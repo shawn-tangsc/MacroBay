@@ -4,13 +4,10 @@ import { useStateViewText } from '@platform/ui/components/state/stateViewText'
 
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { newsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
-import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
-import { NEWS_SENTIMENT_SOURCE_IDS } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { NewsSentimentDrawer } from './NewsSentimentDrawer'
-import { NewsSentimentSettingsModal } from './NewsSentimentSettingsModal'
 import { useNewsSentiment } from './useNewsSentiment'
 
 import './newsSentiment.css'
@@ -26,16 +23,20 @@ export function NewsSentimentFeature(props: {
   now?: () => Date
   /** Tests shorten the read deadline; production uses the hook's default. */
   readDeadlineMs?: number
-  /** Injected in tests; production reads the product's own source client. */
-  sourcesClient?: {
-    runNow: (sourceId: string) => Promise<unknown>
-    setEnabled?: (sourceId: string, enabled: boolean) => Promise<unknown>
-  }
+  /**
+   * 宿主给「打开设置」的去处时调它（现在指：打开配置抽屉并停在内容处理屏）。
+   * **不传就退回本地弹框**——判空与回落写在同一处，别在外面再包一层 if。
+   */
+  /**
+   * 「配置」的去处：**舆情对应的数据源**（`{ business: 'sentiment' }`，宿主演成
+   * `openConfigDrawer({ menu: 'sourcesData', focus })`）。服务两处：抽屉里那颗设置，
+   * 以及「来源没有启用」那颗动作。卡片上不再有自己的设置入口。
+   */
+  onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   /** Publish the clicked item so the agent can start from that story. */
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
   const client = props.client ?? newsSentimentClient
-  const sourcesClient = props.sourcesClient ?? intelligenceSourcesClient
   const now = props.now ?? (() => new Date())
   const state = useNewsSentiment({
     client,
@@ -51,19 +52,6 @@ export function NewsSentimentFeature(props: {
     const next = WINDOW_ORDER[Math.min(WINDOW_ORDER.indexOf(state.window) + 1, WINDOW_ORDER.length - 1)]
     if (next && next !== state.window) state.setWindow(next)
   }
-  // One click collects the named sources and re-reads. A collection that fails on one source must
-  // not swallow the others, so the promises are settled independently.
-  const runSources = (sourceIds: readonly string[]): void => {
-    void Promise.allSettled(sourceIds.map((sourceId) => sourcesClient.runNow(sourceId))).then(() => refresh())
-  }
-  // "Enable" must enable: turn the four sources on, collect once so the card has something to show,
-  // then re-read. A button that only opened settings would be a different label, not this one.
-  const enableSources = (): void => {
-    if (typeof sourcesClient.setEnabled !== 'function') return
-    void Promise.allSettled(NEWS_SENTIMENT_SOURCE_IDS.map((sourceId) => sourcesClient.setEnabled!(sourceId, true)))
-      .then(() => Promise.allSettled(NEWS_SENTIMENT_SOURCE_IDS.map((sourceId) => sourcesClient.runNow(sourceId))))
-      .then(() => refresh())
-  }
   // English is the source language for the feed, so the English UI has no translation surface.
   // Any future non-English UI language reuses the same controls and translates into that language.
   const language = props.language ?? 'zh-CN'
@@ -72,7 +60,6 @@ export function NewsSentimentFeature(props: {
   // 语言来自壳层上下文——产品不许自带语言参数，也不再从 app 层借解析函数。
   const resolveStateText = useStateViewText()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [focusItemId, setFocusItemId] = useState<string>()
 
   return (
@@ -80,11 +67,8 @@ export function NewsSentimentFeature(props: {
       <NewsSentimentCard
         failed={state.failed}
         loading={state.loading}
-        onOpenAll={() => setDrawerOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
-        onEnableSources={enableSources}
+        onOpenSources={props.onOpenSettings}
         onRefresh={state.refresh}
-        onRunSources={runSources}
         onWidenWindow={widenWindow}
         includeNeutral={state.filters.includeNeutral}
         onIncludeNeutralChange={(includeNeutral) => state.setFilters({ includeNeutral })}
@@ -101,7 +85,7 @@ export function NewsSentimentFeature(props: {
         loading={state.loading}
         onClose={() => setDrawerOpen(false)}
         onFilters={state.setFilters}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={props.onOpenSettings === undefined ? undefined : () => props.onOpenSettings!({ business: 'sentiment' })}
         onRefresh={state.refresh}
         onWindowChange={state.setWindow}
         open={drawerOpen}
@@ -109,13 +93,6 @@ export function NewsSentimentFeature(props: {
         view={state.view}
         window={state.window}
         resolveStateText={resolveStateText}
-      />
-      <NewsSentimentSettingsModal
-          showTranslation={translationEnabled}
-        client={client}
-        onClose={() => setSettingsOpen(false)}
-        open={settingsOpen}
-        text={props.text}
       />
     </>
   )

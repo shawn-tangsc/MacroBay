@@ -12,8 +12,9 @@ describe('connection test offer', () => {
     expect(offersConnectionTest(provider!)).toBe(true)
   })
 
-  it('never offers it for an API-key provider, whose credentials are tested inside the key form', () => {
-    expect(offersConnectionTest({ credential: 'api-key', sources: [{ capabilities: { testConnection: true } }] })).toBe(false)
+  it('offers it for an API-key provider too: the probe now lives next to the source name, not in the key form', () => {
+    // 2026-11-10：凭据块里那颗删掉了（全屏只留一颗，跟着源名走），所以 API-Key 源同样用它。
+    expect(offersConnectionTest({ credential: 'api-key', sources: [{ capabilities: { testConnection: true } }] })).toBe(true)
   })
 
   it('stays hidden when no source declares a probe', () => {

@@ -13,8 +13,10 @@
  * 也不替代 Chief 跑的全量。成本实测：5 个真实文件 6.3s（原来全仓 tsc 是 42–60s）。
  */
 import { execFileSync, spawnSync } from 'node:child_process'
+import { findCallers, programFiles } from './pre-commit-callers.mts'
+import { filesWithUnstagedChanges } from './pre-commit-unstaged.mts'
 import { materializeCommitTree, readDeletedPaths } from './pre-commit-tree.mts'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -86,6 +88,30 @@ const owns = (path: string): boolean => codeStaged.includes(path)
 const normalize = (path: string): string => path.replace(/^\.\//, '')
 
 say(`预检 ${codeStaged.length} 个代码文件（预算 ${Math.round(BUDGET_MS / 1000)}s）`)
+
+/**
+ * 第二条警示：**要提交的文件同时还有未暂存改动**（只警告、不拦截）。
+ *
+ * `git commit -- <路径>` 提交的是工作区里那份文件的当前内容，不读暂存区：文件里留着别人的在途 hunk，
+ * 按路径提交就会一起带进 HEAD。2026-11-10 真撞过一次。只警告的理由：`git add -p` 分次暂存是正常手法，
+ * 把正常提交堵死比这个风险更糟。
+ */
+// 共享文件提示（只提示不阻断）：见 `scripts/shared-files.json` 的 why——两次「共享文件捎带」事故之后加的。
+try {
+  const shared = JSON.parse(readFileSync(join(root, 'scripts/shared-files.json'), 'utf8')) as { owners: Record<string, string> }
+  for (const path of codeStaged) {
+    const hit = Object.keys(shared.owners).find((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+    if (hit !== undefined) say(`共享文件：${path} 属于「${shared.owners[hit]}」，确认你是 owner；不是就把改动交给 owner 或等它落（只提示，不阻断）。`)
+  }
+} catch { /* 清单缺失时静默：钩子不因为提示功能而阻断提交 */ }
+
+const drifted = filesWithUnstagedChanges({ cwd: root, staged: codeStaged })
+if (drifted.length > 0) {
+  say(`注意：${drifted.length} 个要提交的文件还有未暂存改动——\`git commit -- <路径>\` 按工作区当前内容提交，`)
+  say('      这些改动会跟着进库（要只交一部分，请先 `git add` 完整文件，或确认那一段是你要提交的）：')
+  for (const path of drifted.slice(0, 10)) say(`      - ${path}`)
+  if (drifted.length > 10) say(`      …还有 ${drifted.length - 10} 个`)
+}
 
 // ── 1. 四条按目录扫的守卫（很便宜，先跑）：红了也要看是谁的文件 ──────────────────────
 const guard = spawnSync('node_modules/.bin/vitest', ['run', ...GUARDS], {
@@ -220,13 +246,30 @@ const ambientDeclarations = execFileSync('git', ['ls-files', '*.d.ts'], { cwd: r
   .map((line) => line.trim())
   .filter((path) => path !== '' && !path.includes('node_modules') && existsSync(join(treeRoot, path)))
 
+/**
+ * 反向依赖：**程序之外引用这一笔文件的人**也要进 `files`。
+ *
+ * 2026-11-10 的 B4 事故：`ProviderDetail` 的 props 加了必填 `health`，设置页改了、看板抽屉
+ * （`DashboardPanelDrawer.tsx`）没改。抽屉是**调用方**，不在「本次提交的文件」里，于是 tsc 的程序
+ * 里根本没有它，`TS2741` 就这么进了链。钩子当时 9.7s / 预算 58s——不是超时，是范围比名字小。
+ * 只展开一层：props 改动的第一个受害者就在这里，够用，也不至于把一个公共模块的全部下游都拖进来。
+ */
+const callerSearch = findCallers({ cwd: root, staged: codeStaged })
+const callers = callerSearch.callers.filter((path) => existsSync(join(treeRoot, path)))
+if (callers.length > 0) {
+  say(`反向依赖：另有 ${callers.length} 个调用方一起查（${callers.slice(0, 3).join('、')}${callers.length > 3 ? ' …' : ''}）`)
+}
+if (callerSearch.skipped > 0) {
+  say(`反向依赖还有 ${callerSearch.skipped} 个调用方超出上限，本次未纳入（只查了前 ${callers.length} 个）。`)
+}
+
 const treeConfig = join(treeRoot, 'tsconfig.pre-commit.json')
 writeFileSync(
   treeConfig,
   JSON.stringify({
     extends: './tsconfig.json',
     include: [],
-    files: [...codeStaged, ...ambientDeclarations].map((path) => `./${path}`)
+    files: programFiles({ staged: codeStaged, callers, ambient: ambientDeclarations })
   })
 )
 
@@ -275,7 +318,15 @@ const repoPathOf = (line: string): string | undefined =>
  * 用户已知并接受（`products/**` 全量本来也看不到）。
  */
 const located = allErrors.map((line) => ({ line, file: repoPathOf(line) }))
-const ownErrors = located.filter((entry) => entry.file !== undefined && codeStaged.includes(entry.file))
+/**
+ * 归属：本笔的文件，**以及本笔文件的调用方**。
+ *
+ * 调用方这一档是 2026-11-10 补的：改 props 的那一笔，红会落在没改过的宿主上（`TS2741`）；
+ * 把它当「别人的文件」放过去，正是这次事故进链的方式。只算一层反查到的调用方，别的一律不动。
+ */
+const callerSet = new Set(callers)
+const ownedFiles = new Set<string>([...codeStaged, ...callers])
+const ownErrors = located.filter((entry) => entry.file !== undefined && ownedFiles.has(entry.file))
 const foreignErrors = located.filter((entry) => !ownErrors.includes(entry))
 
 if (foreignErrors.length > 0) {
@@ -292,6 +343,9 @@ if (ownErrors.length > 0) {
    * `SKIP_PRE_COMMIT=1`，那比这条报错更难收拾。
    */
   for (const entry of ownErrors.slice(0, 20)) {
+    if (entry.file !== undefined && callerSet.has(entry.file)) {
+      console.error(`  （调用方：本笔改了它引用的文件，它自己没跟上）`)
+    }
     // 文件路径用已剥干净的 `entry.file`，位置与错误正文从原行里取：tsc 有时给 `../../var/folders/…`
     // 相对路径、有时给绝对路径，直接打原行会露出一串读者磁盘上不存在的路径（实测过）。
     const position = /\(\d+,\d+\)/u.exec(entry.line)?.[0] ?? ''

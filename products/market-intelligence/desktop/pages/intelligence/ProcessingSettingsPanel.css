@@ -1,0 +1,33 @@
+/*
+ * 内容处理屏（用户 2026-11-10：「所有内容，不能有个统一的圆角背景吗？」）。
+ *
+ * **区块的边框、圆角、底色与卡头内距都不在这里**：那是平台 `SettingsSection` 自带的，
+ * 屏里再写一份就会出现两套数（一处改、另一处不跟）。这份文件只补平台那件表达不了的两条：
+ * 行内控件左缘对齐、区块内那一行状态小字的位置。
+ */
+.config-drawer-processing {
+  display: grid;
+  gap: 16px;
+}
+
+/* 控件列：**所有控制件都从这一列的左缘起**（标签列 160 的右边界），
+   不许用 `margin-left: auto` / `justify-content: space-between` 把控件顶到行尾——
+   同屏两种对齐就是这次用户指出的问题。行尾动作不在这列里（它们是按钮，靠右）。 */
+.config-drawer-processing .config-drawer__value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 0;
+  text-align: left;
+}
+
+.config-drawer-processing .config-drawer__value--with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 提示条贴区块内边：它自带内距与边框，这里只给外侧留白，不另画盒子。 */
+.config-drawer-processing .inline-notice {
+  margin: 8px 12px;
+}

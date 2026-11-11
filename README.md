@@ -230,7 +230,7 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.4.2`). macOS is the verified platform. Panels still need your own provider
+MacroBay is **alpha** (`0.4.3`). macOS is the verified platform. Panels still need your own provider
 credentials; anything that cannot be read is reported as a gap. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified
 there yet, and Linux has no packaging. See [Status and limitations](./docs/reference/status-and-limitations.md).

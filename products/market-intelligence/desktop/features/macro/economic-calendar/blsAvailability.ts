@@ -52,13 +52,46 @@ export function blsUnavailableSentence(text: EconomicCalendarText, unavailable: 
 }
 
 /**
+ * 列表顶部那一句「官方日程拿不到」（2026-11-11 更正）。
+ *
+ * 两句要分清：这一句说的是**整条腿**现在是什么样（BLS 的 HTML 日程被 403 挡住，自动同步停了，
+ * 所以列表里那些 BLS 事件来自**上一次成功同步**）；`blsUnavailableNotice` 说的是详情里那行刷新键。
+ *
+ * 为什么点名 BLS 并带上日期：原来的句子是「官方源暂时不可用，先显示上次成功同步的内容」——
+ * 读者会以为**全部**官方源都没了（fed/bea 其实照常在画），而且「上次」是哪一次没有人知道。
+ * 这句只在 `macro-calendar-bls` 记着 403 时出现，fed/bea 正常与否都不影响它。
+ *
+ * 日期取注册表里那次真实同步的时刻（`lastSuccessfulSyncAt`），**不写死**。
+ */
+/** 正文只放这一句状态词：不带原因、不带日期，一句话读者就能判断「这条腿现在没有新的」。 */
+export function blsUnavailableListLabel(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
+  if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
+  return text.officialUnavailableShort
+}
+
+/** 那一句旁边的 ⓘ：为什么（403）、现在画的是哪次同步、要怎么才能拿到新的（导 ICS）。 */
+export function blsUnavailableListDetail(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
+  if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
+  return fillLabelParams(text.officialUnavailableNote, { date: unavailable.lastSuccessDate ?? '' })
+}
+
+/**
  * 置灰那颗刷新键自己的行内句（界面设计 2026-11-09）。
  *
  * 「不能刷新」与「自动同步停了」不是同一句话：前者是键按不动的原因，后者是后台的现状。
  * 只置灰不说原因，读者只会以为界面坏了；所以这句话必须贴着那颗键说，并且说出**恢复条件**
- * （今天：要等官方站点不再拒绝当前网络，恢复时间未知）。原因码从注册表那一份取，不在这里另写。
+ * （今天：要等官方站点不再拒绝当前网络，恢复时间未知）。
+ *
+ * **正文只给读者说法**：完整原因码不拼进这句话（2026-11-10 界面设计），它由
+ * `blsRefreshBlockedReasonCode` 交给那颗 ⓘ，默认收起、恰一处。
  */
 export function blsRefreshBlockedSentence(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
   if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
-  return fillLabelParams(text.blsRefresh.blocked, { code: unavailable.reasonCode })
+  return text.blsRefresh.blocked
+}
+
+/** 那枚 ⓘ 里要显示的完整原因码；与行内句同一个闸门，不会出现「句子在、码不在」。 */
+export function blsRefreshBlockedReasonCode(unavailable: BlsUnavailable | undefined): string | undefined {
+  if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
+  return unavailable.reasonCode
 }

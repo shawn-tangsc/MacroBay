@@ -6,8 +6,10 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { useSingleFlightSend } from '@platform/ui/async/useSingleFlightSend'
 import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { SettingsRow } from '@platform/ui/components/settings-row'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 import { StateView } from '@platform/ui/components/state'
 
 import './notifications/notificationSettings.css'
@@ -123,9 +125,8 @@ export function NotificationSettingsScreen(props: {
       {state.status === 'ready' ? (
         <div className="notification-card" data-notification-settings-card>
           {writeFailed ? (
-            <p className="notification-settings-write-failed" role="alert" data-notification-write-failed>
-              {text.writeFailed}
-            </p>
+            /* 区块级写失败：平台的红色横幅给角色与颜色，正文只留那一句；没有更多细节就不挂 ⓘ。 */
+            <InlineNotice tone="danger">{text.writeFailed}</InlineNotice>
           ) : null}
 
           <section className="notification-group" aria-label={text.localGroup}>
@@ -137,7 +138,6 @@ export function NotificationSettingsScreen(props: {
               text={text}
               control={
                 <Switch
-                  size="small"
                   checked={state.data.toastEnabled}
                   aria-label={text.toastRow}
                   onChange={(next) => void save(setToast(next))}
@@ -152,7 +152,6 @@ export function NotificationSettingsScreen(props: {
               text={text}
               control={
                 <Switch
-                  size="small"
                   checked={state.data.desktopEnabled}
                   aria-label={text.desktopRow}
                   onChange={(next) => void save(setDesktop(next))}
@@ -164,20 +163,20 @@ export function NotificationSettingsScreen(props: {
 
           <section className="notification-group" aria-label={text.testGroup}>
             <h3 className="notification-group-title">{text.testGroup}</h3>
-            <div className="notification-row" data-row="test">
-              <span className="notification-row-copy">
-                <strong>{text.sendTestRow}</strong>
-              </span>
-              <span className="notification-row-control">
-                <Button
-                  size="small"
-                  disabled={sendGuard.sending}
-                  onClick={onSendTest}
-                  data-send-test>
-                  {text.sendTest}
-                </Button>
-              </span>
-            </div>
+            <SettingsRow
+              controlWrapperClassName="notification-row-control"
+              copyClassName="notification-row-copy"
+              label={<strong>{text.sendTestRow}</strong>}
+              rowAttributes={{ 'data-row': 'test' }}
+              rowClassName="notification-row">
+              <Button
+                size="small"
+                disabled={sendGuard.sending}
+                onClick={onSendTest}
+                data-send-test>
+                {text.sendTest}
+              </Button>
+            </SettingsRow>
             {receipt === null ? null : (
               // aria-live：回执各播报一次，重复点击只更新同一处，不堆消息。
               <div data-send-test-result>
@@ -243,11 +242,12 @@ function SwitchRow(props: {
 }): React.ReactElement {
   const { text } = props
   return (
-    <div className="notification-row" data-row={props.hintKey === HINT_KEY_TOAST ? 'toast' : 'desktop'}>
-      <span className="notification-row-copy">
+    <SettingsRow
+      copyClassName="notification-row-copy"
+      label={<>
         {/*
           * 标题与 ⓘ 包进同一个**行**容器：`.notification-row-copy` 是列布局，直接当兄弟放进去，
-          * 图标永远掉到下一行（用户截图那个缺陷）。
+          * 图标永远掉到下一行（用户截图那个缺陷）。迁移时这一层原样保留。
           */}
         <span className="notification-row-head">
           <strong>{props.name}</strong>
@@ -271,8 +271,10 @@ function SwitchRow(props: {
             )}
           />
         </span>
-      </span>
+      </>}
+      rowAttributes={{ 'data-row': props.hintKey === HINT_KEY_TOAST ? 'toast' : 'desktop' }}
+      rowClassName="notification-row">
       {props.control}
-    </div>
+    </SettingsRow>
   )
 }

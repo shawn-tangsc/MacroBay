@@ -24,29 +24,15 @@ describe('product registry generator', () => {
       icon: 'radar'
     })
 
-    const intelligenceSourcesEntry = registry.settingsEntries.find(
-      (entry) => entry.id === 'market-intelligence.intelligence-sources'
-    )
-    expect(intelligenceSourcesEntry).toMatchObject({ icon: 'database', order: 10 })
-
+    // 用户 2026-11-11：产品配置全部由产品自己的抽屉承载，平台设置侧一条贡献都不再注册。
     const intelligenceSettingsIds = registry.settingsEntries
       .filter((entry) => entry.id.startsWith('market-intelligence.'))
       .map((entry) => entry.id)
-    expect(intelligenceSettingsIds).toEqual([
-      'market-intelligence.intelligence-sources',
-      // 运行日志夹在两者之间：它读的是采集结果，所以排在源设置之后、通知之前。
-      'market-intelligence.intelligence-run-log',
-      'market-intelligence.intelligence-notification'
-    ])
-    const intelligenceRunLogEntry = registry.settingsEntries.find(
-      (entry) => entry.id === 'market-intelligence.intelligence-run-log'
-    )
-    expect(intelligenceRunLogEntry).toMatchObject({ icon: 'scroll-text', order: 11 })
-    const intelligenceNotificationEntry = registry.settingsEntries.find(
-      (entry) => entry.id === 'market-intelligence.intelligence-notification'
-    )
-    // 新面板用注册表里已有的图标，不新增图标；通知顺延到 12，给运行日志腾出 11。
-    expect(intelligenceNotificationEntry).toMatchObject({ icon: 'message-square-text', order: 12 })
+    expect(intelligenceSettingsIds).toEqual([])
+
+    // 抽屉只声明菜单 id；壳层据此出「去设置」，产品页据此开抽屉。
+    const drawer = registry.settingsDrawers.find((entry) => entry.productId === 'market-intelligence')
+    expect(drawer?.menus).toEqual(['sources', 'sourcesData', 'processing', 'analysis', 'briefing', 'notifications', 'runLog'])
   })
 
   it('rejects manifest ids that do not match the product directory', () => {

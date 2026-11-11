@@ -366,6 +366,56 @@ describe('generation stage timeline', () => {
       .toContain(text.aiSettings.failure['schema-validation-failed'])
   })
 
+  /**
+   * 数据版：AI 的几步没写出正文，但这一版照常落库了（模型不可用时就是这样）。
+   * 记录里同时有「写作没成功」和「落库成功」——这就是这一版的形状。
+   */
+  function dataEditionTrace(): GenerationTrace {
+    const selectionIndex = allSucceeded.indexOf('selection')
+    return trace('failed', allSucceeded.map((id, position) => id === 'store'
+      ? stage('store', 'success')
+      : position < selectionIndex
+        ? stage(id, 'success')
+        : position === selectionIndex
+          ? stage(id, 'failed', { failureCode: 'model-unavailable' })
+          : stage(id, 'skipped')))
+  }
+
+  it('calls the stored edition a data edition when the AI steps never produced text', async () => {
+    // 读者看到「落库/发布 成功」会以为日报发出去了。数据版的名字要说清存的是哪一版，
+    // 并且这一版是什么（有数据、没有 AI 编辑写的正文）就在它自己的说明里定义一次。
+    const dom = render(dataEditionTrace())
+    const store = stepOf(dom, 'store')
+    expect(store.querySelector('.mi-brief-steps__name')?.textContent).toBe('保存数据版')
+    // 状态还是原来那几个：没有第四种「部分成功」。
+    expect(store.getAttribute('data-stage-state')).toBe('done')
+    // 没跑的那几步仍然照实说没跑，不是被改名糊过去。
+    expect(resultOf(dom, 'writing').textContent).toContain(text.generationTrace.states.notRun)
+
+    const help = store.querySelector<HTMLButtonElement>('[data-stage-help="store"]')!
+    expect(help).not.toBeNull()
+    expect(help.getAttribute('aria-label')).toBe(text.generationTrace.stageHelpLabel.replace('{stage}', '保存数据版'))
+    act(() => help.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
+    await settle()
+    expect(visibleTooltipText()).toContain('数据版：这一版有数据、没有 AI 编辑写的正文')
+  })
+
+  it('keeps the ordinary store step name on a run that did produce text', () => {
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    expect(stepOf(dom, 'store').querySelector('.mi-brief-steps__name')?.textContent).toBe(text.generationTrace.stages.store)
+  })
+
+  it('keeps the ordinary store step name on a run that never stored anything', () => {
+    // 只有「写作没成功 + 落库成功」才是数据版；一跑没落库的失败不许被叫成数据版。
+    const dom = render(failureTrace('validation', 'schema-validation-failed'))
+    expect(stepOf(dom, 'store').querySelector('.mi-brief-steps__name')?.textContent).toBe(text.generationTrace.stages.store)
+  })
+
+  it('says the data edition in English too', () => {
+    const dom = render(dataEditionTrace(), true)
+    expect(stepOf(dom, 'store').querySelector('.mi-brief-steps__name')?.textContent).toBe('Save the data edition')
+  })
+
   it('locates a store/publish failure', () => {
     const dom = render(failureTrace('store', 'store-failed'))
     expect(dom.querySelector('[data-failed-stage-label]')?.textContent).toBe('失败于：落库/发布')

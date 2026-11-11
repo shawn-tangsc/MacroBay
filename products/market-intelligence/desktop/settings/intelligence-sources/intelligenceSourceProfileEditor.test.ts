@@ -15,7 +15,6 @@ describe('toSaveProfileInput', () => {
     expect(input).toMatchObject({
       sourceId: 'twelve-data-market',
       collectionPreset: 'frequent',
-      includeInSentiment: true,
       scopePolicy: 'all'
     })
   })
@@ -27,7 +26,6 @@ function profile(): IntelligenceSourceProfile {
     sourceId: 'twelve-data-market',
     enabled: true,
     collectionPreset: 'frequent',
-    includeInSentiment: true,
     scopePolicy: 'all',
     rawArchiveEnabled: true,
     retentionMode: 'balanced',

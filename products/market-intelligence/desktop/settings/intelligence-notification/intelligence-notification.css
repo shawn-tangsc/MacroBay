@@ -46,12 +46,8 @@
 }
 
 /* 页标题一行：14 / 600 / 正常色，下边 12 才接第一行。ⓘ 跟在标题后，不在正文里讲道理。 */
-.intelligence-notification-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-}
+
+/* 抽屉里没有页级标题，这颗 ⓘ 紧跟它解释的那组行：与内容间距 4（界面设计 2026-11-10 位置判据）。 */
 
 .intelligence-notification-title {
   margin: 0;
@@ -62,113 +58,28 @@
 
 /* 主从：列表固定 232（内容再长也不挤它），详情吃掉剩余宽度。
    **这一层只许有两个子元素**（列表、详情）——多一个就会掉进下一行的窄格。 */
-.intelligence-notification-panes {
-  display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
 
 /* 列表：每项两行（名字 + 状态），行高 44。右边一条细分隔线把它和详情分开。 */
-.intelligence-notification-list {
-  margin: 0;
-  padding: 0 8px 0 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  border-right: 1px solid var(--border-subtle);
-}
 
-.intelligence-notification-list-item {
-  display: flex;
-  width: 100%;
-  min-height: 44px;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding: 7px 8px;
-  min-width: 0;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-secondary);
-  text-align: left;
-  cursor: pointer;
-}
 
-.intelligence-notification-list-item:hover {
-  background: color-mix(in srgb, var(--surface-soft) 55%, transparent);
-}
 
 /* 选中靠底色 + 文字提亮；「关着」只写在状态词里，不靠灰。 */
-.intelligence-notification-list-item[aria-current='true'] {
-  background: var(--surface-soft);
-  color: var(--text-strong);
-}
 
-.intelligence-notification-list-name {
-  font-size: 13px;
-  font-weight: 500;
-  /* 名字单行省略、不换行；完整名字在 title 里。 */
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 
-.intelligence-notification-list-state {
-  font-size: 11.5px;
-  color: var(--muted);
-  /* 状态行也单行省略——截的是状态尾部，名字已经单独一行，永远不会被截。 */
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 
-.intelligence-notification-list-item[aria-current='true'] .intelligence-notification-list-state {
-  color: var(--text-secondary);
-}
 
 /* 详情列：吃掉剩余宽度但绝不被内容撑破（没有 min-width: 0 会挤坏另一列）。 */
-.intelligence-notification-detail {
-  min-width: 0;
-}
 
 /*
  * 内容卡 620：160（标签）+ 360（控件上限）+ 16（间距）+ 48（内边距）≈ 584，留 36 给长标签。
  * 用 760 会在卡内右侧空出一条，看着像没画完——这是「丑」的来源之一。
  * 左对齐、不居中：切左边四项时内容宽度会变，居中会让整张卡左右跳。
  */
-.intelligence-notification-card {
-  width: 100%;
-  max-width: 620px;
-  padding: 24px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-}
 
 /* 组与组之间：24 间距 + 1px 分隔线；首组不带线（它就在卡的上沿）。 */
-.intelligence-notification-form-group + .intelligence-notification-form-group {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-subtle);
-}
 
-.intelligence-notification-form-group-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
 
 /* 组标题比字段名大一级（13.5 对 13），正常色——不靠灰色小字当节标题。 */
-.intelligence-notification-form-group-title {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
 
 /* 一行一件事：标签固定 160 在左，控件紧接其右（左缘对齐），说明只占下一行。 */
 .intelligence-notification-form-row {
@@ -226,9 +137,6 @@
 }
 
 /* 卡里直接挂的状态说明（例如「还没有可用频道」）没有行提供间距，补一点。 */
-.intelligence-notification-card > .intelligence-notification-form-note {
-  margin-top: 12px;
-}
 
 .intelligence-notification-form-checks {
   display: flex;
@@ -325,4 +233,107 @@
 
 .intelligence-notification-test-reason summary {
   cursor: pointer;
+}
+
+/* ── 抽屉面（配置抽屉「通知」屏）：分栏吃满宽度，左栏 296 由本屏给 ──
+   外壳沿用抽屉那一个 `config-drawer__split`（不新造容器）；这里只改列宽，296 是通知列表
+   需要的最小宽度（名字 + 状态词一行放得下），不是另立一套布局。 */
+.config-drawer__split.intelligence-notification-split {
+  grid-template-columns: 296px minmax(0, 1fr);
+  gap: 16px;
+}
+
+
+/* 「读取中」不是 settled 状态，不画成药丸——一行小字就是占位，不冒充状态。 */
+.intelligence-notification-row-loading {
+  color: var(--muted);
+  font-size: var(--font-body);
+  white-space: nowrap;
+}
+
+/* ── 抽屉面外壳：单列屏，滚动交给抽屉的 pane 整块滚（与日报、平台与模型同一手感）──
+   屏里不设高度、不接管滚动：百分比高度要成立就得让壳给确定行高，那条链一碰 overflow 就
+   回到「卡片被裁」；提示条跟着内容一起滚。 */
+.intelligence-notification-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 抽屉面：单列区块（推送提醒 / 舆情条件 / 日历提醒），区块间距 16。 */
+.intelligence-notification-drawer {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── 抽屉面：区块容器（边框 / 圆角 / 底色 / 卡头内距）由 `SettingsSection` 统一提供 ──
+   屏里不再写第二份；这里只保留单列屏自己的高度与滚动。 */
+.intelligence-notification-drawer > .settings-section {
+  width: 100%;
+}
+
+/* ── 抽屉面：把两种行归一成同一套对齐（否则分段/国家那两行会各自偏移）──
+   行内距 12、标签列 160、控件左缘 = 12 + 160 + 12(gap) + 8(控件前距) = 192；
+   行高 44、行间发丝线、末行无线。阈值行与国家行原本是设置页那套（内距 0、标签与控件间距 16），
+   在本屏内改成同一套数字，不改它们给设置页用的默认值。 */
+.intelligence-notification-drawer .intelligence-notification-form-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-row:last-child,
+.intelligence-notification-drawer .intelligence-notification-form-row.is-last {
+  border-bottom: 0;
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-label {
+  flex: 0 0 160px;
+  min-width: 0;
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+}
+
+/* 区块标题左缘与行标签左缘对齐：卡头内距跟行内距同一套（12）。
+   **这条不是「把区块压平」**——压平（无框/无圆角/无底色/无外层内距/卡头无底线）现在由
+   `SettingsSection variant="flat"` 提供，屏里不许再写第二份；这里只补平方向的对齐，
+   删了会让标题比行标签左移 12（2026-11-11 量过的四个数：行内距 12、标签列 160、
+   控件左缘 192、行高 44）。 */
+.intelligence-notification-drawer .settings-section > .settings-section__header {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* ── 带提示的行：提示只占控件列、12 号、最多一行、与控件垂直居中 ──
+   规则（Chief 2026-11-10 定）：提示出现/消失时控件不许左右或上下跳；同一区块里两行带提示
+   也不许差出一行——所以提示是控件列里的**单行省略**文本，不换行、不把控件推下去。
+   错误是偶发的；为了守住 44 把「没存上」藏进 ⓘ，等于让读者去别处找线索。
+   **截断只截补充说明，不截错误本身**：行内提示至少留下「没存上」这类可判定的核心；
+   若文案哪天变成「没存上：<原因>」，原因要挪进 ⓘ，别让 ellipsis 吃掉读者唯一能懂的部分。 */
+.intelligence-notification-drawer .config-drawer__value,
+.intelligence-notification-drawer .intelligence-notification-form-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.intelligence-notification-drawer .intelligence-notification-form-note {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

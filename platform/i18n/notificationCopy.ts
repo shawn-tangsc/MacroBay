@@ -43,8 +43,6 @@ export type NotificationCopyTable = {
   'notification.event.platform.analysis.quota-exhausted.title': string
   'notification.event.platform.analysis.quota-exhausted.body.line': string,
   'notification.event.platform.analysis.quota-exhausted.body.global': string,
-  'notification.analysis-line.event': string,
-  'notification.analysis-line.calendar': string,
   'notification.event.platform.analysis.quota-exhausted.reason': string
   'notification.event.platform.provider.credential-invalid.title': string
   'notification.event.platform.provider.credential-invalid.body': string,
@@ -88,7 +86,7 @@ export type NotificationCopyTable = {
   'notification.action.open-settings': string
   /**
    * 日报失败事件的动作：打开日报。**只服务历史记录**（v2.58）：那一笔起产品动作改用自己的键
-   * （`notification.action.market-intelligence.open-briefing`，引用形状 `labelRef`），新记录不再写这个键。
+   * （产品动作改用自己的键，引用形状 `labelRef`），新记录不再写这个键。
    *
    * **删它的条件**：库里 `actions[].labelKey === 'notification.action.open-briefing'` 的记录数降到 0
    * （保留期 30 天）。在那之前删掉，老通知的按钮会凭空消失——记录里存的是当初那个键，不是句子。
@@ -136,8 +134,6 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.quota-exhausted.title': "今天的分析次数用完了",
     'notification.event.platform.analysis.quota-exhausted.body.line': "{line}今天已用 {used} 次，上限 {limit} 次；之后再发起同类分析会被拒绝，已有的报告不受影响。",
     'notification.event.platform.analysis.quota-exhausted.body.global': "今天各类自动分析的总次数已经用完",
-    'notification.analysis-line.event': "行情变动分析",
-    'notification.analysis-line.calendar': "日历事件分析",
     'notification.event.platform.analysis.quota-exhausted.reason': '分析调用到了当天的上限，在那之前发起分析会被拒绝。',
     'notification.event.platform.provider.credential-invalid.title': "{provider} 的密钥失效了",
     'notification.event.platform.provider.credential-invalid.body': "保存的密钥已经不被接受，去设置里重新填一把才能继续调用。",
@@ -163,7 +159,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.manual-failed.reason': '只有你自己点的那次失败才回一条，同一次运行不会重复提醒；原因和重试入口在运行记录里。',
     'notification.event.platform.analysis.manual-failed.open': '打开运行记录',
     'notification.event.platform.analysis.repeated-failure.title': "分析连续失败",
-    'notification.event.platform.analysis.repeated-failure.body': "最近 10 次自动分析里有 {failures} 次没成（样本 {sample} 次），可能是模型服务或网络的问题。今天这类提醒最多 2 条，之后同类的情况会并进这一条。",
+    'notification.event.platform.analysis.repeated-failure.body': "最近 {sample} 次自动分析里有 {failures} 次没成。每次的原因不一样，看那一次分析自己的失败说明。今天这类提醒最多 2 条，之后同类的情况会并进这一条。",
     'notification.event.platform.analysis.repeated-failure.reason': '最近 10 次自动分析里失败到 6 次才提醒一次；同一条链同一天只留一条，6 小时内不重复。',
     'notification.event.platform.analysis.attempt-abandoned.title': "有分析没有生成",
     'notification.event.platform.analysis.attempt-abandoned.body': "今天有分析没有生成：{kind}。到点还没有结果，之后不再自动重试。",
@@ -202,8 +198,6 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.quota-exhausted.title': "Today's analysis quota is used up",
     'notification.event.platform.analysis.quota-exhausted.body.line': "{line}: {used} of {limit} analyses used today; further runs on this line will be refused, and reports you already have are unaffected.",
     'notification.event.platform.analysis.quota-exhausted.body.global': "today's overall automatic-analysis budget is spent",
-    'notification.analysis-line.event': "market-move analysis",
-    'notification.analysis-line.calendar': "calendar-event analysis",
     'notification.event.platform.analysis.quota-exhausted.reason': 'Analysis calls have reached the day\'s limit; further requests are refused until it resets.',
     'notification.event.platform.provider.credential-invalid.title': "The key for {provider} stopped working",
     'notification.event.platform.provider.credential-invalid.body': "The saved key is no longer accepted; enter a new one in settings to keep using the provider.",
@@ -229,7 +223,7 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.event.platform.analysis.manual-failed.reason': 'Only a failure of a run you started yourself is reported, once per run; the cause and a retry are in the run log.',
     'notification.event.platform.analysis.manual-failed.open': 'Open run log',
     'notification.event.platform.analysis.repeated-failure.title': 'Analysis kept failing',
-    'notification.event.platform.analysis.repeated-failure.body': 'Of the last {sample} automatic analyses, {failures} did not finish — most likely the model service or the network. At most 2 notices of this kind a day; later ones are folded into this row.',
+    'notification.event.platform.analysis.repeated-failure.body': 'Of the last {sample} automatic analyses, {failures} did not finish. The reasons differ from run to run; each run’s own failure note says why. At most 2 notices of this kind a day; later ones are folded into this row.',
     'notification.event.platform.analysis.repeated-failure.reason': 'Sent once after at least 6 of the last 10 automatic analyses failed; one per trigger line per day, none within 6 hours.',
     'notification.event.platform.analysis.attempt-abandoned.title': 'An analysis did not get generated',
     'notification.event.platform.analysis.attempt-abandoned.body': 'An analysis did not get generated today: {kind}. It produced no result in time and is no longer retried automatically.',

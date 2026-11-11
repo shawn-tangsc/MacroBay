@@ -21,7 +21,7 @@ const normalSentences = (): string[] => [
   text.market.refreshTrigger.manual,
   text.market.refreshTrigger.automatic,
   text.market.statuses.success,
-  text.market.collectedAt,
+  text.market.lastGivenAt,
   text.market.automaticRefresh.replace('{interval}', '30')
 ]
 
@@ -40,17 +40,24 @@ describe('the calendar status body', () => {
     expect(detail).toContain(text.market.refreshOutcome.succeeded)
     expect(detail).toContain(text.market.refreshTrigger.automatic)
     expect(detail).toContain(text.market.statuses.success)
-    expect(detail).toContain(text.market.collectedAt)
+    expect(detail).toContain(text.market.lastGivenAt)
     expect(detail).toContain(observedAt)
     expect(detail).toContain(text.market.automaticRefresh.replace('{interval}', '30'))
     // 一句只出现一次：ⓘ 不重复正文那句（正文此时是空的）。
     expect(fragments.body).toHaveLength(0)
   })
 
+  // 时间前进 ⟺ 「本次尚未刷新」不出现：来源给过这条时，这句话必须消失。
+  it('drops the not-attempted sentence once the source has given anything with a time', () => {
+    const facts = calendarSourceStatusFragments(source({ latestAttempt: undefined }), text, formatTime)
+    expect(facts.body.join(' · ')).not.toContain(text.market.refreshOutcome.unattempted)
+  })
+
   it.each([
     ['refresh failed', { latestAttempt: { state: 'failed' as const, attemptedAt: observedAt, failureCode: 'response-unavailable' as const } },
       [text.market.refreshOutcome.failed, text.market.attemptFailure['response-unavailable']]],
-    ['not attempted', { latestAttempt: undefined }, [text.market.refreshOutcome.unattempted]],
+    // 「本次尚未刷新」只在一条观测都没有时成立（有时间就不再这么说，否则与时间自相矛盾）。
+    ['not attempted', { latestAttempt: undefined, sourceObservedAt: null }, [text.market.refreshOutcome.unattempted]],
     ['partial batch', { status: 'partial' as const }, [text.market.statuses.partial]],
     ['parse limited', { status: 'all-skipped' as const }, [text.market.statuses['all-skipped']]],
     ['no usable batch', { status: 'unavailable' as const }, [text.market.statuses.unavailable]],

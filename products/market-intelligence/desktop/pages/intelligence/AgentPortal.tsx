@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Switch } from 'antd'
 import { Bitcoin, CandlestickChart, ChartLine } from 'lucide-react'
 
 import type { ActivationState } from './agentActivationPolicy'
@@ -119,27 +119,18 @@ export function AgentPortal({
                 <span className="mi-agent-card__copy">
                   <span className="mi-agent-card__top">
                     {isCrypto ? (
-                      /* 开关不是命令按钮：平台没有 switch 组件（`platform/ui/components` 里没有），
-                         这里是 `role="switch"` + `aria-checked` + 轨道/滑块的自绘开关。换成 `Button`
-                         会把「开/关」说成一个动作，语义就错了。保留并登记。 */
-                      <button
-                        aria-checked={sample.active}
+                      /* 开关不是命令按钮：用 antd `Switch`（`size="small"`，与设置页同一实现）。
+                         自绘 `role="switch"` 是欠账，已随 H2 清掉——语义交给组件，不再手写 ARIA。 */
+                      <Switch
                         aria-label={text.activation.actions.sampleSwitch}
-                        className={`mi-agent-card__switch${sample.active ? ' is-on' : ''}`}
+                        checked={sample.active}
                         disabled={sampleSwitchDisabled}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onToggleSample()
-                        }}
-                        role="switch"
+                        onChange={() => onToggleSample()}
+                        // 卡片本身可点：拨开关时不要把点击传上去（antd 的 onClick 收的是 (checked, event)）。
+                        onClick={(_checked, event) => event.stopPropagation()}
+                        size="small"
                         title={text.activation.previewHint}
-                        type="button"
-                      >
-                        <span aria-hidden="true" className="mi-agent-card__switch-track">
-                          <span className="mi-agent-card__switch-thumb" />
-                        </span>
-                        <span>{text.activation.actions.sampleSwitch}</span>
-                      </button>
+                      />
                     ) : (
                       <span className="mi-agent-card__status">
                         <Icon aria-hidden="true" size={13} strokeWidth={1.8} />

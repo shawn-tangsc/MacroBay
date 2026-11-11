@@ -17,6 +17,10 @@ import {
  * The id is the identity; the generation time is only a display value. It is issued when a period is
  * created, opaque, and never derived from the hour, so moving a period from 07:00 to 08:00 cannot
  * detach the editions already generated under it.
+ *
+ * Nothing here says which clock the hour is on: a period runs at the reader's display zone, so
+ * changing that zone moves the schedule with the reader. A per-period zone would be a second answer
+ * to "when does this fire", and the scheduler reads exactly one.
  */
 export type BriefingPeriodOrigin = 'user' | 'legacy-settings'
 

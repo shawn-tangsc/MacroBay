@@ -246,6 +246,13 @@
 .mi-agent-context-card__copy span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 10px; }
 .mi-agent-context-card.is-analysis .mi-agent-context-card__icon { color: var(--accent); }
 
+/* 自动会话的「这次运行」：失败运行没有正文，这张卡片就是那一刻读者能看到的全部事实。 */
+.mi-agent-run-card { display: flex; flex-direction: column; gap: 4px; width: fit-content; max-width: min(100%, 420px); margin: 0 0 7px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.mi-agent-run-card__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mi-agent-run-card__times { color: var(--muted); font-size: var(--font-meta); }
+.mi-agent-run-card__fact { color: var(--text); font-size: var(--font-body); }
+.mi-agent-run-card__reason { color: var(--muted-strong); font-size: var(--font-meta); }
+
 /* Off state: the one action is centred, because the card has no other content to align to. */
 .mi-analysis-conclusion-card__state--center {
   display: flex;
@@ -278,3 +285,27 @@
 /* Below the policy card the calendar and the news split the remaining height evenly; the divider
    still drags the split, so it starts at half rather than at the old 52%. */
 .mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); flex: 1; min-height: 0; }
+
+/*
+ * 结论正文可点（界面设计 2026-11-11 签字）：整块淡底、指针，不加边框/阴影/缩放；
+ * 焦点画在整块外框（2px accent、offset 2、圆角 6）。头部不在可点区内。
+ */
+.mi-analysis-conclusion-card__body--action {
+  cursor: pointer;
+  border-radius: 6px;
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+}
+.mi-analysis-conclusion-card__body--action:hover {
+  background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+}
+.mi-analysis-conclusion-card__body--action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* 鼠标点完不留圈：系统高亮色只在键盘导航时出现，且永远用 accent，不用 UA 默认色。 */
+.mi-analysis-conclusion-card__body--action:focus:not(:focus-visible) { outline: none; }

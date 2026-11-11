@@ -27,6 +27,81 @@ describe('macro economic calendar query projection', () => {
     expect(economicCalendarPresentationPolicy.dayEventLimit).toBe(6)
   })
 
+  /**
+   * `MI-1-R39` §4 五条件**同时**成立才算空壳：发布族 + 日期严格早于今天 + 无官方时刻 + 数值全空
+   * + 官方自动抓取的行。每条都用一条反例钉住——少一条就会藏掉不该藏的事件。
+   */
+  const TODAY = '2026-08-20'
+  const past = '2026-08-12'
+  const future = '2026-08-28'
+
+  it('#1 an auto-collected past release with no time and no values is a shell: main list 0, shells 1', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      // 官方自动抓取那一路（夹具默认是手动 ICS，会命中第 5 条的豁免，所以这里显式换成自动的 caveat）。
+      events: [event({ eventKey: 'US.CPI.RELEASE.shell-1', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only',
+        caveats: ['official-time-not-published'] })] })
+    expect(projection.events).toHaveLength(0)
+    expect(projection.shells.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.shell-1'])
+    expect(projection.days.flatMap(day => day.events)).toHaveLength(0)
+  })
+
+  // #2 手动 ICS 与 python 那条腿的同形行永不判空壳（这五行在库里是读者可见的真实日程）。
+  it.each([
+    ['manual ICS import', ['official-period-not-published-in-ics', 'manual-ics-import']],
+    ['the python leg', ['official-time-not-published', 'bls-python-schedule']]
+  ])('#2 a same-shaped %s row stays in the main list', (_name, caveats) => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.manual-1', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only', caveats })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.manual-1'])
+  })
+
+  it('#3 a future release without values is "not released yet": it stays in the main list', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.future-1', scheduledDate: future, scheduledAt: undefined, releaseTimeSource: 'date-only' })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.future-1'])
+  })
+
+  it('#4 a past FOMC meeting without values is never a shell: that family publishes no values at all', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.FOMC.2026-08-12', eventFamily: 'fomc', titleKey: 'fomc', scheduledDate: past, scheduledAt: undefined,
+        releaseTimeSource: 'date-only', caveats: ['official-time-not-published'] })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.FOMC.2026-08-12'])
+  })
+
+  it('#5 an official-time event without values stays: it is a legitimate "not released yet"', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.pending-1', scheduledDate: past })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.pending-1'])
+  })
+
+  // #12 反向：同形状但**没有**这两条 caveat 的行（BLS 家族刷新 API 那些）仍要判空壳——
+  // 否则第 5 条把规则架空，绿得没意义。
+  it('#12 the same shape without the provenance caveats is still a shell', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', today: TODAY,
+      events: [event({ eventKey: 'US.CPI.RELEASE.api-1', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only',
+        caveats: ['official-time-not-published', 'official-timezone-not-published'] })] })
+    expect(projection.events).toHaveLength(0)
+    expect(projection.shells.map(item => item.eventKey)).toEqual(['US.CPI.RELEASE.api-1'])
+  })
+
+  // #14 写者的 provenance 必须显式进闭集：两条 caveat 都在准入集合里，不许靠「默认都是官方」兜底。
+  it('#14 both provenance caveats are in the admitted closed set, not a default', () => {
+    expect(macroEconomicCalendarCaveatPolicy.admittedCaveats).toContain('manual-ics-import')
+    expect(macroEconomicCalendarCaveatPolicy.admittedCaveats).toContain('bls-python-schedule')
+  })
+
+  it('never filters without a today from the reader time zone (conservative: do not hide)', () => {
+    const projection = createEconomicCalendarProjection({ month: '2026-08', asOf: '2026-08-05T00:00:00.000Z',
+      events: [event({ eventKey: 'US.CPI.RELEASE.shell-2', scheduledDate: past, scheduledAt: undefined, releaseTimeSource: 'date-only',
+        caveats: ['official-time-not-published'] })] })
+    expect(projection.shells).toHaveLength(0)
+    expect(projection.events).toHaveLength(1)
+  })
+
   it('uses the official schedule date for month placement while preserving an optional official release instant', () => {
     const projection = createEconomicCalendarProjection({
       month: '2026-08', asOf: '2026-08-05T00:00:00.000Z', events: [

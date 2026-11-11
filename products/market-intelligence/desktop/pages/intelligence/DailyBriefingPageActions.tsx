@@ -10,6 +10,7 @@ import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefin
 import { BriefingManualRunDialog, type BriefingManualRunDraft, type BriefingManualRunProblem } from './BriefingManualRunDialog'
 import type { BriefingManualRunOutcome } from './useBriefingManualRun'
 import { BriefingPushToPhoneButton } from './BriefingPushToPhoneButton'
+import { openBriefingSessionWithShell } from './openBriefingSession'
 import type { BriefingPushText } from './dailyBriefingPushText'
 import type { BriefingPushToPhone } from './useBriefingPushToPhone'
 import { DailyBriefingGeneratingStatus } from './DailyBriefingGeneratingStates'
@@ -27,7 +28,7 @@ import { briefingEditionDeleteCopy, type BriefingEditionDeleteTarget } from './b
  * 分开放的后果不是"按钮多了"——读者会把"重新生成今天"当成"重新生成这一版"来点。两组各有自己的
  * 禁用条件，也各有自己的理由，混在一行就说不清是哪一组的。
  */
-export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, runningLabel, targetDate, timeZone, defaultDate, latestDate, todayReady, zoneInvalid, systemZone, onManualRun, onOpenSettings }: Readonly<{
+export function DailyBriefingPageActions({ text, resolveText, progress, loading, generating, regenerating, runningLabel, targetDate, timeZone, defaultDate, latestDate, todayReady, systemZone, onManualRun, onOpenSettings }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   progress: BriefingGenerationProgress | undefined
@@ -45,7 +46,6 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   /** 弹框可选的最晚日期：日历今天，未来不许选（`02` v2.129 G1）。 */
   latestDate: string
   todayReady: boolean
-  zoneInvalid: boolean
   systemZone: boolean
   /** 手动生成一次：三个字段由弹框收集，这里只把结果交出去。 */
   /** 一次按下的结果；撞上已有那一版时带一句话和"替换"这个动作，由弹框就地发问。 */
@@ -103,7 +103,6 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
       onClose={() => { setManualOpen(false); setManualProblem(undefined); setManualDuplicate(undefined) }}
     />
     {todayReady ? <>
-      {zoneInvalid ? <small className="mi-daily-briefing__clock-note" role="status">{text.generationSettings.manualUtcNote}</small> : null}
       {/* The settings zone was unusable, so the window was computed in the machine's zone. The
           reader configured a time and is getting another day boundary; saying nothing would let
           them read the edition against the wrong one. */}
@@ -117,7 +116,7 @@ export function DailyBriefingPageActions({ text, resolveText, progress, loading,
   </div>
 }
 
-export function DailyBriefingEditionActions({ text, resolveText, exportable, exportState, copyState, deleteTarget, deleting, generating, runningLabel, regenerateBlockedReason, onExport, onCopy, onDelete, onRegenerate, push, pushText }: Readonly<{
+export function DailyBriefingEditionActions({ text, resolveText, exportable, exportState, copyState, deleteTarget, deleting, generating, runningLabel, regenerateBlockedReason, onExport, onCopy, onDelete, onRegenerate, push, pushText, openSession }: Readonly<{
   text: DailyBriefingText
   resolveText: (key: string) => string
   /** 有可读版次：五颗一起亮；没有就一起禁用，原因写在整组下面一句。 */
@@ -140,8 +139,15 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   regenerateBlockedReason?: string
   push: BriefingPushToPhone
   pushText: BriefingPushText
+  /**
+   * 当前显示那一版的会话（E9）。按 `(date, periodId, locale)` 精确命中才给——没有就不传，
+   * 顶上那颗**整颗不渲染**（不画禁用占位：那等于承诺"本来该有"）。
+   */
+  openSession?: Readonly<{ sessionId: string; label: string }>
 }>): React.ReactElement {
   const confirm = useConfirm()
+  // 「这次没打开」只对当前这一版说一句；再点是**真的再读一次**（与行尾当时同一条规矩）。
+  const [sessionNotOpened, setSessionNotOpened] = useState(false)
   // 发布回执与失败都走平台 toast（用户 2026-11-05：那行字丑、还常驻，别挂在工具栏里）。
   // 每发生一次只提示一次：状态对象本身是"这一次"的身份，重渲染不重发。
   const toast = useToast()
@@ -190,6 +196,21 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   // 工具栏**不参与滚动**：它是卡的第一行，滚动的是卡里只包纸的那一层。既然它不动，就不需要
   // `sticky`、不需要判定"是否吸住"，也不需要滚动时换一套外观——静止与滚动时它看起来一样。
   return <div className="mi-daily-briefing-page__report-bar" data-action-group="edition">
+      {/* 「打开会话」在「重新生成」左边：读者刚看完这一版，下一件事是回它的编辑会话。
+          与其余动作同一个 `Button` + 同一个类，不另造样式；没有会话时整颗不出现。 */}
+      {openSession === undefined ? null : <Button className="mi-briefing-tool__btn" data-toolbar-action="open-session"
+        aria-label={openSession.label}
+        onClick={() => {
+          setSessionNotOpened(false)
+          void openBriefingSessionWithShell(openSession.sessionId)
+            .then((opened) => { if (!opened) setSessionNotOpened(true) })
+            .catch(() => setSessionNotOpened(true))
+        }}>
+        {text.history.openSession}
+      </Button>}
+      {sessionNotOpened ? <span className="mi-daily-briefing__session-not-opened" data-session-not-opened="true" role="status">
+        {text.history.sessionNotOpened}
+      </span> : null}
       {/* 第一颗是"这一版重跑一次"：它作用于当前打开的期号 + 语言，与页面顶部那颗"今天出不出"不是
           同一件事——两颗都在页面上，但管的是不同的东西。 */}
       <Button className="mi-briefing-tool__btn" data-toolbar-action="regenerate-edition"

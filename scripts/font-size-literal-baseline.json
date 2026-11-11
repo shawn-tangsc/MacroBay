@@ -1,9 +1,9 @@
 {
   "note": "字体号字面量总数，只降不升。脚本 scripts/check-font-size-literals.mts 自己数的；口径见其文件头（CSS 声明 + ts/tsx 内联，测试不计）。",
-  "total": 1125,
+  "total": 1103,
   "byRoot": {
-    "apps": 543,
+    "apps": 537,
     "platform": 26,
-    "products": 556
+    "products": 540
   }
 }

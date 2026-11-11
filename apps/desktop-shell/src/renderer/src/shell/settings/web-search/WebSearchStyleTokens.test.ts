@@ -133,8 +133,6 @@ describe('PLAT-60 style tokens', () => {
     const wrap = rule('.web-search-provider-table-wrap')
     const table = rule('.web-search-provider-table')
     const cells = css.match(/\.web-search-provider-table th,\n\.web-search-provider-table td\s*\{[^}]*\}/)?.[0] ?? ''
-    const filter = rule('.web-search-filter-chip')
-    const filterActive = rule('.web-search-filter-chip.on')
     const badge = rule('.web-search-badge')
     const badgeOn = rule('.web-search-badge-on')
     const badgeDefault = rule('.web-search-badge-default')
@@ -146,9 +144,6 @@ describe('PLAT-60 style tokens', () => {
     expect(cells).toContain('padding: 9px 12px')
     expect(cells).toContain('border-bottom: 1px solid var(--border)')
     expect(rule('.web-search-provider-table th')).toContain('background: var(--web-search-control-bg)')
-    expect(filter).toContain('border-radius: 999px')
-    expect(filter).toContain('font-size: 12px')
-    expect(filterActive).toContain('color: var(--accent)')
     expect(badge).toContain('border-radius: 999px')
     expect(badge).toContain('font-size: 10px')
     expect(badgeOn).toContain('--web-search-ok')

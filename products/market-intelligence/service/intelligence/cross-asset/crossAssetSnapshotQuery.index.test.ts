@@ -102,8 +102,16 @@ describe('cross-asset Nasdaq 100 row', () => {
     // The real index has no live tick, so the row must not borrow the perpetual's trade.
     expect(result.quotes?.index).toEqual({ state: 'missing' })
     expect(result.forming?.index).toBeNull()
-    // No bar closed at the analysis instant, so every window is unanswered rather than carried over.
-    expect(Object.values(result.closedReturns.index).every(metric => metric.state === 'unavailable')).toBe(true)
+    // 分析瞬时那一桶没有收盘（现货已收市）时，窗口**回退到库里最近一根已入库的完整桶**，
+    // 而不是整排变成 `—`（Chief 2026-11-11）。`atMs` 就是那一根的时刻，能看出真的换了。
+    for (const window of ['5m', '15m', '1h', '4h'] as const) {
+      const metric = result.closedReturns.index[window]
+      expect(metric.state, window).toBe('available')
+      expect(metric.state === 'available' ? metric.atMs : undefined, window).toBe(new Date(sessionCloseMs).toISOString())
+    }
+    // 这一屏只有一段现货时段的量：24h/7d 的回看端真的没有收盘对 → 仍然不可用（与「还没落库」分开）。
+    expect(result.closedReturns.index['24h']).toEqual({ state: 'unavailable', reason: 'missing' })
+    expect(result.closedReturns.index['7d']).toEqual({ state: 'unavailable', reason: 'missing' })
   })
 
   it('hands the row to the licensed index when no bar is stored for the contract', () => {
@@ -124,12 +132,16 @@ describe('cross-asset Nasdaq 100 row', () => {
     }
   })
 
-  it('follows a source change that happens without a single new bar', () => {
+  it('keeps the row on the stored bars when the runtime turns unavailable (no new bar needed)', () => {
     const bySymbol = bothLegs(overnightMs)
     expect(snapshot({ nowMs: overnightMs, feed: 'ready', bySymbol }).indexSource).toBe('proxy')
-    // Same revision, same instant, same bars: only the proxy leg's own health changed, and the cached
-    // analysis may not keep answering from a leg that stopped answering.
-    expect(snapshot({ nowMs: overnightMs, feed: 'ready', liveState: 'unavailable', bySymbol }).indexSource).toBe('real')
+    // 同 revision、同瞬时、同几根 bar：只有运行状态变成 `unavailable`。库里代理腿的收盘还在，
+    // 所以这一行**仍然由代理腿答**——运行状态只影响状态词（2026-11-11 用户红线）。
+    const degraded = snapshot({ nowMs: overnightMs, feed: 'ready', liveState: 'unavailable', bySymbol })
+    expect(degraded.indexSource).toBe('proxy')
+    expect(degraded.lastClosed?.index?.close).toBe(cryptoBars('QQQUSDT', overnightMs).at(-1)!.close)
+    // 反方向：读者把这一腿关掉（`disabled`）才是「确实不要」，这时才交给真实指数。
+    expect(snapshot({ nowMs: overnightMs, feed: 'ready', liveState: 'disabled', bySymbol }).indexSource).toBe('real')
   })
 
   it('says 未接入 with no reading at all when neither leg can answer', () => {

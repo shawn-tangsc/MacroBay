@@ -27,19 +27,16 @@ describe('resolveNotificationNavigation', () => {
     })
   })
 
-  it('lands a failed analysis on the run log and points at that analysis run', () => {
-    // 分析失败的通知指向那次分析：面板是运行日志（已独立成面板，不是旧的 sources 分区），
-    // 而 focusEntityId 必须留到页面里——只到页面、不到那一条，读者还得自己找。
-    expect(resolveNotificationNavigation({ entityType: 'analysis-run', entityId: 'mi-ar-1' }, products)).toEqual({
-      navKey: 'settings',
-      settingsPanelKey: 'intelligence-run-log',
-      focusEntityId: 'mi-ar-1'
-    })
+  it('gives a failed analysis no target until the product supplies one', () => {
+    // 平台不在壳里写产品面板 id（撤注册之后那就是「点了落到别处」）。产品把目的地写进通知数据
+    // 之前，这条通知只有记录、没有跳转——功能关闭，不是先落到一个错的面板。
+    expect(resolveNotificationNavigation({ entityType: 'analysis-run', entityId: 'mi-ar-1' }, products)).toBeNull()
   })
 
   it('lets a registered entity beat a stale section name', () => {
     // 旧生产者仍写着 intelligence-sources（运行日志已独立成面板）：实体 id 能真的定位到那一条，
     // 分区只会把读者送到错的屏。没登记的实体（如 source）不受这条影响。
+    // 分析运行不是平台登记的实体 ⇒ 退回载荷里的分区名（产品给什么就用什么），不猜面板。
     expect(
       resolveNotificationNavigation(
         {
@@ -50,7 +47,7 @@ describe('resolveNotificationNavigation', () => {
         },
         products
       )
-    ).toEqual({ navKey: 'settings', settingsPanelKey: 'intelligence-run-log', focusEntityId: 'mi-ar-1' })
+    ).toEqual({ navKey: 'settings', settingsPanelKey: 'intelligence-sources' })
 
     expect(
       resolveNotificationNavigation(
@@ -63,6 +60,27 @@ describe('resolveNotificationNavigation', () => {
         products
       )
     ).toEqual({ navKey: 'settings', settingsPanelKey: 'intelligence-sources' })
+  })
+
+  it('carries a product settings-drawer destination through, and refuses an unregistered product', () => {
+    // 产品给的落点：平台只按注册表找那条唯一产品页，然后原样带着 `{ productId, menuId }` 往前送。
+    expect(
+      resolveNotificationNavigation(
+        { productId: 'market-intelligence', settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' } },
+        products
+      )
+    ).toEqual({
+      navKey: '/market-intelligence/intelligence',
+      settingsDrawer: { productId: 'market-intelligence', menuId: 'sources', routePath: '/market-intelligence/intelligence' }
+    })
+
+    // 产品没在这一版注册（没有唯一产品页）→ 不导航，也不回落到任何面板。
+    expect(
+      resolveNotificationNavigation(
+        { settingsDrawer: { productId: 'retired-product', menuId: 'sources' } },
+        products
+      )
+    ).toBeNull()
   })
 
   it('sends an open-briefing action to the route path the registry actually publishes', () => {

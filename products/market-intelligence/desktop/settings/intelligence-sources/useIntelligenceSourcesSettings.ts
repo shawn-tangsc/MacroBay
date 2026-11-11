@@ -6,11 +6,11 @@ import type {
 } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
-import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
-import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout } from './intelligenceSourceProfileEditor'
+import { notifySettingsRevision, subscribeSettingsRevision } from '../../shared/events/settingsRevision'
+import { createSettingsOrigin, writeSourceEnabled } from './sourceWrites'
+import { isSuccessfulCredentialOperation, resolveEnabledNotice, resolveRunNotice, runOutcomeOf, toSaveProfileInput, upsertProfile, waitForRunHealth, withTimeout, type SourceRunOutcome } from './intelligenceSourceProfileEditor'
 
 export { isSuccessfulCredentialOperation }
-import { buildSourceEnabledById } from './intelligenceSourceCatalogView'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 
 type HookState = {
@@ -27,6 +27,8 @@ type HookState = {
   replaying: boolean
   errorCode: string | null
   notice: string | null
+  /** 另一处保存了这一域的设置，而本页有未保存的草稿：只提示，不覆盖。 */
+  otherSideChanged: boolean
 }
 
 export function useIntelligenceSourcesSettings(labels: {
@@ -52,10 +54,15 @@ export function useIntelligenceSourcesSettings(labels: {
     testingCredentials: false,
     replaying: false,
     errorCode: null,
-    notice: null
+    notice: null,
+    otherSideChanged: false
   })
   const saveQueueRef = useRef(Promise.resolve())
   const pendingSaveCountRef = useRef(0)
+  /** 本页写出的变更带着这个 origin 发出去，订阅时忽略自己那一次。 */
+  const revisionOriginRef = useRef(createSettingsOrigin('sources'))
+  /** 本页有没有未保存的输入（凭据框）。由详情组件回报。 */
+  const draftDirtyRef = useRef(false)
 
   const load = useCallback(async (sourceId?: string) => {
     const [pageState, profiles, settingsView] = await Promise.all([
@@ -93,6 +100,35 @@ export function useIntelligenceSourcesSettings(labels: {
     reload()
   }, [reload])
 
+  /**
+   * C8：另一处保存了「来源」域 → 本页**重读**。
+   * 有未保存草稿时**不覆盖**，只立起「另一处已修改」，由读者决定重载还是继续编辑。
+   */
+  useEffect(() => subscribeSettingsRevision('sources', (detail) => {
+    if (detail.origin === revisionOriginRef.current) return
+    if (draftDirtyRef.current) {
+      setState((current) => ({ ...current, otherSideChanged: true }))
+      return
+    }
+    reload()
+  }), [reload])
+
+  const setDraftDirty = useCallback((dirty: boolean) => {
+    draftDirtyRef.current = dirty
+  }, [])
+
+  /** 「重新载入」：丢掉草稿、按另一处的值重读。 */
+  const reloadFromOtherSide = useCallback(() => {
+    setState((current) => ({ ...current, otherSideChanged: false }))
+    draftDirtyRef.current = false
+    reload()
+  }, [reload])
+
+  /** 「继续编辑」：只收起提示，草稿原样保留。 */
+  const dismissOtherSideChanged = useCallback(() => {
+    setState((current) => ({ ...current, otherSideChanged: false }))
+  }, [])
+
   const selectSource = useCallback(async (sourceId: string) => {
     setState((current) => ({ ...current, loading: true, errorCode: null }))
     try {
@@ -102,154 +138,44 @@ export function useIntelligenceSourcesSettings(labels: {
     }
   }, [labels.loadFailed, load])
 
-  const setEnabled = useCallback(
-    (enabled: boolean) => {
-      let previousProfile: IntelligenceSourceProfile | undefined
-      let sourceId: string | undefined
-      let blocked = false
-
-      setState((current) => {
-        if (!current.draftProfile) return current
-        const definition = current.definitions.find((item) => item.sourceId === current.draftProfile?.sourceId)
-        if (
-          definition &&
-          (definition.readiness === 'planned' || definition.readiness === 'fixture-ready') &&
-          definition.collectionOwner !== 'product' &&
-          enabled
-        ) {
-          blocked = true
-          return current
-        }
-        previousProfile = current.draftProfile
-        sourceId = current.draftProfile.sourceId
-        return {
+  /**
+   * 源行/详情的那颗启用开关——**页面上唯一的启用写入点**。
+   *
+   * 日历源与通用源走不同的服务命令（`setSourceEnabled` 一处路由），写完**重读**：开关的值以
+   * 投影为准，不靠组件各自记一份乐观值。失败回滚并把原因留在页面上。
+   */
+  const toggleSourceEnabled = useCallback(
+    async (source: Readonly<{ sourceId: string; kind: string }>, enabled: boolean): Promise<boolean> => {
+      const previous = state.profiles.find((profile) => profile.sourceId === source.sourceId)
+        ?? (state.draftProfile?.sourceId === source.sourceId ? state.draftProfile : undefined)
+      setState((current) => ({
+        ...current,
+        ...(previous === undefined ? {} : { profiles: upsertProfile(current.profiles, { ...previous, enabled }) }),
+        draftProfile: current.draftProfile?.sourceId === source.sourceId
+          ? { ...current.draftProfile, enabled }
+          : current.draftProfile,
+        saving: true,
+        errorCode: null
+      }))
+      try {
+        await writeSourceEnabled(source, enabled, revisionOriginRef.current)
+        // 写完重读：两个宿主看到的是同一份投影，不是两套乐观值。
+        await load(state.selectedSourceId)
+        return true
+      } catch {
+        setState((current) => ({
           ...current,
-          draftProfile: { ...current.draftProfile, enabled },
-          saving: true,
-          errorCode: null
-        }
-      })
-
-      if (blocked || !previousProfile || !sourceId) return
-
-      pendingSaveCountRef.current += 1
-      saveQueueRef.current = saveQueueRef.current
-        .then(async () => {
-          const detail = await withTimeout(
-            intelligenceSourcesClient.saveProfile({ sourceId: sourceId!, enabled }),
-            15_000
-          )
-          setState((current) => {
-            const nextState = {
-              ...current,
-              profiles: upsertProfile(current.profiles, detail.profile),
-              errorCode: null
-            }
-            if (current.selectedSourceId !== detail.profile.sourceId) {
-              return nextState
-            }
-            return {
-              ...nextState,
-              detail,
-              draftProfile: detail.profile,
-              notice: resolveEnabledNotice(detail.profile, enabled, labels)
-            }
-          })
-          notifyIntelligenceSourcesChanged()
-
-          if (enabled && detail.profile.collectionPreset !== 'manual') {
-            void waitForRunHealth(sourceId!)
-              .then((health) => {
-                setState((current) => {
-                  if (current.selectedSourceId !== sourceId) return current
-                  return {
-                    ...current,
-                    detail: current.detail ? { ...current.detail, health } : current.detail,
-                    notice: resolveRunNotice(health, labels)
-                  }
-                })
-              })
-              .catch(() => undefined)
-          }
-        })
-        .catch(() => {
-          setState((current) => ({
-            ...current,
-            draftProfile:
-              current.selectedSourceId === previousProfile?.sourceId ? previousProfile : current.draftProfile,
-            errorCode: labels.saveFailed
-          }))
-        })
-        .finally(() => {
-          pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1)
-          if (pendingSaveCountRef.current === 0) {
-            setState((current) => ({ ...current, saving: false }))
-          }
-        })
+          profiles: previous === undefined ? current.profiles : upsertProfile(current.profiles, previous),
+          draftProfile: current.draftProfile?.sourceId === source.sourceId && previous !== undefined
+            ? previous
+            : current.draftProfile,
+          saving: false,
+          errorCode: labels.saveFailed
+        }))
+        return false
+      }
     },
-    [labels.disabledSaved, labels.enabledAutoCollectQueued, labels.enabledManualHint, labels.runFailed, labels.runQueued, labels.runSucceeded, labels.saveFailed]
-  )
-
-  const updateProfile = useCallback(
-    (patch: Partial<IntelligenceSourceProfile>) => {
-      let previousProfile: IntelligenceSourceProfile | undefined
-      let nextProfile: IntelligenceSourceProfile | undefined
-
-      setState((current) => {
-        if (!current.draftProfile) return current
-        previousProfile = current.draftProfile
-        nextProfile = { ...current.draftProfile, ...patch }
-        return {
-          ...current,
-          draftProfile: nextProfile,
-          saving: true,
-          errorCode: null
-        }
-      })
-
-      if (!previousProfile || !nextProfile) return
-
-      pendingSaveCountRef.current += 1
-      saveQueueRef.current = saveQueueRef.current
-        .then(async () => {
-          const detail = await withTimeout(
-            intelligenceSourcesClient.saveProfile(toSaveProfileInput(nextProfile!)),
-            15_000
-          )
-          setState((current) => {
-            const nextState = {
-              ...current,
-              profiles: upsertProfile(current.profiles, detail.profile),
-              errorCode: null
-            }
-            if (current.selectedSourceId !== detail.profile.sourceId) {
-              return nextState
-            }
-            return {
-              ...nextState,
-              detail,
-              draftProfile: detail.profile,
-              notice: labels.saved
-            }
-          })
-          notifyIntelligenceSourcesChanged()
-        })
-        .catch(() => {
-          setState((current) => ({
-            ...current,
-            draftProfile:
-              current.selectedSourceId === previousProfile?.sourceId ? previousProfile : current.draftProfile,
-            errorCode: labels.saveFailed
-          }))
-        })
-        .finally(() => {
-          pendingSaveCountRef.current = Math.max(0, pendingSaveCountRef.current - 1)
-          if (pendingSaveCountRef.current === 0) {
-            setState((current) => ({ ...current, saving: false }))
-          }
-        })
-    },
-    [labels.saved, labels.saveFailed]
+    [labels.saveFailed, load, state.draftProfile, state.profiles, state.selectedSourceId]
   )
 
   /**
@@ -293,7 +219,7 @@ export function useIntelligenceSourcesSettings(labels: {
               ? { detail, draftProfile: detail.profile, notice: labels.saved }
               : {})
           }))
-          notifyIntelligenceSourcesChanged()
+          notifySettingsRevision('sources', revisionOriginRef.current)
         })
         .catch(() => {
           setState((current) => ({
@@ -313,34 +239,39 @@ export function useIntelligenceSourcesSettings(labels: {
     [labels.saved, labels.saveFailed]
   )
 
-  const runNow = useCallback(async () => {
-    if (!state.selectedSourceId) return
-    const definition = state.definitions.find((item) => item.sourceId === state.selectedSourceId)
-    if (
-      definition?.readiness === 'planned' ||
-      definition?.readiness === 'fixture-ready' ||
-      definition?.supportsRunNow === false
-    ) {
-      return
-    }
+  /**
+   * 运行一个源（B5）。**按源传参**：设置页的详情里每个源各有一颗按钮，不再只认「选中的那个」。
+   * 返回这一次的结果给按钮那一行显示（成功带摘要 / 没成带原因 / 提交了还没结果）。
+   */
+  const runSourceNow = useCallback(async (sourceId: string): Promise<SourceRunOutcome> => {
+    // 「能不能跑」只在 `sourceHealthCells.runNowAnswerOf` 判一次（按钮与四格读同一个答案）；
+    // 这里不再自己判一遍 readiness / supportsRunNow——两处判同一件事，迟早一处说能、一处说不能。
     setState((current) => ({ ...current, running: true, errorCode: null, notice: null }))
     try {
-      await intelligenceSourcesClient.runNow(state.selectedSourceId)
-      const health = await waitForRunHealth(state.selectedSourceId)
+      await intelligenceSourcesClient.runNow(sourceId)
+      const health = await waitForRunHealth(sourceId)
+      const outcome = runOutcomeOf(health, labels)
       setState((current) => ({
         ...current,
         running: false,
-        detail: current.detail ? { ...current.detail, health } : current.detail,
-        notice: resolveRunNotice(health, labels),
-        errorCode:
-          health.lastFailureAt && (!health.lastSuccessAt || health.lastFailureAt >= health.lastSuccessAt)
-            ? labels.runFailed
-            : null
+        detail: current.detail?.profile.sourceId === sourceId
+          ? { ...current.detail, health }
+          : current.detail,
+        notice: outcome.notice,
+        errorCode: outcome.kind === 'failed' ? labels.runFailed : null
       }))
+      return outcome
     } catch {
       setState((current) => ({ ...current, running: false, errorCode: labels.runFailed }))
+      return { kind: 'failed', notice: labels.runFailed }
     }
-  }, [labels, state.definitions, state.selectedSourceId])
+  }, [labels])
+
+  /** 旧入口：跑「当前选中的那一个」，行为与改前一致。 */
+  const runNow = useCallback(async () => {
+    if (!state.selectedSourceId) return
+    await runSourceNow(state.selectedSourceId)
+  }, [runSourceNow, state.selectedSourceId])
 
   const testCredentials = useCallback(
     async (credentialDraft?: string) => {
@@ -387,15 +318,6 @@ export function useIntelligenceSourcesSettings(labels: {
     }))
   }, [state.detail, state.selectedSourceId])
 
-  const sourceEnabledById = useMemo(
-    () =>
-      buildSourceEnabledById(
-        state.definitions.map((definition) => definition.sourceId),
-        state.profiles,
-        state.draftProfile
-      ),
-    [state.definitions, state.draftProfile, state.profiles]
-  )
   const needsManualRunPrompt = useMemo(() => {
     if (!state.draftProfile?.enabled || state.draftProfile.collectionPreset !== 'manual') return false
     const health = state.detail?.health
@@ -404,16 +326,20 @@ export function useIntelligenceSourcesSettings(labels: {
 
   return {
     ...state,
-    sourceEnabledById,
     needsManualRunPrompt,
     reload,
     selectSource,
-    setEnabled,
-    updateProfile,
+    toggleSourceEnabled,
     updateSourceProfile,
     runNow,
     testCredentials,
     replayWindow,
-    refreshHealth
+    refreshHealth,
+    runSourceNow,
+    setDraftDirty,
+    reloadFromOtherSide,
+    dismissOtherSideChanged,
+    /** 本界面实例的域信号 origin：格级写入也用它，别处据此忽略自己那一次。 */
+    revisionOrigin: revisionOriginRef.current
   }
 }

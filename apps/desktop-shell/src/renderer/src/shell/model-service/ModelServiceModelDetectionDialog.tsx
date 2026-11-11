@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { AlertTriangle, Square } from 'lucide-react'
+import { AlertTriangle, Square, X } from 'lucide-react'
 import { Button } from 'antd'
 
 import type { ModelDetectionMode } from '@platform/ai/providers/modelDetection/types'
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -253,9 +254,15 @@ export function ModelServiceModelDetectionDialog({
             borderTopStyle: 'solid',
             borderTopColor: 'var(--border)'
           }}>
-          <Button data-detect-close type="text" onClick={onClose}>
-            {labels.detectClose}
-          </Button>
+          {/* 关闭是图标触发 → 平台 `IconButton`（读屏名走键、尺寸只有 22/24 两档）。 */}
+          <IconButton
+            ariaLabelKey="modelService.detectClose"
+            dataAttributes={{ 'data-detect-close': true }}
+            icon={X}
+            onSelect={onClose}
+            resolveText={(key) => (key === 'modelService.detectClose' ? labels.detectClose : '')}
+            size="md"
+          />
           {canStop ? (
             <Button
               data-detect-stop

@@ -81,3 +81,31 @@ it.each(['success', 'failure'] as const)('keeps the in-flight session identity a
     container.remove(); vi.unstubAllGlobals()
   }
 })
+
+it('lists only the reader\'s own conversations, never the automation run sessions', async () => {
+  // 真实数据：这个 agent 下 47 条自动分析会话、1 条读者会话。面板以前把自动会话也列进来、
+  // 还会选中最新那条——里面只有一张上下文卡片，打开就是空白。
+  const state = {
+    agents: [{ id: 'crypto-market-analyst', model: 'test:model' }],
+    sessions: [
+      { id: 'run-1', agentId: 'crypto-market-analyst', name: '市场分析', origin: 'automation', originGroup: 'market-analysis', updatedAt: '2026-11-10T01:00:00.000Z' },
+      { id: 'mine', agentId: 'crypto-market-analyst', name: '我的对话', origin: 'reader', updatedAt: '2026-11-09T01:00:00.000Z' }
+    ],
+    messagesBySessionId: {}
+  }
+  vi.stubGlobal('platform', { agents: { getState: async () => state, onStateChanged: () => () => {}, getRuntimeSnapshot: async () => ({ sessions: {}, toolApprovals: [] }) } })
+  let chat!: ReturnType<typeof useMarketAnalysisChat>
+  function Probe() { chat = useMarketAnalysisChat(undefined, '市场对话'); return null }
+  const container = document.createElement('div'); document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(createElement(Probe)))
+    await act(async () => { await Promise.resolve() })
+    expect(chat.sessions.map(session => session.id)).toEqual(['mine'])
+    // 选中的是读者自己的那条，而不是最新的自动会话。
+    expect(chat.sessionId).toBe('mine')
+  } finally {
+    await act(async () => root.unmount())
+    container.remove(); vi.unstubAllGlobals()
+  }
+})

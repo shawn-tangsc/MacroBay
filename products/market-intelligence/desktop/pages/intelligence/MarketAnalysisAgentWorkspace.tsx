@@ -17,6 +17,7 @@ import { analysisWorkspaceLayoutPolicy as layout } from './analysisWorkspaceLayo
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { createMarketAnalysisContextRenderers } from './MarketAnalysisContextCard'
+import { marketAnalysisRunSessionText } from './marketAnalysisRunSessionText'
 import { useMarketAnalysisChat } from './useMarketAnalysisChat'
 import { AgentFloatingControl, type AgentFloatingControlText } from './AgentFloatingControl'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
@@ -45,6 +46,11 @@ type Props = {
   selectedEventKey?: string
   selectedEventMonth?: string
   onClearSelectedContext?: () => void
+  /**
+   * 透传给舆情 feature：打开配置抽屉并落到「采集与数据」的舆情组。
+   * **必须收 focus**：feature 知道自己要的是哪一组，中间层把参数丢掉，读者就会停在第一屏。
+   */
+  onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   floatingText: AgentFloatingControlText
 }
 
@@ -56,12 +62,17 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenSettings, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
-    () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
-    [t.contextAnalysis, t.selectedEvent]
+    () => createMarketAnalysisContextRenderers({
+      analysis: t.contextAnalysis,
+      event: t.selectedEvent,
+      runSession: marketAnalysisRunSessionText[language],
+      failureReasons: text.analysisTimeline.failureReasons
+    }),
+    [t.contextAnalysis, t.selectedEvent, language, text.analysisTimeline.failureReasons]
   )
   const [ownBinding, setOwnBinding] = useState<AnalysisWorkspaceBinding>()
   const [ownSelectionState, setOwnSelectionState] = useState<AnalysisSelectionState>('none')
@@ -206,6 +217,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
       onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
     />
     <NewsSentimentFeature
+      {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
       language={language}
       text={text.newsSentiment}
       onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}

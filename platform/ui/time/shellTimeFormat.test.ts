@@ -5,6 +5,7 @@ import { fallbackTimeZone, systemTimeZoneSetting } from '../../settings/schema/a
 import {
   formatShellCompactInstant,
   formatShellInstant,
+  formatShellTimeOfDay,
   formatShellTimeZoneLabel,
   formatShellYearMonth,
   resolveShellTimeZone,
@@ -105,5 +106,19 @@ describe('formatShellCompactInstant (T22)', () => {
     expect(
       formatShellCompactInstant('2026-07-15T12:00:00.000Z', { timeZone: 'America/New_York', locale: 'en-US' })
     ).toBe('07-15 08:00 GMT-4')
+  })
+})
+
+describe('formatShellTimeOfDay', () => {
+  it('gives the wall clock only, on the same day and on another day alike', () => {
+    // 日期由调用方的分组标题表达；这里偷偷补一个 MM-DD，就会让「名字里已有这个时刻」的判定失效。
+    expect(formatShellTimeOfDay('2026-11-09T20:45:00.000Z', { timeZone: 'UTC' })).toBe('20:45')
+    // 换时区要换时刻、但依然不换形状：东八区是次日凌晨 04:45。
+    expect(formatShellTimeOfDay('2026-11-09T20:45:00.000Z', { timeZone: 'Asia/Shanghai' })).toBe('04:45')
+  })
+
+  it('returns null for an instant it cannot read, and never throws on an unknown zone', () => {
+    expect(formatShellTimeOfDay('not-an-instant', { timeZone: 'UTC' })).toBeNull()
+    expect(formatShellTimeOfDay('2026-11-09T20:45:00.000Z', { timeZone: 'Mars/Olympus' })).toBeNull()
   })
 })

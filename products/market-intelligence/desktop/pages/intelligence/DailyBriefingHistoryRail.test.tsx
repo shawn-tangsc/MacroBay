@@ -818,3 +818,12 @@ describe('“running” is only the row that says so (2026-11-06)', () => {
     expect(host.querySelector('[data-rail-title="running"]')).toBeNull()
   })
 })
+
+describe('the session action is not on the rail any more (E9 moved to the toolbar)', () => {
+  it('renders no session button on any row, and no "not opened" line either', () => {
+    render({ editions: [edition({ sessionId: 'session-1' }), edition({ periodId: 'evening', sessionId: 'session-2' })] })
+    expect(host.querySelectorAll('[data-open-session]')).toHaveLength(0)
+    expect(host.querySelectorAll('.mi-daily-briefing__rail-open-session')).toHaveLength(0)
+    expect(host.querySelector('[data-session-not-opened]')).toBeNull()
+  })
+})

@@ -3,19 +3,19 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
+
+import { SettingInfoPopover } from '../SettingInfoPopover'
 
 import type { PlatformText } from '../../../i18n/platformText'
 
-import type { Agent, ChannelPermissionMode } from './channelSettingsPresentation'
+import type { Agent } from './channelSettingsPresentation'
 
 export type ChannelFieldValues = {
   name: string
   agentId: string
-  token: string
-  /** `null` = 系统默认目录。 */
-  workspaceId: string | null
-  /** `null` = 继承助手设置（**不是** `'default'`，那是助手级默认值）。 */
-  permissionMode: ChannelPermissionMode | null
+  /** 凭据字段 → 输入值。字段清单来自适配器描述符（`credentialFields`），不在界面里写死平台名。 */
+  credentials: Record<string, string>
   /** 逗号或换行分隔的原始文本：保存时才解析成列表。 */
   allowedChatIdsText: string
 }
@@ -32,13 +32,15 @@ export function parseAllowedChatIds(text: string): string[] {
 }
 
 /**
- * 新建与编辑共用的六字段布局（原型 B，顺序即必填到可选）：
- * 名称 → 绑定智能体 → 工作目录 → Bot Token → 允许的会话 ID → 频道权限模式。
+ * 新建与编辑共用的字段布局（顺序即必填到可选）：
+ * 名称 → 绑定智能体 → Bot Token → 允许的会话 ID。
  *
  * **两个弹层共用这一个组件**，因为需求定的是「新建和编辑统一，别做两套」。
  *
- * 三个字段现在都能真正保存（工作目录、权限模式自 `64853a9`；允许的会话 ID 自 `3a0e262`，
- * 那一笔把入站判定改成了「列表非空只放行名单内、空且无策略＝允许所有」）。
+ * 这一屏只回答两件事：「这条频道是什么（名字/类型/凭据）」+「开不开」。工作目录与权限模式
+ * 曾在这里各占一栏，2026-11-10 撤掉：权限是**智能体级**的事实，频道再存一份就是读者拦不住、
+ * 却以为拦住了的假安全感；入站会话用的是智能体工作区，频道级目录会成为第二个工作区权威。
+ * 两个存储列留着（不迁移、不删），但不再由读者写入。
  *
  * 「允许的会话 ID」的文案必须**跟着真实状态**走：空列表在「没有显式名单」的频道上等于
  * 允许所有，这一步有风险；而同一个空列表在「已有显式名单」的频道上并不放开任何人。
@@ -50,40 +52,25 @@ export function ChannelFields(props: {
   agents: readonly Agent[]
   labels: PlatformText['settings']
   policyPresence: ChannelPolicyPresence
+  /** 这个平台的凭据字段（来自描述符）：每一项一个输入框，顺序即描述符顺序。 */
+  credentialFields: readonly string[]
+  /** 主进程算好的旧值掩码：编辑时按字段显示「当前已存」，界面从不回填明文。 */
+  maskedFields?: Readonly<Record<string, string>>
+  /** 逐字段的校验错误：挂在**对应那一行**，不是弹层底部一句笼统的「保存失败」。 */
+  credentialErrors?: Readonly<Record<string, string>>
   /**
    * 编辑时库里凭据的真实档位：决定输入框下面那句提示。
    * `configured` → 留空＝不改；`missing` → 填一个，留空什么都不会存；`unavailable` → 填新的换掉它。
    */
   tokenState?: 'configured' | 'missing' | 'unavailable'
-  /** 读者已有的工作区（只列 `user` 那类）。 */
-  workspaces?: readonly { id: string; name: string; path: string }[]
-  /** 选文件夹：返回工作区编号（用户取消返回 null）。登记动作在主进程，这里只拿编号。 */
-  onChooseWorkspace?: () => Promise<string | null>
   onChange: (patch: Partial<ChannelFieldValues>) => void
 }): React.ReactElement {
   const { labels, values } = props
-  // 输入中的新 Token 临时可见；旧值永远不经过这个开关（接口里就没有旧值）。
-  const [tokenVisible, setTokenVisible] = useState(false)
+  // 每个字段一个「临时可见」开关：只让**正在输入的新值**可以被看一眼，旧值没有回显路径。
+  const [visibleFields, setVisibleFields] = useState<Readonly<Record<string, boolean>>>({})
 
-  const CHOOSE_WORKSPACE = '__choose-directory__'
-  const workspaceChoices = props.workspaces ?? []
-  const currentMissing =
-    values.workspaceId !== null && !workspaceChoices.some((workspace) => workspace.id === values.workspaceId)
-  const workspaceOptions = [
-    { value: 'system', label: labels.channelWorkspaceDefault },
-    // 已经选过、但不在读者现有工作区列表里的那条（被删掉了）：原样回显它，不悄悄换成别的。
-    ...(currentMissing ? [{ value: values.workspaceId as string, label: labels.channelWorkspaceCurrent }] : []),
-    ...workspaceChoices.map((workspace) => ({ value: workspace.id, label: workspace.name })),
-    { value: CHOOSE_WORKSPACE, label: labels.channelWorkspaceChoose }
-  ]
-
-  const permissionOptions = [
-    { value: 'inherit', label: labels.channelPermissionInherit },
-    { value: 'default', label: labels.channelPermissionDefault },
-    { value: 'acceptEdits', label: labels.channelPermissionAcceptEdits },
-    { value: 'bypassPermissions', label: labels.channelPermissionBypass },
-    { value: 'plan', label: labels.channelPermissionPlan }
-  ]
+  const fieldLabel = (field: string): string =>
+    (labels.channelCredentialField as Readonly<Record<string, string>>)[field] ?? field
 
   return (
     <div className="channel-fields">
@@ -103,77 +90,77 @@ export function ChannelFields(props: {
         value={values.agentId.length === 0 ? undefined : values.agentId}
       />
 
-      <FieldShell label={labels.channelFieldWorkspace}>
-        <Select
-          aria-label={labels.channelFieldWorkspace}
-          onChange={(value: string) => {
-            // 「选择文件夹…」不是一次选择：它要先调系统窗口、登记工作区，拿到编号后才改这一栏。
-            if (value === CHOOSE_WORKSPACE) {
-              void props.onChooseWorkspace?.().then((workspaceId) => {
-                if (workspaceId !== null && workspaceId !== undefined) props.onChange({ workspaceId })
-              })
-              return
+      {props.credentialFields.map((field) => {
+        const label = fieldLabel(field)
+        const visible = visibleFields[field] === true
+        const error = props.credentialErrors?.[field]
+        const masked = props.maskedFields?.[field]
+        return (
+          <FieldShell
+            info={
+              <SettingInfoPopover
+                hintKeys={[props.tokenState === 'missing' ? 'channelTokenEnterHint' : props.tokenState === 'unavailable' ? 'channelTokenUnavailableHint' : 'channelTokenReadOnly', ...(visible ? ['channelTokenVisibleHint'] : [])]}
+                infoLabelKey="settings.channels.tokenInfo"
+                resolveText={(key: string) =>
+                  key === 'settings.channels.tokenInfo'
+                    ? labels.channelTokenInfoAria
+                    : (labels as unknown as Record<string, string>)[key] ?? ''
+                }
+              />
             }
-            props.onChange({ workspaceId: value === 'system' ? null : value })
-          }}
-          options={workspaceOptions}
-          style={{ width: '100%' }}
-          value={values.workspaceId ?? 'system'}
-        />
-      </FieldShell>
-
-      <FieldShell label={labels.channelCredential}>
-        {props.mode === 'create' ? (
-          <Input.Password
-            aria-label={labels.channelCredential}
-            autoComplete="off"
-            onChange={(event) => props.onChange({ token: event.target.value })}
-            placeholder={labels.channelCredential}
-            value={values.token}
-          />
-        ) : (
-          // 编辑时**可以替换**，但旧值不可读：输入框永远空着，留空＝不改。
-          // 不用 Input.Password（它带「眼睛」＝查看入口），也不回显、不复制旧值。
-          <>
+            key={field}
+            label={label}>
             <div className="channel-field-with-toggle">
               <Input
-                aria-label={labels.channelCredential}
+                aria-label={label}
                 autoComplete="off"
-                onChange={(event) => props.onChange({ token: event.target.value })}
-                placeholder={labels.channelTokenReplaceHint}
-                type={tokenVisible ? 'text' : 'password'}
-                value={values.token}
+                onChange={(event) =>
+                  props.onChange({ credentials: { ...values.credentials, [field]: event.target.value } })}
+                placeholder={
+                  props.mode === 'edit'
+                    ? masked
+                      ? labels.channelTokenCurrent.replace('{mask}', masked)
+                      : labels.channelTokenReplaceHint
+                    : label
+                }
+                type={props.mode === 'create' || visible ? 'text' : 'password'}
+                value={values.credentials[field] ?? ''}
               />
-              {/* 只让**正在输入的新值**可以被看一眼：旧值没有回显路径，也没有复制入口。
-                  读屏名保持恒定（`pressed` 表达状态），否则读屏会听到「隐藏…，已按下」。 */}
-              <IconButton
-                ariaLabelKey="settings.channels.tokenVisibility"
-                icon={tokenVisible ? EyeOff : Eye}
-                onSelect={() => setTokenVisible((current) => !current)}
-                pressed={tokenVisible}
-                resolveText={(key) => (key === 'settings.channels.tokenVisibility' ? labels.channelTokenVisibility : '')}
-                size="sm"
-                tooltipKey="settings.channels.tokenVisibility"
-              />
+              {props.mode === 'edit' ? (
+                <IconButton
+                  ariaLabelKey="settings.channels.tokenVisibility"
+                  icon={visible ? EyeOff : Eye}
+                  onSelect={() => setVisibleFields((current) => ({ ...current, [field]: !visible }))}
+                  pressed={visible}
+                  resolveText={(key) => (key === 'settings.channels.tokenVisibility' ? labels.channelTokenVisibility : '')}
+                  size="sm"
+                  tooltipKey="settings.channels.tokenVisibility"
+                />
+              ) : null}
             </div>
-            {tokenVisible ? (
-              <small className="channel-field-hint" data-token-visible-hint>
-                {labels.channelTokenVisibleHint}
-              </small>
+            {error ? (
+              // 平台提示条：danger 档自带 role="alert"，位置与句子不变，不再手写裸 alert。
+              <div data-field-error={field}>
+                <InlineNotice tone="danger">{error}</InlineNotice>
+              </div>
             ) : null}
-            <small className="channel-field-hint">
-              {/* 三档三句：「留空＝不修改」只在真有一把可读的凭据时才是实话。 */}
-              {props.tokenState === 'missing'
-                ? labels.channelTokenEnterHint
-                : props.tokenState === 'unavailable'
-                  ? labels.channelTokenUnavailableHint
-                  : labels.channelTokenReadOnly}
-            </small>
-          </>
-        )}
-      </FieldShell>
+          </FieldShell>
+        )
+      })}
 
-      <FieldShell hint={labels.channelAllowedChatsHint} label={labels.channelFieldAllowedChats}>
+      <FieldShell
+        info={
+          <SettingInfoPopover
+            hintKey="channelAllowedChatsHint"
+            infoLabelKey="settings.channels.allowedChatsInfo"
+            resolveText={(key: string) =>
+              key === 'settings.channels.allowedChatsInfo'
+                ? labels.channelAllowedChatsInfoAria
+                : (labels as unknown as Record<string, string>)[key] ?? ''
+            }
+          />
+        }
+        label={labels.channelFieldAllowedChats}>
         <Input.TextArea
           aria-label={labels.channelFieldAllowedChats}
           autoSize={{ minRows: 2, maxRows: 4 }}
@@ -193,32 +180,29 @@ export function ChannelFields(props: {
               : `${labels.channelAllowedChatsAll} ${labels.channelAllowedChatsRisk}`}
         </p>
       )}
-
-      <FieldShell label={labels.channelFieldPermissionMode}>
-        <Select
-          aria-label={labels.channelFieldPermissionMode}
-          onChange={(value: string) =>
-            props.onChange({ permissionMode: value === 'inherit' ? null : (value as ChannelPermissionMode) })
-          }
-          options={permissionOptions}
-          style={{ width: '100%' }}
-          value={values.permissionMode ?? 'inherit'}
-        />
-      </FieldShell>
     </div>
   )
 }
 
+/**
+ * 一个字段 = 字段名（旁边可挂一颗 ⓘ）+ 控件（下边最多一行状态句）。
+ *
+ * **说明进 ⓘ**（用户口径，2026-11-11）：字段名旁边的 ⓘ 承载解释，正文只留字段名 / 值 / 控件 /
+ * 一行状态。外壳从 `<label>` 换成 `<div>`：控件各自带 `aria-label`（见上），而 `<label>` 里再放一颗
+ * 按钮会让 label 的关联对象变成那颗按钮——那正是「点字段名没反应」的来源。
+ */
 function FieldShell(props: {
   label: string
-  hint?: string
+  info?: React.ReactNode
   children: React.ReactNode
 }): React.ReactElement {
   return (
-    <label className="channel-field">
-      <span className="channel-field-label">{props.label}</span>
+    <div className="channel-field">
+      <div className="channel-field-label-row">
+        <span className="channel-field-label">{props.label}</span>
+        {props.info}
+      </div>
       {props.children}
-      {props.hint === undefined ? null : <small className="channel-field-hint">{props.hint}</small>}
-    </label>
+    </div>
   )
 }

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { isCanonicalOpenInterestTime, type OpenInterestHistoryResult, type OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import type { ModuleSignalAnalysisRead } from '../../../service/intelligence/analysis/signalAnalysisRead'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { chipAnalysisOf, projectDashboardPositioning, projectModuleSignalChip, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { moduleSignalClient } from '../../shared/ipc/moduleSignalClient'
+import { trackQuietRevision } from './useDataChangeRevision'
 
 /**
  * One read per window. Switching 7d/24h is a new query rather than a client-side reshape: the
@@ -17,21 +18,40 @@ export function useDashboardOpenInterest(input: Readonly<{
   window: OpenInterestWindow
   /** Defaults to the real bridge; a test hands in its own reader. */
   signalClient?: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }
+  /**
+   * 宿主**已经决定这一格不读**（格关了 / 源关了 / 源状态读不到）：给终态，不许写「加载中」——
+   * 「加载中」是永远到不了的等待，界面就永远不告诉读者「没启用」（2026-11-11 用户现场）。
+   * 卡片显示的到底是哪一句，由 `cells` 里的判定 kind 决定，这里只负责不再挂着。
+   */
+  disabled?: boolean
+  /** 启用表还没读完（首帧）：这时才轮到「加载中」，身份与上面那条不同。 */
+  waiting?: boolean
+  /** 「采集写了库」的计数：变了就是后台重读（保留旧读数、失败沿用上一次）。 */
+  revision?: number
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const revisionRef = useRef<number | undefined>(input.revision)
   const reload = () => setAttempt(value => value + 1)
   const [mountInput] = useState(() => input)
   const { window } = input
 
   useEffect(() => {
     let active = true
+    const quiet = trackQuietRevision(revisionRef, input.revision)
+    if (input.waiting === true) { setState({ state: 'loading' }); return () => { active = false } }
+    // 决定不读：终态（不是加载、也不是「失败」——那一格的状态由判定 kind 说，卡里不显示这条）。
+    if (input.disabled === true) {
+      setState({ state: 'unavailable', cause: 'query-failed', onReload: reload })
+      return () => { active = false }
+    }
     const asOf = readClock(mountInput.now)
     if (!asOf || typeof mountInput.client?.query !== 'function') {
       setState({ state: 'unavailable', cause: 'query-failed', onReload: reload })
       return () => { active = false }
     }
-    setState({ state: 'loading' })
+    // 读者的重试与首读先回到加载态；后台重读保留旧读数，不闪。
+    if (!quiet) setState({ state: 'loading' })
     // The chip comes from the module's rule, not from the series: the two reads answer different
     // questions and either may fail alone. A missing signal is no chip, never a made-up one.
     // 牌子固定按 24 小时判（用户 2026-11-08 10:4x 定）：切页签不改「现在怎么样」。
@@ -49,10 +69,13 @@ export function useDashboardOpenInterest(input: Readonly<{
           ? { ...projected, signal: chip, ...(analysis ? { signalAnalysis: analysis } : {}) }
           : projected)
       })
-      .catch(() => { if (active) setState({ state: 'unavailable', cause: 'query-failed', onReload: reload }) })
+      .catch(() => {
+        // 后台重读失败沿用上一次；屏上只有「加载中」时才说读不到。
+        if (active) setState(current => quiet && current.state !== 'loading' ? current : { state: 'unavailable', cause: 'query-failed', onReload: reload })
+      })
     return () => { active = false }
     // `mountInput` is captured once on purpose: the clock must not re-read on every render.
-  }, [mountInput, window, attempt])
+  }, [mountInput, window, attempt, input.disabled, input.waiting, input.revision])
 
   return state
 }

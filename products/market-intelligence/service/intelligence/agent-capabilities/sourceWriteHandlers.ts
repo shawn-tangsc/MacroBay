@@ -18,11 +18,6 @@ type ConfigureSourceInput = {
   action: 'save-profile' | 'set-enabled'
   sourceId?: string
   collectionPreset?: IntelligenceCollectionPreset
-  includeInSentiment?: boolean
-  scopePolicy?: IntelligenceScopePolicy
-  rawArchiveEnabled?: boolean
-  retentionMode?: IntelligenceRetentionMode
-  autoReplayAfterParserUpgrade?: boolean
   monitoredSymbols?: string[]
   enabled?: boolean
 }
@@ -74,7 +69,11 @@ export async function handleConfigureIntelligenceSource(
       sourceId,
       read: () => readSourceSnapshot(deps, sourceId),
       execute: async () => {
-        await sourcesService.setEnabled({ sourceId, enabled })
+        const result = await sourcesService.setEnabled({ sourceId, enabled })
+        if (result.state === 'rejected') {
+          // 需要钥匙却没配：这是**拒绝**，不是保存成功；把原因码原样交给调用方。
+          throw new Error(result.reasonCode)
+        }
         return { state: 'saved', sourceId, enabled }
       }
     })
@@ -147,7 +146,9 @@ export async function handleRequestSourceCredential(
   return {
     handoff: 'credential-entry',
     sourceId,
-    settingsSectionId: 'intelligence-sources',
+    // 落点是产品自己的配置抽屉「数据源」屏（架构师 2026-11-11 签的 `settingsDrawer` 形状）：
+    // 平台设置里那一页已经撤掉，这里不许再留一个指向不存在面板的 id。
+    settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' },
     fields: sourceRequiresCredential(definition.authMode) ? ['apiKey'] : []
   }
 }
@@ -155,13 +156,6 @@ export async function handleRequestSourceCredential(
 function profilePatch(value: ConfigureSourceInput): Partial<SaveIntelligenceSourceProfileInput> {
   const patch: Partial<SaveIntelligenceSourceProfileInput> = {}
   if (value.collectionPreset !== undefined) patch.collectionPreset = value.collectionPreset
-  if (value.includeInSentiment !== undefined) patch.includeInSentiment = value.includeInSentiment
-  if (value.scopePolicy !== undefined) patch.scopePolicy = value.scopePolicy
-  if (value.rawArchiveEnabled !== undefined) patch.rawArchiveEnabled = value.rawArchiveEnabled
-  if (value.retentionMode !== undefined) patch.retentionMode = value.retentionMode
-  if (value.autoReplayAfterParserUpgrade !== undefined) {
-    patch.autoReplayAfterParserUpgrade = value.autoReplayAfterParserUpgrade
-  }
   if (value.monitoredSymbols !== undefined) patch.monitoredSymbols = [...value.monitoredSymbols]
   return patch
 }

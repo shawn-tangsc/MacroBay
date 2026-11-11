@@ -94,12 +94,10 @@ function config() {
     desiredRuntimeState: 'polling' as const,
     parserStrategy: 'statuspage-v1',
     noisePolicy: 'balanced' as const,
-    includeInSentiment: true,
     scopePolicy: 'active-position-priority' as const,
     rawArchiveEnabled: true,
     retentionMode: 'balanced' as const,
     autoReplayAfterParserUpgrade: true,
-    sentimentEligible: true,
     adapterConfig: {}
   }
 }

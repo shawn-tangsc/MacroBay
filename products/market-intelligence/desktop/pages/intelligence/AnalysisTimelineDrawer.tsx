@@ -38,6 +38,8 @@ export function AnalysisTimelineDrawer(props: {
   timeline: UseMarketAnalysisTimelineResult
   openEntry?: MarketAnalysisTimelineEntry
   onOpenChange: (entry: MarketAnalysisTimelineEntry | undefined) => void
+  /** 宿主的「打开 AI 分析设置」入口：给了它，时间线就不再自己挂一个设置对话框。 */
+  onOpenSettings?: () => void
   onClose: () => void
 }): React.ReactElement {
   const resolveProductText = useProductTextKey()
@@ -95,6 +97,7 @@ export function AnalysisTimelineDrawer(props: {
     {phase.kind === 'result' ? <AnalysisConclusionSendStatus reasonLabel={sendText.reasonLabel} status={phase.status} /> : null}
     <TimelinePanel
       onOpenChange={props.onOpenChange}
+      onOpenSettings={props.onOpenSettings}
       openEntry={props.openEntry}
       text={props.text}
       timeline={props.timeline}

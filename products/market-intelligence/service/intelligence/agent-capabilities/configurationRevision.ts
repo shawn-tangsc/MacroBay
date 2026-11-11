@@ -42,7 +42,6 @@ export function computeConfigurationRevision({ profiles }: ConfigurationRevision
         profile.sourceId,
         profile.enabled,
         profile.collectionPreset,
-        profile.includeInSentiment,
         profile.scopePolicy,
         profile.rawArchiveEnabled,
         profile.retentionMode,

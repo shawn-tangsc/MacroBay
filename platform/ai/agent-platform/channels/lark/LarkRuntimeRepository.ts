@@ -28,6 +28,19 @@ export class LarkRuntimeRepository {
     })
   }
 
+  /**
+   * 诊断专用：**不过授权闸门**写一行运行审计。
+   *
+   * `auditIfCurrent` 要求「现役代际 + enabled + requested_enabled=1」，启动失败/被踢的那一刻
+   * 这些条件恰恰可能不成立——最需要证据时一条都留不下（QQ 那次就是 0 行）。
+   * 只给启动诊断用；码里不含凭据、正文与 URL。
+   */
+  auditDiagnostic(channelId: string, code: string, now = new Date()): void {
+    this.database.connection.prepare(
+      'insert into channel_lark_runtime_audits(id,channel_id,code,created_at) values(?,?,?,?)'
+    ).run(randomUUID(), channelId, code, now.toISOString())
+  }
+
   auditIfCurrent(channelId: string, generation: number, code: string, now = new Date()): boolean {
     return this.database.connection.prepare(
       `insert into channel_lark_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?

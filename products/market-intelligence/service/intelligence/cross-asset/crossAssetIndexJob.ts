@@ -24,14 +24,18 @@ export function crossAssetIndexJobDefinitions(): readonly Readonly<Record<string
   return [definition, { ...definition, id: `${CROSS_ASSET_INDEX_COLLECT_JOB_ID}:startup`, trigger: { kind: 'manual' as const }, payload: { startup: true } }]
 }
 
+/**
+ * Registers the collector and asks for one startup tick.
+ *
+ * The interval is not armed here: a source that is switched off must own no job registration
+ * (user, 2026-11-11). The schedule is owned by `intelligenceSourcesService` through
+ * `sourceOwnedJobSchedules`, the single place that reads this source's switch.
+ */
 export function registerCrossAssetIndexJob(
   jobRuntime: JobRuntime,
   run: () => Promise<unknown>
 ): void {
   jobRuntime.registerHandler(CROSS_ASSET_INDEX_COLLECT_JOB_ID, async () => { await run() })
-  const [definition, startup] = crossAssetIndexJobDefinitions()
-  if (typeof jobRuntime.setSchedule === 'function') {
-    jobRuntime.setSchedule(definition as never)
-    void jobRuntime.enqueueDefinition(startup as never).catch(() => undefined)
-  }
+  const [, startup] = crossAssetIndexJobDefinitions()
+  void jobRuntime.enqueueDefinition(startup as never).catch(() => undefined)
 }

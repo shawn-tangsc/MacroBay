@@ -1,6 +1,12 @@
-import { CalendarDays, Copy, RefreshCw } from 'lucide-react'
+import { CalendarDays, CircleDashed, CircleSlash, Copy, RefreshCw, TriangleAlert } from 'lucide-react'
 import { Button, Tooltip } from 'antd'
+
 import { IconButton } from '@platform/ui/components/icon-button'
+
+import { openIntelligenceSourcesSettings } from '../../shared/navigation/productShellNavigation'
+import type { CalendarCardSourcesState } from './useCalendarCardData'
+
+import '../../shared/styles/sourceAvailability.css'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -52,8 +58,10 @@ export type MarketCalendarCardText = Readonly<{
   readableNames: MarketAnalysisReadableNames
 }>
 
-export function MarketCalendarCard({ projection, state = 'ready', stale = false, text, onOpenCalendar, onRefresh, onSelectEvent, onOpenEventInCalendar, selectedEventKey }: Readonly<{
+export function MarketCalendarCard({ projection, state = 'ready', stale = false, sourcesState = 'available', text, onOpenCalendar, onRefresh, onSelectEvent, onOpenEventInCalendar, selectedEventKey }: Readonly<{
   projection: CalendarCardProjection
+  /** 来源三态：没配置 / 没启用时整卡一句 + 一个动作；只有 `available` 才画事件。 */
+  sourcesState?: CalendarCardSourcesState
   /** `loading` is its own state: nothing on screen may turn it into an error. */
   state?: 'loading' | 'ready' | 'error'
   /** Rows came from an earlier read; the newest attempt failed. */
@@ -229,6 +237,13 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
       </div>
     </li>
   )
+  /**
+   * 遮罩只在「一条源都用不了」时出现：来源三态（没配置/没启用）或这一读没读出来。
+   * 部分可用不遮——那会把能看的事件一起挡掉。
+   */
+  const veil: 'missing' | 'disabled' | 'unreadable' | undefined = sourcesState !== 'available'
+    ? sourcesState
+    : state === 'error' ? 'unreadable' : undefined
   return <section className="mi-calendar-card" aria-label={text.title}>
     <header>
       <h2>{text.title}</h2>
@@ -238,32 +253,57 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
     {/* Only the list scrolls. The header is the card's identity — the reader keeps seeing what
         they are looking at while scanning further down the schedule — so it stays outside the
         scroll region instead of travelling with the rows. */}
-    <div className="mi-calendar-card__body">
-      {/* state-ternary: reviewed — 这一枝只渲染加载组件，没有内容容器；下面几处列表各自按 length 判。 */}
-      {state === 'loading' ? <LoadingState label={text.loading} /> : null}
-      {/* state-ternary: reviewed — 这一枝只渲染错误组件；读失败与「今天没有事件」是两个判断，不是一件事。 */}
-      {state === 'error' ? <StateView state="error" reasonCode="unreadable" size="md"
-        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
-      {/* state-ternary: reviewed — 只加一行「数据是旧的」附注，列表照常在下；旧数据不许被这条删掉。 */}
-      {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
-      {/* Readable months with no events at all: the card's answer is "nothing here", not a gap.
-          Keeping it as a line (not a state surface) is the point — there is no window left to widen
-          and no button that would produce an event. */}
-      {/* state-ternary: reviewed — 一行说明，不承担列表；内容块按数组长度判。 */}
-      {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
-      {state === 'ready' && projection.state === 'available' && projection.today.length === 0
-        ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
-        : null}
-      {/* state-ternary: reviewed — 状态只证明读完了，真正的开关是 `today.length > 0`：数据在就画，不靠状态位藏内容。 */}
-      {state === 'ready' && projection.today.length > 0 ? <>
-        <p className="mi-calendar-card__section">{text.todaySection}</p>
-        <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
-      </> : null}
-      {/* state-ternary: reviewed — 同上：开关是 `upcoming.length > 0`，状态不决定这块内容画不画。 */}
-      {state === 'ready' && projection.upcoming.length > 0 ? <>
-        <p className="mi-calendar-card__section">{text.upcomingSection}</p>
-        <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
-      </> : null}
+    <div className="mi-calendar-card__body" {...(veil === undefined ? {} : { 'data-veiled': 'true' })}>
+      {/* 卡内三态（2026-11-11 终稿）：卡框与标题照常，**数据区照常渲染**，只在上面盖一层遮罩；
+          遮罩里居中一句 + 恰一颗按钮，底下内容包 `inert`，Tab 只停在按钮上。
+          只有一条源都用不了才盖；部分可用就照常列，不遮。
+          `data-veiled` 同时打在**滚动容器**上：这一窗比内容矮时，遮罩要钉在窗里，不能跟着内容滚走。 */}
+      <div className="mi-source-veil-host" {...(veil === undefined ? {} : { 'data-veiled': 'true' })}>
+        <div {...(veil === undefined ? {} : { inert: true })}>
+          {/* state-ternary: reviewed — 加载面板本身就是这一阶段唯一的呈现，没有第二个内容容器被状态位藏起 */}
+          {veil === undefined && state === 'loading' ? <LoadingState label={text.loading} /> : null}
+          {/* state-ternary: reviewed — 错误态用 StateView 呈现，此时没有可显示的行，不存在“藏内容” */}
+          {veil === undefined && state === 'error' ? <StateView state="error" reasonCode="unreadable" size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
+          {/* state-ternary: reviewed — 这是一行 stale 提示，不决定任何内容容器画不画 */}
+          {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
+          {/* state-ternary: reviewed — 空态就是读数区的内容；由投影的 empty 判定，不是用状态位藏表格 */}
+          {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
+          {/* state-ternary: reviewed — 无发布事件时给说明；有行时走下面按长度的分支，内容不会被状态位藏掉 */}
+          {state === 'ready' && projection.state === 'available' && projection.today.length === 0
+            ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
+            : null}
+          {/* state-ternary: reviewed — 按数据长度渲染（length > 0），state 只表示读取阶段，未就绪时上面已有 loading/error 分支 */}
+          {state === 'ready' && projection.today.length > 0 ? <>
+            <p className="mi-calendar-card__section">{text.todaySection}</p>
+            <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
+          </> : null}
+          {/* state-ternary: reviewed — 按数据长度渲染（upcoming.length > 0），state 只表示读取阶段，未就绪时上面已有 loading/error 分支 */}
+          {state === 'ready' && projection.upcoming.length > 0 ? <>
+            <p className="mi-calendar-card__section">{text.upcomingSection}</p>
+            <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
+          </> : null}
+        </div>
+        {veil === undefined ? null : <div className="mi-source-veil" data-state={veil}>
+          <p className="mi-source-state" data-state={veil}>
+            {veil === 'missing' ? <CircleDashed aria-hidden className="mi-source-state__icon" size={14} />
+              : veil === 'disabled' ? <CircleSlash aria-hidden className="mi-source-state__icon" size={14} />
+                : <TriangleAlert aria-hidden className="mi-source-state__icon" size={14} />}
+            {resolveKey(veil === 'missing'
+              ? 'pages.intelligence.portal.data.sourcesNotConfigured'
+              : veil === 'disabled'
+                ? 'pages.intelligence.portal.data.sourcesNotEnabled'
+                : 'pages.intelligence.portal.data.temporarilyUnavailable')}
+          </p>
+          <Button onClick={veil === 'unreadable' ? onRefresh : () => openIntelligenceSourcesSettings()} size="small">
+            {resolveKey(veil === 'missing'
+              ? 'pages.intelligence.portal.data.configureSources'
+              : veil === 'disabled'
+                ? 'pages.intelligence.portal.data.enableSources'
+                : 'pages.intelligence.portal.data.retry')}
+          </Button>
+        </div>}
+      </div>
     </div>
   </section>
 }

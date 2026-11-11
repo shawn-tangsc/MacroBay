@@ -27,6 +27,7 @@ import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNot
 import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
 import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
 import type { IntelligenceNotificationTestWiring } from './notificationTestWiring'
+import { getCellEnabledStore, registerCellEnabledIpc } from './registerCellEnabledIpc'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -110,6 +111,11 @@ export function registerIntelligenceIpc(
    */
   readPushChannel?: () => Promise<PushChannelResolution>
 ): void {
+  /* 格级启用：一份存储 + 两个动作（读显式写过的格子 / 写一个格子）。
+     之前这里只 import 了 `registerCellEnabledIpc` 却没调用它——渲染层拿到的是「方法不存在」，
+     真机日志里就是 `Unknown product IPC method "market-intelligence.intelligence.readCellEnabled"`。 */
+  registerCellEnabledIpc(register, getCellEnabledStore())
+
   if (notificationTest && calendarReminder) {
     // 注册器这一侧的 `read` 只声明成 `unknown`（它给设置页读整份视图）；测试样例要的是**类型化**的
     // 那一份。两者是同一个存储的同一次读取——这里按契约收窄，不另读一次。

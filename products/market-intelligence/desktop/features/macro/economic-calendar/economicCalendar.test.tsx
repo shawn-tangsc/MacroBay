@@ -151,15 +151,115 @@ describe('macro economic calendar', () => {
       window.removeEventListener('app-shell:navigate', navigation)
     } finally { query.mockRestore() }
   })
-  it('keeps the proxy notice away when no failure was detected', async () => {
+  /**
+   * 列表顶部那句「官方日程拿不到」：点名 BLS、带上那次**真实**同步的日期。
+   * 原来写的是「官方源暂时不可用，先显示上次成功同步的内容」——读者会以为 fed/bea 也一起没了，
+   * 而且「上次」是哪一次没人知道。
+   */
+  it('names BLS and the real sync date in the official note', async () => {
+    // 这条说明行只在**还有东西可画**时出现（另一侧有事件），否则整块走「官方源不可用」那一态。
+    const market = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [marketEvent], sources: [] })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available', asOf, events: [blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })] }),
+        getEventDetail: async () => ({ state: 'unavailable' }),
+        unavailableSource: { sourceId: 'macro-calendar-bls', reasonCode: 'official-endpoint-returned-403', lastSuccessfulSyncAt: '2026-10-22T07:29:41.159Z' }
+      })
+      await flush()
+      const row = container.querySelector('[data-calendar-official-unavailable]')!
+      // 正文只有状态词：原因（403）、那天同步的日期、「导 ICS」都不许出现在正文里。
+      expect(row.textContent).toContain('BLS 官方日程无法自动获取')
+      expect(row.textContent).not.toContain('403')
+      expect(row.textContent).not.toContain('同步')
+      expect(row.textContent).not.toContain('导入')
+      expect(row.textContent).not.toContain('{date}')
+      // 那颗 ⓘ 里才是完整说明，日期来自同步记录（不是写死的常量）。
+      const help = row.querySelector<HTMLButtonElement>('button[aria-label]')!
+      expect(help, 'the reason lives behind the help trigger').not.toBeNull()
+      await act(async () => help.click())
+      const described = document.body.textContent ?? ''
+      expect(described).toContain('403')
+      expect(described).toContain('2026-10-22')
+    } finally { market.mockRestore() }
+  })
+  it('keeps that note away when the blocked source is not BLS', async () => {
+    const { container } = await renderCalendar({
+      queryMonth: async () => ({ state: 'available', asOf, events: [blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })] }),
+      getEventDetail: async () => ({ state: 'unavailable' }),
+      // fed 被挡、BLS 正常：这条 note 说的是 BLS 的日程，不该跟着别的源出现。
+      unavailableSource: { sourceId: 'macro-calendar-fed', reasonCode: 'official-endpoint-returned-403', lastSuccessfulSyncAt: '2026-10-22T07:29:41.159Z' }
+    })
+    await flush()
+    const notes = [...container.querySelectorAll('[role="note"]')].map(node => node.textContent ?? '')
+    expect(notes.some(line => line.includes('BLS 官方日程'))).toBe(false)
+  })
+  /**
+   * `MI-11-R196` 的同一类病：读者已经把自定义代理配好（`http://127.0.0.1:7888` 带绕过规则），
+   * 横幅却还在让他「去设置 → 基础设置 → 代理模式选自定义代理」——提示与实际配置无关。
+   * 四档判据：已配置+失败 / 未配置+失败 / 已配置+没失败 / 按钮文案跟着档位。
+   */
+  const failedNetworkSources = ([ 'economic-indicator', 'financial-event', 'central-bank-activity' ] as const)
+    .map(eventType => ({ eventType, status: 'unavailable' as const, sourceObservedAt: null,
+      latestAttempt: { state: 'failed' as const, attemptedAt: asOf, failureCode: 'response-unavailable' as const, trigger: 'automatic' as const } }))
+  const configuredProxy = { network: { proxyMode: 'custom' as const, proxyUrl: 'http://127.0.0.1:7888', bypass: ['localhost'] } }
+  const withProxySettings = async <T,>(settings: unknown, run: () => Promise<T>): Promise<T> => {
+    const previous = (window as { platform?: unknown }).platform
+    vi.stubGlobal('platform', { ...(previous as object | undefined), settings: { get: async () => settings } })
+    try { return await run() } finally { vi.unstubAllGlobals() }
+  }
+  it('says the configured proxy did not connect instead of asking for a proxy already filled in', async () => {
+    const copy = productText['zh-CN'].settings.intelligenceSources.proxyNotice
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [], sources: failedNetworkSources })
+    try {
+      const { container } = await withProxySettings(configuredProxy, async () => renderCalendar({
+        queryMonth: async () => ({ state: 'available', asOf, events: [] }),
+        getEventDetail: async () => ({ state: 'unavailable' })
+      }))
+      await flush()
+      const banner = container.querySelector('[data-network-proxy-banner]')!
+      expect(banner, 'a configured proxy that failed still explains itself').not.toBeNull()
+      expect(banner.getAttribute('data-proxy-configured')).toBe('yes')
+      expect(banner.getAttribute('data-tone')).toBe('failed')
+      // 已配置：标题是「这次没连上」，正文让他查地址与端口；不许再出现「去…选自定义代理」。
+      expect(banner.textContent).toContain(copy.configuredFailedTitle)
+      expect(banner.textContent).toContain('检查代理地址与端口')
+      expect(banner.textContent).not.toContain('选「自定义代理」')
+      expect(banner.textContent).not.toContain(copy.body)
+      // 按钮也跟着档位：已配好时是「检查代理地址」，不是「去设置代理」。
+      expect(banner.querySelector('[data-network-proxy-settings]')?.textContent).toContain(copy.configuredFailedAction)
+      expect(banner.querySelector('[data-network-proxy-settings]')?.textContent).not.toContain(copy.action)
+    } finally { query.mockRestore() }
+  })
+  it('keeps the "set up a proxy" wording when no proxy is configured yet', async () => {
+    const copy = productText['zh-CN'].settings.intelligenceSources.proxyNotice
+    const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [], sources: failedNetworkSources })
+    try {
+      const { container } = await withProxySettings({ network: { proxyMode: 'direct' as const, proxyUrl: '' } }, async () => renderCalendar({
+        queryMonth: async () => ({ state: 'available', asOf, events: [] }),
+        getEventDetail: async () => ({ state: 'unavailable' })
+      }))
+      await flush()
+      const banner = container.querySelector('[data-network-proxy-banner]')!
+      expect(banner.getAttribute('data-proxy-configured')).toBe('no')
+      expect(banner.getAttribute('data-tone')).toBe('requires')
+      expect(banner.textContent).toContain(copy.body)
+      expect(banner.textContent).not.toContain(copy.configuredFailedBody)
+      expect(banner.querySelector('[data-network-proxy-settings]')?.textContent).toContain(copy.action)
+    } finally { query.mockRestore() }
+  })
+  // 没有失败就没有横幅——代理配没配都一样：读者没有要做的动作，横幅就是在占他的注意力。
+  it.each([
+    ['未配置', { network: { proxyMode: 'direct' as const, proxyUrl: '' } }],
+    ['已配置', { network: { proxyMode: 'custom' as const, proxyUrl: 'http://127.0.0.1:7888' } }]
+  ])('keeps the proxy notice away when no failure was detected (%s)', async (_label, settings) => {
     const sources = ([ 'economic-indicator', 'financial-event', 'central-bank-activity' ] as const)
       .map(eventType => ({ eventType, status: 'success' as const, sourceObservedAt: marketEvent.sourceObservedAt }))
     const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [marketEvent], sources })
     try {
-      const { container } = await renderCalendar({
+      const { container } = await withProxySettings(settings, async () => renderCalendar({
         queryMonth: async () => ({ state: 'available', asOf, events: [] }),
         getEventDetail: async () => ({ state: 'unavailable' })
-      })
+      }))
       await flush()
       expect(container.querySelector('[data-network-proxy-banner]')).toBeNull()
     } finally { query.mockRestore() }
@@ -377,13 +477,15 @@ describe('macro economic calendar', () => {
     await flush()
     const detail = container.querySelector<HTMLElement>('[data-calendar-detail-container]')!
     expect(detail.textContent).toContain(copy.events.cpi)
-    // A maskless overlay, not a column and not a modal: no drawer, no mask, no dialog role.
-    const panel = container.querySelector('aside')
-    expect(panel?.classList.contains('side-panel')).toBe(true)
+    // 承载是平台抽屉（R38）：`inline`、无遮罩、不进日历那一列。抽屉只做框，正文是原来那一份。
+    const panel = container.querySelector('.ant-drawer-content')
     expect(panel?.classList.contains('mi-calendar-detail')).toBe(true)
-    expect(container.querySelector('.ant-drawer')).toBeNull()
+    expect(container.querySelector('.ant-drawer')?.classList.contains('drawer--inline')).toBe(true)
+    expect(container.querySelector('.ant-drawer')?.classList.contains('drawer--large')).toBe(true)
+    // 无遮罩：日历还在背后、可点，点另一行就是换内容。
     expect(container.querySelector('.ant-drawer-mask')).toBeNull()
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    // 抽屉在宿主内的覆盖层里，而不是日历那一列的子元素——列宽因此不受它影响（R34）。
+    expect(container.querySelector('[data-calendar-detail-layer]')).not.toBeNull()
     // 元素级样式要跟着块走：规则写在面板自己的类上，而不是写在一个已不存在的 antd 抽屉上。
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
     for (const rule of ['.mi-calendar-detail dt', '.mi-calendar-detail dd', '.mi-calendar-detail h2']) {
@@ -401,7 +503,7 @@ describe('macro economic calendar', () => {
     const pageBody = pageRule.slice(0, pageRule.indexOf('\n}'))
     expect(pageBody).toContain('flex-direction: column')
     expect(pageBody).not.toContain('row-reverse')
-    const overlaySelector = '.mi-economic-calendar .mi-calendar-detail {'
+    const overlaySelector = '.mi-calendar-detail-layer > .drawer--inline {'
     expect(layout).toContain(overlaySelector)
     const overlayRule = layout.slice(layout.indexOf(overlaySelector))
     const overlayBody = overlayRule.slice(overlayRule.indexOf('{') + 1, overlayRule.indexOf('\n}'))
@@ -411,9 +513,9 @@ describe('macro economic calendar', () => {
     // 覆盖层不许按屏宽切换形态：以前 ≥1300 并排、<1300 才覆盖，同一份数据两种布局正是这次回归的形态。
     expect(layout).not.toContain('@media (max-width: 1299px)')
     // 结构上的第二道保险：面板不在日历列里，所以工作区（月份网格 + 当日列表）无法把它算进列宽。
-    expect(container.querySelector('.mi-economic-calendar__column .mi-calendar-detail')).toBeNull()
+    expect(container.querySelector('.mi-economic-calendar__column [data-calendar-detail-layer]')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__column .mi-economic-calendar__header')).not.toBeNull()
-    expect(container.querySelector('.mi-economic-calendar > .mi-calendar-detail')).not.toBeNull()
+    expect(container.querySelector('.mi-economic-calendar > [data-calendar-detail-layer]')).not.toBeNull()
     // The reused body's tokens travel with the surface. Opened from the market dashboard there is no
     // `.mi-economic-calendar` ancestor, and an undefined `var()` is invalid at computed-value time —
     // it unsets the property instead of falling back — so the body silently lost its padding and the
@@ -455,12 +557,14 @@ describe('macro economic calendar', () => {
       await act(async () => container.querySelector<HTMLButtonElement>('[data-market-event]')!.click())
       await flush()
       expect(container.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
-      // One panel, not two: the second pick swaps the content of the same column.
-      expect(container.querySelectorAll('aside.side-panel')).toHaveLength(1)
+      // One drawer, not two: the second pick swaps the content of the same drawer.
+      expect(container.querySelectorAll('[data-calendar-detail-layer]')).toHaveLength(1)
       expect(container.querySelector('.mi-market-calendar__inspector')?.textContent).toContain(market.title)
       expect(container.querySelector('[data-release-time-row]')).toBeNull()
       // The list it replaced is still standing behind it.
       expect(container.querySelector('[data-calendar-day-list]')).not.toBeNull()
+      // 换内容不许动焦点：读者连着翻下一条，被拽回上一行就断了。
+      expect(document.activeElement?.closest('[data-calendar-detail-layer]')).toBeNull()
     } finally { spy.mockRestore() }
   })
   it('collapses the panel when the reader picks the same event again, and closes it on Escape', async () => {
@@ -484,6 +588,10 @@ describe('macro economic calendar', () => {
     expect(container.querySelector('[data-calendar-detail-container]')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__inspector')).toBeNull()
     expect(container.querySelector('[data-calendar-day-list] [data-event-key="US.CPI.AUGUST"]')).not.toBeNull()
+    // 焦点只在**关闭**时归还：Tab 进抽屉后按 Esc 焦点本来会落到 body，所以要显式还给被点的那一行。
+    // 那一行按 key 认（月格里也有同名一行，读者点的是当日列表里这条）。
+    expect(document.activeElement?.getAttribute('data-event-key')).toBe('US.CPI.AUGUST')
+    expect(document.activeElement?.closest('[data-calendar-day-list]')).not.toBeNull()
   })
   it('closes the panel from its header control and keeps the day list standing', async () => {
     const event = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
@@ -492,7 +600,9 @@ describe('macro economic calendar', () => {
     await flush()
     await act(async () => eventButton(container, event.eventKey).click())
     await flush()
-    await act(async () => container.querySelector<HTMLButtonElement>('aside button')!.click())
+    // 出口是抽屉标题行右端那颗 ×（无遮罩时它是除 Esc 之外唯一的关闭手势）。
+    await act(async () => container.querySelector<HTMLButtonElement>('.ant-drawer-header button[aria-label]')!.click())
+    await flush()
     expect(container.querySelector('[data-calendar-detail-container]')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__inspector')).toBeNull()
     expect(container.querySelector('[data-calendar-day-list]')).not.toBeNull()
@@ -1375,13 +1485,14 @@ describe('macro economic calendar', () => {
     expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.loading)
   })
 
-  it('A：一条官方腿都没启用 → 「去启用」，点它落到情报源设置，且不摆「本月没有」', async () => {
-    const navigation = vi.fn()
-    window.addEventListener('app-shell:navigate', navigation)
+  it('A：一条官方腿都没启用 → 「去启用」走宿主给的那一个去处，且不摆「本月没有」', async () => {
+    // 页面不再自带回退：去启用与页头「设置」是**同一个回调**，落到哪由宿主决定。
+    const onOpenSettings = vi.fn()
     const { container } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
       getEventDetail: async () => unavailableDetail(),
-      officialFeeds: 'disabled'
+      officialFeeds: 'disabled',
+      onOpenSettings
     })
 
     await flush()
@@ -1392,16 +1503,11 @@ describe('macro economic calendar', () => {
     expect(container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
     expect(container.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
 
-    // 动作只有一个：「去启用」→ 情报源设置面板。
+    // 动作只有一个：「去启用」→ 宿主那一个去处（今天看板宿主传 `openConfigDrawer('sourcesData','calendar')`）。
     const action = state?.querySelector<HTMLElement>('button')
     expect(action?.textContent).toContain('去启用')
     await act(async () => action!.click())
-    expect(navigation).toHaveBeenCalledTimes(1)
-    expect(navigation.mock.calls[0]?.[0].detail).toEqual({
-      navKey: 'settings',
-      settingsPanelKey: 'market-intelligence.intelligence-sources'
-    })
-    window.removeEventListener('app-shell:navigate', navigation)
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
   })
 
   it('B：有可用腿、两边都读到且都为空 → 「本月没有任何事件」，且**不给动作**', async () => {
@@ -2091,6 +2197,22 @@ describe('macro economic calendar', () => {
     } finally { vi.useRealTimers() }
   })
 
+  it('日历设置的出口只有宿主那一个：点了就走宿主给的去处', async () => {
+    // 旧看板抽屉已删，页面不再自带「退回设置页」那条回退；必填由类型层保证
+    //（`economicCalendar.settingsEntry.props.test.ts`），这里断运行期只走宿主这一个回调。
+    const copy = productText['zh-CN'].pages.intelligence.portal.calendar
+    const onOpenSettings = vi.fn()
+    const { container } = await renderCalendar({
+      queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
+      getEventDetail: async () => unavailableDetail(),
+      onOpenSettings
+    })
+    await flush()
+    await act(async () => button(container, copy.calendarSettings).click())
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('.mi-dashboard-source-drawer')).toBeNull()
+  })
+
   it('keeps the month when only a neighbouring month fails, and marks the edges incomplete', async () => {
     const august = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
     const { container } = await renderCalendar({
@@ -2134,6 +2256,11 @@ async function renderCalendar(client: {
   syncBlsEmploymentSchedule?: () => unknown
   /** 官方日历腿的三态（注册表那侧算出来的）；默认「有可用腿」。 */
   officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
+  /**
+   * 注册表里某条官方源的「停用」状态（`SourceView.unavailable`）。
+   * 不传 = 没有停用条目；BLS 那条决定列表顶部那句在不在。
+   */
+  unavailableSource?: { sourceId: string; reasonCode: string; lastSuccessfulSyncAt?: string }
   /** 页面文案（语言）：读者切语言时只看这一份，测试据此断言两种语言的成品句。**两种语言都收**。 */
   text?: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['calendar']
   /**
@@ -2144,6 +2271,8 @@ async function renderCalendar(client: {
   now?: () => Date
   strict?: boolean
   openTarget?: { month: string; eventKey?: string }
+  /** 宿主接管的「日历设置」出口；不给时走旧看板抽屉（行为不变）。 */
+  onOpenSettings?: () => void
 }) {
   const container = document.createElement('div')
   document.body.append(container)
@@ -2160,7 +2289,10 @@ async function renderCalendar(client: {
   // 官方腿三态来自注册表投影：这里替成可控值，默认「有可用腿」，页面因此走既有的空/列表分支。
   vi.spyOn(intelligenceSourcesClient, 'getPanelView').mockResolvedValue({
     calendarOfficialFeeds: { state: client.officialFeeds ?? 'enabled' },
-    providers: []
+    providers: client.unavailableSource === undefined ? [] : [{
+      sources: [{ sourceId: client.unavailableSource.sourceId,
+        unavailable: { reasonCode: client.unavailableSource.reasonCode, ...(client.unavailableSource.lastSuccessfulSyncAt === undefined ? {} : { lastSuccessfulSyncAt: client.unavailableSource.lastSuccessfulSyncAt }) } }]
+    }]
   } as never)
   if (client.marketEmpty === true) {
     const marketSpy = vi.spyOn(marketCalendarClient, 'queryMonth').mockImplementation(async (input: { month: string; locale: 'zh' | 'en' }) => ({
@@ -2173,7 +2305,7 @@ async function renderCalendar(client: {
   // 显示时区由窗口级 provider 提供；测试固定 Asia/Shanghai，断言才与宿主时区无关。
   // 刷新前的确认框由树内的 Modal 实例渲染（`useConfirm`），所以页面必须挂在 `ConfirmProvider` 下；
   // 没有宿主时组件按契约直接抛错，测试也会跟着炸——这正是我们要的。
-  const calendar = <ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} text={client.text ?? productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider></ConfirmProvider>
+  const calendar = <ConfirmProvider><ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={client.now ?? (() => new Date(asOf))} onBack={() => undefined} {...(client.openTarget ? { openTarget: client.openTarget } : {})} onOpenSettings={client.onOpenSettings ?? vi.fn()} text={client.text ?? productText['zh-CN'].pages.intelligence.portal.calendar} /></ShellTimeZoneProvider></ConfirmProvider>
   await act(async () => localRoot.render(client.strict ? <StrictMode>{calendar}</StrictMode> : calendar))
   return { container, root: localRoot, client: input }
 }
@@ -2308,3 +2440,4 @@ function cssRule(styles: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`).exec(styles)?.[1] ?? ''
 }
+

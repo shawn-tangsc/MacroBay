@@ -75,8 +75,9 @@ MIT 许可证只覆盖代码，不覆盖行情数据或供应商内容。MacroBa
 
 ## 当前状态
 
-应用可以从源码运行；安装包与渠道集成仍不在范围内。参见
-[状态与限制](./reference/status-and-limitations.zh-CN.md)。
+应用可以从源码运行，也提供安装包：macOS 的 Apple 芯片版已验证，Intel 版随版本发布但尚未在 Intel 真机
+验收；Windows x64 安装器可构建、可发布，安装后的运行态尚未验收；Linux 未打包。两个安装包都未签名、未公证。
+渠道方面，五个渠道都能收发单聊消息，同一时刻只能启用一条。参见[状态与限制](reference/status-and-limitations.zh-CN.md)。
 
 ## 文档
 

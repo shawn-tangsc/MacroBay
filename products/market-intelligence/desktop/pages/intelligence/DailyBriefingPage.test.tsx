@@ -18,7 +18,6 @@ const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dai
 /** Both settings blocks read the same view; the drawer is what shows them side by side. */
 const settingsView: DailyBriefingSettingsView = {
   settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: true },
-  generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
   language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 } },
   webSearchSupported: false,
   resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
@@ -297,10 +296,11 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   onBack?: () => void
   onConfigureSources?: () => void
   onOpenModelSettings?: () => void
+  onOpenSettings?: () => void
   locale?: 'zh-CN' | 'en-US'
   text?: typeof text
 }> = {}): Promise<HTMLDivElement> {
-  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, locale = 'zh-CN', text: textOverride } = options
+  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, onOpenSettings = vi.fn(), locale = 'zh-CN', text: textOverride } = options
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -312,6 +312,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
       onBack={onBack}
       onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
+      onOpenSettings={onOpenSettings}
       client={client as never}
     /></ToastHost></ConfirmProvider></ConfigProvider>)
   })
@@ -1084,196 +1085,6 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain('重新生成版')
   })
 
-  // The drawer's three close routes and the two answers to its question. Kept as helpers because
-  // the evidence matrix is "entry x state": every route is checked in two states, and a copy-pasted
-  // click per case is how one route silently stops being covered.
-  const openSettingsDrawer = async (dom: HTMLDivElement): Promise<void> => {
-    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
-  }
-  const aiSwitch = (): HTMLElement => document.querySelector<HTMLElement>('[role="switch"]')!
-  /** The switch's own value, which is what "the edits are still there" means. */
-  const editorialSwitchValue = (): string | null => aiSwitch()?.getAttribute('aria-checked') ?? null
-  const toggleEditorial = async (): Promise<void> => {
-    await act(async () => { aiSwitch().click(); await Promise.resolve() })
-  }
-  const closeButton = (): HTMLButtonElement => [...document.querySelectorAll('button')]
-    .filter((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.cancel).at(-1)!
-  const confirmButton = (label: string): HTMLButtonElement => [...document.querySelectorAll('button')]
-    .find((button) => button.textContent?.replace(/\s/g, '') === label)!
-  const discardQuestionVisible = (): boolean => document.body.textContent?.includes(text.settingsDrawer.discardTitle) === true
-  const drawerOpen = (): boolean => document.querySelector('[data-settings-section="generation"]') !== null
-  const pressEscape = async (): Promise<void> => {
-    // antd's modal drawer handles Escape on its own panel and keys off keyCode; dispatching on
-    // `document` never reaches it.
-    const panel = document.querySelector<HTMLElement>('[role="dialog"]')
-    await act(async () => { (panel ?? document).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true })); await Promise.resolve() })
-  }
-  const clickMask = async (): Promise<void> => {
-    const mask = document.querySelector<HTMLElement>('.ant-drawer-mask')
-    expect(mask, 'the modal drawer must render a mask to click').not.toBeNull()
-    await act(async () => { mask!.dispatchEvent(new MouseEvent('click', { bubbles: true })); await Promise.resolve() })
-  }
-
-  it('asks before closing the drawer with unsaved edits instead of dropping them', async () => {
-    // The one silent-loss path: the reader edits a field, presses 取消, and nothing on screen says
-    // the edit is gone. A clean close must not ask; a dirty one must keep the edit until discarded.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-
-    // Clean close: no confirmation, the drawer just closes.
-    await openSettingsDrawer(dom)
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-    expect(discardQuestionVisible()).toBe(false)
-
-    // Edit, then try to close: the drawer stays, the question names what would be lost, and the
-    // edited value is still the value on screen (not the value that was read).
-    await openSettingsDrawer(dom)
-    expect(editorialSwitchValue()).toBe('true')
-    await toggleEditorial()
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    // Discarding is the only way the edits leave: confirm closes the drawer.
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('keeps the edit when the reader answers the question with 继续编辑', async () => {
-    // The other half of the guard: cancelling the confirmation must not close the drawer and must
-    // not reset the form to the values that were read.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    await act(async () => { confirmButton(text.settingsDrawer.discardCancel).click(); await Promise.resolve() })
-
-    // The drawer and the edited value survive the cancelled question; asking again works, which is
-    // what proves the first dialog was dismissed rather than merely faded out of view.
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-  })
-
-  it('asks after a failed save, when the edits are still in the drawer', async () => {
-    // The reviewer's case: edit, press save, save fails, close — the edits are still there and the
-    // reader was just told the save did not go through. That close must ask.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await act(async () => { document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-    // Both sections were ready, so both writes were attempted and both were rejected.
-    expect(document.body.textContent).toContain(text.settingsDrawer.saveFailed.replace('{sections}', `${text.settingsDrawer.sectionFailed.generation}、${text.settingsDrawer.sectionFailed.ai}`))
-
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('still asks on Escape after a failed save', async () => {
-    // Escape in the `save-failed` state: the same onClose route, but a different cell of the matrix.
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-    await act(async () => { document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-
-    await pressEscape()
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('takes the same asking path when the reader presses Escape', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await pressEscape()
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('asks when the reader clicks the mask, and keeps the edit until discarded', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await clickMask()
-    expect(discardQuestionVisible()).toBe(true)
-    expect(drawerOpen()).toBe(true)
-    expect(editorialSwitchValue()).toBe('false')
-
-    await act(async () => { confirmButton(text.settingsDrawer.discardConfirm).click(); await Promise.resolve() })
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('does not ask when the settings could not be loaded at all', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'failed' }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-
-    await act(async () => { closeButton().click(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(false)
-    expect(drawerOpen()).toBe(false)
-  })
-
-  it('does not ask after a successful save, so the saved values are the new baseline', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await openSettingsDrawer(dom)
-    await toggleEditorial()
-
-    await act(async () => { document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
-    expect(discardQuestionVisible()).toBe(false)
-  })
-
   it('leaves the readings count out of the document masthead', async () => {
     const dom = await renderPage(fakeClient())
     const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
@@ -1325,126 +1136,66 @@ describe('daily briefing page', () => {
     expect(attempts).toBeGreaterThan(stages)
   })
 
-  it('keeps exactly one settings entry and opens that one drawer from the failure panel', async () => {
-    ;(window as unknown as { platform: unknown }).platform = { products: { invoke: async () => [] } }
+  it('hands the settings entry to the host when the page is given one', async () => {
+    // C9：抽屉要变成唯一入口。页面这一层拿到 onOpenSettings 就把页头那颗交出去，
+    // 自己不再开那个设置抽屉（同一个入口不能开两个面）。
     const getSettings = vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    const onOpenSettings = vi.fn()
     const client = fakeClient({
-      getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('editorial-timeout') })),
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument() })),
       getSettings,
       saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
     })
-    const dom = await renderPage(client)
+    const dom = await renderPage(client, { onOpenSettings })
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click(); await Promise.resolve() })
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(dom.querySelector('[data-settings-section]')).toBeNull()
+  })
 
-    // The header entry, and nothing else that opens a settings surface of its own.
+  it('keeps exactly one settings entry, and hands it to the host from the header and the failure panel', async () => {
+    // C9：这一天起，页面上只有一个设置入口，而且它把「打开哪一屏」交给宿主（配置抽屉的日报屏）。
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke: async () => [] } }
+    const onOpenSettings = vi.fn()
+    const client = fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('editorial-timeout') })),
+      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
+      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
+    })
+    const dom = await renderPage(client, { onOpenSettings })
+
+    // 只留一个入口：页头那颗；失败面板那颗是同一个入口，不是第二个设置面。
     expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
     expect(dom.querySelectorAll(`[aria-label="${text.aiSettings.open}"]`)).toHaveLength(0)
-    // The failure panel's button is the same entry, not a second one.
     const failureAction = dom.querySelector<HTMLButtonElement>('[data-failure-action="settings"]')!
     expect(failureAction.getAttribute('data-open-settings-section')).toBe('ai')
 
-    await act(async () => {
-      failureAction.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    const generation = document.querySelector('[data-settings-section="generation"]')
-    const ai = document.querySelector('[data-settings-section="ai"]')
-    expect(generation).not.toBeNull()
-    expect(ai).not.toBeNull()
-    // The platform-wide values are jumps, never a second editable copy. The sentence explaining
-    // that is an explanation, so it rides in the question mark instead of taking a line of its own.
-    const platform = document.querySelector<HTMLElement>('[data-settings-platform="true"]')!
-    expect(platform.textContent).not.toContain(text.settingsDrawer.platformNote)
-    expect(platform.textContent).toContain(text.settingsDrawer.platformTitle)
-    const platformHeading = platform.querySelector('h3')!
-    const help = platformHeading.querySelector<HTMLButtonElement>(`[aria-label="${text.settingsDrawer.platformNote}"]`)!
-    expect(help).not.toBeNull()
-    // The question mark comes before the title, like every other field-level explanation.
-    expect(platformHeading.firstElementChild?.contains(help)).toBe(true)
-    expect(platformHeading.lastElementChild?.textContent).toBe(text.settingsDrawer.platformTitle)
-    // The sentence is not gone: focus opens the explanation that holds it.
-    await act(async () => {
-      help.focus()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    expect(document.querySelector('[data-popover-content]')?.textContent).toContain(text.settingsDrawer.platformNote)
-    const globalLinks = [...document.querySelectorAll<HTMLElement>('[data-global-link]')]
-    expect(globalLinks).toHaveLength(2)
-    expect(globalLinks.every((link) => !link.matches('input, select, textarea'))).toBe(true)
-    // Every form control in the drawer belongs to the brief's own settings: the scoped blocks carry
-    // the marker, so a control added outside them would show up as unscoped.
-    expect(document.querySelectorAll('[data-setting-scope="brief"]')).toHaveLength(2)
-    // 加一期的入口现在长在期列表里，而不是一颗写着"这个版本还不支持"的灰按钮：它必须可点。
-    const generationHead = document.querySelector('[data-settings-section="generation"] .mi-briefing-settings__group-head')!
-    expect(generationHead.querySelector('h3')?.textContent).toBe(text.settingsDrawer.sections.generation)
-    // 期列表走产品桥；这一条用例只关心入口在不在、可不可点，所以给它一个空列表。
-    const addPeriod = document.querySelector<HTMLButtonElement>('[data-briefing-period-add]')!
-    expect(addPeriod.disabled).toBe(false)
-    expect(addPeriod.textContent).toContain(text.settings.periods.add)
-    // 那句"这个版本还不支持一天多期"随禁用按钮一起消失，不许留在界面上。
-    expect(document.body.textContent).not.toContain(text.settings.periods.addReason)
-    // The form-wide note lives in the block now, so the drawer shows it too — it used to exist only
-    // in the dialog shell, which meant this surface silently lost it.
-    expect(document.querySelector('[data-settings-section="generation"]')?.textContent)
-      .toContain(text.generationSettings.noteLabel)
+    await act(async () => { failureAction.click(); await Promise.resolve() })
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    // 页面自己不再画设置面：两块内容都不在这里（它们在抽屉的日报屏里）。
+    expect(document.querySelector('[data-settings-section]')).toBeNull()
   })
-
-  it('opens the same drawer from the web-search banner and keeps one entry', async () => {
+  it('sends the web-search banner to the same single entry the header uses', async () => {
+    const onOpenSettings = vi.fn()
     const client = fakeClient({
       getSettings: vi.fn(async () => ({
         state: 'available' as const,
         view: { ...settingsView, settings: { ...settingsView.settings, webSearchEnabled: false } }
       }))
     })
-    const dom = await renderPage(client)
+    const dom = await renderPage(client, { onOpenSettings })
 
+    // 仍然只有一个入口；横幅那颗走的是同一个回调，不是自己再开一个面。
     expect(dom.querySelectorAll('[data-briefing-settings-open]')).toHaveLength(1)
     const banner = dom.querySelector<HTMLElement>('[data-open-settings-section="ai"]')!
     expect(banner.textContent).toBe(text.aiSettings.goEnable)
-    // 说明句不在正文：状态旁边只有一个 ⓘ，它的可访问名就是那句话，点开才看到。
     const warning = banner.closest<HTMLElement>('.mi-daily-briefing-page__websearch-warning')!
     expect(warning.textContent).toBe(`${text.aiSettings.webSearchOff}${text.aiSettings.goEnable}`)
-    expect(warning.querySelector(`button[aria-label="${text.aiSettings.webSearchOffHint}"]`)).not.toBeNull()
+    expect(warning.querySelector('button')).not.toBeNull()
 
-    await act(async () => {
-      banner.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    expect(document.querySelector('[data-settings-section="ai"]')).not.toBeNull()
-    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
+    await act(async () => { banner.click(); await Promise.resolve() })
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('[data-settings-section]')).toBeNull()
   })
-
-  it('closes one explanation on Escape without closing the drawer, and returns focus', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView }))
-    })
-    const dom = await renderPage(client)
-    await act(async () => {
-      dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    // 抽屉里还留着的问号：整块的生成说明（加一期的假按钮已经不存在了）。
-    const trigger = document.querySelector<HTMLButtonElement>(`[aria-label="${text.generationSettings.noteLabel}"]`)!
-    expect(trigger).not.toBeUndefined()
-
-    await act(async () => {
-      trigger.focus()
-      await Promise.resolve()
-    })
-    expect(trigger.getAttribute('aria-expanded')).toBe('true')
-
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-      await Promise.resolve(); await Promise.resolve()
-    })
-    // One Escape closes the explanation it was aimed at; the drawer stays, and focus is back on
-    // the question mark instead of falling to the page behind the mask.
-    expect(trigger.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(trigger)
-    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
-    expect(document.querySelector('[data-settings-section="ai"]')).not.toBeNull()
-  })
-
   it('names a model failure and keeps the readable detail', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('model-unavailable', 'custom-unavailable') })) })
     const dom = await renderPage(client)
@@ -1504,30 +1255,6 @@ describe('daily briefing page', () => {
     // 面板只留一颗「日报设置」：建议句已经点名要检查什么，按钮不再跟着建议码长。
     expect(panel.querySelectorAll('[data-failure-action]')).toHaveLength(1)
     expect(panel.querySelector('[data-failure-action="settings"]')).not.toBeNull()
-  })
-
-  it('names the block that failed to save and keeps the drawer open', async () => {
-    const client = fakeClient({
-      getSettings: vi.fn(async () => ({ state: 'available' as const, view: settingsView })),
-      saveSettings: vi.fn(async () => ({ state: 'unavailable' as const }))
-    })
-    const dom = await renderPage(client)
-    await act(async () => {
-      dom.querySelector<HTMLButtonElement>('[data-briefing-settings-open]')!.click()
-      await Promise.resolve(); await Promise.resolve()
-    })
-    const save = document.querySelector<HTMLButtonElement>('[data-settings-save="true"]')!
-    expect(save.disabled).toBe(false)
-
-    await act(async () => {
-      save.click()
-      await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
-    })
-    const failed = document.querySelector<HTMLElement>('[data-settings-save-failed]')!
-    // Two forms, one save: a bare "save failed" would leave the reader guessing which block to fix.
-    expect(failed.textContent).toContain(text.settingsDrawer.sectionFailed.generation)
-    expect(failed.textContent).toContain(text.settingsDrawer.sectionFailed.ai)
-    expect(document.querySelector('[data-settings-section="generation"]')).not.toBeNull()
   })
 
   it('renders the failure panel in English', async () => {
@@ -1857,6 +1584,180 @@ it('opens a failed run with that attempt\u2019s steps and its readable reason', 
   expect(stages.querySelector('[data-stage="writing"]')?.getAttribute('data-stage-state')).toBe('failed')
   // 这一行没有正文：不出现"打开看正文"那句。
   expect(dom.textContent).not.toContain(text.history.railNoTitle)
+})
+
+it('leaves the previous failure the moment the reader regenerates a failed issue', async () => {
+  // 用户 2026-11-10 真机：失败那一期点「重新生成」，工具栏已经在转，正文却还是上一次的失败面板
+  // 与上一次的步骤时间戳，跑完才跳。这一条断言的是**跑着的时候**屏幕长什么样。
+  const today = '2026-10-30'
+  const trace = generationTraceFixture('failed', 'selection', 'editorial-timeout')
+  const listed = [{
+    date: today, periodId: 'period_failed', locale: 'en-US' as const, availableLocales: [] as const,
+    state: 'missing' as const, attemptCount: 1,
+    languages: [{ locale: 'en-US' as const, state: 'missing' as const, reason: 'run-failed' as const }]
+  }]
+  let settleRun: (value: unknown) => void = () => undefined
+  // 进度只有在**这次重跑点下去之后**才是 running：不然页面一上来就以为已经有跑在飞。
+  let running = false
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })),
+    get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: trace })),
+    // 这一次重跑不结束：测的是起手那一刻的屏幕。
+    regenerate: vi.fn(() => {
+      running = true
+      return new Promise((resolve) => { settleRun = resolve })
+    }),
+    getProgress: vi.fn(async () => running
+      ? {
+          state: 'running' as const,
+          progress: { attemptId: 'attempt-2', startedAt: `${today}T02:00:00.000Z`, stages: [{ id: 'source', state: 'running' as const, startedAt: `${today}T02:00:01.000Z` }] }
+        }
+      : { state: 'idle' as const })
+  })
+  const dom = await renderPage(client)
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  await act(async () => { row.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+  // 起点：失败面板在（不然这条用例没在验"离开"这件事）。
+  expect(dom.querySelector('[data-daily-brief-failure]')).not.toBeNull()
+
+  const regenBtn = dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!
+  await act(async () => { regenBtn.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 1. 正文立刻离开失败面板，换成这一次的步骤；上一次那份步骤表一个字都不留。
+  expect(dom.querySelector('[data-daily-brief-failure]')).toBeNull()
+  expect(dom.querySelector('.mi-daily-briefing-page__content')?.getAttribute('data-body-state')).toBe('generating')
+  const panel = dom.querySelector<HTMLElement>('[data-briefing-stage-panel][data-state="generating"]')!
+  expect(panel).not.toBeNull()
+  expect(panel.querySelector('[data-stage="source"]')).not.toBeNull()
+  // 2. 左侧那一行同时进「生成中」：只修正文、行上还说失败算没修。
+  expect(dom.querySelector('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')?.getAttribute('aria-busy')).toBe('true')
+  settleRun({ state: 'unavailable', failureCode: 'editorial-timeout' })
+})
+
+it('shows the second attempt\u2019s steps and reason when the re-run fails too', async () => {
+  // 与上一条成对：面板走了还不够，**再一次失败**时必须显示这一次的步骤与原因，
+  // 拿第一次那份就红（用户 2026-11-10 的现场就是"一直显示上一次的"）。
+  const today = '2026-10-30'
+  const traceOf = (failedStage: string, failureCode: string, at: string) => ({
+    attemptId: `attempt-${failedStage}`,
+    startedAt: at,
+    finishedAt: at,
+    state: 'failed' as const,
+    stages: traceStageIds.map((id, position) => {
+      const failedAt = traceStageIds.indexOf(failedStage as (typeof traceStageIds)[number])
+      return {
+        id,
+        state: position < failedAt ? 'success' as const : position === failedAt ? 'failed' as const : 'skipped' as const,
+        startedAt: at,
+        finishedAt: at,
+        durationMs: 1_000,
+        ...(position === failedAt ? { failureCode } : {})
+      }
+    })
+  })
+  const first = traceOf('selection', 'editorial-timeout', `${today}T04:00:00.000Z`)
+  const second = traceOf('writing', 'provider-error', `${today}T04:05:00.000Z`)
+  const listed = [{
+    date: today, periodId: 'period_failed', locale: 'en-US' as const, availableLocales: [] as const,
+    state: 'missing' as const, attemptCount: 1,
+    languages: [{ locale: 'en-US' as const, state: 'missing' as const, reason: 'run-failed' as const }]
+  }]
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })),
+    get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: first })),
+    // 第二次也失败，但失败在不同的阶段、不同的原因。
+    regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'provider-error', generationTrace: second }))
+  })
+  const dom = await renderPage(client)
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  await act(async () => { row.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+  expect(dom.querySelector<HTMLElement>('[data-briefing-stage-panel][data-state="failed"]')?.getAttribute('data-failure-code')).toBe('editorial-timeout')
+
+  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+  for (let round = 0; round < 8; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 正文说的是**第二次**：原因、失败阶段、失败码都是新的；第一次那份不留。
+  const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+  expect(panel.getAttribute('data-failure-code')).toBe('provider-error')
+  expect(panel.textContent).toContain(text.aiSettings.failure['provider-error'])
+  expect(panel.textContent).not.toContain(text.aiSettings.failure['editorial-timeout'])
+  const failedStage = panel.querySelector<HTMLElement>('[data-stage-state="failed"]')
+  expect(failedStage?.getAttribute('data-stage')).toBe('writing')
+  expect(panel.querySelector<HTMLElement>('[data-stage="selection"]')?.getAttribute('data-stage-state')).not.toBe('failed')
+})
+
+it('keeps a published edition readable while it is being regenerated, badge and all', async () => {
+  // 已发布的那一期重跑：正文走 ready-replacing（旧版照常可读 + 一句"看的是上一版"），
+  // 语言徽标不许跟着变成"生成中"。
+  const today = '2026-10-30'
+  const englishDocument = { ...briefingDocument(today), edition: { ...briefingDocument(today).edition, locale: 'en-US' as const } }
+  const listed = [{
+    date: today, periodId: 'default', locale: 'en-US' as const, availableLocales: ['en-US'] as const,
+    state: 'generated' as const, generatedAt: `${today}T00:30:00.000Z`, windowEnd: `${today}T00:30:00.000Z`,
+    readingsAvailable: 4,
+    languages: [{ locale: 'en-US' as const, state: 'published' as const }]
+  }]
+  let settleRun: (value: unknown) => void = () => undefined
+  const client = fakeClient({
+    list: vi.fn(async () => ({ state: 'available' as const, result: { editions: listed, today } })),
+    getToday: vi.fn(async () => ({ state: 'available' as const, document: englishDocument })),
+    get: vi.fn(async () => ({ state: 'available' as const, document: englishDocument })),
+    regenerate: vi.fn(() => new Promise((resolve) => { settleRun = resolve })),
+    getProgress: vi.fn(async () => ({ state: 'idle' as const }))
+  })
+  const dom = await renderPage(client)
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+  const badge = () => dom.querySelector('[data-edition-locale="en-US"]')?.textContent
+  expect(badge()).toBe(text.history.languages['en-US'])
+
+  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  // 旧正文还在、顶上说了"看的是上一版"；语言徽标一个字没变。
+  expect(dom.querySelector('.mi-daily-briefing-page__paper')).not.toBeNull()
+  expect(dom.querySelector('[data-briefing-previous-version="true"]')).not.toBeNull()
+  expect(badge()).toBe(text.history.languages['en-US'])
+  settleRun({ state: 'available', document: englishDocument })
+})
+
+it('does not leave the row "generating" when the run fails and the reload fails too', async () => {
+  // 行是**就地**改成 generating 的，收回靠"跑完重读一次"。如果这次重读也失败（列表读不到），
+  // 那一行就会永远停在生成中——一条永远不会结束的"正在跑"比显示旧失败更糟。
+  const today = '2026-10-30'
+  const trace = generationTraceFixture('failed', 'selection', 'editorial-timeout')
+  const listed = [{
+    date: today, periodId: 'period_failed', locale: 'en-US' as const, availableLocales: [] as const,
+    state: 'missing' as const, attemptCount: 1,
+    languages: [{ locale: 'en-US' as const, state: 'missing' as const, reason: 'run-failed' as const }]
+  }]
+  let listCalls = 0
+  const client = fakeClient({
+    list: vi.fn(async () => {
+      listCalls += 1
+      return listCalls === 1
+        ? { state: 'available' as const, result: { editions: listed, today } }
+        : { state: 'unavailable' as const, failureCode: 'list-unreadable' }
+    }),
+    get: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: trace })),
+    // 这一次也失败，紧接着的重读也失败。
+    regenerate: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'editorial-timeout', generationTrace: trace }))
+  })
+  const dom = await renderPage(client)
+  const row = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  await act(async () => { row.click() })
+  for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+
+  await act(async () => { dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate-edition"]')!.click() })
+  for (let round = 0; round < 10; round += 1) await act(async () => { await Promise.resolve() })
+
+  const after = dom.querySelector<HTMLElement>('.mi-daily-briefing__rail-row[data-period-id="period_failed"]')!
+  expect(after.getAttribute('aria-busy')).not.toBe('true')
+  expect(dom.querySelector('[data-rail-title="running"]')).toBeNull()
+  // 回到"失败"那一行（不是生成中），正文也可以继续显示失败原因。
+  expect(dom.querySelector('[data-daily-brief-failure]')).not.toBeNull()
 })
 
 it('never lets another issue\u2019s document stand in for the selected one', async () => {
@@ -2605,8 +2506,7 @@ describe('language fallback on the brief page', () => {
 
   const fallbackView = {
     settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-    generation: { periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }] },
-    language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } },
+      language: { settings: { primary: 'follow-ui', additional: [] }, plan: { locales: ['en-US'], primary: { requested: 'ja-JP', used: 'en-US', fallbackReason: 'ui-language-unsupported' }, writeCount: 1 } },
     webSearchSupported: false,
     resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
   }

@@ -7,16 +7,21 @@
  * （同一份输入永远落到同一屏），不必启动整个壳去验。
  */
 
-/** 通知里携带的跳转意图。字段来源是主进程的通知载荷，这里只读。 */
-export type NotificationDeeplink = Readonly<{
-  settingsSectionId?: string
-  pageId?: string
-  productId?: string
-  /** 实体类型：例如任务失败的 `job-definition`。没有它就定位不到那一行。 */
-  entityType?: string
-  /** 实体 id：任务定义 id。 */
-  entityId?: string
-}>
+/**
+ * 通知里携带的跳转意图：**直接复用平台契约的类型**，不在壳里复述一遍。
+ * 复述过一次的代价很大：契约新增字段（`settingsDrawer`）而副本没加，消费者写了也到不了。
+ */
+import type { NotificationDeeplink } from '@platform/notifications/contracts/notificationContracts'
+export type { NotificationDeeplink }
+
+/**
+ * resolver 只读这几个字段：用 `Pick` 从平台契约取，**不复制字段形状**。
+ * 契约新增一个落点字段时这里加一个名字即可，不会出现「契约有、壳里副本没有」的漂移。
+ */
+export type NotificationDeeplinkNavigationFields = Pick<
+  NotificationDeeplink,
+  'settingsSectionId' | 'pageId' | 'productId' | 'entityType' | 'entityId' | 'settingsDrawer'
+>
 
 /**
  * 产品 id 到一级菜单路由的映射来源。
@@ -32,6 +37,8 @@ export type NotificationNavigationTarget = Readonly<{
   settingsPanelKey?: string
   /** 落进去之后要定位的那一行（任务定义 id）。 */
   focusEntityId?: string
+  /** 产品设置抽屉的落点：`navKey` 是产品页，产品页按 `productId` 过滤后打开对应菜单。 */
+  settingsDrawer?: Readonly<{ productId: string; menuId: string; routePath: string }>
 }>
 
 /**
@@ -40,12 +47,15 @@ export type NotificationNavigationTarget = Readonly<{
  * 任务失败的通知发的是 `entityType: 'job-definition'` + `entityId`（`taskFailureNotifier.ts:44`），
  * 所以它必须落到任务自动化面板并定位到那一行；只落面板不定位，读者还得自己在一张表里找。
  *
- * 分析失败的通知发的是 `entityType: 'analysis-run'` + 分析运行 id：它落到运行日志（排障页），
- * 并按 id 定位到那条记录。这里登记的是**面板 id**，不是旧的分区名（运行日志已经独立成面板）。
+ * **只登记平台自己的面板**：平台认识的面板在这里；产品面板的落点由产品自己给（通知数据里的
+ * 目的地，或产品声明 `entityType → destination`），壳层不写产品面板 id——写一个就多一处
+ * 「产品撤了注册、壳里还指着一个不存在的页」。
+ *
+ * 分析失败（`entityType: 'analysis-run'`）因此**没有平台面板落点**：在产品给出目的地之前，
+ * 这条通知只有记录、没有跳转（功能关闭 = 不渲染、不导航），而不是先落到一个错的面板。
  */
 const ENTITY_SETTINGS_PANEL: Readonly<Record<string, string>> = {
-  'job-definition': 'task-automation',
-  'analysis-run': 'intelligence-run-log'
+  'job-definition': 'task-automation'
 }
 
 /**
@@ -58,7 +68,7 @@ const ENTITY_SETTINGS_PANEL: Readonly<Record<string, string>> = {
  * 所以映射必须来自**注册表本身**，不能来自手写表。
  */
 function routePathOfProduct(
-  deeplink: NotificationDeeplink,
+  deeplink: NotificationDeeplinkNavigationFields,
   productMenuEntries: readonly ProductMenuEntry[]
 ): string | null {
   if (deeplink.productId === undefined) return null
@@ -73,16 +83,22 @@ function routePathOfProduct(
  * 一条通知最多带一个真跳转，但载荷可能同时带产品 id 与设置分区（例如「某来源连续失败」）：
  * 这时应当落到设置里的那个分区，而不是产品的首页——读者点它是因为有事要处理。
  *
- * **为什么实体能压过分区**（2026-11-06）：分区名会过时。运行日志从情报源页独立成面板之后，
- * 旧的生产者仍写着 `settingsSectionId: 'intelligence-sources'`，而它指的其实是那次分析记录；
- * 实体 id 是页面能真的定位到的那一条，分区只是「大概在哪一屏」。只有**在
- * `ENTITY_SETTINGS_PANEL` 登记过**的实体才享受这个优先级——没登记的实体（例如来源 `source`）
- * 仍然按分区走，所以既有行为不变。
+ * **为什么实体能压过分区**（2026-11-06）：分区名会过时。产品把自己的设置分区改名、拆页之后，
+ * 旧的生产者仍写着旧的分区名；实体 id 是页面能真的定位到的那一条，分区只是「大概在哪一屏」。
+ * 只有**在 `ENTITY_SETTINGS_PANEL` 登记过**的实体才享受这个优先级——没登记的实体
+ * （例如产品来源）仍然按分区走，所以既有行为不变。
  */
 export function resolveNotificationNavigation(
-  deeplink: NotificationDeeplink,
+  deeplink: NotificationDeeplinkNavigationFields,
   productMenuEntries: readonly ProductMenuEntry[]
 ): NotificationNavigationTarget | null {
+  // 产品自己给的抽屉落点最具体：先认它。产品没在这一版注册（没有唯一产品页可落）就不导航——
+  // 不猜、也不回落到默认面板。
+  if (deeplink.settingsDrawer !== undefined) {
+    const routePath = routePathOfProduct({ productId: deeplink.settingsDrawer.productId }, productMenuEntries)
+    if (routePath === null) return null
+    return { navKey: routePath, settingsDrawer: { ...deeplink.settingsDrawer, routePath } }
+  }
   // 能精确定位到某一行的实体：它自己知道自己该落在哪个面板。
   const panelFromEntity =
     deeplink.entityType === undefined ? undefined : ENTITY_SETTINGS_PANEL[deeplink.entityType]
@@ -105,7 +121,7 @@ export function resolveNotificationNavigation(
 }
 
 /** 只有「知道自己要去哪一行」的实体才带定位，避免所有通知都被当成行级跳转。 */
-function focusEntityOf(deeplink: NotificationDeeplink): string | undefined {
+function focusEntityOf(deeplink: NotificationDeeplinkNavigationFields): string | undefined {
   if (deeplink.entityId === undefined || deeplink.entityType === undefined) return undefined
   return ENTITY_SETTINGS_PANEL[deeplink.entityType] === undefined ? undefined : deeplink.entityId
 }

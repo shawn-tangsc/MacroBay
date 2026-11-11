@@ -11,6 +11,14 @@ import type { AgentView, PanelView, SettingsView } from '../../../service/intell
 
 const PRODUCT_ID = 'market-intelligence'
 
+/**
+ * 启用请求的结果：`saved` 带最新详情；`rejected` 带原因码（目前只有 `credential-required`）。
+ * 拒绝是**结果**不是异常：调用方要按原因码决定怎么给读者看。
+ */
+export type SourceEnableResult =
+  | Readonly<{ state: 'saved'; detail: SafeIntelligenceSourceDetailView }>
+  | Readonly<{ state: 'rejected'; reasonCode: 'credential-required' }>
+
 export type IntelligenceSourcesClientErrorCode =
   | 'bridge-missing'
   | 'request-failed'
@@ -72,7 +80,7 @@ export const intelligenceSourcesClient = {
     return invoke<SafeIntelligenceSourceDetailView>('intelligenceSources.saveProfile', input)
   },
   setEnabled(sourceId: string, enabled: boolean) {
-    return invoke<SafeIntelligenceSourceDetailView>('intelligenceSources.setEnabled', { sourceId, enabled })
+    return invoke<SourceEnableResult>('intelligenceSources.setEnabled', { sourceId, enabled })
   },
   testCredentials(input: { sourceId: string; credentialDraft?: string }) {
     return invoke<SafeCredentialTestResult | SafeCredentialSaveResult>('intelligenceSources.testCredentials', input)

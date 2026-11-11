@@ -7,10 +7,10 @@
     "products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css": 1,
     "products/market-intelligence/desktop/pages/intelligence/dailyBriefingGeneratedBanner.css": 1,
     "products/market-intelligence/desktop/pages/intelligence/dailyBriefingShareCard.css": 22,
-    "products/market-intelligence/desktop/pages/intelligence/intelligence.css": 6,
+    "products/market-intelligence/desktop/pages/intelligence/intelligence.css": 4,
     "products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css": 3,
     "products/market-intelligence/desktop/pages/intelligence/sampleMode.css": 1,
-    "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css": 5
+    "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css": 1
   },
-  "total": 79
+  "total": 73
 }

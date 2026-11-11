@@ -18,9 +18,19 @@ const dashboardFeedStatusFailureCodes = Object.freeze([
   'response-invalid', 'response-unavailable', 'authentication-failed', 'decryption-failed'
 ] as const)
 
-/** The sources that really feed the dashboard's macro and cross-asset rows, and no others. */
+/**
+ * The sources the dashboard's reads depend on. The board now decides per cell whether its source is
+ * enabled, so this list carries every source those cells can name — the macro/cross-asset feeds,
+ * the perpetual one behind 持仓/费率/纳指, the capital providers, the sentiment index, the policy
+ * venue, and the six calendar feeds. Nothing else: a source outside this list cannot be judged.
+ */
 const dashboardFeedSourceIds = Object.freeze([
-  'realmarketapi-market', 'twelve-data-market', 'fred-rates-liquidity'
+  'realmarketapi-market', 'twelve-data-market', 'fred-rates-liquidity',
+  'binance-futures-positioning', 'defillama-stablecoins', '0xrouter-aggregate-provider',
+  'alternative-fear-greed', 'policy-path-market',
+  'macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls',
+  'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+  'macro-calendar-0xrouter-central-bank-activities'
 ] as const)
 
 export const dashboardFeedStatusPublicPolicy = Object.freeze({
@@ -41,11 +51,15 @@ export const dashboardFeedStatusPublicPolicy = Object.freeze({
     }),
     'twelve-data-market': Object.freeze({ lastSuccessAtMs: 'lastRunAtMs' }),
     'fred-rates-liquidity': Object.freeze({})
-  }),
+  }) as Readonly<Partial<Record<DashboardFeedSourceId, Readonly<{
+    outcome?: string
+    failureCode?: string
+    lastSuccessAtMs?: string
+  }>>>>,
   /** `unavailable:<code>` is the one outcome spelling that names a failure. */
   unavailableOutcomePrefix: 'unavailable:',
-  maximumSources: 3,
-  maximumSnapshotBytes: 4 * 1024
+  maximumSources: 14,
+  maximumSnapshotBytes: 8 * 1024
 } as const)
 
 export type DashboardFeedSourceId = typeof dashboardFeedSourceIds[number]
@@ -64,9 +78,19 @@ export type DashboardFeedSourceStatus = Readonly<{
   failureCode?: DashboardFeedFailureCode
 }>
 
+/**
+ * 读不到的原因，**只用于诊断**（DevTools / 日志），渲染层不许拿它做判定或当状态词显示。
+ * 闭集三元：IPC 失败（主进程没起来/抛错）、渲染层解析拒绝、主进程侧 notes 读失败。
+ */
+export const dashboardFeedStatusFailureReasons = Object.freeze([
+  'ipc-failed', 'parse-failed', 'notes-unreadable'
+] as const)
+
+export type DashboardFeedStatusFailureReason = typeof dashboardFeedStatusFailureReasons[number]
+
 export type DashboardFeedStatusView =
   | Readonly<{ state: 'available'; sources: readonly DashboardFeedSourceStatus[] }>
-  | Readonly<{ state: 'unavailable' }>
+  | Readonly<{ state: 'unavailable'; reason?: DashboardFeedStatusFailureReason }>
 
 /** The one admitted request shape: no arguments at all — the status is product-wide. */
 export function isDashboardFeedStatusQuery(value: unknown): value is Record<string, never> {
@@ -83,7 +107,11 @@ export function isDashboardFeedStatusQuery(value: unknown): value is Record<stri
 export function parseDashboardFeedStatus(value: unknown): DashboardFeedStatusView | undefined {
   try {
     if (!plainRecord(value)) return undefined
-    if (value.state === 'unavailable') return exactFields(value, ['state']) ? Object.freeze({ state: 'unavailable' as const }) : undefined
+    if (value.state === 'unavailable') {
+      if (!exactFields(value, ['state'], ['reason'])) return undefined
+      if (value.reason !== undefined && !(dashboardFeedStatusFailureReasons as readonly string[]).includes(value.reason as string)) return undefined
+      return Object.freeze({ state: 'unavailable' as const, ...(value.reason === undefined ? {} : { reason: value.reason as DashboardFeedStatusFailureReason }) })
+    }
     if (value.state !== 'available') return undefined
     if (!exactFields(value, ['state', 'sources'])) return undefined
     const sources = value.sources

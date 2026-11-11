@@ -11,8 +11,12 @@ const asOf = '2026-10-31T14:45:00.000Z'
 
 let latest: DashboardFundingRateHistoryState | undefined
 
-function Probe(props: Readonly<{ client: { query: (input: { asOf: string }) => Promise<unknown> } }>) {
-  latest = useDashboardFundingRateHistory({ client: props.client, now: () => new Date(asOf) })
+function Probe(props: Readonly<{ client: { query: (input: { asOf: string }) => Promise<unknown> }; disabled?: boolean; waiting?: boolean }>) {
+  latest = useDashboardFundingRateHistory({
+    client: props.client, now: () => new Date(asOf),
+    ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+    ...(props.waiting === undefined ? {} : { waiting: props.waiting })
+  })
   return null
 }
 
@@ -45,5 +49,22 @@ describe('funding rate hook first read', () => {
   it('becomes unavailable only when the read actually rejects', async () => {
     const state = await renderProbe({ query: async () => { throw new Error('ipc down') } })
     expect(state).toMatchObject({ state: 'unavailable' })
+  })
+})
+describe('a cell the host decided not to read is a terminal state', () => {
+  it('answers unavailable instead of loading forever', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => { root.render(createElement(Probe, { client: { query: async () => ({}) }, disabled: true })) })
+    expect(latest?.state).toBe('unavailable')
+  })
+
+  it('keeps loading while the enable table has not been read', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => { root.render(createElement(Probe, { client: { query: async () => ({}) }, waiting: true, disabled: true })) })
+    expect(latest?.state).toBe('loading')
   })
 })

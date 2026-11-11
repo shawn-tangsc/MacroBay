@@ -15,6 +15,8 @@ import type { CalendarCardEvent } from './projectUpcomingCalendarCard'
 /** An official event, which owns its lifecycle; mapped only to the card's field names. */
 export function toCardEventFromOfficial(view: Readonly<{
   eventKey: string; titleKey: string; importance: 'high' | 'medium' | 'low'
+  /** 三个官方腿的 `sourceId`；卡片按来源启停过滤时用。 */
+  providerIds?: readonly string[]
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
   scheduledDate: string; scheduledAt?: string; detectedAt: string
   actual?: Readonly<{ displayValue: string }> | null
@@ -23,6 +25,7 @@ export function toCardEventFromOfficial(view: Readonly<{
 }>): CalendarCardEvent {
   return {
     eventKey: view.eventKey, titleKey: view.titleKey, importance: view.importance,
+    ...(view.providerIds === undefined ? {} : { sourceIds: view.providerIds }),
     // The official route only publishes economic indicators; the provider carries its own kind.
     category: 'economic-indicator',
     lifecycleState: view.lifecycleState, scheduledDate: view.scheduledDate,

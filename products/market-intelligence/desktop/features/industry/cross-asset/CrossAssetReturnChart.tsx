@@ -4,6 +4,22 @@ import type { CrossAssetId, CrossAssetMacroProxyId, CrossAssetSnapshot } from '.
 import type { CrossAssetEventLine } from './crossAssetEventLines'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
+/**
+ * 图上能画的线。行 id 与线 id 在这五条上同名，是刻意的：一格关掉，那一行与那条线一起消失。
+ *
+ * **合成线的口径**：美元 / 黄金一行背后是主源 + 备用源两个格（`quotes:usd` + `quotes:usd-fallback`），
+ * 只有两个格都关掉时这一行才进 `hideStatusRows`，也才把这条线交给 `hiddenLines`——主源关、
+ * 备用源还开着时线照旧画，因为它读的仍是一份开着的格。
+ */
+export const crossAssetChartLines = ['index', 'btc', 'eth', 'dxy', 'gold'] as const
+
+export type CrossAssetChartLineId = (typeof crossAssetChartLines)[number]
+
+/** 按「哪些行被关掉」给出去掉哪些线；行 id 与线 id 同名，映射只此一处。 */
+export function chartLinesHiddenBy(hiddenRows: readonly string[]): readonly CrossAssetChartLineId[] {
+  return crossAssetChartLines.filter((line) => hiddenRows.includes(line))
+}
+
 export const crossAssetChartPolicy = Object.freeze({ width: 1000, height: 200, inset: 8, tooltipWidth: 210, tooltipHeight: 128, offset: 12,
   tickSlots: 3,
   assets: ['index', 'btc', 'eth'] as const,
@@ -17,6 +33,8 @@ type LineId = CrossAssetId | CrossAssetMacroProxyId
 type Text = {
   chart: string; assets: Record<CrossAssetId, string>; macroAssets: Record<CrossAssetMacroProxyId, string>
   noData: string; forming: string
+  /** 图例里那条没画出来的线后面标一句（原因在图标题的 ⓘ 里）。 */
+  lineNotDrawn: string
   /** What a line's tooltip and its accessible name read: the time, then what happened. */
   eventLine: string; eventsCollapsed: string
   /** 同一分钟里官方与 provider 都在、却没能确认是同一条发布时，线上要说明这件事（设计 145 §8 B）。 */
@@ -24,8 +42,13 @@ type Text = {
 }
 const percent = (value: number) => `${value < 0 ? '−' : value > 0 ? '+' : ''}${Math.abs(value) > 0 && Math.abs(value) < .01 ? '<0.01' : Math.abs(value).toFixed(2)}%`
 
-export function CrossAssetReturnChart({ curves, macroCurves, forming, events, eventsCollapsed, onSelectEvent, text }: {
+export function CrossAssetReturnChart({ curves, macroCurves, forming, events, eventsCollapsed, onSelectEvent, text, hiddenLines }: {
   curves: CrossAssetSnapshot['curves']; macroCurves?: CrossAssetSnapshot['macroCurves']
+  /**
+   * 读者在设置里关掉的格：这些线连同图例一起不画（不是画 0、不是灰掉）。
+   * 与图内那颗「点图例隐藏」是两件事：那个是读者临时看图，这个是这一格根本不读。
+   */
+  hiddenLines?: readonly CrossAssetChartLineId[]
   forming?: CrossAssetSnapshot['forming']; text: Text
   /** The window's high-importance calendar events, already reduced to one line per minute. */
   events?: readonly CrossAssetEventLine[]
@@ -48,6 +71,7 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   const tooltipRef = useRef<HTMLDivElement>(null)
   /** Macro lines are drawn only when the wire carried them, and only when they have a curve at all. */
   const listed: readonly LineId[] = [...policy.assets, ...policy.macroProxies.filter(proxy => (macroCurves?.[proxy]?.length ?? 0) > 0)]
+    .filter(id => hiddenLines?.includes(id as CrossAssetChartLineId) !== true)
   const visible = listed.filter(id => !hidden.includes(id))
   const pointsOf = (id: LineId): readonly { at: string; returnPercent: number | null }[] =>
     id in curves ? curves[id as CrossAssetId] : macroCurves?.[id as CrossAssetMacroProxyId] ?? []
@@ -100,8 +124,15 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
       tooltipTop: Math.max(policy.inset, Math.min(mouseY + policy.offset, box.height - height - policy.inset)) })
   }
   return <div className="mi-cross-asset__chart">
-    <div className="mi-cross-asset__legend">{listed.map(id => <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
-      onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}</Button>)}</div>
+    <div className="mi-cross-asset__legend">{listed.map(id => {
+      // 一条线画不画得出来：本窗内至少一个点有值（或有一根仍在形成的尾巴）。
+      const drawn = pointsOf(id).some(point => point.returnPercent !== null)
+        || (formingOf(id)?.returnPercent ?? null) !== null
+      return <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
+        onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}
+        {/* 没画出来就标一句：否则读者会以为这条线被藏了（用户 2026-11-11）。 */}
+        {drawn ? null : <small className="mi-cross-asset__legend-undrawn" data-undrawn={id}>{text.lineNotDrawn}</small>}
+      </Button>})}</div>
     <div className="mi-cross-asset__chart-frame">
       <div className="mi-cross-asset__y-axis">{(max === min ? [0] : [max, 0, min].filter((value, index, all) => all.indexOf(value) === index)).map(value => <span key={value} style={{ top: `${y(value) / policy.height * 100}%` }}>{percent(value)}</span>)}</div>
       <div ref={plotRef} data-cross-asset-plot className="mi-cross-asset__plot" role="group" aria-label={text.chart} tabIndex={0}

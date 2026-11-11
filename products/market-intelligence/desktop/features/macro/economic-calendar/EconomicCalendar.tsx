@@ -4,8 +4,8 @@ import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, Settings2, Upload } fr
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
-import { NetworkProxyBanner } from '../../../shared/NetworkProxyBanner'
 import { openIntelligenceSourcesSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
+import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../../settings/intelligence-sources/sourceWrites'
 import {
   createEconomicCalendarQuery,
   economicCalendarCurrentMonth,
@@ -21,6 +21,8 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CalendarDetailSurface, type CalendarDetailState } from './CalendarDetailSurface'
+import { calendarRowFor } from './calendarRowFocus'
+import { MarketCalendarProxyBanner } from './MarketCalendarProxyBanner'
 import { useBlsAvailability, useBlsYearSync } from './useBlsAvailability'
 import type { BlsScheduleFeedback } from './blsAvailability'
 import { type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
@@ -35,8 +37,6 @@ import { CalendarSourceStatusInfo, MarketCalendarSourceStatus } from './MarketCa
 import { CalendarEventStatusPolicy } from './calendarEventStatusModel'
 import { useCalendarStatusClock } from './useCalendarStatusClock'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import { shouldShowMarketCalendarProxyNotice } from './marketCalendarProxyNotice'
-import { DashboardPanelDrawer } from '../../../pages/intelligence/DashboardPanelDrawer'
 import { economicCalendarMonthLoadingPolicy, toDetailEvent } from './economicCalendarMonthResult'
 import type { EconomicCalendarText } from './economicCalendarText'
 import { useEconomicCalendarMonthWindow, type EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
@@ -51,6 +51,8 @@ type Props = {
   onBack: () => void
   /** Set by the dashboard card: the month (and event) the reader asked to see. */
   openTarget?: { month: string; eventKey?: string }
+  /** 「日历设置」的去处：**必填**——旧看板抽屉已删，页面里不留第二条回退路（宿主自己决定落到哪）。 */
+  onOpenSettings: () => void
 }
 
 const economicCalendarMonthValueAnchorPolicy = {
@@ -72,7 +74,7 @@ function toEconomicCalendarMonthPickerValue(month: string): Dayjs {
   return dayjs(`${month}-${economicCalendarMonthValueAnchorPolicy.day}T${economicCalendarMonthValueAnchorPolicy.localHour}:00:00`)
 }
 
-export function EconomicCalendar({ client, now, text, onBack, openTarget }: Props): ReactElement {
+export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpenSettings }: Props): ReactElement {
   const [initialQuery] = useState(() => createEconomicCalendarQuery(now()))
   const [statusNow, updateStatusClock] = useCalendarStatusClock(now)
   const timeZone = useShellTimeZone()
@@ -87,7 +89,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
    */
   const [followCurrentMonth, setFollowCurrentMonth] = useState(() =>
     !openTarget?.month || openTarget.month === economicCalendarCurrentMonth(initialQuery.asOf))
-  const [calendarPanelOpen, setCalendarPanelOpen] = useState(false)
   const gridMonths = economicCalendarGridMonths(selectedMonth)
   // The named month leads the read: it owns the grid and is what a manual refresh targets.
   const readMonths = [selectedMonth, ...gridMonths.filter(month => month !== selectedMonth)]
@@ -96,7 +97,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const [selectedLinkedMarket, setSelectedLinkedMarket] = useState<MarketCalendarEvent>()
   useEffect(() => { setSelectedMarket(undefined); setSelectedLinkedMarket(undefined) }, [selectedMonth, text.market.locale])
   const [asOf, setAsOf] = useState(initialQuery.asOf)
-  const { monthState, loadMonth } = useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef })
+  const { monthState, loadMonth } = useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef, today })
   const [selectedEventKey, setSelectedEventKey] = useState<string>()
   // The reader's own selection survives a re-read; nothing is picked or dropped on their behalf.
   useEffect(() => {
@@ -330,8 +331,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
 
   return (
     <main className="intelligence-page mi-economic-calendar" aria-label={text.title}>
-      {/* The calendar side of the row. The detail panel is the second child (see the CSS comment on
-          `row-reverse`), so this wrapper is what the panel squeezes — toolbar included. */}
+      {/* The calendar side of the row. 详情是覆盖在它上面的抽屉（不在这一列里，见 CSS 的
+          `.mi-calendar-detail-layer`），所以这一列（工具条 + 周视图 + 当日列表）宽度不受它影响。 */}
       <div className="mi-economic-calendar__column">
       <header className="mi-economic-calendar__header">
         <div className="mi-economic-calendar__heading">
@@ -360,12 +361,13 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           />
           <Button aria-label={text.monthNavigation.next} icon={<ChevronRight aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))}>{text.monthNavigation.next}</Button>
           <Button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)}>{text.monthNavigation.current}</Button>
-          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => setCalendarPanelOpen(true)}>{text.calendarSettings}</Button>
+          <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={onOpenSettings}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
           <Button icon={<ArrowLeft aria-hidden="true" size={15} />} onClick={onBack}>{text.backToDashboard}</Button>
         </div>
       </header>
-      {shouldShowMarketCalendarProxyNotice(market.sources) ? <NetworkProxyBanner onOpenProxySettings={openProxySettings} /> : null}
+      {/* 档位跟着真实代理配置走：配好却未连上 ≠ 去配一个代理（`MI-11-R196`）。 */}
+      <MarketCalendarProxyBanner onOpenProxySettings={openProxySettings} sources={market.sources} />
       <section className="mi-market-calendar__status" aria-live="polite">
         {/* 常态说明（读取范围、刷新成功、采集时刻、更新频率）都收进那颗 ⓘ；正文只留状态。 */}
         {market.pending ? <span>{text.market.pending}</span> : market.feedback && market.feedback.state !== 'completed' ? <span>{text.market[market.feedback.state]}</span> : null}
@@ -382,7 +384,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
 
       <div className="mi-economic-calendar__workspace">
         <CalendarMonthBoard
-          officialUnavailable={blsAvailability.unavailable === undefined ? undefined : text.officialUnavailableNote}
+          officialUnavailable={blsAvailability.listLabel}
+          officialUnavailableDetail={blsAvailability.listDetail}
           officialFeeds={blsAvailability.feeds}
           statusNow={statusNow}
           asOf={asOf}
@@ -398,6 +401,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           state={monthState}
           text={text}
           onRetryMonth={() => loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))}
+          onOpenSettings={onOpenSettings}
           marketMonthRead={market.namedMonthState}
           marketLoading={market.loading}
           onRetryMarket={() => void market.refresh()}
@@ -417,16 +421,17 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
         </section>
       </div>
       </div>
-      <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />
       <CalendarDetailSurface
         blsUnavailableNotice={blsAvailability.notice}
         blsRefreshBlocked={blsAvailability.refreshBlocked}
+        blsRefreshBlockedCode={blsAvailability.refreshBlockedCode}
         client={client}
         contentId={detailContentId}
         detailState={detailState}
         marketSources={market.sources}
         now={now}
         onClose={clearDetail}
+        returnFocusTo={calendarRowFor}
         onRefresh={async (operation, eventKey) => {
           if (refreshState?.pending) return
           setRefreshState({ eventKey, operation, pending: true })

@@ -66,8 +66,7 @@ describe('intelligenceWorkspaceStatus', () => {
     const definition = getIntelligenceSourceDefinition('alternative-fear-greed')!
     const profile = {
       ...createDefaultSourceProfile(definition),
-      enabled: true,
-      includeInSentiment: true
+      enabled: true
     }
     const pipeline = createIntelligencePipeline()
     const aggregateId = 'crypto-market:global:1h'

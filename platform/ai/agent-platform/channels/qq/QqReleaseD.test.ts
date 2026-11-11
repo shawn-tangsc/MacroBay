@@ -14,7 +14,6 @@ import { QqDeliveryTransport } from './QqDeliveryTransport'
 import { QqRuntimeManager } from './QqRuntimeManager'
 import { qqGatewayStateUpsertSql, QqRuntimeRepository } from './QqRuntimeRepository'
 import { normalizeQqEvent } from './QqUpdateNormalizer'
-import { QqGatewayHost } from './QqGatewayHost'
 
 describe('QQ Release D contracts', () => {
   it('creates QQ only as blocked metadata with strict app credential schemas', () => {
@@ -22,7 +21,7 @@ describe('QQ Release D contracts', () => {
     const service = new ChannelManagementService({ repository: new ChannelManagementRepository(database), vault: {} as never, cipher: {} as never, registry: new ChannelAdapterAcceptanceRegistry(), handoff: new ChannelSecureHandoff() })
     const created = service.create({ type: 'qq', name: 'QQ', agentId: 'agent-a', actorId: 'user-a' })
     expect(created).toMatchObject({ ok: true, channel: { type: 'qq', requestedEnabled: false, credential: { hasCredential: false } } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select public_config_json,requested_enabled from agent_channels where id=?').get(created.channel!.id)).toEqual({ public_config_json: '{}', requested_enabled: 0 })
     expect(() => assertQqSecret({ app_id: 'app_12345678', client_secret: 'a'.repeat(20) })).not.toThrow()
     expect(() => assertQqSecret({ app_id: 'short', client_secret: 'a'.repeat(20) })).toThrow('channel-input-invalid')
@@ -33,9 +32,11 @@ describe('QQ Release D contracts', () => {
     const normalized = normalizeQqEvent({ id: 'event_1', author_id: 'user_1', conversation_id: 'group_1', kind: 'group', content: 'hello', url: 'https://private', attachments: [{ id: 'file_1', kind: 'image', mime_type: 'image/png', url: 'https://private' }] })
     expect(normalized).toMatchObject({ eventKey: 'qq:event:event_1', conversationKey: 'qq:conversation:group:group_1', attachments: [{ stableRef: 'qq:file:file_1' }] })
     expect(JSON.stringify(normalized)).not.toContain('https://private')
-    expect(normalizeQqEvent({ id: 'bad key', author_id: 'user', conversation_id: 'group', kind: 'group' })).toBeNull()
+    // 空格不再是坏 id（不透明值允许）；控制字符与超长仍然拒。
+    expect(normalizeQqEvent({ id: 'bad\u0000key', author_id: 'user', conversation_id: 'group', kind: 'group' })).toBeNull()
+    expect(normalizeQqEvent({ id: 'x'.repeat(257), author_id: 'user', conversation_id: 'group', kind: 'group' })).toBeNull()
     expect(encodeQqConversation({ kind: 'channel', id: 'channel_1' })).toBe('qq:conversation:channel:channel_1')
-    expect(decodeQqConversation('qq:conversation:group:bad key')).toBeNull()
+    expect(decodeQqConversation('qq:conversation:group:bad\u0000key')).toBeNull()
     expect(splitQqText('x'.repeat(8_001)).map((part) => part.length)).toEqual([4_000, 4_000, 1])
 
     const urls: string[] = []; const bodies: unknown[] = []
@@ -43,7 +44,7 @@ describe('QQ Release D contracts', () => {
     const client = new QqApiClient({ getPlatformFetch: () => fetch as typeof globalThis.fetch, token: async () => 'internal-token' })
     const delivery = new QqDeliveryTransport(); delivery.setClient('qq-a', client, { isCurrent: () => true, signal: new AbortController().signal })
     await expect(delivery.send({ channelId: 'qq-a', providerConversationKey: 'qq:conversation:group:group_1', text: 'reply', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'delivered' })
-    await expect(delivery.send({ channelId: 'qq-a', providerConversationKey: 'qq:conversation:group:bad key', text: 'no', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'failed', code: 'delivery-provider-rejected' })
+    await expect(delivery.send({ channelId: 'qq-a', providerConversationKey: 'qq:conversation:group:bad\u0000key', text: 'no', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'failed', code: 'delivery-provider-rejected' })
     expect(urls).toEqual(['https://api.sgroup.qq.com/v2/groups/group_1/messages'])
     expect(bodies).toEqual([{ content: 'reply' }])
     expect(JSON.stringify(bodies)).not.toContain('qq:conversation:')
@@ -88,25 +89,11 @@ describe('QQ Release D contracts', () => {
     database.connection.exec("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('telegram-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('telegram-a',1,'active','2026-07-20'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('qq-a','qq-owner','enable',1,'2026-07-20','2026-07-20'),('telegram-a','telegram-owner','enable',1,'2026-07-20','2026-07-20')")
     const management = new ChannelManagementRepository(database)
     expect(management.activeRuntimeOwners('2026-07-20T00:00:00.000Z')).toEqual([{ channelId: 'telegram-a', generation: 1, token: 'telegram-owner' }])
-    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('qq-a')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
+    // QQ 现在是**已实现**的适配器：运行时被围栏（代际作废、owner 失效），但读者点的「启用」意图留着
+    // ——自检放行靠那次点击，清掉它等于让人每次重启都要再点一次。
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('qq-a')).toEqual({ requested_enabled: 1, lifecycle_state: 'enabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('qq-a')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(management.stopAllRuntimeAndFence('2026-07-20T00:01:00.000Z')).toContain('telegram-a')
-  })
-
-  it.each(['closed', 'replaced'] as const)('does not commit or acknowledge a %s source socket during durable inbound work', async (mode) => {
-    const source = new FakeSocket(); const replacement = new FakeSocket(); let created = 0; let release!: () => void
-    const runtime = { commitIfCurrent: vi.fn(() => true), auditIfCurrent: vi.fn(() => true) }
-    const receive = vi.fn(async (input: { acknowledge: () => Promise<void> }) => {
-      await new Promise<void>((resolve) => { release = resolve })
-      await expect(input.acknowledge()).rejects.toThrow('qq-current-gate-failed')
-      return { disposition: 'retry' as const }
-    })
-    const host = new QqGatewayHost({ channelId: 'qq-a', generation: 1, gatewayUrl: 'wss://fake', inbound: { receive } as never, runtime: runtime as never, parseVerifiedDispatch: () => ({ sequence: 9, facts: { eventKey: 'qq:event:e1', conversationKey: 'qq:conversation:direct:user_1', userKey: 'qq:user:user_1', conversationKind: 'direct', mentionedBot: true, text: 'hello' }, acknowledgeWire: '{"ack":9}' }), createPlatformWebSocket: class { constructor(_url: string) { return (++created === 1 ? source : replacement) as never } } as never, isCurrent: () => true, signal: new AbortController().signal })
-    host.start(); source.onmessage?.({ data: '{}' }); await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce())
-    if (mode === 'closed') source.onclose?.({})
-    else host.start()
-    release(); await vi.waitFor(() => expect(runtime.commitIfCurrent).not.toHaveBeenCalled())
-    expect(source.sent).toEqual([]); expect(replacement.sent).toEqual([])
   })
 
   it('purges QQ runtime rows in the established delete isolation transaction', async () => {

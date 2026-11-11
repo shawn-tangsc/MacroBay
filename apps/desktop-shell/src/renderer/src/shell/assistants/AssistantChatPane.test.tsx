@@ -133,7 +133,7 @@ describe('AssistantChatPane', () => {
         modelReady
         statusMessage={null}
         confirmDeleteMessage={false}
-        chatSettings={{ fontSize: 18, messageStyle: 'bubble', narrowMode: true }}
+        chatSettings={{ fontSize: 18, messageStyle: 'bubble', narrowMode: true, sendShortcut: 'enter' }}
         onDraftChange={() => undefined}
         onSend={() => undefined}
         onStop={() => undefined}

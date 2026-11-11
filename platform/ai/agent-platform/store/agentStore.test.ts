@@ -593,6 +593,48 @@ describe('agent store', () => {
     ])
   })
 
+
+
+  it('keeps at most one current session per (agent, originRef) in a single state update', () => {
+    let state = createAgentStoreState({ agents, sessions: [], workspaces: [workspace] })
+    const base = { agentId: agents[0]!.id, workspace: { type: 'system' as const }, origin: 'automation' as const, originGroup: 'daily-briefing', originRef: 'daily-brief:2026-11-09:default:zh-CN' }
+    state = createAgentSession(state, { ...base, name: 'first' })
+    const firstId = state.sessions[0]!.id
+
+    state = createAgentSession(state, { ...base, name: 'second' })
+    const sameIdentity = state.sessions.filter((session) => session.originRef === base.originRef)
+    // 同一次更新里：新的 current，旧的 superseded——不变量成立，且没有中间态可渲染成两行。
+    expect(sameIdentity).toHaveLength(2)
+    expect(sameIdentity.filter((session) => session.originState !== 'superseded')).toHaveLength(1)
+    expect(sameIdentity.find((session) => session.id === firstId)?.originState).toBe('superseded')
+    expect(sameIdentity.find((session) => session.id !== firstId)?.originState).toBeUndefined()
+  })
+
+  it('keeps the automation visibility state on create, and updates it when asked', () => {
+    let state = createAgentStoreState({ agents, sessions: [], workspaces: [workspace] })
+    state = createAgentSession(state, {
+      agentId: agents[0]!.id,
+      name: 'run session',
+      workspace: { type: 'system' },
+      origin: 'automation',
+      originGroup: 'market-analysis',
+      originRef: 'run-1',
+      originState: 'superseded'
+    })
+    const created = state.sessions[0]!
+    // 契约：只有 superseded 会被侧栏隐藏；缺省就是 current（实体可以不带这个字段）。
+    expect(created.originRef).toBe('run-1')
+    expect(created.originState).toBe('superseded')
+
+    state = updateAgentSession(state, created.id, { originState: 'current' })
+    expect(state.sessions[0]!.originState).toBe('current')
+
+    // 缺省创建不带标记：读侧/壳层按「可见」处理。
+    let plain = createAgentStoreState({ agents, sessions: [], workspaces: [workspace] })
+    plain = createAgentSession(plain, { agentId: agents[0]!.id, name: 'x', workspace: { type: 'system' }, origin: 'automation' })
+    expect(plain.sessions[0]!.originState).toBeUndefined()
+  })
+
   it('merges runtime session messages without overwriting concurrent agent edits', () => {
     const base = createAgentStoreState({ agents, sessions, workspaces: [workspace], activeSessionId: 'session-1' })
     const current = updateAgent(base, 'agent-1', { name: 'Renamed while streaming' })

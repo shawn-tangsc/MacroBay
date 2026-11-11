@@ -44,7 +44,7 @@ export function InUseModelRetiredBanner({
         </span>
       )}
       {/* 命令型动作 → antd `Button` 文本档 + `.text-action`（不再手写按钮）。 */}
-      <Button type="text" size="small" className="text-action" data-in-use-model-retired-change onClick={onChangeModel}>
+      <Button className="text-action" data-in-use-model-retired-change onClick={onChangeModel}>
         {labels.changeModel}
       </Button>
     </div>

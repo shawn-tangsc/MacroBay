@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, readFileSync } from 'node:fs'
 
 import { writeFileAtomicallySync } from '@platform/storage/jsonFileStorage'
 
-import type { NewsSentimentTierThreshold } from '../../../contracts/newsSentimentTiers'
+import { DEFAULT_NEWS_PUSH_THRESHOLD, type NewsSentimentTierThreshold } from '../../../contracts/newsSentimentTiers'
 
 /**
  * 「舆情提醒 · 强度门槛」的配置存储（读者 2026-11-07 提：弱 / 中 / 强，选哪档就是该档以上都推）。
@@ -37,7 +37,7 @@ import type { NewsSentimentTierThreshold } from '../../../contracts/newsSentimen
 export const NEWS_PUSH_THRESHOLDS = ['low', 'medium', 'high'] as const satisfies readonly NewsSentimentTierThreshold[]
 
 /** 默认「中」＝这条功能上线以来的行为；实测代价见需求（强约 5 条/天、中约 15 条/天、弱约 50 条/天）。 */
-export const DEFAULT_NEWS_PUSH_THRESHOLD: NewsSentimentTierThreshold = 'medium'
+export { DEFAULT_NEWS_PUSH_THRESHOLD } from '../../../contracts/newsSentimentTiers'
 
 export type NewsPushThresholdSettings = Readonly<{
   pushThreshold: NewsSentimentTierThreshold

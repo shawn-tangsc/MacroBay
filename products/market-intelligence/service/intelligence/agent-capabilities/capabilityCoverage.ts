@@ -115,6 +115,13 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // 日历提醒的读写只服务这一屏的设置表单：agent 没有理由替读者改「提前多久」。
   'intelligence.getCalendarReminderSettings': excluded('internal-view'),
   'intelligence.setCalendarReminderSettings': excluded('internal-view'),
+  // 看板的**格级开关与格内选源**：读的是「这一格读者显式开过没有、选了哪个源」，写的是同一个
+  // 显示偏好文档（`intelligence-cell-enabled.json`）。它服务看板卡自己的开关，不是问答能力——
+  // agent 读同一个事实走看板快照，替读者改某一格的开关没有理由（与上面三条设置写同一条口径）。
+  'intelligence.readCellEnabled': excluded('internal-view'),
+  'intelligence.setCellEnabled': excluded('internal-view'),
+  'intelligence.readCellSelection': excluded('internal-view'),
+  'intelligence.setCellSelection': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
   // The same panel's per-day counts: a reader-facing view with no agent tool behind it.
   'intelligence.syncRuns.aggregates': excluded('internal-view'),
@@ -139,6 +146,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.dailyBriefing.listAttempts': excluded('internal-view'),
   'intelligence.dailyBriefing.regenerate': excluded('internal-view'),
   'intelligence.dailyBriefing.getProgress': excluded('internal-view'),
+  // 日报的 AI 编辑与语言设置：抽屉日报屏唯一的读写口（模型 / WebSearch / 编辑开关 / 语言）。
+  // 期列表早就搬走了，这里只剩这组设置；删这两条等于让读者少一组设置（台账 C15c）。
   'intelligence.dailyBriefing.getSettings': excluded('user-private-data'),
   'intelligence.dailyBriefing.saveSettings': excluded('user-private-data'),
   'intelligence.dailyBriefing.getStorageState': excluded('internal-view'),

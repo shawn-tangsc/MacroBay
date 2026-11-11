@@ -407,14 +407,72 @@ describe('daily briefing document', () => {
     expect(briefingMacroCategoryVisible(undefined)).toBe(true)
   })
 
+  it('carries "the release time was not published" into both sections instead of a made-up time', () => {
+    // 只公布了日期的事件：文档里留日期 + 标记，`scheduledAt` 只是排序位。
+    // 同一份日期只有两档去处——已经发生的进「过去 24 小时」，还没发生的进「接下来」。
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: {
+          state: 'available',
+          events: [
+            {
+              eventKey: 'US.CPI', title: 'CPI', scheduledAt: '2026-10-29T00:00:00.000Z',
+              releaseTimeNotPublished: true, releaseDate: '2026-10-29',
+              importance: 'high', lifecycleState: 'released', category: 'economic-indicator',
+              actual: '3.4%', previous: '3.1%', consensus: '3.2%', surprise: { direction: 'beat', value: 0.2, unit: 'pp' }
+            },
+            {
+              eventKey: 'US.NFP', title: 'NFP', scheduledAt: '2026-10-31T00:00:00.000Z',
+              releaseTimeNotPublished: true, releaseDate: '2026-10-31',
+              importance: 'high', lifecycleState: 'scheduled', category: 'economic-indicator',
+              surprise: { direction: 'consensus-unavailable' }
+            }
+          ]
+        }
+      }),
+      date: '2026-10-30'
+    })
+    const macro = document.news.macro.find((item) => item.eventKey === 'US.CPI')
+    expect(macro).toMatchObject({ scheduledAt: '2026-10-29T00:00:00.000Z', releaseTimeNotPublished: true, releaseDate: '2026-10-29' })
+    const next = [document.next.focus, ...document.next.items].find((item) => item?.eventKey === 'US.NFP')
+    expect(next).toMatchObject({ releaseTimeNotPublished: true, releaseDate: '2026-10-31' })
+  })
+
+  it('keeps a date-only event from yesterday in the past-24h list when its date position sits before the window start', () => {
+    // 反例（Chief 2026-11-11）：UTC 读者 07:00 截止 → 窗口起点是昨天 07:00Z；只公布日期的那一场
+    // 日期位在昨天 00:00Z，**在窗口起点之前**。按瞬间判会被整条丢掉，等于把「有事件」说成「没有事件」。
+    // 归属按日期判：昨天 ∈ [昨天, 今天] → 仍在过去 24 小时（且只有日期，正文画日期 + 一句话）。
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-29T07:00:00.000Z',
+        windowStart: '2026-10-28T07:00:00.000Z',
+        windowEnd: '2026-10-29T07:00:00.000Z',
+        timeZone: 'UTC',
+        calendar: {
+          state: 'available',
+          events: [{
+            eventKey: 'US.CPI', title: 'CPI', scheduledAt: '2026-10-28T00:00:00.000Z',
+            releaseTimeNotPublished: true, releaseDate: '2026-10-28',
+            importance: 'high', lifecycleState: 'released', category: 'economic-indicator',
+            actual: '3.4%', surprise: { direction: 'beat', value: 0.2, unit: 'pp' }
+          }]
+        }
+      }),
+      date: '2026-10-29'
+    })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.CPI'])
+    expect(document.news.macro[0]).toMatchObject({ releaseTimeNotPublished: true, releaseDate: '2026-10-28' })
+  })
+
   it('writes the period identity into the edition at the current schema', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({ asOf: '2026-10-30T00:30:12.345Z', windowEnd: asOf }),
       date: '2026-10-30'
     })
 
-    // 14 起宏观事件带自己的 `lifecycleState`，15 起新闻源静默/失败进文档（`02` v2.167）。
-    expect(document.schemaVersion).toBe(15)
+    // 14 起宏观事件带自己的 `lifecycleState`，15 起新闻源静默/失败进文档（`02` v2.167），
+    // 16 起宏观/接下来两栏可带「官方没公布发布时刻」的日期与标记。
+    expect(document.schemaVersion).toBe(16)
     // The id is a name, not the clock: this version's single fixed period.
     expect(document.edition.periodId).toBe('default')
     // The nominal cutoff, not the (later) actual generation moment; ISO milliseconds like generatedAt.

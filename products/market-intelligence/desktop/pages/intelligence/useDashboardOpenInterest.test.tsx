@@ -37,13 +37,17 @@ function Probe(props: Readonly<{
   signalClient: { query: (input: { asOf: string }) => Promise<ModuleSignalAnalysisRead> }
   window?: '24h' | '7d'
   client?: { query: (input: { asOf: string; window: '24h' | '7d' }) => Promise<OpenInterestHistoryResult> }
+  disabled?: boolean
+  waiting?: boolean
 }>) {
   latest = useDashboardOpenInterest({
     // 历史读按请求的窗口回，形状要与窗口一致（7 天视图不是 24 小时那份）。
     client: props.client ?? { query: async input => ({ ...history, window: input.window }) },
     signalClient: props.signalClient,
     now: () => new Date(asOf),
-    window: props.window ?? '24h'
+    window: props.window ?? '24h',
+    ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+    ...(props.waiting === undefined ? {} : { waiting: props.waiting })
   })
   return null
 }
@@ -185,5 +189,26 @@ describe('positioning hook signal wiring', () => {
     // The series is intact; only the chip changes state, and it says the read failed rather than
     // disappearing into the same shape a quiet market produces.
     expect(state).toMatchObject({ state: 'available', signal: { state: 'unreadable', failureCode: 'query-failed' } })
+  })
+})
+describe('a cell the host decided not to read is a terminal state, not a wait', () => {
+  it('answers unavailable instead of staying on loading forever', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => { root.render(createElement(Probe, { signalClient: { query: async () => emptyRead }, disabled: true })) })
+    // 2026-11-11 用户现场：两格开着、源关着，卡片永远「正在加载…」——那是永远到不了的等待。
+    expect(latest?.state).toBe('unavailable')
+    expect(latest?.state).not.toBe('loading')
+    // 客户端一次都不许被问（关掉就是关掉）。
+  })
+
+  it('still shows loading while the enable table has not been read yet', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => { root.render(createElement(Probe, { signalClient: { query: async () => emptyRead }, waiting: true, disabled: true })) })
+    // 首帧还没读完启用表：这时才是加载（与「已决定不读」是两件事）。
+    expect(latest?.state).toBe('loading')
   })
 })

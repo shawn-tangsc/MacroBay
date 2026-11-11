@@ -35,6 +35,8 @@ export function ChannelRow(props: {
   /** 上一次测试消息的回执（一句话 + 档位），同一位置替换。 */
   testReceipt?: { tone: 'muted' | 'bad'; text: string } | null
   onSendTest?: (channel: Channel) => void
+  /** 这个平台的凭据字段（来自描述符）：一行里按序显示每个字段的掩码，界面不写死平台名。 */
+  credentialFields: readonly string[]
   /** 这条频道的会话入口三态：有会话 / 读不到 / 确实没有。 */
   conversationEntry?: ChannelConversationEntryState
   onOpenConversation?: (channel: Channel) => void
@@ -71,11 +73,31 @@ export function ChannelRow(props: {
             - configured：显示主进程算好的头尾掩码（渲染层不切值）；
             - unavailable：**存过**，只是读不出来——写这一句，绝不画星号也不会写「还没有 Token」；
             - missing：真没有，说「还没有 Token」（画星号会被读成「有值但看不见」）。 */}
-        {channel.credential.status === 'configured'
-          ? (channel.credential.maskedFields?.bot_token ?? labels.channelTokenMask)
-          : channel.credential.status === 'unavailable'
-            ? labels.channelTokenUnavailable
-            : labels.channelTokenNone}
+        {channel.credential.status === 'configured' ? (
+          // 每个已配置字段各一格掩码，按描述符顺序排在同一行；缺的那个明说「未填」，
+          // 否则少配一个字段的行看起来和配齐了一样。掩码由主进程给，这里不切值。
+          <>{props.credentialFields.map((field, index) => {
+            const label = (labels.channelCredentialField as Readonly<Record<string, string>>)[field] ?? field
+            const maskedFields = channel.credential.maskedFields
+            const mask = maskedFields?.[field]
+            // 三种情况必须分开：主进程没给掩码（老读法，没有逐字段信息）→ 旧星号；给了但为空＝**这个字段没配**；
+            // 给了非空＝真的已配置。把「没配」画成星号，读者会以为已经齐了——这次第二个 token 就是这么消失的。
+            const configured = maskedFields === undefined ? true : typeof mask === 'string' && mask.length > 0
+            const shown = maskedFields === undefined ? labels.channelTokenMask : (configured ? mask : labels.channelCredentialMissing)
+            return (
+              <span key={field}>
+                {index === 0 ? null : <span aria-hidden="true">{' · '}</span>}
+                <span data-credential-field={field} data-configured={configured}>
+                  {label}
+                  {' '}
+                  {shown}
+                </span>
+              </span>
+            )
+          })}</>
+        ) : channel.credential.status === 'unavailable'
+          ? labels.channelTokenUnavailable
+          : labels.channelTokenNone}
       </span>
       {props.testReceipt === null || props.testReceipt === undefined ? null : (
         <span className="channel-row-error" data-test-receipt data-test-tone={props.testReceipt.tone} role="note">

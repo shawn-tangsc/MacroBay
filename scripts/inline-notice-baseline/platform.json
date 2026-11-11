@@ -1,0 +1,69 @@
+{
+  "owner": "platform",
+  "entries": {
+    "apps/desktop-shell/src/renderer/src/shell/settings/model-service/ModelProviderApiKeyField.tsx": {
+      "count": 1,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "apps/desktop-shell/src/renderer/src/shell/settings/channels/ChannelEditDialog.tsx": {
+      "count": 1,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "apps/desktop-shell/src/renderer/src/shell/settings/channels/ChannelSettingsPage.tsx": {
+      "count": 1,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "apps/desktop-shell/src/renderer/src/shell/settings/channels/ChannelCreateDialog.tsx": {
+      "count": 1,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentAskUserQuestionCard.tsx": {
+      "count": 1,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderPage.tsx": {
+      "count": 2,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "换成 InlineNotice 后从基线删除",
+      "kind": "debt",
+      "why": "整页级：供应商连接/配置失败的横幅"
+    },
+    "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceKeySection.tsx": {
+      "count": 1,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    },
+    "apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelsSection.tsx": {
+      "count": 2,
+      "owner": "平台设置线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    }
+  }
+}

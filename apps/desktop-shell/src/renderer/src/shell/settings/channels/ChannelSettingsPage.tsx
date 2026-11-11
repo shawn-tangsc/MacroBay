@@ -12,12 +12,10 @@ import { CHANNEL_DISPLAY_NAME } from '@platform/channels/channelDisplayNames'
 import './channelSettings.css'
 import { ChannelCreateDialog, submitNewChannelCredential } from './ChannelCreateDialog'
 import {
-  chooseWorkspaceFolder,
   enableChannelWithSelfCheck,
   readCredentialConfigured,
   runChannelAction,
-  sendChannelTestMessage,
-  workspacePayload
+  sendChannelTestMessage
 } from './channelSettingsActions'
 import { ChannelEditDialog } from './ChannelEditDialog'
 import type { ChannelPolicyPresence } from './ChannelFields'
@@ -31,12 +29,10 @@ import {
   channelFailureReason,
   mutationFailureSentence,
   readAgents,
-  readWorkspaces,
   toCatalog,
   toChannel
 } from './channelSettingsPresentation'
-import type { Agent, Catalog, Channel, ChannelPermissionMode } from './channelSettingsPresentation'
-import type { AgentWorkspaceChoice } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
+import type { Agent, Catalog, Channel } from './channelSettingsPresentation'
 
 
 /**
@@ -54,8 +50,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [catalog, setCatalog] = useState<Catalog[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
-  /** 读者已有的工作区（只列 `user` 那一类）：工作目录下拉的真实选项。 */
-  const [workspaces, setWorkspaces] = useState<readonly AgentWorkspaceChoice[]>([])
   const [selectedType, setSelectedType] = useState<ChannelPlatformType>('telegram')
   const [initialLoading, setInitialLoading] = useState(true)
   const [readError, setReadError] = useState(false)
@@ -89,12 +83,10 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const reload = async (): Promise<void> => {
     try {
-      const [nextCatalog, nextChannels, agentState, workspaceState] = await Promise.all([
+      const [nextCatalog, nextChannels, agentState] = await Promise.all([
         window.platform.channels.catalog(),
         window.platform.channels.list(),
-        window.platform.agents.listAgents({}),
-        // 工作目录下拉要的是工作区本体（编号 + 名字），它挂在整份智能体状态上。
-        window.platform.agents.getState()
+        window.platform.agents.listAgents({})
       ])
       setCatalog(nextCatalog.map(toCatalog))
       const rows = nextChannels.map(toChannel)
@@ -102,7 +94,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       // 「有没有绑定会话」是另一个口：列表先上屏，这一位后到，读不到就不给入口。
       void conversationEntry.readFlags(rows)
       setAgents(readAgents(agentState))
-      setWorkspaces(readWorkspaces(workspaceState))
       setReadError(false)
       setStale(false)
     } catch {
@@ -120,8 +111,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const platform = catalog.find((entry) => entry.type === selectedType)
   const implemented = platform?.implemented === true
-  // 「能接」= 证据完备（supported），不是「代码里有适配器」：`implemented` 只说明收凭据有意义。
-  const supported = platform?.status === 'supported'
+  // 「能接」只看有没有适配器（`implemented`）；「有没有真机验收记录」不再挡用户使用，
+  // 所以这里不再取 `supported`——它只用来决定要不要写一句「这一版还接不了」，而那句话已经删了。
   const planned = platform?.status === 'planned'
   // 「还没接」= 没有适配器，或被挡在验收证据之外：这一类的右侧只留三样（名字、一句用途、一句原因），
   // 不画加号、不画频道行、也不画空态块——空态会被读成「这里本来可以有频道」。
@@ -159,15 +150,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     }
   }
 
-  /** 「选择文件夹…」：取消不改选择，失败说一句，成功把新旧工作区并进下拉并选中它。 */
-  const chooseWorkspace = (): Promise<string | null> => chooseWorkspaceFolder({ labels, setSaveError, setWorkspaces })
-
   const createChannel = async (input: {
     name: string
     agentId: string
-    token: string
-    workspaceId: string | null
-    permissionMode: ChannelPermissionMode | null
+    /** 描述符里的每个字段都必须有值（校验在弹层里按字段做）。 */
+    credentials: Record<string, string>
     allowedChatIds: readonly string[]
   }): Promise<void> => {
     setSavingEdit(true)
@@ -181,9 +168,6 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         type: selectedType,
         name: input.name,
         agentId: input.agentId,
-        workspace: workspacePayload(input.workspaceId),
-        // `null` 就是继承助手；不传 `'default'`，两者必须分得开。
-        permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       }))
@@ -194,7 +178,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         return
       }
       createdId = createdIdValue
-      const submitted = await submitNewChannelCredential(createdIdValue, input.token)
+      const submitted = await submitNewChannelCredential(createdIdValue, input.credentials)
       // 返回 `ok: false` 也是失败（它不抛错），一样不许当成存好了。
       const stored = submitted?.ok === false ? false : await readCredentialConfigured(createdIdValue)
       // 建好了也要回读：频道的存在不等于凭据落库。两种结局分开说，且都关掉弹层——
@@ -227,23 +211,20 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const saveEdit = async (input: {
     name: string
     agentId: string
-    workspaceId: string | null
-    permissionMode: ChannelPermissionMode | null
     allowedChatIds: readonly string[]
-    token: string
+    /** 只含填了的字段：留空＝保持原值。 */
+    credentials: Record<string, string>
   }): Promise<void> => {
     if (editor === null || editor.mode !== 'edit') return
     setSavingEdit(true)
     setError(null)
     setSaveError(null)
-    const tokenProvided = input.token.trim().length > 0
+    const tokenProvided = Object.values(input.credentials).some((value) => value.trim().length > 0)
     try {
       const updated = await window.platform.channels.update({
         id: editor.channel.id,
         name: input.name,
         agentId: input.agentId,
-        workspace: workspacePayload(input.workspaceId),
-        permissionMode: input.permissionMode,
         allowedChatIds: input.allowedChatIds,
         actorId: 'settings-user'
       })
@@ -261,7 +242,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           begin as Parameters<typeof encryptChannelHandoff>[0],
           editor.channel.id,
           'credential',
-          { bot_token: input.token }
+          // 只交填了的字段：服务端会与已有凭据合并，没填的保持原值。
+          { ...input.credentials }
         )
         tokenWrite = await window.platform.channels.rotateCredential({
           channelId: editor.channel.id,
@@ -343,13 +325,22 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                 {/* 三样都要：名字、一句用途、以及「为什么现在不能用」——缺用途那版只剩一句原因，
                     读者不知道这个平台是干什么的。 */}
                 <p className="channel-detail-purpose">{labels.channelPlatformPurpose[selectedType]}</p>
-                {supported ? null : (
+                {/*
+                 * 这两句只在**没有适配器**时出现（今天只有微信）：那是事实，说了有用。
+                 *
+                 * 以前这里按 `status === 'supported'` 判，于是「代码已实现、只是还没有真机验收记录」
+                 * 的平台（Discord / Slack / QQ / 飞书）也会被追一句「这一版还接不了，先把 Telegram
+                 * 接上」——可入口早就按 `implemented` 放行了（下面 `notConnectable` 那行），读者
+                 * 面前明明有「创建」，旁边却写着接不了（用户 2026-11-11 报的就是这句废话）。
+                 * 能不能用由**点启用时的现场自检**回答，不由一句预告替它下结论。
+                 */}
+                {implemented ? null : (
                   <p className="channel-detail-reason">
                     {planned ? labels.channelNeedsEvidence : labels.channelUnsupportedPane}
                   </p>
                 )}
               </div>
-              {notConnectable ? null : (
+              {notConnectable || rows.length === 0 ? null : (
                 <Button
                   className="channel-add-button"
                   icon={<Plus size={14} />}
@@ -394,6 +385,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                   <ChannelRow
                     busy={busyId === channel.id}
                     channel={channel}
+                    credentialFields={platform?.credentialFields ?? []}
                     enableFailure={enableFailures[channel.id] ?? null}
                     key={channel.id}
                     labels={labels}
@@ -418,13 +410,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       {editor !== null && editor.mode === 'create' ? (
         <ChannelCreateDialog
           agents={agents}
+          credentialFields={platform?.credentialFields ?? []}
           labels={labels}
           onCancel={() => setEditor(null)}
-          onChooseWorkspace={chooseWorkspace}
           onCreate={(input) => void createChannel(input)}
           saveError={saveError}
           saving={savingEdit}
-          workspaces={workspaces}
         />
       ) : null}
 
@@ -432,14 +423,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         <ChannelEditDialog
           agents={agents}
           channel={editor.channel}
+          credentialFields={platform?.credentialFields ?? []}
           labels={labels}
           policyPresence={policyPresence}
           onCancel={() => setEditor(null)}
-          onChooseWorkspace={chooseWorkspace}
           onSave={(input) => void saveEdit(input)}
           saveError={saveError}
           saving={savingEdit}
-          workspaces={workspaces}
         />
       ) : null}
 

@@ -15,7 +15,7 @@ export type AgentPlatformMigration = {
   up: string | ((connection: DatabaseSync) => void)
 }
 
-const migrations: AgentPlatformMigration[] = [
+export const migrations: AgentPlatformMigration[] = [
   {
     id: '0001_agent_platform_core',
     up: `
@@ -1509,6 +1509,14 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   {
+    id: '0046_drop_agent_session_messages_fts',
+    up: `
+      -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。
+      -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
+      drop table if exists agent_session_messages_fts;
+    `
+  },
+  {
     /**
      * 会话来源两列（r21 §3.2）：读者自己的会话与产品自动建的会话共用一个列表，但默认列表只取
      * `reader`，否则一天几十条自动会话会把读者的历史埋掉。
@@ -1520,14 +1528,6 @@ const migrations: AgentPlatformMigration[] = [
     up: `
       alter table agent_sessions add column origin text not null default 'reader';
       alter table agent_sessions add column origin_group text;
-    `
-  },
-  {
-    id: '0046_drop_agent_session_messages_fts',
-    up: `
-      -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。
-      -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
-      drop table if exists agent_session_messages_fts;
     `
   },
   ...channelSettingsOverrides,
@@ -1552,6 +1552,14 @@ const migrations: AgentPlatformMigration[] = [
     // （boot 期间刚起的那次运行，开始时刻也早于收敛那一刻）。
     up: `
       alter table agent_session_messages add column owner_boot_id text;
+    `
+  },
+  {
+    id: '0050_agent_session_origin_state',
+    // 自动会话的可见性：只有 `superseded` 在自动会话块里隐藏。照 `origin` 的形状写
+    // （`not null default`），旧行自动拿到确定值，读侧不再依赖「某条读路径记得归一」。
+    up: `
+      alter table agent_sessions add column origin_state text not null default 'current';
     `
   }
 ]

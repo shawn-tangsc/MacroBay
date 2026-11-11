@@ -145,7 +145,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
           `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
-        <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
+        <span data-polarity="macro">{releaseStamp(item, item.scheduledAt, text.macro.timeNotPublished, formatTime, 'poster')}</span>
         <div>
           <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}{item.lifecycleState === 'cancelled' ? <span className="mi-brief-poster__macro-cancelled">{text.macro.cancelled}</span> : null}</p>
           {/* 没有实际值就**整格不渲染**（用户 2026-11-06）：不占位、不写破折号、不写「未拿到」——
@@ -211,7 +211,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       {focusEvent ? <div className="mi-brief-poster__next-focus">
         <div className="mi-brief-poster__next-focus-head">
           <span className="mi-brief-poster__next-tag">{text.next.focus}</span>
-          <time>{nextTime(focusEvent.at, formatTime)}</time>
+          <time>{releaseStamp(focusEvent, focusEvent.at, text.macro.timeNotPublished, formatTime, 'next')}</time>
         </div>
         <h3>{nextTitle(focusEvent, eventTitles, locale)}</h3>
         <p className="mi-brief-poster__next-meta">{nextMeta(focusEvent, text)}</p>
@@ -230,7 +230,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div> : null}
       {otherEvents.length > 0 ? <div className="mi-brief-poster__next-rows">
         {otherEvents.map((item) => <div className="mi-brief-poster__next-row" key={item.eventKey}>
-          <time>{nextTime(item.at, formatTime)}</time>
+          <time>{releaseStamp(item, item.at, text.macro.timeNotPublished, formatTime, 'next')}</time>
           <div>
             <b>{nextCountry(item, text) ? `${nextCountry(item, text)} · ` : ''}{nextTitle(item, eventTitles, locale)}</b>
             <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>
@@ -262,6 +262,27 @@ function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTi
 function nextTime(value: string, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
   const [date, time, ...zone] = formatTime(value, 'minute').split(' ')
   return [date.slice(5), time, ...zone].filter(Boolean).join(' ')
+}
+
+/**
+ * 发布时刻那一格（宏观栏与「接下来」共用）。
+ *
+ * 来源公布了时刻就画时刻；只公布了日期（`MI-1-R39` §4）就画**日期 + 那一个词**（与日历详情同一句，
+ * 由 `text.macro.timeNotPublished` 给）。`scheduledAt` / `at` 只是排序位，任何情况下都不许被印成时刻——
+ * 惯例推算的时刻不是来源公布的时刻。
+ */
+function releaseStamp(
+  item: Readonly<{ releaseTimeNotPublished?: true; releaseDate?: string }>,
+  at: string,
+  word: string,
+  formatTime: (value: string, precision?: 'minute' | 'second') => string,
+  shape: 'poster' | 'next'
+): React.ReactNode {
+  if (!item.releaseTimeNotPublished || !item.releaseDate) {
+    return shape === 'poster' ? macroTime(at, formatTime) : nextTime(at, formatTime)
+  }
+  const date = shape === 'poster' ? item.releaseDate : item.releaseDate.slice(5)
+  return shape === 'poster' ? <>{date}<br />{word}</> : `${date} ${word}`
 }
 
 function comparisonText(doc: DailyBriefingDocument, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): string {

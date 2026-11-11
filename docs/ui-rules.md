@@ -16,13 +16,18 @@
 | Status word | `StatusPill` (closed tone set) | hand-written pill; colour on the word | `statusPillKeyGuard` |
 | Waiting region | `LoadingState` / `LoadingSpinner` | local spinner, CSS rotation, antd `Spin`, `loading…` | `loadingStandard` |
 | Collapsible group header | platform `CollapsibleGroup`: **the shell owns the row and the arrow, the author owns the content** | a hand-drawn arrow, a second row click handler, any focusable element in the header | `CollapsibleGroup` header guard (at the call site) |
-| Tabs | platform `Tabs`; the workspace tab strip is the one registered exception | a third hand-drawn tab strip | **human review** |
+| Tabs | platform `Tabs`; the workspace tab strip is the **one** registered exception | a third hand-drawn tab strip | `check-tab-role` |
 | Single choice | `Segmented` / `Select` (closed set) | two control types in one row | **human review** |
 | On / off | antd `Switch` | hand-written `role="switch"` | **human review** |
 | Drawer / modal header action | the header's `actions` slot (12px from close, one action) | stretching the title row with product CSS | **human review** (component test only) |
 | Buttons | primary / secondary / icon / inline text / destructive — one tier per action | a hand-drawn pill, a 28px icon button, red only on hover | **human review** |
 | Inline text action | `.text-action` | a bordered box inside a sentence | **human review** |
 | Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
+| Card-level action | **on the card title row, right side**: one action (enable source / retry) whenever any source the card depends on is unconfigured or unreadable; the body only names the missing cell | a second copy of that action inside the card; two entries for one action on a screen | **human review** (criterion below) |
+
+**A card-level action lives only on the title row (2026-11-11).** If any source a card depends on is unconfigured or unreadable, the action (enable source / retry) sits on the **right of the card title row**; the body only names the missing cell and never repeats the action. **One action, one entry per screen.**
+Criterion: any source unconfigured → the title row has it; everything configured → no action; count of that action on the screen = 1.
+**Exception:** when **none** of the sources a card depends on is configured, the action moves into the content-area veil, centred; the title row carries no action and the card still holds exactly one entry. Criterion: with nothing configured the card has exactly one focusable element and no title-row action.
 
 ## 2. Type and weight
 
@@ -35,6 +40,7 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | Body sentence | 12 / 1.5 / 400 | `--font-body` / `--line-body` |
 | Group heading | 11.5 / 1.6 / 600 | `--font-section` / `--line-section` |
 | Reading note | 11.5 / 1.6 / 400 | same |
+| Page name (the screen's subject, e.g. a detail header) | 16 / 1.35 / 650 / `--text-strong` | **missing** (literal 16; the screen subject only — never a section title, never a row, **never a card header**: the config drawer's in-card title was removed, `3403c15`) |
 | Card / section title | 13 / 1.4 / 650 | **missing** |
 | Settings label | 13 / 1.4 / 400 | **missing** |
 | Table figure, axis | 11 / 1 / 400 or 600 + `tabular-nums` | **missing** |
@@ -51,6 +57,7 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 |---|---|
 | Allowed steps | **4 / 6 / 8 / 10 / 12 / 16** |
 | List row | height 44 (one line) / 60 (two); **32 for dense streams such as logs and message feeds**, inline padding 12, title to meta 8 |
+| Page outer padding | **24** (page frame only; never inline, never between blocks, and **never a card's inner padding** — a drawer card uses 16) |
 | New values | a non-step value is a defect; the existing ones merge file by file, no repo-wide rewrite |
 | Two-column rows (field area + trailing control) | field area **`flex: 1; min-width: 0`**, trailing control **`flex: none`** |
 
@@ -88,7 +95,7 @@ So **wrong-colour-for-meaning and non-foreground danger have no gate**; keep bot
 - Use a non-tier weight (620 / 680 / 700 / 750).
 - Hard-code a px font size instead of the size tier.
 - Hand-write `role="switch"`.
-- Hand-draw `role="tab"` (except the registered workspace tab strip).
+- Hand-draw `role="tab"` (except the registered workspace tab strip — **the only exception today**, registered in `scripts/check-tab-role.mts`; `ModelServiceModelDrawer` is not a second one: its `role="switch"` debt was removed with the source, and tabs were never its business).
 - Hand-format `YYYY/M/D`.
 - Print the same fact twice on one row.
 - Put explanatory prose in the body — scope notes, implementation detail, reassurance ("only affects…", "will not affect…").

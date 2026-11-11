@@ -66,13 +66,13 @@ function retryOf(
 
 /**
  * 区域级错误只有四档；`page-load-failed` 说的是「整个页面没起来」，它的动作是重载页面，
- * `notification-unknown` 是通知中心的「状态不明」，两者都不属于这一块。真到了这里就按
- * 「这次没读到」显示——这个面板能给的只有重试。
+ * `notification-unknown` 是通知中心的「状态不明」，`render-failed` 是整块界面画不出来（出口是重试 / 重载），
+ * 三者都不属于这一块。真到了这里就按「这次没读到」显示——这个面板能给的只有重试。
  */
 function regionErrorReasonCode(
   reasonCode: ErrorReasonCode
 ): 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart' {
-  return reasonCode === 'page-load-failed' || reasonCode === 'notification-unknown'
+  return reasonCode === 'page-load-failed' || reasonCode === 'notification-unknown' || reasonCode === 'render-failed'
     ? 'unreadable'
     : reasonCode
 }
@@ -190,7 +190,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
           </div>
           <div className="storage-cache-page-actions">
             <label className="storage-cache-dry-run">
-              <Switch size="small" checked={dryRun} onChange={setDryRun} />
+              <Switch checked={dryRun} onChange={setDryRun} />
               <span>{labels.dryRun}</span>
             </label>
             {dryRun ? <span className="storage-cache-dry-run-hint">{labels.dryRunHint}</span> : null}
@@ -211,7 +211,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
         {state.status === 'ready' && state.stale === true ? (
           <div className="storage-cache-error" role="status">
             <span>{labels.staleDataNotice}</span>
-            <Button size="small" onClick={() => void reload()}>{labels.refresh}</Button>
+            <Button onClick={() => void reload()}>{labels.refresh}</Button>
           </div>
         ) : null}
 

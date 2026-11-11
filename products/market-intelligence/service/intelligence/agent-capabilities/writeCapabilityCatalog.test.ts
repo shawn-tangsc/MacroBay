@@ -102,6 +102,16 @@ describe('write capability catalog', () => {
     ).toMatchObject({ ok: false, code: 'unexpected-property' })
   })
 
+  it('does not advertise the frozen profile fields as writable in its description', () => {
+    // C10：写入口撤了，描述若还按旧的写，模型会照描述去填——描述与 schema 是同一条事实。
+    const capability = capabilityById.get('configure_intelligence_source')!
+    for (const term of ['范围策略', '原始归档', '保留策略', '保留模式', '解析器升级']) {
+      expect(capability.description).not.toContain(term)
+    }
+    // 但要说清字段还在：这是「冻结写入口」，不是「删字段」。
+    expect(capability.description).toContain('字段与既有值保留')
+  })
+
   it('requires sourceId on save-profile instead of letting the handler discover it', () => {
     expect(
       validate('configure_intelligence_source', {
@@ -156,11 +166,6 @@ describe('write capability catalog', () => {
         action: 'save-profile',
         sourceId: 'coingecko-trending',
         collectionPreset: 'frequent',
-        includeInSentiment: false,
-        scopePolicy: 'watchlist-priority',
-        rawArchiveEnabled: true,
-        retentionMode: 'extended',
-        autoReplayAfterParserUpgrade: true,
         monitoredSymbols: ['BTCUSDT']
       })
     ).toEqual({ ok: true })

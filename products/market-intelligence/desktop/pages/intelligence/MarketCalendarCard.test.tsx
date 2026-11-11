@@ -43,6 +43,71 @@ async function render(node: React.ReactElement, language: 'zh-CN' | 'en-US' = 'z
   return host
 }
 
+it('keeps the frame and the rows, and veils only the data area when no source is enabled', async () => {
+  // 2026-11-11 终稿：不是「整块换掉卡」，而是卡框/标题/数据区照常在，上面盖一层遮罩。
+  // 断「日期分组容器仍在 DOM 里（被遮罩盖住）」——这正是把整块替换改回去会红的那一条。
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
+    sourcesState="disabled" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  const veil = host.querySelector('.mi-source-veil')
+  expect(veil?.getAttribute('data-state')).toBe('disabled')
+  expect(veil?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.data.sourcesNotEnabled)
+  // 恰一颗按钮：去启用。
+  const actions = veil?.querySelectorAll('button') ?? []
+  expect(actions).toHaveLength(1)
+  expect(actions[0]?.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.data.enableSources)
+  // 数据区还在：事件行仍渲染，只是被 inert 包住（Tab 只停在按钮上）。
+  const list = host.querySelector('.mi-calendar-card__list')
+  expect(list, 'the rows stay in the DOM under the veil').not.toBeNull()
+  const content = list?.closest('[inert]')
+  expect(content, 'the content behind the veil is inert').not.toBeNull()
+  // 旧实现（整块换掉卡）会把列表删掉，也会留一个 `.mi-source-card` 块。
+  expect(host.querySelector('.mi-source-card')).toBeNull()
+  // 遮罩钉在可见窗上：滚动容器自己带上标记，遮罩宿主是它的**直接**子元素（那条 `>` 规则靠这个）。
+  // 这一窗比内容矮时（事件多的一天），遮罩若随内容长高，那句话与按钮就落在窗外了。
+  const body = host.querySelector('.mi-calendar-card__body')
+  expect(body?.getAttribute('data-veiled')).toBe('true')
+  // 遮罩宿主是**直接**子元素：那条 `>` 规则只对直接子元素生效，包深一层就静默失效。
+  const veilHost = body?.firstElementChild
+  expect(veilHost?.classList.contains('mi-source-veil-host')).toBe(true)
+  expect(veilHost?.querySelector('.mi-source-veil')).not.toBeNull()
+})
+
+// 遮罩不是常驻样式：源都可用时这一窗照常滚，别把正常的滚动一起关掉。
+it('leaves the body scrolling when every source is usable', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
+    sourcesState="available" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  expect(host.querySelector('.mi-source-veil')).toBeNull()
+  const body = host.querySelector('.mi-calendar-card__body')
+  expect(body).not.toBeNull()
+  expect(body?.hasAttribute('data-veiled')).toBe(false)
+})
+
+it('locks the visible window while veiled, and keeps the veil in it', () => {
+  const bodyStart = styles.indexOf(".mi-calendar-card__body[data-veiled='true'] {")
+  expect(bodyStart, 'the veiled window stops scrolling').toBeGreaterThan(-1)
+  expect(styles.slice(bodyStart, styles.indexOf('}', bodyStart))).toContain('overflow: hidden')
+  const hostStart = styles.indexOf(".mi-calendar-card__body[data-veiled='true'] > .mi-source-veil-host {")
+  expect(hostStart, 'the veil fills the window instead of growing with the rows').toBeGreaterThan(-1)
+  expect(styles.slice(hostStart, styles.indexOf('}', hostStart))).toContain('height: 100%')
+  // 正常态那条仍在：只有遮罩态才不滚。
+  const baseStart = styles.indexOf('.mi-calendar-card__body {')
+  expect(styles.slice(baseStart, styles.indexOf('}', baseStart))).toContain('overflow: auto')
+})
+
+it('keeps the body and says "no source configured yet" behind the veil', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'empty' }}
+    sourcesState="missing" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  const veil = host.querySelector('.mi-source-veil')
+  expect(veil?.getAttribute('data-state')).toBe('missing')
+  expect(veil?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.data.sourcesNotConfigured)
+  const actions = veil?.querySelectorAll('button') ?? []
+  expect(actions).toHaveLength(1)
+  expect(actions[0]?.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.data.configureSources)
+  // 卡框与内容区都还在（不是整块换掉）。
+  expect(host.querySelector('.mi-calendar-card__body')).not.toBeNull()
+  expect(host.querySelector('.mi-source-card')).toBeNull()
+})
+
 it('puts the provider country next to the kind chip, so two same-named events stay apart', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: '9月未季调消费者物价指数(年率)', countryName: '美国' }), row({ eventKey: 'other', titleKey: '9月未季调消费者物价指数(年率)', countryName: '日本' })], state: 'available' }}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
@@ -115,14 +180,18 @@ it('reports an empty window instead of rendering nothing', async () => {
   expect(host.textContent).toContain(text.empty)
 })
 
-it('reports a readable failure through the shared state view and offers a retry', async () => {
+it('reports a readable failure behind the veil and offers a retry', async () => {
+  // 卡内读不到 = 遮罩一句「暂时读不到」+ 一颗「再试一次」（卡框还留着）；整页不可用才走 StateView。
   const onRefresh = vi.fn()
   const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [], state: 'empty' }}
     onOpenCalendar={() => undefined} onRefresh={onRefresh} text={text} />)
-  // The sentence now comes from the platform's state table; the card no longer owns a copy of it.
-  expect(host.textContent).not.toContain(text.unavailable)
-  expect(host.querySelector('.state-view')).not.toBeNull()
-  await act(async () => host.querySelector('.state-view__action')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  const veil = host.querySelector('.mi-source-veil')
+  expect(veil?.getAttribute('data-state')).toBe('unreadable')
+  expect(veil?.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.data.temporarilyUnavailable)
+  const buttons = [...(veil?.querySelectorAll('button') ?? [])]
+  expect(buttons).toHaveLength(1)
+  expect(buttons[0]?.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.data.retry)
+  await act(async () => buttons[0]!.click())
   expect(onRefresh).toHaveBeenCalledTimes(1)
 })
 
@@ -401,17 +470,18 @@ it('opens on loading, never on the failure state, before the first read answers'
   expect(host.querySelector('[data-calendar-card-row]')).toBeNull()
 })
 
-it('shows the error state with a retry only after the read actually failed', async () => {
+it('shows the unreadable veil with a retry only after the read actually failed', async () => {
   const onRefresh = vi.fn()
-  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [], state: 'empty' }}
+  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [row()], state: 'available' }}
     onOpenCalendar={() => undefined} onRefresh={onRefresh} text={text} />)
-  const failure = host.querySelector<HTMLElement>('.state-view--error')
-  expect(failure).not.toBeNull()
-  expect(failure?.querySelector('.state-view__action')).not.toBeNull()
-  expect(host.querySelector('[data-calendar-card-row]')).toBeNull()
-  const retry = failure?.querySelector<HTMLButtonElement>('.state-view__action button')
-    ?? failure?.querySelector<HTMLButtonElement>('button')
-  await act(async () => retry!.click())
+  const veil = host.querySelector('.mi-source-veil')
+  expect(veil?.getAttribute('data-state')).toBe('unreadable')
+  // 卡框还在；读失败时不再另起一个平台错误面板（卡内这一格的表达是遮罩那一句）。
+  expect(host.querySelector('.mi-calendar-card__body')).not.toBeNull()
+  expect(host.querySelector('.state-view--error')).toBeNull()
+  const buttons = [...host.querySelectorAll<HTMLButtonElement>('.mi-source-veil button')]
+  expect(buttons).toHaveLength(1)
+  await act(async () => buttons[0]!.click())
   expect(onRefresh).toHaveBeenCalledTimes(1)
 })
 

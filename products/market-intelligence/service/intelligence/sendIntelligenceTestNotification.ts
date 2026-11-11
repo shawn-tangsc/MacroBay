@@ -8,43 +8,26 @@ import type {
   IntelligenceTestKind,
   IntelligenceTestReceipt
 } from '../../contracts/intelligenceNotificationTest'
-import type { IntelligenceModule } from './intelligenceModule'
-import {
-  calendarLandedTestCandidate,
-  calendarUpcomingTestCandidate,
-  type CalendarLandedTestEvent,
-  type CalendarTestSourceState
-} from './macro-calendar/calendarNotificationTestCandidates'
-import type { CalendarEventReminderWiring } from './macro-calendar/registerCalendarEventReminder'
-import { readSentimentTestCandidate } from './news-sentiment/newsSentimentTestCandidate'
 import {
   buildCalendarLandedTestRequest,
   buildCalendarUpcomingTestRequest,
-  buildSentimentTestRequest,
   buildIntelligenceTestRequest,
+  buildSentimentTestRequest,
   type TestNotificationPayload
 } from './notificationTestRequests'
 
 /**
  * 三枚「发一条…」按钮的主进程实现（产品侧）。
  *
- * 顺序与真实推送**同一条**：先问「这次发给哪条通道」（`resolvePushChannel`，平台唯一的派生入口），
- * 再按 kind 读一份**只读**候选，拼成`NotificationSubmitRequest`，走**同一个**提交入口。
- * 这里不写第二份「恰好一条通道」的判断，也不自己数通道——两处判据迟早一个说能发、一个说不能。
+ * **测试只为验证通路**（用户 2026-11-10 定）：不读真实日历、不读真实源、不读真实舆情；
+ * 四种 kind 都用内置样例（固定事件名、固定偏移时间、按读者语言给句子）。所以「没数据」不再是
+ * 测试失败的原因——点下去只有两种结果：**发出去了**（点名通道）或**传输层原因**（没有可用通道、
+ * 提交被拒）。这也顺手去掉了旧路径里「把应用语言塞进只收两字母的查询」那类自伤。
  *
- * 三条边界：
- * 1. **只读**：不触发采集、不写库、不重排作业；
- * 2. **「没有」与「拿不到」分开**：`no-data` 是读到了但没样例，`unavailable` 是发不出去，各有各的句子；
- * 3. **不发就什么都不提交**：读失败时不存在「先发一条空的再说」。
+ * 顺序与真实推送同一条：先问「这次发给哪条通道」（平台唯一派生入口），再用同一个提交入口发出去。
  */
 export type IntelligenceTestDeps = Readonly<{
-  intelligence: IntelligenceModule
-  /** 与真实提醒同一个读取函数（作业原样暴露的那个），测试样例必须与真实链路同源。 */
-  calendarReminder: Pick<CalendarEventReminderWiring, 'readWithStatus' | 'readEvents'>
-  /** 日历数据源启用状态：为空 = `disabled`，抛错 = `unreadable`，两者都**不许**用空数组顶替。 */
-  readEnabledCalendarFeeds: () => Promise<readonly string[]>
-  /** 读者显示时区（壳层 `shellTimeZone().get()`）；空串或抛错都按「读不到时区」处理。 */
-  getTimeZone: () => string
+  /** 只影响样例句子的语言（`zh-CN` / `en-US`）；缺省中文。 */
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 平台唯一派生入口：恰好一条 → 用它并交出名字；0 或 ≥2 条 → `push-unavailable` + 真实条数。 */
   resolvePushChannel: () => Promise<PushChannelResolution>
@@ -53,128 +36,82 @@ export type IntelligenceTestDeps = Readonly<{
   now?: () => string
 }>
 
-type CandidateRead =
-  | Readonly<{ kind: 'request'; payload: TestNotificationPayload }>
-  | Readonly<{ kind: 'no-data'; reasonCode: Extract<IntelligenceTestReceipt, { state: 'no-data' }>['reasonCode'] }>
-  | Readonly<{
-    kind: 'unavailable'
-    reasonCode: Extract<IntelligenceTestReceipt, { state: 'unavailable' }>['reasonCode']
-  }>
+/** 内置样例：固定的事件名与相对时间，用来证明「这条链路能通」，不代表任何一条真实数据。 */
+const SAMPLE_MINUTE = 60_000
+
+function sampleEventTitle(language: 'zh-CN' | 'en-US'): string {
+  return language === 'en-US' ? 'US nonfarm payrolls (sample)' : '美国非农就业人数（样例）'
+}
+
+function shifted(now: string, offsetMs: number): string {
+  const parsed = Date.parse(now)
+  return new Date((Number.isFinite(parsed) ? parsed : Date.now()) + offsetMs).toISOString()
+}
+
+export function buildSampleTestPayload(
+  kind: IntelligenceTestKind,
+  now: string,
+  language: 'zh-CN' | 'en-US'
+): TestNotificationPayload {
+  const title = sampleEventTitle(language)
+  if (kind === 'sentiment') {
+    return buildSentimentTestRequest({
+      itemId: 'test-sample-sentiment',
+      title: language === 'en-US' ? 'Sample headline: liquidity tightens (sample)' : '样例标题：流动性边际收紧（样例）',
+      sourceId: 'test-sample',
+      sourceName: language === 'en-US' ? 'Sample source' : '样例来源',
+      publishedAt: now,
+      polarity: 'bearish',
+      strength: 4,
+      tier: 'high',
+      confidence: 0.9,
+      engine: 'rules'
+    }, now)
+  }
+  if (kind === 'calendar-upcoming') {
+    return buildCalendarUpcomingTestRequest({
+      kind: 'reminder',
+      eventKey: 'test-sample-upcoming',
+      title,
+      scheduledAt: shifted(now, 30 * SAMPLE_MINUTE),
+      importance: 'high',
+      remainingMinutes: 30
+    }, now)
+  }
+  return buildCalendarLandedTestRequest({
+    kind: 'landed',
+    eventKey: 'test-sample-landed',
+    title,
+    scheduledAt: shifted(now, -60 * SAMPLE_MINUTE),
+    importance: 'high',
+    actual: '3.2%'
+  }, now)
+}
 
 export async function sendIntelligenceTestNotification(
   kind: IntelligenceTestKind,
   deps: IntelligenceTestDeps
 ): Promise<IntelligenceTestReceipt> {
-  // 通道先判：0 条或 ≥2 条都在这条路径上结束，不会先读一遍数据再说发不出去。
+  // 通道先判：0 条或 ≥2 条都在这条路径上结束，不会先拼一条样例再说发不出去。
   const channel = await deps.resolvePushChannel()
   if (!channel.ok) {
     return { state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: channel.enabledChannelCount }
   }
 
   const now = (deps.now ?? (() => new Date().toISOString()))()
-  const read = await readCandidate(kind, deps, now)
-  if (read.kind === 'no-data') return { state: 'no-data', reasonCode: read.reasonCode }
-  if (read.kind === 'unavailable') return { state: 'unavailable', reasonCode: read.reasonCode }
-
-  // 实参是**构造函数调用**：事件 id 在那个函数体里是字面量，生产者门禁能静态判出这一处提交的是什么。
-  const outcome = await deps.submit(buildIntelligenceTestRequest(kind, read.payload))
-  // 提交被拒也是「没发出去」：按闭集里最接近的一档回（`read-failed`），不新造码、不报成功。
+  const language = await (deps.getAppLanguage ?? (async () => 'zh-CN' as const))()
+  const outcome = await deps.submit(buildIntelligenceTestRequest(kind, buildSampleTestPayload(kind, now, language)))
   if (outcome.kind === 'rejected') return { state: 'unavailable', reasonCode: 'read-failed' }
-  return { state: 'sent', channelId: channel.channelId, channelName: channel.channelName }
-}
+  if (outcome.kind === 'collapsed') return { state: 'unavailable', reasonCode: 'not-attempted' }
+  if (outcome.kind === 'delegated') return { state: 'unavailable', reasonCode: 'not-attempted' }
+  // 合并：这一条并进了已有的那条，**这次没发生投递**——回「已发到手机」就是假事实。
+  if (outcome.kind === 'merged') return { state: 'unavailable', reasonCode: 'not-attempted' }
 
-async function readCandidate(
-  kind: IntelligenceTestKind,
-  deps: IntelligenceTestDeps,
-  now: string
-): Promise<CandidateRead> {
-  try {
-    if (kind === 'sentiment') return await readSentiment(deps, now)
-    if (kind === 'calendar-upcoming') return await readUpcoming(deps, now)
-    return await readLanded(deps, now)
-  } catch {
-    // 取数抛错就是「读不到」：不改写采集、不重试，也不编一条样例。
-    return { kind: 'unavailable', reasonCode: 'read-failed' }
-  }
-}
-
-async function readSentiment(deps: IntelligenceTestDeps, now: string): Promise<CandidateRead> {
-  const store = deps.intelligence.newsSentiment.store
-  if (store === undefined) return { kind: 'unavailable', reasonCode: 'read-failed' }
-  const result = await readSentimentTestCandidate({
-    store,
-    pipeline: deps.intelligence.pipeline,
-    readEnabledSourceIds: async () =>
-      (await deps.intelligence.sourceProfileStore.listProfiles())
-        .filter((profile) => profile.enabled)
-        .map((profile) => profile.sourceId),
-    // 推送判定读的那份存储，不许在这里另存一份默认值（缺省值与评分服务保持一致：`medium`）。
-    readThreshold: () => deps.intelligence.newsSentiment.scoring?.readPushThreshold() ?? 'medium',
-    getTimeZone: deps.getTimeZone,
-    // 读者要的是**时钟**（它自己取当下），不是已经取好的那一串：传字符串会在它内部当场炸。
-    now: () => now
-  })
-  if (result.kind === 'candidate') return { kind: 'request', payload: buildSentimentTestRequest(result, now) }
-  if (result.kind === 'none') return { kind: 'no-data', reasonCode: 'sentiment-none' }
-  if (result.kind === 'source-disabled') return { kind: 'unavailable', reasonCode: 'source-disabled' }
-  // 时区读不到是**另一件事**：窗口算不出来，让读者去改时区，而不是叫他重试。
-  if (result.kind === 'timezone-unreadable') return { kind: 'unavailable', reasonCode: 'timezone-unreadable' }
-  return { kind: 'unavailable', reasonCode: 'read-failed' }
-}
-
-async function readUpcoming(deps: IntelligenceTestDeps, now: string): Promise<CandidateRead> {
-  const source = await calendarSource(deps)
-  const read = deps.calendarReminder.readWithStatus()
-  // 设置读不出来：这一条样例给「读不到」，不拿默认值演示一条读者不会收到的提醒。
-  if (read.state === 'unreadable') return { kind: 'unavailable', reasonCode: 'read-failed' }
-  const result = calendarUpcomingTestCandidate({
-    now,
-    source,
-    settings: read.settings,
-    events: deps.calendarReminder.readEvents()
-  })
-  if (result.kind === 'reminder' || result.kind === 'nearest-future') {
-    return { kind: 'request', payload: buildCalendarUpcomingTestRequest(result, now) }
-  }
-  if (result.kind === 'none-upcoming') return { kind: 'no-data', reasonCode: 'calendar-upcoming-none' }
-  if (result.kind === 'source-disabled') return { kind: 'unavailable', reasonCode: 'source-disabled' }
-  return { kind: 'unavailable', reasonCode: 'read-failed' }
-}
-
-async function readLanded(deps: IntelligenceTestDeps, now: string): Promise<CandidateRead> {
-  const source = await calendarSource(deps)
-  if (source !== 'available') {
-    return { kind: 'unavailable', reasonCode: source === 'disabled' ? 'source-disabled' : 'read-failed' }
-  }
-  const locale = await (deps.getAppLanguage ?? (async () => 'zh-CN' as const))()
-  // 本月 + 上月各查一次：跨月那一两天里「最近一条已落地」落上个月，只查本年会把它报成没有。
-  for (const month of [monthOf(now), previousMonthOf(now)]) {
-    const page = deps.intelligence.publicQueryService.queryMarketCalendarMonth({ month, locale, asOf: now })
-    if ((page as { state?: string }).state === 'unavailable') return { kind: 'unavailable', reasonCode: 'read-failed' }
-    const events = ((page as { events?: readonly CalendarLandedTestEvent[] }).events ?? [])
-    const landed = calendarLandedTestCandidate({ now, source, events })
-    if (landed.kind === 'landed') return { kind: 'request', payload: buildCalendarLandedTestRequest(landed, now) }
-    if (landed.kind === 'source-disabled') return { kind: 'unavailable', reasonCode: 'source-disabled' }
-    if (landed.kind === 'unreadable') return { kind: 'unavailable', reasonCode: 'read-failed' }
-  }
-  return { kind: 'no-data', reasonCode: 'calendar-landed-none' }
-}
-
-async function calendarSource(deps: IntelligenceTestDeps): Promise<CalendarTestSourceState> {
-  try {
-    const feeds = await deps.readEnabledCalendarFeeds()
-    return feeds.length === 0 ? 'disabled' : 'available'
-  } catch {
-    return 'unreadable'
-  }
-}
-
-function monthOf(asOf: string): string {
-  return asOf.slice(0, 7)
-}
-
-function previousMonthOf(asOf: string): string {
-  const date = new Date(`${monthOf(asOf)}-01T00:00:00.000Z`)
-  date.setUTCMonth(date.getUTCMonth() - 1)
-  return date.toISOString().slice(0, 7)
+  // 提交被接受 ≠ 手机响了。回执只认**通道那一跳的真实证据**（`delivery.push`，与记录同源）：
+  const push = outcome.delivery?.push?.state
+  if (push === 'sent-accepted') return { state: 'sent', channelId: channel.channelId, channelName: channel.channelName }
+  if (push === 'sent-unconfirmed') return { state: 'unavailable', reasonCode: 'unknown-after-send' }
+  if (push === 'failed') return { state: 'unavailable', reasonCode: 'channel-rejected' }
+  // 没有 push 条目：通道这一档根本没被尝试（免打扰/开关/未批准都在上游就挡掉了）。
+  return { state: 'unavailable', reasonCode: 'not-attempted' }
 }

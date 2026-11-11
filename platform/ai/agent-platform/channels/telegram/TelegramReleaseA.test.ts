@@ -135,12 +135,14 @@ describe('Telegram Release A contracts', () => {
     const controller = new AbortController()
     const calls: Array<{ text: string; plain: boolean; signal?: AbortSignal }> = []
     const client = { sendMessage: vi.fn(async (_chat: string, text: string, plain: boolean, signal?: AbortSignal) => {
-      calls.push({ text, plain, signal }); return calls.length === 1 ? { ok: false as const, code: 'telegram-provider-rejected', parseRejected: true } : { ok: true as const, value: true }
-    }), typing: vi.fn(async (_chat: string, signal?: AbortSignal) => { expect(signal).toBe(controller.signal); return { ok: true as const, value: true } }) }
+      calls.push({ text, plain, signal }); return calls.length === 1 ? { ok: false as const, code: 'telegram-provider-rejected', parseRejected: true } : { ok: true as const, value: { messageId: 1 } }
+    }), typing: vi.fn(async (_chat: string, signal?: AbortSignal) => { expect(signal).toBe(controller.signal); return { ok: true as const, value: { messageId: 1 } } }) }
     const transport = new TelegramDeliveryTransport()
     transport.setClient('channel-a', client as never, { isCurrent: () => current, signal: controller.signal })
     await transport.typing({ channelId: 'channel-a', providerConversationKey: '1' })
-    await expect(transport.send({ channelId: 'channel-a', providerConversationKey: '1', text: 'hello', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'delivered' })
+    // 送达要带上游 message_id：它是唯一能把「发到了」与「发到了别处」分开的证据。
+    await expect(transport.send({ channelId: 'channel-a', providerConversationKey: '1', text: 'hello', idempotencyKey: 'opaque' }))
+      .resolves.toEqual({ kind: 'delivered', detail: '{"telegramMessageId":1}' })
     expect(calls).toEqual(expect.arrayContaining([expect.objectContaining({ plain: false, signal: controller.signal }), expect.objectContaining({ plain: true, signal: controller.signal })]))
     current = false
     await expect(transport.send({ channelId: 'channel-a', providerConversationKey: '1', text: 'stale', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'failed', code: 'delivery-host-unavailable' })

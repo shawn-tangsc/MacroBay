@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
-import { INTELLIGENCE_SOURCES_CHANGED_EVENT } from '../../shared/events/intelligenceSourcesChanged'
+import { subscribeSettingsRevision } from '../../shared/events/settingsRevision'
 import { countAgentGroups, type AgentView } from '../../../service/intelligence/application/sourceProjection'
 import { projectActivation, type ActivationState } from './agentActivationPolicy'
 
@@ -49,12 +49,10 @@ export function useCryptoActivation(): CryptoActivation {
 
   useEffect(() => { void load() }, [load])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const onSourcesChanged = (): void => { void load({ silent: true }) }
-    window.addEventListener(INTELLIGENCE_SOURCES_CHANGED_EVENT, onSourcesChanged)
-    return () => window.removeEventListener(INTELLIGENCE_SOURCES_CHANGED_EVENT, onSourcesChanged)
-  }, [load])
+  // 来源改了 → 重读自己的投影（`getAgentView`）。订阅的是设置域信号（`sources`），
+  // 不是旧的 `market-intelligence:sources-changed`：那条已被域信号取代，配置线随后会删掉它。
+  // 这里不写配置，也就没有「自己发出、自己忽略」的那一侧，`origin` 用不上。
+  useEffect(() => subscribeSettingsRevision('sources', () => { void load({ silent: true }) }), [load])
 
   const activation = useMemo<ActivationState>(() => {
     if (read.status === 'loading') return { status: 'loading' }

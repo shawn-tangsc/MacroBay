@@ -56,7 +56,7 @@ describe('a month the official source could not be read for', () => {
     // 这一屏闪一下；月查询失败时更糟——「读不到」会被说成「来源全关」。空态只该在读完且确实为空时出现。
     const board = (state: Parameters<typeof CalendarMonthBoard>[0]['state']) => renderToStaticMarkup(createElement(CalendarMonthBoard, {
       asOf: '2026-11-01T00:00:00.000Z', coverage: 'complete', events: [], marketEvents: [], marketSources: [],
-      month: '2026-11', onOpenDay: () => undefined, onSelectItem: () => undefined, officialFeeds: 'disabled',
+      month: '2026-11', onOpenDay: () => undefined, onOpenSettings: () => undefined, onSelectItem: () => undefined, officialFeeds: 'disabled',
       selectedEventKey: undefined, state, statusNow: '2026-11-01T00:00:00.000Z', text: zh, today: '2026-11-01'
     }))
 
@@ -80,9 +80,35 @@ describe('a month the official source could not be read for', () => {
     expect(source).not.toContain("status ??= officialUnavailable")
   })
 
-  it('uses the final sentence verbatim in both languages, "temporarily" included', () => {
-    expect(zh.officialUnavailableNote).toBe('官方源暂时不可用，先显示上次成功同步的内容')
-    expect(en.officialUnavailableNote).toBe('The official source is temporarily unavailable; showing the last successful sync')
-    expect(en.officialUnavailableNote).toContain('temporarily')
+  /**
+   * 2026-11-11 更正：这句只在 **BLS** 的 HTML 日程被 403 挡住时出现，所以说的是「BLS 官方日程」而不是
+   * 「官方源」——fed/bea 照常在画，写成复数会让读者以为全部官方数据都没了。日期是参数：那次真实同步
+   * 的时刻（`lastSuccessfulSyncAt`），句子里**不许出现写死的日期**。
+   */
+  /**
+   * 两句分工（用户 2026-11-10 的硬口径 + `check:body-prose`）：**正文只有状态词**，
+   * 原因（403）、画的是哪次同步、怎么拿到新的，全部进那颗 ⓘ。日期从同步记录来，不写死。
+   */
+  it('keeps only a status word in the body, and the why plus the sync date in the ⓘ', () => {
+    expect(zh.officialUnavailableShort).toBe('BLS 官方日程无法自动获取')
+    expect(en.officialUnavailableShort).toBe('The BLS official schedule cannot be fetched')
+    // 正文那句里不许出现任何解释词。
+    for (const label of [zh.officialUnavailableShort, en.officialUnavailableShort]) {
+      expect(label).not.toContain('403')
+      expect(label).not.toContain('同步')
+      expect(label).not.toMatch(/\d{4}-\d{2}-\d{2}/u)
+    }
+    // ⓘ 里才是完整说明：原因、那次同步的日期、怎么拿到新的。
+    expect(zh.officialUnavailableNote).toContain('403')
+    expect(zh.officialUnavailableNote).toContain('{date}')
+    expect(zh.officialUnavailableNote).toContain('ICS')
+    expect(en.officialUnavailableNote).toContain('403')
+    expect(en.officialUnavailableNote).toContain('{date}')
+    for (const sentence of [zh.officialUnavailableNote, en.officialUnavailableNote]) {
+      // 「暂时」当时是错的：这条腿不是暂时不可用，是 403 挡住、自动同步已停。
+      expect(sentence).not.toContain('暂时')
+      // 不许写死任何日期。
+      expect(sentence).not.toMatch(/\d{4}-\d{2}-\d{2}/u)
+    }
   })
 })

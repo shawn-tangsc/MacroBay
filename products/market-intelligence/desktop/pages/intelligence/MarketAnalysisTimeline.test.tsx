@@ -613,6 +613,32 @@ describe('MarketAnalysisTimeline', () => {
     expect(document.body.textContent).not.toContain('model-1provider-1')
   })
 
+  it('hands the settings entry to the host instead of opening a second dialog', async () => {
+    // C9：同一个设置面只许一份草稿。宿主给了入口，这一屏就不再挂自己的对话框——
+    // 否则页面上的按钮和抽屉里那条「去设置改」会各开一份，保存互相覆盖。
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    }) }, modelProviders: { list: vi.fn(async () => []) } })
+    const onOpenSettings = vi.fn()
+    const timeline = { state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(), requestState: 'idle' }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(MarketAnalysisTimeline, {
+      text, timeline: timeline as never, onOpenSettings
+    } as never)))
+    await flushReads()
+
+    const settings = Array.from(container.querySelectorAll('button')).find(button => labelled(button, text.settings))
+    expect(settings).toBeDefined()
+    await act(async () => settings?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flushReads()
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(document.body.textContent).not.toContain(text.settingsTitle)
+  })
+
   it('opens the analysis settings dialog and saves the chosen switch', async () => {
     const invoke = vi.fn(async (_product: string, method: string) => {
       if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [], nextCursor: null }

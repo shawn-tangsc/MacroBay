@@ -14,7 +14,7 @@ export const crossAssetViewPolicy = Object.freeze({
   firstReadBackoffMs: Object.freeze([1000, 2000, 4000, 8000, 16000] as const)
 })
 
-export function useCrossAssetObservation({ client }: { client: ReturnType<typeof createCrossAssetObservationClient> }) {
+export function useCrossAssetObservation({ client, enabled = true }: { client: ReturnType<typeof createCrossAssetObservationClient>; /** 读者把这一路要看的格都关掉时为 false：一次请求都不发。 */ enabled?: boolean }) {
   const [range, setRange] = useState<CrossAssetRange>('24h')
   const [snapshot, setSnapshot] = useState<CrossAssetSnapshot>()
   /** The same value, readable synchronously from the effect's timeout callbacks. */
@@ -32,6 +32,7 @@ export function useCrossAssetObservation({ client }: { client: ReturnType<typeof
   const mounted = useRef(false)
   useEffect(() => {
     mounted.current = true
+    if (!enabled) return () => { mounted.current = false }
     let active = false
     let generation = 0
     let queryTimer: ReturnType<typeof setTimeout> | undefined
@@ -134,7 +135,7 @@ export function useCrossAssetObservation({ client }: { client: ReturnType<typeof
     document.addEventListener('visibilitychange', visibility)
     void start()
     return () => { mounted.current = false; stop(); document.removeEventListener('visibilitychange', visibility) }
-  }, [client])
+  }, [client, enabled])
   const refresh = async () => {
     const leaseId = leaseRef.current
     if (!leaseId || refreshing) return

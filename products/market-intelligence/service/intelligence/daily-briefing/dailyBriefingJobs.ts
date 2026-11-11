@@ -1,7 +1,7 @@
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import type { JobRuntime } from '@platform/jobs'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingGenerationSettingsService } from './dailyBriefingGenerationSettingsService'
 import type { DailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import type { DailyBriefAttemptCleanup } from './dailyBriefSessionRetention'
 import type { DailyBriefingService } from './dailyBriefingService'
@@ -26,7 +26,7 @@ export function wireDailyBriefingJobs(deps: Readonly<{
   now?: () => string
   getLocale: () => Promise<DailyBriefingLocale>
   timeZone: () => string
-  periods: Pick<DailyBriefingGenerationSettingsService, 'getPeriods'>
+  periods: Readonly<{ getPeriods: () => Promise<readonly BriefingPeriod[]> }>
   /** 平台的落盘日志（app.log）。补跑是后台事实，必须留一条事后查得到的记录。 */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
   links: DailyBriefSessionLinkStore

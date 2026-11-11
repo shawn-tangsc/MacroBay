@@ -34,9 +34,11 @@ export type EconomicCalendarMonthState =
  * that fails only costs the edges their rows, and one that never answers is cut off by the
  * budget instead of holding the month that did.
  */
-export function useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef }: {
+export function useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef, today }: {
   client: MacroEconomicCalendarClient
   asOf: string
+  /** 读者显示时区的今天（`YYYY-MM-DD`）：空壳判据要拿它比「严格早于今天」。 */
+  today?: string
   /** The month the page is pointing at; a result for any other month is stale. */
   selectedMonthRef: { current: string }
 }): { monthState: EconomicCalendarMonthState; loadMonth: (month: string, refresh?: boolean, nextAsOf?: string) => void } {
@@ -133,7 +135,7 @@ export function useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef 
         settle(candidate, unavailableRead)
         return
       }
-      void pending.then((result) => settle(candidate, toMonthState(result, createEconomicCalendarMonthQuery(candidate, readAsOf))))
+      void pending.then((result) => settle(candidate, toMonthState(result, { ...createEconomicCalendarMonthQuery(candidate, readAsOf), ...(today === undefined ? {} : { today }) })))
         .catch(() => settle(candidate, unavailableRead))
     })
   }, [asOf, client, selectedMonthRef])

@@ -10,6 +10,7 @@ import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import type { SelectedCalendarEvent } from './selectedCalendarEvent'
+import { DASHBOARD_SOURCE_MODULES } from '../../settings/intelligence-sources/dashboardSourceModules'
 
 /**
  * Clicking a line on the chart: the drawer opens, the event is recorded, and nothing else moves.
@@ -58,6 +59,13 @@ const snapshot = createCrossAssetSnapshotQuery({
 
 /** The calendar's month route, as the dashboard was already handed it in the page. */
 const monthPage = (events: readonly unknown[]) => ({ state: 'available' as const, asOf, events })
+/**
+ * 看板的每一次读都先过源级启用表（`decideCellRead`）：没有这份表就是「源未知」，于是**一处都不读**，
+ * 跨资产图停在 loading、日历竖线自然画不出来。所以夹具要给一份「全部启用」的来源表——
+ * 来源 id 从那张唯一注册表取，不在这里手写。
+ */
+const allSourcesEnabled = [...new Set(DASHBOARD_SOURCE_MODULES.flatMap(module => module.cells.map(cell => cell.sourceId)))]
+  .map(sourceId => ({ enabled: true, sourceId }))
 const calendar = { queryMonth: vi.fn(async () => monthPage([calendarEvent])) }
 const never = async () => ({ state: 'unavailable' })
 const dashboardProps = {
@@ -69,6 +77,8 @@ const dashboardProps = {
   onConfigureSources: () => undefined,
   onManageSource: () => undefined,
   onOpenCalendar: () => undefined,
+  // 源级启用表：读到了并且全部启用（真实宿主由 `dashboardFeedStatusClient` 给）。
+  dashboardFeedStatusClient: { query: async () => ({ sources: allSourcesEnabled, state: 'available' as const }) } as never,
   crossAssetClient: {
     acquire: async () => ({ state: 'active', leaseId: 'test-lease', expiresAt: nowMs + 30_000 }),
     query: async () => snapshot,

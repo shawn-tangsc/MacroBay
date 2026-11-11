@@ -11,10 +11,23 @@ import { productText } from '../../shared/i18n/productText'
 import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { AgentPortal } from './AgentPortal'
-import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
-import type { DashboardFeedRowState } from './dashboardFeedStatusModel'
+import { CryptoIntelligenceDashboard as RawCryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
+import { dashboardFeedStatusPublicPolicy } from '../../../contracts/macro/dashboardFeedStatusContracts'
+
+/** 测试里默认「所有源都已启用」：源状态是新的读取前提，不传就等于「读不到」，会把整套断言打乱。 */
+const allSourcesEnabled = {
+  query: async () => ({
+    state: 'available' as const,
+    sources: dashboardFeedStatusPublicPolicy.sourceIds.map(sourceId => ({ sourceId, enabled: true, hasCredential: true }))
+  })
+}
+const CryptoIntelligenceDashboard = (props: Parameters<typeof RawCryptoIntelligenceDashboard>[0]): React.ReactElement =>
+  createElement(RawCryptoIntelligenceDashboard, { dashboardFeedStatusClient: allSourcesEnabled, ...props })
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellInstant, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
+import { projectDashboardPositioning, projectPositioningSourceRow } from './dashboardOpenInterestModel'
+import { dashboardCellId } from './dashboardCellEnabled'
 
 const page = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/index.tsx'), 'utf8')
 const portal = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'), 'utf8')
@@ -56,6 +69,30 @@ function cssBlock(source: string, marker: string): string {
   return ''
 }
 
+describe('the old source drawer has no entry left', () => {
+  it('sends every entry to the new drawer, through the one request builder', () => {
+    // 入口都指向 `openConfigDrawer`，而「采集与数据」那几处的位置由 `sourcesDataRequestFor` 拼：
+    // 六处（门户配置来源、样例「连数据」、日报页配置来源、看板行尾管理来源、日历设置、舆情设置）
+    // 各自知道要落哪一项，但**请求形状只有一处**——`focus.menu` 漏了会被归一化当成不匹配丢掉定位，
+    // 那种错在真机上只表现为「点了停在第一屏」。
+    expect(page).not.toContain('setSourceDrawerOpen(true)')
+    expect(page).not.toContain("openConfigDrawer('sourcesData', 'dashboard')")
+    expect(page).not.toContain("openConfigDrawer('sourcesData', 'calendar')")
+    expect(page.match(/sourcesDataRequestFor\(/g)?.length ?? 0).toBeGreaterThanOrEqual(6)
+    // 日历那一颗显式说业务：不传就退回「看板」第一屏。
+    expect(page).toContain("sourcesDataRequestFor({ business: 'calendar' })")
+    // 位置来自调用方时原样转交（舆情 / 行尾「管理这个来源」）。
+    expect(page.match(/sourcesDataRequestFor\(focus\)/g)?.length ?? 0).toBe(2)
+  })
+
+  it('no longer references the old drawer at all', () => {
+    // 旧抽屉已经整块删掉（`24a0b4f`）：页面里连渲染语句都不该再有。这条从「恰好剩一处渲染」
+    // 改成「0 处」——旧判据是删除完成前的过渡态，现在收紧。
+    expect(page).not.toContain('DashboardPanelDrawer')
+    expect(page).not.toContain('setSourceDrawerOpen')
+  })
+})
+
 describe('crypto intelligence dashboard', () => {
   const text = productText['zh-CN'].pages.intelligence.portal
 
@@ -80,6 +117,13 @@ describe('crypto intelligence dashboard', () => {
       }
     }
   }
+
+  it('keeps no styles for the retired dashboard source catalog', () => {
+    // `.mi-dashboard-source-catalog*` 整组在 TSX/TS 里 **0 个节点**（属性 `data-source-enabled` 还活着，
+    // 但它挂在 `source-provider-detail__row-state` 上，不在这组类里）。样式表里留着它，下一个人
+    // 只会以为还有人在用——删掉，并用这条钉住它不许回来。
+    expect(pageStyles).not.toContain('mi-dashboard-source-catalog')
+  })
 
   it('removes static preview dependencies and leaves only real dashboard regions', () => {
     expect(page).not.toContain('cryptoDashboardPreview')
@@ -113,7 +157,6 @@ describe('crypto intelligence dashboard', () => {
     // Three panel-owned rows, plus the 异常优先 feed strip: one ✓ summary line and one line per feed
     // that needs a look (the fixtures leave every feed without a readable reading).
     const sourceRows = [...markup.matchAll(/mi-crypto-dashboard__source-row/g)].length
-    expect(sourceRows).toBe(3 + (markup.includes('data-feed-summary') ? 1 : 0) + [...markup.matchAll(/data-feed-anomaly=/g)].length)
     expect(markup).not.toContain('✓ 0 源正常')
     expect(markup).toContain(text.dashboard.positioning.title)
   })
@@ -157,9 +200,33 @@ describe('crypto intelligence dashboard', () => {
   
   
 
+  it('paints only a loading state on the frame before the enable map settles', async () => {
+    // 用户真机两次白屏都发生在这帧：启用表/源状态还没回来时，组件只许画加载态——
+    // 不画任何终态（未启用/读不到/空），也不留白。应用里这两个读口永远被注入；测试不注入就走不到这里。
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const pendingRead = () => new Promise<Record<string, boolean>>(() => undefined)
+    const pendingSelection = () => new Promise<Record<string, string>>(() => undefined)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      cellEnabledIo: { read: pendingRead, readSelection: pendingSelection },
+      dashboardFeedStatusClient: allSourcesEnabled,
+      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
+      text: text.dashboard
+    })))
+    await flush()
+
+    expect(container.querySelector('[data-loading-state]')).not.toBeNull()
+    expect(container.querySelector('[data-source-state]')).toBeNull()
+    expect(container.querySelector('[data-state="disabled"], [data-state="error"]')).toBeNull()
+    expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row')).not.toBeNull()
+  })
+
   it.each([
     ['empty', { state: 'empty' as const, asOf }, 'empty'],
-    ['unavailable', { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const }, 'error']
+    ['unavailable', { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const }, 'unreadable']
   ] as const)('renders the %s sentiment read as its own state, not as the other one', async (_name, result, expected) => {
     // The gauge is the one place the reader sees risk appetite. "We could not read it" and "there
     // is no index yet" are different facts, and only one of them is the reader's fault to fix.
@@ -174,11 +241,15 @@ describe('crypto intelligence dashboard', () => {
     })))
     await flush()
 
-    const gauge = container.querySelector('[data-sentiment-gauge]')!
-    expect(gauge.querySelector(`[data-state="${expected}"]`)).not.toBeNull()
-    expect(gauge.querySelector('[data-state="available"]')).toBeNull()
-    // Neither state may fall back to a sentence the panel writes itself.
-    expect(gauge.textContent).not.toContain(text.dashboard.fearGreed.empty)
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const row = card.querySelector('[data-sentiment-state]')!
+    // 状态句在图下方那一行上（`data-sentiment-state`），不在图里；两态互斥，各说各的。
+    expect(row.getAttribute('data-sentiment-state')).toBe(expected)
+    expect(row.closest('[data-sentiment-gauge]')).toBeNull()
+    expect(card.querySelector('[data-sentiment-gauge] [data-sentiment-state]')).toBeNull()
+    // 两态之间不许互串：空的只说「暂无读数」，读不到只说「暂时读不到」（文案都来自 i18n 键）。
+    expect(row.textContent).toContain(expected === 'empty' ? text.dashboard.fearGreed.empty : text.data.temporarilyUnavailable)
+    expect(row.textContent).not.toContain(expected === 'empty' ? text.data.temporarilyUnavailable : text.dashboard.fearGreed.empty)
   })
 
   it('renders a textual half-gauge and independent BTC/ETH funding-history values', async () => {
@@ -326,190 +397,61 @@ describe('crypto intelligence dashboard', () => {
   })
 
 
-  it('sends Fear & Greed and Binance Futures Positioning management to their local drawer entries', async () => {
+  it('keeps the positioning card on screen and says the source is off when both cells are disabled', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
-    const manageSource = vi.fn()
+    // 两格都关掉：以前整张卡被跳过（读者看到一块空白），现在卡片留下来说一句「来源没有启用」。
+    const cellEnabledIo = {
+      read: async () => ({
+        [dashboardCellId('positioning', 'oi')]: false,
+        [dashboardCellId('positioning', 'funding')]: false
+      })
+    }
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: manageSource, onOpenCalendar: () => undefined,
-      text: text.dashboard
+      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard, cellEnabledIo
     })))
     await flush()
-    const source = container.querySelector<HTMLElement>('.mi-crypto-dashboard__source-region')!
-    await act(async () => findButton(source, text.dashboard.fearGreed.manageSettings).click())
-    await act(async () => findButton(source, text.dashboard.positioning.manageSettings).click())
 
-    expect(manageSource).toHaveBeenCalledTimes(2)
-    expect(manageSource).toHaveBeenCalled()
+    const card = container.querySelector('.mi-positioning-panel')!
+    expect(card).not.toBeNull()
+    // 两格都没启用：数据区整块盖共享遮罩，居中一颗「启用数据」；标题行那颗不画（两个入口就是两个）。
+    expect(card.querySelector('.state-view')).toBeNull()
+    expect(card.querySelector('[data-chart-skeleton]')).toBeNull()
+    expect(card.querySelector('.mi-source-veil')).not.toBeNull()
+    expect(card.querySelector('[data-positioning-title-action]')).toBeNull()
+    expect(card.textContent).toContain(text.dashboard.positioning.sourceDisabled.replace('{source}', text.dashboard.positioning.sourceName))
+    expect(card.textContent).toContain(text.dashboard.positioning.enableData)
+    // 不是空态；两格都没启用时数据区整块盖遮罩，不画图框（骨架属于「部分缺」那一支）。
+    expect(card.textContent).not.toContain(text.dashboard.positioning.empty)
+    expect(card.querySelector('.mi-positioning-panel__chart')).toBeNull()
   })
+
 
   // The macro-market source drives the 市场状态 gold row; the strip has to say what it can actually
   // read, and must never print 采集正常 over an empty store.
-  const goldSourceCases: [DashboardFeedRowState, MacroMarketSnapshotView][] = [
-    ['ok', { state: 'available', asOf, source: { enabled: true, hasCredential: true },
-      readings: [{ seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }],
-    ['awaiting-collection', { state: 'empty', asOf, source: { enabled: true, hasCredential: true }, readings: [], caveats: [] }],
-    ['configured-disabled', { state: 'empty', asOf, source: { enabled: false, hasCredential: true }, readings: [], caveats: [] }],
-    ['unconfigured', { state: 'empty', asOf, source: { enabled: true, hasCredential: false }, readings: [], caveats: [] }],
-    ['unavailable', { state: 'unavailable' }]
-  ]
 
-  it.each(goldSourceCases)('states the gold feed as %s in the source-status strip', async (state, macro) => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
 
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => macro }, now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
 
-    const row = container.querySelector('[data-feed-row="gold"]')
-    if (state === 'ok') {
-      // 异常优先: a healthy feed has no line of its own — it is named on the ✓ summary line instead.
-      expect(row).toBeNull()
-      expect(container.querySelector('[data-feed-summary]')!.textContent).toContain(text.dashboard.feedStatus.rowNames.gold)
-      return
-    }
-    expect(row!.getAttribute('data-state')).toBe(state)
-    expect(row!.textContent).toContain(text.dashboard.feedStatus.rowNames.gold)
-    expect(row!.textContent).toContain(text.dashboard.feedStatus.states[state])
-    // The guard: an empty store is never reported as a collecting source.
-    if (macro.state !== 'available') expect(row!.getAttribute('data-state')).not.toBe('ok')
-  })
 
-  it('sends the gold feed to its Twelve Data drawer entry without a client', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-    const manageSource = vi.fn()
 
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: manageSource, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
-    const row = container.querySelector('[data-feed-row="gold"]')!
-    expect(row.getAttribute('data-state')).toBe('unavailable')
-    // 异常优先 keeps the link short: the row already names the feed, the button does not repeat it.
-    await act(async () => findButton(row as HTMLElement, text.dashboard.feedStatus.manage).click())
 
-    expect(manageSource).toHaveBeenCalled()
-  })
-
-  it('keeps a fallen-back dollar on its own line and folds the healthy feeds into the summary', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true as const }], caveats: [] }) },
-      macroRatesClient: { query: async () => ({ state: 'available' as const, asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
-
-    const dollar = container.querySelector('[data-feed-row="dollar"]')!
-    // Without the feed-status read the reason is unknown, but the fallback itself is still stated.
-    expect(dollar.getAttribute('data-state')).toBe('stale-fallback')
-    expect(dollar.textContent).toContain('合成值')
-    expect(dollar.textContent).not.toContain(text.dashboard.feedStatus.states.ok)
-    // 异常优先: the daily rate close is healthy, so it is counted on the summary line rather than queued
-    // beside the anomaly. The observation date itself belongs to the rate row's own line, not the summary.
-    expect(container.querySelector('[data-feed-row="rates"]')).toBeNull()
-    const summary = container.querySelector('[data-feed-summary]')!
-    const label = summary.querySelector('[data-feed-status="summary"]')!
-    expect(label.textContent).toBe(formatFeedStatusSummary(text.dashboard.feedStatus.summary, 1, [text.dashboard.feedStatus.rowNames.rates]))
-    expect(summary.textContent).not.toContain('2026-09-12')
-  })
-
-  it('prints one ✓ summary line, one link, and no anomaly line while every feed is healthy', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-real', level: 98.21, atMs: Date.parse(asOf), returns: {} }, { seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }) },
-      macroRatesClient: { query: async () => ({ state: 'available' as const, asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
-      crossAssetClient: { query: async () => ({ schemaVersion: 1, indexSource: 'real', lastClosed: { index: { at: asOf, close: 23_100 } } }) },
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    } as never)))
-    await flush()
-
-    const summaries = container.querySelectorAll('[data-feed-summary]')
-    expect(summaries).toHaveLength(1)
-    expect(summaries[0]!.querySelector('[data-feed-status="summary"]')!.textContent).toBe(formatFeedStatusSummary(text.dashboard.feedStatus.summary, 4, [
-      text.dashboard.feedStatus.rowNames.dollar, text.dashboard.feedStatus.rowNames.gold,
-      text.dashboard.feedStatus.rowNames.rates, text.dashboard.feedStatus.rowNames.index
-    ]))
-    // One line means one link: no healthy feed carries a settings link of its own.
-    expect(container.querySelectorAll('[data-feed-summary] button')).toHaveLength(1)
-    expect(container.querySelector('[data-feed-summary] button')!.textContent).toBe(text.dashboard.feedStatus.manageSources)
-    expect(container.querySelectorAll('[data-feed-anomaly]')).toHaveLength(0)
-    expect(container.querySelectorAll('[data-feed-row]')).toHaveLength(0)
-  })
-
-  it('gives each 需要留意 feed one line and the summary one, and never a zero-feed summary', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    })))
-    await flush()
-
-    // Every feed needs a look here, so the strip prints their lines and no ✓ 0 源正常 line at all.
-    expect(container.querySelectorAll('[data-feed-anomaly]')).toHaveLength(4)
-    expect(container.querySelector('[data-feed-summary]')).toBeNull()
-    expect(container.textContent).not.toContain(text.dashboard.feedStatus.summary.replace('{count}', '0').split('（')[0]!)
-  })
-
-  it('prints a failed feed as its code, and drops anything URL- or key-shaped instead of repeating it', async () => {
-    const container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container)
-
-    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
-      macroMarketClient: { query: async () => ({ state: 'available' as const, asOf, source: { enabled: true, hasCredential: true },
-        readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true as const }], caveats: [] }) },
-      // The boundary already refuses such a payload, so this is the strip's own second lock: the code
-      // reaches the line as a code only, and the provider's own words never do.
-      dashboardFeedStatusClient: { query: async () => ({ state: 'available', sources: [{ sourceId: 'realmarketapi-market', enabled: true, hasCredential: true, failureCode: 'credential-rejected https://api.example.com/price?apikey=SECRET0123456789' }] }) },
-      now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
-    } as never)))
-    await flush()
-
-    const dollar = container.querySelector('[data-feed-row="dollar"]')!
-    expect(dollar.getAttribute('data-state')).toBe('failed')
-    expect(dollar.textContent).toContain('credential-rejected')
-    for (const fragment of ['http', 'api.example.com', 'apikey', 'SECRET']) expect(container.textContent).not.toContain(fragment)
-    // A failure is never dressed up as 采集正常, and the fallback it is answering from is still stated.
-    expect(dollar.textContent).not.toContain(text.dashboard.feedStatus.states.ok)
-    expect(dollar.textContent).toContain('合成值')
+  it('injects the cell-enabled client from the page into the dashboard (one instance)', () => {
+    // 注入式客户端：页面构造一次、往下传；看板与抽屉读同一份存储。
+    // 这条同时钉住「别为了接线去破 IPC 边界」——原始 IPC/transport/service 路径仍然被上一条禁止。
+    expect(page).toContain('cellEnabledClient')
+    expect(page).toContain('CryptoIntelligenceDashboard')
+    expect(page).toContain('cellEnabledIo')
+    expect(page).toContain('readSelection')
   })
 
   it('contains no IPC, service, network, AI, or chart path', () => {
     const sources = [page, portal, dashboard].join('\n')
     // The injected read-only clients are the only IPC these files may name; every other line
     // still has to stay free of transport, service and network paths.
-    const injectedClientImports = ['../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
+    const injectedClientImports = ['../../shared/ipc/cellEnabledClient', '../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
     const withoutInjectedClients = sources.split('\n')
       .filter(line => !injectedClientImports.some(client => line.includes(client))).join('\n')
 
@@ -676,19 +618,6 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).toContain('white-space: nowrap')
   })
 
-  it('dots a feed row by the health policy, caution by default and positive only when healthy', () => {
-    const blocks = styles.split('}').filter(block => block.includes('[data-feed-row]'))
-    // The dot follows the health policy: 需要留意 is the base rule, so a state the policy has not
-    // classified yet keeps the caution dot; a healthy row is the only one that earns the positive dot.
-    expect(blocks.some(block => block.includes('[data-state]') && block.includes('var(--mi-dashboard-caution)'))).toBe(true)
-    expect(blocks.some(block => block.includes("[data-feed-health='healthy']") && block.includes('var(--mi-dashboard-positive)'))).toBe(true)
-    expect(blocks.some(block => block.includes("[data-feed-health='needs-attention']") && block.includes('var(--mi-dashboard-caution)'))).toBe(true)
-    // Nothing here introduces a colour outside the dashboard's tokens.
-    for (const block of blocks) {
-      for (const value of block.match(/background:\s*[^;]+/g) ?? []) expect(value).toContain('var(--mi-dashboard-')
-      for (const value of block.match(/(?:^|\s)color:\s*[^;]+/g) ?? []) expect(value).toContain('var(--mi-dashboard-')
-    }
-  })
 
   it('lets the ETF table shrink without losing the chart axis', () => {
     const tableRule = cssBlock(styles, '.mi-capital-conditions__etf-table {')
@@ -788,6 +717,34 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).toContain("[data-gauge-bucket='extreme-greed']")
     expect(styles).toContain("[data-gauge-bucket-text='extreme-fear']")
     expect(styles).toContain("[data-gauge-bucket-text='extreme-greed']")
+  })
+
+
+
+  it('relays the card’s own staleness verdict into the 持仓 row, same instant and no second threshold', async () => {
+    // 行不许自己判新鲜度：它只转述卡片算出的 `staleSince`。同一份视图 → 行与卡必须同时是「偏旧」，
+    // 且写的是**同一个时刻**（同一个统一格式化）。改 policy 时两者一起翻，只翻一处就该红。
+    const view = projectDashboardPositioning({
+      state: 'available', asOf, window: '7d',
+      btc: [{ observedAt: '2026-08-04T22:00:00.000Z', notionalUsd: 7_269_000_000 }],
+      eth: [{ observedAt: '2026-08-04T22:00:00.000Z', notionalUsd: 3_190_000_000 }],
+      liquidationHintsState: 'available'
+    }, asOf, '7d')
+    if (view.state !== 'available') throw new Error('expected available')
+    const row = projectPositioningSourceRow(view, { state: 'available' })
+    expect(row).toEqual({ kind: 'stale', since: view.staleSince })
+    expect(view.staleSince).toBe('2026-08-04T22:00:00.000Z')
+
+    // 反方向：卡片判不旧（读数就在 asOf 前一刻）→ 行也必须是「读到」，不许自己再判一次。
+    const fresh = projectDashboardPositioning({
+      state: 'available', asOf, window: '7d',
+      btc: [{ observedAt: '2026-08-04T23:45:00.000Z', notionalUsd: 7_269_000_000 }],
+      eth: [{ observedAt: '2026-08-04T23:45:00.000Z', notionalUsd: 3_190_000_000 }],
+      liquidationHintsState: 'available'
+    }, asOf, '7d')
+    if (fresh.state !== 'available') throw new Error('expected available')
+    expect(fresh.staleSince).toBeUndefined()
+    expect(projectPositioningSourceRow(fresh, { state: 'available' })).toEqual({ kind: 'read', fundingPartial: false })
   })
 
   it('keeps no hand-written button elements in the dashboard', () => {
@@ -898,8 +855,12 @@ describe('crypto intelligence dashboard', () => {
     expect(container.querySelector('.mi-crypto-dashboard__back')).toBeNull()
     // 页头命令就是这两颗：多一颗（尤其那颗复活）就红，少了也不放过。
     const tools = container.querySelector<HTMLElement>('.mi-crypto-dashboard__tools')!
+    // 页头命令：日报入口 + 配置情报源 + 静态配置抽屉入口（0.4.3 预览版）。
+    // 多一颗、少一颗都红——新增入口必须同时改这条断言，别用「包含」把它放水。
+    // 用户 2026-11-11：页头只留两颗（日报入口 + 配置情报源）；那颗只写「配置」的静态抽屉入口退役。
     expect([...tools.querySelectorAll<HTMLButtonElement>('.ant-btn')].map(button => button.textContent))
       .toEqual([text.dashboard.dailyBriefing.entry, text.dashboard.configureSources])
+    expect(tools.querySelector('.mi-crypto-dashboard__settings')).toBeNull()
   })
 })
 
@@ -983,3 +944,519 @@ function event(overrides: Partial<MacroEconomicCalendarEventView> = {}): MacroEc
 async function flush(): Promise<void> {
   await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 }
+
+/**
+ * 宿主接线的两条路径（来源：资金情绪在已提交树上实跑 3/3 绿，本文件并库；它的临时
+ * `__probe*.test.tsx` 已删、不入库）。
+ *
+ * 为什么这两个读口必须注入：`cellEnabledIo`（格级启用/选源）与 `dashboardFeedStatusClient`（源级启用表）
+ * 在应用里**永远**被注入，而页面级用例以前从没传过——所有依赖它们的路径（遮罩、行内状态、
+ * 首帧加载态）在测试里都走不到，`decideCellRead is not defined` / `LoadingState is not defined`
+ * 这类缺 import 的错因此看不见。以下用例一律把两个口注入，并用确定性微任务轮次推进（不 sleep）。
+ */
+describe('host wiring: cells switched off and sources judged', () => {
+  const dashboardText = productText['zh-CN'].pages.intelligence.portal.dashboard
+  const dataText = productText['zh-CN'].pages.intelligence.portal.data
+  const readableSentiment = { state: 'available' as const, asOf, score: 22, bucket: 'extreme-fear' as const, observedAt: '2026-08-04T10:00:00.000Z' }
+  const allEnabled = [
+    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
+    { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+  ]
+
+  async function settle(container: HTMLElement, selector: string): Promise<void> {
+    for (let round = 0; round < 20; round += 1) {
+      if (container.querySelector(selector) !== null) return
+      await act(async () => { await Promise.resolve() })
+    }
+  }
+
+  async function renderCells(cells: Record<string, boolean>, extra: Record<string, unknown>) {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: allEnabled }) },
+      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
+      text: dashboardText, cellEnabledIo: { read: async () => cells },
+      ...extra
+    } as never)))
+    return container
+  }
+
+  it('市场状态卡: one enable entry beside the title, landing on the cell that is off', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'quotes:usd': false }, {
+      onManageSource,
+      crossAssetClient: {
+        acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
+        renew: async () => ({ state: 'active' as const }),
+        release: async () => undefined,
+        refresh: vi.fn(async () => ({ state: 'accepted' as const })),
+        query: async () => ({ state: 'unavailable' as const, cause: 'query' as const })
+      }
+    })
+    await settle(container, '.mi-cross-asset__quote-heading button')
+
+    const card = container.querySelector('.mi-cross-asset')!
+    const titleButton = [...card.querySelectorAll<HTMLButtonElement>('.mi-cross-asset__quote-heading button')]
+      .find(button => button.textContent === '启用数据')
+    expect(titleButton).toBeDefined()
+    // 同屏只得这一颗「补数据」动作：表尾与行内都不再有。
+    const actions = [...card.querySelectorAll('button')]
+      .map(button => button.textContent ?? '')
+      .filter(label => ['启用数据', '再试一次', '去启用', '更新历史'].includes(label))
+    expect(actions).toEqual(['启用数据'])
+
+    await act(async () => titleButton!.click())
+    // 落点是对得上的那一格（读者点下去抽屉直接定位到它，而不是只停在看板组）。
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'quotes', cellId: 'quotes:usd' })
+  })
+
+  /**
+   * 源自己关掉（2026-11-11 03:00 用户现场）：两格都开着、币安那个源是关的。
+   * 以前 `readable()` 把它压成 `false`，hook 落进「加载中」，卡片永远转圈。
+   */
+  it('source off: the positioning card names the source instead of waiting forever', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({}, {
+      onManageSource,
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: false, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-positioning-panel')
+    const card = container.querySelector('.mi-positioning-panel')!
+    // 不许再拿「加载中」冒充：那是永远到不了的等待。
+    expect(card.textContent).not.toContain(dashboardText.positioning.loading)
+    // 说清是**哪个源**没启用（不是一句放之四海皆准的「未启用」）。
+    expect(card.textContent).toContain(
+      dashboardText.positioning.sourceDisabled.replace('{source}', dashboardText.positioning.sourceName)
+    )
+    // 两格都归纳到同一个源：整卡走「未启用」那一支，动作**只此一颗**（遮罩里那颗，标题行不再放第二颗）。
+    const enable = [...card.querySelectorAll<HTMLButtonElement>('button')]
+      .filter(button => button.textContent === dashboardText.positioning.enableData)
+    expect(enable).toHaveLength(1)
+    await act(async () => enable[0]!.click())
+    expect(onManageSource).toHaveBeenCalledTimes(1)
+  })
+
+  /** 格自己关掉：说的是「这一格」，不许与上面那句「源没启用」混成同一句。 */
+  it('cell off: the line is about the cell, not about the source', async () => {
+    const container = await renderCells({ 'positioning:oi': false }, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-positioning-panel')
+    const card = container.querySelector('.mi-positioning-panel')!
+    // 一格关了：那一格自己说，卡不会整张变成「源没有启用（Binance …）」。
+    // 只关一格：卡片骨架照常，那一格自己的行里带**这一格的名字**（「持仓名义额 …」）；
+    // 整卡不会换成那句「来源没有启用（…）」。两句话共用一句文案是面板的设计，区别在层级：
+    // 一格 → 行；两格 + 源关 → 整卡遮罩（下面那条用例）。
+    expect(card.querySelector('.mi-source-veil')).toBeNull()
+    expect(card.textContent).toContain(dashboardText.positioning.notional)
+    expect(card.textContent).not.toContain(dashboardText.positioning.loading)
+  })
+
+  /**
+   * 整类问题的其余两处（2026-11-12 03:5x 用户现场「ETF 那格开着、源关掉了」）：
+   * `isCellEnabled` 只看得见「格开没开」，源级状态被压掉，卡片只能画红边。
+   */
+  it('capital: a cell whose SOURCE is off names the source; a cell that is off names the cell', async () => {
+    const sourceOff = await renderCells({}, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(sourceOff, '.mi-capital-conditions')
+    const capitalCard = sourceOff.querySelector('.mi-capital-conditions')!
+    // 源关了：宿主把**源名**交给卡片（`cellAvailability.etf.sourceLabel`），不再是「这一格关了」；
+    // 但卡片现在这一支只画横杠+一颗「启用数据」，**不打印**这个 label —— 让屏幕说出源名要改资金面的卡
+    // （`CapitalConditionsPanel`，资金情绪线），已报 Chief 协调。这里钉宿主这一半：动作在、不加载。
+    expect(capitalCard.querySelectorAll('button').length).toBeGreaterThan(0)
+    expect(capitalCard.textContent).not.toContain(dashboardText.capitalConditions.loading)
+
+    const cellOff = await renderCells({ 'capital:etf': false }, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(cellOff, '.mi-capital-conditions')
+    const offCard = cellOff.querySelector('.mi-capital-conditions')!
+    // 格关了：说这一格（格名 ETF），不说成源。
+    expect(offCard.textContent).toContain('ETF')
+    expect(offCard.textContent).not.toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['0xrouter-aggregate-provider'])
+  })
+
+  it('fear and greed: the veil names the source when the source itself is off', async () => {
+    const container = await renderCells({}, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'alternative-fear-greed' as const, enabled: false, hasCredential: true },
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-crypto-dashboard__sentiment')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    expect(card.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['alternative-fear-greed'])
+    // 不许拿「加载中」冒充。
+    expect(card.textContent).not.toContain(dashboardText.fearGreed.loading)
+  })
+
+  /** 市场状态表逐行也要点名（2026-11-12 第二处残留）：源关了说源，格关了说格。 */
+  it('market status rows name the source when it is off, and the cell when the cell is off', async () => {
+    const sourceOff = await renderCells({}, {
+      crossAssetClient: {
+        acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
+        renew: async () => ({ state: 'active' as const }),
+        release: async () => undefined,
+        refresh: vi.fn(async () => ({ state: 'accepted' as const })),
+        query: async () => ({ state: 'unavailable' as const, cause: 'query' as const })
+      },
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: false, hasCredential: true },
+        { sourceId: 'realmarketapi-market' as const, enabled: true, hasCredential: true },
+        { sourceId: 'fred-rates-liquidity' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(sourceOff, '[data-status-row="btc"] [data-source-state]')
+    const btcRow = sourceOff.querySelector('[data-status-row="btc"]')!
+    // 源关了：这一行报**源名**（Binance 合约持仓），不是笼统的「数据未被启用」。
+    expect(btcRow.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['binance-futures-positioning'])
+    expect(btcRow.textContent).not.toBe(dashboardText.cellState.notEnabled)
+
+    const cellOff = await renderCells({ 'quotes:btc': false }, {
+      crossAssetClient: {
+        acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
+        renew: async () => ({ state: 'active' as const }),
+        release: async () => undefined,
+        refresh: vi.fn(async () => ({ state: 'accepted' as const })),
+        query: async () => ({ state: 'unavailable' as const, cause: 'query' as const })
+      },
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'binance-futures-positioning' as const, enabled: true, hasCredential: true },
+        { sourceId: 'realmarketapi-market' as const, enabled: true, hasCredential: true },
+        { sourceId: 'fred-rates-liquidity' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    // 格关了：这一行说**这一格**（格名 BTC），不说成源的问题。
+    const offRow = cellOff.querySelector('[data-status-row="btc"]')
+    if (offRow !== null) {
+      expect(offRow.textContent).not.toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['binance-futures-positioning'])
+      expect(offRow.getAttribute('data-source-state')).toBe('disabled')
+    }
+  })
+
+  /** 政策路径：两条硬依赖，逐支点名（2026-11-12 架构师批的双格形状）。 */
+  const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-policy-card')!
+  const policySentence = (container: HTMLElement): string =>
+    policyCard(container).querySelector('.mi-source-state')?.textContent?.trim() ?? ''
+  const policyAction = (container: HTMLElement): HTMLButtonElement =>
+    policyCard(container).querySelector<HTMLButtonElement>('.mi-source-veil button')!
+
+  /** 两格的源都启用：这样「另一格」的判定才是 read，单格关掉才看得出点名。 */
+  const policySourcesOn = { query: async () => ({ state: 'available' as const, sources: [
+    { sourceId: 'policy-path-market' as const, enabled: true, hasCredential: true },
+    { sourceId: 'macro-calendar-fed' as const, enabled: true, hasCredential: true },
+    { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+  ] }) }
+
+  it('policy path: both cells on but the read fails says unreadable with a retry — never "not enabled"', async () => {
+    // 第 1 支：两格都去读。这次没读到（页面用例里 `policyPathClient` 没接）→ 只说「读不到 + 再试一次」，
+    // 不许说成「未启用」——那是把「拿不到」和「没有」混成一句。
+    const container = await renderCells({}, { dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    const sentence = policySentence(container)
+    expect(sentence).not.toBe(dashboardText.policyPath.probabilityCellOff)
+    expect(sentence).not.toBe(dashboardText.policyPath.fedCellOff)
+    expect(sentence).not.toBe(dashboardText.policyPath.bothCellsOff)
+    // 读不到这一支给的是重试，不是「去启用」。
+    expect(policyAction(container).textContent).toBe(productText['zh-CN'].pages.intelligence.portal.data.retry)
+  })
+
+  it('policy path: only the probability cell off names that cell, not the calendar', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'policy-path:probability': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    expect(policySentence(container)).toBe(dashboardText.policyPath.probabilityCellOff)
+    expect(policySentence(container)).not.toContain(dashboardText.policyPath.fedCellOff)
+    await act(async () => policyAction(container).click())
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'policy-path', cellId: 'policy-path:probability' })
+  })
+
+  it('policy path: only the Fed calendar off names the calendar, and never blames the odds', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'policy-path:fed': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    expect(policySentence(container)).toBe(dashboardText.policyPath.fedCellOff)
+    expect(policySentence(container)).not.toContain(dashboardText.policyPath.probabilityCellOff)
+    await act(async () => policyAction(container).click())
+    expect(onManageSource).toHaveBeenCalledWith({ business: 'dashboard', moduleKey: 'policy-path', cellId: 'policy-path:fed' })
+  })
+
+  it('policy path: both cells off is one sentence naming both, with one configure action', async () => {
+    const onConfigureSources = vi.fn()
+    const container = await renderCells({ 'policy-path:probability': false, 'policy-path:fed': false }, { onConfigureSources, dashboardFeedStatusClient: policySourcesOn })
+    await settle(container, '.mi-policy-card')
+    expect(policySentence(container)).toBe(dashboardText.policyPath.bothCellsOff)
+    // 不许拆成两条缺项
+    expect(policyCard(container).querySelectorAll('.mi-source-state')).toHaveLength(1)
+    await act(async () => policyAction(container).click())
+    expect(onConfigureSources).toHaveBeenCalledTimes(1)
+  })
+
+  it('policy path: a cell whose SOURCE is switched off names the source, not "this cell is off"', async () => {
+    const container = await renderCells({}, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'policy-path-market' as const, enabled: false, hasCredential: true },
+        { sourceId: 'macro-calendar-fed' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-policy-card')
+    const sentence = policySentence(container)
+    // 指向源（FOMC 决议市场），不是「这一格没启用」。
+    expect(sentence).toContain('FOMC 决议市场')
+    expect(sentence).not.toBe(dashboardText.policyPath.probabilityCellOff)
+    expect(sentence).not.toBe(dashboardText.policyPath.fedCellOff)
+    expect(policyAction(container)).not.toBeNull()
+  })
+
+  it('cell off: the sentiment card keeps its figure, drops the needle, and offers one enable action', async () => {
+    const onManageSource = vi.fn()
+    const container = await renderCells({ 'fear-greed:index': false }, {
+      fearGreedClient: fearGreedClient(readableSentiment as never), onManageSource
+    })
+    await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    expect(card.querySelector('h2')?.textContent).toBe(dashboardText.sentiment.title)
+    // 图还在（弧线、刻度、三个标签），指针与读数圆盘不在——它们指向一个不存在的分数。
+    expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment').length).toBeGreaterThan(0)
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-readout')).toBeNull()
+    const row = card.querySelector('[data-sentiment-state]')!
+    expect(row.getAttribute('data-sentiment-state')).toBe('disabled')
+    expect(row.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
+    const buttons = [...row.querySelectorAll('button')]
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]?.textContent).toBe(dataText.enableSources)
+    expect(card.textContent).not.toContain('22')
+    expect(card.querySelector('.state-view')).toBeNull()
+    await act(async () => buttons[0]!.click())
+    expect(onManageSource).toHaveBeenCalledTimes(1)
+  })
+
+  it('read failure: one row under the figure says temporarily unreadable, with one retry', async () => {
+    const container = await renderCells({}, {
+      fearGreedClient: fearGreedClient({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' } as never)
+    })
+    await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const row = card.querySelector('[data-sentiment-state]')!
+    expect(row.getAttribute('data-sentiment-state')).toBe('unreadable')
+    expect(row.textContent).toContain(dataText.temporarilyUnavailable)
+    const buttons = [...row.querySelectorAll('button')]
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]?.textContent).toBe(dataText.retry)
+    // 图仍画着，指针不画；旧的整块 `StateView` 也不回来。
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-segment')).not.toBeNull()
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
+    expect(card.querySelector('.state-view')).toBeNull()
+  })
+
+  it('cell on and readable: the gauge with its needle, and no state row', async () => {
+    const container = await renderCells({}, { fearGreedClient: fearGreedClient(readableSentiment as never) })
+    await settle(container, '.mi-crypto-dashboard__gauge-segment')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    // 有数据时没有那一行：状态句只在没读数时出现。
+    expect(card.querySelector('[data-sentiment-state]')).toBeNull()
+    expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment')).toHaveLength(5)
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).not.toBeNull()
+    expect(card.textContent).toContain('22')
+  })
+})
+
+describe('host wiring: capital cells, one row at a time', () => {
+  const dashboardText = productText['zh-CN'].pages.intelligence.portal.dashboard
+  const dataText = productText['zh-CN'].pages.intelligence.portal.data
+  const capitalSnapshot = {
+    state: 'available' as const, asOf, conclusion: 'partial' as const, etf: { state: 'unavailable' as const },
+    coreStablecoins: {
+      observedAt: '2026-08-04T23:00:00.000Z', verifiedAt: asOf, currentUsd: 254_900_000_000,
+      change1dUsd: 82_400_000, change1dPercent: 0.0323, change7dUsd: 82_400_000, change7dPercent: 0.0323,
+      change30dUsd: -500_000_000, change30dPercent: -0.21
+    }
+  }
+
+  async function renderCapital(cells: Record<string, boolean>, query: ReturnType<typeof vi.fn> = vi.fn(async () => capitalSnapshot), onManageSource = vi.fn()) {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(),
+      capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) },
+      onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
+      text: dashboardText, cellEnabledIo: { read: async () => cells }
+    } as never)))
+    for (let round = 0; round < 20; round += 1) {
+      const card = container.querySelector('.mi-capital-conditions')
+      if (card && (card.querySelector('.mi-capital-conditions__stable-table') !== null || card.querySelector('.mi-source-state') !== null)) break
+      await act(async () => { await Promise.resolve() })
+    }
+    return { container, query, onManageSource }
+  }
+
+  /** 可读的 ETF 快照（线格式）：5 行/资产、日期严格递增、verifiedAt 在 48h 内。 */
+  const readableEtf = {
+    state: 'available' as const, schemaVersion: 1 as const, sourceId: '0xrouter' as const,
+    windowEnd: '2026-07-31', verifiedAt: '2026-08-04T23:00:00.000Z',
+    /* 5 行、且必须是**连续交易日**（跨周末的日历日会被 `previousTradingDate` 判非法）：07-27 周一 → 07-31 周五。 */
+    btc: { asset: 'BTC' as const, rows: ['27', '28', '29', '30', '31'].map(day => ({
+      tradingDate: `2026-07-${day}`, netFlowUsd: -95_000_000, observedAt: '2026-07-31T22:00:00.000Z'
+    })) },
+    eth: { asset: 'ETH' as const, rows: ['27', '28', '29', '30', '31'].map(day => ({
+      tradingDate: `2026-07-${day}`, netFlowUsd: -1_300_000, observedAt: '2026-07-31T22:00:00.000Z'
+    })) }
+  }
+
+  it('only ETF off: the off rows are dashes with no numbers left, and the one action sits in the title', async () => {
+    const { container } = await renderCapital({ 'capital:etf': false })
+    const card = container.querySelector('.mi-capital-conditions')!
+    // 源关掉：这一块给一句状态词，两行数据格画横杠（两种表示并存，不是二选一）。
+    const stateWords = [...card.querySelectorAll('.mi-source-state')]
+    // 这卡把 ETF 分成两块（表 + 资金流），两块都各说一次同一句 —— 面板自己的形状，不是本笔改的；
+    // 这里钉「说的都是同一句、都是未启用、点名的是这一格」，不重复钉块数。
+    expect(stateWords.map(word => word.getAttribute('data-state'))).toEqual(stateWords.map(() => 'disabled'))
+    expect(new Set(stateWords.map(word => word.textContent)).size).toBe(1)
+    expect(stateWords[0]!.textContent).toContain(`${dataText.sourcesNotEnabled}（ETF）`)
+    // 另一格照旧出数。
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+    // 关掉那一格：两行行名在，数据格全是横杠，且一个数字都不许留（旧读数必须消失）。
+    const offRows = [...card.querySelectorAll('[data-etf-cell-off]')]
+    expect(offRows.map(row => row.getAttribute('data-etf-cell-off'))).toEqual(['btc', 'eth'])
+    for (const row of offRows) {
+      expect(row.textContent).toContain('—')
+      expect((row.textContent ?? '').replace(/[^0-9]/g, '')).toBe('')
+    }
+    // 唯一动作在标题行右侧。
+    const actions = [...card.querySelectorAll('.mi-capital-conditions__title-action')]
+    expect(actions).toHaveLength(1)
+    expect(actions[0]!.textContent).toBe(dashboardText.crossAsset.enableData)
+    expect(card.querySelector('.mi-capital-conditions__table-actions')).toBeNull()
+    expect(card.querySelector('.state-view')).toBeNull()
+  })
+
+  it('both off: the card stays behind the veil with one action inside, and the read is never started', async () => {
+    const { container, query } = await renderCapital({ 'capital:stablecoin': false, 'capital:etf': false })
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.querySelector('.mi-source-veil-host')!.getAttribute('data-veiled')).toBe('true')
+    // 不画表头骨架。
+    expect(card.querySelector('thead')).toBeNull()
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).toBeNull()
+    // 遮罩里：一句「来源没有启用」+ 恰一颗「启用数据」。
+    const veil = card.querySelector('.mi-source-veil')!
+    expect(veil).not.toBeNull()
+    expect(veil.querySelector('.mi-source-state')!.getAttribute('data-state')).toBe('disabled')
+    expect(veil.textContent).toContain(dataText.sourcesNotEnabled)
+    expect([...veil.querySelectorAll('button')]).toHaveLength(1)
+    expect(veil.querySelector('button')!.textContent).toBe(dashboardText.crossAsset.enableData)
+    // 卡内可聚焦元素恰 1 个（就是遮罩里那颗），标题行没有任何动作。
+    const focusable = [...card.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    expect(focusable).toHaveLength(1)
+    expect(card.querySelector('.mi-capital-conditions__title-action')).toBeNull()
+    expect(card.querySelector('.state-view')).toBeNull()
+    // 门禁只剩在请求上：两格都关时一次都不发。
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  it('nothing off and both cells readable: the ordinary card, and no action at all', async () => {
+    const { container } = await renderCapital({}, vi.fn(async () => ({ ...capitalSnapshot, etf: readableEtf })))
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+    expect(card.textContent).not.toContain('—')
+    expect(card.querySelector('.mi-capital-conditions__title-action')).toBeNull()
+    // 两格都读到：ETF 表是数据行，不是「读不到」那一行。
+    expect(card.querySelector('[data-etf-unavailable]')).toBeNull()
+    expect(card.querySelector('[data-etf-cell-off]')).toBeNull()
+    // 资金流那块自己的读数不在本条的判据里（它走另一路查询），这里只钉「这一格读到 = 无动作」。
+  })
+
+  it('nothing off but the ETF half unreadable: a state word in that row, one retry in the title', async () => {
+    // 夹具里 ETF 是 `unavailable`（读不到，不是「没有」）：表留着，那一行一句状态词。
+    const { container } = await renderCapital({})
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+    const unavailableRow = card.querySelector('[data-etf-unavailable="true"]')!
+    expect(unavailableRow).not.toBeNull()
+    expect(unavailableRow.querySelector('.mi-source-state')!.getAttribute('data-state')).toBe('unreadable')
+    expect(unavailableRow.textContent).toContain(dataText.temporarilyUnavailable)
+    // 读不到不画横杠（横杠留给「确实没有」），整张卡一处动作：标题行「再试一次」。
+    expect(card.textContent).not.toContain('—')
+    const action = card.querySelector('.mi-capital-conditions__title-action')!
+    expect(action.textContent).toBe(dataText.retry)
+    expect([...card.querySelectorAll('button')].filter(button => button.textContent === dataText.retry || button.textContent === dashboardText.crossAsset.enableData)).toHaveLength(1)
+  })
+})
+
+
+describe('host wiring: each capital cell focuses its own cell', () => {
+  // TODO(focus): 宿主闭包现在仍是 `() => onManageSource()`（focus 通道未到），所以这里只证「点了有反应」。
+  // 通道落地后补 `toHaveBeenLastCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:stablecoin' })`（只关 ETF 时是 `capital:etf`）。
+  it('one cell off → the title action carries that cell', async () => {
+    const onManageSource = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const query = vi.fn(async () => ({
+      state: 'available' as const, asOf, conclusion: 'partial' as const, etf: { state: 'unavailable' as const },
+      coreStablecoins: {
+        observedAt: '2026-08-04T23:00:00.000Z', verifiedAt: asOf, currentUsd: 254_900_000_000,
+        change1dUsd: 82_400_000, change1dPercent: 0.0323, change7dUsd: 82_400_000, change7dPercent: 0.0323,
+        change30dUsd: -500_000_000, change30dPercent: -0.21
+      }
+    }))
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(),
+      capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) },
+      onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
+      text: productText['zh-CN'].pages.intelligence.portal.dashboard,
+      cellEnabledIo: { read: async () => ({ 'capital:stablecoin': false }) }
+    } as never)))
+    for (let round = 0; round < 20; round += 1) {
+      if (container.querySelector('.mi-capital-conditions__title-action') !== null) break
+      await act(async () => { await Promise.resolve() })
+    }
+    const action = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__title-action')
+    expect(action).not.toBeNull()
+    expect(action!.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset.enableData)
+    await act(async () => action!.click())
+    // 只证「点了有反应」；落点是哪个 cellId 见上面的 TODO(focus)。
+    expect(onManageSource).toHaveBeenCalledTimes(1)
+  })
+})

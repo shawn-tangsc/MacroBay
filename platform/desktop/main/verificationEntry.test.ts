@@ -81,6 +81,8 @@ describe('verification entry', () => {
       'check:components-ownership',
       'check:async-initial-state',
       'check:state-content-ternary',
+      'check:role-switch',
+      'check:tab-role',
       'check:notification-approval',
       'typecheck',
       'typecheck:products',

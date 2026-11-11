@@ -2,7 +2,7 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productSettingsEntries } from '@products/generated/shellRegistry'
 
@@ -13,6 +13,29 @@ import { AppShell } from '../AppShell'
 import { resolveLocalizedTitle } from './shellIconRegistry'
 import { openConversation } from './openConversation'
 import { findProductSettingsPanelByIntent, openProductSettingsPanelByIntent } from './openProductSettingsPanel'
+
+/**
+ * 落点由**夹具注册表**自证，不依赖「这一版装了哪个产品、产品声明了哪个意图」。
+ * 产品撤掉 `settingsSections` 注册之后，这条仍要证明「意图 → 真面板 → 正文挂载 → 焦点交接」整条链。
+ */
+vi.mock('@products/generated/shellRegistry', () => ({
+  productMenuEntries: [],
+  productPanelEntries: [],
+  productApprovalFieldLabels: {},
+  // 通知中心那颗「去设置」读它；漏了就会让整个壳在挂载时炸（mock 必须与模块导出对齐）。
+  productSettingsDrawers: [],
+  productSettingsEntries: [{
+    id: 'sample-product.source-settings',
+    productId: 'sample-product',
+    productName: { 'zh-CN': '示例产品', 'en-US': 'Sample Product' },
+    title: { 'zh-CN': '来源设置', 'en-US': 'Source settings' },
+    icon: 'database',
+    order: 10,
+    navIntent: 'resource-sources',
+    load: async () => ({ default: () => null })
+  }]
+}))
+
 
 
 /**
@@ -167,7 +190,13 @@ describe('R87 landing', () => {
     await settle()
 
     // 面板真的换了（不是只把侧栏点亮）：高亮的就是那一项，名字取自注册表本身。
-    const panelEntry = productSettingsEntries.find((entry) => entry.id === panelKey)
+    // 注：本构建的 `productSettingsEntries` 是空数组（产品已撤注册），生成物的类型是 `readonly []`，
+    // `.find` 会被收成 `never`——这里按条目形状取，运行时仍是 mock 里那一条。
+    const entries = productSettingsEntries as readonly {
+      id: string
+      title: { 'zh-CN': string; 'en-US': string }
+    }[]
+    const panelEntry = entries.find((entry) => entry.id === panelKey)
     expect(panelEntry).toBeDefined()
     expect(activeSettingsPanel(host)).toBe(
       resolveLocalizedTitle(panelEntry!.title, settingsLanguage())

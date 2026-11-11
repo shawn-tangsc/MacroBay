@@ -17,7 +17,6 @@ const fixture = vi.hoisted(() => {
     sourceId: 'coingecko-trending',
     enabled: true,
     collectionPreset: 'balanced',
-    includeInSentiment: true,
     scopePolicy: 'all',
     rawArchiveEnabled: false,
     retentionMode: 'balanced',
@@ -202,6 +201,23 @@ describe('source configuration write handlers', () => {
     expect(result.revisionBefore).not.toBe(result.revisionAfter)
   })
 
+  it('refuses the frozen profile fields the agent may not write any more', async () => {
+    // C10：这四项（`scopePolicy` / `rawArchiveEnabled` / `retentionMode` / `autoReplayAfterParserUpgrade`）
+    // 已从智能体写入口撤掉——值是既有事实，冻结，不迁不删。把它们加回 capability schema 或 action
+    // 字段表，这条就会红：这正是「撤干净」的反向证据。
+    for (const field of ['scopePolicy', 'rawArchiveEnabled', 'retentionMode', 'autoReplayAfterParserUpgrade', 'sourceSpecificConfigJson']) {
+      const error = await handler('configure-intelligence-source')(
+        { action: 'save-profile', sourceId: 'coingecko-trending', [field]: field === 'scopePolicy' ? 'all' : field === 'sourceSpecificConfigJson' ? '{}' : true },
+        context
+      ).catch((thrown: unknown) => thrown)
+      expect(error, `${field} must be refused`).toBeInstanceOf(Error)
+      // 守卫拒收「这次动作不认的参数」——错误码是 `unexpected-property`，话里点名那个字段。
+      expect(String((error as Error).message)).toContain(`Unsupported parameter: ${field}.`)
+    }
+    // 一个都没写进去：库里已有的值不动。
+    expect(fixture.saves).toEqual([])
+  })
+
   it('enables a source through setEnabled and records the flag change', async () => {
     fixture.profiles = [fixture.profile({ enabled: false })]
 
@@ -322,13 +338,13 @@ describe('credential handoff', () => {
     const result = (await handler('request-source-credential')(
       { sourceId: 'fred-rates-liquidity' },
       context
-    )) as { handoff: string; sourceId: string; settingsSectionId: string; fields: string[] }
+    )) as { handoff: string; sourceId: string; settingsDrawer: { productId: string; menuId: string }; fields: string[] }
     const serialized = JSON.stringify(result)
 
     expect(result).toEqual({
       handoff: 'credential-entry',
       sourceId: 'fred-rates-liquidity',
-      settingsSectionId: 'intelligence-sources',
+      settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' },
       fields: ['apiKey']
     })
     expect(serialized).not.toContain('maskedPreview')

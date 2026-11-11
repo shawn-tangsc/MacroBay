@@ -1,6 +1,6 @@
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import { DEFAULT_PERIOD_ID, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { briefingScheduledCutoff } from './dailyBriefingWindow'
-import type { DailyBriefingGenerationSettingsService } from './dailyBriefingGenerationSettingsService'
 import type { DailyBriefingStore } from './dailyBriefingService'
 
 /**
@@ -15,7 +15,7 @@ import type { DailyBriefingStore } from './dailyBriefingService'
  */
 export async function missedScheduledPeriods(input: Readonly<{
   store: Pick<DailyBriefingStore, 'get'> & Pick<Partial<DailyBriefingStore>, 'listAttempts' | 'wasEditionDeleted'>
-  periods: () => Promise<readonly (Awaited<ReturnType<DailyBriefingGenerationSettingsService['getPeriods']>>[number] & Readonly<{ language?: DailyBriefingLocale }>)[]>
+  periods: () => Promise<readonly BriefingPeriod[]>
   today: string
   now: string
   readerTimeZone: string
@@ -25,11 +25,11 @@ export async function missedScheduledPeriods(input: Readonly<{
   const missed: Array<Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>> = []
   for (const period of periods) {
     const id = period.id || DEFAULT_PERIOD_ID
-    const zone = period.generationTimeZone ?? input.readerTimeZone
-    // 未到点：别预告失败。计划时刻按**这一期自己的钟**算。
+    const zone = input.readerTimeZone
+    // 未到点：别预告失败。计划时刻按读者的钟算——期只写时刻，不写钟。
     const cutoff = briefingScheduledCutoff(input.today, period.generationTime, zone)
     if (cutoff === undefined || Date.parse(cutoff) > Date.parse(input.now)) continue
-    const locale = period.language ?? input.fallbackLocale
+    const locale = period.language
     // 读者成功删过的：不建行，否则删完又冒出来，等于删不掉。
     if (await input.store.wasEditionDeleted?.(input.today, id, locale).catch(() => false) === true) continue
     // 有版次 / 有尝试：那一行由版次或尝试自己说，不在这里造。

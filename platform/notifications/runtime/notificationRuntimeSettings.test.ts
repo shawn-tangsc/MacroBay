@@ -86,6 +86,7 @@ function createRuntime(options: {
   subscriptions?: Record<string, unknown>
   settings?: Partial<NotificationRuntimeSettings>
   push?: (record: unknown, content: unknown) => Promise<{ ok: boolean; reason?: string; messageId?: string }>
+  lastDelivery?: (channelId: string) => { status: 'delivered' | 'failed' | 'unknown-after-send'; at: string; conversationLabel: string | null } | null
 } = {}) {
   let state: any = {
     records: [],
@@ -101,6 +102,7 @@ function createRuntime(options: {
   const resolvePushChannel = async () => ({ ok: true as const, channelId: 'telegram', channelName: 'Telegram · test' })
   const runtime = createNotificationRuntime({
     resolvePushChannel,
+    ...(options.lastDelivery === undefined ? {} : { lastDelivery: options.lastDelivery }),
     diagnostics: () => undefined,
     storage,
     catalog,
@@ -144,6 +146,21 @@ describe('notification settings surface', () => {
     await expect(runtime.setChannelEvent('platform.nope', true)).rejects.toThrow(
       'notification-channel-event-not-allowed: platform.nope'
     )
+  })
+
+  it('reports the last real delivery, and says "no record" instead of "not ready" when there is none', async () => {
+    const withRecord = createRuntime({
+      lastDelivery: () => ({ status: 'delivered' as const, at: '2026-11-10T12:02:06.805Z', conversationLabel: 'Tang' })
+    })
+    expect((await withRecord.runtime.getDeliverySettings()).lastDelivery).toEqual({
+      status: 'delivered',
+      at: '2026-11-10T12:02:06.805Z',
+      conversationLabel: 'Tang'
+    })
+
+    // 一次都没投过：null 就是 null，界面据此说「还没有记录」，不许说成「未就绪」。
+    const never = createRuntime({ lastDelivery: () => null })
+    expect((await never.runtime.getDeliverySettings()).lastDelivery).toBeNull()
   })
 
   it('reports the desktop switch and the real push wiring, not a constant', async () => {

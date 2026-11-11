@@ -778,4 +778,40 @@ describe('the sheet lists newest first (user 2026-11-06)', () => {
     expect(rows[1]).toContain('Middle event')
     expect(rows[2]).toContain('Older event')
   })
+
+  it('prints the date and "release time not published", never a time, when the source published no time', async () => {
+    // `MI-1-R39` §4：官方没公布时刻就只画日期 + 那一句话；`scheduledAt` 只是排序位，不许被印成时间。
+    const doc = briefing()
+    const base = doc.news.macro[0]!
+    const macro = [{
+      ...base, scheduledAt: '2026-10-29T00:00:00.000Z',
+      releaseTimeNotPublished: true as const, releaseDate: '2026-10-29'
+    }]
+    const host = await render({ ...doc, news: { ...doc.news, macro, notes: {} } })
+    const row = host.querySelector('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')
+    expect(row?.textContent).toContain('2026-10-29')
+    expect(row?.textContent).toContain(text.macro.timeNotPublished)
+    expect(row?.textContent).not.toContain('00:00')
+  })
+
+  it('still prints the time for an event whose time the source published', async () => {
+    const doc = briefing()
+    const base = doc.news.macro[0]!
+    const macro = [{ ...base, scheduledAt: '2026-10-29T13:30:00.000Z' }]
+    const host = await render({ ...doc, news: { ...doc.news, macro, notes: {} } })
+    const row = host.querySelector('.mi-brief-poster__macro:not(.mi-brief-poster__macro-row-empty)')
+    // 日期与时刻在同一格里分两行（`<br/>`），所以按两段断言。
+    expect(row?.textContent).toContain('2026-10-29')
+    expect(row?.textContent).toContain('13:30')
+    expect(row?.textContent).not.toContain(text.macro.timeNotPublished)
+  })
+
+  it('prints the date and the not-published words in the next section too', async () => {
+    const doc = withFocus({ at: '2026-10-31T00:00:00.000Z', releaseTimeNotPublished: true, releaseDate: '2026-10-31' })
+    const host = await render(doc)
+    const head = host.querySelector('.mi-brief-poster__next-focus time')
+    expect(head?.textContent).toContain('10-31')
+    expect(head?.textContent).toContain(text.macro.timeNotPublished)
+    expect(head?.textContent).not.toContain('00:00')
+  })
 })

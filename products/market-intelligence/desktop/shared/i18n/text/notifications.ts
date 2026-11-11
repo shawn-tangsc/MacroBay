@@ -5,6 +5,7 @@ import { macroEventNotificationSentences } from '../../../../contracts/macroEven
 import { sentimentAlertTemplates } from '../../../../contracts/sentimentAlertSentences'
 import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
+  ACKNOWLEDGE_ACTION_KEY,
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
   OPEN_BRIEFING_ACTION_KEY,
   notificationEventBodyKey,
@@ -39,6 +40,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.briefingFailed)]: '日报没生成出来',
     // 产品动作的标签（v2.58）：与正文同一条解析链路。句子与搬家前逐字相同。
     [OPEN_BRIEFING_ACTION_KEY]: '打开日报',
+    [ACKNOWLEDGE_ACTION_KEY]: '知道了',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '{date} {time} {language}这一期没有生成出来。',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了，但解读没出来。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
@@ -74,6 +76,20 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.calendarEventUpcoming)]: '日历事件即将开始',
     [BODY(IDS.calendarEventUpcoming)]: '按你设定的提前量提醒：有一条日历事件快开始了。',
     [REASON(IDS.calendarEventUpcoming)]: '你打开了日历事件的开始前提醒。',
+
+    // 刷新失败（2026-11-11 用户：「失败了，要通知」）：**不出现任何内部码**，原因走人话表；
+    // 没有码时不编原因，只用 `no-reason` 那一版。
+    [TITLE(IDS.calendarRefreshFailed)]: '日历刷新失败',
+    // 变体名 = 失败码：句子里**不出现任何内部码**，原因就是这句人话（没有码时不编原因）。
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'input-invalid')]: '{source} 这次没刷新成功：请求没有通过校验。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'credential-not-configured')]: '{source} 这次没刷新成功：还没有配置凭据。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'response-unavailable')]: '{source} 这次没刷新成功：来源没有响应。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'archive-unavailable')]: '{source} 这次没刷新成功：证据归档不可用。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'parse-unavailable')]: '{source} 这次没刷新成功：返回的内容没能解析出来。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-unavailable')]: '{source} 这次没刷新成功：本地存储不可用。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-pressure')]: '{source} 这次没刷新成功：本地存储空间受限。已有事件还在，不会丢。',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'no-code')]: '{source} 这次没刷新成功。已有事件还在，不会丢。',
+    [REASON(IDS.calendarRefreshFailed)]: '市场日历的一次刷新没有完成。',
 
     [TITLE(IDS.sentimentAlert)]: zh.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: zh.alert.bodyWithSource,
@@ -118,6 +134,9 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: '分析结论',
     [BODY(IDS.analysisConclusion)]: '这次分析的结论已经出来了。',
     [REASON(IDS.analysisConclusion)]: '你订阅了信号触发的分析结论提醒。',
+    // 分析额度那条正文里的线名：句子属于产品自己的分析线，平台文案表里不再寄存（v2.59）。
+    'notification.analysis-line.market-intelligence.event': '行情变动分析',
+    'notification.analysis-line.market-intelligence.calendar': '日历事件分析',
 
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
     [BODY(IDS.timezoneInvalid)]: '去设置里改成有效的时区，日报会恢复自动生成。',
@@ -126,6 +145,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
   'en-US': Object.freeze({
     [TITLE(IDS.briefingFailed)]: 'The daily briefing did not generate',
     [OPEN_BRIEFING_ACTION_KEY]: 'Open briefing',
+    [ACKNOWLEDGE_ACTION_KEY]: 'Got it',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'The {date} {time} {language} edition failed to generate.',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
@@ -152,6 +172,17 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.calendarEventUpcoming)]: 'A calendar event starts soon',
     [BODY(IDS.calendarEventUpcoming)]: 'A reminder at the lead time you set: a calendar event is about to start.',
     [REASON(IDS.calendarEventUpcoming)]: 'You turned on the reminder before calendar events start.',
+
+    [TITLE(IDS.calendarRefreshFailed)]: 'Calendar refresh failed',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'input-invalid')]: '{source} did not refresh this time: the request was rejected as invalid. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'credential-not-configured')]: '{source} did not refresh this time: no credential is configured. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'response-unavailable')]: '{source} did not refresh this time: the source did not respond. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'archive-unavailable')]: '{source} did not refresh this time: the evidence archive is unavailable. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'parse-unavailable')]: '{source} did not refresh this time: the response could not be parsed. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-unavailable')]: '{source} did not refresh this time: local storage is unavailable. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'storage-pressure')]: '{source} did not refresh this time: local storage is short of space. The events you already have are still there.',
+    [notificationEventVariantKey(IDS.calendarRefreshFailed, 'no-code')]: '{source} did not refresh this time. The events you already have are still there.',
+    [REASON(IDS.calendarRefreshFailed)]: 'A market-calendar refresh did not finish.',
 
     [TITLE(IDS.sentimentAlert)]: en.alert.title,
     [notificationEventVariantKey(IDS.sentimentAlert, 'withSource')]: en.alert.bodyWithSource,
@@ -195,6 +226,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: 'Analysis conclusion',
     [BODY(IDS.analysisConclusion)]: 'The conclusion from this analysis is ready.',
     [REASON(IDS.analysisConclusion)]: 'You subscribed to signal-triggered analysis conclusions.',
+    // Line names used inside the analysis-quota sentence: they belong to this product's analysis lines,
+    // so the platform copy table no longer carries them (v2.59).
+    'notification.analysis-line.market-intelligence.event': 'market-move analysis',
+    'notification.analysis-line.market-intelligence.calendar': 'calendar-event analysis',
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
     [BODY(IDS.timezoneInvalid)]: 'Set a valid time zone in settings and the briefing will generate automatically again.',

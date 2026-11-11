@@ -68,7 +68,7 @@ async function renderInspector(subject: Record<string, unknown>, timeZone = 'Asi
     refreshFedFomcDecision: vi.fn(async () => ({ state: 'unavailable' as const })),
     syncBlsEmploymentSchedule: vi.fn(async () => ({ state: 'unavailable' as const }))
   }
-  const calendar = <ShellTimeZoneProvider timeZone={timeZone}><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
+  const calendar = <ShellTimeZoneProvider timeZone={timeZone}><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} onOpenSettings={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
   await act(async () => localRoot.render(calendar))
   for (let attempt = 0; attempt < 12; attempt += 1) await act(async () => { await Promise.resolve() })
   return { host: container, input }
@@ -89,10 +89,11 @@ async function flush(): Promise<void> {
 
 describe('the release time is edited where it is shown', () => {
   it('shows the displayed instant as the row value and only reveals the picker when asked', async () => {
-    const { host } = await renderInspector(event())
+    // 这一条测的是「官方时刻怎么显示」：所以夹具必须是官方时刻（惯例时刻已经不再当发布时间印，
+    // 见下面那条用例）。12:30Z is 20:30 in the workspace's Asia/Shanghai zone.
+    const { host } = await renderInspector(event({ releaseTimeSource: 'official' }))
     const row = host.querySelector('[data-release-time-row]')
-    expect(row?.getAttribute('data-release-time-row')).toBe('convention-default')
-    // 12:30Z is 20:30 in the workspace's Asia/Shanghai zone.
+    expect(row?.getAttribute('data-release-time-row')).toBe('official')
     expect(row?.textContent).toContain('10-14 20:30')
     // The control is not the default state: nothing to fill in until the reader opens it.
     expect(host.querySelector('.mi-economic-calendar__release-time-picker')).toBeNull()
@@ -100,9 +101,14 @@ describe('the release time is edited where it is shown', () => {
     expect(host.querySelector('.mi-economic-calendar__release-time-picker')).not.toBeNull()
   })
 
-  it('labels a convention, and offers to restore once the reader has edited the row', async () => {
+  it('does not print a convention time as the release time, and offers to restore once the reader has edited the row', async () => {
+    // MI-1-R39 §4：惯例推算的时刻不是发布时刻——官方没公布就只给日期，说「发布时间未公布」。
     const first = await renderInspector(event())
-    expect(first.host.querySelector('[data-release-time-row]')?.textContent).toContain(text.details.conventionTime)
+    const row = first.host.querySelector('[data-release-time-row]')
+    expect(row?.textContent).toContain(text.details.timeNotPublished)
+    expect(row?.textContent).not.toContain('惯例')
+    // 那一刻本身不许出现在这一行里（日期留着，时刻不印）。
+    expect(row?.textContent).not.toContain('20:30')
     act(() => root?.unmount())
     container?.remove()
     root = undefined

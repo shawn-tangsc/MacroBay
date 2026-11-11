@@ -1,0 +1,450 @@
+import { useEffect, useRef, useState } from 'react'
+
+import { Drawer } from '@platform/ui/components/drawer'
+import { Popover } from '@platform/ui/components/popover'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Bell, Info, Layers, ListTree, Newspaper, ScanText, ScrollText, Sparkles } from 'lucide-react'
+
+import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
+import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
+
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
+import { SourcesStaticScreen } from './SourcesStaticScreen'
+import { DRAWER_MENUS, DRAWER_PREVIEW_SCREENS, type ConfigDrawerMenu, type PreviewControl } from './drawerPreviewRows'
+import type { DrawerRowView, DrawerScreenView } from './drawerScreenView'
+import { ConfigDrawerContentCard } from './ConfigDrawerContentCard'
+import './configDrawer.css'
+
+/**
+ * 产品内「配置」抽屉——**纯静态版式**（用户 2026-11-10：先只做样子，一行数据都不接）。
+ *
+ * 职责只有一件：把六个菜单和每屏的行摆出来。没有 IPC、没有数据、没有副作用。
+ * 「不接数据」由 `ConfigSettingsDrawer.test.tsx` 的守卫验（抽屉目录不许出现数据层 import），
+ * 不是靠这句话。
+ *
+ * 左栏是**竖排按钮 + `aria-current`**，不是 `role="tab"`：平台 `Tabs` 只有横排，硬套会改形态；
+ * 菜单是导航不是页签。上下键在导航内移动，Enter/Space 由按钮自己处理。
+ *
+ * 关闭三种方式都由平台 `Drawer` 给：Esc、右上关闭钮、点遮罩。
+ *
+ * TODO(0.4.3-preview): 数据接入后删除本文件的静态分支与 `drawerPreviewRows.ts`。
+ */
+export type ConfigSettingsDrawerProps = {
+  open: boolean
+  onClose: () => void
+  initialMenu?: ConfigDrawerMenu
+  /**
+   * 内容处理：**宿主渲染好的整块**（设置页「翻译偏好」那张卡 + 评分模型只读）。
+   *
+   * 与 `sourcesPanel` 同一条边界：内容与读写都在宿主那边，抽屉只把它放进这一屏。
+   */
+  processingPanel?: React.ReactNode
+  /** 通知屏视图：**宿主读好再传**，抽屉不自己取数；不传则保留静态版式。 */
+  notificationsView?: DrawerScreenView<DrawerRowView>
+  /**
+   * 通知：**宿主渲染好的整块**（设置页「通知」那一屏的同一块实现，不带页标题与页边距）。
+   *
+   * 与 `sourcesPanel` 同一条边界：内容与读写都在宿主那边，抽屉只把它放进这一屏。
+   */
+  notificationsPanel?: React.ReactNode
+  /**
+   * 来源与采集：**宿主渲染好的「左树 + 右详情」整块**。
+   *
+   * 抽屉目录不许 import 数据层（有守卫），所以这块由宿主用设置页同一套组件渲染好再交进来；
+   * 抽屉只负责把它放进两栏。传了它就不再用下面的静态版或扁平列表。
+   *
+   * 是个**回调**而不是节点：抽屉内部从「采集与数据」点源名跳过来时，得把「落到哪个源」交给这屏
+   * （`focusSourceId`）——定位归抽屉，因为切菜单也归抽屉。节点形态做不到这件事，只能把状态抬回页面，
+   * 而那正是「抽屉被重新打开一次」的来源。
+   */
+  sourcesPanel?: (nav: Readonly<{ focusSourceId?: string }>) => React.ReactNode
+  /**
+   * 「采集与数据」那一屏（业务设置视图）由宿主渲染好交进来。
+   *
+   * `openSource` 是**抽屉内部**的导航：换菜单 + 定位那个源，一次都不重开抽屉。
+   * 不传回调时宿主只能自己接到页面级「打开配置抽屉」，那条路会 bump 请求计数、整只抽屉重建。
+   */
+  sourcesDataPanel?: (nav: Readonly<{ openSource: (sourceId: string) => void }>) => React.ReactNode
+  /**
+   * 运行日志：**只读表格**，直接用设置页那一份实现（同一块，不复制）。
+   *
+   * 与来源屏同一条：内容与读取都在宿主那边，抽屉只把它放进这一屏；宽度例外由 `.config-drawer__pane--wide` 给。
+   */
+  runLogPanel?: React.ReactNode
+  /**
+   * AI 分析：**宿主渲染好的整块**——就是「AI 分析设置」对话框的内容本体（`variant="inline"`）。
+   *
+   * 开关、说明、模型选择、保存/取消都是那一份实现；抽屉不加标题、不加边距，也不造第二个写入口。
+   * 原来那条「只读两行 + 去设置改」的 `analysisView` 路径随它退役。
+   */
+  analysisPanel?: React.ReactNode
+  /** 日报屏视图（`useDrawerBriefingView`，五行只读），宿主读好传进来。 */
+  briefingView?: DrawerScreenView<DrawerRowView>
+  /**
+   * 日报与简报：**宿主渲染好的整块**（简报设置抽屉里那两块内容，去掉抽屉外壳）。
+   *
+   * 与 `sourcesPanel` / `notificationsPanel` 同一条边界：内容与读写都在宿主那边。
+   */
+  briefingPanel?: React.ReactNode
+  /** 行键与平台键的解析入口（文案）。 */
+  resolveText?: (key: string) => string
+  /**
+   * 这一屏有没有**未保存的改动**：`true` 就拦一下，先问「继续编辑 / 丢掉改动」。
+   *
+   * 只有报脏的屏会拦，没报脏的屏行为一字不变；以后加第二屏只加报脏，不改抽屉接口。
+   * 三条关闭路径（✕ / 遮罩 / Esc）都过同一个 `requestClose`，所以三处不会各堵一条。
+   */
+  isScreenDirty?: (menu: ConfigDrawerMenu) => boolean
+  /** 当前屏有没有未保存改动：**只有它才能让底部保存栏出现**（无改动不出灰按钮）。 */
+  screenDirty?: boolean
+  /** 保存动作与状态，都由屏上报；壳不读数据、不知道保存的是什么。 */
+  onScreenSave?: () => void
+  screenSaving?: boolean
+  /** 保存失败那一句（放在按钮上方一行，`role="alert"`）。 */
+  screenSaveFailure?: string
+  /**
+   * 「丢掉未保存的改动」那一问怎么弹：**由宿主给**（它就是平台 `useConfirm`），抽屉只负责
+   * 决定什么时候问、问什么、以及确认后调一次关闭。文案也在这里传出去，宿主不另写一句。
+   */
+  confirmDiscard?: (input: {
+    title: string
+    body: string
+    confirmLabel: string
+    cancelLabel: string
+    onDiscard: () => void
+  }) => void
+}
+
+/** 值是占位符：这一版不带任何数据，也不许编数字。 */
+const EMPTY_VALUE = '—'
+
+/** 左列分三组（设置页那套导航：分组标题 + 图标项）；顺序即 `DRAWER_MENUS` 的顺序。 */
+const DRAWER_NAV_GROUPS: ReadonlyArray<{ id: string; menus: readonly ConfigDrawerMenu[] }> = [
+  { id: 'collect', menus: ['sources', 'sourcesData', 'processing'] },
+  { id: 'output', menus: ['analysis', 'briefing', 'notifications'] },
+  { id: 'record', menus: ['runLog'] }
+]
+
+/** 六屏各一颗图标（不再用 1–6 编号）。 */
+const DRAWER_MENU_ICONS: Readonly<Record<ConfigDrawerMenu, typeof Info>> = {
+  sources: ListTree,
+  sourcesData: Layers,
+  processing: ScanText,
+  analysis: Sparkles,
+  briefing: Newspaper,
+  notifications: Bell,
+  runLog: ScrollText
+}
+
+export function ConfigSettingsDrawer({
+  open,
+  onClose,
+  initialMenu = 'sources',
+  processingPanel,
+  notificationsView,
+  notificationsPanel,
+  runLogPanel,
+  analysisPanel,
+  briefingView,
+  briefingPanel,
+  sourcesPanel,
+  sourcesDataPanel,
+  resolveText: resolveTextProp,
+  isScreenDirty,
+  screenDirty,
+  onScreenSave,
+  screenSaving,
+  screenSaveFailure,
+  confirmDiscard
+}: ConfigSettingsDrawerProps): React.ReactElement {
+  const language = useShellLanguage()
+  const copy = productText[language].pages.intelligence.portal.dashboard.configDrawer
+  // 抽屉铺满后，右下角那颗 AI 对话浮球（`position: fixed`、在抽屉之外）会浮在内容上。
+  // 用**根上的一个属性**说明「抽屉开着」，让浮球按 CSS 让位：不改它的交互与位置常量，
+  // 也不必把「抽屉开关」这条状态穿过 layout → workspace 三层（它们今天都不知道抽屉）。
+  useEffect(() => {
+    const root = document.documentElement
+    if (open) root.setAttribute('data-settings-drawer', 'open')
+    else root.removeAttribute('data-settings-drawer')
+    return () => { root.removeAttribute('data-settings-drawer') }
+  }, [open])
+  const resolveProductText = useProductTextKey()
+  const [menu, setMenu] = useState<ConfigDrawerMenu>(initialMenu)
+  /**
+   * 抽屉内部的定位：从「采集与数据」点源名进来时，让「数据源」那屏挂载就落在那个源上。
+   *
+   * 它是**抽屉自己的状态**，不是页面状态：切菜单、定位源都发生在抽屉里，抬到页面就会变成
+   * 「又从外面打开了一次」（用户原话：「都在抽屉里面，就是 tab 切换一下，为啥还要给我重新打开抽屉？」）。
+   */
+  const [focusSourceId, setFocusSourceId] = useState<string>()
+  const navRef = useRef<HTMLElement>(null)
+  const screen = DRAWER_PREVIEW_SCREENS.find((candidate) => candidate.menu === menu)
+  const menuLabel = (key: ConfigDrawerMenu): string => copy.menus[key]
+  /** 行标签：清单里存的是 `configDrawer.rows.<name>` 的完整路径，这里取最后一段查文案。 */
+  const rowLabel = (labelKey: string): string => {
+    const name = labelKey.split('.').at(-1) ?? labelKey
+    return (copy.rows as Record<string, string>)[name] ?? labelKey
+  }
+  /** 分组标题：与行一样，清单里存完整路径，这里取最后一段查文案——**不许把键名印到屏幕上**。 */
+  const groupLabel = (titleKey: string): string => {
+    const name = titleKey.split('.').at(-1) ?? titleKey
+    return (copy.groups as Record<string, string>)[name] ?? titleKey
+  }
+  /**
+   * 文案解析：宿主给了就用宿主的，没给就用产品文案表的解析器。
+   *
+   * 以前这里是个空壳（只认两个键、其余返回空串），于是平台/分析这些屏把**键名**直接印在屏幕上
+   * （`configDrawer.rows.timeZone`）——静态阶段最扎眼的一类错。文案表是静态文本，抽屉目录允许
+   * import（守卫放行的前缀里就有 `../../shared/i18n/`），所以这一层自己解析，不依赖宿主。
+   */
+  /**
+   * 抽屉里用的是短键（`configDrawer.rows.timeZone`），文案表里是完整路径；先用产品文案表补前缀查，
+   * 查不到再问宿主，**两者都查不到就返回空串**——宁可空着，也绝不把键名印到屏幕上。
+   */
+  const resolveText = (key: string): string => {
+    const own = resolveProductText(`pages.intelligence.portal.dashboard.${key}`) || resolveProductText(key)
+    if (own !== '') return own
+    const fromHost = resolveTextProp?.(key) ?? ''
+    return fromHost === key ? '' : fromHost
+  }
+
+  /**
+   * 切屏也走**同一处前置检查**：当前屏有未保存改动时，切走和关抽屉一样先问一句
+   * （继续编辑 = 留在原屏；丢掉改动 = 才换屏）。不另造一套判断——`isScreenDirty` 与关窗共用。
+   */
+  const requestMenuChange = (next: ConfigDrawerMenu): void => {
+    if (next === menu) return
+    if (isScreenDirty?.(menu) !== true || confirmDiscard === undefined) {
+      setMenu(next)
+      return
+    }
+    confirmDiscard({
+      title: copy.discard.title,
+      body: copy.discard.body,
+      confirmLabel: copy.discard.confirm,
+      cancelLabel: copy.discard.cancel,
+      onDiscard: () => setMenu(next)
+    })
+  }
+
+  /**
+   * 「采集与数据」里点源名 / 点红辉光行 → 切到「数据源」并定位那个源。
+   *
+   * **全在抽屉里完成**：只换菜单、只记定位，不碰页面的「打开抽屉」那条路（那条会 bump 请求计数、
+   * 整只抽屉重建——用户看到的就是「tab 切换一下，抽屉又给我重开了一次」）。
+   * 有未保存改动时照样走 `requestMenuChange`：切屏和关抽屉共用同一条确认。
+   */
+  const openSource = (sourceId: string): void => {
+    setFocusSourceId(sourceId)
+    requestMenuChange('sources')
+  }
+
+  // 上下键在导航内移动；Home/End 跳首尾。焦点跟着走，读屏才跟得上。
+  const move = (delta: number): void => {
+    const index = DRAWER_MENUS.indexOf(menu)
+    const next = (index + delta + DRAWER_MENUS.length) % DRAWER_MENUS.length
+    requestMenuChange(DRAWER_MENUS[next]!)
+    navRef.current?.querySelectorAll<HTMLElement>('.settings-nav-item')[next]?.focus()
+  }
+
+  /**
+   * 关闭前置检查：**先问再关**。三条路径（右上 ✕ / 点遮罩 / Esc）都由平台的 `Drawer` 汇到这一个
+   * 回调上，所以不会出现「只堵一条」。没报脏就直接关一次；报脏就先弹确认，确认里也只调一次。
+   */
+  const requestClose = (): void => {
+    if (isScreenDirty?.(menu) !== true) {
+      onClose()
+      return
+    }
+    if (confirmDiscard === undefined) {
+      onClose()
+      return
+    }
+    confirmDiscard({
+      title: copy.discard.title,
+      body: copy.discard.body,
+      confirmLabel: copy.discard.confirm,
+      cancelLabel: copy.discard.cancel,
+      onDiscard: onClose
+    })
+  }
+
+  /* 两栏屏（用户 2026-11-11 拆成两个菜单之后）：
+     `数据源` = 左树 + 右详情，`采集与数据` = 左列表 + 右内容；两屏都吃「280 + 1fr」的分栏。
+     少了这一条，列表会横过来铺满整行、内容被压到下面——真机上就是这么错的。 */
+  const splitPane = (menu === 'sources' && sourcesPanel !== undefined)
+    || (menu === 'sourcesData' && sourcesDataPanel !== undefined)
+
+  return <Drawer
+    mode="modal"
+    onClose={requestClose}
+    open={open}
+    resolveText={resolveText}
+    /* 这一屏是三栏（菜单 + 列表 196 + 详情）：`wide`(860) 下详情只剩一半，所以用 `full`(1040)。 */
+    size="full"
+    footer={screenDirty === true ? <div className="config-drawer__savebar" data-drawer-savebar="true">
+      {screenSaveFailure === undefined ? null : <p className="config-drawer__savebar-failed" role="alert">{screenSaveFailure}</p>}
+      <button
+        className="config-drawer__save"
+        disabled={screenSaving === true}
+        onClick={onScreenSave}
+        type="button">{screenSaving === true ? copy.values.saving ?? '' : copy.values.save ?? ''}</button>
+    </div> : undefined}
+    titleKey="configDrawer.title">
+    <div
+      className="config-drawer"
+      /* 保存栏是固定栏：它出现时给滚动容器留出等高的底部安全区，最后一格获得焦点也不会被压住；
+         不出现时安全区为 0（不留白）。
+         **靠原生聚焦滚动 + 这条安全区**，不自绘焦点跟随逻辑：浏览器的「聚焦元素滚进可视区」
+         本来就遵守 `scroll-padding-*`，自己再写一遍只会多一段没法被用例证明的代码。
+         若真机发现原生不跟随，再补——补的时候必须能被用例驱动，别用 spy 假装断言。 */
+      style={{ scrollPaddingBottom: screenDirty === true ? '56px' : '0px' }}>
+      <nav
+        aria-label={menuLabel(menu)}
+        className="settings-nav"
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') { event.preventDefault(); move(1) }
+          if (event.key === 'ArrowUp') { event.preventDefault(); move(-1) }
+        }}
+        ref={navRef}>
+        {DRAWER_NAV_GROUPS.map((group) => <section className="settings-nav-group" key={group.id}>
+          <div className="settings-nav-group-title">{menuLabel(group.menus[0])}</div>
+          {group.menus.map((key) => {
+            const Icon = DRAWER_MENU_ICONS[key]
+            return <button
+              aria-current={key === menu ? 'page' : undefined}
+              className={`settings-nav-item${key === menu ? ' active' : ''}`}
+              key={key}
+              onClick={() => requestMenuChange(key)}
+              type="button">
+              <Icon aria-hidden="true" size={17} />
+              <span>{menuLabel(key)}</span>
+            </button>
+          })}
+        </section>)}
+      </nav>
+      <section
+        data-drawer-pane="true"
+        aria-label={menuLabel(menu)}
+        /* 有「左树 + 右详情」这一屏时，滚动交给两栏各自（菜单那一栏也自己滚），整块不滚。 */
+        /* 只有真正的分栏屏（来源：左树 + 右详情）才吃两栏；通知屏是单列，套 split 会让卡片按内容宽度塌缩。 */
+        className={`config-drawer__pane${splitPane && ' config-drawer__pane--split'}`}>
+        <ConfigDrawerContentCard split={splitPane}>
+        {menu === 'sourcesData' && sourcesDataPanel !== undefined
+          ? <div className="config-drawer__split">{sourcesDataPanel({ openSource })}</div>
+          : null}
+        {menu === 'sources'
+          ? sourcesPanel === undefined
+            ? (<SourcesStaticScreen />)
+            : (<div className="config-drawer__split">{sourcesPanel({ ...(focusSourceId === undefined ? {} : { focusSourceId }) })}</div>)
+          : null}
+        {menu === 'processing' && processingPanel !== undefined
+          ? processingPanel
+          : null}
+        {menu === 'runLog' && runLogPanel !== undefined
+          ? runLogPanel
+          : null}
+        {menu === 'analysis' && analysisPanel !== undefined
+          ? analysisPanel
+          : null}
+        {menu === 'briefing' && briefingPanel !== undefined
+          ? briefingPanel
+          : null}
+        {menu === 'briefing' && briefingPanel === undefined && briefingView !== undefined
+          ? (<NotificationsScreen resolveText={resolveText} view={briefingView} />)
+          : null}
+        {menu === 'notifications' && notificationsPanel !== undefined
+          ? notificationsPanel
+          : null}
+        {menu === 'notifications' && notificationsPanel === undefined && notificationsView !== undefined
+          ? (<NotificationsScreen resolveText={resolveText} view={notificationsView} />)
+          : null}
+                {(menu === 'processing' && processingPanel !== undefined) || (menu === 'briefing' && (briefingView !== undefined || briefingPanel !== undefined)) || (menu === 'notifications' && (notificationsView !== undefined || notificationsPanel !== undefined)) || (menu === 'analysis' && analysisPanel !== undefined) || (menu === 'runLog' && runLogPanel !== undefined) || menu === 'sources'
+          ? null
+          : screen?.groups.map((group, groupIndex) => <div className="config-drawer__group" key={`${menu}:${groupIndex}`}>
+          {group.titleKey === undefined ? null : <div className="config-drawer__group-title">{groupLabel(group.titleKey)}</div>}
+          {group.rows.map((row) => <div className="config-drawer__row" key={row.key}>
+            <span className="config-drawer__label">{rowLabel(row.labelKey)}</span>
+            <span className="config-drawer__value">{EMPTY_VALUE}</span>
+            <PreviewControlView control={row.control} info={row.info === true} />
+          </div>)}
+        </div>)}
+        </ConfigDrawerContentCard>
+      </section>
+    </div>
+  </Drawer>
+}
+
+/**
+ * 通知屏：**只渲染宿主传来的视图**。每屏根节点带 `data-drawer-screen`，用例据此分辨四态——
+ * 只断「没报错」抓不到「看起来渲染了、其实什么都没出来」。
+ */
+function NotificationsScreen({ view, resolveText }: {
+  view: DrawerScreenView<DrawerRowView>
+  resolveText: (key: string) => string
+}): React.ReactElement {
+  if (view.state === 'loading') {
+    return (<div data-drawer-screen="loading"><LoadingState ariaLabel={resolveText('ui.loading.label')} /></div>)
+  }
+  if (view.state === 'error') {
+    return (
+      <div data-drawer-screen="error">
+        <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: view.onRetry }}
+          reasonCode="unreadable"
+          resolveText={resolveText}
+          state="error" />
+      </div>
+    )
+  }
+  if (view.rows.length === 0) {
+    // `not-yet`：确实还没有、也没有可做的动作（要求挂动作的码在这里语义不对）。
+    return (<div data-drawer-screen="empty"><StateView reasonCode="not-yet" resolveText={resolveText} state="empty" /></div>)
+  }
+  return (
+    <div data-drawer-screen="ready">
+      {view.rows.map((row) => (
+        <div className={row.disabled === true ? 'config-drawer__row is-disabled' : 'config-drawer__row'} data-drawer-row={row.key} key={row.key}>
+          <span className="config-drawer__label">
+            {resolveText(row.key)}
+            {/* 原因只进 ⓘ：正文只留状态词。 */}
+            {row.reason === undefined ? null : (
+              <Popover
+                content={<span>{row.reason}</span>}
+                trigger={(triggerProps) => (
+                  <IconButton {...triggerProps} ariaLabelKey="configDrawer.rowReason" icon={Info} onSelect={() => undefined} resolveText={(key: string) => (key === 'configDrawer.rowReason' ? row.reason ?? '' : '')} size="sm" variant="plain" />
+                )} />
+            )}
+          </span>
+          {/* 值列三选一：真值 / 状态词（拿不到 + 原因）/ 单个 `—`（确实没有）。
+              留有值的空位是不允许的——「留白」只属演示态，会随数据接上收敛掉。 */}
+          <span className="config-drawer__value">{row.value ?? row.emptyLabel ?? '—'}</span>
+          {row.action === undefined ? null : (
+            <button className="config-drawer__row-action" disabled={row.action.disabled === true} onClick={row.action.onSelect} type="button">
+              {resolveText(row.action.labelKey)}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** 控件只画外观：不带行为、不带值。 */
+function PreviewControlView({ control, info }: { control: PreviewControl; info: boolean }): React.ReactElement | null {
+  const glyph = control === 'switch'
+    ? <span aria-hidden="true" className="config-drawer__switch" />
+    : control === 'select' || control === 'multiSelect'
+      ? <span aria-hidden="true" className={`config-drawer__select${control === 'multiSelect' ? ' config-drawer__select--multi' : ''}`} />
+      : control === 'number'
+        ? <span aria-hidden="true" className="config-drawer__number" />
+        : null
+  return <>
+    {glyph}
+    {info ? <IconButton ariaLabelKey="configDrawer.info" icon={Info} onSelect={() => undefined} resolveText={(key) => key} size="sm" variant="plain" /> : null}
+  </>
+}

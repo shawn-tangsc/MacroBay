@@ -9,6 +9,7 @@ import {
   isCanonicalOpenInterestTime,
   isOpenInterestChange,
   isOpenInterestNotional,
+  isOpenInterestHistoryResult,
   isOpenInterestSeries,
   isOpenInterestWindow,
   openInterestHistoryPolicy,
@@ -19,6 +20,23 @@ import {
 const point = (offsetMs: number, notionalUsd = 8_000_000_000) => ({
   observedAt: new Date(Date.UTC(2026, 9, 29, 0, 0) + offsetMs).toISOString(),
   notionalUsd
+})
+
+/**
+ * 新增的「折叠前最新读数」不是随便塞的字段：它必须是规范时刻、且不晚于这次读取的 asOf。
+ * 晚于 asOf 的时刻等于「未来」，采信它会让滞后判定永远为假——那比不做判定更糟。
+ */
+it('accepts only a canonical newest reading that is not in the future', () => {
+  const base = {
+    state: 'available' as const, asOf: '2026-11-10T01:50:00.000Z', window: '7d' as const,
+    btc: [{ observedAt: '2026-11-10T01:00:00.000Z', notionalUsd: 7_269_000_000 }],
+    eth: [{ observedAt: '2026-11-10T01:00:00.000Z', notionalUsd: 3_190_000_000 }],
+    liquidationHintsState: 'available' as const
+  }
+  expect(isOpenInterestHistoryResult({ ...base, newestReadingAt: '2026-11-10T01:45:00.000Z' }, base.asOf, '7d')).toBe(true)
+  expect(isOpenInterestHistoryResult(base, base.asOf, '7d')).toBe(true)
+  expect(isOpenInterestHistoryResult({ ...base, newestReadingAt: '2026-11-10T01:55:00.000Z' }, base.asOf, '7d')).toBe(false)
+  expect(isOpenInterestHistoryResult({ ...base, newestReadingAt: '2026-11-10 01:45' }, base.asOf, '7d')).toBe(false)
 })
 
 describe('open interest policy', () => {

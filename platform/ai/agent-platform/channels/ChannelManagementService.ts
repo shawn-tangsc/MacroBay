@@ -10,6 +10,7 @@ import {
   type ChannelManagementResult,
   type SecureHandoffSubmit
 } from './ChannelManagementContracts'
+import { runtimeFailureOutcome } from './channelRuntimeFailureOutcome'
 import { ChannelManagementCredentialService } from './ChannelManagementCredentialService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
@@ -29,6 +30,7 @@ import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
 import { channelAdapterDescriptor } from './channelAdapterDescriptors'
 import { channelAdapterKeyForType } from './ChannelManagementPredicates'
+import { validatePolicy } from './channelPolicyValidation'
 
 type ManagementDependencies = {
   repository: ChannelManagementRepository
@@ -50,7 +52,11 @@ type ManagementDependencies = {
      * 以前这里只收布尔，于是 telegram 的启动失败被硬编码成 `telegram-network-unavailable`，
      * 用户被指去看代理与网络，而真实原因可能是凭据、占用或状态。
      */
-    start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean | { ok: boolean; reason?: string }>
+    start: (
+      channelId: string,
+      generation: number,
+      ownerToken: string
+    ) => Promise<boolean | { ok: boolean; reason?: string; closeCode?: number | null; providerCode?: string }>
     stop: (channelId: string, ownerToken?: string) => void
   }
   now?: () => Date
@@ -103,6 +109,9 @@ export class ChannelManagementService {
   listConversations(input: { id: unknown; limit?: unknown }) { return this.inventory.listConversations(input) }
   runtimeStatus(input: { id: unknown }) { return this.inventory.runtimeStatus(input) }
   listDeliveryAttempts(input: { id: unknown; limit?: unknown; offset?: unknown }) { return this.inventory.listDeliveryAttempts(input) }
+
+  /** 通道页/通知屏要的「最近一次真实投递」：一条都没有时回 null（不是「未就绪」）。 */
+  lastDelivery(channelId: string) { return this.deps.repository.lastDelivery(channelId) }
   listDeliveryAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) { return this.inventory.listDeliveryAudits(input) }
   listRuntimeAudits(input: { id: unknown; limit?: unknown; cursor?: unknown }) { return this.inventory.listRuntimeAudits(input) }
 
@@ -155,7 +164,17 @@ export class ChannelManagementService {
       // 平台整体还没「对外声明支持」不等于这位用户不能用：用他刚填的凭据现场自检一次，
       // 过了就只在这条通道上启用（进程内、不写库、不翻 supported），没过就把原因说清楚。
       const smoke = this.deps.smoke
-      if (!smoke) return this.enableRejected(id, input.actorId, channel)
+      if (!smoke) {
+        // 已实现的适配器不能被告知「平台还没接上」——那是把「这一版缺放行路径」说成「代码没写」。
+        return this.enableRejected(
+          id,
+          input.actorId,
+          channel,
+          channelAdapterDescriptor(channelAdapterKeyForType(channel.type)).implemented
+            ? 'channel-adapter-unverified'
+            : 'adapter-not-supported'
+        )
+      }
       return requestSmokeEnabledChannel(
         {
           smoke,
@@ -220,23 +239,17 @@ export class ChannelManagementService {
       )
     }
     this.deps.runtime?.stop(id)
-    let started: boolean | { ok: boolean; reason?: string } = false
+    let started: boolean | { ok: boolean; reason?: string; closeCode?: number | null; providerCode?: string } = false
     try { started = this.deps.runtime ? await this.deps.runtime.start(id, activeOwner.generation, owner.token) : false } catch {}
     const startOk = typeof started === 'boolean' ? started : started.ok === true
     if (!startOk || !this.deps.repository.ownsLifecycleOwner(id, activeOwner)) {
       this.deps.runtime?.stop(id, owner.token)
       this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
-      // 启动失败的真实原因由运行时给（`telegram-proxy-unavailable` / `telegram-conflict` 等），
+      // 启动失败的真实原因由运行时给（`telegram-proxy-unavailable` / `discord-intents-disallowed` 等），
       // 这里**不再替它编一个**：编出来的原因会把用户指到完全无关的方向。
-      const startReason = typeof started === 'object' && started !== null && started.ok === false ? started.reason : undefined
-      const rejected = this.enableRejected(
-        id,
-        actorId,
-        channel,
-        'adapter-runtime-start-failed',
-        startReason ? { runtimeReason: startReason } : undefined
-      )
-      return startReason ? { ...rejected, reason: startReason } : rejected
+      const outcome = runtimeFailureOutcome(started)
+      const rejected = this.enableRejected(id, actorId, channel, outcome.code, outcome.summary)
+      return outcome.summary?.runtimeReason ? { ...rejected, reason: outcome.summary.runtimeReason } : rejected
     }
     this.deps.repository.audit(id, assertIdentifier(actorId), restart ? 'restart' : 'request-enable', null, this.now())
     return {
@@ -483,18 +496,3 @@ export class ChannelManagementService {
   }
 }
 
-function validatePolicy(value: unknown): {
-  subjectType: 'user' | 'conversation'
-  key: string
-  conversationKind: 'direct' | 'group' | 'channel' | null
-} {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('channel-policy-invalid')
-  const policy = value as Record<string, unknown>
-  if (policy.subjectType !== 'user' && policy.subjectType !== 'conversation') throw new Error('channel-policy-invalid')
-  if (typeof policy.key !== 'string' || !policy.key.trim() || policy.key.length > 512) throw new Error('channel-policy-invalid')
-  const conversationKind = policy.conversationKind ?? null
-  if (conversationKind !== null && conversationKind !== 'direct' && conversationKind !== 'group' && conversationKind !== 'channel') {
-    throw new Error('channel-policy-invalid')
-  }
-  return { subjectType: policy.subjectType, key: policy.key.trim(), conversationKind }
-}

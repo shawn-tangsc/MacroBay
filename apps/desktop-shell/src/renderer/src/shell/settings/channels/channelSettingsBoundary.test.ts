@@ -37,11 +37,14 @@ describe('channel settings boundary', () => {
     for (const call of [
       'window.platform.channels.requestEnable',
       'window.platform.channels.sendTestMessage',
-      'window.platform.channels.get',
-      'window.platform.app.selectDirectory',
-      'window.platform.agents.ensureWorkspace'
+      'window.platform.channels.get'
     ]) {
       expect(actions).toContain(call)
+    }
+    // 选择文件夹那条路已随控件一起撤掉（第二个工作区权威）：这一屏不许再碰系统目录窗口或登记工作区。
+    for (const gone of ['window.platform.app.selectDirectory', 'window.platform.agents.ensureWorkspace']) {
+      expect(page).not.toContain(gone)
+      expect(actions).not.toContain(gone)
     }
     for (const source of [page, actions, row, createDialog]) {
       expect(source).not.toContain('localStorage')

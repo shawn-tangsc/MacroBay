@@ -1,7 +1,3 @@
-import { Button } from 'antd'
-import { ChevronDown } from 'lucide-react'
-import { useState } from 'react'
-
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 
@@ -10,7 +6,6 @@ import { ModelPicker } from '../components/ModelPicker/ModelPicker'
 import {
   buildDefaultModelCandidates,
   defaultModelConstraints,
-  moreDefaultModelFields,
   primaryDefaultModelFields,
   type DefaultModelField
 } from './modelServiceDefaultModels'
@@ -93,17 +88,17 @@ export function ModelServiceDefaultModelsSection({
   values,
   onChange
 }: ModelServiceDefaultModelsSectionProps): React.ReactElement {
-  const [expanded, setExpanded] = useState(false)
-
-  const labelOf: Record<DefaultModelField, string> = {
+  // 只有 `primaryDefaultModelFields` 里的字段会渲染；`imageModelId`（绘画模型）没有任何控件（C10），
+  // 连它的标签也不留在表里——留一个用不到的键，下一个人会以为那一行只是暂时藏起来了。
+  type RenderedField = (typeof primaryDefaultModelFields)[number]
+  const labelOf: Record<RenderedField, string> = {
     assistantModelId: labels.defaultModelAssistant,
     agentModelId: labels.defaultModelAgent,
     fastModelId: labels.defaultModelFast,
-    translationModelId: labels.defaultModelTranslation,
-    imageModelId: labels.defaultModelImage
+    translationModelId: labels.defaultModelTranslation
   }
 
-  function renderRow(field: DefaultModelField): React.ReactElement {
+  function renderRow(field: RenderedField): React.ReactElement {
     return (
       <DefaultModelFieldRow
         key={field}
@@ -121,21 +116,7 @@ export function ModelServiceDefaultModelsSection({
     <section className="model-service-default-models" data-model-service-default-models>
       <div className="model-service-default-row" data-default-model-row-group="primary">
         <div className="model-service-default-row-scroll">{primaryDefaultModelFields.map(renderRow)}</div>
-        {/* 展开/收起是命令型动作 → antd `Button`（类名与 `aria-expanded` 原样保留）。 */}
-        <Button
-          className="model-service-default-toggle"
-          data-default-models-toggle
-          aria-expanded={expanded}
-          onClick={() => setExpanded((current) => !current)}>
-          <span>{expanded ? labels.defaultModelsCollapse : labels.defaultModelsShowMore}</span>
-          <ChevronDown className="model-service-default-toggle-chevron" size={13} aria-hidden="true" />
-        </Button>
       </div>
-      {expanded ? (
-        <div className="model-service-default-row" data-default-model-row-group="more">
-          <div className="model-service-default-row-scroll">{moreDefaultModelFields.map(renderRow)}</div>
-        </div>
-      ) : null}
     </section>
   )
 }

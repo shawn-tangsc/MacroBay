@@ -214,9 +214,10 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     authMode: 'api-key',
     supportsRunNow: false,
     parserStrategy: 'twelve-data-time-series-v1',
-    // Hidden in providerRegistry as well: the agreement is what the registry guard test holds.
-    visibility: 'hidden',
-    readiness: 'planned',
+    // Visible in providerRegistry as well: the agreement is what the registry guard test holds.
+    // 用户 2026-11-11：它在看板供数（合成美元 DXY 兜底 + 黄金未收盘覆盖），注册表按事实写「可见 / 就绪」。
+    visibility: 'visible',
+    readiness: 'live',
     // The macro-market collector is a product job (market-intelligence.collect-macro-market); the
     // profile's enable flag is what that job reads, and the generic runtime never schedules it.
     collectionOwner: 'product',
@@ -569,24 +570,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
       'CoinGecko 公开全球市场指标（无需凭据，公共接口限流）。每 10 分钟采集总市值/24h 成交额/BTC 占比；聚合口径，缺失或非数值字段会被丢弃。',
     supportedImpactScopes: ['crypto-market', 'sector'],
     adapterConfig: { endpointUrl: 'https://api.coingecko.com/api/v3/global' }
-  }),
-  source({
-    sourceId: 'binance-asset-page',
-    displayName: 'Binance Asset Page',
-    sourceGroup: 'exchange-announcement',
-    adapterType: 'html-page-poller',
-    category: 'exchange-announcement',
-    defaultScopePolicy: 'watchlist-priority',
-    parserStrategy: 'binance-asset-page-v1',
-    intelligenceLayer: 'asset',
-    dataDomain: 'asset-market',
-    reliabilityTier: 'page-extract',
-    eventFamily: 'mixed',
-    readiness: 'planned',
-    readinessNote:
-      '保持未启用：实测 https://www.binance.com/en/price/ethereum 返回 202 且响应体为空（反爬挑战），页面数据无法稳定取得，且没有对应解析器。',
-    supportedImpactScopes: ['symbol', 'watchlist'],
-    adapterConfig: { pageUrl: 'https://www.binance.com/en/price/ethereum' }
   }),
   source({
     sourceId: zeroXRouterSourcePolicy.sourceId,

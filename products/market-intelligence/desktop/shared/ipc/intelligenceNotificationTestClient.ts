@@ -42,7 +42,16 @@ export function readTestNotificationReceipt(value: unknown): IntelligenceTestRec
 }
 
 const NO_DATA_REASONS = ['sentiment-none', 'calendar-upcoming-none', 'calendar-landed-none'] as const
-const UNAVAILABLE_REASONS = ['push-unavailable', 'source-disabled', 'timezone-unreadable', 'read-failed'] as const
+const UNAVAILABLE_REASONS = [
+  'push-unavailable',
+  'source-disabled',
+  'timezone-unreadable',
+  'read-failed',
+  // 通道那一跳的三种结局：都是「没送到手机」，但读者要做的事不同。
+  'channel-rejected',
+  'unknown-after-send',
+  'not-attempted'
+] as const
 
 function isKnownRelayCode<T extends string>(value: unknown, allowed: readonly T[]): value is T {
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)

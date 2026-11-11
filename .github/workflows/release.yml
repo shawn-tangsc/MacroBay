@@ -17,6 +17,10 @@ on:
         description: Create or update the GitHub Release for that tag
         type: boolean
         default: false
+      self_test:
+        description: Validate the publish step and print its commands; no Release is created or changed
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -259,10 +263,29 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: [macos, macos-x64, windows]
-    if: github.event_name == 'push' || github.event.inputs.publish == 'true'
+    # `self_test` 与 `publish` 都能把这条作业叫起来：前者只校验，不建 Release。
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.publish == 'true' ||
+      github.event.inputs.self_test == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # 为什么要检出（别删）：0.4.2 第一次发版就红在这条作业——它只下载产物、不检出仓库，
+      # 脚本却去仓库里读 `<版本>.release-body.md`，于是报 `missing release body` 退 1。
+      # 现在的规则是「读什么就取什么」：脚本来自仓库（这一步），产物只来自下面那一步下载。
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      # 下限写死 22.18：脚本是 `.mts`，靠 Node 自带的类型剥离直接跑；剥类型在 22.18 才默认开启，
+      # `node-version: 22` 这种浮动大版本不保证拿得到，命令行会变成一个看不懂的扩展名错误。
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+
       - name: Download installers
         uses: actions/download-artifact@v4
         with:
@@ -270,37 +293,15 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Publish the release
+      # 唯一实现是 `scripts/release/publish-release.mts`：先校验产物齐不齐（少一件就报名字退 1），
+      # 再决定上传还是创建。`self_test` 走 `--dry-run`：只打印计划和要跑的命令，不碰 GitHub。
+      - name: Publish or validate the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          SELF_TEST: ${{ github.event.inputs.self_test }}
         run: |
           set -euo pipefail
-
-          # NUL-separated so no artifact name can be split into two arguments.
-          list_assets() {
-            find dist -type f \
-              \( -name '*.dmg' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) -print0
-          }
-
-          if [ ! -d dist ] || [ -z "$(list_assets | tr -d '\0')" ]; then
-            echo "no installer files were downloaded from the build jobs" >&2
-            exit 1
-          fi
-          echo 'attaching:'
-          list_assets | tr '\0' '\n'
-
-          # 发布说明**不在**这里生成：它由人在 Release 页上手写（用户 2026-11-10 定）。
-          # 这条作业只负责把产物挂上去，并且**重跑时不动说明**——重跑是为了换包，不是覆盖人写的字。
-          version="${BUILD_REF#v}"
-
-          if gh release view "$BUILD_REF" >/dev/null 2>&1; then
-            list_assets | xargs -0 gh release upload "$BUILD_REF" --clobber
-          else
-            list_assets | xargs -0 gh release create "$BUILD_REF" \
-              --title "MacroBay ${version}" \
-              --notes-file /dev/null \
-              --verify-tag
-          fi
-
-          gh release view "$BUILD_REF" --json url -q .url
+          args=(--dist dist --tag "$BUILD_REF")
+          if [ "${SELF_TEST:-false}" = "true" ]; then args+=(--dry-run); fi
+          node scripts/release/publish-release.mts "${args[@]}"

@@ -225,13 +225,15 @@ describe('cross-asset observation workspace', () => {
       expect(tag?.getAttribute('data-caveat')).toBe('synthetic-dollar-index')
       expect(host.querySelector('[data-status-row="gold"][data-connected="true"]')).not.toBeNull()
       expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('3412.55')
-      // 7d was not in the gold reading: the cell is a dash whose accessible name still says 无数据,
-      // not a zero. It is not a control, so there is no tooltip and no focus stop.
+      // 7d was not in the gold reading: the cell is a dash, not a zero. Its accessible name now says
+      // **why** —「库里没有这一窗口的收盘对」——因为「本次还没落库」那一支已由服务端回退到上一根桶。
+      // It is not a control, so there is no tooltip and no focus stop.
       const missing = host.querySelector('[data-asset-return="gold:7d"]')
       expect(missing?.textContent).toBe(text.windowNoData)
       expect(missing?.getAttribute('title')).toBeNull()
       expect(missing?.getAttribute('tabindex')).toBeNull()
-      expect(missing?.getAttribute('aria-label')).toBe(text.noData)
+      expect(missing?.getAttribute('aria-label')).toBe(text.windowNoPair)
+      expect(missing?.getAttribute('data-window-reason')).toBe('missing')
       expect(missing?.getAttribute('data-unavailable')).toBe('true')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.getAttribute('data-unavailable')).toBeNull()
       expect(host.querySelector('[data-status-row="gold"] [data-synthetic]')).toBeNull()
@@ -335,7 +337,8 @@ describe('cross-asset observation workspace', () => {
       // 整块的来源药丸已撤掉（读者 2026-11-03）：曲线是收盘存档，实时流断了照样画，
       // 而药丸整块写「不可用」，读者只会读成「这张图坏了」。逐资产那行仍在，且只说这一只的情况。
       expect(host.querySelector('[data-source-state]')).toBeNull()
-      expect(host.querySelector('[data-quote-asset="btc"]')?.textContent).toBe(`${text.assets.btc} ${text.states.missing}`)
+      // 腿级说法（用户 2026-11-11）：这句只说实时报价这条腿，不说「这个资产没有数据」。
+      expect(host.querySelector('[data-quote-asset="btc"]')?.textContent).toBe(`${text.assets.btc} ${text.quoteLeg.missing}`)
       for (const asset of ['index', 'btc', 'eth']) expect(host.querySelector(`[data-status-row="${asset}"][data-connected="true"]`)).not.toBeNull()
       expect(host.querySelector('.mi-cross-asset > header, .mi-cross-asset > footer')).toBeNull()
       const proxyInfo = host.querySelector<HTMLButtonElement>('.mi-cross-asset__quote button[aria-label]')
@@ -382,11 +385,14 @@ describe('cross-asset observation workspace', () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
       expect(host.querySelector('[data-cross-asset-workspace]')).not.toBeNull()
       expect(host.querySelector('section')?.getAttribute('aria-label')).toBe(text.title)
-      // 拿不到行情是「读不到」，由统一状态面说那句话并给出重试，不再自己写一句文案。
-      const failure = host.querySelector<HTMLElement>('.state-view--error')
-      expect(failure, 'a failed query renders the shared state surface').not.toBeNull()
-      expect(failure?.querySelector('.state-view__action'), 'error always offers an action').not.toBeNull()
+      // 拿不到行情**不再整块换提示**（用户 2026-11-11：结构要留）：表头与列名都在，
+      // 状态句在表头下第一行，动作只剩标题行那一颗「再试一次」。
       expect(host.querySelector('[data-cross-asset-region="status"]')).not.toBeNull()
+      expect(host.querySelectorAll('.mi-cross-asset__status-table thead th')).toHaveLength(6)
+      const channelRow = host.querySelector('tbody[data-channel-state="unavailable"] td')
+      expect(channelRow, 'the sentence sits in the table, under its header').not.toBeNull()
+      expect(channelRow?.querySelector('.mi-source-state[data-state="unreadable"]')).not.toBeNull()
+      expect(host.querySelector('[data-cross-asset-region="chart"] .state-view--error')).toBeNull()
       // 跨市场观察 is temporarily unrendered (its data and i18n keys are untouched); this guard is
       // flipped back when the aside returns.
       expect(host.querySelector('[data-cross-asset-region="observations"]')).toBeNull()
@@ -845,7 +851,7 @@ describe('首次进入的状态顺序', () => {
     } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
   })
 
-  it('turns a genuinely failed first read into the error surface with a retry', async () => {
+  it('turns a genuinely failed first read into a kept table with one retry in the title row', async () => {
     // A read that keeps failing is terminal after the ladder — otherwise "not ready yet" would be
     // a spinner that never ends.
     const client = {
@@ -861,9 +867,16 @@ describe('首次进入的状态顺序', () => {
       const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
       await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
-      const failure = host.querySelector('.state-view--error')
-      expect(failure).not.toBeNull()
-      expect(failure?.querySelector('.state-view__action')).not.toBeNull()
+      // 结构留着：表头六列都在，七行行位都在，状态句在表头下第一行。
+      expect(host.querySelectorAll('.mi-cross-asset__status-table thead th')).toHaveLength(6)
+      expect(host.querySelectorAll('tr[data-status-row]')).toHaveLength(7)
+      expect(host.querySelector('tbody[data-channel-state="unavailable"] td .mi-source-state[data-state="unreadable"]')).not.toBeNull()
+      // 重试只有一颗，在标题行；图区不再自己画一块带重试的状态面。
+      const retryLabel = productText['zh-CN'].pages.intelligence.portal.data.retry
+      const actions = [...host.querySelectorAll('button')].map(button => button.textContent).filter(label => label === retryLabel)
+      expect(actions).toHaveLength(1)
+      expect(host.querySelector('.mi-cross-asset__quote-heading')?.textContent).toContain(retryLabel)
+      expect(host.querySelector('[data-cross-asset-region="chart"] .state-view--error')).toBeNull()
     } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
   })
 })

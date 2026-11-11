@@ -130,7 +130,11 @@ function officialEvent(
   event: Extract<Awaited<ReturnType<MarketIntelligencePublicQueryService['queryMacroEconomicCalendarMonth']>>, { state: 'available' }>['events'][number],
   _asOf: string
 ): DailyBriefingCalendarEvent {
-  const scheduledAt = event.scheduledAt ?? event.conventionScheduledAt ?? `${event.scheduledDate}T00:00:00.000Z`
+  // 惯例推算的时刻**不是发布时刻**（`MI-1-R39` §4）：官方没公布（`convention-default`）或源里
+  // 根本没有时刻（`date-only`）时，一律不许把它填进 `scheduledAt`——那等于把一个假时刻顶掉
+  // 另一个假时刻。剩下的只是一个**日期位**给排序与分栏用，印刷面另带标记，只画日期 + 一句话。
+  const published = event.releaseTimeSource === 'convention-default' ? undefined : event.scheduledAt
+  const scheduledAt = published ?? `${event.scheduledDate}T00:00:00.000Z`
   const surprise = assessMarketCalendarSurprise(event.actual, event.consensus)
   return Object.freeze({
     eventKey: event.eventKey,
@@ -138,6 +142,7 @@ function officialEvent(
     titleKey: event.titleKey,
     countryCode: event.countryCode,
     scheduledAt,
+    ...(published === undefined ? { releaseTimeNotPublished: true as const, releaseDate: event.scheduledDate } : {}),
     importance: event.importance,
     lifecycleState: event.lifecycleState,
     category: 'economic-indicator' as const,

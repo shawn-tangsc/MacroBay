@@ -177,6 +177,10 @@ function describePhase(phase: Phase, text: (key: string) => string, kind: TestNo
     if (phase.channelCount !== null && phase.channelCount >= 2) {
       return text('pages.intelligence.notification.test.multipleChannels').replace('{count}', String(phase.channelCount))
     }
+    // 通道那一跳的三种结局各一句：用一个「失败」盖三种处境，读者只能猜。
+    if (phase.reasonCode === 'channel-rejected') return text('pages.intelligence.notification.test.channelRejected')
+    if (phase.reasonCode === 'unknown-after-send') return text('pages.intelligence.notification.test.unknownAfterSend')
+    if (phase.reasonCode === 'not-attempted') return text('pages.intelligence.notification.test.notAttempted')
     return text('pages.intelligence.notification.test.failed')
   }
   return null

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
@@ -10,13 +10,18 @@ import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } 
 import { AgentPortal } from './AgentPortal'
 import { useCryptoActivation } from './useCryptoActivation'
 import { marketIntelligenceAgents } from './agentPortalModel'
+import { cellEnabledClient } from '../../shared/ipc/cellEnabledClient'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
+import { DRAWER_MENUS, type ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
+import { businessFocusFromRequest, drawerSectionFromRequest, menuFromSettingsDrawer, normalizeConfigDrawerRequest, sourcesDataRequestFor, type OpenConfigDrawerRequest } from './configDrawerRequest'
+import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
 import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
-import { DashboardPanelDrawer } from './DashboardPanelDrawer'
+import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../settings/intelligence-sources/sourceWrites'
+import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
 import { createCalendarCardReactionReader } from './calendarCardReaction'
 
@@ -61,7 +66,58 @@ function IntelligencePageBody(): React.ReactElement {
   const sampleText = text.sampleMode
   const sampleNow = sample.now
   const { activation, sourceCounts, retry: retryActivation } = useCryptoActivation()
-  const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
+  /**
+   * 配置抽屉的「请求打开」：入口在别的视图里（日报页 / 日历 / 门户），抽屉自己住在看板那一层。
+   * 所以这里只 bump 一个**递增计数**——布尔表达不了「已经开着又点了一次」，而连点入口很常见。
+   */
+  const [configDrawerRequest, setConfigDrawerRequest] = useState(0)
+  const [configDrawerMenu, setConfigDrawerMenu] = useState<ConfigDrawerMenu>('sources')
+  /** 屏内定位（只随请求生效一次；读者自己点别的菜单/源后不再回拽）。 */
+  const [configDrawerSourceId, setConfigDrawerSourceId] = useState<string | undefined>(undefined)
+  /**
+   * 「采集与数据」那屏的屏内定位（业务 / 模块卡 / 格）。
+   *
+   * 为什么单独一个状态：它描述的是**另一屏**里落到哪一项。原先只有「过滤器」这一个口头，
+   * 于是日历/舆情的入口把 `'calendar'` 当筛选传下来，而抽屉那屏根本不看筛选——四个入口全停在
+   * 「看板」第一屏。定位归 `focus`，单开一个口，跟 `configDrawerSourceId` 同一条规矩：只随请求生效一次。
+   */
+  const [configDrawerBusinessFocus, setConfigDrawerBusinessFocus] = useState<BusinessFocus>()
+  /** 三屏的屏内分区（`focus.<menu>.section`）：只作初值，跟上面两条同一个规矩。 */
+  const [configDrawerSection, setConfigDrawerSection] = useState<Readonly<{ menu: ConfigDrawerMenu; section: string }>>()
+  /**
+   * 「来源与采集」这一屏挂载时的初值过滤器（只作初值，之后的筛选由那一屏自己管）。
+   * 第二步才会由门户/看板传值；现在恒为 `undefined`，所以读者看到的仍是看板默认。
+   */
+  const [initialSourceFilter, setInitialSourceFilter] = useState<SourceFilter>()
+  const openConfigDrawer = (input: ConfigDrawerMenu | OpenConfigDrawerRequest, filter?: SourceFilter): void => {
+    const request = normalizeConfigDrawerRequest(input)
+    const menu = request.menu
+    setConfigDrawerSourceId(menu === 'sources' && request.focus?.menu === 'sources' ? request.focus.sourceId : undefined)
+    setConfigDrawerBusinessFocus(businessFocusFromRequest(request))
+    setConfigDrawerSection(drawerSectionFromRequest(request))
+    setConfigDrawerMenu(menu)
+    setInitialSourceFilter(filter)
+    setConfigDrawerRequest((value) => value + 1)
+    setActiveView('dashboard')
+  }
+
+  /**
+   * 壳层的「去设置」跳转：`AppShellNavigateDetail.settingsDrawer` 带 `{ productId, menuId }`。
+   *
+   * 只认自己的产品，且 `menuId` 必须是登记表里的七屏之一——不认识就**什么都不做**
+   * （不猜、不落默认屏：那会让读者点了 A 却停在 B）。
+   */
+  useEffect(() => {
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<{ settingsDrawer?: { productId?: string; menuId?: string } }>).detail
+      const menu = menuFromSettingsDrawer(detail?.settingsDrawer)
+      if (menu === undefined) return
+      openConfigDrawer(menu)
+    }
+    window.addEventListener('app-shell:navigate', handler)
+    return () => window.removeEventListener('app-shell:navigate', handler)
+    // 只订阅一次：处理器只调 setState，不读 props/state 快照。
+  }, [])
   /**
    * 打开「情报」直接落在看板。
    * 用户 2026-11-06：智能体选择页先留着不删，多智能体方案未定前不改结构，只改默认落点。
@@ -75,8 +131,9 @@ function IntelligencePageBody(): React.ReactElement {
   const openCryptoPrimary = (): void => {
     setActiveView('dashboard')
   }
+  /** 门户/看板「配置来源」：**新抽屉**，预设看板筛选（旧看板抽屉入口一并收口）。 */
   const openCryptoSources = (): void => {
-    setSourceDrawerOpen(true)
+    openConfigDrawer(sourcesDataRequestFor())
   }
   const toggleSample = async (): Promise<void> => {
     if (sample.state.active) {
@@ -131,7 +188,7 @@ function IntelligencePageBody(): React.ReactElement {
       {sample.state.active && activeView === 'dashboard' ? (
         <SampleModeBanner
           busy={sample.busy}
-          onConnect={() => { void sample.exit().then(() => setSourceDrawerOpen(true)) }}
+          onConnect={() => { void sample.exit().then(() => openConfigDrawer(sourcesDataRequestFor())) }}
           onExit={() => { void sample.exit() }}
           scenarioNow={sample.state.scenarioNow}
           text={sampleText.banner as SampleModeBannerText}
@@ -143,8 +200,9 @@ function IntelligencePageBody(): React.ReactElement {
           text={text.dashboard.dailyBriefing}
           eventTitles={text.analysisWorkspace.readableNames.eventName}
           onBack={() => setActiveView('dashboard')}
-          onConfigureSources={() => setSourceDrawerOpen(true)}
+          onConfigureSources={() => openConfigDrawer(sourcesDataRequestFor())}
           onConfigureWebSearch={openWebSearchSettings}
+          onOpenSettings={() => openConfigDrawer('briefing')}
         />
       ) : activeView === 'calendar' ? (
         <EconomicCalendar
@@ -153,10 +211,13 @@ function IntelligencePageBody(): React.ReactElement {
           onBack={() => setActiveView('dashboard')}
           openTarget={calendarTarget}
           text={text.calendar}
+          onOpenSettings={() => openConfigDrawer(sourcesDataRequestFor({ business: 'calendar' }))}
         />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
+          onOpenAnalysisSettings={() => openConfigDrawer({ menu: 'analysis' })}
+          onOpenSettings={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
           onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
           text={text}
           locale={language}
@@ -180,6 +241,8 @@ function IntelligencePageBody(): React.ReactElement {
           />}
         >
         <CryptoIntelligenceDashboard
+          /* 格级启停：与抽屉、设置页**同一个单例**（一份存储），页面构造一次往下传。 */
+          cellEnabledIo={{ read: () => cellEnabledClient.read(), readSelection: () => cellEnabledClient.readSelection() }}
           key={sample.sessionKey}
           locale={language}
           briefingEnabled={!sample.state.active}
@@ -196,8 +259,17 @@ function IntelligencePageBody(): React.ReactElement {
           macroRatesClient={macroRatesClient}
           dashboardFeedStatusClient={dashboardFeedStatusClient}
           now={sampleNow}
-          onConfigureSources={() => setSourceDrawerOpen(true)}
-          onManageSource={() => setSourceDrawerOpen(true)}
+          onConfigureSources={() => openConfigDrawer(sourcesDataRequestFor())}
+          onManageSource={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
+          initialSettingsMenu={configDrawerMenu}
+          {...(configDrawerSourceId === undefined ? {} : { initialSourceId: configDrawerSourceId })}
+          {...(configDrawerBusinessFocus === undefined ? {} : { initialBusinessPosition: configDrawerBusinessFocus })}
+          {...(configDrawerSection === undefined ? {} : { initialDrawerSection: configDrawerSection })}
+          initialSourceFilter={initialSourceFilter}
+          openSettingsRequest={configDrawerRequest}
+          /* 「采集与数据」里点源名/红行：切到「数据源」屏，定位到那个源（滚动/描边/焦点归详情）。 */
+          /* 舆情卡右边的入口卡 → 抽屉「内容处理」屏（菜单 7 项不变，同一条 openConfigDrawer 路）。 */
+          onOpenProcessingSettings={() => openConfigDrawer({ menu: 'processing' })}
           onOpenCalendar={() => setActiveView('calendar')}
           text={text.dashboard}
         />
@@ -215,13 +287,6 @@ function IntelligencePageBody(): React.ReactElement {
           text={text}
         />
       )}
-      {sourceDrawerOpen ? <DashboardPanelDrawer
-        onClose={() => setSourceDrawerOpen(false)}
-        open
-        // The registry projection may stand in for a failed read only while the reader is looking
-        // at sample data: outside it, a failed read is stated as failed, never as a source list.
-        sampleActive={sample.state.active}
-      /> : null}
     </div>
   )
 }

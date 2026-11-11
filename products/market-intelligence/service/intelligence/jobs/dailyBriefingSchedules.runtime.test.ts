@@ -2,14 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { createJobRuntime, type JobRuntime } from '@platform/jobs'
 
-import {
-  createDailyBriefingGenerationSettingsService,
-  createInMemoryDailyBriefingGenerationSettingsStorage
-} from '../daily-briefing/dailyBriefingGenerationSettingsService'
 import { applyDailyBriefingSchedules } from './registerDailyBriefingJob'
 import { INTELLIGENCE_DAILY_BRIEFING_JOB } from './intelligenceJobIds'
-
-const updatedAt = '2026-11-02T00:00:00.000Z'
 
 const period = (id: string, generationTime: string, generationTimeZone?: string) => ({
   id,
@@ -18,12 +12,6 @@ const period = (id: string, generationTime: string, generationTimeZone?: string)
   windowHours: 24 as const
 })
 
-/** The saved periods as the real settings service reads them, over an in-memory file. */
-function settingsWith(periods: readonly unknown[]) {
-  return createDailyBriefingGenerationSettingsService({
-    storage: createInMemoryDailyBriefingGenerationSettingsStorage({ periods, updatedAt })
-  })
-}
 
 let runtime: JobRuntime | undefined
 
@@ -34,9 +22,9 @@ afterEach(() => {
 
 describe('per-period schedules against the real job runtime', () => {
   it('registers one definition per saved period, keyed by period id', async () => {
-    const settings = settingsWith([period('default', '08:00'), period('asia-open', '12:30', 'Asia/Shanghai')])
+    const periods = [period('default', '08:00'), period('asia-open', '12:30', 'Asia/Shanghai')]
     runtime = createJobRuntime()
-    applyDailyBriefingSchedules(runtime, await settings.getPeriods(), 'Europe/London')
+    applyDailyBriefingSchedules(runtime, periods, 'Europe/London')
 
     // T5: the registered table itself, not a helper's return value.
     expect(runtime.listSchedules().map((definition) => definition.id).sort()).toEqual([
@@ -58,10 +46,9 @@ describe('per-period schedules against the real job runtime', () => {
 
   it('leaves no definition behind for a period that was removed', async () => {
     runtime = createJobRuntime()
-    applyDailyBriefingSchedules(runtime, await settingsWith([period('default', '08:00'), period('asia-open', '12:30')]).getPeriods(), 'Asia/Shanghai')
+    applyDailyBriefingSchedules(runtime, [period('default', '08:00'), period('asia-open', '12:30')], 'Asia/Shanghai')
 
-    const shrunk = settingsWith([period('default', '08:00')])
-    const result = applyDailyBriefingSchedules(runtime, await shrunk.getPeriods(), 'Asia/Shanghai')
+    const result = applyDailyBriefingSchedules(runtime, [period('default', '08:00')], 'Asia/Shanghai')
 
     expect(result.removed).toEqual(['asia-open'])
     // The end state, read from the runtime: "off" is an absent definition, not a handler filter.
@@ -70,10 +57,9 @@ describe('per-period schedules against the real job runtime', () => {
 
   it('keeps the other periods when one period zone cannot be read', async () => {
     runtime = createJobRuntime()
-    applyDailyBriefingSchedules(runtime, await settingsWith([period('default', '08:00'), period('asia-open', '12:30')]).getPeriods(), 'Asia/Shanghai')
+    applyDailyBriefingSchedules(runtime, [period('default', '08:00'), period('asia-open', '12:30')], 'Asia/Shanghai')
 
-    const broken = settingsWith([period('default', '08:00'), period('asia-open', '12:30', 'Asia/Shangai')])
-    const result = applyDailyBriefingSchedules(runtime, await broken.getPeriods(), 'Asia/Shanghai')
+    const result = applyDailyBriefingSchedules(runtime, [period('default', '08:00'), period('asia-open', '12:30', 'Asia/Shangai')], 'Asia/Shanghai')
 
     expect(result.paused).toEqual(['asia-open'])
     expect(runtime.listSchedules().map((definition) => definition.id)).toEqual([`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`])
@@ -81,7 +67,7 @@ describe('per-period schedules against the real job runtime', () => {
 
   it('re-arms a period whose time moved: remove first, then set, and only one definition', async () => {
     runtime = createJobRuntime()
-    applyDailyBriefingSchedules(runtime, await settingsWith([period('default', '08:00')]).getPeriods(), 'Asia/Shanghai')
+    applyDailyBriefingSchedules(runtime, [period('default', '08:00')], 'Asia/Shanghai')
     expect(runtime.listSchedules()[0]?.trigger).toMatchObject({ expression: '0 8 * * *' })
 
     const calls: string[] = []
@@ -91,7 +77,7 @@ describe('per-period schedules against the real job runtime', () => {
       listSchedules: () => runtime!.listSchedules()
     }
     // A day has one 08:00 trigger. Updating in place would leave the old one armed as well.
-    applyDailyBriefingSchedules(spied, await settingsWith([period('default', '09:00')]).getPeriods(), 'Asia/Shanghai')
+    applyDailyBriefingSchedules(spied, [period('default', '09:00')], 'Asia/Shanghai')
 
     const definitionId = `${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`
     expect(calls).toEqual([`remove:${definitionId}`, `set:${definitionId}`])
@@ -101,7 +87,7 @@ describe('per-period schedules against the real job runtime', () => {
 
   it('writes nothing when the periods did not change', async () => {
     runtime = createJobRuntime()
-    const periods = await settingsWith([period('default', '08:00'), period('asia-open', '12:30', 'Asia/Shanghai')]).getPeriods()
+    const periods = [period('default', '08:00'), period('asia-open', '12:30', 'Asia/Shanghai')]
     applyDailyBriefingSchedules(runtime, periods, 'Asia/Shanghai')
 
     const calls: string[] = []
@@ -118,7 +104,7 @@ describe('per-period schedules against the real job runtime', () => {
 
   it('leaves no definition when there is no period left', async () => {
     runtime = createJobRuntime()
-    applyDailyBriefingSchedules(runtime, await settingsWith([period('default', '08:00')]).getPeriods(), 'Asia/Shanghai')
+    applyDailyBriefingSchedules(runtime, [period('default', '08:00')], 'Asia/Shanghai')
     expect(runtime.listSchedules()).toHaveLength(1)
 
     const result = applyDailyBriefingSchedules(runtime, [], 'Asia/Shanghai')
@@ -138,7 +124,7 @@ describe('per-period schedules against the real job runtime', () => {
 describe('the schedule follows the reader’s clock', () => {
   it('arms a zone-less period in the reader zone, never in UTC', async () => {
     runtime = createJobRuntime()
-    applyDailyBriefingSchedules(runtime, await settingsWith([period('default', '07:00')]).getPeriods(), 'Asia/Shanghai')
+    applyDailyBriefingSchedules(runtime, [period('default', '07:00')], 'Asia/Shanghai')
 
     const [definition] = runtime.listSchedules()
     expect(definition?.trigger).toMatchObject({ expression: '0 7 * * *', timezone: 'Asia/Shanghai' })

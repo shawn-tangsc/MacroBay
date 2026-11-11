@@ -17,7 +17,14 @@ import { VERIFY_CHECKS } from './verify-sample'
 const strict = process.argv.includes('--strict')
 
 function run(command: string, args: readonly string[]): number {
-  const result = spawnSync(command, [...args], { stdio: 'inherit' })
+  // Windows 上 `pnpm` 只有 `.cmd`/`.ps1` 两种入口，没有 `.exe`：`spawnSync` 不走 PATHEXT，
+  // 直接调用会以 `ENOENT` 失败并返回 `status: null`，而这条链把它读成「检查失败」——
+  // 于是整条门禁在 Windows 上一个字不打印就红。过一层 shell 才解析得到 `pnpm.cmd`。
+  // 参数全部是脚本里的字面量，没有外部输入，不经引号拼接。
+  const result = spawnSync(command, [...args], { stdio: 'inherit', shell: process.platform === 'win32' })
+  if (result.error) {
+    console.error(`[verify] could not start "${command}": ${String((result.error as NodeJS.ErrnoException).code)}`)
+  }
   return result.status ?? 1
 }
 

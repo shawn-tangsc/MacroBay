@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 
 import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
-import { blsRefreshBlockedSentence, blsUnavailableSentence, readBlsUnavailable, type BlsScheduleFeedback, type BlsUnavailable } from './blsAvailability'
+import { blsRefreshBlockedReasonCode, blsRefreshBlockedSentence, blsUnavailableListDetail, blsUnavailableListLabel, blsUnavailableSentence, readBlsUnavailable, type BlsScheduleFeedback, type BlsUnavailable } from './blsAvailability'
 import type { EconomicCalendarText } from './economicCalendarText'
 
 /**
@@ -14,8 +14,14 @@ import type { EconomicCalendarText } from './economicCalendarText'
 export function useBlsAvailability(text: EconomicCalendarText): Readonly<{
   unavailable?: BlsUnavailable
   notice?: string
+  /** 列表顶部那一句状态词：点名 BLS，不带原因（原因在那颗 ⓘ 里）。 */
+  listLabel?: string
+  /** 那颗 ⓘ 里的完整说明：403、画的是哪次同步、怎么拿到新的。 */
+  listDetail?: string
   /** 置灰的 BLS 刷新键自己的行内句：为什么不能刷新、何时能好（若有）。 */
   refreshBlocked?: string
+  /** 行内句旁那颗 ⓘ 里的完整原因码（正文不拼它）。 */
+  refreshBlockedCode?: string
   /** 官方日历腿的三态（宏观线在注册表那侧算好，这里只读，不遍历注册表）。 */
   feeds?: 'disabled' | 'enabled' | 'unavailable'
 }> {
@@ -31,11 +37,17 @@ export function useBlsAvailability(text: EconomicCalendarText): Readonly<{
     return () => { active = false }
   }, [])
   const notice = blsUnavailableSentence(text, unavailable)
+  const listLabel = blsUnavailableListLabel(text, unavailable)
+  const listDetail = blsUnavailableListDetail(text, unavailable)
   const refreshBlocked = blsRefreshBlockedSentence(text, unavailable)
+  const refreshBlockedCode = blsRefreshBlockedReasonCode(unavailable)
   return {
     ...(unavailable === undefined ? {} : { unavailable }),
     ...(notice === undefined ? {} : { notice }),
+    ...(listLabel === undefined ? {} : { listLabel }),
+    ...(listDetail === undefined ? {} : { listDetail }),
     ...(refreshBlocked === undefined ? {} : { refreshBlocked }),
+    ...(refreshBlockedCode === undefined ? {} : { refreshBlockedCode }),
     ...(feeds === undefined ? {} : { feeds })
   }
 }

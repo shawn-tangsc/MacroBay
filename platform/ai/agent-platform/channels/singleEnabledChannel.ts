@@ -32,6 +32,11 @@ export function disableOtherEnabledChannelsInTransaction(
     `update agent_channels set requested_enabled = 0, lifecycle_state = 'disabled', updated_at = ?
      where ${managedChannelSql()} and lifecycle_state = 'enabled' and id <> ?`
   ).run(now, keepId)
+  // 占用行跟着一起删：它是「谁正在操作」的锁，频道已经被挤出运行，锁留着只会让它再也启不起来。
+  const placeholders = rows.map(() => '?').join(', ')
+  database.connection.prepare(
+    `delete from channel_telegram_lifecycle_operations where channel_id in (${placeholders})`
+  ).run(...rows.map((row) => row.id))
   return rows.map((row) => ({ id: row.id, adapter: row.adapter_key }))
 }
 

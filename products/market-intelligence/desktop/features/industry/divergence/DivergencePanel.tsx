@@ -3,6 +3,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 import { ChevronRight, Info } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, useStateViewText } from '@platform/ui/components/state'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -42,6 +43,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
+  const stateText = useStateViewText()
   const detailId = useId()
   const [expanded, setExpanded] = useState(false)
   // 契约保证 `observedAt` 是规范 UTC（`isCanonicalDivergenceTime`），直接交给统一格式化；
@@ -72,8 +74,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   }
   if (state.state === 'unavailable') {
     return (
+      // 读不到不是一句「没读到」就完事：这一行里恰一颗「重试」，接的是宿主给的重读入口
+      // （原先 `onRetry` 是必填却没人读的死接口）。不加第二个框——它仍是那一行里的一颗文字动作。
       <section className="mi-divergence" aria-label={text.title} data-state="unavailable" data-divergence-unavailable>
-        <p role="status" className="mi-divergence__unavailable">{text.unavailableTrace}</p>
+        <p role="status" className="mi-divergence__unavailable">
+          {text.unavailableTrace}
+          <button className="mi-divergence__retry" onClick={onRetry} type="button">{stateText(STATE_VIEW_ACTION_KEYS.retry)}</button>
+        </p>
       </section>
     )
   }

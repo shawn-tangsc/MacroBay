@@ -1,12 +1,14 @@
 import { useState, type ReactElement } from 'react'
 import { Button, DatePicker } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
-import { Pencil, RefreshCw } from 'lucide-react'
+import { Info, Pencil, RefreshCw } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 import { resolveCalendarConsensus, type CalendarConsensusValue } from '../../../../contracts/macro/calendarConsensus'
 import { useConfirm } from '@platform/ui/components/confirm'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { helpTrigger } from '@platform/ui/components/popover'
+import { Popover } from '@platform/ui/components/popover'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
@@ -76,13 +78,14 @@ const fedFomcRefreshPresentationPolicy = {
  */
 function releaseTimeText(event: EconomicCalendarEventView, text: EconomicCalendarText, timeZone: string, timeZoneLabel: string): string {
   if (event.scheduledAt === undefined) return `${event.scheduledDate} ${text.details.scheduledDateOnly}`
+  // 惯例推算的时刻**不是发布时刻**：官方没公布就只给日期，说「发布时间未公布」（MI-1-R39 §4）。
+  if (event.releaseTimeSource === 'convention-default') return `${event.scheduledDate} ${text.details.timeNotPublished}`
   const time = `${calendarDisplayDate(event.scheduledAt, timeZone)} ${formatEconomicCalendarTime(event.scheduledAt, timeZone, timeZoneLabel)}`
-  if (event.releaseTimeSource === 'convention-default') return `${time}（${text.details.conventionTime}）`
   if (event.releaseTimeSource === 'user-edited') return `${time}（${text.details.editedTime}）`
   return time
 }
 
-export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked }: {
+export function EconomicCalendarEventDetail({ event, officialConsensus, linkedConsensus, linkedConsensusFailure, now, onRefresh, onReleaseTimeChanged, releaseTimeClient, refreshState, text, blsUnavailableNotice, blsRefreshBlocked, blsRefreshBlockedCode }: {
   event: EconomicCalendarEventView
   /**
    * The official consensus, when the view carries one. The projection does not surface it today —
@@ -114,10 +117,17 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
    * 为什么按不动。一句顶两句会把两个不同的处境说成同一件事。
    */
   blsRefreshBlocked?: string
+  /**
+   * 行内句旁那颗 ⓘ 里的**完整原因码**（2026-11-10）：正文只给读者说法，码默认收起、恰一处。
+   * 由 `blsRefreshBlockedReasonCode` 与行内句走同一道闸门给来，所以不会「句子在、码不在」。
+   */
+  blsRefreshBlockedCode?: string
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
   const formatTime = useShellTimeFormat()
+  // ⓘ 的读屏名与气泡都只收键：句子在这里解析，组件内零文案。
+  const resolveKey = useProductTextKey()
   const valueRows: { id: 'actual' | 'previous'; label: string }[] = [
     { id: 'actual', label: text.details.actual }, { id: 'previous', label: text.details.previous }
   ]
@@ -185,7 +195,22 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
     {/* 置灰也要说原因：句子与键同一行（界面设计 2026-11-09），不是第二个弹窗、也不是另起一段。 */}
     {isBlsRefreshEligible(event, now()) ? <div className="mi-economic-calendar__refresh-row">
       <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} />
-      {blsRefreshBlocked ? <span className="mi-economic-calendar__refresh-blocked" data-bls-refresh-blocked role="note">{blsRefreshBlocked}</span> : null}
+      {blsRefreshBlocked ? <span className="mi-economic-calendar__refresh-blocked" data-bls-refresh-blocked role="note">
+        {blsRefreshBlocked}
+        {blsRefreshBlockedCode
+          ? <Popover
+            content={<code className="mi-economic-calendar__refresh-blocked-code">{blsRefreshBlockedCode}</code>}
+            trigger={(triggerProps) => (
+              <IconButton
+                {...triggerProps}
+                ariaLabelKey="pages.intelligence.portal.calendar.blsRefresh.reasonCodeAria"
+                icon={Info}
+                resolveText={resolveKey}
+                size="sm"
+                variant="plain" />
+            )} />
+          : null}
+      </span> : null}
     </div> : null}
     {isFedFomcRefreshEligible(event, now()) ? <FedFomcRefreshAction disabled={fomcRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={fomcRefreshAction.pending} text={text} /> : null}
     {refreshState?.feedback && isRefreshStateFor(refreshState, event.eventKey, 'bls') ? <p className="mi-economic-calendar__comparison-rule" role="status">{text.blsRefresh[refreshState.feedback]}</p> : null}
@@ -290,7 +315,11 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
                 size="sm"
               />
             </span>
-          : <span className="mi-economic-calendar__release-time-value" data-release-time-fixed="true">{shown}</span>}
+          : <span className="mi-economic-calendar__release-time-value" data-release-time-fixed="true">{shown}
+              {event.releaseTimeSource === 'convention-default'
+                ? <> {helpTrigger({ text: text.details.timeNotPublishedReason })}</>
+                : null}
+            </span>}
       {editing
         ? <span className="mi-economic-calendar__release-time-actions">
             <Button aria-label={text.details.editTime.save} disabled={state === 'saving' || draft === null} onClick={() => void save()} size="small" type="primary">{text.details.editTime.save}</Button>

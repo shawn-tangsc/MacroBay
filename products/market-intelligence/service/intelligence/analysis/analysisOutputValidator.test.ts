@@ -207,7 +207,7 @@ describe('analysisOutputValidator', () => {
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
       ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
-      rule: 'policy-probability-citation', detail: 'policy-probability-not-frozen'
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
     })
   })
 
@@ -225,7 +225,110 @@ describe('analysisOutputValidator', () => {
     fabricated.conclusion.macro = '政策与市场定价：市场定价 70%，截至 2026-10-30 15:00 UTC。'
     expect(validateAnalysisModelOutput(JSON.stringify(fabricated), snapshot)).toEqual({
       ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
-      rule: 'policy-probability-citation', detail: 'policy-probability-not-frozen'
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+  })
+
+  it('traces a negative number with its sign: the return the model wrote is the frozen one', () => {
+    // 真实事故（2026-11-11 12:03 之后全部失败）：正文写「3 天 -2.75%」，快照里是 -2.74955757589076。
+    // 旧读法把负号吃掉、拿 2.75 去和 -2.75 比，于是每次都被判成「快照里没有这个数」。
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(), { ...policyExtraFact('policy-target-range', '4.00%–4.25%'), metric: 'policy-implied-probability' }, {
+      ...policyExtraFact('price-return-3d', -2.74955757589076), domain: 'cross-asset', subject: 'BTC'
+    }]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；BTC 3 天 -2.75%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+
+    // 把负号写丢（2.75%）就不是快照里那个数：这一条必须仍然被拒，否则「改回旧读法」不会红。
+    const dropped = validOutput()
+    dropped.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；BTC 3 天 2.75%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(dropped), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+  })
+
+  it('accepts either integer neighbour of a decimal probability, and still rejects a third one', () => {
+    // 约数口径（Chief 2026-11-11 批）：76.65 写 76（舍）或 77（入）都算「同一个数」；75 不是它。
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(76.65)]
+    for (const written of ['76', '77']) {
+      const output = validOutput()
+      output.conclusion.macro = `政策与市场定价：市场定价 ${written}%，截至 2026-10-30 15:00 UTC。`
+      expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot), written).toMatchObject({ ok: true })
+    }
+    const fabricated = validOutput()
+    fabricated.conclusion.macro = '政策与市场定价：市场定价 75%，截至 2026-10-30 15:00 UTC。'
+    expect(validateAnalysisModelOutput(JSON.stringify(fabricated), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+  })
+
+  it('reads a range separator as a separator, not as a minus sign', () => {
+    // 抓负号时最容易踩的一脚：`3.75%-4.00%` 里的短横是范围连接符，不是负号。
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact(), policyExtraFact('policy-target-range', '3.75%–4.00%')]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；目标区间 3.75%-4.00%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+  })
+
+  it('accepts a number the change digest printed, and still rejects one it never printed', () => {
+    // 2026-11-11 的事故另一半：提示词的变更摘要印着「持仓 24 小时变化：-0.84% → -1.12%」，模型照抄
+    // `-0.84%`，而冻结事实里只有当前值 `-1.12%` —— 被拒的是我们印给它的数。
+    const base = frozenSnapshot()
+    const snapshot = { ...base, facts: [...base.facts, policyProbabilityFact()], changeValues: [-0.84, -1.12] }
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；BTC 持仓 24 小时变化由 -0.84% 到 -1.12%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+
+    // 变更值只进「有没有出处」，**不走概率那条整数约数**：-0.34% 与 -0.84% 相邻但不等，仍是编数。
+    const adjacent = validOutput()
+    adjacent.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；持仓 24 小时变化 -0.34%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(adjacent), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+
+    // 两个集合里都没有的百分数，照样拒。
+    const invented = validOutput()
+    invented.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；ETF 净流出 12.34%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(invented), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+    })
+  })
+
+  it('accepts a plain number printed in a change value, and still refuses sentence numbers', () => {
+    // 值位印的是普通数字（`0.007999` 这种，无百分号）时，正文引用它也算有出处。
+    const base = frozenSnapshot()
+    const snapshot = { ...base, facts: [...base.facts, policyProbabilityFact()], changeValues: [0.007999] }
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；资金费率 0.007999%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+
+    // 摘要里的行文数字（「24 小时」「3 条」）不进集合：正文写「24%」「3%」仍是编数。
+    for (const invented of ['24%', '3%']) {
+      const bad = validOutput()
+      bad.conclusion.macro = `政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；变化 ${invented}。`
+      expect(validateAnalysisModelOutput(JSON.stringify(bad), snapshot), invented).toEqual({
+        ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+        rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
+      })
+    }
+  })
+
+  it('behaves exactly as before when the snapshot carries no change values', () => {
+    // 老快照没有变更记录 ⇒ 没有第二个集合 ⇒ 与今天完全一致：同一个数仍被拒。
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；持仓 24 小时变化 -0.84%。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'policy-probability-citation', detail: 'policy-probability-not-in-snapshot'
     })
   })
 

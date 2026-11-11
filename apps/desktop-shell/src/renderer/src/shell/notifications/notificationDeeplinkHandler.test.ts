@@ -41,6 +41,43 @@ describe('notification deeplink handler', () => {
 
     expect(calls).toEqual(['center:false'])
   })
+
+  it('hands a product settings-drawer destination to the drawer opener, with no panel fallback', () => {
+    const calls: string[] = []
+    const opened: Array<Record<string, string>> = []
+    const handler = createNotificationDeeplinkHandler({
+      productMenuEntries: [{ productId: 'market-intelligence', routePath: '/market-intelligence/intelligence' }],
+      navigate: (key) => calls.push(`navigate:${key}`),
+      setSettingsPanelKey: (key) => calls.push(`panel:${key}`),
+      setNotificationCenterOpen: (open) => calls.push(`center:${open}`),
+      openProductSettingsDrawer: (entry) => opened.push(entry as unknown as Record<string, string>)
+    })
+
+    handler({ scope: 'product', settingsDrawer: { productId: 'market-intelligence', menuId: 'sources' } })
+
+    // 只关抽屉 + 交给产品页；设置面板那一套（panel / navigate）一次都不碰。
+    expect(calls).toEqual(['center:false'])
+    expect(opened).toEqual([
+      { productId: 'market-intelligence', menuId: 'sources', routePath: '/market-intelligence/intelligence' }
+    ])
+  })
+
+  it('does not navigate at all when the named panel is not in this build', () => {
+    // 「给了目标但不认识」（产品卸载 / 注册被撤）不是「没给目标」：后者才允许回落默认面板。
+    const calls: string[] = []
+    const handler = createNotificationDeeplinkHandler({
+      productMenuEntries: [],
+      navigate: (key) => calls.push(`navigate:${key}`),
+      setSettingsPanelKey: (key) => calls.push(`panel:${key}`),
+      setNotificationCenterOpen: (open) => calls.push(`center:${open}`),
+      isSettingsPanelAvailable: () => false
+    })
+
+    handler({ scope: 'product', settingsSectionId: 'retired-panel' })
+
+    // 只有「关抽屉」这一下；没有 panel、没有 navigate——落地到哪儿由「目标不存在」决定，不是猜。
+    expect(calls).toEqual(['center:false'])
+  })
 })
 
 /**
@@ -59,8 +96,10 @@ describe('the deeplink handler is assembled with a navigation that actually open
     expect(shell).not.toContain('navigate: setActiveNavKey')
   })
 
-  it('resolves the settings panel through the availability check', () => {
-    // 产品卸载或版本差异会让面板键不存在：直接 set 就是把读者送进空屏。
-    expect(wiring).toContain('ports.setSettingsPanelKey(resolveAvailableSettingsPanelKey(key, ports.productSettingsEntries))')
+  it('never falls back to another panel when the named one is gone', () => {
+    // 产品卸载或版本差异会让面板键不存在：回落到默认面板就是「点了落到别页」。
+    // 判据在 handler 的 `isSettingsPanelAvailable`；装配里不许再出现会回落的解析。
+    expect(wiring).toContain('isSettingsPanelAvailable:')
+    expect(wiring).not.toContain('resolveAvailableSettingsPanelKey')
   })
 })

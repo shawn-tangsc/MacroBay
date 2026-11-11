@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.4.2`. This page describes what is usable today and what is intentionally not
+MacroBay is at `0.4.3`. This page describes what is usable today and what is intentionally not
 supported yet.
 
 ## Usable from source
@@ -21,11 +21,12 @@ supported yet.
 
 ### Channel integrations
 
-Platform code for Telegram, Slack, Lark, Discord, QQ, and WeChat is present, and the channel settings
-page is reachable from the desktop shell: channels can be created, and credentials can be stored for
-the adapters that have a runtime implementation. No adapter is enabled in this release, and the app
-offers no way to enable one, so a channel created here sends and receives nothing. Treat channels as
-unavailable until an adapter is deliberately enabled.
+All five adapters — Telegram, Slack, Discord, QQ and Lark — can be created and enabled, but **only one
+channel is active at a time**: enabling a new one turns the previous one off, and a message still in
+flight on the old channel leaves a "not delivered: the channel just changed" record instead of
+disappearing. What works is **one-to-one chat messages**; in-group @mentions and channel posts are
+only partly verified. **WeChat cannot be connected in this version** — do not read it as
+"supported later".
 
 ### Official BLS calendar
 
@@ -48,7 +49,8 @@ not accepted yet; Linux packaging is not configured. There is no auto-update cha
 
 ## Platform support
 
-- **macOS**: developed and verified.
+- **macOS**: arm64 is developed and verified; the x64 installer ships with each release but has not
+  been verified on Intel hardware.
 - **Windows / Linux**: the Electron code is expected to run, but end-to-end behavior has not been
   validated. Treat these platforms as experimental and report concrete failures.
 
@@ -93,7 +95,7 @@ hiding it.
 
 ## API and configuration stability
 
-The `0.4.2` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.4.3` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 

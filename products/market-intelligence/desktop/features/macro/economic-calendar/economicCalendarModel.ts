@@ -28,8 +28,17 @@ export type EconomicCalendarDayView = {
 export type EconomicCalendarProjection = {
   month: string
   asOf: string
+  /** 主列表：不含标题型空壳。 */
   events: EconomicCalendarEventView[]
   days: EconomicCalendarDayView[]
+  /**
+   * 标题型空壳：给「官方日程」视图与页头「受影响 N 条」用（`MI-1-R39` §4）。
+   *
+   * 判据只有一处：`isTitleOnlyCalendarEvent`。**主列表暂时仍在画它们**——见该函数的注释：
+   * 按 §4 的字面判据，没有时刻的 FOMC 会议（官方只给日期）也会被算成空壳，而那是不该藏的。
+   * 剔除要等「哪些事件算发布型」这一条定下来，别在这里先斩。
+   */
+  shells: EconomicCalendarEventView[]
 }
 
 export const economicCalendarPresentationPolicy = {
@@ -98,21 +107,84 @@ export function selectEconomicCalendarMonth(candidate: string | undefined, selec
   return candidate && monthBounds(candidate) ? candidate : selectedMonth
 }
 
+/**
+ * **会发布数值的事件族**（`MI-1-R39` §4 第 1 条）：只有这些族适用空壳规则。
+ *
+ * 为什么必须有它：FOMC 壳与 BLS 壳在「日期 / 时刻 / 数值」三个字段上长得一模一样——官方只给会议
+ * 日期、不给时刻、当然也没有数值。靠字段分不开，只能靠族。数据一处，别处不许再散列名字。
+ *
+ * 取值与官方源注册表里的 `eventFamilies` 同源（非 `fomc` 那几族：CPI / 就业 / PCE / GDP）。
+ */
+export const valuePublishingCalendarEventFamilies: readonly string[] = Object.freeze([
+  'cpi', 'core-cpi', 'consumer-price-index', 'employment-situation', 'pce', 'core-pce', 'gdp'
+])
+
+/**
+ * 标题型空壳（`MI-1-R39` §4，架构师四条件**同时**成立）：
+ *
+ * 1. `eventFamily` 在 `valuePublishingCalendarEventFamilies` 里（FOMC 这类日期型事件**永不**判空壳，
+ *    与源健不健康无关）；
+ * 2. `scheduledDate` **严格早于**读者显示时区的今天——否则未来的 CPI 会被当成「空壳」藏掉，
+ *    而它只是还没到日子（待公布）；
+ * 3. 没有官方时刻：`scheduledAt` 缺失，或来源只有 `convention-default` / `date-only`；
+ * 4. 实际 / 预期 / 前值全空；
+ * 5. `date-only` 是这一行**正常形状**（BLS 年会日程，`bls-python-schedule`）或**读者自带**
+ *    （`manual-ics-import`）的行，永不判空壳。判据只看**行内**字段（caveats），不读尝试记录、
+ *    不读源健康。
+ *
+ *    第 5 条的功能理由很硬：这两条 caveat 恰好是「刷新 BLS 数据」的准入判据
+ *    （`EconomicCalendarEventDetail.tsx` 的刷新键判定），判空壳等于把读者在该行上**唯一的刷新入口
+ *    一起藏掉**。手动 ICS 今天产生不出「无时刻」的行（解析器拒 `VALUE=DATE`、要求美东本地时刻），
+ *    这条对它是**防御性**的：旧库已存在、将来放宽导入形状、或伪造行。
+ *
+ * 五条一条都不许省：少 1 → 藏掉 FOMC；少 2 → 藏掉未来的发布；少 3 或 4 → 把正常事件算成空壳。
+ * 也**不许**按源健康状态判，不许「没有数值就一刀切」。
+ *
+ * 唯一一份判据：主列表剔除、官方日程视图、页头「受影响 N 条」三处都读这一个函数。
+ */
+export function isTitleOnlyCalendarEvent(event: Readonly<{
+  eventFamily?: string | undefined
+  scheduledDate?: string | undefined
+  scheduledAt?: string | undefined
+  releaseTimeSource?: EconomicCalendarEventView['releaseTimeSource'] | undefined
+  actual?: unknown
+  previous?: unknown
+  consensus?: unknown
+  caveats?: readonly string[] | undefined
+}>, today: string): boolean {
+  if (event.eventFamily === undefined || !valuePublishingCalendarEventFamilies.includes(event.eventFamily)) return false
+  if (event.scheduledDate === undefined || event.scheduledDate >= today) return false
+  const hasOfficialTime = event.scheduledAt !== undefined
+    && event.releaseTimeSource !== 'convention-default' && event.releaseTimeSource !== 'date-only'
+  if (hasOfficialTime) return false
+  // 第 5 条：手动导入与 python 那条腿的行是读者可见的真实日程，永不判空壳。
+  const caveats = event.caveats ?? []
+  if (caveats.includes('manual-ics-import') || caveats.includes('bls-python-schedule')) return false
+  // 数值字段在这个视图里是解析后的值对象，不是字符串：判「有没有」只看空不空。
+  return event.actual === undefined && event.previous === undefined
+    && (event.consensus === undefined || event.consensus === null)
+}
+
 export function createEconomicCalendarProjection(input: {
   month: string
   asOf: string
   events: readonly EconomicCalendarPublicEvent[]
+  /** 读者显示时区的今天（`YYYY-MM-DD`）；不传＝不判空壳（保守：宁可不剔，也不误藏）。 */
+  today?: string
 }): EconomicCalendarProjection {
   const bounds = monthBounds(input.month)
-  if (!bounds) return { month: input.month, asOf: input.asOf, events: [], days: [] }
-  const events = input.events
+  if (!bounds) return { month: input.month, asOf: input.asOf, events: [], days: [], shells: [] }
+  const views = input.events
     .filter((event) => event.detectedAt <= input.asOf && event.scheduledDate >= bounds.start && event.scheduledDate < bounds.end)
     .map(toEventView)
     .filter((event): event is EconomicCalendarEventView => Boolean(event))
     .sort(compareEvents)
+  const today = input.today
+  const shells = today === undefined ? [] : views.filter((event) => isTitleOnlyCalendarEvent(event, today))
+  const events = today === undefined ? views : views.filter((event) => !isTitleOnlyCalendarEvent(event, today))
   const byDate = new Map<string, EconomicCalendarEventView[]>()
   for (const event of events) byDate.set(event.scheduledDate, [...(byDate.get(event.scheduledDate) ?? []), event])
-  return { month: input.month, asOf: input.asOf, events, days: monthGrid(bounds.start, input.month, byDate) }
+  return { month: input.month, asOf: input.asOf, events, days: monthGrid(bounds.start, input.month, byDate), shells }
 }
 
 /**

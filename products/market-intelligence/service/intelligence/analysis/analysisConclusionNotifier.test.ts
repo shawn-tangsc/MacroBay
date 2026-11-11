@@ -38,7 +38,7 @@ describe('the analysis conclusion submit', () => {
     await send(notice())
     expect(submit).toHaveBeenCalledTimes(1)
     const request = submit.mock.calls[0]![0] as NotificationSubmitRequest
-    expect(request.dedupeVars).toEqual({ builder: 'template', vars: { bucket: 'signal:mi-eg-1', cutoff: '2026-11-08T03:00:00.000Z' } })
+    expect(request.dedupeVars).toEqual({ builder: 'template', vars: { triggerKey: 'signal.open-interest.oi-liquidation-proxy', cutoff: '2026-11-08T03:00:00.000Z' } })
     expect(JSON.stringify(request.dedupeVars)).not.toContain('mi-ar-1')
     expect(request.eventTypeId).toBe('market-intelligence.analysis.conclusion')
   })

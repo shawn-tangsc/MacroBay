@@ -45,7 +45,7 @@ describe('the macro-market transport', () => {
 })
 
 describe('the macro-market runtime', () => {
-  it('registers the job, schedules the five-minute clock and runs it from a startup tick', async () => {
+  it('registers both jobs, asks for a startup tick from each, and leaves the arming to the source switch', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'macro-runtime-')); directories.push(directory)
     const runtime = jobRuntime()
     const atMs = Date.UTC(2026, 9, 14, 6, 0)
@@ -57,8 +57,9 @@ describe('the macro-market runtime', () => {
     })
 
     expect(runtime.handlers.has(MACRO_MARKET_COLLECT_JOB_ID)).toBe(true)
-    // Two jobs and two clocks now: the basket on its own profile, the real index beside it.
-    expect(runtime.schedules).toHaveLength(2)
+    // 装配只登记 handler、只排一次「启动立即跑」；**排期跟着源的开关走**，由
+    // `intelligenceSourcesService` 那一处决定（用户 2026-11-11：没启用的源不注册 job）。
+    expect(runtime.schedules).toHaveLength(0)
     expect(macroMarketJobDefinitions()[0]).toMatchObject({ trigger: { kind: 'interval', intervalMs: 5 * 60_000 } })
     expect(runtime.enqueued).toHaveLength(2)
 

@@ -25,6 +25,15 @@ export function tierOf(strength: number): NewsSentimentTier {
 /** 读者可配的推送门槛：与三档同一套顺序，低 < 中 < 高（词在文案表里，三处逐词相同）。 */
 export type NewsSentimentTierThreshold = NewsSentimentTier
 
+/**
+ * 推送门槛的默认档：**唯一一份**，与 `DEFAULT_CALENDAR_REMINDER_SETTINGS` 同一种做法。
+ *
+ * 住 `contracts/` 而不是服务层，理由与上面的档位映射相同：设置页的注册表要引用它，
+ * 而渲染层进不了 `service/`（`newsPushThresholdStore.ts` 带 `node:fs`）。写第二份字面量
+ * 正是 G6 要挡的「默认值副本」。
+ */
+export const DEFAULT_NEWS_PUSH_THRESHOLD: NewsSentimentTierThreshold = 'medium'
+
 const TIER_ORDER: Readonly<Record<NewsSentimentTier, number>> = Object.freeze({
   low: 0,
   medium: 1,

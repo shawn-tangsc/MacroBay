@@ -59,6 +59,12 @@ export function useCalendarReminderSettings(
   const update = useCallback((patch: Parameters<CalendarReminderSettingsState['update']>[0]) => {
     const field = Object.keys(patch)[0]
     setSaving(true)
+    // 先显示读者刚改的值；失败不回退（G8），本行给「这次没存上」。
+    // 国家不在这里乐观更新：那一行自己持有草稿，hook 把未确认的 codes 写进 value 会把草稿的
+    // 「服务端已确认」基准污染掉，下一次别的字段存成功就会把草稿当成过期值清空。
+    if (patch.landedCountries === undefined) {
+      setValue((current) => (current === undefined ? current : { ...current, ...patch }))
+    }
     // 只清**这一处自己**的旧失败提示。别处保存不该把「国家没存上」擦掉——那处的读者草稿还没存上，
     // 提示消失等于告诉读者「已经好了」。
     setSaveFailedField((current) => (current === field ? undefined : current))

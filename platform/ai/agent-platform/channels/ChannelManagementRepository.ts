@@ -8,6 +8,13 @@ import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolated
 import { channelAdapterDescriptor } from './channelAdapterDescriptors'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
 import {
+  isPayloadKeyRefForChannel,
+  isProviderRefForChannel,
+  isValidPendingCredentialOperation,
+  parseCredentialCleanupRefs,
+  parsePayloadKeyRefs
+} from './channelCredentialJournalRefs'
+import {
   activateOwnedChannelRuntime,
   explainEnableBlock
 } from './channelRuntimeActivation'
@@ -73,6 +80,29 @@ export class ChannelManagementRepository {
 
   agentExists(agentId: string): boolean {
     return Boolean(this.database.connection.prepare('select 1 from agent_entities where id = ?').get(agentId))
+  }
+
+  /**
+   * 这条通道最近一次**真实投递**（任意来源）的结局。
+   *
+   * 为什么要有它：读者看到的横幅说「通道未就绪」，而库里明明有成功的投递尝试——界面缺一个
+   * 他自己能核对的事实。会话标签从入站候选里按 `conversation_key_hash` 对出来，不往审计里复制姓名。
+   */
+  lastDelivery(channelId: string): { status: 'delivered' | 'failed' | 'unknown-after-send'; at: string; conversationLabel: string | null } | null {
+    const row = this.database.connection.prepare(
+      `select a.status as status, coalesce(a.completed_at, a.created_at) as at, c.display_label as label
+       from channel_delivery_attempts a
+       left join channel_conversations v on v.id = a.conversation_id
+       left join channel_inbound_candidates c
+         on c.channel_id = a.channel_id and c.conversation_key_hash = v.conversation_key_hash
+       where a.channel_id = ?
+       order by coalesce(a.completed_at, a.created_at) desc, a.id desc
+       limit 1`
+    ).get(channelId) as { status: string; at: string; label: string | null } | undefined
+    if (!row) return null
+    // 只认三种终态；别的值（queued 等）说明还没走完，按「没到手」处理更安全。
+    if (row.status !== 'delivered' && row.status !== 'failed' && row.status !== 'unknown-after-send') return null
+    return { status: row.status, at: row.at, conversationLabel: row.label }
   }
 
   create(input: ManagedChannelCreateInput): boolean {
@@ -811,6 +841,51 @@ export class ChannelManagementRepository {
     })
   }
 
+  /**
+   * 释放一条频道的运行时占用并作废代际（停用/被挤出/启动失败都用它）。
+   *
+   * 占用行（`channel_telegram_lifecycle_operations`）是「谁正在操作这条频道」的锁：只在操作期间有效。
+   * 以前只在成功路径上删，于是被单频道不变量挤出的频道留着一条 `purpose=enable` 的行，
+   * 下一次启用被自己那条旧锁挡住——现场表现是所有频道都报 `adapter-runtime-start-failed`。
+   */
+  releaseLifecycleOwnerAndFence(channelId: string, now: string): void {
+    this.database.transact(() => {
+      this.invalidateLifecycleOwner(channelId)
+      this.fence(channelId, now)
+    })
+  }
+
+  /** 现在是谁占着这条频道（诊断用）：没有占用行返回 `null`。 */
+  describeLifecycleOwner(channelId: string): { purpose: string; since: string } | null {
+    const row = this.database.connection.prepare(
+      `select purpose, updated_at from channel_telegram_lifecycle_operations where channel_id = ? limit 1`
+    ).get(channelId) as { purpose: string; updated_at: string } | undefined
+    return row ? { purpose: row.purpose, since: row.updated_at } : null
+  }
+
+  /**
+   * 启动期围栏：把运行代际作废，**但保留读者的开启意图**（`requested_enabled` 不动，状态回 `ready`）。
+   *
+   * 为什么不能清意图：已实现、只是还没有验收证据的适配器，靠「启用时现场自检通过」放行；
+   * 证据决定的是平台对外声明，不是这位读者能不能用。启动时拿 `canEnable`（= 有证据）把这类频道
+   * 判成「不许跑」还可以，但顺手把 `requested_enabled` 抹掉就等于替他取消启用——
+   * 下次启动连恢复候选都没有，简报只会发到恰好还在启用的那一条（用户今天报的现场）。
+   */
+  fenceRuntimeGenerationKeepingIntent(channelId: string, now: string): boolean {
+    return this.database.transact(() => {
+      const changed = this.database.connection.prepare(
+        `update agent_channels
+           set lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'ready' end,
+               updated_at = ?
+         where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state <> 'deleting' and requested_enabled = 1`
+      ).run(now, channelId).changes
+      // 占用行必须一起删：它只在「这条频道正在被谁操作」期间有效，围栏之后它只会挡住下一次启用。
+      this.invalidateLifecycleOwner(channelId)
+      this.fence(channelId, now)
+      return changed === 1
+    })
+  }
+
   private invalidateLifecycleOwner(channelId: string): void {
     this.database.connection.prepare(
       `update channel_management_operations set state = case when state = 'external-inflight' then 'revoked-inflight' else 'revoked-cleanup' end,
@@ -1120,76 +1195,3 @@ export class ChannelManagementRepository {
 
 }
 
-function parsePayloadKeyRefs(value: string, channelId: string): string[] | null {
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (!Array.isArray(parsed)) return null
-    const refs = parsed.filter((ref) => isPayloadKeyRefForChannel(ref, channelId))
-    return refs.length === parsed.length ? [...new Set(refs)] : null
-  } catch {
-    return null
-  }
-}
-
-function parseCredentialCleanupRefs(value: string, channelId: string): CredentialCleanupRef[] | null {
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (!Array.isArray(parsed)) return null
-    const refs = parsed.filter((ref) => isValidCredentialCleanupRef(ref, channelId))
-    return refs.length === parsed.length ? refs : null
-  } catch {
-    return null
-  }
-}
-
-function isValidCredentialCleanupRef(value: unknown, channelId: string): value is CredentialCleanupRef {
-  if (!value || typeof value !== 'object') return false
-  const ref = value as CredentialCleanupRef
-  if (ref.purpose === 'rotate') return isProviderRefForChannel(ref.ref, channelId) &&
-    typeof ref.expectedRevision === 'number' && Number.isSafeInteger(ref.expectedRevision) && ref.expectedRevision > 0
-  return ref.purpose === 'provision' && isBase64Url(ref.fingerprint, 512) &&
-    isOpaqueJournalValue(ref.keyId, 256) && isBase64Url(ref.permit, 512) &&
-    typeof ref.fingerprint === 'string' && ref.ref === providerRef(channelId, ref.fingerprint) &&
-    (ref.expectedRevision === null ||
-      (typeof ref.expectedRevision === 'number' && Number.isSafeInteger(ref.expectedRevision) && ref.expectedRevision > 0))
-}
-
-function isPayloadKeyRefForChannel(value: unknown, channelId: string): value is string {
-  const prefix = `channel-payload-key:${channelId}:`
-  return typeof value === 'string' && value.startsWith(prefix) && /^[0-9a-f-]{36}$/i.test(value.slice(prefix.length))
-}
-
-function isValidPendingCredentialOperation(value: {
-  purpose: 'provision' | 'rotate'; credential_ref: string | null; source_fingerprint: string | null; fingerprint_key_id: string | null; operation_permit: string | null; expected_revision: number | null
-}, channelId: string): boolean {
-  if (value.purpose === 'rotate') return typeof value.credential_ref === 'string' && isProviderRefForChannel(value.credential_ref, channelId) &&
-    typeof value.expected_revision === 'number' && Number.isSafeInteger(value.expected_revision) && value.expected_revision > 0
-  return isBase64Url(value.source_fingerprint, 512) && isOpaqueJournalValue(value.fingerprint_key_id, 256) &&
-    isBase64Url(value.operation_permit, 512) && typeof value.source_fingerprint === 'string' && value.credential_ref === providerRef(channelId, value.source_fingerprint)
-}
-
-
-
-
-
-function isOpaqueJournalValue(value: unknown, max: number): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= max && !/[\u0000-\u001f\s]/.test(value)
-}
-
-function isBase64Url(value: unknown, max: number): value is string {
-  return isOpaqueJournalValue(value, max) && /^[A-Za-z0-9_-]+$/.test(value)
-}
-
-function providerRef(channelId: string, fingerprint: string): string {
-  return `channel-migration:${channelId}:${fingerprint}`
-}
-
-function archiveRef(channelId: string, fingerprint: string): string {
-  return `channel-migration-archive:${channelId}:${fingerprint}`
-}
-
-function isProviderRefForChannel(value: string, channelId: string): boolean {
-  const prefix = `channel-migration:${channelId}:`
-  const fingerprint = value.startsWith(prefix) ? value.slice(prefix.length) : ''
-  return isBase64Url(fingerprint, 512)
-}

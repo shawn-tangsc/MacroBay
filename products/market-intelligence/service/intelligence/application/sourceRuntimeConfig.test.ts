@@ -15,22 +15,22 @@ describe('sourceRuntimeConfig', () => {
     const definition = requireDefinition('coindesk-rss')
     const config = resolveRuntimeConfig({ definition })
 
-    expect(config.enabled).toBe(false)
+    // 免钥匙的源首次运行即启用（用户 2026-11-11 定的默认）：没 profile 行时按注册表的
+    // authMode 判，这里 coindesk-rss 不需要钥匙，所以默认就是开的。
+    expect(config.enabled).toBe(true)
     expect(config.collectionPreset).toBe('balanced')
     expect(config.scopePolicy).toBe('watchlist-priority')
     expect(config.retentionMode).toBe('balanced')
     expect(config.rawArchiveEnabled).toBe(true)
-    expect(config.includeInSentiment).toBe(true)
     expect(config.pollingIntervalSec).toBe(15 * 60)
   })
 
-  it('applies profile overrides for enabled, preset, sentiment, scope, and retention', () => {
+  it('applies profile overrides for enabled, preset, scope, and retention', () => {
     const definition = requireDefinition('sec-rss')
     const profile = {
       ...createDefaultSourceProfile(definition),
       enabled: true,
       collectionPreset: 'frequent' as const,
-      includeInSentiment: false,
       scopePolicy: 'watchlist-priority' as const,
       retentionMode: 'extended' as const,
       rawArchiveEnabled: false
@@ -40,7 +40,6 @@ describe('sourceRuntimeConfig', () => {
 
     expect(config.enabled).toBe(true)
     expect(config.collectionPreset).toBe('frequent')
-    expect(config.includeInSentiment).toBe(false)
     expect(config.scopePolicy).toBe('watchlist-priority')
     expect(config.retentionMode).toBe('extended')
     expect(config.rawArchiveEnabled).toBe(false)
@@ -83,31 +82,16 @@ describe('sourceRuntimeConfig', () => {
     expect(credentialIncomplete.pollingIntervalSec).toBeUndefined()
   })
 
-  it('forces includeInSentiment false when definition does not support sentiment', () => {
-    const definition = requireDefinition('github-releases')
-    const config = resolveRuntimeConfig({
-      definition,
-      profile: {
-        ...createDefaultSourceProfile(definition),
-        includeInSentiment: true
-      }
-    })
-
-    expect(config.includeInSentiment).toBe(false)
-    expect(config.sentimentEligible).toBe(false)
-  })
-
   it('does not interpret generic raw archive, retention, or replay profile values for the special stablecoin collector', () => {
     const definition = requireDefinition('defillama-stablecoins')
     const config = resolveRuntimeConfig({
       definition,
       profile: {
         ...createDefaultSourceProfile(definition), enabled: true, rawArchiveEnabled: true,
-        retentionMode: 'extended', autoReplayAfterParserUpgrade: true, includeInSentiment: true
+        retentionMode: 'extended', autoReplayAfterParserUpgrade: true
       }
     })
 
-    expect(config.includeInSentiment).toBe(false)
     expect(config.rawArchiveEnabled).toBe(false)
     expect(config.autoReplayAfterParserUpgrade).toBe(false)
   })
@@ -151,6 +135,43 @@ describe('sourceRuntimeConfig', () => {
     expect(config.pollingIntervalSec).toBeUndefined()
   })
 
+  it('never schedules a source the generic runtime does not collect, whatever its readiness', () => {
+    // `twelve-data-market` 从 planned 改成 live 之后暴露的真问题：collection: 'none' 的语义是
+    // 「不是通用适配器采」，与 readiness 无关；它由产品侧供数，通用运行时不该排期。
+    const definition = requireDefinition('twelve-data-market')
+    expect(definition.readiness).toBe('live')
+    const config = resolveRuntimeConfig({
+      definition,
+      profile: { ...createDefaultSourceProfile(definition), enabled: true, credentialRef: 'cred-twelve' },
+      hasCredential: true
+    })
+    expect(config.enabled).toBe(false)
+  })
+
+  it('defaults keyless live sources with a reader-visible output to enabled, and leaves three other groups off', () => {
+    // 免钥匙 + live + 有产出（看板 / 简报 / 舆情 / 仅分析）→ 默认开。
+    expect(createDefaultSourceProfile(requireDefinition('coindesk-rss')).enabled).toBe(true)
+    // 只供 AI 分析用、没有任何看板模块读它 → 也默认开（读者 2026-11-12：「还没用上的」不包括它们）。
+    expect(createDefaultSourceProfile(requireDefinition('defillama-tvl')).enabled).toBe(true)
+    expect(createDefaultSourceProfile(requireDefinition('binance-spot-market')).enabled).toBe(true)
+    // 维护备用（`maintenanceOnly`，今天没有任何读者可见产出）→ 默认关。读者点名的那几条：
+    // 系统与状态那组、以太坊基金会、CFTC，另外还有美联储新闻稿、Binance API updates。
+    for (const sourceId of ['coinbase-status', 'kraken-status', 'solana-status', 'github-releases',
+      'ethereum-foundation-blog', 'cftc-rss', 'federal-reserve-rss', 'binance-api-updates']) {
+      const definition = requireDefinition(sourceId)
+      // 免钥匙（`none` 或 `optional-api-key`）且已就绪，只因「今天没有读者可见产出」而默认关。
+      expect(definition.readiness, sourceId).toBe('live')
+      expect(createDefaultSourceProfile(definition).enabled, sourceId).toBe(false)
+    }
+    // 需要钥匙 → 默认关。
+    expect(createDefaultSourceProfile(requireDefinition('twelve-data-market')).enabled).toBe(false)
+    // 免钥匙但还没接进来（readiness 不是 live）→ 默认关。
+    const planned = requireDefinition('treasury-fiscal-data')
+    expect(planned.authMode).toBe('none')
+    expect(planned.readiness).toBe('planned')
+    expect(createDefaultSourceProfile(planned).enabled).toBe(false)
+  })
+
   it('blocks enabling planned sources at validation time', () => {
     const definition = requireDefinition('bea-economic-series')
     const { config, issues } = resolveAndValidateRuntimeConfig({
@@ -161,6 +182,7 @@ describe('sourceRuntimeConfig', () => {
       }
     })
 
+    // 计划中/夹具就绪的源仍被校验挡下：默认值不改变「没准备好就不采」这条。
     expect(config.enabled).toBe(false)
     expect(issues.some((issue) => issue.code === 'source-not-ready')).toBe(true)
   })
@@ -175,6 +197,7 @@ describe('sourceRuntimeConfig', () => {
       }
     })
 
+    // 计划中/夹具就绪的源仍被校验挡下：默认值不改变「没准备好就不采」这条。
     expect(config.enabled).toBe(false)
     expect(issues.some((issue) => issue.code === 'source-not-ready')).toBe(true)
     expect(issues.some((issue) => issue.code === 'missing-credential')).toBe(false)

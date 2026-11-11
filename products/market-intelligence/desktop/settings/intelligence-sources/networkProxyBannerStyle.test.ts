@@ -14,6 +14,8 @@ import { describe, expect, it } from 'vitest'
  */
 const root = process.cwd()
 const component = readFileSync(resolve(root, 'products/market-intelligence/desktop/shared/NetworkProxyBanner.tsx'), 'utf8')
+/** 代理横幅与私有源说明共用的那一件：antd `Alert` 只在它里面出现一次。 */
+const noticeBanner = readFileSync(resolve(root, 'products/market-intelligence/desktop/shared/NoticeBanner.tsx'), 'utf8')
 const css = readFileSync(
   resolve(root, 'products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css'),
   'utf8'
@@ -28,8 +30,13 @@ function rule(selector: string): string {
 
 describe('proxy requirement bar', () => {
   it('renders the platform Alert with the proxy action', () => {
-    expect(component).toContain('<Alert')
-    expect(component).toContain('type="warning"')
+    // 代理横幅不再自己画 Alert：改用共享 `NoticeBanner`（私有源说明同一件），
+    // 所以「antd warning Alert」这条判据看那一件，`<Alert` 只允许出现一处。
+    expect(component).toContain('<NoticeBanner')
+    expect(component).not.toContain('<Alert')
+    expect(noticeBanner).toContain('<Alert')
+    expect(noticeBanner).toContain('type="warning"')
+    expect(noticeBanner).toContain('showIcon')
     // 句面只来自文案表：失败档在「已配好代理」时换另一句，但仍是表里的键，不是硬编码。
     expect(component).toContain('text.body')
     expect(component).toContain('text.configuredFailedBody')

@@ -1,3 +1,4 @@
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import type { JobRuntime } from '@platform/jobs'
 
 import { DEFAULT_PERIOD_ID, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
@@ -43,7 +44,7 @@ export function registerDailyBriefingJob(
      * 带 `language`：一期配什么语言，就写什么语言的版次（用户 2026-11-06 报的 20:00 英文期跑出中文）。
      * 旧数据没有这个字段时回落到界面语言，行为与此前一致。
      */
-    getPeriods: () => Promise<readonly (DailyBriefingPeriod & Readonly<{ language?: DailyBriefingLocale }>)[]>
+    getPeriods: () => Promise<readonly BriefingPeriod[]>
     /** 期自己的时区读不出来、这一期因此不排期时调用；只在真的暂停了时才调。 */
     onPaused?: (paused: readonly string[]) => void
     /** 平台的落盘日志；装配缺时区钩子时留一条指名道姓的错误。 */
@@ -54,10 +55,10 @@ export function registerDailyBriefingJob(
     const periodId = periodIdOf(payload)
     const period = (await deps.getPeriods()).find((candidate) => candidate.id === periodId)
     if (!period) return
-    if (generationTimeZoneIssue(period.generationTimeZone)) return
     // 这一期自己的语言优先：定时触发的是"20:00 那一期（英文）"，不是"界面现在是什么语言"。
-    const locale = period.language ?? await deps.getLocale()
-    const timeZone = period.generationTimeZone ?? deps.timeZone()
+    const locale = period.language
+    // 期只写时刻、不写钟：这次按读者当前显示时区解释，与排期用的是同一个钟。
+    const timeZone = deps.timeZone()
     const result = await deps.service.getToday({
       locale,
       timeZone,

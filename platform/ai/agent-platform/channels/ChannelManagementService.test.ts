@@ -16,7 +16,7 @@ describe('ChannelManagementService', () => {
     const { service, database } = harness()
     const created = service.create({ type: 'feishu', name: 'Lark', agentId: 'agent-a', actorId: 'user-a' })
     expect(created).toMatchObject({ ok: true, channel: { type: 'feishu', requestedEnabled: false, state: 'credential-missing' } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select adapter_key,public_config_json,requested_enabled,lifecycle_state from agent_channels where id=?').get(created.channel!.id)).toEqual({
       adapter_key: 'lark', public_config_json: '{"domain":"lark"}', requested_enabled: 0, lifecycle_state: 'credential-missing'
     })
@@ -64,7 +64,7 @@ describe('ChannelManagementService', () => {
     expect(created).toMatchObject({ ok: true, code: 'configuration-ready', channel: {
       type: 'slack', requestedEnabled: false, state: 'credential-missing', credential: { hasCredential: false }
     } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select adapter_key,requested_enabled,lifecycle_state from agent_channels where id=?').get(created.channel!.id)).toEqual({
       adapter_key: 'slack', requested_enabled: 0, lifecycle_state: 'credential-missing'
     })
@@ -81,7 +81,7 @@ describe('ChannelManagementService', () => {
     const created = service.create({ name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' })
 
     expect(created).toMatchObject({ ok: true, code: 'configuration-ready', channel: { requestedEnabled: false, state: 'credential-missing' } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(service.restart({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
     expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get(created.channel!.id)).toEqual({
       requested_enabled: 0,
@@ -113,6 +113,36 @@ describe('ChannelManagementService', () => {
     await expect(Promise.resolve(service.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({ ok: false, code: 'adapter-runtime-start-failed' })
     expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get(id)).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(database.connection.prepare('select lifecycle_state from channel_runtime_generations where channel_id=?').get(id)).toEqual({ lifecycle_state: 'inactive' })
+  })
+
+  it('records the runtime failure reason as the code and keeps its close code in the audit', async () => {
+    // 服务与适配器无关：这里验证的是「运行时给原因 → 结果码 → 审计」这条链。
+    // 以前 Discord 的 4014 只会落成 `adapter-runtime-start-failed` + 空 summary，日志里查不出原因。
+    const { database, repository, vault, cipher } = harness()
+    const id = repository.query.list()[0]?.id ?? 'channel-discord-failure'
+    if (!repository.query.get(id)) expect(repository.create({ id, name: 'Discord', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
+    database.connection.prepare("update agent_channels set credential_ref='channel-migration:channel-discord-failure:ref',credential_revision=1,credential_health='configured',lifecycle_state='ready' where id=?").run(id)
+    const service = new ChannelManagementService({
+      repository, vault, cipher, registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]), handoff: new ChannelSecureHandoff(),
+      runtime: {
+        start: async () => ({ ok: false, reason: 'discord-intents-disallowed', closeCode: 4_014 }),
+        stop: () => {}
+      },
+      now: () => new Date('2026-07-19T00:00:00.000Z')
+    })
+
+    await expect(Promise.resolve(service.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
+      ok: false,
+      code: 'discord-intents-disallowed',
+      reason: 'discord-intents-disallowed'
+    })
+    const audit = database.connection.prepare(
+      'select action,code,summary_json from channel_management_audits where channel_id=? order by created_at desc, id desc limit 1'
+    ).get(id) as { action: string; code: string; summary_json: string }
+    expect(audit.action).toBe('request-enable')
+    // 审计码就是细码：查日志的人不必再猜那个总桶背后是什么。
+    expect(audit.code).toBe('discord-intents-disallowed')
+    expect(JSON.parse(audit.summary_json)).toEqual({ runtimeReason: 'discord-intents-disallowed', closeCode: '4014' })
   })
 
   it('fences all runtime-ready Telegram channels during bounded application shutdown', () => {
@@ -1388,66 +1418,54 @@ describe('channel test message through the management service', () => {
   })
 })
 
-describe('channel settings overrides (workspace / allowed chats / permission mode)', () => {
+describe('channel settings: the allow list is the only per-channel override', () => {
   function created() {
     const h = harness()
     const channel = h.service.create({
       type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a',
-      workspace: { type: 'user', workspaceId: 'workspace-1' },
-      allowedChatIds: ['111', '222'],
-      permissionMode: 'plan'
+      allowedChatIds: ['111', '222']
     }).channel!
     return { ...h, channel }
   }
 
-  it('stores the three fields on the channel row and reads them back', () => {
+  it('stores the allow list and leaves the two inherited columns empty', () => {
     const { service, database, channel } = created()
-    expect(channel.workspace).toEqual({ type: 'user', workspaceId: 'workspace-1' })
     expect(channel.allowedChatIds).toEqual(['111', '222'])
-    expect(channel.permissionMode).toBe('plan')
+    // 权限与工作目录是智能体级的事实：频道这一行不给第二个答案，读出来就是「继承 / 系统目录」。
+    expect(channel.workspace).toEqual({ type: 'system' })
+    expect(channel.permissionMode).toBeNull()
 
     const row = database.connection.prepare('select workspace_json, active_chat_ids_json, permission_mode from agent_channels where id = ?').get(channel.id)
-    expect(row).toEqual({
-      workspace_json: '{"type":"user","workspaceId":"workspace-1"}',
-      active_chat_ids_json: '["111","222"]',
-      permission_mode: 'plan'
-    })
-    expect(service.get(channel.id)?.permissionMode).toBe('plan')
+    expect(row).toEqual({ workspace_json: null, active_chat_ids_json: '["111","222"]', permission_mode: null })
+    expect(service.get(channel.id)?.permissionMode).toBeNull()
   })
 
-  it('defaults to the system workspace, allow-all chats and an inherited permission mode', () => {
+  it('ignores a workspace or permission mode an old client still sends', () => {
     const { service, database } = harness()
-    const channel = service.create({ type: 'telegram', name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!
+    // 老界面（或别的入口）还可能带着这两个字段来；它们不再有写入权。
+    const legacy = { workspace: { type: 'user', workspaceId: 'workspace-1' }, permissionMode: 'plan' as const }
+    const channel = service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', ...legacy }).channel!
+    expect(database.connection.prepare('select workspace_json, permission_mode from agent_channels where id = ?').get(channel.id))
+      .toEqual({ workspace_json: null, permission_mode: null })
     expect(channel.workspace).toEqual({ type: 'system' })
-    expect(channel.allowedChatIds).toEqual([])
     expect(channel.permissionMode).toBeNull()
-    // 「继承」必须落 null：落成助手级默认值 'default' 就和「显式选了 default」分不开了。
-    expect(database.connection.prepare('select permission_mode from agent_channels where id = ?').get(channel.id)).toEqual({ permission_mode: null })
   })
 
-  it('changes only the fields that were passed, and an empty list clears the allowlist', () => {
+  it('keeps the stored values of those columns when an old row is edited', () => {
     const { service, database, channel } = created()
-    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', permissionMode: null })
-    const inherited = service.get(channel.id)!
-    expect(inherited.permissionMode).toBeNull()
-    expect(inherited.workspace).toEqual({ type: 'user', workspaceId: 'workspace-1' })
-    expect(inherited.allowedChatIds).toEqual(['111', '222'])
+    database.connection.prepare("update agent_channels set workspace_json='{\"type\":\"user\",\"workspaceId\":\"legacy\"}', permission_mode='plan' where id=?").run(channel.id)
 
-    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: [] })
+    service.update({ id: channel.id, name: 'Telegram 2', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: [] })
+    // 「列保留、停止写入」：老值原样留着，不被清掉，也不被这次编辑改写。
+    expect(database.connection.prepare('select name, workspace_json, permission_mode from agent_channels where id = ?').get(channel.id))
+      .toEqual({ name: 'Telegram 2', workspace_json: '{"type":"user","workspaceId":"legacy"}', permission_mode: 'plan' })
     expect(service.get(channel.id)?.allowedChatIds).toEqual([])
     expect(database.connection.prepare('select active_chat_ids_json from agent_channels where id = ?').get(channel.id)).toEqual({ active_chat_ids_json: null })
-
-    service.update({ id: channel.id, name: 'Telegram', agentId: 'agent-a', actorId: 'user-a', workspace: { type: 'system' } })
-    const reset = service.get(channel.id)!
-    expect(reset.workspace).toEqual({ type: 'system' })
-    expect(reset.allowedChatIds).toEqual([])
   })
 
-  it('rejects a malformed workspace, an oversized allowlist entry and an unknown permission mode', () => {
+  it('rejects an oversized allowlist entry', () => {
     const { service } = harness()
-    expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', workspace: { type: 'user' } })).toThrow('channel-input-invalid')
     expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', allowedChatIds: ['x'.repeat(65)] })).toThrow('channel-input-invalid')
-    expect(() => service.create({ type: 'telegram', name: 'T', agentId: 'agent-a', actorId: 'user-a', permissionMode: 'yolo' })).toThrow('channel-input-invalid')
   })
 })
 
@@ -1551,7 +1569,7 @@ describe('Slack enable chain (evidence -> canEnable -> in-app enable)', () => {
 
     await expect(Promise.resolve(guarded.requestEnable({ id, actorId: 'user-a' }))).resolves.toMatchObject({
       ok: false,
-      code: 'adapter-not-supported'
+      code: 'channel-adapter-unverified'
     })
     expect(started).toEqual([])
     expect(service.catalog().find((entry) => entry.type === 'slack')).toMatchObject({ status: 'blocked' })
@@ -1624,22 +1642,35 @@ describe('in-app smoke on enable (unsupported adapter)', () => {
     ).all(id)).toEqual([{ code: 'telegram-conflict' }])
   })
 
-  it('never leaves the failure reason empty: throws, timeouts and blank codes are normalised', async () => {
-    const cases: Array<[() => Promise<{ ok: true } | { ok: false; code: string }>, string]> = [
-      [async () => { throw new Error('AbortError: timeout') }, 'telegram-network-unavailable'],
-      [async () => ({ ok: false, code: '' }), 'telegram-network-unavailable'],
-      [async () => ({ ok: false, code: 'something-new' }), 'telegram-network-unavailable']
+  it('never leaves the failure reason empty, and names the adapter that actually failed', async () => {
+    const cases: Array<[() => Promise<{ ok: true } | { ok: false; code: string }>, string, 'slack' | 'telegram']> = [
+      [async () => { throw new Error('AbortError: timeout') }, 'telegram-network-unavailable', 'telegram'],
+      [async () => ({ ok: false, code: '' }), 'telegram-network-unavailable', 'telegram'],
+      // 同一个未知码按适配器归各自的「网络不可用」：把 Slack 说成「适配器未支持」，
+      // 用户就会去查一个根本不存在的开关；只有真没实现自检的那几家才该说未支持。
+      [async () => ({ ok: false, code: 'something-new' }), 'slack-network-unavailable', 'slack']
     ]
-    for (const [smoke, expected] of cases) {
+    for (const [smoke, expected, type] of cases) {
       const { database, service } = harnessWithSmoke(smoke as never)
-      // 用 telegram：未知/异常码归一成「网络不可用」，非 telegram 会归成「适配器未支持」——那是另一条语义。
-      const id = configuredSlack(database, service, 'telegram')
+      const id = configuredSlack(database, service, type)
       const result = await service.requestEnable({ id, actorId: 'user-a' })
       expect(result).toMatchObject({ ok: false, code: 'channel-smoke-failed', reason: expected })
       // 审计行必须能看出「因为什么没开」：与返回的 reason 同一个码。
       expect(database.connection.prepare(
         "select code from channel_management_audits where channel_id = ? and action = 'request-enable'"
       ).all(id)).toEqual([{ code: expected }])
+    }
+  })
+
+  it('keeps "stored but unreadable" apart from "nothing stored"', async () => {
+    for (const code of ['channel-credential-unavailable', 'channel-credential-missing']) {
+      const { database, service } = harnessWithSmoke(async () => ({ ok: false, code }))
+      const id = configuredSlack(database, service, 'slack')
+      await expect(service.requestEnable({ id, actorId: 'user-a' })).resolves.toMatchObject({
+        ok: false,
+        code: 'channel-smoke-failed',
+        reason: code
+      })
     }
   })
 

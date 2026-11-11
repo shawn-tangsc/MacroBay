@@ -362,10 +362,16 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
  * there leaves the next attempt guessing — the loop that produced three identical failures in one
  * evening (MI-2-R16).
  */
+/** The edition language, named the way a person says it — the tag alone reads like our internal id. */
+const LANGUAGE_NAMES: Readonly<Record<string, string>> = Object.freeze({
+  'zh-CN': 'Simplified Chinese', 'en-US': 'English'
+})
+
 export function repairPromptFor(
   failureCode: string,
   failureDetail: string | undefined,
-  failures?: readonly Readonly<{ code: string; detail?: string }>[]
+  failures?: readonly Readonly<{ code: string; detail?: string }>[],
+  locale?: string
 ): string {
   // Every independent defect in one message. Given one, a repair round fixes that one and the next
   // round finds the next — which is how three writes each cleared a different field and the edition
@@ -377,7 +383,12 @@ export function repairPromptFor(
   if (failureCode === 'invalid-output-language') {
     // 写成**要求**，不是句式规则（用户 2026-11-08）：每一段读者能看到的文字都用本期语言；
     // 逐字引用的新闻标题、专有名词、机构名、URL 与数字保留原文，不要翻译；拿不准就保留原文。
-    return `Your previous JSON contains text that is not written in this edition's language${failureDetail ? ` (first at ${failureDetail})` : ''}. Rewrite the full JSON so that every piece of text the reader can see is written in this edition's language. Verbatim quotations — news headlines, proper names, institution names, URLs and numbers — stay exactly as they are and are not translation targets. When you are unsure whether a word should be translated, keep it as it is.`
+    //
+    // **本期语言要说出来，不能只说「本期语言」**（`MI-2-R85` 口径：修复提示带命中路径与本期语言）：
+    // 刚刚用错语言的模型，正是最可能把「本期语言」理解成「我刚写的那种」的那一个。
+    const named = locale === undefined ? undefined : LANGUAGE_NAMES[locale] ?? locale
+    const language = named === undefined ? 'this edition\'s language' : `${named} (LOCALE: ${locale})`
+    return `Your previous JSON contains text that is not written in ${language}${failureDetail ? ` (first at ${failureDetail})` : ''}. Rewrite the full JSON so that every piece of text the reader can see is written in ${language}. Verbatim quotations — news headlines, proper names, institution names, URLs and numbers — stay exactly as they are and are not translation targets. When you are unsure whether a word should be translated, keep it as it is.`
   }
   return `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`
 }

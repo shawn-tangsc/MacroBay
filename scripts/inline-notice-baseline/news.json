@@ -1,0 +1,13 @@
+{
+  "owner": "news",
+  "entries": {
+    "products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentSettingsModal.tsx": {
+      "count": 1,
+      "owner": "配置/舆情线",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "永不清零",
+      "kind": "by-design",
+      "why": "字段/弹框/行级提示，跟着那个控件或那一行走，换成横幅会错位"
+    }
+  }
+}

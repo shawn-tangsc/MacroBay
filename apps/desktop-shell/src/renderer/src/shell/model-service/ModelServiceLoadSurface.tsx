@@ -52,7 +52,7 @@ export function ModelServiceLoadSurface(props: {
         <p className="model-service-stale" role="status">
           <span>{t.models.providersStaleNotice}</span>
           {/* 句内动作 → antd 文本档 `Button` + `.text-action`。 */}
-          <Button type="text" size="small" className="text-action" onClick={props.onRetry}>
+          <Button className="text-action" onClick={props.onRetry}>
             {resolveStateViewText(props.language, STATE_VIEW_ACTION_KEYS.refresh)}
           </Button>
         </p>

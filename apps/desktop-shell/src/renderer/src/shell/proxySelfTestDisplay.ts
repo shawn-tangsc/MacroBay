@@ -52,18 +52,17 @@ export type ProxySelfTestContext = {
   fallbackProxyLabel: string
 }
 
-/** 用当前供应商的 origin 作为中性目标；没有可用供应商时回退 siliconflow。 */
-export function buildProxyProbeUrl(baseUrl: string | null | undefined): string {
-  const fallback = 'https://api.siliconflow.cn/'
-  if (!baseUrl) return fallback
-  try {
-    const parsed = new URL(baseUrl.trim())
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return `${parsed.origin}/`
-  } catch {
-    return fallback
-  }
-  return fallback
-}
+/**
+ * 代理自检的目标：**固定是 Google 的那个 204 端点**。
+ *
+ * 以前拿「当前供应商的 origin」当目标，于是 SiliconFlow 的根路径返回 404 → 判成失败，
+ * 读者看到「供应商返回 HTTP 404」以为代理坏了，其实代理是通的
+ * （用户 2026-11-11：「访问一下 google 就说明代理有没有用了」）。
+ *
+ * 这个地址只回答一个问题——**请求能不能穿过代理出去**——所以它必须与选的是哪个供应商无关；
+ * `generate_204` 无正文、正常就是 204，主进程按 2xx 判成功已经够。
+ */
+export const PROXY_SELF_TEST_PROBE_URL = 'https://www.google.com/generate_204'
 
 /**
  * 一次同时给出文案、语气与可选第二行。渲染层只照着 `tone` 上样式，不再自己判断成败。
@@ -196,8 +195,17 @@ export function formatProxySelfTestLine(
   return describeProxySelfTest(result, labels, context).line
 }
 
+/**
+ * 失败句：**只描述网络与目标站，不出现「供应商」**。
+ *
+ * 那些句子原本是给「模型供应商连接检查」写的（`connectionCheckReason*`），拿过来用会说错对象：
+ * 这次探的是 Google。所以只借中性的那几句（代理 / 超时 / DNS / TLS / 拒绝 / 未知），
+ * 带状态的统一说「目标站返回 HTTP N」。
+ */
 function proxyFailureSentence(result: ProxySelfTestResult, labels: PlatformText): string {
   const sentences = labels.models
+  // 「目标站返回 HTTP N」这一句住在 proxy 自检自己那组文案里（`preferences`），不属于模型供应商那组。
+  const proxy = labels.preferences
   switch (result.reasonCode) {
     case 'proxy_error':
       return sentences.connectionCheckReasonProxy
@@ -212,14 +220,10 @@ function proxyFailureSentence(result: ProxySelfTestResult, labels: PlatformText)
     case 'network_refused':
     case 'connection_refused':
       return sentences.connectionCheckReasonRefused
-    case 'rate_limited':
-      return sentences.connectionCheckReasonRateLimited
-    case 'invalid_response':
-      return sentences.connectionCheckReasonInvalidResponse
     default:
       return result.status === null
         ? sentences.connectionCheckReasonUnknown
-        : sentences.connectionCheckReasonHttp(result.status)
+        : proxy.proxySelfTestTargetReturnedBad(result.status)
   }
 }
 

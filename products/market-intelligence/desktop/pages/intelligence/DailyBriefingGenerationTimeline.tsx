@@ -57,6 +57,11 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
     stages: generationStageIds.map((id) => ({ id, state: 'pending' as const }))
   }
   const rendered = trace ?? emptyTrace
+  const store = rendered.stages.find((entry) => entry.id === 'store')
+  const writing = rendered.stages.find((entry) => entry.id === 'writing')
+  // 数据版：AI 那一步没写出正文，但这一版照常落库了（模型不可用、或读者关掉了 AI 编辑）。
+  // 判据是记录里的两行状态——写作没成功、落库成功；不是"记录器先打点再写库"那种实现顺序。
+  const dataEdition = store?.state === 'success' && writing?.state !== 'success'
   const summaryLine = waiting
     ? labels.waitingSummary
     : running
@@ -95,15 +100,20 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime, runni
         const state = stage?.state ?? 'pending'
         const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
         const failure = failed?.id === id ? stage : undefined
+        // 数据版存的是「有数据、没有 AI 正文」的那一版：落库这一步按它真正存下的东西叫名字，
+        // 否则「落库/发布 成功」会被读成「日报发出去了」。
+        const stageName = id === 'store' && dataEdition ? labels.dataEditionStore : labels.stages[id]
+        const helpText = id === 'store' && dataEdition ? labels.dataEditionStoreHelp : labels.stageHelp?.[id]
+        const helpKey = id === 'store' && dataEdition ? DATA_EDITION_HELP_KEY : STAGE_HELP_KEYS[id]
         return {
           id,
           // A stage that ran more than once says so: the row keeps the last segment's time, so without
           // the count a run that checked four times reads exactly like a run that checked once.
-          name: stage && (stage.runs ?? 1) > 1 ? `${labels.stages[id]} ×${stage.runs}` : labels.stages[id],
+          name: stage && (stage.runs ?? 1) > 1 ? `${stageName} ×${stage.runs}` : stageName,
           state: rowStateFor(stage, skipReason),
           detail: stage ? stageResult(stage, id, skipReason, text, formatTime, running) : running ? text.generationTrace.states.notStarted : labels.notRecorded,
-          ...(labels.stageHelp?.[id]?.trim()
-            ? { help: { labelKey: STAGE_HELP_KEYS[id], triggerLabelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel', triggerLabelParams: { stage: labels.stages[id] }, dataAttributes: { 'data-stage-help': id } } }
+          ...(helpText?.trim()
+            ? { help: { labelKey: helpKey, triggerLabelKey: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel', triggerLabelParams: { stage: stageName }, dataAttributes: { 'data-stage-help': id } } }
             : {}),
           attributes: { 'data-stage-skip': skipReason ?? 'none' },
           ...(failure?.failureCode
@@ -138,6 +148,9 @@ function rowStateFor(stage: GenerationTraceStage | undefined, skipReason: SkipRe
  * One literal key per stage: the guard only validates literals it can see, so the keys live here
  * rather than being built by string interpolation at the call site.
  */
+/** 「数据版」的定义只在落库这一行说一次。 */
+const DATA_EDITION_HELP_KEY = 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.dataEditionStoreHelp'
+
 const STAGE_HELP_KEYS: Record<GenerationStageId, string> = {
   source: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.source',
   candidates: 'pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelp.candidates',

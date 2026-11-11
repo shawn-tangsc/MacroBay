@@ -13,5 +13,9 @@ export async function setSourceEnabled(source: ToggleableSource, enabled: boolea
     if (!result.ok) throw new Error(result.failureCode ?? 'calendar-toggle-failed')
     return
   }
-  await intelligenceSourcesClient.setEnabled(source.sourceId, enabled)
+  const result = await intelligenceSourcesClient.setEnabled(source.sourceId, enabled)
+  if (result.state === 'rejected') {
+    // 拒绝是服务端的结果：把原因码带出来（界面据此说清「先配钥匙」），而不是吞成成功。
+    throw Object.assign(new Error(result.reasonCode), { reasonCode: result.reasonCode })
+  }
 }

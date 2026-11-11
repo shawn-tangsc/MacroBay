@@ -20,6 +20,25 @@ const VIEW = Object.freeze({ width: 1000, height: 186, left: 32, right: 992, mar
 /** 标记牌：13 高、贴图上方那条带里，下缘正好是 `markerRow`——竖线从牌子底下开始，不穿牌。 */
 const MARKER_CHIP = Object.freeze({ height: 13, baseline: 12, radius: 4, gap: 6 })
 
+/**
+ * 没有可画的读数时的图框：保留两条车道标签与两条基准线（上车道底线、费率零线）。
+ *
+ * 高度与真图同一个 `VIEW`——空态与有数据态用同一张图的尺寸，读者不会觉得换了一张卡；
+ * 不画刻度：刻度必须是真实时刻，骨架不编数据。状态句由调用点放在这张图上方的那一行。
+ */
+export function PositioningChartSkeleton({ text }: Readonly<{ text: PositioningPanelText }>): React.ReactElement {
+  return (
+    <div className="mi-positioning-panel__chart" data-chart-skeleton="true">
+      <svg viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} aria-hidden="true" focusable="false">
+        <text x="0" y={VIEW.upperTop - 8} className="mi-positioning-panel__lane">{text.notional}</text>
+        <text x="0" y={VIEW.upperBottom + 18} className="mi-positioning-panel__lane">{text.rateLabel}</text>
+        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.upperBottom + 6} y2={VIEW.upperBottom + 6} className="mi-positioning-panel__rule" />
+        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.zero} y2={VIEW.zero} className="mi-positioning-panel__zero" />
+      </svg>
+    </div>
+  )
+}
+
 export function PositioningChart({ positioning, funding, text }: Readonly<{
   positioning: Extract<DashboardPositioningViewState, { state: 'available' }>
   funding: DashboardFundingRateHistoryState

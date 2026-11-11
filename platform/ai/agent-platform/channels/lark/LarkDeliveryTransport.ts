@@ -1,6 +1,7 @@
 import type { ChannelDeliveryTransport, ChannelDeliveryTransportResult } from '../ChannelDeliveryContracts'
 import { LarkApiClient } from './LarkApiClient'
 import { decodeLarkConversation, splitLarkText } from './LarkContracts'
+import { toLarkPlainText } from './larkPlainText'
 
 export class LarkDeliveryTransport implements ChannelDeliveryTransport {
   private readonly clients = new Map<string, LarkApiClient>()
@@ -18,7 +19,8 @@ export class LarkDeliveryTransport implements ChannelDeliveryTransport {
     const conversation = decodeLarkConversation(input.providerConversationKey)
     if (!client || !lifetime || lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
     if (!conversation) return { kind: 'failed', code: 'delivery-provider-rejected' }
-    for (const segment of splitLarkText(input.text)) {
+    // 飞书文本消息不渲染 markdown：先转纯文本，再按长度切段（转换只此一处）。
+    for (const segment of splitLarkText(toLarkPlainText(input.text))) {
       if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
       const result = await client.sendText(conversation, segment, lifetime.signal)
       if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }

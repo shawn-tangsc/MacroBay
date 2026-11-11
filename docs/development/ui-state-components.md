@@ -40,7 +40,7 @@ instead of falling back to a generic sentence.
 | `reasonCode` | a closed set, one per state | `empty` / `error` / `disabled` / `permission` | A **code**, never a sentence. The key is `ui.state.<state>.reason.<code>`. A code that belongs to another state does not compile. |
 | `action` | `{ labelKey, onSelect }` | optional for every state; whether a state has one is a scenario decision, not a type rule. `empty` except `not-yet`; `error`; `disabled` / `target-disabled`; `permission`; never for `not-yet`, `capability-not-wired` | At most one action. The label is a key, not text. Where the reader has nothing to do, passing one does not compile. |
 | `details` | `{ summaryKey, bodyKey }` | `error` only | Troubleshooting detail, folded by default. |
-| `size` | `'sm' \| 'md' \| 'lg'` | optional, default `md` | `lg` = full page (220), `md` = inside a card (80). `sm` is reserved and must not be used yet. |
+| `size` | `'sm' \| 'md' \| 'lg'` | optional, default `md` | `lg` = full page (220), `md` = inside a card (80), `sm` = inline (a row or a list body; **no fixed height, grows with its content**). `sm` is for inline use only — never for a full page (`lg`) or an in-card block (`md`). |
 | `children` | `ReactNode` | `normal` only | The region's own content. |
 | `className` | `string` | optional | Positioning only; never restyle the internals. |
 
@@ -88,6 +88,7 @@ needs one gets the code and the key in the same change, never the key on its own
 | `error` | `needs-restart` | required: restart the app — `restart-app` | A local interface is missing; only a restart loads it. |
 | `error` | `page-load-failed` | required: reload the page — `reload-page` | The page itself did not load. Reloading the page is the fix — not `retry` (a failed operation) and not `restart-app` (a different cost). |
 | `error` | `notification-unknown` | required: retry — `retry` | The notification list could not be read and the cause is not known: "can't read" is not "there is none". Never `empty` (that says there is nothing) and never `permission` (an unreadable permission is not a denied one). |
+| `error` | `render-failed` | required: retry first, reload if it keeps happening — `retry` / `reload-page` | It threw while drawing this block: not "could not read" (`unreadable`) and not "the page did not load" (`page-load-failed`). `retry` first, `reload-page` when it keeps happening. Its title says so instead of "Could not read". |
 | `disabled` | `capability-not-wired` | forbidden | The platform side is not connected; nothing is wrong on the reader's side. |
 | `disabled` | `target-disabled` | required: enable — `enable` | The target was switched off. |
 | `disabled` | `precondition-unsaved` | required: save — `save` | The form has unsaved changes; saving unlocks it. |
@@ -99,10 +100,11 @@ needs one gets the code and the key in the same change, never the key on its own
 | --- | --- | --- |
 | `lg` | Full page | `220` |
 | `md` (default) | Inside a card, drawer body | `80` |
-| `sm` | List row / table body | not open in this batch |
+| `sm` | List row / table body (inline) | none — content-driven |
 
-The two numbers live in one table in the component and are written to `style.minHeight`; do not pass
-a pixel value from a call site, and do not write a second `min-height` in page CSS.
+`lg` / `md` numbers live in one table in the component and are written to `style.minHeight`; `sm` has
+no fixed height at all (it grows with its content). Do not pass a pixel value from a call site, and do
+not write a second `min-height` in page CSS.
 
 ## Copy
 

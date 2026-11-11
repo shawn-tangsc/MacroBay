@@ -66,7 +66,10 @@ export function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMe
     const cell = <td key={window} data-asset-return={`${id}:${window}`}
       data-direction={metric?.state === 'available' ? Math.sign(metric.value) : 0}
       data-unavailable={percent === undefined ? 'true' : undefined}
-      aria-label={percent === undefined ? text.noData : undefined}>{percent ?? text.windowNoData}</td>
+      // 不可用的原因也带上：`missing` = 库里凑不出这一窗口的收盘对（真的没有）；
+      // 「这一次还没落库」已经不会走到这里了——它由服务端回退到上一根完整的桶（Chief 2026-11-11）。
+      data-window-reason={metric?.state === 'unavailable' ? metric.reason : undefined}
+      aria-label={percent === undefined ? text.windowNoPair : undefined}>{percent ?? text.windowNoData}</td>
     // 不是真控件就不迁：单元格套 `tabIndex` + 浮层是假控件，说明改挂在可访问名上。
     return cell
   })}</>

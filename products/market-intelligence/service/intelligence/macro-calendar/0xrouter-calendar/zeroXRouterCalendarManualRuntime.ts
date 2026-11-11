@@ -12,6 +12,7 @@ import type { MacroCalendarSqlite } from '../macroCalendarSqlite'
 import { createMarketCalendarPublicQueryService } from './marketCalendarPublicQueryService'
 import { createMarketCalendarRefreshAttemptStore, latestAttemptFor, readWorstEnabledCollection } from './marketCalendarRefreshAttemptStore'
 import { notifyMacroEventLandings, selectLandedReleases, type LandedReleaseFilter, type MacroEventLandedSubmit } from '../../signals/macroEventLandedNotifier'
+import { notifyCalendarRefreshFailed, readerCalendarDay, MARKET_CALENDAR_REFRESH_SOURCE_LABEL } from './marketCalendarRefreshNotifier'
 import { marketCalendarPublicPolicy, type MarketCalendarFreshness, type MarketCalendarRefreshNowResult,
   type MarketCalendarRefreshResult, type MarketCalendarSource, type MarketCalendarRefreshAttempt, type MarketCalendarScope,
   isMarketCalendarScope } from '../../../../contracts/macro/marketCalendarQueryContracts'
@@ -39,6 +40,13 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
    * itself instead of letting the machine's load decide whether the case passes.
    */
   monotonicNow?: () => number
+  /**
+   * 通知端口（2026-11-11 用户「失败了，要通知」）：刷新失败时发一条。不传＝不发（测试与未装配通知
+   * 运行时的宿主）；自动与手动都走这里，读者看到的是「这次没刷新成功」同一件事。
+   */
+  notificationSubmit?: (request: import('@platform/notifications/contracts/notificationSubmitContracts').NotificationSubmitRequest) => Promise<import('@platform/notifications/contracts/notificationSubmitContracts').NotificationSubmitOutcome>
+  /** 读者设置时区：去重键里的 `{date}` 按它算（读者看得见的日期跟他的日历走）。 */
+  readerTimeZone?: () => string
 }) {
   let repository!: ReturnType<typeof createMarketCalendarEventRepository>
   const collection = createZeroXRouterCalendarCollectionService({ ...deps,
@@ -77,6 +85,36 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
         : { descriptorId: item.descriptorId, locale: item.locale, month: item.month, attemptedAt, state: 'failed', trigger,
           ...(item.failureCode ? { failureCode: item.failureCode } : {}) })
     }
+    const day = readerCalendarDay(attemptedAt, deps.readerTimeZone?.() ?? 'UTC')
+    if (result.items.some(item => item.state === 'succeeded')) markSuccess(day)
+    notifyFailures(result, attemptedAt, day)
+  }
+  /**
+   * 刷新失败的通知：**一个来源一条**，去重代次按「这条源在这个读者日里成功过几次」算——
+   * 连续失败落在同一代（合并不刷屏），失败 → 成功 → 又失败是新一代（能再报一次）。
+   * 只活在本进程内：重启后代次归零，最坏情况是同一天的第二条被并进第一条，不会多报。
+   */
+  const refreshGenerations = new Map<string, { day: string; generation: number }>()
+  function notifyFailures(result: RefreshResult, attemptedAt: string, day: string): void {
+    const submit = deps.notificationSubmit
+    const failed = result.items.filter(item => item.state !== 'succeeded')
+    if (submit === undefined || failed.length === 0) return
+    const current = refreshGenerations.get(MARKET_CALENDAR_REFRESH_SOURCE_LABEL)
+    const generation = current?.day === day ? current.generation : 0
+    // 一次批次里同一来源只报一条：三个 feed 同时失败是同一个状况。
+    const worst = failed.find(item => item.failureCode !== undefined) ?? failed[0]
+    void notifyCalendarRefreshFailed(submit, {
+      providerId: MARKET_CALENDAR_REFRESH_SOURCE_LABEL,
+      ...(worst?.failureCode === undefined ? {} : { failureCode: worst.failureCode }),
+      date: day,
+      generation
+    }, attemptedAt)
+  }
+  /** 一次成功就是这个状况的结束：下一代从这里开始计数。 */
+  function markSuccess(day: string): void {
+    const current = refreshGenerations.get(MARKET_CALENDAR_REFRESH_SOURCE_LABEL)
+    refreshGenerations.set(MARKET_CALENDAR_REFRESH_SOURCE_LABEL,
+      current?.day === day ? { day, generation: current.generation + 1 } : { day, generation: 1 })
   }
   // The automatic path stays separate from the manual one on purpose: it must not write a
   // manual refresh-attempt outcome, and it derives the months it covers itself (design

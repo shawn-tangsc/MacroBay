@@ -1,0 +1,559 @@
+/* 配置抽屉（静态版式）：所有数值取自档位与主档，不从别处搬数。 */
+.config-drawer {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  /* 抽屉高度就是可视区：三栏各自滚动，整块不滚。 */
+  height: 100%;
+  min-height: 0;
+}
+
+.config-drawer__nav {
+  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  /* 顶部与内容区同一条 16：左列第一项与右侧第一个区块顶沿对齐（原来 8 会高 8px）。 */
+  padding: 16px 6px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.config-drawer__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.config-drawer__nav-item[aria-current='true'] {
+  background: var(--surface);
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.config-drawer__nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.config-drawer__nav-index {
+  width: 16px;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  text-align: center;
+}
+
+.config-drawer__pane {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  /*padding: 16px;*/
+  /* 其余屏只有一列内容：整块自己滚。 */
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/*
+ * 单列屏铺满可视区（用户 2026-11-11：「内容是圆角的，各自把当前的内容放到内容区域」）。
+ *
+ * 不加这一条时 `align-content: start` 让那一行按**内容高度**走，卡上的
+ * `height: calc(100% - 32px)` 就在对着一个不定高的盒子算——短内容时卡撑不满可视区，
+ * 需要自己滚的屏（运行日志、通知）也量不到可用高度。分栏屏那条 `.config-drawer__pane--split`
+ * 已经自己写了 `align-content: stretch` 与两行，所以这里只对单列生效。
+ */
+.config-drawer__pane:not(.config-drawer__pane--split) {
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* 单列屏的根节点跟着卡体走：宽度吃满、允许收缩，屏内自己滚时才量得到高度。 */
+.config-drawer__card-body:not(.config-drawer__card-body--split) > * {
+  width: 100%;
+  min-height: 0;
+}
+
+/* 「左树 + 右详情」那一屏：标题固定，两栏各自滚。 */
+.config-drawer__pane--split {
+  align-content: stretch;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.config-drawer__pane--split .config-drawer__split {
+  height: 100%;
+  min-height: 0;
+}
+
+.config-drawer__split > .intelligence-catalog-pane,
+.config-drawer__split > .settings-detail-pane {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.config-drawer__group {
+  display: grid;
+  gap: 0;
+}
+
+.config-drawer__group-title {
+  margin-bottom: 8px;
+  color: var(--muted-strong);
+  /* 区块名：13 / 1.4 / 650。抽屉里只有三级：16 页名 → 13 区块名 → 12 行标签。 */
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+
+/* 局部读不到：一行状态词 + 一次「重新读取」；读不到不是脏，跟保存无关。 */
+.config-drawer__platform-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+}
+
+/* 值位里带 ⓘ：状态词与图标同一行，间距 4（图标自带 22，不另写字号/尺寸）。 */
+.config-drawer__value--with-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 设置行的形状：左标签、右值/控件、行尾动作；行与行只用发丝线分隔，不画卡片。 */
+.config-drawer__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.config-drawer__row:last-child {
+  border-bottom: 0;
+}
+
+.config-drawer__label {
+  flex: 0 0 160px;
+  color: var(--text);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  font-weight: 400;
+}
+
+.config-drawer__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* 值与控件**左缘对齐标签列的右边界**（不右对齐）：右对齐会让每行控件位置各不相同，
+     整页看着就散——这条以 `@platform/ui/components/settings-row` 的既有决定为准。 */
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 行尾动作：文字按钮，不用 antd 的 link 边距，保持与值对齐。 */
+.config-drawer__row-action {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  cursor: pointer;
+}
+
+.config-drawer__row-action:hover {
+  text-decoration: underline;
+}
+
+.config-drawer__row-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.config-drawer__switch {
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.config-drawer__select,
+.config-drawer__number {
+  flex: none;
+  width: 120px;
+  height: 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.config-drawer__select--multi {
+  width: 160px;
+}
+
+/* 源列表：一份**面板**，不是文字墙。一行一个源，左名字右状态，行间一条分隔。 */
+.config-drawer__source-list {
+  display: grid;
+  align-content: start;
+  /* 规格：列表栏宽 196、1px 边框、圆角 8，与详情区间距 12。 */
+  width: 196px;
+  max-width: 100%;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* 供应商分组标题：三十多个源平铺就是一堵名字墙，按供应商断开才读得下去。 */
+.config-drawer__source-group {
+  padding: 12px 12px 4px;
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  font-weight: 600;
+}
+
+/* 详情区里那一句状态：与药丸同一个词，只是换行显示。 */
+.config-drawer__source-detail-status {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
+.config-drawer__source-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  /* 规格：每行高 44、左右内距 12（主档）。 */
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.config-drawer__source-item:last-child { border-bottom: 0; }
+
+.config-drawer__source-item:hover { background: var(--surface-soft); }
+
+.config-drawer__source-item[aria-current='true'] {
+  background: var(--surface-soft);
+  font-weight: 500;
+}
+
+.config-drawer__source-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.config-drawer__source-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态词在右：小一号、次要色，不抢名字。 */
+.config-drawer__source-status {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
+/* 选中：整行 `--surface-soft` + 左侧 2px `--accent`。 */
+.config-drawer__source-item[aria-current='true'] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* 禁用：不假装可点，但仍要读得清。 */
+.config-drawer__source-item:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.config-drawer__source-item:disabled:hover { background: none; }
+
+/* 来源与采集：两栏（来源树 + 详情），间距 12。
+   用户 2026-11-10：抽屉加宽是为了让**来源树这一栏**更宽——196 会把长名字截成「美国商品期货交易委…」。
+   所以这一栏给到 300–340（用户 2026-11-10 二次拍：400 太宽），其余宽度全给详情；**只改抽屉这条**，设置页那套（`.intelligence-overview-grid`
+   的 260–340）是另一个面，不动。 */
+.config-drawer__split {
+  display: grid;
+  /* 固定 280：用户按截图量过——顶部五个筛合约 240 + 内距 24 ≈ 264，最长名字约 270，280 两样都放得下。
+     不用 minmax(280,340)：那会在名字长时继续长，用户要的是「正好放下 tab」。 */
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.config-drawer__detail {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+/* 两栏里列表自己不再需要宽度与下边距（外层已定）。 */
+.config-drawer__split .config-drawer__source-list {
+  width: auto;
+  margin-bottom: 0;
+}
+
+/* 详情区（规格 §2）：分组标题上 16 下 8；行 44/60、左右 12；标签列 160；控件与值间距 8；块间 16。 */
+.config-drawer__detail .config-drawer__group-title {
+  margin: 16px 0 8px;
+  font-size: var(--font-section);
+  font-weight: 600;
+  line-height: var(--line-section);
+  color: var(--muted-strong);
+}
+
+.config-drawer__detail .config-drawer__group { gap: 16px; }
+
+.config-drawer__detail .config-drawer__row {
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+/* 两行内容的行：60（44 + 一行正文行高）。 */
+.config-drawer__detail .config-drawer__row--two-line { min-height: 60px; }
+
+.config-drawer__detail .config-drawer__label {
+  flex: 0 0 160px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.config-drawer__detail .config-drawer__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 8px;
+}
+
+/* 行尾健康点四档（规格）：none 不画、ring 空心环、warn 实心黄、bad 实心红。 */
+.config-drawer__source-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.config-drawer__source-dot--ring {
+  border: 1.5px solid var(--muted);
+  background: transparent;
+}
+
+.config-drawer__source-dot--warn { background: var(--caution); }
+
+.config-drawer__source-dot--bad { background: var(--danger); }
+
+/* 来源屏静态元素：首字母圆标、详情区头部与底部动作。 */
+.config-drawer__source-badge {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted-strong);
+  font-size: var(--font-meta);
+}
+
+.config-drawer__detail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.config-drawer__detail-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.config-drawer__detail-foot {
+  padding-top: 12px;
+}
+
+/*
+ * `provider-row` 第三格是 18px 状态点，写不下「读不到」这类词，所以把第三格改成状态词位；
+ * 46 / `7 9` / 圆角 7 / 选中浅底 / hover 全部沿用家族，不另改数值。
+ */
+.config-drawer__list-row { grid-template-columns: minmax(0,1fr) auto; }
+.config-drawer__list-row .provider-row-copy strong { font-size: var(--font-body); }
+
+/* 底部统一保存栏：由抽屉壳给（`Drawer` 的 footer，不随内容滚走）；无改动时不出现。 */
+.config-drawer__savebar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/*
+ * 保存失败那句说明：**不用状态色**。
+ *
+ * 它是读者要读的一整句正文（`role="alert"` 已经让读屏立刻念出来，句子本身也写着「没保存上」），
+ * 状态不靠颜色传；而 `--danger` 当正文色在深色下只有 3.25–3.94，低于 4.5 的门槛——那种红
+ * 是「给人看的提醒」，不是「给人读的句子」。所以回正文色，红色留给真正的状态标记。
+ */
+.config-drawer__savebar-failed {
+  align-self: stretch;
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+
+.config-drawer__save {
+  min-height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: var(--font-body);
+  cursor: pointer;
+}
+
+.config-drawer__save:disabled { opacity: 0.6; cursor: default; }
+
+
+/*
+ * 内容卡（骨架一处）：右侧正文整块是一张卡，七个屏都渲染在它里面。
+ * 数值照界面设计 `2026-11-11-settings-drawer-skeleton-numbers.md`：圆角 8、1px `--border`、
+ * `--surface` 底、高 100%、内距 16（窄屏 12）。**卡体是唯一滚动容器**（界面设计用探针量过长内容：
+ * scrollHeight 1112 > clientHeight 300、不溢出卡）；短内容屏也撑满 100%、内容顶对齐，切菜单时卡框不动。
+ * 卡头页名已按用户要求删除（菜单已高亮当前屏）。
+ */
+.config-drawer__card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  /*
+   * 与菜单的 16 间距**落在卡上**：用户 2026-11-11 亲手把 `.config-drawer__pane` 的 `padding: 16px`
+   * 注释掉（他的改动，不许改回去），所以间距由卡的 margin 承担；高度扣掉上下 32，避免溢出卡体。
+   */
+  height: calc(100% - 32px);
+  margin: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+
+
+.config-drawer__card-body {
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.config-drawer__card-body--split { display: grid; grid-template-columns: 1fr; }
+
+@media (max-width: 560px) {
+  .config-drawer__card-body { padding: 12px; }
+}
+
+/*
+ * 区块之间的分隔线归卡体画（1px 通到卡边、间距 16）：区块自画会被卡体 16 内距截住。
+ * 卡内区块的「去边框/圆角/底色、区块头 `0 0 8px` 无底线」已由 `SettingsSection` 的 `variant="flat"` 提供
+ * （`6887263`），这里不再留覆盖。
+ */
+.config-drawer__card .settings-section + .settings-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  /* 通到卡边：抵消卡体的左右内距，让线贴到卡片两侧。 */
+  margin-inline: -16px;
+  padding-inline: 16px;
+}
+
+@media (max-width: 560px) {
+  .config-drawer__card .settings-section + .settings-section { margin-inline: -12px; padding-inline: 12px; }
+}
+
+/*
+ * 这两屏的内层卡是**内容**（用户：数据源与采集与数据里面本来就有卡片，要留着），所以不压平，
+ * 只把「内容卡内缘 → 内层卡外缘」统一成 16：
+ * - 数据源屏的树/详情本身没有外层内距，进卡后天然就是 16；
+ * - 采集与数据屏的 `.business-settings__content` 自己还有 16，与卡体 16 叠成 32，这里归零。
+ */
+.config-drawer__card .business-settings__content { padding: 0; }
+
+/*
+ * 用户口径（2026-11-11）：「这两屏只能看到一圈边框」——外层骨架卡就是内容卡，内层面板不再自套一层框。
+ * 只去掉**外框/圆角/底色**，布局与内容（左树/右详情、分组、行）原样保留；卡内到第一层内容恰好 16。
+ * 数据源屏的树用 `border-right` 作两栏分隔线，这条**保留**（它是分隔线，不是第二圈框）。
+ */
+.config-drawer__card .intelligence-catalog-pane {
+  border-radius: 0;
+  background: none;
+}
+
+.config-drawer__card .settings-detail-pane { background: none; }
+
+/* 采集与数据的模块卡：改成骨架内的区块（无框无圆角无底色），组间用一条发丝线分隔。 */
+.config-drawer__card .business-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  border-top: 1px solid var(--border);
+}
+
+.config-drawer__card .business-card + .business-card {
+  /*padding-top: 16px;*/
+  border-top: 1px solid var(--border);
+}
+
+/*
+ * 内容处理屏：第一层内容到卡内缘的距离必须与采集与数据屏**相等（16）**。
+ * 该屏根节点自己不带内距、也不许用负边距把内容顶到卡边——这里只是把这条钉死，
+ * 真正的 16 仍由卡体的 `padding: 16` 给（不在屏里再加一层）。
+ */
+.config-drawer__card .config-drawer-processing {
+  margin: 0;
+  padding: 0;
+}

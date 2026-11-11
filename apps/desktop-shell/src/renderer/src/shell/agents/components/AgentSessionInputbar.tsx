@@ -36,7 +36,8 @@ import {
   getAgentTextareaMaxHeight,
   toggleAgentInputExpanded
 } from './agentInputbarControls'
-import { isSendShortcut, resizeTextarea } from './agentInputbarHelpers'
+import { isSendShortcut } from '../../chat/chatSendShortcut'
+import { resizeTextarea } from './agentInputbarHelpers'
 import { useQuotedToComposer } from './useQuotedToComposer'
 import AgentQuickPanel, { getAgentQuickPanelNextActiveId } from './AgentQuickPanel'
 import AgentSessionInputbarFooter from './AgentSessionInputbarFooter'

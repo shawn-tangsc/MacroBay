@@ -44,6 +44,11 @@ export type ErrorReasonCode =
   | 'needs-restart'
   | 'page-load-failed'
   | 'notification-unknown'
+  /*
+    渲染这一步崩了：界面画不出来。它既不是「没读到」（`unreadable`），也不是「页面没加载」
+    （`page-load-failed`）——是画的时候抛了错，恢复办法是先重试、反复出现再重载界面。
+  */
+  | 'render-failed'
 export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
 export type PermissionReasonCode = 'not-granted'
 
@@ -100,6 +105,8 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'error.page-load-failed': 'required',
   // 通知中心「状态不明」：读者只能再试一次；不给动作就把人丢在一个没有出路的页面里。
   'error.notification-unknown': 'required',
+  // 渲染崩了：先重试（可能只是一次性数据），反复出现再重载界面——两个出口都没有就是白屏上没路。
+  'error.render-failed': 'required',
   'disabled.capability-not-wired': 'forbidden',
   'disabled.target-disabled': 'required',
   'disabled.precondition-unsaved': 'required',
@@ -144,6 +151,8 @@ export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
   'error.page-load-failed': ['ui.state.action.reload-page'],
   // 「状态不明」不是页面没加载、也不是来源不可用：只允许重试，不提供别的出口。
   'error.notification-unknown': ['ui.state.action.retry'],
+  // 先 `retry`，反复出现再 `reload-page`：一次偶发崩溃不该逼读者丢掉整页状态。
+  'error.render-failed': ['ui.state.action.retry', 'ui.state.action.reload-page'],
   'disabled.target-disabled': ['ui.state.action.enable'],
   'disabled.precondition-unsaved': ['ui.state.action.save'],
   'permission.not-granted': ['ui.state.action.open-system-settings']

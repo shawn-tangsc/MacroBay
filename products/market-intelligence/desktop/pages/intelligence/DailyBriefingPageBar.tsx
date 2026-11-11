@@ -26,7 +26,6 @@ export function DailyBriefingPageBar({
   timeZone,
   defaultDate,
   latestDate,
-  zoneInvalid,
   systemZone,
   onManualRun,
   onOpenSettings,
@@ -45,7 +44,6 @@ export function DailyBriefingPageBar({
   timeZone: string
   defaultDate: string
   latestDate: string
-  zoneInvalid: boolean
   systemZone: boolean
   onManualRun: (draft: BriefingManualRunDraft) => Readonly<{
     outcome: BriefingManualRunOutcome
@@ -72,7 +70,6 @@ export function DailyBriefingPageBar({
       timeZone={timeZone}
       defaultDate={defaultDate}
       latestDate={latestDate}
-      zoneInvalid={zoneInvalid}
       systemZone={systemZone}
       onManualRun={onManualRun}
       onOpenSettings={onOpenSettings}

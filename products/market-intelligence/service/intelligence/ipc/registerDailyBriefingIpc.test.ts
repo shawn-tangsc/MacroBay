@@ -15,6 +15,57 @@ function registerAll(deletePeriod?: (input: Readonly<{ date: string; periodId: s
   return handlers
 }
 
+describe('a read keeps the period the reader is looking at', () => {
+  // 真实事故形态：读取口只回 locale/timeZone/generate，读者传的期号在这一层被丢掉，服务端于是按
+  // `default` 期回答、窗口按期配置第一项算——而同一天的排期跑的是他选的那一期。同一个「今天」两套数。
+  const evening = { id: 'period_evening', generationTime: '20:00', windowHours: 48, language: 'zh-CN' }
+
+  function harness(rows: readonly unknown[] = [evening]) {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    const spies = {
+      getToday: vi.fn(async () => ({ state: 'available' })),
+      getProgress: vi.fn(async () => ({ state: 'idle' }))
+    }
+    registerDailyBriefingIpc(((_product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, handler)
+    }) as never, { ...(service as unknown as Record<string, unknown>), ...spies } as never, undefined, undefined,
+    { list: async () => rows } as never)
+    return { handlers, spies }
+  }
+
+  it('passes the period, together with that period\'s own hour and window, to getToday', async () => {
+    const { handlers, spies } = harness()
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_evening'
+    })
+    expect(spies.getToday).toHaveBeenCalledWith({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_evening',
+      generation: { generationTime: '20:00', windowHours: 48 }
+    })
+  })
+
+  it('passes the period to the progress read, so it answers for the run the reader is looking at', async () => {
+    const { handlers, spies } = harness()
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.getProgress)!({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_evening'
+    })
+    expect(spies.getProgress).toHaveBeenCalledWith({
+      locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_evening'
+    })
+  })
+
+  it('refuses a period that cannot be read instead of quietly answering for the default one', async () => {
+    const { handlers, spies } = harness()
+    const getToday = handlers.get(DAILY_BRIEFING_IPC_METHODS.getToday)!
+    await expect(getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: '' }))
+      .rejects.toThrow('daily-briefing-invalid-request')
+    await expect(getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai', periodId: 'period_deleted' }))
+      .rejects.toThrow('daily-briefing-period-unknown')
+    // 两条都不许悄悄落到 default 期上：那正是这次事故的形态。
+    expect(spies.getToday).not.toHaveBeenCalled()
+  })
+})
+
 describe('the regenerate payload keeps the run\'s identity', () => {
   // 用户报的「选 8 点、跑成 7 点」：这一层曾把 periodId 与 generation 一起丢掉，服务看到的是
   // `periodId: undefined`，于是落回 default，覆盖了读者正在看的那一版。这条用例防的就是这个。
@@ -183,5 +234,53 @@ describe('the publish-to-phone payload carries the edition identity, and nothing
     expect(deletePeriod).not.toHaveBeenCalled()
     await handler({ date: '2026-11-07', periodId: 'default', locale: 'zh-CN', entry: 'toolbar' })
     expect(deletePeriod).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the period write seam shares the runtime store', () => {
+  it('a write on a fresh upgrade moves the old rows first and keeps the marker', async () => {
+    const { mkdtemp, readFile, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { createBriefingPeriodsSource } = await import('../daily-briefing/dailyBriefingPeriodsSource')
+    const dir = await mkdtemp(join(tmpdir(), 'briefing-ipc-move-'))
+    try {
+      const periodsPath = join(dir, 'daily-briefing-periods.json')
+      const source = createBriefingPeriodsSource({
+        filePath: periodsPath,
+        locale: async () => 'zh-CN',
+        legacyPeriodsMigration: {
+          readLegacyPeriods: async () => [
+            { id: 'default', generationTime: '07:00', windowHours: 24 },
+            { id: 'evening', generationTime: '21:30', windowHours: 12 }
+          ],
+          additionalLanguages: async () => []
+        }
+      })
+      const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+      registerDailyBriefingIpc((( _product: string, method: string, handler: (payload: unknown) => Promise<unknown>) => {
+        handlers.set(method, handler)
+      }) as never, service, undefined, undefined, source.editor)
+
+      // No runtime read first: this is the settings page's first write on an upgraded install.
+      const saved = await handlers.get(DAILY_BRIEFING_IPC_METHODS.updatePeriod)!({
+        id: 'default',
+        draft: { generationTime: '08:00', windowHours: 24, language: 'zh-CN' },
+        locale: 'zh-CN'
+      })
+
+      expect(saved).toMatchObject({ state: 'saved' })
+      const document = JSON.parse(await readFile(periodsPath, 'utf8')) as {
+        periods: readonly { id: string; generationTime: string }[]
+        markers?: Record<string, unknown>
+      }
+      // The old second period survives: the move ran before the write, not after it.
+      expect(document.periods.map((period) => period.id)).toEqual(['default', 'evening'])
+      expect(document.periods.map((period) => period.generationTime)).toEqual(['08:00', '21:30'])
+      // A period file without the marker is the state that would skip the move forever.
+      expect(typeof document.markers?.['migrated.legacyGlobalSettings.v1']).toBe('string')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

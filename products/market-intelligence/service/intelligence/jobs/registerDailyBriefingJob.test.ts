@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import type { DailyBriefingPeriod } from '../daily-briefing/dailyBriefingGenerationSettings'
 import { applyDailyBriefingSchedules, registerDailyBriefingJob } from './registerDailyBriefingJob'
 import { syncDailyBriefingSchedules } from './dailyBriefingSchedules'
@@ -28,7 +29,21 @@ function runtime() {
   }
 }
 
-const period = (overrides: Partial<DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }>> = {}): DailyBriefingPeriod & Readonly<{ language?: 'zh-CN' | 'en-US' }> => ({
+const period = (overrides: Partial<BriefingPeriod> = {}): BriefingPeriod => ({
+  id: 'default',
+  generationTime: '08:00',
+  windowHours: 24 as never,
+  // A period always carries its language now; the fixture starts in the interface language and
+  // each case that cares overrides it.
+  language: 'zh-CN',
+  ...overrides
+})
+
+/**
+ * The scheduler's own boundary still takes the older settings shape, which is the shape that
+ * carries a per-period zone. The runtime feed below passes `BriefingPeriod`, which has none.
+ */
+const scheduledPeriod = (overrides: Partial<DailyBriefingPeriod> = {}): DailyBriefingPeriod => ({
   id: 'default',
   generationTime: '08:00',
   windowHours: 24 as never,
@@ -44,7 +59,7 @@ describe('daily briefing schedules', () => {
     // Two periods is the case the whole change exists for: the same morning must be able to run
     // twice at different times, and neither may answer for the other.
     const { runtime: jobRuntime, definitions } = runtime()
-    applyDailyBriefingSchedules(jobRuntime, [period(), period({ id: 'asia-open', generationTime: '12:30', generationTimeZone: 'Asia/Shanghai' })], 'Europe/London')
+    applyDailyBriefingSchedules(jobRuntime, [scheduledPeriod(), scheduledPeriod({ id: 'asia-open', generationTime: '12:30', generationTimeZone: 'Asia/Shanghai' })], 'Europe/London')
 
     expect([...definitions.keys()].sort()).toEqual([
       `${INTELLIGENCE_DAILY_BRIEFING_JOB}.asia-open`,
@@ -76,8 +91,8 @@ describe('daily briefing schedules', () => {
 
   it('re-registers the same id when a period time or zone moves', () => {
     const { runtime: jobRuntime, definitions } = runtime()
-    applyDailyBriefingSchedules(jobRuntime, [period()], 'Asia/Shanghai')
-    applyDailyBriefingSchedules(jobRuntime, [period({ generationTime: '09:30', generationTimeZone: 'Asia/Shanghai' })], 'Asia/Shanghai')
+    applyDailyBriefingSchedules(jobRuntime, [scheduledPeriod()], 'Asia/Shanghai')
+    applyDailyBriefingSchedules(jobRuntime, [scheduledPeriod({ generationTime: '09:30', generationTimeZone: 'Asia/Shanghai' })], 'Asia/Shanghai')
 
     expect([...definitions.keys()]).toEqual([`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`])
     expect(definitions.get(`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`)).toMatchObject({
@@ -89,10 +104,10 @@ describe('daily briefing schedules', () => {
     // Today one unreadable zone pauses every automatic run. With one definition per period that
     // would mean a typo in the second period silences the first as well, silently.
     const { runtime: jobRuntime, definitions } = runtime()
-    applyDailyBriefingSchedules(jobRuntime, [period(), period({ id: 'asia-open', generationTime: '12:30' })], 'Asia/Shanghai')
+    applyDailyBriefingSchedules(jobRuntime, [scheduledPeriod(), scheduledPeriod({ id: 'asia-open', generationTime: '12:30' })], 'Asia/Shanghai')
     const result = applyDailyBriefingSchedules(jobRuntime, [
-      period(),
-      period({ id: 'asia-open', generationTime: '12:30', generationTimeZone: 'Asia/Shangai' })
+      scheduledPeriod(),
+      scheduledPeriod({ id: 'asia-open', generationTime: '12:30', generationTimeZone: 'Asia/Shangai' })
     ], 'Asia/Shanghai')
 
     expect(result.paused).toEqual(['asia-open'])
@@ -119,7 +134,7 @@ describe('daily briefing job handler', () => {
       service: { getToday },
       getLocale: async () => 'zh-CN',
       timeZone: () => 'Europe/London',
-      getPeriods: async () => [period({ id: 'asia-open', generationTime: '12:30', generationTimeZone: 'Asia/Shanghai', windowHours: 48 as never })]
+      getPeriods: async () => [period({ id: 'asia-open', generationTime: '12:30', windowHours: 48 as never })]
     })
 
     await run({ periodId: 'asia-open' })
@@ -127,7 +142,8 @@ describe('daily briefing job handler', () => {
     // The scheduler fired this run, so the edition must record that trigger as well as the period.
     expect(getToday).toHaveBeenCalledWith({
       locale: 'zh-CN',
-      timeZone: 'Asia/Shanghai',
+      // 期不写钟：这一版按读者当前显示时区解释那个时刻。
+      timeZone: 'Europe/London',
       periodId: 'asia-open',
       periodKind: 'scheduled',
       runTrigger: 'scheduled',
@@ -167,18 +183,17 @@ describe('daily briefing job handler', () => {
     expect(getToday).toHaveBeenCalledWith(expect.objectContaining({ locale: 'zh-CN' }))
   })
 
-  it('spends nothing on a run whose period is gone or whose zone no longer reads', async () => {
+  it('spends nothing on a run whose period is gone', async () => {
     const { runtime: jobRuntime, run } = runtime()
     const getToday = vi.fn(async () => available)
     registerDailyBriefingJob(jobRuntime, {
       service: { getToday },
       getLocale: async () => 'zh-CN',
       timeZone: () => 'UTC',
-      getPeriods: async () => [period({ id: 'asia-open', generationTime: '12:30', generationTimeZone: 'Asia/Shangai' })]
+      getPeriods: async () => [period({ id: 'asia-open', generationTime: '12:30' })]
     })
 
     await expect(run({ periodId: 'gone' })).resolves.toBeUndefined()
-    await expect(run({ periodId: 'asia-open' })).resolves.toBeUndefined()
     expect(getToday).not.toHaveBeenCalled()
   })
 
@@ -293,7 +308,7 @@ describe('paused periods', () => {
 
     applyDailyBriefingSchedules(
       jobRuntime,
-      [period(), period({ id: 'bad-zone', generationTimeZone: 'Asia/Shangai' })],
+      [scheduledPeriod(), scheduledPeriod({ id: 'bad-zone', generationTimeZone: 'Asia/Shangai' })],
       'UTC',
       onPaused
     )
@@ -303,20 +318,5 @@ describe('paused periods', () => {
     paused.length = 0
     applyDailyBriefingSchedules(jobRuntime, [period()], 'UTC', onPaused)
     expect(paused).toEqual([])
-  })
-
-  it('reports the pause from the registration path too, not only from the timezone hook', async () => {
-    const { runtime: jobRuntime } = runtime()
-    const paused: string[] = []
-    registerDailyBriefingJob(jobRuntime, {
-      service: { getToday: async () => available },
-      getLocale: async () => 'zh-CN',
-      timeZone: () => 'UTC',
-      getPeriods: async () => [period({ id: 'bad-zone', generationTimeZone: 'Asia/Shangai' })],
-      onPaused: (ids) => { paused.push(...ids) }
-    })
-    await flush()
-
-    expect(paused).toEqual(['bad-zone'])
   })
 })

@@ -10,6 +10,7 @@ import {
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
+import { ensureAnalysisRunSession, appendAnalysisRunSessionSummary } from './analysisRunSessionEnsure'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
@@ -27,7 +28,7 @@ import { buildAnalysisMessages, type AnalysisSessionInput } from './analysisMode
 import { sessionBriefForTriggerKey } from './analysisSessionContext'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
 import type { SignificanceSignal } from './significanceChangeMatcher'
-import { withSnapshotChange } from './snapshotChange'
+import { frozenEvidenceForRun } from './analysisFrozenEvidence'
 
 type Repository = Readonly<{
   getRun: (id: string) => AnalysisRun | undefined
@@ -123,7 +124,7 @@ const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
   'fact-evidence-mismatch': '每条 knownFact 只能引用它自己的那一个 evidenceRef；marketReaction 的 evidenceRefIds 必须恰好覆盖它 factIds 对应的证据集合，多一个也会被拒绝。',
   'ineligible-market-reaction': 'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs；输入没有该字段或为空时写 []。',
   'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。',
-  'policy-probability-citation': '结论里的政策概率取整到整百分点写（输入 76.65% 写「约 77%」或按输入取整写 77%），并在同一段写出该概率的截至时刻（例如「市场定价 77%，截至 2026-10-30 15:00 UTC」）；更精确的值留在记录里，不在正文重复。「概率/定价」附近的百分数只能取自输入里的概率事实，不得换档或编造；输入没有 24 小时变化时写「24 小时变化尚未可得」，不得自己算。',
+  'policy-probability-citation': '结论里的政策概率取整到整百分点写（输入 X% 时写「约 round(X)%」或直接写取整后的整数），并在同一段写出该概率的截至时刻（例如「市场定价 X%，截至 YYYY-MM-DD HH:mm UTC」，X 用输入里那条事实的值，不要照抄示例数字）；更精确的值留在记录里，不在正文重复。「概率/定价」附近的百分数只能取自输入里的概率事实，不得换档或编造；正文里的数值必须带符号（写「-2.92%」，不要写「下跌 2.92%」），数字只写完整小数或四舍五入到整数、不许截断；输入没有 24 小时变化时写「24 小时变化尚未可得」，不得自己算。',
   // The answer must return to the change that triggered the run, not to a better-writable topic.
   'divergence-contradiction': '上一次 `divergences` 里的立场与输入事实相反：输入里 `divergence-<pairId>` 事实存在，说明这一对的背离成立，`stance` 只能是 diverging；反过来，事实值是 none（查过、没背离）时不能写 diverging。与证据相反会被整份拒绝——**不写不算相反**，没意见就不要写这一项。',
   'shape:divergences': '`divergences` 是可选数组；写的话每项必须恰好包含 pairId 与 stance 两个键，pairId 取输入里 `divergence-<pairId>` 的原文，stance 只能是 diverging 或 not-diverging。',
@@ -217,23 +218,23 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     if (!runRecord || !deps.repository.claimRun(runRecord.id, deps.now())) return { status: 'failed', errorCode: 'analysis-run-not-available' }
     // 会话在「认领成功、还没调模型」之间建：失败那次也要有会话，否则最需要查原文的那种恰好没有。
     // 建会话失败不影响这次分析——它是记录的附加物，不是分析的前提。
-    if (deps.ensureRunSession) {
-      try { await deps.ensureRunSession({ runId: runRecord.id, queuedAt: runRecord.queuedAt }) } catch { /* 会话是附加物 */ }
-    }
+    // 建不出来不许静默（F1 / 架构师条件）：端口缺失、窄查抛错、create 失败都留一条 marker。
+    await ensureAnalysisRunSession({
+      runId: runRecord.id,
+      queuedAt: runRecord.queuedAt,
+      ...(deps.ensureRunSession ? { ensure: deps.ensureRunSession } : {})
+    })
     if (input.signal?.aborted) return cancel(runRecord.id)
     const signal = input.signal ?? new AbortController().signal
 
-    const snapshot = deps.repository.getSnapshot?.(runRecord.snapshotId) ?? deps.repository.listSnapshots?.(runRecord.eventGroupId).find(value => value.id === runRecord.snapshotId)
-    if (!snapshot || snapshot.snapshotHash !== runRecord.snapshotHash) return fail(runRecord.id, 'failed', 'analysis-snapshot-changed')
-    // Snapshots frozen before the change record existed derive it from their
-    // immutable predecessor, so the model always receives "what moved".
-    const withChange = withSnapshotChange(snapshot, deps.repository.listSnapshots?.(runRecord.eventGroupId) ?? [])
-    const evidenceIds = new Set(withChange.evidenceRefs.map(ref => ref.evidenceRefId))
-    const facts = withChange.facts.filter(fact => fact.evidenceRefId && evidenceIds.has(fact.evidenceRefId))
-    if (!facts.length) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.missingEvidence)
-    const frozenEvidence: FrozenAnalysisEvidence = { facts, evidenceRefs: withChange.evidenceRefs }
-    // Resolved from the frozen snapshot, so the rule judges the question the run actually held.
-    const triggerFocus: TriggerFocus = resolveTriggerFocus(withChange)
+    // 冻结证据的构造（快照哈希、可用事实、变更摘要里的数、语言）在 `analysisFrozenEvidence` 一处。
+    const frozen = await frozenEvidenceForRun({
+      run: runRecord,
+      repository: deps.repository,
+      ...(deps.getLanguage ? { getLanguage: deps.getLanguage } : {})
+    })
+    if (frozen.state === 'failed') return fail(runRecord.id, 'failed', frozen.failureCode)
+    const { snapshot, withChange, facts, frozenEvidence, triggerFocus, proseLanguage } = frozen
 
     // The run's own trigger key says which open it serves; recovery runs and manual runs keep the
     // prompt they had.
@@ -246,7 +247,6 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const model = runRecord.modelProviderId && runRecord.modelId
       ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
       : {}
-    const proseLanguage = deps.getLanguage ? await deps.getLanguage() : undefined
     let messages = buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
     let invocation: InvocationResult | undefined
     let validated: AnalysisOutputValidationResult | undefined
@@ -385,13 +385,13 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
     if (retried) deps.repository.retry?.record(runRecord.id, 'succeeded')
-    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。
-    if (deps.appendRunSummary) {
-      const summaryText = summary.conclusion?.summary ?? summary.eventAssessment ?? ''
-      if (summaryText) {
-        try { await deps.appendRunSummary({ runId: runRecord.id, summary: summaryText }) } catch { /* 会话是附加物 */ }
-      }
-    }
+    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。失败不阻断发布，
+    // 留痕在 helper 里（读者打开只剩卡片时，事后只有那条 marker 能查得到）。
+    await appendAnalysisRunSessionSummary({
+      runId: runRecord.id,
+      summary: summary.conclusion?.summary ?? summary.eventAssessment ?? '',
+      ...(deps.appendRunSummary ? { append: deps.appendRunSummary } : {})
+    })
     // N12：**达到门槛**的那次、写入记录之后，提交一次结论推送。判据是原因码，不是触发键——
     // 键记的是阶段，消息面达门槛的运行也长着宏观的样子（`analysisConclusionPushEligible` 一处判）。
     const triggerReasonCode = deps.repository.triggerReasonOf?.(runRecord.id)

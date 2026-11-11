@@ -38,10 +38,11 @@ free-form message.
 
 ## Are channels available?
 
-No. Telegram, Slack, Lark, Discord, QQ, and WeChat integrations exist in the platform code, and the
-channel settings page is visible, so channels can be created and credentials stored. But no adapter
-is enabled in this release, so nothing is sent or received. See
-[Status and limitations](./status-and-limitations.md).
+Channels can be created and enabled, but **only one channel is active at a time**: enabling a new one
+turns the previous one off. What works is **one-to-one chat messages**; in-group @mentions and channel
+posts are only partly verified. All five adapters — Telegram, Slack, Discord, QQ and Lark — ship in
+this version and were each verified with real credentials. **WeChat cannot be
+connected in this version.** See [Status and limitations](./status-and-limitations.md).
 
 ## Does it work on Windows or Linux?
 

@@ -1,4 +1,4 @@
-import { SOURCE_REPEATED_FAILURE_THRESHOLD } from '../application/sourceProjection'
+import { isFailingHealthState, sourceHealthState, type SourceHealthFact } from '../application/sourceProjection'
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
 import { computeConfigurationRevision } from './configurationRevision'
 import {
@@ -14,6 +14,16 @@ import type {
 const STUCK_RUN_MS = 15 * 60_000
 const RUN_SAMPLE_LIMIT = 200
 
+/** 操作健康里只带得到粗档字符串；认不出的档不给健康对象（＝不亮），不猜成失败。 */
+function healthFactState(
+  runtimeStatus: string,
+  consecutiveFailures: number
+): ReturnType<typeof sourceHealthState> | undefined {
+  if (runtimeStatus !== 'healthy' && runtimeStatus !== 'degraded' && runtimeStatus !== 'failed' && runtimeStatus !== 'paused') return undefined
+  const fact: SourceHealthFact = { runtimeStatus, consecutiveFailures }
+  return sourceHealthState({ enabled: true, health: fact })
+}
+
 export async function handleGetOperationsHealth(
   _input: unknown,
   deps: ReadHandlerDeps
@@ -28,9 +38,11 @@ export async function handleGetOperationsHealth(
     .map((run) => run.startedAt ?? run.createdAt)
     .sort()
     .at(-1)
-  const failedSource = health.sources.some(
-    (source) => source.runtimeStatus === 'failed' || source.consecutiveFailures >= SOURCE_REPEATED_FAILURE_THRESHOLD
-  )
+  // 与设置页同一个五态派生：agent 问「哪些源坏了」不许自己再比一次阈值。
+  const failedSource = health.sources.some((source) => {
+    const state = healthFactState(source.runtimeStatus, source.consecutiveFailures)
+    return state !== undefined && isFailingHealthState(state)
+  })
   const stuckRun = running.some((run) => {
     const startedMs = Date.parse(run.startedAt ?? run.createdAt)
     return Number.isFinite(startedMs) && nowMs - startedMs > STUCK_RUN_MS

@@ -82,8 +82,6 @@ export function ModelServiceKeySection({
       <div className="model-service-helper-row">
         {getKeyUrl ? (
           <Button
-            type="text"
-            size="small"
             className="text-action"
             data-get-api-key
             onClick={() => onOpenExternal(getKeyUrl)}>

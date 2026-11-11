@@ -48,7 +48,7 @@ describe('dashboard feed status boundary', () => {
   })
 
   it('refuses a source this boundary does not serve, a duplicate and a malformed entry', () => {
-    expect(parseDashboardFeedStatus({ state: 'available', sources: [entry({ sourceId: 'binance-futures-positioning' })] })).toBeUndefined()
+    expect(parseDashboardFeedStatus({ state: 'available', sources: [entry({ sourceId: 'not-a-dashboard-source' })] })).toBeUndefined()
     expect(parseDashboardFeedStatus({ state: 'available', sources: [entry(), entry()] })).toBeUndefined()
     expect(parseDashboardFeedStatus({ state: 'available', sources: [entry({ enabled: 'yes' })] })).toBeUndefined()
     expect(parseDashboardFeedStatus({ state: 'available', sources: [entry({ lastSuccessAtMs: -1 })] })).toBeUndefined()
@@ -61,7 +61,16 @@ describe('dashboard feed status boundary', () => {
     expect(parseDashboardFeedStatus(null)).toBeUndefined()
   })
 
-  it('serves the three sources the dashboard actually reads and no fourth', () => {
-    expect(dashboardFeedStatusPublicPolicy.sourceIds).toEqual(['realmarketapi-market', 'twelve-data-market', 'fred-rates-liquidity'])
+  it('serves exactly the sources the dashboard\'s cells can name', () => {
+    // 与 dashboardSourceModules 的格一一对得上：扩源时这张表跟着改，测试钉住「没有漏也没有多」。
+    expect(dashboardFeedStatusPublicPolicy.sourceIds).toEqual([
+      'realmarketapi-market', 'twelve-data-market', 'fred-rates-liquidity',
+      'binance-futures-positioning', 'defillama-stablecoins', '0xrouter-aggregate-provider',
+      'alternative-fear-greed', 'policy-path-market',
+      'macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls',
+      'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+      'macro-calendar-0xrouter-central-bank-activities'
+    ])
+    expect(dashboardFeedStatusPublicPolicy.maximumSources).toBe(dashboardFeedStatusPublicPolicy.sourceIds.length)
   })
 })

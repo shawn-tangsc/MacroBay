@@ -61,6 +61,7 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 ## 下载
 
 **[macOS · Apple Silicon（.dmg）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-arm64.dmg)** ·
+**[macOS · Intel（.dmg）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64.dmg)** ·
 **[Windows · x64（.exe）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
 [全部版本](https://github.com/shawn-tangsc/MacroBay/releases)
 
@@ -73,6 +74,9 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
    **更多信息 → 仍要运行**。
 
 每次下载新版本都要重走这两步，直到发布签名版本。
+
+Intel 版是 `MacroBay-x64.dmg`：**已构建、已随版本发布，但还没有在 Intel 真机上验收**。上面 Apple
+Silicon 的下载链接不变；`latest-mac.yml` 只由 arm64 那条构建产出。
 
 <div align="center">
 
@@ -201,7 +205,7 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.4.2`）。macOS 是已验证平台。面板仍需你自己的供应商凭据；读不到的数据
+MacroBay 目前是 **alpha**（`0.4.3`）。macOS 是已验证平台。面板仍需你自己的供应商凭据；读不到的数据
 会如实报成缺口。macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
 运行态尚未验证，Linux 尚未配置打包。详见
 [状态与限制](./docs/reference/status-and-limitations.zh-CN.md)。

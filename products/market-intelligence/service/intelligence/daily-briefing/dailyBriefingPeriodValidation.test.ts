@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   briefingPeriodConflict,
   briefingPeriodDraftIssue,
-  readBriefingPeriods
+  readBriefingPeriods,
+  readBriefingPeriodsWithRepair
 } from './dailyBriefingPeriodValidation'
 
 describe('briefing period validation', () => {
@@ -47,6 +48,46 @@ describe('briefing period validation', () => {
     expect(periods.map((period) => period.id)).toEqual(['default', 'period_b'])
     expect(periods[0]?.origin).toBe('legacy-settings')
     expect(periods[1]?.generationTime).toBe('09:00')
+  })
+
+  it('takes the one language its editions name, and marks a fallback as inferred', async () => {
+    const result = await readBriefingPeriodsWithRepair({
+      version: 1,
+      periods: [
+        { id: 'period_en', generationTime: '07:00', windowHours: 24 },
+        { id: 'period_both', generationTime: '08:00', windowHours: 24 },
+        { id: 'period_never', generationTime: '09:00', windowHours: 24 }
+      ]
+    }, {
+      fallbackLanguage: 'zh-CN',
+      editionLocales: async () => new Map([
+        ['period_en', new Set(['en-US'] as const)],
+        // 两种语言都用过：版次本身给不出唯一答案，不能自己挑一个。
+        ['period_both', new Set(['zh-CN', 'en-US'] as const)]
+      ])
+    })
+
+    expect(result.periods.map((period) => period.language)).toEqual(['en-US', 'zh-CN', 'zh-CN'])
+    // 写回按 id 补，一行一条：文件里只改这三行的 `language`，别的一律不动。
+    expect(result.languageRepairs).toEqual([
+      { id: 'period_en', language: 'en-US' },
+      { id: 'period_both', language: 'zh-CN' },
+      { id: 'period_never', language: 'zh-CN' }
+    ])
+    // 只有从没生成过版次的那一期算推定；两语言那一期也在推定里（版次没有唯一答案）。
+    expect(result.inferred).toEqual(['period_both', 'period_never'])
+  })
+
+  it('does not ask for edition languages when every period already carries one', async () => {
+    let asked = 0
+    const result = await readBriefingPeriodsWithRepair({
+      version: 1,
+      periods: [{ id: 'default', generationTime: '07:00', windowHours: 24, language: 'zh-CN' }]
+    }, { fallbackLanguage: 'zh-CN', editionLocales: async () => { asked += 1; return new Map() } })
+
+    expect(result.languageRepairs).toEqual([])
+    expect(result.inferred).toEqual([])
+    expect(asked).toBe(0)
   })
 
   it('reads an older or empty file as no periods', () => {

@@ -62,6 +62,15 @@ export type DashboardPositioningViewState =
       eth: readonly DashboardPositioningPoint[]
       changeBtc?: Readonly<{ h1Pct?: number; h24Pct?: number }>
       changeEth?: Readonly<{ h1Pct?: number; h24Pct?: number }>
+      /**
+       * 曲线**末点**的时刻：7 天窗口按小时折叠，它盖的是那个小时的开头。卡面「观测时间」用它。
+       */
+      pointAt?: string
+      /**
+       * 窗口内**折叠前的最新读数**时刻。卡面只在它与 `pointAt` 不同时才写第二段「最新读数」；
+       * 两者由这一处投影同时给出，卡面不再各自现取（`at(-1).observedAt` 那种写法会漂）。
+       */
+      newestReadingAt?: string
       /** Set when the newest reading is older than the staleness bound. */
       staleSince?: string
       /** 当前窗口内的全部命中，图上逐个画点（查询已按 window 裁剪）。 */
@@ -116,6 +125,34 @@ export const dashboardPositioningPresentationPolicy = Object.freeze({
   chart: Object.freeze({ minimumNotionalSpan: 1, minimumVisibleHeightPercent: 4, maximumHeightPercent: 100 })
 })
 
+/**
+ * 来源状态条里「持仓」那一格要说的那一句（产品 2026-11-10，决定记录 §15）。
+ *
+ * **它不判新鲜度**：不读 `staleAfterMs`、不写任何秒数，只转述卡片算出来的 `staleSince`。
+ * 阈值只在 `dashboardPositioningPresentationPolicy` 里存在一次；行与卡因此不可能各判一套
+ * （「改 policy → 行和卡一起变」这条用例就是为了钉住这件事）。
+ *
+ * 词根与另两行统一：读到了 / 偏旧 · 截至 {时刻} / 读不到。
+ */
+export type PositioningSourceRowState =
+  | Readonly<{ kind: 'loading' }>
+  | Readonly<{ kind: 'read'; fundingPartial: boolean }>
+  | Readonly<{ kind: 'stale'; since: string }>
+  | Readonly<{ kind: 'empty' }>
+  | Readonly<{ kind: 'unreadable' }>
+
+export function projectPositioningSourceRow(
+  positioning: DashboardPositioningViewState,
+  funding: { state: string }
+): PositioningSourceRowState {
+  if (positioning.state === 'loading') return { kind: 'loading' }
+  if (positioning.state === 'unavailable') return { kind: 'unreadable' }
+  if (positioning.state === 'empty') return { kind: 'empty' }
+  // 偏旧压过「费率只有一支」：行上先说的是这一格的数据新不新。
+  if (positioning.staleSince) return { kind: 'stale', since: positioning.staleSince }
+  return { kind: 'read', fundingPartial: funding.state === 'partial' }
+}
+
 export function projectDashboardPositioning(value: unknown, asOf: string, window: OpenInterestWindow, onReload: () => void = () => undefined): DashboardPositioningViewState {
   try {
     if (!isCanonicalOpenInterestTime(asOf)) return { state: 'unavailable', cause: 'invalid-clock', onReload }
@@ -123,8 +160,18 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
     if (value.state === 'empty') return { state: 'empty', onReload }
     if (value.state === 'unavailable') return { state: 'unavailable', cause: 'query-failed', onReload }
 
-    const latest = value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
-    const staleSince = latest && Date.parse(asOf) - Date.parse(latest) > dashboardPositioningPresentationPolicy.staleAfterMs ? latest : undefined
+    /**
+     * 「最新读数」不是最后一个点：7 天窗口按小时折叠、时间戳落在小时开头，最后那个点的时刻最多比它
+     * 承载的读数早 45 分钟。拿折叠点判滞后，01:45 的新数据会被标成「已滞后」（用户 2026-11-10 现场）。
+     * `newestReadingAt` 是读侧带来的真实读数时刻；老载荷没有它时退回折叠点，行为不变。
+     */
+    // 两个时刻在**这一处**同时给出：曲线末点（折叠点）与折叠前的最新读数。卡面只读这两个字段。
+    const pointAt = value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
+    const newestReadingAt = value.newestReadingAt ?? pointAt
+    // 滞后只拿最新读数判：拿折叠点判会把 01:45 的新数据说成「已滞后」（用户 2026-11-10 现场）。
+    const staleSince = newestReadingAt && Date.parse(asOf) - Date.parse(newestReadingAt) > dashboardPositioningPresentationPolicy.staleAfterMs
+      ? newestReadingAt
+      : undefined
     return {
       state: 'available',
       window,
@@ -138,6 +185,8 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
       hiddenHits: Math.max(0, (value.liquidationHintsTotal ?? value.liquidationHints?.length ?? 0) - (value.liquidationHints?.length ?? 0)),
       signal: { state: 'hidden' },
       onReload,
+      ...(pointAt ? { pointAt } : {}),
+      ...(newestReadingAt ? { newestReadingAt } : {}),
       ...(staleSince ? { staleSince } : {})
     }
   } catch {

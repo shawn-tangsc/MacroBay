@@ -9,7 +9,7 @@
  */
 import type { ChannelManagementRepository } from './ChannelManagementRepository'
 import type { ChannelManagementSafeView } from './ChannelManagementContracts'
-import { readCredentialPreviews } from './channelCredentialPreview'
+import { credentialFieldsFor, readCredentialPreviews } from './channelCredentialPreview'
 
 export type CredentialPreviewVault = { get: (ref: string) => Promise<Record<string, string> | null> }
 
@@ -31,8 +31,13 @@ async function withPreviews(
     // Vault 不可用时保留静态掩码：显示「已配置」即可，不能因此让列表读失败。
     return view
   }
+  // 每个描述符字段都要有一格：有值给掩码，**没有值给空串**（界面据此说「未填」）。
+  // 只回「已配的那些」会让少配一个字段的行看起来是齐的——那正是这次用户看到的第二个 token 不见了。
   const maskedFields: Record<string, string> = {}
-  for (const [field, value] of Object.entries(previews)) maskedFields[field] = value.length < 8 ? FULL_MASK : value
+  for (const field of credentialFieldsFor(view.type)) {
+    const value = previews[field]
+    maskedFields[field] = value === undefined ? '' : (value.length < 8 ? FULL_MASK : value)
+  }
   if (Object.keys(maskedFields).length === 0) return view
   return { ...view, credential: { ...view.credential, maskedFields: { ...view.credential.maskedFields, ...maskedFields } } }
 }

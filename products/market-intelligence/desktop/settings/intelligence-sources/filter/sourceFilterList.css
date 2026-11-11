@@ -1,0 +1,34 @@
+/* C5 来源列表：行 44 / 左右 12 / 行间 1px；字体走既有档位，不新增字号档。 */
+.source-filter-list { display: grid; gap: 8px; min-width: 0; }
+.source-filter-list__filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.source-filter-list__filter,
+.source-filter-list__mode {
+  min-height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--muted); font-size: var(--font-meta); line-height: var(--line-meta);
+  cursor: pointer;
+}
+.source-filter-list__filter[aria-pressed='true'],
+.source-filter-list__mode[aria-pressed='true'] { color: var(--text); border-color: var(--border-strong); }
+.source-filter-list__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.source-filter-list__count { color: var(--muted); font-size: var(--font-meta); font-variant-numeric: tabular-nums; }
+.source-filter-list__modes { display: flex; gap: 4px; }
+.source-filter-list__rows { margin: 0; padding: 0; list-style: none; }
+.source-filter-list__row {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px;
+  border-top: 1px solid var(--border);
+}
+.source-filter-list__name { flex: 1; min-width: 0; color: var(--text); font-size: var(--font-body); }
+.source-filter-list__tag { color: var(--muted); font-size: var(--font-meta); }
+.source-filter-list__status { flex: none; color: var(--muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+.source-filter-list__tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.source-filter-list__tile {
+  display: grid; gap: 4px; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+.source-filter-list__empty { display: grid; gap: 8px; padding: 16px; text-align: center; }
+.source-filter-list__empty p { margin: 0; color: var(--muted); font-size: var(--font-meta); }
+.source-filter-list__clear {
+  justify-self: center; min-height: 24px; padding: 0 8px; border: 1px solid var(--border);
+  border-radius: 999px; background: transparent; color: var(--text); font-size: var(--font-meta);
+  cursor: pointer;
+}

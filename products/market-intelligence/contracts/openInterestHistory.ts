@@ -139,6 +139,19 @@ export type OpenInterestHistoryResult =
       liquidationHintsTotal?: number
       liquidationHintsTruncated?: boolean
       /**
+       * 窗口内**最新一条 15 分钟读数**的时刻（折叠之前）。
+       *
+       * 7 天窗口按小时折叠、时间戳落在小时开头，所以最后一个点的时刻最多比它承载的读数早 45 分钟。
+       * 「数据是否滞后」必须拿真实读数判，不能拿折叠点判——否则 01:45 的新数据会被标成「已滞后」
+       * （用户 2026-11-10 现场：卡面观测时间 01:00、库里最新格 01:45）。
+       * 可选：老载荷没有这个字段时，读取侧退回折叠点，行为与添加字段前一致。
+       *
+       * **规矩（架构师 2026-11-10）**：凡是按 7 天窗口判新鲜度的地方，都必须用 `newestReadingAt`，
+       * **不能用最后一个点**。今天的 bug 不是算错，是「折叠点的语义只有实现里的人知道」——下一个把
+       * 日报从 24h 改成 7d 的人会原样再踩一次。
+       */
+      newestReadingAt?: string
+      /**
        * `unavailable` means the volume leg could not answer, so an empty `liquidationHints`
        * there is "cannot tell", not "nothing happened". A panel must not treat them alike.
        */
@@ -198,6 +211,9 @@ export function isOpenInterestHistoryResult(value: unknown, asOf: string, window
   }
   if (record.state !== 'available' || record.asOf !== asOf || record.window !== window) return false
   if (!isOpenInterestSeries(record.btc, asOf) || !isOpenInterestSeries(record.eth, asOf)) return false
+  // 折叠前的最新读数：必须是规范时刻，且不能晚于这次读取的 asOf（晚于它就是未来，不采信）。
+  if (record.newestReadingAt !== undefined
+    && (!isCanonicalOpenInterestTime(record.newestReadingAt) || record.newestReadingAt > asOf)) return false
 
   if (record.change !== undefined) {
     if (!isPlainRecord(record.change)) return false

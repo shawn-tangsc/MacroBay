@@ -46,6 +46,26 @@ export function resolveEnabledNotice(
   return labels.enabledAutoCollectQueued
 }
 
+/** 一次「立即运行」的结果：成功了 / 这次没成 / 提交了但还没拿到结果。 */
+export type SourceRunOutcome = Readonly<{
+  kind: 'succeeded' | 'failed' | 'unknown'
+  /** 给读者看的那一句（成功带摘要，失败带原因，拿不到结果时如实说还在等）。 */
+  notice: string
+}>
+
+/** 健康读数 → 一次运行的结果。判据与 `resolveRunNotice` 同一份，避免句子与状态互相打架。 */
+export function runOutcomeOf(
+  health: Awaited<ReturnType<typeof intelligenceSourcesClient.getHealth>>,
+  labels: { runQueued: string; runSucceeded: string; runFailed: string }
+): SourceRunOutcome {
+  const notice = resolveRunNotice(health, labels)
+  if (health.lastFailureAt && (!health.lastSuccessAt || health.lastFailureAt >= health.lastSuccessAt)) {
+    return { kind: 'failed', notice }
+  }
+  if (health.lastSuccessAt) return { kind: 'succeeded', notice }
+  return { kind: 'unknown', notice }
+}
+
 /** 跑一次之后要说哪一句：失败优先，成功带摘要，没有任何结果时是「已排队」。 */
 export function resolveRunNotice(
   health: Awaited<ReturnType<typeof intelligenceSourcesClient.getHealth>>,
@@ -84,7 +104,6 @@ export function toSaveProfileInput(profile: IntelligenceSourceProfile) {
   return {
     sourceId: profile.sourceId,
     collectionPreset: profile.collectionPreset,
-    includeInSentiment: profile.includeInSentiment,
     scopePolicy: profile.scopePolicy,
     rawArchiveEnabled: profile.rawArchiveEnabled,
     retentionMode: profile.retentionMode,

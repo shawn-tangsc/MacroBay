@@ -7,6 +7,8 @@ import type {
 } from '../../../secrets/channels/channelCredentialContracts'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import { assertDiscordSecret, assertLarkSecret, assertQqSecret, assertSenderId, assertSlackSecret, assertTelegramSecret, type ChannelManagementResult, type SecureHandoffSubmit } from './ChannelManagementContracts'
+import { channelAdapterDescriptor } from './channelAdapterDescriptors'
+import { channelAdapterKeyForType } from './ChannelManagementPredicates'
 import { ChannelManagementRepository, type TelegramLifecycleOwner } from './ChannelManagementRepository'
 import { ChannelCredentialRecoveryService } from './ChannelCredentialRecoveryService'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
@@ -66,16 +68,7 @@ export class ChannelManagementCredentialService {
       const type = this.deps.repository.channelType(input.id)
       if (!type) return { ok: false, code: 'channel-not-found' }
       const value = JSON.parse(new TextDecoder().decode(plaintext))
-      const secret = type === 'slack'
-        ? assertSlackSecret(value)
-        : type === 'feishu'
-          ? assertLarkSecret(value)
-          : type === 'qq'
-            ? assertQqSecret(value)
-          : type === 'discord'
-              ? assertDiscordSecret(value)
-              : assertTelegramSecret(value)
-      // 编辑弹层保存 Token 走的是 `rotate`，「新建」走 `provision`。两条都得先看清**已有凭据的真实形态**：
+      // 编辑弹层保存凭据走的是 `rotate`，「新建」走 `provision`。两条都得先看清**已有凭据的真实形态**：
       // 能正常读 → 就地轮换；读不出来（预留记录、或已失效）→ 新写入 + 切 ref + 旧记录幂等清理。
       // 以前只有「有元数据就 rotate」这一条判据，而所有凭据都是预留记录 → 换 Token 必然失败，
       // 用户的凭据还被那几次失败的 rotate 打成 unavailable（每试一次多一条卡住的操作）。
@@ -84,7 +77,17 @@ export class ChannelManagementCredentialService {
       // 「读不出来」才换 ref 重写；「读得出来但 revision 落后」仍旧走轮换，让 CAS 失败如实报出来
       // （`channel-credential-mutation-incomplete`），不能拿一次重写把它悄悄盖过去。
       const readable = current ? await this.credentialReadState(current) : 'unreadable'
-      if (intent === 'rotate' && current && readable !== 'unreadable') {
+      const rotating = intent === 'rotate' && current !== null && readable !== 'unreadable'
+      const patch = nonEmptyFields(value)
+      // 轮换允许**只填其中一项**（多字段凭据：只换 App Token 不重填 Bot Token）。界面拿不到旧值，
+      // 所以「留空＝保持原值」只能在这里做：读出现有凭据，用填了的字段覆盖，再按完整形状校验。
+      // 只有**字段不齐**时才去读旧值：字段齐的轮换保持原路径一字不动（不额外碰 Vault）。
+      const partial = descriptorFields(type).some((field) => !(field in patch))
+      const merged = rotating && current && partial
+        ? { ...(await this.deps.vault.get(current.ref)) ?? {}, ...patch }
+        : patch
+      const secret = assertSecretShape(type, merged)
+      if (rotating) {
         return await this.rotateKnown(input.id, input.actorId, type, secret, input.owner)
       }
       return await this.provisionReserved(input.id, input.actorId, type, secret, input.owner, expectedRevision, current ?? undefined)
@@ -295,4 +298,31 @@ export class ChannelManagementCredentialService {
     return { ok: false, code: 'channel-management-metadata-failed' }
   }
 
+}
+
+
+/** 只保留真正填了的字段：界面「留空＝不修改」就是靠把空串丢掉实现的。 */
+function nonEmptyFields(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const out: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw !== 'string') continue
+    const trimmed = raw.trim()
+    if (trimmed.length > 0) out[key] = trimmed
+  }
+  return out
+}
+
+/** 按适配器键校验**完整**形状；形状不全／多了键一律 `channel-input-invalid`。 */
+function assertSecretShape(type: AgentChannelType, value: unknown): Record<string, string> {
+  if (type === 'slack') return assertSlackSecret(value)
+  if (type === 'feishu') return assertLarkSecret(value)
+  if (type === 'qq') return assertQqSecret(value)
+  if (type === 'discord') return assertDiscordSecret(value)
+  return assertTelegramSecret(value)
+}
+
+/** 这个适配器的凭据字段清单（来自描述符）：判断这次提交是不是「只填了一部分」。 */
+function descriptorFields(type: AgentChannelType): readonly string[] {
+  return channelAdapterDescriptor(channelAdapterKeyForType(type)).credentialFields
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
-import type { AgentSessionEntity, AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { normalizeSessionOrigin, type AgentSessionEntity, type AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { AgentComposedMessage } from '@renderer/shell/agents/agentMessageSendFlow'
 import { analysisWorkspacePolicy, type AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
@@ -71,7 +71,12 @@ export function useMarketAnalysisChat(
    * key: choosing a node changes the next message's context, never the conversation being read.
    */
   const sessions = useMemo<AgentSessionEntity[]>(() => {
-    const matching = (state?.sessions ?? []).filter(session => session.agentId === analysisWorkspacePolicy.agentId)
+    // 这个面板是**读者自己的对话**：自动分析会话（origin=automation）属于侧栏「自动会话」，
+    // 不属于这里。以前没滤，面板会选中最新的那条自动会话——里面只有一张上下文卡片，打开就是空白，
+    // 读者发的问题也落到 analysts 的 run 会话上（E1）。
+    const matching = (state?.sessions ?? []).filter(
+      session => session.agentId === analysisWorkspacePolicy.agentId && normalizeSessionOrigin(session.origin) !== 'automation'
+    )
     return [...matching].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
   }, [state?.sessions])
 

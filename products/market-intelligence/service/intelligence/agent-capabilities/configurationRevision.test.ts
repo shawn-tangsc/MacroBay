@@ -14,7 +14,6 @@ function profile(overrides: Partial<IntelligenceSourceProfile> = {}): Intelligen
     sourceId: 'source-a',
     enabled: true,
     collectionPreset: 'balanced',
-    includeInSentiment: true,
     scopePolicy: 'all',
     rawArchiveEnabled: false,
     retentionMode: 'balanced',
@@ -33,7 +32,9 @@ describe('computeConfigurationRevision', () => {
 
   it('pins the exact revision for a fixed configuration', () => {
     // Pinned so a change to the field order or the row/digest delimiters fails here.
-    expect(computeConfigurationRevision({ profiles: [profile()] })).toBe('006681166362')
+    // 2026-11-12 换过一次值：`includeInSentiment` 按用户决定从 profile 里删除（死开关），
+    // 修订输入少了一列，所以这里从 `006681166362` 变成 `3a965339d5aa`。此后字段再变要再换并写明原因。
+    expect(computeConfigurationRevision({ profiles: [profile()] })).toBe('3a965339d5aa')
   })
 
   it('is stable when the profiles do not change', () => {

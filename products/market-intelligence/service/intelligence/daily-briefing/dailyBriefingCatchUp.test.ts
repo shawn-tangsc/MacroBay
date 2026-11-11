@@ -119,11 +119,10 @@ describe('the cutoff of a period is the wall clock the reader configured', () =>
     expect(briefingCatchUpDue(period(), ZONE, '2026-11-05T22:30:00.000Z')).toBeUndefined()
   })
 
-  it('reads the period’s own zone when it has one', () => {
-    const utc = period({ generationTimeZone: 'UTC' })
-    // 按 UTC 的钟：此刻 UTC 23:30（11/05），UTC 07:00 已经过了 16 小时 → 早超出 1 小时窗口。
-    expect(briefingCatchUpDue(utc, ZONE, AFTER_CUTOFF)).toEqual({ date: '2026-11-05', cutoff: '2026-11-05T07:00:00.000Z', expired: true })
-    expect(briefingCatchUpDue(utc, ZONE, '2026-11-06T07:30:00.000Z')).toEqual({ date: '2026-11-06', cutoff: '2026-11-06T07:00:00.000Z', expired: false })
+  it('reads the clock in the reader’s zone — a period does not carry one', () => {
+    // 读取者在 UTC：此刻 UTC 23:30（11/05），UTC 07:00 已经过了 16 小时 → 早超出 1 小时窗口。
+    expect(briefingCatchUpDue(period(), 'UTC', AFTER_CUTOFF)).toEqual({ date: '2026-11-05', cutoff: '2026-11-05T07:00:00.000Z', expired: true })
+    expect(briefingCatchUpDue(period(), 'UTC', '2026-11-06T07:30:00.000Z')).toEqual({ date: '2026-11-06', cutoff: '2026-11-06T07:00:00.000Z', expired: false })
   })
 })
 

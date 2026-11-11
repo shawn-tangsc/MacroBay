@@ -14,6 +14,10 @@ import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBrief
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { briefingEditionDeleteCopy } from './briefingEditionDeleteConfirm'
 import { formatDuration } from './DailyBriefingGenerationTimeline'
+import { clockOf, formatRailDate, railClock, reasonOf, reasonSuffix, runReasonOf } from './briefingRailRowText'
+
+// 两处既有引用（页面、手动生成结果文案）从这里取 `railClock`：搬家不改变导入路径。
+export { railClock, formatRailDate } from './briefingRailRowText'
 
 /** Which edition is on screen: one identity, shared by the rail and the page. */
 export type BriefingRailSelection = Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }>
@@ -75,23 +79,6 @@ function triggerLabelOf(kind: RailTriggerKind | undefined, text: DailyBriefingTe
   return text.history.notRecorded
 }
 
-/**
- * 第一行那个时刻：定时期写「截止 07:00」，**手动期没有截止**，写「08:00 发起」。
- *
- * 手动期借默认期的 07:00 是以前真出过的错：那一行说的是别人的时刻。老记录既没有 periodTime 也没有
- * 排期时刻时返回 `undefined`，界面写「未记录」，不回填。
- */
-function clockOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText, timeZone: string): string | undefined {
-  // 手动期：`periodTime` 就是这次发起的那一刻（没有版次时由尝试记录的 started_at 补上）。
-  if (edition.periodKind === 'manual') {
-    if (edition.periodTime === undefined) return undefined
-    return text.history.timeStarted.replace('{time}', railClock(edition.periodTime, timeZone))
-  }
-  const nominal = edition.periodTime === undefined ? edition.scheduledTime : railClock(edition.periodTime, timeZone)
-  if (nominal === undefined) return undefined
-  return `${text.history.timeCutoff} ${nominal}`
-}
-
 export function DailyBriefingHistoryRail({
   editions, dates, failed = false, loading = false, onRetry, selectedDate, selectedPeriodId, selectedLocale,
   todayDate, locale, text, timeZone, generatingStage, generatingElapsedMs, resolveText, onSelect, onSelectLocale, onDeletePeriod,
@@ -128,6 +115,10 @@ export function DailyBriefingHistoryRail({
   onSelectLocale?: (selection: BriefingRailSelection) => void
   /** 删这一版。`clock` 跟着一起来：成功那句要点名 `日期 · 时刻 · 语言`。 */
   onDeletePeriod?: (input: Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale; clock?: string }>) => void | Promise<void>
+  /**
+   * 打开这一版**最新一次生成**用的会话（E9）。返回 `false` 表示会话已经不在了：行上就地一句，
+   * 不跳转（产品 §8 第 6 条）。返回 `true` 时页面已经切走，行的选中态不再重要。
+   */
   // 行上不放重试：重试只在正文失败面板与工具栏（用户 2026-11-06）。行只陈述事实。
   /**
    * 页面自己发起的那次跑：`(日期, 期号, 语言)` 三元组。
@@ -290,8 +281,8 @@ export function DailyBriefingHistoryRail({
               ?? (running ? (edition.periodKind === 'manual' ? 'manual' as const : 'scheduled' as const) : undefined)
             const clock = clockOf(edition, text, timeZone)
             const title = edition.summaryLine ?? ''
-            // 行上**不放任何按钮**（用户 2026-11-06：list 上每个 item 都有重试按钮，太重）。
-            // 重试只在正文的失败面板与工具栏，行本身只陈述事实。
+            // 行上**只放这一颗**动作（E9"打开会话"）。重试仍然只在正文的失败面板与工具栏——
+            // 用户 2026-11-06 否掉的是"每个 item 都挂重试按钮"，不是动作本身。
             const interrupted = runReasonOf(edition) === 'run-interrupted'
             /**
              * **失败只认这一行自己的原因**，不许用"有没有尝试过"去猜（用户 2026-11-07 的回归：成功行也
@@ -432,48 +423,6 @@ export function DailyBriefingHistoryRail({
   </aside>
 }
 
-function runReasonOf(edition: DailyBriefingEditionSummary): string | undefined {
-  return (edition.languages ?? []).find((language) => language.reason !== undefined)?.reason
-}
-
-
-/**
- * 没有正文的那一行，第二行写的是**为什么没有**——空行会被读成"还在加载"。
- *
- * 中断过的、失败过的、从没跑过的不是同一件事：一个还可以再试，一个这次没生成出来，一个是根本没开始。
- */
-/** 第二行状态词后面那半句：失败说"这次没生成出来"，从没跑过说"这一期没有生成过"。 */
-function reasonSuffix(edition: DailyBriefingEditionSummary, text: DailyBriefingText, failedRun: boolean, interrupted: boolean): string | null {
-  if (interrupted) return null
-  return failedRun ? ` ${text.history.railFailedReason}` : ` ${text.history.railNotRun}`
-}
-
-function reasonOf(edition: DailyBriefingEditionSummary, text: DailyBriefingText): string {
-  const reason = runReasonOf(edition)
-  if (reason === 'run-interrupted') return text.history.runInterrupted
-  if (reason === 'run-failed') return text.history.railFailedReason
-  // 读者自己的动作：不建行、也不编一句"没跑过"（`02` v2.176）。走到这里说明投影漏了，留空。
-  if (reason === 'run-cancelled') return ''
-  return text.history.railNotRun
-}
-
-/** `HH:mm` in the reader's zone: the row's date is on the line above, the offset is the setting's. */
-export function railClock(instant: string, timeZone: string): string {
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(instant))
-  } catch {
-    return instant.slice(11, 16)
-  }
-}
-
-export function formatRailDate(date: string, locale: DailyBriefingLocale): string {
-  const parsed = Date.parse(`${date}T00:00:00.000Z`)
-  if (!Number.isFinite(parsed)) return date
-  const value = new Date(parsed)
-  const day = new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', timeZone: 'UTC' }).format(value)
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(value)
-  return `${day} ${weekday}`
-}
 
 const formatDate = formatRailDate
 

@@ -253,6 +253,7 @@ build); CI runs the same command, so this page never keeps its own copy of the l
 
 Then install the produced package on a clean machine and verify:
 
+- **the release self-check passes**: `pnpm exec tsx scripts/release/check-superseded-origins.mts --user-data "<the installed app's data directory>"` — run it against the installed package's data directory, not a source window's profile; it must report `rows marked superseded without an origin reference: 0` and `PASS`, and a machine that never ran the 0.4.1 build reports `PASS` with the reason instead of an error;
 - first launch and model-service configuration;
 - a real agent turn;
 - local data written under `userData`;

@@ -1,13 +1,4 @@
-import type { KeyboardEvent } from 'react'
-
-import type { ChatSettings } from '@platform/settings/schema/appSettings'
-
-export function isSendShortcut(event: KeyboardEvent<HTMLTextAreaElement>, shortcut: ChatSettings['sendShortcut']): boolean {
-  if (event.key !== 'Enter' || event.nativeEvent.isComposing) return false
-  if (shortcut === 'mod-enter') return event.metaKey || event.ctrlKey
-  return !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey
-}
-
+// 发送快捷键的判定不在这里：两面（智能体 / 助手）共用一份，见 `shell/chat/chatSendShortcut.ts`。
 export function resizeTextarea(textarea: HTMLTextAreaElement, maxHeight: number): void {
   textarea.style.height = 'auto'
   textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`

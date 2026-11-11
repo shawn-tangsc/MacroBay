@@ -50,6 +50,47 @@ describe('the macro-market snapshot', () => {
     store.close()
   })
 
+  it('reads only the source the reader chose for the dollar cell, never both', () => {
+    // 同一格不许同时读主备两个源：选了十二数据就只取合成那条（哪怕真实那条更新），选了 RealMarketAPI
+    // 就只取真实那条（哪怕合成那条更新）。缺键仍按今天的规则走（见下面那条既有用例）。
+    const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
+    const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))
+    const series = macroMarketPolicy.series
+    store.append([
+      { series: series.dollarIndexReal, atMs: at(60), value: 99.5, observedAtMs: at(60) },
+      { series: series.dollarIndex, atMs: at(30), value: 101.2, observedAtMs: at(30) }
+    ])
+    const query = createMacroMarketSnapshotQuery({ store, now: () => at(60) })
+    const chosenSynthetic = query.snapshot({ dollarSourceId: 'twelve-data-market' })
+    const synthetic = chosenSynthetic.readings.filter(reading => reading.seriesId.includes('dxy'))
+    expect(synthetic).toHaveLength(1)
+    expect(synthetic[0]).toMatchObject({ seriesId: series.dollarIndex, synthetic: true, level: 101.2 })
+
+    const chosenReal = query.snapshot({ dollarSourceId: 'realmarketapi-market' })
+    const real = chosenReal.readings.filter(reading => reading.seriesId.includes('dxy'))
+    expect(real).toHaveLength(1)
+    expect(real[0]).toMatchObject({ seriesId: series.dollarIndexReal, level: 99.5 })
+    expect(real[0]!.synthetic).toBeUndefined()
+    // 没选过：今天的规则不变（真实那条有点就取真实）。
+    const defaulted = query.snapshot()
+    expect(defaulted.readings.find(reading => reading.seriesId.includes('dxy'))?.seriesId).toBe(series.dollarIndexReal)
+    store.close()
+  })
+
+  it('shows nothing for an explicitly chosen source that has no reading, instead of borrowing the other', () => {
+    // 显式选了 B、B 没数据：不许拿 A 的数顶上去（三态里的「读不到」由卡片说，数据层就是没有）。
+    const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
+    const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))
+    const series = macroMarketPolicy.series
+    store.append([{ series: series.dollarIndexReal, atMs: at(60), value: 99.5, observedAtMs: at(60) }])
+    const query = createMacroMarketSnapshotQuery({ store, now: () => at(60) })
+    const chosenSynthetic = query.snapshot({ dollarSourceId: 'twelve-data-market' })
+    expect(chosenSynthetic.readings.filter(reading => reading.seriesId.includes('dxy'))).toEqual([])
+    // 不选的时候仍按原规则取到真实那条。
+    expect(query.snapshot().readings.find(reading => reading.seriesId.includes('dxy'))?.seriesId).toBe(series.dollarIndexReal)
+    store.close()
+  })
+
   it('says empty rather than inventing a level, and drops the synthetic caveat with it', () => {
     const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
     const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))

@@ -90,12 +90,10 @@ function config() {
     desiredRuntimeState: 'polling' as const,
     parserStrategy: 'rss-v1',
     noisePolicy: 'balanced' as const,
-    includeInSentiment: true,
     scopePolicy: 'watchlist-priority' as const,
     rawArchiveEnabled: true,
     retentionMode: 'balanced' as const,
     autoReplayAfterParserUpgrade: true,
-    sentimentEligible: true,
     adapterConfig: {}
   }
 }

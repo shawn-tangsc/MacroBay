@@ -103,12 +103,6 @@ const APPLICABILITY_BY_SOURCE_ID: Record<string, ApplicabilitySeed> = {
     venueScopes: ['binance'],
     instrumentScopes: ['ETHUSDT', 'BTCUSDT']
   },
-  'binance-asset-page': {
-    sourceKind: 'mixed-news-hub',
-    applicabilityMode: 'instrument',
-    focusMarkets: ['digital-assets'],
-    venueScopes: ['binance']
-  },
   'defillama-stablecoins': {
     sourceKind: 'data-aggregator',
     applicabilityMode: 'market-domain',

@@ -6,6 +6,8 @@ import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
+import { resolveStateViewText } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { divergencePolicy } from '../../../../contracts/marketDivergence'
@@ -391,6 +393,30 @@ describe('divergence panel · the states around the line', () => {
     expect(markup).not.toContain('mi-divergence__summary')
   })
 
+  it('offers one retry on a failed read, and the button reaches the retry entry', async () => {
+    // 读不到时读者要有出路：这一行里那颗「重试」必须真的接到 `onRetry`，不是一颗点了没反应的按钮。
+    const retry = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(scoped(createElement(DivergencePanel, {
+        state: { state: 'unavailable', reason: 'query-failed', missing: [] },
+        onRetry: retry,
+        text
+      })))
+    })
+    const button = host.querySelector<HTMLButtonElement>('.mi-divergence__retry')
+    expect(button).not.toBeNull()
+    expect(button!.textContent).toBe(resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry))
+    await act(async () => { button!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(retry).toHaveBeenCalledTimes(1)
+    // 一行里只有这一颗动作，不加第二个框。
+    expect(host.querySelectorAll('.mi-divergence__unavailable button')).toHaveLength(1)
+    await act(async () => { root.unmount() })
+    document.body.innerHTML = ''
+  })
+
   it('renders the summary in the reader language', () => {
     const english = productText['en-US'].pages.intelligence.portal.dashboard.divergence
     const markup = render(answer([row]), 'en-US')
@@ -517,3 +543,5 @@ describe('divergence panel · the explanation sits behind one icon', () => {
     await act(async () => { root.unmount() })
   })
 })
+
+

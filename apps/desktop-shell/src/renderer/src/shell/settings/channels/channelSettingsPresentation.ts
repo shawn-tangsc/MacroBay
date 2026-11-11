@@ -44,13 +44,21 @@ export type RuntimeStatus = { channelId: string; generation: number; lifecycle: 
 export type Candidate = { id: string; kind: 'direct' | 'group' | 'channel'; displayLabel: string | null; firstSeenAt: string; lastSeenAt: string; hitCount: number; status: 'pending' | 'allowed' | 'ignored' }
 export type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKind: string | null }
 export type Agent = { id: string; name: string }
-export type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string; implemented: boolean }
+export type Catalog = {
+  type: string
+  status: 'planned' | 'blocked' | 'supported'
+  reason: string
+  implemented: boolean
+  /** 凭据字段（来自适配器描述符）：弹层按它逐项渲染输入框，界面不写死平台名。 */
+  credentialFields: readonly string[]
+}
 
 /** 目录状态 → 档位：按数据值查表，穷举闭集；多一个取值就编译不过，没有兜底档。 */
 export const catalogTone: Record<Catalog['status'], StatusPillTone> = {
   supported: 'ok',
   planned: 'muted',
-  blocked: 'bad'
+  // 「没有真机验收证据」= 这个版本还不能启用，**不是故障**。画成红色会让六格里五格像系统坏了。
+  blocked: 'muted'
 }
 
 /**
@@ -178,7 +186,8 @@ export function toCatalog(entry: ChannelManagementCatalogEntry): Catalog {
     type: entry.type,
     status: entry.status,
     reason: entry.reason,
-    implemented: entry.implemented
+    implemented: entry.implemented,
+    credentialFields: entry.credentialFields
   }
 }
 
@@ -200,28 +209,6 @@ export function readAgents(value: unknown): Agent[] {
     const id = fields.id
     const name = fields.name
     return typeof id === 'string' && typeof name === 'string' ? [{ id, name }] : []
-  })
-}
-
-/**
- * `agents.getState()` 里的工作区列表 → 下拉能用的选项。
- *
- * 只收 `type === 'user'`：系统默认目录不是「一条工作区」，它由「不使用工作目录」表达。
- * 字段照样逐个验（那个口子还没标类型），少一个字段就丢掉这一条，而不是把 undefined 画进下拉。
- */
-export function readWorkspaces(value: unknown): { id: string; name: string; path: string }[] {
-  if (typeof value !== 'object' || value === null) return []
-  const bucket = value as Record<string, unknown>
-  const list = bucket.workspaces
-  if (!Array.isArray(list)) return []
-  return list.flatMap((entry) => {
-    if (typeof entry !== 'object' || entry === null) return []
-    const fields = entry as Record<string, unknown>
-    const { id, name, path, type } = fields
-    if (type !== 'user') return []
-    return typeof id === 'string' && typeof name === 'string' && typeof path === 'string'
-      ? [{ id, name, path }]
-      : []
   })
 }
 

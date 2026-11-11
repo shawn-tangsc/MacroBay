@@ -31,7 +31,6 @@ const sourceSummaryProperties = {
   domains: { type: 'array', items: { type: 'string', enum: ['dashboard', 'calendar'] } },
   enabled: { type: 'boolean' },
   collectionPreset: { type: 'string', enum: ['manual', 'balanced', 'frequent'] },
-  includeInSentiment: { type: 'boolean' },
   scopePolicy: { type: 'string', enum: ['all', 'watchlist-priority', 'active-position-priority'] },
   retentionMode: { type: 'string', enum: ['compact', 'balanced', 'extended'] },
   rawArchiveEnabled: { type: 'boolean' },

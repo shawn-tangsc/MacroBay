@@ -1,4 +1,5 @@
 import type { AgentFact, AnalysisConclusion } from '../../../contracts/marketAnalysisContracts'
+import { percentagesIn } from './analysisPrintedNumbers'
 import { MARKET_ANALYSIS_POLICY_PATH_METRICS } from '../../../contracts/marketAnalysisContracts'
 
 /**
@@ -30,7 +31,14 @@ export const analysisProbabilityDefects = Object.freeze({
    */
   absent: 'policy-probability-absent',
   missingInstant: 'policy-probability-missing-instant',
-  notFrozen: 'policy-probability-not-frozen',
+  /**
+   * A percentage in the prose that the frozen snapshot does not carry.
+   *
+   * 旧名是 `policy-probability-not-frozen`（2026-11-11 改名）：它把「正文里有个数找不到出处」
+   * 读成了「概率没冻结」，而真正的原因常常只是**负号在读取时被吃掉**。历史运行行里仍是旧码，
+   * 那是事实记录、不改写；新写入一律用这个名字。
+   */
+  notInSnapshot: 'policy-probability-not-in-snapshot',
 
 })
 
@@ -39,6 +47,8 @@ export type AnalysisProbabilityDefect = (typeof analysisProbabilityDefects)[keyo
 /** The part of a frozen snapshot this reading needs; a full snapshot satisfies it. */
 export type ProbabilityEvidence = Readonly<{
   facts: readonly Pick<AgentFact, 'metric' | 'value' | 'observedAt'>[]
+  /** 变更摘要里印给模型看过的百分数：引用它们不算编数（见 `changeValuesForPrompt`）。 */
+  changeValues?: readonly number[]
 }>
 
 /**
@@ -59,34 +69,27 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
   // **正文里每个百分数逐个查快照出处**：不在快照里的数就是编造——拒的理由是"那个数不存在"，
   // 与句子用了什么词无关。旧做法（`概率/定价` 前后 N 个字）是对措辞的猜测，换个说法就绕过。
   const mentioned = percentagesIn(prose)
-  const allowed = snapshotNumbers(snapshot)
+  // 变更摘要印过的数只进「有没有出处」这一份集合，且仍按**等值/整数取整**判——概率那条整数约数
+  // 语义不沿用它（架构师 2026-11-11）。
+  const allowed = [...snapshotNumbers(snapshot), ...(snapshot.changeValues ?? [])]
   for (const value of mentioned) {
-    if (!tracedToSnapshot(value, allowed)) return analysisProbabilityDefects.notFrozen
+    // 概率可以写**它的整数约数**（76.65 → 76 / 77），所以这一轮也要用它那份判定；其余数只认等值。
+    if (!tracedToSnapshot(value, allowed) && !tracedToProbability(value, probabilities.map(fact => Number(fact.value)))) {
+      return analysisProbabilityDefects.notInSnapshot
+    }
   }
   const probabilityValues = probabilities.map(fact => Number(fact.value))
   // 整段没有一处提到快照里的概率 → 与原来的「回避」同一个缺陷（事实判据，不靠关键词）。
-  if (!mentioned.some(value => tracedToSnapshot(value, probabilityValues))) return analysisProbabilityDefects.absent
+  if (!mentioned.some(value => tracedToProbability(value, probabilityValues))) return analysisProbabilityDefects.absent
   for (const fact of probabilities) {
     const value = Number(fact.value)
-    if (mentioned.some(candidate => tracedToSnapshot(candidate, [value])) && !mentionsInstant(prose, fact.observedAt!)) {
+    if (mentioned.some(candidate => tracedToProbability(candidate, [value])) && !mentionsInstant(prose, fact.observedAt!)) {
       return analysisProbabilityDefects.missingInstant
     }
   }
   return undefined
 }
 
-/**
- * 正文里的**每一个百分数**，逐个查它在快照里有没有出处。
- *
- * 旧做法是「`概率/定价` 前后 N 个字以内的数字」——那是对措辞的猜测：`概率/定价` 只是其中一种说法，
- * 模型换个说法就绕过去了，而合规的写法（`目标区间 4.00%–4.25%`）反而会被窗口吞掉。现在只问事实：
- * **这个数在快照里存在吗**。
- */
-function percentagesIn(text: string): number[] {
-  return [...text.matchAll(/(\d+(?:\.\d+)?)\s*(?:%|\uFF05)/gu)]
-    .map(match => Number(match[1]))
-    .filter(value => Number.isFinite(value))
-}
 
 /** 快照里出现过的所有数字：数字型值直接取，字符串型值把里面的数（如 `4.00%–4.25%`）也取出来。 */
 function snapshotNumbers(snapshot: ProbabilityEvidence): readonly number[] {
@@ -101,6 +104,21 @@ function snapshotNumbers(snapshot: ProbabilityEvidence): readonly number[] {
 /** 某个数在快照里有没有出处：等值，或等于它的整百分点（正文写约数是允许的）。 */
 function tracedToSnapshot(value: number, allowed: readonly number[]): boolean {
   return allowed.some(candidate => Math.abs(candidate - value) < 0.05 || Math.abs(Math.round(candidate) - value) < 0.05)
+}
+
+/**
+ * 概率的整数约数：**同一个数相邻的那两个整数**，不是「差得不多」。
+ *
+ * 76.65 写 76（舍）或 77（入）都是合规写法（用户 2026-11-08：正文每个数都要有出处，约数是写法
+ * 不是编数）；75 离它一格半，仍是编造。边界写死在「floor / ceil 之一且候选是整数」，不做容差——
+ * 一旦改成容差，编出来的数就会顺着容差溜进来。
+ */
+function tracedToProbability(value: number, probabilities: readonly number[]): boolean {
+  return probabilities.some(candidate =>
+    Math.abs(candidate - value) < 0.05 ||
+    Math.abs(Math.round(candidate) - value) < 0.05 ||
+    (Number.isInteger(value) && !Number.isInteger(candidate) &&
+      (value === Math.floor(candidate) || value === Math.ceil(candidate))))
 }
 
 /** `observedAt` is UTC; accept the ISO form, `YYYY-MM-DD HH:mm`, or `MM-DD HH:mm`. */

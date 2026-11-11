@@ -13,7 +13,12 @@ let root: Root | undefined
 
 const catalogEntries = [
   { type: 'telegram', status: 'supported', reason: 'release-a-pending', implemented: true, credentialFields: ['bot_token'] },
-  { type: 'feishu', status: 'blocked', reason: 'adapter-blocked', implemented: false, credentialFields: [] }
+  { type: 'slack', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token', 'app_token'] },
+  { type: 'discord', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['bot_token'] },
+  { type: 'qq', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['app_id', 'client_secret'] },
+  { type: 'feishu', status: 'blocked', reason: 'adapter-blocked', implemented: true, credentialFields: ['app_id', 'app_secret'] },
+  // 没实现的平台目录里仍有一行，但**列表里不出现**：列表回答的是「我现在能用哪个」。
+  { type: 'wechat', status: 'blocked', reason: 'adapter-blocked', implemented: false, credentialFields: [] }
 ]
 
 const channel = {
@@ -73,6 +78,26 @@ function installPlatform(overrides: Record<string, unknown> = {}): Record<string
 
 function stateOf(container: HTMLElement, state: string): Element | null {
   return container.querySelector(`[data-state="${state}"]`)
+}
+
+/**
+ * 打开「新建」弹层：空态时右上角那颗「添加」不画（原型：一屏一颗动作），入口是 `StateView` 的「创建」；
+ * 非空时走右上角。两种都只点**一颗**，用它取即可。
+ */
+/** 点开 Bot Token 字段名旁的 ⓘ：说明只在那里，正文不再有提示句。 */
+async function openTokenInfo(): Promise<void> {
+  const info = [...document.body.querySelectorAll('button')].find(
+    (node) => node.getAttribute('aria-label') === labels.channelTokenInfoAria
+  ) as HTMLButtonElement | undefined
+  await act(async () => info?.click())
+  await act(async () => {})
+}
+
+async function openCreate(container: HTMLElement): Promise<void> {
+  const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
+  const target = add ?? container.querySelector<HTMLElement>('[data-state="empty"] .state-view__action')
+  await act(async () => target?.click())
+  await act(async () => {})
 }
 
 async function mount(): Promise<HTMLElement> {
@@ -204,32 +229,37 @@ describe('a channel row', () => {
   })
 })
 
-describe('the two fields that became saveable', () => {
-  it('shows "inherit the agent" for a null permission mode and "no working folder" for the system workspace', async () => {
-    installPlatform({ list: vi.fn(async () => [{ ...channel, permissionMode: null, workspace: { type: 'system' } }]) })
-    const container = await mount()
+/**
+ * 判据变了（2026-11-10）：工作目录与权限模式这两栏撤掉之后，这一屏只回答两件事——
+ * 「这条频道是什么」+「开不开」。原来那三条用例问的是「这两样能不能保存」；现在问的是
+ * **「有没有第二个权威」**：弹层里不许再出现这两个控件，保存也不许把这两样交给接口。
+ */
+describe('the channel dialog has one authority for permission and working folder', () => {
+  /** 有标签外壳的那两项（名称与智能体是裸输入，没有 FieldShell）。 */
+  const labelledFields = (): string[] =>
+    [...document.body.querySelectorAll('.channel-field-label')].map((node) => node.textContent?.trim() ?? '')
+  /** 弹层里还剩几个下拉：工作目录与权限模式都曾是 Select，只留「绑定智能体」那一个。 */
+  const selects = (): number => document.body.querySelectorAll('.ant-select').length
 
+  async function openEditor(): Promise<void> {
+    const container = await mount()
     const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
       (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
     )
     await act(async () => edit?.click())
     await act(async () => {})
+  }
 
-    expect(document.body.textContent).toContain(labels.channelPermissionInherit)
-    expect(document.body.textContent).toContain(labels.channelWorkspaceDefault)
-  })
-
-  it('sends the workspace and the permission mode through update, keeping "inherit" as null', async () => {
+  it('offers exactly four fields when editing, and sends neither field to the interface', async () => {
     const channels = installPlatform({
-      list: vi.fn(async () => [{ ...channel, permissionMode: null, workspace: { type: 'system' } }])
+      list: vi.fn(async () => [{ ...channel, permissionMode: 'acceptEdits', workspace: { type: 'user', workspaceId: 'ws-1' } }])
     })
-    const container = await mount()
+    await openEditor()
 
-    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
-      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
-    )
-    await act(async () => edit?.click())
-    await act(async () => {})
+    // 字段清单**恰好**是这些：多一项就是又开始收集第二个答案了。
+    expect(labelledFields()).toEqual([labels.channelCredential, labels.channelFieldAllowedChats])
+    // 只剩「绑定智能体」一个下拉：工作目录与权限模式原本各是 Select。
+    expect(selects()).toBe(1)
 
     const save = [...document.body.querySelectorAll('button')].find(
       (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelUpdate
@@ -237,32 +267,37 @@ describe('the two fields that became saveable', () => {
     await act(async () => save?.click())
     await act(async () => {})
 
-    expect(channels.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'channel-1',
-        workspace: { type: 'system' },
-        permissionMode: null
-      })
-    )
+    const payload = channels.update.mock.calls[0]?.[0] as Record<string, unknown> | undefined
+    expect(payload).toBeDefined()
+    // 逐键比对：多出 workspace / permissionMode 就是把第二个权威又交回去了。
+    expect(Object.keys(payload ?? {}).sort()).toEqual(['actorId', 'agentId', 'allowedChatIds', 'id', 'name'])
   })
 
-  it('sends the system workspace and an inherited mode on create', async () => {
+  it('keeps the allow-list explanation in the ⓘ, not in the body', async () => {
+    installPlatform({ list: vi.fn(async () => []) })
+    const container = await mount()
+    await openCreate(container)
+
+    // 正文只有字段名 / 值 / 控件（加一行状态）；解释在字段名旁边那颗 ⓘ 里，点开才出现。
+    expect(document.body.textContent).not.toContain(labels.channelAllowedChatsHint)
+    const info = [...document.body.querySelectorAll('button')].find(
+      (node) => node.getAttribute('aria-label') === labels.channelAllowedChatsInfoAria
+    ) as HTMLButtonElement | undefined
+    expect(info).toBeDefined()
+    await act(async () => info?.click())
+    await act(async () => {})
+    expect(document.body.textContent).toContain(labels.channelAllowedChatsHint)
+  })
+
+  it('offers the same four fields when creating', async () => {
     const channels = installPlatform({ list: vi.fn(async () => []) })
     const container = await mount()
 
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
+    await openCreate(container)
 
-    const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
-    await act(async () => {
-      name.value = 'Telegram 主频道'
-      name.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    const save = [...document.body.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelCreate)
-    expect(save).not.toBeUndefined()
-    // Token 与助手是必填：没填时保存按钮禁用——这是「不许保存成功但没存」那条规矩的延伸。
-    expect((save as HTMLButtonElement).disabled).toBe(true)
+    expect(labelledFields()).toEqual([labels.channelCredential, labels.channelFieldAllowedChats])
+    expect(selects()).toBe(1)
+    // 两个入口同一套字段：新建这条路径也不该带上那两样。
     expect(channels.create).not.toHaveBeenCalled()
   })
 })
@@ -332,7 +367,9 @@ describe('showing which token is stored', () => {
     const container = await mount()
 
     // 列表行直接显示主进程给的掩码（不是渲染层自己切）。
-    expect(container.querySelector('[data-channel-id="channel-1"] .channel-row-mask')?.textContent).toBe('6050…xAA')
+    // 行上现在带字段名（多字段凭据要按字段各显示一格），所以按**字段**断言掩码，不再比整行字符串。
+    expect(container.querySelector('[data-channel-id="channel-1"] [data-credential-field="bot_token"]')?.textContent)
+      .toBe(`Bot Token 6050…xAA`)
 
     const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
       (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
@@ -349,6 +386,52 @@ describe('showing which token is stored', () => {
     // 输入框仍为空：旧值不被回显。
     const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
     expect(field.value).toBe('')
+  })
+})
+
+describe('a row shows every configured credential field', () => {
+  const slackChannel = (maskedFields: Record<string, string>) => ({
+    ...channel,
+    id: 'channel-slack',
+    type: 'slack',
+    name: 'Slack 测试',
+    credential: { status: 'configured', hasCredential: true, revision: 2, maskedFields },
+    allowedChatIds: []
+  })
+
+  async function showSlack(maskedFields: Record<string, string>): Promise<HTMLElement> {
+    installPlatform({ list: vi.fn(async () => [slackChannel(maskedFields)]) })
+    const container = await mount()
+    const item = [...container.querySelectorAll('.channel-platform-item')].find(
+      (node) => node.textContent?.trim() === CHANNEL_DISPLAY_NAME.slack['zh-CN']
+    )
+    await act(async () => (item as HTMLButtonElement | undefined)?.click())
+    await act(async () => {})
+    return container
+  }
+
+  it('shows both Slack masks in descriptor order, keyed by field name', async () => {
+    const container = await showSlack({ bot_token: 'xoxb…GA3', app_token: 'xapp…3e1' })
+    const segments = [...container.querySelectorAll('[data-channel-id="channel-slack"] [data-credential-field]')]
+    // 断言用的是**键集合与顺序**，不是拼好的整串：以后加平台再只显示一个字段，这条会红。
+    expect(segments.map((node) => node.getAttribute('data-credential-field'))).toEqual(['bot_token', 'app_token'])
+    expect(segments.map((node) => node.textContent)).toEqual(['Bot Token xoxb…GA3', 'App Token xapp…3e1'])
+    expect(segments.every((node) => node.getAttribute('data-configured') === 'true')).toBe(true)
+  })
+
+  it('marks the field that has no value instead of hiding it', async () => {
+    // 只有 bot_token 时，App Token 那一格必须明说「还没填」——藏起来会让读者以为已经配齐。
+    const container = await showSlack({ bot_token: 'xoxb…GA3', app_token: '' })
+    const missing = container.querySelector('[data-channel-id="channel-slack"] [data-credential-field="app_token"]')
+    expect(missing?.getAttribute('data-configured')).toBe('false')
+    expect(missing?.textContent).toContain(labels.channelCredentialMissing)
+  })
+
+  it('still shows exactly one mask for a single-field platform', async () => {
+    installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })
+    const container = await mount()
+    const segments = [...container.querySelectorAll('[data-channel-id="channel-1"] [data-credential-field]')]
+    expect(segments.map((node) => node.getAttribute('data-credential-field'))).toEqual(['bot_token'])
   })
 })
 
@@ -389,7 +472,8 @@ describe('an empty credential is said out loud, never dressed as a mask', () => 
     // 同一屏里不许同时出现相反的结论。
     expect(current?.textContent).not.toContain(labels.channelTokenCurrentNone)
     expect(current?.textContent).not.toContain('当前已存')
-    // 提示也跟着档位走：这一档是「填一把新的换掉它」，不是「留空＝不修改」。
+    // 提示也跟着档位走：这一档是「填一把新的换掉它」，不是「留空＝不修改」。说明在 ⓘ 里。
+    await openTokenInfo()
     expect(document.body.textContent).toContain(labels.channelTokenUnavailableHint)
     expect(document.body.textContent).not.toContain(labels.channelTokenReadOnly)
   })
@@ -411,6 +495,7 @@ describe('an empty credential is said out loud, never dressed as a mask', () => 
     expect(current?.textContent).toContain(labels.channelTokenCurrentNone)
     expect(current?.textContent).not.toContain('当前已存')
     // 「留空＝不修改」在这里是假话：本来就没有可改的值。
+    await openTokenInfo()
     expect(document.body.textContent).toContain(labels.channelTokenEnterHint)
     expect(document.body.textContent).not.toContain(labels.channelTokenReadOnly)
     // 也没有「第 N 次保存」：从没保存过凭据。
@@ -452,7 +537,8 @@ describe('the allowed chat IDs field', () => {
     await openEdit(container)
     await act(async () => {})
 
-    const field = document.body.querySelector('textarea[aria-label="允许的会话 ID"]') as HTMLTextAreaElement
+    // 用文案键取，不写死一句话：字段名换成读者的话时，这条用例不该跟着改。
+    const field = document.body.querySelector(`textarea[aria-label="${labels.channelFieldAllowedChats}"]`) as HTMLTextAreaElement
     await act(async () => {
       // React 会拦截直接赋值：走原型上的 setter，它才认这次变更。
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
@@ -540,8 +626,9 @@ describe('the platform list follows the approved layout', () => {
     const order = [...container.querySelectorAll('.channel-platform-item')].map((node) =>
       node.querySelectorAll('span')[1]?.textContent?.trim()
     )
-    // 产品 2026-11-09：未实现的四个（飞书 / QQ / 微信 / Discord）撤下，只留能开的两个。
-    expect(order).toEqual(['Telegram', 'Slack'])
+    // 判据来自目录的 `implemented`：接上了才出现；微信没实现，所以不在列表里。
+    expect(order).toEqual(['Telegram', 'Slack', 'Discord', 'QQ', '飞书'])
+    expect(container.textContent).not.toContain('WeChat')
   })
 
   it('never shows another platform sentence once the selection changes', async () => {
@@ -552,49 +639,46 @@ describe('the platform list follows the approved layout', () => {
     const slack = [...container.querySelectorAll('.channel-platform-item')].find((node) => node.textContent?.includes('Slack'))
     await act(async () => (slack as HTMLButtonElement).click())
 
-    // Slack 这版接不了：说明换成那一句，且不再出现 Telegram 的说明。
-    expect(container.textContent).toContain(labels.channelUnsupportedPane)
+    // 选中项换了，说明跟着换：不再出现 Telegram 那句。
+    expect(container.textContent).toContain(labels.channelPlatformPurpose.slack)
     expect(container.textContent).not.toContain(labels.channelPlatformPurpose.telegram)
   })
 
-  it('leaves a platform that cannot be connected with its name, what it is for, why not, and no empty block', async () => {
+  it('does not list a platform the catalog has not implemented', async () => {
     installPlatform()
     const container = await mount()
 
-    const slack = [...container.querySelectorAll('.channel-platform-item')].find((node) => node.textContent?.includes('Slack'))
-    await act(async () => (slack as HTMLButtonElement).click())
-
-    // 三样都要：名字在标题，用途与原因各一句——缺用途时读者不知道这个平台是干什么的。
-    expect(container.querySelector('.channel-detail-title')?.textContent).toBe('Slack')
-    expect(container.textContent).toContain(labels.channelPlatformPurpose.slack)
-    expect(container.textContent).toContain(labels.channelUnsupportedPane)
+    // 微信目录里有行、但 implemented=false：列表里一个位置都不占，也不留空块或按不动的项。
+    expect(container.textContent).not.toContain('WeChat')
+    expect([...container.querySelectorAll('.channel-platform-item')]).toHaveLength(5)
     expect(container.querySelector('[data-state="empty"]')).toBeNull()
-    expect([...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)).toBeUndefined()
   })
 
   it('gives every listed platform its own mark', async () => {
     installPlatform()
     const container = await mount()
 
-    // 列表只留能开的两个平台（产品 2026-11-09），每个都有自己的图形。
-    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(2)
-    expect(container.querySelector('.channel-platform-logo[data-platform-logo="telegram"]')).not.toBeNull()
-    expect(container.querySelector('.channel-platform-logo[data-platform-logo="slack"]')).not.toBeNull()
+    // 每个列出来的平台都有自己的图形；Discord 接上之后也在。
+    expect(container.querySelectorAll('.channel-platform-logo svg')).toHaveLength(5)
+    for (const platform of ['telegram', 'slack', 'discord', 'qq', 'feishu']) {
+      expect(container.querySelector(`.channel-platform-logo[data-platform-logo="${platform}"]`)).not.toBeNull()
+    }
   })
 })
 
 describe('an empty platform', () => {
-  it('says no Telegram channel yet, and leaves the only add button at the top right', async () => {
+  it('says no Telegram channel yet, and shows exactly one create action', async () => {
     installPlatform({ list: vi.fn(async () => []) })
     const container = await mount()
 
-    // 空态按组件契约：标准两行（通用标题 + 原因句）加一个「添加」动作，不再叠加自己的一句话。
+    // 空态按组件契约：标准两行（通用标题 + 原因句）加一个「创建」动作。
+    // **一屏只有这一颗**：右上角那颗「添加」在空态时不画（同一件事两个入口，读者会以为是两件事）。
     const empty = container.querySelector('[data-state="empty"]')
     expect(empty).not.toBeNull()
     expect(empty?.querySelectorAll('.state-view__title, .state-view__reason').length).toBe(2)
     expect(empty?.querySelector('.state-view__action')).not.toBeNull()
     const addButtons = [...container.querySelectorAll('button')].filter((node) => node.textContent?.trim() === labels.channelAdd)
-    expect(addButtons).toHaveLength(1)
+    expect(addButtons).toHaveLength(0)
   })
 })
 
@@ -729,9 +813,7 @@ describe('saving a credential has to prove itself', () => {
     })
     const container = await mount()
 
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
+    await openCreate(container)
 
     const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
     await act(async () => typeInto(name, 'Telegram 9'))
@@ -792,9 +874,7 @@ describe('creating a channel reads the real result', () => {
 
   /** 走完新建弹层：名称 + 助手 + Token，然后点「创建频道」。 */
   async function fillCreateDialog(container: HTMLElement): Promise<void> {
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
+    await openCreate(container)
 
     const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
     await act(async () => typeInto(name, 'Telegram 9'))
@@ -918,8 +998,15 @@ describe('the token you are typing can be checked', () => {
     ) as HTMLButtonElement
     await act(async () => toggle.click())
     expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).getAttribute('type')).toBe('text')
-    expect(document.body.querySelector('[data-token-visible-hint]')?.textContent).toBe(labels.channelTokenVisibleHint)
     expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    // 「只在本机显示」这句解释进字段名旁的 ⓘ（正文只留一行状态）；点开就能看到。
+    const info = [...document.body.querySelectorAll('button')].find(
+      (node) => node.getAttribute('aria-label') === labels.channelTokenInfoAria
+    ) as HTMLButtonElement | undefined
+    expect(info).toBeDefined()
+    await act(async () => info?.click())
+    await act(async () => {})
+    expect(document.body.textContent).toContain(labels.channelTokenVisibleHint)
 
     await act(async () => toggle.click())
     expect((document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement).getAttribute('type')).toBe('password')
@@ -928,119 +1015,20 @@ describe('the token you are typing can be checked', () => {
 })
 
 /**
- * 工作目录必须是真选项，不是只有一个「不使用」。
- *
- * 频道的 `workspace` 存的是工作区**编号**，所以「选文件夹」这一步是：系统窗口给路径 →
- * 主进程换成编号（没有就先登记）→ 下拉选中它 → 保存写 `{ type:'user', workspaceId }`。
- * 取消与失败都不许把这栏悄悄退回默认值。
+ * 选择文件夹这条路已经跟着控件一起撤掉：这一屏不该再调系统目录窗口，也不该登记工作区。
+ * 留一条反向证据，免得哪天有人把那一栏又接回来——那会是第二个工作区权威。
  */
-describe('the working folder picker', () => {
-  async function openCreateDialog(container: HTMLElement): Promise<void> {
-    const add = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAdd)
-    await act(async () => add?.click())
-    await act(async () => {})
-  }
-
-  async function chooseWorkspace(value: string): Promise<void> {
-    const select = [...document.body.querySelectorAll('.ant-select')].find((node) =>
-      node.querySelector(`[title="${labels.channelFieldWorkspace}"], [aria-label="${labels.channelFieldWorkspace}"]`)
-    ) as HTMLElement | undefined
-    const trigger = (select ?? (document.body.querySelectorAll('.ant-select')[1] as HTMLElement)).querySelector(
-      '.ant-select-selector'
-    ) ?? (select as HTMLElement)
-    await act(async () => trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
-    await vi.waitFor(() => {
-      const options = [...document.querySelectorAll('.ant-select-item-option')]
-      expect(options.some((option) => option.textContent?.trim() === value)).toBe(true)
-    })
-    const option = [...document.querySelectorAll('.ant-select-item-option')].find(
-      (node) => node.textContent?.trim() === value
-    ) as HTMLElement
-    await act(async () => {
-      option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-    await act(async () => {})
-  }
-
-  it('lists the reader\'s own workspaces and saves the chosen one by id', async () => {
-    const channels = installPlatform({ list: vi.fn(async () => []) })
+describe('the channel screen no longer picks a working folder', () => {
+  it('never opens the system folder picker nor registers a workspace', async () => {
+    installPlatform({ list: vi.fn(async () => [{ ...channel, workspace: { type: 'user', workspaceId: 'ws-1' } }]) })
     const container = await mount()
-    await openCreateDialog(container)
 
-    await chooseWorkspace('market-notes')
-    expect(document.body.textContent).toContain('market-notes')
-
-    // 名称、助手、Token 都要有才能提交。
-    const name = document.body.querySelector('input[aria-label="名称"]') as HTMLInputElement
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(name, 'Telegram 1')
-      name.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    const agentSelect = document.body.querySelectorAll('.ant-select')[0] as HTMLElement
-    await act(async () => (agentSelect.querySelector('.ant-select-selector') ?? agentSelect).dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
-    await vi.waitFor(() => expect(document.querySelectorAll('.ant-select-item-option').length).toBeGreaterThan(0))
-    const agentOption = [...document.querySelectorAll('.ant-select-item-option')].find(
-      (node) => node.textContent?.trim() === '助手一'
-    ) as HTMLElement
-    await act(async () => {
-      agentOption.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await waitForSelection('助手一')
-    const token = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
-      setter?.call(token, '123:new-token')
-      token.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    const submit = [...document.body.querySelectorAll('button')].find(
-      (node): node is HTMLButtonElement => node.textContent?.trim() === labels.channelCreate
-    )
-    await act(async () => submit?.click())
-    await act(async () => {})
-
-    expect(channels.create).toHaveBeenCalledWith(expect.objectContaining({ workspace: { type: 'user', workspaceId: 'ws-1' } }))
-  })
-
-  it('turns a chosen folder into a workspace id before it is saved', async () => {
-    const channels = installPlatform({ list: vi.fn(async () => []) })
-    const container = await mount()
-    await openCreateDialog(container)
-
-    await chooseWorkspace(labels.channelWorkspaceChoose)
+    await openCreate(container)
 
     const agentsBridge = window.platform.agents as unknown as { ensureWorkspace: ReturnType<typeof vi.fn> }
-    expect(agentsBridge.ensureWorkspace).toHaveBeenCalledWith('/Users/me/new-folder')
-    expect(document.body.textContent).toContain('新目录')
-    expect(channels.create).not.toHaveBeenCalled()
-  })
-
-  it('keeps the current choice and says so when the folder cannot be used', async () => {
-    installPlatform({
-      list: vi.fn(async () => [
-        { ...channel, allowedChatIds: [], workspace: { type: 'user', workspaceId: 'ws-1' } }
-      ])
-    })
-    const agentsBridge = window.platform.agents as unknown as { ensureWorkspace: ReturnType<typeof vi.fn> }
-    agentsBridge.ensureWorkspace.mockResolvedValue({ ok: false, code: 'workspace-unavailable' })
-
-    const container = await mount()
-    const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
-      (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
-    )
-    await act(async () => edit?.click())
-    await act(async () => {})
-
-    await chooseWorkspace(labels.channelWorkspaceChoose)
-
-    expect(document.body.textContent).toContain(labels.channelWorkspaceFailed)
-    // 不许静默退回「不使用工作目录」：选中的仍是原来那条工作区。
-    const selected = [...document.body.querySelectorAll('.ant-select-selection-item')].map(
-      (node) => node.textContent?.trim() ?? ''
-    )
-    expect(selected).toContain('market-notes')
-    expect(selected).not.toContain(labels.channelWorkspaceDefault)
+    const appBridge = window.platform.app as unknown as { selectDirectory: ReturnType<typeof vi.fn> }
+    expect(appBridge.selectDirectory).not.toHaveBeenCalled()
+    expect(agentsBridge.ensureWorkspace).not.toHaveBeenCalled()
   })
 })
 
@@ -1350,5 +1338,102 @@ describe('opening the conversation a channel is bound to', () => {
     // 具名原因直接给读者：读不到哪一条都收在一句通用失败里，等于什么都没说。
     expect(container.textContent).toContain(labels.channelFailureReason['conversation-session-missing'])
     window.removeEventListener('app-shell:navigate', onNavigate)
+  })
+})
+
+/**
+ * 多字段凭据：字段清单来自适配器描述符，弹层按它逐项渲染。
+ *
+ * 曾经的故障：Slack / QQ / 飞书各需要两组凭据，而弹层只有一个写死的 `bot_token` 输入框——
+ * 读者能建频道，却根本填不了凭据。
+ */
+describe('multi-field credentials', () => {
+  const platformName = (type: string): string =>
+    CHANNEL_DISPLAY_NAME[type as keyof typeof CHANNEL_DISPLAY_NAME]['zh-CN']
+
+  async function selectPlatform(type: string): Promise<void> {
+    const item = [...document.querySelectorAll('.channel-platform-item')].find(
+      (node) => node.textContent?.trim() === platformName(type)
+    )
+    await act(async () => (item as HTMLButtonElement | undefined)?.click())
+    await act(async () => {})
+  }
+
+  async function chooseAgent(): Promise<void> {
+    const select = document.body.querySelector('.ant-select') as HTMLElement
+    const trigger = select.querySelector('.ant-select-selector') ?? select
+    await act(async () => trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+    await act(async () => {})
+    const option = [...document.querySelectorAll('.ant-select-item-option')].find(
+      (node) => node.textContent?.trim() === '助手一'
+    )
+    await act(async () => (option as HTMLElement | undefined)?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => {})
+  }
+
+  function typeInto(field: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(field, value)
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+
+  async function openCreateFor(type: string): Promise<HTMLElement> {
+    const container = await mount()
+    await selectPlatform(type)
+    await openCreate(container)
+    return container
+  }
+
+  it('renders one input per descriptor field, so all five platforms are fillable', async () => {
+    installPlatform()
+    const expected: Array<[string, string[]]> = [
+      ['telegram', ['Bot Token']],
+      ['slack', ['Bot Token', 'App Token']],
+      ['discord', ['Bot Token']],
+      ['qq', ['App ID', 'Client Secret']],
+      ['feishu', ['App ID', 'App Secret']]
+    ]
+    for (const [type, fieldLabels] of expected) {
+      const container = await openCreateFor(type)
+      const shown = [...document.body.querySelectorAll('.channel-fields input[aria-label]')]
+        .map((node) => node.getAttribute('aria-label'))
+        .filter((label): label is string => label !== null && fieldLabels.includes(label))
+      expect(new Set(shown), `${type} fields`).toEqual(new Set(fieldLabels))
+
+      // 关掉弹层再换下一个平台：同一个页面实例上继续点平台即可。
+      const cancel = [...document.body.querySelectorAll('button')].find(
+        (node) => node.textContent?.trim() === labels.channelCancel
+      )
+      await act(async () => cancel?.click())
+      await act(async () => {})
+      await act(async () => root?.unmount())
+      root = undefined
+      document.body.replaceChildren()
+      void container
+    }
+  })
+
+  it('refuses a half-filled Slack credential and points at the field that is missing', async () => {
+    const channels = installPlatform()
+    await openCreateFor('slack')
+
+    const name = document.body.querySelector(`input[aria-label="${labels.channelName}"]`) as HTMLInputElement
+    await act(async () => typeInto(name, 'Slack 测试'))
+    await chooseAgent()
+    const botToken = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
+    await act(async () => typeInto(botToken, 'xoxb-1234567890'))
+
+    const create = [...document.body.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === labels.channelCreate
+    )
+    await act(async () => create?.click())
+    await act(async () => {})
+
+    // 少一个字段就不许建：错误挂在缺的那一行，不是弹层底部一句「保存失败」。
+    expect(channels.create).not.toHaveBeenCalled()
+    const error = document.body.querySelector('[data-field-error="app_token"]')
+    expect(error).not.toBeNull()
+    expect(error?.textContent).toContain('App Token')
+    expect(document.body.querySelector('[data-field-error="bot_token"]')).toBeNull()
   })
 })

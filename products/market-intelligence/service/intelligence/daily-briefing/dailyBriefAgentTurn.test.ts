@@ -276,6 +276,24 @@ describe('daily brief agent turn copy', () => {
     expect(writing).toContain('"focus": true')
   })
 
+  it('names the edition language in the language repair, not just "this edition\'s language"', async () => {
+    // `MI-2-R85` 口径：命中语言之后的那次修复重写，提示里要带**命中路径与本期语言**。
+    // 只说「本期语言」时，刚用错语言的模型最容易把它读成「我刚写的那种」——这一条钉住它必须说出来。
+    const selection = { stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [] }
+    const { continues, runner } = scriptedRunner(selection, editorial(
+      'US.FOMC',
+      '为什么这件事重要：它会改变利率预期'
+    ))
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    const repair = continues[1] ?? ''
+    expect(repair).toContain('LOCALE: en-US')
+    expect(repair).toContain('English')
+    expect(repair).toContain('next.focus.why')
+    expect(result.state).toBe('failed')
+  })
+
   it('falls back to the relevance leader when the chosen focus has no BTC/ETH transmission', async () => {
     const selection = {
       stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
@@ -536,6 +554,40 @@ describe('the citable set (Chief 2026-11-06)', () => {
     expect(continues.filter((text) => text.includes('failed validation'))).toHaveLength(1)
     const repair = stages.filter((stage) => stage.id === 'repair-1')
     expect(repair.map((stage) => stage.state)).toEqual(['begin', 'success'])
+  })
+
+  it('refuses an English edition that stays Chinese after one repair, and names the section', async () => {
+    // B6 / `04` §3.4.2：语言按**渲染出来的文档**判（不是模型那份 JSON），命中先重写一次；
+    // 重写仍命中 → 整版拒发（`invalid-output-language`），**不删段、不翻译**。读者看到的是
+    // 「语言与本期不一致 + 重写也没改过来」；日志里点名到段（`next.focus.why`），
+    // 好让下一个人知道是哪个字段写错了语言，而不是只知道"整份不对"。
+    const chinese = '资金面转弱，稳定币连续收缩，风险偏好回落。'
+    const continues: string[] = []
+    const finishes: string[] = []
+    const runner = {
+      start: vi.fn(async () => ({ sessionId: 's1', created: true, assistantText: JSON.stringify({
+        stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: []
+      }), toolInvocations: [] })),
+      continue: vi.fn(async (_sessionId: string, text: string) => {
+        continues.push(text)
+        // 写作与重写都写成中文：这是「英文期里混进中文」的最坏情形。
+        return { assistantText: JSON.stringify(editorial('US.FOMC', chinese)), toolInvocations: [] }
+      }),
+      finish: vi.fn(async (_sessionId: string, outcome: string) => { finishes.push(outcome) })
+    }
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('failed')
+    if (result.state !== 'failed') throw new Error('an English edition written in Chinese must be refused')
+    expect(result.failureCode).toBe('invalid-output-language')
+    // 只重写一次，且重写要求说的是「本期语言」这条要求，不是句式规则。
+    const languageRepairs = continues.filter((text) => text.includes('contains text that is not written in'))
+    expect(languageRepairs).toHaveLength(1)
+    expect(languageRepairs[0]).toContain('next.focus.why')
+    // 拒发时点名到段：这是日志/排查能读到的那一层。
+    expect(result.failureDetail).toBe('next.focus.why')
+    expect(finishes).toEqual(['failed'])
   })
 
   it('records a stopped turn as cancelled, never as the model writing bad JSON', async () => {

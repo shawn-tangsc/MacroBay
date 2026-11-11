@@ -41,6 +41,12 @@ export type NotificationCompositionPorts = Readonly<{
   resolvePushChannel?: () => Promise<PushChannelResolution>
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
+  /** 通道侧「最近一次真实投递」（通道页/通知屏给读者核对用）；缺省时界面只说「没有记录」。 */
+  lastDelivery?: (channelId: string) => {
+    status: 'delivered' | 'failed' | 'unknown-after-send'
+    at: string
+    conversationLabel: string | null
+  } | null
   /**
    * 通知设置页「发送到通道」那一行读的只读投影：可选通道 + 目标绑定。
    *
@@ -93,6 +99,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     diagnostics: ports.diagnostics,
     ...(ports.push === undefined ? {} : { push: ports.push }),
     ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
+    ...(ports.lastDelivery === undefined ? {} : { lastDelivery: ports.lastDelivery }),
     ...(ports.resolvePushChannel === undefined ? {} : { resolvePushChannel: ports.resolvePushChannel }),
   })
 }
@@ -166,6 +173,8 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     push,
     resolvePushChannel: pushTarget,
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
+    // 读者核对的事实：这条通道最近一次真实投递的结局（不是「有没有配好」）。
+    lastDelivery: (channelId: string) => ports.channels.lastDelivery?.(channelId) ?? null,
     updateSettings: withSurfaceSaveDiagnostics({
       update: async (patch) => {
         const current = await ports.settingsStore.get()

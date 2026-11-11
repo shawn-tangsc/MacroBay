@@ -41,6 +41,59 @@ const read = (signals: readonly ModuleSignal[]): ModuleSignalRead => ({
   droppedInvalid: 0
 })
 
+/**
+ * 卡片说「数据已滞后」，但库里数据比它新（用户 2026-11-10 报）。
+ *
+ * 7 天窗口把 15 分钟格折成小时点、**按小时开头盖时间戳**（`openInterestHistoryQuery.foldToHours`），
+ * 所以最后那个点的时刻最多比它承载的读数早 45 分钟。判定却拿这个折叠后的点去减 `asOf`：
+ * 01:45 的读数被标成 01:00，`asOf` 一到 01:30 之后就越过 30 分钟门槛 → 报「已滞后」，而数据是新的。
+ */
+const available = (overrides: Record<string, unknown> = {}) => ({
+  state: 'available' as const,
+  asOf: '2026-11-10T01:50:00.000Z',
+  window: '7d' as const,
+  btc: [
+    { observedAt: '2026-11-10T00:00:00.000Z', notionalUsd: 7_100_000_000 },
+    { observedAt: '2026-11-10T01:00:00.000Z', notionalUsd: 7_269_000_000 }
+  ],
+  eth: [
+    { observedAt: '2026-11-10T00:00:00.000Z', notionalUsd: 3_100_000_000 },
+    { observedAt: '2026-11-10T01:00:00.000Z', notionalUsd: 3_190_000_000 }
+  ],
+  liquidationHintsState: 'available' as const,
+  ...overrides
+})
+
+it('hands the card both instants from one place: the folded point and the newest reading', () => {
+  // 卡面那段「观测时间 X · 最新读数 Y」不许各算一处：投影里一次给出两个时刻（同源），
+  // 否则窗口切换时会冒出「显示 01:00 · 01:45 但曲线末点其实不是 01:00」的第三类错。
+  const view = projectDashboardPositioning(available({ newestReadingAt: '2026-11-10T01:45:00.000Z' }), '2026-11-10T01:50:00.000Z', '7d')
+  if (view.state !== 'available') throw new Error('expected available')
+  expect(view.pointAt).toBe('2026-11-10T01:00:00.000Z')
+  expect(view.newestReadingAt).toBe('2026-11-10T01:45:00.000Z')
+  // 老载荷没有最新读数：两个时刻相等（同一个来源），卡面因此只写一段。
+  const legacy = projectDashboardPositioning(available(), '2026-11-10T01:50:00.000Z', '7d')
+  if (legacy.state !== 'available') throw new Error('expected available')
+  expect(legacy.pointAt).toBe('2026-11-10T01:00:00.000Z')
+  expect(legacy.newestReadingAt).toBe(legacy.pointAt)
+})
+
+it('does not call the data stale when the reading behind the folded hour is newer', () => {
+  // 折叠点的时刻是 01:00，但那一格承载的最新读数是 01:45 —— 数据只差 5 分钟，不是「已滞后」。
+  const fresh = projectDashboardPositioning(available({ newestReadingAt: '2026-11-10T01:45:00.000Z' }), '2026-11-10T01:50:00.000Z', '7d')
+  expect(fresh.state).toBe('available')
+  expect(fresh.state === 'available' ? fresh.staleSince : undefined).toBeUndefined()
+})
+
+it('still says 已滞后 when the newest reading really is old', () => {
+  // 反方向：最新读数就是 01:00、asOf 已经 01:50 —— 这 50 分钟是真实的滞后，必须照旧报出来。
+  const stale = projectDashboardPositioning(available({ newestReadingAt: '2026-11-10T01:00:00.000Z' }), '2026-11-10T01:50:00.000Z', '7d')
+  expect(stale.state === 'available' ? stale.staleSince : undefined).toBe('2026-11-10T01:00:00.000Z')
+  // 老载荷没有这个字段时退回折叠点（与今天行为一致，不静默变成「永不滞后」）。
+  const legacy = projectDashboardPositioning(available(), '2026-11-10T01:50:00.000Z', '7d')
+  expect(legacy.state === 'available' ? legacy.staleSince : undefined).toBe('2026-11-10T01:00:00.000Z')
+})
+
 describe('module signal chip', () => {
   it('says the read failed, with the code, instead of drawing nothing', () => {
     // The failure is a different fact from a quiet market, so it gets its own state; the code is

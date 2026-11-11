@@ -70,10 +70,23 @@ export interface ProductSettingsSectionContribution {
   navIntent?: ProductSettingsNavIntent
 }
 
+/**
+ * 产品自己的设置抽屉**声明**（架构师 2026-11-11 签）：只放菜单 id，不放标题。
+ *
+ * 壳层不渲染菜单名（那颗按钮是平台自己的「去设置」），所以这里不逼平台解析产品文案；
+ * 将来真要显示落点名，用 `title: LocalizedText` 数据，与 `settingsSections.title` 同形。
+ * 平台敢渲染入口的前提是产品真能兑现：声明集必须与抽屉实际菜单集一致（产品侧守卫）。
+ */
+export interface ProductSettingsDrawerContribution {
+  id: string
+}
+
 export interface ProductShellContributions {
   menuPages: readonly ProductMenuPageContribution[]
   settingsSections: readonly ProductSettingsSectionContribution[]
   panels?: readonly ProductWorkspacePanelContribution[]
+  /** 声明「本产品有设置抽屉，它有哪些屏」；未声明 = 壳层不出任何指向它的入口。 */
+  settingsDrawer?: readonly ProductSettingsDrawerContribution[]
 }
 
 /** id/pageIds 是产品内标识；module 是受生成器校验的产品内相对入口。 */

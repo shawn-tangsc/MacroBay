@@ -16,9 +16,9 @@ export type ChannelAdapterDescriptor = {
 export const channelAdapterDescriptors: Record<ChannelAdapterKey, ChannelAdapterDescriptor> = {
   telegram: { key: 'telegram', implemented: true, credentialFields: ['bot_token'], displayName: { 'zh-CN': 'Telegram', 'en-US': 'Telegram' } },
   slack: { key: 'slack', implemented: true, credentialFields: ['bot_token', 'app_token'], displayName: { 'zh-CN': 'Slack', 'en-US': 'Slack' } },
-  lark: { key: 'lark', implemented: false, credentialFields: ['app_id', 'app_secret'], displayName: { 'zh-CN': '飞书', 'en-US': 'Lark' } },
-  qq: { key: 'qq', implemented: false, credentialFields: ['app_id', 'client_secret'], displayName: { 'zh-CN': 'QQ', 'en-US': 'QQ' } },
-  discord: { key: 'discord', implemented: false, credentialFields: ['bot_token'], displayName: { 'zh-CN': 'Discord', 'en-US': 'Discord' } },
+  lark: { key: 'lark', implemented: true, credentialFields: ['app_id', 'app_secret'], displayName: { 'zh-CN': '飞书', 'en-US': 'Lark' } },
+  qq: { key: 'qq', implemented: true, credentialFields: ['app_id', 'client_secret'], displayName: { 'zh-CN': 'QQ', 'en-US': 'QQ' } },
+  discord: { key: 'discord', implemented: true, credentialFields: ['bot_token'], displayName: { 'zh-CN': 'Discord', 'en-US': 'Discord' } },
   wechat: { key: 'wechat', implemented: false, credentialFields: [], displayName: { 'zh-CN': '微信', 'en-US': 'WeChat' } }
 }
 

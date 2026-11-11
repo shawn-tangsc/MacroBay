@@ -22,7 +22,7 @@ const productId = 'market-intelligence'
  * keyed — so the dashboard can tell "waiting for the first collection" from "switched off".
  */
 export type MacroMarketSnapshotIpcQuery = Readonly<{
-  snapshot: () => MacroMarketSnapshot
+  snapshot: (input?: { dollarSourceId?: string }) => MacroMarketSnapshot
   readiness: () => Promise<Readonly<{ enabled: boolean; hasCredential: boolean }>>
 }>
 
@@ -35,7 +35,7 @@ export function registerMacroMarketIpc(register: ProductIpcRegistrar, query: Mac
   register(productId, macroMarketSnapshotPublicPolicy.method, async payload => {
     try {
       if (!isMacroMarketSnapshotQuery(payload)) return unavailable()
-      const snapshot = query.snapshot()
+      const snapshot = query.snapshot(payload)
       const readiness = await query.readiness()
       return parseMacroMarketSnapshot({
         ...snapshot,
@@ -72,5 +72,6 @@ export function registerDashboardFeedStatusIpc(
 }
 
 function feedStatusUnavailable() {
-  return Object.freeze({ state: 'unavailable' as const })
+  // 走到这里的 throw 来自查询内部（目前只剩 notes 读取这条路径），码只给诊断用。
+  return Object.freeze({ state: 'unavailable' as const, reason: 'notes-unreadable' as const })
 }

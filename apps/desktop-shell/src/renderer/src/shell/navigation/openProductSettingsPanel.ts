@@ -60,10 +60,16 @@ export function openProductSettingsPanelByIntent(intent: ProductSettingsNavInten
   return true
 }
 
+/**
+ * 生成物里的空数组会被推成 `readonly []`；按元素读 `.id` 就会被收成 `never`。
+ * 运行时仍是注册表本身，这里只把**元素类型**显式写出来（不放宽到 `any`、不删断言）。
+ */
+const registeredSettingsEntries: readonly RegisteredSettingsEntry[] = productSettingsEntries
+
 export function openProductSettingsPanel(panelKey: ProductSettingsPanelKey): void {
   // 类型已经关死；这一层是给「绕过类型」的调用点（JS / `as any`）的：**不认识就炸**，
   // 不能让它悄悄回落到默认面板——用户会以为按钮点错了页，而代码里一点痕迹都没有。
-  if (!productSettingsEntries.some((entry) => entry.id === panelKey)) {
+  if (!registeredSettingsEntries.some((entry) => entry.id === panelKey)) {
     throw new Error(`unknown-product-settings-panel:${panelKey}`)
   }
   navigateTo({ page: 'settings', panel: panelKey })

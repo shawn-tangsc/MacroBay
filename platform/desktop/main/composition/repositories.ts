@@ -10,9 +10,15 @@ import { createAgentPlatformServices } from '../../../ai/agent-platform/services
 import { createAgentPlatformDatabase } from '../../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../../ai/assistant-platform/db/createAssistantPlatformDatabase'
 import { createAssistantPlatformRepositories } from '../../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
+import { createChannelSmokeRouter } from '../../../ai/agent-platform/channels/channelSmokeEnable'
+import { createDiscordChannelSmoke } from '../../../ai/agent-platform/channels/discord/discordChannelSmoke'
+import { discordUserAgent } from '../../../ai/agent-platform/channels/discord/discordUserAgent'
+import { createLarkChannelSmoke } from '../../../ai/agent-platform/channels/lark/larkChannelSmoke'
+import { createQqChannelSmoke } from '../../../ai/agent-platform/channels/qq/qqChannelSmoke'
+import { createSlackChannelSmoke } from '../../../ai/agent-platform/channels/slack/slackChannelSmoke'
 import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
 import { reconcileSingleEnabledChannel } from '../../../ai/agent-platform/channels/singleEnabledChannel'
-import { describeActiveProxy } from '../../../network/activeProxyState'
+import { describeActiveProxy, resolveActiveProxy } from '../../../network/activeProxyState'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createAgentPlatformRepositories } from '../../../ai/agent-platform/repositories/createAgentPlatformRepositories'
 import { createAgentSqliteStoreWithOptions } from '../../../ai/agent-platform/store/agentSqliteStore'
@@ -87,13 +93,50 @@ const channelManagementService = new ChannelManagementService({
   // 用户点「启用」时现场自检：握手 + 一次接收往返（够证明 token、网络与代理都通），
   // 通过才在这条通道上启用；平台的七项真机验收照旧决定「对外是否声明支持」。
   // 实现在 `telegramChannelSmoke`：它有独立用例，免得「长轮询套短超时」这种必失败写法再躲进来。
-  smoke: createTelegramChannelSmoke({
-    credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
-    readSecret: (ref) => channelCredentialVault.get(ref),
-    getPlatformFetch,
-    // 失败时把「实际生效的代理」记进审计：这是唯一能把「代理没生效」与「代理连不上」分开的事实。
-    describeProxy: describeActiveProxy,
-    fetchKind: 'net'
+  smoke: createChannelSmokeRouter({
+    telegram: createTelegramChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      // 失败时把「实际生效的代理」记进审计：这是唯一能把「代理没生效」与「代理连不上」分开的事实。
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net'
+    }),
+    // Slack 两把凭据各证一件事：auth.test 证 Bot Token，apps.connections.open 证 App Token 与 Socket Mode。
+    slack: createSlackChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net'
+    }),
+    // Discord 一次 `/users/@me` 同时证明凭据活着、出网通、bot 存在。
+    discord: createDiscordChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net',
+      // 浏览器 UA 打 Discord 会被边缘挡成 403（用户现场就是这一条）；自检与运行时用同一个产品 UA。
+      userAgent: discordUserAgent(app.getVersion())
+    }),
+    // QQ 两步：换 access token（证凭据活）+ 取网关地址（证 token 能用、出网通）。
+    qq: createQqChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net'
+    }),
+    // 飞书两步：鉴权 + 长连接。代理只从应用网络设置解析，解析不出来就判失败、不建连接。
+    feishu: createLarkChannelSmoke({
+      credentialMetadata: (id) => channelManagementRepository.credentialMetadata(id),
+      readSecret: (ref) => channelCredentialVault.get(ref),
+      getPlatformFetch,
+      resolveProxy: resolveActiveProxy,
+      describeProxy: describeActiveProxy,
+      fetchKind: 'net'
+    })
   })
 })
 const agentStore = createAgentSqliteStoreWithOptions(

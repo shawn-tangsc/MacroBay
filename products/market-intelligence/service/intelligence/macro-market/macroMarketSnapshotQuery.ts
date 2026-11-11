@@ -90,7 +90,15 @@ export function createMacroMarketSnapshotQuery(deps: Readonly<{
    * 已经按"最新一根"算窗口，新鲜度由行的最近更新时间与来源状态分别说明，不需要靠换仪器表达。
    * 合成值仍然带 `synthetic` 标记，所以标签永远跟着它描述的那个数走。
    */
-  function dollarReading(): MacroMarketReading | undefined {
+  function dollarReading(dollarSourceId?: string): MacroMarketReading | undefined {
+    // 读者在设置里给美元格选了源：只读那一个源的序列，另一个源一列都不读——
+    // 「同一格不许同时读主备两个源」，也不拿另一个源偷偷兜底（那会变成读者选 A 却看到 B）。
+    const chosen = dollarSourceId === undefined
+      ? undefined
+      : (macroMarketSnapshotPublicPolicy.dollarIndexSeriesBySource as Readonly<Record<string, string>>)[dollarSourceId]
+    if (chosen === macroMarketSnapshotPublicPolicy.series.dollarIndexReal) return readReading(macroMarketSnapshotPublicPolicy.series.dollarIndexReal)
+    if (chosen === macroMarketSnapshotPublicPolicy.series.dollarIndex) return readReading(macroMarketSnapshotPublicPolicy.series.dollarIndex, true)
+    // 没选过（或缺键）：今天的规则原样保留。
     const real = deps.store.latest(macroMarketSnapshotPublicPolicy.series.dollarIndexReal)
     if (real) {
       const synthetic = deps.store.latest(macroMarketSnapshotPublicPolicy.series.dollarIndex)
@@ -99,10 +107,10 @@ export function createMacroMarketSnapshotQuery(deps: Readonly<{
     return readReading(macroMarketSnapshotPublicPolicy.series.dollarIndex, true)
   }
 
-  function snapshot(): MacroMarketSnapshot {
+  function snapshot(input?: { dollarSourceId?: string }): MacroMarketSnapshot {
     const nowMs = (deps.now ?? Date.now)()
     const readings: MacroMarketReading[] = []
-    const dollar = dollarReading()
+    const dollar = dollarReading(input?.dollarSourceId)
     if (dollar) readings.push(dollar)
     for (const seriesId of macroSeriesOrder) {
       const reading = readReading(seriesId)

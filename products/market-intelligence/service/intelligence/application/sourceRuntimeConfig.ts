@@ -7,6 +7,7 @@ import type {
   IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
 import { sourceRequiresCredential } from '../schema/intelligenceSource'
+import { getSource } from './providerRegistry'
 import { isMacroSourceId } from './macroSourceCatalogMetadata'
 import { isDefillamaStablecoinRetiredPath } from './sourceCatalog'
 import { isZeroXRouterSource, zeroXRouterEtfRefreshSchedulePolicy } from './zeroXRouterSourcePolicy'
@@ -42,6 +43,25 @@ const MACRO_POLLING_INTERVAL_SEC: Record<IntelligenceCollectionPreset, number | 
   frequent: 2 * 60 * 60
 }
 
+/**
+ * 默认启用 = 免钥匙 **且** 已就绪（live）**且** 不是「维护备用」（今天没有读者可见产出）。
+ *
+ * 用户 2026-11-12 分两句话定的口径：先说「除了要 API Key 的、还没接的，其余默认开」，
+ * 看到「系统与状态」那一组（Coinbase / Kraken / Solana / GitHub）、以太坊基金会、CFTC 之后补了
+ * 「这几个还没用上的，默认不启动」。判据不另造清单：`purposes` 为空且 `maintenanceOnly` 的源，
+ * 注册表已经声明了它们今天没有任何读者可见产出；只供 AI 分析用的源（`binance-spot-market`、
+ * `coingecko-market`、`defillama-tvl`）有 `purposes`，仍然默认开。
+ *
+ * 2026-11-11 那版要求「还要被看板模块用到」，会把上面这类分析用源也关掉（读者反馈「数据未被启用」）；
+ * 现在这条只排除真正没产出的源。源清单仍只来自注册表，没有 id 白名单。
+ */
+export function isDefaultEnabledDefinition(definition: IntelligenceSourceDefinition): boolean {
+  if (sourceRequiresCredential(definition.authMode)) return false
+  if ((definition.readiness ?? 'live') !== 'live') return false
+  // `maintenanceOnly` 只声明在 `providerRegistry`（catalog 没有这个字段），按 id 反查一次。
+  return getSource(definition.sourceId)?.maintenanceOnly !== true
+}
+
 export function createDefaultSourceProfile(
   definition: IntelligenceSourceDefinition,
   now = new Date().toISOString()
@@ -49,9 +69,10 @@ export function createDefaultSourceProfile(
   return {
     profileId: `${definition.sourceId}-profile`,
     sourceId: definition.sourceId,
-    enabled: false,
+    // 默认值**只在这里定一次**：免钥匙 + 已就绪的源首次运行即启用；需要 API Key 的、
+    // 还没接入的源默认关着。读者显式存过的 profile 一律以存量为准。
+    enabled: isDefaultEnabledDefinition(definition),
     collectionPreset: definition.defaultCollectionPreset,
-    includeInSentiment: definition.supportsSentiment,
     scopePolicy: definition.defaultScopePolicy,
     rawArchiveEnabled: true,
     retentionMode: definition.defaultRetentionMode,
@@ -83,6 +104,19 @@ export function hasProductOwnedCollection(definition: IntelligenceSourceDefiniti
   return definition.collectionOwner === 'product'
 }
 
+/**
+ * 通用运行时**采不采**这个源：`collection: 'none'` 的语义就是「不是通用适配器采」，与
+ * `readiness` 无关——`twelve-data-market` / `policy-path-market` 这类源改成 live 之后由产品侧供数，
+ * 通用运行时仍不该排期。
+ *
+ * 只看注册表的 `collection`，不按 `collectionOwner: 'product'` 一刀切：0xRouter 的 ETF 现况是
+ * 产品自有刷新，但它走的是**受治理的采集任务**（`etfFlowHistory.refresh`），仍需要通用运行时给它
+ * 排期与 reconcile；按 owner 一刀切会把那条真链路停掉（启动恢复用例抓到的）。
+ */
+export function genericRuntimeCollects(definition: IntelligenceSourceDefinition): boolean {
+  return getSource(definition.sourceId)?.collection !== 'none'
+}
+
 export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): IntelligenceSourceConfig {
   const profile = input.profile ?? createDefaultSourceProfile(input.definition)
   const hasCredential = input.hasCredential ?? Boolean(profile.credentialRef)
@@ -90,8 +124,10 @@ export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): Intellig
   const collectionPreset = usesFixedEtfRefreshSchedule
     ? zeroXRouterEtfRefreshSchedulePolicy.collectionPreset
     : profile.collectionPreset ?? input.definition.defaultCollectionPreset
-  const includeInSentiment = input.definition.supportsSentiment ? profile.includeInSentiment : false
-  const enabled = blocksProductionCollection(input.definition) ? false : profile.enabled
+  // 通用运行时只采「不是 none、也不是产品自有」的源；ready 与否另有一条（`blocksProductionCollection`）。
+  const enabled = blocksProductionCollection(input.definition) || !genericRuntimeCollects(input.definition)
+    ? false
+    : profile.enabled
   const isStream = input.definition.executionMode === 'websocket'
   const isCapitalConditionsCollector = isDefillamaStablecoinRetiredPath(input.definition.sourceId)
 
@@ -121,12 +157,10 @@ export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): Intellig
     desiredRuntimeState,
     parserStrategy: input.definition.parserStrategy,
     noisePolicy: 'balanced',
-    includeInSentiment,
     scopePolicy: profile.scopePolicy,
     rawArchiveEnabled: isCapitalConditionsCollector ? false : profile.rawArchiveEnabled,
     retentionMode: profile.retentionMode,
     autoReplayAfterParserUpgrade: isCapitalConditionsCollector ? false : profile.autoReplayAfterParserUpgrade,
-    sentimentEligible: includeInSentiment,
     adapterConfig: resolveAdapterConfig(input.definition, profile)
   }
 }
@@ -205,14 +239,6 @@ export function validateRuntimeConfig(
       code: 'missing-credential',
       field: 'credentialRef',
       message: 'An API credential is required before this source can run.'
-    })
-  }
-
-  if (!definition.supportsSentiment && config.includeInSentiment) {
-    issues.push({
-      code: 'unsupported-sentiment',
-      field: 'includeInSentiment',
-      message: 'This source does not support sentiment inclusion.'
     })
   }
 

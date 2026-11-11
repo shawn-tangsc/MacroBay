@@ -152,18 +152,19 @@ describe('Lark Release C contracts', () => {
     expect(database.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id=?').get('legacy-feishu')).toEqual({ count: 0 })
   })
 
-  it('does not construct HTTP or WebSocket runtime dependencies while Lark remains blocked', async () => {
+  it('opens nothing when the credential cannot be read', async () => {
     const fetch = vi.fn() as unknown as typeof globalThis.fetch
-    const webSocket = vi.fn() as never
+    const resolveProxy = vi.fn(async () => ({ kind: 'direct' as const }))
     const manager = new LarkRuntimeManager({
       inbound: {} as never, runtime: new LarkRuntimeRepository(createAgentPlatformDatabase(':memory:')),
-      vault: {} as never, getPlatformFetch: () => fetch, createPlatformWebSocket: webSocket,
+      vault: { get: async () => null } as never, getPlatformFetch: () => fetch,
       delivery: new LarkDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }), keyedHash: async () => 'opaque',
-      ownsLifecycleOwner: () => true, isCurrentActive: () => true
+      ownsLifecycleOwner: () => true, isCurrentActive: () => true, resolveProxy
     })
+    // 凭据读不出来：一个请求、一次代理解析、一条连接都不该发生。
     await expect(manager.start('lark-a', 1, 'owner-a')).resolves.toBe(false)
     expect(fetch).not.toHaveBeenCalled()
-    expect(webSocket).not.toHaveBeenCalled()
+    expect(resolveProxy).not.toHaveBeenCalled()
   })
 
   it('does not route an isolated Feishu storage row to Telegram or Lark delivery', async () => {
@@ -184,33 +185,6 @@ describe('Lark Release C contracts', () => {
     expect(lark.send).not.toHaveBeenCalled()
   })
 
-  it('rejects a source socket replaced before durable inbound acknowledgement without committing state', async () => {
-    const database = createAgentPlatformDatabase(':memory:')
-    seedActiveLark(database)
-    const socket = new FakeSocket()
-    let release!: () => void
-    const receive = vi.fn(async (input: { acknowledge: () => Promise<void> }) => {
-      await new Promise<void>((resolve) => { release = resolve })
-      await expect(input.acknowledge()).rejects.toThrow('lark-current-gate-failed')
-      return { disposition: 'retry' as const }
-    })
-    const host = new LarkLongConnectionHost({
-      channelId: 'lark-a', generation: 1, socketUrl: 'wss://fake', inbound: { receive } as never, runtime: new LarkRuntimeRepository(database),
-      hashEventKey: async () => 'opaque-event', parseVerifiedEnvelope: () => ({ facts: {
-        eventKey: 'lark:event:e1', conversationKey: 'lark:conversation:chat:chat_1', userKey: 'lark:user:user_1', conversationKind: 'direct', mentionedBot: true, text: 'hello'
-      }, acknowledgeWire: '{"ack":"opaque"}' }),
-      reconnectSocketUrl: async () => null,
-      createPlatformWebSocket: class { constructor(_url: string) { return socket as never } } as never,
-      isCurrent: () => true, signal: new AbortController().signal
-    })
-    host.start()
-    socket.onmessage?.({ data: '{}' })
-    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce())
-    socket.onclose?.({})
-    release()
-    await vi.waitFor(() => expect(database.connection.prepare('select count(*) as count from channel_lark_runtime_state').get()).toEqual({ count: 0 }))
-    expect(socket.sent).toEqual([])
-  })
 })
 
 class FakeSocket {

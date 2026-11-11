@@ -8,6 +8,7 @@ import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
+import type { DailyBriefingLocale } from '../../contracts/dailyBriefing'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
@@ -29,7 +30,7 @@ import { createMarketAnalysisSettingsService } from './application/marketAnalysi
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
-import { seedDefaultEnabledSources } from './application/defaultEnabledSources'
+import { disableMaintenanceOnlyKeylessSources, migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
 import {
   createIntelligenceCredentialJsonStorage,
   createIntelligenceCredentialStore
@@ -76,8 +77,9 @@ import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReading
 import { applyDailyBriefingSchedules } from './jobs/registerDailyBriefingJob'
 import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
+import type { BriefingPeriodsEditor } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
-import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
+import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort, findLatestBriefingSessionId } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
 import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
@@ -87,10 +89,8 @@ import type { PolicyPathQueryService } from './policy-path/policyPathQueryServic
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createEditionLanguageSettingsService, createEditionLanguageSettingsJsonStorage } from './daily-briefing/dailyBriefingLanguageSettingsService'
 import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
-import {
-  createDailyBriefingGenerationSettingsJsonStorage,
-  createDailyBriefingGenerationSettingsService
-} from './daily-briefing/dailyBriefingGenerationSettingsService'
+import { readDailyBriefingPeriodsSettings } from './daily-briefing/dailyBriefingGenerationSettings'
+import { createJsonFileStorage } from '@platform/storage/jsonFileStorage'
 import {
   createDailyBriefingSettingsService,
   type DailyBriefingSettingsService
@@ -110,6 +110,7 @@ import {
   INTELLIGENCE_REPLAY_WINDOW_JOB
 } from './jobs/intelligenceJobIds'
 import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
+import { registerIntelligenceDataChangedEvents } from './jobs/registerIntelligenceDataChanged'
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
@@ -213,6 +214,8 @@ export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
   /** Reconcile the automatic calendar job registry after a feed switch. */
   onCalendarEnabledChanged?: () => void | Promise<void>
   createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
+  /** 自动会话的幂等窄查（按 agentId + originRef）：同一期只复用一条会话。 */
+  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
   sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
   cancelAgentSession?: (sessionId: string) => Promise<void> | void
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
@@ -255,11 +258,19 @@ export type IntelligenceModule = {
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
   dailyBriefingService: DailyBriefingService
   deleteDailyBriefingPeriod: DailyBriefingPeriodDeletion
+  /**
+   * The reader's period store behind the runtime's list — the same instance, so the settings
+   * surface's writes go through the one-time move and cannot create a second, marker-less file.
+   */
+  briefingPeriods: BriefingPeriodsEditor
   /** The deterministic core-fact pass, exposed for logs and focused verification. */
   dailyBriefFactEnsure: ReturnType<typeof createDailyBriefFactEnsure>
   /**
-   * The daily-brief settings seam. The name predates the generation setting; the value is the
-   * composed settings service, and `dailyBriefingAiSettings` inside the module is the AI-only part.
+   * 日报的 **AI 编辑与语言设置**：模型 / WebSearch / 编辑开关 + 全局语言偏好，
+   * 由 `dailyBriefingSettingsService` 组合 AI 与语言两个服务而来。抽屉日报屏的 `getSettings` /
+   * `saveSettings` 是这组设置**唯一的读写口**——删掉它等于让读者少一组设置（要删必须先给它一条
+   * 新路径，B：新增专属 IPC 并切调用点；C：C7 换新面）。
+   * 字段名 `dailyBriefingAiSettings` 是历史名（早期只装 AI 那半），改名会动四处调用点，本批不动。
    */
   dailyBriefingAiSettings: DailyBriefingSettingsService
   rawRecordStore: ReturnType<typeof createRawRecordStore>
@@ -631,6 +642,8 @@ export function getIntelligenceModule(
         : {})
     }
     registerIntelligenceJobs(jobRuntime, intelligenceJobDeps)
+    /* 采集写了库 → 发一条 `intelligence.dataChanged`（形状见合同，映射在 `jobs/dataChangedJobMap.ts`）。 */
+    registerIntelligenceDataChangedEvents(PRODUCT_ID)
     // Judgments are event-driven: normalize only sends the items it just created. A cleared
     // database, a partial write failure, or a settings change leaves older admitted items with no
     // current row and no event to bring them back. One idempotent pass per start reconciles them
@@ -721,8 +734,29 @@ export function getIntelligenceModule(
     // The dashboard's first screen (sentiment, fear & greed, stablecoin capital) is fed by sources
     // that need no credential; a fresh install should not require toggling them on before the cards
     // can do anything. An existing profile wins, so a reader's "off" is never overridden.
-    const ensureDefaultSources = seedDefaultEnabledSources(profileStore).catch(() => undefined)
-    const startupReady = ensureDefaultSources
+    // 一次性迁移：老安装里「免钥匙 + live」的源曾被旧默认写成关，这里打开一次（标记写在
+    // `intelligence-source-migration-markers.json`，之后读者再关就是关）。口径见
+    // `isDefaultEnabledDefinition`：免钥匙 + 已就绪即默认启用，维护备用（还没用上）的除外。
+    const migrationMarkers = join(dataDir, 'intelligence-source-migration-markers.json')
+    const ensureDefaultSources = migrateKeylessSourceDefaults({ markerPath: migrationMarkers, store: profileStore })
+      // 第二条：把维护备用那批关回去（第一条先把它们一起打开了，顺序不能反）。
+      .then(() => disableMaintenanceOnlyKeylessSources({ markerPath: migrationMarkers, store: profileStore }))
+      .catch(() => undefined)
+    // 历史日报编辑会话的身份归位：只改身份字段（消息与内容不动），幂等，失败不阻断启动但要留痕。
+    const earlierBriefingSessionMigration = ensureDefaultSources
+      .then(() => claimExistingBriefingSessions({
+        links: dailyBriefSessionLinks,
+        agentId: 'daily-brief-editor',
+        ...(hooks.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
+        ...(hooks.updateAgentSession ? { updateAgentSession: hooks.updateAgentSession } : {})
+      }))
+      .then((result) => {
+        if (result.updated > 0) hooks.log?.('info', 'daily-brief-session-migration', { updated: result.updated, skipped: result.skipped })
+      })
+      .catch((error: unknown) => {
+        hooks.log?.('warn', 'daily-brief-session-migration-failed', { message: error instanceof Error ? error.message : String(error) })
+      })
+    const startupReady = earlierBriefingSessionMigration
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
       .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
@@ -759,23 +793,49 @@ export function getIntelligenceModule(
     })
     // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
     // settings surface, but it no longer decides when an edition runs.
-    const briefingPeriodsSource = createBriefingPeriodsSource({ filePath: join(dataDir, 'daily-briefing-periods.json'), locale: getAppLanguage })
-    const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
-      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
-      onSaved: () => { void briefingPeriodsSource.getPeriods().then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, shellTimeZone())).catch(() => undefined) }
+    const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
+    // Periods are the runtime's schedule (§11.6b): the old settings file is still read by the
+    // settings surface, but it no longer decides when an edition runs.
+    const briefingPeriodsSource = createBriefingPeriodsSource({
+      filePath: join(dataDir, 'daily-briefing-periods.json'),
+      locale: getAppLanguage,
+      // The one-time move of the old settings' periods into this file. Lazy closures on purpose:
+      // the two services are assembled further down, and the move runs on the first read, which is
+      // the job registration below — after both exist.
+      // The one-time move reads the old file through its pure reader — never through a service
+      // that could write it — so the file stays exactly as the previous version left it.
+      legacyPeriodsMigration: {
+        readLegacyPeriods: async () => {
+          const raw = await createJsonFileStorage<unknown>(join(dataDir, 'daily-briefing-generation-settings.json'), undefined).read()
+          return readDailyBriefingPeriodsSettings(raw, new Date().toISOString()).periods
+        },
+        additionalLanguages: async () => (await dailyBriefingLanguageSettings.getSettings()).additional,
+        ...(hooks?.log ? { log: hooks.log } : {})
+      },
+      // Asked only when a stored period predates "language belongs to a period": one read of the
+      // links before today, then periodId → the languages its editions were actually written in.
+      editionLocales: async () => {
+        const links = await dailyBriefSessionLinks.listBefore(new Date(Date.now() + 86_400_000).toISOString().slice(0, 10))
+        const byPeriod = new Map<string, Set<DailyBriefingLocale>>()
+        for (const link of links) {
+          const languages = byPeriod.get(link.periodId) ?? new Set<DailyBriefingLocale>()
+          languages.add(link.locale)
+          byPeriod.set(link.periodId, languages)
+        }
+        return byPeriod
+      }
     })
     const dailyBriefingLanguageSettings = createEditionLanguageSettingsService({
       storage: createEditionLanguageSettingsJsonStorage(join(dataDir, 'daily-briefing-language-settings.json')), uiLanguage: getAppLanguage })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
-      generation: dailyBriefingGenerationSettings,
       language: dailyBriefingLanguageSettings
     })
-    const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
     const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions
       ? createDailyBriefEditorSessionPort({
         links: dailyBriefSessionLinks,
         createSession: hooks.createAgentSession,
+        ...(hooks.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
         send: hooks.sendAgentMessage,
         cancelAgentSession: hooks.cancelAgentSession,
       })
@@ -897,6 +957,11 @@ export function getIntelligenceModule(
         getView: () => dailyBriefingAiSettings.getView(),
         ...(hooks?.isWebSearchProviderReady ? { isWebSearchProviderReady: hooks.isWebSearchProviderReady } : {})
       }),
+      // E9「打开会话」：会话 id 只走这一条查找（身份是期 × 语言），列表只消费它的返回值。
+      sessionIdOf: (input) => findLatestBriefingSessionId({
+        ...(hooks?.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
+        ...(hooks?.log ? { log: hooks.log } : {})
+      }, { agentId: 'daily-brief-editor', editionDate: input.date, periodId: input.periodId, locale: input.locale })
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched
@@ -933,7 +998,7 @@ export function getIntelligenceModule(
       newsSentiment: newsSentimentExposure,
       sourcesService,
       publicQueryService,
-      dailyBriefingService, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks,
+      dailyBriefingService, briefingPeriods: briefingPeriodsSource.editor, deleteDailyBriefingPeriod: createDailyBriefingPeriodDeletion({ store: dailyBriefingStore, links: dailyBriefSessionLinks,
         ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}) }),
       dailyBriefFactEnsure,
       dailyBriefingAiSettings: dailyBriefingSettings,

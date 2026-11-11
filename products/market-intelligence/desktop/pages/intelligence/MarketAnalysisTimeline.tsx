@@ -76,6 +76,11 @@ type Props = Readonly<{
   timeline: UseMarketAnalysisTimelineResult
   onBack?: () => void
   onSelect?: (entry: MarketAnalysisTimelineEntry) => void
+  /**
+   * 由宿主提供「打开 AI 分析设置」的入口。给了它，这一屏就不再自己挂一个设置对话框：
+   * 同一个设置面两个草稿，保存的先后会互相覆盖，读者也无从知道自己在改哪一份。
+   */
+  onOpenSettings?: () => void
 }>
 
 
@@ -86,7 +91,7 @@ type Props = Readonly<{
  * rendered in two places. Data and selection state come from the shared
  * workspace hook.
  */
-export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Props): React.ReactElement {
+export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpenSettings }: Props): React.ReactElement {
   const { state, attempt, requestState } = timeline
   // `loading` is only the short request leg; the run itself stays `queued` while it works, so the
   // button's own icon must spin for both states instead of freezing next to a disabled label.
@@ -152,7 +157,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
       <header className="mi-analysis-timeline__header" aria-hidden={masked || undefined}>
         <div><p>{text.workspaceLabel}</p><h1>{text.title}</h1></div>
         <div>
-          <Button className="mi-analysis-timeline__settings" onClick={() => setSettingsOpen(true)} icon={<Settings2 aria-hidden="true" size={14} />}>{text.settings}</Button>
+          <Button className="mi-analysis-timeline__settings" onClick={() => (onOpenSettings === undefined ? setSettingsOpen(true) : onOpenSettings())} icon={<Settings2 aria-hidden="true" size={14} />}>{text.settings}</Button>
           {onBack ? <Button className="mi-analysis-timeline__back" onClick={onBack} icon={<ArrowLeft aria-hidden="true" size={15} />}>{text.back}</Button> : null}
           {/* The one analysis action sits at the far right, where a separate refresh button used to
               be: the list refreshes itself (live poll, focus), so a second control that only re-read
@@ -248,16 +253,17 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
         <div className="mi-analysis-timeline__mask-body">
           <p>{text.analysisOffHint}</p>
           <div>
-            <Button type="primary" onClick={() => setSettingsOpen(true)}>{text.enableAnalysis}</Button>
+            <Button type="primary" onClick={() => (onOpenSettings === undefined ? setSettingsOpen(true) : onOpenSettings())}>{text.enableAnalysis}</Button>
           </div>
           {refusalText(settingsState.refusal) ? <p role="alert">{refusalText(settingsState.refusal)}</p> : null}
         </div>
       </div> : null}
-      <MarketAnalysisSettingsDialog
+      {/* 宿主给了入口就不再挂第二个对话框：一份草稿，一处保存。 */}
+      {onOpenSettings === undefined ? <MarketAnalysisSettingsDialog
         onClose={() => setSettingsOpen(false)}
         open={settingsOpen}
         text={text}
-      />
+      /> : null}
     </section>
   )
 }

@@ -29,7 +29,6 @@ function sourcesState(overrides: Record<string, unknown>) {
     selectedSourceId: undefined,
     detail: undefined,
     draftProfile: undefined,
-    sourceEnabledById: {},
     needsManualRunPrompt: false,
     loading: true,
     saving: false,
@@ -113,6 +112,7 @@ afterEach(async () => {
   root = undefined
   host?.remove()
   host = undefined
+  Reflect.deleteProperty(window, 'platform')
   vi.restoreAllMocks()
 })
 
@@ -122,6 +122,7 @@ const render = async () => {
   root = createRoot(host)
   await act(async () => root!.render(createElement(IntelligenceSourcesSettingsSection)))
   await act(async () => { await Promise.resolve() })
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
   return host
 }
 
@@ -158,7 +159,6 @@ describe('sources settings page states', () => {
           autoReplayAfterParserUpgrade: false,
           collectionPreset: 'balanced',
           enabled: true,
-          includeInSentiment: true,
           profileId: 'profile-s1',
           rawArchiveEnabled: false,
           retentionMode: 'balanced',
@@ -172,33 +172,12 @@ describe('sources settings page states', () => {
     )
     const dom = await render()
 
-    // 默认收起：头行只有「采集策略」，四行控件不显示；展开后才出现（界面设计 2026-11-09）。
-    // 注意：平台壳为了 `aria-controls` 永远指向**存在**的节点，内容从首帧就挂载、收起时是
-    // `display: none`——所以这里判「不显示」，不判「不在 DOM 里」（判 DOM 存在与否会被真正的显隐问题骗过）。
-    expect(dom.textContent).toContain(zhText.collectionPolicy.title)
-    const collapsedGrid = dom.querySelector<HTMLElement>('.intelligence-setting-grid')
-    expect(collapsedGrid?.closest<HTMLElement>('.ant-collapse-content')?.style.display).toBe('none')
-    // 壳 `CollapsibleGroup` 到了自定义内容形态：头行由壳负责（档位、箭头、`aria-controls`）。
-    const header = [...dom.querySelectorAll<HTMLElement>('.collapsible-group .ant-collapse-header')]
-      .find((element) => element.textContent?.includes(zhText.collectionPolicy.title))!
-    await act(async () => { header.click() })
-    await act(async () => { await Promise.resolve() })
+    // 「高级」与展开区已按用户 2026-11-12 删除：这一屏只剩源行（名字 + 状态 + 开关），
+    // 采集预设与「纳入情绪」都挪到「采集与数据」每源第二行。
+    expect(dom.querySelector('.source-provider-detail__advanced')).toBeNull()
+    expect(dom.querySelector('.source-provider-detail__form')).toBeNull()
+    expect(dom.textContent).not.toContain(zhText.collectionPolicy.collectionPreset)
 
-    const section = dom.querySelector('.intelligence-section:has(.intelligence-setting-grid)')
-    expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
-    expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)
-    expect(section).not.toBeNull()
-    // 范围策略已从界面撤掉：读者改它什么也不会发生（架构师核对：只写不读）。控件不能以禁用态
-    // 留着——禁用等于承诺「以后能开」。这里判两个方向：标签不在屏上，且只剩一个下拉（预设）。
-    expect(section!.textContent).not.toContain('范围策略')
-    expect(section!.querySelectorAll('.ant-select')).toHaveLength(1)
-
-    const sentimentRow = [...section!.querySelectorAll<HTMLElement>('.intelligence-setting-row')]
-      .find((row) => row.textContent?.includes(zhText.collectionPolicy.includeInSentiment))!
-    const toggle = sentimentRow.querySelector<HTMLElement>('[role="switch"]')!
-    await act(async () => { toggle.click() })
-
-    expect(updateSourceProfile).toHaveBeenCalledWith('s1', { includeInSentiment: false })
   })
 
   it('marks which provider row is selected for assistive tech', async () => {
@@ -217,7 +196,38 @@ describe('sources settings page states', () => {
     expect(rows[0]?.textContent).toContain('P1')
   })
 
+  it('shows the other-place notice with two actions when this page has a draft', async () => {
+    const reloadOtherSide = vi.fn()
+    const dismissOtherSide = vi.fn()
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({
+        loading: false,
+        settingsView: settingsViewOneProvider(),
+        otherSideChanged: true,
+        reloadFromOtherSide: reloadOtherSide,
+        dismissOtherSideChanged: dismissOtherSide,
+        setDraftDirty: vi.fn()
+      }) as never
+    )
+    const dom = await render()
+
+    expect(dom.textContent).toContain(zhText.otherSideChanged)
+    await act(async () => { button(dom, zhText.reloadOtherSide).click() })
+    expect(reloadOtherSide).toHaveBeenCalledTimes(1)
+    await act(async () => { button(dom, zhText.keepEditing).click() })
+    expect(dismissOtherSide).toHaveBeenCalledTimes(1)
+  })
+
   it('draws the page once the read is done', async () => {
+    // 详情是另一条读（每源一次）：读成了才画健康四格。这里给一条最小详情，
+    // 否则页面会如实落「详情读不到」的错误态——那是另一条用例的事。
+    ;(window as unknown as { platform: unknown }).platform = {
+      products: {
+        invoke: vi.fn(async (_productId: string, method: string) => method === 'intelligenceSources.getPageState'
+          ? { detail: { health: { sourceId: 's1', runtimeStatus: 'healthy', connectivityStatus: 'connected', consecutiveFailures: 0 } } }
+          : undefined)
+      }
+    }
     vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
       sourcesState({
         loading: false,
@@ -236,5 +246,23 @@ describe('sources settings page states', () => {
     const dom = await render()
     expect(dom.querySelector('.state-view')).toBeNull()
     expect(dom.querySelector('[role="group"]')).not.toBeNull()
+  })
+})
+
+describe('设置页 › 业务设置：每行都有格级开关', () => {
+  it('renders one switch per cell row in the settings host too', async () => {
+    // 防「抽屉有、设置页没有」复发：两个宿主各一条同形判据。
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({ loading: false, settingsView: settingsViewOneProvider() }) as never
+    )
+    const dom = await render()
+    const businessTab = [...dom.querySelectorAll<HTMLButtonElement>('.intelligence-catalog-filters button')]
+      .find((button) => button.textContent === zhText.sourceFilters.dashboard)
+    expect(businessTab).not.toBeUndefined()
+    await act(async () => { businessTab!.click() })
+    const rows = dom.querySelectorAll('[data-cell-id]')
+    const switches = dom.querySelectorAll('[data-cell-id] [role="switch"]')
+    expect(rows.length).toBeGreaterThan(0)
+    expect(switches.length).toBe(rows.length)
   })
 })

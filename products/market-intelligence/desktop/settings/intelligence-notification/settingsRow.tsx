@@ -1,5 +1,8 @@
 import type { ReactElement, ReactNode } from 'react'
 
+import { SettingsRow as SharedSettingsRow } from '@platform/ui/components/settings-row'
+import { SettingsSection } from '@platform/ui/components/settings-section'
+
 import { SettingsInfo, type SettingsInfoSpec } from '../settingsInfo'
 
 /**
@@ -23,34 +26,34 @@ export function SettingsRow(props: Readonly<{
   last?: boolean
   children?: ReactNode
 }>): ReactElement {
-  return <div className={`intelligence-notification-form-row${props.last === true ? ' is-last' : ''}`}>
-    <span className="intelligence-notification-form-label">
+  return <SharedSettingsRow
+    controlWrapperClassName="intelligence-notification-form-control"
+    copyClassName="intelligence-notification-form-label"
+    label={<>
       {/* 标题与 ⓘ 同一行：长标题压标题，图标 flex: none 不被挤下去。 */}
       <span className="intelligence-notification-form-label-text">{props.label}</span>
       {props.info === undefined ? null : <SettingsInfo {...props.info} />}
-    </span>
-    <div className="intelligence-notification-form-control">
-      {props.children}
-    </div>
-  </div>
+    </>}
+    rowClassName={`intelligence-notification-form-row${props.last === true ? ' is-last' : ''}`}>
+    {props.children}
+  </SharedSettingsRow>
 }
 
 export type SettingsRowInfo = SettingsInfoSpec
 
 export { SettingsInfo }
 
-/** 一组字段：组标题 + 行；组与组之间靠 24 间距 + 1px 分隔线分开（首组不带线）。 */
+/**
+ * 一组字段：区块标题 + 行。
+ *
+ * 直接交给平台 `SettingsSection`（当前只服务设置页那一面，用默认 `card`）：
+ * 组头、ⓘ 槽、分隔线与区块形态都只有那一份实现，这里不再自绘一个「长得像」的。
+ */
 export function SettingsGroup(props: Readonly<{
   title: string
   /** 组标题旁的可选说明（ⓘ），不是正文。 */
   aside?: ReactNode
   children: ReactNode
 }>): ReactElement {
-  return <section className="intelligence-notification-form-group">
-    <div className="intelligence-notification-form-group-head">
-      <h3 className="intelligence-notification-form-group-title">{props.title}</h3>
-      {props.aside ?? null}
-    </div>
-    {props.children}
-  </section>
+  return <SettingsSection info={props.aside} title={props.title}>{props.children}</SettingsSection>
 }

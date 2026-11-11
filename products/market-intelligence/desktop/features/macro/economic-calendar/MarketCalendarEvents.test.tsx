@@ -25,9 +25,11 @@ it('renders provider-only economic values and unknown country without numerical 
     expect(host.textContent).toContain('公布值（0xRouter）')
     expect(host.textContent).toContain('未标明国家')
     expect(host.textContent).toContain('暂不可比较')
-    expect(host.textContent).toContain('本次尚未刷新')
-    // 抽屉里没有 ⓘ，所以这里按 `full` 显示：常态串（含采集时刻）仍在，不是被搬走了。
-    expect(host.textContent).toContain('数据采集于')
+    // 这条来源**给过**这条事件（有时间），所以不再说「本次尚未刷新」——时间与那句话不许自相矛盾。
+    expect(host.textContent).not.toContain('本次尚未刷新')
+    // 抽屉里没有 ⓘ，所以这里按 `full` 显示：常态串仍在，不是被搬走了。口径是「来源最后一次给出」，
+    // 不是「我们采集于」——它证明对方还在给，不证明我们跑过。
+    expect(host.textContent).toContain('来源最后一次给出这条于')
     expect(host.textContent).toContain('来源观测时间')
     expect(host.querySelector('[data-market-value="consensus"]')?.textContent).toContain('0')
     expect(host.querySelector('[data-market-value="providerPrevious"]')?.textContent).toBe('前值（0xRouter）暂无')
@@ -117,7 +119,8 @@ it('renders safe failed and empty endpoint feedback in English without claiming 
     await act(async () => root.render(scoped(<MarketCalendarSourceStatus text={text} source={{ eventType: 'financial-event',
       status: 'success-empty', sourceObservedAt: time }} />)))
     expect(host.textContent).toContain('No events this time')
-    expect(host.textContent).toContain('Not refreshed this session')
+    // 来源给过这一条（有时间）：不再说「本次尚未刷新」，否则与时间自相矛盾。
+    expect(host.textContent).not.toContain('Not refreshed this session')
     expect(host.textContent).not.toContain('Refresh failed')
   } finally { await act(async () => root.unmount()) }
 })

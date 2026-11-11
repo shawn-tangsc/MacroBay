@@ -1,0 +1,12 @@
+{
+  "why": "两次共享文件捎带事故：一条线在共享文件里的未提交改动被另一条线的提交一起带走（先是一份基线 JSON，后是 configDrawer.css 的一个 hunk）。提交集里出现下列文件时，钩子只提示不阻断——能停正常提交的检查会被关掉。不是 owner 就把改动交给 owner，或等 owner 落。",
+  "owners": {
+    "products/market-intelligence/desktop/settings/config-drawer/configDrawer.css": "前端组件线",
+    "products/market-intelligence/desktop/settings/config-drawer/ConfigSettingsDrawer.tsx": "前端组件线",
+    "products/market-intelligence/desktop/shared/i18n/productText.ts": "共享文案表（只许精确插入自己那几条并立刻提交）",
+    "apps/desktop-shell/src/renderer/src/i18n/platformText.ts": "共享文案表（只许精确插入自己那几条并立刻提交）",
+    "scripts/inline-notice-baseline": "各线（按 owner 拆成多份，见 scripts/inline-notice-baseline/*.json）",
+    "scripts/body-prose-baseline.json": "共享基线（只许用 --lower / --remove 改）",
+    "scripts/font-size-literal-baseline.json": "共享基线（只许降）"
+  }
+}

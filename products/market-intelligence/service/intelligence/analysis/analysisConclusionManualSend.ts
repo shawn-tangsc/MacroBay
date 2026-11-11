@@ -59,7 +59,7 @@ export function createAnalysisConclusionManualSend(deps: AnalysisConclusionManua
       ...buildAnalysisConclusionRequest({
         summary: conclusion.summary,
         citedCount: summary.evidenceRefs.length,
-        bucket: `manual:${run.eventGroupId}`,
+        triggerKey: `manual:${run.eventGroupId}`,
         // 点击时刻进第二个分量：同一条结论点两次是两条键，不会合并成一条，也不占真实事件的键。
         cutoff: `${cutoff}:${clickAt}`,
         occurredAt: clickAt,

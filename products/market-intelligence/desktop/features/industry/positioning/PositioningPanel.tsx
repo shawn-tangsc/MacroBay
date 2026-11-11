@@ -1,6 +1,7 @@
-import { ChevronRight, Info } from 'lucide-react'
+import { ChevronRight, CircleSlash, Info } from 'lucide-react'
 import { useState } from 'react'
 
+import { Button } from 'antd'
 import { Segmented } from '@platform/ui/components/segmented'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -8,7 +9,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
 import { Popover } from '@platform/ui/components/popover'
 import { Tooltip } from '@platform/ui/components/tooltip'
-import { STATE_VIEW_ACTION_KEYS, StateView, useStateViewText } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, useStateViewText } from '@platform/ui/components/state'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -16,6 +17,7 @@ import type { OpenInterestWindow } from '../../../../contracts/openInterestHisto
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
+import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
 import type { PositioningState } from '../../../../contracts/openInterestPositioning'
 import type { DashboardFundingRateHistoryPoint, DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import {
@@ -30,9 +32,17 @@ import {
 
 import { SignalDetail } from '../shared'
 import { useSignalAnalysisSentence } from '../shared/useSignalAnalysisSentence'
-import { PositioningChart, formatRate } from './PositioningChart'
+import { PositioningChart, PositioningChartSkeleton, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
+import {
+  projectPositioningCardState,
+  type PositioningCellReason,
+  type PositioningCells,
+  type PositioningCellState
+} from '../../../pages/intelligence/dashboardPositioningSourceState'
 import { positioningNoteKeys, resolvePositioningNote } from './positioningNotes'
+// 三态怎么画在独立模块里：句式落在结构行上，卡片骨架不动（用户 2026-11-11 定的形态）。
+import { SourceStateLine, type SourceStateLineView } from './positioningSourceState'
 
 import './PositioningPanel.css'
 
@@ -61,6 +71,15 @@ export type PositioningPanelProps = Readonly<{
   window: OpenInterestWindow
   onWindowChange: (window: OpenInterestWindow) => void
   text: PositioningPanelText
+  /**
+   * 两格各自的源可用性（判定在 `projectPositioningCells`，来自源注册表与格级启用表，不在本文件现算）。
+   * 不传 = 两格都可用（老调用点与既有用例的行为不变）。
+   */
+  cells?: PositioningCells
+  /** 未配置 / 未启用时的那个动作：去「设置 → 情报源」对应分组。 */
+  onOpenSources?: () => void
+  /** 费率那格读不到时的重读入口；不传就退到整卡的 `onReload`。 */
+  onReloadFunding?: () => void
 }>
 
 // A strip above the plot belongs to the liquidation marks: a label drawn over the curves hid the
@@ -77,7 +96,7 @@ function chipLabel(text: PositioningPanelText, chip: Extract<DashboardSignalChip
     .replace('{multiple}', chip.volumeMultiple.toFixed(1))
 }
 
-export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
+export function PositioningPanel({ funding, positioning, window, onWindowChange, text, cells, onOpenSources, onReloadFunding }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductKey = useProductTextKey()
   // 口径说明收在一颗 ⓘ 里（界面 2026-11-08）：正文只留读数与证据，元说明不占版面。
@@ -103,7 +122,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
    * 规则那次没读到；`insufficient` = 读到了但成交量腿不齐。第三种以前只给一枚「数据不齐」的
    * 状态牌、第二种只给一个 16px 感叹号——两者都说不清「是没命中，还是没读到」。
    *
-   * 整卡本身不可用时（空 / 读失败 / 加载中）这行不出现：那是平台 `StateView` 的地盘。
+   * 整卡本身不可用时（空 / 读失败 / 加载中）这行不出现：骨架与状态行已经在说同一件事。
    */
   // 判据直接读投影里的牌子状态（不从上面那个只为「显示哪些牌子」过滤过的 `chip` 取：
   // `hidden` 恰恰是被过滤掉的那一种，而「没命中」正是它）。
@@ -126,7 +145,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       : liquidationNote === 'insufficient'
         ? text.liquidationNoteInsufficient
         : undefined
-  const header = (extra?: React.ReactNode) => (
+  const header = (extra?: React.ReactNode, showTabs = true) => (
     <header className="mi-positioning-panel__head">
       <h2>{text.pairTitle}</h2>
       {alertChip ? (
@@ -147,8 +166,10 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           </button>
         </Tooltip>
       ) : null}
+      {/* 标题右边那一颗：这一张卡上唯一的「补数据」入口（用户 2026-11-11）。 */}
+      {titleAction ? <Button data-positioning-title-action="true" size="small" onClick={titleAction.run}>{titleAction.label}</Button> : null}
       {extra}
-      <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
+      {showTabs ? <WindowTabs window={window} onWindowChange={onWindowChange} text={text} /> : null}
     </header>
   )
 
@@ -167,35 +188,89 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       }).join(' · ')
     : ''
   const available = positioning.state === 'available'
-  const latest = available ? positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt : undefined
-  // Two different facts, two different states: nothing collected yet is empty, a failed read is an
-  // error. The platform owns both sentences and the shape; the card only says which happened.
-  const status = (positioning.state === 'loading' || funding.state === 'loading')
-    ? <LoadingState label={text.loading} minHeight={140} />
-    : positioning.state === 'empty'
-      ? <StateView state="empty" reasonCode="not-yet" size="md" />
-      : positioning.state === 'unavailable' && positioning.cause === 'contract-mismatch'
-        // A shape from another app version fails the same way every time: a retry button would be a
-        // false way out. The platform's `needs-restart` code + its relaunch action is the one path
-        // that actually changes the outcome; the sentence says why (and that reloading is not enough).
-        ? <>
-            <StateView state="error" reasonCode="needs-restart" size="md"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.restart_app, onSelect: () => { void globalThis.window.platform.app.relaunch() } }} />
-            <p className="mi-positioning-panel__contract" role="status">{text.contractMismatch}</p>
-          </>
-        : positioning.state === 'unavailable'
-          ? <StateView state="error" reasonCode="unavailable" size="md"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: positioning.onReload }} />
-          // `available` never reaches this slot (the chart is rendered instead).
-          : null
+  // 空态与读不到都带重读入口；读到了就没有可重读的东西。
+  const positioningRetry = positioning.state === 'unavailable' || positioning.state === 'empty' ? positioning.onReload : undefined
+  // 两格的源可用性：判定在投影里（注册表 / 格级启用 / 这次读到没有），本文件只按它决定画哪半。
+  const cardSourceState = cells ? projectPositioningCardState(cells) : undefined
+  const oiState: PositioningCellState = cells?.oi ?? 'available'
+  const fundingCellState: PositioningCellState = cells?.funding ?? 'available'
+  const oiReady = oiState === 'available'
+  const fundingReady = fundingCellState === 'available'
+  // 每格一颗主动作：未配置 → 去配置；未启用 → 去启用（同一处，落在该源那一行）；读不到 → 再试一次。
+  const cardSourceReason: PositioningCellReason | undefined = cells?.reasons.oi ?? cells?.reasons.funding
+  // 整卡「再试一次」把两格一起重读：两格都不可用时读者要的是「再读一次这张卡」。
+  const cardRetry = (): void => { positioningRetry?.(); onReloadFunding?.() }
+  // 未配置 / 未启用的动作永远有一颗真按钮：宿主没接线时落到共享导航（同一个目的地：设置 → 情报源）。
+  const cardOpenSources = onOpenSources ?? openIntelligenceSourcesSettings
+  // 两个时刻都来自投影（同源）：曲线末点与折叠前的最新读数。这里不再 `at(-1)` 现取——
+  // 各算一处，窗口切换时就会出现「写着 01:00 · 01:45，但曲线末点其实不是 01:00」。
+  const pointAt = available ? positioning.pointAt : undefined
+  const newestReadingAt = available ? positioning.newestReadingAt ?? positioning.pointAt : undefined
+  // 形状/版本不符的唯一出口：完全退出后重开（重试必然再失败）。
+  const restartAction = { label: stateText(STATE_VIEW_ACTION_KEYS.restart_app), run: () => { void globalThis.window.platform.app.relaunch() } }
+  /**
+   * 每一格的一句状态，落在图表上方那一行里——卡片骨架不动，只换这一行（用户 2026-11-11）。
+   *
+   * 句子里**不带动作**：整张卡只有一个动作入口，在标题行（见 `titleAction`）；同一张卡两颗
+   * 「去启用」就是两个入口。顺序与判定顺序一致：未配置 → 未启用 → 读不到；「没有数据」用产品自己那句。
+   */
+  const sourceNotes: SourceStateLineView[] = cardSourceState
+    ? [{ state: cardSourceState, ...(cardSourceReason ? { reason: cardSourceReason } : {}) }]
+    : [
+        ...(oiReady ? [] : [{
+          label: text.notional, state: oiState,
+          ...(cells?.reasons.oi ? { reason: cells.reasons.oi } : {})
+        } as SourceStateLineView]),
+        ...(fundingReady ? [] : [{
+          label: text.rateLabel, state: fundingCellState,
+          ...(cells?.reasons.funding ? { reason: cells.reasons.funding } : {})
+        } as SourceStateLineView]),
+        ...(positioning.state === 'empty' && oiReady ? [{ state: 'empty' as const }] : []),
+        ...(positioning.state === 'unavailable' && oiReady
+          ? [{
+              state: 'unreadable' as const,
+              ...(positioning.cause === 'contract-mismatch' ? { sentence: text.contractMismatch } : {}),
+              ...(positioning.cause ? { reason: positioning.cause } : {})
+            }]
+          : [])
+      ]
+
+  // 用户 2026-11-11 的三条分支：两格都**未启用** → 整块遮罩 + 居中一颗；部分缺 → 骨架 + 标题行一颗；
+  // 全都配好 → 没有任何动作。标题行那颗在遮罩那一支不画——遮罩里那颗才是入口，两个入口就是两个。
+  //
+  // 不判「从没配过」：这张卡的源是注册表里的固定条目，读者删不掉（`dashboardSourceModules.ts`），
+  // 「没配」在链路上被并进 `not-enabled`，判不出来就别造一个看着像的判据（Chief 2026-11-11 事实）。
+  const allCellsDisabled = cells !== undefined && cells.oi === 'disabled' && cells.funding === 'disabled'
+  const anyCellNotEnabled = oiState === 'missing' || fundingCellState === 'missing'
+    || oiState === 'disabled' || fundingCellState === 'disabled'
+  const anyReadFailed = oiState === 'unreadable' || fundingCellState === 'unreadable'
+    || positioning.state === 'unavailable'
+  const shapeMismatch = positioning.state === 'unavailable' && positioning.cause === 'contract-mismatch'
+    || cells?.reasons.oi === 'contract-mismatch' || cells?.reasons.funding === 'contract-mismatch'
+  const titleAction: Readonly<{ label: string; run: () => void }> | undefined = allCellsDisabled
+    ? undefined
+    : anyCellNotEnabled
+      ? { label: text.enableData, run: cardOpenSources }
+      : anyReadFailed
+        ? (shapeMismatch
+            ? restartAction
+            : { label: stateText(STATE_VIEW_ACTION_KEYS.retry), run: cardRetry })
+        : undefined
 
   return (
     <section className="mi-positioning-panel" data-state={positioning.state} data-funding-state={funding.state} data-window={window}
       data-stale={available && positioning.staleSince ? 'true' : undefined}>
       {header(
         <>
-          {latest
-            ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(latest)}{available && positioning.staleSince ? text.staleSuffix.replace('{stale}', text.stale) : ''}</small>
+          {pointAt
+            ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(pointAt)}
+                {/* 界面设计 2026-11-10：两个时刻不同才写第二段（7 天窗口的折叠点最多比最新读数早 45 分钟）。
+                    不用括号——括号读作「补充/次要」，而「最新读数更晚」在这个窗口是同等级的关键事实；
+                    也不加第三套词，只用「观测时间」「最新读数」这两段。 */}
+                {pointAt && newestReadingAt && newestReadingAt !== pointAt
+                  ? <> · {text.newestReading} {formatTime(newestReadingAt)}</>
+                  : null}
+                {available && positioning.staleSince ? text.staleSuffix.replace('{stale}', text.stale) : ''}</small>
             : null}
         </>
       )}
@@ -244,35 +319,63 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           </div>
         </Modal>
       ) : null}
-      <div className="mi-positioning-panel__body">
-        <div className="mi-positioning-panel__summary">
-          <Asset asset="btc" text={text} rate={btcRate.at(-1)} rateAgo={btcRate.at(-4)} change={available ? positioning.changeBtc : undefined}
-            notional={available ? positioning.btc.at(-1) : undefined} state={available ? positioningStateFor(positioning, btcRate, positioning.changeBtc) : undefined} />
-          <Asset asset="eth" text={text} rate={ethRate.at(-1)} rateAgo={ethRate.at(-4)} change={available ? positioning.changeEth : undefined}
-            notional={available ? positioning.eth.at(-1) : undefined} state={available ? positioningStateFor(positioning, ethRate, positioning.changeEth) : undefined} />
+      {allCellsDisabled ? (
+        /* 两格都没启用：读者这一屏还没有可以读的数。数据区整块盖共享遮罩，居中一颗「启用数据」；
+           标题行保留（读者得知道这是哪张卡），标题行那颗按钮此时不画——遮罩里那颗才是入口，
+           两个入口就是两个。不画骨架：连要不要读都还没开的时候，空图框是假承诺。 */
+        <div className="mi-positioning-panel__body mi-source-veil-host" data-card-state="disabled" data-veiled="true">
+          <div className="mi-source-veil" data-state="disabled">
+            <p className="mi-source-state" data-state="disabled">
+              <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
+              <span>{text.sourceDisabled.replace('{source}', text.sourceName)}</span>
+            </p>
+            <Button size="small" onClick={cardOpenSources}>{text.enableData}</Button>
+          </div>
         </div>
+      ) : (
+      <div className="mi-positioning-panel__body" data-card-state={cardSourceState ?? 'available'}>
+        {/* 左列：两行资产位始终在。不可用的格给占位（`—`），不是整行消失。 */}
+        <div className="mi-positioning-panel__summary">
+          <Asset asset="btc" text={text} rate={fundingReady ? btcRate.at(-1) : undefined} rateAgo={fundingReady ? btcRate.at(-4) : undefined}
+            change={available && oiReady ? positioning.changeBtc : undefined}
+            notional={available && oiReady ? positioning.btc.at(-1) : undefined}
+            state={available && oiReady ? positioningStateFor(positioning, btcRate, positioning.changeBtc) : undefined} />
+          <Asset asset="eth" text={text} rate={fundingReady ? ethRate.at(-1) : undefined} rateAgo={fundingReady ? ethRate.at(-4) : undefined}
+            change={available && oiReady ? positioning.changeEth : undefined}
+            notional={available && oiReady ? positioning.eth.at(-1) : undefined}
+            state={available && oiReady ? positioningStateFor(positioning, ethRate, positioning.changeEth) : undefined} />
+        </div>
+        {/* 右列：显式第 2 列。状态行与骨架都不许把图挪走（Chief 2026-11-11 的布局根因）。 */}
         <div className="mi-positioning-panel__chart-wrap">
-          {available
-            ? <>
-                <PositioningChart positioning={positioning} funding={funding} text={text} />
-                {/* 一条腿读不到时的说明：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
-                {fundingMissingNote ? (
-                  <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingMissingNote}</p>
-                ) : null}
-                {/*
-                  截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
-                  一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
-                  只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
-                */}
-                {positioning.hiddenHits > 0 ? (
-                  <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
-                    {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
-                  </p>
-                ) : null}
-              </>
-            : status}
+          {sourceNotes.map((note, index) => (
+            <SourceStateLine key={`${note.state}-${note.label ?? 'card'}-${index}`} view={note} text={text} resolveText={resolveProductKey} />
+          ))}
+          {/* 只有「这一格已启用、正在读」才算等待：被关掉/没配置的格不会自己变出数据，等它就是在骗人。 */}
+          {oiReady && positioning.state === 'loading' || fundingReady && funding.state === 'loading'
+            ? <LoadingState label={text.loading} minHeight={140} />
+            : available && oiReady
+              ? <>
+                  {/* 费率那一格不可用时只画持仓线，不画半张柱子图；缺的那格由上面那行说明。 */}
+                  <PositioningChart positioning={positioning} funding={fundingReady ? funding : { state: 'unavailable' }} text={text} />
+                  {/* 一条腿读不到时的说明：整句、muted、不带重试——另半张图照常画，读者要知道少了哪条腿。 */}
+                  {fundingReady && fundingMissingNote ? (
+                    <p className="mi-positioning-panel__funding-missing" data-funding-missing="true" role="status">{fundingMissingNote}</p>
+                  ) : null}
+                  {/*
+                    截断行：只说图，不说判定结论。它和卡底的「判定三态」是两处、可以同时出现——
+                    一个说图上有几个点没画，一个说这次判成什么；**截断行不许提结论，判定行不许提数量**。
+                    只在真的画不下时出现：命中 0 时这一行不存在，卡面不多一个字。
+                  */}
+                  {positioning.hiddenHits > 0 ? (
+                    <p className="mi-positioning-panel__hidden-hits" data-hidden-hits="">
+                      {text.liquidationHiddenHits.replace('{count}', String(positioning.hiddenHits))}
+                    </p>
+                  ) : null}
+                </>
+              : <PositioningChartSkeleton text={text} />}
         </div>
       </div>
+      )}
       {liquidationNoteText ? (
         // 一行，muted，不是警报色：它说的是判定的结论，不是「我们出错了」。
         <p className="mi-positioning-panel__liquidation-note" data-liquidation-note={liquidationNote} role="status">
@@ -335,6 +438,9 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
   change?: Readonly<{ h1Pct?: number; h24Pct?: number }>
   notional?: DashboardPositioningPoint
   state: PositioningState | undefined
+  /** 这一格不可用时**不画**：不做一串破折号，那个位置由卡片上那行状态说明接手。 */
+  hideRate?: boolean
+  hideNotional?: boolean
 }>): React.ReactElement {
   const resolveProductKey = useProductTextKey()
   // 口径说明收在一颗 ⓘ 里（界面 2026-11-08）：正文只留读数与证据，元说明不占版面。

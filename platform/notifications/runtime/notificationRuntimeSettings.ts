@@ -25,6 +25,14 @@ export type NotificationSettingsSurfaceInput = {
   getSettings: () => Promise<NotificationRuntimeSettings>
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
+  /** 目标通道的唯一派生（与推送路由同一份判定，不另算一次）。 */
+  resolvePushChannel?: () => Promise<{ ok: true; channelId: string } | { ok: false }>
+  /** 通道侧「最近一次真实投递」：一次都没投过时回 null，界面据此说「还没有记录」而不是「未就绪」。 */
+  lastDelivery?: (channelId: string) => {
+    status: 'delivered' | 'failed' | 'unknown-after-send'
+    at: string
+    conversationLabel: string | null
+  } | null
   /** 端口真的装配好才为 true；不再读一个永远 false 的常量。 */
   pushWired?: () => boolean
   load: () => Promise<NotificationStoreState>
@@ -151,6 +159,12 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       channels: readonly unknown[]
       lastPushFailureAt: string | null
       lastPushFailureReason: string | null
+      /** 最近一次真实投递（通道侧尝试，不是通知记录）：读者自己核对「到底投过没有」。 */
+      lastDelivery: {
+        status: 'delivered' | 'failed' | 'unknown-after-send'
+        at: string
+        conversationLabel: string | null
+      } | null
     }> {
       const settings = await input.getSettings()
       const state = await input.load()
@@ -166,7 +180,11 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
           lastPushFailureReason = push.reason ?? null
         }
       }
+      const resolvePushChannel = input.resolvePushChannel
+      const channel = resolvePushChannel === undefined ? null : await resolvePushChannel()
+      const lastDelivery = channel?.ok === true ? (input.lastDelivery?.(channel.channelId) ?? null) : null
       return {
+        lastDelivery,
         toastEnabled: settings.toastEnabled,
         desktopEnabled: settings.desktopEnabled,
         pushWired: input.pushWired?.() ?? false,
@@ -197,6 +215,12 @@ export function composeNotificationSettingsSurface(
     getSettings: () => Promise<NotificationRuntimeSettings>
     updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
     getPushTargets?: () => Promise<readonly unknown[]>
+    resolvePushChannel?: () => Promise<{ ok: true; channelId: string } | { ok: false }>
+    lastDelivery?: (channelId: string) => {
+      status: 'delivered' | 'failed' | 'unknown-after-send'
+      at: string
+      conversationLabel: string | null
+    } | null
     pushWired?: () => boolean
   },
   internals: Pick<
@@ -209,6 +233,8 @@ export function composeNotificationSettingsSurface(
     getSettings: deps.getSettings,
     updateSettings: deps.updateSettings,
     getPushTargets: deps.getPushTargets,
+    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+    ...(deps.lastDelivery === undefined ? {} : { lastDelivery: deps.lastDelivery }),
     pushWired: deps.pushWired,
     ...internals
   })

@@ -24,6 +24,12 @@ function harness(options: { channel?: unknown; outcome?: string; suppressed?: { 
 }
 
 describe('sendTestNotice (link only)', () => {
+  it('says the submit was rejected instead of pretending the sample could not be read', async () => {
+    // 被拒（门禁/批准表）与「读不到样例」是两种病：同一个码盖两种病，读者会去查数据而不是查开关。
+    const { surface } = harness({ outcome: 'rejected' })
+    await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'rejected' })
+  })
+
   it('uses a new dedupe key per click, so two clicks are two records', async () => {
     const first = harness()
     const second = harness()
@@ -33,6 +39,16 @@ describe('sendTestNotice (link only)', () => {
     // 键里带点击时刻：同一毫秒以外，两次点击必然不同 -> 不会互相吞掉。
     expect(key(first)).toHaveProperty('seq')
     expect(key(first)?.date).toEqual(key(second)?.date)
+  })
+
+  it('rides a neutral platform event, never a product event', async () => {
+    // 这条曾经借过产品事件当载体：通知中心里那条就会显示成「简报已生成」——读者点的是通道自检，
+    // 看到的却是别人的事。事件 id 必须中性、不带产品名；改回借用 → 这例当场红。
+    const { surface, submitted } = harness()
+    await surface.sendTestNotice()
+    const eventTypeId = submitted[0]?.eventTypeId ?? ''
+    expect(eventTypeId).toBe('platform.notification.self-test')
+    expect(eventTypeId).not.toMatch(/market-intelligence|briefing\.ready/)
   })
 
   it('sends the fixed sample through the same submit in the test namespace and names the channel', async () => {

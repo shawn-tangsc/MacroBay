@@ -1,3 +1,4 @@
+import { SettingsRow } from '@platform/ui/components/settings-row'
 import { useMemo } from 'react'
 import { Button, Select, Switch } from 'antd'
 
@@ -230,11 +231,15 @@ export function TranslationPreferencesSection(props: {
 }
 
 function SettingRow(props: { label: string; children: React.ReactNode; wide?: boolean }): React.ReactElement {
+  // 同上：结构走共享组件，类名与 wide 变体由本页给，DOM 不变。
   return (
-    <div className={`intelligence-setting-row${props.wide ? ' intelligence-setting-row-wide' : ''}`}>
-      <span className="intelligence-setting-label">{props.label}</span>
-      <div className="intelligence-setting-control">{props.children}</div>
-    </div>
+    <SettingsRow
+      controlWrapperClassName="intelligence-setting-control"
+      copyClassName="intelligence-setting-label"
+      label={props.label}
+      rowClassName={`intelligence-setting-row${props.wide ? ' intelligence-setting-row-wide' : ''}`}>
+      {props.children}
+    </SettingsRow>
   )
 }
 

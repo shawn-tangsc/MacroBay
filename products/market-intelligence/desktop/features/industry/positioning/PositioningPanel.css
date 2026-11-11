@@ -9,13 +9,20 @@
 
 .mi-positioning-panel__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .mi-positioning-panel h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 13px; font-weight: 650; }
-.mi-positioning-panel__asof { margin-left: auto; color: var(--mi-dashboard-muted); font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* 两段时刻同一档 meta（`--font-meta` / `--line-meta` / 400 / `--muted`）；数字对齐靠 `tabular-nums`，
+   不是靠 monospace 字族——对齐是数字的事（界面设计 2026-11-10）。 */
+.mi-positioning-panel__asof { margin-left: auto; color: var(--muted); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 400; font-variant-numeric: tabular-nums; }
 
 /* Placement only: the segmented base owns its frame, selected state and focus ring. */
 .mi-positioning-panel__tabs { margin-left: auto; }
 
+/* 网格里只有两样东西：左列容器、右列图表容器。**都显式定位**——靠自动排布时，多一行状态句
+   就会把图表挤进 264px 的左列、右列空着（用户 2026-11-11 看到的那张就是这么坏的）。 */
 .mi-positioning-panel__body { display: grid; grid-template-columns: var(--mi-positioning-summary-width) minmax(0, 1fr); gap: 18px; align-items: stretch; }
-.mi-positioning-panel__summary { display: grid; align-content: center; gap: 14px; padding-right: 16px; border-right: 1px solid var(--mi-dashboard-line); }
+.mi-positioning-panel__summary {
+  grid-column: 1; grid-row: 1;
+  display: grid; align-content: center; gap: 14px; padding-right: 16px; border-right: 1px solid var(--mi-dashboard-line);
+}
 
 .mi-positioning-panel__asset {
   display: grid; gap: 5px; min-width: 0;
@@ -39,7 +46,10 @@
 .mi-positioning-panel__row[data-layout='level'] .mi-positioning-panel__value { font-size: 13px; }
 
 .mi-positioning-panel__state { justify-self: end; cursor: help; }
-.mi-positioning-panel__chart-wrap { min-width: 0; width: 100%; }
+.mi-positioning-panel__chart-wrap { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
+/* 三态那一行：属于结构的一部分（落在图表上方），不是一整块居中提示。
+   颜色与字号沿用状态词自己的（`.mi-source-state` 归共享样式表），这里只排位置。 */
+.mi-positioning-panel__source-note { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 6px; }
 .mi-positioning-panel__legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 4px; color: var(--mi-dashboard-muted); font-size: 9.5px; }
 .mi-positioning-panel__legend span { display: inline-flex; align-items: center; gap: 5px; }
 .mi-positioning-panel__legend i { width: 8px; height: 8px; border-radius: 2px; }
@@ -102,7 +112,11 @@
 
 @container (max-width: 700px) {
   .mi-positioning-panel__body { grid-template-columns: minmax(0, 1fr); }
-  .mi-positioning-panel__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--mi-dashboard-line); }
+  .mi-positioning-panel__summary {
+    grid-column: 1; grid-row: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--mi-dashboard-line);
+  }
+  .mi-positioning-panel__chart-wrap { grid-column: 1; grid-row: auto; }
 }
 
 

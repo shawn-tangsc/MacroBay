@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from 'antd'
 import { Sparkles } from 'lucide-react'
 import { StatusPill } from '@platform/ui/components/status-pill'
@@ -55,6 +55,8 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   const formatTime = useShellTimeFormat()
   const resolveProductText = useProductTextKey()
   const analysisSettings = useMarketAnalysisSettings()
+  /** 读者点了正文、但详情还在读：读好之后自动打开抽屉（不是点完没反应）。 */
+  const [openWhenReady, setOpenWhenReady] = useState(false)
   const latest = selectLatestPublishedEntry(state.entries)
   const detail = latest ? details[latest.id] : undefined
   const pending = latest ? detailState[latest.id] : undefined
@@ -71,6 +73,30 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   useEffect(() => {
     if (latest) timeline.ensureDetail(latest)
   }, [latest?.id])
+
+  useEffect(() => {
+    if (!openWhenReady || !latest || !detail) return
+    setOpenWhenReady(false)
+    onOpenDetail(latest)
+  }, [openWhenReady, latest, detail])
+
+  /** 键盘与鼠标等效：Enter / Space 触发同一个动作（Space 要阻止滚动）。 */
+  const onBodyKeyDown = (event: React.KeyboardEvent<HTMLElement>): void => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    requestOpen()
+  }
+
+  /** 正文整块即入口：详情已读好就直接开，没读好就先读、读好自动开。 */
+  const requestOpen = (): void => {
+    if (!latest) return
+    if (detail) {
+      onOpenDetail(latest)
+      return
+    }
+    setOpenWhenReady(true)
+    timeline.ensureDetail(latest)
+  }
 
   // With the capability switched off the card has nothing to offer — no new conclusion will be
   // published and the actions behind it are disabled — so it stays out of the main area instead of
@@ -93,12 +119,14 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
       <div>
         {latest ? <><time>{formatTime(latest.occurredAt, 'second')}</time><StatusPill labelKey={ANALYSIS_STATUS_KEY[latest.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[latest.status]} /></> : null}
         {onOpenTimeline ? <Button size="small" onClick={onOpenTimeline}>{openTimelineLabel}</Button> : null}
-        {latest && detail ? <Button size="small" onClick={() => onOpenDetail(latest)}>{workspaceText.openDetail}</Button> : null}
       </div>
     </header>
     {!latest && state.loading ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
     {!latest && !state.loading ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
-    {latest && pending === 'loading' ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
+    {latest && pending === 'loading' ? <div aria-label={workspaceText.openDetail} className="mi-analysis-conclusion-card__body mi-analysis-conclusion-card__body--action"
+      onClick={requestOpen} onKeyDown={onBodyKeyDown} role="button" tabIndex={0}>
+      <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} />
+    </div> : null}
     {/* 读不到不是「没有这条分析」：走统一状态面，句子是产品那句，动作是真重读**这一个节点**
         （与抽屉同一条 `ensureDetail`）。自动重试停了之后，读者还留着一个出口——没有出口的失败态
         下次任何一次瞬时失败都会再卡一次。 */}
@@ -114,7 +142,8 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
       size="md"
       state="error"
     /> : null}
-    {latest && detail ? <div className="mi-analysis-conclusion-card__body" data-direction={direction ?? 'none'}
+    {latest && detail ? <div aria-label={workspaceText.openDetail} className="mi-analysis-conclusion-card__body mi-analysis-conclusion-card__body--action" data-direction={direction ?? 'none'}
+      onClick={requestOpen} onKeyDown={onBodyKeyDown} role="button" tabIndex={0}
       style={direction ? { '--mi-conclusion-direction': `var(${analysisConclusionDirectionPolicy.colorTokens[direction]})` } as React.CSSProperties : undefined}>
       <p className="mi-analysis-conclusion-card__conclusion">
         {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}

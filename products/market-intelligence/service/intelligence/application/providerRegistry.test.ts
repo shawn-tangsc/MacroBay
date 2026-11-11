@@ -95,6 +95,9 @@ describe('source projections', () => {
     expect(getProvider('0xrouter')?.signupUrl).toContain('invite=tangscsh')
     expect(getProvider('realmarketapi')?.signupUrl).toContain('via=Macrobay')
     expect(getProvider('fred')?.signupUrl).toContain('fred.stlouisfed.org')
+    // 私有数据源的说明横幅是**注册表数据**（渲染层按类别找文案），组件里不出现源名。
+    expect(getProvider('0xrouter')?.notice).toBe('private-data-source')
+    expect(getProvider('realmarketapi')?.notice).toBeUndefined()
   })
 
   it('keeps every panel a subset of its agent', () => {
@@ -135,15 +138,8 @@ describe('source projections', () => {
   })
 
   it('marks every proxy-only source as needing a proxy and leaves reachable sources unmarked', () => {
-    const routers = getProvider('0xrouter')?.sources ?? []
-    expect(routers).toHaveLength(4)
-    for (const source of routers) expect(source.requiresProxy, source.sourceId).toBe(true)
-
-    // The projection carries the flag to both panes, so the tag and the banner read one field.
-    const projected = panelView('dashboard')?.providers.find((provider) => provider.providerId === '0xrouter')
-    expect(projected?.sources.every((source) => source.requiresProxy === true)).toBe(true)
-
-    // Mainland-blocked crypto venues and news: the bar and the 需要代理 tag must reach them too.
+    // 判据是实测（2026-11-12：直连 vs 经本地代理对照），不是名单印象：
+    // 直连 000、或只回一张边缘拦截页而拿不到可用响应的，算「需要代理」。
     const blocked = [
       'binance-announcements',
       'binance-api-updates',
@@ -151,9 +147,19 @@ describe('source projections', () => {
       'binance-futures-positioning',
       'okx-latest-announcements',
       'okx-api-announcements',
-      'defillama-stablecoins',
-      'defillama-tvl',
-      'coindesk-rss'
+      'coingecko-market',
+      'coindesk-rss',
+      'policy-path-market',
+      'ethereum-foundation-blog',
+      'coinbase-status',
+      'kraken-status',
+      'kraken-system-status',
+      'solana-status',
+      // 直连回 403 但那是边缘拦截，接口要经代理才通（读者 2026-11-12 确认）。
+      '0xrouter-aggregate-provider',
+      'macro-calendar-0xrouter-economic-data',
+      'macro-calendar-0xrouter-financial-events',
+      'macro-calendar-0xrouter-central-bank-activities'
     ]
     for (const sourceId of blocked) {
       expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBe(true)
@@ -161,11 +167,18 @@ describe('source projections', () => {
     expect(panelView('dashboard')?.providers.find((provider) => provider.providerId === 'binance')?.sources
       .every((source) => source.requiresProxy === true)).toBe(true)
 
-    for (const reachable of ['coingecko-market', 'fred-rates-liquidity', 'alternative-fear-greed']) {
-      expect(allSources().find((source) => source.sourceId === reachable)?.requiresProxy).toBeUndefined()
+    // 直连就能拿回可用 HTTP 响应（含 401/403：那是缺钥匙/缺 UA）的一律不标。
+    const reachable = [
+      'defillama-stablecoins', 'defillama-tvl',
+      'fred-rates-liquidity', 'alternative-fear-greed', 'federal-reserve-rss', 'cftc-rss',
+      'sec-rss', 'bls-economic-series', 'bea-economic-series', 'treasury-fiscal-data',
+      'twelve-data-market', 'realmarketapi-market', 'github-releases'
+    ]
+    for (const sourceId of reachable) {
+      expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBeUndefined()
     }
     expect(providerRegistry.filter((provider) => provider.sources.some((source) => source.requiresProxy)).map((provider) => provider.providerId))
-      .toEqual(['binance', 'okx', 'defillama', 'coindesk', '0xrouter'])
+      .toEqual(['policy-path', 'binance', 'okx', 'coingecko', 'coindesk', 'ethereum-foundation', '0xrouter', 'coinbase', 'kraken', 'solana'])
   })
 
   it('names the provider credential source even in a panel that does not list it', () => {

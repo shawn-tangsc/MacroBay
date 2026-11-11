@@ -1,0 +1,13 @@
+{
+  "owner": "drawer",
+  "entries": {
+    "products/market-intelligence/desktop/settings/config-drawer/ConfigSettingsDrawer.tsx": {
+      "count": 1,
+      "owner": "前端组件线（我，替换中）",
+      "shared": "屏里自己画的警告条（裸 <p role=\"alert\">）",
+      "clearWhen": "换成 InlineNotice 后从基线删除",
+      "kind": "debt",
+      "why": "抽屉级：保存栏上方的失败句（我替换中）"
+    }
+  }
+}

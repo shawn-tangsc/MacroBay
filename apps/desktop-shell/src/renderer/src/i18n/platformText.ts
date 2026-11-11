@@ -186,6 +186,8 @@ export type PlatformText = {
     channelName: string
     channelAgentId: string
     channelCredential: string
+    channelTokenInfoAria: string
+    channelAllowedChatsInfoAria: string
     channelAppCredential: string
     channelLarkAppId: string
     channelLarkAppSecret: string
@@ -194,23 +196,12 @@ export type PlatformText = {
     channelDiscordBotToken: string
     channelWechatEnrollment: string
     channelDelete: string
-    channelPolicy: string
-    channelPolicyCreate: string
-    channelPolicySubject: Record<'user' | 'conversation', string>
-    channelTarget: string
     channelUpdate: string
     channelEnable: string
     channelEnableBlocked: string
     channelAdapterUnavailable: string
-    channelCandidates: string
-    channelCandidatesEmpty: string
-    channelCandidateUnknown: string
-    channelCandidateAllow: string
-    channelCandidateIgnore: string
-    channelCandidateAlsoTarget: string
     channelDeleteConfirm: string
     channelCancel: string
-    channelRuntimeGeneration: string
     channelRuntimeLifecycle: string
     /**
      * 「标签: 值」里的值，小写，例如 `Runtime: not running`。
@@ -245,6 +236,13 @@ export type PlatformText = {
      * 键的类型是平台那份闭集（`CHANNEL_FAILURE_CODES`）：**少一个就编译不过**。
      * 上一版用 `Record<string, string>`，漏了新码也一路绿，用户看到的是「暂时说不出具体原因」。
      */
+    /**
+     * 凭据字段名：键来自适配器描述符的 `credentialFields`。界面按它逐项渲染输入框，
+     * **不按平台写 if**——多字段凭据（Slack/QQ/飞书）与单字段（Telegram/Discord）走同一段逻辑。
+     */
+    channelCredentialField: Readonly<Record<'bot_token' | 'app_token' | 'app_id' | 'client_secret' | 'app_secret', string>>
+    /** 必填项为空时挂在**该行**下面的句子，`{field}` 替换成字段名。 */
+    channelCredentialFieldRequired: string
     channelFailureReason: Readonly<Record<ChannelFailureCode, string>>
     /** 启用/自检这条路上表里没有的码：说「没通过、说不出具体原因」，不把空值包装成解释。 */
     channelFailureReasonUnknown: string
@@ -290,18 +288,8 @@ export type PlatformText = {
     channelTestNoTarget: string
     channelTestAmbiguousTarget: string
     channelTestRejected: string
-    /** 编辑弹层的六字段标签；新建与编辑共用同一套。 */
-    channelFieldWorkspace: string
+    /** 编辑弹层的字段标签；新建与编辑共用同一套。 */
     channelFieldAllowedChats: string
-    channelFieldPermissionMode: string
-    channelWorkspaceDefault: string
-    /** 下拉最后一项：调系统选目录窗口，选完登记成工作区并选中它。 */
-    channelWorkspaceChoose: string
-    /** 选目录/登记失败：如实说没成功，不静默退回「不使用工作目录」。 */
-    channelWorkspaceFailed: string
-    channelPermissionInherit: string
-    /** 后端还没接的字段：禁用并说明，不许做成「能改、保存成功、其实没存」。 */
-    channelFieldNotSavable: string
     /** 编辑弹层里 Token：旧值不可读；留空表示不修改，输入新值表示整串替换。 */
     channelTokenReadOnly: string
     channelTokenReplaceHint: string
@@ -315,13 +303,6 @@ export type PlatformText = {
     channelCredentialUnverified: string
     /** 新建成功但 Token 没落库：先说频道已经建好，免得用户以为要再点一次「创建」。 */
     channelCreatedWithoutCredential: string
-    /** 权限模式四档的人话（null 那一档是「继承助手设置」）。 */
-    channelPermissionDefault: string
-    channelPermissionAcceptEdits: string
-    channelPermissionBypass: string
-    channelPermissionPlan: string
-    /** 工作目录：读者已经指定过一个工作区时，那一项的名字（本版没有工作区目录接口，只能回显它）。 */
-    channelWorkspaceCurrent: string
     /** 允许的会话 ID：留空在「没有显式名单」的频道上等于允许所有，风险句要整块可见。 */
     channelAllowedChatsHint: string
     channelAllowedChatsRisk: string
@@ -339,6 +320,7 @@ export type PlatformText = {
     /** 日志面板：一条记录的三种类别，正文必须带前缀，读者一眼能分。 */
     channelLogsTitle: string
     channelLogsCopy: string
+    channelLogsCopied: string
     channelLogsRetry: string
     channelLogsEmptyTitle: string
     channelLogsEmptyHint: string
@@ -834,11 +816,7 @@ export type PlatformText = {
     defaultModelFastHint: string
     defaultModelTranslation: string
     defaultModelTranslationHint: string
-    defaultModelImage: string
-    defaultModelImageHint: string
     /** 默认模型条：第二行（绘画模型）默认收起，用「更多默认模型设置」展开。 */
-    defaultModelsShowMore: string
-    defaultModelsCollapse: string
     /** 默认模型条底部：说清哪些默认值由平台入口直接用、哪些只供产品功能读取。 */
     defaultModelsConsumerHint: string
     copyModelId: string
@@ -1184,6 +1162,7 @@ export type PlatformText = {
     proxySelfTestCauseUnknownHint: string
     proxySelfTestProxyAnsweredBadly: (sentence: string) => string
     proxySelfTestUnattributable: (endpoint: string) => string
+    proxySelfTestTargetReturnedBad: (status: number) => string
     proxySelfTestTargetRejected: (status: number, host: string) => string
     proxySelfTestAuthenticationHint: string
     proxySelfTestTargetDenied: (status: number, host: string) => string
@@ -1292,6 +1271,8 @@ export type PlatformText = {
     centerUnreadGroup: string
     centerEarlierGroup: string
     centerMarkAllRead: string
+    /** 通知中心底部「去设置」：只在产品声明了设置抽屉时渲染。 */
+    centerOpenSettings: string
     centerMarkRead: string
     centerReadDone: string
     centerDeleteRead: string
@@ -1374,10 +1355,11 @@ export type PlatformText = {
     resultsSection: string
     providerOptionReason: (name: string, reason: string) => string
     optionMissingKey: string
-    providerFiltersAll: (count: number) => string
+    /** 筛选胶囊的标签与计数分开：计数由组件渲染，文案里不再嵌数字。 */
+    providerFilterAll: string
     providerFilterSearch: string
     providerFilterFetch: string
-    providerFilterDisabled: (count: number) => string
+    providerFilterDisabled: string
     providerTableName: string
     providerTableCapabilities: string
     providerTableStatus: string
@@ -1681,13 +1663,13 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsResetConfirmBody: '这会把设置文件重建为默认值，当前设置无法恢复。坏文件与副本不会被删除。',
       settingsResetConfirm: '确认重置',
       settingsResetCancel: '取消',
-      notifications: '通知', channels: '频道', channelCreate: '创建频道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无频道实例', channelStaleNotice: '没能更新，下面是上次读到的频道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除频道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '广播频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' },
+      notifications: '通知', channels: '频道', channelCreate: '创建频道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '已保存', channelCredentialMissing: '还没填', channelCredentialUnavailable: '读不到', channelSaveCredential: '保存凭据', channelNoInstances: '尚无频道实例', channelStaleNotice: '没能更新，下面是上次读到的频道', channelDetailsStaleNotice: '这次没能刷新详情，下面是上次读到的内容', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelCredentialField: { bot_token: 'Bot Token', app_token: 'App Token', app_id: 'App ID', client_secret: 'Client Secret', app_secret: 'App Secret' }, channelCredentialFieldRequired: '{field} 还没填，这一项是必填', channelTokenInfoAria: 'Bot Token 怎么填', channelAllowedChatsInfoAria: '允许的会话怎么填', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelDeleteConfirm: '删除频道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelNotRunning: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '暂不可用', supported: '可用' }, channelCatalogReason: { supported: '可以添加', planned: '还没上线', blockedImplemented: '这个版本还不能启用', blockedUnimplemented: '这个版本还不支持' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '广播频道' }, channelState: { 'credential-missing': '还没填密钥', 'configuration-ready': '未启用', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '已启用' },
       channelAdd: '添加',
       channelPlatformPurpose: {
         telegram: '通过 Telegram 机器人用长轮询接收和回复消息。',
         feishu: '通过飞书机器人接收和回复消息。',
         qq: '通过 QQ 机器人接收和回复消息。',
-        wechat: '通过微信机器人接收和回复消息。',
+        wechat: '这一版还接不了：微信没有可对接的对外协议。',
         discord: '通过 Discord 机器人接收和回复消息。',
         slack: '通过 Slack 机器人接收和回复消息。'
       },
@@ -1696,6 +1678,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSelfCheckHint: '点启用会用已存凭据现场检查一次连接，通过就打开。',
       channelFailureReason: Object.freeze({
       'adapter-not-supported': '这个平台还没接上，这一版启用不了',
+        'channel-adapter-unverified': '这个平台已经实现，但这一版还没有接现场自检，暂时不能从这里启用',
       'adapter-runtime-start-failed': '连接没能起来，可以再试一次；反复失败就看一眼日志',
       'channel-agent-missing': '这条频道绑的助手不在了，刷新之后重选一个',
       'channel-credential-invalid': '这个平台不接受这种凭据，检查一下再填',
@@ -1717,6 +1700,26 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'conversation-session-missing': '这条对话还没绑定会话，先让它收到一条消息',
       'session-selection-unavailable': '会话列表现在打不开，稍后再试',
       'telegram-conflict': '另一个程序也在用这个机器人，先关掉那一处再试',
+      'lark-connect-failed': '凭据是对的，但长连接没建立起来——检查代理与飞书网关是否可达',
+        'lark-tenant-domain-unresolved': '没能确定这个应用属于飞书中国站还是国际站——检查 App ID 与 App Secret，或网络/代理是否通',
+      'lark-network-unavailable': '网络或代理连不通，检查代理后重试',
+      'lark-provider-rejected': '飞书拒绝了这个应用凭据：检查 App ID 与 App Secret',
+      'lark-proxy-unresolved': '没能确定走哪条代理，所以没有建立连接——检查应用的网络设置',
+      'lark-rate-limited': '请求太频繁被限流，等一会儿再试',
+      'qq-network-unavailable': '网络或代理连不通，检查代理后重试',
+      'qq-provider-rejected': 'QQ 拒绝了这个应用凭据：检查 AppID 与 Secret，并确认机器人已开通群/频道消息权限',
+      'qq-rate-limited': '请求太频繁被限流，等一会儿再试',
+      'discord-auth-rejected': 'Discord 不认这把 Bot Token（401，填错或被吊销），去开发者后台重新生成一枚再填',
+      'discord-credential-missing': '还没存 Bot Token，先在「编辑」里填一把再启用',
+      'discord-credential-rejected': 'Discord 不认这把 Bot Token（填错或被吊销），去开发者后台重新生成一枚再填',
+      'discord-gateway-endpoint-blocked': 'Discord 挡住了「取网关地址」这个请求（403）：不是 Token 的问题（同一枚 Token 别处能用），换个网络或代理再试；反复出现就把这条发给我们',
+      'discord-intents-disallowed': 'Discord 没允许读取消息内容：去开发者后台 → 你的应用 → Bot → 打开 Message Content Intent，保存后回来再点一次启用',
+      'discord-network-unavailable': '网络或代理连不通，检查代理后重试',
+      'discord-provider-rejected': 'Discord 拒绝了这次请求（Bot Token 无效或没有权限），检查 Token 后重试',
+      'discord-rate-limited': '请求太频繁被限流，等一会儿再试',
+      'slack-network-unavailable': '网络或代理连不通，检查代理后重试',
+      'slack-provider-rejected': 'Slack 拒绝了这个 Token：检查 Bot Token 与 App Token，并确认 App 侧已打开 Socket Mode',
+      'slack-rate-limited': '请求太频繁被限流，等一会儿再试',
       'telegram-credential-missing': '还没有填写 Token，先在「编辑」里填一把',
       'telegram-network-unavailable': '网络或代理连不通，检查代理后重试',
       'telegram-provider-rejected': 'Token 被 Telegram 拒绝了，换一把再试',
@@ -1758,14 +1761,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       // 同样不许指路到没有入口的地方：界面里现在没有「选一个对话」的操作，只能如实说清限制。
       channelTestAmbiguousTarget: '绑了不止一个对话，这条没有发',
       channelTestRejected: '通道拒收了，原因见日志',
-      channelFieldWorkspace: '工作目录',
-      channelFieldAllowedChats: '允许的会话 ID',
-      channelFieldPermissionMode: '频道权限模式',
-      channelWorkspaceDefault: '不使用工作目录',
-      channelWorkspaceChoose: '选择文件夹…',
-      channelWorkspaceFailed: '没能用上这个文件夹，可以再试一次',
-      channelPermissionInherit: '继承助手设置',
-      channelFieldNotSavable: '这一版还保存不了这一项',
+      channelFieldAllowedChats: '允许哪些会话发消息',
       channelTokenReadOnly: '旧 Token 不会显示，也不会被复制；留空表示不修改。',
       channelTokenReplaceHint: '留空表示不修改；输入新 Token 会整串替换',
       channelTokenCurrent: '当前已存：{mask}',
@@ -1774,12 +1770,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelCredentialSaveFailed: 'Token 没存上，请重试',
       channelCredentialUnverified: '没确认到是否存上，重开弹层看一下',
       channelCreatedWithoutCredential: '频道建好了，但 Token 没存上——在「编辑」里重新填一次',
-      channelPermissionDefault: '每次都要问',
-      channelPermissionAcceptEdits: '自动接受修改',
-      channelPermissionBypass: '完全放行',
-      channelPermissionPlan: '只做计划',
-      channelWorkspaceCurrent: '当前工作区',
-      channelAllowedChatsHint: '多个会话 ID 用逗号或换行分隔。',
+      channelAllowedChatsHint: '一行一个，也可以用逗号分隔；留空＝允许所有会话。',
       channelAllowedChatsRisk: '留空＝允许所有会话——任何人都能用这个机器人。',
       channelAllowedChatsAll: '现在是允许所有：任何人都能用这个机器人。',
       channelAllowedChatsPolicies: '这个频道已有显式放行名单：留空不会放开所有人。',
@@ -1789,7 +1780,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsNavGroupNotify: '通知与频道',
       settingsNavGroupOther: '其他',
       channelLogsTitle: '{name} — 日志',
-      channelLogsCopy: '复制',
+      channelLogsCopy: '复制', channelLogsCopied: '已复制',
       channelLogsRetry: '重试',
       channelLogsEmptyTitle: '这个频道还没有记录。',
       channelLogsEmptyHint: '开启、改动、发送失败都会记在这里。',
@@ -2279,10 +2270,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelFastHint: '供产品功能读取（轻量任务），平台自身不调用',
       defaultModelTranslation: '翻译模型',
       defaultModelTranslationHint: '供产品功能读取（翻译任务），平台自身不调用',
-      defaultModelImage: '绘画模型',
-      defaultModelImageHint: '图片生成使用',
-      defaultModelsShowMore: '更多默认模型设置',
-      defaultModelsCollapse: '收起',
       defaultModelsConsumerHint:
         '助手、智能体、绘画由对应入口直接使用；快速与翻译模型只作为共用默认值被产品功能读取。没有产品用到时，选了也不会有可见效果。',
       copyModelId: '复制',
@@ -2588,6 +2575,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestCauseUnknownHint: '这次没拿到对照结果，暂时判断不了原因；可以重试一次。',
       proxySelfTestProxyAnsweredBadly: (sentence) => `经代理请求失败：代理端点连得上，但代理自身返回了错误（${sentence}）`,
       proxySelfTestUnattributable: (endpoint) => `连不上代理服务器本身（${endpoint}）；原因待查`,
+      // 自检的目标是 Google，不是供应商：带状态的失败句只说「目标站」，绝不出现「供应商」。
+      proxySelfTestTargetReturnedBad: (status) => `目标站返回 HTTP ${status}，请按状态码排查。`,
       proxySelfTestTargetRejected: (status, host) => `已连到目标站点，站点要求鉴权（HTTP ${status}）· ${host}`,
       proxySelfTestAuthenticationHint: '这条自检不带 Key，401 属正常；与代理是否生效无关。',
       proxySelfTestTargetDenied: (status, host) => `已连到目标站点，站点拒绝了请求（HTTP ${status}）· ${host}`,
@@ -2682,6 +2671,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerUnreadGroup: '未读',
       centerEarlierGroup: '已读',
       centerMarkAllRead: '全部标为已读',
+      centerOpenSettings: '去设置',
       centerMarkRead: '标为已读',
       centerReadDone: '已全部标为已读',
       centerDeleteRead: '删除已读',
@@ -2763,10 +2753,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       resultsSection: '结果',
       providerOptionReason: (name, reason) => `${name}（${reason}）`,
       optionMissingKey: '缺 Key',
-      providerFiltersAll: (count) => `全部 ${count}`,
+      providerFilterAll: '全部',
       providerFilterSearch: '搜索',
       providerFilterFetch: '读取',
-      providerFilterDisabled: (count) => `未启用 ${count}`,
+      providerFilterDisabled: '未启用',
       providerTableName: '名称',
       providerTableCapabilities: '能力',
       providerTableStatus: '状态',
@@ -3062,13 +3052,13 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsResetConfirmBody: 'This rebuilds the settings file with defaults; the current settings cannot be recovered. The damaged file and its copy are not deleted.',
       settingsResetConfirm: 'Reset anyway',
       settingsResetCancel: 'Cancel',
-      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelStaleNotice: 'Could not refresh — these channels are from the last read', channelDetailsStaleNotice: 'Could not refresh the details — showing the last read', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelNotRunning: 'Not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Broadcast channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' },
+      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Saved', channelCredentialMissing: 'Not entered yet', channelCredentialUnavailable: 'Could not read', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelStaleNotice: 'Could not refresh — these channels are from the last read', channelDetailsStaleNotice: 'Could not refresh the details — showing the last read', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelCredentialField: { bot_token: 'Bot Token', app_token: 'App Token', app_id: 'App ID', client_secret: 'Client Secret', app_secret: 'App Secret' }, channelCredentialFieldRequired: '{field} is required', channelTokenInfoAria: 'How to fill in the bot token', channelAllowedChatsInfoAria: 'How the allowed conversations work', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelNotRunning: 'Not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Not available yet', supported: 'Available' }, channelCatalogReason: { supported: 'Can be added', planned: 'Not released yet', blockedImplemented: 'Cannot be enabled in this version yet', blockedUnimplemented: 'Not supported in this version yet' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Broadcast channel' }, channelState: { 'credential-missing': 'Credential not entered yet', 'configuration-ready': 'Not enabled', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Enabled' },
       channelAdd: 'Add',
       channelPlatformPurpose: {
         telegram: 'Receive and reply through a Telegram bot using long polling.',
         feishu: 'Receive and reply through a Lark bot.',
         qq: 'Receive and reply through a QQ bot.',
-        wechat: 'Receive and reply through a WeChat bot.',
+        wechat: 'Not available in this version: WeChat has no external protocol we can integrate with.',
         discord: 'Receive and reply through a Discord bot.',
         slack: 'Receive and reply through a Slack bot.'
       },
@@ -3077,6 +3067,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelEnableSelfCheckHint: 'Enabling checks the connection once with the stored credential, then turns on.',
       channelFailureReason: Object.freeze({
       'adapter-not-supported': 'this platform is not connected yet, so it cannot be enabled in this version',
+        'channel-adapter-unverified': 'this platform is implemented, but this version has no on-the-spot self-check yet, so it cannot be enabled from here',
       'adapter-runtime-start-failed': 'the connection did not come up; retry, and check the logs if it keeps failing',
       'channel-agent-missing': 'the assistant this channel was bound to is gone; refresh and pick another',
       'channel-credential-invalid': 'this platform does not accept that credential; check it and enter it again',
@@ -3098,6 +3089,26 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'conversation-session-missing': 'this conversation has no session yet; send it one message first',
       'session-selection-unavailable': 'the session list cannot be opened right now; try again shortly',
       'telegram-conflict': 'another program is using the same bot; stop that one first',
+      'lark-connect-failed': 'the credentials are fine, but the long connection was not established — check the proxy and whether the Lark gateway is reachable',
+        'lark-tenant-domain-unresolved': 'could not tell whether this app belongs to Feishu China or Lark International — check the App ID and App Secret, and whether the network or proxy can reach it',
+      'lark-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
+      'lark-provider-rejected': 'Lark rejected the app credentials; check the app id and app secret',
+      'lark-proxy-unresolved': 'could not decide which proxy to use, so no connection was made — check the app network settings',
+      'lark-rate-limited': 'too many requests right now; wait a moment and retry',
+      'qq-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
+      'qq-provider-rejected': 'QQ rejected the app credentials; check the app id and secret, and make sure the bot may read group and channel messages',
+      'qq-rate-limited': 'too many requests right now; wait a moment and retry',
+      'discord-auth-rejected': 'Discord rejected this bot token (401: wrong or revoked); generate a new one in the developer portal and enter it',
+      'discord-credential-missing': 'no bot token is saved yet; add one under Edit and enable again',
+      'discord-credential-rejected': 'Discord rejected this bot token (wrong or revoked); generate a new one in the developer portal and enter it',
+      'discord-gateway-endpoint-blocked': 'Discord blocked the gateway-address request (403); this is not a token problem (the same token works elsewhere). Try another network or proxy, and send us this message if it keeps happening',
+      'discord-intents-disallowed': 'Discord does not allow reading message content: open the developer portal, go to your app → Bot, enable Message Content Intent, save, then enable again',
+      'discord-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
+      'discord-provider-rejected': 'Discord rejected the request (invalid bot token or missing permission); check the token and retry',
+      'discord-rate-limited': 'too many requests right now; wait a moment and retry',
+      'slack-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
+      'slack-provider-rejected': 'Slack rejected the token: check the bot and app tokens, and make sure Socket Mode is on for the app',
+      'slack-rate-limited': 'too many requests right now; wait a moment and retry',
       'telegram-credential-missing': 'no token is stored yet; add one in Edit',
       'telegram-network-unavailable': 'the network or proxy cannot be reached; check the connection and retry',
       'telegram-provider-rejected': 'Telegram rejected the token; enter a new one',
@@ -3132,14 +3143,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTestNoTarget: 'Send this bot a message from your phone first; that conversation is then remembered automatically',
       channelTestAmbiguousTarget: 'Bound to more than one conversation, so nothing was sent',
       channelTestRejected: 'The channel rejected it; see the log',
-      channelFieldWorkspace: 'Working folder',
-      channelFieldAllowedChats: 'Allowed chat IDs',
-      channelFieldPermissionMode: 'Channel permission mode',
-      channelWorkspaceDefault: 'Do not use a working folder',
-      channelWorkspaceChoose: 'Choose a folder…',
-      channelWorkspaceFailed: 'That folder could not be used; try again',
-      channelPermissionInherit: 'Inherit the agent setting',
-      channelFieldNotSavable: 'This version cannot save this field yet',
+      channelFieldAllowedChats: 'Which conversations may message the bot',
       channelTokenReadOnly: 'The existing token is never shown or copied; leave empty to keep it.',
       channelTokenReplaceHint: 'Leave empty to keep the current token; typing a new one replaces it',
       channelTokenCurrent: 'Currently stored: {mask}',
@@ -3148,12 +3152,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelCredentialSaveFailed: 'the token was not saved; retry',
       channelCredentialUnverified: 'not confirmed as stored; reopen this dialog to check',
       channelCreatedWithoutCredential: 'the channel was created, but the token was not saved — enter it again in Edit',
-      channelPermissionDefault: 'Ask every time',
-      channelPermissionAcceptEdits: 'Accept edits automatically',
-      channelPermissionBypass: 'Allow everything',
-      channelPermissionPlan: 'Plan only',
-      channelWorkspaceCurrent: 'Current working folder',
-      channelAllowedChatsHint: 'Separate several chat IDs with commas or new lines.',
+      channelAllowedChatsHint: 'One per line, or separated by commas; leaving it empty allows every conversation.',
       channelAllowedChatsRisk: 'Empty means every conversation is allowed — anyone can use this bot.',
       channelAllowedChatsAll: 'Everyone is allowed right now: anyone can use this bot.',
       channelAllowedChatsPolicies: 'This channel already has an explicit allow list, so an empty box does not open it up.',
@@ -3163,7 +3162,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       settingsNavGroupNotify: 'Notifications and channels',
       settingsNavGroupOther: 'Other',
       channelLogsTitle: '{name} — Logs',
-      channelLogsCopy: 'Copy',
+      channelLogsCopy: 'Copy', channelLogsCopied: 'Copied',
       channelLogsRetry: 'Retry',
       channelLogsEmptyTitle: 'This channel has no records yet.',
       channelLogsEmptyHint: 'Enabling, changes and failed sends are recorded here.',
@@ -3651,10 +3650,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelFastHint: 'Read by product features (lightweight tasks); the platform itself does not call it',
       defaultModelTranslation: 'Translation model',
       defaultModelTranslationHint: 'Read by product features (translation); the platform itself does not call it',
-      defaultModelImage: 'Image model',
-      defaultModelImageHint: 'Used for image generation',
-      defaultModelsShowMore: 'More default model settings',
-      defaultModelsCollapse: 'Collapse',
       defaultModelsConsumerHint:
         'Assistant, agent, and image defaults are used directly by their own entry points. The fast and translation defaults are shared values read by product features only, so they have no visible effect until a product uses them.',
       copyModelId: 'Copy',
@@ -3969,6 +3964,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestProxyAnsweredBadly: (sentence) =>
         `The request through the proxy failed: the proxy endpoint answers, but the proxy itself returned an error (${sentence})`,
       proxySelfTestUnattributable: (endpoint) => `Cannot reach the proxy server itself (${endpoint}); cause unknown`,
+      proxySelfTestTargetReturnedBad: (status) =>
+        `The target site returned HTTP ${status}. Check that status code.`,
       proxySelfTestTargetRejected: (status, host) =>
         `Reached the target site; it asks for authentication (HTTP ${status}) · ${host}`,
       proxySelfTestAuthenticationHint:
@@ -4064,6 +4061,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerUnreadGroup: 'Unread',
       centerEarlierGroup: 'Earlier',
       centerMarkAllRead: 'Mark all as read',
+      centerOpenSettings: 'Open settings',
       centerMarkRead: 'Mark as read',
       centerReadDone: 'All marked as read',
       centerDeleteRead: 'Delete read',
@@ -4145,10 +4143,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       resultsSection: 'Results',
       providerOptionReason: (name, reason) => `${name} (${reason})`,
       optionMissingKey: 'Missing key',
-      providerFiltersAll: (count) => `All ${count}`,
+      providerFilterAll: 'All',
       providerFilterSearch: 'Search',
       providerFilterFetch: 'Fetch',
-      providerFilterDisabled: (count) => `Disabled ${count}`,
+      providerFilterDisabled: 'Disabled',
       providerTableName: 'Name',
       providerTableCapabilities: 'Capabilities',
       providerTableStatus: 'Status',

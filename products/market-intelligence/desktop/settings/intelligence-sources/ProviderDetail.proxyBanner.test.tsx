@@ -26,12 +26,10 @@ function labels(): ProviderDetailLabels {
     panelNames: settingsText.panelNames,
     badges: settingsText.sourceBadges,
     status: settingsText.status,
-    capabilities: settingsText.providerSummary,
     toggleSource: settingsText.toggleSource,
     credentials: settingsText.credentialsRequired,
     website: settingsText.website,
     signup: settingsText.signup,
-    inviteNote: settingsText.inviteNote,
     testConnection: settingsText.testConnection,
     jobRegistered: settingsText.jobRegistered,
     jobNotRegistered: settingsText.jobNotRegistered,
@@ -40,10 +38,10 @@ function labels(): ProviderDetailLabels {
     connectionUnsupported: settingsText.connectionUnsupported,
     unavailableReasonCode: settingsText.unavailableReasonCode,
     unavailableReasonCodeAria: settingsText.unavailableReasonCodeAria,
-    collectionPolicyStopped: settingsText.collectionPolicyStopped,
     automaticSyncStopped: settingsText.automaticSyncStopped,
     lastSuccessfulSync: settingsText.lastSuccessfulSync,
-    apiKey: settingsText.apiKey
+    apiKey: settingsText.apiKey,
+    health: settingsText.health
   }
 }
 
@@ -53,6 +51,7 @@ function routerProvider(requiresProxy = true): ProviderView {
     displayName: '0xRouter',
     category: 'aggregate',
     credential: 'api-key',
+    healthMarker: 'none',
     sources: [{
       sourceId: '0xrouter-aggregate-provider',
       providerId: '0xrouter',
@@ -65,7 +64,9 @@ function routerProvider(requiresProxy = true): ProviderView {
       capabilities: { runNow: 'adapter', testConnection: true },
       readiness: 'live',
       requiresProxy,
-      enabled: true
+      enabled: true,
+      healthState: 'healthy' as const,
+      healthMarker: 'none' as const
     }]
   }
 }
@@ -109,34 +110,22 @@ function button(text: string): HTMLButtonElement {
 }
 
 describe('ProviderDetail proxy notice', () => {
-  it('states the proxy requirement before any test, then sharpens it when the probe is refused', async () => {
+  it('leaves the “not configured yet” case to the row tag, not to the banner', async () => {
+    // 分工（2026-11-10 界面设计定）：**未配代理**由行尾那颗「需要代理」药丸承担，横幅不出现——同一件事
+    // 不许两处说，未配时代理只需要一个入口。横幅只管「配了没通」（那条在下面那组用例里）。
     stubPlatform({ sourceId: '0xrouter-aggregate-provider', state: 'failed', failureCode: 'response-unavailable' })
     await render(routerProvider())
 
-    // The requirement is on screen before anyone presses 测试连接, above the provider heading.
-    const before = document.body.querySelector('[data-network-proxy-banner]')
-    expect(before).not.toBeNull()
-    expect(before?.getAttribute('data-tone')).toBe('requires')
-    expect(before?.textContent).toContain(settingsText.proxyNotice.title)
-    const heading = document.body.querySelector('h2')
-    expect(before && heading && before.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
 
+    // 探测被拒也还是「没配」：键按不动的原因是缺配置，不是配置没通，所以横幅仍不出现。
     await act(async () => button(settingsText.testConnection).click())
     await flush()
 
-    const banner = document.body.querySelector('[data-network-proxy-banner]')
-    expect(banner).not.toBeNull()
-    expect(banner?.getAttribute('data-tone')).toBe('failed')
-    expect(banner?.textContent).toContain(settingsText.proxyNotice.failedTitle)
-    expect(banner?.textContent).toContain(settingsText.proxyNotice.body)
-
-    const navigation = vi.fn()
-    window.addEventListener('app-shell:navigate', navigation)
-    const openSettings = document.body.querySelector<HTMLButtonElement>('[data-network-proxy-settings]')
-    expect(openSettings).not.toBeNull()
-    await act(async () => openSettings?.click())
-    expect(navigation.mock.calls[0]?.[0].detail).toEqual({ navKey: 'settings', settingsPanelKey: 'preferences' })
-    window.removeEventListener('app-shell:navigate', navigation)
+    expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
+    expect(document.body.textContent).not.toContain(settingsText.proxyNotice.configuredFailedTitle)
   })
 
   it('does not send a rejected API key to the proxy settings', async () => {
@@ -146,9 +135,10 @@ describe('ProviderDetail proxy notice', () => {
     await act(async () => button(settingsText.testConnection).click())
     await flush()
 
-    // The standing requirement stays, but a rejected key never becomes a 本地代理 verdict.
-    expect(document.body.querySelector('[data-network-proxy-banner]')?.getAttribute('data-tone')).toBe('requires')
+    // 代理还没配：横幅不出现（由药丸说），而且一颗被拒的 key 永远不该变成代理结论。
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
     expect(document.body.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
+    expect(document.body.textContent).not.toContain(settingsText.proxyNotice.configuredFailedTitle)
   })
 
   it('still tags a proxy-required source even before any test runs', async () => {
@@ -205,6 +195,16 @@ describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', 
     expect(banner?.textContent).toContain(settingsText.proxyNotice.configuredFailedTitle)
     // 不许再让他「先打开 本地代理 或本地代理」——那件事他已经做了。
     expect(banner?.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
+    // 横幅在页头之上：进设置去改代理的入口在同一处，不因分工变化而丢。
+    const heading = document.body.querySelector('h2')
+    expect(banner && heading && banner.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const navigation = vi.fn()
+    window.addEventListener('app-shell:navigate', navigation)
+    const openSettings = document.body.querySelector<HTMLButtonElement>('[data-network-proxy-settings]')
+    expect(openSettings).not.toBeNull()
+    await act(async () => openSettings?.click())
+    expect(navigation.mock.calls[0]?.[0].detail).toEqual({ navKey: 'settings', settingsPanelKey: 'preferences' })
+    window.removeEventListener('app-shell:navigate', navigation)
   })
 
   it('does not call a custom mode with an unparsable address "configured"', async () => {
@@ -212,7 +212,8 @@ describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', 
     await render(routerProvider())
     await flush()
 
-    expect(document.body.querySelector('[data-network-proxy-banner]')).not.toBeNull()
+    // 地址不可解析 = 还没配好：药丸说要求，横幅不出现。
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
     expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
   })
 
@@ -221,7 +222,7 @@ describe('ProviderDetail proxy notice once a proxy is configured (MI-11-R196)', 
     await render(routerProvider())
     await flush()
 
-    expect(document.body.querySelector('[data-network-proxy-banner]')).not.toBeNull()
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
     expect(document.body.querySelector('.source-provider-detail__proxy')).not.toBeNull()
   })
 })
@@ -239,7 +240,9 @@ function calendarPanelProvider(): ProviderView {
     capabilities: { runNow: 'job' as const, testConnection: true },
     readiness: 'live' as const,
     requiresProxy: true,
-    enabled: true
+    enabled: true,
+    healthState: 'healthy' as const,
+    healthMarker: 'none' as const
   })
   return {
     providerId: '0xrouter',
@@ -247,6 +250,7 @@ function calendarPanelProvider(): ProviderView {
     category: 'aggregate',
     credential: 'api-key',
     credentialSourceId: '0xrouter-aggregate-provider',
+    healthMarker: 'none',
     sources: [
       calendar('macro-calendar-0xrouter-economic-data', '0xRouter 经济数据'),
       calendar('macro-calendar-0xrouter-financial-events', '0xRouter 财经事件'),

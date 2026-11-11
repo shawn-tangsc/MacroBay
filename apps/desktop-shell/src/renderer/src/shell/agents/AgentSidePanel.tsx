@@ -87,8 +87,10 @@ export default function AgentSidePanel({
     () => agentSessions.filter((session) => session.origin !== 'automation'),
     [agentSessions]
   )
+  // 自动会话块只显示**当前身份**：`superseded` 是「已被同身份的新会话取代」的历史副本，
+  // 由字段决定隐藏；读者列表的判据不受影响（仍是 `origin !== 'automation'`）。
   const automationSessions = useMemo(
-    () => agentSessions.filter((session) => session.origin === 'automation'),
+    () => agentSessions.filter((session) => session.origin === 'automation' && session.originState !== 'superseded'),
     [agentSessions]
   )
   const filteredSessions = useMemo(() => {

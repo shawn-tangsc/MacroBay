@@ -12,7 +12,7 @@
 /* A row is two lines — facts, then the title — so its height comes from its content. The old
    `height: 27px` is exactly what made a second line impossible; the measured row is 39.69px
    (40.69px selected), and every generated row must land on that same pitch. */
-.mi-daily-briefing__rail-row { display: block; width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
+.mi-daily-briefing__rail-row { display: block; flex: 1 1 auto; width: auto; min-width: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mi-dashboard-muted); text-align: left; cursor: pointer; }
 .mi-daily-briefing__rail-row:hover:not(:disabled) { background: rgba(255, 255, 255, .04); }
 /* Selection changes the surface, the edge and the 2px bar — never the ink. The prototype's
    `[aria-current]` rule carries no colour for a reason: brightening the whole row makes a selected
@@ -26,6 +26,8 @@
 .mi-daily-briefing__rail-row[aria-current="true"] { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 22%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--mi-dashboard-lime) 4%, transparent); box-shadow: inset 2px 0 var(--mi-dashboard-lime); }
 .mi-daily-briefing__rail-row:disabled { opacity: .42; cursor: default; }
 .mi-daily-briefing__rail-date { font: 500 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mi-daily-briefing__rail-open-session { flex: none; }
+.mi-daily-briefing__rail-session-not-opened { flex: none; color: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-row i { width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--mi-dashboard-muted); }
 .mi-daily-briefing__rail-row i[data-direction="bullish"] { background: var(--mi-dashboard-positive); }
 .mi-daily-briefing__rail-row i[data-direction="bearish"] { background: var(--mi-dashboard-negative); }
@@ -257,7 +259,7 @@
 .mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }
 
 /* 历史行：一行一期，语言与生成记录是行内动作；三者并排但不在主按钮里（按钮不能套按钮）。 */
-.mi-daily-briefing__rail-item { display: block; min-width: 0; }
+.mi-daily-briefing__rail-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mi-daily-briefing__rail-side { display: flex; align-items: center; gap: 4px; padding-top: 4px; }
 .mi-daily-briefing__rail-attempt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
 .mi-daily-briefing__rail-attempt em { font-style: normal; color: var(--mi-dashboard-caution); }

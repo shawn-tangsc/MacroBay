@@ -42,7 +42,6 @@ import {useModelServiceActions} from './model-service/useModelServiceActions'
 import {useModelServiceDrafts} from './model-service/useModelServiceDrafts'
 import {useModelServiceProviderActions} from './model-service/useModelServiceProviderActions'
 import {
-  buildProxyProbeUrl,
   describeProxySelfTest,
   type ProxySelfTestResult,
 } from './proxySelfTestDisplay'
@@ -100,6 +99,11 @@ type AppShellNavigateDetail = {
   navKey?: string
   settingsPanelKey?: string
   assistant?: AssistantOpenRequest
+  /**
+   * 「请产品的设置抽屉打开某一屏」（架构师 2026-11-11 签）：走同一条 `app-shell:navigate`，
+   * 不新增事件名。壳层**忽略**这个字段——它是给产品页读的，产品按自己的 `productId` 过滤。
+   */
+  settingsDrawer?: { productId: string; menuId: string }
 }
 
 type PlatformModelText = typeof platformText['zh-CN']['models']
@@ -246,7 +250,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const liveNotice = drafts.liveNotice
   const pinnedModelIds = drafts.pinnedModelIds
   const selectedProvider = drafts.selectedProvider
-  const { proxySelfTest, proxySelfTestView, runProxySelfTest } = useProxySelfTest({ settings, t, selectedProvider })
+  const { proxySelfTest, proxySelfTestView, runProxySelfTest } = useProxySelfTest({ settings, t })
   // 提示与状态在渲染时解析：存的是「怎么生成这句话」，所以切语言后连历史提示一起变。
   const noticeText = resolveLiveText(liveNotice.notice, t)
   // 解析器与两张键表都在 `shellOptionTables`：同一件事只有一处定义。

@@ -56,7 +56,7 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   newsEmptyCodes: Readonly<Record<string, string>>
   macroEmptyCodes: Readonly<Record<string, string>>
   nextEmptyCodes: Readonly<Record<string, string>>
-  macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>> }>
+  macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>>; timeNotPublished: string }>
   /** 网页取到的值的来源后缀（`02` v2.128）：正文/导出/复制三处同一份。 */
   macroWebValue: string
   conclusion: Readonly<{ invalidation: string; conditions: string; counter: string; gaps: string; caveats: string }>
@@ -283,7 +283,7 @@ function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOption
     item
   )
   return [
-    `- **${title}** — ${options.formatTime(item.scheduledAt)}`,
+    `- **${title}** — ${releaseStamp(item, item.scheduledAt, options)}`,
     ...(value === undefined ? [] : [value]),
     `${options.labels.macro.consensus} ${item.consensus ?? options.labels.macro.noConsensus}`,
     `${options.labels.macro.previous} ${item.previous ?? '—'}`,
@@ -327,7 +327,23 @@ function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBrief
 
 function nextLine(item: BriefingNextItem, options: DailyBriefingMarkdownOptions): string {
   const title = escapeMarkdown(options.eventTitle ? options.eventTitle(item) : item.title)
-  return `- ${options.formatTime(item.at)} **${title}** · ${options.labels.next.category[item.category] ?? item.category}`
+  return `- ${releaseStamp(item, item.at, options)} **${title}** · ${options.labels.next.category[item.category] ?? item.category}`
+}
+
+/**
+ * 发布时刻那一段（宏观栏与「接下来」共用）：来源公布了时刻就印时刻；只公布了日期
+ * （`MI-1-R39` §4）就印**日期 + 那一个词**。`scheduledAt` / `at` 只是排序位，任何情况下都不许
+ * 被复制成时刻——惯例推算的时刻不是来源公布的时刻。
+ */
+function releaseStamp(
+  item: Readonly<{ releaseTimeNotPublished?: true; releaseDate?: string }>,
+  at: string,
+  options: DailyBriefingMarkdownOptions
+): string {
+  if (item.releaseTimeNotPublished && item.releaseDate) {
+    return `${item.releaseDate} ${options.labels.macro.timeNotPublished}`
+  }
+  return options.formatTime(at)
 }
 
 function emptyNews(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {

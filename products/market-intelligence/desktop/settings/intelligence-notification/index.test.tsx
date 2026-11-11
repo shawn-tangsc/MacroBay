@@ -8,7 +8,8 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { DEFAULT_CALENDAR_REMINDER_SETTINGS } from '../../../contracts/calendarEventReminder'
 import { intelligenceNotificationText } from './text'
-import IntelligenceNotificationSettingsSection, { itemForFocus } from './index'
+import IntelligenceNotificationSettingsSection, { itemForFocus, MIGRATED_SETTING_KEYS } from './index'
+import { settingRegistry } from '../../shared/settings/registry'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS } from './useChannelEventSettings'
 
@@ -100,7 +101,7 @@ async function render(focusEntityId?: string): Promise<HTMLDivElement> {
 }
 
 function listItems(): HTMLButtonElement[] {
-  return [...(container?.querySelectorAll<HTMLButtonElement>('.intelligence-notification-list-item') ?? [])]
+  return [...(container?.querySelectorAll<HTMLButtonElement>('.intelligence-provider-row') ?? [])]
 }
 
 async function selectItem(index: number): Promise<void> {
@@ -149,6 +150,9 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
   container?.remove()
+  // 浮层由组件挂到 document.body 的 overlay 容器里，不在本测试的 container 内；
+  // 不清理会把上一例的浮层留给下一例（按「第一个浮层」取时尤其明显）。
+  document.body.innerHTML = ''
   container = undefined
   delete (window as unknown as { platform?: unknown }).platform
   vi.restoreAllMocks()
@@ -194,7 +198,7 @@ describe('row-to-event binding', () => {
 describe('intelligence notification settings', () => {
   it('lists four items, selects the first, and folds the landed notice into the calendar item', async () => {
     await render()
-    const names = listItems().map((item) => item.querySelector('.intelligence-notification-list-name')?.textContent)
+    const names = listItems().map((item) => item.querySelector('.intelligence-provider-row strong')?.textContent)
     expect(names).toEqual([
       text['pages.intelligence.notification.rows.signalTriggered.title'],
       text['pages.intelligence.notification.rows.briefingReady.title'],
@@ -245,23 +249,20 @@ describe('intelligence notification settings', () => {
       expect(cells[0]?.classList.contains('intelligence-notification-form-label')).toBe(true)
       expect(cells[1]?.classList.contains('intelligence-notification-form-control')).toBe(true)
     }
-    // 整块详情放在一张卡里（620 上限、左对齐），不是一个带内边距的裸容器。
-    expect(container?.querySelectorAll('.intelligence-notification-card')).toHaveLength(1)
+    // 日历这一项按「通知方式 / 开始前 / 发生后」三块排，每块都是平台区块（不再是一张卡）。
+    expect(container?.querySelectorAll('.settings-section')).toHaveLength(3)
   })
 
-  it('keeps the grid to exactly two children, with the head outside it', async () => {
-    // 上一版把 标题 / 列表 / 详情 三个块塞进两列网格：自动排布把标题放窄格、详情挤到第二行。
-    // 这条断言抓的就是那个形状——只量 resolveNotificationLayout() 的数字抓不到它。
+  it('keeps the two columns as exactly two children, and the page title inside the detail column', async () => {
+    // 标题不再单独占一行网格元素：它是详情列里的页名，两栏只有「列表 / 详情」两个孩子。
     await render()
-    const panes = container?.querySelector('.intelligence-notification-panes')
+    const panes = container?.querySelector('.config-drawer__split')
     expect(panes).not.toBeNull()
     const children = [...(panes?.children ?? [])]
     expect(children).toHaveLength(2)
-    expect(children[0]?.classList.contains('intelligence-notification-list')).toBe(true)
-    expect(children[1]?.classList.contains('intelligence-notification-detail')).toBe(true)
-    const head = container?.querySelector('.intelligence-notification-head')
-    expect(head).not.toBeNull()
-    expect(panes?.contains(head ?? null)).toBe(false)
+    expect(children[0]?.classList.contains('intelligence-catalog-pane')).toBe(true)
+    expect(children[1]?.classList.contains('settings-detail-pane')).toBe(true)
+    expect(children[1]?.querySelector('.intelligence-notification-title')).not.toBeNull()
   })
 
   it('shows the calendar detail with one surface choice and both segments', async () => {
@@ -281,7 +282,7 @@ describe('intelligence notification settings', () => {
     expect(body.indexOf(text['pages.intelligence.notification.calendar.surfaces']!))
       .toBeLessThan(body.indexOf(text['pages.intelligence.notification.calendar.before']!))
     // 桌面两条都没批 → 这一项的详情里根本不该出现桌面（页脚那句是另一件事）。
-    const detail = container?.querySelector('.intelligence-notification-calendar-detail')?.textContent ?? ''
+    const detail = container?.querySelector('.settings-detail-pane')?.textContent ?? ''
     expect(detail).not.toContain('桌面')
     // 状态词只在列表里出现一次，详情标题不再重复同一个名字。
     expect(container?.querySelector('.intelligence-notification-detail-title')).toBeNull()
@@ -319,19 +320,46 @@ describe('intelligence notification settings', () => {
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.calendar.surfaces'])
   })
 
+  it('draws each settled state word from the explicit map: on, off, unreadable', async () => {
+    // 状态词由 `STATUS_WORD_KEY` 显式映射（状态 → 文案键），不是把状态拼进键：拼出来的键
+    // `statusPillKeyGuard` 与文案表守卫都读不到，缺键也只在运行时显示成空。三种 settled 状态各断一句。
+    const productsInvokeFor = (state: 'on' | 'off' | 'unreadable') => vi.fn(async (_productId: string, method: string) => {
+      if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+      if (String(method).includes('getNewsPushOutletState')) return { enabled: true }
+      if (String(method).includes('getCalendarReminderSettings')) {
+        // 「读不到」是读失败，不是「关着」——这条来自 2026-11-01 的口径，状态词必须跟着分。
+        if (state === 'unreadable') throw new Error('read-failed')
+        return { enabled: state === 'on', leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only' }
+      }
+      return { enabled: true }
+    })
+
+    for (const [state, key] of [
+      ['on', 'pages.intelligence.notification.status.on'],
+      ['off', 'pages.intelligence.notification.status.off'],
+      ['unreadable', 'pages.intelligence.notification.status.unreadable']
+    ] as const) {
+      install({ productsInvoke: productsInvokeFor(state) })
+      await render()
+      // 日历是第 4 行（列表顺序：模块信号 / 日报完成 / 舆情 / 日历）。
+      expect(listItems()[3]?.textContent, state).toContain(text[key])
+      await act(async () => { root?.unmount() })
+    }
+  })
+
   it('keeps three columns at a 1000 container even though the window is wider', async () => {
     // 专抓「按窗口宽度判断」那个错：容器 1000 排得下三列（页面最小 860），不该切下拉。
     sectionWidth = 1000
     await render()
     await act(async () => { await Promise.resolve() })
-    expect(container?.querySelector('.intelligence-notification-panes')).not.toBeNull()
-    expect(container?.querySelector('.intelligence-notification-list')).not.toBeNull()
+    expect(container?.querySelector('.config-drawer__split')).not.toBeNull()
+    expect(container?.querySelector('.intelligence-catalog-pane')).not.toBeNull()
   })
 
   it('collapses the lead and importance controls while the reminder is off and says what would happen', async () => {
     await render()
     await selectItem(3)
-    const detail = container?.querySelector('.intelligence-notification-calendar-detail')?.textContent ?? ''
+    const detail = container?.querySelector('.settings-detail-pane')?.textContent ?? ''
     // 关着时摆出**已存的值**（状态 / 提前量 / 重要性），不是一句话。
     expect(detail).toContain(
       [text['pages.intelligence.notification.status.off'], text['pages.intelligence.notification.leads.60'], text['pages.intelligence.notification.importance.high']]
@@ -352,6 +380,170 @@ describe('intelligence notification settings', () => {
     expect(toastBox?.checked).toBe(true)
     expect(toastBox?.disabled).toBe(false)
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.surfaceBlocked.toast'])
+  })
+
+  it('renders every migrated row from its declaration, exactly one key at a time', async () => {
+    install()
+    await render()
+    const keys = (): string[] =>
+      [...(container?.querySelectorAll('[data-setting-key]') ?? [])].map((node) => node.getAttribute('data-setting-key') ?? '')
+    /**
+     * 四个 tab 状态里**实际渲染出来**的键取并集。反向判据（清单 → 页面）就靠它：
+     * 往清单里加一条、页面任何状态都不画，并集就少一条，这条会红。
+     */
+    const rendered = new Set<string>()
+    const take = (): string[] => {
+      const current = keys()
+      for (const key of current) rendered.add(key)
+      return current
+    }
+
+    // 默认选第一项（模块信号触发）。
+    expect(take()).toEqual(['setting:notifications.channel-event.signal-triggered'])
+    await selectItem(1)
+    expect(take()).toEqual(['setting:notifications.channel-event.briefing-ready'])
+    await selectItem(2)
+    expect(take()).toEqual([
+      'setting:notifications.push-outlet',
+      'setting:notifications.push-threshold'
+    ])
+
+    // 日历详情：开关打开时四行都从声明渲染；关着时只剩开关那一行 + 页面状态摘要。
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'us', codes: [] } }
+        }
+        if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+        return { enabled: true }
+      })
+    })
+    await render()
+    await selectItem(3)
+    expect(take()).toEqual([
+      'setting:notifications.surfaces',
+      'setting:notifications.calendar.enabled',
+      'setting:notifications.calendar.lead',
+      'setting:notifications.calendar.importance',
+      'setting:notifications.calendar.landed-filter',
+      'setting:notifications.calendar.landed-countries.scope'
+    ])
+
+    // 同一份夹具翻父值（范围 us → custom）：行数必须随条件行变化，删掉国家码这一行就红。
+    act(() => root?.unmount())
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'custom', codes: ['US'] } }
+        }
+        if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+        return { enabled: true }
+      })
+    })
+    await render()
+    await selectItem(3)
+    expect(take()).toEqual([
+      'setting:notifications.surfaces',
+      'setting:notifications.calendar.enabled',
+      'setting:notifications.calendar.lead',
+      'setting:notifications.calendar.importance',
+      'setting:notifications.calendar.landed-filter',
+      'setting:notifications.calendar.landed-countries.scope',
+      'setting:notifications.calendar.landed-countries.codes'
+    ])
+
+    // 清单 → 页面（反向，架构师 2026-11-10 要求的那一半）：四个状态并集必须与清单**集合相等**。
+    // 只做「渲染出的键 ∈ 清单」时，往清单里加一条而页面不画不会红——那正是混合渲染的漏点。
+    // 这里不按 tab 手写第二份键→tab 表（行还带条件、分在三个组件里），并集来自真实渲染，
+    // 清单多一条就少一个渲染证据，清单少一条并集就多一条，两边都红。
+    expect([...rendered].sort()).toEqual([...MIGRATED_SETTING_KEYS].sort())
+
+    // 页面 → 注册表：清单里每一条都必须是 settings 面上的真实声明。
+    for (const key of MIGRATED_SETTING_KEYS) {
+      const declared = settingRegistry.notifications.find((row) => row.key === key)
+      expect(declared?.surfaces).toEqual(['settings'])
+    }
+  })
+
+  it('keeps the switch and its row action inside one two-column row', () => {
+    // 布局数值（行高/是否折行）在 happy-dom 下量不到：没有排版引擎，`getBoundingClientRect()`
+    // 恒为 0（本仓已登记 MI-11-R143，浏览器/截图/CDP 各线禁用）。所以这里钉的是**结构前提**：
+    // 行只有两列、开关与行尾动作同在第 2 列、开关不再被强制成 small（small 正是那次被吞掉的宽度差）。
+    install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) {
+          return { enabled: true, leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'us', codes: [] } }
+        }
+        return { enabled: true }
+      })
+    })
+    return render().then(async () => {
+      await selectItem(3)
+      const row = container?.querySelector('[data-setting-key="setting:notifications.calendar.enabled"]')
+      expect(row).not.toBeNull()
+      // 两列：标签列 + 控件列；没有第三列、也不靠换行另起一块。
+      expect(row?.children).toHaveLength(2)
+      const control = row?.children[1] as HTMLElement | undefined
+      const toggle = control?.querySelector('button[role="switch"]')
+      const action = control?.querySelector('[data-test-notification]')
+      expect(toggle).not.toBeNull()
+      expect(action).not.toBeNull()
+      // 默认尺寸开关：不得再出现 small 档（那会让这一行少 12px 宽度）。
+      expect(toggle?.className ?? '').not.toContain('ant-switch-small')
+    })
+  })
+
+  it('never leaks a setting anchor into visible text or an accessible name', async () => {
+    // `data-setting-key` 只当锚点：读者看到 `setting:…` 会把它当成内部码，读屏念出来更糟。
+    const leaks = (): string[] => {
+      const found: string[] = []
+      const root = container
+      if (root === null || root === undefined) return found
+      if ((root.textContent ?? '').includes('setting:')) found.push('text')
+      for (const element of root.querySelectorAll('*')) {
+        for (const attribute of element.attributes) {
+          if (attribute.name.startsWith('aria-') && attribute.value.includes('setting:')) {
+            found.push(`${attribute.name}:${element.tagName}`)
+          }
+        }
+      }
+      return found
+    }
+
+    install()
+    await render()
+    expect(leaks()).toEqual([])
+    await selectItem(1)
+    expect(leaks()).toEqual([])
+    await selectItem(2)
+    expect(leaks()).toEqual([])
+
+    const base = { leadMinutes: 60, importance: ['high'], landedFilter: 'surprise-only', landedCountries: { scope: 'us', codes: [] } }
+    install({
+      productsInvoke: vi.fn(async (_productId: string, method: string) => {
+        if (String(method).includes('getCalendarReminderSettings')) return { ...base, enabled: true }
+        if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
+        return { enabled: true }
+      })
+    })
+    act(() => root?.unmount())
+    await render()
+    await selectItem(3)
+    expect(leaks()).toEqual([])
+  })
+
+  it('keeps the value the reader just picked when a channel toggle fails to save', async () => {
+    // G8：写失败时控件保留读者刚选的值，只在本行说「这次没存上」，不回退、不只弹提示。
+    install({ setChannelEvent: vi.fn(async () => { throw new Error('write-failed') }) })
+    await render()
+    const row = container?.querySelector('[data-setting-key="setting:notifications.channel-event.signal-triggered"]')
+    const toggle = row?.querySelector<HTMLButtonElement>('button[role="switch"]')
+    expect(toggle?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => { toggle?.click(); await Promise.resolve() })
+    await act(async () => { await Promise.resolve() })
+    expect(toggle?.getAttribute('aria-checked')).toBe('false')
+    expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.saveFailed'])
   })
 
   it('says so in place when a surface tick fails to save, instead of silently reverting', async () => {
@@ -433,6 +625,24 @@ describe('intelligence notification settings', () => {
       .toBe(text['pages.intelligence.notification.threshold.medium'])
   })
 
+  it('words the two conditional rows as conditions, not as bare states', async () => {
+    // 界面设计 2026-11-10：「最低强度」的值要写清推的是哪几档，「通知条件」的值要写条件本身，
+    // 不能只写「中」或把开关状态复述一遍。
+    expect(text['pages.intelligence.notification.threshold.medium']).toBe('中（只推中、高）')
+    expect(text['pages.intelligence.notification.threshold.high']).toBe('高（只推高）')
+    expect(text['pages.intelligence.notification.threshold.low']).toBe('低（三档都推）')
+    expect(text['pages.intelligence.notification.landed.surprise-only']).toBe('只在超出预期时报')
+
+    await render()
+    await selectItem(2)
+    const group = [...(container?.querySelectorAll('[role="group"]') ?? [])]
+      .find((node) => node.getAttribute('aria-label') === text['pages.intelligence.notification.threshold.row'])
+    expect(group?.querySelector('[aria-pressed="true"]')?.textContent).toBe('中（只推中、高）')
+
+    await selectItem(3)
+    expect(container?.textContent).toContain('只在超出预期时报')
+  })
+
   it('saves the chosen tier and shows what the service read back', async () => {
     const invoke = vi.fn(async (_productId: string, method: string, payload?: unknown) => {
       if (String(method).includes('saveNewsPushThreshold')) {
@@ -482,9 +692,8 @@ describe('intelligence notification settings', () => {
       .toContain(text['pages.intelligence.notification.threshold.cost'])
   })
 
-  it('says so when saving the tier fails, and keeps the value the service still reports', async () => {
-    // 用户 2026-11-07「点了没反应」那类缺陷的防线：写失败必须当场说，而且界面跟着服务的值走，
-    // 不许本地先翻过去再悄悄回滚。
+  it('says so when saving the tier fails, and keeps the value the reader just picked', async () => {
+    // 写失败必须当场说；按 G8，控件保留读者刚选的值（不回退、不只弹提示）。
     const invoke = vi.fn(async (_productId: string, method: string) => {
       if (String(method).includes('saveNewsPushThreshold')) throw new Error('write failed')
       if (String(method).includes('getNewsPushThreshold')) return { pushThreshold: 'medium' }
@@ -501,8 +710,9 @@ describe('intelligence notification settings', () => {
     await act(async () => { await Promise.resolve() })
 
     expect(container?.textContent ?? '').toContain(text['pages.intelligence.notification.saveFailed'])
+    // G8：读者按的是「高」，失败后就该仍然是「高」，不是偷偷回到服务端的「中」。
     expect(group.querySelector('[aria-pressed="true"]')?.textContent)
-      .toBe(text['pages.intelligence.notification.threshold.medium'])
+      .toBe(text['pages.intelligence.notification.threshold.high'])
   })
 
 })
@@ -617,7 +827,8 @@ describe('通知配置后的测试按钮（R201）', () => {
       await Promise.resolve()
     })
     expect(stubs.sendTest).toHaveBeenCalledTimes(1)
-    expect(container?.textContent).toContain('刚发过')
+    // 冷却必须**说清还要等多久**，不能只把按钮变灰（那会被读成坏了/没权限）。
+    expect(container?.textContent).toMatch(/刚发过，\d+ 秒后再试/)
   })
 
   it('says the per-row 「nothing to send」 sentence and never shows a reason code', async () => {
@@ -649,6 +860,28 @@ describe('通知配置后的测试按钮（R201）', () => {
     const details = container?.querySelector('details')
     expect(details?.open).toBe(false)
     expect(details?.textContent).toContain('timezone-unreadable')
+  })
+
+  it('tells a rejected send from an unconfirmed one and from a send that never went', async () => {
+    const cases: Array<[string, string]> = [
+      ['channel-rejected', '没送到：通道拒收了这一次发送'],
+      ['unknown-after-send', '已经发出去了，但还没收到回执'],
+      ['not-attempted', '没有发出去：这一次没有走通道']
+    ]
+    for (const [reasonCode, sentence] of cases) {
+      install({
+        getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+        sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode }))
+      })
+      await render()
+      await selectItem(2)
+      await clickTestButton('sentiment')
+      const shown = container?.querySelector('[data-test-result="failed"]')?.textContent ?? ''
+      expect(shown, reasonCode).toContain(sentence)
+      // 原因码仍然只在折叠区出现，不进句子。
+      expect(shown, reasonCode).not.toContain(reasonCode)
+      root?.unmount()
+    }
   })
 
   it('disables the button and says why when that config item is off', async () => {

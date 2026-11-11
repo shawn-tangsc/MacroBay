@@ -7,7 +7,6 @@ import { planNotificationSubmit } from '@platform/notifications/runtime/notifica
 
 import {
   analysisFailureNoticePolicy,
-  analysisNoticeDeeplink,
   analysisRunOutcomesOf,
   ANALYSIS_EVENT_ID_BY_KIND,
   analysisFailureNoticeDedupeVars,
@@ -85,11 +84,14 @@ describe('the three failure notices', () => {
     expect(outcomes.map(run => [run.id, run.line])).toEqual([['r2', 'calendar'], ['r3', 'event'], ['r1', 'event']])
   })
 
-  it('carries the sending instant in the link, so an expired run is not mistaken for a missing one', () => {
-    const deeplink = analysisNoticeDeeplink('run-5', at(0))
-    // 运行 id 不带时间：删掉的 id 和从没存在过的 id 在库里一模一样，只有这个时刻能分开它们。
-    expect(deeplink.params).toEqual({ at: at(0) })
-    expect(analysisNoticeDeeplink('run-5', '')).not.toHaveProperty('params')
+  it('carries no destination at all — the run log is audit-only and has no entry points', () => {
+    // 用户 2026-11-11：运行记录不设入口（审计用）。通知只报事，不许把人送进任何一屏。
+    const request = buildAnalysisFailureNoticeRequest(
+      { kind: 'recovered', line: 'event', episodeRunId: 'run-5', missingCount: 3 },
+      at(0)
+    )
+    expect(request).not.toHaveProperty('deeplink')
+    expect(request?.actions).toEqual([])
   })
 
   it('passes only the declaration’s variables and lets the platform compose the key', () => {
@@ -106,6 +108,24 @@ describe('the three failure notices', () => {
     ])
     expect(analysisFailureNoticePolicy.recoverySuccessStreak).toBe(2)
   })
+  it('states the counts and stops guessing at a cause', () => {
+    // 2026-11-11 的真机追问：正文原来写「可能是模型服务或网络的问题」，而那天的根因是我们自己的
+    // 输出校验规则（负号被吃掉）。把责任推给外部，读者会去查网络、重启模型，永远查不到。
+    // 这里的判据是**不许猜**：只写事实，原因指向那一次自己的失败说明。
+    const request = buildAnalysisFailureNoticeRequest(
+      { kind: 'repeated-failure', line: 'event', failures: 6, sample: 10 }, at(0))
+    const rendered = request?.rendered
+    if (rendered === undefined) throw new Error('repeated-failure must build its copy')
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      const body = rendered[language]?.body ?? ''
+      expect(body, language).not.toBe('')
+      expect(body, language).toContain('6')
+      expect(body, language).toContain('10')
+      expect(body, language).not.toMatch(/模型服务|网络|model service|network/iu)
+      expect(body, language).toContain(language === 'zh-CN' ? '失败说明' : 'failure note')
+    }
+  })
+
   it('carries the actions array every request must have, for all three kinds', () => {
     // 2026-11-08 线上：P12（恢复）每次提交都抛 `TypeError`，通知静默丢失。原因是这里少了
     // `actions: []`，而末尾的 `as NotificationSubmitRequest` 把「少一个必填字段」压成了编译通过。

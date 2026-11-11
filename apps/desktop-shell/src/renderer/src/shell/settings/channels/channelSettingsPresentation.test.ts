@@ -59,6 +59,35 @@ describe('failure sentences', () => {
     expect(enableFailureSentence(undefined, zh)).toBe(zh.channelFailureReasonUnknown)
   })
 
+  it('turns a Discord 4014 into "open Message Content", not the same sentence as a bad token', () => {
+    // 这条是这次用户缺陷的判据：他反复换 Token，而真原因是后台没开 Message Content。
+    // 两句必须不同，且 4014 那句要指到后台那个开关上——否则他还会继续换 Token。
+    const intents = enableFailureSentence({ ok: false, code: 'discord-intents-disallowed' }, zh) ?? ''
+    const rejected = enableFailureSentence({ ok: false, code: 'discord-credential-rejected' }, zh) ?? ''
+    const network = enableFailureSentence({ ok: false, code: 'discord-network-unavailable' }, zh) ?? ''
+
+    expect(intents).not.toBe(rejected)
+    expect(intents).not.toBe(network)
+    expect(intents).toContain('Message Content')
+    expect(intents).toContain('开发者后台')
+    expect(intents).toContain('Bot')
+    // 另外两句不许也提到那个开关：混在一起就等于又回到一个桶。
+    expect(rejected).not.toContain('Message Content')
+    expect(network).not.toContain('Message Content')
+  })
+
+  it('never blames the token when Discord blocked the gateway request', () => {
+    // 这次用户被「Token 无效」骗着换了三枚 Token，真原因是边缘把请求挡了（UA/40333）。
+    const blocked = enableFailureSentence({ ok: false, code: 'discord-gateway-endpoint-blocked' }, zh) ?? ''
+    const auth = enableFailureSentence({ ok: false, code: 'discord-auth-rejected' }, zh) ?? ''
+    expect(blocked).not.toBe(auth)
+    expect(blocked).toContain('403')
+    expect(blocked).not.toContain('Token 无效')
+    expect(blocked).not.toContain('无效')
+    // 真正 401 的那句才让人换 Token。
+    expect(auth).toContain('Token')
+  })
+
   it('never calls a mutation successful without an explicit ok', () => {
     // 只有 `ok === true` 才算成功：新建/编辑/删除失败时是正常返回 `{ ok:false, code }`。
     expect(mutationFailureSentence({ ok: true, code: 'configuration-ready' }, zh)).toBeNull()

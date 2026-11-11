@@ -84,7 +84,7 @@ describe('sending one conclusion to the channel', () => {
     // 模板拼出来就是 analysis:{桶}:{截止}:{点击}——第二个分量带点击时刻，所以每次点击都是新键。
     expect(submit.mock.calls[0]![0].dedupeVars).toEqual({
       builder: 'template',
-      vars: { bucket: 'manual:mi-eg-1', cutoff: `${asOf}:${clickAt}` }
+      vars: { triggerKey: 'manual:mi-eg-1', cutoff: `${asOf}:${clickAt}` }
     })
   })
 

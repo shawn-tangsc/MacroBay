@@ -159,35 +159,31 @@ Two things to watch in this pane:
 - **Credential handling.** Keys go to the platform secret store; the settings pane only ever shows a
   masked preview. Use **Save and verify connection** and read the result before trusting the panel.
 
-## 4. Choose a collection policy
+## 4. Set how a source collects
 
-Each provider has a collection policy:
+Each source is one row, and only these are adjustable:
 
-- **Preset** — Manual, Balanced, or Frequent. Manual means enabling the source does *not* fetch
-  anything; you run it yourself.
-- **Include in sentiment analysis** — whether this source can influence the sentiment signal.
-- **Scope policy** — All, Watchlist priority, or Active-position priority, for sources that can be
-  narrowed.
-- **Retention and replay** — whether raw payloads are archived, and whether a parser upgrade triggers
-  a replay.
-- **Source health** — last success, last failure, consecutive failures, and the last run summary.
+- **Enabled** — the switch on the row. Off means nothing is fetched; on means it collects on its frequency.
+- **Frequency** — Manual, Balanced or Frequent, one row per source under "Collection & data". Manual means it does not collect on a timer.
+- **API Key** — only for sources that need a credential. You can press **Test connection** before saving it.
+- **Private-source note** — for example 0xRouter: a private data source; after registering an account you request an API Key from the developer. That sentence describes the source; it is not a status.
 
-The header actions are **Run now**, **Refresh health**, and **Replay window**.
+**Two more things sit on the row**:
 
-## 5. Collect once
+- **Run now** — collect once without waiting for the timer. The button is disabled while it runs, and the result stays on that row: the server's summary on success, the reason on failure.
+- **Source health** — four cells: whether it has a reading today, when it last succeeded, why it is not collecting, and whether it can run right now. All four come from one read, and the dot in the catalog uses the same judgement.
 
-After enabling a source, check whether it already has data:
+**Not offered, and not affected by anything you set**: scope policy, raw archiving, retention mode, and replay after a parser upgrade. Nothing in this version reads them, so a switch would change nothing.
 
-- **Configured, awaiting first collection** means the schedule has not fired yet. Use **Run now**.
-- **Not configured** means the source is on but a required key is missing.
-- **Configured but disabled** means it is set up and switched off.
-- **Collection failed** shows an error code; open the provider's health section for the last run
-  summary.
-- **Data expired, fell back** means a fresher value was expected and the panel is showing the last
-  good reading with its timestamp.
+## 5. Check that a source has data
 
-The dashboard also has a feed-status strip and a **Configure dashboard sources** drawer, which links
-each panel to the provider that feeds it.
+After enabling a source, see whether it delivers:
+
+- **Wait for the first collection** — it collects on the frequency you set; for a reading right now, use **Run now** on that source's row.
+- **Missing credential** — the source is on but the required key is not filled in; the page names what is missing.
+- **Switched off** — configured but not enabled; it collects once you turn it on.
+- **Collection failed** — the page names which kind of failure it is and marks it on the source.
+- **Stale, fell back** — the value that should have arrived did not; the panel shows the last valid reading and its time.
 
 ## 6. Read the dashboard
 

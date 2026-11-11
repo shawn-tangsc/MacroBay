@@ -17,6 +17,9 @@ const eventAt = '2026-10-14T01:30:00.000Z'
 let root: ReturnType<typeof createRoot> | undefined
 let latest: CalendarCardDataState | undefined
 let mode: 'pending' | 'ok' | 'fail' = 'pending'
+/** 产品事件通道上的订阅者：这一屏的日历月读口自己订一条（`economic-calendar` 面板）。 */
+let dataChangedHandlers: Array<(data: unknown) => void> = []
+let invoke: ReturnType<typeof vi.fn> | undefined
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -35,7 +38,8 @@ const officialEvent = {
 }
 
 function stubPlatform(): void {
-  const invoke = vi.fn(async (_product: string, method: string, payload: unknown) => {
+  dataChangedHandlers = []
+  invoke = vi.fn(async (_product: string, method: string, payload: unknown) => {
     if (method === 'intelligence.macro.economicCalendar.queryMonth') {
       if (mode === 'pending') return new Promise(() => undefined)
       if (mode === 'fail') throw new Error('read failed')
@@ -44,7 +48,15 @@ function stubPlatform(): void {
     }
     return { state: 'unavailable', failureCode: 'calendar-query-unavailable' }
   })
-  vi.stubGlobal('platform', { products: { invoke } })
+  vi.stubGlobal('platform', {
+    products: {
+      invoke,
+      onEvent: (_productId: string, _event: string, listener: (data: unknown) => void) => {
+        dataChangedHandlers.push(listener)
+        return () => { dataChangedHandlers = dataChangedHandlers.filter(entry => entry !== listener) }
+      }
+    }
+  })
 }
 
 async function mount(): Promise<void> {
@@ -109,4 +121,41 @@ it('clears the stale mark when the retried read succeeds', async () => {
   await settle()
   expect(latest?.state).toBe('ready')
   expect(latest?.stale).toBe(false)
+})
+
+function monthQueries(): number {
+  return (invoke?.mock.calls ?? []).filter(([, method]) => method === 'intelligence.macro.economicCalendar.queryMonth').length
+}
+
+it('re-reads the months when a collector writes the calendar, and keeps the rows it already has', async () => {
+  mode = 'ok'
+  await mount()
+  await settle()
+  expect(latest?.state).toBe('ready')
+  const before = monthQueries()
+  expect(before).toBeGreaterThan(0)
+
+  // 采集写了日历库 → 这一屏（`economic-calendar` 面板）重读它自己那几窗。
+  await act(async () => {
+    dataChangedHandlers.forEach(handler => handler({ panels: ['economic-calendar'], sources: ['macro-calendar-bls'] }))
+  })
+  await settle()
+
+  expect(monthQueries()).toBeGreaterThan(before)
+  // 重读不清空读数：有行就留着，不退回 loading。
+  expect(latest?.state).toBe('ready')
+})
+
+it('leaves the calendar alone when the write belongs to another panel', async () => {
+  mode = 'ok'
+  await mount()
+  await settle()
+  const before = monthQueries()
+
+  await act(async () => {
+    dataChangedHandlers.forEach(handler => handler({ panels: ['dashboard'], sources: ['binance-futures'] }))
+  })
+  await settle()
+
+  expect(monthQueries()).toBe(before)
 })

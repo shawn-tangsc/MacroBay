@@ -1,5 +1,6 @@
 import type { BriefingMacroItem } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import { localDate } from './dailyBriefingWindow'
 
 /**
  * 宏观那几行怎么选出来——与文档构造分开。它是一套自己的判断：哪些算候选（窗口内的高影响事件、
@@ -21,14 +22,35 @@ import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dail
  */
 export function highImpactEventsInWindow(packet: DailyBriefingFactPacket): readonly DailyBriefingCalendarEvent[] {
   if (packet.calendar.state !== 'available') return Object.freeze([])
-  const start = Date.parse(packet.windowStart)
-  const end = Date.parse(packet.windowEnd)
+  const endDay = localDate(packet.windowEnd, packet.timeZone)
+  const window = { start: packet.windowStart, end: packet.windowEnd, timeZone: packet.timeZone }
   return Object.freeze(packet.calendar.events
     .filter((event) => event.importance === 'high')
-    .filter((event) => {
-      const at = Date.parse(event.scheduledAt)
-      return Number.isFinite(at) && at >= start && at < end
-    }))
+    .filter((event) => briefingEventInWindow(event, window))
+    // 今天、还没发生（`scheduled`）的那一场归「接下来」，否则同一场会两栏都出现。
+    .filter((event) => !(event.releaseTimeNotPublished && endDay !== undefined &&
+      event.releaseDate === endDay && event.lifecycleState === 'scheduled')))
+}
+
+/**
+ * 一条日历事件属不属于 `[windowStart, windowEnd)` 这一栏——只判归属，不判分到哪一段。
+ *
+ * 有时刻就按瞬时判；**只公布日期**时按日期判（`scheduledAt` 只是排序位，不能当瞬时）：
+ * 只按瞬时判，日期位落在窗口起点之前就会把昨天的事件整条丢掉——「把有事件说成没有事件」
+ * 比多列一条更糟。
+ */
+export function briefingEventInWindow(
+  event: Readonly<{ scheduledAt: string; releaseTimeNotPublished?: true; releaseDate?: string }>,
+  window: Readonly<{ start: string; end: string; timeZone: string }>
+): boolean {
+  if (event.releaseTimeNotPublished) {
+    const day = event.releaseDate
+    const startDay = localDate(window.start, window.timeZone)
+    const endDay = localDate(window.end, window.timeZone)
+    return day !== undefined && startDay !== undefined && endDay !== undefined && day >= startDay && day <= endDay
+  }
+  const at = Date.parse(event.scheduledAt)
+  return Number.isFinite(at) && at >= Date.parse(window.start) && at < Date.parse(window.end)
 }
 
 /**
@@ -150,6 +172,10 @@ function toMacroItem(event: DailyBriefingCalendarEvent, webSourced = false): Bri
     ...(event.consensus === undefined ? {} : { consensus: event.consensus }),
     // 原样带下来（schema 14）：卡片靠它画「已取消」，快照靠它排除；不在这里判断，判断只有一处。
     lifecycleState: event.lifecycleState,
+    // 只公布了日期的那一对（schema 16）：卡片靠它决定「画日期 + 一句话」而不是画 `scheduledAt`。
+    ...(event.releaseTimeNotPublished && event.releaseDate
+      ? { releaseTimeNotPublished: true as const, releaseDate: event.releaseDate }
+      : {}),
     surprise: Object.freeze({ ...event.surprise })
   })
 }

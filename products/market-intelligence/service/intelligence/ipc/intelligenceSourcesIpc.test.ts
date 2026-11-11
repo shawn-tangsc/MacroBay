@@ -11,11 +11,60 @@ import { createIntelligencePipeline } from '../application/intelligencePipeline'
 import { createSourceRequestGovernanceQueue } from '../application/sourceRequestGovernance'
 import { createDefaultProfileForDefinition, createIntelligenceSourcesService } from '../application/intelligenceSourcesService'
 import { createSourceRuntimeOrchestrator, intelligenceCollectJobId } from '../application/sourceRuntimeOrchestrator'
+import { MACRO_MARKET_COLLECT_JOB_ID } from '../macro-market/macroMarketJob'
 import { registerIntelligenceJobs } from '../jobs/registerIntelligenceJobs'
 import { resolveRuntimeConfig } from '../application/sourceRuntimeConfig'
 import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
 import { realMarketApiPriceResponse } from '../macro-market/realMarketApiResponseFixtures'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
+
+describe('enabling a source needs its credential first', () => {
+  it('refuses to enable a key-requiring source and leaves the profile off', async () => {
+    const service = createService()
+    const result = await service.setEnabled({ sourceId: 'twelve-data-market', enabled: true })
+    expect(result).toEqual({ state: 'rejected', reasonCode: 'credential-required' })
+    expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(false)
+  })
+
+  it('allows disabling it at any time', async () => {
+    const service = createService()
+    const result = await service.setEnabled({ sourceId: 'twelve-data-market', enabled: false })
+    expect(result.state).toBe('saved')
+  })
+
+  it('allows enabling once the credential is saved', async () => {
+    const service = createService()
+    await service.testCredentials({ sourceId: 'twelve-data-market', credentialDraft: TWELVE_DATA_KEY })
+    const result = await service.setEnabled({ sourceId: 'twelve-data-market', enabled: true })
+    expect(result.state).toBe('saved')
+    expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(true)
+  })
+
+  it('leaves keyless sources unaffected', async () => {
+    const service = createService()
+    const result = await service.setEnabled({ sourceId: 'federal-reserve-rss', enabled: true })
+    expect(result.state).toBe('saved')
+  })
+})
+
+describe('defaults for a source with no profile row', () => {
+  it('starts keyless live sources that have an output on, and keys-required or maintenance-only ones off', async () => {
+    const service = createService()
+    // 用户 2026-11-12 的默认启用规则：免钥匙 + live + **有读者可见产出** 默认开。
+    // `alternative-fear-greed` 被「恐惧与贪婪」格用到 → 开；`twelve-data-market` 需要钥匙 → 关；
+    // `federal-reserve-rss` 是维护备用（今天没有任何读者可见产出）→ 关。
+    expect((await service.getPageState({ sourceId: 'alternative-fear-greed' })).detail!.profile.enabled).toBe(true)
+    expect((await service.getPageState({ sourceId: 'twelve-data-market' })).detail!.profile.enabled).toBe(false)
+    expect((await service.getPageState({ sourceId: 'federal-reserve-rss' })).detail!.profile.enabled).toBe(false)
+  })
+
+  it('keeps an explicit off for a keyless source that defaults on', async () => {
+    const service = createService()
+    // 要验的是「读者显式关掉覆盖默认开」，所以必须挑一条默认开的源。
+    await service.saveProfile({ sourceId: 'alternative-fear-greed', enabled: false })
+    expect((await service.getPageState({ sourceId: 'alternative-fear-greed' })).detail!.profile.enabled).toBe(false)
+  })
+})
 
 describe('intelligenceSources service', () => {
   it('returns definitions, detail, profile, runtime config, and health in page state', async () => {
@@ -173,13 +222,15 @@ describe('intelligenceSources service', () => {
   })
 
   it('never returns raw secrets in safe views', async () => {
+    // 换源不换判据：`fred` 在注册表里已弃用且隐藏（hidden/planned），`getDetail('fred')` 走的是
+    // 「未知源」那条路径，测不到密钥安全。改用**可见且需要钥匙**的 `fred-rates-liquidity`，
+    // 仍然断言「安全视图里没有原始密钥、只剩掩码、并且确实记下了凭据」。
     const service = createService()
-    await service.testCredentials({ sourceId: 'fred', credentialDraft: 'super-secret-key-value' })
-    const detail = await service.getDetail('fred')
+    await service.testCredentials({ sourceId: 'fred-rates-liquidity', credentialDraft: FRED_KEY })
+    const detail = await service.getDetail('fred-rates-liquidity')
 
-    expect(JSON.stringify(detail)).not.toContain('super-secret-key-value')
+    expect(JSON.stringify(detail)).not.toContain(FRED_KEY)
     expect(detail.credentialStatus?.maskedPreview).toContain('****')
-    expect(detail.profile.credentialRef).toBe('fred-credentials')
     expect(detail.credentialStatus?.hasCredential).toBe(true)
   })
 
@@ -648,14 +699,20 @@ describe('intelligenceSources service', () => {
     // The dedicated macro-market job reads this back through the profile.
     const detail = await service.getDetail('twelve-data-market')
     expect(detail.profile.enabled).toBe(true)
-    // `readiness: 'planned'` still forces the generic runtime off, so nothing was scheduled and the
-    // unadapted `rest-api-poller` collect job does not even exist for this source.
+    // 挡住通用运行时的**不是** `readiness`（这条源 2026-11-11 改成 live 了），而是
+    // `genericRuntimeCollects`：`collectionOwner: 'product'` / `collection: 'none'` 一律不采。
+    // 所以没有这条 `rest-api-poller` collect job。改 readiness 不会解开这道闸。
     expect(resolveRuntimeConfig({
       definition: getIntelligenceSourceDefinition('twelve-data-market')!,
       profile: detail.profile,
       hasCredential: true
     }).enabled).toBe(false)
-    expect(setSchedule).not.toHaveBeenCalled()
+    // 通用采集作业不存在；读者开着这条源时，**产品自有**的那条作业照规则排期
+    // （用户 2026-11-11：没启用的源不注册 job，反之开着就要注册）。
+    const scheduledIds = jobRuntime.listSchedules().map((definition) => definition.id)
+    expect(scheduledIds).not.toContain(intelligenceCollectJobId('twelve-data-market'))
+    expect(scheduledIds).toContain(MACRO_MARKET_COLLECT_JOB_ID)
+    expect(setSchedule).not.toHaveBeenCalledWith(expect.objectContaining({ id: intelligenceCollectJobId('twelve-data-market') }))
     await expect(jobRuntime.enqueueManual(intelligenceCollectJobId('twelve-data-market'))).rejects.toThrow('Unknown job definition')
     expect(jobRuntime.listRecentRuns()).toEqual([])
   })

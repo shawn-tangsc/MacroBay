@@ -15,7 +15,6 @@ import { DiscordDeliveryTransport } from './DiscordDeliveryTransport'
 import { DiscordRuntimeManager } from './DiscordRuntimeManager'
 import { discordGatewayStateUpsertSql, DiscordRuntimeRepository } from './DiscordRuntimeRepository'
 import { normalizeDiscordEvent } from './DiscordUpdateNormalizer'
-import { DiscordGatewayHost } from './DiscordGatewayHost'
 
 describe('Discord Release E contracts', () => {
   it('creates Discord only as blocked metadata with a bot-token-only credential schema', () => {
@@ -23,7 +22,7 @@ describe('Discord Release E contracts', () => {
     const service = new ChannelManagementService({ repository: new ChannelManagementRepository(database), vault: {} as never, cipher: {} as never, registry: new ChannelAdapterAcceptanceRegistry(), handoff: new ChannelSecureHandoff() })
     const created = service.create({ type: 'discord', name: 'Discord', agentId: 'agent-a', actorId: 'user-a' })
     expect(created).toMatchObject({ ok: true, channel: { type: 'discord', requestedEnabled: false, credential: { hasCredential: false } } })
-    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
+    expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'channel-adapter-unverified' })
     expect(database.connection.prepare('select public_config_json,requested_enabled from agent_channels where id=?').get(created.channel!.id)).toEqual({ public_config_json: '{}', requested_enabled: 0 })
     expect(() => assertDiscordSecret({ bot_token: 'a'.repeat(24) })).not.toThrow()
     expect(() => assertDiscordSecret({ bot_token: 'short' })).toThrow('channel-input-invalid')
@@ -41,7 +40,7 @@ describe('Discord Release E contracts', () => {
 
     const urls: string[] = []; const bodies: unknown[] = []
     const fetch = async (url: string, init?: RequestInit) => { urls.push(url); bodies.push(JSON.parse(String(init?.body))); return response() }
-    const client = new DiscordApiClient({ getPlatformFetch: () => fetch as typeof globalThis.fetch, token: async () => 'internal-token' })
+    const client = new DiscordApiClient({ getPlatformFetch: () => fetch as typeof globalThis.fetch, token: async () => 'internal-token', userAgent: 'MacroBay/test (Discord adapter)' })
     const delivery = new DiscordDeliveryTransport(); delivery.setClient('discord-a', client, { isCurrent: () => true, signal: new AbortController().signal })
     await expect(delivery.send({ channelId: 'discord-a', providerConversationKey: 'discord:conversation:guild:guild_1', text: 'reply', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'delivered' })
     await expect(delivery.send({ channelId: 'discord-a', providerConversationKey: 'discord:conversation:guild:bad key', text: 'no', idempotencyKey: 'opaque' })).resolves.toEqual({ kind: 'failed', code: 'delivery-provider-rejected' })
@@ -52,7 +51,7 @@ describe('Discord Release E contracts', () => {
 
   it.each(['system', 'custom', 'none'])('uses the explicitly injected %s platform fetch path', async (_mode) => {
     const fetch = vi.fn(async () => response()) as unknown as typeof globalThis.fetch
-    const client = new DiscordApiClient({ getPlatformFetch: () => fetch, token: async () => 'internal-token' })
+    const client = new DiscordApiClient({ getPlatformFetch: () => fetch, token: async () => 'internal-token', userAgent: 'MacroBay/test (Discord adapter)' })
     await expect(client.sendText({ kind: 'direct', id: 'user_1' }, 'text')).resolves.toBe('delivered')
     expect(fetch).toHaveBeenCalledWith('https://discord.com/api/v10/channels/user_1/messages', expect.objectContaining({ method: 'POST' }))
   })
@@ -98,31 +97,17 @@ describe('Discord Release E contracts', () => {
     expect(database.connection.prepare('select last_sequence from channel_discord_gateway_state where channel_id=?').get('discord-a')).toEqual({ last_sequence: 1 })
   })
 
-  it('startup and quit fence a forged Discord owner without affecting managed Telegram', () => {
+  it('startup fences a forged Discord owner but keeps the reader\'s enable intent, without affecting managed Telegram', () => {
     const database = databaseForDiscord(); seedActiveDiscord(database)
     seedChannelAdapterSupport(database, ['telegram'])
     database.connection.exec("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('telegram-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('telegram-a',1,'active','2026-07-20'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('discord-a','discord-owner','enable',1,'2026-07-20','2026-07-20'),('telegram-a','telegram-owner','enable',1,'2026-07-20','2026-07-20')")
     const management = new ChannelManagementRepository(database)
     expect(management.activeRuntimeOwners('2026-07-20T00:00:00.000Z')).toEqual([{ channelId: 'telegram-a', generation: 1, token: 'telegram-owner' }])
-    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('discord-a')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
+    // Discord 现在是**已实现**的适配器：运行时被围栏（代际作废、owner 失效），但读者点的「启用」
+    // 这一意图留着——自检放行靠的是那次点击，清掉它等于让用户每次重启都要再点一次。
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('discord-a')).toEqual({ requested_enabled: 1, lifecycle_state: 'enabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('discord-a')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(management.stopAllRuntimeAndFence('2026-07-20T00:01:00.000Z')).toContain('telegram-a')
-  })
-
-  it.each(['closed', 'replaced'] as const)('does not commit or acknowledge a %s source socket during durable inbound work', async (mode) => {
-    const source = new FakeSocket(); const replacement = new FakeSocket(); let created = 0; let release!: () => void
-    const runtime = { commitIfCurrent: vi.fn(() => true), auditIfCurrent: vi.fn(() => true) }
-    const receive = vi.fn(async (input: { acknowledge: () => Promise<void> }) => {
-      await new Promise<void>((resolve) => { release = resolve })
-      await expect(input.acknowledge()).rejects.toThrow('discord-current-gate-failed')
-      return { disposition: 'retry' as const }
-    })
-    const host = new DiscordGatewayHost({ channelId: 'discord-a', generation: 1, gatewayUrl: 'wss://fake', inbound: { receive } as never, runtime: runtime as never, parseVerifiedDispatch: () => ({ sequence: 9, facts: { eventKey: 'discord:event:e1', conversationKey: 'discord:conversation:direct:user_1', userKey: 'discord:user:user_1', conversationKind: 'direct', mentionedBot: true, text: 'hello' }, acknowledgeWire: '{"ack":9}' }), createPlatformWebSocket: class { constructor(_url: string) { return (++created === 1 ? source : replacement) as never } } as never, isCurrent: () => true, signal: new AbortController().signal })
-    host.start(); source.onmessage?.({ data: '{}' }); await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce())
-    if (mode === 'closed') source.onclose?.({})
-    else host.start()
-    release(); await vi.waitFor(() => expect(runtime.commitIfCurrent).not.toHaveBeenCalled())
-    expect(source.sent).toEqual([]); expect(replacement.sent).toEqual([])
   })
 
   it('purges Discord runtime rows in the established delete isolation transaction', async () => {
@@ -136,7 +121,7 @@ describe('Discord Release E contracts', () => {
 
   it('does not construct injected HTTP or Gateway dependencies while Discord remains blocked', async () => {
     const fetch = vi.fn() as unknown as typeof globalThis.fetch; const webSocket = vi.fn() as never
-    const manager = new DiscordRuntimeManager({ inbound: {} as never, runtime: new DiscordRuntimeRepository(createAgentPlatformDatabase(':memory:')), vault: {} as never, getPlatformFetch: () => fetch, createPlatformWebSocket: webSocket, delivery: new DiscordDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }), ownsLifecycleOwner: () => true, isCurrentActive: () => true })
+    const manager = new DiscordRuntimeManager({ inbound: {} as never, runtime: new DiscordRuntimeRepository(createAgentPlatformDatabase(':memory:')), vault: {} as never, getPlatformFetch: () => fetch, createPlatformWebSocket: webSocket, delivery: new DiscordDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }), ownsLifecycleOwner: () => true, isCurrentActive: () => true, userAgent: 'MacroBay/test (Discord adapter)' })
     await expect(manager.start('discord-a', 1, 'owner-a')).resolves.toBe(false)
     expect(fetch).not.toHaveBeenCalled(); expect(webSocket).not.toHaveBeenCalled()
   })

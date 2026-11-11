@@ -77,6 +77,29 @@ export function computeSnapshotChange(input: Readonly<{
   }
 }
 
+/**
+ * 变更摘要**值位**上印出来的那两串（变更前、变更后），按摘要同一个 `factValue` 格式化。
+ *
+ * 为什么只给值位、不给整段摘要：「持仓 **24** 小时变化」的 24、「新增证据 **3** 条」的 3 都是摘要里的
+ * 数字，收进来等于给编造开口子（正文写「24%」「3%」也能过）。取值范围钉死在值位（架构师 2026-11-11）。
+ *
+ * `change.facts` 已经按 `maximumFactChanges` 截断过：没印给模型看的第 201 条不在这里，截断行为不变。
+ */
+export function printedChangeValuePairs(
+  change: SnapshotChange,
+  names: MarketAnalysisReadableNames = analysisModelVocabulary,
+  locale: MarketAnalysisReadableLocale = 'zh-CN'
+): readonly string[] {
+  const printed: string[] = []
+  for (const fact of change.facts) {
+    for (const value of [fact.previousValue, fact.value]) {
+      if (value === undefined || value === null) continue
+      printed.push(factValue(names, fact.metric, value, fact.unit, locale))
+    }
+  }
+  return printed
+}
+
 /** True when the snapshot carries no difference against its predecessor. */
 export function isUnchangedSnapshot(change: SnapshotChange): boolean {
   return change.facts.length === 0 && change.missingDomainsAdded.length === 0 && change.missingDomainsRemoved.length === 0 &&

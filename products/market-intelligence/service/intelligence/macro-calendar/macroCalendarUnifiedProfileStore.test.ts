@@ -7,7 +7,7 @@ describe('unified macro calendar profile store', () => {
   it('writes an official calendar switch into the shared source profile store', async () => {
     const store = createSourceProfileStore(createInMemoryProfileStorage())
     const unified = createUnifiedMacroCalendarProfileStore(store)
-    await unified.save({ providerId: 'macro-calendar-fed', enabled: true })
+    await unified.save({ providerId: 'macro-calendar-fed', enabled: true, decidedBy: 'reader' })
     const saved = (await store.listProfiles()).find((profile) => profile.sourceId === 'macro-calendar-fed')
     expect(saved?.enabled).toBe(true)
   })
@@ -34,7 +34,7 @@ describe('unified macro calendar profile store', () => {
     }
     const unified = createUnifiedMacroCalendarProfileStore(store)
 
-    const saved = await unified.save({ providerId: 'macro-calendar-bea', enabled: true })
+    const saved = await unified.save({ providerId: 'macro-calendar-bea', enabled: true, decidedBy: 'reader' })
     expect(store.saveProfile).toHaveBeenCalledWith({ sourceId: 'macro-calendar-bea', enabled: true })
     expect(saved.enabled).toBe(true)
   })

@@ -33,8 +33,20 @@ export function createDashboardFeedStatusQuery(deps: Readonly<{
     } catch { /* An unreadable profile is "not enabled, not keyed" rather than an exception. */ }
     const notes = dashboardFeedStatusPublicPolicy.notesBySource[sourceId] as
       Readonly<{ outcome?: string; failureCode?: string; lastSuccessAtMs?: string }> | undefined
-    const failureCode = failureCodeOf(notes)
-    const lastSuccessAtMs = lastSuccessAtMsOf(notes) ?? healthSuccessMs(sourceId)
+    /**
+     * 备注读取与 profile 同形：**失败只影响这一源**。`readNote` 读的是宏行情库的 note，
+     * 库损坏/锁住时它会抛错；以前没有保护，一处抛错让整个 `status()` reject，整张源状态表变
+     * unavailable，七行被放成「暂时读不到」、所有读请求被门禁挡下（用户 2026-11-11 真机）。
+     */
+    let failureCode: ReturnType<typeof failureCodeOf>
+    let lastSuccessAtMs: number | undefined
+    try {
+      failureCode = failureCodeOf(notes)
+      lastSuccessAtMs = lastSuccessAtMsOf(notes) ?? healthSuccessMs(sourceId)
+    } catch {
+      failureCode = undefined
+      lastSuccessAtMs = undefined
+    }
     return Object.freeze({
       sourceId, enabled, hasCredential,
       ...(lastSuccessAtMs === undefined ? {} : { lastSuccessAtMs }),

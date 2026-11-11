@@ -16,12 +16,18 @@ import './run-log.css'
  * question about the past, not a switch to flip, so the tab and the page have now converged into
  * this section and the sources page keeps only the configuration.
  */
-export default function IntelligenceRunLogSettingsSection({ focusEntityId }: Readonly<{
+export default function IntelligenceRunLogSettingsSection({ focusEntityId, variant = 'page' }: Readonly<{
   /**
    * Set when a notification asked for one record (the shell carries the entity id across). The page
    * locates that analysis run and says so when it cannot — see `SyncRunSection`.
    */
   focusEntityId?: string | null
+  /**
+   * `page`（默认）= 设置页那一版：外框 `settings-workspace` + 页边距，行为与今天一字不差。
+   * `embed` = 产品内「配置」抽屉里那一屏：**不套页外框、不画页边距**（抽屉自己有标题与内边距），
+   * 表格吃满可用宽度。用 DOM 分支而不是 CSS 隐藏——隐藏掉的标题读屏还会念。
+   */
+  variant?: 'page' | 'embed'
 }> = {}): React.ReactElement {
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
@@ -50,16 +56,25 @@ export default function IntelligenceRunLogSettingsSection({ focusEntityId }: Rea
     return () => { cancelled = true }
   }, [t.sourceNames])
 
-  return (
-    <section className="settings-workspace intelligence-run-log-workspace">
-      <div className="intelligence-run-log-workspace__body">
+  const body = (
+    <div className="intelligence-run-log-workspace__body">
         <SyncRunSection
           analysisFailureReasons={productText[language].pages.intelligence.portal.analysisTimeline.failureReasons}
           focusAnalysisRunId={focusEntityId}
           knownSources={knownSources}
           text={{ ...t.syncRun, sourceNames: t.sourceNames }}
         />
-      </div>
+    </div>
+  )
+
+  // 内嵌（抽屉）：没有页外框、没有页边距；外框那层的类名留给页面那一版。
+  if (variant === 'embed') {
+    return <section className="intelligence-run-log-embed" data-run-log-embed="true">{body}</section>
+  }
+
+  return (
+    <section className="settings-workspace intelligence-run-log-workspace">
+      {body}
     </section>
   )
 }

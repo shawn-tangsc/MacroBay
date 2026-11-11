@@ -11,6 +11,7 @@ import type {
   WebSearchSettings
 } from '@platform/ai/web-search/contracts/webSearchContracts'
 import type { PlatformText } from '../../../i18n/platformText'
+import { FilterChip } from '@platform/ui/components/filter-chip'
 import { WebSearchProviderDrawer } from './WebSearchProviderDrawer'
 
 type ProviderFilter = 'all' | WebSearchCapability | 'disabled'
@@ -52,28 +53,38 @@ export function WebSearchProvidersPage({
   const disabledCount = implemented.filter((provider) => !provider.enabled).length
   const rows = implemented.filter((provider) => matchesFilter(provider, filter))
   const openProvider = providers.find((provider) => provider.id === openProviderId) ?? null
+  const resolveChipText = (key: string): string => chipLabel(labels, key)
 
   return (
     <div className="web-search-providers" data-web-search-providers>
       <div className="web-search-provider-filters" role="group" aria-label={labels.providersTab}>
+        {/* 筛选胶囊是平台 `FilterChip`（界面 2026-11-02 三条）：标签与计数分开渲染，
+            选中态只由 `aria-pressed` 驱动。四个键都指真实文案路径，本页不再拼「全部 4」这种句子。 */}
         <FilterChip
-          active={filter === 'all'}
-          label={labels.providerFiltersAll(implemented.length)}
-          filter="all"
-          onClick={setFilter}
+          count={String(implemented.length)}
+          labelKey="webSearch.providerFilterAll"
+          onPressedChange={() => setFilter('all')}
+          pressed={filter === 'all'}
+          resolveText={resolveChipText}
         />
         <FilterChip
-          active={filter === 'searchKeywords'}
-          label={labels.providerFilterSearch}
-          filter="searchKeywords"
-          onClick={setFilter}
+          labelKey="webSearch.providerFilterSearch"
+          onPressedChange={() => setFilter('searchKeywords')}
+          pressed={filter === 'searchKeywords'}
+          resolveText={resolveChipText}
         />
-        <FilterChip active={filter === 'fetchUrls'} label={labels.providerFilterFetch} filter="fetchUrls" onClick={setFilter} />
         <FilterChip
-          active={filter === 'disabled'}
-          label={labels.providerFilterDisabled(disabledCount)}
-          filter="disabled"
-          onClick={setFilter}
+          labelKey="webSearch.providerFilterFetch"
+          onPressedChange={() => setFilter('fetchUrls')}
+          pressed={filter === 'fetchUrls'}
+          resolveText={resolveChipText}
+        />
+        <FilterChip
+          count={String(disabledCount)}
+          labelKey="webSearch.providerFilterDisabled"
+          onPressedChange={() => setFilter('disabled')}
+          pressed={filter === 'disabled'}
+          resolveText={resolveChipText}
         />
       </div>
 
@@ -155,27 +166,15 @@ export function WebSearchProvidersPage({
   )
 }
 
-function FilterChip({
-  active,
-  label,
-  filter,
-  onClick
-}: {
-  active: boolean
-  label: string
-  filter: ProviderFilter
-  onClick: (filter: ProviderFilter) => void
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      className={active ? 'web-search-filter-chip on' : 'web-search-filter-chip'}
-      data-web-search-filter={filter}
-      aria-pressed={active}
-      onClick={() => onClick(filter)}>
-      {label}
-    </button>
-  )
+/** 胶囊文案：只认本页这四个真实键；别的键返回空串（缺键在测试里现形，不静默回退键名）。 */
+function chipLabel(labels: PlatformText['webSearch'], key: string): string {
+  switch (key) {
+    case 'webSearch.providerFilterAll': return labels.providerFilterAll
+    case 'webSearch.providerFilterSearch': return labels.providerFilterSearch
+    case 'webSearch.providerFilterFetch': return labels.providerFilterFetch
+    case 'webSearch.providerFilterDisabled': return labels.providerFilterDisabled
+    default: return ''
+  }
 }
 
 function matchesFilter(provider: SafeWebSearchProviderView, filter: ProviderFilter): boolean {

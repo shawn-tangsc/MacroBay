@@ -74,12 +74,10 @@ describe('metricRestApiAdapter.collect', () => {
         desiredRuntimeState: 'polling',
         parserStrategy: 'binance-spot-market-v1',
         noisePolicy: 'balanced',
-        includeInSentiment: true,
         scopePolicy: 'watchlist-priority',
         rawArchiveEnabled: false,
         retentionMode: 'balanced',
         autoReplayAfterParserUpgrade: false,
-        sentimentEligible: true,
         adapterConfig: {
           endpointUrl: 'https://api.binance.com/api/v3/ticker/24hr',
           symbolParam: 'symbol',

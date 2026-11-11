@@ -21,6 +21,7 @@ describe('AssistantInputbar', () => {
         isStreaming={false}
         modelReady
         topicSelected
+        sendShortcut="enter"
         mentionedModels={[]}
         imageGeneration={{
           target: null,
@@ -61,6 +62,7 @@ describe('AssistantInputbar', () => {
         isStreaming={false}
         modelReady
         topicSelected
+        sendShortcut="enter"
         mentionedModels={[]}
         imageGeneration={{
           target: null,

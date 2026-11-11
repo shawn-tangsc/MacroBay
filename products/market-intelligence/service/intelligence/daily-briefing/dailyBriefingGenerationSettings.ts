@@ -43,13 +43,6 @@ export type DailyBriefingGenerationSettings = Readonly<{
   windowHours: DailyBriefingWindowHours
 }>
 
-export type DailyBriefingGenerationSettingsPatch = Readonly<{
-  generationTime?: string
-  /** The zone the reader is seeing the time in; a save re-anchors the schedule to it. */
-  generationTimeZone?: string
-  windowHours?: number
-}>
-
 export const dailyBriefingGenerationSettingsPolicy = Object.freeze({
   generationTimeInvalidError: 'daily-briefing-generation-time-invalid',
   generationTimeZoneInvalidError: 'daily-briefing-generation-time-zone-invalid',
@@ -71,11 +64,6 @@ export function createDefaultDailyBriefingPeriod(): DailyBriefingPeriod {
     generationTime: dailyBriefingGenerationPolicy.defaultGenerationTime,
     windowHours: dailyBriefingGenerationPolicy.defaultWindowHours
   })
-}
-
-/** The period the single-period views read: the first one, or the default when the list is empty. */
-export function firstDailyBriefingPeriod(settings: DailyBriefingPeriodsSettings): DailyBriefingPeriod {
-  return settings.periods[0] ?? createDefaultDailyBriefingPeriod()
 }
 
 function trimmed(value: unknown): string | undefined {
@@ -157,41 +145,6 @@ export function readDailyBriefingPeriodsSettings(
   return Object.freeze({
     periods: Object.freeze([periodFromRecord(raw, DEFAULT_PERIOD_ID)]),
     updatedAt
-  })
-}
-
-/**
- * A save is a reader action: an unsupported time, window or zone is rejected, never repaired.
- *
- * The patch addresses **one period** (the first), because that is the only period this version can
- * show; a file that already holds more periods keeps them untouched rather than dropping them.
- */
-export function applyDailyBriefingGenerationSettingsPatch(
-  current: DailyBriefingPeriodsSettings,
-  patch: DailyBriefingGenerationSettingsPatch,
-  now: string
-): DailyBriefingPeriodsSettings {
-  if (patch.generationTime !== undefined && !isDailyBriefingGenerationTime(patch.generationTime)) {
-    throw new Error(dailyBriefingGenerationSettingsPolicy.generationTimeInvalidError)
-  }
-  if (patch.generationTimeZone !== undefined && !isDailyBriefingTimeZoneId(patch.generationTimeZone)) {
-    throw new Error(dailyBriefingGenerationSettingsPolicy.generationTimeZoneInvalidError)
-  }
-  if (patch.windowHours !== undefined && !isDailyBriefingWindowHours(patch.windowHours)) {
-    throw new Error(dailyBriefingGenerationSettingsPolicy.windowHoursInvalidError)
-  }
-
-  const target = firstDailyBriefingPeriod(current)
-  const zone = patch.generationTimeZone ?? target.generationTimeZone
-  const next: DailyBriefingPeriod = Object.freeze({
-    ...target,
-    generationTime: patch.generationTime ?? target.generationTime,
-    windowHours: (patch.windowHours ?? target.windowHours) as DailyBriefingWindowHours,
-    ...(zone ? { generationTimeZone: zone } : {})
-  })
-  return Object.freeze({
-    periods: Object.freeze([next, ...current.periods.slice(1)]),
-    updatedAt: now
   })
 }
 

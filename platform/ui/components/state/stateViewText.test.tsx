@@ -7,14 +7,14 @@ import { STATE_VIEW_TEXT_KEYS, type StateViewTextKey } from './StateView'
 import { resolveStateViewText, STATE_VIEW_ACTION_KEYS, useStateViewText } from './stateViewText'
 
 /** 最小组件：把 hook 的结果渲染出来，证明语言确实来自上下文而不是参数。 */
-function Probe(props: { keys: readonly StateViewTextKey[] }): string {
+function Probe(props: { keys: readonly StateViewTextKey[] }): React.ReactElement {
   const resolve = useStateViewText()
   return <span>{props.keys.map((key) => resolve(key)).join('|')}</span>
 }
 
 function rendered(language: 'zh-CN' | 'en-US', keys: readonly StateViewTextKey[]): string {
   return renderToStaticMarkup(
-    createElement(ShellLanguageProvider, { language }, createElement(Probe, { keys }))
+    createElement(ShellLanguageProvider, { language, children: createElement(Probe, { keys }) })
   )
 }
 

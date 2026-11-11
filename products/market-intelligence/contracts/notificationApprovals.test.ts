@@ -23,13 +23,15 @@ describe('market-intelligence approvals', () => {
     }).toEqual({ signedWithoutDeclaration: [], declaredWithoutSignature: [] })
   })
 
-  it('keeps desktop to the four failure/status events plus the finished briefing', () => {
+  it('keeps desktop to the failure/status events plus the finished briefing', () => {
     // 桌面对「信息类」不开放（用户原话：没打开应用还被轰炸）。2026-11-06 用户追加一条：
     // **日报生成成功**也要能弹；同日摘掉它的 `toast`——用户只说了桌面，「不弹应用内提示」是 11-04 的原话。
+    // 2026-11-11 再加一条：**日历刷新失败**（用户「失败了，要通知」）——失败类，且只批中心 + 桌面。
     // 顺序即签署文件里的顺序；新增或摘掉一条必须在这里显式改，不靠数字对上蒙过去。
     expect(ids.filter((id) => levelsOf(id).includes('desktop'))).toEqual([
       'market-intelligence.briefing.failed',
       'market-intelligence.briefing.ready',
+      'market-intelligence.calendar.refresh-failed',
       'market-intelligence.source.consecutive-failed',
       'market-intelligence.source.stale',
       'market-intelligence.timezone.invalid'
@@ -57,14 +59,17 @@ describe('market-intelligence approvals', () => {
     ])
   })
 
-  it('leaves three events without a toast, on purpose', () => {
+  it('leaves four events without a toast, on purpose', () => {
     // 提示默认开：关掉桌面时它是唯一的本机提醒。不批提示的三条都有理由，不是漏配：
     // - 日报完成：**桌面批准、提示不批**——11-04 用户原话「不弹提示」，11-06 只要求桌面通知，
     //   两格不是一回事，留着提示就是替他多要一次打扰（别顺手补回来）；
     // - N10 舆情：信息类，手机与中心就够；
     // - 分析结论：完成类，用户要的是「结论到了」这一声，反过来只在手机与中心（同向时由调用方收窄到中心）。
+    // - 日历刷新失败（2026-11-11）：失败类但只批中心 + 桌面——它是对后台维护的一次说明，
+    //   不是要读者现在动手，提示那一格没有获批，别顺手补。
     expect(ids.filter((id) => !levelsOf(id).includes('toast'))).toEqual([
       'market-intelligence.briefing.ready',
+      'market-intelligence.calendar.refresh-failed',
       'market-intelligence.sentiment.alert',
       'market-intelligence.analysis.conclusion'
     ])

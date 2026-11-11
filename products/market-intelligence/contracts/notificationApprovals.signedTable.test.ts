@@ -30,6 +30,12 @@ const SIGNED_TABLE: Readonly<Record<string, Readonly<{
   // 两条日历事件同一个组键、且档位必须一致：读者只勾一次，组内可用面取两条的交集。
   'market-intelligence.macro.event-landed': { levels: ['center', 'toast', 'channel'], bypassQuietHours: false, surfaceGroup: 'calendar-events' },
   'market-intelligence.calendar.event-upcoming': { levels: ['center', 'toast', 'channel'], bypassQuietHours: false, surfaceGroup: 'calendar-events' },
+  /**
+   * 刷新失败（2026-11-11 用户「失败了，要通知」，同日情报模块产品经理签署）：**只有中心 + 桌面**，
+   * 没有手机（后台维护事件，读者当场做不了事；持续性失败由 `source.consecutive-failed` 负责），
+   * 也不绕过免打扰（凌晨打断没有收益）。
+   */
+  'market-intelligence.calendar.refresh-failed': { levels: ['center', 'desktop'], bypassQuietHours: false },
   'market-intelligence.source.consecutive-failed': { levels: ['center', 'toast', 'desktop'], bypassQuietHours: false },
   'market-intelligence.source.stale': { levels: ['center', 'toast', 'desktop'], bypassQuietHours: false },
   'market-intelligence.timezone.invalid': { levels: ['center', 'toast', 'desktop'], bypassQuietHours: false },

@@ -11,9 +11,8 @@ describe('macro calendar provider state', () => {
       providerId: 'macro-calendar-bea', enabled: false, credentialRef: 'opaque-vault-ref', updatedAt: '2026-08-01T00:00:00.000Z'
     }]))
     expect(macroCalendarProviderDefinitions.map((provider) => provider.providerId)).toEqual(['macro-calendar-fed', 'macro-calendar-bls', 'macro-calendar-bea'])
-    const saved = await store.save({ providerId: 'macro-calendar-bea', enabled: true })
+    const saved = await store.save({ providerId: 'macro-calendar-bea', enabled: true, decidedBy: 'reader' })
     expect(saved).toMatchObject({ providerId: 'macro-calendar-bea', enabled: true, credentialRef: 'opaque-vault-ref' })
-    expectTypeOf(store.save).parameter(0).toEqualTypeOf<{ providerId: 'macro-calendar-fed' | 'macro-calendar-bls' | 'macro-calendar-bea'; enabled: boolean }>()
     expect(JSON.stringify(await store.list())).not.toContain('credential-value')
   })
 
@@ -38,10 +37,10 @@ describe('macro calendar provider state', () => {
 
     await runtime.reconcile()
     expect(removeSchedule).toHaveBeenCalledOnce()
-    await profiles.save({ providerId: 'macro-calendar-fed', enabled: true })
+    await profiles.save({ providerId: 'macro-calendar-fed', enabled: true, decidedBy: 'reader' })
     await runtime.reconcile()
     expect(upsertSchedule).toHaveBeenCalledOnce()
-    await profiles.save({ providerId: 'macro-calendar-fed', enabled: false })
+    await profiles.save({ providerId: 'macro-calendar-fed', enabled: false, decidedBy: 'reader' })
     await runtime.reconcile()
     expect(removeSchedule).toHaveBeenCalledTimes(2)
     await runtime.runNow('macro-calendar-fed')

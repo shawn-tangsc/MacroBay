@@ -47,7 +47,6 @@ describe('sourceProfileStore', () => {
     await store.saveProfile({
       sourceId: 'github-releases',
       collectionPreset: 'frequent',
-      includeInSentiment: true,
       credentialRef: 'cred://github/token'
     })
 
@@ -115,6 +114,37 @@ describe('sourceProfileStore', () => {
 
       const raw = JSON.parse(await readFile(filePath, 'utf8')) as unknown[]
       expect(raw).toHaveLength(1)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a legacy row that still carries the deleted includeInSentiment field, and never resurrects it', async () => {
+    // 字段已删（用户 2026-11-12：`includeInSentiment` 从出生起就是死开关）。旧 profile JSON 里可能
+    // 还存着它：读取侧**容忍未知字段**（忽略、不报错），写回时**不许把它复活**；不做迁移、不写迁移标记。
+    const dir = await mkdtemp(join(tmpdir(), 'intelligence-profiles-'))
+    const filePath = join(dir, 'intelligence-source-profiles.json')
+    const legacy = {
+      profileId: 'sec-rss-profile', sourceId: 'sec-rss', enabled: true, collectionPreset: 'balanced',
+      includeInSentiment: true, scopePolicy: 'all', rawArchiveEnabled: true, retentionMode: 'balanced',
+      autoReplayAfterParserUpgrade: true, updatedAt: '2026-01-01T00:00:00.000Z'
+    }
+
+    try {
+      await writeFile(filePath, `${JSON.stringify([legacy], null, 2)}\n`, 'utf8')
+      const store = createSourceProfileStore(createProfileJsonStorage(filePath))
+
+      const read = await store.listProfiles()
+      expect(read).toHaveLength(1)
+      expect(read[0]?.sourceId).toBe('sec-rss')
+      expect(read[0] && Object.hasOwn(read[0], 'includeInSentiment')).toBe(false)
+
+      const saved = await store.saveProfile({ sourceId: 'sec-rss', collectionPreset: 'frequent' })
+      expect(saved.collectionPreset).toBe('frequent')
+      expect(Object.hasOwn(saved, 'includeInSentiment')).toBe(false)
+
+      const raw = JSON.parse(await readFile(filePath, 'utf8')) as Array<Record<string, unknown>>
+      expect(Object.hasOwn(raw[0]!, 'includeInSentiment')).toBe(false)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

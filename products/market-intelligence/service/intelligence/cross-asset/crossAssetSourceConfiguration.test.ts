@@ -10,7 +10,10 @@ describe('cross-asset existing Binance source configuration', () => {
     expect(crossAssetPolicy.capabilityId).toBe('cross-asset-market')
     const definition = getIntelligenceSourceDefinition(crossAssetPolicy.sourceId)!
     const profile = createDefaultSourceProfile(definition)
-    expect(profile.enabled).toBe(false)
+    // 默认开不是这条用例的主张，是用户 2026-11-11 的默认启用规则带来的事实：这条源免钥匙、live，
+    // 且被看板的持仓 / 资金费率 / 纳指格用到，所以没有 profile 行时默认启用。这条用例保的是
+    // 「复用同一个源身份、不改资金费率默认与预设」，因此下面仍按原样验预设。
+    expect(profile.enabled).toBe(true)
     expect(resolveRuntimeConfig({ definition, profile: { ...profile, enabled: true, collectionPreset: 'frequent' } }).collectionPreset).toBe('frequent')
     expect(listIntelligenceSourceDefinitions().filter(source => source.sourceId === 'binance-cross-asset-market')).toEqual([])
   })

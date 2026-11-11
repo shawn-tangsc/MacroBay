@@ -12,6 +12,23 @@ function memoryStorage(initial: unknown = undefined) {
   }
 }
 
+/**
+ * A storage that answers a different document after the first read: how "another writer changed the
+ * file between our read and our write" looks to the store.
+ */
+function rewriteStorage(first: unknown, then: unknown) {
+  let reads = 0
+  let stored = first
+  return {
+    read: vi.fn(async () => {
+      reads += 1
+      return reads === 1 ? first : then
+    }),
+    write: vi.fn(async (value: unknown) => { stored = value }),
+    stored: () => stored as Readonly<{ periods: readonly BriefingPeriod[] }>
+  }
+}
+
 const store = (storage: ReturnType<typeof memoryStorage>, overrides: Readonly<{ defaultLanguage?: () => 'zh-CN' | 'en-US' }> = {}) =>
   createBriefingPeriodStore({
     storage,
@@ -44,6 +61,119 @@ describe('briefing period store', () => {
     expect(result.period.id).toBe('period_new')
     expect(storage.stored().periods.map((period) => period.id)).toEqual(['default', 'period_new'])
     expect((await store(storage).list()).map((period) => period.id)).toEqual(['default', 'period_new'])
+  })
+
+  it('keeps a row it cannot run when another row needs a language', async () => {
+    // 一期缺语言触发修复；同一文件里另一期的 windowHours 越界。写回只补语言，坏行原样留在文件里
+    // ——删掉它就是「读触发写入」造成的静默丢数据：读者配过的那一期会永久消失。
+    const storage = memoryStorage({
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24 },
+        { id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' }
+      ]
+    })
+
+    const periods = await store(storage).list()
+
+    // 这一版读不了坏行：运行期列表里没有它，文件里不许没有。
+    expect(periods.map((period) => period.id)).toEqual(['period_ok'])
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_ok', 'period_bad'])
+    expect(storage.stored().periods[1]).toEqual({ id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' })
+  })
+
+  it('keeps a period another writer added while the language was being filled in', async () => {
+    // 读 → 补 → 写回之间，另一个写口加了一期。写回按 id 合并，不许整表覆盖掉它。
+    const before = { version: 1, periods: [{ id: 'period_ok', generationTime: '07:00', windowHours: 24 }] }
+    const meanwhile = {
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24 },
+        { id: 'period_new', generationTime: '21:30', windowHours: 12, language: 'en-US' }
+      ]
+    }
+    const storage = rewriteStorage(before, meanwhile)
+
+    await store(storage).list()
+
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_ok', 'period_new'])
+    expect(storage.stored().periods[0]?.language).toBe('zh-CN')
+  })
+
+  it('writes a field it does not read back exactly as the file carried it', async () => {
+    // 旧文件带有契约里已经没有的时区值：读的时候不解释它，写回补语言时也不许弄丢。
+    const storage = memoryStorage({
+      version: 1,
+      periods: [{ id: 'default', generationTime: '07:00', windowHours: 24, generationTimeZone: 'Asia/Shanghai' }]
+    })
+
+    await store(storage).list()
+
+    expect(storage.stored().periods[0]).toEqual({
+      id: 'default',
+      generationTime: '07:00',
+      windowHours: 24,
+      generationTimeZone: 'Asia/Shanghai',
+      language: 'zh-CN'
+    })
+  })
+
+  it('writes a created row as exactly the period’s own values', async () => {
+    // 期就是四个值：id、时刻、窗口、语言。谁往写盘里多加一个字段，这里就红。
+    const storage = memoryStorage()
+    await store(storage).create({ generationTime: '09:00', windowHours: 12, language: 'en-US' })
+
+    expect(Object.keys(storage.stored().periods[1] ?? {}).sort()).toEqual(['generationTime', 'id', 'language', 'windowHours'])
+  })
+
+  it('keeps a row it cannot read when the reader adds a period', async () => {
+    // 读不懂不等于不存在：加一期是保存动作，不是销毁动作。坏行留在文件里，只是这一版显示不出来。
+    const storage = memoryStorage({
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24, language: 'zh-CN' },
+        { id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN', kept: 'verbatim' }
+      ]
+    })
+
+    const result = await store(storage).create({ generationTime: '12:30', windowHours: 12, language: 'en-US' })
+
+    expect(result.state).toBe('saved')
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_ok', 'period_bad', 'period_new'])
+    expect(storage.stored().periods[1]).toEqual({ id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN', kept: 'verbatim' })
+    // 返回给界面的是它看得见的那几行：保留了，但这一版读不懂，不能假装已经显示出来。
+    if (result.state === 'saved') expect(result.periods.map((period) => period.id)).toEqual(['period_ok', 'period_new'])
+  })
+
+  it('keeps a row it cannot read when the reader edits another one', async () => {
+    const storage = memoryStorage({
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24, language: 'zh-CN' },
+        { id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' }
+      ]
+    })
+
+    const result = await store(storage).update('period_ok', { generationTime: '08:00', windowHours: 48, language: 'zh-CN' })
+
+    expect(result.state).toBe('saved')
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_ok', 'period_bad'])
+    expect(storage.stored().periods[1]).toEqual({ id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' })
+  })
+
+  it('keeps a row it cannot read when the reader deletes another one', async () => {
+    const storage = memoryStorage({
+      version: 1,
+      periods: [
+        { id: 'period_ok', generationTime: '07:00', windowHours: 24, language: 'zh-CN' },
+        { id: 'period_bad', generationTime: '09:00', windowHours: 6, language: 'zh-CN' }
+      ]
+    })
+
+    const result = await store(storage).remove('period_ok')
+
+    expect(result.state).toBe('removed')
+    expect(storage.stored().periods.map((period) => period.id)).toEqual(['period_bad'])
   })
 
   it('refuses a duplicate and names the row it collides with, leaving the file untouched', async () => {

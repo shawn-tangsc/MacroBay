@@ -69,7 +69,7 @@ export function crossAssetFlatBand(leg: keyof typeof crossAssetObservationPolicy
 type Asset = keyof typeof crossAssetPolicy.assets
 type Range = '1h' | '24h' | '7d'
 type Reason = 'missing' | 'insufficient' | 'zero-variance' | 'stale'
-type Metric = { state: 'available'; value: number } | { state: 'unavailable'; reason: Reason }
+type Metric = { state: 'available'; value: number; atMs?: string } | { state: 'unavailable'; reason: Reason }
 /**
  * One admitted bar: the close the returns use, and the high/low the amplitude needs.
  *
@@ -139,10 +139,30 @@ export function analyzeCrossAssetHistory(input: {
       pair.some(asset => !prices[asset].has(analysisEndMs)) ? 'stale' : 'missing'
   }
 
+  /**
+   * 窗口末端用哪一根：先要 `analysisEndMs` 那一根；取不到（刚关闭那一桶还没落库）就**回退到库里
+   * 最近一根已入库的完整桶**——读者看到的是「数稍微旧一点」，不是「数没了」（Chief 2026-11-11）。
+   * 返回 `undefined` 代表这一路连一根都没有，那才是真的没有。
+   */
+  const windowEndOf = (asset: Asset): number | undefined => {
+    if (prices[asset].has(analysisEndMs)) return analysisEndMs
+    let newest: number | undefined
+    for (const instant of prices[asset].keys()) {
+      if (instant > analysisEndMs) continue
+      if (newest === undefined || instant > newest) newest = instant
+    }
+    return newest
+  }
+  const isoOf = (instantMs: number): string => new Date(instantMs).toISOString()
   function closedReturn(asset: Asset, intervals: number): Metric {
-    const start = prices[asset].get(analysisEndMs - intervals * step)
-    const end = prices[asset].get(analysisEndMs)
-    return start === undefined || end === undefined ? unavailable(missingReason([asset])) : metric(policy.percentFactor * (end / start - 1))
+    const endInstant = windowEndOf(asset)
+    if (endInstant === undefined) return unavailable(missingReason([asset]))
+    const start = prices[asset].get(endInstant - intervals * step)
+    const end = prices[asset].get(endInstant)
+    // `atMs` 随指标一起走：读者与用例都能看出「这一格用的是哪一根」，不必猜。
+    return start === undefined || end === undefined
+      ? unavailable(missingReason([asset]))
+      : { state: 'available', value: policy.percentFactor * (end / start - 1), atMs: isoOf(endInstant) }
   }
 
   function correlation(left: Asset, right: Asset): Correlation {

@@ -6,78 +6,46 @@ import type {
 } from '@platform/notifications/contracts/notificationContracts'
 import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
 
-import {
-  DEFAULT_CALENDAR_REMINDER_SETTINGS,
-  type CalendarReminderSettings
-} from '../../contracts/calendarEventReminder'
 import { parseIntelligenceTestRequest } from '../../contracts/intelligenceNotificationTest'
-import type { IntelligenceModule } from './intelligenceModule'
+import {
+  buildIntelligenceTestRequest,
+  type TestNotificationPayload
+} from './notificationTestRequests'
 import { sendIntelligenceTestNotification, type IntelligenceTestDeps } from './sendIntelligenceTestNotification'
 
 /**
- * 三枚「发一条…」的主进程行为：**先看通道，再读数据，最后走同一个提交入口**。
+ * 三枚「发一条…」的主进程行为（用户 2026-11-10 定口径）。
  *
- * 这些用例断言的是「读者看到哪句话」，所以每条都钉住回执三档里的具体一格：
- * 0 条/≥2 条通道不许先读一遍数据；「没有样例」与「读不到」不许互相顶替；提交被拒不许报成功。
+ * **测试只为验证通路**：不读真实日历、不读真实源、不读真实舆情；四种 kind 都用内置样例。
+ * 所以这里的判据只有两条：点下去要么「已发到 X」，要么是传输层原因（通道/提交被拒）；
+ * 「没数据」「读不到数据」不再是测试失败的原因。通道仍先判：发不出去时不拼样例。
  */
 
 const NOW = '2026-11-08T05:00:00.000Z'
 const ONE_CHANNEL: PushChannelResolution = { ok: true, channelId: 'slack', channelName: 'Slack' }
-
-/** 打开提醒的读者设置：其余字段取契约默认值，不为测试另造一份形状。 */
-const REMINDER_ON: CalendarReminderSettings = { ...DEFAULT_CALENDAR_REMINDER_SETTINGS, enabled: true }
-
+// 提交被接受 + **通道那一跳真的被受理**：回执要的是这两件事同时成立。
 const ACCEPTED: NotificationSubmitOutcome = {
   kind: 'accepted',
   recordId: 'r1',
-  levels: ['center'],
-  // 契约要求：这次因免打扰/未批准而被压下的档位要显式交出来（空数组＝没有压下任何一档）。
-  suppressedLevels: []
+  levels: ['center', 'channel'],
+  suppressedLevels: [],
+  delivery: { push: { state: 'sent-accepted', at: NOW } }
 }
-const NO_PUSH_CHANNEL: PushChannelResolution = {
-  ok: false,
-  reason: 'push-unavailable',
-  enabledChannelCount: 0,
-  multiple: false,
-  states: {}
-}
-const TWO_PUSH_CHANNELS: PushChannelResolution = {
-  ok: false,
-  reason: 'push-unavailable',
-  enabledChannelCount: 2,
-  multiple: true,
-  states: {}
-}
-
-function minimumModule(over: Partial<Record<string, unknown>> = {}): IntelligenceModule {
-  const base = {
-    newsSentiment: { store: { listLatestSentiment: () => [] }, scoring: undefined },
-    pipeline: { listItems: () => [] },
-    sourceProfileStore: { listProfiles: async () => [] },
-    publicQueryService: { queryMarketCalendarMonth: () => ({ state: 'available', events: [] }) }
-  }
-  return {
-    ...base,
-    ...over,
-    newsSentiment: { ...base.newsSentiment, ...((over.newsSentiment ?? {}) as object) },
-    publicQueryService: { ...base.publicQueryService, ...((over.publicQueryService ?? {}) as object) }
-  } as unknown as IntelligenceModule
-}
+const NO_PUSH_CHANNEL: PushChannelResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} }
+const TWO_PUSH_CHANNELS: PushChannelResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 2, multiple: true, states: {} }
 
 function deps(over: Partial<IntelligenceTestDeps> = {}): IntelligenceTestDeps {
   return {
-    intelligence: minimumModule(),
-    calendarReminder: {
-      readWithStatus: () => ({ state: 'readable' as const, settings: REMINDER_ON }),
-      readEvents: () => []
-    },
-    readEnabledCalendarFeeds: async () => ['macro-calendar'],
-    getTimeZone: () => 'Asia/Shanghai',
     resolvePushChannel: async () => ONE_CHANNEL,
     submit: async () => ACCEPTED,
     now: () => NOW,
     ...over
   }
+}
+
+/** 断言一份提交请求里的成品句子（标题与正文都带测试标记）。 */
+function renderedOf(request: NotificationSubmitRequest): Readonly<Record<string, { title: string; body: string }>> {
+  return request.rendered as unknown as Readonly<Record<string, { title: string; body: string }>>
 }
 
 describe('parseIntelligenceTestRequest', () => {
@@ -93,17 +61,13 @@ describe('parseIntelligenceTestRequest', () => {
 })
 
 describe('sendIntelligenceTestNotification — 通道先判', () => {
-  it('zero ready channels reports the count and reads no product data at all', async () => {
-    const listProfiles = vi.fn(async () => [])
+  it('zero ready channels reports the count, and no sample is submitted', async () => {
     const submit = vi.fn()
     const result = await sendIntelligenceTestNotification('sentiment', deps({
-      intelligence: minimumModule({ sourceProfileStore: { listProfiles } }),
       resolvePushChannel: async () => NO_PUSH_CHANNEL,
       submit
     }))
     expect(result).toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0 })
-    // 顺序就是承诺：发不出去时不去读一遍舆情再告诉读者发不出去。
-    expect(listProfiles).not.toHaveBeenCalled()
     expect(submit).not.toHaveBeenCalled()
   })
 
@@ -115,94 +79,93 @@ describe('sendIntelligenceTestNotification — 通道先判', () => {
   })
 })
 
-describe('sendIntelligenceTestNotification — 三条取数各回各的话', () => {
-  it('sentiment with an enabled source but no scored item is no-data (not a failure)', async () => {
-    const result = await sendIntelligenceTestNotification('sentiment', deps({
-      intelligence: minimumModule({ sourceProfileStore: { listProfiles: async () => [{ sourceId: 'coindesk-rss', enabled: true }] } })
-    }))
-    expect(result).toEqual({ state: 'no-data', reasonCode: 'sentiment-none' })
-  })
-
-  it('sentiment with every source disabled is unavailable — "not enabled" is not "nothing to send"', async () => {
-    const result = await sendIntelligenceTestNotification('sentiment', deps())
-    expect(result).toEqual({ state: 'unavailable', reasonCode: 'source-disabled' })
-  })
-
-  it('sentiment without a readable time zone says so, instead of pretending the window is empty', async () => {
-    const result = await sendIntelligenceTestNotification('sentiment', deps({ getTimeZone: () => '' }))
-    expect(result).toEqual({ state: 'unavailable', reasonCode: 'timezone-unreadable' })
-  })
-
-  it('calendar upcoming with no future event is no-data', async () => {
-    expect(await sendIntelligenceTestNotification('calendar-upcoming', deps())).toEqual({
-      state: 'no-data',
-      reasonCode: 'calendar-upcoming-none'
-    })
-  })
-
-  it('a disabled calendar source is unavailable, never "no events"', async () => {
-    const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
-      readEnabledCalendarFeeds: async () => []
-    }))
-    expect(result).toEqual({ state: 'unavailable', reasonCode: 'source-disabled' })
-  })
-
-  it('calendar landed with no actual value is no-data', async () => {
-    expect(await sendIntelligenceTestNotification('calendar-landed', deps())).toEqual({
-      state: 'no-data',
-      reasonCode: 'calendar-landed-none'
-    })
+describe('the receipt follows the real push, not the submit', () => {
+  const cases: Array<[NotificationSubmitOutcome, unknown]> = [
+    // 通道受理 → 才算发到手机。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center', 'channel'], suppressedLevels: [], delivery: { push: { state: 'sent-accepted', at: NOW } } }, { state: 'sent', channelId: 'slack', channelName: 'Slack' }],
+    // 发出去了没拿到回执：既不是成功也不是失败。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center', 'channel'], suppressedLevels: [], delivery: { push: { state: 'sent-unconfirmed', at: NOW } } }, { state: 'unavailable', reasonCode: 'unknown-after-send' }],
+    // 通道拒收（含熔断挡下）。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center', 'channel'], suppressedLevels: [], delivery: { push: { state: 'failed', reason: 'channel-rejected', at: NOW } } }, { state: 'unavailable', reasonCode: 'channel-rejected' }],
+    // 提交被接受但通道那一档根本没被尝试：不算「发到手机」。
+    [{ kind: 'accepted', recordId: 'r1', levels: ['center'], suppressedLevels: [] }, { state: 'unavailable', reasonCode: 'not-attempted' }],
+    // 合并进已有记录：这次没有发生投递。
+    [{ kind: 'merged', recordId: 'r1', occurrenceCount: 2, mergedEventTypes: [] }, { state: 'unavailable', reasonCode: 'not-attempted' }]
+  ]
+  it.each(cases)('maps %j to the receipt the button shows', async (outcome, expected) => {
+    const receipt = await sendIntelligenceTestNotification('sentiment', deps({ submit: async () => outcome }))
+    expect(receipt).toEqual(expected)
   })
 })
 
-describe('sendIntelligenceTestNotification — 真的发出去了', () => {
-  it('builds the upcoming request from the same reader the real reminder uses, in the test dedupe domain', async () => {
-    const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>>(
-      async () => ACCEPTED
-    )
-    const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
-      calendarReminder: {
-        readWithStatus: () => ({ state: 'readable' as const, settings: REMINDER_ON }),
-        readEvents: () => [{ eventKey: 'cpi', title: '美国 CPI', scheduledAt: '2026-11-08T05:30:00.000Z', importance: 'high' as const }]
-      },
-      submit
-    }))
+describe('every kind sends a built-in sample, with no data source in sight', () => {
+  it.each([
+    ['sentiment', 'market-intelligence.sentiment.alert'],
+    ['calendar-upcoming', 'market-intelligence.calendar.event-upcoming'],
+    ['calendar-landed', 'market-intelligence.macro.event-landed']
+  ] as const)('%s goes out with a sample payload', async (kind, eventTypeId) => {
+    const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>>(async () => ACCEPTED)
+    // deps 里没有任何数据源（没有 store、没有日历、没有查询）：测试不需要它们。
+    const result = await sendIntelligenceTestNotification(kind, deps({ submit }))
 
     expect(result).toEqual({ state: 'sent', channelId: 'slack', channelName: 'Slack' })
     const request = submit.mock.calls[0]![0]!
-    expect(request.eventTypeId).toBe('market-intelligence.calendar.event-upcoming')
-    // 测试不吃真实键：同一个键、不同域。
+    expect(request.eventTypeId).toBe(eventTypeId)
     expect(request.namespace).toBe('test')
-    expect(request.dedupeVars).toEqual({ builder: 'template', vars: { eventKey: 'cpi', scheduledAt: '2026-11-08T05:30:00.000Z' } })
-    // 标题与正文都带测试标记（读者第一眼必须知道这是测试）。
-    const rendered = request.rendered!
-    expect(rendered['zh-CN']?.title).toBe('【测试】美国 CPI')
+    // 标题带测试标记；正文第一行仍是「这是测试消息」。
+    const rendered = renderedOf(request)
+    expect(rendered['zh-CN']?.title.startsWith('【测试】')).toBe(true)
     expect(rendered['zh-CN']?.body).toContain('这是测试消息，不是真实提醒。')
     expect(rendered['en-US']?.title.startsWith('[Test] ')).toBe(true)
+    // 投递面：中心 + 手机，不进桌面。
+    expect(request.narrowedDisruptionLevels).toEqual(['center', 'channel'])
+    // occurredAt 就是这一次的 now（样例时间只相对它偏移）。
+    expect(request.occurredAt).toBe(NOW)
   })
 
-  it('a rejected submit is not a success — it comes back as read-failed', async () => {
+  it('samples are deterministic: same now → same request', async () => {
+    const first = vi.fn<(request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>>(async () => ACCEPTED)
+    const second = vi.fn<(request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>>(async () => ACCEPTED)
+    await sendIntelligenceTestNotification('calendar-landed', deps({ submit: first }))
+    await sendIntelligenceTestNotification('calendar-landed', deps({ submit: second }))
+    expect(first.mock.calls[0]![0]).toEqual(second.mock.calls[0]![0])
+  })
+
+  it('the sample sentence follows the reader language, the event stays the fixed sample', async () => {
+    const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>>(async () => ACCEPTED)
+    await sendIntelligenceTestNotification('calendar-upcoming', deps({
+      getAppLanguage: async () => 'en-US',
+      submit
+    }))
+    const rendered = renderedOf(submit.mock.calls[0]![0]!)
+    expect(rendered['en-US']?.title).toContain('US nonfarm payrolls (sample)')
+  })
+})
+
+describe('a rejected submit is a transport result, never a success', () => {
+  it('comes back as unavailable and does not claim it was sent', async () => {
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
-      calendarReminder: {
-        readWithStatus: () => ({ state: 'readable' as const, settings: REMINDER_ON }),
-        readEvents: () => [{ eventKey: 'cpi', title: '美国 CPI', scheduledAt: '2026-11-08T05:30:00.000Z', importance: 'high' as const }]
-      },
       submit: async (): Promise<NotificationSubmitOutcome> => ({ kind: 'rejected', reason: 'unknown-event-type', message: 'no such event' })
     }))
     expect(result).toEqual({ state: 'unavailable', reasonCode: 'read-failed' })
   })
+})
 
-  it('an unreadable settings file is read-failed, and nothing is submitted', async () => {
-    // 设置读不到时**不拿默认值演示**一条读者不会收到的提醒：这一条样例给「读不到」。
-    const submit = vi.fn()
-    const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
-      calendarReminder: {
-        readWithStatus: () => ({ state: 'unreadable' as const, reason: 'corrupt' as const }),
-        readEvents: () => []
+describe('the three test messages share one delivery surface rule', () => {
+  it('goes to the centre and the phone channel only, for every kind', () => {
+    // 测试消息不是业务事实：读者在设置页点一下，不该在桌面上弹一条。
+    const payload: TestNotificationPayload = {
+      namespace: 'test',
+      dedupeVars: { builder: 'template', vars: { key: 'value' } },
+      rendered: {
+        'zh-CN': { title: '【测试】x', body: 'y', reason: 'y' },
+        'en-US': { title: '[Test] x', body: 'y', reason: 'y' }
       },
-      submit
-    }))
-    expect(result).toEqual({ state: 'unavailable', reasonCode: 'read-failed' })
-    expect(submit).not.toHaveBeenCalled()
+      occurredAt: NOW,
+      actions: []
+    }
+    for (const kind of ['sentiment', 'calendar-upcoming', 'calendar-landed'] as const) {
+      expect(buildIntelligenceTestRequest(kind, payload).narrowedDisruptionLevels).toEqual(['center', 'channel'])
+    }
   })
 })

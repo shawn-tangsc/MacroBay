@@ -9,6 +9,8 @@ import { registerCacheAuditRetentionJob } from '../../storage/cache-governance/c
 import type { CacheAuditRetentionTarget } from '../../storage/cache-governance/cacheAuditRetentionJob'
 import { registerEventBusRetentionJob } from '../../message-bus/runtime/eventBusRetentionJob'
 import type { EventBusRetentionTarget } from '../../message-bus/runtime/eventBusRetentionJob'
+import { registerChannelRuntimeAuditRetentionJob } from '../../ai/agent-platform/channels/channelRuntimeAuditRetentionJob'
+import { getChannelRuntimeAuditPrune } from './composition/slots'
 
 export type PlatformRetentionInput = Readonly<{
   jobRuntime: JobRuntime
@@ -24,7 +26,7 @@ export type PlatformRetentionInput = Readonly<{
 }>
 
 /**
- * 平台自己拥有的保留期任务：会话历史、通知记录、缓存操作审计、事件总线。
+ * 平台自己拥有的保留期任务：会话历史、通知记录、缓存操作审计、事件总线、通道运行审计。
  *
  * 两处都挂在同一个 `@platform/jobs` 运行时上，都不许自造定时器。放在这里而不是 `app.ts`，
  * 是因为 `app.ts` 是受保护的装配接缝：每加一个平台任务就在里面多五行，久了没人看得出
@@ -44,6 +46,11 @@ export function registerPlatformRetentionJobs(input: PlatformRetentionInput): vo
   })
   registerEventBusRetentionJob(input.jobRuntime, {
     eventBus: () => input.eventBus,
+    timeZone: input.timeZone
+  })
+  registerChannelRuntimeAuditRetentionJob(input.jobRuntime, {
+    // 库句柄在通道组合根里，经槽取——`app.ts` 不为这条任务多一行装配。
+    audits: () => ({ prune: getChannelRuntimeAuditPrune() }),
     timeZone: input.timeZone
   })
 }

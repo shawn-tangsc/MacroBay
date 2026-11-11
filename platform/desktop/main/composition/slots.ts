@@ -22,6 +22,8 @@ let disposeJobRunRetention: (() => void) | null = null
 let disposeChannelMaintenanceJobs: (() => void) | null = null
 let installedProductManifestIds: string[] = []
 let agentTaskRunController: ReturnType<typeof createAgentTaskRunController> | null = null
+/** 通道运行审计的批量裁剪（0.4.3 B3）：由通道组合根设置，保留期任务读取。 */
+let channelRuntimeAuditPrune: (() => { removedFailureRows: number; removedLifecycleRows: number }) | null = null
 
 export function setAgentTaskExecutionCoordinator(value: AgentTaskExecutionCoordinator | null): void {
   agentTaskExecutionCoordinator = value
@@ -74,4 +76,14 @@ export function setAgentTaskRunController(value: ReturnType<typeof createAgentTa
 }
 export function getAgentTaskRunController(): ReturnType<typeof createAgentTaskRunController> | null {
   return agentTaskRunController
+}
+
+export function setChannelRuntimeAuditPrune(value: (() => { removedFailureRows: number; removedLifecycleRows: number }) | null): void {
+  channelRuntimeAuditPrune = value
+}
+
+/** 保留期任务在注册时就该有它：拿不到说明组合根漏了接线，宁可注册期失败也不静默不裁。 */
+export function getChannelRuntimeAuditPrune(): () => { removedFailureRows: number; removedLifecycleRows: number } {
+  if (channelRuntimeAuditPrune === null) throw new Error('channel-runtime-audit-prune-before-init')
+  return channelRuntimeAuditPrune
 }

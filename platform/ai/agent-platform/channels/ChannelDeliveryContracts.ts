@@ -45,7 +45,11 @@ export function isChannelDeliverySkipReason(value: string | null | undefined): v
 }
 
 export type ChannelDeliveryTransportResult =
-  | { kind: 'delivered' }
+  /**
+   * `detail` 是**送到之后的上游凭据**（例如 Telegram 的 `message_id`），只作证据、不参与判定：
+   * 没有它，「发到了」与「发到了别处」在库里长得一模一样（2026-11-10 的用户现场）。
+   */
+  | { kind: 'delivered'; detail?: string }
   /** `detail` 是通道自己给的一句话（已脱敏截断），只用于日志排查，不参与判定。 */
   | { kind: 'failed'; code: ChannelDeliveryFailureCode; detail?: string }
   | { kind: 'unknown-after-send'; detail?: string }

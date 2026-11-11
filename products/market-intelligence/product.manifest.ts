@@ -1,4 +1,4 @@
-import type { ProductManifest } from '../../platform/product-manifest'
+import type { ProductManifest, ProductSettingsSectionContribution } from '../../platform/product-manifest'
 import type { NotificationEventDeclaration } from '../../platform/notifications/contracts/notificationEventCatalog'
 import { MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS } from './contracts/notificationApprovals'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
@@ -49,7 +49,7 @@ function notificationEvent(
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.4.2',
+  version: '0.4.3',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [
@@ -62,32 +62,21 @@ export const marketIntelligenceProductManifest = {
         module: './desktop/pages/intelligence'
       }
     ],
-    settingsSections: [
-      {
-        id: 'intelligence-sources',
-        title: { 'zh-CN': '情报源', 'en-US': 'Intelligence Sources' },
-        icon: 'database',
-        order: 10,
-        module: './desktop/settings/intelligence-sources',
-        // 资源任务空态的「去启用」由壳层按业务意图带路，壳层不写死我们的面板 id。
-        navIntent: 'resource-sources'
-      },
-      {
-        // 设置 → 情报 → 运行日志：这个模块做过什么。从情报源页的标签搬出来，配置与记录各占一页。
-        id: 'intelligence-run-log',
-        title: { 'zh-CN': '运行日志', 'en-US': 'Run log' },
-        icon: 'scroll-text',
-        order: 11,
-        module: './desktop/settings/run-log'
-      },
-      {
-        // 设置 → 情报 → 通知：只放「这三条推不推手机」，本机两档在通用通知页（界面规范 §9d）。
-        id: 'intelligence-notification',
-        title: { 'zh-CN': '通知', 'en-US': 'Notifications' },
-        icon: 'message-square-text',
-        order: 12,
-        module: './desktop/settings/intelligence-notification'
-      }
+    /* 平台设置侧不再放本产品的配置：全部改由产品自己的配置抽屉承载（用户 2026-11-11）。
+       平台侧渲染逻辑没变，仍按注册数据驱动；这里撤的是「贡献」，不是能力。 */
+    settingsSections: [] as readonly ProductSettingsSectionContribution[],
+    /* 产品自己的配置抽屉有几屏（架构师 2026-11-11 签）：**只放 id、不放标题**，
+       壳层据此决定「去设置」入口出不出现。菜单集必须与抽屉实际菜单一致，
+       由 `desktop/settings/config-drawer/settingsDrawerDeclaration.test.tsx` 守着——
+       守卫从抽屉自己的 `DRAWER_MENUS` 取集合，不在这里再抄一份。 */
+    settingsDrawer: [
+      { id: 'sources' },
+      { id: 'sourcesData' },
+      { id: 'processing' },
+      { id: 'analysis' },
+      { id: 'briefing' },
+      { id: 'notifications' },
+      { id: 'runLog' }
     ]
   },
   routes: [],
@@ -315,6 +304,22 @@ export const marketIntelligenceProductManifest = {
       conditionWindowMs: 86_400_000,
       requestedBypassQuietHours: false
     }),
+    notificationEvent('market-intelligence.calendar.refresh-failed', {
+      category: 'failure',
+      // 有码时正文点出人话原因；没有码就不编原因（只报「这次没刷成」）。
+      // 变体名 = 失败码（白话句子在文案表里，正文因此永远不出现内部码）；没有码时用 `no-code`，
+      // 不编原因。
+      bodyVariants: ['input-invalid', 'credential-not-configured', 'response-unavailable', 'archive-unavailable',
+        'parse-unavailable', 'storage-unavailable', 'storage-pressure', 'no-code'],
+      requiresUserAction: false,
+      // 中心 + 桌面；**不申请手机**（后台维护事件，读者当场做不了事；持续性失败由
+      // `source.consecutive-failed` 那条负责）。也不申请免打扰穿透：凌晨打断没有收益。
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyTemplate: 'calendar-refresh:{providerId}:{date}:{generation}',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.signal.triggered', {
       category: 'reminder',
       // 正文按「规则 × 档位」分变体；标题是 `{asset} {headline}`，资产名开头。
@@ -403,8 +408,12 @@ export const marketIntelligenceProductManifest = {
     }),
     // N12：信号唤起的那次分析给出结论。只在这一条路径发，手动与日报都不发。
     // 去重键只用触发键与截止时刻——同一份证据重跑会换 runId，带上它读者会收到两条同样的结论。
-    // 手机那一档要等平台加上按次收窄的字段（architect 已判，排在频道线之后单独一笔）：同向收窄到
-    // 只进中心，反向或新信息不传、按批准表全档。在那之前这里只声明、不投递。
+    // 手机那一档按次收窄：同向收窄到只进中心，反向或新信息不传、按批准表全档（字段
+    // `narrowedDisruptionLevels` 已由平台提供）。**这条已经在投递**：宿主给了提交入口时，
+    // `analysisReleaseNoticeWiring` 会用 `createAnalysisConclusionNotifier` 把它交出去；
+    // 自动（信号唤起的那次分析）与手动（读者点「发送到手机」）两条路共用同一个构造器。
+    // 去重变量必须与下面模板**逐字同名**（`triggerKey`）：两边各叫一个名字，占位符展不开，
+    // 平台会按 `missing-dedupe-key` 拒收整条——2026-11-11 两条路一起哑掉就是这个。
     notificationEvent('market-intelligence.analysis.conclusion', {
       category: 'completed',
       body: true,

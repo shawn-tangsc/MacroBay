@@ -115,11 +115,6 @@ export const configureIntelligenceSourceInputSchema = {
     action: actionSchema(['save-profile', 'set-enabled']),
     sourceId: { type: 'string', 'x-maxStringLength': 160 },
     collectionPreset: { type: 'string', enum: ['manual', 'balanced', 'frequent'] },
-    includeInSentiment: { type: 'boolean' },
-    scopePolicy: { type: 'string', enum: ['all', 'watchlist-priority', 'active-position-priority'] },
-    rawArchiveEnabled: { type: 'boolean' },
-    retentionMode: { type: 'string', enum: ['compact', 'balanced', 'extended'] },
-    autoReplayAfterParserUpgrade: { type: 'boolean' },
     monitoredSymbols: { type: 'array', maxItems: 200, items: { type: 'string' } },
     enabled: { type: 'boolean' },
     // Declared only so the action guard can name it; no action accepts it.
@@ -219,11 +214,19 @@ export const requestSourceCredentialInputSchema = {
 export const requestSourceCredentialOutputSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['handoff', 'sourceId', 'settingsSectionId', 'fields'],
+  required: ['handoff', 'sourceId', 'settingsDrawer', 'fields'],
   properties: {
     handoff: { type: 'string', enum: ['credential-entry'] },
     sourceId: { type: 'string' },
-    settingsSectionId: { type: 'string', enum: ['intelligence-sources'] },
+    settingsDrawer: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['productId', 'menuId'],
+      properties: {
+        productId: { type: 'string', enum: ['market-intelligence'] },
+        menuId: { type: 'string', enum: ['sources'] }
+      }
+    },
     fields: { type: 'array', items: { type: 'string' } }
   }
 } as const
@@ -248,11 +251,6 @@ export const intelligenceWriteActionRules: Readonly<Record<string, CapabilityAct
       fields: [
         'sourceId',
         'collectionPreset',
-        'includeInSentiment',
-        'scopePolicy',
-        'rawArchiveEnabled',
-        'retentionMode',
-        'autoReplayAfterParserUpgrade',
         'monitoredSymbols'
       ],
       required: ['sourceId']

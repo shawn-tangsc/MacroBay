@@ -17,7 +17,6 @@ const fixture = vi.hoisted(() => ({
       sourceId: 'coingecko-trending',
       enabled: true,
       collectionPreset: 'balanced',
-      includeInSentiment: true,
       scopePolicy: 'all',
       rawArchiveEnabled: false,
       retentionMode: 'balanced',

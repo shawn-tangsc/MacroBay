@@ -19,12 +19,10 @@ const config = {
   desiredRuntimeState: 'polling',
   parserStrategy: 'test',
   noisePolicy: 'balanced',
-  includeInSentiment: true,
   scopePolicy: 'all',
   rawArchiveEnabled: false,
   retentionMode: 'balanced',
   autoReplayAfterParserUpgrade: false,
-  sentimentEligible: true,
   adapterConfig: { symbol: 'ETHUSDT' }
 } as const
 

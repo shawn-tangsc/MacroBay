@@ -32,6 +32,14 @@ describe('open interest query', () => {
     for (const point of result.btc) expect(point.observedAt.endsWith(':00.000Z')).toBe(true)
   })
 
+  it('carries the newest reading even though the folded point is stamped at the hour', async () => {
+    // 折叠点落在 01:00，而它承载的最新读数是 01:45：卡面判「是否滞后」要用后者（用户 2026-11-10 现场）。
+    const result = await queryOpenInterestHistoryAsync({ asOf, window: '7d', store: store(rows(672)) })
+    if (result.state !== 'available') throw new Error('expected available')
+    expect(result.btc.at(-1)!.observedAt.endsWith(':00.000Z')).toBe(true)
+    expect(result.newestReadingAt).toBe(new Date(asOfMs - 900_000).toISOString())
+  })
+
   it('keeps the native 15-minute points on the 24-hour window', async () => {
     const result = await queryOpenInterestHistoryAsync({ asOf, window: '24h', store: store(rows(96)) })
     if (result.state !== 'available') throw new Error('expected available')

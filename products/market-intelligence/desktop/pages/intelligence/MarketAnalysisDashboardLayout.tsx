@@ -70,7 +70,9 @@ const workspaceSwitchKeys = Object.freeze({
   agent: 'pages.intelligence.portal.analysisWorkspace.title'
 })
 
-export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
+export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
+  /** 舆情那颗设置入口：打开配置抽屉、落在「采集与数据」的**舆情组**（未传时舆情仍用本地弹框）。 */
+  onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   /**
    * The calendar's own title vocabulary, read from the product registry by the page entry.
    *
@@ -174,7 +176,9 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           timeline={timeline}
           onOpenDetail={entry => { setOpenEntry(entry); timeline.ensureDetail(entry) }}
           onOpenTimeline={() => setTimelineOpen(true)}
-          onOpenAnalysisSettings={() => setAnalysisSettingsOpen(true)}
+          /* 与时间轴同一形状：宿主给了入口就用宿主的（`index.tsx` 传的是打开配置抽屉「AI 分析」屏），
+             只有单挂组件、没有宿主时才退回本地弹窗。 */
+          onOpenAnalysisSettings={onOpenAnalysisSettings ?? (() => setAnalysisSettingsOpen(true))}
           openTimelineLabel={text.analysisDrawer.open}
           enableAnalysisLabel={text.analysisTimeline.enableAnalysis}
           analysisOffHint={text.analysisTimeline.analysisOffHint}
@@ -190,12 +194,15 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readMarketEvents ? { readMarketEvents } : {})
         })}
-        <MarketAnalysisSettingsDialog
-          onClose={() => setAnalysisSettingsOpen(false)}
-          open={analysisSettingsOpen}
-          text={text.analysisTimeline}
-        />
+        {onOpenAnalysisSettings === undefined
+          ? <MarketAnalysisSettingsDialog
+            onClose={() => setAnalysisSettingsOpen(false)}
+            open={analysisSettingsOpen}
+            text={text.analysisTimeline}
+          />
+          : null}
         <AnalysisTimelineDrawer
+          onOpenSettings={onOpenAnalysisSettings ?? (() => setAnalysisSettingsOpen(true))}
           onClose={() => setTimelineOpen(false)}
           onOpenChange={setOpenEntry}
           open={timelineOpen}
@@ -215,12 +222,14 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         {eventDetail && renderEventDetailDrawer ? renderEventDetailDrawer(eventDetail, () => setEventDetail(undefined)) : null}
       </div>
 <MarketAnalysisAgentWorkspace
+        {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
         language={locale ?? 'zh-CN'}
         floatingText={{ open: text.calendarCard.expandAgent, close: text.calendarCard.closeAgent, title: text.calendarCard.agentTitle, clear: text.calendarCard.clearConversation }}
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
         card={<MarketCalendarCard
           projection={cardData.projection}
           state={cardData.state}
+          sourcesState={cardData.sourcesState}
           stale={cardData.stale}
           text={{
             ...text.calendarCard,

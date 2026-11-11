@@ -1,3 +1,4 @@
+import type { BriefingPeriod } from '../../../contracts/dailyBriefingPeriod'
 import { DEFAULT_PERIOD_ID, type DailyBriefingLocale, type DailyBriefingRunTrigger, type DailyBriefingWindowHours } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
 import { briefingWindow, briefingWindowAtCutoff, localDate, type DailyBriefingZoneSource } from './dailyBriefingWindow'
@@ -37,7 +38,7 @@ export function createDailyBriefingRegenerate(deps: Readonly<{
    * 用户 2026-11-06 报的"20:00 那期的身份、07:00 的内容"就是这里来的：以前不带期号，窗口一律取
    * 期列表第一项（默认 07:00），语言取界面语言——三个来源拼一版。现在三样都从这一期取。
    */
-  readPeriods?: () => Promise<readonly Readonly<{ id: string; generationTime: string; windowHours: 12 | 24 | 48; language?: DailyBriefingLocale }>[]>
+  readPeriods?: () => Promise<readonly BriefingPeriod[]>
   resolve: (input: Readonly<{
     asOf: string
     date: string

@@ -164,6 +164,48 @@ export const intelligenceSourcesText = {
   },
 
   sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
+  /** 来源列表的条件行（C5）：胶囊说「值 · 还剩 N」，清空按钮一个词。 */
+  /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
+  sourceSummary: {
+    '0xrouter-aggregate-provider': 'BTC、ETH 现货 ETF 的净流入',
+    'alternative-fear-greed': '恐惧与贪婪指数的当前读数',
+    'bea-economic-series': '美国经济分析局的 GDP 与 PCE',
+    'binance-announcements': '币安公告：上币、下架与规则变更',
+    'binance-api-updates': '维护备用，暂不向读者提供内容',
+    'binance-futures-positioning': '永续合约的持仓名义额与资金费率',
+    'binance-spot-market': 'BTC 与 ETH 的现货报价与成交额',
+    'bls-economic-series': '美国劳工统计局的经济指标数值',
+    'cftc-rss': '维护备用，暂不向读者提供内容',
+    'coinbase-status': '维护备用，暂不向读者提供内容',
+    'coindesk-rss': 'CoinDesk 的加密新闻标题与摘要',
+    'coingecko-market': '加密总市值、成交额与 BTC 占比',
+    'coinmarketcal': '加密事件条目，按币种与日期',
+    'cryptopanic': '加密新闻聚合，按币种归类',
+    'defillama-stablecoins': '稳定币总供给及其近期变化',
+    'defillama-tvl': '各链锁仓总值及其近期变化',
+    'ethereum-foundation-blog': '维护备用，暂不向读者提供内容',
+    'federal-reserve-rss': '维护备用，暂不向读者提供内容',
+    'fred': '旧版指标采集，已被利率与流动性取代',
+    'fred-rates-liquidity': '美债收益率与通胀预期的日收盘',
+    'github-releases': '维护备用，暂不向读者提供内容',
+    'kraken-status': '维护备用，暂不向读者提供内容',
+    'kraken-system-status': '维护备用，暂不向读者提供内容',
+    'macro-calendar-0xrouter-central-bank-activities': '央行会议与公开活动的日程',
+    'macro-calendar-0xrouter-economic-data': '经济指标的发布日程与公布值',
+    'macro-calendar-0xrouter-financial-events': '财经事件的发生日程与时间点',
+    'macro-calendar-bea': '美国经济分析局的官方发布日程',
+    'macro-calendar-bls': '美国劳工统计局的官方发布日程',
+    'macro-calendar-coinmarketcal': '加密活动与代币事件的日程',
+    'macro-calendar-fed': '美联储会议与讲话的官方时间表',
+    'okx-api-announcements': 'OKX 接口变更：停机、字段与限额',
+    'okx-latest-announcements': 'OKX 最新公告：上币、下架与规则变更',
+    'policy-path-market': '下一次议息的隐含概率，加息与降息对比',
+    'realmarketapi-market': '美元指数的现价与短线变化',
+    'sec-rss': '美国证监会新闻稿：执法与规则提案',
+    'solana-status': '维护备用，暂不向读者提供内容',
+    'treasury-fiscal-data': '美国财政部账户的每日余额',
+    'twelve-data-market': '美元与黄金的报价',
+  },
   sourceNames: {
     'macro-calendar-fed': '美联储官方日程', 'federal-reserve-rss': '美联储新闻稿',
     'macro-calendar-bea': 'BEA 官方发布', 'bea-economic-series': 'BEA 经济数据',
@@ -172,7 +214,7 @@ export const intelligenceSourcesText = {
     'treasury-fiscal-data': '财政部财政数据', 'sec-rss': 'SEC 监管公告', 'cftc-rss': 'CFTC 监管公告',
     'binance-announcements': '币安公告', 'binance-api-updates': '币安 API 更新',
     'binance-spot-market': '币安现货行情', 'binance-futures-positioning': '币安合约持仓',
-    'binance-asset-page': '币安资产页', 'okx-latest-announcements': 'OKX 最新公告',
+    'okx-latest-announcements': 'OKX 最新公告',
     'okx-api-announcements': 'OKX API 公告', 'coingecko-market': 'CoinGecko 行情',
     'defillama-stablecoins': 'DeFiLlama 稳定币', 'defillama-tvl': 'DeFiLlama TVL',
     'alternative-fear-greed': '恐惧与贪婪指数', 'coindesk-rss': 'CoinDesk 新闻',
@@ -199,9 +241,16 @@ export const intelligenceSourcesText = {
   },
   readinessLabels: { live: '可用', 'fixture-ready': '测试数据', planned: '未接入' },
 
-  sourceFilters: { all: '全部', calendar: '日历', dashboard: '看板', pending: '待接入', advanced: '高级' },
+  /* 页签名只改这两个词（用户 2026-11-10）：`all` = 情报源、`dashboard` = 业务设置；
+     **值 `'all'` / `'dashboard'` 不动**——默认筛选、入口传参、用例都靠它们。 */
+  sourceFilters: { all: '情报源', calendar: '日历', dashboard: '业务设置', sentiment: '舆情', pending: '待接入', advanced: '高级', other: '其他' },
   sourceFilterLabel: '来源筛选',
+  /* C5 列表形态：看板那一档自动平铺，这两句给读屏播报用。 */
+  sourceListModes: { grouped: '分组', tiles: '平铺' },
   sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
+  /* 数据源列表里跟在源名后的黄色小标签：这一个源的接口在境内要经代理才通。
+     与 `sourceBadges.proxy`（读者没配代理时的提示）不同，它**常显**，回答「哪些源需要 VPN」。 */
+  proxyTag: 'VPN',
   proxyNotice: {
     title: '这个来源要走本地代理才能连',
     failedTitle: '连接失败：请先打开本地代理，再回来重试。',
@@ -216,12 +265,20 @@ export const intelligenceSourcesText = {
   agentNames: { crypto: '数字货币', stocks: '股票', futures: '期货' },
   panelNames: { dashboard: '看板', 'economic-calendar': '日历' },
   toggleSource: { enable: '启用 {name}', disable: '停用 {name}' },
-  providerSummary: '{total} 项能力 · 已启用 {enabled}',
+  /* 源那一行行尾那颗展开按钮：两个字，不是说明。 */
+  advancedToggle: '高级',
   credentialsRequired: '需要 API Key',
+  providerNotices: { privateDataSource: '私有数据源：注册账号后需向开发者申请 API Key。' },
   website: '官网',
   signup: '注册 / 获取 Key',
-  inviteNote: '如果这个源帮到你，欢迎用我的邀请链接注册，就当请作者吃根雪糕 🍦',
   testConnection: '测试连接',
+  /* 每一行源自己的连通性测试（读者 2026-11-12：每个已经接了的源都要有一个测试按钮）。
+     短词：行很窄，句子留给页头的整组测试。 */
+  rowTest: '测试',
+  rowTesting: '测试中…',
+  rowTestOk: '通',
+  rowTestFailed: '不通',
+  rowTestUnsupported: '不支持',
   jobRegistered: '已注册自动任务',
   jobNotRegistered: '未注册自动任务',
   connectionSucceeded: '连接已验证。',
@@ -293,7 +350,6 @@ export const intelligenceSourcesText = {
     'binance-api-updates': 'Binance API 更新',
     'binance-spot-market': 'Binance 现货行情',
     'binance-futures-positioning': 'Binance 合约持仓',
-    'binance-asset-page': 'Binance 资产页',
     'okx-latest-announcements': 'OKX 最新公告',
     'okx-api-announcements': 'OKX API 公告',
     'coindesk-rss': 'CoinDesk RSS',
@@ -311,7 +367,7 @@ export const intelligenceSourcesText = {
     'realmarketapi-market': 'RealMarketAPI',
     'treasury-fiscal-data': '美国财政部数据',
     fred: 'FRED',
-    'alternative-fear-greed': '恐惧贪婪指数',
+    'alternative-fear-greed': '恐惧与贪婪指数',
     'defillama-stablecoins': 'DeFiLlama 稳定币',
     'defillama-tvl': 'DeFiLlama TVL',
     'kraken-system-status': 'Kraken SystemStatus',
@@ -327,8 +383,8 @@ export const intelligenceSourcesText = {
     'websocket-stream-consumer': 'WebSocket 流消费'
   },
   status: {
-    enabled: '已启用',
-    disabled: '未启用'
+    applied: '已应用',
+    notApplied: '未应用'
   },
   executionModes: {
     polling: '轮询',
@@ -344,11 +400,21 @@ export const intelligenceSourcesText = {
   collectionPolicy: {
     title: '采集策略',
     collectionPreset: '采集预设',
+    /* 窄格短标（产品 2026-11-12）：读者判的是「多久采一次」，「预设」是内部说法。 */
+    frequency: '频率',
+    /* 产品自有采集的源：节奏由产品作业定，只写事实、不画控件（用户 2026-11-12）。 */
+    builtinCadence: '内置频率',
+    builtinCadenceNote: '这个源的采集节奏由产品内置，不能在这里调整。',
+    builtinCadenceNoteAria: '内置频率说明',
     manualPresetNote: '手动模式启用后不会自动采集，需点击「立即运行」。',
+    manualPresetNoteAria: '采集预设说明',
     plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
+    /* 那颗 ⓘ 的读屏名：取不到与尚未接入共用同一颗（句子不同）。 */
+    notConfigurableAria: '这一行不能修改的说明',
     productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由该来源那一行末尾的开关控制；采集预设不适用于它。',
     productOwnedNoteAria: '采集策略说明',
-    includeInSentiment: '纳入情绪分析',
+    /* 收起态头行那枚短标：只说这组现在不能改，不搬展开区那句原因。 */
+    stoppedBadge: '暂不可改',
     presets: {
       manual: '手动',
       balanced: '均衡',
@@ -379,29 +445,58 @@ export const intelligenceSourcesText = {
     title: '来源专属选项',
     empty: '当前来源没有额外可见字段。'
   },
-  retentionReplay: {
-    title: '保留与重放',
-    rawArchiveEnabled: '启用原始归档',
-    retentionMode: '保留模式',
-    autoReplayAfterParserUpgrade: '解析器升级后自动重放',
-    retentionModes: {
-      compact: '紧凑',
-      balanced: '均衡',
-      extended: '扩展'
-    }
-  },
   /**
    * 设置页只放**短句**：这里不显示内容，套全句会变成「先显示上次同步的内容」而那儿什么都没显示。
    * 全句只用在会显示内容的地方（经济日历错误态、日报）。
    */
   unavailableShort: '官方源暂时不可用',
+  unavailableCountOne: '含 {count} 个不可用的源',
+  unavailableCountOther: '含 {count} 个不可用的源',
   unavailableReasonCode: '原因码：{code}',
   /** 只给 ⓘ 的可访问名用：它是名字，不是句子（句子那个带 `{code}`）。 */
   unavailableReasonCodeAria: '原因码',
+  'health.runAction.infoAria': '立即运行的说明',
   /** 不可用源的策略组整组停用：**通用结构**，任何不可用源都同一句，不针对某个源。 */
-  collectionPolicyStopped: '同步已停止，恢复后才生效',
+  collectionPolicyStopped: '同步已停止；恢复后自动生效，恢复时间未知',
+  /* C8：另一处保存了同一域，而本页有未保存的草稿。只提示，不覆盖。 */
+  otherSideChanged: '另一处已修改了这里的设置，你正在填的内容没有动。',
+  reloadOtherSide: '重新载入',
+  keepEditing: '继续编辑',
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
+  /* 「业务设置」左列那三项（用户 2026-11-10：切到业务设置后左列只有这三项）。 */
+  businessTabs: { dashboard: '看板', calendar: '日历', sentiment: '舆情' },
+  businessTabsAria: '业务设置',
+  /* 左列三项的副标题：写**有用的事实**（模块数 / 源数），数字从数据层算。 */
+  businessSubtitle: { modules: '{count} 个模块', sources: '{count} 个源' },
+  /* 看板页签的分组名：能复用既有标题键的都用既有键（各模块在 dashboardSourceModules 里指过去），
+     这里只放**没有现成标题键**的那几个。 */
+  dashboardModuleTitles: {
+    policyPath: '政策路径',
+    marketState: '市场状态'
+  },
+  /* 采集与数据里「背后的源没开启」的项：整行可点，跳到那个源的配置页。 */
+  openSourceConfig: '打开 {name} 的配置',
+  /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
+  cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
+  /* 需要 API Key 但还没配：开关不可用，旁边一颗 ⓘ 说这一句（正文不放整句）。 */
+  credentialRequiredToEnable: '先配置 API Key',
+  credentialRequiredToEnableAria: '为什么这个开关现在不能开',
+  /* 待接入的源：整组启停不可操作，提示只说「还没接入」（短句，不是长说明）。 */
+  providerPending: '这个源还没接入',
+  providerPendingAria: '为什么这个开关现在不能开',
+  /* 页头那颗**整组**启停（该来源下全部能力）：可访问名带来源名，别只念「开关」。 */
+  toggleProviderEnable: '启用 {name} 的全部能力',
+  toggleProviderDisable: '停用 {name} 的全部能力',
+  /** 源详情里那行：这个源被哪些模块用（0 个模块时整行不显示）。 */
+  usedInModules: '用在哪些模块',
+  /* 「日历」筛选下的两个组名：判据是 calendarFeedRegistry 的 owner，不是手抄表（用户 2026-11-10）。 */
+  calendarGroups: {
+    official: '官方源',
+    aggregate: '聚合源'
+  },
+  /* 右详情那一个折叠块的头：健康四格 + 采集策略都住在它里面（用户 2026-11-10）。 */
+  detailsBlockTitle: '健康与采集策略',
   health: {
     title: '来源健康',
     runtimeStatus: '运行状态',
@@ -410,6 +505,52 @@ export const intelligenceSourcesText = {
     consecutiveFailures: '连续失败',
     lastRunSummary: '最近运行摘要',
     empty: '暂无',
+    /* B4 来源健康四格：今天有没有读数 / 上次成功 / 为什么没在采 / 能不能立刻采。 */
+    todayReading: '今天的读数',
+    todayReadingYes: '有 · {time}',
+    todayReadingNo: '今天还没有',
+    noSuccess: '没有成功记录',
+    /* 「未知」要自解释：这一档既可能是日历类源没有逐次记录、也可能是这一屏读失败。
+       原因进同一行标签旁的 ⓘ，值这里给能读懂的短词（不许只印两个字）。 */
+    unknown: '状态暂时读不到',
+    unknownReason: '这类来源只按提供方汇总运行，没有逐次记录',
+    /* 这两句只进标签旁的 ⓘ：正文只留状态词（用户 2026-11-10）。 */
+    unknownReasonAria: '未知原因的说明',
+    automaticSyncStoppedAria: '自动同步已停止的说明',
+    whyNotCollecting: '为什么没在采',
+    runNowAnswer: '能不能立刻采',
+    refreshStale: '刚跑完，读数还没刷新',
+    reasons: {
+      disabled: '未启用',
+      'missing-credential': '缺凭据',
+      unavailable: '平台取不到',
+      'never-ran': '从没成功采过',
+      'not-ready': '还没接入完成',
+      manual: '手动模式，不会自动采集',
+      'product-owned': '由产品自己的采集作业负责',
+      collecting: '按计划采集中',
+      unknown: '状态暂时读不到'
+    },
+    /* B5 立即运行：三态（可运行 / 正在运行 / 结果）。禁用时按钮文案就是原因，
+       这一行再用 role=status 说一句「跑完会自动恢复」——禁用按钮不进 Tab、读屏也读不到。 */
+    runAction: {
+      run: '立即运行',
+      running: '正在运行',
+      runningInfo: '正在运行，跑完会自动恢复',
+      runningInfoAria: '立即运行的说明',
+      failedToStart: '没有发出请求，请重试。'
+    },
+    runNow: {
+      yes: '可以',
+      /* 正文只留状态词：为什么不能在这里运行进同一行标签旁的 ⓘ。 */
+      unsupported: '不可运行',
+      unsupportedReason: '平台没有为这个来源提供在这里运行的入口。',
+      unsupportedReasonAria: '为什么不可运行',
+      'not-ready': '还没接入完成',
+      unavailable: '现在取不到数据，恢复后再试',
+      'missing-credential': '先填好凭据',
+      disabled: '先启用这个来源'
+    },
     statuses: {
       healthy: '健康',
       'multiple-failures': '多次失败',
@@ -605,6 +746,48 @@ export const intelligenceSourcesText = {
   },
 
   sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },
+  /** Source-list conditions (C5): the chip says "value · N left"; the clear button is one word. */
+  /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
+  sourceSummary: {
+    '0xrouter-aggregate-provider': 'Net flows into BTC and ETH spot ETFs',
+    'alternative-fear-greed': 'The current Fear & Greed reading',
+    'bea-economic-series': 'BEA figures for GDP and PCE',
+    'binance-announcements': 'Binance announcements: listings, delistings and rule changes',
+    'binance-api-updates': 'Maintenance only; nothing here is shown to readers yet',
+    'binance-futures-positioning': 'Perpetual open interest and the funding rate',
+    'binance-spot-market': 'BTC and ETH spot quotes with turnover',
+    'bls-economic-series': 'US BLS economic indicator values',
+    'cftc-rss': 'Maintenance only; nothing here is shown to readers yet',
+    'coinbase-status': 'Maintenance only; nothing here is shown to readers yet',
+    'coindesk-rss': 'Crypto headlines and summaries from CoinDesk',
+    'coingecko-market': 'Total crypto market cap, turnover and BTC share',
+    'coinmarketcal': 'Crypto event entries, by coin and date',
+    'cryptopanic': 'Aggregated crypto headlines, grouped by coin',
+    'defillama-stablecoins': 'Total stablecoin supply and its recent change',
+    'defillama-tvl': 'Total value locked per chain and its recent change',
+    'ethereum-foundation-blog': 'Maintenance only; nothing here is shown to readers yet',
+    'federal-reserve-rss': 'Maintenance only; nothing here is shown to readers yet',
+    'fred': 'Legacy indicator feed, replaced by rates and liquidity',
+    'fred-rates-liquidity': 'US Treasury yields and inflation expectations, daily close',
+    'github-releases': 'Maintenance only; nothing here is shown to readers yet',
+    'kraken-status': 'Maintenance only; nothing here is shown to readers yet',
+    'kraken-system-status': 'Maintenance only; nothing here is shown to readers yet',
+    'macro-calendar-0xrouter-central-bank-activities': 'Central bank meetings and public appearances',
+    'macro-calendar-0xrouter-economic-data': 'Economic indicator schedule with released values',
+    'macro-calendar-0xrouter-financial-events': 'When financial events are scheduled to happen',
+    'macro-calendar-bea': 'BEA official release schedule',
+    'macro-calendar-bls': 'BLS official release schedule',
+    'macro-calendar-coinmarketcal': 'Crypto events and token event dates',
+    'macro-calendar-fed': 'The official schedule of Fed meetings and speeches',
+    'okx-api-announcements': 'OKX API changes: outages, fields and rate limits',
+    'okx-latest-announcements': 'OKX latest announcements: listings, delistings and rule changes',
+    'policy-path-market': 'Implied odds for the next rate decision, hike versus cut',
+    'realmarketapi-market': 'The dollar index, current level and short-term change',
+    'sec-rss': 'US SEC press releases: enforcement and rule proposals',
+    'solana-status': 'Maintenance only; nothing here is shown to readers yet',
+    'treasury-fiscal-data': 'Daily balances in the US Treasury account',
+    'twelve-data-market': 'Dollar, gold and offshore yuan quotes',
+  },
   sourceNames: {
     'macro-calendar-fed': 'Federal Reserve official schedule', 'federal-reserve-rss': 'Federal Reserve press releases',
     'macro-calendar-bea': 'BEA official releases', 'bea-economic-series': 'BEA economic data',
@@ -613,7 +796,7 @@ export const intelligenceSourcesText = {
     'treasury-fiscal-data': 'Treasury fiscal data', 'sec-rss': 'SEC regulatory notices', 'cftc-rss': 'CFTC regulatory notices',
     'binance-announcements': 'Binance announcements', 'binance-api-updates': 'Binance API updates',
     'binance-spot-market': 'Binance spot market', 'binance-futures-positioning': 'Binance futures positioning',
-    'binance-asset-page': 'Binance asset page', 'okx-latest-announcements': 'OKX latest announcements',
+    'okx-latest-announcements': 'OKX latest announcements',
     'okx-api-announcements': 'OKX API announcements', 'coingecko-market': 'CoinGecko market data',
     'defillama-stablecoins': 'DeFiLlama stablecoins', 'defillama-tvl': 'DeFiLlama TVL',
     'alternative-fear-greed': 'Fear and greed index', 'coindesk-rss': 'CoinDesk news',
@@ -640,9 +823,11 @@ export const intelligenceSourcesText = {
   },
   readinessLabels: { live: 'Available', 'fixture-ready': 'Fixture data', planned: 'Not connected' },
 
-  sourceFilters: { all: 'All', calendar: 'Calendar', dashboard: 'Dashboard', pending: 'Pending', advanced: 'Advanced' },
+  sourceFilters: { all: 'Intelligence sources', calendar: 'Calendar', dashboard: 'Business settings', sentiment: 'Sentiment', pending: 'Pending', advanced: 'Advanced', other: 'Other' },
   sourceFilterLabel: 'Filter sources',
+  sourceListModes: { grouped: 'Grouped', tiles: 'Tiles' },
   sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
+  proxyTag: 'VPN',
   proxyNotice: {
     title: 'This source needs a local proxy to connect',
     failedTitle: 'Connection failed: turn on your local proxy, then try again.',
@@ -655,12 +840,17 @@ export const intelligenceSourcesText = {
   agentNames: { crypto: 'Crypto', stocks: 'Stocks', futures: 'Futures' },
   panelNames: { dashboard: 'Dashboard', 'economic-calendar': 'Calendar' },
   toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
-  providerSummary: '{total} capabilities · {enabled} enabled',
+  advancedToggle: 'Advanced',
   credentialsRequired: 'API key required',
+  providerNotices: { privateDataSource: 'Private data source: after registering an account, request an API Key from the developer.' },
   website: 'Website',
   signup: 'Sign up / Get key',
-  inviteNote: 'If this source helps, signing up through my invite link buys the author an ice cream 🍦',
   testConnection: 'Test connection',
+  rowTest: 'Test',
+  rowTesting: 'Testing…',
+  rowTestOk: 'Reachable',
+  rowTestFailed: 'Unreachable',
+  rowTestUnsupported: 'Not testable',
   jobRegistered: 'Auto job registered',
   jobNotRegistered: 'No auto job',
   connectionSucceeded: 'Connection verified.',
@@ -732,7 +922,6 @@ export const intelligenceSourcesText = {
     'binance-api-updates': 'Binance API Updates',
     'binance-spot-market': 'Binance Spot Market',
     'binance-futures-positioning': 'Binance Futures Positioning',
-    'binance-asset-page': 'Binance Asset Page',
     'okx-latest-announcements': 'OKX Latest Announcements',
     'okx-api-announcements': 'OKX API Announcements',
     'coindesk-rss': 'CoinDesk RSS',
@@ -766,8 +955,8 @@ export const intelligenceSourcesText = {
     'websocket-stream-consumer': 'WebSocket Stream Consumer'
   },
   status: {
-    enabled: 'Enabled',
-    disabled: 'Disabled'
+    applied: 'Applied',
+    notApplied: 'Not applied'
   },
   executionModes: {
     polling: 'Polling',
@@ -783,11 +972,17 @@ export const intelligenceSourcesText = {
   collectionPolicy: {
     title: 'Collection Policy',
     collectionPreset: 'Collection Preset',
+    frequency: 'Frequency',
+    builtinCadence: 'Built-in cadence',
+    builtinCadenceNote: 'This source is collected on a cadence built into the product; it cannot be changed here.',
+    builtinCadenceNoteAria: 'About the built-in cadence',
     manualPresetNote: 'Manual mode does not collect automatically after enable. Use Run Now.',
+    manualPresetNoteAria: 'About the collection preset',
     plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
+    notConfigurableAria: 'About why this row cannot be changed',
     productOwnedNote: 'A product-owned job collects this source; the switch at the end of its row controls it, while the collection preset does not apply.',
     productOwnedNoteAria: 'About this source’s collection policy',
-    includeInSentiment: 'Include In Sentiment',
+    stoppedBadge: 'Read-only for now',
     presets: {
       manual: 'Manual',
       balanced: 'Balanced',
@@ -818,23 +1013,39 @@ export const intelligenceSourcesText = {
     title: 'Source-Specific Options',
     empty: 'No extra visible fields for this source.'
   },
-  retentionReplay: {
-    title: 'Retention And Replay',
-    rawArchiveEnabled: 'Enable Raw Archive',
-    retentionMode: 'Retention Mode',
-    autoReplayAfterParserUpgrade: 'Auto Replay After Parser Upgrade',
-    retentionModes: {
-      compact: 'Compact',
-      balanced: 'Balanced',
-      extended: 'Extended'
-    }
-  },
   unavailableShort: 'The official source is temporarily unavailable',
+  unavailableCountOne: '{count} unavailable source',
+  unavailableCountOther: '{count} unavailable sources',
   unavailableReasonCode: 'Reason code: {code}',
   unavailableReasonCodeAria: 'Reason code',
-  collectionPolicyStopped: 'Sync has stopped; this applies again once it resumes',
+  'health.runAction.infoAria': 'About Run now',
+  collectionPolicyStopped: 'Sync has stopped; it applies again automatically once it resumes — when that happens is unknown',
+  otherSideChanged: 'Something changed here in another place. What you are typing was left alone.',
+  reloadOtherSide: 'Reload',
+  keepEditing: 'Keep editing',
   automaticSyncStopped: 'Automatic sync stopped',
   lastSuccessfulSync: 'Last successful sync: {date}',
+  calendarGroups: {
+    official: 'Official sources',
+    aggregate: 'Aggregators'
+  },
+  businessTabs: { dashboard: 'Dashboard', calendar: 'Calendar', sentiment: 'Sentiment' },
+  businessTabsAria: 'Business settings',
+  businessSubtitle: { modules: '{count} modules', sources: '{count} sources' },
+  dashboardModuleTitles: {
+    policyPath: 'Policy path',
+    marketState: 'Market state'
+  },
+  openSourceConfig: 'Open the settings for {name}',
+  cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
+  credentialRequiredToEnable: 'Set the API key first',
+  credentialRequiredToEnableAria: 'About why this switch cannot be turned on yet',
+  providerPending: 'This source is not wired up yet',
+  providerPendingAria: 'About why this switch cannot be turned on yet',
+  toggleProviderEnable: 'Turn on every capability of {name}',
+  toggleProviderDisable: 'Turn off every capability of {name}',
+  usedInModules: 'Used in modules',
+  detailsBlockTitle: 'Health and collection policy',
   health: {
     title: 'Source Health',
     runtimeStatus: 'Runtime Status',
@@ -843,6 +1054,45 @@ export const intelligenceSourcesText = {
     consecutiveFailures: 'Consecutive Failures',
     lastRunSummary: 'Last Run Summary',
     empty: 'None',
+    todayReading: "Today's reading",
+    todayReadingYes: 'Yes · {time}',
+    todayReadingNo: 'Nothing yet today',
+    noSuccess: 'No successful run yet',
+    unknown: 'Status unreadable for now',
+    unknownReason: 'This kind of source is summarised per provider; there is no run-by-run record',
+    unknownReasonAria: 'About unknown readings',
+    automaticSyncStoppedAria: 'About automatic sync stopping',
+    whyNotCollecting: 'Why it is not collecting',
+    runNowAnswer: 'Can it run now',
+    refreshStale: 'Just ran; the readings have not refreshed yet',
+    reasons: {
+      disabled: 'Not enabled',
+      'missing-credential': 'Missing credential',
+      unavailable: 'The platform cannot reach it',
+      'never-ran': 'No successful run yet',
+      'not-ready': 'Not wired up yet',
+      manual: 'Manual mode: it does not collect on its own',
+      'product-owned': "Collected by the product's own job",
+      collecting: 'Collecting on schedule',
+      unknown: 'Status unreadable for now'
+    },
+    runAction: {
+      run: 'Run now',
+      running: 'Running',
+      runningInfo: 'Running; the button comes back when it finishes',
+      runningInfoAria: 'About Run now',
+      failedToStart: 'The request was not sent. Try again.'
+    },
+    runNow: {
+      yes: 'Yes',
+      unsupported: 'Cannot run',
+      unsupportedReason: 'The platform does not offer a way to run this source from here.',
+      unsupportedReasonAria: 'About why it cannot run',
+      'not-ready': 'Not wired up yet',
+      unavailable: 'It cannot be reached right now; try again after it recovers',
+      'missing-credential': 'Set the credential first',
+      disabled: 'Turn the source on first'
+    },
     statuses: {
       healthy: 'Healthy',
       'multiple-failures': 'Repeated failures',

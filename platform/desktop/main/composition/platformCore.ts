@@ -92,5 +92,5 @@ const taskIpcScheduleValidationOptions = createTaskIpcScheduleValidationOptions(
   timeZone: () => shellTimeZone.get()
 })
 
-  return { platformDataDirectory, settingsStore, shellTimeZone, providerSecretVault, providerStore, appLog, rendererProcessLog, mainWindowHost, taskIpcScheduleValidationOptions, workspaceTestFixtures }
+  return { platformDataDirectory, settingsStore, shellTimeZone, providerSecretVault, providerStore, appLog, rendererProcessLog, mainWindowHost, taskIpcScheduleValidationOptions, workspaceTestFixtures, appVersion }
 }
