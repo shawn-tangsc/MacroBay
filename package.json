@@ -53,6 +53,8 @@
     "seed:analysis-quota": "tsx scripts/seed-analysis-quota.mts",
     "check:async-initial-state": "tsx scripts/check-async-initial-state.mts",
     "check:state-content-ternary": "tsx scripts/check-state-content-ternary.mts",
+    "check:role-switch": "tsx scripts/check-role-switch.mts",
+    "check:tab-role": "tsx scripts/check-tab-role.mts",
     "check:components-ownership": "tsx scripts/check-components-ownership.mts",
     "check:test-budget": "tsx scripts/check-test-budget.mts",
     "dist:mac:x64": "pnpm build && pnpm build:info darwin x64 && electron-builder --mac dmg --x64",
