@@ -9,6 +9,7 @@ type Fakes = Readonly<{
   notes?: Readonly<Record<string, string>>
   health?: Readonly<Record<string, Readonly<{ lastSuccessAt?: string; lastFailureAt?: string }>>>
   throwOn?: string
+  throwOnNote?: string
 }>
 
 function query(fakes: Fakes = {}) {
@@ -18,7 +19,10 @@ function query(fakes: Fakes = {}) {
       return fakes.profiles?.[sourceId] ?? { enabled: false, credentialRef: null }
     },
     hasCredential: async credentialRef => fakes.credentials?.[credentialRef] === true,
-    readNote: key => fakes.notes?.[key],
+    readNote: key => {
+      if (fakes.throwOnNote === key) throw new Error('notes-unavailable')
+      return fakes.notes?.[key]
+    },
     readHealth: sourceId => fakes.health?.[sourceId] ?? {}
   })
 }
@@ -91,5 +95,24 @@ describe('dashboard feed status query', () => {
     }).status()
     expect(status[0]).toMatchObject({ sourceId: 'realmarketapi-market', enabled: false, hasCredential: false })
     expect(status[1]).toMatchObject({ sourceId: 'twelve-data-market', enabled: true, hasCredential: true })
+  })
+})
+
+
+describe('a notes read that throws', () => {
+  it('degrades only that source, never the whole table', async () => {
+    // 真机塌表的真因：`readNote` 没有 per-source 保护，单条备注读失败会让 status() 整个 reject。
+    const status = await query({
+      profiles: { ...keyed('realmarketapi-market'), ...keyed('twelve-data-market') },
+      notes: { 'realmarketapi.lastOutcome': 'unavailable:credential-rejected' },
+      throwOnNote: 'realmarketapi.lastOutcome'
+    }).status()
+    // 整表仍可用，且覆盖契约里的每一个源。
+    expect(status.map(source => source.sourceId)).toEqual([...dashboardFeedStatusPublicPolicy.sourceIds])
+    // 受影响的那一源没有失败码（读不到就是读不到），其它源照旧。
+    const broken = status.find(source => source.sourceId === 'realmarketapi-market')!
+    expect(broken.failureCode).toBeUndefined()
+    const other = status.find(source => source.sourceId === 'twelve-data-market')!
+    expect(other).toBeDefined()
   })
 })
