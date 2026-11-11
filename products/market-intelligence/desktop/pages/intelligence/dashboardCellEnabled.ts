@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { CrossAssetStatusId } from '../../features/industry/cross-asset/crossAssetStatusRegistry'
 import { DASHBOARD_SOURCE_MODULES, cellIdOf } from '../../settings/intelligence-sources/dashboardSourceModules'
+import { subscribeSettingsRevision } from '../../shared/events/settingsRevision'
 
 /**
  * 看板按「格级启用」读不读、画不画。
@@ -186,20 +187,35 @@ export function useDashboardCellEnabled(input: { io?: CellEnabledIo }): Dashboar
       return
     }
     let active = true
-    // 启用与选源是同一份文档的两块：一起读，一起就绪；任一读失败沿用上一次（第一次失败 = 全启用 + 全默认源）。
-    void Promise.all([
-      io.read(),
-      io.readSelection === undefined ? Promise.resolve(lastSelection.current) : io.readSelection()
-    ]).then(([saved, selections]) => {
-      if (!active) return
-      lastKnown.current = saved
-      lastSelection.current = selections
-      setState({ ready: true, cells: saved, selections })
-    }).catch(() => {
-      if (!active) return
-      setState({ ready: true, cells: lastKnown.current, selections: lastSelection.current })
-    })
-    return () => { active = false }
+    /** 同一时刻只跑一轮读；读的过程中又来信号 → 记一个排队，本轮结束后补读一次。 */
+    let inFlight = false
+    let queued = false
+    const readState = (): void => {
+      if (inFlight) { queued = true; return }
+      inFlight = true
+      // 启用与选源是同一份文档的两块：一起读，一起就绪；任一读失败沿用上一次（第一次失败 = 全启用 + 全默认源）。
+      void Promise.all([
+        io.read(),
+        io.readSelection === undefined ? Promise.resolve(lastSelection.current) : io.readSelection()
+      ]).then(([saved, selections]) => {
+        if (active) {
+          lastKnown.current = saved
+          lastSelection.current = selections
+          setState({ ready: true, cells: saved, selections })
+        }
+      }).catch(() => {
+        // 重读失败沿用上一次：一次读失败不许把整屏关掉。
+        if (active) setState({ ready: true, cells: lastKnown.current, selections: lastSelection.current })
+      }).finally(() => {
+        inFlight = false
+        if (queued && active) { queued = false; readState() }
+      })
+    }
+    readState()
+    // 同窗口里设置改了（抽屉里开关格/选源）：重读一次。不轮询、不看 visibilitychange，
+    // 发信号的是设置侧（`C8`），这里是唯一的重读入口。
+    const unsubscribe = subscribeSettingsRevision('sources', () => { readState() })
+    return () => { active = false; unsubscribe() }
   }, [input.io])
   return state
 }

@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
-import { dashboardCellId, QUOTES_STATUS_ROW_CELLS, type CellEnabledIo } from './dashboardCellEnabled'
+import { dashboardCellId, QUOTES_STATUS_ROW_CELLS, useDashboardCellEnabled, type CellEnabledIo } from './dashboardCellEnabled'
+import { notifySettingsRevision } from '../../shared/events/settingsRevision'
 import { dashboardFeedStatusPublicPolicy } from '../../../contracts/macro/dashboardFeedStatusContracts'
 
 const asOf = '2026-08-05T00:00:00.000Z'
@@ -166,5 +167,60 @@ describe('policy path keeps one placement in every state', () => {
     expect(slot.textContent).toContain('来源没有启用')
     expect(container.textContent).not.toContain('来源没有启用')
     slot.remove()
+  })
+})
+
+
+describe('格级启用表跟随同窗口的设置变更', () => {
+  function renderHook(io: CellEnabledIo) {
+    const seen: Array<ReturnType<typeof useDashboardCellEnabled>> = []
+    function Probe(): null {
+      seen.push(useDashboardCellEnabled({ io }))
+      return null
+    }
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    act(() => { root!.render(<Probe />) })
+    return seen
+  }
+
+  it('re-reads after a sources revision from another surface', async () => {
+    let cells: Record<string, boolean> = { [dashboardCellId('policy-path', 'probability')]: false }
+    const reads: string[] = []
+    const io: CellEnabledIo = {
+      read: async () => { reads.push('read'); return cells },
+      readSelection: async () => ({})
+    }
+    const seen = renderHook(io)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(seen.at(-1)!.cells[dashboardCellId('policy-path', 'probability')]).toBe(false)
+
+    // 抽屉里打开那一格 → 发 sources 信号 → 看板这一层重读，不再停在旧的 false。
+    cells = {}
+    act(() => notifySettingsRevision('sources', 'config-drawer'))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(seen.at(-1)!.cells[dashboardCellId('policy-path', 'probability')]).toBeUndefined()
+    expect(reads.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('never runs two reads at once (one round in flight, the rest coalesce)', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    let release: (() => void) | undefined
+    const io: CellEnabledIo = {
+      read: () => new Promise<Record<string, boolean>>((resolve) => {
+        inFlight += 1
+        maxInFlight = Math.max(maxInFlight, inFlight)
+        release = () => { inFlight -= 1; resolve({}) }
+      }),
+      readSelection: async () => ({})
+    }
+    renderHook(io)
+    await act(async () => { await Promise.resolve() })
+    act(() => { notifySettingsRevision('sources', 'a'); notifySettingsRevision('sources', 'b') })
+    expect(maxInFlight).toBe(1)
+    await act(async () => { release?.(); await Promise.resolve(); await Promise.resolve() })
+    expect(maxInFlight).toBe(1)
   })
 })
