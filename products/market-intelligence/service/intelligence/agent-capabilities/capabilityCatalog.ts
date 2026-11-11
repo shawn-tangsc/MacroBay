@@ -465,7 +465,7 @@ export const intelligenceAgentCapabilities = [
     kind: 'handoff',
     title: { 'zh-CN': '发起凭据填写', 'en-US': 'Request source credential' },
     description:
-      '当某个情报源需要凭据而用户尚未填写时，返回设置页的填写入口，而不是索要或接收密钥。输出只有 handoff、sourceId、settingsDrawer 与需要填写的字段名（如 apiKey；无需凭据的源为空数组）。限制：不返回、不回显、不校验任何密钥、掩码或历史；用户填完后应改用 test-connection 验证，绝不要让用户在对话里粘贴 key。',
+      '当某个情报源需要凭据而用户尚未填写时，返回产品配置抽屉「数据源」屏里那个源的填写入口，而不是索要或接收密钥。输出只有 handoff、sourceId、settingsDrawer 与需要填写的字段名（如 apiKey；无需凭据的源为空数组）。限制：不返回、不回显、不校验任何密钥、掩码或历史；用户填完后应改用 test-connection 验证，绝不要让用户在对话里粘贴 key。',
     inputSchema: requestSourceCredentialInputSchema,
     outputSchema: requestSourceCredentialOutputSchema,
     handlerId: 'market-intelligence.request-source-credential',
