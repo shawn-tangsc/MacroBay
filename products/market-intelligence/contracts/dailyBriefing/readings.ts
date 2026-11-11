@@ -7,7 +7,7 @@
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
 export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24' | 'daily-briefing.v25'
 
 /** The four readings, and whether each source could answer at generation time. */
@@ -328,6 +328,18 @@ export type BriefingMacroItem = Readonly<{
    */
   lifecycleState?: 'scheduled' | 'released' | 'cancelled'
   /**
+   * 官方只公布了日期、没有公布时刻（`MI-1-R39` §4，schema 16）。
+   *
+   * 这一对字段出现时，`scheduledAt` **只是内部排序/分栏用的日期位**，任何界面都不许把它印成
+   * 时刻：正文只画 `releaseDate` + 「发布时间未公布」（与日历详情同一个词）。惯例推算出来的时刻
+   * 不是来源公布的时刻，把它当发布时间印出来正是这条缺陷。
+   *
+   * 老文档没有这两个字段 = `scheduledAt` 就是来源公布的时刻，照旧显示。
+   */
+  releaseTimeNotPublished?: true
+  /** 与 `releaseTimeNotPublished` 成对：来源公布的**日期**（`YYYY-MM-DD`，不是瞬时）。 */
+  releaseDate?: string
+  /**
    * 这个实际值是从哪儿来的（`02` v2.128）：日历源就是 `calendar`，联网取到的是 `web`。
    * 只用于在值后面标「（网页）」——**来源标注不是可信度话术**，四个禁用词照旧命中 0。
    * 老文档没有这个字段 = 全部来自日历，渲染不补任何后缀。
@@ -404,6 +416,15 @@ export type BriefingNextItem = Readonly<{
   countryName?: string
   consensus?: string
   previous?: string
+  /**
+   * 官方只公布了日期、没有公布时刻（`MI-1-R39` §4，schema 16）。
+   *
+   * 与 `BriefingMacroItem` 同一对字段、同一条规矩：`at` 只是排序位，正文只画 `releaseDate` +
+   * 「发布时间未公布」，不许把 `at` 印成时刻。老文档没有这一对 = `at` 就是来源公布的时刻。
+   */
+  releaseTimeNotPublished?: true
+  /** 与 `releaseTimeNotPublished` 成对：来源公布的**日期**（`YYYY-MM-DD`，不是瞬时）。 */
+  releaseDate?: string
   /**
    * Why this event ranks where it does for a crypto reader. Optional because editions stored before
    * the ranking existed carry no relevance, and those must keep rendering.

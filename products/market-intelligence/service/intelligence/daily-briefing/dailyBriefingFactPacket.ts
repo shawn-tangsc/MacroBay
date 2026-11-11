@@ -26,7 +26,15 @@ export type DailyBriefingCalendarEvent = Readonly<{
   titleKey?: string
   countryCode?: string
   countryName?: string
+  /**
+   * 排序/分栏用的位置。官方公布了时刻时就是那个时刻；只公布了日期时是那一天的 UTC 零点——
+   * 一律配 `releaseTimeNotPublished`，**任何界面都不许把它印成时刻**（`MI-1-R39` §4）。
+   */
   scheduledAt: string
+  /** 官方只公布了日期、没有公布时刻：印刷只给 `releaseDate` + 「发布时间未公布」。 */
+  releaseTimeNotPublished?: true
+  /** 与 `releaseTimeNotPublished` 成对：来源公布的日期（`YYYY-MM-DD`，不是瞬时）。 */
+  releaseDate?: string
   importance: 'high' | 'medium' | 'low'
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
   category: 'economic-indicator' | 'financial-event' | 'central-bank-activity'

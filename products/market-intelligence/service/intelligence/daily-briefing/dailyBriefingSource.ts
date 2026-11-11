@@ -16,6 +16,7 @@ import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from
 import { DAY_MS, HOUR_MS, safe, safeSync } from './dailyBriefingSafeRead'
 import { briefingMarketKnowledgeAt, logBriefingMarketRead, readBriefingMarketSnapshot } from './dailyBriefMarketReading'
 import { readCalendar, readPriorConclusions } from './dailyBriefingRenderLocalize'
+import { briefingEventInWindow } from './dailyBriefingDocumentMacro'
 import { lookupMissingMacroValues, mergeMacroValues } from './dailyBriefingMacroValueLookup'
 import { ensureCalendarFreshForRun } from './dailyBriefingCalendarCatchUp'
 import { readNewsSourceIssues } from './dailyBriefingSourceIssues'
@@ -183,7 +184,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         readPriorConclusions(deps, facts.timeline, facts.asOf, facts.windowStart, locale),
         readCalendar(deps, facts.asOf, locale, facts.enabled.calendar)
       ])
-      const refreshed = await refreshMissingMacroValues(deps, facts, locale, calendar)
+      const refreshed = await refreshMissingMacroValues(deps, facts, locale, calendar, timeZone)
       const counts = refreshed.counts
       const webKeys = refreshed.webKeys
       const conflicts = refreshed.conflicts
@@ -211,7 +212,8 @@ async function refreshMissingMacroValues(
   deps: DailyBriefingSourceDeps,
   facts: DailyBriefingFactSnapshot,
   locale: DailyBriefingLocale,
-  calendar: DailyBriefingFactPacket['calendar']
+  calendar: DailyBriefingFactPacket['calendar'],
+  timeZone: string
 ): Promise<Readonly<{
   calendar: DailyBriefingFactPacket['calendar']
   counts?: Readonly<{ calendarCalls: number; webCalls: number }>
@@ -219,12 +221,10 @@ async function refreshMissingMacroValues(
   conflicts?: readonly string[]
 }>> {
   if (calendar.state !== 'available' || calendar.events.length === 0) return { calendar }
-  const start = Date.parse(facts.windowStart)
-  const end = Date.parse(facts.windowEnd)
-  const inWindow = calendar.events.filter((event) => {
-    const at = Date.parse(event.scheduledAt)
-    return Number.isFinite(at) && at >= start && at < end
-  })
+  // 时刻没公布的事件只有日期位：归属与 `highImpactEventsInWindow` 同一份判断（按日期判），
+  // 否则它们在回查这一步就被整条丢掉，值再也补不回来。
+  const window = { start: facts.windowStart, end: facts.windowEnd, timeZone }
+  const inWindow = calendar.events.filter((event) => briefingEventInWindow(event, window))
   if (inWindow.length === 0) return { calendar }
   const candidates = inWindow.map((event) => ({
     eventKey: event.eventKey,

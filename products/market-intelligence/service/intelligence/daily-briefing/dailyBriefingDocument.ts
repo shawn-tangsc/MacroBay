@@ -303,6 +303,12 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
     // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
     .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))
     .filter((event) => {
+      // 时刻没公布的事件只有日期：按**日期**分栏，不拿日期位当瞬时（它的零点可能早于截止时刻）。
+      // 今天还没发生的那一场归这里；同日已发生/已取消的归「过去 24 小时」，两栏不重叠。
+      if (event.releaseTimeNotPublished) {
+        const day = event.releaseDate
+        return day !== undefined && day >= today && day <= horizon
+      }
       const at = Date.parse(event.scheduledAt)
       const day = localDate(event.scheduledAt, packet.timeZone)
       return Number.isFinite(at) && at > Date.parse(packet.windowEnd) && day <= horizon
@@ -312,6 +318,9 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
       title: event.title,
       ...(event.titleKey ? { titleKey: event.titleKey } : {}),
       at: event.scheduledAt,
+      ...(event.releaseTimeNotPublished && event.releaseDate
+        ? { releaseTimeNotPublished: true as const, releaseDate: event.releaseDate }
+        : {}),
       importance: event.importance,
       category: event.category,
       ...(event.countryCode ? { countryCode: event.countryCode } : {}),

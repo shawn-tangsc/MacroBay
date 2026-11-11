@@ -238,13 +238,44 @@ describe('daily briefing source', () => {
     expect(packet.readings.fearGreed.state).toBe('available')
     expect(packet.calendar.state).toBe('available')
     expect(packet.calendar.events.map((event) => event.eventKey).sort()).toEqual(['MC.FOMC', 'US.CPI'])
+    // 这条事件只有惯例推算的时刻（`convention-default`）：事实包里**不许出现那个时刻**，
+    // 只留一个日期位给排序，另带「时刻未公布」的标记（`MI-1-R39` §4）。
     expect(packet.calendar.events.find((event) => event.eventKey === 'US.CPI')).toMatchObject({
-      title: 'cpi', titleKey: 'cpi', category: 'economic-indicator', scheduledAt: '2026-10-29T12:30:00.000Z', surprise: { direction: 'beat', unit: 'pp' }
+      title: 'cpi', titleKey: 'cpi', category: 'economic-indicator', scheduledAt: '2026-10-29T00:00:00.000Z',
+      releaseTimeNotPublished: true, releaseDate: '2026-10-29', surprise: { direction: 'beat', unit: 'pp' }
     })
     expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')).toMatchObject({
       title: 'FOMC rate decision', lifecycleState: 'scheduled'
     })
     expect(packet.enabled).toMatchObject({ fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true })
+  })
+
+  it('drops the convention instant even when the calendar view carries it as scheduledAt', async () => {
+    // 生产形态就是这个：`resolveDisplayedReleaseTime` 把惯例时刻**写进** `scheduledAt`，同时把
+    // `releaseTimeSource` 标成 `convention-default`。只造 `scheduledAt: undefined` 的夹具会漏掉这条真路径。
+    const convention = { ...officialEvent, scheduledAt: '2026-10-29T12:30:00.000Z' }
+    const base = deps()
+    const calendar = (base.publicQuery as unknown as { queryMacroEconomicCalendarMonth: () => Promise<unknown> })
+    calendar.queryMacroEconomicCalendarMonth = async () => ({ state: 'available', asOf, events: [convention] })
+    const packet = await makeSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const row = packet.calendar.events.find((event) => event.eventKey === 'US.CPI')!
+    expect(row.releaseTimeNotPublished).toBe(true)
+    expect(row.releaseDate).toBe('2026-10-29')
+    // 排序位是日期位，不是那个惯例时刻——`12:30` 一个字都不许留在包里。
+    expect(row.scheduledAt).toBe('2026-10-29T00:00:00.000Z')
+    expect(JSON.stringify(row)).not.toContain('12:30')
+  })
+
+  it('keeps the time the source actually published, with no not-published marker', async () => {
+    const official = { ...officialEvent, scheduledAt: '2026-10-29T12:30:00.000Z', releaseTimeSource: 'official' as const }
+    const base = deps()
+    const calendar = (base.publicQuery as unknown as { queryMacroEconomicCalendarMonth: () => Promise<unknown> })
+    calendar.queryMacroEconomicCalendarMonth = async () => ({ state: 'available', asOf, events: [official] })
+    const packet = await makeSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const row = packet.calendar.events.find((event) => event.eventKey === 'US.CPI')!
+    expect(row.scheduledAt).toBe('2026-10-29T12:30:00.000Z')
+    expect(row).not.toHaveProperty('releaseTimeNotPublished')
+    expect(row).not.toHaveProperty('releaseDate')
   })
 
   it('reads the configured statistical window instead of assuming 24 hours', async () => {

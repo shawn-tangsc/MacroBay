@@ -107,9 +107,10 @@ describe('daily briefing document guard at schema 13', () => {
 
   it('accepts the current schema row and refuses only a version past it', () => {
     // 文档落库后必须被自己读回来：守卫只拒绝「比现在更新」的版本。
-    const current = { ...document(), schemaVersion: 15 as const, policyVersion: 'daily-briefing.v24' as const }
+    // 16 起宏观/「接下来」两栏可带「官方没公布发布时刻」的日期与标记。
+    const current = { ...document(), schemaVersion: 16 as const, policyVersion: 'daily-briefing.v24' as const }
     expect(isDocument(current)).toBe(true)
-    expect(isDocument({ ...current, schemaVersion: 16 as unknown as 15 })).toBe(false)
+    expect(isDocument({ ...current, schemaVersion: 17 as unknown as 16 })).toBe(false)
   })
 
   it('carries the news-source list a schema-15 edition froze, and refuses an unknown state', () => {
@@ -119,6 +120,16 @@ describe('daily briefing document guard at schema 13', () => {
     expect(isDocument(withSources)).toBe(true)
     // 状态是闭集：猜出来的第三种状态一律拒绝，不让它混进来。
     expect(isDocument({ ...withSources, news: { ...withSources.news, sources: [{ ...silent, state: 'quiet' }] } })).toBe(false)
+  })
+
+  it('carries the not-published release time as a date plus a marker, and refuses half of the pair', () => {
+    // 16 起：官方没公布时刻时，`scheduledAt` 只是排序位，正文印 `releaseDate` + 那一个词。
+    // 只带标记不带日期（或反过来）就是读不懂的文档——宁可整份拒，也不许猜一个日期去印。
+    const base = document()
+    const marked = { ...base.news.macro[0], eventKey: 'US.CPI', title: 'CPI', scheduledAt: '2026-10-29T00:00:00.000Z', releaseTimeNotPublished: true as const, releaseDate: '2026-10-29', importance: 'high' as const, surprise: { direction: 'consensus-unavailable' as const } }
+    expect(isDocument({ ...base, news: { ...base.news, macro: [marked] } })).toBe(true)
+    expect(isDocument({ ...base, news: { ...base.news, macro: [{ ...marked, releaseDate: undefined }] } })).toBe(false)
+    expect(isDocument({ ...base, news: { ...base.news, macro: [{ ...marked, releaseTimeNotPublished: 'yes' as unknown as true }] } })).toBe(false)
   })
 
   it('ignores unknown fields instead of rejecting the whole document', () => {

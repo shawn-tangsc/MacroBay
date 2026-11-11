@@ -18,7 +18,7 @@ import {
 
 function isDocument(value: unknown): value is DailyBriefingDocument {
   if (!isRecord(value) || !isDailyBriefingDocumentWithinBudget(value)) return false
-  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7 && value.schemaVersion !== 8 && value.schemaVersion !== 9 && value.schemaVersion !== 10 && value.schemaVersion !== 11 && value.schemaVersion !== 12 && value.schemaVersion !== 13 && value.schemaVersion !== 14 && value.schemaVersion !== 15) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18' && value.policyVersion !== 'daily-briefing.v19' && value.policyVersion !== 'daily-briefing.v20' && value.policyVersion !== 'daily-briefing.v21' && value.policyVersion !== 'daily-briefing.v22' && value.policyVersion !== 'daily-briefing.v23' && value.policyVersion !== 'daily-briefing.v24' && value.policyVersion !== 'daily-briefing.v25')) return false
+  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7 && value.schemaVersion !== 8 && value.schemaVersion !== 9 && value.schemaVersion !== 10 && value.schemaVersion !== 11 && value.schemaVersion !== 12 && value.schemaVersion !== 13 && value.schemaVersion !== 14 && value.schemaVersion !== 15 && value.schemaVersion !== 16) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18' && value.policyVersion !== 'daily-briefing.v19' && value.policyVersion !== 'daily-briefing.v20' && value.policyVersion !== 'daily-briefing.v21' && value.policyVersion !== 'daily-briefing.v22' && value.policyVersion !== 'daily-briefing.v23' && value.policyVersion !== 'daily-briefing.v24' && value.policyVersion !== 'daily-briefing.v25')) return false
   if (!isEdition(value.edition, value.schemaVersion) || !isStatus(value.status) || !isLede(value.lede)) return false
   if (!isNews(value.news) || !isData(value.data) || !isConclusionOrNull(value.conclusion)) return false
   if (!isNext(value.next) || !Array.isArray(value.citations) || !isProvenance(value.provenance)) return false
@@ -103,9 +103,21 @@ function isNewsItem(value: unknown): boolean {
 function isMacroItem(value: unknown): boolean {
   if (!isRecord(value) || !isText(value.eventKey) || !isText(value.title) || !isText(value.scheduledAt) ||
     !['high', 'medium', 'low'].includes(String(value.importance)) || !isRecord(value.surprise)) return false
+  // Schema 16：官方没公布时刻时，`scheduledAt` 只是排序位，正文印这一对（日期 + 标记）。
+  if (!isReleaseTimeNotPublished(value)) return false
   // Schema 14 carries the event's own lifecycle; absent on older rows, never a fourth state.
   return value.lifecycleState === undefined ||
     value.lifecycleState === 'scheduled' || value.lifecycleState === 'released' || value.lifecycleState === 'cancelled'
+}
+
+/**
+ * 「官方没公布发布时刻」那一对字段：要么都没有（老文档 = 有时刻），要么标记为 `true` 且带一个
+ * `YYYY-MM-DD` 日期。只带一半就是读不懂的文档——不许猜一个日期去印，整份拒。
+ */
+function isReleaseTimeNotPublished(value: Record<string, unknown>): boolean {
+  if (value.releaseTimeNotPublished === undefined && value.releaseDate === undefined) return true
+  return value.releaseTimeNotPublished === true &&
+    isText(value.releaseDate) && dailyBriefingPolicy.editionDatePattern.test(value.releaseDate)
 }
 
 function isData(value: unknown): boolean {
@@ -155,6 +167,8 @@ function isNextItem(value: unknown): boolean {
   if (value.countryName !== undefined && !isText(value.countryName)) return false
   if (value.consensus !== undefined && !isText(value.consensus)) return false
   if (value.previous !== undefined && !isText(value.previous)) return false
+  // 同一对字段、同一条规矩（schema 16）。
+  if (!isReleaseTimeNotPublished(value)) return false
   if (value.why !== undefined && !isText(value.why)) return false
   if (value.watch !== undefined) {
     if (!Array.isArray(value.watch) || value.watch.length > 3) return false
