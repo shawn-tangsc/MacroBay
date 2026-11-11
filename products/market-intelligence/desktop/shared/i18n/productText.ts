@@ -910,7 +910,8 @@ mi: miText['zh-CN'],
              */
             cellState: {
               notEnabled: '数据未被启用',
-              sourceUnknown: '暂时读不到'
+              sourceUnknown: '暂时读不到',
+              sourceStale: '来源状态：上一次成功的读数 · {time}'
             },
             dailyBriefing: dailyBriefingText['zh-CN']
           },
@@ -2335,7 +2336,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             /** Two policy verdicts; 读不到 stays each card's own sentence. */
             cellState: {
               notEnabled: 'Data is not enabled',
-              sourceUnknown: 'Status is temporarily unavailable'
+              sourceUnknown: 'Status is temporarily unavailable',
+              sourceStale: 'Source status: last successful reading · {time}'
             },
             // One row per feed in Source status. `{tag}` is the panel's own synthetic/proxy label.
             dailyBriefing: dailyBriefingText['en-US']

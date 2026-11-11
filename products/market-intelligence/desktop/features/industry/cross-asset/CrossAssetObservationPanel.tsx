@@ -128,7 +128,7 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>
 }
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, cellStateLabels, crossAssetReadingEnabled = true }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
@@ -154,6 +154,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   rowStates?: Readonly<Partial<Record<CrossAssetStatusId, CellStateKind>>>
   /** 三态那两句由宿主传（跨资产自己的文案表里没有它们，别在这里造第二份）。 */
   cellStateLabels?: Readonly<{ disabled: string; unreadable: string }>
+  /** 源状态表是上一次成功的读数（读失败但有 last-good）；只作短状态词，说明不铺正文。 */
+  sourceStatusStale?: string
   /** 三行行情（索引 / BTC / ETH）与图表同读一份跨资产快照：三格都关掉时整路不发请求。 */
   crossAssetReadingEnabled?: boolean
   /** The calendar, read by month: it is the only place this panel learns what happened and when. */
@@ -311,7 +313,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
-          <thead><tr><th>{text.statusColumns.asset}</th><th>{text.statusColumns.latest}</th>
+          <thead><tr><th>{text.statusColumns.asset}{sourceStatusStale === undefined ? null : <small className="mi-cross-asset__stale" data-source-status-stale>{sourceStatusStale}</small>}</th><th>{text.statusColumns.latest}</th>
           {crossAssetWindows.map(window => <th key={window}>{text.statusColumns[window]}</th>)}</tr></thead>
           {allRowsUnreadable
             ? <tbody data-status-section="unavailable"><tr><td colSpan={2 + crossAssetWindows.length}>

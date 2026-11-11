@@ -51,6 +51,8 @@ async function render(input: Readonly<{
   hideStatusRows?: readonly ('index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate')[]
   /** 每行的三态；配合 `cellStateLabels` 才生效。 */
   rowStates?: Partial<Record<'index' | 'btc' | 'eth' | 'dxy' | 'gold' | 'us10y' | 'realRate', 'disabled' | 'unreadable'>>
+  /** 源状态表沿用了上一次成功的读数时的短标注。 */
+  sourceStatusStale?: string
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -81,7 +83,8 @@ async function render(input: Readonly<{
     ...(input.rowStates === undefined ? {} : {
       rowStates: input.rowStates,
       cellStateLabels: { disabled: '数据未被启用', unreadable: '暂时读不到' }
-    })
+    }),
+    ...(input.sourceStatusStale === undefined ? {} : { sourceStatusStale: input.sourceStatusStale })
   })))
   return { host, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
 }
@@ -269,6 +272,23 @@ describe('市场状态表的三态粒度（界面设计 2026-11-11）', () => {
       expect(page.host.querySelectorAll('tfoot button')).toHaveLength(1)
       // 其它行照常是数据行（有窗口单元格）。
       expect(page.host.querySelectorAll('tr[data-status-row="btc"] [data-asset-return]').length).toBeGreaterThan(0)
+    } finally { await page.unmount() }
+  })
+})
+
+
+describe('来源状态表沿用上一次读数时的标注', () => {
+  it('shows the short stale label once, and rows keep reading (no per-row unreadable)', async () => {
+    const page = await render({
+      nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs),
+      sourceStatusStale: '来源状态：上一次成功的读数 · 08:00'
+    })
+    try {
+      expect(page.host.querySelectorAll('[data-source-status-stale]')).toHaveLength(1)
+      expect(page.host.textContent).toContain('上一次成功的读数')
+      // 行照常出数，没有逐行「读不到」。
+      expect(page.host.querySelectorAll('tr[data-source-state]')).toHaveLength(0)
+      expect(page.host.querySelector('[data-status-row="btc"]')).not.toBeNull()
     } finally { await page.unmount() }
   })
 })

@@ -152,6 +152,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   openSettingsRequest?: number
 }): React.ReactElement {
   const resolveProductKey = useProductTextKey()
+  const formatTime = useShellTimeFormat()
   // 格级启用：先算出「哪些格读、哪些格不读」，再决定要不要调各 client（关掉的格一次请求都不发）。
   const cellState = useDashboardCellEnabled({ io: cellEnabledIo })
   const readGates = resolveDashboardReadGates(cellState.cells)
@@ -163,8 +164,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     client: readsReady ? dashboardFeedStatusClient : undefined,
     crossAssetClient: readsReady && readGates.crossAsset ? crossAssetClient : undefined
   })
+  // 失败但有上一次成功的表：继续用它判（不把七行打成「暂时读不到」），并给表格一个「上次读数」标记；
+  // 只有**从未成功过**（没有 last-good）才让整表走 StateView。
   const sourceEnabled: SourceEnabledMap | undefined =
-    feedView.feedState === 'ready' && feedView.feed?.state === 'available'
+    feedView.feed?.state === 'available'
       ? Object.fromEntries(feedView.feed.sources.map(source => [source.sourceId, source.enabled]))
       : undefined
   const decisionsUsable = feedView.feedState !== 'loading'
@@ -381,6 +384,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {crossAssetClient ? <CrossAssetObservationPanel
         client={crossAssetClient}
         rowStates={rowStates}
+        sourceStatusStale={feedView.feedStale && feedView.feedLastSuccessAtMs !== undefined
+          ? text.cellState.sourceStale.replace('{time}', formatTime(new Date(feedView.feedLastSuccessAtMs).toISOString()))
+          : undefined}
         cellStateLabels={cellStateLabels}
         crossAssetReadingEnabled={anyReadable(['quotes', 'ndx'], ['quotes', 'btc'], ['quotes', 'eth'])}
         macroSnapshot={macroView.snapshot}
