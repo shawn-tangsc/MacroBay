@@ -842,6 +842,28 @@ export class ChannelManagementRepository {
   }
 
   /**
+   * 释放一条频道的运行时占用并作废代际（停用/被挤出/启动失败都用它）。
+   *
+   * 占用行（`channel_telegram_lifecycle_operations`）是「谁正在操作这条频道」的锁：只在操作期间有效。
+   * 以前只在成功路径上删，于是被单频道不变量挤出的频道留着一条 `purpose=enable` 的行，
+   * 下一次启用被自己那条旧锁挡住——现场表现是所有频道都报 `adapter-runtime-start-failed`。
+   */
+  releaseLifecycleOwnerAndFence(channelId: string, now: string): void {
+    this.database.transact(() => {
+      this.invalidateLifecycleOwner(channelId)
+      this.fence(channelId, now)
+    })
+  }
+
+  /** 现在是谁占着这条频道（诊断用）：没有占用行返回 `null`。 */
+  describeLifecycleOwner(channelId: string): { purpose: string; since: string } | null {
+    const row = this.database.connection.prepare(
+      `select purpose, updated_at from channel_telegram_lifecycle_operations where channel_id = ? limit 1`
+    ).get(channelId) as { purpose: string; updated_at: string } | undefined
+    return row ? { purpose: row.purpose, since: row.updated_at } : null
+  }
+
+  /**
    * 启动期围栏：把运行代际作废，**但保留读者的开启意图**（`requested_enabled` 不动，状态回 `ready`）。
    *
    * 为什么不能清意图：已实现、只是还没有验收证据的适配器，靠「启用时现场自检通过」放行；
@@ -857,6 +879,8 @@ export class ChannelManagementRepository {
                updated_at = ?
          where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state <> 'deleting' and requested_enabled = 1`
       ).run(now, channelId).changes
+      // 占用行必须一起删：它只在「这条频道正在被谁操作」期间有效，围栏之后它只会挡住下一次启用。
+      this.invalidateLifecycleOwner(channelId)
       this.fence(channelId, now)
       return changed === 1
     })
