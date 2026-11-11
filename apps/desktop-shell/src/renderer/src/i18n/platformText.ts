@@ -1669,7 +1669,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         telegram: '通过 Telegram 机器人用长轮询接收和回复消息。',
         feishu: '通过飞书机器人接收和回复消息。',
         qq: '通过 QQ 机器人接收和回复消息。',
-        wechat: '通过微信机器人接收和回复消息。',
+        wechat: '这一版还接不了：微信没有可对接的对外协议。',
         discord: '通过 Discord 机器人接收和回复消息。',
         slack: '通过 Slack 机器人接收和回复消息。'
       },
@@ -3058,7 +3058,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         telegram: 'Receive and reply through a Telegram bot using long polling.',
         feishu: 'Receive and reply through a Lark bot.',
         qq: 'Receive and reply through a QQ bot.',
-        wechat: 'Receive and reply through a WeChat bot.',
+        wechat: 'Not available in this version: WeChat has no external protocol we can integrate with.',
         discord: 'Receive and reply through a Discord bot.',
         slack: 'Receive and reply through a Slack bot.'
       },
