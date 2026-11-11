@@ -23,6 +23,10 @@
 | Buttons | primary / secondary / icon / inline text / destructive — one tier per action | a hand-drawn pill, a 28px icon button, red only on hover | **human review** |
 | Inline text action | `.text-action` | a bordered box inside a sentence | **human review** |
 | Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
+| Card-level action | **on the card title row, right side**: one action (enable source / retry) whenever any source the card depends on is unconfigured or unreadable; the body only names the missing cell | a second copy of that action inside the card; two entries for one action on a screen | **human review** (criterion below) |
+
+**A card-level action lives only on the title row (2026-11-11).** If any source a card depends on is unconfigured or unreadable, the action (enable source / retry) sits on the **right of the card title row**; the body only names the missing cell and never repeats the action. **One action, one entry per screen.**
+Criterion: any source unconfigured → the title row has it; everything configured → no action; count of that action on the screen = 1.
 
 ## 2. Type and weight
 
