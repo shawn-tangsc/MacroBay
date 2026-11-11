@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { productText } from '../../shared/i18n/productText'
 import { settingRegistry } from '../../shared/settings/registry'
 import { ProviderDetail, type ProviderDetailLabels } from './ProviderDetail'
-import { visibleSourceRows } from './sourceSettingRows'
+import { SOURCE_ROW_TEMPLATES, visibleSourceRows } from './sourceSettingRows'
 import type { ProviderView, SourceView } from '../../../service/intelligence/application/sourceProjection'
 
 /**
@@ -124,7 +124,10 @@ function renderedKeys(container: HTMLElement): string[] {
 describe('the source screen renders menu 1 from the declarations (C2)', () => {
   it('renders the declared rows, in declaration order, and hides what visibleWhen hides', async () => {
     const container = await mount()
+    // 采集预设已挪到「采集与数据」每个源项下面（用户 2026-11-12，`takeover`）：
+    // 详情只画剩下的声明行（启用 / 纳入情绪），预设那行由 `BusinessSettingsView` 渲染同一个模板。
     const expected = provider().sources.flatMap((entry) => visibleSourceRows(viewOf(entry))
+      .filter((row) => row.template !== SOURCE_ROW_TEMPLATES.collectionPreset)
       .map((row) => row.template.replace('<sourceId>', entry.sourceId)))
 
     // ① 顺序取自声明（先启用、再预设、再情绪），不是页面自己排的；② 不可见的行不出现。
@@ -163,8 +166,9 @@ describe('the source screen renders menu 1 from the declarations (C2)', () => {
       [...container.querySelectorAll('[data-setting-key]')]
         .map((node) => node.getAttribute('data-setting-template'))
     )
+    // 预设模板不再由详情渲染（接管方：`BusinessSettingsView` 每源第二行，见
+    // `BusinessSettingsView.preset.test.tsx` 的「同一个模板」断言）；这里只剩详情这两个。
     expect([...templates].sort()).toEqual([
-      'setting:sources.collection-preset@<sourceId>',
       'setting:sources.enabled@<sourceId>',
       'setting:sources.include-in-sentiment@<sourceId>'
     ])

@@ -181,13 +181,14 @@ describe('sources settings page states', () => {
     await act(async () => { advanced?.click() })
     expect(advanced?.getAttribute('aria-expanded')).toBe('true')
     const section = dom.querySelector('.source-provider-detail__form')
-    expect(dom.textContent).toContain(zhText.collectionPolicy.collectionPreset)
+    // 采集预设已挪到「采集与数据」（用户 2026-11-12）：详情只剩「纳入情绪分析」这一行。
+    expect(dom.textContent).not.toContain(zhText.collectionPolicy.collectionPreset)
     expect(dom.textContent).toContain(zhText.collectionPolicy.includeInSentiment)
     expect(section).not.toBeNull()
     // 范围策略已从界面撤掉：读者改它什么也不会发生（架构师核对：只写不读）。控件不能以禁用态
-    // 留着——禁用等于承诺「以后能开」。这里判两个方向：标签不在屏上，且只剩一个下拉（预设）。
+    // 留着——禁用等于承诺「以后能开」。预设搬走后，这一块里**一个下拉都不该有**。
     expect(section!.textContent).not.toContain('范围策略')
-    expect(section!.querySelectorAll('.ant-select')).toHaveLength(1)
+    expect(section!.querySelectorAll('.ant-select')).toHaveLength(0)
 
     const sentimentRow = [...section!.querySelectorAll<HTMLElement>('.intelligence-setting-row')]
       .find((row) => row.textContent?.includes(zhText.collectionPolicy.includeInSentiment))!

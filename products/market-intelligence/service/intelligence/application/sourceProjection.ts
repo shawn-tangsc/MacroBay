@@ -2,6 +2,7 @@ import {
   officialCalendarFeedsAvailability,
   type CalendarOfficialFeedsAvailability
 } from './officialCalendarAvailability'
+import { getIntelligenceSourceDefinition } from './sourceCatalog'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import {
   agentRegistry,
@@ -132,6 +133,11 @@ export type ProjectionState = {
 }
 
 export type SourceView = SourceDefinition & {
+  /**
+   * 采集由谁负责（来自 catalog）：`product` = 产品自己的作业决定节奏，通用采集器不按预设跑。
+   * UI 据此决定频率那一行显示文字还是下拉（用户 2026-11-12）。
+   */
+  collectionOwner?: 'adapter' | 'product'
   enabled: boolean
   jobRegistered?: boolean
   /** 五态结论，与其他面读的是同一个字段（见 `sourceHealthState`）。 */
@@ -208,6 +214,7 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
   })
   return {
     ...source,
+    ...(getIntelligenceSourceDefinition(source.sourceId)?.collectionOwner === 'product' ? { collectionOwner: 'product' as const } : {}),
     enabled,
     healthState,
     healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),

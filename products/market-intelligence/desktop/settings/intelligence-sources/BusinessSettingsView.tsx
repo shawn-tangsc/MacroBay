@@ -1,7 +1,9 @@
 import { ChevronRight } from 'lucide-react'
 
-import { Switch } from 'antd'
+import { Select, Switch } from 'antd'
 
+import { SettingsInfo } from '../settingsInfo'
+import { SOURCE_ROW_TEMPLATES, sourceRowAttributes } from './sourceSettingRows'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import {
   cellEnabledOrDefault,
@@ -37,6 +39,9 @@ export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment'
 export type BusinessFocus = Readonly<{ business?: BusinessKey; moduleKey?: string; cellId?: string }>
 
 const BUSINESS_KEYS: readonly BusinessKey[] = ['dashboard', 'calendar', 'sentiment']
+
+/** 采集预设三档；值来自 schema（`manual | balanced | frequent`），这里只引用不再定义语义。 */
+const PRESET_VALUES = ['manual', 'balanced', 'frequent'] as const
 
 /** 同一格的多个候选源：键去掉 `-fallback` 后缀、标题去掉「（备用）」。 */
 export type CellGroup = Readonly<{
@@ -152,6 +157,18 @@ export function BusinessSettingsContent(props: {
   isSourceEnabled?: (sourceId: string) => boolean | undefined
   /** 未开启的项点击后跳到那个源的配置页（宿主实现切屏与选中）。 */
   onOpenSourceConfig?: (sourceId: string) => void
+  /**
+   * 每源当前的采集预设（只含**可配置且已启用**的源）：值来自那份 profile 投影，
+   * 与详情读同一处；未启用 / 待接入 / 不可用 / 无采集的源不出现这一行。
+   */
+  presets?: Readonly<Record<string, string>>
+  /** 写回一个源的预设；由宿主注入 `updateSourceProfile`（按源单字段 patch，不是整份回写）。 */
+  onPresetChange?: (sourceId: string, preset: string) => void
+  /**
+   * 产品自有采集的已启用源：节奏由产品作业定，**只显示「固定节奏」文字、不画下拉**——
+   * 画成禁用控件就是假控件（用户 2026-11-12）。数值不在组件里写死。
+   */
+  productCadence?: ReadonlySet<string>
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
@@ -171,7 +188,14 @@ export function BusinessSettingsContent(props: {
       sourceId: cell.sourceId,
       ...(props.isSourceEnabled === undefined ? {} : { sourceEnabled: props.isSourceEnabled(cell.sourceId) }),
       ...(props.onCellToggle === undefined ? {} : { onCellToggle: props.onCellToggle }),
-      ...(props.onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig: props.onOpenSourceConfig })
+      ...(props.onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig: props.onOpenSourceConfig }),
+      ...(props.presets?.[cell.sourceId] === undefined || props.onPresetChange === undefined
+        ? {}
+        : {
+          preset: props.presets[cell.sourceId],
+          onPresetChange: (next: string) => props.onPresetChange!(cell.sourceId, next)
+        }),
+      ...(props.productCadence?.has(cell.sourceId) === true ? { productCadence: true } : {})
     })
   }
   return <div className="intelligence-detail-scroll">
@@ -286,6 +310,11 @@ function cellRow(args: {
   sourceEnabled?: boolean
   onCellToggle?: (cellId: string, enabled: boolean) => void
   onOpenSourceConfig?: (sourceId: string) => void
+  /** 这个源当前的采集预设；给了才画第二行（未启用/待接入/无采集的源不给）。 */
+  preset?: string
+  onPresetChange?: (next: string) => void
+  /** 产品自有采集：第二行只写「固定节奏」文字，不画下拉。 */
+  productCadence?: boolean
   resolveText: (key: string) => string
 }): React.ReactElement {
   const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
@@ -325,6 +354,7 @@ function cellRow(args: {
       : undefined}
     role={sourceOff ? 'button' : undefined}
     tabIndex={sourceOff ? 0 : undefined}>
+    <div className="business-card__line">
     {sourceOff || args.onOpenSourceConfig === undefined
       /* 源没开：整行是按钮（这一行只能去配置），名字不再单独做按钮——按钮套按钮是嵌套交互。
          源开着：名字是**真按钮**（原生 button，键盘可达），行本身不是按钮。 */
@@ -352,5 +382,42 @@ function cellRow(args: {
           onChange={onSelect}
           size="small" />
       </span>}
+    </div>
+    {/* 第二行：频率（产品 2026-11-12 定：与「开不开」同一屏决定「采多勤」）。
+        **源没开就不画**——那一行整行是跳配置的按钮，行里不能再嵌一个下拉（嵌套交互）；
+        不是「没值所以禁用」（禁用等于承诺以后能开）。 */}
+    {sourceOff
+      ? null
+      : args.productCadence === true
+        ? <div className="business-card__preset" data-preset-row={sourceId} data-preset-fixed="true" {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId)}>
+          <span className="business-card__preset-label-group">
+            <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
+          </span>
+          {/* 产品自有作业的节奏：只写事实，不画点不动的控件。具体数字由产品排期决定，组件不写死。 */}
+          <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.fixedCadence')}</span>
+        </div>
+        : args.preset === undefined || args.onPresetChange === undefined
+      ? null
+      : <div className="business-card__preset" data-preset-row={sourceId} {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId)}>
+        <span className="business-card__preset-label-group">
+          <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
+          {args.preset === 'manual'
+            ? <SettingsInfo
+              ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
+              labelKeys={['settings.intelligenceSources.collectionPolicy.manualPresetNote']}
+              resolveText={args.resolveText} />
+            : null}
+        </span>
+        <Select
+          aria-label={args.resolveText('settings.intelligenceSources.collectionPolicy.collectionPreset')}
+          className="business-card__preset-select"
+          onChange={args.onPresetChange}
+          options={PRESET_VALUES.map((value) => ({
+            value,
+            label: args.resolveText(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
+          }))}
+          size="small"
+          value={args.preset} />
+      </div>}
   </div>
 }

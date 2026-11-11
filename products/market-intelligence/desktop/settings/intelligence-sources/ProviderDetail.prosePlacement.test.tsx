@@ -119,21 +119,16 @@ async function render(
 }
 
 describe('the moved sentences live in exactly one place', () => {
-  it('keeps the manual-preset sentence out of the body, and behind the info trigger', async () => {
+  it('no longer renders the preset sentence in the source detail at all', async () => {
+    // 采集预设整行已挪到「采集与数据」每源第二行（用户 2026-11-12），那句手动档说明也跟着过去；
+    // 详情里既不出现正文，也没有那颗 ⓘ。接管判据见 `BusinessSettingsView.preset.test.tsx`。
     const host = await render(createElement(ProviderDetail, {
       labels: labels(),
       provider: provider(),
       policy: policy('manual')
     }))
 
-    // 正文不含这句话（搬走了，不是复制一份）。
     expect(host.textContent).not.toContain(settingsText.collectionPolicy.manualPresetNote)
-
-    // 展开那颗 ⓘ 之后才有——证明它确实搬进了 ⓘ，而不是被删掉。
-    const trigger = [...host.querySelectorAll<HTMLElement>(`[aria-label="${settingsText.collectionPolicy.manualPresetNoteAria}"]`)][0]
-    expect(trigger, 'the preset row must carry its own info trigger').toBeDefined()
-    await act(async () => { trigger?.focus() })
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect(document.body.textContent).toContain(settingsText.collectionPolicy.manualPresetNote)
+    expect([...host.querySelectorAll<HTMLElement>(`[aria-label="${settingsText.collectionPolicy.manualPresetNoteAria}"]`)]).toHaveLength(0)
   })
 })

@@ -116,7 +116,8 @@ describe('business cards: the source column keeps a usable width', () => {
   it('gives the source name the remaining width and forbids wrapping it', () => {
     // 真机第一次渲染就把源名压成 0 宽（逐字竖排）。判据落在规则本体（happy-dom 量不到计算宽度）：
     // 行现在是「源名（1fr）/ 行尾开关（auto）」——行标签就是源名（用户 2026-11-11），没有值列。
-    const row = rulesFor(css, 'business-card__row').join('\n')
+    // 采集预设挪到第二行后，第一行单独成 `.business-card__line`：两列在它身上。
+    const row = rulesFor(css, 'business-card__line').join('\n')
     expect(row).toContain('minmax(0, 1fr)')
     expect(row).toContain('auto')
     const label = rulesFor(css, 'business-card__label').join('\n')
@@ -137,7 +138,8 @@ describe('business cards keep their padding', () => {
     const row = rulesFor(css, 'business-card__row')
     expect(row.some((body) => /padding\s*:\s*0\s+12px/u.test(body))).toBe(true)
     // 两列：源名（1fr）+ 行尾开关（auto）。少了 `auto` 那列，开关就掉到第二行（那次事故的判据）。
-    expect(row.some((body) => /grid-template-columns\s*:[^;]*minmax\(0,\s*1fr\)[^;]*auto/u.test(body))).toBe(true)
+    const line = rulesFor(css, 'business-card__line')
+    expect(line.some((body) => /grid-template-columns\s*:[^;]*minmax\(0,\s*1fr\)[^;]*auto/u.test(body))).toBe(true)
     // 两层卡片 + 自适应（用户 2026-11-11）：三列基准，一张数据卡片按自己的源项个数占列，
     // 所以 1 个源的卡占 1/3、2 个源占 2/3，能并进同一行；放不下就换行。
     // 第一层模块卡也自适应：三列基准，模块按内部源项数占列（上限 3）。

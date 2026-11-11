@@ -628,16 +628,12 @@ describe('ProviderDetail source details', () => {
     // 留着 `role="group"` 只剩一个说不清自己的分组。触发器自己的 `aria-describedby`
     // 由平台 `Popover` 挂、指向它自己的浮层内容，不属于这一条。
     expect(container.querySelector('.source-provider-detail__form [role="group"]')).toBeNull()
-    // 它住在「采集预设」字段名旁那颗 ⓘ 里：点开才读到。
-    const info = container.querySelector<HTMLButtonElement>(
-      `.source-provider-detail__form [aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)
-    expect(info).not.toBeNull()
-    await act(async () => { info?.click() })
-    await act(async () => { await Promise.resolve() })
-    expect(document.body.textContent).toContain(settingsText.collectionPolicyStopped)
+    // 采集预设已挪到「采集与数据」（用户 2026-11-12），详情里不再有它的 ⓘ，也没有那一行。
+    expect(container.querySelector('[aria-label="' + settingsText.collectionPolicy.notConfigurableAria + '"]')).toBeNull()
+    expect(container.querySelector('[data-setting-key*="collection-preset"]')).toBeNull()
   })
 
-  it('gives every unavailable source its own reason ⓘ', async () => {
+  it('gives every unavailable source its own health reason, with no preset ⓘ left behind', async () => {
     // 同一屏两个不可用源：每颗 ⓘ 属于它自己那一组，不能只画一颗、也不能两颗挤在同一个块里。
     // （以前这里钉的是「每组的描述符 id 不同」；句子搬进浮层后没有常驻描述符，判据换成每组的 ⓘ。）
     const invoke = vi.fn(async () => undefined)
@@ -671,16 +667,14 @@ describe('ProviderDetail source details', () => {
     })
     await flush()
 
-    const policies = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__form')]
-    expect(policies).toHaveLength(2)
-    for (const policy of policies) {
-      expect(policy.querySelectorAll<HTMLElement>(`[aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toHaveLength(1)
+    const forms = [...container.querySelectorAll<HTMLElement>('.source-provider-detail__form')]
+    expect(forms).toHaveLength(2)
+    for (const form of forms) {
+      // 预设行已经不在详情：每份表单里都不再挂「不配置」那颗 ⓘ。
+      expect(form.querySelector(`[aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)).toBeNull()
+      expect(form.querySelector('[data-setting-key*="collection-preset"]')).toBeNull()
     }
     expect(container.textContent).not.toContain(settingsText.collectionPolicyStopped)
-    const first = policies[0]?.querySelector<HTMLButtonElement>(`[aria-label="${settingsText.collectionPolicy.notConfigurableAria}"]`)
-    await act(async () => { first?.click() })
-    await act(async () => { await Promise.resolve() })
-    expect(document.body.textContent).toContain(settingsText.collectionPolicyStopped)
   })
 
   it('leaves no group semantics, no dangling description and no frozen note on a usable source', async () => {

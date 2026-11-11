@@ -101,7 +101,7 @@ function drawerHost(sourceView: SourceView): SourcesSettingsPaneProps {
 function surfaceOf(sourceView: SourceView): SourcesSettingsPaneProps['surface'] {
   return {
     text: settingsText,
-    policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: {} },
+    policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: { [sourceView.sourceId]: true } },
     supportsRunNowById: { [sourceView.sourceId]: true },
     onToggleSource: async () => true,
     onRunNow: async () => ({ kind: 'succeeded' as const, notice: '采集成功。' }),
@@ -149,8 +149,10 @@ describe('the settings page and the config drawer render the same sources pane (
     const fromDrawer = await signature(drawerHost(sourceView))
 
     expect(fromDrawer).toEqual(fromSettings)
-    // 「逐项一致」不是「两边都少同一项」：策略组、四格、运行入口都得在。
-    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.collectionPreset)
+    // 「逐项一致」不是「两边都少同一项」：策略组（现在只剩「纳入情绪分析」）、四格、运行入口都得在。
+    // 采集预设已挪到「采集与数据」（用户 2026-11-12），详情不再出现。
+    expect(fromSettings.detail).not.toContain(settingsText.collectionPolicy.collectionPreset)
+    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.includeInSentiment)
     expect(fromSettings.detail).toContain(settingsText.health.todayReading)
     expect(fromSettings.detail).toContain(settingsText.health.runNow.unavailable)
     // 目录一侧同样逐项一致（含那颗「不可用源」数量标记）。
@@ -162,7 +164,8 @@ describe('the settings page and the config drawer render the same sources pane (
     const fromSettings = await signature(settingsHost(sourceView))
     const fromDrawer = await signature(drawerHost(sourceView))
     expect(fromDrawer).toEqual(fromSettings)
-    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.collectionPreset)
+    expect(fromSettings.detail).not.toContain(settingsText.collectionPolicy.collectionPreset)
+    expect(fromSettings.detail).toContain(settingsText.collectionPolicy.includeInSentiment)
     expect(fromSettings.detail).toContain(settingsText.health.runAction.run)
   })
 
@@ -204,7 +207,7 @@ describe('the config surface adapts a host that only has the three write callbac
     const props: SourceConfigSurfaceProps = {
       text: settingsText,
       provider: provider(sourceView),
-      policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: {} },
+      policy: { labels: settingsText.collectionPolicy, onChange: () => undefined, profiles: profiles(sourceView) as never, supportsSentimentById: { [sourceView.sourceId]: true } },
       supportsRunNowById: { [sourceView.sourceId]: true },
       onWriteSourceEnabled: write,
       writeOrigin: 'calendar-drawer',
@@ -227,7 +230,8 @@ describe('the config surface adapts a host that only has the three write callbac
     expect(run).toHaveBeenCalledWith(sourceView.sourceId)
 
     // 启停的编辑入口是页头那颗组开关（用户 2026-11-12）；能力行仍只读，点了不写。
-    const rows = [...container.querySelectorAll<HTMLButtonElement>('.source-provider-detail__list button[role="switch"]')]
+    // 只看能力行（启用）那颗：策略表单里还有「纳入情绪分析」开关，它不是启停入口。
+    const rows = [...container.querySelectorAll<HTMLButtonElement>('[data-setting-key^="setting:sources.enabled"] button[role="switch"]')]
     expect(rows.length).toBeGreaterThan(0)
     for (const toggle of rows) {
       expect(toggle.disabled).toBe(true)

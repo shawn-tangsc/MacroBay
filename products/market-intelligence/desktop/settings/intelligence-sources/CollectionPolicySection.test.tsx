@@ -64,39 +64,29 @@ describe('CollectionPolicySection', () => {
     expect(changes).toContainEqual({ includeInSentiment: true })
   })
 
-  it('fails closed and keeps the "not implemented" sentence in the ⓘ, not in the body', async () => {
-    // 用户 2026-11-10：那句话以前是正文里一段没有控件的话；现在它只住「采集预设」字段名旁的 ⓘ。
-    // 状态本身读者照样看得见：行尾开关与预设控件都是禁用的。
+  it('renders nothing at all when the only remaining row (sentiment) does not apply', async () => {
+    // 采集预设移走后，这一块只剩「纳入情绪分析」这一条条件行（用户 2026-11-12）：
+    // 不支持情绪的源**整块不渲染**，不留空标题、不留空网格。
     const container = await render({ configurable: false, enabledConfigurable: false, supportsSentiment: false })
 
+    expect(container.querySelector('.intelligence-policy-rows')).toBeNull()
+    expect(container.querySelector('.intelligence-setting-grid')).toBeNull()
+    expect(container.textContent).not.toContain(labels.title)
     expect(container.textContent).not.toContain(PLANNED_NOTE)
-    expect(document.body.textContent).not.toContain(PLANNED_NOTE)
-    expect(container.textContent).not.toContain(copy['settings.intelligenceSources.collectionPolicy.productOwnedNote'])
-    expect(infoTriggers(container, copy[NOT_CONFIGURABLE_ARIA_KEY]!)).toHaveLength(1)
     expect(switchControls(container)).toHaveLength(0)
-
-    const trigger = infoTriggers(container, copy[NOT_CONFIGURABLE_ARIA_KEY]!)[0]!
-    await act(async () => { trigger.click() })
-    await act(async () => { await Promise.resolve() })
-    // 浮层走 portal，内容在 document.body 里。
-    expect(document.body.textContent).toContain(PLANNED_NOTE)
+    expect(infoTriggers(container)).toHaveLength(0)
   })
 
-  it('explains a product-owned source in a field-level info trigger, not in the body prose', async () => {
-    // 界面设计 2026-11-10：那句是**说明**（讲它怎么工作），正文只留字段名与控件；它挂在字段名旁的 ⓘ 里。
-    // 折叠头那格放不下 ⓘ——组件契约禁止头行出现可聚焦元素。
-    const container = await render({ configurable: false, enabledConfigurable: true, supportsSentiment: false })
+  it('keeps only the sentiment row for a source that supports it', async () => {
+    const container = await render({ configurable: false, enabledConfigurable: true, supportsSentiment: true })
 
-    const note = copy['settings.intelligenceSources.collectionPolicy.productOwnedNote']!
-    expect(container.textContent).not.toContain(note)
-    expect(container.textContent).not.toContain(PLANNED_NOTE)
-    // 恰一颗，名字是它自己的（说明不继承字段名，否则读屏会念两遍）。
-    expect(infoTriggers(container)).toHaveLength(1)
-    expect(infoTriggers(container)[0]!.getAttribute('aria-label')).toBe(
-      copy['settings.intelligenceSources.collectionPolicy.productOwnedNoteAria']
-    )
-    expect(switchControls(container)).toHaveLength(0)
+    expect(container.textContent).toContain(labels.includeInSentiment)
+    // 预设那一行（含它自己的 ⓘ 与控件）不再出现在这里——它归「采集与数据」。
+    expect(container.textContent).not.toContain(labels.collectionPreset)
+    expect(infoTriggers(container)).toHaveLength(0)
+    expect(switchControls(container)).toHaveLength(1)
   })
+
 })
 
 async function render(props: {

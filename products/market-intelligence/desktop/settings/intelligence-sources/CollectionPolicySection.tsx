@@ -1,6 +1,6 @@
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 
-import { SourcePresetRow, SourceSentimentRow } from './SourceRows'
+import { SourceSentimentRow } from './SourceRows'
 
 export type CollectionPolicyLabels = {
   title: string
@@ -26,6 +26,14 @@ export type CollectionPolicyNotConfigurable = Readonly<{ ariaLabelKey: string; l
  * 就等于同一个事实存两份副本——组内读页面持有的 profile、行尾读源视图，各写各的，
  * 读者一动就互相打架（2026-11-10 用户实测：动组内那颗，上面整行被关掉）。
  */
+/**
+ * 「这个源怎么采」剩下的那一行：**只有「纳入情绪分析」**。
+ *
+ * 采集预设已按用户 2026-11-12 挪到「采集与数据」每个源项下面（一处写、一处读）；
+ * 这里不再渲染它，注册表里的声明仍保留（那是数据，不是第二个入口）。
+ * 移走后本块唯一的一行是条件行（`supportsSentiment`）：不支持情绪的源**整块不渲染**，
+ * 不留空标题或空网格。
+ */
 export function CollectionPolicySection(props: {
   /** 这一组属于哪个源：按源实例化的设置行要用它派生实例键。 */
   sourceId: string
@@ -34,40 +42,23 @@ export function CollectionPolicySection(props: {
   configurable?: boolean
   /**
    * Whether this source's enable switch (the one at the end of its row) is usable at all.
-   * It only decides which note the group shows; the switch itself lives in the row.
+   * Kept for the sentiment row's disabled state; the switch itself lives in the row.
    */
   enabledConfigurable?: boolean
   labels: CollectionPolicyLabels
   resolveText: (key: string) => string
-  /**
-   * 这一行不能改的原因（键 + 读屏名）。给了就挂到「采集预设」字段名旁的 ⓘ 里，
-   * **正文不留整句**：整行说明这种位置已经没有了。
-   */
+  /** 保留入参形状：这一块已经不再有「采集预设」那行可挂说明。 */
   notConfigurable?: CollectionPolicyNotConfigurable
   /** 外层区块已经画了标题时传 false：同一屏里「采集策略」只出现一次。 */
   showTitle?: boolean
   onChange: (patch: Partial<IntelligenceSourceProfile>) => void
-}): React.ReactElement {
+}): React.ReactElement | null {
   const configurable = props.configurable ?? true
-  const enabledConfigurable = props.enabledConfigurable ?? configurable
-  // 产品自有采集的源：预设与情绪开关都不适用，读者要看到「为什么这行是灰的」——那句解释进 ⓘ，
-  // 不占正文（正文只允许字段名、当前值、控件）。
-  const productOwned = enabledConfigurable && !configurable
+  if (!props.supportsSentiment) return null
   return (
     <div className="intelligence-policy-rows">
       {props.showTitle === false ? null : <div className="intelligence-section-title">{props.labels.title}</div>}
-      {/* 两行都从声明来（值/可见性/行键），顺序就是 `SOURCE_ROWS` 的声明顺序：预设在前、情绪在后。 */}
       <div className="intelligence-setting-grid">
-        <SourcePresetRow
-          configurable={configurable}
-          labels={props.labels}
-          onChange={props.onChange}
-          productOwned={productOwned}
-          profile={props.draftProfile}
-          resolveText={props.resolveText}
-          sourceId={props.sourceId}
-          {...(props.notConfigurable === undefined ? {} : { notConfigurable: props.notConfigurable })}
-        />
         <SourceSentimentRow
           disabled={!configurable}
           onChange={props.onChange}

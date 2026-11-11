@@ -1,14 +1,13 @@
-import { Button, Select, Switch } from 'antd'
+import { Button, Switch } from 'antd'
 
 import { SettingsRow } from '@platform/ui/components/settings-row'
 import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { SettingsInfo } from '../settingsInfo'
 import { healthStateBadge } from './sourceHealthTone'
-import { SETTING_OPTION_SETS, type SettingOptionsSource } from '../../shared/settings/descriptorTypes'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes, sourceRowView } from './sourceSettingRows'
 import type { ProviderDetailLabels } from './ProviderDetail'
-import type { CollectionPolicyLabels, CollectionPolicyNotConfigurable } from './CollectionPolicySection'
+import type { CollectionPolicyLabels } from './CollectionPolicySection'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
 
@@ -158,92 +157,6 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
 
 /** 行尾那颗展开按钮的文案键（「高级」两个字，不是说明）。 */
 const ADVANCED_KEY = 'settings.intelligenceSources.advancedToggle'
-
-const PRODUCT_OWNED_NOTE_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNote'
-const PRODUCT_OWNED_NOTE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.productOwnedNoteAria'
-/** 「手动模式不会自动采集」那句说明的键与 ⓘ 读屏名（文案在设置页文案表里，已存在）。 */
-const MANUAL_PRESET_NOTE_KEY = 'settings.intelligenceSources.collectionPolicy.manualPresetNote'
-const MANUAL_PRESET_NOTE_ARIA_KEY = 'settings.intelligenceSources.collectionPolicy.manualPresetNoteAria'
-
-export type SourcePresetRowProps = Readonly<{
-  sourceId: string
-  profile: IntelligenceSourceProfile
-  configurable: boolean
-  /** 产品自有采集的源：预设不适用，字段名旁挂一句 ⓘ 说明（正文不留长句）。 */
-  productOwned: boolean
-  /** 这一行现在不能改的原因（取不到 / 尚未接入）：同样只走 ⓘ，正文不留整句。 */
-  notConfigurable?: CollectionPolicyNotConfigurable
-  labels: Pick<CollectionPolicyLabels, 'manualPresetNote' | 'presets'>
-  resolveText: (key: string) => string
-  onChange: (patch: Partial<IntelligenceSourceProfile>) => void
-}>
-
-/**
- * 「采集预设」一行：字段名（产品自有源、或这一行不能改时多一颗 ⓘ）+ 下拉；
- * 选「手动」时再多一颗 ⓘ（下拉下方不再写注解）。选项值来自声明，句子来自文案表的预设词表。
- */
-export function SourcePresetRow(props: SourcePresetRowProps): React.ReactElement | null {
-  const view = { sourceId: props.sourceId, profile: props.profile }
-  const row = sourceRowView(SOURCE_ROW_TEMPLATES.collectionPreset, view)
-  if (!row.visible) return null
-  const label = props.resolveText(row.descriptor.copy?.labelKey ?? '')
-  const optionsFrom = row.descriptor.field.kind === 'select' ? row.descriptor.field.optionsFrom : undefined
-  const options = typeof optionsFrom === 'string'
-    ? SETTING_OPTION_SETS[optionsFrom as SettingOptionsSource].map((option) => ({
-      value: String(option.value),
-      label: props.labels.presets[String(option.value)] ?? ''
-    }))
-    : []
-  // 手动那句只在**能改**时才挂：这一行已经不能改时，读者需要的是「为什么不能改」那一句，
-  // 两颗 ⓘ 排在一起说的是同一件事的两种解释，只会让读者多点一次。
-  const manualNote = props.notConfigurable === undefined && !props.productOwned && row.value === 'manual'
-  const labelHasInfo = props.productOwned || props.notConfigurable !== undefined || manualNote
-  return <SettingsRow
-    controlWrapperClassName="intelligence-setting-control"
-    copyClassName={labelHasInfo
-      ? 'intelligence-setting-label intelligence-setting-label--with-info'
-      : 'intelligence-setting-label'}
-    label={<>
-      {label}
-      {props.productOwned
-        ? <SettingsInfo
-          ariaLabelKey={PRODUCT_OWNED_NOTE_ARIA_KEY}
-          labelKeys={[PRODUCT_OWNED_NOTE_KEY]}
-          resolveText={props.resolveText}
-        />
-        : null}
-      {/* 「为什么这一行不能改」：取不到（同步已停止）与还没接入，同一颗 ⓘ、两句不同的话。 */}
-      {props.notConfigurable === undefined
-        ? null
-        : <SettingsInfo
-          ariaLabelKey={props.notConfigurable.ariaLabelKey}
-          labelKeys={[props.notConfigurable.labelKey]}
-          resolveText={props.resolveText}
-        />}
-      {/* 「手动模式不会自动采集」是**说明**，按规范进同一颗 ⓘ；正文只留控件。
-          只有选到「手动」才挂，避免给别的档位多一颗没话说的 ⓘ。 */}
-      {manualNote
-        ? <SettingsInfo
-          ariaLabelKey={MANUAL_PRESET_NOTE_ARIA_KEY}
-          labelKeys={[MANUAL_PRESET_NOTE_KEY]}
-          resolveText={props.resolveText}
-        />
-        : null}
-    </>}
-    rowAttributes={sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, props.sourceId)}
-    rowClassName="intelligence-setting-row"
-  >
-    <div className="intelligence-preset-control">
-      <Select
-        className="intelligence-select"
-        disabled={!props.configurable}
-        onChange={(collectionPreset) => props.onChange({ collectionPreset: collectionPreset as IntelligenceSourceProfile['collectionPreset'] })}
-        options={options}
-        value={typeof row.value === 'string' ? row.value : undefined}
-      />
-    </div>
-  </SettingsRow>
-}
 
 export type SourceSentimentRowProps = Readonly<{
   sourceId: string

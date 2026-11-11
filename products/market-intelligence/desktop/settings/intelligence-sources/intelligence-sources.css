@@ -1685,12 +1685,10 @@
 
 .business-card__row {
   display: grid;
-  /* 两列：**源名 / 行尾开关**（用户 2026-11-11：行标签就是源名，不再写格名，所以没有值列）。
-     第二列 `auto` 让开关固定贴住行右缘，与源行同一条右缘；少了它开关会被挤到下一行行首。 */
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  min-height: 44px;
+  /* 第一行 = **源名 / 行尾开关**；有采集预设时下面再加一行（上距 8、高 24）。
+     行本身只管上下两行的间距，左右 12 归两行共用（用户 2026-11-12）。 */
+  gap: 8px;
+  align-items: stretch;
   padding: 0 12px;
   /* 一行 = 一个圆角描边的整行容器，和源行同一套描边/圆角/底色/内距（用户 2026-11-11）；
      不再用贯穿卡片宽度的 1px 分隔线。 */
@@ -1705,6 +1703,50 @@
 
 .business-card__row:hover {
   background: color-mix(in srgb, var(--surface-soft) 45%, transparent);
+}
+
+/* 第一行：源名 + 行尾开关（44 高；开关固定贴右缘）。 */
+.business-card__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* 第二行：频率（11/400 muted + 8 + 下拉占满、最小 96；ⓘ 紧跟短标 4px）。只用既有档位。 */
+.business-card__preset {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  min-width: 0;
+}
+
+.business-card__preset-label-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.business-card__preset-label {
+  color: var(--muted);
+  font-size: var(--font-meta);
+  font-weight: 400;
+  line-height: var(--line-meta);
+}
+
+.business-card__preset-select {
+  flex: 1 1 auto;
+  min-width: 96px;
+}
+
+.business-card__preset-value {
+  color: var(--text);
+  font-size: var(--font-meta);
+  font-weight: 400;
+  line-height: var(--line-meta);
 }
 
 .business-card__label {

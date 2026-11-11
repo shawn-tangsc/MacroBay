@@ -113,6 +113,35 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
   }
   const isSourceEnabled = (sourceId: string): boolean | undefined => sourceEnabledById.get(sourceId)
   /**
+   * 「采集与数据」第二行的数据：**只有可配置的已启用源**才给预设值（不是把下拉画成禁用）。
+   * 值来自 `surface.policy.profiles`（与详情同一份），写走同一个 `onChange`（按源单字段 patch），
+   * 不新造通道、也不使用详情那份草稿快照。
+   */
+  const presetValues: Record<string, string> = {}
+  const productCadence = new Set<string>()
+  const presetPolicy = props.surface.policy
+  for (const group of props.view?.groups ?? []) {
+    for (const provider of group.providers) {
+      for (const source of provider.sources) {
+        if (!source.enabled || source.visibility === 'pending' || source.unavailable !== undefined) continue
+        if (source.collection === 'none') continue
+        // 产品自有采集：节奏由产品作业定，只显示文字、不画下拉（数值不在组件里写死）。
+        if (source.collectionOwner === 'product') {
+          productCadence.add(source.sourceId)
+          continue
+        }
+        if (presetPolicy === undefined) continue
+        const profile = presetPolicy.profiles[source.sourceId]
+        if (profile !== undefined) presetValues[source.sourceId] = profile.collectionPreset
+      }
+    }
+  }
+  const onPresetChange = presetPolicy === undefined
+    ? undefined
+    : (sourceId: string, preset: string): void => {
+      presetPolicy.onChange(sourceId, { collectionPreset: preset as never })
+    }
+  /**
    * 格级启停：缺键 = 启用；读失败也按启用显示。**只在这里存一份读回来的显式值**，
    * 存储层之外不再造第二份默认值表。
    */
@@ -189,6 +218,9 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           isCellEnabled={isCellEnabled}
           isSourceEnabled={isSourceEnabled}
           {...(props.onOpenSourceConfig === undefined ? {} : { onOpenSourceConfig: props.onOpenSourceConfig })}
+          {...(onPresetChange === undefined ? {} : { onPresetChange })}
+          presets={presetValues}
+          {...(productCadence.size === 0 ? {} : { productCadence })}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <>
