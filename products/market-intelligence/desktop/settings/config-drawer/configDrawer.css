@@ -429,10 +429,17 @@
   background: var(--surface);
 }
 
+/*
+ * 保存失败那句说明：**不用状态色**。
+ *
+ * 它是读者要读的一整句正文（`role="alert"` 已经让读屏立刻念出来，句子本身也写着「没保存上」），
+ * 状态不靠颜色传；而 `--danger` 当正文色在深色下只有 3.25–3.94，低于 4.5 的门槛——那种红
+ * 是「给人看的提醒」，不是「给人读的句子」。所以回正文色，红色留给真正的状态标记。
+ */
 .config-drawer__savebar-failed {
   align-self: stretch;
   margin: 0;
-  color: var(--danger);
+  color: var(--text-strong);
   font-size: var(--font-meta);
   line-height: var(--line-meta);
 }
