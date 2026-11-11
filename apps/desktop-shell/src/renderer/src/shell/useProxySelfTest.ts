@@ -5,7 +5,7 @@ import type { AppSettings } from '@platform/settings/schema/appSettings'
 
 import type { PlatformText } from '../i18n/platformText'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
-import { buildProxyProbeUrl, describeProxySelfTest, type ProxySelfTestResult } from './proxySelfTestDisplay'
+import { describeProxySelfTest, PROXY_SELF_TEST_PROBE_URL, type ProxySelfTestResult } from './proxySelfTestDisplay'
 import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 
 /**
@@ -15,11 +15,10 @@ import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 export type ProxySelfTestParams = {
   settings: AppSettings
   t: PlatformText
-  selectedProvider: SafeModelProvider | null
 }
 
 export function useProxySelfTest(params: ProxySelfTestParams) {
-  const { settings, t, selectedProvider } = params
+  const { settings, t } = params
   const [proxySelfTest, setProxySelfTest] = useState<{ running: boolean; result: ProxySelfTestResult | null }>({
     running: false,
     result: null
@@ -45,7 +44,8 @@ export function useProxySelfTest(params: ProxySelfTestParams) {
    * 主进程用 Electron `net.fetch`（当前 session 代理）发**无鉴权 GET**；只显示归类与耗时。
    */
   async function runProxySelfTest(): Promise<void> {
-    const target = buildProxyProbeUrl(selectedProvider?.baseUrl)
+    // 目标固定为 Google 的 204 端点：自检只回答「代理通不通」，与选哪个供应商无关。
+    const target = PROXY_SELF_TEST_PROBE_URL
     setProxySelfTest({ running: true, result: null })
     try {
       const result = (await window.platform.modelProviders.testConnection('', {

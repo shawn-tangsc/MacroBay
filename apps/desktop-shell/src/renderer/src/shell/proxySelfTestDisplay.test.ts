@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { platformText } from '../i18n/platformText'
 
-import { describeProxySelfTest, formatProxySelfTestLine, type ProxySelfTestResult } from './proxySelfTestDisplay'
+import {
+  describeProxySelfTest,
+  formatProxySelfTestLine,
+  PROXY_SELF_TEST_PROBE_URL,
+  type ProxySelfTestResult
+} from './proxySelfTestDisplay'
 
 const text = platformText['zh-CN']
 const labels = text.preferences
@@ -223,5 +228,28 @@ describe('formatProxySelfTestLine', () => {
     )
 
     expect(line).toBe(labels.proxySelfTestReachable(200, '0.1'))
+  })
+})
+
+describe('自检的目标固定是 Google，与供应商无关', () => {
+  it('probes the Google 204 endpoint through one constant', () => {
+    // 用户 2026-11-11：「访问一下 google 就说明代理有没有用了」。
+    // 以前拿供应商 origin 当目标，SiliconFlow 根路径 404 → 判失败，而代理其实是通的。
+    expect(PROXY_SELF_TEST_PROBE_URL).toBe('https://www.google.com/generate_204')
+  })
+
+  it('reads 204 as a pass, not as a failure', () => {
+    const view = describeProxySelfTest(result({ ok: true, status: 204, targetHost: 'www.google.com' }), text, customContext)
+    expect(view.tone).toBe('pass')
+    expect(view.line).toContain('204')
+  })
+
+  it('never blames "供应商" when the target answers with a bad status', () => {
+    // 目标换成 Google 之后，「供应商返回 HTTP N」这句话就说错对象了。
+    const view = describeProxySelfTest(result({ ok: false, status: 404, targetHost: 'www.google.com' }), text, customContext)
+    expect(view.tone).toBe('partial')
+    expect(view.line).not.toContain('供应商')
+    expect(view.line).toContain('目标站')
+    expect(view.line).toContain('www.google.com')
   })
 })

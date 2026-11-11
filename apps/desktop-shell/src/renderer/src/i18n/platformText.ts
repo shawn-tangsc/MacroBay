@@ -1155,6 +1155,7 @@ export type PlatformText = {
     proxySelfTestCauseUnknownHint: string
     proxySelfTestProxyAnsweredBadly: (sentence: string) => string
     proxySelfTestUnattributable: (endpoint: string) => string
+    proxySelfTestTargetReturnedBad: (status: number) => string
     proxySelfTestTargetRejected: (status: number, host: string) => string
     proxySelfTestAuthenticationHint: string
     proxySelfTestTargetDenied: (status: number, host: string) => string
@@ -2560,6 +2561,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestCauseUnknownHint: '这次没拿到对照结果，暂时判断不了原因；可以重试一次。',
       proxySelfTestProxyAnsweredBadly: (sentence) => `经代理请求失败：代理端点连得上，但代理自身返回了错误（${sentence}）`,
       proxySelfTestUnattributable: (endpoint) => `连不上代理服务器本身（${endpoint}）；原因待查`,
+      // 自检的目标是 Google，不是供应商：带状态的失败句只说「目标站」，绝不出现「供应商」。
+      proxySelfTestTargetReturnedBad: (status) => `目标站返回 HTTP ${status}，请按状态码排查。`,
       proxySelfTestTargetRejected: (status, host) => `已连到目标站点，站点要求鉴权（HTTP ${status}）· ${host}`,
       proxySelfTestAuthenticationHint: '这条自检不带 Key，401 属正常；与代理是否生效无关。',
       proxySelfTestTargetDenied: (status, host) => `已连到目标站点，站点拒绝了请求（HTTP ${status}）· ${host}`,
@@ -3940,6 +3943,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestProxyAnsweredBadly: (sentence) =>
         `The request through the proxy failed: the proxy endpoint answers, but the proxy itself returned an error (${sentence})`,
       proxySelfTestUnattributable: (endpoint) => `Cannot reach the proxy server itself (${endpoint}); cause unknown`,
+      proxySelfTestTargetReturnedBad: (status) =>
+        `The target site returned HTTP ${status}. Check that status code.`,
       proxySelfTestTargetRejected: (status, host) =>
         `Reached the target site; it asks for authentication (HTTP ${status}) · ${host}`,
       proxySelfTestAuthenticationHint:
