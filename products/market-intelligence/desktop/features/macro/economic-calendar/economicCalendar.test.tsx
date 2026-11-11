@@ -152,6 +152,44 @@ describe('macro economic calendar', () => {
     } finally { query.mockRestore() }
   })
   /**
+   * 列表顶部那句「官方日程拿不到」：点名 BLS、带上那次**真实**同步的日期。
+   * 原来写的是「官方源暂时不可用，先显示上次成功同步的内容」——读者会以为 fed/bea 也一起没了，
+   * 而且「上次」是哪一次没人知道。
+   */
+  it('names BLS and the real sync date in the official note', async () => {
+    // 这条说明行只在**还有东西可画**时出现（另一侧有事件），否则整块走「官方源不可用」那一态。
+    const market = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events: [marketEvent], sources: [] })
+    try {
+      const { container } = await renderCalendar({
+        queryMonth: async () => ({ state: 'available', asOf, events: [blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })] }),
+        getEventDetail: async () => ({ state: 'unavailable' }),
+        unavailableSource: { sourceId: 'macro-calendar-bls', reasonCode: 'official-endpoint-returned-403', lastSuccessfulSyncAt: '2026-10-22T07:29:41.159Z' }
+      })
+      await flush()
+      const notes = [...container.querySelectorAll('[role="note"]')].map(node => node.textContent ?? '')
+      // 说明行是常驻注解，可能同时有别的（这一读的市场腿失败也占一行），按内容找这一条。
+      const note = notes.find(line => line.includes('BLS')) ?? ''
+      expect(note, 'the official leg being blocked explains itself').not.toBe('')
+      expect(note).toContain('BLS 官方日程')
+      expect(note).toContain('403')
+      // 日期来自同步记录，不是写死的常量。
+      expect(note).toContain('2026-10-22')
+      expect(note).not.toContain('官方源暂时不可用')
+      expect(note).not.toContain('{date}')
+    } finally { market.mockRestore() }
+  })
+  it('keeps that note away when the blocked source is not BLS', async () => {
+    const { container } = await renderCalendar({
+      queryMonth: async () => ({ state: 'available', asOf, events: [blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })] }),
+      getEventDetail: async () => ({ state: 'unavailable' }),
+      // fed 被挡、BLS 正常：这条 note 说的是 BLS 的日程，不该跟着别的源出现。
+      unavailableSource: { sourceId: 'macro-calendar-fed', reasonCode: 'official-endpoint-returned-403', lastSuccessfulSyncAt: '2026-10-22T07:29:41.159Z' }
+    })
+    await flush()
+    const notes = [...container.querySelectorAll('[role="note"]')].map(node => node.textContent ?? '')
+    expect(notes.some(line => line.includes('BLS 官方日程'))).toBe(false)
+  })
+  /**
    * `MI-11-R196` 的同一类病：读者已经把自定义代理配好（`http://127.0.0.1:7888` 带绕过规则），
    * 横幅却还在让他「去设置 → 基础设置 → 代理模式选自定义代理」——提示与实际配置无关。
    * 四档判据：已配置+失败 / 未配置+失败 / 已配置+没失败 / 按钮文案跟着档位。
@@ -2214,6 +2252,11 @@ async function renderCalendar(client: {
   syncBlsEmploymentSchedule?: () => unknown
   /** 官方日历腿的三态（注册表那侧算出来的）；默认「有可用腿」。 */
   officialFeeds?: 'disabled' | 'enabled' | 'unavailable'
+  /**
+   * 注册表里某条官方源的「停用」状态（`SourceView.unavailable`）。
+   * 不传 = 没有停用条目；BLS 那条决定列表顶部那句在不在。
+   */
+  unavailableSource?: { sourceId: string; reasonCode: string; lastSuccessfulSyncAt?: string }
   /** 页面文案（语言）：读者切语言时只看这一份，测试据此断言两种语言的成品句。**两种语言都收**。 */
   text?: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['calendar']
   /**
@@ -2242,7 +2285,10 @@ async function renderCalendar(client: {
   // 官方腿三态来自注册表投影：这里替成可控值，默认「有可用腿」，页面因此走既有的空/列表分支。
   vi.spyOn(intelligenceSourcesClient, 'getPanelView').mockResolvedValue({
     calendarOfficialFeeds: { state: client.officialFeeds ?? 'enabled' },
-    providers: []
+    providers: client.unavailableSource === undefined ? [] : [{
+      sources: [{ sourceId: client.unavailableSource.sourceId,
+        unavailable: { reasonCode: client.unavailableSource.reasonCode, ...(client.unavailableSource.lastSuccessfulSyncAt === undefined ? {} : { lastSuccessfulSyncAt: client.unavailableSource.lastSuccessfulSyncAt }) } }]
+    }]
   } as never)
   if (client.marketEmpty === true) {
     const marketSpy = vi.spyOn(marketCalendarClient, 'queryMonth').mockImplementation(async (input: { month: string; locale: 'zh' | 'en' }) => ({

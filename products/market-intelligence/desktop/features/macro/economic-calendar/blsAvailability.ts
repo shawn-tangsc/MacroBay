@@ -52,6 +52,23 @@ export function blsUnavailableSentence(text: EconomicCalendarText, unavailable: 
 }
 
 /**
+ * 列表顶部那一句「官方日程拿不到」（2026-11-11 更正）。
+ *
+ * 两句要分清：这一句说的是**整条腿**现在是什么样（BLS 的 HTML 日程被 403 挡住，自动同步停了，
+ * 所以列表里那些 BLS 事件来自**上一次成功同步**）；`blsUnavailableNotice` 说的是详情里那行刷新键。
+ *
+ * 为什么点名 BLS 并带上日期：原来的句子是「官方源暂时不可用，先显示上次成功同步的内容」——
+ * 读者会以为**全部**官方源都没了（fed/bea 其实照常在画），而且「上次」是哪一次没有人知道。
+ * 这句只在 `macro-calendar-bls` 记着 403 时出现，fed/bea 正常与否都不影响它。
+ *
+ * 日期取注册表里那次真实同步的时刻（`lastSuccessfulSyncAt`），**不写死**。
+ */
+export function blsUnavailableListNote(text: EconomicCalendarText, unavailable: BlsUnavailable | undefined): string | undefined {
+  if (unavailable === undefined || unavailable.reasonCode !== 'official-endpoint-returned-403') return undefined
+  return fillLabelParams(text.officialUnavailableNote, { date: unavailable.lastSuccessDate ?? '' })
+}
+
+/**
  * 置灰那颗刷新键自己的行内句（界面设计 2026-11-09）。
  *
  * 「不能刷新」与「自动同步停了」不是同一句话：前者是键按不动的原因，后者是后台的现状。

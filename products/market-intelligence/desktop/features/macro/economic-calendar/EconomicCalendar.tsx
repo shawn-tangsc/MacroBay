@@ -384,7 +384,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
 
       <div className="mi-economic-calendar__workspace">
         <CalendarMonthBoard
-          officialUnavailable={blsAvailability.unavailable === undefined ? undefined : text.officialUnavailableNote}
+          officialUnavailable={blsAvailability.listNote}
           officialFeeds={blsAvailability.feeds}
           statusNow={statusNow}
           asOf={asOf}

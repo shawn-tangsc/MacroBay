@@ -80,9 +80,20 @@ describe('a month the official source could not be read for', () => {
     expect(source).not.toContain("status ??= officialUnavailable")
   })
 
-  it('uses the final sentence verbatim in both languages, "temporarily" included', () => {
-    expect(zh.officialUnavailableNote).toBe('官方源暂时不可用，先显示上次成功同步的内容')
-    expect(en.officialUnavailableNote).toBe('The official source is temporarily unavailable; showing the last successful sync')
-    expect(en.officialUnavailableNote).toContain('temporarily')
+  /**
+   * 2026-11-11 更正：这句只在 **BLS** 的 HTML 日程被 403 挡住时出现，所以说的是「BLS 官方日程」而不是
+   * 「官方源」——fed/bea 照常在画，写成复数会让读者以为全部官方数据都没了。日期是参数：那次真实同步
+   * 的时刻（`lastSuccessfulSyncAt`），句子里**不许出现写死的日期**。
+   */
+  it('names BLS and takes the sync date from the record, in both languages', () => {
+    expect(zh.officialUnavailableNote).toBe('BLS 官方日程：当前网络环境无法自动获取（403），显示 {date} 成功同步的内容')
+    expect(en.officialUnavailableNote).toBe('BLS official schedule: this network cannot read the site (403); showing what was synced on {date}')
+    for (const sentence of [zh.officialUnavailableNote, en.officialUnavailableNote]) {
+      expect(sentence).toContain('{date}')
+      // 「暂时」当时是错的：这条腿不是暂时不可用，是 403 挡住、自动同步已停。
+      expect(sentence).not.toContain('暂时')
+      // 不许写死任何日期。
+      expect(sentence).not.toMatch(/\d{4}-\d{2}-\d{2}/u)
+    }
   })
 })
