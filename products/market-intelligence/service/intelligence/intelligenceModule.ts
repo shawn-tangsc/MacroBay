@@ -14,6 +14,9 @@ import { createStructuredModelInvocationService } from '@platform/ai/invocation/
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
 import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 import { app } from 'electron'
+import { emitProductIpcEvent } from '@platform/desktop/ipc/productIpcEventBridge'
+import { registerProductRunTerminalListener } from '@platform/desktop/main/runTerminalFanOut'
+import { INTELLIGENCE_DATA_CHANGED_EVENT } from '../../contracts/intelligenceDataChangedEvent'
 
 import { createIntelligenceFetchText, executeIntelligenceFetchTarget } from './adapters/intelligenceHttpFetch'
 import { createIntelligenceArchiveService } from './application/intelligenceArchiveService'
@@ -110,6 +113,7 @@ import {
   INTELLIGENCE_REPLAY_WINDOW_JOB
 } from './jobs/intelligenceJobIds'
 import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
+import { createIntelligenceDataChangedEmitter } from './jobs/intelligenceDataChangedEmitter'
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
@@ -641,6 +645,13 @@ export function getIntelligenceModule(
         : {})
     }
     registerIntelligenceJobs(jobRuntime, intelligenceJobDeps)
+    /* 采集写了库 → 发一条 `intelligence.dataChanged`（产品事件通道，形状见合同）。
+       作业→源/面板的映射落在 `jobs/dataChangedJobMap.ts`（作业注册这一侧）。 */
+    registerProductRunTerminalListener(createIntelligenceDataChangedEmitter({
+      emit: (payload) => {
+        emitProductIpcEvent(PRODUCT_ID, INTELLIGENCE_DATA_CHANGED_EVENT, payload)
+      }
+    }))
     // Judgments are event-driven: normalize only sends the items it just created. A cleared
     // database, a partial write failure, or a settings change leaves older admitted items with no
     // current row and no event to bring them back. One idempotent pass per start reconciles them

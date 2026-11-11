@@ -136,6 +136,7 @@ import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, cr
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
 import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
 import { wireTaskFailureNotifier } from '../../notifications/producers/wireTaskFailureNotifier'
+import { fanOutRunTerminal } from './runTerminalFanOut'
 import { resolveJobTitle } from '../../jobs/runtime/jobTitle'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
 import { getEventBusRuntime } from '../../message-bus/ipc/registerEventBusIpc'
@@ -866,7 +867,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
    */
   composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
   // 第一个真实通知来源：任务最终失败。装配在这，通知语义不进平台。
-  const onRunTerminal = wireTaskFailureNotifier({
+  const taskFailureNotifier = wireTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
     listDefinitions: () => jobRuntime.listSchedules(),
     dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant)), // P2 的「连续 3 次失败」按**任务身份**数，所以取的是这个 handler 的运行序列：
@@ -877,6 +878,9 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     listHandlerRuns: (handlerId) =>
       jobRuntime.listRuns({ handlerId, statuses: ['completed', 'failed', 'cancelled'], newestFirst: true, limit: 200 })
   })
+  /* 扇出：原有那条（任务失败通知）原样保留；产品登记的数据变更发射器从登记表里取。
+     平台不 import 产品，产品在自己的装配处 `registerProductRunTerminalListener` 登记。 */
+  const onRunTerminal = fanOutRunTerminal([taskFailureNotifier])
   const jobRuntime = createJobRuntime({ store: jobRunStore, onRunTerminal })
   setJobRuntimeForDisposal(jobRuntime)
   jobRuntime.recover()
