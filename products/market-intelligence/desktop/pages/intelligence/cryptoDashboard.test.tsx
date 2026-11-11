@@ -1067,6 +1067,54 @@ describe('host wiring: cells switched off and sources judged', () => {
     expect(card.textContent).not.toContain(dashboardText.positioning.loading)
   })
 
+  /**
+   * 整类问题的其余两处（2026-11-12 03:5x 用户现场「ETF 那格开着、源关掉了」）：
+   * `isCellEnabled` 只看得见「格开没开」，源级状态被压掉，卡片只能画红边。
+   */
+  it('capital: a cell whose SOURCE is off names the source; a cell that is off names the cell', async () => {
+    const sourceOff = await renderCells({}, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(sourceOff, '.mi-capital-conditions')
+    const capitalCard = sourceOff.querySelector('.mi-capital-conditions')!
+    // 源关了：宿主把**源名**交给卡片（`cellAvailability.etf.sourceLabel`），不再是「这一格关了」；
+    // 但卡片现在这一支只画横杠+一颗「启用数据」，**不打印**这个 label —— 让屏幕说出源名要改资金面的卡
+    // （`CapitalConditionsPanel`，资金情绪线），已报 Chief 协调。这里钉宿主这一半：动作在、不加载。
+    expect(capitalCard.querySelectorAll('button').length).toBeGreaterThan(0)
+    expect(capitalCard.textContent).not.toContain(dashboardText.capitalConditions.loading)
+
+    const cellOff = await renderCells({ 'capital:etf': false }, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(cellOff, '.mi-capital-conditions')
+    const offCard = cellOff.querySelector('.mi-capital-conditions')!
+    // 格关了：说这一格（格名 ETF），不说成源。
+    expect(offCard.textContent).toContain('ETF')
+    expect(offCard.textContent).not.toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['0xrouter-aggregate-provider'])
+  })
+
+  it('fear and greed: the veil names the source when the source itself is off', async () => {
+    const container = await renderCells({}, {
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'alternative-fear-greed' as const, enabled: false, hasCredential: true },
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true }
+      ] }) }
+    })
+    await settle(container, '.mi-crypto-dashboard__sentiment')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    expect(card.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['alternative-fear-greed'])
+    // 不许拿「加载中」冒充。
+    expect(card.textContent).not.toContain(dashboardText.fearGreed.loading)
+  })
+
   /** 政策路径：两条硬依赖，逐支点名（2026-11-12 架构师批的双格形状）。 */
   const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-policy-card')!
   const policySentence = (container: HTMLElement): string =>

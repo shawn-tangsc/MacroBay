@@ -67,6 +67,8 @@ import { PolicyPathSlot } from './PolicyPathSlot'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
+import { cellOffLabel } from './dashboardCellOff'
+import { QUOTES_ROW_CELL_KEYS, quotesRowStates } from './dashboardQuotesRows'
 import { useDataChangeRevision } from './useDataChangeRevision'
 
 /**
@@ -187,40 +189,38 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
     cells.some(([moduleId, cellKey]) => readable(moduleId, cellKey))
   const cellStateLabels = { disabled: text.cellState.notEnabled, unreadable: text.cellState.sourceUnknown }
   /**
-   * 资金面两格各一颗「去启用」：**两个独立闭包**，读者点哪一格就落到哪一格。
-   * 落点目前只到设置抽屉的默认位置（`focus` 通道前端线还没落），等它落地后把 cellId 填进 focus。
+   * 一格「不能用」时的那句话与落点：**先看判定 kind，不压成布尔**（2026-11-12 用户现场：
+   * ETF 那格开着、0xRouter 这个源关着，卡片只画红边，从不说缺的是哪个源）。
+   * - `not-enabled` → 说**这一格**（格名）；
+   * - `source-disabled` → 说**那个源**（源显示名）；
+   * - `read` / `source-unknown` → 不给这句（读不到由卡片自己的「读不到」承担）。
    */
-  const capitalCellOff = (cellKey: string): DashboardCapitalCellOff | undefined =>
-    isCellEnabled(cellState.cells, dashboardCellId('capital', cellKey))
-      ? undefined
-      : {
-          sourceLabel: cellLabel('capital', cellKey) ?? '',
-          // 两颗「去启用」各指各的格：cellId 就是这一格的键，别共用卡级回跳。
-          onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: 'capital', cellId: `capital:${cellKey}` })
-        }
+  const cellOffOf = (
+    moduleId: 'capital' | 'fear-greed',
+    cellKey: string
+  ): { sourceLabel: string; onOpenSources: () => void } | undefined => {
+    const sourceLabel = cellOffLabel({
+      decision: decide(moduleId, cellKey),
+      cellLabel: cellLabel(moduleId, cellKey),
+      sourceName: (sourceId) => resolveProductKey(`settings.intelligenceSources.sourceNames.${sourceId}`)
+    })
+    if (sourceLabel === undefined) return undefined
+    return {
+      sourceLabel,
+      onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: moduleId, cellId: dashboardCellId(moduleId, cellKey) })
+    }
+  }
+  /** 资金面两格各一颗「去启用」：**两个独立闭包**，读者点哪一格就落到哪一格。 */
+  const capitalCellOff = (cellKey: string): DashboardCapitalCellOff | undefined => cellOffOf('capital', cellKey)
   const capitalCellAvailability: DashboardCapitalCellAvailability = {
     ...(capitalCellOff('stablecoin') === undefined ? {} : { stablecoin: capitalCellOff('stablecoin') }),
     ...(capitalCellOff('etf') === undefined ? {} : { etf: capitalCellOff('etf') })
   }
-  // 情绪卡那一格被关掉：卡仍在，卡内遮罩说「来源没有启用」。
-  const fearGreedCellOff = isCellEnabled(cellState.cells, dashboardCellId('fear-greed', 'index'))
-    ? undefined
-    : { sourceLabel: cellLabel('fear-greed', 'index') ?? '', onOpenSources: () => onManageSource({ business: 'dashboard', moduleKey: 'fear-greed', cellId: 'fear-greed:index' }) }
+  // 情绪卡那一格不能用：卡仍在，遮罩说清是「这一格没启用」还是「这个源没启用」。
+  const fearGreedCellOff = cellOffOf('fear-greed', 'index')
   // 市场状态表每一行：读不到 / 未启用就画状态行（不是删行）。
-  const QUOTES_ROW_CELL_KEYS = {
-    index: 'ndx', btc: 'btc', eth: 'eth', dxy: 'usd', gold: 'gold', us10y: 'ust10y', realRate: 'ust10y'
-  } as const
-  const rowStates = Object.fromEntries(Object.entries(QUOTES_ROW_CELL_KEYS).flatMap(([row, cellKey]) => {
-    if (!decisionsUsable) return []
-    const decision = decide('quotes', cellKey)
-    if (decision.kind === 'read') return []
-    return [[row, decision.kind === 'source-unknown' ? 'unreadable' : 'disabled']]
-  }))
-  /**
-   * 「市场状态」标题右边那颗「启用数据」落到哪一格：**按行序第一行没配好的那一格**。
-   * 落点带 cellId，读者点下去抽屉直接定位到这一格，而不是只停在看板组。
-   */
-  const firstDisabledQuotesCell = Object.entries(QUOTES_ROW_CELL_KEYS).find(([row]) => rowStates[row] === 'disabled')
+  const rowStates = quotesRowStates({ decisionsUsable, decide })
+  const firstDisabledQuotesCell = Object.entries(QUOTES_ROW_CELL_KEYS).find(([row]) => rowStates[row as keyof typeof QUOTES_ROW_CELL_KEYS] === 'disabled')
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, disabled: !readsReady || !readable('fear-greed', 'index'), now, revision: dataRevision })
   // 费率那格读不到时的重读入口：与持仓各自一格，一格重试不影响另一格。
