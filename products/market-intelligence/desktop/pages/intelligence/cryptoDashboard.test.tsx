@@ -1081,7 +1081,7 @@ describe('host wiring: capital cells, one row at a time', () => {
     }
   }
 
-  async function renderCapital(cells: Record<string, boolean>, query = vi.fn(async () => capitalSnapshot), onManageSource = vi.fn()) {
+  async function renderCapital(cells: Record<string, boolean>, query: ReturnType<typeof vi.fn> = vi.fn(async () => capitalSnapshot), onManageSource = vi.fn()) {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -1105,40 +1105,100 @@ describe('host wiring: capital cells, one row at a time', () => {
     return { container, query, onManageSource }
   }
 
-  it('only ETF off: that row says it, the other cell keeps reading', async () => {
+  /** 可读的 ETF 快照（线格式）：5 行/资产、日期严格递增、verifiedAt 在 48h 内。 */
+  const readableEtf = {
+    state: 'available' as const, schemaVersion: 1 as const, sourceId: '0xrouter' as const,
+    windowEnd: '2026-07-31', verifiedAt: '2026-08-04T23:00:00.000Z',
+    /* 5 行、且必须是**连续交易日**（跨周末的日历日会被 `previousTradingDate` 判非法）：07-27 周一 → 07-31 周五。 */
+    btc: { asset: 'BTC' as const, rows: ['27', '28', '29', '30', '31'].map(day => ({
+      tradingDate: `2026-07-${day}`, netFlowUsd: -95_000_000, observedAt: '2026-07-31T22:00:00.000Z'
+    })) },
+    eth: { asset: 'ETH' as const, rows: ['27', '28', '29', '30', '31'].map(day => ({
+      tradingDate: `2026-07-${day}`, netFlowUsd: -1_300_000, observedAt: '2026-07-31T22:00:00.000Z'
+    })) }
+  }
+
+  it('only ETF off: the off rows are dashes with no numbers left, and the one action sits in the title', async () => {
     const { container } = await renderCapital({ 'capital:etf': false })
     const card = container.querySelector('.mi-capital-conditions')!
+    // 源关掉：这一块给一句状态词，两行数据格画横杠（两种表示并存，不是二选一）。
+    const stateWords = [...card.querySelectorAll('.mi-source-state')]
+    expect(stateWords.map(word => word.getAttribute('data-state'))).toEqual(['disabled'])
+    expect(stateWords[0]!.textContent).toContain(`${dataText.sourcesNotEnabled}（ETF）`)
+    // 另一格照旧出数。
     expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
-    const rows = [...card.querySelectorAll('.mi-source-state')]
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.getAttribute('data-state')).toBe('disabled')
-    expect(rows[0]?.textContent).toContain(`${dataText.sourcesNotEnabled}（ETF）`)
-    expect([...card.querySelectorAll('button')].filter((b) => b.textContent === dataText.enableSources)).toHaveLength(1)
+    // 关掉那一格：两行行名在，数据格全是横杠，且一个数字都不许留（旧读数必须消失）。
+    const offRows = [...card.querySelectorAll('[data-etf-cell-off]')]
+    expect(offRows.map(row => row.getAttribute('data-etf-cell-off'))).toEqual(['btc', 'eth'])
+    for (const row of offRows) {
+      expect(row.textContent).toContain('—')
+      expect((row.textContent ?? '').replace(/[^0-9]/g, '')).toBe('')
+    }
+    // 唯一动作在标题行右侧。
+    const actions = [...card.querySelectorAll('.mi-capital-conditions__title-action')]
+    expect(actions).toHaveLength(1)
+    expect(actions[0]!.textContent).toBe(dashboardText.crossAsset.enableData)
+    expect(card.querySelector('.mi-capital-conditions__table-actions')).toBeNull()
     expect(card.querySelector('.state-view')).toBeNull()
   })
 
-  it('both off: the card stays with two rows, and the read is never started', async () => {
+  it('both off: the card stays behind the veil with one action inside, and the read is never started', async () => {
     const { container, query } = await renderCapital({ 'capital:stablecoin': false, 'capital:etf': false })
     const card = container.querySelector('.mi-capital-conditions')!
-    expect(card.querySelectorAll('.mi-source-state[data-state="disabled"]')).toHaveLength(2)
-    expect([...card.querySelectorAll('button')].filter((b) => b.textContent === dataText.enableSources)).toHaveLength(2)
+    expect(card.querySelector('.mi-source-veil-host')!.getAttribute('data-veiled')).toBe('true')
+    // 不画表头骨架。
+    expect(card.querySelector('thead')).toBeNull()
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).toBeNull()
+    // 遮罩里：一句「来源没有启用」+ 恰一颗「启用数据」。
+    const veil = card.querySelector('.mi-source-veil')!
+    expect(veil).not.toBeNull()
+    expect(veil.querySelector('.mi-source-state')!.getAttribute('data-state')).toBe('disabled')
+    expect(veil.textContent).toContain(dataText.sourcesNotEnabled)
+    expect([...veil.querySelectorAll('button')]).toHaveLength(1)
+    expect(veil.querySelector('button')!.textContent).toBe(dashboardText.crossAsset.enableData)
+    // 卡内可聚焦元素恰 1 个（就是遮罩里那颗），标题行没有任何动作。
+    const focusable = [...card.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    expect(focusable).toHaveLength(1)
+    expect(card.querySelector('.mi-capital-conditions__title-action')).toBeNull()
     expect(card.querySelector('.state-view')).toBeNull()
-    // 门禁只剩在请求上：两格都关时一次都不发（关键断言，不许写成只看卡在不在）。
+    // 门禁只剩在请求上：两格都关时一次都不发。
     expect(query).not.toHaveBeenCalled()
   })
 
-  it('neither off: the ordinary card, no source-state rows', async () => {
+  it('nothing off and both cells readable: the ordinary card, and no action at all', async () => {
+    const { container } = await renderCapital({}, vi.fn(async () => ({ ...capitalSnapshot, etf: readableEtf })))
+    const card = container.querySelector('.mi-capital-conditions')!
+    expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+    expect(card.textContent).not.toContain('—')
+    expect(card.querySelector('.mi-capital-conditions__title-action')).toBeNull()
+    // 两格都读到：ETF 表是数据行，不是「读不到」那一行。
+    expect(card.querySelector('[data-etf-unavailable]')).toBeNull()
+    expect(card.querySelector('[data-etf-cell-off]')).toBeNull()
+    // 资金流那块自己的读数不在本条的判据里（它走另一路查询），这里只钉「这一格读到 = 无动作」。
+  })
+
+  it('nothing off but the ETF half unreadable: a state word in that row, one retry in the title', async () => {
+    // 夹具里 ETF 是 `unavailable`（读不到，不是「没有」）：表留着，那一行一句状态词。
     const { container } = await renderCapital({})
     const card = container.querySelector('.mi-capital-conditions')!
-    expect(card.querySelector('.mi-source-state')).toBeNull()
     expect(card.querySelector('.mi-capital-conditions__stable-table')).not.toBeNull()
+    const unavailableRow = card.querySelector('[data-etf-unavailable="true"]')!
+    expect(unavailableRow).not.toBeNull()
+    expect(unavailableRow.querySelector('.mi-source-state')!.getAttribute('data-state')).toBe('unreadable')
+    expect(unavailableRow.textContent).toContain(dataText.temporarilyUnavailable)
+    // 读不到不画横杠（横杠留给「确实没有」），整张卡一处动作：标题行「再试一次」。
+    expect(card.textContent).not.toContain('—')
+    const action = card.querySelector('.mi-capital-conditions__title-action')!
+    expect(action.textContent).toBe(dataText.retry)
+    expect([...card.querySelectorAll('button')].filter(button => button.textContent === dataText.retry || button.textContent === dashboardText.crossAsset.enableData)).toHaveLength(1)
   })
 })
 
 
 describe('host wiring: each capital cell focuses its own cell', () => {
-  it('only the stablecoin action carries capital:stablecoin, only the ETF one carries capital:etf', async () => {
-    const text = productText['zh-CN'].pages.intelligence.portal
+  // TODO(focus): 宿主闭包现在仍是 `() => onManageSource()`（focus 通道未到），所以这里只证「点了有反应」。
+  // 通道落地后补 `toHaveBeenLastCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:stablecoin' })`（只关 ETF 时是 `capital:etf`）。
+  it('one cell off → the title action carries that cell', async () => {
     const onManageSource = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
@@ -1153,20 +1213,26 @@ describe('host wiring: each capital cell focuses its own cell', () => {
     }))
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
-      openInterestClient: openInterestClient(), capitalConditionsClient: { querySnapshot: query },
-      now: () => new Date(asOf), onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
-      text: text.dashboard, cellEnabledIo: { read: async () => ({ 'capital:stablecoin': false, 'capital:etf': false }) }
+      openInterestClient: openInterestClient(),
+      capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
+      dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
+        { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
+        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
+      ] }) },
+      onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
+      text: productText['zh-CN'].pages.intelligence.portal.dashboard,
+      cellEnabledIo: { read: async () => ({ 'capital:stablecoin': false }) }
     } as never)))
     for (let round = 0; round < 20; round += 1) {
-      if (container.querySelectorAll('.mi-source-state[data-state="disabled"]').length === 2) break
+      if (container.querySelector('.mi-capital-conditions__title-action') !== null) break
       await act(async () => { await Promise.resolve() })
     }
-    const buttons = [...container.querySelectorAll<HTMLButtonElement>('.mi-capital-conditions button')]
-      .filter((button) => button.textContent === productText['zh-CN'].pages.intelligence.portal.data.enableSources)
-    expect(buttons).toHaveLength(2)
-    await act(async () => buttons[0]!.click())
-    expect(onManageSource).toHaveBeenLastCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:stablecoin' })
-    await act(async () => buttons[1]!.click())
-    expect(onManageSource).toHaveBeenLastCalledWith({ business: 'dashboard', moduleKey: 'capital', cellId: 'capital:etf' })
+    const action = container.querySelector<HTMLButtonElement>('.mi-capital-conditions__title-action')
+    expect(action).not.toBeNull()
+    expect(action!.textContent).toBe(productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset.enableData)
+    await act(async () => action!.click())
+    // 只证「点了有反应」；落点是哪个 cellId 见上面的 TODO(focus)。
+    expect(onManageSource).toHaveBeenCalledTimes(1)
   })
 })
