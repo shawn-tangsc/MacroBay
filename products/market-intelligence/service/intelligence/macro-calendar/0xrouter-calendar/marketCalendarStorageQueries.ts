@@ -107,7 +107,13 @@ export function createMarketCalendarStorageQueries(database: DatabaseSync, curso
         // twice or skipped. A previous formulation sampled `limit*2+1` rows newest-collection-
         // first and advanced the cursor to the largest key in that sample, which permanently
         // excluded identities whose newest row lived in an older collection.
-        rows = read(`select o.*, c.detected_at as last_observed_at, c.evidence_hash as collection_evidence_hash
+        // `last_observed_at` 是**读者看到的「来源观测时间」**：一条身份被重复采到时，写入侧按
+        // 「业务值没变就不新增观测行」去重（`marketCalendarEventRepository` 的 `sameObservationState`），
+        // 所以那张只插不改的观测行上的时间会冻在首次采样那一刻。ledger 的 `last_seen_at` 才是
+        // 「最近一次见到这个候选」——两者取大，既保留观测行的审计语义，又让时间跟着采集走。
+        rows = read(`select o.*, c.detected_at as collection_observed_at,
+            l.last_seen_at as ledger_last_seen_at,
+            c.evidence_hash as collection_evidence_hash
           from (select o2.candidate_key as candidate_key, max(c2.collection_sequence) as collection_sequence
             from mi_macro_calendar_market_event_observations as o2 indexed by ${marketCalendarRetentionPolicy.identityScanIndex}
             join mi_macro_calendar_market_event_collections as c2 on c2.collection_id = o2.collection_id
@@ -118,8 +124,18 @@ export function createMarketCalendarStorageQueries(database: DatabaseSync, curso
           join mi_macro_calendar_market_event_observations as o on o.candidate_key = current.candidate_key
           join mi_macro_calendar_market_event_collections as c on c.collection_id = o.collection_id
             and c.collection_sequence = current.collection_sequence
+          left join mi_macro_calendar_market_observation_ledger as l on l.candidate_key = o.candidate_key
           order by current.candidate_key collate binary asc limit ?`,
         [...parameters, query.asOf as string, BigInt(highWater), ...(cursor?.last ?? []), limit + 1, limit + 1])
+        // 展示用的「来源观测时间」= max(这次真正存下这条的批次, ledger 里最近一次见到它)。
+        // 上限卡在本次读取的 `asOf` 上：冻结读取（asOf 在过去）不许被后来的采集时间穿透，
+        // 否则「按 asOf 回看」会看到未来的时间。
+        const asOfMs = Date.parse(String(query.asOf))
+        for (const row of rows) {
+          const collected = String(row.collection_observed_at)
+          const seen = typeof row.ledger_last_seen_at === 'string' ? row.ledger_last_seen_at : undefined
+          row.last_observed_at = seen !== undefined && seen > collected && Date.parse(seen) <= asOfMs ? seen : collected
+        }
       } else {
         const parent = read(`select collection_id from mi_macro_calendar_market_event_collections where collection_id = ?
           and ${scopePredicate} and detected_at <= ? and collection_sequence <= ? limit 1`,

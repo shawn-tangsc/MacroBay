@@ -118,7 +118,7 @@ describe('market public paging independent of official 200 item cap', () => {
     }
     expect(resampled).toHaveLength(251)
     expect(resampled.filter((item) => item.observationKey === resampledKey)).toEqual([
-      { observationKey: resampledKey, sourceObservedAt: '2026-09-10T00:00:00.000Z', title: 'Derived event' }
+      { observationKey: resampledKey, sourceObservedAt: '2026-09-10T01:00:00.000Z', title: 'Derived event' }
     ])
     expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations where collection_id = ?').get('second')?.n).toBe(0)
     expect(h.service.queryMonth({ ...query, locale: 'en', cursor: first.nextCursor }).state).toBe('unavailable')
