@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   createLarkLongConnection,
+  larkCloseCode,
   larkWsTarget,
   toLongConnectionEvent,
   type LarkHttpInstance,
@@ -194,4 +195,14 @@ describe('lark long connection wrapper', () => {
     expect(larkApiBaseFor('feishu')).toBe('https://open.feishu.cn/open-apis')
   })
 
+})
+
+
+describe('close code extraction', () => {
+  it('keeps the numeric code the gateway sent, from a field or from the message', () => {
+    expect(larkCloseCode(Object.assign(new Error('boom'), { code: 1000040351 }))).toBe('1000040351')
+    expect(larkCloseCode(new Error('connect failed: 1000040351 Incorrect domain name'))).toBe('1000040351')
+    expect(larkCloseCode(new Error('no code here'))).toBe('unknown')
+    expect(larkCloseCode(null)).toBe('unknown')
+  })
 })

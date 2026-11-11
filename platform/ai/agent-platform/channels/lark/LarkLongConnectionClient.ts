@@ -73,6 +73,9 @@ export type LarkWsClientFactory = (options: {
   httpInstance: LarkHttpInstance
   /** 租户所属那一站：SDK 的 `domain` 与代理目标都从它取，不许在工厂里再写字面量。 */
   domain: LarkDomain
+  /** SDK 首次握手成功 / 终态失败的回调：宿主据此落「就绪」「被关闭」两行诊断。 */
+  onReady?: () => void
+  onError?: (error: Error) => void
 }) => WsClientLike
 
 export type LarkLongConnectionDeps = {
@@ -86,6 +89,9 @@ export type LarkLongConnectionDeps = {
   createWsClient?: LarkWsClientFactory
   /** 租户所属那一站：缺省是历史默认的国际站；启用自检会按凭据探测后传真实值。 */
   domain?: LarkDomain
+  /** 长连接就绪（首次握手成功）/ 终态失败：宿主用它们写诊断行，绝不吞掉。 */
+  onReady?: () => void
+  onError?: (error: Error) => void
   /** 握手超时：代理挂住时不让它无限等。 */
   handshakeTimeoutMs?: number
 }
@@ -118,7 +124,9 @@ export function createLarkLongConnection(deps: LarkLongConnectionDeps): LarkLong
           // 取 wss 地址那一跳也走平台的出网入口：SDK 默认的 axios 不读应用网络设置。
           httpInstance: createLarkHttpInstance(deps.getPlatformFetch),
           // 域名跟着租户走：中国站租户在国际站会被 1000040351 踢掉。
-          domain: deps.domain ?? 'lark'
+          domain: deps.domain ?? 'lark',
+          ...(deps.onReady === undefined ? {} : { onReady: deps.onReady }),
+          ...(deps.onError === undefined ? {} : { onError: deps.onError })
         })
         await client.start({ eventDispatcher: createDispatcher(handlers.onEvent) })
         return { ok: true }
@@ -183,10 +191,27 @@ const defaultWsClientFactory: LarkWsClientFactory = (options) => {
     // 不传它，SDK 会用自带的 axios 直连——那正是这一笔要堵的口子。
     // 收窄是必要的：SDK 声明的是 axios 实例（带 get/post/delete…），我们只实现它实际用到的那一个方法。
     httpInstance: options.httpInstance as unknown as SdkWsClientParams['httpInstance'],
-    // 取 wss 地址打哪个 origin 由同一处常量决定：默认它会是 Feishu，与 REST 基址分叉。
+    // 取 wss 地址打哪个 origin 由同一处常量决定，与 REST 基址同源。
     domain: larkOrigins[options.domain],
+    ...(options.onReady === undefined ? {} : { onReady: options.onReady }),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
     autoReconnect: false
   }) as unknown as WsClientLike
+}
+
+/**
+ * SDK 终态错误 → 一个**短码**（写进诊断审计，不含 URL、凭据、正文）。
+ *
+ * 飞书被网关踢下来的典型形态是 `1000040351 Incorrect domain name`：数字码必须在库里看得见，
+ * 否则「连上了但收不到消息」永远分不出是域名错、网络错还是没订阅。
+ */
+export function larkCloseCode(error: unknown): string {
+  const record = (error ?? {}) as { code?: unknown; errCode?: unknown; message?: unknown }
+  const direct = record.code ?? record.errCode
+  if (typeof direct === 'number' || (typeof direct === 'string' && direct.trim() !== '')) return String(direct)
+  const message = typeof record.message === 'string' ? record.message : ''
+  const matched = /\b(\d{6,})\b/u.exec(message)
+  return matched?.[1] ?? 'unknown'
 }
 
 /** 只订阅消息事件，并把 SDK 的回调折成我们自己的形状。 */

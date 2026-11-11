@@ -88,6 +88,8 @@ function createHarness(options: {
   const order: string[] = []
   const inboundRequests: Array<Record<string, unknown>> = []
   let emitHandler: ((event: LarkLongConnectionEvent) => Promise<void>) | null = null
+  let emitReady: (() => void) | undefined
+  let emitError: ((error: Error) => void) | undefined
   const inbound = {
     receive: vi.fn(async (request: Record<string, unknown>) => {
       inboundRequests.push(request)
@@ -105,6 +107,9 @@ function createHarness(options: {
     auditIfCurrent: vi.fn((_channelId: string, _generation: number, code: string) => {
       auditCodes.push(code)
       return true
+    }),
+    auditDiagnostic: vi.fn((_channelId: string, code: string) => {
+      auditCodes.push(code)
     })
   }
   const host = new LarkLongConnectionHost({
@@ -122,8 +127,10 @@ function createHarness(options: {
     },
     isCurrent: () => true,
     signal: new AbortController().signal,
-    createConnection: ({ onEvent }) => {
+    createConnection: ({ onEvent, onReady, onError }) => {
       emitHandler = onEvent
+      emitReady = onReady
+      emitError = onError
       return {
         connect: async () => options.connectResult ?? { ok: true },
         close: () => {}
@@ -137,9 +144,41 @@ function createHarness(options: {
     runtime,
     order,
     audits: () => [...auditCodes],
+    ready: () => emitReady?.(),
+    fail: (error: Error) => emitError?.(error),
     emit: async (payload: unknown) => {
       if (!emitHandler) throw new Error('connection was never attached')
       await emitHandler({ eventId: 'evt-1', eventType: 'im.message.receive_v1', payload })
     }
   }
 }
+
+/**
+ * 现场诊断：飞书「启用了但一点现场都留不下」时，这四行必须能落库。
+ * 它们**不过授权闸门**——被踢下线的那一刻，闸门条件往往已经不成立。
+ */
+describe('lark host diagnostics', () => {
+  it('records start, gate, station and frame-in without asking the gate', async () => {
+    const harness = createHarness({ connectResult: { ok: true } })
+    await expect(harness.host.start()).resolves.toBe(true)
+
+    expect(harness.audits()).toContain('lark-host-start:g1')
+    expect(harness.audits().some((code) => code.startsWith('lark-gate:aborted='))).toBe(true)
+    expect(harness.audits()).toContain('lark-station:unresolved')
+
+    await harness.emit(TEXT_PAYLOAD)
+    expect(harness.audits()).toContain('lark-frame-in:im.message.receive_v1')
+  })
+
+  it('records ready and the exact close code the gateway sent', async () => {
+    const harness = createHarness({ connectResult: { ok: true } })
+    await harness.host.start()
+
+    harness.ready()
+    expect(harness.audits()).toContain('lark-ws-ready')
+
+    // 现场那条：1000040351 Incorrect domain name 必须能原样落库，否则永远分不出是哪一种掉线。
+    harness.fail(Object.assign(new Error('Incorrect domain name'), { code: 1000040351 }))
+    expect(harness.audits()).toContain('lark-ws-closed:1000040351')
+  })
+})

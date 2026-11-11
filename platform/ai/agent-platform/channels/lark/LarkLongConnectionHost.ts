@@ -2,6 +2,7 @@ import type { ChannelInboundService } from '../ChannelInboundService'
 import { readLarkMessageEvent } from './LarkEventEnvelope'
 import {
   createLarkLongConnection,
+  larkCloseCode,
   type LarkLongConnection,
   type LarkLongConnectionEvent,
   type LarkProxyDecision
@@ -40,10 +41,19 @@ export class LarkLongConnectionHost {
     signal: AbortSignal
     handshakeTimeoutMs?: number
     /** 只给用例注入；生产用包装层的默认工厂。 */
-    createConnection?: (input: { onEvent: (event: LarkLongConnectionEvent) => Promise<void> }) => LarkLongConnection
+    createConnection?: (input: {
+      onEvent: (event: LarkLongConnectionEvent) => Promise<void>
+      onReady?: () => void
+      onError?: (error: Error) => void
+    }) => LarkLongConnection
   }) {}
 
   async start(): Promise<boolean> {
+    // 诊断行不过授权闸门：启动失败/被踢的那一刻，`auditIfCurrent` 的条件恰恰可能不成立。
+    this.diagnose(`lark-host-start:g${this.deps.generation}`)
+    this.diagnose(
+      `lark-gate:aborted=${this.deps.signal.aborted ? 1 : 0},active=${this.currentGeneration() ? 1 : 0},owner=g${this.deps.generation}`
+    )
     if (this.stopped || !this.currentGeneration()) return false
     // 域名跟着租户走：先问凭据属于哪一站，再按那一站建长连接与解析代理。
     // 判不出来就不建连接——拿错域名连上去会被网关踢，读者只会看到「已启用却收不到消息」。
@@ -55,17 +65,22 @@ export class LarkLongConnectionHost {
         getPlatformFetch: this.deps.getPlatformFetch
       })
       : null
+    this.diagnose(`lark-station:${auth !== null && auth.ok ? auth.domain : 'unresolved'}`)
     if (auth !== null && !auth.ok) {
       this.audit(auth.code)
       return false
     }
-    const connection = this.deps.createConnection?.({ onEvent: (event) => this.handle(event) }) ??
+    const onReady = (): void => this.diagnose('lark-ws-ready')
+    const onError = (error: Error): void => this.diagnose(`lark-ws-closed:${larkCloseCode(error)}`)
+    const connection = this.deps.createConnection?.({ onEvent: (event) => this.handle(event), onReady, onError }) ??
       createLarkLongConnection({
         appId: this.deps.appId,
         appSecret: this.deps.appSecret,
         resolveProxy: this.deps.resolveProxy,
         getPlatformFetch: this.deps.getPlatformFetch,
         ...(auth === null ? {} : { domain: auth.domain }),
+        onReady,
+        onError,
         ...(this.deps.handshakeTimeoutMs === undefined ? {} : { handshakeTimeoutMs: this.deps.handshakeTimeoutMs })
       })
     this.connection = connection
@@ -88,6 +103,8 @@ export class LarkLongConnectionHost {
 
   /** 事件 → 归一层 → 入站管道。抛错 = 不确认（平台会重推）。 */
   private async handle(event: LarkLongConnectionEvent): Promise<void> {
+    // 事件进管道的**第一行**：只写事件类型，不带正文。域名对了之后，这一行就是「消息真的进来了」。
+    this.diagnose(`lark-frame-in:${event.eventType === '' ? 'unknown' : event.eventType}`)
     if (this.stopped || !this.currentGeneration()) throw new Error('lark-host-not-current')
     const read = readLarkMessageEvent(event)
     if (read.kind === 'ignored') return
@@ -136,5 +153,10 @@ export class LarkLongConnectionHost {
   private audit(code: string): void {
     if (!this.currentGeneration()) return
     this.deps.runtime.auditIfCurrent(this.deps.channelId, this.deps.generation, code)
+  }
+
+  /** 诊断行：不过闸门、不含凭据/正文/URL；channelId 只写后 6 位。 */
+  private diagnose(code: string): void {
+    this.deps.runtime.auditDiagnostic(this.deps.channelId, code)
   }
 }
