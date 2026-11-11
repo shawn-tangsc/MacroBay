@@ -5,7 +5,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
-import { DASHBOARD_TAB_MODULES, cellEnabledOrDefault, cellsUsingSource, modulesUsingSource } from './dashboardSourceModules'
+import { DASHBOARD_TAB_MODULES } from './dashboardSourceModules'
 import { SettingsInfo } from '../settingsInfo'
 import { catalogMarkerClass } from './sourceHealthTone'
 import { SourceFilterTabs } from './filter/SourceFilterTabs'
@@ -67,39 +67,28 @@ export function sourceMatchesFilter(
 const matchesFilter = sourceMatchesFilter
 
 /**
- * 「这个源在『采集与数据』里开着吗」——两处显示同一事实的唯一判据（用户 2026-11-12）。
+ * 行状态**只看源自己开没开**（用户 2026-11-12：「数据源这里绿不绿，和里面的模块启用不启用没关系，
+ * 只和整个源是不是被启用有关」）。
  *
- * 源自己的 `enabled` 为 false → 关；源开着、但它在采集与数据里对应的格**全关** → 也关。
- * 缺键按卡片的默认（主格开、备用行关），与 `BusinessSettingsView` 共用 `cellEnabledOrDefault`。
+ * 三档：全部源待接入 → `pending`（灰）；否则任一源启用 → `enabled`（绿）；否则 `disabled`（红）。
+ * **不读任何模块/格数据**——以前那两维（`modulesUsingSource`、`cellEnabledOrDefault`）正是
+ * 「明明是启用的源，颜色却跟着模块变」的来源，已整块删除；要恢复它们得先让用户改口。
  */
-function sourceEnabledInList(
-  source: { sourceId: string; enabled: boolean; visibility: string },
-  cellEnabled?: Readonly<Record<string, boolean>>
-): boolean {
-  if (source.visibility === 'pending' || !source.enabled) return false
-  const cells = cellsUsingSource(source.sourceId)
-  if (cells.length === 0) return true
-  return cells.some((cell) => cellEnabledOrDefault(cellEnabled?.[cell.cellId], cell.fallback))
-}
-
-/** 行状态：`enabled`（至少一项开）/ `disabled`（有模块用但全关）/ `unused`（0 模块或全待接入）。 */
 export function providerRowState(
-  provider: { sources: ReadonlyArray<{ sourceId: string; enabled: boolean; visibility: string }> },
-  cellEnabled?: Readonly<Record<string, boolean>>
-): 'enabled' | 'disabled' | 'unused' {
-  const used = provider.sources.some((source) => modulesUsingSource(source.sourceId).length > 0)
-  if (!used || provider.sources.every((source) => source.visibility === 'pending')) return 'unused'
-  return provider.sources.some((source) => sourceEnabledInList(source, cellEnabled)) ? 'enabled' : 'disabled'
+  provider: { sources: ReadonlyArray<{ enabled: boolean; visibility: string }> }
+): 'enabled' | 'disabled' | 'pending' {
+  if (provider.sources.every((source) => source.visibility === 'pending')) return 'pending'
+  return provider.sources.some((source) => source.enabled) ? 'enabled' : 'disabled'
 }
 
 /**
- * 组内排序（用户 2026-11-11）：enabled → disabled → unused；**同级保持原顺序**（稳定的数组排序，
+ * 组内排序（用户 2026-11-11）：enabled → disabled → pending；**同级保持原顺序**（稳定的数组排序，
  * 不每次渲染抖）。只排组内，不跨组。
  */
-const STATE_ORDER: Record<ReturnType<typeof providerRowState>, number> = { enabled: 0, disabled: 1, unused: 2 }
+const STATE_ORDER: Record<ReturnType<typeof providerRowState>, number> = { enabled: 0, disabled: 1, pending: 2 }
 
-function sortByState<T extends { sources: ReadonlyArray<{ sourceId: string; enabled: boolean; visibility: string }> }>(providers: readonly T[], cellEnabled?: Readonly<Record<string, boolean>>): T[] {
-  return [...providers].sort((left, right) => STATE_ORDER[providerRowState(left, cellEnabled)] - STATE_ORDER[providerRowState(right, cellEnabled)])
+function sortByState<T extends { sources: ReadonlyArray<{ enabled: boolean; visibility: string }> }>(providers: readonly T[]): T[] {
+  return [...providers].sort((left, right) => STATE_ORDER[providerRowState(left)] - STATE_ORDER[providerRowState(right)])
 }
 
 /**
@@ -120,7 +109,7 @@ function isOfficialCalendarSource(sourceId: string): boolean {
 }
 
 /** One flat row per provider; capabilities live in the detail pane. */
-export function SettingsSourceTree({ bare, cellEnabled, filter, filters, flat, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
+export function SettingsSourceTree({ bare, filter, filters, flat, labels, onFilterChange, onSelectProvider, selectedProviderId, view }: {
   /** 只交**列表本体**（不画外层栏与页签）：页签条由 `SourcesSettingsPane` 统一画，切 tab 才不重挂载。 */
   bare?: boolean
   /**
@@ -132,11 +121,6 @@ export function SettingsSourceTree({ bare, cellEnabled, filter, filters, flat, l
   /** 这一面显示哪几块筛选：设置页默认六项；抽屉只传四块（日历 / 看板 / 舆情 / 待接入）。 */
   filters?: ReadonlyArray<{ value: SourceFilter; labelKey: string }>
   labels: Labels
-  /**
-   * 格级启用快照（`采集与数据` 里那些开关）：**数据源行的状态与它一致**（用户 2026-11-12）。
-   * 由宿主 `SourcesSettingsPane` 传同一份，不许在这里再读一遍。
-   */
-  cellEnabled?: Readonly<Record<string, boolean>>
   onFilterChange: (filter: SourceFilter) => void
   onSelectProvider: (providerId: string) => void
   selectedProviderId?: string
@@ -238,7 +222,7 @@ export function SettingsSourceTree({ bare, cellEnabled, filter, filters, flat, l
                   labelKeys={[section.info.noteKey]}
                   resolveText={resolveText} />}
             </div>}
-          {sortByState(providers, cellEnabled).map((provider) => {
+          {sortByState(providers).map((provider) => {
             // 标记档由投影给出，与抽屉读同一份（组件不看 enabled/unavailable）。
             const markerClass = catalogMarkerClass(provider.healthMarker)
             // ring 是装饰（aria-hidden），读屏听不到「取不到」——把数量补进这一行的可访问名。
@@ -253,12 +237,12 @@ export function SettingsSourceTree({ bare, cellEnabled, filter, filters, flat, l
                 aria-current={provider.providerId === selectedProviderId ? 'true' : undefined}
                 /* 行状态只给**头像**上色：待接入（优先）→ 灰、全关 → 红、至少一项启用 → 绿。
                    源名与副标题的文字色不跟状态走（用户 2026-11-11）。 */
-                data-provider-state={providerRowState(provider, cellEnabled) === 'unused' ? 'pending' : providerRowState(provider, cellEnabled)}
+                data-provider-state={providerRowState(provider)}
                 className={`intelligence-provider-row${provider.providerId === selectedProviderId ? ' selected' : ''}`}
                 type="button"
                 onClick={() => onSelectProvider(provider.providerId)}
               >
-                <span className={`intelligence-source-avatar${provider.sources.every((source) => source.panels.length === 0) ? ' is-unused' : ''}`} aria-hidden="true">
+                <span className="intelligence-source-avatar" aria-hidden="true">
                   {(labels.providerNames[provider.providerId] ?? provider.displayName).slice(0, 1).toUpperCase()}
                 </span>
                 <span className="intelligence-provider-main">

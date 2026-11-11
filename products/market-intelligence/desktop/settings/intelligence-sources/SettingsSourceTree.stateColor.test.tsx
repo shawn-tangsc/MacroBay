@@ -4,11 +4,17 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
-import { SettingsSourceTree } from './SettingsSourceTree'
+import { SettingsSourceTree, providerRowState } from './SettingsSourceTree'
 
 /**
- * 行状态只给**头像**上色（用户 2026-11-11）：待接入（优先）→ 灰、未启用（全关）→ 红、至少一项启用 → 绿。
- * **源名与副标题的文字色不随状态变**——这三条用例把属性钉住，把文字也染色就得红（见 settingsRowValues 的类级断言）。
+ * 行状态**只看源自己开没开**（用户 2026-11-12 原话：「数据源这里绿不绿，和里面的模块启用不启用没关系，
+ * 只和整个源是不是被启用有关」）。
+ *
+ * 三档：全部源待接入 → `pending`（灰）；否则任一源启用 → `enabled`（绿）；否则 `disabled`（红）。
+ * 颜色只给头像（`data-provider-state`），文字色不随状态变。
+ *
+ * 曾经有两维参与判定，都被用户否掉、这里钉住不能回来：
+ * ① 「它的格在采集与数据里全关」→ 曾判 disabled；② 「0 个模块用它」→ 曾判灰/红。
  */
 const t = productText['zh-CN'].settings.intelligenceSources
 let root: ReturnType<typeof createRoot> | undefined
@@ -26,12 +32,11 @@ function src(sourceId: string, overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function renderRow(sources: ReadonlyArray<Record<string, unknown>>, providers?: ReadonlyArray<ReadonlyArray<Record<string, unknown>>>, cellEnabled?: Readonly<Record<string, boolean>>): Promise<HTMLElement> {
+async function renderRow(sources: ReadonlyArray<Record<string, unknown>>, providers?: ReadonlyArray<ReadonlyArray<Record<string, unknown>>>): Promise<HTMLElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(SettingsSourceTree, {
-    ...(cellEnabled === undefined ? {} : { cellEnabled }),
     filter: 'all',
     labels: {
       title: 'Sources', categories: { macro: '宏观' } as never, providerNames: {}, unavailableCountOne: '{count} 个不可用', unavailableCountOther: '{count} 个不可用'
@@ -53,81 +58,74 @@ async function renderRow(sources: ReadonlyArray<Record<string, unknown>>, provid
   return host
 }
 
-describe('来源行状态属性（只给头像上色）', () => {
-  it('marks a pending source as pending even when it is disabled', async () => {
-    // 待接入优先于未启用：待接入的源即使 enabled=false 也走灰，不显示红。
-    const host = await renderRow([{ sourceId: 'coindesk-rss', visibility: 'pending', enabled: false }])
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('pending')
+const stateOf = (host: HTMLElement): string | null | undefined =>
+  host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')
+
+describe('行状态只看源自己的 enabled', () => {
+  it('① stays enabled when the source is on, even if every one of its cells is off', async () => {
+    // 改前：这颗源的格全关 → 行被判 disabled（用户截图：采集与数据里关掉「政策路径概率」，
+    // 数据源里 Polymarket 变红）。现在格与行状态无关，源开着就是绿。
+    const host = await renderRow([{ sourceId: 'policy-path-market', enabled: true }])
+    expect(stateOf(host)).toBe('enabled')
   })
 
-  it('greys a source that no dashboard module uses, whatever its switch says', async () => {
-    // `ethereum-foundation-blog` 这类：0 模块使用 → 灰，与开/关无关（用户 2026-11-11）。
+  it('② is disabled when the source itself is off, whatever its cells say', async () => {
+    const host = await renderRow([{ sourceId: 'policy-path-market', enabled: false }])
+    expect(stateOf(host)).toBe('disabled')
+  })
+
+  it('③ all pending → pending; pending mixed with an enabled source → enabled; pending + all off → disabled', async () => {
+    const allPending = await renderRow([
+      { sourceId: 'a', visibility: 'pending', enabled: false },
+      { sourceId: 'b', visibility: 'pending', enabled: false }
+    ])
+    expect(stateOf(allPending)).toBe('pending')
+    await act(async () => root?.unmount())
+    document.body.replaceChildren()
+
+    const pendingPlusOn = await renderRow([
+      { sourceId: 'a', visibility: 'pending', enabled: false },
+      { sourceId: 'b', visibility: 'visible', enabled: true }
+    ])
+    expect(stateOf(pendingPlusOn)).toBe('enabled')
+    await act(async () => root?.unmount())
+    document.body.replaceChildren()
+
+    const pendingPlusOff = await renderRow([
+      { sourceId: 'a', visibility: 'pending', enabled: false },
+      { sourceId: 'b', visibility: 'visible', enabled: false }
+    ])
+    expect(stateOf(pendingPlusOff)).toBe('disabled')
+  })
+
+  it('does not take any cell or module data: the signature has one parameter and extra data changes nothing', () => {
+    // 反向守卫：函数签名里**没有**第二个参数（加回来就红）；外部再塞一份格/模块快照也影响不了判定。
+    expect(providerRowState.length).toBe(1)
+    const provider = { sources: [src('policy-path-market', { enabled: true })] }
+    const withExtra = (providerRowState as (input: unknown, extra?: unknown) => string)(provider, { 'policy-path:probability': false })
+    expect(withExtra).toBe('enabled')
+  })
+
+  it('an enabled source that no dashboard module uses is still green', async () => {
+    // 维护备用 / 只供分析的源：0 模块也照自己的开关上色（改前会被判灰/红）。
     const host = await renderRow([{ sourceId: 'ethereum-foundation-blog', enabled: true }])
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('pending')
-  })
-
-  it('marks a fully disabled source as disabled', async () => {
-    const host = await renderRow([{ sourceId: 'coindesk-rss', enabled: false }, { sourceId: 'sec-rss', enabled: false }])
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('disabled')
-  })
-
-  it('marks a source with at least one enabled capability as enabled', async () => {
-    const host = await renderRow([{ sourceId: 'coindesk-rss', enabled: false }, { sourceId: 'sec-rss', enabled: true }])
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('enabled')
+    expect(stateOf(host)).toBe('enabled')
+    await act(async () => root?.unmount())
+    document.body.replaceChildren()
+    const off = await renderRow([{ sourceId: 'ethereum-foundation-blog', enabled: false }])
+    expect(stateOf(off)).toBe('disabled')
   })
 })
 
 describe('组内按状态排序', () => {
-  it('orders enabled, then disabled, then unused, and keeps same-state order stable', async () => {
-    // 三个供应商：一个全关（红）、一个有一项开（绿）、一个 0 模块（灰）。渲染顺序必须是 绿 → 红 → 灰。
+  it('orders enabled, then disabled, then pending, and keeps same-state order stable', async () => {
+    // 三个供应商：全关（红）、有一项开（绿）、全待接入（灰）。渲染顺序必须是 绿 → 红 → 灰。
     const host = await renderRow([], [
       [{ sourceId: 'coindesk-rss', enabled: false }],
       [{ sourceId: 'sec-rss', enabled: true }],
-      [{ sourceId: 'ethereum-foundation-blog', enabled: true }]
+      [{ sourceId: 'coinmarketcal', visibility: 'pending', enabled: false }]
     ])
     const states = [...host.querySelectorAll('.intelligence-provider-row')].map((row) => row.getAttribute('data-provider-state'))
     expect(states).toEqual(['enabled', 'disabled', 'pending'])
   })
-describe('数据源的启用状态与「采集与数据」一致（用户 2026-11-12）', () => {
-  it('shows a source as disabled when the source is on but every one of its cells is off', async () => {
-    // 用户截图：采集与数据里「政策路径概率」关掉，数据源里 Polymarket 仍显绿。
-    // 同一个事实的两处显示必须一致：格全关 → 这一行就是「关闭」。
-    const host = await renderRow(
-      [{ sourceId: 'policy-path-market', enabled: true }],
-      undefined,
-      { 'policy-path:probability': false }
-    )
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('disabled')
-  })
-
-  it('goes back to enabled as soon as the cell is on again', async () => {
-    const host = await renderRow(
-      [{ sourceId: 'policy-path-market', enabled: true }],
-      undefined,
-      { 'policy-path:probability': true }
-    )
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('enabled')
-  })
-
-  it('still treats a pending source as pending, never as disabled', async () => {
-    // 真待接入不是「格关了」：即使它的格全关，也留在灰档。
-    const host = await renderRow(
-      [{ sourceId: 'policy-path-market', visibility: 'pending', enabled: false }],
-      undefined,
-      { 'policy-path:probability': false }
-    )
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('pending')
-  })
-
-  it('stays disabled when the source itself is off, whatever the cells say', async () => {
-    // 两条路都收敛到「关闭」：源自己关，或它的格全关。
-    const host = await renderRow(
-      [{ sourceId: 'policy-path-market', enabled: false }],
-      undefined,
-      { 'policy-path:probability': true }
-    )
-    expect(host.querySelector('.intelligence-provider-row')?.getAttribute('data-provider-state')).toBe('disabled')
-  })
-})
-
 })

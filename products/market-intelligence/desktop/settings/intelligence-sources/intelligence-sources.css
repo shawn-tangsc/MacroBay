@@ -1436,12 +1436,6 @@
   line-height: 1.6;
 }
 
-.intelligence-source-avatar.is-unused {
-  border-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
-}
-
 .source-detail-drawer {
   display: grid;
   gap: 14px;

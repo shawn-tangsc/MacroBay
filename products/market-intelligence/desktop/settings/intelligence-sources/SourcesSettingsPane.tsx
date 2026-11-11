@@ -200,9 +200,6 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           sourceNames={sourceNames} />
         : <SettingsSourceTree
           bare
-          /* 数据源行的状态与「采集与数据」的开关是**同一个事实**：宿主已读好的那份格快照直接传下去，
-             不许在这里再读一遍（用户 2026-11-12）。 */
-          cellEnabled={cellEnabled}
           /* 「数据源」这屏**平铺不分组**、列全部可见源（灰的也在）；模块分组只留给「采集与数据」的卡片。 */
           flat={props.pane === 'sources'}
           filter={props.pane === 'sources' ? 'all' : props.filter}
