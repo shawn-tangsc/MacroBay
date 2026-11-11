@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -63,62 +65,84 @@ describe('the sentiment panel after the move out of the dashboard page', () => {
   })
 })
 
-describe('the sentiment card speaks two source states, through a veil over the reading', () => {
+describe('the three non-data states keep the figure and put the sentence under it', () => {
   const openSources = { sourceLabel: '恐惧与贪婪', onOpenSources: () => undefined }
+  /** 没有读数的三态：图还在，指针与圆盘不在。 */
+  const withoutReading = [{ state: 'empty' as const }, { state: 'unavailable' as const }] as const
 
-  it('keeps the card and its title, and veils only the reading', () => {
-    // 卡不许被换掉（用户 2026-11-11：「不是隐藏掉，是要让客户知道」）：标题照常在。
-    for (const state of [{ state: 'unavailable' as const }, { state: 'empty' as const }]) {
-      expect(markup(state)).toContain(text.sentiment.title)
+  it('keeps the arcs, ticks and the three labels in every state, and never draws a needle or a score', () => {
+    // 「没启用」由宿主给（cellOff），下面单独覆盖；这里先过读数自己的两态。
+    for (const state of withoutReading) {
+      const shown = markup(state)
+      // 图还在：弧线五段 + 五个刻度 + 三个标签（缺的只是读数，不是整张图）。
+      expect(shown.split('data-gauge-segment=').length - 1).toBe(5)
+      expect(shown.split('class="mi-crypto-dashboard__gauge-tick"').length - 1).toBe(5)
+      expect(shown).toContain(text.sentiment.gaugeMarkers.fear)
+      expect(shown).toContain(text.sentiment.gaugeMarkers.neutral)
+      expect(shown).toContain(text.sentiment.gaugeMarkers.greed)
+      // 不画指针、不画读数圆盘：那是指向一个不存在的分数。
+      expect(shown).not.toContain('mi-crypto-dashboard__gauge-needle')
+      expect(shown).not.toContain('mi-crypto-dashboard__gauge-readout')
+      expect(shown).not.toContain('<strong>')
     }
+    // 有数据时才画指针与圆盘（同一条判据的另一半）。
+    expect(markup(available)).toContain('mi-crypto-dashboard__gauge-needle')
+    expect(markup(available)).toContain('mi-crypto-dashboard__gauge-readout')
+  })
+
+  it('names the state in one row under the figure, with exactly the actions that exist', () => {
     const disabled = markup({ state: 'loading' }, openSources)
-    expect(disabled).toContain(text.sentiment.title)
-    expect(disabled).toContain('mi-source-veil-host')
-    expect(disabled).toContain('mi-source-veil')
-    // 图例留在遮罩外面：它回答「缺的是哪张图」。
-    expect(disabled).toContain(text.sentiment.gaugeMarkers.fear)
+    expect(disabled).toContain('data-sentiment-state="disabled"')
+    expect(disabled).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
+    expect(disabled).toContain(dataText.enableSources)
+
+    const unreadable = markup({ state: 'unavailable' })
+    expect(unreadable).toContain('data-sentiment-state="unreadable"')
+    expect(unreadable).toContain(dataText.temporarilyUnavailable)
+    expect(unreadable).toContain(dataText.retry)
+
+    const empty = markup({ state: 'empty' })
+    expect(empty).toContain('data-sentiment-state="empty"')
+    expect(empty).toContain(text.fearGreed.empty)
+
+    // 那一行恰一处、在图之后、并且**不在**图容器里（不进图、不居中盖图）。
+    for (const shown of [disabled, unreadable, empty]) {
+      expect(shown.split('data-sentiment-state=').length - 1).toBe(1)
+      const gaugeEnd = shown.indexOf('data-sentiment-gauge')
+      expect(shown.indexOf('data-sentiment-state=')).toBeGreaterThan(gaugeEnd)
+    }
+    // 有数据时没有这一行。
+    expect(markup(available)).not.toContain('data-sentiment-state=')
   })
 
-  it('says "not enabled" with one action, and names the source', () => {
-    const veiled = markup({ state: 'loading' }, openSources)
-    expect(veiled).toContain(`data-state="disabled"`)
-    expect(veiled).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
-    // 遮罩里恰一颗按钮：去启用。
-    expect((veiled.match(/<button\b/g) ?? [])).toHaveLength(1)
-    expect(veiled).toContain(dataText.enableSources)
-    // 没有读数，也没有转圈：关掉一格时这一次根本不去读。
-    expect(veiled).not.toContain('mi-crypto-dashboard__gauge-segment')
-    expect(veiled).not.toContain(text.fearGreed.loading)
+  it('offers one action at most: enable, retry, and nothing to press when there is simply no reading yet', () => {
+    expect((markup({ state: 'loading' }, openSources).match(/<button\b/g) ?? [])).toHaveLength(1)
+    expect((markup({ state: 'unavailable' }).match(/<button\b/g) ?? [])).toHaveLength(1)
+    expect((markup({ state: 'empty' }).match(/<button\b/g) ?? [])).toHaveLength(0)
+    // 旧的两套壳都作废：读不到不再整块画 `StateView`，也不再自绘遮罩。
+    for (const shown of [markup({ state: 'loading' }, openSources), markup({ state: 'unavailable' }), markup({ state: 'empty' })]) {
+      expect(shown).not.toContain('state-view')
+      expect(shown).not.toContain('mi-source-veil')
+    }
   })
 
-  it('says "temporarily unreadable" with one retry, and no longer draws a state view', () => {
-    const veiled = markup({ state: 'unavailable' })
-    expect(veiled).toContain('data-state="unreadable"')
-    expect(veiled).toContain(dataText.temporarilyUnavailable)
-    expect((veiled.match(/<button\b/g) ?? [])).toHaveLength(1)
-    expect(veiled).toContain(dataText.retry)
-    // 旧的整块 `StateView` 作废：卡内三态一律遮罩，遮罩里不再嵌状态面。
-    expect(veiled).not.toContain('state-view')
-  })
-
-  it('lets the cell state win over the reading, so a closed cell never shows a spinner', () => {
-    // 结构优先：宿主说这一格关着，就先画那一态，不看读数（关掉时读数会停在等待态）。
-    for (const state of [{ state: 'loading' as const }, { state: 'empty' as const }, { state: 'available' as const, score: 22, bucket: 'extreme-fear' as const, observedAt }]) {
-      const veiled = markup(state, openSources)
-      expect(veiled).toContain('data-state="disabled"')
-      expect(veiled).not.toContain('data-state="unreadable"')
+  it('lets the cell state win over the reading, so a closed cell never shows a score', () => {
+    for (const state of [{ state: 'loading' as const }, { state: 'empty' as const }, available]) {
+      const shown = markup(state, openSources)
+      expect(shown).toContain('data-sentiment-state="disabled"')
+      expect(shown).not.toContain('data-sentiment-state="unreadable"')
+      expect(shown).not.toContain('mi-crypto-dashboard__gauge-needle')
     }
   })
 
   it('never claims a source is unconfigured, in any state', () => {
-    // 这张卡的源是注册表里的固定条目：读者没有「配一个源」的动作，所以不画那一态（死分支不写）。
-    for (const state of [available, { state: 'empty' as const }, { state: 'unavailable' as const }, { state: 'loading' as const }]) {
+    for (const state of [available, ...withoutReading, { state: 'loading' as const }]) {
       expect(markup(state)).not.toContain(dataText.sourcesNotConfigured)
       expect(markup(state, openSources)).not.toContain(dataText.sourcesNotConfigured)
     }
   })
 
-  it('routes the veil action to its own handler', async () => {
+  it('routes the row action to its own handler', async () => {
     const open = vi.fn()
     const retry = vi.fn()
     const container = document.createElement('div')
@@ -135,7 +159,7 @@ describe('the sentiment card speaks two source states, through a veil over the r
           })
         })
       })))
-      return container.querySelector<HTMLButtonElement>('.mi-source-veil button')!
+      return container.querySelector<HTMLButtonElement>('[data-sentiment-state] button')!
     }
     const enable = await render({ state: 'loading' }, openSources)
     await act(async () => enable.click())
@@ -144,5 +168,27 @@ describe('the sentiment card speaks two source states, through a veil over the r
     const again = await render({ state: 'unavailable' })
     await act(async () => again.click())
     expect(retry).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the card width cannot be decided by its content', () => {
+  const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
+  const sentimentRules = [...styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector]) => selector.includes('mi-crypto-dashboard__sentiment'))
+
+  it('pins the card root and the gauge to the card content width', () => {
+    const root = sentimentRules.find(([, selector]) => /^\.mi-crypto-dashboard__sentiment\s*,?$/.test(selector.trim()))
+    expect(root?.[2]).toContain('width: 100%')
+    expect(root?.[2]).toContain('min-width: 0')
+    const gauge = sentimentRules.find(([, selector]) => selector.trim() === '.mi-crypto-dashboard__sentiment-gauge')
+    expect(gauge?.[2]).toContain('width: 100%')
+  })
+
+  it('never sizes any part of it from its content', () => {
+    // 空态缩水的成因都在这三类里：内容宽（fit-content）、行内网格（inline-grid）、
+    // 反推 SVG 固有宽。一条都不许回来。
+    for (const [, selector, body] of sentimentRules) {
+      expect(`${selector}${body}`).not.toMatch(/fit-content|inline-grid|inline-block/)
+    }
   })
 })

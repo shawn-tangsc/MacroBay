@@ -241,11 +241,15 @@ describe('crypto intelligence dashboard', () => {
     })))
     await flush()
 
-    const gauge = container.querySelector('[data-sentiment-gauge]')!
-    expect(gauge.querySelector(`[data-state="${expected}"]`)).not.toBeNull()
-    expect(gauge.querySelector('[data-state="available"]')).toBeNull()
-    // Neither state may fall back to a sentence the panel writes itself.
-    expect(gauge.textContent).not.toContain(text.dashboard.fearGreed.empty)
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const row = card.querySelector('[data-sentiment-state]')!
+    // 状态句在图下方那一行上（`data-sentiment-state`），不在图里；两态互斥，各说各的。
+    expect(row.getAttribute('data-sentiment-state')).toBe(expected)
+    expect(row.closest('[data-sentiment-gauge]')).toBeNull()
+    expect(card.querySelector('[data-sentiment-gauge] [data-sentiment-state]')).toBeNull()
+    // 两态之间不许互串：空的只说「暂无读数」，读不到只说「暂时读不到」（文案都来自 i18n 键）。
+    expect(row.textContent).toContain(expected === 'empty' ? text.dashboard.fearGreed.empty : text.data.temporarilyUnavailable)
+    expect(row.textContent).not.toContain(expected === 'empty' ? text.data.temporarilyUnavailable : text.dashboard.fearGreed.empty)
   })
 
   it('renders a textual half-gauge and independent BTC/ETH funding-history values', async () => {
@@ -413,14 +417,16 @@ describe('crypto intelligence dashboard', () => {
 
     const card = container.querySelector('.mi-positioning-panel')!
     expect(card).not.toBeNull()
-    // 整卡级归平台六态：两格都不可用时整块换 `StateView`，不是共享可用性卡。
-    expect(card.querySelector('.mi-source-card')).toBeNull()
-    expect(card.querySelector('.state-view[data-state="disabled"]')).not.toBeNull()
+    // 两格都不可用时骨架还在：图表仍在右列，句式落在结构里，不是整块状态视图。
+    expect(card.querySelector('.state-view')).toBeNull()
+    expect(card.querySelector('[data-chart-skeleton="true"]')).not.toBeNull()
+    expect(card.querySelector('.mi-positioning-panel__chart-wrap')!.parentElement?.className)
+      .toContain('mi-positioning-panel__body')
     expect(card.textContent).toContain(text.dashboard.positioning.sourceDisabled.replace('{source}', text.dashboard.positioning.sourceName))
     expect(card.textContent).toContain(text.dashboard.positioning.actionEnable)
-    // 不是空态、也没有图表框架：三态与「确实没有数据」形状不同。
+    // 不是空态；图框留着（骨架），只有数据不画——用户 2026-11-11 要的正是「像一张空表」。
     expect(card.textContent).not.toContain(text.dashboard.positioning.empty)
-    expect(card.querySelector('.mi-positioning-panel__chart')).toBeNull()
+    expect(card.querySelector('.mi-positioning-panel__chart')).not.toBeNull()
   })
 
 
@@ -980,47 +986,56 @@ describe('host wiring: cells switched off and sources judged', () => {
     return container
   }
 
-  it('cell off: the sentiment card stays, veils the reading, and offers one enable action', async () => {
+  it('cell off: the sentiment card keeps its figure, drops the needle, and offers one enable action', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'fear-greed:index': false }, {
       fearGreedClient: fearGreedClient(readableSentiment as never), onManageSource
     })
-    await settle(container, '.mi-crypto-dashboard__sentiment .mi-source-veil')
+    await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
     const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
     expect(card.querySelector('h2')?.textContent).toBe(dashboardText.sentiment.title)
-    const veil = card.querySelector('.mi-source-veil')!
-    expect(veil.getAttribute('data-state')).toBe('disabled')
-    expect(veil.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
-    const buttons = [...veil.querySelectorAll('button')]
+    // 图还在（弧线、刻度、三个标签），指针与读数圆盘不在——它们指向一个不存在的分数。
+    expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment').length).toBeGreaterThan(0)
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-readout')).toBeNull()
+    const row = card.querySelector('[data-sentiment-state]')!
+    expect(row.getAttribute('data-sentiment-state')).toBe('disabled')
+    expect(row.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
+    const buttons = [...row.querySelectorAll('button')]
     expect(buttons).toHaveLength(1)
     expect(buttons[0]?.textContent).toBe(dataText.enableSources)
     expect(card.textContent).not.toContain('22')
-    expect(card.querySelector('.mi-crypto-dashboard__gauge-segment')).toBeNull()
     expect(card.querySelector('.state-view')).toBeNull()
     await act(async () => buttons[0]!.click())
     expect(onManageSource).toHaveBeenCalledTimes(1)
   })
 
-  it('read failure: the veil says temporarily unreadable with one retry', async () => {
+  it('read failure: one row under the figure says temporarily unreadable, with one retry', async () => {
     const container = await renderCells({}, {
       fearGreedClient: fearGreedClient({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' } as never)
     })
-    await settle(container, '.mi-crypto-dashboard__sentiment .mi-source-veil')
-    const veil = container.querySelector('.mi-crypto-dashboard__sentiment .mi-source-veil')!
-    expect(veil.getAttribute('data-state')).toBe('unreadable')
-    expect(veil.textContent).toContain(dataText.temporarilyUnavailable)
-    const buttons = [...veil.querySelectorAll('button')]
+    await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const row = card.querySelector('[data-sentiment-state]')!
+    expect(row.getAttribute('data-sentiment-state')).toBe('unreadable')
+    expect(row.textContent).toContain(dataText.temporarilyUnavailable)
+    const buttons = [...row.querySelectorAll('button')]
     expect(buttons).toHaveLength(1)
     expect(buttons[0]?.textContent).toBe(dataText.retry)
-    expect(container.querySelector('.mi-crypto-dashboard__sentiment .state-view')).toBeNull()
+    // 图仍画着，指针不画；旧的整块 `StateView` 也不回来。
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-segment')).not.toBeNull()
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
+    expect(card.querySelector('.state-view')).toBeNull()
   })
 
-  it('cell on and readable: the gauge, no veil', async () => {
+  it('cell on and readable: the gauge with its needle, and no state row', async () => {
     const container = await renderCells({}, { fearGreedClient: fearGreedClient(readableSentiment as never) })
     await settle(container, '.mi-crypto-dashboard__gauge-segment')
     const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
-    expect(card.querySelector('.mi-source-veil')).toBeNull()
+    // 有数据时没有那一行：状态句只在没读数时出现。
+    expect(card.querySelector('[data-sentiment-state]')).toBeNull()
     expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment')).toHaveLength(5)
+    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).not.toBeNull()
     expect(card.textContent).toContain('22')
   })
 })

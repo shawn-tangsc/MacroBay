@@ -143,7 +143,7 @@
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0 8px; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
-.mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
+.mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; /* 卡宽跟卡片内容区：不由内容宽决定（空态不许缩水）。 */ width: 100%; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
 .mi-capital-conditions__summary > p { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions__header-band { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap); }
@@ -294,7 +294,7 @@
 .mi-capital-conditions__daily-table tbody tr:last-child td { border-bottom: 0; }
 .mi-capital-conditions__daily-table tbody tr:hover { background: var(--surface-soft); }
 .mi-capital-conditions__daily-empty { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; }
-.mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
+.mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; width: 100%; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
 .mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }
 /* The dial is the positioning context: the svg renders 112x80 from a 120x86 viewBox, and the
    score is centred on the readout disc at y=60 (69.77% down). The disc is painted after the
@@ -337,6 +337,15 @@
 .mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] { margin-top: 5px; font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge small,
 .mi-crypto-dashboard__sentiment-gauge p { margin: 5px 0 0; color: var(--mi-dashboard-muted); font-size: 10px; }
+
+/* 没读数时那一行（界面设计 2026-11-11 定稿）：图下方、卡内一行，状态句 + 恰一颗按钮。
+   左右跟着卡自己的内距（这一行不再加 padding），不进图、不居中盖图。
+   12 号字走 `--font-body`，与遮罩里那句同档——不新造字号。 */
+.mi-crypto-dashboard__sentiment-state {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
+  min-height: 32px; margin-top: 8px;
+}
+.mi-crypto-dashboard__sentiment-state .mi-source-state { font-size: var(--font-body); line-height: var(--line-body); }
 /*
  * 两条数据带**默认就是并排**，宽度按 fr 分配；断点只负责"真的放不下"时的堆叠。
  *
