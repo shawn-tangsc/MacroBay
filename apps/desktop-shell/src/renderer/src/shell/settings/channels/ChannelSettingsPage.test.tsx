@@ -367,7 +367,9 @@ describe('showing which token is stored', () => {
     const container = await mount()
 
     // 列表行直接显示主进程给的掩码（不是渲染层自己切）。
-    expect(container.querySelector('[data-channel-id="channel-1"] .channel-row-mask')?.textContent).toBe('6050…xAA')
+    // 行上现在带字段名（多字段凭据要按字段各显示一格），所以按**字段**断言掩码，不再比整行字符串。
+    expect(container.querySelector('[data-channel-id="channel-1"] [data-credential-field="bot_token"]')?.textContent)
+      .toBe(`Bot Token 6050…xAA`)
 
     const edit = [...container.querySelectorAll('[data-channel-id="channel-1"] button')].find(
       (node): node is HTMLButtonElement => node.getAttribute('aria-label') === labels.channelEdit
@@ -384,6 +386,52 @@ describe('showing which token is stored', () => {
     // 输入框仍为空：旧值不被回显。
     const field = document.body.querySelector('input[aria-label="Bot Token"]') as HTMLInputElement
     expect(field.value).toBe('')
+  })
+})
+
+describe('a row shows every configured credential field', () => {
+  const slackChannel = (maskedFields: Record<string, string>) => ({
+    ...channel,
+    id: 'channel-slack',
+    type: 'slack',
+    name: 'Slack 测试',
+    credential: { status: 'configured', hasCredential: true, revision: 2, maskedFields },
+    allowedChatIds: []
+  })
+
+  async function showSlack(maskedFields: Record<string, string>): Promise<HTMLElement> {
+    installPlatform({ list: vi.fn(async () => [slackChannel(maskedFields)]) })
+    const container = await mount()
+    const item = [...container.querySelectorAll('.channel-platform-item')].find(
+      (node) => node.textContent?.trim() === CHANNEL_DISPLAY_NAME.slack['zh-CN']
+    )
+    await act(async () => (item as HTMLButtonElement | undefined)?.click())
+    await act(async () => {})
+    return container
+  }
+
+  it('shows both Slack masks in descriptor order, keyed by field name', async () => {
+    const container = await showSlack({ bot_token: 'xoxb…GA3', app_token: 'xapp…3e1' })
+    const segments = [...container.querySelectorAll('[data-channel-id="channel-slack"] [data-credential-field]')]
+    // 断言用的是**键集合与顺序**，不是拼好的整串：以后加平台再只显示一个字段，这条会红。
+    expect(segments.map((node) => node.getAttribute('data-credential-field'))).toEqual(['bot_token', 'app_token'])
+    expect(segments.map((node) => node.textContent)).toEqual(['Bot Token xoxb…GA3', 'App Token xapp…3e1'])
+    expect(segments.every((node) => node.getAttribute('data-configured') === 'true')).toBe(true)
+  })
+
+  it('marks the field that has no value instead of hiding it', async () => {
+    // 只有 bot_token 时，App Token 那一格必须明说「还没填」——藏起来会让读者以为已经配齐。
+    const container = await showSlack({ bot_token: 'xoxb…GA3', app_token: '' })
+    const missing = container.querySelector('[data-channel-id="channel-slack"] [data-credential-field="app_token"]')
+    expect(missing?.getAttribute('data-configured')).toBe('false')
+    expect(missing?.textContent).toContain(labels.channelCredentialMissing)
+  })
+
+  it('still shows exactly one mask for a single-field platform', async () => {
+    installPlatform({ list: vi.fn(async () => [{ ...channel, allowedChatIds: [] }]) })
+    const container = await mount()
+    const segments = [...container.querySelectorAll('[data-channel-id="channel-1"] [data-credential-field]')]
+    expect(segments.map((node) => node.getAttribute('data-credential-field'))).toEqual(['bot_token'])
   })
 })
 

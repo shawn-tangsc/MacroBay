@@ -385,6 +385,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                   <ChannelRow
                     busy={busyId === channel.id}
                     channel={channel}
+                    credentialFields={platform?.credentialFields ?? []}
                     enableFailure={enableFailures[channel.id] ?? null}
                     key={channel.id}
                     labels={labels}

@@ -1,4 +1,5 @@
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
+import { credentialFieldsFor } from './channelCredentialPreview'
 import { managedChannelSql } from './ChannelManagementPredicates'
 import type { AgentPermissionMode } from '../schemas/agentSchemas'
 import type {
@@ -260,18 +261,10 @@ function toSafeView(row: ChannelRow): ChannelManagementSafeView {
       status: row.type === 'wechat' || row.credential_revision === null ? 'missing' : row.credential_health,
       hasCredential: row.type !== 'wechat' && row.credential_revision !== null && row.credential_health === 'configured',
       revision: row.type === 'wechat' ? null : row.credential_revision,
+      // 静态兜底：按描述符把所有字段都写成星号（这一层没有 Vault，不知道哪些字段真的缺）。
+      // 真正按字段的掩码由 `channelCredentialProjection` 覆盖；这里**不按平台写 if**。
       maskedFields: row.type !== 'wechat' && row.credential_revision !== null && row.credential_health === 'configured'
-        ? row.type === 'slack'
-          ? { bot_token: '********', app_token: '********' }
-          : row.type === 'feishu'
-            ? { app_id: '********', app_secret: '********' }
-            : row.type === 'qq'
-              ? { app_id: '********', client_secret: '********' }
-              : row.type === 'discord'
-                ? { bot_token: '********' }
-                : (row.type as string) === 'wechat'
-                  ? {}
-            : { bot_token: '********' }
+        ? Object.fromEntries(credentialFieldsFor(row.type).map((field) => [field, '********']))
         : {}
     },
     workspace: readWorkspace(row.workspace_json),
