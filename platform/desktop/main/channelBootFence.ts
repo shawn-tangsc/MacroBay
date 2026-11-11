@@ -68,6 +68,12 @@ export function fenceAfterFailedBootStart(input: {
  *
  * 整块搬出 `app.ts`（受保护接缝，只减不增）：`app.ts` 只留一次调用，运行时同样一次只跑一条。
  */
+/**
+ * 启动期已经补过放行的频道。按频道幂等：同一频道在一次进程里只 retain 一次，
+ * 否则「启动补一次 + 用户再点启用补一次」会让适配器的引用计数多一格，而停用只回收一格。
+ */
+const bootRetained = new Set<string>()
+
 export async function bootChannelRuntimes(deps: {
   active: ReadonlyArray<{ channelId: string; generation: number; token: string }>
   readType: (channelId: string) => AgentChannelType | null
@@ -76,6 +82,11 @@ export async function bootChannelRuntimes(deps: {
   disableGeneration: (channelId: string, generation: number, now: string) => unknown
   /** 落围栏审计：不同适配器各有自己的运行审计表，`null`/别的类型就是没有落点。 */
   auditFenced: (channelId: string, type: AgentChannelType | null, kind: 'evidence-missing' | 'start-failed') => void
+  /**
+   * 进程内放行（`retainChannelAcceptance`）。运行时每一道闸门都读 `supportedChannelSql`，
+   * 而六家在库里都是 blocked；不补这一步，启动恢复起来的通道每一帧都会被判「没资格」——静默失联。
+   */
+  retainAcceptance: (type: AgentChannelType) => void
   /** 各适配器返回布尔或带原因的结果对象：这里只关心「起没起来」。 */
   start: (type: AgentChannelType, channelId: string, generation: number, token: string) => Promise<unknown>
   now: () => string
@@ -84,6 +95,18 @@ export async function bootChannelRuntimes(deps: {
     const type = deps.readType(channelId)
     const auditFenced = (fencedType: AgentChannelType | null, kind: 'evidence-missing' | 'start-failed'): void =>
       deps.auditFenced(channelId, fencedType, kind)
+    // 已实现但还没有验收证据：与「用户当场点启用」同一条放行，进程内、不写库、不翻 supported。
+    // 已 supported 的适配器忽略这一步（放行对它没有意义），未实现的本来就不会走到启动。
+    if (
+      type !== null
+      && channelAdapterDescriptor(channelAdapterKeyForType(type)).implemented
+      && !deps.canEnable(type)
+      && !bootRetained.has(channelId)
+    ) {
+      deps.retainAcceptance(type)
+      bootRetained.add(channelId)
+    }
+
     if (fenceChannelAtBoot({
       channelId,
       generation,

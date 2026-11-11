@@ -114,6 +114,7 @@ import { composeUpdateCheck } from './composition/updateCheck'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { bootChannelRuntimes } from './channelBootFence'
+import { retainChannelAcceptance } from '../../ai/agent-platform/channels/channelAcceptanceOverride'
 import type { AgentChannelType } from '../../ai/agent-platform/schemas/channelSchemas'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
@@ -1132,6 +1133,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     canEnable: (type) => channelAdapterRegistry.canEnable(type),
     fenceKeepingIntent: (channelId, now) => channelManagementRepository.fenceRuntimeGenerationKeepingIntent(channelId, now),
     disableGeneration: (channelId, generation, now) => channelManagementRepository.disableRuntimeGeneration(channelId, generation, now),
+    retainAcceptance: (type) => retainChannelAcceptance(type),
     auditFenced: (channelId, type, kind) => {
       const suffix = kind === 'evidence-missing' ? 'evidence-missing' : 'start-failed'
       if (type === 'slack') slackRuntimeRepository.auditBootstrapFenced(channelId, `slack-runtime-${suffix}`)
