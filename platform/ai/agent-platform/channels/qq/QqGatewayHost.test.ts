@@ -129,6 +129,29 @@ describe('qq gateway host', () => {
     expect(harness.runtime.commitIfCurrent).toHaveBeenCalledTimes(before)
   })
 
+  it('writes which bit of the gate drops a frame, and that the frame even arrived', async () => {
+    // 现场：socket 真的开了（终端有 PLATFORM_WS_OPENED），但库里连 qq-gateway-open 都没有，
+    // 分不出「帧没到」「帧到了被判掉」。这两行把两件事拆开。
+    const harness = await createHarness()
+    harness.sockets[0].open()
+    expect(harness.diagnostics).toContain('qq-socket-open:g1')
+    expect(harness.diagnostics).toContain('qq-gate:aborted=0,active=1,owner=1,socket=ok')
+
+    harness.sockets[0].message('{"op":0,"s":2,"t":"C2C_MESSAGE_CREATE","d":{"id":"m1","content":"测试","author":{"user_openid":"u1"}}}')
+    await flush()
+    expect(harness.diagnostics).toContain('qq-frame-in:C2C_MESSAGE_CREATE')
+  })
+
+  it('names the failing bit instead of one boolean', async () => {
+    const harness = await createHarness({ gate: { aborted: false, active: false, owner: true } })
+    harness.sockets[0].open()
+    expect(harness.diagnostics).toContain('qq-gate:aborted=0,active=0,owner=1,socket=ok')
+    // 帧到了也照样记：判掉与没到是两件事。
+    harness.sockets[0].message('not-json')
+    await flush()
+    expect(harness.diagnostics).toContain('qq-frame-in:unparsed')
+  })
+
   it('opens nothing without a token', async () => {
     const harness = await createHarness({ token: null })
     expect(harness.sockets).toHaveLength(0)
@@ -193,6 +216,13 @@ class FakeSocket {
     this.sent.push(value)
   }
 
+  onopen: (() => void) | null = null
+
+  /** 对端/传输层报告连接打开（平台 ws 打开时会调它）。 */
+  open(): void {
+    this.onopen?.()
+  }
+
   message(raw: string): void {
     this.onmessage?.({ data: raw })
   }
@@ -207,10 +237,13 @@ async function createHarness(options: {
   token?: string | null
   commitSequence?: () => boolean
   receive?: (request: Record<string, unknown>) => Promise<{ disposition: string }>
+  /** 闸门诊断的三位；默认「没被挡」。 */
+  gate?: { aborted: boolean; active: boolean; owner: boolean }
 } = {}) {
   const clock = new FakeClock()
   const sockets: FakeSocket[] = []
   const auditCodes: string[] = []
+  const diagnostics: string[] = []
   const order: string[] = []
   const inboundRequests: Array<Record<string, unknown>> = []
   const inbound = {
@@ -230,7 +263,9 @@ async function createHarness(options: {
     auditIfCurrent: vi.fn((_channelId: string, _generation: number, code: string) => {
       auditCodes.push(code)
       return true
-    })
+    }),
+    // 诊断写入：不过授权闸门，测试里照样收集。
+    auditDiagnostic: vi.fn((_channelId: string, code: string) => { diagnostics.push(code) })
   }
   const host = new QqGatewayHost({
     channelId: 'qq-a',
@@ -248,6 +283,7 @@ async function createHarness(options: {
       }
     } as never,
     isCurrent: () => true,
+    diagnoseGate: () => options.gate ?? { aborted: false, active: true, owner: true },
     signal: new AbortController().signal,
     timers: { setTimeout: clock.setTimeout as unknown as typeof setTimeout, clearTimeout: clock.clearTimeout as unknown as typeof clearTimeout }
   })
@@ -262,6 +298,7 @@ async function createHarness(options: {
     inbound,
     inboundRequests,
     order,
+    diagnostics,
     audits: () => [...auditCodes],
     wire: (index: number) => sockets[index]?.sent.map(parseWire) ?? []
   }

@@ -49,6 +49,11 @@ export class QqGatewayHost {
     signal: AbortSignal
     timers?: { setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout }
     refreshGatewayUrl?: () => Promise<string | null>
+    /**
+     * 诊断用：把 `currentGeneration()` 的两半**分开**报（是否被 abort、代际是否现役、owner 是否还归这代）。
+     * 三者合成一个布尔时，库里只能看到「被挡了」，看不出是哪一 bit。
+     */
+    diagnoseGate?: () => { aborted: boolean; active: boolean; owner: boolean }
   }) {}
 
   /** 返回「这条连接真的被发起了」：凭据读不到、代际已过期都算没起来（调用方据此回滚启用）。 */
@@ -107,7 +112,12 @@ export class QqGatewayHost {
     })
     // 临时诊断：连接真的建起来了没有。以前这一层一条审计都没有，
     // 于是「QQ 启用了、一条消息都没进来」时库里查不出是没连、没收到、还是收到了被丢。
-    socket.onopen = () => { if (this.current(socket)) this.audit('qq-gateway-open') }
+    socket.onopen = () => {
+      // 不走授权闸门：连接打开这一刻，正是最需要证据的时候。
+      this.diagnose(`qq-socket-open:g${this.deps.generation}`)
+      this.diagnose(`qq-gate:${gateBits(this.deps.diagnoseGate?.(), this.socket === socket)}`)
+      if (this.current(socket)) this.audit('qq-gateway-open')
+    }
     socket.onmessage = (event) => { void this.handle(event.data, socket) }
     socket.onerror = () => { if (this.current(socket)) this.audit('qq-gateway-error') }
     socket.onclose = (event) => {
@@ -120,6 +130,8 @@ export class QqGatewayHost {
   }
 
   private async handle(data: unknown, socket: Socket): Promise<void> {
+    // 先记「帧到了」，再判闸门：两件事分开，才分得出「根本没到」与「到了被判掉」。
+    this.diagnose(`qq-frame-in:${frameEventName(data)}`)
     if (!this.current(socket)) return
     if (typeof data !== 'string') return this.close()
     const frame = parseQqGatewayFrame(data)
@@ -276,6 +288,11 @@ export class QqGatewayHost {
     return this.currentGeneration() && this.socket === socket && !this.closed.has(socket)
   }
 
+  /** 诊断写入：不过授权闸门（正常审计在失败那一刻往往已经写不进去）。 */
+  private diagnose(code: string): void {
+    this.deps.runtime.auditDiagnostic(this.deps.channelId, code)
+  }
+
   private audit(code: string): void {
     if (!this.currentGeneration()) return
     this.deps.runtime.auditIfCurrent(this.deps.channelId, this.deps.generation, code)
@@ -303,4 +320,33 @@ function closeCodeOf(event: unknown): number | null {
 
 function backoffMs(attempt: number): number {
   return Math.min(30_000, 1_000 * 2 ** attempt)
+}
+
+/** 四个 bit 分开拼：aborted / active / owner 各一位，socket 身份单独一位。 */
+function gateBits(
+  gate: { aborted: boolean; active: boolean; owner: boolean } | undefined,
+  socketIsCurrent: boolean
+): string {
+  const bit = (value: boolean | undefined): string => (value === true ? '1' : '0')
+  // gate 缺省（老调用方/用例没注入）时写 `?`，不假装成 0——「不知道」与「不成立」是两件事。
+  const unknown = gate === undefined
+  return [
+    `aborted=${unknown ? '?' : bit(gate.aborted)}`,
+    `active=${unknown ? '?' : bit(gate.active)}`,
+    `owner=${unknown ? '?' : bit(gate.owner)}`,
+    `socket=${socketIsCurrent ? 'ok' : 'stale'}`
+  ].join(',')
+}
+
+/** 只取事件名（`t`）或 op；不读 `d`，所以正文与凭据都不会进审计。 */
+function frameEventName(data: unknown): string {
+  if (typeof data !== 'string') return 'non-text'
+  try {
+    const parsed = JSON.parse(data) as { t?: unknown; op?: unknown }
+    if (typeof parsed.t === 'string' && parsed.t.length > 0) return parsed.t.slice(0, 64)
+    if (typeof parsed.op === 'number') return `op:${parsed.op}`
+    return 'no-event'
+  } catch {
+    return 'unparsed'
+  }
 }

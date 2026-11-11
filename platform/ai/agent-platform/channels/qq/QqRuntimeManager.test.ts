@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { setChannelAcceptanceOverride } from '../channelAcceptanceOverride'
 
 import { QQ_DEFAULT_INTENTS, QqRuntimeManager } from './QqRuntimeManager'
 import { QqDeliveryTransport } from './QqDeliveryTransport'
@@ -56,6 +58,19 @@ describe('qq runtime manager', () => {
       text: 'hi',
       idempotencyKey: 'opaque-2'
     })).resolves.toEqual({ kind: 'failed', code: 'delivery-host-unavailable' })
+  })
+
+  it('records whether the in-process acceptance override is present', async () => {
+    // 运行时每一道闸门都读 supportedChannelSql，而六家在库里全是 blocked：到底有没有放行，
+    // 是「重启后静默失联」那条线索的第一格。只记适配器键，没有凭据。
+    const without = createHarness()
+    await without.manager.start('qq-a', 1, 'owner-a')
+    expect(without.audits).toContain('qq-acceptance:none')
+
+    setChannelAcceptanceOverride('qq')
+    const withOverride = createHarness()
+    await withOverride.manager.start('qq-a', 1, 'owner-a')
+    expect(withOverride.audits).toContain('qq-acceptance:qq')
   })
 
   it('records that start was entered, and which branch rejected it', async () => {
@@ -186,3 +201,8 @@ class FakeSocket {
 
   send(_value: string): void {}
 }
+
+afterEach(() => {
+  // 放行是进程内状态：用例之间必须还原。
+  setChannelAcceptanceOverride(null)
+})

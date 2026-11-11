@@ -4,6 +4,7 @@ import type { ChannelInboundService } from '../ChannelInboundService'
 import { exchangeQqAccessToken, readQqGateway } from './QqAccessToken'
 import { QqApiClient } from './QqApiClient'
 import { QqDeliveryTransport } from './QqDeliveryTransport'
+import { channelAcceptanceOverrides } from '../channelAcceptanceOverride'
 import { QqGatewayHost } from './QqGatewayHost'
 import { QqRuntimeRepository } from './QqRuntimeRepository'
 
@@ -40,6 +41,11 @@ export class QqRuntimeManager {
     // 入口先留痕（带 generation）：启用点了没反应时，第一步就能确认「到底进没进 start」。
     // 用诊断专用写入（不过授权闸门）：启动失败时代际/启用状态往往已经对不上，正常审计会一条都不留。
     this.deps.runtime.auditDiagnostic(channelId, `qq-start:g${generation}`)
+    // 运行时那几道闸门都靠「进程内取证放行」：这里先记放行在不在，省得后面逐层猜。
+    this.deps.runtime.auditDiagnostic(
+      channelId,
+      `qq-acceptance:${channelAcceptanceOverrides().includes('qq') ? 'qq' : 'none'}`
+    )
     if (!ownerToken || !this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)) {
       this.deps.runtime.auditDiagnostic(channelId, `qq-start-rejected:owner:g${generation}`)
       return false
@@ -88,6 +94,11 @@ export class QqRuntimeManager {
         createPlatformWebSocket: this.deps.createPlatformWebSocket as never,
         isCurrent,
         signal: controller.signal,
+        diagnoseGate: () => ({
+          aborted: controller.signal.aborted,
+          active: this.deps.isCurrentActive(channelId, generation),
+          owner: this.deps.ownsLifecycleOwner(channelId, ownerToken, generation)
+        }),
         refreshGatewayUrl: async () => {
           const token = await this.accessToken(channelId, controller.signal)
           if (!token) return null
