@@ -72,6 +72,10 @@ describe('每源第二行：频率', () => {
     expect(row!.textContent).toContain(t.collectionPolicy.frequency)
     // ⑤ 声明的模板真的有人画（守卫按模板反查，不猜实例形状）。
     expect(row!.getAttribute('data-setting-key')).toBe('setting:sources.collection-preset@policy-path-market')
+    // 一个源行里**只许有一颗开关**（源采集那颗）。用户 2026-11-12 真机报过两颗一样的圆开关并排
+    // （源采集 + 「纳入情绪分析」），会被读成重复开关；第二颗已随该功能整个删除（`4c4f298`/`c3004e5`），
+    // 这条钉住它不会以任何形态回来。
+    expect(host.querySelector<HTMLElement>(ROW)!.querySelectorAll('[role="switch"]')).toHaveLength(1)
 
     // 下拉交互：打开后选「频繁」，回调收到的是按源的单字段 patch 目标。
     const selector = row!.querySelector<HTMLElement>('.ant-select-selector')!
