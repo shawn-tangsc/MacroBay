@@ -135,7 +135,7 @@ import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
 import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
-import { wireTaskFailureNotifier } from '../../notifications/producers/wireTaskFailureNotifier'
+import { createTaskFailureNotifier } from './taskFailureNotifications'
 import { fanOutRunTerminal } from './runTerminalFanOut'
 import { resolveJobTitle } from '../../jobs/runtime/jobTitle'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
@@ -866,15 +866,11 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
    * `jobTitle` 是闭包，调用时 `jobRuntime` 早已就绪；这里只把端口交进去，不调用。
    */
   composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), jobTitle: (definitionId, language) => { const definition = jobRuntime.listSchedules().find((entry) => entry.id === definitionId); return definition === undefined ? null : resolveJobTitle(definition.title, definition.titleParams, language) } })
-  // 第一个真实通知来源：任务最终失败。装配在这，通知语义不进平台。
-  const taskFailureNotifier = wireTaskFailureNotifier({
+  /* 第一个真实通知来源：任务最终失败。拼装细节（按任务身份数、limit 200、按设置时区切天）在模块里。 */
+  const taskFailureNotifier = createTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
     listDefinitions: () => jobRuntime.listSchedules(),
-    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant)), // P2 的「连续 3 次失败」按**任务身份**数，所以取的是这个 handler 的运行序列：
-    // 一次性作业每次 definitionId 都带时间戳与随机后缀，按 definitionId 数永远到不了阈值
-    // （同一个人工任务失败 5 次会变成 5 条各自独立的通知）。身份过滤在生产者里做：
-    // 周期作业 = definitionId，一次性作业 = handler + sourceId；这里只负责把序列取回来。
-    // limit 200 是给「同一 handler 多来源交错」留的余量。
+    timeZone: () => shellTimeZone.get(),
     listHandlerRuns: (handlerId) =>
       jobRuntime.listRuns({ handlerId, statuses: ['completed', 'failed', 'cancelled'], newestFirst: true, limit: 200 })
   })

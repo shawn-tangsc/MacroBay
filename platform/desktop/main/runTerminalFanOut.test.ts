@@ -51,10 +51,14 @@ describe('run terminal fan-out', () => {
     expect(product).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the original wireTaskFailureNotifier wired into the fan-out in app.ts', () => {
-    // 删掉任一侧（平台那条固定监听器，或把它交给扇出这一步）都会在这里红。
-    const source = readFileSync(join(process.cwd(), 'platform/desktop/main/app.ts'), 'utf8')
-    expect(source).toContain('const taskFailureNotifier = wireTaskFailureNotifier({')
-    expect(source).toContain('fanOutRunTerminal([taskFailureNotifier])')
+  it('keeps the original task-failure notifier wired into the fan-out', () => {
+    // 删掉任一侧（平台那条固定监听器、它内部的 wireTaskFailureNotifier、或把它交给扇出这一步）都会红：
+    // 接线接缝在 `app.ts`，拼装细节在 `taskFailureNotifications.ts`（体积门禁把它抽出去的）。
+    const root = process.cwd()
+    const app = readFileSync(join(root, 'platform/desktop/main/app.ts'), 'utf8')
+    expect(app).toContain('const taskFailureNotifier = createTaskFailureNotifier({')
+    expect(app).toContain('fanOutRunTerminal([taskFailureNotifier])')
+    const wiring = readFileSync(join(root, 'platform/desktop/main/taskFailureNotifications.ts'), 'utf8')
+    expect(wiring).toContain('return wireTaskFailureNotifier({')
   })
 })
