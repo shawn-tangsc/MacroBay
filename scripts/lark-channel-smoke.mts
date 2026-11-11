@@ -22,12 +22,12 @@
  *
  * `--proxy` 省略时依次看 `LARK_SMOKE_PROXY` / `HTTPS_PROXY` / `https_proxy`；都没有就是直连。
  *
- * `--base <url>` 换 REST 基址（默认 `LarkContracts.larkApiBase`，今天指 `open.larksuite.com`）。
+ * `--base <url>` 换 REST 基址（默认 `LarkContracts.larkApiBase`，与长连接同源于 `larkOrigin`）。
  * 两个域名各跑一次，第 2 步就能回答「这是域名问题还是凭据问题」：
  *   … pnpm lark:smoke --probe --base https://open.feishu.cn/open-apis --proxy http://127.0.0.1:7888
  *
- * **它只管 REST 两步**（换 token / 发消息），长连接那一步的域名归 SDK 决定，输出里用 `socketOrigin`
- * 写清楚是哪一边——别把一次运行读成「两步打的是同一个域名」。
+ * **它只管 REST 两步**（换 token / 发消息）；长连接那一步固定跟运行时的 `larkOrigin` 走，输出里的
+ * `socketOrigin` 写清楚是哪一边——别把一次运行读成「两步打的是同一个域名」。
  *
  * 失败码分三类，`step` 指到断在哪一步：
  *   - 凭据错：`lark-provider-rejected`（`step:"token"` = app_id/secret 不认；`step:"send"` = 消息被拒，
@@ -41,7 +41,7 @@ import { request } from 'node:https'
 
 import { ProxyAgent } from 'proxy-agent'
 
-import { larkApiBase } from '../platform/ai/agent-platform/channels/lark/LarkContracts'
+import { larkApiBase, larkOrigin } from '../platform/ai/agent-platform/channels/lark/LarkContracts'
 import {
   createLarkLongConnection,
   type LarkProxyDecision
@@ -120,10 +120,10 @@ function resolveBase(explicit: string | undefined): string {
 }
 
 /**
- * 长连接那一步走的是 SDK 自己的域名（1.76.0 默认 `Domain.Feishu`），**不受 `--base` 影响**。
- * 输出里把它写出来，免得读者以为一次运行里两步打的是同一个域名。
+ * 长连接那一跳打哪个 origin：运行时已把它收到一处常量（`larkOrigin`），**不受 `--base` 影响**。
+ * 输出里写出来，免得读者以为一次运行里两步打的是同一个域名。
  */
-const SDK_DEFAULT_SOCKET_ORIGIN = 'https://open.feishu.cn'
+const SOCKET_ORIGIN = larkOrigin
 
 function resolveProxy(explicit: string | undefined): string | null {
   const value = explicit ?? process.env.LARK_SMOKE_PROXY ?? process.env.HTTPS_PROXY ?? process.env.https_proxy ?? ''
@@ -261,7 +261,7 @@ async function main(): Promise<void> {
     ok: false,
     mode: args.mode,
     base,
-    socketOrigin: SDK_DEFAULT_SOCKET_ORIGIN,
+    socketOrigin: SOCKET_ORIGIN,
     proxy: maskProxy(proxy)
   }
   if (proxy && !(await proxyReachable(proxy))) return print({ ...report, step: 'proxy', failure: 'proxy-unreachable' })

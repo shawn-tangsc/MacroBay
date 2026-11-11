@@ -1,5 +1,17 @@
-/** Release C accepts only the `lark` public preset, so credentials never cross to a Feishu origin. */
-export const larkApiBase = 'https://open.larksuite.com/open-apis'
+/**
+ * 飞书的**唯一 origin**：REST 基址与长连接取地址那一跳都从它派生。
+ *
+ * 为什么要收成一处：这两跳以前各写各的——REST 打 `open.larksuite.com`，长连接由 SDK 默认
+ * 打 `open.feishu.cn`，而取地址那一步会带上 `app_id + app_secret`。于是「凭据不越过 Feishu origin」
+ * 这句承诺与代码互相打脸，而且两个域名里哪个才算「对」也没法一眼回答。
+ *
+ * 现值仍是 `open.larksuite.com`（Release C 只接受 `lark` 公开预设）。**要换域名只改这一行**：
+ * REST 基址与 SDK 的 `domain` 同时跟着变。换之前先用 `pnpm lark:smoke --base <url>` 两种都试一次。
+ */
+export const larkOrigin = 'https://open.larksuite.com'
+
+/** REST 基址：从同一个 origin 派生，别在别处再写一个域名。 */
+export const larkApiBase = `${larkOrigin}/open-apis`
 
 export type LarkApiResult<T> =
   | { ok: true; value: T }

@@ -1,6 +1,8 @@
 import { EventDispatcher, WSClient as SdkWsClient } from '@larksuiteoapi/node-sdk'
 import { ProxyAgent } from 'proxy-agent'
 
+import { larkOrigin } from './LarkContracts'
+
 /**
  * 飞书长连接的**包装层**：SDK 只出现在这个文件里，平台拿到的永远是我们自己的形状。
  *
@@ -170,6 +172,8 @@ const defaultWsClientFactory: LarkWsClientFactory = (options) => {
     // 不传它，SDK 会用自带的 axios 直连——那正是这一笔要堵的口子。
     // 收窄是必要的：SDK 声明的是 axios 实例（带 get/post/delete…），我们只实现它实际用到的那一个方法。
     httpInstance: options.httpInstance as unknown as SdkWsClientParams['httpInstance'],
+    // 取 wss 地址打哪个 origin 由同一处常量决定：默认它会是 Feishu，与 REST 基址分叉。
+    domain: larkOrigin,
     autoReconnect: false
   }) as unknown as WsClientLike
 }
