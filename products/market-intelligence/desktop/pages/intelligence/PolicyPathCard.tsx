@@ -1,6 +1,5 @@
 import { Button } from 'antd'
-import { ChartLine, CircleDashed, CircleSlash, TriangleAlert } from 'lucide-react'
-import { IconButton } from '@platform/ui/components/icon-button'
+import { CircleDashed, CircleSlash, TriangleAlert } from 'lucide-react'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -112,7 +111,7 @@ const STALENESS_KEY = {
  * 这一支底下**没有**「压着的数据」：读数本身就不在（宿主里只有遮罩，没有可 `inert` 的内容）。
  * 遮罩高度由共享表的 `min-height` 撑住，卡不塌；颜色走主题 token，调用点不写颜色。
  */
-export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sentence, action, onOpenIndicators, openIndicatorsLabel }: Readonly<{
+export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sentence, action}: Readonly<{
   text: PolicyPathCardText
   state: 'missing' | 'disabled' | 'unreadable'
   /**
@@ -124,9 +123,6 @@ export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sente
   onConfigure?: () => void
   /** 再试一次：只重读，不跳转。 */
   onRetry?: () => void
-  /** 关键指标抽屉的入口：读不到时也要在，否则那一次失败会把入口一起藏掉。 */
-  onOpenIndicators?: () => void
-  openIndicatorsLabel?: string
   sentence?: string
   action?: Readonly<{ label: string; run: () => void }>
 }>): React.ReactElement {
@@ -144,7 +140,6 @@ export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sente
   // 这三态不是新鲜度；状态只在遮罩与状态句上用 `data-state` 说一次。
   return <section className="mi-policy-card" aria-label={text.title}>
     <header className="mi-policy-card__head"><h2>{text.title}</h2>
-      <IndicatorEntry onOpen={onOpenIndicators} label={openIndicatorsLabel} />
     </header>
     <div className="mi-source-veil-host" data-veiled="true">
       <div className="mi-source-veil" data-state={state}>
@@ -159,7 +154,7 @@ export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sente
   </section>
 }
 
-export function PolicyPathCard({ reading, text, month, onOpen, onOpenIndicators, openIndicatorsLabel }: Readonly<{
+export function PolicyPathCard({ reading, text, month, onOpen}: Readonly<{
   reading: PolicyPathReading
   text: PolicyPathCardText
   month: string
@@ -275,7 +270,6 @@ export function PolicyPathCard({ reading, text, month, onOpen, onOpenIndicators,
         : null}
       {/* 关键指标抽屉的入口：卡头右上角，**不是**整卡可点——卡本身是读数，点任意处等于把
           「看数值」变成「打开另一个页面」。入口只做一件事，名字也说清它打开的是哪个抽屉。 */}
-      <IndicatorEntry onOpen={onOpenIndicators} label={openIndicatorsLabel} />
     </header>
 
     {/* One skeleton for every state: a missing value becomes a dash, so the card never changes
@@ -403,22 +397,4 @@ function SettlementBlock({ settlement, text }: Readonly<{ settlement: PolicyPath
       .replace('{actual}', text.outcomes[settlement.actualOutcome])
       .replace('{priced}', text.outcomes[settlement.pricedOutcome])}</span>
   </div>
-}
-
-/**
- * The 关键指标 drawer's only entry: a 24px icon button in the card header.
- *
- * It is optional on purpose — the card is used where that drawer is not mounted (tests, single-cell
- * renders), and an entry that opens nothing is worse than no entry.
- */
-function IndicatorEntry({ onOpen, label }: Readonly<{ onOpen?: () => void; label?: string }>): React.ReactElement | null {
-  if (!onOpen) return null
-  // The resolver keeps the shell's signature (one key-shaped argument): a zero-argument resolver
-  // is what the guard forbids, because it can no longer tell whether the caller passed a key or a
-  // sentence that happens to be short. `//` inside JSX children would be rendered as text — this
-  // comment belongs here, before the return, not between the tags.
-  return <span className="mi-policy-card__entry">
-    <IconButton ariaLabelKey="entry.openAria" icon={ChartLine} size="sm" onSelect={onOpen}
-      resolveText={(_key: string) => label ?? ''} />
-  </span>
 }

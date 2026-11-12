@@ -59,24 +59,15 @@
   background: color-mix(in srgb, var(--surface-soft) 34%, transparent);
   padding: 8px 10px 6px;
   flex: none;
-  /* The row is one block: the plot column decides the height, the card fills it. */
-  align-items: stretch;
+  /* 行高由卡片内容决定（原型同法）：卡按自然高度，图跟着填满这一行。 */
+  align-items: start;
 }
-.mk-plot { display: flex; flex-direction: column; min-width: 0; }
+.mk-plot { display: flex; flex-direction: column; min-width: 0; align-self: stretch; height: 100%; }
 .mk-plot__scroll { overflow-x: auto; overflow-y: hidden; }
 .mk-plot__svg { display: block; overflow: visible; }
-.mk-zoom { display: flex; gap: 2px; margin-bottom: 2px; align-self: flex-end; }
-.mk-zoom button { border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: var(--font-meta); padding: 0 8px; height: 20px; border-radius: 5px; cursor: pointer; }
-.mk-zoom button[aria-pressed='true'] { background: var(--surface-soft); color: var(--text-strong); border-color: var(--border-strong); }
-.mk-zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mk-plot__zero { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
 .mk-plot__line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
 .mk-plot__mark { fill: var(--surface); stroke: var(--caution); stroke-width: 1.5; }
-.mk-legend { display: flex; gap: 14px; align-items: center; min-height: 18px; margin-top: auto; font-size: var(--font-meta); color: var(--muted); }
-.mk-sw { display: inline-block; vertical-align: -2px; margin-right: 4px; }
-.mk-sw--line { width: 16px; height: 2px; background: var(--accent); }
-.mk-sw--ring { width: 9px; height: 9px; border: 1.5px solid var(--caution); border-radius: 50%; }
-.mk-sw--hollow { width: 9px; height: 9px; border: 1.5px solid var(--border-strong); border-radius: 50%; background: var(--surface); }
 
 
 /* Cards: one skeleton, three sizes of value type. */
@@ -91,7 +82,9 @@
   gap: 6px;
   min-width: 0;
 }
-.mk-card--hero { border-color: var(--border-strong); width: 300px; min-height: 192px; height: 100%; }
+.mk-policy-slot { width: 300px; min-height: 192px; display: flex; min-width: 0; align-self: start; }
+/* 复用现有「利率路径」卡：卡自带的 10px 外边距在抽屉里会顶出列宽，这里清零并让它填满槽位。 */
+.mk-policy-slot > .mi-policy-card { margin: 0; flex: 1; min-width: 0; }
 .mk-card__h { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .mk-card__h h3 { margin: 0; font-size: var(--font-section); font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-card__h em { font-size: var(--font-meta); color: var(--muted); font-style: normal; margin-left: auto; white-space: nowrap; }

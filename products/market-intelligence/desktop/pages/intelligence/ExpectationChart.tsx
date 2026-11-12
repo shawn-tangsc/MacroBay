@@ -6,6 +6,8 @@
  * 红面积、2px 柠绿曲线、事件虚线 + 圆点 + 贴顶标注、纵轴刻度 `+40/+20/0/−20/−40bp`、
  * 每 7 个点一个日期——逐句对应原型那段 `<script>` 里的绘图部分。
  *
+ * 缩放按钮（1x/2x）与图例那一行是早前误加的，设计稿里没有，已删。
+ *
  * 只有三处被改写，其余常量一字未动：
  * 1. DOM API（`createElementNS`/`setAttribute`）换成 JSX 属性；
  * 2. 文字宽度用 `getBBox()` 量的地方，改成按 9.5px 字号估算（SVG 里量字要等布局，静态页不必）；
@@ -18,15 +20,13 @@ const B = 34
 
 export type ExpectationEvent = Readonly<{ index: number; label: string; impact: number }>
 
-export function ExpectationChart({ values, events, height, width, zoom }: Readonly<{
+export function ExpectationChart({ values, events, height, width }: Readonly<{
   values: readonly number[]
   events: readonly ExpectationEvent[]
   height: number
   width: number
-  /** 1 = 撑满容器；2 = 横向可滚动（原型那个 1x/2x）。 */
-  zoom: 1 | 2
 }>): React.ReactElement {
-  const W = Math.max(380, Math.floor(width)) * zoom
+  const W = Math.max(380, Math.floor(width))
   const H = height
   const max = Math.max(...values.map(value => Math.abs(value)))
   const min = Math.min(...values)

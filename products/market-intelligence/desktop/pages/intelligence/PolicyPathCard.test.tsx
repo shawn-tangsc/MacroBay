@@ -418,3 +418,23 @@ describe('the card tail action is inline text, not a link button', () => {
     container.remove()
   })
 })
+
+
+// 入口现在就是卡底那个「详情 ↗」。要点是可复现：点一次，回调必须发生一次。
+describe('detail entry', () => {
+  it('fires onOpen when 详情 is clicked', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const onOpen = vi.fn()
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+        <PolicyPathCard reading={reading} text={text} month="12 月" onOpen={onOpen} />
+      </ShellTimeZoneProvider></ShellLanguageProvider>)
+    })
+    const detail = Array.from(host.querySelectorAll('button')).find(button => (button.textContent ?? '').includes('详情'))!
+    expect(detail).toBeTruthy()
+    await act(async () => { detail.click() })
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+})

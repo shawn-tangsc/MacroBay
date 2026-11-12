@@ -5,6 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
+import { productText } from '../../shared/i18n/productText'
+import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+
+const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
 
 let root: Root | undefined
 let host: HTMLDivElement | undefined
@@ -21,7 +25,7 @@ function Harness({ onOpened }: Readonly<{ onOpened: () => void }>): React.ReactE
   const [open, setOpen] = useState(false)
   return <>
     <button type="button" onClick={() => { setOpen(true); onOpened() }}>open</button>
-    {open ? <MacroIndicatorDrawer locale="zh-CN" onClose={() => setOpen(false)} /> : null}
+    {open ? <MacroIndicatorDrawer locale="zh-CN" onClose={() => setOpen(false)} policyText={text} /> : null}
   </>
 }
 
@@ -51,7 +55,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const byName = (name: string) => document.body.querySelector(`button[aria-label="${name}"]`) as HTMLButtonElement
     const title = () => document.body.querySelector('.mk-minical__h h3')!.textContent
@@ -71,7 +75,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const cells = Array.from(document.body.querySelectorAll('.mk-minical__day'))
     // 2026-11-13 carries five releases in the prototype's data: three named rows + 「2 条重要」.
@@ -86,7 +90,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const prev = document.body.querySelector('button[aria-label="上一个月"]') as HTMLButtonElement
     const next = document.body.querySelector('button[aria-label="下一个月"]') as HTMLButtonElement
@@ -95,5 +99,39 @@ describe('key-indicator drawer', () => {
     expect(document.body.querySelector('.mk-minical__nodata')?.textContent).toBe('暂无日程数据')
     await act(async () => { prev.click() })
     expect(document.body.querySelector('.mk-minical__nodata')).toBeNull()
+  })
+})
+
+const reading: PolicyPathReading = {
+  meetingDate: '2026-12-09', daysUntilMeeting: 26, hasProjectionMaterials: true,
+  phase: { kind: 'normal' },
+  targetRange: { lowerPercent: 3.75, upperPercent: 4 },
+  lastDecision: { vote: { for: 10, against: 2 }, outcome: 'no-change' },
+  probability: { venue: 'polymarket', asOf: '2026-11-12T02:10:00.000Z', outcome: 'hike-25', value: 0.878, changeInPp24h: 2.1, points: 40 },
+  staleness: 'live'
+}
+
+describe('policy card inside the drawer', () => {
+  it('draws the reading the host already has, not a second read', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} policyReading={reading} /></ShellLanguageProvider>)
+    })
+    const slot = document.body.querySelector('.mk-policy-slot')!
+    expect(slot.querySelector('.mi-policy-card')).not.toBeNull()
+    expect(slot.textContent).toContain('87.8%')
+  })
+
+  it('shows the unreadable form rather than inventing a number', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+    })
+    const slot = document.body.querySelector('.mk-policy-slot')!
+    expect(slot.textContent).not.toContain('%')
   })
 })

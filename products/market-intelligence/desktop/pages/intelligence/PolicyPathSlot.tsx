@@ -20,7 +20,7 @@ type PolicyPathText = typeof productText['zh-CN' | 'en-US']['pages']['intelligen
  *
  * 搬出主文件只为控体积；判定仍全部来自宿主传进来的 `decideCellRead` 结果。
  */
-export function PolicyPathSlot({ text, locale, decisions, read, onConfigureSources, onFocusCell, onOpenDetail, onOpenIndicators, openIndicatorsLabel, resolveKey }: Readonly<{
+export function PolicyPathSlot({ text, locale, decisions, read, onConfigureSources, onFocusCell, onOpenDetail, resolveKey }: Readonly<{
   text: PolicyPathText
   locale: 'zh-CN' | 'en-US'
   decisions: Readonly<{ probability: CellReadDecision; fed: CellReadDecision }>
@@ -28,14 +28,10 @@ export function PolicyPathSlot({ text, locale, decisions, read, onConfigureSourc
   onConfigureSources: () => void
   onFocusCell: (cellKey: 'probability' | 'fed') => void
   onOpenDetail: () => void
-  /** 关键指标抽屉：入口挂在卡头，抽屉本体由页面持有。 */
-  onOpenIndicators?: () => void
-  openIndicatorsLabel?: string
   /** 产品文案解析（源显示名等）：由宿主给，组件不自建第二套文案表。 */
   resolveKey?: (key: string) => string
 }>): React.ReactElement {
   const key = resolveKey ?? (() => '')
-  const entry = { ...(onOpenIndicators === undefined ? {} : { onOpenIndicators }), ...(openIndicatorsLabel === undefined ? {} : { openIndicatorsLabel }) }
   const reading = read.result
   const bothRead = decisions.probability.kind === 'read' && decisions.fed.kind === 'read'
   const sourceOff = [decisions.probability, decisions.fed].find(decision => decision.kind === 'source-disabled')
@@ -44,24 +40,24 @@ export function PolicyPathSlot({ text, locale, decisions, read, onConfigureSourc
     ...(decisions.fed.kind === 'read' ? [] : ['fed' as const])
   ]
   const disabledCell = (sentence: string, cellKey: 'probability' | 'fed'): React.ReactElement =>
-    <PolicyPathUnavailable state="disabled" text={text} sentence={sentence} {...entry}
+    <PolicyPathUnavailable state="disabled" text={text} sentence={sentence}
       action={{ label: key('pages.intelligence.portal.data.enableSources'), run: () => onFocusCell(cellKey) }} />
 
   if (bothRead) {
     return reading?.state === 'available'
       ? <PolicyPathCard reading={reading.reading} text={text}
-          month={policyPathMonth(reading.reading.meetingDate, locale)} onOpen={onOpenDetail} {...entry} />
-      : <PolicyPathUnavailable state="unreadable" text={text} onRetry={read.reload} {...entry} />
+          month={policyPathMonth(reading.reading.meetingDate, locale)} onOpen={onOpenDetail} />
+      : <PolicyPathUnavailable state="unreadable" text={text} onRetry={read.reload} />
   }
   // 5) 源自己关着：点它落到**这一格**（这一格开着，读者要开的是源）。
   if (sourceOff !== undefined && sourceOff.kind === 'source-disabled') {
-    return <PolicyPathUnavailable state="disabled" text={text} {...entry}
+    return <PolicyPathUnavailable state="disabled" text={text}
       sentence={text.dependencySourceOff.replace('{source}', key(`settings.intelligenceSources.sourceNames.${sourceOff.sourceId}`))}
       action={{ label: key('pages.intelligence.portal.data.enableSources'), run: () => onFocusCell(decisions.fed.kind === 'read' ? 'probability' : 'fed') }} />
   }
   // 4) 两格都关：一句话同时点名两格。
   if (offCells.length === 2) {
-    return <PolicyPathUnavailable state="disabled" text={text} sentence={text.bothCellsOff} {...entry}
+    return <PolicyPathUnavailable state="disabled" text={text} sentence={text.bothCellsOff}
       action={{ label: key('pages.intelligence.portal.data.configureSources'), run: onConfigureSources }} />
   }
   // 2) / 3) 只缺一格：点这一格。

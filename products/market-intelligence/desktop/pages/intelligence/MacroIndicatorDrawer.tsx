@@ -5,6 +5,8 @@ import { LoadingState } from '@platform/ui/components/loading'
 
 import { ExpectationChart } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
+import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
+import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { MiSideDrawer } from './MiSideDrawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 
@@ -64,9 +66,16 @@ const MOCK = {
   }
 } as const
 
-export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfigure }: Readonly<{
+export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfigure, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   onClose: () => void
+  /**
+   * 政策利率卡是**唯一接真数据**的一块：用宿主已经读到的那一份 `reading`，抽屉里不再取第二遍。
+   * 读不到时不编数——走既有的「读不到」形态。
+   */
+  policyReading?: PolicyPathReading
+  policyText: PolicyPathCardText
+  onOpenPolicyDetail?: () => void
   /** 「配置日历」的去处；宿主给不出落点时按钮禁用，不画假按钮。 */
   onConfigure?: () => void
   /**
@@ -78,11 +87,10 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
   const text: MacroIndicatorDrawerText = macroIndicatorDrawerText[locale]
   // The right column scrolls on its own; the drawer body does not.
   const [selectedDay] = useState(MOCK.day.date)
-  const [zoom, setZoom] = useState<1 | 2>(1)
   const [plotWidth, setPlotWidth] = useState(560)
   const [plotHeight, setPlotHeight] = useState(264)
   const plotRef = useRef<HTMLDivElement | null>(null)
-  const heroRef = useRef<HTMLElement | null>(null)
+  const heroRef = useRef<HTMLDivElement | null>(null)
 
   // The prototype measures both boxes before drawing: the plot fills the column, and the plot's
   // height is the hero card's own height (`--top-h`). Same two measurements, same order.
@@ -90,8 +98,9 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
     const measure = () => {
       const host = plotRef.current
       if (host) setPlotWidth(Math.max(380, Math.floor(host.clientWidth)))
-      const hero = heroRef.current
-      if (hero) setPlotHeight(Math.max(200, Math.ceil(hero.getBoundingClientRect().height)))
+      // 行高由卡片内容决定：量卡本身（它的第一个子元素），不是量被拉伸过的槽位。
+      const card = heroRef.current?.firstElementChild ?? heroRef.current
+      if (card) setPlotHeight(Math.max(200, Math.ceil(card.getBoundingClientRect().height)))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -121,32 +130,15 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
 
         <div className="mk-view">
           <div className="mk-plot" ref={plotRef}>
-            <div className="mk-zoom" role="group" aria-label={text.zoom}>
-              {[1, 2].map(level => <button key={level} type="button" aria-pressed={zoom === level} onClick={() => setZoom(level as 1 | 2)}>{level}x</button>)}
-            </div>
-            <ExpectationChart values={MOCK.expectation} events={MOCK.eventMarks.map(mark => ({ index: mark.index, label: mark.name, impact: mark.impact }))} height={plotHeight} width={plotWidth} zoom={zoom} />
-            {/* 图例是图下方一行小字（原型）；事件数值已经贴在图顶那一行，这里不再列第二遍。 */}
-            <div className="mk-legend">
-              <span><i className="mk-sw mk-sw--ring" />{text.legendEvent}</span>
-              <span><i className="mk-sw mk-sw--hollow" />{text.legendNoEvent}</span>
-            </div>
+            <ExpectationChart values={MOCK.expectation} events={MOCK.eventMarks.map(mark => ({ index: mark.index, label: mark.name, impact: mark.impact }))} height={plotHeight} width={plotWidth} />
           </div>
-          <article className="mk-card mk-card--hero" ref={heroRef}>
-            <div className="mk-card__h"><h3>{text.policyRate}</h3><em>{text.policyPending}</em></div>
-            <div className="mk-card__v"><b>{MOCK.rate.policy.mostLikely}</b><span>{text.policyExpectation}</span><i>{MOCK.rate.delta}</i></div>
-            <span className="mk-card__bar">
-              <i style={{ width: `${MOCK.rate.policy.hike25}%` }} /><i style={{ width: `${MOCK.rate.policy.hike50}%` }} /><i style={{ width: `${MOCK.rate.policy.other}%` }} />
-            </span>
-            <p className="mk-card__mix">
-              {text.policyMix.hike25} <b>{MOCK.rate.policy.hike25}%</b> · {text.policyMix.hike50} <b>{MOCK.rate.policy.hike50}%</b> · {text.policyMix.other} <b>{MOCK.rate.policy.other}%</b>
-            </p>
-            <dl className="mk-card__facts">
-              <div><dt>{text.facts.nextMeeting}</dt><dd>{MOCK.rate.facts.meeting}</dd></div>
-              <div><dt>{text.facts.range}</dt><dd>{MOCK.rate.facts.range}</dd></div>
-              <div><dt>{text.facts.sep}</dt><dd>{MOCK.rate.facts.sep}</dd></div>
-              <div><dt>{text.facts.lastVote}</dt><dd>{MOCK.rate.facts.vote}</dd></div>
-            </dl>
-          </article>
+          {/* 政策利率卡：设计照现有那张「利率路径」卡，数据用宿主已读到的那一份；
+              读不到时画既有「读不到」形态，不编数。右边这块占位壳保持 300 宽、随行拉齐。 */}
+          <div className="mk-policy-slot" ref={heroRef}>
+            {policyReading
+              ? <PolicyPathCard reading={policyReading} text={policyText} month={''} {...(onOpenPolicyDetail ? { onOpen: onOpenPolicyDetail } : {})} />
+              : <PolicyPathUnavailable state="unreadable" text={policyText} />}
+          </div>
         </div>
 
         <div className="mk-strip">

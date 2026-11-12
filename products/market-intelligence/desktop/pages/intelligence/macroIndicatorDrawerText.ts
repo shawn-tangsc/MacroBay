@@ -11,7 +11,6 @@ export const macroIndicatorDrawerText = {
   'zh-CN': {
     title: '关键指标 · 预期变化',
     open: '打开关键指标 · 预期变化',
-    entry: { openAria: '打开关键指标 · 预期变化抽屉' },
     calendarLink: '经济日历',
     mockTag: '示意数据',
     rateTitle: '利率数学期望',
@@ -63,7 +62,6 @@ export const macroIndicatorDrawerText = {
   'en-US': {
     title: 'Key indicators · expectations',
     open: 'Open key indicators · expectations',
-    entry: { openAria: 'Open the key indicators and expectations drawer' },
     calendarLink: 'Economic calendar',
     mockTag: 'Sample data',
     rateTitle: 'Rate expectation',
