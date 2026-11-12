@@ -61,3 +61,27 @@ export const NO_PUSH_CHANNEL: PushChannelResolution = {
   multiple: false,
   states: {}
 }
+
+/**
+ * 多通道（方案 §5-1）：`runtime-ready` 有几条就发几条。
+ *
+ * 判据仍是**同一条**（`state === 'runtime-ready'`）——两个函数放在同一份文件里，就是为了不让调用处
+ * 再拼一次「requestedEnabled && credential.status」。用户 2026-11-12 拍板：多条同时启用是合法状态，
+ * 所以这里**不产生**任何「配置冲突」诊断码。
+ *
+ * 失败只剩一档：**一条都没有**（`enabledChannelCount: 0`）。有通道但不是 `runtime-ready` 也走这里，
+ * `states` 直方图说明卡在哪一档，仍然是「没有」，不是「拿不到」。
+ */
+export type PushChannelTarget = { id: string; name: string }
+
+export type PushChannelsResolution =
+  | { ok: true; channels: readonly PushChannelTarget[] }
+  | { ok: false; reason: 'push-unavailable'; enabledChannelCount: 0; states: Readonly<Record<string, number>> }
+
+export function resolvePushChannels(channels: readonly PushChannelCandidate[]): PushChannelsResolution {
+  const ready = channels.filter((channel) => channel.state === 'runtime-ready')
+  if (ready.length > 0) return { ok: true, channels: ready.map((channel) => ({ id: channel.id, name: channel.name })) }
+  const states: Record<string, number> = {}
+  for (const channel of channels) states[channel.state] = (states[channel.state] ?? 0) + 1
+  return { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states }
+}
