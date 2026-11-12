@@ -473,7 +473,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {<MacroIndicatorDrawer open={indicatorDrawerOpen} locale={locale} policyText={text.policyPath}
         {...(policyPath?.state === 'available' ? { policyReading: policyPath.reading } : {})}
         onOpenPolicyDetail={() => setPolicyDrawerOpen(true)} onConfigure={onConfigureSources}
-        onOpenCalendar={() => { setIndicatorDrawerOpen(false); onOpenCalendar() }} onClose={() => setIndicatorDrawerOpen(false)} />}
+        onClose={() => setIndicatorDrawerOpen(false)} />}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">

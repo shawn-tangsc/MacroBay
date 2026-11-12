@@ -61,7 +61,7 @@ const MOCK = {
   }
 } as const
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, onOpenCalendar, onConfigure, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -78,11 +78,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onOpenCalen
   onOpenPolicyDetail?: () => void
   /** 「配置日历」的去处；宿主给不出落点时按钮禁用，不画假按钮。 */
   onConfigure?: () => void
-  /**
-   * 页头那个「经济日历 ↗」真的会打开经济日历（宿主传 `onOpenCalendar`）。
-   * 它和右栏日历卡上的入口指向同一个去处——登记为 K2 待定项，不做只画不动的假按钮。
-   */
-  onOpenCalendar?: () => void
 }>): React.ReactElement {
   const text: MacroIndicatorDrawerText = macroIndicatorDrawerText[locale]
   // 平台 Drawer 只收键；这张表把本抽屉的键映到产品自己的文案表（查表，不是 key→句子的分支）。
@@ -122,7 +117,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onOpenCalen
     className="mk-drawer"
     titleKey="mk.title"
     resolveText={(key: string) => drawerKeys[key] ?? ''}
-    {...(onOpenCalendar ? { actions: <button className="mk-hlink" type="button" onClick={onOpenCalendar}>{text.calendarLink} ↗</button> } : {})}
     footer={<><span>{text.dataBy}</span> <a className="mk-foot-a" href="https://narwhalapi.com" target="_blank" rel="noreferrer">Narwhal API</a></>}
     onClose={onClose}
   >
