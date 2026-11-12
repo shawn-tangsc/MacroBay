@@ -1,4 +1,5 @@
-import { intelligenceHttpRequest } from '../adapters/intelligenceHttpClient'
+import { httpRequest } from '@platform/jobs'
+import { getPlatformFetch } from '@platform/network/platformFetch'
 
 import {
   cryptoEtfAuthorizationHeader,
@@ -59,12 +60,14 @@ export type CryptoEtfBodyResult =
   | Readonly<{ state: 'failed'; failureCode: CryptoEtfFlowFailureCode }>
 
 export type CryptoEtfFlowClientDeps = Readonly<{
-  /** 只给用例注入；生产走平台代理感知的 `intelligenceHttpRequest`。 */
+  /** 只给用例注入；生产走平台代理感知的出网通道。 */
   requestBody?: (url: string, apiKey: string) => Promise<CryptoEtfBodyResult>
+  /** 与 `credentialedProviderProbes.ts` 同样的取法：`deps.platformFetch ?? getPlatformFetch()`。 */
+  platformFetch?: typeof fetch
 }>
 
 export function createCryptoEtfFlowClient(deps: CryptoEtfFlowClientDeps = {}) {
-  const requestBody = deps.requestBody ?? requestCryptoEtfBody
+  const requestBody = deps.requestBody ?? ((url: string, apiKey: string) => requestCryptoEtfBody(url, apiKey, deps.platformFetch))
 
   return {
     /** 两支一起读；一支成功是 `partial`，一支都没成才是 `unavailable`。 */
@@ -116,9 +119,9 @@ async function readAsset(asset: CryptoEtfAssetKey, apiKey: string, requestBody: 
     : Object.freeze({ state: 'unavailable' as const, failureCode: parsed.reason })
 }
 
-async function requestCryptoEtfBody(url: string, apiKey: string): Promise<CryptoEtfBodyResult> {
+async function requestCryptoEtfBody(url: string, apiKey: string, platformFetch?: typeof fetch): Promise<CryptoEtfBodyResult> {
   try {
-    const response = await intelligenceHttpRequest(
+    const response = await httpRequest(
       {
         url,
         method: 'GET',
@@ -129,7 +132,7 @@ async function requestCryptoEtfBody(url: string, apiKey: string): Promise<Crypto
         timeoutMs: cryptoEtfSourcePolicy.requestTimeoutMs
       },
       // 测试按钮只按一次：不重试、不放大并发。429 必须让读者看见，不是悄悄重排。
-      { retryPolicy: { maxAttempts: 1 }, redactHeaders: ['authorization', 'x-api-key'] }
+      { fetchImpl: platformFetch ?? getPlatformFetch(), retryPolicy: { maxAttempts: 1 }, redactHeaders: ['authorization', 'x-api-key'] }
     )
     if (response.status === 401) return failed('credential-invalid')
     if (response.status === 403) return failed('plan-restricted')

@@ -1,11 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { intelligenceHttpRequest } from '../adapters/intelligenceHttpClient'
 import { createCryptoEtfFlowClient, type CryptoEtfBodyResult } from './cryptoEtfFlowClient'
-
-vi.mock('../adapters/intelligenceHttpClient', () => ({ intelligenceHttpRequest: vi.fn() }))
-
-const mockedRequest = vi.mocked(intelligenceHttpRequest)
 
 function fundsBody(symbol: 'BTC' | 'ETH', asset: 'bitcoin' | 'ethereum', days: readonly { date: string; totalUsdM: number; funds: readonly { ticker: string; issuer: string; netFlowUsdM: number }[] }[]) {
   return JSON.stringify({ symbol, asset, windowDays: 30, days, updatedAt: '2026-11-12T20:14:31.376Z' })
@@ -16,13 +11,13 @@ const settledFunds = [
   { date: '2026-11-11', totalUsdM: -299.8, funds: [{ ticker: 'IBIT', issuer: 'BlackRock', netFlowUsdM: -299.8 }] }
 ]
 
-function response(bodyText: string, status = 200) {
-  return { status, headers: { 'x-plan': 'free', 'x-ratelimit-remaining': '59' }, bodyText, byteSize: bodyText.length }
+function fetchReturning(bodyText: string, status = 200) {
+  return vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(bodyText, { status, headers: { 'x-plan': 'free', 'x-ratelimit-remaining': '59' } }))
 }
 
-beforeEach(() => {
-  mockedRequest.mockReset()
-})
+function fetchFailing(message: string) {
+  return vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => { throw new Error(message) })
+}
 
 describe('createCryptoEtfFlowClient readSettledWindow', () => {
   it('reads both assets from the settled funds endpoint and reports the latest trading day', async () => {
@@ -69,10 +64,10 @@ describe('createCryptoEtfFlowClient readSettledWindow', () => {
 })
 
 describe('createCryptoEtfFlowClient testConnection', () => {
-  it('probes the settled funds endpoint and reports what it found', async () => {
-    mockedRequest.mockResolvedValueOnce(response(fundsBody('BTC', 'bitcoin', settledFunds)))
+  it('probes the settled funds endpoint through the injected platform fetch', async () => {
+    const platformFetch = fetchReturning(fundsBody('BTC', 'bitcoin', settledFunds))
 
-    const result = await createCryptoEtfFlowClient().testConnection('secret-key')
+    const result = await createCryptoEtfFlowClient({ platformFetch }).testConnection('secret-key')
 
     expect(result).toMatchObject({
       state: 'succeeded',
@@ -80,9 +75,9 @@ describe('createCryptoEtfFlowClient testConnection', () => {
       plan: 'free',
       rateLimitRemaining: '59'
     })
-    expect(mockedRequest).toHaveBeenCalledTimes(1)
-    expect(mockedRequest.mock.calls[0]![0].url).toBe('https://api.cryptoetf.today/api/v1/flows/btc/funds')
-    expect(mockedRequest.mock.calls[0]![0].headers).toMatchObject({ Authorization: 'Bearer secret-key' })
+    expect(platformFetch).toHaveBeenCalledTimes(1)
+    expect(platformFetch.mock.calls[0]![0]).toBe('https://api.cryptoetf.today/api/v1/flows/btc/funds')
+    expect(platformFetch.mock.calls[0]![1]).toMatchObject({ headers: { Authorization: 'Bearer secret-key' } })
   })
 
   it.each([
@@ -91,32 +86,30 @@ describe('createCryptoEtfFlowClient testConnection', () => {
     [429, 'rate-limited'],
     [500, 'response-unavailable']
   ] as const)('maps HTTP %s to %s without retrying', async (status, failureCode) => {
-    mockedRequest.mockResolvedValue(response('{"message":"no"}', status))
-    const result = await createCryptoEtfFlowClient().testConnection('secret-key')
+    const platformFetch = fetchReturning('{"message":"no"}', status)
+    const result = await createCryptoEtfFlowClient({ platformFetch }).testConnection('secret-key')
 
     expect(result).toEqual({ state: 'failed', failureCode })
-    expect(mockedRequest).toHaveBeenCalledTimes(1)
-    expect(mockedRequest.mock.calls[0]![0].headers).toMatchObject({ Authorization: 'Bearer secret-key' })
+    expect(platformFetch).toHaveBeenCalledTimes(1)
   })
 
   it('separates a timeout from a transport failure', async () => {
-    mockedRequest.mockRejectedValueOnce(new Error('Request timed out after 15000ms.'))
-    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'request-timeout' })
-
-    mockedRequest.mockRejectedValueOnce(new Error('fetch failed'))
-    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'transport-unavailable' })
+    await expect(createCryptoEtfFlowClient({ platformFetch: fetchFailing('Request timed out after 15000ms.') }).testConnection('k'))
+      .resolves.toEqual({ state: 'failed', failureCode: 'request-timeout' })
+    await expect(createCryptoEtfFlowClient({ platformFetch: fetchFailing('fetch failed') }).testConnection('k'))
+      .resolves.toEqual({ state: 'failed', failureCode: 'transport-unavailable' })
   })
 
   it('fails on a 200 whose structure is wrong and never treats it as success', async () => {
-    mockedRequest.mockResolvedValueOnce(response(JSON.stringify({ symbol: 'BTC', asset: 'bitcoin', windowDays: 30, days: [] })))
+    const platformFetch = fetchReturning(JSON.stringify({ symbol: 'BTC', asset: 'bitcoin', windowDays: 30, days: [] }))
 
-    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape-invalid' })
-    expect(mockedRequest).toHaveBeenCalledTimes(1)
+    await expect(createCryptoEtfFlowClient({ platformFetch }).testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape-invalid' })
+    expect(platformFetch).toHaveBeenCalledTimes(1)
   })
 
   it('does not invent a fifth visible state when the answer holds no settled day', async () => {
-    mockedRequest.mockResolvedValueOnce(response(fundsBody('BTC', 'bitcoin', [{ date: '2026-11-11', totalUsdM: 0, funds: [] }])))
+    const platformFetch = fetchReturning(fundsBody('BTC', 'bitcoin', [{ date: '2026-11-11', totalUsdM: 0, funds: [] }]))
 
-    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape-invalid' })
+    await expect(createCryptoEtfFlowClient({ platformFetch }).testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape-invalid' })
   })
 })
