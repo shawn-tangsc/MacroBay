@@ -1565,6 +1565,7 @@ export type PlatformText = {
     quarantineTitle: string
     quarantineWhat: string
     quarantineWhatAria: string
+    quarantineEmpty: string
     quarantineColumnFile: string
     quarantineColumnLocation: string
     quarantineColumnSize: string
@@ -2976,6 +2977,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       quarantineTitle: '隔离副本',
       quarantineWhat: '读到损坏的存储文件时，应用会把原文按时间戳留一份副本，便于事后追查。副本不参与读取；删掉它不会影响正在使用的设置或数据，只会失去这份追查依据。',
       quarantineWhatAria: '隔离副本说明',
+      quarantineEmpty: '当前没有隔离副本。读到损坏的存储文件时，原样副本会自动留在这里。',
       quarantineColumnFile: '文件',
       quarantineColumnLocation: '位置',
       quarantineColumnSize: '大小',
@@ -4386,6 +4388,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       quarantineTitle: 'Quarantine copies',
       quarantineWhat: 'When a stored file is found corrupt, the app keeps an untouched copy with a timestamp for later inspection. Copies are never read; deleting one does not affect settings or data in use — you only lose that evidence.',
       quarantineWhatAria: 'About quarantine copies',
+      quarantineEmpty: 'No quarantine copies right now. When a stored file is found damaged, its untouched copy appears here.',
       quarantineColumnFile: 'File',
       quarantineColumnLocation: 'Location',
       quarantineColumnSize: 'Size',

@@ -9,6 +9,8 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { Segmented } from '@platform/ui/components/segmented'
 import { useToast } from '@platform/ui/components/toast'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
+
 import { SettingInfoPopover } from '../SettingInfoPopover'
 import { QuarantineCopyList } from './QuarantineCopyList'
 import { StorageCacheDetailDrawer } from './StorageCacheDetailDrawer'
@@ -86,7 +88,6 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   const { state, reload, inspectCache, clearCache, compactCache } = useStorageCacheSettings()
   // 隔离副本单独一条读取：缓存巡检失败不该把这一块的结论也变成「读不到」，反之亦然。
   const quarantine = useQuarantineCopies()
-  const [quarantineOpen, setQuarantineOpen] = useState(false)
   // `data` 只在 `ready` 上，所以下面每一处用到行数据的地方都先证明它——这正是类型要的。
   const snapshot = state.status === 'ready' ? state.data : null
   const caches = snapshot?.caches ?? []
@@ -293,33 +294,36 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
          * 大小与修改时间；说明（它们是什么、能不能删、删了会怎样）在标题旁的 ⓘ 里。
          * 三态分开：读不到 = 错误态 + 重试；扫完了没有 = 空态；有目录没读到 = 列表照出 + 一句「可能不全」。
          */}
-        <section className="storage-cache-panel storage-cache-history-panel" data-quarantine-copies="true">
-          <div className="storage-cache-quarantine-head">
-            <button
-              type="button"
-              className="storage-cache-history-toggle"
-              aria-expanded={quarantineOpen}
-              onClick={() => setQuarantineOpen((current) => !current)}>
-              <ChevronRight
-                size={14}
-                className={quarantineOpen ? 'storage-cache-chevron open' : 'storage-cache-chevron'}
+        {/*
+         * 隔离副本：磁盘上有、界面以前完全看不见的那一类文件。**只读**——列出文件名、相对位置、
+         * 大小与修改时间；说明（它们是什么、能不能删、删了会怎样）在展开区顶部的 ⓘ 里。
+         * 折叠头走平台 `CollapsibleGroup`（同屏只许一套折叠实现）；三态分开：读不到 = 错误态 + 重试；
+         * 扫完了没有 = 空态（说的是「健康」不是「等数据」）；有目录没读到 = 列表照出 + 一句「可能不全」。
+         */}
+        <section className="storage-cache-panel" data-quarantine-copies="true">
+          <CollapsibleGroup
+            resolveText={(key) => (key === labels.quarantineTitle ? labels.quarantineTitle : '')}
+            titleText={labels.quarantineTitle}
+            {...(quarantine.state.status === 'ready'
+              ? { metaText: String(quarantine.state.data.copies.length) }
+              : {})}
+          >
+            <div className="storage-cache-quarantine-about">
+              {/*
+               * 说明句只进 ⓘ：折叠头的头行整行是按钮，平台契约禁止在里面放可聚焦元素（嵌套按钮），
+               * 所以它跟着展开区一起来——收起时没有「被推到行尾」这件事。
+               */}
+              <SettingInfoPopover
+                hintKey={labels.quarantineWhat}
+                infoLabelKey={labels.quarantineWhatAria}
+                resolveText={(key) => {
+                  if (key === labels.quarantineWhat) return labels.quarantineWhat
+                  if (key === labels.quarantineWhatAria) return labels.quarantineWhatAria
+                  return ''
+                }}
               />
-              <span>{labels.quarantineTitle}</span>
-              {quarantine.state.status === 'ready' ? <small>{quarantine.state.data.copies.length}</small> : null}
-            </button>
-            <SettingInfoPopover
-              hintKey={labels.quarantineWhat}
-              infoLabelKey={labels.quarantineWhatAria}
-              resolveText={(key) => {
-                // ⓘ 本身用同一份文案：说明句给浮层，读屏名给触发件。
-                if (key === labels.quarantineWhat) return labels.quarantineWhat
-                if (key === labels.quarantineWhatAria) return labels.quarantineWhatAria
-                return ''
-              }}
-            />
-          </div>
-          {quarantineOpen ? (
-            quarantine.state.status === 'loading' ? (
+            </div>
+            {quarantine.state.status === 'loading' ? (
               <div className="storage-cache-placeholder">
                 <LoadingState label={labels.loading} />
               </div>
@@ -337,7 +341,17 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
                 {quarantine.state.data.copies.length === 0
                   && quarantine.state.data.unreadableDirectories === 0
                   && quarantine.state.data.truncated === false
-                  ? <StateView state="empty" reasonCode="not-yet" size="sm" />
+                  ? <StateView
+                    state="empty"
+                    reasonCode="not-yet"
+                    size="sm"
+                    // 0 份副本是**健康状态**，不是「等数据进来」：用自己的句子说清它会自己出现。
+                    // 键带产品前缀、句子来自文案表（§17：键 + 文案表，不把句子当键喂回去）。
+                    productReason={{
+                      key: 'storage.quarantine-empty',
+                      resolve: () => labels.quarantineEmpty
+                    }}
+                  />
                   : quarantine.state.data.copies.length === 0
                     ? null
                     : <QuarantineCopyList language={language} labels={labels} scan={quarantine.state.data} />}
@@ -346,7 +360,14 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
                   <p className="storage-cache-muted">
                     {labels.quarantinePartial(quarantine.state.data.unreadableDirectories)}
                     {' '}
-                    <Button onClick={() => void quarantine.reload()} size="small">{labels.refresh}</Button>
+                    {/* 句内动作：文本档按钮，不再是句子里塞一个描边盒子。 */}
+                    <Button
+                      className="text-action"
+                      onClick={() => void quarantine.reload()}
+                      size="small"
+                      type="text">
+                      {labels.refresh}
+                    </Button>
                   </p>
                 ) : null}
                 {quarantine.state.data.truncated ? (
@@ -355,8 +376,8 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
                   </p>
                 ) : null}
               </>
-            )
-          ) : null}
+            )}
+          </CollapsibleGroup>
         </section>
 
         <section className="storage-cache-panel storage-cache-history-panel">

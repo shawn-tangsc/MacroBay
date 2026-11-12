@@ -2512,8 +2512,9 @@ h1 {
 
 .storage-cache-muted {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--font-body);
   font-weight: 400;
+  line-height: var(--line-body);
 }
 
 .storage-cache-chevron {
@@ -2532,37 +2533,38 @@ h1 {
   width: 100%;
   padding: 12px 16px;
   background: transparent;
-  color: var(--text-strong);
-  font-size: 12.5px;
+  color: var(--muted-strong);
+  /* 可折叠头 = 分组标题档（ui-rules §2：--font-section / --line-section / 600）；与平台
+     `CollapsibleGroup` 同一套数值，同屏两个折叠头才不会分成两档。 */
+  font-size: var(--font-section);
   font-weight: 600;
+  line-height: var(--line-section);
   text-align: left;
   cursor: pointer;
 }
 
+/* 头行计数：11 / 400 / muted / 等宽数字（与 `CollapsibleGroup` 的 meta 同档）。 */
 .storage-cache-history-toggle small {
   color: var(--muted);
-  font-weight: 500;
+  font-size: var(--font-meta);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-meta);
 }
 
 .storage-cache-history-panel > .storage-cache-muted {
   margin: 0;
-  padding: 0 16px 14px;
+  padding: 0 16px 12px;
 }
 
 /*
- * 隔离副本：标题行右边多一颗 ⓘ（说明它们是什么），左边仍是那条折叠按钮。
- * 只给这一行加排版，不新造第二套面板样式。
+ * 隔离副本展开区顶部那一行：只放说明的 ⓘ。
+ * 折叠头走平台 `CollapsibleGroup`（整行是按钮、禁止嵌套可聚焦元素），所以 ⓘ 跟着展开区来。
  */
-.storage-cache-quarantine-head {
+.storage-cache-quarantine-about {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-right: 12px;
-}
-
-.storage-cache-quarantine-head > .storage-cache-history-toggle {
-  flex: 1 1 auto;
-  width: auto;
+  padding: 0 12px 8px;
 }
 
 .storage-cache-history {

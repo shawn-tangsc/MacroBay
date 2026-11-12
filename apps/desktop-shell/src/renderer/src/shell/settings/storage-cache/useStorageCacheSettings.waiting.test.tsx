@@ -15,12 +15,15 @@ import { StorageCacheSettingsPage } from './StorageCacheSettingsPage'
  * `ready` 开始，正好绕开「首帧」这个唯一的出事点。这里让 IPC 的成功回调悬着，首帧是什么样
  * 就是用户真的看到的那一帧。
  */
-function installStorage(read: () => Promise<unknown>): void {
+function installStorage(read: () => Promise<unknown>, readQuarantine: () => Promise<unknown> = () => new Promise(() => undefined)): void {
   Object.defineProperty(window, 'platform', {
     configurable: true,
     value: {
       storage: {
         listCaches: vi.fn(read),
+        // 隔离副本是同一屏上的另一条读取；首帧同样是加载态，这里立刻返回一份空清单。
+        // 隔离副本同样悬着：这一条判的是「首帧」，两块任何一个先落定都会把首帧写成终态。
+        listQuarantineCopies: vi.fn(readQuarantine),
         listCacheOperations: vi.fn(async () => ({ records: [] })),
         inspectCache: vi.fn(async () => undefined),
         clearCache: vi.fn(async () => undefined),
@@ -97,7 +100,11 @@ describe('storage cache read: first frame', () => {
       await pending
     })
     expect(host.innerHTML).toContain('Derived analysis cache')
-    expect(host.querySelector('[data-loading-state]')).toBeNull()
+    // 只看缓存表那一块：隔离副本是同一屏上另一条读取，它还悬着不影响这一条的结论。
+    const cachePanel = [...host.querySelectorAll('section.storage-cache-panel')]
+      .find((panel) => !panel.hasAttribute('data-quarantine-copies'))
+    expect(cachePanel, 'cache panel').toBeDefined()
+    expect(cachePanel!.querySelector('[data-loading-state]')).toBeNull()
     await act(async () => {
       root.unmount()
     })

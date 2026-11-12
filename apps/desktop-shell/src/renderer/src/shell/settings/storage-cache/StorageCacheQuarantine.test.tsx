@@ -81,10 +81,11 @@ async function render(): Promise<HTMLElement> {
 
 /** 打开隔离副本那一块的折叠按钮（它默认收起，与操作记录一致）。 */
 async function openQuarantine(): Promise<void> {
-  const toggle = [...(container?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
-    .find((button) => button.textContent?.includes(labels.quarantineTitle))
+  // 折叠头是平台壳（antd Collapse）：整行是 `role="button"` 的 header，不是原生 `<button>`。
+  const toggle = quarantineSection()?.querySelector<HTMLElement>('.ant-collapse-header')
   expect(toggle, 'quarantine section toggle').toBeDefined()
   await act(async () => { toggle!.click() })
+  await act(async () => { await Promise.resolve() })
 }
 
 function quarantineSection(): Element | null {
@@ -124,15 +125,34 @@ describe('storage page · quarantine copies', () => {
     expect(section!.textContent).not.toContain(labels.quarantinePartial(1))
   })
 
-  it('says "nothing to list" only when the scan actually completed', async () => {
+  it('says "nothing to list" in its own words when the scan completed (0 copies is healthy, not pending)', async () => {
     await render()
     await openQuarantine()
 
     const section = quarantineSection()!
     expect(section.querySelector('[data-state="empty"]')).not.toBeNull()
     expect(section.querySelector('[data-state="error"]')).toBeNull()
+    // 平台那句是「等有数据进来后这里就会出现」——可本机 0 份是健康状态，用自己的句子说清。
+    expect(section.textContent).toContain(labels.quarantineEmpty)
+    expect(section.textContent).not.toContain(resolveStateViewText('en-US', stateViewTextKeys('empty', 'not-yet').reason))
     // 空态不给动作：确实没有就是没有，不用一颗按不动的重试。
     expect(section.textContent).not.toContain(resolveStateViewText('en-US', STATE_VIEW_ACTION_KEYS.retry))
+  })
+
+  it('uses the platform collapsible head (one implementation on this screen) with the count as meta', async () => {
+    mockQuarantine.state = {
+      status: 'ready',
+      data: { copies: [{ fileName: 'a.json.corrupt-1', relativePath: 'a.json.corrupt-1', sizeBytes: 1, modifiedAt: '2026-11-12T01:02:03.000Z' }], unreadableDirectories: 0, truncated: false }
+    }
+    await render()
+
+    const section = quarantineSection()!
+    // 折叠头是平台壳：`collapsible-group` 的头行，箭头在最右、整行可点；这一屏不再有第二套手写折叠头。
+    expect(section.querySelector('.collapsible-group')).not.toBeNull()
+    expect(section.querySelector('.collapsible-group__title')?.textContent).toBe(labels.quarantineTitle)
+    // 计数走壳的 meta 槽（11 / 400 / muted），不再是我手写的 `<small>`。
+    expect(section.querySelector('.collapsible-group__meta')?.textContent).toBe('1')
+    expect(section.querySelector('.storage-cache-history-toggle')).toBeNull()
   })
 
   it('shows a failed read as an error with a retry, never as an empty list', async () => {
