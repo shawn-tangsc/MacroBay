@@ -5,6 +5,13 @@
  * 文件名与类名避开日历页的 `.mi-calendar-*`：两个抽屉同时存在时，同名类会互相改样式。
  */
 
+/*
+ * 遮罩的兜底：antd 的遮罩样式靠 cssinjs 注入，元素带 `ant-drawer-mask-motion-appear` 时初始
+ * `opacity: 0`——注入的哈希对不上、或动画停在起始帧，就会出现「元素在、像素是透明的」。
+ * 只在本抽屉范围内补一条不依赖注入的底色与终态透明度；行为（点遮罩关闭）仍归平台 Drawer。
+ */
+.ant-drawer:has(.mk-drawer) > .ant-drawer-mask { background: rgba(0, 0, 0, 0.45); opacity: 1; transition: none; }
+
 /* 平台 Drawer 的正文留白（设计稿 14/16），只在本抽屉范围内生效。 */
 .mk-drawer.ant-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; }
 .mk-drawer.ant-drawer .ant-drawer-header { padding: 10px 12px; }
