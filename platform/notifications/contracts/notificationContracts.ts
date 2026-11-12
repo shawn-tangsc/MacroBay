@@ -247,6 +247,14 @@ export type NotificationCenterItem = Omit<
    * 句子在主进程解析，渲染层拿到的就是这句话，不自己拼数。
    */
   occurrenceLabel?: string
+  /**
+   * 「手机这一档为什么没发出去」的唯一一句（多通道方案 §5-4）。**只在一种处境出现**：
+   * 一条可用通道都没有（`failed` + `push-unavailable`）。别的失败处境各有各的逐通道结果，
+   * 不在这里编一句通用话；逐通道的行等界面设计定稿后再画。
+   *
+   * 句子在主进程解析（与标题同一条口径），渲染层拿到的就是这句话。
+   */
+  deliveryHint?: string
 }
 
 export type NotificationRequest = {

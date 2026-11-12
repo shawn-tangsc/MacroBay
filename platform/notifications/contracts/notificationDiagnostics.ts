@@ -31,8 +31,6 @@ export type NotificationDiagnosticsEntry = {
     | 'persist-failed'
     /** 提交**抛出**（读回坏了 / 规划器炸了 / 目录实现抛错）：与 `persist-failed` 互斥，同一失败只记一条。 */
     | 'submit-failed'
-    /** 通道目标不唯一：`runtime-ready` 有 ≥2 条，推送按 fail closed 拒绝（技术方案 §1）。只记条数。 */
-    | 'push-multiple-enabled'
     /**
      * 推送**根本没有钩子**（`deliveryHooks.push` 缺席）：装配漏了出站端口。读者侧仍只有
      * `push-unavailable` 一个码，这四个是**诊断**码，不进读者可见闭集。
@@ -76,7 +74,7 @@ export type NotificationDiagnosticsEntry = {
   reason?: string
   step?: 'surface' | 'target' | 'edition' | 'channel'
   language?: 'zh-CN' | 'en-US'
-  /** `push-multiple-enabled` 用：当时处于 `runtime-ready` 的通道条数。**不记通道名、不记凭据。** */
+  /** 条数（这几种伤病都用它，不含通道名与凭据）。 */
   count?: number
   /** `push-target-not-ready` 用：**按状态**的通道条数（`{ 'runtime-ready': 0, 'credential-missing': 1 }`）。 */
   states?: Readonly<Record<string, number>>

@@ -106,6 +106,19 @@ export type NotificationCopyTable = {
   'notification.deliveryReason.systemUnsupported': string
   'notification.deliveryReason.handedToSystem': string
   'notification.deliveryReason.sendFailedUnknown': string
+  /**
+   * 自检的逐通道回执（多通道方案 §5-5）：一次点击在每条可用通道上各发一条测试消息，
+   * 各报各的结果。`{count}` 是「真的发到的条数」，不是「配了几条」。
+   */
+  'notification.selfTest.summary': string
+  'notification.selfTest.channelSent': string
+  /** 熔断窗口内没发：**待产品定稿**（先用现有措辞「冷却中」）。 */
+  'notification.selfTest.channelWaiting': string
+  /** 发出去了但没拿到回执：**待产品定稿**（先沿用「没收到回执」）。 */
+  'notification.selfTest.channelUnconfirmed': string
+  'notification.selfTest.channelFailed': string
+  /** 提交根本没被放行（被拒/折叠/合并/免打扰）：只说「没发出去」，不给内部码。 */
+  'notification.selfTest.notSent': string
 }
 
 /** 通知文案的键闭集：写错一个键编译不过，不靠评审。 */
@@ -176,6 +189,12 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.deliveryReason.systemUnsupported': '这台系统不支持桌面通知',
     'notification.deliveryReason.handedToSystem': '已推送到系统，未确认显示',
     'notification.deliveryReason.sendFailedUnknown': '发送失败，系统没有给出原因。',
+    'notification.selfTest.summary': '已发到 {count} 条通道（测试）',
+    'notification.selfTest.channelSent': '已发到 {channel}（测试）',
+    'notification.selfTest.channelWaiting': '冷却中：{channel}',
+    'notification.selfTest.channelUnconfirmed': '没收到回执：{channel}',
+    'notification.selfTest.channelFailed': '没发出去：{channel}',
+    'notification.selfTest.notSent': '测试消息没发出去',
   }),
   'en-US': Object.freeze({
     'notification.taskFailed.title': 'Task failed: {taskName}',
@@ -240,6 +259,12 @@ export const notificationCopy: Readonly<Record<NotificationCopyLanguage, Notific
     'notification.deliveryReason.systemUnsupported': 'This system does not support desktop notifications.',
     'notification.deliveryReason.handedToSystem': 'Handed to the system; display is unconfirmed.',
     'notification.deliveryReason.sendFailedUnknown': 'Sending failed and the system gave no reason.',
+    'notification.selfTest.summary': 'Sent to {count} channels (test)',
+    'notification.selfTest.channelSent': 'Sent to {channel} (test)',
+    'notification.selfTest.channelWaiting': 'Cooling down: {channel}',
+    'notification.selfTest.channelUnconfirmed': 'No receipt: {channel}',
+    'notification.selfTest.channelFailed': 'Not sent: {channel}',
+    'notification.selfTest.notSent': 'The test message did not go out',
   })
 })
 

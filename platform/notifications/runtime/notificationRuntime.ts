@@ -31,7 +31,7 @@ import type { NotificationEventCatalog } from '../contracts/notificationEventCat
 import type { NotificationProducerOwnership } from '../contracts/notificationProducerOwnership'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type { NotificationCopyLanguage } from '../../i18n/notificationCopy'
-import { toNotificationCenterItem } from './notificationCenterItem'
+import { projectNotificationCenterItem } from './notificationCenterProjection'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
@@ -394,20 +394,18 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     now: nowIso
   })
 
-  /**
-   * 一条记录给渲染层的样子：句子在这里解析（读的那一刻），键与参数留在这边。
-   *
-   * `category` 从**事件目录**取而不是存在记录上：目录是类型标签唯一来源（契约 v2.34），
-   * 记录只存 id。目录里没有这条事件（旧记录、已撤事件）就没有标签——界面不编一个。
-   * `language` 可由调用方一次取好传进来：列表要解析一整页，不该每条读一次设置。
-   */
+  /** 一条记录给渲染层的样子（`category` 取事件目录；没有就无标签）。实现见 `notificationCenterProjection`。 */
   async function centerItem(
     record: NotificationRecord,
     content?: NotificationDeliveryContent
   ): Promise<NotificationCenterItem> {
-    // 投递路径上正文刚解析过，直接传进来——不解析第二遍，否则同一屏可能出现两种说法。
-    const resolved = content ?? await delivery.resolveContent(record)
-    return toNotificationCenterItem(record, resolved, deps.catalog?.get(record.eventTypeId)?.category)
+    return projectNotificationCenterItem({
+      record,
+      // 投递路径上正文刚解析过，直接传进来——不解析第二遍，否则同一屏可能出现两种说法。
+      content: content ?? await delivery.resolveContent(record),
+      category: deps.catalog?.get(record.eventTypeId)?.category,
+      language: () => deps.getLanguage?.() ?? Promise.resolve('zh-CN' as const)
+    })
   }
 
   return {

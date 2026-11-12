@@ -21,7 +21,9 @@ import type { NotificationDeliveryContent } from './notificationRouting'
 export function toNotificationCenterItem(
   record: NotificationRecord,
   content: NotificationDeliveryContent,
-  category: NotificationCategory | undefined
+  category: NotificationCategory | undefined,
+  /** 手机这一档的补充句（已解析）。只在「一条可用通道都没有」时由调用方给。 */
+  deliveryHint?: string
 ): NotificationCenterItem {
   const safe = toSafeNotificationRecord(record)
   const {
@@ -50,6 +52,7 @@ export function toNotificationCenterItem(
     ...(content.reason.length === 0 ? {} : { reason: content.reason }),
     actions: labelled,
     ...(content.occurrenceLabel === undefined ? {} : { occurrenceLabel: content.occurrenceLabel }),
+    ...(deliveryHint === undefined ? {} : { deliveryHint }),
     ...(category === undefined ? {} : { category })
   }
 }
