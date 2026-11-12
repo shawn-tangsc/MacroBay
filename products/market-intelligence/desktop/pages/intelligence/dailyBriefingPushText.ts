@@ -48,6 +48,8 @@ export type BriefingPushText = Readonly<{
 
   /** 结果条自己的控件与逐行用词。 */
   stripInfoLabel: string
+  /** 动作旁那颗 ⓘ 的读屏名：只回答「这是什么」，不是它弹出来的整句说明。 */
+  actionInfoLabel: string
   stripInfoTip: string
   closeStrip: string
   toggleOpen: string
@@ -114,6 +116,7 @@ const zh: BriefingPushText = {
   textPrefix: '只发了文字：',
   noChannels: '没有可用的通道',
   stripInfoLabel: '结果说明',
+  actionInfoLabel: '动作说明',
   stripInfoTip: '只说明这一次发布的结果；下一次发布会替换这条。',
   closeStrip: '关闭结果条',
   toggleOpen: '展开明细',
@@ -186,6 +189,7 @@ const en: BriefingPushText = {
   textPrefix: 'Text only: ',
   noChannels: 'No usable channel',
   stripInfoLabel: 'About this result',
+  actionInfoLabel: 'About this action',
   stripInfoTip: 'This describes this publish only; the next publish replaces it.',
   closeStrip: 'Close the result strip',
   toggleOpen: 'Show details',

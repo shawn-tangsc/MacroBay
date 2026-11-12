@@ -34,52 +34,66 @@ export function BriefingPushResultStrip(props: Readonly<{
   const received = result.rows.filter((row) => row.outcome === 'received')
   const essential = result.rows.filter((row) => row.outcome !== 'received')
   const visible = [...essential, ...(detailOpen ? received : [])]
+  /**
+   * 三颗图标按钮的读屏名：**真实的键换真实的短名**，不是把弹出来的那整句当名字。
+   *
+   * ⓘ 的名字回答「这是什么」（结果说明 / 动作说明），弹出的句子回答「为什么」。以前三处都借
+   * `ui.help.trigger` 当哨兵、再让解析器返回别的字：键与句子不符，解析器一换，关闭键就会被念成
+   * 「帮助」——读屏名只收键，句子由解析器给，这一条不许用哨兵绕过。
+   */
+  const label = (key: string): string =>
+    key === 'briefingPush.stripInfo' ? text.stripInfoLabel
+      : key === 'briefingPush.actionInfo' ? text.actionInfoLabel
+        : key === 'briefingPush.closeStrip' ? text.closeStrip
+          : ''
   return <div className={`mi-daily-briefing__push-result mi-daily-briefing__push-result--${result.tone}`}
     data-push-result="true" data-tone={result.tone}>
     <div className="mi-daily-briefing__push-result-head">
       <span className="mi-daily-briefing__push-summary" role="status">{result.summary}</span>
       <span className="mi-daily-briefing__push-result-spacer" />
+      {/* 句内动作只有一种写法：antd 文本档 + `.text-action`（颜色取 `--accent`）。
+          `type="link"` 走 antd 的 `colorLink`，那是 token 之外的第二个人工交互色。 */}
       {result.action === undefined ? null : <Button
-        className="mi-daily-briefing__push-action"
+        className="text-action"
         data-push-action={result.action.key}
         onClick={() => props.onAction(result.action!.key)}
         size="small"
-        type="link">
+        type="text">
         {result.action.label}
       </Button>}
       {result.action?.tip === undefined ? null : <Popover
         content={<span>{result.action.tip}</span>}
         trigger={(triggerProps) => <IconButton
           {...triggerProps}
-          ariaLabelKey="ui.help.trigger"
+          ariaLabelKey="briefingPush.actionInfo"
           icon={Info}
-          resolveText={(key: string) => key === 'ui.help.trigger' ? result.action!.tip! : ''}
+          resolveText={label}
           size="sm"
           variant="plain" />}
       />}
       {sending || result.rows.length === 0 ? null : <Button
-        className="mi-daily-briefing__push-toggle"
+        className="text-action"
         data-push-toggle="true"
         onClick={() => setDetailOpen((open) => !open)}
         size="small"
-        type="link">
+        type="text">
         {detailOpen ? text.toggleClose : text.toggleOpen}
       </Button>}
       {sending ? null : <Popover
         content={<span>{text.stripInfoTip}</span>}
         trigger={(triggerProps) => <IconButton
           {...triggerProps}
-          ariaLabelKey="ui.help.trigger"
+          ariaLabelKey="briefingPush.stripInfo"
           icon={Info}
-          resolveText={(key: string) => key === 'ui.help.trigger' ? text.stripInfoLabel : ''}
+          resolveText={label}
           size="sm"
           variant="plain" />}
       />}
       {sending ? null : <IconButton
-        ariaLabelKey="ui.help.trigger"
+        ariaLabelKey="briefingPush.closeStrip"
         icon={X}
         onSelect={props.onClose}
-        resolveText={(key: string) => key === 'ui.help.trigger' ? text.closeStrip : ''}
+        resolveText={label}
         size="sm"
         variant="plain" />}
     </div>

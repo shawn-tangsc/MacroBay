@@ -216,7 +216,9 @@ function describeResult(
       const tone = 'tone' in counts ? counts.tone : toneOf(buckets!)
       // 形态前缀：整条尝试是「只发文字」还是「带海报」——读者点了只发文字之后要知道海报没发。
       const prefixed = state.attempt === 'text' ? `${text.textPrefix}${summary}` : `${text.posterPrefix}${summary}`
-      return { tone, summary: prefixed, rows, ...(actionOf(buckets, state.attempt, input, text)) }
+      // 有条通道真拿到了海报，就算这一次点的是「只发文字」也不能再重投那几条（见 `actionOf`）。
+      const posterInPlay = state.attempt === 'poster' || rows.some((row) => row.form === 'poster')
+      return { tone, summary: prefixed, rows, ...(actionOf(buckets, posterInPlay, text)) }
     }
     case 'failed': {
       // 渲不出来可以重试（多半是一次性的）；主进程拒了这次带图发布给「只发文字」。
@@ -281,14 +283,16 @@ function toneOf(buckets: Buckets): BriefingPushResultTone {
 /**
  * 结果条上**最多一颗**动作，按结果选：
  * - 有等回执的 → 不给（等它回来）；
- * - 部分成 → 「再发一次没到的」**只在这一次是纯文字尝试时**给：平台重投会跳过已受理的通道；
- *   带海报那一路的投递不复用它，重发会把海报再发给已经收到的通道（这是一条待补的能力，已报）。
- * - 全败 → 重试（一条都没收到，重发不会重复）。
+ * - 全败 → 重试（一条都没收到，重发不会重复）；
+ * - 部分成 → 「再发一次没到的」只在**这一条消息确实没有海报出去过**时给。
+ *
+ * 第二部分当前是**临时隐藏**：投递层重发带海报的消息时，会把海报再发给已经收到的通道（`posterInPlay`
+ * 为真就落到这里返回空）。等投递层补上「重发跳过已受理的通道」之后恢复这一颗，并在同笔加一条
+ * 「带海报的部分成也给动作」的用例——恢复前先有办法证明它不会再往已收到的通道推一遍。
  */
 function actionOf(
   buckets: Buckets | undefined,
-  attempt: 'poster' | 'text',
-  input: Readonly<{ text: BriefingPushText; hasShorten: boolean; hasChannelsPage: boolean }>,
+  posterInPlay: boolean,
   text: BriefingPushText
 ): Readonly<{ action?: Readonly<{ key: BriefingPushActionKey; label: string }> }> {
   if (buckets === undefined) return {}
@@ -297,9 +301,8 @@ function actionOf(
   if (buckets.received === 0 && buckets.failed === buckets.total) {
     return { action: { key: 'retry', label: text.retry } }
   }
-  if (attempt === 'text') return { action: { key: 'retry-missing', label: text.retryMissing } }
-  void input
-  return {}
+  if (posterInPlay) return {}
+  return { action: { key: 'retry-missing', label: text.retryMissing } }
 }
 
 function actionOf2(

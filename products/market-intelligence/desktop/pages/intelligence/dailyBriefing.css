@@ -372,7 +372,6 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 .mi-daily-briefing__push-result-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mi-daily-briefing__push-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-daily-briefing__push-result-spacer { margin-left: auto; }
-.mi-daily-briefing__push-action.ant-btn, .mi-daily-briefing__push-toggle.ant-btn { height: auto; padding: 0 4px; font-size: var(--font-body); }
 .mi-daily-briefing__push-result-lines { display: grid; gap: 2px; padding-top: 2px; }
 .mi-daily-briefing__push-line { display: grid; grid-template-columns: 104px 64px 88px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 28px; }
 .mi-daily-briefing__push-line-name { color: var(--text); }

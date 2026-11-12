@@ -179,6 +179,55 @@ describe('the publish control on the page', () => {
     expect(invoke).toHaveBeenCalledTimes(2)
   })
 
+  it('offers to resend only the missing ones when this message carried no poster', async () => {
+    invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'failed', channels: [
+      { channelId: 'c1', channelName: '贾维斯', state: 'sent-accepted', kind: 'text' },
+      { channelId: 'c2', channelName: '飞书群', state: 'failed', reason: 'channel-rejected' }
+    ] } })
+    render(<Row edition={document()} />)
+    await act(async () => { await Promise.resolve() })
+    await push()
+    const action = strip()?.querySelector('[data-push-action="retry-missing"]') as HTMLButtonElement
+    expect(action.textContent).toBe(zh.retryMissing)
+    // 「展开明细」与句内动作是同一套写法：antd 文本档 + `.text-action`（颜色取 `--accent`）。
+    // 链接档走的是 antd 的 `colorLink`，会在一页里冒出第二个交互色。
+    const toggle = strip()?.querySelector('[data-push-toggle]') as HTMLButtonElement
+    for (const control of [action, toggle]) {
+      expect(control.className).toContain('text-action')
+      expect(control.className).toContain('ant-btn-text')
+      expect(control.className).not.toContain('ant-btn-link')
+    }
+    await act(async () => { action.click() })
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+
+  it('hides "send the missing ones again" while a poster may already have reached a channel', async () => {
+    // 这一次点的是「只发文字」，投递层却按暂存区走了海报路由——已受理那条拿到的是海报。
+    // 重投会把海报再发给它，所以在投递层能跳过已受理通道之前，这颗动作对带海报的结果不出现。
+    invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'failed', channels: [
+      { channelId: 'c1', channelName: '贾维斯', state: 'sent-accepted', kind: 'image' },
+      { channelId: 'c2', channelName: '飞书群', state: 'failed', reason: 'channel-rejected' }
+    ] } })
+    render(<Row edition={document()} />)
+    await act(async () => { await Promise.resolve() })
+    await push()
+    expect(strip()?.querySelector('[data-push-action]')).toBeNull()
+    // 收到与没到照样逐条说清，少的只是那颗动作。
+    expect(lineTexts().map((line) => line.split('|')[1])).toEqual(['没到', '收到'])
+  })
+
+  it('names every strip icon by its own short label, never by the sentence it opens', async () => {
+    const tooLong = { ...document(), lede: { text: 'a'.repeat(1_100) } } as unknown as DailyBriefingDocument
+    render(<Row edition={tooLong} posterRoot={() => window.document.createElement('div')} onShortenLede={() => undefined} />)
+    await act(async () => { await Promise.resolve() })
+    await push()
+    const names = [...(strip()?.querySelectorAll('button[aria-label]') ?? [])]
+      .map((node) => node.getAttribute('aria-label'))
+    expect(names).toEqual(['动作说明', '结果说明', '关闭结果条'])
+    // 名字不是它弹出的那句话：读屏不该把整段解释当成按钮名。
+    expect(names).not.toContain(zh.captionTooLongWhy)
+  })
+
   it('says where it is sending while it waits, with the channel count it can see', async () => {
     // 别线：请求挂着不返回，读者点完之后要看到「正在发到 N 条通道…」而不是一片空白。
     invoke.mockReturnValue(new Promise(() => undefined))
