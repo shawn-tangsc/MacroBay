@@ -172,8 +172,13 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).toContain(labels.clear)
     expect(markup).toContain(labels.compact)
     expect(markup).toContain(labels.historyTitle)
-    // History stays collapsed until the user opens it.
-    expect(markup).not.toContain('class="storage-cache-history"')
+    // 两个折叠头都走平台壳；操作记录默认收起——表在 DOM 里（壳的 `aria-controls` 要指向真实节点），
+    // 但包在 antd 的 inactive 内容里（`display:none`），所以读者看不到。
+    // 两个折叠头（隔离副本 + 操作记录）都默认收起 → 两处 `aria-expanded="false"`。
+    expect((markup.match(/aria-expanded="false"/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(markup).toContain('title="Operations"')
+    expect(markup).toMatch(/ant-collapse-content-inactive[^]*class="storage-cache-history"/)
+    expect(markup).toContain(`collapsible-group__meta">1<`)
     expect(markup).not.toContain('Unsupported')
   })
 

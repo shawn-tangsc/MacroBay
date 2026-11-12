@@ -1,5 +1,5 @@
 import { Button, Switch } from 'antd'
-import { ChevronRight, RotateCw } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import type { ErrorReasonCode } from '@platform/contracts/queryOutcome'
@@ -95,7 +95,6 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   const [dryRun, setDryRun] = useState(false)
   const [activeFilter, setActiveFilter] = useState<StorageCacheFilterKey>('all')
   const [detailCacheId, setDetailCacheId] = useState<string | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
 
   const filters = useMemo(() => listStorageCacheFilters(language), [language])
   // 分段器只收键：文案的唯一定义仍在 platformText，页面只负责把键解析回来。
@@ -380,28 +379,43 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
           </CollapsibleGroup>
         </section>
 
+        {/*
+         * 操作记录：与隔离副本同一个折叠壳（同一屏只许一套折叠实现）。
+         * 展开区常驻渲染是壳的契约（`aria-controls` 必须指向真实节点），收起态由 antd 隐藏。
+         */}
         <section className="storage-cache-panel storage-cache-history-panel">
-          <button
-            type="button"
-            className="storage-cache-history-toggle"
-            aria-expanded={historyOpen}
-            onClick={() => setHistoryOpen((current) => !current)}>
-            <ChevronRight
-              size={14}
-              className={historyOpen ? 'storage-cache-chevron open' : 'storage-cache-chevron'}
-            />
-            <span>{labels.historyTitle}</span>
-            <small>{operations.length}</small>
-          </button>
-          {historyOpen ? (
-            <StorageCacheOperationList
-              language={language}
-              labels={labels}
-              records={operations}
-              caches={caches}
-              showCacheName
-            />
-          ) : null}
+          <CollapsibleGroup
+            resolveText={(key) => (key === labels.historyTitle ? labels.historyTitle : '')}
+            titleText={labels.historyTitle}
+            metaText={String(operations.length)}
+          >
+            {/*
+             * 展开区常驻渲染，所以这里也要按读取生命周期给三态：读还没回来时既不是「没有记录」
+             * （`StorageCacheOperationList` 会因为拿到空数组画空态），也不是错误。
+             */}
+            {state.status === 'ready' ? (
+              <StorageCacheOperationList
+                language={language}
+                labels={labels}
+                records={state.data.operations}
+                caches={caches}
+                showCacheName
+              />
+            ) : state.status === 'loading' ? (
+              <div className="storage-cache-placeholder">
+                <LoadingState label={labels.loading} />
+              </div>
+            ) : (
+              <div className="storage-cache-placeholder">
+                <StateView
+                  state="error"
+                  reasonCode={regionErrorReasonCode(state.reasonCode)}
+                  size="md"
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reload() }}
+                />
+              </div>
+            )}
+          </CollapsibleGroup>
         </section>
       </div>
 

@@ -24,7 +24,21 @@ function installStorage(read: () => Promise<unknown>, readQuarantine: () => Prom
         // 隔离副本是同一屏上的另一条读取；首帧同样是加载态，这里立刻返回一份空清单。
         // 隔离副本同样悬着：这一条判的是「首帧」，两块任何一个先落定都会把首帧写成终态。
         listQuarantineCopies: vi.fn(readQuarantine),
-        listCacheOperations: vi.fn(async () => ({ records: [] })),
+        // 操作记录区块常驻渲染（折叠壳要求 `aria-controls` 指向真实节点），给一行记录，
+        // 免得它的空态在首帧冒充「缓存表读完了」。
+        listCacheOperations: vi.fn(async () => ({
+          records: [{
+            operationId: 'op-1',
+            cacheId: 'derived.cache',
+            ownerType: 'product',
+            ownerId: 'sample-product',
+            operation: 'clear',
+            dryRun: true,
+            requestedAt: '2026-07-12T00:00:00.000Z',
+            completedAt: '2026-07-12T00:00:01.000Z',
+            status: 'skipped'
+          }]
+        })),
         inspectCache: vi.fn(async () => undefined),
         clearCache: vi.fn(async () => undefined),
         compactCache: vi.fn(async () => undefined)

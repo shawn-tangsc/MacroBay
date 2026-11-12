@@ -152,6 +152,8 @@ describe('storage page · quarantine copies', () => {
     expect(section.querySelector('.collapsible-group__title')?.textContent).toBe(labels.quarantineTitle)
     // 计数走壳的 meta 槽（11 / 400 / muted），不再是我手写的 `<small>`。
     expect(section.querySelector('.collapsible-group__meta')?.textContent).toBe('1')
+    // 整屏只剩平台壳：两个折叠区（隔离副本 + 操作记录），没有第二个手写头。
+    expect(container!.querySelectorAll('.collapsible-group')).toHaveLength(2)
     expect(section.querySelector('.storage-cache-history-toggle')).toBeNull()
   })
 

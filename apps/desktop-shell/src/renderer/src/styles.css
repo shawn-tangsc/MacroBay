@@ -2517,42 +2517,7 @@ h1 {
   line-height: var(--line-body);
 }
 
-.storage-cache-chevron {
-  color: var(--muted);
-  transition: transform 0.15s ease;
-}
-
-.storage-cache-chevron.open {
-  transform: rotate(90deg);
-}
-
-.storage-cache-history-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px 16px;
-  background: transparent;
-  color: var(--muted-strong);
-  /* 可折叠头 = 分组标题档（ui-rules §2：--font-section / --line-section / 600）；与平台
-     `CollapsibleGroup` 同一套数值，同屏两个折叠头才不会分成两档。 */
-  font-size: var(--font-section);
-  font-weight: 600;
-  line-height: var(--line-section);
-  text-align: left;
-  cursor: pointer;
-}
-
-/* 头行计数：11 / 400 / muted / 等宽数字（与 `CollapsibleGroup` 的 meta 同档）。 */
-.storage-cache-history-toggle small {
-  color: var(--muted);
-  font-size: var(--font-meta);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  line-height: var(--line-meta);
-}
-
-.storage-cache-history-panel > .storage-cache-muted {
+.storage-cache-history-panel .storage-cache-muted {
   margin: 0;
   padding: 0 16px 12px;
 }
