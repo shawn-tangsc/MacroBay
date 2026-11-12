@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto'
 import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { ChannelDeliveryRepository } from './ChannelDeliveryRepository'
 import { ChannelDeliveryService } from './ChannelDeliveryService'
-import { channelImageSourceId } from './ChannelDeliveryContracts'
+import { channelImageSourceId, type ChannelDeliveryTransportResult } from './ChannelDeliveryContracts'
 import { MAX_CHANNEL_IMAGE_BYTES, MAX_CHANNEL_IMAGE_CAPTION_CHARS } from './channelImageDelivery'
 import { seedChannelAdapterSupport } from './channelTestSupport'
 
@@ -276,7 +276,7 @@ function imageHarness(options: { supportsImage?: boolean; withImageTransport?: b
     image: { mime: string; bytes: Uint8Array }
     caption: string
     idempotencyKey: string
-  }) => ({ kind: 'delivered' as const }))
+  }): Promise<ChannelDeliveryTransportResult> => ({ kind: 'delivered' }))
   const service = new ChannelDeliveryService({
     repository: new ChannelDeliveryRepository(base.database),
     cipher: cipherForTests(),
@@ -396,6 +396,38 @@ describe('image delivery shares the ledger but never the row', () => {
     expect(database.connection.prepare(
       'select status, next_attempt_at from channel_delivery_attempts'
     ).get()).toEqual({ status: 'failed', next_attempt_at: null })
+  })
+})
+
+describe('image retries are never automatic', () => {
+  it('leaves a retryable image failure without a payload, so the automatic retryer cannot blind-send it', async () => {
+    // 架构师口径：投递层不发起图片的自动重试。重试 payload 里不写 fileName（投递层不认路径），
+    // 于是 `listDueRetries`（要求 retry_payload_ciphertext 非空）扫不到它——结构上就不会盲发。
+    const limited = imageHarness()
+    limited.sendImage.mockResolvedValueOnce({ kind: 'failed', code: 'delivery-rate-limited' })
+    await expect(limited.service.deliverImage(imageRequest('record-rate'))).resolves.toMatchObject({
+      status: 'failed', errorCode: 'delivery-rate-limited'
+    })
+    expect(limited.database.connection.prepare(
+      'select status, retry_payload_ciphertext, retry_payload_key_ref, retry_payload_key_revision from channel_delivery_attempts'
+    ).get()).toEqual({
+      status: 'failed',
+      retry_payload_ciphertext: null,
+      retry_payload_key_ref: null,
+      retry_payload_key_revision: null
+    })
+    await limited.service.retryDue()
+    expect(limited.sendImage).toHaveBeenCalledOnce()
+  })
+
+  it('stores no fileName in any retry payload on an image attempt', async () => {
+    const { service, database } = imageHarness()
+    await service.deliverImage(imageRequest('record-nopayload'))
+    const row = database.connection.prepare(
+      'select retry_payload_ciphertext from channel_delivery_attempts'
+    ).get() as { retry_payload_ciphertext: Uint8Array | null }
+    // 没有 payload：跨重启后调用点不再持有 {messageId, fileName}，也就没有「只发图片」可点。
+    expect(row.retry_payload_ciphertext).toBeNull()
   })
 })
 

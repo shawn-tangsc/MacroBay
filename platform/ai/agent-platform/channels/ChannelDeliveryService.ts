@@ -166,7 +166,9 @@ export class ChannelDeliveryService {
         status: result.kind,
         errorCode,
         detail,
-        retryable: errorCode === 'delivery-rate-limited' || errorCode === 'delivery-host-unavailable',
+        // **图片不自动重试**（架构师 2026-11-12）：重试 payload 里不写 fileName，自动重试器扫到也
+        // 不能盲发；可重试的终态只留给「仍持有 {messageId, fileName} 的调用点」去重新驱动。
+        retryable: false,
         now: this.now()
       })
       return committed

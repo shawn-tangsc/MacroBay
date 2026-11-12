@@ -112,6 +112,31 @@ describe('send an image to the channel', () => {
     await act(async () => {})
     expect(sendMessageImage).toHaveBeenLastCalledWith({ messageId: 'm1', fileName: '0123456789abcdef.png', withoutCaption: true })
   })
+
+  it('says "image only" in the success line, and drops the bare action after it is used', async () => {
+    const sendMessageImage = vi.fn()
+      .mockResolvedValueOnce({ ok: false, code: 'delivery-caption-too-long', channelId: 'c1' })
+      .mockResolvedValueOnce({ ok: true, channelId: 'c1', status: 'delivered', code: null })
+    ;(globalThis as { window?: unknown }).window = Object.assign(globalThis.window ?? {}, {
+      platform: { channels: { imageTarget: vi.fn(async () => ({ channelId: 'c1', channelName: 'Telegram', supportsImage: true })), sendMessageImage } }
+    })
+    const host = await mountCard({ messageId: 'm1', caption: 'x'.repeat(1500) })
+    await act(async () => (host.querySelector('[data-image-send-action]') as HTMLButtonElement).click())
+    await act(async () => {})
+    await act(async () => (host.querySelector('[data-image-send-bare]') as HTMLButtonElement).click())
+    await act(async () => {})
+    expect(host.querySelector('[data-image-send-result="sent"]')?.textContent)
+      .toContain(labels.imageSentBare.replace('{channel}', 'Telegram'))
+    expect(host.querySelector('[data-image-send-bare]')).toBeNull()
+  })
+
+  it('does not draw any action without a message id or without image capability', async () => {
+    installChannels({ channelId: 'c1', channelName: 'Telegram', supportsImage: true }, { ok: true, channelId: 'c1', status: 'delivered', code: null })
+    expect((await mountCard({ caption: 'hi' })).querySelector('[data-image-send-action]')).toBeNull()
+
+    installChannels({ channelId: 'c1', channelName: 'Telegram', supportsImage: false }, { ok: true, channelId: 'c1', status: 'delivered', code: null })
+    expect((await mountCard({ messageId: 'm1', caption: 'hi' })).querySelector('[data-image-send-action]')).toBeNull()
+  })
 })
 
 describe('MessageImageCard', () => {

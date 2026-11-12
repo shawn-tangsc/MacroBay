@@ -482,6 +482,8 @@ export type PlatformText = {
     imageSendToChannel: string
     imageSending: string
     imageSent: string
+    /** 只发图片那次成功：与普通成功分开说，别让读者以为说明也发出去了。 */
+    imageSentBare: string
     imageSendBare: string
     imageSendCaptionTooLong: string
     imageSendTooLarge: string
@@ -1962,6 +1964,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       imageSendToChannel: '发到频道',
       imageSending: '正在发到 {channel}',
       imageSent: '已发到 {channel}',
+      imageSentBare: '已发到 {channel}（只发了图片）',
       imageSendBare: '只发图片',
       imageSendCaptionTooLong: '说明太长（超过 1024 字），没有发出；可以只发图片',
       imageSendTooLarge: '图片太大，没有发出',
@@ -3348,6 +3351,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       imageSendToChannel: 'Send to channel',
       imageSending: 'Sending to {channel}',
       imageSent: 'Sent to {channel}',
+      imageSentBare: 'Sent to {channel} (image only)',
       imageSendBare: 'Send image only',
       imageSendCaptionTooLong: 'The description is longer than 1024 characters, so nothing was sent; you can send the image only',
       imageSendTooLarge: 'The image is too large and was not sent',

@@ -20,7 +20,7 @@ type MessageImageCardProps = {
 }
 
 type ImageSendOutcome =
-  | { kind: 'sent'; channelName: string }
+  | { kind: 'sent'; channelName: string; bare: boolean }
   | { kind: 'failed'; text: string; captionTooLong: boolean }
 
 type ImageTarget = { channelName: string; supportsImage: boolean }
@@ -56,9 +56,13 @@ export function MessageImageCard({ labels, images, createdAt, messageId, caption
         fileName,
         ...(withoutCaption ? { withoutCaption: true } : {})
       })
-      const outcome: ImageSendOutcome = result.ok
-        ? { kind: 'sent', channelName }
-        : { kind: 'failed', text: failureText(result.code, labels), captionTooLong: result.code === 'delivery-caption-too-long' }
+      // 三种结局分开：投递尝试可能是 delivered / unknown-after-send / failed / skipped，
+      // `ok: true` 只表示「请求走完了」，不表示「送达」。
+      const outcome: ImageSendOutcome = result.status === 'delivered'
+        ? { kind: 'sent', channelName, bare: withoutCaption }
+        : result.status === 'unknown-after-send'
+          ? { kind: 'failed', text: labels.imageSendUnconfirmed, captionTooLong: false }
+          : { kind: 'failed', text: failureText(result.code, labels), captionTooLong: result.code === 'delivery-caption-too-long' }
       setOutcomes((current) => ({ ...current, [fileName]: outcome }))
     } catch {
       setOutcomes((current) => ({ ...current, [fileName]: { kind: 'failed', text: labels.imageSendFailed, captionTooLong: false } }))
@@ -106,13 +110,13 @@ export function MessageImageCard({ labels, images, createdAt, messageId, caption
                 </button>
                 {outcome?.kind === 'sent' ? (
                   <span data-image-send-result="sent">
-                    {labels.imageSent.replace('{channel}', outcome.channelName)}
+                    {(outcome.bare ? labels.imageSentBare : labels.imageSent).replace('{channel}', outcome.channelName)}
                   </span>
                 ) : null}
                 {outcome?.kind === 'failed' ? (
                   <span data-image-send-result="failed" role="status">
                     {outcome.text}
-                    {outcome.captionTooLong ? (
+                    {outcome.captionTooLong && busyImage === null ? (
                       <button
                         className="assistant-image-send-action"
                         data-image-send-bare
