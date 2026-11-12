@@ -118,7 +118,6 @@ export const dailyBriefingText = {
         label: '第 {index} 期',
         meta: '每天 {time} 生成 · 截至 {time} 的最近 {hours} 小时 · 主语言 {language}',
         add: '添加一期',
-        addReason: '这个版本还不支持一天多期，位置先留着。',
         // 升级后第一屏就是这里：0 条时它要自己说明"为什么空"，而不是让人去找一个已经不在设置页里的入口。
         empty: '还没有设置任何一期',
         emptyHint: '每一期各有自己的生成时间、统计窗口和语言；加一期之后，它会在到点时自动生成。',
@@ -203,7 +202,7 @@ export const dailyBriefingText = {
       roles: { source: '来源', time: '时间', advice: '建议' },
       listSeparator: '、',
       sources: {
-        stablecoin: 'DefiLlama 稳定币', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
+        stablecoin: 'DeFiLlama 稳定币', etf: 'CryptoETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
         market: '行情数据', macro: '宏观行情', rates: '宏观利率', calendar: '宏观日历', news: '新闻来源',
         analysis: '分析结论', webSearch: 'WebSearch 证据', editorial: '日报 AI 编辑', backfill: '历史接口回补',
         settings: '日报生成设置', collector: '情报源', system: '生成服务'
@@ -239,7 +238,7 @@ export const dailyBriefingText = {
         checkSource: '检查来源网络与凭据，等一次成功采集后再生成；沿用上次数据时按陈旧值阅读。',
         waitCollection: '等一次采集完成后再生成。',
         restoreCapital: '先恢复稳定币与资金面数据，ETF 会随之恢复。',
-        etfAfterOpen: '{time} 前 ETF 还没有可用历史；开盘后再生成，或确认 0xRouter ETF 来源已启用。', etfAfterOpenNoTime: 'ETF 还没有可用历史；开盘后再生成，或确认 0xRouter ETF 来源已启用。',
+        etfAfterOpen: '{time} 前 ETF 还没有可用数据。ETF 净流入按 T+1 发布，上一个交易日的数在次日上午才有。', etfAfterOpenNoTime: 'ETF 还没有可用数据；净流入按 T+1 发布，上一个交易日的数在次日上午才有。', etfSourceDisabled: 'ETF 净流入的来源没有启用。',
         waitNextRelease: '等下一次发布或上一交易日数据后再比较；本期不显示变化。',
         widenWindow: '把统计窗口调到 24 小时以上，或等下一期。',
         fillConsensus: '在宏观日历来源里补齐预期值；缺失时结论不计算预期差。',
@@ -533,7 +532,6 @@ export const dailyBriefingText = {
         label: 'Edition {index}',
         meta: 'Runs daily at {time} · last {hours} hours to {time} · primary language {language}',
         add: 'Add an edition',
-        addReason: 'This version does not support more than one edition a day yet — the spot is reserved.',
         // The first screen after an upgrade: with no period it must explain itself, not point at an
         // entry that no longer exists in settings.
         empty: 'No period is set up yet',
@@ -601,7 +599,7 @@ export const dailyBriefingText = {
       drawerClose: 'Close details',
       groupLabels: {
         'row-disabled': 'Source disabled', 'row-unavailable': 'Data unavailable', 'row-stale': 'Stale data', 'row-no-value': 'No usable value',
-        'etf-no-history': 'No history before 08:00', 'capital-gate': 'Blocked by the capital snapshot',
+        'etf-no-history': 'No usable history', 'capital-gate': 'Blocked by the capital snapshot',
         'no-baseline': 'Change baseline missing', 'no-baseline-last-release': 'Change baseline missing', 'insufficient-window': 'Comparison window too short',
         'news-disabled': 'News sources disabled', 'news-unavailable': 'News sentiment unavailable',
         'news-source-silent': 'A news source has gone quiet', 'news-source-failed': 'A news source keeps failing',
@@ -618,7 +616,7 @@ export const dailyBriefingText = {
       roles: { source: 'Source', time: 'Time', advice: 'Advice' },
       listSeparator: ', ',
       sources: {
-        stablecoin: 'DefiLlama stablecoins', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance futures',
+        stablecoin: 'DeFiLlama stablecoins', etf: 'CryptoETF', fearGreed: 'Alternative.me', funding: 'Binance futures',
         market: 'Market snapshot', macro: 'Macro market', rates: 'Macro rates', calendar: 'Macro calendar', news: 'News sources',
         analysis: 'Analysis conclusion', webSearch: 'WebSearch evidence', editorial: 'Brief AI editor', backfill: 'Historical interface backfill',
         settings: 'Brief generation settings', collector: 'Intelligence sources', system: 'Generation service'
@@ -653,7 +651,7 @@ export const dailyBriefingText = {
         checkSource: 'Check the source network and credentials, then wait for a successful collection; read retained data as stale.',
         waitCollection: 'Wait for one collection, then generate again.',
         restoreCapital: 'Restore the stablecoin/capital snapshot first; the ETF rows recover with it.',
-        etfAfterOpen: 'ETF has no usable history before {time}; generate after the open, or confirm the 0xRouter ETF source is enabled.', etfAfterOpenNoTime: 'ETF has no usable history yet; generate after the open, or confirm the 0xRouter ETF source is enabled.',
+        etfAfterOpen: 'ETF has no usable data before {time}. Net flows are published T+1: the previous session\'s figure arrives the next morning.', etfAfterOpenNoTime: 'ETF has no usable data; net flows are published T+1: the previous session\'s figure arrives the next morning.', etfSourceDisabled: 'The ETF net-flow source is not enabled.',
         waitNextRelease: 'Compare after the next release or trading day; this edition shows no change.',
         widenWindow: 'Set the statistics window to 24 hours or more, or wait for the next edition.',
         fillConsensus: 'Fill in the consensus value in the macro calendar source; without it the conclusion cannot compute a surprise.',
