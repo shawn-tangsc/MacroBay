@@ -198,7 +198,7 @@ export function ChannelRow(props: {
           />
           {/* `<details>` 是块级内容：外层必须是 `<div>` 而不是 `<p>`（视觉不变，语义合规）。 */}
           {props.autoDisabledFailure === null || props.autoDisabledFailure === undefined ? null : (
-            <div className="channel-row-hint-failure" data-auto-disabled-failure role="note">
+            <div className="channel-row-error" data-auto-disabled-failure role="note">
               {labels.channelAutoDisabledEnableFailed.replace('{reason}', props.autoDisabledFailure.sentence)}
               <details>
                 <summary>{labels.channelAutoDisabledReasonCode}</summary>

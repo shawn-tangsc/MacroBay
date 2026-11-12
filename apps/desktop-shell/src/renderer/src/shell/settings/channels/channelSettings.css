@@ -169,23 +169,20 @@
 .channel-row-hint {
   flex-basis: 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding-bottom: 8px;
 }
 
-.channel-row-hint .inline-notice {
-  flex: 1;
+/* 失败那一句复用同一屏已有的 `.channel-row-error`（红只落在点/边框/图标上，前景保持次要色）；
+   这里只补「整行宽度」这条布局，不新造一个只差一个字的失败选择器，也不加第二处危险色前景。 */
+.channel-row-hint .channel-row-error {
+  flex-basis: 100%;
 }
 
-.channel-row-hint-failure {
-  flex-basis: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  color: var(--danger);
-  font-size: var(--font-meta);
+.channel-row-hint .inline-notice {
+  flex: 1;
 }
 
 .channel-row-dot {
