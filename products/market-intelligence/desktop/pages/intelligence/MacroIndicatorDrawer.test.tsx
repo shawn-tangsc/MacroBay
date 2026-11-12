@@ -88,6 +88,20 @@ describe('key-indicator drawer', () => {
     expect(busy.querySelector('.mk-mcell__more')?.textContent).toBe('2 条重要')
   })
 
+  it('keeps the header to a title and one close control — no calendar link', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+    })
+    const header = document.body.querySelector('.ant-drawer-header')!
+    expect(header.textContent).toContain('关键指标 · 预期变化')
+    expect(header.textContent).not.toContain('经济日历')
+    // 页头只剩一个按钮（关闭）；多一个就是又长出了入口。
+    expect(header.querySelectorAll('button')).toHaveLength(1)
+  })
+
   it('draws each day row as exactly time + name — no type chip, no surprise, no assets', async () => {
     host = document.createElement('div')
     document.body.append(host)
