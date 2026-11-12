@@ -741,7 +741,7 @@ export class ChannelManagementRepository {
     channelId: string,
     owner: TelegramLifecycleOwner,
     now: string
-  ): { owner: TelegramLifecycleOwner; displaced: import('./singleEnabledChannel').DisplacedChannel[] } | null {
+  ): { owner: TelegramLifecycleOwner } | null {
     return activateOwnedChannelRuntime(this.database, channelId, owner, now)
   }
 

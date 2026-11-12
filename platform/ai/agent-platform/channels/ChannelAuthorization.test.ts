@@ -107,9 +107,10 @@ describe('channel runtime authorization', () => {
     expect(management.beginLifecycleOwner('telegram-a', 'enable', 'owner-next', '2026-11-11T13:50:00.000Z')).not.toBeNull()
   })
 
-  it('releases the lifecycle owner of a channel displaced by the single-channel invariant', async () => {
-    // 现场：启用 Telegram 把 Slack/Discord 挤出后，那两条各自留着一条 purpose=enable 的占用行，
-    // 于是它们**永远**再启不起来（每条频道各锁自己）。
+  it('releases the lifecycle owner when a channel is disabled, so it can be enabled again', async () => {
+    // 现场（2026-11-11）：频道被停用后还留着一条 purpose=enable 的占用行，于是它**永远**再启不起来。
+    // 规则：停用这条通道就必须把「谁正在操作」的锁一起放掉。多频道放开后，这条保证与「被谁挤出」无关，
+    // 所以判据落在停用本身。
     const database = createAgentPlatformDatabase(':memory:')
     database.connection.exec(`
       insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at)
@@ -123,12 +124,12 @@ describe('channel runtime authorization', () => {
         values('telegram-a','owner-tg','enable',5,'2026-11-11','2026-11-11'),
               ('slack-a','owner-slack','enable',3,'2026-11-11','2026-11-11');
     `)
-    const { reconcileSingleEnabledChannel } = await import('./singleEnabledChannel')
     const management = new ChannelManagementRepository(database)
 
-    // Telegram 最近启用 → 留下它，Slack 被挤出。
-    expect(reconcileSingleEnabledChannel(database, '2026-11-11T13:41:10.000Z').disabled.map((row) => row.id)).toEqual(['slack-a'])
+    expect(management.disable('slack-a', '2026-11-11T13:41:10.000Z')).toBe(true)
+    // 停用的那条把占用行放掉了；还在跑的那条不受影响（多频道：停一条不动另一条）。
     expect(database.connection.prepare("select count(*) as count from channel_telegram_lifecycle_operations where channel_id='slack-a'").get()).toEqual({ count: 0 })
+    expect(database.connection.prepare("select lifecycle_state from agent_channels where id='telegram-a'").get()).toEqual({ lifecycle_state: 'enabled' })
     // Slack 现在是一条普通「未启用」频道：下一次启用必须拿得到占用权。
     expect(management.beginLifecycleOwner('slack-a', 'enable', 'owner-retry', '2026-11-11T13:50:00.000Z')).not.toBeNull()
   })

@@ -18,7 +18,7 @@ import { projectChannelCatalog } from './channelCatalogProjection'
 import { createChannelTestMessageSender, type ChannelTestMessageReceipt } from './channelTestMessage'
 import { requestSmokeEnabledChannel } from './channelSmokeEnable'
 import { releaseChannelAcceptance } from './channelAcceptanceOverride'
-import { reconcileEnabledChannels, resumeChannelsWithInvariant, stopDisplacedChannels } from './channelSingleEnabledEnforcement'
+import { resumeRequestedChannels } from './channelStartupResume'
 import { getWithCredentialPreviews, listWithCredentialPreviews } from './channelCredentialProjection'
 import { createChannelInventory, type ChannelInventory } from './channelInventoryQueries'
 import { requireExistingChannel } from './channelLookup'
@@ -60,11 +60,6 @@ type ManagementDependencies = {
     stop: (channelId: string, ownerToken?: string) => void
   }
   now?: () => Date
-  /**
-   * 启动对账用的单频道不变量：由组合根接到同一份数据库（服务不直接摸连接）。
-   * 返回保留的那条与被停用的那些；停运行时与审计由服务负责。
-   */
-  singleEnabledChannel?: (now: string) => { kept: import('./singleEnabledChannel').DisplacedChannel | null; disabled: import('./singleEnabledChannel').DisplacedChannel[] }
 }
 
 type MutationInput = { id: unknown; actorId: unknown }
@@ -223,7 +218,6 @@ export class ChannelManagementService {
       return this.enableRejected(id, actorId, channel, credentialCode)
     }
     const activation = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
-    if (activation !== null) stopDisplacedChannels(this.enforcement(), activation.displaced)
     const activeOwner = activation?.owner
     if (!activeOwner?.generation) {
       // 先把真实原因问出来，再放掉 pending owner（放了就查不到 owner 那一档了）。
@@ -357,10 +351,11 @@ export class ChannelManagementService {
     })
   }
 
-  /** Restarts channels whose intent survived a graceful quit；恢复前后各对一次单频道不变量。 */
+  /** 启动恢复：按每条通道自己的开启意图恢复，不再做「只留一条」的对账（多频道方案 §1b）。 */
   async resumeRequested(): Promise<void> {
-    await resumeChannelsWithInvariant({
-      ...this.enforcement(),
+    await resumeRequestedChannels({
+      repository: this.deps.repository,
+      now: () => this.now(),
       resumableChannelIds: () => this.deps.repository.resumableChannelIds(),
       readChannel: (id) => this.deps.repository.query.get(id),
       canEnableAdapter: (channel) => this.canEnableAdapter(channel.type as AgentChannelType),
@@ -386,21 +381,7 @@ export class ChannelManagementService {
     }
   }
 
-  /** 启动对账：保留最近启用的那条，其余停用并留一行审计。 */
-  reconcileSingleEnabledChannel(): { keptChannelId: string | null; disabledChannelIds: string[] } {
-    return reconcileEnabledChannels(this.enforcement())
-  }
 
-  /** 单频道不变量的执行上下文（停运行时、还放行、写审计都在 `channelSingleEnabledEnforcement`）。 */
-  private enforcement() {
-    return {
-      repository: this.deps.repository,
-      ...(this.deps.runtime ? { runtime: this.deps.runtime } : {}),
-      now: () => this.now(),
-      releaseAcceptance: (adapter: string) => { releaseChannelAcceptance(adapter) },
-      ...(this.deps.singleEnabledChannel ? { reconcile: this.deps.singleEnabledChannel } : {})
-    }
-  }
 
   private requireChannel(id: unknown): string {
     return requireExistingChannel(this.deps.repository, id)
