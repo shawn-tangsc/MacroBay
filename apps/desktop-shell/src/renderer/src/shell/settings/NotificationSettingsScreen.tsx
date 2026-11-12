@@ -15,6 +15,7 @@ import { StateView } from '@platform/ui/components/state'
 import './notifications/notificationSettings.css'
 import { notificationSettingsText, type NotificationSettingsText } from './notifications/notificationSettingsText'
 import { platformText } from '../../i18n/platformText'
+import { createFooterInfoResolver } from './notifications/footerInfoText'
 import { useNotificationSettingsData, type NotificationSettingsClient } from './notifications/useNotificationSettingsData'
 
 /** ⓘ 的读屏名：只收键（点分、无空白、无中文），句子由这一屏的解析器给出。 */
@@ -56,13 +57,8 @@ export function NotificationSettingsScreen(props: {
   client?: NotificationSettingsClient
 }): React.ReactElement {
   const text = notificationSettingsText[props.language]
-  // 页脚 ⓘ 的三句话来自平台文案表：键与句子都只有那一处，调用点不再拿比较式拼。
-  const footerInfo = platformText[props.language].notifications
-  const footerInfoText: Readonly<Record<string, string>> = {
-    'notifications.footerInfoCenter': footerInfo.footerInfoCenter,
-    'notifications.footerInfoLine': footerInfo.footerInfoLine,
-    'notifications.footerInfoHint': footerInfo.footerInfoHint
-  }
+  // 页脚 ⓘ 的三句话来自平台文案表；键表在 `.ts` 里（正文门禁不该把键表当正文用法）。
+  const resolveFooterInfo = createFooterInfoResolver(platformText[props.language].notifications)
   const client = props.client ?? (window.platform?.notifications as NotificationSettingsClient)
   const { state, reload, setToast, setDesktop } = useNotificationSettingsData(client)
   /** 回执：一句主句 + 可选的原因码。码只在折叠区，不进主句（界面规范 v2.27 §2）。 */
@@ -211,7 +207,7 @@ export function NotificationSettingsScreen(props: {
                 { labelKey: 'notifications.footerInfoHint' },
                 { labelKey: 'notifications.footerInfoLine' }
               ]}
-              resolveText={(key: string) => footerInfoText[key] ?? ''}
+              resolveText={resolveFooterInfo}
               trigger={(triggerProps) => (
                 <IconButton
                   ariaLabelKey={HINT_KEY_FOOTER}
