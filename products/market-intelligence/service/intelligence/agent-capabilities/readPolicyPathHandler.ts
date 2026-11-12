@@ -22,5 +22,14 @@ export async function handleGetPolicyPath(input: unknown, deps: ReadHandlerDeps)
   // design: the same sentence would mean something else a day later, so the model gets the facts
   // (the meeting, the range, the odds) and none of the clock-derived panel state.
   const { phase: _phase, markers: _markers, settlement: _settlement, ...facts } = reading
-  return { state: 'available', asOf, meetingDate: reading.meetingDate, reading: facts, caveats }
+  // The drawn series is a rendering input, not a fact: sixteen hundred points in the answer would
+  // cost the model its context and buy it nothing it cannot read off the numbers below.
+  const { series: _series, seriesTruncated: _seriesTruncated, ...probability } = reading.probability ?? {}
+  return {
+    state: 'available',
+    asOf,
+    meetingDate: reading.meetingDate,
+    reading: { ...facts, ...(reading.probability ? { probability } : {}) },
+    caveats
+  }
 }

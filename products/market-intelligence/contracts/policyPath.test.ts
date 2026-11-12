@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  changeInPp, decisionInstant, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
+  changeInBp, changeInPp, decisionInstant, expectationBp, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
   POLICY_PATH_OUTCOME_ORDER, namedOutcomes, repricingMarkers, settlementConclusion, stalenessOf, thinSeries,
   valueAtOrBefore, verdictOf, type PolicyPathObservation
 } from './policyPath'
@@ -184,5 +184,37 @@ describe('share floor', () => {
   it('treats exactly five percent as not worth naming', () => {
     const values = { 'no-change': 0.05, 'hike-25': 0.9, 'hike-50-plus': 0.02, 'cut-25': 0.02, 'cut-50-plus': 0.01 }
     expect(namedOutcomes(values)).toEqual(['hike-25'])
+  })
+})
+
+describe('weighted expectation', () => {
+  it('is the five buckets weighted by +25/+50/0/−25/−50', () => {
+    // 25×0.6 + 50×0.1 + 0×0.2 − 25×0.08 − 50×0.02 = 15 + 5 − 2 − 1 = 17bp
+    expect(expectationBp({ 'no-change': 0.2, 'hike-25': 0.6, 'hike-50-plus': 0.1, 'cut-25': 0.08, 'cut-50-plus': 0.02 }))
+      .toBeCloseTo(17, 10)
+  })
+
+  it('uses the lower bound for the open-ended buckets — a documented understatement, not a midpoint guess', () => {
+    expect(expectationBp({ 'no-change': 0, 'hike-25': 0, 'hike-50-plus': 1, 'cut-25': 0, 'cut-50-plus': 0 })).toBe(50)
+    expect(expectationBp({ 'no-change': 0, 'hike-25': 0, 'hike-50-plus': 0, 'cut-25': 0, 'cut-50-plus': 1 })).toBe(-50)
+  })
+
+  it('counts a bucket under five percent: folding it away for display must not drop it from the sum', () => {
+    const withSmallCut = { 'no-change': 0.67, 'hike-25': 0.3, 'hike-50-plus': 0, 'cut-25': 0.03, 'cut-50-plus': 0 }
+    const withoutSmallCut = { ...withSmallCut, 'cut-25': 0, 'no-change': 0.7 }
+    expect(expectationBp(withoutSmallCut) - expectationBp(withSmallCut)).toBeCloseTo(0.75, 10)
+  })
+
+  it('does not normalise again on read: a distribution summing to 1.1 is weighted as it stands', () => {
+    // Re-dividing by the sum would yield 17 instead of 18.7 — that is the bug this pins down.
+    const overround = { 'no-change': 0.22, 'hike-25': 0.66, 'hike-50-plus': 0.11, 'cut-25': 0.088, 'cut-50-plus': 0.022 }
+    expect(expectationBp(overround)).toBeCloseTo(18.7, 10)
+  })
+
+  it('reports a bp change at one decimal, and a non-finite input as not-a-number rather than zero', () => {
+    expect(changeInBp(26.93, 26.54)).toBe(0.4)
+    expect(changeInBp(26.93, 26.93)).toBe(0)
+    expect(Number.isNaN(expectationBp({ 'no-change': Number.NaN, 'hike-25': 1, 'hike-50-plus': 0, 'cut-25': 0, 'cut-50-plus': 0 })))
+      .toBe(true)
   })
 })

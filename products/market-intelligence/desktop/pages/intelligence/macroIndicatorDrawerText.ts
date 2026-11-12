@@ -5,7 +5,8 @@
  * product's own vocabulary stays in the product module, in both locales, so no visible sentence is
  * ever a literal inside JSX.
  *
- * **This build is a static page.** Every value on screen is mock data; the drawer reads nothing.
+ * 两张真数据面（利率期望曲线、政策利率卡）的文案与三张示意卡片的文案在同一张表里，
+ * 因为它们在同一个抽屉里读同一份语言设置；`mockTag` 只挂在仍是示意数据的块上。
  */
 export const macroIndicatorDrawerText = {
   'zh-CN': {
@@ -15,6 +16,17 @@ export const macroIndicatorDrawerText = {
     rateTitle: '利率数学期望',
     rateUnit: 'bp',
     rateNote: '纵轴＝加权期望（bp）· 零以上＝预期加息 / 零以下＝预期降息',
+    rateNoteAria: '利率数学期望的说明',
+    rateUnreadable: '暂时读不到',
+    rateFlat: '持平 · 较上一日',
+    rateNoHistory: '无历史可比',
+    rateDeltaUp: '↑ +{value}bp · 较上一日',
+    rateDeltaDown: '↓ −{value}bp · 较上一日',
+    rateTruncated: '序列已截断，只画了最近 {days} 天',
+    chartAria: '利率数学期望曲线：每个点是那一刻五档概率的加权期望，单位 bp',
+    panelExpectation: '加权期望',
+    panelVsYesterday: '较上一日',
+    panelFlat: '持平',
     policyRate: '政策利率',
     policyPending: '12-09 待发布',
     policyExpectation: '12 月加息 25bp',
@@ -52,6 +64,17 @@ export const macroIndicatorDrawerText = {
     rateTitle: 'Rate expectation',
     rateUnit: 'bp',
     rateNote: 'Vertical axis = weighted expectation (bp) · above zero = a hike is priced, below = a cut',
+    rateNoteAria: 'About the rate expectation',
+    rateUnreadable: 'Not readable right now',
+    rateFlat: 'Unchanged · vs yesterday',
+    rateNoHistory: 'No earlier reading to compare',
+    rateDeltaUp: '↑ +{value}bp · vs yesterday',
+    rateDeltaDown: '↓ −{value}bp · vs yesterday',
+    rateTruncated: 'Series truncated — only the last {days} days are drawn',
+    chartAria: 'Rate expectation curve: each point is the five-bucket weighted expectation at that instant, in bp',
+    panelExpectation: 'Weighted expectation',
+    panelVsYesterday: 'vs yesterday',
+    panelFlat: 'Unchanged',
     policyRate: 'Policy rate',
     policyPending: '12-09 scheduled',
     policyExpectation: 'A 25bp hike in December',

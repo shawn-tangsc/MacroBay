@@ -166,7 +166,7 @@ const policyPath = (
   daysUntilMeeting: 40,
   hasProjectionMaterials: true,
   phase: { kind: 'normal' },
-  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, points: 12, ...(overrides.distribution ? { distribution: overrides.distribution } : {}) },
+  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, ...(overrides.distribution ? { distribution: overrides.distribution } : {}) },
   staleness: 'live'
 })
 

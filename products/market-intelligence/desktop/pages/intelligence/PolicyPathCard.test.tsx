@@ -18,7 +18,7 @@ const reading: PolicyPathReading = {
   phase: { kind: 'normal' },
   targetRange: { lowerPercent: 3.75, upperPercent: 4 },
   lastDecision: { vote: { for: 10, against: 2 }, outcome: 'no-change' },
-  probability: { venue: 'polymarket', asOf: '2026-10-30T02:10:00.000Z', outcome: 'hike-25', value: 0.76, changeInPp24h: -1, points: 40 },
+  probability: { venue: 'polymarket', asOf: '2026-10-30T02:10:00.000Z', outcome: 'hike-25', value: 0.76, changeInPp24h: -1 },
   staleness: 'live'
 }
 

@@ -1,39 +1,38 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
+import { Info } from 'lucide-react'
 
-import { ExpectationChart } from './ExpectationChart'
+import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { productText } from '../../shared/i18n/productText'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
+import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+import { expectationBp } from '../../../contracts/policyPath'
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 
 import './macroIndicatorDrawer.css'
 
 /**
- * 关键指标 · 预期变化 — **静态页面**。
+ * 关键指标 · 预期变化。
  *
- * 这一版只做画面：所有数字、事件、日期都是 `MOCK` 里的示意数据，组件不读库、不取数、不连任何源。
- * 布局与尺寸逐项照 `2026-11-13-K11-b.html`（1280 抽屉、正文 1248、左列 828 + 右列 403、间距 16）。
+ * 两条数据的来路不同，这里说清，免得下一个人以为整张抽屉都是装饰：
+ * - **利率数学期望曲线与政策利率卡读真数据**：曲线来自同一次读数里的逐点序列（`probability.series`），
+ *   政策卡复用宿主已经读到的那一份，抽屉里不再取第二遍。
+ * - **三张简化卡、迷你日历、右列当日事件仍是示意数据**：它们的取值与下次发布日还没接，
+ *   所以各自带着「示意数据」标记；撤标记之前必须先把真数据接上。
  *
- * 刻意不做的事：不在这一版里接真实数据，也不因为「真实数据没有这一项」去调布局。数据是假的，
- * 版式是验过的。
+ * 版式逐项照 `2026-11-13-K11-b.html`（1280 抽屉、正文 1248、左列 828 + 右列 403、间距 16）。
  */
 const MOCK = {
-  /** 加权期望曲线，单位 bp（与原型同一组数，右端是「此刻」）。 */
-  expectation: [-28, -27.8, -27.6, -27.4, -27.2, -27, -26.8, -26.6, -26, -23.48, -20.22, -16.59, -12.72, -8.64, -4.39, 0, 0.5, 1.9, 3.3, 4.7, 6.1, 7.5, 8.9, 10.3, 11, 9.4, 7.8, 6.2, 4.6, 3, 1.4, 3.4, 5.4, 7.4, 9.4, 11.4, 13.4, 15.4, 17.4, 19.4, 21.4, 23.4, 25.4, 27.4, 29.4, 31.4],
-  eventMarks: [{ index: 16, name: 'CPI 年率', impact: 8.6 }, { index: 24, name: '新增就业', impact: -6.2 }],
-  rate: {
-    // 顶上这个数与原型一致：取曲线末值，差值是末值减前值（原型同一算法）。
-    headline: '31.4', delta: '↑ +2.0bp · 较上一日',
-    policy: { mostLikely: '90.0%', label: '12 月加息 25bp', hike25: 90, hike50: 6.4, other: 3.6 },
-    facts: { meeting: '12月9日 · 26 天', range: '3.75–4.00%', sep: '4.1%', vote: '维持 · 10–2' }
-  },
   cards: {
     cpi: { value: '3.7%', change: '↗ 0.1pp', core: '2.6%', next: '12-10', diffYoy: '−0.2pp', diffCore: '−0.2pp' },
     payrolls: { value: '+165K', change: '较上期（未修正）+136K', unemployment: '4.1%', next: '12-04' },
@@ -61,7 +60,7 @@ const MOCK = {
   }
 } as const
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -70,18 +69,30 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   open?: boolean
   onClose: () => void
   /**
-   * 政策利率卡是**唯一接真数据**的一块：用宿主已经读到的那一份 `reading`，抽屉里不再取第二遍。
-   * 读不到时不编数——走既有的「读不到」形态。
+   * 曲线与政策利率卡读**同一份读数**：宿主已经读到的那一份，抽屉里不再取第二遍。
+   * 读不到时不编数——曲线与卡各自走「读不到」形态。
    */
   policyReading?: PolicyPathReading
   policyText: PolicyPathCardText
   onOpenPolicyDetail?: () => void
+  /**
+   * 读数没读出来时的唯一动作：重读一次，不跳转。
+   *
+   * **必填**：错误态不带动作出不去（StateView 的 `error.unreadable` 规定要有），而一个点了没反应的
+   * 「再试一次」正是要禁的假按钮。宿主必须给出真实的重新读入口。
+   */
+  onRetryPolicy: () => void
   /** 「配置日历」的去处；宿主给不出落点时按钮禁用，不画假按钮。 */
   onConfigure?: () => void
 }>): React.ReactElement {
   const text: MacroIndicatorDrawerText = macroIndicatorDrawerText[locale]
-  // 平台 Drawer 只收键；这张表把本抽屉的键映到产品自己的文案表（查表，不是 key→句子的分支）。
-  const drawerKeys: Readonly<Record<string, string>> = { 'mk.title': text.title }
+  // 平台 Drawer 与 Popover 都只收键；这张表把本抽屉的键映到产品自己的文案表（查表，不是 key→句子的分支）。
+  const drawerKeys: Readonly<Record<string, string>> = {
+    'mk.title': text.title,
+    'mk.rateNote': text.rateNote,
+    'mk.rateNoteAria': text.rateNoteAria
+  }
+  const resolveDrawerKey = (key: string): string => drawerKeys[key] ?? ''
   // 复用日历页那套行组件，文案用同一份产品表，不另写一套词汇。
   const calendarText = productText[locale].pages.intelligence.portal.calendar
   const dayListRef = useRef<HTMLDivElement | null>(null)
@@ -109,6 +120,28 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     return () => observer.disconnect()
   }, [])
 
+  // 序列 → 曲线的逐点值。公式只有一份（契约里的 `expectationBp`），这里只负责搬。
+  const points = useMemo<readonly ExpectationPoint[]>(() => {
+    const series = policyReading?.probability?.series
+    if (!series) return []
+    return series.flatMap((point) => {
+      const bp = expectationBp(point.values)
+      return Number.isFinite(bp) ? [{ at: point.at, bp, values: point.values }] : []
+    })
+  }, [policyReading])
+  const latestBp = points[points.length - 1]?.bp
+  const delta = policyReading?.probability?.expectationChange24hBp
+  // 三种变化句各有各的边界：没有基准说「无历史可比」，不是 +0.0bp；差 0 才说持平。
+  const deltaText = delta === undefined
+    ? text.rateNoHistory
+    : Math.abs(delta) < 0.05
+      ? text.rateFlat
+      : (delta > 0 ? text.rateDeltaUp : text.rateDeltaDown).replace('{value}', Math.abs(delta).toFixed(1))
+  const truncatedDays = policyReading?.probability?.seriesTruncated && points.length > 1
+    ? Math.max(1, Math.ceil((Date.parse(points[points.length - 1]!.at) - Date.parse(points[0]!.at)) / 86_400_000))
+    : undefined
+  const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
+
   // 挂到 body：抽屉是 1280 的右侧浮层，如果落在右栏或某个 overflow 容器里，会被祖先裁掉——
   // 表现正是「点了没反应」。portal 让它以视口为参照，和其它浮层同一层。
   // 平台 `Drawer` 的 modal 档：遮罩、锁焦点、点遮罩关闭、Esc、关闭后焦点回位都是它的能力，
@@ -126,29 +159,55 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     <section className="mk-sec" aria-label={text.title}>
       <div className="mk-col-l">
         <div className="mk-sechead">
-          <h2 className="mk-sec__t">{text.rateTitle}</h2>
-          <b className="mk-sec__v">{MOCK.rate.headline}<i className="mk-sec__u">{text.rateUnit}</i></b>
-          <span className="mk-sec__d">{MOCK.rate.delta}</span>
-          <span className="mk-mocktag">{text.mockTag}</span>
-          <span className="mk-sec__note">{text.rateNote}</span>
+          {/* 标题与说明图标是一组：图标永远挨着它解释的那一行标题，不被读数和变化值挤开。
+              说明句不挂在正文里——正文只留数字，读法收进这颗 ⓘ 的浮层。 */}
+          <div className="mk-sec__title">
+            <h2 className="mk-sec__t">{text.rateTitle}</h2>
+            <Popover
+              labelKey="mk.rateNote"
+              resolveText={resolveDrawerKey}
+              trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey="mk.rateNoteAria"
+                icon={Info} size="sm" variant="plain" resolveText={resolveDrawerKey} />} />
+          </div>
+          {latestBp === undefined
+            ? <b className="mk-sec__v mk-sec__v--absent">{text.rateUnreadable}</b>
+            : <b className="mk-sec__v">{latestBp.toFixed(1)}<i className="mk-sec__u">{text.rateUnit}</i></b>}
+          {latestBp === undefined
+            ? null
+            : <span className="mk-sec__d" data-flat={delta === undefined || Math.abs(delta) < 0.05 ? 'true' : 'false'}>{deltaText}</span>}
+          {truncatedDays === undefined ? null : <span className="mk-sec__note">{text.rateTruncated.replace('{days}', String(truncatedDays))}</span>}
         </div>
 
         <div className="mk-view">
           <div className="mk-plot" ref={plotRef}>
-            <ExpectationChart values={MOCK.expectation} events={MOCK.eventMarks.map(mark => ({ index: mark.index, label: mark.name, impact: mark.impact }))} height={plotHeight} width={plotWidth} />
+            {points.length
+              ? <ExpectationChart points={points} events={[]} height={plotHeight} width={plotWidth}
+                latest={delta === undefined ? {} : { changeBp: delta }}
+                text={{
+                  aria: text.chartAria,
+                  outcomes: policyText.shortOutcomes,
+                  expectation: text.panelExpectation,
+                  vsYesterday: text.panelVsYesterday,
+                  flat: text.panelFlat,
+                  noHistory: text.rateNoHistory
+                }} />
+              : policyReading
+                ? <StateView state="empty" reasonCode="nothing-in-window" />
+                : <StateView state="error" reasonCode="unreadable"
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetryPolicy }} />}
           </div>
           {/* 政策利率卡：设计照现有那张「利率路径」卡，数据用宿主已读到的那一份；
               读不到时画既有「读不到」形态，不编数。右边这块占位壳保持 300 宽、随行拉齐。 */}
           <div className="mk-policy-slot" ref={heroRef}>
             {policyReading
-              ? <PolicyPathCard reading={policyReading} text={policyText} month={''} {...(onOpenPolicyDetail ? { onOpen: onOpenPolicyDetail } : {})} />
-              : <PolicyPathUnavailable state="unreadable" text={policyText} />}
+              ? <PolicyPathCard reading={policyReading} text={policyText} month={policyMonth} {...(onOpenPolicyDetail ? { onOpen: onOpenPolicyDetail } : {})} />
+              : <PolicyPathUnavailable state="unreadable" text={policyText} onRetry={onRetryPolicy} />}
           </div>
         </div>
 
         <div className="mk-strip">
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.cpi.title}</h3><em>{text.cards.cpi.state}</em></div>
+            <div className="mk-card__h"><h3>{text.cards.cpi.title}</h3><em>{text.cards.cpi.state}</em><span className="mk-mocktag">{text.mockTag}</span></div>
             <div className="mk-card__v"><b>{MOCK.cards.cpi.value}</b><span>{text.cards.cpi.unit}</span><i>{MOCK.cards.cpi.change}</i></div>
             <p className="mk-card__exp">{text.expectedDiff.replace('{yoy}', MOCK.cards.cpi.diffYoy).replace('{core}', MOCK.cards.cpi.diffCore)}</p>
             <dl className="mk-card__facts">
@@ -158,7 +217,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.payrolls.title}</h3><em>{text.cards.payrolls.state}</em></div>
+            <div className="mk-card__h"><h3>{text.cards.payrolls.title}</h3><em>{text.cards.payrolls.state}</em><span className="mk-mocktag">{text.mockTag}</span></div>
             <div className="mk-card__v"><b>{MOCK.cards.payrolls.value}</b><span>{text.cards.payrolls.unit}</span><i>{MOCK.cards.payrolls.change}</i></div>
             <dl className="mk-card__facts">
               <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{MOCK.cards.payrolls.unemployment}</dd></div>
@@ -167,7 +226,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             <div className="mk-card__f"><span>{text.sourceBls}</span><span>{text.detail}</span></div>
           </article>
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.pce.title}</h3><em>{text.cards.pce.state}</em></div>
+            <div className="mk-card__h"><h3>{text.cards.pce.title}</h3><em>{text.cards.pce.state}</em><span className="mk-mocktag">{text.mockTag}</span></div>
             <div className="mk-card__v"><b>{MOCK.cards.pce.value}</b><span>{text.cards.pce.unit}</span></div>
             <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt><dd>{MOCK.cards.pce.next}</dd></div></dl>
             <p className="mk-card__st">{MOCK.cards.pce.stamp}</p>

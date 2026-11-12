@@ -109,7 +109,7 @@ describe('policy drawer distribution', () => {
       phase: { kind: 'normal' },
       settlement: undefined,
       probability: {
-        venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69, points: 40,
+        venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69,
         distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
       }
     })
@@ -151,7 +151,7 @@ describe('policy drawer pending 24h change', () => {
       ...reading,
       phase: { kind: 'normal' },
       settlement: undefined,
-      probability: { venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69, points: 40 }
+      probability: { venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69 }
     })
     // The reason used to live in a hint (first a `title`, then a tooltip): the pointer got it, and
     // everyone else got a dash. It is now the value's own line.

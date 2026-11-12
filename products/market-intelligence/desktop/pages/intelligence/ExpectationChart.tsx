@@ -1,123 +1,411 @@
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellCompactInstant, formatShellDay } from '@platform/ui/time/shellTimeFormat'
+
+import { expectationBp, type PolicyPathDistribution, type PolicyPathOutcome } from '../../../contracts/policyPath'
+
 /**
  * 「利率数学期望」曲线。
  *
- * **这段绘制是从 `2026-11-13-K11-b.html` 原样搬过来的**，不是按描述重画：坐标函数 `xs/Y`、
- * 两条 `userSpaceOnUse` 渐变（0 轴 0.02 → 曲线 0.40，红 `#B3362B` / 蓝 `#2E5F9E`）、零轴、
- * 红面积、2px 柠绿曲线、事件虚线 + 圆点 + 贴顶标注、纵轴刻度 `+40/+20/0/−20/−40bp`、
- * 每 7 个点一个日期——逐句对应原型那段 `<script>` 里的绘图部分。
+ * **绘制本身是从 `2026-11-13-K11-b.html` 搬过来的**：坐标函数、两条 `userSpaceOnUse` 渐变
+ * （0 轴 0.02 → 曲线 0.40，红 `#B3362B` / 蓝 `#2E5F9E`）、零轴、红面积、2px 柠绿曲线、
+ * 事件虚线 + 圆点 + 贴顶标注、纵轴刻度与 0 轴线。
  *
- * 缩放按钮（1x/2x）与图例那一行是早前误加的，设计稿里没有，已删。
+ * 三处改写（与原型不同，且必须不同）：
+ * 1. 横轴是**绝对时刻**：原型把点按下标等距铺开，真实观测的间隔并不等距（有 10 分钟一段，
+ *    也有 9 小时的空档），按下标铺会把空档压没、把密集段拉长。这里按时刻线性铺开。
+ * 2. **按像素分箱**（见 `binExpectationPoints`）：1662 个点全画是噪点墙，而分箱必须按图宽做。
+ * 3. 事件标注按时刻落位，标签宽度用估算（SVG 里量字要等布局，这里不需要精确到像素）。
  *
- * 只有三处被改写，其余常量一字未动：
- * 1. DOM API（`createElementNS`/`setAttribute`）换成 JSX 属性；
- * 2. 文字宽度用 `getBBox()` 量的地方，改成按 9.5px 字号估算（SVG 里量字要等布局，静态页不必）；
- * 3. 数据数组 `V` / `EV` 由调用方传入，仍是同一组数。
+ * 读数面板（`mk-tip`）跟着鼠标走，键盘用左右键移点。它是**图自己的绝对定位子元素**，
+ * 不开 portal、不是全局浮层，也不改变页面布局：每次移动只改面板里的 text 和它的 transform。
  */
 const L = 52
 const RM = 12
 const T0 = 16
 const B = 34
+/** 面板与光标之间的距离：横向留出的这段空隙，才是「不遮住那一点」的保证。 */
+const TIP_OFFSET = 10
 
-/**
- * 刻度的写法只有这一处：正数带 `+`，负数带 `−`（U+2212，不是连字符），零不带符号。
- * 之前把负号吞掉过一次，屏幕上最底下那条成了 `+40bp`——所以它被单独提出来并配了用例。
- */
+/** 刻度：正数带 `+`，负数带 `−`（U+2212，不是连字符），零不带符号。 */
 export function formatTick(value: number): string {
   const rounded = Math.round(value)
   if (rounded === 0) return '0bp'
   return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)}bp`
 }
 
-export type ExpectationEvent = Readonly<{ index: number; label: string; impact: number }>
+/** 曲线上的一个点：绝对时刻、那一刻的加权期望（bp）以及算出它的五桶概率。 */
+export type ExpectationPoint = Readonly<{ at: string; bp: number; values: PolicyPathDistribution }>
 
-export function ExpectationChart({ values, events, height, width }: Readonly<{
-  values: readonly number[]
+/** 一个事件标注：时刻、事件名（已本地化）、推动量（bp）、标注处曲线的高度（bp）。 */
+export type ExpectationEvent = Readonly<{ at: string; label: string; changeBp: number; bp: number }>
+
+/**
+ * 分箱规则——**这是唯一一处定义，改图宽不会得到另一条曲线**：
+ *
+ * - 箱数 = `max(1, floor(绘图区像素宽 / 3))`，即每箱 3px。在 13 天半的窗口上，一箱约 2 小时；
+ *   现有 1662 条观测（中位间隔 10 分钟）大约是每箱 10–11 条。
+ * - 每箱取**箱内时刻最晚的一条**（as-of 语义：读者看到的是「那一刻市场的最新判断」），
+ *   **不取平均**——平均会把盘中抖动抹成一条并不存在的平滑线。
+ * - 箱内没有观测 → 留空（`null`），**不插值、不跨箱借用**。采集停过的地方必须看得出是停过。
+ *
+ * 返回的是每个箱的 bp 值，下标就是箱号；坐标由调用方按箱中心换算。
+ */
+export const EXPECTATION_BIN_PX = 3
+
+export function binExpectationPoints(
+  points: readonly ExpectationPoint[],
+  plotWidth: number
+): readonly (number | null)[] {
+  const width = Math.max(1, Math.floor(plotWidth))
+  const count = Math.max(1, Math.floor(width / EXPECTATION_BIN_PX))
+  const bins: (number | null)[] = Array.from({ length: count }, () => null)
+  const first = points[0]
+  const last = points[points.length - 1]
+  if (!first || !last) return bins
+  const fromMs = Date.parse(first.at)
+  const toMs = Date.parse(last.at)
+  const spanMs = toMs - fromMs
+  for (const point of points) {
+    const at = Date.parse(point.at)
+    if (!Number.isFinite(at) || !Number.isFinite(point.bp)) continue
+    const fraction = spanMs > 0 ? (at - fromMs) / spanMs : 0.5
+    const index = Math.min(count - 1, Math.max(0, Math.floor(fraction * count)))
+    bins[index] = point.bp
+  }
+  return bins
+}
+
+/** 面板里的五档顺序：加息 25 / 加息 50+ / 不动 / 降息 25 / 降息 50+。 */
+const PANEL_ORDER: readonly PolicyPathOutcome[] = ['hike-25', 'hike-50-plus', 'no-change', 'cut-25', 'cut-50-plus']
+
+export type ExpectationChartText = Readonly<{
+  aria: string
+  /** 五档的短名，与政策卡同一套词（`policyText.shortOutcomes`）。 */
+  outcomes: Readonly<Record<PolicyPathOutcome, string>>
+  expectation: string
+  vsYesterday: string
+  flat: string
+  noHistory: string
+}>
+
+type Selection = Readonly<{ index: number; pointer?: Readonly<{ x: number; y: number }>; keyboard: boolean }>
+
+export function ExpectationChart({ points, events, height, width, text, latest }: Readonly<{
+  points: readonly ExpectationPoint[]
   events: readonly ExpectationEvent[]
   height: number
   width: number
+  /** 图与读数面板的全部文案都由调用方给：图表组件里不写死任何一句可见文案。 */
+  text: ExpectationChartText
+  /**
+   * 最后一点的「较上一日」。只有 hover/选中最后一点时才用得上。
+   *
+   * 传对象是为了把两件事分开：`undefined` = 不是最后一点（不显示这一行）；
+   * `{}` = 是最后一点但没有 24 小时基准（显示「无历史可比」，不是 +0.0bp）。
+   */
+  latest?: Readonly<{ changeBp?: number }>
 }>): React.ReactElement {
-  const W = Math.max(380, Math.floor(width))
-  const H = height
-  const max = Math.max(...values.map(value => Math.abs(value)))
-  const min = Math.min(...values)
-  const positiveOnly = min >= 0
-  const span = Math.max(30, Math.ceil((max * 1.25) / 10) * 10)
-  const HI = span
-  const LO = positiveOnly ? 0 : -span
+  const timeZone = useShellTimeZone()
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const tipRef = useRef<HTMLDivElement | null>(null)
+  const [selection, setSelection] = useState<Selection | null>(null)
+  const [tipSize, setTipSize] = useState({ width: 184, height: 152 })
 
-  const xs = (index: number) => L + (index / (values.length - 1)) * (W - L - RM)
-  const Y = (value: number) => T0 + ((HI - value) / (HI - LO)) * (H - T0 - B)
+  const geometry = useMemo(() => {
+    const W = Math.max(380, Math.floor(width))
+    const H = height
+    const plotW = W - L - RM
+    const firstMs = Date.parse(points[0]?.at ?? '')
+    const lastMs = Date.parse(points[points.length - 1]?.at ?? '')
+    const spanMs = Number.isFinite(firstMs) && Number.isFinite(lastMs) ? lastMs - firstMs : 0
+    const xOfMs = (ms: number): number => spanMs > 0 ? L + ((ms - firstMs) / spanMs) * plotW : L + plotW / 2
 
-  const line = values.map((value, index) => `${index === 0 ? 'M' : 'L'}${xs(index).toFixed(1)} ${Y(value).toFixed(1)}`).join(' ')
-  const area = `M${xs(0).toFixed(1)} ${Y(0).toFixed(1)} ${values.map((value, index) => `L${xs(index).toFixed(1)} ${Y(value).toFixed(1)}`).join(' ')} L${xs(values.length - 1).toFixed(1)} ${Y(0).toFixed(1)} Z`
+    // The axis is scaled from **every** observation, not from the binned sample: resizing the drawer
+    // must not change the vertical scale, or the same day would read differently at another width.
+    const absoluteMax = points.reduce((most, point) => Math.max(most, Math.abs(point.bp)), 0)
+    const min = points.reduce((least, point) => Math.min(least, point.bp), Number.POSITIVE_INFINITY)
+    const positiveOnly = min >= 0
+    const span = Math.max(30, Math.ceil((absoluteMax * 1.25) / 10) * 10)
+    const HI = span
+    const LO = positiveOnly ? 0 : -span
+    const Y = (value: number): number => T0 + ((HI - value) / (HI - LO)) * (H - T0 - B)
 
-  const ticks = positiveOnly ? [0, HI / 4, HI / 2, HI * 0.75, HI] : [LO, LO / 2, 0, HI / 2, HI]
-  const dates = axisDates(values.length, W)
+    const bins = binExpectationPoints(points, plotW)
+    // 箱号 → 该箱最后一条观测的下标。分箱只留了 bp，而面板要五档概率，所以这一遍必须做；
+    // 规则与 `binExpectationPoints` 完全一致（同一个起止时刻、同一个箱数）。
+    const binObservation: number[] = Array.from({ length: bins.length }, () => -1)
+    for (let index = 0; index < points.length; index += 1) {
+      const at = Date.parse(points[index]!.at)
+      if (!Number.isFinite(at) || !Number.isFinite(points[index]!.bp)) continue
+      const fraction = spanMs > 0 ? (at - firstMs) / spanMs : 0.5
+      binObservation[Math.min(bins.length - 1, Math.max(0, Math.floor(fraction * bins.length)))] = index
+    }
 
-  // Labels are placed right to left so the later ones keep their leader; the same rule the
-  // prototype applies, with the measured width replaced by an estimate.
-  let limit = W - RM
-  const labels = [...events].sort((left, right) => xs(right.index) - xs(left.index)).map(event => {
-    const text = `${event.impact >= 0 ? '↑ +' : '↓ −'}${Math.abs(event.impact).toFixed(1)}bp ${event.label}`
-    const approxWidth = text.length * 5.2
-    const x = Math.max(L, Math.min(xs(event.index) - approxWidth / 2, limit - approxWidth))
-    limit = x - 8
-    return { text, x }
-  })
+    const binWidth = plotW / bins.length
+    const binX = (index: number): number => L + (index + 0.5) * binWidth
+    // Consecutive non-empty bins form one segment; a gap breaks the line instead of bridging it.
+    const segments: number[][] = []
+    let current: number[] = []
+    for (let index = 0; index < bins.length; index += 1) {
+      if (bins[index] === null) {
+        if (current.length) segments.push(current)
+        current = []
+      } else {
+        current.push(index)
+      }
+    }
+    if (current.length) segments.push(current)
 
-  return <div className="mk-plot__scroll">
-    <svg className="mk-plot__svg" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="rate expectation">
-      <defs>
-        <linearGradient id="mk-g-red" gradientUnits="userSpaceOnUse" x1={0} y1={Y(0)} x2={0} y2={Y(HI)}>
-          <stop offset="0" stopColor="#B3362B" stopOpacity="0.02" />
-          <stop offset="1" stopColor="#B3362B" stopOpacity="0.40" />
-        </linearGradient>
-        <linearGradient id="mk-g-blue" gradientUnits="userSpaceOnUse" x1={0} y1={Y(0)} x2={0} y2={Y(LO)}>
-          <stop offset="0" stopColor="#2E5F9E" stopOpacity="0.02" />
-          <stop offset="1" stopColor="#2E5F9E" stopOpacity="0.40" />
-        </linearGradient>
-      </defs>
-      {positiveOnly ? null : <rect x={L} y={Y(0)} width={W - L - RM} height={Y(LO) - Y(0)} fill="url(#mk-g-blue)" />}
-      <path d={area} fill="url(#mk-g-red)" />
-      <path d={line} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" />
-      {ticks.map(value => {
-        const isZero = Math.abs(value) < 1e-9
-        return <g key={value}>
-          <line x1={L} y1={Y(value)} x2={W - RM} y2={Y(value)} stroke="var(--text-strong)" strokeWidth={1} opacity={isZero ? 0.4 : 0.08} />
-          <text x={L - 8} y={Y(value) + 3} fontSize={9} fill={isZero ? 'var(--text)' : 'var(--muted)'} textAnchor="end">
-            {formatTick(value)}
-          </text>
-        </g>
-      })}
-      <text x={L + 6} y={Y(0) - 5} fontSize={9} fill="var(--muted)">0 · 不加不减</text>
-      {events.map(event => <g key={`mark-${event.index}`}>
-        <line x1={xs(event.index)} y1={T0} x2={xs(event.index)} y2={H - B} stroke="rgba(255,255,255,0.28)" strokeWidth={1} strokeDasharray="3 3" />
-        <circle cx={xs(event.index)} cy={Y(values[event.index] ?? 0)} r={3} fill="var(--accent)" />
-      </g>)}
-      {labels.map(label => <text key={label.text} x={label.x.toFixed(1)} y={T0 + 10} fontSize={9.5} textAnchor="start" fill="var(--accent)">{label.text}</text>)}
-      {dates.map(date => <text key={date.index} x={Math.min(Math.max(xs(date.index), L + 10), W - RM - 10)} y={H - B + 16} fontSize={9} fill="var(--muted)" textAnchor="middle">{date.label}</text>)}
-    </svg>
+    const lineOf = (segment: readonly number[]): string => segment
+      .map((index, position) => `${position === 0 ? 'M' : 'L'}${binX(index).toFixed(1)} ${Y(bins[index]!).toFixed(1)}`)
+      .join(' ')
+    const areaPathOf = (segment: readonly number[]): string => {
+      const head = segment[0]!
+      const tail = segment[segment.length - 1]!
+      const body = segment.map((index) => `L${binX(index).toFixed(1)} ${Y(bins[index]!).toFixed(1)}`).join(' ')
+      return `M${binX(head).toFixed(1)} ${Y(0).toFixed(1)} ${body} L${binX(tail).toFixed(1)} ${Y(0).toFixed(1)} Z`
+    }
+
+    const ticks = positiveOnly ? [0, HI / 4, HI / 2, HI * 0.75, HI] : [LO, LO / 2, 0, HI / 2, HI]
+
+    // Labels are placed right to left so the later ones keep their leader; 8px between labels, never
+    // outside the plot. The same rule the prototype applies, with the measured width replaced by an
+    // estimate (a 9.5px CJK glyph is about 5.2px wide on average at this size).
+    let limit = W - RM
+    const labels = [...events]
+      .filter((event) => Number.isFinite(Date.parse(event.at)))
+      .sort((left, right) => xOfMs(Date.parse(right.at)) - xOfMs(Date.parse(left.at)))
+      .map((event) => {
+        const label = `${event.changeBp >= 0 ? '↑ +' : '↓ −'}${Math.abs(event.changeBp).toFixed(1)}bp ${event.label}`
+        const approxWidth = label.length * 5.2
+        const x = Math.max(L, Math.min(xOfMs(Date.parse(event.at)) - approxWidth / 2, limit - approxWidth))
+        limit = x - 8
+        return { label, x }
+      })
+
+    const dates = axisDates(firstMs, lastMs, plotW, timeZone)
+    return { W, H, plotW, xOfMs, Y, HI, LO, positiveOnly, bins, binObservation, binX, segments, lineOf, areaPathOf, ticks, labels, dates }
+  }, [points, events, height, width, timeZone])
+
+  // 只有「箱内有值」的位置可以被选中：命中按横向最近，不要求压在 2px 的线上。
+  const selectable = useMemo(
+    () => geometry.bins.flatMap((value, index) => value === null ? [] : [{ index, x: geometry.binX(index), y: geometry.Y(value) }]),
+    [geometry]
+  )
+
+  // 面板文字变了（换点）或首次出现时才量一次尺寸：它决定往哪边翻，不能每次移动都读布局。
+  useLayoutEffect(() => {
+    const element = tipRef.current
+    if (!element) return
+    const measuredWidth = element.offsetWidth
+    const measuredHeight = element.offsetHeight
+    if (measuredWidth > 0 && measuredHeight > 0
+      && (measuredWidth !== tipSize.width || measuredHeight !== tipSize.height)) {
+      setTipSize({ width: measuredWidth, height: measuredHeight })
+    }
+  }, [selection?.index, tipSize])
+
+  if (!points.length) return <div className="mk-plot__stage" />
+
+  const selected = selection ? selectable.find((item) => item.index === selection.index) : undefined
+  const panelPoint = selection ? points[geometry.binObservation[selection.index]!] : undefined
+  const isLast = selection !== null && geometry.binObservation[selection.index] === points.length - 1
+
+  const placeTip = (): Readonly<{ left: number; top: number }> => {
+    if (!selection) return { left: 0, top: 0 }
+    const { W, H } = geometry
+    const { width: tipW, height: tipH } = tipSize
+    if (selection.pointer) {
+      // 横向先留 TIP_OFFSET 的空隙（这才是「不遮住光标那一点」的保证），左边放不下就翻到右侧；
+      // 纵向优先上方，上方不够翻到下方，再夹回图内——纵向被夹住时横向空隙仍然成立。
+      const { x, y } = selection.pointer
+      const left = x + TIP_OFFSET + tipW <= W - 4
+        ? x + TIP_OFFSET
+        : x - TIP_OFFSET - tipW
+      let top = y - TIP_OFFSET - tipH
+      if (top < 4) top = y + TIP_OFFSET
+      return { left: clamp(left, 4, W - tipW - 4), top: clamp(top, 4, H - tipH - 4) }
+    }
+    const point = selected ?? selectable[0]!
+    // 键盘没有光标可跟：面板落在选中点上方居中。
+    let top = point.y - TIP_OFFSET - tipH
+    if (top < 4) top = point.y + TIP_OFFSET
+    return { left: clamp(point.x - tipW / 2, 4, W - tipW - 4), top: clamp(top, 4, H - tipH - 4) }
+  }
+
+  const nearestByX = (x: number): number => {
+    let best = selectable[0]!
+    for (const item of selectable) if (Math.abs(item.x - x) < Math.abs(best.x - x)) best = item
+    return best.index
+  }
+
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const host = stageRef.current
+    if (!host || !selectable.length) return
+    const rect = host.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+    const index = nearestByX(x)
+    // 同一个箱、位移不到 1px 就保持原 state：鼠标在箱内滑动不会触发重绘。
+    setSelection((previous) => previous && previous.index === index && previous.pointer
+      && Math.abs(previous.pointer.x - x) < 1 && Math.abs(previous.pointer.y - y) < 1
+      ? previous
+      : { index, pointer: { x, y }, keyboard: false })
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'Escape') {
+      setSelection(null)
+      return
+    }
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+    if (!selectable.length) return
+    event.preventDefault()
+    const current = selection && selection.keyboard ? selectable.findIndex((item) => item.index === selection.index) : -1
+    const next = current < 0
+      ? (event.key === 'ArrowRight' ? 0 : selectable.length - 1)
+      : clamp(current + (event.key === 'ArrowRight' ? 1 : -1), 0, selectable.length - 1)
+    setSelection({ index: selectable[next]!.index, keyboard: true })
+  }
+
+  const tip = placeTip()
+
+  return <div
+    className="mk-plot__stage"
+    ref={stageRef}
+    tabIndex={0}
+    role="group"
+    aria-label={text.aria}
+    onPointerMove={onPointerMove}
+    onPointerLeave={() => setSelection(null)}
+    onKeyDown={onKeyDown}
+  >
+    <div className="mk-plot__scroll">
+      <svg className="mk-plot__svg" width={geometry.W} height={geometry.H}
+        viewBox={`0 0 ${geometry.W} ${geometry.H}`} aria-hidden="true">
+        <defs>
+          <linearGradient id="mk-g-red" gradientUnits="userSpaceOnUse" x1={0} y1={geometry.Y(0)} x2={0} y2={geometry.Y(geometry.HI)}>
+            <stop offset="0" stopColor="#B3362B" stopOpacity="0.02" />
+            <stop offset="1" stopColor="#B3362B" stopOpacity="0.40" />
+          </linearGradient>
+          <linearGradient id="mk-g-blue" gradientUnits="userSpaceOnUse" x1={0} y1={geometry.Y(0)} x2={0} y2={geometry.Y(geometry.LO)}>
+            <stop offset="0" stopColor="#2E5F9E" stopOpacity="0.02" />
+            <stop offset="1" stopColor="#2E5F9E" stopOpacity="0.40" />
+          </linearGradient>
+        </defs>
+        {geometry.positiveOnly ? null
+          : <rect x={L} y={geometry.Y(0)} width={geometry.plotW} height={geometry.Y(geometry.LO) - geometry.Y(0)} fill="url(#mk-g-blue)" />}
+        {geometry.segments.map((segment) => <path key={`area-${segment[0]}`} d={geometry.areaPathOf(segment)} fill="url(#mk-g-red)" />)}
+        {geometry.segments.map((segment) => <path key={`line-${segment[0]}`} d={geometry.lineOf(segment)} fill="none"
+          stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" />)}
+        {geometry.ticks.map((value) => {
+          const isZero = Math.abs(value) < 1e-9
+          return <g key={value}>
+            <line x1={L} y1={geometry.Y(value)} x2={geometry.W - RM} y2={geometry.Y(value)}
+              stroke="var(--text-strong)" strokeWidth={1} opacity={isZero ? 0.4 : 0.08} />
+            <text x={L - 8} y={geometry.Y(value) + 3} fontSize={9} fill={isZero ? 'var(--text)' : 'var(--muted)'} textAnchor="end">
+              {formatTick(value)}
+            </text>
+          </g>
+        })}
+        {events.map((event) => {
+          const x = geometry.xOfMs(Date.parse(event.at))
+          return <g key={`mark-${event.at}`}>
+            <line x1={x} y1={T0} x2={x} y2={geometry.H - B} stroke="rgba(255,255,255,0.28)" strokeWidth={1} strokeDasharray="3 3" />
+            <circle cx={x} cy={geometry.Y(event.bp)} r={3} fill="var(--accent)" />
+          </g>
+        })}
+        {geometry.labels.map((label) => <text key={label.label} x={label.x.toFixed(1)} y={T0 + 10} fontSize={9.5}
+          textAnchor="start" fill="var(--accent)">{label.label}</text>)}
+        {geometry.dates.map((date) => <text key={date.at} x={date.x.toFixed(1)} y={geometry.H - B + 16} fontSize={9}
+          fill="var(--muted)" textAnchor="middle">{date.label}</text>)}
+        {selected ? <g className="mk-plot__cross">
+          <line x1={selected.x} y1={T0} x2={selected.x} y2={geometry.H - B} stroke="var(--accent)" strokeWidth={1} opacity={0.45} />
+          <circle cx={selected.x} cy={selected.y} r={3.5} fill="var(--accent)" />
+        </g> : null}
+      </svg>
+    </div>
+
+    <div
+      className="mk-tip"
+      ref={tipRef}
+      data-active={selection ? 'true' : 'false'}
+      style={{ transform: `translate(${tip.left.toFixed(1)}px, ${tip.top.toFixed(1)}px)` }}
+      aria-live={selection?.keyboard ? 'polite' : 'off'}
+    >
+      {panelPoint ? <PanelContent point={panelPoint} text={text} latest={isLast ? latest : undefined} timeZone={timeZone} /> : null}
+    </div>
   </div>
 }
 
+/** 面板内容：时刻、五档概率各一行、加权期望；最后一个点再加「较上一日」。 */
+function PanelContent({ point, text, latest, timeZone }: Readonly<{
+  point: ExpectationPoint
+  text: ExpectationChartText
+  latest: Readonly<{ changeBp?: number }> | undefined
+  timeZone: string
+}>): React.ReactElement {
+  const bp = expectationBp(point.values)
+  return <>
+    <span className="mk-tip__time">{formatShellCompactInstant(point.at, { timeZone })}</span>
+    <dl className="mk-tip__mix">
+      {PANEL_ORDER.map((outcome) => <div key={outcome}>
+        <dt>{text.outcomes[outcome]}</dt>
+        <dd>{(point.values[outcome] * 100).toFixed(1)}%</dd>
+      </div>)}
+    </dl>
+    <div className="mk-tip__sum">
+      <span>{text.expectation}</span>
+      <b>{formatSignedBp(bp)}</b>
+    </div>
+    {latest === undefined ? null : <div className="mk-tip__delta">
+      <span>{text.vsYesterday}</span>
+      {latest.changeBp === undefined
+        ? <b data-flat="true">{text.noHistory}</b>
+        : <b data-flat={Math.abs(latest.changeBp) < 0.05 ? 'true' : 'false'}>
+          {Math.abs(latest.changeBp) < 0.05 ? text.flat : formatSignedBp(latest.changeBp)}
+        </b>}
+    </div>}
+  </>
+}
+
+/** 期望值带符号，一位小数：`+27.8bp` / `−1.4bp`（负号是 U+2212）。 */
+function formatSignedBp(value: number): string {
+  const magnitude = Math.abs(value)
+  if (magnitude < 0.05) return '0.0bp'
+  return `${value > 0 ? '+' : '−'}${magnitude.toFixed(1)}bp`
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(Math.max(value, low), Math.max(low, high))
+}
+
 /**
- * Every 7th point carries a date, from 2026-10-30 to 2026-11-11 — the prototype's own window.
+ * Evenly spaced date labels, absolute times formatted in the reader's zone.
  *
- * 两处必须按实际宽度收：末位那条会被右边界裁掉（原型的 `text-anchor="middle"` 落在 `W-RM` 上），
- * 窄宽度下相邻两条会叠在一起。所以末位夹回绘图区、间隔不足 56px 时丢掉较晚那条。
+ * `labelCount` follows the width (~one every 96px, at least two) so a narrow drawer does not stack
+ * labels on top of each other, and a wider one is not left with three lonely dates.
  */
-function axisDates(count: number, width: number): ReadonlyArray<Readonly<{ index: number; label: string }>> {
-  const start = Date.parse('2026-10-30')
-  const end = Date.parse('2026-11-11')
-  const toX = (index: number) => L + (index / (count - 1)) * (width - L - RM)
-  const out: Array<{ index: number; label: string }> = []
-  let previousX = Number.NEGATIVE_INFINITY
-  for (let index = 0; index < count; index += 7) {
-    const x = toX(index)
-    if (x - previousX < 56) continue
-    const at = start + ((end - start) * index) / (count - 1)
-    out.push({ index, label: new Date(at).toISOString().slice(5, 10) })
-    previousX = x
+function axisDates(fromMs: number, toMs: number, plotWidth: number, timeZone: string): readonly Readonly<{ at: string; x: number; label: string }>[] {
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return []
+  const count = Math.max(2, Math.min(8, Math.floor(plotWidth / 96) + 1))
+  const out: Array<{ at: string; x: number; label: string }> = []
+  let previous = ''
+  for (let index = 0; index < count; index += 1) {
+    const fraction = index / (count - 1)
+    const ms = fromMs + (toMs - fromMs) * fraction
+    const at = new Date(ms).toISOString()
+    // `formatShellDay` is the same wall-clock split the rest of the product uses; only the year is
+    // dropped, because an axis spanning two weeks does not need it twice.
+    const day = formatShellDay(at, timeZone)
+    if (!day) continue
+    const label = day.slice(5)
+    if (label === previous) continue
+    previous = label
+    const x = Math.min(Math.max(L + fraction * plotWidth, L + 12), L + plotWidth - 12)
+    out.push({ at, x, label })
   }
   return out
 }

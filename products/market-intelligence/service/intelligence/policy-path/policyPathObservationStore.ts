@@ -8,11 +8,28 @@ import { POLICY_PATH_OUTCOMES } from '../../../contracts/policyPath'
  * Every refresh used to overwrite the previous read, which made "did it move today" unanswerable.
  * A row per observation costs little (about seventy a day at the 10/30-minute cadence) and is the
  * only way the trailing range can be computed from what this machine actually saw.
+ *
+ * The read side takes a **time window plus a protective row cap**, never a bare row count: a count
+ * silently truncates older history the moment the collector gets denser, and a reader would then see
+ * a chart that believes it is showing everything. When the cap is hit, `truncated` is said out loud.
  */
+export type PolicyPathObservationWindow = Readonly<{
+  /** Only observations at or after this instant (inclusive). Must be a canonical UTC ISO string. */
+  from?: string
+  /** Protective ceiling on rows returned. Not a window. */
+  limit: number
+}>
+
+export type PolicyPathObservationList = Readonly<{
+  /** Oldest to newest. */
+  observations: readonly PolicyPathObservation[]
+  /** The cap was reached while older rows still existed inside the window. */
+  truncated: boolean
+}>
+
 export type PolicyPathObservationStore = Readonly<{
   append: (meetingDate: string, observation: PolicyPathObservation) => void
-  /** Oldest to newest, capped at `limit` rows taken from the tail. */
-  list: (meetingDate: string, limit: number) => readonly PolicyPathObservation[]
+  list: (meetingDate: string, window: PolicyPathObservationWindow) => PolicyPathObservationList
 }>
 
 type Database = ReturnType<typeof createMacroCalendarSqlite>['database']
@@ -24,7 +41,10 @@ export function createPolicyPathObservationStore(database: Database): PolicyPath
      values (?, ?, ?, ?)
      on conflict(meeting_date, at) do nothing`
   )
-  const select = database.prepare(
+  const selectFrom = database.prepare(
+    'select * from mi_policy_path_observations where meeting_date = ? and at >= ? order by at desc limit ?'
+  )
+  const selectAll = database.prepare(
     'select * from mi_policy_path_observations where meeting_date = ? order by at desc limit ?'
   )
   return Object.freeze({
@@ -36,10 +56,20 @@ export function createPolicyPathObservationStore(database: Database): PolicyPath
         observation.quote ? JSON.stringify(observation.quote) : null
       )
     },
-    list(meetingDate, limit) {
-      if (!Number.isSafeInteger(limit) || limit < 1) return []
-      const rows = select.all(meetingDate, limit) as Row[]
-      return rows.map(toObservation).filter((row): row is PolicyPathObservation => row !== undefined).reverse()
+    list(meetingDate, window) {
+      if (!Number.isSafeInteger(window.limit) || window.limit < 1) return { observations: [], truncated: false }
+      // One extra row is read so "there is older history beyond the cap" is observable; the extra
+      // row itself is never returned.
+      const cap = window.limit + 1
+      const rows = (window.from === undefined
+        ? selectAll.all(meetingDate, cap)
+        : selectFrom.all(meetingDate, window.from, cap)) as Row[]
+      const truncated = rows.length > window.limit
+      const bounded = truncated ? rows.slice(0, window.limit) : rows
+      return {
+        observations: bounded.map(toObservation).filter((row): row is PolicyPathObservation => row !== undefined).reverse(),
+        truncated
+      }
     }
   })
 }

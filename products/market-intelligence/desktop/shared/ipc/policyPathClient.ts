@@ -1,7 +1,7 @@
 import {
   POLICY_PATH_OUTCOMES,
   type PolicyPathDistribution, type PolicyPathMarker, type PolicyPathOutcome, type PolicyPathPhase,
-  type PolicyPathSettlement
+  type PolicyPathSeriesPoint, type PolicyPathSettlement
 } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { POLICY_PATH_IPC_METHODS } from '../../../service/intelligence/policy-path/ipc/registerPolicyPathIpc'
@@ -47,16 +47,29 @@ function readReading(value: unknown): PolicyPathReading | undefined {
   const probability = isObject(value.probability) && typeof value.probability.value === 'number'
     && typeof value.probability.outcome === 'string'
     && (POLICY_PATH_OUTCOMES as readonly string[]).includes(value.probability.outcome)
-    ? {
-      ...value.probability,
-      ...(isCompleteDistribution(value.probability.distribution)
-        ? { distribution: value.probability.distribution as Record<string, number> }
-        : {}),
-      ...(isObject(value.probability.comparison) ? { comparison: readComparison(value.probability.comparison) } : {}),
-      ...(typeof value.probability.marketUrl === 'string' && value.probability.marketUrl.startsWith('https://')
-        ? { marketUrl: value.probability.marketUrl }
-        : {})
-    } as PolicyPathReading['probability']
+    ? (() => {
+      // Raw chart fields are dropped before the validated ones are added: passing an unvalidated
+      // series through would draw a spike nobody can explain, and one bad `at` blanks the axis.
+      const {
+        series: _rawSeries, seriesTruncated: _rawTruncated,
+        expectationBp: _rawBp, expectationChange24hBp: _rawChange,
+        ...rest
+      } = value.probability
+      const series = readSeries(_rawSeries)
+      return {
+        ...rest,
+        ...(isCompleteDistribution(rest.distribution)
+          ? { distribution: rest.distribution as Record<string, number> }
+          : {}),
+        ...(isObject(rest.comparison) ? { comparison: readComparison(rest.comparison) } : {}),
+        ...(typeof rest.marketUrl === 'string' && rest.marketUrl.startsWith('https://')
+          ? { marketUrl: rest.marketUrl }
+          : {}),
+        ...(isFiniteNumber(_rawChange) ? { expectationChange24hBp: _rawChange } : {}),
+        ...(series.length ? { series } : {}),
+        ...(_rawTruncated === true ? { seriesTruncated: true as const } : {})
+      }
+    })() as PolicyPathReading['probability']
     : undefined
   const lastDecision = readLastDecision(value.lastDecision)
   // `medianCurrentYear` is optional: a table whose year column is missing is still a valid SEP, and
@@ -214,6 +227,23 @@ function readComparison(value: Record<string, unknown>): NonNullable<NonNullable
 function isCompleteDistribution(value: unknown): boolean {
   if (!isObject(value)) return false
   return POLICY_PATH_OUTCOMES.every((outcome) => typeof value[outcome] === 'number' && Number.isFinite(value[outcome]))
+}
+
+/**
+ * The drawn series, point by point.
+ *
+ * A point whose instant does not parse or whose five buckets are not all finite numbers is dropped,
+ * not repaired: the chart has no honest way to draw a half-observed instant. Dropping points keeps
+ * the rest of the curve; a payload that loses every point simply has no series, and the drawer says
+ * so instead of drawing a flat line.
+ */
+function readSeries(value: unknown): readonly PolicyPathSeriesPoint[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry): PolicyPathSeriesPoint[] => {
+    if (!isObject(entry) || typeof entry.at !== 'string' || !Number.isFinite(Date.parse(entry.at))) return []
+    if (!isCompleteDistribution(entry.values)) return []
+    return [{ at: entry.at, values: entry.values as PolicyPathDistribution }]
+  })
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

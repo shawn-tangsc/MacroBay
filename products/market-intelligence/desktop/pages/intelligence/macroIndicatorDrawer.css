@@ -59,10 +59,16 @@
 }
 
 .mk-sechead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; flex: none; }
+/* 标题与它的说明图标是一组：图标紧贴标题，读数排在它们之后，不插在中间。 */
+.mk-sec__title { display: inline-flex; align-items: center; gap: 6px; }
 .mk-sec__t { margin: 0; font-size: var(--font-body); line-height: var(--line-body); font-weight: 600; color: var(--text-strong); }
 .mk-sec__v { font-size: var(--font-metric-sm); line-height: 1.05; font-weight: 600; color: var(--text-strong); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
 .mk-sec__u { margin-left: 2px; font-size: var(--font-meta); font-style: normal; font-weight: 400; color: var(--muted); }
 .mk-sec__d { font-size: var(--font-meta); color: var(--caution); font-variant-numeric: tabular-nums; }
+/* 持平 / 无历史可比：置灰，不给方向色——那是「没动」，不是「跌了」。 */
+.mk-sec__d[data-flat='true'] { color: var(--muted); }
+/* 读数缺席时这一格说的是「暂时读不到」，不是数字，所以不占读数那档字号。 */
+.mk-sec__v--absent { font-size: var(--font-meta); font-weight: 400; color: var(--muted); letter-spacing: 0; }
 .mk-mocktag { font-size: var(--font-meta); color: var(--caution); border: 1px solid var(--caution); border-radius: 999px; padding: 0 6px; }
 .mk-sec__note { flex-basis: 100%; font-size: var(--font-meta); color: var(--muted); }
 
@@ -82,6 +88,35 @@
 .mk-plot { display: flex; flex-direction: column; min-width: 0; align-self: stretch; height: 100%; }
 .mk-plot__scroll { overflow-x: auto; overflow-y: hidden; }
 .mk-plot__svg { display: block; overflow: visible; }
+/* 图自己的舞台：面板以它为定位参照，所以它必须是 position:relative 且有确定尺寸。 */
+.mk-plot__stage { position: relative; flex: 1; min-height: 0; min-width: 0; outline: none; }
+.mk-plot__stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.mk-plot__cross { pointer-events: none; }
+/*
+ * 读数面板：图自己的绝对定位子元素（不是全局浮层，不开 portal）。
+ * 每次移动只改 transform 与文字，宽度固定、内容不换行，所以不会把页面重新排版。
+ */
+.mk-tip {
+  position: absolute; left: 0; top: 0; z-index: 2;
+  width: 168px; padding: 7px 9px; line-height: 1.35;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+  font-size: var(--font-meta); color: var(--text);
+  pointer-events: none; will-change: transform;
+}
+.mk-tip[data-active='false'] { visibility: hidden; }
+.mk-tip__time { display: block; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mk-tip__mix { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 6px 0 0; }
+.mk-tip__mix > div { display: contents; }
+.mk-tip__mix dt { color: var(--muted); white-space: nowrap; }
+.mk-tip__mix dd { margin: 0; text-align: right; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.mk-tip__sum, .mk-tip__delta {
+  display: flex; justify-content: space-between; gap: 10px; white-space: nowrap;
+  margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
+}
+.mk-tip__sum b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.mk-tip__delta b { color: var(--caution); font-variant-numeric: tabular-nums; }
+.mk-tip__delta b[data-flat='true'] { color: var(--muted); font-weight: 400; }
 .mk-plot__zero { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
 .mk-plot__line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
 .mk-plot__mark { fill: var(--surface); stroke: var(--caution); stroke-width: 1.5; }

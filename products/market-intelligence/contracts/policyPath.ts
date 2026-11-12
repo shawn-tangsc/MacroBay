@@ -51,6 +51,55 @@ export function changeInPp(current: number, previous: number): number {
   return Math.round((current - previous) * 1000) / 10
 }
 
+/** Basis-point change, one decimal: the chart's own unit, rounded like the pp figure above. */
+export function changeInBp(current: number, previous: number): number {
+  return Math.round((current - previous) * 10) / 10
+}
+
+/**
+ * What one bucket is worth in basis points — the single definition of the expectation.
+ *
+ * A bucket *is* a magnitude, so 25 and its negative carry no ambiguity. The two open-ended buckets
+ * take their lower bound (+50 / −50): the midpoint would guess at what the venue never told us, and
+ * a historical average would import past moves into today's quote. The lower bound is the only
+ * choice that is decidable from one observation alone. The cost is a known, documented bias — both
+ * open-ended buckets are understated — so this number must never be compared with another venue's
+ * expectation, and changing it means recomputing every stored point, never mixing old and new.
+ */
+export const POLICY_PATH_BUCKET_BP: Readonly<Record<PolicyPathOutcome, number>> = Object.freeze({
+  'hike-25': 25,
+  'hike-50-plus': 50,
+  'no-change': 0,
+  'cut-25': -25,
+  'cut-50-plus': -50
+})
+
+/**
+ * The market's weighted expectation at one instant, in basis points.
+ *
+ * The input must already be a normalised distribution: the collector normalises once on write, and
+ * dividing by the sum again here would re-edit a value that is already aligned. Every bucket takes
+ * part — the card folds small shares into "other" for display only, never for this sum.
+ */
+export function expectationBp(values: PolicyPathDistribution): number {
+  let total = 0
+  for (const outcome of POLICY_PATH_OUTCOMES) {
+    const share = values[outcome]
+    if (!Number.isFinite(share)) return Number.NaN
+    total += share * POLICY_PATH_BUCKET_BP[outcome]
+  }
+  return total
+}
+
+/**
+ * One point of the drawn series: the absolute instant and the five buckets observed then.
+ *
+ * The axis is deliberately not part of this shape. The stored points are absolute times, and the
+ * renderer derives both the axis and its bins, so changing the axis later is a pure drawing change —
+ * no migration, and the vertical value never depends on which axis is in force.
+ */
+export type PolicyPathSeriesPoint = Readonly<{ at: string; values: PolicyPathDistribution }>
+
 /** The most likely bucket, and how likely it is. */
 export function leadingOutcome(values: PolicyPathDistribution): { outcome: PolicyPathOutcome; probability: number } {
   return POLICY_PATH_OUTCOMES.reduce((best, outcome) =>

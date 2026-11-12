@@ -59,4 +59,34 @@ describe('policy path client sanitizer', () => {
     }))
     expect(result.state === 'available' ? result.reading.lastDecision?.dissents : undefined).toEqual([{ name: 'Lisa D. Cook', preferred: 'raise' }])
   })
+
+  it('keeps only the series points whose instant and five buckets both survive', () => {
+    const good = {
+      at: '2026-10-30T01:00:00.000Z',
+      values: { 'no-change': 0.28, 'hike-25': 0.71, 'hike-50-plus': 0, 'cut-25': 0.01, 'cut-50-plus': 0 }
+    }
+    const result = sanitize(reading({
+      probability: {
+        venue: 'polymarket', outcome: 'hike-25', value: 0.71, asOf: '2026-10-30T01:00:00.000Z',
+        expectationChange24hBp: 0.4,
+        series: [
+          good,
+          { at: 'not-a-time', values: good.values },
+          { at: '2026-10-30T02:00:00.000Z', values: { 'hike-25': 0.71 } }
+        ]
+      }
+    }))
+    const probability = result.state === 'available' ? result.reading.probability : undefined
+    expect(probability?.series).toEqual([good])
+    expect(probability?.expectationChange24hBp).toBe(0.4)
+  })
+
+  it('omits the series entirely when nothing survives, so the drawer can say there is none', () => {
+    const result = sanitize(reading({
+      probability: { venue: 'polymarket', outcome: 'hike-25', value: 0.71, asOf: '2026-10-30T01:00:00.000Z', series: 'nope' }
+    }))
+    const probability = result.state === 'available' ? result.reading.probability : undefined
+    expect(probability).toBeDefined()
+    expect(probability).not.toHaveProperty('series')
+  })
 })

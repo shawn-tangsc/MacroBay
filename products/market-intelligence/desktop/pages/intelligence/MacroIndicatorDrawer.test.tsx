@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
+import { EXPECTATION_BIN_PX } from './ExpectationChart'
 import { productText } from '../../shared/i18n/productText'
+import { macroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
@@ -25,7 +27,7 @@ function Harness({ onOpened }: Readonly<{ onOpened: () => void }>): React.ReactE
   const [open, setOpen] = useState(false)
   return <>
     <button type="button" onClick={() => { setOpen(true); onOpened() }}>open</button>
-    {open ? <MacroIndicatorDrawer locale="zh-CN" onClose={() => setOpen(false)} policyText={text} /> : null}
+    {open ? <MacroIndicatorDrawer locale="zh-CN" onClose={() => setOpen(false)} onRetryPolicy={() => undefined} policyText={text} /> : null}
   </>
 }
 
@@ -64,7 +66,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const byName = (name: string) => document.body.querySelector(`button[aria-label="${name}"]`) as HTMLButtonElement
     const title = () => document.body.querySelector('.mk-minical__h h3')!.textContent
@@ -84,7 +86,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const cells = Array.from(document.body.querySelectorAll('.mk-minical__day'))
     // 2026-11-13 carries five releases in the prototype's data: three named rows + 「2 条重要」.
@@ -99,7 +101,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const header = document.body.querySelector('.ant-drawer-header')!
     expect(header.textContent).toContain('关键指标 · 预期变化')
@@ -117,7 +119,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     // 用户 2026-11-13：右列直接复用日历页那套列表，它自带的两行保留。
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
@@ -130,7 +132,7 @@ describe('key-indicator drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const prev = document.body.querySelector('button[aria-label="上一个月"]') as HTMLButtonElement
     const next = document.body.querySelector('button[aria-label="下一个月"]') as HTMLButtonElement
@@ -147,7 +149,7 @@ const reading: PolicyPathReading = {
   phase: { kind: 'normal' },
   targetRange: { lowerPercent: 3.75, upperPercent: 4 },
   lastDecision: { vote: { for: 10, against: 2 }, outcome: 'no-change' },
-  probability: { venue: 'polymarket', asOf: '2026-11-12T02:10:00.000Z', outcome: 'hike-25', value: 0.878, changeInPp24h: 2.1, points: 40 },
+  probability: { venue: 'polymarket', asOf: '2026-11-12T02:10:00.000Z', outcome: 'hike-25', value: 0.878, changeInPp24h: 2.1 },
   staleness: 'live'
 }
 
@@ -157,7 +159,7 @@ describe('policy card inside the drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} policyReading={reading} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} policyReading={reading} /></ShellLanguageProvider>)
     })
     const slot = document.body.querySelector('.mk-policy-slot')!
     expect(slot.querySelector('.mi-policy-card')).not.toBeNull()
@@ -169,9 +171,122 @@ describe('policy card inside the drawer', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const slot = document.body.querySelector('.mk-policy-slot')!
     expect(slot.textContent).not.toContain('%')
+  })
+})
+
+describe('the note lives in the info popover', () => {
+  const note = macroIndicatorDrawerText['zh-CN'].rateNote
+
+  it('keeps the explanation out of the body text', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
+    })
+    const head = document.body.querySelector('.mk-sechead')!
+    expect(head.textContent).not.toContain('纵轴＝加权期望')
+    expect(head.textContent).not.toContain('零以上')
+  })
+
+  it('shows the same sentence inside the icon popover, and the icon precedes the readout', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
+    })
+    const head = document.body.querySelector('.mk-sechead')!
+    const trigger = head.querySelector('button[aria-label="利率数学期望的说明"]') as HTMLButtonElement
+    expect(trigger).not.toBeNull()
+    // 标题 → ⓘ → 读数：图标必须在读数之前，不能跟到数字后面。
+    const readout = head.querySelector('.mk-sec__v')!
+    expect(trigger.compareDocumentPosition(readout) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(trigger.getAttribute('aria-describedby')).toBeTruthy()
+    await act(async () => { trigger.click() })
+    expect(document.body.textContent).toContain(note)
+    expect(document.body.textContent).toContain('零以上')
+  })
+})
+
+describe('expectation curve inside the drawer', () => {
+  const early = { 'no-change': 0.2, 'hike-25': 0.75, 'hike-50-plus': 0.03, 'cut-25': 0.01, 'cut-50-plus': 0.01 }
+  const late = { 'no-change': 0.1, 'hike-25': 0.8, 'hike-50-plus': 0.05, 'cut-25': 0.04, 'cut-50-plus': 0.01 }
+  const withSeries: PolicyPathReading = {
+    ...reading,
+    probability: {
+      ...reading.probability!,
+      expectationChange24hBp: 0.4,
+      series: [
+        { at: '2026-10-30T00:00:00.000Z', values: early },
+        { at: '2026-11-12T23:00:00.000Z', values: late }
+      ]
+    }
+  }
+
+  const render = async (drawerReading?: PolicyPathReading) => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
+        {...(drawerReading ? { policyReading: drawerReading } : {})} /></ShellLanguageProvider>)
+    })
+  }
+
+  it('draws the stored series: 25×hike25 + 50×hike50+ − 25×cut25 − 50×cut50+', async () => {
+    await render(withSeries)
+    // 末点：25×0.8 + 50×0.05 − 25×0.04 − 50×0.01 = 21.0bp，一位小数。
+    expect(document.body.querySelector('.mk-sec__v')?.textContent).toBe('21.0bp')
+    expect(document.body.querySelector('.mk-sec__d')?.textContent).toBe('↑ +0.4bp · 较上一日')
+    const plot = document.body.querySelector('.mk-plot')!
+    expect(plot.querySelector('.mk-plot__svg')).not.toBeNull()
+    expect(plot.querySelector('.state-view')).toBeNull()
+    // 数据全为正：零轴贴底，不出现蓝区（C3）。
+    expect(plot.querySelector('rect[fill="url(#mk-g-blue)"]')).toBeNull()
+  })
+
+  it('says there is no history instead of printing +0.0bp', async () => {
+    const { expectationChange24hBp: _dropped, ...withoutChange } = withSeries.probability!
+    await render({ ...withSeries, probability: withoutChange })
+    expect(document.body.querySelector('.mk-sec__d')?.textContent).toBe('无历史可比')
+  })
+
+  it('turns an unreadable read into the error state with one retry action, and draws no curve', async () => {
+    await render()
+    const plot = document.body.querySelector('.mk-plot')!
+    expect(plot.querySelector('.mk-plot__svg')).toBeNull()
+    expect(plot.querySelector('.state-view--error')).not.toBeNull()
+    expect(document.body.querySelector('.mk-sec__v')?.textContent).toBe('暂时读不到')
+  })
+
+  it('bins the real volume — 1662 observations must not become 1662 vertices', async () => {
+    const start = Date.parse('2026-10-30T10:46:22.223Z')
+    const step = (13.5 * 86_400_000) / 1661
+    const series = Array.from({ length: 1662 }, (_unused, index) => ({
+      at: new Date(start + index * step).toISOString(),
+      values: late
+    }))
+    await render({ ...withSeries, probability: { ...withSeries.probability!, series } })
+    const line = document.body.querySelector('.mk-plot__svg path[stroke="var(--accent)"]')
+    expect(line).not.toBeNull()
+    const vertices = (line!.getAttribute('d')!.match(/[ML]/g) ?? []).length
+    // 顶点数只由箱数决定（每箱 3px，图宽几百像素 → 一百多个箱），与观测条数无关。
+    // happy-dom 量的宽度不稳，所以这里钉的是量级：远少于 1662，且不是几个点糊过去。
+    expect(EXPECTATION_BIN_PX).toBe(3)
+    expect(vertices).toBeGreaterThan(80)
+    expect(vertices).toBeLessThan(200)
+  })
+
+  it('shows the empty state, not a flat line, when the reading carries no points', async () => {
+    const { series: _noSeries, ...probability } = withSeries.probability!
+    await render({ ...withSeries, probability })
+    const plot = document.body.querySelector('.mk-plot')!
+    expect(plot.querySelector('.mk-plot__svg')).toBeNull()
+    expect(plot.querySelector('.state-view--empty')).not.toBeNull()
   })
 })
