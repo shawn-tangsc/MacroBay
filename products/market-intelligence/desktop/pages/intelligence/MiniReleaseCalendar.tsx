@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+
 import { LoadingState } from '@platform/ui/components/loading'
 
 import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
@@ -68,13 +70,13 @@ export function MiniReleaseCalendar({ text, onConfigure }: Readonly<{
       </span>
       <span className="mk-minical__tools">
         <button className="mk-iconbtn" type="button" aria-label={text.minicalTools.prev} disabled={atStart}
-          onClick={() => setMonthKey(MONTH_KEYS[Math.max(0, index - 1)]!)}><span aria-hidden="true">‹</span></button>
+          onClick={() => setMonthKey(MONTH_KEYS[Math.max(0, index - 1)]!)}><ChevronLeft aria-hidden="true" size={14} /></button>
         <button className="mk-iconbtn" type="button" aria-label={text.minicalTools.next} disabled={atEnd}
-          onClick={() => setMonthKey(MONTH_KEYS[Math.min(MONTH_KEYS.length - 1, index + 1)]!)}><span aria-hidden="true">›</span></button>
+          onClick={() => setMonthKey(MONTH_KEYS[Math.min(MONTH_KEYS.length - 1, index + 1)]!)}><ChevronRight aria-hidden="true" size={14} /></button>
         <button className="mk-textbtn" type="button" aria-label={text.minicalTools.back} disabled={backDisabled}
           onClick={() => setMonthKey(THIS_MONTH)}>{text.minicalTools.back}</button>
         <button className="mk-iconbtn" type="button" aria-label={text.minicalTools.refresh} onClick={() => setRefreshing(true)}>
-          <span aria-hidden="true">⟳</span>
+          <RefreshCw aria-hidden="true" size={14} />
         </button>
         <button className="mk-textbtn" type="button" aria-label={text.minicalTools.configure} disabled={onConfigure === undefined}
           {...(onConfigure === undefined ? {} : { onClick: onConfigure })}>{text.minicalTools.configure}</button>
