@@ -474,7 +474,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       {/* 静态页面版：抽屉里全是示意数据，不读库、不接源。它从右侧滑出（设计稿 K11-b），
           与左侧那层「分析详情」抽屉不是同一个位置，所以用 placement 区分，而不是另写一个壳。 */}
-      {indicatorDrawerOpen ? <MacroIndicatorDrawer locale={locale} onOpenCalendar={() => { setIndicatorDrawerOpen(false); onOpenCalendar() }} onClose={() => setIndicatorDrawerOpen(false)} /> : null}
+      {indicatorDrawerOpen ? <MacroIndicatorDrawer locale={locale} onConfigure={onConfigureSources} onOpenCalendar={() => { setIndicatorDrawerOpen(false); onOpenCalendar() }} onClose={() => setIndicatorDrawerOpen(false)} /> : null}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">

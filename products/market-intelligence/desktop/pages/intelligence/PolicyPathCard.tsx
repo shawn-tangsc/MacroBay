@@ -413,10 +413,11 @@ function SettlementBlock({ settlement, text }: Readonly<{ settlement: PolicyPath
  */
 function IndicatorEntry({ onOpen, label }: Readonly<{ onOpen?: () => void; label?: string }>): React.ReactElement | null {
   if (!onOpen) return null
+  // The resolver keeps the shell's signature (one key-shaped argument): a zero-argument resolver
+  // is what the guard forbids, because it can no longer tell whether the caller passed a key or a
+  // sentence that happens to be short. `//` inside JSX children would be rendered as text — this
+  // comment belongs here, before the return, not between the tags.
   return <span className="mi-policy-card__entry">
-    // The resolver keeps the shell's signature (one key-shaped argument): a zero-argument
-    // resolver is what the guard forbids, because it can no longer tell whether the caller
-    // passed a key or a sentence.
     <IconButton ariaLabelKey="entry.openAria" icon={ChartLine} size="sm" onSelect={onOpen}
       resolveText={(_key: string) => label ?? ''} />
   </span>

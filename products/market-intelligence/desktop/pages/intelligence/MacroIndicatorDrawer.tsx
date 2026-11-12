@@ -1,5 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
+import { LoadingState } from '@platform/ui/components/loading'
+
+import { ExpectationChart } from './ExpectationChart'
+import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import { MiSideDrawer } from './MiSideDrawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 
@@ -58,9 +63,11 @@ const MOCK = {
   }
 } as const
 
-export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar }: Readonly<{
+export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfigure }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   onClose: () => void
+  /** 「配置日历」的去处；宿主给不出落点时按钮禁用，不画假按钮。 */
+  onConfigure?: () => void
   /**
    * 页头那个「经济日历 ↗」真的会打开经济日历（宿主传 `onOpenCalendar`）。
    * 它和右栏日历卡上的入口指向同一个去处——登记为 K2 待定项，不做只画不动的假按钮。
@@ -70,8 +77,31 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar }: Readon
   const text: MacroIndicatorDrawerText = macroIndicatorDrawerText[locale]
   // The right column scrolls on its own; the drawer body does not.
   const [selectedDay] = useState(MOCK.day.date)
+  const [zoom, setZoom] = useState<1 | 2>(1)
+  const [plotWidth, setPlotWidth] = useState(560)
+  const [plotHeight, setPlotHeight] = useState(264)
+  const plotRef = useRef<HTMLDivElement | null>(null)
+  const heroRef = useRef<HTMLElement | null>(null)
 
-  return <MiSideDrawer
+  // The prototype measures both boxes before drawing: the plot fills the column, and the plot's
+  // height is the hero card's own height (`--top-h`). Same two measurements, same order.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const host = plotRef.current
+      if (host) setPlotWidth(Math.max(380, Math.floor(host.clientWidth)))
+      const hero = heroRef.current
+      if (hero) setPlotHeight(Math.max(200, Math.ceil(hero.getBoundingClientRect().height)))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    if (plotRef.current) observer.observe(plotRef.current)
+    if (heroRef.current) observer.observe(heroRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  // 挂到 body：抽屉是 1280 的右侧浮层，如果落在右栏或某个 overflow 容器里，会被祖先裁掉——
+  // 表现正是「点了没反应」。portal 让它以视口为参照，和其它浮层同一层。
+  return createPortal(<MiSideDrawer
     title={text.title}
     placement="right"
     actions={onOpenCalendar ? <button className="mk-hlink" type="button" onClick={onOpenCalendar}>{text.calendarLink} ↗</button> : null}
@@ -89,8 +119,11 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar }: Readon
         </div>
 
         <div className="mk-view">
-          <div className="mk-plot">
-            <ExpectationPlot values={MOCK.expectation} marks={MOCK.eventMarks} />
+          <div className="mk-plot" ref={plotRef}>
+            <div className="mk-zoom" role="group" aria-label={text.zoom}>
+              {[1, 2].map(level => <button key={level} type="button" aria-pressed={zoom === level} onClick={() => setZoom(level as 1 | 2)}>{level}x</button>)}
+            </div>
+            <ExpectationChart values={MOCK.expectation} events={MOCK.eventMarks.map(mark => ({ index: mark.index, label: mark.name, impact: mark.impact }))} height={plotHeight} width={plotWidth} zoom={zoom} />
             <div className="mk-legend">
               <span><i className="mk-sw mk-sw--line" />{text.legendLine}</span>
               <span><i className="mk-sw mk-sw--ring" />{text.legendEvent}</span>
@@ -104,7 +137,7 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar }: Readon
               <span className="mk-rail__t"><b>{mark.name}</b><em>{mark.impact > 0 ? '+' : ''}{mark.impact}bp</em></span>
             </div>)}
           </div>
-          <article className="mk-card mk-card--hero">
+          <article className="mk-card mk-card--hero" ref={heroRef}>
             <div className="mk-card__h"><h3>{text.policyRate}</h3><em>{text.policyPending}</em></div>
             <div className="mk-card__v"><b>{MOCK.rate.policy.mostLikely}</b><span>{text.policyExpectation}</span><i>{MOCK.rate.delta}</i></div>
             <span className="mk-card__bar">
@@ -151,23 +184,7 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar }: Readon
           </article>
         </div>
 
-        <section className="mk-minical" aria-label={text.minicalTitle}>
-          <div className="mk-minical__h">
-            <h3>{text.minicalMonth} · {text.minicalTitle}</h3>
-            <span className="mk-minical__lg">
-              <i className="mk-mdot mk-mdot--done" />{text.minicalLegend.done}
-              <i className="mk-mdot mk-mdot--todo" />{text.minicalLegend.todo}
-              <i className="mk-mdot mk-mdot--today" />{text.minicalLegend.today}
-            </span>
-          </div>
-          <div className="mk-minical__wk">{text.weekday.map(day => <span key={day}>{day}</span>)}</div>
-          <div className="mk-minical__grid">
-            {MOCK.minical.weeks.map((week, index) => week.map(([day, state]) => <div className="mk-minical__day" key={`${index}-${day}`} data-state={state}>
-              <em>{day}</em>
-              {state === 'none' ? null : <i className={`mk-mdot mk-mdot--${state}`} />}
-            </div>))}
-          </div>
-        </section>
+        <MiniReleaseCalendar text={text} {...(onConfigure === undefined ? {} : { onConfigure })} />
       </div>
 
       <aside className="mk-col-r" aria-label={text.dayTitle.replace('{date}', selectedDay)}>
@@ -192,17 +209,14 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar }: Readon
             {group.count > group.shown.length ? <p className="mk-evmore">{text.more.replace('{count}', String(group.count - group.shown.length))}</p> : null}
           </section>)}
         </div>
+        {/* 静的一天是一个读数，不是缺块：这一块在 DOM 里，props 里没有事件时才显示。
+            静态页的 mock 那一天有 57 条，所以它现在是 hidden——和原型同一份结构。 */}
+        <div className="mk-evempty" hidden={MOCK.day.total > 0}>{text.dayEmpty}</div>
       </aside>
     </section>
-  </MiSideDrawer>
+  </MiSideDrawer>, document.body)
 }
 
-/**
- * The expectation line: a polyline over the mock series, with a zero axis and the two event marks.
- *
- * Hand-drawn rather than a chart component because the shape is one line plus two dots — a chart
- * dependency would bring axes, tooltips and a legend the prototype does not have.
- */
 /** One sentence per surprise state; `none` (a central-bank speech) has no number to compare. */
 function surpriseSentence(tone: 'beat' | 'miss' | 'inline' | 'none', value: string, text: MacroIndicatorDrawerText): string | undefined {
   switch (tone) {
@@ -211,23 +225,4 @@ function surpriseSentence(tone: 'beat' | 'miss' | 'inline' | 'none', value: stri
     case 'inline': return text.surprise.inline
     default: return undefined
   }
-}
-
-function ExpectationPlot({ values, marks }: Readonly<{ values: readonly number[]; marks: readonly Readonly<{ index: number; impact: number }>[] }>): React.ReactElement {
-  const { path, zeroY, points } = useMemo(() => {
-    const width = 560
-    const height = 240
-    const max = Math.max(...values.map(Math.abs), 10) * 1.15
-    const toY = (value: number) => height / 2 - (value / max) * (height / 2 - 8)
-    const step = width / (values.length - 1)
-    const path = values.map((value, index) => `${index === 0 ? 'M' : 'L'}${(index * step).toFixed(1)},${toY(value).toFixed(1)}`).join(' ')
-    const points = marks.map(mark => ({ x: mark.index * step, y: toY(values[mark.index] ?? 0) }))
-    return { path, zeroY: toY(0), points }
-  }, [values, marks])
-
-  return <svg className="mk-plot__svg" viewBox="0 0 560 240" preserveAspectRatio="none" role="img" aria-hidden="true">
-    <line x1="0" y1={zeroY} x2="560" y2={zeroY} className="mk-plot__zero" />
-    <path d={path} className="mk-plot__line" />
-    {points.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="3.5" className="mk-plot__mark" />)}
-  </svg>
 }
