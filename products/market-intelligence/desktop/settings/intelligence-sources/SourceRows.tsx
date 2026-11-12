@@ -1,11 +1,17 @@
 import { StatusPill } from '@platform/ui/components/status-pill'
 
+import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import { SettingsInfo } from '../settingsInfo'
 import { healthStateBadge } from './sourceHealthTone'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes, sourceRowView } from './sourceSettingRows'
 import type { ProviderDetailLabels } from './ProviderDetail'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
+
+/** 这条源是否由另一条 feed 的作业覆盖（Narwhal 三类的形状）。只读注册表字段。 */
+function coverageOwnerOf(sourceId: string): string | undefined {
+  return (calendarFeedRegistry as Readonly<Record<string, { coveredBy?: string }>>)[sourceId]?.coveredBy
+}
 
 /**
  * 菜单 1 的三行：**行长什么样住在这里，行的值/可见性/写入来自 `menus/sources.ts` 的声明**。
@@ -77,7 +83,12 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
   const metaParts = [
     ...new Set(props.tags),
     ...(source.requiresProxy && !props.proxyConfigured ? [labels.badges.proxy] : []),
-    ...(needsJob(source) ? [source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered] : [])
+    /* 被别的 feed 的作业覆盖时，这一行**没有自己的任务**：写「由同一次采集覆盖」，不写
+       「未注册自动任务」——后者会让读者以为这一类型漏采了（Narwhal 一次调用返回全部 releases，
+       三类是我们按 series 自己分的）。覆盖关系读注册表，不按名字或顺序猜。 */
+    ...(coverageOwnerOf(source.sourceId) !== undefined
+      ? [resolveText('settings.intelligenceSources.coveredBySameCollection')]
+      : needsJob(source) ? [source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered] : [])
   ]
   const proxyPart = labels.badges.proxy
   /* 这一行是**列表行**，不是设置行：复制列是 `div`、标签是 `strong`（原来就是这样）。
