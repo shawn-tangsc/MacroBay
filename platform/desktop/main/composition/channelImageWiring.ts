@@ -41,6 +41,8 @@ export function createChannelImageWiring(deps: {
   readImage: (fileName: string) => Promise<{ bytes: Uint8Array; mime: string } | null>
   /** 海报逐通道结果写回同一条记录（额度按记录算）；由组合根注入，wiring 不自己拿运行时。 */
   recordPosterOutcomes: (input: { recordId: string; channels: readonly any[] }) => Promise<{ ok: boolean }>
+  /** 这条记录上已经写过的逐通道结果：重发据此只补没到的通道。 */
+  readPosterChannels: (recordId: string) => Promise<readonly any[]>
   /** 助手消息仓储的 `messages.getById`；来源校验与 caption 用同一次读。 */
   getMessage: (messageId: string) => unknown
 }): ChannelImageWiring {
@@ -90,9 +92,12 @@ export function createChannelImageWiring(deps: {
 
   const posterPublish: PosterPublish = async (input) => {
     const outbox = getChannelPosterOutbox()
-    // 这一版没有暂存海报 → 调用方走原来的纯文字路径（既有行为一字不变）。
-    if (outbox === null || !await outbox.has(input.edition)) return { kind: 'no-poster' }
-    const sent = await posterSend.publish(input)
+    // 暂存区只用来取字节与做来源校验；**这次发什么由调用方的意图决定**（带了海报才调到这里）。
+    if (outbox === null) return { kind: 'refused', code: 'delivery-image-unavailable', detail: 'poster-outbox-unavailable' }
+    // 重发只补没到的通道：已经 `sent-accepted` 的一条都不重发（否则读者手机上第二次收到同一张图）。
+    const prior = await deps.readPosterChannels(input.recordId)
+    const accepted = prior.filter((entry) => entry.state === 'sent-accepted').map((entry) => entry.channelId)
+    const sent = await posterSend.publish({ ...input, skipChannelIds: accepted })
     if (sent.channels.length === 0) {
       return {
         kind: 'refused',
@@ -101,7 +106,9 @@ export function createChannelImageWiring(deps: {
         ...(sent.detail === undefined ? {} : { detail: sent.detail })
       }
     }
-    await deps.recordPosterOutcomes({ recordId: input.recordId, channels: sent.channels })
+    // 记录上保留已送达的那些行（它们仍是事实），只把这次的结果与它们合并后写回。
+    const merged = [...prior.filter((entry) => accepted.includes(entry.channelId)), ...sent.channels]
+    await deps.recordPosterOutcomes({ recordId: input.recordId, channels: merged })
     // 写回之后读出来的就是记录上的那一档：回执与记录同源，不从结果对象反推。
     return { kind: 'published', delivery: { state: sent.state, ...(sent.code === null ? {} : { reason: sent.code }), at: new Date().toISOString(), channels: sent.channels }, channels: sent.channels }
   }

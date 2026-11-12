@@ -1,6 +1,6 @@
 import type { PushChannelOutcome } from '../contracts/notificationContracts'
 import type { NotificationRuntimeDependencies } from './notificationRuntime'
-import { recordPosterOutcomes } from './notificationPosterRecord'
+import { readPosterChannels, recordPosterOutcomes } from './notificationPosterRecord'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 
@@ -34,6 +34,7 @@ export function composeNotificationRuntimeSurfaces(
   /** 海报那一路的逐通道结果写回同一条记录（额度按记录算）。 */
   posterRecord: {
     recordPosterOutcomes: (input: { recordId: string; channels: readonly PushChannelOutcome[] }) => Promise<{ ok: boolean }>
+    readPosterChannels: (recordId: string) => Promise<readonly PushChannelOutcome[]>
   }
 } {
   const settingsSurface = composeNotificationSettingsSurface(
@@ -73,7 +74,8 @@ export function composeNotificationRuntimeSurfaces(
         notifyChanged: internals.notifyChanged
       })
       return { ok: result.ok }
-    }
+    },
+    readPosterChannels: (recordId: string) => readPosterChannels({ recordId, load: internals.load })
   }
   return { settingsSurface, delivery, posterRecord }
 }

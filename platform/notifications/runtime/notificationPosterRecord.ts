@@ -12,6 +12,16 @@ import { aggregatePushDelivery } from '../delivery/aggregatePushDelivery'
  * - 逐通道行原样写进去（含 `kind:'image' | 'text'`，读者能看出哪条降级了）；
  * - `pushCount` 只在真写回时加一，`highestSeverity` 原样保留。
  */
+/** 读这条记录上**已经写过的**逐通道海报结果：重发据此跳过已送达的通道。 */
+export async function readPosterChannels(deps: {
+  recordId: string
+  load: () => Promise<{ records: readonly import('../contracts/notificationContracts').NotificationRecord[] } & Record<string, unknown>>
+}): Promise<readonly PushChannelOutcome[]> {
+  const state = await deps.load()
+  const record = state.records.find((candidate) => candidate.id === deps.recordId)
+  return record?.delivery.push?.channels ?? []
+}
+
 export async function recordPosterOutcomes(deps: {
   recordId: string
   channels: readonly PushChannelOutcome[]

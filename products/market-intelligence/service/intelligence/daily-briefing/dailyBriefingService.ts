@@ -291,7 +291,8 @@ export type DailyBriefingService = Readonly<{
    * 配置（写回去就会污染列表，那正是"每次手动生成都多一条排期"的来源）。
    */
   regenerate: (input: DailyBriefingRegenerateInput) => Promise<DailyBriefingTodayResult>
-  publishToPhone: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<BriefingPublishOutcome>
+  /** `withPoster` = 本次请求带了海报（路由只看这个意图，不看暂存区里有什么）。 */
+  publishToPhone: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string; withPoster?: boolean }>) => Promise<BriefingPublishOutcome>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
   listAttempts: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingAttemptsResult>

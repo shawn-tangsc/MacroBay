@@ -63,7 +63,7 @@ export function createPublishToPhone(deps: Readonly<{
   redeliver: BriefingRedeliver | undefined
   log?: BriefingDiagnosticLog
   now: () => string
-}>): (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>) => Promise<BriefingPublishOutcome> {
+}>): (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string; withPoster?: boolean }>) => Promise<BriefingPublishOutcome> {
   return (input) => publishBriefingToPhone({
     readEdition: (edition) => deps.store.get(edition.date, edition.locale, edition.periodId),
     submit: deps.submit,
@@ -75,7 +75,13 @@ export function createPublishToPhone(deps: Readonly<{
 
 export async function publishBriefingToPhone(
   deps: BriefingPublishDeps,
-  input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId: string }>
+  input: Readonly<{
+    date: string
+    locale: DailyBriefingLocale
+    periodId: string
+    /** 本次请求**是否带了海报**：路由只看这一个意图，不看暂存区里有什么。 */
+    withPoster?: boolean
+  }>
 ): Promise<BriefingPublishOutcome> {
   const edition = await deps.readEdition(input).catch(() => undefined)
   if (edition === undefined) return { kind: 'rejected', reason: 'edition-missing' }
@@ -91,18 +97,20 @@ export async function publishBriefingToPhone(
   if (receipt === null || receipt.kind === 'rejected' || receipt.kind === 'delegated' || receipt.kind === 'collapsed') {
     return { kind: 'rejected', reason: 'runtime-unavailable' }
   }
-  // 这一版若有暂存海报：按通道能力选形态发（图 + 导读一条 / 纯导读一条），结果写回同一条记录。
-  // 没有海报（老路径）就照旧只发文字——既有行为一字不变。
+  // **路由按本次请求的意图**：这次带了海报才走海报那一路（按通道能力选形态），
+  // 没带就照旧只发文字——暂存区里躺着旧海报也不许改变这次发什么（否则「只发文字」会发出图）。
   const poster = getPosterPublish()
   if (poster !== null) {
     const sent = await poster({
       recordId: receipt.recordId,
       edition: { date: input.date, periodId: input.periodId, locale: input.locale },
-      caption: edition.document.lede.text
+      caption: edition.document.lede.text,
+      // 意图：这次带了海报就按通道能力发图；没带就是「只发文字」（每条通道都发导读）。
+      mode: input.withPoster === true ? 'image' : 'text'
     })
     if (sent.kind === 'published') return { kind: 'accepted', recordId: receipt.recordId, delivery: sent.delivery }
     // 整条不发：不偷偷降级成纯文字（图生成/来源/导读长度与「通道没能力」是两件事）。
-    if (sent.kind === 'refused') return { kind: 'rejected', reason: 'poster-refused' }
+    return { kind: 'rejected', reason: 'poster-refused' }
   }
   return deps.redeliver({ recordId: receipt.recordId, editionId, locale: input.locale })
 }

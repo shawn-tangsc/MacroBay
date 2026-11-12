@@ -185,7 +185,7 @@ describe('poster route: chosen only when a poster was staged for this edition', 
       } satisfies PosterPublishOutcome
     })
 
-    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, input)
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, { ...input, withPoster: true })
 
     // 走的是海报那一路（导读原样交给它），**没有再走一遍纯文字扇出**。
     expect(calls).toHaveLength(1)
@@ -196,18 +196,25 @@ describe('poster route: chosen only when a poster was staged for this edition', 
     expect(runtime.records()).toHaveLength(1)
   })
 
-  it('falls back to the original text path when there is no poster', async () => {
+  it('sends text only when this request carried no poster, even if one is staged for the edition', async () => {
+    // 路由看**本次意图**，不看暂存区里有什么：读者点「只发文字」时不许把旧海报发出去。
     const runtime = runtimeWithPush()
-    configurePosterPublish(async () => ({ kind: 'no-poster' }))
+    const called: { mode?: string }[] = []
+    configurePosterPublish(async (value) => {
+      called.push(value as { mode?: string })
+      return { kind: 'published', delivery: { state: 'sent-accepted', at: NOW }, channels: [] }
+    })
     const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, input)
-    expect(runtime.pushes()).toBe(1)
+    expect(called).toEqual([expect.objectContaining({ mode: 'text' })])
+    // 纯文字那一路不再走通知的文本扇出（那是另一条键，而且这里要的是 `:poster-text`）。
+    expect(runtime.pushes()).toBe(0)
     expect(outcome.kind).toBe('accepted')
   })
 
   it('refuses the whole publish instead of quietly sending text-only when the poster was refused', async () => {
     const runtime = runtimeWithPush()
     configurePosterPublish(async () => ({ kind: 'refused', code: 'delivery-caption-too-long' }))
-    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, input)
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, { ...input, withPoster: true })
     // 整条不发：既不发图，也不偷偷降级成纯文字（那是读者自己选的另一个动作）。
     expect(outcome).toEqual({ kind: 'rejected', reason: 'poster-refused' })
     expect(runtime.pushes()).toBe(0)

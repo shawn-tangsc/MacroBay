@@ -56,12 +56,24 @@ export function createChannelPosterSend(deps: {
   deliverTextToEnabledTargets: (input: Omit<ChannelDeliveryRequest, 'conversationId'>) => Promise<ChannelDeliveryResult[]>
   now: () => string
 }): {
-  publish: (input: { recordId: string; edition: { date: string; periodId: string; locale: string }; caption: string }) => Promise<PosterSendResult>
+  publish: (input: {
+    recordId: string
+    edition: { date: string; periodId: string; locale: string }
+    caption: string
+    /**
+     * 这次发什么形态：`image` = 按通道能力选（图 + 导读 / 纯导读），
+     * `text` = 读者选了「只发文字」，**每条通道都只发导读**（尝试键 `:poster-text`），一次上传都没有。
+     */
+    mode?: 'image' | 'text'
+    /** 已经 `sent-accepted` 的通道：重发**只补没到的**，已送达的一条都不重发（海报方案 §5 重试）。 */
+    skipChannelIds?: readonly string[]
+  }) => Promise<PosterSendResult>
 } {
   return {
     async publish(input) {
       const at = deps.now()
       const ready = deps.listChannels().filter((channel) => channel.state === 'runtime-ready')
+      const skip = new Set(input.skipChannelIds ?? [])
       if (ready.length === 0) {
         // 配置事实：一条可用通道都没有。不冒用「拿不到」那一类码。
         return { ok: false, state: 'failed', code: 'delivery-no-target-bound', detail: 'no-ready-channel', channels: [] }
@@ -71,7 +83,12 @@ export function createChannelPosterSend(deps: {
         return { ok: false, state: 'failed', code: 'delivery-caption-too-long', detail: `chars=${input.caption.length}`, channels: [] }
       }
 
-      const imageChannels = ready.filter((channel) => channel.supportsImage)
+      const targets = ready.filter((channel) => !skip.has(channel.id))
+      if (targets.length === 0) {
+        // 每条都已经送达：不发、不读图，如实回「这次没有要补的」。
+        return { ok: true, state: 'sent-accepted', code: null, channels: [] }
+      }
+      const imageChannels = input.mode === 'text' ? [] : targets.filter((channel) => channel.supportsImage)
       // 图只在发之前读**一次**，复用给每条支持图片的通道；一条都不支持时连读都不读。
       let poster: Extract<ReadPosterOutcome, { ok: true }> | { ok: false; code: string; detail: string } | null = null
       if (imageChannels.length > 0) {
@@ -80,7 +97,7 @@ export function createChannelPosterSend(deps: {
       }
 
       const channels: PosterChannelOutcome[] = []
-      for (const channel of ready) {
+      for (const channel of targets) {
         channels.push(await sendTo(channel))
       }
 
@@ -96,10 +113,10 @@ export function createChannelPosterSend(deps: {
         const base = { channelId: channel.id, channelName: channel.name, at }
         if (!channel.agentId) {
           // 一条通道没绑定目标只影响它自己那一行。
-          return { ...base, kind: channel.supportsImage ? 'image' : 'text', state: 'failed', reason: 'delivery-no-target-bound' }
+          return { ...base, kind: input.mode === 'text' ? 'text' : channel.supportsImage ? 'image' : 'text', state: 'failed', reason: 'delivery-no-target-bound' }
         }
         try {
-          if (channel.supportsImage && poster !== null && poster.ok) {
+          if (input.mode !== 'text' && channel.supportsImage && poster !== null && poster.ok) {
             const result = await deps.deliverImageToEnabledTargets({
               channelId: channel.id,
               agentId: channel.agentId,
@@ -120,7 +137,7 @@ export function createChannelPosterSend(deps: {
           return { ...base, kind: 'text', ...outcomeOf(result) }
         } catch {
           // 单通道异常只记它自己失败（与通知扇出同一口径）。
-          return { ...base, kind: channel.supportsImage ? 'image' : 'text', state: 'failed', reason: 'channel-rejected' }
+          return { ...base, kind: input.mode === 'text' ? 'text' : channel.supportsImage ? 'image' : 'text', state: 'failed', reason: 'channel-rejected' }
         }
       }
     }

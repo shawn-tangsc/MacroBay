@@ -187,7 +187,8 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     readImage: (fileName) => ports.generatedImageStorage.read(fileName),
     getMessage: (messageId) => assistantRepositories.messages.getById(messageId),
     // 海报的逐通道结果写回同一条通知记录（额度按记录算）：运行时晚于这里构造，调用那一刻才取。
-    recordPosterOutcomes: async (input) => getNotificationRuntime().recordPosterOutcomes(input)
+    recordPosterOutcomes: async (input) => getNotificationRuntime().recordPosterOutcomes(input),
+    readPosterChannels: (recordId) => getNotificationRuntime().readPosterChannels(recordId)
   })
   const channelImageSend = channelImageWiring
   // 同一份校验/投递也负责日报海报（按通道能力选形态，图 + 导读一条）。

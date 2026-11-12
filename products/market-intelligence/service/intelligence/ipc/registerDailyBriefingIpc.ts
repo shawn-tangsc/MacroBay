@@ -64,7 +64,10 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
       // 体积超限/格式不收：整条不发（不偷偷降级成纯文字——那是另一种失败）。
       if (!stored.ok) throw new Error(stored.code)
     }
-    return service.publishToPhone({ date: query.date, periodId: query.periodId, locale: query.locale })
+    // 路由按**本次请求的意图**：带了海报才走海报那一路；不带就发纯文字（哪怕暂存区里还有旧海报）。
+    return query.poster === undefined
+      ? service.publishToPhone({ date: query.date, periodId: query.periodId, locale: query.locale })
+      : service.publishToPhone({ date: query.date, periodId: query.periodId, locale: query.locale, withPoster: true })
   })
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getProgress, async (payload) =>
     service.getProgress(readQuery(payload)))

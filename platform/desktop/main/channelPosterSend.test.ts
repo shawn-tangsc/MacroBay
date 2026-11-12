@@ -110,6 +110,53 @@ describe('poster fan-out per channel', () => {
     expect(result.state).toBe('failed')
   })
 
+  it('sends text only when the reader chose that: no upload anywhere, and the text key is used', async () => {
+    const { send, imageCalls, textCalls, readPoster } = harness()
+    const result = await send.publish({
+      recordId: 'record-1', edition: EDITION, caption: '导读', mode: 'text'
+    })
+    // 一次上传都没有，连图都不读。
+    expect(imageCalls).toHaveLength(0)
+    expect(readPoster).not.toHaveBeenCalled()
+    // 每条通道都走纯文字，并且用 `:poster-text` 那个键（与「不支持图片的通道」同一个形态）。
+    expect(textCalls).toHaveLength(2)
+    expect(textCalls.every((call) => call.sourceId === channelPosterTextSourceId('record-1'))).toBe(true)
+    expect(result.channels.map((entry) => entry.kind)).toEqual(['text', 'text'])
+    expect(result.state).toBe('sent-accepted')
+  })
+
+  it('re-sends only the channels that are not delivered yet', async () => {
+    const { send, imageCalls, textCalls, readPoster } = harness()
+    const result = await send.publish({
+      recordId: 'record-1',
+      edition: EDITION,
+      caption: '导读',
+      // 上一次：图片通道已送达，文字通道失败。
+      skipChannelIds: ['channel-a']
+    })
+
+    // 已送达的那条**一点都不重发**：不上传、不产生新结果行。
+    expect(imageCalls).toHaveLength(0)
+    expect(textCalls.map((call) => call.channelId)).toEqual(['channel-b'])
+    expect(result.channels.map((entry) => [entry.channelId, entry.kind, entry.state])).toEqual([
+      ['channel-b', 'text', 'sent-accepted']
+    ])
+    // 剩下要补的那条不支持图片：这次连图都不读（读了也没人用）。
+    expect(readPoster).not.toHaveBeenCalled()
+  })
+
+  it('does nothing at all when every channel already delivered', async () => {
+    const { send, imageCalls, textCalls, readPoster } = harness()
+    const result = await send.publish({
+      recordId: 'record-1', edition: EDITION, caption: '导读',
+      skipChannelIds: ['channel-a', 'channel-b']
+    })
+    expect(result).toMatchObject({ ok: true, state: 'sent-accepted', channels: [] })
+    expect(imageCalls).toHaveLength(0)
+    expect(textCalls).toHaveLength(0)
+    expect(readPoster).not.toHaveBeenCalled()
+  })
+
   it('refuses the whole publish when the caption is over 1024 characters, before any upload', async () => {
     const { send, imageCalls, textCalls } = harness()
     const result = await send.publish({ recordId: 'record-1', edition: EDITION, caption: 'x'.repeat(1_025) })

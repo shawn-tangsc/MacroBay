@@ -325,8 +325,8 @@ describe('the poster payload is optional and never carries a path', () => {
     const send = handler(publishToPhone)
 
     await expect(send(payload({ bytes: PNG, mime: 'image/png' }))).resolves.toEqual({ state: 'sent' })
-    // 服务那一跳仍然只收三元组：海报在主进程暂存，投递层不认识它。
-    expect(publishToPhone).toHaveBeenCalledWith({ date: '2026-11-12', periodId: 'default', locale: 'zh-CN' })
+    // 服务那一跳只收三元组 + 「这次带了海报」这个意图：字节留在主进程暂存区，投递层不认识它。
+    expect(publishToPhone).toHaveBeenCalledWith({ date: '2026-11-12', periodId: 'default', locale: 'zh-CN', withPoster: true })
     await expect(outbox.read({ date: '2026-11-12', periodId: 'default', locale: 'zh-CN' })).resolves.toMatchObject({ ok: true })
   })
 
