@@ -149,7 +149,13 @@ export type DailyBriefingClient = Readonly<{
    * 把这一版发布到手机（2026-11-05 口径）：主进程先写/更新当天的完成记录（只记不发，幂等合并），
    * 再按同一个键重投。结果原样交回——翻成读者的话是发布按钮自己的事，不在这里编。
    */
-  publishToPhone: (input: Readonly<{ date: string; periodId: string; locale: 'zh-CN' | 'en-US' }>) => Promise<unknown>
+  publishToPhone: (input: Readonly<{
+    date: string
+    periodId: string
+    locale: 'zh-CN' | 'en-US'
+    /** 可选海报字节（1080 宽、1x 的那一张）。不带就是「只发文字」的既有路径。 */
+    poster?: Readonly<{ bytes: Uint8Array; mime: string }>
+  }>) => Promise<unknown>
   getProgress: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientProgressResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
   saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
