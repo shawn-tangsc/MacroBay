@@ -21,13 +21,19 @@ import {
  * 让「源的形状变了」把一个与读者无关的失败显示出来。测试按钮就测这一个口：鉴权、额度、形状
  * 一次全能证明。
  */
+/**
+ * 与 `credentialedProviderProbes.ts` 的 `CredentialProbeFailureCode` **同一套词**，只多两个：
+ * `response-shape-invalid`（200 但结构不对，配置线正在补的一个码）与 `no-settled-rows`
+ * （内部诊断用，不上界面——界面上它落到形状那一档）。
+ */
 export type CryptoEtfFlowFailureCode =
   | 'credential-invalid'
+  | 'plan-restricted'
   | 'rate-limited'
   | 'request-timeout'
   | 'transport-unavailable'
   | 'response-unavailable'
-  | 'response-shape'
+  | 'response-shape-invalid'
   | 'no-settled-rows'
 
 export type CryptoEtfAssetReading =
@@ -85,7 +91,7 @@ export function createCryptoEtfFlowClient(deps: CryptoEtfFlowClientDeps = {}) {
       const parsed = parseCryptoEtfFundsResponse(body.body, 'btc')
       // 测试按钮的可见失败只有四组（密钥/额度/网络/形状）。「没有一行定稿」不是第五个词，
       // 对读者就是「返回结构和预期不一样」。
-      if (parsed.state !== 'available') return Object.freeze({ state: 'failed' as const, failureCode: parsed.reason === 'no-settled-rows' ? 'response-shape' : parsed.reason })
+      if (parsed.state !== 'available') return Object.freeze({ state: 'failed' as const, failureCode: parsed.reason === 'no-settled-rows' ? 'response-shape-invalid' : parsed.reason })
 
       return Object.freeze({
         state: 'succeeded' as const,
@@ -125,11 +131,12 @@ async function requestCryptoEtfBody(url: string, apiKey: string): Promise<Crypto
       // 测试按钮只按一次：不重试、不放大并发。429 必须让读者看见，不是悄悄重排。
       { retryPolicy: { maxAttempts: 1 }, redactHeaders: ['authorization', 'x-api-key'] }
     )
-    if (response.status === 401 || response.status === 403) return failed('credential-invalid')
+    if (response.status === 401) return failed('credential-invalid')
+    if (response.status === 403) return failed('plan-restricted')
     if (response.status === 429) return failed('rate-limited')
     if (response.status < 200 || response.status >= 300) return failed('response-unavailable')
     if (response.byteSize > cryptoEtfSourcePolicy.responseAcceptedMaxBytes) return failed('response-unavailable')
-    if (response.bodyText.trim().length === 0) return failed('response-shape')
+    if (response.bodyText.trim().length === 0) return failed('response-shape-invalid')
     return Object.freeze({ state: 'ok' as const, body: response.bodyText, status: response.status, headers: Object.freeze({ ...response.headers }) })
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : ''
@@ -139,8 +146,8 @@ async function requestCryptoEtfBody(url: string, apiKey: string): Promise<Crypto
 
 function pickFailure(codes: readonly CryptoEtfFlowFailureCode[]): CryptoEtfFlowFailureCode {
   const precedence: readonly CryptoEtfFlowFailureCode[] = [
-    'credential-invalid', 'rate-limited', 'request-timeout', 'transport-unavailable',
-    'response-unavailable', 'response-shape', 'no-settled-rows'
+    'credential-invalid', 'plan-restricted', 'rate-limited', 'request-timeout', 'transport-unavailable',
+    'response-unavailable', 'response-shape-invalid', 'no-settled-rows'
   ]
   return precedence.find((code) => codes.includes(code)) ?? 'response-unavailable'
 }

@@ -87,7 +87,7 @@ describe('createCryptoEtfFlowClient testConnection', () => {
 
   it.each([
     [401, 'credential-invalid'],
-    [403, 'credential-invalid'],
+    [403, 'plan-restricted'],
     [429, 'rate-limited'],
     [500, 'response-unavailable']
   ] as const)('maps HTTP %s to %s without retrying', async (status, failureCode) => {
@@ -110,13 +110,13 @@ describe('createCryptoEtfFlowClient testConnection', () => {
   it('fails on a 200 whose structure is wrong and never treats it as success', async () => {
     mockedRequest.mockResolvedValueOnce(response(JSON.stringify({ symbol: 'BTC', asset: 'bitcoin', windowDays: 30, days: [] })))
 
-    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape' })
+    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape-invalid' })
     expect(mockedRequest).toHaveBeenCalledTimes(1)
   })
 
   it('does not invent a fifth visible state when the answer holds no settled day', async () => {
     mockedRequest.mockResolvedValueOnce(response(fundsBody('BTC', 'bitcoin', [{ date: '2026-11-11', totalUsdM: 0, funds: [] }])))
 
-    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape' })
+    await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape-invalid' })
   })
 })

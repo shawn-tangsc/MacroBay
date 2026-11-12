@@ -37,7 +37,7 @@ export type CryptoEtfFundsAudit = Readonly<{
 
 export type CryptoEtfFundsParseResult =
   | Readonly<{ state: 'available'; days: readonly CryptoEtfSettledDay[]; audit: CryptoEtfFundsAudit }>
-  | Readonly<{ state: 'unavailable'; reason: 'response-shape' | 'no-settled-rows' }>
+  | Readonly<{ state: 'unavailable'; reason: 'response-shape-invalid' | 'no-settled-rows' }>
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/
 const topLevelKeys = Object.freeze(['symbol', 'asset', 'windowDays', 'days', 'updatedAt'])
@@ -47,9 +47,9 @@ const fundKeys = Object.freeze(['ticker', 'issuer', 'netFlowUsdM'])
 export function parseCryptoEtfFundsResponse(body: string, asset: CryptoEtfAssetKey): CryptoEtfFundsParseResult {
   try {
     const parsed = parseEnvelope(body, asset)
-    return parsed ?? { state: 'unavailable' as const, reason: 'response-shape' as const }
+    return parsed ?? { state: 'unavailable' as const, reason: 'response-shape-invalid' as const }
   } catch {
-    return { state: 'unavailable' as const, reason: 'response-shape' as const }
+    return { state: 'unavailable' as const, reason: 'response-shape-invalid' as const }
   }
 }
 

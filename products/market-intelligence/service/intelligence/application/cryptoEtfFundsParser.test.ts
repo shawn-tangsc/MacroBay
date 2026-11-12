@@ -60,7 +60,7 @@ describe('parseCryptoEtfFundsResponse', () => {
 
   it('rejects a response whose symbol does not match the requested asset', () => {
     const parsed = parseCryptoEtfFundsResponse(payload([day('2026-11-10', 1, [fund('IBIT', 1)])], { symbol: 'ETH', asset: 'ethereum' }), 'btc')
-    expect(parsed).toEqual({ state: 'unavailable', reason: 'response-shape' })
+    expect(parsed).toEqual({ state: 'unavailable', reason: 'response-shape-invalid' })
   })
 
   it('rejects a duplicate trading date instead of picking one revision', () => {
@@ -68,7 +68,7 @@ describe('parseCryptoEtfFundsResponse', () => {
       day('2026-11-10', 1, [fund('IBIT', 1)]),
       day('2026-11-10', 2, [fund('IBIT', 2)])
     ]), 'btc')
-    expect(parsed).toEqual({ state: 'unavailable', reason: 'response-shape' })
+    expect(parsed).toEqual({ state: 'unavailable', reason: 'response-shape-invalid' })
   })
 
   it('rejects unknown fields, malformed fund rows and non-canonical dates', () => {
@@ -86,7 +86,7 @@ describe('parseCryptoEtfFundsResponse', () => {
     expect(parsed).toEqual({ state: 'unavailable', reason: 'no-settled-rows' })
   })
 
-  it('returns response-shape for a body that is not JSON at all', () => {
-    expect(parseCryptoEtfFundsResponse('<html>404</html>', 'btc')).toEqual({ state: 'unavailable', reason: 'response-shape' })
+  it('returns response-shape-invalid for a body that is not JSON at all', () => {
+    expect(parseCryptoEtfFundsResponse('<html>404</html>', 'btc')).toEqual({ state: 'unavailable', reason: 'response-shape-invalid' })
   })
 })
