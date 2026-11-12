@@ -13,6 +13,7 @@ import {
 } from './realMarketApiConnectionProbe'
 import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
 import { probeCryptoEtfConnection } from './cryptoEtfConnectionProbe'
+import { narwhalCalendarProbeUrl, narwhalSourcePolicy } from './narwhalSourcePolicy'
 import { probeZeroXRouterConnection } from './zeroXRouterConnectionProbe'
 import { createSourceRequestGovernanceQueue } from './sourceRequestGovernance'
 import { isSafeZeroXRouterApiKey, zeroXRouterSourcePolicy } from './zeroXRouterSourcePolicy'
@@ -26,6 +27,9 @@ export type CredentialProbeFailureCode =
   | 'credential-not-configured'
   | 'authentication-failed'
   | 'plan-restricted'
+  /* 额度用尽：这个月没了、下个月会回来。与 `plan-restricted`（这条路走不通）不是一回事，
+     折进去就等于对读者说「套餐不含」，而实际是「这个月用完了」。 */
+  | 'credits-exhausted'
   | 'rate-limited'
   | 'transport-unavailable'
   | 'request-timeout'
@@ -67,8 +71,69 @@ export function createCredentialedProviderProbes(
     [macroMarketPolicy.sourceId, twelveDataMarketProbe(deps)],
     [realMarketApiConnectionProbePolicy.sourceId, realMarketApiProbe(deps)],
     [fredRatesConnectionProbePolicy.sourceId, fredRatesProbe(deps)],
-    [cryptoEtfSourcePolicy.sourceId, cryptoEtfProbe(deps)]
+    [cryptoEtfSourcePolicy.sourceId, cryptoEtfProbe(deps)],
+    [narwhalSourcePolicy.sourceId, narwhalProbe(deps)]
   ])
+}
+
+/**
+ * Narwhal：一次日历请求回答三件事——key 有效、日历权限在、返回是 JSON。
+ *
+ * 结构判定只到「是 JSON 对象或数组」为止：更细的字段形状归采集器的解析器，探针不做第二套解析
+ * （两套解析迟早对不上，而探针只需要一张收据）。`402` 有自己的码：额度用尽不是套餐不含。
+ */
+function narwhalProbe(deps: CredentialedProviderProbeDeps): CredentialedProviderProbe {
+  return {
+    isValidCredentialShape: (credentialDraft) => {
+      const trimmed = credentialDraft.trim()
+      return trimmed.length > 0 && trimmed.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(trimmed)
+    },
+    async probe(apiKey) {
+      const platformFetch = deps.platformFetch ?? resolvePlatformFetch()
+      if (!platformFetch) return safeProbeFailure('transport-unavailable')
+      let response: Response
+      try {
+        response = await platformFetch(narwhalCalendarProbeUrl(), {
+          method: 'GET',
+          headers: {
+            accept: 'application/json',
+            [narwhalSourcePolicy.authHeader]: `${narwhalSourcePolicy.authScheme} ${apiKey.trim()}`
+          },
+          signal: AbortSignal.timeout(narwhalSourcePolicy.timeoutMs)
+        })
+      } catch {
+        return safeProbeFailure('transport-unavailable')
+      }
+      const refusal = narwhalOutcome(response.status)
+      if (refusal) return refusal
+      let bodyText: string
+      try {
+        bodyText = await response.text()
+      } catch {
+        return safeProbeFailure('transport-unavailable')
+      }
+      if (bodyText.length > CREDENTIAL_PROBE_MAX_BODY_BYTES) return safeProbeFailure('response-unavailable')
+      const body = parseJson(bodyText)
+      if (body === undefined) return safeProbeFailure('response-unavailable')
+      if (typeof body !== 'object' || body === null) return safeProbeFailure('response-shape-invalid')
+      return { state: 'succeeded' }
+    }
+  }
+}
+
+/**
+ * 状态码 → 失败码。三档必须分开：`401` 是 key 填错或失效，`402` 是**额度用尽**（这个月没了），
+ * `429` 是限速（等一会儿再来）。都报「连接失败」的话，读者和我们都不知道该改哪儿。
+ *
+ * `403` 留 `plan-restricted`：key 是好的，但这个端点不在当前订阅里。
+ */
+export function narwhalOutcome(httpStatus: number): CredentialProbeOutcome | undefined {
+  if (httpStatus === 401) return safeProbeFailure('credential-invalid')
+  if (httpStatus === 402) return safeProbeFailure('credits-exhausted')
+  if (httpStatus === 403) return safeProbeFailure('plan-restricted')
+  if (httpStatus === 429) return safeProbeFailure('rate-limited')
+  if (httpStatus >= 200 && httpStatus < 300) return undefined
+  return safeProbeFailure('response-unavailable')
 }
 
 /**

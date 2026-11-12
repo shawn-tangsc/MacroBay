@@ -11,6 +11,9 @@ describe('calendar feed registry', () => {
       'macro-calendar-0xrouter-economic-data',
       'macro-calendar-0xrouter-financial-events',
       'macro-calendar-0xrouter-central-bank-activities',
+      'macro-calendar-narwhal-economic-data',
+      'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities',
       'macro-calendar-coinmarketcal'
     ])
   })
@@ -29,6 +32,18 @@ describe('calendar feed registry', () => {
       owner: 'market',
       collection: 'job'
     })
+  })
+
+  it('registers the Narwhal feeds as market-owned but not collectable yet', () => {
+    for (const feedId of [
+      'macro-calendar-narwhal-economic-data',
+      'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities'
+    ] as const) {
+      expect(calendarFeedRegistry[feedId]).toMatchObject({ providerId: 'narwhal', owner: 'market', collection: 'none' })
+      /* 采集器还没落，所以「立即采集」必须是 none：给它一个 job 就等于画一个点了没反应的按钮。 */
+      expect(calendarFeedCapabilities(feedId)).toMatchObject({ canToggle: true, runNow: 'none', canTestConnection: true })
+    }
   })
 
   it('marks CoinMarketCal as pending and not collectable', () => {

@@ -1,5 +1,6 @@
 import type {
   ProviderDefinition,
+  ProviderNoticeKind,
   SourceCategory,
   SourceDefinition,
   SourcePurpose
@@ -46,6 +47,12 @@ export function provider(input: {
   category: SourceCategory
   credential: 'none' | 'api-key'
   credentialSourceId?: string
+  /** 详情页头上方那条说明的**类别**（句子在文案表里，见 `ProviderNoticeKind`）。 */
+  notice?: ProviderNoticeKind
+  /** 官网地址：**有才画「官网」按钮**，没有就整个不出现（加源规范要求必须有）。 */
+  website?: string
+  /** 注册 / 获取 Key 的地址；与 `website` 相同则只画一颗按钮。 */
+  signupUrl?: string
   sources: SourceSeed[]
 }): ProviderDefinition {
   return {

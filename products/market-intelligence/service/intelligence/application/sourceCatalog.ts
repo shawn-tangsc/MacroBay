@@ -15,6 +15,7 @@ import {
 import { attachSourceApplicability } from './sourceCatalogApplicability'
 import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
 import { zeroXRouterSourcePolicy } from './zeroXRouterSourcePolicy'
+import { narwhalSourcePolicy } from './narwhalSourcePolicy'
 
 const catalog: IntelligenceSourceCatalogEntry[] = [
   source({
@@ -580,6 +581,34 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     readiness: 'live', supportsRunNow: false, supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
     readinessNote: '已接入，但本版只验证接入：不采集、不写库、不参与任何读数。',
     adapterConfig: { baseUrl: cryptoEtfSourcePolicy.apiBaseUrl }, requestGovernance: cryptoEtfSourcePolicy.requestGovernance
+  }),
+  /* Narwhal 三条：**已登记、可验证密钥、本版不采集**（与 CryptoETF 第一轮同一形状）。
+     登记进目录的原因很具体：凭证保存走 `testCredentials -> requireDefinition -> getIntelligenceSourceDefinition`，
+     只认目录里的源；没有这张条目，填了有效 key 点保存会抛「Unknown intelligence source」。
+     `readiness: 'planned'` 让 `supportsRunNow` 恒为 false——没有采集器就不许出现「立即采集」。 */
+  source({
+    sourceId: narwhalSourcePolicy.sourceId, displayName: 'Narwhal economic data', sourceGroup: 'aggregate-data-provider',
+    adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-economic-data-v1',
+    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'planned',
+    supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    readinessNote: '已登记，本版只验证密钥：采集器与解析器还没接，不采集、不写库、不参与任何读数。',
+    adapterConfig: { baseUrl: narwhalSourcePolicy.baseUrl, calendarPath: narwhalSourcePolicy.calendarPath }
+  }),
+  source({
+    sourceId: 'macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', sourceGroup: 'aggregate-data-provider',
+    adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-financial-events-v1',
+    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'planned',
+    supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    readinessNote: '已登记，本版只验证密钥：采集器与解析器还没接，不采集、不写库、不参与任何读数。',
+    adapterConfig: { baseUrl: narwhalSourcePolicy.baseUrl, calendarPath: narwhalSourcePolicy.calendarPath }
+  }),
+  source({
+    sourceId: 'macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', sourceGroup: 'aggregate-data-provider',
+    adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-central-bank-activities-v1',
+    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'planned',
+    supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    readinessNote: '已登记，本版只验证密钥：采集器与解析器还没接，不采集、不写库、不参与任何读数。',
+    adapterConfig: { baseUrl: narwhalSourcePolicy.baseUrl, calendarPath: narwhalSourcePolicy.calendarPath }
   }),
   source({
     sourceId: zeroXRouterSourcePolicy.sourceId,

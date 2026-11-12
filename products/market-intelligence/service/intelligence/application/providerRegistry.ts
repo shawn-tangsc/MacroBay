@@ -295,6 +295,10 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     /* The key box and the "cannot be scheduled" guarantee at once: the source is `none`, so the
        generic runtime never arms it, and the anchor is stated rather than derived from an adapter. */
     credentialSourceId: cryptoEtfSourcePolicy.sourceId,
+    /* 一个标记、两个后果（产品 §3.7）：页面顶部那条说明横幅，以及密钥块里那一行**常显**的四态
+       （未配置 / 已保存待验证 / 连接失败：原因 / 连接正常）。只有这一个 provider 带它，
+       其余源的界面不变；组件里不按 providerId 特判。 */
+    notice: 'verification-only',
     sources: [
       src({
         sourceId: cryptoEtfSourcePolicy.sourceId,
@@ -360,6 +364,29 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       src({ sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
+    ]
+  }),
+  provider({
+    providerId: 'narwhal',
+    displayName: 'Narwhal',
+    category: 'aggregate',
+    credential: 'api-key',
+    /* 加源规范：官网按钮只按数据画，没有地址就不出现（用户 2026-11-13 点出 Narwhal 缺这颗）。
+       注册页地址没有实测到，所以只填官网；填一个猜的注册页比少一颗按钮更糟。 */
+    website: 'https://narwhalapi.com',
+    /* 这一版只做两件事：登记这个源、让它能验证密钥。三条 feed 都还没有采集器与解析器，所以
+       `collection: 'none'`——没有采集就没有「立即采集」，也**不进** `AUTOMATIC_CALENDAR_FEED_IDS`：
+       登记了却让自动刷新去刷一个不存在的适配器，比不登记更糟（Chief 2026-11-13 定）。
+       密钥挂在第一条 feed 上：三条都不采集，派生不出「哪条能测」，猜不到 key 框就整个不见了。
+       采集器落地那一笔：`collection` 改 `job`、补 schedule，并把自动采集名单、feed→作业键、
+       日历作业表与看板状态源清单（1:1，上限 14 不许涨）一起换过去。 */
+    credentialSourceId: 'macro-calendar-narwhal-economic-data',
+    /* 「本版只验证密钥，不采集数据」那一行由这个标记给：读者一眼看出现在没有数据、也没有在采。 */
+    notice: 'verification-only',
+    sources: [
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-economic-data', displayName: 'Narwhal economic data', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } })
     ]
   }),
   provider({
@@ -434,6 +461,9 @@ export const agentRegistry: readonly AgentDefinition[] = [
           'macro-calendar-0xrouter-economic-data',
           'macro-calendar-0xrouter-financial-events',
           'macro-calendar-0xrouter-central-bank-activities',
+          'macro-calendar-narwhal-economic-data',
+          'macro-calendar-narwhal-financial-events',
+          'macro-calendar-narwhal-central-bank-activities',
           'macro-calendar-coinmarketcal',
           'federal-reserve-rss',
           'fred-rates-liquidity',

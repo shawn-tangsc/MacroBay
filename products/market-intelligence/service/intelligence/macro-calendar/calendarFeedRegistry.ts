@@ -28,6 +28,9 @@ const calendarFeedOrder = [
   'macro-calendar-0xrouter-economic-data',
   'macro-calendar-0xrouter-financial-events',
   'macro-calendar-0xrouter-central-bank-activities',
+  'macro-calendar-narwhal-economic-data',
+  'macro-calendar-narwhal-financial-events',
+  'macro-calendar-narwhal-central-bank-activities',
   'macro-calendar-coinmarketcal'
 ] as const
 
@@ -100,6 +103,40 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     collection: 'job',
     dashboardSection: 'macro-calendar',
     schedule: { kind: 'job', intervalSeconds: 10 * 60 }
+  },
+  /* Narwhal 三条：**已登记、可验证密钥、本版不采集**（`collection: 'none'`）。
+     不写 `job` 是因为它还没有采集器与解析器：写成 `job` 会让「立即采集」成为一个点了没反应、
+     或者按旧源实现去采的入口。等采集器落地的那一笔，把 `collection`/`schedule` 与
+     `AUTOMATIC_CALENDAR_FEED_IDS`、`zeroXRouterFeedKeys`、日历卡那三行一起改，才是真换源。 */
+  'macro-calendar-narwhal-economic-data': {
+    feedId: 'macro-calendar-narwhal-economic-data',
+    providerId: 'narwhal',
+    providerDisplayName: 'Narwhal',
+    displayName: 'Narwhal Economic Data',
+    description: 'Market-sourced economic calendar; events stay unverified until an official link exists.',
+    owner: 'market',
+    collection: 'none',
+    dashboardSection: 'macro-calendar'
+  },
+  'macro-calendar-narwhal-financial-events': {
+    feedId: 'macro-calendar-narwhal-financial-events',
+    providerId: 'narwhal',
+    providerDisplayName: 'Narwhal',
+    displayName: 'Narwhal Financial Events',
+    description: 'Market-sourced financial events; events stay unverified until an official link exists.',
+    owner: 'market',
+    collection: 'none',
+    dashboardSection: 'macro-calendar'
+  },
+  'macro-calendar-narwhal-central-bank-activities': {
+    feedId: 'macro-calendar-narwhal-central-bank-activities',
+    providerId: 'narwhal',
+    providerDisplayName: 'Narwhal',
+    displayName: 'Narwhal Central Bank Activities',
+    description: 'Market-sourced central bank activities; events stay unverified until an official link exists.',
+    owner: 'market',
+    collection: 'none',
+    dashboardSection: 'macro-calendar'
   },
   'macro-calendar-coinmarketcal': {
     feedId: 'macro-calendar-coinmarketcal',

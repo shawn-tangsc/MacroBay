@@ -73,14 +73,14 @@ describe('业务设置的左列', () => {
   })
 
   it('recounts when a source leaves the mapping', async () => {
-    // 反向：源数是从数据层算的——把经济日历少挂一个源，副标题立刻从 6 变 5。
+    // 反向：源数是从数据层算的——把经济日历少挂一个源，副标题立刻从 9 变 8。
     const module = modulesForBusiness('calendar')[0]!
     const original = module.cells
     try {
       ;(module as unknown as { cells: typeof original }).cells = original.slice(1)
       const { host } = await render('dashboard')
       const subtitles = [...host.querySelectorAll('.business-settings__nav .intelligence-provider-main small')].map((node) => node.textContent)
-      expect(subtitles[1]).toBe('5 个源')
+      expect(subtitles[1]).toBe('8 个源')
     } finally {
       ;(module as unknown as { cells: typeof original }).cells = original
     }
@@ -88,7 +88,8 @@ describe('业务设置的左列', () => {
 
   it('splits calendar into 官方源 / 聚合源 cards and keeps sentiment as one card', async () => {
     const calendar = await renderContent('calendar')
-    expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(6)
+    // 9 行 = Fed / BEA / BLS + 0xRouter 三条 + Narwhal 三条（换源要等采集器，暂时并存）。
+    expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(9)
     // 日历也走两层卡片：第二层两张数据卡片，标题按注册表的 owner 分。
     const cards = [...calendar.host.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
     expect(cards.map((card) => card.getAttribute('data-business-cell-card'))).toEqual(['official', 'aggregate'])
