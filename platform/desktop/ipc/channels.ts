@@ -248,6 +248,7 @@ export const IpcChannels = {
   storageClearCache: 'platform:storage-clear-cache',
   storageCompactCache: 'platform:storage-compact-cache',
   storageListCacheOperations: 'platform:storage-list-cache-operations',
+  storageListQuarantineCopies: 'platform:storage-list-quarantine-copies',
   notificationsList: 'platform:notifications-list',
   notificationsGetUnreadState: 'platform:notifications-get-unread-state',
   notificationsMarkRead: 'platform:notifications-mark-read',

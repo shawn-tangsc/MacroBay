@@ -2549,6 +2549,22 @@ h1 {
   padding: 0 16px 14px;
 }
 
+/*
+ * 隔离副本：标题行右边多一颗 ⓘ（说明它们是什么），左边仍是那条折叠按钮。
+ * 只给这一行加排版，不新造第二套面板样式。
+ */
+.storage-cache-quarantine-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+}
+
+.storage-cache-quarantine-head > .storage-cache-history-toggle {
+  flex: 1 1 auto;
+  width: auto;
+}
+
 .storage-cache-history {
   width: 100%;
   border-collapse: collapse;

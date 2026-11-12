@@ -96,10 +96,12 @@ describe('settings and storage composition', () => {
     const { channels, ipcMain } = record()
     composeStorageIpc(ipcMain as never, {
       cacheGovernance: {} as never,
+      quarantine: {} as never,
       summarizeProducts: vi.fn(() => ({ products: [], totals: { count: 0 } }))
     } as never)
 
-    expect(channels).toHaveLength(8)
-    expect(new Set(channels).size).toBe(8)
+    // 8 → 9：多的是只读的隔离副本清单（`platform:storage-list-quarantine-copies`）。
+    expect(channels).toHaveLength(9)
+    expect(new Set(channels).size).toBe(9)
   })
 })

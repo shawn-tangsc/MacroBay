@@ -9,6 +9,8 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { Segmented } from '@platform/ui/components/segmented'
 import { useToast } from '@platform/ui/components/toast'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { SettingInfoPopover } from '../SettingInfoPopover'
+import { QuarantineCopyList } from './QuarantineCopyList'
 import { StorageCacheDetailDrawer } from './StorageCacheDetailDrawer'
 import { StorageCacheOperationList } from './StorageCacheOperationList'
 import { StorageCacheTable } from './StorageCacheTable'
@@ -16,6 +18,7 @@ import {
   formatBytes,
   getStorageCacheLabels
 } from './storageCacheDisplay'
+import { useQuarantineCopies } from './useQuarantineCopies'
 import { useStorageCacheSettings } from './useStorageCacheSettings'
 import {
   buildStorageCacheSummary,
@@ -81,6 +84,9 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   const labels = getStorageCacheLabels(language)
   const toast = useToast()
   const { state, reload, inspectCache, clearCache, compactCache } = useStorageCacheSettings()
+  // 隔离副本单独一条读取：缓存巡检失败不该把这一块的结论也变成「读不到」，反之亦然。
+  const quarantine = useQuarantineCopies()
+  const [quarantineOpen, setQuarantineOpen] = useState(false)
   // `data` 只在 `ready` 上，所以下面每一处用到行数据的地方都先证明它——这正是类型要的。
   const snapshot = state.status === 'ready' ? state.data : null
   const caches = snapshot?.caches ?? []
@@ -197,7 +203,8 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
             <Button
               className="ant-secondary-button"
               icon={<RotateCw size={14} />}
-              onClick={() => void reload()}>
+              // 页头那颗刷新同时重读隔离副本：它就在同一屏上，只刷一半会让两块各说一次「最新」。
+              onClick={() => { void reload(); void quarantine.reload() }}>
               {labels.refresh}
             </Button>
           </div>
@@ -280,6 +287,77 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
             )}
           </section>
         )}
+
+        {/*
+         * 隔离副本：磁盘上有、界面以前完全看不见的那一类文件。**只读**——列出文件名、相对位置、
+         * 大小与修改时间；说明（它们是什么、能不能删、删了会怎样）在标题旁的 ⓘ 里。
+         * 三态分开：读不到 = 错误态 + 重试；扫完了没有 = 空态；有目录没读到 = 列表照出 + 一句「可能不全」。
+         */}
+        <section className="storage-cache-panel storage-cache-history-panel" data-quarantine-copies="true">
+          <div className="storage-cache-quarantine-head">
+            <button
+              type="button"
+              className="storage-cache-history-toggle"
+              aria-expanded={quarantineOpen}
+              onClick={() => setQuarantineOpen((current) => !current)}>
+              <ChevronRight
+                size={14}
+                className={quarantineOpen ? 'storage-cache-chevron open' : 'storage-cache-chevron'}
+              />
+              <span>{labels.quarantineTitle}</span>
+              {quarantine.state.status === 'ready' ? <small>{quarantine.state.data.copies.length}</small> : null}
+            </button>
+            <SettingInfoPopover
+              hintKey={labels.quarantineWhat}
+              infoLabelKey={labels.quarantineWhatAria}
+              resolveText={(key) => {
+                // ⓘ 本身用同一份文案：说明句给浮层，读屏名给触发件。
+                if (key === labels.quarantineWhat) return labels.quarantineWhat
+                if (key === labels.quarantineWhatAria) return labels.quarantineWhatAria
+                return ''
+              }}
+            />
+          </div>
+          {quarantineOpen ? (
+            quarantine.state.status === 'loading' ? (
+              <div className="storage-cache-placeholder">
+                <LoadingState label={labels.loading} />
+              </div>
+            ) : quarantine.state.status === 'error' ? (
+              <div className="storage-cache-placeholder">
+                <StateView
+                  state="error"
+                  reasonCode={regionErrorReasonCode(quarantine.state.reasonCode)}
+                  size="md"
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void quarantine.reload() }}
+                />
+              </div>
+            ) : (
+              <>
+                {quarantine.state.data.copies.length === 0
+                  && quarantine.state.data.unreadableDirectories === 0
+                  && quarantine.state.data.truncated === false
+                  ? <StateView state="empty" reasonCode="not-yet" size="sm" />
+                  : quarantine.state.data.copies.length === 0
+                    ? null
+                    : <QuarantineCopyList language={language} labels={labels} scan={quarantine.state.data} />}
+
+                {quarantine.state.data.unreadableDirectories > 0 ? (
+                  <p className="storage-cache-muted">
+                    {labels.quarantinePartial(quarantine.state.data.unreadableDirectories)}
+                    {' '}
+                    <Button onClick={() => void quarantine.reload()} size="small">{labels.refresh}</Button>
+                  </p>
+                ) : null}
+                {quarantine.state.data.truncated ? (
+                  <p className="storage-cache-muted">
+                    {labels.quarantineTruncated(quarantine.state.data.copies.length)}
+                  </p>
+                ) : null}
+              </>
+            )
+          ) : null}
+        </section>
 
         <section className="storage-cache-panel storage-cache-history-panel">
           <button

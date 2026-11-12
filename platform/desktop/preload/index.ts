@@ -277,7 +277,8 @@ const api = {
     inspectCache: (cacheId: string) => ipcRenderer.invoke(IpcChannels.storageInspectCache, cacheId),
     clearCache: (input: unknown) => ipcRenderer.invoke(IpcChannels.storageClearCache, input),
     compactCache: (input: unknown) => ipcRenderer.invoke(IpcChannels.storageCompactCache, input),
-    listCacheOperations: (query?: unknown) => ipcRenderer.invoke(IpcChannels.storageListCacheOperations, query)
+    listCacheOperations: (query?: unknown) => ipcRenderer.invoke(IpcChannels.storageListCacheOperations, query),
+    listQuarantineCopies: () => ipcRenderer.invoke(IpcChannels.storageListQuarantineCopies)
   },
   /** 产品模块 IPC：platform 只做路由，语义由各 product 的 service/bootstrap 注册。 */
   products: {

@@ -12,7 +12,8 @@ const EXPECTED_CHANNELS = [
   'platform:storage-inspect-cache',
   'platform:storage-clear-cache',
   'platform:storage-compact-cache',
-  'platform:storage-list-cache-operations'
+  'platform:storage-list-cache-operations',
+  'platform:storage-list-quarantine-copies'
 ]
 
 function record(): { channels: string[]; ipcMain: { handle: (channel: string, listener: unknown) => void } } {
@@ -39,6 +40,7 @@ function ports(overrides: Partial<StorageIpcPorts> = {}): StorageIpcPorts {
       compactCache: noop,
       listOperations: noop
     },
+    quarantine: { listCopies: async () => ({ copies: [], unreadableDirectories: 0, truncated: false }) },
     externalApps: { listInstalledAppViews: async () => [], launchWorkspace: async () => undefined },
     summarizeProducts: () => [],
     ...overrides
@@ -46,7 +48,7 @@ function ports(overrides: Partial<StorageIpcPorts> = {}): StorageIpcPorts {
 }
 
 describe('storage ipc surface', () => {
-  it('registers exactly the eight storage/product/external-app channels, in order', () => {
+  it('registers exactly the nine storage/product/external-app channels, in order', () => {
     const { channels, ipcMain } = record()
     registerStorageIpc(ipcMain as never, ports())
 

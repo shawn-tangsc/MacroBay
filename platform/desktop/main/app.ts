@@ -110,6 +110,7 @@ import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachab
 import { createShellTimeZoneProvider } from './shellTimeZone'
 import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
+import { listQuarantineCopies } from '../../storage/quarantine/quarantineCopies'
 import { composeUpdateCheck } from './composition/updateCheck'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
@@ -705,6 +706,8 @@ function registerIpcHandlers(
   composeStorageIpc(ipcMain, {
     cacheGovernance: cacheGovernanceIpcHandlers,
     externalApps: externalAppsService,
+    // 隔离副本散落在各存储文件旁边，没有索引：只读扫一遍数据根目录（读者点刷新时重扫）。
+    quarantine: { listCopies: () => listQuarantineCopies(app.getPath('userData')) },
     summarizeProducts: () => summarizeProductManifests(productManifests)
   })
 
@@ -1041,6 +1044,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
 
   await mainWindowHost.createAndWire()
   tray = createAppTray(getMainWindow)
+  // 菜单与窗口同级：它只读 `getMainWindow`，早建一步就不会在下面那段后台恢复期间出现「没有菜单栏」。
+  buildAppMenu(getMainWindow)
   await applySessionProxySettings((await settingsStore.readStartup()).network, {
     // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
@@ -1127,6 +1132,19 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       { ownerBootId: processBootId }
     )
   )
+
+  /**
+   * 界面先上，后台再继续（2026-11-13，启动白屏）。
+   *
+   * 走到这里，渲染层首屏需要的东西都齐了：三个平台 IPC（`appInfo` / `productSummaries` / `settings.get`）
+   * 在 `registerIpcHandlers` 里更早就注册完；产品 IPC 已由上面的 `runProductBootstrap` 注册并 seal；
+   * 主窗已 `registerMainWindow`；`panelWorkspace.start()` 也已完成（渲染层第一次读布局不会读到默认值）。
+   *
+   * 下面这段（任务/通道恢复、各类保留期与维护任务排期、工具与 MCP 同步、运行时订阅）只服务后台行为，
+   * 渲染层首屏一律不读它们，因此挪到挂载之后继续跑；**顺序与语义原样不动**。
+   */
+  await mainWindowHost.loadAndMount()
+
   await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()
   await channelManagementService.recover()
   await bootChannelRuntimes({
@@ -1183,8 +1201,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   agentRuntimeService.subscribe((snapshot) => {
     agentBroadcasts.runtimeStateChanged(snapshot)
   })
-  buildAppMenu(getMainWindow)
-  await mainWindowHost.loadAndMount()
 
   // 自动检查：主界面出来之后才排，一次性、延迟 15 秒；闸门与静默都在服务里。
   updateCheck.startAutomaticCheck()
