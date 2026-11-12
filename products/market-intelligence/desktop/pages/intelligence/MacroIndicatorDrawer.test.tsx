@@ -110,24 +110,17 @@ describe('key-indicator drawer', () => {
     expect(header.querySelectorAll('a')).toHaveLength(0)
   })
 
-  it('draws each day row as exactly time + name — no type chip, no surprise, no assets', async () => {
+  it('reuses the calendar day list, so its surprise and asset lines stay', async () => {
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
       root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
-    const rows = Array.from(document.body.querySelectorAll('.mk-evr'))
-    expect(rows.length).toBeGreaterThan(0)
-    for (const row of rows) {
-      expect(row.children).toHaveLength(2)
-      expect(row.children[0]!.tagName.toLowerCase()).toBe('time')
-      expect(row.children[1]!.tagName.toLowerCase()).toBe('span')
-      // 原型右列没有这三样；出现任一条就说明又回到了多行版本。
-      expect(row.textContent).not.toContain('超预期')
-      expect(row.textContent).not.toContain('QQQ')
-      expect(row.textContent).not.toContain('经济指标')
-    }
+    // 用户 2026-11-13：右列直接复用日历页那套列表，它自带的两行保留。
+    const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
+    expect(list).not.toBeNull()
+    expect(list!.textContent).toContain('上周EIA原油库存变化')
   })
 
   it('says 暂无日程数据 in a month that has no releases', async () => {

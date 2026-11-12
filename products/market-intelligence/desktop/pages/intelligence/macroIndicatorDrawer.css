@@ -43,7 +43,8 @@
   min-height: 0;
 }
 .mk-col-l { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.mk-col-r {
+.mk-col-r { /* 里面是日历页那套当日列表 */
+  padding-top: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -173,15 +174,3 @@
 .mk-mdot--today { width: 6px; height: 6px; background: transparent; border: 1px solid var(--accent); box-sizing: border-box; }
 
 /* The day panel: sticky heading, one block per type, one row per event. */
-.mk-evhead { position: sticky; top: 0; z-index: 1; background: var(--surface); padding-bottom: 6px; }
-.mk-evhead h3 { margin: 0; font-size: var(--font-section); font-weight: 600; color: var(--text-strong); }
-.mk-evhead p { margin: 2px 0 0; font-size: var(--font-meta); color: var(--muted); }
-.mk-evgroups { display: flex; flex-direction: column; gap: 10px; }
-.mk-evgroup h4 { margin: 0 0 4px; font-size: var(--font-meta); font-weight: 600; color: var(--text-strong); }
-.mk-evl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.mk-evr { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--font-meta); font-variant-numeric: tabular-nums; }
-.mk-evr time { flex: none; color: var(--muted); }
-.mk-evr span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.mk-evmore { margin: 4px 0 0; font-size: var(--font-meta); color: var(--muted); }
-.mk-evempty { flex: 1; display: grid; place-items: center; border: 1px dashed var(--border-strong); border-radius: 8px; font-size: var(--font-meta); color: var(--muted); text-align: center; padding: 0 12px; }
-.mk-evempty[hidden] { display: none; }

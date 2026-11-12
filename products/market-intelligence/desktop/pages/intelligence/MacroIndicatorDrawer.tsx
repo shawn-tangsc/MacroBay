@@ -4,6 +4,10 @@ import { LoadingState } from '@platform/ui/components/loading'
 
 import { ExpectationChart } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
+import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
+import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
+import { productText } from '../../shared/i18n/productText'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { Drawer } from '@platform/ui/components/drawer'
@@ -48,15 +52,11 @@ const MOCK = {
   },
   day: {
     date: '2026-11-13', total: 57,
-    groups: [
-      {
-        kind: 'indicator' as const, count: 48, shown: [
-          { time: '01:00', name: '上周EIA原油库存变化(万桶)(至1106)' },
-          { time: '21:30', name: '10月生产者物价指数(年率)' },
-          { time: '21:30', name: '10月核心生产者物价指数(年率)' }
-        ]
-      },
-      { kind: 'centralBank' as const, count: 9, shown: [{ time: '02:10', name: '旧金山联储主席戴利发表讲话' }] }
+    /** 复用日历页那套行组件，所以这里给的是它认的 `MarketCalendarEvent`。 */
+    events: [
+      marketEvent('mock-eia', '上周EIA原油库存变化(万桶)(至1106)', '01:00', 'economic-indicator', '+519.93%', '-0.35%'),
+      marketEvent('mock-ppi', '10月生产者物价指数(年率)', '21:30', 'economic-indicator', '+2.56%', '+0.87%'),
+      marketEvent('mock-daly', '旧金山联储主席戴利发表讲话', '02:10', 'central-bank-activity', null, null)
     ]
   }
 } as const
@@ -82,6 +82,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const text: MacroIndicatorDrawerText = macroIndicatorDrawerText[locale]
   // 平台 Drawer 只收键；这张表把本抽屉的键映到产品自己的文案表（查表，不是 key→句子的分支）。
   const drawerKeys: Readonly<Record<string, string>> = { 'mk.title': text.title }
+  // 复用日历页那套行组件，文案用同一份产品表，不另写一套词汇。
+  const calendarText = productText[locale].pages.intelligence.portal.calendar
+  const dayListRef = useRef<HTMLDivElement | null>(null)
   // The right column scrolls on its own; the drawer body does not.
   const [selectedDay] = useState(MOCK.day.date)
   const [plotWidth, setPlotWidth] = useState(560)
@@ -175,26 +178,45 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
         <MiniReleaseCalendar text={text} {...(onConfigure === undefined ? {} : { onConfigure })} />
       </div>
 
-      <aside className="mk-col-r" aria-label={text.dayTitle.replace('{date}', selectedDay)}>
-        <div className="mk-evhead">
-          <h3>{text.dayTitle.replace('{date}', selectedDay)}</h3>
-          <p>{text.daySummary.replace('{count}', String(MOCK.day.total))}</p>
-        </div>
-        <div className="mk-evgroups">
-          {MOCK.day.groups.map(group => <section className="mk-evgroup" key={group.kind}>
-            <h4>{text.dayGroup.replace('{type}', text.kinds[group.kind]).replace('{count}', String(group.count))}</h4>
-            <ul className="mk-evl">
-              {group.shown.map(row => <li className="mk-evr" key={`${group.kind}-${row.time}-${row.name}`}>
-                <time>{row.time}</time><span>{row.name}</span>
-              </li>)}
-            </ul>
-            {group.count > group.shown.length ? <p className="mk-evmore">{text.more.replace('{count}', String(group.count - group.shown.length))}</p> : null}
-          </section>)}
-        </div>
-        {/* 静的一天是一个读数，不是缺块：这一块在 DOM 里，props 里没有事件时才显示。
-            静态页的 mock 那一天有 57 条，所以它现在是 hidden——和原型同一份结构。 */}
-        <div className="mk-evempty" hidden={MOCK.day.total > 0}>{text.dayEmpty}</div>
-      </aside>
+      {/* 右列直接复用日历页的当日事件列表：它自带的「超预期」「资产涨跌」两行保留（用户 2026-11-13）。 */}
+      <div className="mk-col-r" ref={dayListRef}>
+        <CalendarDayEventList
+          label={calendarText.dayEvents.listLabel}
+          title={calendarText.dayEvents.title.replace('{date}', MOCK.day.date)}
+          summary={calendarText.unifiedDay.total.replace('{count}', String(MOCK.day.total)) + ' · ' + calendarText.unifiedDay.grouped}
+          groups={dayGroups(MOCK.day.events)}
+          marketSources={[]}
+          text={calendarText}
+          statusNow={MOCK.day.date + 'T00:00:00.000Z'}
+          selectedEventKey={undefined}
+          selectedMarketKey={undefined}
+          onSelect={() => undefined}
+        />
+      </div>
     </section>
   </Drawer>
+}
+
+/** 一条 mock 的市场事件：只为把复用的行组件喂饱，字段与真实形状一致。 */
+function marketEvent(key: string, title: string, time: string, eventType: MarketCalendarEvent['eventType'], actual: string | null, change: string | null): MarketCalendarEvent {
+  return {
+    eventKey: key, title, countryCode: 'US', countryName: '美国', eventType, importance: 'high',
+    scheduledAt: `2026-11-13T${time}:00.000Z`,
+    consensus: { displayValue: '—' }, providerPrevious: { displayValue: change ?? '—' },
+    providerActual: actual === null ? null : { displayValue: actual },
+    source: '0xRouter', sourceObservedAt: '2026-11-13T00:00:00.000Z', coverage: 'observed-unverified'
+  }
+}
+
+/** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行）。 */
+function dayGroups(events: readonly MarketCalendarEvent[]): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+  const order: MarketCalendarEvent['eventType'][] = ['economic-indicator', 'financial-event', 'central-bank-activity']
+  return order
+    .map(eventType => ({
+      eventType,
+      items: events.filter(event => event.eventType === eventType).map((event): CalendarDayItem => ({
+        key: event.eventKey, date: '2026-11-13', time: event.scheduledAt.slice(11, 16), source: 'market', event
+      }))
+    }))
+    .filter(group => group.items.length > 0)
 }
