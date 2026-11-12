@@ -1,4 +1,6 @@
+import type { PushChannelOutcome } from '../contracts/notificationContracts'
 import type { NotificationRuntimeDependencies } from './notificationRuntime'
+import { recordPosterOutcomes } from './notificationPosterRecord'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 
@@ -26,7 +28,14 @@ export type NotificationRuntimeSurfaceInternals = Readonly<{
 export function composeNotificationRuntimeSurfaces(
   deps: NotificationRuntimeDependencies,
   internals: NotificationRuntimeSurfaceInternals
-): { settingsSurface: ReturnType<typeof composeNotificationSettingsSurface>; delivery: ReturnType<typeof createNotificationDelivery> } {
+): {
+  settingsSurface: ReturnType<typeof composeNotificationSettingsSurface>
+  delivery: ReturnType<typeof createNotificationDelivery>
+  /** 海报那一路的逐通道结果写回同一条记录（额度按记录算）。 */
+  posterRecord: {
+    recordPosterOutcomes: (input: { recordId: string; channels: readonly PushChannelOutcome[] }) => Promise<{ ok: boolean }>
+  }
+} {
   const settingsSurface = composeNotificationSettingsSurface(
     {
       catalog: deps.catalog,
@@ -53,5 +62,18 @@ export function composeNotificationRuntimeSurfaces(
     ...(deps.resolvePushChannels === undefined ? {} : { resolvePushChannels: deps.resolvePushChannels }),
     now: internals.now
   })
-  return { settingsSurface, delivery }
+  const posterRecord = {
+    recordPosterOutcomes: async (input: { recordId: string; channels: readonly PushChannelOutcome[] }): Promise<{ ok: boolean }> => {
+      const result = await recordPosterOutcomes({
+        recordId: input.recordId,
+        channels: input.channels,
+        now: internals.now(),
+        load: internals.load,
+        persist: internals.persistWithDiagnostics as never,
+        notifyChanged: internals.notifyChanged
+      })
+      return { ok: result.ok }
+    }
+  }
+  return { settingsSurface, delivery, posterRecord }
 }

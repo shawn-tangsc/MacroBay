@@ -30,6 +30,7 @@ import {
 import { discordUserAgent } from '../../../ai/agent-platform/channels/discord/discordUserAgent'
 import { resolveActiveProxy } from '../../../network/activeProxyState'
 import { createChannelImageWiring } from './channelImageWiring'
+import { configurePosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { pruneChannelRuntimeAudits } from '../../../ai/agent-platform/channels/channelRuntimeAuditPrune'
@@ -179,13 +180,18 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     imageTransport: channelDeliveryRouter
   })
   // 助手聊天里的图消息「发到频道」：投影 + 动作的装配单独一个分片（这个文件贴着 500 行上限）。
-  const channelImageSend = createChannelImageWiring({
+  const channelImageWiring = createChannelImageWiring({
     channels: channelManagementService,
     router: channelDeliveryRouter,
     delivery: channelDeliveryService,
     readImage: (fileName) => ports.generatedImageStorage.read(fileName),
-    getMessage: (messageId) => assistantRepositories.messages.getById(messageId)
+    getMessage: (messageId) => assistantRepositories.messages.getById(messageId),
+    // 海报的逐通道结果写回同一条通知记录（额度按记录算）：运行时晚于这里构造，调用那一刻才取。
+    recordPosterOutcomes: async (input) => getNotificationRuntime().recordPosterOutcomes(input)
   })
+  const channelImageSend = channelImageWiring
+  // 同一份校验/投递也负责日报海报（按通道能力选形态，图 + 导读一条）。
+  configurePosterPublish(channelImageWiring.posterPublish)
   // 设置页「发一条测试消息」要走真投递：装在这儿而不是 app.ts（那是只减不增的基线文件）。
   channelManagementService.setDelivery(channelDeliveryService)
   // 运行审计的批量裁剪（0.4.3 B3）：库句柄在这里，保留期任务在别处注册——经槽传过去，

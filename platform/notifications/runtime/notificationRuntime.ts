@@ -386,7 +386,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   const reportProviderCredential = (input: ProviderCredentialSignal) => reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
   // 两个面（设置面 / 投递面）的装配搬到 `notificationRuntimeSurfaces.ts`：这里只留接线一条。
-  const { settingsSurface, delivery } = composeNotificationRuntimeSurfaces(deps, {
+  const { settingsSurface, delivery, posterRecord } = composeNotificationRuntimeSurfaces(deps, {
     load,
     exclusive,
     persistWithDiagnostics,
@@ -423,6 +423,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     ...composeSelfTestSurface({ resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS),
       submitRequest: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
+    ...posterRecord,
     reportProviderCredential,
 
     ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics, resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS) }),

@@ -91,6 +91,11 @@ export type NotificationDeliveryPathState = 'queued' | 'sent-accepted' | 'sent-u
 export type PushChannelOutcome = {
   channelId: string
   channelName?: string
+  /**
+   * 这条通道上发的是什么形态（海报方案 §5）：`image` = 图 + 导读同一条消息，
+   * `text` = 纯导读文字（该通道支持不了图，属于**明示降级**）。其它场景不写。
+   */
+  kind?: 'image' | 'text'
   state: NotificationDeliveryPathState
   reason?: string
   attemptId?: string

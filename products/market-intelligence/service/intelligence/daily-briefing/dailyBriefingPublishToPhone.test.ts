@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import {
+  configurePosterPublish,
+  type PosterPublishOutcome
+} from '@platform/ai/agent-platform/channels/channelPosterPublishRegistry'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
@@ -157,5 +162,55 @@ describe('publish to phone: write the record first, then push it', () => {
 
     expect(outcome).toEqual({ kind: 'rejected', reason: 'runtime-unavailable' })
     expect(runtime.pushes()).toBe(0)
+  })
+})
+
+describe('poster route: chosen only when a poster was staged for this edition', () => {
+  const input = { date: DATE, locale: 'zh-CN' as const, periodId: 'default' }
+  const readEdition = async () => ({ document: { lede: { text: '今天的主导事件是…' } } })
+  afterEach(() => { configurePosterPublish(null) })
+
+  it('publishes the poster set instead of the text fan-out when a poster exists', async () => {
+    const runtime = runtimeWithPush()
+    const calls: unknown[] = []
+    configurePosterPublish(async (value) => {
+      calls.push(value)
+      return {
+        kind: 'published',
+        delivery: { state: 'failed', at: NOW, channels: [
+          { channelId: 'channel-a', kind: 'image', state: 'sent-accepted', at: NOW },
+          { channelId: 'channel-b', kind: 'text', state: 'failed', reason: 'channel-rejected', at: NOW }
+        ] },
+        channels: []
+      } satisfies PosterPublishOutcome
+    })
+
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, input)
+
+    // 走的是海报那一路（导读原样交给它），**没有再走一遍纯文字扇出**。
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ edition: input, caption: '今天的主导事件是…' })
+    expect(runtime.pushes()).toBe(0)
+    expect(outcome.kind).toBe('accepted')
+    // 记录仍是那一条（额度按记录算）。
+    expect(runtime.records()).toHaveLength(1)
+  })
+
+  it('falls back to the original text path when there is no poster', async () => {
+    const runtime = runtimeWithPush()
+    configurePosterPublish(async () => ({ kind: 'no-poster' }))
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, input)
+    expect(runtime.pushes()).toBe(1)
+    expect(outcome.kind).toBe('accepted')
+  })
+
+  it('refuses the whole publish instead of quietly sending text-only when the poster was refused', async () => {
+    const runtime = runtimeWithPush()
+    configurePosterPublish(async () => ({ kind: 'refused', code: 'delivery-caption-too-long' }))
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, input)
+    // 整条不发：既不发图，也不偷偷降级成纯文字（那是读者自己选的另一个动作）。
+    expect(outcome).toEqual({ kind: 'rejected', reason: 'poster-refused' })
+    expect(runtime.pushes()).toBe(0)
+    expect(runtime.records()).toHaveLength(1)
   })
 })

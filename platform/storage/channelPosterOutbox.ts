@@ -51,6 +51,8 @@ export type ChannelPosterOutbox = {
   directory: string
   store: (input: { edition: ChannelPosterEdition; bytes: Uint8Array; mime: string }) => Promise<StorePosterOutcome>
   read: (edition: ChannelPosterEdition) => Promise<ReadPosterOutcome>
+  /** 只问「这一版有没有暂存海报」：不读字节（路由决定用，读盘留给真正要发的时候）。 */
+  has: (edition: ChannelPosterEdition) => Promise<boolean>
   prune: () => Promise<readonly string[]>
 }
 
@@ -140,6 +142,11 @@ export function createChannelPosterOutbox(deps: {
       // 顺手清理过期记录（7 天窗口）：写入路径不需要额外的维护任务也能收敛。
       await prune()
       return { ok: true, record }
+    },
+
+    async has(edition) {
+      const record = (await loadRecords())[channelPosterEditionId(edition)]
+      return record !== undefined && !expired(record, deps.now())
     },
 
     async read(edition) {

@@ -167,6 +167,19 @@ export function channelImageSourceId(recordId: string): string {
  * 与「图片带说明」**不是同一条尝试**：caption 超长导致整条失败时，那条 failed 行原样留在审计里；
  * 「只发图片」是一次新的、可独立回退的投递，点第二次返回同一个终态、不重发。
  */
+/**
+ * 日报海报（图 + 导读一条消息）的 `sourceId` 后缀（海报方案 §5）。
+ * 与图片的 `:image` 是**不同产物形态**，所以另用一个后缀；同样不加通道维度（通道在唯一键第一列）。
+ */
+export function channelPosterSourceId(recordId: string): string {
+  return `${recordId}:poster`
+}
+
+/** 不支持图片的通道收纯导读文字：同一动作、**另一条产物形态**，所以另用一个后缀。 */
+export function channelPosterTextSourceId(recordId: string): string {
+  return `${recordId}:poster-text`
+}
+
 export function channelImageBareSourceId(recordId: string): string {
   return `${recordId}:image:bare`
 }

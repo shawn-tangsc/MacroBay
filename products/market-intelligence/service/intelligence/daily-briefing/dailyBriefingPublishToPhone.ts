@@ -1,6 +1,7 @@
 import type { NotificationDeliveryState } from '@platform/notifications/contracts/notificationContracts'
 import type { DailyBriefingStore } from './dailyBriefingService'
 import type { RedeliverReasonCode } from '@platform/notifications/runtime/notificationRedeliver'
+import { getPosterPublish } from '@platform/ai/agent-platform/channels/channelPosterPublishRegistry'
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { notifyDailyBriefing } from './dailyBriefingNotifier'
@@ -23,7 +24,11 @@ import type { BriefingDiagnosticLog } from './dailyBriefReadinessGate'
 
 export type BriefingPublishOutcome =
   | Readonly<{ kind: 'accepted'; recordId: string; delivery: NotificationDeliveryState }>
-  | Readonly<{ kind: 'rejected'; reason: 'edition-missing' | 'runtime-unavailable' | RedeliverReasonCode }>
+  | Readonly<{
+    kind: 'rejected'
+    /** `poster-refused` = 这次带了海报、但整条不发（导读超长 / 来源不符 / 图太大）。产品词，不是平台码。 */
+    reason: 'edition-missing' | 'runtime-unavailable' | 'poster-refused' | RedeliverReasonCode
+  }>
 
 export type BriefingPublishDeps = Readonly<{
   /** 这一版本体（只读）：不存在就不该发布；存在时它的 `document.lede.text` 要一起带上。 */
@@ -85,6 +90,19 @@ export async function publishBriefingToPhone(
   // 推的是**回执里那条记录**，不是自己拼出来的键：没有回执就没有可推的东西，不许假装推了。
   if (receipt === null || receipt.kind === 'rejected' || receipt.kind === 'delegated' || receipt.kind === 'collapsed') {
     return { kind: 'rejected', reason: 'runtime-unavailable' }
+  }
+  // 这一版若有暂存海报：按通道能力选形态发（图 + 导读一条 / 纯导读一条），结果写回同一条记录。
+  // 没有海报（老路径）就照旧只发文字——既有行为一字不变。
+  const poster = getPosterPublish()
+  if (poster !== null) {
+    const sent = await poster({
+      recordId: receipt.recordId,
+      edition: { date: input.date, periodId: input.periodId, locale: input.locale },
+      caption: edition.document.lede.text
+    })
+    if (sent.kind === 'published') return { kind: 'accepted', recordId: receipt.recordId, delivery: sent.delivery }
+    // 整条不发：不偷偷降级成纯文字（图生成/来源/导读长度与「通道没能力」是两件事）。
+    if (sent.kind === 'refused') return { kind: 'rejected', reason: 'poster-refused' }
   }
   return deps.redeliver({ recordId: receipt.recordId, editionId, locale: input.locale })
 }

@@ -1,7 +1,9 @@
-import type { ChannelDeliveryResult, ChannelImageDeliveryRequest } from '../../../ai/agent-platform/channels/ChannelDeliveryContracts'
+import type { ChannelDeliveryRequest, ChannelDeliveryResult, ChannelImageDeliveryRequest } from '../../../ai/agent-platform/channels/ChannelDeliveryContracts'
 import { createChannelImageSend, type ChannelImageSendResult } from '../channelImageSend'
 import { createChannelImageSource } from '../channelImageSource'
+import { createChannelPosterSend } from '../channelPosterSend'
 import { getChannelPosterOutbox } from '../../../storage/channelPosterOutbox'
+import type { PosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
 
 /**
  * 「把助手聊天里的图消息发到频道」的装配分片（多通道方案 §4b 定稿 A）。
@@ -23,6 +25,8 @@ export type ChannelImageWiring = {
   /** 按钮出现条件的唯一来源：没有**可发图**的通道时返回 `null`，渲染层不自己判。 */
   target: () => ChannelImageTargets | null
   send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => Promise<ChannelImageSendResult>
+  /** 日报海报：按通道能力选形态（图 + 导读 / 纯导读），逐通道结果写回同一条记录。 */
+  posterPublish: PosterPublish
 }
 
 type MessageLike = { data?: { parts?: unknown } }
@@ -32,8 +36,11 @@ export function createChannelImageWiring(deps: {
   router: { supportsImage: (channelId: string) => boolean }
   delivery: {
     deliverImageToEnabledTargets: (input: Omit<ChannelImageDeliveryRequest, 'conversationId'>) => Promise<ChannelDeliveryResult[]>
+    deliverToEnabledTargets: (input: Omit<ChannelDeliveryRequest, 'conversationId'>) => Promise<ChannelDeliveryResult[]>
   }
   readImage: (fileName: string) => Promise<{ bytes: Uint8Array; mime: string } | null>
+  /** 海报逐通道结果写回同一条记录（额度按记录算）；由组合根注入，wiring 不自己拿运行时。 */
+  recordPosterOutcomes: (input: { recordId: string; channels: readonly any[] }) => Promise<{ ok: boolean }>
   /** 助手消息仓储的 `messages.getById`；来源校验与 caption 用同一次读。 */
   getMessage: (messageId: string) => unknown
 }): ChannelImageWiring {
@@ -62,6 +69,43 @@ export function createChannelImageWiring(deps: {
     captionFor: (messageId) => captionOf(getMessage(messageId))
   }).send
 
+  const posterSend = createChannelPosterSend({
+    listChannels: () => deps.channels.list().map((channel) => ({
+      id: channel.id,
+      name: channel.name,
+      agentId: channel.agentId,
+      state: channel.state,
+      supportsImage: deps.router.supportsImage(channel.id)
+    })),
+    readPoster: (edition) => {
+      const outbox = getChannelPosterOutbox()
+      return outbox === null
+        ? Promise.resolve({ ok: false as const, code: 'delivery-image-unavailable' as const, detail: 'poster-outbox-unavailable' })
+        : outbox.read(edition)
+    },
+    deliverImageToEnabledTargets: (input) => deps.delivery.deliverImageToEnabledTargets(input),
+    deliverTextToEnabledTargets: (input) => deps.delivery.deliverToEnabledTargets(input),
+    now: () => new Date().toISOString()
+  })
+
+  const posterPublish: PosterPublish = async (input) => {
+    const outbox = getChannelPosterOutbox()
+    // 这一版没有暂存海报 → 调用方走原来的纯文字路径（既有行为一字不变）。
+    if (outbox === null || !await outbox.has(input.edition)) return { kind: 'no-poster' }
+    const sent = await posterSend.publish(input)
+    if (sent.channels.length === 0) {
+      return {
+        kind: 'refused',
+        // 整条不发一定有一个原因码：没有码就按「通道侧拒收」——不许返回一个没有原因的拒绝。
+        code: sent.code ?? 'channel-rejected',
+        ...(sent.detail === undefined ? {} : { detail: sent.detail })
+      }
+    }
+    await deps.recordPosterOutcomes({ recordId: input.recordId, channels: sent.channels })
+    // 写回之后读出来的就是记录上的那一档：回执与记录同源，不从结果对象反推。
+    return { kind: 'published', delivery: { state: sent.state, ...(sent.code === null ? {} : { reason: sent.code }), at: new Date().toISOString(), channels: sent.channels }, channels: sent.channels }
+  }
+
   return {
     target() {
       const ready = deps.channels.list().filter((channel) => channel.state === 'runtime-ready')
@@ -75,7 +119,8 @@ export function createChannelImageWiring(deps: {
       // 全都不支持图片、或一条 ready 都没有：不画按钮（这是投影的结论，渲染层不自己判）。
       return channels.length === 0 ? null : { channels }
     },
-    send
+    send,
+    posterPublish
   }
 }
 
