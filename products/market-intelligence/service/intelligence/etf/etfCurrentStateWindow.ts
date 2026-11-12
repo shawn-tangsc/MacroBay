@@ -48,7 +48,7 @@ export function buildEtfCurrentStateWindow(input: {
   if (!isCanonicalUtcMillis(input.asOf) || !isCompleteDateSet(input.completeDates, input.completeThrough, input.asOf.slice(0, 10))) return unavailable()
   const btc = validateAssetRows(input.btc, 'BTC', input.completeThrough)
   const eth = validateAssetRows(input.eth, 'ETH', input.completeThrough)
-  if (!btc || !eth || !sameDates(btc, eth) || !sameSource(btc, eth) || !sameDatesAsCompleteSet(btc, input.completeDates)) return unavailable()
+  if (!btc || !eth || !sameDates(btc, eth) || !sameSource([...btc, ...eth]) || !sameDatesAsCompleteSet(btc, input.completeDates)) return unavailable()
 
   const windowEnd = btc.at(-1)!.tradingDate
   if (windowEnd !== input.completeThrough) return unavailable()
@@ -67,7 +67,7 @@ export function isValidEtfCurrentStateWindow(window: unknown): window is EtfCurr
   if (!isTradingDate(window.windowEnd) || !Array.isArray(window.capitalConclusionDates) || !window.capitalConclusionDates.every(isTradingDate)) return false
   const btc = validateAssetRows(window.btc as readonly EtfDailyFlow[], 'BTC', window.windowEnd)
   const eth = validateAssetRows(window.eth as readonly EtfDailyFlow[], 'ETH', window.windowEnd)
-  return !!btc && !!eth && sameDates(btc, eth) &&
+  return !!btc && !!eth && sameDates(btc, eth) && sameSource([...btc, ...eth]) &&
     btc.at(-1)?.tradingDate === window.windowEnd && eth.at(-1)?.tradingDate === window.windowEnd &&
     window.capitalConclusionDates.length === etfCurrentStateWindowPolicy.capitalConclusionRows &&
     sameDatesAsCompleteSet(btc.slice(-etfCurrentStateWindowPolicy.capitalConclusionRows), window.capitalConclusionDates) &&
@@ -95,8 +95,9 @@ function isFlow(value: unknown, asset: EtfAsset): value is EtfDailyFlow {
     (etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(value.source as string) && (value.sourceRevision === undefined || isSafeRevision(value.sourceRevision))
 }
 
-function sameSource(left: readonly EtfDailyFlow[], right: readonly EtfDailyFlow[]): boolean {
-  return left.length > 0 && right.length > 0 && left[0]!.source === right[0]!.source
+/** 整窗（两支合起来）去重后必须恰好一个来源。比「首行相同」严：任何一处混源都拦得住。 */
+function sameSource(rows: readonly EtfDailyFlow[]): boolean {
+  return rows.length > 0 && rows.every((row) => row.source === rows[0]!.source)
 }
 
 function sameDates(left: readonly EtfDailyFlow[], right: readonly EtfDailyFlow[]): boolean {

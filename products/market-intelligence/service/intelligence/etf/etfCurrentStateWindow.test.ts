@@ -41,6 +41,10 @@ describe('ETF current-state window', () => {
 
     expect(buildEtfCurrentStateWindow(inputFor(btc, flows('ETH', 5)))).toEqual({ state: 'unavailable' })
 
+    // 架构师给的反例：BTC = [旧, 新]、ETH = 全旧。首行相同，只查首行会放过去；整窗去重必须红。
+    const handBuilt = { btc, eth: flows('ETH', 5), windowEnd: '2026-08-30', capitalConclusionDates: flows('BTC', 5).slice(-5).map((row) => row.tradingDate) }
+    expect(isValidEtfCurrentStateWindow(handBuilt)).toBe(false)
+
     const legacy = flows('BTC', 5).map((row) => ({ ...row, source: '0xrouter' as const }))
     const legacyEth = flows('ETH', 5).map((row) => ({ ...row, source: '0xrouter' as const }))
     expect(buildEtfCurrentStateWindow(inputFor(legacy, legacyEth)).state).toBe('available')
