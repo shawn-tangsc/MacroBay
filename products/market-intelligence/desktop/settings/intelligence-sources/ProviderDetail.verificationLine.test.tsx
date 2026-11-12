@@ -98,6 +98,16 @@ describe('连接四态那一行：只有声明了 verification-only 的 provider
     expect(dom.textContent).not.toMatch(/上次验证|验证于/)
   })
 
+  it('draws no notice banner for this marker — only the four-state line', async () => {
+    // 横幅只给「有件事要讲」的类别（私有数据源 / 归属说明）。
+    // 「本版只验证密钥，不采集数据」这类讲我们内部进度的话不许进界面（用户 2026-11-13）。
+    const dom = await render({ notice: 'verification-only', hasCredential: true })
+    expect(dom.querySelector('[data-source-notice="verification-only"]')).toBeNull()
+    expect(dom.textContent).not.toMatch(/只验证|不采集数据|本版/)
+    // 标记本身仍在用：四态那一行还在。
+    expect(dom.textContent).toContain('已保存，还没验证过')
+  })
+
   it('draws nothing for a provider that does not declare the marker', async () => {
     const dom = await render({ hasCredential: true })
     expect(dom.textContent).not.toContain('已保存，还没验证过')

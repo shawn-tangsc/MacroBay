@@ -172,7 +172,7 @@ export const intelligenceSourcesText = {
   /** 来源列表的条件行（C5）：胶囊说「值 · 还剩 N」，清空按钮一个词。 */
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
-    '0xrouter-aggregate-provider': 'BTC、ETH 现货 ETF 的净流入',
+    '0xrouter-aggregate-provider': '三项市场日历共用的接入凭据',
     'alternative-fear-greed': '恐惧与贪婪指数的当前读数',
     'bea-economic-series': '美国经济分析局的 GDP 与 PCE',
     'binance-announcements': '币安公告：上币、下架与规则变更',
@@ -230,7 +230,7 @@ export const intelligenceSourcesText = {
     'ethereum-foundation-blog': '以太坊基金会博客', cryptopanic: 'CryptoPanic 新闻',
     coinmarketcal: 'CoinMarketCal 新闻（旧）', 'macro-calendar-coinmarketcal': 'CoinMarketCal 事件日历',
     'cryptoetf-etf-flows': 'CryptoETF ETF 净流入',
-    '0xrouter-aggregate-provider': '0xRouter 聚合行情',
+    '0xrouter-aggregate-provider': '0xRouter 接入凭据',
     'macro-calendar-0xrouter-economic-data': '0xRouter 经济数据',
     'macro-calendar-0xrouter-financial-events': '0xRouter 财经事件',
     'macro-calendar-0xrouter-central-bank-activities': '0xRouter 央行活动',
@@ -287,7 +287,6 @@ export const intelligenceSourcesText = {
     /* 免费档的署名条件：中英逐字相同、不翻译（Chief 2026-11-13 定，三处之一）。 */
     dataAttribution: 'Data by CryptoETF',
     dataAttributionAria: '数据来源署名，打开 CryptoETF 站点',
-    verificationOnly: '本版只验证密钥，不采集数据。'
   },
   website: '官网',
   signup: '注册 / 获取 Key',
@@ -534,6 +533,8 @@ export const intelligenceSourcesText = {
   credentialRequiredToEnableAria: '为什么这个开关现在不能开',
   /* 待接入的源：整组启停不可操作，提示只说「还没接入」（短句，不是长说明）。 */
   providerPending: '这个源还没接入',
+  /** 只验证密钥的源：开关对它没有作用。只说「这个源不采集」，不写「本版」这种进度。 */
+  providerCannotCollect: '这个源不采集数据，开关对它没有作用。',
   providerPendingAria: '为什么这个开关现在不能开',
   /* 页头那颗**整组**启停（该来源下全部能力）：可访问名带来源名，别只念「开关」。 */
   toggleProviderEnable: '启用 {name} 的全部能力',
@@ -613,7 +614,8 @@ export const intelligenceSourcesText = {
   credentialVerification: {
     savedUnverified: '已保存，还没验证过；点「测试连接」',
     failed: '连接失败：{reason}',
-    succeeded: '连接正常：只验证这个密钥能不能用，本版不采集数据'
+    // 一句就够：后面那半句是在讲我们做到哪一步，不进界面（用户 2026-11-13）。
+    succeeded: '连接正常'
   },
   actions: {
     save: '保存'
@@ -810,7 +812,7 @@ export const intelligenceSourcesText = {
   /** Source-list conditions (C5): the chip says "value · N left"; the clear button is one word. */
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
-    '0xrouter-aggregate-provider': 'Net flows into BTC and ETH spot ETFs',
+    '0xrouter-aggregate-provider': 'Shared credential for the three market calendars',
     'alternative-fear-greed': 'The current Fear & Greed reading',
     'bea-economic-series': 'BEA figures for GDP and PCE',
     'binance-announcements': 'Binance announcements: listings, delistings and rule changes',
@@ -868,7 +870,7 @@ export const intelligenceSourcesText = {
     'ethereum-foundation-blog': 'Ethereum Foundation blog', cryptopanic: 'CryptoPanic news',
     coinmarketcal: 'CoinMarketCal news (legacy)', 'macro-calendar-coinmarketcal': 'CoinMarketCal event calendar',
     'cryptoetf-etf-flows': 'CryptoETF ETF flows',
-    '0xrouter-aggregate-provider': '0xRouter aggregate market data',
+    '0xrouter-aggregate-provider': '0xRouter credential anchor',
     'macro-calendar-0xrouter-economic-data': '0xRouter economic data',
     'macro-calendar-0xrouter-financial-events': '0xRouter financial events',
     'macro-calendar-0xrouter-central-bank-activities': '0xRouter central bank activities',
@@ -917,7 +919,6 @@ export const intelligenceSourcesText = {
     /* Attribution required by the free tier: identical in every language, never translated. */
     dataAttribution: 'Data by CryptoETF',
     dataAttributionAria: 'Data source attribution; opens the CryptoETF site',
-    verificationOnly: 'This version only checks the key; it does not collect data.'
   },
   website: 'Website',
   signup: 'Sign up / Get key',
@@ -1205,7 +1206,7 @@ export const intelligenceSourcesText = {
   credentialVerification: {
     savedUnverified: 'Saved, not verified yet; use Test connection',
     failed: 'Connection failed: {reason}',
-    succeeded: 'Connection works: this version only checks the key; it does not collect data'
+    succeeded: 'Connection works'
   },
   actions: {
     save: 'Save'

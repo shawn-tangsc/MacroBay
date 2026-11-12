@@ -54,17 +54,18 @@ describe('the verification-only status line', () => {
     expect(unknown).not.toContain('some-future-code')
   })
 
-  it('says the connection works without claiming that anything is collected', () => {
-    expect(line({ feedback: { kind: 'succeeded' } })).toEqual({
-      message: '连接正常：只验证这个密钥能不能用，本版不采集数据',
-      tone: 'success'
-    })
+  it('says only that the connection works — no build status in the sentence', () => {
+    // 用户 2026-11-13：「本版只验证密钥、不采集数据」这类讲我们做到哪一步的话不许进界面。
+    expect(line({ feedback: { kind: 'succeeded' } })).toEqual({ message: '连接正常', tone: 'success' })
     expect(credentialVerificationLine({
       notice: 'verification-only', resolveText: en, hasCredential: true, feedback: { kind: 'succeeded' }
-    })).toEqual({
-      message: 'Connection works: this version only checks the key; it does not collect data',
-      tone: 'success'
-    })
+    })).toEqual({ message: 'Connection works', tone: 'success' })
+    for (const text of [zh, en]) {
+      const sentence = credentialVerificationLine({
+        notice: 'verification-only', resolveText: text, hasCredential: true, feedback: { kind: 'succeeded' }
+      })!.message
+      expect(sentence).not.toMatch(/本版|这一版|this version|this build|不采集|does not collect/i)
+    }
   })
 
   it('stays off for other providers and until the credential state is known', () => {

@@ -34,10 +34,15 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { credentialVerificationLine, type ConnectionFeedback } from './connectionFailureSentence'
 import { providerSwitchBlock } from './providerSwitchBlock'
 
-const PROVIDER_NOTICE_KEYS: Readonly<Record<NonNullable<ProviderView['notice']>, string>> = {
+/**
+ * 只有**有件事要讲**的类别才有横幅。
+ *
+ * `verification-only` 刻意不在表里（用户 2026-11-13：「本版只验证密钥，不采集数据」这类
+ * 讲我们内部做到哪一步的话不许进界面）。这个标记本身还在用：四态那一行与开关的显示都靠它。
+ */
+const PROVIDER_NOTICE_KEYS: Readonly<Partial<Record<NonNullable<ProviderView['notice']>, string>>> = {
   'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource',
-  'data-attribution': 'settings.intelligenceSources.providerNotices.dataAttribution',
-  'verification-only': 'settings.intelligenceSources.providerNotices.verificationOnly'
+  'data-attribution': 'settings.intelligenceSources.providerNotices.dataAttribution'
 }
 
 export type ProviderDetailLabels = {
@@ -218,6 +223,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const credentialTarget = credentialSourceId ? { sourceId: credentialSourceId, kind: 'feed' as const } : undefined
   const testSource = provider.sources.find((source) => source.kind === 'official-calendar') ?? credentialTarget
   const verificationOnly = provider.notice === 'verification-only' // 四态常显行只由这个标记决定
+  /* 横幅只给「有件事要讲」的类别；`verification-only` 没有横幅（见 `PROVIDER_NOTICE_KEYS`）。 */
+  const noticeKey = provider.notice === undefined ? undefined : PROVIDER_NOTICE_KEYS[provider.notice]
   const verificationLine = credentialVerificationLine({ notice: provider.notice, resolveText, hasCredential: credentialStatus?.hasCredential, feedback: connectionFeedback })
 
   /**
@@ -370,12 +377,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         **且** `networkFailure`，不再是「未配或失败」。 */}
     {/* 说明横幅在页头卡上方、代理横幅之前（界面设计 2026-11-12 签字）：无动作、不可关闭；
         窄窗折行可以，截断不行。类别来自注册表，组件不认识具体源。 */}
-    {provider.notice === undefined ? null : <div
+    {noticeKey === undefined ? null : <div
       className={`mi-source-notice-banner${hasProxySource && proxyConfigured && networkFailure ? '' : ' mi-source-notice-banner--alone'}`}
       data-source-notice={provider.notice}>
       {provider.notice === 'data-attribution' && provider.website !== undefined
-        ? <a href={provider.website} target="_blank" rel="noreferrer" aria-label={resolveText('settings.intelligenceSources.providerNotices.dataAttributionAria')}>{resolveText(PROVIDER_NOTICE_KEYS['data-attribution'])}</a>
-        : <NoticeBanner title={resolveText(PROVIDER_NOTICE_KEYS[provider.notice])} />}
+        ? <a href={provider.website} target="_blank" rel="noreferrer" aria-label={resolveText('settings.intelligenceSources.providerNotices.dataAttributionAria')}>{resolveText(noticeKey)}</a>
+        : <NoticeBanner title={resolveText(noticeKey)} />}
     </div>}
     {hasProxySource && proxyConfigured && networkFailure ? <NetworkProxyBanner
       tone="failed"

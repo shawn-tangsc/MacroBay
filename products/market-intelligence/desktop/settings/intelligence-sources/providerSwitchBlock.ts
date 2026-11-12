@@ -16,7 +16,7 @@ export function providerSwitchBlock(input: Readonly<{
   if (input.verificationOnly) {
     return {
       ariaKey: 'settings.intelligenceSources.providerVerificationOnlyAria',
-      labelKey: 'settings.intelligenceSources.providerNotices.verificationOnly'
+      labelKey: 'settings.intelligenceSources.providerCannotCollect'
     }
   }
   if (input.pending) {
