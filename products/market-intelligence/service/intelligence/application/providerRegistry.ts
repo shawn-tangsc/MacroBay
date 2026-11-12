@@ -344,17 +344,19 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     /* 加源规范：官网按钮只按数据画，没有地址就不出现（用户 2026-11-13 点出 Narwhal 缺这颗）。
        注册页地址没有实测到，所以只填官网；填一个猜的注册页比少一颗按钮更糟。 */
     website: 'https://narwhalapi.com',
-    /* 三条 feed 目前待接入：`visibility: 'pending'` + `collection: 'none'`，所以开关锁着、也没有
-       「立即采集」，并且**不进** `AUTOMATIC_CALENDAR_FEED_IDS`（登记了却让自动刷新去刷一个不存在的
-       适配器，比不登记更糟）。界面只显示状态（待接入 / 这个源还没接入），不写我们做到哪一步。
-       密钥挂在第一条 feed 上：三条都不采集，派生不出「哪条能测」，猜不到 key 框就整个不见了。
-       采集器落地那一笔：`collection` 改 `job`、`visibility` 改 visible、补 schedule，并把自动采集名单、
-       feed→作业键、日历作业表与看板状态源清单（1:1，上限 14 不许涨）一起换过去。 */
+    /* 双写阶段：**后台在采、界面仍锁**。`collection: 'job'` + `runNow: 'job'` + `readiness: 'live'`
+       让作业能注册、能采集；`visibility: 'pending'` 让开关继续锁着（读者看到「待接入」），
+       等新旧源对账通过那一笔再改 visible。
+       **仍不进** `AUTOMATIC_CALENDAR_FEED_IDS`：采集由日历线自己的作业拥有，通用自动刷新名单
+       里加一条 Narwhal 就会去刷一个不对应的调度器。
+       密钥挂在第一条 feed 上：三条派生不出「哪条能测」，猜不到 key 框就整个不见了。
+       对账通过那一笔：`visibility` 改 visible，并把自动采集名单、feed→作业键、日历作业表与
+       看板状态源清单（1:1，上限 14 不许涨）一起换过去。 */
     credentialSourceId: 'macro-calendar-narwhal-economic-data',
     sources: [
-      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-economic-data', displayName: 'Narwhal economic data', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
-      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
-      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } })
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-economic-data', displayName: 'Narwhal economic data', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: true } })
     ]
   }),
   provider({

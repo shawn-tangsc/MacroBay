@@ -98,10 +98,16 @@ describe('provider registry contract', () => {
     }
   })
 
-  it('marks pending sources as non-collectable', () => {
+  /**
+   * 「待接入」= 读者手里没有这个源：不能开、不能立即采、不出现采集控件。
+   *
+   * **但它可以在后台被产品自有作业采集**（双写阶段就是这样：`visibility: 'pending'` + `collection: 'job'`）。
+   * 这条以前一刀切要求 `collection === 'none'`，把「界面锁着、后台在采」判成了违规；真正的违规只有一种：
+   * `collection: 'adapter'` —— 那是通用适配器按读者的开关在跑，界面上却看不到任何开关。
+   */
+  it('keeps pending sources out of the reader hands, whichever scheduler collects them', () => {
     for (const source of sources.filter((item) => item.visibility === 'pending')) {
-      expect(source.collection, source.sourceId).toBe('none')
-      expect(source.capabilities.runNow, source.sourceId).toBe('none')
+      expect(source.collection, source.sourceId).not.toBe('adapter')
       expect(resolveSourceCapabilities(source).canEnable, source.sourceId).toBe(false)
       expect(resolveSourceCapabilities(source).canRunNow, source.sourceId).toBe(false)
     }
