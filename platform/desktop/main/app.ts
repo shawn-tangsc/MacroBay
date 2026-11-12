@@ -1044,8 +1044,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
 
   await mainWindowHost.createAndWire()
   tray = createAppTray(getMainWindow)
-  // 菜单与窗口同级：它只读 `getMainWindow`，早建一步就不会在下面那段后台恢复期间出现「没有菜单栏」。
-  buildAppMenu(getMainWindow)
   await applySessionProxySettings((await settingsStore.readStartup()).network, {
     // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
@@ -1133,18 +1131,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     )
   )
 
-  /**
-   * 界面先上，后台再继续（2026-11-13，启动白屏）。
-   *
-   * 走到这里，渲染层首屏需要的东西都齐了：三个平台 IPC（`appInfo` / `productSummaries` / `settings.get`）
-   * 在 `registerIpcHandlers` 里更早就注册完；产品 IPC 已由上面的 `runProductBootstrap` 注册并 seal；
-   * 主窗已 `registerMainWindow`；`panelWorkspace.start()` 也已完成（渲染层第一次读布局不会读到默认值）。
-   *
-   * 下面这段（任务/通道恢复、各类保留期与维护任务排期、工具与 MCP 同步、运行时订阅）只服务后台行为，
-   * 渲染层首屏一律不读它们，因此挪到挂载之后继续跑；**顺序与语义原样不动**。
-   */
-  await mainWindowHost.loadAndMount()
-
+  await mainWindowHost.loadAndMount() // 界面先上：首屏依赖已就绪；后台恢复挪到挂载之后（见提交说明）。
   await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()
   await channelManagementService.recover()
   await bootChannelRuntimes({
@@ -1201,6 +1188,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   agentRuntimeService.subscribe((snapshot) => {
     agentBroadcasts.runtimeStateChanged(snapshot)
   })
+  buildAppMenu(getMainWindow)
 
   // 自动检查：主界面出来之后才排，一次性、延迟 15 秒；闸门与静默都在服务里。
   updateCheck.startAutomaticCheck()
