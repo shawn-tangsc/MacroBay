@@ -97,7 +97,7 @@ export function ModelServiceBrandBlock({
               dataAttributes={{ 'data-provider-title-link': true }}
               icon={ExternalLink}
               onSelect={() => onOpenExternal(titleLink)}
-              resolveText={(key) => (key === 'modelService.providerConsole' ? labels.providerConsole : '')}
+              resolveText={(key) => ({ 'modelService.providerConsole': labels.providerConsole } as Readonly<Record<string, string>>)[key] ?? ''}
               size="sm"
               tooltipKey="modelService.providerConsole"
             />

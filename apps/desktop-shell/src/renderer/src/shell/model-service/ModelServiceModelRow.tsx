@@ -272,7 +272,7 @@ export function ModelServiceModelRow({
             icon={FlaskConical}
             loading={detectionStatus === 'testing'}
             onSelect={() => onTestModel(model.id)}
-            resolveText={(key) => (key === 'modelService.testModel' ? labels.testModel : '')}
+            resolveText={(key) => ({ 'modelService.testModel': labels.testModel } as Readonly<Record<string, string>>)[key] ?? ''}
             size="sm"
           />
         ) : null}
@@ -282,7 +282,7 @@ export function ModelServiceModelRow({
           dataAttributes={{ 'data-model-row-settings': true }}
           icon={Settings}
           onSelect={() => onEditModel(model)}
-          resolveText={(key) => (key === 'modelService.editModel' ? labels.editModel : '')}
+          resolveText={(key) => ({ 'modelService.editModel': labels.editModel } as Readonly<Record<string, string>>)[key] ?? ''}
           size="sm"
         />
         {/* 危险图标：`tone="danger"`（闭集，颜色静止可见；尺寸仍只许 sm/md）。 */}
@@ -293,7 +293,7 @@ export function ModelServiceModelRow({
           disabled={isRemovingModel}
           icon={Minus}
           onSelect={() => void onRemoveModel(model.id)}
-          resolveText={(key) => (key === 'modelService.removeModel' ? labels.removeModel : '')}
+          resolveText={(key) => ({ 'modelService.removeModel': labels.removeModel } as Readonly<Record<string, string>>)[key] ?? ''}
           size="sm"
           tone="danger"
         />

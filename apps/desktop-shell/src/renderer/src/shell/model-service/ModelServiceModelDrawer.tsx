@@ -167,7 +167,7 @@ export function ModelServiceModelDrawer({
               icon={Copy}
               onSelect={() => void copyId()}
               resolveText={(key) =>
-                (key === 'modelService.copyModelId' ? (copied ? labels.copied : labels.copyModelId) : '')}
+                ({ 'modelService.copyModelId': copied ? labels.copied : labels.copyModelId } as Readonly<Record<string, string>>)[key] ?? ''}
               size="sm"
             />
             {copied ? (

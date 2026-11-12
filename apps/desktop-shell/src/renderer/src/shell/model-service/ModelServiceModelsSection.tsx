@@ -155,6 +155,12 @@ export function ModelServiceModelsSection({
     .filter((group) => group.models.length > 0)
 
   const filterLabel = filtersOpen ? labels.hideModelFilters : labels.showModelFilters
+  /** 这一屏图标按钮的读屏名：键 → 句子只有这一张表，调用点不再用比较式硬编码。 */
+  const iconTextKeys: Readonly<Record<string, string>> = {
+    'modelService.filterModels': filterLabel,
+    'modelService.searchModels': labels.modelSearch,
+    'modelService.fetchModelList': syncHint ?? labels.fetchModelList
+  }
 
   return (
     <section className="model-service-section model-service-models" data-model-service-models>
@@ -169,7 +175,7 @@ export function ModelServiceModelsSection({
             expanded={filtersOpen}
             icon={Filter}
             onSelect={() => setFiltersOpen((current) => !current)}
-            resolveText={(key) => (key === 'modelService.filterModels' ? filterLabel : '')}
+            resolveText={(key) => iconTextKeys[key] ?? ''}
             size="sm"
             tooltipKey="modelService.filterModels"
             dataAttributes={{ 'data-models-filter-toggle': 'true' }}
@@ -179,7 +185,7 @@ export function ModelServiceModelsSection({
             icon={Search}
             onSelect={() => setSearchOpen((current) => !current)}
             pressed={searchOpen}
-            resolveText={(key) => (key === 'modelService.searchModels' ? labels.modelSearch : '')}
+            resolveText={(key) => iconTextKeys[key] ?? ''}
             size="sm"
             tooltipKey="modelService.searchModels"
             dataAttributes={{ 'data-models-search-toggle': 'true' }}
@@ -211,7 +217,7 @@ export function ModelServiceModelsSection({
             return syncDisabled ? syncButton : (
               <Tooltip
                 labelKey="modelService.fetchModelList"
-                resolveText={(key) => (key === 'modelService.fetchModelList' ? (syncHint ?? labels.fetchModelList) : '')}>
+                resolveText={(key) => iconTextKeys[key] ?? ''}>
                 {syncButton}
               </Tooltip>
             )
@@ -229,7 +235,7 @@ export function ModelServiceModelsSection({
             disabled={!canAddModel}
             icon={Plus}
             onSelect={onAddModel}
-            resolveText={(key) => (key === 'modelService.addModel' ? (addHint ?? labels.addModel) : '')}
+            resolveText={(key) => ({ 'modelService.addModel': addHint ?? labels.addModel } as Readonly<Record<string, string>>)[key] ?? ''}
             size="sm"
           />
         </span>

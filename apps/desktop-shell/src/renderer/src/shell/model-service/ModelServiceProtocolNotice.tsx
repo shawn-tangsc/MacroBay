@@ -31,7 +31,7 @@ export function ModelServiceProtocolNotice({
         tooltipKey="modelService.protocolNoticeDismiss"
         icon={X}
         onSelect={onDismiss}
-        resolveText={(key) => (key === 'modelService.protocolNoticeDismiss' ? labels.protocolNoticeDismiss : '')}
+        resolveText={(key) => ({ 'modelService.protocolNoticeDismiss': labels.protocolNoticeDismiss } as Readonly<Record<string, string>>)[key] ?? ''}
         size="sm"
         dataAttributes={{ 'data-protocol-notice-dismiss': true }}
       />
