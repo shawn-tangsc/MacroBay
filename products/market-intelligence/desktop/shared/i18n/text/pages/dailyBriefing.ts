@@ -140,8 +140,8 @@ export const dailyBriefingText = {
         autoRetry: '重试读取排期注册状态',
         language: '生成语言',
         languageFollow: '{language}（跟随界面语言）',
-        languageFallback: '{language}（跟随界面语言，暂不支持你的语言）',
-        languageUnsupported: '你的界面语言是{language}，这一版日报还不能用这种语言写，现在用英语代替。',
+        languageFallback: '{language}（按界面语言显示）',
+        languageUnsupported: '你的界面语言是{language}，这份日报用英语呈现。',
         cost: '这一期会写作 {count} 次（主语言 1 次 + 附加语言 {extra} 次），慢一倍。',
         costLabel: '成本说明'
       },
@@ -554,8 +554,8 @@ export const dailyBriefingText = {
         autoRetry: 'Read the schedule registration again',
         language: 'Edition language',
         languageFollow: '{language} (follows the interface)',
-        languageFallback: '{language} (follows the interface; your language is not supported yet)',
-        languageUnsupported: 'Your interface is {language}, but this version cannot write the brief in that language yet, so it uses English instead.',
+        languageFallback: '{language} (shown in the interface language)',
+        languageUnsupported: 'Your interface is {language}; this brief is shown in English.',
         cost: 'This edition will be written {count} times (1 primary + {extra} extra), roughly twice as slow.',
         costLabel: 'What this costs'
       },
