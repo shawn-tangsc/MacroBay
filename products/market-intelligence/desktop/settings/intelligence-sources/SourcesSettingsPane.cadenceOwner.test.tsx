@@ -121,3 +121,32 @@ describe('官方日历源的频率行是「内置频率」', () => {
     expect(row!.querySelector('.ant-select-selector')).not.toBeNull()
   })
 })
+
+/**
+ * 2026-11-13 读者复报：0xRouter 那三条市场日历 feed 仍然画着三档下拉。
+ * 它们在注册表里是 `collection: 'job'`（产品作业采）、目录里**没有条目**，
+ * 点下去 `saveProfile` 第一步 `requireDefinition` 就抛 `Unknown intelligence source`，
+ * 而这个屏不渲染 `errorCode`——读者看到的就是「选完弹回、什么都没发生」。
+ *
+ * 判据：`collection` 是 `job` / `none` 的源，一律「内置频率」、没有任何控件、不落 preset。
+ */
+describe('0xRouter 的三条市场日历 feed：节奏归产品作业，不许画下拉', () => {
+  it('shows 内置频率 for every job-collected calendar feed', async () => {
+    const host = await render('calendar')
+    for (const sourceId of [
+      'macro-calendar-0xrouter-economic-data',
+      'macro-calendar-0xrouter-financial-events',
+      'macro-calendar-0xrouter-central-bank-activities'
+    ]) {
+      const row = presetRowOf(host, sourceId)
+      expect(row, sourceId).not.toBeNull()
+      expect(row!.getAttribute('data-preset-builtin'), sourceId).toBe('true')
+      expect(row!.textContent, sourceId).toContain(t.collectionPolicy.builtinCadence)
+      // 三档下拉、开关、输入框一个都不许有：这一行不可写，就不许长得像能写。
+      expect(row!.querySelectorAll('select, [role="combobox"], [role="switch"], input'), sourceId).toHaveLength(0)
+      expect(row!.querySelector('.ant-select-selector'), sourceId).toBeNull()
+      // 也不是「挂了模板却点不动」：不挂可写行的模板属性。
+      expect(row!.hasAttribute('data-setting-key'), sourceId).toBe(false)
+    }
+  })
+})

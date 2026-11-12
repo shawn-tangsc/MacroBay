@@ -212,14 +212,20 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     ...(source.unavailable === undefined ? {} : { unavailable: true }),
     ...(health === undefined ? {} : { health })
   })
-  /* 采集节奏归谁：目录里声明了 `collectionOwner: 'product'` 的源归产品；
-     官方日历源（`kind: 'official-calendar'`）**没有目录条目**（它们是 registry-only 的 feed），
-     但节奏同样由产品自己的日历作业决定（`macroCalendarScheduleBackend`），没有任何读取点读
-     profile 的 `collectionPreset`。所以这里按 kind 判成 product——否则界面会画一个「改完不生效」
-     的下拉（用户 2026-11-12 真机：「这个采集频率怎么还动不了」）。 */
+  /* 采集节奏归谁：**目录和注册表两条都要读**。
+     - 目录声明 `collectionOwner: 'product'` → 产品自己的作业采；
+     - 注册表的 `collection` 是运行时事实：`'job'` = 产品作业采（0xRouter 那三条日历 feed）、
+       `'none'` = 通用适配器不采。这两种都没有任何读取点读 profile 的 `collectionPreset`；
+     - 官方日历源（`kind: 'official-calendar'`）**没有目录条目**（registry-only 的 feed），
+       节奏由产品自己的日历作业决定（`macroCalendarScheduleBackend`）。
+     只信目录会漏掉 registry-only 的 feed——界面就画出一个「选完弹回、什么都没发生」的下拉
+     （读者 2026-11-12 与 2026-11-13 两次复报）。 */
   const catalogOwner = getIntelligenceSourceDefinition(source.sourceId)?.collectionOwner
-  const collectionOwner = catalogOwner
-    ?? (source.kind === 'official-calendar' ? 'product' : undefined)
+  const productOwnedCollection = catalogOwner === 'product'
+    || source.collection === 'job'
+    || source.collection === 'none'
+    || source.kind === 'official-calendar'
+  const collectionOwner = productOwnedCollection ? 'product' as const : catalogOwner
   return {
     ...source,
     ...(collectionOwner === 'product' ? { collectionOwner: 'product' as const } : {}),
