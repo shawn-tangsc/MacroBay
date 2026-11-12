@@ -73,7 +73,8 @@ describe('lark image send', () => {
     const { fetchImpl, calls } = fakeFetch({ upload: uploaded })
     const { transport } = transportWith(fetchImpl)
 
-    expect(transport.supportsImage('lark-a')).toBe(true)
+    // 能力开关是关的（飞书先不做）；这里直接调适配器，用来钉住「打开之后要按这个形状发」。
+    expect(transport.supportsImage('lark-a')).toBe(false)
     await expect(transport.sendImage(imageInput(''))).resolves.toEqual({ kind: 'delivered' })
 
     const upload = uploadCall(calls)
@@ -167,8 +168,8 @@ describe('router with the real Lark adapter', () => {
     supportsIdempotency: () => false
   }
 
-  it('counts Lark as image-capable and keeps text-only adapters unsupported', async () => {
-    const { fetchImpl } = fakeFetch({ upload: uploaded })
+  it('keeps Lark unsupported while the capability switch is off', async () => {
+    const { fetchImpl, calls } = fakeFetch({ upload: uploaded })
     const instance = new ChannelDeliveryTransportRouter({
       typeForChannel: (channelId) => (channelId === 'lark-a' ? 'feishu' : channelId === 'wechat-a' ? 'wechat' : null),
       telegram: textOnly,
@@ -179,11 +180,19 @@ describe('router with the real Lark adapter', () => {
       wechat: textOnly
     })
 
-    expect(instance.supportsImage('lark-a')).toBe(true)
+    // 开关关着：路由不为飞书放行图片，界面也不会有按钮。把常量改成 true，这条必须红。
+    // 这是产品路径上的唯一判据——`ChannelDeliveryService.deliverImage` 先问 `supportsImage`，
+    // 为假就直接判 `delivery-image-unsupported`，连 `sendImage` 都不会调（上传请求为 0 就是证据）。
+    expect(instance.supportsImage('lark-a')).toBe(false)
     expect(instance.supportsImage('wechat-a')).toBe(false)
-    await expect(instance.sendImage({ ...imageInput('日报'), channelId: 'lark-a' })).resolves.toEqual({ kind: 'delivered' })
+    const sent = await instance.supportsImage('lark-a')
+      ? instance.sendImage({ ...imageInput('日报'), channelId: 'lark-a' })
+      : { kind: 'failed' as const, code: 'delivery-image-unsupported' }
+    expect(sent).toEqual({ kind: 'failed', code: 'delivery-image-unsupported' })
     await expect(instance.sendImage({ ...imageInput('日报'), channelId: 'wechat-a' }))
       .resolves.toEqual({ kind: 'failed', code: 'delivery-image-unsupported' })
+    // 关的只是图片能力：一次上传请求都不该发出去。
+    expect(calls).toHaveLength(0)
     // 同一个实例、同一个平台：文本接口没被图片接口顶掉。
     await expect(instance.send({ channelId: 'lark-a', providerConversationKey: 'lark:conversation:chat:oc_1', text: 'hi', idempotencyKey: 'k' }))
       .resolves.toEqual({ kind: 'delivered' })

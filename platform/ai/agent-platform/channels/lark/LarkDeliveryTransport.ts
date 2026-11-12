@@ -8,6 +8,18 @@ import { decodeLarkConversation, splitLarkText, type LarkApiFailure } from './La
 import { toLarkPlainText } from './larkPlainText'
 
 /**
+ * 飞书图片出站的**能力开关**（2026-11-12）：实现已经落在本类里（`sendImage` 两种形态），
+ * 但用户说「飞书先不做」，而且这条链路还没在真机上验过一次。
+ *
+ * 关在这里、不删代码：router 的能力判据是「适配器实现了 `sendImage` **且** `supportsImage` 为真」，
+ * 所以这一个开关同时做到两件事——投递层判 `delivery-image-unsupported`（不会去发），
+ * 聊天卡片的投影拿到 `supportsImage: false`（不画「发到频道」按钮）。未验证的实现不外露。
+ *
+ * 真机验过一次之后把它改成 `true`：改动只此一行，用例会跟着翻面。
+ */
+const LARK_IMAGE_EGRESS_ENABLED = false
+
+/**
  * 飞书出站：文本一条 `text`；图片**先上传拿 image_key、再发一条消息**。
  *
  * 图片的两种形态都由 `LarkApiClient.sendImage` 决定，两种都只有**一条**消息：
@@ -42,8 +54,12 @@ export class LarkDeliveryTransport implements ChannelDeliveryTransport, ChannelI
 
   supportsIdempotency(): boolean { return false }
 
-  /** 与文本同一份运行时所有权：客户端在、代际没被围栏，才谈得上发图。 */
+  /**
+   * 与文本同一份运行时所有权：客户端在、代际没被围栏，才谈得上发图。
+   * 但先过能力开关：飞书这一版「先不做」，见 `LARK_IMAGE_EGRESS_ENABLED`。
+   */
   supportsImage(channelId: string): boolean {
+    if (!LARK_IMAGE_EGRESS_ENABLED) return false
     const client = this.clients.get(channelId)
     const lifetime = this.lifetimes.get(channelId)
     return Boolean(client && lifetime && !lifetime.signal.aborted && lifetime.isCurrent())
