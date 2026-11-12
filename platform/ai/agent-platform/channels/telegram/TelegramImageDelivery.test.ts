@@ -103,7 +103,8 @@ describe('telegram sendPhoto', () => {
 })
 
 describe('delivery router with one table for both kinds', () => {
-  const slackStub: ChannelDeliveryTransport = {
+  /** 只实现文本的适配器。判据是「有没有实现 sendImage」，不是平台名——Slack 已有自己的图片用例。 */
+  const textOnlyTransport: ChannelDeliveryTransport = {
     send: async () => ({ kind: 'delivered' }),
     supportsIdempotency: () => false
   }
@@ -111,24 +112,24 @@ describe('delivery router with one table for both kinds', () => {
   function router(fetchImpl: typeof fetch) {
     const { transport } = transportWith(fetchImpl)
     const routerInstance = new ChannelDeliveryTransportRouter({
-      typeForChannel: (channelId) => (channelId === 'slack-a' ? 'slack' : channelId === 'unknown-a' ? null : 'telegram'),
+      typeForChannel: (channelId) => (channelId === 'lark-a' ? 'feishu' : channelId === 'unknown-a' ? null : 'telegram'),
       telegram: transport,
-      slack: slackStub,
-      lark: slackStub,
-      qq: slackStub,
-      discord: slackStub,
-      wechat: slackStub
+      slack: textOnlyTransport,
+      lark: textOnlyTransport,
+      qq: textOnlyTransport,
+      discord: textOnlyTransport,
+      wechat: textOnlyTransport
     })
     return routerInstance
   }
 
-  it('answers image capability per adapter and refuses the rest as unsupported', async () => {
+  it('answers image capability per adapter and refuses text-only adapters as unsupported', async () => {
     const instance = router(fakeFetch([{ status: 200, body: { ok: true, result: { message_id: 1 } } }]).fetch)
 
     expect(instance.supportsImage('channel-a')).toBe(true)
-    expect(instance.supportsImage('slack-a')).toBe(false)
+    expect(instance.supportsImage('lark-a')).toBe(false)
     expect(instance.supportsImage('unknown-a')).toBe(false)
-    await expect(instance.sendImage({ ...imageInput(), channelId: 'slack-a' }))
+    await expect(instance.sendImage({ ...imageInput(), channelId: 'lark-a' }))
       .resolves.toEqual({ kind: 'failed', code: 'delivery-image-unsupported' })
     await expect(instance.sendImage({ ...imageInput(), channelId: 'unknown-a' }))
       .resolves.toEqual({ kind: 'failed', code: 'delivery-image-unsupported' })

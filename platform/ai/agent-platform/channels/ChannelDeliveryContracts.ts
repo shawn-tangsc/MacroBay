@@ -122,7 +122,7 @@ export type ChannelDeliveryAuditView = {
 }
 
 /**
- * 出站图片的输入（P2：仅应用生成的图；只做 Telegram）。
+ * 出站图片的输入（P2：仅应用生成的图；哪几个平台能发由适配器有没有实现 `sendImage` 决定）。
  *
  * `image.mime` 是**嗅探结果**，不是存储声明的那个：声明 png、实际 webp 的图存在，
  * 判定只看字节签名（见 `channelImageDelivery.sniffImageMime`）。

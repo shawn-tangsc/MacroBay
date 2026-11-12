@@ -97,7 +97,7 @@ export class ChannelDeliveryService {
   }
 
   /**
-   * 发一张图 + caption（P2：仅应用生成的图，仅 Telegram）。
+   * 发一张图 + caption（P2：仅应用生成的图；适配器实现了 `sendImage` 的平台就能发）。
    *
    * 三条纪律：
    * - 与文本**共用**投递尝试表，但 `sourceId` 必须错开（图用 `<recordId>:image`），否则第二次 claim

@@ -1,8 +1,11 @@
 export const slackApiBase = 'https://slack.com/api'
 
+/** Slack 一侧的失败分类（限流 / 上游拒绝 / 网络不可用）；到投递层的映射只写一处。 */
+export type SlackApiFailure = 'slack-rate-limited' | 'slack-provider-rejected' | 'slack-network-unavailable'
+
 export type SlackApiResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: 'slack-rate-limited' | 'slack-provider-rejected' | 'slack-network-unavailable'; retryAfterMs?: number }
+  | { ok: false; code: SlackApiFailure; retryAfterMs?: number }
 
 export type SlackSocketEnvelope = {
   envelope_id?: unknown
