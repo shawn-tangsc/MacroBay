@@ -1131,7 +1131,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     )
   )
 
-  await mainWindowHost.loadAndMount() // 界面先上：首屏依赖已就绪；后台恢复挪到挂载之后（见提交说明）。
   await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()
   await channelManagementService.recover()
   await bootChannelRuntimes({
@@ -1156,9 +1155,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     now: () => new Date().toISOString()
   })
   await channelManagementService.resumeRequested()
-  taskAutomationMaintenance.recoverAfterRestart()
-  setDisposeTaskAutomationMaintenance(scheduleTaskAutomationMaintenance(taskAutomationMaintenance))
-  setDisposeJobRunRetention(scheduleJobRunRetention(jobRunStore))
   registerInUseModelPatrolHandler(jobRuntime, { patrol: inUseModelPatrol })
   await syncInUseModelPatrolSchedule(jobRuntime, {
     isReady: async () => {
@@ -1166,6 +1162,13 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
     }
   })
+  taskAutomationMaintenance.recoverAfterRestart()
+  syncProductToolsRuntimeFromState(await agentStore.getState())
+  mcpRuntimeService.syncFromState(await agentStore.getState())
+  agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
+  await mainWindowHost.loadAndMount() // 界面先上：会在界面体现状态的恢复（通道/任务/工具/巡检）都已完成。
+  setDisposeTaskAutomationMaintenance(scheduleTaskAutomationMaintenance(taskAutomationMaintenance))
+  setDisposeJobRunRetention(scheduleJobRunRetention(jobRunStore))
   const channelMaintenanceJobDeps = {
     deliveryCleanup: () => channelDeliveryMaintenance.runSlice(),
     deliveryRetry: () => channelDeliveryMaintenance.runRetrySlice(),
@@ -1181,9 +1184,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   }
   registerChannelMaintenanceJobHandlers(jobRuntime, channelMaintenanceJobDeps)
   setDisposeChannelMaintenanceJobs(scheduleChannelMaintenanceJobs(jobRuntime, channelMaintenanceJobDeps))
-  syncProductToolsRuntimeFromState(await agentStore.getState())
-  mcpRuntimeService.syncFromState(await agentStore.getState())
-  agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.start()
   agentRuntimeService.subscribe((snapshot) => {
     agentBroadcasts.runtimeStateChanged(snapshot)
