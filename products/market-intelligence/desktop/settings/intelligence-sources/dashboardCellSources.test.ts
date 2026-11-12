@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { getSource } from '../../../service/intelligence/application/providerRegistry'
+import { allSources, getSource } from '../../../service/intelligence/application/providerRegistry'
+import { resolveFactSource } from '../../../contracts/factSources'
 import { DASHBOARD_SOURCE_MODULES } from './dashboardSourceModules'
 
 /**
@@ -28,5 +29,25 @@ describe('every dashboard cell names a source the registry feeds to the dashboar
     // 先钉数量（零个）再比内容：这一条要能在「新挂一个只供日历的源」时红。
     expect(offenders).toHaveLength(0)
     expect(offenders).toEqual([])
+  })
+})
+
+describe('the ETF cell asks for a fact instead of naming a supplier', () => {
+  const capitalCell = DASHBOARD_SOURCE_MODULES
+    .find((module) => module.id === 'capital')!
+    .cells.find((cell) => cell.cellKey === 'etf')!
+
+  it('keeps the reader-facing key fixed and declares the fact', () => {
+    // 键是读者设置的主键：换源不许换格，否则读者对 capital:etf 的开关会失效。
+    expect(capitalCell.cellKey).toBe('etf')
+    expect(capitalCell.fact).toBe('etf-net-flow')
+  })
+
+  it('takes the supplier from the resolver, so a second source needs no edit here', () => {
+    const fromRegistry = allSources().map((source) => ({
+      sourceId: source.sourceId, provides: source.provides, enabled: true, jobRegistered: true, readiness: source.readiness
+    }))
+    expect(resolveFactSource({ factId: capitalCell.fact!, sources: fromRegistry }))
+      .toEqual({ kind: 'resolved', sourceId: 'cryptoetf-etf-flows' })
   })
 })

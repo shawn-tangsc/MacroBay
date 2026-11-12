@@ -1,3 +1,4 @@
+import type { MarketFactId } from '../../../contracts/factSources'
 import type {
   ProviderDefinition,
   ProviderNoticeKind,
@@ -49,6 +50,8 @@ export function provider(input: {
   credentialSourceId?: string
   /** 详情页常显那一行凭据状态（四态）；与 notice 无关，不锁开关。 */
   credentialStateLine?: true
+  /** 这个源能供哪些事实；见 `SourceDefinition.provides`。 */
+  provides?: readonly MarketFactId[]
   /** 详情页头上方那条说明的**类别**（句子在文案表里，见 `ProviderNoticeKind`）。 */
   notice?: ProviderNoticeKind
   /** 官网地址：**有才画「官网」按钮**，没有就整个不出现（加源规范要求必须有）。 */

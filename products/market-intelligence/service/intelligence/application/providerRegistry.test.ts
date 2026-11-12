@@ -12,6 +12,7 @@ import {
 } from './providerRegistry'
 import { createDefaultSourceProfile, resolveRuntimeConfig } from './sourceRuntimeConfig'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
+import { resolveFactSource } from '../../../contracts/factSources'
 import { resolveSourceCapabilities } from './sourceCapabilities'
 import { agentView, countAgentGroups, panelView, settingsView } from './sourceProjection'
 
@@ -58,6 +59,19 @@ describe('provider registry contract', () => {
    * 判据不是「只有某一个 provider」，而是**带标记的 provider 必须真是「只验证密钥、还不采集」**——
    * 标记一旦被当成装饰挂在会采集的源上，那一行就会对读者说「本版不采集数据」的假话。
    */
+  it('declares the ETF fact on the source that runs, and on nothing else', () => {
+    const claimants = allSources().filter((source) => source.provides?.includes('etf-net-flow') === true)
+    expect(claimants.map((source) => source.sourceId)).toEqual(['cryptoetf-etf-flows'])
+    // 旧锚已经摘了采集授权：声明了反而会被解析成候选。
+    expect(getSource('0xrouter-aggregate-provider')?.provides ?? []).toEqual([])
+    // 读者把它的 profile 关掉以后，解析结果是 none——不是猜一个、也不是 unknown。
+    const views = allSources().map((source) => ({ ...source, enabled: source.sourceId === 'cryptoetf-etf-flows' ? false : true, jobRegistered: true }))
+    expect(resolveFactSource({ factId: 'etf-net-flow', sources: views })).toEqual({ kind: 'none' })
+    const running = allSources().map((source) => ({ ...source, enabled: true, jobRegistered: true }))
+    expect(resolveFactSource({ factId: 'etf-net-flow', sources: running }))
+      .toEqual({ kind: 'resolved', sourceId: 'cryptoetf-etf-flows' })
+  })
+
   it('keeps the verification-only marker only on providers that still collect nothing', () => {
     const verified = providerRegistry.filter((provider) => provider.notice === 'verification-only')
     /* 原来守的是「只验证密钥的源不许被排期」。CryptoETF 切换后真的采集了，所以它必须摘掉这个标记——

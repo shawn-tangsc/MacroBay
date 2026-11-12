@@ -1,3 +1,4 @@
+import type { MarketFactId } from '../../../contracts/factSources'
 import { cryptoEtfProvider } from './cryptoEtfProvider'
 import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
 import { providerLinks } from './providerLinks'
@@ -42,6 +43,13 @@ export type SourceDefinition = {
   purposes?: SourcePurpose[]
   /** 派生的显示位置，不单独声明：`dashboard → ['dashboard']`、`calendar → ['economic-calendar']`。 */
   panels: PanelId[]
+  /**
+   * 这个源**能供哪些事实**（架构师 2026-11-13 裁定：放这里，不放 sourceCatalog）。
+   * 解析器判据里有「这个源在不在采」，而那个事实与目标侧是同一份 `SourceView`
+   * （`SourceDefinition & { enabled, jobRegistered }`）；放 catalog 就得跨两张表拼，
+   * 拼出来的答案和调度器看的不是同一个对象。声明了不等于归你——还要开着、作业真注册着。
+   */
+  provides?: readonly MarketFactId[]
   /**
    * 供维护/备用：今天没有任何读者可见产出。
    *

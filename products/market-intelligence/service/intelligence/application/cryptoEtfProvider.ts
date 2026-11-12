@@ -33,6 +33,8 @@ export const cryptoEtfProvider: ProviderDefinition = provider({
            there). It keeps the product-owned collection flag: the collector is this product's own
            refresh, scheduled by the generic runtime at the fixed interval. */
         purposes: ['dashboard', 'briefing'],
+        /* 声明「我能供 ETF 净流」。谁真的在供由解析器现算：开着 + 作业真注册 + 就绪。 */
+        provides: ['etf-net-flow'],
         capabilities: { runNow: 'none', testConnection: true },
         readiness: 'live',
         adapterRef: cryptoEtfSourcePolicy.sourceId

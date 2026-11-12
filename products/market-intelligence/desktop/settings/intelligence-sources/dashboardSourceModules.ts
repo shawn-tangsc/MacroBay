@@ -11,6 +11,8 @@
  * - 一个源被多个模块用就**在每个模块下各出现一次**（读者按模块找源）。
  * - 反查（源 → 模块）由 `modulesUsingSource` 算，组件里不许再存第二份映射。
  */
+import type { MarketFactId } from '../../../contracts/factSources'
+
 export type DashboardCell = Readonly<{
   /** 格名（读数格叫法，取自冻结文档 §1/§3）；`''` = 这一行不写格名、只列源名。 */
   label: string
@@ -19,7 +21,13 @@ export type DashboardCell = Readonly<{
    * 全局 `cellId = <moduleId>:<cellKey>`，卡片渲染、看板判断、以后存储迁移都读这一处。
    */
   cellKey: string
+  /** 默认供数源（标签、默认值、没有解析结果时的去处）；真正用哪个源由 `fact` 解析决定。 */
   sourceId: string
+  /**
+   * 这一格要的是哪个**事实**。声明了它，供数源就由 `resolveFactSource` 现算——换源只改注册表，
+   * 不改这里；`cellKey` 仍是格的身份，换源不会让读者对 `capital:etf` 的开关失效。
+   */
+  fact?: MarketFactId
   /** 这一行是主源的备用回落（格名写成「美元（备用）」这种）。 */
   fallback?: boolean
 }>
@@ -61,19 +69,21 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   资金费率: 'funding',
 }
 
-/** `[格名, 源 id, 是不是备用行]` → 模块；`sourceIds` 由 cells 派生，两处不会不一致。 */
+/** `[格名, 源 id, 是不是备用行, 显式键, 事实]` → 模块；`sourceIds` 由 cells 派生，两处不会不一致。 */
 function moduleOf(
   id: string,
   labelKey: string,
-  rows: ReadonlyArray<readonly [string, string, boolean?, string?]>
+  rows: ReadonlyArray<readonly [string, string, boolean?, string?, MarketFactId?]>
 ): DashboardSourceModule {
-  const cells: DashboardCell[] = rows.map(([label, sourceId, fallback, explicitKey]) => ({
+  const cells: DashboardCell[] = rows.map(([label, sourceId, fallback, explicitKey, fact]) => ({
     label,
     /* 键的优先级：显式给的最优先（同一格名出现两次时必须显式区分，例如背离卡的两条「资金腿」），
-       其次是 `CELL_SLUGS` 的表，最后退回格名本身；没有格名的行（今天已不存在）退回源 id。 */
+       其次是 `CELL_SLUGS` 的表，最后退回格名本身；没有格名的行（今天已不存在）退回源 id。
+       **`cellKey` 永不跟来源走**：它是读者设置的主键，换源只换解析结果。 */
     cellKey: explicitKey ?? (label === '' ? sourceId : (CELL_SLUGS[label] ?? label)),
     sourceId,
-    ...(fallback === true ? { fallback: true } : {})
+    ...(fallback === true ? { fallback: true } : {}),
+    ...(fact === undefined ? {} : { fact })
   }))
   return { id, labelKey, cells, sourceIds: [...new Set(cells.map((cell) => cell.sourceId))] }
 }
@@ -89,7 +99,7 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
   moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.fearGreed.title', [['恐惧与贪婪', 'alternative-fear-greed']]),
   moduleOf('capital', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.capital', [
     ['稳定币', 'defillama-stablecoins'],
-    ['ETF', 'cryptoetf-etf-flows']
+    ['ETF', 'cryptoetf-etf-flows', false, undefined, 'etf-net-flow']
   ]),
   moduleOf('positioning', 'pages.intelligence.portal.dashboard.positioning.title', [
     ['永续持仓名义额', 'binance-futures-positioning'],
