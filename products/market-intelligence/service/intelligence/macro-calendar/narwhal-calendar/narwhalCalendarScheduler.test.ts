@@ -23,7 +23,7 @@ describe('narwhal calendar scheduler', () => {
     expect(ids).toEqual([narwhalCalendarTickPolicy.definitionId, narwhalCalendarSweepPolicy.definitionId])
     expect(jobRuntime.removeSchedule).not.toHaveBeenCalled()
     // 作业身份来自源自己：payload.sourceId 必须是新 id。
-    expect((jobRuntime.setSchedule.mock.calls[0]![0] as { payload: { sourceId: string } }).payload.sourceId).toBe('macro-calendar-narwhal')
+    expect((jobRuntime.setSchedule.mock.calls[0]![0] as { payload: { sourceId: string } }).payload.sourceId).toBe('macro-calendar-narwhal-economic-data')
   })
 
   it('registers nothing without a credential — no key, no requests, no job', () => {

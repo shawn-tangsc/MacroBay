@@ -82,7 +82,8 @@ function maybeDefinition(policy: typeof narwhalCalendarTickPolicy | typeof narwh
     title: { 'zh-CN': '市场日历 · Narwhal', 'en-US': 'Market calendar · Narwhal' },
     audience: policy.audience,
     trigger: { kind: 'interval', intervalMs: policy.intervalMs, anchor: 'lastStart' },
-    payload: { sourceId: 'macro-calendar-narwhal' },
+    // 必须与注册表里的 sourceId 逐字一致：`macro-calendar-narwhal` 是个不存在的源。
+    payload: { sourceId: 'macro-calendar-narwhal-economic-data' },
     concurrencyKey: policy.handlerId,
     timeoutMs: policy.jobTimeoutMs,
     retryPolicy: policy.jobRetryPolicy
