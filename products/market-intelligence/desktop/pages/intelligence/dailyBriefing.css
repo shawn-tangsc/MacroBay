@@ -373,11 +373,13 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 .mi-daily-briefing__push-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-daily-briefing__push-result-spacer { margin-left: auto; }
 .mi-daily-briefing__push-result-lines { display: grid; gap: 2px; padding-top: 2px; }
-.mi-daily-briefing__push-line { display: grid; grid-template-columns: 104px auto 88px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 28px; }
+.mi-daily-briefing__push-line { display: grid; grid-template-columns: 104px 152px 88px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 28px; }
 .mi-daily-briefing__push-line-name { color: var(--text); }
 /* 结果是状态药丸（`StatusPill`）：档位色只落在圆点与描边上，字始终是正文色——`--danger` 当正文
    前景在深色下只有 3.25–3.94（正文门槛 4.5），这里不再为某一种 outcome 造红色文字选择器。
-   这一列按内容自适应：英文「did not receive」比中文长，固定 64px 会撞到形态列。 */
+   第二列**固定 152px，不随文案长短走**（界面设计 2026-11-12 复核）：这是四列对齐表，一旦让内容
+   决定宽度，同一份明细里几行的「形态」列起点会跟着中英文长短左右跳。152 = 药丸盒子 19（内距 8×2
+   + 描边 1×2）+ 圆点 6 + 圆点与字的间距 5 + 最长那句（英文 20 个字符含标点，11px 下约 112）+ 余量 10。 */
 .mi-daily-briefing__push-line-form { color: var(--muted); }
 .mi-daily-briefing__push-line-reason { min-width: 0; color: var(--text); }
 .mi-daily-briefing__push-code { margin-top: 2px; color: var(--muted); font-size: var(--font-meta); }

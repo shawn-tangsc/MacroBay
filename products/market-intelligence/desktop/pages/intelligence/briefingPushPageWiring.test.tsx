@@ -202,6 +202,28 @@ describe('the publish control on the page', () => {
     expect(invoke).toHaveBeenCalledTimes(2)
   })
 
+  it('renders every outcome as a status pill, and puts the tone on the pill rather than on the word', async () => {
+    // 三档状态词走平台 `StatusPill`：危险色只落在圆点与描边（`--danger` 当正文前景在深色下
+    // 3.25–3.94，正文门槛 4.5）。收到 ok / 没到 bad / 等回执 info。
+    invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'failed', channels: [
+      { channelId: 'c1', channelName: '贾维斯', state: 'sent-accepted', kind: 'image' },
+      { channelId: 'c2', channelName: '飞书群', state: 'failed', reason: 'channel-rejected' },
+      { channelId: 'c3', channelName: '邮件', state: 'sent-unconfirmed' }
+    ] } })
+    render(<Row edition={document()} />)
+    await act(async () => { await Promise.resolve() })
+    await push()
+    // 明细顺序：没到 / 等回执在前（永远可见），收到在后。
+    const pills = [...(strip()?.querySelectorAll('.mi-daily-briefing__push-line-outcome .status-pill') ?? [])]
+    expect(pills.map((pill) => pill.className)).toEqual([
+      'status-pill status-pill--bad',
+      'status-pill status-pill--info',
+      'status-pill status-pill--ok'
+    ])
+    // 字上没有内联颜色：档位色归药丸的圆点与描边。
+    expect(pills.every((pill) => (pill.getAttribute('style') ?? '') === '')).toBe(true)
+  })
+
   it('offers to resend the missing ones on a poster result too; the delivery layer skips the channels that already got it', async () => {
     // 一成一败、已受理那条拿到的是海报。重发由投递层按「本次请求的意图」选路，并跳过已受理的通道
     // （频道线 `cb5ef08` 的用例钉住「只对没到的那条产生新尝试、一条都不补时不发」）；
