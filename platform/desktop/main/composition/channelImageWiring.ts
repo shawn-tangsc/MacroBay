@@ -1,6 +1,7 @@
 import type { ChannelDeliveryResult, ChannelImageDeliveryRequest } from '../../../ai/agent-platform/channels/ChannelDeliveryContracts'
 import { createChannelImageSend, type ChannelImageSendResult } from '../channelImageSend'
 import { createChannelImageSource } from '../channelImageSource'
+import { getChannelPosterOutbox } from '../../../storage/channelPosterOutbox'
 
 /**
  * 「把助手聊天里的图消息发到频道」的装配分片（多通道方案 §4b 定稿 A）。
@@ -39,7 +40,14 @@ export function createChannelImageWiring(deps: {
   const getMessage = (messageId: string): MessageLike | null => (deps.getMessage(messageId) as MessageLike | null) ?? null
   const channelImageSource = createChannelImageSource({
     read: (fileName) => deps.readImage(fileName),
-    getMessage
+    getMessage,
+    // 日报海报那一支：读的是进程内同一个暂存区（没装配就如实说「没有」，不猜、不扫目录）。
+    readPoster: (edition) => {
+      const outbox = getChannelPosterOutbox()
+      return outbox === null
+        ? Promise.resolve({ ok: false as const, code: 'delivery-image-unavailable' as const, detail: 'poster-outbox-unavailable' })
+        : outbox.read(edition)
+    }
   })
   const send = createChannelImageSend({
     // 能力在一次投影里问清楚：投递时不再回头问 router（一条通道一次决定，不两处判）。

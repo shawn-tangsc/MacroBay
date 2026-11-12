@@ -60,7 +60,7 @@ export function createChannelImageSend(deps: {
       }
 
       // **一次**读盘 + 一次嗅探；下面每通道复用同一份字节。
-      const resolved = await deps.resolveImage({ messageId: input.messageId, fileName: input.fileName })
+      const resolved = await deps.resolveImage({ kind: 'assistant-message', messageId: input.messageId, fileName: input.fileName })
       if (!resolved.ok) return { ok: false, state: 'failed', code: resolved.code, detail: resolved.detail, channels: [] }
 
       const caption = input.withoutCaption === true ? '' : captionFor(deps, input)

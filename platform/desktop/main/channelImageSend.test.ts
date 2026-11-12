@@ -6,7 +6,7 @@ import {
   type ChannelDeliveryResult,
   type ChannelImageDeliveryRequest
 } from '../../ai/agent-platform/channels/ChannelDeliveryContracts'
-import type { ChannelImageSourceResult } from './channelImageSource'
+import type { ChannelImageSourceRequest, ChannelImageSourceResult } from './channelImageSource'
 import { createChannelImageSend, type ChannelImageSendChannel } from './channelImageSend'
 
 /**
@@ -33,7 +33,7 @@ function deps(options: {
     async (input: Omit<ChannelImageDeliveryRequest, 'conversationId'>): Promise<ChannelDeliveryResult[]> =>
       options.outcomes?.[input.channelId] ?? [{ status: 'delivered', attemptId: `attempt-${input.channelId}`, errorCode: null }]
   )
-  const resolveImage = vi.fn(async (_input: { messageId: string; fileName: string }): Promise<ChannelImageSourceResult> =>
+  const resolveImage = vi.fn(async (_input: ChannelImageSourceRequest): Promise<ChannelImageSourceResult> =>
     options.resolve ?? { ok: true, mime: 'image/png', bytes: pngBytes })
   const send = createChannelImageSend({
     listChannels: () => options.channels ?? [ready('channel-a')],

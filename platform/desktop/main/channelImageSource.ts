@@ -1,4 +1,5 @@
 import { sniffImageMime } from '../../ai/agent-platform/channels/channelImageDelivery'
+import type { ReadPosterOutcome, ChannelPosterEdition } from '../../storage/channelPosterOutbox'
 
 /**
  * 出站图片的**读盘入口**（主进程唯一一处）。
@@ -12,15 +13,27 @@ import { sniffImageMime } from '../../ai/agent-platform/channels/channelImageDel
  * 失败码分开：「图不在了」= `delivery-image-unavailable` + detail `missing`；
  * 「在但读不出来」= 同一个码 + detail `read-failed`；「这张图不许发」= `delivery-image-source-not-allowed`。
  */
+type MessagePart = { type?: unknown; fileName?: unknown }
+type MessageLike = { role?: unknown; status?: unknown; data?: { parts?: unknown } }
+
+/**
+ * 出站图片的**来源**：判别联合，互不借用（方案 §2）。
+ *
+ * 两种来源的判据完全不同，所以用 `kind` 分开而不是「有空就看那张图」：
+ * - `assistant-message`：这条助手消息自己带着这张图（`{messageId, fileName}`，行为原样）；
+ * - `briefing-poster`：日报海报的暂存记录，且**版本必须就是这次发布**——调用方只能给
+ *   `{date, periodId, locale}`，路径与文件名永远由主进程拼（给不出路径，也就伪造不了）。
+ */
+export type ChannelImageSourceRequest =
+  | { kind: 'assistant-message'; messageId: string; fileName: string }
+  | { kind: 'briefing-poster'; edition: ChannelPosterEdition }
+
 export type ChannelImageSourceResult =
   | { ok: true; mime: string; bytes: Uint8Array }
   | { ok: false; code: 'delivery-image-unavailable' | 'delivery-image-source-not-allowed'; detail: string }
 
-type MessagePart = { type?: unknown; fileName?: unknown }
-type MessageLike = { role?: unknown; status?: unknown; data?: { parts?: unknown } }
-
 export type ChannelImageSource = {
-  resolve: (input: { messageId: string; fileName: string }) => Promise<ChannelImageSourceResult>
+  resolve: (input: ChannelImageSourceRequest) => Promise<ChannelImageSourceResult>
 }
 
 export function createChannelImageSource(deps: {
@@ -28,9 +41,25 @@ export function createChannelImageSource(deps: {
   read: (fileName: string) => Promise<{ bytes: Uint8Array; mime: string } | null>
   /** 消息仓储：用已有的 `messages.getById`，不新开查询。 */
   getMessage: (messageId: string) => MessageLike | null
+  /** 日报海报的暂存区读入口（主进程同一处）；没装时海报那一支一律「没有」，不猜。 */
+  readPoster?: (edition: ChannelPosterEdition) => Promise<ReadPosterOutcome>
 }): ChannelImageSource {
   return {
     async resolve(input) {
+      // 第二种来源：按暂存记录 + 版本绑定，绝不按目录判（方案 §2 第三条）。
+      if (input.kind === 'briefing-poster') {
+        if (deps.readPoster === undefined) {
+          return { ok: false, code: 'delivery-image-unavailable', detail: 'poster-outbox-unavailable' }
+        }
+        const poster = await deps.readPoster(input.edition)
+        if (!poster.ok) {
+          // 来源被拒（版本对不上）与「图不在了/读不出」是两种处境，码分开给。
+          return poster.code === 'delivery-image-source-not-allowed'
+            ? { ok: false, code: 'delivery-image-source-not-allowed', detail: poster.detail }
+            : { ok: false, code: 'delivery-image-unavailable', detail: poster.detail }
+        }
+        return { ok: true, mime: poster.mime, bytes: poster.bytes }
+      }
       const message = deps.getMessage(input.messageId)
       if (!message) {
         return { ok: false, code: 'delivery-image-source-not-allowed', detail: 'message-not-found' }
