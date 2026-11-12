@@ -10,7 +10,12 @@
  * `opacity: 0`——注入的哈希对不上、或动画停在起始帧，就会出现「元素在、像素是透明的」。
  * 只在本抽屉范围内补一条不依赖注入的底色与终态透明度；行为（点遮罩关闭）仍归平台 Drawer。
  */
-.ant-drawer:has(.mk-drawer) > .ant-drawer-mask { background: rgba(0, 0, 0, 0.45); opacity: 1; transition: none; }
+.ant-drawer.drawer--modal:has(.drawer__panel.mk-drawer) > .ant-drawer-mask {
+  background: rgba(0, 0, 0, 0.45);
+  /* antd 的遮罩初始 `opacity: 0`（进入动画的第一帧）；动画不跑就一直是 0。这里只钉终态。 */
+  opacity: 1 !important;
+  transition: none;
+}
 
 /* 平台 Drawer 的正文留白（设计稿 14/16），只在本抽屉范围内生效。 */
 .mk-drawer.ant-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; }
