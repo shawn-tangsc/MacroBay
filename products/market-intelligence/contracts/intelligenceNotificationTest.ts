@@ -52,9 +52,16 @@ export type IntelligenceTestReceipt =
     reasonCode: IntelligenceTestUnavailableReason
     /**
      * 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数，恒为 0（本码的含义就是 0 条），
-     * 由主进程数。**它不是「启用了的通道条数」**——后者不在回执里，界面上那句话也就不印条数。
+     * 由主进程数。**它不是「启用了的通道条数」**——那件事看 `requestedCount`。
      */
     enabledChannelCount?: number
+    /**
+     * 只在 `push-unavailable` 上出现：**读者请求启用的通道条数**（`requestedEnabled === true`），
+     * 与状态直方图并列、由主进程数。它回答「读者到底启用过没有」，不是从档位反推：
+     * `configuration-ready` 同时装着「刚建好、还没启用」和「启用过但没连上」两种，反推会假阳性。
+     * 界面上它只决定说哪一句（0 → 还没启用；>0 → 启用了但没连上），条数本身进 ⓘ，不印正文。
+     */
+    requestedCount?: number
   }>
 
 /**

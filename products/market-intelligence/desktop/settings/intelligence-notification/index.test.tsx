@@ -12,6 +12,7 @@ import IntelligenceNotificationSettingsSection, { itemForFocus, MIGRATED_SETTING
 import { settingRegistry } from '../../shared/settings/registry'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { INTELLIGENCE_CHANNEL_EVENT_ROWS } from './useChannelEventSettings'
+import { pushUnavailableSentenceKey } from './testNotificationButton'
 
 /**
  * 这一页的判据（界面规范 §9d–§9f）：左列表四项、默认选中第一项、关着只写在状态词里；
@@ -769,7 +770,7 @@ describe('通知配置后的测试按钮（R201）', () => {
   it('keeps the button when two channels are enabled, and says the configuration state — never "stop all but one"', async () => {
     const stubs = install({
       getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: twoChannels, lastPushFailureAt: null, lastPushFailureReason: null })),
-      sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 0 }))
+      sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 0, requestedCount: 2 }))
     })
     await render()
 
@@ -786,14 +787,54 @@ describe('通知配置后的测试按钮（R201）', () => {
 
     expect(stubs.sendTest).toHaveBeenCalledWith({ kind: 'sentiment' })
     const text_ = container?.textContent ?? ''
-    // 配置状态句，不是投递失败句；也**不再**出现「停用到只剩一条」那类错建议。
+    // ② 请求启用了 2 条、一条都没连上：配置状态句（不是投递失败句），也是不再有错建议。
     expect(text_).toContain('已启用的通道都没有连上。')
     expect(text_).not.toContain('停用到只剩一条')
     expect(text_).not.toContain('测试消息没发出去')
+    // 句子里**不印条数**：条数进 ⓘ。
+    expect(container?.querySelector('[data-test-result="failed"]')?.textContent).not.toContain('2')
+    // 动作是「查看通道状态」，点了去频道设置。
+    const action = [...(container?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === '查看通道状态')
+    expect(action, '启用了没连上 → 查看通道状态').toBeDefined()
     // 原因码只在折叠区：主句 0 次，展开后恰好 1 处。
     const sentence = container?.querySelector('[data-test-result="failed"]')?.textContent ?? ''
     expect(sentence).not.toContain('push-unavailable')
     expect(text_.split('push-unavailable')).toHaveLength(2)
+  })
+
+  it('says no channel is enabled when the reader never requested one', async () => {
+    const stubs = install({
+      getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: oneChannel, lastPushFailureAt: null, lastPushFailureReason: null })),
+      // requestedCount = 0：读者一条都没请求启用（例如刚建好、还没开）。
+      sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 0, requestedCount: 0 }))
+    })
+    await render()
+    await selectItem(2)
+    await clickTestButton('sentiment')
+    const text_ = container?.textContent ?? ''
+    expect(text_).toContain('还没有启用通道。')
+    expect(text_).not.toContain('已启用的通道都没有连上。')
+    expect(text_).not.toContain('测试消息没发出去')
+    const action = [...(container?.querySelectorAll('button') ?? [])]
+      .find((button) => button.textContent === '去启用')
+    expect(action, '一条都没启用 → 去启用').toBeDefined()
+  })
+
+  it('decides the sentence from requestedCount only, never from the state histogram', () => {
+    // 反向守卫：只按「状态直方图里非 disabled 的档」反推会是**假阳性**——
+    // `configuration-ready` 同时装「刚建好、还没启用」和「启用过但没连上」。
+    // 这里复现那条错规则：刚建好一条（configuration-ready: 1）会被它算成「启用过」→ 说②；
+    // 而回执的 requestedCount 是 0 → 必须说①。
+    const freshButNeverEnabled = { requestedCount: 0, states: { 'configuration-ready': 1 } as Record<string, number> }
+    const wrongByStates = Object.entries(freshButNeverEnabled.states)
+      .filter(([state]) => state !== 'disabled')
+      .reduce((sum, [, count]) => sum + count, 0) > 0
+    expect(wrongByStates, '按档位反推会把它算成「启用过」').toBe(true)
+    expect(pushUnavailableSentenceKey(freshButNeverEnabled.requestedCount)).toBe('pages.intelligence.notification.test.noChannelEnabled')
+    // 判据函数只吃一个数：送入不同 states 也不会改变句子（签名里根本没有 states）。
+    expect(pushUnavailableSentenceKey.length).toBe(1)
+    expect(pushUnavailableSentenceKey(3)).toBe('pages.intelligence.notification.test.channelsNotConnected')
   })
 
   it('disables the button while sending, so a second click cannot produce a second message', async () => {

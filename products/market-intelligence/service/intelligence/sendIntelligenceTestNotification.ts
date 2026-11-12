@@ -95,7 +95,7 @@ export async function sendIntelligenceTestNotification(
   // 通道先判：一条可用通道都没有就在这条路径上结束，不会先拼一条样例再说发不出去。
   const resolution = await deps.resolvePushChannels()
   if (!resolution.ok) {
-    return { state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: resolution.enabledChannelCount }
+    return { state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: resolution.enabledChannelCount, requestedCount: resolution.requestedCount }
   }
 
   const now = (deps.now ?? (() => new Date().toISOString()))()
