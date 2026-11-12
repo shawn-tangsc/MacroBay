@@ -101,12 +101,9 @@ describe('这一行怎么读', () => {
       .toMatchObject({ kind: 'interval', next: { kind: 'running' } })
     // 从没跑过：尚未开始（不写「立即」、不编时刻）。
     expect(frequencyReadoutView({ ...base, cadence: { ...cadence, lastRunAt: null, nextRunAt: null } }))
-      .toMatchObject({ kind: 'interval', next: { kind: 'never' } })
+      .toMatchObject({ kind: 'interval', next: { kind: 'notStarted' } })
     // 跑过但推不出下次：只有这一半读不到，间隔那一段照旧。
     expect(frequencyReadoutView({ ...base, cadence: { ...cadence, nextRunAt: null } }))
       .toMatchObject({ kind: 'interval', intervalSeconds: 900, next: { kind: 'unreadable' } })
-    // 采集器离线：下次没有意义。
-    expect(frequencyReadoutView({ ...base, collectorOffline: true, cadence }))
-      .toMatchObject({ kind: 'interval', next: { kind: 'offline' } })
   })
 })

@@ -425,26 +425,28 @@ export const intelligenceSourcesText = {
     /**
      * 下拉下方那一行读数（原型 2026-11-13）：**间隔与下次是两段独立事实**，
      * 一段读不到只影响那一段。读不到 ≠ 0 ≠ 从未；手动档不写「—」。
+     *
+     * 键就放在 `collectionPolicy` 这一层（与 `frequency` / `builtinCadence` 同一组），
+     * 不再多套一层 `readout`：一行读数只属于这一个字段。
      */
-    readout: {
-      intervalMinutes: '间隔 {count} 分钟',
-      intervalHours: '间隔 {count} 小时',
-      nextAt: '下次 {time}',
-      /* 正在采集：不给倒计时，跑完再给新时刻（推算不是承诺）。 */
-      nextRunning: '正在采集',
-      nextNever: '尚未开始',
-      nextUnreadable: '下次时间读不到',
-      nextOffline: '采集器离线，下次未知',
-      manualOnly: '手动：不自动采集',
-      disabledNoCollect: '未启用，不采集',
-      /* 排期里没有这个源的作业：只写这一句，不显示间隔（不从开关反推）。 */
-      unscheduled: '未安排',
-      /* 并入同一颗 ⓘ 的两段解释：三档在各采集器上的实际间隔、以及「下次」是推算。 */
-      presetIntervalsNote: '三档在各采集器上不是同一个数字：均衡 = 网页 30 分钟、RSS 15 分钟、接口 10 分钟、状态页 2 分钟、宏观指标 6 小时；频繁约为均衡的三分之一；手动只在按按钮或事件驱动时采。',
-      nextIsEstimateNote: '「下次」是按间隔推算的，实际会随任务队列前后浮动，不是承诺时刻；正在采集时不给倒计时。',
-      /* 整批调度投影读不到（桥缺失或调用失败）时，ⓘ 里补的这一句。 */
-      scheduleUnreadableNote: '这次没读到采集排期，所以「间隔」和「下次」都没有显示。'
-    }
+    intervalMinutes: '间隔 {count} 分钟',
+    intervalHours: '间隔 {count} 小时',
+    /* 「约」只加在这一条：这个值是推算的，正文写成精确时刻等于替系统下保证。 */
+    nextAt: '约 {time}',
+    /* 正在采集：只换「下次」那一段，间隔照留，不给倒计时，也不出现任何时刻。 */
+    nextRunning: '正在采集',
+    /* 从没跑过：不写「立即」、不给时刻，也不预告「启用后会马上跑一次」（那是行为不是承诺）。 */
+    nextNotStarted: '尚未开始',
+    nextUnreadable: '下次时间读不到',
+    manualOnly: '手动：不自动采集',
+    disabledNoCollect: '未启用，不采集',
+    /* 排期里没有这个源的作业：只写这一句，不显示间隔（不从开关反推）。 */
+    unscheduled: '未安排',
+    /* 并入同一颗 ⓘ 的两段解释：三档在各采集器上的实际间隔、以及「下次」是推算。 */
+    presetIntervalsNote: '三档在各采集器上不是同一个数字：均衡 = 网页 30 分钟、RSS 15 分钟、接口 10 分钟、状态页 2 分钟、宏观指标 6 小时；频繁约为均衡的三分之一；手动只在按按钮或事件驱动时采。',
+    nextIsEstimateNote: '「下次」是按间隔推算的，实际会随任务队列前后浮动，不是承诺时刻；正在采集时不给倒计时。',
+    /* 整批调度投影读不到（桥缺失或调用失败）时，ⓘ 里补的这一句。 */
+    scheduleUnreadableNote: '这次没读到采集排期，所以「间隔」和「下次」都没有显示。'
   },
   credentials: {
     title: '访问凭证',
@@ -1018,22 +1020,23 @@ export const intelligenceSourcesText = {
     /**
      * The readout under the preset select (prototype 2026-11-13): interval and next run are
      * two independent facts; one unreadable segment never blanks the other.
+     *
+     * The keys live directly on `collectionPolicy` (next to `frequency` / `builtinCadence`),
+     * not under an extra `readout` object.
      */
-    readout: {
-      intervalMinutes: 'Every {count} minutes',
-      intervalHours: 'Every {count} hours',
-      nextAt: 'Next {time}',
-      nextRunning: 'Collecting now',
-      nextNever: 'Not started yet',
-      nextUnreadable: 'Next run time unreadable',
-      nextOffline: 'Collector offline, next run unknown',
-      manualOnly: 'Manual: no automatic collection',
-      disabledNoCollect: 'Disabled, not collected',
-      unscheduled: 'Not scheduled',
-      presetIntervalsNote: 'The three presets are not one number across collectors: Balanced = web pages 30 minutes, RSS 15 minutes, APIs 10 minutes, status pages 2 minutes, macro metrics 6 hours; Frequent is about a third of Balanced; Manual only collects on demand or on an event.',
-      nextIsEstimateNote: '“Next” is derived from the interval, so it drifts with the job queue. It is not a promised time; while a run is in progress no countdown is shown.',
-      scheduleUnreadableNote: 'The collection schedule could not be read this time, so neither the interval nor the next run is shown.'
-    }
+    intervalMinutes: 'Every {count} minutes',
+    intervalHours: 'Every {count} hours',
+    /* "About" only here: the value is derived, so the body text must not sound like a promise. */
+    nextAt: 'About {time}',
+    nextRunning: 'Collecting now',
+    nextNotStarted: 'Not started yet',
+    nextUnreadable: 'Next run time unreadable',
+    manualOnly: 'Manual: no automatic collection',
+    disabledNoCollect: 'Disabled, not collected',
+    unscheduled: 'Not scheduled',
+    presetIntervalsNote: 'The three presets are not one number across collectors: Balanced = web pages 30 minutes, RSS 15 minutes, APIs 10 minutes, status pages 2 minutes, macro metrics 6 hours; Frequent is about a third of Balanced; Manual only collects on demand or on an event.',
+    nextIsEstimateNote: '“Next” is derived from the interval, so it drifts with the job queue. It is not a promised time; while a run is in progress no countdown is shown.',
+    scheduleUnreadableNote: 'The collection schedule could not be read this time, so neither the interval nor the next run is shown.'
   },
   credentials: {
     title: 'Credentials',

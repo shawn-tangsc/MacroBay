@@ -343,8 +343,6 @@ function cellRow(args: {
   cadence?: SourceCadenceReadout
   /** 这一批排期没读到：读数不画，ⓘ 里说明。 */
   cadenceUnavailable?: boolean
-  /** 这个源被登记为取不到（端点拒绝一切尝试）：读数是「采集器离线」。 */
-  collectorOffline?: boolean
   resolveText: (key: string) => string
 }): React.ReactElement {
   const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
@@ -443,10 +441,10 @@ function cellRow(args: {
           <SettingsInfo
             ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
             labelKeys={[
-              'settings.intelligenceSources.collectionPolicy.readout.presetIntervalsNote',
-              'settings.intelligenceSources.collectionPolicy.readout.nextIsEstimateNote',
+              'settings.intelligenceSources.collectionPolicy.presetIntervalsNote',
+              'settings.intelligenceSources.collectionPolicy.nextIsEstimateNote',
               ...(args.cadenceUnavailable === true
-                ? ['settings.intelligenceSources.collectionPolicy.readout.scheduleUnreadableNote']
+                ? ['settings.intelligenceSources.collectionPolicy.scheduleUnreadableNote']
                 : []),
               ...(args.preset === 'manual'
                 ? ['settings.intelligenceSources.collectionPolicy.manualPresetNote']
@@ -471,7 +469,6 @@ function cellRow(args: {
             view={frequencyReadoutView({
               enabled: !sourceOff,
               preset: args.preset,
-              collectorOffline: args.collectorOffline === true,
               scheduleAvailable: args.cadenceUnavailable !== true,
               ...(args.cadence === undefined ? {} : { cadence: args.cadence })
             })} />

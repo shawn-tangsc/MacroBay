@@ -8,7 +8,7 @@ import type { FrequencyReadoutView } from './sourceCadence'
 
 import './frequencyReadout.css'
 
-const READOUT = 'settings.intelligenceSources.collectionPolicy.readout'
+const POLICY = 'settings.intelligenceSources.collectionPolicy'
 
 /**
  * 频率行下拉下方那一行读数（原型 2026-11-13 定死）：`间隔 15 分钟 · 下次 14:30`。
@@ -29,13 +29,13 @@ export function FrequencyReadout(props: Readonly<{
   // 整批投影读不到：这一行不画占位（原因进同一颗 ⓘ），别让读者以为「间隔是 0」。
   if (view.kind === 'unreadable') return null
   if (view.kind === 'disabled') return <span className="business-card__preset-readout" data-frequency-readout="disabled">
-    {resolveText(`${READOUT}.disabledNoCollect`)}
+    {resolveText(`${POLICY}.disabledNoCollect`)}
   </span>
   if (view.kind === 'manual') return <span className="business-card__preset-readout" data-frequency-readout="manual">
-    {resolveText(`${READOUT}.manualOnly`)}
+    {resolveText(`${POLICY}.manualOnly`)}
   </span>
   if (view.kind === 'unscheduled') return <span className="business-card__preset-readout" data-frequency-readout="unscheduled">
-    {resolveText(`${READOUT}.unscheduled`)}
+    {resolveText(`${POLICY}.unscheduled`)}
   </span>
 
   const interval = formatInterval(view.intervalSeconds, resolveText)
@@ -52,7 +52,7 @@ export function FrequencyReadout(props: Readonly<{
 function formatInterval(seconds: number, resolveText: (key: string) => string): string {
   const minutes = Math.max(1, Math.round(seconds / 60))
   const wholeHours = minutes >= 60 && minutes % 60 === 0
-  const template = resolveText(`${READOUT}.${wholeHours ? 'intervalHours' : 'intervalMinutes'}`)
+  const template = resolveText(`${POLICY}.${wholeHours ? 'intervalHours' : 'intervalMinutes'}`)
   return fillLabelParams(template, { count: String(wholeHours ? minutes / 60 : minutes) })
 }
 
@@ -61,12 +61,11 @@ function formatNext(
   resolveText: (key: string) => string,
   timeZone: string
 ): string | null {
-  if (next.kind === 'running') return resolveText(`${READOUT}.nextRunning`)
-  if (next.kind === 'never') return resolveText(`${READOUT}.nextNever`)
-  if (next.kind === 'offline') return resolveText(`${READOUT}.nextOffline`)
-  if (next.kind === 'unreadable') return resolveText(`${READOUT}.nextUnreadable`)
+  if (next.kind === 'running') return resolveText(`${POLICY}.nextRunning`)
+  if (next.kind === 'notStarted') return resolveText(`${POLICY}.nextNotStarted`)
+  if (next.kind === 'unreadable') return resolveText(`${POLICY}.nextUnreadable`)
   const clock = formatShellClock(next.instant, { timeZone })
   // 格式器读不出来这个时刻：**这一半**归「读不到」，不拿原串顶上、也不写 `--`。
-  if (clock === null) return resolveText(`${READOUT}.nextUnreadable`)
-  return fillLabelParams(resolveText(`${READOUT}.nextAt`), { time: clock })
+  if (clock === null) return resolveText(`${POLICY}.nextUnreadable`)
+  return fillLabelParams(resolveText(`${POLICY}.nextAt`), { time: clock })
 }

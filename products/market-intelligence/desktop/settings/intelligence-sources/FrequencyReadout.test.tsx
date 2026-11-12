@@ -18,7 +18,7 @@ import type { FrequencyReadoutView } from './sourceCadence'
  * 钉的判据：两段独立、不可判定的几种各自有说法、**不写 `--`/`0`/「从未」**、
  * 时刻走平台统一格式化（这里把显示时区钉成 UTC，所以断言的是真值不是「大约」）。
  */
-const T = productText['zh-CN'].settings.intelligenceSources.collectionPolicy.readout
+const T = productText['zh-CN'].settings.intelligenceSources.collectionPolicy
 const resolveText = (key: string): string => resolveProductTextKey('zh-CN', key)
 
 let root: ReturnType<typeof createRoot> | undefined
@@ -47,15 +47,35 @@ async function render(view: FrequencyReadoutView): Promise<HTMLElement> {
 const INSTANT = '2026-12-01T06:30:00.000Z'
 
 describe('频率读数那一行', () => {
-  it('正常态：间隔 + 推算出来的下次时刻（读者时区），两段之间一颗「·」', async () => {
+  it('正常态：间隔 + 推算出来的下次时刻（读者时区、**带「约」**），两段之间一颗「·」', async () => {
     const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind: 'at', instant: INSTANT } })
     const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
     expect(row, '读数').not.toBeNull()
     expect(row!.textContent).toContain('间隔 15 分钟')
     // 时刻由平台格式化器给，不在这里拼：跨天它会自己带上月-日。
-    expect(row!.textContent).toContain(formatShellClock(INSTANT, { timeZone: 'UTC' })!)
+    // 正文写「约」：这个值是推算的，写成精确时刻等于替系统下保证。
+    expect(row!.textContent).toContain(`约 ${formatShellClock(INSTANT, { timeZone: 'UTC' })}`)
     expect(row!.querySelectorAll('.business-card__preset-readout-sep')).toHaveLength(1)
     expect(row!.textContent).not.toMatch(/--|—|从未/)
+  })
+
+  it('正在采集：只换「下次」那一段，间隔照留，DOM 里不出现任何时刻', async () => {
+    const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind: 'running' } })
+    const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
+    expect(row!.textContent).toContain('间隔 15 分钟')
+    expect(row!.textContent).toContain(T.nextRunning)
+    // 倒计时/时刻一律不许出现：`14:30`、`12-01 06:30` 这类都算。
+    expect(row!.textContent).not.toMatch(/\d{1,2}:\d{2}/)
+  })
+
+  it('从没跑过：不写「立即」、不给时刻，也不预告「启用后会马上跑一次」', async () => {
+    const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind: 'notStarted' } })
+    const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
+    expect(row!.textContent).toBe(`间隔 15 分钟·${T.nextNotStarted}`)
+    expect(row!.textContent).not.toMatch(/\d{1,2}:\d{2}/)
+    expect(row!.textContent).not.toContain('立即')
+    // ⓘ 里也不预告那个行为（那是行为，不是承诺）。
+    expect(`${T.presetIntervalsNote}${T.nextIsEstimateNote}${T.scheduleUnreadableNote}`).not.toContain('立即')
   })
 
   it('整天数：6 小时按小时说，不写成 360 分钟', async () => {
@@ -65,9 +85,8 @@ describe('频率读数那一行', () => {
 
   it.each([
     ['running', T.nextRunning],
-    ['never', T.nextNever],
-    ['unreadable', T.nextUnreadable],
-    ['offline', T.nextOffline]
+    ['notStarted', T.nextNotStarted],
+    ['unreadable', T.nextUnreadable]
   ] as const)('有间隔、第二段是 %s：说这一段的实话，不拿占位顶替', async (kind, copy) => {
     const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind } })
     const row = host.querySelector<HTMLElement>('[data-frequency-readout]')

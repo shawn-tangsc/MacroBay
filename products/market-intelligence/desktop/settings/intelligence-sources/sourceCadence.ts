@@ -60,9 +60,8 @@ export function readSourceCadence(
 export type FrequencyNext =
   | Readonly<{ kind: 'at'; instant: string }>
   | Readonly<{ kind: 'running' }>
-  | Readonly<{ kind: 'never' }>
+  | Readonly<{ kind: 'notStarted' }>
   | Readonly<{ kind: 'unreadable' }>
-  | Readonly<{ kind: 'offline' }>
 
 export type FrequencyReadoutView =
   /** 手动档：不自动采集，不写「—」也不写时刻。 */
@@ -81,8 +80,6 @@ export type FrequencyReadoutInput = Readonly<{
   enabled: boolean
   /** 读者存的采集预设：`manual` 时底下不可能有作业，先判它。 */
   preset?: string
-  /** 这个源被登记为**取不到**（端点拒绝一切尝试、自动同步已停）——「采集器离线」。 */
-  collectorOffline?: boolean
   /** 整批调度投影这次读没读到（桥缺失或调用失败）。 */
   scheduleAvailable: boolean
   /** 这个源的调度事实；`undefined` = 投影里没有它。 */
@@ -99,14 +96,12 @@ export function frequencyReadoutView(input: FrequencyReadoutInput): FrequencyRea
 
   const intervalSeconds = cadence.intervalSeconds
   /* 顺序即优先级，每一条都有独立的数据来源：
-     1. 采集器离线：端点被判定取不到，下次时刻没有意义；
-     2. 正在采集（队列里或正在跑）：不给倒计时，跑完再给新时刻；
-     3. 从没跑过：写「尚未开始」，不写「立即」也不编一个时刻；
-     4. 跑过但推不出下次：写「下次时间读不到」；
-     5. 其余：给推算出来的时刻。 */
-  if (input.collectorOffline === true) return { kind: 'interval', intervalSeconds, next: { kind: 'offline' } }
+     1. 正在采集（队列里或正在跑）：只换「下次」那一段，不给倒计时；
+     2. 从没跑过：写「尚未开始」，不写「立即」也不编一个时刻；
+     3. 跑过但推不出下次：写「下次时间读不到」；
+     4. 其余：给推算出来的时刻（正文写「约」）。 */
   if (cadence.running) return { kind: 'interval', intervalSeconds, next: { kind: 'running' } }
-  if (cadence.lastRunAt === null) return { kind: 'interval', intervalSeconds, next: { kind: 'never' } }
+  if (cadence.lastRunAt === null) return { kind: 'interval', intervalSeconds, next: { kind: 'notStarted' } }
   if (cadence.nextRunAt === null) return { kind: 'interval', intervalSeconds, next: { kind: 'unreadable' } }
   return { kind: 'interval', intervalSeconds, next: { kind: 'at', instant: cadence.nextRunAt } }
 }
