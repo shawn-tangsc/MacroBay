@@ -49,6 +49,12 @@ describe('key-indicator drawer', () => {
     expect(drawer!.querySelector('.mk-sec')).not.toBeNull()
     const mask = document.body.querySelector('.ant-drawer-mask')
     expect(mask).not.toBeNull()
+    // 兜底那条 CSS 的命中条件，逐项钉住（`:has()` 本身由浏览器实现，这里验它的前提）：
+    const drawerRoot = document.body.querySelector('.ant-drawer')!
+    expect(drawerRoot.classList.contains('drawer--modal')).toBe(true)
+    expect(drawerRoot.querySelector('.drawer__panel.mk-drawer')).not.toBeNull()
+    // 遮罩必须是 `.ant-drawer` 的直接子元素，`:has(...) > .ant-drawer-mask` 才可能命中。
+    expect(drawerRoot.querySelector(':scope > .ant-drawer-mask')).toBe(mask)
     await act(async () => { (mask as HTMLElement).click() })
     expect(document.body.querySelector('.mk-sec')).toBeNull()
   })
@@ -100,6 +106,8 @@ describe('key-indicator drawer', () => {
     expect(header.textContent).not.toContain('经济日历')
     // 页头只剩一个按钮（关闭）；多一个就是又长出了入口。
     expect(header.querySelectorAll('button')).toHaveLength(1)
+    // Chief 的点名判据：页头里的链接数量必须是 0。
+    expect(header.querySelectorAll('a')).toHaveLength(0)
   })
 
   it('draws each day row as exactly time + name — no type chip, no surprise, no assets', async () => {
