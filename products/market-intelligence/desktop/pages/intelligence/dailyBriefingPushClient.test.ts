@@ -26,18 +26,45 @@ describe('the push client', () => {
   it('asks for the edition on screen, in its own language, through the product bridge', async () => {
     const invoke = stubBridge({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted' } })
     await redeliverBriefingPush(edition)
-    // One call: 主进程内部先写记录再重投，渲染层不该自己拼两步（那会把顺序交给调用点）。
+    // One call: 主进程内部先写记录、暂存海报、再投递，渲染层不该自己拼那几步。
+    // 没有海报就不带 `poster` 这个键（只发文字的既有路径一字不变）。
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligence.dailyBriefing.publishToPhone', {
       date: '2026-11-04', periodId: 'default', locale: 'en-US'
     })
   })
 
+  it('carries the poster bytes when the caller has them', async () => {
+    const invoke = stubBridge({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted' } })
+    const poster = { bytes: new Uint8Array([1, 2, 3]), mime: 'image/png' }
+    await redeliverBriefingPush(edition, poster)
+    expect(invoke).toHaveBeenCalledWith('market-intelligence', 'intelligence.dailyBriefing.publishToPhone', {
+      date: '2026-11-04', periodId: 'default', locale: 'en-US', poster
+    })
+  })
+
   it('reads the receipt, not the port: a send without one is not called sent', async () => {
     stubBridge({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-unconfirmed' } })
-    expect(await redeliverBriefingPush(edition)).toEqual({ state: 'sent', delivery: 'sent-unconfirmed' })
+    expect(await redeliverBriefingPush(edition)).toEqual({ state: 'result', delivery: 'sent-unconfirmed' })
 
     stubBridge({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted' } })
-    expect(await redeliverBriefingPush(edition)).toEqual({ state: 'sent', delivery: 'sent-accepted' })
+    expect(await redeliverBriefingPush(edition)).toEqual({ state: 'result', delivery: 'sent-accepted' })
+  })
+
+  it('hands every per-channel row back, kind included, so the screen can count and say who got text', async () => {
+    stubBridge({ kind: 'accepted', recordId: 'r1', delivery: { state: 'failed', channels: [
+      { channelId: 'c1', channelName: '贾维斯', state: 'sent-accepted', kind: 'image' },
+      { channelId: 'c2', channelName: '飞书群', state: 'sent-accepted', kind: 'text' },
+      { channelId: 'c3', channelName: '邮件', state: 'failed', reason: 'channel-rejected', kind: 'text' }
+    ] } })
+    expect(await redeliverBriefingPush(edition)).toEqual({
+      state: 'result',
+      delivery: 'failed',
+      channels: [
+        { channelName: '贾维斯', state: 'sent-accepted', kind: 'image' },
+        { channelName: '飞书群', state: 'sent-accepted', kind: 'text' },
+        { channelName: '邮件', state: 'failed', reason: 'channel-rejected', kind: 'text' }
+      ]
+    })
   })
 
   it('names each rejection in words a reader can act on', async () => {
@@ -50,6 +77,8 @@ describe('the push client', () => {
       // 主进程先写后推之后，剩下的「记录不在」其实是「这一版还没生成」：读者要做的事一样，同一句。
       ['edition-missing', 'record-missing'],
       ['runtime-unavailable', 'capability-missing'],
+      // 带图发布整条被拒（来源对不上等）：不降级，读者自己选只发文字。
+      ['poster-refused', 'poster-refused'],
       // 认不出的拒绝码：不冒充任何具体原因，落「回执不认识」。
       ['some-new-platform-code', 'receipt-unknown']
     ] as const) {

@@ -14,11 +14,11 @@ import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 
 /**
- * 「推送到手机」接线：页面层点到主进程的那一段。
+ * 「发布频道」接线：页面层点到主进程的那一段。
  *
  * 判的都是渲染输出与调用次数，不扫源码：一个按钮能不能点、点三次发几次、失败留在哪，这些才是
- * 读者能看见的事实。2026-11-05 起失败与回执都走平台 toast（工具栏只留按钮），所以「有没有留痕」
- * 判的是 toast，不是工具栏那一行字。
+ * 读者能看见的事实。海报之后，结果改成工具栏下方**固定的一行**（正文只有数字与动作、逐条说明在 ⓘ），
+ * 因为它要能同时放「几条收到」「哪条只发了文字」和两个动作——toast 装不下这些。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const zh = briefingPushText['zh-CN']
@@ -60,8 +60,8 @@ const render = (element: React.ReactElement): void => {
   })
 }
 const button = (): HTMLButtonElement => container.querySelector<HTMLButtonElement>('.mi-daily-briefing__push button') as HTMLButtonElement
-/** 工具栏这一行：回执与失败都不许出现在它里面（toast 是宿主里的另一块，不算）。 */
-const toolbarText = (): string => container.querySelector('.mi-daily-briefing-page__report-bar')?.textContent ?? ''
+/** 结果那一行（工具栏下方、卡顶固定区）：发布之后它才出现。 */
+const resultText = (): string => container.querySelector('[data-push-result]')?.textContent ?? ''
 const push = async (): Promise<void> => { await act(async () => { button().click() }) }
 
 beforeEach(() => {
@@ -101,38 +101,52 @@ describe('the publish control on the page', () => {
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 
-  it('says it was handed over in a toast, never that it was delivered, and leaves the toolbar clean', async () => {
+  it('shows the result under the toolbar, never claiming delivery and never naming a channel in the body', async () => {
+    invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted', channels: [
+      { channelId: 'c1', channelName: '贾维斯', state: 'sent-accepted', kind: 'image' }
+    ] } })
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await push()
-    expect(window.document.body.textContent).toContain('已交给 贾维斯')
-    expect(window.document.body.textContent).not.toMatch(/已送达|已推送|发送成功|Delivered/)
-    // 工具栏里只有按钮：回执不许常驻在那一行。
-    expect(toolbarText()).not.toContain('已交给 贾维斯')
-    await act(async () => { vi.advanceTimersByTime(3_000) })
-    expect(window.document.body.textContent).not.toContain('已交给 贾维斯')
+    expect(resultText()).toContain('1 条通道都收到了')
+    expect(resultText()).not.toContain('贾维斯')
+    expect(window.document.body.textContent).not.toMatch(/已送达|已推送|已发送|发送成功|Delivered/)
   })
 
-  it('keeps the half-sentence when no receipt came back', async () => {
+  it('keeps the neutral half-sentence when no receipt came back', async () => {
     invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-unconfirmed' } })
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await push()
-    expect(window.document.body.textContent).toContain('已交给 贾维斯（未拿到回执）')
+    expect(resultText()).toContain('已送出去，还没收到回执')
   })
 
-  it('reports a failure as a toast with a retry, and puts nothing in the toolbar', async () => {
+  it('marks the channel that was downgraded to text instead of calling it a poster', async () => {
+    invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'sent-accepted', channels: [
+      { channelId: 'c1', channelName: '贾维斯', state: 'sent-accepted', kind: 'image' },
+      { channelId: 'c2', channelName: '飞书群', state: 'sent-accepted', kind: 'text' }
+    ] } })
+    render(<Row edition={document()} />)
+    await act(async () => { await Promise.resolve() })
+    await push()
+    expect(resultText()).toContain('2 条通道都收到了')
+    // ⓘ 里逐条说清：一条发了海报、一条只发了文字。
+    const trigger = container.querySelector('[data-push-result] button[aria-label="这次每条通道的结果"]') as HTMLButtonElement
+    await act(async () => { trigger.click() })
+    const rows = [...window.document.body.querySelectorAll('[data-push-channels] li')].map((row) => row.textContent)
+    expect(rows).toEqual(['贾维斯发了海报 · 收到了', '飞书群只发了文字 · 收到了'])
+  })
+
+  it('keeps a failure in its own row with a retry action, not in the toolbar buttons', async () => {
     invoke.mockResolvedValue({ kind: 'rejected', reason: 'redeliver-edition-mismatch' })
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await push()
-    expect(window.document.body.textContent).toContain(`${zh.failedTitle}：${zh.failed['edition-mismatch']}`)
-    // 工具栏不许再挂那行「没发出去…重试」（用户原话：字丑、别一直显示在界面上）。
-    expect(toolbarText()).not.toContain(zh.failed['edition-mismatch'])
-    expect(toolbarText()).not.toContain(zh.failedTitle)
+    expect(resultText()).toContain(`${zh.failedTitle}：${zh.failed['edition-mismatch']}`)
 
-    const retry = Array.from(window.document.body.querySelectorAll('button')).find((entry) => entry.textContent?.includes(zh.retry))
-    await act(async () => { retry?.click() })
+    const retry = container.querySelector('[data-push-action="retry"]') as HTMLButtonElement
+    expect(retry.textContent).toBe(zh.retry)
+    await act(async () => { retry.click() })
     expect(invoke).toHaveBeenCalledTimes(2)
   })
 
@@ -209,6 +223,7 @@ describe('the publish control on the page', () => {
     expect(button().disabled).toBe(false)
 
     await push()
-    expect(window.document.body.textContent).toContain('已交给 贾维斯')
+    // 通道重新读到之后按钮可点了，结果那一行说的是「收到」，不再点名某一条通道。
+    expect(resultText()).toContain('通道收到了')
   })
 })

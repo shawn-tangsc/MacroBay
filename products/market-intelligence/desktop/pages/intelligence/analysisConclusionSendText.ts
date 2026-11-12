@@ -1,3 +1,5 @@
+import { channelResultWords } from './channelResultText'
+
 /**
  * 「发送到频道」的说法，一张表。
  *
@@ -85,18 +87,11 @@ const zh: AnalysisConclusionSendText = {
   noneReceived: '没有任何通道收到（共 {n} 条）',
   unconfirmed: '已送出去，还没收到回执',
   channelsLabel: '这次每条通道的结果',
-  channelReceived: '收到了',
-  channelNotReceived: '没收到',
-  channelUnconfirmed: '已送出去，还没收到回执',
-  channelReasonUnknown: '这次没成功（原因这台设备不认识）',
-  channelReasons: {
-    'channel-rejected': '通道没接这次请求',
-    'push-backoff': '这条通道刚失败过几次，暂时没有重试',
-    'unknown-after-send': '送到一半失去响应，不知道到没到',
-    'delivery-no-target-bound': '这条通道没有绑定投递目标',
-    'delivery-ambiguous-target': '有多个同名通道，不确定发给哪一条',
-    'push-unavailable': '这条通道现在不可用'
-  },
+  channelReceived: channelResultWords['zh-CN'].received,
+  channelNotReceived: channelResultWords['zh-CN'].notReceived,
+  channelUnconfirmed: channelResultWords['zh-CN'].unconfirmed,
+  channelReasonUnknown: channelResultWords['zh-CN'].reasonUnknown,
+  channelReasons: channelResultWords['zh-CN'].reasons,
   appOnly: '只留在应用内，没到手机 · {time}',
   quietHours: '这次没发到手机：现在是免打扰时段，不会自动补发。要现在验通道，关掉免打扰再点一次。',
   dailyLimit: '今天的上限到了（每天 4 条），明天再发',
@@ -120,18 +115,11 @@ const en: AnalysisConclusionSendText = {
   noneReceived: 'No channel received it (0 of {n})',
   unconfirmed: 'Sent, no receipt yet',
   channelsLabel: 'What each channel reported',
-  channelReceived: 'received',
-  channelNotReceived: 'did not receive',
-  channelUnconfirmed: 'sent, no receipt yet',
-  channelReasonUnknown: 'it failed for a reason this build does not recognize',
-  channelReasons: {
-    'channel-rejected': 'the channel did not take this request',
-    'push-backoff': 'this channel failed recently, so it was not retried',
-    'unknown-after-send': 'the connection dropped mid-send, so delivery is unknown',
-    'delivery-no-target-bound': 'this channel has no delivery target bound',
-    'delivery-ambiguous-target': 'several channels share this name, so the target was ambiguous',
-    'push-unavailable': 'this channel is not available right now'
-  },
+  channelReceived: channelResultWords['en-US'].received,
+  channelNotReceived: channelResultWords['en-US'].notReceived,
+  channelUnconfirmed: channelResultWords['en-US'].unconfirmed,
+  channelReasonUnknown: channelResultWords['en-US'].reasonUnknown,
+  channelReasons: channelResultWords['en-US'].reasons,
   appOnly: 'Stayed in the app, not sent to your phone · {time}',
   quietHours: 'Not sent to your phone this time: it is quiet hours now, and nothing is resent later. To test the channel, turn quiet hours off and send again.',
   dailyLimit: 'Today’s limit is reached (4 a day) — try again tomorrow',
@@ -142,7 +130,7 @@ const en: AnalysisConclusionSendText = {
   surfaceOff: 'You turned off the phone leg for this notification, so it stayed in the app',
   pushUnavailableNone: 'Not sent to your phone: no usable channel yet — enable one under Channels',
   failed: 'Not sent',
-  channelUnknown: 'push channel'
+  channelUnknown: channelResultWords['en-US'].unknownChannel
 }
 
 export function analysisConclusionSendText(language: 'zh-CN' | 'en-US'): AnalysisConclusionSendText {

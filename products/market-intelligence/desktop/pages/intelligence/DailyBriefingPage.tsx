@@ -75,6 +75,7 @@ import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingManualRun } from './useBriefingManualRun'
 import { briefingManualRunReport, briefingManualRunningLabel } from './briefingManualRunOutcome'
 import { briefingPageChrome } from './briefingPageChrome'
+import { briefingPublishInputs } from './briefingPublishInputs'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
 import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
 
@@ -337,17 +338,18 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
    * notice by date, language and issue, and a wrong issue is refused rather than quietly sent as another
    * one. The words are interface chrome, so they follow the interface language, not the edition's.
    */
-  const pushToPhone = useBriefingPushToPhone({
+  // 发的是**选中那一版**；海报就是屏幕上这张纸；导读超长时去这一版的会话里把它写短。
+  // 映射在 `briefingPublishInputs` 里（页面贴着 500 行），这里只交页面事实。
+  const pushToPhone = useBriefingPushToPhone(briefingPublishInputs({
     document: contentBlocked ? undefined : screenDocument,
     generating,
     localeMissing: view.status === 'locale-missing',
-    // 与正文同一口径：发的是**选中那一版**。按日期取首行会在一日多期时发错版（审计 #74 家族）。
     periodId: pickedPeriodId ?? screenDocument?.edition.periodId ?? DEFAULT_PERIOD_ID,
     text: briefingPushText[locale],
-    // The channel is configured somewhere else (that drawer, or the platform's own settings). Re-read
-    // when it may have changed, or the button keeps the verdict it formed at mount.
-    refreshKey: settingsReloadKey
-  })
+    refreshKey: settingsReloadKey,
+    posterRoot: () => shareRef.current,
+    ...(onScreenSession === undefined ? {} : { sessionId: onScreenSession.sessionId })
+  }))
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.
   // 选中的是哪一版，由**选中项**决定（状态直取，见页面开头那道闸门）。

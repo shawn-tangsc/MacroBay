@@ -32,7 +32,7 @@ function render(): void {
       <DailyBriefingEditionActions
         text={text} resolveText={(key) => key} exportable exportState="idle" copyState="idle" generating={false}
         onExport={() => undefined} onCopy={() => undefined} onRegenerate={() => undefined}
-        push={{ state: { kind: 'idle' }, sentence: undefined, onPush: () => undefined, onRetry: () => undefined } as never}
+        push={{ state: { kind: 'idle' }, result: undefined, onPush: () => undefined, onRetry: () => undefined, onSendTextOnly: () => undefined } as never}
         pushText={{ button: 'b', sending: 's', delivered: 'd', failedTitle: 'f', retry: 'r', disabled: {}, failed: {} } as never}
       />
     </ToastHost></ConfirmProvider></ConfigProvider>)

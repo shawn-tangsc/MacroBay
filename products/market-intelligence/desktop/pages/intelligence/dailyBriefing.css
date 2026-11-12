@@ -110,6 +110,10 @@
    scroll — a surface with a faint seam under it, which is the edge of the sheet's area rather than a
    second section. */
 .mi-daily-briefing-page__report-bar { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px; background: var(--mi-dashboard-surface); border-bottom: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent); }
+/* 工具栏 + 它下面那一行发布结果：两行都固定在卡顶（不跟着纸滚动）。工具栏自己的底线在两行之间，
+   所以结果行出现时把那条线交给结果行去画，避免中间多出一条把两行切成两块。 */
+.mi-daily-briefing-page__report-slot { flex: none; display: flex; flex-direction: column; }
+.mi-daily-briefing-page__report-slot > .mi-daily-briefing-page__report-bar:has(+ .mi-daily-briefing__push-result) { border-bottom: 0; }
 /* The sheet's own scroll area. Equal 12px insets on both sides: the sheet is centred inside the card,
    and an overlay scrollbar floats in the right-hand dark band instead of over the cream sheet — a dark
    bar on the paper reads as the page having been cut. */
@@ -358,7 +362,17 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 /* 发布频道：与「重新生成」同一组，按钮用平台默认样式，这里只负责它和那句成功回执怎么排。
    成功句自己会消失（3s / 6s），所以它占的是行内一格，不给它一块会留下空位的地方。 */
 .mi-daily-briefing__push-slot { display: inline-flex; align-items: center; gap: 8px; }
-.mi-daily-briefing__push-toast { color: var(--mi-dashboard-muted); font-size: 12px; line-height: 18px; }
+/* 发布结果一行：正文（数字与动作）+ 一颗 ⓘ（逐通道说明与「为什么整条不发」）。
+   失败不染色：这不是错误页，动作就在旁边，读者读完就知道下一步做什么。 */
+.mi-daily-briefing__push-result { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 12px 10px; border-bottom: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent); }
+.mi-daily-briefing__push-message { color: var(--mi-dashboard-muted); font-size: 11.5px; line-height: 18px; }
+.mi-daily-briefing__push-detail { display: grid; gap: 6px; max-width: 360px; }
+.mi-daily-briefing__push-why { margin: 0; font-size: 11.5px; line-height: 1.5; }
+.mi-daily-briefing__push-channels { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mi-daily-briefing__push-channel { display: flex; gap: 4px; align-items: baseline; font-size: 11.5px; line-height: 1.4; }
+.mi-daily-briefing__push-channel-name { color: var(--text-strong); }
+.mi-daily-briefing__push-channel-name::after { content: ' · '; color: var(--muted); }
+.mi-daily-briefing__push-channel-detail { color: var(--muted); }
 
 /* The two period dialogs: one row per choice, the verdict under them. The conflict sentence is a
    warning (the button is already disabled), not an error state — the reader has not done anything
