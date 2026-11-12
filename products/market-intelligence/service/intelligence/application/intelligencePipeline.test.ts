@@ -341,7 +341,12 @@ describe('intelligencePipeline', () => {
     } finally {
       releaseConsumer.resolve()
       await vi.waitFor(async () => {
-        expect((await storage.read()).deliveries.every((delivery) => delivery.status === 'completed')).toBe(true)
+        // 事件总线存储的读带完整性结论（闸门第二笔）：文件读得懂才谈「投递都完成了」。
+        const outcome = await storage.read()
+        if (outcome.integrity === 'corrupt' || outcome.integrity === 'future-version') {
+          throw new Error(`event bus store blocked: ${outcome.integrity}`)
+        }
+        expect(outcome.state.deliveries.every((delivery) => delivery.status === 'completed')).toBe(true)
       })
       await rm(directory, { recursive: true, force: true })
     }

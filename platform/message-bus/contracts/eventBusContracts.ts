@@ -100,6 +100,16 @@ export type EventBusDiagnosticsPage = {
   checkpoints: PlatformEventCheckpoint[]
 }
 
+/** 写侧闸门拒绝写的原因：坏文件 / 更新的版本 / 校验和不符。 */
+export type EventBusWriteBlockedReason = 'corrupt' | 'future-version' | 'checksum-mismatch'
+
+/** 显式归档一份阻断态主文件的结果（人/诊断动作触发，启动时绝不自动做）。 */
+export type EventBusArchiveResult = Readonly<{
+  archivedPath: string
+  markerPath: string
+  reason: EventBusWriteBlockedReason
+}>
+
 export type EventBusRuntime = {
   publish: <TPayload>(input: PublishEventInput<TPayload>) => Promise<PlatformEventEnvelope<TPayload>>
   publishDurably: <TPayload>(input: PublishEventInput<TPayload>) => Promise<PlatformEventEnvelope<TPayload>>
@@ -113,6 +123,11 @@ export type EventBusRuntime = {
    * 启动时 hydration 之后自动跑一次，平台保留期任务每日再跑一次；`pending` 投递及其事件永不裁。
    */
   pruneRetained: (options?: { now?: string }) => Promise<{ removedEvents: number; removedDeliveries: number }>
+  /**
+   * **显式**归档阻断态的主文件（`<file>.corrupt-<ISO>` + marker），归档后主文件缺失 → 下一次读
+   * 是 `empty`。只能由人/诊断动作触发——启动时自动改名等于替读者决定了「数据不要了」。
+   */
+  archiveCorruptStore: () => Promise<EventBusArchiveResult | undefined>
 }
 
 export const DEFAULT_EVENT_CONSUMER_RETRY_POLICY: EventConsumerRetryPolicy = {

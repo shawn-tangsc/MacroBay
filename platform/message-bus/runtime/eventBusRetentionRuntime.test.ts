@@ -32,7 +32,8 @@ function state(overrides: Partial<EventBusStoreState> = {}): EventBusStoreState 
 
 function storageReturning(initial: EventBusStoreState): EventBusStorage & { write: ReturnType<typeof vi.fn> } {
   return {
-    read: vi.fn(async () => initial),
+    // 这份文件是闸门之前的旧形状（无 formatVersion）：legacy 可读、写一次即升级。
+    read: vi.fn(async () => ({ integrity: 'unverified-legacy' as const, state: initial })),
     write: vi.fn(async () => undefined)
   }
 }
