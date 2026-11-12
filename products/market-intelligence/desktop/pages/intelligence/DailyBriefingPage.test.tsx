@@ -252,14 +252,51 @@ function dialogButton(label: string): HTMLButtonElement {
 }
 
 /**
+ * 等一个**状态真的出现**，不等「冲几轮微任务」。
+ *
+ * 背景：删除那条链是 confirm → deletePeriod → onSettled → 重读列表 → 状态更新 → 重渲染，至少五跳。
+ * 以前用「冲 6 轮 `Promise.resolve()`」等于猜它今天正好用几拍走完；机器被抢时拍数对不上，用例就翻。
+ * 这里只问条件成没成立，成立就走。
+ *
+ * 本文件用的是 fake timers：`setTimeout` 不会自己走，所以每轮 `advanceTimersByTime(0)` 把 0ms
+ * 定时器（确认框关闭后的焦点归还、antd 的收尾）确定地推进一步，而不是等真实时间。
+ *
+ * 超时**必须**把「等的是什么、当时是什么值」一起报出来：下次红的时候要一眼看出卡在哪，
+ * 而不是只看到一句 timed out。轮数只作上限，正常情况下第一两轮就返回。
+ */
+async function waitUntil(
+  what: string,
+  condition: () => boolean,
+  snapshot: () => string,
+  turns = 200
+): Promise<void> {
+  for (let turn = 0; turn < turns; turn += 1) {
+    if (condition()) return
+    await act(async () => {
+      vi.advanceTimersByTime(0)
+      await Promise.resolve()
+    })
+  }
+  if (condition()) return
+  throw new Error(`timed out after ${turns} turns waiting for ${what}; last state: ${snapshot()}`)
+}
+
+/**
  * 像读者一样先展开那一天再读它的行（`A5.3`：默认只展开今天）。
  * 展开天头会顺带把右侧切到那天最近的一版（`A9.14`）——那是产品行为，不是测试的副作用。
  */
 const expandDay = async (dom: HTMLElement, date: string): Promise<void> => {
-  const head = dom.querySelector<HTMLButtonElement>(`.mi-daily-briefing__rail-day[data-day="${date}"] .mi-daily-briefing__rail-day-head`)
+  const dayHead = (): HTMLButtonElement | null => dom.querySelector<HTMLButtonElement>(
+    `.mi-daily-briefing__rail-day[data-day="${date}"] .mi-daily-briefing__rail-day-head`
+  )
+  const head = dayHead()
   if (head !== null && head.getAttribute('aria-expanded') === 'false') {
     await act(async () => { head.click(); await Promise.resolve() })
-    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    await waitUntil(
+      `day ${date} to expand`,
+      () => dayHead()?.getAttribute('aria-expanded') === 'true',
+      () => `aria-expanded=${dayHead()?.getAttribute('aria-expanded') ?? 'missing'}`
+    )
   }
 }
 
@@ -434,10 +471,23 @@ describe('daily briefing page', () => {
     act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]!
     act(() => { item.click() })
-    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    await waitUntil(
+      'the delete confirmation to appear',
+      () => document.querySelector<HTMLElement>('[role="dialog"]') !== null,
+      () => `dialogs=${document.querySelectorAll('[role="dialog"]').length}`
+    )
     const confirm = dialogButton(text.history.deleteEditionConfirm)
     await act(async () => { confirm.click() })
-    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    // 删除跑完的信号是**页面把列表又读了一次、而且今天那一版仍是选中项**——等这个状态，
+    // 不数微任务拍数。断言留在后面：「没有多叫 getToday」「载荷带入口」真回归时是一次
+    // 干脆的断言失败，而不是等满轮数再超时。
+    await waitUntil(
+      'the page to reload the list after the delete',
+      () => client.list.mock.calls.length >= 2
+        && dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current') === 'true',
+      () => `list=${client.list.mock.calls.length} getToday=${client.getToday.mock.calls.length}`
+        + ` todaySelected=${dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current') ?? 'none'}`
+    )
 
     // 入口写进载荷：操作记录要能回答"从哪删的"（用户 2026-11-06）。
     expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN', entry: 'row-menu' })
