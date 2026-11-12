@@ -67,7 +67,8 @@ function bodyOf(raw: unknown): Readonly<{ releases: readonly unknown[]; nextCurs
   const releases = record.releases
   if (!Array.isArray(releases)) return undefined
   const cursor = record.next_cursor
-  if (cursor !== undefined && typeof cursor !== 'string') return undefined
+  // **最后一页给的是 `null`，不是缺字段**（实测）：把 null 当「到底」，不是坏形状。
+  if (cursor !== undefined && cursor !== null && typeof cursor !== 'string') return undefined
   return { releases, ...(typeof cursor === 'string' && cursor !== '' ? { nextCursor: cursor } : {}) }
 }
 

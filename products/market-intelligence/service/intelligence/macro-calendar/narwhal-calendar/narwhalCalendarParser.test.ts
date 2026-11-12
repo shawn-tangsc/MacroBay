@@ -50,6 +50,14 @@ describe('narwhal calendar parser', () => {
     expect(result.releases.map(release => release.dateBasis)).toEqual(['indicative', 'exact'])
   })
 
+  it('treats next_cursor: null as the end of pages, not as a broken shape', () => {
+    // 实测：最后一页返回的是 `"next_cursor": null`（不是缺字段）。
+    const result = parseNarwhalCalendarPage({ releases: [entry()], next_cursor: null }, { asOf: '2026-11-13T00:00:00Z' })
+    expect(result.state).toBe('succeeded')
+    if (result.state !== 'succeeded') return
+    expect(result.nextCursor).toBeUndefined()
+  })
+
   it('drops one malformed release instead of failing the whole page', () => {
     const result = parseNarwhalCalendarPage(page([entry({ release_id: '' }), entry({ release_id: 'ok' })]), { asOf: '2026-11-13T00:00:00Z' })
     if (result.state !== 'succeeded') throw new Error('expected success')

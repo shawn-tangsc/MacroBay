@@ -34,7 +34,9 @@ export function narwhalCalendarUrl(input: Readonly<{
   const params = new URLSearchParams({ start_date: input.startDate, end_date: input.endDate, limit: String(input.limit ?? 100) })
   // 多国是**重复参数**，不是逗号分隔——逗号会被当成一个国家。
   for (const country of input.countries) params.append('countries', country)
-  if (input.cursor !== undefined) params.append('next_cursor', input.cursor)
+  // 响应体里的字段叫 `next_cursor`，但**请求参数**是 `cursor`（见响应里的 next_url）——
+  // 按响应字段名回传会拿到 400/空页，实测踩过。
+  if (input.cursor !== undefined) params.append('cursor', input.cursor)
   return `${baseUrl}?${params.toString()}`
 }
 
