@@ -76,7 +76,7 @@ function provider(overrides: Partial<ProviderView> = {}): ProviderView {
     credential: 'none',
     invite: true,
     healthMarker: 'none' as const,
-    // 邀请那句要同时有 `invite` 与 `signupUrl` 才渲染（`inviteProvider && provider.signupUrl`）。
+    // 邀请那句已删除；`invite` / `signupUrl` 留着是因为 ProviderView 还带这两个字段。
     signupUrl: 'https://example.test/signup',
     sources: [source()],
     ...overrides

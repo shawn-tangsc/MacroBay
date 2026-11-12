@@ -46,6 +46,23 @@ describe('provider registry contract', () => {
     expect(config.enabled).toBe(false)
   })
 
+  /**
+   * 四态那一行只由这一个标记决定（产品 §3.7）：标记落在注册表，组件里不按 providerId 特判。
+   * 判据不是「只有某一个 provider」，而是**带标记的 provider 必须真是「只验证密钥、还不采集」**——
+   * 标记一旦被当成装饰挂在会采集的源上，那一行就会对读者说「本版不采集数据」的假话。
+   */
+  it('keeps the verification-only marker on key-only providers that collect nothing yet', () => {
+    const verified = providerRegistry.filter((provider) => provider.notice === 'verification-only')
+    // 本轮的 CryptoETF 必须带：它的密钥块靠这个标记才有那一行。
+    expect(verified.map((provider) => provider.providerId)).toContain('cryptoetf')
+    for (const provider of verified) {
+      for (const source of provider.sources) {
+        expect(source.collection, `${provider.providerId}:${source.sourceId}`).toBe('none')
+        expect(source.capabilities?.testConnection, `${provider.providerId}:${source.sourceId}`).toBe(true)
+      }
+    }
+  })
+
   it('keeps every source id unique', () => {
     const ids = sources.map((source) => source.sourceId)
     expect(new Set(ids).size).toBe(ids.length)
