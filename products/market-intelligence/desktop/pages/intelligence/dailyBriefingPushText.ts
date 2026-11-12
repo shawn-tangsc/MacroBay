@@ -46,13 +46,13 @@ export type BriefingPushText = Readonly<{
   /** 整条没发：一条可用通道都没有（不是「没收到」）。 */
   noChannels: string
 
-  /** 结果条自己的控件与逐行用词。读屏名不在这里：它在产品文案表里（`push.*` 那一组）。 */
+  /**
+   * 结果条自己的控件与逐行用词。读屏名与逐通道状态词不在这里：它们在产品文案表里
+   * （`push.*` 那一组），状态词要交给平台 `StatusPill` 按档位取键。
+   */
   stripInfoTip: string
   toggleOpen: string
   toggleClose: string
-  rowReceived: string
-  rowNotReceived: string
-  rowPending: string
   rowCodeLabel: string
   /** 这一行没有形态可写时的占位（没发出去的行）。 */
   rowNoForm: string
@@ -114,9 +114,6 @@ const zh: BriefingPushText = {
   stripInfoTip: '只说明这一次发布的结果；下一次发布会替换这条。',
   toggleOpen: '展开明细',
   toggleClose: '收起明细',
-  rowReceived: '收到',
-  rowNotReceived: '没到',
-  rowPending: '等回执',
   rowCodeLabel: '原因码',
   rowNoForm: '—',
   retryMissing: '再发一次没到的',
@@ -184,9 +181,6 @@ const en: BriefingPushText = {
   stripInfoTip: 'This describes this publish only; the next publish replaces it.',
   toggleOpen: 'Show details',
   toggleClose: 'Hide details',
-  rowReceived: 'received',
-  rowNotReceived: 'did not receive',
-  rowPending: 'awaiting receipt',
   rowCodeLabel: 'Reason code',
   rowNoForm: '—',
   retryMissing: 'Send the missing ones again',

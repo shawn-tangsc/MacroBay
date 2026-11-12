@@ -416,7 +416,12 @@ export const dailyBriefingText = {
     push: {
       stripInfoLabel: '结果说明',
       actionInfoLabel: '动作说明',
-      closeStrip: '关闭结果条'
+      closeStrip: '关闭结果条',
+      // 逐通道的三档结果：状态词只给药丸取键，颜色落在圆点与描边上，字永远用正文色
+      // （`--danger` 当正文前景在深色下只有 3.25–3.94，正文门槛 4.5）。
+      rowReceived: '收到',
+      rowNotReceived: '没到',
+      rowPending: '等回执'
     },
     generationSettings: {
       open: '生成设置', title: '日报生成设置',
@@ -816,7 +821,12 @@ export const dailyBriefingText = {
     push: {
       stripInfoLabel: 'About this result',
       actionInfoLabel: 'About this action',
-      closeStrip: 'Close the result strip'
+      closeStrip: 'Close the result strip',
+      // Per-channel outcomes: the pill takes the tone on its dot and border; the word stays in
+      // body colour (danger as a foreground is 3.25–3.94 in dark mode, under the 4.5 threshold).
+      rowReceived: 'received',
+      rowNotReceived: 'did not receive',
+      rowPending: 'awaiting receipt'
     },
     generationSettings: {
       open: 'Generation settings', title: 'Brief generation settings',

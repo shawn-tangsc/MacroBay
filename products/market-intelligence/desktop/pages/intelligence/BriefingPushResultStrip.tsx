@@ -4,6 +4,7 @@ import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import type { BriefingPushText } from './dailyBriefingPushText'
 import type { BriefingPushActionKey, BriefingPushResultRow, BriefingPushResultView } from './useBriefingPushToPhone'
@@ -88,19 +89,34 @@ export function BriefingPushResultStrip(props: Readonly<{
         variant="plain" />}
     </div>
     {visible.length === 0 ? null : <div className="mi-daily-briefing__push-result-lines" data-push-lines="true">
-      {visible.map((row, index) => <PushResultLine key={`${row.name}#${index}`} row={row} text={text} />)}
+      {visible.map((row, index) => <PushResultLine
+        key={`${row.name}#${index}`}
+        resolveText={props.resolveText}
+        row={row}
+        text={text} />)}
     </div>}
   </div>
 }
 
 /** 一行通道：名字 / 结果 / 形态 / 人话原因 + 折叠的原因码。 */
-function PushResultLine(props: Readonly<{ row: BriefingPushResultRow; text: BriefingPushText }>): React.ReactElement {
+function PushResultLine(props: Readonly<{
+  row: BriefingPushResultRow
+  text: BriefingPushText
+  resolveText: (key: string) => string
+}>): React.ReactElement {
   const { row, text } = props
-  const outcome = row.outcome === 'received' ? text.rowReceived : row.outcome === 'pending' ? text.rowPending : text.rowNotReceived
   const form = row.form === 'poster' ? text.channelImage : row.form === 'text' ? text.channelText : text.rowNoForm
   return <div className="mi-daily-briefing__push-line" data-push-line={row.outcome}>
     <span className="mi-daily-briefing__push-line-name">{row.name}</span>
-    <span className="mi-daily-briefing__push-line-outcome" data-outcome={row.outcome}>{outcome}</span>
+    {/* 三档结果是**状态词**，按平台规矩交给 `StatusPill`：档位色只落在圆点与描边上，字始终是正文色。
+        `--danger` 当正文前景在深色下只有 3.25–3.94（正文门槛 4.5），门禁不许为一种 outcome 新造一个
+        红色文字选择器；复用这个组件既保住「没到＝危险档」，也不用新增颜色基线。 */}
+    <span className="mi-daily-briefing__push-line-outcome" data-outcome={row.outcome}>
+      <StatusPill
+        labelKey={outcomeLabelKey(row.outcome)}
+        resolveText={props.resolveText}
+        tone={outcomeTone(row.outcome)} />
+    </span>
     <span className="mi-daily-briefing__push-line-form">{form}</span>
     <span className="mi-daily-briefing__push-line-reason">
       {row.reason ?? ''}
@@ -110,4 +126,18 @@ function PushResultLine(props: Readonly<{ row: BriefingPushResultRow; text: Brie
       </details>}
     </span>
   </div>
+}
+
+/** 状态词与档位：收到 ok、没到 bad（危险档）、等回执 info（进行中）。 */
+function outcomeTone(outcome: BriefingPushResultRow['outcome']): StatusPillTone {
+  return outcome === 'received' ? 'ok' : outcome === 'pending' ? 'info' : 'bad'
+}
+
+/** 三个状态词在产品文案表里的完整路径（可见文案与读屏名同一张表）。 */
+function outcomeLabelKey(outcome: BriefingPushResultRow['outcome']): string {
+  return outcome === 'received'
+    ? 'pages.intelligence.portal.dashboard.dailyBriefing.push.rowReceived'
+    : outcome === 'pending'
+      ? 'pages.intelligence.portal.dashboard.dailyBriefing.push.rowPending'
+      : 'pages.intelligence.portal.dashboard.dailyBriefing.push.rowNotReceived'
 }
