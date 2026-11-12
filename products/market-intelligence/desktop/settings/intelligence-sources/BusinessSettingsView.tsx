@@ -431,8 +431,12 @@ function cellRow(args: {
               labelKeys={['settings.intelligenceSources.collectionPolicy.builtinCadenceNote']}
               resolveText={args.resolveText} />
           </span>
-          {/* 只写事实：具体周期由产品排期决定，没有真实读口就不编数字（不写「内置 · 5 分钟」）。 */}
-          <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.builtinCadence')}</span>
+          {/* 有真实调度就读真值（用户 2026-11-13：CryptoETF 走通用调度却被标成内置）；没有作业才写「内置频率」。 */}
+          {args.cadence === undefined
+            ? <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.builtinCadence')}</span>
+            : <FrequencyReadout resolveText={args.resolveText} view={frequencyReadoutView({
+              enabled: true, preset: 'balanced', scheduleAvailable: args.cadenceUnavailable !== true, cadence: args.cadence
+            })} />}
         </div>
         : args.preset === undefined || args.onPresetChange === undefined
       ? null

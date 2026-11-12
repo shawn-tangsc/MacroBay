@@ -129,6 +129,25 @@ describe('每源第二行：频率', () => {
     expect(onPresetChange).not.toHaveBeenCalled()
   })
 
+  it('writes the real interval for a built-in row whose source really has a schedule', async () => {
+    // 用户 2026-11-13：CryptoETF 走通用 10 分钟调度，却被标成「内置频率」——有作业就得写真值。
+    const { host } = await render({
+      builtinCadence: true,
+      cadence: {
+        'policy-path-market': {
+          registration: 'registered', mode: 'interval', intervalSeconds: 600,
+          nextRunAt: '2026-11-13T00:30:00.000Z', lastRunAt: '2026-11-13T00:20:00.000Z', running: false
+        }
+      }
+    })
+    const row = host.querySelector<HTMLElement>(`${ROW} [data-preset-row="policy-path-market"]`)!
+    expect(row.getAttribute('data-preset-builtin')).toBe('true')
+    expect(row.textContent).not.toContain(t.collectionPolicy.builtinCadence)
+    expect(row.textContent).toContain('10')
+    // 仍然不可操作：有读数不等于能把周期改成别的。
+    expect(row.querySelectorAll(OPERATION_CONTROLS)).toHaveLength(0)
+  })
+
   it('omits the second line for a disabled source but keeps the row as the one jump target', async () => {
     for (const input of [{ sourceEnabled: false, preset: 'manual' }, { sourceEnabled: false, builtinCadence: true }]) {
       const { host } = await render(input)
