@@ -202,6 +202,13 @@ describe('频率读数：下拉下方那一段', () => {
     expect(control!.textContent).toContain('间隔 15 分钟')
     // 仍然只有一颗 ⓘ，而且它现在**每行都有**（三档间隔并进同一颗）。
     expect(row.querySelectorAll('button[aria-label]')).toHaveLength(1)
+    // 说明句只许在浮层里：正文只留字段名 + 值（2026-11-13 正文说明句门禁）。
+    for (const note of [
+      t.collectionPolicy.presetIntervalsNote,
+      t.collectionPolicy.nextIsEstimateNote,
+      t.collectionPolicy.manualPresetNote,
+      t.collectionPolicy.scheduleUnreadableNote
+    ]) expect(row.textContent, note).not.toContain(note)
   })
 
   it('draws nothing when the schedule could not be read at all — and says so only in the ⓘ', async () => {

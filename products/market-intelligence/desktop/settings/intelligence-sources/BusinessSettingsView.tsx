@@ -1,6 +1,9 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Info } from 'lucide-react'
 
 import { Select, Switch } from 'antd'
+
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
 
 import { SettingsInfo } from '../settingsInfo'
 import { ProcessingEntryRow } from '../../pages/intelligence/ProcessingEntryRow'
@@ -437,20 +440,31 @@ function cellRow(args: {
         <span className="business-card__preset-label-group">
           <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
           {/* 这一行**只有一颗** ⓘ（原型 2026-11-13）：三档在各采集器上的实际间隔、「下次」是推算、
-              手动档为什么不会自动采集，三段都并进同一颗的多行内容。 */}
-          <SettingsInfo
-            ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
-            labelKeys={[
-              'settings.intelligenceSources.collectionPolicy.presetIntervalsNote',
-              'settings.intelligenceSources.collectionPolicy.nextIsEstimateNote',
+              手动档为什么不会自动采集、整批排期读不到，四句都在这颗浮层的 `lines` 里；
+              正文只留字段名 + 值（说明句不许进正文）。
+              这里直接写 `Popover` 而不是经过 `SettingsInfo`：门禁认的是调用点上的 `lines=`，
+              包一层 helper 会让这四句看起来像正文（2026-11-13 正文说明句门禁抓到的那八条）。 */}
+          <Popover
+            lines={[
+              { labelKey: 'settings.intelligenceSources.collectionPolicy.presetIntervalsNote' },
+              { labelKey: 'settings.intelligenceSources.collectionPolicy.nextIsEstimateNote' },
               ...(args.cadenceUnavailable === true
-                ? ['settings.intelligenceSources.collectionPolicy.scheduleUnreadableNote']
+                ? [{ labelKey: 'settings.intelligenceSources.collectionPolicy.scheduleUnreadableNote' }]
                 : []),
               ...(args.preset === 'manual'
-                ? ['settings.intelligenceSources.collectionPolicy.manualPresetNote']
+                ? [{ labelKey: 'settings.intelligenceSources.collectionPolicy.manualPresetNote' }]
                 : [])
             ]}
-            resolveText={args.resolveText} />
+            resolveText={args.resolveText}
+            trigger={(triggerProps) => (
+              <IconButton
+                {...triggerProps}
+                ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
+                icon={Info}
+                resolveText={args.resolveText}
+                size="sm"
+                variant="plain" />
+            )} />
         </span>
         <span className="business-card__preset-control">
           <Select
