@@ -42,9 +42,6 @@ describe('the derived panels match what the registry declared before purposes ex
     ['coinmarketcal', []],
     ['macro-calendar-coinmarketcal', []],
     ['0xrouter-aggregate-provider', []],
-    ['macro-calendar-0xrouter-economic-data', ['dashboard', 'economic-calendar']],
-    ['macro-calendar-0xrouter-financial-events', ['dashboard', 'economic-calendar']],
-    ['macro-calendar-0xrouter-central-bank-activities', ['dashboard', 'economic-calendar']],
     /* Narwhal 三条日历源已进注册表（另一条线），快照按它在 provider 顺序里的位置登记。 */
     ['macro-calendar-narwhal-economic-data', ['dashboard', 'economic-calendar']],
     ['macro-calendar-narwhal-financial-events', ['dashboard', 'economic-calendar']],

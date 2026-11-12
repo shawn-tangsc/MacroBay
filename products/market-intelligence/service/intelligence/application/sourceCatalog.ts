@@ -633,6 +633,9 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     supportsReplay: false,
     parserStrategy: '0xrouter-etf-flow-history-current-state-v1',
     readiness: 'live',
+    /* 日历三条与 ETF 都退出日程/行情链之后，这条只剩「历史行的归属」一个用途：**不可见**。
+       留着可见 = 设置页多一个「有密钥框、什么都不采」的入口。 */
+    visibility: 'hidden',
     // 0xRouter's own refresh services collect it, exactly like the macro-market job; the flag used to
     // be a source-id exemption and is now this declaration.
     collectionOwner: 'product',

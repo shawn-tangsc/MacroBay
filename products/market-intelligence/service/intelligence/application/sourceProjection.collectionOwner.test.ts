@@ -39,9 +39,9 @@ describe('官方日历源的采集节奏归产品', () => {
   it('reads the registry collection too: job/none are product-owned even without a catalog entry', () => {
     const byId = new Map(sourcesOf().map((source) => [source.sourceId, source]))
     for (const sourceId of [
-      'macro-calendar-0xrouter-economic-data',
-      'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities'
+      'macro-calendar-narwhal-economic-data',
+      'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities'
     ]) {
       expect(byId.get(sourceId)?.collection, sourceId).toBe('job')
       expect(byId.get(sourceId)?.collectionOwner, sourceId).toBe('product')

@@ -129,9 +129,14 @@ describe('官方日历源的频率行是「内置频率」', () => {
  * 而这个屏不渲染 `errorCode`——读者看到的就是「选完弹回、什么都没发生」。
  *
  * 判据：`collection` 是 `job` / `none` 的源，一律「内置频率」、没有任何控件、不落 preset。
+ *
+ * 换源后这三条 Narwhal feed 处于**待接入 + 未启用**（双写阶段：后台在采、界面锁着），
+ * 频率那一行按 `SourcesSettingsPane` 的守卫整行不画（`!enabled || pending` 直接跳过）。
+ * 所以这条只判「不出现任何可写控件」——画一个拨不动的下拉才是当初要防的事；
+ * 「接入后要显示内置频率」由同一文件上半部分对官方日历源那条覆盖。
  */
-describe('0xRouter 的三条市场日历 feed：节奏归产品作业，不许画下拉', () => {
-  it('shows 内置频率 for every job-collected calendar feed', async () => {
+describe('Narwhal 的三条市场日历 feed：待接入期间不许出现任何可写控件', () => {
+  it('draws no writable frequency control on the still-locked feeds', async () => {
     const host = await render('calendar')
     for (const sourceId of [
       'macro-calendar-narwhal-economic-data',
@@ -139,14 +144,11 @@ describe('0xRouter 的三条市场日历 feed：节奏归产品作业，不许�
       'macro-calendar-narwhal-central-bank-activities'
     ]) {
       const row = presetRowOf(host, sourceId)
-      expect(row, sourceId).not.toBeNull()
-      expect(row!.getAttribute('data-preset-builtin'), sourceId).toBe('true')
-      expect(row!.textContent, sourceId).toContain(t.collectionPolicy.builtinCadence)
-      // 三档下拉、开关、输入框一个都不许有：这一行不可写，就不许长得像能写。
-      expect(row!.querySelectorAll('select, [role="combobox"], [role="switch"], input'), sourceId).toHaveLength(0)
-      expect(row!.querySelector('.ant-select-selector'), sourceId).toBeNull()
-      // 也不是「挂了模板却点不动」：不挂可写行的模板属性。
-      expect(row!.hasAttribute('data-setting-key'), sourceId).toBe(false)
+      /* 待接入期间整行不画；一旦画出来，就必须是只读的「内置频率」形态。 */
+      expect(row, sourceId).toBeNull()
+      for (const control of host.querySelectorAll<HTMLElement>(`[data-source-id="${sourceId}"] select, [data-source-id="${sourceId}"] [role="combobox"], [data-source-id="${sourceId}"] [role="switch"], [data-source-id="${sourceId}"] input`)) {
+        expect(control, `${sourceId} 不该有可写控件`).toBeNull()
+      }
     }
   })
 })

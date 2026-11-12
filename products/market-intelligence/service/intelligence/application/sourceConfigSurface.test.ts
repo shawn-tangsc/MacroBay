@@ -134,7 +134,7 @@ describe('the three read commands describe the same source from one computation'
     // 回归（S0 `23fc2da` 引入）：这三条日历源只在 providerRegistry / calendarFeedRegistry 里，
     // 不在通用目录里。当时 `readConfigSurface` 只对目录源读 profile，日历作业写进去的 profile 被漏掉，
     // 设置页就把「正在跑」画成「你已停用」——正好是我们在清的那类「拿不到画成没有」。
-    const FEED = 'macro-calendar-0xrouter-economic-data'
+    const FEED = 'macro-calendar-narwhal-economic-data'
     const definition = getIntelligenceSourceDefinition(FEED)
     const stored = createSourceProfileStore(createInMemoryProfileStorage([
       { ...createDefaultSourceProfile(definition ?? { sourceId: FEED } as never), sourceId: FEED, enabled: true }

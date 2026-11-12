@@ -921,6 +921,9 @@ export const intelligenceSourcesText = {
       'macro-calendar-fed': 'Federal Reserve Board (Fed)',
       'macro-calendar-bea': 'Bureau of Economic Analysis (BEA)',
       'macro-calendar-bls': 'Bureau of Labor Statistics (BLS)',
+      'macro-calendar-narwhal-economic-data': 'Narwhal economic data',
+      'macro-calendar-narwhal-financial-events': 'Narwhal financial events',
+      'macro-calendar-narwhal-central-bank-activities': 'Narwhal central bank activities',
       'macro-calendar-coinmarketcal': 'CoinMarketCal'
     }
   },

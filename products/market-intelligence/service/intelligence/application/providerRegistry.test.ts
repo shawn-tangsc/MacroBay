@@ -175,15 +175,14 @@ describe('source projections', () => {
     }
   })
 
-  it('shows 0xRouter once in the dashboard panel with its three calendar feeds', () => {
-    const dashboard = panelView('dashboard')
-    const routers = dashboard?.providers.filter((provider) => provider.providerId === '0xrouter') ?? []
-    expect(routers).toHaveLength(1)
-    expect(routers[0]?.sources.map((source) => source.sourceId)).toEqual([
-      'macro-calendar-0xrouter-economic-data',
-      'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities'
-    ])
+  it('keeps 0xRouter out of every panel after the switch, with one hidden registration left', () => {
+    /* 换源后 0xRouter 的日历三条已归 Narwhal、ETF 改由 CryptoETF 采，它自己不再供任何面板。
+       留一条 hidden 登记的用途只有一个：库里它写过的历史行有归属可解释。 */
+    expect(panelView('dashboard')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(false)
+    expect(panelView('economic-calendar')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(false)
+    const router = providerRegistry.find((provider) => provider.providerId === '0xrouter')
+    expect(router?.sources.map((source) => source.sourceId)).toEqual(['0xrouter-aggregate-provider'])
+    expect(router?.sources[0]).toMatchObject({ visibility: 'hidden', maintenanceOnly: true, collection: 'none', purposes: [] })
   })
 
   it('marks every proxy-only source as needing a proxy and leaves reachable sources unmarked', () => {
@@ -205,10 +204,7 @@ describe('source projections', () => {
       'kraken-system-status',
       'solana-status',
       // 直连回 403 但那是边缘拦截，接口要经代理才通（读者 2026-11-12 确认）。
-      '0xrouter-aggregate-provider',
-      'macro-calendar-0xrouter-economic-data',
-      'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities'
+      '0xrouter-aggregate-provider'
     ]
     for (const sourceId of blocked) {
       expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBe(true)
@@ -231,11 +227,11 @@ describe('source projections', () => {
   })
 
   it('names the provider credential source even in a panel that does not list it', () => {
-    const calendar = panelView('economic-calendar')?.providers.find((provider) => provider.providerId === '0xrouter')
+    /* 换源后这条判据跟着搬家：Narwhal 的密钥锚在 `-economic-data`，而日历面板列的就是三条 feed；
+       锚那条不在面板里也要能说出来，否则密钥框整个不见。 */
+    const calendar = panelView('economic-calendar')?.providers.find((provider) => provider.providerId === 'narwhal')
     expect(calendar?.sources.map((source) => source.collection)).toEqual(['job', 'job', 'job'])
-    expect(calendar?.credentialSourceId).toBe('0xrouter-aggregate-provider')
-    expect(panelView('dashboard')?.providers.find((provider) => provider.providerId === '0xrouter')?.credentialSourceId)
-      .toBe('0xrouter-aggregate-provider')
+    expect(calendar?.credentialSourceId).toBe('macro-calendar-narwhal-economic-data')
   })
 
   it('hides hidden sources unless they are enabled', () => {
