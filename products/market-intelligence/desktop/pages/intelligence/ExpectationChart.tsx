@@ -4,6 +4,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellCompactInstant, formatShellDay } from '@platform/ui/time/shellTimeFormat'
 
 import { expectationBp, type PolicyPathDistribution, type PolicyPathOutcome } from '../../../contracts/policyPath'
+import { placeReadout } from './readoutPlacement'
 
 /**
  * 「利率数学期望」曲线。
@@ -217,24 +218,19 @@ export function ExpectationChart({ points, events, height, width, text, latest }
 
   const placeTip = (): Readonly<{ left: number; top: number }> => {
     if (!selection) return { left: 0, top: 0 }
-    const { W, H } = geometry
-    const { width: tipW, height: tipH } = tipSize
-    if (selection.pointer) {
-      // 横向先留 TIP_OFFSET 的空隙（这才是「不遮住光标那一点」的保证），左边放不下就翻到右侧；
-      // 纵向优先上方，上方不够翻到下方，再夹回图内——纵向被夹住时横向空隙仍然成立。
-      const { x, y } = selection.pointer
-      const left = x + TIP_OFFSET + tipW <= W - 4
-        ? x + TIP_OFFSET
-        : x - TIP_OFFSET - tipW
-      let top = y - TIP_OFFSET - tipH
-      if (top < 4) top = y + TIP_OFFSET
-      return { left: clamp(left, 4, W - tipW - 4), top: clamp(top, 4, H - tipH - 4) }
-    }
     const point = selected ?? selectable[0]!
-    // 键盘没有光标可跟：面板落在选中点上方居中。
-    let top = point.y - TIP_OFFSET - tipH
-    if (top < 4) top = point.y + TIP_OFFSET
-    return { left: clamp(point.x - tipW / 2, 4, W - tipW - 4), top: clamp(top, 4, H - tipH - 4) }
+    const rect = placeReadout({
+      // 用舞台**真实**的盒子，而不是 SVG 的逻辑高度：两者在首帧或动画中可能差几个像素，
+      // 差出来的那几像素正好会让面板底部越过绘图区，被上层或裁切吃掉。
+      stage: {
+        width: stageRef.current?.clientWidth || geometry.W,
+        height: stageRef.current?.clientHeight || geometry.H
+      },
+      tip: tipSize,
+      point: { x: point.x, y: point.y },
+      ...(selection.pointer ? { pointer: selection.pointer } : {})
+    })
+    return { left: rect.left, top: rect.top }
   }
 
   const nearestByX = (x: number): number => {

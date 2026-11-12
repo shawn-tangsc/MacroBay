@@ -91,8 +91,13 @@
  * 这断开的是一个尺寸反馈环：量卡高 → 写回成图高 → 图若在流里就会把行撑高 → 再量到更高的卡
  * → 图更高。用户实测「刚进来没滚动条，一滚动图就变大」就是这个环。
  */
-.mk-plot { position: relative; min-width: 0; align-self: stretch; overflow: hidden; }
-.mk-plot__svg { display: block; overflow: hidden; }
+/*
+ * 这一格**不裁内容**：读数面板是它内部的绝对定位子元素，`overflow: hidden` 会把面板切掉
+ * （用户 2026-11-13 看到数值被切断就是这个）。尺寸环由「舞台 absolute、行高只由政策卡决定」断开，
+ * 不靠裁切——裁切在这条链里是多余的，代价是浮层永远显示不全。
+ */
+.mk-plot { position: relative; min-width: 0; align-self: stretch; overflow: visible; }
+.mk-plot__svg { display: block; overflow: visible; }
 /* 图的舞台：绝对铺满，既是面板的定位参照，又不占据任何行高。 */
 .mk-plot__stage { position: absolute; inset: 0; outline: none; }
 .mk-plot__stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
@@ -102,12 +107,15 @@
  * 每次移动只改 transform 与文字，宽度固定、内容不换行，所以不会把页面重新排版。
  */
 .mk-tip {
-  position: absolute; left: 0; top: 0; z-index: 2;
+  /* z-index 要盖过图下面那排卡片与迷你日历（它们都在同一个层叠上下文里）。
+     任何祖先都不许再开层叠上下文，否则这个数只在图的内部有效。 */
+  position: absolute; left: 0; top: 0; z-index: 30;
   width: 168px; padding: 7px 9px; line-height: 1.35;
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
   font-size: var(--font-meta); color: var(--text);
-  pointer-events: none; will-change: transform;
+  /* 不做动画，`will-change: transform` 是多余的一层；它只会多一个层叠上下文。 */
+  pointer-events: none;
 }
 .mk-tip[data-active='false'] { visibility: hidden; }
 .mk-tip__time { display: block; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
