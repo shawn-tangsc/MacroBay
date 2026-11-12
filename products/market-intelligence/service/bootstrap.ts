@@ -57,7 +57,9 @@ import { withSyncAudit } from './intelligence/audit/syncAuditRecorder'
 import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRuntime'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
+import { getPlatformFetch } from '@platform/network/platformFetch'
 import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
+import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
 import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calendar/bea-official-release/beaOfficialReleaseJobRuntime'
 import { createMacroCalendarProviderSettingsService } from './intelligence/macro-calendar/macroCalendarProviderSettingsService'
@@ -393,8 +395,17 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(macroCalendarBackend.beaOfficialReleaseRefresh ? ['macro-calendar-bea' as const] : []),
     ...(macroCalendarBackend.blsEmploymentSchedule ? ['macro-calendar-bls' as const] : [])
   ] as const
+  // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
+  const narwhalCalendarAssembly = createNarwhalCalendarAssembly({
+    jobRuntime: deps.jobRuntime,
+    repository: macroCalendarBackend.repository,
+    fetchImpl: getPlatformFetch(),
+    getCredential: credentialRef => intelligenceModule.sourceCredentials.getByRef(credentialRef),
+    now: Date.now
+  })
   syncMarketCalendarSchedule = () => marketCalendarScheduler.syncSchedule()
   void marketCalendarScheduler.initialize()
+  void narwhalCalendarAssembly.initialize()
   blsScheduleAndValuesScheduler.initialize()
   void autoEnrollCalendarProviders({ profiles: calendarProfiles, readyProviderIds: readyCalendarProviders })
     .then(() => {
@@ -430,6 +441,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     await crossAssetRuntime?.dispose()
     crossAssetStore?.close()
     marketCalendarScheduler.dispose()
+    narwhalCalendarAssembly.dispose()
     blsScheduleAndValuesScheduler.dispose()
     await marketCalendar.dispose()
     await beaOfficialReleaseJobs?.dispose()
