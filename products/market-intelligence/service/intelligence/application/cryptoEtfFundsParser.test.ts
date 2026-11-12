@@ -31,8 +31,8 @@ describe('parseCryptoEtfFundsResponse', () => {
       day('2026-10-18', 0, []),
       // 逐基金为空 = 未定稿/占位，绝不能变成 0
       day('2026-10-19', 0, []),
-      // 已定稿、合计正好是 0 = 真的是 0
-      day('2026-10-20', 0, [fund('IBIT', 0), fund('FBTC', 0)])
+      // 已定稿、合计正好是 0、但有基金非零（进出抵消）= 真的是 0
+      day('2026-10-20', 0, [fund('IBIT', 50), fund('FBTC', -50)])
     ]), 'btc')
 
     expect(parsed.state).toBe('available')
@@ -41,9 +41,21 @@ describe('parseCryptoEtfFundsResponse', () => {
     expect(parsed.days.map((row) => row.netFlowUsd)).toEqual([175_700_000, -82_400_000, 0])
     expect(parsed.audit).toMatchObject({
       symbol: 'BTC', windowDays: 30, rows: 6, settledRows: 3,
-      droppedWeekendRows: 2, droppedRowsWithoutFunds: 1, fundSumMismatches: 0,
+      droppedWeekendRows: 2, droppedRowsWithoutFunds: 1, droppedUndecidableZeroRows: 0, fundSumMismatches: 0,
       latestTradingDate: '2026-10-20'
     })
+  })
+
+  it('drops a zero total whose funds are all zero: a holiday and a real zero are indistinguishable', () => {
+    const parsed = parseCryptoEtfFundsResponse(payload([
+      day('2026-09-07', 0, [fund('IBIT', 0), fund('FBTC', 0)]),
+      day('2026-09-08', -29.5, [fund('IBIT', -29.5)])
+    ]), 'btc')
+
+    expect(parsed.state).toBe('available')
+    if (parsed.state !== 'available') return
+    expect(parsed.days.map((row) => row.tradingDate)).toEqual(['2026-09-08'])
+    expect(parsed.audit.droppedUndecidableZeroRows).toBe(1)
   })
 
   it('uses totalUsdM as the reading and only counts a per-fund mismatch', () => {

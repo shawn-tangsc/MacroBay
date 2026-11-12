@@ -33,6 +33,8 @@ export type CryptoEtfFundsAudit = Readonly<{
   settledRows: number
   droppedWeekendRows: number
   droppedRowsWithoutFunds: number
+  /** `total = 0` 且逐基金全零/为空：节假日或占位，无法与真 0 区分，不落行。 */
+  droppedUndecidableZeroRows: number
   fundSumMismatches: number
   latestTradingDate: string
 }>
@@ -83,6 +85,7 @@ function parseEnvelope(body: string, asset: CryptoEtfAssetKey): CryptoEtfFundsPa
 
   let droppedWeekendRows = 0
   let droppedRowsWithoutFunds = 0
+  let droppedUndecidableZeroRows = 0
   let fundSumMismatches = 0
   const days: CryptoEtfSettledDay[] = []
   for (const day of raw) {
@@ -93,6 +96,12 @@ function parseEnvelope(body: string, asset: CryptoEtfAssetKey): CryptoEtfFundsPa
     if (day.funds.length === 0) {
       // 未定稿/非交易日：不落行。绝不能把它写成 0。
       droppedRowsWithoutFunds += 1
+      continue
+    }
+    // 按行内容判，不按日期判：合计为零、且逐基金也全零，就是「节假日/占位」与「真 0」不可分的那一档，
+    // 不落行（宁可少一天，也不给假 0）。合计为零但有基金非零，是进出抵消的真 0，照常落 0。
+    if (day.totalUsdM === 0 && !(day.funds as { netFlowUsdM: number }[]).some((fund) => fund.netFlowUsdM !== 0)) {
+      droppedUndecidableZeroRows += 1
       continue
     }
     const netFlowUsd = toUsd(day.totalUsdM)
@@ -112,6 +121,7 @@ function parseEnvelope(body: string, asset: CryptoEtfAssetKey): CryptoEtfFundsPa
       settledRows: days.length,
       droppedWeekendRows,
       droppedRowsWithoutFunds,
+      droppedUndecidableZeroRows,
       fundSumMismatches,
       latestTradingDate: days.at(-1)!.tradingDate
     })

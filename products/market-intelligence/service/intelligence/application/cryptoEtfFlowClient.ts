@@ -99,7 +99,7 @@ export function createCryptoEtfFlowClient(deps: CryptoEtfFlowClientDeps = {}) {
         settled: Object.freeze({
           tradingDate: parsed.audit.latestTradingDate,
           settledRows: parsed.audit.settledRows,
-          placeholderOrNonTradingRows: parsed.audit.droppedRowsWithoutFunds + parsed.audit.droppedWeekendRows
+          placeholderOrNonTradingRows: parsed.audit.droppedRowsWithoutFunds + parsed.audit.droppedWeekendRows + parsed.audit.droppedUndecidableZeroRows
         }),
         ...(body.headers['x-plan'] ? { plan: body.headers['x-plan'] } : {}),
         ...(body.headers['x-ratelimit-remaining'] ? { rateLimitRemaining: body.headers['x-ratelimit-remaining'] } : {})
