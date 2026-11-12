@@ -1,4 +1,5 @@
 import { httpRequest } from '@platform/jobs'
+import type { CredentialProbeFailureCode } from './credentialedProviderProbes'
 import { getPlatformFetch } from '@platform/network/platformFetch'
 
 import {
@@ -23,18 +24,15 @@ import {
  * 一次全能证明。
  */
 /**
- * 与 `credentialedProviderProbes.ts` 的 `CredentialProbeFailureCode` **同一套词**，只多两个：
- * `response-shape-invalid`（200 但结构不对，配置线正在补的一个码）与 `no-settled-rows`
- * （内部诊断用，不上界面——界面上它落到形状那一档）。
+ * 取自共享闭集 `CredentialProbeFailureCode`，只挑**这个客户端真会返回**的码，外加自己的诊断码
+ * `no-settled-rows`（读数口用，探针把它并到形状那一档，不上界面）。
+ * 用 `Extract` 而不是整集合取并：配置线那条 `Record<CryptoEtfFlowFailureCode, ...>` 是穷尽的，
+ * 整集合会逼它给「我永远不会返回的码」也写映射。共享集删掉哪个码，这里会立刻编译失败。
  */
 export type CryptoEtfFlowFailureCode =
-  | 'credential-invalid'
-  | 'plan-restricted'
-  | 'rate-limited'
-  | 'request-timeout'
-  | 'transport-unavailable'
-  | 'response-unavailable'
-  | 'response-shape-invalid'
+  | Extract<CredentialProbeFailureCode,
+      | 'credential-invalid' | 'plan-restricted' | 'rate-limited' | 'request-timeout'
+      | 'transport-unavailable' | 'response-unavailable' | 'response-shape-invalid'>
   | 'no-settled-rows'
 
 export type CryptoEtfAssetReading =

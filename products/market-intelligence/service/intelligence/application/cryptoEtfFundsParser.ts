@@ -1,3 +1,5 @@
+import type { CredentialProbeFailureCode } from './credentialedProviderProbes'
+
 import {
   cryptoEtfAssetMetadata,
   cryptoEtfSourcePolicy,
@@ -35,9 +37,14 @@ export type CryptoEtfFundsAudit = Readonly<{
   latestTradingDate: string
 }>
 
+/** 失败原因同样取自共享闭集；`no-settled-rows` 只在本模块内部流转。 */
+export type CryptoEtfFundsParseReason =
+  | Extract<CredentialProbeFailureCode, 'response-shape-invalid'>
+  | 'no-settled-rows'
+
 export type CryptoEtfFundsParseResult =
   | Readonly<{ state: 'available'; days: readonly CryptoEtfSettledDay[]; audit: CryptoEtfFundsAudit }>
-  | Readonly<{ state: 'unavailable'; reason: 'response-shape-invalid' | 'no-settled-rows' }>
+  | Readonly<{ state: 'unavailable'; reason: CryptoEtfFundsParseReason }>
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/
 const topLevelKeys = Object.freeze(['symbol', 'asset', 'windowDays', 'days', 'updatedAt'])
