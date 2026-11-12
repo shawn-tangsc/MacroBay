@@ -6,7 +6,8 @@ import type {
   PlatformEventEnvelope,
   PlatformEventDelivery,
   PlatformEventHandler,
-  PublishEventInput
+  PublishEventInput,
+  EventBusStoreDiagnosticIntegrity
 } from '../contracts/eventBusContracts'
 import { validatePublishEventInput } from '../contracts/eventBusValidation'
 import { createEventBusRegistry } from './eventBusRegistry'
@@ -49,7 +50,17 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
    * 闸门状态：读到 `corrupt` / `future-version` 之后进入**阻断态**——半个字节都不写、不派发、
    * 不裁剪。内存保持空，但「空」与「读不到」分开记账：诊断（第三笔）读这里，不读文件内容。
    */
-  let blocked: Readonly<{ reason: EventBusWriteBlockedReason; integrity: 'corrupt' | 'future-version' }> | undefined
+  let blocked: Readonly<{
+    reason: EventBusWriteBlockedReason
+    /** 写进日志的那一档（比 `reason` 细一档：`invalid-json` / `shape` / `checksum-mismatch` / `future-version`）。 */
+    logReason: string
+    integrity: 'corrupt' | 'future-version'
+  }> | undefined
+  /**
+   * 文件本身的完整性结论，诊断原样读它。初始值：有存储的文件但还没读 → `empty`
+   * （主文件不存在与「读坏了」不是一件事）；纯内存运行时（没有存储）→ `ok`。
+   */
+  let integrity: EventBusStoreDiagnosticIntegrity = deps.storage ? 'empty' : 'ok'
 
   /**
    * 按保留期裁剪当前状态；删到东西才落盘（没删就不写，避免启动时做一次无意义的整份写回）。
@@ -79,16 +90,22 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
         const outcome = await deps.storage!.read()
         if (outcome.integrity === 'corrupt' || outcome.integrity === 'future-version') {
           // 读到了、但读不懂：进入阻断态。**不**把内存换成「空」去当默认值，也不写回。
+          const logReason = outcome.integrity === 'future-version' ? 'future-version' : outcome.problem
           blocked = {
             reason: outcome.integrity === 'future-version'
               ? 'future-version'
               : outcome.problem === 'checksum-mismatch' ? 'checksum-mismatch' : 'corrupt',
+            logReason,
             integrity: outcome.integrity
           }
+          integrity = outcome.integrity
+          // 一行日志，够排障用：不带文件内容、不带事件体。与诊断里的 `integrity`/`blocked` 是同一份事实。
+          console.warn(`event-bus-store-blocked reason=${logReason}`)
           hydrated = true
           return
         }
         blocked = undefined
+        integrity = outcome.integrity
         store.replaceState(outcome.state)
         synchronizeEventBusIdCounters(store.getState().events, store.getState().deliveries)
         hydrated = true
@@ -106,6 +123,8 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
   async function persist(): Promise<void> {
     if (!deps.storage) return
     await deps.storage.write(store.getState())
+    // 写成功了：文件现在是本版本写出的 v1（旧文件也在这一次写里升级完毕）。
+    integrity = 'ok'
   }
 
   function queueBackgroundOperation(operation: () => Promise<void>): void {
@@ -171,7 +190,11 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
       await ensureHydrated()
       if (!blocked || !deps.storage?.archiveCorruptStore) return undefined
       const archived = await deps.storage.archiveCorruptStore()
-      if (archived !== undefined) blocked = undefined
+      if (archived !== undefined) {
+        blocked = undefined
+        // 归档后主文件不存在 = 首次安装那一态；写重新被允许。
+        integrity = 'empty'
+      }
       return archived
     },
 
@@ -200,7 +223,11 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
         failedDeliveries,
         deadLetterDeliveries,
         blockedDeliveries,
-        checkpoints: checkpoints as EventBusDiagnosticsPage['checkpoints']
+        checkpoints: checkpoints as EventBusDiagnosticsPage['checkpoints'],
+        // 「文件坏了所以写被拒」与「新功能自己写失败」在日志里长得像，诊断里必须一眼分开：
+        // `events: 0` + `integrity: 'corrupt'` + `blocked: true` 是两回事。
+        integrity,
+        blocked: blocked !== undefined
       }
     }
   }

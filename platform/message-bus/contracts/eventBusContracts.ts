@@ -92,12 +92,26 @@ export type EventBusDiagnosticsQuery = {
   limit?: number
 }
 
+/**
+ * 存储文件本身的完整性结论（与「有没有事件」是两件事）。
+ *
+ * 排障时只看这两项就能分开两种「事件总线不正常」：
+ * - `integrity` 不是 `ok` / `unverified-legacy`（`corrupt`、`future-version`）+ `blocked: true`
+ *   ⇒ **文件本身被读坏了/是更新的版本写的，写被闸门拒绝**；
+ * - `integrity` 正常 + `blocked: false` ⇒ 闸门没拦，是**新功能自己的写失败**（看日志与错误码）。
+ */
+export type EventBusStoreDiagnosticIntegrity = 'empty' | 'ok' | 'unverified-legacy' | 'corrupt' | 'future-version'
+
 export type EventBusDiagnosticsPage = {
   recentEvents: PlatformEventEnvelope[]
   failedDeliveries: PlatformEventDelivery[]
   deadLetterDeliveries: PlatformEventDelivery[]
   blockedDeliveries: PlatformEventDelivery[]
   checkpoints: PlatformEventCheckpoint[]
+  /** 存储文件的完整性结论；`empty` 只表示主文件不存在（首次安装）。 */
+  integrity: EventBusStoreDiagnosticIntegrity
+  /** 是否处于阻断态（写被拒绝）；**不代表**「没有事件」。 */
+  blocked: boolean
 }
 
 /** 写侧闸门拒绝写的原因：坏文件 / 更新的版本 / 校验和不符。 */

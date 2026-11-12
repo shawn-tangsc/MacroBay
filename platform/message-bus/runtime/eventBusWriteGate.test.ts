@@ -119,6 +119,86 @@ describe('event bus write gate (runtime)', () => {
     expect(persisted.events.map((event) => event.eventId)).toEqual([published.eventId])
   })
 
+  describe('diagnostics tell a blocked file apart from a new feature failing to write', () => {
+    it('reports integrity and blocked for a corrupt file, and says which problem it was in one log line', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const filePath = await storeFile()
+      await writeFile(filePath, '{"events": [', 'utf8')
+      const runtime = createEventBusRuntime({ storage: createEventBusJsonStorage(filePath) })
+
+      // 「没有事件」与「文件坏了」必须是两句：events: 0 + integrity: corrupt + blocked: true。
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({
+        integrity: 'corrupt',
+        blocked: true,
+        recentEvents: []
+      })
+      expect(warn).toHaveBeenCalledWith('event-bus-store-blocked reason=invalid-json')
+      warn.mockRestore()
+    })
+
+    it('names the future-version and checksum-mismatch reasons the same way', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      const futurePath = await storeFile()
+      await writeFile(futurePath, JSON.stringify({ formatVersion: 2, events: [], deliveries: [], checkpoints: [] }), 'utf8')
+      const futureRuntime = createEventBusRuntime({ storage: createEventBusJsonStorage(futurePath) })
+      await expect(futureRuntime.getDiagnostics()).resolves.toMatchObject({ integrity: 'future-version', blocked: true })
+      expect(warn).toHaveBeenCalledWith('event-bus-store-blocked reason=future-version')
+
+      warn.mockClear()
+      const tamperedPath = await storeFile()
+      const tampered = JSON.parse(serializeEventBusState(createDefaultEventBusStoreState())) as Record<string, unknown>
+      tampered.events = [{ eventId: 'x', topic: 'tampered' }]
+      await writeFile(tamperedPath, JSON.stringify(tampered), 'utf8')
+      const tamperedRuntime = createEventBusRuntime({ storage: createEventBusJsonStorage(tamperedPath) })
+      await expect(tamperedRuntime.getDiagnostics()).resolves.toMatchObject({ integrity: 'corrupt', blocked: true })
+      expect(warn).toHaveBeenCalledWith('event-bus-store-blocked reason=checksum-mismatch')
+      warn.mockRestore()
+    })
+
+    it('keeps blocked false when the gate is not the reason a write failed', async () => {
+      const filePath = await storeFile()
+      const runtime = createEventBusRuntime({ storage: createEventBusJsonStorage(filePath) })
+      // 写失败来自磁盘（`.next` 位置被占），不是闸门：诊断必须仍然说「文件没问题」。
+      await mkdir(`${filePath}.next`, { recursive: true })
+      await expect(runtime.publish(eventInput)).rejects.toBeDefined()
+
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({ integrity: 'empty', blocked: false })
+      await rm(`${filePath}.next`, { recursive: true, force: true })
+    })
+
+    it('says empty for a first install and ok once the file is written', async () => {
+      const filePath = await storeFile()
+      const runtime = createEventBusRuntime({ storage: createEventBusJsonStorage(filePath) })
+
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({ integrity: 'empty', blocked: false })
+      await runtime.publish(eventInput)
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({ integrity: 'ok', blocked: false })
+    })
+
+    it('calls a legacy file unverified-legacy, and ok after the first upgrade write', async () => {
+      const filePath = await storeFile()
+      await writeFile(filePath, JSON.stringify(createDefaultEventBusStoreState()), 'utf8')
+      const runtime = createEventBusRuntime({ storage: createEventBusJsonStorage(filePath) })
+
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({ integrity: 'unverified-legacy', blocked: false })
+      await runtime.publish(eventInput)
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({ integrity: 'ok', blocked: false })
+    })
+
+    it('reports empty and unblocked again after an explicit archive', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const filePath = await storeFile()
+      await writeFile(filePath, '{"events": [', 'utf8')
+      const runtime = createEventBusRuntime({ storage: createEventBusJsonStorage(filePath) })
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({ integrity: 'corrupt', blocked: true })
+
+      await runtime.archiveCorruptStore()
+      await expect(runtime.getDiagnostics()).resolves.toMatchObject({ integrity: 'empty', blocked: false })
+      warn.mockRestore()
+    })
+  })
+
   it('keeps a readable legacy store publishable and upgrades it on the next write', async () => {
     const filePath = await storeFile()
     await writeFile(filePath, JSON.stringify(createDefaultEventBusStoreState()), 'utf8')

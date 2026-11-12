@@ -93,6 +93,22 @@ hiding it.
 - The agent selection page has no entry point right now: **Intelligence** lands directly on the
   dashboard.
 
+### The stored event-bus file
+
+The app keeps its event-bus records in one file in the app data folder. If that file is damaged, or
+was written by a newer version of the app, **the app stops writing to it instead of replacing it**:
+publishing fails with a clear error, whatever is already in the file stays exactly as it is, and the
+file is never repaired, renamed or overwritten automatically.
+
+- Existing records in that file are not lost. The file is left untouched until someone deals with it.
+- Events published while this is in effect are **not recorded**; the caller gets an error instead of
+  a false "saved", so nothing silently disappears.
+- The only way forward is to move that file aside by hand and start again; the app will not do it on
+  its own, because that would be deciding to throw the data away for you.
+- To tell "the file itself was refused" apart from "a new feature could not write", start with the
+  event-bus diagnostics: `integrity` and `blocked` say which of the two it is. Only then decide
+  whether to roll back or repair.
+
 ## API and configuration stability
 
 The `0.4.3` release does not promise stable internal APIs, database schemas, or settings shapes.
