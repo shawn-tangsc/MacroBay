@@ -164,17 +164,10 @@
 .mk-evhead p { margin: 2px 0 0; font-size: var(--font-meta); color: var(--muted); }
 .mk-evgroups { display: flex; flex-direction: column; gap: 10px; }
 .mk-evgroup h4 { margin: 0 0 4px; font-size: var(--font-meta); font-weight: 600; color: var(--text-strong); }
-.mk-evrow { display: grid; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
-.mk-evrow__top { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
-.mk-evrow__top time { font-size: var(--font-meta); color: var(--muted); }
-.mk-evrow__kind { font-size: var(--font-meta); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; }
-.mk-evrow__kind[data-kind='indicator'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.mk-evrow__name { margin: 0; font-size: var(--font-body); color: var(--text); }
-.mk-evrow__name span { color: var(--muted); font-size: var(--font-meta); }
-.mk-evrow__surprise { margin: 0; font-size: var(--font-meta); color: var(--muted); font-variant-numeric: tabular-nums; }
-.mk-evrow__surprise[data-tone='beat'] { color: var(--caution); }
-.mk-evrow__surprise[data-tone='miss'] { color: var(--muted-strong); }
-.mk-evrow__assets { margin: 0; display: flex; gap: 8px; font-size: var(--font-meta); color: var(--muted); font-variant-numeric: tabular-nums; }
+.mk-evl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.mk-evr { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--font-meta); font-variant-numeric: tabular-nums; }
+.mk-evr time { flex: none; color: var(--muted); }
+.mk-evr span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .mk-evmore { margin: 4px 0 0; font-size: var(--font-meta); color: var(--muted); }
 .mk-evempty { flex: 1; display: grid; place-items: center; border: 1px dashed var(--border-strong); border-radius: 8px; font-size: var(--font-meta); color: var(--muted); text-align: center; padding: 0 12px; }
 .mk-evempty[hidden] { display: none; }

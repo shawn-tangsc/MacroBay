@@ -52,16 +52,12 @@ const MOCK = {
     groups: [
       {
         kind: 'indicator' as const, count: 48, shown: [
-          { time: '01:00', country: '美国', name: '上周EIA原油库存变化(万桶)(至1106)', surprise: 'beat', value: '+519.93%', assets: { qqq: '-0.35%', btc: '+0.16%', eth: '-0.05%', usd: '-0.02%' } },
-          { time: '21:30', country: '美国', name: '10月生产者物价指数(年率)', surprise: 'inline', value: '', assets: { qqq: '+0.87%', btc: '-0.54%', eth: '+0.69%', usd: '+0.25%' } },
-          { time: '21:30', country: '美国', name: '10月核心生产者物价指数(年率)', surprise: 'beat', value: '+2.56%', assets: { qqq: '-0.20%', btc: '-0.56%', eth: '-0.50%', usd: '-0.02%' } }
+          { time: '01:00', name: '上周EIA原油库存变化(万桶)(至1106)' },
+          { time: '21:30', name: '10月生产者物价指数(年率)' },
+          { time: '21:30', name: '10月核心生产者物价指数(年率)' }
         ]
       },
-      {
-        kind: 'centralBank' as const, count: 9, shown: [
-          { time: '02:10', country: '美国', name: '旧金山联储主席戴利发表讲话', surprise: 'none' as const, value: '', assets: { qqq: '—', btc: '—', eth: '—', usd: '—' } }
-        ]
-      }
+      { kind: 'centralBank' as const, count: 9, shown: [{ time: '02:10', name: '旧金山联储主席戴利发表讲话' }] }
     ]
   }
 } as const
@@ -181,17 +177,11 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
         <div className="mk-evgroups">
           {MOCK.day.groups.map(group => <section className="mk-evgroup" key={group.kind}>
             <h4>{text.dayGroup.replace('{type}', text.kinds[group.kind]).replace('{count}', String(group.count))}</h4>
-            {group.shown.map(row => <article className="mk-evrow" key={`${group.kind}-${row.name}`}>
-              <div className="mk-evrow__top"><time>{row.time}</time><span className="mk-evrow__kind" data-kind={group.kind}>{text.kinds[group.kind]}</span></div>
-              <p className="mk-evrow__name"><span>{row.country}</span> {row.name}</p>
-              {surpriseSentence(row.surprise, row.value, text) === undefined ? null : <p className="mk-evrow__surprise" data-tone={row.surprise}>
-                {surpriseSentence(row.surprise, row.value, text)}
-              </p>}
-              <p className="mk-evrow__assets">
-                <span>{text.assets.qqq} {row.assets.qqq}</span><span>{text.assets.btc} {row.assets.btc}</span>
-                <span>{text.assets.eth} {row.assets.eth}</span><span>{text.assets.usd} {row.assets.usd}</span>
-              </p>
-            </article>)}
+            <ul className="mk-evl">
+              {group.shown.map(row => <li className="mk-evr" key={`${group.kind}-${row.time}-${row.name}`}>
+                <time>{row.time}</time><span>{row.name}</span>
+              </li>)}
+            </ul>
             {group.count > group.shown.length ? <p className="mk-evmore">{text.more.replace('{count}', String(group.count - group.shown.length))}</p> : null}
           </section>)}
         </div>
