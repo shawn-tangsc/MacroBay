@@ -10,6 +10,8 @@ import { createHash } from 'node:crypto'
 import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { ChannelDeliveryRepository } from './ChannelDeliveryRepository'
 import { ChannelDeliveryService } from './ChannelDeliveryService'
+import { channelImageSourceId } from './ChannelDeliveryContracts'
+import { MAX_CHANNEL_IMAGE_BYTES, MAX_CHANNEL_IMAGE_CAPTION_CHARS } from './channelImageDelivery'
 import { seedChannelAdapterSupport } from './channelTestSupport'
 
 describe('ChannelDeliveryService', () => {
@@ -265,6 +267,137 @@ function harness(enabled = true, beforeSendOwnership?: () => void, deliveredDeta
   const cipher = cipherForTests()
   return { database, transport, service: new ChannelDeliveryService({ repository: new ChannelDeliveryRepository(database), cipher, transport, now: () => new Date('2026-07-18T00:00:00.000Z'), beforeSendOwnership }) }
 }
+
+function imageHarness(options: { supportsImage?: boolean; withImageTransport?: boolean } = {}) {
+  const base = harness()
+  const sendImage = vi.fn(async (_input: {
+    channelId: string
+    providerConversationKey: string
+    image: { mime: string; bytes: Uint8Array }
+    caption: string
+    idempotencyKey: string
+  }) => ({ kind: 'delivered' as const }))
+  const service = new ChannelDeliveryService({
+    repository: new ChannelDeliveryRepository(base.database),
+    cipher: cipherForTests(),
+    transport: base.transport,
+    ...(options.withImageTransport === false ? {} : {
+      imageTransport: { supportsImage: () => options.supportsImage ?? true, sendImage }
+    }),
+    now: () => new Date('2026-07-18T00:00:00.000Z')
+  })
+  return { ...base, service, sendImage }
+}
+
+function pngBytes(size = 64): Uint8Array {
+  const value = new Uint8Array(size)
+  value.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  return value
+}
+
+/** 默认 sourceId 走 `channelImageSourceId`，与生产者同一处规则。 */
+function imageRequest(recordId: string, overrides: {
+  bytes?: Uint8Array
+  mime?: string
+  caption?: string
+  sourceId?: string
+} = {}) {
+  return {
+    channelId: 'channel-a',
+    agentId: 'agent-a',
+    conversationId: 'conversation-a',
+    source: 'notification' as const,
+    sourceId: overrides.sourceId ?? channelImageSourceId(recordId),
+    image: { mime: overrides.mime ?? 'image/png', bytes: overrides.bytes ?? pngBytes() },
+    caption: overrides.caption ?? '日报'
+  }
+}
+
+describe('image sourceId suffix', () => {
+  it('always appends :image, so an image never claims the text row', () => {
+    // 这条是生产者规则的唯一判据：后缀固定、不随机；拿掉后缀，图会命中文本那条已送达的记录。
+    const recordId = 'notification-1'
+    expect(channelImageSourceId(recordId)).toBe(`${recordId}:image`)
+    expect(channelImageSourceId(recordId)).not.toBe(recordId)
+  })
+})
+
+describe('image delivery shares the ledger but never the row', () => {
+  it('gives text and image separate attempts for one recordId', async () => {
+    const { service, sendImage } = imageHarness()
+    const recordId = 'record-1'
+    await expect(service.deliver({
+      channelId: 'channel-a', agentId: 'agent-a', conversationId: 'conversation-a',
+      source: 'notification', sourceId: recordId, text: '日报正文'
+    })).resolves.toMatchObject({ status: 'delivered' })
+    await expect(service.deliverImage(imageRequest(recordId))).resolves.toMatchObject({ status: 'delivered' })
+
+    // 两个 sourceId 不同 → 两条尝试、两次发送。共用同一个 id 时，第二次 claim 会命中文本那条
+    // 已送达的记录、直接返回成功而图根本没发（方案 §0-1 的真 bug）。
+    expect(service).toBeDefined()
+    expect(sendImage).toHaveBeenCalledOnce()
+  })
+
+  it('does not reuse a delivered text attempt when the caller forgets the suffix', async () => {
+    // 反向钉：故意传同一个 sourceId，图的 claim 会命中文本那条 → sendImage 一次都不会调用。
+    const { service, sendImage } = imageHarness()
+    await service.deliver({
+      channelId: 'channel-a', agentId: 'agent-a', conversationId: 'conversation-a',
+      source: 'notification', sourceId: 'record-2', text: '日报正文'
+    })
+    const collided = await service.deliverImage(imageRequest('record-2', { sourceId: 'record-2' }))
+    expect(collided.status).toBe('delivered')
+    expect(sendImage).not.toHaveBeenCalled()
+  })
+
+  it('sends the same image once: the second call returns the first terminal state', async () => {
+    const { service, sendImage, database } = imageHarness()
+    await expect(service.deliverImage(imageRequest('record-3'))).resolves.toMatchObject({ status: 'delivered' })
+    await expect(service.deliverImage(imageRequest('record-3'))).resolves.toMatchObject({ status: 'delivered' })
+    expect(sendImage).toHaveBeenCalledOnce()
+    expect(database.connection.prepare('select count(*) as count from channel_delivery_attempts').get()).toEqual({ count: 1 })
+  })
+
+  it('refuses before sending: webp bytes, oversized image, long caption, no image capability', async () => {
+    const webp = imageHarness()
+    const webpBytes = pngBytes()
+    webpBytes.set([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
+    await expect(webp.service.deliverImage(imageRequest('record-4', { bytes: webpBytes })))
+      .resolves.toMatchObject({ status: 'failed', errorCode: 'delivery-image-unsupported' })
+    expect(webp.sendImage).not.toHaveBeenCalled()
+
+    const large = imageHarness()
+    await expect(large.service.deliverImage(imageRequest('record-5', { bytes: pngBytes(MAX_CHANNEL_IMAGE_BYTES + 1) })))
+      .resolves.toMatchObject({ status: 'failed', errorCode: 'delivery-image-too-large' })
+    expect(large.sendImage).not.toHaveBeenCalled()
+
+    const longCaption = imageHarness()
+    await expect(longCaption.service.deliverImage(imageRequest('record-6', { caption: 'x'.repeat(MAX_CHANNEL_IMAGE_CAPTION_CHARS + 1) })))
+      .resolves.toMatchObject({ status: 'failed', errorCode: 'delivery-caption-too-long' })
+    expect(longCaption.sendImage).not.toHaveBeenCalled()
+
+    const noCapability = imageHarness({ supportsImage: false })
+    await expect(noCapability.service.deliverImage(imageRequest('record-7')))
+      .resolves.toMatchObject({ status: 'failed', errorCode: 'delivery-image-unsupported' })
+    expect(noCapability.sendImage).not.toHaveBeenCalled()
+
+    const noTransport = imageHarness({ withImageTransport: false })
+    await expect(noTransport.service.deliverImage(imageRequest('record-8')))
+      .resolves.toMatchObject({ status: 'failed', errorCode: 'delivery-image-unsupported' })
+  })
+
+  it('keeps terminal image failures out of the retry queue', async () => {
+    const { service, database } = imageHarness()
+    await service.deliverImage(imageRequest('record-9', { bytes: (() => {
+      const value = pngBytes()
+      value.set([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
+      return value
+    })() }))
+    expect(database.connection.prepare(
+      'select status, next_attempt_at from channel_delivery_attempts'
+    ).get()).toEqual({ status: 'failed', next_attempt_at: null })
+  })
+})
 
 function cipherForTests() { return { encrypt: async () => ({ ciphertext: new Uint8Array(), keyRef: 'ref', keyRevision: 1 }), decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext, keyedHash: async () => 'hash', rotate: async () => ({ keyRef: 'ref', keyRevision: 1 }), revoke: async () => {} } }
 function hashForTests(value: string): string { return createHash('sha256').update(value).digest('base64url') }

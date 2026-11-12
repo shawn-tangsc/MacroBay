@@ -1,6 +1,13 @@
 import type { ChannelPayloadCipher } from '../../../secrets/channels/channelCredentialContracts'
 import { sanitizeChannelOutput } from './OutputSanitizer'
-import type { ChannelDeliveryRequest, ChannelDeliveryResult, ChannelDeliveryTransport } from './ChannelDeliveryContracts'
+import type {
+  ChannelDeliveryRequest,
+  ChannelDeliveryResult,
+  ChannelDeliveryTransport,
+  ChannelImageDeliveryRequest,
+  ChannelImageTransport
+} from './ChannelDeliveryContracts'
+import { validateChannelImageDelivery } from './channelImageDelivery'
 import { ChannelDeliveryRepository } from './ChannelDeliveryRepository'
 
 export class ChannelDeliveryService {
@@ -8,6 +15,11 @@ export class ChannelDeliveryService {
     repository: ChannelDeliveryRepository
     cipher: ChannelPayloadCipher
     transport: ChannelDeliveryTransport
+    /**
+     * 图片通道（可选）：没接图片能力的通道直接判 `delivery-image-unsupported`，
+     * 不把字节交给只会发文本的适配器。router 必须是**同一个实例**同时实现两个接口。
+     */
+    imageTransport?: ChannelImageTransport
     now?: () => Date
     beforeSendOwnership?: () => Promise<void> | void
     beforeTransport?: () => Promise<void> | void
@@ -77,6 +89,92 @@ export class ChannelDeliveryService {
     } catch {
       if (owner) {
         this.deps.repository.finish({ owner, status: 'unknown-after-send', errorCode: 'delivery-transport-unknown', executionClaim: request.executionClaim, now: this.now() })
+      }
+      return owner
+        ? { status: 'unknown-after-send', attemptId: attempt.id, errorCode: 'delivery-transport-unknown' }
+        : { status: 'skipped', attemptId: attempt.id, errorCode: 'delivery-not-authorized' }
+    }
+  }
+
+  /**
+   * 发一张图 + caption（P2：仅应用生成的图，仅 Telegram）。
+   *
+   * 三条纪律：
+   * - 与文本**共用**投递尝试表，但 `sourceId` 必须错开（图用 `<recordId>:image`），否则第二次 claim
+   *   命中文本那条已送达的记录、返回成功而图没发；
+   * - 判定在 `beginSend` 之前：格式（字节签名）/上限/caption 任一不过就记 `failed`，一次网络都不发；
+   * - 字节不落库；重投需要发起方重新读盘（`delivery-image-unavailable` 分 missing / read-failed）。
+   */
+  async deliverImage(request: ChannelImageDeliveryRequest): Promise<ChannelDeliveryResult> {
+    const now = this.now()
+    const attempt = this.deps.repository.claim({
+      channelId: request.channelId,
+      agentId: request.agentId,
+      conversationId: request.conversationId,
+      source: request.source,
+      sourceId: request.sourceId,
+      requireTarget: request.source !== 'inbound-reply',
+      now
+    })
+    if (!attempt) return { status: 'skipped', attemptId: null, errorCode: 'delivery-not-authorized' }
+    if (attempt.status === 'delivered' || attempt.status === 'failed' || attempt.status === 'skipped') {
+      // 幂等：同一 `<recordId>:image` 已有终态，直接还回去，不会再发第二张。
+      return { status: attempt.status, attemptId: attempt.id, errorCode: null }
+    }
+
+    const validation = validateChannelImageDelivery({
+      bytes: request.image.bytes,
+      caption: request.caption,
+      declaredMime: request.image.mime
+    })
+    if (!validation.ok) {
+      // 终态：重试不会变，不写 next_attempt_at（`retryDue()` 扫不到它）。
+      this.deps.repository.markRetryTerminal(attempt.id, validation.code, now)
+      return { status: 'failed', attemptId: attempt.id, errorCode: validation.code }
+    }
+
+    const imageTransport = this.deps.imageTransport
+    if (!imageTransport || !imageTransport.supportsImage(request.channelId)) {
+      this.deps.repository.markRetryTerminal(attempt.id, 'delivery-image-unsupported', now)
+      return { status: 'failed', attemptId: attempt.id, errorCode: 'delivery-image-unsupported' }
+    }
+
+    const key = this.deps.repository.getConversationKeyCipher(request.conversationId)
+    if (!key || key.channelId !== request.channelId) return { status: 'skipped', attemptId: null, errorCode: 'delivery-not-authorized' }
+    let owner: import('./ChannelDeliveryRepository').ChannelDeliverySendOwner | null = null
+    try {
+      owner = this.deps.repository.beginSend({ attempt, retryUnknown: Boolean(request.retryUnknown), now })
+      if (!owner) return { status: 'skipped', attemptId: attempt.id, errorCode: 'delivery-not-authorized' }
+      const providerConversationKey = new TextDecoder().decode(await this.deps.cipher.decrypt({
+        channelId: key.channelId, ciphertext: key.ciphertext, keyRef: key.keyRef, keyRevision: key.keyRevision
+      }))
+      if (!this.deps.repository.admitSend({ attempt, owner, now: this.now() })) {
+        this.deps.repository.finish({ owner, status: 'unknown-after-send', errorCode: 'delivery-lifecycle-fenced', now: this.now() })
+        return { status: 'skipped', attemptId: attempt.id, errorCode: 'delivery-not-authorized' }
+      }
+      const result = await imageTransport.sendImage({
+        channelId: request.channelId,
+        providerConversationKey,
+        image: { mime: validation.mime, bytes: request.image.bytes },
+        caption: request.caption,
+        idempotencyKey: attempt.idempotencyKey
+      })
+      const errorCode = result.kind === 'failed' ? result.code : null
+      const detail = 'detail' in result ? result.detail : undefined
+      const committed = this.deps.repository.finish({
+        owner,
+        status: result.kind,
+        errorCode,
+        detail,
+        retryable: errorCode === 'delivery-rate-limited' || errorCode === 'delivery-host-unavailable',
+        now: this.now()
+      })
+      return committed
+        ? { status: result.kind, attemptId: attempt.id, errorCode }
+        : { status: 'unknown-after-send', attemptId: attempt.id, errorCode: 'delivery-lifecycle-fenced' }
+    } catch {
+      if (owner) {
+        this.deps.repository.finish({ owner, status: 'unknown-after-send', errorCode: 'delivery-transport-unknown', now: this.now() })
       }
       return owner
         ? { status: 'unknown-after-send', attemptId: attempt.id, errorCode: 'delivery-transport-unknown' }

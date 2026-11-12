@@ -61,6 +61,16 @@ export type ChannelDeliveryFailureCode =
   | 'delivery-provider-rejected'
   /** 会话键里补不出平台认的目标（例如 Telegram 的 chat id）：这是目标解析问题，不是网络。 */
   | 'delivery-target-invalid'
+  /** 图片超出通道上限：**发之前**就判出来，一次网络请求都不发。 */
+  | 'delivery-image-too-large'
+  /** 这个通道（或这一版）发不了这张图：没有图片能力、格式不认（按字节签名判）、或说明文字超长。 */
+  | 'delivery-image-unsupported'
+  /** 图取不到：detail 分 `missing`（文件不在了）与 `read-failed`（在但读不出来）——「没有」与「拿不到」分开。 */
+  | 'delivery-image-unavailable'
+  /** 这张图不许对外发：来源不是「这条助手消息自己带着它」（编辑原图走同一条投递口时会被拒）。 */
+  | 'delivery-image-source-not-allowed'
+  /** caption 超过通道上限：整条不发（不许截断后假装发全，也不许运行期自动拆成两条）。 */
+  | 'delivery-caption-too-long'
 
 export type ChannelDeliveryTransport = {
   send: (input: {
@@ -109,4 +119,44 @@ export type ChannelDeliveryAuditView = {
   attemptId: string | null
   code: string
   createdAt: string
+}
+
+/**
+ * 出站图片的输入（P2：仅应用生成的图；只做 Telegram）。
+ *
+ * `image.mime` 是**嗅探结果**，不是存储声明的那个：声明 png、实际 webp 的图存在，
+ * 判定只看字节签名（见 `channelImageDelivery.sniffImageMime`）。
+ */
+export type ChannelImageDeliveryRequest = {
+  channelId: string
+  agentId: string
+  conversationId: string
+  source: ChannelDeliverySource
+  sourceId: string
+  image: { mime: string; bytes: Uint8Array }
+  caption: string
+  retryUnknown?: boolean
+}
+
+/** 通道的图片能力：`supportsImage` 为假时投递层直接判 `delivery-image-unsupported`，一次网络都不发。 */
+export type ChannelImageTransport = {
+  supportsImage: (channelId: string) => boolean
+  sendImage: (input: {
+    channelId: string
+    providerConversationKey: string
+    image: { mime: string; bytes: Uint8Array }
+    caption: string
+    idempotencyKey: string
+  }) => Promise<ChannelDeliveryTransportResult>
+}
+
+/**
+ * 图片投递的 `sourceId`：**固定后缀**，只由「产物种类」决定。
+ *
+ * 文字用 `<recordId>`（现状不动），图片用 `<recordId>:image`。`claim` 的去重键是
+ * `(channel, conversation, source, sha256(sourceId))`：两者共用一个 id 时，第二次 claim 会命中
+ * 第一次那条已送达的记录、直接返回成功，而图根本没发出去。
+ */
+export function channelImageSourceId(recordId: string): string {
+  return `${recordId}:image`
 }
