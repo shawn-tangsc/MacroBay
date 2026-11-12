@@ -1289,6 +1289,10 @@ export type PlatformText = {
     bell: string
     bellUnread: (count: string) => string
     centerTitle: string
+    /** 页脚 ⓘ 的三段：中心说明 / 页脚一行 / 为什么没有开关。 */
+    footerInfoCenter: string
+    footerInfoLine: string
+    footerInfoHint: string
     centerUnreadGroup: string
     centerEarlierGroup: string
     centerMarkAllRead: string
@@ -2717,6 +2721,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       bell: '通知',
       bellUnread: (count) => `${count} 条未读通知，打开通知中心`,
       centerTitle: '通知',
+      footerInfoCenter: '不能逐条关；读过的可以清掉，超过保留期的自动清理。',
+      footerInfoLine: '都会记进通知中心。该弹桌面的会弹到桌面，同一件事不会重复。',
+      footerInfoHint: '这些事件都由我们替你决定、不给开关。本机只打扰一次：桌面开着就弹桌面、不再在应用内重复；只有「桌面关着、这台机器不支持桌面通知、发送报错」这三种情况才改在应用内提示。系统里关掉通知这件事我们读不到，也不会因此重复弹一次。手机是另一回事——只有三条离开应用，跟这里的开关无关。',
       centerUnreadGroup: '未读',
       centerEarlierGroup: '已读',
       centerMarkAllRead: '全部标为已读',
@@ -4134,6 +4141,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       bell: 'Notifications',
       bellUnread: (count) => `${count} unread notifications, open the notification center`,
       centerTitle: 'Notifications',
+      footerInfoCenter: 'You cannot turn individual ones off; read ones can be cleared, and the rest age out of the retention window.',
+      footerInfoLine: 'Everything is recorded in the notification center. Whatever should show on the desktop does, and the same thing never repeats.',
+      footerInfoHint: 'We decide which of these events notify you; there is no switch for them. On this device a notification disturbs you once: if desktop alerts are on it shows on the desktop and does not repeat in the app; only when desktop is off, the system does not support desktop notifications, or sending fails does it fall back to the in-app hint. We cannot read whether notifications are turned off in the system, so we do not fall back a second time and do not repeat the alert. The phone is a separate channel — only three events leave the app, and none of them depend on these switches.',
       centerUnreadGroup: 'Unread',
       centerEarlierGroup: 'Earlier',
       centerMarkAllRead: 'Mark all as read',
