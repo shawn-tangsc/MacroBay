@@ -6,6 +6,11 @@ import { describe, expect, it } from 'vitest'
 import { looksLikeTextKey } from '../textKeyShape'
 import { sentinelResolveText } from '../resolveTextShape'
 import { declaredTextKeysIn, literalAriaLabelKeys } from '../textKeyPaths'
+import { resolveDrawerText } from '../drawer/drawerText'
+import { resolveModalText } from '../modal/modalText'
+import { resolvePanelText } from '../side-panel/panelText'
+import { resolveToastText } from '../toast/toastText'
+import { resolveHelpTriggerText } from '../popover/helpTriggerText'
 
 /**
  * `IconButton` 的读屏名与提示只收 i18n 键，但为了不逼产品绕过组件，类型是开区间 `string`
@@ -177,6 +182,33 @@ describe('ariaLabelKey 必须是声明过的键（平台/壳层）', () => {
  * **不抓**「内联 lambda 一律」：平台各屏合法地写 `resolveText={(key) => localMap[key] ?? ''}`，
  * 一刀切只会把合规代码全打红，然后被加豁免。
  */
+/**
+ * 平台侧的另一半：`ui.*` 这类键要能从**组件自带表**里真解析出来，不是「声明过」就算数。
+ * 这一侧没有统一点分表，所以用各组件自己的解析器（与运行时同一个函数）；两张语言各取一次。
+ */
+describe('ui.* 键要能从组件自带表里解析出来', () => {
+  const resolvers: ReadonlyArray<(language: 'zh-CN' | 'en-US', key: string) => string> = [
+    (language, key) => resolveDrawerText(language, key as never),
+    (language, key) => resolveModalText(language, key as never),
+    (language, key) => resolvePanelText(language, key as never),
+    (language, key) => resolveToastText(language, key as never),
+    (language, key) => resolveHelpTriggerText(language, key)
+  ]
+
+  const resolves = (key: string): boolean => resolvers.some((resolve) =>
+    resolve('zh-CN', key) !== '' && resolve('en-US', key) !== '')
+
+  /**
+   * 只断「真键解析得出句子」这半边：组件表对未知键**回退到它唯一那句话**（`?? ZH_CN[CLOSE_KEY]`），
+   * 所以单靠解析器调用**证明不了**键存在——反例必须由上半条「属性名声明」来抓。
+   * 两条合起来才是完整判据：声明过（挡哨兵）且解析得出（挡插错父节点）。
+   */
+  it('resolves the component-owned keys through their own tables', () => {
+    expect(resolves('ui.drawer.close')).toBe(true)
+    expect(resolves('ui.help.trigger')).toBe(true)
+  })
+})
+
 describe('resolveText 不许是哨兵形状', () => {
   /**
    * 归属由**元素本身**决定（`sentinelResolveText` 里按 JSX 标签名判），不再数行数：
