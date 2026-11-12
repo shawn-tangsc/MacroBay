@@ -256,7 +256,17 @@ describe('notification settings is two switches, one test button and a footer', 
 
   it('says only 「没发出去」 in the sentence and puts the reason code in a collapsed area', async () => {
     const container = await mount(
-      client({ sendTest: async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 0 }) })
+      // 这一条的意图是 ①（一条都没启用）：把 requestedCount 显式写成 0，别靠「字段缺了」碰巧走这条。
+      // 注：本屏现在只渲染 `text.testUnavailable`，不读 enabledChannelCount / requestedCount
+      // （全仓渲染层 grep 0）；等 ② 的分叉真的落进这一屏，再补一条 >0 的桩验那句。
+      client({
+        sendTest: async () => ({
+          state: 'unavailable' as const,
+          reasonCode: 'push-unavailable',
+          enabledChannelCount: 0,
+          requestedCount: 0
+        })
+      })
     )
     const button = container.querySelector('[data-send-test]') as HTMLElement
     await act(async () => {
