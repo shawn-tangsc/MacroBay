@@ -327,6 +327,10 @@ mi: miText['zh-CN'],
               screenCrashed: '这一块没能显示出来，可以重试。',
               sourceUnavailable: '取不到（原因见详情）',
               unreadable: '读不到',
+              /** 抽屉行末那颗 ⓘ 的读屏名：说明正文是数据里带来的原因，名字带上它才听得到。 */
+              reasonAria: '原因：{reason}',
+              /** 预览控件上那颗 ⓘ 的读屏名（这一行有说明）。 */
+              infoAria: '这一项的说明',
               discard: {
                 title: '有改动没保存，要丢掉吗？',
                 body: '关掉之后没保存的改动都不保留。',
@@ -790,6 +794,8 @@ mi: miText['zh-CN'],
             },
             policyPath: {
               title: '利率路径',
+              /* 卡尾那颗「详情 ↗」的可访问名：它属于导航，名字要说清打开的是哪张卡的详情。 */
+              openDetailAria: '打开利率路径的详情',
               /* 两条硬依赖各自点名（2026-11-12）：缺哪一格说哪一格，缺源说源，不合并。 */
               probabilityCellOff: '政策路径概率未启用',
               fedCellOff: '美联储日程未启用',
@@ -1814,6 +1820,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               screenCrashed: 'This part could not be shown. Try again.',
               sourceUnavailable: 'Not available (see details)',
               unreadable: 'Could not read',
+              /** Screen-reader name for the ⓘ at the end of a row: the reason comes from the data. */
+              reasonAria: 'Reason: {reason}',
+              /** Screen-reader name for the ⓘ on a preview control (this row has an explanation). */
+              infoAria: 'About this setting',
               discard: {
                 title: 'You have unsaved changes. Discard them?',
                 body: 'Closing now keeps none of the unsaved edits.',
@@ -2240,6 +2250,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             policyPath: {
               title: 'Policy path',
+              openDetailAria: 'Open policy path details',
               probabilityCellOff: 'Policy path probability is switched off',
               fedCellOff: 'Fed calendar is switched off',
               bothCellsOff: 'Policy path is off: both “policy path probability” and “Fed calendar” must be on',

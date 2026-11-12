@@ -33,7 +33,10 @@ import { conclusionView, judgedView, percentOf, settledFor } from './policyPathS
 export type PolicyPathCardText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
   lastVote: string; unchanged: string
-  detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
+  detail: string
+  /** 卡尾「详情 ↗」的可访问名：它属于导航，名字要说清打开的是哪张卡。 */
+  openDetailAria: string
+  sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
   /** `{month} 月{outcome}` in Chinese; the month and the bucket are separate so English can order them its way. */
   outcomeLead: string
   /** Explains the for-against pair on hover: "10–2" alone is not self-evident. */
@@ -332,7 +335,8 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
               {probability ? <span className="mi-policy-card__status">· {probability.venue}</span> : null}
             </>}
       </span>
-      {onOpen ? <Button type="link" className="mi-policy-card__open" onClick={onOpen}>
+      {onOpen ? <Button type="text" size="small" className="text-action mi-policy-card__open" onClick={onOpen}
+        aria-label={text.openDetailAria}>
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
       </Button> : null}
     </footer>

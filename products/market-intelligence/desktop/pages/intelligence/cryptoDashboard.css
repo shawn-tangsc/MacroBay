@@ -294,6 +294,9 @@
 .mi-capital-conditions__daily-table tbody tr:last-child td { border-bottom: 0; }
 .mi-capital-conditions__daily-table tbody tr:hover { background: var(--surface-soft); }
 .mi-capital-conditions__daily-empty { margin: 0; color: var(--mi-dashboard-muted); font-size: 12px; }
+/* 卡片标题行那一颗是**次按钮**（界面设计 2026-11-12 五档）：24 高（antd small 就是 24）、
+   12 号字、正文色、`--border-strong` 描边。同屏同位置的卡级动作必须同形，所以这里不用 link 文字。 */
+.mi-capital-conditions__title-action.ant-btn { height: 24px; padding: 0 8px; color: var(--text); border-color: var(--border-strong); font-size: var(--font-body); }
 .mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; width: 100%; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
 .mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }
 /* The dial is the positioning context: the svg renders 112x80 from a 120x86 viewBox, and the
