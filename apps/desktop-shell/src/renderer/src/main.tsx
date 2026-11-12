@@ -11,6 +11,7 @@ import '@platform/ui/styles/textAction.css'
 import { installAntdStaticRender } from '@platform/ui/antd/antdStaticRender'
 
 import { AppShell } from './shell/AppShell'
+import { markRendererBoot } from './shell/bootMarks'
 import { markRendererPlatform } from './shell/window/windowPlatform'
 import './styles.css'
 
@@ -26,3 +27,6 @@ createRoot(document.getElementById('root') as HTMLElement).render(
     <AppShell />
   </React.StrictMode>
 )
+
+// 纯观测：两帧之后才算「第一帧已经画到屏幕上」（单帧还在布局之前）。删掉不影响渲染。
+requestAnimationFrame(() => requestAnimationFrame(() => markRendererBoot('first-frame')))
