@@ -21,7 +21,7 @@
 | 开关 | antd `Switch` | 手写 `role="switch"` | **人看** |
 | 抽屉 / 弹窗头动作 | 头的 `actions` 槽（距关闭键 12，一头一个） | 用产品 CSS 撑开标题行 | **人看**（有组件用例，无全仓守卫） |
 | 按钮五档 | 主 / 次 / 图标 / 行内文字 / 危险，一个动作一档 | 自绘胶囊、28px 图标钮、危险只悬停变红 | **人看** |
-| 行内文字动作（句子里、提示条里、状态条里的「重试 / 改短导读 / 展开明细」） | `<Button type="text" size="small" className="text-action">` | `type="link"`（走 antd `colorLink`，不在 token 里，会冒出第二个交互色）；手写 `<button>`；在调用点按 antd 默认值写 `height/padding/font-size` | **人看**：`type="link"` 只减不增（2026-11-12 基线 **13 处 / 8 个文件**，待清）；清到 0 之后「出现即退回」 |
+| 行内文字动作（句子里、提示条里、状态条里的「重试 / 改短导读 / 展开明细」） | `<Button type="text" size="small" className="text-action">` | `type="link"`（走 antd `colorLink`，不在 token 里，会冒出第二个交互色）；手写 `<button>`；在调用点按 antd 默认值写 `height/padding/font-size` | **人看**：`type="link"` 只减不增（2026-11-12 基线 **12 处 / 8 个文件**，待清）；清到 0 之后「出现即退回」 |
 | 说明性文字 | 该行/该组标题旁的 ⓘ（`IconButton` + `Popover`），默认收起 | 写成正文的一句、半句、括号补充、破折号补充 | `check:body-prose` |
 | 卡片级动作 | **放在卡片标题行右侧**：只要这张卡依赖的任一数据源**未配置或读不到**，就在标题行给一颗（启用数据 / 重试）；卡内只说明缺哪一格 | 卡内再放同一颗动作；同屏同一动作两处入口 | **人看**（判据见下） |
 
