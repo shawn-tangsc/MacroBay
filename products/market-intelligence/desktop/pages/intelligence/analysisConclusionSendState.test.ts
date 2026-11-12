@@ -239,7 +239,7 @@ describe('reading one send receipt across every channel', () => {
     const state = classifySendReceipt({ kind: 'accepted', delivery: { push: { state: 'failed', reason: 'push-unavailable' } } })
     expect(state).toEqual({ state: 'push-unavailable' })
     expect(describeSendStatus({ state, text: zh, time }).message).toBe('没发到手机：还没有可用的通道，去「频道」启用一条')
-    // 多通道是合法配置：任何一份回执、任何一种语言都不许再出现「停用到只剩一条」。
+    // 多通道是合法配置：任何一份回执、任何一种语言都不许再叫读者去停用通道。
     for (const text of [zh, en]) {
       const sentences = [
         describeSendStatus({ state, text, time }).message,
