@@ -27,7 +27,10 @@ export type BriefingPushState =
   | Readonly<{
       kind: 'result'
       delivery: 'sent-accepted' | 'sent-unconfirmed' | 'failed' | 'queued'
+      deliveryReason?: string
       channels?: readonly BriefingPushChannelResult[]
+      /** 这一次尝试的形态：带图发的还是只发文字（结果句的形态前缀读它）。 */
+      attempt: 'poster' | 'text'
     }>
   | Readonly<{ kind: 'failed'; reason: BriefingPushFailure }>
   /** 导读超长：整条不发，给两个动作。 */
@@ -88,6 +91,9 @@ export function useBriefingPush(input: Readonly<{
         setState({
           kind: 'result',
           delivery: outcome.delivery,
+          // 没有字节就是只发了文字（读者选的，或这一版没有可渲染的纸）——结果句的形态前缀据此写。
+          attempt: poster === undefined ? 'text' : 'poster',
+          ...(outcome.deliveryReason === undefined ? {} : { deliveryReason: outcome.deliveryReason }),
           ...(outcome.channels === undefined ? {} : { channels: outcome.channels })
         })
         return

@@ -61,7 +61,7 @@ describe('the push state machine', () => {
     })
     await act(async () => { harness.api.push() })
     expect(send).toHaveBeenCalledWith(edition, poster)
-    expect(harness.last).toEqual({ kind: 'result', delivery: 'sent-accepted' })
+    expect(harness.last).toEqual({ kind: 'result', delivery: 'sent-accepted', attempt: 'poster' })
     harness.unmount()
   })
 
@@ -101,7 +101,7 @@ describe('the push state machine', () => {
     // 读者自己选的路：不渲染、不带图，照样发。
     expect(prepare).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith(edition, undefined)
-    expect(harness.last).toEqual({ kind: 'result', delivery: 'sent-accepted' })
+    expect(harness.last).toEqual({ kind: 'result', delivery: 'sent-accepted', attempt: 'text' })
     harness.unmount()
   })
 
@@ -113,7 +113,7 @@ describe('the push state machine', () => {
     await act(async () => { harness.api.push() })
     expect(harness.last).toEqual({ kind: 'failed', reason: 'edition-mismatch' })
     await act(async () => { harness.api.retry() })
-    expect(harness.last).toEqual({ kind: 'result', delivery: 'sent-accepted' })
+    expect(harness.last).toEqual({ kind: 'result', delivery: 'sent-accepted', attempt: 'text' })
     harness.unmount()
   })
 
@@ -132,8 +132,8 @@ describe('the push copy', () => {
     for (const locale of ['zh-CN', 'en-US'] as const) {
       const text = briefingPushText[locale]
       const sentences = [
-        text.sentAll, text.sentSome, text.sentNone, text.sentUnconfirmed,
-        text.sentAcceptedNoRows, text.sentUnconfirmedNoRows, text.notReceivedNoRows,
+        text.sentAll, text.bucketReceived, text.bucketFailed, text.bucketPending,
+        text.sentNone, text.sentAcceptedNoRows, text.sentUnconfirmedNoRows, text.notReceivedNoRows,
         text.captionTooLong, text.posterRenderFailed, text.posterTooLarge,
         ...Object.values(text.failed), ...Object.values(text.disabled)
       ].join(' ')
@@ -141,18 +141,28 @@ describe('the push copy', () => {
     }
   })
 
-  it('keeps the body free of channel names and the counts filled from the rows', () => {
+  it('keeps the body free of channel names and builds the three buckets without a false "did not arrive"', () => {
     const text = briefingPushText['zh-CN']
     // 正文句只有数字占位，没有 {channel}。
-    for (const sentence of [text.sentAll, text.sentSome, text.sentNone, text.sentUnconfirmed]) {
+    for (const sentence of [text.sentAll, text.bucketReceived, text.bucketFailed, text.bucketPending, text.sentNone]) {
       expect(sentence).not.toContain('{channel}')
     }
     expect(text.sentAll).toContain('{n}')
-    expect(text.sentSome).toContain('{ok}')
-    expect(text.sentSome).toContain('{failed}')
-    // 降级看得出来：形态词与结果词是两样。
-    expect(text.channelText).toBe('只发了文字')
+    // 三桶各自成段：拼起来就是产品定稿的那句；「还没回执」自成一桶，不与「没到」合并。
+    expect([text.bucketReceived, text.bucketFailed, text.bucketPending].join(text.bucketSeparator))
+      .toBe('{n} 条收到，{n} 条没到，{n} 条还没回执')
+    expect(text.bucketPending).toContain('还没回执')
+    // 降级看得出来：形态词与结果词是两样；单看「只发了文字」会让人问「海报是不是丢了」。
+    expect(text.channelText).toBe('只发了文字（没有海报）')
     expect(text.channelImage).toBe('发了海报')
+  })
+
+  it('names the shorten action by what it does and says it regenerates', () => {
+    // 产品定稿：按钮写「改短导读」，ⓘ 必须说透「打开这一期的编辑会话、写短后重新生成」。
+    expect(briefingPushText['zh-CN'].shortenLede).toBe('改短导读')
+    expect(briefingPushText['zh-CN'].captionTooLongWhy).toContain('编辑会话')
+    expect(briefingPushText['zh-CN'].captionTooLongWhy).toContain('重新生成')
+    expect(briefingPushText['en-US'].captionTooLongWhy).toContain('regenerate')
   })
 
   it('gives every rejection and the two poster refusals their own sentence', () => {

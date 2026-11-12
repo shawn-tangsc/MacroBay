@@ -9,12 +9,12 @@
 export const channelResultWords = Object.freeze({
   'zh-CN': Object.freeze({
     image: '发了海报',
-    text: '只发了文字',
+    text: '只发了文字（没有海报）',
     received: '收到了',
     notReceived: '没收到',
     unconfirmed: '已送出去，还没收到回执',
     unknownChannel: '推送通道',
-    reasonUnknown: '这次没成功（原因这台设备不认识）',
+    reasonUnknown: '这次没成功，原因还不认识',
     reasons: Object.freeze({
       'channel-rejected': '通道没接这次请求',
       'push-backoff': '这条通道刚失败过几次，暂时没有重试',
@@ -26,7 +26,7 @@ export const channelResultWords = Object.freeze({
   }),
   'en-US': Object.freeze({
     image: 'sent the poster',
-    text: 'sent text only',
+    text: 'sent text only (no poster)',
     received: 'received',
     notReceived: 'did not receive',
     unconfirmed: 'sent, no receipt yet',

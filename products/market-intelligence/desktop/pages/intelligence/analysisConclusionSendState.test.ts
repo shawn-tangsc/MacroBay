@@ -183,7 +183,7 @@ describe('reading one send receipt across every channel', () => {
     expect(copyOf({
       state: 'failed',
       channels: channels({ channelName: 'Telegram', state: 'failed', reason: 'brand-new-reason' })
-    }).channels?.[0]).toEqual({ name: 'Telegram', detail: '这次没成功（原因这台设备不认识）' })
+    }).channels?.[0]).toEqual({ name: 'Telegram', detail: '这次没成功，原因还不认识' })
   })
 
   it('keeps a quiet-hours suppression honest, and does not call the channel broken', () => {

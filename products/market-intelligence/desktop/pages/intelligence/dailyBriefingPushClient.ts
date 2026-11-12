@@ -48,6 +48,8 @@ export type BriefingPushOutcome =
   | Readonly<{
       state: 'result'
       delivery: 'sent-accepted' | 'sent-unconfirmed' | 'failed' | 'queued'
+      /** 聚合档的原因（例如 `push-unavailable` = 一条可用通道都没有）：与逐通道行的原因分开。 */
+      deliveryReason?: string
       /** 多通道：每条一行，总括数字与逐条说明都从这些行来；老回执没有就不画。 */
       channels?: readonly BriefingPushChannelResult[]
     }>
@@ -91,7 +93,16 @@ export type BriefingPushFailure =
  * button stays pressable and a missing channel is reported by the send itself. Only an explicit
  * `false` disables it — "this build cannot send" is a claim, and a claim needs evidence.
  */
-export type BriefingPushChannel = Readonly<{ wired: boolean | undefined; name: string | undefined }>
+export type BriefingPushChannel = Readonly<{
+  wired: boolean | undefined
+  name: string | undefined
+  /**
+   * 读者配置里「可投递」的通道条数。**发送中那句「正在发到 {n} 条通道…」只读它**：
+   * 真正的目标是平台运行时判定的就绪通道，渲染层点之前看不到——所以这是个**乐观上界**，
+   * 回执回来之后一切以逐通道行为准（数不对时以回执为准，不拿这个数去覆盖结果）。
+   */
+  deliverableCount: number | undefined
+}>
 
 /**
  * 通道名从平台的投递设置里读（纯展示）；**发布本身走产品 IPC**——先写/更新记录再重投是主进程的事，
@@ -121,21 +132,25 @@ export function briefingPushAvailable(): boolean {
  */
 export async function readBriefingPushChannel(): Promise<BriefingPushChannel> {
   const bridge = channelBridge()
-  if (!bridge) return { wired: false, name: undefined }
-  if (typeof bridge.getDeliverySettings !== 'function') return { wired: undefined, name: undefined }
+  if (!bridge) return { wired: false, name: undefined, deliverableCount: undefined }
+  if (typeof bridge.getDeliverySettings !== 'function') {
+    return { wired: undefined, name: undefined, deliverableCount: undefined }
+  }
   try {
     const settings = await bridge.getDeliverySettings()
     const channels = Array.isArray(settings?.channels) ? settings.channels : []
-    const named = channels.find((entry) => isRecord(entry) && entry.deliverable === true) ?? channels.find(isRecord)
+    const deliverable = channels.filter((entry) => isRecord(entry) && entry.deliverable === true)
+    const named = deliverable[0] ?? channels.find(isRecord)
     const name = isRecord(named) && typeof named.name === 'string' ? named.name.trim() : ''
     return {
       // Absent `pushWired` is not `false`: an older platform that does not answer the question must not
       // disable a button that would have worked.
       wired: typeof settings?.pushWired === 'boolean' ? settings.pushWired : undefined,
-      name: name === '' ? undefined : name
+      name: name === '' ? undefined : name,
+      deliverableCount: deliverable.length
     }
   } catch {
-    return { wired: undefined, name: undefined }
+    return { wired: undefined, name: undefined, deliverableCount: undefined }
   }
 }
 
@@ -175,7 +190,10 @@ export async function redeliverBriefingPush(
   const channels = readChannelResults(delivery)
   // 聚合档原样照抄四档（缺省按 `sent-unconfirmed`：拿到「accepted」却没有投递证据，只能是「不知道」）。
   const state = DELIVERY_STATES.find((candidate) => candidate === delivery?.state) ?? 'sent-unconfirmed'
-  return { state: 'result', delivery: state, ...(channels === undefined ? {} : { channels }) }
+  const deliveryReason = typeof delivery?.reason === 'string' && delivery.reason.length > 0
+    ? { deliveryReason: delivery.reason }
+    : {}
+  return { state: 'result', delivery: state, ...deliveryReason, ...(channels === undefined ? {} : { channels }) }
 }
 
 /** The platform's five rejections, in the reader's terms. */

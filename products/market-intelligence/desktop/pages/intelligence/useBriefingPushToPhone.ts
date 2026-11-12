@@ -26,28 +26,41 @@ import { useBriefingPush, type BriefingPushDisabledReason, type BriefingPushStat
  *
  * 结果那一行：正文只有数字与动作，逐通道的「名字 · 发了什么 · 到没到」全在 ⓘ 里。
  */
-export type BriefingPushChannelRow = Readonly<{ name: string; detail: string }>
-export type BriefingPushActionKey = 'retry' | 'send-text-only' | 'shorten-lede'
+export type BriefingPushResultTone = 'info' | 'caution' | 'danger'
+export type BriefingPushRowOutcome = 'received' | 'not-received' | 'pending'
+
+/** 明细里的一条通道：名字 / 结果 / 形态 / 人话原因 / 原因码（码只折叠在明细里）。 */
+export type BriefingPushResultRow = Readonly<{
+  name: string
+  outcome: BriefingPushRowOutcome
+  form?: 'poster' | 'text'
+  reason?: string
+  reasonCode?: string
+}>
+
+export type BriefingPushActionKey = 'retry' | 'retry-missing' | 'send-text-only' | 'shorten-lede' | 'open-channels'
 
 export type BriefingPushResultView = Readonly<{
-  /** 正文那一句：数字与会话，不带通道名。 */
-  message: string
-  /** ⓘ 的逐通道说明；没有回执通道行时为空（不画空气泡）。 */
-  channels?: readonly BriefingPushChannelRow[]
-  /** 动作（按顺序摆）：重试 / 只发文字 / 缩短导读。 */
-  actions: readonly Readonly<{ key: BriefingPushActionKey; label: string }>[]
-  /** ⓘ 里那句解释（为什么整条不发 / 为什么不截断）；成功时没有。 */
-  why?: string
+  tone: BriefingPushResultTone
+  /** 摘要那一句：只有数字（形态前缀 + 三桶合并句 / 全成 / 全败 / 整条没发）。 */
+  summary: string
+  rows: readonly BriefingPushResultRow[]
+  /** **最多一颗**行内文字动作（不是主按钮）。 */
+  action?: Readonly<{ key: BriefingPushActionKey; label: string; tip?: string }>
+  /** 发送中：没有可关闭、没有明细折叠（还没结果可看）。 */
+  sending?: true
 }>
 
 export type BriefingPushToPhone = Readonly<{
   state: BriefingPushState
-  /** 读者看到的那一行；`undefined` 时整行不渲染（空闲、发送中、禁用）。 */
+  /** 结果条的内容；`undefined` 时整条不渲染（空闲、禁用）。 */
   result: BriefingPushResultView | undefined
   onPush: () => void
   onRetry: () => void
   onSendTextOnly: () => void
-  /** 导读超长时的第二个动作：去把导读写短（打开这一版的编辑会话）。没有会话时不给这颗。 */
+  onClose: () => void
+  onAction: (key: BriefingPushActionKey) => void
+  onOpenChannels?: () => void
   onShortenLede?: () => void
 }>
 
@@ -68,10 +81,16 @@ export function useBriefingPushToPhone(input: Readonly<{
   refreshKey?: number
   /** 屏幕上的海报根节点（发布用的那张纸）；没有就不带图发。 */
   posterRoot?: () => HTMLElement | null
-  /** 导读超长的第二动作：打开这一版的编辑会话去把导读写短。 */
+  /** 「改短导读」：打开这一版的编辑会话把导读写短（没有会话就不给这颗动作）。 */
   onShortenLede?: (() => void) | undefined
+  /** 「去频道」：一条可用通道都没有时那条路。 */
+  onOpenChannels?: (() => void) | undefined
 }>): BriefingPushToPhone {
-  const [channel, setChannel] = useState<BriefingPushChannel>({ wired: undefined, name: undefined })
+  const [channel, setChannel] = useState<BriefingPushChannel>({
+    wired: undefined, name: undefined, deliverableCount: undefined
+  })
+  const onOpenChannels = input.onOpenChannels
+  const onShortenLede = input.onShortenLede
 
   useEffect(() => {
     let active = true
@@ -93,7 +112,7 @@ export function useBriefingPushToPhone(input: Readonly<{
           : edition === undefined ? 'no-edition'
             : undefined
 
-  const { state, push, retry, sendTextOnly } = useBriefingPush({
+  const { state, push, retry, sendTextOnly, dismiss } = useBriefingPush({
     edition,
     ...(blocked === undefined ? {} : { blocked }),
     send: redeliverBriefingPush,
@@ -104,13 +123,30 @@ export function useBriefingPushToPhone(input: Readonly<{
     })
   })
 
+  const result = describeResult(state, {
+    text: input.text,
+    channelCount: channel.deliverableCount,
+    hasShorten: onShortenLede !== undefined,
+    hasChannelsPage: onOpenChannels !== undefined
+  })
+  const onAction = (key: BriefingPushActionKey): void => {
+    if (key === 'retry') retry()
+    else if (key === 'retry-missing') retry()
+    else if (key === 'send-text-only') sendTextOnly()
+    else if (key === 'shorten-lede') onShortenLede?.()
+    else onOpenChannels?.()
+  }
+
   return {
     state,
-    result: describeResult(state, input),
+    result,
     onPush: push,
     onRetry: retry,
     onSendTextOnly: sendTextOnly,
-    ...(input.onShortenLede === undefined ? {} : { onShortenLede: input.onShortenLede })
+    onClose: dismiss,
+    onAction,
+    ...(onShortenLede === undefined ? {} : { onShortenLede }),
+    ...(onOpenChannels === undefined ? {} : { onOpenChannels })
   }
 }
 
@@ -121,50 +157,99 @@ export function formatPosterBytes(bytes: number): string {
   return bytes >= MB ? `${(bytes / MB).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
+type Buckets = Readonly<{ total: number; received: number; failed: number; pending: number }>
+
+function bucketsOf(channels: readonly BriefingPushChannelResult[] | undefined): Buckets | undefined {
+  if (channels === undefined || channels.length === 0) return undefined
+  const received = channels.filter((channel) => channel.state === 'sent-accepted').length
+  const pending = channels.filter((channel) => channel.state === 'sent-unconfirmed').length
+  const total = channels.length
+  return { total, received, failed: total - received - pending, pending }
+}
+
 /**
- * 状态 → 读者那一行。
+ * 状态 → 结果条。**三桶分开数**：收到只认 `sent-accepted`，没到认 `failed` / `queued`，
+ * `sent-unconfirmed` 自成一桶（等回执）——绝不把它算进「没到」，那是拿不到当没有。
  *
- * 计数只从逐通道行来：收到只认 `sent-accepted`，`sent-unconfirmed` 既不算收到也不算没到
- * （只要有一条未回执，正文就走中性句），其余（`failed` / `queued`）算没到。
+ * 颜色三档（只有这三档）：全成 `info`（中性，不染绿）；部分成与有未回执 `caution`；
+ * 全败与三种「整条不发」`danger`。
  */
 function describeResult(
   state: BriefingPushState,
-  input: Readonly<{ text: BriefingPushText; onShortenLede?: (() => void) | undefined }>
+  input: Readonly<{
+    text: BriefingPushText
+    channelCount: number | undefined
+    hasShorten: boolean
+    hasChannelsPage: boolean
+  }>
 ): BriefingPushResultView | undefined {
   const text = input.text
+  if (state.kind === 'sending') {
+    // 发送中：`{n}` 是点之前可投递的条数（乐观上界）；拿不到就不编一个数。
+    const summary = input.channelCount === undefined || input.channelCount === 0
+      ? text.sending
+      : text.sendingChannels.replace('{n}', String(input.channelCount))
+    return { tone: 'info', summary, rows: [], sending: true }
+  }
   switch (state.kind) {
     case 'result': {
       const channels = state.channels
-      return {
-        message: countMessage(channels, state.delivery, text),
-        ...(channels === undefined ? {} : { channels: channelRows(channels, text) }),
-        actions: []
+      const buckets = bucketsOf(channels)
+      const rows = channels === undefined ? [] : channelRows(channels, text)
+      const noChannels = state.delivery === 'failed' && state.deliveryReason === 'push-unavailable'
+      const counts = buckets ?? (state.delivery === 'sent-accepted'
+        ? { summary: text.sentAcceptedNoRows, tone: 'info' as const }
+        : state.delivery === 'sent-unconfirmed'
+          ? { summary: text.sentUnconfirmedNoRows, tone: 'caution' as const }
+          : { summary: text.notReceivedNoRows, tone: 'danger' as const })
+      if (noChannels) {
+        return {
+          tone: 'danger',
+          summary: text.noChannels,
+          rows: [],
+          ...(input.hasChannelsPage
+            ? { action: { key: 'open-channels' as const, label: text.openChannels } }
+            : {})
+        }
       }
+      const summary = 'summary' in counts ? counts.summary : summaryOf(buckets!, text)
+      const tone = 'tone' in counts ? counts.tone : toneOf(buckets!)
+      // 形态前缀：整条尝试是「只发文字」还是「带海报」——读者点了只发文字之后要知道海报没发。
+      const prefixed = state.attempt === 'text' ? `${text.textPrefix}${summary}` : `${text.posterPrefix}${summary}`
+      return { tone, summary: prefixed, rows, ...(actionOf(buckets, state.attempt, input, text)) }
     }
     case 'failed': {
-      // 渲不出来可以重试（多半是一次性的）；主进程拒了这次带图发布则给「只发文字」。
-      const actions: BriefingPushActionKey[] = state.reason === 'poster-refused' ? ['send-text-only', 'retry'] : ['retry']
-      return { message: `${text.failedTitle}：${text.failed[state.reason]}`, actions: actionViews(actions, text, input) }
+      // 渲不出来可以重试（多半是一次性的）；主进程拒了这次带图发布给「只发文字」。
+      const action: BriefingPushActionKey = state.reason === 'poster-refused' ? 'send-text-only' : 'retry'
+      return {
+        tone: 'danger',
+        summary: `${text.failedTitle}：${text.failed[state.reason]}`,
+        rows: [],
+        action: actionOf2(action, input, text)
+      }
     }
     case 'caption-too-long': {
-      const actions: BriefingPushActionKey[] = input.onShortenLede === undefined
-        ? ['send-text-only']
-        : ['send-text-only', 'shorten-lede']
+      // 产品定稿：只有两颗里的一颗——没有编辑会话就给不出「改短导读」，那时不摆动作。
       return {
-        message: text.captionTooLong
+        tone: 'danger',
+        summary: text.captionTooLong
           .replace('{chars}', String(state.chars))
           .replace('{limit}', String(BRIEFING_PUBLISH_CAPTION_MAX_CHARS)),
-        why: text.captionTooLongWhy,
-        actions: actionViews(actions, text, input)
+        rows: [],
+        ...(input.hasShorten
+          ? { action: { key: 'shorten-lede' as const, label: text.shortenLede, tip: text.captionTooLongWhy } }
+          : {})
       }
     }
     case 'poster-too-large': {
+      // 图太大：说清多大，只给「只发文字」（重试同一张图没有意义）。
       return {
-        message: text.posterTooLarge
+        tone: 'danger',
+        summary: text.posterTooLarge
           .replace('{size}', formatPosterBytes(state.byteLength))
           .replace('{limit}', formatPosterBytes(BRIEFING_PUBLISH_POSTER_MAX_BYTES)),
-        why: text.posterTooLargeWhy,
-        actions: actionViews(['send-text-only'], text, input)
+        rows: [],
+        action: actionOf2('send-text-only', input, text)
       }
     }
     default:
@@ -172,61 +257,84 @@ function describeResult(
   }
 }
 
-function actionViews(
-  keys: readonly BriefingPushActionKey[],
-  text: BriefingPushText,
-  input: Readonly<{ onShortenLede?: (() => void) | undefined }>
-): readonly Readonly<{ key: BriefingPushActionKey; label: string }>[] {
-  return keys
-    // 没有会话就没有「缩短导读」这条路：不摆一颗按了没反应的按钮。
-    .filter((key) => key !== 'shorten-lede' || input.onShortenLede !== undefined)
-    .map((key) => ({
-      key,
-      label: key === 'retry' ? text.retry : key === 'send-text-only' ? text.sendTextOnly : text.shortenLede
-    }))
+/** 全成的摘要 / 全败的摘要；部分成走三桶合并句。 */
+function summaryOf(buckets: Buckets, text: BriefingPushText): string {
+  if (buckets.received === buckets.total) return text.sentAll.replace('{n}', String(buckets.total))
+  if (buckets.received === 0 && buckets.failed === 0) {
+    // 全都在等回执：只有 pending 一段。
+    return text.bucketPending.replace('{n}', String(buckets.pending))
+  }
+  if (buckets.received === 0 && buckets.pending === 0) return text.sentNone.replace('{n}', String(buckets.total))
+  const segments: string[] = []
+  if (buckets.received > 0) segments.push(text.bucketReceived.replace('{n}', String(buckets.received)))
+  if (buckets.failed > 0) segments.push(text.bucketFailed.replace('{n}', String(buckets.failed)))
+  if (buckets.pending > 0) segments.push(text.bucketPending.replace('{n}', String(buckets.pending)))
+  return segments.join(text.bucketSeparator)
 }
 
-function countMessage(
-  channels: readonly BriefingPushChannelResult[] | undefined,
-  delivery: 'sent-accepted' | 'sent-unconfirmed' | 'failed' | 'queued',
-  text: BriefingPushText
-): string {
-  if (channels === undefined || channels.length === 0) {
-    return delivery === 'sent-accepted'
-      ? text.sentAcceptedNoRows
-      : delivery === 'sent-unconfirmed'
-        ? text.sentUnconfirmedNoRows
-        : text.notReceivedNoRows
-  }
-  const total = channels.length
-  const received = channels.filter((channel) => channel.state === 'sent-accepted').length
-  const unconfirmed = channels.filter((channel) => channel.state === 'sent-unconfirmed').length
-  if (unconfirmed > 0) return text.sentUnconfirmed.replace('{n}', String(total))
-  if (received === total) return text.sentAll.replace('{n}', String(total))
-  if (received === 0) return text.sentNone.replace('{n}', String(total))
-  return text.sentSome.replace('{ok}', String(received)).replace('{failed}', String(total - received)).replace('{n}', String(total))
+function toneOf(buckets: Buckets): BriefingPushResultTone {
+  if (buckets.failed === 0 && buckets.pending === 0) return 'info'
+  if (buckets.received === 0 && buckets.failed === buckets.total) return 'danger'
+  return 'caution'
 }
 
 /**
- * 一行一条通道：「名字 · 发了海报/只发了文字 · 到没到」。
- * **降级必须看得出来**：`kind: 'text'` 的那条写「只发了文字」，绝不写成「发了海报」。
+ * 结果条上**最多一颗**动作，按结果选：
+ * - 有等回执的 → 不给（等它回来）；
+ * - 部分成 → 「再发一次没到的」**只在这一次是纯文字尝试时**给：平台重投会跳过已受理的通道；
+ *   带海报那一路的投递不复用它，重发会把海报再发给已经收到的通道（这是一条待补的能力，已报）。
+ * - 全败 → 重试（一条都没收到，重发不会重复）。
+ */
+function actionOf(
+  buckets: Buckets | undefined,
+  attempt: 'poster' | 'text',
+  input: Readonly<{ text: BriefingPushText; hasShorten: boolean; hasChannelsPage: boolean }>,
+  text: BriefingPushText
+): Readonly<{ action?: Readonly<{ key: BriefingPushActionKey; label: string }> }> {
+  if (buckets === undefined) return {}
+  if (buckets.pending > 0) return {}
+  if (buckets.received === buckets.total) return {}
+  if (buckets.received === 0 && buckets.failed === buckets.total) {
+    return { action: { key: 'retry', label: text.retry } }
+  }
+  if (attempt === 'text') return { action: { key: 'retry-missing', label: text.retryMissing } }
+  void input
+  return {}
+}
+
+function actionOf2(
+  key: BriefingPushActionKey,
+  input: Readonly<{ text: BriefingPushText }>,
+  text: BriefingPushText
+): Readonly<{ key: BriefingPushActionKey; label: string }> {
+  void input
+  return {
+    key,
+    label: key === 'send-text-only' ? text.sendTextOnly : key === 'shorten-lede' ? text.shortenLede : text.retry
+  }
+}
+
+/**
+ * 明细一行一条通道：名字 / 结果 / 形态 / 人话原因 / 原因码（折叠，由组件渲染）。
+ * **降级必须看得出来**：`kind: 'text'` 的那条写「只发了文字（没有海报）」，绝不写成「发了海报」。
  */
 function channelRows(
   channels: readonly BriefingPushChannelResult[],
   text: BriefingPushText
-): readonly BriefingPushChannelRow[] {
+): readonly BriefingPushResultRow[] {
   return channels.map((channel) => {
-    const kind = channel.kind === 'image' ? text.channelImage : channel.kind === 'text' ? text.channelText : undefined
-    const outcome = channel.state === 'sent-accepted'
-      ? text.channelReceived
-      : channel.state === 'sent-unconfirmed'
-        ? text.channelUnconfirmed
-        : channel.reason === undefined
-          ? text.channelNotReceived
-          : text.channelReasons[channel.reason] ?? text.channelReasonUnknown
+    const outcome: BriefingPushRowOutcome = channel.state === 'sent-accepted'
+      ? 'received'
+      : channel.state === 'sent-unconfirmed' ? 'pending' : 'not-received'
     return {
       name: channel.channelName ?? text.channelUnknown,
-      detail: kind === undefined ? outcome : `${kind} · ${outcome}`
+      outcome,
+      ...(channel.kind === 'image' ? { form: 'poster' as const } : channel.kind === 'text' ? { form: 'text' as const } : {}),
+      // 原因只在「没到」时给人话；等回执那行自己就是原因（还没收到回执）。
+      ...(outcome !== 'not-received'
+        ? {}
+        : { reason: channel.reason === undefined ? text.channelNotReceived : text.channelReasons[channel.reason] ?? text.channelReasonUnknown }),
+      ...(channel.reason === undefined ? {} : { reasonCode: channel.reason })
     }
   })
 }

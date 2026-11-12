@@ -17,28 +17,53 @@ export type BriefingPushText = Readonly<{
   /** 导读超长时的第二个动作：去把导读写短。 */
   shortenLede: string
 
+  /** 发送中：`{n}` 是点之前可投递的通道条数（回执回来之后一切以逐通道行为准）。 */
+  sendingChannels: string
+
   /**
-   * 结果那一行，**只有数字**：`{n}` = 这次的目标通道数，`{ok}` / `{failed}` = 收到 / 没到。
-   * 通道名一个都不出现在正文里（它们只在 ⓘ 的逐行说明里）。
+   * 结果条摘要，**只有数字**：`{n}` = 这次的目标通道数，`{ok}` / `{failed}` / `{pending}` 是三桶
+   * （收到 / 没到 / 还没回执）。**没回执不许算进「没到」**——那是拿不到当没有。
+   * 通道名一个都不出现在摘要里（它们只在明细的逐行说明里）。
    */
   sentAll: string
-  sentSome: string
+  /**
+   * 三桶合并句的**三段**（按 收到 / 没到 / 还没回执 的顺序拼，空桶整段不出现）。
+   * 三段都在时就是产品定稿那句：`{ok} 条收到，{failed} 条没到，{pending} 条还没回执`。
+   * 不写成一整句再按逗号切——翻译会换标点，切出来的段就错位了。
+   */
+  bucketReceived: string
+  bucketFailed: string
+  bucketPending: string
+  bucketSeparator: string
   sentNone: string
-  sentUnconfirmed: string
   /** 老回执没有逐通道行时（极少）：只知道聚合档，不编一个条数。 */
   sentAcceptedNoRows: string
   sentUnconfirmedNoRows: string
   notReceivedNoRows: string
+  /** 形态前缀（整条同一形态时加；混合形态不加，逐行写清）。 */
+  posterPrefix: string
+  textPrefix: string
+  /** 整条没发：一条可用通道都没有（不是「没收到」）。 */
+  noChannels: string
 
-  /** ⓘ 的读屏名与逐通道那几样（名字 · 发了什么 · 到没到）。 */
-  channelsLabel: string
-  /** 只有解释、没有逐通道行时那颗 ⓘ 的读屏名。 */
-  explainLabel: string
+  /** 结果条自己的控件与逐行用词。 */
+  stripInfoLabel: string
+  stripInfoTip: string
+  closeStrip: string
+  toggleOpen: string
+  toggleClose: string
+  rowReceived: string
+  rowNotReceived: string
+  rowPending: string
+  rowCodeLabel: string
+  /** 这一行没有形态可写时的占位（没发出去的行）。 */
+  rowNoForm: string
+  retryMissing: string
+  openChannels: string
+
   channelImage: string
   channelText: string
-  channelReceived: string
   channelNotReceived: string
-  channelUnconfirmed: string
   channelUnknown: string
   channelReasonUnknown: string
   channelReasons: Readonly<Record<string, string>>
@@ -77,26 +102,40 @@ const zh: BriefingPushText = {
   sending: '正在发布…',
   retry: '重试',
   sendTextOnly: '只发文字',
-  shortenLede: '缩短导读',
+  shortenLede: '改短导读',
+  sendingChannels: '正在发到 {n} 条通道…',
   sentAll: '{n} 条通道都收到了',
-  sentSome: '{ok} 条通道收到，{failed} 条没到',
+  bucketReceived: '{n} 条收到',
+  bucketFailed: '{n} 条没到',
+  bucketPending: '{n} 条还没回执',
+  bucketSeparator: '，',
   sentNone: '没有任何通道收到（共 {n} 条）',
-  sentUnconfirmed: '{n} 条通道已送出去，还没收到回执',
+  posterPrefix: '发了海报：',
+  textPrefix: '只发了文字：',
+  noChannels: '没有可用的通道',
+  stripInfoLabel: '结果说明',
+  stripInfoTip: '只说明这一次发布的结果；下一次发布会替换这条。',
+  closeStrip: '关闭结果条',
+  toggleOpen: '展开明细',
+  toggleClose: '收起明细',
+  rowReceived: '收到',
+  rowNotReceived: '没到',
+  rowPending: '等回执',
+  rowCodeLabel: '原因码',
+  rowNoForm: '—',
+  retryMissing: '再发一次没到的',
+  openChannels: '去频道',
   sentAcceptedNoRows: '通道收到了',
   sentUnconfirmedNoRows: '已送出去，还没收到回执',
   notReceivedNoRows: '通道没收到',
-  channelsLabel: '这次每条通道的结果',
-  explainLabel: '这次为什么没发',
   channelImage: channelResultWords['zh-CN'].image,
   channelText: channelResultWords['zh-CN'].text,
-  channelReceived: channelResultWords['zh-CN'].received,
   channelNotReceived: channelResultWords['zh-CN'].notReceived,
-  channelUnconfirmed: channelResultWords['zh-CN'].unconfirmed,
   channelUnknown: channelResultWords['zh-CN'].unknownChannel,
   channelReasonUnknown: channelResultWords['zh-CN'].reasonUnknown,
   channelReasons: channelResultWords['zh-CN'].reasons,
   captionTooLong: '没发出去：导读 {chars} 字，一次最多 {limit} 字',
-  captionTooLongWhy: '导读是按原文发的，所以不截断——截断就成了半句话。把导读写短，或者只发文字。',
+  captionTooLongWhy: '导读是按原文发的，所以不截断——截断就成了半句话。改短导读会打开这一期的编辑会话，把导读写短后重新生成（会花一次模型调用）；也可以只发文字。',
   posterRenderFailed: '没发出去：这次的海报没渲染出来',
   posterRenderFailedWhy: '图没有生成成功，这次一个字节都没发。可以重试。',
   posterTooLarge: '没发出去：这一版的海报 {size}，上限 {limit}',
@@ -136,25 +175,39 @@ const en: BriefingPushText = {
   retry: 'Retry',
   sendTextOnly: 'Send text only',
   shortenLede: 'Shorten the lede',
+  sendingChannels: 'Sending to {n} channels…',
   sentAll: 'All {n} channels received it',
-  sentSome: '{ok} of {n} channels received it; {failed} did not',
+  bucketReceived: '{n} received',
+  bucketFailed: '{n} did not',
+  bucketPending: '{n} awaiting a receipt',
+  bucketSeparator: ', ',
   sentNone: 'No channel received it (0 of {n})',
-  sentUnconfirmed: '{n} channels sent, no receipt yet',
+  posterPrefix: 'With the poster: ',
+  textPrefix: 'Text only: ',
+  noChannels: 'No usable channel',
+  stripInfoLabel: 'About this result',
+  stripInfoTip: 'This describes this publish only; the next publish replaces it.',
+  closeStrip: 'Close the result strip',
+  toggleOpen: 'Show details',
+  toggleClose: 'Hide details',
+  rowReceived: 'received',
+  rowNotReceived: 'did not receive',
+  rowPending: 'awaiting receipt',
+  rowCodeLabel: 'Reason code',
+  rowNoForm: '—',
+  retryMissing: 'Send the missing ones again',
+  openChannels: 'Go to channels',
   sentAcceptedNoRows: 'The channel received it',
   sentUnconfirmedNoRows: 'Sent, no receipt yet',
   notReceivedNoRows: 'The channel did not receive it',
-  channelsLabel: 'What each channel reported',
-  explainLabel: 'Why nothing was sent',
   channelImage: channelResultWords['en-US'].image,
   channelText: channelResultWords['en-US'].text,
-  channelReceived: channelResultWords['en-US'].received,
   channelNotReceived: channelResultWords['en-US'].notReceived,
-  channelUnconfirmed: channelResultWords['en-US'].unconfirmed,
   channelUnknown: channelResultWords['en-US'].unknownChannel,
   channelReasonUnknown: channelResultWords['en-US'].reasonUnknown,
   channelReasons: channelResultWords['en-US'].reasons,
   captionTooLong: 'Not published: the lede is {chars} characters, over the limit of {limit}',
-  captionTooLongWhy: 'The lede is sent as written, so it is never truncated. Shorten it, or send text only.',
+  captionTooLongWhy: 'The lede is sent as written, so it is never truncated. Shortening it opens this edition’s editing session, where you make the lede shorter and regenerate (this spends one model call); you can also send text only.',
   posterRenderFailed: 'Not published: the poster could not be rendered',
   posterRenderFailedWhy: 'The image was never produced, so nothing was sent. You can retry.',
   posterTooLarge: 'Not published: this poster is {size}, over the limit of {limit}',

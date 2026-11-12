@@ -1,4 +1,6 @@
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
+
 import { openBriefingSessionWithShell } from './openBriefingSession'
 import type { BriefingPushText } from './dailyBriefingPushText'
 
@@ -22,6 +24,8 @@ export type BriefingPublishInput = Readonly<{
   refreshKey: number
   posterRoot: () => HTMLElement | null
   onShortenLede?: (() => void) | undefined
+  /** 一条可用通道都没有时那条路：去频道页。 */
+  onOpenChannels: () => void
 }>
 
 export function briefingPublishInputs(input: Readonly<{
@@ -46,6 +50,8 @@ export function briefingPublishInputs(input: Readonly<{
     posterRoot: input.posterRoot,
     ...(sessionId === undefined
       ? {}
-      : { onShortenLede: () => { void openBriefingSessionWithShell(sessionId) } })
+      : { onShortenLede: () => { void openBriefingSessionWithShell(sessionId) } }),
+    // 「去频道」：零通道那条结果的唯一动作。导航归壳，这里只给那一处目的地。
+    onOpenChannels: () => navigateTo({ page: 'settings', panel: 'channels' })
   }
 }

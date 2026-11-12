@@ -9,7 +9,7 @@ import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefin
 import { BriefingManualRunDialog, type BriefingManualRunDraft, type BriefingManualRunProblem } from './BriefingManualRunDialog'
 import type { BriefingManualRunOutcome } from './useBriefingManualRun'
 import { BriefingPushToPhoneButton } from './BriefingPushToPhoneButton'
-import { BriefingPushResultRow } from './BriefingPushResultRow'
+import { BriefingPushResultStrip } from './BriefingPushResultStrip'
 import { openBriefingSessionWithShell } from './openBriefingSession'
 import type { BriefingPushText } from './dailyBriefingPushText'
 import type { BriefingPushToPhone } from './useBriefingPushToPhone'
@@ -214,14 +214,13 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
           动作行不解释自己（界面规范 §5.1），原因由正文的空态说明。 */}
       {deleteButton}
   </div>
-  {/* 发布结果：正文只有数字与动作，逐条说明在 ⓘ 里。它固定在卡顶、不跟着纸滚动，
-      所以发布之后往下读正文，这一行还在。 */}
-  {push.result === undefined ? null : <BriefingPushResultRow
+  {/* 发布结果条（界面设计 2026-11-12 定稿）：工具栏下方、内容区顶部，**不是工具栏的一部分**。
+      常驻到下一次发布（下一次替换同一条），可手动关闭，明细可展开。 */}
+  {push.result === undefined ? null : <BriefingPushResultStrip
     result={push.result}
     text={pushText}
-    onRetry={push.onRetry}
-    onSendTextOnly={push.onSendTextOnly}
-    {...(push.onShortenLede === undefined ? {} : { onShortenLede: push.onShortenLede })}
+    onAction={push.onAction}
+    onClose={push.onClose}
   />}
   </div>
 }
