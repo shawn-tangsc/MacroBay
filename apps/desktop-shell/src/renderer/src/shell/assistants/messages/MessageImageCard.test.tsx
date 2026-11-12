@@ -130,6 +130,29 @@ describe('send an image to the channel', () => {
     expect(host.querySelector('[data-image-send-bare]')).toBeNull()
   })
 
+  it('#4c: after a remount (the equivalent of a restart) the image-only action is gone and nothing is stored', async () => {
+    // 口径 B：跨重启不提供「只发图片」。动作依赖的是**这次会话里的失败状态**，重建调用点后状态归零；
+    // 主进程侧也不留 payload（见 ChannelDeliveryService 的「stores no fileName」用例），所以没有可点的地方。
+    const { sendMessageImage } = installChannels(
+      { channelId: 'c1', channelName: 'Telegram', supportsImage: true },
+      { ok: false, code: 'delivery-caption-too-long', channelId: 'c1' }
+    )
+    const host = await mountCard({ messageId: 'm1', caption: 'x'.repeat(1500) })
+    await act(async () => (host.querySelector('[data-image-send-action]') as HTMLButtonElement).click())
+    await act(async () => {})
+    expect(host.querySelector('[data-image-send-bare]')).not.toBeNull()
+
+    // 重建：卸载旧卡片、重新挂载（与「重启后重新打开这条消息」同一形状）。
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    const remounted = await mountCard({ messageId: 'm1', caption: 'x'.repeat(1500) })
+    expect(remounted.querySelector('[data-image-send-bare]')).toBeNull()
+    expect(remounted.querySelector('[data-image-send-result]')).toBeNull()
+    // 也没有偷偷替读者发一次。
+    expect(sendMessageImage).toHaveBeenCalledOnce()
+  })
+
   it('does not draw any action without a message id or without image capability', async () => {
     installChannels({ channelId: 'c1', channelName: 'Telegram', supportsImage: true }, { ok: true, channelId: 'c1', status: 'delivered', code: null })
     expect((await mountCard({ caption: 'hi' })).querySelector('[data-image-send-action]')).toBeNull()
