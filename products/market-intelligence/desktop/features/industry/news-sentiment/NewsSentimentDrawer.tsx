@@ -163,7 +163,7 @@ export function NewsSentimentDrawer(props: {
             <span aria-hidden="true" className="mi-news-drawer__queue-percent">
               {Math.round((progress.done / Math.max(1, progress.total)) * 100)}%
             </span>
-            <Button className="mi-news-drawer__queue-cancel" onClick={cancelTranslation} size="small" type="link">{text.settingsModal.cancelTranslate}</Button>
+            <Button className="mi-news-drawer__queue-cancel text-action" onClick={cancelTranslation} size="small" type="text">{text.settingsModal.cancelTranslate}</Button>
           </div>
         ) : null}
         <header className="mi-news-drawer__toolbar">
