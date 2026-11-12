@@ -29,4 +29,10 @@ createRoot(document.getElementById('root') as HTMLElement).render(
 )
 
 // 纯观测：两帧之后才算「第一帧已经画到屏幕上」（单帧还在布局之前）。删掉不影响渲染。
-requestAnimationFrame(() => requestAnimationFrame(() => markRendererBoot('first-frame')))
+// 同一时机移除内联首屏占位：它只负责「别让窗口一片空」，第一帧画出来就该退场。
+requestAnimationFrame(() =>
+  requestAnimationFrame(() => {
+    markRendererBoot('first-frame')
+    document.getElementById('boot-splash')?.remove()
+  })
+)
