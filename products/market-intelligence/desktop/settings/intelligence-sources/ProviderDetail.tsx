@@ -31,7 +31,7 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
  * 说明横幅的类别 → 文案键（类别来自注册表 `ProviderDefinition.notice`，组件里不出现源名）。
  * 新增一种同类源：注册表标一个值 + 两语文案各一条，不动组件逻辑。
  */
-import { failureSentenceOf, type ConnectionFeedback } from './connectionFailureSentence'
+import { credentialVerificationLine, type ConnectionFeedback } from './connectionFailureSentence'
 
 const PROVIDER_NOTICE_KEYS: Readonly<Record<NonNullable<ProviderView['notice']>, string>> = {
   'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource',
@@ -215,6 +215,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    */
   const credentialTarget = credentialSourceId ? { sourceId: credentialSourceId, kind: 'feed' as const } : undefined
   const testSource = provider.sources.find((source) => source.kind === 'official-calendar') ?? credentialTarget
+  const verificationOnly = provider.notice === 'verification-only' // 四态常显行只由这个标记决定
+  const verificationLine = credentialVerificationLine({ notice: provider.notice, resolveText, hasCredential: credentialStatus?.hasCredential, feedback: connectionFeedback })
 
   /**
    * 行内连通性测试：每个已经接了的源一颗，结果按源记。
@@ -300,6 +302,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       setCredentialDraft(status?.maskedPreview ?? '')
       setCredentialPristine(true)
       setCredentialFeedback('saved')
+      /* 换了一把钥匙，上一把的测试结果就过期了：不清掉会让「连接失败：原因」挂在新钥匙上。
+         清回「已保存待验证」是准确的——这一版本来就不保留验证时间。 */
+      setConnectionFeedback(undefined)
     } catch {
       setCredentialFeedback('failed')
     } finally {
@@ -463,12 +468,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       </> : null}
       {/* 「官网 / 测试连接」那一排动作整行去掉：两颗都上到源名旁边（同一屏一个动作只有一处）。
           连接反馈仍要留在页头，它是这次点击的结果。 */}
-      {connectionFeedback ? <Alert
-        message={connectionFeedback.kind === 'succeeded' ? labels.connectionSucceeded
-          : connectionFeedback.kind === 'unsupported' ? labels.connectionUnsupported
-            : failureSentenceOf(resolveText, connectionFeedback.failureCode) ?? labels.connectionFailed}
-        showIcon type={connectionFeedback.kind === 'succeeded' ? 'success' : connectionFeedback.kind === 'unsupported' ? 'warning' : 'error'}
-      /> : null}
+      {verificationLine !== undefined
+        ? <Alert message={verificationLine.message} showIcon type={verificationLine.tone} />
+        : connectionFeedback ? <Alert
+          message={connectionFeedback.kind === 'succeeded' ? labels.connectionSucceeded
+            : connectionFeedback.kind === 'unsupported' ? labels.connectionUnsupported : labels.connectionFailed}
+          showIcon type={connectionFeedback.kind === 'succeeded' ? 'success' : connectionFeedback.kind === 'unsupported' ? 'warning' : 'error'}
+        /> : null}
     </header>
     {/* 卡二 = 源项列表卡：所有能力行装进**一张卡**，行间只用细分隔线（外层已经有卡了，双层框会显脏）。 */}
     <div className="source-provider-detail__list source-provider-detail__card">
@@ -482,7 +488,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         credentialMissing={provider.credential === 'api-key' && credentialStatus?.hasCredential === false}
         key={source.sourceId}
         labels={labels}
-        onTest={source.capabilities?.testConnection === true ? () => void rowTests.run(source) : undefined}
+        onTest={source.capabilities?.testConnection === true && !verificationOnly ? () => void rowTests.run(source) : undefined}
         proxyConfigured={proxyConfigured}
         resolveText={resolveText}
         source={source}

@@ -10,11 +10,48 @@ export type ConnectionFeedback =
   | Readonly<{ kind: 'unsupported' }>
   | Readonly<{ kind: 'failed'; failureCode?: string }>
 
+/**
+ * 这一行常显的四态（产品 §3.7）：未配置 / 已保存待验证 / 失败带原因 / 本次会话内通过。
+ *
+ * 刷新后回到「已保存待验证」是准确的：`lastValidatedAt` 重启后会退回保存密钥的时间
+ * （`intelligenceCredentialStore.ts:119`），所以这里**不写「上次验证于」**——那会在从未验证过
+ * 的情况下显示验证过。
+ */
+export type VerificationLineTone = 'info' | 'success' | 'error'
+
+export function credentialVerificationLine(input: Readonly<{
+  notice: string | undefined
+  resolveText: (key: string) => string
+  /** `undefined` = 凭据状态还没读回来：先不画，免得先说「没配」再说「已保存」。 */
+  hasCredential: boolean | undefined
+  feedback: ConnectionFeedback | undefined
+}>): Readonly<{ message: string; tone: VerificationLineTone }> | undefined {
+  const { notice, resolveText, hasCredential, feedback } = input
+  /* Only the provider that declares "this build only verifies the key" gets this line. One marker,
+     two consequences; no `providerId` special case inside a shared component. */
+  if (notice !== 'verification-only' || hasCredential === undefined) return undefined
+  if (!hasCredential) {
+    return { message: resolveText('settings.intelligenceSources.syncRun.failureCodes.credential-missing'), tone: 'info' }
+  }
+  if (feedback?.kind === 'succeeded') {
+    return { message: resolveText('settings.intelligenceSources.credentialVerification.succeeded'), tone: 'success' }
+  }
+  if (feedback?.kind === 'failed') {
+    const reason = failureSentenceOf(resolveText, feedback.failureCode)
+      ?? resolveText('settings.intelligenceSources.connectionFailed')
+    return {
+      message: resolveText('settings.intelligenceSources.credentialVerification.failed').replace('{reason}', reason),
+      tone: 'error'
+    }
+  }
+  return { message: resolveText('settings.intelligenceSources.credentialVerification.savedUnverified'), tone: 'info' }
+}
+
 export function failureSentenceOf(
   resolveText: (key: string) => string,
   code: string | undefined
 ): string | undefined {
   if (code === undefined) return undefined
-  const sentence = resolveText(`settings.intelligenceSources.failureCodes.${code}`)
+  const sentence = resolveText(`settings.intelligenceSources.syncRun.failureCodes.${code}`)
   return sentence === '' ? undefined : sentence
 }

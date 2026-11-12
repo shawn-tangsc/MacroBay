@@ -278,7 +278,7 @@ export const intelligenceSourcesText = {
     /* 免费档的署名条件：中英逐字相同、不翻译（Chief 2026-11-13 定，三处之一）。 */
     dataAttribution: 'Data by CryptoETF',
     dataAttributionAria: '数据来源署名，打开 CryptoETF 站点',
-    verificationOnly: '本版只验证接入：不采集、不写库，也不参与任何读数。'
+    verificationOnly: '本版只验证密钥，不采集数据。'
   },
   website: '官网',
   signup: '注册 / 获取 Key',
@@ -597,6 +597,12 @@ export const intelligenceSourcesText = {
       paused: '已关闭'
     }
   },
+  /* 只给「本版只验证密钥」的源用的一行：四态常显，刷新后回到「已保存待验证」。 */
+  credentialVerification: {
+    savedUnverified: '已保存，还没验证过；点「测试连接」',
+    failed: '连接失败：{reason}',
+    succeeded: '连接正常：只验证这个密钥能不能用，本版不采集数据'
+  },
   actions: {
     save: '保存'
   },
@@ -890,7 +896,7 @@ export const intelligenceSourcesText = {
     /* Attribution required by the free tier: identical in every language, never translated. */
     dataAttribution: 'Data by CryptoETF',
     dataAttributionAria: 'Data source attribution; opens the CryptoETF site',
-    verificationOnly: 'This version only verifies reachability: it does not collect, does not write, and feeds no reading.'
+    verificationOnly: 'This version only checks the key; it does not collect data.'
   },
   website: 'Website',
   signup: 'Sign up / Get key',
@@ -1171,6 +1177,11 @@ export const intelligenceSourcesText = {
       failed: 'Failed',
       paused: 'Off'
     }
+  },
+  credentialVerification: {
+    savedUnverified: 'Saved, not verified yet; use Test connection',
+    failed: 'Connection failed: {reason}',
+    succeeded: 'Connection works: this version only checks the key; it does not collect data'
   },
   actions: {
     save: 'Save'
