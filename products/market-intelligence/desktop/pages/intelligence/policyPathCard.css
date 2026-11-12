@@ -16,6 +16,8 @@
   color: var(--text, #e8e9ec);
 }
 .mi-policy-card__head { display: flex; align-items: center; gap: 8px; }
+/* The drawer entry rides at the far right of the header, after every status chip. */
+.mi-policy-card__entry { margin-left: auto; display: inline-flex; align-items: center; }
 .mi-policy-card__head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--muted, #8b8d94); }
 .mi-policy-card__chip {
   margin-left: auto;

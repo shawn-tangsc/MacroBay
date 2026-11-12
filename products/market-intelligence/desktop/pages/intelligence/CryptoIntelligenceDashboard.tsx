@@ -64,6 +64,8 @@ import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
 
 import { PolicyPathSlot } from './PolicyPathSlot'
+import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
+import { macroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
@@ -311,6 +313,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const policyPathRead = usePolicyPathReading(readsReady && policyCellsRead, dataRevision)
   const policyPath = policyPathRead.result
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
+  // 关键指标 · 预期变化：静态页面版，内容是这个抽屉自己的示意数据（不读库）。
+  const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
   // make it re-query the calendar on every render of this dashboard.
@@ -460,12 +464,17 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           onConfigureSources={onConfigureSources}
           onFocusCell={(cellKey) => onManageSource({ business: 'dashboard', moduleKey: 'policy-path', cellId: dashboardCellId('policy-path', cellKey) })}
           onOpenDetail={() => setPolicyDrawerOpen(true)}
+          onOpenIndicators={() => setIndicatorDrawerOpen(true)}
+          openIndicatorsLabel={macroIndicatorDrawerText[locale].entry.openAria}
           resolveKey={resolveProductKey} />
         // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
         return policySlot ? createPortal(card, policySlot) : card
       })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
+      {/* 静态页面版：抽屉里全是示意数据，不读库、不接源。它从右侧滑出（设计稿 K11-b），
+          与左侧那层「分析详情」抽屉不是同一个位置，所以用 placement 区分，而不是另写一个壳。 */}
+      {indicatorDrawerOpen ? <MacroIndicatorDrawer locale={locale} onOpenCalendar={() => { setIndicatorDrawerOpen(false); onOpenCalendar() }} onClose={() => setIndicatorDrawerOpen(false)} /> : null}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">

@@ -27,7 +27,7 @@ import { useBlsAvailability, useBlsYearSync } from './useBlsAvailability'
 import type { BlsScheduleFeedback } from './blsAvailability'
 import { type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
 import { CalendarMonthBoard } from './CalendarMonthBoard'
-import { CalendarEventRow } from './CalendarEventRow'
+import { CalendarDayEventList, calendarDaySummary } from './CalendarDayEventList'
 import { calendarDayForMonth, calendarDisplayDate, unifiedCalendarDay, type CalendarDayCoverage, type CalendarDayItem } from './economicCalendarDayModel'
 import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
 import { useBlsIcsImport } from './useBlsIcsImport'
@@ -406,19 +406,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
           marketLoading={market.loading}
           onRetryMarket={() => void market.refresh()}
         />
-        <section aria-label={text.dayEvents.listLabel} className="mi-calendar-day-list" data-calendar-day-list ref={dayList}>
-          <h2>{text.dayEvents.title.replace('{date}', selectedDay)}</h2>
-          <p data-day-summary>{coverage === 'complete' ? text.unifiedDay.total.replace('{count}', String(dayEvents.items.length)) : text.unifiedDay[coverage]} · {text.unifiedDay.grouped}</p>
-          <div role="list">{dayEvents.groups.map(group => <section data-calendar-group={group.eventType} key={group.eventType}>
-            <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>
-            {group.items.map(item => <div role="listitem" key={item.key}><CalendarEventRow item={item} marketSources={market.sources} text={text} statusNow={statusNow} selected={item.source === 'market' ? item.event.eventKey === selectedMarket?.eventKey : item.event.eventKey === selectedEventKey} onSelect={value => selectItem(value)} /></div>)}
-          </section>)}</div>
-          {/* A quiet day is a reading, not a missing block: the sources answered and the answer is
-              zero. It carries no action because nothing the reader can press would produce events,
-              and a button that does nothing is worse than none. The sentence stays visible so a
-              blank area cannot be mistaken for "not loaded yet". */}
-          {coverage === 'complete' && !dayEvents.items.length ? <p>{text.unifiedDay.empty}</p> : null}
-        </section>
+        <CalendarDayEventList label={text.dayEvents.listLabel} title={text.dayEvents.title.replace('{date}', selectedDay)}
+          summary={calendarDaySummary(coverage, dayEvents.items.length, text)} groups={dayEvents.groups}
+          {...(coverage === 'complete' && !dayEvents.items.length ? { emptyText: text.unifiedDay.empty } : {})}
+          listRef={dayList} marketSources={market.sources} text={text} statusNow={statusNow}
+          selectedEventKey={selectedEventKey} selectedMarketKey={selectedMarket?.eventKey} onSelect={value => selectItem(value)} />
       </div>
       </div>
       <CalendarDetailSurface

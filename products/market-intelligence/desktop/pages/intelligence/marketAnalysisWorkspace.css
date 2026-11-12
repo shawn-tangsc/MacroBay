@@ -45,12 +45,15 @@
 .mi-analysis-timeline__conclusion h3 { color: var(--text-strong); }
 
 /* 节点详情抽屉：非模态，无遮罩，覆盖在主看板之上但不覆盖 Agent 栏。 */
-.mi-analysis-drawer { position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
+.mi-analysis-drawer { position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
+.mi-analysis-drawer[data-placement="right"] { inset: 0 0 0 auto; width: min(1280px, 94vw); border-right: 0; border-left: 1px solid var(--border); box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); }
+.mi-analysis-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
 .mi-analysis-dashboard-layout { --mi-drawer-width: 520px; }
 .mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
 .mi-analysis-conclusion-card__body { display: grid; gap: 6px; padding-left: 10px; border-left: 2px solid transparent; }
 .mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
 .mi-analysis-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.mi-analysis-drawer__footer { display: flex; align-items: center; gap: 4px; padding: 6px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--font-meta); }
 .mi-analysis-drawer__meta time { color: var(--muted); font-size: 10.5px; }
 .mi-analysis-drawer__meta span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .mi-analysis-drawer__body { min-height: 0; overflow: auto; padding: 16px; }
