@@ -29,8 +29,8 @@ const dashboardFeedSourceIds = Object.freeze([
   'binance-futures-positioning', 'defillama-stablecoins', '0xrouter-aggregate-provider',
   'alternative-fear-greed', 'policy-path-market',
   'macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls',
-  'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
-  'macro-calendar-0xrouter-central-bank-activities'
+  'macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
+  'macro-calendar-narwhal-central-bank-activities'
 ] as const)
 
 export const dashboardFeedStatusPublicPolicy = Object.freeze({

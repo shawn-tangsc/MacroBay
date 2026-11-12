@@ -5,9 +5,8 @@
  * 每加一条 feed 只改这里一处，不必再进两百行的 registerServices 里找。
  */
 export const AUTOMATIC_CALENDAR_FEED_IDS: readonly string[] = Object.freeze([
-  'macro-calendar-0xrouter-economic-data',
-  'macro-calendar-0xrouter-financial-events',
-  'macro-calendar-0xrouter-central-bank-activities'
+  // Narwhal 一次采集写三类：自动刷新只认拥有作业的这条，另两条由它覆盖。
+  'macro-calendar-narwhal-economic-data'
 ])
 
 export function createEnabledCalendarFeeds(deps: Readonly<{

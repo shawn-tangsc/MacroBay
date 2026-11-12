@@ -12,6 +12,14 @@ export type CalendarFeedDefinition = {
   dashboardSection: 'macro-calendar'
   supportsBlsScheduleSync?: boolean
   schedule?: Readonly<{ kind: 'provider' | 'job'; intervalSeconds: number }>
+  /**
+   * 这条 feed 的采集由哪一条 feed 的作业覆盖。
+   *
+   * Narwhal 一次接口调用返回全部 releases，三类是我们按 series 自己分的，所以只有一条作业。
+   * 覆盖关系落注册表，状态渲染只读它；被覆盖的那条**不加开关**（那层 UI 今天不存在），
+   * 只在状态列写「由同一次采集覆盖」。
+   */
+  coveredBy?: CalendarFeedId
 }
 
 export type CalendarFeedCapabilities = {
@@ -25,9 +33,6 @@ const calendarFeedOrder = [
   'macro-calendar-fed',
   'macro-calendar-bea',
   'macro-calendar-bls',
-  'macro-calendar-0xrouter-economic-data',
-  'macro-calendar-0xrouter-financial-events',
-  'macro-calendar-0xrouter-central-bank-activities',
   'macro-calendar-narwhal-economic-data',
   'macro-calendar-narwhal-financial-events',
   'macro-calendar-narwhal-central-bank-activities',
@@ -71,39 +76,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     supportsBlsScheduleSync: true,
     schedule: { kind: 'provider', intervalSeconds: 6 * 60 * 60 }
   },
-  'macro-calendar-0xrouter-economic-data': {
-    feedId: 'macro-calendar-0xrouter-economic-data',
-    providerId: '0xrouter',
-    providerDisplayName: '0xRouter',
-    displayName: '0xRouter Economic Data',
-    description: 'Market-sourced economic calendar; events stay unverified until an official link exists.',
-    owner: 'market',
-    collection: 'job',
-    dashboardSection: 'macro-calendar',
-    schedule: { kind: 'job', intervalSeconds: 10 * 60 }
-  },
-  'macro-calendar-0xrouter-financial-events': {
-    feedId: 'macro-calendar-0xrouter-financial-events',
-    providerId: '0xrouter',
-    providerDisplayName: '0xRouter',
-    displayName: '0xRouter Financial Events',
-    description: 'Market-sourced financial events; events stay unverified until an official link exists.',
-    owner: 'market',
-    collection: 'job',
-    dashboardSection: 'macro-calendar',
-    schedule: { kind: 'job', intervalSeconds: 10 * 60 }
-  },
-  'macro-calendar-0xrouter-central-bank-activities': {
-    feedId: 'macro-calendar-0xrouter-central-bank-activities',
-    providerId: '0xrouter',
-    providerDisplayName: '0xRouter',
-    displayName: '0xRouter Central Bank Activities',
-    description: 'Market-sourced central bank activities; events stay unverified until an official link exists.',
-    owner: 'market',
-    collection: 'job',
-    dashboardSection: 'macro-calendar',
-    schedule: { kind: 'job', intervalSeconds: 10 * 60 }
-  },
   /* Narwhal 三条：**已登记、可验证密钥、本版不采集**（`collection: 'none'`）。
      不写 `job` 是因为它还没有采集器与解析器：写成 `job` 会让「立即采集」成为一个点了没反应、
      或者按旧源实现去采的入口。等采集器落地的那一笔，把 `collection`/`schedule` 与
@@ -112,11 +84,13 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     feedId: 'macro-calendar-narwhal-economic-data',
     providerId: 'narwhal',
     providerDisplayName: 'Narwhal',
-    displayName: 'Narwhal Economic Data',
+    displayName: 'Narwhal economic data',
     description: 'Market-sourced economic calendar; events stay unverified until an official link exists.',
     owner: 'market',
-    collection: 'none',
-    dashboardSection: 'macro-calendar'
+    collection: 'job',
+    dashboardSection: 'macro-calendar',
+    /** 一次采集写三类，作业挂在这一条上。 */
+    schedule: { kind: 'job', intervalSeconds: 30 * 60 }
   },
   'macro-calendar-narwhal-financial-events': {
     feedId: 'macro-calendar-narwhal-financial-events',
@@ -125,7 +99,8 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     displayName: 'Narwhal Financial Events',
     description: 'Market-sourced financial events; events stay unverified until an official link exists.',
     owner: 'market',
-    collection: 'none',
+    collection: 'job',
+    coveredBy: 'macro-calendar-narwhal-economic-data',
     dashboardSection: 'macro-calendar'
   },
   'macro-calendar-narwhal-central-bank-activities': {
@@ -135,7 +110,8 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     displayName: 'Narwhal Central Bank Activities',
     description: 'Market-sourced central bank activities; events stay unverified until an official link exists.',
     owner: 'market',
-    collection: 'none',
+    collection: 'job',
+    coveredBy: 'macro-calendar-narwhal-economic-data',
     dashboardSection: 'macro-calendar'
   },
   'macro-calendar-coinmarketcal': {

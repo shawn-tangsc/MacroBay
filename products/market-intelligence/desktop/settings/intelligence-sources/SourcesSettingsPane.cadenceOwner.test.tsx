@@ -134,9 +134,9 @@ describe('0xRouter 的三条市场日历 feed：节奏归产品作业，不许�
   it('shows 内置频率 for every job-collected calendar feed', async () => {
     const host = await render('calendar')
     for (const sourceId of [
-      'macro-calendar-0xrouter-economic-data',
-      'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities'
+      'macro-calendar-narwhal-economic-data',
+      'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities'
     ]) {
       const row = presetRowOf(host, sourceId)
       expect(row, sourceId).not.toBeNull()

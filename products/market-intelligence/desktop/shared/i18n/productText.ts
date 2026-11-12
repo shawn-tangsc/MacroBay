@@ -563,7 +563,7 @@ mi: miText['zh-CN'],
               presets: { manual: '手动', balanced: '均衡', frequent: '高频' },
               marketCalendar: {
                 title: '市场日历', description: '由产品定时任务采集；在与官方日程建立关联前，事件标记为未验证。', refresh: '立即刷新', refreshing: '正在刷新市场日历…', succeeded: '市场日历已刷新。', failed: '市场日历刷新失败。',
-                feeds: { 'macro-calendar-0xrouter-economic-data': '经济数据', 'macro-calendar-0xrouter-financial-events': '金融事件', 'macro-calendar-0xrouter-central-bank-activities': '央行活动' },
+                feeds: { 'macro-calendar-narwhal-economic-data': '经济数据', 'macro-calendar-narwhal-financial-events': '金融事件', 'macro-calendar-narwhal-central-bank-activities': '央行活动' },
                 owner: '市场 · 未验证'
               },
               groups: { 'macro-calendar': '宏观日历', 'macro-regulation': '宏观与监管', 'crypto-market': '加密市场', 'aggregate-data-provider': '聚合数据供应商' },
@@ -2038,7 +2038,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               presets: { manual: 'Manual', balanced: 'Balanced', frequent: 'Frequent' },
               marketCalendar: {
                 title: 'Market calendar', description: 'Collected by a product job; events stay unverified until an official link exists.', refresh: 'Refresh now', refreshing: 'Refreshing the market calendar…', succeeded: 'Market calendar refreshed.', failed: 'Market calendar refresh failed.',
-                feeds: { 'macro-calendar-0xrouter-economic-data': 'Economic data', 'macro-calendar-0xrouter-financial-events': 'Financial events', 'macro-calendar-0xrouter-central-bank-activities': 'Central bank activities' },
+                feeds: { 'macro-calendar-narwhal-economic-data': 'Economic data', 'macro-calendar-narwhal-financial-events': 'Financial events', 'macro-calendar-narwhal-central-bank-activities': 'Central bank activities' },
                 owner: 'Market · unverified'
               },
               groups: { 'macro-calendar': 'Macro calendar', 'macro-regulation': 'Macro and regulation', 'crypto-market': 'Crypto market', 'aggregate-data-provider': 'Aggregate data providers' },

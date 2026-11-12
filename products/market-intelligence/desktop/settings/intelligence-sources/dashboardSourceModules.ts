@@ -99,15 +99,11 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     ['Fed 官方日程', 'macro-calendar-fed'],
     ['BEA 官方发布', 'macro-calendar-bea'],
     ['BLS 官方日程', 'macro-calendar-bls'],
-    ['0xRouter 经济数据', 'macro-calendar-0xrouter-economic-data'],
-    ['0xRouter 财经事件', 'macro-calendar-0xrouter-financial-events'],
-    ['0xRouter 央行活动', 'macro-calendar-0xrouter-central-bank-activities'],
-    /* Narwhal 三条与 0xRouter 三条**此刻并存**：换源要等采集器落地，先换会让日历直接空掉。
-       显式键不跟显示名漂（`narwhal-*`），换源时删掉 0xRouter 三行、把这三行改成旧键
-       `0xRouter 经济数据` 那三个字面量，读者已存的格开关才不会静默重置。 */
-    ['Narwhal 经济数据', 'macro-calendar-narwhal-economic-data', false, 'narwhal-economic-data'],
-    ['Narwhal 财经事件', 'macro-calendar-narwhal-financial-events', false, 'narwhal-financial-events'],
-    ['Narwhal 央行活动', 'macro-calendar-narwhal-central-bank-activities', false, 'narwhal-central-bank-activities']
+    /* 换源完成：三条 Narwhal 顶替三条 0xRouter。
+       **cellKey 保留旧字面量**（`0xRouter …` 那三个），读者已存的格级开关才不会静默重置。 */
+    ['Narwhal 经济数据', 'macro-calendar-narwhal-economic-data', false, '0xRouter 经济数据'],
+    ['Narwhal 财经事件', 'macro-calendar-narwhal-financial-events', false, '0xRouter 财经事件'],
+    ['Narwhal 央行活动', 'macro-calendar-narwhal-central-bank-activities', false, '0xRouter 央行活动']
   ]),
   moduleOf('quotes', `${TITLES}.marketState`, [
     ['BTC', 'binance-futures-positioning'],
