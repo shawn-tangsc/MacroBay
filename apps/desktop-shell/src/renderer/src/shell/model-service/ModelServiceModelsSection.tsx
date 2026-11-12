@@ -202,26 +202,33 @@ export function ModelServiceModelsSection({
             * 普通动作按档位：antd `Button` 默认档（不再挂 `model-service-pill`——胶囊在本界面没有第二处）。
             * 禁用态不配提示：禁用控件接不到焦点，提示就成鼠标专属。
             */}
-          {(() => {
-            const syncButton = (
+          {/*
+            * 禁用态与可点态**分成两段 JSX**：浮层只包可点的那一颗。
+            * 守卫判的是「Tooltip 的子元素里有没有 disabled」——共用 `syncButton` 变量会让它看见
+            * `disabled={syncDisabled}`，哪怕那个分支运行时并不套浮层；拆开写既过守卫，也照原样：
+            * 禁用时不给提示（禁用控件接不到焦点，提示等于落空），原因仍在该控件的可访问名里。
+            */}
+          {syncDisabled ? (
+            <Button
+              aria-label={syncHint ?? labels.fetchModelList}
+              data-models-sync
+              disabled
+              icon={<RefreshCw size={13} aria-hidden="true" />}>
+              {labels.fetchModelList}
+            </Button>
+          ) : (
+            <Tooltip
+              labelKey="modelService.fetchModelList"
+              resolveText={(key) => iconTextKeys[key] ?? ''}>
               <Button
                 aria-label={syncHint ?? labels.fetchModelList}
                 data-models-sync
-                disabled={syncDisabled}
                 icon={<RefreshCw size={13} aria-hidden="true" />}
                 onClick={onSyncModels}>
                 {labels.fetchModelList}
               </Button>
-            )
-            // 禁用态不配提示（接不到焦点）：这时不套浮层，而不是套一个空壳。
-            return syncDisabled ? syncButton : (
-              <Tooltip
-                labelKey="modelService.fetchModelList"
-                resolveText={(key) => iconTextKeys[key] ?? ''}>
-                {syncButton}
-              </Tooltip>
-            )
-          })()}
+            </Tooltip>
+          )}
           <ModelServiceClearModelsControl
             labels={labels}
             modelCount={modelCount + staleModelCount}
