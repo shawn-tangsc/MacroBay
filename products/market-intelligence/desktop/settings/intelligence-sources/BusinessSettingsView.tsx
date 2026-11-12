@@ -4,6 +4,8 @@ import { Select, Switch } from 'antd'
 
 import { SettingsInfo } from '../settingsInfo'
 import { ProcessingEntryRow } from '../../pages/intelligence/ProcessingEntryRow'
+import { FrequencyReadout } from './FrequencyReadout'
+import { frequencyReadoutView, type SourceCadenceReadout } from './sourceCadence'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes } from './sourceSettingRows'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import {
@@ -176,6 +178,14 @@ export function BusinessSettingsContent(props: {
    * 具体周期不在组件里写死：没有真实排期读口就不编数字。
    */
   builtinCadence?: ReadonlySet<string>
+  /**
+   * 「当前间隔 / 下次采集」的读数（按源索引，来自 `listSchedules()` 的只读投影）。
+   *
+   * 只给可调的那一行用；`cadenceAvailable === false` 表示这一批排期没读到——那时不画读数，
+   * 原因进同一颗 ⓘ（读不到 ≠ 0 ≠ 没有排期）。
+   */
+  cadence?: Readonly<Record<string, SourceCadenceReadout>>
+  cadenceAvailable?: boolean
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
@@ -203,6 +213,8 @@ export function BusinessSettingsContent(props: {
           onPresetChange: (next: string) => props.onPresetChange!(cell.sourceId, next)
         }),
       ...(props.builtinCadence?.has(cell.sourceId) === true ? { builtinCadence: true } : {}),
+      ...(props.cadence?.[cell.sourceId] === undefined ? {} : { cadence: props.cadence[cell.sourceId] }),
+      ...(props.cadenceAvailable === false ? { cadenceUnavailable: true } : {}),
     })
   }
   return <div className="intelligence-detail-scroll">
@@ -327,6 +339,12 @@ function cellRow(args: {
   onPresetChange?: (next: string) => void
   /** 节奏由产品内置：第二行只写「内置频率」这个值，不画任何启停/采集控件。 */
   builtinCadence?: boolean
+  /** 这个源的调度事实（没有作业就没有这一格）。 */
+  cadence?: SourceCadenceReadout
+  /** 这一批排期没读到：读数不画，ⓘ 里说明。 */
+  cadenceUnavailable?: boolean
+  /** 这个源被登记为取不到（端点拒绝一切尝试）：读数是「采集器离线」。 */
+  collectorOffline?: boolean
   resolveText: (key: string) => string
 }): React.ReactElement {
   const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
@@ -420,23 +438,44 @@ function cellRow(args: {
       : <div className="business-card__preset" data-preset-row={sourceId} {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId)}>
         <span className="business-card__preset-label-group">
           <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
-          {args.preset === 'manual'
-            ? <SettingsInfo
-              ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
-              labelKeys={['settings.intelligenceSources.collectionPolicy.manualPresetNote']}
-              resolveText={args.resolveText} />
-            : null}
+          {/* 这一行**只有一颗** ⓘ（原型 2026-11-13）：三档在各采集器上的实际间隔、「下次」是推算、
+              手动档为什么不会自动采集，三段都并进同一颗的多行内容。 */}
+          <SettingsInfo
+            ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
+            labelKeys={[
+              'settings.intelligenceSources.collectionPolicy.readout.presetIntervalsNote',
+              'settings.intelligenceSources.collectionPolicy.readout.nextIsEstimateNote',
+              ...(args.cadenceUnavailable === true
+                ? ['settings.intelligenceSources.collectionPolicy.readout.scheduleUnreadableNote']
+                : []),
+              ...(args.preset === 'manual'
+                ? ['settings.intelligenceSources.collectionPolicy.manualPresetNote']
+                : [])
+            ]}
+            resolveText={args.resolveText} />
         </span>
-        <Select
-          aria-label={args.resolveText('settings.intelligenceSources.collectionPolicy.collectionPreset')}
-          className="business-card__preset-select"
-          onChange={args.onPresetChange}
-          options={PRESET_VALUES.map((value) => ({
-            value,
-            label: args.resolveText(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
-          }))}
-          size="small"
-          value={args.preset} />
+        <span className="business-card__preset-control">
+          <Select
+            aria-label={args.resolveText('settings.intelligenceSources.collectionPolicy.collectionPreset')}
+            className="business-card__preset-select"
+            onChange={args.onPresetChange}
+            options={PRESET_VALUES.map((value) => ({
+              value,
+              label: args.resolveText(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
+            }))}
+            size="small"
+            value={args.preset} />
+          {/* 下拉正下方：当前间隔 / 下次采集。只是文字，不新造控件。 */}
+          <FrequencyReadout
+            resolveText={args.resolveText}
+            view={frequencyReadoutView({
+              enabled: !sourceOff,
+              preset: args.preset,
+              collectorOffline: args.collectorOffline === true,
+              scheduleAvailable: args.cadenceUnavailable !== true,
+              ...(args.cadence === undefined ? {} : { cadence: args.cadence })
+            })} />
+        </span>
       </div>}
   </div>
 }

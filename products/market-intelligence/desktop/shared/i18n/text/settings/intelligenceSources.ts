@@ -421,6 +421,29 @@ export const intelligenceSourcesText = {
       manual: '手动',
       balanced: '均衡',
       frequent: '高频'
+    },
+    /**
+     * 下拉下方那一行读数（原型 2026-11-13）：**间隔与下次是两段独立事实**，
+     * 一段读不到只影响那一段。读不到 ≠ 0 ≠ 从未；手动档不写「—」。
+     */
+    readout: {
+      intervalMinutes: '间隔 {count} 分钟',
+      intervalHours: '间隔 {count} 小时',
+      nextAt: '下次 {time}',
+      /* 正在采集：不给倒计时，跑完再给新时刻（推算不是承诺）。 */
+      nextRunning: '正在采集',
+      nextNever: '尚未开始',
+      nextUnreadable: '下次时间读不到',
+      nextOffline: '采集器离线，下次未知',
+      manualOnly: '手动：不自动采集',
+      disabledNoCollect: '未启用，不采集',
+      /* 排期里没有这个源的作业：只写这一句，不显示间隔（不从开关反推）。 */
+      unscheduled: '未安排',
+      /* 并入同一颗 ⓘ 的两段解释：三档在各采集器上的实际间隔、以及「下次」是推算。 */
+      presetIntervalsNote: '三档在各采集器上不是同一个数字：均衡 = 网页 30 分钟、RSS 15 分钟、接口 10 分钟、状态页 2 分钟、宏观指标 6 小时；频繁约为均衡的三分之一；手动只在按按钮或事件驱动时采。',
+      nextIsEstimateNote: '「下次」是按间隔推算的，实际会随任务队列前后浮动，不是承诺时刻；正在采集时不给倒计时。',
+      /* 整批调度投影读不到（桥缺失或调用失败）时，ⓘ 里补的这一句。 */
+      scheduleUnreadableNote: '这次没读到采集排期，所以「间隔」和「下次」都没有显示。'
     }
   },
   credentials: {
@@ -991,6 +1014,25 @@ export const intelligenceSourcesText = {
       manual: 'Manual',
       balanced: 'Balanced',
       frequent: 'Frequent'
+    },
+    /**
+     * The readout under the preset select (prototype 2026-11-13): interval and next run are
+     * two independent facts; one unreadable segment never blanks the other.
+     */
+    readout: {
+      intervalMinutes: 'Every {count} minutes',
+      intervalHours: 'Every {count} hours',
+      nextAt: 'Next {time}',
+      nextRunning: 'Collecting now',
+      nextNever: 'Not started yet',
+      nextUnreadable: 'Next run time unreadable',
+      nextOffline: 'Collector offline, next run unknown',
+      manualOnly: 'Manual: no automatic collection',
+      disabledNoCollect: 'Disabled, not collected',
+      unscheduled: 'Not scheduled',
+      presetIntervalsNote: 'The three presets are not one number across collectors: Balanced = web pages 30 minutes, RSS 15 minutes, APIs 10 minutes, status pages 2 minutes, macro metrics 6 hours; Frequent is about a third of Balanced; Manual only collects on demand or on an event.',
+      nextIsEstimateNote: '“Next” is derived from the interval, so it drifts with the job queue. It is not a promised time; while a run is in progress no countdown is shown.',
+      scheduleUnreadableNote: 'The collection schedule could not be read this time, so neither the interval nor the next run is shown.'
     }
   },
   credentials: {

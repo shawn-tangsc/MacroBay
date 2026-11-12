@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
 import { InlineNotice } from '@platform/ui/components/inline-notice'
@@ -10,6 +10,7 @@ import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
+import { useSourceCadence } from './useSourceCadence'
 import { SourceConfigSurface, type SourceConfigSurfaceProps } from './SourceConfigSurface'
 
 // 样式跟着组件走，不跟着页面入口走：配置抽屉直接渲染本组件、不经过 settings 的 index.tsx，
@@ -125,6 +126,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     for (const provider of group.providers) for (const source of provider.sources) sourceEnabledById.set(source.sourceId, source.enabled)
   }
   const isSourceEnabled = (sourceId: string): boolean | undefined => sourceEnabledById.get(sourceId)
+  const cadence = useSourceCadence()
   /**
    * 「采集与数据」第二行的数据：**只有可配置的已启用源**才给预设值（不是把下拉画成禁用）。
    * 值来自 `surface.policy.profiles`（与详情同一份），写走同一个 `onChange`（按源单字段 patch），
@@ -169,8 +171,15 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
    * 本轮结束后补读一次（连点不会打出一串读）；写失败/读失败都沿用上一次，绝不把整屏画成「全关」。
    */
   const cellRevisionOrigin = props.surface.revisionOrigin ?? 'sources-cell'
+  /*
+    注入的读写口**放进 ref**：宿主每次渲染都传一个新的对象字面量，直接写进依赖会让这个 effect
+    在每次父级重渲染时重跑一遍（本屏现在还会因为频率读数那一次代理读而重渲染，于是「连发三条信号
+    只补一次读」当场变成三次）。读口本身是无状态闭包，认一次就够。
+  */
+  const cellEnabledIoRef = useRef(props.cellEnabledIo)
+  cellEnabledIoRef.current = props.cellEnabledIo
   useEffect(() => {
-    const io = props.cellEnabledIo
+    const io = cellEnabledIoRef.current
     if (io === undefined) return
     let active = true
     let inFlight = false
@@ -194,7 +203,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
       readState()
     })
     return () => { active = false; unsubscribe() }
-  }, [props.cellEnabledIo, cellRevisionOrigin])
+  }, [cellRevisionOrigin])
   /* 只回**显式写过**的格；缺键交给调用方按「主源默认开、备用行默认关」解释，
      否则界面上主备两个源会同时显示为开（用户 2026-11-11：同一格只有一个源在用）。 */
   const isCellEnabled = (cellId: string): boolean | undefined => cellEnabled[cellId]
@@ -273,6 +282,10 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {...(onPresetChange === undefined ? {} : { onPresetChange })}
           presets={presetValues}
           {...(builtinCadence.size === 0 ? {} : { builtinCadence })}
+          /* 频率读数：一次全量读、随 `sources` 域信号重读（不轮询、不在渲染里读）。
+             整批没读到时传 false，界面不画读数、原因进同一颗 ⓘ。 */
+          cadence={cadence.bySource}
+          cadenceAvailable={cadence.available}
           resolveText={resolveText}
           sourceNames={sourceNames} />
         : <>

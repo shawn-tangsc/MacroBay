@@ -8,6 +8,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import { BusinessSettingsContent, otherBusinessGroups, type BusinessKey } from './BusinessSettingsView'
 import { modulesForBusiness } from './dashboardSourceModules'
+import type { SourceCadenceReadout } from './sourceCadence'
 
 /**
  * 「采集与数据」每个源项的第二行：**频率**（产品 2026-11-12 定稿，界面设计 2026-11-12 签字）。
@@ -41,13 +42,17 @@ const resolveText = (key: string): string => {
   return typeof value === 'string' ? value : key
 }
 
-async function render(input: Readonly<{
+type RenderInput = Readonly<{
   business?: BusinessKey
   sourceEnabled?: boolean
   preset?: string
   builtinCadence?: boolean
   presets?: Readonly<Record<string, string>>
-}> = {}): Promise<{ host: HTMLElement; onPresetChange: (sourceId: string, preset: string) => void }> {
+  cadence?: Readonly<Record<string, SourceCadenceReadout>>
+  cadenceAvailable?: boolean
+}>
+
+async function render(input: RenderInput = {}): Promise<{ host: HTMLElement; onPresetChange: (sourceId: string, preset: string) => void }> {
   const onPresetChange = vi.fn<(sourceId: string, preset: string) => void>()
   const host = document.createElement('div')
   document.body.append(host)
@@ -65,6 +70,8 @@ async function render(input: Readonly<{
         onPresetChange,
         ...(presets === undefined ? {} : { presets }),
         ...(input.builtinCadence === true ? { builtinCadence: new Set(['policy-path-market']) } : {}),
+        ...(input.cadence === undefined ? {} : { cadence: input.cadence }),
+        ...(input.cadenceAvailable === undefined ? {} : { cadenceAvailable: input.cadenceAvailable }),
         resolveText,
         sourceNames: { 'policy-path-market': 'Polymarket' }
       })
@@ -168,5 +175,42 @@ describe('每源第二行：频率', () => {
       await act(async () => root?.unmount())
       document.body.replaceChildren()
     }
+  })
+})
+
+/**
+ * 下拉正下方那一行读数（原型 2026-11-13）：**只是文字**，不新造控件；整批排期读不到时
+ * 这一行不画（原因进同一颗 ⓘ），不拿 0 / `--` / 「从未」顶替。
+ */
+describe('频率读数：下拉下方那一段', () => {
+  const CADENCE = {
+    registration: 'registered' as const,
+    mode: 'interval' as const,
+    intervalSeconds: 900,
+    nextRunAt: '2026-12-01T06:30:00.000Z',
+    lastRunAt: '2026-12-01T06:15:00.000Z',
+    running: false
+  }
+
+  it('puts the readout under the select, inside the control column', async () => {
+    const { host } = await render({ preset: 'balanced', cadence: { 'policy-path-market': CADENCE } })
+    const row = host.querySelector<HTMLElement>(`${ROW} [data-preset-row="policy-path-market"]`)!
+    const control = row.querySelector<HTMLElement>('.business-card__preset-control')
+    expect(control, '控件列').not.toBeNull()
+    // 读数在控件列里、排在下拉之后：不是另起一行，也不在标签列。
+    expect(control!.lastElementChild?.getAttribute('data-frequency-readout')).toBe('interval-at')
+    expect(control!.textContent).toContain('间隔 15 分钟')
+    // 仍然只有一颗 ⓘ，而且它现在**每行都有**（三档间隔并进同一颗）。
+    expect(row.querySelectorAll('button[aria-label]')).toHaveLength(1)
+  })
+
+  it('draws nothing when the schedule could not be read at all — and says so only in the ⓘ', async () => {
+    const { host } = await render({ preset: 'balanced', cadenceAvailable: false })
+    const row = host.querySelector<HTMLElement>(`${ROW} [data-preset-row="policy-path-market"]`)!
+    expect(row.querySelector('[data-frequency-readout]')).toBeNull()
+    expect(row.textContent).not.toMatch(/--|—|从未/)
+    // ⓘ 仍在（排期读不到的原因在那里说），下拉仍在。
+    expect(row.querySelectorAll('button[aria-label]')).toHaveLength(1)
+    expect(row.querySelector('.ant-select-selector')).not.toBeNull()
   })
 })
