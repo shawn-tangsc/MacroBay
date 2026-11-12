@@ -284,7 +284,7 @@ export const intelligenceSourcesText = {
   connectionSucceeded: '连接已验证。',
   connectionFailed: '无法验证连接，请重试。',
   connectionUnsupported: '该来源由本地同步任务采集，不支持连接测试。',
-  apiKey: { label: 'API Key', save: '保存并验证', emptyHint: '输入 API Key 后保存。', savedHint: '已保存；输入新的 Key 可替换。', revealFailed: '无法读取完整 Key，请重启应用后重试。' },
+  apiKey: { label: 'API Key', reveal: '显示密钥', hide: '隐藏密钥', save: '保存并验证', emptyHint: '输入 API Key 后保存。', savedHint: '已保存；输入新的 Key 可替换。', revealFailed: '无法读取完整 Key，请重启应用后重试。' },
   calendarSources: {
     title: '宏观日历', official: '官方采集', market: '市场日历', pending: '待接入', hint: '在宏观日历中管理',
     feeds: {
@@ -856,7 +856,7 @@ export const intelligenceSourcesText = {
   connectionSucceeded: 'Connection verified.',
   connectionFailed: 'Connection could not be verified.',
   connectionUnsupported: 'This source is collected by a local sync job and has no connection test.',
-  apiKey: { label: 'API Key', save: 'Save and verify', emptyHint: 'Enter an API key and save it.', savedHint: 'Saved; enter a new key to replace it.', revealFailed: 'Could not read the full key. Restart the app and try again.' },
+  apiKey: { label: 'API Key', reveal: 'Show API key', hide: 'Hide API key', save: 'Save and verify', emptyHint: 'Enter an API key and save it.', savedHint: 'Saved; enter a new key to replace it.', revealFailed: 'Could not read the full key. Restart the app and try again.' },
   calendarSources: {
     title: 'Macro calendar', official: 'Official collection', market: 'Market calendar', pending: 'Pending connection', hint: 'Manage in the macro calendar',
     feeds: {
