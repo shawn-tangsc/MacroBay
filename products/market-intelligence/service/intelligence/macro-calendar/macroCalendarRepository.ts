@@ -6,6 +6,7 @@ import { createPolicyPathMarketLinkStore, type PolicyPathMarketLinkStore } from 
 import { statSync } from 'node:fs'
 
 import { MACRO_CALENDAR_SCHEMA_VERSION, type MacroCalendarRevision, type MacroCalendarValue } from './macroCalendarContracts'
+import { timePrecisionOf, type NarwhalFirstPublished, type NarwhalReleaseRow, type NarwhalReleaseValue } from './narwhalReleaseContracts'
 import { isMacroCalendarVisibleAsOf, macroCalendarStoragePolicy } from './macroCalendarPolicy'
 import { createMacroCalendarSqlite, type MacroCalendarSqlite } from './macroCalendarSqlite'
 import { isValidIsoTime } from '../public-query/asOfVisibility'
@@ -14,6 +15,14 @@ export type MacroCalendarRepository = {
   appendIfNew: (revision: MacroCalendarRevision) => { inserted: boolean; revision: MacroCalendarRevision }
   appendManyIfNew: (revisions: readonly MacroCalendarRevision[]) => { insertedCount: number; dedupedCount: number }
   listEffectiveMonthAsOf: (input: { monthStart: string; monthEndExclusive: string; asOf: string; limit: number }) => MacroCalendarRevision[]
+  /** 幂等写入一行发布；同一 `release_id` 再次写入是更新，不是新增一行。 */
+  upsertReleaseRow: (row: NarwhalReleaseRow) => void
+  /** 读某天某国的发布行（双写对账用）。 */
+  listReleaseRows: (input: { countryCode: string; scheduledDate: string }) => NarwhalReleaseRow[]
+  /** 首发布快照：只在第一次写入，之后的修订不覆盖。返回是否真的写进去了。 */
+  recordFirstPublished: (snapshot: NarwhalFirstPublished) => boolean
+  /** 读首发布快照；没有就是「无法确认首发布值」，不返回 0、不返回修订值。 */
+  readFirstPublished: (releaseKey: string) => NarwhalFirstPublished | undefined
   getEffectiveEventAsOf: (input: { eventKey: string; asOf: string }) => MacroCalendarRevision | undefined
   /**
    * 只读的两个时刻，按 `asOf` 的可见性聚合：
@@ -89,7 +98,52 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
   const deleteBeaObservation = sqlite.database.prepare('delete from mi_bea_release_observation_state where release_group_key = ?')
   const deleteExpiredBeaObservations = sqlite.database.prepare('delete from mi_bea_release_observation_state where last_attempt_at < ?')
 
+  const releaseStatements = {
+    upsert: sqlite.database.prepare(`insert into mi_macro_calendar_release_rows
+      (release_id, provider_id, country_code, scheduled_date, scheduled_at, date_basis, time_precision, status, values_json, detected_at, recorded_at, schema_version)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(release_id) do update set
+        provider_id = excluded.provider_id, country_code = excluded.country_code,
+        scheduled_date = excluded.scheduled_date, scheduled_at = excluded.scheduled_at,
+        date_basis = excluded.date_basis, time_precision = excluded.time_precision,
+        status = excluded.status, values_json = excluded.values_json,
+        detected_at = excluded.detected_at, recorded_at = excluded.recorded_at,
+        schema_version = excluded.schema_version`),
+    listDay: sqlite.database.prepare(`select * from mi_macro_calendar_release_rows
+      where country_code = ? and scheduled_date = ? order by release_id`),
+    insertSnapshot: sqlite.database.prepare(`insert or ignore into mi_macro_calendar_first_published
+      (release_key, provider_id, first_previous_json, first_actual_json, captured_at) values (?, ?, ?, ?, ?)`),
+    readSnapshot: sqlite.database.prepare('select * from mi_macro_calendar_first_published where release_key = ?')
+  }
+
   return {
+    upsertReleaseRow(row) {
+      releaseStatements.upsert.run(row.releaseId, row.providerId, row.countryCode, row.scheduledDate,
+        row.scheduledAt ?? null, row.dateBasis, timePrecisionOf(row.dateBasis), row.status ?? null,
+        JSON.stringify(row.values), row.detectedAt, row.recordedAt, MACRO_CALENDAR_SCHEMA_VERSION)
+    },
+    listReleaseRows(input) {
+      return (releaseStatements.listDay.all(input.countryCode, input.scheduledDate) as unknown as StoredRow[])
+        .map(toReleaseRow)
+    },
+    recordFirstPublished(snapshot) {
+      // `insert or ignore`：第一次写的那个数就是「首发布值」，之后来源修订**不覆盖**。
+      const result = releaseStatements.insertSnapshot.run(snapshot.releaseKey, snapshot.providerId,
+        snapshot.firstPrevious === undefined ? null : JSON.stringify({ displayValue: snapshot.firstPrevious }),
+        snapshot.firstActual === undefined ? null : JSON.stringify({ displayValue: snapshot.firstActual }),
+        snapshot.capturedAt)
+      return Number(result.changes) === 1
+    },
+    readFirstPublished(releaseKey) {
+      const row = releaseStatements.readSnapshot.get(releaseKey) as StoredRow | undefined
+      if (row === undefined) return undefined
+      return {
+        releaseKey: String(row.release_key), providerId: String(row.provider_id),
+        ...(valueOf(row.first_previous_json) === undefined ? {} : { firstPrevious: valueOf(row.first_previous_json) }),
+        ...(valueOf(row.first_actual_json) === undefined ? {} : { firstActual: valueOf(row.first_actual_json) }),
+        capturedAt: String(row.captured_at)
+      }
+    },
     appendIfNew(revision) {
       const stored = prepareRevision(revision)
       // 与批量写入同一条规矩：修订行与首次落库的侧表行同生共死，崩溃窗口里不许只落一半。
@@ -252,6 +306,18 @@ function migrate(database: ReturnType<typeof createMacroCalendarSqlite>['databas
      * `event_key` 删掉侧表行——否则同名事件重建会继承上一世的"创建时间"。
      */
     execute("create table if not exists mi_macro_calendar_event_first_seen (event_key text primary key, first_recorded_at text not null, first_actual_detected_at text); insert or ignore into mi_macro_calendar_migrations(version) values (8)")
+    /**
+     * 换源第一笔（双写）：Narwhal 的发布行先写自己的表，不动 0xRouter 的可见性。
+     *
+     * `release_id` 是主键——来源自己给的发布标识就是分组键，不再靠「国家+时刻+名称同族」的近似合并。
+     * `date_basis` / `time_precision` 原样落库：`indicative` 的行到渲染层只显示日期。
+     */
+    execute("create table if not exists mi_macro_calendar_release_rows (release_id text primary key, provider_id text not null, country_code text not null, scheduled_date text not null, scheduled_at text, date_basis text not null check(date_basis in ('exact','indicative','date-only')), time_precision text not null check(time_precision in ('minute','date')), status text, values_json text not null, detected_at text not null, recorded_at text not null, schema_version integer not null); create index if not exists idx_mi_release_rows_day on mi_macro_calendar_release_rows(country_code, scheduled_date, release_id); insert or ignore into mi_macro_calendar_migrations(version) values (9)")
+    /**
+     * 首发布快照：**第一次**看到某期时写下当时的 `previous`，之后来源修订不覆盖。
+     * 没有这一行＝「无法确认首发布值」，界面照实说，不回填 0、不拿修订值顶。
+     */
+    execute("create table if not exists mi_macro_calendar_first_published (release_key text primary key, provider_id text not null, first_previous_json text, first_actual_json text, captured_at text not null); insert or ignore into mi_macro_calendar_migrations(version) values (10)")
     execute('commit')
   } catch (error) {
     try { execute('rollback') } catch { /* Preserve the migration failure. */ }
@@ -349,4 +415,28 @@ function persistedEpochTime(value: string): number | undefined {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return undefined
   const milliseconds = Date.parse(value)
   return Number.isFinite(milliseconds) && new Date(milliseconds).toISOString() === value ? milliseconds : undefined
+}
+
+type StoredRow = Record<string, unknown>
+
+/** 快照里的值存成 `{displayValue}` 的 JSON，读回来只取那个字符串。 */
+function valueOf(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value === '') return undefined
+  try {
+    const parsed = JSON.parse(value) as { displayValue?: unknown }
+    return typeof parsed.displayValue === 'string' ? parsed.displayValue : undefined
+  } catch { return undefined }
+}
+
+function toReleaseRow(row: StoredRow): NarwhalReleaseRow {
+  const basis = String(row.date_basis)
+  return {
+    releaseId: String(row.release_id), providerId: String(row.provider_id), countryCode: String(row.country_code),
+    scheduledDate: String(row.scheduled_date),
+    ...(typeof row.scheduled_at === 'string' ? { scheduledAt: row.scheduled_at } : {}),
+    dateBasis: basis === 'indicative' || basis === 'date-only' ? basis : 'exact',
+    ...(typeof row.status === 'string' ? { status: row.status } : {}),
+    values: JSON.parse(String(row.values_json)) as NarwhalReleaseValue[],
+    detectedAt: String(row.detected_at), recordedAt: String(row.recorded_at)
+  }
 }
