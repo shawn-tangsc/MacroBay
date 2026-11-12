@@ -59,6 +59,8 @@
   background: color-mix(in srgb, var(--surface-soft) 34%, transparent);
   padding: 8px 10px 6px;
   flex: none;
+  /* The row is one block: the plot column decides the height, the card fills it. */
+  align-items: stretch;
 }
 .mk-plot { display: flex; flex-direction: column; min-width: 0; }
 .mk-plot__scroll { overflow-x: auto; overflow-y: hidden; }
@@ -70,7 +72,7 @@
 .mk-plot__zero { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
 .mk-plot__line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
 .mk-plot__mark { fill: var(--surface); stroke: var(--caution); stroke-width: 1.5; }
-.mk-legend { display: flex; gap: 14px; align-items: center; min-height: 18px; font-size: var(--font-meta); color: var(--muted); margin-top: 4px; }
+.mk-legend { display: flex; gap: 14px; align-items: center; min-height: 18px; margin-top: auto; font-size: var(--font-meta); color: var(--muted); }
 .mk-sw { display: inline-block; vertical-align: -2px; margin-right: 4px; }
 .mk-sw--line { width: 16px; height: 2px; background: var(--accent); }
 .mk-sw--ring { width: 9px; height: 9px; border: 1.5px solid var(--caution); border-radius: 50%; }
@@ -89,7 +91,7 @@
   gap: 6px;
   min-width: 0;
 }
-.mk-card--hero { border-color: var(--border-strong); align-self: start; width: 300px; min-height: 192px; }
+.mk-card--hero { border-color: var(--border-strong); width: 300px; min-height: 192px; height: 100%; }
 .mk-card__h { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .mk-card__h h3 { margin: 0; font-size: var(--font-section); font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-card__h em { font-size: var(--font-meta); color: var(--muted); font-style: normal; margin-left: auto; white-space: nowrap; }
