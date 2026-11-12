@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 
 import { LoadingState } from '@platform/ui/components/loading'
 
@@ -7,7 +6,7 @@ import { ExpectationChart } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { MiSideDrawer } from './MiSideDrawer'
+import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 
 import './macroIndicatorDrawer.css'
@@ -81,6 +80,8 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
   onOpenCalendar?: () => void
 }>): React.ReactElement {
   const text: MacroIndicatorDrawerText = macroIndicatorDrawerText[locale]
+  // 平台 Drawer 只收键；这张表把本抽屉的键映到产品自己的文案表（查表，不是 key→句子的分支）。
+  const drawerKeys: Readonly<Record<string, string>> = { 'mk.title': text.title }
   // The right column scrolls on its own; the drawer body does not.
   const [selectedDay] = useState(MOCK.day.date)
   const [plotWidth, setPlotWidth] = useState(560)
@@ -107,10 +108,16 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
 
   // 挂到 body：抽屉是 1280 的右侧浮层，如果落在右栏或某个 overflow 容器里，会被祖先裁掉——
   // 表现正是「点了没反应」。portal 让它以视口为参照，和其它浮层同一层。
-  return createPortal(<MiSideDrawer
-    title={text.title}
-    placement="right"
-    actions={onOpenCalendar ? <button className="mk-hlink" type="button" onClick={onOpenCalendar}>{text.calendarLink} ↗</button> : null}
+  // 平台 `Drawer` 的 modal 档：遮罩、锁焦点、点遮罩关闭、Esc、关闭后焦点回位都是它的能力，
+  // 不再在非模态壳上补一套手写的行为。
+  return <Drawer
+    open
+    mode="modal"
+    size="full"
+    className="mk-drawer"
+    titleKey="mk.title"
+    resolveText={(key: string) => drawerKeys[key] ?? ''}
+    {...(onOpenCalendar ? { actions: <button className="mk-hlink" type="button" onClick={onOpenCalendar}>{text.calendarLink} ↗</button> } : {})}
     footer={<><span>{text.dataBy}</span> <a className="mk-foot-a" href="https://narwhalapi.com" target="_blank" rel="noreferrer">Narwhal API</a></>}
     onClose={onClose}
   >
@@ -190,7 +197,7 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
         <div className="mk-evempty" hidden={MOCK.day.total > 0}>{text.dayEmpty}</div>
       </aside>
     </section>
-  </MiSideDrawer>, document.body)
+  </Drawer>
 }
 
 /** One sentence per surprise state; `none` (a central-bank speech) has no number to compare. */

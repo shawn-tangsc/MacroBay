@@ -5,7 +5,10 @@
  * 文件名与类名避开日历页的 `.mi-calendar-*`：两个抽屉同时存在时，同名类会互相改样式。
  */
 
-.mi-analysis-drawer[data-placement='right'] { z-index: 30; }
+/* 平台 Drawer 的正文留白（设计稿 14/16），只在本抽屉范围内生效。 */
+.mk-drawer.ant-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; }
+.mk-drawer.ant-drawer .ant-drawer-header { padding: 10px 12px; }
+.mk-drawer.ant-drawer-footer { padding: 6px 16px; }
 .mk-hlink {
   border: 0;
   background: transparent;
@@ -139,8 +142,8 @@
 .mk-minical__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; }
 .mk-minical__wk { margin-top: 4px; flex: none; }
 .mk-minical__wk span { font-size: var(--font-meta); color: var(--muted); text-align: left; padding: 1px 6px; }
-.mk-minical__grid { flex: 1 1 auto; grid-template-rows: repeat(6, minmax(63.8px, auto)); margin-top: 1px; min-height: 0; }
-.mk-minical__day { position: relative; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 6px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mk-minical__grid { flex: 1 1 auto; grid-template-rows: repeat(6, minmax(63.8px, 1fr)); margin-top: 1px; min-height: 0; }
+.mk-minical__day { position: relative; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 6px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mk-mcell__row { display: flex; align-items: center; gap: 3px; min-width: 0; font-size: var(--font-meta); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mk-mcell__row .mk-mdot { margin-left: 0; }
 .mk-mcell__more { position: absolute; right: 6px; bottom: 4px; font-size: var(--font-meta); color: var(--muted); }

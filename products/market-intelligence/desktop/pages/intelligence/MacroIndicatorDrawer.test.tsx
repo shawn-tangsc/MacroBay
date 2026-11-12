@@ -30,7 +30,7 @@ function Harness({ onOpened }: Readonly<{ onOpened: () => void }>): React.ReactE
 }
 
 describe('key-indicator drawer', () => {
-  it('mounts on body when opened and closes on Escape', async () => {
+  it('mounts as a modal drawer with a mask, and closes when the mask is clicked', async () => {
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
@@ -43,11 +43,14 @@ describe('key-indicator drawer', () => {
     expect(opened).toBe(1)
     // The drawer is portalled to body: a drawer rendered inside the rail gets clipped by it, and
     // that looks exactly like "the button does nothing".
-    const drawer = document.body.querySelector('.mi-analysis-drawer[data-placement="right"]')
+    // 平台 modal 抽屉：遮罩 + 右侧浮层由 antd 负责，本组件只提供内容。
+    const drawer = document.body.querySelector('.ant-drawer')
     expect(drawer).not.toBeNull()
     expect(drawer!.querySelector('.mk-sec')).not.toBeNull()
-    await act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
-    expect(document.body.querySelector('.mi-analysis-drawer[data-placement="right"]')).toBeNull()
+    const mask = document.body.querySelector('.ant-drawer-mask')
+    expect(mask).not.toBeNull()
+    await act(async () => { (mask as HTMLElement).click() })
+    expect(document.body.querySelector('.mk-sec')).toBeNull()
   })
 
   it('really turns the mini calendar page, disables 回到本月 on the current month, and shows a refresh state', async () => {

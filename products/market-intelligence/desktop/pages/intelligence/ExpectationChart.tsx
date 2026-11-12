@@ -18,6 +18,16 @@ const RM = 12
 const T0 = 16
 const B = 34
 
+/**
+ * 刻度的写法只有这一处：正数带 `+`，负数带 `−`（U+2212，不是连字符），零不带符号。
+ * 之前把负号吞掉过一次，屏幕上最底下那条成了 `+40bp`——所以它被单独提出来并配了用例。
+ */
+export function formatTick(value: number): string {
+  const rounded = Math.round(value)
+  if (rounded === 0) return '0bp'
+  return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)}bp`
+}
+
 export type ExpectationEvent = Readonly<{ index: number; label: string; impact: number }>
 
 export function ExpectationChart({ values, events, height, width }: Readonly<{
@@ -75,7 +85,7 @@ export function ExpectationChart({ values, events, height, width }: Readonly<{
         return <g key={value}>
           <line x1={L} y1={Y(value)} x2={W - RM} y2={Y(value)} stroke="var(--text-strong)" strokeWidth={1} opacity={isZero ? 0.4 : 0.08} />
           <text x={L - 8} y={Y(value) + 3} fontSize={9} fill={isZero ? 'var(--text)' : 'var(--muted)'} textAnchor="end">
-            {(value > 0 ? '+' : '') + Math.round(value) + 'bp'}
+            {formatTick(value)}
           </text>
         </g>
       })}
