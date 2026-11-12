@@ -31,8 +31,12 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
  * 说明横幅的类别 → 文案键（类别来自注册表 `ProviderDefinition.notice`，组件里不出现源名）。
  * 新增一种同类源：注册表标一个值 + 两语文案各一条，不动组件逻辑。
  */
+import { failureSentenceOf, type ConnectionFeedback } from './connectionFailureSentence'
+
 const PROVIDER_NOTICE_KEYS: Readonly<Record<NonNullable<ProviderView['notice']>, string>> = {
-  'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource'
+  'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource',
+  'data-attribution': 'settings.intelligenceSources.providerNotices.dataAttribution',
+  'verification-only': 'settings.intelligenceSources.providerNotices.verificationOnly'
 }
 
 export type ProviderDetailLabels = {
@@ -165,7 +169,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [savingCredential, setSavingCredential] = useState(false)
   const [runningSourceId, setRunningSourceId] = useState<string>()
   const [testingConnection, setTestingConnection] = useState(false)
-  const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
+  const [connectionFeedback, setConnectionFeedback] = useState<ConnectionFeedback>()
   const resolveText = useProductTextKey()
   /** 唯一一处「这是哪个面」的判定：注册表渲染只发生在设置页那一侧。 */
   const isSettingsSurface = (surface ?? 'panel') === 'settings'
@@ -270,10 +274,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     setConnectionFeedback(undefined)
     try {
       const result = await testSourceConnection(testSource)
-      setConnectionFeedback(result.ok ? 'succeeded' : result.unsupported ? 'unsupported' : 'failed')
+      const failed: ConnectionFeedback = { kind: 'failed', ...(result.failureCode ? { failureCode: result.failureCode } : {}) }
+      setConnectionFeedback(result.ok ? { kind: 'succeeded' } : result.unsupported ? { kind: 'unsupported' } : failed)
       setNetworkFailure(isNetworkConnectionFailure(result))
     } catch {
-      setConnectionFeedback('failed')
+      setConnectionFeedback({ kind: 'failed' })
       setNetworkFailure(false)
     } finally {
       setTestingConnection(false)
@@ -360,7 +365,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     {provider.notice === undefined ? null : <div
       className={`mi-source-notice-banner${hasProxySource && proxyConfigured && networkFailure ? '' : ' mi-source-notice-banner--alone'}`}
       data-source-notice={provider.notice}>
-      <NoticeBanner title={resolveText(PROVIDER_NOTICE_KEYS[provider.notice])} />
+      {provider.notice === 'data-attribution' && provider.website !== undefined
+        ? <a href={provider.website} target="_blank" rel="noreferrer" aria-label={resolveText('settings.intelligenceSources.providerNotices.dataAttributionAria')}>{resolveText(PROVIDER_NOTICE_KEYS['data-attribution'])}</a>
+        : <NoticeBanner title={resolveText(PROVIDER_NOTICE_KEYS[provider.notice])} />}
     </div>}
     {hasProxySource && proxyConfigured && networkFailure ? <NetworkProxyBanner
       tone="failed"
@@ -457,9 +464,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       {/* 「官网 / 测试连接」那一排动作整行去掉：两颗都上到源名旁边（同一屏一个动作只有一处）。
           连接反馈仍要留在页头，它是这次点击的结果。 */}
       {connectionFeedback ? <Alert
-        message={connectionFeedback === 'succeeded' ? labels.connectionSucceeded : connectionFeedback === 'unsupported' ? labels.connectionUnsupported : labels.connectionFailed}
-        showIcon
-        type={connectionFeedback === 'succeeded' ? 'success' : connectionFeedback === 'unsupported' ? 'warning' : 'error'}
+        message={connectionFeedback.kind === 'succeeded' ? labels.connectionSucceeded
+          : connectionFeedback.kind === 'unsupported' ? labels.connectionUnsupported
+            : failureSentenceOf(resolveText, connectionFeedback.failureCode) ?? labels.connectionFailed}
+        showIcon type={connectionFeedback.kind === 'succeeded' ? 'success' : connectionFeedback.kind === 'unsupported' ? 'warning' : 'error'}
       /> : null}
     </header>
     {/* 卡二 = 源项列表卡：所有能力行装进**一张卡**，行间只用细分隔线（外层已经有卡了，双层框会显脏）。 */}

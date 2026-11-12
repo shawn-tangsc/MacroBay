@@ -5,10 +5,13 @@ import {
   allSources,
   getPanel,
   getProvider,
+  getSource,
   panelRegistry,
   providerRegistry,
   type PanelId
 } from './providerRegistry'
+import { createDefaultSourceProfile, resolveRuntimeConfig } from './sourceRuntimeConfig'
+import { getIntelligenceSourceDefinition } from './sourceCatalog'
 import { resolveSourceCapabilities } from './sourceCapabilities'
 import { agentView, countAgentGroups, panelView, settingsView } from './sourceProjection'
 
@@ -27,6 +30,22 @@ function panelSourceIds(panelId: PanelId): string[] {
 }
 
 describe('provider registry contract', () => {
+  it('keeps the verification-only source testable and impossible to schedule', () => {
+    const source = getSource('cryptoetf-etf-flows')
+    expect(source?.collection).toBe('none')
+    expect(source?.capabilities).toEqual({ runNow: 'none', testConnection: true })
+    // The key box hangs off an explicit anchor: a `none` source has no adapter for the old guess.
+    expect(getProvider('cryptoetf')?.credentialSourceId).toBe('cryptoetf-etf-flows')
+    expect(getProvider('cryptoetf')?.category).toBe('crypto')
+    const definition = getIntelligenceSourceDefinition('cryptoetf-etf-flows')!
+    const config = resolveRuntimeConfig({
+      definition,
+      profile: { ...createDefaultSourceProfile(definition), enabled: true, credentialRef: 'cryptoetf-etf-flows-credentials' }
+    })
+    // Even switched on and holding a key, the generic runtime must not arm it.
+    expect(config.enabled).toBe(false)
+  })
+
   it('keeps every source id unique', () => {
     const ids = sources.map((source) => source.sourceId)
     expect(new Set(ids).size).toBe(ids.length)

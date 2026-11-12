@@ -11,6 +11,8 @@ import {
   probeRealMarketApiConnection,
   realMarketApiConnectionProbePolicy
 } from './realMarketApiConnectionProbe'
+import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
+import { probeCryptoEtfConnection } from './cryptoEtfConnectionProbe'
 import { probeZeroXRouterConnection } from './zeroXRouterConnectionProbe'
 import { createSourceRequestGovernanceQueue } from './sourceRequestGovernance'
 import { isSafeZeroXRouterApiKey, zeroXRouterSourcePolicy } from './zeroXRouterSourcePolicy'
@@ -64,7 +66,8 @@ export function createCredentialedProviderProbes(
     [zeroXRouterSourcePolicy.sourceId, zeroXRouterProbe(deps)],
     [macroMarketPolicy.sourceId, twelveDataMarketProbe(deps)],
     [realMarketApiConnectionProbePolicy.sourceId, realMarketApiProbe(deps)],
-    [fredRatesConnectionProbePolicy.sourceId, fredRatesProbe(deps)]
+    [fredRatesConnectionProbePolicy.sourceId, fredRatesProbe(deps)],
+    [cryptoEtfSourcePolicy.sourceId, cryptoEtfProbe(deps)]
   ])
 }
 
@@ -93,6 +96,38 @@ function fredRatesProbe(deps: CredentialedProviderProbeDeps): CredentialedProvid
       ...(deps.platformFetch ? { platformFetch: deps.platformFetch } : {}),
       maxBodyBytes: CREDENTIAL_PROBE_MAX_BODY_BYTES
     })
+  }
+}
+
+/**
+ * CryptoETF: the collector's own client is the probe, so the answer the reader sees is the answer the
+ * chain will get. Shape judgement stays in one place (the funds parser); this only carries the key,
+ * the shared governance queue and the platform fetch.
+ */
+function cryptoEtfProbe(deps: CredentialedProviderProbeDeps): CredentialedProviderProbe {
+  return {
+    isValidCredentialShape: (credentialDraft) => {
+      const trimmed = credentialDraft.trim()
+      return trimmed.length > 0 && trimmed.length <= 4096 && !/[\u0000-\u001f\u007f]/.test(trimmed)
+    },
+    async probe(apiKey) {
+      const run = () => probeCryptoEtfConnection(apiKey, {
+        ...(deps.platformFetch ? { platformFetch: deps.platformFetch } : {})
+      })
+      if (!deps.requestGovernanceQueue) return run()
+      try {
+        return await deps.requestGovernanceQueue.enqueue({
+          sourceId: cryptoEtfSourcePolicy.sourceId,
+          policy: cryptoEtfSourcePolicy.requestGovernance,
+          apiKey,
+          intent: 'user',
+          run
+        })
+      } catch {
+        // A governance refusal and a transport refusal are the same safe answer to the reader.
+        return { state: 'failed' as const, failureCode: 'response-unavailable' as const }
+      }
+    }
   }
 }
 

@@ -13,6 +13,7 @@ import {
   inferReliabilityTier
 } from './sourceCatalogMetadata'
 import { attachSourceApplicability } from './sourceCatalogApplicability'
+import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
 import { zeroXRouterSourcePolicy } from './zeroXRouterSourcePolicy'
 
 const catalog: IntelligenceSourceCatalogEntry[] = [
@@ -570,6 +571,15 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
       'CoinGecko 公开全球市场指标（无需凭据，公共接口限流）。每 10 分钟采集总市值/24h 成交额/BTC 占比；聚合口径，缺失或非数值字段会被丢弃。',
     supportedImpactScopes: ['crypto-market', 'sector'],
     adapterConfig: { endpointUrl: 'https://api.coingecko.com/api/v3/global' }
+  }),
+  source({
+    sourceId: cryptoEtfSourcePolicy.sourceId, displayName: 'CryptoETF ETF flows', sourceGroup: 'aggregate-data-provider',
+    adapterType: 'rest-api-poller', category: 'mainstream-news', parserStrategy: 'cryptoetf-etf-funds-v1',
+    intelligenceLayer: 'industry', dataDomain: 'crypto-market', reliabilityTier: 'aggregator', authMode: 'api-key',
+    // Round 1: reachable and testable, deliberately collectable by nothing yet — both stated, neither implied.
+    readiness: 'live', supportsRunNow: false, supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    readinessNote: '已接入，但本版只验证接入：不采集、不写库、不参与任何读数。',
+    adapterConfig: { baseUrl: cryptoEtfSourcePolicy.apiBaseUrl }, requestGovernance: cryptoEtfSourcePolicy.requestGovernance
   }),
   source({
     sourceId: zeroXRouterSourcePolicy.sourceId,

@@ -1,4 +1,6 @@
+import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
 import { providerLinks } from './providerLinks'
+import { provider, src } from './sourceDefinitionBuilders'
 
 export type AgentId = 'crypto' | 'stocks' | 'futures'
 export type PanelId = 'dashboard' | 'economic-calendar'
@@ -97,6 +99,16 @@ export type ProviderDefinition = {
   displayName: string
   category: SourceCategory
   credential: 'none' | 'api-key'
+  /**
+   * Which of the provider's sources the credential box belongs to.
+   *
+   * Derived by default from the first source collected by an adapter, because that used to be the
+   * only kind that could hold a key. A source that must be testable while it is deliberately not
+   * collectable (`collection: 'none'`) has no such source, so the provider states its anchor here
+   * instead of the projection guessing — the guess returning nothing is what makes the key box
+   * disappear entirely.
+   */
+  credentialSourceId?: string
   /** Public home page, opened in the system browser. */
   website?: string
   /** Signup / API-key guide. Replace with the operator's invite link. */
@@ -112,7 +124,12 @@ export type ProviderDefinition = {
 }
 
 /** 源详情页头上方的说明横幅类别；新增一种要同时加两语文案（渲染层映射）。 */
-export type ProviderNoticeKind = 'private-data-source'
+export type ProviderNoticeKind =
+  | 'private-data-source'
+  /* Attribution the provider's free tier requires, verbatim and untranslated, with a link. */
+  | 'data-attribution'
+  /* The source is registered and testable but deliberately collects nothing in this build. */
+  | 'verification-only'
 
 export type ActivationGroupDefinition = {
   groupId: string
@@ -132,45 +149,6 @@ export type PanelDefinition = {
   panelId: PanelId
   agentId: AgentId
   displayName: string
-}
-
-/** `src()` 的输入：`purposes` 必填（注册表作者不许漏），其余字段可省略走默认。 */
-/**
- * `src()` 的输入：`purposes` 必填，`panels` **不许传**（它由 `purposes` 派生，传进来只会被静默覆盖）。
- *
- * `panels` 从类型上 `Omit` 掉，所以「顺手写一个 panels」是**编译错误**，不是运行期被悄悄改写——
- * 面板归属只有一个声明处（`purposes`），这条让第二份声明连写都写不出来。
- */
-type SourceInput = Omit<SourceDefinition, 'providerId' | 'purposes' | 'panels'> & { purposes: SourcePurpose[] }
-
-/** `src()` 的输出：派生出 `panels`，`providerId` 由 `provider()` 补上。 */
-type SourceSeed = Omit<SourceInput, 'providerId'> & Pick<SourceDefinition, 'panels'>
-
-function src(input: Partial<Omit<SourceInput, 'purposes'>> & Pick<SourceInput, 'sourceId' | 'displayName' | 'purposes'>): SourceSeed {
-  return {
-    agents: ['crypto'],
-    visibility: 'visible',
-    collection: 'adapter',
-    kind: 'feed',
-    capabilities: { runNow: 'adapter', testConnection: false },
-    readiness: 'live',
-    ...input,
-    // 派生，不接收调用方的 panels：声明只看 `purposes` 一处。
-    panels: input.purposes.flatMap((purpose) => purpose === 'dashboard' ? ['dashboard' as const] : purpose === 'calendar' ? ['economic-calendar' as const] : [])
-  }
-}
-
-function provider(input: {
-  providerId: string
-  displayName: string
-  category: SourceCategory
-  credential: 'none' | 'api-key'
-  sources: SourceSeed[]
-}): ProviderDefinition {
-  return {
-    ...input,
-    sources: input.sources.map((source) => ({ ...source, providerId: input.providerId }))
-  }
 }
 
 /** 同时供给看板与经济日历的源：两个 purpose 一起声明。 */
@@ -307,6 +285,31 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     sources: [
       src({ sourceId: 'defillama-stablecoins', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-stablecoins', displayName: 'DeFiLlama stablecoins', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'defillama-stablecoins' }),
       src({ purposes: ['analysis'], sourceId: 'defillama-tvl', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-tvl', displayName: 'DeFiLlama TVL', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'defillama-tvl' })
+    ]
+  }),
+  provider({
+    providerId: cryptoEtfSourcePolicy.providerId,
+    displayName: cryptoEtfSourcePolicy.displayName,
+    category: 'crypto',
+    credential: 'api-key',
+    /* The key box and the "cannot be scheduled" guarantee at once: the source is `none`, so the
+       generic runtime never arms it, and the anchor is stated rather than derived from an adapter. */
+    credentialSourceId: cryptoEtfSourcePolicy.sourceId,
+    sources: [
+      src({
+        sourceId: cryptoEtfSourcePolicy.sourceId,
+        summaryKey: `settings.intelligenceSources.sourceSummary.${cryptoEtfSourcePolicy.sourceId}`,
+        displayName: 'CryptoETF ETF flows',
+        /* Round 1 feeds no panel and no agent group on purpose: putting it on the dashboard list
+           or in an activation group would change what the crypto analyst counts as its sources,
+           and this round must change nothing a reader already sees. The switch commit moves it. */
+        purposes: [],
+        maintenanceOnly: true,
+        collection: 'none',
+        capabilities: { runNow: 'none', testConnection: true },
+        readiness: 'live',
+        adapterRef: cryptoEtfSourcePolicy.sourceId
+      })
     ]
   }),
   provider({

@@ -334,7 +334,12 @@ function groupByProvider(sources: SourceView[]): ProviderView[] {
     if (existing) {
       existing.sources.push(source)
     } else {
-      const credentialSource = provider.sources.find((candidate) => candidate.collection === 'adapter')
+      /* An explicitly named anchor wins; otherwise keep the old derivation (the first source an
+       adapter collects), so every provider that does not state one behaves exactly as before. */
+    const credentialSource = (provider.credentialSourceId === undefined
+      ? undefined
+      : provider.sources.find((candidate) => candidate.sourceId === provider.credentialSourceId))
+      ?? provider.sources.find((candidate) => candidate.collection === 'adapter')
       providers.set(provider.providerId, {
         providerId: provider.providerId,
         displayName: provider.displayName,

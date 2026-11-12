@@ -34,6 +34,7 @@ export const providerLinks: ProviderLinks = {
   cryptopanic: { website: 'https://cryptopanic.com/', signupUrl: 'https://cryptopanic.com/developers/api/' },
   '0xrouter': { website: 'https://0xrouter.app/', signupUrl: 'https://0xrouter.app/index.html?invite=tangscsh', invite: true, notice: 'private-data-source' },
   realmarketapi: { website: 'https://realmarketapi.com/', signupUrl: 'https://realmarketapi.com/?via=Macrobay', invite: true },
+  cryptoetf: { website: 'https://cryptoetf.today/' },
   'policy-path': { website: 'https://polymarket.com/zh?tag=fed' },
   twelvedata: { website: 'https://twelvedata.com/', signupUrl: 'https://twelvedata.com/pricing' },
   coinbase: { website: 'https://www.coinbase.com/' },
