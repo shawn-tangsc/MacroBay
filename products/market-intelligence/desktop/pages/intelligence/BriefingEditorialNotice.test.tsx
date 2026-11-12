@@ -39,6 +39,10 @@ describe('the page notice offers exactly the action its case has', () => {
     expect(node.querySelector('[data-editorial-notice]')?.getAttribute('data-editorial-notice')).toBe('no-model')
     const action = node.querySelector('[data-editorial-notice-action="configure"]') as HTMLButtonElement
     expect(action.textContent).toBe(zh.aiSettings.noticeAction.configure)
+    // 句内动作按平台写法定：antd 文本档 + `.text-action`，不借链接档的 `colorLink`。
+    expect(action.className).toContain('text-action')
+    expect(action.className).toContain('ant-btn-text')
+    expect(action.className).not.toContain('ant-btn-link')
     action.click()
     expect(onOpenSettings).toHaveBeenCalledTimes(1)
     // 配置问题不给「重新生成」：去了也没用。

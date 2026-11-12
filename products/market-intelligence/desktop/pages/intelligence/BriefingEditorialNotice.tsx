@@ -19,9 +19,9 @@ export function BriefingEditorialNotice({ notice, text, regenerating, onOpenSett
   return <p className="mi-daily-briefing-page__ai-failure" role="status" data-editorial-notice={notice.case}>
     <span>{notice.sentence}</span>
     {notice.action === 'configure'
-      ? <Button type="link" size="small" data-editorial-notice-action="configure" onClick={onOpenSettings}>{text.aiSettings.noticeAction.configure}</Button>
+      ? <Button className="text-action" data-editorial-notice-action="configure" onClick={onOpenSettings} size="small" type="text">{text.aiSettings.noticeAction.configure}</Button>
       : notice.action === 'regenerate'
-        ? <Button type="link" size="small" data-editorial-notice-action="regenerate" disabled={regenerating} onClick={onRetry}>{text.aiSettings.noticeAction.regenerate}</Button>
+        ? <Button className="text-action" data-editorial-notice-action="regenerate" disabled={regenerating} onClick={onRetry} size="small" type="text">{text.aiSettings.noticeAction.regenerate}</Button>
         : null}
   </p>
 }
