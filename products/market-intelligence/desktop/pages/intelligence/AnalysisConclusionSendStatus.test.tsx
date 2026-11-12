@@ -5,6 +5,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { AnalysisConclusionSendStatus } from './AnalysisConclusionSendStatus'
+import {
+  ANALYSIS_SEND_CHANNELS_LABEL_KEY,
+  analysisConclusionSendText,
+  resolveAnalysisSendText
+} from './analysisConclusionSendText'
 
 /**
  * 说明行的判据：
@@ -26,8 +31,13 @@ afterEach(() => {
   host.remove()
 })
 
+const sendText = analysisConclusionSendText('zh-CN')
+
 const render = (status: Parameters<typeof AnalysisConclusionSendStatus>[0]['status']): void => {
-  act(() => root.render(<AnalysisConclusionSendStatus channelsLabel="这次每条通道的结果" status={status} />))
+  act(() => root.render(<AnalysisConclusionSendStatus
+    ariaLabelKey={ANALYSIS_SEND_CHANNELS_LABEL_KEY}
+    resolveText={(key) => resolveAnalysisSendText(sendText, key)}
+    status={status} />))
 }
 
 const trigger = (): HTMLButtonElement | null => host.querySelector('button[aria-label="这次每条通道的结果"]')
@@ -71,5 +81,15 @@ describe('the send status row', () => {
     render({ message: '只留在应用内，没到手机 · 12:44' })
     expect(trigger()).toBeNull()
     expect(host.querySelector('[role="status"]')?.textContent).toBe('只留在应用内，没到手机 · 12:44')
+  })
+
+  it('takes the ⓘ name from a real key, not from a borrowed one', () => {
+    render({ message: '1 条通道收到', channels: [{ name: 'Telegram', detail: '收到了' }] })
+    expect(trigger()).not.toBeNull()
+    // 键是点分的真实路径，解析出来就是那条短名（与浮层同义，不是一整句说明）。
+    expect(ANALYSIS_SEND_CHANNELS_LABEL_KEY).toBe('analysisSend.channelsLabel')
+    expect(resolveAnalysisSendText(sendText, ANALYSIS_SEND_CHANNELS_LABEL_KEY)).toBe(sendText.channelsLabel)
+    // 借来的哨兵解不出东西：不再有「帮助」被念成这颗按钮名字的可能。
+    expect(resolveAnalysisSendText(sendText, 'ui.help.trigger')).toBe('')
   })
 })

@@ -11,7 +11,11 @@ import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysi
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { AnalysisConclusionSendButton } from './AnalysisConclusionSendButton'
 import { AnalysisConclusionSendStatus } from './AnalysisConclusionSendStatus'
-import { analysisConclusionSendText } from './analysisConclusionSendText'
+import {
+  ANALYSIS_SEND_CHANNELS_LABEL_KEY,
+  analysisConclusionSendText,
+  resolveAnalysisSendText
+} from './analysisConclusionSendText'
 import { useAnalysisConclusionSend } from './useAnalysisConclusionSend'
 import { sendActionOffered, useAnalysisConclusionSendReadiness } from './useAnalysisConclusionSendReadiness'
 import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
@@ -92,7 +96,10 @@ export function AnalysisTimelineDrawer(props: {
     />}
     titleKey="pages.intelligence.portal.analysisDrawer.title">
     {/* 结果只在标题下方这一行说：不弹 toast，也不拿按钮的状态冒充回执。 */}
-    {phase.kind === 'result' ? <AnalysisConclusionSendStatus channelsLabel={sendText.channelsLabel} status={phase.status} /> : null}
+    {phase.kind === 'result' ? <AnalysisConclusionSendStatus
+      ariaLabelKey={ANALYSIS_SEND_CHANNELS_LABEL_KEY}
+      resolveText={(key) => resolveAnalysisSendText(sendText, key)}
+      status={phase.status} /> : null}
     <TimelinePanel
       onOpenChange={props.onOpenChange}
       onOpenSettings={props.onOpenSettings}

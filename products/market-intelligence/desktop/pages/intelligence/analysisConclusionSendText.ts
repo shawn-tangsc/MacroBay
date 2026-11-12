@@ -136,3 +136,15 @@ const en: AnalysisConclusionSendText = {
 export function analysisConclusionSendText(language: 'zh-CN' | 'en-US'): AnalysisConclusionSendText {
   return language === 'zh-CN' ? zh : en
 }
+
+/**
+ * ⓘ 的读屏名：**键与短名在同一处**，组件只收键。
+ *
+ * 以前这条名字是一串已经解析好的字，`ariaLabelKey` 只好借 `ui.help.trigger` 当哨兵——
+ * 键和句子对不上，换个解析器，读屏就会把「帮助」念成这颗按钮的名字。
+ */
+export const ANALYSIS_SEND_CHANNELS_LABEL_KEY = 'analysisSend.channelsLabel'
+
+export function resolveAnalysisSendText(text: AnalysisConclusionSendText, key: string): string {
+  return key === ANALYSIS_SEND_CHANNELS_LABEL_KEY ? text.channelsLabel : ''
+}

@@ -19,8 +19,12 @@ import './analysisConclusionSend.css'
  */
 export function AnalysisConclusionSendStatus(props: Readonly<{
   status: SendStatusCopy
-  /** ⓘ 的读屏名：与浮层同义（「这次每条通道的结果」）。 */
-  channelsLabel: string
+  /**
+   * ⓘ 的读屏名**键**（`ANALYSIS_SEND_CHANNELS_LABEL_KEY`），短名由 `resolveText` 解析。
+   * 不收已经解析好的句子：那样 `ariaLabelKey` 只能借一个哨兵键，键与名字就对不上了。
+   */
+  ariaLabelKey: string
+  resolveText: (key: string) => string
 }>): React.ReactElement {
   const channels = props.status.channels
   return <div className="mi-analysis-send__status-row">
@@ -34,9 +38,9 @@ export function AnalysisConclusionSendStatus(props: Readonly<{
       </ul>}
       trigger={(triggerProps) => <IconButton
         {...triggerProps}
-        ariaLabelKey="ui.help.trigger"
+        ariaLabelKey={props.ariaLabelKey}
         icon={Info}
-        resolveText={(key: string) => key === 'ui.help.trigger' ? props.channelsLabel : ''}
+        resolveText={props.resolveText}
         size="sm"
         variant="plain" />}
     />}
