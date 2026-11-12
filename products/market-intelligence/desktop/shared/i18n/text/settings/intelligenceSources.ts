@@ -304,6 +304,8 @@ export const intelligenceSourcesText = {
   enabledAutoCollectQueued: '已启用，首次采集已自动排队。',
   loadFailed: '加载失败，请重试。',
   saveFailed: '保存失败，请重试。',
+  /** 写失败提示条上那颗动作：重跑刚才那次写，不是整页重读。 */
+  saveFailureRetry: '重试',
   runFailed: '立即运行失败，请重试。',
   runQueued: '采集任务已提交，正在等待结果…',
   runSucceeded: '采集成功。',
@@ -876,6 +878,8 @@ export const intelligenceSourcesText = {
   enabledAutoCollectQueued: 'Enabled. The first collection run was queued automatically.',
   loadFailed: 'Load failed. Try again.',
   saveFailed: 'Save failed. Try again.',
+  /** Action on the save-failure notice: re-runs that one write, not a whole reload. */
+  saveFailureRetry: 'Retry',
   runFailed: 'Run now failed. Try again.',
   runQueued: 'Collection queued. Waiting for result…',
   runSucceeded: 'Collection succeeded.',

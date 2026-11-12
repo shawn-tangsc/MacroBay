@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 
 import { notifySettingsRevision, subscribeSettingsRevision } from '../../shared/events/settingsRevision'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -37,6 +38,15 @@ export type SourcesSettingsPaneProps = {
    * 这里只提供位置——它在右栏里、紧挨被提示的那一版，位置与抽取前一致。
    */
   notice?: ReactNode
+  /**
+   * 最近一次**写失败**的人话（宿主从 `useIntelligenceSourcesSettings` 里拿）。
+   *
+   * 放在这里而不是只放页面提示条：写入口在「采集与数据」那一屏，那一支没有页面提示的位置，
+   * 而失败恰恰发生在那儿（选完档位弹回、开关弹回）。给了就画在右栏顶部，两个分支都看得见。
+   */
+  saveFailure?: string | null
+  /** 「重试」= 再跑一次那次写（不是整页重读，读者的改动还在那次动作里）。 */
+  onRetrySave?: () => void
   /** 右栏那份「事实 + 文案」组装件需要的全部入参（由调用方原样给）。 */
   surface: Omit<SourceConfigSurfaceProps, 'provider'> & { providerId?: string }
   /** 这一面显示哪几块筛选（抽屉传四块，设置页默认六项）。 */
@@ -246,6 +256,12 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           view={props.view} />}
     </aside>
     <div className="settings-detail-pane intelligence-detail-pane">
+      {props.saveFailure === undefined || props.saveFailure === null || props.onRetrySave === undefined
+        ? null
+        : <InlineNotice
+          action={{ labelKey: 'settings.intelligenceSources.saveFailureRetry', onSelect: props.onRetrySave }}
+          resolveText={resolveText}
+          tone="danger">{props.saveFailure}</InlineNotice>}
       {isBusiness
         ? <BusinessSettingsContent
           business={business}

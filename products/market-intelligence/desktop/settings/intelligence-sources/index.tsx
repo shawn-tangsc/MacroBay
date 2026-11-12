@@ -35,6 +35,8 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     testingCredentials,
     replaying,
     errorCode,
+    saveFailure,
+    retryFailedSave,
     notice,
     reload,
     selectSource,
@@ -103,6 +105,8 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
           writeSelection: (cellId, sourceId) => cellEnabledClient.writeSelection(cellId, sourceId)
         }}
         filter={sourceFilter}
+        onRetrySave={retryFailedSave}
+        saveFailure={saveFailure}
         notice={<>
           {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">
             <span>{t.otherSideChanged}</span>
