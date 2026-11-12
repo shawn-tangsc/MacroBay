@@ -108,20 +108,32 @@ export function sentinelResolveText(path: string, source: string): ReadonlyArray
   )
   const offenders: ResolveTextSentinel[] = []
 
-  const walk = (node: ts.Node): void => {
-    if (ts.isJsxAttribute(node) && node.name.getText(file) === 'resolveText') {
-      const initializer = node.initializer
+  /*
+    按 **JSX 元素**判，不按「`resolveText` 上方几行里出现过组件名」判。
+    数行数的窗口在多层 props、属性顺序与格式化差异下都会飘：调用点开标签一长，组件名就掉出窗口，
+    于是同一类哨兵时红时不红。元素自己带着标签名，问它就是可靠的。
+  */
+  const tagOf = (tagName: ts.JsxTagNameExpression): string =>
+    ts.isIdentifier(tagName) ? tagName.text : ''
+
+  const inspect = (element: ts.JsxOpeningElement | ts.JsxSelfClosingElement): void => {
+    if (!(RESOLVE_TEXT_COMPONENTS as readonly string[]).includes(tagOf(element.tagName))) return
+    for (const property of element.attributes.properties) {
+      if (!ts.isJsxAttribute(property) || property.name.getText(file) !== 'resolveText') continue
+      const initializer = property.initializer
       const expression = initializer !== undefined && ts.isJsxExpression(initializer) ? initializer.expression : undefined
-      if (expression !== undefined && (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression))) {
-        const name = firstName(expression)
-        if (name !== undefined) {
-          const line = file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1
-          if (isIdentity(expression, name)) offenders.push({ path, line, shape: 'identity' })
-          else if (hasSwitchOnFirstParam(expression.body, name)) offenders.push({ path, line, shape: 'switch' })
-          else if (hasComparison(expression.body, name)) offenders.push({ path, line, shape: 'comparison' })
-        }
-      }
+      if (expression === undefined || !(ts.isArrowFunction(expression) || ts.isFunctionExpression(expression))) continue
+      const name = firstName(expression)
+      if (name === undefined) continue
+      const line = file.getLineAndCharacterOfPosition(property.getStart(file)).line + 1
+      if (isIdentity(expression, name)) offenders.push({ path, line, shape: 'identity' })
+      else if (hasSwitchOnFirstParam(expression.body, name)) offenders.push({ path, line, shape: 'switch' })
+      else if (hasComparison(expression.body, name)) offenders.push({ path, line, shape: 'comparison' })
     }
+  }
+
+  const walk = (node: ts.Node): void => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) inspect(node)
     ts.forEachChild(node, walk)
   }
 

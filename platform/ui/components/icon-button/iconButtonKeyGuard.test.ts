@@ -178,19 +178,12 @@ describe('ariaLabelKey 必须是声明过的键（平台/壳层）', () => {
  * 一刀切只会把合规代码全打红，然后被加豁免。
  */
 describe('resolveText 不许是哨兵形状', () => {
-  const COMPONENT_PATTERN = new RegExp(`<(${['IconButton', 'Popover', 'Tabs', 'Segmented', 'StatusPill', 'StateView', 'Tooltip', 'FilterChip', 'InlineNotice', 'DisabledHint', 'SidePanel', 'Drawer', 'ToastHost'].join('|')})\\b`)
-
+  /**
+   * 归属由**元素本身**决定（`sentinelResolveText` 里按 JSX 标签名判），不再数行数：
+   * 数行的窗口在长开标签、属性顺序、格式化差异下都会飘，同一类哨兵时红时不红。
+   */
   function sentinelsIn(sources: ReadonlyArray<Readonly<{ path: string; text: string }>>) {
-    return sources.flatMap((source) => {
-      const found = sentinelResolveText(source.path, source.text)
-      // 只看真的在这颗组件上的：`resolveText` 也是别的组件的属性名。
-      return found.filter((entry) => {
-        const line = source.text.split('\n')[entry.line - 1] ?? ''
-        if (COMPONENT_PATTERN.test(line)) return true
-        const above = source.text.split('\n').slice(Math.max(0, entry.line - 6), entry.line).join('\n')
-        return COMPONENT_PATTERN.test(above)
-      })
-    })
+    return sources.flatMap((source) => sentinelResolveText(source.path, source.text))
   }
 
   it('never hard-codes key → sentence in a comparison, a switch or an identity function', () => {
@@ -203,6 +196,32 @@ describe('resolveText 不许是哨兵形状', () => {
         && !source.path.startsWith('platform/ui/components/resolveTextShape.ts'))
 
     expect(sentinelsIn(sources).map((entry) => `${entry.path}:${entry.line} ${entry.shape}`)).toEqual([])
+  })
+
+  /**
+   * 已知漏掉的九处形状（平台设置已在 `525ca4c` 修完，这里只留形状作夹具）。
+   *
+   * 它们共同的特征：**调用点的开标签很长**，`resolveText` 距离开标签超过 6 行。
+   * 旧实现按「`resolveText` 上方 6 行内出现过组件名」过滤，于是这九处一条都没抓到——
+   * 数行数在多层 props、格式化差异下都会飘，这也正是这个窗口必须换成 AST 的原因。
+   */
+  const MULTILINE_SENTINELS: ReadonlyArray<readonly [string, string]> = [
+    ["ApiAddressSection", "const X = <IconButton\n  ariaLabelKey=\"modelService.requestConfig\"\n  dataAttributes={{ 'data-apiaddresssection': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.requestConfig\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.requestConfig' ? labels.requestConfig : '')}\n/>\n"],
+    ["ModelDrawer", "const X = <IconButton\n  ariaLabelKey=\"modelService.copyModelId\"\n  dataAttributes={{ 'data-modeldrawer': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.copyModelId\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.copyModelId' ? labels.copyModelId : '')}\n/>\n"],
+    ["ModelRow.testModel", "const X = <IconButton\n  ariaLabelKey=\"modelService.testModel\"\n  dataAttributes={{ 'data-modelrow.testmodel': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.testModel\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.testModel' ? labels.testModel : '')}\n/>\n"],
+    ["ModelRow.editModel", "const X = <IconButton\n  ariaLabelKey=\"modelService.editModel\"\n  dataAttributes={{ 'data-modelrow.editmodel': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.editModel\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.editModel' ? labels.editModel : '')}\n/>\n"],
+    ["ModelRow.removeModel", "const X = <IconButton\n  ariaLabelKey=\"modelService.removeModel\"\n  dataAttributes={{ 'data-modelrow.removemodel': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.removeModel\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.removeModel' ? labels.removeModel : '')}\n/>\n"],
+    ["ModelsSection", "const X = <IconButton\n  ariaLabelKey=\"modelService.addModel\"\n  dataAttributes={{ 'data-modelssection': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.addModel\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.addModel' ? labels.addModel : '')}\n/>\n"],
+    ["ProviderMoreMenu", "const X = <IconButton\n  ariaLabelKey=\"modelService.providerMoreActions\"\n  dataAttributes={{ 'data-providermoremenu': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.providerMoreActions\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.providerMoreActions' ? labels.more : '')}\n/>\n"],
+    ["EndpointFields", "const X = <IconButton\n  ariaLabelKey=\"modelService.endpointDelete\"\n  dataAttributes={{ 'data-endpointfields': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.endpointDelete\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.endpointDelete' ? labels.deleteEndpoint : '')}\n/>\n"],
+    ["ModelProviderApiKeyField", "const X = <IconButton\n  ariaLabelKey=\"modelService.showApiKey\"\n  dataAttributes={{ 'data-modelproviderapikeyfield': true }}\n  icon={Settings2}\n  onSelect={open}\n  size=\"sm\"\n  tooltipKey=\"modelService.showApiKey\"\n  variant=\"plain\"\n  resolveText={(key) => (key === 'modelService.showApiKey' ? labels.showApiKey : '')}\n/>\n"]
+  ]
+
+  it('catches the nine multiline shapes the six-line window used to miss', () => {
+    const sources = MULTILINE_SENTINELS.map(([name, text]) => ({ path: `${name}.tsx`, text }))
+    const caught = sentinelsIn(sources)
+    expect(caught).toHaveLength(MULTILINE_SENTINELS.length)
+    expect(caught.every((entry) => entry.shape === 'comparison')).toBe(true)
   })
 
   it('catches the three shapes and leaves a table lookup alone', () => {
