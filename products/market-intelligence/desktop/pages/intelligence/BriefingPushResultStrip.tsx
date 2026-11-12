@@ -24,6 +24,8 @@ import type { BriefingPushActionKey, BriefingPushResultRow, BriefingPushResultVi
 export function BriefingPushResultStrip(props: Readonly<{
   result: BriefingPushResultView
   text: BriefingPushText
+  /** 产品文案表的解析器（`useProductTextKey()`）：读屏名传完整路径，句子由它给。 */
+  resolveText: (key: string) => string
   onAction: (key: BriefingPushActionKey) => void
   onClose: () => void
 }>): React.ReactElement {
@@ -34,18 +36,6 @@ export function BriefingPushResultStrip(props: Readonly<{
   const received = result.rows.filter((row) => row.outcome === 'received')
   const essential = result.rows.filter((row) => row.outcome !== 'received')
   const visible = [...essential, ...(detailOpen ? received : [])]
-  /**
-   * 三颗图标按钮的读屏名：**真实的键换真实的短名**，不是把弹出来的那整句当名字。
-   *
-   * ⓘ 的名字回答「这是什么」（结果说明 / 动作说明），弹出的句子回答「为什么」。以前三处都借
-   * `ui.help.trigger` 当哨兵、再让解析器返回别的字：键与句子不符，解析器一换，关闭键就会被念成
-   * 「帮助」——读屏名只收键，句子由解析器给，这一条不许用哨兵绕过。
-   */
-  const label = (key: string): string =>
-    key === 'briefingPush.stripInfo' ? text.stripInfoLabel
-      : key === 'briefingPush.actionInfo' ? text.actionInfoLabel
-        : key === 'briefingPush.closeStrip' ? text.closeStrip
-          : ''
   return <div className={`mi-daily-briefing__push-result mi-daily-briefing__push-result--${result.tone}`}
     data-push-result="true" data-tone={result.tone}>
     <div className="mi-daily-briefing__push-result-head">
@@ -65,9 +55,9 @@ export function BriefingPushResultStrip(props: Readonly<{
         content={<span>{result.action.tip}</span>}
         trigger={(triggerProps) => <IconButton
           {...triggerProps}
-          ariaLabelKey="briefingPush.actionInfo"
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.push.actionInfoLabel"
           icon={Info}
-          resolveText={label}
+          resolveText={props.resolveText}
           size="sm"
           variant="plain" />}
       />}
@@ -83,17 +73,17 @@ export function BriefingPushResultStrip(props: Readonly<{
         content={<span>{text.stripInfoTip}</span>}
         trigger={(triggerProps) => <IconButton
           {...triggerProps}
-          ariaLabelKey="briefingPush.stripInfo"
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.push.stripInfoLabel"
           icon={Info}
-          resolveText={label}
+          resolveText={props.resolveText}
           size="sm"
           variant="plain" />}
       />}
       {sending ? null : <IconButton
-        ariaLabelKey="briefingPush.closeStrip"
+        ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.push.closeStrip"
         icon={X}
         onSelect={props.onClose}
-        resolveText={label}
+        resolveText={props.resolveText}
         size="sm"
         variant="plain" />}
     </div>

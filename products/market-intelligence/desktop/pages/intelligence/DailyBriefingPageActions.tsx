@@ -219,6 +219,7 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   {push.result === undefined ? null : <BriefingPushResultStrip
     result={push.result}
     text={pushText}
+    resolveText={resolveText}
     onAction={push.onAction}
     onClose={push.onClose}
   />}

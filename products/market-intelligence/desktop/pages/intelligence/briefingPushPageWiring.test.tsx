@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { ToastHost } from '@platform/ui/components/toast'
 import { productText } from '../../shared/i18n/productText'
+import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
 import { briefingPushText } from './dailyBriefingPushText'
@@ -51,7 +52,7 @@ function Row(input: Readonly<{
     ...(input.onOpenChannels === undefined ? {} : { onOpenChannels: input.onOpenChannels })
   })
   return <DailyBriefingEditionActions
-    text={text} resolveText={(key) => key}
+    text={text} resolveText={(key) => resolveProductTextKey('zh-CN', key)}
     generating={input.generating ?? false} exportable={false}
     exportState="idle" copyState="idle" push={push} pushText={zh}
     onExport={() => undefined} onCopy={() => undefined} onRegenerate={() => undefined} />
@@ -227,9 +228,31 @@ describe('the publish control on the page', () => {
     await push()
     const names = [...(strip()?.querySelectorAll('button[aria-label]') ?? [])]
       .map((node) => node.getAttribute('aria-label'))
-    expect(names).toEqual(['动作说明', '结果说明', '关闭结果条'])
+    // 名字来自产品文案表的完整路径：路径真的能解析，读屏才拿得到名字。
+    const expected = [
+      'pages.intelligence.portal.dashboard.dailyBriefing.push.actionInfoLabel',
+      'pages.intelligence.portal.dashboard.dailyBriefing.push.stripInfoLabel',
+      'pages.intelligence.portal.dashboard.dailyBriefing.push.closeStrip'
+    ].map((path) => resolveProductTextKey('zh-CN', path))
+    expect(names).toEqual(expected)
+    expect(names.every((name) => name !== '')).toBe(true)
     // 名字不是它弹出的那句话：读屏不该把整段解释当成按钮名。
     expect(names).not.toContain(zh.captionTooLongWhy)
+  })
+
+  it('registers the three screen-reader names in both languages, and a wrong path resolves to nothing', () => {
+    const paths = [
+      'pages.intelligence.portal.dashboard.dailyBriefing.push.actionInfoLabel',
+      'pages.intelligence.portal.dashboard.dailyBriefing.push.stripInfoLabel',
+      'pages.intelligence.portal.dashboard.dailyBriefing.push.closeStrip'
+    ]
+    for (const path of paths) {
+      for (const language of ['zh-CN', 'en-US'] as const) {
+        expect(resolveProductTextKey(language, path)).not.toBe('')
+      }
+    }
+    // 写错一段路径就是空串——那正是一粒没有名字的按钮的来源，所以键必须真在表里。
+    expect(resolveProductTextKey('zh-CN', 'pages.intelligence.portal.dashboard.dailyBriefing.push.notThere')).toBe('')
   })
 
   it('says where it is sending while it waits, with the channel count it can see', async () => {

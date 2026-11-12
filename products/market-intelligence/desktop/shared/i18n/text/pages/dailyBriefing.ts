@@ -411,6 +411,13 @@ export const dailyBriefingText = {
       sectionFailed: { generation: '生成设置未保存', ai: 'AI 编辑未保存' },
       saveFailed: '保存失败：{sections}',
     },
+    // 发布结果条三颗图标按钮的读屏名：名字只回答「这是什么」，句子由解析器给。
+    // 读屏名与可见文案同一张表、同一套点分键——调用点传完整路径，不内联手写解析。
+    push: {
+      stripInfoLabel: '结果说明',
+      actionInfoLabel: '动作说明',
+      closeStrip: '关闭结果条'
+    },
     generationSettings: {
       open: '生成设置', title: '日报生成设置',
       generationTime: '生成时间',
@@ -802,6 +809,14 @@ export const dailyBriefingText = {
       sections: { generation: 'Generation', ai: 'AI editing' },
       sectionFailed: { generation: 'Generation settings were not saved', ai: 'AI editing was not saved' },
       saveFailed: 'Save failed: {sections}',
+    },
+    // Screen-reader names for the publish result strip's three icon buttons. The name says what
+    // the control is; the sentence comes from the resolver. Same table and same dotted keys as the
+    // visible copy — call sites pass the full path and never resolve by hand.
+    push: {
+      stripInfoLabel: 'About this result',
+      actionInfoLabel: 'About this action',
+      closeStrip: 'Close the result strip'
     },
     generationSettings: {
       open: 'Generation settings', title: 'Brief generation settings',
