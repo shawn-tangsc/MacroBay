@@ -202,7 +202,7 @@ export const dailyBriefingText = {
       roles: { source: '来源', time: '时间', advice: '建议' },
       listSeparator: '、',
       sources: {
-        stablecoin: 'DeFiLlama 稳定币', etf: 'CryptoETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
+        stablecoin: 'DeFiLlama 稳定币', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
         market: '行情数据', macro: '宏观行情', rates: '宏观利率', calendar: '宏观日历', news: '新闻来源',
         analysis: '分析结论', webSearch: 'WebSearch 证据', editorial: '日报 AI 编辑', backfill: '历史接口回补',
         settings: '日报生成设置', collector: '情报源', system: '生成服务'
@@ -616,7 +616,7 @@ export const dailyBriefingText = {
       roles: { source: 'Source', time: 'Time', advice: 'Advice' },
       listSeparator: ', ',
       sources: {
-        stablecoin: 'DeFiLlama stablecoins', etf: 'CryptoETF', fearGreed: 'Alternative.me', funding: 'Binance futures',
+        stablecoin: 'DeFiLlama stablecoins', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance futures',
         market: 'Market snapshot', macro: 'Macro market', rates: 'Macro rates', calendar: 'Macro calendar', news: 'News sources',
         analysis: 'Analysis conclusion', webSearch: 'WebSearch evidence', editorial: 'Brief AI editor', backfill: 'Historical interface backfill',
         settings: 'Brief generation settings', collector: 'Intelligence sources', system: 'Generation service'
