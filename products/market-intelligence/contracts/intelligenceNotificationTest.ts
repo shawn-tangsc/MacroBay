@@ -23,7 +23,8 @@ export type IntelligenceTestNoDataReason =
 
 /**
  * 「发不出去」的四种原因：
- * - `push-unavailable`：此刻没有恰好一条 `runtime-ready` 通道（0 条或 ≥2 条），是配置事实，不是瞬时失败；
+ * - `push-unavailable`：此刻**一条 `runtime-ready` 通道都没有**（多通道已是合法状态，不再有「恰好一条」这一说），
+ *   是配置事实，不是瞬时失败；界面上它属于「已启用的通道都没连上」这一档，不是「消息没发出去」；
  * - `source-disabled`：这一行依赖的数据源没启用——去启用它，不是等一等；
  * - `timezone-unreadable`：读者时区读不到，窗口算不出来；**不拿 UTC 顶**（那会把 +08:00 印成 08:00）；
  * - `read-failed`：读不到，或提交被拒——「没拿到」和「确实没有」必须分开说。
@@ -49,7 +50,10 @@ export type IntelligenceTestReceipt =
   | Readonly<{
     state: 'unavailable'
     reasonCode: IntelligenceTestUnavailableReason
-    /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（0 或 ≥2），由主进程数。 */
+    /**
+     * 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数，恒为 0（本码的含义就是 0 条），
+     * 由主进程数。**它不是「启用了的通道条数」**——后者不在回执里，界面上那句话也就不印条数。
+     */
     enabledChannelCount?: number
   }>
 

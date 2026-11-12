@@ -766,15 +766,14 @@ describe('通知配置后的测试按钮（R201）', () => {
     expect(container?.textContent).not.toContain('已发送')
   })
 
-  it('keeps the button when two channels are enabled, then refuses with the count the main process reported', async () => {
+  it('keeps the button when two channels are enabled, and says the configuration state — never "stop all but one"', async () => {
     const stubs = install({
       getDeliverySettings: vi.fn(async () => ({ toastEnabled: true, pushWired: true, channels: twoChannels, lastPushFailureAt: null, lastPushFailureReason: null })),
-      sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 2 }))
+      sendTest: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 0 }))
     })
     await render()
 
-    // 两行各一枚：日历行打开时两枚都在（开始前 / 落地），按钮在不在只取决于「有没有可用通道」，
-    // 不取决于「唯一不唯一」——两条通道时仍然渲染、可点。
+    // 多通道是合法状态：两条通道时按钮仍然渲染、可点（按钮在不在只看「有没有可投递目标」）。
     await selectItem(3)
     expect(testButtons().map((button) => button.dataset.testNotification).sort()).toEqual([
       'calendar-landed',
@@ -787,7 +786,10 @@ describe('通知配置后的测试按钮（R201）', () => {
 
     expect(stubs.sendTest).toHaveBeenCalledWith({ kind: 'sentiment' })
     const text_ = container?.textContent ?? ''
-    expect(text_).toContain('你启用了 2 条通道')
+    // 配置状态句，不是投递失败句；也**不再**出现「停用到只剩一条」那类错建议。
+    expect(text_).toContain('已启用的通道都没有连上。')
+    expect(text_).not.toContain('停用到只剩一条')
+    expect(text_).not.toContain('测试消息没发出去')
     // 原因码只在折叠区：主句 0 次，展开后恰好 1 处。
     const sentence = container?.querySelector('[data-test-result="failed"]')?.textContent ?? ''
     expect(sentence).not.toContain('push-unavailable')

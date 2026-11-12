@@ -102,7 +102,8 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.test.channelRejected': '没送到：通道拒收了这一次发送',
   'pages.intelligence.notification.test.unknownAfterSend': '已经发出去了，但还没收到回执——先在手机上确认一下',
   'pages.intelligence.notification.test.notAttempted': '没有发出去：这一次没有走通道（先看上面那行状态）',
-  'pages.intelligence.notification.test.multipleChannels': '你启用了 {count} 条通道，日报推送只支持一条——去通道页停用到只剩一条',
+  /* 配置状态，不是投递失败：多通道是合法状态，这条只说「启用了、但没一条连上」（不印条数）。 */
+  'pages.intelligence.notification.test.channelsNotConnected': '已启用的通道都没有连上。',
   'pages.intelligence.notification.test.reasonCode': '原因码',
   'pages.intelligence.notification.test.needEnabled': '打开这一项才能发测试',
   'pages.intelligence.notification.rows.sentimentAlert.info': '模型判出的强度到「中」以上、并且能归到同一件事时推一条；同一件事只推第一条。默认关着：打开那一刻之前发布的新闻不会补推。',
@@ -221,7 +222,7 @@ const EN: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.test.channelRejected': 'Not delivered: the channel rejected this send',
   'pages.intelligence.notification.test.unknownAfterSend': 'It went out, but no receipt has come back yet — check your phone',
   'pages.intelligence.notification.test.notAttempted': 'Not sent: the channel was not used for this attempt (see the status line above)',
-  'pages.intelligence.notification.test.multipleChannels': 'You enabled {count} channels; briefing push supports one — leave only one in the channels page',
+  'pages.intelligence.notification.test.channelsNotConnected': 'None of the enabled channels is connected.',
   'pages.intelligence.notification.test.reasonCode': 'Reason code',
   'pages.intelligence.notification.test.needEnabled': 'Turn this on to send a test',
   'pages.intelligence.notification.rows.sentimentAlert.info': 'Sends one notice when the model rates an item Medium or above and it groups with an existing story; one notice per story. Off by default: items published before you switch it on are not sent late.',

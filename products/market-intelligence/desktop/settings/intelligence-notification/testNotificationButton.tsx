@@ -19,8 +19,9 @@ import { sendIntelligenceTestNotification } from '../../shared/ipc/intelligenceN
  * 三条写死的规矩：
  * 1. **0 条可用通道 → 整组不渲染**（不是禁用）。`push-unavailable` 是配置事实，不是可重试的瞬时失败；
  *    一个点了必然以配置原因失败的按钮，正是「没接线的入口」。判据在父层（`channelReady`），本组件只认这个布尔。
- * 2. **≥2 条通道仍然渲染**：按钮在不在只取决于「有没有可用通道」，不取决于「唯一不唯一」；点下去才拒绝，
- *    并把主进程数出来的条数原样写进句子（**不自己数**——渲染层读不到通道列表，两次数出来会互相矛盾）。
+ * 2. **多通道是合法状态**：按钮在不在只取决于「有没有可投递目标」，不取决于「唯一不唯一」；
+ *    点下去若一条就绪的都没有，说的是**配置事实**（「已启用的通道都没有连上」），不是投递失败，
+ *    也**不印条数**——渲染层读不到通道列表，数出来的条数会与主进程互相矛盾。
  * 3. **原因码只在失败折叠区**：主句、ⓘ 都不出现码；失败时给一个默认收起的 `<details>`，展开后恰好一处。
  *
  * 超时（10 秒）按失败处理，但**不编一个码**：超时不是主进程返回的结论，硬塞 `read-failed` 之类就是把
@@ -174,9 +175,10 @@ function describePhase(phase: Phase, text: (key: string) => string, kind: TestNo
   }
   if (phase.kind === 'no-data') return text(`pages.intelligence.notification.test.noData.${kind}`)
   if (phase.kind === 'failed') {
-    if (phase.channelCount !== null && phase.channelCount >= 2) {
-      return text('pages.intelligence.notification.test.multipleChannels').replace('{count}', String(phase.channelCount))
-    }
+    // 「一条就绪的通道都没有」是**配置状态**，不是投递失败：多通道已是合法状态，
+    // 「停用到只剩一条」是错建议（停一条并不会让另一条连上）。按钮只在有可投递目标时才渲染，
+    // 所以走到这里必然是「启用了、但没连上」——用②，不印条数（条数变句子不该跟着变）。
+    if (phase.reasonCode === 'push-unavailable') return text('pages.intelligence.notification.test.channelsNotConnected')
     // 通道那一跳的三种结局各一句：用一个「失败」盖三种处境，读者只能猜。
     if (phase.reasonCode === 'channel-rejected') return text('pages.intelligence.notification.test.channelRejected')
     if (phase.reasonCode === 'unknown-after-send') return text('pages.intelligence.notification.test.unknownAfterSend')
