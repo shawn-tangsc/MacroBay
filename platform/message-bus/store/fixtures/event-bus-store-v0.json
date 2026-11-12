@@ -1,0 +1,95 @@
+{
+  "events": [
+    {
+      "eventId": "evt-2026-11-02-0001",
+      "eventRecordId": "evr-0001",
+      "topic": "market-intelligence.source.collected",
+      "producer": "market-intelligence",
+      "schemaVersion": 1,
+      "occurredAt": "2026-11-02T01:15:00.000Z",
+      "recordedAt": "2026-11-02T01:15:00.420Z",
+      "correlationId": "run-8812",
+      "idempotencyKey": "source.collected:binance-futures-positioning:2026-11-02T01:15",
+      "payload": {
+        "sourceId": "binance-futures-positioning",
+        "appended": 2,
+        "duplicates": 0
+      }
+    },
+    {
+      "eventId": "evt-2026-11-02-0002",
+      "eventRecordId": "evr-0002",
+      "topic": "market-intelligence.source.collected",
+      "producer": "market-intelligence",
+      "schemaVersion": 1,
+      "occurredAt": "2026-11-02T01:30:00.000Z",
+      "recordedAt": "2026-11-02T01:30:00.180Z",
+      "payload": {
+        "sourceId": "defillama-stablecoins",
+        "appended": 1,
+        "duplicates": 3
+      }
+    },
+    {
+      "eventId": "evt-2026-11-02-0003",
+      "eventRecordId": "evr-0003",
+      "topic": "market-intelligence.briefing.ready",
+      "producer": "market-intelligence",
+      "schemaVersion": 1,
+      "occurredAt": "2026-11-02T07:01:00.000Z",
+      "recordedAt": "2026-11-02T07:01:02.010Z",
+      "payload": {
+        "editionDate": "2026-11-02",
+        "locale": "zh-CN"
+      }
+    }
+  ],
+  "deliveries": [
+    {
+      "deliveryId": "dlv-0001",
+      "deliveryRecordId": "dlr-0001",
+      "eventId": "evt-2026-11-02-0001",
+      "eventRecordId": "evr-0001",
+      "consumerId": "market-intelligence.briefing",
+      "status": "completed",
+      "attemptCount": 1,
+      "lastAttemptAt": "2026-11-02T01:15:01.000Z",
+      "completedAt": "2026-11-02T01:15:01.000Z"
+    },
+    {
+      "deliveryId": "dlv-0002",
+      "deliveryRecordId": "dlr-0002",
+      "eventId": "evt-2026-11-02-0002",
+      "eventRecordId": "evr-0002",
+      "consumerId": "market-intelligence.briefing",
+      "status": "pending",
+      "attemptCount": 0,
+      "nextAttemptAt": "2026-11-02T01:31:00.000Z"
+    },
+    {
+      "deliveryId": "dlv-0003",
+      "deliveryRecordId": "dlr-0003",
+      "eventId": "evt-2026-11-02-0003",
+      "eventRecordId": "evr-0003",
+      "consumerId": "market-intelligence.notification",
+      "status": "failed",
+      "attemptCount": 2,
+      "lastAttemptAt": "2026-11-02T07:01:05.000Z",
+      "lastError": "delivery-target-disabled"
+    }
+  ],
+  "checkpoints": [
+    {
+      "consumerId": "market-intelligence.briefing",
+      "lastCompletedRecordedAt": "2026-11-02T01:15:01.000Z",
+      "lastCompletedEventId": "evt-2026-11-02-0001",
+      "updatedAt": "2026-11-02T01:15:01.000Z"
+    },
+    {
+      "consumerId": "market-intelligence.notification",
+      "lastCompletedRecordedAt": "2026-11-01T22:00:00.000Z",
+      "lastCompletedEventId": "evt-2026-11-01-0099",
+      "updatedAt": "2026-11-01T22:00:00.000Z"
+    }
+  ]
+}
