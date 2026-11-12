@@ -187,6 +187,26 @@ export class ChannelDeliveryService {
     return this.deliver({ ...request, text: chunks.slice(-128).map((chunk) => sanitizeChannelOutput(chunk).text).join('').slice(-64 * 1024) })
   }
 
+  /**
+   * 图片版的目标解析：与文本 `deliverToEnabledTargets` **同一处**取目标、同一套跳过码。
+   * 不另写一套判断——两套判据迟早一个说能发、一个说没目标。
+   */
+  async deliverImageToEnabledTargets(
+    input: Omit<ChannelImageDeliveryRequest, 'conversationId'>
+  ): Promise<ChannelDeliveryResult[]> {
+    const targets = this.deps.repository.listEnabledTargets(input.channelId, input.agentId)
+    if (targets.length === 0) {
+      return [{
+        status: 'skipped',
+        attemptId: null,
+        errorCode: this.deps.repository.hasAnyTarget(input.channelId, input.agentId)
+          ? 'delivery-target-disabled'
+          : 'delivery-no-target-bound'
+      }]
+    }
+    return Promise.all(targets.map((target) => this.deliverImage({ ...input, conversationId: target.conversationId })))
+  }
+
   async deliverToEnabledTargets(input: Omit<ChannelDeliveryRequest, 'conversationId'>): Promise<ChannelDeliveryResult[]> {
     const targets = this.deps.repository.listEnabledTargets(input.channelId, input.agentId)
     if (targets.length === 0) {

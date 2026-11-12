@@ -422,9 +422,11 @@ const channelsAndJobs = createChannelsAndJobs({
   core: platformCore,
   agentBroadcasts,
   agentRuntimeService,
+  generatedImageStorage,
   repositories: {
     agentDatabase,
     agentRepositories,
+    assistantRepositories,
     agentServices,
     agentStore,
     channelInboundRepository,
@@ -446,7 +448,7 @@ const {
   channelInboundService,
   channelInboundExecutionRunner,
   channelDeliveryMaintenance,
-  deliverTaskResultToChannels, channelDeliveryService,
+  deliverTaskResultToChannels, channelDeliveryService, channelImageSend,
   taskAutomationMaintenance,
   telegramRuntimeManager,
   slackRuntimeManager,
@@ -717,7 +719,7 @@ function registerIpcHandlers(
   })
   // 渠道管理 / 入站两个服务共 25 个 handler 搬到 ipc/channelIpc.ts；
   // 退出链（dispose 五步、维护定时器、adapter dispose、fenceAllForQuit）仍留在本文件。
-  registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })
+  registerChannelIpc(ipcMain, { channelManagementService, channelInboundService, channelImages: channelImageSend })
 
   // 模型服务 19 个 handler（含检测事件推送）在 ipc/modelIpc.ts；端口与其状态读法在 composition/model.ts。
   composeModelIpc(ipcMain, {

@@ -478,6 +478,17 @@ export type PlatformText = {
     imageGenerating: string
     imageDownload: string
     imagePreview: string
+    /** 图消息下方「发到频道」这一组：动作、进行中、成功与逐类失败。 */
+    imageSendToChannel: string
+    imageSending: string
+    imageSent: string
+    imageSendBare: string
+    imageSendCaptionTooLong: string
+    imageSendTooLarge: string
+    imageSendUnsupported: string
+    imageSendHostUnavailable: string
+    imageSendUnconfirmed: string
+    imageSendFailed: string
     imagePromptRequired: string
     imageFailureInvalidCount: string
     imageFailureInvalidSize: string
@@ -1948,6 +1959,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       imageGenerating: '图片生成中…',
       imageDownload: '下载',
       imagePreview: '预览图片',
+      imageSendToChannel: '发到频道',
+      imageSending: '正在发到 {channel}',
+      imageSent: '已发到 {channel}',
+      imageSendBare: '只发图片',
+      imageSendCaptionTooLong: '说明太长（超过 1024 字），没有发出；可以只发图片',
+      imageSendTooLarge: '图片太大，没有发出',
+      imageSendUnsupported: '这个格式发不了（例如 WebP），没有发出',
+      imageSendHostUnavailable: '通道没连上，没有发出',
+      imageSendUnconfirmed: '已发出，但没有收到回执',
+      imageSendFailed: '没有发出',
       imagePromptRequired: '请输入图片描述',
       imageFailureInvalidCount: '数量需为 1–4',
       imageFailureInvalidSize: '尺寸只支持 256x256 / 512x512 / 1024x1024',
@@ -3324,6 +3345,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       imageGenerating: 'Generating image…',
       imageDownload: 'Download',
       imagePreview: 'Preview image',
+      imageSendToChannel: 'Send to channel',
+      imageSending: 'Sending to {channel}',
+      imageSent: 'Sent to {channel}',
+      imageSendBare: 'Send image only',
+      imageSendCaptionTooLong: 'The description is longer than 1024 characters, so nothing was sent; you can send the image only',
+      imageSendTooLarge: 'The image is too large and was not sent',
+      imageSendUnsupported: 'This format cannot be sent (for example WebP); nothing was sent',
+      imageSendHostUnavailable: 'The channel is not connected; nothing was sent',
+      imageSendUnconfirmed: 'Sent, but no receipt came back',
+      imageSendFailed: 'Not sent',
       imagePromptRequired: 'Enter a prompt for the image',
       imageFailureInvalidCount: 'Count must be between 1 and 4',
       imageFailureInvalidSize: 'Size must be 256x256, 512x512 or 1024x1024',

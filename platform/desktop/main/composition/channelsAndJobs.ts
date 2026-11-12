@@ -29,6 +29,8 @@ import {
 } from '../../../ai/agent-platform/channels'
 import { discordUserAgent } from '../../../ai/agent-platform/channels/discord/discordUserAgent'
 import { resolveActiveProxy } from '../../../network/activeProxyState'
+import { createChannelImageSend } from '../channelImageSend'
+import { createChannelImageSource } from '../channelImageSource'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { pruneChannelRuntimeAudits } from '../../../ai/agent-platform/channels/channelRuntimeAuditPrune'
@@ -93,10 +95,13 @@ export type ChannelsAndJobsPorts = Readonly<{
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   /** 日志口（缺省是主进程唯一写入器）。同样是「留个口子好测」，不为别的。 */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  /** 生成图落盘（主进程唯一读入口用）；由 app.ts 注入同一实例。 */
+  generatedImageStorage: { read: (fileName: string) => Promise<{ bytes: Uint8Array; mime: string } | null> }
   repositories: Pick<
     ReturnType<typeof createRepositories>,
     | 'agentDatabase'
     | 'agentRepositories'
+    | 'assistantRepositories'
     | 'agentServices'
     | 'agentStore'
     | 'channelInboundRepository'
@@ -125,6 +130,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   const {
     agentDatabase,
     agentRepositories,
+    assistantRepositories,
     agentServices,
     agentStore,
     channelInboundRepository,
@@ -173,6 +179,36 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     transport: channelDeliveryRouter,
     imageTransport: channelDeliveryRouter
   })
+  /**
+   * 助手聊天里的图消息「发到频道」：主进程读盘 + 投递装配。
+   * 只认唯一 `runtime-ready` 的通道；图片能力问同一个 router（一张表）；投影也在这里派生。
+   */
+  const channelImageSource = createChannelImageSource({
+    read: (fileName) => ports.generatedImageStorage.read(fileName),
+    getMessage: (messageId) => assistantRepositories.messages.getById(messageId) as never
+  })
+  const channelImageSend = {
+    target: () => {
+      const ready = channelManagementService.list().filter((channel) => channel.state === 'runtime-ready')
+      const channel = ready.length === 1 ? ready[0]! : null
+      if (!channel) return null
+      return { channelId: channel.id, channelName: channel.name, supportsImage: channelDeliveryRouter.supportsImage(channel.id) }
+    },
+    send: createChannelImageSend({
+      listChannels: () => channelManagementService.list().map((channel) => ({ id: channel.id, agentId: channel.agentId, state: channel.state })),
+      resolveImage: channelImageSource.resolve,
+      deliverImageToEnabledTargets: (input) => channelDeliveryService.deliverImageToEnabledTargets(input),
+      captionFor: (messageId) => {
+        const message = assistantRepositories.messages.getById(messageId)
+        const parts = Array.isArray(message?.data?.parts) ? message.data.parts : []
+        return parts
+          .filter((part): part is { type: 'text'; text: string } => part.type === 'text' && typeof (part as { text?: unknown }).text === 'string')
+          .map((part) => part.text)
+          .join('\n')
+          .trim()
+      }
+    }).send
+  }
   // 设置页「发一条测试消息」要走真投递：装在这儿而不是 app.ts（那是只减不增的基线文件）。
   channelManagementService.setDelivery(channelDeliveryService)
   // 运行审计的批量裁剪（0.4.3 B3）：库句柄在这里，保留期任务在别处注册——经槽传过去，
@@ -446,6 +482,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     channelInboundService,
     channelInboundExecutionRunner,
     channelDeliveryService,
+    channelImageSend,
     channelDeliveryMaintenance,
     deliverTaskResultToChannels,
     taskAutomationMaintenance,

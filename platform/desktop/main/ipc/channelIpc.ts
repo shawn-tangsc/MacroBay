@@ -20,6 +20,12 @@ import { IpcChannels } from '../../ipc/channels'
 export type ChannelIpcPorts = Readonly<{
   channelManagementService: ChannelManagementService
   channelInboundService: ChannelInboundService
+  /** 助手聊天里的图消息：一个只读投影 + 一条发送动作（主进程侧装配见 channelImageSend.ts）。 */
+  channelImages?: {
+    target: () => { channelId: string; channelName: string; supportsImage: boolean } | null
+    send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) =>
+      Promise<{ ok: boolean; channelId: string | null; status?: string; code: string | null; detail?: string }>
+  }
 }>
 
 export function registerChannelIpc(
@@ -27,6 +33,7 @@ export function registerChannelIpc(
   ports: ChannelIpcPorts
 ): void {
   const { channelManagementService, channelInboundService } = ports
+  const channelImages = ports.channelImages
 
   ipcMain.handle(IpcChannels.channelsCatalog, () => channelManagementService.catalog())
   ipcMain.handle(IpcChannels.channelsList, () => channelManagementService.listWithCredentialPreviews())
@@ -82,6 +89,20 @@ export function registerChannelIpc(
     return channelManagementService.listRuntimeAudits({ id: channelIdOf(value), limit: value.limit, cursor: value.cursor })
   })
   ipcMain.handle(IpcChannels.channelsSendTestMessage, (_event: IpcMainInvokeEvent, input: unknown) => {
+
+  // 图消息「发到频道」：投影与动作成对。没有可用通道时投影为 `null`，渲染层据此**不画**按钮。
+  ipcMain.handle(IpcChannels.channelsImageTarget, () => channelImages?.target() ?? null)
+  ipcMain.handle(IpcChannels.channelsSendMessageImage, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = (input ?? {}) as { messageId?: unknown; fileName?: unknown; withoutCaption?: unknown }
+    if (typeof value.messageId !== 'string' || value.messageId.length === 0) throw new Error('channel-input-invalid')
+    if (typeof value.fileName !== 'string' || value.fileName.length === 0) throw new Error('channel-input-invalid')
+    if (!channelImages) return { ok: false, channelId: null, code: 'delivery-host-unavailable' }
+    return channelImages.send({
+      messageId: value.messageId,
+      fileName: value.fileName,
+      ...(value.withoutCaption === true ? { withoutCaption: true } : {})
+    })
+  })
     const value = asChannelInput(input)
     return channelManagementService.sendTestMessage({ id: channelIdOf(value), text: value.text })
   })

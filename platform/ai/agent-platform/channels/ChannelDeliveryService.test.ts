@@ -399,6 +399,25 @@ describe('image delivery shares the ledger but never the row', () => {
   })
 })
 
+describe('image delivery to enabled targets mirrors the text path', () => {
+  it('names the same skip reasons when there is no target or the target is disabled', async () => {
+    const unbound = imageHarness()
+    unbound.database.connection.exec('delete from channel_delivery_targets')
+    await expect(unbound.service.deliverImageToEnabledTargets({
+      channelId: 'channel-a', agentId: 'agent-a', source: 'agent-notify', sourceId: channelImageSourceId('m1'),
+      image: { mime: 'image/png', bytes: pngBytes() }, caption: ''
+    })).resolves.toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-no-target-bound' }])
+    expect(unbound.sendImage).not.toHaveBeenCalled()
+
+    const disabled = imageHarness()
+    disabled.database.connection.exec("update channel_delivery_targets set enabled = 0 where channel_id = 'channel-a'")
+    await expect(disabled.service.deliverImageToEnabledTargets({
+      channelId: 'channel-a', agentId: 'agent-a', source: 'agent-notify', sourceId: channelImageSourceId('m2'),
+      image: { mime: 'image/png', bytes: pngBytes() }, caption: ''
+    })).resolves.toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-target-disabled' }])
+  })
+})
+
 function cipherForTests() { return { encrypt: async () => ({ ciphertext: new Uint8Array(), keyRef: 'ref', keyRevision: 1 }), decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext, keyedHash: async () => 'hash', rotate: async () => ({ keyRef: 'ref', keyRevision: 1 }), revoke: async () => {} } }
 function hashForTests(value: string): string { return createHash('sha256').update(value).digest('base64url') }
 

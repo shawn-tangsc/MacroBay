@@ -81,6 +81,9 @@ export const IpcChannels = {
    * **没有「已送达」**——我们能证明的只是通道接受了。
    */
   channelsSendTestMessage: 'platform:channels-send-test-message',
+  /** 助手聊天里的图消息「发到频道」：投影（有没有可用通道）+ 一条发送动作。 */
+  channelsImageTarget: 'platform:channels-image-target',
+  channelsSendMessageImage: 'platform:channels-send-message-image',
   channelsListPolicies: 'platform:channels-list-policies',
   channelsDeletePolicy: 'platform:channels-delete-policy',
   channelsListConversations: 'platform:channels-list-conversations',

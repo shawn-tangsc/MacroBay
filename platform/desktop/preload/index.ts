@@ -148,6 +148,18 @@ const api = {
     listRuntimeAudits: (input: ChannelIdPayload & { limit?: number; cursor?: unknown }) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input) as Promise<ChannelRuntimeAuditPage>,
     /** 真发一条测试消息：`{ channelId, text }` → `{ state: 'accepted' | 'unconfirmed' | 'failed', … }`。 */
     sendTestMessage: (input: ChannelIdPayload & { text: string }) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input) as Promise<ChannelTestMessageReceipt>,
+    /**
+     * 助手聊天里「发这张图到频道」：投影与动作。
+     * 投影为 `null` = 没有可用通道（渲染层据此不画按钮，不自己判）。
+     */
+    imageTarget: () => ipcRenderer.invoke(IpcChannels.channelsImageTarget) as Promise<{ channelId: string; channelName: string; supportsImage: boolean } | null>,
+    sendMessageImage: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => ipcRenderer.invoke(IpcChannels.channelsSendMessageImage, input) as Promise<{
+      ok: boolean
+      channelId: string | null
+      status?: string
+      code: string | null
+      detail?: string
+    }>,
     listPolicies: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input) as Promise<readonly ChannelPolicySafeView[]>,
     deletePolicy: (input: ChannelActionPayload & { policyId: string }) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
     listConversations: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input) as Promise<readonly ChannelConversationSafeView[]>,

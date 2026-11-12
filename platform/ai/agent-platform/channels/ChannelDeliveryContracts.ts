@@ -160,3 +160,13 @@ export type ChannelImageTransport = {
 export function channelImageSourceId(recordId: string): string {
   return `${recordId}:image`
 }
+
+/**
+ * 「只发图片」用的第三个固定键：`<recordId>:image:bare`。
+ *
+ * 与「图片带说明」**不是同一条尝试**：caption 超长导致整条失败时，那条 failed 行原样留在审计里；
+ * 「只发图片」是一次新的、可独立回退的投递，点第二次返回同一个终态、不重发。
+ */
+export function channelImageBareSourceId(recordId: string): string {
+  return `${recordId}:image:bare`
+}
