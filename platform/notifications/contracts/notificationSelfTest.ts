@@ -50,6 +50,11 @@ export type TestNoticeReceipt =
      * 直方图只有状态词与条数，不含通道名与凭据。
      */
     states?: Readonly<Record<string, number>>
+    /**
+     * 读者**请求启用过**的通道条数（`requestedEnabled`）。
+     * 与 `states` 并列：档位分不出「刚建好」与「启用过没连上」，这个数分得出。
+     */
+    requestedCount?: number
     /** 真的试过之后逐通道的结果（提交被接受、但通道那一步有结论时才有）。 */
     channels?: readonly TestNoticeChannelReceipt[]
   }

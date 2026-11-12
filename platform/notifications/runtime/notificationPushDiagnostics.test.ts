@@ -67,7 +67,7 @@ describe('push diagnostics say which of the four situations it is', () => {
 
   it('names an empty channel list, separately from a channel that is merely not ready', async () => {
     const { runtime, diagnostics } = harness({
-      resolution: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {} })
+      resolution: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 })
     })
     await runtime.submit(request())
     expect(diagnostics.map((entry) => entry.code)).toContain('push-target-none')
@@ -79,8 +79,8 @@ describe('push diagnostics say which of the four situations it is', () => {
         ok: false,
         reason: 'push-unavailable',
         enabledChannelCount: 0,
-        multiple: false,
-        states: { 'credential-missing': 1, 'runtime-ready': 0 }
+        states: { 'credential-missing': 1, 'runtime-ready': 0 },
+        requestedCount: 0
       })
     })
     await runtime.submit(request())

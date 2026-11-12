@@ -33,24 +33,26 @@ describe('sendTestNotice (link only)', () => {
   it('hands the same-judgement histogram back, so "none configured" and "N configured but none connected" differ', async () => {
     // 一条通道都没配：空直方图（这是「去启用一条」的处境）。
     const empty = harness({
-      channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {} }
+      channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 }
     })
     await expect(empty.surface.sendTestNotice()).resolves.toEqual({
       state: 'unavailable',
       reasonCode: 'push-unavailable',
       enabledChannelCount: 0,
-      states: {}
+      states: {},
+      requestedCount: 0
     })
 
     // 配了两条、但都没连上：直方图说清卡在哪一档（这是「去看哪条出问题」的处境）。
     const notConnected = harness({
-      channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'credential-missing': 1, 'configuration-ready': 1 } }
+      channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'credential-missing': 1, 'configuration-ready': 1 }, requestedCount: 1 }
     })
     await expect(notConnected.surface.sendTestNotice()).resolves.toEqual({
       state: 'unavailable',
       reasonCode: 'push-unavailable',
       enabledChannelCount: 0,
-      states: { 'credential-missing': 1, 'configuration-ready': 1 }
+      states: { 'credential-missing': 1, 'configuration-ready': 1 },
+      requestedCount: 1
     })
   })
 
@@ -100,18 +102,20 @@ describe('sendTestNotice (link only)', () => {
 
   it('fails closed with 0 channels and carries the count from the same judgement', async () => {
     const { surface, submitted } = harness({ channel: NO_PUSH_CHANNELS })
-    await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0, states: {} })
+    await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 })
     expect(submitted).toEqual([])
   })
 
   it('reports the histogram from the same judgement instead of a hard-coded count', async () => {
-    const { surface } = harness({ channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'configuration-ready': 3 } } })
+    const { surface } = harness({ channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'configuration-ready': 3 }, requestedCount: 0 } })
     // 「配了 3 条但一条都没连上」：回执带的就是那一次判定算出来的直方图。
     await expect(surface.sendTestNotice()).resolves.toEqual({
       state: 'unavailable',
       reasonCode: 'push-unavailable',
       enabledChannelCount: 0,
-      states: { 'configuration-ready': 3 }
+      states: { 'configuration-ready': 3 },
+      // 三条都是「刚建好、没请求启用」：直方图里有两个非 disabled 档也不能当成请求过。
+      requestedCount: 0
     })
   })
 })

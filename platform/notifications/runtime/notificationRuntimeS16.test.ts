@@ -103,7 +103,7 @@ function createRuntime(records: readonly ReturnType<typeof record>[]) {
 
 /** 这些夹具没有可用通道：派生入口按「一条都没有」处理（fail closed，不再读 `push.channelId`）。 */
 async function resolvePushChannelsFromSettings() {
-  return { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {} }
+  return { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {}, requestedCount: 0 }
 }
 
 describe('S16: prune keeps subscriptions and caps records', () => {

@@ -31,7 +31,7 @@ const ACCEPTED: NotificationSubmitOutcome = {
   suppressedLevels: [],
   delivery: { push: { state: 'sent-accepted', at: NOW } }
 }
-const NO_PUSH_CHANNEL: PushChannelsResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {} }
+const NO_PUSH_CHANNEL: PushChannelsResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 }
 const TWO_CHANNELS: PushChannelsResolution = { ok: true, channels: [{ id: 'slack', name: 'Slack' }, { id: 'telegram', name: 'Telegram' }] }
 
 function deps(over: Partial<IntelligenceTestDeps> = {}): IntelligenceTestDeps {

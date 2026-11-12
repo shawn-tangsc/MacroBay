@@ -38,7 +38,9 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
           enabledChannelCount: resolution.enabledChannelCount,
           // 裁决那一刻已经算好的直方图原样交出去：界面据此区分「一条都没配」与「配了但没连上」，
           // 不再自己去查一遍通道表（那是第二份判定，迟早在两处说不一样的话）。
-          states: resolution.states
+          states: resolution.states,
+          // 读者请求启用过几条：与直方图同一次判定的产物，界面不再回查通道表。
+          requestedCount: resolution.requestedCount
         })
       }
       const at = input.now()

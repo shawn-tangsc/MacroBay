@@ -98,7 +98,7 @@ const catalog = createNotificationEventCatalog({
 async function resolvePushChannelsFromSettings() {
   const channelId = settings.push.channelId
   return channelId === null
-    ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {} }
+    ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {}, requestedCount: 0 }
     : { ok: true as const, channels: [{ id: channelId, name: 'channel-1' }] }
 }
 

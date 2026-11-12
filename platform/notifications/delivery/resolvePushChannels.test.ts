@@ -24,6 +24,26 @@ describe('resolvePushChannels', () => {
     expect(resolvePushChannels([ready('a')])).toEqual({ ok: true, channels: [{ id: 'a', name: 'A' }] })
   })
 
+  it('counts requested channels from their intent, never from the state histogram', () => {
+    // `configuration-ready` 同时装两种处境：刚建好（没请求启用）与「启用过、围栏保留意图」。
+    // 按档反推会把前者算成「请求过」——这条用例就是把那种假阳性钉死。
+    expect(resolvePushChannels([
+      { id: 'a', name: 'A', state: 'configuration-ready', requestedEnabled: true },
+      { id: 'b', name: 'B', state: 'configuration-ready', requestedEnabled: false },
+      { id: 'c', name: 'C', state: 'credential-missing', requestedEnabled: false }
+    ])).toEqual({
+      ok: false,
+      reason: 'push-unavailable',
+      enabledChannelCount: 0,
+      states: { 'configuration-ready': 2, 'credential-missing': 1 },
+      requestedCount: 1
+    })
+
+    // 没有开启意图的字段（老调用点）不许凭空算成「请求过」。
+    expect(resolvePushChannels([{ id: 'a', name: 'A', state: 'configuration-ready' }]))
+      .toMatchObject({ requestedCount: 0 })
+  })
+
   it('fails closed with zero ready channels and reports the state histogram', () => {
     expect(resolvePushChannels([
       { id: 'a', name: 'A', state: 'credential-missing' },
@@ -32,9 +52,10 @@ describe('resolvePushChannels', () => {
       ok: false,
       reason: 'push-unavailable',
       enabledChannelCount: 0,
-      states: { 'credential-missing': 1, disabled: 1 }
+      states: { 'credential-missing': 1, disabled: 1 },
+      requestedCount: 0
     })
     // 一条都没有：空直方图也是「没有」，不是「不知道」。
-    expect(resolvePushChannels([])).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {} })
+    expect(resolvePushChannels([])).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 })
   })
 })

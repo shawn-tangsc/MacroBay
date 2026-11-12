@@ -51,7 +51,7 @@ function harness(options: {
     resolvePushChannels: async () => {
       const list = options.channels ?? []
       return list.length === 0
-        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {} }
+        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {}, requestedCount: 0 }
         : { ok: true as const, channels: list.map((channel) => ({ id: channel.id, name: channel.name })) }
     },
     getSettings: async () => ({ ...createDefaultNotificationRuntimeSettings(), desktopEnabled: false }),

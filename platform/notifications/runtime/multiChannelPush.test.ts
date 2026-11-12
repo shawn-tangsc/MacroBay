@@ -81,7 +81,7 @@ function harness(options: {
     resolvePushChannels: async () => {
       const list = options.channels ?? [ready('channel-a'), ready('channel-b')]
       return list.length === 0
-        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {} }
+        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {}, requestedCount: 0 }
         : { ok: true as const, channels: list.map((channel) => ({ id: channel.id, name: channel.name })) }
     },
     // 三档全开：自检要真的走到通道，不被「桌面开关关着」判成 suppressed。

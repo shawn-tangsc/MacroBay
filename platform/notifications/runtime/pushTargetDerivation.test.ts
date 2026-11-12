@@ -85,11 +85,11 @@ describe('resolvePushChannels', () => {
   it('judges by runtime-ready only, not by "requested + credential": those two are a second criterion', () => {
     // 读者勾了启用、凭据也在，但运行时没接通（configuration-ready）→ 不算可用通道。
     expect(resolvePushChannels([{ id: 'a', name: 'A', state: 'configuration-ready' }]))
-      .toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'configuration-ready': 1 } })
+      .toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'configuration-ready': 1 }, requestedCount: 0 })
   })
 
   it('fails closed with 0 channels and reports no conflict', () => {
-    expect(resolvePushChannels([])).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {} })
+    expect(resolvePushChannels([])).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 })
   })
 
   it('returns every runtime-ready channel instead of treating two as a conflict', () => {
@@ -110,7 +110,7 @@ describe('the three read sites share one derivation', () => {
       storage: { read: async () => createDefaultNotificationStoreState(), write: async () => undefined },
       catalog,
       diagnostics: () => undefined,
-      resolvePushChannels: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {} }),
+      resolvePushChannels: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 }),
       getSettings: async () => settings,
       clock,
       deliveryHooks: { push: singleResultHook(async (record) => { pushed.push(record.id); return { ok: true, messageId: record.id } }) }

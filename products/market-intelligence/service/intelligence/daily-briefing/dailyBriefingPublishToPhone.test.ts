@@ -50,7 +50,7 @@ function runtimeWithPush(options: { channels?: 'one' | 'none' } = {}) {
     diagnostics: () => undefined,
     // 目标通道由唯一派生入口给出（技术方案 §1）：夹具给「恰好一条 runtime-ready」，与生产同形。
     resolvePushChannels: async () => (options.channels === 'none'
-      ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: { 'runtime-ready': 0 } }
+      ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: { 'runtime-ready': 0 }, requestedCount: 0 }
       : { ok: true as const, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
