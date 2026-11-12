@@ -5,8 +5,8 @@ import { SEND_ACTION_READY, readChannelReadiness, readSendReceipt } from './anal
 /**
  * 回执解析的两条规矩：
  * 1. **认不出形状就报错**——不猜成成功，也不猜成某一种失败；
- * 2. **投递结果就在回执里**（`delivery.push` / `delivery.suppressed`），不再去读一次记录；
- *    没带就是「这次没有投递」，那是「只在应用内」，不是「已发到」。
+ * 2. **投递结果就在回执里**（服务侧翻好的产品形状 `{ pushState, pushReason, channels, suppressed }`），
+ *    不再去读一次记录；没带就是「这次没有投递」，那是「只在应用内」，不是「收到了」。
  */
 /**
  * 放行开关：契约里有 `accepted.delivery` 才摆按钮。字段进了契约，这一条跟着
@@ -19,32 +19,68 @@ describe('the send action gate', () => {
 })
 
 describe('reading the pre-click channel readiness', () => {
-  it('reads the one ready channel as ready, without a name', () => {
+  it('reads a ready channel as ready, without a name', () => {
     expect(readChannelReadiness({ state: 'ready' })).toEqual({ state: 'ready' })
   })
 
-  it('keeps the count and the multiple flag for the guidance sentence', () => {
-    expect(readChannelReadiness({ state: 'unavailable', enabledChannelCount: 0, multiple: false }))
-      .toEqual({ state: 'unavailable', enabledChannelCount: 0, multiple: false })
+  it('reads "no usable channel" as unavailable and no longer asks why there are several', () => {
+    // 多通道是合法配置：这一问只回答「有没有」，条数与「多条」都不再需要。
+    expect(readChannelReadiness({ state: 'unavailable' })).toEqual({ state: 'unavailable' })
     expect(readChannelReadiness({ state: 'unavailable', enabledChannelCount: 3, multiple: true }))
-      .toEqual({ state: 'unavailable', enabledChannelCount: 3, multiple: true })
+      .toEqual({ state: 'unavailable' })
   })
 
   it('refuses a shape it cannot read instead of guessing "there is a channel"', () => {
-    for (const value of [undefined, null, {}, { state: 'ready', channelName: 'x' }, { state: 'unavailable' }]) {
-      if (typeof value === 'object' && value !== null && (value as { state?: string }).state === 'ready') continue
+    for (const value of [undefined, null, {}, { state: 'nonsense' }]) {
       expect(() => readChannelReadiness(value)).toThrow('analysis-conclusion-channel-unreadable')
     }
   })
 })
 
 describe('reading the send receipt', () => {
-  it('keeps the delivery the platform reported for this submit', () => {
-    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1', delivery: { push: { state: 'sent-accepted', channelName: 'Telegram' } } }))
-      .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-accepted', channelName: 'Telegram' } } })
+  it('keeps the aggregate push state the platform reported for this submit', () => {
+    expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1', delivery: { pushState: 'sent-accepted' } }))
+      .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-accepted' } } })
     // 「没拿到回执」也是一档，原样带过来，界面负责说得准。
-    expect(readSendReceipt({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } }))
+    expect(readSendReceipt({ kind: 'accepted', delivery: { pushState: 'sent-unconfirmed' } }))
       .toEqual({ kind: 'accepted', delivery: { push: { state: 'sent-unconfirmed' } } })
+  })
+
+  it('keeps every per-channel row, name and reason included, because the counts come from them', () => {
+    expect(readSendReceipt({
+      kind: 'accepted',
+      delivery: {
+        pushState: 'failed',
+        channels: [
+          { channelName: 'Telegram', state: 'sent-accepted' },
+          { channelName: '飞书', state: 'failed', reason: 'channel-rejected' },
+          { channelName: 'Discord', state: 'queued', reason: 'push-backoff' }
+        ]
+      }
+    })).toEqual({
+      kind: 'accepted',
+      delivery: {
+        push: {
+          state: 'failed',
+          channels: [
+            { channelName: 'Telegram', state: 'sent-accepted' },
+            { channelName: '飞书', state: 'failed', reason: 'channel-rejected' },
+            { channelName: 'Discord', state: 'queued', reason: 'push-backoff' }
+          ]
+        }
+      }
+    })
+  })
+
+  it('drops a channel row it cannot read but keeps the rest — the count never invents a row', () => {
+    const receipt = readSendReceipt({
+      kind: 'accepted',
+      delivery: { pushState: 'failed', channels: [{ channelName: 'Telegram', state: 'sent-accepted' }, { channelName: 'x', state: 'nonsense' }] }
+    })
+    expect(receipt).toEqual({
+      kind: 'accepted',
+      delivery: { push: { state: 'failed', channels: [{ channelName: 'Telegram', state: 'sent-accepted' }] } }
+    })
   })
 
   it('keeps the suppression reason, including one this build does not recognize', () => {
@@ -59,7 +95,7 @@ describe('reading the send receipt', () => {
     expect(readSendReceipt({ kind: 'accepted', recordId: 'n-1' })).toEqual({ kind: 'accepted' })
     // merged 只在真升级时带投递结果；不带就是没有这次投递。
     expect(readSendReceipt({ kind: 'merged', recordId: 'n-1', occurrenceCount: 2 })).toEqual({ kind: 'accepted' })
-    expect(readSendReceipt({ kind: 'merged', recordId: 'n-1', delivery: { push: { state: 'failed', reason: 'push-unavailable' } } }))
+    expect(readSendReceipt({ kind: 'merged', recordId: 'n-1', delivery: { pushState: 'failed', pushReason: 'push-unavailable' } }))
       .toEqual({ kind: 'accepted', delivery: { push: { state: 'failed', reason: 'push-unavailable' } } })
   })
 

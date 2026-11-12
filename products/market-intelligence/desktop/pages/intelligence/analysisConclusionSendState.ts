@@ -3,28 +3,41 @@ import type { NotificationSuppressedLevel } from '@platform/notifications/contra
 /**
  * 「发送到频道」的回执判定：**回执 → 读者要看的那一种情况**。
  *
- * 一句话：**提交成功不等于手机收到**。四种说法各有各的证据，不许互相顶替：
- * - `sent-accepted` → 「已发到 {通道名}」；
- * - `sent-unconfirmed` → 「已交给 {通道名}，没拿到回执」；
- * - `failed` → 「没发到手机」（原因进折叠区）；
+ * 一句话：**提交成功不等于手机收到**。多通道是合法配置（一条消息发到所有已启用通道），
+ * 所以读者要看到的是**计数**而不是一个「成功」：
+ * - 每条通道都 `sent-accepted` → 「{n} 条通道都收到了」；
+ * - 有收到有没到 → 「{ok} 条通道收到，{failed} 条没到」；
+ * - 一条都没到 → 「没有任何通道收到（共 {n} 条）」；
+ * - 有 `sent-unconfirmed`（发出去了、没拿到回执）→ 中性占位，既不说收到也不说没到；
  * - 手机档**缺席**（或平台报「被压下」）→ 「只在应用内」。
  *
  * 三个来源各管一件事，不许互相代替：
- * - **这一次发没发出去**：`push` 那一档 + `suppressed` 的压下原因（都来自记录/回执）；
- * - **通道有几条、叫什么**：`resolvePushChannel` 那一份派生；
+ * - **这一次到没到**：逐通道 `channels[]` 是计数与逐条说明的唯一来源；没有它的老记录按聚合档单条读；
+ * - **通道有几条**：只从回执里数，不从点击前那份派生反推；
  * - **提交本身过没过**：`kind` 与拒绝码。
  *
- * 这里**不认识平台契约类型**：入参是本模块自己的中性形状，接口长什么样由**一个函数边界**翻一次
- * （架构师还在裁「回执扩字段」还是「读记录」；两种实现只换那一个函数，界面与这张表不动）。
+ * 这里**不认识平台契约类型**：入参是本模块自己的中性形状，接口长什么样由**一个函数边界**翻一次。
  * 文案也不在这里：说法在 `analysisConclusionSendText` 那张表里，口径改了只改表。
  */
 
 /** 平台记录上手机投递那一档，状态名原样照抄（`queued`/`sent-accepted`/`sent-unconfirmed`/`failed`）。 */
+export type PushChannelReading = Readonly<{
+  /** 读者在通道页看到的那个名字；平台没给就不编一个品牌名。 */
+  channelName?: string
+  state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+  /** 平台给的原因码：界面翻成人话，**码不上屏**。 */
+  reason?: string
+}>
+
 export type PushDeliveryReading = Readonly<{
+  /** 聚合档：有一条没送到就不许是 `sent-accepted`（平台侧同一条硬判据）。 */
   state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
   reason?: string
-  /** 这次真的发到了哪条通道——**通道名跟着这次提交走**，不从通道列表读。 */
-  channelName?: string
+  /**
+   * 逐通道结果（多通道方案）：**读者看到的总括数字只从这些行数出来**，不从聚合档反推。
+   * 老记录没有它——那时确实只有一条通道，按聚合档单条渲染，不回填、不报错。
+   */
+  channels?: readonly PushChannelReading[]
 }>
 
 /**
@@ -64,10 +77,24 @@ function isKnownSuppression(reason: string): reason is SuppressionReason {
   return Object.hasOwn(SUPPRESSED_REASONS, reason)
 }
 
+/**
+ * 读者面前只有这几种情况；`sending` 是过程，不在这支里。
+ *
+ * 前三档是**计数**（多通道方案定稿）：读者要看到的是「几条收到、几条没到」，不是一句
+ * 「发送成功」——一条消息发到所有已启用通道之后，成败本来就不是一个布尔值。
+ */
 export type SendOutcomeState =
-  | Readonly<{ state: 'sent' }>
-  | Readonly<{ state: 'handed' }>
-  | Readonly<{ state: 'not-sent'; reason?: string }>
+  /** 每条通道都受理了。 */
+  | Readonly<{ state: 'delivered'; total: number }>
+  /** 有收到、也有没到；两边都是**已经确定**的（没有「未确认」混在里面）。 */
+  | Readonly<{ state: 'partial'; received: number; total: number }>
+  /** 一条都没收到（全部确定没到）。 */
+  | Readonly<{ state: 'none-received'; total: number }>
+  /**
+   * 有通道「发出去但没收到回执」：既不能说收到（假成功），也不能说没到（假失败）。
+   * 这一档的说法产品还在定，界面先用中性占位句；逐条真相在 ⓘ 里。
+   */
+  | Readonly<{ state: 'unconfirmed' }>
   /** 记录在、应用内有，手机那一档没排上且没给原因。 */
   | Readonly<{ state: 'app-only' }>
   | Readonly<{ state: 'suppressed'; reason: SuppressionReason }>
@@ -75,7 +102,7 @@ export type SendOutcomeState =
   | Readonly<{ state: 'suppressed-unknown'; reason: string }>
   /** 平台每日上限：提交就被拒，不是某一档被压下——读者要做的是等明天。 */
   | Readonly<{ state: 'daily-limit' }>
-  /** 通道不通（0 条或多条）。条数不在这里判，那是 `resolvePushChannel` 的事。 */
+  /** 一条可用通道都没有（多条是合法配置，这里只指 0 条）。 */
   | Readonly<{ state: 'push-unavailable' }>
   /** 提交层面的其他拒绝，以及请求根本没到（IPC 抛错）。 */
   | Readonly<{ state: 'failed'; reason: string }>
@@ -95,10 +122,31 @@ export function classifySendReceipt(receipt: SendReceiptView): SendOutcomeState 
   const push = delivery?.push
   // 缺席不是失败：记录与中心都在，只是手机那一档没排上。
   if (push === undefined) return { state: 'app-only' }
-  if (push.state === 'sent-accepted') return { state: 'sent' }
-  if (push.state === 'sent-unconfirmed') return { state: 'handed' }
-  if (push.reason === 'push-unavailable') return { state: 'push-unavailable' }
-  // `queued` 是「还没发出」：不许说成已发，也不许说成没发——它就是还没到那一步。
-  if (push.state === 'queued') return { state: 'app-only' }
-  return push.reason === undefined ? { state: 'not-sent' } : { state: 'not-sent', reason: push.reason }
+  return classifyPushReading(push)
+}
+
+/**
+ * 手机那一档 → 读者面前的计数。
+ *
+ * 三条计数规矩（一条消息发到所有已启用通道）：
+ * - **收到**只认 `sent-accepted`；
+ * - **没到**认 `failed` 与 `queued`（`queued` 是退避跳过，这一次请求根本没发出去）；
+ * - `sent-unconfirmed` **既不算收到也不算没到**：只要有一条处在这一档，总括句就走中性占位，
+ *   绝不把它并进任何一边——ⓘ 里逐条照实说。
+ */
+function classifyPushReading(push: PushDeliveryReading): SendOutcomeState {
+  const channels = push.channels !== undefined && push.channels.length > 0 ? push.channels : undefined
+  if (channels === undefined) {
+    // 老记录：只有聚合档，那时确实只有一条通道。
+    if (push.reason === 'push-unavailable') return { state: 'push-unavailable' }
+    if (push.state === 'sent-accepted') return { state: 'delivered', total: 1 }
+    if (push.state === 'sent-unconfirmed') return { state: 'unconfirmed' }
+    return { state: 'none-received', total: 1 }
+  }
+  const total = channels.length
+  if (channels.some(channel => channel.state === 'sent-unconfirmed')) return { state: 'unconfirmed' }
+  const received = channels.filter(channel => channel.state === 'sent-accepted').length
+  if (received === total) return { state: 'delivered', total }
+  if (received === 0) return { state: 'none-received', total }
+  return { state: 'partial', received, total }
 }

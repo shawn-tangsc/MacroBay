@@ -1,7 +1,7 @@
 import type { NotificationSubmitOutcome } from '@platform/notifications/contracts/notificationContracts'
 
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
-import type { DeliveryReading, PushDeliveryReading, SendReceiptView } from '../../pages/intelligence/analysisConclusionSendState'
+import type { DeliveryReading, PushChannelReading, PushDeliveryReading, SendReceiptView } from '../../pages/intelligence/analysisConclusionSendState'
 
 /**
  * 抽屉里「发送到频道」的渲染层入口：**只传运行 id**。
@@ -38,13 +38,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+/**
+ * 逐通道结果（多通道方案）：一条通道一行，状态照抄四档。
+ *
+ * 认不出一条通道就**跳过那一行**，不让整份回执变红：界面按**行数**数收到/没到，跳过一行会让数字
+ * 少一条，但至少不会编造；行数异常会在下一版由守卫发现（回执是平台的，不是读者写的）。
+ */
+function readChannels(value: unknown): readonly PushChannelReading[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const rows: PushChannelReading[] = []
+  for (const entry of value) {
+    if (!isRecord(entry)) continue
+    const state = PUSH_STATES.find(candidate => candidate === entry.state)
+    if (state === undefined) continue
+    rows.push({
+      state,
+      ...(typeof entry.reason === 'string' && entry.reason.length > 0 ? { reason: entry.reason } : {}),
+      ...(typeof entry.channelName === 'string' && entry.channelName.length > 0 ? { channelName: entry.channelName } : {})
+    })
+  }
+  return rows.length === 0 ? undefined : rows
+}
+
+/**
+ * 手机那一档：产品形状是 `{ pushState, pushReason, channels }`（服务侧翻译过，渲染层不认平台类型）。
+ * 聚合档没有可读状态、又没有逐通道行时返回 `undefined`——那一条不构成「到没到」的证据。
+ */
 function readPush(value: unknown): PushDeliveryReading | undefined {
   if (!isRecord(value)) return undefined
-  const state = PUSH_STATES.find(candidate => candidate === value.state)
-  if (state === undefined) return undefined
-  const reason = typeof value.reason === 'string' && value.reason.length > 0 ? { reason: value.reason } : {}
-  const channelName = typeof value.channelName === 'string' && value.channelName.length > 0 ? { channelName: value.channelName } : {}
-  return { state, ...reason, ...channelName }
+  const state = PUSH_STATES.find(candidate => candidate === value.pushState)
+  const channels = readChannels(value.channels)
+  if (state === undefined) return channels === undefined ? undefined : { state: 'failed', channels }
+  return {
+    state,
+    ...(typeof value.pushReason === 'string' && value.pushReason.length > 0 ? { reason: value.pushReason } : {}),
+    ...(channels === undefined ? {} : { channels })
+  }
 }
 
 function readSuppressed(value: unknown): DeliveryReading['suppressed'] {
@@ -67,8 +96,9 @@ export function readSendReceipt(value: unknown): AnalysisConclusionSendReceipt {
     return { kind: 'rejected', reason: value.reason }
   }
   if (value.kind === 'accepted' || value.kind === 'merged') {
+    // 服务侧给的是产品形状：`{ pushState, pushReason, channels, suppressed }`，不是平台的嵌套对象。
     const delivery = isRecord(value.delivery) ? value.delivery : undefined
-    const push = readPush(delivery?.push)
+    const push = readPush(delivery)
     const suppressed = readSuppressed(delivery?.suppressed)
     // 没带投递结果＝这次没有投递（合并没升级、折叠、让渡都属此列），按「只在应用内」判，不当成功。
     if (push === undefined && suppressed === undefined) return { kind: 'accepted' }
@@ -78,19 +108,17 @@ export function readSendReceipt(value: unknown): AnalysisConclusionSendReceipt {
 }
 
 /**
- * **点击前**那一问：现在能不能发。0 条 → 按钮整个不渲染；≥2 条 → 按钮在、点了才拒绝。
- * 只回答「能不能发」；**不带通道名**，所以拿不到名字去拼「已发到 X」。
+ * **点击前**那一问：现在能不能发。0 条 → 按钮整个不渲染；≥1 条 → 按钮在（多通道是合法配置）。
+ * 只回答「能不能发」，**不带通道名**——名字只认这次提交回执里那一份。
  */
 export type SendChannelReadiness =
   | Readonly<{ state: 'ready' }>
-  | Readonly<{ state: 'unavailable'; enabledChannelCount: number; multiple: boolean }>
+  | Readonly<{ state: 'unavailable' }>
 
 export function readChannelReadiness(value: unknown): SendChannelReadiness {
   if (!isRecord(value)) throw new Error('analysis-conclusion-channel-unreadable')
   if (value.state === 'ready') return { state: 'ready' }
-  if (value.state === 'unavailable' && typeof value.enabledChannelCount === 'number') {
-    return { state: 'unavailable', enabledChannelCount: value.enabledChannelCount, multiple: value.multiple === true }
-  }
+  if (value.state === 'unavailable') return { state: 'unavailable' }
   throw new Error('analysis-conclusion-channel-unreadable')
 }
 

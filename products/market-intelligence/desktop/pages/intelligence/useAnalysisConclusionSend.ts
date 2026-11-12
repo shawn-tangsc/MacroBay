@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 
 import { sendAnalysisConclusion as defaultSend, type AnalysisConclusionSendReceipt } from '../../shared/ipc/analysisConclusionSendClient'
-import { describeSendStatus, type SendChannelFacts, type SendStatusCopy } from './analysisConclusionSendCopy'
+import { describeSendStatus, type SendStatusCopy } from './analysisConclusionSendCopy'
 import { classifySendReceipt } from './analysisConclusionSendState'
 import type { AnalysisConclusionSendText } from './analysisConclusionSendText'
 
@@ -22,8 +22,6 @@ export function useAnalysisConclusionSend(input: Readonly<{
   text: AnalysisConclusionSendText
   /** 这一条分析运行的 id；没有它就没有可发的东西（按钮应当已按此禁用）。 */
   analysisRunId?: string | undefined
-  /** 点击前的通道事实（0 条 / 多条）；只影响「没发到手机」那句话的指路。 */
-  channel?: SendChannelFacts | undefined
   /** 台面注入：默认走产品 IPC，用例里换成桩。 */
   send?: ((analysisRunId: string) => Promise<AnalysisConclusionSendReceipt>) | undefined
   /** 结果行里的时刻（读者时区，已格式化）。 */
@@ -44,11 +42,10 @@ export function useAnalysisConclusionSend(input: Readonly<{
       status = describeSendStatus({
         state: classifySendReceipt(receipt),
         text: input.text,
-        // 通道名跟着这次提交的结果走；点击前的那份派生只判「有没有可用通道」。
-        ...(receipt.kind === 'accepted' && receipt.delivery?.push?.channelName !== undefined
-          ? { receiptChannelName: receipt.delivery.push.channelName }
+        // 逐通道结果跟着这次提交走：总括数字与 ⓘ 的逐行说明都只从它来。
+        ...(receipt.kind === 'accepted' && receipt.delivery?.push?.channels !== undefined
+          ? { channels: receipt.delivery.push.channels }
           : {}),
-        channel: input.channel,
         time: formatNow()
       })
     } catch (error) {
@@ -56,7 +53,6 @@ export function useAnalysisConclusionSend(input: Readonly<{
       status = describeSendStatus({
         state: { state: 'failed', reason: error instanceof Error && error.message.length > 0 ? error.message : 'invoke-failed' },
         text: input.text,
-        channel: input.channel,
         time: formatNow()
       })
     }

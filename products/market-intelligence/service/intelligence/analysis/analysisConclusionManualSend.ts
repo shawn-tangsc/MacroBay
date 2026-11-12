@@ -1,4 +1,5 @@
 import type { NotificationApprovedLevel, NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationSubmitDelivery } from '@platform/notifications/contracts/notificationSubmitContracts'
 
 import type { AnalysisRun, AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
@@ -22,9 +23,40 @@ import { buildAnalysisConclusionRequest } from './analysisConclusionPush'
  */
 
 export type AnalysisConclusionSendReceipt =
-  | Readonly<{ kind: 'accepted'; recordId: string; levels: readonly NotificationApprovedLevel[] }>
+  | Readonly<{
+      kind: 'accepted'
+      recordId: string
+      levels: readonly NotificationApprovedLevel[]
+      /**
+       * 这次提交真实产生的投递证据。**多通道是合法配置**：一条消息发到所有运行时就绪的通道，
+       * 每条通道各有一行结果，界面上的「几条收到、几条没到」只从这些行数出来，不从聚合档反推。
+       */
+      delivery?: AnalysisConclusionSendDelivery
+    }>
   /** `reason` 是平台拒绝码（如 `daily-limit-reached`）或本层的三种「取不到」（`run-missing` 等）。 */
   | Readonly<{ kind: 'rejected'; reason: string }>
+
+/** 一条通道这一次的结果（`state` 照抄平台契约的四档）。 */
+export type AnalysisConclusionSendChannel = Readonly<{
+  channelName?: string
+  state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+  /** 平台给的原因码：界面翻成人话，**码不上屏**。 */
+  reason?: string
+}>
+
+/**
+ * 投递证据的**产品形状**：平台契约变了只改这一处，渲染层不需要认识平台类型。
+ *
+ * 聚合档与逐通道行同时带着，理由不同：逐通道行是读者看得见的计数与逐条说明；聚合档是
+ * 老记录（没有 `channels[]` 的那批）唯一能读到的证据，读侧按单条渲染，不回填、不报错。
+ */
+export type AnalysisConclusionSendDelivery = Readonly<{
+  pushState?: AnalysisConclusionSendChannel['state']
+  pushReason?: string
+  channels?: readonly AnalysisConclusionSendChannel[]
+  /** 没被尝试的表面（免打扰 / 开关关着）：与「试了没成」是两件事。 */
+  suppressed?: readonly Readonly<{ level: string; reason: string }>[]
+}>
 
 export type AnalysisConclusionSendInput = Readonly<{ analysisRunId: string }>
 
@@ -67,11 +99,53 @@ export function createAnalysisConclusionManualSend(deps: AnalysisConclusionManua
       })
     }
     const outcome = await deps.submit(request)
-    if (outcome.kind === 'accepted') return { kind: 'accepted', recordId: outcome.recordId, levels: outcome.levels }
-    // 合并成一条也算发出去了：记录身份就是回执里那一条（读它的 `delivery.push` 才判得出到没到手机）。
-    if (outcome.kind === 'merged') return { kind: 'accepted', recordId: outcome.recordId, levels: [] }
+    if (outcome.kind === 'accepted') {
+      const delivery = deliveryOf(outcome.delivery, outcome.suppressedLevels)
+      return { kind: 'accepted', recordId: outcome.recordId, levels: outcome.levels, ...(delivery === undefined ? {} : { delivery }) }
+    }
+    // 合并成一条也算发出去了：记录身份就是回执里那一条。投递证据只有**真升级**那一次才带——
+    // 没带就是「这次没有投递」，界面按「只在应用内」说，不当成功。
+    if (outcome.kind === 'merged') {
+      const delivery = deliveryOf(outcome.delivery, undefined)
+      return { kind: 'accepted', recordId: outcome.recordId, levels: [], ...(delivery === undefined ? {} : { delivery }) }
+    }
     if (outcome.kind === 'rejected') return { kind: 'rejected', reason: outcome.reason }
     // `delegated`/`collapsed` 在这条事件上不该出现；出现了就是"没发"——不许说成已发送。
     return { kind: 'rejected', reason: outcome.kind }
+  }
+}
+
+/**
+ * 平台回执 → 产品的投递证据。**只做形状翻译，不判到没到**（判定在渲染层的纯函数里）。
+ *
+ * 逐通道行原样带过来（名字、四档、原因码），聚合档也留着给老记录读；没有手机档、也没有
+ * 被压下的表面时返回 `undefined`——那是「这次没有投递」，不是「都送到了」。
+ */
+function deliveryOf(
+  delivery: NotificationSubmitDelivery | undefined,
+  suppressed: readonly Readonly<{ level: string; reason: string }>[] | undefined
+): AnalysisConclusionSendDelivery | undefined {
+  const push = delivery?.push
+  const suppressedRows = suppressed === undefined || suppressed.length === 0
+    ? undefined
+    : suppressed.map((entry) => ({ level: entry.level, reason: entry.reason }))
+  if (push === undefined && suppressedRows === undefined) return undefined
+  return {
+    ...(push === undefined
+      ? {}
+      : {
+          pushState: push.state,
+          ...(push.reason === undefined ? {} : { pushReason: push.reason }),
+          ...(push.channels === undefined || push.channels.length === 0
+            ? {}
+            : {
+                channels: push.channels.map((channel) => ({
+                  ...(channel.channelName === undefined ? {} : { channelName: channel.channelName }),
+                  state: channel.state,
+                  ...(channel.reason === undefined ? {} : { reason: channel.reason })
+                }))
+              })
+        }),
+    ...(suppressedRows === undefined ? {} : { suppressed: suppressedRows })
   }
 }
