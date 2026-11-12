@@ -53,7 +53,8 @@ const render = async (candidate: PolicyPathReading) => {
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(PolicyPathDrawer, { reading: candidate, text, onClose: () => {} })))
-  return host
+  // 抽屉是 modal：内容 portal 到 body，所以查询根是 body，不是渲染容器。
+  return document.body
 }
 
 /** 红线第 4 条：抽屉里同样不许自己切日期、也不许把 ISO 切成 19 位再显示。 */

@@ -2,7 +2,7 @@ import { ExternalLink } from 'lucide-react'
 
 import { StateView } from '@platform/ui/components/state'
 
-import { MiSideDrawer } from './MiSideDrawer'
+import { Drawer } from '@platform/ui/components/drawer'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { policyPathDay, policyPathMonth } from './policyPathMonth'
@@ -87,11 +87,15 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
   const nextMeeting = reading.settlement?.nextMeeting
   const meetingDate = nextMeeting?.meetingDate ?? reading.meetingDate
   const daysAway = nextMeeting?.daysUntil ?? reading.daysUntilMeeting
-  return <MiSideDrawer title={text.title} closeLabel={text.close} onClose={onClose}
-    meta={<>
+  // 与设置抽屉、关键指标抽屉同一个壳：平台 modal Drawer（遮罩、点遮罩关闭、Esc、锁焦点、焦点回位）。
+  const shellKeys: Readonly<Record<string, string>> = { 'policyPathDrawer.title': text.title }
+  return <Drawer open mode="modal" size="full" className="mi-policy-path-drawer"
+    titleKey="policyPathDrawer.title" resolveText={(key: string) => shellKeys[key] ?? ''}
+    titleExtra={<>
       <span>{text.meeting} {policyPathDay(meetingDate, locale)} · {text.daysAway.replace('{days}', String(daysAway))}</span>
       {reading.hasProjectionMaterials ? <em className="mi-policy-drawer__chip">{text.projection}</em> : null}
-    </>}>
+    </>}
+    onClose={onClose}>
 
     {/* While the strip is up the odds below belong to a meeting that already decided; showing them
         would put a pre-decision price under a post-decision result. */}
@@ -214,7 +218,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
           for it, and a sentence that says what the number is not should not need a hover. */}
       <p className="mi-policy-drawer__note">{text.basisNote}</p>
     </section>
-  </MiSideDrawer>
+  </Drawer>
 }
 
 /**
