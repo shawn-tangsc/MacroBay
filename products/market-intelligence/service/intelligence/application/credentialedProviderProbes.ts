@@ -28,6 +28,9 @@ export type CredentialProbeFailureCode =
   | 'transport-unavailable'
   | 'request-timeout'
   | 'response-unavailable'
+  /* The answer arrived but not in the shape we parse (HTTP 200 included): a distinct refusal,
+     because "no content" is a different fact from "content we cannot read". */
+  | 'response-shape-invalid'
 
 export type CredentialProbeOutcome =
   | Readonly<{ state: 'succeeded' }>

@@ -3,9 +3,10 @@ import type {
   IntelligenceSourceDefinition,
   IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
+import type { CredentialProbeFailureCode } from '../application/credentialedProviderProbes'
+import type { IntelligencePipelineHealth } from '../application/intelligencePipeline'
 
 export type SafeIntelligenceSourceDefinition = Omit<IntelligenceSourceDefinition, 'requestGovernance'>
-import type { IntelligencePipelineHealth } from '../application/intelligencePipeline'
 
 export type SafeVisibleRequestBudget = Readonly<{ maxRequests: number; windowSeconds: number }>
 
@@ -106,15 +107,9 @@ export type SafeCredentialSaveResult =
   | Readonly<{ sourceId: string; state: 'unverified' }>
   | Readonly<{ sourceId: string; state: 'failed'; failureCode: SafeCredentialProviderFailureCode }>
 
-export type SafeCredentialProviderFailureCode =
-  | 'credential-invalid'
-  | 'credential-not-configured'
-  | 'authentication-failed'
-  | 'plan-restricted'
-  | 'rate-limited'
-  | 'transport-unavailable'
-  | 'request-timeout'
-  | 'response-unavailable'
+/* One definition, referenced: the probe registry owns the vocabulary a probe may answer with, and
+   the renderer-side contract must not carry a second copy that can drift from it. */
+export type SafeCredentialProviderFailureCode = CredentialProbeFailureCode
 
 export type SafeCredentialProviderConnectionResult =
   | Readonly<{ sourceId: string; state: 'succeeded' }>
