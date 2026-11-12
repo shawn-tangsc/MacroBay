@@ -30,6 +30,8 @@ type ChannelRow = {
   permission_mode: string | null
   created_at: string
   updated_at: string
+  auto_disabled_at: string | null
+  last_enabled_at: string | null
 }
 
 const MANAGED_CHANNEL_SQL = managedChannelSql()
@@ -40,7 +42,9 @@ export class ChannelManagementQueryRepository {
 
   get(id: string): ChannelManagementSafeView | null {
     const row = this.database.connection.prepare(
-      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at
+      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at,
+       (select max(a.created_at) from channel_management_audits a where a.channel_id = agent_channels.id and a.action = 'disable' and a.summary_json like '%\"reason\":\"single-channel-invariant\"%') as auto_disabled_at,
+       (select max(a.created_at) from channel_management_audits a where a.channel_id = agent_channels.id and a.action in ('request-enable','restart') and a.code is null) as last_enabled_at
        from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} 
          and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)`
     ).get(id) as ChannelRow | undefined
@@ -49,7 +53,9 @@ export class ChannelManagementQueryRepository {
 
   list(): ChannelManagementSafeView[] {
     return (this.database.connection.prepare(
-      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at
+      `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, workspace_json, active_chat_ids_json, permission_mode, created_at, updated_at,
+       (select max(a.created_at) from channel_management_audits a where a.channel_id = agent_channels.id and a.action = 'disable' and a.summary_json like '%\"reason\":\"single-channel-invariant\"%') as auto_disabled_at,
+       (select max(a.created_at) from channel_management_audits a where a.channel_id = agent_channels.id and a.action in ('request-enable','restart') and a.code is null) as last_enabled_at
        from agent_channels where ${MANAGED_CHANNEL_SQL} 
          and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)
        order by updated_at desc, id asc`
@@ -271,7 +277,8 @@ function toSafeView(row: ChannelRow): ChannelManagementSafeView {
     allowedChatIds: readAllowedChatIds(row.active_chat_ids_json),
     permissionMode: readPermissionMode(row.permission_mode),
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    autoDisabled: { autoDisabledAt: row.auto_disabled_at ?? null, lastEnabledAt: row.last_enabled_at ?? null }
   }
 }
 

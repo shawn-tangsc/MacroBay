@@ -269,6 +269,14 @@ export type PlatformText = {
     channelLogsEmpty: string
     /** 启用开关的读屏名（开/关各一句，读屏要能说出拨动后的结果）。 */
     channelEnableSwitch: string
+    /** 「曾被『只允许一条』规则自动停用」那一行：句 + 行内启用 + ⓘ（原型 2026-11-13）。 */
+    channelAutoDisabledNotice: string
+    channelAutoDisabledEnable: string
+    channelAutoDisabledInfo: string
+    channelAutoDisabledInfoAria: string
+    /** 启用失败：`{reason}` 是一句人话原因；原因码另收在折叠里。 */
+    channelAutoDisabledEnableFailed: string
+    channelAutoDisabledReasonCode: string
     /** 行内的「发送测试消息」：真发一次，回执三态就地显示。 */
     channelTestSend: string
     /** 行内的「查看这个频道的会话」：跳到这条频道绑定的助手，再打开那条会话。 */
@@ -1766,6 +1774,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenVisibleHint: '仅本机显示，关掉就恢复点号。',
       channelLogsEmpty: '这个频道还没有记录',
       channelEnableSwitch: '启用这个频道',
+      channelAutoDisabledNotice: '这条通道曾被「只允许一条」规则自动停用',
+      channelAutoDisabledEnable: '启用',
+      channelAutoDisabledInfo: '同一时刻只允许一条通道接收推送。规则自动停用了它；恢复要你自己确认，因为另一条正在收的通道会让位。',
+      channelAutoDisabledInfoAria: '这条提示的说明',
+      channelAutoDisabledEnableFailed: '没有启用成功：{reason}',
+      channelAutoDisabledReasonCode: '原因码',
       channelTestSend: '发送测试消息',
       channelOpenConversation: '查看这个频道的会话',
       channelOpenConversationFailed: '这条对话还没绑定会话，或会话列表暂时打不开。',
@@ -3175,6 +3189,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenVisibleHint: 'Shown on this machine only; turn the eye off and it is dots again.',
       channelLogsEmpty: 'This channel has no records yet',
       channelEnableSwitch: 'Enable this channel',
+      channelAutoDisabledNotice: 'This channel was switched off automatically by the "only one at a time" rule',
+      channelAutoDisabledEnable: 'Enable',
+      channelAutoDisabledInfo: 'Only one channel may receive pushes at a time. The rule switched this one off; turning it back on is your call, because the channel that is receiving now will give way.',
+      channelAutoDisabledInfoAria: 'About this notice',
+      channelAutoDisabledEnableFailed: 'Could not enable it: {reason}',
+      channelAutoDisabledReasonCode: 'Reason code',
       channelTestSend: 'Send test message',
       channelOpenConversation: "Open this channel's conversations",
       channelOpenConversationFailed: 'This conversation has no session yet, or the session list is unavailable right now.',

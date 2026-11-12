@@ -37,6 +37,8 @@ export type Channel = {
   permissionMode?: ChannelPermissionMode | null
   /** 空数组 = 允许所有会话（本版接口尚未生效，界面先只读回显）。 */
   allowedChatIds?: readonly string[]
+  /** 只读证据：曾被规则自动停用、之后没再启用（判据见 `autoDisabledHint`）。 */
+  autoDisabled?: { autoDisabledAt: string | null; lastEnabledAt: string | null }
 }
 
 export type Conversation = { id: string; kind: string; targetEnabled: boolean }
@@ -176,7 +178,8 @@ export function toChannel(view: ChannelManagementSafeView): Channel {
     },
     workspace: view.workspace,
     permissionMode: view.permissionMode,
-    allowedChatIds: view.allowedChatIds
+    allowedChatIds: view.allowedChatIds,
+    ...(view.autoDisabled === undefined ? {} : { autoDisabled: view.autoDisabled })
   }
 }
 

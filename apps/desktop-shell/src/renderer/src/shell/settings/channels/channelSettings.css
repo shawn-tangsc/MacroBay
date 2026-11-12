@@ -147,6 +147,7 @@
 
 .channel-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   min-height: 56px;
@@ -161,6 +162,30 @@
 
 .channel-row:hover {
   background: var(--surface-2);
+}
+
+/* 「曾被『只允许一条』规则自动停用」：行内容下方一整行（原型 2026-11-13）。
+   没有证据时这个块根本不渲染——不留空行、不灰着。 */
+.channel-row-hint {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.channel-row-hint .inline-notice {
+  flex: 1;
+}
+
+.channel-row-hint-failure {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-meta);
 }
 
 .channel-row-dot {

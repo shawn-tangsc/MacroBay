@@ -1437,3 +1437,73 @@ describe('multi-field credentials', () => {
     expect(document.body.querySelector('[data-field-error="bot_token"]')).toBeNull()
   })
 })
+
+describe('the "was switched off by the only-one rule" hint', () => {
+  /** 只在有证据那条通道的行里出现；没证据的行一个字都不多。 */
+  const withEvidence = (autoDisabled: { autoDisabledAt: string | null; lastEnabledAt: string | null }) => ({
+    ...channel,
+    autoDisabled
+  })
+
+  it('renders nothing at all when there is no audit evidence', async () => {
+    installPlatform({ list: vi.fn(async () => [withEvidence({ autoDisabledAt: null, lastEnabledAt: null })]) })
+    const container = await mount()
+    expect(container.querySelector('[data-channel-auto-disabled]')).toBeNull()
+    // 不留空行：这一行只有它本来就有的内容。
+    expect(container.querySelectorAll('[data-channel-auto-disabled]')).toHaveLength(0)
+  })
+
+  it('shows the notice only on the channel that has evidence', async () => {
+    installPlatform({
+      list: vi.fn(async () => [
+        withEvidence({ autoDisabledAt: '2026-11-11T10:00:00.000Z', lastEnabledAt: null }),
+        { ...channel, id: 'channel-2', name: 'Slack', type: 'slack' }
+      ])
+    })
+    const container = await mount()
+    const hints = container.querySelectorAll('[data-channel-auto-disabled]')
+    expect(hints).toHaveLength(1)
+    expect(hints[0]?.textContent).toContain(labels.channelAutoDisabledNotice)
+    expect(hints[0]?.textContent).toContain(labels.channelAutoDisabledEnable)
+  })
+
+  it('hides the notice when the channel was enabled again after the automatic disable', async () => {
+    // 最容易写错的一条：审计有过，但读者后来自己启用了 → 不许再催他一次。
+    installPlatform({
+      list: vi.fn(async () => [withEvidence({
+        autoDisabledAt: '2026-11-11T10:00:00.000Z',
+        lastEnabledAt: '2026-11-12T09:00:00.000Z'
+      })])
+    })
+    const container = await mount()
+    expect(container.querySelector('[data-channel-auto-disabled]')).toBeNull()
+  })
+
+  it('enables that very channel from inside the notice', async () => {
+    const platform = installPlatform({
+      list: vi.fn(async () => [withEvidence({ autoDisabledAt: '2026-11-11T10:00:00.000Z', lastEnabledAt: null })])
+    })
+    const container = await mount()
+    const enable = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAutoDisabledEnable)
+    await act(async () => enable?.click())
+    await act(async () => {})
+    expect(platform.requestEnable).toHaveBeenCalledWith({ channelId: 'channel-1', actorId: 'settings-user' })
+  })
+
+  it('keeps the notice and shows one human sentence plus the folded code when enabling fails', async () => {
+    installPlatform({
+      list: vi.fn(async () => [withEvidence({ autoDisabledAt: '2026-11-11T10:00:00.000Z', lastEnabledAt: null })]),
+      requestEnable: vi.fn(async () => ({ ok: false, code: 'channel-host-unavailable' }))
+    })
+    const container = await mount()
+    const enable = [...container.querySelectorAll('button')].find((node) => node.textContent?.trim() === labels.channelAutoDisabledEnable)
+    await act(async () => enable?.click())
+    await act(async () => {})
+    // 提示保留（问题没解决），下面一句人话 + 原因码在折叠里。
+    expect(container.querySelector('[data-channel-auto-disabled]')).not.toBeNull()
+    const failure = container.querySelector('[data-auto-disabled-failure]')
+    expect(failure?.textContent).toContain(labels.channelAutoDisabledReasonCode)
+    expect(failure?.textContent).toContain('channel-host-unavailable')
+    expect(failure?.textContent).not.toContain(labels.channelAutoDisabledNotice)
+  })
+})

@@ -102,6 +102,8 @@ export type EnableDeps = {
   setBusyId: (id: string | null) => void
   setError: (message: string | null) => void
   setEnableFailures: (update: (current: Readonly<Record<string, string>>) => Readonly<Record<string, string>>) => void
+  /** 同一处再记一条原因码：提示里「原因码」那一行要它，主句不出现。 */
+  setEnableFailureCodes?: (update: (current: Readonly<Record<string, string>>) => Readonly<Record<string, string>>) => void
   reload: () => Promise<void>
 }
 
@@ -117,10 +119,18 @@ export async function enableChannelWithSelfCheck(channel: Channel, deps: EnableD
     delete next[channel.id]
     return next
   })
+  deps.setEnableFailureCodes?.((current) => {
+    const next = { ...current }
+    delete next[channel.id]
+    return next
+  })
   try {
     const result = await window.platform.channels.requestEnable({ channelId: channel.id, actorId: 'settings-user' })
     const sentence = enableFailureSentence(result, deps.labels)
-    if (sentence !== null) deps.setEnableFailures((current) => ({ ...current, [channel.id]: sentence }))
+    if (sentence !== null) {
+      deps.setEnableFailures((current) => ({ ...current, [channel.id]: sentence }))
+      deps.setEnableFailureCodes?.((current) => ({ ...current, [channel.id]: result.code }))
+    }
     await deps.reload()
   } catch {
     deps.setError(deps.labels.channelOperationFailed)
