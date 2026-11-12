@@ -45,7 +45,7 @@ function labels() {
   } as never
 }
 
-async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-key'; hasCredential?: boolean; pendingIndex?: number; invite?: boolean } = {}) {
+async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-key'; hasCredential?: boolean; pendingIndex?: number; invite?: boolean; notice?: string } = {}) {
   const invoke = vi.fn(async (_p: string, method: string) => method === 'intelligenceSources.getPageState'
     ? { detail: { credentialStatus: { hasCredential: extra.hasCredential === true } } }
     : undefined)
@@ -61,6 +61,7 @@ async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-ke
       provider: {
         providerId: 'bls', displayName: 'Bureau of Labor Statistics (BLS)', category: 'macro',
         credential: extra.credential ?? 'none', healthMarker: 'none',
+        ...(extra.notice === undefined ? {} : { notice: extra.notice }),
         website: 'https://www.bls.gov',
         sources: enabled.map((value, index) => source(`s${index}`, value, extra.pendingIndex === index ? 'pending' : 'visible'))
       },
@@ -98,6 +99,17 @@ describe('页头整组启停 = 源采集开关的唯一编辑入口', () => {
     // 混合按 off 显示，点一下把可操作项全开——已经开的那项不重复写。
     expect(onToggleSource).toHaveBeenCalledTimes(1)
     expect(onToggleSource.mock.calls[0]?.[1]).toBe(true)
+  })
+
+  it('shows a verification-only source as off and not operable, even when the stored profile says on', async () => {
+    // 界面必须显示系统真正用的那个态：这类源永远排不上采集，所以「开」不能画出来（架构师 A10）。
+    const { host, onToggleSource } = await render([true], { credential: 'api-key', hasCredential: true, notice: 'verification-only' })
+    const control = groupSwitch(host)
+    expect(control?.getAttribute('aria-checked')).toBe('false')
+    expect(control?.getAttribute('aria-disabled')).toBe('true')
+    expect(host.querySelector(`[aria-label="${t.providerVerificationOnlyAria}"]`)).not.toBeNull()
+    await act(async () => { control?.click() })
+    expect(onToggleSource).not.toHaveBeenCalled()
   })
 
   it('disables the group switch while a required key is missing, and writes nothing', async () => {

@@ -74,6 +74,8 @@ export const intelligenceSourcesText = {
       'response-unavailable': '数据源没有返回内容',
       'response-shape-invalid': '数据源返回的结构和预期不一样',
       'plan-restricted': '当前套餐不允许访问这个接口',
+      /* 额度用尽 ≠ 套餐不含：这是这个月没了、下个月会回来。**不写恢复时间**——我们不知道它何时恢复。 */
+      'credits-exhausted': '本月额度已用尽',
       'invalid-json': '数据源返回的内容不是合法 JSON',
       cancelled: '已取消',
       'handler-error': '任务执行报错'
@@ -195,6 +197,9 @@ export const intelligenceSourcesText = {
     'kraken-status': '维护备用，暂不向读者提供内容',
     'kraken-system-status': '维护备用，暂不向读者提供内容',
     'macro-calendar-0xrouter-central-bank-activities': '央行会议与公开活动的日程',
+    'macro-calendar-narwhal-economic-data': '经济指标的发布日程与市场预期',
+    'macro-calendar-narwhal-financial-events': '财经事件的发生日程与时间点',
+    'macro-calendar-narwhal-central-bank-activities': '央行会议与公开活动的日程',
     'macro-calendar-0xrouter-economic-data': '经济指标的发布日程与公布值',
     'macro-calendar-0xrouter-financial-events': '财经事件的发生日程与时间点',
     'macro-calendar-bea': '美国经济分析局的官方发布日程',
@@ -229,6 +234,9 @@ export const intelligenceSourcesText = {
     'macro-calendar-0xrouter-economic-data': '0xRouter 经济数据',
     'macro-calendar-0xrouter-financial-events': '0xRouter 财经事件',
     'macro-calendar-0xrouter-central-bank-activities': '0xRouter 央行活动',
+    'macro-calendar-narwhal-economic-data': 'Narwhal 经济数据',
+    'macro-calendar-narwhal-financial-events': 'Narwhal 财经事件',
+    'macro-calendar-narwhal-central-bank-activities': 'Narwhal 央行活动',
     'realmarketapi-market': 'RealMarketAPI 美元指数', 'twelve-data-market': 'Twelve Data 宏观行情',
     'policy-path-market': 'FOMC 决议市场',
     'coinbase-status': 'Coinbase 运行状态', 'kraken-status': 'Kraken 运行状态',
@@ -240,7 +248,7 @@ export const intelligenceSourcesText = {
     treasury: '美国财政部', sec: '美国证监会', cftc: '美国商品期货交易委员会',
     binance: '币安', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
     'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': '以太坊基金会',
-    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', cryptoetf: 'CryptoETF',
+    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', narwhal: 'Narwhal', cryptoetf: 'CryptoETF',
     realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
     kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
   },
@@ -273,6 +281,7 @@ export const intelligenceSourcesText = {
   /* 源那一行行尾那颗展开按钮：两个字，不是说明。 */
   advancedToggle: '高级',
   credentialsRequired: '需要 API Key',
+  providerVerificationOnlyAria: '为什么这个来源的开关不可操作',
   providerNotices: {
     privateDataSource: '私有数据源：注册账号后需向开发者申请 API Key。',
     /* 免费档的署名条件：中英逐字相同、不翻译（Chief 2026-11-13 定，三处之一）。 */
@@ -303,6 +312,9 @@ export const intelligenceSourcesText = {
       'macro-calendar-bea': '美国经济分析局（BEA）',
       'macro-calendar-bls': '美国劳工统计局（BLS）',
       'macro-calendar-0xrouter-economic-data': '0xRouter 市场日历',
+      'macro-calendar-narwhal-economic-data': 'Narwhal 市场日历',
+      'macro-calendar-narwhal-financial-events': 'Narwhal 财经事件',
+      'macro-calendar-narwhal-central-bank-activities': 'Narwhal 央行活动',
       'macro-calendar-coinmarketcal': 'CoinMarketCal'
     }
   },
@@ -705,6 +717,8 @@ export const intelligenceSourcesText = {
       'response-unavailable': 'The source returned nothing',
       'response-shape-invalid': 'The source answered in an unexpected shape',
       'plan-restricted': 'This endpoint is not available on the current plan',
+      /* Exhausted quota is not a restricted plan: it is gone for this month. No recovery date is stated. */
+      'credits-exhausted': "This month's API quota is used up",
       'invalid-json': 'The source returned content that is not valid JSON',
       cancelled: 'Cancelled',
       'handler-error': 'The task failed'
@@ -821,6 +835,9 @@ export const intelligenceSourcesText = {
     'kraken-status': 'Maintenance only; nothing here is shown to readers yet',
     'kraken-system-status': 'Maintenance only; nothing here is shown to readers yet',
     'macro-calendar-0xrouter-central-bank-activities': 'Central bank meetings and public appearances',
+    'macro-calendar-narwhal-economic-data': 'Economic indicator schedule with market consensus',
+    'macro-calendar-narwhal-financial-events': 'When financial events are scheduled to happen',
+    'macro-calendar-narwhal-central-bank-activities': 'Central bank meetings and public appearances',
     'macro-calendar-0xrouter-economic-data': 'Economic indicator schedule with released values',
     'macro-calendar-0xrouter-financial-events': 'When financial events are scheduled to happen',
     'macro-calendar-bea': 'BEA official release schedule',
@@ -855,6 +872,9 @@ export const intelligenceSourcesText = {
     'macro-calendar-0xrouter-economic-data': '0xRouter economic data',
     'macro-calendar-0xrouter-financial-events': '0xRouter financial events',
     'macro-calendar-0xrouter-central-bank-activities': '0xRouter central bank activities',
+    'macro-calendar-narwhal-economic-data': 'Narwhal economic data',
+    'macro-calendar-narwhal-financial-events': 'Narwhal financial events',
+    'macro-calendar-narwhal-central-bank-activities': 'Narwhal central bank activities',
     'realmarketapi-market': 'RealMarketAPI dollar index', 'twelve-data-market': 'Twelve Data macro market data',
     'policy-path-market': 'FOMC decision market',
     'coinbase-status': 'Coinbase status', 'kraken-status': 'Kraken status',
@@ -866,7 +886,7 @@ export const intelligenceSourcesText = {
     treasury: 'US Treasury', sec: 'US SEC', cftc: 'US CFTC',
     binance: 'Binance', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
     'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': 'Ethereum Foundation',
-    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', cryptoetf: 'CryptoETF',
+    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', narwhal: 'Narwhal', cryptoetf: 'CryptoETF',
     realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
     kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
   },
@@ -891,6 +911,7 @@ export const intelligenceSourcesText = {
   toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
   advancedToggle: 'Advanced',
   credentialsRequired: 'API key required',
+  providerVerificationOnlyAria: 'Why this source cannot be switched on',
   providerNotices: {
     privateDataSource: 'Private data source: after registering an account, request an API Key from the developer.',
     /* Attribution required by the free tier: identical in every language, never translated. */
@@ -919,6 +940,9 @@ export const intelligenceSourcesText = {
       'macro-calendar-bea': 'Bureau of Economic Analysis (BEA)',
       'macro-calendar-bls': 'Bureau of Labor Statistics (BLS)',
       'macro-calendar-0xrouter-economic-data': '0xRouter market calendar',
+      'macro-calendar-narwhal-economic-data': 'Narwhal market calendar',
+      'macro-calendar-narwhal-financial-events': 'Narwhal financial events',
+      'macro-calendar-narwhal-central-bank-activities': 'Narwhal central bank activities',
       'macro-calendar-coinmarketcal': 'CoinMarketCal'
     }
   },

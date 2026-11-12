@@ -32,6 +32,7 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
  * 新增一种同类源：注册表标一个值 + 两语文案各一条，不动组件逻辑。
  */
 import { credentialVerificationLine, type ConnectionFeedback } from './connectionFailureSentence'
+import { providerSwitchBlock } from './providerSwitchBlock'
 
 const PROVIDER_NOTICE_KEYS: Readonly<Record<NonNullable<ProviderView['notice']>, string>> = {
   'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource',
@@ -203,9 +204,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
 
 
 
-  const inviteProvider = provider.invite === true || /[?&](?:invite|via)=/.test(provider.signupUrl ?? '')
-  // A credential provider is discovered through its signup/key guide, not its home page.
-  const hideWebsite = inviteProvider || provider.credential === 'api-key'
+  /* 官网**只按数据藏**（界面设计 2026-11-13 裁）：没有地址才不画。
+     不再因为「需要密钥」或「带邀请参数」隐藏——api-key 源同样要有官网（CryptoETF 那一屏就是这样缺的）。
+     去重按地址：`website === signupUrl` 时只画「注册 / 获取 Key」，同一页不摆两颗按钮。 */
+  const showWebsite = provider.website !== undefined && provider.website !== provider.signupUrl
   const credentialSourceId = provider.credentialSourceId
     ?? provider.sources.find((source) => source.collection === 'adapter')?.sourceId
     ?? provider.sources[0]?.sourceId
@@ -354,8 +356,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
   /* 待接入 > 缺凭据 > 可操作：**整组一个可操作能力都没有**时才锁死并提示「还没接入」。 */
   const providerPending = operableSources.length === 0 && sources.length > 0
+  const switchBlock = providerSwitchBlock({ pending: providerPending, credentialMissing: providerCredentialMissing, verificationOnly })
   const toggleProvider = async (next: boolean): Promise<void> => {
-    if (providerCredentialMissing || providerPending) return
+    if (switchBlock !== undefined) return
     // 只写**已接入**的能力；待接入的项不写、不会被打开、状态不变。
     for (const source of operableSources) if (source.enabled !== next) await toggle(source, next)
   }
@@ -391,7 +394,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             同一行 inline、间距 8、与名字基线对齐，全是小号文字按钮。
             一行放不下时整组换到名字下方、左缘仍与名字对齐（flex-wrap 就是这个行为）。 */}
         <span className="source-provider-detail__name-actions">
-          {provider.website && !hideWebsite
+          {showWebsite
             ? <Button
               className="source-provider-detail__name-action"
               onClick={() => window.open(provider.website!, '_blank', 'noopener,noreferrer')}
@@ -415,25 +418,18 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         {/* 整组启停：这一行代表一个来源，开关管它下面**全部能力**（用户 2026-11-11，照模型服务供应商那排布）。
             全开 = on、全关 = off、**混合按 off 显示**（点击后全开）——否则读者看不出到底开没开。 */}
         <span className="source-provider-detail__group-toggle">
-          {providerPending || providerCredentialMissing
-            ? <SettingsInfo
-              ariaLabelKey={providerPending
-                ? 'settings.intelligenceSources.providerPendingAria'
-                : 'settings.intelligenceSources.credentialRequiredToEnableAria'}
-              labelKeys={[providerPending
-                ? 'settings.intelligenceSources.providerPending'
-                : 'settings.intelligenceSources.credentialRequiredToEnable']}
-              resolveText={resolveText} />
-            : null}
+          {switchBlock === undefined ? null : <SettingsInfo
+            ariaLabelKey={switchBlock.ariaKey} labelKeys={[switchBlock.labelKey]} resolveText={resolveText} />}
           <Switch
             /* 页头这颗是**源采集开关的唯一编辑入口**（用户 2026-11-12 撤回「关格顺带停源」后回归）：
                它写源自己的 `enabled`（整组写；待接入项不参与，缺凭据时禁用）。
                下面能力行的开关仍然只读——行上显示的是「采集与数据」里有没有用它。 */
-            aria-disabled={providerPending || providerCredentialMissing ? true : undefined}
+            /* 这条源永远排不上采集，界面显示系统真正用的态（关）：点开却什么都不发生的开关是假控件（A10）。 */
+            aria-disabled={switchBlock === undefined ? undefined : true}
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
-            checked={providerGroupEnabled}
-            disabled={providerPending || providerCredentialMissing}
+            checked={verificationOnly ? false : providerGroupEnabled}
+            disabled={switchBlock !== undefined}
             onChange={(next) => void toggleProvider(next)}
             size="small" />
         </span>
