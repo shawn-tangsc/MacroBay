@@ -2,12 +2,14 @@ import { dirname } from 'node:path'
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 import { mkdirSync } from 'node:fs'
 
-import { etfCurrentStateWindowPolicy, isValidEtfCurrentStateWindow, type EtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
+import { etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, isValidEtfCurrentStateWindow, type EtfCurrentStateWindow, type EtfDailyFlow, type EtfFlowSourceId } from '../etf/etfCurrentStateWindow'
 import { etfPublicSnapshotPolicy } from '../../../contracts/intelligenceQueryContracts'
 
 export const etfCurrentStateStorePolicy = Object.freeze({
-  schemaVersion: 1,
-  maximumWindowBytes: 12 * 1024,
+  schemaVersion: 2,
+  // 12KB 在旧 id 下已占 98.7%（30 行 12,129 字节）；新 id 每行更长，满窗会越过上限，
+  // 那会让 persist 静默返回 false、读数永远写不进去。16KB 留出余量，并由用例钉住。
+  maximumWindowBytes: 16 * 1024,
   maximumStateBytes: 256 * 1024,
   maximumAtomicDiskBytes: 512 * 1024,
   maximumSnapshotAgeMs: etfPublicSnapshotPolicy.maximumAgeMs,
@@ -40,6 +42,8 @@ export type EtfHistoryRow = readonly [tradingDate: string, netFlowUsd: number, o
 /** The rows a refresh stored, kept so a cutoff can be answered after the window moved on. */
 export type EtfCurrentStateHistoryEntry = Readonly<{
   at: string
+  /** 这份归档行自己的来源。v1 没有它，迁移时按当时的窗口来源补上；没有它归档会被整片重标。 */
+  source: EtfFlowSourceId
   btc: readonly EtfHistoryRow[]
   eth: readonly EtfHistoryRow[]
 }>
@@ -66,6 +70,81 @@ export function isValidEtfCurrentState(state: unknown): state is EtfCurrentState
   return isSafeState(state as EtfCurrentState)
 }
 
+/**
+ * v1 → v2，**只读内存、不写回**，在存储解码处校验之前跑（R1）。同一输入两次输出一致。
+ *
+ * - 每条归档行集补自己的 `source`：v1 只可能写过 `'0xrouter'`，所以补旧值即正确（R2）。
+ * - 没有 revision 的窗口补一个确定性摘要，否则 `replace` 的闸门恒 false、换源永远写不进去（R4）。
+ * - 允许集是新旧两个 id：旧行迁移后仍是 `'0xrouter'`，只留新 id 会把旧窗口判非法（R3）。
+ */
+export function migrateEtfCurrentState(value: unknown): EtfCurrentState | undefined {
+  if (!isPlainRecord(value)) return undefined
+  if (value.schemaVersion === etfCurrentStateStorePolicy.schemaVersion) {
+    return isValidEtfCurrentState(value) ? value as EtfCurrentState : undefined
+  }
+  if (value.schemaVersion !== 1 || !isHealth(value.health)) return undefined
+
+  const snapshot = value.snapshot
+  let migratedSnapshot: EtfCurrentState['snapshot']
+  if (snapshot !== undefined) {
+    if (!isPlainRecord(snapshot) || !hasOnlyKeys(snapshot, ['window', 'verifiedAt']) || !isCanonicalUtcMillis(snapshot.verifiedAt)) return undefined
+    const window = migrateWindow(snapshot.window)
+    if (!window) return undefined
+    migratedSnapshot = Object.freeze({ window, verifiedAt: snapshot.verifiedAt })
+  }
+
+  let migratedHistory: readonly EtfCurrentStateHistoryEntry[] | undefined
+  if (value.history !== undefined) {
+    if (!Array.isArray(value.history)) return undefined
+    const windowSource = migratedSnapshot ? etfWindowSource(migratedSnapshot.window) : etfCurrentStateWindowPolicy.legacySourceId
+    const entries: EtfCurrentStateHistoryEntry[] = []
+    for (const entry of value.history) {
+      if (!isPlainRecord(entry) || !hasOnlyKeys(entry, ['at', 'source', 'btc', 'eth']) || !isCanonicalUtcMillis(entry.at)) return undefined
+      const own = (etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(entry.source as string)
+        ? entry.source as EtfFlowSourceId
+        : windowSource
+      entries.push(Object.freeze({ at: entry.at, source: own, btc: entry.btc as readonly EtfHistoryRow[], eth: entry.eth as readonly EtfHistoryRow[] }))
+    }
+    migratedHistory = Object.freeze(entries)
+  }
+
+  const migrated = Object.freeze({
+    schemaVersion: etfCurrentStateStorePolicy.schemaVersion,
+    ...(migratedSnapshot ? { snapshot: migratedSnapshot } : {}),
+    ...(migratedHistory ? { history: migratedHistory } : {}),
+    health: value.health
+  }) as EtfCurrentState
+  return isValidEtfCurrentState(migrated) ? migrated : undefined
+}
+
+function migrateWindow(value: unknown): EtfCurrentStateWindow | undefined {
+  if (!isPlainRecord(value)) return undefined
+  const btc = migrateRows(value.btc)
+  const eth = migrateRows(value.eth)
+  if (!btc || !eth) return undefined
+  const revision = isSafeRevisionIdentity(value.revision as EtfCurrentStateWindow['revision']) && value.revision !== undefined
+    ? value.revision as EtfCurrentStateWindow['revision']
+    : etfWindowRevision([...btc, ...eth])
+  const candidate: EtfCurrentStateWindow = {
+    btc, eth,
+    windowEnd: value.windowEnd as string,
+    capitalConclusionDates: value.capitalConclusionDates as readonly string[],
+    revision
+  }
+  return isValidEtfCurrentStateWindow(candidate) ? Object.freeze(candidate) : undefined
+}
+
+function migrateRows(value: unknown): readonly EtfDailyFlow[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.map((row) => {
+    if (!isPlainRecord(row)) return row as never
+    const source = (etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(row.source as string)
+      ? row.source as EtfFlowSourceId
+      : etfCurrentStateWindowPolicy.legacySourceId
+    return Object.freeze({ ...(row as unknown as EtfDailyFlow), source })
+  }) as readonly EtfDailyFlow[]
+}
+
 export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStorage }) {
   let cached: EtfCurrentState | undefined
   let readFailed = false
@@ -74,8 +153,9 @@ export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStora
     if (cached) return cached
     try {
       const persisted = await deps.storage.read()
-      if (persisted !== null && !isValidEtfCurrentState(persisted)) throw new Error('ETF current state is invalid')
-      cached = persisted ?? emptyState()
+      const migrated = persisted === null ? undefined : migrateEtfCurrentState(persisted)
+      if (persisted !== null && !migrated) throw new Error('ETF current state is invalid')
+      cached = migrated ?? emptyState()
       return cached
     } catch {
       readFailed = true
@@ -179,13 +259,13 @@ function archivedAt(history: readonly EtfCurrentStateHistoryEntry[] | undefined,
 function historyEntry(window: EtfCurrentStateWindow, at: string): EtfCurrentStateHistoryEntry {
   const rows = (flows: readonly EtfDailyFlow[]): readonly EtfHistoryRow[] =>
     flows.map((flow) => Object.freeze([flow.tradingDate, flow.netFlowUsd, flow.observedAt] as const))
-  return Object.freeze({ at, btc: rows(window.btc), eth: rows(window.eth) })
+  return Object.freeze({ at, source: etfWindowSource(window), btc: rows(window.btc), eth: rows(window.eth) })
 }
 
 function windowFromHistoryEntry(entry: EtfCurrentStateHistoryEntry): EtfCurrentStateWindow | undefined {
   const flows = (rows: readonly EtfHistoryRow[], asset: 'BTC' | 'ETH'): readonly EtfDailyFlow[] =>
     rows.map(([tradingDate, netFlowUsd, observedAt]) => Object.freeze({
-      asset, tradingDate, netFlowUsd, observedAt, fetchedAt: entry.at, source: etfCurrentStateWindowPolicy.sourceId
+      asset, tradingDate, netFlowUsd, observedAt, fetchedAt: entry.at, source: entry.source
     }))
   const btc = flows(entry.btc, 'BTC')
   const eth = flows(entry.eth, 'ETH')
@@ -314,8 +394,8 @@ export function createEtfCurrentStateSqliteStorage(filePath: string): EtfCurrent
         try {
           if ((row.window_json === null) !== (row.verified_at === null)) return null
           const history = row.history_json ? JSON.parse(row.history_json) : undefined
-          const state: EtfCurrentState = {
-            schemaVersion: row.schema_version as 1,
+          const raw = {
+            schemaVersion: row.schema_version,
             ...(row.window_json && row.verified_at ? { snapshot: { window: JSON.parse(row.window_json), verifiedAt: row.verified_at } } : {}),
             ...(history === undefined ? {} : { history }),
             health: {
@@ -326,7 +406,7 @@ export function createEtfCurrentStateSqliteStorage(filePath: string): EtfCurrent
               rejectionCount: row.rejection_count
             }
           }
-          return isValidEtfCurrentState(state) ? state : null
+          return migrateEtfCurrentState(raw) ?? null
         } catch { return null }
       }
       return null
@@ -417,7 +497,8 @@ function isHistory(value: unknown): value is readonly EtfCurrentStateHistoryEntr
   if (!Array.isArray(value) || value.length === 0 || value.length > etfCurrentStateStorePolicy.maximumHistoryEntries) return false
   let previous = ''
   for (const entry of value) {
-    if (!isPlainRecord(entry) || !hasOnlyKeys(entry, ['at', 'btc', 'eth']) || !isCanonicalUtcMillis(entry.at) || entry.at <= previous) return false
+    if (!isPlainRecord(entry) || !hasOnlyKeys(entry, ['at', 'source', 'btc', 'eth']) || !isCanonicalUtcMillis(entry.at) || entry.at <= previous) return false
+    if (!(etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(entry.source as string)) return false
     if (!isHistoryRows(entry.btc) || !isHistoryRows(entry.eth)) return false
     if (!windowFromHistoryEntry(entry as unknown as EtfCurrentStateHistoryEntry)) return false
     previous = entry.at

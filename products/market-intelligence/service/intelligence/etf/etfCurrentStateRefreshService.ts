@@ -1,10 +1,8 @@
-import { createHash } from 'node:crypto'
-
 import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
 import { reportSettledEtfRevisions } from './etfSettledRevision'
-import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, type EtfAsset, type EtfDailyFlow } from './etfCurrentStateWindow'
+import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, type EtfAsset, type EtfDailyFlow } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
 export const etfCurrentStateRefreshAdmissionPolicy = Object.freeze({
@@ -46,6 +44,9 @@ export function createEtfCurrentStateRefreshService(deps: {
         const requested = await deps.requestWindow()
         if (requested.state === 'unavailable') return unavailable()
         const previous = requested.state === 'partial' && deps.store.read ? await deps.store.read() : null
+        // 换源期的 partial 不许跨源合并：上一次窗口是旧来源时，补进来的两半会混源，整窗校验必红。
+        // 保留旧窗口、整轮 unavailable，等两支都成功再整窗替换。
+        if (requested.state === 'partial' && previous?.snapshot && etfWindowSource(previous.snapshot.window) !== etfCurrentStateRefreshAdmissionPolicy.sourceId) return unavailable()
         const btc = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.btc, requested.btc) : requested.btc
         const eth = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.eth, requested.eth) : requested.eth
         if (!btc || !eth) return unavailable()
@@ -120,7 +121,7 @@ function buildWindow(input: Readonly<{
     eth: eth.filter((flow) => completeDates.includes(flow.tradingDate))
   })
   if (built.state !== 'available') return undefined
-  const revision = revisionFor([...built.window.btc, ...built.window.eth])
+  const revision = etfWindowRevision([...built.window.btc, ...built.window.eth])
   return Object.freeze({ ...built.window, ...(revision ? { revision } : {}) })
 }
 
@@ -148,14 +149,6 @@ function mergeRows(previous: readonly EtfDailyFlow[] | undefined, incoming: read
   for (const row of previous ?? []) byDate.set(Date.parse(`${row.tradingDate}T00:00:00.000Z`), { date: Date.parse(`${row.tradingDate}T00:00:00.000Z`), changeUsd: row.netFlowUsd, ...(row.sourceRevision ? { updateTime: row.sourceRevision } : {}) })
   for (const row of incoming ?? []) byDate.set(row.date, row)
   return [...byDate.values()].sort((left, right) => left.date - right.date)
-}
-
-function revisionFor(rows: readonly EtfDailyFlow[]): Readonly<{ providerCurrentStateId: string }> {
-  return Object.freeze({
-    providerCurrentStateId: createHash(etfCurrentStateRefreshAdmissionPolicy.updateMarkerDigestAlgorithm)
-      .update(rows.map((row) => `${row.asset}:${row.tradingDate}:${row.netFlowUsd}:${row.sourceRevision ?? ''}`).join('|'))
-      .digest('hex')
-  })
 }
 
 function utcTradingDate(value: number): string | undefined {

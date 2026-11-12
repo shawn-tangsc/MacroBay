@@ -39,9 +39,11 @@ export type CryptoEtfAssetReading =
   | Readonly<{ state: 'available'; days: readonly CryptoEtfSettledDay[]; audit: CryptoEtfFundsAudit }>
   | Readonly<{ state: 'unavailable'; failureCode: CryptoEtfFlowFailureCode }>
 
+type CryptoEtfAvailableReading = Extract<CryptoEtfAssetReading, { state: 'available' }>
+
 export type CryptoEtfFlowWindow =
-  | Readonly<{ state: 'available'; btc: CryptoEtfAssetReading; eth: CryptoEtfAssetReading }>
-  | Readonly<{ state: 'partial'; btc?: CryptoEtfAssetReading; eth?: CryptoEtfAssetReading }>
+  | Readonly<{ state: 'available'; btc: CryptoEtfAvailableReading; eth: CryptoEtfAvailableReading }>
+  | Readonly<{ state: 'partial'; btc?: CryptoEtfAvailableReading; eth?: CryptoEtfAvailableReading }>
   | Readonly<{ state: 'unavailable'; failureCode: CryptoEtfFlowFailureCode }>
 
 export type CryptoEtfConnectionTest =
@@ -61,7 +63,7 @@ export type CryptoEtfFlowClientDeps = Readonly<{
   /** 只给用例注入；生产走平台代理感知的出网通道。 */
   requestBody?: (url: string, apiKey: string) => Promise<CryptoEtfBodyResult>
   /** 与 `credentialedProviderProbes.ts` 同样的取法：`deps.platformFetch ?? getPlatformFetch()`。 */
-  platformFetch?: typeof fetch
+  platformFetch?: (input: string, init: RequestInit) => Promise<Response>
 }>
 
 export function createCryptoEtfFlowClient(deps: CryptoEtfFlowClientDeps = {}) {
@@ -117,7 +119,7 @@ async function readAsset(asset: CryptoEtfAssetKey, apiKey: string, requestBody: 
     : Object.freeze({ state: 'unavailable' as const, failureCode: parsed.reason })
 }
 
-async function requestCryptoEtfBody(url: string, apiKey: string, platformFetch?: typeof fetch): Promise<CryptoEtfBodyResult> {
+async function requestCryptoEtfBody(url: string, apiKey: string, platformFetch?: (input: string, init: RequestInit) => Promise<Response>): Promise<CryptoEtfBodyResult> {
   try {
     const response = await httpRequest(
       {
@@ -130,7 +132,8 @@ async function requestCryptoEtfBody(url: string, apiKey: string, platformFetch?:
         timeoutMs: cryptoEtfSourcePolicy.requestTimeoutMs
       },
       // 测试按钮只按一次：不重试、不放大并发。429 必须让读者看见，不是悄悄重排。
-      { fetchImpl: platformFetch ?? getPlatformFetch(), retryPolicy: { maxAttempts: 1 }, redactHeaders: ['authorization', 'x-api-key'] }
+      // 出网一律走平台适配器。`httpRequest` 的 fetchImpl 类型更宽，但我们只传 URL 字符串。
+      { fetchImpl: (platformFetch ?? getPlatformFetch()) as typeof fetch, retryPolicy: { maxAttempts: 1 }, redactHeaders: ['authorization', 'x-api-key'] }
     )
     if (response.status === 401) return failed('credential-invalid')
     if (response.status === 403) return failed('plan-restricted')

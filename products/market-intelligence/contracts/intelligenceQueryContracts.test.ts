@@ -90,7 +90,11 @@ describe('intelligenceQueryContracts', () => {
 
   it('owns the fixed, bounded ETF public DTO contract and rejects an extended provider shape', () => {
     const snapshot = safeEtfPublicSnapshot()
-    expect(etfPublicSnapshotPolicy).toMatchObject({ sourceId: '0xrouter', maximumRowsPerAsset: 30, maximumDtoBytes: 12 * 1024 })
+    expect(etfPublicSnapshotPolicy).toMatchObject({ sourceId: 'cryptoetf-etf-flows', maximumRowsPerAsset: 30, maximumDtoBytes: 12 * 1024 })
+    // 过渡期：旧读数仍标 0xrouter，新读数标 cryptoetf-etf-flows；注册表外的 id 一律非法。
+    expect(etfPublicSnapshotPolicy.allowedSourceIds).toEqual(['0xrouter', 'cryptoetf-etf-flows'])
+    expect(isValidEtfPublicSnapshot({ ...snapshot, sourceId: 'cryptoetf-etf-flows' })).toBe(true)
+    expect(isValidEtfPublicSnapshot({ ...snapshot, sourceId: 'unregistered-source' })).toBe(false)
     expect(isValidEtfPublicSnapshot(snapshot)).toBe(true)
     expect(isValidEtfPublicSnapshot({ ...snapshot, providerMetadata: 'secret' })).toBe(false)
     expect(isValidEtfPublicSnapshot({ ...snapshot, btc: { ...snapshot.btc, asset: 'ETH' } })).toBe(false)

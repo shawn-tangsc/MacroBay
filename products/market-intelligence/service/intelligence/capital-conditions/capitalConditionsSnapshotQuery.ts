@@ -11,6 +11,7 @@ import {
 
 import type { CapitalConditionsCurrentStateStore, CapitalConditionsSnapshotState } from './stablecoinCapitalCurrentStateStore'
 import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
+import { etfWindowSource } from '../etf/etfCurrentStateWindow'
 
 export const capitalConditionsSafeQueryPolicy = Object.freeze({
   ...capitalConditionsSnapshotPolicy,
@@ -81,7 +82,7 @@ async function projectEtf(store: EtfCurrentStateStore, asOf: string, allowStale 
   if (available.state !== 'available') return Object.freeze({ state: 'unavailable' as const })
   const { window, verifiedAt } = available
   const dto: EtfPublicSnapshot = Object.freeze({
-    state: 'available', schemaVersion: etfPublicSnapshotPolicy.schemaVersion, sourceId: etfPublicSnapshotPolicy.sourceId,
+    state: 'available', schemaVersion: etfPublicSnapshotPolicy.schemaVersion, sourceId: etfWindowSource(window),
     windowEnd: window.windowEnd, verifiedAt,
     btc: Object.freeze({ asset: 'BTC', rows: Object.freeze(window.btc.map(({ tradingDate, netFlowUsd, observedAt }) => Object.freeze({ tradingDate, netFlowUsd, observedAt }))) }),
     eth: Object.freeze({ asset: 'ETH', rows: Object.freeze(window.eth.map(({ tradingDate, netFlowUsd, observedAt }) => Object.freeze({ tradingDate, netFlowUsd, observedAt }))) })

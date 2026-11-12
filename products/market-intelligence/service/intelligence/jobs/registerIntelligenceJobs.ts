@@ -8,6 +8,7 @@ import type { createNewsSentimentEnrichmentService } from '../news-sentiment/new
 import type { createNewsSentimentScoringService } from '../news-sentiment/newsSentimentScoringService'
 import { isDefillamaStablecoinRetiredPath } from '../application/sourceCatalog'
 import { isZeroXRouterSource } from '../application/zeroXRouterSourcePolicy'
+import { cryptoEtfSourcePolicy } from '../application/cryptoEtfSourcePolicy'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
 import { enqueueIntelligencePipelineJobs } from './enqueueIntelligencePipelineJobs'
 import {
@@ -53,7 +54,7 @@ export function registerIntelligenceJobs(
       await deps.capitalConditions?.refresh()
       return
     }
-    if (isZeroXRouterSource(input.sourceId)) {
+    if (isZeroXRouterSource(input.sourceId) || input.sourceId === cryptoEtfSourcePolicy.sourceId) {
       await deps.etfFlowHistory?.refresh()
       return
     }

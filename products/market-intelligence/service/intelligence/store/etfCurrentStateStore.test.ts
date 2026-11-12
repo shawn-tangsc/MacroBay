@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildEtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
-import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage, etfCurrentStateStorePolicy, type EtfCurrentState, type EtfCurrentStateStorage } from './etfCurrentStateStore'
+import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage, etfCurrentStateStorePolicy, migrateEtfCurrentState, type EtfCurrentState, type EtfCurrentStateStorage } from './etfCurrentStateStore'
 
 const firstWindow = windowFor(1)
 const revisedWindow = windowFor(10)
@@ -74,6 +74,71 @@ describe('ETF current-state store', () => {
       state: 'available',
       verifiedAt: '2026-08-31T12:00:00.000Z'
     })
+  })
+
+  it('migrates a v1 row on read: rows keep their source, a missing revision is added, archive keeps its own source', async () => {
+    const legacyWindow = { ...windowFor(1), revision: undefined }
+    const legacyHistory = [{
+      at: '2026-08-31T00:00:00.000Z',
+      btc: legacyWindow.btc.map((flow) => [flow.tradingDate, flow.netFlowUsd, flow.observedAt] as const),
+      eth: legacyWindow.eth.map((flow) => [flow.tradingDate, flow.netFlowUsd, flow.observedAt] as const)
+    }]
+    const directory = await mkdtemp(join(tmpdir(), 'etf-current-state-'))
+    const filePath = join(directory, 'etf-current-state.sqlite')
+    const database = new DatabaseSync(filePath)
+    database.exec('create table etf_current_state (id integer primary key, schema_version integer not null, window_json text, verified_at text, last_attempt_at text not null, last_success_at text, snapshot_replace_count integer not null, snapshot_no_write_count integer not null, rejection_count integer not null, history_json text)')
+    database.prepare('insert into etf_current_state values (1, 1, ?, ?, ?, ?, 1, 0, 0, ?)').run(
+      JSON.stringify(legacyWindow), '2026-08-31T00:00:00.000Z', '2026-08-31T00:00:00.000Z', '2026-08-31T00:00:00.000Z', JSON.stringify(legacyHistory)
+    )
+    database.close()
+    const store = createEtfCurrentStateStore({ storage: createEtfCurrentStateSqliteStorage(filePath) })
+
+    const state = await store.read()
+    expect(state?.schemaVersion).toBe(2)
+    expect(state?.snapshot?.window.btc.every((row) => row.source === '0xrouter')).toBe(true)
+    expect(state?.snapshot?.window.revision).toEqual(expect.objectContaining({ providerCurrentStateId: expect.any(String) }))
+    expect(state?.history?.[0]?.source).toBe('0xrouter')
+
+    // 迁移出来的 revision 与新窗口不同：第一次新源写入必须过得去，不是被闸门静默拒绝。
+    const nextBase = windowFor(2)
+    const next = {
+      ...nextBase,
+      btc: nextBase.btc.map((row) => ({ ...row, source: 'cryptoetf-etf-flows' as const })),
+      eth: nextBase.eth.map((row) => ({ ...row, source: 'cryptoetf-etf-flows' as const })),
+      revision: { providerCurrentStateId: 'cryptoetf-etf-flows-1' }
+    }
+    await expect(store.replace({ window: next, verifiedAt: '2026-09-01T00:00:00.000Z' })).resolves.toEqual({ state: 'updated' })
+    const after = await store.readAvailable({ asOf: '2026-09-01T00:00:00.000Z' })
+    expect(after).toMatchObject({ state: 'available' })
+    if (after.state !== 'available') return
+    expect(after.window.btc.every((row) => row.source === 'cryptoetf-etf-flows')).toBe(true)
+  })
+
+  it('is idempotent on the same v1 input', () => {
+    const legacyWindow = { ...windowFor(1), revision: undefined }
+    const raw = {
+      schemaVersion: 1,
+      snapshot: { window: legacyWindow, verifiedAt: '2026-08-31T00:00:00.000Z' },
+      health: { lastAttemptAt: '2026-08-31T00:00:00.000Z', lastSuccessAt: '2026-08-31T00:00:00.000Z', snapshotReplaceCount: 1, snapshotNoWriteCount: 0, rejectionCount: 0 }
+    }
+    const once = migrateEtfCurrentState(raw)
+    expect(once).toBeDefined()
+    expect(migrateEtfCurrentState(once)).toEqual(once)
+  })
+
+  it('still writes a full 30-row window after the source id grew', async () => {
+    const dates = Array.from({ length: 30 }, (_, index) => new Date(Date.parse('2026-07-01T00:00:00.000Z') + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10))
+    const rows = (asset: 'BTC' | 'ETH') => dates.map((tradingDate, index) => ({
+      asset, tradingDate, netFlowUsd: index + 1, observedAt: '2026-08-31T00:00:00.000Z', fetchedAt: '2026-08-31T00:00:00.000Z',
+      source: 'cryptoetf-etf-flows' as const, sourceRevision: 'revision-'.repeat(5)
+    }))
+    const built = buildEtfCurrentStateWindow({ asOf: '2026-08-31T00:00:00.000Z', completeThrough: dates.at(-1)!, completeDates: dates, btc: rows('BTC'), eth: rows('ETH') })
+    if (built.state !== 'available') throw new Error('test window must be available')
+    const window = { ...built.window, revision: { providerCurrentStateId: 'cryptoetf-budget' } }
+    // 旧预算 12KB 装不下新 id 的满窗；这正是会让 persist 静默失败的那条线。
+    expect(Buffer.byteLength(JSON.stringify(window))).toBeGreaterThan(12 * 1024)
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    await expect(store.replace({ window, verifiedAt: '2026-09-01T00:00:00.000Z' })).resolves.toEqual({ state: 'updated' })
   })
 
   it('fails closed without caching or exposing a malformed persisted state', async () => {

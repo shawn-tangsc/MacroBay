@@ -127,6 +127,8 @@ import { createSourceRequestGovernanceQueue } from './application/sourceRequestG
 import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore } from './store/etfCurrentStateStore'
 import { createEtfCurrentStateRefreshService } from './etf/etfCurrentStateRefreshService'
 import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
+import { createCryptoEtfFlowClient } from './application/cryptoEtfFlowClient'
+import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
 import { createFundingRateHistorySqliteStore } from './store/fundingRateHistoryStore'
 import { createPerpetualPositioningSqliteStore } from './store/perpetualPositioningStore'
@@ -432,6 +434,7 @@ export function getIntelligenceModule(
       readHistory: input => queryOpenInterestHistoryAsync({ ...input, store: perpetualPositioningStore }),
       ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }) })
     const etfFlowHistoryClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
+    const cryptoEtfFlowClient = createCryptoEtfFlowClient(hooks.platformFetch ? { platformFetch: hooks.platformFetch } : {})
     // The macro-market series (dollar, gold, offshore yuan, stablecoin peg) come from a credentialed
     // REST provider, read through the same profile/credential pair every other source uses. The real
     // licensed dollar index is collected by the same runtime into the same store, so the log line
@@ -457,6 +460,10 @@ export function getIntelligenceModule(
       const profile = await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)
       return profile.credentialRef ? credentialStore.getByRef(profile.credentialRef) : null
     }
+    const cryptoEtfCredential = async () => {
+      const profile = await profileStore.resolveProfile(cryptoEtfSourcePolicy.sourceId)
+      return profile.credentialRef ? credentialStore.getByRef(profile.credentialRef) : null
+    }
     // One reader for the strip's macro and cross-asset feed lines: the same profile store and
     // credential store the collectors read, the macro store's own outcome notes, and the pipeline's
     // health for the generic FRED collector. The key itself never leaves the credential store.
@@ -472,11 +479,24 @@ export function getIntelligenceModule(
       evidence: createMacroCalendarEvidenceStore(macroCalendarEvidenceArchive)
     })
     const etfCurrentStateRefresh = createEtfCurrentStateRefreshService({
-      isEnabled: async () => (await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)).enabled,
-      hasCredential: async () => Boolean((await zeroXRouterCredential())?.apiKey),
+      // 切换后这条链读新源的开关与凭据：用户没填 key 就是静默停采，不是旧源在替它采。
+      isEnabled: async () => (await profileStore.resolveProfile(cryptoEtfSourcePolicy.sourceId)).enabled,
+      hasCredential: async () => Boolean((await cryptoEtfCredential())?.apiKey),
       requestWindow: async () => {
-        const credential = await zeroXRouterCredential()
-        return credential?.apiKey ? etfFlowHistoryClient.requestWindow(credential.apiKey) : Object.freeze({ state: 'unavailable' as const })
+        const credential = await cryptoEtfCredential()
+        if (!credential?.apiKey) return Object.freeze({ state: 'unavailable' as const })
+        const toRows = (days: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[]) =>
+          days.map((day) => Object.freeze({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd }))
+        const result = await cryptoEtfFlowClient.readSettledWindow(credential.apiKey)
+        if (result.state === 'available') {
+          return Object.freeze({ state: 'available' as const, btc: toRows(result.btc.days), eth: toRows(result.eth.days) })
+        }
+        if (result.state === 'partial') {
+          const btc = result.btc?.state === 'available' ? toRows(result.btc.days) : undefined
+          const eth = result.eth?.state === 'available' ? toRows(result.eth.days) : undefined
+          return Object.freeze({ state: 'partial' as const, ...(btc ? { btc } : {}), ...(eth ? { eth } : {}) })
+        }
+        return Object.freeze({ state: 'unavailable' as const })
       },
       store: etfCurrentStateStore,
       now: () => new Date().toISOString(),

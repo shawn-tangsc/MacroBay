@@ -1,5 +1,11 @@
+import { createHash } from 'node:crypto'
+
 export const etfCurrentStateWindowPolicy = Object.freeze({
-  sourceId: '0xrouter',
+  /** 新写入一律带这个 id；它同时是注册表 id（架构师裁定，一处定义）。 */
+  sourceId: 'cryptoetf-etf-flows' as const,
+  /** 旧值只用于读迁移，永不新写；窗口内仍必须同值。 */
+  legacySourceId: '0xrouter' as const,
+  allowedSourceIds: Object.freeze(['0xrouter', 'cryptoetf-etf-flows'] as const),
   assets: Object.freeze(['BTC', 'ETH'] as const),
   minimumCompleteRows: 5,
   maximumRowsPerAsset: 30,
@@ -8,6 +14,7 @@ export const etfCurrentStateWindowPolicy = Object.freeze({
 })
 
 export type EtfAsset = typeof etfCurrentStateWindowPolicy.assets[number]
+export type EtfFlowSourceId = typeof etfCurrentStateWindowPolicy.allowedSourceIds[number]
 
 export type EtfDailyFlow = Readonly<{
   asset: EtfAsset
@@ -15,7 +22,7 @@ export type EtfDailyFlow = Readonly<{
   netFlowUsd: number
   observedAt: string
   fetchedAt: string
-  source: typeof etfCurrentStateWindowPolicy.sourceId
+  source: EtfFlowSourceId
   sourceRevision?: string
 }>
 
@@ -41,7 +48,7 @@ export function buildEtfCurrentStateWindow(input: {
   if (!isCanonicalUtcMillis(input.asOf) || !isCompleteDateSet(input.completeDates, input.completeThrough, input.asOf.slice(0, 10))) return unavailable()
   const btc = validateAssetRows(input.btc, 'BTC', input.completeThrough)
   const eth = validateAssetRows(input.eth, 'ETH', input.completeThrough)
-  if (!btc || !eth || !sameDates(btc, eth) || !sameDatesAsCompleteSet(btc, input.completeDates)) return unavailable()
+  if (!btc || !eth || !sameDates(btc, eth) || !sameSource(btc, eth) || !sameDatesAsCompleteSet(btc, input.completeDates)) return unavailable()
 
   const windowEnd = btc.at(-1)!.tradingDate
   if (windowEnd !== input.completeThrough) return unavailable()
@@ -76,14 +83,20 @@ function validateAssetRows(rows: readonly EtfDailyFlow[], asset: EtfAsset, compl
     dates.add(row.tradingDate)
     canonical.push(Object.freeze({ ...row }))
   }
-  return canonical.every((row, index) => index === 0 || canonical[index - 1]!.tradingDate < row.tradingDate) ? canonical : undefined
+  if (!canonical.every((row, index) => index === 0 || canonical[index - 1]!.tradingDate < row.tradingDate)) return undefined
+  // 一个窗口只有一个来源：混源会让 DTO 的 sourceId 说谎，也会把两个口径拼进同一条累计。
+  return canonical.every((row) => row.source === canonical[0]!.source) ? canonical : undefined
 }
 
 function isFlow(value: unknown, asset: EtfAsset): value is EtfDailyFlow {
   if (!isPlainRecord(value) || !hasOnlyKeys(value, ['asset', 'tradingDate', 'netFlowUsd', 'observedAt', 'fetchedAt', 'source', 'sourceRevision'])) return false
   return value.asset === asset && isTradingDate(value.tradingDate) && isUsdFlow(value.netFlowUsd) &&
     isCanonicalUtcMillis(value.observedAt) && isCanonicalUtcMillis(value.fetchedAt) &&
-    value.source === etfCurrentStateWindowPolicy.sourceId && (value.sourceRevision === undefined || isSafeRevision(value.sourceRevision))
+    (etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(value.source as string) && (value.sourceRevision === undefined || isSafeRevision(value.sourceRevision))
+}
+
+function sameSource(left: readonly EtfDailyFlow[], right: readonly EtfDailyFlow[]): boolean {
+  return left.length > 0 && right.length > 0 && left[0]!.source === right[0]!.source
 }
 
 function sameDates(left: readonly EtfDailyFlow[], right: readonly EtfDailyFlow[]): boolean {
@@ -127,6 +140,23 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
   return Object.keys(value).every((key) => allowed.includes(key))
+}
+
+/** 窗口的单一来源。调用方先确认窗口合法，所以这里不会拿到空数组或混源。 */
+export function etfWindowSource(window: EtfCurrentStateWindow): EtfFlowSourceId {
+  return window.btc[0]!.source
+}
+
+/**
+ * 窗口的身份摘要：刷新与迁移共用这一份。两个地方各写一个哈希，换源那天就会一边认一边不认。
+ * 旧行（source 为 legacy）也能算，迁移用它给无 revision 的窗口补一个确定性身份。
+ */
+export function etfWindowRevision(rows: readonly EtfDailyFlow[]): Readonly<{ providerCurrentStateId: string }> {
+  return Object.freeze({
+    providerCurrentStateId: createHash('sha256')
+      .update(rows.map((row) => `${row.asset}:${row.tradingDate}:${row.netFlowUsd}:${row.source}:${row.sourceRevision ?? ''}`).join('|'))
+      .digest('hex')
+  })
 }
 
 function unavailable(): Extract<EtfCurrentStateWindowResult, { state: 'unavailable' }> {

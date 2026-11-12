@@ -12,7 +12,8 @@ import { marketPulsePolicy } from './marketPulse'
 import { isWithinUtf8JsonBudget } from './queryDtoBudget'
 import type {
   EtfPublicAssetSnapshot,
-  EtfPublicSnapshot
+  EtfPublicSnapshot,
+  EtfPublicSourceId
 } from './capitalConditionsQueryTypes'
 
 export const capitalConditionsSnapshotPolicy = {
@@ -52,7 +53,10 @@ export function isWithinCapitalConditionsSnapshotDtoBudget(value: unknown): bool
 
 export const etfPublicSnapshotPolicy = {
   schemaVersion: 1,
-  sourceId: '0xrouter',
+  /** 新写入的来源；DTO 里如实带窗口自己的来源，所以过渡期旧读数仍标 `0xrouter`。 */
+  sourceId: 'cryptoetf-etf-flows' as const,
+  legacySourceId: '0xrouter' as const,
+  allowedSourceIds: Object.freeze(['0xrouter', 'cryptoetf-etf-flows'] as const),
   maximumAgeMs: 48 * 60 * 60 * 1_000,
   maximumRowsPerAsset: 30,
   minimumRowsPerAsset: 5,
@@ -68,7 +72,7 @@ export function isWithinEtfPublicSnapshotDtoBudget(value: unknown): boolean {
 export function isValidEtfPublicSnapshot(value: unknown): value is EtfPublicSnapshot {
   try {
     if (!isPlainRecord(value) || !hasExactKeys(value, ['state', 'schemaVersion', 'sourceId', 'windowEnd', 'verifiedAt', 'btc', 'eth']) ||
-      value.state !== 'available' || value.schemaVersion !== etfPublicSnapshotPolicy.schemaVersion || value.sourceId !== etfPublicSnapshotPolicy.sourceId ||
+      value.state !== 'available' || value.schemaVersion !== etfPublicSnapshotPolicy.schemaVersion || !(etfPublicSnapshotPolicy.allowedSourceIds as readonly string[]).includes(value.sourceId as string) ||
       !isTradingDate(value.windowEnd) || !isCanonicalEtfPublicTime(value.verifiedAt)) return false
     if (!isEtfPublicAsset(value.btc, 'BTC', value.verifiedAt) || !isEtfPublicAsset(value.eth, 'ETH', value.verifiedAt)) return false
     const btc = value.btc as EtfPublicAssetSnapshot
@@ -118,7 +122,7 @@ export function isValidEtfPublicSnapshot(value: unknown): value is EtfPublicSnap
 export function toEtfPublicSnapshot(value: unknown): EtfPublicSnapshot | undefined {
   if (!isValidEtfPublicSnapshot(value)) return undefined
   return Object.freeze({
-    state: 'available', schemaVersion: etfPublicSnapshotPolicy.schemaVersion, sourceId: etfPublicSnapshotPolicy.sourceId,
+    state: 'available', schemaVersion: etfPublicSnapshotPolicy.schemaVersion, sourceId: value.sourceId as EtfPublicSourceId,
     windowEnd: value.windowEnd, verifiedAt: value.verifiedAt,
     btc: copyEtfPublicAsset(value.btc), eth: copyEtfPublicAsset(value.eth)
   })

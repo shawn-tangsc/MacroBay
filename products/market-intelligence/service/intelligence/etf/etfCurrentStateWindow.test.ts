@@ -35,6 +35,17 @@ describe('ETF current-state window', () => {
       .toEqual({ state: 'unavailable' })
   })
 
+  it('rejects a window that mixes two sources, and still accepts a legacy-only window', () => {
+    const btc = [...flows('BTC', 5)]
+    btc[btc.length - 1] = { ...btc[btc.length - 1]!, source: 'cryptoetf-etf-flows' }
+
+    expect(buildEtfCurrentStateWindow(inputFor(btc, flows('ETH', 5)))).toEqual({ state: 'unavailable' })
+
+    const legacy = flows('BTC', 5).map((row) => ({ ...row, source: '0xrouter' as const }))
+    const legacyEth = flows('ETH', 5).map((row) => ({ ...row, source: '0xrouter' as const }))
+    expect(buildEtfCurrentStateWindow(inputFor(legacy, legacyEth)).state).toBe('available')
+  })
+
   it('rejects duplicate, missing and non-common dates instead of zero filling either asset', () => {
     const duplicate = [...flows('BTC', 5), { ...flows('BTC', 5)[4], netFlowUsd: 999 }]
     const missing = flows('ETH', 5).slice(0, -1)

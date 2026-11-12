@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { createEtfCurrentStateRefreshService } from './etfCurrentStateRefreshService'
 import { createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage } from '../store/etfCurrentStateStore'
+import { buildEtfCurrentStateWindow } from './etfCurrentStateWindow'
 
 describe('ETF current-state refresh service', () => {
   it('makes zero network requests and zero writes when the source is disabled or has no credential', async () => {
@@ -50,6 +51,37 @@ describe('ETF current-state refresh service', () => {
         eth: expect.not.arrayContaining([expect.objectContaining({ tradingDate: '2026-09-01' })])
       }
     })
+  })
+
+  it('refuses to merge a partial answer across a source switch', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const btcRows = rows('BTC')
+    const ethRows = rows('ETH')
+    const tradingDate = (row: { date: number }) => new Date(row.date).toISOString().slice(0, 10)
+    const legacyFlow = (asset: 'BTC' | 'ETH', row: { date: number; changeUsd: number }) => ({
+      asset, tradingDate: tradingDate(row), netFlowUsd: row.changeUsd,
+      observedAt: '2026-09-01T00:00:00.000Z', fetchedAt: '2026-09-01T00:00:00.000Z', source: '0xrouter' as const
+    })
+    const built = buildEtfCurrentStateWindow({
+      asOf: '2026-09-01T00:00:00.000Z',
+      completeThrough: tradingDate(btcRows.at(-1)!),
+      completeDates: btcRows.map(tradingDate),
+      btc: btcRows.map((row) => legacyFlow('BTC', row)),
+      eth: ethRows.map((row) => legacyFlow('ETH', row))
+    })
+    if (built.state !== 'available') throw new Error('test window must be available')
+    const legacy = { ...built.window, revision: { providerCurrentStateId: 'legacy-1' } }
+    await store.replace({ window: legacy, verifiedAt: '2026-09-01T00:00:00.000Z' })
+
+    const service = createEtfCurrentStateRefreshService({
+      isEnabled: async () => true, hasCredential: async () => true,
+      // 只有一支回来了：这个 partial 如果跟旧窗口合并，就会拼出一个混源窗口。
+      requestWindow: async () => ({ state: 'partial' as const, btc: rows('BTC') }),
+      store, now: () => '2026-09-02T12:00:00.000Z'
+    })
+
+    await expect(service.refresh()).resolves.toEqual({ state: 'unavailable' })
+    expect((await store.read())?.snapshot?.window).toEqual(legacy)
   })
 
   // 定稿后仍变的交易日：写一行计数（不是静默），这是「30 小时余量够不够」的唯一数据来源。
