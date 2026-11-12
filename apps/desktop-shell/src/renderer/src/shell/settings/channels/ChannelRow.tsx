@@ -196,14 +196,15 @@ export function ChannelRow(props: {
             infoLabelKey="settings.channels.autoDisabled.infoAria"
             resolveText={resolveText}
           />
+          {/* `<details>` 是块级内容：外层必须是 `<div>` 而不是 `<p>`（视觉不变，语义合规）。 */}
           {props.autoDisabledFailure === null || props.autoDisabledFailure === undefined ? null : (
-            <p className="channel-row-hint-failure" data-auto-disabled-failure role="note">
+            <div className="channel-row-hint-failure" data-auto-disabled-failure role="note">
               {labels.channelAutoDisabledEnableFailed.replace('{reason}', props.autoDisabledFailure.sentence)}
               <details>
                 <summary>{labels.channelAutoDisabledReasonCode}</summary>
                 <code>{props.autoDisabledFailure.code}</code>
               </details>
-            </p>
+            </div>
           )}
         </div>
       ) : null}
