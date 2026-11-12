@@ -31,7 +31,7 @@ export type NarwhalParsedRelease = Readonly<{
   name: string
   country: string
   status: string
-  dateBasis: 'exact' | 'indicative' | 'date-only'
+  dateBasis: 'exact' | 'indicative'
   /** 读者时区里的发布日；渲染层用它分组，时刻另用 `at`。 */
   eventDate: string
   values: readonly NarwhalParsedValue[]
@@ -113,8 +113,9 @@ function valuesOf(raw: unknown): readonly NarwhalParsedValue[] | undefined {
   return values
 }
 
+/** 只有 `indicative` 与缺省两种形态（实测 1,987 条）；其它值一律按缺省，不新造一档。 */
 function basisOf(raw: unknown): NarwhalParsedRelease['dateBasis'] {
-  return raw === 'indicative' || raw === 'date-only' ? raw : 'exact'
+  return raw === 'indicative' ? 'indicative' : 'exact'
 }
 
 /** `at` 换算到读者时区的那一天；时刻本身仍用 `at`，不在这里截断。 */

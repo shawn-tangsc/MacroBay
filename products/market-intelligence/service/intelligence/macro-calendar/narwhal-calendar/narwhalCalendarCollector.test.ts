@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { collectNarwhalCalendar, type NarwhalPageResponse } from './narwhalCalendarCollector'
+import { toPageResponse } from './narwhalCalendarHttp'
 
 const entry = (id: string) => ({
   release_id: id, at: '2026-11-13T13:30:00Z', timezone: 'America/New_York',
@@ -59,11 +60,21 @@ describe('narwhal calendar collector', () => {
     }
   })
 
-  it('retries a 429 exactly once, then gives up as rate-limited', async () => {
-    const fetchPage = vi.fn(async () => ({ state: 'http' as const, status: 429, retryAfterMs: 1_000 }))
-    const result = await collectNarwhalCalendar(input, { readApiKey: () => 'k', fetchPage, onReleases: vi.fn(), sleep: vi.fn(async () => undefined) })
+  it('retries a 429 exactly once, waiting the Retry-After the source actually sends', async () => {
+    // 实测形状（2026-11-13，20 页 / 200ms 时打出来的）：
+    //   type …/rate-limit-exceeded, status 429, Retry-After: 1, x-ratelimit-remaining: 0
+    // 裸状态码测不出「用 Retry-After 退避」这件事，所以这里连头一起造。
+    const measured = toPageResponse({
+      status: 429,
+      headers: { 'retry-after': '1', 'x-ratelimit-remaining': '0' },
+      body: { type: 'https://narwhalapi.com/problems/rate-limit-exceeded', status: 429 }
+    })
+    const sleep = vi.fn(async () => undefined)
+    const fetchPage = vi.fn(async () => measured)
+    const result = await collectNarwhalCalendar(input, { readApiKey: () => 'k', fetchPage, onReleases: vi.fn(), sleep })
     expect(result).toMatchObject({ state: 'failed', failureCode: 'rate-limited' })
     expect(fetchPage).toHaveBeenCalledTimes(2)
+    expect(sleep).toHaveBeenCalledWith(1_000)
   })
 
   it('stops at the page budget instead of looping forever', async () => {

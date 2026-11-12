@@ -17,7 +17,10 @@ export const calendarSnapshotEvidencePolicy = Object.freeze({
   pageSize: 100,
   // `mi_macro_calendar_event_first_seen` 是数据的一部分：恢复后若没有它，"创建时间"会退化成
   // 最近一次替换的写入时刻（BLS/BEA 是删旧行再插入），所以快照必须带着它，缺失即 schema-invalid。
-  officialTables: ['mi_macro_calendar_migrations', 'mi_macro_calendar_revisions', 'mi_bea_release_observation_state', 'mi_macro_calendar_event_first_seen'],
+  // 换源后用到的两张表也在数据里：发布行（一行 = 一次发布）与首发布快照。
+  // 恢复后若缺 `first_published`，「较上期（未修正）」会从"首发布值"退化成"现在这个值"——
+  // 那正是这张表存在的理由，所以它必须随快照走，缺失即 schema-invalid。
+  officialTables: ['mi_macro_calendar_migrations', 'mi_macro_calendar_revisions', 'mi_bea_release_observation_state', 'mi_macro_calendar_event_first_seen', 'mi_macro_calendar_release_rows', 'mi_macro_calendar_first_published'],
   marketTables: ['mi_macro_calendar_market_event_collections', 'mi_macro_calendar_market_event_observations', 'mi_macro_calendar_provider_indicator_links'],
   /**
    * **v7 及更早的 bundle 不可导入**（因此这里是精确匹配而不是"≥"）。
@@ -27,7 +30,7 @@ export const calendarSnapshotEvidencePolicy = Object.freeze({
    * 导入后旧事件的创建时间会是未知（我们本就不回填），但没有表连"新事件从此刻起准确"也做不到。
    * 若将来把它开放成读者备份，必须先改成接受旧版本并建空侧表，别让读者丢可恢复数据。
    */
-  migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8], hashPattern: /^[a-f0-9]{64}$/,
+  migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], hashPattern: /^[a-f0-9]{64}$/,
   canonicalMarketProvider: '0xrouter', archiveMarketProvider: 'macro-calendar-0xrouter'
 })
 export type SnapshotFailureCode = 'schema-invalid' | 'evidence-invalid' | 'evidence-unresolved' | 'capacity' | 'path-invalid' | 'bundle-invalid' | 'incomplete' | 'io-failure'

@@ -5,8 +5,14 @@
  * Narwhal 的行先写进自己的表，等对账通过再谈切分点。
  */
 
-/** 发布时刻的精度声明，原样保留 Narwhal 的 `date_basis`。 */
-export type NarwhalDateBasis = 'exact' | 'indicative' | 'date-only'
+/**
+ * 发布时刻的精度声明，原样保留 Narwhal 的 `date_basis`。
+ *
+ * **只有两种取值**：实测扫了 2026-11-01..12-15 共 1,987 条，`indicative` 1,383 条、缺省 604 条，
+ * 源里从来没有 `date-only`。多列一个没人能验的取值，就是我们替来源编了一个值——
+ * 「只显示日期」是 `timePrecision` 的事，不该混进这一列。
+ */
+export type NarwhalDateBasis = 'exact' | 'indicative'
 
 /**
  * 由 `date_basis` 派生「这一行能不能显示到分钟」。

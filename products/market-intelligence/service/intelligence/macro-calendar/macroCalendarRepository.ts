@@ -312,12 +312,17 @@ function migrate(database: ReturnType<typeof createMacroCalendarSqlite>['databas
      * `release_id` 是主键——来源自己给的发布标识就是分组键，不再靠「国家+时刻+名称同族」的近似合并。
      * `date_basis` / `time_precision` 原样落库：`indicative` 的行到渲染层只显示日期。
      */
-    execute("create table if not exists mi_macro_calendar_release_rows (release_id text primary key, provider_id text not null, country_code text not null, scheduled_date text not null, scheduled_at text, date_basis text not null check(date_basis in ('exact','indicative','date-only')), time_precision text not null check(time_precision in ('minute','date')), status text, values_json text not null, detected_at text not null, recorded_at text not null, schema_version integer not null); create index if not exists idx_mi_release_rows_day on mi_macro_calendar_release_rows(country_code, scheduled_date, release_id); insert or ignore into mi_macro_calendar_migrations(version) values (9)")
+    execute("create table if not exists mi_macro_calendar_release_rows (release_id text primary key, provider_id text not null, country_code text not null, scheduled_date text not null, scheduled_at text, date_basis text not null check(date_basis in ('exact','indicative')), time_precision text not null check(time_precision in ('minute','date')), status text, values_json text not null, detected_at text not null, recorded_at text not null, schema_version integer not null); create index if not exists idx_mi_release_rows_day on mi_macro_calendar_release_rows(country_code, scheduled_date, release_id); insert or ignore into mi_macro_calendar_migrations(version) values (9)")
     /**
      * 首发布快照：**第一次**看到某期时写下当时的 `previous`，之后来源修订不覆盖。
      * 没有这一行＝「无法确认首发布值」，界面照实说，不回填 0、不拿修订值顶。
      */
     execute("create table if not exists mi_macro_calendar_first_published (release_key text primary key, provider_id text not null, first_previous_json text, first_actual_json text, captured_at text not null); insert or ignore into mi_macro_calendar_migrations(version) values (10)")
+    /**
+     * 收窄 `date_basis` 的取值：源里只有 `indicative` 与缺省（实测 1,987 条），`date-only` 没有出处。
+     * SQLite 改不了 CHECK，只能重建表；**行原样搬过去**（没有 `date-only` 行可丢），索引重建。
+     */
+    execute("create table if not exists mi_macro_calendar_release_rows_v11 (release_id text primary key, provider_id text not null, country_code text not null, scheduled_date text not null, scheduled_at text, date_basis text not null check(date_basis in ('exact','indicative')), time_precision text not null check(time_precision in ('minute','date')), status text, values_json text not null, detected_at text not null, recorded_at text not null, schema_version integer not null); insert or ignore into mi_macro_calendar_release_rows_v11 select release_id, provider_id, country_code, scheduled_date, scheduled_at, date_basis, time_precision, status, values_json, detected_at, recorded_at, schema_version from mi_macro_calendar_release_rows where date_basis in ('exact','indicative'); drop table if exists mi_macro_calendar_release_rows; alter table mi_macro_calendar_release_rows_v11 rename to mi_macro_calendar_release_rows; create index if not exists idx_mi_release_rows_day on mi_macro_calendar_release_rows(country_code, scheduled_date, release_id); insert or ignore into mi_macro_calendar_migrations(version) values (11)")
     execute('commit')
   } catch (error) {
     try { execute('rollback') } catch { /* Preserve the migration failure. */ }
@@ -434,7 +439,7 @@ function toReleaseRow(row: StoredRow): NarwhalReleaseRow {
     releaseId: String(row.release_id), providerId: String(row.provider_id), countryCode: String(row.country_code),
     scheduledDate: String(row.scheduled_date),
     ...(typeof row.scheduled_at === 'string' ? { scheduledAt: row.scheduled_at } : {}),
-    dateBasis: basis === 'indicative' || basis === 'date-only' ? basis : 'exact',
+    dateBasis: basis === 'indicative' ? basis : 'exact',
     ...(typeof row.status === 'string' ? { status: row.status } : {}),
     values: JSON.parse(String(row.values_json)) as NarwhalReleaseValue[],
     detectedAt: String(row.detected_at), recordedAt: String(row.recorded_at)
