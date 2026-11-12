@@ -108,6 +108,8 @@ describe('key-indicator drawer', () => {
     expect(header.querySelectorAll('button')).toHaveLength(1)
     // Chief 的点名判据：页头里的链接数量必须是 0。
     expect(header.querySelectorAll('a')).toHaveLength(0)
+    // `.mk-drawer` 必须真的包住正文——样式选择器写错时这条会红。
+    expect(document.body.querySelector('.mk-drawer .ant-drawer-body')).not.toBeNull()
   })
 
   it('reuses the calendar day list, so its surprise and asset lines stay', async () => {

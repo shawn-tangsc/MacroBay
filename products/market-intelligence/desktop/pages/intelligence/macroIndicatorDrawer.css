@@ -22,9 +22,9 @@
 }
 
 /* 平台 Drawer 的正文留白（设计稿 14/16），只在本抽屉范围内生效。 */
-.mk-drawer.ant-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; }
-.mk-drawer.ant-drawer .ant-drawer-header { padding: 10px 12px; }
-.mk-drawer.ant-drawer-footer { padding: 6px 16px; }
+/* `className` 落在内容面板上，不在 `.ant-drawer` 根上——所以这里不能写 `.mk-drawer.ant-drawer`。 */
+.mk-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; }
+.mk-drawer .ant-drawer-footer { padding: 6px 16px; }
   border: 0;
   background: transparent;
   color: var(--accent);
