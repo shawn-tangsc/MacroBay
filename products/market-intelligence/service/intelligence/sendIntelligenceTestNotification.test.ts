@@ -67,7 +67,14 @@ describe('sendIntelligenceTestNotification — 通道先判', () => {
       resolvePushChannels: async () => NO_PUSH_CHANNEL,
       submit
     }))
-    expect(result).toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0 })
+    // 严格比对（不换 toMatchObject）：回执**多一个字段**必须红——`requestedCount` 是自检回执
+    // 后来加的「读者请求启用的通道条数」，漏同步就该被这条抓住。
+    expect(result).toEqual({
+      state: 'unavailable',
+      reasonCode: 'push-unavailable',
+      enabledChannelCount: 0,
+      requestedCount: 0
+    })
     expect(submit).not.toHaveBeenCalled()
   })
 
