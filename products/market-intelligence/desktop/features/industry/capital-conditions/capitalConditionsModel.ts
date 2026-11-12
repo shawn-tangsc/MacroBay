@@ -127,9 +127,11 @@ export type DashboardCapitalConditionsUnavailableReason =
   | 'snapshot-unavailable'
   | 'value-unformattable'
   | 'query-failed'
+  /** 一次读在 deadline 内没有 settle（诊断用；可见文案与 `query-failed` 同一句）。 */
+  | 'timeout'
 
 export function isCapitalConditionsRetryable(reason: DashboardCapitalConditionsUnavailableReason): boolean {
-  return reason === 'snapshot-unavailable' || reason === 'query-failed'
+  return reason === 'snapshot-unavailable' || reason === 'query-failed' || reason === 'timeout'
 }
 
 export type DashboardCapitalConditionsState =

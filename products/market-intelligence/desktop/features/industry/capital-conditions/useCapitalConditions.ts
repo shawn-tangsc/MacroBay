@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { QueryDeadlineError, withQueryDeadline } from '../../../shared/ipc/queryDeadline'
+
 import type { IntelligenceCapitalConditionsClient } from '../../../shared/ipc/intelligenceCapitalConditionsClient'
 import type { ModuleSignal } from '../../../../contracts/moduleSignal'
 import { isCanonicalCapitalConditionsSnapshotTime } from '../../../../contracts/intelligenceQueryContracts'
@@ -65,7 +67,8 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
     const signals = readSignals(mountInput.signalClient ?? moduleSignalClient, asOf)
 
     const read = (attempt: number): void => {
-      void queryClient.querySnapshot({ asOf }).then(async (result) => {
+      // 一次读挂起不 settle 时不许一直转：10 秒后按「这次失败」走下面的分支（原因记 timeout）。
+      void withQueryDeadline(queryClient.querySnapshot({ asOf })).then(async (result) => {
         const projected = projectDashboardCapitalConditionsSnapshot(result, asOf)
         const read = await signals
         const chip = projectEtfOutflowChip(read)
@@ -74,11 +77,17 @@ export function useCapitalConditions({ client, signalClient, now, reloadKey = 0,
         apply(projected.state === 'available'
           ? { ...projected, etfSignal: chip, ...(analysis ? { etfSignalAnalysis: analysis } : {}) }
           : projected)
-      }).catch(() => {
+      }).catch((error: unknown) => {
         if (!active) return
         // Readings already on screen outrank a failed refresh: keep them and say they are old.
         if (latest.current.state === 'available') {
           apply({ ...latest.current, stale: true })
+          return
+        }
+        // **超时不再重排**：这一跳已经等了整整 10 秒，再排三次就是 30 秒的空转。
+        // 它落在与失败同一个终态档（可见文案同一句、动作同一颗），只有原因码不同（诊断用）。
+        if (error instanceof QueryDeadlineError) {
+          apply({ state: 'unavailable', reason: 'timeout' })
           return
         }
         const delay = capitalConditionsReadRetryDelaysMs[attempt]
