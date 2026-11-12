@@ -189,12 +189,13 @@ export function ProcessingSettingsPanel({ initialSection }: { initialSection?: P
               trigger={(triggerProps) => (
                 <IconButton
                   {...triggerProps}
-                  ariaLabelKey="configDrawer.rowReason"
+                  ariaLabelKey="pages.intelligence.portal.dashboard.configDrawer.reasonAria"
+                  ariaLabelParams={{ reason: copy.values.sentimentUnknownReason }}
                   icon={Info}
                   onSelect={() => undefined}
-                  variant="plain"
-                  resolveText={(key: string) => (key === 'configDrawer.rowReason' ? copy.values.sentimentUnknownReason : '')}
-                  size="sm" />
+                  resolveText={resolveTextKey}
+                  size="sm"
+                  variant="plain" />
               )} />
             : null}
         </>}
@@ -275,7 +276,8 @@ function Unreadable(props: Readonly<{ reason: string }>): React.ReactElement {
       trigger={(triggerProps) => (
         <IconButton
           {...triggerProps}
-          ariaLabelKey="configDrawer.rowReason"
+          ariaLabelKey="pages.intelligence.portal.dashboard.configDrawer.reasonAria"
+          ariaLabelParams={{ reason: props.reason }}
           icon={Info}
           onSelect={() => undefined}
           resolveText={resolveText}
