@@ -16,17 +16,6 @@ const settledFunds = [
   { date: '2026-11-11', totalUsdM: -299.8, funds: [{ ticker: 'IBIT', issuer: 'BlackRock', netFlowUsdM: -299.8 }] }
 ]
 
-const aggregateBody = JSON.stringify({
-  symbol: 'BTC',
-  asset: 'bitcoin',
-  windowDays: 30,
-  days: [
-    { date: '2026-11-11', netFlowUsdM: -299.8 },
-    { date: '2026-11-12', netFlowUsdM: 0 }
-  ],
-  updatedAt: '2026-11-12T20:15:23.095Z'
-})
-
 function response(bodyText: string, status = 200) {
   return { status, headers: { 'x-plan': 'free', 'x-ratelimit-remaining': '59' }, bodyText, byteSize: bodyText.length }
 }
@@ -80,24 +69,19 @@ describe('createCryptoEtfFlowClient readSettledWindow', () => {
 })
 
 describe('createCryptoEtfFlowClient testConnection', () => {
-  it('probes the aggregate endpoint first, then parses the settled funds endpoint', async () => {
-    mockedRequest
-      .mockResolvedValueOnce(response(aggregateBody))
-      .mockResolvedValueOnce(response(fundsBody('BTC', 'bitcoin', settledFunds)))
+  it('probes the settled funds endpoint and reports what it found', async () => {
+    mockedRequest.mockResolvedValueOnce(response(fundsBody('BTC', 'bitcoin', settledFunds)))
 
     const result = await createCryptoEtfFlowClient().testConnection('secret-key')
 
     expect(result).toMatchObject({
       state: 'succeeded',
-      aggregate: { rows: 2, lastDate: '2026-11-12', lastRowIsPlaceholder: true },
       settled: { tradingDate: '2026-11-11', settledRows: 2, placeholderOrNonTradingRows: 0 },
       plan: 'free',
       rateLimitRemaining: '59'
     })
-    expect(mockedRequest.mock.calls.map(([request]) => request.url)).toEqual([
-      'https://api.cryptoetf.today/api/v1/flows/btc',
-      'https://api.cryptoetf.today/api/v1/flows/btc/funds'
-    ])
+    expect(mockedRequest).toHaveBeenCalledTimes(1)
+    expect(mockedRequest.mock.calls[0]![0].url).toBe('https://api.cryptoetf.today/api/v1/flows/btc/funds')
     expect(mockedRequest.mock.calls[0]![0].headers).toMatchObject({ Authorization: 'Bearer secret-key' })
   })
 
@@ -123,16 +107,15 @@ describe('createCryptoEtfFlowClient testConnection', () => {
     await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'transport-unavailable' })
   })
 
-  it('fails the test when the aggregate answers but our parsed endpoint has a wrong shape', async () => {
-    mockedRequest
-      .mockResolvedValueOnce(response(aggregateBody))
-      .mockResolvedValueOnce(response(JSON.stringify({ symbol: 'BTC', asset: 'bitcoin', windowDays: 30, days: [{ date: '2026-11-11' }] })))
+  it('fails on a 200 whose structure is wrong and never treats it as success', async () => {
+    mockedRequest.mockResolvedValueOnce(response(JSON.stringify({ symbol: 'BTC', asset: 'bitcoin', windowDays: 30, days: [] })))
 
     await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape' })
+    expect(mockedRequest).toHaveBeenCalledTimes(1)
   })
 
-  it('reports a failed test, not a success, when the aggregate body is not the documented shape', async () => {
-    mockedRequest.mockResolvedValueOnce(response('{"symbol":"BTC","asset":"bitcoin","days":[]}'))
+  it('does not invent a fifth visible state when the answer holds no settled day', async () => {
+    mockedRequest.mockResolvedValueOnce(response(fundsBody('BTC', 'bitcoin', [{ date: '2026-11-11', totalUsdM: 0, funds: [] }])))
 
     await expect(createCryptoEtfFlowClient().testConnection('k')).resolves.toEqual({ state: 'failed', failureCode: 'response-shape' })
   })

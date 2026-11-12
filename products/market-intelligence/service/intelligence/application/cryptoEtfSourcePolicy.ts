@@ -53,11 +53,6 @@ export function cryptoEtfFlowFundsUrl(asset: CryptoEtfAssetKey): string {
   return `${cryptoEtfSourcePolicy.apiBaseUrl}/api/v1/flows/${asset}/funds`
 }
 
-/** 只用于诊断/探针的聚合口；它的最后一行是未定稿占位，永远不进读数。 */
-export function cryptoEtfFlowUrl(asset: CryptoEtfAssetKey): string {
-  return `${cryptoEtfSourcePolicy.apiBaseUrl}/api/v1/flows/${asset}`
-}
-
 export function cryptoEtfAuthorizationHeader(apiKey: string): string {
   return `${cryptoEtfSourcePolicy.authScheme} ${apiKey.trim()}`
 }
