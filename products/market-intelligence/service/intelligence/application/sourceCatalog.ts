@@ -591,7 +591,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-economic-data-v1',
     reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'planned',
     supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
-    readinessNote: '已登记，本版只验证密钥：采集器与解析器还没接，不采集、不写库、不参与任何读数。',
     adapterConfig: { baseUrl: narwhalSourcePolicy.baseUrl, calendarPath: narwhalSourcePolicy.calendarPath }
   }),
   source({
@@ -599,7 +598,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-financial-events-v1',
     reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'planned',
     supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
-    readinessNote: '已登记，本版只验证密钥：采集器与解析器还没接，不采集、不写库、不参与任何读数。',
     adapterConfig: { baseUrl: narwhalSourcePolicy.baseUrl, calendarPath: narwhalSourcePolicy.calendarPath }
   }),
   source({
@@ -607,7 +605,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-central-bank-activities-v1',
     reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'planned',
     supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
-    readinessNote: '已登记，本版只验证密钥：采集器与解析器还没接，不采集、不写库、不参与任何读数。',
     adapterConfig: { baseUrl: narwhalSourcePolicy.baseUrl, calendarPath: narwhalSourcePolicy.calendarPath }
   }),
   source({
