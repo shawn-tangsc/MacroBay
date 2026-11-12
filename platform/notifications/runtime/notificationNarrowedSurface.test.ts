@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
@@ -48,10 +49,10 @@ function harnessWith(catalogOverride?: ReturnType<typeof createNotificationEvent
       }]
     }),
     diagnostics: () => undefined,
-    resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock,
-    deliveryHooks: { push: async (record) => ({ ok: true, messageId: record.id }) }
+    deliveryHooks: { push: singleResultHook(async (record) => ({ ok: true, messageId: record.id })) }
   })
   return { runtime, state: () => state }
 }
@@ -77,10 +78,10 @@ function harnessWithDiagnostics() {
       }]
     }),
     diagnostics: (entry) => entries.push(entry),
-    resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock,
-    deliveryHooks: { push: async (record) => ({ ok: true, messageId: record.id }) }
+    deliveryHooks: { push: singleResultHook(async (record) => ({ ok: true, messageId: record.id })) }
   })
   return { runtime, state: () => state, entries }
 }

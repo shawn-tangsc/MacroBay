@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { NO_PUSH_CHANNEL } from '../delivery/pushChannelResolution'
+import { NO_PUSH_CHANNELS } from '../delivery/pushChannelResolution'
 import { composeSelfTestSurface } from './notificationSelfTestSurface'
 
 /**
@@ -9,7 +9,7 @@ import { composeSelfTestSurface } from './notificationSelfTestSurface'
 function harness(options: { channel?: unknown; outcome?: string; suppressed?: { level: 'push' | 'desktop'; reason: 'quiet-hours' | 'desktop-disabled' }[] } = {}) {
   const submitted: { eventTypeId: string; namespace?: string; rendered?: Record<string, { title: string }>; deeplink?: unknown; dedupeVars?: { vars?: Record<string, string> } }[] = []
   const surface = composeSelfTestSurface({
-    resolvePushChannel: async () => (options.channel ?? { ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }) as never,
+    resolvePushChannels: async () => (options.channel ?? { ok: true, channels: [{ id: 'channel-a', name: 'Telegram · test' }] }) as never,
     submitRequest: async (input) => {
       submitted.push(input as never)
       if (options.outcome === 'rejected') return { kind: 'rejected', reason: 'unknown-event-type', message: 'x' } as never
@@ -75,7 +75,7 @@ describe('sendTestNotice (link only)', () => {
   })
 
   it('fails closed with 0 channels and carries the count from the same judgement', async () => {
-    const { surface, submitted } = harness({ channel: NO_PUSH_CHANNEL })
+    const { surface, submitted } = harness({ channel: NO_PUSH_CHANNELS })
     await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0 })
     expect(submitted).toEqual([])
   })

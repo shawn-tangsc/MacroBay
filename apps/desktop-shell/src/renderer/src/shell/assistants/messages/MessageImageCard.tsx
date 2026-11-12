@@ -23,7 +23,12 @@ type ImageSendOutcome =
   | { kind: 'sent'; channelName: string; bare: boolean }
   | { kind: 'failed'; text: string; captionTooLong: boolean }
 
-type ImageTarget = { channelName: string; supportsImage: boolean }
+type ImageTarget = { channels: readonly { channelName: string; supportsImage: boolean }[] }
+
+/** 成功句里的通道名：多条通道时按投影顺序用顿号-and-comma 拼（逐条措辞归界面设计，第 3 笔）。 */
+function targetLabel(target: ImageTarget): string {
+  return target.channels.filter((channel) => channel.supportsImage).map((channel) => channel.channelName).join(', ')
+}
 
 /**
  * T1：消息里的图片卡片。
@@ -46,7 +51,7 @@ export function MessageImageCard({ labels, images, createdAt, messageId, caption
     return () => { alive = false }
   }, [])
 
-  const send = async (fileName: string, withoutCaption: boolean, channelName: string): Promise<void> => {
+  const send = async (fileName: string, withoutCaption: boolean, target: ImageTarget): Promise<void> => {
     const channels = globalThis.window?.platform?.channels
     if (!channels || !messageId) return
     setBusyImage(fileName)
@@ -56,11 +61,16 @@ export function MessageImageCard({ labels, images, createdAt, messageId, caption
         fileName,
         ...(withoutCaption ? { withoutCaption: true } : {})
       })
-      // 三种结局分开：投递尝试可能是 delivered / unknown-after-send / failed / skipped，
-      // `ok: true` 只表示「请求走完了」，不表示「送达」。
-      const outcome: ImageSendOutcome = result.status === 'delivered'
-        ? { kind: 'sent', channelName, bare: withoutCaption }
-        : result.status === 'unknown-after-send'
+      // 三种结局分开：聚合可能是 sent-accepted / sent-unconfirmed / failed，
+      // `ok: true` 只表示「不是全败」，不表示「每条都送达」。
+      // 成功句里的通道名只数**真的受理了**的那几条；逐条措辞归界面设计（第 3 笔）。
+      const accepted = result.channels
+        .filter((channel) => channel.state === 'sent-accepted')
+        .map((channel) => channel.channelName ?? '')
+        .filter((name) => name.length > 0)
+      const outcome: ImageSendOutcome = result.state === 'sent-accepted'
+        ? { kind: 'sent', channelName: accepted.length > 0 ? accepted.join(', ') : targetLabel(target), bare: withoutCaption }
+        : result.state === 'sent-unconfirmed'
           ? { kind: 'failed', text: labels.imageSendUnconfirmed, captionTooLong: false }
           : { kind: 'failed', text: failureText(result.code, labels), captionTooLong: result.code === 'delivery-caption-too-long' }
       setOutcomes((current) => ({ ...current, [fileName]: outcome }))
@@ -95,17 +105,17 @@ export function MessageImageCard({ labels, images, createdAt, messageId, caption
               <Download size={12} aria-hidden="true" />
               {labels.imageDownload}
             </a>
-            {target !== null && target !== undefined && target.supportsImage && messageId ? (
+            {target !== null && target !== undefined && target.channels.some((channel) => channel.supportsImage) && messageId ? (
               <span className="assistant-image-send" data-image-send>
                 <button
                   className="assistant-image-send-action"
                   data-image-send-action
                   disabled={busyImage !== null}
-                  onClick={() => void send(image.fileName, false, target.channelName)}
+                  onClick={() => void send(image.fileName, false, target)}
                   type="button">
                   <Send size={12} aria-hidden="true" />
                   {busyImage === image.fileName
-                    ? labels.imageSending.replace('{channel}', target.channelName)
+                    ? labels.imageSending.replace('{channel}', targetLabel(target))
                     : labels.imageSendToChannel}
                 </button>
                 {outcome?.kind === 'sent' ? (
@@ -121,7 +131,7 @@ export function MessageImageCard({ labels, images, createdAt, messageId, caption
                         className="assistant-image-send-action"
                         data-image-send-bare
                         disabled={busyImage !== null}
-                        onClick={() => void send(image.fileName, true, target.channelName)}
+                        onClick={() => void send(image.fileName, true, target)}
                         type="button">
                         {labels.imageSendBare}
                       </button>

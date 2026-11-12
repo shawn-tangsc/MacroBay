@@ -10,7 +10,7 @@ import { composeNotificationSettingsSurface } from './notificationRuntimeSetting
  *
  * 不变的两件事（以后改这里要一起看）：
  * - `pushWired` 由 `deliveryHooks.push` **是否存在**决定，不读任何配置值；
- * - `resolvePushChannel` 是**可选**端口：没装就不传，界面据此说「没有可用通道」，不猜。
+ * - `resolvePushChannels` 是**可选**端口：没装就不传，界面据此说「没有可用通道」，不猜。
  *
  * 类型上刻意只引用 `NotificationRuntimeDependencies` 与两个组合函数的参数，不新造一份端口清单：
  * 多一份清单，就多一处会与 runtime 漂开的地方。
@@ -33,7 +33,7 @@ export function composeNotificationRuntimeSurfaces(
       getSettings: deps.getSettings,
       updateSettings: deps.updateSettings,
       getPushTargets: deps.getPushTargets,
-      ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+      ...(deps.resolvePushChannels === undefined ? {} : { resolvePushChannels: deps.resolvePushChannels }),
       ...(deps.lastDelivery === undefined ? {} : { lastDelivery: deps.lastDelivery }),
       pushWired: () => deps.deliveryHooks?.push !== undefined
     },
@@ -50,7 +50,7 @@ export function composeNotificationRuntimeSurfaces(
     getLanguage: deps.getLanguage,
     copy: deps.copy,
     diagnostics: deps.diagnostics,
-    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+    ...(deps.resolvePushChannels === undefined ? {} : { resolvePushChannels: deps.resolvePushChannels }),
     now: internals.now
   })
   return { settingsSurface, delivery }

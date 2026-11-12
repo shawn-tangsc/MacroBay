@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import { createDefaultNotificationRuntimeSettings } from '../contracts/notificationContracts'
@@ -55,9 +56,9 @@ function harness() {
     desktopSupported: () => true,
     deliveryHooks: {
       desktop: async () => ({ ok: true }),
-      push: async () => ({ ok: true, messageId: 'm-1' })
+      push: singleResultHook(async () => ({ ok: true, messageId: 'm-1' }))
     },
-    resolvePushChannel: async () => ({ ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'channel-a', name: 'Telegram · test' }] }),
     getLanguage: async () => 'zh-CN'
   })
   return { runtime, state: () => state }

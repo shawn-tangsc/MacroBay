@@ -22,7 +22,7 @@ import { createNewsPushLedgerStore, newsPushLedgerPolicy } from '../news-sentime
 import { createNewsPushOutletService } from '../news-sentiment/newsPushOutletService'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
-import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNotificationTest'
 import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
 import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
@@ -106,10 +106,10 @@ export function registerIntelligenceIpc(
    */
   notificationTest?: IntelligenceNotificationTestWiring & Readonly<{ now?: () => string }>,
   /**
-   * 点击前的通道可用性：平台唯一那一份派生（`resolvePushChannel`），由装配处注射。
+   * 点击前的通道可用性：平台唯一那一份派生（`resolvePushChannels`），由装配处注射。
    * 这里只**去掉通道名**再交出去——渲染层拿不到名字，就不会拿它去拼「已发到 X」。
    */
-  readPushChannel?: () => Promise<PushChannelResolution>
+  readPushChannel?: () => Promise<PushChannelsResolution>
 ): void {
   /* 格级启用：一份存储 + 两个动作（读显式写过的格子 / 写一个格子）。
      之前这里只 import 了 `registerCellEnabledIpc` 却没调用它——渲染层拿到的是「方法不存在」，
@@ -151,9 +151,10 @@ export function registerIntelligenceIpc(
   if (readPushChannel !== undefined) {
     register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getAnalysisConclusionSendChannel, async () => {
       const resolved = await readPushChannel()
+      // 多通道是合法状态：`multiple` 只为旧读法留到第 3 笔，恒为 false（不再有「配置冲突」这回事）。
       return resolved.ok
         ? { state: 'ready' as const }
-        : { state: 'unavailable' as const, enabledChannelCount: resolved.enabledChannelCount, multiple: resolved.multiple }
+        : { state: 'unavailable' as const, enabledChannelCount: resolved.enabledChannelCount, multiple: false }
     })
   }
 

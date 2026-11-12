@@ -52,7 +52,7 @@ import {
   type NotificationDeliveryContent
 } from '../runtime/notificationRouting'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
-import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushChannelResolution'
+import { NO_PUSH_CHANNELS, type PushChannelsResolution } from '../delivery/pushChannelResolution'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeSelfTestSurface } from './notificationSelfTestSurface'
 import { reportNarrowingWidened } from './notificationNarrowingTrace'
@@ -105,7 +105,7 @@ export type NotificationRuntimeDependencies = {
     conversationLabel: string | null
   } | null
   /** 目标通道的**唯一派生**（技术方案 §1），主推送/升级/重投共用；缺省＝一条都没有，绝不回退读旧字段。 */
-  resolvePushChannel?: () => Promise<PushChannelResolution>
+  resolvePushChannels?: () => Promise<PushChannelsResolution>
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
@@ -413,7 +413,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   return {
     submit,
     /** 推送目标（唯一派生）：产品侧要读「发到哪条、几条可用」，别再造第二份三档判定。 */
-    resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
+    resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS),
 
     /**
      * 渲染层看到的那一份（落地约束 v1.2 §1）：应用内投递与列表共用**同一个**投影。
@@ -422,12 +422,12 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     toCenterItem: (record: NotificationRecord, content?: NotificationDeliveryContent): Promise<NotificationCenterItem> =>
       centerItem(record, content),
 
-    ...composeSelfTestSurface({ resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
+    ...composeSelfTestSurface({ resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS),
       submitRequest: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
     reportProviderCredential,
 
-    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics, resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL) }),
+    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics, resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS) }),
 
     async initialize(): Promise<void> {
       await load()

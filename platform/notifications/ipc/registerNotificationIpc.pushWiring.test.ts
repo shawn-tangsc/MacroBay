@@ -81,8 +81,9 @@ describe('the runtime gets the injected push-channel resolver', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  function configure(push = vi.fn(async () => ({ ok: true, messageId: 'm-1' }))) {
-    const resolvePushChannel = vi.fn(async () => ({ ok: true as const, channelId: 'channel-a', channelName: 'Telegram · test' }))
+  function configure(push = vi.fn(async (_record: unknown, _content: unknown, targets: readonly { channelId: string; channelName: string }[]) =>
+    targets.map((target) => ({ channelId: target.channelId, channelName: target.channelName, result: { ok: true, messageId: 'm-1' } })))) {
+    const resolvePushChannel = vi.fn(async () => ({ ok: true as const, channels: [{ id: 'channel-a', name: 'Telegram · test' }] }))
     configureNotificationRuntime({
       // 三档都开着：这条判的是「派生入口接没接上」，不是读者关掉某一档时的回执（那有另一组用例）。
       getSettings: async () => ({ ...createDefaultNotificationRuntimeSettings(), desktopEnabled: true, toastEnabled: true }),
@@ -91,7 +92,7 @@ describe('the runtime gets the injected push-channel resolver', () => {
       diagnostics: () => undefined,
       catalog,
       push,
-      resolvePushChannel
+      resolvePushChannels: resolvePushChannel
     })
     return { push, resolvePushChannel }
   }
@@ -99,7 +100,7 @@ describe('the runtime gets the injected push-channel resolver', () => {
   it('hands the runtime the very resolver composition injected, not the no-channel fallback', async () => {
     const { resolvePushChannel } = configure()
     const runtime = getNotificationRuntime()
-    await expect(runtime.resolvePushChannel()).resolves.toEqual({ ok: true, channelId: 'channel-a', channelName: 'Telegram · test' })
+    await expect(runtime.resolvePushChannels()).resolves.toEqual({ ok: true, channels: [{ id: 'channel-a', name: 'Telegram · test' }] })
     expect(resolvePushChannel).toHaveBeenCalled()
   })
 
@@ -118,7 +119,7 @@ describe('the runtime gets the injected push-channel resolver', () => {
   it('the three test buttons send through the same resolver, so they no longer report push-unavailable', async () => {
     configure()
     const runtime = getNotificationRuntime()
-    await expect(runtime.sendTestNotice()).resolves.toEqual({ state: 'sent', channelId: 'channel-a', channelName: 'Telegram · test' })
+    await expect(runtime.sendTestNotice()).resolves.toMatchObject({ state: 'sent', channelId: 'channel-a', channelName: 'Telegram · test' })
   })
   it('refuses to build the singleton before configuration, instead of creating a push-dead runtime', async () => {
     // 装配顺序错了必须响亮失败：一个在装配前被造出来的运行时，本进程内永远不会再被修正。

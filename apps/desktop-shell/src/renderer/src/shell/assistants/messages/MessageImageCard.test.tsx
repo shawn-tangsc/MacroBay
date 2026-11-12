@@ -62,7 +62,10 @@ afterEach(async () => {
  * 「只发图片」只在 caption 超长终态失败后出现，并且走第三个键（由主进程负责，这里只传 withoutCaption）。
  */
 describe('send an image to the channel', () => {
-  function installChannels(target: { channelId: string; channelName: string; supportsImage: boolean } | null, sendResult: Record<string, unknown>) {
+  function installChannels(
+    target: { channels: readonly { channelId: string; channelName: string; supportsImage: boolean }[] } | null,
+    sendResult: Record<string, unknown>
+  ) {
     const sendMessageImage = vi.fn(async (_input: { messageId: string; fileName: string; withoutCaption?: boolean }) => sendResult)
     ;(globalThis as { window?: unknown }).window = Object.assign(globalThis.window ?? {}, {
       platform: { channels: { imageTarget: vi.fn(async () => target), sendMessageImage } }
@@ -80,13 +83,13 @@ describe('send an image to the channel', () => {
   }
 
   it('does not draw the action when no channel is available', async () => {
-    installChannels(null, { ok: false, code: 'delivery-host-unavailable', channelId: null })
+    installChannels(null, { ok: false, state: 'failed', code: 'delivery-host-unavailable', channels: [] })
     const host = await mountCard({ messageId: 'm1', caption: 'hi' })
     expect(host.querySelector('[data-image-send-action]')).toBeNull()
   })
 
   it('sends with the message id and file name, then shows the channel it went to', async () => {
-    const { sendMessageImage } = installChannels({ channelId: 'c1', channelName: 'Telegram', supportsImage: true }, { ok: true, channelId: 'c1', status: 'delivered', code: null })
+    const { sendMessageImage } = installChannels({ channels: [{ channelId: 'c1', channelName: 'Telegram', supportsImage: true }] }, { ok: true, state: 'sent-accepted', code: null, channels: [{ channelId: 'c1', channelName: 'Telegram', state: 'sent-accepted' }] })
     const host = await mountCard({ messageId: 'm1', caption: 'hi' })
     const button = host.querySelector('[data-image-send-action]') as HTMLButtonElement
     expect(button).not.toBeNull()
@@ -98,8 +101,8 @@ describe('send an image to the channel', () => {
 
   it('offers "send image only" after a caption-too-long failure, and never truncates silently', async () => {
     const { sendMessageImage } = installChannels(
-      { channelId: 'c1', channelName: 'Telegram', supportsImage: true },
-      { ok: false, code: 'delivery-caption-too-long', channelId: 'c1' }
+      { channels: [{ channelId: 'c1', channelName: 'Telegram', supportsImage: true }] },
+      { ok: false, state: 'failed', code: 'delivery-caption-too-long', channels: [{ channelId: 'c1', channelName: 'Telegram', state: 'failed', code: 'delivery-caption-too-long' }] }
     )
     const host = await mountCard({ messageId: 'm1', caption: 'x'.repeat(1500) })
     await act(async () => (host.querySelector('[data-image-send-action]') as HTMLButtonElement).click())
@@ -115,10 +118,10 @@ describe('send an image to the channel', () => {
 
   it('says "image only" in the success line, and drops the bare action after it is used', async () => {
     const sendMessageImage = vi.fn()
-      .mockResolvedValueOnce({ ok: false, code: 'delivery-caption-too-long', channelId: 'c1' })
-      .mockResolvedValueOnce({ ok: true, channelId: 'c1', status: 'delivered', code: null })
+      .mockResolvedValueOnce({ ok: false, state: 'failed', code: 'delivery-caption-too-long', channels: [{ channelId: 'c1', channelName: 'Telegram', state: 'failed', code: 'delivery-caption-too-long' }] })
+      .mockResolvedValueOnce({ ok: true, state: 'sent-accepted', code: null, channels: [{ channelId: 'c1', channelName: 'Telegram', state: 'sent-accepted' }] })
     ;(globalThis as { window?: unknown }).window = Object.assign(globalThis.window ?? {}, {
-      platform: { channels: { imageTarget: vi.fn(async () => ({ channelId: 'c1', channelName: 'Telegram', supportsImage: true })), sendMessageImage } }
+      platform: { channels: { imageTarget: vi.fn(async () => ({ channels: [{ channelId: 'c1', channelName: 'Telegram', supportsImage: true }] })), sendMessageImage } }
     })
     const host = await mountCard({ messageId: 'm1', caption: 'x'.repeat(1500) })
     await act(async () => (host.querySelector('[data-image-send-action]') as HTMLButtonElement).click())
@@ -134,8 +137,8 @@ describe('send an image to the channel', () => {
     // 口径 B：跨重启不提供「只发图片」。动作依赖的是**这次会话里的失败状态**，重建调用点后状态归零；
     // 主进程侧也不留 payload（见 ChannelDeliveryService 的「stores no fileName」用例），所以没有可点的地方。
     const { sendMessageImage } = installChannels(
-      { channelId: 'c1', channelName: 'Telegram', supportsImage: true },
-      { ok: false, code: 'delivery-caption-too-long', channelId: 'c1' }
+      { channels: [{ channelId: 'c1', channelName: 'Telegram', supportsImage: true }] },
+      { ok: false, state: 'failed', code: 'delivery-caption-too-long', channels: [{ channelId: 'c1', channelName: 'Telegram', state: 'failed', code: 'delivery-caption-too-long' }] }
     )
     const host = await mountCard({ messageId: 'm1', caption: 'x'.repeat(1500) })
     await act(async () => (host.querySelector('[data-image-send-action]') as HTMLButtonElement).click())
@@ -154,10 +157,10 @@ describe('send an image to the channel', () => {
   })
 
   it('does not draw any action without a message id or without image capability', async () => {
-    installChannels({ channelId: 'c1', channelName: 'Telegram', supportsImage: true }, { ok: true, channelId: 'c1', status: 'delivered', code: null })
+    installChannels({ channels: [{ channelId: 'c1', channelName: 'Telegram', supportsImage: true }] }, { ok: true, state: 'sent-accepted', code: null, channels: [{ channelId: 'c1', channelName: 'Telegram', state: 'sent-accepted' }] })
     expect((await mountCard({ caption: 'hi' })).querySelector('[data-image-send-action]')).toBeNull()
 
-    installChannels({ channelId: 'c1', channelName: 'Telegram', supportsImage: false }, { ok: true, channelId: 'c1', status: 'delivered', code: null })
+    installChannels({ channels: [{ channelId: 'c1', channelName: 'Telegram', supportsImage: false }] }, { ok: true, state: 'sent-accepted', code: null, channels: [{ channelId: 'c1', channelName: 'Telegram', state: 'sent-accepted' }] })
     expect((await mountCard({ messageId: 'm1', caption: 'hi' })).querySelector('[data-image-send-action]')).toBeNull()
   })
 })

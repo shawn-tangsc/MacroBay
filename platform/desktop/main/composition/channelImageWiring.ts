@@ -3,23 +3,24 @@ import { createChannelImageSend, type ChannelImageSendResult } from '../channelI
 import { createChannelImageSource } from '../channelImageSource'
 
 /**
- * 「把助手聊天里的图消息发到频道」的装配分片（第四笔）。
+ * 「把助手聊天里的图消息发到频道」的装配分片（多通道方案 §4b 定稿 A）。
  *
- * 从 `channelsAndJobs.ts` 抽出来的理由只有一个：那个文件已经贴着 500 行上限，装配再长就要抬基线。
- * 行为一字未改——选通道、来源校验、目标解析仍在原来那三处，这里只把它们接起来。
- *
- * 三条不在这里重新判断的事：
- * - **投影与动作选同一条通道**：唯一 `runtime-ready`；0 条或多条都当作「没有可用的通道宿主」。
+ * 两条口径：
+ * - **投影回列表**：每条 `runtime-ready` 一条，带 `supportsImage`；按钮出现条件 = 至少一条可发图
+ *   （全不支持、或一条 ready 都没有 → `null`，不画按钮）。`target()` 只读投影：不读图、不读盘。
  * - **图片能力问同一个 router**：一张路由表同时实现文本与图片接口，不开第二张（方案 §2）。
- * - **目标解析与跳过码归投递层**：`deliverImageToEnabledTargets` 与文本版同形、同一套码。
+ *
+ * 目标解析与跳过码归投递层：`deliverImageToEnabledTargets` 与文本版同形、同一套码。
  */
 export type ChannelImageWiringChannel = { id: string; name: string; agentId: string | null; state: string }
 
 export type ChannelImageTarget = { channelId: string; channelName: string; supportsImage: boolean }
 
+export type ChannelImageTargets = { channels: readonly ChannelImageTarget[] }
+
 export type ChannelImageWiring = {
-  /** 按钮出现条件的唯一来源：没有可用通道时返回 `null`，渲染层不自己判。 */
-  target: () => ChannelImageTarget | null
+  /** 按钮出现条件的唯一来源：没有**可发图**的通道时返回 `null`，渲染层不自己判。 */
+  target: () => ChannelImageTargets | null
   send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => Promise<ChannelImageSendResult>
 }
 
@@ -41,7 +42,13 @@ export function createChannelImageWiring(deps: {
     getMessage
   })
   const send = createChannelImageSend({
-    listChannels: () => deps.channels.list().map((channel) => ({ id: channel.id, agentId: channel.agentId, state: channel.state })),
+    // 能力在一次投影里问清楚：投递时不再回头问 router（一条通道一次决定，不两处判）。
+    listChannels: () => deps.channels.list().map((channel) => ({
+      id: channel.id,
+      agentId: channel.agentId,
+      state: channel.state,
+      supportsImage: deps.router.supportsImage(channel.id)
+    })),
     resolveImage: channelImageSource.resolve,
     deliverImageToEnabledTargets: (input) => deps.delivery.deliverImageToEnabledTargets(input),
     captionFor: (messageId) => captionOf(getMessage(messageId))
@@ -50,9 +57,15 @@ export function createChannelImageWiring(deps: {
   return {
     target() {
       const ready = deps.channels.list().filter((channel) => channel.state === 'runtime-ready')
-      const channel = ready.length === 1 ? ready[0]! : null
-      if (!channel) return null
-      return { channelId: channel.id, channelName: channel.name, supportsImage: deps.router.supportsImage(channel.id) }
+      const channels = ready
+        .map((channel) => ({
+          channelId: channel.id,
+          channelName: channel.name,
+          supportsImage: deps.router.supportsImage(channel.id)
+        }))
+        .filter((channel) => channel.supportsImage)
+      // 全都不支持图片、或一条 ready 都没有：不画按钮（这是投影的结论，渲染层不自己判）。
+      return channels.length === 0 ? null : { channels }
     },
     send
   }

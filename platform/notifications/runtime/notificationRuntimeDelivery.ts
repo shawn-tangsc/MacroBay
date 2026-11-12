@@ -19,11 +19,11 @@ import type {
   NotificationSignalSeverity,
   NotificationPushBackoff,
   NotificationRecord,
+  PushChannelOutcome,
   NotificationRuntimeSettings
 } from '../contracts/notificationContracts'
-import { recordPushOutcome, shouldSkipPush, type PushDeliveryOutcome } from '../delivery/pushBackoffPolicy'
-import { pushDeliveryState } from '../delivery/pushDeliveryState'
-import type { PushChannelResolution } from '../delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '../delivery/pushChannelResolution'
+import { attemptChannelPush } from './pushFanout'
 import {
   routeTransientDelivery,
   type DeliveryHooks,
@@ -31,7 +31,8 @@ import {
   type NotificationDeliveryContent
 } from './notificationRouting'
 
-export type NotificationPushTransition = { kind: 'paused' | 'resumed'; channelId: string }
+import type { NotificationPushTransition } from './pushFanout'
+export type { NotificationPushTransition }
 
 export type NotificationDeliveryInput = {
   deliveryHooks?: DeliveryHooks
@@ -40,7 +41,7 @@ export type NotificationDeliveryInput = {
   copy?: NotificationCopyPort
   diagnostics?: NotificationDiagnosticsSink
   /** 目标通道的唯一派生（技术方案 §1）；缺省视为「一条都没有」，绝不回退去读旧字段。 */
-  resolvePushChannel?: () => Promise<PushChannelResolution>
+  resolvePushChannels?: () => Promise<PushChannelsResolution>
   now: () => string
 }
 
@@ -303,9 +304,7 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
 
   /**
    * 手机这一档的一次投递（契约 §8/§16.3.4）：唯一写 `delivery.push` 的地方。
-   *
-   * `highestSeverity` 只在这里、且只在**真的发出去了**（受理或未确认）时抬——推失败不算「已经告诉过读者」。
-   * 比较用 `SIGNAL_SEVERITY_RANK`，跟展示用的 `NotificationSeverity` 不是一回事。
+   * 扇出与聚合在 `pushFanout.ts`（这个文件贴着体积上限，成块逻辑先抽出去）。
    */
   async function attemptPush(
     record: NotificationRecord,
@@ -318,92 +317,18 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
     pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
     transition?: NotificationPushTransition
   }> {
-    const nextBackoff: Record<string, NotificationPushBackoff> = { ...pushBackoff }
-    let changed = false
-    let transition: NotificationPushTransition | undefined
-    const at = input.now()
-    // 目标通道由派生入口给出（`runtime-ready` 恰好一条），不再读 `settings.push.channelId`——
-    // 那个字段没有任何生产写入方，读它等于让推送目标悬空（技术方案 §1）。
-    //
-    // not-ok 时**必须留一行可查的原因**（2026-11-08）：以前这一支什么都不记，于是「装配漏了钩子」
-    // 「漏了派生入口」「一条通道都没配」「配了但状态不对」四种完全不同的处境，在日志里长得一模一样，
-    // 读者侧也只有一个 `push-unavailable` 可看。四个诊断码只进日志，读者的闭集一个码都不加。
-    const resolvePushChannel = input.resolvePushChannel
-    if (resolvePushChannel === undefined) {
-      input.diagnostics?.({ code: 'push-resolver-missing', count: 0, at })
-    }
-    const pushChannel = resolvePushChannel === undefined
-      ? null
-      : await resolvePushChannel()
-    if (pushChannel !== null && !pushChannel.ok) {
-      if (pushChannel.multiple) {
-        input.diagnostics?.({ code: 'push-multiple-enabled', count: pushChannel.enabledChannelCount, at })
-      } else if (Object.keys(pushChannel.states).length === 0) {
-        // 一条通道都没有：配置事实，不是瞬时失败。
-        input.diagnostics?.({ code: 'push-target-none', count: 0, at })
-      } else {
-        // 有通道、但没有一条 `runtime-ready`：带状态直方图说清卡在哪一档，**不含通道名与凭据**。
-        input.diagnostics?.({ code: 'push-target-not-ready', count: pushChannel.enabledChannelCount, states: pushChannel.states, at })
-      }
-    }
-    const channelId = pushChannel?.ok === true ? pushChannel.channelId : null
-    const current = channelId === null ? undefined : pushBackoff[channelId]
-    const previousHighest = delivery.push?.highestSeverity
-    const highest = (sent: boolean): NotificationSignalSeverity | undefined => {
-      if (!sent || signalSeverity === undefined) return previousHighest
-      if (previousHighest === undefined) return signalSeverity
-      return SIGNAL_SEVERITY_RANK[signalSeverity] > SIGNAL_SEVERITY_RANK[previousHighest]
-        ? signalSeverity
-        : previousHighest
-    }
-
-    // 事件级开关的兜底：规划层已经不排手机，但严重度升级与手动重投不经过规划。
-    // 明确关掉的事件在这里直接不发，也不写 `delivery.push`——「读者选择不推」不是一次失败。
-    if ((settings.channelEvents ?? {})[record.eventTypeId] === false) {
-      return { pushBackoff }
-    }
-    if (channelId === null || !input.deliveryHooks?.push) {
-      // 钩子缺席是**装配漏了出站端口**，与「没有可用通道」是两件事：分开记，下一次一眼定案。
-      if (!input.deliveryHooks?.push) input.diagnostics?.({ code: 'push-hook-missing', count: 0, at })
-      delivery.push = { state: 'failed', reason: 'push-unavailable', at, ...(previousHighest === undefined ? {} : { highestSeverity: previousHighest }) }
-      return { pushBackoff }
-    }
-    if (shouldSkipPush(current, at)) {
-      // 熔断窗口内不发：写独立原因码，不调用端口（通道方案 §3）。
-      delivery.push = { state: 'failed', reason: 'push-backoff', at, ...(previousHighest === undefined ? {} : { highestSeverity: previousHighest }) }
-      return { pushBackoff }
-    }
-
-    const result = await input.deliveryHooks.push({ ...record, delivery }, content)
-    // 记录上的状态词只由这一处映射给（与手动重投读同一张表）。
-    const mapped = pushDeliveryState(result)
-    // 熔断只认「确定失败」：`sent-unconfirmed`（发出去了、没拿到回执）既不是成功也不是失败。
-    const outcome: PushDeliveryOutcome = mapped.state === 'sent-unconfirmed'
-      ? 'unknown-after-send'
-      : mapped.state === 'failed'
-        ? 'failed'
-        : 'sent-accepted'
-    const decision = recordPushOutcome(current, outcome, at)
-    // `unknown-after-send` 与「本来就没失败过」返回原值：不写，保留「没有熔断记录」这个状态。
-    if (decision.changed) {
-      nextBackoff[channelId] = {
-        channelId,
-        failures: decision.failures,
-        pausedUntil: decision.pausedUntil
-      }
-      changed = true
-    }
-    if (decision.transition === 'suspended') transition = { kind: 'paused', channelId }
-    if (decision.transition === 'resumed') transition = { kind: 'resumed', channelId }
-    const sent = outcome !== 'failed'
-    const nextHighest = highest(sent)
-    delivery.push = {
-      ...mapped,
-      at,
-      ...(result.messageId === undefined ? {} : { messageId: result.messageId }),
-      ...(nextHighest === undefined ? {} : { highestSeverity: nextHighest })
-    }
-    return { pushBackoff: changed ? nextBackoff : pushBackoff, ...(transition === undefined ? {} : { transition }) }
+    return attemptChannelPush({
+      record,
+      delivery,
+      settings,
+      pushBackoff,
+      content,
+      signalSeverity,
+      now: input.now,
+      ...(input.resolvePushChannels === undefined ? {} : { resolvePushChannels: input.resolvePushChannels }),
+      ...(input.deliveryHooks?.push === undefined ? {} : { pushHook: input.deliveryHooks.push }),
+      ...(input.diagnostics === undefined ? {} : { diagnostics: input.diagnostics })
+    })
   }
 
   /**

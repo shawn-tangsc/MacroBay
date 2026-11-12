@@ -15,7 +15,6 @@ import type {
   ChannelManagementSafeView
 } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { resolveDeliveryTarget } from '../../ai/agent-platform/channels/channelDeliveryTargetResolution'
-import type { PushChannelResolution } from './pushChannelResolution'
 import type { ChannelDeliveryRequest, ChannelDeliveryResult } from '../../ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { NotificationAction, NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDeliveryContent } from '../runtime/notificationRouting'
@@ -31,6 +30,19 @@ export type ChannelPushReason =
   | 'push-backoff'
   | 'channel-rejected'
   | 'unknown-after-send'
+
+/** 端口的一个目标：名字来自通道投影（读者看得见的那个名字），端口不另编。 */
+export type ChannelPushTarget = { channelId: string; channelName: string }
+
+/** 一个目标的投递结果：谁、成没成、为什么。N 个目标 = N 行，互不覆盖。 */
+export type ChannelPushAttempt = { channelId: string; channelName: string; result: ChannelPushResult }
+
+/** 出站端口的形状（混入 `DeliveryHooks`）：一次调用扇出到被点名的全部目标，串行、按顺序返回。 */
+export type ChannelPushHook = (
+  record: NotificationRecord,
+  content: NotificationDeliveryContent,
+  targets: readonly ChannelPushTarget[]
+) => Promise<readonly ChannelPushAttempt[]>
 
 export type ChannelPushResult = {
   ok: boolean
@@ -63,18 +75,10 @@ export type ChannelPushPortDeps = {
   }
   deliver(request: ChannelDeliveryRequest): Promise<ChannelDeliveryResult>
   /**
-   * 目标通道的**唯一派生**（技术方案 §1）：`runtime-ready` 恰好一条就用它，0 条与 ≥2 条都是
-   * `push-unavailable`。组合根注入；`push.channelId` 已降级为历史字段，运行路径不再读。
-   */
-  resolvePushChannel: () => Promise<PushChannelResolution>
-  /**
    * 「多于一个外部链接」这件事的出口（契约 §7.5 ⑫）：取第一个照发，但**不许只在脑子里处理**。
    * 两种外链是设计错误，留一行日志，第二次写错的人才查得到。
    */
-  diagnostics?: (
-    code: 'multiple-external-actions' | 'push-multiple-enabled',
-    detail: { recordId?: string; count: number }
-  ) => void
+  diagnostics?: (code: 'multiple-external-actions', detail: { recordId?: string; count: number }) => void
 }
 
 /**
@@ -142,51 +146,58 @@ export function mapChannelDeliveryResult(result: ChannelDeliveryResult): Channel
 
 export function createChannelPushPort(deps: ChannelPushPortDeps) {
   /**
-   * `record` 只用来取幂等键（记录 id）；正文一律取自 `content`，
-   * 端口不碰原始记录里的 metadata / 参数（脱敏在入记录那一刻已做过，通道方案 §2.5）。
+   * 扇出：**只发到被点名的目标**（谁可用、谁在退避、谁被跳过由 runtime 判定，端口不重判）。
+   *
+   * - 串行、按传进来的顺序（N 是个位数；串行让顺序与日志确定，也不并发打多家）；
+   * - **单通道异常只记它自己失败**（`channel-rejected`），循环继续——一条坏通道不许拖垮另外两条；
+   * - 一条记录一次调用：N 个目标 = N 次尝试，但**仍然只有一条通知记录**（额度按记录算）。
    */
   return async function push(
     record: NotificationRecord,
-    content: NotificationDeliveryContent
-  ): Promise<ChannelPushResult> {
-    try {
-      const channel = await deps.resolvePushChannel()
-      if (!channel.ok) {
-        // ≥2 条不是「没有」，是配置冲突：留一行痕（只记条数），否则读者只会看到「发不出去」。
-        if (channel.multiple) deps.diagnostics?.('push-multiple-enabled', { count: channel.enabledChannelCount })
-        return { ok: false, reason: 'push-unavailable' }
-      }
+    content: NotificationDeliveryContent,
+    targets: readonly ChannelPushTarget[]
+  ): Promise<readonly ChannelPushAttempt[]> {
+    const attempts: ChannelPushAttempt[] = []
+    const external = externalActionUrl(record.actions)
+    if (external.extra > 0) {
+      deps.diagnostics?.('multiple-external-actions', { recordId: record.id, count: external.extra + 1 })
+    }
+    // 正文只拼一次：N 个目标发的是同一份内容（本版不做「按通道差异化」）。
+    const text = formatPushText(content, external.url)
+    for (const target of targets) {
+      attempts.push({ channelId: target.channelId, channelName: target.channelName, result: await sendTo(target) })
+    }
+    return attempts
 
-      // 目标判定是**唯一实现**（`resolveDeliveryTarget`）：设置页、测试消息和这条推送都读它，
-      // 免得两个功能在「一个说已绑定、另一个说没绑定」上各说各话。
-      const resolved = resolveDeliveryTarget(deps.channels, channel.channelId)
-      if (!resolved.ok) {
-        return {
-          ok: false,
-          reason: resolved.reason === 'no-target'
-            ? 'delivery-no-target-bound'
-            : resolved.reason === 'ambiguous' ? 'delivery-ambiguous-target' : 'channel-rejected'
+    async function sendTo(target: ChannelPushTarget): Promise<ChannelPushResult> {
+      try {
+        // 目标判定是**唯一实现**（`resolveDeliveryTarget`）：设置页、测试消息和这条推送都读它，
+        // 免得两个功能在「一个说已绑定、另一个说没绑定」上各说各话。
+        const resolved = resolveDeliveryTarget(deps.channels, target.channelId)
+        if (!resolved.ok) {
+          return {
+            ok: false,
+            reason: resolved.reason === 'no-target'
+              ? 'delivery-no-target-bound'
+              : resolved.reason === 'ambiguous' ? 'delivery-ambiguous-target' : 'channel-rejected'
+          }
         }
+        const result = await deps.deliver({
+          channelId: resolved.channelId,
+          agentId: resolved.agentId,
+          conversationId: resolved.conversationId,
+          source: 'notification',
+          // 幂等键 = 记录 id：同一条记录重发不会在通道侧变成两次（通道方案 §2.2）。
+          // **不加通道维度**：通道已经是 claim 唯一键的第一列。
+          sourceId: record.id,
+          // 原文链接是**最后一块**：手机上它是唯一能点的东西，也是中心那个按钮的同一个地址。
+          text
+        })
+        return mapChannelDeliveryResult(result)
+      } catch {
+        // 端口不许把异常抛回提交路径：失败是记录上的证据，不是一条丢掉的记录。
+        return { ok: false, reason: 'channel-rejected' }
       }
-
-      const external = externalActionUrl(record.actions)
-      if (external.extra > 0) {
-        deps.diagnostics?.('multiple-external-actions', { recordId: record.id, count: external.extra + 1 })
-      }
-      const result = await deps.deliver({
-        channelId: resolved.channelId,
-        agentId: resolved.agentId,
-        conversationId: resolved.conversationId,
-        source: 'notification',
-        // 幂等键 = 记录 id：同一条记录重发不会在通道侧变成两次（通道方案 §2.2）。
-        sourceId: record.id,
-        // 原文链接是**最后一块**：手机上它是唯一能点的东西，也是中心那个按钮的同一个地址。
-        text: formatPushText(content, external.url)
-      })
-      return mapChannelDeliveryResult(result)
-    } catch {
-      // 端口不许把异常抛回提交路径：失败是记录上的证据，不是一条丢掉的记录。
-      return { ok: false, reason: 'channel-rejected' }
     }
   }
 }

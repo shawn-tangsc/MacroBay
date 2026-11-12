@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
 
 const catalog = createNotificationEventCatalog({
@@ -99,9 +100,9 @@ function createRuntime(options: {
   }
   const updates: Partial<NotificationRuntimeSettings>[] = []
   // 目标通道由派生入口给出（技术方案 §1）：这个夹具要真的走到推送端口，所以给它一条 runtime-ready。
-  const resolvePushChannel = async () => ({ ok: true as const, channelId: 'telegram', channelName: 'Telegram · test' })
+  const resolvePushChannels = async () => ({ ok: true as const, channels: [{ id: 'telegram', name: 'Telegram · test' }] })
   const runtime = createNotificationRuntime({
-    resolvePushChannel,
+    resolvePushChannels,
     ...(options.lastDelivery === undefined ? {} : { lastDelivery: options.lastDelivery }),
     diagnostics: () => undefined,
     storage,
@@ -117,7 +118,7 @@ function createRuntime(options: {
     }),
     updateSettings: async (patch) => { updates.push(patch) },
     clock,
-    deliveryHooks: options.push === undefined ? {} : { push: options.push }
+    deliveryHooks: options.push === undefined ? {} : { push: singleResultHook(options.push) }
   })
   return { runtime, state: () => state, updates }
 }
@@ -201,14 +202,17 @@ describe('notification settings surface', () => {
     await runtime.submit(request('2026-11-04'))
     expect(calls).toBe(3)
     const latest = state().records.find((record: any) => record.dedupeKey === 'platform|done:2026-11-04')
-    expect(latest?.delivery.push).toMatchObject({ state: 'failed', reason: 'push-backoff' })
+    // 熔断窗口内：这一条记 `queued`（没发），不是 `failed`——通道没坏，是读者/平台在等。
+    expect(latest?.delivery.push).toMatchObject({ state: 'queued' })
     // P6a：进入暂停时发一条平台事件，记录里有它。
     expect(
       state().records.some((record: any) => record.eventTypeId === 'platform.channel.push-suspended')
     ).toBe(true)
     expect((await runtime.getDeliverySettings()).lastPushFailureAt).toBe('2026-11-03T00:00:00.000Z')
-    // 原因与时刻来自同一条记录：这条最近失败是 `push-backoff`，不是前面那次的 `channel-rejected`。
-    expect((await runtime.getDeliverySettings()).lastPushFailureReason).toBe('push-backoff')
+    // 原因与时刻来自同一条记录。熔断窗口内那一条现在是 `queued`（**没发**，不是失败），
+    // 所以「最近一次失败」仍然是之前那次真正的 `channel-rejected`——把它说成 push-backoff 等于
+    // 告诉读者通道坏了，而事实是它在等窗口过去。
+    expect((await runtime.getDeliverySettings()).lastPushFailureReason).toBe('channel-rejected')
   })
 
   it('keeps the preferences and the records when they alternate twenty times', async () => {

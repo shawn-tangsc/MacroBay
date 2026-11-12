@@ -22,9 +22,15 @@ export type ChannelIpcPorts = Readonly<{
   channelInboundService: ChannelInboundService
   /** 助手聊天里的图消息：一个只读投影 + 一条发送动作（主进程侧装配见 channelImageSend.ts）。 */
   channelImages?: {
-    target: () => { channelId: string; channelName: string; supportsImage: boolean } | null
-    send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) =>
-      Promise<{ ok: boolean; channelId: string | null; status?: string; code: string | null; detail?: string }>
+    /** 投影：`null` = 没有可发图的通道；否则每条 `runtime-ready` 通道一行，带 `supportsImage`。 */
+    target: () => { channels: readonly { channelId: string; channelName: string; supportsImage: boolean }[] } | null
+    send: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => Promise<{
+      ok: boolean
+      state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+      code: string | null
+      channels: readonly { channelId: string; channelName?: string; state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'; code?: string }[]
+      detail?: string
+    }>
   }
 }>
 
@@ -96,7 +102,7 @@ export function registerChannelIpc(
     const value = (input ?? {}) as { messageId?: unknown; fileName?: unknown; withoutCaption?: unknown }
     if (typeof value.messageId !== 'string' || value.messageId.length === 0) throw new Error('channel-input-invalid')
     if (typeof value.fileName !== 'string' || value.fileName.length === 0) throw new Error('channel-input-invalid')
-    if (!channelImages) return { ok: false, channelId: null, code: 'delivery-host-unavailable' }
+    if (!channelImages) return { ok: false, state: 'failed' as const, code: 'delivery-host-unavailable', channels: [] }
     return channelImages.send({
       messageId: value.messageId,
       fileName: value.fileName,

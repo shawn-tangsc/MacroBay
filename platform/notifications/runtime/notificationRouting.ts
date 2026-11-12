@@ -1,6 +1,7 @@
 import { isInsideQuietHours } from './quietHours'
 import type { NotificationChannel, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationRecord } from '../contracts/notificationContracts'
+import type { ChannelPushHook } from '../delivery/channelPushPort'
 import type { NotificationDeeplink, NotificationRequest } from '../contracts/notificationContracts'
 
 export type DeliveryAttempt = {
@@ -35,8 +36,11 @@ export type DeliveryHooks = {
   toast?: (record: NotificationRecord, content: NotificationDeliveryContent) => void
   popup?: (record: NotificationRecord, content: NotificationDeliveryContent) => void
   desktop?: (record: NotificationRecord, content: NotificationDeliveryContent) => Promise<{ ok: boolean; reason?: string }>
-  /** 出站到读者已绑定的通道；由主进程装配，通知运行时只调这个口（通道方案 §2.2）。 */
-  push?: (record: NotificationRecord, content: NotificationDeliveryContent) => Promise<{ ok: boolean; reason?: string; messageId?: string }>
+  /**
+   * 出站到读者已绑定的通道；由主进程装配，通知运行时只调这个口（通道方案 §2.2）。
+   * **一次调用扇出到被点名的全部目标**，逐目标回执：N 条通道 = N 行结果，仍是一条记录。
+   */
+  push?: ChannelPushHook
 }
 
 /**

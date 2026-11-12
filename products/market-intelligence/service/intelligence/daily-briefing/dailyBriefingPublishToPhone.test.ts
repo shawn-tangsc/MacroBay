@@ -49,16 +49,21 @@ function runtimeWithPush(options: { channels?: 'one' | 'none' } = {}) {
     }),
     diagnostics: () => undefined,
     // 目标通道由唯一派生入口给出（技术方案 §1）：夹具给「恰好一条 runtime-ready」，与生产同形。
-    resolvePushChannel: async () => (options.channels === 'none'
+    resolvePushChannels: async () => (options.channels === 'none'
       ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: { 'runtime-ready': 0 } }
-      : { ok: true as const, channelId: 'telegram', channelName: 'Telegram · test' }),
+      : { ok: true as const, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
     productIds: ['market-intelligence'],
     deliveryHooks: {
-      push: async () => {
+      // 扇出：一次调用点名 N 条通道，逐条回执（多通道方案 §2）。
+      push: async (_record, _content, targets) => {
         pushes += 1
-        return { ok: true, messageId: `m-${pushes}` }
+        return targets.map((target) => ({
+          channelId: target.channelId,
+          channelName: target.channelName,
+          result: { ok: true, messageId: `m-${pushes}` }
+        }))
       }
     }
   })
@@ -103,7 +108,7 @@ describe('publish to phone: write the record first, then push it', () => {
     })
   })
 
-  it('pressing again keeps one row and pushes again', async () => {
+  it('pressing again keeps one row and does not resend an already delivered channel', async () => {
     const runtime = runtimeWithPush()
     const deps = { readEdition: async () => ({ document: { lede: { text: '今天的主导事件是…' } } }), submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }
     await publishBriefingToPhone(deps, input)
@@ -112,7 +117,8 @@ describe('publish to phone: write the record first, then push it', () => {
 
     expect(again).toMatchObject({ kind: 'accepted' })
     expect(runtime.records()).toHaveLength(1)
-    expect(runtime.pushes()).toBe(2)
+    // 通道已经是 delivered 终态：不再重发（多通道方案 §3：「重推只对没到终态的通道发起」）。
+    expect(runtime.pushes()).toBe(1)
     // 只动投递；次数与创建时间不动。
     expect(runtime.records()[0]).toMatchObject({
       id: first?.id,

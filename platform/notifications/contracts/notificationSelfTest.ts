@@ -9,9 +9,26 @@
  */
 export type LinkSelfTestKind = 'link'
 
+/**
+ * 逐通道回执（多通道方案 §5-5）：一次自检在每条可用通道上各发一条测试消息，各报各的结果。
+ * 读者可见的句子在第 3 笔按这一列渲染；这笔先把事实交出来。
+ */
+export type TestNoticeChannelReceipt = {
+  channelId: string
+  channelName?: string
+  state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+  reason?: string
+}
+
 /** 三档回执的闭集：`sent` 必带通道名（成功句「已发到 {通道名}（测试）」要有来源）。 */
 export type TestNoticeReceipt =
-  | { state: 'sent'; channelId: string; channelName: string }
+  | {
+    state: 'sent'
+    channelId: string
+    channelName: string
+    /** 这一次每条通道各收到了什么；老读者只读上面两个字段时行为不变。 */
+    channels?: readonly TestNoticeChannelReceipt[]
+  }
   | {
     state: 'unavailable'
     /**
@@ -25,6 +42,8 @@ export type TestNoticeReceipt =
      * 后者是**读不到样例**（没有可发的内容）。以前把两者合成 `read-failed`，于是同一个码盖两种病，
      * 读者看到「读失败」去查数据，真正的问题是这条事件没被批准（2026-11-10）。
      */
-    /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（0 或 ≥2）。 */
+    /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（这里是 0）。 */
     enabledChannelCount?: number
+    /** 真的试过之后逐通道的结果（提交被接受、但通道那一步有结论时才有）。 */
+    channels?: readonly TestNoticeChannelReceipt[]
   }
