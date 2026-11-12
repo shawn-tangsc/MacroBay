@@ -63,6 +63,49 @@ export class TelegramApiClient {
       : response.ok ? { ok: false, code: 'telegram-provider-rejected' } : response
   }
 
+  /**
+   * 发一张图 + caption（`sendPhoto`，multipart/form-data）。
+   *
+   * 与文本共用同一套失败分类；caption 的 Markdown 回落由调用方（transport）决定，这里只照 `plain` 发。
+   * 字节直接作为 `photo` 部分，不落盘、不进日志。
+   */
+  async sendPhoto(input: {
+    chatId: string
+    bytes: Uint8Array
+    mime: string
+    caption: string
+    plain: boolean
+    signal?: AbortSignal
+  }): Promise<TelegramApiResult<{ messageId: number | null }>> {
+    try {
+      if (input.signal?.aborted) return { ok: false, code: 'telegram-network-unavailable' }
+      const token = await this.deps.token()
+      if (!token || input.signal?.aborted) return { ok: false, code: 'telegram-provider-rejected' }
+      const form = new FormData()
+      form.set('chat_id', input.chatId)
+      if (input.caption.trim().length > 0) {
+        form.set('caption', input.caption)
+        if (!input.plain) form.set('parse_mode', 'MarkdownV2')
+      }
+      // 文件名只由 mime 决定（Telegram 用扩展名判定是图片）；字节来自调用方，不落盘。
+      const extension = input.mime === 'image/png' ? 'png' : 'jpg'
+      form.set('photo', new Blob([input.bytes], { type: input.mime }), `photo.${extension}`)
+      const response = await this.deps.getPlatformFetch()(`${telegramApiBase}/bot${token}/sendPhoto`, {
+        method: 'POST', signal: input.signal, body: form
+      })
+      const json = await response.json() as { ok?: boolean; result?: { message_id?: unknown }; error_code?: number; parameters?: { retry_after?: number }; description?: string }
+      if (response.ok && json.ok === true) {
+        const id = json.result?.message_id
+        return { ok: true, value: { messageId: typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? id : null } }
+      }
+      return interpretHttpFailure(response.status, json)
+    } catch (error) {
+      const transportError = chromiumErrorName(error)
+      const failure = { ok: false as const, code: classifyTransportFailure(error, input.signal) }
+      return transportError ? { ...failure, transportError } : failure
+    }
+  }
+
   private async request<T>(method: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<TelegramApiResult<T>> {
     try {
       if (signal?.aborted) return { ok: false, code: 'telegram-network-unavailable' }
@@ -73,22 +116,31 @@ export class TelegramApiClient {
       })
       const json = await response.json() as { ok?: boolean; result?: T; error_code?: number; parameters?: { retry_after?: number }; description?: string }
       if (response.ok && json.ok === true) return { ok: true, value: json.result as T }
-      if (response.status === 429) return { ok: false, code: 'telegram-rate-limited', retryAfterMs: boundedRetry(json.parameters?.retry_after) }
-      if (response.status === 409) return { ok: false, code: 'telegram-conflict' }
-      if (response.status >= 500) return { ok: false, code: 'telegram-network-unavailable' }
-      return {
-        ok: false,
-        code: 'telegram-provider-rejected',
-        parseRejected: /parse entities|can't parse/i.test(json.description ?? ''),
-        // Telegram 的说明是人类可读的（`Bad Request: chat not found` 这类），不含 token、不含 URL；
-        // 截断后随失败一路带到投递审计里——用户看到「发送失败」时，我们总算有下一句可查。
-        providerDetail: sanitizeProviderDetail(json.description)
-      }
+      return interpretHttpFailure(response.status, json)
     } catch (error) {
       const transportError = chromiumErrorName(error)
       const failure = { ok: false as const, code: classifyTransportFailure(error, signal) }
       return transportError ? { ...failure, transportError } : failure
     }
+  }
+}
+
+/**
+ * Telegram 的 HTTP 失败分类（文本与图片共用一处）：429 限流、409 冲突、5xx 网络、其余 4xx 被拒。
+ * `description` 是人类可读原话（已脱敏截断），只进审计，不参与判定。
+ */
+function interpretHttpFailure(
+  status: number,
+  json: { parameters?: { retry_after?: number }; description?: string }
+): { ok: false; code: TelegramApiFailure; retryAfterMs?: number; parseRejected?: boolean; providerDetail?: string } {
+  if (status === 429) return { ok: false, code: 'telegram-rate-limited', retryAfterMs: boundedRetry(json.parameters?.retry_after) }
+  if (status === 409) return { ok: false, code: 'telegram-conflict' }
+  if (status >= 500) return { ok: false, code: 'telegram-network-unavailable' }
+  return {
+    ok: false,
+    code: 'telegram-provider-rejected',
+    parseRejected: /parse entities|can't parse/i.test(json.description ?? ''),
+    providerDetail: sanitizeProviderDetail(json.description)
   }
 }
 

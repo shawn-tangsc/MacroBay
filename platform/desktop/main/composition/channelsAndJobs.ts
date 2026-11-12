@@ -157,18 +157,21 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   const qqDeliveryTransport = new QqDeliveryTransport()
   const discordDeliveryTransport = new DiscordDeliveryTransport()
   const wechatDeliveryTransport = new WechatDeliveryTransport()
+  // **同一个实例**同时充当文本与图片出口：只有一张路由表（方案 §2），不开第二张。
+  const channelDeliveryRouter = new ChannelDeliveryTransportRouter({
+    typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
+    telegram: telegramDeliveryTransport,
+    slack: slackDeliveryTransport,
+    lark: larkDeliveryTransport,
+    qq: qqDeliveryTransport,
+    discord: discordDeliveryTransport,
+    wechat: wechatDeliveryTransport
+  })
   const channelDeliveryService = new ChannelDeliveryService({
     repository: channelDeliveryRepository,
     cipher: channelCredentialVault.payloadCipher,
-    transport: new ChannelDeliveryTransportRouter({
-      typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
-      telegram: telegramDeliveryTransport,
-      slack: slackDeliveryTransport,
-      lark: larkDeliveryTransport,
-      qq: qqDeliveryTransport,
-      discord: discordDeliveryTransport,
-      wechat: wechatDeliveryTransport
-    })
+    transport: channelDeliveryRouter,
+    imageTransport: channelDeliveryRouter
   })
   // 设置页「发一条测试消息」要走真投递：装在这儿而不是 app.ts（那是只减不增的基线文件）。
   channelManagementService.setDelivery(channelDeliveryService)
