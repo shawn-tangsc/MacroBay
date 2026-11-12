@@ -201,9 +201,10 @@ describe('the publish control on the page', () => {
     expect(invoke).toHaveBeenCalledTimes(2)
   })
 
-  it('hides "send the missing ones again" while a poster may already have reached a channel', async () => {
-    // 这一次点的是「只发文字」，投递层却按暂存区走了海报路由——已受理那条拿到的是海报。
-    // 重投会把海报再发给它，所以在投递层能跳过已受理通道之前，这颗动作对带海报的结果不出现。
+  it('offers to resend the missing ones on a poster result too; the delivery layer skips the channels that already got it', async () => {
+    // 一成一败、已受理那条拿到的是海报。重发由投递层按「本次请求的意图」选路，并跳过已受理的通道
+    // （频道线 `cb5ef08` 的用例钉住「只对没到的那条产生新尝试、一条都不补时不发」）；
+    // 页面这一层的判据是：这颗动作出现，点它只再发起一次发布。
     invoke.mockResolvedValue({ kind: 'accepted', recordId: 'r1', delivery: { state: 'failed', channels: [
       { channelId: 'c1', channelName: '贾维斯', state: 'sent-accepted', kind: 'image' },
       { channelId: 'c2', channelName: '飞书群', state: 'failed', reason: 'channel-rejected' }
@@ -211,9 +212,12 @@ describe('the publish control on the page', () => {
     render(<Row edition={document()} />)
     await act(async () => { await Promise.resolve() })
     await push()
-    expect(strip()?.querySelector('[data-push-action]')).toBeNull()
-    // 收到与没到照样逐条说清，少的只是那颗动作。
+    const action = strip()?.querySelector('[data-push-action="retry-missing"]') as HTMLButtonElement
+    expect(action.textContent).toBe(zh.retryMissing)
+    // 收到与没到照样逐条说清。
     expect(lineTexts().map((line) => line.split('|')[1])).toEqual(['没到', '收到'])
+    await act(async () => { action.click() })
+    expect(invoke).toHaveBeenCalledTimes(2)
   })
 
   it('names every strip icon by its own short label, never by the sentence it opens', async () => {
