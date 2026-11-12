@@ -175,14 +175,16 @@ describe('source projections', () => {
     }
   })
 
-  it('keeps 0xRouter out of every panel after the switch, with one hidden registration left', () => {
-    /* 换源后 0xRouter 的日历三条已归 Narwhal、ETF 改由 CryptoETF 采，它自己不再供任何面板。
-       留一条 hidden 登记的用途只有一个：库里它写过的历史行有归属可解释。 */
+  it('keeps 0xRouter out of every panel after the switch, still visible and still switchable', () => {
+    /* 换源后 0xRouter 的日历三条已归 Narwhal、ETF 改由 CryptoETF 定时采，它自己不再供任何面板。
+       剩下的那条**必须可见**：日报的 ETF 历史回溯仍按需读它，门控是读者自己的开关——
+       看不见却还在供数，就是一个关不掉的源。 */
     expect(panelView('dashboard')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(false)
     expect(panelView('economic-calendar')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(false)
     const router = providerRegistry.find((provider) => provider.providerId === '0xrouter')
     expect(router?.sources.map((source) => source.sourceId)).toEqual(['0xrouter-aggregate-provider'])
-    expect(router?.sources[0]).toMatchObject({ visibility: 'hidden', maintenanceOnly: true, collection: 'none', purposes: [] })
+    expect(router?.sources[0]).toMatchObject({ maintenanceOnly: true, collection: 'none', purposes: [], capabilities: { runNow: 'none', testConnection: true } })
+    expect(router?.sources[0]?.visibility).not.toBe('hidden')
   })
 
   it('marks every proxy-only source as needing a proxy and leaves reachable sources unmarked', () => {
