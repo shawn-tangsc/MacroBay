@@ -52,8 +52,9 @@ describe('intelligence source startup recovery', () => {
     expect(collectSource).toHaveBeenCalledOnce()
   })
 
-  it('restores an enabled credentialed 0xRouter profile through the governed ETF current-state refresh path despite a legacy manual preset', async () => {
-    const saved = profile('0xrouter-aggregate-provider', { enabled: true, collectionPreset: 'manual', credentialRef: '0xrouter-credentials' })
+  it('restores an enabled credentialed ETF profile through the governed refresh path despite a legacy manual preset', async () => {
+    // 切换后这条判据落在新源上：旧聚合源已不采集，密钥只是日历的锚。
+    const saved = profile('cryptoetf-etf-flows', { enabled: true, collectionPreset: 'manual', credentialRef: 'cryptoetf-etf-flows-credentials' })
     const jobRuntime = createJobRuntime()
     const etfRefresh = vi.fn(async () => ({ state: 'updated' as const }))
     const collectSource = vi.fn(async () => ({

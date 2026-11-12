@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
-import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { citationSource, DailyBriefingShareCard, SOURCE_LABELS } from './DailyBriefingShareCard'
 import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 const text = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -813,5 +813,21 @@ describe('the sheet lists newest first (user 2026-11-06)', () => {
     expect(head?.textContent).toContain('10-31')
     expect(head?.textContent).toContain(text.macro.timeNotPublished)
     expect(head?.textContent).not.toContain('00:00')
+  })
+})
+
+describe('citation source labels', () => {
+  const text = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+  it('resolves every source id that can appear to a name, never to a raw id or the analysis fallback', () => {
+    // 切换后最容易出的两种错：新 id 没进表 → 落原始 id；旧 refId 前缀分支还在 → 新数据贴旧标签。
+    for (const sourceId of Object.keys(SOURCE_LABELS)) {
+      expect(citationSource({ refId: `query:${sourceId}`, sourceLabel: sourceId }, text)).toBe(SOURCE_LABELS[sourceId])
+    }
+    expect(citationSource({ refId: 'query:cryptoetf-etf-flows', sourceLabel: 'cryptoetf-etf-flows' }, text)).toBe('CryptoETF')
+    expect(citationSource({ refId: 'query:cryptoetf-etf-flows', sourceLabel: 'cryptoetf-etf-flows' }, text))
+      .not.toBe(text.citationSources.analysis)
+  })
+  it('no longer relabels anything just because its ref handle starts with the old provider', () => {
+    expect(citationSource({ refId: 'query:0xrouter-etf' }, text)).not.toBe('0xRouter')
   })
 })

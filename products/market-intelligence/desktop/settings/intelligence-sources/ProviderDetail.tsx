@@ -222,10 +222,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    */
   const credentialTarget = credentialSourceId ? { sourceId: credentialSourceId, kind: 'feed' as const } : undefined
   const testSource = provider.sources.find((source) => source.kind === 'official-calendar') ?? credentialTarget
-  const verificationOnly = provider.notice === 'verification-only' // 四态常显行只由这个标记决定
-  /* 横幅只给「有件事要讲」的类别；`verification-only` 没有横幅（见 `PROVIDER_NOTICE_KEYS`）。 */
   const noticeKey = provider.notice === undefined ? undefined : PROVIDER_NOTICE_KEYS[provider.notice]
-  const verificationLine = credentialVerificationLine({ notice: provider.notice, resolveText, hasCredential: credentialStatus?.hasCredential, feedback: connectionFeedback })
+  const verificationLine = credentialVerificationLine({ show: provider.credentialStateLine === true || provider.notice === 'verification-only', resolveText, hasCredential: credentialStatus?.hasCredential, feedback: connectionFeedback })
 
   /**
    * 行内连通性测试：每个已经接了的源一颗，结果按源记。
@@ -361,9 +359,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** 可操作的能力全开 = on、全关 = off、**混合按 off**（点击后把这些可操作项全开）。 */
   const providerGroupEnabled = operableSources.length > 0 && operableSources.every((source) => source.enabled)
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
-  /* 待接入 > 缺凭据 > 可操作：**整组一个可操作能力都没有**时才锁死并提示「还没接入」。 */
+  /* 待接入 > 缺凭据：整组一个可操作能力都没有时才锁死，并提示「还没接入」。 */
   const providerPending = operableSources.length === 0 && sources.length > 0
-  const switchBlock = providerSwitchBlock({ pending: providerPending, credentialMissing: providerCredentialMissing, verificationOnly })
+  const switchBlock = providerSwitchBlock({ pending: providerPending, credentialMissing: providerCredentialMissing })
   const toggleProvider = async (next: boolean): Promise<void> => {
     if (switchBlock !== undefined) return
     // 只写**已接入**的能力；待接入的项不写、不会被打开、状态不变。
@@ -428,21 +426,17 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
           {switchBlock === undefined ? null : <SettingsInfo
             ariaLabelKey={switchBlock.ariaKey} labelKeys={[switchBlock.labelKey]} resolveText={resolveText} />}
           <Switch
-            /* 页头这颗是**源采集开关的唯一编辑入口**（用户 2026-11-12 撤回「关格顺带停源」后回归）：
-               它写源自己的 `enabled`（整组写；待接入项不参与，缺凭据时禁用）。
-               下面能力行的开关仍然只读——行上显示的是「采集与数据」里有没有用它。 */
-            /* 这条源永远排不上采集，界面显示系统真正用的态（关）：点开却什么都不发生的开关是假控件（A10）。 */
+            /* 页头这颗是源采集开关的唯一编辑入口；整组写，待接入项不参与，缺凭据时禁用。 */
             aria-disabled={switchBlock === undefined ? undefined : true}
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
-            checked={verificationOnly ? false : providerGroupEnabled}
+            checked={providerGroupEnabled}
             disabled={switchBlock !== undefined}
             onChange={(next) => void toggleProvider(next)}
             size="small" />
         </span>
       </div>
-      {/* 「需要 API Key」那行分组标题删掉了（用户 2026-11-10）：下面那行的标签 `API Key` 自己就说清了，
-          再来一个标题只是同一件事说两遍。 */}
+      {/* 「需要 API Key」那行分组标题删掉了：下面那行的标签自己就说清了。 */}
       {provider.credential === 'api-key' ? <>
         <div className="source-provider-detail__credential">
           <label>
@@ -491,7 +485,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         credentialMissing={provider.credential === 'api-key' && credentialStatus?.hasCredential === false}
         key={source.sourceId}
         labels={labels}
-        onTest={source.capabilities?.testConnection === true && !verificationOnly ? () => void rowTests.run(source) : undefined}
+        onTest={source.capabilities?.testConnection === true && verificationLine === undefined ? () => void rowTests.run(source) : undefined}
         proxyConfigured={proxyConfigured}
         resolveText={resolveText}
         source={source}

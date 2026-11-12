@@ -11,14 +11,7 @@ export type ProviderSwitchBlock = Readonly<{ ariaKey: string; labelKey: string }
 export function providerSwitchBlock(input: Readonly<{
   pending: boolean
   credentialMissing: boolean
-  verificationOnly: boolean
 }>): ProviderSwitchBlock | undefined {
-  if (input.verificationOnly) {
-    return {
-      ariaKey: 'settings.intelligenceSources.providerVerificationOnlyAria',
-      labelKey: 'settings.intelligenceSources.providerCannotCollect'
-    }
-  }
   if (input.pending) {
     return {
       ariaKey: 'settings.intelligenceSources.providerPendingAria',

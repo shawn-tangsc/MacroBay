@@ -319,10 +319,10 @@ function daysUntil(at: string, from: string): number {
 
 
 
-const SOURCE_LABELS: Readonly<Record<string, string>> = {
+export const SOURCE_LABELS: Readonly<Record<string, string>> = {
   'defillama-stablecoins': 'DefiLlama Stablecoins',
   'binance-futures-positioning': 'Binance Futures',
-  '0xrouter-aggregate-provider': '0xRouter ETF',
+  'cryptoetf-etf-flows': 'CryptoETF',
   'alternative-fear-greed': 'Alternative.me',
   'coindesk-rss': 'CoinDesk RSS'
 }
@@ -342,10 +342,11 @@ function groupCitations(citations: readonly Citation[], text: DailyBriefingText)
   return [...groups.entries()].map(([key, value]) => Object.freeze({ key, indexes: Object.freeze([...value.indexes]), ...(value.statement ? { statement: value.statement } : {}), source: value.source, ...(value.observedAt ? { observedAt: value.observedAt } : {}) }))
 }
 
-function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>, text: DailyBriefingText): string {
+export function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>, text: DailyBriefingText): string {
   if (entry.sourceLabel) return SOURCE_LABELS[entry.sourceLabel] ?? entry.sourceLabel
   if (entry.refId.startsWith('query:defillama-stablecoins')) return 'DefiLlama Stablecoins'
-  if (entry.refId.startsWith('query:0xrouter')) return '0xRouter'
+  /* 0xRouter 那条分支删了（2026-11-13 切换）：refId 若还带旧前缀，这条会把新数据贴成旧标签；
+     若前缀换了，它又匹配不上、掉到「分析」。标签统一走 `sourceLabel` → SOURCE_LABELS。 */
   if (entry.refId.startsWith('macro-calendar')) return text.citationSources.macroCalendar
   if (entry.refId.startsWith('news')) return text.citationSources.news
   return text.citationSources.analysis

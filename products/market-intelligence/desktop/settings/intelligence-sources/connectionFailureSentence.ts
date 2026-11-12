@@ -20,16 +20,16 @@ export type ConnectionFeedback =
 export type VerificationLineTone = 'info' | 'success' | 'error'
 
 export function credentialVerificationLine(input: Readonly<{
-  notice: string | undefined
+  show: boolean
   resolveText: (key: string) => string
   /** `undefined` = 凭据状态还没读回来：先不画，免得先说「没配」再说「已保存」。 */
   hasCredential: boolean | undefined
   feedback: ConnectionFeedback | undefined
 }>): Readonly<{ message: string; tone: VerificationLineTone }> | undefined {
-  const { notice, resolveText, hasCredential, feedback } = input
+  const { show, resolveText, hasCredential, feedback } = input
   /* Only the provider that declares "this build only verifies the key" gets this line. One marker,
      two consequences; no `providerId` special case inside a shared component. */
-  if (notice !== 'verification-only' || hasCredential === undefined) return undefined
+  if (!show || hasCredential === undefined) return undefined
   if (!hasCredential) {
     return { message: resolveText('settings.intelligenceSources.syncRun.failureCodes.credential-missing'), tone: 'info' }
   }

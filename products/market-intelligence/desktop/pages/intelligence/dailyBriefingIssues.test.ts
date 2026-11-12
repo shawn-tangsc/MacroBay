@@ -197,8 +197,10 @@ describe('daily briefing issues', () => {
     }).find((entry) => entry.id === 'data:etf-btc:unavailable')!
     // The clock comes from this edition's own cutoff, not from the current settings.
     expect(noHistory.title).toBe('美国比特币现货基金：00:30 前无可用历史，最近交易日数据尚未返回')
-    expect(noHistory.source).toBe('0xRouter ETF')
-    expect(noHistory.advice).toContain('开盘后')
+    expect(noHistory.source).toBe('CryptoETF')
+    // T+1 之后「开盘后再生成」是错的推荐动作；这句只说 T+1 与次日上午。
+    expect(noHistory.advice).toContain('T+1')
+    expect(noHistory.advice).not.toContain('开盘后')
 
     // No readable cutoff: the sentence says only that the trading day has not arrived, and prints no time.
     const noTime = briefingIssues({

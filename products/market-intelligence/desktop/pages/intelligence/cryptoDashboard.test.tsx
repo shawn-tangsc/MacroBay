@@ -961,7 +961,7 @@ describe('host wiring: cells switched off and sources judged', () => {
   const allEnabled = [
     { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
     { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+    { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true }
   ]
 
   async function settle(container: HTMLElement, selector: string): Promise<void> {
@@ -1027,7 +1027,7 @@ describe('host wiring: cells switched off and sources judged', () => {
         { sourceId: 'binance-futures-positioning' as const, enabled: false, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true }
       ] }) }
     })
     await settle(container, '.mi-positioning-panel')
@@ -1053,7 +1053,7 @@ describe('host wiring: cells switched off and sources judged', () => {
         { sourceId: 'binance-futures-positioning' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true }
       ] }) }
     })
     await settle(container, '.mi-positioning-panel')
@@ -1075,7 +1075,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     const sourceOff = await renderCells({}, {
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: false, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) }
     })
@@ -1090,7 +1090,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     const cellOff = await renderCells({ 'capital:etf': false }, {
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) }
     })
@@ -1312,7 +1312,7 @@ describe('host wiring: capital cells, one row at a time', () => {
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) },
       onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
@@ -1441,7 +1441,7 @@ describe('host wiring: each capital cell focuses its own cell', () => {
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) },
       onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,

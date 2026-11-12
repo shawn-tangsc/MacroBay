@@ -30,20 +30,27 @@ function panelSourceIds(panelId: PanelId): string[] {
 }
 
 describe('provider registry contract', () => {
-  it('keeps the verification-only source testable and impossible to schedule', () => {
+  it('hands the ETF reading to the new source and stops the old one, without losing the calendar key', () => {
     const source = getSource('cryptoetf-etf-flows')
-    expect(source?.collection).toBe('none')
+    expect(source?.collection).toBe('adapter')
+    expect(source?.purposes).toEqual(['dashboard', 'briefing'])
     expect(source?.capabilities).toEqual({ runNow: 'none', testConnection: true })
-    // The key box hangs off an explicit anchor: a `none` source has no adapter for the old guess.
-    expect(getProvider('cryptoetf')?.credentialSourceId).toBe('cryptoetf-etf-flows')
+    // The four-state line follows an explicit flag, so it no longer doubles as a switch lock.
+    expect(getProvider('cryptoetf')?.credentialStateLine).toBe(true)
     expect(getProvider('cryptoetf')?.category).toBe('crypto')
+    // The old aggregate source collects nothing but keeps the key the three calendars share.
+    const retired = getSource('0xrouter-aggregate-provider')
+    expect(retired?.collection).toBe('none')
+    expect(retired?.purposes).toEqual([])
+    expect(getProvider('0xrouter')?.credentialSourceId).toBe('0xrouter-aggregate-provider')
     const definition = getIntelligenceSourceDefinition('cryptoetf-etf-flows')!
     const config = resolveRuntimeConfig({
       definition,
       profile: { ...createDefaultSourceProfile(definition), enabled: true, credentialRef: 'cryptoetf-etf-flows-credentials' }
     })
-    // Even switched on and holding a key, the generic runtime must not arm it.
-    expect(config.enabled).toBe(false)
+    // Switched on with a key, the generic runtime arms it on the fixed ten-minute cadence.
+    expect(config.enabled).toBe(true)
+    expect(config.pollingIntervalSec).toBe(10 * 60)
   })
 
   /**
@@ -51,10 +58,11 @@ describe('provider registry contract', () => {
    * 判据不是「只有某一个 provider」，而是**带标记的 provider 必须真是「只验证密钥、还不采集」**——
    * 标记一旦被当成装饰挂在会采集的源上，那一行就会对读者说「本版不采集数据」的假话。
    */
-  it('keeps the verification-only marker on key-only providers that collect nothing yet', () => {
+  it('keeps the verification-only marker only on providers that still collect nothing', () => {
     const verified = providerRegistry.filter((provider) => provider.notice === 'verification-only')
-    // 本轮的 CryptoETF 必须带：它的密钥块靠这个标记才有那一行。
-    expect(verified.map((provider) => provider.providerId)).toContain('cryptoetf')
+    /* 原来守的是「只验证密钥的源不许被排期」。CryptoETF 切换后真的采集了，所以它必须摘掉这个标记——
+       这条断言接替旧判据：标记只允许出现在不采集的 provider 上，采集源一律不许带。 */
+    expect(verified.map((provider) => provider.providerId)).not.toContain('cryptoetf')
     for (const provider of verified) {
       for (const source of provider.sources) {
         expect(source.collection, `${provider.providerId}:${source.sourceId}`).toBe('none')
@@ -161,12 +169,11 @@ describe('source projections', () => {
     }
   })
 
-  it('shows 0xRouter once in the dashboard panel with all four sources', () => {
+  it('shows 0xRouter once in the dashboard panel with its three calendar feeds', () => {
     const dashboard = panelView('dashboard')
     const routers = dashboard?.providers.filter((provider) => provider.providerId === '0xrouter') ?? []
     expect(routers).toHaveLength(1)
     expect(routers[0]?.sources.map((source) => source.sourceId)).toEqual([
-      '0xrouter-aggregate-provider',
       'macro-calendar-0xrouter-economic-data',
       'macro-calendar-0xrouter-financial-events',
       'macro-calendar-0xrouter-central-bank-activities'

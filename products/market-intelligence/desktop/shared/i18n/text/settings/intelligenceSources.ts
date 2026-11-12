@@ -281,7 +281,6 @@ export const intelligenceSourcesText = {
   /* 源那一行行尾那颗展开按钮：两个字，不是说明。 */
   advancedToggle: '高级',
   credentialsRequired: '需要 API Key',
-  providerVerificationOnlyAria: '为什么这个来源的开关不可操作',
   providerNotices: {
     privateDataSource: '私有数据源：注册账号后需向开发者申请 API Key。',
     /* 免费档的署名条件：中英逐字相同、不翻译（Chief 2026-11-13 定，三处之一）。 */
@@ -534,7 +533,6 @@ export const intelligenceSourcesText = {
   /* 待接入的源：整组启停不可操作，提示只说「还没接入」（短句，不是长说明）。 */
   providerPending: '这个源还没接入',
   /** 只验证密钥的源：开关对它没有作用。只说「这个源不采集」，不写「本版」这种进度。 */
-  providerCannotCollect: '这个源不采集数据，开关对它没有作用。',
   providerPendingAria: '为什么这个开关现在不能开',
   /* 页头那颗**整组**启停（该来源下全部能力）：可访问名带来源名，别只念「开关」。 */
   toggleProviderEnable: '启用 {name} 的全部能力',
@@ -913,7 +911,6 @@ export const intelligenceSourcesText = {
   toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
   advancedToggle: 'Advanced',
   credentialsRequired: 'API key required',
-  providerVerificationOnlyAria: 'Why this source cannot be switched on',
   providerNotices: {
     privateDataSource: 'Private data source: after registering an account, request an API Key from the developer.',
     /* Attribution required by the free tier: identical in every language, never translated. */

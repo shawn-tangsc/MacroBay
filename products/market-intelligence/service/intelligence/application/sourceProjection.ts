@@ -164,6 +164,13 @@ export type ProviderView = {
   invite?: boolean
   /** 页头说明横幅的类别（见 `ProviderDefinition.notice`）。 */
   notice?: ProviderDefinition['notice']
+  /**
+   * 密钥块里那条四态常显行（未配置 / 已保存待验证 / 连接失败：原因 / 连接正常）。
+   *
+   * 与横幅分开：以前由 `notice: 'verification-only'` 兼任，副作用是「只验证密钥」的源连采集开关
+   * 也被锁住——源一旦真能采集就错了。现在它是独立字段，注册表说显示就显示，和开关无关。
+   */
+  credentialStateLine?: ProviderDefinition['credentialStateLine']
   sources: SourceView[]
   /** 目录标记档（provider 级，源里最差的一档）。 */
   healthMarker: SourceHealthMarker
@@ -350,6 +357,7 @@ function groupByProvider(sources: SourceView[]): ProviderView[] {
         ...(provider.signupUrl ? { signupUrl: provider.signupUrl } : {}),
         ...(provider.invite ? { invite: true } : {}),
         ...(provider.notice ? { notice: provider.notice } : {}),
+        ...(provider.credentialStateLine === undefined ? {} : { credentialStateLine: provider.credentialStateLine }),
         sources: [source]
       })
     }

@@ -3,7 +3,7 @@ export const DAILY_BRIEFING_SOURCE_IDS = Object.freeze({
   fearGreed: 'alternative-fear-greed',
   funding: 'binance-futures-positioning',
   stablecoin: 'defillama-stablecoins',
-  etf: '0xrouter-aggregate-provider',
+  etf: 'cryptoetf-etf-flows',
   /**
    * The macro rows the deterministic core-fact ensure may read. The dollar has two writers (the
    * licensed index and this product's basket), so either switch is enough for `dxy`; gold and the

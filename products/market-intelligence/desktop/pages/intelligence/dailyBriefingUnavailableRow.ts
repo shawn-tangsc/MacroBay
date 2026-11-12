@@ -27,6 +27,14 @@ export function unavailableRowCopy(input: Readonly<{
       advice: input.reason === 'not-collected' ? text.limits.advice.waitCollection : text.limits.advice.checkSource
     }
   }
+  /* 「源没启用」与「T+1 还没出」是两件事，不能写一句（产品 2026-11-13）。 */
+  if (input.reason === 'not-collected') {
+    return {
+      template: 'row-unavailable',
+      title: text.limits.row.unavailable.replace('{row}', label),
+      advice: text.limits.advice.etfSourceDisabled
+    }
+  }
   if (input.reason === 'capital-gate') {
     return {
       template: 'capital-gate',

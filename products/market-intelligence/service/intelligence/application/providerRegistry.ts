@@ -1,6 +1,8 @@
+import { cryptoEtfProvider } from './cryptoEtfProvider'
 import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
 import { providerLinks } from './providerLinks'
 import { provider, src } from './sourceDefinitionBuilders'
+import { zeroXRouterProvider } from './zeroXRouterProvider'
 
 export type AgentId = 'crypto' | 'stocks' | 'futures'
 export type PanelId = 'dashboard' | 'economic-calendar'
@@ -109,6 +111,13 @@ export type ProviderDefinition = {
    * disappear entirely.
    */
   credentialSourceId?: string
+  /**
+   * Show the credential-state line on this provider's detail page (未配置 / 已保存待验证 /
+   * 连接失败：原因 / 连接正常). A display fact about this provider, deliberately not a notice kind:
+   * the notice slot was doing double duty, so a provider that only verified its key also got its
+   * collection switch locked — which is wrong the moment the source really collects.
+   */
+  credentialStateLine?: true
   /** Public home page, opened in the system browser. */
   website?: string
   /** Signup / API-key guide. Replace with the operator's invite link. */
@@ -287,35 +296,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       src({ purposes: ['analysis'], sourceId: 'defillama-tvl', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-tvl', displayName: 'DeFiLlama TVL', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'defillama-tvl' })
     ]
   }),
-  provider({
-    providerId: cryptoEtfSourcePolicy.providerId,
-    displayName: cryptoEtfSourcePolicy.displayName,
-    category: 'crypto',
-    credential: 'api-key',
-    /* The key box and the "cannot be scheduled" guarantee at once: the source is `none`, so the
-       generic runtime never arms it, and the anchor is stated rather than derived from an adapter. */
-    credentialSourceId: cryptoEtfSourcePolicy.sourceId,
-    /* 一个标记、两个后果（产品 §3.7）：页面顶部那条说明横幅，以及密钥块里那一行**常显**的四态
-       （未配置 / 已保存待验证 / 连接失败：原因 / 连接正常）。只有这一个 provider 带它，
-       其余源的界面不变；组件里不按 providerId 特判。 */
-    notice: 'verification-only',
-    sources: [
-      src({
-        sourceId: cryptoEtfSourcePolicy.sourceId,
-        summaryKey: `settings.intelligenceSources.sourceSummary.${cryptoEtfSourcePolicy.sourceId}`,
-        displayName: 'CryptoETF ETF flows',
-        /* Round 1 feeds no panel and no agent group on purpose: putting it on the dashboard list
-           or in an activation group would change what the crypto analyst counts as its sources,
-           and this round must change nothing a reader already sees. The switch commit moves it. */
-        purposes: [],
-        maintenanceOnly: true,
-        collection: 'none',
-        capabilities: { runNow: 'none', testConnection: true },
-        readiness: 'live',
-        adapterRef: cryptoEtfSourcePolicy.sourceId
-      })
-    ]
-  }),
+  cryptoEtfProvider,
   provider({
     providerId: 'alternative-me',
     displayName: 'Alternative.me',
@@ -354,18 +335,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       src({ purposes: [], sourceId: 'macro-calendar-coinmarketcal', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-coinmarketcal', displayName: 'CoinMarketCal events', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, kind: 'market-calendar' })
     ]
   }),
-  provider({
-    providerId: '0xrouter',
-    displayName: '0xRouter',
-    category: 'aggregate',
-    credential: 'api-key',
-    sources: [
-      src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
-    ]
-  }),
+  zeroXRouterProvider,
   provider({
     providerId: 'narwhal',
     displayName: 'Narwhal',
@@ -374,19 +344,17 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     /* 加源规范：官网按钮只按数据画，没有地址就不出现（用户 2026-11-13 点出 Narwhal 缺这颗）。
        注册页地址没有实测到，所以只填官网；填一个猜的注册页比少一颗按钮更糟。 */
     website: 'https://narwhalapi.com',
-    /* 这一版只做两件事：登记这个源、让它能验证密钥。三条 feed 都还没有采集器与解析器，所以
-       `collection: 'none'`——没有采集就没有「立即采集」，也**不进** `AUTOMATIC_CALENDAR_FEED_IDS`：
-       登记了却让自动刷新去刷一个不存在的适配器，比不登记更糟（Chief 2026-11-13 定）。
+    /* 三条 feed 目前待接入：`visibility: 'pending'` + `collection: 'none'`，所以开关锁着、也没有
+       「立即采集」，并且**不进** `AUTOMATIC_CALENDAR_FEED_IDS`（登记了却让自动刷新去刷一个不存在的
+       适配器，比不登记更糟）。界面只显示状态（待接入 / 这个源还没接入），不写我们做到哪一步。
        密钥挂在第一条 feed 上：三条都不采集，派生不出「哪条能测」，猜不到 key 框就整个不见了。
-       采集器落地那一笔：`collection` 改 `job`、补 schedule，并把自动采集名单、feed→作业键、
-       日历作业表与看板状态源清单（1:1，上限 14 不许涨）一起换过去。 */
+       采集器落地那一笔：`collection` 改 `job`、`visibility` 改 visible、补 schedule，并把自动采集名单、
+       feed→作业键、日历作业表与看板状态源清单（1:1，上限 14 不许涨）一起换过去。 */
     credentialSourceId: 'macro-calendar-narwhal-economic-data',
-    /* 「本版只验证密钥，不采集数据」那一行由这个标记给：读者一眼看出现在没有数据、也没有在采。 */
-    notice: 'verification-only',
     sources: [
-      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-economic-data', displayName: 'Narwhal economic data', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
-      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
-      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } })
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-economic-data', displayName: 'Narwhal economic data', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], visibility: 'pending', sourceId: 'macro-calendar-narwhal-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', collection: 'none', kind: 'market-calendar', readiness: 'planned', capabilities: { runNow: 'none', testConnection: true } })
     ]
   }),
   provider({
@@ -448,7 +416,7 @@ export const agentRegistry: readonly AgentDefinition[] = [
     activation: 'available',
     groups: [
       { groupId: 'fear-greed', agentId: 'crypto', tier: 'required', sourceIds: ['alternative-fear-greed'] },
-      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market'] },
+      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', cryptoEtfSourcePolicy.sourceId, 'realmarketapi-market', 'twelve-data-market'] },
       { groupId: 'funding-rate', agentId: 'crypto', tier: 'required', sourceIds: ['binance-futures-positioning'] },
       {
         groupId: 'macro-calendar',

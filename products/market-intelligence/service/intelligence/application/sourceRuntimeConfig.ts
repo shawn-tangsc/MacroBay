@@ -10,7 +10,8 @@ import { sourceRequiresCredential } from '../schema/intelligenceSource'
 import { getSource } from './providerRegistry'
 import { isMacroSourceId } from './macroSourceCatalogMetadata'
 import { isDefillamaStablecoinRetiredPath } from './sourceCatalog'
-import { isZeroXRouterSource, zeroXRouterEtfRefreshSchedulePolicy } from './zeroXRouterSourcePolicy'
+import { cryptoEtfRefreshSchedulePolicy } from './cryptoEtfRefreshSchedule'
+import { isZeroXRouterSource } from './zeroXRouterSourcePolicy'
 import { dashboardSourceSurfacePolicy, type SafeSourceScheduleRule } from '../schema/intelligenceSourcesContracts'
 
 export type ResolveRuntimeConfigInput = {
@@ -120,9 +121,12 @@ export function genericRuntimeCollects(definition: IntelligenceSourceDefinition)
 export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): IntelligenceSourceConfig {
   const profile = input.profile ?? createDefaultSourceProfile(input.definition)
   const hasCredential = input.hasCredential ?? Boolean(profile.credentialRef)
-  const usesFixedEtfRefreshSchedule = isZeroXRouterSource(input.definition.sourceId) && profile.enabled && hasCredential
+  /* Both ids, while the switch is in flight: the old schedule must not drift to the preset interval
+     in the intermediate state. The old branch goes away with its collection flag. */
+  const usesFixedEtfRefreshSchedule = (input.definition.sourceId === cryptoEtfRefreshSchedulePolicy.sourceId
+    || isZeroXRouterSource(input.definition.sourceId)) && profile.enabled && hasCredential
   const collectionPreset = usesFixedEtfRefreshSchedule
-    ? zeroXRouterEtfRefreshSchedulePolicy.collectionPreset
+    ? cryptoEtfRefreshSchedulePolicy.collectionPreset
     : profile.collectionPreset ?? input.definition.defaultCollectionPreset
   // 通用运行时只采「不是 none、也不是产品自有」的源；ready 与否另有一条（`blocksProductionCollection`）。
   const enabled = blocksProductionCollection(input.definition) || !genericRuntimeCollects(input.definition)
@@ -136,7 +140,7 @@ export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): Intellig
     : isMacroSourceId(input.definition.sourceId)
       ? MACRO_POLLING_INTERVAL_SEC[collectionPreset]
       : usesFixedEtfRefreshSchedule
-        ? zeroXRouterEtfRefreshSchedulePolicy.intervalSeconds
+        ? cryptoEtfRefreshSchedulePolicy.intervalSeconds
         : POLLING_INTERVAL_SEC[input.definition.adapterType][collectionPreset]
 
   const desiredRuntimeState = !enabled ? 'paused' : isStream ? 'live' : 'polling'

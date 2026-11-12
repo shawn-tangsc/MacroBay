@@ -101,17 +101,6 @@ describe('页头整组启停 = 源采集开关的唯一编辑入口', () => {
     expect(onToggleSource.mock.calls[0]?.[1]).toBe(true)
   })
 
-  it('shows a verification-only source as off and not operable, even when the stored profile says on', async () => {
-    // 界面必须显示系统真正用的那个态：这类源永远排不上采集，所以「开」不能画出来（架构师 A10）。
-    const { host, onToggleSource } = await render([true], { credential: 'api-key', hasCredential: true, notice: 'verification-only' })
-    const control = groupSwitch(host)
-    expect(control?.getAttribute('aria-checked')).toBe('false')
-    expect(control?.getAttribute('aria-disabled')).toBe('true')
-    expect(host.querySelector(`[aria-label="${t.providerVerificationOnlyAria}"]`)).not.toBeNull()
-    await act(async () => { control?.click() })
-    expect(onToggleSource).not.toHaveBeenCalled()
-  })
-
   it('disables the group switch while a required key is missing, and writes nothing', async () => {
     const { host, onToggleSource } = await render([false, false], { credential: 'api-key', hasCredential: false })
     const control = groupSwitch(host)

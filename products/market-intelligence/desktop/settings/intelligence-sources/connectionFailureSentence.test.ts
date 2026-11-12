@@ -27,7 +27,7 @@ const en = resolveTextIn('en-US')
 
 function line(overrides: Partial<Parameters<typeof credentialVerificationLine>[0]> = {}) {
   return credentialVerificationLine({
-    notice: 'verification-only',
+    show: true,
     resolveText: zh,
     hasCredential: true,
     feedback: undefined,
@@ -58,19 +58,18 @@ describe('the verification-only status line', () => {
     // 用户 2026-11-13：「本版只验证密钥、不采集数据」这类讲我们做到哪一步的话不许进界面。
     expect(line({ feedback: { kind: 'succeeded' } })).toEqual({ message: '连接正常', tone: 'success' })
     expect(credentialVerificationLine({
-      notice: 'verification-only', resolveText: en, hasCredential: true, feedback: { kind: 'succeeded' }
+      show: true, resolveText: en, hasCredential: true, feedback: { kind: 'succeeded' }
     })).toEqual({ message: 'Connection works', tone: 'success' })
     for (const text of [zh, en]) {
       const sentence = credentialVerificationLine({
-        notice: 'verification-only', resolveText: text, hasCredential: true, feedback: { kind: 'succeeded' }
+        show: true, resolveText: text, hasCredential: true, feedback: { kind: 'succeeded' }
       })!.message
       expect(sentence).not.toMatch(/本版|这一版|this version|this build|不采集|does not collect/i)
     }
   })
 
   it('stays off for other providers and until the credential state is known', () => {
-    expect(line({ notice: 'private-data-source' })).toBeUndefined()
-    expect(line({ notice: undefined })).toBeUndefined()
+    expect(line({ show: false })).toBeUndefined()
     expect(line({ hasCredential: undefined })).toBeUndefined()
   })
 
@@ -79,7 +78,7 @@ describe('the verification-only status line', () => {
       const text = resolveTextIn(language)
       for (const feedback of [{ kind: 'succeeded' } as const, { kind: 'failed', failureCode: 'credential-invalid' } as const, undefined]) {
         const sentence = credentialVerificationLine({
-          notice: 'verification-only', resolveText: text, hasCredential: true, feedback
+          show: true, resolveText: text, hasCredential: true, feedback
         })?.message ?? ''
         expect(sentence).not.toMatch(/上次验证|last verified/i)
       }

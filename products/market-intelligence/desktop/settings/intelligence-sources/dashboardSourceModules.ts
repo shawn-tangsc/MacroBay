@@ -89,7 +89,7 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
   moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.fearGreed.title', [['恐惧与贪婪', 'alternative-fear-greed']]),
   moduleOf('capital', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.capital', [
     ['稳定币', 'defillama-stablecoins'],
-    ['ETF', '0xrouter-aggregate-provider']
+    ['ETF', 'cryptoetf-etf-flows']
   ]),
   moduleOf('positioning', 'pages.intelligence.portal.dashboard.positioning.title', [
     ['永续持仓名义额', 'binance-futures-positioning'],
