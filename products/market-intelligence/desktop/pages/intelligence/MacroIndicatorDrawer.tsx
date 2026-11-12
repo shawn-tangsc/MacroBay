@@ -61,8 +61,13 @@ const MOCK = {
   }
 } as const
 
-export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfigure, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, onOpenCalendar, onConfigure, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
   locale: 'zh-CN' | 'en-US'
+  /**
+   * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
+   * 条件挂载会让它在关的瞬间被卸载，antd 收不到关闭完成，焦点也就回不去「详情」。
+   */
+  open?: boolean
   onClose: () => void
   /**
    * 政策利率卡是**唯一接真数据**的一块：用宿主已经读到的那一份 `reading`，抽屉里不再取第二遍。
@@ -111,7 +116,7 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
   // 平台 `Drawer` 的 modal 档：遮罩、锁焦点、点遮罩关闭、Esc、关闭后焦点回位都是它的能力，
   // 不再在非模态壳上补一套手写的行为。
   return <Drawer
-    open
+    open={open}
     mode="modal"
     size="full"
     className="mk-drawer"
@@ -198,14 +203,4 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
       </aside>
     </section>
   </Drawer>
-}
-
-/** One sentence per surprise state; `none` (a central-bank speech) has no number to compare. */
-function surpriseSentence(tone: 'beat' | 'miss' | 'inline' | 'none', value: string, text: MacroIndicatorDrawerText): string | undefined {
-  switch (tone) {
-    case 'beat': return text.surprise.beat.replace('{value}', value)
-    case 'miss': return text.surprise.miss.replace('{value}', value)
-    case 'inline': return text.surprise.inline
-    default: return undefined
-  }
 }

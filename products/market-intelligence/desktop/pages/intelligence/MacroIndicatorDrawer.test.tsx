@@ -88,6 +88,26 @@ describe('key-indicator drawer', () => {
     expect(busy.querySelector('.mk-mcell__more')?.textContent).toBe('2 条重要')
   })
 
+  it('draws each day row as exactly time + name — no type chip, no surprise, no assets', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} policyText={text} /></ShellLanguageProvider>)
+    })
+    const rows = Array.from(document.body.querySelectorAll('.mk-evr'))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row.children).toHaveLength(2)
+      expect(row.children[0]!.tagName.toLowerCase()).toBe('time')
+      expect(row.children[1]!.tagName.toLowerCase()).toBe('span')
+      // 原型右列没有这三样；出现任一条就说明又回到了多行版本。
+      expect(row.textContent).not.toContain('超预期')
+      expect(row.textContent).not.toContain('QQQ')
+      expect(row.textContent).not.toContain('经济指标')
+    }
+  })
+
   it('says 暂无日程数据 in a month that has no releases', async () => {
     host = document.createElement('div')
     document.body.append(host)
