@@ -7,10 +7,14 @@
 
 /*
  * 遮罩的兜底：antd 的遮罩样式靠 cssinjs 注入，元素带 `ant-drawer-mask-motion-appear` 时初始
- * `opacity: 0`——注入的哈希对不上、或动画停在起始帧，就会出现「元素在、像素是透明的」。
- * 只在本抽屉范围内补一条不依赖注入的底色与终态透明度；行为（点遮罩关闭）仍归平台 Drawer。
+ * `opacity: 0`——动画不跑完（比如系统开了「减少动态效果」）就一直是 0，表现就是「元素在、
+ * 像素是透明的」。
+ *
+ * 这里**不再依赖 `:has()`**：实测那台机器上 `:has()` 版本没有生效，而 `!important` 只要命中
+ * 就一定赢。选择器只用根元素自己带的 `drawer--modal`（平台 Drawer 写在 rootClassName 里），
+ * 命中条件是确定的。代价：模态抽屉的遮罩淡入变成瞬间出现，可见性不再依赖动画。
  */
-.ant-drawer.drawer--modal:has(.drawer__panel.mk-drawer) > .ant-drawer-mask {
+.ant-drawer.drawer--modal > .ant-drawer-mask {
   background: rgba(0, 0, 0, 0.45);
   /* antd 的遮罩初始 `opacity: 0`（进入动画的第一帧）；动画不跑就一直是 0。这里只钉终态。 */
   opacity: 1 !important;
