@@ -32,7 +32,14 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
       }
       const resolution = await input.resolvePushChannels()
       if (!resolution.ok) {
-        return finish({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: resolution.enabledChannelCount })
+        return finish({
+          state: 'unavailable',
+          reasonCode: 'push-unavailable',
+          enabledChannelCount: resolution.enabledChannelCount,
+          // 裁决那一刻已经算好的直方图原样交出去：界面据此区分「一条都没配」与「配了但没连上」，
+          // 不再自己去查一遍通道表（那是第二份判定，迟早在两处说不一样的话）。
+          states: resolution.states
+        })
       }
       const at = input.now()
       // 每次点击都是新键（`seq` 用点击时刻），所以连点是多条测试记录，且不占任何真实键。

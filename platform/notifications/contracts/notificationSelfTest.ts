@@ -44,6 +44,12 @@ export type TestNoticeReceipt =
      */
     /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（这里是 0）。 */
     enabledChannelCount?: number
+    /**
+     * 同一次判定里已经算好的**全通道按状态直方图**（`{ 'credential-missing': 2 }`）。
+     * 它回答「一条都没配」与「配了 N 条但都没连上」是两件事——后者读者该去看是哪条出了问题。
+     * 直方图只有状态词与条数，不含通道名与凭据。
+     */
+    states?: Readonly<Record<string, number>>
     /** 真的试过之后逐通道的结果（提交被接受、但通道那一步有结论时才有）。 */
     channels?: readonly TestNoticeChannelReceipt[]
   }

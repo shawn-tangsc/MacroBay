@@ -30,6 +30,30 @@ describe('sendTestNotice (link only)', () => {
     await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'rejected' })
   })
 
+  it('hands the same-judgement histogram back, so "none configured" and "N configured but none connected" differ', async () => {
+    // 一条通道都没配：空直方图（这是「去启用一条」的处境）。
+    const empty = harness({
+      channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {} }
+    })
+    await expect(empty.surface.sendTestNotice()).resolves.toEqual({
+      state: 'unavailable',
+      reasonCode: 'push-unavailable',
+      enabledChannelCount: 0,
+      states: {}
+    })
+
+    // 配了两条、但都没连上：直方图说清卡在哪一档（这是「去看哪条出问题」的处境）。
+    const notConnected = harness({
+      channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'credential-missing': 1, 'configuration-ready': 1 } }
+    })
+    await expect(notConnected.surface.sendTestNotice()).resolves.toEqual({
+      state: 'unavailable',
+      reasonCode: 'push-unavailable',
+      enabledChannelCount: 0,
+      states: { 'credential-missing': 1, 'configuration-ready': 1 }
+    })
+  })
+
   it('uses a new dedupe key per click, so two clicks are two records', async () => {
     const first = harness()
     const second = harness()
@@ -76,12 +100,18 @@ describe('sendTestNotice (link only)', () => {
 
   it('fails closed with 0 channels and carries the count from the same judgement', async () => {
     const { surface, submitted } = harness({ channel: NO_PUSH_CHANNELS })
-    await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0 })
+    await expect(surface.sendTestNotice()).resolves.toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0, states: {} })
     expect(submitted).toEqual([])
   })
 
-  it('fails closed with ≥2 channels and reports the real count, not a hard-coded 2', async () => {
-    const { surface } = harness({ channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 3, multiple: true, states: { 'runtime-ready': 3 } } })
-    await expect(surface.sendTestNotice()).resolves.toMatchObject({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 3 })
+  it('reports the histogram from the same judgement instead of a hard-coded count', async () => {
+    const { surface } = harness({ channel: { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'configuration-ready': 3 } } })
+    // 「配了 3 条但一条都没连上」：回执带的就是那一次判定算出来的直方图。
+    await expect(surface.sendTestNotice()).resolves.toEqual({
+      state: 'unavailable',
+      reasonCode: 'push-unavailable',
+      enabledChannelCount: 0,
+      states: { 'configuration-ready': 3 }
+    })
   })
 })
