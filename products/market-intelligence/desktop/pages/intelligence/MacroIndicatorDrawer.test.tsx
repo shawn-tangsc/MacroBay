@@ -65,4 +65,35 @@ describe('key-indicator drawer', () => {
     await act(async () => { byName('刷新市场日历').click() })
     expect(document.body.querySelector('.mk-minical__busy')).not.toBeNull()
   })
+
+  it('lists release names in the cells: three rows, then 「N 条重要」 in the bottom-right corner', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} /></ShellLanguageProvider>)
+    })
+    const cells = Array.from(document.body.querySelectorAll('.mk-minical__day'))
+    // 2026-11-13 carries five releases in the prototype's data: three named rows + 「2 条重要」.
+    const busy = cells.find(cell => cell.querySelector('em')?.textContent === '13' && cell.querySelector('.mk-mcell__row'))!
+    expect(busy).toBeTruthy()
+    expect(busy.querySelectorAll('.mk-mcell__row')).toHaveLength(3)
+    expect(busy.querySelector('.mk-mcell__more')?.textContent).toBe('2 条重要')
+  })
+
+  it('says 暂无日程数据 in a month that has no releases', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} /></ShellLanguageProvider>)
+    })
+    const prev = document.body.querySelector('button[aria-label="上一个月"]') as HTMLButtonElement
+    const next = document.body.querySelector('button[aria-label="下一个月"]') as HTMLButtonElement
+    // 10 → 11 → 12 → 2027-01 (empty in the prototype's data)
+    for (let step = 0; step < 2; step += 1) await act(async () => { next.click() })
+    expect(document.body.querySelector('.mk-minical__nodata')?.textContent).toBe('暂无日程数据')
+    await act(async () => { prev.click() })
+    expect(document.body.querySelector('.mk-minical__nodata')).toBeNull()
+  })
 })

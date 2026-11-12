@@ -7,29 +7,59 @@ import { LoadingState } from '@platform/ui/components/loading'
 import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 
 /**
- * The drawer's mini release calendar: a 62px-cell dot grid, **not** the page's 200px month board.
+ * The drawer's mini release calendar: a month grid whose cells **list the releases by name**
+ * (up to three, then a「N 条重要」count), not a dot grid.
  *
- * 数据是静的（`RELEASES`），但按钮都是真的：上/下月真的换月、回到本月真的回、刷新真的走一次
- * 等待态、配置真的跳到日历来源配置。静态页不等于假按钮——用户 2026-11-13 明确要求这一条。
+ * 契约照 `2026-11-13-K11-b.html` 的 `CALMONTHS`：每格是 `[短名, 状态]` 的数组，格内最多三行
+ * 「圆点 + 短名」，第 4 条起在右下角显示「N 条重要」（原型 `mcell__more`）。行高下限 63.8
+ * （日期 + 3 行 + 行距 + 内边距 + 边框）；装不下按文档退回正文滚动，不砍事件行。
  *
- * 月份与圆点数据照 `2026-11-13-K11-b.html` 里的 `CALMONTHS` 原样搬来。
+ * 按钮都是真的：上/下月换月、回到本月当月禁用、刷新走平台等待态、配置去来源配置。
  */
 const TODAY = '2026-11-13'
 const THIS_MONTH = '2026-11'
 
-const RELEASES: Readonly<Record<string, readonly Readonly<{ day: number; state: 'done' | 'todo' }>[]>> = {
-  '2026-09': [],
-  '2026-10': [{ day: 29, state: 'done' }, { day: 30, state: 'done' }],
-  '2026-11': [
-    { day: 5, state: 'done' }, { day: 6, state: 'done' }, { day: 10, state: 'done' }, { day: 12, state: 'done' },
-    { day: 13, state: 'todo' }, { day: 19, state: 'todo' }, { day: 26, state: 'todo' }
-  ],
-  '2026-12': [{ day: 4, state: 'todo' }, { day: 9, state: 'todo' }, { day: 10, state: 'todo' }, { day: 23, state: 'todo' }],
-  '2027-01': [],
-  '2027-02': [{ day: 4, state: 'todo' }, { day: 19, state: 'todo' }]
+type Item = Readonly<{ name: string; state: 'done' | 'todo' }>
+
+/** 月份 → 日 → 事件短名。照原型的 `CALMONTHS` 搬来。 */
+const RELEASES: Readonly<Record<string, Readonly<Record<number, readonly Item[]>>>> = {
+  '2026-09': {},
+  '2026-10': {
+    29: [{ name: 'PCE 核心', state: 'done' }],
+    30: [{ name: '初请失业金', state: 'done' }]
+  },
+  '2026-11': {
+    5: [{ name: '初请失业金', state: 'done' }],
+    6: [{ name: '新增就业', state: 'done' }, { name: '消费者信心', state: 'done' }],
+    10: [{ name: 'CPI 年率', state: 'done' }],
+    12: [{ name: '初请失业金', state: 'done' }],
+    13: [
+      { name: 'PPI 年率', state: 'todo' }, { name: '零售销售', state: 'todo' },
+      { name: '消费者信心', state: 'todo' }, { name: '初请失业金', state: 'todo' },
+      { name: '通胀预期 1 年', state: 'todo' }
+    ],
+    19: [
+      { name: '初请失业金', state: 'todo' }, { name: '零售销售', state: 'todo' },
+      { name: '通胀预期 1 年', state: 'todo' }
+    ],
+    26: [{ name: '初请失业金', state: 'todo' }]
+  },
+  '2026-12': {
+    4: [{ name: '新增就业', state: 'todo' }],
+    9: [{ name: '政策利率', state: 'todo' }],
+    10: [{ name: 'CPI 年率', state: 'todo' }],
+    23: [{ name: 'PCE 核心', state: 'todo' }]
+  },
+  '2027-01': {},
+  '2027-02': {
+    4: [{ name: '新增就业', state: 'todo' }],
+    19: [{ name: 'CPI 年率', state: 'todo' }]
+  }
 }
 
 const MONTH_KEYS = Object.keys(RELEASES)
+/** 每格最多列三条；第 4 条起只报数。 */
+const CELL_ITEM_LIMIT = 3
 
 export function MiniReleaseCalendar({ text, onConfigure }: Readonly<{
   text: MacroIndicatorDrawerText
@@ -57,7 +87,8 @@ export function MiniReleaseCalendar({ text, onConfigure }: Readonly<{
     return () => clearTimeout(timer)
   }, [refreshDone])
 
-  const weeks = useMemo(() => buildWeeks(monthKey, RELEASES[monthKey] ?? []), [monthKey])
+  const weeks = useMemo(() => buildWeeks(monthKey, RELEASES[monthKey] ?? {}), [monthKey])
+  const noReleases = Object.keys(RELEASES[monthKey] ?? {}).length === 0
   const [year, month] = monthKey.split('-')
 
   return <section className="mk-minical" aria-label={text.minicalTitle}>
@@ -86,27 +117,34 @@ export function MiniReleaseCalendar({ text, onConfigure }: Readonly<{
     {refreshing ? null : <>
       <div className="mk-minical__wk">{text.weekday.map(day => <span key={day}>{day}</span>)}</div>
       <div className="mk-minical__grid">
-        {weeks.map((week, rowIndex) => week.map(cell => <div className="mk-minical__day" key={`${rowIndex}-${cell.dateKey}`}
-          data-state={cell.current ? (cell.dateKey === TODAY && monthKey === THIS_MONTH ? 'today' : cell.mark ?? 'none') : 'outside'}>
-          <em>{cell.day}</em>
-          {cell.current && cell.mark !== undefined ? <i className={`mk-mdot mk-mdot--${cell.mark}`} /> : null}
-        </div>))}
+        {weeks.map((week, rowIndex) => week.map(cell => {
+          const shown = cell.items.slice(0, CELL_ITEM_LIMIT)
+          const hidden = cell.items.length - shown.length
+          const isToday = cell.current && cell.dateKey === TODAY && monthKey === THIS_MONTH
+          return <div className="mk-minical__day" key={`${rowIndex}-${cell.dateKey}`}
+            data-state={isToday ? 'today' : !cell.current ? 'outside' : noReleases ? 'nodata' : 'ready'}>
+            <em>{cell.day}</em>
+            {shown.map(item => <span className="mk-mcell__row" key={item.name}>
+              <i className={`mk-mdot mk-mdot--${item.state}`} />{item.name}
+            </span>)}
+            {hidden > 0 ? <span className="mk-mcell__more">{text.minicalMore.replace('{count}', String(hidden))}</span> : null}
+          </div>
+        }))}
       </div>
+      {noReleases ? <p className="mk-minical__nodata">{text.minicalNoData}</p> : null}
       {refreshDone ? <p className="mk-minical__note" role="status">{text.minicalTools.refreshed}</p> : null}
-      {weeks.every(week => week.every(cell => cell.mark === undefined)) ? <p className="mk-minical__empty">{text.minicalEmpty}</p> : null}
     </>}
   </section>
 }
 
-type Cell = Readonly<{ dateKey: string; day: number; current: boolean; mark?: 'done' | 'todo' }>
+type Cell = Readonly<{ dateKey: string; day: number; current: boolean; items: readonly Item[] }>
 
-/** Six Monday-first weeks centred on the month, the same grid the design draws. */
-function buildWeeks(monthKey: string, marks: readonly Readonly<{ day: number; state: 'done' | 'todo' }>[]): readonly (readonly Cell[])[] {
+/** Six Monday-first weeks centred on the month. */
+function buildWeeks(monthKey: string, releases: Readonly<Record<number, readonly Item[]>>): readonly (readonly Cell[])[] {
   const [year, month] = monthKey.split('-').map(Number) as [number, number]
   const first = new Date(Date.UTC(year, month - 1, 1))
   const startOffset = (first.getUTCDay() + 6) % 7
   const start = new Date(Date.UTC(year, month - 1, 1 - startOffset))
-  const markByDay = new Map(marks.map(mark => [mark.day, mark.state]))
   const weeks: Cell[][] = []
   for (let row = 0; row < 6; row += 1) {
     const week: Cell[] = []
@@ -114,8 +152,10 @@ function buildWeeks(monthKey: string, marks: readonly Readonly<{ day: number; st
       const at = new Date(start.getTime() + (row * 7 + column) * 86_400_000)
       const inMonth = at.getUTCMonth() === month - 1
       const day = at.getUTCDate()
-      const dateKey = at.toISOString().slice(0, 10)
-      week.push({ dateKey, day, current: inMonth, ...(inMonth && markByDay.has(day) ? { mark: markByDay.get(day)! } : {}) })
+      week.push({
+        dateKey: at.toISOString().slice(0, 10), day, current: inMonth,
+        items: inMonth ? (releases[day] ?? []) : []
+      })
     }
     weeks.push(week)
   }

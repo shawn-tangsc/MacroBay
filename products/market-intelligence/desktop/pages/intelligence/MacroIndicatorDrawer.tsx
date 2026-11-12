@@ -124,18 +124,11 @@ export function MacroIndicatorDrawer({ locale, onClose, onOpenCalendar, onConfig
               {[1, 2].map(level => <button key={level} type="button" aria-pressed={zoom === level} onClick={() => setZoom(level as 1 | 2)}>{level}x</button>)}
             </div>
             <ExpectationChart values={MOCK.expectation} events={MOCK.eventMarks.map(mark => ({ index: mark.index, label: mark.name, impact: mark.impact }))} height={plotHeight} width={plotWidth} zoom={zoom} />
+            {/* 图例是图下方一行小字（原型）；事件数值已经贴在图顶那一行，这里不再列第二遍。 */}
             <div className="mk-legend">
-              <span><i className="mk-sw mk-sw--line" />{text.legendLine}</span>
               <span><i className="mk-sw mk-sw--ring" />{text.legendEvent}</span>
               <span><i className="mk-sw mk-sw--hollow" />{text.legendNoEvent}</span>
             </div>
-          </div>
-          <div className="mk-rail" aria-label={text.eventsRail}>
-            <h3>{text.eventsRail}</h3>
-            {MOCK.eventMarks.map(mark => <div className="mk-rail__item" key={mark.name}>
-              <i className="mk-rail__dot" />
-              <span className="mk-rail__t"><b>{mark.name}</b><em>{mark.impact > 0 ? '+' : ''}{mark.impact}bp</em></span>
-            </div>)}
           </div>
           <article className="mk-card mk-card--hero" ref={heroRef}>
             <div className="mk-card__h"><h3>{text.policyRate}</h3><em>{text.policyPending}</em></div>

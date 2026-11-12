@@ -42,7 +42,7 @@ export function ExpectationChart({ values, events, height, width, zoom }: Readon
   const area = `M${xs(0).toFixed(1)} ${Y(0).toFixed(1)} ${values.map((value, index) => `L${xs(index).toFixed(1)} ${Y(value).toFixed(1)}`).join(' ')} L${xs(values.length - 1).toFixed(1)} ${Y(0).toFixed(1)} Z`
 
   const ticks = positiveOnly ? [0, HI / 4, HI / 2, HI * 0.75, HI] : [LO, LO / 2, 0, HI / 2, HI]
-  const dates = datesFor(values.length)
+  const dates = axisDates(values.length, W)
 
   // Labels are placed right to left so the later ones keep their leader; the same rule the
   // prototype applies, with the measured width replaced by an estimate.
@@ -85,19 +85,29 @@ export function ExpectationChart({ values, events, height, width, zoom }: Readon
         <circle cx={xs(event.index)} cy={Y(values[event.index] ?? 0)} r={3} fill="var(--accent)" />
       </g>)}
       {labels.map(label => <text key={label.text} x={label.x.toFixed(1)} y={T0 + 10} fontSize={9.5} textAnchor="start" fill="var(--accent)">{label.text}</text>)}
-      {dates.map(date => <text key={date.index} x={xs(date.index)} y={H - B + 16} fontSize={9} fill="var(--muted)" textAnchor="middle">{date.label}</text>)}
+      {dates.map(date => <text key={date.index} x={Math.min(Math.max(xs(date.index), L + 10), W - RM - 10)} y={H - B + 16} fontSize={9} fill="var(--muted)" textAnchor="middle">{date.label}</text>)}
     </svg>
   </div>
 }
 
-/** Every 7th point carries a date, from 2026-10-30 to 2026-11-11 — the prototype's own window. */
-function datesFor(count: number): ReadonlyArray<Readonly<{ index: number; label: string }>> {
+/**
+ * Every 7th point carries a date, from 2026-10-30 to 2026-11-11 — the prototype's own window.
+ *
+ * 两处必须按实际宽度收：末位那条会被右边界裁掉（原型的 `text-anchor="middle"` 落在 `W-RM` 上），
+ * 窄宽度下相邻两条会叠在一起。所以末位夹回绘图区、间隔不足 56px 时丢掉较晚那条。
+ */
+function axisDates(count: number, width: number): ReadonlyArray<Readonly<{ index: number; label: string }>> {
   const start = Date.parse('2026-10-30')
   const end = Date.parse('2026-11-11')
+  const toX = (index: number) => L + (index / (count - 1)) * (width - L - RM)
   const out: Array<{ index: number; label: string }> = []
+  let previousX = Number.NEGATIVE_INFINITY
   for (let index = 0; index < count; index += 7) {
+    const x = toX(index)
+    if (x - previousX < 56) continue
     const at = start + ((end - start) * index) / (count - 1)
     out.push({ index, label: new Date(at).toISOString().slice(5, 10) })
+    previousX = x
   }
   return out
 }
