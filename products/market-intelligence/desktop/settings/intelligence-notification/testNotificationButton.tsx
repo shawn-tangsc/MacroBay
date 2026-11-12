@@ -162,15 +162,16 @@ export function TestNotificationButton(props: Readonly<{
       role="status">{note}</span>}
     {phase.kind === 'failed' && phase.reasonCode === 'push-unavailable'
       ? <>
-        <Button onClick={openChannelSettings} size="small" type="link">
+        <Button className="text-action" onClick={openChannelSettings} size="small" type="text">
           {text(channelActionKey(phase.requestedCount))}
         </Button>
         {(phase.requestedCount ?? 0) > 0
           ? <Popover
             labelKey="pages.intelligence.notification.test.channelsNotConnectedDetail"
-            resolveText={(key: string) => key === 'pages.intelligence.notification.test.channelsNotConnectedDetail'
-              ? text(key).replace('{count}', String(phase.requestedCount))
-              : text(key)}
+            /* 占位符走组件那一条 `labelParams`（`fillLabelParams` 是全仓唯一实现），
+               不再在调用点比键、拼句子。 */
+            labelParams={{ count: String(phase.requestedCount) }}
+            resolveText={props.resolveText}
             trigger={(triggerProps) => <IconButton
               {...triggerProps}
               ariaLabelKey="pages.intelligence.notification.test.channelsNotConnectedDetailAria"

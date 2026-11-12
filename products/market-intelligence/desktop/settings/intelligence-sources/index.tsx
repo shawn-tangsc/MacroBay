@@ -106,8 +106,8 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         notice={<>
           {otherSideChanged ? <div className="intelligence-sources-other-side" role="status">
             <span>{t.otherSideChanged}</span>
-            <Button onClick={reloadFromOtherSide} type="link">{t.reloadOtherSide}</Button>
-            <Button onClick={dismissOtherSideChanged} type="link">{t.keepEditing}</Button>
+            <Button className="text-action" onClick={reloadFromOtherSide} size="small" type="text">{t.reloadOtherSide}</Button>
+            <Button className="text-action" onClick={dismissOtherSideChanged} size="small" type="text">{t.keepEditing}</Button>
           </div> : null}
         </>}
         onFilterChange={setSourceFilter}

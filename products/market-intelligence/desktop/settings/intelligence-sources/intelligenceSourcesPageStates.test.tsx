@@ -212,9 +212,17 @@ describe('sources settings page states', () => {
     const dom = await render()
 
     expect(dom.textContent).toContain(zhText.otherSideChanged)
-    await act(async () => { button(dom, zhText.reloadOtherSide).click() })
+    // 这条提示里的两个动作是**句内文字**：antd 文本档 + 平台 `.text-action`（颜色取 `--accent`）。
+    // 链接档走 `colorLink`，不在 token 里，一页上会出现第二个交互色。
+    const reloadAction = button(dom, zhText.reloadOtherSide)
+    const keepAction = button(dom, zhText.keepEditing)
+    expect(reloadAction.className).toContain('text-action')
+    expect(keepAction.className).toContain('text-action')
+    expect(reloadAction.className).not.toContain('ant-btn-link')
+    expect(keepAction.className).not.toContain('ant-btn-link')
+    await act(async () => { reloadAction.click() })
     expect(reloadOtherSide).toHaveBeenCalledTimes(1)
-    await act(async () => { button(dom, zhText.keepEditing).click() })
+    await act(async () => { keepAction.click() })
     expect(dismissOtherSide).toHaveBeenCalledTimes(1)
   })
 

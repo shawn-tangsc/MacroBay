@@ -797,6 +797,10 @@ describe('通知配置后的测试按钮（R201）', () => {
     const action = [...(container?.querySelectorAll('button') ?? [])]
       .find((button) => button.textContent === '查看通道状态')
     expect(action, '启用了没连上 → 查看通道状态').toBeDefined()
+    // 句内动作只有一种写法：antd 文本档 + `.text-action`（颜色取 `--accent`）。链接档走 antd 的
+    // `colorLink`，那是 token 之外的第二个人工交互色，一页上会冒出两种「可点」。
+    expect(action!.className).toContain('text-action')
+    expect(action!.className).not.toContain('ant-btn-link')
     // 原因码只在折叠区：主句 0 次，展开后恰好 1 处。
     const sentence = container?.querySelector('[data-test-result="failed"]')?.textContent ?? ''
     expect(sentence).not.toContain('push-unavailable')
@@ -819,6 +823,9 @@ describe('通知配置后的测试按钮（R201）', () => {
     const action = [...(container?.querySelectorAll('button') ?? [])]
       .find((button) => button.textContent === '去启用')
     expect(action, '一条都没启用 → 去启用').toBeDefined()
+    // 同上：动作是句内文字，不是链接档。
+    expect(action!.className).toContain('text-action')
+    expect(action!.className).not.toContain('ant-btn-link')
   })
 
   it('decides the sentence from requestedCount only, never from the state histogram', () => {
