@@ -18,6 +18,7 @@ import type { PolicyPathReading } from '../../../service/intelligence/policy-pat
 import { expectationBp } from '../../../contracts/policyPath'
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
+import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
 
 import './macroIndicatorDrawer.css'
 
@@ -108,10 +109,15 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   useLayoutEffect(() => {
     const measure = () => {
       const host = plotRef.current
-      if (host) setPlotWidth(Math.max(380, Math.floor(host.clientWidth)))
+      // 写回值永远来自「量到的那个数」：量不到（首帧 clientWidth=0）就保持上一次的值，
+      // 不给自己任何地板宽度/高度——地板正是「量 340 写 380」这种自激的入口。
+      setPlotWidth(previous => nextMeasuredSize(previous, host ? Math.floor(host.clientWidth) : 0))
       // 行高由卡片内容决定：量卡本身（它的第一个子元素），不是量被拉伸过的槽位。
       const card = heroRef.current?.firstElementChild ?? heroRef.current
-      if (card) setPlotHeight(Math.max(200, Math.ceil(card.getBoundingClientRect().height)))
+      if (card) {
+        const measured = Math.ceil(card.getBoundingClientRect().height)
+        setPlotHeight(previous => nextMeasuredSize(previous, measured))
+      }
     }
     measure()
     const observer = new ResizeObserver(measure)

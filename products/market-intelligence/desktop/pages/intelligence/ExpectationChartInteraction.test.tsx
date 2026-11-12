@@ -45,13 +45,13 @@ afterEach(async () => {
   document.body.innerHTML = ''
 })
 
-async function render(latest?: Readonly<{ changeBp?: number }>, height = 240): Promise<HTMLDivElement> {
+async function render(latest?: Readonly<{ changeBp?: number }>, height = 240, width = 480): Promise<HTMLDivElement> {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
-      <ExpectationChart points={[early, late]} events={[]} height={height} width={480} text={text} {...(latest ? { latest } : {})} />
+      <ExpectationChart points={[early, late]} events={[]} height={height} width={width} text={text} {...(latest ? { latest } : {})} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
   return host.querySelector('.mk-plot__stage') as HTMLDivElement
@@ -71,6 +71,29 @@ async function press(stage: HTMLElement, key: string): Promise<void> {
     stage.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key }))
   })
 }
+
+describe('sizing', () => {
+  it('draws at exactly the width it was given — no floor, no scroll container', async () => {
+    const stage = await render(undefined, 240, 320)
+    const svg = stage.querySelector('svg')!
+    // 把 380 那个地板加回来，这里就是 380，比容器宽 → 出横条。这条守卫就是用来红的。
+    expect(svg.getAttribute('width')).toBe('320')
+    expect(Number(svg.getAttribute('width'))).toBeLessThanOrEqual(320)
+    // 滚动容器本身是横条的来源，已经拆掉。
+    expect(stage.querySelector('.mk-plot__scroll')).toBeNull()
+  })
+
+  it('keeps the last date label inside the plot, right-aligned', async () => {
+    const stage = await render(undefined, 240, 320)
+    const svg = stage.querySelector('svg')!
+    const dates = Array.from(svg.querySelectorAll('text')).filter((node) => node.getAttribute('y') === '222')
+    expect(dates.length).toBeGreaterThan(1)
+    const last = dates[dates.length - 1]!
+    expect(last.getAttribute('text-anchor')).toBe('end')
+    // 右边界就是 W - RM（320 - 12），向右对齐后文字不会出界。
+    expect(Number(last.getAttribute('x'))).toBeCloseTo(308, 5)
+  })
+})
 
 describe('zero axis', () => {
   it('carries no sentence of its own — the tick label is the only thing on that line', async () => {

@@ -114,9 +114,11 @@ export function ExpectationChart({ points, events, height, width, text, latest }
   const [tipSize, setTipSize] = useState({ width: 184, height: 152 })
 
   const geometry = useMemo(() => {
-    const W = Math.max(380, Math.floor(width))
+    // 原样画收到的宽度：**不许**在这里给自己一个地板宽度。给了，图就比容器宽，
+    // 横向滚动条就是这么来的。容器窄到不可读是版式的事，不是 SVG 去撑开。
+    const W = Math.max(1, Math.floor(width))
     const H = height
-    const plotW = W - L - RM
+    const plotW = Math.max(0, W - L - RM)
     const firstMs = Date.parse(points[0]?.at ?? '')
     const lastMs = Date.parse(points[points.length - 1]?.at ?? '')
     const spanMs = Number.isFinite(firstMs) && Number.isFinite(lastMs) ? lastMs - firstMs : 0
@@ -282,7 +284,6 @@ export function ExpectationChart({ points, events, height, width, text, latest }
     onPointerLeave={() => setSelection(null)}
     onKeyDown={onKeyDown}
   >
-    <div className="mk-plot__scroll">
       <svg className="mk-plot__svg" width={geometry.W} height={geometry.H}
         viewBox={`0 0 ${geometry.W} ${geometry.H}`} aria-hidden="true">
         <defs>
@@ -320,13 +321,12 @@ export function ExpectationChart({ points, events, height, width, text, latest }
         {geometry.labels.map((label) => <text key={label.label} x={label.x.toFixed(1)} y={T0 + 10} fontSize={9.5}
           textAnchor="start" fill="var(--accent)">{label.label}</text>)}
         {geometry.dates.map((date) => <text key={date.at} x={date.x.toFixed(1)} y={geometry.H - B + 16} fontSize={9}
-          fill="var(--muted)" textAnchor="middle">{date.label}</text>)}
+          fill="var(--muted)" textAnchor={date.anchor}>{date.label}</text>)}
         {selected ? <g className="mk-plot__cross">
           <line x1={selected.x} y1={T0} x2={selected.x} y2={geometry.H - B} stroke="var(--accent)" strokeWidth={1} opacity={0.45} />
           <circle cx={selected.x} cy={selected.y} r={3.5} fill="var(--accent)" />
         </g> : null}
       </svg>
-    </div>
 
     <div
       className="mk-tip"
@@ -388,10 +388,10 @@ function clamp(value: number, low: number, high: number): number {
  * `labelCount` follows the width (~one every 96px, at least two) so a narrow drawer does not stack
  * labels on top of each other, and a wider one is not left with three lonely dates.
  */
-function axisDates(fromMs: number, toMs: number, plotWidth: number, timeZone: string): readonly Readonly<{ at: string; x: number; label: string }>[] {
+function axisDates(fromMs: number, toMs: number, plotWidth: number, timeZone: string): readonly Readonly<{ at: string; x: number; label: string; anchor: 'start' | 'middle' | 'end' }>[] {
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) return []
   const count = Math.max(2, Math.min(8, Math.floor(plotWidth / 96) + 1))
-  const out: Array<{ at: string; x: number; label: string }> = []
+  const out: Array<{ at: string; x: number; label: string; anchor: 'start' | 'middle' | 'end' }> = []
   let previous = ''
   for (let index = 0; index < count; index += 1) {
     const fraction = index / (count - 1)
@@ -404,8 +404,10 @@ function axisDates(fromMs: number, toMs: number, plotWidth: number, timeZone: st
     const label = day.slice(5)
     if (label === previous) continue
     previous = label
-    const x = Math.min(Math.max(L + fraction * plotWidth, L + 12), L + plotWidth - 12)
-    out.push({ at, x, label })
+    // 首尾两条贴住绘图区边线，用左/右对齐：居中会把首尾各切掉半个字（截图里那个「11-」）。
+    const edge = index === 0 ? 'start' as const : index === count - 1 ? 'end' as const : 'middle' as const
+    const x = edge === 'start' ? L : edge === 'end' ? L + plotWidth : L + fraction * plotWidth
+    out.push({ at, x, label, anchor: edge })
   }
   return out
 }
