@@ -41,6 +41,24 @@ it.each([0, 1, 6, 7, 20])('bounds %i real rows without inventing placeholders', 
   expect(result.visible).toHaveLength(Math.min(count, 6))
   expect(result.remaining).toBe(Math.max(count - 6, 0))
 })
+it('带指标码的日子按分级收窄：只露两条名字，其余进数字（恒等式钉住）', async () => {
+  const { unifiedCalendarDay } = await model()
+  // 三级以外的码（PPI）与事件型行都不露名字，但都计入数字。
+  const events = [
+    { ...market(1), eventNameKey: 'US.NONFARM.SA.CHANGE' },
+    { ...market(2), eventNameKey: 'US.UNEMPLOYMENT.SA.RATE' },
+    { ...market(3), eventNameKey: 'US.AHE.SA.MOM' },
+    { ...market(4), eventNameKey: 'US.PPI.NSA.YOY' },
+    { ...market(5), eventNameKey: undefined }
+  ] as never
+  const result = unifiedCalendarDay('2026-09-10', [], events, 'complete')
+  expect(result.visible).toHaveLength(2)                       // 上限 2
+  expect(result.visible.map(item => item.key)).toEqual(['market:market-1', 'market:market-2'])
+  expect(result.hiddenTiered).toBe(1)                          // 时薪月率（一级）超出上限
+  expect(result.hiddenUntiered).toBe(2)                        // PPI 与无码行
+  expect(result.visible.length + result.hiddenTotal).toBe(5)   // 恒等式
+})
+
 it('sorts date-only last and uses stable source/key tie-breaks without title merging', async () => {
   const { unifiedCalendarDay } = await model()
   const input = [official(2), official(1), { ...official(3), scheduledAt: undefined }]

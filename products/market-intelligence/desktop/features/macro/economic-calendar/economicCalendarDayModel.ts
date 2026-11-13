@@ -1,3 +1,5 @@
+import { filterVisibleByTier, tierVisibilityPolicy }
+  from '../../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { economicCalendarPresentationPolicy, type EconomicCalendarEventView } from './economicCalendarModel'
 
@@ -66,6 +68,12 @@ function compareCalendarGroupItems(a: CalendarDayItem, b: CalendarDayItem): numb
     EconomicCalendarUnifiedDayPolicy.sourceOrder.indexOf(a.source) - EconomicCalendarUnifiedDayPolicy.sourceOrder.indexOf(b.source) || a.key.localeCompare(b.key)
 }
 
+/** 这一条对应哪个指标码：没有码的行不参与分级（事件型、旧路径官方条目都属这一类）。 */
+function metricKeyOf(item: CalendarDayItem): string {
+  const key = item.source === 'market' ? item.event.eventNameKey : (item.event as { eventNameKey?: string }).eventNameKey
+  return key ?? ''
+}
+
 export function unifiedCalendarDay(date: string, official: readonly EconomicCalendarEventView[],
   market: readonly MarketCalendarEvent[], coverage: CalendarDayCoverage, timeZone: string, linkedMarketKeys: ReadonlySet<string> = new Set()) {
   const linkedByOfficial = new Map<string, MarketCalendarEvent>()
@@ -89,9 +97,26 @@ export function unifiedCalendarDay(date: string, official: readonly EconomicCale
   // list and the cell are one reading of one day. Which kind a row is does not enter into its rank:
   // the glyph says what it is, and ranking by kind inside one importance level is what put a 22:30
   // indicator above a 16:00 central-bank event of the same weight, so the cell read out of order.
-  const visible = items.slice(0, economicCalendarPresentationPolicy.dayEventLimit)
+  /**
+   * **格子里只写一级、二级的名字，最多两条**——判定在 `filterVisibleByTier` 一处实现，
+   * 其余（未标级的 + 一二级里超出的）全部计入数字。
+   *
+   * **过渡规则**：整天**没有任何一行带指标码**时（旧路径的官方条目就是这样，它们没有码），
+   * 保持原来的上限行为。否则切到标准表之前，那些没有码的日子会突然变成「一条名字都不显示」。
+   * S2 之后每一行都带码（事件码与源内身份除外），这条分支自然只剩事件日会走到——那时它
+   * 仍是对的：事件没有分级，显示名字而不是把它折进一个数字。
+   */
+  const coded = items.filter((item) => metricKeyOf(item) !== '')
+  const tiered = coded.length === 0
+    ? { visible: items.slice(0, economicCalendarPresentationPolicy.dayEventLimit),
+      hiddenTiered: 0, hiddenUntiered: 0, hiddenTotal: 0 }
+    : filterVisibleByTier(items.map((item) => ({ metricKey: metricKeyOf(item), item })),
+      { maximumVisible: tierVisibilityPolicy.maximumVisible })
+  const visible = tiered.visible
   const groups = EconomicCalendarUnifiedDayPolicy.eventTypeOrder.map(eventType => ({ eventType,
     items: items.filter(item => calendarItemType(item) === eventType).sort(compareCalendarGroupItems) })).filter(group => group.items.length > 0)
   return { items, visible, groups, coverage,
+    hiddenTiered: tiered.hiddenTiered, hiddenUntiered: tiered.hiddenUntiered,
+    hiddenTotal: tiered.hiddenTotal === 0 ? Math.max(0, items.length - visible.length) : tiered.hiddenTotal,
     remaining: coverage === 'complete' ? Math.max(0, items.length - visible.length) : undefined }
 }
