@@ -12,6 +12,7 @@ import {
 } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_INTELLIGENCE_QUERY_CAVEATS } from '../../../contracts/intelligenceQueryContracts'
 import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
+import { MARKET_ANALYSIS_CONTEXT_CAVEATS } from '../../../contracts/marketAnalysisContracts'
 import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
@@ -687,7 +688,7 @@ describe('market analysis data-access matrix', () => {
     expect(result.caveats).toContain('macro-calendar-unavailable')
   })
 
-  it('projects the 0xRouter market route as macro facts with a named unverified identity', async () => {
+  it('projects the Narwhal market route as macro facts with a named unverified identity', async () => {
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
       queryMacroEconomicCalendarMonth: async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' }),
       queryMarketCalendarMonth: () => marketPage([marketEvent()])
@@ -698,14 +699,14 @@ describe('market analysis data-access matrix', () => {
     const macroFacts = result.facts.filter(fact => fact.domain === 'macro')
     expect(macroFacts.map(fact => fact.value)).toEqual(expect.arrayContaining(['美国核心CPI年率', 'released', '3.2', '3.0']))
     expect(macroFacts.map(fact => fact.value)).not.toContain('US')
-    expect(macroFacts.every(fact => fact.sourceId === 'macro-calendar-0xrouter-economic-data')).toBe(true)
+    expect(macroFacts.every(fact => fact.sourceId === 'macro-calendar-narwhal-economic-data')).toBe(true)
     expect(result.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'available', factCount: macroFacts.length })
     // The official route was down, so the gap stays named even though the month is usable.
     expect(result.caveats).toContain('macro-calendar-unavailable')
     expect(result.caveats).toContain('observed-unverified')
     expect(result.missingDomains).not.toContain('macro')
     expect(result.evidenceRefs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-economic-data', detectedAt: '2026-09-10T12:31:00.000Z' })
+      expect.objectContaining({ sourceId: 'macro-calendar-narwhal-economic-data', detectedAt: '2026-09-10T12:31:00.000Z' })
     ]))
   })
 
@@ -891,3 +892,18 @@ function crossAssetSnapshotFor(range: '1h' | '24h' | '7d'): CrossAssetSnapshot {
     closedReturns: { btc: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, eth: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, index: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric } }
   }
 }
+
+it('reports the macro domain as unavailable when the calendar cannot be read, never as "nothing happened"', async () => {
+  const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
+    queryMacroEconomicCalendarMonth: async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' }),
+    // 读失败：既不是「读到了但为空」，也不是「没有事件」。
+    queryMarketCalendarMonth: () => { throw new Error('calendar-view-unavailable') }
+  }))
+
+  expect(result.state).toBe('available')
+  if (result.state !== 'available') return
+  const macro = result.domainAccess.find(domain => domain.domain === 'macro')
+  expect(macro?.queryState).toBe('unavailable')
+  expect(macro?.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
+  expect(macro?.caveats).not.toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty)
+})
