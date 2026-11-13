@@ -27,6 +27,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
 import { IndicatorCards, type IndicatorCardGroup } from './IndicatorCards'
+import { MACRO_INDICATOR_GROUPS } from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 
 import './macroIndicatorDrawer.css'
 
@@ -178,38 +179,18 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   // 右列按「能不能解释利率路径」筛，与曲线标注同一把尺子（判据来自契约，不在这里另写一份）。
   const dayLayers = useMemo(() => splitDayLayers(dayEvents), [dayEvents])
   /**
-   * 三张卡的 12 个一级码：**顺序即卡内行序**，左右两页按同一顺序逐行对齐。
-   * 标题与行名来自文案表，身份仍是 metric_key——不靠标题文本认指标。
+   * 三张卡的分组来自数据层的唯一出处（`MACRO_INDICATOR_GROUPS`）：这里只把键译成文案，
+   * 不另写一份分组——设置页也从同一张表派生，两处不会各长各的。
    */
-  const cardGroups = useMemo<readonly IndicatorCardGroup[]>(() => [
-    {
-      id: 'cpi', title: text.cards.cpi.title,
-      rows: [
-        { metricKey: 'US.CPI.NSA.YOY', label: text.cardRows.yoy, kind: 'yoy' },
-        { metricKey: 'US.CPI.SA.MOM', label: text.cardRows.mom, kind: 'mom' },
-        { metricKey: 'US.CORE_CPI.NSA.YOY', label: text.cardRows.coreYoy, kind: 'yoy' },
-        { metricKey: 'US.CORE_CPI.SA.MOM', label: text.cardRows.coreMom, kind: 'mom' }
-      ]
-    },
-    {
-      id: 'payrolls', title: text.cards.payrolls.title,
-      rows: [
-        { metricKey: 'US.NONFARM.SA.CHANGE', label: text.cardRows.nonfarm, kind: 'change' },
-        { metricKey: 'US.UNEMPLOYMENT.SA.RATE', label: text.cardRows.unemployment, kind: 'rate' },
-        { metricKey: 'US.AHE.SA.MOM', label: text.cardRows.avgHourlyMom, kind: 'mom' },
-        { metricKey: 'US.AHE.NSA.YOY', label: text.cardRows.avgHourlyYoy, kind: 'yoy' }
-      ]
-    },
-    {
-      id: 'pce', title: text.cards.pce.title,
-      rows: [
-        { metricKey: 'US.PCE.NSA.YOY', label: text.cardRows.yoy, kind: 'yoy' },
-        { metricKey: 'US.PCE.SA.MOM', label: text.cardRows.mom, kind: 'mom' },
-        { metricKey: 'US.CORE_PCE.NSA.YOY', label: text.cardRows.coreYoy, kind: 'yoy' },
-        { metricKey: 'US.CORE_PCE.SA.MOM', label: text.cardRows.coreMom, kind: 'mom' }
-      ]
-    }
-  ], [text])
+  const cardGroups = useMemo<readonly IndicatorCardGroup[]>(() => MACRO_INDICATOR_GROUPS.map((group) => ({
+    id: group.id,
+    title: text.cards[group.titleKey].title,
+    rows: group.rows.map((row) => ({
+      metricKey: row.metricKey,
+      label: text.cardRows[row.labelKey],
+      kind: row.kind
+    }))
+  })), [text])
 
   // 核心层为空、但这一天还有别的发布时**默认展开**：收起会让页面同时写着「没有事件」和「其他 27 条」，
   // 中间空一大片。显式切换过就按读者的选择，换一天再回到默认。

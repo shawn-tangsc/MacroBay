@@ -14,8 +14,9 @@ const MINUTE_MS = 60 * 1000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
 
-/** 一行的量纲：决定正负号与单位（年率、失业率不带正号；月率、时薪、非农带正负号）。 */
-export type IndicatorRowKind = 'yoy' | 'mom' | 'rate' | 'change'
+// 行量纲的唯一定义在数据层（分组表所在模块），这里只引用，不另立一份。
+import type { MacroIndicatorRowKind } from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
+type IndicatorRowKind = MacroIndicatorRowKind
 
 export type IndicatorRow = Readonly<{ metricKey: MacroIndicatorCardKey; label: string; kind: IndicatorRowKind }>
 
