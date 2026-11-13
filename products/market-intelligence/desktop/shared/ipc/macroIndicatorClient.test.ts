@@ -48,6 +48,70 @@ describe('macroIndicatorClient.sanitize', () => {
     }
   })
 
+  /**
+   * 白名单漏一个字段，界面上就只剩裸数字：上一期是官方序列还是日历库的首发布值、
+   * 什么时候观测的，读者都看不出来。这条用例就是在守那份白名单别再漏。
+   */
+  it('keeps where the previous value came from, not just the number', () => {
+    const withProvenance = {
+      ...payload,
+      facts: payload.facts.map((fact) => fact.metricKey === 'US.CPI.NSA.YOY'
+        ? { ...fact, previousAsPublished: 3.73768, previousSource: 'fred', previousObservedAt: '2026-09-01T00:00:00.000Z' }
+        : fact)
+    }
+    const cpi = (sanitize(withProvenance) as { facts: readonly Record<string, unknown>[] }).facts
+      .find((fact) => fact.metricKey === 'US.CPI.NSA.YOY')!
+    expect(cpi).toMatchObject({ previousSource: 'fred', previousObservedAt: '2026-09-01T00:00:00.000Z' })
+  })
+
+  it('keeps the next release, its expectation and that expectation\'s provenance', () => {
+    const withNext = {
+      ...payload,
+      facts: payload.facts.map((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE'
+        ? {
+          ...fact,
+          next: {
+            period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z', timePrecision: 'minute',
+            expected: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
+          }
+        }
+        : fact)
+    }
+    const payrolls = (sanitize(withNext) as { facts: readonly Record<string, unknown>[] }).facts
+      .find((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE')!
+    expect(payrolls.next).toEqual({
+      period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z', timePrecision: 'minute',
+      expected: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
+    })
+  })
+
+  /** 判红：预期有值却不带来源 → 这一格按「没有值」处理，不补一个来源上去。 */
+  it('throws away an expectation whose provenance it cannot read', () => {
+    const sourceless = {
+      ...payload,
+      facts: payload.facts.map((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE'
+        ? { ...fact, next: { period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z', expected: { value: 112.5, asOf: '2026-11-13T20:40:00.000Z' } } }
+        : fact)
+    }
+    const payrolls = (sanitize(sourceless) as { facts: readonly Record<string, unknown>[] }).facts
+      .find((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE')!
+    expect(payrolls.next).toEqual({ period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z' })
+  })
+
+  /** 盘口自称有值却不带成交量 → 无法验证，同样按「没有值」处理。 */
+  it('refuses a market expectation that carries no volume', () => {
+    const noVolume = {
+      ...payload,
+      facts: payload.facts.map((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE'
+        ? { ...fact, next: { period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z',
+          expected: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z' } } }
+        : fact)
+    }
+    const payrolls = (sanitize(noVolume) as { facts: readonly Record<string, unknown>[] }).facts
+      .find((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE')!
+    expect(payrolls.next).not.toHaveProperty('expected')
+  })
+
   it('passes an unreadable answer through instead of inventing facts', () => {
     expect(sanitize({ state: 'unavailable', failureCode: 'unreadable' })).toEqual({ state: 'unavailable', failureCode: 'unreadable' })
     expect(sanitize(undefined)).toEqual({ state: 'unavailable', failureCode: 'malformed' })

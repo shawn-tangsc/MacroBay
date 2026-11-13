@@ -66,9 +66,63 @@ function readFact(value: unknown): MacroIndicatorCardFact | undefined {
     ...(value_ === undefined ? {} : { value: value_ }),
     ...(previous === undefined ? {} : { previousAsPublished: previous }),
     ...(value.unit === 'percent' || value.unit === 'thousands' ? { unit: value.unit } : {}),
-    ...(value.source === 'narwhal' || value.source === '0xrouter' ? { source: value.source } : {}),
-    ...(readConsensus(value.consensus) === undefined ? {} : { consensus: readConsensus(value.consensus)! })
+    ...(value.source === 'narwhal' || value.source === '0xrouter' || value.source === 'fred' ? { source: value.source } : {}),
+    ...(readConsensus(value.consensus) === undefined ? {} : { consensus: readConsensus(value.consensus)! }),
+    ...readPreviousProvenance(value),
+    ...(readNext(value.next) === undefined ? {} : { next: readNext(value.next)! })
   }
+}
+
+/**
+ * 上一期那个数的出处。**白名单漏掉它，界面上就只剩一个裸数字**——读者分不清那是官方序列
+ * 还是日历库的首发布值，也看不出它是什么时候的（2026-11-14 漏过一次）。
+ */
+function readPreviousProvenance(value: Record<string, unknown>): Partial<Pick<MacroIndicatorCardFact,
+  'previousSource' | 'previousObservedAt' | 'previousUnreadable'>> {
+  const source = value.previousSource === 'fred' || value.previousSource === 'release' ? value.previousSource : undefined
+  const observedAt = typeof value.previousObservedAt === 'string' && Number.isFinite(Date.parse(value.previousObservedAt))
+    ? value.previousObservedAt
+    : undefined
+  return {
+    ...(source === undefined ? {} : { previousSource: source }),
+    ...(observedAt === undefined ? {} : { previousObservedAt: observedAt }),
+    ...(value.previousUnreadable === true ? { previousUnreadable: true } : {})
+  }
+}
+
+/**
+ * 下一期：排期 + 预期。**有值必然带来源**这一条在这里也成立，不是只在服务层成立：
+ * 值在而没有可识别的来源，就当这一格没有值，绝不给它补一个来源。
+ */
+function readNext(value: unknown): MacroIndicatorCardFact['next'] | undefined {
+  if (!isObject(value) || typeof value.period !== 'string' || typeof value.releaseAt !== 'string') return undefined
+  if (!Number.isFinite(Date.parse(value.releaseAt))) return undefined
+  const timePrecision = value.timePrecision === 'minute' || value.timePrecision === 'date' ? value.timePrecision : undefined
+  const expected = readExpected(value.expected)
+  const expectedState = value.expectedState === 'no-market' || value.expectedState === 'unreadable' ? value.expectedState : undefined
+  return {
+    period: value.period,
+    releaseAt: value.releaseAt,
+    ...(timePrecision === undefined ? {} : { timePrecision }),
+    ...(expected === undefined ? {} : { expected }),
+    // 有值就不再说「没有值」，两者互斥：同一格既写「暂无」又写数字，是这张卡最糟的样子。
+    ...(expected !== undefined || expectedState === undefined ? {} : { expectedState })
+  }
+}
+
+function readExpected(value: unknown): NonNullable<MacroIndicatorCardFact['next']>['expected'] {
+  if (!isObject(value) || !isFiniteNumber(value.value) || typeof value.asOf !== 'string') return undefined
+  if (!Number.isFinite(Date.parse(value.asOf))) return undefined
+  if (value.provenance === 'market-implied') {
+    // 盘口这一档必须带成交量：没有成交量的「市场预期」无法验证，也就不该自称来自盘口。
+    return isFiniteNumber(value.marketVolume) && value.marketVolume > 0
+      ? { value: value.value, provenance: 'market-implied', asOf: value.asOf, marketVolume: value.marketVolume }
+      : undefined
+  }
+  if (value.provenance === 'source-survey') {
+    return { value: value.value, provenance: 'source-survey', asOf: value.asOf }
+  }
+  return undefined
 }
 
 /**
