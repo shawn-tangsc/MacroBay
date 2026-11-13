@@ -62,6 +62,10 @@ export const syncRunHandlerCatalog: Readonly<Record<string, CatalogEntry>> = {
   'market-intelligence.refreshMarketCalendar.economic-data': { taskLabel: '市场日历 · 经济数据', action: 'collect', sourceId: 'macro-calendar-0xrouter-economic-data', sourceLabel: '市场日历 · 经济数据' },
   'market-intelligence.refreshMarketCalendar.financial-events': { taskLabel: '市场日历 · 金融事件', action: 'collect', sourceId: 'macro-calendar-0xrouter-financial-events', sourceLabel: '市场日历 · 金融事件' },
   'market-intelligence.refreshMarketCalendar.central-bank-activities': { taskLabel: '市场日历 · 央行活动', action: 'collect', sourceId: 'macro-calendar-0xrouter-central-bank-activities', sourceLabel: '市场日历 · 央行活动' },
+  /* Narwhal：一个端点、两条作业（当日 tick 与 30 天日扫），归属都落在「拥有作业的那一条事件身份」上。
+     三条 0xRouter 条目等它们退役时同笔删除，现在保留 —— 否则仍在跑的旧作业会变成没有标签的裸 id。 */
+  'market-intelligence.refreshNarwhalCalendarTick.automatic': { taskLabel: '市场日历 · Narwhal 当日刷新', action: 'collect', sourceId: 'macro-calendar-narwhal-economic-data', sourceLabel: '市场日历（Narwhal）' },
+  'market-intelligence.refreshNarwhalCalendarSweep.automatic': { taskLabel: '市场日历 · Narwhal 日扫（30 天）', action: 'collect', sourceId: 'macro-calendar-narwhal-economic-data', sourceLabel: '市场日历（Narwhal）' },
   'market-intelligence.collect-macro-market': { taskLabel: '宏观行情', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
   'market-intelligence.collect-cross-asset-index': { taskLabel: '纳指指数', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
   'market-intelligence.collect-realmarketapi-dxy': { taskLabel: '美元指数', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
