@@ -36,8 +36,14 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   onSelect?: (item: CalendarDayItem) => void
 }>): React.ReactElement {
   return <section aria-label={label} className="mi-calendar-day-list" data-calendar-day-list ref={listRef}>
-    <h2>{title}</h2>
-    <p data-day-summary>{summary}</p>
+    {/* 标题行两端对齐：左边标题、右边计数。计数原来单独占一段，窄栏（抽屉右列 300px）里会换行、
+        和下面的分组标题挤在一起——用户看到的就是「几条重要什么的字样和内容重叠」。
+        计数右对齐、不换行；放不下时**标题先省略**，计数保完整——它是读者判断「有没有被截断」的唯一依据。
+        读序不变：标题在前、计数在后，仍在同一个标题行里。 */}
+    <div className="mi-calendar-day-list__head">
+      <h2>{title}</h2>
+      <p data-day-summary>{summary}</p>
+    </div>
     <div role="list">{groups.map(group => <section data-calendar-group={group.eventType} key={group.eventType}>
       {hideGroupHeadings ? null : <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}
       {group.items.map(item => <div role="listitem" key={item.key}><CalendarEventRow item={item} marketSources={marketSources} text={text} statusNow={statusNow} selected={item.source === 'market' ? item.event.eventKey === selectedMarketKey : item.event.eventKey === selectedEventKey} onSelect={onSelect} /></div>)}

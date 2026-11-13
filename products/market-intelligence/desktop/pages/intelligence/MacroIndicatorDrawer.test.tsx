@@ -231,6 +231,20 @@ describe('key-indicator drawer', () => {
     expect(list!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.market.kinds['economic-indicator'])
   })
 
+  /**
+   * 计数与标题同一行、右对齐；**不许**回到「计数单独一段」——
+   * 那样在 300px 的右列里会换行，和下面的分组标题挤在一起（用户报的「字样和内容重叠」）。
+   */
+  it('keeps the day count on the title row instead of its own paragraph', async () => {
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!
+    const head = list.querySelector(':scope > .mi-calendar-day-list__head')
+    expect(head).not.toBeNull()
+    expect(head!.querySelector('h2')).not.toBeNull()
+    expect(head!.querySelector('[data-day-summary]')).not.toBeNull()
+    expect(list.querySelector(':scope > [data-day-summary]')).toBeNull()
+  })
+
   it('says 暂无日程数据 in a month that has no releases', async () => {
     await renderDrawer({
       now: '2026-11-13T10:00:00.000Z',
