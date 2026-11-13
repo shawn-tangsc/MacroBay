@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { narwhalCanonicalIdentityKey } from '../marketCalendarMetricIdentity'
-import { narwhalObservationBatches } from './narwhalCalendarObservationBatches'
+import { narwhalObservationBatches, narwhalStandardRowInputs } from './narwhalCalendarObservationBatches'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
 const AT = '2026-11-13T13:30:00.000Z'
@@ -49,5 +49,18 @@ describe('Narwhal 发布 → 日历观测批次', () => {
     })], { locale: 'zh', parserVersion: 'v1', collectionIdPrefix: 'x' })
     const draft = batches[0]!.parseResult.drafts[0]!
     expect(narwhalCanonicalIdentityKey(String(draft.marketFactKey))).toBeUndefined()
+  })
+})
+
+describe('不是发布的东西不进日历', () => {
+  it('GDP 即时预测按 series 排除（不是按名字）', () => {
+    const rows = narwhalStandardRowInputs([
+      release({ releaseId: 'nowcast-1', seriesId: 'usa-gdp-nowcast', period: '2026-Q4',
+        values: [{ measure: 'gdp_nowcast_qoq_annualized', concept: 'gdp', actual: '2.1' }] }),
+      release({ releaseId: 'gdp-1', seriesId: 'usa-gdp', period: '2026-Q3',
+        values: [{ measure: 'gdp_nowcast_qoq_annualized', concept: 'gdp', actual: '3.1' }] })
+    ])
+    // 即时预测那条一行都不出；同 measure 的 GDP 那条照常出（排除按 series，不按 measure 名）。
+    expect(rows.map((row) => row.sourceEventId)).toEqual(['gdp-1'])
   })
 })

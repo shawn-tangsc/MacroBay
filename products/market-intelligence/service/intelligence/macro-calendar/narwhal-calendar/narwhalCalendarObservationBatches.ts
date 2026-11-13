@@ -177,9 +177,19 @@ export type NarwhalStandardRowInput = Readonly<{
   actual?: string
 }>
 
+/**
+ * **不是发布的序列**：不进日历，也不进 `unmapped`。
+ *
+ * `usa-gdp-nowcast` 是**随时更新的估算**，不是「什么时候有一次发布」。按日期键它会按更新日
+ * 一天一行（11 月三天三行），读者会把三次估算看成三次 GDP 发布。判定按**数据清单**（series id），
+ * 不按名字。它该出现在 GDP 卡片与分析里——那里「最新值」的语义是对的，同一个数在日历里错、在卡片里对。
+ */
+export const narwhalNotAReleaseSeriesIds: readonly string[] = Object.freeze(['usa-gdp-nowcast'])
+
 export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease[]): readonly NarwhalStandardRowInput[] {
   const rows: NarwhalStandardRowInput[] = []
   for (const release of releases) {
+    if (narwhalNotAReleaseSeriesIds.includes(release.seriesId)) continue
     const period = release.period
     if (period === undefined || period.length === 0) {
       // **没有 `period` 不等于缺数据**：这些几乎全是事件型（讲话、声明、资产负债表、石油库存…），
