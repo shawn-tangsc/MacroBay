@@ -75,7 +75,7 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     consensus: value('consensus'), providerPrevious: value('previous'), providerActual: value('actual'),
     source: context.resolveSource(row),
     sourceObservedAt: row.observedAt, coverage: 'observed-unverified',
-    timePrecision: row.timePrecision, releaseStatus: row.status
+    timePrecision: row.timePrecision, releaseStatus: row.status, rowKind: row.rowKind
   }
 }
 

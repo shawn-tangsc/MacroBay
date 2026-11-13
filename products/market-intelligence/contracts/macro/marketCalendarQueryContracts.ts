@@ -102,6 +102,12 @@ export type MarketCalendarEvent = Readonly<{
   timePrecision?: 'minute' | 'date'
   /** 源给的发布状态：读侧分「已发布 / 排期 / 取消」只许读它，不按日期推。 */
   releaseStatus?: 'scheduled' | 'published' | 'cancelled' | 'unknown'
+  /**
+   * 行类型：`estimate` 是**随时更新的估算**（GDP 即时预测那类），不是一次发布。
+   * 日历页的查询里正常不会有它；分析侧按身份取「最新估算」时要靠它分辨。
+   * 可选：旧的投影不产出，缺了就是「不知道」，按发布对待。
+   */
+  rowKind?: 'release' | 'estimate'
   officialLink?: MarketCalendarOfficialLink
 }>
 /**
