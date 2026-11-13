@@ -48,8 +48,9 @@ export const macroIndicatorDrawerText = {
     cardStates: {
       notAvailable: '未提供',
       unreadable: '暂时读不到',
-      missingCurrent: '{period} · 已到发布日期，首发布值未收录',
-      missingCurrentNoPeriod: '已到发布日期，首发布值未收录',
+      /* 卡面只留字段和值：状态词说清「本期没有这个数」就够，原因进 ⓘ 浮层。 */
+      missingCurrent: '{period} · 本期无此数',
+      missingCurrentNoPeriod: '本期无此数',
       notRecorded: '本月未发布',
       previousPeriod: '上一期 {value}',
       /* 回退顺序落到哪一档，就把那一档的出处与期次写出来：不写的话，9 月的值挂在 10 月那格里。 */
@@ -72,6 +73,9 @@ export const macroIndicatorDrawerText = {
     // 角标：数的是「格子里没显示出来的条数」，不是「重要条数」——所以是 +N，不是「N 条重要」。
     minicalMore: '+{count}',
     minicalMoreAria: '还有 {count} 条未显示',
+    missingCurrentWhy: '去年同月（2025-10）的 CPI 从未发布，这一期的同比没有分母，所以本期没有这个数。',
+    missingCurrentWhyAria: '为什么本期没有这个数',
+    previousLabel: '上一期',
     minicalUnavailable: '暂时读不到这个月的日程',
     mkDay: {
       summary: '与利率相关 {related} 条',
@@ -126,8 +130,8 @@ export const macroIndicatorDrawerText = {
     cardStates: {
       notAvailable: 'Not available',
       unreadable: 'Not readable right now',
-      missingCurrent: '{period} · released, first-publish value not recorded',
-      missingCurrentNoPeriod: 'released, first-publish value not recorded',
+      missingCurrent: '{period} · no value for this period',
+      missingCurrentNoPeriod: 'no value for this period',
       notRecorded: 'Not released this month',
       previousPeriod: 'Previous {value}',
       previousPeriodFrom: 'Previous {value} ({source} · {period})',
@@ -148,6 +152,9 @@ export const macroIndicatorDrawerText = {
     minicalNoData: 'No calendar data yet',
     minicalMore: '+{count}',
     minicalMoreAria: '{count} more not shown',
+    missingCurrentWhy: 'October 2025 CPI was never published, so this period has no year-over-year denominator.',
+    missingCurrentWhyAria: 'Why this period has no value',
+    previousLabel: 'Previous',
     minicalUnavailable: 'This month\'s schedule is not readable right now',
     mkDay: {
       summary: 'Related to rates {related}',

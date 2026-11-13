@@ -133,7 +133,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const drawerKeys: Readonly<Record<string, string>> = {
     'mk.title': text.title,
     'mk.rateNote': text.rateNote,
-    'mk.rateNoteAria': text.rateNoteAria
+    'mk.rateNoteAria': text.rateNoteAria,
+    'mk.cardWhy': text.missingCurrentWhy,
+    'mk.cardWhyAria': text.missingCurrentWhyAria
   }
   const resolveDrawerKey = (key: string): string => drawerKeys[key] ?? ''
   // 复用日历页那套行组件，文案用同一份产品表，不另写一套词汇。
@@ -371,13 +373,16 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
 
         <div className="mk-strip">
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.cpi.title}</h3></div>
+            <div className="mk-card__h"><h3>{text.cards.cpi.title}</h3>
+              {cpiFact?.state === 'missing-current' ? <CardWhy resolveKey={resolveDrawerKey} /> : null}</div>
             <div className="mk-card__v"><b className={cardValueClass(cpiFact, cardFactsUnreadable)}>{cardValueText(cpiFact, text, cardFactsUnreadable)}</b><span>{text.cards.cpi.unit}</span></div>
             {cardChangeText(cpiFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(cpiFact, text)}</p>}
             {cardStateText(cpiFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(cpiFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
               <div><dt>{text.cards.cpi.core}</dt><dd>{cardValueText(coreCpiFact, text, cardFactsUnreadable)}</dd></div>
               <div><dt>{text.cards.cpi.consensus}</dt><dd>{consensusText(cpiFact, text, timeZone, nowInstant)}</dd></div>
+              {previousText(cpiFact, text, timeZone) === undefined ? null
+                : <div><dt>{text.previousLabel}</dt><dd>{previousText(cpiFact, text, timeZone)}</dd></div>}
               {nextRelease.cpi.kind === 'none' ? null : <div><dt>{text.cards.cpi.next}</dt>
                 <dd>{nextRelease.cpi.kind === 'date' ? nextRelease.cpi.text : text.cardStates.unreadable}</dd></div>}
             </dl>
@@ -397,12 +402,15 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             <div className="mk-card__f">{cardSourceLabel(payrollsFact, text, calendarText)}<span>{text.detail}</span></div>
           </article>
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.pce.title}</h3></div>
+            <div className="mk-card__h"><h3>{text.cards.pce.title}</h3>
+              {pceFact?.state === 'missing-current' ? <CardWhy resolveKey={resolveDrawerKey} /> : null}</div>
             <div className="mk-card__v"><b className={cardValueClass(pceFact, cardFactsUnreadable)}>{cardValueText(pceFact, text, cardFactsUnreadable)}</b><span>{text.cards.pce.unit}</span></div>
             {cardChangeText(pceFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(pceFact, text)}</p>}
             {cardStateText(pceFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(pceFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
               <div><dt>{text.cards.pce.consensus}</dt><dd>{consensusText(pceFact, text, timeZone, nowInstant)}</dd></div>
+              {previousText(pceFact, text, timeZone) === undefined ? null
+                : <div><dt>{text.previousLabel}</dt><dd>{previousText(pceFact, text, timeZone)}</dd></div>}
               {nextRelease.pce.kind === 'none' ? null : <div><dt>{text.cards.pce.next}</dt>
                 <dd>{nextRelease.pce.kind === 'date' ? nextRelease.pce.text : text.cardStates.unreadable}</dd></div>}
             </dl>
@@ -570,6 +578,30 @@ function cardSourceLabel(fact: MacroIndicatorCardFact | undefined, text: MacroIn
   return provider === 'narwhal' ? <span>{calendarText.market.source}</span> : null
 }
 
+/** 「上一期」的字段值：值 + 出处 · 期次（官方序列才有出处）；读不到写「暂时读不到」。 */
+function previousText(fact: MacroIndicatorCardFact | undefined, text: MacroIndicatorDrawerText, timeZone: string): string | undefined {
+  if (fact === undefined) return undefined
+  if (fact.previousUnreadable === true) return text.cardStates.unreadable
+  if (fact.previousAsPublished === undefined) return undefined
+  const value = formatCardNumber(fact.previousAsPublished, fact.unit)
+  if (fact.previousSource === 'fred' && fact.previousObservedAt !== undefined) {
+    return text.cardStates.previousPeriodFrom
+      .replace('{value}', value)
+      .replace('{source}', text.sourceFred)
+      .replace('{period}', formatCardPeriod(fact.previousObservedAt.slice(0, 7)))
+  }
+  return value
+}
+
+/** 卡头的 ⓘ：解释「为什么没有这个数」。卡面正文不放解释性句子。 */
+function CardWhy({ resolveKey }: Readonly<{ resolveKey: (key: string) => string }>): React.ReactElement {
+  return <Popover
+    labelKey="mk.cardWhy"
+    resolveText={resolveKey}
+    trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey="mk.cardWhyAria"
+      icon={Info} size="sm" variant="plain" resolveText={resolveKey} />} />
+}
+
 /**
  * 「预期」一格：有共识就写值 + 出处与观测时刻（三样齐全才显示），没有就写「暂无共识」。
  * 不写「未提供」——那是「本期没值」，共识没有是另一件事。
@@ -620,17 +652,8 @@ function cardStateText(fact: MacroIndicatorCardFact | undefined, text: MacroIndi
   const base = fact.period === undefined
     ? text.cardStates.missingCurrentNoPeriod
     : text.cardStates.missingCurrent.replace('{period}', formatCardPeriod(fact.period))
-  if (fact.previousUnreadable === true) return `${base} · ${text.cardStates.previousUnreadable}`
-  if (fact.previousAsPublished === undefined) return base
-  const value = formatCardNumber(fact.previousAsPublished, fact.unit)
-  // 回退链落到哪一档就标哪一档：官方序列给的就写 FRED + 它自己的期次，不许只写一个数。
-  if (fact.previousSource === 'fred' && fact.previousObservedAt !== undefined) {
-    return `${base} · ${text.cardStates.previousPeriodFrom
-      .replace('{value}', value)
-      .replace('{source}', text.sourceFred)
-      .replace('{period}', formatCardPeriod(fact.previousObservedAt.slice(0, 7)))}`
-  }
-  return `${base} · ${text.cardStates.previousPeriod.replace('{value}', value)}`
+  // 卡面只写状态词；「上一期」是另一个字段，单独一行渲染。
+  return base
 }
 
 function formatCardNumber(value: number, unit: MacroIndicatorCardFact['unit']): string {

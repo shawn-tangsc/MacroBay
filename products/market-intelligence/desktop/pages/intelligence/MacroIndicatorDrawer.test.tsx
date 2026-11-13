@@ -421,7 +421,11 @@ describe('the three simplified cards', () => {
   it('says 未提供 for this period and keeps last period, instead of passing it off as current', async () => {
     const [cpi] = await renderCards(facts)
     expect(cpi).toContain('未提供')
-    expect(cpi).toContain('10 月 · 已到发布日期，首发布值未收录 · 上一期 3.7%')
+    // 卡面只有字段和值：状态词 + 上一期作为独立一行；解释句进 ⓘ，不在正文里。
+    expect(cpi).toContain('10 月 · 本期无此数')
+    expect(cpi).toContain('上一期3.7%')
+    expect(cpi).not.toContain('从未发布')
+    expect(document.body.querySelector('.mk-card__h button[aria-label]')).not.toBeNull()
     // 上一期 3.7% 不许出现在主值位（`mk-card__na` 是「未提供」那一格）。
     expect(document.body.querySelector('.mk-card__v b.mk-card__na')?.textContent).toBe('未提供')
     expect(cpi).not.toContain('较上期')
