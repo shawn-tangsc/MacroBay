@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMarketCalendarEventRepository, ManualCalendarCapacityPolicy } from './marketCalendarEventRepository'
 import { parseZeroXRouterEconomicData } from './zeroXRouterEconomicDataParser'
 import { prepareMarketCollection, zeroXRouterCalendarStoragePolicy as policy } from './marketCalendarStorageValidation'
-import type { ZeroXRouterCalendarDescriptor } from './zeroXRouterCalendarContracts'
+import type { ZeroXRouterCalendarDescriptor } from './marketCalendarStorageContracts'
 
 const databases: DatabaseSync[] = []
 const descriptorId = 'macro-calendar-0xrouter-economic-data' as const

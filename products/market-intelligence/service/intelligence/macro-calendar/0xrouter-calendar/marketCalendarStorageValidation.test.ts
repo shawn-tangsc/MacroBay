@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
-import { calendarText, calendarIdentity, zeroXRouterCalendarParserPolicy } from './zeroXRouterCalendarContracts'
+import { calendarText, calendarIdentity, zeroXRouterCalendarParserPolicy } from './marketCalendarStorageContracts'
 import { parseZeroXRouterEconomicData } from './zeroXRouterEconomicDataParser'
 import { parseZeroXRouterFinancialEvents } from './zeroXRouterFinancialEventsParser'
 import { parseZeroXRouterCentralBankActivities } from './zeroXRouterCentralBankActivitiesParser'
