@@ -22,6 +22,26 @@ describe('applyOfficialYoY', () => {
     expect(next).toMatchObject({ state: 'provided', value: 3.7, source: 'fred' })
   })
 
+  /**
+   * 旧源正在删除：本期由官方给值以后，「上一期」必须也来自官方前一个观测，
+   * 否则等旧源消失，那一格会在没人察觉的情况下变空。
+   */
+  it('takes 上一期 from the previous official observation, not from the old source', () => {
+    const next = applyOfficialYoY(cpi, {
+      state: 'ok', value: 3.8, observedAt: '2026-10-01T00:00:00.000Z', seriesId: 'CPIAUCNS',
+      previous: { value: 3.73768, observedAt: '2026-09-01T00:00:00.000Z' }
+    })
+    expect(next).toMatchObject({
+      value: 3.8, previousAsPublished: 3.73768, previousSource: 'fred',
+      previousObservedAt: '2026-09-01T00:00:00.000Z'
+    })
+  })
+
+  it('says 上一期 is unreadable when the official window has no previous observation', () => {
+    const next = applyOfficialYoY(cpi, { state: 'ok', value: 3.8, observedAt: '2026-10-01T00:00:00.000Z', seriesId: 'CPIAUCNS' })
+    expect(next.previousUnreadable).toBe(true)
+  })
+
   /** 读不到不退回旧数字：旧源正在被删，它那份值会冻结在删除那一刻。 */
   it('marks 上一期 as unreadable instead of keeping the stale number', () => {
     const next = applyOfficialYoY(cpi, { state: 'unavailable', seriesId: 'CPIAUCNS', reason: 'read-failed' })

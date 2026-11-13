@@ -36,6 +36,28 @@ describe('readFredIndicatorYoY', () => {
     expect(reading).toEqual({ state: 'unavailable', seriesId: 'CPIAUCNS', reason: 'read-failed' })
   })
 
+  /** 上一期也只有官方一处是真的：连它前面那个有值的观测一起带回来。 */
+  it('carries the previous observation so 上一期 never has to ask the old source', async () => {
+    const reading = await readFredIndicatorYoY('US.CPI.NSA.YOY', async () => [
+      { date: '2026-10-01', value: '3.8' },
+      { date: '2026-09-01', value: '3.73768' },
+      { date: '2026-08-01', value: '3.5' }
+    ])
+    expect(reading).toEqual({
+      state: 'ok', value: 3.8, observedAt: '2026-10-01T00:00:00.000Z', seriesId: 'CPIAUCNS',
+      previous: { value: 3.73768, observedAt: '2026-09-01T00:00:00.000Z' }
+    })
+  })
+
+  it('skips empty rows when picking the previous observation', async () => {
+    const reading = await readFredIndicatorYoY('US.CPI.NSA.YOY', async () => [
+      { date: '2026-10-01', value: '3.8' },
+      { date: '2026-09-01', value: '.' },
+      { date: '2026-08-01', value: '3.5' }
+    ])
+    expect(reading).toMatchObject({ state: 'ok', previous: { value: 3.5 } })
+  })
+
   it('reports no observation when every row is empty', async () => {
     const reading = await readFredIndicatorYoY('US.CPI.NSA.YOY', async () => [{ date: '2026-09-01', value: '.' }])
     expect(reading).toEqual({ state: 'unavailable', seriesId: 'CPIAUCNS', reason: 'no-observation' })

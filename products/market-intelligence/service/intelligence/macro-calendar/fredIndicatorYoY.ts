@@ -22,7 +22,14 @@ export const fredIndicatorYoYPolicy = Object.freeze({
 } as const)
 
 export type FredYoYReading =
-  | Readonly<{ state: 'ok'; value: number; observedAt: string; seriesId: string }>
+  | Readonly<{
+    state: 'ok'
+    value: number
+    observedAt: string
+    seriesId: string
+    /** 再往前一个**有值**的观测：本期由官方给值时，「上一期」也从这里来，不回退旧源。 */
+    previous?: Readonly<{ value: number; observedAt: string }>
+  }>
   | Readonly<{ state: 'unavailable'; seriesId: string; reason: 'no-series' | 'no-observation' | 'read-failed' }>
 
 export type FredObservationsFetcher = (input: Readonly<{
@@ -36,7 +43,12 @@ export function fredSeriesFor(metricKey: string): string | undefined {
   return (fredIndicatorYoYPolicy.seriesByMetricKey as Readonly<Record<string, string>>)[metricKey]
 }
 
-/** 取最新一个有值的观测（FRED 用 `.` 表示缺值，跳过而不是当 0）。 */
+/**
+ * 取最新一个有值的观测（FRED 用 `.` 表示缺值，跳过而不是当 0），连它前面那个有值的观测一起带上。
+ *
+ * 带上前一个是为了「上一期」：这两个数都只有官方一处是真的，等旧源删掉以后再去问它，
+ * 那一格就会在没人察觉的情况下变空。
+ */
 export async function readFredIndicatorYoY(
   metricKey: string,
   fetchObservations: FredObservationsFetcher
@@ -49,13 +61,20 @@ export async function readFredIndicatorYoY(
   } catch {
     return { state: 'unavailable', seriesId, reason: 'read-failed' }
   }
+  const valid: Readonly<{ value: number; observedAt: string }>[] = []
   for (const row of rows) {
     const value = Number(row.value)
     if (row.value.trim() === '' || row.value.trim() === '.' || !Number.isFinite(value)) continue
     if (!isValidIsoTime(`${row.date}T00:00:00.000Z`)) continue
-    return { state: 'ok', value, observedAt: `${row.date}T00:00:00.000Z`, seriesId }
+    valid.push({ value, observedAt: `${row.date}T00:00:00.000Z` })
   }
-  return { state: 'unavailable', seriesId, reason: 'no-observation' }
+  const latest = valid[0]
+  if (latest === undefined) return { state: 'unavailable', seriesId, reason: 'no-observation' }
+  const previous = valid[1]
+  return {
+    state: 'ok', value: latest.value, observedAt: latest.observedAt, seriesId,
+    ...(previous === undefined ? {} : { previous })
+  }
 }
 
 /**
@@ -81,9 +100,18 @@ export function applyOfficialYoY(
   }
   const period = reading.observedAt.slice(0, 7)
   if (period === fact.period) {
+    // 本期由官方给值时，「上一期」也取官方前一个观测——旧源正在删除，问它就是问一个正在冻结的值。
+    // 官方窗口里拿不到前一个观测 → 这一格是「读不到」，不是「没有」。
+    const previous = reading.previous
     return {
       ...fact, state: 'provided', value: reading.value, source: 'fred',
-      releasedAt: reading.observedAt, previousUnreadable: false
+      releasedAt: reading.observedAt,
+      ...(previous === undefined
+        ? { previousUnreadable: true }
+        : {
+          previousAsPublished: previous.value, previousSource: 'fred' as const,
+          previousObservedAt: previous.observedAt, previousUnreadable: false
+        })
     }
   }
   return {
