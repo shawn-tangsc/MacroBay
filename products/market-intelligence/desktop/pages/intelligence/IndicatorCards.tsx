@@ -77,7 +77,8 @@ type CardInput = Readonly<{
  * 两页各 4 行、卡高固定，切换只换内容，行位不变。
  */
 function Carousel(input: CardInput): React.ReactElement {
-  const [page, setPage] = useState<'past' | 'next'>('past')
+  // 默认打开**未来**那页：读者打开这张卡，想看的就是「接下来会怎样」；已发布页往左翻。
+  const [page, setPage] = useState<'past' | 'next'>('next')
   const { group, text } = input
   const move = (next: 'past' | 'next'): void => setPage(next)
   const nav = (

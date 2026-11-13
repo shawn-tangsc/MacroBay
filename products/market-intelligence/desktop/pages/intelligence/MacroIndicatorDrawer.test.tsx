@@ -409,6 +409,13 @@ describe('the three simplified cards', () => {
       ? fact
       : { ...fact, next: { period: '2026-11', releaseAt, timePrecision: 'minute' as const } })
 
+  /** 默认是未来页；要看已发布页的用例先统一翻过去。 */
+  const renderReleased = async (cardFacts?: readonly MacroIndicatorCardFact[], cardFactsUnreadable?: boolean) => {
+    const rows = await renderCards(cardFacts, cardFactsUnreadable)
+    for (let index = 0; index < 3; index += 1) await switchPage(index, 'released')
+    return rows
+  }
+
   /** 一张卡位 = 一个轮播；文字取整个卡位（当前页的内容都在里面）。 */
   const carouselText = (index: number): string =>
     document.body.querySelectorAll('[data-pair]')[index]?.textContent ?? ''
@@ -420,6 +427,15 @@ describe('the three simplified cards', () => {
     const target = direction === 'next' ? nav?.[1] : nav?.[0]
     await act(async () => { target?.click() })
   }
+
+  /** 用户 2026-11-14：默认打开**未来**那页；左箭头仍能翻回已发布页，数据是同一份。 */
+  it('opens on the future page by default and can go back to the released page', async () => {
+    await renderCards(facts)
+    expect(carouselText(0)).toContain('下次发布')
+    await switchPage(0, 'released')
+    expect(carouselText(0)).toContain('发布')
+    expect(carouselText(0)).not.toContain('下次发布')
+  })
 
   /** 倒计时 tag 三档都用强调色：7 天外不是灰，24 小时内才实底反白。 */
   it('colours the countdown tag by how close the release is', async () => {
@@ -454,7 +470,7 @@ describe('the three simplified cards', () => {
 
   /** 取消整卡变灰，同时时间标签**无条件渲染**：旧了不代表坏了，但要让人看得出多久以前。 */
   it('keeps the card normal and still shows how long ago it was published', async () => {
-    await renderCards(facts)
+    await renderReleased(facts)
     expect(document.body.querySelector('[data-dim="true"]')).toBeNull()
     expect(carouselText(0)).toMatch(/天前|刚发布|昨天发布|前天发布/)
   })
@@ -474,7 +490,7 @@ describe('the three simplified cards', () => {
   }
 
   it('says 未提供 for rows this period did not provide, instead of a blank', async () => {
-    await renderCards(facts)
+    await renderReleased(facts)
     const cpi = carouselText(0)
     expect(cpi).toContain('未提供')
     // 卡面只有字段和值：缺的那几行写「未提供」，解释句进 ⓘ，不在正文里。
@@ -482,7 +498,7 @@ describe('the three simplified cards', () => {
   })
 
   it('shows the payrolls value and the expectation gap chip', async () => {
-    await renderCards(facts)
+    await renderReleased(facts)
     const payrolls = carouselText(1)
     expect(payrolls).toContain('+165K')
     // 「较上期」这一行已从卡面去掉（用户 2026-11-14 定稿）；卡上给的是预期差。
@@ -526,14 +542,14 @@ describe('the three simplified cards', () => {
    */
 
   it('says 未提供 on every PCE row because this month has no release row', async () => {
-    await renderCards(facts)
+    await renderReleased(facts)
     const pce = carouselText(2)
     expect(pce).toContain('未提供')
     expect(pce).not.toContain('+165K')
   })
 
   it('never shows a number on a card when the facts were not read at all', async () => {
-    const cards = await renderCards()
+    const cards = await renderReleased()
     expect(cards).toHaveLength(3)
     // 主值那一格空着：既没有数，也没有「未提供」——那两个字是「来源没给」的意思。
     expect(cardMainValues()).toHaveLength(12)
@@ -542,7 +558,7 @@ describe('the three simplified cards', () => {
   })
 
   it('says 暂时读不到 when the read failed, never 未提供', async () => {
-    await renderCards(undefined, true)
+    await renderReleased(undefined, true)
     expect(cardMainValues()).toHaveLength(12)
     expect(cardMainValues().every((value) => value === '暂时读不到')).toBe(true)
   })
