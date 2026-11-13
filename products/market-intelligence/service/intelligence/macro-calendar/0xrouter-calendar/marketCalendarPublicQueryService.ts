@@ -6,7 +6,7 @@ import { marketCalendarSourceStatus } from './marketCalendarSourceStatus'
 import type { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import type { MarketRow } from './marketCalendarStorageValidation'
 import { preferredObservation, type MarketObservationCandidate } from './marketCalendarObservationPrecedence'
-import { narwhalCanonicalIdentityKey, zeroXRouterCanonicalIdentity,
+import { narwhalCanonicalIdentityKey, toAlpha3Country, zeroXRouterCanonicalIdentity,
   type MarketCalendarCanonicalIdentity } from '../marketCalendarMetricIdentity'
 
 // Ephemeral main-only page positions, not durable identity or a cache of event history.
@@ -36,6 +36,8 @@ type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; pairs: Pair[]; sou
   covered: Map<string, string[]>;
   /** 算不出身份、因而不进日历的 Narwhal 行数（行仍在库里，可查）。 */
   unmappedNarwhal: number;
+  /** 事件型 Narwhal 行数：有身份，但配对规则未接，暂不进日历。 */
+  eventRows: number;
   /** 已经投影出去的事件按身份归位：同一身份再来一行时按优先级替换，而不是按顺序留第一行。 */
   chosen: Map<string, { index: number; candidate: MarketObservationCandidate; collectionId: string; observationId: string }> }
 /**
@@ -46,7 +48,7 @@ type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; pairs: Pair[]; sou
  * - 旧源的行：同一 (国家, 指标)、发布日相差 ≤1 天时让位——**配对只在这一步用时间窗，身份
  *   仍是 (国家, 指标, 期间)**。没有指标身份的讲话/会议行原样保留。
  */
-function rowsShowsThisRow(position: { covered: Map<string, string[]>; unmappedNarwhal: number },
+function rowsShowsThisRow(position: { covered: Map<string, string[]>; unmappedNarwhal: number; eventRows: number },
   row: Record<string, unknown>): boolean {
   const scheduledAt = String(row.scheduled_at)
   const day = scheduledAt.slice(0, 10)
@@ -54,6 +56,9 @@ function rowsShowsThisRow(position: { covered: Map<string, string[]>; unmappedNa
     const identityKey = narwhalCanonicalIdentityKey(String(row.candidate_key))
     if (!identityKey) { position.unmappedNarwhal += 1; return false }
     const [countryCode, metricKey] = identityKey.split('|') as [string, string]
+    // 事件型（讲话/财经事件）这一版**先不进日历**：它们的配对规则（同类型 + 时刻窗）还没接，
+    // 硬放进来会和旧源的同名事件各出一行。行在库里、可查，配对接上就放出来。
+    if (metricKey === 'central-bank-activity' || metricKey === 'financial-event') { position.eventRows += 1; return false }
     const bucket = `${countryCode}|${metricKey}`
     const dates = position.covered.get(bucket)
     if (dates === undefined) position.covered.set(bucket, [day])
@@ -61,7 +66,7 @@ function rowsShowsThisRow(position: { covered: Map<string, string[]>; unmappedNa
     return true
   }
   const identity = zeroXRouterCanonicalIdentity({
-    countryCode: row.country_code === null ? null : String(row.country_code),
+    countryCode: row.country_code === null ? null : toAlpha3Country(String(row.country_code)),
     indicatorId: row.indicator_id === null ? null : String(row.indicator_id),
     scheduledAt
   })
@@ -170,7 +175,7 @@ export function createMarketCalendarPublicQueryService(deps: {
           })
           const pairs: Pair[] = selections.flatMap((found) => found.map((selection) => ({ selection })))
           position = { query: { month, locale, asOf }, pairs, sources, index: 0, created: timestamp, chosen: new Map(),
-            covered: new Map(), unmappedNarwhal: 0 }
+            covered: new Map(), unmappedNarwhal: 0, eventRows: 0 }
         }
         const sources = position.sources
         const events: MarketCalendarEvent[] = []
@@ -240,6 +245,9 @@ export function createMarketCalendarPublicQueryService(deps: {
         // 一次请求最多一行，而且只在真异常时：同一批次里同一身份出现了两行。
         if (duplicatesInBatch > 0) {
           console.warn(`[macro-calendar] 同一批次内同一身份出现多行：${duplicatesInBatch} 处，读取按优先级取一行`)
+        }
+        if (!input.cursor && position.eventRows > 0) {
+          console.warn(`[macro-calendar] ${position.eventRows} 条 Narwhal 事件型发布已入库，待配对规则接入后显示`)
         }
         if (!input.cursor && position.unmappedNarwhal > 0) {
           // 可查的数：这些行**在库里**、只是算不出身份进不了日历；映射补齐后它们自动出现。

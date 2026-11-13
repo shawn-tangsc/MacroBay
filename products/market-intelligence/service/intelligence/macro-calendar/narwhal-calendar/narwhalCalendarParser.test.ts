@@ -75,7 +75,8 @@ describe('narwhal calendar parser', () => {
   it('converts the release instant to the reader time zone for the day, without truncating the instant', () => {
     const result = parseNarwhalCalendarPage(page([entry({ at: '2026-11-13T23:30:00Z' })]), { asOf: '2026-11-13T00:00:00Z', timeZone: 'Asia/Shanghai' })
     if (result.state !== 'succeeded') throw new Error('expected success')
-    expect(result.releases[0]!.at).toBe('2026-11-13T23:30:00Z')
+    // 时刻统一成带毫秒的规范形式：存储层只认这一种，秒级差异会让同一条发布在库里出现两个时刻。
+    expect(result.releases[0]!.at).toBe('2026-11-13T23:30:00.000Z')
     expect(result.releases[0]!.eventDate).toBe('2026-11-14')
   })
 })

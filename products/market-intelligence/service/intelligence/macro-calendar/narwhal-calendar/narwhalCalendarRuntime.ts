@@ -1,7 +1,11 @@
 import type { NarwhalIngestRepository } from './narwhalCalendarIngest'
 import { ingestNarwhalReleases } from './narwhalCalendarIngest'
 import { collectNarwhalCalendar, type NarwhalCollectorResult } from './narwhalCalendarCollector'
+import { narwhalObservationBatches, type NarwhalCalendarBatch } from './narwhalCalendarObservationBatches'
 import { createNarwhalPageFetcher, type NarwhalRequest } from './narwhalCalendarHttp'
+
+/** 观测行的解析器版本：解析规则一变就换版本号，旧的观测行不用回填。 */
+export const narwhalCalendarParserVersion = 'narwhal-calendar-mc1-v1'
 
 /**
  * 把三块接起来：HTTP 适配 → 采集循环 → 落库（含首发布快照）。
@@ -14,6 +18,13 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
   request: NarwhalRequest
   readApiKey: () => string | undefined
   repository: NarwhalIngestRepository
+  /**
+   * 同一次采集里，把发布再写成日历观测（两类口径见 `narwhalObservationBatches`）。
+   * 不注入就不写——单测与只读核对可以只用发布行。
+   */
+  appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
+  /** 观测批次的集合前缀，默认按采集时刻一采集一批。 */
+  collectionIdPrefix?: () => string
   now?: () => number
   sleep: (milliseconds: number) => Promise<void>
 }>) {
@@ -38,6 +49,13 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
           const stamp = new Date(deps.now?.() ?? Date.now()).toISOString()
           const result = ingestNarwhalReleases({ releases, detectedAt: stamp, recordedAt: stamp }, deps.repository)
           firstPublishedCaptured += result.firstPublishedCaptured
+          if (deps.appendObservationBatch === undefined) return
+          const prefix = deps.collectionIdPrefix?.() ?? `narwhal-${stamp.replace(/[:.]/g, '-')}`
+          for (const locale of ['zh', 'en'] as const) {
+            for (const batch of narwhalObservationBatches(releases, {
+              locale, parserVersion: narwhalCalendarParserVersion, collectionIdPrefix: `${prefix}-${locale}`
+            })) deps.appendObservationBatch(batch)
+          }
         }
       })
       return { collector, firstPublishedCaptured }

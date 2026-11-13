@@ -34,6 +34,10 @@ export type NarwhalParsedRelease = Readonly<{
   dateBasis: 'exact' | 'indicative'
   /** 读者时区里的发布日；渲染层用它分组，时刻另用 `at`。 */
   eventDate: string
+  /** 来源给的题材（`policy_communication` 这类），用于事件型分型。 */
+  topic?: string
+  /** 来源给的参照期（`2026-10` / `2026-Q3` / `2026-11-07`）。**直接用它，不按发布月反推。** */
+  period?: string
   values: readonly NarwhalParsedValue[]
 }>
 
@@ -76,7 +80,10 @@ function releaseOf(entry: unknown, options: Readonly<{ asOf: string; timeZone?: 
   if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return undefined
   const record = entry as Record<string, unknown>
   const releaseId = text(record.release_id)
-  const at = text(record.at)
+  // 来源给的是 `2026-11-18T13:30:00Z`（无毫秒）。存储层只认带毫秒的规范时刻，且秒级截断
+  // 会让「同一发布」在库里出现两个时刻，所以在这里一次性归一。
+  const rawAt = text(record.at)
+  const at = rawAt === undefined ? undefined : canonicalInstantOf(rawAt)
   const timezone = text(record.timezone)
   const seriesId = text(record.series_id)
   const name = text(record.name)
@@ -91,8 +98,15 @@ function releaseOf(entry: unknown, options: Readonly<{ asOf: string; timeZone?: 
     releaseId: releaseId!, at: at!, timezone: timezone!, seriesId: seriesId!, name: name!,
     country: country!, status: status!, dateBasis,
     eventDate: localDate(at!, options.timeZone ?? 'UTC'),
+    ...(text(record.topic) === undefined ? {} : { topic: text(record.topic)! }),
+    ...(text(record.period) === undefined ? {} : { period: text(record.period)! }),
     values
   }
+}
+
+function canonicalInstantOf(value: string): string | undefined {
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
 }
 
 function valuesOf(raw: unknown): readonly NarwhalParsedValue[] | undefined {

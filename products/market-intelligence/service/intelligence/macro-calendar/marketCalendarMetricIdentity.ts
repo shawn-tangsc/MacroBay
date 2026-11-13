@@ -247,6 +247,19 @@ export type MarketCalendarCanonicalIdentity = Readonly<{
   countryCode: string; metricKey: string; periodKey: string
 }>
 
+/**
+ * 国家码归一：**身份只用三位（ISO alpha-3）**，存储层写的是两位。
+ *
+ * 不归一就会出现「同一个国家两条身份」——这正是身份规范里「US 与 USA 并存」那条判红。
+ */
+const alpha3ByAlpha2: Readonly<Record<string, string>> = Object.freeze({
+  US: 'USA', CA: 'CAN', DE: 'DEU', GB: 'GBR', JP: 'JPN', CN: 'CHN', EU: 'EUR'
+})
+
+export function toAlpha3Country(code: string): string {
+  return alpha3ByAlpha2[code] ?? code
+}
+
 /** 身份的可比较字符串形式，做 join 用；分隔符取 `|`，三个字段都不含它。 */
 export function canonicalIdentityKey(identity: MarketCalendarCanonicalIdentity): string {
   return `${identity.countryCode}|${identity.metricKey}|${identity.periodKey}`
@@ -328,16 +341,47 @@ export function narwhalCanonicalIdentityKey(candidateKey: string): string | unde
   let parsed: unknown
   try { parsed = JSON.parse(candidateKey) } catch { return undefined }
   if (!Array.isArray(parsed) || parsed.length !== 4 || parsed[0] !== 'narwhal') return undefined
-  const inner = parsed[3]
+  // `source_event_id` 是**字符串**列，写进去的是 `["<token>",1]` 的 JSON 文本，所以这里可能
+  // 拿到字符串也可能拿到数组（老行/新行两种宽度都认）。
+  let inner: unknown = parsed[3]
+  if (typeof inner === 'string') {
+    try { inner = JSON.parse(inner) } catch { return undefined }
+  }
   if (!Array.isArray(inner) || inner.length !== 2 || typeof inner[0] !== 'string' ||
     typeof inner[1] !== 'number' || !Number.isSafeInteger(inner[1]) || inner[1] <= 0) return undefined
-  const parts = inner[0].split('|')
+  const plain = decodeNarwhalIdentityToken(inner[0])
+  if (plain === undefined) return undefined
+  const parts = plain.split('|')
   if (parts.length !== 3 || parts.some((part) => part.length === 0)) return undefined
   const [countryCode, metricKey, periodKey] = parts as [string, string, string]
   return canonicalIdentityKey({ countryCode, metricKey, periodKey })
 }
 
-/** 写入端：把规范身份拼成 `sourceEventId`（`releaseId` 只在算不出身份时用）。 */
+/**
+ * 写入端：把身份串编成 `sourceEventId` 的第一段。
+ *
+ * 存储层对 `source_event_id` 的字符集是 `[A-Za-z0-9_-]`（`candidate_key` 要能当索引键），
+ * 而规范身份里有 `.` 和 `|`，所以这一段是 **base64url 编码**，读侧解回来。`releaseId`
+ * 也在其中（算不出身份时它就是来源自己的 id）。
+ */
 export function narwhalSourceEventIdForIdentity(canonical: MarketCalendarCanonicalIdentity): string {
-  return JSON.stringify([`${canonical.countryCode}|${canonical.metricKey}|${canonical.periodKey}`, 1])
+  return JSON.stringify([encodeIdentityToken(`${canonical.countryCode}|${canonical.metricKey}|${canonical.periodKey}`), 1])
+}
+
+/** 事件型身份：`(国家, 类型, 时刻)`，同样编码后写进 `sourceEventId`。 */
+export function narwhalEventSourceEventId(countryCode: string, eventKind: string, at: string): string {
+  return JSON.stringify([encodeIdentityToken(`${countryCode}|${eventKind}|${at}`), 1])
+}
+
+function encodeIdentityToken(plain: string): string {
+  return Buffer.from(plain, 'utf8').toString('base64url')
+}
+
+/** 反过来解：解不出、或解出来的形状不是三段，就是 `unmapped`。 */
+export function decodeNarwhalIdentityToken(token: string): string | undefined {
+  if (!/^[A-Za-z0-9_-]{4,128}$/.test(token)) return undefined
+  try {
+    const plain = Buffer.from(token, 'base64url').toString('utf8')
+    return plain.includes('|') ? plain : undefined
+  } catch { return undefined }
 }
