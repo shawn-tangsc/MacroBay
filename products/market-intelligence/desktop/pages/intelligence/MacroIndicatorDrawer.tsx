@@ -383,8 +383,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 summary={text.mkDay.summary
                   .replace('{related}', String(dayLayers.core.length))
                   .replace('{other}', String(dayLayers.other.length))}
-                groups={dayGroups(dayLayers, selectedDay, timeZone, othersExpanded, text.mkDay.sequence)}
-                {...(dayLayers.core.length ? {} : { emptyText: text.mkDay.none })}
+                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, othersExpanded, text.mkDay.sequence)}
+                {...(othersExpanded ? { hideGroupHeadings: true } : {})}
+                {...(dayEvents.length === 0
+                  ? { emptyText: calendarText.unifiedDay.empty }
+                  : dayLayers.core.length === 0 ? { emptyText: text.mkDay.none } : {})}
                 marketSources={[]}
                 text={calendarText}
                 statusNow={nowInstant}
@@ -395,7 +398,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
               {dayLayers.other.length === 0 ? null : <button className="mk-col-r__more" type="button"
                 aria-expanded={othersExpanded}
                 onClick={() => setOthersExpanded((value) => !value)}>
-                {text.mkDay.other.replace('{count}', String(dayLayers.other.length))}
+                {(othersExpanded ? text.mkDay.collapse : text.mkDay.other).replace('{count}', String(dayLayers.other.length))}
                 <ChevronDown aria-hidden="true" size={12} data-flip={othersExpanded ? 'true' : 'false'} />
               </button>}
             </>
@@ -440,12 +443,16 @@ export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, tod
 }
 
 /** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行），组内按时刻升序。 */
-function dayGroups(layers: DayLayers, date: string, timeZone: string, othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+function dayGroups(layers: DayLayers, allDay: readonly MarketCalendarEvent[], date: string, timeZone: string, othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
   const shown = othersExpanded ? [...layers.core, ...layers.other] : layers.core
   const order: MarketCalendarEvent['eventType'][] = ['economic-indicator', 'financial-event', 'central-bank-activity']
   // 同一时刻、同一类型、同名的多条（源只给类型名时就是这样）：加序号，否则读者以为渲染重复。
+  // **分母按当天同类型总数**算，不按当前显示了几条——否则展开前后 `2/4` 会变成 `2/9`，像重新排序。
   const totals = new Map<string, number>()
-  for (const event of shown) totals.set(`${event.scheduledAt}|${event.title}`, (totals.get(`${event.scheduledAt}|${event.title}`) ?? 0) + 1)
+  for (const event of allDay) {
+    if (event.eventType !== 'economic-indicator') continue
+    totals.set(`${event.scheduledAt}|${event.title}`, (totals.get(`${event.scheduledAt}|${event.title}`) ?? 0) + 1)
+  }
   const seen = new Map<string, number>()
   return order
     .map(eventType => ({

@@ -68,6 +68,7 @@ export const macroIndicatorDrawerText = {
     mkDay: {
       summary: '与利率相关 {related} 条 · 其他 {other} 条',
       other: '其他 {count} 条',
+      collapse: '收起 {count} 条',
       none: '今天没有影响利率预期的事件',
       sequence: '{name} · {index}/{total}'
     },
@@ -130,6 +131,7 @@ export const macroIndicatorDrawerText = {
     mkDay: {
       summary: 'Related to rates {related} · Other {other}',
       other: 'Other {count}',
+      collapse: 'Collapse {count}',
       none: 'No events that move rate expectations today',
       sequence: '{name} · {index}/{total}'
     },

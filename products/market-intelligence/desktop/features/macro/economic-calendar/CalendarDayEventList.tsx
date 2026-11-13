@@ -12,7 +12,7 @@ import type { EconomicCalendarText } from './economicCalendarText'
  *
  * It is presentational: every value arrives as a prop, and the caller keeps the selection state.
  */
-export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect }: Readonly<{
+export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, hideGroupHeadings, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect }: Readonly<{
   label: string
   /** The page scrolls this list to the top when the selected day changes; the drawer passes nothing. */
   listRef?: React.RefObject<HTMLElement | null>
@@ -22,6 +22,11 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   groups: readonly Readonly<{ eventType: keyof EconomicCalendarText['market']['kinds']; items: readonly CalendarDayItem[] }>[]
   /** Shown only when the sources answered and the answer is zero; omitted means no sentence. */
   emptyText?: string
+  /**
+   * 展开态用：把分组标题也省掉（`true`）。抽屉右列展开「其他 N 条」时是一张平铺清单——
+   * 再分三组标题会把 12 条撑成 15 行，展开就失去「临时看一眼」的意义。
+   */
+  hideGroupHeadings?: boolean
   marketSources: readonly MarketCalendarSource[]
   text: EconomicCalendarText
   statusNow: string
@@ -34,7 +39,7 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
     <h2>{title}</h2>
     <p data-day-summary>{summary}</p>
     <div role="list">{groups.map(group => <section data-calendar-group={group.eventType} key={group.eventType}>
-      <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>
+      {hideGroupHeadings ? null : <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}
       {group.items.map(item => <div role="listitem" key={item.key}><CalendarEventRow item={item} marketSources={marketSources} text={text} statusNow={statusNow} selected={item.source === 'market' ? item.event.eventKey === selectedMarketKey : item.event.eventKey === selectedEventKey} onSelect={onSelect} /></div>)}
     </section>)}</div>
     {/* A quiet day is a reading, not a missing block: the sources answered and the answer is

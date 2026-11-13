@@ -143,18 +143,25 @@ describe('key-indicator drawer', () => {
     // 就地展开：抽屉内的按钮，aria-expanded 真的翻转，展开后那一行才出现。
     const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
     expect(more.getAttribute('aria-expanded')).toBe('false')
+    // 收起态写「其他 N 条」，展开态必须写「收起 N 条」——同一行两种状态不能都写「其他」。
+    expect(more.textContent).toContain('其他 1 条')
     await act(async () => { more.click() })
-    expect((rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement).getAttribute('aria-expanded')).toBe('true')
+    const expanded = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
+    expect(expanded.getAttribute('aria-expanded')).toBe('true')
+    expect(expanded.textContent).toContain('收起 1 条')
     expect(rightColumn()!.textContent).toContain('11月消费者信心')
+    // 展开态是平铺清单：分组标题不再出现（再分三组会把 12 条撑成 15 行）。
+    expect(rightColumn()!.querySelector('h3')).toBeNull()
   })
 
-  it('draws an empty sentence for a day without events, never a blank column', async () => {
+  it('draws the right empty sentence for a day without events, never a blank column', async () => {
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '20')!
     await act(async () => { cell.click() })
     expect(rightColumnTitle()).toContain('2026-11-20')
-    expect(rightColumn()!.textContent).toContain('今天没有影响利率预期的事件')
+    // 当天一条事件都没有 → 「这一天没有已收录的事件」，不是「没有影响利率预期的」——两句不能共用。
+    expect(rightColumn()!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.unifiedDay.empty)
     expect(rightColumn()!.textContent).toContain('与利率相关 0 条 · 其他 0 条')
     expect(document.body.querySelectorAll('.mk-col-r [data-calendar-row]')).toHaveLength(0)
   })
