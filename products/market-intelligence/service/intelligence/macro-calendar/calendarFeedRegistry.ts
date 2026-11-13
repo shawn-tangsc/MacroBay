@@ -128,6 +128,14 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
   }
 }
 
+/**
+ * **真正在采的那些 feed id**（`collection !== 'none'`）：`refreshNow` 的返回里列的就是它们。
+ * 一个出处——白名单曾经另写一份（旧源那三条），结果日报传新源 id 被直接判 `input-invalid`。
+ */
+export function collectingCalendarFeedIds(): readonly string[] {
+  return Object.values(calendarFeedRegistry).filter((feed) => feed.collection !== 'none').map((feed) => feed.feedId)
+}
+
 export function listCalendarFeeds(): readonly CalendarFeedDefinition[] {
   return calendarFeedOrder.map((feedId) => calendarFeedRegistry[feedId])
 }

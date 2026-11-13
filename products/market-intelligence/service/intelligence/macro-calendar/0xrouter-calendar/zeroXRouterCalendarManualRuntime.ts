@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { collectingCalendarFeedIds } from '../calendarFeedRegistry'
 import { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import type { MarketCollectionContext } from './marketCalendarStorageValidation'
 import { createZeroXRouterCalendarCollectionService } from './zeroXRouterCalendarCollectionService'
@@ -47,6 +48,14 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
    * 运行时的宿主）；自动与手动都走这里，读者看到的是「这次没刷新成功」同一件事。
    */
   notificationSubmit?: (request: import('@platform/notifications/contracts/notificationSubmitContracts').NotificationSubmitRequest) => Promise<import('@platform/notifications/contracts/notificationSubmitContracts').NotificationSubmitOutcome>
+  /**
+   * 「立刻跑一次日历采集」的实现：**由装配处注入**（今天就是排一次 tick 作业）。
+   *
+   * 这个运行时只表达「跑一次」这件事，不认识作业定义、不认识源 id：
+   * - `triggered` 必须在**真的排上之后**才返回（先拿句柄再返回，否则就是「点了没反应」还回成功）；
+   * - `running` 表示已有一轮在跑；`failed` 表示排不上（抛错也算 failed，不许吞）。
+   */
+  triggerCollection?: () => Promise<'triggered' | 'running' | 'failed'>
   /** 读者设置时区：去重键里的 `{date}` 按它算（读者看得见的日期跟他的日历走）。 */
   readerTimeZone?: () => string
 }) {
@@ -143,24 +152,24 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
      * failed" lead to different sentences downstream. A `collected` batch has already been
      * stored by the code the page reads, so the caller may read the page right after it returns.
      */
+    /**
+     * 「立刻跑一次日历采集」：**不接收源 id**，触发一次采集即可。
+     *
+     * 收窄的理由：按源点名与「只有一个日历采集域、源在适配器后面」这个模型冲突——
+     * 换了白名单只是把「被拒绝」变成「接受后下游失败」，而日报本不该关心谁在采。
+     * 传 `sourceIds` 一律 `input-invalid`（**拒绝，不是忽略**）。
+     */
     async refreshNow(input: unknown): Promise<MarketCalendarRefreshNowResult> {
       const parsed = parseRefreshNowInput(input)
       if (!parsed) return { state: 'failed', failureCode: 'input-invalid' }
       if (stopped || !deps.evidenceReady) return { state: 'failed', failureCode: 'readiness-unavailable' }
-      const timedOut = Symbol('timeout')
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const deadline = new Promise<typeof timedOut>((resolve) => {
-        timer = setTimeout(() => resolve(timedOut), parsed.timeoutMs)
-        timer.unref?.()
-      })
+      if (deps.triggerCollection === undefined) return { state: 'failed', failureCode: 'readiness-unavailable' }
       try {
-        const outcome = await Promise.race([refreshAutomatic(parsed.sourceIds), deadline])
-        if (outcome === timedOut) return { state: 'timeout', timeoutMs: parsed.timeoutMs }
-        return refreshNowOutcome(outcome)
+        const outcome = await deps.triggerCollection()
+        if (outcome === 'failed') return { state: 'failed', failureCode: 'response-unavailable' }
+        return { state: 'collected', sources: [...collectingCalendarFeedIds()] }
       } catch {
         return { state: 'failed', failureCode: 'response-unavailable' }
-      } finally {
-        if (timer) clearTimeout(timer)
       }
     },
     /**
@@ -255,23 +264,20 @@ function sourceFor(index: number, highWater: readonly { descriptorId: string }[]
   return undefined
 }
 
-function parseRefreshNowInput(input: unknown): { sourceIds: readonly string[]; timeoutMs: number } | undefined {
+/**
+ * 入参只接受 `{ timeoutMs? }`。**任何源 id 一律拒绝**——不是忽略：
+ * 静默忽略会让调用方以为「点名的源跑过了」，而实际跑的是整个采集域。
+ */
+function parseRefreshNowInput(input: unknown): { timeoutMs: number } | undefined {
+  if (input === undefined) return { timeoutMs: marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs }
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
   const value = input as Record<string, unknown>
-  if (Object.keys(value).some((key) => key !== 'sourceIds' && key !== 'timeoutMs')) return undefined
+  if (Object.keys(value).some((key) => key !== 'timeoutMs')) return undefined
   const timeoutMs = value.timeoutMs ?? marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs
   if (typeof timeoutMs !== 'number' || !Number.isSafeInteger(timeoutMs) ||
     timeoutMs < marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs ||
     timeoutMs > marketCalendarPublicPolicy.refreshNow.maximumTimeoutMs) return undefined
-  const sourceIds = value.sourceIds ?? marketCalendarPublicPolicy.descriptors
-  if (!Array.isArray(sourceIds) || sourceIds.length === 0 || sourceIds.length > marketCalendarPublicPolicy.descriptors.length) return undefined
-  const seen = new Set<string>()
-  for (const sourceId of sourceIds) {
-    if (typeof sourceId !== 'string' || !(marketCalendarPublicPolicy.descriptors as readonly string[]).includes(sourceId)) return undefined
-    if (seen.has(sourceId)) return undefined
-    seen.add(sourceId)
-  }
-  return { sourceIds: [...seen], timeoutMs }
+  return { timeoutMs }
 }
 
 /** A batch that stored anything is `collected`; nothing stored is `unchanged`; a refusal keeps its code. */
