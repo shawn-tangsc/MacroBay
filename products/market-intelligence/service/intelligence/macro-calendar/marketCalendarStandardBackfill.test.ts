@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
-import { narwhalSourceEventIdForIdentity } from './marketCalendarMetricIdentity'
+import { narwhalSourceEventIdForIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { backfillStandardRowsFromObservations } from './marketCalendarStandardBackfill'
+import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
 
 /**
  * 回填的判据：**三类发布各走各的身份，但只问一处分流**。
@@ -17,7 +18,8 @@ function openDatabase(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   database.exec(`create table mi_macro_calendar_market_event_observations (
     source_event_id text not null, provider_id text not null, market_fact_key text,
-    display_name text not null, country_code text, scheduled_date text not null, scheduled_at text not null,
+    display_name text not null, country_code text, indicator_id text, event_kind text not null,
+    scheduled_date text not null, scheduled_at text not null,
     consensus_json text, provider_previous_json text, provider_actual_json text,
     importance text not null, measure_keys_json text, last_seen_at text)`)
   return database
@@ -31,10 +33,10 @@ function observe(database: DatabaseSync, input: Readonly<{
   measures?: string
 }>): void {
   database.prepare(`insert into mi_macro_calendar_market_event_observations
-    (source_event_id, provider_id, market_fact_key, display_name, country_code, scheduled_date,
+    (source_event_id, provider_id, market_fact_key, display_name, country_code, event_kind, scheduled_date,
      scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
      measure_keys_json, last_seen_at)
-    values (?, 'narwhal', ?, ?, 'USA', ?, ?, null, null, ?, 'high', ?, ?)`)
+    values (?, 'narwhal', ?, ?, 'USA', 'economic-indicator', ?, ?, null, null, ?, 'high', ?, ?)`)
     .run(`event-${input.metricKey}-${input.periodKey}`,
       JSON.stringify(['narwhal', 'macro-calendar-narwhal-economic-data', 'zh',
         JSON.parse(narwhalSourceEventIdForIdentity({ countryCode: 'USA', metricKey: input.metricKey, periodKey: input.periodKey }))]),
@@ -94,10 +96,10 @@ describe('从观测表回填标准表', () => {
   it('算不出身份的发布不吞：记 unmapped 并带原因', () => {
     const database = openDatabase()
     database.prepare(`insert into mi_macro_calendar_market_event_observations
-      (source_event_id, provider_id, market_fact_key, display_name, country_code, scheduled_date,
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, event_kind, scheduled_date,
        scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
        measure_keys_json, last_seen_at)
-      values ('broken', 'narwhal', null, 'broken row', 'USA', '2026-10-15', '2026-10-15T12:30:00.000Z',
+      values ('broken', 'narwhal', null, 'broken row', 'USA', 'economic-indicator', '2026-10-15', '2026-10-15T12:30:00.000Z',
         null, null, null, 'high', '[]', '2026-11-14T00:00:00.000Z')`).run()
     const report = backfillStandardRowsFromObservations(database)
     expect(report.unmapped).toEqual({ 'bad-identity': 1 })
@@ -105,5 +107,65 @@ describe('从观测表回填标准表', () => {
     // 再跑一次不新增第二条工作清单行（同一发布、同一原因只记一次）
     backfillStandardRowsFromObservations(database)
     expect(database.prepare('select count(*) as c from mi_calendar_unmapped').get()).toEqual({ c: 1 })
+  })
+})
+
+describe('旧源重放：只补历史，不覆盖新源', () => {
+  /** 旧源的身份来自 `indicator_id` 那张表，区间由发布时刻倒推；这里用一条真实映射（CPI 年率）。 */
+  const OLD_CPI_INDICATOR = '1001'
+
+  function openOldDatabase(): DatabaseSync {
+    const database = new DatabaseSync(':memory:')
+    database.exec(`create table mi_macro_calendar_market_event_observations (
+      source_event_id text not null, provider_id text not null, market_fact_key text,
+      display_name text not null, country_code text, indicator_id text, event_kind text not null,
+      scheduled_date text not null, scheduled_at text not null,
+      consensus_json text, provider_previous_json text, provider_actual_json text,
+      importance text not null, measure_keys_json text, last_seen_at text)`)
+    return database
+  }
+
+  it('解出身份且带值的旧行 → 指标行，来源记在 `0xrouter` 上（界面显示「未标来源」）', () => {
+    const mapped = Object.entries(zeroXRouterIndicatorIdentities)
+      .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
+    const database = openOldDatabase()
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["77",1]', '0xrouter', null, 'CPI yoy', 'USA', ?, 'economic-indicator',
+        '2026-10-15', '2026-10-15T12:30:00.000Z', null, null, '3.5', 'high', null, '2026-11-14T00:00:00.000Z')`)
+      .run(mapped[0])
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    expect(report.indicator).toBe(1)
+    const row = database.prepare('select metric_key, source_provider_id from mi_calendar_events').get() as Record<string, unknown>
+    expect(row.metric_key).toBe(mapped[1].metricKey)
+    expect(row.source_provider_id).toBe('0xrouter')
+  })
+
+  it('新源已经写过同一身份 → 旧源跳过，不覆盖它的值', () => {
+    const mapped = Object.entries(zeroXRouterIndicatorIdentities)
+      .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
+    const database = openOldDatabase()
+    ensureCalendarStandardTables(database)
+    // 新源先写一行同身份（值 9.9），旧源只补历史、不许盖掉它。
+    upsertCalendarStandardRow(database, {
+      countryCode: 'USA', metricKey: mapped[1].metricKey, periodKey: '2026-09', scheduledDate: '2026-10-15',
+      timePrecision: 'date', valuesJson: JSON.stringify({ actual: '9.9' }), sourceProviderId: 'narwhal',
+      sourceEventId: 'narwhal-1', parserVersion: 'v1', observedAt: '2026-11-14T00:00:00.000Z',
+      firstSeenAt: '2026-11-14T00:00:00.000Z'
+    })
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["78",1]', '0xrouter', null, 'CPI yoy', 'USA', ?, 'economic-indicator',
+        '2026-10-15', '2026-10-15T12:30:00.000Z', null, null, '3.5', 'high', null, '2026-11-14T00:00:00.000Z')`)
+      .run(mapped[0])
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    expect(report.skippedExisting).toBe(1)
+    expect(report.written).toBe(0)
+    expect(database.prepare('select values_json, source_provider_id from mi_calendar_events').all())
+      .toEqual([{ values_json: JSON.stringify({ actual: '9.9' }), source_provider_id: 'narwhal' }])
   })
 })
