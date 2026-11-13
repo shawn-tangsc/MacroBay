@@ -957,6 +957,23 @@ mi: miText['zh-CN'],
                官方腿读不到但市场侧有行 → 说明行。「没有」与「拿不到」必须分得开。 */
             officialUnavailableShort: 'BLS 官方日程无法自动获取',
             officialUnavailableNote: '官方站点拒绝了当前网络（403），自动同步已停止。列表里的 BLS 事件来自 {date} 成功同步的内容；要拿到新的官方日程，请从官方站点导出 ICS 后手动导入。',
+            /**
+             * 月历格子里那个数字：**显示上限之外的条目总数**。
+             *
+             * 三层文案，各有各的用处，别合并：
+             * - 格子里只有数字+量词（对「里面有什么」不作承诺，因为它同时含「一二级超限」与「未分级」两种）；
+             * - 悬停一句话说清「另有 N 条未显示」；
+             * - 读屏必须能分开两个数，否则读者听到的「其中几条重要」永远对不上。
+             */
+            cellOverflow: {
+              chip: '+{count} 条',
+              title: '另有 {count} 条未显示',
+              aria: {
+                both: '这一天共 {total} 条，此处显示 {shown} 条，另有 {hidden} 条未显示：其中 {tiered} 条一级或二级、{untiered} 条未分级',
+                tieredOnly: '这一天共 {total} 条，此处显示 {shown} 条，另有 {hidden} 条未显示，均为一级或二级（超出显示上限）',
+                untieredOnly: '这一天共 {total} 条，此处显示 {shown} 条，另有 {hidden} 条未显示，均为未分级'
+              }
+            },
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '读取范围：{months}（UTC 月，含网格相邻月）；官方每月最多 200 条' },
             calendarSettings: '配置日历',
             calendarPanel: { title: '日历源', configure: '在数据源中配置', loading: '正在加载日历源…', unavailable: '当前面板没有可配置的日历源。', pending: '待接入', enabled: '已启用', disabled: '未启用' },
@@ -2408,6 +2425,15 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             blsUnavailableNotice: 'BLS official calendar: this network cannot fetch it automatically (the official site returns 403) and automatic sync has stopped; the BLS events in the database come from the last successful sync ({date}), and their release times are unknown.',
             officialUnavailableShort: 'The BLS official schedule cannot be fetched',
             officialUnavailableNote: 'The site refuses this network (403), so automatic syncing has stopped. The BLS events listed come from the content synced on {date}; to get the current schedule, export the ICS from the official site and import it.',
+            cellOverflow: {
+              chip: '+{count} more',
+              title: '{count} more not shown',
+              aria: {
+                both: '{total} events this day, {shown} shown here, {hidden} more not shown: {tiered} of them tier one or two, {untiered} untiered',
+                tieredOnly: '{total} events this day, {shown} shown here, {hidden} more not shown, all tier one or two (over the display limit)',
+                untieredOnly: '{total} events this day, {shown} shown here, {hidden} more not shown, all untiered'
+              }
+            },
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Reading {months} (UTC months, including the grid\'s neighbouring months); up to 200 official events per month' },
             calendarSettings: 'Configure calendar',
             calendarPanel: { title: 'Calendar sources', configure: 'Configure in data sources', loading: 'Loading calendar sources…', unavailable: 'No calendar sources are available for this panel.', pending: 'Pending', enabled: 'Enabled', disabled: 'Disabled' },
