@@ -97,7 +97,14 @@ async function withNextRelease(
   dependencies: MacroIndicatorReadDependencies,
   asOf: string
 ): Promise<MacroIndicatorCardFact> {
-  const next = dependencies.nextReleaseFor!(fact.metricKey, asOf)
+  // 下一期排期是**补充信息**：这一步失败不该把整卡擦成「读不到」。吞掉异常、这一格就不带 `next`，
+  // 卡上显示「暂无排期」——那是如实说没拿到，而不是把整次读取判成失败。
+  let next: Readonly<{ period: string; releaseAt: string; timePrecision?: 'minute' | 'date' }> | undefined
+  try {
+    next = dependencies.nextReleaseFor!(fact.metricKey, asOf)
+  } catch {
+    return fact
+  }
   if (next === undefined) return fact
   const schedule = {
     next: {

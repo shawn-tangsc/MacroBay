@@ -210,6 +210,19 @@ describe('macroIndicatorReadService', () => {
     })
   })
 
+  /** 排期查询抛错是「这一个补充信息没拿到」，不该把整卡判成读不到。 */
+  it('keeps the facts when the next-release lookup itself throws', async () => {
+    await withRepository(async ({ repository }) => {
+      repository.upsertReleaseRow(payrollRelease)
+      const read = createMacroIndicatorReadService(repository, {
+        nextReleaseFor: () => { throw new Error('view missing') }
+      }).read({ asOf })
+      const payrolls = (await factsOf(read))['US.NONFARM.SA.CHANGE']!
+      expect(payrolls).toMatchObject({ state: 'provided', value: 165 })
+      expect(payrolls.next).toBeUndefined()
+    })
+  })
+
   /** 没有排期就不带「下一期」：拿上一期凑会让盘口去查一个不存在的盘。 */
   it('carries no next release when the calendar has no schedule', async () => {
     await withRepository(async ({ repository }) => {
