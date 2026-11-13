@@ -169,8 +169,8 @@ describe('policy path keeps one placement in every state', () => {
     )
     // 三支都进同一个落点：没启用这一支也在右栏。句子现在按**是哪一格没启用**点名
     // （2026-11-12 双格形状），不再是一句笼统的「来源没有启用」。
-    expect(slot.textContent).toContain('核心指标未启用')
-    expect(container.textContent).not.toContain('核心指标未启用')
+    expect(slot.textContent).toContain('利率未启用')
+    expect(container.textContent).not.toContain('利率未启用')
     slot.remove()
   })
 })
