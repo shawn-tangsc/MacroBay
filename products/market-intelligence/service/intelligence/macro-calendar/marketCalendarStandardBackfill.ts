@@ -56,6 +56,21 @@ const displayOf = (json: string | null): string | undefined => {
   } catch { return undefined }
 }
 
+/**
+ * 工作清单按「同一发布、同一原因」只记一次。
+ *
+ * `unmapped` 表的主键带 `detected_at`（采集日志：每次看到都该留一行），而回填是**重放**——
+ * 每跑一次就用新时间戳再记一遍，跑两次就是两份，`跑两次一致` 这句话就不成立。判据不靠时间戳兜，
+ * 而是先问「这条发布这个原因记过没有」：记过就不写，第一次照常留当初的时刻。
+ */
+function recordUnmappedOnce(database: DatabaseSync, input: Readonly<{ providerId: string
+  sourceKey: string; detectedAt: string; rawJson: string; reason: 'bad-identity' | 'unknown-event-type' }>): void {
+  const existing = database.prepare('select 1 from mi_calendar_unmapped where provider_id = ? and source_key = ? and reason = ? limit 1')
+    .get(input.providerId, input.sourceKey, input.reason)
+  if (existing !== undefined) return
+  recordCalendarUnmapped(database, input)
+}
+
 const hasMeasures = (json: string | null): boolean =>
   json !== null && json !== '' && json !== '[]' && json !== 'null'
 
@@ -97,7 +112,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       // 算不出身份：**不吞**，落工作清单（与采集时同一条规矩）。
       badIdentity += 1
       if (write) {
-        recordCalendarUnmapped(database, { providerId, sourceKey: String(row.source_event_id),
+        recordUnmappedOnce(database, { providerId, sourceKey: String(row.source_event_id),
           detectedAt: observedAt, rawJson: JSON.stringify({ name: row.display_name ?? '' }), reason: 'bad-identity' })
       }
       continue
@@ -112,7 +127,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
     if (route.kind === 'unmapped') {
       badIdentity += 1
       if (write) {
-        recordCalendarUnmapped(database, { providerId, sourceKey: String(row.source_event_id),
+        recordUnmappedOnce(database, { providerId, sourceKey: String(row.source_event_id),
           detectedAt: observedAt, rawJson: JSON.stringify({ name: sourceName }), reason: route.reason })
       }
       continue

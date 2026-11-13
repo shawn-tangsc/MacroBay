@@ -87,6 +87,8 @@ describe('从观测表回填标准表', () => {
     expect({ ...second, written: 0 }).toEqual({ ...first, written: 0 })
     expect(afterFirst).toHaveLength(2)
     expect(standardRows(database)).toEqual(afterFirst)
+    // 工作清单也要幂等：`unmapped` 主键带 `detected_at`，重放时不许用新时间戳再记一遍。
+    expect(database.prepare('select count(*) as c from mi_calendar_unmapped').get()).toEqual({ c: 0 })
   })
 
   it('算不出身份的发布不吞：记 unmapped 并带原因', () => {
@@ -100,5 +102,8 @@ describe('从观测表回填标准表', () => {
     const report = backfillStandardRowsFromObservations(database)
     expect(report.unmapped).toEqual({ 'bad-identity': 1 })
     expect(standardRows(database)).toHaveLength(0)
+    // 再跑一次不新增第二条工作清单行（同一发布、同一原因只记一次）
+    backfillStandardRowsFromObservations(database)
+    expect(database.prepare('select count(*) as c from mi_calendar_unmapped').get()).toEqual({ c: 1 })
   })
 })
