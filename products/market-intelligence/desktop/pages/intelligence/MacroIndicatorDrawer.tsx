@@ -445,9 +445,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 selectedEventKey={undefined}
                 selectedMarketKey={undefined}
               />
-              {/* 核心层为空时，这句话是「其他」这一组的说明，不是整块提示语——它下面明明还有条目。 */}
-              {dayLayers.core.length === 0 && dayLayers.other.length > 0
-                ? <p className="mk-col-r__note">{text.mkDay.none}</p> : null}
               {/* 次要层就地展开：抽屉里的交互，不跳页、不弹窗（日期详情只以抽屉形态出现）。 */}
               {dayLayers.other.length === 0 ? null : <button className="mk-col-r__more" type="button"
                 aria-expanded={showOthers}

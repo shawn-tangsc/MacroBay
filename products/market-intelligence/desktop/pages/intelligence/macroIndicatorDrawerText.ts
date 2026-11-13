@@ -80,11 +80,11 @@ export const macroIndicatorDrawerText = {
       valueMissing: '未提供',
       /* 日详情顶部那句解释，只出现一次；右列每行已有行尾的 `未提供`，不重复。 */
       publishedWithoutValues: '已发布 · 来源未提供数值',
-      other: '其他 {count} 条',
-      collapse: '收起 {count} 条',
+      other: '其他 {count} 条 · 均不影响利率预期',
+      collapse: '收起 {count} 条 · 均不影响利率预期',
       none: '今天没有影响利率预期的事件',
       /* 自动跳到别的日子时必须说清：这是哪一天、为什么不是今天。 */
-      notToday: '今天没有发布，下面是最近一次有发布的日子',
+      notToday: '今天没有发布 · 下面是最近一个有发布的日子',
       sequence: '{name} · {index}/{total}'
     },
     weekday: ['一', '二', '三', '四', '五', '六', '日'],
@@ -153,10 +153,10 @@ export const macroIndicatorDrawerText = {
       summary: 'Related to rates {related}',
       valueMissing: 'Not provided',
       publishedWithoutValues: 'Published · the source gave no value',
-      other: 'Other {count}',
-      collapse: 'Collapse {count}',
+      other: 'Other {count} · none move rate expectations',
+      collapse: 'Collapse {count} · none move rate expectations',
       none: 'No events that move rate expectations today',
-      notToday: 'Nothing released today — this is the most recent day with a release',
+      notToday: 'Nothing released today · showing the most recent day with a release',
       sequence: '{name} · {index}/{total}'
     },
     weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],

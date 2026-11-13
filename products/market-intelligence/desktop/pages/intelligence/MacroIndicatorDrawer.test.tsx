@@ -163,15 +163,28 @@ describe('key-indicator drawer', () => {
     expect(rightColumn()!.textContent).toContain('11月消费者信心')
     const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
     expect(more.getAttribute('aria-expanded')).toBe('true')
-    expect(more.textContent).toContain('收起 1 条')
-    // 那句话现在只是「其他」这一组的说明，不是整块提示语。
-    expect(rightColumn()!.textContent).toContain(macroIndicatorDrawerText['zh-CN'].mkDay.none)
+    // 说明并进了「其他」那组的行里（不再是一整块提示语，也不再和 27 条并存矛盾）。
+    expect(more.textContent).toContain('收起 1 条 · 均不影响利率预期')
+    expect(rightColumn()!.textContent).not.toContain(macroIndicatorDrawerText['zh-CN'].mkDay.none)
     // 手动收起后回到「其他 N 条」，行消失。
     await act(async () => { more.click() })
     const collapsed = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
     expect(collapsed.getAttribute('aria-expanded')).toBe('false')
-    expect(collapsed.textContent).toContain('其他 1 条')
+    expect(collapsed.textContent).toContain('其他 1 条 · 均不影响利率预期')
     expect(rightColumn()!.textContent).not.toContain('11月消费者信心')
+  })
+
+  /** 不是今天时那句小字：说清是哪天、为什么（自动挑到最近一天时才有）。 */
+  it('explains why the shown day is not today', async () => {
+    // 今天 11-13 没有发布，最近的一天是 11-14。
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z')] })
+    const note = document.body.querySelector('.mk-col-r [data-day-not-today]')
+    expect(note?.textContent).toBe(macroIndicatorDrawerText['zh-CN'].mkDay.notToday)
+    // 读者自己挑的那天不加这句——标题里的日期就是他点的。
+    const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
+      .find((value) => value.querySelector('em')?.textContent === '20')!
+    await act(async () => { cell.click() })
+    expect(document.body.querySelector('.mk-col-r [data-day-not-today]')).toBeNull()
   })
 
   it('draws the right empty sentence for a day without events, never a blank column', async () => {
