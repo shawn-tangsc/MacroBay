@@ -79,6 +79,28 @@ describe('事件型：源类型串 → evt.* 码', () => {
 })
 
 
+describe('源内身份不参与跨源合并', () => {
+  it('同一国家/期间/发布日：源内身份行与另一个源的标准码行各成一行，谁也不吞谁', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const base = { countryCode: 'USA', periodKey: '2026-10', scheduledDate: '2026-11-18',
+      scheduledAt: '2026-11-18T10:30:00.000Z', kind: 'event' as const }
+    dualWriteMeasureRows(database, { providerId: 'narwhal', parserVersion: 'v1',
+      observedAt: '2026-11-18T10:31:00.000Z',
+      rows: [{ ...base, metricKey: 'r-local-id', sourceEventId: 'r-local-id',
+        identityKind: 'source' as const, sourceLabel: 'Something new', seriesId: 'usa-nowhere' }] as never })
+    dualWriteMeasureRows(database, { providerId: 'official', parserVersion: 'v1',
+      observedAt: '2026-11-18T10:31:00.000Z',
+      rows: [{ ...base, metricKey: 'US.ADP.SA.CHANGE', sourceEventId: 'official-1',
+        identityKind: 'code' as const, status: 'published' as const }] as never })
+    const rows = database.prepare('select identity_kind, metric_key from mi_calendar_events order by identity_kind')
+      .all() as { identity_kind: string; metric_key: string }[]
+    // 没有共同身份就不能合并：源内身份行按源内 id 独立存在，标准码行按标准码独立存在。
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => row.identity_kind)).toEqual(['code', 'source'])
+  })
+})
+
 describe('源内身份 → 标准码：原地转正，不新增行', () => {
   const row = (over: Record<string, unknown>) => ({
     countryCode: 'USA', metricKey: 'r-1', periodKey: '2026-10', scheduledDate: '2026-11-05',
