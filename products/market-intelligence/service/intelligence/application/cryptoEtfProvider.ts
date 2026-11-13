@@ -18,9 +18,6 @@ export const cryptoEtfProvider: ProviderDefinition = provider({
        there is no adapter left to derive an anchor from, and a derived anchor of nothing hides the
        key box entirely. */
     credentialSourceId: cryptoEtfSourcePolicy.sourceId,
-    /* The free tier requires this attribution wherever the data is shown; the settings source
-       detail is one of the three places. The "only verifies the key" notice is gone: it collects now. */
-    notice: 'data-attribution',
     /* 四态行跟着这个 provider 走；它不再是一个「只验证密钥」的标记，所以不会锁开关。 */
     credentialStateLine: true,
     sources: [

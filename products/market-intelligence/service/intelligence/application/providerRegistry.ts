@@ -143,8 +143,6 @@ export type ProviderDefinition = {
 /** 源详情页头上方的说明横幅类别；新增一种要同时加两语文案（渲染层映射）。 */
 export type ProviderNoticeKind =
   | 'private-data-source'
-  /* Attribution the provider's free tier requires, verbatim and untranslated, with a link. */
-  | 'data-attribution'
   /* The source is registered and testable but deliberately collects nothing in this build. */
   | 'verification-only'
 

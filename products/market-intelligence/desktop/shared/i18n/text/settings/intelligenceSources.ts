@@ -274,9 +274,6 @@ export const intelligenceSourcesText = {
   credentialsRequired: '需要 API Key',
   providerNotices: {
     privateDataSource: '私有数据源：注册账号后需向开发者申请 API Key。',
-    /* 免费档的署名条件：中英逐字相同、不翻译（Chief 2026-11-13 定，三处之一）。 */
-    dataAttribution: 'Data by CryptoETF',
-    dataAttributionAria: '数据来源署名，打开 CryptoETF 站点',
   },
   website: '官网',
   signup: '注册 / 获取 Key',
@@ -896,9 +893,6 @@ export const intelligenceSourcesText = {
   credentialsRequired: 'API key required',
   providerNotices: {
     privateDataSource: 'Private data source: after registering an account, request an API Key from the developer.',
-    /* Attribution required by the free tier: identical in every language, never translated. */
-    dataAttribution: 'Data by CryptoETF',
-    dataAttributionAria: 'Data source attribution; opens the CryptoETF site',
   },
   website: 'Website',
   signup: 'Sign up / Get key',

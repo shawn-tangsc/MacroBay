@@ -41,8 +41,7 @@ import { providerSwitchBlock } from './providerSwitchBlock'
  * 讲我们内部做到哪一步的话不许进界面）。这个标记本身还在用：四态那一行与开关的显示都靠它。
  */
 const PROVIDER_NOTICE_KEYS: Readonly<Partial<Record<NonNullable<ProviderView['notice']>, string>>> = {
-  'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource',
-  'data-attribution': 'settings.intelligenceSources.providerNotices.dataAttribution'
+  'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource'
 }
 
 export type ProviderDetailLabels = {
@@ -378,9 +377,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     {noticeKey === undefined ? null : <div
       className={`mi-source-notice-banner${hasProxySource && proxyConfigured && networkFailure ? '' : ' mi-source-notice-banner--alone'}`}
       data-source-notice={provider.notice}>
-      {provider.notice === 'data-attribution' && provider.website !== undefined
-        ? <a href={provider.website} target="_blank" rel="noreferrer" aria-label={resolveText('settings.intelligenceSources.providerNotices.dataAttributionAria')}>{resolveText(noticeKey)}</a>
-        : <NoticeBanner title={resolveText(noticeKey)} />}
+      <NoticeBanner title={resolveText(noticeKey)} />
     </div>}
     {hasProxySource && proxyConfigured && networkFailure ? <NetworkProxyBanner
       tone="failed"
