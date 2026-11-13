@@ -432,7 +432,7 @@ describe('the three simplified cards', () => {
     expect(cpi).toContain('11-25')
     // 非农在当天稍后还有一次发布（12:30Z），所以这一格有日期——不是「凡是未来的都算下个月」。
     expect(payrolls).toContain('下次发布')
-    // 核心 PCE 在这份数据里没有未来行：这一格整格不画，而不是写「未提供」。
+    // 核心 PCE 在这份数据里没有未来行（两个月都读到了）：这一格整格不画，而不是写「未提供」。
     expect(pce).not.toContain('下次发布')
   })
 
@@ -461,6 +461,26 @@ describe('the three simplified cards', () => {
       .find((value) => value.querySelector('em')?.textContent === '14')!
     await act(async () => { cell.click() })
     expect(reads.filter((month) => month === '2026-12')).toHaveLength(1)
+  })
+
+  /**
+   * 下个月那次读**失败**，不等于「没有下一次发布」：这一格必须说「暂时读不到」，
+   * 画成「没有」就是替源编答案。这是「读不到 ≠ 空」在卡片上的落点。
+   */
+  it('says 暂时读不到 for 下次发布 when the next-month read failed, instead of hiding the cell', async () => {
+    const readMarketEvents = async (month: string) => month === '2026-12' ? null : calendarEvents
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+        <MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
+          now="2026-11-13T10:00:00.000Z" readMarketEvents={readMarketEvents} cardFacts={facts} />
+      </ShellTimeZoneProvider></ShellLanguageProvider>)
+    })
+    const cpi = document.body.querySelectorAll('.mk-card')[0]!.textContent ?? ''
+    expect(cpi).toContain('下次发布')
+    expect(cpi).toContain('暂时读不到')
   })
 
   it('says 未提供 for core PCE because this month has no release row', async () => {

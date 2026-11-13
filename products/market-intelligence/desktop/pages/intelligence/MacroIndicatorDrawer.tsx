@@ -183,18 +183,29 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   }), [])
   const monthHasNext = useMemo(() => Object.values(nextReleaseKeys)
     .some((keys) => nextReleaseOf(releases.events, keys, nowInstant, timeZone) === undefined), [nextReleaseKeys, releases.events, nowInstant, timeZone])
-  const nextMonth = useNextMonthReleases({
+  const nextMonthRead = useNextMonthReleases({
     enabled: open && monthHasNext,
     month: shiftMonth(month, 1),
     asOf: nowInstant,
     locale,
     ...(readMarketEvents ? { readMarketEvents } : {})
   })
-  const nextRelease = useMemo(() => ({
-    cpi: nextReleaseOf([...releases.events, ...nextMonth], nextReleaseKeys.cpi, nowInstant, timeZone),
-    payrolls: nextReleaseOf([...releases.events, ...nextMonth], nextReleaseKeys.payrolls, nowInstant, timeZone),
-    pce: nextReleaseOf([...releases.events, ...nextMonth], nextReleaseKeys.pce, nowInstant, timeZone)
-  }), [releases.events, nextMonth, nextReleaseKeys, nowInstant, timeZone])
+  const nextMonth = nextMonthRead.events
+  /**
+   * 每张卡的「下次发布」有三种结果，**读不到不等于没有**：
+   * - 找到了 → 日期；
+   * - 两个月都读到、确实没有 → 不画这一格；
+   * - 下个月那次**没读到** → 「暂时读不到」（画成「没有」就是替源编答案）。
+   */
+  const nextRelease = useMemo(() => {
+    const lookup = (keys: readonly string[]) => {
+      const found = nextReleaseOf([...releases.events, ...nextMonth], keys, nowInstant, timeZone)
+      if (found !== undefined) return { kind: 'date' as const, text: found }
+      if (nextMonthRead.state === 'unavailable') return { kind: 'unreadable' as const }
+      return { kind: 'none' as const }
+    }
+    return { cpi: lookup(nextReleaseKeys.cpi), payrolls: lookup(nextReleaseKeys.payrolls), pce: lookup(nextReleaseKeys.pce) }
+  }, [releases.events, nextMonth, nextMonthRead.state, nextReleaseKeys, nowInstant, timeZone])
   const [othersExpanded, setOthersExpanded] = useState(false)
   // 换一天就收起「其他」：展开态跟着日期走，不跟着抽屉走。
   useEffect(() => { setOthersExpanded(false) }, [selectedDay])
@@ -361,7 +372,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             {cardStateText(cpiFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(cpiFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
               <div><dt>{text.cards.cpi.core}</dt><dd>{cardValueText(coreCpiFact, text, cardFactsUnreadable)}</dd></div>
-              {nextRelease.cpi === undefined ? null : <div><dt>{text.cards.cpi.next}</dt><dd>{nextRelease.cpi}</dd></div>}
+              {nextRelease.cpi.kind === 'none' ? null : <div><dt>{text.cards.cpi.next}</dt>
+                <dd>{nextRelease.cpi.kind === 'date' ? nextRelease.cpi.text : text.cardStates.unreadable}</dd></div>}
             </dl>
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
@@ -372,7 +384,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             {cardStateText(payrollsFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(payrollsFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
               <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{cardValueText(unemploymentFact, text, cardFactsUnreadable)}</dd></div>
-              {nextRelease.payrolls === undefined ? null : <div><dt>{text.cards.payrolls.next}</dt><dd>{nextRelease.payrolls}</dd></div>}
+              {nextRelease.payrolls.kind === 'none' ? null : <div><dt>{text.cards.payrolls.next}</dt>
+                <dd>{nextRelease.payrolls.kind === 'date' ? nextRelease.payrolls.text : text.cardStates.unreadable}</dd></div>}
             </dl>
             <div className="mk-card__f"><span>{text.sourceBls}</span><span>{text.detail}</span></div>
           </article>
@@ -381,7 +394,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             <div className="mk-card__v"><b className={cardValueClass(pceFact, cardFactsUnreadable)}>{cardValueText(pceFact, text, cardFactsUnreadable)}</b><span>{text.cards.pce.unit}</span></div>
             {cardChangeText(pceFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(pceFact, text)}</p>}
             {cardStateText(pceFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(pceFact, text, cardFactsUnreadable)}</p>}
-            {nextRelease.pce === undefined ? null : <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt><dd>{nextRelease.pce}</dd></div></dl>}
+            {nextRelease.pce.kind === 'none' ? null : <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt>
+              <dd>{nextRelease.pce.kind === 'date' ? nextRelease.pce.text : text.cardStates.unreadable}</dd></div></dl>}
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
         </div>
