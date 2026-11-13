@@ -12,11 +12,11 @@ const METRICS = ['cpiYoy', 'coreCpiYoy', 'nonfarmPayrolls', 'corePceYoy'] as con
 const EMPTY_STATES = ['noMarket', 'marketSettled', 'incomplete', 'unconfigured'] as const
 
 describe('core indicator settings copy', () => {
-  it('names the nav item and keeps the unit different from sources', () => {
+  it('keeps the menu item, whose content is source configuration rather than expectation order', () => {
     for (const language of ['zh-CN', 'en-US'] as const) {
       const text = productText[language].settings.intelligenceSources
       expect(text.businessTabs.coreIndicators, language).toBeTruthy()
-      // 单位是「项指标」，不是「个源」——两件事不能借同一个量词。
+      // 量词是「项指标」：这一项数的是指标，不是来源；写成「N 个源」会让读者以为这里能接数据源。
       expect(text.businessSubtitle.indicators, language).toContain('{count}')
       expect(text.businessSubtitle.indicators, language).not.toBe(text.businessSubtitle.sources)
     }
