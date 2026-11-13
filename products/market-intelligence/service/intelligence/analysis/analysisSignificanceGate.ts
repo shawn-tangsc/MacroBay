@@ -192,6 +192,12 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
     await dependencies.notifyQuotaExhausted?.({ used: quota.used, limit: quota.limit, occurredAt: dependencies.now(), scope })
   }
   // 没有持久层时用的兜底：只在进程内有效，生产装配由 repository 提供。
+  // 装配漏掉持久层时这里只 warn 一次（不是每 tick）：静默退回内存会让「重启不清零」悄悄失效，
+  // 而所有用例仍然绿——那正是要防的形状。
+  const persistenceWired = dependencies.readCalendarReadStreak !== undefined && dependencies.writeCalendarReadStreak !== undefined
+  if (!persistenceWired) {
+    console.warn('[analysis] calendar-read streak falls back to process memory: persistence is not wired')
+  }
   const memoryStreak = { official: 0, provider: 0 }
   return {
     async evaluate(input: SignificanceGateInput): Promise<SignificanceGateOutcome> {
