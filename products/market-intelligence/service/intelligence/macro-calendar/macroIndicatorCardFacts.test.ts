@@ -50,6 +50,23 @@ describe('macro indicator card facts', () => {
     expect(payrolls.value! - payrolls.previousAsPublished!).toBe(136)
   })
 
+  /**
+   * 主位取的是**主测度**，不是「组里第一个有值的」。
+   *
+   * 这条专门防一种改法：把取值改成遍历组内 measure、取第一个有数的那条——那样 CPI 主位会变成
+   * 核心月率 0.3%，而新闻里说的是年率 3.7。所以这里让两个测度**同时有值**，主位必须是年率。
+   */
+  it('takes the primary measure, not the first measure that happens to have a value', () => {
+    const both: MacroIndicatorCardRow = {
+      ...cpiRow,
+      // 组里第一个有值的是核心月率（0.3）；整体年率（3.7）才是主测度。
+      measureValues: { 'US.CORE_CPI.SA.MOM': 0.3, 'US.CPI.SA.MOM': 0.4, 'US.CPI.NSA.YOY': 3.7 }
+    }
+    const cpi = rowFor([both])['US.CPI.NSA.YOY']!
+    expect(cpi).toMatchObject({ state: 'provided', value: 3.7 })
+    expect(cpi.value).not.toBe(0.3)
+  })
+
   it('does not use the revised previous: the row carries the as-published one or nothing', () => {
     const revised: MacroIndicatorCardRow = { ...payrollRow, previousAsPublished: undefined }
     const fact = rowFor([revised])['US.NONFARM.SA.CHANGE']!
