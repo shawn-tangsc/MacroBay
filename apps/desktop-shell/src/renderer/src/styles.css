@@ -2533,10 +2533,14 @@ h1 {
   padding: 0 16px 8px;
 }
 
+/*
+ * 表格正文：两张表共用这一档（隔离副本 / 操作记录）——12 档（`ui-rules` §2 Body 12 / 1.5 / 400）。
+ * 只取字号：表头的 11.5 与单元格内距不动，行高仍按浏览器默认行距走，所以行高不变、字略小。
+ */
 .storage-cache-history {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--font-body);
 }
 
 .storage-cache-history th {
