@@ -8,8 +8,9 @@ const factOf = (overrides: Partial<AgentFact> = {}): AgentFact => ({
   unit: null, sourceId: 'US.CPI', observedAt: '2026-10-11T06:00:00.000Z', asOf: query.asOf, comparability: 'comparable', ...overrides
 } as AgentFact)
 
-const reads = (facts: readonly AgentFact[], refs: readonly string[] = []) => ({
+const reads = (facts: readonly AgentFact[], refs: readonly string[] = [], state: 'available' | 'unavailable' = 'available') => ({
   readFacts: vi.fn(async () => facts),
+  readState: async () => state,
   readEvidenceRefs: vi.fn(async () => refs),
   isVisible: (visibleAt: string | undefined, asOf: string) => visibleAt === undefined || Date.parse(visibleAt) <= Date.parse(asOf)
 })
@@ -37,4 +38,10 @@ it('keeps only the evidence refs that belong to the selected event', async () =>
   // The product's own ref shape: `macro-calendar:<sourceId>:<eventKey>`.
   const result = await macroCalendarEventContextFromReads(reads([factOf()], ['macro-calendar:official:US.CPI', 'macro-calendar:official:US.NFP']), query)
   expect(result.evidenceRefs).toEqual(['macro-calendar:official:US.CPI'])
+})
+
+it('says the month could not be read, instead of saying the event had no facts', async () => {
+  // 与上面那条「事件没有事实」必须给出不同的答案：一个是「没有」，一个是「不知道」。
+  const result = await macroCalendarEventContextFromReads(reads([], [], 'unavailable'), query)
+  expect(result).toMatchObject({ coverage: 'unavailable', caveats: ['calendar-unreadable'], facts: [], evidenceRefs: [] })
 })

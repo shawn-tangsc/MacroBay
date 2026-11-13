@@ -42,7 +42,7 @@ export function isMarketAnalysisSettingsPatchInput(value: unknown): value is Rea
  */
 export type MarketAnalysisCalendarEventContextInput = Readonly<{ eventKey: string; month: string; asOf: string }>
 
-export type MarketAnalysisCalendarEventContextCaveat = 'no-facts-held' | 'insufficient-facts' | 'event-values-missing'
+export type MarketAnalysisCalendarEventContextCaveat = 'calendar-unreadable' | 'no-facts-held' | 'insufficient-facts' | 'event-values-missing'
 
 /** What the panel receives: the facts, the evidence behind them, and how complete they are. */
 export type MarketAnalysisCalendarEventContextData = Readonly<{

@@ -1,6 +1,6 @@
 import type { AgentEvidenceRef, AgentFact } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_ANALYSIS_RUN_SOURCE_BUDGET } from '../analysis/analysisRunPolicy'
-import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
+import { marketCalendarObservationPolicy, readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
 import { isVisibleAsOf } from './asOfVisibility'
 import { projectMacroCalendar } from './marketAnalysisContextProjection'
 import type { MacroCalendarEventContextReads } from './macroCalendarEventContextAdapter'
@@ -29,7 +29,11 @@ export type MacroCalendarEventContextQuerySources = Readonly<{
 }>
 
 export function macroCalendarEventContextReaders(service: MacroCalendarEventContextQuerySources): MacroCalendarEventContextReads {
-  const reads = new Map<string, Promise<Readonly<{ facts: readonly AgentFact[]; evidenceRefs: readonly string[] }>>>()
+  const reads = new Map<string, Promise<Readonly<{
+    state: 'available' | 'unavailable'
+    facts: readonly AgentFact[]
+    evidenceRefs: readonly string[]
+  }>>>()
   const readMonth = (query: MacroCalendarEventContextQuery) => {
     const key = `${query.month}:${query.asOf}`
     const cached = reads.get(key)
@@ -39,15 +43,33 @@ export function macroCalendarEventContextReaders(service: MacroCalendarEventCont
       const evidenceRefs = new Map<string, AgentEvidenceRef>()
       const caveats = new Set<string>()
       const observations: Parameters<typeof projectMacroCalendar>[5] = {}
+      let officialRead = false
+      let providerRead = false
       const official = service.queryMacroEconomicCalendarMonth
-        // The product's own query is synchronous and untyped at the boundary; awaiting is safe either way.
-        ? await service.queryMacroEconomicCalendarMonth({ month: query.month, asOf: query.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents })
+        ? await (async () => {
+            // The product's own query is synchronous and untyped at the boundary; awaiting is safe either way.
+            try {
+              const page = await service.queryMacroEconomicCalendarMonth!({ month: query.month, asOf: query.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents })
+              if (page && page.state === 'available') officialRead = true
+              return page
+            } catch { return undefined }
+          })()
         : undefined
       const provider = service.queryMarketCalendarMonth
-        ? readMarketCalendarObservations(service.queryMarketCalendarMonth, { month: query.month, asOf: query.asOf })
+        ? (() => {
+            try {
+              const set = readMarketCalendarObservations(service.queryMarketCalendarMonth!, { month: query.month, asOf: query.asOf })
+              // 这一层把「页面读不到」折成一条 caveat，和「这个月没有事件」共用空数组；只能从那条
+              // caveat 认出它没读成，不然后面就会把读失败说成空。
+              providerRead = !(set.observations.length === 0 && set.caveats.includes(marketCalendarObservationPolicy.caveats.pageUnavailable))
+              return set
+            } catch { return undefined }
+          })()
         : undefined
       projectMacroCalendar({ official, provider }, query.asOf, facts, evidenceRefs, caveats, observations)
-      return { facts, evidenceRefs: [...evidenceRefs.keys()] }
+      // 两侧一次都没读成才算读不到：一侧读成时，事件仍可能落在那一侧。
+      const state = officialRead || providerRead ? 'available' as const : 'unavailable' as const
+      return { state, facts, evidenceRefs: [...evidenceRefs.keys()] }
     })()
     reads.set(key, pending)
     return pending
@@ -55,6 +77,7 @@ export function macroCalendarEventContextReaders(service: MacroCalendarEventCont
   return {
     readFacts: async query => (await readMonth(query)).facts,
     readEvidenceRefs: async query => (await readMonth(query)).evidenceRefs,
+    readState: async query => (await readMonth(query)).state,
     isVisible: isVisibleAsOf
   }
 }

@@ -49,7 +49,7 @@ export function coverageOf(input: Readonly<{ factCount: number; eventValuesPrese
 export type MacroCalendarEventContextFact = Readonly<{ factId: string; metric: string; value: string }>
 
 /** Everything the agent is told about why this context is or is not complete. */
-export type MacroCalendarEventContextCaveat = 'no-facts-held' | 'insufficient-facts' | 'event-values-missing'
+export type MacroCalendarEventContextCaveat = 'calendar-unreadable' | 'no-facts-held' | 'insufficient-facts' | 'event-values-missing'
 
 export type MacroCalendarEventContextResult = Readonly<{
   facts: readonly MacroCalendarEventContextFact[]
@@ -68,7 +68,13 @@ export function assembleMacroCalendarEventContext(input: Readonly<{
   facts: readonly MacroCalendarEventContextFact[]
   evidenceRefs: readonly string[]
   eventValuesPresent: boolean
+  /** 这个月本身没读到：与「读到了但没有事实」是两种答案。 */
+  unreadable?: boolean
 }>, policy = macroCalendarEventContextPolicy): MacroCalendarEventContextResult {
+  if (input.unreadable === true) {
+    // 读不到说读不到，不给「没有事实」——后者会让模型叙述安静，前者才让它停下来问。
+    return { facts: [], evidenceRefs: [], coverage: 'unavailable', caveats: ['calendar-unreadable'] }
+  }
   const coverage = coverageOf({ factCount: input.facts.length, eventValuesPresent: input.eventValuesPresent }, policy)
   const caveats: MacroCalendarEventContextCaveat[] = []
   if (coverage === 'unavailable') caveats.push('no-facts-held')

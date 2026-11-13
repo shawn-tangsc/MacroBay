@@ -24,3 +24,10 @@ it('tells the agent nothing is held instead of handing it an empty list', () => 
   expect(block).toBe('[系统当前事实: 系统当前没有这条事件的数据，请勿据此推断]')
   expect(block).not.toContain('\n')
 })
+
+it('uses the unreadable sentence when the month could not be read and the copy provides it', () => {
+  const text = { factsHeading: 'F', factsUnavailable: 'nothing held', factsPartial: 'partial', factsEvidence: 'E', factsUnreadable: 'could not read' }
+  const block = formatCalendarEventFactContext({ facts: [], evidenceRefs: [], coverage: 'unavailable', caveats: ['calendar-unreadable'] }, text)
+  expect(block).toContain('could not read')
+  expect(block).not.toContain('nothing held')
+})
