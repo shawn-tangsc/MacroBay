@@ -53,14 +53,16 @@ describe('Narwhal 发布 → 日历观测批次', () => {
 })
 
 describe('不是发布的东西不进日历', () => {
-  it('GDP 即时预测按 series 排除（不是按名字）', () => {
+  it('GDP 即时预测：写进表但标 estimate（不排除）', () => {
     const rows = narwhalStandardRowInputs([
       release({ releaseId: 'nowcast-1', seriesId: 'usa-gdp-nowcast', period: '2026-Q4',
         values: [{ measure: 'gdp_nowcast_qoq_annualized', concept: 'gdp', actual: '2.1' }] }),
       release({ releaseId: 'gdp-1', seriesId: 'usa-gdp', period: '2026-Q3',
         values: [{ measure: 'gdp_nowcast_qoq_annualized', concept: 'gdp', actual: '3.1' }] })
     ])
-    // 即时预测那条一行都不出；同 measure 的 GDP 那条照常出（排除按 series，不按 measure 名）。
-    expect(rows.map((row) => row.sourceEventId)).toEqual(['gdp-1'])
+    // 两条都写：即时预测标 estimate（日历会过滤掉它），GDP 那条不标（默认 release）。
+    expect(rows.map((row) => row.sourceEventId)).toEqual(['nowcast-1', 'gdp-1'])
+    expect(rows.find((row) => row.sourceEventId === 'nowcast-1')?.rowKind).toBe('estimate')
+    expect(rows.find((row) => row.sourceEventId === 'gdp-1')?.rowKind).toBeUndefined()
   })
 })

@@ -36,6 +36,7 @@ export function dualWriteMeasureRows(
     rows: readonly Readonly<{ countryCode: string; metricKey: string; periodKey: string
       scheduledDate: string; scheduledAt: string; sourceEventId: string
       timePrecision?: 'minute' | 'date'
+      rowKind?: 'release' | 'estimate'
       previous?: string; consensus?: string; actual?: string }>[] }>,
   options?: Readonly<{ onError?: (message: string) => void }>
 ): DualWriteCounts {
@@ -59,6 +60,7 @@ export function dualWriteMeasureRows(
         scheduledDate: row.scheduledDate, scheduledAt: row.scheduledAt,
         ...(existing === undefined ? {} : { firstScheduledDate: existing.firstScheduledDate }),
         timePrecision: row.timePrecision ?? (row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute'),
+        ...(row.rowKind === undefined ? {} : { rowKind: row.rowKind }),
         valuesJson: JSON.stringify({
           ...(row.consensus === undefined ? {} : { consensus: row.consensus }),
           ...(row.previous === undefined ? {} : { previous: row.previous }),

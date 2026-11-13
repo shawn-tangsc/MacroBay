@@ -29,6 +29,8 @@ import type { DatabaseSync } from 'node:sqlite'
  */
 export const calendarStandardTablePolicy = Object.freeze({
   eventsTable: 'mi_calendar_events',
+  /** 日历的唯一读入口（只含 `row_kind = 'release'`）。 */
+  releasesView: 'mi_calendar_releases',
   unmappedTable: 'mi_calendar_unmapped',
   /** 没映射上的原因闭集。新增值要同时更新这里的注释与用例。 */
   unmappedReasons: Object.freeze(['unknown-measure', 'unknown-event-type', 'bad-period', 'bad-identity',
@@ -53,6 +55,12 @@ export type CalendarStandardRow = Readonly<{
   parserVersion: string
   observedAt: string
   firstSeenAt: string
+  /**
+   * 行类型：`release` 是一次发布，`estimate` 是**随时更新的估算**（GDP 即时预测那类）。
+   * 日历只取 `release`；分析与卡片按身份可读全部——同一个数在日历里错（三次估算像三次发布）、
+   * 在卡片里对（最新值就是估算）。**不记 `unmapped`**：它不是映射不上，是本来就不是发布。
+   */
+  rowKind?: 'release' | 'estimate'
   /** 第一次看到这一期时来源给的 actual / previous；之后修订**不覆盖**，没有就不写。 */
   firstPublishedActual?: string
   firstPublishedPrevious?: string
@@ -69,6 +77,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       first_scheduled_date text not null,
       scheduled_at text,
       time_precision text not null check(time_precision in ('minute', 'date')),
+      row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
       values_json text not null,
       source_provider_id text not null,
       source_event_id text not null,
@@ -79,6 +88,11 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       first_published_previous text,
       primary key(country_code, metric_key, period_key, first_scheduled_date)
     );
+    -- **日历只读视图**：一个入口，条件写在这里，不靠每个调用点记得加。
+    -- 同表两种行时，「每处都记得 where」是不可靠的：漏一处，估算就混进日历，而且图上看不出来。
+    drop view if exists ${calendarStandardTablePolicy.releasesView};
+    create view ${calendarStandardTablePolicy.releasesView} as
+      select * from ${eventsTable} where row_kind = 'release';
     create index if not exists idx_calendar_events_month
       on ${eventsTable}(country_code, scheduled_at);
     create table if not exists ${unmappedTable} (
@@ -99,10 +113,10 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
 export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): void {
   const { eventsTable } = calendarStandardTablePolicy
   database.prepare(`insert into ${eventsTable}
-    (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision,
+    (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       scheduled_at = excluded.scheduled_at,
@@ -114,6 +128,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       observed_at = excluded.observed_at`)
     .run(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate,
       row.firstScheduledDate ?? row.scheduledDate, row.scheduledAt ?? null, row.timePrecision,
+      row.rowKind ?? 'release',
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null)
 }

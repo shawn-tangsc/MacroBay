@@ -90,3 +90,18 @@ describe('一次发布一行：四次判红口径', () => {
     expect(row!.first_scheduled_date).toBe(base.scheduledDate)
   })
 })
+
+describe('日历只读视图', () => {
+  it('视图只出 release，estimate 出不来；基表里两行都在', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, sourceEventId: 'r-release' })
+    upsertCalendarStandardRow(database, { ...base, sourceEventId: 'r-estimate', rowKind: 'estimate',
+      metricKey: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ', periodKey: '2026-Q4' })
+    const view = database.prepare('select count(*) c from mi_calendar_releases').get() as { c: number }
+    const all = rows(database)
+    expect(view.c).toBe(1)
+    expect(all).toHaveLength(2)
+    expect(all.filter((row) => row.row_kind === 'estimate')).toHaveLength(1)
+  })
+})

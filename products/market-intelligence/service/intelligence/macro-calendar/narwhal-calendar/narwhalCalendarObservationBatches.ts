@@ -172,6 +172,7 @@ export type NarwhalStandardRowInput = Readonly<{
   sourceEventId: string
   /** 指标型是 `minute`/`date`（按有没有时刻）；事件型按是否只有日期。 */
   timePrecision?: 'minute' | 'date'
+  rowKind?: 'release' | 'estimate'
   previous?: string
   consensus?: string
   actual?: string
@@ -189,7 +190,9 @@ export const narwhalNotAReleaseSeriesIds: readonly string[] = Object.freeze(['us
 export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease[]): readonly NarwhalStandardRowInput[] {
   const rows: NarwhalStandardRowInput[] = []
   for (const release of releases) {
-    if (narwhalNotAReleaseSeriesIds.includes(release.seriesId)) continue
+    // 不是「排除」，是**写进去并标记**：分析侧只读标准表一个入口，不写表它就彻底不存在；
+    // 而日历按 `row_kind = 'release'` 过滤，所以三次估算不会变成三次「GDP 发布」。
+    const isEstimate = narwhalNotAReleaseSeriesIds.includes(release.seriesId)
     const period = release.period
     if (period === undefined || period.length === 0) {
       // **没有 `period` 不等于缺数据**：这些几乎全是事件型（讲话、声明、资产负债表、石油库存…），
@@ -214,6 +217,7 @@ export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease
       const metricKey = narwhalMeasureMetricKeys[value.measure]
       if (metricKey === undefined) continue
       rows.push({
+        ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
         countryCode: release.country, metricKey, periodKey: period,
         scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
         ...(value.previous === undefined ? {} : { previous: value.previous }),
