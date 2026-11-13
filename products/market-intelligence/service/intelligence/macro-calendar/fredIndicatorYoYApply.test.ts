@@ -32,4 +32,16 @@ describe('applyOfficialYoY', () => {
     const pce: MacroIndicatorCardFact = { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' }
     expect(applyOfficialYoY(pce, { state: 'unavailable', seriesId: '', reason: 'no-series' })).toEqual(pce)
   })
+
+  /**
+   * `no-series` 是「这个指标没有官方序列」，不是「读不到」：非农的上期 29 来自日历库，
+   * 官方那一腿不存在，不该被抹成「暂时读不到」。
+   */
+  it('does not mark 上一期 unreadable for a metric that has no official series', () => {
+    const payrolls: MacroIndicatorCardFact = {
+      metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', period: '2026-10',
+      value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal'
+    }
+    expect(applyOfficialYoY(payrolls, { state: 'unavailable', seriesId: '', reason: 'no-series' })).toEqual(payrolls)
+  })
 })

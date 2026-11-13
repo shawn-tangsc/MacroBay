@@ -73,6 +73,9 @@ export function applyOfficialYoY(
   reading: FredYoYReading
 ): import('./macroIndicatorCardFacts').MacroIndicatorCardFact {
   if (reading.state === 'unavailable') {
+    // `no-series` 是「这个指标没有官方序列」（非农、失业率），不是「读不到」：
+    // 那条腿本来就不存在，抹成「暂时读不到」会把日历库里真有的上期值（29）一起弄没。
+    if (reading.reason === 'no-series') return fact
     // 只有本来就该有「上一期」的那几档才标；`not-recorded` 没有行，谈不上「读不到」。
     return fact.state === 'not-recorded' ? fact : { ...fact, previousUnreadable: true }
   }
