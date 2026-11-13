@@ -1,6 +1,7 @@
 import { Switch } from 'antd'
 
-import { coreIndicatorSourcePreferenceKey } from '../../../service/intelligence/application/coreIndicatorSourcePrefsStore'
+/* 只从**纯模块**取键的拼法：store 里有 `node:fs`，渲染层导入它会整页加载失败（2026-11-14）。 */
+import { coreIndicatorSourcePreferenceKey } from '../../../service/intelligence/macro-calendar/coreIndicatorSourcePreferenceKey'
 import {
   coreIndicatorMetricKeys,
   valueSourcesForMetric,

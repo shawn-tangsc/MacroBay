@@ -23,10 +23,8 @@ export type CoreIndicatorSourcePrefs = Readonly<{
   setSourceEnabled: (preferenceKey: string, enabled: boolean) => Promise<void>
 }>
 
-/** 偏好键：指标 × 源。分隔符用 `|`，两个 id 里都不会出现它（metric_key 用 `.` 与 `_`）。 */
-export function coreIndicatorSourcePreferenceKey(metricKey: string, providerId: string): string {
-  return `${metricKey}|${providerId}`
-}
+/* 键的拼法在纯模块里（渲染层也要用，不许经这里把 node:fs 带进浏览器包）。 */
+export { coreIndicatorSourcePreferenceKey } from '../macro-calendar/coreIndicatorSourcePreferenceKey'
 
 type RawDocument = Record<string, unknown>
 
