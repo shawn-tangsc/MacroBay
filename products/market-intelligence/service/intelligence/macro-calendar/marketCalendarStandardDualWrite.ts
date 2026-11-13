@@ -95,7 +95,7 @@ type ObservationLike = Readonly<{
 
 const emptyReasons = (): Record<CalendarUnmappedReason, number> =>
   ({ 'unknown-measure': 0, 'unknown-event-type': 0, 'bad-period': 0, 'bad-identity': 0,
-    'unknown-release-group': 0, 'ambiguous-same-day': 0 })
+    'unknown-release-group': 0, 'ambiguous-same-day': 0, 'no-values': 0 })
 
 export function dualWriteObservationBatch(
   database: DatabaseSync,

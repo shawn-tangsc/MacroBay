@@ -79,6 +79,19 @@ describe('映射不上的行必须交出去，不许静默丢', () => {
   })
 })
 
+describe('有期间但没有任何值的发布也要交出去（发布层守恒）', () => {
+  it('period 有、values 为空 → unmapped，reason 是 no-values 而不是 unknown-measure', () => {
+    const detailed = narwhalStandardRowInputsDetailed([
+      release({ releaseId: 'empty-values-1', period: '2026-10', values: [] })
+    ])
+    expect(detailed.rows).toHaveLength(0)
+    // 「没值可写」与「身份算不出来」修法不同：前者问源为什么发空发布，后者补映射。
+    expect(detailed.unmapped).toEqual([
+      { sourceKey: 'empty-values-1', name: 'Employment report', reason: 'no-values', measureKeys: [] }
+    ])
+  })
+})
+
 describe('未知 measure 也要交出去（测度层守恒）', () => {
   it('有期间但 measure 不在映射表 → unknown-measure，带 measureKeys', () => {
     const detailed = narwhalStandardRowInputsDetailed([

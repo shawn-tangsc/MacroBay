@@ -64,6 +64,7 @@ import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calenda
 import { allSources } from './intelligence/application/providerRegistry'
 import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from './intelligence/macro-calendar/marketCalendarStandardTable'
+import { calendarStandardConservation } from './intelligence/macro-calendar/marketCalendarStandardConservation'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
 import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calendar/bea-official-release/beaOfficialReleaseJobRuntime'
@@ -427,24 +428,20 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         ensureCalendarStandardTables(database)
         const observedAt = new Date().toISOString()
         for (const item of unmapped) {
+          // `reason` **原样落库**：这里曾用三段白名单映射，任何新原因都会被悄悄改写成
+          // `unknown-event-type`（`no-values` 就会以「未知事件类型」的样子出现，指向错误的修法）。
           recordCalendarUnmapped(database, { providerId: 'narwhal', sourceKey: item.sourceKey,
             detectedAt: observedAt, rawJson: JSON.stringify({ name: item.name, measureKeys: item.measureKeys ?? [] }),
-            reason: item.reason === 'bad-period' ? 'bad-period'
-              : item.reason === 'unknown-measure' ? 'unknown-measure' : 'unknown-event-type' })
+            reason: item.reason })
         }
         const counts = dualWriteMeasureRows(database, {
           providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3', observedAt, rows
         }, { onError: (message) => console.warn(`[macro-calendar] 标准表写入失败：${message}`) })
-        // 两层都用**源**当被减数（`sourceTotals`），不从产物反推——构造阶段丢的一条既不在
-        // rows 也不在 unmapped，从产物算输入会跟着少、方程永远平（那就是假绿）。
-        const unmappedReleases = unmapped.length + Object.values(counts.unmapped).reduce((sum, value) => sum + value, 0)
-        const landedReleases = new Set(rows.map((row) => row.sourceEventId)).size
-        const releaseDiff = sourceTotals.releases - (landedReleases + unmappedReleases + counts.failed)
-        // 测度层**只数指标行**：事件型没有 measure，算进去的话每批恒报 −(事件数) 的假红。
-        const landedMeasures = rows.filter((row) => row.kind === 'indicator').length
-        const unmappedMeasures = unmapped.reduce((sum, item) => sum + (item.measureKeys?.length ?? 1), 0)
-        const measureDiff = sourceTotals.measures - (landedMeasures + unmappedMeasures)
-        console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 落表 ${landedReleases} + 未映射 ${unmappedReleases} + 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${landedMeasures} + 未映射 measure ${unmappedMeasures}（差 ${measureDiff}）`)
+        // 算式只有一份实现（`calendarStandardConservation`，带能跑红的用例）：写在这里的
+        // 闭包里没人能测，而它已经错过两版（恒平、恒红）。
+        const conservation = calendarStandardConservation({ sourceTotals, rows, unmapped, failed: counts.failed })
+        const { releaseDiff, measureDiff } = conservation
+        console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 认领 ${conservation.creditedReleases}（落表∪未映射，按 id 去重）+ 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${conservation.landedMeasures} + 未映射 measure ${conservation.unmappedMeasures} + 事件型随行 ${conservation.excludedMeasures}（差 ${measureDiff}）`)
         if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
         if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)
         if (counts.failed > 0) console.warn(`[macro-calendar] 标准行写入失败 ${counts.failed} 条（已计入守恒式）`)

@@ -1,5 +1,6 @@
 import { narwhalEventSourceEventId, narwhalMeasureMetricKeys, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
 import { eventCodeBySourceType } from '../marketCalendarEventCodeTable'
+import type { CalendarUnmappedReason } from '../marketCalendarStandardTable'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
 /**
@@ -202,13 +203,14 @@ export const narwhalNotAReleaseSeriesIds: readonly string[] = Object.freeze(['us
 export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParsedRelease[]): Readonly<{
   rows: readonly NarwhalStandardRowInput[]
   unmapped: readonly Readonly<{ sourceKey: string; name: string
-    reason: 'unknown-event-type' | 'bad-period' | 'unknown-measure'
+    /** 闭集来自标准表策略（**不在这里再抄一份**：两份闭集必然漂移，`no-values` 就是这么漏的）。 */
+    reason: CalendarUnmappedReason
     /** 这个发布里没映射上的 measure（测度层对账用；空表也能看出缺哪些）。 */
     measureKeys?: readonly string[] }>[]
 }> {
   const rows: NarwhalStandardRowInput[] = []
   const unmapped: { sourceKey: string; name: string
-    reason: 'unknown-event-type' | 'bad-period' | 'unknown-measure'; measureKeys?: string[] }[] = []
+    reason: CalendarUnmappedReason; measureKeys?: string[] }[] = []
   for (const release of releases) {
     // 不是「排除」，是**写进去并标记**：分析侧只读标准表一个入口，不写表它就彻底不存在；
     // 而日历按 `row_kind = 'release'` 过滤，所以三次估算不会变成三次「GDP 发布」。
@@ -234,6 +236,13 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
         ...(first?.consensus === undefined ? {} : { consensus: first.consensus }),
         ...(first?.actual === undefined ? {} : { actual: first.actual })
       })
+      continue
+    }
+    // **有期间、一个 measure 都没有**：这类发布既写不出指标行（没有 measure 就没有 `metric_key`），
+    // 也不是「映射不上」，以前在这里静默消失——表里没有、`unmapped` 没有、日志也不说。
+    // 抛开它，发布层守恒式就会差 21（11+12 月美国实测），而且差额指向不了任何一条记录。
+    if (release.values.length === 0) {
+      unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'no-values', measureKeys: [] })
       continue
     }
     for (const value of release.values) {

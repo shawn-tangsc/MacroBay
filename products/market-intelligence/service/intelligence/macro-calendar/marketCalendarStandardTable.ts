@@ -34,7 +34,14 @@ export const calendarStandardTablePolicy = Object.freeze({
   unmappedTable: 'mi_calendar_unmapped',
   /** 没映射上的原因闭集。新增值要同时更新这里的注释与用例。 */
   unmappedReasons: Object.freeze(['unknown-measure', 'unknown-event-type', 'bad-period', 'bad-identity',
-    'unknown-release-group', 'ambiguous-same-day'] as const)
+    'unknown-release-group', 'ambiguous-same-day',
+    /**
+     * 有期间、但这次发布**一个 measure 都没有**（实测 11+12 月美国 21 条）。它写不出指标行
+     * （没有 measure 就没有 `metric_key`），也不属于「映射不上」——所以要单独一个原因：
+     * 前者要问源为什么发空发布，后者要补映射，修法不同。这条路径以前三无（表里没有、
+     * `unmapped` 没有、日志也不说），发布层守恒式一上线就把它量出来了。
+     */
+    'no-values'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
 

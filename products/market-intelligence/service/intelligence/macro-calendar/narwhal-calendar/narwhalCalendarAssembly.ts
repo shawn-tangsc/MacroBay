@@ -4,6 +4,7 @@ import { createNarwhalCalendarRuntime } from './narwhalCalendarRuntime'
 import type { NarwhalCalendarBatch, NarwhalStandardRowInput } from './narwhalCalendarObservationBatches'
 import { createNarwhalCalendarScheduler } from './narwhalCalendarScheduler'
 import type { NarwhalHttpResult, NarwhalRequest } from './narwhalCalendarHttp'
+import type { CalendarUnmappedReason } from '../marketCalendarStandardTable'
 
 /**
  * 装配零件：把「取凭据 → 发请求 → 采集/解析/入库 → 注册两条作业」包成一件，
@@ -29,9 +30,9 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
   readSourceGate?: () => Promise<Readonly<{ visibility: string; enabled: boolean }> | undefined>
   /** 按 measure 拆行的标准行（S1 双写用）：一次采集给一次，与语言无关。 */
   appendStandardRows?: (rows: readonly NarwhalStandardRowInput[],
-    unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: string
+    unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: CalendarUnmappedReason
       measureKeys?: readonly string[] }>[],
-    sourceTotals: Readonly<{ releases: number; measures: number }>) => void
+    sourceTotals: Readonly<{ releases: number; measures: number; measuresOnEventReleases: number }>) => void
   /** 把发布同时写成日历观测（走日历那张表的同一套写入校验）。 */
   appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
 }>) {

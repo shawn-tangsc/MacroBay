@@ -4,6 +4,7 @@ import { collectNarwhalCalendar, type NarwhalCollectorResult } from './narwhalCa
 import { narwhalObservationBatches, narwhalStandardRowInputsDetailed, type NarwhalCalendarBatch,
   type NarwhalStandardRowInput } from './narwhalCalendarObservationBatches'
 import { narwhalCanonicalIdentityKey } from '../marketCalendarMetricIdentity'
+import type { CalendarUnmappedReason } from '../marketCalendarStandardTable'
 import { createNarwhalPageFetcher, type NarwhalRequest } from './narwhalCalendarHttp'
 
 /** 观测行的解析器版本：解析规则一变就换版本号，旧的观测行不用回填。 */
@@ -27,10 +28,10 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
   appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
   /** 按 measure 拆行的标准行（S1 双写用）。一次采集给一次，与语言无关。 */
   appendStandardRows?: (rows: readonly NarwhalStandardRowInput[],
-    unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: string
+    unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: CalendarUnmappedReason
       measureKeys?: readonly string[] }>[],
     /** **来自解析结果**的输入总量：守恒式只许拿它当被减数，不许从产物反推。 */
-    sourceTotals: Readonly<{ releases: number; measures: number }>) => void
+    sourceTotals: Readonly<{ releases: number; measures: number; measuresOnEventReleases: number }>) => void
   /** 观测批次的集合前缀，默认按采集时刻一采集一批。 */
   collectionIdPrefix?: () => string
   now?: () => number
@@ -70,7 +71,12 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
           // 从产物反推的话输入会跟着一起少，方程永远平（那就是假绿）。
           deps.appendStandardRows?.(standard.rows, standard.unmapped, {
             releases: releases.length,
-            measures: releases.reduce((sum, release) => sum + release.values.length, 0)
+            measures: releases.reduce((sum, release) => sum + release.values.length, 0),
+            // 无期间（事件型）发布里的 measure：随事件行走，永远变不成指标行。它是测度层的
+            // **显式排除项**，不是差异——不分出来，每批都会恒报 +1（实测就是那 1 条决议带值）。
+            measuresOnEventReleases: releases
+              .filter((release) => (release.period ?? '').length === 0)
+              .reduce((sum, release) => sum + release.values.length, 0)
           })
           for (const locale of ['zh', 'en'] as const) {
             for (const batch of narwhalObservationBatches(releases, {
