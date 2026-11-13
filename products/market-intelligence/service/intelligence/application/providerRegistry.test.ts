@@ -232,6 +232,10 @@ describe('source projections', () => {
     /* 直连可达、**不要**标代理的源。CryptoETF 是实测进来的（2026-11-13：绕开代理直连 200、
        2.2 秒、路由走 en0 物理网卡），不是「忘了标」——别为了跟币安/OKX 视觉统一补上它。 */
     const reachable = [
+      /* Narwhal：2026-11-13 实测直连 200（上海电信、无代理），不带 key 401 → 不该挂 VPN 标签。 */
+      'macro-calendar-narwhal-economic-data',
+      'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities',
       'cryptoetf-etf-flows', 'defillama-stablecoins', 'defillama-tvl',
       'fred-rates-liquidity', 'alternative-fear-greed', 'federal-reserve-rss', 'cftc-rss',
       'sec-rss', 'bls-economic-series', 'bea-economic-series', 'treasury-fiscal-data',
