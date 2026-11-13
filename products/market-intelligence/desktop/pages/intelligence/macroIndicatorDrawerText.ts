@@ -60,6 +60,16 @@ export const macroIndicatorDrawerText = {
       consensusSource: '{source} · {asOf}',
       vsPrevious: '较上期（未修正）{value}'
     },
+    /**
+     * 距发布：>24 小时说整数天；≤24 小时才倒计时；**源只给日期时永远只说天数**（`today` 处理 0 天）。
+     * 「已过」不设键——那一格直接不画，挂着「下次发布」说过去的事就是自相矛盾。
+     */
+    countdown: {
+      days: '{days} 天后',
+      today: '今天',
+      hoursMinutes: '还有 {hours} 小时 {minutes} 分',
+      minutes: '还有 {minutes} 分'
+    },
     expectedDiff: '预期差 年率 {yoy} · 核心 {core}',
     // 来源按**真实 provider** 显示：写死一个名字等于替数据编出处。
     /* 官方序列的品牌名；旧源即将删除、不赋品牌名，Narwhal 用日历那份既有文案。 */
@@ -141,6 +151,12 @@ export const macroIndicatorDrawerText = {
       vsPrevious: 'vs previous (unrevised) {value}'
     },
     expectedDiff: 'Surprise YoY {yoy} · core {core}',
+    countdown: {
+      days: 'in {days} days',
+      today: 'today',
+      hoursMinutes: '{hours}h {minutes}m left',
+      minutes: '{minutes}m left'
+    },
     // 来源按**真实 provider** 显示：写死一个名字等于替数据编出处。
     /* 官方序列的品牌名；旧源即将删除、不赋品牌名，Narwhal 用日历那份既有文案。 */
     sourceFred: 'FRED',

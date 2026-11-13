@@ -535,8 +535,14 @@ export const intelligenceSourcesText = {
     metrics: { cpiYoy: 'CPI 年率', coreCpiYoy: '核心 CPI 年率', nonfarmPayrolls: '新增就业', corePceYoy: '核心 PCE 年率' },
     sourceOrder: {
       label: '来源顺序',
-      options: { defaultChain: '盘口 → 商业源 → 手填', marketOnly: '只用盘口', surveyOnly: '只用商业源', manualOnly: '只用手填' }
+      /* 默认链**只有两档**：盘口 → 数据商预期。手填不在这条链里——它只能被显式选「只用手填」，
+       否则一个手填值会静默顶掉将来才开的盘（2026-11-14 用户定）。 */
+    options: { defaultChain: '盘口 → 数据商预期', marketOnly: '只用盘口', surveyOnly: '只用数据商预期', manualOnly: '只用手填' }
     },
+    /* 「数据商预期」= 数据源自己在发布前汇总的分析师预期中值；**不是我们去发问卷**（用户 2026-11-14）。
+       悬停里点明是哪家源给的，所以卡片上不必写「问卷」这种像我们动作的词。 */
+    sources: { market: '盘口反推', provider: '数据商预期', manual: '手填' },
+    providerExpectationTitle: '由数据源（{provider}）在发布前汇总的分析师预期中值',
     showVolume: '显示成交量',
     showAsOf: '显示观测时刻',
     empty: {
@@ -1152,8 +1158,10 @@ export const intelligenceSourcesText = {
     metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },
     sourceOrder: {
       label: 'Source order',
-      options: { defaultChain: 'Market → survey → manual', marketOnly: 'Market only', surveyOnly: 'Survey only', manualOnly: 'Manual only' }
+      options: { defaultChain: 'Market → data provider', marketOnly: 'Market only', surveyOnly: 'Data provider only', manualOnly: 'Manual only' }
     },
+    sources: { market: 'Market-implied', provider: 'Data provider expectation', manual: 'Manual' },
+    providerExpectationTitle: 'The analyst consensus the data source ({provider}) summarises before release',
     showVolume: 'Show volume',
     showAsOf: 'Show observation time',
     empty: {
