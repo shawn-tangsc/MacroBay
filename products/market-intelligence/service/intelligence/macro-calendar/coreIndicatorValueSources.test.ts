@@ -57,7 +57,12 @@ describe('core indicator value sources', () => {
     const source = readFileSync(join(process.cwd(),
       'products/market-intelligence/service/intelligence/macro-calendar/coreIndicatorValueSources.ts'), 'utf8')
     const literals = source.match(/'US\.[A-Z0-9_.]+'/g) ?? []
-    const allowed = new Set(['US.NONFARM.SA.CHANGE', 'US.UNEMPLOYMENT.SA.RATE'])
+    // 允许的字面量只有两处事实：BLS 覆盖的两条，和**产品定的四项核心指标**（2026-11-14 定，
+    // 不是从卡片行键派生——派生会产出 11 项、7 张空卡）。Narwhal / FRED 那两张清单仍不许抄。
+    const allowed = new Set([
+      'US.NONFARM.SA.CHANGE', 'US.UNEMPLOYMENT.SA.RATE',
+      'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.CORE_PCE.NSA.YOY'
+    ])
     const extra = literals.filter((literal) => !allowed.has(literal.replace(/'/g, '')))
     expect(extra).toEqual([])
   })

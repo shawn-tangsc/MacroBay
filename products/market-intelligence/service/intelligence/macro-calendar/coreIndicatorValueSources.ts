@@ -72,16 +72,22 @@ export function valueSourcesForMetric(metricKey: string): readonly CoreIndicator
 }
 
 /**
- * 卡片键里**只是卡内一行、不单独成卡**的那些（失业率就在非农卡里那一行）。
- * 这是本文件第二个、也是最后一个新增事实；四个指标名一律从 `MACRO_INDICATOR_CARD_KEYS` 派生，
- * 不在这里再列一遍——列一遍就是第二个真相源。
+ * 核心指标菜单要列的**四项核心指标**（产品 2026-11-14 定）：
+ * CPI 年率 / 核心 CPI 年率 / 新增就业 / 核心 PCE 年率。
+ *
+ * **这四个键是产品口径，不是从卡片行键派生的。** 原来写成「`MACRO_INDICATOR_CARD_KEYS` 去掉
+ * 行键」，而那个常量是 12 个卡片**行**键（每张卡四行），于是产出 11 项、7 张卡在设置页上没有
+ * 文案键、渲染成空卡。派生这个词正是错因：它看上去会跟着卡片走，实际只会跟着卡片的行数走。
+ *
+ * 与卡片的关系只在一个方向上成立：这四项都必须出现在 `MACRO_INDICATOR_CARD_KEYS` 里，
+ * 否则说明两张表各写了一份——那条自检仍由 `coreIndicatorKeysMissingFromCards` 守着。
  */
-const rowOnlyCardKeys: readonly string[] = Object.freeze(['US.UNEMPLOYMENT.SA.RATE'])
-
-/** 核心指标菜单要列的四张卡：卡片键去掉「只是某卡里一行」的那些。 */
-export const coreIndicatorMetricKeys: readonly string[] = Object.freeze(
-  (MACRO_INDICATOR_CARD_KEYS as readonly string[]).filter((key) => !rowOnlyCardKeys.includes(key))
-)
+export const coreIndicatorMetricKeys: readonly string[] = Object.freeze([
+  'US.CPI.NSA.YOY',
+  'US.CORE_CPI.NSA.YOY',
+  'US.NONFARM.SA.CHANGE',
+  'US.CORE_PCE.NSA.YOY'
+])
 
 /** 页面与存储都读这一份：(metric_key, provider_id) 的完整清单。 */
 export function coreIndicatorValueSourceRows(): readonly Readonly<{
