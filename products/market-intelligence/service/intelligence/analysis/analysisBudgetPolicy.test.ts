@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest'
 import { analysisBudgetPolicy, decideBudget, type AnalysisBudgetInput } from './analysisBudgetPolicy'
+import { analysisUpstreamRetryPolicy } from './analysisUpstreamRetry'
+import { marketAnalysisJobPolicy } from '../jobs/registerMarketAnalysisJobs'
 
 const now = '2026-10-09T12:00:00.000Z'
 /** Enough headroom that only the rule under test can skip. */
@@ -100,4 +102,18 @@ it('fails closed on counts or instants it cannot trust', () => {
   expect(event({ eventRunsThisHour: Number.NaN })).toEqual({ decision: 'skipped', reasonCode: 'invalid-budget-input' })
   expect(calendar({ now: '2026-10-09T12:00:00Z' })).toEqual({ decision: 'skipped', reasonCode: 'invalid-budget-input' })
   expect(calendar({ lastAutoRunAt: 'not-an-instant' })).toEqual({ decision: 'skipped', reasonCode: 'invalid-budget-input' })
+})
+
+/**
+ * 记账口径只写在声明里，根数是别人的：一个运行内几次调用归 `analysisUpstreamRetryPolicy`，
+ * job 重试几次归 `marketAnalysisJobPolicy`。这里钉「声明的数与那两处一致」，改了一边而另一边
+ * 忘了改时红，而不是让读者看到的「最多 9 次」慢慢变成假话。
+ */
+it('accounts by run (failures included) and derives the worst case from the retry policies', () => {
+  expect(analysisBudgetPolicy.accounting.unit).toBe('run')
+  expect(analysisBudgetPolicy.accounting.failuresCount).toBe(true)
+  expect(analysisBudgetPolicy.accounting.modelCallsPerRun).toBe(analysisUpstreamRetryPolicy.maximumCallsPerRun)
+  expect(analysisBudgetPolicy.accounting.jobAttempts).toBe(marketAnalysisJobPolicy.runRetryPolicy.maxAttempts)
+  expect(analysisBudgetPolicy.accounting.worstCaseModelCallsPerRun)
+    .toBe(analysisUpstreamRetryPolicy.maximumCallsPerRun * marketAnalysisJobPolicy.runRetryPolicy.maxAttempts)
 })

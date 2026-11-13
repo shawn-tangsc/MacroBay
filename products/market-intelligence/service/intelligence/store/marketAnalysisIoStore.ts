@@ -90,6 +90,11 @@ export type AnalysisIoStore = Readonly<{
   begin: (input: AnalysisIoBeginInput) => Readonly<{ id: string; createdAt: string }>
   complete: (input: AnalysisIoCompletionInput) => boolean
   readByRunId: (analysisRunId: string) => readonly AnalysisIoRow[]
+  /**
+   * 这一天**实际发生了多少次模型调用**（一行 = 一次调用，含失败的调用）。
+   * 配额按运行记账，这个数回答的是「今天实际花了几次」——两个数不是一个数，不许互相代替。
+   */
+  countCreatedSince: (isoInclusive: string) => number
   usage: () => AnalysisIoUsage
   retention: (input: Readonly<{ cutoffIso: string; byteBudgetBytes?: number }>) => AnalysisIoRetentionResult
 }>
@@ -172,6 +177,11 @@ export function createAnalysisIoStore(database: DatabaseSync): AnalysisIoStore {
     readByRunId(analysisRunId) {
       const rows = database.prepare('select * from mi_analysis_io where analysis_run_id=? order by call_index asc, id asc').all(analysisRunId) as StoredIoRow[]
       return Object.freeze(rows.map(fromStoredRow))
+    },
+    countCreatedSince(isoInclusive) {
+      if (typeof isoInclusive !== 'string' || isoInclusive.length === 0) throw new Error('analysis-io-cutoff-invalid')
+      const row = database.prepare('select count(*) as count from mi_analysis_io where created_at >= ?').get(isoInclusive) as { count: number } | undefined
+      return Number(row?.count ?? 0)
     },
     usage() {
       return Object.freeze({ rows: countRows(database), bytes: totalBytes(database) })

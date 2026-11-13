@@ -57,6 +57,23 @@ export const analysisBudgetPolicy = Object.freeze({
     /** The calendar line's own nine a day, plus the three an hour it was previously denied. */
     calendar: Object.freeze({ daily: 9, hourly: 3, coalesce: true })
   }),
+  /**
+   * 记账单位与最坏情况（用户 2026-11-14 拍板：「一行 = 一次运行，失败也计」）。
+   *
+   * 配额的一行是**一次运行**，不是一次模型调用：运行失败、被重试都不退额度，否则重试就变成
+   * 免费的了。一次运行最坏会花 `modelCallsPerRun × jobAttempts` 次模型调用（首次 + 传输重试 +
+   * 修复，最坏 3 次；job 最多再试 3 次）。读者能看到的说明写在预算耗尽的句子里；实际花了几次
+   * 由 `countModelCallsToday` 从 IO 记录数出来——那是另一个数，不拿运行数冒充。
+   */
+  accounting: Object.freeze({
+    unit: 'run' as const,
+    failuresCount: true,
+    /** 单个运行内最多几次模型调用（`analysisUpstreamRetryPolicy.maximumCallsPerRun`）。 */
+    modelCallsPerRun: 3,
+    /** 同一个运行 job 层最多几次尝试（`marketAnalysisJobPolicy.runRetryPolicy.maxAttempts`）。 */
+    jobAttempts: 3,
+    worstCaseModelCallsPerRun: 9
+  }),
   dayWindow: 'utc-calendar-day' as const,
   reasonCodes: Object.freeze({
     invalidInput: 'invalid-budget-input',

@@ -17,6 +17,22 @@ function store() {
 const repeatedPrompt = (size: number) => [{ role: 'user', content: 'x'.repeat(size) }]
 
 describe('the analysis call record', () => {
+  /**
+   * 「今天实际花了多少次模型调用」是可查的数，不是估算：每次调用一行，失败的调用也有一行。
+   * 配额按运行记账，这个数回答的是另一个问题，两者不互相代替。
+   */
+  it('counts the calls made on or after a cutoff, failures included', () => {
+    const { io } = store()
+    const midnight = new Date(Date.UTC(2026, 10, 6, 0, 0, 0)).toISOString()
+    const beforeMidnight = new Date(Date.UTC(2026, 10, 5, 23, 59, 0)).toISOString()
+    io.begin({ analysisRunId: 'mi-ar-1', callIndex: 1, callKind: 'initial', prompt: repeatedPrompt(16), atMs: Date.parse(beforeMidnight) })
+    io.begin({ analysisRunId: 'mi-ar-2', callIndex: 1, callKind: 'initial', prompt: repeatedPrompt(16), atMs: Date.parse(midnight) })
+    // 第二次调用没拿到答案：它仍然是一次**发生过的**调用，必须计数。
+    io.begin({ analysisRunId: 'mi-ar-2', callIndex: 2, callKind: 'repair', prompt: repeatedPrompt(16), atMs: now })
+    expect(io.countCreatedSince(midnight)).toBe(2)
+    expect(() => io.countCreatedSince('')).toThrow('analysis-io-cutoff-invalid')
+  })
+
   it('stores the rendered prompt before the call and the answer after it, compressed', () => {
     const { io } = store()
     const prompt = repeatedPrompt(8_000)
