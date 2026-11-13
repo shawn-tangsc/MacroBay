@@ -320,6 +320,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const curveReleaseEvents = useCurveReleaseEvents({
     enabled: indicatorDrawerOpen,
     ...(readMarketEvents ? { readMarketEvents } : {}),
+    // 用曲线那次读数的快照时刻，不另取「现在」：两处各取各的，标注就对不上它标的跳变。
+    ...(policyPath?.state === 'available' ? { asOf: policyPath.asOf } : {}),
+    locale,
     ...(curveSeries?.length
       ? { windowStart: curveSeries[0]!.at, windowEnd: curveSeries[curveSeries.length - 1]!.at }
       : {})

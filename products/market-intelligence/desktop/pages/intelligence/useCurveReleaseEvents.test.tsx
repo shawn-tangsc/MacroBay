@@ -7,15 +7,21 @@ import { useCurveReleaseEvents } from './useCurveReleaseEvents'
 
 type Read = (month: string, asOf: string) => Promise<readonly unknown[] | null>
 
-function Probe({ read, windowStart, windowEnd, enabled = true }: Readonly<{
+const AS_OF = '2026-11-13T00:00:00.000Z'
+
+function Probe({ read, windowStart, windowEnd, enabled = true, asOf = AS_OF, locale = 'zh-CN' }: Readonly<{
   read?: Read
   windowStart?: string
   windowEnd?: string
   enabled?: boolean
+  asOf?: string
+  locale?: string
 }>): React.ReactElement {
   const events = useCurveReleaseEvents({
     enabled,
     ...(read ? { readMarketEvents: read } : {}),
+    asOf,
+    locale,
     ...(windowStart ? { windowStart } : {}),
     ...(windowEnd ? { windowEnd } : {})
   })
@@ -65,6 +71,39 @@ describe('curve release events', () => {
     const read = vi.fn<Read>(async () => [])
     await mount({ read, windowStart: '2026-11-01T00:00:00.000Z', windowEnd: '2026-11-12T00:00:00.000Z', enabled: false })
     expect(read).not.toHaveBeenCalled()
+  })
+
+  it('queries with the reading snapshot instant, never a fresh clock', async () => {
+    const read = vi.fn<Read>(async () => [])
+    await mount({ read, windowStart: '2026-11-01T00:00:00.000Z', windowEnd: '2026-11-12T00:00:00.000Z' })
+    expect(read.mock.calls.every(([, at]) => at === AS_OF)).toBe(true)
+  })
+
+  it('does not read again for the same snapshot and window, even when the reader identity changes', async () => {
+    const read = vi.fn<Read>(async () => [])
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const props = { read, windowStart: '2026-11-01T00:00:00.000Z', windowEnd: '2026-11-12T00:00:00.000Z' }
+    await act(async () => { root!.render(<Probe {...props} />) })
+    const calls = read.mock.calls.length
+    // 新函数身份、同一快照：hover/重渲染不许再打一次——新的那个也不许被调用。
+    const second = vi.fn<Read>(async () => [])
+    await act(async () => { root!.render(<Probe {...props} read={second} />) })
+    expect(read.mock.calls.length).toBe(calls)
+    expect(second).not.toHaveBeenCalled()
+  })
+
+  it('re-reads when the language changes', async () => {
+    const read = vi.fn<Read>(async () => [])
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const base = { read, windowStart: '2026-11-01T00:00:00.000Z', windowEnd: '2026-11-12T00:00:00.000Z' }
+    await act(async () => { root!.render(<Probe {...base} locale="zh-CN" />) })
+    const calls = read.mock.calls.length
+    await act(async () => { root!.render(<Probe {...base} locale="en-US" />) })
+    expect(read.mock.calls.length).toBeGreaterThan(calls)
   })
 
   it('treats a failed read as no events — the annotation layer never breaks the curve', async () => {

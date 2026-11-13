@@ -15,24 +15,34 @@ export function useCurveReleaseEvents(input: Readonly<{
   /** 抽屉关着就不读：没人看的东西不花一次请求。 */
   enabled: boolean
   readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  /**
+   * 曲线那次读数的 `asOf`——**不许自己 `new Date()`**。
+   *
+   * 事件与曲线必须是同一份快照：各取各的「现在」，标注就会对不上它标的那次跳变。
+   * 缺席就不读（宁可没有标注，也不拿另一个时钟去凑）。
+   */
+  asOf?: string
+  /** 抽屉当前语言：换语言要重读，否则标注停在旧语言上。 */
+  locale?: string
   windowStart?: string
   windowEnd?: string
 }>): readonly CurveReleaseEvent[] {
   const [events, setEvents] = useState<readonly CurveReleaseEvent[]>([])
-  // 窗口是触发条件；asOf 每个时钟滴答都在动，不能进依赖，否则每次渲染都读一遍月页。
-  const asOf = useRef(new Date().toISOString())
-  asOf.current = new Date().toISOString()
-  const { enabled, readMarketEvents, windowStart, windowEnd } = input
+  // 读入口放进 ref：页面每次渲染都可能传一个新函数，进依赖会让同一个快照被反复读。
+  const reader = useRef(input.readMarketEvents)
+  reader.current = input.readMarketEvents
+  const { enabled, asOf, locale, windowStart, windowEnd } = input
   useEffect(() => {
-    if (!enabled || !readMarketEvents || !windowStart || !windowEnd) {
+    const read = reader.current
+    if (!enabled || !read || !asOf || !windowStart || !windowEnd) {
       setEvents((previous) => previous.length ? [] : previous)
       return undefined
     }
     const months = monthsBetween(windowStart, windowEnd)
     if (!months.length) return undefined
     let current = true
-    const instant = asOf.current
-    void Promise.all(months.map((month) => readMarketEvents(month, instant).catch(() => null)))
+    // 同一个 asOf + 窗口只读一次：依赖里只有这两个窗口端点、快照与语言。
+    void Promise.all(months.map((month) => read(month, asOf).catch(() => null)))
       .then((pages) => {
         if (!current) return
         const next: CurveReleaseEvent[] = []
@@ -52,7 +62,7 @@ export function useCurveReleaseEvents(input: Readonly<{
       })
       .catch(() => { if (current) setEvents([]) })
     return () => { current = false }
-  }, [enabled, readMarketEvents, windowEnd, windowStart])
+  }, [enabled, asOf, locale, windowEnd, windowStart])
   return events
 }
 
