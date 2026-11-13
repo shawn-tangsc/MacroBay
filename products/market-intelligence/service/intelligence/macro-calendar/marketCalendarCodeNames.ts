@@ -104,6 +104,9 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.FHFA_HOUSE_PRICE.SA.LEVEL': { zhFull: 'FHFA 房价指数', zhShort: 'FHFA 房价', enFull: 'FHFA House Price Index', enShort: 'FHFA HPI', locked: false },
   'US.FHFA_HOUSE_PRICE.SA.MOM': { zhFull: 'FHFA 房价指数月率', zhShort: 'FHFA 房价 月率', enFull: 'FHFA House Price Index MoM', enShort: 'FHFA HPI MoM', locked: false },
   'US.FHFA_HOUSE_PRICE.NSA.YOY': { zhFull: 'FHFA 房价指数年率', zhShort: 'FHFA 房价 年率', enFull: 'FHFA House Price Index YoY', enShort: 'FHFA HPI YoY', locked: false },
+  // 官方 BEA 发布的 GDP 与下面的**即时预测不是同一件事**：中文简称带「年化季率」，
+  // 撞成两个「GDP」读者分不清哪个是官方值。短码 `gdp` 是九个老码之一，不新造。
+  'US.GDP.SA.ANNUALIZED_QOQ': { zhFull: '国内生产总值（年化季率）', zhShort: 'GDP 年化季率', enFull: 'Gross Domestic Product, Annualized QoQ', enShort: 'GDP Ann. QoQ', code: 'gdp', locked: true },
   'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ': { zhFull: 'GDP 即时预测（年化季率）', zhShort: 'GDP 即时预测', enFull: 'GDP Nowcast, Annualized QoQ', enShort: 'GDP Nowcast', code: 'gdp-nowcast', locked: true },
   'US.GOVERNMENT_PAYROLLS.SA.CHANGE': { zhFull: '政府部门就业人数变动', zhShort: '政府就业', enFull: 'Government Payrolls Change', enShort: 'Government Payrolls', code: 'government-payrolls', locked: true },
   'US.GSCPI.NONE.LEVEL': { zhFull: '全球供应链压力指数', zhShort: '供应链压力指数', enFull: 'Global Supply Chain Pressure Index', enShort: 'GSCPI', locked: false },

@@ -35,7 +35,10 @@ export function dualWriteMeasureRows(
   database: DatabaseSync,
   input: Readonly<{ providerId: string; parserVersion: string; observedAt: string
     rows: readonly Readonly<{ countryCode: string; metricKey: string; periodKey: string
-      scheduledDate: string; scheduledAt: string; sourceEventId: string
+      scheduledDate: string
+      /** 源没给时刻就**不写**（`time_precision = 'date'`）——绝不推算一个「惯例的 8:30」。 */
+      scheduledAt?: string
+      sourceEventId: string
       timePrecision?: 'minute' | 'date'
       rowKind?: 'release' | 'estimate'
       identityKind?: CalendarIdentityKind
@@ -74,9 +77,10 @@ export function dualWriteMeasureRows(
       }
       upsertCalendarStandardRow(database, {
         countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
-        scheduledDate: row.scheduledDate, scheduledAt: row.scheduledAt,
+        scheduledDate: row.scheduledDate,
+        ...(row.scheduledAt === undefined ? {} : { scheduledAt: row.scheduledAt }),
         ...(existing === undefined ? {} : { firstScheduledDate: existing.firstScheduledDate }),
-        timePrecision: row.timePrecision ?? (row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute'),
+        timePrecision: row.timePrecision ?? (row.scheduledAt === undefined || row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute'),
         ...(row.rowKind === undefined ? {} : { rowKind: row.rowKind }),
         ...(row.status === undefined ? {} : { status: row.status }),
         ...(row.identityKind === undefined ? {} : { identityKind: row.identityKind }),

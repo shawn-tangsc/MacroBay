@@ -53,7 +53,7 @@ describe('码名', () => {
     // 期望值来自产品经理 20 号表的现名——那 38 个名字已经在卡片和日历行里，
     // 重构改动它们就是一次没人申报的文案变更。
     const locked = Object.entries(nameByMetricKey).filter(([, entry]) => entry.locked)
-    expect(locked).toHaveLength(38)
+    expect(locked).toHaveLength(39)   // 2026-11-14：官方 GDP 的码补上名字后 +1
     // 期望值是**字面常量**（抄自 20 号表现名），不是从表里自己比自己——那样改了也不会红。
     for (const [metricKey, expected] of Object.entries(EXPECTED_LOCKED_NAMES)) {
       const actual = nameForMetricKey(metricKey)!
@@ -85,7 +85,7 @@ describe('码名', () => {
         seen.set(value, metricKey)
       }
     }
-    expect(entries.length).toBe(163)
+    expect(entries.length).toBe(164)
   })
 
   it('覆盖守卫：每一个在用码都有名字，一个都不许缺', () => {
