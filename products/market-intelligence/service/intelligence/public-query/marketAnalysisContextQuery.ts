@@ -25,7 +25,7 @@ import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindo
 import type { AgentSafeEvidenceRef } from './queryContracts'
 import type { MarketIntelligencePublicQueryService as PublicQueryService } from './publicQueryService'
 import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
-import { zeroXRouterCalendarEvidenceDescriptors } from '../macro-calendar/macroCalendarOfficialSourceRegistry'
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { projectMacroMarket } from './macroMarketFactProjection'
 import { projectMacroRates } from './macroRatesFactProjection'
 import { applyMacroFactCap } from './macroFactBudget'
@@ -65,9 +65,9 @@ const DOMAIN_DEFINITIONS: readonly DomainDefinition[] = Object.freeze([
       'macro-calendar-fed-schedule', 'macro-calendar-fed-statement', 'macro-calendar-fed-statement-history',
       'macro-calendar-bls-schedule', 'macro-calendar-bls-values', 'macro-calendar-bls-ics-manual',
       'macro-calendar-bea-schedule', 'macro-calendar-bea-release-rss',
-      // 三个日历 descriptor 从**登记它们的那份注册表**取名，不再手抄：它们是证据链里的
-      // descriptor（provider 仍由日历服务写入），换源时只改注册表，这里跟着走。
-      ...zeroXRouterCalendarEvidenceDescriptors.map((descriptor) => descriptor.descriptorId),
+      // 市场日历的 feed id 取自公开契约的 `feedByKind`：事实里的 `sourceId` 就是按它填的，
+      // 声明来源必须与事实来源同源，否则来源健康里会永远挂着三个不产数的旧 id。
+      ...marketCalendarPublicPolicy.feedByKind,
       'fred-rates-liquidity', 'twelve-data-market', 'policy-path-market'
     ]),
     admission: 'connected-but-not-agent-tool',
@@ -156,9 +156,9 @@ const SOURCE_ACCESS_REGISTRY: readonly MarketAnalysisSourceAccess[] = Object.fre
   // Full admission, decided by the product owner: the calendar is live and equal to the official
   // calendar for trigger purposes. Its observations are still aggregator observations, so the
   // observed-unverified caveat stays on every one of these sources.
-  // 三条从登记它们的注册表生成，不手抄 id：换源时注册表一处改名，这里跟着走。
-  ...zeroXRouterCalendarEvidenceDescriptors.map((descriptor) => source(
-    descriptor.descriptorId, ['macro'], 'production-ready',
+  // 与事实里的 `sourceId` 同一个出处（`feedByKind`），换源时只改契约一处。
+  ...marketCalendarPublicPolicy.feedByKind.map((feedId) => source(
+    feedId, ['macro'], 'production-ready',
     ['marketCalendarPublicQueryService.queryMonth'], ['intelligence.macro.marketCalendar.queryMonth'],
     true, ['observed-unverified'])),
   source('bea-economic-series', ['macro'], 'planned', [], [], false, ['planned-source-unavailable']),

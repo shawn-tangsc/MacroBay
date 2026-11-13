@@ -35,7 +35,6 @@ import {
 } from '../../../contracts/macro/marketCalendarQueryContracts'
 import {
   macroCalendarOfficialSourceRegistry,
-  zeroXRouterCalendarEvidenceDescriptors
 } from '../macro-calendar/macroCalendarOfficialSourceRegistry'
 import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import type { CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
@@ -253,9 +252,9 @@ describe('market analysis data-access matrix', () => {
       expect.objectContaining({ sourceId: '0xrouter', admission: 'connected-but-not-agent-tool', agentToolAvailable: false }),
       // Full admission with the official calendar: the unverified identity is carried as a
       // caveat, not as a lower admission, and these sources may trigger analysis.
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-economic-data', admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified'] }),
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-financial-events', admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified'] }),
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified'] }),
+      ...marketCalendarPublicPolicy.feedByKind.map((feedId) => expect.objectContaining({
+        sourceId: feedId, admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified']
+      })),
       expect.objectContaining({ sourceId: 'bea-economic-series', admission: 'planned', autoTriggerAllowed: false }),
       // FRED is connected and read by the dashboard's daily rate rows, but its granularity is a
       // trading-day close: the caveat rides with the source so no conclusion reads it as intraday.
@@ -282,10 +281,10 @@ describe('market analysis data-access matrix', () => {
     expect(access.some(item => item.admission === 'temporarily-paused')).toBe(false)
   })
 
-  it('names the calendar descriptors the evidence registry owns, so the matrix is not a fourth copy', () => {
-    // 这三条以前是手抄的 id；注册表里删掉/改名的那天，矩阵还留着旧名，读者看到的是「矩阵写着某源、
-    // 数据来自另一处」。现在矩阵从登记它们的注册表生成，这条守卫是那个连接的判据。
-    const evidenceIds = zeroXRouterCalendarEvidenceDescriptors.map((descriptor) => descriptor.descriptorId)
+  it('names the calendar feeds the public contract owns, so the matrix is not a fourth copy', () => {
+    // 这三条以前是手抄的 id；契约里删掉/改名的那天，矩阵还留着旧名，读者看到的是「矩阵写着某源、
+    // 数据来自另一处」。现在矩阵取自公开契约的 `feedByKind`（事实里的 sourceId 也取自它）。
+    const evidenceIds = [...marketCalendarPublicPolicy.feedByKind]
     const access = listMarketAnalysisSourceAccess()
     const macroRows = access.filter((row) => row.domains.includes('macro'))
     for (const descriptorId of evidenceIds) {
@@ -430,7 +429,7 @@ describe('market analysis data-access matrix', () => {
     expect(JSON.parse(harness).sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceId: 'twelve-data-market', admission: 'production-ready', agentToolAvailable: true, caveats: expect.arrayContaining(['synthetic-dollar-index']) }),
       expect.objectContaining({ sourceId: 'fred-rates-liquidity', agentToolAvailable: true, caveats: ['official-daily-close'] }),
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-economic-data', admission: 'production-ready', autoTriggerAllowed: true })
+      expect.objectContaining({ sourceId: marketCalendarPublicPolicy.feedByKind[0], admission: 'production-ready', autoTriggerAllowed: true })
     ]))
     expect(harness).not.toMatch(/https?:\/\/|\/Users\/|api[_-]?key|token|prompt|raw|error/i)
   })
