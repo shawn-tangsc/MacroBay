@@ -166,8 +166,14 @@ export function createMarketCalendarPublicQueryService(deps: {
       scheduledAt: row.scheduled_at, consensus: value(row.consensus_json), providerPrevious: value(row.provider_previous_json),
       providerActual: value(row.provider_actual_json), source: row.provider_id === marketCalendarLegacyProviderId ? '0xRouter' : marketCalendarSourceName,
       sourceObservedAt: String(row.last_observed_at), coverage: 'observed-unverified' }
-    if (!isMarketCalendarEvent(result)) throw new Error('projection-unavailable')
-    return result
+    // 身份只搬运、不重算：写入端把它定死在 `candidate_key` 里，这里读出来原样带出去。
+    const storedIdentity = String(row.provider_id) === marketCalendarProviderId
+      ? narwhalCanonicalIdentityKey(String(row.candidate_key)) : undefined
+    const metricKey = storedIdentity === undefined ? undefined : storedIdentity.split('|')[1]
+    const withIdentity = metricKey !== undefined && !eventKinds.includes(metricKey)
+      ? { ...result, eventNameKey: metricKey } : result
+    if (!isMarketCalendarEvent(withIdentity)) throw new Error('projection-unavailable')
+    return withIdentity
   }
   return Object.freeze({
     queryMonth(input: unknown, observe?: MarketCalendarEvidenceObserver): MarketCalendarPage {

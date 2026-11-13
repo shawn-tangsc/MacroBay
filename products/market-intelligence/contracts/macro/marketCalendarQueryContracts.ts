@@ -75,8 +75,13 @@ export type MarketCalendarEvent = Readonly<{
    * it. Optional on the wire: a service that does not supply it keeps working.
    */
   observationKey?: string
-  /** 已注册指标的稳定标识（`cpi`、`nonfarm-payrolls`…）；0xRouter 的自由文本事件没有它。 */
+  /**
+   * 这条事件对应的规范指标键（`US.CPI.NSA.YOY`），**从写入时定下的身份里搬出来**，
+   * 投影不重算。没有身份的行（讲话、旧源未登记的行）不带这个字段。
+   */
   eventNameKey?: string
+  /** 新源给的事件类型标识（`usa-policy-rate-decision` 这类）。行上没有就不带字段，不填空串。 */
+  seriesId?: string
   eventType: typeof marketCalendarPublicPolicy.kinds[number]; importance: typeof marketCalendarPublicPolicy.importance[number]
   scheduledAt: string; consensus: MarketCalendarValue; providerPrevious: MarketCalendarValue; providerActual: MarketCalendarValue
   /**
@@ -174,7 +179,9 @@ export function isMarketCalendarOfficialLink(value: unknown, providerScheduledAt
 }
 export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEvent {
   return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'importance', 'scheduledAt', 'consensus',
-    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey']) &&
+    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId']) &&
+    (!Object.hasOwn(value, 'eventNameKey') || (typeof value.eventNameKey === 'string' && value.eventNameKey.length > 0 && value.eventNameKey.length <= marketCalendarPublicPolicy.maximumObservationKeyChars && !value.eventNameKey.includes('|'))) &&
+    (!Object.hasOwn(value, 'seriesId') || (typeof value.seriesId === 'string' && value.seriesId.length > 0 && value.seriesId.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&
     (!Object.hasOwn(value, 'observationKey') || (typeof value.observationKey === 'string' && value.observationKey.length > 0 && value.observationKey.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&
     typeof value.eventKey === 'string' && marketCalendarPublicPolicy.opaquePattern.test(value.eventKey) && text(value.title) &&
     (value.countryCode === null || typeof value.countryCode === 'string' && marketCalendarPublicPolicy.countryCodePattern.test(value.countryCode) && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value.countryCode)) &&
