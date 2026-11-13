@@ -93,15 +93,17 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
 export function readNextReleaseForMetric(database: DatabaseSync, input: Readonly<{
   metricKey: string
   asOf: string
-}>): Readonly<{ scheduledDate: string; periodKey: string; scheduledAt?: string }> | undefined {
+}>): Readonly<{ period: string; releaseAt: string }> | undefined {
   const row = database.prepare(`select scheduled_date, period_key, scheduled_at
     from ${calendarStandardTablePolicy.releasesView}
     where metric_key = ? and scheduled_date > ?
     order by scheduled_date asc, coalesce(scheduled_at, '') asc
     limit 1`).get(input.metricKey, input.asOf.slice(0, 10)) as Record<string, unknown> | undefined
   if (row === undefined) return undefined
+  // 形状对齐盘口现查器的入参：`{ metricKey, period, releaseAt, asOf }`。少给期次它就会查错盘，
+  // 所以缺 `scheduled_at` 时用当天 00:00（**日期粒度的发布日**），不编时刻。
   return {
-    scheduledDate: String(row.scheduled_date), periodKey: String(row.period_key),
-    ...(row.scheduled_at === null ? {} : { scheduledAt: String(row.scheduled_at) })
+    period: String(row.period_key),
+    releaseAt: row.scheduled_at === null ? `${String(row.scheduled_date)}T00:00:00.000Z` : String(row.scheduled_at)
   }
 }
