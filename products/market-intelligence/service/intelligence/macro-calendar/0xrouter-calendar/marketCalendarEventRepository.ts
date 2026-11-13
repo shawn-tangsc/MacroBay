@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { calendarRecord } from './zeroXRouterCalendarContracts'
+import { calendarRecord } from './marketCalendarStorageContracts'
 import { instant, marketCalendarEffectiveLogicalBytes, marketCalendarObservationStateFields, MarketStorageFailure,
   metadata, prepareMarketCollection, reject, zeroXRouterCalendarStoragePolicy as policy,
   type MarketCapacity, type MarketCollectionContext, type MarketRow } from './marketCalendarStorageValidation'

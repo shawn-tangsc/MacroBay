@@ -61,10 +61,6 @@
       "count": 3,
       "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
     },
-    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarContracts.ts": {
-      "count": 6,
-      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
-    },
     "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler.ts": {
       "count": 3,
       "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
@@ -144,6 +140,10 @@
     "desktop/pages/intelligence/MacroIndicatorDrawer.tsx": {
       "count": 1,
       "why": "卡片页脚按事实自带的 provider 选显示名（Narwhal 用日历既有文案、FRED 用品牌名、旧源不赋名）。这是显示层唯一一处按源选名，不参与任何取数/排序/筛选判断；目标仍是清零。"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageContracts.ts": {
+      "count": 6,
+      "why": "存储契约搬出旧源目录后仍在用；里面出现的源名是旧源协议字段，删旧源时随之清理"
     }
   }
 }

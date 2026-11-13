@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { calendarRecord } from './zeroXRouterCalendarContracts'
+import { calendarRecord } from './marketCalendarStorageContracts'
 import { exact, instant, marketScope, metadata, reject, MarketStorageFailure,
   zeroXRouterCalendarStoragePolicy as policy, type MarketRow, type MarketFailureCode } from './marketCalendarStorageValidation'
 import { marketCalendarRetentionPolicy } from './marketCalendarStorageReclaim'

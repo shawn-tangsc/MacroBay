@@ -1,7 +1,7 @@
 import { zeroXRouterCalendarTransportPolicy as transportPolicy } from '../../application/zeroXRouterSourcePolicy'
 import { marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import type { createZeroXRouterCalendarCollectionService } from './zeroXRouterCalendarCollectionService'
-import { zeroXRouterCalendarParserPolicy } from './zeroXRouterCalendarContracts'
+import { zeroXRouterCalendarParserPolicy } from './marketCalendarStorageContracts'
 
 // Product-owned refresh admission only: no scheduling, result cache or runtime registration.
 export const zeroXRouterCalendarRefreshPolicy = Object.freeze({

@@ -4,7 +4,7 @@ import { createMarketCalendarEventRepository } from './marketCalendarEventReposi
 import type { MarketCollectionContext } from './marketCalendarStorageValidation'
 import { createZeroXRouterCalendarCollectionService } from './zeroXRouterCalendarCollectionService'
 import { createZeroXRouterCalendarRefreshService } from './zeroXRouterCalendarRefreshService'
-import { calendarRecord } from './zeroXRouterCalendarContracts'
+import { calendarRecord } from './marketCalendarStorageContracts'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { statfsSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'

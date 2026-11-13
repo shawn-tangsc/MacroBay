@@ -3,7 +3,7 @@ import { zeroXRouterCalendarTransportPolicy } from '../../application/zeroXRoute
 import {
   calendarRecord, zeroXRouterCalendarParserPolicy,
   type ZeroXRouterCalendarDraft
-} from './zeroXRouterCalendarContracts'
+} from './marketCalendarStorageContracts'
 
 /**
  * 一张事件身份表：每个 descriptor 对应哪一类事件。**采集来源换了，这张表的含义不变**——
