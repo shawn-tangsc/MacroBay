@@ -3,6 +3,9 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
@@ -81,5 +84,44 @@ describe('core indicator source page', () => {
     const card = host.querySelector<HTMLElement>('[data-core-indicator="US.CPI.NSA.YOY"]')!
     expect(card.textContent).toContain(t.coreIndicators.valueSourceAllClosed)
     expect(card.textContent).not.toContain(t.coreIndicators.valueSourceEmpty)
+  })
+})
+
+/**
+ * 名字最多两行，但**全名必须拿得到**（界面设计 2026-11-14）：
+ * 悬停看全名、读屏念全名；样式只许排布类属性，出现颜色/字号/边框就得回共享文件。
+ */
+describe('源名：两行截断，全名不丢', () => {
+  const LONG = 'Federal Reserve Economic Data — St. Louis Fed 官方序列'
+
+  it('keeps the full name on the element (title + text) while CSS clamps it to two lines', async () => {
+    const host = await render({ sourceNameOf: (providerId: string) =>
+      providerId === 'fred-rates-liquidity' ? LONG : names[providerId] })
+    const label = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|fred-rates-liquidity"] .business-card__label')!
+    // 悬停能看到全名。
+    expect(label.getAttribute('title')).toBe(LONG)
+    // 读屏念的是完整名字（DOM 文本没有被截断成两行内容）。
+    expect(label.textContent).toBe(LONG)
+  })
+
+  it('keeps the full name on the jump button too', async () => {
+    const host = await render({
+      sourceNameOf: (providerId: string) => providerId === 'narwhal' ? LONG : names[providerId],
+      sourceEnabled: (providerId: string) => providerId !== 'narwhal',
+      onOpenSource: vi.fn()
+    })
+    const jump = host.querySelector<HTMLButtonElement>('[data-core-source-row="US.CPI.NSA.YOY|narwhal"] .business-card__label--action')!
+    expect(jump.getAttribute('title')).toBe(LONG)
+    expect(jump.textContent).toBe(LONG)
+  })
+
+  it('styles with layout properties only — no colour, font, border, background or min-height', () => {
+    const css = readFileSync(join(__dirname, 'coreIndicators.css'), 'utf8')
+    // 两行截断确实在（不是靠省略号）。
+    expect(css).toContain('-webkit-line-clamp: 2')
+    expect(css).toContain('-webkit-box-orient: vertical')
+    // 只许排布类属性：出现这些就必须回 `intelligence-sources.css` 由组件线改。
+    const forbidden = /(^|[\s;{])(color|font-size|font-weight|font-family|background|border|border-radius|min-height)\s*:/g
+    expect(css.match(forbidden) ?? []).toEqual([])
   })
 })

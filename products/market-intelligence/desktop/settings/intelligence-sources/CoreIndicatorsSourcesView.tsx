@@ -83,8 +83,11 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
                     ? <button
                       className="business-card__label business-card__label--action"
                       onClick={() => props.onOpenSource?.(source.providerId)}
+                      /* 名字最多显示两行；**全名**靠 title（悬停）与 DOM 文本（读屏）——
+                         被截掉的部分不许在无障碍层也消失。 */
+                      title={name}
                       type="button">{name}</button>
-                    : <span className="business-card__label">{name}</span>}
+                    : <span className="business-card__label" title={name}>{name}</span>}
                   <span className="business-card__toggle">
                     <Switch
                       checked={props.disabled[preferenceKey] !== true}
