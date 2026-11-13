@@ -102,10 +102,7 @@ export const macroIndicatorDrawerText = {
     /** 轮播的四个入口都要可访问名：两个箭头、两个圆点，另加一句组名。 */
     carousel: {
       prev: '查看已发布',
-      next: '查看下次发布',
-      published: '已发布',
-      upcoming: '下次发布',
-      pages: '卡片页'
+      next: '查看下次发布'
     },
     /** 三张卡共用的行名（左右两卡按同一顺序逐行对齐，行位不删、不折、不藏）。 */
     cardRows: {
@@ -233,10 +230,7 @@ export const macroIndicatorDrawerText = {
     },
     carousel: {
       prev: 'View released',
-      next: 'View next release',
-      published: 'Released',
-      upcoming: 'Next release',
-      pages: 'Card pages'
+      next: 'View next release'
     },
     cardRows: {
       yoy: 'YoY',
