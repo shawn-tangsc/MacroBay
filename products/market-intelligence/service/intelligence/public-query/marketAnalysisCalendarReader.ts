@@ -85,9 +85,19 @@ export function readAnalysisCalendarMonth(
     maximumPerGroup: marketAnalysisCalendarReadPolicy.maximumPerGroup
   })
   const admitted = new Set(selection.admitted.map(row => row.identity))
-  const observations: MacroCalendarProviderObservation[] = []
+  // 每个准入身份只取一行：估算每天更新一次，按身份（国家|码|期间）只留最新那条，
+  // 逐行成事实就是「同一估算多份证据」。
+  const chosenByIdentity = new Map<string, MarketCalendarEvent>()
   for (const event of events) {
-    if (!admitted.has(admissionIdentity(event))) continue
+    const identity = admissionIdentity(event)
+    if (!admitted.has(identity)) continue
+    const previous = chosenByIdentity.get(identity)
+    if (!previous || Date.parse(event.sourceObservedAt ?? '') >= Date.parse(previous.sourceObservedAt ?? '')) {
+      chosenByIdentity.set(identity, event)
+    }
+  }
+  const observations: MacroCalendarProviderObservation[] = []
+  for (const event of chosenByIdentity.values()) {
     const observation = normalizeMarketCalendarEvent(event)
     // 算不出稳定身份的行：报缺口，不静默丢。
     if (!observation) { caveats.add(marketCalendarObservationPolicy.caveats.identityMissing); continue }
@@ -102,9 +112,17 @@ export function readAnalysisCalendarMonth(
   return { observations, caveats: [...caveats], readState: 'available' }
 }
 
-/** 稳定身份：`observationKey` 优先（跨采集不变），缺失时退回事件键（同一次查询内唯一）。 */
+/**
+ * 稳定身份：`observationKey` 优先（跨采集不变），缺失时退回事件键（同一次查询内唯一）。
+ *
+ * 估算的身份**不含发布日**（`国家|码|期间`）：即时预测每天更新一次、每天一行，带上日期就
+ * 变成「三个不同的估算」；发布行的身份带日期，初值与终值才是两次发布。
+ */
 function admissionIdentity(event: MarketCalendarEvent): string {
-  return event.observationKey ?? `event:${event.eventKey}`
+  const base = event.observationKey ?? `event:${event.eventKey}`
+  if (event.rowKind !== 'estimate') return base
+  const parts = base.split('|')
+  return parts.length === 4 ? parts.slice(0, 3).join('|') : base
 }
 
 function toAdmissionRow(event: MarketCalendarEvent, asOf: string): MacroCalendarAdmissionRow {

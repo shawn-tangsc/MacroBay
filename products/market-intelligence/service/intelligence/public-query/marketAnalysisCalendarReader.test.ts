@@ -65,12 +65,10 @@ it('reports an unreadable page as unavailable, never as an empty month', () => {
   expect(result.caveats.length).toBeGreaterThan(0)
 })
 
-// 待契约修复后转绿：`rowKind` 在 `MarketCalendarEvent` 类型里，却不在 `isMarketCalendarEvent`
-// 的白名单键里，于是带估算行的整页会被判非法——分析侧看到的会是「日历读不到」。
-it.skip('keeps one row per estimate identity, the latest one', () => {
+it('keeps one row per estimate identity, the latest one', () => {
   const query = vi.fn(() => page([
-    event({ eventNameKey: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ', observationKey: 'estimate-1', rowKind: 'estimate', sourceObservedAt: '2026-11-02T00:00:00.000Z' }),
-    event({ eventNameKey: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ', observationKey: 'estimate-2', rowKind: 'estimate', sourceObservedAt: '2026-11-09T00:00:00.000Z' }),
+    event({ eventNameKey: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ', observationKey: 'USA|US.GDP_NOWCAST.SA.ANNUALIZED_QOQ|2026-Q4|2026-11-02', rowKind: 'estimate', sourceObservedAt: '2026-11-02T00:00:00.000Z' }),
+    event({ eventNameKey: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ', observationKey: 'USA|US.GDP_NOWCAST.SA.ANNUALIZED_QOQ|2026-Q4|2026-11-09', rowKind: 'estimate', sourceObservedAt: '2026-11-09T00:00:00.000Z' }),
     event({ eventNameKey: 'US.CPI.NSA.YOY', observationKey: 'release-1' })
   ]))
   const result = readAnalysisCalendarMonth(query, { month, asOf })
