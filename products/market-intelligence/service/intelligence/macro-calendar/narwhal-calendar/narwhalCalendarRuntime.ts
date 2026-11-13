@@ -28,7 +28,9 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
   /** 按 measure 拆行的标准行（S1 双写用）。一次采集给一次，与语言无关。 */
   appendStandardRows?: (rows: readonly NarwhalStandardRowInput[],
     unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: string
-      measureKeys?: readonly string[] }>[]) => void
+      measureKeys?: readonly string[] }>[],
+    /** **来自解析结果**的输入总量：守恒式只许拿它当被减数，不许从产物反推。 */
+    sourceTotals: Readonly<{ releases: number; measures: number }>) => void
   /** 观测批次的集合前缀，默认按采集时刻一采集一批。 */
   collectionIdPrefix?: () => string
   now?: () => number
@@ -64,7 +66,12 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
           const prefix = deps.collectionIdPrefix?.() ?? `narwhal-${stamp.replace(/[:.]/g, '-')}`
           // 标准行与语言无关：一次发布拆成「一个 measure 一行」，只算一次。
           const standard = narwhalStandardRowInputsDetailed(releases)
-          deps.appendStandardRows?.(standard.rows, standard.unmapped)
+          // 输入量从**源**算：被构造阶段丢掉的发布既不在 rows、也不在 unmapped，
+          // 从产物反推的话输入会跟着一起少，方程永远平（那就是假绿）。
+          deps.appendStandardRows?.(standard.rows, standard.unmapped, {
+            releases: releases.length,
+            measures: releases.reduce((sum, release) => sum + release.values.length, 0)
+          })
           for (const locale of ['zh', 'en'] as const) {
             for (const batch of narwhalObservationBatches(releases, {
               locale, parserVersion: narwhalCalendarParserVersion, collectionIdPrefix: `${prefix}-${locale}`

@@ -69,8 +69,8 @@ describe('码名', () => {
     }
   })
 
-  it('事件型有显示名（17 条，取自 20 号表）', () => {
-    expect(Object.keys(eventTypeNameByCode)).toHaveLength(17)
+  it('事件型有显示名（20 条，取自 20 号表）', () => {
+    expect(Object.keys(eventTypeNameByCode)).toHaveLength(20)
     expect(nameForMetricKey('evt.central-bank-speech')?.zhShort).toBeTruthy()
     expect(nameForMetricKey('evt.fomc')?.zhFull).toBe('美联储议息会议')
   })

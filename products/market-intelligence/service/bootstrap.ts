@@ -421,7 +421,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       if (written.state !== 'succeeded') console.warn(`[macro-calendar] 观测批次未写入：${written.failureCode ?? 'unknown'}`)
     },
     // 标准行按 measure 拆：一次发布里的每个 measure 各一行，身份各算各的。
-    appendStandardRows: (rows, unmapped) => {
+    appendStandardRows: (rows, unmapped, sourceTotals) => {
       try {
         const database = macroCalendarBackend.storage.database
         ensureCalendarStandardTables(database)
@@ -436,12 +436,13 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
           providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3', observedAt, rows
         }, { onError: (message) => console.warn(`[macro-calendar] 标准表写入失败：${message}`) })
         const unmappedCount = unmapped.length + Object.values(counts.unmapped).reduce((sum, value) => sum + value, 0)
-        const inputReleases = rows.length + unmapped.length
+        // **被减数来自源**（`sourceTotals`），不从产物反推：构造阶段丢掉的一条既不在 rows、
+        // 也不在 unmapped，若从产物算，输入会跟着少、方程永远平。
+        const inputReleases = sourceTotals.releases
         const releaseDiff = inputReleases - (counts.written + unmappedCount + counts.failed)
-        // **两层守恒式**：发布层按条数，测度层按 measure 数（未映射的 measure 从 raw_json 取）。
         const unmappedMeasures = unmapped.reduce((sum, item) => sum + (item.measureKeys?.length ?? 1), 0)
-        const inputMeasures = rows.reduce((sum, row) => sum + (row.measureCount ?? 1), 0) + unmappedMeasures
-        const measureDiff = inputMeasures - (rows.length + unmappedMeasures)
+        const inputMeasures = sourceTotals.measures
+        const measureDiff = inputMeasures - (rows.reduce((sum, row) => sum + (row.measureCount ?? 1), 0) + unmappedMeasures)
         console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${inputReleases} = 落表 ${counts.written} + 未映射 ${unmappedCount} + 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${inputMeasures}（差 ${measureDiff}）`)
         if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
         if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)

@@ -1,11 +1,8 @@
 /**
- * 事件类型：**源给的类型串 → 标准码 `evt.*`**。
+ * 事件类型：**源给的类型串 → 标准码 `evt.*`**（20 条，来自 22 号表）。
  *
- * 出处：`docs-private/iterations/0.4.4-calendar-sources/22-源类型串到码.csv`（16 条）。
- * 中文名只在 20 号四列名表里；本表只做「源串 → 码」的翻译，**不含任何显示文案**——
- * 两个地方各写一份中文名，就是「两张名称表并存」，今晚已经因为这类重叠返工过。
- *
- * 未知类型串 → **不映射**，落 `unknown-event-type` 并计数；补一条就重放，不猜、不模糊匹配。
+ * 中文名只在 `marketCalendarCodeNames` 的事件名表里；本表只做「源串 → 码」的翻译。
+ * 新增映射前**先贴源原文**（`name` 字段），不许照我们自己的说法写——那会多一条永远不命中的规则。
  */
 export const eventCodeBySourceType: Readonly<Record<string, string>> = Object.freeze({
   'Central bank balance sheet': 'evt.central-bank-balance-sheet',
@@ -18,10 +15,14 @@ export const eventCodeBySourceType: Readonly<Record<string, string>> = Object.fr
   'Futures positioning': 'evt.futures-positioning',
   'Household debt': 'evt.household-debt',
   'Merchandise trade': 'evt.merchandise-trade',
+  'Monetary policy minutes': 'evt.monetary-policy-minutes',
   'Monetary policy press conference': 'evt.monetary-policy-press-conference',
+  'Monetary policy projections': 'evt.monetary-policy-projections',
   'Monetary policy statement': 'evt.monetary-policy-statement',
   'Money and credit': 'evt.money-and-credit',
   'Mortgage applications': 'evt.mortgage-applications',
   'Oil rig count': 'evt.oil-rig-count',
   'Petroleum inventories': 'evt.petroleum-inventories',
+  'Policy rate decision': 'evt.policy-rate-decision',
+  'fomc（官方 event_name_key）': 'evt.fomc',
 })
