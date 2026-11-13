@@ -148,3 +148,26 @@ describe('源内身份 → 标准码：原地转正，不新增行', () => {
     expect(rows.map((entry) => entry.status)).toEqual(['published'])
   })
 })
+
+describe('同身份同日两份发布（夹具，不靠真实数据）', () => {
+  it('一份带值一份空：合并后行有值、映射表留两个 id、计数为 1', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const common = { countryCode: 'USA', metricKey: 'US.NONFARM.SA.CHANGE', periodKey: '2026-10',
+      scheduledDate: '2026-11-06', scheduledAt: '2026-11-06T13:30:00.000Z', kind: 'indicator' as const,
+      identityKind: 'code' as const, status: 'published' as const }
+    const write = (rows: object[]) => dualWriteMeasureRows(database, { providerId: 'narwhal',
+      parserVersion: 'v1', observedAt: '2026-11-06T13:31:00.000Z', rows: rows as never })
+    write([{ ...common, sourceEventId: 'empty-shell', actual: undefined }])
+    const counts = write([{ ...common, sourceEventId: 'with-values', actual: '165', previous: '60' }])
+    const row = database.prepare(`select values_json, value_state from mi_calendar_events
+      where metric_key = 'US.NONFARM.SA.CHANGE' and period_key = '2026-10'`).get() as
+      { values_json: string; value_state: string }
+    const ids = database.prepare('select source_event_id from mi_calendar_event_source_ids order by source_event_id')
+      .all() as { source_event_id: string }[]
+    expect(JSON.parse(row.values_json).actual).toBe('165')   // 空值不覆盖有值
+    expect(row.value_state).toBe('present')
+    expect(ids.map((entry) => entry.source_event_id)).toEqual(['empty-shell', 'with-values'])
+    expect(counts.mergedSameDay).toBe(1)
+  })
+})

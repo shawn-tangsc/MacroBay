@@ -25,6 +25,12 @@ export type DualWriteCounts = Readonly<{
   written: number
   unmapped: Readonly<Record<CalendarUnmappedReason, number>>
   failed: number
+  /**
+   * 同一身份、同一天被**两份不同发布**写进来的次数（源重发）。
+   * 不算失败也不算丢行：值取并集（空值不覆盖有值）、两个 `source_event_id` 都留在映射表里。
+   * 但**必须数出来**——今天能合，明天换个期次就可能露出来。
+   */
+  mergedSameDay: number
 }>
 
 /**
@@ -55,6 +61,7 @@ export function dualWriteMeasureRows(
   const reasons = emptyReasons()
   let written = 0
   let failed = 0
+  let mergedSameDay = 0
   for (const row of input.rows) {
     try {
       // 源内身份的行没有标准码可查：它是「源里确实有这次发布」，不是缺映射。
@@ -69,6 +76,15 @@ export function dualWriteMeasureRows(
       const existing = findCalendarStandardRowBySource(database, {
         sourceProviderId: input.providerId, sourceEventId: row.sourceEventId
       })
+      // 同身份同日的**另一份发布**：先数出来再写（值取并集、两个 id 都留痕）。
+      if (existing === undefined) {
+        const collision = database.prepare(`select source_event_id from ${calendarStandardTablePolicy.eventsTable}
+          where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?
+            and source_event_id <> ? limit 1`)
+          .get(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate, row.sourceEventId) as
+          { source_event_id: string } | undefined
+        if (collision !== undefined) mergedSameDay += 1
+      }
       // **原地转正**：原来用源内 id 撑着的那一行，现在有标准码了 → 改这一行的码，不新增行。
       if (existing !== undefined && existing.identityKind === 'source' && row.identityKind !== 'source'
         && existing.metricKey !== row.metricKey) {
@@ -110,7 +126,7 @@ export function dualWriteMeasureRows(
       options?.onError?.((error as Error)?.message ?? 'unknown')
     }
   }
-  return { written, unmapped: reasons, failed }
+  return { written, unmapped: reasons, failed, mergedSameDay }
 }
 
 /** 观测行的最小形状（draft 与已落库行都能满足）。 */
@@ -205,5 +221,6 @@ export function dualWriteObservationBatch(
       options?.onError?.((error as Error)?.message ?? 'unknown')
     }
   }
-  return { written, unmapped: reasons, failed }
+  // 观测草稿这条老路径不按「同身份同日」合并（它只写身份算得出的行），所以恒 0。
+  return { written, unmapped: reasons, failed, mergedSameDay: 0 }
 }
