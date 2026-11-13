@@ -48,10 +48,10 @@ type LegacySeed = Readonly<{
   locale?: string
 }>
 
-function withRepository(run: (input: Readonly<{
+async function withRepository(run: (input: Readonly<{
   repository: ReturnType<typeof createMacroCalendarRepository>
   seedLegacy: (row: LegacySeed) => void
-}>) => Promise<void> | void): void {
+}>) => Promise<void> | void): Promise<void> {
   const storage = createMacroCalendarSqlite(':memory:')
   try {
     const repository = createMacroCalendarRepository({ storage })
@@ -62,7 +62,7 @@ function withRepository(run: (input: Readonly<{
        raw_record_id, evidence_hash, parser_version, input_count, skipped_count, skip_reasons_json, status)
       values ('c', '0xrouter', 'd', 'zh', '2026-10-01', '2026-12-01', ?, ?, 'r', 'e', 'p', 0, 0, '[]', 'success')`)
       .run(asOf, asOf)
-    run({
+    await run({
       repository,
       seedLegacy(row) {
         // 观测表没有写入 API（写入口归采集端），这条用例只需要读查询看到的那几列。
@@ -87,8 +87,8 @@ const factsOf = async (facts: Promise<readonly Fact[]>) =>
   Object.fromEntries((await facts).map((fact) => [fact.metricKey, fact])) as Record<string, Fact>
 
 describe('macroIndicatorReadService', () => {
-  it('keeps the structurally absent CPI year-over-year value out of the main slot and carries last period', () => {
-    withRepository(async ({ repository, seedLegacy }) => {
+  it('keeps the structurally absent CPI year-over-year value out of the main slot and carries last period', async () => {
+    await withRepository(async ({ repository, seedLegacy }) => {
       repository.upsertReleaseRow(cpiRelease)
       seedLegacy({ indicatorId: '8637', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', previous: '3.7%' })
       seedLegacy({ indicatorId: '8639', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', previous: '2.6%' })
@@ -101,8 +101,8 @@ describe('macroIndicatorReadService', () => {
     })
   })
 
-  it('reports payrolls from the new source and computes the gap against the as-published previous', () => {
-    withRepository(async ({ repository, seedLegacy }) => {
+  it('reports payrolls from the new source and computes the gap against the as-published previous', async () => {
+    await withRepository(async ({ repository, seedLegacy }) => {
       repository.upsertReleaseRow(payrollRelease)
       // 旧源这一行是**发布当时**抓的：上期 29。新源记录的是修订后的 60。
       seedLegacy({ indicatorId: '8656', scheduledDate: '2026-11-06', scheduledAt: '2026-11-06T13:30:00.000Z', actual: '165', previous: '29' })
@@ -114,8 +114,8 @@ describe('macroIndicatorReadService', () => {
     })
   })
 
-  it('never borrows an older period value for the current period', () => {
-    withRepository(async ({ repository, seedLegacy }) => {
+  it('never borrows an older period value for the current period', async () => {
+    await withRepository(async ({ repository, seedLegacy }) => {
       // 本期（11-10）发布行没有年率值；上一期（10-14）有 3.7%。
       repository.upsertReleaseRow(cpiRelease)
       seedLegacy({ indicatorId: '8637', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', previous: '3.7%' })
@@ -128,16 +128,16 @@ describe('macroIndicatorReadService', () => {
     })
   })
 
-  it('says 未发布 for 核心 PCE, which has no release row at all this month', () => {
-    withRepository(async ({ repository }) => {
+  it('says 未发布 for 核心 PCE, which has no release row at all this month', async () => {
+    await withRepository(async ({ repository }) => {
       repository.upsertReleaseRow(cpiRelease)
       expect((await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.CORE_PCE.NSA.YOY'])
         .toMatchObject({ state: 'not-recorded' })
     })
   })
 
-  it('falls back to the legacy source when the new one has no value for the measure', () => {
-    withRepository(async ({ repository, seedLegacy }) => {
+  it('falls back to the legacy source when the new one has no value for the measure', async () => {
+    await withRepository(async ({ repository, seedLegacy }) => {
       repository.upsertReleaseRow(cpiRelease)
       // 旧源同一天那一行有值（构造出来的情形）：主身份就是这个指标，所以可以用。
       seedLegacy({ indicatorId: '8637', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', actual: '3.7%', previous: '3.4%' })
@@ -147,9 +147,66 @@ describe('macroIndicatorReadService', () => {
     })
   })
 
-  it('refuses a non-canonical as-of instead of reporting every card as 未发布', () => {
-    withRepository(async ({ repository }) => {
+  it('refuses a non-canonical as-of instead of reporting every card as 未发布', async () => {
+    await withRepository(async ({ repository }) => {
       await expect(createMacroIndicatorReadService(repository).read({ asOf: '2026-11-13' })).rejects.toThrow()
+    })
+  })
+
+  /**
+   * 下一期共识：盘口是**下一期**的盘（非农 11 月：成交 $5,285、中位数落 100–125K 档 ≈ 11 万）。
+   * 它不能塞进本期那一格——本期那一格是 10 月的实际（165）与 10 月的预期（65）。
+   */
+  it('attaches the next release and its market consensus, keeping it apart from this period', async () => {
+    await withRepository(async ({ repository }) => {
+      repository.upsertReleaseRow(payrollRelease)
+      const read = createMacroIndicatorReadService(repository, {
+        nextReleaseFor: (metricKey) => metricKey === 'US.NONFARM.SA.CHANGE'
+          ? { period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z' }
+          : undefined,
+        readMarketConsensus: async () => ({ state: 'ok', value: 112.5, marketVolume: 5285, asOf: '2026-11-13T20:40:00.000Z' })
+      }).read({ asOf })
+
+      const payrolls = (await factsOf(read))['US.NONFARM.SA.CHANGE']!
+
+      // 本期那一格没被下一期的盘污染。
+      expect(payrolls).toMatchObject({ state: 'provided', value: 165 })
+      expect(payrolls.consensus).toBeUndefined()
+      expect(payrolls.next).toEqual({
+        period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z',
+        consensus: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
+      })
+    })
+  })
+
+  it('tells a missing market apart from a failed read', async () => {
+    await withRepository(async ({ repository }) => {
+      repository.upsertReleaseRow(payrollRelease)
+      const service = (consensus: NonNullable<Parameters<typeof createMacroIndicatorReadService>[1]>['readMarketConsensus']) =>
+        createMacroIndicatorReadService(repository, {
+          nextReleaseFor: () => ({ period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z' }),
+          readMarketConsensus: consensus
+        }).read({ asOf })
+
+      // 两次读都要在同一个同步前缀里发起：夹具的连接在 `run` 返回时就关了。
+      const missing = service(async () => ({ state: 'unavailable', reason: 'no-market' }))
+      const failed = service(async () => { throw new Error('network') })
+      const [noMarket, unreadable] = await Promise.all([factsOf(missing), factsOf(failed)])
+
+      expect(noMarket['US.NONFARM.SA.CHANGE']!.next).toMatchObject({ consensusState: 'no-market' })
+      expect(unreadable['US.NONFARM.SA.CHANGE']!.next).toMatchObject({ consensusState: 'unreadable' })
+    })
+  })
+
+  /** 没有排期就不带「下一期」：拿上一期凑会让盘口去查一个不存在的盘。 */
+  it('carries no next release when the calendar has no schedule', async () => {
+    await withRepository(async ({ repository }) => {
+      repository.upsertReleaseRow(payrollRelease)
+      const read = createMacroIndicatorReadService(repository, {
+        nextReleaseFor: () => undefined,
+        readMarketConsensus: async () => ({ state: 'ok', value: 112.5, marketVolume: 5285, asOf: '2026-11-13T20:40:00.000Z' })
+      }).read({ asOf })
+      expect((await factsOf(read))['US.NONFARM.SA.CHANGE']!.next).toBeUndefined()
     })
   })
 })

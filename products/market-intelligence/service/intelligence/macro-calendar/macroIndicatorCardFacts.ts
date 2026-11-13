@@ -65,13 +65,27 @@ export type MacroIndicatorCardFact = Readonly<{
   /** 官方序列**读不到**（不是「没有值」）：那一格要说「暂时读不到」，不许拿旧数字冒充。 */
   previousUnreadable?: boolean
   /**
-   * 共识：**五元组**（值 + 期次 + `asOf` + 出处 + 盘口才要的成交量）。今天只接商业源问卷这一档。
+   * 共识：**五元组**（值 + 期次 + `asOf` + 出处 + 盘口才要的成交量）。今天是商业源问卷这一档。
    * 期次在 `period` 上——缺它就不带出去（那会变成一个「看起来像答案的数」）。
    */
   consensus?: Readonly<{
     value: number
     provenance: 'source-survey'
     asOf: string
+  }>
+  /**
+   * **下一期**：排期只从日历那一处来（`nextReleaseFor`），盘口共识只对还没发布的那一期有意义。
+   *
+   * 与本期 `consensus` 分成两块，不是为了字段好看：盘是「下一期」的盘，塞进本期那一格，
+   * 就是把 10 月的实际配上 11 月的预期——今天反复出的期次错位。
+   */
+  next?: Readonly<{
+    period: string
+    releaseAt: string
+    /** 盘口反推的共识：有盘才有，成交量也在里面。 */
+    consensus?: Readonly<{ value: number; provenance: 'market-implied'; asOf: string; marketVolume: number }>
+    /** 没有值的原因：`no-market` 是真的没盘；`unreadable` 是读失败，要说「暂时读不到」。 */
+    consensusState?: 'no-market' | 'unreadable'
   }>
   unit?: 'percent' | 'thousands'
   source?: 'narwhal' | '0xrouter' | 'fred'

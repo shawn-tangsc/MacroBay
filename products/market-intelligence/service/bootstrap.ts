@@ -53,6 +53,8 @@ import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPo
 import { createMacroIndicatorReadService } from './intelligence/macro-calendar/macroIndicatorReadService'
 import { registerMacroIndicatorIpc } from './intelligence/macro-calendar/ipc/registerMacroIndicatorIpc'
 import { createFredObservationsFetcher, readFredIndicatorYoY } from './intelligence/macro-calendar/fredIndicatorYoY'
+import { readNextReleaseForMetric } from './intelligence/macro-calendar/marketCalendarStandardMonthRead'
+import { readPolymarketConsensus } from './intelligence/macro-calendar/polymarketConsensus'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
 import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
 import { createSyncAuditStoreIfAvailable } from './intelligence/audit/syncAuditStore'
@@ -609,8 +611,16 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   registerPolicyPathIpc(register, policyPathQueryService)
   // FRED 的 key 只从模块那份凭据存储出（`fetchText` 负责加 `api_key`），这里不碰凭据本身。
   const fredObservations = createFredObservationsFetcher((url, sourceId) => intelligenceModule.fetchText(url, sourceId))
+  // 排期只问标准表一处（编一个期次会去查一个不存在的盘）；盘口走预测市场那个源的出口，
+  // 它是 `authMode: none`，和 FRED 一样不在这里碰凭据。
+  const standardCalendarDatabase = macroCalendarBackend.storage.database
   registerMacroIndicatorIpc(register, createMacroIndicatorReadService(macroCalendarBackend.repository, {
-    readOfficialYoY: (metricKey) => readFredIndicatorYoY(metricKey, fredObservations)
+    readOfficialYoY: (metricKey) => readFredIndicatorYoY(metricKey, fredObservations),
+    nextReleaseFor: (metricKey, asOf) => readNextReleaseForMetric(standardCalendarDatabase, { metricKey, asOf }),
+    readMarketConsensus: (input) => readPolymarketConsensus({
+      ...input,
+      fetchText: (url) => intelligenceModule.fetchText(url, 'policy-path-market')
+    })
   }))
   registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
     // Read-only: the run log joins a task to the analysis it produced, and never writes either side.

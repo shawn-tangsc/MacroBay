@@ -27,13 +27,26 @@ export const macroIndicatorAsOfPolicy = {
 /**
  * 外部读数（装配层注入，读服务里**不碰凭据、不碰网络出口**）：
  * - `readOfficialYoY`：官方序列的同比（FRED，`units=pc1`）；没有映射的指标可以不实现；
- * - `readMarketConsensus`：盘口反推的市场共识；本期没有盘就返回 `unavailable`。
+ * - `nextReleaseFor`：这个指标在 `asOf` 之后**最近一次排期**（期次 + 发布时刻），没有就返回 `undefined`。
+ *   排期只有日历那一处是真的，这里不改写、不缓存、不拿上一期凑；
+ * - `readMarketConsensus`：盘口反推的共识，**必须带期次与发布时刻**——查错期次会查到一个
+ *   看起来完全正常的盘。
  *
- * 两个都可选：**没注入就当这一档不存在**，不退回猜测。装配处必须显式传，不能靠默认值。
+ * 三个都可选：**没注入就当这一档不存在**，不退回猜测。装配处必须显式传，不能靠默认值。
  */
+export type MacroMarketConsensusReading =
+  | Readonly<{ state: 'ok'; value: number; marketVolume: number; asOf: string }>
+  | Readonly<{ state: 'unavailable'; reason: 'no-market' | 'no-buckets' | 'after-release' | 'read-failed' }>
+
 export type MacroIndicatorReadDependencies = Readonly<{
   readOfficialYoY?: (metricKey: string) => Promise<FredYoYReading>
-  readMarketConsensus?: (input: Readonly<{ metricKey: string }>) => Promise<Readonly<{ value: number; marketVolume: number; asOf: string }> | undefined>
+  nextReleaseFor?: (metricKey: string, asOf: string) => Readonly<{ period: string; releaseAt: string }> | undefined
+  readMarketConsensus?: (input: Readonly<{
+    metricKey: string
+    period: string
+    releaseAt: string
+    asOf: string
+  }>) => Promise<MacroMarketConsensusReading>
 }>
 
 export type MacroIndicatorReadService = Readonly<{
@@ -50,15 +63,57 @@ export function createMacroIndicatorReadService(
       if (!macroIndicatorAsOfPolicy.canonicalUtcMillisPattern.test(asOf)) throw new Error('invalid asOf')
       const rows = MACRO_INDICATOR_CARD_KEYS.flatMap((metricKey) => rowsForMetric(repository, metricKey, asOf))
       const facts = resolveMacroIndicatorFacts(rows)
-      if (dependencies.readOfficialYoY === undefined) return facts
       // 官方序列优先于日历库的读数；读不到就把那一格标成「暂时读不到」，不退回旧值。
-      const withOfficial = await Promise.all(facts.map(async (fact) => {
-        const reading = await dependencies.readOfficialYoY!(fact.metricKey).catch((): FredYoYReading => ({ state: 'unavailable', seriesId: '', reason: 'read-failed' }))
-        return applyOfficialYoY(fact, reading)
-      }))
-      return withOfficial
+      const withOfficial = dependencies.readOfficialYoY === undefined
+        ? facts
+        : await Promise.all(facts.map(async (fact) => {
+          const reading = await dependencies.readOfficialYoY!(fact.metricKey).catch((): FredYoYReading => ({ state: 'unavailable', seriesId: '', reason: 'read-failed' }))
+          return applyOfficialYoY(fact, reading)
+        }))
+      if (dependencies.nextReleaseFor === undefined) return withOfficial
+      return await Promise.all(withOfficial.map((fact) => withNextRelease(fact, dependencies, asOf)))
     }
   }
+}
+
+/**
+ * 下一期：排期 + 那一期的盘口共识。
+ *
+ * 三件事分开说：
+ * - 没有排期 → 不带 `next`（卡上走「暂无排期」），**不拿上一期凑**；
+ * - 有排期、没接盘口 → 只带排期；
+ * - 有盘口：读到盘就带值（含成交量），读失败标 `unreadable`（卡上说「暂时读不到」），
+ *   确实没盘标 `no-market`（卡上说「暂无共识」）——这两种在读者眼里是两件事。
+ */
+async function withNextRelease(
+  fact: MacroIndicatorCardFact,
+  dependencies: MacroIndicatorReadDependencies,
+  asOf: string
+): Promise<MacroIndicatorCardFact> {
+  const next = dependencies.nextReleaseFor!(fact.metricKey, asOf)
+  if (next === undefined) return fact
+  const schedule = { next: { period: next.period, releaseAt: next.releaseAt } }
+  if (dependencies.readMarketConsensus === undefined) return { ...fact, ...schedule }
+  let reading: MacroMarketConsensusReading
+  try {
+    reading = await dependencies.readMarketConsensus({ metricKey: fact.metricKey, ...next, asOf })
+  } catch {
+    reading = { state: 'unavailable', reason: 'read-failed' }
+  }
+  if (reading.state === 'ok') {
+    return {
+      ...fact,
+      next: {
+        ...next,
+        consensus: Object.freeze({
+          value: reading.value, provenance: 'market-implied' as const,
+          asOf: reading.asOf, marketVolume: reading.marketVolume
+        })
+      }
+    }
+  }
+  // 读失败与「没有盘」不能混：前者读者该知道是暂时读不到，后者是这个指标确实没有盘。
+  return { ...fact, next: { ...next, consensusState: reading.reason === 'read-failed' ? 'unreadable' : 'no-market' } }
 }
 
 const unitByNarwhalUnit: Readonly<Record<string, 'percent' | 'thousands'>> = Object.freeze({
