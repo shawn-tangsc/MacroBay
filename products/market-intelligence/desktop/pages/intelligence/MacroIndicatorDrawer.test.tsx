@@ -305,6 +305,18 @@ describe('key-indicator drawer', () => {
     expect(rows.some((row) => row.textContent?.includes('央行讲话'))).toBe(false)
   })
 
+  /**
+   * 市场侧的重要性是占位值（源里没有这个字段）。**占位值不许参与任何判断**：
+   * 抽屉与迷你日历里出现按 `importance` 排序/筛选/画记号，就是把它当成了数据。
+   */
+  it('never decides anything from 市场的占位重要性', () => {
+    for (const file of ['MacroIndicatorDrawer.tsx', 'MiniReleaseCalendar.tsx']) {
+      const source = readFileSync(`products/market-intelligence/desktop/pages/intelligence/${file}`, 'utf8')
+      const code = source.split('\n').filter((line) => !line.trim().startsWith('//') && !line.trim().startsWith('*')).join('\n')
+      expect(code).not.toMatch(/\.importance\b/)
+    }
+  })
+
   it('says 暂无日程数据 in a month that has no releases', async () => {
     await renderDrawer({
       now: '2026-11-13T10:00:00.000Z',

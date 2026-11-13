@@ -454,7 +454,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
  * 找不到就返回 `undefined`，调用方**不画这一格**——写「未提供」会让人以为今天该有一次发布。
  * 日期用与日历一致的显示时区算，再取 `MM-DD`（跨年时补上年，避免把 1 月写成去年）。
  */
-function nextReleaseOf(events: readonly MarketCalendarEvent[], keys: readonly string[], nowInstant: string, timeZone: string): string | undefined {
+function nextReleaseOf(events: readonly Readonly<{ scheduledAt: string; measureKeys?: readonly string[] }>[], keys: readonly string[], nowInstant: string, timeZone: string): string | undefined {
   const nowMs = Date.parse(nowInstant)
   const next = events
     .filter((event) => Date.parse(event.scheduledAt) > nowMs)
