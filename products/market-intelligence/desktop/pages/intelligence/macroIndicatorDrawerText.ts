@@ -24,6 +24,10 @@ export const macroIndicatorDrawerText = {
     rateDeltaDown: '↓ −{value}bp · 较上一日',
     rateTruncated: '序列已截断，只画了最近 {days} 天',
     chartAria: '利率数学期望曲线：每个点是那一刻五档概率的加权期望，单位 bp',
+    eventNames: {
+      cpi: 'CPI 年率', coreCpi: '核心 CPI', payrolls: '新增就业', corePce: '核心 PCE',
+      decision: '议息决议', minutes: '会议纪要'
+    },
     panelExpectation: '加权期望',
     panelVsYesterday: '较上一日',
     panelFlat: '持平',
@@ -72,6 +76,10 @@ export const macroIndicatorDrawerText = {
     rateDeltaDown: '↓ −{value}bp · vs yesterday',
     rateTruncated: 'Series truncated — only the last {days} days are drawn',
     chartAria: 'Rate expectation curve: each point is the five-bucket weighted expectation at that instant, in bp',
+    eventNames: {
+      cpi: 'CPI YoY', coreCpi: 'Core CPI', payrolls: 'Payrolls', corePce: 'Core PCE',
+      decision: 'Rate decision', minutes: 'Meeting minutes'
+    },
     panelExpectation: 'Weighted expectation',
     panelVsYesterday: 'vs yesterday',
     panelFlat: 'Unchanged',

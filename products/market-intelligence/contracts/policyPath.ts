@@ -390,6 +390,50 @@ export function distributionAtOrBefore(
  * 推动量 = E(事件后最近一条) − E(事件前最近一条)，两侧都必须落在窗口内；缺一侧就不标。
  * 单位与方向都走期望口径：概率差的正负可以跟期望差相反，图上一律用期望。
  */
+/**
+ * 允许标注的指标清单——**判据只有这一张表**，按指标身份，不按名字、不按 importance、不按国家。
+ *
+ * 事件标注解释的是「这条曲线为什么跳」，所以只有**影响美联储路径**的指标才配得上：
+ * `importance: high` 是对市场的普遍影响（EIA 原油库存也是 high），两者不是一回事。
+ * 这份表是产品口径（`15-事件身份口径.md` §十七），要扩只能扩这里；清单之外的指标无论推动量多大都不标。
+ */
+export const POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS = Object.freeze([
+  'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY'
+] as const)
+
+/**
+ * 央行那档：用 `series_id`（发布类型，语言无关）认，不按标题判。
+ *
+ * 只认两个：**决议**是一次会议的代表，**纪要**有单独时刻可以单独标。
+ * 声明 / 发布会 / 点阵图与决议同一时刻，是同一件事的附件，不单独标；票委讲话识别得出但并不值得标。
+ */
+export const POLICY_PATH_EVENT_RELEVANT_SERIES_IDS = Object.freeze([
+  'usa-policy-rate-decision', 'usa-monetary-policy-minutes'
+] as const)
+
+/**
+ * 同一次发布只允许标一条：同一时刻的多条 measure 按这张表取优先级最高的一条。
+ *
+ * 不归组的话，CPI 整体年率 / 核心年率 / 月率会在「同窗多条不归因」那步互相挤掉，
+ * 结果是曲线明明跳了却一条解释都没有。顺序是产品口径：非农 > 失业率 > 时薪；
+ * CPI 整体年率 > 核心年率 > 月率；核心 PCE > 整体 PCE。以后扩清单按同一份文档插进来。
+ */
+export const POLICY_PATH_EVENT_METRIC_PRIORITY = Object.freeze([
+  'US.NONFARM.SA.CHANGE',
+  'US.CPI.NSA.YOY',
+  'US.CORE_CPI.NSA.YOY',
+  'US.CORE_PCE.NSA.YOY'
+] as const)
+
+export type PolicyPathEventCandidate = Readonly<{
+  at: string
+  label: string
+  /** 指标身份（经济数据）。与 `seriesId` 至少有一个；两个都没有的行不参与标注。 */
+  metricKey?: string
+  /** 发布类型（央行事件）：`usa-policy-rate-decision` / `usa-monetary-policy-minutes`。 */
+  seriesId?: string
+}>
+
 export const POLICY_PATH_EVENT_POLICY = Object.freeze({
   /** 归因窗口：事件前后各 15 分钟。 */
   windowMinutes: 15,
@@ -410,14 +454,34 @@ export type PolicyPathExpectationEvent = Readonly<{
 
 export function expectationEventMoves(
   series: readonly PolicyPathObservation[],
-  events: readonly Readonly<{ at: string; label: string }>[]
+  events: readonly PolicyPathEventCandidate[]
 ): readonly PolicyPathExpectationEvent[] {
   const oldest = series[0]
   const newest = series[series.length - 1]
   if (!oldest || !newest) return []
   const windowMs = POLICY_PATH_EVENT_POLICY.windowMinutes * 60_000
+  // 第一步：清单之外一律不标（判据只有指标身份 / 发布类型，不看名字、不看 importance）。
+  // 没有身份的行（例如今天 0xRouter 的行没有 series_id）即使名字百分百像 FOMC 决议，也不标。
+  const relevant = events.filter((event) =>
+    (event.metricKey !== undefined && (POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS as readonly string[]).includes(event.metricKey))
+    || (event.seriesId !== undefined && (POLICY_PATH_EVENT_RELEVANT_SERIES_IDS as readonly string[]).includes(event.seriesId)))
+  // 第二步：同一时刻（同一次发布）只留优先级最高的一条。
+  const rankOf = (event: PolicyPathEventCandidate): number => {
+    if (event.seriesId === 'usa-policy-rate-decision') return -1
+    if (event.metricKey === undefined) return Number.MAX_SAFE_INTEGER
+    return (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[]).indexOf(event.metricKey)
+  }
+  const byInstant = new Map<string, PolicyPathEventCandidate>()
+  for (const event of relevant) {
+    const previous = byInstant.get(event.at)
+    if (!previous) {
+      byInstant.set(event.at, event)
+      continue
+    }
+    if (rankOf(event) < rankOf(previous)) byInstant.set(event.at, event)
+  }
   const candidates: Array<PolicyPathExpectationEvent & Readonly<{ atMs: number }>> = []
-  for (const event of events) {
+  for (const event of byInstant.values()) {
     const atMs = Date.parse(event.at)
     if (!Number.isFinite(atMs)) continue
     let before: PolicyPathObservation | undefined

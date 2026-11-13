@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useCurveReleaseEvents } from './useCurveReleaseEvents'
+import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 
 type Read = (month: string, asOf: string) => Promise<readonly unknown[] | null>
 
@@ -17,13 +18,16 @@ function Probe({ read, windowStart, windowEnd, enabled = true, asOf = AS_OF, loc
   asOf?: string
   locale?: string
 }>): React.ReactElement {
+  // 只给 hook 它认识的那一段：窗口端点来自序列首尾。
+  const reading = windowStart && windowEnd
+    ? ({ probability: { series: [{ at: windowStart }, { at: windowEnd }] } } as unknown as PolicyPathReading)
+    : undefined
   const events = useCurveReleaseEvents({
     enabled,
     ...(read ? { readMarketEvents: read } : {}),
     asOf,
     locale,
-    ...(windowStart ? { windowStart } : {}),
-    ...(windowEnd ? { windowEnd } : {})
+    ...(reading ? { reading } : {})
   })
   return <output>{events.map((event) => `${event.at}|${event.label}`).join(',')}</output>
 }

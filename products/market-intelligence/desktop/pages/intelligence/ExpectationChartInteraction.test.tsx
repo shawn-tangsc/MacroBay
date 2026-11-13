@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
-import { ExpectationChart, type ExpectationChartText, type ExpectationPoint } from './ExpectationChart'
+import { estimateEventLabelWidth, ExpectationChart, fitEventLabel, type ExpectationChartText, type ExpectationPoint } from './ExpectationChart'
 
 /**
  * 读数面板：鼠标跟着走、键盘左右移点、Esc 收起。
@@ -225,5 +225,39 @@ describe('expectation readout panel', () => {
     expect(second).not.toBe(first)
     await press(stage, 'Escape')
     expect(tip().dataset.active).toBe('false')
+  })
+})
+
+describe('event labels on the chart', () => {
+  it('establishes width by character class, not by a single per-character number', () => {
+    // 汉字按 9.5px、西文半角按 5.2px：只按 5.2 估，一条中文标题会少算一半。
+    expect(estimateEventLabelWidth('CPI 年率')).toBeCloseTo(5.2 * 3 + 5.2 + 9.5 + 9.5, 5)
+    expect(estimateEventLabelWidth('上周EIA天然气库存变化(亿立方英尺)(至1030)'))
+      .toBeGreaterThan('上周EIA天然气库存变化(亿立方英尺)(至1030)'.length * 6)
+  })
+
+  it('truncates a long title with an ellipsis and never exceeds the cap', () => {
+    const long = '上周EIA天然气库存变化(亿立方英尺)(至1030)'.repeat(2)
+    const fitted = fitEventLabel(`↓ −0.9bp ${long}`)
+    expect(fitted.endsWith('…')).toBe(true)
+    expect(estimateEventLabelWidth(fitted)).toBeLessThanOrEqual(160)
+  })
+
+  it('keeps the drawn label inside the plot even for a 40-character title', async () => {
+    const stage = await render()
+    const long = '上周EIA天然气库存变化(亿立方英尺)(至1030)'.repeat(2)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+        <ExpectationChart points={[early, late]} events={[{ at: '2026-11-05T00:00:00.000Z', label: long, changeBp: -0.9, bp: 20 }]}
+          height={240} width={480} text={text} />
+      </ShellTimeZoneProvider></ShellLanguageProvider>)
+    })
+    const svg = stage.ownerDocument.querySelector('.mk-plot__svg')!
+    const label = Array.from(svg.querySelectorAll('text')).find((node) => (node.textContent ?? '').includes('…'))
+    expect(label).toBeDefined()
+    const x = Number(label!.getAttribute('x'))
+    expect(x + estimateEventLabelWidth(label!.textContent ?? '')).toBeLessThanOrEqual(480)
+    // 图不许比格子宽：<svg width> 必须就是量到的盒子宽度。
+    expect(Number(svg.getAttribute('width'))).toBeLessThanOrEqual(480)
   })
 })

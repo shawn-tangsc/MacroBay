@@ -316,16 +316,12 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 关键指标 · 预期变化：曲线与政策卡读真数据，三张简化卡仍是示意数据。
   const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
   // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。
-  const curveSeries = policyPath?.state === 'available' ? policyPath.reading.probability?.series : undefined
   const curveReleaseEvents = useCurveReleaseEvents({
     enabled: indicatorDrawerOpen,
     ...(readMarketEvents ? { readMarketEvents } : {}),
     // 用曲线那次读数的快照时刻，不另取「现在」：两处各取各的，标注就对不上它标的跳变。
-    ...(policyPath?.state === 'available' ? { asOf: policyPath.asOf } : {}),
-    locale,
-    ...(curveSeries?.length
-      ? { windowStart: curveSeries[0]!.at, windowEnd: curveSeries[curveSeries.length - 1]!.at }
-      : {})
+    ...(policyPath?.state === 'available' ? { asOf: policyPath.asOf, reading: policyPath.reading } : {}),
+    locale
   })
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would

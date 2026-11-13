@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
@@ -14,6 +14,22 @@ const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
 
 let root: Root | undefined
 let host: HTMLDivElement | undefined
+const originalRect = Element.prototype.getBoundingClientRect
+
+/**
+ * 图的尺寸只认「量到的值」，量不到就不画。happy-dom 没有布局，所以这里把格子与卡片的尺寸喂进去；
+ * 需要验「没量到」的用例，把这个桩设为 0。
+ */
+function stubLayout(width = 490, height = 192): void {
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => width })
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => height })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => height })
+  Element.prototype.getBoundingClientRect = () => ({
+    x: 0, y: 0, top: 0, left: 0, right: width, bottom: height, width, height, toJSON: () => ({})
+  }) as DOMRect
+}
+
+beforeEach(() => stubLayout())
 
 afterEach(async () => {
   await act(async () => root?.unmount())
@@ -21,6 +37,10 @@ afterEach(async () => {
   host?.remove()
   host = undefined
   document.body.innerHTML = ''
+  for (const key of ['clientWidth', 'clientHeight', 'offsetHeight']) {
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]
+  }
+  Element.prototype.getBoundingClientRect = originalRect
 })
 
 function Harness({ onOpened }: Readonly<{ onOpened: () => void }>): React.ReactElement {
@@ -301,7 +321,7 @@ describe('expectation curve inside the drawer', () => {
     await act(async () => {
       root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined}
         onRetryPolicy={() => undefined} policyText={text} policyReading={reading}
-        releaseEvents={[{ at: '2026-11-10T13:30:00.000Z', label: 'CPI 年率' }]} /></ShellLanguageProvider>)
+        releaseEvents={[{ at: '2026-11-10T13:30:00.000Z', label: '10月未季调消费者物价指数(年率)', metricKey: 'US.CPI.NSA.YOY' }]} /></ShellLanguageProvider>)
     })
     // 期望差：25×(0.70−0.50) = +5.0bp，标注贴在图顶。
     expect(document.body.querySelector('.mk-plot__svg')?.textContent).toContain('↑ +5.0bp CPI 年率')
@@ -310,6 +330,22 @@ describe('expectation curve inside the drawer', () => {
   it('shows no annotation when the host passes no events', async () => {
     await render(withSeries)
     expect(document.body.querySelector('.mk-plot__svg')?.textContent ?? '').not.toContain('bp CPI')
+  })
+
+  it('does not draw the chart before the cell has been measured', async () => {
+    stubLayout(0, 0)
+    await render(withSeries)
+    expect(document.body.querySelector('.mk-plot__svg')).toBeNull()
+    // 占位仍在：格子不塌，布局不跳。
+    expect(document.body.querySelector('.mk-plot')).not.toBeNull()
+  })
+
+  it('draws exactly at the measured cell width, never wider', async () => {
+    await render(withSeries)
+    const svg = document.body.querySelector('.mk-plot__svg')!
+    expect(Number(svg.getAttribute('width'))).toBe(490)
+    const cell = document.body.querySelector('.mk-plot') as HTMLElement
+    expect(Number(svg.getAttribute('width'))).toBeLessThanOrEqual(cell.clientWidth)
   })
 
   it('shows the empty state, not a flat line, when the reading carries no points', async () => {

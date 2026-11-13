@@ -39,6 +39,42 @@ export function formatTick(value: number): string {
 /** 曲线上的一个点：绝对时刻、那一刻的加权期望（bp）以及算出它的五桶概率。 */
 export type ExpectationPoint = Readonly<{ at: string; bp: number; values: PolicyPathDistribution }>
 
+/**
+ * 标注文字的宽度估算：**按字符类别逐字累加**，不是「长度 × 一个数」。
+ *
+ * 9.5px 字号下，一个汉字/全角字符约 9.5px，西文与数字半角约 5.2px。只按 5.2 估，
+ * 一条中文事件名会少算一半，夹边按估出来的宽度算、实际画出来更宽，就压到旁边的卡片上。
+ * 上限 160px：超了截断加省略号——图上的标注是索引，不是标题。
+ */
+export const EVENT_LABEL_MAX_WIDTH = 160
+
+export function estimateEventLabelWidth(text: string): number {
+  let width = 0
+  for (const character of text) width += isWideCharacter(character) ? 9.5 : 5.2
+  return width
+}
+
+export function fitEventLabel(text: string, maxWidth = EVENT_LABEL_MAX_WIDTH): string {
+  if (estimateEventLabelWidth(text) <= maxWidth) return text
+  const ellipsis = '…'
+  const budget = maxWidth - estimateEventLabelWidth(ellipsis)
+  let trimmed = ''
+  let used = 0
+  for (const character of text) {
+    const next = isWideCharacter(character) ? 9.5 : 5.2
+    if (used + next > budget) break
+    trimmed += character
+    used += next
+  }
+  return `${trimmed}${ellipsis}`
+}
+
+function isWideCharacter(character: string): boolean {
+  const code = character.codePointAt(0) ?? 0
+  // CJK 统一表意文字、假名、全角标点/字母数字都在这些区段里。
+  return code >= 0x2e80
+}
+
 /** 一个事件标注：时刻、事件名（已本地化）、推动量（bp）、标注处曲线的高度（bp）。 */
 export type ExpectationEvent = Readonly<{ at: string; label: string; changeBp: number; bp: number }>
 
@@ -182,8 +218,9 @@ export function ExpectationChart({ points, events, height, width, text, latest }
       .filter((event) => Number.isFinite(Date.parse(event.at)))
       .sort((left, right) => xOfMs(Date.parse(right.at)) - xOfMs(Date.parse(left.at)))
       .map((event) => {
-        const label = `${event.changeBp >= 0 ? '↑ +' : '↓ −'}${Math.abs(event.changeBp).toFixed(1)}bp ${event.label}`
-        const approxWidth = label.length * 5.2
+        // 图上只放短名 + 推动量；完整标题不上图（正文不许长句）。
+        const label = fitEventLabel(`${event.changeBp >= 0 ? '↑ +' : '↓ −'}${Math.abs(event.changeBp).toFixed(1)}bp ${event.label}`)
+        const approxWidth = estimateEventLabelWidth(label)
         const x = Math.max(L, Math.min(xOfMs(Date.parse(event.at)) - approxWidth / 2, limit - approxWidth))
         limit = x - 8
         return { label, x }

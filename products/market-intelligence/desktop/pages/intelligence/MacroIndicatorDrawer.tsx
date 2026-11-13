@@ -61,6 +61,19 @@ const MOCK = {
   }
 } as const
 
+/** 图上标注用的短名：按指标身份/发布类型取当前语言的叫法，取不到才退回日历标题。 */
+function shortEventLabel(event: Readonly<{ label: string; metricKey?: string; seriesId?: string }>, text: MacroIndicatorDrawerText): string {
+  if (event.seriesId === 'usa-policy-rate-decision') return text.eventNames.decision
+  if (event.seriesId === 'usa-monetary-policy-minutes') return text.eventNames.minutes
+  switch (event.metricKey) {
+    case 'US.CPI.NSA.YOY': return text.eventNames.cpi
+    case 'US.CORE_CPI.NSA.YOY': return text.eventNames.coreCpi
+    case 'US.NONFARM.SA.CHANGE': return text.eventNames.payrolls
+    case 'US.CORE_PCE.NSA.YOY': return text.eventNames.corePce
+    default: return event.label
+  }
+}
+
 export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
@@ -81,7 +94,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
    *
    * 由宿主从**它已经读到的日历结果**里取；抽屉不为此另发一次日历请求。缺省就是没有标注。
    */
-  releaseEvents?: readonly Readonly<{ at: string; label: string }>[]
+  releaseEvents?: readonly Readonly<{ at: string; label: string; metricKey?: string; seriesId?: string }>[]
   /**
    * 读数没读出来时的唯一动作：重读一次，不跳转。
    *
@@ -105,32 +118,56 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const dayListRef = useRef<HTMLDivElement | null>(null)
   // The right column scrolls on its own; the drawer body does not.
   const [selectedDay] = useState(MOCK.day.date)
-  const [plotWidth, setPlotWidth] = useState(560)
-  const [plotHeight, setPlotHeight] = useState(264)
+  /**
+   * 图的尺寸：0 表示**还没量到**。
+   *
+   * 结构约定（这块已经三次跑出格子：横条、面板被裁、整张图压到右边的卡上）：
+   * **图、读数面板、事件标注，任何一部分都不许出现在自己的盒子之外。**
+   * 所以尺寸只认量到的值，量不到就不画；不要用「先给一个默认宽高」「给个地板」
+   * 「用 overflow 裁掉」这三种方式兜底——前两种会画到格子外，第三种会把面板一起裁掉。
+   */
+  const [plotWidth, setPlotWidth] = useState(0)
+  const [plotHeight, setPlotHeight] = useState(0)
   const plotRef = useRef<HTMLDivElement | null>(null)
   const heroRef = useRef<HTMLDivElement | null>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
 
-  // The prototype measures both boxes before drawing: the plot fills the column, and the plot's
-  // height is the hero card's own height (`--top-h`). Same two measurements, same order.
-  useLayoutEffect(() => {
-    const measure = () => {
-      const host = plotRef.current
-      // 写回值永远来自「量到的那个数」：量不到（首帧 clientWidth=0）就保持上一次的值，
-      // 不给自己任何地板宽度/高度——地板正是「量 340 写 380」这种自激的入口。
-      setPlotWidth(previous => nextMeasuredSize(previous, host ? Math.floor(host.clientWidth) : 0))
-      // 行高由卡片内容决定：量卡本身（它的第一个子元素），不是量被拉伸过的槽位。
-      const card = heroRef.current?.firstElementChild ?? heroRef.current
-      if (card) {
-        const measured = Math.ceil(card.getBoundingClientRect().height)
-        setPlotHeight(previous => nextMeasuredSize(previous, measured))
-      }
-    }
+  const measure = useCallback(() => {
+    // 写回值永远来自「量到的那个数」：量不到（首帧 clientWidth=0）就保持上一次的值，
+    // 不给自己任何地板宽度/高度——地板正是「量 340 写 380」这种自激的入口。
+    const host = plotRef.current
+    setPlotWidth((previous) => nextMeasuredSize(previous, host ? Math.floor(host.clientWidth) : 0))
+    // 行高由卡片内容决定：量卡本身（它的第一个子元素），不是量被拉伸过的槽位。
+    const card = heroRef.current?.firstElementChild ?? heroRef.current
+    if (card) setPlotHeight((previous) => nextMeasuredSize(previous, Math.ceil(card.getBoundingClientRect().height)))
+  }, [])
+
+  /**
+   * 用**回调 ref** 量尺寸，而不是挂在组件上的 `useLayoutEffect`。
+   *
+   * 抽屉的内容是 antd 在打开后挂进来的：组件的 layout effect 第一次跑时 `.mk-plot` 还没挂上
+   * （实测 `plotRef.current === null`），于是尺寸一直是 0；以前用 560/264 的初始值掩盖了这件事，
+   * 而那个假尺寸正是「整张图比格子宽、压到右边卡片」的来源。回调 ref 在节点真正挂上时触发，
+   * 量到的就是真实盒子；ResizeObserver 跟上后续的尺寸变化。
+   */
+  const attachPlot = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect()
+    plotRef.current = node
+    if (!node) return
     measure()
     const observer = new ResizeObserver(measure)
-    if (plotRef.current) observer.observe(plotRef.current)
+    observer.observe(node)
     if (heroRef.current) observer.observe(heroRef.current)
-    return () => observer.disconnect()
-  }, [])
+    observerRef.current = observer
+  }, [measure])
+
+  const attachHero = useCallback((node: HTMLDivElement | null) => {
+    heroRef.current = node
+    measure()
+    if (node && observerRef.current) observerRef.current.observe(node)
+  }, [measure])
+
+  useEffect(() => () => observerRef.current?.disconnect(), [])
 
   // 序列 → 曲线的逐点值。公式只有一份（契约里的 `expectationBp`），这里只负责搬。
   const points = useMemo<readonly ExpectationPoint[]>(() => {
@@ -154,10 +191,13 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     : undefined
   const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
   // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
+  // 图上用短名（完整标题不上图）；名字按身份取，不按标题文本猜。
   const eventMarks = useMemo(() => {
     const series = policyReading?.probability?.series
-    return series && releaseEvents?.length ? expectationEventMoves(series, releaseEvents) : []
-  }, [policyReading, releaseEvents])
+    if (!series || !releaseEvents?.length) return []
+    const named = releaseEvents.map((event) => ({ ...event, label: shortEventLabel(event, text) }))
+    return expectationEventMoves(series, named)
+  }, [policyReading, releaseEvents, text])
 
   // 挂到 body：抽屉是 1280 的右侧浮层，如果落在右栏或某个 overflow 容器里，会被祖先裁掉——
   // 表现正是「点了没反应」。portal 让它以视口为参照，和其它浮层同一层。
@@ -196,8 +236,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
         </div>
 
         <div className="mk-view">
-          <div className="mk-plot" ref={plotRef}>
-            {points.length
+          <div className="mk-plot" ref={attachPlot}>
+            {/* 没量到尺寸（`plotWidth/plotHeight` 为 0）就不画图：占位保留，布局不跳，也不会画到格子外。 */}
+            {points.length && plotWidth > 0 && plotHeight > 0
               ? <ExpectationChart points={points} events={eventMarks} height={plotHeight} width={plotWidth}
                 latest={delta === undefined ? {} : { changeBp: delta }}
                 text={{
@@ -208,14 +249,17 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                   flat: text.panelFlat,
                   noHistory: text.rateNoHistory
                 }} />
-              : policyReading
-                ? <StateView state="empty" reasonCode="nothing-in-window" />
-                : <StateView state="error" reasonCode="unreadable"
-                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetryPolicy }} />}
+              : points.length
+                // 有数据、只是还没量到格子：什么都不画，容器自己占位。别把它画成「没有数据」。
+                ? null
+                : policyReading
+                  ? <StateView state="empty" reasonCode="nothing-in-window" />
+                  : <StateView state="error" reasonCode="unreadable"
+                    action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetryPolicy }} />}
           </div>
           {/* 政策利率卡：设计照现有那张「利率路径」卡，数据用宿主已读到的那一份；
               读不到时画既有「读不到」形态，不编数。右边这块占位壳保持 300 宽、随行拉齐。 */}
-          <div className="mk-policy-slot" ref={heroRef}>
+          <div className="mk-policy-slot" ref={attachHero}>
             {policyReading
               ? <PolicyPathCard reading={policyReading} text={policyText} month={policyMonth} {...(onOpenPolicyDetail ? { onOpen: onOpenPolicyDetail } : {})} />
               : <PolicyPathUnavailable state="unreadable" text={policyText} onRetry={onRetryPolicy} />}

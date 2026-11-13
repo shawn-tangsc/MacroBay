@@ -15,12 +15,13 @@ describe('plot never clips or traps the readout panel', () => {
   const ruleOf = (selector: string): string =>
     new RegExp(`${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? ''
 
-  it('does not clip .mk-plot or the svg inside it', () => {
+  it('lets the plot paint the panel but makes the svg clip itself', () => {
+    // `.mk-plot` 不能裁（面板在里面）；`svg` 必须裁（图上的标注不许画到图外）。
     const plot = ruleOf('.mk-plot')
     const svg = ruleOf('.mk-plot__svg')
     expect(plot).not.toContain('overflow: hidden')
     expect(plot).not.toContain('contain: paint')
-    expect(svg).not.toContain('overflow: hidden')
+    expect(svg).toContain('overflow: hidden')
   })
 
   it('keeps every ancestor between the plot and the drawer from clipping or starting a stacking context', () => {

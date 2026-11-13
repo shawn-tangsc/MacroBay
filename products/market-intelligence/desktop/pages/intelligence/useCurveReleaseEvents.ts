@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
+import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+
 /**
  * 曲线窗口里已发生的发布/事件，供曲线标注「这一刻动了多少」。
  *
@@ -9,7 +11,14 @@ import { useEffect, useRef, useState } from 'react'
  *
  * 读失败按「没有事件」处理：标注是解释层，读不到就少几个圈，不许因此让曲线报错。
  */
-export type CurveReleaseEvent = Readonly<{ at: string; label: string }>
+export type CurveReleaseEvent = Readonly<{
+  at: string
+  /** 日历当前语言的完整标题；图上会被换成短名。 */
+  label: string
+  /** 指标身份（经济数据）与发布类型（央行事件）：两者至少一个，否则这一行不参与标注。 */
+  metricKey?: string
+  seriesId?: string
+}>
 
 export function useCurveReleaseEvents(input: Readonly<{
   /** 抽屉关着就不读：没人看的东西不花一次请求。 */
@@ -24,14 +33,16 @@ export function useCurveReleaseEvents(input: Readonly<{
   asOf?: string
   /** 抽屉当前语言：换语言要重读，否则标注停在旧语言上。 */
   locale?: string
-  windowStart?: string
-  windowEnd?: string
+  /** 曲线那次读数：窗口端点从它的序列里取，读数的形状只在这里认识。 */
+  reading?: PolicyPathReading
 }>): readonly CurveReleaseEvent[] {
   const [events, setEvents] = useState<readonly CurveReleaseEvent[]>([])
   // 读入口放进 ref：页面每次渲染都可能传一个新函数，进依赖会让同一个快照被反复读。
   const reader = useRef(input.readMarketEvents)
   reader.current = input.readMarketEvents
-  const { enabled, asOf, locale, windowStart, windowEnd } = input
+  const { enabled, asOf, locale, reading } = input
+  const windowStart = reading?.probability?.series?.[0]?.at
+  const windowEnd = reading?.probability?.series?.at(-1)?.at
   useEffect(() => {
     const read = reader.current
     if (!enabled || !read || !asOf || !windowStart || !windowEnd) {
@@ -53,7 +64,11 @@ export function useCurveReleaseEvents(input: Readonly<{
             const at = typeof record.scheduledAt === 'string' ? record.scheduledAt : ''
             const label = typeof record.title === 'string' ? record.title : ''
             if (!Number.isFinite(Date.parse(at)) || !label) continue
-            next.push({ at, label })
+            // 身份字段照抄，不按名字补：没有身份的行由契约那层整条挡掉。
+            const metricKey = typeof record.eventNameKey === 'string' ? record.eventNameKey
+              : typeof record.metricKey === 'string' ? record.metricKey : undefined
+            const seriesId = typeof record.seriesId === 'string' ? record.seriesId : undefined
+            next.push({ at, label, ...(metricKey ? { metricKey } : {}), ...(seriesId ? { seriesId } : {}) })
           }
         }
         // 同一时刻同名的行只留一条：来源批次的重复不该在图上叠两圈。
