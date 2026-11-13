@@ -81,32 +81,52 @@ describe('源名字面量守卫', () => {
 })
 
 describe('汇总文案表不许手改', () => {
-  it('productText.ts 里每处带源名的文案，都必须在某个 text/** 源文件里找得到同一串', () => {
-    // `productText.ts` 是全产品文案的汇总（2964 行），卡片、事件名、日历行的文案都在里面。
-    // 整文件豁免等于把它摘出守卫，所以补一条漂移断言：**汇总里的源名文案必须能在源文件里找到**。
-    // 这条同时挡住「有人手改生成文件」——这个仓里手改它丢过 key，不是假设。
+  it('productText.ts 里每个「值含源名」的 key，都必须在 text/** 里存在同名同值的映射', () => {
+    // 按**字符串搜索**不够：同一句值在源文件里出现一次，汇总里手改出第二处同值就查不出；
+    // 手改后的新值只要别处也有一份，同样过。所以按 **(key, value) 配对**对齐——
+    // 找不到同名同值的映射 → 红。改源文件再重新生成自动就对；直接改汇总，立刻红。
     const aggregate = readFileSync(join(PRODUCT, 'desktop/shared/i18n/productText.ts'), 'utf8')
-    const strings = new Set(aggregate.match(/'[^'\n]*'|"[^"\n]*"/g) ?? [])
-    const withSource = [...strings].filter((text) => SOURCE_NAME.test(text))
-    const sourceTexts: string[] = []
+    // key 有引号的（feed id 那种）也有不带引号的（`linkedTimeProvider:` 这种），两种都收。
+    const PAIR = /(?:'([^'\n]{1,160})'|([A-Za-z_$][\w$.-]*))\s*:\s*'([^'\n]*)'/g
+    const pairs = [...aggregate.matchAll(PAIR)]
+      .map((match) => ({ key: (match[1] ?? match[2])!, value: match[3]! }))
+      .filter((pair) => SOURCE_NAME.test(pair.value))
+    // 模板串里的值也要收（反引号写的文案一样会给读者看）。
+    const templates = [...aggregate.matchAll(/`([^`\n]{1,200})`/g)]
+      .map((match) => match[1]!)
+      .filter((value) => SOURCE_NAME.test(value))
+    // 这 8 串是**已知内联**在汇总里的（市场日历那段还没搬到 `text/**`）。登记为「现状已核实」，
+    // **新增一处内联文案 → 红**。S3 清理时连同相关文案一起下掉。
+    const inline = new Set([
+      "'0xRouter 市场日历'", "'日历时间：Narwhal'", "'前值（Narwhal）'", "'公布值（Narwhal）'",
+      "'0xRouter market calendar'", "'Calendar time: Narwhal'", "'Previous (Narwhal)'", "'Actual (Narwhal)'",
+      // 源名本身（provider 显示名、来源标签）：值就是源名，属于页面署名/设置那一类。
+      "'Narwhal'", "'0xRouter'"
+    ])
+    const sources: string[] = []
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
         const full = join(dir, entry)
         if (statSync(full).isDirectory()) { walk(full); continue }
-        if (entry.endsWith('.ts') && !/\.test\.ts$/.test(entry)) sourceTexts.push(readFileSync(full, 'utf8'))
+        if (entry.endsWith('.ts') && !/\.test\.ts$/.test(entry)) sources.push(readFileSync(full, 'utf8'))
       }
     }
     walk(join(PRODUCT, 'desktop/shared/i18n/text'))
-    // 这 8 串是**已知内联**在汇总里的（市场日历那段文案直接写在 productText 里，尚未搬到
-    // `text/**`）。它们登记在这里，等于「现状已核实」；**新增一处内联文案 → 红**。
-    const inline = [
-      "'0xRouter 市场日历'", "'日历时间：Narwhal'", "'前值（Narwhal）'", "'公布值（Narwhal）'",
-      "'0xRouter market calendar'", "'Calendar time: Narwhal'", "'Previous (Narwhal)'", "'Actual (Narwhal)'"
-    ]
-    const missing = withSource
-      .filter((text) => !inline.includes(text))
-      .filter((text) => !sourceTexts.some((source) => source.includes(text)))
-    expect(missing, `这些带源名的文案只在汇总里、源文件里找不到（手改过？）：\n${missing.join('\n')}`).toEqual([])
+    const missing = pairs
+      .filter((pair) => !inline.has(`'${pair.value}'`))
+      .filter((pair) => !sources.some((source) => {
+        const quotedKey = source.includes(`'${pair.key}': '${pair.value}'`)
+          || source.includes(`"${pair.key}": "${pair.value}"`)
+        const bareKey = new RegExp(`(?:^|[\\s{,'"])${pair.key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:\\s*'${pair.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`).test(source)
+        return quotedKey || bareKey
+      }))
+      .map((pair) => `${pair.key}: '${pair.value}'`)
+    const missingTemplates = templates
+      .filter((value) => !inline.has(`'${value}'`))
+      .filter((value) => !sources.some((source) => source.includes(value)))
+    expect([...missing, ...missingTemplates],
+      `这些文案只在汇总里、text/** 里找不到同名同值（手改过？）：\n${[...missing, ...missingTemplates].join('\n')}`)
+      .toEqual([])
   })
 })
 
