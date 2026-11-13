@@ -19,6 +19,11 @@ import { marketCalendarObservationStateFields,
  */
 export const marketCalendarRetentionPolicy = Object.freeze({
   marketObservationRetentionMs: 90 * 24 * 60 * 60 * 1000,
+  /**
+   * **永不过期**的 cutoff（1970 之前）：观测表从一个「按保留期滚动删除的缓存」变成
+   * 「历史证据」。它仍参与去重（同一身份多份样本合一），但不再按时间删行。
+   */
+  frozenObservationCutoff: '0001-01-01T00:00:00.000Z',
   /** Rows one run may delete or update before it stops and reports `limited: true`. */
   defaultMaximumRowsPerRun: 40_000,
   /** Rows one run may read while deciding; reaching it reports `limited: true` instead of unbounded work. */
@@ -70,7 +75,11 @@ export function reclaimMarketCalendarStorage(database: DatabaseSync,
   const budget = options.maximumRowsPerRun ?? marketCalendarRetentionPolicy.defaultMaximumRowsPerRun
   const limit = Number.isSafeInteger(budget) && budget > 0 ? budget : marketCalendarRetentionPolicy.defaultMaximumRowsPerRun
   const before = readMarketCalendarBilling(database)
-  const cutoff = new Date(now - marketCalendarRetentionPolicy.marketObservationRetentionMs).toISOString()
+  // **观测表冻结成历史证据**（2026-11-14 定 A 方案）：停「过期删除」、保留「去重」。
+  // 原因：`macroCalendarRepository.readLatestReleaseForMetric` 仍在读它的旧源历史兜底，
+  // 清掉历史会让那条兜底悄悄换答案；而同一身份多份样本仍要合一，否则读取会看到重复。
+  // 所以 cutoff 压到「永不过期」——过期 0 行，去重照旧。
+  const cutoff = marketCalendarRetentionPolicy.frozenObservationCutoff
   database.exec(`create index if not exists ${marketCalendarRetentionPolicy.maintenanceIndex}
     on mi_macro_calendar_market_event_observations(candidate_key, last_seen_at desc)`)
   database.exec('begin immediate')
