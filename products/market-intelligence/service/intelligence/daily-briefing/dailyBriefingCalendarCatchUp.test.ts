@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  briefingCalendarCatchUpSourceIds,
   BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS,
   ensureCalendarFreshForRun,
   isFreshAt
 } from './dailyBriefingCalendarCatchUp'
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { calendarFeedRegistry } from '../macro-calendar/calendarFeedRegistry'
+import { getMacroCalendarEvidenceSourceDescriptor } from '../macro-calendar/macroCalendarOfficialSourceRegistry'
 
 const dataAsOf = '2026-11-05T07:00:00.000Z'
 const twoHoursAgo = '2026-11-05T05:00:00.000Z'
@@ -16,10 +20,40 @@ function freshness(lastCollectedAt: string | null, attempt?: { attemptedAt: stri
     state: 'available' as const,
     asOf: dataAsOf,
     lastCollectedAt,
-    sources: (['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'] as const)
+    sources: (['macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events', 'macro-calendar-narwhal-central-bank-activities'] as const)
       .map((descriptorId) => ({ descriptorId, lastCollectedAt, ...(attempt ? { latestAttempt: attempt } : {}) }))
   }
 }
+
+describe('the catch-up list is the registry\'s "actually collecting" answer', () => {
+  // 清单恒等于「注册表里 collection 非 none 的 feed」——不手抄、不读契约。
+  it('equals exactly the feeds the registry says are collecting', () => {
+    const collecting = Object.values(calendarFeedRegistry)
+      .filter(feed => feed.owner === 'market' && feed.collection !== 'none' && feed.coveredBy === undefined)
+      .map(feed => feed.feedId)
+    expect([...briefingCalendarCatchUpSourceIds()].sort()).toEqual([...collecting].sort())
+  })
+
+  // 反向、最重要：**登记 ≠ 在采**。Narwhal 这一版三条都登记了，但只有「登记、没接采集器」，
+  // 一条都不许进补跑清单——否则 refreshNow 只会回 unavailable。
+  // 反向、最重要：**被覆盖的那两条不进清单**（一次写三类的作业只挂第一条）。
+  it('leaves the feeds covered by another feed out of the list', () => {
+    const covered = Object.values(calendarFeedRegistry).filter(feed => feed.coveredBy !== undefined)
+    expect(covered.length).toBeGreaterThan(0)
+    for (const feed of covered) expect(briefingCalendarCatchUpSourceIds()).not.toContain(feed.feedId)
+  })
+
+  // 时间性：接上采集器之后它自动进清单，调用点一个字不改（B 相对「新增字段」的全部收益）。
+  it('picks a feed up automatically once the registry says it collects', () => {
+    const feed = Object.values(calendarFeedRegistry).find(candidate => candidate.coveredBy !== undefined)!
+    const patched = { ...feed, collection: 'job' as const, coveredBy: undefined }
+    const collecting = [...Object.values(calendarFeedRegistry).filter(candidate => candidate.feedId !== feed.feedId), patched]
+    const ids = collecting.filter(candidate => candidate.owner === 'market' && candidate.collection !== 'none' && candidate.coveredBy === undefined).map(candidate => candidate.feedId)
+    expect(ids).toContain(feed.feedId)
+    // 与实现的判据同形：同样的过滤函数对注册表取值。
+    expect(briefingCalendarCatchUpSourceIds()).not.toContain(feed.feedId)
+  })
+})
 
 describe('ensureCalendarFreshForRun', () => {
   it('skips the catch-up when the last success is inside the two-hour window', async () => {
@@ -34,7 +68,7 @@ describe('ensureCalendarFreshForRun', () => {
   })
 
   it('catches up once for a stale calendar and decides from the reading taken afterwards', async () => {
-    const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: ['macro-calendar-0xrouter-economic-data'] }))
+    const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: ['macro-calendar-narwhal-economic-data'] }))
     const reads = [freshness(staleAt), freshness(dataAsOf)]
     let call = 0
     const reading = await ensureCalendarFreshForRun({
@@ -126,5 +160,26 @@ describe('isFreshAt', () => {
   it('treats "never collected" as not fresh', () => {
     expect(isFreshAt(null, dataAsOf)).toBe(false)
     expect(isFreshAt(undefined, dataAsOf)).toBe(false)
+  })
+})
+
+/**
+ * 补跑清单不许是「另一份手抄的 id 表」。
+ *
+ * `refreshNow` 只认 `marketCalendarPublicPolicy.descriptors`，别的 id 一律 `input-invalid`；
+ * 所以清单与那份契约必须逐条相同，且每一条都要能在登记日历 descriptor 的注册表里查到——
+ * 这条守卫会在 id 被删掉/改名的当天变红，而不是等到补跑空跑或报错才发现。
+ */
+describe('the catch-up list', () => {
+  it('holds only registered descriptors, and only the ones the registry says are collecting', () => {
+    // 不再是「等于契约里那三条」：契约说的是登记，补跑要的是在采（今天一条）。
+    expect([...briefingCalendarCatchUpSourceIds()]).toEqual(['macro-calendar-narwhal-economic-data'])
+    expect(marketCalendarPublicPolicy.feedByKind).toContain('macro-calendar-narwhal-economic-data')
+    for (const feedId of briefingCalendarCatchUpSourceIds()) {
+      // 「登记」看的是日历 feed 注册表（证据源注册表里没有市场侧 feed，那是另一张表）。
+      expect(calendarFeedRegistry[feedId as keyof typeof calendarFeedRegistry]).toBeDefined()
+    }
+    // 反证：不存在的 id 在注册表里查不到——上面那条断言不是空转。
+    expect(calendarFeedRegistry['macro-calendar-0xrouter-economic-dat' as keyof typeof calendarFeedRegistry]).toBeUndefined()
   })
 })

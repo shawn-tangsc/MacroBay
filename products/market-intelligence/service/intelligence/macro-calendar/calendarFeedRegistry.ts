@@ -76,7 +76,9 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     supportsBlsScheduleSync: true,
     schedule: { kind: 'provider', intervalSeconds: 6 * 60 * 60 }
   },
-  /* Narwhal 三条：**已登记、可验证密钥、本版不采集**（`collection: 'none'`）。
+  /* Narwhal 三条：**采集器已落**——作业挂在第一条（30 分钟一次），另两条由它一次写三类
+     （`coveredBy` 指向第一条）。所以这三条是 `collection: 'job'`，不是「登记了但不采」；
+     旧注释写的 `collection: 'none'` 已与数据相反，2026-11-13 更正。
      不写 `job` 是因为它还没有采集器与解析器：写成 `job` 会让「立即采集」成为一个点了没反应、
      或者按旧源实现去采的入口。等采集器落地的那一笔，把 `collection`/`schedule` 与
      `AUTOMATIC_CALENDAR_FEED_IDS`、`zeroXRouterFeedKeys`、日历卡那三行一起改，才是真换源。 */

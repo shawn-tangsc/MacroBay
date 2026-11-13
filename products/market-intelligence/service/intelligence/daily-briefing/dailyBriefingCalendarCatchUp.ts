@@ -5,6 +5,7 @@ import {
   type MarketCalendarFreshness,
   type MarketCalendarRefreshNowResult
 } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { calendarFeedRegistry } from '../macro-calendar/calendarFeedRegistry'
 import { BRIEFING_CALENDAR_STALE_AFTER_MS } from './dailyBriefingMacroEmptyReason'
 
 /**
@@ -29,12 +30,31 @@ import { BRIEFING_CALENDAR_STALE_AFTER_MS } from './dailyBriefingMacroEmptyReaso
 /** The whole budget for one catch-up; the three feeds share it, they do not each get one. */
 export const BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS = marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs
 
-/** The three 0xRouter feeds the brief may catch up. `fed`/`bea` are official-schedule covered. */
-export const BRIEFING_CALENDAR_CATCH_UP_SOURCE_IDS = Object.freeze([
-  'macro-calendar-0xrouter-economic-data',
-  'macro-calendar-0xrouter-financial-events',
-  'macro-calendar-0xrouter-central-bank-activities'
-] as const)
+/**
+ * The calendar feeds the brief may catch up: **exactly the descriptors the live calendar service
+ * exposes**, read from the policy rather than copied.
+ *
+ * `refreshNow` accepts nothing outside `marketCalendarPublicPolicy.descriptors` (anything else fails
+ * closed as `input-invalid`), so a second copy of the three ids can only drift. When the calendar
+ * switches provider the policy is the one place that changes, and this list follows.
+ * `fed`/`bea` keep their own official schedule and are never caught up here.
+ */
+/**
+ * 补跑清单 = **注册表里此刻真的在采的那些 feed**（`collection !== 'none'`）。
+ *
+ * 为什么不读契约里的 `collectionFeeds`：那个字段说的是「这份 provider 契约登记了哪条采集入口」，
+ * 是**契约**；补跑要的是**运行时事实**——登记了但采集器还没接的（Narwhal 这一版）不能进清单，
+ * 否则 `refreshNow` 只会回 `unavailable`。也不新增「谁在采」的字段：那是第二个答案，还得手动跟
+ * 注册表同步，漏一次就是同一处红。采集器落地时只改注册表那一行，清单自动跟上。
+ */
+export function briefingCalendarCatchUpSourceIds(): readonly string[] {
+  return Object.values(calendarFeedRegistry)
+    // 判据三条一起：**市场侧**（`owner === 'market'`，官方日程那三条也是 `provider`，不能只看它）、
+    // **真的在采**（`collection !== 'none'`）、**不是被别的 feed 覆盖的那两条**（`coveredBy` 为空）。
+    // 今天正好一条：`macro-calendar-narwhal-economic-data`。
+    .filter(feed => feed.owner === 'market' && feed.collection !== 'none' && feed.coveredBy === undefined)
+    .map(feed => feed.feedId)
+}
 
 export type BriefingCalendarCatchUp = Readonly<{
   state: 'skipped' | 'collected' | 'unchanged' | 'failed' | 'timeout'
@@ -109,7 +129,7 @@ async function runCatchUp(
   let raw: unknown
   try {
     raw = await refreshNow({
-      sourceIds: BRIEFING_CALENDAR_CATCH_UP_SOURCE_IDS,
+      sourceIds: briefingCalendarCatchUpSourceIds(),
       timeoutMs: BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS
     })
   } catch (error) {

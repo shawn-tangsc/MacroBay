@@ -25,6 +25,7 @@ import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindo
 import type { AgentSafeEvidenceRef } from './queryContracts'
 import type { MarketIntelligencePublicQueryService as PublicQueryService } from './publicQueryService'
 import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
+import { zeroXRouterCalendarEvidenceDescriptors } from '../macro-calendar/macroCalendarOfficialSourceRegistry'
 import { projectMacroMarket } from './macroMarketFactProjection'
 import { projectMacroRates } from './macroRatesFactProjection'
 import { applyMacroFactCap } from './macroFactBudget'
@@ -64,8 +65,9 @@ const DOMAIN_DEFINITIONS: readonly DomainDefinition[] = Object.freeze([
       'macro-calendar-fed-schedule', 'macro-calendar-fed-statement', 'macro-calendar-fed-statement-history',
       'macro-calendar-bls-schedule', 'macro-calendar-bls-values', 'macro-calendar-bls-ics-manual',
       'macro-calendar-bea-schedule', 'macro-calendar-bea-release-rss',
-      'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities',
+      // 三个日历 descriptor 从**登记它们的那份注册表**取名，不再手抄：它们是证据链里的
+      // descriptor（provider 仍由日历服务写入），换源时只改注册表，这里跟着走。
+      ...zeroXRouterCalendarEvidenceDescriptors.map((descriptor) => descriptor.descriptorId),
       'fred-rates-liquidity', 'twelve-data-market', 'policy-path-market'
     ]),
     admission: 'connected-but-not-agent-tool',
@@ -151,12 +153,14 @@ const SOURCE_ACCESS_REGISTRY: readonly MarketAnalysisSourceAccess[] = Object.fre
   source('binance-futures-positioning', ['funding', 'cross-asset'], 'connected-but-not-agent-tool', ['publicQueryService.queryFundingRateHistory'], ['intelligence.queryFundingRateHistory', 'intelligence.crossAsset.query']),
   source('defillama-stablecoins', ['capital'], 'connected-but-not-agent-tool', ['publicQueryService.queryCapitalConditionsSnapshot'], ['intelligence.queryCapitalConditionsSnapshot']),
   source('0xrouter', ['capital'], 'connected-but-not-agent-tool', ['publicQueryService.queryCapitalConditionsSnapshot'], ['intelligence.queryCapitalConditionsSnapshot']),
-  // Full admission, decided by the product owner: the 0xRouter calendar is live and equal
-  // to the official calendar for trigger purposes. Its observations are still aggregator
-  // observations, so the observed-unverified caveat stays on every one of these sources.
-  source('macro-calendar-0xrouter-economic-data', ['macro'], 'production-ready', ['marketCalendarPublicQueryService.queryMonth'], ['intelligence.macro.marketCalendar.queryMonth'], true, ['observed-unverified']),
-  source('macro-calendar-0xrouter-financial-events', ['macro'], 'production-ready', ['marketCalendarPublicQueryService.queryMonth'], ['intelligence.macro.marketCalendar.queryMonth'], true, ['observed-unverified']),
-  source('macro-calendar-0xrouter-central-bank-activities', ['macro'], 'production-ready', ['marketCalendarPublicQueryService.queryMonth'], ['intelligence.macro.marketCalendar.queryMonth'], true, ['observed-unverified']),
+  // Full admission, decided by the product owner: the calendar is live and equal to the official
+  // calendar for trigger purposes. Its observations are still aggregator observations, so the
+  // observed-unverified caveat stays on every one of these sources.
+  // 三条从登记它们的注册表生成，不手抄 id：换源时注册表一处改名，这里跟着走。
+  ...zeroXRouterCalendarEvidenceDescriptors.map((descriptor) => source(
+    descriptor.descriptorId, ['macro'], 'production-ready',
+    ['marketCalendarPublicQueryService.queryMonth'], ['intelligence.macro.marketCalendar.queryMonth'],
+    true, ['observed-unverified'])),
   source('bea-economic-series', ['macro'], 'planned', [], [], false, ['planned-source-unavailable']),
   // FRED is collected and read (the dashboard's 美债 10Y and 实际利率 rows) *and* now callable by the
   // analysis agent through its own read-only tool. Its only granularity is the official trading-day
