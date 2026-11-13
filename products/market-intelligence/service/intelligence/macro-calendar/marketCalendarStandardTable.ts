@@ -131,7 +131,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       -- 精度只从 date 升到 minute，不反向降；新值为空时不覆盖已有值。
       scheduled_at = coalesce(excluded.scheduled_at, scheduled_at),
       time_precision = case when excluded.time_precision = 'minute' then 'minute' else time_precision end,
-      values_json = excluded.values_json,
+      -- 值也一样：**空值不覆盖有值**。同一次发布后写的往往是「还没有值」那一版
+      -- （来源标了已发布却没给值，或两边同一天各说一半），拿 {} 盖掉已有的值等于退回空白。
+      values_json = case when excluded.values_json = '{}' then values_json else excluded.values_json end,
       source_provider_id = excluded.source_provider_id,
       source_event_id = excluded.source_event_id,
       parser_version = excluded.parser_version,

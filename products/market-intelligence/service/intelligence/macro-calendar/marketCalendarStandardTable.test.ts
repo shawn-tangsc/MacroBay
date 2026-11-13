@@ -43,6 +43,16 @@ describe('标准日历表', () => {
     expect(row!.observed_at).toBe('2026-11-13T09:00:00.000Z')         // 观测时间跟着走
   })
 
+  it('空值不覆盖有值：先落了值的行，再被一条值空的行认领，值不许被抹成 {}', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, base)
+    // 后写的是「还没有值」的那一版（同身份、同源 id）：值区清空是事实，但不能抹掉已有的值。
+    upsertCalendarStandardRow(database, { ...base, valuesJson: '{}', observedAt: '2026-11-13T09:00:00.000Z' })
+    const [row] = rows(database)
+    expect(JSON.parse(String(row!.values_json)).actual).toBe('165')
+  })
+
   it('没映射上的行进 unmapped、不进日历，且重复记录幂等', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
