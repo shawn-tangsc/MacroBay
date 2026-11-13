@@ -26,7 +26,20 @@ import type {
  */
 export type MacroCalendarProviderObservation =
   Omit<MacroEconomicCalendarEventView, 'countryCode' | 'importance'> &
-  Readonly<{ countryCode: string | null; importance: 'high' | 'medium' | 'low' }>
+  Readonly<{
+    countryCode: string | null
+    // 市场行没有源给的「重要性」：观测表里那个 `medium` 是占位。分析侧若按重要性排序/筛选，
+    // 必须把这类行当「未分级」排除，别把占位当成我们判断过的值。
+    importance: 'high' | 'medium' | 'low'
+    /**
+     * **指标码**（`US.CPI.NSA.YOY`）：分析侧要算「同一发布组最多几条」就必须有它，
+     * 没有码就查不到组，配额只能退回「按事件」——那等于没限流。
+     * 只加字段、不改判定：来源仍是页面事件已经算好的 `eventNameKey`。
+     */
+    eventNameKey?: string
+    /** `estimate` 是估算（GDP 即时预测那类），分析侧按身份取最新时靠它分辨。 */
+    rowKind?: 'release' | 'estimate'
+  }>
 
 export type MacroCalendarProviderObservationSet = Readonly<{
   observations: readonly MacroCalendarProviderObservation[]
@@ -139,6 +152,8 @@ export function normalizeMarketCalendarEvent(event: MarketCalendarEvent): MacroC
   const eventKey = marketCalendarObservationEventKey(observationKey)
   return {
     eventKey,
+    ...(event.eventNameKey === undefined ? {} : { eventNameKey: event.eventNameKey }),
+    ...(event.rowKind === undefined ? {} : { rowKind: event.rowKind }),
     // No official release grouping is admitted for an unverified observation, so the
     // observation is its own group, exactly as the official Fed FOMC branch does.
     releaseGroupKey: eventKey,

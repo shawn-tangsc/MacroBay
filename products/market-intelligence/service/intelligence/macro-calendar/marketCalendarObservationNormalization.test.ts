@@ -50,6 +50,19 @@ function page(events: readonly MarketCalendarEvent[], nextCursor?: string): Mark
   return result
 }
 
+describe('观测带着分析侧限流要用的字段', () => {
+  it('指标码与 rowKind 从页面事件带到观测上（只加字段，不改判定）', () => {
+    const observation = normalizeMarketCalendarEvent(event({ eventNameKey: 'US.CPI.NSA.YOY',
+      rowKind: 'estimate' }))
+    expect(observation?.eventNameKey).toBe('US.CPI.NSA.YOY')
+    expect(observation?.rowKind).toBe('estimate')
+    // 没有就不带：不填空串、不给默认值。
+    const plain = normalizeMarketCalendarEvent(event())
+    expect(plain?.eventNameKey).toBeUndefined()
+    expect(plain?.rowKind).toBeUndefined()
+  })
+})
+
 describe('0xRouter observation normalization', () => {
   it('derives the analysis identity from the stable observation key, never the per-batch event key', () => {
     const first = normalizeMarketCalendarEvent(event())
