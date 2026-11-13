@@ -67,7 +67,11 @@ describe('标准行 → 日历事件（queryMonth 形状不变）', () => {
     expect(first!.eventKey).toBe(rows[0]!.identityKey)
     expect(first!.observationKey).toBe(rows[0]!.identityKey)
     expect(first!.sourceObservedAt).toBe('2026-11-10T13:31:00.000Z')
-    expect(standardRowToMarketEvent({ ...rows[0]!, metricKey: 'UNKNOWN.CODE', identityKind: 'code',
-      sourceLabel: undefined }, { ...context, resolveTitle: () => undefined })).toBeUndefined()
+    // 没有名字**也不许消失**：退回码本身，读者至少看得到「这条发布存在」。
+    const nameless = standardRowToMarketEvent({ ...rows[0]!, metricKey: 'UNKNOWN.CODE', identityKind: 'code',
+      sourceLabel: undefined }, { ...context, resolveTitle: () => undefined })
+    expect(nameless.title).toBe('UNKNOWN.CODE')
+    expect(standardRowsToMarketEvents([{ ...rows[0]!, metricKey: 'UNKNOWN.CODE', identityKind: 'code',
+      sourceLabel: undefined }], { ...context, resolveTitle: () => undefined })).toHaveLength(1)
   })
 })

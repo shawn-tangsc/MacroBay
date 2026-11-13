@@ -30,9 +30,14 @@ export type StandardEventContext = Readonly<{
 
 /** `undefined` ↔ 「这条行没有可显示的名字」：调用方按「不显示」处理，不猜。 */
 export function standardRowToMarketEvent(row: StandardMonthRow, context: StandardEventContext):
-  MarketCalendarEvent | undefined {
-  const title = context.resolveTitle(row) ?? row.sourceLabel
-  if (title === undefined) return undefined
+  MarketCalendarEvent {
+  /**
+   * 名称回退链：名表 → 源原文名 → **码本身**。
+   * 最后一档是故意的：这一行在源里**确实存在**，没有名字是「我们还没给它起名」，不是「它不存在」。
+   * 早先这里 `return undefined`（悄悄少一行），读者看到的就是「这段时间没有这条发布」——
+   * 正是「把读不到画成没有」，只是发生在名字这一格。宁可显示一串码，也不吞掉这条发布。
+   */
+  const title = context.resolveTitle(row) ?? row.sourceLabel ?? row.metricKey
   const value = (key: string) => (row.values[key] === undefined ? null : { displayValue: row.values[key]! })
   return {
     // 新读路径的 `eventKey` 就是**稳定身份串**（旧路径是每批变化的 HMAC，下游只能靠 observationKey）。
@@ -52,13 +57,8 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
   }
 }
 
-/** 一批行 → 事件数组：没有名字的行**不显示也不报错**（它不是一条能读的事件），其余原样。 */
+/** 一批行 → 事件数组：**一行都不丢**（名字缺失时退回码本身，见上面的回退链）。 */
 export function standardRowsToMarketEvents(rows: readonly StandardMonthRow[], context: StandardEventContext):
   readonly MarketCalendarEvent[] {
-  const events: MarketCalendarEvent[] = []
-  for (const row of rows) {
-    const event = standardRowToMarketEvent(row, context)
-    if (event !== undefined) events.push(event)
-  }
-  return events
+  return rows.map((row) => standardRowToMarketEvent(row, context))
 }
