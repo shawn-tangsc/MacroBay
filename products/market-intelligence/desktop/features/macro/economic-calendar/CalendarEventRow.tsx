@@ -17,7 +17,7 @@ const calendarKindGlyphs: Record<MarketCalendarEvent['eventType'], LucideIcon> =
   'central-bank-activity': Landmark
 }
 
-export function CalendarEventRow({ item, text, statusNow, onSelect, marketSources = [], selected = false }: {
+export function CalendarEventRow({ item, text, statusNow, onSelect, marketSources = [], selected = false, missingValueLabel }: {
   item: CalendarDayItem; text: EconomicCalendarText; statusNow: string
   /**
    * `undefined` = 这一行**没有动作**：渲染成非交互的行，不画按钮、不可聚焦、没有悬停指针。
@@ -26,6 +26,11 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   onSelect?: (item: CalendarDayItem) => void
   /** Source-level state for this page. Only the market route can carry a storage-limit verdict. */
   marketSources?: readonly MarketCalendarSource[]; selected?: boolean
+  /**
+   * 行尾「未提供」的文案。给了才显示，且**只给经济指标行**——事件型（讲话/会议/报告）本来就没有
+   * 「缺值」这个概念，标上会把「源说发布了却没给数」和「这类事件永远没有数」混成一团。
+   */
+  missingValueLabel?: string
 }) {
   const title = item.source === 'market' ? item.event.title : text.events[item.event.labelKey]
   const time = item.time ?? text.unifiedDay.timePending
@@ -46,7 +51,9 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // The kind and the importance ride in the description so the marks have names: the accessible label
   // and the hover text both say them, rather than leaving the reader to decode two glyphs.
   const importanceNote = important ? ` · ${text.details.importance} ${text.importance.high}` : ''
-  const description = `${time} ${text.market.kinds[kind]} ${country ? `${country} ` : ''}${title} · ${text.eventStatus[status]}${importanceNote}`
+  // 「已发布却没值」：时刻已过、来源没给实际值，且这是**指标**行。事件型永远不加。
+  const missingValue = missingValueLabel !== undefined && status === 'awaiting-data' && kind === 'economic-indicator'
+  const description = `${time} ${text.market.kinds[kind]} ${country ? `${country} ` : ''}${title}${missingValue ? ` · ${missingValueLabel}` : ''} · ${text.eventStatus[status]}${importanceNote}`
   // The description is runtime data (time, title, status), not a sentence from the text table, so it
   // goes through `dataText`. The hint is the same line on hover and on focus; the accessible name is
   // that same line — it used to repeat the time, because the template added it a second time.
@@ -65,21 +72,22 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
     'data-importance': important ? 'high' : item.source === 'market' ? item.event.importance : undefined,
     'data-event-status': status
   } as const
+  const titleText = missingValue ? `${title} · ${missingValueLabel}` : title
   return <Tooltip dataText={description} resolveText={resolveText}>
     {onSelect === undefined
       ? <div {...shared}>
-        <RowContent item={item} time={time} kind={kind} important={important} country={country} title={title} KindGlyph={KindGlyph} />
+        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} />
       </div>
       : <button {...shared} data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
         type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
-        <RowContent item={item} time={time} kind={kind} important={important} country={country} title={title} KindGlyph={KindGlyph} />
+        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} />
       </button>}
   </Tooltip>
 }
 
 /** 行内内容：按钮态与非交互态必须一模一样，所以只有一份。 */
-function RowContent({ item, time, kind, important, country, title, KindGlyph }: {
-  item: CalendarDayItem; time: string; kind: MarketCalendarEvent['eventType']; important: boolean
+function RowContent({ time, kind, important, country, title, KindGlyph }: {
+  time: string; kind: MarketCalendarEvent['eventType']; important: boolean
   country: string | undefined; title: string; KindGlyph: LucideIcon
 }) {
   return <>

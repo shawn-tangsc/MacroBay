@@ -414,6 +414,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                   ? { emptyText: calendarText.unifiedDay.empty }
                   : dayLayers.core.length === 0 ? { emptyText: text.mkDay.none } : {})}
                 marketSources={[]}
+                missingValueLabel={text.mkDay.valueMissing}
                 text={calendarText}
                 statusNow={nowInstant}
                 selectedEventKey={undefined}

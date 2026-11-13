@@ -286,6 +286,25 @@ describe('key-indicator drawer', () => {
     expect(countRule).toContain('white-space: nowrap')
   })
 
+  /**
+   * 「已发布却没值」只给**指标**行加行尾「未提供」；事件型（讲话/会议/报告）永远不加——
+   * 它们不是缺值，是本来就没有这个概念。判据用类型，不用「时刻已过且没值」。
+   */
+  it('adds 未提供 to an indicator row that was published without a value, and never to a speech', async () => {
+    const past = '2026-11-13T01:00:00.000Z'
+    const indicator = { ...dayEvent('e-missing', '10月家庭债务', past, { measureKeys: [] }), providerActual: null }
+    const speech = { ...dayEvent('e-speech', '央行讲话', past, { eventType: 'central-bank-activity' }), providerActual: null }
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [indicator, speech] })
+    // 指标行进了「其他」（没有与利率相关的身份），展开后能看到行尾两个字。
+    const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
+    await act(async () => { more.click() })
+    const rows = Array.from(rightColumn()!.querySelectorAll('[data-calendar-row]'))
+    const indicatorRow = rows.find((row) => row.textContent?.includes('家庭债务'))!
+    expect(indicatorRow.textContent).toContain('未提供')
+    // 讲话类不进右列（不进层），所以这里连行都没有——事件型的「不加」由 `CalendarEventRow` 自己钉。
+    expect(rows.some((row) => row.textContent?.includes('央行讲话'))).toBe(false)
+  })
+
   it('says 暂无日程数据 in a month that has no releases', async () => {
     await renderDrawer({
       now: '2026-11-13T10:00:00.000Z',
