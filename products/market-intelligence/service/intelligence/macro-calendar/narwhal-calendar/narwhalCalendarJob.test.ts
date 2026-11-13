@@ -17,7 +17,7 @@ describe('narwhal calendar jobs', () => {
     const runtime = runtimeWith(succeeded)
     const handler = createNarwhalCalendarJobHandler({ runtime, now: () => Date.parse('2026-11-13T23:30:00Z'), mode: 'tick', readSourceGate: openGate })
     const outcome = await handler()
-    expect(runtime.run).toHaveBeenCalledWith({ startDate: '2026-11-13', endDate: '2026-11-13', countries: ['USA'] })
+    expect(runtime.run).toHaveBeenCalledWith({ startDate: '2026-11-13', endDate: '2026-11-13', countries: ['USA', 'DEU', 'GBR', 'JPN'] })
     expect(outcome).toMatchObject({ state: 'succeeded', releases: 5 })
   })
 
@@ -25,7 +25,7 @@ describe('narwhal calendar jobs', () => {
     const runtime = runtimeWith(succeeded)
     const handler = createNarwhalCalendarJobHandler({ runtime, now: () => Date.parse('2026-11-13T00:00:00Z'), mode: 'sweep', readSourceGate: openGate })
     await handler()
-    expect(runtime.run).toHaveBeenCalledWith({ startDate: '2026-11-13', endDate: '2026-12-12', countries: ['USA'] })
+    expect(runtime.run).toHaveBeenCalledWith({ startDate: '2026-11-13', endDate: '2026-12-12', countries: ['USA', 'DEU', 'GBR', 'JPN'] })
   })
 
   it('keeps both definitions: 30-minute tick and daily sweep', () => {

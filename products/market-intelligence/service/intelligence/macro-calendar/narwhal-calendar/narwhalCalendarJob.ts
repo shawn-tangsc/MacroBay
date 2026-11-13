@@ -40,6 +40,13 @@ export const narwhalCalendarSweepPolicy = Object.freeze({
   maximumWindowDays: 30
 })
 
+/**
+ * 默认采集的国家。**先四个，不铺全量**：美国一国约 62 次/天，已占免费额度（5,000/月）的 37%，
+ * 每加一个国家按页数近似线性增加。德国、英国、日本是日历里出现最多的非美国国家；
+ * 跑满一天记下请求次数/页数/剩余额度，再决定继续扩还是收。
+ */
+export const narwhalCalendarCountries = Object.freeze(['USA', 'DEU', 'GBR', 'JPN'] as const)
+
 export type NarwhalCalendarJobOutcome =
   | Readonly<{ state: 'succeeded'; pages: number; releases: number; firstPublishedCaptured: number; startDate: string; endDate: string }>
   | Readonly<{ state: 'failed'; failureCode: string; pagesRead: number; startDate: string; endDate: string }>
@@ -78,7 +85,7 @@ export function createNarwhalCalendarJobHandler(deps: Readonly<{
       : gate.visibility === 'pending' || gate.visibility === 'hidden' ? 'source-pending'
       : gate.enabled ? undefined : 'reader-disabled'
     if (reason !== undefined) return { state: 'skipped', reason, startDate, endDate }
-    const result = await deps.runtime.run({ startDate, endDate, countries: deps.countries ?? ['USA'] })
+    const result = await deps.runtime.run({ startDate, endDate, countries: deps.countries ?? narwhalCalendarCountries })
     if (result.collector.state === 'failed') {
       return {
         state: 'failed', failureCode: result.collector.failureCode,

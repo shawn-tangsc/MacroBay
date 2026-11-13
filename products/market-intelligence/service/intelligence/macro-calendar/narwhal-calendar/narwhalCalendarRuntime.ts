@@ -2,6 +2,7 @@ import type { NarwhalIngestRepository } from './narwhalCalendarIngest'
 import { ingestNarwhalReleases } from './narwhalCalendarIngest'
 import { collectNarwhalCalendar, type NarwhalCollectorResult } from './narwhalCalendarCollector'
 import { narwhalObservationBatches, type NarwhalCalendarBatch } from './narwhalCalendarObservationBatches'
+import { narwhalCanonicalIdentityKey } from '../marketCalendarMetricIdentity'
 import { createNarwhalPageFetcher, type NarwhalRequest } from './narwhalCalendarHttp'
 
 /** 观测行的解析器版本：解析规则一变就换版本号，旧的观测行不用回填。 */
@@ -37,15 +38,20 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
      * 每条发布都按 `release_id` 幂等写入；首发布快照按期写一次，之后的修订不覆盖。
      */
     async run(input: Readonly<{ startDate: string; endDate: string; countries: readonly string[] }>): Promise<
-      Readonly<{ collector: NarwhalCollectorResult; firstPublishedCaptured: number }>
+      Readonly<{ collector: NarwhalCollectorResult; firstPublishedCaptured: number
+        counts: Readonly<{ fetched: number; observationRows: number; unmappedRows: number; eventRows: number }> }>
     > {
       let firstPublishedCaptured = 0
+      // 可观测性：**抓到多少、写进去多少、其中多少算不出身份**。没有这三个数，
+      // 「数据没到账」只能靠猜——上一次排查就是被这个缺口耽误的。只进日志与作业结果，不上界面。
+      const counts = { fetched: 0, observationRows: 0, unmappedRows: 0, eventRows: 0 }
       const collector = await collectNarwhalCalendar(input, {
         readApiKey: deps.readApiKey,
         fetchPage,
         sleep: deps.sleep,
         ...(deps.now === undefined ? {} : { now: deps.now }),
         onReleases: releases => {
+          counts.fetched += releases.length
           const stamp = new Date(deps.now?.() ?? Date.now()).toISOString()
           const result = ingestNarwhalReleases({ releases, detectedAt: stamp, recordedAt: stamp }, deps.repository)
           firstPublishedCaptured += result.firstPublishedCaptured
@@ -54,11 +60,25 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
           for (const locale of ['zh', 'en'] as const) {
             for (const batch of narwhalObservationBatches(releases, {
               locale, parserVersion: narwhalCalendarParserVersion, collectionIdPrefix: `${prefix}-${locale}`
-            })) deps.appendObservationBatch(batch)
+            })) {
+              if (locale === 'zh') {
+                counts.observationRows += batch.parseResult.drafts.length
+                for (const draft of batch.parseResult.drafts) {
+                  if (narwhalCanonicalIdentityKey(String(draft.marketFactKey)) === undefined) counts.unmappedRows += 1
+                  else if (String(draft.kind) !== 'economic-indicator') counts.eventRows += 1
+                }
+              }
+              deps.appendObservationBatch(batch)
+            }
           }
         }
       })
-      return { collector, firstPublishedCaptured }
+      const summary = { ...counts, firstPublishedCaptured }
+      // 一轮一行：抓取量、写入量、算不出身份的量、事件型量。数字对不上时能一眼看出是「没抓到」
+      // 还是「抓到了写不进」还是「写进去了但没身份」。
+      console.warn(`[macro-calendar] Narwhal 一轮：抓取 ${summary.fetched} 条、写入观测 ${summary.observationRows} 行、`
+        + `算不出身份 ${summary.unmappedRows} 条、事件型 ${summary.eventRows} 条（事件型不进日历，仅入库）`)
+      return { collector, firstPublishedCaptured, counts: summary }
     }
   }
 }
