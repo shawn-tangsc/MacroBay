@@ -14,7 +14,7 @@
       "why": "看板源状态清单：列的就是 feed id"
     },
     "contracts/macro/marketCalendarQueryContracts.ts": {
-      "count": 21,
+      "count": 22,
       "why": "契约里的 provider id 常量与来源标签定义处；19 = 原 13 + `sourceFeeds` 新增的 6 个 feed id（来源真值的唯一出处，属于可命名的整合数据）"
     },
     "desktop/pages/intelligence/useCalendarCardData.ts": {

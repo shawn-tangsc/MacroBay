@@ -224,7 +224,17 @@ export function isMarketCalendarOfficialLink(value: unknown, providerScheduledAt
 }
 export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEvent {
   return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'importance', 'scheduledAt', 'consensus',
-    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId', 'measureKeys']) &&
+    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId', 'measureKeys',
+      // 切到标准表后适配器**每行都写**这四个（时间精度、生命周期、行类型、来源真值）。
+      // 白名单里没有它们时，`marketExact` 判 false → 整页非法 → 读者看到「读不到」，
+      // 而行级断言全绿（那一层不跑页面校验）。
+      'timePrecision', 'releaseStatus', 'rowKind', 'sourceFeedId']) &&
+    (!Object.hasOwn(value, 'timePrecision') || value.timePrecision === 'minute' || value.timePrecision === 'date') &&
+    (!Object.hasOwn(value, 'releaseStatus') || ['scheduled', 'published', 'cancelled', 'unknown'].includes(String(value.releaseStatus))) &&
+    (!Object.hasOwn(value, 'rowKind') || value.rowKind === 'release' || value.rowKind === 'estimate') &&
+    (!Object.hasOwn(value, 'sourceFeedId') ||
+      (marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds.includes(String(value.sourceFeedId)) ||
+      value.sourceFeedId === marketCalendarPublicPolicy.unspecifiedSource) &&
     (!Object.hasOwn(value, 'measureKeys') || (Array.isArray(value.measureKeys) && value.measureKeys.length > 0 &&
       value.measureKeys.every((key) => typeof key === 'string' && key.length > 0 &&
         key.length <= marketCalendarPublicPolicy.maximumObservationKeyChars && !key.includes('|')))) &&
@@ -235,7 +245,8 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
     (value.countryCode === null || typeof value.countryCode === 'string' && marketCalendarPublicPolicy.countryCodePattern.test(value.countryCode) && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value.countryCode)) &&
     (!Object.hasOwn(value, 'countryName') || text(value.countryName)) &&
     marketCalendarPublicPolicy.kinds.includes(value.eventType as never) && marketCalendarPublicPolicy.importance.includes(value.importance as never) &&
-    marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && (value.source === 'Narwhal' || value.source === '0xRouter') && value.coverage === 'observed-unverified' &&
+    marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && ((marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds as readonly unknown[])
+      .concat(['Narwhal', '0xRouter', marketCalendarPublicPolicy.unspecifiedSource]).includes(value.source) && value.coverage === 'observed-unverified' &&
     [value.consensus, value.providerPrevious, value.providerActual].every(display) &&
     (value.eventType === 'economic-indicator' || [value.consensus, value.providerPrevious, value.providerActual].every(item => item === null)) &&
     (!Object.hasOwn(value, 'officialLink') || value.eventType === 'economic-indicator' &&

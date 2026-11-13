@@ -74,7 +74,7 @@ export function createStandardMonthPageReader(deps: Readonly<{
         }
         return {
           state: 'available', month: input.month, locale: input.locale, asOf: input.asOf,
-          events: page, sources: sourcesOf(inMonth),
+          events: page, sources: sourcesOf(inMonth, input.asOf),
           ...(nextCursor === undefined ? {} : { nextCursor })
         }
       } catch {
@@ -85,13 +85,16 @@ export function createStandardMonthPageReader(deps: Readonly<{
 }
 
 /** 三条，顺序对齐 `kinds`；「读到了但这一类没有行」与「读失败」是两种状态。 */
-function sourcesOf(events: readonly MarketCalendarEvent[]): readonly MarketCalendarSource[] {
+function sourcesOf(events: readonly MarketCalendarEvent[], asOf: string): readonly MarketCalendarSource[] {
+  // 「读到了、这一类没有行」也要给观测时刻：契约只允许 `unavailable` 的观测时刻为空，
+  // 其余状态必须是有效时刻——填 `asOf` 是诚实的（这一刻我们读过，确实没有这一类）。
+  const observed = events.map((event) => event.sourceObservedAt).sort().at(-1) ?? asOf
   return marketCalendarPublicPolicy.kinds.map((kind) => {
     const ofKind = events.filter((event) => event.eventType === kind)
     return {
       eventType: kind,
       status: ofKind.length === 0 ? 'success-empty' : 'success',
-      sourceObservedAt: ofKind.map((event) => event.sourceObservedAt).sort().at(-1) ?? null
+      sourceObservedAt: ofKind.map((event) => event.sourceObservedAt).sort().at(-1) ?? observed
     } as MarketCalendarSource
   })
 }
