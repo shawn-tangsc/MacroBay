@@ -1,8 +1,8 @@
 import {
   isMarketCalendarFreshness,
+  isMarketCalendarRefreshNowResult,
   type MarketCalendarCollectionFreshness,
-  type MarketCalendarFreshness,
-  type MarketCalendarRefreshNowResult
+  type MarketCalendarFreshness
 } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarFeedRegistry } from '../macro-calendar/calendarFeedRegistry'
 import { BRIEFING_CALENDAR_STALE_AFTER_MS } from './dailyBriefingMacroEmptyReason'
@@ -149,24 +149,20 @@ async function runCatchUp(
     const message = error instanceof Error ? error.message : String(error)
     return Object.freeze({ state: 'failed' as const, failureCode: message.slice(0, 64) })
   }
-  const verdict = raw as Partial<MarketCalendarRefreshNowResult> | undefined
-  if (verdict?.state === 'collected' || verdict?.state === 'unchanged') {
-    return Object.freeze({ state: verdict.state })
+  // 校验契约本身，不只校验 `state` 那个词：`{state:'collected'}` 少了 `sources`、`timeoutMs` 越界，
+  // 都是「看着像、其实不是」。以前这里只读 state，半截形状会被当成真结果记下来。
+  if (!isMarketCalendarRefreshNowResult(raw)) {
+    // 命令被接受了、但没回答出契约里的结果。写成「采集失败」是给读者一句假话（像是源坏了），
+    // 写成「超时」是凭空编一个时长。落「未知」，那句话交给补跑之后的读数决定。
+    return Object.freeze({ state: 'unknown' as const, failureCode: 'catch-up-verdict-invalid' })
   }
-  if (verdict?.state === 'timeout') {
-    return Object.freeze({
-      state: 'timeout' as const,
-      timeoutMs: typeof verdict.timeoutMs === 'number' ? verdict.timeoutMs : BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS
-    })
+  if (raw.state === 'collected' || raw.state === 'unchanged') {
+    return Object.freeze({ state: raw.state })
   }
-  if (verdict?.state === 'failed') {
-    return Object.freeze({ state: 'failed' as const, ...(typeof verdict.failureCode === 'string' ? { failureCode: verdict.failureCode } : {}) })
+  if (raw.state === 'timeout') {
+    return Object.freeze({ state: 'timeout' as const, timeoutMs: raw.timeoutMs })
   }
-  // A shape the contract does not name: the command was accepted, but we did not learn how it went.
-  // Reporting it as a failed collection would be a lie the reader acts on ("采集失败" 让人以为源坏了),
-  // and reporting it as a timeout would invent a duration. Say "unknown" and let the reading after the
-  // trigger decide the sentence.
-  return Object.freeze({ state: 'unknown' as const, failureCode: 'catch-up-verdict-invalid' })
+  return Object.freeze({ state: 'failed' as const, failureCode: raw.failureCode })
 }
 
 async function readFreshness(

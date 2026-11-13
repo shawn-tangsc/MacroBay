@@ -139,6 +139,18 @@ describe('ensureCalendarFreshForRun', () => {
     expect(reading).toMatchObject({ state: 'available', lastCollectedAt: staleAt })
   })
 
+  // 只校验 `state` 那个词不够：`{state:'collected'}` 少了 `sources` 是「看着像、其实不是」。
+  // 以前这种半截形状会被当成真结果记下来（于是补跑后判「采到了」），现在落 unknown。
+  it('rejects a half-valid verdict: the contract validates the shape, not just the state word', async () => {
+    const reading = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true,
+      refreshNow: async () => ({ state: 'collected' }),
+      readFreshness: async () => freshness(staleAt)
+    })
+
+    expect(reading.catchUp).toEqual({ state: 'unknown', failureCode: 'catch-up-verdict-invalid' })
+  })
+
   it('answers "not wired" — not "nothing" — when no freshness reader was injected', async () => {
     const reading = await ensureCalendarFreshForRun({ dataAsOf, enabled: true })
 
