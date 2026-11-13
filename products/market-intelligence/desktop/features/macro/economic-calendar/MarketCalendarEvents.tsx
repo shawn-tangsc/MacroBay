@@ -13,6 +13,18 @@ import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
 
+/**
+ * 来源显示名：**feed id → 名字**，认不出用「未标来源」，都不是就退回旧的通用名。
+ *
+ * 顺序按定稿：`sourceFeedId`（行上的真值）优先，旧 `source` 兜底。绝不把 feed id 原串印给读者，
+ * 也不把「不知道来源」写成「没有这条发布」。
+ */
+export function sourceLabel(text: { market: { source: string
+  sourceByFeed?: Readonly<Record<string, string>>; sourceUnknown?: string } }, source: string): string {
+  if (source === 'unspecified') return text.market.sourceUnknown ?? text.market.source
+  return text.market.sourceByFeed?.[source] ?? text.market.source
+}
+
 export function MarketCalendarInspector({ event, source, text }: { event: MarketCalendarEvent; source?: MarketCalendarSource; text: EconomicCalendarText }) {
   const timeZone = useShellTimeZone()
   const language = useShellLanguage()
@@ -30,12 +42,12 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
     ? source
     : { eventType: event.eventType, status: 'success', sourceObservedAt: event.sourceObservedAt }
   return <aside className="mi-economic-calendar__inspector mi-market-calendar__inspector" aria-live="polite">
-    <p>{text.market.source} · {text.market.kinds[event.eventType]}</p><h2>{event.title}</h2>
+    <p>{sourceLabel(text, event.source)} · {text.market.kinds[event.eventType]}</p><h2>{event.title}</h2>
     <p><MarketCalendarSourceStatus source={shownSource} text={text} variant="full" /></p>
     <dl className="mi-economic-calendar__metadata">
       <div><dt>{text.details.time}</dt><dd>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</dd></div>
       <div><dt>{text.market.observed}</dt><dd>{formatTime(event.sourceObservedAt, 'second')}</dd></div>
-      <div><dt>{text.details.source}</dt><dd data-market-country>{event.countryName ?? event.countryCode ?? text.market.unknownCountry} · {text.market.source}</dd></div>
+      <div><dt>{text.details.source}</dt><dd data-market-country>{event.countryName ?? event.countryCode ?? text.market.unknownCountry} · {sourceLabel(text, event.source)}</dd></div>
       <div data-market-importance><dt>{text.details.importance}</dt><dd>{text.market.importance[event.importance]}</dd></div>
     </dl>
     {event.eventType === 'economic-indicator' ? <div className="mi-economic-calendar__values">

@@ -49,6 +49,11 @@ export const marketCalendarPublicPolicy = Object.freeze({
     'macro-calendar-fed'
   ],
   /**
+   * 来源认不出时的值。**不许退回旧源**（`0xRouter` 删掉之后那会是个不存在的来源），
+   * 也不许把这条发布藏起来——「不知道来源」不等于「没有这次发布」。
+   */
+  unspecifiedSource: 'unspecified',
+  /**
    * 0xRouter 的三个事件身份：**只描述旧来源自己能采什么**（它的采集器、它的尝试台账、
    * 以及按需补跑时能点名的那三个端点）。它不是当前读取来源，也不是按事件类型的映射表
    * ——映射表是 `feedByKind`，采集清单是 `collectionFeeds`。
@@ -107,7 +112,7 @@ export type MarketCalendarEvent = Readonly<{
    * 来源。**新写入一律给 feed id**（`marketCalendarPublicPolicy.sourceFeeds`）；
    * `'Narwhal' | '0xRouter'` 是旧行兼容值，读侧应按「feed id 优先、旧值兜底」判。
    */
-  source: typeof marketCalendarPublicPolicy.sourceFeeds[number] | 'Narwhal' | '0xRouter'
+  source: typeof marketCalendarPublicPolicy.sourceFeeds[number] | 'unspecified' | 'Narwhal' | '0xRouter'
   sourceObservedAt: string; coverage: 'observed-unverified'
   /**
    * 这条数据的**真实来源 feed id**（`macro-calendar-bls`、`macro-calendar-narwhal-economic-data`…）。

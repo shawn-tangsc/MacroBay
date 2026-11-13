@@ -35,8 +35,8 @@ export function createStandardMonthPageReader(deps: Readonly<{
   database: DatabaseSync
   /** 名称解析由装配处给（指标码与事件码在两张名表里）。 */
   resolveTitle: StandardEventContext['resolveTitle']
-  /** 这条行来自哪个源（Narwhal / 旧源），同样由装配处判。 */
-  sourceOf: (row: { sourceProviderId: string }) => MarketCalendarEvent['source']
+  /** 兜底来源（认不出 feed id 时用）；不传就由适配器落 `unspecified`。 */
+  sourceOf?: (row: { sourceProviderId: string }) => MarketCalendarEvent['source']
   limit?: number
   /** 诊断出口：默认进日志；测试可注入哨兵。 */
   onMissingSourceFeedId?: (count: number, month: string) => void
@@ -50,7 +50,10 @@ export function createStandardMonthPageReader(deps: Readonly<{
         const rows = readStandardCalendarMonth(deps.database, { month: input.month, limit: 5_000 })
         const events = standardRowsToMarketEvents(rows, {
           locale: input.locale, resolveTitle: deps.resolveTitle,
-          resolveSource: (row) => deps.sourceOf({ sourceProviderId: row.sourceProviderId })
+          ...(deps.sourceOf === undefined ? {} : {
+            resolveSource: (row: Readonly<{ sourceProviderId: string }>) =>
+              deps.sourceOf!({ sourceProviderId: row.sourceProviderId })
+          })
         })
         // 月内校验：越界的行不许进页（跨月数据串进来是分页最容易犯的错）。
         const inMonth = events.filter((event) => event.scheduledAt.startsWith(`${input.month}-`))

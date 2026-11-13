@@ -358,6 +358,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
   // **S2：月查询改读标准表**（`mi_calendar_releases` 视图）。对外仍是 `MarketCalendarPage`，
   // 上面的分析与日报因此不用改一行。旧观测那条路径保留给新鲜度与证据观察，读数据不再经过它。
+  // 来源由「行 → feed id」的映射算出来（适配器内），装配处不再保留那条
+  // 「其余 → 0xRouter」的死分支——旧源删掉之后它会把认不出的 provider 说成一个不存在的来源。
   const standardCalendarReader = createStandardMonthPageReader({
     database: macroCalendarBackend.storage.database,
     resolveTitle: (row) => {
@@ -367,7 +369,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       if (event !== undefined) return event.zhShort
       return row.sourceLabel
     },
-    sourceOf: (row) => row.sourceProviderId === narwhalSourcePolicy.sourceId ? 'Narwhal' : '0xRouter'
   })
   intelligenceModule.publicQueryService.setMarketCalendarQuery({
     queryMonth: standardCalendarReader.queryMonth,

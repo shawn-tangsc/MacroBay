@@ -46,8 +46,8 @@ export function eventKeyForIdentity(row: StandardMonthRow): string {
 export type StandardEventContext = Readonly<{
   locale: 'zh' | 'en'
   resolveTitle: (row: StandardMonthRow) => string | undefined
-  /** 这一行来自哪个源：由装配处判（本文件不碰源名字面量，那块有守卫）。 */
-  resolveSource: (row: StandardMonthRow) => MarketCalendarEvent['source']
+  /** 认不出来源时**只能用 `specifiedSource` 之外的兜底值**；不传就落 `unspecified`。 */
+  resolveSource?: (row: StandardMonthRow) => MarketCalendarEvent['source']
 }>
 
 /** `undefined` ↔ 「这条行没有可显示的名字」：调用方按「不显示」处理，不猜。 */
@@ -75,8 +75,9 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     scheduledAt: row.scheduledAt ?? `${row.scheduledDate}T00:00:00.000Z`,
     consensus: value('consensus'), providerPrevious: value('previous'), providerActual: value('actual'),
     // **feed id 优先**：它来自写入时定下的真值；认不出时才回退到装配处给的两档旧值。
+    // **feed id 优先**；认不出就用 `unspecified`（不退回删掉的旧源，也不藏这条发布）。
     source: sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) })
-      ?? context.resolveSource(row),
+      ?? context.resolveSource?.(row) ?? 'unspecified',
     ...(sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) }) === undefined
       ? {} : { sourceFeedId: sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) })! }),
     sourceObservedAt: row.observedAt, coverage: 'observed-unverified',
