@@ -49,6 +49,11 @@ describe('官方发布先进标准表（source 身份）', () => {
     expect(gdp!.periodKey).toBe('2026-Q3')
   })
 
+  it('国家码统一成标准表用的 USA（否则同一发布会存成两个身份）', () => {
+    const [row] = officialRevisionsToSourceRows([revision()])
+    expect(row!.countryCode).toBe('USA')
+  })
+
   it('官方 CPI 用发布给的 12 个月同比，不许拿季调指数相除算出来', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)

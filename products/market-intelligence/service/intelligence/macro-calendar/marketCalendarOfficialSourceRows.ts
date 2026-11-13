@@ -28,6 +28,15 @@ export function normalizeOfficialPeriodKey(periodKey: string): string {
   return month === null ? periodKey : `${month[1]}-${month[2]}`
 }
 
+/**
+ * 官方 revision 的国家码是 `US`，标准表用的是 `USA`（市场源就这么写）。
+ * **不统一就永远合不成一行**：同一发布会以两个国家码各存一行，日历上看着像两条，
+ * 而折叠规则也按 (国家, 指标, 期间) 分组，同样合不到一起。
+ */
+export function normalizeOfficialCountryCode(countryCode: string): string {
+  return countryCode === 'US' ? 'USA' : countryCode
+}
+
 /** 这条官方发布对应的标准码；拼不出来就是 `undefined`（**不许猜**）。 */
 export function officialMetricKeyFor(eventKey: string): string | undefined {
   const mapping = macroCalendarReleaseValueMappings.find((row) => eventKey.startsWith(row.eventKeyPrefix))
@@ -50,7 +59,7 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
     identityKind: metricKey === undefined ? 'source' as const : 'code' as const,
     status: officialLifecycleToReleaseStatus(revision.lifecycleState),
     sourceLabel: revision.eventNameKey,
-    countryCode: revision.countryCode,
+    countryCode: normalizeOfficialCountryCode(revision.countryCode),
     metricKey: metricKey ?? revision.eventKey,
     periodKey: metricKey === undefined ? revision.periodKey : normalizeOfficialPeriodKey(revision.periodKey),
     scheduledDate: revision.scheduledDate,
