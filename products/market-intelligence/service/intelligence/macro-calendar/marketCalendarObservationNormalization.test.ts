@@ -10,7 +10,6 @@ import {
   assessMarketCalendarSurprise,
   toCalendarSurpriseView
 } from '../../../contracts/macro/marketCalendarSurprise'
-import { zeroXRouterCalendarStoragePolicy } from './0xrouter-calendar/marketCalendarStorageValidation'
 import {
   marketCalendarObservationEventKey,
   marketCalendarObservationPolicy,
@@ -20,7 +19,7 @@ import {
 
 const AS_OF = '2026-09-25T08:30:00.000Z'
 const MONTH = '2026-09'
-const DESCRIPTOR = 'macro-calendar-0xrouter-economic-data'
+const DESCRIPTOR = 'macro-calendar-narwhal-economic-data'
 const OBSERVATION_KEY = JSON.stringify(['0xrouter', DESCRIPTOR, 'zh', JSON.stringify(['211664', 71565])])
 
 function event(overrides: Partial<MarketCalendarEvent> = {}): MarketCalendarEvent {
@@ -28,7 +27,7 @@ function event(overrides: Partial<MarketCalendarEvent> = {}): MarketCalendarEven
     eventKey: '11111111-2222-3333-4444-555555555555', observationKey: OBSERVATION_KEY,
     title: '美国核心CPI年率', countryCode: 'US', eventType: 'economic-indicator', importance: 'high',
     scheduledAt: '2026-09-10T12:30:00.000Z', consensus: { displayValue: '3.1' }, providerPrevious: { displayValue: '3.0' },
-    providerActual: { displayValue: '3.2' }, source: '0xRouter', sourceObservedAt: '2026-09-10T12:31:00.000Z',
+    providerActual: { displayValue: '3.2' }, source: 'Narwhal', sourceObservedAt: '2026-09-10T12:31:00.000Z',
     coverage: 'observed-unverified', ...overrides
   }
 }
@@ -99,11 +98,12 @@ describe('0xRouter observation normalization', () => {
     const centralBank = normalizeMarketCalendarEvent(event({ eventType: 'central-bank-activity', consensus: null,
       providerPrevious: null, providerActual: null }))
 
-    expect(financial).toMatchObject({ eventFamily: 'financial-event', providerIds: ['macro-calendar-0xrouter-financial-events'] })
-    expect(centralBank).toMatchObject({ eventFamily: 'central-bank-activity', providerIds: ['macro-calendar-0xrouter-central-bank-activities'] })
-    for (const [descriptorId, kind] of Object.entries(zeroXRouterCalendarStoragePolicy.descriptorKinds)) {
+    expect(financial).toMatchObject({ eventFamily: 'financial-event', providerIds: ['macro-calendar-narwhal-financial-events'] })
+    expect(centralBank).toMatchObject({ eventFamily: 'central-bank-activity', providerIds: ['macro-calendar-narwhal-central-bank-activities'] })
+    // 三类事件各自反查回自己的那条 feed 身份：位置与 `kinds` 逐位对齐，值来自 `feedByKind`。
+    for (const [index, kind] of marketCalendarPublicPolicy.kinds.entries()) {
       expect(normalizeMarketCalendarEvent(event({ eventType: kind as MarketCalendarEvent['eventType'], consensus: null,
-        providerPrevious: null, providerActual: null }))?.providerIds).toEqual([descriptorId])
+        providerPrevious: null, providerActual: null }))?.providerIds).toEqual([marketCalendarPublicPolicy.feedByKind[index]])
     }
   })
 

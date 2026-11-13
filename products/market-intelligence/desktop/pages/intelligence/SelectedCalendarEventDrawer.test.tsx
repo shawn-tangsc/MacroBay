@@ -130,7 +130,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
       eventKey: selection.eventKey, title: '9月零售销售(月率)', countryCode: 'US', countryName: '美国',
       eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-10-14T12:30:00.000Z',
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter' as const, sourceObservedAt: '2026-10-14T12:31:00.000Z', coverage: 'observed-unverified' as const
+      source: 'Narwhal' as const, sourceObservedAt: '2026-10-14T12:31:00.000Z', coverage: 'observed-unverified' as const
     }
     const host = await render(clientWith({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' } as never), vi.fn(), async () => ({ events: [provider], sources: [] }))
     const body = host.querySelector('[data-calendar-detail-container]')
@@ -159,7 +159,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
       eventKey: selection.eventKey, title: '9月零售销售(月率)', countryCode: 'US', eventType: 'economic-indicator' as const,
       importance: 'high' as const, scheduledAt: '2026-10-14T12:30:00.000Z',
       consensus: null, providerPrevious: null, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter' as const, sourceObservedAt: '2026-10-14T12:31:00.000Z', coverage: 'observed-unverified' as const
+      source: 'Narwhal' as const, sourceObservedAt: '2026-10-14T12:31:00.000Z', coverage: 'observed-unverified' as const
     }
     const source = {
       eventType: 'economic-indicator' as const, status: 'partial' as const, sourceObservedAt: provider.sourceObservedAt,
@@ -181,7 +181,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
       eventKey: selection.eventKey, title: '9月零售销售(月率)', countryCode: 'US', eventType: 'economic-indicator' as const,
       importance: 'high' as const, scheduledAt: '2026-10-14T12:30:00.000Z',
       consensus: null, providerPrevious: null, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter' as const, sourceObservedAt: '2026-10-14T12:31:00.000Z', coverage: 'observed-unverified' as const
+      source: 'Narwhal' as const, sourceObservedAt: '2026-10-14T12:31:00.000Z', coverage: 'observed-unverified' as const
     }
     const source = { eventType: 'economic-indicator' as const, status: 'success' as const, sourceObservedAt: '2026-10-15T14:00:00.000Z' }
     const host = await render(clientWith({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' } as never), vi.fn(),
@@ -198,7 +198,7 @@ describe('the drawer pairs an official event with its admitted market observatio
     events: [{
       eventKey: 'market:core-cpi', title: '美国核心CPI', countryCode: 'US', eventType: 'economic-indicator',
       importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus, providerPrevious: null, providerActual: null,
-      source: '0xRouter', sourceObservedAt: asOf, coverage: 'observed-unverified',
+      source: 'Narwhal', sourceObservedAt: asOf, coverage: 'observed-unverified',
       officialLink: {
         officialEventKey: selection.eventKey, officialPeriodKey: '2026-M09', officialScheduledDate: '2026-10-14',
         officialScheduledAt: '2026-10-14T12:30:00.000Z', officialDetectedAt: asOf,
@@ -240,7 +240,7 @@ describe('the drawer pairs an official event with its admitted market observatio
       events: [{
         eventKey: 'market:unemployment', title: '美国失业率', countryCode: 'US', eventType: 'economic-indicator',
         importance: 'high', scheduledAt: '2026-10-14T12:30:00.000Z', consensus: { displayValue: '4.1%' },
-        providerPrevious: null, providerActual: null, source: '0xRouter', sourceObservedAt: asOf,
+        providerPrevious: null, providerActual: null, source: 'Narwhal', sourceObservedAt: asOf,
         coverage: 'observed-unverified'
       }]
     }

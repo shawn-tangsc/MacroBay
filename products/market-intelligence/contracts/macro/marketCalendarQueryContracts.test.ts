@@ -10,7 +10,7 @@ const input = { month: '2026-09', locale: 'zh', asOf: '2026-09-10T00:00:00.000Z'
 const event = { eventKey: '00000000-0000-4000-8000-000000000001', title: 'Derived event', countryCode: null,
   eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-09-11T00:00:00.000Z',
   consensus: { displayValue: '0' }, providerPrevious: null, providerActual: { displayValue: '3' },
-  source: '0xRouter', sourceObservedAt: input.asOf, coverage: 'observed-unverified' }
+  source: 'Narwhal', sourceObservedAt: input.asOf, coverage: 'observed-unverified' }
 describe('market calendar exact safe contracts', () => {
   it('admits only safe endpoint attempt state and timestamp separately from old data time', async () => {
     const c = await contracts()

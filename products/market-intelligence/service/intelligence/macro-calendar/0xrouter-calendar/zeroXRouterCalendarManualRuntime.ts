@@ -162,14 +162,19 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
      */
     readCollectionFreshness(enabledSourceIds?: readonly string[]): MarketCalendarFreshness {
       try {
-        const enabled = enabledSourceIds ?? marketCalendarPublicPolicy.descriptors
-        const sources = marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
+        const enabled = enabledSourceIds ?? marketCalendarPublicPolicy.feedByKind
+        const highWater = attempts.listCollectionHighWater()
+        const allAttempts = attempts.listAttempts()
+        const sources = marketCalendarPublicPolicy.kinds.map((_, index) => {
+          // 一类事件只报一个来源：新来源有采集记录就报它，否则报切换前那个——
+          // 与读取侧同一条规则，否则「数据来自谁」和「新鲜度说的是谁」会各说各话。
+          const descriptorId = sourceFor(index, highWater) ?? marketCalendarPublicPolicy.feedByKind[index]!
           const lastCollectedAt = readWorstEnabledCollection(
-            attempts.listCollectionHighWater().filter((row) => row.descriptorId === descriptorId), [descriptorId])
-          const latestAttempt = latestAttemptFor(attempts.listAttempts(), descriptorId)
+            highWater.filter((row) => row.descriptorId === descriptorId), [descriptorId])
+          const latestAttempt = latestAttemptFor(allAttempts, descriptorId)
           return { descriptorId, lastCollectedAt, ...(latestAttempt ? { latestAttempt } : {}) }
         })
-        return { state: 'available', asOf: deps.now().toISOString(), lastCollectedAt: readWorstEnabledCollection(attempts.listCollectionHighWater(), enabled),
+        return { state: 'available', asOf: deps.now().toISOString(), lastCollectedAt: readWorstEnabledCollection(highWater, enabled),
           sources }
       } catch {
         return { state: 'unavailable', failureCode: 'query-unavailable' }
@@ -177,9 +182,14 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
     },
     readRefreshAttempt(scope: MarketCalendarScope, eventType: MarketCalendarSource['eventType']): MarketCalendarRefreshAttempt | undefined {
       const index = marketCalendarPublicPolicy.kinds.indexOf(eventType)
-      const descriptorId = marketCalendarPublicPolicy.descriptors[index]
-      if (!descriptorId) return undefined
-      return latestAttemptFor(attempts.listAttempts().filter((row) => row.locale === scope.locale), descriptorId, scope.month)
+      if (index < 0) return undefined
+      const attemptsOfLocale = attempts.listAttempts().filter((row) => row.locale === scope.locale)
+      // 同一类事件先认新来源的尝试，没有再认切换前的：两个来源都可能有失败记录，先说的算。
+      for (const descriptorId of [marketCalendarPublicPolicy.feedByKind[index]!, marketCalendarPublicPolicy.descriptors[index]!]) {
+        const attempt = latestAttemptFor(attemptsOfLocale, descriptorId, scope.month)
+        if (attempt) return attempt
+      }
+      return undefined
     },
     refreshManual(input: unknown): Promise<RefreshResult> {
       if (stopped || !deps.evidenceReady) return unavailable('readiness-unavailable')
@@ -206,10 +216,20 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
 }
 
 /**
- * `sourceIds` defaults to the three 0xRouter feeds (fed/bea have their own 6-hour official
- * schedule and are never caught up here). Only those three are accepted: a caller cannot
- * widen the set, and a bad shape fails closed.
+ * `sourceIds` 是**这台运行时实际能采的那几条**，也就是 0xRouter 的三个端点——按需补跑
+ * 直接喂给它的采集器，所以标识必须与采集器一致，不能拿新的 feed 身份去点名它。
+ *
+ * 采集端换到 Narwhal 之后（一次调用写三类），这份清单收成 `collectionFeeds` 那一条；
+ * 在那之前用新身份点名，只会得到 `input-invalid`。
  */
+/** 这一类事件这一期真正有采集记录的那个来源；两个都没有时返回 undefined。 */
+function sourceFor(index: number, highWater: readonly { descriptorId: string }[]): string | undefined {
+  for (const descriptorId of [marketCalendarPublicPolicy.feedByKind[index]!, marketCalendarPublicPolicy.descriptors[index]!]) {
+    if (highWater.some((row) => row.descriptorId === descriptorId)) return descriptorId
+  }
+  return undefined
+}
+
 function parseRefreshNowInput(input: unknown): { sourceIds: readonly string[]; timeoutMs: number } | undefined {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
   const value = input as Record<string, unknown>

@@ -171,7 +171,7 @@ describe('a chart line selects a calendar event without opening the conversation
       eventKey: 'a1b2c3d4-0000-4000-8000-000000000001', title: '9月零售销售(月率)', countryCode: 'US',
       eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: releasedAt,
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
+      source: 'Narwhal' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
     }
     const readMarketEvents = vi.fn(async () => [provider])
     const host = await renderSurface({ readMarketEvents })
@@ -275,7 +275,7 @@ describe('the same release reads the same on the line and in its drawer', () => 
       eventKey: 'a1b2c3d4-0000-4000-8000-000000000001', title: providerTitle, countryCode: 'US',
       eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: releasedAt,
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
+      source: 'Narwhal' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
     }
     const officialOnly = pageClient({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' })
     const host = await renderSurface({

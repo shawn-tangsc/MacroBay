@@ -21,8 +21,31 @@ export const marketCalendarPublicPolicy = Object.freeze({
   attemptFailures: ['input-invalid', 'credential-not-configured', 'response-unavailable',
     'archive-unavailable', 'parse-unavailable', 'storage-unavailable', 'storage-pressure'],
   attemptTriggers: ['manual', 'automatic'],
-  descriptors: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'],
-  /** Bounded catch-up for the daily briefing: same three feeds, one shared deadline. */
+  /**
+   * 事件类型 → 该类型事件的来源身份，**按位置与 `kinds` 对齐**。
+   *
+   * 位置必须是三个：读回时靠它把每一行观测反查回它的事件类型（经济指标 / 财经事件 /
+   * 央行活动），压成一条会让另两类事件反查不到源。三条都指向同一次采集产出的那三类身份，
+   * 所以它是「映射」，不是「采集清单」——采集清单见 `collectionFeeds`。
+   */
+  feedByKind: ['macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
+    'macro-calendar-narwhal-central-bank-activities'],
+  /**
+   * 真正被采集、被调用方清单列出的来源：**一条**。
+   *
+   * 一次 `economics/calendar` 调用返回全部 releases，三类事件由我们按 series 自己分；
+   * 另两条 feed 带 `coveredBy` 指向它。调用方（简报补跑、按需刷新）只列这一条，列三条就是
+   * 同一个端点请求三次。
+   */
+  collectionFeeds: ['macro-calendar-narwhal-economic-data'],
+  /**
+   * 0xRouter 的三个事件身份：**只描述旧来源自己能采什么**（它的采集器、它的尝试台账、
+   * 以及按需补跑时能点名的那三个端点）。它不是当前读取来源，也不是按事件类型的映射表
+   * ——映射表是 `feedByKind`，采集清单是 `collectionFeeds`。
+   */
+  descriptors: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+    'macro-calendar-0xrouter-central-bank-activities'],
+  /** Bounded catch-up for the daily briefing: one collection, one shared deadline. */
   refreshNow: { defaultTimeoutMs: 90_000, minimumTimeoutMs: 1_000, maximumTimeoutMs: 120_000 },
   methods: { refresh: 'intelligence.macro.marketCalendar.refreshManual', query: 'intelligence.macro.marketCalendar.queryMonth',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
@@ -56,7 +79,11 @@ export type MarketCalendarEvent = Readonly<{
   eventNameKey?: string
   eventType: typeof marketCalendarPublicPolicy.kinds[number]; importance: typeof marketCalendarPublicPolicy.importance[number]
   scheduledAt: string; consensus: MarketCalendarValue; providerPrevious: MarketCalendarValue; providerActual: MarketCalendarValue
-  source: '0xRouter'; sourceObservedAt: string; coverage: 'observed-unverified'
+  /**
+   * 这条观测由哪个来源给出：`Narwhal` 是当前采集来源；`0xRouter` 只在 Narwhal 这个月的
+   * 这一类事件里一行都没有时回落出现（库里还留着切换前的行）。
+   */
+  source: 'Narwhal' | '0xRouter'; sourceObservedAt: string; coverage: 'observed-unverified'
   officialLink?: MarketCalendarOfficialLink
 }>
 /**
@@ -153,7 +180,7 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
     (value.countryCode === null || typeof value.countryCode === 'string' && marketCalendarPublicPolicy.countryCodePattern.test(value.countryCode) && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value.countryCode)) &&
     (!Object.hasOwn(value, 'countryName') || text(value.countryName)) &&
     marketCalendarPublicPolicy.kinds.includes(value.eventType as never) && marketCalendarPublicPolicy.importance.includes(value.importance as never) &&
-    marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && value.source === '0xRouter' && value.coverage === 'observed-unverified' &&
+    marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && (value.source === 'Narwhal' || value.source === '0xRouter') && value.coverage === 'observed-unverified' &&
     [value.consensus, value.providerPrevious, value.providerActual].every(display) &&
     (value.eventType === 'economic-indicator' || [value.consensus, value.providerPrevious, value.providerActual].every(item => item === null)) &&
     (!Object.hasOwn(value, 'officialLink') || value.eventType === 'economic-indicator' &&
@@ -214,13 +241,13 @@ export function isMarketCalendarFreshness(value: unknown): value is MarketCalend
   if (!marketInstant(value.asOf)) return false
   if (value.lastCollectedAt !== null && !marketInstant(value.lastCollectedAt)) return false
   if (!safeArray(value.sources, sourceFreshness)) return false
-  return value.sources.length === marketCalendarPublicPolicy.descriptors.length &&
-    value.sources.every((item, index) => item.descriptorId === marketCalendarPublicPolicy.descriptors[index]) &&
+  return value.sources.length === marketCalendarPublicPolicy.feedByKind.length &&
+    value.sources.every((item, index) => item.descriptorId === marketCalendarPublicPolicy.feedByKind[index]) &&
     value.sources.every(item => item.lastCollectedAt === null || item.lastCollectedAt <= (value.asOf as string))
 }
 function sourceFreshness(value: unknown): value is MarketCalendarCollectionFreshness {
   return marketExact(value, ['descriptorId', 'lastCollectedAt'], ['latestAttempt']) &&
-    marketCalendarPublicPolicy.descriptors.includes(value.descriptorId as never) &&
+    typeof value.descriptorId === 'string' && (marketCalendarPublicPolicy.feedByKind as readonly string[]).includes(value.descriptorId) &&
     (value.lastCollectedAt === null || marketInstant(value.lastCollectedAt)) &&
     (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt))
 }
@@ -229,7 +256,7 @@ export function isMarketCalendarRefreshNowResult(value: unknown): value is Marke
   if (marketExact(value, ['state']) && value.state === 'unchanged') return true
   if (marketExact(value, ['state', 'sources']) && value.state === 'collected') {
     return Array.isArray(value.sources) && value.sources.length > 0 &&
-      value.sources.every(item => typeof item === 'string' && marketCalendarPublicPolicy.descriptors.includes(item as never))
+      value.sources.every(item => typeof item === 'string' && (marketCalendarPublicPolicy.collectionFeeds as readonly string[]).includes(item))
   }
   if (marketExact(value, ['state', 'timeoutMs']) && value.state === 'timeout') {
     return value.timeoutMs === marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs ||

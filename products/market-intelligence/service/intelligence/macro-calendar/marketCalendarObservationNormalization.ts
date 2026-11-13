@@ -93,10 +93,10 @@ const eventFamilyByEventType: Readonly<Record<MarketCalendarEvent['eventType'], 
   'central-bank-activity': 'central-bank-activity'
 })
 
-/** Reuses the contract's own kind/descriptor alignment instead of restating it. */
+/** Reuses the contract's own kind/feed alignment instead of restating it. */
 const providerIdByEventType: Readonly<Record<MarketCalendarEvent['eventType'], string>> = Object.freeze(
   Object.fromEntries(marketCalendarPublicPolicy.kinds.map(
-    (kind, index) => [kind, marketCalendarPublicPolicy.descriptors[index]!]
+    (kind, index) => [kind, marketCalendarPublicPolicy.feedByKind[index]!]
   )) as Record<MarketCalendarEvent['eventType'], string>
 )
 

@@ -11,11 +11,23 @@ import { preferredObservation, type MarketObservationCandidate } from './marketC
 export const marketCalendarPublicPagingPolicy = Object.freeze({ maximumContexts: 128, contextLifetimeMs: 10 * 60 * 1000,
   /** Batches scanned to find the newest one that stored observations. */
   selectionScanLimit: 20 })
+/**
+ * 市场日历现在只有一个采集来源：Narwhal 的 `economics/calendar`。
+ *
+ * 写入端与读取端必须用同一个 provider id——此前写入落 `release_rows`、读取按 `0xrouter`
+ * 取 `market_event_observations`，两边都正确却永远对不上，读者看到的就是「一条都没有」。
+ */
+export const marketCalendarProviderId = 'narwhal'
+/** 切换前的来源。它的行留在库里：读者看到的空月里，历史仍按这一类事件回落读出。 */
+export const marketCalendarLegacyProviderId = '0xrouter'
+/** 读者可见的来源名。与 provider id 分开：一个是存储键，一个是界面上的词。 */
+export const marketCalendarSourceName = 'Narwhal'
 const emptyStatuses = ['success-empty', 'all-skipped']
 export type MarketCalendarLinkEvidence = Readonly<{ providerId: string; descriptorId: string; locale: string;
   evidenceHash: string; sourceEventId: string; indicatorId: string | null }>
 export type MarketCalendarEvidenceObserver = (event: MarketCalendarEvent, evidence: MarketCalendarLinkEvidence) => void
-type Selection = { collectionId: string; evidenceHash: string; source: MarketCalendarSource } | undefined
+type Selection = { collectionId: string; evidenceHash: string; providerId: string; descriptorId: string
+  source: MarketCalendarSource } | undefined
 type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; selections: Selection[]; sources: MarketCalendarSource[]; index: number; storageCursor?: string; created: number;
   /** 已经投影出去的事件按身份归位：同一身份再来一行时按优先级替换，而不是按顺序留第一行。 */
   chosen: Map<string, { index: number; candidate: MarketObservationCandidate; collectionId: string; observationId: string }> }
@@ -47,7 +59,7 @@ export function createMarketCalendarPublicQueryService(deps: {
       observationKey: String(row.market_fact_key),
       title: row.display_name, countryCode: row.country_code, ...(row.country_name === null ? {} : { countryName: String(row.country_name) }), eventType: row.event_kind, importance: row.importance,
       scheduledAt: row.scheduled_at, consensus: value(row.consensus_json), providerPrevious: value(row.provider_previous_json),
-      providerActual: value(row.provider_actual_json), source: '0xRouter',
+      providerActual: value(row.provider_actual_json), source: row.provider_id === marketCalendarLegacyProviderId ? '0xRouter' : marketCalendarSourceName,
       sourceObservedAt: String(row.last_observed_at), coverage: 'observed-unverified' }
     if (!isMarketCalendarEvent(result)) throw new Error('projection-unavailable')
     return result
@@ -70,25 +82,40 @@ export function createMarketCalendarPublicQueryService(deps: {
           // evidence that the events ceased to exist. A batch that stored nothing because every
           // sample was an unchanged resample is the same case: the last stored sample is still
           // this event's current value, and it is the row whose evidence the observer receives.
-          const batches = policy.descriptors.map((descriptorId) => {
-            const result = deps.repository.listCollections({ providerId: '0xrouter', descriptorId, month, locale, asOf,
+          // 每一类事件先问 Narwhal，它在这个月这一类里**一行都没有**时才回落到旧来源的库。
+          // 这是「以 Narwhal 为主」在读取侧的落点：不是把两源的行合并去重（那需要一张跨源
+          // 指标身份映射，代码里还没有），而是同一类事件只认一个来源——同一身份因此不可能
+          // 出现两行，条数也不会被重复计一次。
+          const batchesByKind = policy.kinds.map((_, index) => [
+            { providerId: marketCalendarProviderId, descriptorId: policy.feedByKind[index]! },
+            { providerId: marketCalendarLegacyProviderId, descriptorId: policy.descriptors[index]! }
+          ].map((candidate) => {
+            const result = deps.repository.listCollections({ ...candidate, month, locale, asOf,
               limit: marketCalendarPublicPagingPolicy.selectionScanLimit })
             if (result.state !== 'succeeded') throw new Error('selection-unavailable')
-            return result.rows
+            return { ...candidate, rows: result.rows }
+          }))
+          const selections = batchesByKind.map((candidates, index): Selection => {
+            // 首选「有内容的批次」：一个只有空批次的来源是这个月确实没有发布，不是它没在工作。
+            for (const candidate of candidates) {
+              const row = candidate.rows.find((item) => !emptyStatuses.includes(String(item.status)))
+              if (row) return { collectionId: String(row.collection_id), evidenceHash: String(row.evidence_hash),
+                providerId: candidate.providerId, descriptorId: candidate.descriptorId,
+                source: { eventType: policy.kinds[index]!, status: row.status as MarketCalendarSource['status'],
+                  sourceObservedAt: String(row.detected_at) } }
+            }
+            return undefined
           })
-          const selections = batches.map((rows, index): Selection => {
-            const row = rows.find((candidate) => !emptyStatuses.includes(String(candidate.status)))
-            return row ? { collectionId: String(row.collection_id), evidenceHash: String(row.evidence_hash), source: { eventType: policy.kinds[index]!,
-              status: row.status as MarketCalendarSource['status'], sourceObservedAt: String(row.detected_at) } } : undefined
-          })
-          const sources = batches.map((rows, index): MarketCalendarSource => {
+          const sources = batchesByKind.map((candidates, index): MarketCalendarSource => {
             const eventType = policy.kinds[index]!
-            // The newest batch is what the source status reports, even when it stored nothing.
-            const newest = rows[0]
+            // 状态跟着这个月真正被采用的那个来源走：有内容的那个，其次是有批次记录的那个。
+            const reporting = candidates.find((candidate) => candidate.rows.some((item) => !emptyStatuses.includes(String(item.status)))) ??
+              candidates.find((candidate) => candidate.rows.length > 0)
+            const newest = reporting?.rows[0]
             const attempt = deps.readRefreshAttempt?.({ month, locale }, eventType)
             // 「这条来源不发布这种语言」与「这个月没有事件」分开说：前者是来源能力，后者是确实没有。
-            return { ...(newest ? { eventType,
-              status: marketCalendarSourceStatus(String(newest.status), policy.descriptors[index]!, locale),
+            return { ...(newest && reporting ? { eventType,
+              status: marketCalendarSourceStatus(String(newest.status), reporting.descriptorId, locale),
               sourceObservedAt: String(newest.detected_at) } : { eventType, status: 'unavailable' as const, sourceObservedAt: null }),
               ...(attempt && attempt.attemptedAt <= asOf ? { latestAttempt: attempt } : {}) }
           })
@@ -103,12 +130,12 @@ export function createMarketCalendarPublicQueryService(deps: {
         // page's byte budget or event bound is reached. The continuation keeps the same cursor
         // and the same event keys, so a later page never repeats or skips an identity.
         let duplicatesInBatch = 0
-        while (position.index < policy.descriptors.length && events.length < policy.maximumEvents) {
+        while (position.index < policy.feedByKind.length && events.length < policy.maximumEvents) {
           const selected = position.selections[position.index]
           if (!selected || selected.source.status === 'success-empty' || selected.source.status === 'all-skipped') {
             position.index++; position.storageCursor = undefined; continue
           }
-          const page = deps.repository.listObservationStates({ providerId: '0xrouter', descriptorId: policy.descriptors[position.index],
+          const page = deps.repository.listObservationStates({ providerId: selected.providerId, descriptorId: selected.descriptorId,
             month, locale, asOf, limit: policy.maximumEvents, ...(position.storageCursor ? { cursor: position.storageCursor } : {}) })
           if (page.state !== 'succeeded') return unavailable()
           let full = false
@@ -162,7 +189,7 @@ export function createMarketCalendarPublicQueryService(deps: {
         if (duplicatesInBatch > 0) {
           console.warn(`[macro-calendar] 同一批次内同一身份出现多行：${duplicatesInBatch} 处，读取按优先级取一行`)
         }
-        const result = { ...envelope, ...(position.index < policy.descriptors.length ? { nextCursor: remember(position) } : {}) }
+        const result = { ...envelope, ...(position.index < policy.feedByKind.length ? { nextCursor: remember(position) } : {}) }
         return isMarketCalendarPage(result, input) ? result : unavailable()
       } catch { return unavailable() }
     },

@@ -5,6 +5,22 @@ import {
   type ZeroXRouterCalendarDraft
 } from './zeroXRouterCalendarContracts'
 
+/**
+ * 一张事件身份表：每个 descriptor 对应哪一类事件。**采集来源换了，这张表的含义不变**——
+ * 它回答的是「这条观测属于哪一类」，不回答「谁去采」，所以两个来源的身份都在这里，
+ * 各占自己那三个位置。
+ */
+export const marketCalendarDescriptorKinds = Object.freeze({
+  'macro-calendar-0xrouter-economic-data': 'economic-indicator',
+  'macro-calendar-0xrouter-financial-events': 'financial-event',
+  'macro-calendar-0xrouter-central-bank-activities': 'central-bank-activity',
+  'macro-calendar-narwhal-economic-data': 'economic-indicator',
+  'macro-calendar-narwhal-financial-events': 'financial-event',
+  'macro-calendar-narwhal-central-bank-activities': 'central-bank-activity'
+})
+/** 库里有观测的采集来源。切换期两个都在：旧来源的行留着，新来源从切换点开始写。 */
+export const marketCalendarStorageProviders = Object.freeze(['0xrouter', 'narwhal'] as const)
+
 // Product repository policy, from Accepted design 119/120. Changes require product
 // acceptance. No retention deletion, identity promotion or runtime mapping learning.
 export const zeroXRouterCalendarStoragePolicy = Object.freeze({
@@ -18,11 +34,7 @@ export const zeroXRouterCalendarStoragePolicy = Object.freeze({
   indexReserveMultiplier: 2, transactionReservePages: 16, walFrameHeaderBytes: 24,
   metadataCharacters: 128, hashPattern: /^[a-f0-9]{64}$/,
   canonicalInstantPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
-  descriptorKinds: Object.freeze({
-    'macro-calendar-0xrouter-economic-data': 'economic-indicator',
-    'macro-calendar-0xrouter-financial-events': 'financial-event',
-    'macro-calendar-0xrouter-central-bank-activities': 'central-bank-activity'
-  }),
+  descriptorKinds: marketCalendarDescriptorKinds,
   draftFields: Object.freeze(['providerId', 'descriptorId', 'kind', 'locale', 'sourceEventId', 'marketFactKey',
     'identityState', 'localeMerge', 'officialLink', 'displayName', 'countryCode', 'countryName', 'importance',
     'scheduledDate', 'scheduledAt', 'indicatorId', 'consensus', 'providerPrevious', 'providerActual', 'providerImpact']),
@@ -114,8 +126,8 @@ export function metadata(value: unknown): value is string {
     isCanonicalCalendarIdentity(value)
 }
 export function marketScope(input: Record<string, unknown>) {
-  if (input.providerId !== '0xrouter' || typeof input.descriptorId !== 'string' ||
-    !Object.hasOwn(zeroXRouterCalendarTransportPolicy.descriptorPaths, input.descriptorId) ||
+  if (!marketCalendarStorageProviders.includes(input.providerId as never) || typeof input.descriptorId !== 'string' ||
+    !Object.hasOwn(marketCalendarDescriptorKinds, input.descriptorId) ||
     !zeroXRouterCalendarTransportPolicy.locales.some((locale) => locale === input.locale) ||
     typeof input.month !== 'string' || !zeroXRouterCalendarTransportPolicy.monthPattern.test(input.month)) reject('invalid-input')
   const start = new Date(`${input.month}-01T00:00:00.000Z`)
@@ -145,7 +157,7 @@ function normalizedDraft(value: unknown, scope: ReturnType<typeof marketScope>):
   if (!Array.isArray(identity) || identity.length !== 2 || !isCanonicalCalendarIdentity(identity[0]) ||
     typeof identity[1] !== 'number' || !Number.isSafeInteger(identity[1]) || identity[1] <= 0 ||
     JSON.stringify(identity) !== draft.sourceEventId ||
-    JSON.stringify(['0xrouter', scope.descriptor_id, scope.locale, draft.sourceEventId]) !== draft.marketFactKey) reject('invalid-input')
+    JSON.stringify([scope.provider_id, scope.descriptor_id, scope.locale, draft.sourceEventId]) !== draft.marketFactKey) reject('invalid-input')
   for (const key of policy.valueFields) {
     if (draft[key] === undefined) continue
     const value = calendarRecord(draft[key])

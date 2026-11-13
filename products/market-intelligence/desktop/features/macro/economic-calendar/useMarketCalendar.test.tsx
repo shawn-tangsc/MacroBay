@@ -145,7 +145,7 @@ it('reads every month the grid draws and keeps a repeated observation once', asy
   const { useMarketCalendar } = await import('./useMarketCalendar')
   const event = { eventKey: 'shared-observation', title: 'Shared', countryCode: null, eventType: 'economic-indicator' as const,
     importance: 'high' as const, scheduledAt: '2026-09-01T10:00:00.000Z', consensus: null, providerActual: null, providerPrevious: null,
-    source: '0xRouter' as const, sourceObservedAt: '2026-08-01T00:00:00.000Z', coverage: 'observed-unverified' as const }
+    source: 'Narwhal' as const, sourceObservedAt: '2026-08-01T00:00:00.000Z', coverage: 'observed-unverified' as const }
   const client = calendarClient({ queryMonth: vi.fn(async ({ month }: { month: string }) => ({ state: 'available' as const, month, locale: 'zh' as const,
     asOf: now().toISOString(), events: month === '2026-09' || month === '2026-08' ? [event] : [], sources: [] })), refresh: vi.fn() })
   let state!: ReturnType<typeof useMarketCalendar>

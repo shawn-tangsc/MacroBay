@@ -45,7 +45,7 @@ it('uses only localized time and full accessible topic for both event sources', 
   const text = productText['zh-CN'].pages.intelligence.portal.calendar
   const host = document.createElement('div'); const root = createRoot(host)
   const event = { key: 'market:derived', source: 'market', date: '2026-09-10', time: '08:30',
-    event: { eventKey: 'derived', title: 'Derived full topic', importance: 'high', eventType: 'economic-indicator', source: '0xRouter', consensus: { displayValue: '456' } } } as CalendarDayItem
+    event: { eventKey: 'derived', title: 'Derived full topic', importance: 'high', eventType: 'economic-indicator', source: 'Narwhal', consensus: { displayValue: '456' } } } as CalendarDayItem
   try {
     await act(async () => root.render(<CalendarEventRow item={event} text={text} statusNow="2026-09-10T00:00:00.000Z" onSelect={() => {}} />))
     expect(host.textContent).toBe('08:30Derived full topic')

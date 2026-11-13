@@ -18,11 +18,11 @@ it('renders provider-only economic values and unknown country without numerical 
   const event = { eventKey: '00000000-0000-4000-8000-000000000001', title: 'Derived market event', countryCode: null,
     eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-09-10T00:00:00.000Z',
     consensus: { displayValue: '0' }, providerPrevious: null, providerActual: { displayValue: '3' },
-    source: '0xRouter' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
+    source: 'Narwhal' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
   try {
     await act(async () => root.render(scoped(<MarketCalendarInspector event={event} text={text} />)))
     expect(host.textContent).toContain('市场预期')
-    expect(host.textContent).toContain('公布值（0xRouter）')
+    expect(host.textContent).toContain('公布值（Narwhal）')
     expect(host.textContent).toContain('未标明国家')
     expect(host.textContent).toContain('暂不可比较')
     // 这条来源**给过**这条事件（有时间），所以不再说「本次尚未刷新」——时间与那句话不许自相矛盾。
@@ -32,7 +32,7 @@ it('renders provider-only economic values and unknown country without numerical 
     expect(host.textContent).toContain('来源最后一次给出这条于')
     expect(host.textContent).toContain('来源观测时间')
     expect(host.querySelector('[data-market-value="consensus"]')?.textContent).toContain('0')
-    expect(host.querySelector('[data-market-value="providerPrevious"]')?.textContent).toBe('前值（0xRouter）暂无')
+    expect(host.querySelector('[data-market-value="providerPrevious"]')?.textContent).toBe('前值（Narwhal）暂无')
     expect(host.querySelector('[data-market-importance]')?.textContent).toBe('重要性高')
     await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...event, eventType: 'financial-event', consensus: null, providerPrevious: null, providerActual: null }} text={text} />)))
     expect(host.querySelector('[data-market-value]')).toBeNull()
@@ -44,7 +44,7 @@ it('states the market surprise in the inspector, and prints no number when there
   const text = productText['zh-CN'].pages.intelligence.portal.calendar
   const base = { eventKey: '00000000-0000-4000-8000-000000000009', title: 'Surprise event', countryCode: 'US',
     eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-10-15T12:30:00.000Z',
-    source: '0xRouter' as const, sourceObservedAt: '2026-10-15T12:31:00.000Z', coverage: 'observed-unverified' as const }
+    source: 'Narwhal' as const, sourceObservedAt: '2026-10-15T12:31:00.000Z', coverage: 'observed-unverified' as const }
   const surpriseRow = () => host.querySelector('[data-market-value="surprise"]')
   try {
     await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base,
@@ -75,7 +75,7 @@ it('prefers safe countryName, then code, then the localized unknown fallback', a
   const text = productText['zh-CN'].pages.intelligence.portal.calendar
   const base = { eventKey: '00000000-0000-4000-8000-000000000002', title: 'Country event', eventType: 'financial-event' as const,
     importance: 'high' as const, scheduledAt: '2026-09-10T00:00:00.000Z', consensus: null, providerPrevious: null, providerActual: null,
-    source: '0xRouter' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
+    source: 'Narwhal' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
   try {
     await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base, countryCode: 'CHN', countryName: '中国' }} text={text} />)))
     expect(host.querySelector('[data-market-country]')?.textContent).toContain('中国')
@@ -93,7 +93,7 @@ it('shows the calendar times in the reader zone instead of a fixed Beijing offse
   const event = { eventKey: '00000000-0000-4000-8000-000000000003', title: 'Zoned event', countryCode: null,
     eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-09-10T00:00:00.000Z',
     consensus: null, providerPrevious: null, providerActual: null,
-    source: '0xRouter' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
+    source: 'Narwhal' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
   try {
     // UTC provider：日历必须跟随窗口时区，而不是写死的 Asia/Shanghai
     await act(async () => root.render(scoped(<MarketCalendarInspector event={event} text={text} />)))

@@ -32,6 +32,10 @@ import {
   type MarketCalendarEvent,
   type MarketCalendarPage
 } from '../../../contracts/macro/marketCalendarQueryContracts'
+import {
+  macroCalendarOfficialSourceRegistry,
+  zeroXRouterCalendarEvidenceDescriptors
+} from '../macro-calendar/macroCalendarOfficialSourceRegistry'
 import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import type { CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import type { FearGreedSnapshotResult, FundingRateHistoryResult, MarketIntelligenceQueryResult, MarketIntelligenceQueryType, SourceCoverageAsOf } from '../../../contracts/intelligenceQueryContracts'
@@ -117,7 +121,7 @@ function marketEvent(overrides: Partial<MarketCalendarEvent> = {}): MarketCalend
     eventKey: '11111111-2222-3333-4444-555555555555', observationKey: MARKET_OBSERVATION_KEY,
     title: '美国核心CPI年率', countryCode: 'US', eventType: 'economic-indicator', importance: 'high',
     scheduledAt: '2026-09-10T12:30:00.000Z', consensus: { displayValue: '3.1' }, providerPrevious: { displayValue: '3.0' },
-    providerActual: { displayValue: '3.2' }, source: '0xRouter', sourceObservedAt: '2026-09-10T12:31:00.000Z',
+    providerActual: { displayValue: '3.2' }, source: 'Narwhal', sourceObservedAt: '2026-09-10T12:31:00.000Z',
     coverage: 'observed-unverified', ...overrides
   }
 }
@@ -275,6 +279,28 @@ describe('market analysis data-access matrix', () => {
       })
     ]))
     expect(access.some(item => item.admission === 'temporarily-paused')).toBe(false)
+  })
+
+  it('names the calendar descriptors the evidence registry owns, so the matrix is not a fourth copy', () => {
+    // 这三条以前是手抄的 id；注册表里删掉/改名的那天，矩阵还留着旧名，读者看到的是「矩阵写着某源、
+    // 数据来自另一处」。现在矩阵从登记它们的注册表生成，这条守卫是那个连接的判据。
+    const evidenceIds = zeroXRouterCalendarEvidenceDescriptors.map((descriptor) => descriptor.descriptorId)
+    const access = listMarketAnalysisSourceAccess()
+    const macroRows = access.filter((row) => row.domains.includes('macro'))
+    for (const descriptorId of evidenceIds) {
+      expect(macroRows).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceId: descriptorId, admission: 'production-ready' })
+      ]))
+    }
+    // 反向：矩阵里的日历 id 必须能在某份注册表里查到（官方日历或证据链），不许出现只在矩阵里活着的名字。
+    const registered = new Set<string>([
+      ...evidenceIds,
+      ...macroCalendarOfficialSourceRegistry.map((descriptor) => descriptor.descriptorId)
+    ])
+    const listedCalendarIds = access
+      .map((row) => row.sourceId)
+      .filter((sourceId) => sourceId.startsWith('macro-calendar-'))
+    expect(listedCalendarIds.every((sourceId) => registered.has(sourceId))).toBe(true)
   })
 
   it('keeps the analysis caveat vocabulary and the rates wire contract naming one caveat', () => {

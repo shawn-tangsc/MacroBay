@@ -269,7 +269,7 @@ function marketEvent(key: string, title: string, time: string, eventType: Market
     scheduledAt: `2026-11-13T${time}:00.000Z`,
     consensus: { displayValue: '—' }, providerPrevious: { displayValue: change ?? '—' },
     providerActual: actual === null ? null : { displayValue: actual },
-    source: '0xRouter', sourceObservedAt: '2026-11-13T00:00:00.000Z', coverage: 'observed-unverified'
+    source: 'Narwhal', sourceObservedAt: '2026-11-13T00:00:00.000Z', coverage: 'observed-unverified'
   }
 }
 

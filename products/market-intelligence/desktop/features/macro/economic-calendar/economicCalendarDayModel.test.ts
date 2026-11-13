@@ -7,7 +7,7 @@ const official = (id: number, scheduledAt: string | undefined = '2026-09-10T01:0
   scheduledDate: '2026-09-10', scheduledAt, labelKey: 'cpi', importance: 'high' }) as unknown as EconomicCalendarEventView
 const market = (id: number, scheduledAt = '2026-09-10T02:00:00.000Z') => ({ eventKey: `market-${id}`, title: 'CPI',
   scheduledAt, importance: 'high', eventType: 'economic-indicator', countryCode: null, consensus: null, providerPrevious: null, providerActual: null,
-  source: '0xRouter', sourceObservedAt: '2026-09-10T00:00:00.000Z', coverage: 'observed-unverified' }) as MarketCalendarEvent
+  source: 'Narwhal', sourceObservedAt: '2026-09-10T00:00:00.000Z', coverage: 'observed-unverified' }) as MarketCalendarEvent
 const typedMarket = (id: number, eventType: MarketCalendarEvent['eventType'], importance: MarketCalendarEvent['importance'], scheduledAt = `2026-09-10T${String(id).padStart(2, '0')}:00:00.000Z`) => ({
   ...market(id, scheduledAt), eventKey: `typed-${eventType}-${id}`, eventType, importance
 }) as MarketCalendarEvent

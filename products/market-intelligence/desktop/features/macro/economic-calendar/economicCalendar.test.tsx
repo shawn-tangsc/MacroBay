@@ -714,7 +714,7 @@ describe('macro economic calendar', () => {
 
   const marketEvent: MarketCalendarEvent = { eventKey: '00000000-0000-4000-8000-000000000001', title: 'Derived independent market event',
     countryCode: null, eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-08-12T12:30:00.000Z',
-    consensus: { displayValue: '0' }, providerActual: null, providerPrevious: null, source: '0xRouter',
+    consensus: { displayValue: '0' }, providerActual: null, providerPrevious: null, source: 'Narwhal',
     sourceObservedAt: '2026-08-05T00:00:00.000Z', coverage: 'observed-unverified' }
   it.each(['loading', 'unavailable'])('keeps market events visible while the official calendar is %s', async (state) => {
     const spy = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf,
@@ -2080,7 +2080,7 @@ describe('macro economic calendar', () => {
   it('selects a provider event a caller named, on the route that owns it', async () => {
     const provider: MarketCalendarEvent = { eventKey: '00000000-0000-4000-8000-0000000000aa', title: 'Provider-named event',
       countryCode: null, eventType: 'financial-event', importance: 'high', scheduledAt: '2026-10-13T12:30:00.000Z',
-      consensus: null, providerActual: null, providerPrevious: null, source: '0xRouter',
+      consensus: null, providerActual: null, providerPrevious: null, source: 'Narwhal',
       sourceObservedAt: '2026-10-01T00:00:00.000Z', coverage: 'observed-unverified' }
     const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-10', locale: 'zh', asOf, events: [provider], sources: [] })
     try {
@@ -2156,7 +2156,7 @@ describe('macro economic calendar', () => {
     const september = blsEvent({ eventKey: 'US.CPI.SEPTEMBER', scheduledDate: '2026-09-01', scheduledAt: '2026-09-01T12:30:00.000Z' })
     const provider: MarketCalendarEvent = { eventKey: '00000000-0000-4000-8000-0000000000bb', title: 'Provider September event',
       countryCode: null, eventType: 'financial-event', importance: 'high', scheduledAt: '2026-09-02T10:00:00.000Z',
-      consensus: null, providerActual: null, providerPrevious: null, source: '0xRouter',
+      consensus: null, providerActual: null, providerPrevious: null, source: 'Narwhal',
       sourceObservedAt: '2026-08-01T00:00:00.000Z', coverage: 'observed-unverified' }
     const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockImplementation(async ({ month }) => ({ state: 'available', month, locale: 'zh', asOf,
       events: month === '2026-09' ? [provider] : [], sources: [] }))

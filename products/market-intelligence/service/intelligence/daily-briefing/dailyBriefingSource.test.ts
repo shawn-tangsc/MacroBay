@@ -77,7 +77,7 @@ const officialEvent = {
 const marketEvent = {
   eventKey: 'MC.FOMC', title: 'FOMC rate decision', countryCode: 'US', eventType: 'central-bank-activity',
   importance: 'high', scheduledAt: '2026-11-02T18:00:00.000Z', consensus: { displayValue: '4.00%' },
-  providerPrevious: { displayValue: '4.25%' }, providerActual: null, source: '0xRouter',
+  providerPrevious: { displayValue: '4.25%' }, providerActual: null, source: 'Narwhal',
   sourceObservedAt: '2026-10-30T00:00:00.000Z', coverage: 'observed-unverified'
 }
 

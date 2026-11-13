@@ -21,13 +21,16 @@ import { useDataChangeRevision } from './useDataChangeRevision'
  */
 
 /**
- * 0xRouter 一条事件属于哪个日历来源：`eventType` 与三个 descriptor 一一对应。
+ * 一条市场日历事件属于哪个日历来源：`eventType` 与三个 feed 身份一一对应。
  * 官方腿的事件自带 `providerIds`，不需要这张表。
+ *
+ * 位置仍是三个（三类事件都要能反查到源），但三条 feed 由同一次采集产出——它是映射，
+ * 不是采集清单；采集清单是 `marketCalendarPublicPolicy.collectionFeeds` 那一条。
  */
 const MARKET_FEED_BY_EVENT_TYPE: Readonly<Record<string, string>> = {
-  'economic-indicator': 'macro-calendar-0xrouter-economic-data',
-  'financial-event': 'macro-calendar-0xrouter-financial-events',
-  'central-bank-activity': 'macro-calendar-0xrouter-central-bank-activities'
+  'economic-indicator': 'macro-calendar-narwhal-economic-data',
+  'financial-event': 'macro-calendar-narwhal-financial-events',
+  'central-bank-activity': 'macro-calendar-narwhal-central-bank-activities'
 }
 
 /**
