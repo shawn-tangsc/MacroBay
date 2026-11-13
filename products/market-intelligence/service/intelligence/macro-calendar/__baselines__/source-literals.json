@@ -1,5 +1,5 @@
 {
-  "note": "源名字面量基线：新增一处必须在这里登记并写理由；守卫只看「比基线多」。",
+  "note": "源名字面量基线：现存处全部登记、目标清零；新增一处必须在这里写清理由。i18n 只统计值位置（键位置的源 id 允许）。",
   "files": {
     "contracts/capitalConditionsQueryContracts.ts": {
       "count": 3,
@@ -14,20 +14,52 @@
       "why": "看板源状态清单：列的就是 feed id"
     },
     "contracts/macro/marketCalendarQueryContracts.ts": {
-      "count": 7,
+      "count": 13,
       "why": "契约里的 provider id 常量与来源标签定义处"
     },
     "desktop/pages/intelligence/useCalendarCardData.ts": {
       "count": 3,
       "why": "事件类型→feed 映射：三类事件反查自己的源"
     },
+    "desktop/pages/intelligence/useCalendarMonthReleases.ts": {
+      "count": 2,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/pages/intelligence/useNextMonthReleases.ts": {
+      "count": 1,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/settings/intelligence-sources/BusinessSettingsView.tsx": {
+      "count": 1,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/settings/intelligence-sources/SourcesSettingsPane.tsx": {
+      "count": 1,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/settings/intelligence-sources/dashboardSourceModules.ts": {
+      "count": 3,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/shared/i18n/productText.ts": {
+      "count": 12,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/shared/i18n/text/settings/intelligenceSources.ts": {
+      "count": 18,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
     "desktop/shared/ipc/macroIndicatorClient.ts": {
       "count": 2,
       "why": "IPC 客户端校验 `source` 字段的取值集合"
     },
     "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarPublicQueryService.ts": {
-      "count": 11,
+      "count": 15,
       "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarRefreshNotifier.ts": {
+      "count": 1,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
     },
     "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageValidation.ts": {
       "count": 8,
@@ -66,7 +98,7 @@
       "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
     },
     "service/intelligence/macro-calendar/calendarFeedRegistry.ts": {
-      "count": 14,
+      "count": 17,
       "why": "注册表：feed 身份就是源 id，这里是定义处"
     },
     "service/intelligence/macro-calendar/enabledCalendarFeeds.ts": {
@@ -113,15 +145,5 @@
       "count": 2,
       "why": "新源自己的采集/装配：provider id 是它的数据"
     }
-  },
-  "exempt": [
-    {
-      "path": "desktop/settings/",
-      "why": "设置页要按源渲染开关/健康度，源名是它的主题"
-    },
-    {
-      "path": "desktop/shared/i18n/",
-      "why": "源显示名与 i18n 键本身就是源 id（注册表镜像）"
-    }
-  ]
+  }
 }
