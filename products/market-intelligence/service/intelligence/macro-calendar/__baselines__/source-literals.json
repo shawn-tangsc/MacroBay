@@ -41,10 +41,6 @@
       "count": 3,
       "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
     },
-    "desktop/shared/i18n/productText.ts": {
-      "count": 4,
-      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
-    },
     "desktop/shared/ipc/macroIndicatorClient.ts": {
       "count": 2,
       "why": "IPC 客户端校验 `source` 字段的取值集合"
