@@ -120,7 +120,8 @@ describe('key-indicator drawer', () => {
     expect(rightColumn()!.textContent).toContain('新增就业')
     // EIA 是 importance=high，但它解释不了利率预期：按判据不进核心层（也不按 importance 筛）。
     expect(rightColumn()!.textContent).not.toContain('上周EIA原油库存变化')
-    expect(rightColumn()!.textContent).toContain('与利率相关 1 条 · 其他 2 条')
+    // 右上角只写一个数：第二个数本来就有自己那行可点展开，放进标题行会让读者以为有两处入口。
+    expect(rightColumn()!.querySelector('[data-day-summary]')?.textContent).toBe('与利率相关 1 条')
   })
 
   it('picks the nearest day that has events when today is quiet', async () => {
@@ -162,7 +163,8 @@ describe('key-indicator drawer', () => {
     expect(rightColumnTitle()).toContain('2026-11-20')
     // 当天一条事件都没有 → 「这一天没有已收录的事件」，不是「没有影响利率预期的」——两句不能共用。
     expect(rightColumn()!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.unifiedDay.empty)
-    expect(rightColumn()!.textContent).toContain('与利率相关 0 条 · 其他 0 条')
+    // 核心为 0 时右上角留白，不写「0 条」。
+    expect(rightColumn()!.querySelector('[data-day-summary]')).toBeNull()
     expect(document.body.querySelectorAll('.mk-col-r [data-calendar-row]')).toHaveLength(0)
   })
 
@@ -243,6 +245,25 @@ describe('key-indicator drawer', () => {
     expect(head!.querySelector('h2')).not.toBeNull()
     expect(head!.querySelector('[data-day-summary]')).not.toBeNull()
     expect(list.querySelector(':scope > [data-day-summary]')).toBeNull()
+  })
+
+  /**
+   * 结构守卫（CSS 层）：标题先让位、计数保完整。
+   * 去掉 `margin-left:auto`（计数紧贴标题）或给标题 `flex:1` 吃掉计数，这两条就会红。
+   */
+  it('keeps the count pinned right and lets the title be the one that truncates', () => {
+    const styles = readFileSync('products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css', 'utf8')
+    const head = styles.slice(styles.indexOf('.mi-calendar-day-list__head > h2'))
+    const titleRule = head.slice(0, head.indexOf('}'))
+    const countRuleStart = head.indexOf('.mi-calendar-day-list__head > [data-day-summary]')
+    const countRule = head.slice(countRuleStart, head.indexOf('}', countRuleStart))
+    // 标题：可收缩 + 省略号
+    expect(titleRule).toContain('min-width: 0')
+    expect(titleRule).toContain('text-overflow: ellipsis')
+    // 计数：贴右、不收缩、不换行——它不能被标题吃掉
+    expect(countRule).toContain('margin: 0 0 0 auto')
+    expect(countRule).toContain('flex: none')
+    expect(countRule).toContain('white-space: nowrap')
   })
 
   it('says 暂无日程数据 in a month that has no releases', async () => {

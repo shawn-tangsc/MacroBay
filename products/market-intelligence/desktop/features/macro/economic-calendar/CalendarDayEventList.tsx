@@ -18,7 +18,12 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   listRef?: React.RefObject<HTMLElement | null>
   /** Already filled with the day; the caller owns the sentence. */
   title: string
-  summary: string
+  /**
+   * 标题行右侧的计数。**只写一个数**（例如「与利率相关 2 条」），不放第二个数——
+   * 300px 里两个数会把标题挤掉，而第二个数本来就有自己那行可点展开。
+   * 缺省（核心为 0）时右上角留白，不写「0 条」。
+   */
+  summary?: string
   groups: readonly Readonly<{ eventType: keyof EconomicCalendarText['market']['kinds']; items: readonly CalendarDayItem[] }>[]
   /** Shown only when the sources answered and the answer is zero; omitted means no sentence. */
   emptyText?: string
@@ -42,7 +47,7 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
         读序不变：标题在前、计数在后，仍在同一个标题行里。 */}
     <div className="mi-calendar-day-list__head">
       <h2>{title}</h2>
-      <p data-day-summary>{summary}</p>
+      {summary === undefined || summary === '' ? null : <p data-day-summary>{summary}</p>}
     </div>
     <div role="list">{groups.map(group => <section data-calendar-group={group.eventType} key={group.eventType}>
       {hideGroupHeadings ? null : <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}

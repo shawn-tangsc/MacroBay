@@ -404,9 +404,10 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
               <CalendarDayEventList
                 label={calendarText.dayEvents.listLabel}
                 title={calendarText.dayEvents.title.replace('{date}', selectedDay)}
-                summary={text.mkDay.summary
-                  .replace('{related}', String(dayLayers.core.length))
-                  .replace('{other}', String(dayLayers.other.length))}
+                // 右上角只放「与利率相关 N 条」；核心为 0 时留白，不写「0 条」。
+                {...(dayLayers.core.length === 0 ? {} : {
+                  summary: text.mkDay.summary.replace('{related}', String(dayLayers.core.length))
+                })}
                 groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, othersExpanded, text.mkDay.sequence)}
                 {...(othersExpanded ? { hideGroupHeadings: true } : {})}
                 {...(dayEvents.length === 0

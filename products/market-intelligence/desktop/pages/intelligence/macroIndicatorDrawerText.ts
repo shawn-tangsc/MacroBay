@@ -66,7 +66,7 @@ export const macroIndicatorDrawerText = {
     minicalMore: '{count} 条重要',
     minicalUnavailable: '暂时读不到这个月的日程',
     mkDay: {
-      summary: '与利率相关 {related} 条 · 其他 {other} 条',
+      summary: '与利率相关 {related} 条',
       other: '其他 {count} 条',
       collapse: '收起 {count} 条',
       none: '今天没有影响利率预期的事件',
@@ -129,7 +129,7 @@ export const macroIndicatorDrawerText = {
     minicalMore: '{count} more',
     minicalUnavailable: 'This month\'s schedule is not readable right now',
     mkDay: {
-      summary: 'Related to rates {related} · Other {other}',
+      summary: 'Related to rates {related}',
       other: 'Other {count}',
       collapse: 'Collapse {count}',
       none: 'No events that move rate expectations today',

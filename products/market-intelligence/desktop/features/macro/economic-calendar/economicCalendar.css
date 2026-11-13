@@ -194,7 +194,7 @@
 /* 标题行：标题在左、计数在右，同一行。`min-width: 0` 让标题先被省略，计数 `flex: none` 保完整。 */
 .mi-calendar-day-list__head { display: flex; align-items: baseline; gap: var(--mi-calendar-group-gap); min-width: 0; }
 .mi-calendar-day-list__head > h2 { flex: 1 1 auto; flex-shrink: 1000; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mi-calendar-day-list__head > [data-day-summary] { flex: 0 1 auto; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.mi-calendar-day-list__head > [data-day-summary] { flex: none; margin: 0 0 0 auto; white-space: nowrap; text-align: right; }
 /*
  * The detail is a **side panel** now: it owns a column and squeezes the calendar instead of covering
  * it. The panel carries its own width, close control and focus policy; nothing about the old
