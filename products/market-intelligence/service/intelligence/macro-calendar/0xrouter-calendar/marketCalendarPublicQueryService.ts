@@ -6,6 +6,7 @@ import { marketCalendarSourceStatus } from './marketCalendarSourceStatus'
 import type { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import type { MarketRow } from './marketCalendarStorageValidation'
 import { preferredObservation, type MarketObservationCandidate } from './marketCalendarObservationPrecedence'
+import { marketCalendarDisplayTitle } from '../marketCalendarDisplayNames'
 import { eventPairVerdict } from '../marketCalendarEventPairing'
 import { narwhalCanonicalIdentityKey, toAlpha3Country, zeroXRouterCanonicalIdentity,
   type MarketCalendarCanonicalIdentity } from '../marketCalendarMetricIdentity'
@@ -156,28 +157,30 @@ export function createMarketCalendarPublicQueryService(deps: {
   function event(row: MarketRow): MarketCalendarEvent {
     const hash = createHmac('sha256', identityKey).update(String(row.observation_id)).digest('hex').slice(0, 32)
     const value = (raw: unknown) => raw === null ? null : JSON.parse(String(raw))
+    // 身份只搬运、不重算：写入端把它定死在 `candidate_key` 里，这里读出来原样带出去。
+    const storedIdentity = String(row.provider_id) === marketCalendarProviderId
+      ? narwhalCanonicalIdentityKey(String(row.candidate_key)) : undefined
+    const metricKey = storedIdentity === undefined ? undefined : storedIdentity.split('|')[1]
+    const eventNameKey = metricKey !== undefined && !eventKinds.includes(metricKey) ? metricKey : undefined
+    const measureKeys = row.measure_keys_json === null || row.measure_keys_json === undefined
+      ? undefined : JSON.parse(String(row.measure_keys_json)) as readonly string[]
+    // 展示名是**纯展示**：指标名表 → 源类型名表 → 源原文，都不参与身份与标注资格。
+    const title = marketCalendarDisplayTitle({ rawTitle: String(row.display_name),
+      eventNameKey, locale: row.locale === 'en' ? 'en' : 'zh' })
     const result = { eventKey: `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20)}`,
       // `eventKey` above is an HMAC of the stored `observation_id`. `market_fact_key` is stable
       // across batches, so it is the identity a consumer tracking the observation over time
       // must use. `sourceObservedAt` is when the batch that stored this row observed it: a later
       // batch that deduplicated the same value is not this observation's time.
       observationKey: String(row.market_fact_key),
-      title: row.display_name, countryCode: row.country_code, ...(row.country_name === null ? {} : { countryName: String(row.country_name) }), eventType: row.event_kind, importance: row.importance,
+      title, countryCode: row.country_code, ...(row.country_name === null ? {} : { countryName: String(row.country_name) }), eventType: row.event_kind, importance: row.importance,
       scheduledAt: row.scheduled_at, consensus: value(row.consensus_json), providerPrevious: value(row.provider_previous_json),
       providerActual: value(row.provider_actual_json), source: row.provider_id === marketCalendarLegacyProviderId ? '0xRouter' : marketCalendarSourceName,
-      sourceObservedAt: String(row.last_observed_at), coverage: 'observed-unverified' }
-    // 身份只搬运、不重算：写入端把它定死在 `candidate_key` 里，这里读出来原样带出去。
-    const storedIdentity = String(row.provider_id) === marketCalendarProviderId
-      ? narwhalCanonicalIdentityKey(String(row.candidate_key)) : undefined
-    const metricKey = storedIdentity === undefined ? undefined : storedIdentity.split('|')[1]
-    const measureKeys = row.measure_keys_json === null || row.measure_keys_json === undefined
-      ? undefined : JSON.parse(String(row.measure_keys_json)) as readonly string[]
-    const withIdentity = {
-      ...(metricKey !== undefined && !eventKinds.includes(metricKey) ? { ...result, eventNameKey: metricKey } : result),
-      ...(measureKeys === undefined ? {} : { measureKeys })
-    }
-    if (!isMarketCalendarEvent(withIdentity)) throw new Error('projection-unavailable')
-    return withIdentity
+      sourceObservedAt: String(row.last_observed_at), coverage: 'observed-unverified',
+      ...(eventNameKey === undefined ? {} : { eventNameKey }),
+      ...(measureKeys === undefined ? {} : { measureKeys }) }
+    if (!isMarketCalendarEvent(result)) throw new Error('projection-unavailable')
+    return result
   }
   return Object.freeze({
     queryMonth(input: unknown, observe?: MarketCalendarEvidenceObserver): MarketCalendarPage {

@@ -1,0 +1,57 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+
+import {
+  marketCalendarDisplayNameTally,
+  marketCalendarDisplayTitle,
+  marketCalendarEventTypeDisplayNames,
+  marketCalendarMetricDisplayNames
+} from './marketCalendarDisplayNames'
+
+describe('两张纯展示表', () => {
+  it('本月实际出现的 33 个 metric_key 全有中文名，且没有重名', () => {
+    const keys = Object.keys(marketCalendarMetricDisplayNames)
+    expect(keys).toHaveLength(33)
+    expect(new Set(Object.values(marketCalendarMetricDisplayNames)).size).toBe(keys.length)
+    for (const name of Object.values(marketCalendarMetricDisplayNames)) {
+      // 指标名，不是标题：不许把期间塞进名字里。
+      expect(name).not.toMatch(/\(至\d|\(月\)|上月|本周/)
+    }
+  })
+
+  it('14 个源类型名齐了，且一条个体名都没有', () => {
+    const keys = Object.keys(marketCalendarEventTypeDisplayNames)
+    expect(keys).toHaveLength(14)
+    // 个体名（讲话人、具体会议）不许进这张表：源类型串里不会出现人名式的「姓 名」结构。
+    for (const key of keys) expect(key).not.toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/)
+    for (const name of Object.values(marketCalendarEventTypeDisplayNames)) {
+      expect(name).not.toMatch(/主席|行长|先生|女士|新闻发布会：/)
+    }
+  })
+
+  it('中文界面：指标名优先，其次类型名，未知回退英文并计数', () => {
+    expect(marketCalendarDisplayTitle({ rawTitle: 'Consumer prices', eventNameKey: 'US.CORE_CPI.SA.MOM', locale: 'zh' }))
+      .toBe('核心 CPI（月率）')
+    expect(marketCalendarDisplayTitle({ rawTitle: 'Central bank speech', eventNameKey: undefined, locale: 'zh' }))
+      .toBe('央行讲话')
+    const before = marketCalendarDisplayNameTally().metricKeys
+    expect(marketCalendarDisplayTitle({ rawTitle: 'Something new', eventNameKey: 'US.NOT.REGISTERED', locale: 'zh' }))
+      .toBe('Something new')
+    expect(marketCalendarDisplayNameTally().metricKeys).toBe(before + 1)
+  })
+
+  it('英文界面直接用源给的英文名，不查表', () => {
+    expect(marketCalendarDisplayTitle({ rawTitle: 'Consumer prices', eventNameKey: 'US.CPI.NSA.YOY', locale: 'en' }))
+      .toBe('Consumer prices')
+  })
+
+  it('这两张表不许进身份与标注资格那条链——结构守卫', () => {
+    const identity = readFileSync(new URL('./marketCalendarMetricIdentity.ts', import.meta.url), 'utf8')
+    const pairing = readFileSync(new URL('./marketCalendarEventPairing.ts', import.meta.url), 'utf8')
+    for (const source of [identity, pairing]) {
+      expect(source).not.toContain('marketCalendarDisplayNames')
+      expect(source).not.toContain('marketCalendarMetricDisplayNames')
+      expect(source).not.toContain('marketCalendarEventTypeDisplayNames')
+    }
+  })
+})
