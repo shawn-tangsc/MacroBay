@@ -7,7 +7,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { ChevronDown, Info } from 'lucide-react'
 
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
-import { MiniReleaseCalendar, shiftMonth } from './MiniReleaseCalendar'
+import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
 import type { EconomicCalendarText } from '../../features/macro/economic-calendar/economicCalendarText'
@@ -16,7 +16,6 @@ import { productText } from '../../shared/i18n/productText'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { useCalendarMonthReleases } from './useCalendarMonthReleases'
-import { useNextMonthReleases } from './useNextMonthReleases'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -177,39 +176,10 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   // 右列按「能不能解释利率路径」筛，与曲线标注同一把尺子（判据来自契约，不在这里另写一份）。
   const dayLayers = useMemo(() => splitDayLayers(dayEvents), [dayEvents])
   /**
-   * 「下次发布」：先在本月那次读里找未来同一指标；**本月找不到才读下一个月**（一次，按 `asOf` 记住）。
-   * 两个月都找不到就不画这一格——不写「未提供」，也不猜「12 月之后」。
+   * 「下次发布」改读**读模型的唯一实现**（`readNextReleaseForMetric`，经读数服务进到 `fact.next`）：
+   * 它不受「抽屉里加载了哪几个月」限制。原来那套「当月找不到就读下个月」对本季度指标是错的——
+   * 下次发布落在第三个月之后时，卡片会显示「暂无排期」，而那看起来完全正常。
    */
-  const nextReleaseKeys = useMemo(() => ({
-    cpi: ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY'],
-    payrolls: ['US.NONFARM.SA.CHANGE'],
-    pce: ['US.CORE_PCE.NSA.YOY']
-  }), [])
-  const monthHasNext = useMemo(() => Object.values(nextReleaseKeys)
-    .some((keys) => nextReleaseOf(releases.events, keys, nowInstant, timeZone) === undefined), [nextReleaseKeys, releases.events, nowInstant, timeZone])
-  const nextMonthRead = useNextMonthReleases({
-    enabled: open && monthHasNext,
-    month: shiftMonth(month, 1),
-    asOf: nowInstant,
-    locale,
-    ...(readMarketEvents ? { readMarketEvents } : {})
-  })
-  const nextMonth = nextMonthRead.events
-  /**
-   * 每张卡的「下次发布」有三种结果，**读不到不等于没有**：
-   * - 找到了 → 日期；
-   * - 两个月都读到、确实没有 → 不画这一格；
-   * - 下个月那次**没读到** → 「暂时读不到」（画成「没有」就是替源编答案）。
-   */
-  const nextRelease = useMemo(() => {
-    const lookup = (keys: readonly string[]) => {
-      const found = nextReleaseOf([...releases.events, ...nextMonth], keys, nowInstant, timeZone)
-      if (found !== undefined) return { kind: 'date' as const, text: found }
-      if (nextMonthRead.state === 'unavailable') return { kind: 'unreadable' as const }
-      return { kind: 'none' as const }
-    }
-    return { cpi: lookup(nextReleaseKeys.cpi), payrolls: lookup(nextReleaseKeys.payrolls), pce: lookup(nextReleaseKeys.pce) }
-  }, [releases.events, nextMonth, nextMonthRead.state, nextReleaseKeys, nowInstant, timeZone])
   // 核心层为空、但这一天还有别的发布时**默认展开**：收起会让页面同时写着「没有事件」和「其他 27 条」，
   // 中间空一大片。显式切换过就按读者的选择，换一天再回到默认。
   const othersDefaultOpen = dayLayers.core.length === 0 && dayLayers.other.length > 0
@@ -388,9 +358,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           timeZone={timeZone}
           now={nowInstant}
           resolveKey={resolveDrawerKey}
-          nextReleaseOf={(metricKey) => metricKey === 'US.CPI.NSA.YOY'
-            ? nextRelease.cpi
-            : metricKey === 'US.NONFARM.SA.CHANGE' ? nextRelease.payrolls : nextRelease.pce}
         />
         <MiniReleaseCalendar text={text} month={month} today={today} selectedDay={selectedDay}
           events={releases.events} timeZone={timeZone} now={nowInstant}
@@ -439,23 +406,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
       </div>
     </section>
   </Drawer>
-}
-
-/**
- * 下一次发布：在**同一次按月读**的结果里按身份找「现在之后」最近的一条。
- *
- * 找不到就返回 `undefined`，调用方**不画这一格**——写「未提供」会让人以为今天该有一次发布。
- * 日期用与日历一致的显示时区算，再取 `MM-DD`（跨年时补上年，避免把 1 月写成去年）。
- */
-function nextReleaseOf(events: readonly Readonly<{ scheduledAt: string; measureKeys?: readonly string[] }>[], keys: readonly string[], nowInstant: string, timeZone: string): string | undefined {
-  const nowMs = Date.parse(nowInstant)
-  const next = events
-    .filter((event) => Date.parse(event.scheduledAt) > nowMs)
-    .filter((event) => (event.measureKeys ?? []).some((key) => keys.includes(key)))
-    .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))[0]
-  if (next === undefined) return undefined
-  const day = calendarDisplayDate(next.scheduledAt, timeZone)
-  return day.slice(0, 4) === calendarDisplayDate(nowInstant, timeZone).slice(0, 4) ? day.slice(5) : day
 }
 
 /**

@@ -26,11 +26,6 @@ export type IndicatorCardModel = Readonly<{
   nextLabel?: string
 }>
 
-export type NextReleaseState =
-  | Readonly<{ kind: 'date'; text: string }>
-  | Readonly<{ kind: 'unreadable' }>
-  | Readonly<{ kind: 'none' }>
-
 type CardInput = Readonly<{
   card: IndicatorCardModel
   facts: ReadonlyMap<string, MacroIndicatorCardFact>
@@ -43,7 +38,6 @@ type CardInput = Readonly<{
   now: string
   resolveKey: (key: string) => string
   onOpenExpectationSettings?: (metricKey: MacroIndicatorCardKey) => void
-  nextReleaseOf?: (metricKey: MacroIndicatorCardKey) => NextReleaseState
 }>
 
 /**
@@ -68,8 +62,6 @@ export function IndicatorCards(input: Readonly<{
   resolveKey: (key: string) => string
   /** 预期配置面板由配置线那边提供；没有这个回调就不画齿轮——不放假控件。 */
   onOpenExpectationSettings?: (metricKey: MacroIndicatorCardKey) => void
-  /** 已发布卡上的「下次发布」：日期 / 读不到 / 没有，三态分开（由宿主那一次按月读给出）。 */
-  nextReleaseOf?: (metricKey: MacroIndicatorCardKey) => NextReleaseState
 }>): React.ReactElement {
   const byKey = new Map((input.facts ?? []).map((fact) => [fact.metricKey, fact]))
   return (
@@ -78,8 +70,7 @@ export function IndicatorCards(input: Readonly<{
         <IndicatorCard key={card.metricKey} card={card} facts={byKey} loaded={input.facts !== undefined} unreadable={input.unreadable}
           text={input.text} calendarText={input.calendarText} timeZone={input.timeZone}
           now={input.now} resolveKey={input.resolveKey}
-          {...(input.onOpenExpectationSettings === undefined ? {} : { onOpenExpectationSettings: input.onOpenExpectationSettings })}
-          {...(input.nextReleaseOf === undefined ? {} : { nextReleaseOf: input.nextReleaseOf })} />
+          {...(input.onOpenExpectationSettings === undefined ? {} : { onOpenExpectationSettings: input.onOpenExpectationSettings })} />
       ))}
     </div>
   )
@@ -129,7 +120,7 @@ function ReleasedCard(input: CardInput & Readonly<{ fact: MacroIndicatorCardFact
           : <div><dt>{card.extraLabel}</dt><dd>{cardValueText(extra, text, unreadable)}</dd></div>}
         <div><dt>{text.cardStates.expectedLabel}</dt><dd>{consensusText(fact, text, timeZone, input.now)}</dd></div>
         {previous === undefined ? null : <div><dt>{text.previousLabel}</dt><dd>{previous}</dd></div>}
-        {input.nextReleaseOf === undefined ? null : nextReleaseRow(input.nextReleaseOf(card.metricKey), text, card)}
+        {nextReleaseRow(fact, card, text, timeZone, input.now)}
       </dl>
       <div className="mk-card__f">{cardSourceLabel(fact, text, calendarText)}<span>{text.detail}</span></div>
     </>
@@ -285,19 +276,28 @@ function approxNumber(value: number, unit: MacroIndicatorCardFact['unit']): stri
   return `约 ${Math.round(value)}K`
 }
 
-/** 「下次发布」：没有这一格就不画——写「未提供」会让人以为今天该有一次发布。 */
-function nextReleaseRow(state: NextReleaseState, text: MacroIndicatorDrawerText, card: IndicatorCardModel): React.ReactNode {
-  if (state.kind === 'none') return null
+/**
+ * 「下次发布」：**唯一的实现是读模型**（`readNextReleaseForMetric` → `fact.next`），
+ * 不再按「抽屉里加载了哪几个月」现算——那样季度指标的下次发布落在第三个月以后时会显示
+ * 「暂无排期」，而它看起来完全正常，不是空白也不是错误。
+ */
+function nextReleaseRow(
+  fact: MacroIndicatorCardFact | undefined,
+  card: IndicatorCardModel,
+  text: MacroIndicatorDrawerText,
+  timeZone: string,
+  now: string
+): React.ReactNode {
+  const next = fact?.next
+  if (next === undefined) return null
+  const day = calendarDisplayDate(next.releaseAt, timeZone)
+  const shown = day.slice(0, 4) === calendarDisplayDate(now, timeZone).slice(0, 4) ? day.slice(5) : day
   return (
     <div>
-      <dt>{nextReleaseLabel(card)}</dt>
-      <dd>{state.kind === 'date' ? state.text : text.cardStates.unreadable}</dd>
+      <dt>{card.nextLabel ?? ''}</dt>
+      <dd>{shown}</dd>
     </div>
   )
-}
-
-function nextReleaseLabel(card: IndicatorCardModel): string {
-  return card.nextLabel ?? ''
 }
 
 function cardValueClass(fact: MacroIndicatorCardFact | undefined, unreadable?: boolean): string | undefined {
