@@ -1,6 +1,7 @@
 import type { JobRuntime } from '@platform/jobs'
 
 import { createNarwhalCalendarRuntime } from './narwhalCalendarRuntime'
+import type { NarwhalCalendarBatch } from './narwhalCalendarObservationBatches'
 import { createNarwhalCalendarScheduler } from './narwhalCalendarScheduler'
 import type { NarwhalHttpResult, NarwhalRequest } from './narwhalCalendarHttp'
 
@@ -24,6 +25,8 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
   countries?: readonly string[]
   /** 读者开关：`undefined` ＝ 仍锁着（pending 期间不参与判断）。 */
   readerEnabled?: () => boolean | undefined
+  /** 把发布同时写成日历观测（走日历那张表的同一套写入校验）。 */
+  appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
 }>) {
   // 读到的密钥只活在这个闭包里：`hasCredential()` 用它判注册，`request` 用它发请求。
   let apiKey: string | undefined
@@ -57,6 +60,7 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
     request,
     readApiKey: () => apiKey,
     repository: deps.repository,
+    ...(deps.appendObservationBatch === undefined ? {} : { appendObservationBatch: deps.appendObservationBatch }),
     now: deps.now,
     sleep: deps.sleep ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)))
   })

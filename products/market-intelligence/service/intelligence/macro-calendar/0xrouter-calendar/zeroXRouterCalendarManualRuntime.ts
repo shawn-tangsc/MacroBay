@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
+import type { MarketCollectionContext } from './marketCalendarStorageValidation'
 import { createZeroXRouterCalendarCollectionService } from './zeroXRouterCalendarCollectionService'
 import { createZeroXRouterCalendarRefreshService } from './zeroXRouterCalendarRefreshService'
 import { calendarRecord } from './zeroXRouterCalendarContracts'
@@ -49,9 +51,15 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
   readerTimeZone?: () => string
 }) {
   let repository!: ReturnType<typeof createMarketCalendarEventRepository>
+  /**
+   * 不是这条采集路径产出的批次（今天只有 Narwhal）先把自己的上下文放这里，仓库照同一套
+   * 校验读它——写入口径只有一份，不因为换了来源就绕过身份/容量/证据校验。
+   */
+  const pendingContexts = new Map<string, MarketCollectionContext>()
   const collection = createZeroXRouterCalendarCollectionService({ ...deps,
     createRepository: resolveCollectionContext => {
-      repository = createMarketCalendarEventRepository({ database: deps.database, resolveCollectionContext,
+      repository = createMarketCalendarEventRepository({ database: deps.database,
+        resolveCollectionContext: (collectionId: string) => pendingContexts.get(collectionId) ?? resolveCollectionContext(collectionId),
         readCapacity: deps.readCapacity, cursorKey: deps.cursorKey, now: () => deps.now().toISOString(),
         monotonicNow: deps.monotonicNow, manualCapacityAdmission: true })
       return repository
@@ -207,6 +215,23 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
       active = { key, promise }
       return promise
     },
+    /**
+     * 外部采集（Narwhal）把一页发布写进同一张观测表。
+     *
+     * 上下文在这里现造：来源、身份、月份都来自批次本身，`evidenceHash` 取批次内容的 sha256，
+     * `rawRecordId` 由集合 id 派生（可追到是哪一次采集写的）。
+     */
+    appendObservationBatch(batch: Readonly<{ collectionId: string; providerId: string; descriptorId: string
+      locale: string; month: string; parseResult: unknown }>): { state: string; failureCode?: string } {
+      const evidenceHash = createHash('sha256').update(JSON.stringify(batch.parseResult)).digest('hex')
+      pendingContexts.set(batch.collectionId, {
+        providerId: batch.providerId, descriptorId: batch.descriptorId, locale: batch.locale, month: batch.month,
+        detectedAt: deps.now().toISOString(),
+        evidence: { providerId: batch.providerId, descriptorId: batch.descriptorId,
+          rawRecordId: `batch-${batch.collectionId}`.slice(0, 120), evidenceHash }
+      })
+      try { return repository.appendCollection(batch) } finally { pendingContexts.delete(batch.collectionId) }
+    },
     dispose(): Promise<void> {
       stopped = true
       disposal ??= (active?.promise ?? Promise.resolve()).then(() => undefined, () => undefined)
@@ -323,6 +348,8 @@ export function createStoredManualCalendar(deps: {
   }
   return Object.freeze({
     queryMonth: query.queryMonth,
+    /** 外部采集（Narwhal）的观测写入，原样转给同一个仓库。 */
+    appendObservationBatch: runtime.appendObservationBatch,
     /** Bounded catch-up, forwarded unchanged: the runtime already owns the verdicts. */
     refreshNow: runtime.refreshNow,
     /**

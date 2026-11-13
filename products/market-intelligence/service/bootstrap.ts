@@ -399,6 +399,12 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const narwhalCalendarAssembly = createNarwhalCalendarAssembly({
     jobRuntime: deps.jobRuntime,
     repository: macroCalendarBackend.repository,
+    // 采集到的发布同时写进日历读的那张观测表；写入走它自己的同一套校验，失败只记一句，
+    // 不让一次写坏把整轮采集判失败（发布级行仍然写成功了）。
+    appendObservationBatch: (batch) => {
+      const written = marketCalendar.appendObservationBatch(batch)
+      if (written.state !== 'succeeded') console.warn(`[macro-calendar] 观测批次未写入：${written.failureCode ?? 'unknown'}`)
+    },
     fetchImpl: getPlatformFetch(),
     getCredential: credentialRef => intelligenceModule.sourceCredentials.getByRef(credentialRef),
     now: Date.now
