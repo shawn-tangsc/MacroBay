@@ -14,6 +14,10 @@ import type { createNarwhalCalendarRuntime } from './narwhalCalendarRuntime'
  *
  * 这条「解锁后开关必须生效」由用例钉住，不靠注释。
  *
+ * **现状（2026-11-13）**：三条 Narwhal 已解锁（`visibility` 不再是 `pending`），所以
+ * 「`pending` 就不采」那条判据**今天是死路径、不触发**；留着是给以后先在 `pending` 里试水的
+ * 新源用——那时它必须真的挡住采集，而不是只在设置页显示「待接入」。
+ *
  * **启动自检**：`interval` + `anchor='lastStart'` 在平台调度器里是朴素 `setInterval`——注册后
  * 第一次触发在**一个间隔之后**。日扫是 24 小时一次，于是新装或重启后的头 24 小时里
  * 「今天..+30 天」一条都不会采，读者看到的就是「下半月空着」。这不是「等它跑」，
