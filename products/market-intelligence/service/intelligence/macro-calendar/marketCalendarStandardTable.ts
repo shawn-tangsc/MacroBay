@@ -1,7 +1,18 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 /**
- * 标准日历表：**一身份一行**，主键就是身份 `(country_code, metric_key, period_key)`。
+ * 标准日历表：**一行 = 一次发布**。主键 = 身份 `(country_code, metric_key, period_key)` +
+ * **首次发布时刻** `first_scheduled_at`（冻结；显示用的 `scheduled_at` 不在主键里，源改期就跟着变）。
+ *
+ * 为什么时刻进主键：同一指标同一期间可能发两次（密歇根初值 11-06、终值 11-20）。只按身份收敛会把
+ * 其中一次发布**静默吞掉**——那是「日历少了一个发布」，不是「修订覆盖」。用时刻区分，规则能写成
+ * 一句：**同指标、同期间、不同发布时刻 = 两次发布，各占一行**。不用 `prelim`/`final` 这类人工标签：
+ * 源不总给这个信息，判错就是错标；而时刻是源自带、语言无关、不用判断。
+ *
+ * 两列拆开才有「改期仍是一行」：`first_scheduled_at` 冻结且在主键里；`scheduled_at` 是显示用的，
+ * 源改期时就变。**认回「同一次发布」先按源内 id**（`source_provider_id` + `source_event_id`）：
+ * 命中就是同一次发布，只更新显示时刻/值/观测时间；找不到才按主键插入。**不写「差几小时内算同一次」
+ * 这种容差**——那是替源做判断，判错就把两次发布并成一次，正是要防的事。
  *
  * 与观测表的区别（观测表是**采集日志**，别混）：这里没有 `collection_id`/`descriptor_id`
  * ——那两个回答的是「哪一次采集、哪个端点」，属于采集层。读取层只读这张表，因此「不感知源」。
@@ -24,7 +35,10 @@ export type CalendarStandardRow = Readonly<{
   metricKey: string
   periodKey: string
   scheduledDate: string
+  /** 显示用的发布时刻：源改期就变，**不在主键里**。 */
   scheduledAt: string
+  /** 首次看到的发布时刻：冻结，**在主键里**。不传时取 `scheduledAt`（首次写入的常态）。 */
+  firstScheduledAt?: string
   timePrecision: 'minute' | 'date'
   valuesJson: string
   sourceProviderId: string
@@ -45,6 +59,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       metric_key text not null,
       period_key text not null,
       scheduled_date text not null,
+      first_scheduled_at text not null,
       scheduled_at text not null,
       time_precision text not null check(time_precision in ('minute', 'date')),
       values_json text not null,
@@ -55,7 +70,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       first_seen_at text not null,
       first_published_actual text,
       first_published_previous text,
-      primary key(country_code, metric_key, period_key)
+      primary key(country_code, metric_key, period_key, first_scheduled_at)
     );
     create index if not exists idx_calendar_events_month
       on ${eventsTable}(country_code, scheduled_at);
@@ -77,11 +92,11 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
 export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): void {
   const { eventsTable } = calendarStandardTablePolicy
   database.prepare(`insert into ${eventsTable}
-    (country_code, metric_key, period_key, scheduled_date, scheduled_at, time_precision, values_json,
-     source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
+    (country_code, metric_key, period_key, scheduled_date, first_scheduled_at, scheduled_at, time_precision,
+     values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    on conflict(country_code, metric_key, period_key) do update set
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    on conflict(country_code, metric_key, period_key, first_scheduled_at) do update set
       scheduled_date = excluded.scheduled_date,
       scheduled_at = excluded.scheduled_at,
       time_precision = excluded.time_precision,
@@ -90,7 +105,8 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       source_event_id = excluded.source_event_id,
       parser_version = excluded.parser_version,
       observed_at = excluded.observed_at`)
-    .run(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate, row.scheduledAt, row.timePrecision,
+    .run(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate,
+      row.firstScheduledAt ?? row.scheduledAt, row.scheduledAt, row.timePrecision,
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null)
 }
@@ -103,4 +119,24 @@ export function recordCalendarUnmapped(database: DatabaseSync, input: Readonly<{
   database.prepare(`insert or ignore into ${unmappedTable}
     (provider_id, source_key, detected_at, raw_json, reason) values (?, ?, ?, ?, ?)`)
     .run(input.providerId, input.sourceKey, input.detectedAt, input.rawJson, input.reason)
+}
+
+/**
+ * 按**源内 id** 找回同一次发布（`source_provider_id` + `source_event_id`）。
+ *
+ * 这是「改期仍是一行」的唯一判据：先按源内 id 找，命中的就是同一次发布，更新显示时刻/值即可；
+ * 找不到才按主键插入。**不用时间容差**——那等于替源判断「差几小时算同一次」，判错就把两次
+ * 真实发布并成一次。
+ */
+export function findCalendarStandardRowBySource(database: DatabaseSync, input: Readonly<{
+  sourceProviderId: string; sourceEventId: string
+}>): Readonly<{ countryCode: string; metricKey: string; periodKey: string; firstScheduledAt: string }> | undefined {
+  const { eventsTable } = calendarStandardTablePolicy
+  const row = database.prepare(`select country_code, metric_key, period_key, first_scheduled_at
+    from ${eventsTable} where source_provider_id = ? and source_event_id = ? limit 1`)
+    .get(input.sourceProviderId, input.sourceEventId) as Record<string, unknown> | undefined
+  return row === undefined ? undefined : {
+    countryCode: String(row.country_code), metricKey: String(row.metric_key),
+    periodKey: String(row.period_key), firstScheduledAt: String(row.first_scheduled_at)
+  }
 }

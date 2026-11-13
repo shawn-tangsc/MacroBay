@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import {
-  ensureCalendarStandardTables, recordCalendarUnmapped, upsertCalendarStandardRow,
+  ensureCalendarStandardTables, findCalendarStandardRowBySource, recordCalendarUnmapped, upsertCalendarStandardRow,
   type CalendarStandardRow
 } from './marketCalendarStandardTable'
 
@@ -52,5 +52,41 @@ describe('标准日历表', () => {
     recordCalendarUnmapped(database, entry)
     expect((database.prepare('select count(*) c from mi_calendar_unmapped').get() as { c: number }).c).toBe(1)
     expect(rows(database)).toHaveLength(0)
+  })
+})
+
+describe('一次发布一行：四次判红口径', () => {
+  const write = (database: DatabaseSync, over: Partial<CalendarStandardRow>) =>
+    upsertCalendarStandardRow(database, { ...base, ...over })
+
+  it('同一期间两次真实发布（初值 11-06 / 终值 11-20）→ 两行', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, { sourceEventId: 'r-prelim', scheduledAt: '2026-11-06T15:00:00.000Z' })
+    write(database, { sourceEventId: 'r-final', scheduledAt: '2026-11-20T15:00:00.000Z' })
+    expect(rows(database)).toHaveLength(2)
+  })
+
+  it('同一发布修订 → 仍一行，且其次发布时刻不变', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, {})
+    write(database, { valuesJson: JSON.stringify({ actual: '165', previous: '60' }),
+      observedAt: '2026-11-13T09:00:00.000Z' })
+    const [row] = rows(database)
+    expect(rows(database)).toHaveLength(1)
+    expect(row!.first_scheduled_at).toBe(base.scheduledAt)
+  })
+
+  it('源改期（同源同 source_event_id）→ 仍一行，显示时刻跟着变', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, {})
+    const found = findCalendarStandardRowBySource(database, { sourceProviderId: 'narwhal', sourceEventId: 'r-1' })!
+    write(database, { scheduledAt: '2026-11-07T13:30:00.000Z', firstScheduledAt: found.firstScheduledAt })
+    const [row] = rows(database)
+    expect(rows(database)).toHaveLength(1)
+    expect(row!.scheduled_at).toBe('2026-11-07T13:30:00.000Z')
+    expect(row!.first_scheduled_at).toBe(base.scheduledAt)
   })
 })

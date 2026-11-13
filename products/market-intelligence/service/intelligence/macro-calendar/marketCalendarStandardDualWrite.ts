@@ -6,7 +6,7 @@ import { nameByMetricKey } from './marketCalendarCodeNames'
 
 /** 事件型身份的第二段：不是指标码，`evt.*` 映射还没接。 */
 const EVENT_KINDS: readonly string[] = ['central-bank-activity', 'financial-event']
-import { recordCalendarUnmapped, upsertCalendarStandardRow,
+import { findCalendarStandardRowBySource, recordCalendarUnmapped, upsertCalendarStandardRow,
   type CalendarUnmappedReason } from './marketCalendarStandardTable'
 
 /**
@@ -93,8 +93,14 @@ export function dualWriteObservationBatch(
       }
       const scheduledAt = String(draft.scheduledAt ?? '')
       const scheduledDate = String(draft.scheduledDate ?? scheduledAt.slice(0, 10))
+      // 认回「同一次发布」：**先按源内 id**（同 provider + 同 source_event_id）。命中就用它冻结的
+      // `first_scheduled_at` 作为主键，只更新显示时刻/值——源改期不会把一条变成两条。
+      const existing = findCalendarStandardRowBySource(database, {
+        sourceProviderId: batch.providerId, sourceEventId: String(draft.marketFactKey)
+      })
       upsertCalendarStandardRow(database, {
         countryCode, metricKey, periodKey, scheduledDate, scheduledAt,
+        ...(existing === undefined ? {} : { firstScheduledAt: existing.firstScheduledAt }),
         timePrecision: scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute',
         valuesJson: JSON.stringify({
           ...(draft.consensus === undefined ? {} : { consensus: draft.consensus.displayValue }),
