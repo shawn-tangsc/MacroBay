@@ -545,7 +545,10 @@ export const intelligenceSourcesText = {
        归卡片齿轮，不进这里（否则读者会以为它能供数，关了却发现数还在）。 */
     valueSourceType: { official: '官方', provider: '数据商' },
     valueSourceFrequencyReadonly: '频率只读',
-    valueSourceFootnote: '关闭某个源不会删除历史数据，只是不再采集。',
+    /* 这里那颗开关**就是源自己的启停**（和「日历」页按源列的是同一个事实），不是这份菜单的私有配置——
+       所以要把共用后果写在页脚，别让读者以为「只对这个指标关了」。 */
+    valueSourceFootnote: '关闭某个源不会删除历史数据，只是不再采集；**同一个源在多个指标下共用这一颗开关**。',
+    valueSourceShared: '共用同一颗源开关',
     valueSourceEmpty: '这个指标还没有可用来源。',
     providerExpectationTitle: '由数据源（{provider}）在发布前汇总的分析师预期中值',
     showVolume: '显示成交量',
@@ -1168,7 +1171,8 @@ export const intelligenceSourcesText = {
     sources: { market: 'Market-implied', provider: 'Data provider expectation', manual: 'Manual' },
     valueSourceType: { official: 'Official', provider: 'Data provider' },
     valueSourceFrequencyReadonly: 'Frequency is read-only',
-    valueSourceFootnote: 'Turning a source off keeps its history; it only stops collecting.',
+    valueSourceFootnote: 'Turning a source off keeps its history; it only stops collecting; **one source shares this switch across indicators**.',
+    valueSourceShared: 'Same switch as the source itself',
     valueSourceEmpty: 'No value source is available for this indicator yet.',
     providerExpectationTitle: 'The analyst consensus the data source ({provider}) summarises before release',
     showVolume: 'Show volume',
