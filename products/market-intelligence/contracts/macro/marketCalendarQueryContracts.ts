@@ -94,6 +94,14 @@ export type MarketCalendarEvent = Readonly<{
    * 这一类事件里一行都没有时回落出现（库里还留着切换前的行）。
    */
   source: 'Narwhal' | '0xRouter'; sourceObservedAt: string; coverage: 'observed-unverified'
+  /**
+   * 这条发布到什么精度：`minute` 有时刻、`date` 只有日期。
+   * **少了它，日期型事件会被画成 00:00 一条**（README 里那句「缺字段会静默失效」）。
+   * 可选：旧的投影不产出它，读侧要按「没有就按时刻渲染」保持兼容。
+   */
+  timePrecision?: 'minute' | 'date'
+  /** 源给的发布状态：读侧分「已发布 / 排期 / 取消」只许读它，不按日期推。 */
+  releaseStatus?: 'scheduled' | 'published' | 'cancelled' | 'unknown'
   officialLink?: MarketCalendarOfficialLink
 }>
 /**
