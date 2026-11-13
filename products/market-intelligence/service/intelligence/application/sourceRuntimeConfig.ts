@@ -57,6 +57,8 @@ const MACRO_POLLING_INTERVAL_SEC: Record<IntelligenceCollectionPreset, number | 
  * 现在这条只排除真正没产出的源。源清单仍只来自注册表，没有 id 白名单。
  */
 export function isDefaultEnabledDefinition(definition: IntelligenceSourceDefinition): boolean {
+  /* 显式声明优先：密钥已在库里、数据已回填的源不能因为「需要密钥」就被默认关掉（会突然停采）。 */
+  if (definition.defaultEnabled === true) return true
   if (sourceRequiresCredential(definition.authMode)) return false
   if ((definition.readiness ?? 'live') !== 'live') return false
   // `maintenanceOnly` 只声明在 `providerRegistry`（catalog 没有这个字段），按 id 反查一次。

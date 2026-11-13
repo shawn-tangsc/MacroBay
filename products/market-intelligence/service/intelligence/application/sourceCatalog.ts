@@ -589,7 +589,7 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
   source({
     sourceId: narwhalSourcePolicy.sourceId, displayName: 'Narwhal economic data', sourceGroup: 'aggregate-data-provider',
     adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-economic-data-v1',
-    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'live',
+    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'live', defaultEnabled: true,
     /* 采集在跑（作业由日历线自己的调度器拥有），所以这里必须同笔开 `supportsRunNow`：
        跨表审计要求 `provider.runNow !== 'none'` ↔ `catalog.supportsRunNow === true`，否则
        `run-now-disagreement` 红。`readiness` 也不能留在 planned——它会把 `supportsRunNow` 强制成 false。 */
@@ -600,7 +600,7 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
   source({
     sourceId: 'macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', sourceGroup: 'aggregate-data-provider',
     adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-financial-events-v1',
-    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'live',
+    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'live', defaultEnabled: true,
     /* 采集在跑（作业由日历线自己的调度器拥有），所以这里必须同笔开 `supportsRunNow`：
        跨表审计要求 `provider.runNow !== 'none'` ↔ `catalog.supportsRunNow === true`，否则
        `run-now-disagreement` 红。`readiness` 也不能留在 planned——它会把 `supportsRunNow` 强制成 false。 */
@@ -611,7 +611,7 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
   source({
     sourceId: 'macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', sourceGroup: 'aggregate-data-provider',
     adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-central-bank-activities-v1',
-    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'live',
+    reliabilityTier: 'aggregator', authMode: 'api-key', readiness: 'live', defaultEnabled: true,
     /* 采集在跑（作业由日历线自己的调度器拥有），所以这里必须同笔开 `supportsRunNow`：
        跨表审计要求 `provider.runNow !== 'none'` ↔ `catalog.supportsRunNow === true`，否则
        `run-now-disagreement` 红。`readiness` 也不能留在 planned——它会把 `supportsRunNow` 强制成 false。 */
