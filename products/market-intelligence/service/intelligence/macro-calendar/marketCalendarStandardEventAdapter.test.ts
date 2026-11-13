@@ -30,7 +30,7 @@ const seed = (): DatabaseSync => {
 
 const context = {
   locale: 'zh' as const,
-  source: 'Narwhal' as const,
+  resolveSource: (_row: { sourceProviderId: string }) => 'Narwhal' as const,
   // 名称解析由装配处注入：指标码与事件码在两张名表里。
   resolveTitle: (row: { metricKey: string }) => {
     const metric = (nameByMetricKey as Record<string, { zhShort: string }>)[row.metricKey]

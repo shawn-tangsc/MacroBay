@@ -15,7 +15,7 @@ const base: CalendarStandardRow = {
 const reader = (database: DatabaseSync) => createStandardMonthPageReader({
   database,
   resolveTitle: (row) => row.sourceLabel ?? 'T:'.concat(row.metricKey),
-  sourceOf: () => 'Narwhal'
+  sourceOf: () => 'Narwhal' as const
 })
 const seeded = (events: number): DatabaseSync => {
   const database = new DatabaseSync(':memory:')

@@ -47,8 +47,9 @@ export function createStandardMonthPageReader(deps: Readonly<{
       try {
         const rows = readStandardCalendarMonth(deps.database, { month: input.month, limit: 5_000 })
         const events = standardRowsToMarketEvents(rows, {
-          locale: input.locale, resolveTitle: deps.resolveTitle, source: 'Narwhal'
-        }).map((event) => ({ ...event, source: deps.sourceOf({ sourceProviderId: event.source }) }))
+          locale: input.locale, resolveTitle: deps.resolveTitle,
+          resolveSource: (row) => deps.sourceOf({ sourceProviderId: row.sourceProviderId })
+        })
         // 月内校验：越界的行不许进页（跨月数据串进来是分页最容易犯的错）。
         const inMonth = events.filter((event) => event.scheduledAt.startsWith(`${input.month}-`))
         const offset = input.cursor === undefined ? 0 : (contexts.get(input.cursor)?.offset ?? -1)

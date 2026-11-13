@@ -45,7 +45,8 @@ export function eventKeyForIdentity(row: StandardMonthRow): string {
 export type StandardEventContext = Readonly<{
   locale: 'zh' | 'en'
   resolveTitle: (row: StandardMonthRow) => string | undefined
-  source: MarketCalendarEvent['source']
+  /** 这一行来自哪个源：由装配处判（本文件不碰源名字面量，那块有守卫）。 */
+  resolveSource: (row: StandardMonthRow) => MarketCalendarEvent['source']
 }>
 
 /** `undefined` ↔ 「这条行没有可显示的名字」：调用方按「不显示」处理，不猜。 */
@@ -72,7 +73,7 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     importance: 'medium',
     scheduledAt: row.scheduledAt ?? `${row.scheduledDate}T00:00:00.000Z`,
     consensus: value('consensus'), providerPrevious: value('previous'), providerActual: value('actual'),
-    source: context.source,
+    source: context.resolveSource(row),
     sourceObservedAt: row.observedAt, coverage: 'observed-unverified',
     timePrecision: row.timePrecision, releaseStatus: row.status
   }
