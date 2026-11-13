@@ -395,12 +395,14 @@ const reading: PolicyPathReading = {
 
 describe('the three simplified cards', () => {
   // 真库里的三条事实：CPI 本期空、上一期 3.7；非农 165/首发布上期 29；核心 PCE 本月没有发布行。
+  // 发布时刻放在 `now`（11-13 10:00）的 3 天内：这一组测的是**已发布卡**；
+  // 卡位替换（过了 3 天换成下一期卡）另有一组用例。
   const facts: readonly MacroIndicatorCardFact[] = [
-    { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 3.7, unit: 'percent' },
-    { metricKey: 'US.CORE_CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 2.6, unit: 'percent' },
-    { metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal' },
+    { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-12T13:30:00.000Z', previousAsPublished: 3.7, unit: 'percent' },
+    { metricKey: 'US.CORE_CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-12T13:30:00.000Z', previousAsPublished: 2.6, unit: 'percent' },
+    { metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', period: '2026-10', releasedAt: '2026-11-12T13:30:00.000Z', value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal' },
     { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' },
-    { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' }
+    { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-12T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' }
   ]
 
   const cardMainValues = () =>
@@ -411,7 +413,10 @@ describe('the three simplified cards', () => {
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
+      // `now` 固定：卡位替换的判据是「距发布几天」，跟着墙上时钟走的话，这些用例
+      // 过两天就会自己变成下一期卡——那是时间炸弹，不是测试。
       root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined}
+        now="2026-11-13T10:00:00.000Z"
         onRetryPolicy={() => undefined} policyText={text} {...(cardFacts ? { cardFacts } : {})}
         {...(cardFactsUnreadable ? { cardFactsUnreadable: true } : {})} /></ShellLanguageProvider>)
     })
@@ -458,8 +463,10 @@ describe('the three simplified cards', () => {
     expect(cpi).toContain('11-25')
     // 非农在当天稍后还有一次发布（12:30Z），所以这一格有日期——不是「凡是未来的都算下个月」。
     expect(payrolls).toContain('下次发布')
-    // 核心 PCE 在这份数据里没有未来行（两个月都读到了）：这一格整格不画，而不是写「未提供」。
-    expect(pce).not.toContain('下次发布')
+    // 核心 PCE 没有已发布读数 → 卡位已是**下一期卡**（2026-11-14 定的卡位替换），
+    // 它没有排期，所以写「暂无排期」，而不是把旧数据摆成「本期未提供」。
+    expect(pce).toContain('暂无排期')
+    expect(pce).not.toContain('未提供')
   })
 
   it('reads next month only when this month has no future release, and only once per snapshot', async () => {
@@ -509,10 +516,66 @@ describe('the three simplified cards', () => {
     expect(cpi).toContain('暂时读不到')
   })
 
-  it('says 未提供 for core PCE because this month has no release row', async () => {
+  /**
+   * 核心 PCE 本月没有发布行 → 卡位是**下一期卡**（2026-11-14 定的卡位替换）：
+   * 它不再把旧读数摆成「本期未提供」，而是直说下一次什么时候发、预期是什么；
+   * 没有排期就写「暂无排期」——那是「没排期」，不是「没数据」。
+   */
+  it('turns 核心 PCE into the next-release card instead of showing an old reading as this month', async () => {
     const [, , pce] = await renderCards(facts)
-    expect(pce).toContain('未提供')
-    expect(pce).toContain('本月未发布')
+    expect(pce).toContain('暂无排期')
+    expect(pce).not.toContain('未提供')
+  })
+
+  /**
+   * 卡位替换的另一半：**过了 3 天就换成下一期卡**（用户 2026-11-14 定）。
+   * 这一组钉住那张卡的四个可见事实：倒计时 tag、预期值 + 出处、成交量（仅盘口）、没有「较上期」。
+   */
+  describe('the next-release card', () => {
+    const stale = facts.map((fact) => ({ ...fact, releasedAt: '2026-11-06T13:30:00.000Z' }))
+
+    it('switches the slot to the next release and counts down to it', async () => {
+      const [cpi] = await renderCards(stale.map((fact) => fact.metricKey === 'US.CPI.NSA.YOY' ? {
+        ...fact,
+        next: { period: '2026-11', releaseAt: '2026-12-10T13:30:00.000Z', timePrecision: 'minute' as const }
+      } : fact))
+      expect(cpi).toContain('下次发布 11 月 · 12-10')
+      expect(cpi).toContain('27 天后')
+    })
+
+    it('shows the market expectation with its volume, and says the observation was before the release', async () => {
+      const [, payrolls] = await renderCards(stale.map((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE' ? {
+        ...fact,
+        next: {
+          period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z', timePrecision: 'minute' as const,
+          expected: { value: 112.5, provenance: 'market-implied' as const, asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
+        }
+      } : fact))
+      expect(payrolls).toContain('约 113K')
+      expect(payrolls).toContain('$5,285')
+      expect(payrolls).toContain('发布前')
+      // 盘口反推的是档位中点，不是精确值：写「约」，也不加正负号。
+      expect(payrolls).not.toContain('+113K')
+      // 还没有实际值，「较上期」没有基准，这张卡上不该出现它。
+      expect(payrolls).not.toContain('较上期')
+    })
+
+    it('never counts down when the source only gave a date', async () => {
+      const [cpi] = await renderCards(stale.map((fact) => fact.metricKey === 'US.CPI.NSA.YOY' ? {
+        ...fact,
+        next: { period: '2026-11', releaseAt: '2026-11-17T00:00:00.000Z', timePrecision: 'date' as const }
+      } : fact))
+      expect(cpi).toContain('4 天后')
+      expect(cpi).not.toContain('小时')
+    })
+
+    it('says 暂无预期 when there is a schedule but no market and no provider value', async () => {
+      const [cpi] = await renderCards(stale.map((fact) => fact.metricKey === 'US.CPI.NSA.YOY' ? {
+        ...fact,
+        next: { period: '2026-11', releaseAt: '2026-12-10T13:30:00.000Z', timePrecision: 'minute' as const, expectedState: 'no-market' as const }
+      } : fact))
+      expect(cpi).toContain('暂无预期')
+    })
   })
 
   /**

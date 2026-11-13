@@ -27,6 +27,7 @@ import type { MacroIndicatorCardFact, MacroIndicatorCardKey } from '../../../ser
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
+import { IndicatorCards, type IndicatorCardModel } from './IndicatorCards'
 
 import './macroIndicatorDrawer.css'
 
@@ -290,11 +291,18 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
   const factOf = (key: MacroIndicatorCardKey): MacroIndicatorCardFact | undefined =>
     cardFacts?.find((fact) => fact.metricKey === key)
-  const cpiFact = factOf('US.CPI.NSA.YOY')
-  const coreCpiFact = factOf('US.CORE_CPI.NSA.YOY')
-  const payrollsFact = factOf('US.NONFARM.SA.CHANGE')
-  const pceFact = factOf('US.CORE_PCE.NSA.YOY')
-  const unemploymentFact = factOf('US.UNEMPLOYMENT.SA.RATE')
+  // 三张卡的标题与单位来自文案表，身份仍是 metric_key：不靠标题文本认指标。
+  const cardModels: readonly IndicatorCardModel[] = [
+    {
+      metricKey: 'US.CPI.NSA.YOY', title: text.cards.cpi.title, unit: text.cards.cpi.unit,
+      extraMetricKey: 'US.CORE_CPI.NSA.YOY', extraLabel: text.cards.cpi.core, nextLabel: text.cards.cpi.next
+    },
+    {
+      metricKey: 'US.NONFARM.SA.CHANGE', title: text.cards.payrolls.title, unit: text.cards.payrolls.unit,
+      extraMetricKey: 'US.UNEMPLOYMENT.SA.RATE', extraLabel: text.cards.payrolls.unemployment, nextLabel: text.cards.payrolls.next
+    },
+    { metricKey: 'US.CORE_PCE.NSA.YOY', title: text.cards.pce.title, unit: text.cards.pce.unit, nextLabel: text.cards.pce.next }
+  ]
   // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
   // 图上用短名（完整标题不上图）；名字按身份取，不按标题文本猜。
   const eventMarks = useMemo(() => {
@@ -371,53 +379,19 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           </div>
         </div>
 
-        <div className="mk-strip">
-          <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.cpi.title}</h3>
-              {cpiFact?.state === 'missing-current' ? <CardWhy resolveKey={resolveDrawerKey} /> : null}</div>
-            <div className="mk-card__v"><b className={cardValueClass(cpiFact, cardFactsUnreadable)}>{cardValueText(cpiFact, text, cardFactsUnreadable)}</b><span>{text.cards.cpi.unit}</span></div>
-            {cardChangeText(cpiFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(cpiFact, text)}</p>}
-            {cardStateText(cpiFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(cpiFact, text, cardFactsUnreadable)}</p>}
-            <dl className="mk-card__facts">
-              <div><dt>{text.cards.cpi.core}</dt><dd>{cardValueText(coreCpiFact, text, cardFactsUnreadable)}</dd></div>
-              <div><dt>{text.cards.cpi.consensus}</dt><dd>{consensusText(cpiFact, text, timeZone, nowInstant)}</dd></div>
-              {previousText(cpiFact, text, timeZone) === undefined ? null
-                : <div><dt>{text.previousLabel}</dt><dd>{previousText(cpiFact, text, timeZone)}</dd></div>}
-              {nextRelease.cpi.kind === 'none' ? null : <div><dt>{text.cards.cpi.next}</dt>
-                <dd>{nextRelease.cpi.kind === 'date' ? nextRelease.cpi.text : text.cardStates.unreadable}</dd></div>}
-            </dl>
-            <div className="mk-card__f">{cardSourceLabel(cpiFact, text, calendarText)}<span>{text.detail}</span></div>
-          </article>
-          <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.payrolls.title}</h3></div>
-            <div className="mk-card__v"><b className={cardValueClass(payrollsFact, cardFactsUnreadable)}>{cardValueText(payrollsFact, text, cardFactsUnreadable)}</b><span>{text.cards.payrolls.unit}</span></div>
-            {cardChangeText(payrollsFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(payrollsFact, text)}</p>}
-            {cardStateText(payrollsFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(payrollsFact, text, cardFactsUnreadable)}</p>}
-            <dl className="mk-card__facts">
-              <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{cardValueText(unemploymentFact, text, cardFactsUnreadable)}</dd></div>
-              <div><dt>{text.cards.payrolls.consensus}</dt><dd>{consensusText(payrollsFact, text, timeZone, nowInstant)}</dd></div>
-              {nextRelease.payrolls.kind === 'none' ? null : <div><dt>{text.cards.payrolls.next}</dt>
-                <dd>{nextRelease.payrolls.kind === 'date' ? nextRelease.payrolls.text : text.cardStates.unreadable}</dd></div>}
-            </dl>
-            <div className="mk-card__f">{cardSourceLabel(payrollsFact, text, calendarText)}<span>{text.detail}</span></div>
-          </article>
-          <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.pce.title}</h3>
-              {pceFact?.state === 'missing-current' ? <CardWhy resolveKey={resolveDrawerKey} /> : null}</div>
-            <div className="mk-card__v"><b className={cardValueClass(pceFact, cardFactsUnreadable)}>{cardValueText(pceFact, text, cardFactsUnreadable)}</b><span>{text.cards.pce.unit}</span></div>
-            {cardChangeText(pceFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(pceFact, text)}</p>}
-            {cardStateText(pceFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(pceFact, text, cardFactsUnreadable)}</p>}
-            <dl className="mk-card__facts">
-              <div><dt>{text.cards.pce.consensus}</dt><dd>{consensusText(pceFact, text, timeZone, nowInstant)}</dd></div>
-              {previousText(pceFact, text, timeZone) === undefined ? null
-                : <div><dt>{text.previousLabel}</dt><dd>{previousText(pceFact, text, timeZone)}</dd></div>}
-              {nextRelease.pce.kind === 'none' ? null : <div><dt>{text.cards.pce.next}</dt>
-                <dd>{nextRelease.pce.kind === 'date' ? nextRelease.pce.text : text.cardStates.unreadable}</dd></div>}
-            </dl>
-            <div className="mk-card__f">{cardSourceLabel(pceFact, text, calendarText)}<span>{text.detail}</span></div>
-          </article>
-        </div>
-
+        <IndicatorCards
+          cards={cardModels}
+          {...(cardFacts === undefined ? {} : { facts: cardFacts })}
+          {...(cardFactsUnreadable === true ? { unreadable: true } : {})}
+          text={text}
+          calendarText={calendarText}
+          timeZone={timeZone}
+          now={nowInstant}
+          resolveKey={resolveDrawerKey}
+          nextReleaseOf={(metricKey) => metricKey === 'US.CPI.NSA.YOY'
+            ? nextRelease.cpi
+            : metricKey === 'US.NONFARM.SA.CHANGE' ? nextRelease.payrolls : nextRelease.pce}
+        />
         <MiniReleaseCalendar text={text} month={month} today={today} selectedDay={selectedDay}
           events={releases.events} timeZone={timeZone} now={nowInstant}
           state={releases.state} refreshing={releases.refreshing}
