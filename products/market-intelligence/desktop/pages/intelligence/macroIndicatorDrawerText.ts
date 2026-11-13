@@ -46,6 +46,13 @@ export const macroIndicatorDrawerText = {
       payrolls: { title: '新增就业', state: '11-06 已发布', unit: '非农新增', unemployment: '失业率', next: '下次发布' },
       pce: { title: 'PCE 核心', state: '10-29 已发布', unit: '核心同比', next: '下次发布' }
     },
+    cardStates: {
+      notAvailable: '未提供',
+      missingCurrent: '{period} · 已到发布日期，首发布值未收录',
+      notRecorded: '本月未发布',
+      previousPeriod: '上一期 {value}',
+      vsPrevious: '较上期（未修正）{value}'
+    },
     expectedDiff: '预期差 年率 {yoy} · 核心 {core}',
     source: 'FRED',
     sourceBls: 'BLS',
@@ -92,6 +99,13 @@ export const macroIndicatorDrawerText = {
       cpi: { title: 'CPI YoY', state: '11-10 published', unit: 'YoY', core: 'Core YoY', next: 'Next release' },
       payrolls: { title: 'Payrolls', state: '11-06 published', unit: 'NFP change', unemployment: 'Unemployment', next: 'Next release' },
       pce: { title: 'Core PCE', state: '10-29 published', unit: 'Core YoY', next: 'Next release' }
+    },
+    cardStates: {
+      notAvailable: 'Not available',
+      missingCurrent: '{period} · released, first-publish value not recorded',
+      notRecorded: 'Not released this month',
+      previousPeriod: 'Previous {value}',
+      vsPrevious: 'vs previous (unrevised) {value}'
     },
     expectedDiff: 'Surprise YoY {yoy} · core {core}',
     source: 'FRED',

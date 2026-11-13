@@ -158,6 +158,10 @@
 .mk-card__h em { font-size: var(--font-meta); color: var(--muted); font-style: normal; margin-left: auto; white-space: nowrap; }
 .mk-card__v { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .mk-card__v b { font-size: var(--font-metric-sm); line-height: 1.05; font-weight: 600; color: var(--text-strong); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+/* 「未提供」不占读数那档字号：它不是数字，放大就会比真值还抢眼（界面设计定：body/500/muted）。 */
+.mk-card__na { font-size: var(--font-body); font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.mk-card__chg { margin: 0; font-size: var(--font-meta); color: var(--text); font-variant-numeric: tabular-nums; }
+.mk-card__na-line { margin: 0; font-size: var(--font-meta); color: var(--muted); }
 .mk-card--hero .mk-card__v b { font-size: var(--font-metric-md); }
 .mk-card__v span { font-size: var(--font-meta); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-card__v i { font-style: normal; font-size: var(--font-meta); color: var(--caution); white-space: nowrap; }

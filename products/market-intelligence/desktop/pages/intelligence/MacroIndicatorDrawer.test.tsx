@@ -9,6 +9,7 @@ import { EXPECTATION_BIN_PX } from './ExpectationChart'
 import { productText } from '../../shared/i18n/productText'
 import { macroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
 
@@ -172,6 +173,55 @@ const reading: PolicyPathReading = {
   probability: { venue: 'polymarket', asOf: '2026-11-12T02:10:00.000Z', outcome: 'hike-25', value: 0.878, changeInPp24h: 2.1 },
   staleness: 'live'
 }
+
+describe('the three simplified cards', () => {
+  // 真库里的三条事实：CPI 本期空、上一期 3.7；非农 165/首发布上期 29；核心 PCE 本月没有发布行。
+  const facts: readonly MacroIndicatorCardFact[] = [
+    { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 3.7, unit: 'percent' },
+    { metricKey: 'US.CORE_CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 2.6, unit: 'percent' },
+    { metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal' },
+    { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' }
+  ]
+
+  const renderCards = async (cardFacts?: readonly MacroIndicatorCardFact[]) => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined}
+        onRetryPolicy={() => undefined} policyText={text} {...(cardFacts ? { cardFacts } : {})} /></ShellLanguageProvider>)
+    })
+    return Array.from(document.body.querySelectorAll('.mk-card')).map((card) => card.textContent ?? '')
+  }
+
+  it('says 未提供 for this period and keeps last period, instead of passing it off as current', async () => {
+    const [cpi] = await renderCards(facts)
+    expect(cpi).toContain('未提供')
+    expect(cpi).toContain('10 月 · 已到发布日期，首发布值未收录 · 上一期 3.7%')
+    // 上一期 3.7% 不许出现在主值位（`mk-card__na` 是「未提供」那一格）。
+    expect(document.body.querySelector('.mk-card__v b.mk-card__na')?.textContent).toBe('未提供')
+    expect(cpi).not.toContain('较上期')
+  })
+
+  it('shows the payrolls value and the as-published change: 165 − 29 = +136K', async () => {
+    const [, payrolls] = await renderCards(facts)
+    expect(payrolls).toContain('+165K')
+    expect(payrolls).toContain('较上期（未修正）+136K')
+  })
+
+  it('says 未提供 for core PCE because this month has no release row', async () => {
+    const [, , pce] = await renderCards(facts)
+    expect(pce).toContain('未提供')
+    expect(pce).toContain('本月未发布')
+  })
+
+  it('never shows a number on a card when the facts were not read at all', async () => {
+    const cards = await renderCards()
+    expect(cards).toHaveLength(3)
+    for (const card of cards) expect(card).toContain('未提供')
+    expect(cards.join('')).not.toContain('示意数据')
+  })
+})
 
 describe('policy card inside the drawer', () => {
   it('draws the reading the host already has, not a second read', async () => {

@@ -16,6 +16,7 @@ import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from '
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { expectationBp, expectationEventMoves, matchedRelevantKey } from '../../../contracts/policyPath'
+import type { MacroIndicatorCardFact, MacroIndicatorCardKey } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
@@ -34,11 +35,6 @@ import './macroIndicatorDrawer.css'
  * 版式逐项照 `2026-11-13-K11-b.html`（1280 抽屉、正文 1248、左列 828 + 右列 403、间距 16）。
  */
 const MOCK = {
-  cards: {
-    cpi: { value: '3.7%', change: '↗ 0.1pp', core: '2.6%', next: '12-10', diffYoy: '−0.2pp', diffCore: '−0.2pp' },
-    payrolls: { value: '+165K', change: '较上期（未修正）+136K', unemployment: '4.1%', next: '12-04' },
-    pce: { value: '3.1%', next: '12-23', stamp: '11-13 08:00 · 已更新' }
-  },
   minical: {
     /** 每格：[日, 状态]。状态决定圆点颜色。 */
     weeks: [
@@ -87,7 +83,7 @@ function nameOfMetricKey(key: string | undefined, text: MacroIndicatorDrawerText
   }
 }
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -108,6 +104,12 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
    * 由宿主从**它已经读到的日历结果**里取；抽屉不为此另发一次日历请求。缺省就是没有标注。
    */
   releaseEvents?: readonly Readonly<{ at: string; label: string; eventNameKey?: string; measureKeys?: readonly string[]; seriesId?: string }>[]
+  /**
+   * 三张简化卡的取值事实（按 `metric_key` 取，新源优先、缺则旧源）。
+   *
+   * 缺席表示这一路还没读通——卡按「未提供」如实显示，不许回退成示意数据。
+   */
+  cardFacts?: readonly MacroIndicatorCardFact[]
   /**
    * 读数没读出来时的唯一动作：重读一次，不跳转。
    *
@@ -203,6 +205,12 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     ? Math.max(1, Math.ceil((Date.parse(points[points.length - 1]!.at) - Date.parse(points[0]!.at)) / 86_400_000))
     : undefined
   const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
+  const factOf = (key: MacroIndicatorCardKey): MacroIndicatorCardFact | undefined =>
+    cardFacts?.find((fact) => fact.metricKey === key)
+  const cpiFact = factOf('US.CPI.NSA.YOY')
+  const coreCpiFact = factOf('US.CORE_CPI.NSA.YOY')
+  const payrollsFact = factOf('US.NONFARM.SA.CHANGE')
+  const pceFact = factOf('US.CORE_PCE.NSA.YOY')
   // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
   // 图上用短名（完整标题不上图）；名字按身份取，不按标题文本猜。
   const eventMarks = useMemo(() => {
@@ -281,29 +289,33 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
 
         <div className="mk-strip">
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.cpi.title}</h3><em>{text.cards.cpi.state}</em><span className="mk-mocktag">{text.mockTag}</span></div>
-            <div className="mk-card__v"><b>{MOCK.cards.cpi.value}</b><span>{text.cards.cpi.unit}</span><i>{MOCK.cards.cpi.change}</i></div>
-            <p className="mk-card__exp">{text.expectedDiff.replace('{yoy}', MOCK.cards.cpi.diffYoy).replace('{core}', MOCK.cards.cpi.diffCore)}</p>
+            <div className="mk-card__h"><h3>{text.cards.cpi.title}</h3></div>
+            <div className="mk-card__v"><b className={cardValueClass(cpiFact)}>{cardValueText(cpiFact, text)}</b><span>{text.cards.cpi.unit}</span></div>
+            {cardChangeText(cpiFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(cpiFact, text)}</p>}
+            {cardStateText(cpiFact, text) === undefined ? null : <p className="mk-card__na-line">{cardStateText(cpiFact, text)}</p>}
             <dl className="mk-card__facts">
-              <div><dt>{text.cards.cpi.core}</dt><dd>{MOCK.cards.cpi.core}</dd></div>
-              <div><dt>{text.cards.cpi.next}</dt><dd>{MOCK.cards.cpi.next}</dd></div>
+              <div><dt>{text.cards.cpi.core}</dt><dd>{cardValueText(coreCpiFact, text)}</dd></div>
+              <div><dt>{text.cards.cpi.next}</dt><dd>{text.cardStates.notAvailable}</dd></div>
             </dl>
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.payrolls.title}</h3><em>{text.cards.payrolls.state}</em><span className="mk-mocktag">{text.mockTag}</span></div>
-            <div className="mk-card__v"><b>{MOCK.cards.payrolls.value}</b><span>{text.cards.payrolls.unit}</span><i>{MOCK.cards.payrolls.change}</i></div>
+            <div className="mk-card__h"><h3>{text.cards.payrolls.title}</h3></div>
+            <div className="mk-card__v"><b className={cardValueClass(payrollsFact)}>{cardValueText(payrollsFact, text)}</b><span>{text.cards.payrolls.unit}</span></div>
+            {cardChangeText(payrollsFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(payrollsFact, text)}</p>}
+            {cardStateText(payrollsFact, text) === undefined ? null : <p className="mk-card__na-line">{cardStateText(payrollsFact, text)}</p>}
             <dl className="mk-card__facts">
-              <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{MOCK.cards.payrolls.unemployment}</dd></div>
-              <div><dt>{text.cards.payrolls.next}</dt><dd>{MOCK.cards.payrolls.next}</dd></div>
+              <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{text.cardStates.notAvailable}</dd></div>
+              <div><dt>{text.cards.payrolls.next}</dt><dd>{text.cardStates.notAvailable}</dd></div>
             </dl>
             <div className="mk-card__f"><span>{text.sourceBls}</span><span>{text.detail}</span></div>
           </article>
           <article className="mk-card">
-            <div className="mk-card__h"><h3>{text.cards.pce.title}</h3><em>{text.cards.pce.state}</em><span className="mk-mocktag">{text.mockTag}</span></div>
-            <div className="mk-card__v"><b>{MOCK.cards.pce.value}</b><span>{text.cards.pce.unit}</span></div>
-            <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt><dd>{MOCK.cards.pce.next}</dd></div></dl>
-            <p className="mk-card__st">{MOCK.cards.pce.stamp}</p>
+            <div className="mk-card__h"><h3>{text.cards.pce.title}</h3></div>
+            <div className="mk-card__v"><b className={cardValueClass(pceFact)}>{cardValueText(pceFact, text)}</b><span>{text.cards.pce.unit}</span></div>
+            {cardChangeText(pceFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(pceFact, text)}</p>}
+            {cardStateText(pceFact, text) === undefined ? null : <p className="mk-card__na-line">{cardStateText(pceFact, text)}</p>}
+            <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt><dd>{text.cardStates.notAvailable}</dd></div></dl>
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
         </div>
@@ -352,4 +364,50 @@ function dayGroups(events: readonly MarketCalendarEvent[]): readonly Readonly<{ 
       }))
     }))
     .filter(group => group.items.length > 0)
+}
+
+/** 主值是「未提供」时不占读数那档字号：那四个字一旦放大，会比真实数字更抢眼（界面设计定）。 */
+function cardValueClass(fact: MacroIndicatorCardFact | undefined): string | undefined {
+  return fact?.state === 'provided' ? undefined : 'mk-card__na'
+}
+
+/** 主值：取到就按单位写（percent 一位小数、thousands 带符号 K），取不到写「未提供」，不写 0。 */
+function cardValueText(fact: MacroIndicatorCardFact | undefined, text: MacroIndicatorDrawerText): string {
+  if (fact?.state === 'provided' && fact.value !== undefined) return formatCardNumber(fact.value, fact.unit)
+  return text.cardStates.notAvailable
+}
+
+/**
+ * 「较上期（未修正）」：只用**首发布**的上一期值。
+ *
+ * 来源当前的 `previous` 可能是修订值（非农首发布 29、修订后 60），拿它算会把 +136K 写成 +105K。
+ * 缺首发布值就整块不显示这一行——不拿修订值顶，也不回填 0。
+ */
+function cardChangeText(fact: MacroIndicatorCardFact | undefined, text: MacroIndicatorDrawerText): string | undefined {
+  if (fact?.state !== 'provided' || fact.value === undefined || fact.previousAsPublished === undefined) return undefined
+  const delta = fact.value - fact.previousAsPublished
+  const signed = fact.unit === 'thousands'
+    ? `${delta > 0 ? '+' : ''}${Math.round(delta)}K`
+    : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}pp`
+  return text.cardStates.vsPrevious.replace('{value}', signed)
+}
+
+/** 值级缺失时那一行：写清是哪一期、是「发布了没值」还是「本月没发布」。 */
+function cardStateText(fact: MacroIndicatorCardFact | undefined, text: MacroIndicatorDrawerText): string | undefined {
+  if (!fact || fact.state === 'provided') return undefined
+  if (fact.state === 'not-recorded') return text.cardStates.notRecorded
+  const base = text.cardStates.missingCurrent.replace('{period}', formatCardPeriod(fact.period))
+  return fact.previousAsPublished === undefined
+    ? base
+    : `${base} · ${text.cardStates.previousPeriod.replace('{value}', formatCardNumber(fact.previousAsPublished, fact.unit))}`
+}
+
+function formatCardNumber(value: number, unit: MacroIndicatorCardFact['unit']): string {
+  return unit === 'thousands' ? `${value > 0 ? '+' : ''}${Math.round(value)}K` : `${value.toFixed(1)}%`
+}
+
+/** `2026-10` → `10 月`；别的形状原样返回（不猜）。 */
+function formatCardPeriod(period: string | undefined): string {
+  const match = /^\d{4}-(\d{2})$/.exec(period ?? '')
+  return match ? `${Number(match[1])} 月` : (period ?? '')
 }
