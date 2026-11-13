@@ -83,7 +83,9 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
     ...(deps.readSourceGate === undefined ? {} : { readSourceGate: deps.readSourceGate }),
     hasCredential: () => apiKey !== undefined,
     // 读者关掉 → `removeSchedule`（不是空转）；再打开 → 重新注册。判据就是缓存里的那个布尔。
-    readerEnabled: () => readerEnabledCache,
+    // **fail-closed**：缓存没初始化（还没读过档）按「关」处理，不按「开」——宁可晚一轮，
+    // 也不许在读者档案还没读到的时候先替他答应。
+    readerEnabled: () => readerEnabledCache === true,
     ...(deps.readerEnabled === undefined ? {} : { readerEnabled: deps.readerEnabled }),
     ...(deps.countries === undefined ? {} : { countries: deps.countries })
   })

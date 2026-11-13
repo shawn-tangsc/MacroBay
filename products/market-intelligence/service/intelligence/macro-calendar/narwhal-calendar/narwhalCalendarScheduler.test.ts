@@ -8,6 +8,7 @@ const runtime = { run: vi.fn(async () => ({ collector: { state: 'completed', pag
 const schedulerFor = (options: Readonly<{ hasCredential?: boolean; readerEnabled?: () => boolean | undefined }> = {}) => {
   const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(), enqueueDefinition: vi.fn(), listRuns: vi.fn(() => []) }
   const scheduler = createNarwhalCalendarScheduler({
+    readSourceGate: async () => ({ visibility: 'visible', enabled: true }),
     jobRuntime, runtime, now: () => Date.parse('2026-11-13T00:00:00Z'),
     hasCredential: () => options.hasCredential ?? true,
     ...(options.readerEnabled === undefined ? {} : { readerEnabled: options.readerEnabled })
@@ -67,7 +68,8 @@ describe('日扫启动自检', () => {
   const setup = (runs: readonly { status: string; startedAt: string; completedAt?: string }[]) => {
     const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(),
       enqueueDefinition: vi.fn(async () => ({})), listRuns: vi.fn(() => runs as never) }
-    const scheduler = createNarwhalCalendarScheduler({ jobRuntime: jobRuntime as never,
+    const scheduler = createNarwhalCalendarScheduler({
+    readSourceGate: async () => ({ visibility: 'visible', enabled: true }), jobRuntime: jobRuntime as never,
       runtime: { run: vi.fn() } as never, now: () => Date.parse('2026-11-13T10:30:00.000Z'), hasCredential: () => true })
     scheduler.initialize()
     return jobRuntime

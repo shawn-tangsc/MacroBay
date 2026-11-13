@@ -8,6 +8,7 @@ const repository = { upsertReleaseRow: vi.fn(), recordFirstPublished: vi.fn(() =
 const assemblyFor = (options: Readonly<{ apiKey?: string; readerEnabled?: () => boolean | undefined; fetchImpl?: typeof fetch }> = {}) => {
   const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(), enqueueDefinition: vi.fn(), listRuns: vi.fn(() => []) }
   const assembly = createNarwhalCalendarAssembly({
+    readSourceGate: async () => ({ visibility: 'visible', enabled: true }),
     jobRuntime,
     repository,
     fetchImpl: options.fetchImpl ?? (vi.fn() as unknown as typeof fetch),
