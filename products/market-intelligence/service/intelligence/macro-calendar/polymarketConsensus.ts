@@ -11,14 +11,24 @@ import { checkConsensusCandidate, weightedMedianFromBuckets, type ConsensusBucke
  * 「有没有盘」不是常量：过去期次会结算下架，所以每次按期间现查，不缓存成静态清单。
  */
 export const polymarketConsensusPolicy = Object.freeze({
-  searchEndpoint: 'https://gamma-api.polymarket.com/public-search',
   eventsEndpoint: 'https://gamma-api.polymarket.com/events',
-  /** 指标 → 搜索词 + 标题里必须出现的期间词（盘口只有标题可认，不匹配就不显示，不猜）。 */
-  searchByMetricKey: Object.freeze({
-    'US.CPI.NSA.YOY': Object.freeze({ query: 'inflation us annual', seriesId: 'cpi-annual' }),
-    'US.CORE_CPI.NSA.YOY': Object.freeze({ query: 'core cpi yoy', seriesId: 'core-cpi-yoy' }),
-    'US.CORE_PCE.NSA.YOY': Object.freeze({ query: 'core pce yoy', seriesId: 'core-pce-yoy' }),
-    'US.NONFARM.SA.CHANGE': Object.freeze({ query: 'how many jobs added', seriesId: 'jobs-added' })
+  /**
+   * 指标 → **slug 模板**：按模板拼出这一期的 slug 直接 `?slug=` 查，不走搜索。
+   * 搜索结果的顺序与期间无关，按标题匹配会漏场（非农那一场标题甚至不带年份）。
+   * `{month}` 是英文全拼小写、`{year}` 四位年份。
+   */
+  slugTemplateByMetricKey: Object.freeze({
+    'US.CPI.NSA.YOY': '{month}-inflation-us-annual',
+    'US.CORE_CPI.NSA.YOY': 'core-cpi-yoy-{month}-{year}',
+    'US.CORE_PCE.NSA.YOY': 'core-pce-yoy-{month}-{year}',
+    'US.NONFARM.SA.CHANGE': 'how-many-jobs-added-in-{month}-{year}'
+  } as const),
+  /**
+   * 档位标签是「100k to 125k」这种**绝对人数**，而卡片的口径是千（`+165K`）。
+   * 换算只在这里做一次，别让读出来的数带着绝对人数流进渲染层。
+   */
+  valueDivisorByMetricKey: Object.freeze({
+    'US.NONFARM.SA.CHANGE': 1000
   } as const)
 } as const)
 
@@ -37,6 +47,16 @@ export function polymarketPeriodToken(period: string): string | undefined {
   return name === undefined ? undefined : `${name} ${year}`
 }
 
+/** 按模板拼出这一期的 slug（月份英文全拼、小写）；期间不是 `YYYY-MM` 就没有 slug。 */
+export function polymarketSlugFor(metricKey: string, period: string): string | undefined {
+  const template = (polymarketConsensusPolicy.slugTemplateByMetricKey as Readonly<Record<string, string>>)[metricKey]
+  if (template === undefined) return undefined
+  const [year, month] = period.split('-').map(Number) as [number, number]
+  const name = MONTH_NAMES[month - 1]
+  if (name === undefined) return undefined
+  return template.replace('{month}', name.toLowerCase()).replace('{year}', String(year))
+}
+
 export async function readPolymarketConsensus(input: Readonly<{
   metricKey: string
   /** 这一期的期次，`YYYY-MM`。 */
@@ -46,21 +66,10 @@ export async function readPolymarketConsensus(input: Readonly<{
   asOf: string
   fetchText: PolymarketFetchText
 }>): Promise<PolymarketConsensusReading> {
-  const target = (polymarketConsensusPolicy.searchByMetricKey as Readonly<Record<string, Readonly<{ query: string; seriesId: string }>>>)[input.metricKey]
-  if (target === undefined) return { state: 'unavailable', reason: 'no-market' }
-  const token = polymarketPeriodToken(input.period)
-  if (token === undefined) return { state: 'unavailable', reason: 'no-market' }
+  const slug = polymarketSlugFor(input.metricKey, input.period)
+  if (slug === undefined) return { state: 'unavailable', reason: 'no-market' }
   // 发布之后的盘是结果，不是预期：连查都不查（也省一次请求）。
   if (Date.parse(input.asOf) >= Date.parse(input.releaseAt)) return { state: 'unavailable', reason: 'after-release' }
-
-  let events: unknown
-  try {
-    events = JSON.parse(await input.fetchText(`${polymarketConsensusPolicy.searchEndpoint}?q=${encodeURIComponent(target.query)}&limit_per_type=20`))
-  } catch {
-    return { state: 'unavailable', reason: 'read-failed' }
-  }
-  const slug = findSlug(events, token)
-  if (slug === undefined) return { state: 'unavailable', reason: 'no-market' }
 
   let detail: unknown
   try {
@@ -68,9 +77,13 @@ export async function readPolymarketConsensus(input: Readonly<{
   } catch {
     return { state: 'unavailable', reason: 'read-failed' }
   }
+  // 该期没开盘：这个 slug 查回来是空的。这与「请求失败」是两件事。
+  if (!eventExists(detail, slug)) return { state: 'unavailable', reason: 'no-market' }
   const buckets = readBuckets(detail, slug)
-  const value = weightedMedianFromBuckets(buckets)
-  if (value === undefined) return { state: 'unavailable', reason: 'no-buckets' }
+  const median = weightedMedianFromBuckets(buckets)
+  if (median === undefined) return { state: 'unavailable', reason: 'no-buckets' }
+  const divisor = (polymarketConsensusPolicy.valueDivisorByMetricKey as Readonly<Record<string, number>>)[input.metricKey] ?? 1
+  const value = median / divisor
 
   const marketVolume = readVolume(detail, slug)
   const gate = checkConsensusCandidate({
@@ -80,20 +93,34 @@ export async function readPolymarketConsensus(input: Readonly<{
   })
   if (gate.state === 'rejected') {
     // 盘**找到了**、只是成交量读不到：这是「读不到」，不是「没有这个盘」。
-    // 把两者都写成 `no-market`，卡上就会把「我们没查到」说成「市场上没有」。
     return { state: 'unavailable', reason: gate.missing.includes('marketVolume') ? 'no-volume' : 'after-release' }
   }
   return { state: 'ok', value, marketVolume: marketVolume!, asOf: input.asOf, provenance: 'market-implied' }
 }
 
-/** 在搜索结果里找「标题含期间词」的那一场；找不到就是不显示，不按相似度挑。 */
+/** `?slug=` 查回来可能是数组或单个对象；空数组就是这一期没开盘。 */
+function eventExists(payload: unknown, slug: string): boolean {
+  const list = Array.isArray(payload) ? payload : [payload]
+  return list.some((entry) => Boolean(entry) && typeof entry === 'object' && (entry as { slug?: unknown }).slug === slug)
+}
+
+/**
+ * 在搜索结果里找**那一期**的那一场。判据两条，任一满足即可：
+ * - `slug` 含 `november-2026`（线上 slug 一定带年份，标题却常常不带：`How many jobs added in November?`）；
+ * - 标题含 `November 2026`（有的场次标题带年份）。
+ *
+ * 找不到就是不显示，**不按相似度挑**——挑错一期等于把别的月份的盘当成这一期。
+ */
 function findSlug(payload: unknown, token: string): string | undefined {
+  const slugToken = token.toLowerCase().replace(' ', '-')
   const events = Array.isArray((payload as { events?: unknown })?.events) ? (payload as { events: unknown[] }).events : []
   for (const entry of events) {
     if (!entry || typeof entry !== 'object') continue
     const title = typeof (entry as { title?: unknown }).title === 'string' ? (entry as { title: string }).title : ''
     const slug = typeof (entry as { slug?: unknown }).slug === 'string' ? (entry as { slug: string }).slug : ''
-    if (slug !== '' && title.includes(token)) return slug
+    if (slug === '') continue
+    // 期间词按 slug 匹配：标题里常没有年份，只按标题会漏掉整场。
+    if (slug.toLowerCase().includes(slugToken) || title.includes(token)) return slug
   }
   return undefined
 }
@@ -107,14 +134,27 @@ function readBuckets(payload: unknown, slug: string): readonly ConsensusBucket[]
     if (!market || typeof market !== 'object') continue
     const record = market as Record<string, unknown>
     const label = typeof record.groupItemTitle === 'string' ? record.groupItemTitle : ''
-    const prices = Array.isArray(record.outcomePrices) ? record.outcomePrices : []
-    const yes = typeof prices[0] === 'string' ? Number(prices[0]) : Number.NaN
+    // 线上把 `outcomePrices` 序列化成**字符串**（`"[\"0.17\", \"0.83\"]"`），不是数组；
+    // 只认数组会让每一档都被跳过，整场判成 `no-buckets`。
+    const prices = readPriceList(record.outcomePrices)
+    const yes = prices[0] === undefined ? Number.NaN : Number(prices[0])
     if (!label || !Number.isFinite(yes)) continue
     const bounds = parseBucketBounds(label)
     if (bounds === undefined) continue
     buckets.push({ label, yes, ...bounds })
   }
   return buckets
+}
+
+function readPriceList(value: unknown): readonly unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string') return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 function readVolume(payload: unknown, slug: string): number | undefined {
