@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
-import { readStandardCalendarMonth } from './marketCalendarStandardMonthRead'
+import { readNextReleaseForMetric, readStandardCalendarMonth } from './marketCalendarStandardMonthRead'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow, type CalendarStandardRow }
   from './marketCalendarStandardTable'
 
@@ -60,5 +60,26 @@ describe('从标准表读一个月', () => {
       .toEqual(['US.PPI.NSA.YOY'])
     expect(readStandardCalendarMonth(database, { month: '2099-01' })).toEqual([])
     expect(emptyMonth(database)).toBe(0)
+  })
+})
+
+
+describe('下一期排期：读不到就说没有，不许编期次', () => {
+  it('取 asOf 之后最近一次排期；没有就 undefined', () => {
+    const database = new DatabaseSync(':memory:')
+    seed(database)
+    expect(readNextReleaseForMetric(database, { metricKey: 'US.PPI.NSA.YOY', asOf: '2026-11-14T00:00:00.000Z' }))
+      .toEqual({ scheduledDate: '2026-12-15', periodKey: '2026-10', scheduledAt: '2026-11-10T13:30:00.000Z' })
+    expect(readNextReleaseForMetric(database, { metricKey: 'US.PPI.NSA.YOY', asOf: '2026-12-20T00:00:00.000Z' }))
+      .toBeUndefined()
+    expect(readNextReleaseForMetric(database, { metricKey: 'US.UNKNOWN.SA.MOM', asOf: '2026-11-14T00:00:00.000Z' }))
+      .toBeUndefined()
+  })
+
+  it('估算不是发布：视图里没有估算行，所以它不会冒出来当「下一次」', () => {
+    const database = new DatabaseSync(':memory:')
+    seed(database)
+    expect(readNextReleaseForMetric(database, { metricKey: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ',
+      asOf: '2026-11-14T00:00:00.000Z' })).toBeUndefined()
   })
 })

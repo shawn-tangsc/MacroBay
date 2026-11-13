@@ -78,3 +78,30 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     values: JSON.parse(String(row.values_json)) as Record<string, string>
   }))
 }
+
+/**
+ * **某个指标下一次发布**：返回下一期的期次与发布时刻，读不到就明确说「没有排期」。
+ *
+ * 用途：盘口共识要知道「查哪一期的盘」——查今天或上一期都会拿错盘（发布后的盘是结果，
+ * 不是预期）。所以这里只回答一个问题：`asOf` 之后这个指标**最近一次**排期是什么。
+ *
+ * 两条边界：
+ * 1. **绝不编期次**：没有排期就返回 `undefined`，让调用方说「暂无排期」。编一个期次会去查
+ *    一个不存在的盘，而那个查询看起来完全正常——最难发现的一类错；
+ * 2. 只读视图（`row_kind = 'release'`）：估算不是发布，不能拿它当「下一次发布」。
+ */
+export function readNextReleaseForMetric(database: DatabaseSync, input: Readonly<{
+  metricKey: string
+  asOf: string
+}>): Readonly<{ scheduledDate: string; periodKey: string; scheduledAt?: string }> | undefined {
+  const row = database.prepare(`select scheduled_date, period_key, scheduled_at
+    from ${calendarStandardTablePolicy.releasesView}
+    where metric_key = ? and scheduled_date > ?
+    order by scheduled_date asc, coalesce(scheduled_at, '') asc
+    limit 1`).get(input.metricKey, input.asOf.slice(0, 10)) as Record<string, unknown> | undefined
+  if (row === undefined) return undefined
+  return {
+    scheduledDate: String(row.scheduled_date), periodKey: String(row.period_key),
+    ...(row.scheduled_at === null ? {} : { scheduledAt: String(row.scheduled_at) })
+  }
+}
