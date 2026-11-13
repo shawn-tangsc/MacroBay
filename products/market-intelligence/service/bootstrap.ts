@@ -335,6 +335,15 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     archive: intelligenceModule.macroCalendarEvidenceArchive, evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
     requestGovernanceQueue: intelligenceModule.requestGovernanceQueue,
     readEnabledFeeds: readEnabledCalendarFeeds,
+    // 「立刻跑一次日历采集」＝排一次 tick 作业，**拿到句柄才算触发**（失败不吞，返回 failed）。
+    // 用 enqueueManual 而不是 enqueueDefinition：后者要在这里保留一份作业定义，那是第二个真相源。
+    triggerCollection: async () => {
+      try {
+        await deps.jobRuntime.enqueueManual('market-intelligence.refreshNarwhalCalendarTick.automatic')
+        return 'triggered' as const
+      } catch { return 'failed' as const }
+    },
+    jobRuntime: deps.jobRuntime,
     // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
     readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })

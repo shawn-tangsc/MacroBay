@@ -298,10 +298,13 @@ function refreshNowOutcome(result: RefreshResult): MarketCalendarRefreshNowResul
 // upper bound through the existing market capacity seam, never called attribution.
 export function createStoredManualCalendar(deps: {
   storage: MacroCalendarSqlite; archive: MacroCalendarEvidenceArchive; evidenceReady: boolean
+  jobRuntime?: { enqueueManual: (definitionId: string) => Promise<unknown> }
   requestGovernanceQueue: CollectionDependencies['requestGovernanceQueue']
   getApiKey: CollectionDependencies['getApiKey']; requestJsonBody: CollectionDependencies['requestJsonBody']
   readReadiness: RefreshDependencies['readReadiness']
   readEnabledFeeds?: RefreshDependencies['readEnabledFeeds']
+  /** 「立刻跑一次日历采集」（装配处注入：排一次 tick 作业）。 */
+  triggerCollection?: () => Promise<'triggered' | 'running' | 'failed'>
   /**
    * 这条腿的通知出口。**挂在采集侧**：一件事发生了就说一次，分析跑不跑是读者的选择，不决定
    * 「发生了」要不要被说出来。缺省时采集行为与从前一字不差。
