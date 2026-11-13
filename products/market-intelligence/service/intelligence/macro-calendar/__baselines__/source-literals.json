@@ -1,0 +1,14 @@
+{
+  "macroIndicatorCardFacts.ts": 9,
+  "marketCalendarMetricIdentity.ts": 1,
+  "macroIndicatorReadService.ts": 2,
+  "calendarFeedRegistry.ts": 3,
+  "macroCalendarStorageSnapshotEvidence.ts": 1,
+  "0xrouter-calendar/zeroXRouterCalendarCollectionService.ts": 1,
+  "0xrouter-calendar/zeroXRouterCalendarContracts.ts": 3,
+  "0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry.ts": 2,
+  "0xrouter-calendar/marketCalendarStorageValidation.ts": 2,
+  "0xrouter-calendar/marketCalendarPublicQueryService.ts": 2,
+  "narwhal-calendar/narwhalCalendarIngest.ts": 2,
+  "narwhal-calendar/narwhalCalendarObservationBatches.ts": 4
+}
