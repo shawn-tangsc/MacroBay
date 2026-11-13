@@ -189,6 +189,8 @@ export type NarwhalStandardRowInput = Readonly<{
   identityKind: CalendarIdentityKind
   /** `source` 身份要带源原文名：标准码的显示名去名表查，源内 id 查不到。 */
   sourceLabel?: string
+  /** 源的 `series_id`（转正时重算身份用）。 */
+  seriesId?: string
   /** 源给的发布状态（闭集）：读侧分「已发布/排期/取消」只许读它，不按日期推。 */
   status: CalendarReleaseStatus
   /** 这一行是由**源的某个 measure** 生成的（测度层对账只数它们）。 */
@@ -315,7 +317,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
       // 记一笔工作清单，补上映射后**原地转正**成标准码，不新增行。
       unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-event-type' })
       rows.push({
-        kind: 'event', identityKind: 'source', status, sourceLabel: release.name,
+        kind: 'event', identityKind: 'source', status, sourceLabel: release.name, seriesId: release.seriesId,
         countryCode: release.country, metricKey: release.releaseId,
         periodKey: release.at.slice(0, 16), scheduledDate: release.eventDate, scheduledAt: release.at,
         sourceEventId: release.releaseId, timePrecision: 'minute',

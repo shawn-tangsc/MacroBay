@@ -41,6 +41,8 @@ export function dualWriteMeasureRows(
       identityKind?: CalendarIdentityKind
       /** `source` 身份行要带源原文名（标准码去名表查，源内 id 查不到）。 */
       sourceLabel?: string
+      /** 源的 series_id（转正时重算身份用）。 */
+      seriesId?: string
       status?: CalendarReleaseStatus
       valueState?: 'not-provided'
       previous?: string; consensus?: string; actual?: string }>[] }>,
@@ -78,6 +80,7 @@ export function dualWriteMeasureRows(
         ...(row.status === undefined ? {} : { status: row.status }),
         ...(row.identityKind === undefined ? {} : { identityKind: row.identityKind }),
         ...(row.sourceLabel === undefined ? {} : { sourceLabel: row.sourceLabel }),
+        ...(row.seriesId === undefined ? {} : { seriesId: row.seriesId }),
         valuesJson: JSON.stringify({
           ...(row.valueState === undefined ? {} : { valueState: row.valueState }),
           ...(row.consensus === undefined ? {} : { consensus: row.consensus }),

@@ -64,6 +64,7 @@ import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calenda
 import { allSources } from './intelligence/application/providerRegistry'
 import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from './intelligence/macro-calendar/marketCalendarStandardTable'
+import { promoteSourceIdentities } from './intelligence/macro-calendar/marketCalendarSourcePromotion'
 import { calendarStandardConservation } from './intelligence/macro-calendar/marketCalendarStandardConservation'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
@@ -427,6 +428,12 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         const database = macroCalendarBackend.storage.database
         ensureCalendarStandardTables(database)
         const observedAt = new Date().toISOString()
+        // **启动/采集前先转正存量**：补映射之前写进去的 `source` 行，现在算得出身份的就地改码。
+        // 只报三个数、不上界面；dryRun 的入口给补完映射后先看数用。
+        const promotion = promoteSourceIdentities(database)
+        if (promotion.scanned > 0) {
+          console.warn(`[macro-calendar] 源内身份转正：扫描 ${promotion.scanned} / 转正 ${promotion.promoted} / 仍无身份 ${promotion.stillSource}`)
+        }
         for (const item of unmapped) {
           // `reason` **原样落库**：这里曾用三段白名单映射，任何新原因都会被悄悄改写成
           // `unknown-event-type`（`no-values` 就会以「未知事件类型」的样子出现，指向错误的修法）。
