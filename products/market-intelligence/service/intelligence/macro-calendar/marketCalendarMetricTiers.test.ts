@@ -11,10 +11,10 @@ import { marketCalendarTier1MetricKeys, marketCalendarTierByMetricKey, tierOfMet
  * 3. 未分级返回 `undefined`，**不返回 4**（缺席不等于第四档）。
  */
 describe('指标分级常量', () => {
-  it('一级 12 / 二级 29，三级 0（本期不采集，不是漏标）', () => {
+  it('一级 12 / 二级 31，三级 0（本期不采集，不是漏标）', () => {
     const tiers = Object.values(marketCalendarTierByMetricKey)
     expect(tiers.filter((tier) => tier === 1)).toHaveLength(12)
-    expect(tiers.filter((tier) => tier === 2)).toHaveLength(29)
+    expect(tiers.filter((tier) => tier === 2)).toHaveLength(31)
     expect(tiers.filter((tier) => tier === 3)).toHaveLength(0)
   })
 

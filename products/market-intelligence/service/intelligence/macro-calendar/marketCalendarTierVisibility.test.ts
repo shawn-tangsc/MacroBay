@@ -12,12 +12,12 @@ describe('日历按分级收窄：只出一级二级，其余进计数行', () =
       'US.MANUFACTURING_PAYROLLS.SA.CHANGE', 'US.PRIVATE_PAYROLLS.SA.CHANGE',
       'US.AVERAGE_WEEKLY_HOURS.SA.LEVEL'].map(entry)
     const result = filterVisibleByTier(employment)
-    // 标了级的只有四个（非农、失业率、时薪月率、时薪年率），其余八个未分级。
-    // 格子里最多显示 2 条 → 露名字的是前两条一级，剩下 10 条全进数字。
+    // 提级后：一级 4（非农、失业率、时薪月率/年率）、二级 2（U6、参与率）、未分级 6。
+    // 格子最多显示 2 条 → 露名字的是前两条一级；一二级超出 4 条进 hiddenTiered。
     expect(result.visible).toEqual(['US.NONFARM.SA.CHANGE', 'US.UNEMPLOYMENT.SA.RATE'])
-    // 一二级共四个、显示两个 → 超出 2；其余八个未分级 → 8。**两个数分开算**。
-    expect(result.hiddenTiered).toBe(2)
-    expect(result.hiddenUntiered).toBe(8)
+    // **8 → 6 是分级清单变了（U6、参与率提二级），不是计数坏了**；数字从 8 变 8 同样对得上。
+    expect(result.hiddenTiered).toBe(4)
+    expect(result.hiddenUntiered).toBe(6)
     expect(result.hiddenTotal).toBe(10)
   })
 
