@@ -457,7 +457,7 @@ export const intelligenceSourcesText = {
     /* 整批排期读不到：第①条就是这一句，不许因为收进浮层就不说。 */
     readoutScheduleUnreadable: '这次没读到采集排期，所以间隔和下次都没有显示。',
     /* ② 压成数字式一行。 */
-    presetIntervalsNote: '网页 30 分钟 / RSS 15 分钟 / 接口 10 分钟 / 状态页 2 分钟 / 宏观指标 6 小时；频繁约为均衡的 1/3。',
+    presetIntervalsNote: '网页 30 分钟 / RSS 15 分钟 / 接口 10 分钟 / 状态页 2 分钟 / 宏观指标 6 小时；频繁约为均衡的 1/3，最快是状态页每分钟一次。',
     nextIsEstimateNote: '「下次」是推算的，会随任务队列前后浮动，不是承诺时刻；正在采集时不给倒计时。',
     readoutEdgesNote: '手动档只在点按钮或事件驱动时采，没有下次；排期读不到就写读不到，不写 0、也不写从未。'
   },
@@ -1067,7 +1067,7 @@ export const intelligenceSourcesText = {
     readoutDisabled: 'Disabled, not collected',
     readoutUnscheduled: 'Not scheduled',
     readoutScheduleUnreadable: 'The collection schedule could not be read this time, so neither the interval nor the next run is shown.',
-    presetIntervalsNote: 'Web pages 30 minutes / RSS 15 minutes / APIs 10 minutes / status pages 2 minutes / macro metrics 6 hours; Frequent is about 1/3 of Balanced.',
+    presetIntervalsNote: 'Web pages 30 minutes / RSS 15 minutes / APIs 10 minutes / status pages 2 minutes / macro metrics 6 hours; Frequent is about 1/3 of Balanced, and the fastest is once a minute on status pages.',
     nextIsEstimateNote: '“Next” is derived from the interval and drifts with the job queue; it is not a promised time, and no countdown is shown while a run is in progress.',
     readoutEdgesNote: 'Manual only collects on demand or on an event, so it has no next run; when the schedule cannot be read it says so instead of showing 0 or “never”.'
   },
