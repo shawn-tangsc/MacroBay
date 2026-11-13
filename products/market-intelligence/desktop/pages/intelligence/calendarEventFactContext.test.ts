@@ -1,4 +1,6 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
+import { productText } from '../../shared/i18n/productText'
 import { formatCalendarEventFactContext } from './calendarEventFactContext'
 
 const text = { factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }
@@ -30,4 +32,19 @@ it('uses the unreadable sentence when the month could not be read and the copy p
   const block = formatCalendarEventFactContext({ facts: [], evidenceRefs: [], coverage: 'unavailable', caveats: ['calendar-unreadable'] }, text)
   expect(block).toContain('could not read')
   expect(block).not.toContain('nothing held')
+})
+
+describe('calendar facts copy', () => {
+  /**
+   * 「这段时间的日历没读到」与「读到了但没有这条事件」必须是两句（2026-11-14）。
+   * 前者来自 `factsUnreadable`、后者来自 `factsUnavailable`；合并回去就是又把
+   * 「拿不到」画成「确实没有」——这轮反复拆的正是这一处。
+   */
+  it('carries a separate unread sentence in both languages', () => {
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      const context = productText[language].pages.intelligence.portal.calendarCard.eventContext as Record<string, string>
+      expect(context.factsUnreadable, language).toBeTruthy()
+      expect(context.factsUnreadable, language).not.toBe(context.factsUnavailable)
+    }
+  })
 })
