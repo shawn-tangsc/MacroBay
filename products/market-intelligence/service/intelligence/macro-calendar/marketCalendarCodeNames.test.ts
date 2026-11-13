@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { nameByMetricKey, nameForMetricKey } from './marketCalendarCodeNames'
+import { eventTypeNameByCode, nameByMetricKey, nameForMetricKey } from './marketCalendarCodeNames'
 import { narwhalMeasureMetricKeys, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 
 /** 38 条已上线码名的**冻结期望值**：抄自 20 号表的现名，改一个字节这里就该红。 */
@@ -67,6 +67,12 @@ describe('码名', () => {
         zhFull: entry.zhFull, zhShort: entry.zhShort, enFull: entry.enFull, enShort: entry.enShort
       })
     }
+  })
+
+  it('事件型有显示名（17 条，取自 20 号表）', () => {
+    expect(Object.keys(eventTypeNameByCode)).toHaveLength(17)
+    expect(nameForMetricKey('evt.central-bank-speech')?.zhShort).toBeTruthy()
+    expect(nameForMetricKey('evt.fomc')?.zhFull).toBe('美联储议息会议')
   })
 
   it('四列各自唯一（简称撞车读者就分不清）', () => {

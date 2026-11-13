@@ -216,6 +216,8 @@ export function nameForMetricKey(metricKey: string): Readonly<{
 }> | undefined {
   const named = nameByMetricKey[metricKey]
   if (named !== undefined) return named
+  const eventName = eventTypeNameByCode[metricKey]
+  if (eventName !== undefined) return eventName
   const parts = metricKey.split('.')
   const measure = parts[parts.length - 1]
   const family = parts.slice(1, -1).join('.')
@@ -229,3 +231,28 @@ export function nameForMetricKey(metricKey: string): Readonly<{
     enFull: `${base.enFull}, ${word.enFull}`, enShort: `${base.enShort} ${word.enShort}`
   }
 }
+
+/** 事件类型名：`evt.*` → 四名（来自 20 号表，17 条）。
+ * 事件型行（讲话、声明、库存、抵押贷款申请…）没有指标码，靠这张表才有读者看得懂的名字；
+ * 取不到就退回类型串——**不许显示码本身**，也不许编名字。 */
+export const eventTypeNameByCode: Readonly<Record<string, Readonly<{
+  zhFull: string; zhShort: string; enFull: string; enShort: string
+}>>> = Object.freeze({
+  'evt.central-bank-balance-sheet': { zhFull: '中央银行资产负债表', zhShort: '央行资产负债表', enFull: 'Central Bank Balance Sheet', enShort: 'CB Balance Sheet' },
+  'evt.central-bank-report': { zhFull: '中央银行报告', zhShort: '央行报告', enFull: 'Central Bank Report', enShort: 'CB Report' },
+  'evt.central-bank-speech': { zhFull: '中央银行讲话', zhShort: '央行讲话', enFull: 'Central Bank Speech', enShort: 'CB Speech' },
+  'evt.commodity-market-report': { zhFull: '商品市场报告', zhShort: '商品市场报告', enFull: 'Commodity Market Report', enShort: 'Commodity Report' },
+  'evt.economic-policy-meeting': { zhFull: '经济政策会议', zhShort: '经济政策会议', enFull: 'Economic Policy Meeting', enShort: 'Econ Policy Meeting' },
+  'evt.employment-statistics': { zhFull: '就业统计', zhShort: '就业统计', enFull: 'Employment Statistics', enShort: 'Employment Stats' },
+  'evt.fiscal-report': { zhFull: '财政报告', zhShort: '财政报告', enFull: 'Fiscal Report', enShort: 'Fiscal Report' },
+  'evt.fomc': { zhFull: '美联储议息会议', zhShort: '议息会议', enFull: 'FOMC Rate Decision', enShort: 'FOMC' },
+  'evt.futures-positioning': { zhFull: '期货持仓', zhShort: '期货持仓', enFull: 'Futures Positioning', enShort: 'Futures Positioning' },
+  'evt.household-debt': { zhFull: '家庭债务', zhShort: '家庭债务', enFull: 'Household Debt', enShort: 'Household Debt' },
+  'evt.merchandise-trade': { zhFull: '商品贸易', zhShort: '商品贸易', enFull: 'Merchandise Trade', enShort: 'Goods Trade' },
+  'evt.monetary-policy-press-conference': { zhFull: '货币政策新闻发布会', zhShort: '发布会', enFull: 'Monetary Policy Press Conference', enShort: 'Press Conference' },
+  'evt.monetary-policy-statement': { zhFull: '货币政策声明', zhShort: '政策声明', enFull: 'Monetary Policy Statement', enShort: 'Policy Statement' },
+  'evt.money-and-credit': { zhFull: '货币与信贷', zhShort: '货币与信贷', enFull: 'Money and Credit', enShort: 'Money & Credit' },
+  'evt.mortgage-applications': { zhFull: '抵押贷款申请', zhShort: '抵押贷款申请', enFull: 'Mortgage Applications', enShort: 'Mortgage Apps' },
+  'evt.oil-rig-count': { zhFull: '石油钻井数', zhShort: '石油钻井数', enFull: 'Oil Rig Count', enShort: 'Rig Count' },
+  'evt.petroleum-inventories': { zhFull: '石油库存报告', zhShort: '石油库存', enFull: 'Petroleum Inventories', enShort: 'Petroleum Stocks' },
+})
