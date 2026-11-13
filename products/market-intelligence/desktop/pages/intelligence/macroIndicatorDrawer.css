@@ -61,6 +61,8 @@
    （界面设计定）。行高 15.9、单行不换行、超长省略由日历那套行组件与它带的 token 负责。 */
 .mk-col-r .mi-economic-calendar__event-kind,
 .mk-col-r .mi-economic-calendar__event-country { display: none; }
+/* 右列里那种「说清一句」的小字：不是空态块，只是解释这一列为什么是现在这样。 */
+.mk-col-r__note { margin: 0 0 4px; font-size: var(--font-meta); color: var(--muted); }
 /* 次要层收成一行，就地展开：容器内的一个按钮，不跳页、不弹窗。 */
 .mk-col-r__more {
   display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;

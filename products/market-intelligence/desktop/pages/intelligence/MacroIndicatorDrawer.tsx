@@ -207,9 +207,13 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     }
     return { cpi: lookup(nextReleaseKeys.cpi), payrolls: lookup(nextReleaseKeys.payrolls), pce: lookup(nextReleaseKeys.pce) }
   }, [releases.events, nextMonth, nextMonthRead.state, nextReleaseKeys, nowInstant, timeZone])
-  const [othersExpanded, setOthersExpanded] = useState(false)
-  // 换一天就收起「其他」：展开态跟着日期走，不跟着抽屉走。
-  useEffect(() => { setOthersExpanded(false) }, [selectedDay])
+  // 核心层为空、但这一天还有别的发布时**默认展开**：收起会让页面同时写着「没有事件」和「其他 27 条」，
+  // 中间空一大片。显式切换过就按读者的选择，换一天再回到默认。
+  const othersDefaultOpen = dayLayers.core.length === 0 && dayLayers.other.length > 0
+  const [othersExpanded, setOthersExpanded] = useState<boolean | undefined>(undefined)
+  const showOthers = othersExpanded ?? othersDefaultOpen
+  // 展开态跟着日期走，不跟着抽屉走。
+  useEffect(() => { setOthersExpanded(undefined) }, [selectedDay])
   /**
    * 图的尺寸：0 表示**还没量到**。
    *
@@ -421,6 +425,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: releases.reload }} />
           : releases.state === 'ready'
             ? <>
+              {/* 自动挑到别的日子时要说清是哪一天、为什么——否则读者以为标题里的日期是「今天」。 */}
+              {pickedDay === undefined && selectedDay !== today
+                ? <p className="mk-col-r__note" data-day-not-today>{text.mkDay.notToday}</p> : null}
               <CalendarDayEventList
                 label={calendarText.dayEvents.listLabel}
                 title={calendarText.dayEvents.title.replace('{date}', selectedDay)}
@@ -428,11 +435,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayLayers.core.length === 0 ? {} : {
                   summary: text.mkDay.summary.replace('{related}', String(dayLayers.core.length))
                 })}
-                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, othersExpanded, text.mkDay.sequence)}
-                {...(othersExpanded ? { hideGroupHeadings: true } : {})}
-                {...(dayEvents.length === 0
-                  ? { emptyText: calendarText.unifiedDay.empty }
-                  : dayLayers.core.length === 0 ? { emptyText: text.mkDay.none } : {})}
+                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, showOthers, text.mkDay.sequence)}
+                {...(showOthers ? { hideGroupHeadings: true } : {})}
+                {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
                 text={calendarText}
@@ -440,11 +445,14 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 selectedEventKey={undefined}
                 selectedMarketKey={undefined}
               />
+              {/* 核心层为空时，这句话是「其他」这一组的说明，不是整块提示语——它下面明明还有条目。 */}
+              {dayLayers.core.length === 0 && dayLayers.other.length > 0
+                ? <p className="mk-col-r__note">{text.mkDay.none}</p> : null}
               {/* 次要层就地展开：抽屉里的交互，不跳页、不弹窗（日期详情只以抽屉形态出现）。 */}
               {dayLayers.other.length === 0 ? null : <button className="mk-col-r__more" type="button"
-                aria-expanded={othersExpanded}
-                onClick={() => setOthersExpanded((value) => !value)}>
-                {(othersExpanded ? text.mkDay.collapse : text.mkDay.other).replace('{count}', String(dayLayers.other.length))}
+                aria-expanded={showOthers}
+                onClick={() => setOthersExpanded(!showOthers)}>
+                {(showOthers ? text.mkDay.collapse : text.mkDay.other).replace('{count}', String(dayLayers.other.length))}
                 <ChevronDown aria-hidden="true" size={12} data-flip={othersExpanded ? 'true' : 'false'} />
               </button>}
             </>

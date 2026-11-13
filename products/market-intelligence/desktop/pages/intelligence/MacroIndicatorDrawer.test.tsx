@@ -158,21 +158,20 @@ describe('key-indicator drawer', () => {
     await act(async () => { cell('14').click() })
     expect(rightColumnTitle()).toContain('2026-11-14')
     expect(cell('14').getAttribute('aria-pressed')).toBe('true')
-    // 11-14 只有一条非核心事件：核心层为空 → 给空态句，其余折成一行。
-    expect(rightColumn()!.textContent).toContain(macroIndicatorDrawerText['zh-CN'].mkDay.none)
-    expect(rightColumn()!.textContent).toContain('其他 1 条')
-    // 就地展开：抽屉内的按钮，aria-expanded 真的翻转，展开后那一行才出现。
-    const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
-    expect(more.getAttribute('aria-expanded')).toBe('false')
-    // 收起态写「其他 N 条」，展开态必须写「收起 N 条」——同一行两种状态不能都写「其他」。
-    expect(more.textContent).toContain('其他 1 条')
-    await act(async () => { more.click() })
-    const expanded = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
-    expect(expanded.getAttribute('aria-expanded')).toBe('true')
-    expect(expanded.textContent).toContain('收起 1 条')
+    // 11-14 只有一条非核心事件：核心层为空时**默认展开**，不许默认收起成空白
+    //（否则页面同时写着「没有事件」和「其他 N 条」，中间空一大片）。
     expect(rightColumn()!.textContent).toContain('11月消费者信心')
-    // 展开态是平铺清单：分组标题不再出现（再分三组会把 12 条撑成 15 行）。
-    expect(rightColumn()!.querySelector('h3')).toBeNull()
+    const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    expect(more.textContent).toContain('收起 1 条')
+    // 那句话现在只是「其他」这一组的说明，不是整块提示语。
+    expect(rightColumn()!.textContent).toContain(macroIndicatorDrawerText['zh-CN'].mkDay.none)
+    // 手动收起后回到「其他 N 条」，行消失。
+    await act(async () => { more.click() })
+    const collapsed = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
+    expect(collapsed.getAttribute('aria-expanded')).toBe('false')
+    expect(collapsed.textContent).toContain('其他 1 条')
+    expect(rightColumn()!.textContent).not.toContain('11月消费者信心')
   })
 
   it('draws the right empty sentence for a day without events, never a blank column', async () => {
@@ -295,9 +294,7 @@ describe('key-indicator drawer', () => {
     const indicator = { ...dayEvent('e-missing', '10月家庭债务', past, { measureKeys: [] }), providerActual: null }
     const speech = { ...dayEvent('e-speech', '央行讲话', past, { eventType: 'central-bank-activity' }), providerActual: null }
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [indicator, speech] })
-    // 指标行进了「其他」（没有与利率相关的身份），展开后能看到行尾两个字。
-    const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
-    await act(async () => { more.click() })
+    // 指标行进了「其他」（没有与利率相关的身份）；核心层为空时默认展开，直接能看到行尾两个字。
     const rows = Array.from(rightColumn()!.querySelectorAll('[data-calendar-row]'))
     const indicatorRow = rows.find((row) => row.textContent?.includes('家庭债务'))!
     expect(indicatorRow.textContent).toContain('未提供')
