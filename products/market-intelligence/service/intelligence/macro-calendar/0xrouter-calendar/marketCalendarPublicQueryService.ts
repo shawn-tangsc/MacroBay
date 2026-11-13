@@ -166,7 +166,7 @@ export function createMarketCalendarPublicQueryService(deps: {
       ? undefined : JSON.parse(String(row.measure_keys_json)) as readonly string[]
     // 展示名是**纯展示**：指标名表 → 源类型名表 → 源原文，都不参与身份与标注资格。
     const title = marketCalendarDisplayTitle({ rawTitle: String(row.display_name),
-      eventNameKey, locale: row.locale === 'en' ? 'en' : 'zh' })
+      eventNameKey, ...(measureKeys === undefined ? {} : { measureKeys }), locale: row.locale === 'en' ? 'en' : 'zh' })
     const result = { eventKey: `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20)}`,
       // `eventKey` above is an HMAC of the stored `observation_id`. `market_fact_key` is stable
       // across batches, so it is the identity a consumer tracking the observation over time

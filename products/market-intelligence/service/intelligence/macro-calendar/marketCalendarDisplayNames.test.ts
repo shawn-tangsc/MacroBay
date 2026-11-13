@@ -45,6 +45,15 @@ describe('两张纯展示表', () => {
       .toBe('Consumer prices')
   })
 
+  it('标题用的优先顺序只读契约那一份，不另抄', () => {
+    const source = readFileSync(new URL('./marketCalendarDisplayNames.ts', import.meta.url), 'utf8')
+    // 顺序只许来自 `POLICY_PATH_EVENT_METRIC_PRIORITY`：这里出现那四个 key 的字面量就是抄了第二份。
+    for (const key of ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY']) {
+      expect(source).not.toContain(key)
+    }
+    expect(source).toContain('POLICY_PATH_EVENT_METRIC_PRIORITY')
+  })
+
   it('这两张表不许进身份与标注资格那条链——结构守卫', () => {
     const identity = readFileSync(new URL('./marketCalendarMetricIdentity.ts', import.meta.url), 'utf8')
     const pairing = readFileSync(new URL('./marketCalendarEventPairing.ts', import.meta.url), 'utf8')

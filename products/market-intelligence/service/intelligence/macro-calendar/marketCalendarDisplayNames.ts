@@ -1,3 +1,5 @@
+import { POLICY_PATH_EVENT_METRIC_PRIORITY } from '../../../contracts/policyPath'
+
 /**
  * 两张**纯展示**表：指标名（键 = `metric_key`）与源类型名（键 = 源给的类型串）。
  *
@@ -83,9 +85,18 @@ export function marketCalendarDisplayNameTally(): Readonly<{ metricKeys: number;
  * 3. 都没有 → 源原文（英文），并计数。**不翻译、不猜、不按相似度找。**
  */
 export function marketCalendarDisplayTitle(input: Readonly<{
-  rawTitle: string; eventNameKey: string | undefined; locale: 'zh' | 'en'
+  rawTitle: string; eventNameKey: string | undefined; measureKeys?: readonly string[]
+  locale: 'zh' | 'en'
 }>): string {
   if (input.locale !== 'zh') return input.rawTitle
+  // 一次发布覆盖多个指标时，标题取**契约里那份优先顺序**里第一个有中文名的——顺序只有一份，
+  // 这里不另写（写了就会和标注归组那份漂开，同一件事两个界面叫两个名字）。
+  for (const key of POLICY_PATH_EVENT_METRIC_PRIORITY) {
+    if (input.measureKeys?.includes(key) === true) {
+      const named = marketCalendarMetricDisplayNames[key]
+      if (named !== undefined) return named
+    }
+  }
   if (input.eventNameKey !== undefined) {
     const named = marketCalendarMetricDisplayNames[input.eventNameKey]
     if (named !== undefined) return named
