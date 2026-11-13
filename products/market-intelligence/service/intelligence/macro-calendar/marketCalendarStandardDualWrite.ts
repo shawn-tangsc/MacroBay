@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { narwhalCanonicalIdentityKey } from './marketCalendarMetricIdentity'
+import { eventCodeBySourceType } from './marketCalendarEventCodeTable'
 import { nameByMetricKey } from './marketCalendarCodeNames'
 
 /** 事件型身份的第二段：不是指标码，`evt.*` 映射还没接。 */
@@ -67,6 +68,23 @@ export function dualWriteObservationBatch(
         // `evt.*` 映射还没接，所以记 `unknown-event-type`，别混进「缺指标映射」里：
         // 两者该修的地方不同（一个补事件类型表，一个补指标码）。
         const eventType = EVENT_KINDS.includes(metricKey)
+        if (eventType) {
+          // 事件型：用**源给的类型串**翻成 `evt.*` 码（不按名字猜）。类型串是显示名，但它在
+          // 这张表里是**键**，不是匹配依据——未知串照旧落 unmapped。
+          const code = eventCodeBySourceType[String(draft.displayName ?? '')]
+          if (code !== undefined) {
+            const minute = String(draft.scheduledAt ?? '').slice(0, 16)
+            upsertCalendarStandardRow(database, {
+              countryCode, metricKey: code, periodKey: minute,
+              scheduledDate: String(draft.scheduledDate ?? ''), scheduledAt: String(draft.scheduledAt ?? ''),
+              timePrecision: 'minute', valuesJson: '{}', sourceProviderId: batch.providerId,
+              sourceEventId: String(draft.marketFactKey), parserVersion: batch.parserVersion,
+              observedAt: batch.observedAt, firstSeenAt: batch.observedAt
+            })
+            written += 1
+            continue
+          }
+        }
         const reason: CalendarUnmappedReason = eventType ? 'unknown-event-type' : 'unknown-measure'
         reasons[reason] += 1
         recordCalendarUnmapped(database, { providerId: batch.providerId, sourceKey: String(draft.marketFactKey),

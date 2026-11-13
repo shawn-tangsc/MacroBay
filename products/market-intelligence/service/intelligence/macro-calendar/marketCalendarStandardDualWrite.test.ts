@@ -48,3 +48,32 @@ describe('观测 → 标准 双写', () => {
     expect((database.prepare('select count(*) c from mi_calendar_events').get() as { c: number }).c).toBe(1)
   })
 })
+
+describe('事件型：源类型串 → evt.* 码', () => {
+  const eventDraft = (displayName: string, at: string) => ({
+    marketFactKey: JSON.stringify(['narwhal', 'macro-calendar-narwhal-central-bank-activities', 'zh',
+      JSON.parse(narwhalSourceEventIdForIdentity({ countryCode: 'USA',
+        metricKey: 'central-bank-activity', periodKey: at }))]),
+    kind: 'central-bank-activity', displayName, countryCode: 'US', scheduledAt: at, scheduledDate: at.slice(0, 10)
+  })
+
+  it('已知类型串 → 落标准表，periodKey 取时刻到分钟', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const counts = dualWriteObservationBatch(database, batch([eventDraft('Central bank speech', '2026-11-13T14:10:00.000Z')]))
+    expect(counts.written).toBe(1)
+    const row = database.prepare('select metric_key, period_key, time_precision from mi_calendar_events').get() as
+      { metric_key: string; period_key: string; time_precision: string }
+    expect(row.metric_key).toBe('evt.central-bank-speech')
+    expect(row.period_key).toBe('2026-11-13T14:10')
+    expect(row.time_precision).toBe('minute')
+  })
+
+  it('未知类型串 → 不猜，落 unknown-event-type', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const counts = dualWriteObservationBatch(database, batch([eventDraft('Some new type', '2026-11-13T15:00:00.000Z')]))
+    expect(counts.written).toBe(0)
+    expect(counts.unmapped['unknown-event-type']).toBe(1)
+  })
+})
