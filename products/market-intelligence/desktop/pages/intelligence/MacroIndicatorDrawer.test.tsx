@@ -183,13 +183,17 @@ describe('the three simplified cards', () => {
     { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' }
   ]
 
-  const renderCards = async (cardFacts?: readonly MacroIndicatorCardFact[]) => {
+  const cardMainValues = () =>
+    Array.from(document.body.querySelectorAll('.mk-card__v b')).map((cell) => cell.textContent ?? '')
+
+  const renderCards = async (cardFacts?: readonly MacroIndicatorCardFact[], cardFactsUnreadable?: boolean) => {
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
       root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined}
-        onRetryPolicy={() => undefined} policyText={text} {...(cardFacts ? { cardFacts } : {})} /></ShellLanguageProvider>)
+        onRetryPolicy={() => undefined} policyText={text} {...(cardFacts ? { cardFacts } : {})}
+        {...(cardFactsUnreadable ? { cardFactsUnreadable: true } : {})} /></ShellLanguageProvider>)
     })
     return Array.from(document.body.querySelectorAll('.mk-card')).map((card) => card.textContent ?? '')
   }
@@ -215,11 +219,21 @@ describe('the three simplified cards', () => {
     expect(pce).toContain('本月未发布')
   })
 
+  /**
+   * 三态分开：**没读到**（接口失败）写「暂时读不到」；**还在读**（既没事实也没报失败）
+   * 一个数、一个字都不落。「未提供」只说「来源没给这一期的值」，不许拿来顶前两种。
+   */
   it('never shows a number on a card when the facts were not read at all', async () => {
     const cards = await renderCards()
     expect(cards).toHaveLength(3)
-    for (const card of cards) expect(card).toContain('未提供')
+    // 主值那一格空着：既没有数，也没有「未提供」——那两个字是「来源没给」的意思。
+    expect(cardMainValues()).toEqual(['', '', ''])
     expect(cards.join('')).not.toContain('示意数据')
+  })
+
+  it('says 暂时读不到 when the read failed, never 未提供', async () => {
+    await renderCards(undefined, true)
+    expect(cardMainValues()).toEqual(['暂时读不到', '暂时读不到', '暂时读不到'])
   })
 })
 

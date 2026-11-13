@@ -69,6 +69,7 @@ import { useCurveReleaseEvents } from './useCurveReleaseEvents'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
+import { useMacroIndicatorFacts } from './useMacroIndicatorFacts'
 import { cellOffFor } from './dashboardCellOff'
 import { QUOTES_ROW_CELL_KEYS, quoteRowPresentation } from './dashboardQuotesRows'
 import { useDataChangeRevision } from './useDataChangeRevision'
@@ -312,8 +313,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const policyCellsRead = policyProbability.kind === 'read' && policyFed.kind === 'read'
   const policyPathRead = usePolicyPathReading(readsReady && policyCellsRead, dataRevision)
   const policyPath = policyPathRead.result
+  // 三张简化卡的读数走自己的只读接口（按指标身份取最新已发布）；抽屉只管渲染，不再取第二遍。
+  const cardFactsRead = useMacroIndicatorFacts(readsReady, dataRevision)
+  const cardFactsView = cardFactsRead.result
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
-  // 关键指标 · 预期变化：曲线与政策卡读真数据，三张简化卡仍是示意数据。
+  // 关键指标 · 预期变化：曲线、政策卡与三张简化卡都读真数据。
   const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
   // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。
   const curveReleaseEvents = useCurveReleaseEvents({
@@ -478,11 +482,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
-      {/* 关键指标抽屉：曲线与政策卡读同一份真实读数；三张简化卡仍是示意数据。右侧滑出，与左侧分析详情不是同一层。 */}
+      {/* 关键指标抽屉：曲线与政策卡读同一份真实读数；三张简化卡读装配层的事实。右侧滑出，与左侧分析详情不是同一层。 */}
       {<MacroIndicatorDrawer open={indicatorDrawerOpen} locale={locale} policyText={text.policyPath}
         {...(policyPath?.state === 'available' ? { policyReading: policyPath.reading } : {})}
         onRetryPolicy={policyPathRead.reload}
         releaseEvents={curveReleaseEvents}
+        {...(cardFactsView?.state === 'available' ? { cardFacts: cardFactsView.facts } : {})}
+        {...(cardFactsView?.state === 'unavailable' ? { cardFactsUnreadable: true } : {})}
         onOpenPolicyDetail={() => { setIndicatorDrawerOpen(false); setPolicyDrawerOpen(true) }} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not

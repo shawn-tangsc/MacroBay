@@ -1,4 +1,4 @@
-import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 
 /**
  * 三张关键指标卡的取值事实——**按身份取，不按名字、不按标题**。
@@ -64,10 +64,25 @@ export function legacyIndicatorIdsByMetricKey(metricKey: string): readonly strin
     .map(([indicatorId]) => indicatorId)
 }
 
+/**
+ * 规范 key → 新源 `measure` 的反查（同一张表，不另写一份）。
+ *
+ * 那张表是双射（128 measure ↔ 128 key），所以反查唯一；查不到就没有新源口径。
+ */
+export function narwhalMeasuresByMetricKey(metricKey: string): readonly string[] {
+  return Object.entries(narwhalMeasureMetricKeys)
+    .filter(([, mapped]) => mapped === metricKey)
+    .map(([measure]) => measure)
+}
+
+/** 同一时刻两个源都有一行时取新源；其余取更晚的那条。 */
 function latestRow(rows: readonly MacroIndicatorCardRow[]): MacroIndicatorCardRow | undefined {
   return rows.reduce<MacroIndicatorCardRow | undefined>((best, row) => {
     if (!best) return row
-    return Date.parse(row.releasedAt) > Date.parse(best.releasedAt) ? row : best
+    const mine = Date.parse(row.releasedAt)
+    const theirs = Date.parse(best.releasedAt)
+    if (mine > theirs) return row
+    return mine === theirs && row.provider === 'narwhal' ? row : best
   }, undefined)
 }
 
@@ -112,9 +127,12 @@ export function resolveMacroIndicatorFact(
     // 发布了，但这一期没有这个 measure 的值——值级缺失，不是没有这条发布。
     // 这一期没有值，但上一期的实际值仍要带出来（CPI 2026-10：本期空、上一期 3.7%）。
     const withPrevious = latestRow(covering.filter((row) => row.previousAsPublished !== undefined))
+    // 期次可能只挂在另一源那一行上（新源发布行不带期次，旧源同身份行带）：取**任何一行有期次的那期**。
+    const withPeriod = latestRow(covering.filter((row) => row.period !== undefined))
+    const period = latestCovering.period ?? withPeriod?.period
     return {
       metricKey, state: 'missing-current',
-      ...(latestCovering.period === undefined ? {} : { period: latestCovering.period }),
+      ...(period === undefined ? {} : { period }),
       releasedAt: latestCovering.releasedAt,
       ...(withPrevious?.previousAsPublished === undefined ? {} : { previousAsPublished: withPrevious.previousAsPublished })
     }

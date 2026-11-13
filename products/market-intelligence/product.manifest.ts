@@ -116,6 +116,8 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.macro.economicCalendar.previewManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.queryMonth' },
     { method: 'intelligence.macro.policyPath.read' },
+    // 三张关键指标卡的读数（只读）：按指标身份取最新一次已发布的值。
+    { method: 'intelligence.macro.indicator.read' },
     { method: 'intelligence.syncRuns.list' },
     { method: 'intelligence.syncRuns.aggregates' },
     // The reader's own release time: every registered product method must be in this sealed

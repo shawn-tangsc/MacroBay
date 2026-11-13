@@ -19,6 +19,21 @@ export type MacroCalendarRepository = {
   upsertReleaseRow: (row: NarwhalReleaseRow) => void
   /** 读某天某国的发布行（双写对账用）。 */
   listReleaseRows: (input: { countryCode: string; scheduledDate: string }) => NarwhalReleaseRow[]
+  /**
+   * 只读：一个指标身份「**最新一次已发布**」的那一次发布。
+   *
+   * 只取原始行、**不做口径判断**：「哪一行算这个指标」由调用方按身份表判，这里不按名字猜。
+   * - `narwhal`：`status='published'` 且 `values_json` 里带这个 `measure` 的最近一条发布行；
+   * - `legacy`：旧源同名观测行——有新源行时只取**同一天**的（同期），否则取最近一次已到时刻的。
+   *   跨天的一律不返回：拿上一个月的那一行当本期，比没有值更糟。
+   */
+  readLatestReleaseForMetric: (input: {
+    /** 源内 measure 名（发布行里 `values[].measure`）。 */
+    narwhalMeasure: string
+    /** 旧源的 `indicator_id`；没有旧源映射的指标传空数组。 */
+    legacyIndicatorIds: readonly string[]
+    asOf: string
+  }) => Readonly<{ narwhal?: NarwhalReleaseRow; legacy: readonly MacroCalendarLegacyMetricRow[] }>
   /** 首发布快照：只在第一次写入，之后的修订不覆盖。返回是否真的写进去了。 */
   recordFirstPublished: (snapshot: NarwhalFirstPublished) => boolean
   /** 读首发布快照；没有就是「无法确认首发布值」，不返回 0、不返回修订值。 */
@@ -44,6 +59,22 @@ export type MacroCalendarRepository = {
   policyMarketLinks: PolicyPathMarketLinkStore
   close: () => void
 }
+
+/**
+ * 旧源一行观测的原始值，只为「按指标身份取最新已发布」而出。
+ *
+ * `previousDisplay` 是**发布当时**来源给的上期值：非农那次是 29，来源之后修订成 60 也不覆盖它。
+ * 「较上期（未修正）」只认这个数——拿修订值算会把 +136K 写成 +105K。
+ */
+export type MacroCalendarLegacyMetricRow = Readonly<{
+  indicatorId: string
+  countryCode: string
+  scheduledAt: string
+  /** 本期实际值原文（没发布时为空）。 */
+  actualDisplay?: string
+  /** 上期实际值原文。 */
+  previousDisplay?: string
+}>
 
 export const macroCalendarAtomicWritePolicy = {
   beginStatement: 'begin immediate',
@@ -125,6 +156,22 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
     listReleaseRows(input) {
       return (releaseStatements.listDay.all(input.countryCode, input.scheduledDate) as unknown as StoredRow[])
         .map(toReleaseRow)
+    },
+    readLatestReleaseForMetric({ narwhalMeasure, legacyIndicatorIds, asOf }) {
+      if (epochTime(asOf) === undefined) return { legacy: [] }
+      const narwhal = narwhalMeasure === '' ? undefined : (sqlite.database.prepare(
+        // `instr` 而不是 `like`：measure 里带下划线，`like` 会把 `_` 当成通配符，`cpi_yoy` 就能匹配到别的 measure。
+        `select * from mi_macro_calendar_release_rows where status = 'published' and instr(values_json, ?) > 0
+         order by scheduled_date desc, coalesce(scheduled_at, '') desc, release_id limit 1`
+      ).get(`"measure":"${narwhalMeasure}"`) as StoredRow | undefined)
+      const legacy = readLegacyRows(legacyIndicatorIds, narwhal
+        // 同一期才有比较意义：有新源发布行时只认同一天那几行。
+        ? { scheduledDate: String(narwhal.scheduled_date) }
+        : { notAfter: asOf })
+      return {
+        ...(narwhal === undefined ? {} : { narwhal: toReleaseRow(narwhal) }),
+        legacy
+      }
     },
     recordFirstPublished(snapshot) {
       // `insert or ignore`：第一次写的那个数就是「首发布值」，之后来源修订**不覆盖**。
@@ -235,6 +282,44 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
     close() {
       if (owned) sqlite.close()
     }
+  }
+
+  /**
+   * 旧源同名行：同一个 `indicator_id` 只留一行（同一时刻有 zh/en 两条，值相同）。
+   *
+   * `scheduledDate` 分支取同一天（有新源发布行时用）；`notAfter` 分支取最近一次已到时刻的
+   * （旧源独家指标用）——两种都只返回原始值，不判断它是不是「这个指标本期」。
+   */
+  function readLegacyRows(
+    indicatorIds: readonly string[],
+    scope: Readonly<{ scheduledDate: string }> | Readonly<{ notAfter: string }>
+  ): MacroCalendarLegacyMetricRow[] {
+    if (indicatorIds.length === 0) return []
+    // 观测表由旧源采集端建：没配那个源时这张表根本不存在，读它不该让整次读数失败。
+    if (sqlite.database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'").get() === undefined) return []
+    const placeholders = indicatorIds.map(() => '?').join(',')
+    const columns = 'indicator_id, country_code, scheduled_at, provider_actual_json, provider_previous_json'
+    const rows = ('scheduledDate' in scope
+      ? sqlite.database.prepare(`select ${columns} from mi_macro_calendar_market_event_observations
+          where indicator_id in (${placeholders}) and scheduled_date = ? order by scheduled_at desc, indicator_id`).all(...indicatorIds, scope.scheduledDate)
+      : sqlite.database.prepare(`select ${columns} from mi_macro_calendar_market_event_observations
+          where indicator_id in (${placeholders}) and scheduled_at <= ? order by scheduled_date desc, scheduled_at desc, indicator_id limit 8`)
+        .all(...indicatorIds, scope.notAfter)) as StoredRow[]
+    const seen = new Set<string>()
+    return rows.flatMap((row) => {
+      const indicatorId = String(row.indicator_id)
+      if (seen.has(indicatorId)) return []
+      seen.add(indicatorId)
+      const actualDisplay = valueOf(row.provider_actual_json)
+      const previousDisplay = valueOf(row.provider_previous_json)
+      return [{
+        indicatorId,
+        countryCode: typeof row.country_code === 'string' ? row.country_code : '',
+        scheduledAt: String(row.scheduled_at),
+        ...(actualDisplay === undefined ? {} : { actualDisplay }),
+        ...(previousDisplay === undefined ? {} : { previousDisplay })
+      }]
+    })
   }
 
   function replaceCurrent(stored: MacroCalendarRevision): { inserted: boolean; revision: MacroCalendarRevision } {

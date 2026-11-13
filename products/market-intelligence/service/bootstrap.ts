@@ -50,6 +50,8 @@ import { landedFilterReader, registerCalendarEventReminder } from './intelligenc
 import { createCalendarReminderSettingsStore } from './intelligence/macro-calendar/calendarEventReminderSettingsStore'
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
+import { createMacroIndicatorReadService } from './intelligence/macro-calendar/macroIndicatorReadService'
+import { registerMacroIndicatorIpc } from './intelligence/macro-calendar/ipc/registerMacroIndicatorIpc'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
 import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
 import { createSyncAuditStoreIfAvailable } from './intelligence/audit/syncAuditStore'
@@ -516,6 +518,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
+  registerMacroIndicatorIpc(register, createMacroIndicatorReadService(macroCalendarBackend.repository))
   registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
     // Read-only: the run log joins a task to the analysis it produced, and never writes either side.
     listRuns: () => intelligenceModule.marketAnalysisRuntime.repository.listRuns()

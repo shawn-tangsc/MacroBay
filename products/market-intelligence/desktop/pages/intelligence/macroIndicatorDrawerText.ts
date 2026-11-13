@@ -48,7 +48,9 @@ export const macroIndicatorDrawerText = {
     },
     cardStates: {
       notAvailable: '未提供',
+      unreadable: '暂时读不到',
       missingCurrent: '{period} · 已到发布日期，首发布值未收录',
+      missingCurrentNoPeriod: '已到发布日期，首发布值未收录',
       notRecorded: '本月未发布',
       previousPeriod: '上一期 {value}',
       vsPrevious: '较上期（未修正）{value}'
@@ -102,7 +104,9 @@ export const macroIndicatorDrawerText = {
     },
     cardStates: {
       notAvailable: 'Not available',
+      unreadable: 'Not readable right now',
       missingCurrent: '{period} · released, first-publish value not recorded',
+      missingCurrentNoPeriod: 'released, first-publish value not recorded',
       notRecorded: 'Not released this month',
       previousPeriod: 'Previous {value}',
       vsPrevious: 'vs previous (unrevised) {value}'
