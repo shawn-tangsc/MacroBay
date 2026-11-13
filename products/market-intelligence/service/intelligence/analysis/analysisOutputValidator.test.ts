@@ -187,6 +187,19 @@ describe('analysisOutputValidator', () => {
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
   })
 
+  /**
+   * 同一判据扩到**所有会印数字的段落**：以前只验 conclusion，情景/传导/催化剂/方向理由里的
+   * 百分数没人管。这里在方向理由里放一个快照没有的数——必须拒，而不是删掉重写。
+   */
+  it('rejects a percentage in a direction rationale the snapshot does not carry', () => {
+    const output = validOutput()
+    output.directions[0]!.rationale = '短期资金费率 12.34% 仍在高位，方向偏空。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'prose-number-citation', detail: 'prose-number-not-in-snapshot'
+    })
+  })
+
   it('rejects a policy probability without its as-of', () => {
     const snapshot = frozenSnapshot()
     snapshot.facts = [...snapshot.facts, policyProbabilityFact(), policyExtraFact('policy-sep-median-current-year', 4.1)]
@@ -348,7 +361,8 @@ describe('analysisOutputValidator', () => {
 
   it('does not require a probability when the snapshot carries none', () => {
     const output = validOutput()
-    output.conclusion.macro = '政策与市场定价：目标区间 4.00%–4.25%，下次会议 2026-12-09。'
+    // 不提概率也不提任何数：这条只验「快照里没有概率时，不要求正文必须提到概率」。
+    output.conclusion.macro = '政策与市场定价：下次会议 2026-12-09，区间不变。'
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toMatchObject({ ok: true })
   })
@@ -415,7 +429,7 @@ function frozenSnapshot(): TestSnapshot {
   // The fixture is wider than the validator's read-only view (it carries source/unit/confidence for
   // the prompt tests), so it is built as data and narrowed once here instead of casting at each use.
   return {
-    facts: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', metric: 'price-return', comparability: 'comparable', freshness: 'fresh', domain: 'cross-asset', subject: 'BTC', value: 1, unit: '%', sourceId: 'source', sourceLabel: 'source', observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z', confidence: 1 }],
+    facts: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', metric: 'price-return', comparability: 'comparable', freshness: 'fresh', domain: 'cross-asset', subject: 'BTC', value: 1, unit: 'percent', sourceId: 'source', sourceLabel: 'source', observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z', confidence: 1 }],
     evidenceRefs: [{ evidenceRefId: 'mi-ev-market-move' }]
   } as unknown as TestSnapshot
 }
@@ -423,7 +437,7 @@ function frozenSnapshot(): TestSnapshot {
 function policyExtraFact(metric: string, value: string | number): import('../../../contracts/marketAnalysisContracts').AgentFact {
   return {
     factId: `mi-fact-${metric}`, evidenceRefId: 'mi-ev-policy', metric, domain: 'macro', subject: 'us',
-    value, unit: '%', sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
+    value, unit: 'percent', sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
     observedAt: '2026-10-30T15:00:00.000Z', asOf: '2026-10-30T15:00:00.000Z',
     freshness: 'fresh', confidence: 1, comparability: 'comparable', sourceUrl: 'https://polymarket.com/'
   }
@@ -432,7 +446,7 @@ function policyExtraFact(metric: string, value: string | number): import('../../
 function policyProbabilityFact(value = 71, observedAt = '2026-10-30T15:00:00.000Z'): import('../../../contracts/marketAnalysisContracts').AgentFact {
   return {
     factId: `mi-fact-macro-policy-implied-probability-${value}-${observedAt}`, evidenceRefId: 'mi-ev-policy',
-    metric: 'policy-implied-probability', domain: 'macro', subject: 'hike-25', value, unit: '%',
+    metric: 'policy-implied-probability', domain: 'macro', subject: 'hike-25', value, unit: 'percent',
     sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
     observedAt, asOf: observedAt,
     freshness: 'fresh', confidence: 1, comparability: 'comparable',

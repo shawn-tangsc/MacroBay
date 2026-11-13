@@ -15,7 +15,7 @@ import {
 } from '../../../contracts/marketAnalysisContracts'
 import { isMarketReactionFact, marketAnalysisUnsafeOutputPolicy, marketAnalysisValidationPolicy } from './analysisConstants'
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
-import { policyProbabilityDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
+import { policyProbabilityDefect, untracedProsePercentageDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 import {
   divergenceDefectOf,
@@ -87,6 +87,11 @@ export const analysisValidationRules = Object.freeze({
    * policy fact carries is a fabricated number, not a rounding difference.
    */
   policyProbabilityCitation: 'policy-probability-citation',
+  /**
+   * 任意散文段落里的一个百分数在冻结快照里找不到出处（情景、传导假设、催化剂、方向理由都算）。
+   * 判据是数，不读句子：不因措辞拒，也不因「看起来像估算」放行。
+   */
+  proseNumberCitation: 'prose-number-citation',
   /**
    * The conclusion never returned to the change that triggered the run: it cites something else and
    * talks about the background. Coarse code stays `analysis-missing-evidence`, which is already in
@@ -275,6 +280,9 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   if (divergenceDefect === 'contradiction') return missingEvidence(analysisValidationRules.divergenceContradiction)
   const probabilityDefect = policyProbabilityDefect(output.conclusion, snapshot)
   if (probabilityDefect) return missingEvidence(analysisValidationRules.policyProbabilityCitation, probabilityDefect)
+  // 同一条判据扩到**所有会印数字的段落**：只验 conclusion 时，情景与方向理由里的编造数没人管。
+  const proseNumberDefect = untracedProsePercentageDefect(output, snapshot)
+  if (proseNumberDefect) return missingEvidence(analysisValidationRules.proseNumberCitation, proseNumberDefect)
   // Only when the caller could resolve a trigger source; a snapshot with no change record never
   // ran this rule and must not be judged by it.
   if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
