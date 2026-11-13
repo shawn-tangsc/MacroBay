@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  changeInBp, changeInPp, decisionInstant, expectationBp, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
+  changeInBp, changeInPp, decisionInstant, expectationBp, expectationEventMoves, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
   POLICY_PATH_OUTCOME_ORDER, namedOutcomes, repricingMarkers, settlementConclusion, stalenessOf, thinSeries,
   valueAtOrBefore, verdictOf, type PolicyPathObservation
 } from './policyPath'
@@ -216,5 +216,54 @@ describe('weighted expectation', () => {
     expect(changeInBp(26.93, 26.93)).toBe(0)
     expect(Number.isNaN(expectationBp({ 'no-change': Number.NaN, 'hike-25': 1, 'hike-50-plus': 0, 'cut-25': 0, 'cut-50-plus': 0 })))
       .toBe(true)
+  })
+})
+
+describe('event attribution on the curve', () => {
+  const at = (minute: number): string => new Date(Date.UTC(2026, 9, 30, 12, minute)).toISOString()
+
+  it('marks an event when the curve moved at least half a point, with the move and the dot height', () => {
+    // E = 25×hike25 − 0.25：0.60 → 14.75bp，0.70 → 17.25bp，差 2.5bp。
+    const series = [observation(at(55), 0.2, 0.6), observation(at(65), 0.2, 0.7)]
+    expect(expectationEventMoves(series, [{ at: at(60), label: 'CPI 年率' }]))
+      .toEqual([{ at: at(60), label: 'CPI 年率', changeBp: 2.5, bp: 14.75 }])
+  })
+
+  it('ignores a move under half a point — the reader cannot see it', () => {
+    const series = [observation(at(55), 0.2, 0.6), observation(at(65), 0.2, 0.61)]
+    expect(expectationEventMoves(series, [{ at: at(60), label: '噪音' }])).toEqual([])
+  })
+
+  it('attributes neither event when two windows overlap', () => {
+    const series = [observation(at(50), 0.2, 0.5), observation(at(60), 0.2, 0.7), observation(at(75), 0.2, 0.9)]
+    expect(expectationEventMoves(series, [{ at: at(55), label: 'a' }, { at: at(65), label: 'b' }])).toEqual([])
+  })
+
+  it('keeps two events whose windows do not overlap', () => {
+    const series = [
+      observation(at(50), 0.2, 0.5), observation(at(60), 0.2, 0.7),
+      observation(at(100), 0.2, 0.7), observation(at(110), 0.2, 0.9)
+    ]
+    expect(expectationEventMoves(series, [{ at: at(55), label: 'a' }, { at: at(105), label: 'b' }]).map((mark) => mark.label))
+      .toEqual(['a', 'b'])
+  })
+
+  it('keeps at most five marks, the largest moves first, then back in time order', () => {
+    const series: PolicyPathObservation[] = []
+    const events: Array<{ at: string; label: string }> = []
+    for (let index = 0; index < 6; index += 1) {
+      const base = index * 60
+      series.push(observation(at(base + 50), 0.2, 0.5))
+      // 每一步 hike 0.02 → 0.5bp 起，第 6 个是 1.5bp。
+      series.push(observation(at(base + 70), 0.2, 0.5 + (index + 1) * 0.02))
+      events.push({ at: at(base + 60), label: `e${index}` })
+    }
+    expect(expectationEventMoves(series, events).map((mark) => mark.label)).toEqual(['e1', 'e2', 'e3', 'e4', 'e5'])
+  })
+
+  it('does not mark when one side of the window has no observation', () => {
+    // 事件前 10 分钟有一条，事件后 20 分钟才有下一条——超出 ±15 分钟，不标。
+    const series = [observation(at(50), 0.2, 0.5), observation(at(80), 0.2, 0.9)]
+    expect(expectationEventMoves(series, [{ at: at(60), label: 'x' }])).toEqual([])
   })
 })

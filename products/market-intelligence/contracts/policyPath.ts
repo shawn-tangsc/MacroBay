@@ -378,6 +378,76 @@ export function distributionAtOrBefore(
   return candidate
 }
 
+/**
+ * 事件标注：那一刻曲线真的动了多少，以及标不标。
+ *
+ * 三条规则（用户 2026-11-13 定，别放宽）：
+ * 1. 窗口内**任何**已发生的事件都可标，不限指标名单——央行讲话与会议往往才是大动作的来源；
+ * 2. 只有 |推动量| ≥ 0.5bp 才标；半个点以下读者看不出曲线动过，标了就是噪音；
+ * 3. 同一个 ±15 分钟窗口里有多条事件 → **不归因、不标**（宁可少一个圈，不把一次跳变算给两件事）；
+ *    一张图最多 5 条，按 |推动量| 取前 5。
+ *
+ * 推动量 = E(事件后最近一条) − E(事件前最近一条)，两侧都必须落在窗口内；缺一侧就不标。
+ * 单位与方向都走期望口径：概率差的正负可以跟期望差相反，图上一律用期望。
+ */
+export const POLICY_PATH_EVENT_POLICY = Object.freeze({
+  /** 归因窗口：事件前后各 15 分钟。 */
+  windowMinutes: 15,
+  /** 低于这个推动量不标。 */
+  minimumMoveBp: 0.5,
+  /** 一张图最多几个标注。 */
+  maximumMarks: 5
+} as const)
+
+export type PolicyPathExpectationEvent = Readonly<{
+  at: string
+  label: string
+  /** 期望的推动量（bp），带符号。 */
+  changeBp: number
+  /** 标注处曲线的高度：事件前最近一条的期望（bp）。 */
+  bp: number
+}>
+
+export function expectationEventMoves(
+  series: readonly PolicyPathObservation[],
+  events: readonly Readonly<{ at: string; label: string }>[]
+): readonly PolicyPathExpectationEvent[] {
+  const oldest = series[0]
+  const newest = series[series.length - 1]
+  if (!oldest || !newest) return []
+  const windowMs = POLICY_PATH_EVENT_POLICY.windowMinutes * 60_000
+  const candidates: Array<PolicyPathExpectationEvent & Readonly<{ atMs: number }>> = []
+  for (const event of events) {
+    const atMs = Date.parse(event.at)
+    if (!Number.isFinite(atMs)) continue
+    let before: PolicyPathObservation | undefined
+    let after: PolicyPathObservation | undefined
+    for (const observation of series) {
+      const observedAt = Date.parse(observation.at)
+      if (!Number.isFinite(observedAt)) continue
+      if (observedAt <= atMs) {
+        if (atMs - observedAt <= windowMs) before = observation
+      } else if (observedAt - atMs <= windowMs) {
+        // 有序序列里第一条落在窗口后的就是「事件后最近一条」。
+        after = observation
+        break
+      }
+    }
+    if (!before || !after) continue
+    const changeBp = changeInBp(expectationBp(after.values), expectationBp(before.values))
+    if (Math.abs(changeBp) < POLICY_PATH_EVENT_POLICY.minimumMoveBp) continue
+    candidates.push({ at: event.at, atMs, label: event.label, changeBp, bp: expectationBp(before.values) })
+  }
+  // 竞争归因：两条事件的窗口重叠（相隔不到 2 个窗口）就都不标。
+  const attributed = candidates.filter((candidate) => candidates.every((other) =>
+    other === candidate || Math.abs(other.atMs - candidate.atMs) >= 2 * windowMs))
+  return attributed
+    .sort((left, right) => Math.abs(right.changeBp) - Math.abs(left.changeBp))
+    .slice(0, POLICY_PATH_EVENT_POLICY.maximumMarks)
+    .sort((left, right) => left.atMs - right.atMs)
+    .map(({ atMs: _atMs, ...mark }) => mark)
+}
+
 /** The value that was in force `minutes` before the newest observation, if the series reaches back. */
 export function valueAtOrBefore(series: readonly PolicyPathObservation[], outcome: PolicyPathOutcome, minutes: number): number | undefined {
   const newest = series.at(-1)

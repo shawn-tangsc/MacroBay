@@ -65,6 +65,7 @@ import { createPortal } from 'react-dom'
 
 import { PolicyPathSlot } from './PolicyPathSlot'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
+import { useCurveReleaseEvents } from './useCurveReleaseEvents'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
@@ -312,8 +313,17 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const policyPathRead = usePolicyPathReading(readsReady && policyCellsRead, dataRevision)
   const policyPath = policyPathRead.result
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
-  // 关键指标 · 预期变化：静态页面版，内容是这个抽屉自己的示意数据（不读库）。
+  // 关键指标 · 预期变化：曲线与政策卡读真数据，三张简化卡仍是示意数据。
   const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
+  // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。
+  const curveSeries = policyPath?.state === 'available' ? policyPath.reading.probability?.series : undefined
+  const curveReleaseEvents = useCurveReleaseEvents({
+    enabled: indicatorDrawerOpen,
+    ...(readMarketEvents ? { readMarketEvents } : {}),
+    ...(curveSeries?.length
+      ? { windowStart: curveSeries[0]!.at, windowEnd: curveSeries[curveSeries.length - 1]!.at }
+      : {})
+  })
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
   // make it re-query the calendar on every render of this dashboard.
@@ -473,6 +483,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {<MacroIndicatorDrawer open={indicatorDrawerOpen} locale={locale} policyText={text.policyPath}
         {...(policyPath?.state === 'available' ? { policyReading: policyPath.reading } : {})}
         onRetryPolicy={policyPathRead.reload}
+        releaseEvents={curveReleaseEvents}
         onOpenPolicyDetail={() => { setIndicatorDrawerOpen(false); setPolicyDrawerOpen(true) }} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not

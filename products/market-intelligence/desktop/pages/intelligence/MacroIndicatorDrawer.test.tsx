@@ -282,6 +282,36 @@ describe('expectation curve inside the drawer', () => {
     expect(vertices).toBeLessThan(200)
   })
 
+  it('marks a release on the curve only when the curve actually moved', async () => {
+    const before = { 'no-change': 0.45, 'hike-25': 0.5, 'hike-50-plus': 0.03, 'cut-25': 0.01, 'cut-50-plus': 0.01 }
+    const after = { 'no-change': 0.25, 'hike-25': 0.7, 'hike-50-plus': 0.03, 'cut-25': 0.01, 'cut-50-plus': 0.01 }
+    const reading: PolicyPathReading = {
+      ...withSeries,
+      probability: {
+        ...withSeries.probability!,
+        series: [
+          { at: '2026-11-10T13:20:00.000Z', values: before },
+          { at: '2026-11-10T13:40:00.000Z', values: after }
+        ]
+      }
+    }
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined}
+        onRetryPolicy={() => undefined} policyText={text} policyReading={reading}
+        releaseEvents={[{ at: '2026-11-10T13:30:00.000Z', label: 'CPI 年率' }]} /></ShellLanguageProvider>)
+    })
+    // 期望差：25×(0.70−0.50) = +5.0bp，标注贴在图顶。
+    expect(document.body.querySelector('.mk-plot__svg')?.textContent).toContain('↑ +5.0bp CPI 年率')
+  })
+
+  it('shows no annotation when the host passes no events', async () => {
+    await render(withSeries)
+    expect(document.body.querySelector('.mk-plot__svg')?.textContent ?? '').not.toContain('bp CPI')
+  })
+
   it('shows the empty state, not a flat line, when the reading carries no points', async () => {
     const { series: _noSeries, ...probability } = withSeries.probability!
     await render({ ...withSeries, probability })

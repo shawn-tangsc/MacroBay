@@ -15,7 +15,7 @@ import { productText } from '../../shared/i18n/productText'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { expectationBp } from '../../../contracts/policyPath'
+import { expectationBp, expectationEventMoves } from '../../../contracts/policyPath'
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
@@ -61,7 +61,7 @@ const MOCK = {
   }
 } as const
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -76,6 +76,12 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   policyReading?: PolicyPathReading
   policyText: PolicyPathCardText
   onOpenPolicyDetail?: () => void
+  /**
+   * 曲线窗口内已发生的发布/事件（有名字、有时刻），用来在曲线上标注「这一刻动了多少」。
+   *
+   * 由宿主从**它已经读到的日历结果**里取；抽屉不为此另发一次日历请求。缺省就是没有标注。
+   */
+  releaseEvents?: readonly Readonly<{ at: string; label: string }>[]
   /**
    * 读数没读出来时的唯一动作：重读一次，不跳转。
    *
@@ -147,6 +153,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     ? Math.max(1, Math.ceil((Date.parse(points[points.length - 1]!.at) - Date.parse(points[0]!.at)) / 86_400_000))
     : undefined
   const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
+  // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
+  const eventMarks = useMemo(() => {
+    const series = policyReading?.probability?.series
+    return series && releaseEvents?.length ? expectationEventMoves(series, releaseEvents) : []
+  }, [policyReading, releaseEvents])
 
   // 挂到 body：抽屉是 1280 的右侧浮层，如果落在右栏或某个 overflow 容器里，会被祖先裁掉——
   // 表现正是「点了没反应」。portal 让它以视口为参照，和其它浮层同一层。
@@ -187,7 +198,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
         <div className="mk-view">
           <div className="mk-plot" ref={plotRef}>
             {points.length
-              ? <ExpectationChart points={points} events={[]} height={plotHeight} width={plotWidth}
+              ? <ExpectationChart points={points} events={eventMarks} height={plotHeight} width={plotWidth}
                 latest={delta === undefined ? {} : { changeBp: delta }}
                 text={{
                   aria: text.chartAria,
