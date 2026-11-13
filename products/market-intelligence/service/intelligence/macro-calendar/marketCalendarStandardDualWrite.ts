@@ -2,6 +2,9 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { narwhalCanonicalIdentityKey } from './marketCalendarMetricIdentity'
 import { nameByMetricKey } from './marketCalendarCodeNames'
+
+/** 事件型身份的第二段：不是指标码，`evt.*` 映射还没接。 */
+const EVENT_KINDS: readonly string[] = ['central-bank-activity', 'financial-event']
 import { recordCalendarUnmapped, upsertCalendarStandardRow,
   type CalendarUnmappedReason } from './marketCalendarStandardTable'
 
@@ -60,9 +63,14 @@ export function dualWriteObservationBatch(
       const [countryCode, metricKey, periodKey] = parts as [string, string, string]
       const named = nameByMetricKey[metricKey]
       if (named === undefined) {
-        reasons['unknown-measure'] += 1
+        // 事件型行的身份第二段是**事件类型**（`central-bank-activity`），不是指标码——它们的
+        // `evt.*` 映射还没接，所以记 `unknown-event-type`，别混进「缺指标映射」里：
+        // 两者该修的地方不同（一个补事件类型表，一个补指标码）。
+        const eventType = EVENT_KINDS.includes(metricKey)
+        const reason: CalendarUnmappedReason = eventType ? 'unknown-event-type' : 'unknown-measure'
+        reasons[reason] += 1
         recordCalendarUnmapped(database, { providerId: batch.providerId, sourceKey: String(draft.marketFactKey),
-          detectedAt: batch.observedAt, rawJson: JSON.stringify({ metricKey }), reason: 'unknown-measure' })
+          detectedAt: batch.observedAt, rawJson: JSON.stringify({ metricKey }), reason })
         continue
       }
       const scheduledAt = String(draft.scheduledAt ?? '')
