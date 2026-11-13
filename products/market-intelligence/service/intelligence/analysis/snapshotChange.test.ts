@@ -4,7 +4,7 @@ import type { AgentFact, AgentEvidenceRef, EvidenceSnapshot } from '../../../con
 import { computeSnapshotChange, isUnchangedSnapshot, snapshotChangePolicy } from './snapshotChange'
 
 const fact = (factId: string, value: string, metric = 'actual'): AgentFact => ({
-  factId, domain: 'macro', subject: 'CPI', metric, value, unit: '%', sourceId: 'official', sourceLabel: '官方',
+  factId, domain: 'macro', subject: 'CPI', metric, value, unit: 'percent', sourceId: 'official', sourceLabel: '官方',
   observedAt: '2026-10-06T00:00:00.000Z', asOf: '2026-10-06T00:00:00.000Z', freshness: 'fresh', confidence: 1,
   comparability: 'comparable', evidenceRefId: 'ev-1'
 })
@@ -42,7 +42,7 @@ describe('snapshot change', () => {
     expect(change.previousSnapshotHash).toBe('hash-1')
     // The change also carries the display fields, so a reader can describe it
     // instead of showing a fact id.
-    const display = { subject: 'CPI', unit: '%', sourceLabel: '官方' }
+    const display = { subject: 'CPI', unit: 'percent', sourceLabel: '官方' }
     expect(change.facts).toEqual([
       { factId: 'f1', domain: 'macro', ...display, metric: 'actual', kind: 'changed', previousValue: '3.2', value: '3.4' },
       { factId: 'f2', domain: 'macro', ...display, metric: 'previous', kind: 'removed', previousValue: '0.1' },
