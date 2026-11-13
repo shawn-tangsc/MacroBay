@@ -24,7 +24,8 @@ import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroM
 import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindows'
 import type { AgentSafeEvidenceRef } from './queryContracts'
 import type { MarketIntelligencePublicQueryService as PublicQueryService } from './publicQueryService'
-import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
+import { readAnalysisCalendarMonth } from './marketAnalysisCalendarReader'
+import { marketCalendarObservationPolicy } from '../macro-calendar/marketCalendarObservationNormalization'
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { projectMacroMarket } from './macroMarketFactProjection'
 import { projectMacroRates } from './macroRatesFactProjection'
@@ -285,20 +286,21 @@ export async function buildMarketAnalysisContext(
   }
 
   if (requestedDomains.includes('macro')) {
-    const officialQuery = publicQueryService.queryMacroEconomicCalendarMonth
+    // 只读一个入口：标准表的月查询（页面里已经包含官方行）。再调官方日历查询，同一次发布
+    // 会以两个来源各出现一次——那正是「同一事实两份证据」。
     const marketQuery = publicQueryService.queryMarketCalendarMonth
-    if (!officialQuery && !marketQuery) {
+    if (!marketQuery) {
       observations.macro = observation('missing', 'missing', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarQueryNotWired])
       caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarQueryNotWired)
     } else {
       const month = input.asOf.slice(0, 7)
-      const official = officialQuery
-        ? await safeQuery(() => officialQuery({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents }))
-        : undefined
-      safeProject(() => projectMacroCalendar({
-        official,
-        provider: marketQuery ? readMarketCalendarObservations(marketQuery, { month, asOf: input.asOf }) : undefined
-      }, input.asOf, facts, evidenceRefs, caveats, observations), observations, 'macro')
+      const provider = readAnalysisCalendarMonth(marketQuery, { month, asOf: input.asOf })
+      safeProject(() => projectMacroCalendar({ official: undefined, provider }, input.asOf, facts, evidenceRefs, caveats, observations), observations, 'macro')
+      // 一页都没读成：域状态必须是不可用，不能被投影成「这个月没有事件」。
+      if (provider.observations.length === 0 && provider.caveats.includes(marketCalendarObservationPolicy.caveats.pageUnavailable)) {
+        observations.macro = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable])
+        caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
+      }
     }
     // The macro domain has three producers and the panel shows all three: the calendar rows, the
     // 市场状态 block's dollar and gold readings, and FRED's daily rates. Each projection merges into

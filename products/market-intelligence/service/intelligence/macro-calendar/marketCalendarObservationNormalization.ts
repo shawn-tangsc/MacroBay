@@ -44,6 +44,13 @@ export type MacroCalendarProviderObservation =
 export type MacroCalendarProviderObservationSet = Readonly<{
   observations: readonly MacroCalendarProviderObservation[]
   caveats: readonly string[]
+  /**
+   * 这一侧到底读没读到（可选，缺省按旧行为当可读）。
+   *
+   * 空数组有两种意思：读成功但这个月确实没有发布，或者根本读不到。分析侧要把它们分别说成
+   * 「空」和「不可用」，所以读成功但为空时必须带 `available`。
+   */
+  readState?: 'available' | 'unavailable'
 }>
 
 export const marketCalendarObservationPolicy = Object.freeze({

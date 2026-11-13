@@ -329,14 +329,19 @@ export function projectMacroCalendar(
 ): void {
   const official = input.official
   const officialEvents = official && official.state === 'available' && official.asOf === asOf ? official.events : undefined
+  const providerEvents = input.provider?.observations ?? []
   for (const caveat of input.provider?.caveats ?? []) caveats.add(caveat)
-  if (!officialEvents) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
-  const events: readonly MacroCalendarProviderObservation[] = [...(officialEvents ?? []), ...(input.provider?.observations ?? [])]
+  // 官方日历查询缺失不再等于「日历不可用」：标准表把官方与市场写在一起，官方行经同一个月查询
+  // 进来。只有两路都没有事件时才报这条缺口，否则每次分析都会挂一条假的「不可用」。
+  if (!officialEvents && providerEvents.length === 0) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
+  const events: readonly MacroCalendarProviderObservation[] = [...(officialEvents ?? []), ...providerEvents]
   if (events.length === 0) {
-    observations.macro = officialEvents
+    // 读成功但为空 = 空；一次都没读成 = 不可用。两者不许合并。
+    const readable = officialEvents !== undefined || input.provider?.readState === 'available'
+    observations.macro = readable
       ? observation('empty', 'missing', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty])
       : observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable])
-    caveats.add(officialEvents ? MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty : MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
+    caveats.add(readable ? MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty : MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
     return
   }
   let factCount = 0
