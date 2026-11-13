@@ -368,7 +368,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const group = deps.repository.getEventGroup(runRecord.eventGroupId)
     if (!group) return fail(runRecord.id, 'failed', 'analysis-event-group-not-found')
     const currentVersion = group.currentSummaryId ? deps.repository.getSummary?.(group.currentSummaryId)?.version ?? 0 : 0
-    const summary = toSummary(runRecord, validated.value, currentVersion + 1, deps.now(), deps.idFactory)
+    const summary = toSummary(runRecord, validated.value, currentVersion + 1, deps.now(), deps.idFactory, proseLanguage)
     const predictions = toPredictions(summary, validated.value, deps.now(), deps.idFactory)
     const timeline: TimelineEntry = {
       id: makeId('mi-tl-', deps.idFactory()), schemaVersion: 1, eventGroupId: runRecord.eventGroupId, analysisRunId: runRecord.id,
@@ -466,8 +466,14 @@ export function createAnalysisOrchestrator(deps: Readonly<{
   return { run }
 }
 
-function toSummary(run: AnalysisRun, output: ValidatedAnalysisModelOutput, version: number, createdAt: string, idFactory: () => string): AnalysisSummary {
-  return { id: makeId('mi-as-', idFactory()), schemaVersion: 1, analysisRunId: run.id, eventGroupId: run.eventGroupId, version, ...output, createdAt }
+function toSummary(run: AnalysisRun, output: ValidatedAnalysisModelOutput, version: number, createdAt: string, idFactory: () => string,
+  proseLanguage?: 'zh-CN' | 'en-US'): AnalysisSummary {
+  // 提示词在语言读不到时按中文写（`buildAnalysisMessages` 的默认），所以记录也写中文：
+  // 记录的是「这份正文实际用的语言」，不是「读没读到设置」。
+  return {
+    id: makeId('mi-as-', idFactory()), schemaVersion: 2, analysisRunId: run.id, eventGroupId: run.eventGroupId, version,
+    proseLanguage: proseLanguage ?? 'zh-CN', ...output, createdAt
+  }
 }
 
 function toPredictions(summary: AnalysisSummary, output: ValidatedAnalysisModelOutput, createdAt: string, idFactory: () => string): Prediction[] {

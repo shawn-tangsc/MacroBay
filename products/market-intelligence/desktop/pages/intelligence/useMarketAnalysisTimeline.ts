@@ -75,6 +75,11 @@ export type UseMarketAnalysisTimelineResult = Readonly<{
   loadMore: () => void
   requestInitialAnalysis: () => Promise<void>
   requestRefreshAnalysis: () => Promise<void>
+  /**
+   * 「重新生成这一条」：同一事件组再分析一次，产生新记录（旧记录不动）。走既有入口，
+   * 只是把目标从「最近一条」换成读者正在看的那一组。
+   */
+  regenerateConclusion: (eventGroupId: string) => Promise<void>
 }>
 
 /**
@@ -387,12 +392,12 @@ export function useMarketAnalysisTimeline(input: Readonly<{
    * A refusal (`already-available`, `not-ready`, an IPC error) is reported as `request`; a run
    * that finished without publishing is reported as `run`, so the surface can say which happened.
    */
-  const enqueueRefresh = async (baselineEntryId: string | undefined): Promise<PollResult | 'refused'> => {
+  const enqueueRefresh = async (baselineEntryId: string | undefined, eventGroupId?: string): Promise<PollResult | 'refused'> => {
     setRequestState('loading')
     setRequestFailure(undefined)
     let result: Awaited<ReturnType<typeof marketAnalysisTimelineClient.requestInitialAnalysis>>
     try {
-      result = await marketAnalysisTimelineClient.requestInitialAnalysis(undefined, 'refresh')
+      result = await marketAnalysisTimelineClient.requestInitialAnalysis(undefined, 'refresh', eventGroupId)
     } catch (error) {
       // The service refuses with `analysis-already-available` when a usable analysis already exists —
       // including the run it just finished. That is not a failure to report as "not published".
@@ -415,6 +420,14 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     // also cover scheduled runs and runs whose panel is closed, and it re-asks against the same
     // frozen snapshot. The poll simply keeps waiting while that second answer is produced.
     await enqueueRefresh(state.entries[0]?.id)
+  }
+
+  /**
+   * 旧结论的语言与当前界面不同时，读者点的「重新生成」：同一事件组再跑一次，产生**新记录**。
+   * 旧记录原样留着（结论可追溯）——这里从不覆盖已发布的东西。
+   */
+  const regenerateConclusion = async (eventGroupId: string): Promise<void> => {
+    await enqueueRefresh(state.entries[0]?.id, eventGroupId)
   }
 
   const selectionState: AnalysisSelectionState = state.selected
@@ -474,7 +487,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   return {
     state, attempt, requestState, requestFailure, selectionState, details, detailState, load, select, clearSelection, ensureDetail,
     loadMore: () => { void load(state.nextCursor ?? undefined) },
-    requestInitialAnalysis, requestRefreshAnalysis
+    requestInitialAnalysis, requestRefreshAnalysis, regenerateConclusion
   }
 }
 

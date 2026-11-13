@@ -116,6 +116,8 @@ export type MarketAnalysisTimelineDetail = Readonly<{
     evidenceCount: number
     dataCaveats: readonly string[]
     createdAt: string
+    /** v2 摘要记录正文的生成语言；旧记录没有这个字段。 */
+    proseLanguage?: 'zh-CN' | 'en-US'
   }>
   predictions: readonly Readonly<{
     id: string
@@ -147,7 +149,11 @@ export type MarketAnalysisTimelineClient = Readonly<{
   getSettings: () => Promise<MarketAnalysisSettingsView | undefined>
   saveSettings: (patch: MarketAnalysisSettingsPatch) => Promise<MarketAnalysisSettingsSaveResult>
   listTimeline: (input?: { cursor?: string }) => Promise<{ state: 'available'; page: MarketAnalysisTimelinePage } | { state: 'unavailable' }>
-  requestInitialAnalysis: (retryRunId?: string, mode?: 'initial' | 'refresh') => Promise<{ state: 'queued'; itemId: string } | { state: 'unavailable'; reason: 'not-eligible' | 'not-ready' | 'failed' | 'already-available' }>
+  /**
+   * 既有入口：`retryRunId` 重跑失败的那次；`mode: 'refresh'` 为同一事件组再分析一次；
+   * `eventGroupId` 让「重新生成」指着读者正在看的那一组，而不是「最近一条」。
+   */
+  requestInitialAnalysis: (retryRunId?: string, mode?: 'initial' | 'refresh', eventGroupId?: string) => Promise<{ state: 'queued'; itemId: string } | { state: 'unavailable'; reason: 'not-eligible' | 'not-ready' | 'failed' | 'already-available' }>
   getLatestAttempt: () => Promise<MarketAnalysisAttempt | null>
   getDetail: (entry: MarketAnalysisTimelineEntry) => Promise<{ state: 'available'; detail: MarketAnalysisTimelineDetail } | { state: 'unavailable' }>
 }>
@@ -192,10 +198,10 @@ export const marketAnalysisTimelineClient: MarketAnalysisTimelineClient = {
       return value as MarketAnalysisAttempt
     } catch { return null }
   },
-  async requestInitialAnalysis(retryRunId, mode = 'initial') {
+  async requestInitialAnalysis(retryRunId, mode = 'initial', eventGroupId) {
     try {
       if (!window.platform?.products?.invoke) return { state: 'unavailable', reason: 'failed' }
-      const payload = retryRunId ? { retryRunId } : mode === 'refresh' ? { mode } : {}
+      const payload = eventGroupId ? { eventGroupId } : retryRunId ? { retryRunId } : mode === 'refresh' ? { mode } : {}
       const result = await window.platform.products.invoke(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis, payload)
       if (!isExactRecord(result, ['itemId', 'queued']) || typeof result.itemId !== 'string' || result.queued !== true) return { state: 'unavailable', reason: 'failed' }
       return { state: 'queued', itemId: result.itemId }
@@ -315,7 +321,8 @@ function sanitizeRun(value: unknown): MarketAnalysisTimelineDetail['run'] | unde
 function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'] | undefined {
   // 白名单只从 `marketAnalysisSummaryWhitelist` 读（守卫用例与这里同一份）。可选键缺席一律不判错：
   // 两种契约世代的摘要都要能渲染，少一个可选字段不许把详情变成「读不到」。
-  if (!isExactRecordWithOptionals(value, SUMMARY_REQUIRED_FIELDS, SUMMARY_OPTIONAL_FIELDS) || value.schemaVersion !== 1 ||
+  if (!isExactRecordWithOptionals(value, SUMMARY_REQUIRED_FIELDS, SUMMARY_OPTIONAL_FIELDS) ||
+    (value.schemaVersion !== 1 && value.schemaVersion !== 2) ||
     !isText(value.id) || typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1 ||
     !isCanonicalTime(value.createdAt)) return undefined
   // Caveats are rendered, so an over-long list is truncated; the evidence references are only
@@ -335,11 +342,14 @@ function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'
   const nextCatalysts = sanitizeStatementClaims(value.nextCatalysts, ['statement', 'evidenceRefIds'])
   const directions = sanitizeDirections((value as { directions?: unknown }).directions)
   if (!knownFacts || !transmissionHypotheses || !marketReaction || !supportingEvidence || !counterEvidence || !nextCatalysts || directions === false) return undefined
+  // `proseLanguage` 只认这两种；旧记录没有它、脏值也不认（不标注），但都不影响详情可用。
+  const proseLanguage = value.proseLanguage === 'zh-CN' || value.proseLanguage === 'en-US' ? value.proseLanguage : undefined
   return {
     id: value.id,
     version: value.version,
     ...(eventAssessment ? { eventAssessment } : {}),
     ...(conclusion ? { conclusion } : {}),
+    ...(proseLanguage ? { proseLanguage } : {}),
     knownFacts,
     transmissionHypotheses,
     marketReaction,

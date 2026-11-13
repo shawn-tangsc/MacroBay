@@ -1,5 +1,7 @@
+import { Button } from 'antd'
 import { localizeAnalysisMagnitudeUnits, type MarketAnalysisReadableLocale, type MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
 import type { MarketAnalysisTimelineDetail } from '../../shared/ipc/marketAnalysisTimelineClient'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -65,6 +67,10 @@ export type AnalysisDetailText = Readonly<{
   readableNames: MarketAnalysisReadableNames
   /** Locale for number formatting; the conclusion prose is Chinese, so this defaults to it. */
   readableLocale?: MarketAnalysisReadableLocale
+  /** 正文语言与当前界面不同时的一句事实；`{language}` 由界面填入语言名。 */
+  conclusionLanguageNote: string
+  /** 那条提示旁的「重新生成」。 */
+  regenerateConclusion: string
 }>
 
 /**
@@ -73,11 +79,25 @@ export type AnalysisDetailText = Readonly<{
  * published conclusion, not a preview, so nothing here may shorten it.
  * Audit identifiers stay inside a collapsed details element.
  */
-export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: MarketAnalysisTimelineDetail; text: AnalysisDetailText }>): React.ReactElement {
+export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonly<{
+  detail: MarketAnalysisTimelineDetail
+  text: AnalysisDetailText
+  /** 「重新生成」：同一事件组再跑一次（由宿主接到既有入口上）。 */
+  onRegenerate?: () => void
+}>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductText = useProductTextKey()
+  const uiLanguage = useShellLanguage()
   const summary = detail.summary
   const locale = text.readableLocale ?? 'zh-CN'
+  /**
+   * 正文的生成语言与当前界面语言不一致时，标一句**事实**。
+   *
+   * 旧记录没有这个字段：不标注、不猜、不写「语言未知」——那就是噪声。语言一致时也不标注。
+   */
+  const languageNote = summary.proseLanguage !== undefined && summary.proseLanguage !== uiLanguage
+    ? text.conclusionLanguageNote.replace('{language}', displayLanguageName(summary.proseLanguage, uiLanguage))
+    : undefined
   // Two contract generations: a structured conclusion (current) or the legacy labelled paragraph,
   // read through the same projection the at-a-glance card uses.
   const { direction, blocks } = readConclusion(summary, conclusionReadableNames, locale)
@@ -89,6 +109,10 @@ export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: Ma
         <p className="mi-analysis-timeline__section-label">{text.conclusion}</p>
         {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}
       </header>
+      {languageNote === undefined ? null : <p className="mi-analysis-conclusion__language" role="note">
+        {languageNote}{' '}
+        {onRegenerate === undefined ? null : <Button className="text-action" onClick={onRegenerate} size="small" type="text">{text.regenerateConclusion}</Button>}
+      </p>}
       {(detail.summary.directions ?? []).length > 0 ? <AnalysisDirectionsBlock directions={detail.summary.directions!} text={text.directions} /> : null}
       <div className="mi-analysis-conclusion__body">
         {localizedBlocks.map((block, index) => block.kind === 'text'
@@ -178,4 +202,17 @@ function describeStructural(change: NonNullable<MarketAnalysisTimelineDetail['ru
   if (change.evidenceRefsAdded > 0) parts.push(`${text.changeEvidenceAdded} ${change.evidenceRefsAdded}`)
   if (change.evidenceRefsRemoved > 0) parts.push(`${text.changeEvidenceRemoved} ${change.evidenceRefsRemoved}`)
   return parts
+}
+
+/**
+ * 生成语言的名字，按读者当前界面语言书写（「英语」/「English」）。
+ *
+ * 语言名是数据，不是文案：句子在文案表里，这里只填那一个词。取不到时退回语言码本身。
+ */
+function displayLanguageName(language: string, uiLanguage: string): string {
+  try {
+    return new Intl.DisplayNames([uiLanguage], { type: 'language' }).of(language.split('-')[0]!) ?? language
+  } catch {
+    return language
+  }
 }

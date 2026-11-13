@@ -17,7 +17,7 @@ function harness() {
     })),
     getTimelineEntry: vi.fn(() => timelineEntry),
     listRuns: vi.fn(() => [{ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', privateBody: 'never-display' }]),
-    getEventGroup: vi.fn((id: string) => id === 'mi-eg-1' ? { id, currentSummaryId: 'mi-as-1' } : undefined),
+    getEventGroup: vi.fn((id: string) => id === 'mi-eg-1' ? { id, currentSummaryId: 'mi-as-1', eventRefs: ['item-1'] } : undefined),
     getRun: vi.fn(() => ({
       id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial' as const, status: 'succeeded' as const,
       failureCode: null, queuedAt: '2026-09-28T00:00:00.000Z', startedAt: '2026-09-28T00:00:01.000Z', completedAt: '2026-09-28T00:00:02.000Z'
@@ -35,11 +35,12 @@ function harness() {
       nextCatalyst: null, status: 'pending' as const, verificationDueAt: '2026-09-28T01:00:00.000Z', createdAt: '2026-09-28T00:00:02.000Z'
     }])
   }
+  const sessions = { requestInitialAnalysis: vi.fn(async () => ({ itemId: 'item-1', queued: true as const })) }
   registerMarketAnalysisIpc((productId, method, handler) => {
     expect(productId).toBe('market-intelligence')
     handlers.set(method, handler)
-  }, repository as never)
-  return { handlers, repository }
+  }, repository as never, {}, sessions)
+  return { handlers, repository, sessions }
 }
 
 describe('marketAnalysisIpc', () => {
@@ -49,6 +50,20 @@ describe('marketAnalysisIpc', () => {
       id: 'mi-ar-failed', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', evidenceCount: 1
     })
   })
+  it('re-runs the same event group through the existing entry when a conclusion is regenerated', async () => {
+    const { handlers, sessions } = harness()
+    // 「重新生成」不是新 IPC、也不覆盖旧记录：走同一个入口，只是把目标换成读者正在看的那一组。
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis)?.({ eventGroupId: 'mi-eg-1' }))
+      .resolves.toEqual({ itemId: 'item-1', queued: true })
+    expect(sessions.requestInitialAnalysis).toHaveBeenCalledWith('item-1', undefined, 'refresh', 'manual')
+    // 组不存在：拒绝，不去猜一个 item。
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis)?.({ eventGroupId: 'mi-eg-missing' }))
+      .rejects.toThrow('analysis-not-eligible')
+    // 和别的目标混着传：整条请求非法。
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis)?.({ eventGroupId: 'mi-eg-1', mode: 'refresh' }))
+      .rejects.toThrow('analysis-invalid-request')
+  })
+
   it('supports timeline pagination through the product IPC boundary', async () => {
     const { handlers, repository } = harness()
     expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: 'mi-eg-1', limit: 1 })).toEqual({

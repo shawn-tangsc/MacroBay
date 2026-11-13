@@ -410,8 +410,14 @@ export type AnalysisConclusion = Readonly<{
 
 export type AnalysisSummary = Readonly<{
   id: string
-  schemaVersion: 1
+  /** 1 = 没有语言字段的旧记录；2 = 带 `proseLanguage` 的记录。 */
+  schemaVersion: 1 | 2
   analysisRunId: string
+  /**
+   * 这份正文是用哪种语言写的（生成时的界面语言）。旧记录没有这个字段：读出来是不认识、
+   * 不标注，绝不是「当前语言」或「未知」。
+   */
+  proseLanguage?: 'zh-CN' | 'en-US'
   eventGroupId: string
   version: number
   /**

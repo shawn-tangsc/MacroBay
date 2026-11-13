@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { marketAnalysisTimelineClient } from './marketAnalysisTimelineClient'
+import { marketAnalysisTimelineClient, type MarketAnalysisTimelineDetail } from './marketAnalysisTimelineClient'
 
 const asOf = '2026-09-28T00:00:00.000Z'
 
@@ -80,6 +80,50 @@ describe('marketAnalysisTimelineClient', () => {
     expect(result.state).toBe('available')
     expect(result.state === 'available' ? result.detail.summary.conclusion?.direction : undefined).toBe('bearish')
     expect(result.state === 'available' ? result.detail.summary.eventAssessment : undefined).toBeUndefined()
+  })
+
+  /**
+   * 「这条结论是用英文写的」这句事实只能来自记录本身：
+   * v2 摘要带 `proseLanguage`，v1 摘要没有它——读出来就是不标注，绝不当成当前语言，
+   * 也不许把一个怪值当成语言。
+   */
+  it('carries the generation language a v2 summary recorded, and leaves a v1 summary without one', async () => {
+    const entry = {
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
+      occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '偏空。', direction: 'bearish' as const, version: 1
+    }
+    const base = {
+      id: 'mi-as-1', analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
+      conclusion: { direction: 'bearish', summary: '偏空。', change: 'ETF 净流出。', causalChain: '资金流出 → 承压。', conditions: ['持续流出。'], macro: null, evidenceStrength: null, dataGaps: [] },
+      knownFacts: [], transmissionHypotheses: [], marketReaction: [], supportingEvidence: [], counterEvidence: [], scenarios: [], directions: [],
+      nextCatalysts: [], dataCaveats: [], evidenceRefs: ['mi-ev-1'], createdAt: asOf
+    }
+    const run = {
+      id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
+      queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 1
+    }
+    const detailFor = async (summary: Record<string, unknown>): Promise<MarketAnalysisTimelineDetail | undefined> => {
+      const invoke = vi.fn(async (_productId: string, method: string) => {
+        if (method === 'marketAnalysis.getAnalysisRun') return run
+        if (method === 'marketAnalysis.getSummary') return summary
+        return []
+      })
+      vi.stubGlobal('window', { platform: { products: { invoke } } })
+      const result = await marketAnalysisTimelineClient.getDetail(entry)
+      return result.state === 'available' ? result.detail : undefined
+    }
+
+    // v2：语言读得出来。
+    const v2 = await detailFor({ ...base, schemaVersion: 2, proseLanguage: 'en-US' })
+    expect(v2?.summary.proseLanguage).toBe('en-US')
+    // v1：没有字段 → 不标注（undefined），详情照常可用。
+    const v1 = await detailFor({ ...base, schemaVersion: 1 })
+    expect(v1).toBeDefined()
+    expect(v1?.summary.proseLanguage).toBeUndefined()
+    // 脏值：不认，但也别把整条详情判成读不到。
+    const dirty = await detailFor({ ...base, schemaVersion: 2, proseLanguage: 'fr-FR' })
+    expect(dirty).toBeDefined()
+    expect(dirty?.summary.proseLanguage).toBeUndefined()
   })
 
   it('fails closed when the product IPC is unavailable or extends the safe contract', async () => {

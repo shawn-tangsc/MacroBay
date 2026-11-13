@@ -63,12 +63,22 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
   })
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis, async (payload) => {
     if (!sessions.requestInitialAnalysis) throw new Error('analysis-initial-request-unavailable')
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => !['retryRunId', 'mode'].includes(key))) throw new Error('analysis-invalid-request')
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).some(key => !['retryRunId', 'mode', 'eventGroupId'].includes(key))) throw new Error('analysis-invalid-request')
     const retryRunId = (payload as { retryRunId?: unknown }).retryRunId
     if (retryRunId !== undefined && (typeof retryRunId !== 'string' || !retryRunId)) throw new Error('analysis-invalid-request')
     const mode = (payload as { mode?: unknown }).mode
     if (mode !== undefined && mode !== 'initial' && mode !== 'refresh') throw new Error('analysis-invalid-request')
     if (mode === 'refresh' && retryRunId !== undefined) throw new Error('analysis-invalid-request')
+    const eventGroupId = (payload as { eventGroupId?: unknown }).eventGroupId
+    if (eventGroupId !== undefined) {
+      // 「重新生成这一条」：同一事件组再分析一次，产生**新**记录；旧记录不动（结论可追溯）。
+      // 仍走这一个入口——不是新 IPC，也不在旧记录上覆盖。
+      if (typeof eventGroupId !== 'string' || !eventGroupId || retryRunId !== undefined || mode !== undefined) throw new Error('analysis-invalid-request')
+      const group = repository.getEventGroup(eventGroupId)
+      const itemId = group?.eventRefs[0]
+      if (!itemId) throw new Error('analysis-not-eligible')
+      return sessions.requestInitialAnalysis(itemId, undefined, 'refresh', 'manual')
+    }
     return sessions.requestInitialAnalysis(undefined, retryRunId, (mode ?? 'initial') as 'initial' | 'refresh', 'manual')
   })
 }

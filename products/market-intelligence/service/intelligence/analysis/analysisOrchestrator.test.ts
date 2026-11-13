@@ -89,14 +89,14 @@ describe('analysisOrchestrator', () => {
       return { ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', providerId: 'provider-1', modelId: 'model-1', durationMs: 4 } }
     })
     const repository = createRepository({ commitSuccessfulAnalysis, chatMessagesWritten: () => chatMessagesWritten })
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(), getLanguage: async () => 'en-US' })
 
     const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
 
     expect(result.status).toBe('succeeded')
     expect(chatMessagesWritten).toBe(0)
     expect(commitSuccessfulAnalysis).toHaveBeenCalledOnce()
-    expect(commitSuccessfulAnalysis.mock.calls[0]?.[0]).toMatchObject({ runId: 'mi-ar-1', summary: { id: 'mi-as-1', eventGroupId: 'mi-eg-1' } })
+    expect(commitSuccessfulAnalysis.mock.calls[0]?.[0]).toMatchObject({ runId: 'mi-ar-1', summary: { id: 'mi-as-1', eventGroupId: 'mi-eg-1', schemaVersion: 2, proseLanguage: 'en-US' } })
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ACCEPTANCE', package: 'MI-A05', event: 'isolated-run', status: 'pass', details: { chatMessagesWritten, modelCalls: invoke.mock.calls.length, publishedSummary: commitSuccessfulAnalysis.mock.calls.length, oldSummaryPreserved: true } }))
   })
 

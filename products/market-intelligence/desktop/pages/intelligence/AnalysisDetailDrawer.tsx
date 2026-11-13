@@ -55,6 +55,9 @@ export function AnalysisDetailDrawer({ text, workspaceText, timeline, openEntry,
       size="md"
       state="error"
     /> : null}
-    {detail ? <AnalysisConclusionDetail detail={detail} text={text} /> : null}
+    {detail ? <AnalysisConclusionDetail
+      detail={detail}
+      onRegenerate={() => { void timeline.regenerateConclusion(openEntry.eventGroupId) }}
+      text={text} /> : null}
   </MiSideDrawer>
 }
