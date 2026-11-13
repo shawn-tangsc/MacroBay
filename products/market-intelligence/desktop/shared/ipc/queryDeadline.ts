@@ -44,17 +44,21 @@ export function withQueryDeadline<T>(read: Promise<T>, deadlineMs: number = quer
  * 同形状读口清单（都直接 `await client.*`，都没有 deadline）——**已接 / 未接**写在这里，
  * 下一笔按顺序接，不要再把所有 hook 扫一遍。
  *
- * 已接：
- * - 资金面 `useCapitalConditions` → `intelligenceCapitalConditionsClient.querySnapshot`（用户现场，2026-11-13）
+ * **全部已接**（2026-11-13，用户 0.4.4 拍板；守卫在 `pages/intelligence/queryDeadlineReadPoints.test.tsx`，
+ * 每个读口一条「桩永不返回 → 过 deadline 落终态」的用例，新增读口照此加一条）：
+ * 1. 资金面 `useCapitalConditions` → `querySnapshot`
+ * 2. `useDashboardOpenInterest`（`client.query`；信号腿失败本就可容忍，不另加）
+ * 3. `useDashboardFundingRateHistory`（`client.query`）
+ * 4. `useDashboardFearGreed`（`client.querySnapshot`）
+ * 5. `useDashboardDivergence`（`client.query`）
+ * 6. `useDashboardEconomicCalendar`（`client.queryMonth`）
+ * 7. `useCalendarCardData`（两条日历读）
+ * 8. `useMacroMarketSnapshot`（`client.query`）
+ * 9. `useMacroRatesSnapshot`（`client.query`）
+ * 10. 跨资产 `useCrossAssetObservation`（`client.query`）
  *
- * 未接（同一形状：挂起就永远转）：
- * 1. `useDashboardOpenInterest`（`openInterestClient.query`）
- * 2. `useDashboardFundingRateHistory`（`fundingRateClient.query`）
- * 3. `useDashboardFearGreed`（`fearGreedClient.querySnapshot`）
- * 4. `useDashboardDivergence`（`divergenceClient.query`）
- * 5. `useDashboardEconomicCalendar`（`client.queryMonth`）
- * 6. `useCalendarCardData`（两条日历读 + 面板视图）
- * 7. `useMacroMarketSnapshot`（`macroMarketClient.query`）
- * 8. `useMacroRatesSnapshot`（`macroRatesClient.query`）
- * 9. 跨资产 `useCrossAssetObservation`（`client.query`）
+ * 两条读口另有「不许无限加载」的上限（不只 deadline）：`useMacroMarketSnapshot` /
+ * `useMacroRatesSnapshot` 在**首答之前连续 3 轮没有答案**就落 `unavailable`（有数据后保持旧行，
+ * 轮询继续、恢复即回 ready）。理由：这两个是轮询式读口，光给每次读挂 10 秒期限，状态仍可能永远
+ * 停在「加载中」。
  */

@@ -8,6 +8,7 @@ import { toCardEventFromOfficial, toCardEventFromProvider } from './calendarCard
 import { attachReactions, reactionAnchors, type CalendarCardReaction } from './calendarCardReaction'
 import { projectUpcomingCalendarCard, type CalendarCardEvent, type CalendarCardProjection } from './projectUpcomingCalendarCard'
 import { useDataChangeRevision } from './useDataChangeRevision'
+import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 /**
  * Feeds the card from the calendar the page already has, read-only.
@@ -139,9 +140,9 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
     const months = calendarCardMonths(asOf)
     void Promise.all(months.map(async month => {
       const [official, market] = await Promise.all([
-        macroEconomicCalendarClient.queryMonth({ month, asOf }),
+        withQueryDeadline(macroEconomicCalendarClient.queryMonth({ month, asOf })),
         // Paged: reading one page hid the provider's later days from the card.
-        readMarketCalendarMonth(marketCalendarClient, { month, locale, asOf })
+        withQueryDeadline(readMarketCalendarMonth(marketCalendarClient, { month, locale, asOf }))
       ])
       const events: CalendarCardEvent[] = official.state === 'available' ? official.events.map(toCardEventFromOfficial) : []
       if (market !== null) {
