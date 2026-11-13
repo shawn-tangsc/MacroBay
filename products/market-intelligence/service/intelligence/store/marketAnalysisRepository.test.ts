@@ -27,7 +27,7 @@ function group(id = 'mi-eg-0001'): EventGroup {
 }
 
 function snapshot(id: string, eventGroupId: string, value: string): EvidenceSnapshot {
-  const facts = [{ factId: `fact-${value}`, domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value, unit: '%', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: `ev-${value}` }]
+  const facts = [{ factId: `fact-${value}`, domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value, unit: 'percent', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: `ev-${value}` }]
   const evidenceRefs = [{ evidenceRefId: `ev-${value}`, sourceId: 'source-fed', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: createHash('sha256').update(`ev-${value}`).digest('hex') }]
   return {
     id, schemaVersion: 1, eventGroupId, asOf, dataCutoff: asOf, snapshotHash: buildAnalysisSnapshotHash({ profileId: 'crypto-market-analysis-v1', asOf, dataCutoff: asOf, facts, missingDomains: [], caveats: [], evidenceRefs }),

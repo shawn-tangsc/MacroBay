@@ -25,7 +25,7 @@ const group: EventGroup = {
 }
 
 function snapshot(): EvidenceSnapshot {
-  const facts = [{ factId: 'fact-1', domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value: '3.1', unit: '%', sourceId: 'source-fed', sourceLabel: '官方', observedAt: at, asOf: at, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'ev-1' }]
+  const facts = [{ factId: 'fact-1', domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value: '3.1', unit: 'percent', sourceId: 'source-fed', sourceLabel: '官方', observedAt: at, asOf: at, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'ev-1' }]
   const evidenceRefs = [{ evidenceRefId: 'ev-1', sourceId: 'source-fed', sourceLabel: '官方', itemId: null, occurredAt: at, publishedAt: at, detectedAt: at, computedAt: null, visibleAt: at, excerptHash: createHash('sha256').update('ev-1').digest('hex') }]
   return {
     id: 'mi-es-1', schemaVersion: 1 as const, eventGroupId: group.id, asOf: at, dataCutoff: at,

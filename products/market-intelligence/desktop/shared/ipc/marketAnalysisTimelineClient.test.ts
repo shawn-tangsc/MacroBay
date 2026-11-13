@@ -100,7 +100,7 @@ describe('marketAnalysisTimelineClient', () => {
     const invoke = vi.fn(async (_productId: string, method: string) => {
       if (method === 'marketAnalysis.getAnalysisRun') return {
         id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
-        queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: '%', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 }
+        queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: 'percent', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 }
       }
       if (method === 'marketAnalysis.getSummary') return {
         id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
@@ -116,7 +116,7 @@ describe('marketAnalysisTimelineClient', () => {
 
     await expect(marketAnalysisTimelineClient.getDetail(entry)).resolves.toEqual(expect.objectContaining({
       state: 'available', detail: expect.objectContaining({
-        run: expect.objectContaining({ evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: '%', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 } }),
+        run: expect.objectContaining({ evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: 'percent', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 } }),
         summary: expect.objectContaining({ version: 1, evidenceCount: 2 }),
         predictions: [expect.objectContaining({ asset: 'BTC', status: 'pending' })]
       })

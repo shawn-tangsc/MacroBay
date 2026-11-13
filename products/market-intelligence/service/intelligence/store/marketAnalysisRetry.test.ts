@@ -22,7 +22,7 @@ function group(id = 'mi-eg-retry', mergeKey = 'US.CPI|retry'): EventGroup {
 }
 
 function snapshot(id: string, eventGroupId: string): EvidenceSnapshot {
-  const facts = [{ factId: 'fact-A', domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'ev-A' }]
+  const facts = [{ factId: 'fact-A', domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value: '3.2', unit: 'percent', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'ev-A' }]
   const evidenceRefs = [{ evidenceRefId: 'ev-A', sourceId: 'source-fed', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: createHash('sha256').update('ev-A').digest('hex') }]
   return {
     id, schemaVersion: 1, eventGroupId, asOf, dataCutoff: asOf,

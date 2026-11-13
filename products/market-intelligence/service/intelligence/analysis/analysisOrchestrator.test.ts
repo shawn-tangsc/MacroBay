@@ -121,7 +121,7 @@ describe('analysisOrchestrator', () => {
     const repository = createRepository({
       getSnapshot: () => ({
         snapshotHash: 'snapshot-hash',
-        facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.4', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
+        facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.4', unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
         evidenceRefs: [{ evidenceRefId: 'evidence-1', sourceId: 'official', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: 'hash' }],
         change: { sequence: 2, previousSnapshotHash: 'h1', facts: [{ factId: 'fact-1', domain: 'macro', metric: 'actual', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: [], caveatsRemoved: [], evidenceRefsAdded: [], evidenceRefsRemoved: [] }
       })
@@ -330,7 +330,7 @@ describe('analysisOrchestrator', () => {
     const snapshot = {
       snapshotHash: 'snapshot-hash',
       facts: [
-        { factId: 'fact-1', domain: 'macro' as const, subject: 'CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'evidence-1' },
+        { factId: 'fact-1', domain: 'macro' as const, subject: 'CPI', metric: 'actual', value: '3.2', unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'evidence-1' },
         news
       ],
       evidenceRefs: [{ evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-news' }]
@@ -605,7 +605,7 @@ function createRepository(overrides: Record<string, unknown> = {}) {
   }
   const snapshot: EvidenceSnapshot = {
     id: 'mi-es-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotHash: 'snapshot-hash', profileId: 'crypto-market-analysis-v1',
-    facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
+    facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.2', unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
     missingDomains: [], caveats: [], evidenceRefs: [{ evidenceRefId: 'evidence-1', sourceId: 'official', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: 'hash' }], sourceHealth: [], createdAt: asOf, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
   }
   const group: EventGroup = { id: 'mi-eg-1', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|official', firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-28T02:00:00.000Z', eventRefs: ['event-1'], triggerCount: 1, reviewCount: 0, currentSummaryId: 'mi-as-old', supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf }
