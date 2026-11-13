@@ -174,7 +174,8 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
       }
     },
     recordFirstPublished(snapshot) {
-      // `insert or ignore`：第一次写的那个数就是「首发布值」，之后来源修订**不覆盖**。
+      // `insert or ignore`：第一次写的那个数就是当时看到的数，之后来源修订**不覆盖**。
+      // 注意它**不是**无条件可信的权威：事后回填写进来的就是修订值，所以回填不许走这里。
       const result = releaseStatements.insertSnapshot.run(snapshot.releaseKey, snapshot.providerId,
         snapshot.firstPrevious === undefined ? null : JSON.stringify({ displayValue: snapshot.firstPrevious }),
         snapshot.firstActual === undefined ? null : JSON.stringify({ displayValue: snapshot.firstActual }),

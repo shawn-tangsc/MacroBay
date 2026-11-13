@@ -33,10 +33,20 @@ export function ingestNarwhalReleases(input: Readonly<{
   releases: readonly NarwhalParsedRelease[]
   detectedAt: string
   recordedAt: string
+  /**
+   * 写不写首发布快照。**默认写**——常态采集第一次看到某期时，那一刻的 `previous` 就是首发布值。
+   *
+   * **事后回填必须传 `false`**：回填是几天后才补的，来源那时已经修订过，写进去的必然是修订值。
+   * 一张装修订值的「首发布快照」比没有这张表更糟——下游会把它当权威（非农那条就是 60 而非 29）。
+   * 宁可留空（读侧照实说「无法确认首发布值」），也不许让回填写这一列。
+   */
+  captureFirstPublished?: boolean
 }>, repository: NarwhalIngestRepository): NarwhalIngestResult {
   let firstPublishedCaptured = 0
+  const capture = input.captureFirstPublished !== false
   for (const release of input.releases) {
     repository.upsertReleaseRow(toRow(release, input.detectedAt, input.recordedAt))
+    if (!capture) continue
     for (const value of release.values) {
       const captures = captureFirstPublished(release, value, repository, input.detectedAt)
       if (captures) firstPublishedCaptured += 1
