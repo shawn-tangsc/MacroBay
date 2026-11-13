@@ -445,12 +445,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   narwhalCalendarAssembly = createNarwhalCalendarAssembly({
     jobRuntime: deps.jobRuntime,
     repository: macroCalendarBackend.repository,
-    // 采集到的发布同时写进日历读的那张观测表；写入走它自己的同一套校验，失败只记一句，
-    // 不让一次写坏把整轮采集判失败（发布级行仍然写成功了）。
-    appendObservationBatch: (batch) => {
-      const written = marketCalendar.appendObservationBatch(batch)
-      if (written.state !== 'succeeded') console.warn(`[macro-calendar] 观测批次未写入：${written.failureCode ?? 'unknown'}`)
-    },
+    // **观测表停写**（2026-11-14 定）：日历已改读标准表，三处可能的读方逐处核过——证据抽屉走
+    // 联动共识（新读取模型）、其余读方都在要删的旧源目录里、存储盘点只数行不读内容。
+    // **只停写、不删历史行**：`mi_macro_calendar_market_event_observations` 里的行原样留着，
+    // 少写的只是「同一批采集顺便多写一份」。
     // 标准行按 measure 拆：一次发布里的每个 measure 各一行，身份各算各的。
     appendStandardRows: (rows, unmapped, sourceTotals) => {
       try {
