@@ -80,6 +80,12 @@ export type CalendarStandardRow = Readonly<{
   timePrecision: 'minute' | 'date'
   /** 源给的发布状态（闭集）。缺省 `unknown`——不猜，也不按日期推。 */
   status?: CalendarReleaseStatus
+  /**
+   * 重要性，**从源带过来**（观测表本来就有这一列；官方 revision 也带）。标准表原本缺这一列，
+   * 读侧只好拿三档里的一个去顶，那等于编数据——筛选会失效，而没人看得出是假的。
+   * 缺省不填；读侧拿不到就是「未分级」，不许拿 `medium` 顶。
+   */
+  importance?: 'high' | 'medium' | 'low'
   /** 映射得上＝`code`（缺省）；映射不上＝`source`，`metricKey` 存源内标识。 */
   identityKind?: CalendarIdentityKind
   /**
@@ -133,6 +139,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
       source_label text,
       series_id text,
+      importance text check(importance in ('high', 'medium', 'low')),
       value_state text check(value_state in ('present', 'missing')),
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
       values_json text not null,
@@ -188,6 +195,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   if (!columns.some((column) => column.name === 'source_label')) {
     database.exec(`alter table ${eventsTable} add column source_label text`)
   }
+  if (!columns.some((column) => column.name === 'importance')) {
+    database.exec(`alter table ${eventsTable} add column importance text`)
+  }
   if (!columns.some((column) => column.name === 'series_id')) {
     database.exec(`alter table ${eventsTable} add column series_id text`)
   }
@@ -208,9 +218,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   const { eventsTable } = calendarStandardTablePolicy
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
-     status, identity_kind, source_label, series_id, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
+     status, identity_kind, source_label, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -236,6 +246,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.identityKind ?? 'code',
       row.sourceLabel ?? null,
       row.seriesId ?? null,
+      row.importance ?? null,
       // 没传就**从值本身推**：物化列不允许留空——空着会被视图当「没值」折掉。
       row.valueState ?? (row.valuesJson === '{}' ? 'missing' : 'present'),
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,

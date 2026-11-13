@@ -52,6 +52,8 @@ export function dualWriteMeasureRows(
       sourceLabel?: string
       /** 源的 series_id（转正时重算身份用）。 */
       seriesId?: string
+      /** 源给的重要性；没有就不写（读侧显示「未分级」）。 */
+      importance?: 'high' | 'medium' | 'low'
       status?: CalendarReleaseStatus
       /** 由值自己算出来：有 actual/previous/consensus 之一即 present。 */
       valueState?: 'present' | 'missing'
@@ -102,6 +104,7 @@ export function dualWriteMeasureRows(
         ...(row.identityKind === undefined ? {} : { identityKind: row.identityKind }),
         ...(row.sourceLabel === undefined ? {} : { sourceLabel: row.sourceLabel }),
         ...(row.seriesId === undefined ? {} : { seriesId: row.seriesId }),
+        ...(row.importance === undefined ? {} : { importance: row.importance }),
         // **由这份值本身算**，不从调用方传：物化列一旦允许调用方随便传，就会漂。
         valueState: row.actual === undefined && row.previous === undefined && row.consensus === undefined
           ? 'missing' as const : 'present' as const,

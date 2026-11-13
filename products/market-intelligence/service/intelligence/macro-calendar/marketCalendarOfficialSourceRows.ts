@@ -59,6 +59,8 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
     identityKind: metricKey === undefined ? 'source' as const : 'code' as const,
     status: officialLifecycleToReleaseStatus(revision.lifecycleState),
     sourceLabel: revision.eventNameKey,
+    // 官方的 revision 自己带重要性（今天恒 high），照搬，不在这里另判。
+    importance: revision.importance,
     countryCode: normalizeOfficialCountryCode(revision.countryCode),
     metricKey: metricKey ?? revision.eventKey,
     periodKey: metricKey === undefined ? revision.periodKey : normalizeOfficialPeriodKey(revision.periodKey),
