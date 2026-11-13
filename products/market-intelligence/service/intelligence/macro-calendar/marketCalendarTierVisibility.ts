@@ -20,12 +20,26 @@ export type TierVisibilityResult<T> = Readonly<{
   hiddenCount: number
 }>
 
-export function filterVisibleByTier<T>(input: readonly TierVisibilityInput<T>[]): TierVisibilityResult<T> {
+export const tierVisibilityPolicy = Object.freeze({
+  /** 一天在格子里最多显示几条一级/二级：再多名字会把格子撑破。 */
+  maximumVisible: 2
+})
+
+/**
+ * 收窄规则（日历格子用）：**只写一级、二级的名字，且最多 `maximumVisible` 条**；
+ * 其余（未标级的 + 一二级里超出的）**全部计入数字**，一个都不许静默消失。
+ *
+ * 顺序保持原样，不在这里排序：排序是读取侧的事，这里只决定「谁露名字、谁进数字」。
+ */
+export function filterVisibleByTier<T>(input: readonly TierVisibilityInput<T>[],
+  options?: Readonly<{ maximumVisible?: number }>): TierVisibilityResult<T> {
+  const maximum = Math.max(0, options?.maximumVisible ?? tierVisibilityPolicy.maximumVisible)
   const visible: T[] = []
   let hiddenCount = 0
   for (const entry of input) {
     const tier = tierOfMetricKey(entry.metricKey)
-    if (tier === 1 || tier === 2) { visible.push(entry.item); continue }
+    const tiered = tier === 1 || tier === 2
+    if (tiered && visible.length < maximum) { visible.push(entry.item); continue }
     hiddenCount += 1
   }
   return { visible, hiddenCount }
