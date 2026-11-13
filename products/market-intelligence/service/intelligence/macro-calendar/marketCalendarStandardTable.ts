@@ -2,7 +2,17 @@ import type { DatabaseSync } from 'node:sqlite'
 
 /**
  * 标准日历表：**一行 = 一次发布**。主键 = 身份 `(country_code, metric_key, period_key)` +
- * **首次发布时刻** `first_scheduled_at`（冻结；显示用的 `scheduled_at` 不在主键里，源改期就跟着变）。
+ * **首次发布日** `first_scheduled_date`（UTS 日期，冻结）。
+ *
+ * 为什么第 4 列是**日期**而不是时刻：官方源（BLS 日程等）只给日期、不给时刻，市场行有 13:30。
+ * 用分钟做键，同一次发布就成了两行；而**日期是两边都拿得到的粒度**。日期已足够区分「哪一次发布」
+ * （初值 11-06 / 终值 11-20 是两天），不需要分钟。
+ *
+ * **绝不推算时刻**：源没给就留空、`time_precision = 'date'`。推一个「惯例的 8:30」会把编造的时间
+ * 印给读者，而且推出来的时刻一旦进键和界面，就再也分不清哪条是源说的、哪条是我们猜的。
+ *
+ * 显示用两列：`scheduled_date`（可变，跨日改期就改它）与 `scheduled_at`（可空，源给到分钟才有）。
+ * 合并时取精度是 `minute` 的那一方——官方没有时刻，优先它就是拿空值盖掉 13:30。
  *
  * 为什么时刻进主键：同一指标同一期间可能发两次（密歇根初值 11-06、终值 11-20）。只按身份收敛会把
  * 其中一次发布**静默吞掉**——那是「日历少了一个发布」，不是「修订覆盖」。用时刻区分，规则能写成
@@ -26,7 +36,8 @@ export const calendarStandardTablePolicy = Object.freeze({
   eventsTable: 'mi_calendar_events',
   unmappedTable: 'mi_calendar_unmapped',
   /** 没映射上的原因闭集。新增值要同时更新这里的注释与用例。 */
-  unmappedReasons: Object.freeze(['unknown-measure', 'unknown-event-type', 'bad-period', 'bad-identity'] as const)
+  unmappedReasons: Object.freeze(['unknown-measure', 'unknown-event-type', 'bad-period', 'bad-identity',
+    'unknown-release-group', 'ambiguous-same-day'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
 
@@ -34,11 +45,12 @@ export type CalendarStandardRow = Readonly<{
   countryCode: string
   metricKey: string
   periodKey: string
+  /** 显示用的发布日：跨日改期就变，**不在主键里**。 */
   scheduledDate: string
-  /** 显示用的发布时刻：源改期就变，**不在主键里**。 */
-  scheduledAt: string
-  /** 首次看到的发布时刻：冻结，**在主键里**。不传时取 `scheduledAt`（首次写入的常态）。 */
-  firstScheduledAt?: string
+  /** 显示用的发布时刻：源给到分钟才有，没有就**留空**（不推）。 */
+  scheduledAt?: string
+  /** 首次看到的发布日（UTC）：冻结，**在主键里**。不传时取 `scheduledDate`。 */
+  firstScheduledDate?: string
   timePrecision: 'minute' | 'date'
   valuesJson: string
   sourceProviderId: string
@@ -59,8 +71,8 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       metric_key text not null,
       period_key text not null,
       scheduled_date text not null,
-      first_scheduled_at text not null,
-      scheduled_at text not null,
+      first_scheduled_date text not null,
+      scheduled_at text,
       time_precision text not null check(time_precision in ('minute', 'date')),
       values_json text not null,
       source_provider_id text not null,
@@ -70,7 +82,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       first_seen_at text not null,
       first_published_actual text,
       first_published_previous text,
-      primary key(country_code, metric_key, period_key, first_scheduled_at)
+      primary key(country_code, metric_key, period_key, first_scheduled_date)
     );
     create index if not exists idx_calendar_events_month
       on ${eventsTable}(country_code, scheduled_at);
@@ -92,11 +104,11 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
 export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): void {
   const { eventsTable } = calendarStandardTablePolicy
   database.prepare(`insert into ${eventsTable}
-    (country_code, metric_key, period_key, scheduled_date, first_scheduled_at, scheduled_at, time_precision,
+    (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision,
      values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous)
     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    on conflict(country_code, metric_key, period_key, first_scheduled_at) do update set
+    on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       scheduled_at = excluded.scheduled_at,
       time_precision = excluded.time_precision,
@@ -106,7 +118,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       parser_version = excluded.parser_version,
       observed_at = excluded.observed_at`)
     .run(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate,
-      row.firstScheduledAt ?? row.scheduledAt, row.scheduledAt, row.timePrecision,
+      row.firstScheduledDate ?? row.scheduledDate, row.scheduledAt ?? null, row.timePrecision,
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null)
 }
@@ -130,13 +142,15 @@ export function recordCalendarUnmapped(database: DatabaseSync, input: Readonly<{
  */
 export function findCalendarStandardRowBySource(database: DatabaseSync, input: Readonly<{
   sourceProviderId: string; sourceEventId: string
-}>): Readonly<{ countryCode: string; metricKey: string; periodKey: string; firstScheduledAt: string }> | undefined {
+}>): Readonly<{ countryCode: string; metricKey: string; periodKey: string
+  firstScheduledDate: string; sourceEventId: string }> | undefined {
   const { eventsTable } = calendarStandardTablePolicy
-  const row = database.prepare(`select country_code, metric_key, period_key, first_scheduled_at
+  const row = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date, source_event_id
     from ${eventsTable} where source_provider_id = ? and source_event_id = ? limit 1`)
     .get(input.sourceProviderId, input.sourceEventId) as Record<string, unknown> | undefined
   return row === undefined ? undefined : {
     countryCode: String(row.country_code), metricKey: String(row.metric_key),
-    periodKey: String(row.period_key), firstScheduledAt: String(row.first_scheduled_at)
+    periodKey: String(row.period_key), firstScheduledDate: String(row.first_scheduled_date),
+    sourceEventId: String(row.source_event_id)
   }
 }

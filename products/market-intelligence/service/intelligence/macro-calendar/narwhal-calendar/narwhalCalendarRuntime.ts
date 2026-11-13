@@ -1,7 +1,8 @@
 import type { NarwhalIngestRepository } from './narwhalCalendarIngest'
 import { ingestNarwhalReleases } from './narwhalCalendarIngest'
 import { collectNarwhalCalendar, type NarwhalCollectorResult } from './narwhalCalendarCollector'
-import { narwhalObservationBatches, type NarwhalCalendarBatch } from './narwhalCalendarObservationBatches'
+import { narwhalObservationBatches, narwhalStandardRowInputs, type NarwhalCalendarBatch,
+  type NarwhalStandardRowInput } from './narwhalCalendarObservationBatches'
 import { narwhalCanonicalIdentityKey } from '../marketCalendarMetricIdentity'
 import { createNarwhalPageFetcher, type NarwhalRequest } from './narwhalCalendarHttp'
 
@@ -24,6 +25,8 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
    * 不注入就不写——单测与只读核对可以只用发布行。
    */
   appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
+  /** 按 measure 拆行的标准行（S1 双写用）。一次采集给一次，与语言无关。 */
+  appendStandardRows?: (rows: readonly NarwhalStandardRowInput[]) => void
   /** 观测批次的集合前缀，默认按采集时刻一采集一批。 */
   collectionIdPrefix?: () => string
   now?: () => number
@@ -57,6 +60,8 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
           firstPublishedCaptured += result.firstPublishedCaptured
           if (deps.appendObservationBatch === undefined) return
           const prefix = deps.collectionIdPrefix?.() ?? `narwhal-${stamp.replace(/[:.]/g, '-')}`
+          // 标准行与语言无关：一次发布拆成「一个 measure 一行」，只算一次。
+          deps.appendStandardRows?.(narwhalStandardRowInputs(releases))
           for (const locale of ['zh', 'en'] as const) {
             for (const batch of narwhalObservationBatches(releases, {
               locale, parserVersion: narwhalCalendarParserVersion, collectionIdPrefix: `${prefix}-${locale}`

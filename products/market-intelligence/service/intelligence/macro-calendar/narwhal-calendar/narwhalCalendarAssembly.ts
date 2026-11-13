@@ -1,7 +1,7 @@
 import type { JobRuntime } from '@platform/jobs'
 
 import { createNarwhalCalendarRuntime } from './narwhalCalendarRuntime'
-import type { NarwhalCalendarBatch } from './narwhalCalendarObservationBatches'
+import type { NarwhalCalendarBatch, NarwhalStandardRowInput } from './narwhalCalendarObservationBatches'
 import { createNarwhalCalendarScheduler } from './narwhalCalendarScheduler'
 import type { NarwhalHttpResult, NarwhalRequest } from './narwhalCalendarHttp'
 
@@ -27,6 +27,8 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
   readerEnabled?: () => boolean | undefined
   /** 采集前的门：源还锁着（`pending`）或读者关掉 → 这轮不采。 */
   readSourceGate?: () => Promise<Readonly<{ visibility: string; enabled: boolean }> | undefined>
+  /** 按 measure 拆行的标准行（S1 双写用）：一次采集给一次，与语言无关。 */
+  appendStandardRows?: (rows: readonly NarwhalStandardRowInput[]) => void
   /** 把发布同时写成日历观测（走日历那张表的同一套写入校验）。 */
   appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
 }>) {
@@ -63,6 +65,7 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
     readApiKey: () => apiKey,
     repository: deps.repository,
     ...(deps.appendObservationBatch === undefined ? {} : { appendObservationBatch: deps.appendObservationBatch }),
+    ...(deps.appendStandardRows === undefined ? {} : { appendStandardRows: deps.appendStandardRows }),
     now: deps.now,
     sleep: deps.sleep ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)))
   })

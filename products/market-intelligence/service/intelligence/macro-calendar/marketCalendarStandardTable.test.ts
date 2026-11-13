@@ -63,7 +63,7 @@ describe('一次发布一行：四次判红口径', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
     write(database, { sourceEventId: 'r-prelim', scheduledAt: '2026-11-06T15:00:00.000Z' })
-    write(database, { sourceEventId: 'r-final', scheduledAt: '2026-11-20T15:00:00.000Z' })
+    write(database, { sourceEventId: 'r-final', scheduledDate: '2026-11-20', scheduledAt: '2026-11-20T15:00:00.000Z' })
     expect(rows(database)).toHaveLength(2)
   })
 
@@ -75,7 +75,7 @@ describe('一次发布一行：四次判红口径', () => {
       observedAt: '2026-11-13T09:00:00.000Z' })
     const [row] = rows(database)
     expect(rows(database)).toHaveLength(1)
-    expect(row!.first_scheduled_at).toBe(base.scheduledAt)
+    expect(row!.first_scheduled_date).toBe(base.scheduledDate)
   })
 
   it('源改期（同源同 source_event_id）→ 仍一行，显示时刻跟着变', () => {
@@ -83,10 +83,10 @@ describe('一次发布一行：四次判红口径', () => {
     ensureCalendarStandardTables(database)
     write(database, {})
     const found = findCalendarStandardRowBySource(database, { sourceProviderId: 'narwhal', sourceEventId: 'r-1' })!
-    write(database, { scheduledAt: '2026-11-07T13:30:00.000Z', firstScheduledAt: found.firstScheduledAt })
+    write(database, { scheduledDate: '2026-11-07', scheduledAt: '2026-11-07T13:30:00.000Z', firstScheduledDate: found.firstScheduledDate })
     const [row] = rows(database)
     expect(rows(database)).toHaveLength(1)
-    expect(row!.scheduled_at).toBe('2026-11-07T13:30:00.000Z')
-    expect(row!.first_scheduled_at).toBe(base.scheduledAt)
+    expect(row!.scheduled_date).toBe('2026-11-07')
+    expect(row!.first_scheduled_date).toBe(base.scheduledDate)
   })
 })

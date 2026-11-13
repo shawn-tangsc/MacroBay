@@ -62,7 +62,7 @@ import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-cale
 import { getPlatformFetch } from '@platform/network/platformFetch'
 import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
 import { allSources } from './intelligence/application/providerRegistry'
-import { dualWriteObservationBatch } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
+import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables } from './intelligence/macro-calendar/marketCalendarStandardTable'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
@@ -410,18 +410,20 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     appendObservationBatch: (batch) => {
       const written = marketCalendar.appendObservationBatch(batch)
       if (written.state !== 'succeeded') console.warn(`[macro-calendar] 观测批次未写入：${written.failureCode ?? 'unknown'}`)
-      try { ensureCalendarStandardTables(macroCalendarBackend.storage.database) } catch { /* 建表失败也在双写里记 */ }
-      // S1 双写：标准表只写不读。**写失败不拖停采集**，只计数与记日志；读取路径一个字节不动。
+    },
+    // 标准行按 measure 拆：一次发布里的每个 measure 各一行，身份各算各的。
+    appendStandardRows: (rows) => {
       try {
-        const counts = dualWriteObservationBatch(macroCalendarBackend.storage.database, {
-          providerId: batch.providerId, parserVersion: batch.parserVersion,
-          observedAt: new Date().toISOString(), drafts: batch.parseResult.drafts as never
-        }, { onError: (message) => console.warn(`[macro-calendar] 标准表写入失败：${message}`) })
+        ensureCalendarStandardTables(macroCalendarBackend.storage.database)
+        const counts = dualWriteMeasureRows(macroCalendarBackend.storage.database, {
+          providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3',
+          observedAt: new Date().toISOString(), rows
+        }, { onError: (message) => console.warn(`[macro-calendar] 标准行写入失败：${message}`) })
         if (counts.failed > 0 || Object.values(counts.unmapped).some((value) => value > 0)) {
-          console.warn(`[macro-calendar] 标准表双写：写入 ${counts.written} 行、失败 ${counts.failed} 行、未映射 ${JSON.stringify(counts.unmapped)}`)
+          console.warn(`[macro-calendar] 标准行：写入 ${counts.written}、失败 ${counts.failed}、未映射 ${JSON.stringify(counts.unmapped)}`)
         }
       } catch (error) {
-        console.warn(`[macro-calendar] 标准表双写异常（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
+        console.warn(`[macro-calendar] 标准行接线异常（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
       }
     },
     fetchImpl: getPlatformFetch(),

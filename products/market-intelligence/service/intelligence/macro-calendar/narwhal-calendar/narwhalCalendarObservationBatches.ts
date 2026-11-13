@@ -153,3 +153,43 @@ function sourceEventIdOf(release: NarwhalParsedRelease, kind: NarwhalEventKind):
 function displayValueOf(raw: string | undefined): Record<string, string> | undefined {
   return raw === undefined || raw.length === 0 ? undefined : { displayValue: raw }
 }
+
+/**
+ * 标准表用的**按 measure 拆行**：一次发布里的每个 measure 各一行，身份各算各的。
+ *
+ * 为什么不从观测草稿派生：观测草稿是「一次发布一行」，身份只取第一个映射得上的 measure
+ * （`Consumer prices` 那行是核心 CPI 月率），整体 CPI 就永远配不上官方行。这里**直接从
+ * `release.values` 生成**，一个 measure 一行；拆出来的行共享 `scheduledAt` / `sourceEventId`
+ * （它们说的是「这次发布」），只有 `metricKey` 与值不同。
+ */
+export type NarwhalStandardRowInput = Readonly<{
+  countryCode: string
+  metricKey: string
+  periodKey: string
+  scheduledDate: string
+  scheduledAt: string
+  sourceEventId: string
+  previous?: string
+  consensus?: string
+  actual?: string
+}>
+
+export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease[]): readonly NarwhalStandardRowInput[] {
+  const rows: NarwhalStandardRowInput[] = []
+  for (const release of releases) {
+    const period = release.period
+    if (period === undefined || period.length === 0) continue
+    for (const value of release.values) {
+      const metricKey = narwhalMeasureMetricKeys[value.measure]
+      if (metricKey === undefined) continue
+      rows.push({
+        countryCode: release.country, metricKey, periodKey: period,
+        scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+        ...(value.previous === undefined ? {} : { previous: value.previous }),
+        ...(value.consensus === undefined ? {} : { consensus: value.consensus }),
+        ...(value.actual === undefined ? {} : { actual: value.actual })
+      })
+    }
+  }
+  return rows
+}
