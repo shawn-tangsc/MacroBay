@@ -63,6 +63,17 @@ export type FrequencyNext =
   | Readonly<{ kind: 'notStarted' }>
   | Readonly<{ kind: 'unreadable' }>
 
+/**
+ * 读数这一行（浮层第①条）的状态集合。
+ *
+ * **原型 v4 里还有两态，这里刻意没有**（用户 2026-11-13 定，理由比「先不做」更硬：
+ * 摆了拿不到数据的状态，等于先画界面、再让数据去凑）：
+ * - `下次待排期`：`JobScheduleView` 里「已登记、没跑过、下次推不出」与「尚未开始」是**同一个形状**，
+ *   要分开只能编一个假分支；
+ * - `采集器离线`：`unavailable` 的源本来就不画这一行，`healthState` 的词义是「运行失败」不是「离线」。
+ *
+ * 两态都**等真有数据来源再加**，别照原型回来「补缺」；真接上时要先能区分，再一起补文案与用例。
+ */
 export type FrequencyReadoutView =
   /** 手动档：不自动采集，不写「—」也不写时刻。 */
   | Readonly<{ kind: 'manual' }>
