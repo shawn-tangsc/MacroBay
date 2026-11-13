@@ -64,6 +64,31 @@ export const macroIndicatorDrawerText = {
      * 距发布：>24 小时说整数天；≤24 小时才倒计时；**源只给日期时永远只说天数**（`today` 处理 0 天）。
      * 「已过」不设键——那一格直接不画，挂着「下次发布」说过去的事就是自相矛盾。
      */
+    /**
+     * 左卡「已发布」的时间标签（三档，深金）。**超过 3 天不渲染任何标签、整卡降权**——
+     * 那条是「不渲染 + 类名」，不需要键。
+     *
+     * 取整与倒计时**相反**：倒计时是「还没到」，向上取整（不出现「还有 0 分」）；这里是「已经过了」，
+     * 向下取整会把 59 秒说成「刚发布 0 分钟」，所以 <1 分钟统一写「刚发布 1 分钟」。
+     */
+    published: {
+      minutes: '刚发布 {minutes} 分钟',
+      hours: '刚发布 {hours} 小时',
+      yesterday: '昨天发布',
+      beforeYesterday: '前天发布',
+      daysAgo: '{days} 天前'
+    },
+    /** 三张卡共用的行名（左右两卡按同一顺序逐行对齐，行位不删、不折、不藏）。 */
+    cardRows: {
+      yoy: '年率',
+      mom: '月率',
+      coreYoy: '核心年率',
+      coreMom: '核心月率',
+      nonfarm: '非农',
+      unemployment: '失业率',
+      avgHourlyMom: '时薪月率',
+      avgHourlyYoy: '时薪年率'
+    },
     countdown: {
       days: '{days} 天后',
       today: '今天',
@@ -151,6 +176,23 @@ export const macroIndicatorDrawerText = {
       vsPrevious: 'vs previous (unrevised) {value}'
     },
     expectedDiff: 'Surprise YoY {yoy} · core {core}',
+    published: {
+      minutes: 'Published {minutes} min ago',
+      hours: 'Published {hours} h ago',
+      yesterday: 'Published yesterday',
+      beforeYesterday: 'Published the day before yesterday',
+      daysAgo: '{days} days ago'
+    },
+    cardRows: {
+      yoy: 'YoY',
+      mom: 'MoM',
+      coreYoy: 'Core YoY',
+      coreMom: 'Core MoM',
+      nonfarm: 'Nonfarm',
+      unemployment: 'Unemployment',
+      avgHourlyMom: 'Avg hourly MoM',
+      avgHourlyYoy: 'Avg hourly YoY'
+    },
     countdown: {
       days: 'in {days} days',
       today: 'today',
