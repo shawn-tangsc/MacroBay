@@ -66,6 +66,9 @@ import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalend
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from './intelligence/macro-calendar/marketCalendarStandardTable'
 import { promoteSourceIdentities } from './intelligence/macro-calendar/marketCalendarSourcePromotion'
 import { syncOfficialStandardRows } from './intelligence/macro-calendar/marketCalendarOfficialSourceRows'
+import { createStandardMonthPageReader } from './intelligence/macro-calendar/marketCalendarStandardMonthPage'
+import { eventTypeNameByCode, nameByMetricKey } from './intelligence/macro-calendar/marketCalendarCodeNames'
+import { narwhalSourcePolicy } from './intelligence/application/narwhalSourcePolicy'
 import { calendarStandardConservation } from './intelligence/macro-calendar/marketCalendarStandardConservation'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
@@ -353,8 +356,21 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
   // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
+  // **S2：月查询改读标准表**（`mi_calendar_releases` 视图）。对外仍是 `MarketCalendarPage`，
+  // 上面的分析与日报因此不用改一行。旧观测那条路径保留给新鲜度与证据观察，读数据不再经过它。
+  const standardCalendarReader = createStandardMonthPageReader({
+    database: macroCalendarBackend.storage.database,
+    resolveTitle: (row) => {
+      const metric = nameByMetricKey[row.metricKey]
+      if (metric !== undefined) return metric.zhShort
+      const event = eventTypeNameByCode[row.metricKey]
+      if (event !== undefined) return event.zhShort
+      return row.sourceLabel
+    },
+    sourceOf: (row) => row.sourceProviderId === narwhalSourcePolicy.sourceId ? 'Narwhal' : '0xRouter'
+  })
   intelligenceModule.publicQueryService.setMarketCalendarQuery({
-    queryMonth: marketCalendar.queryMonth,
+    queryMonth: standardCalendarReader.queryMonth,
     readCollectionFreshness: () => marketCalendar.readCollectionFreshness()
   })
   // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
