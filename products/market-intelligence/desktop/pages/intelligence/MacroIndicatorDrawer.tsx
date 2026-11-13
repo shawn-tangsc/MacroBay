@@ -165,6 +165,12 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const changeMonth = (next: string): void => { setMonth(next); setPickedDay(undefined) }
   // 右列按「能不能解释利率路径」筛，与曲线标注同一把尺子（判据来自契约，不在这里另写一份）。
   const dayLayers = useMemo(() => splitDayLayers(dayEvents), [dayEvents])
+  // 「下次发布」与右列同一份按月读：找不到就不画这一格（不是写「未提供」——那会让人以为今天该有）。
+  const nextRelease = useMemo(() => ({
+    cpi: nextReleaseOf(releases.events, ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY'], nowInstant, timeZone),
+    payrolls: nextReleaseOf(releases.events, ['US.NONFARM.SA.CHANGE'], nowInstant, timeZone),
+    pce: nextReleaseOf(releases.events, ['US.CORE_PCE.NSA.YOY'], nowInstant, timeZone)
+  }), [releases.events, nowInstant, timeZone])
   const [othersExpanded, setOthersExpanded] = useState(false)
   // 换一天就收起「其他」：展开态跟着日期走，不跟着抽屉走。
   useEffect(() => { setOthersExpanded(false) }, [selectedDay])
@@ -246,6 +252,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const coreCpiFact = factOf('US.CORE_CPI.NSA.YOY')
   const payrollsFact = factOf('US.NONFARM.SA.CHANGE')
   const pceFact = factOf('US.CORE_PCE.NSA.YOY')
+  const unemploymentFact = factOf('US.UNEMPLOYMENT.SA.RATE')
   // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
   // 图上用短名（完整标题不上图）；名字按身份取，不按标题文本猜。
   const eventMarks = useMemo(() => {
@@ -330,7 +337,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             {cardStateText(cpiFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(cpiFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
               <div><dt>{text.cards.cpi.core}</dt><dd>{cardValueText(coreCpiFact, text, cardFactsUnreadable)}</dd></div>
-              <div><dt>{text.cards.cpi.next}</dt><dd>{text.cardStates.notAvailable}</dd></div>
+              {nextRelease.cpi === undefined ? null : <div><dt>{text.cards.cpi.next}</dt><dd>{nextRelease.cpi}</dd></div>}
             </dl>
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
@@ -340,8 +347,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             {cardChangeText(payrollsFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(payrollsFact, text)}</p>}
             {cardStateText(payrollsFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(payrollsFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
-              <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{text.cardStates.notAvailable}</dd></div>
-              <div><dt>{text.cards.payrolls.next}</dt><dd>{text.cardStates.notAvailable}</dd></div>
+              <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{cardValueText(unemploymentFact, text, cardFactsUnreadable)}</dd></div>
+              {nextRelease.payrolls === undefined ? null : <div><dt>{text.cards.payrolls.next}</dt><dd>{nextRelease.payrolls}</dd></div>}
             </dl>
             <div className="mk-card__f"><span>{text.sourceBls}</span><span>{text.detail}</span></div>
           </article>
@@ -350,7 +357,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             <div className="mk-card__v"><b className={cardValueClass(pceFact, cardFactsUnreadable)}>{cardValueText(pceFact, text, cardFactsUnreadable)}</b><span>{text.cards.pce.unit}</span></div>
             {cardChangeText(pceFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(pceFact, text)}</p>}
             {cardStateText(pceFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(pceFact, text, cardFactsUnreadable)}</p>}
-            <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt><dd>{text.cardStates.notAvailable}</dd></div></dl>
+            {nextRelease.pce === undefined ? null : <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt><dd>{nextRelease.pce}</dd></div></dl>}
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
         </div>
@@ -396,6 +403,23 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
       </div>
     </section>
   </Drawer>
+}
+
+/**
+ * 下一次发布：在**同一次按月读**的结果里按身份找「现在之后」最近的一条。
+ *
+ * 找不到就返回 `undefined`，调用方**不画这一格**——写「未提供」会让人以为今天该有一次发布。
+ * 日期用与日历一致的显示时区算，再取 `MM-DD`（跨年时补上年，避免把 1 月写成去年）。
+ */
+function nextReleaseOf(events: readonly MarketCalendarEvent[], keys: readonly string[], nowInstant: string, timeZone: string): string | undefined {
+  const nowMs = Date.parse(nowInstant)
+  const next = events
+    .filter((event) => Date.parse(event.scheduledAt) > nowMs)
+    .filter((event) => (event.measureKeys ?? []).some((key) => keys.includes(key)))
+    .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))[0]
+  if (next === undefined) return undefined
+  const day = calendarDisplayDate(next.scheduledAt, timeZone)
+  return day.slice(0, 4) === calendarDisplayDate(nowInstant, timeZone).slice(0, 4) ? day.slice(5) : day
 }
 
 /**

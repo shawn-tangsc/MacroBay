@@ -296,7 +296,8 @@ describe('the three simplified cards', () => {
     { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 3.7, unit: 'percent' },
     { metricKey: 'US.CORE_CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 2.6, unit: 'percent' },
     { metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal' },
-    { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' }
+    { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' },
+    { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' }
   ]
 
   const cardMainValues = () =>
@@ -327,6 +328,31 @@ describe('the three simplified cards', () => {
     const [, payrolls] = await renderCards(facts)
     expect(payrolls).toContain('+165K')
     expect(payrolls).toContain('较上期（未修正）+136K')
+  })
+
+  it('shows 失业率 from the same payroll release, not a second read', async () => {
+    const [, payrolls] = await renderCards(facts)
+    expect(payrolls).toContain('4.1%')
+  })
+
+  it('shows the next release from the same month read, and hides the cell when there is none', async () => {
+    // 一条未来的 CPI 发布：卡片上「下次发布」就该有日期；非农/PCE 没有未来行 → 那两格不画。
+    const future = dayEvent('e-cpi-next', '11月CPI年率', '2026-11-25T13:30:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] })
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+        <MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
+          now="2026-11-13T10:00:00.000Z" readMarketEvents={async () => [...calendarEvents, future]} cardFacts={facts} />
+      </ShellTimeZoneProvider></ShellLanguageProvider>)
+    })
+    const [cpi, payrolls, pce] = Array.from(document.body.querySelectorAll('.mk-card')).map((card) => card.textContent ?? '')
+    expect(cpi).toContain('11-25')
+    // 非农在当天稍后还有一次发布（12:30Z），所以这一格有日期——不是「凡是未来的都算下个月」。
+    expect(payrolls).toContain('下次发布')
+    // 核心 PCE 在这份数据里没有未来行：这一格整格不画，而不是写「未提供」。
+    expect(pce).not.toContain('下次发布')
   })
 
   it('says 未提供 for core PCE because this month has no release row', async () => {

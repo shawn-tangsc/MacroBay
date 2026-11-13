@@ -14,7 +14,10 @@ import { narwhalMeasureMetricKeys, zeroXRouterIndicatorIdentities } from './mark
  * 所以一行只有在「它的主身份就是这个 key」或「它带了这个 measure 的值」时才算数。
  */
 export const MACRO_INDICATOR_CARD_KEYS = Object.freeze([
-  'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY'
+  'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY',
+  // 新增就业卡里那一行「失业率」：值就在同一条非农发布行里（`unemployment_rate`），
+  // 不另开一次读。之前这一格显示「未提供」，那不是没数据，是我们没取。
+  'US.UNEMPLOYMENT.SA.RATE'
 ] as const)
 
 export type MacroIndicatorCardKey = typeof MACRO_INDICATOR_CARD_KEYS[number]
