@@ -27,7 +27,8 @@ describe('analysisOutputValidator', () => {
       ...snapshot.facts[0]!, factId: 'mi-fact-macro-surprise', domain: 'macro' as const,
       subject: 'consumer-price-index', metric: 'surprise', value: 0.3, unit: 'pp'
     }
-    snapshot.facts = [surprise]
+    // 这条用例的失效条件引用 `mi-fact-btc-return`（`validOutput`），所以保留原事实再加这条。
+    snapshot.facts = [...snapshot.facts, surprise]
     const output = {
       ...validOutput(),
       knownFacts: [{ factId: surprise.factId, statement: 'CPI 年率超预期 +0.3 个百分点。', evidenceRefIds: ['mi-ev-market-move'] }],
@@ -191,6 +192,25 @@ describe('analysisOutputValidator', () => {
    * 同一判据扩到**所有会印数字的段落**：以前只验 conclusion，情景/传导/催化剂/方向理由里的
    * 百分数没人管。这里在方向理由里放一个快照没有的数——必须拒，而不是删掉重写。
    */
+  /**
+   * 失效条件必须引用**快照里真有**的东西：模型可以写任意句子，但「跌破支撑」这种没有事实/时刻
+   * 出处的价位必须拒——判的是数据，不读那句话。
+   */
+  it('rejects an invalidation that points at a fact the snapshot does not carry', () => {
+    const output = validOutput()
+    output.scenarios[0]!.invalidation = { kind: 'fact', factId: 'mi-fact-missing', relation: 'below', statement: '跌破支撑就失效。' }
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'invalidation-not-in-snapshot'
+    })
+  })
+
+  it('accepts an invalidation that names a fact the snapshot carries', () => {
+    const output = validOutput()
+    output.scenarios[0]!.invalidation = { kind: 'fact', factId: 'mi-fact-btc-return', relation: 'below', statement: 'BTC 十五分钟收益转负。' }
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toMatchObject({ ok: true })
+  })
+
   it('rejects a percentage in a direction rationale the snapshot does not carry', () => {
     const output = validOutput()
     output.directions[0]!.rationale = '短期资金费率 12.34% 仍在高位，方向偏空。'
@@ -471,7 +491,7 @@ function validOutput() {
     marketReaction: [{ statement: 'BTC 价格出现短期变化。', factIds: ['mi-fact-btc-return'], evidenceRefIds: ['mi-ev-market-move'] }],
     supportingEvidence: [{ statement: '市场反应事实可见。', evidenceRefId: 'mi-ev-market-move' }],
     counterEvidence: [{ statement: '当前证据不足以确认因果关系。', evidenceRefId: 'mi-ev-market-move' }],
-    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持条件式观察。', conditions: ['后续价格数据保持可比。'], invalidation: '出现相反且可比的新事实。', status: 'pending' }],
+    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持条件式观察。', conditions: ['后续价格数据保持可比。'], invalidation: { kind: 'fact', factId: 'mi-fact-btc-return', relation: 'below', statement: '出现相反且可比的新事实。' }, status: 'pending' }],
     directions: [
     { horizon: 'short', direction: 'bullish', rationale: '短期资金流转正。', confidence: 'medium', evidenceRefIds: ['mi-ev-market-move'] },
     { horizon: 'medium', direction: 'range', rationale: '中期缺少方向性资金。', confidence: 'low', evidenceRefIds: ['mi-ev-market-move'] },

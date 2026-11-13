@@ -471,7 +471,7 @@ function toSummary(run: AnalysisRun, output: ValidatedAnalysisModelOutput, versi
   // 提示词在语言读不到时按中文写（`buildAnalysisMessages` 的默认），所以记录也写中文：
   // 记录的是「这份正文实际用的语言」，不是「读没读到设置」。
   return {
-    id: makeId('mi-as-', idFactory()), schemaVersion: 2, analysisRunId: run.id, eventGroupId: run.eventGroupId, version,
+    id: makeId('mi-as-', idFactory()), schemaVersion: 3, analysisRunId: run.id, eventGroupId: run.eventGroupId, version,
     proseLanguage: proseLanguage ?? 'zh-CN', ...output, createdAt
   }
 }
@@ -480,7 +480,8 @@ function toPredictions(summary: AnalysisSummary, output: ValidatedAnalysisModelO
   return output.scenarios.map((scenario) => {
     const horizonMs = scenario.horizon === '0-15m' ? 15 * 60_000 : scenario.horizon === '15m-2h' ? 2 * 60 * 60_000 : scenario.horizon === '2h-24h' ? 24 * 60 * 60_000 : 3 * 24 * 60 * 60_000
     const horizonEnd = new Date(Date.parse(createdAt) + horizonMs).toISOString()
-    return { id: makeId('mi-pr-', idFactory()), schemaVersion: 1, summaryId: summary.id, asset: scenario.asset, horizonStart: createdAt, horizonEnd, baseCase: scenario.baseCase, conditions: scenario.conditions, invalidation: scenario.invalidation, nextCatalyst: output.nextCatalysts[0]?.statement ?? null, status: 'pending', verificationDueAt: horizonEnd, createdAt }
+    return { id: makeId('mi-pr-', idFactory()), schemaVersion: 1, summaryId: summary.id, asset: scenario.asset, horizonStart: createdAt, horizonEnd, baseCase: scenario.baseCase, conditions: scenario.conditions, nextCatalyst: output.nextCatalysts[0]?.statement ?? null, status: 'pending', verificationDueAt: horizonEnd, createdAt,
+      invalidation: typeof scenario.invalidation === 'string' ? scenario.invalidation : scenario.invalidation.statement }
   })
 }
 

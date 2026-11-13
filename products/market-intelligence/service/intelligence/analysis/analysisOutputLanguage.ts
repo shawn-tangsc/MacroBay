@@ -71,7 +71,15 @@ export function analysisPromptSchemaExample(): Record<string, unknown> {
       horizon: policy.scenarioHorizons.join(' 或 '),
       baseCase: '<条件式情景>',
       conditions: ['<非空成立条件>'],
-      invalidation: '<失效条件>',
+      // 失效条件引用**快照里已有**的东西：一条事实的 factRef（与上面 factId 同一套句柄），或
+      // 快照里的一个时刻；`statement` 是给读者看的那句话，不参与校验。
+      invalidation: {
+        kind: 'fact 或 instant',
+        factId: '<输入事实的 factRef，kind=fact 时必填>',
+        relation: 'below 或 above（kind=fact 时必填）',
+        at: '<快照里的 ISO 时刻，kind=instant 时必填>',
+        statement: '<读者能读到的一句失效条件>'
+      },
       status: 'pending'
     }],
     directions: [{

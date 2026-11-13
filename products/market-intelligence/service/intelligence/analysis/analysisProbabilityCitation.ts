@@ -105,7 +105,7 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
  */
 export type ProseBearingOutput = Readonly<{
   conclusion: AnalysisConclusion
-  scenarios: readonly Readonly<{ baseCase: string; conditions: readonly string[]; invalidation: string }>[]
+  scenarios: readonly Readonly<{ baseCase: string; conditions: readonly string[]; invalidation?: string | Readonly<{ statement: string }> }>[]
   transmissionHypotheses: readonly Readonly<{ statement: string }>[]
   nextCatalysts: readonly Readonly<{ statement: string }>[]
   directions: readonly Readonly<{ rationale: string }>[]
@@ -120,7 +120,10 @@ export function untracedProsePercentageDefect(output: ProseBearingOutput, snapsh
     ...(output.conclusion.macro === null ? [] : [output.conclusion.macro]),
     ...(output.conclusion.evidenceStrength === null ? [] : [output.conclusion.evidenceStrength]),
     ...output.conclusion.dataGaps,
-    ...output.scenarios.flatMap(scenario => [scenario.baseCase, ...scenario.conditions, scenario.invalidation]),
+    ...output.scenarios.flatMap(scenario => [
+      scenario.baseCase, ...scenario.conditions,
+      typeof scenario.invalidation === 'string' ? scenario.invalidation : scenario.invalidation?.statement ?? ''
+    ]),
     ...output.transmissionHypotheses.map(hypothesis => hypothesis.statement),
     ...output.nextCatalysts.map(catalyst => catalyst.statement),
     ...output.directions.map(direction => direction.rationale)

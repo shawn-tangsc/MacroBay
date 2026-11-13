@@ -410,8 +410,8 @@ export type AnalysisConclusion = Readonly<{
 
 export type AnalysisSummary = Readonly<{
   id: string
-  /** 1 = 没有语言字段的旧记录；2 = 带 `proseLanguage` 的记录。 */
-  schemaVersion: 1 | 2
+  /** 1 = 没有语言字段；2 = 带 `proseLanguage`；3 = 失效条件换成引用快照的结构。 */
+  schemaVersion: 1 | 2 | 3
   analysisRunId: string
   /**
    * 这份正文是用哪种语言写的（生成时的界面语言）。旧记录没有这个字段：读出来是不认识、
@@ -446,12 +446,32 @@ export type Hypothesis = Readonly<{ statement: string; evidenceRefIds: readonly 
 export type ReactionClaim = Readonly<{ statement: string; factIds: readonly string[]; evidenceRefIds: readonly string[] }>
 export type EvidenceClaim = Readonly<{ statement: string; evidenceRefId: string }>
 export type Catalyst = Readonly<{ statement: string; evidenceRefIds: readonly string[] }>
+/**
+ * 失效条件：**引用快照里已经存在的东西**，不是一句可以随便写价位的自由文本。
+ *
+ * - `fact`：引用快照里的某条事实（`factId` 是快照里的 id），失效方向只有跌破/涨破两种；
+ * - `instant`：快照里的一个时刻（事实的观测时刻或快照的 as-of）。
+ *
+ * `statement` 只是给读者看的那句话，**校验不读它**——读句子等于用词表猜事实，换一种说法就绕过。
+ */
+export type AnalysisInvalidation =
+  | Readonly<{ kind: 'fact'; factId: string; relation: 'below' | 'above'; statement: string }>
+  | Readonly<{ kind: 'instant'; at: string; statement: string }>
+
+/** v1/v2 已存储的摘要里这一栏是字符串：读出来照旧显示，不回写成「未知」。 */
+export type StoredInvalidation = AnalysisInvalidation | string
+
+export function invalidationText(invalidation: StoredInvalidation): string {
+  return typeof invalidation === 'string' ? invalidation : invalidation.statement
+}
+
 export type Scenario = Readonly<{
   asset: 'BTC' | 'ETH'
   horizon: AnalysisScenarioHorizon
   baseCase: string
   conditions: readonly string[]
-  invalidation: string
+  /** 新生成的一律是结构（`AnalysisInvalidation`）；字符串只出现在旧记录里，见 `StoredInvalidation`。 */
+  invalidation: StoredInvalidation
   status: 'pending'
 }>
 

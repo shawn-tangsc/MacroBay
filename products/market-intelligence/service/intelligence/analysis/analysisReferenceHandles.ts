@@ -105,6 +105,20 @@ export function resolveAnalysisReferences<T>(output: T, map: AnalysisReferenceMa
         ...(Array.isArray(claim.evidenceRefIds) ? { evidenceRefIds: claim.evidenceRefIds.map(entry => typeof entry === 'string' ? resolveEvidence(entry) : entry) } : {})
       }))
     } : {}),
+    // 失效条件里的 `factId` 与别处一样是模型引用的句柄：存下来之前换回真实 id，校验与审计
+    // 看到的是同一个东西。旧记录里这一栏可能是字符串（v1/v2），原样留着。
+    ...(Array.isArray(record.scenarios) ? {
+      scenarios: record.scenarios.map(scenario => {
+        if (!scenario || typeof scenario !== 'object') return scenario
+        const entry = scenario as Record<string, unknown>
+        const invalidation = entry.invalidation
+        if (!invalidation || typeof invalidation !== 'object' || (invalidation as Record<string, unknown>).kind !== 'fact') return scenario
+        const factId = (invalidation as Record<string, unknown>).factId
+        return typeof factId === 'string'
+          ? { ...entry, invalidation: { ...(invalidation as Record<string, unknown>), factId: resolveFact(factId) } }
+          : scenario
+      })
+    } : {}),
     ...(Array.isArray(record.evidenceRefs) ? { evidenceRefs: record.evidenceRefs.map(entry => typeof entry === 'string' ? resolveEvidence(entry) : entry) } : {})
   } as T
 }

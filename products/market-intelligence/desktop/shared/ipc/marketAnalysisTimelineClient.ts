@@ -322,7 +322,7 @@ function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'
   // 白名单只从 `marketAnalysisSummaryWhitelist` 读（守卫用例与这里同一份）。可选键缺席一律不判错：
   // 两种契约世代的摘要都要能渲染，少一个可选字段不许把详情变成「读不到」。
   if (!isExactRecordWithOptionals(value, SUMMARY_REQUIRED_FIELDS, SUMMARY_OPTIONAL_FIELDS) ||
-    (value.schemaVersion !== 1 && value.schemaVersion !== 2) ||
+    (value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3) ||
     !isText(value.id) || typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1 ||
     !isCanonicalTime(value.createdAt)) return undefined
   // Caveats are rendered, so an over-long list is truncated; the evidence references are only

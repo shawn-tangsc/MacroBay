@@ -120,6 +120,9 @@ describe('marketAnalysisTimelineClient', () => {
     const v1 = await detailFor({ ...base, schemaVersion: 1 })
     expect(v1).toBeDefined()
     expect(v1?.summary.proseLanguage).toBeUndefined()
+    // v3（失效条件结构化的那一版）：读取端同样要认，不能因为升版把旧版本之外的一律拒掉。
+    const v3 = await detailFor({ ...base, schemaVersion: 3, proseLanguage: 'zh-CN' })
+    expect(v3).toBeDefined()
     // 脏值：不认，但也别把整条详情判成读不到。
     const dirty = await detailFor({ ...base, schemaVersion: 2, proseLanguage: 'fr-FR' })
     expect(dirty).toBeDefined()

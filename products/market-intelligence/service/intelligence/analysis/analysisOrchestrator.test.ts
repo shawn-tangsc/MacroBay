@@ -96,7 +96,7 @@ describe('analysisOrchestrator', () => {
     expect(result.status).toBe('succeeded')
     expect(chatMessagesWritten).toBe(0)
     expect(commitSuccessfulAnalysis).toHaveBeenCalledOnce()
-    expect(commitSuccessfulAnalysis.mock.calls[0]?.[0]).toMatchObject({ runId: 'mi-ar-1', summary: { id: 'mi-as-1', eventGroupId: 'mi-eg-1', schemaVersion: 2, proseLanguage: 'en-US' } })
+    expect(commitSuccessfulAnalysis.mock.calls[0]?.[0]).toMatchObject({ runId: 'mi-ar-1', summary: { id: 'mi-as-1', eventGroupId: 'mi-eg-1', schemaVersion: 3, proseLanguage: 'en-US' } })
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ACCEPTANCE', package: 'MI-A05', event: 'isolated-run', status: 'pass', details: { chatMessagesWritten, modelCalls: invoke.mock.calls.length, publishedSummary: commitSuccessfulAnalysis.mock.calls.length, oldSummaryPreserved: true } }))
   })
 
@@ -638,7 +638,7 @@ function validOutput() {
     marketReaction: [{ statement: 'BTC 短期反应待确认。', factIds: ['fact-1'], evidenceRefIds: ['evidence-1'] }],
     supportingEvidence: [{ statement: '官方发布可核验。', evidenceRefId: 'evidence-1' }],
     counterEvidence: [],
-    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['价格数据保持可比'], invalidation: '出现相反事实', status: 'pending' }],
+    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['价格数据保持可比'], invalidation: { kind: 'fact', factId: 'fact-1', relation: 'below', statement: '出现相反事实' }, status: 'pending' }],
     directions: [
       { horizon: 'short', direction: 'bullish', rationale: '短期资金流转正。', confidence: 'medium', evidenceRefIds: ['evidence-1'] },
       { horizon: 'medium', direction: 'range', rationale: '中期缺少方向性资金。', confidence: 'low', evidenceRefIds: ['evidence-1'] },

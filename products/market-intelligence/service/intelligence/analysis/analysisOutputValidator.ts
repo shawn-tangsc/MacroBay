@@ -10,6 +10,7 @@ import {
   type EvidenceClaim,
   type Catalyst,
   type Scenario,
+  type AnalysisInvalidation,
   type AgentFact,
   type AnalysisConclusion
 } from '../../../contracts/marketAnalysisContracts'
@@ -98,6 +99,11 @@ export const analysisValidationRules = Object.freeze({
    * the repairable set, so the model gets its one rewrite; the detail names this rule.
    */
   triggerFocus: 'missing-trigger-focus',
+  /**
+   * 失效条件引用了一个快照里不存在的 id 或时刻（例如「跌破支撑」这种没有事实出处的价位）。
+   * 判据是数据：factId 在快照事实里、at 在快照的时刻里；不读那句话怎么写。
+   */
+  invalidationReference: 'invalidation-not-in-snapshot',
   /**
    * 分析的背离结论与快照里已有的事实相反（`02` 系统设计 §校验规则）。
    *
@@ -283,6 +289,10 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   // 同一条判据扩到**所有会印数字的段落**：只验 conclusion 时，情景与方向理由里的编造数没人管。
   const proseNumberDefect = untracedProsePercentageDefect(output, snapshot)
   if (proseNumberDefect) return missingEvidence(analysisValidationRules.proseNumberCitation, proseNumberDefect)
+  // 失效条件只许引用快照里真的有的东西：一条事实 id，或事实/快照上的一个时刻。
+  if (!scenarioInvalidationsReferToSnapshot(output.scenarios, snapshot)) {
+    return missingEvidence(analysisValidationRules.invalidationReference)
+  }
   // Only when the caller could resolve a trigger source; a snapshot with no change record never
   // ran this rule and must not be judged by it.
   if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
@@ -340,7 +350,48 @@ function isScenarios(value: unknown): value is Scenario[] {
     isScenarioHorizon(item.horizon) &&
     isBoundedText(item.baseCase) &&
     isBoundedTextCollection(item.conditions) && item.conditions.length > 0 &&
-    isBoundedText(item.invalidation) && item.status === marketAnalysisValidationPolicy.modelPredictionStatus)
+    isInvalidation(item.invalidation) && item.status === marketAnalysisValidationPolicy.modelPredictionStatus)
+}
+
+/**
+ * 失效条件的新结构：引用一条快照事实（factId + 方向）或快照里的一个时刻（at）。
+ *
+ * 句子（statement）必须有，但**不参与校验**；旧记录里的字符串在这一层不认——那是存储兼容，
+ * 新生成的输出必须给结构，否则「跌破支撑」这种快照里没有的价位就又会进来。
+ */
+function isInvalidation(value: unknown): value is AnalysisInvalidation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  if (record.kind === 'fact') {
+    return hasExactKeys(record, ['kind', 'factId', 'relation', 'statement']) &&
+      isBoundedText(record.factId) && (record.relation === 'below' || record.relation === 'above') && isBoundedText(record.statement)
+  }
+  if (record.kind === 'instant') {
+    return hasExactKeys(record, ['kind', 'at', 'statement']) && isCanonicalInstant(record.at) && isBoundedText(record.statement)
+  }
+  return false
+}
+
+/**
+ * 失效条件只能引用**快照里真的有**的东西：一条事实 id，或事实/快照上的一个时刻。
+ * 只比数据，不读句子。
+ */
+function scenarioInvalidationsReferToSnapshot(scenarios: readonly Scenario[], snapshot: FrozenAnalysisEvidence): boolean {
+  const factIds = new Set(snapshot.facts.map(fact => fact.factId))
+  const instants = new Set<string>()
+  for (const fact of snapshot.facts) {
+    if (typeof fact.observedAt === 'string') instants.add(fact.observedAt)
+  }
+  return scenarios.every(scenario => {
+    const invalidation = scenario.invalidation
+    if (typeof invalidation === 'string') return false
+    return invalidation.kind === 'fact' ? factIds.has(invalidation.factId) : instants.has(invalidation.at)
+  })
+}
+
+/** 严格 ISO 时刻（UTC、毫秒）：与快照里存的形状一致，写错一位就是没出处。 */
+function isCanonicalInstant(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
 }
 
 /**
