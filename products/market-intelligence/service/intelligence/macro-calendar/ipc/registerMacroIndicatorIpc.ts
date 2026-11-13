@@ -42,7 +42,36 @@ function indicatorFactPayload(fact: MacroIndicatorCardFact): Readonly<Record<str
     ...(fact.previousAsPublished === undefined ? {} : { previousAsPublished: fact.previousAsPublished }),
     ...(fact.unit === undefined ? {} : { unit: fact.unit }),
     ...(fact.source === undefined ? {} : { source: fact.source }),
-    ...(fact.consensus === undefined ? {} : { consensus: fact.consensus })
+    ...(fact.consensus === undefined ? {} : { consensus: fact.consensus }),
+    // 上一期那个数的出处：只送数字的话，读者分不清它是官方序列还是首发布值，也看不出观测时刻。
+    ...(fact.previousSource === undefined ? {} : { previousSource: fact.previousSource }),
+    ...(fact.previousObservedAt === undefined ? {} : { previousObservedAt: fact.previousObservedAt }),
+    ...(fact.previousUnreadable === true ? { previousUnreadable: true } : {}),
+    ...(fact.next === undefined ? {} : { next: nextReleasePayload(fact.next) })
+  }
+}
+
+/**
+ * 下一期：排期 + 预期。**这一层也要逐项列出**——它曾经漏掉整个 `next`，
+ * 于是渲染层永远拿不到下次发布与倒计时，卡片看起来「什么数据都没有」（2026-11-14 真机就是这个）。
+ *
+ * 嵌套结构同样逐项写：`expected` 里带 `provenance` 与（仅盘口的）成交量，
+ * 没有值就只给原因；`timePrecision` 一定带上，否则日期型排期会被拿去倒计时。
+ */
+function nextReleasePayload(next: NonNullable<MacroIndicatorCardFact['next']>): Readonly<Record<string, unknown>> {
+  return {
+    period: next.period,
+    releaseAt: next.releaseAt,
+    ...(next.timePrecision === undefined ? {} : { timePrecision: next.timePrecision }),
+    ...(next.expected === undefined ? {} : {
+      expected: {
+        value: next.expected.value,
+        provenance: next.expected.provenance,
+        asOf: next.expected.asOf,
+        ...(next.expected.marketVolume === undefined ? {} : { marketVolume: next.expected.marketVolume })
+      }
+    }),
+    ...(next.expectedState === undefined ? {} : { expectedState: next.expectedState })
   }
 }
 

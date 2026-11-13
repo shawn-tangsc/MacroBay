@@ -36,6 +36,34 @@ describe('registerMacroIndicatorIpc', () => {
   })
 
   /**
+   * 下一期与上一期的出处必须**真的出门**：这一层曾经只列了本期的六个字段，
+   * 整个 `next` 被吃掉——真机上三张卡因此没有下次发布、没有倒计时，看起来「什么数据都没有」。
+   */
+  it('sends the next release with its expectation and the previous value provenance', async () => {
+    const register = registrar()
+    registerMacroIndicatorIpc(register.register, {
+      read: async () => [
+        {
+          ...facts[0]!, previousSource: 'fred', previousObservedAt: '2026-09-01T00:00:00.000Z',
+          next: {
+            period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z', timePrecision: 'minute',
+            expected: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
+          }
+        } as MacroIndicatorCardFact,
+        facts[1]!
+      ]
+    }, () => '2026-11-13T10:00:00.000Z')
+
+    const answer = await register.handlers.get(MACRO_INDICATOR_IPC_METHODS.read)?.({}) as { facts: readonly Record<string, unknown>[] }
+    const payrolls = answer.facts[0]!
+    expect(payrolls.previousSource).toBe('fred')
+    expect(payrolls.next).toEqual({
+      period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z', timePrecision: 'minute',
+      expected: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
+    })
+  })
+
+  /**
    * 渲染层拿不到原始行：这条断的是「payload 里只有那几个可见字段」。
    *
    * 观测行上的 `market_fact_key`、源内 `measure` 名这类内部标识一旦跟着 fact 出门，
@@ -51,7 +79,8 @@ describe('registerMacroIndicatorIpc', () => {
     }, () => '2026-11-13T10:00:00.000Z')
 
     const answer = await register.handlers.get(MACRO_INDICATOR_IPC_METHODS.read)?.({}) as { facts: readonly Record<string, unknown>[] }
-    const allowed = ['metricKey', 'state', 'period', 'releasedAt', 'value', 'previousAsPublished', 'unit', 'source']
+    const allowed = ['metricKey', 'state', 'period', 'releasedAt', 'value', 'previousAsPublished', 'unit', 'source',
+      'previousSource', 'previousObservedAt', 'previousUnreadable', 'consensus', 'next']
     for (const fact of answer.facts) {
       expect(Object.keys(fact).filter((key) => !allowed.includes(key))).toEqual([])
       expect(fact).not.toHaveProperty('marketFactKey')
