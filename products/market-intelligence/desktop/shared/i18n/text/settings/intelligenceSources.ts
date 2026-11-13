@@ -549,7 +549,11 @@ export const intelligenceSourcesText = {
        所以要把共用后果写在页脚，别让读者以为「只对这个指标关了」。 */
     valueSourceFootnote: '关闭某个源不会删除历史数据，只是不再采集；**同一个源在多个指标下共用这一颗开关**。',
     valueSourceShared: '共用同一颗源开关',
+  /* 总闸关掉时那一行的小按钮：去哪里开这个源。 */
+  valueSourceOpenSource: '去数据源开启',
     valueSourceEmpty: '这个指标还没有可用来源。',
+    /* 腿全被读者关掉：这是他自己的选择，不是「暂无数据」——两种状态不许长成一句话。 */
+    valueSourceAllClosed: '所有源已关闭（你可调整）',
     providerExpectationTitle: '由数据源（{provider}）在发布前汇总的分析师预期中值',
     showVolume: '显示成交量',
     showAsOf: '显示观测时刻',
@@ -1173,7 +1177,9 @@ export const intelligenceSourcesText = {
     valueSourceFrequencyReadonly: 'Frequency is read-only',
     valueSourceFootnote: 'Turning a source off keeps its history; it only stops collecting; **one source shares this switch across indicators**.',
     valueSourceShared: 'Same switch as the source itself',
+  valueSourceOpenSource: 'Turn it on in data sources',
     valueSourceEmpty: 'No value source is available for this indicator yet.',
+    valueSourceAllClosed: 'All sources are off (you can change this)',
     providerExpectationTitle: 'The analyst consensus the data source ({provider}) summarises before release',
     showVolume: 'Show volume',
     showAsOf: 'Show observation time',
