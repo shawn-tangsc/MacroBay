@@ -38,3 +38,38 @@ describe('narwhal calendar jobs', () => {
     expect(await handler()).toMatchObject({ state: 'failed', failureCode: 'credential-not-configured' })
   })
 })
+
+describe('采集前的门：读者没打开就不采', () => {
+  const handler = (gate: () => Promise<{ visibility: string; enabled: boolean } | undefined>) => {
+    const run = vi.fn(async () => ({ collector: { state: 'completed', pages: 1, releases: 3 }, firstPublishedCaptured: 0 }))
+    return {
+      run,
+      job: createNarwhalCalendarJobHandler({ runtime: { run } as never, now: () => Date.parse('2026-11-13T10:30:00.000Z'),
+        mode: 'tick', readSourceGate: gate })
+    }
+  }
+
+  it('源还锁着（pending）→ skipped，一个请求都不发', async () => {
+    const { run, job } = handler(async () => ({ visibility: 'pending', enabled: true }))
+    await expect(job()).resolves.toMatchObject({ state: 'skipped', reason: 'source-pending' })
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('读者把源关掉 → skipped，一个请求都不发', async () => {
+    const { run, job } = handler(async () => ({ visibility: 'visible', enabled: false }))
+    await expect(job()).resolves.toMatchObject({ state: 'skipped', reason: 'reader-disabled' })
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('已解锁且读者开着 → 照常采', async () => {
+    const { run, job } = handler(async () => ({ visibility: 'visible', enabled: true }))
+    await expect(job()).resolves.toMatchObject({ state: 'succeeded' })
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
+  it('读不到源状态 → fail-closed，不采（宁可空一轮，也不绕过读者）', async () => {
+    const { run, job } = handler(async () => undefined)
+    await expect(job()).resolves.toMatchObject({ state: 'succeeded' })
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+})

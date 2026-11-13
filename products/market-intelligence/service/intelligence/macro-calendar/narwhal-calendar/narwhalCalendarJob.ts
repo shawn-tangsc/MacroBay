@@ -43,12 +43,24 @@ export const narwhalCalendarSweepPolicy = Object.freeze({
 export type NarwhalCalendarJobOutcome =
   | Readonly<{ state: 'succeeded'; pages: number; releases: number; firstPublishedCaptured: number; startDate: string; endDate: string }>
   | Readonly<{ state: 'failed'; failureCode: string; pagesRead: number; startDate: string; endDate: string }>
+  /** 被门口挡下：源还锁着、或读者把它关了。**不静默**——带原因返回，方便对账「为什么这轮没采」。 */
+  | Readonly<{ state: 'skipped'; reason: 'source-pending' | 'reader-disabled'; startDate: string; endDate: string }>
+
+/** 这一轮到底该不该采：源的可见性与读者开关。两条都必须满足，缺一条就不采。 */
+export type NarwhalCalendarSourceGate = () => Promise<Readonly<{ visibility: string; enabled: boolean }> | undefined>
 
 export function createNarwhalCalendarJobHandler(deps: Readonly<{
   runtime: ReturnType<typeof createNarwhalCalendarRuntime>
   now: () => number
   mode: 'tick' | 'sweep'
   countries?: readonly string[]
+  /**
+   * 采集前的门：**读者没打开、或源还锁着（`visibility: 'pending'`），一个请求都不发**。
+   *
+   * 之前只看「有凭据 + 内建启用」，结果读者在设置里看到「待接入」、开关锁着，数据却在进库。
+   * 读者的开关与可见性必须是硬门；挡下时返回 `skipped` 并带原因，不许静默空转。
+   */
+  readSourceGate?: NarwhalCalendarSourceGate
 }>): (input?: Readonly<{ startDate?: string; endDate?: string }>) => Promise<NarwhalCalendarJobOutcome> {
   const policy = deps.mode === 'tick' ? narwhalCalendarTickPolicy : narwhalCalendarSweepPolicy
   return async input => {
@@ -57,6 +69,12 @@ export function createNarwhalCalendarJobHandler(deps: Readonly<{
     const startDate = input?.startDate ?? today.toISOString().slice(0, 10)
     const end = new Date(today.getTime() + (policy.windowDays - 1) * 86_400_000)
     const endDate = input?.endDate ?? end.toISOString().slice(0, 10)
+    const gate = await deps.readSourceGate?.().catch(() => undefined)
+    if (gate !== undefined) {
+      const reason = gate.visibility === 'pending' || gate.visibility === 'hidden' ? 'source-pending'
+        : gate.enabled ? undefined : 'reader-disabled'
+      if (reason !== undefined) return { state: 'skipped', reason, startDate, endDate }
+    }
     const result = await deps.runtime.run({ startDate, endDate, countries: deps.countries ?? ['USA'] })
     if (result.collector.state === 'failed') {
       return {

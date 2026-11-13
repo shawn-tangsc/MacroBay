@@ -25,6 +25,8 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
   countries?: readonly string[]
   /** 读者开关：`undefined` ＝ 仍锁着（pending 期间不参与判断）。 */
   readerEnabled?: () => boolean | undefined
+  /** 采集前的门：源还锁着（`pending`）或读者关掉 → 这轮不采。 */
+  readSourceGate?: () => Promise<Readonly<{ visibility: string; enabled: boolean }> | undefined>
   /** 把发布同时写成日历观测（走日历那张表的同一套写入校验）。 */
   appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
 }>) {
@@ -65,11 +67,23 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
     sleep: deps.sleep ?? (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)))
   })
 
+  // 读者开关的**同步缓存**：调度器判定注册是同步的，而档案是异步读的，
+  // 所以在 initialize / syncSchedule 里读一次、存成布尔，之后调度器直接问缓存。
+  let readerEnabledCache: boolean | undefined
+  async function refreshGate(): Promise<void> {
+    const gate = await deps.readSourceGate?.()
+    readerEnabledCache = gate === undefined ? undefined
+      : gate.visibility === 'pending' || gate.visibility === 'hidden' ? false : gate.enabled
+  }
+
   const scheduler = createNarwhalCalendarScheduler({
     jobRuntime: deps.jobRuntime,
     runtime,
     now: deps.now,
+    ...(deps.readSourceGate === undefined ? {} : { readSourceGate: deps.readSourceGate }),
     hasCredential: () => apiKey !== undefined,
+    // 读者关掉 → `removeSchedule`（不是空转）；再打开 → 重新注册。判据就是缓存里的那个布尔。
+    readerEnabled: () => readerEnabledCache,
     ...(deps.readerEnabled === undefined ? {} : { readerEnabled: deps.readerEnabled }),
     ...(deps.countries === undefined ? {} : { countries: deps.countries })
   })
@@ -78,11 +92,13 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
     /** 先读凭据再注册：顺序反了会「没有密钥却注册了作业」。 */
     async initialize(): Promise<void> {
       await loadCredential()
+      await refreshGate()
       scheduler.initialize()
     },
     /** 凭据/开关变化后重新对账；凭据变化要重新读一次。 */
     async syncSchedule(): Promise<void> {
       await loadCredential()
+      await refreshGate()
       scheduler.syncSchedule()
     },
     dispose(): void { scheduler.dispose() },

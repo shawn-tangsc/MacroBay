@@ -22,6 +22,8 @@ import type { createNarwhalCalendarRuntime } from './narwhalCalendarRuntime'
  * **采集窗口不变**，这里只补触发时机。
  */
 export function createNarwhalCalendarScheduler(deps: Readonly<{
+  /** 采集前的门：`visibility === 'pending'` 或读者关掉 → 这轮不采（返回 `skipped`，不静默）。 */
+  readSourceGate?: () => Promise<Readonly<{ visibility: string; enabled: boolean }> | undefined>
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition' | 'listRuns'>
   runtime: ReturnType<typeof createNarwhalCalendarRuntime>
   now: () => number
@@ -41,7 +43,9 @@ export function createNarwhalCalendarScheduler(deps: Readonly<{
   function handlers(): Array<[string, (payload: unknown) => Promise<void>]> {
     const wrap = (mode: 'tick' | 'sweep') => async (payload: unknown): Promise<void> => {
       const override = payload as Readonly<{ startDate?: string; endDate?: string }> | undefined
-      const run = createNarwhalCalendarJobHandler({ ...deps, mode })
+      const run = createNarwhalCalendarJobHandler({ runtime: deps.runtime, now: deps.now, mode,
+        ...(deps.countries === undefined ? {} : { countries: deps.countries }),
+        ...(deps.readSourceGate === undefined ? {} : { readSourceGate: deps.readSourceGate }) })
       const outcome = await run(override ?? {})
       // 失败必须冒泡给作业运行时，否则"没采到"会被记成"跑过了"。
       if (outcome.state === 'failed') throw new Error(`narwhal calendar ${mode} failed: ${outcome.failureCode}`)

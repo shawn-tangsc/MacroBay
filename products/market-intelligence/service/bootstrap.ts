@@ -61,6 +61,7 @@ import { createMacroEconomicCalendarQueryService } from './intelligence/macro-ca
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
 import { getPlatformFetch } from '@platform/network/platformFetch'
 import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
+import { allSources } from './intelligence/application/providerRegistry'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
 import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calendar/bea-official-release/beaOfficialReleaseJobRuntime'
@@ -193,7 +194,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(deps.getNetworkSettings
       ? { createPlatformWebSocket: () => createPlatformWebSocketFactory({ getNetworkSettings: deps.getNetworkSettings! }) }
       : {}),
-    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => syncMarketCalendarSchedule?.(),
+    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => { void syncMarketCalendarSchedule?.(); void narwhalCalendarAssembly?.syncSchedule() },
     // 读者一拨开关，产品自有作业就跟着排期/撤期（`sourceEnableListeners` 在下面装配时登记）。
     // 通用采集作业与宏观市场、DXY、Nasdaq 100 那几条不由这里管：它们的闸是服务里的同一处。
     onSourceEnabledChanged: (sourceId) => { sourceEnableListeners.get(sourceId)?.() }
@@ -398,7 +399,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(macroCalendarBackend.blsEmploymentSchedule ? ['macro-calendar-bls' as const] : [])
   ] as const
   // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
-  const narwhalCalendarAssembly = createNarwhalCalendarAssembly({
+  let narwhalCalendarAssembly: ReturnType<typeof createNarwhalCalendarAssembly> | undefined
+  narwhalCalendarAssembly = createNarwhalCalendarAssembly({
     jobRuntime: deps.jobRuntime,
     repository: macroCalendarBackend.repository,
     // 采集到的发布同时写进日历读的那张观测表；写入走它自己的同一套校验，失败只记一句，
@@ -409,6 +411,15 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     },
     fetchImpl: getPlatformFetch(),
     getCredential: credentialRef => intelligenceModule.sourceCredentials.getByRef(credentialRef),
+    // 采集前的门：读者关掉、或源还锁着（`visibility: 'pending'`），一个请求都不发。
+    // 可见性读注册表（静态事实），开关读读者档案（运行时事实）；读不到就**不采**（fail-closed）。
+    readSourceGate: async () => {
+      const sourceId = 'macro-calendar-narwhal-economic-data'
+      const source = allSources().find((candidate) => candidate.sourceId === sourceId)
+      if (source === undefined) return { visibility: 'hidden', enabled: false }
+      const profile = (await calendarProfiles.list()).find((candidate) => candidate.providerId === source.providerId)
+      return { visibility: source.visibility, enabled: profile?.enabled === true }
+    },
     now: Date.now
   })
   syncMarketCalendarSchedule = () => marketCalendarScheduler.syncSchedule()
