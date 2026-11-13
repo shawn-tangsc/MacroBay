@@ -108,6 +108,8 @@ function draftOf(release: NarwhalParsedRelease, kind: NarwhalEventKind, locale: 
   const descriptorId = feedByKind[kind]
   const sourceEventId = sourceEventIdOf(release, kind)
   const valued = kind === 'economic-indicator' ? primaryMappedValue(release) : undefined
+  const measureKeys = [...new Set(release.values.map((value) => narwhalMeasureMetricKeys[value.measure])
+    .filter((key): key is string => key !== undefined))]
   return {
     providerId: 'narwhal',
     descriptorId,
@@ -123,6 +125,7 @@ function draftOf(release: NarwhalParsedRelease, kind: NarwhalEventKind, locale: 
     importance: 'medium',
     scheduledDate: release.eventDate,
     scheduledAt: release.at,
+    ...(measureKeys.length === 0 ? {} : { measureKeys: measureKeys.join(',') }),
     ...(valued === undefined ? {} : {
       consensus: displayValueOf(valued.consensus),
       providerPrevious: displayValueOf(valued.previous),

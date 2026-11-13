@@ -37,7 +37,9 @@ export const zeroXRouterCalendarStoragePolicy = Object.freeze({
   descriptorKinds: marketCalendarDescriptorKinds,
   draftFields: Object.freeze(['providerId', 'descriptorId', 'kind', 'locale', 'sourceEventId', 'marketFactKey',
     'identityState', 'localeMerge', 'officialLink', 'displayName', 'countryCode', 'countryName', 'importance',
-    'scheduledDate', 'scheduledAt', 'indicatorId', 'consensus', 'providerPrevious', 'providerActual', 'providerImpact']),
+    'scheduledDate', 'scheduledAt', 'indicatorId', 'consensus', 'providerPrevious', 'providerActual', 'providerImpact',
+    // 这条发布覆盖的指标 key 列表（与 `indicatorId` 是两件事：一个是主 measure，一个是全体）。
+    'measureKeys']),
   valueFields: Object.freeze(['consensus', 'providerPrevious', 'providerActual'] as const),
   skipReasons: Object.freeze(['invalid-identity', 'invalid-date', 'invalid-row'] as const),
   caveats: Object.freeze(['identity-unverified', 'locale-merge-disabled', 'official-link-disabled'])
@@ -238,6 +240,10 @@ function buildObservation(value: unknown, scope: ReturnType<typeof marketScope>,
   const observation: MarketRow = { observation_id: JSON.stringify([batch.collectionId, draft.marketFactKey]), collection_id: batch.collectionId as string,
     provider_id: draft.providerId, descriptor_id: draft.descriptorId, locale: draft.locale, source_event_id: draft.sourceEventId,
     identity_state: draft.identityState, market_fact_key: draft.marketFactKey, ...business,
+    // 只有带这一列的来源（今天只有 Narwhal）才写这个键：旧来源的行保持原样，
+    // 免得给每行多塞一个 `null` 把已有的行大小预算顶出去。
+    ...(draft.measureKeys === undefined ? {}
+      : { measure_keys_json: JSON.stringify(String(draft.measureKeys).split(',').filter((key) => key.length > 0)) }),
     business_snapshot_hash: createHash('sha256').update(JSON.stringify(business)).digest('hex'), caveats_json: JSON.stringify(policy.caveats), schema_version: policy.schemaVersion, candidate_key: draft.marketFactKey }
   return observation
 }

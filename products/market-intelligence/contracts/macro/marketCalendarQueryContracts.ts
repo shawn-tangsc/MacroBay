@@ -82,6 +82,11 @@ export type MarketCalendarEvent = Readonly<{
   eventNameKey?: string
   /** 新源给的事件类型标识（`usa-policy-rate-decision` 这类）。行上没有就不带字段，不填空串。 */
   seriesId?: string
+  /**
+   * 这条发布覆盖的全部指标 key（一次发布可能包含多个 measure）。**与 `eventNameKey` 是两个
+   * 含义**：前者是「它还包含哪些指标」，后者是「这条事件叫什么」。
+   */
+  measureKeys?: readonly string[]
   eventType: typeof marketCalendarPublicPolicy.kinds[number]; importance: typeof marketCalendarPublicPolicy.importance[number]
   scheduledAt: string; consensus: MarketCalendarValue; providerPrevious: MarketCalendarValue; providerActual: MarketCalendarValue
   /**
@@ -179,7 +184,10 @@ export function isMarketCalendarOfficialLink(value: unknown, providerScheduledAt
 }
 export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEvent {
   return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'importance', 'scheduledAt', 'consensus',
-    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId']) &&
+    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId', 'measureKeys']) &&
+    (!Object.hasOwn(value, 'measureKeys') || (Array.isArray(value.measureKeys) && value.measureKeys.length > 0 &&
+      value.measureKeys.every((key) => typeof key === 'string' && key.length > 0 &&
+        key.length <= marketCalendarPublicPolicy.maximumObservationKeyChars && !key.includes('|')))) &&
     (!Object.hasOwn(value, 'eventNameKey') || (typeof value.eventNameKey === 'string' && value.eventNameKey.length > 0 && value.eventNameKey.length <= marketCalendarPublicPolicy.maximumObservationKeyChars && !value.eventNameKey.includes('|'))) &&
     (!Object.hasOwn(value, 'seriesId') || (typeof value.seriesId === 'string' && value.seriesId.length > 0 && value.seriesId.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&
     (!Object.hasOwn(value, 'observationKey') || (typeof value.observationKey === 'string' && value.observationKey.length > 0 && value.observationKey.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&

@@ -170,8 +170,12 @@ export function createMarketCalendarPublicQueryService(deps: {
     const storedIdentity = String(row.provider_id) === marketCalendarProviderId
       ? narwhalCanonicalIdentityKey(String(row.candidate_key)) : undefined
     const metricKey = storedIdentity === undefined ? undefined : storedIdentity.split('|')[1]
-    const withIdentity = metricKey !== undefined && !eventKinds.includes(metricKey)
-      ? { ...result, eventNameKey: metricKey } : result
+    const measureKeys = row.measure_keys_json === null || row.measure_keys_json === undefined
+      ? undefined : JSON.parse(String(row.measure_keys_json)) as readonly string[]
+    const withIdentity = {
+      ...(metricKey !== undefined && !eventKinds.includes(metricKey) ? { ...result, eventNameKey: metricKey } : result),
+      ...(measureKeys === undefined ? {} : { measureKeys })
+    }
     if (!isMarketCalendarEvent(withIdentity)) throw new Error('projection-unavailable')
     return withIdentity
   }

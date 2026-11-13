@@ -187,6 +187,12 @@ export function ensureMarketCalendarObservationState(database: DatabaseSync): bo
         where c.collection_id = o.collection_id)
       where o.last_seen_at is null`)
   }
+  // 发布覆盖的指标列表（`measure_keys_json`）：一行 = 一次发布，身份只记主 measure 的 key，
+  // 其余 measure 的 key 只能记在这里。**只加列，不改旧列**；旧行这一列是 null，读侧按「没带」
+  // 处理，不猜、不用主 key 顶替。
+  if (!fields.some((field) => field.name === 'measure_keys_json')) {
+    database.exec('alter table mi_macro_calendar_market_event_observations add column measure_keys_json text')
+  }
   database.exec(`create table if not exists ${marketCalendarRetentionPolicy.ledgerTable} (
     candidate_key text primary key, last_seen_at text not null)`)
   database.exec(`create index if not exists ${marketCalendarRetentionPolicy.maintenanceIndex}

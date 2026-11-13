@@ -27,6 +27,12 @@ export type ZeroXRouterCalendarDraft = Readonly<{
   providerPrevious?: ZeroXRouterDisplayValue
   providerActual?: ZeroXRouterDisplayValue
   providerImpact?: Readonly<{ label: string; code?: string }>
+  /**
+   * 这条发布覆盖的全部指标 key，逗号分隔（存储快照只允许基元字段，数组进不去）。
+   * **与 `indicatorId` 是两个字段**：`indicatorId` 是主 measure（决定这条事件叫什么），
+   * 这一份是「它还包含哪些指标」。旧来源没有这个概念，旧行这一列是 null。
+   */
+  measureKeys?: string
 }>
 export type ZeroXRouterCalendarRowFailure = 'invalid-identity' | 'invalid-date' | 'invalid-row'
 export type ZeroXRouterCalendarParseResult =
