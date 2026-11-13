@@ -505,10 +505,14 @@ export const intelligenceSourcesText = {
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
   /* 「业务设置」左列那三项（用户 2026-11-10：切到业务设置后左列只有这三项）。 */
-  businessTabs: { dashboard: '看板', calendar: '日历', sentiment: '舆情' },
+  /* 第四个导航项（用户 2026-11-14）：与看板/日历/舆情并列。它装的是一级指标的共识配置：
+     顶部是「政策路径」那两块（FOMC 决议市场 + 美联储日程，整块挪过来、**键不动**），
+     下面接 CPI / 核心 CPI / 新增就业 / 核心 PCE 四项。只备文案，**先不接线**。 */
+  businessTabs: { dashboard: '看板', calendar: '日历', sentiment: '舆情', coreIndicators: '核心指标' },
   businessTabsAria: '业务设置',
   /* 左列三项的副标题：写**有用的事实**（模块数 / 源数），数字从数据层算。 */
-  businessSubtitle: { modules: '{count} 个模块', sources: '{count} 个源' },
+  /* 量词不同就是不同：这一项配的是**指标**不是来源，写成「N 个源」会让读者以为这里能接数据源。 */
+  businessSubtitle: { modules: '{count} 个模块', sources: '{count} 个源', indicators: '{count} 项指标' },
   /* 看板页签的分组名：能复用既有标题键的都用既有键（各模块在 dashboardSourceModules 里指过去），
      这里只放**没有现成标题键**的那几个。 */
   dashboardModuleTitles: {
@@ -519,6 +523,29 @@ export const intelligenceSourcesText = {
   openSourceConfig: '打开 {name} 的配置',
   /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
   cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
+  /**
+   * 「核心指标」那组配置的文案（用户 2026-11-14）。
+   *
+   * 每格三样：**现状**（只读：期次 / 来源 / 值 / 成交量 / 观测时刻）+ 来源顺序 + 两个显示开关。
+   * **四种空态必须各有一句**——尤其「本期已发布 · 盘口已下架」：那是正常态（盘按期结算下架），
+   * 不单列读者会以为这个指标一直没盘。
+   */
+  coreIndicators: {
+    title: '核心指标',
+    metrics: { cpiYoy: 'CPI 年率', coreCpiYoy: '核心 CPI 年率', nonfarmPayrolls: '新增就业', corePceYoy: '核心 PCE 年率' },
+    sourceOrder: {
+      label: '来源顺序',
+      options: { defaultChain: '盘口 → 商业源 → 手填', marketOnly: '只用盘口', surveyOnly: '只用商业源', manualOnly: '只用手填' }
+    },
+    showVolume: '显示成交量',
+    showAsOf: '显示观测时刻',
+    empty: {
+      noMarket: '本期无盘 · 已退到商业源',
+      marketSettled: '本期已发布 · 盘口已下架',
+      incomplete: '必需项不全，不显示',
+      unconfigured: '尚未选择来源'
+    }
+  },
   /* 需要 API Key 但还没配：开关不可用，旁边一颗 ⓘ 说这一句（正文不放整句）。 */
   credentialRequiredToEnable: '先配置 API Key',
   credentialRequiredToEnableAria: '为什么这个开关现在不能开',
@@ -1111,15 +1138,31 @@ export const intelligenceSourcesText = {
     official: 'Official sources',
     aggregate: 'Aggregators'
   },
-  businessTabs: { dashboard: 'Dashboard', calendar: 'Calendar', sentiment: 'Sentiment' },
+  businessTabs: { dashboard: 'Dashboard', calendar: 'Calendar', sentiment: 'Sentiment', coreIndicators: 'Core indicators' },
   businessTabsAria: 'Business settings',
-  businessSubtitle: { modules: '{count} modules', sources: '{count} sources' },
+  businessSubtitle: { modules: '{count} modules', sources: '{count} sources', indicators: '{count} indicators' },
   dashboardModuleTitles: {
     policyPath: 'Policy path',
     marketState: 'Market state'
   },
   openSourceConfig: 'Open the settings for {name}',
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
+  coreIndicators: {
+    title: 'Core indicators',
+    metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },
+    sourceOrder: {
+      label: 'Source order',
+      options: { defaultChain: 'Market → survey → manual', marketOnly: 'Market only', surveyOnly: 'Survey only', manualOnly: 'Manual only' }
+    },
+    showVolume: 'Show volume',
+    showAsOf: 'Show observation time',
+    empty: {
+      noMarket: 'No market this period · fell back to the survey',
+      marketSettled: 'Published · the market is settled and gone',
+      incomplete: 'Required fields missing; not shown',
+      unconfigured: 'No source chosen yet'
+    }
+  },
   credentialRequiredToEnable: 'Set the API key first',
   credentialRequiredToEnableAria: 'About why this switch cannot be turned on yet',
   providerPending: 'This source is not wired up yet',
