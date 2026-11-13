@@ -86,6 +86,12 @@ export type CalendarStandardRow = Readonly<{
    * 算不出「这条属于哪个发布组」。写成列而不是塞进 raw_json：转正是 SQL 层的扫描。
    */
   seriesId?: string
+  /**
+   * 值区状态：`not-provided` ＝ 源标了已发布、却一个值都没给。
+   * **单独一列、不塞进 `values_json`**：视图要判「这行有没有值」，`values_json = '{}'` 必须
+   * 就代表「真的没有值」。塞进去会让空行看起来有值，折叠规则当场失效。
+   */
+  valueState?: 'not-provided'
   valuesJson: string
   sourceProviderId: string
   sourceEventId: string
@@ -118,6 +124,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
       source_label text,
       series_id text,
+      value_state text,
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
       values_json text not null,
       source_provider_id text not null,
@@ -132,8 +139,24 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
     -- **日历只读视图**：一个入口，条件写在这里，不靠每个调用点记得加。
     -- 同表两种行时，「每处都记得 where」是不可靠的：漏一处，估算就混进日历，而且图上看不出来。
     drop view if exists ${calendarStandardTablePolicy.releasesView};
+    -- **视图 ≠ 基表减 estimate**：还多一条折叠规则，拿基表对数时要记得这一条。
+    -- 折叠键 = (国家, 指标, 期间)；保留规则 = 「带值的行全留；一行带值的都没有时，只留首见那行」。
+    -- 由来：源会把同一期重发多次（实测 ADP 十月发了三次，11-05/11-06 两次是空的），
+    -- 日历上就成了三次「ADP 十月发布」。反过来，密歇根初值/终值同属一期但**都带值**，
+    -- 那是两次真实发布，必须都留——所以判据是「有没有值」，不是「差几天」。
     create view ${calendarStandardTablePolicy.releasesView} as
-      select * from ${eventsTable} where row_kind = 'release';
+      select * from ${eventsTable} e
+      where e.row_kind = 'release' and (
+        e.values_json <> '{}'
+        or (
+          not exists (select 1 from ${eventsTable} v
+            where v.country_code = e.country_code and v.metric_key = e.metric_key
+              and v.period_key = e.period_key and v.row_kind = 'release' and v.values_json <> '{}')
+          and e.first_scheduled_date = (select min(f.first_scheduled_date) from ${eventsTable} f
+            where f.country_code = e.country_code and f.metric_key = e.metric_key
+              and f.period_key = e.period_key and f.row_kind = 'release')
+        )
+      );
     create index if not exists idx_calendar_events_month
       on ${eventsTable}(country_code, scheduled_at);
     create table if not exists ${unmappedTable} (
@@ -160,6 +183,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   if (!columns.some((column) => column.name === 'series_id')) {
     database.exec(`alter table ${eventsTable} add column series_id text`)
   }
+  if (!columns.some((column) => column.name === 'value_state')) {
+    database.exec(`alter table ${eventsTable} add column value_state text`)
+  }
 }
 
 /**
@@ -170,9 +196,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   const { eventsTable } = calendarStandardTablePolicy
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
-     status, identity_kind, source_label, series_id, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
+     status, identity_kind, source_label, series_id, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -194,6 +220,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.identityKind ?? 'code',
       row.sourceLabel ?? null,
       row.seriesId ?? null,
+      row.valueState ?? null,
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null)
 }

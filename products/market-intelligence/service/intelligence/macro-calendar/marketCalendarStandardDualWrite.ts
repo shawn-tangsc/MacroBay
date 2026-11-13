@@ -81,8 +81,8 @@ export function dualWriteMeasureRows(
         ...(row.identityKind === undefined ? {} : { identityKind: row.identityKind }),
         ...(row.sourceLabel === undefined ? {} : { sourceLabel: row.sourceLabel }),
         ...(row.seriesId === undefined ? {} : { seriesId: row.seriesId }),
+        ...(row.valueState === undefined ? {} : { valueState: row.valueState }),
         valuesJson: JSON.stringify({
-          ...(row.valueState === undefined ? {} : { valueState: row.valueState }),
           ...(row.consensus === undefined ? {} : { consensus: row.consensus }),
           ...(row.previous === undefined ? {} : { previous: row.previous }),
           ...(row.actual === undefined ? {} : { actual: row.actual })

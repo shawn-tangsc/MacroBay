@@ -65,6 +65,51 @@ describe('标准日历表', () => {
   })
 })
 
+describe('视图折叠：同一指标同一期重发多次', () => {
+  const viewRows = (database: DatabaseSync) =>
+    database.prepare('select scheduled_date, values_json from mi_calendar_releases order by scheduled_date').all() as
+      { scheduled_date: string; values_json: string }[]
+  const write = (database: DatabaseSync, over: Partial<CalendarStandardRow>) =>
+    upsertCalendarStandardRow(database, { ...base, ...over })
+
+  it('带值的那行留下，空的折掉（ADP 十月：源发了三次）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, { scheduledDate: '2026-11-04', valuesJson: '{"actual":"165"}' })
+    write(database, { scheduledDate: '2026-11-05', valuesJson: '{}', valueState: 'not-provided' })
+    write(database, { scheduledDate: '2026-11-06', valuesJson: '{}', valueState: 'not-provided' })
+    const view = viewRows(database)
+    expect(view).toHaveLength(1)
+    expect(view[0]!.scheduled_date).toBe('2026-11-04')
+  })
+
+  it('两行都带值 → 两行都留（密歇根初值/终值是真两次发布）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, { scheduledDate: '2026-11-14', valuesJson: '{"actual":"51.0"}' })
+    write(database, { scheduledDate: '2026-11-28', valuesJson: '{"actual":"53.2"}' })
+    expect(viewRows(database)).toHaveLength(2)
+  })
+
+  it('整期都没有值 → 只留首见那行，不能折成 0 行', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, { scheduledDate: '2026-11-05', valuesJson: '{}' })
+    write(database, { scheduledDate: '2026-11-06', valuesJson: '{}' })
+    const view = viewRows(database)
+    expect(view).toHaveLength(1)
+    expect(view[0]!.scheduled_date).toBe('2026-11-05')
+  })
+
+  it('不同期间互不影响（折叠键含期间）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, { periodKey: '2026-10', valuesJson: '{}' })
+    write(database, { periodKey: '2026-11', valuesJson: '{"actual":"1"}' })
+    expect(viewRows(database)).toHaveLength(2)
+  })
+})
+
 describe('一次发布一行：四次判红口径', () => {
   const write = (database: DatabaseSync, over: Partial<CalendarStandardRow>) =>
     upsertCalendarStandardRow(database, { ...base, ...over })
