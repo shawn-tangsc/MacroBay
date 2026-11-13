@@ -403,8 +403,23 @@ describe('the three simplified cards', () => {
     { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' }
   ]
 
+  /** 给三张卡装上「下一期」，日期由用例指定；PCE 故意不给，用来验证「没有就写暂无排期」。 */
+  const withNextRelease = (list: readonly MacroIndicatorCardFact[], releaseAt: string): readonly MacroIndicatorCardFact[] =>
+    list.map((fact) => fact.metricKey === 'US.CORE_PCE.NSA.YOY'
+      ? fact
+      : { ...fact, next: { period: '2026-11', releaseAt, timePrecision: 'minute' as const } })
+
+  /** 一张卡位 = 一个轮播；文字取整个卡位（当前页的内容都在里面）。 */
+  const carouselText = (index: number): string =>
+    document.body.querySelectorAll('[data-pair]')[index]?.textContent ?? ''
+  /** 切到另一页：点卡头那颗真按钮（不是手势）。 */
+  const switchPage = async (index: number, direction: 'released' | 'next'): Promise<void> => {
+    const nav = document.body.querySelectorAll('[data-pair]')[index]?.querySelectorAll<HTMLButtonElement>('.mk-nav button')
+    const target = direction === 'next' ? nav?.[1] : nav?.[0]
+    await act(async () => { target?.click() })
+  }
   const cardMainValues = () =>
-    Array.from(document.body.querySelectorAll('.mk-card__v b')).map((cell) => cell.textContent ?? '')
+    Array.from(document.body.querySelectorAll('.mk-vrow dd')).map((cell) => cell.textContent ?? '')
 
   const renderCards = async (cardFacts?: readonly MacroIndicatorCardFact[], cardFactsUnreadable?: boolean) => {
     host = document.createElement('div')
@@ -418,118 +433,78 @@ describe('the three simplified cards', () => {
     return Array.from(document.body.querySelectorAll('.mk-card')).map((card) => card.textContent ?? '')
   }
 
-  it('says 未提供 for this period and keeps last period, instead of passing it off as current', async () => {
-    const [cpi] = await renderCards(facts)
+  it('says 未提供 for rows this period did not provide, instead of a blank', async () => {
+    await renderCards(facts)
+    const cpi = carouselText(0)
     expect(cpi).toContain('未提供')
-    // 卡面只有字段和值：状态词 + 上一期作为独立一行；解释句进 ⓘ，不在正文里。
-    expect(cpi).toContain('10 月 · 本期无此数')
-    expect(cpi).toContain('上一期3.7%')
-    expect(cpi).not.toContain('从未发布')
-    expect(document.body.querySelector('.mk-card__h button[aria-label]')).not.toBeNull()
-    // 上一期 3.7% 不许出现在主值位（`mk-card__na` 是「未提供」那一格）。
-    expect(document.body.querySelector('.mk-card__v b.mk-card__na')?.textContent).toBe('未提供')
-    expect(cpi).not.toContain('较上期')
+    // 卡面只有字段和值：缺的那几行写「未提供」，解释句进 ⓘ，不在正文里。
+    expect(cpi).not.toContain('本期无此数')
   })
 
-  it('shows the payrolls value and the as-published change: 165 − 29 = +136K', async () => {
-    const [, payrolls] = await renderCards(facts)
+  it('shows the payrolls value and the expectation gap chip', async () => {
+    await renderCards(facts)
+    const payrolls = carouselText(1)
     expect(payrolls).toContain('+165K')
-    expect(payrolls).toContain('较上期（未修正）+136K')
+    // 「较上期」这一行已从卡面去掉（用户 2026-11-14 定稿）；卡上给的是预期差。
+    expect(payrolls).not.toContain('较上期')
   })
 
-  it('shows 失业率 from the same payroll release, not a second read', async () => {
-    const [, payrolls] = await renderCards(facts)
-    expect(payrolls).toContain('4.1%')
+  /**
+   * 「下次发布」在轮播的**未来页**上：切过去才看得到。原来那套「同月找不到就读下个月」的现算已删，
+   * 现在读模型的唯一实现（`fact.next`），三条验收（三个月后 / 今天还没到点 / 今天只有日期）在下一组。
+   */
+  it('shows the next release on the future page, and hides the line when the read model has none', async () => {
+    await renderCards(withNextRelease(facts, '2026-12-10T13:30:00.000Z'))
+    await switchPage(0, 'next')
+    expect(carouselText(0)).toContain('下次发布')
+    expect(carouselText(0)).toContain('12-10')
+    // 核心 PCE 没有排期 → 未来页写「暂无排期」，已发布页写「本月未发布」（两页各说各自的）。
+    await switchPage(2, 'next')
+    expect(carouselText(2)).toContain('暂无排期')
   })
 
-  it('shows the next release from the same month read, and hides the cell when there is none', async () => {
-    // 一条未来的 CPI 发布：卡片上「下次发布」就该有日期；非农/PCE 没有未来行 → 那两格不画。
-    const future = dayEvent('e-cpi-next', '11月CPI年率', '2026-11-25T13:30:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] })
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
-        <MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
-          now="2026-11-13T10:00:00.000Z" readMarketEvents={async () => [...calendarEvents, future]} cardFacts={facts} />
-      </ShellTimeZoneProvider></ShellLanguageProvider>)
-    })
-    const [cpi, payrolls, pce] = Array.from(document.body.querySelectorAll('.mk-card')).map((card) => card.textContent ?? '')
-    expect(cpi).toContain('11-25')
-    // 非农在当天稍后还有一次发布（12:30Z），所以这一格有日期——不是「凡是未来的都算下个月」。
-    expect(payrolls).toContain('下次发布')
-    // 核心 PCE 在这份数据里没有未来行（两个月都读到了）：这一格整格不画，而不是写「未提供」。
-    expect(pce).not.toContain('下次发布')
-  })
-
-  it('reads next month only when this month has no future release, and only once per snapshot', async () => {
+  it('does not read a second month for 下次发布 anymore', async () => {
     const reads: string[] = []
-    const december = [dayEvent('e-cpi-dec', '11月CPI年率', '2026-12-10T13:30:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] })]
-    const readMarketEvents = async (month: string) => {
-      reads.push(month)
-      return month === '2026-12' ? december : calendarEvents
-    }
+    const readMarketEvents = async (month: string) => { reads.push(month); return calendarEvents }
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
       root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
         <MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
-          now="2026-11-13T10:00:00.000Z" readMarketEvents={readMarketEvents} cardFacts={facts} />
+          now="2026-11-13T10:00:00.000Z" readMarketEvents={readMarketEvents}
+          cardFacts={withNextRelease(facts, '2026-12-10T13:30:00.000Z')} />
       </ShellTimeZoneProvider></ShellLanguageProvider>)
     })
-    const cpiCard = () => document.body.querySelectorAll('.mk-card')[0]!.textContent ?? ''
-    // 11 月这批里 CPI 没有未来行 → 读 12 月，格子写出 12-10。
-    expect(cpiCard()).toContain('12-10')
-    expect(reads.filter((month) => month === '2026-12')).toHaveLength(1)
-    // 切日期、重渲染都不再打一次同一快照。
-    const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
-      .find((value) => value.querySelector('em')?.textContent === '14')!
-    await act(async () => { cell.click() })
-    expect(reads.filter((month) => month === '2026-12')).toHaveLength(1)
+    expect(new Set(reads)).toEqual(new Set(['2026-11']))
   })
 
   /**
-   * 下个月那次读**失败**，不等于「没有下一次发布」：这一格必须说「暂时读不到」，
-   * 画成「没有」就是替源编答案。这是「读不到 ≠ 空」在卡片上的落点。
+   * 原来这里有一条「下个月那次读失败 → 这一格说暂时读不到」。
+   * 那个路径已经不存在：`next` 由读数服务给出，读失败会让**整份读数**失败，
+   * 由「says 暂时读不到 when the read failed」那条接管——同一件事，覆盖整卡而不是一格。
    */
-  it('says 暂时读不到 for 下次发布 when the next-month read failed, instead of hiding the cell', async () => {
-    const readMarketEvents = async (month: string) => month === '2026-12' ? null : calendarEvents
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
-        <MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
-          now="2026-11-13T10:00:00.000Z" readMarketEvents={readMarketEvents} cardFacts={facts} />
-      </ShellTimeZoneProvider></ShellLanguageProvider>)
-    })
-    const cpi = document.body.querySelectorAll('.mk-card')[0]!.textContent ?? ''
-    expect(cpi).toContain('下次发布')
-    expect(cpi).toContain('暂时读不到')
-  })
 
-  it('says 未提供 for core PCE because this month has no release row', async () => {
-    const [, , pce] = await renderCards(facts)
+  it('says 未提供 on every PCE row because this month has no release row', async () => {
+    await renderCards(facts)
+    const pce = carouselText(2)
     expect(pce).toContain('未提供')
-    expect(pce).toContain('本月未发布')
+    expect(pce).not.toContain('+165K')
   })
 
-  /**
-   * 三态分开：**没读到**（接口失败）写「暂时读不到」；**还在读**（既没事实也没报失败）
-   * 一个数、一个字都不落。「未提供」只说「来源没给这一期的值」，不许拿来顶前两种。
-   */
   it('never shows a number on a card when the facts were not read at all', async () => {
     const cards = await renderCards()
     expect(cards).toHaveLength(3)
     // 主值那一格空着：既没有数，也没有「未提供」——那两个字是「来源没给」的意思。
-    expect(cardMainValues()).toEqual(['', '', ''])
+    expect(cardMainValues()).toHaveLength(12)
+    expect(cardMainValues().every((value) => value === '')).toBe(true)
     expect(cards.join('')).not.toContain('示意数据')
   })
 
   it('says 暂时读不到 when the read failed, never 未提供', async () => {
     await renderCards(undefined, true)
-    expect(cardMainValues()).toEqual(['暂时读不到', '暂时读不到', '暂时读不到'])
+    expect(cardMainValues()).toHaveLength(12)
+    expect(cardMainValues().every((value) => value === '暂时读不到')).toBe(true)
   })
 })
 

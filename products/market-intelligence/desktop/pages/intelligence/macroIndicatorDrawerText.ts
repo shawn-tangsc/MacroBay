@@ -78,6 +78,35 @@ export const macroIndicatorDrawerText = {
       beforeYesterday: '前天发布',
       daysAgo: '{days} 天前'
     },
+    /** 卡面骨架：期次与时刻、来源行、口径、预期差三态、折叠那句。 */
+    cardFace: {
+      whenPublished: '{period} · {time} 发布',
+      whenNext: '下次发布 {period} · {date}',
+      noSchedule: '下次发布 · 暂无排期',
+      sourceLine: '来源 {source} · {time}',
+      chipUp: '高于预期',
+      chipDown: '低于预期',
+      chipFlat: '符合预期',
+      expectedMissing: '暂无预期',
+      expectedState: '预期状态 {state}',
+      approx: '约 {value}',
+      volume: '成交量 {value}',
+      observed: '观测 {time}',
+      beforeRelease: '（发布前）',
+      foldMore: '另 {count} 项暂无预期（盘未开）',
+      stateMarket: '有盘',
+      stateProvider: '有预期',
+      stateNoSchedule: '暂无排期'
+    },
+    /** 卡面骨架：期次与时刻、来源行、口径、预期差三态、折叠那句。 */
+    /** 轮播的四个入口都要可访问名：两个箭头、两个圆点，另加一句组名。 */
+    carousel: {
+      prev: '查看已发布',
+      next: '查看下次发布',
+      published: '已发布',
+      upcoming: '下次发布',
+      pages: '卡片页'
+    },
     /** 三张卡共用的行名（左右两卡按同一顺序逐行对齐，行位不删、不折、不藏）。 */
     cardRows: {
       yoy: '年率',
@@ -182,6 +211,32 @@ export const macroIndicatorDrawerText = {
       yesterday: 'Published yesterday',
       beforeYesterday: 'Published the day before yesterday',
       daysAgo: '{days} days ago'
+    },
+    cardFace: {
+      whenPublished: '{period} · published {time}',
+      whenNext: 'Next release {period} · {date}',
+      noSchedule: 'Next release · no schedule',
+      sourceLine: 'Source {source} · {time}',
+      chipUp: 'above expectation',
+      chipDown: 'below expectation',
+      chipFlat: 'in line',
+      expectedMissing: 'No expectation',
+      expectedState: 'Expectation status {state}',
+      approx: 'about {value}',
+      volume: 'Volume {value}',
+      observed: 'observed {time}',
+      beforeRelease: '(before release)',
+      foldMore: '{count} more with no expectation (market not open)',
+      stateMarket: 'Market open',
+      stateProvider: 'Data provider',
+      stateNoSchedule: 'No schedule'
+    },
+    carousel: {
+      prev: 'View released',
+      next: 'View next release',
+      published: 'Released',
+      upcoming: 'Next release',
+      pages: 'Card pages'
     },
     cardRows: {
       yoy: 'YoY',

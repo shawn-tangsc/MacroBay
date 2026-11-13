@@ -155,6 +155,8 @@
 
 
 /* Cards: one skeleton, three sizes of value type. */
+/* 一个指标一行、一个轮播卡位（用户 2026-11-14 定稿：结构照轮播版，像素值照正常态版）。 */
+/* 三张指标卡一行平铺（每张一个轮播卡位）；左列 828 里三等分。 */
 .mk-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; align-items: stretch; flex: none; }
 .mk-card {
   border: 1px solid var(--border);
@@ -264,3 +266,49 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 .mk-mdot--today { width: 6px; height: 6px; background: transparent; border: 1px solid var(--accent); box-sizing: border-box; }
 
 /* The day panel: sticky heading, one block per type, one row per event. */
+
+/* ── 轮播卡位（照 2026-11-14 原型：卡宽 408、卡高 204、圆角 12、内距 10/12） ── */
+/* 宽度跟着三等分的格子走：一行平铺三张，不写死 408。 */
+.mk-carousel { width: 100%; max-width: 100%; outline: none; }
+.mk-carousel:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 14px; }
+.mk-card--wrapper { display: flex; flex-direction: column; }
+.mk-nav { display: flex; gap: 2px; flex: none; }
+.mk-card__head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mk-card__head h4 { margin: 0; font-size: var(--font-section); font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mk-dot { width: 7px; height: 7px; border-radius: 50%; box-sizing: border-box; flex: none; background: var(--accent); }
+.mk-card--next .mk-dot { background: transparent; border: 1px dashed var(--muted); }
+.mk-src { margin-left: auto; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; flex: none; }
+.mk-card { box-sizing: border-box; min-height: 204px; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); }
+.mk-card--past { border: 1px solid var(--border-strong); }
+.mk-card--next { border: 1px dashed var(--border-strong); background: color-mix(in srgb, var(--surface) 86%, transparent); }
+/* 已发布页超过 3 天：整页降权（规则只作用在已发布页，未来页永不降权）。 */
+.mk-card[data-dim='true'] { border-color: var(--border-subtle); }
+.mk-card[data-dim='true'] .mk-card__head h4,
+.mk-card[data-dim='true'] .mk-vrow dd { color: var(--muted); }
+.mk-card[data-dim='true'] .mk-dot { background: var(--muted); opacity: .6; border-style: solid; }
+.mk-card[data-dim='true'] .mk-chip { opacity: .5; }
+.mk-when { margin: 4px 0 6px; font-size: var(--font-meta); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-rows { margin-top: 6px; }
+.mk-vrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--border-subtle); }
+.mk-vrow:first-child { border-top: 0; }
+.mk-vrow dt { margin: 0; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; }
+.mk-vrow dd { margin: 0; text-align: right; font-size: var(--font-body); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-strong); white-space: nowrap; }
+.mk-vrow dd[data-na='true'] { font-weight: 500; color: var(--muted); }
+.mk-chipwrap { justify-self: end; }
+.mk-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; font-size: var(--font-meta); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+.mk-chip--up { background: var(--caution); border: 1px solid var(--caution); color: var(--bg); font-weight: 600; }
+.mk-chip--down { background: var(--info); border: 1px solid var(--info); color: var(--bg); font-weight: 600; }
+.mk-chip--flat { background: transparent; border: 1px solid var(--border-strong); color: var(--muted); }
+:root[data-theme='light'] .mk-chip--up { background: transparent; color: var(--caution); border-color: var(--caution); }
+:root[data-theme='light'] .mk-chip--down { background: transparent; color: var(--info); border-color: var(--info); }
+.mk-card__foot { margin-top: auto; padding-top: 8px; font-size: var(--font-meta); color: var(--muted); line-height: 1.7; display: flex; flex-direction: column; gap: 2px; }
+.mk-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-weight: 400; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
+.mk-tag[data-soon='true'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+/* 已发布页的时间标签：3 天内用深金（与右卡的柠绿区分“已发生 / 未发生”）。 */
+.mk-tag--past { border-color: var(--caution); color: var(--caution); font-weight: 600; }
+.mk-dots { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+.mk-dotbtn { width: 16px; height: 16px; border: 0; background: transparent; padding: 0; display: grid; place-items: center; cursor: pointer; }
+.mk-dotbtn i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-strong, var(--muted)); display: block; }
+/* 选中态同时变大小与颜色：只靠颜色，色弱与读屏都分不出来。 */
+.mk-dotbtn[aria-selected='true'] i { width: 9px; height: 9px; background: var(--accent); }
+.mk-dotbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 50%; }

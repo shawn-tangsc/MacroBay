@@ -13,11 +13,19 @@ import { narwhalMeasureMetricKeys, zeroXRouterIndicatorIdentities } from './mark
  * CPI 那行的 `actual` 是核心月率 0.3，CPI 年率是 3.7；就业那行的主 measure 是政府就业。
  * 所以一行只有在「它的主身份就是这个 key」或「它带了这个 measure 的值」时才算数。
  */
+/**
+ * 一级核心指标：**12 个码**，三张卡每组 4 行（用户 2026-11-14 定稿）。
+ *
+ * 之前只读 5 个码，读者只能数出 5 个数；缺的是所有月率、PCE 整体年率/月率、时薪两条。
+ * 顺序即卡内行序，左右两张卡**按同一个顺序逐行对齐**——所以这里的顺序是契约，不是排版偏好。
+ */
 export const MACRO_INDICATOR_CARD_KEYS = Object.freeze([
-  'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY',
-  // 新增就业卡里那一行「失业率」：值就在同一条非农发布行里（`unemployment_rate`），
-  // 不另开一次读。之前这一格显示「未提供」，那不是没数据，是我们没取。
-  'US.UNEMPLOYMENT.SA.RATE'
+  // CPI 卡：年率 / 月率 / 核心年率 / 核心月率
+  'US.CPI.NSA.YOY', 'US.CPI.SA.MOM', 'US.CORE_CPI.NSA.YOY', 'US.CORE_CPI.SA.MOM',
+  // 就业卡：非农 / 失业率 / 时薪月率 / 时薪年率
+  'US.NONFARM.SA.CHANGE', 'US.UNEMPLOYMENT.SA.RATE', 'US.AHE.SA.MOM', 'US.AHE.NSA.YOY',
+  // PCE 卡：年率 / 月率 / 核心年率 / 核心月率
+  'US.PCE.NSA.YOY', 'US.PCE.SA.MOM', 'US.CORE_PCE.NSA.YOY', 'US.CORE_PCE.SA.MOM'
 ] as const)
 
 export type MacroIndicatorCardKey = typeof MACRO_INDICATOR_CARD_KEYS[number]

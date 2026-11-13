@@ -2,25 +2,35 @@ import { describe, expect, it } from 'vitest'
 
 import { sanitize } from './macroIndicatorClient'
 
-/** 真实读数今天的样子（装配层读出来的四个指标）。 */
+/**
+ * 真实读数今天的样子：**12 个一级码**（2026-11-14 定稿，三张卡各 4 行）。
+ * 少一个码整份作废——半份事实比没有事实更容易被当成真读数。
+ */
 const payload = {
   state: 'available',
   asOf: '2026-11-13T10:00:00.000Z',
   facts: [
     { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 3.7, unit: 'percent' },
+    { metricKey: 'US.CPI.SA.MOM', state: 'provided', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', value: 0.3, previousAsPublished: 0.2, unit: 'percent' },
     { metricKey: 'US.CORE_CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 2.6, unit: 'percent' },
+    { metricKey: 'US.CORE_CPI.SA.MOM', state: 'provided', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', value: 0.2, unit: 'percent' },
     { metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal' },
-    { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' },
-    { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' }
+    { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' },
+    { metricKey: 'US.AHE.SA.MOM', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 0.4, unit: 'percent', source: 'narwhal' },
+    { metricKey: 'US.AHE.NSA.YOY', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 3.6, unit: 'percent', source: 'narwhal' },
+    { metricKey: 'US.PCE.NSA.YOY', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 2.8, unit: 'percent', source: 'fred' },
+    { metricKey: 'US.PCE.SA.MOM', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 0.2, unit: 'percent', source: 'fred' },
+    { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 3.1, unit: 'percent', source: 'fred' },
+    { metricKey: 'US.CORE_PCE.SA.MOM', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 0.2, unit: 'percent', source: 'fred' }
   ]
 }
 
 describe('macroIndicatorClient.sanitize', () => {
-  it('keeps the four facts a card can render', () => {
+  it('keeps the twelve facts the three cards can render', () => {
     const result = sanitize(payload)
     expect(result).toMatchObject({ state: 'available' })
     const facts = result.state === 'available' ? result.facts : []
-    expect(facts).toHaveLength(5)
+    expect(facts).toHaveLength(12)
     expect(facts.find((fact) => fact.metricKey === 'US.NONFARM.SA.CHANGE')).toMatchObject({ value: 165, previousAsPublished: 29 })
   })
 
@@ -28,11 +38,11 @@ describe('macroIndicatorClient.sanitize', () => {
    * 半份事实比没有事实更容易被当成真读数：少一张卡就整份作废，不画「其余三张是真的」。
    */
   it('refuses a payload that lost one of the four cards', () => {
-    expect(sanitize({ ...payload, facts: payload.facts.slice(0, 4) })).toMatchObject({ state: 'unavailable', failureCode: 'malformed' })
+    expect(sanitize({ ...payload, facts: payload.facts.slice(0, 11) })).toMatchObject({ state: 'unavailable', failureCode: 'malformed' })
   })
 
   it('drops a card whose state is not one of the three, taking the whole payload with it', () => {
-    const broken = { ...payload, facts: [{ ...payload.facts[3]!, state: 'unknown' }, ...payload.facts.slice(0, 4)] }
+    const broken = { ...payload, facts: [{ ...payload.facts[0]!, state: 'unknown' }, ...payload.facts.slice(1)] }
     expect(sanitize(broken)).toMatchObject({ state: 'unavailable' })
   })
 
@@ -41,7 +51,7 @@ describe('macroIndicatorClient.sanitize', () => {
     const leaky = { ...payload, facts: payload.facts.map((fact) => ({ ...fact, marketFactKey: '["0xrouter"]', measure: 'cpi_yoy' })) }
     const result = sanitize(leaky)
     const facts = result.state === 'available' ? result.facts : []
-    expect(facts).toHaveLength(5)
+    expect(facts).toHaveLength(12)
     for (const fact of facts) {
       expect(fact).not.toHaveProperty('marketFactKey')
       expect(fact).not.toHaveProperty('measure')
