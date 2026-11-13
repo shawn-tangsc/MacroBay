@@ -16,8 +16,16 @@ export type TierVisibilityInput<T> = Readonly<{ metricKey: string; item: T }>
 
 export type TierVisibilityResult<T> = Readonly<{
   visible: readonly T[]
-  /** 被收进「另有 N 条」的条数；为 0 时界面不画那一行。 */
-  hiddenCount: number
+  /** 超出显示上限的**一级/二级**条数：折进数字里也不能丢——那是一条重要数据。 */
+  hiddenTiered: number
+  /** 未分级条数（含事件型与源内身份行）。 */
+  hiddenUntiered: number
+  /**
+   * 格子里的数字 = `hiddenTiered + hiddenUntiered` = **当天总条数 − 已显示条数**。
+   * 这个恒等式是判据：拿「未分级条数」去填这个数字，就会出现「总数 5、显示 2、数字 3」而
+   * 其中一条其实是一级——这类错在月历上肉眼永远看不出来。
+   */
+  hiddenTotal: number
 }>
 
 export const tierVisibilityPolicy = Object.freeze({
@@ -35,12 +43,14 @@ export function filterVisibleByTier<T>(input: readonly TierVisibilityInput<T>[],
   options?: Readonly<{ maximumVisible?: number }>): TierVisibilityResult<T> {
   const maximum = Math.max(0, options?.maximumVisible ?? tierVisibilityPolicy.maximumVisible)
   const visible: T[] = []
-  let hiddenCount = 0
+  let hiddenTiered = 0
+  let hiddenUntiered = 0
   for (const entry of input) {
     const tier = tierOfMetricKey(entry.metricKey)
     const tiered = tier === 1 || tier === 2
     if (tiered && visible.length < maximum) { visible.push(entry.item); continue }
-    hiddenCount += 1
+    if (tiered) hiddenTiered += 1
+    else hiddenUntiered += 1
   }
-  return { visible, hiddenCount }
+  return { visible, hiddenTiered, hiddenUntiered, hiddenTotal: hiddenTiered + hiddenUntiered }
 }
