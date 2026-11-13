@@ -3,15 +3,17 @@ import { describe, expect, it } from 'vitest'
 
 import {
   marketCalendarDisplayNameTally,
-  marketCalendarDisplayTitle,
+  marketCalendarDisplayTitle
+} from './marketCalendarDisplayNames'
+import {
   marketCalendarEventTypeDisplayNames,
   marketCalendarMetricDisplayNames
-} from './marketCalendarDisplayNames'
+} from './marketCalendarDisplayNameTables'
 
 describe('两张纯展示表', () => {
-  it('本月实际出现的 33 个 metric_key 全有中文名，且没有重名', () => {
+  it('37 个 metric_key 全有中文名（本月 33 条 + 4 个头部指标），且没有重名', () => {
     const keys = Object.keys(marketCalendarMetricDisplayNames)
-    expect(keys).toHaveLength(33)
+    expect(keys).toHaveLength(37)
     expect(new Set(Object.values(marketCalendarMetricDisplayNames)).size).toBe(keys.length)
     for (const name of Object.values(marketCalendarMetricDisplayNames)) {
       // 指标名，不是标题：不许把期间塞进名字里。
@@ -32,6 +34,10 @@ describe('两张纯展示表', () => {
   it('中文界面：指标名优先，其次类型名，未知回退英文并计数', () => {
     expect(marketCalendarDisplayTitle({ rawTitle: 'Consumer prices', eventNameKey: 'US.CORE_CPI.SA.MOM', locale: 'zh' }))
       .toBe('核心 CPI（月率）')
+    // 四个头部指标之一：发布内按契约顺序取第一个有中文名的 measure。
+    expect(marketCalendarDisplayTitle({ rawTitle: 'Consumer prices', eventNameKey: 'US.CORE_CPI.SA.MOM',
+      measureKeys: ['US.CORE_CPI.SA.MOM', 'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY'], locale: 'zh' }))
+      .toBe('CPI 年率')
     expect(marketCalendarDisplayTitle({ rawTitle: 'Central bank speech', eventNameKey: undefined, locale: 'zh' }))
       .toBe('央行讲话')
     const before = marketCalendarDisplayNameTally().metricKeys
