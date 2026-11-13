@@ -1,6 +1,8 @@
+import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
-import { readCalendarFreshnessFromJobRuns } from './marketCalendarFreshnessFromJobs'
+import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
+import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from './marketCalendarFreshnessFromJobs'
 
 const runs = (completed: string[]) => (query: { definitionId: string }) =>
   (completed.includes(query.definitionId) ? [{ status: 'completed', completedAt: completed[0]! }] : [])
@@ -33,5 +35,24 @@ describe('新鲜度：运行时刻与数据写入要分开', () => {
     })
     expect(freshness.lastRunAt).toBeNull()
     expect(new Set(freshness.sources.map((source) => source.lastCollectedAt)).size).toBe(1)
+  })
+})
+
+describe('数据写入时刻取自标准表', () => {
+  it('表还没建 → null（没有数据这个事实，不是读不到）', () => {
+    expect(readStandardTableLastWrittenAt(new DatabaseSync(':memory:'))).toBeNull()
+  })
+
+  it('取 max(observed_at)：多次写入看最新那一次', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    for (const [observedAt, eventId] of [['2026-11-12T00:00:00.000Z', 'r-1'], ['2026-11-14T05:00:00.000Z', 'r-2']] as const) {
+      upsertCalendarStandardRow(database, {
+        countryCode: 'USA', metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10', scheduledDate: '2026-11-14',
+        timePrecision: 'date', valuesJson: '{}', sourceProviderId: 'narwhal', sourceEventId: eventId,
+        parserVersion: 'v1', observedAt, firstSeenAt: observedAt
+      })
+    }
+    expect(readStandardTableLastWrittenAt(database)).toBe('2026-11-14T05:00:00.000Z')
   })
 })

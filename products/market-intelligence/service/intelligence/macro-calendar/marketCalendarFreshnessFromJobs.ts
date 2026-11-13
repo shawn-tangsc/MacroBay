@@ -1,3 +1,5 @@
+import type { DatabaseSync } from 'node:sqlite'
+
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { narwhalCalendarSweepPolicy, narwhalCalendarTickPolicy } from './narwhal-calendar/narwhalCalendarJob'
 
@@ -20,6 +22,20 @@ import { narwhalCalendarSweepPolicy, narwhalCalendarTickPolicy } from './narwhal
  * 一条边界：作业运行时没资格回答「某个源是否启用」——这里不做启用判断，启用与否由调用方
  * 在注册表那层判，别在这儿再造第二处。
  */
+/**
+ * 标准表里最近一次**真正写入**的时刻（`mi_calendar_events.observed_at` 的最大值）。
+ *
+ * 表还没建（新库、或采集一次都没跑）→ `null`：那是「没有数据」这个事实，不是读不到。
+ * 这里只读一个数，不判断启用、不解析行——新鲜度的口径只有这一处。
+ */
+export function readStandardTableLastWrittenAt(database: DatabaseSync): string | null {
+  try {
+    const row = database.prepare('select max(observed_at) as at from mi_calendar_events').get() as
+      { at: string | null } | undefined
+    return row?.at ?? null
+  } catch { return null }
+}
+
 export type JobRunLike = Readonly<{ status?: string; completedAt?: string; startedAt?: string
   createdAt?: string; definitionId?: string }>
 
