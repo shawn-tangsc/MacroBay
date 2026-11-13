@@ -18,7 +18,7 @@ export function registerMacroIndicatorIpc(
   register(productId, MACRO_INDICATOR_IPC_METHODS.read, async (payload) => {
     const asOf = canonicalAsOf(payload) ?? now()
     try {
-      return { state: 'available' as const, asOf, facts: service.read({ asOf }).map(indicatorFactPayload) }
+      return { state: 'available' as const, asOf, facts: (await service.read({ asOf })).map(indicatorFactPayload) }
     } catch {
       // 读失败是一件事，不是「这个指标没有值」：`unavailable` 与事实里的三态分得开。
       return { state: 'unavailable' as const, failureCode: 'unreadable' as const }

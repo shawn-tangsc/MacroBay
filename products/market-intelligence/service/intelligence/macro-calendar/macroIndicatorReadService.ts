@@ -2,6 +2,7 @@ import {
   MACRO_INDICATOR_CARD_KEYS, legacyIndicatorIdsByMetricKey, narwhalMeasuresByMetricKey,
   resolveMacroIndicatorFacts, type MacroIndicatorCardFact, type MacroIndicatorCardKey, type MacroIndicatorCardRow
 } from './macroIndicatorCardFacts'
+import { applyOfficialYoY, type FredYoYReading } from './fredIndicatorYoY'
 import type { MacroCalendarLegacyMetricRow, MacroCalendarRepository } from './macroCalendarRepository'
 import { narwhalMeasureMetricKeys, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import type { NarwhalReleaseRow, NarwhalReleaseValue } from './narwhalReleaseContracts'
@@ -23,17 +24,39 @@ export const macroIndicatorAsOfPolicy = {
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 } as const
 
-export type MacroIndicatorReadService = Readonly<{
-  /** 四个指标的事实；`asOf` 不是规范 UTC 时刻就抛——读不到不能画成「本月未发布」。 */
-  read: (input: { asOf: string }) => readonly MacroIndicatorCardFact[]
+/**
+ * 外部读数（装配层注入，读服务里**不碰凭据、不碰网络出口**）：
+ * - `readOfficialYoY`：官方序列的同比（FRED，`units=pc1`）；没有映射的指标可以不实现；
+ * - `readMarketConsensus`：盘口反推的市场共识；本期没有盘就返回 `unavailable`。
+ *
+ * 两个都可选：**没注入就当这一档不存在**，不退回猜测。装配处必须显式传，不能靠默认值。
+ */
+export type MacroIndicatorReadDependencies = Readonly<{
+  readOfficialYoY?: (metricKey: string) => Promise<FredYoYReading>
+  readMarketConsensus?: (input: Readonly<{ metricKey: string }>) => Promise<Readonly<{ value: number; marketVolume: number; asOf: string }> | undefined>
 }>
 
-export function createMacroIndicatorReadService(repository: MacroIndicatorReadRepository): MacroIndicatorReadService {
+export type MacroIndicatorReadService = Readonly<{
+  /** 四个指标的事实；`asOf` 不是规范 UTC 时刻就抛——读不到不能画成「本月未发布」。 */
+  read: (input: { asOf: string }) => Promise<readonly MacroIndicatorCardFact[]>
+}>
+
+export function createMacroIndicatorReadService(
+  repository: MacroIndicatorReadRepository,
+  dependencies: MacroIndicatorReadDependencies = {}
+): MacroIndicatorReadService {
   return {
-    read({ asOf }) {
+    async read({ asOf }) {
       if (!macroIndicatorAsOfPolicy.canonicalUtcMillisPattern.test(asOf)) throw new Error('invalid asOf')
       const rows = MACRO_INDICATOR_CARD_KEYS.flatMap((metricKey) => rowsForMetric(repository, metricKey, asOf))
-      return resolveMacroIndicatorFacts(rows)
+      const facts = resolveMacroIndicatorFacts(rows)
+      if (dependencies.readOfficialYoY === undefined) return facts
+      // 官方序列优先于日历库的读数；读不到就把那一格标成「暂时读不到」，不退回旧值。
+      const withOfficial = await Promise.all(facts.map(async (fact) => {
+        const reading = await dependencies.readOfficialYoY!(fact.metricKey).catch((): FredYoYReading => ({ state: 'unavailable', seriesId: '', reason: 'read-failed' }))
+        return applyOfficialYoY(fact, reading)
+      }))
+      return withOfficial
     }
   }
 }

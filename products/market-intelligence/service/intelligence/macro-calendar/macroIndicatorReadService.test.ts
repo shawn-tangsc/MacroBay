@@ -51,7 +51,7 @@ type LegacySeed = Readonly<{
 function withRepository(run: (input: Readonly<{
   repository: ReturnType<typeof createMacroCalendarRepository>
   seedLegacy: (row: LegacySeed) => void
-}>) => void): void {
+}>) => Promise<void> | void): void {
   const storage = createMacroCalendarSqlite(':memory:')
   try {
     const repository = createMacroCalendarRepository({ storage })
@@ -82,17 +82,18 @@ function withRepository(run: (input: Readonly<{
   } finally { storage.close() }
 }
 
-const factsOf = (facts: ReturnType<ReturnType<typeof createMacroIndicatorReadService>['read']>) =>
-  Object.fromEntries(facts.map((fact) => [fact.metricKey, fact]))
+type Fact = Awaited<ReturnType<ReturnType<typeof createMacroIndicatorReadService>['read']>>[number]
+const factsOf = async (facts: Promise<readonly Fact[]>) =>
+  Object.fromEntries((await facts).map((fact) => [fact.metricKey, fact])) as Record<string, Fact>
 
 describe('macroIndicatorReadService', () => {
   it('keeps the structurally absent CPI year-over-year value out of the main slot and carries last period', () => {
-    withRepository(({ repository, seedLegacy }) => {
+    withRepository(async ({ repository, seedLegacy }) => {
       repository.upsertReleaseRow(cpiRelease)
       seedLegacy({ indicatorId: '8637', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', previous: '3.7%' })
       seedLegacy({ indicatorId: '8639', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', previous: '2.6%' })
 
-      const cpi = factsOf(createMacroIndicatorReadService(repository).read({ asOf }))['US.CPI.NSA.YOY']!
+      const cpi = (await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.CPI.NSA.YOY']!
 
       expect(cpi).toMatchObject({ state: 'missing-current', period: '2026-10', previousAsPublished: 3.7 })
       // 3.7 是上一期，不许写成这一期的值——那正是「数字倒退」的来源。
@@ -101,12 +102,12 @@ describe('macroIndicatorReadService', () => {
   })
 
   it('reports payrolls from the new source and computes the gap against the as-published previous', () => {
-    withRepository(({ repository, seedLegacy }) => {
+    withRepository(async ({ repository, seedLegacy }) => {
       repository.upsertReleaseRow(payrollRelease)
       // 旧源这一行是**发布当时**抓的：上期 29。新源记录的是修订后的 60。
       seedLegacy({ indicatorId: '8656', scheduledDate: '2026-11-06', scheduledAt: '2026-11-06T13:30:00.000Z', actual: '165', previous: '29' })
 
-      const payrolls = factsOf(createMacroIndicatorReadService(repository).read({ asOf }))['US.NONFARM.SA.CHANGE']!
+      const payrolls = (await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.NONFARM.SA.CHANGE']!
 
       expect(payrolls).toMatchObject({ state: 'provided', source: 'narwhal', value: 165, previousAsPublished: 29, unit: 'thousands' })
       expect(payrolls.value! - payrolls.previousAsPublished!).toBe(136)
@@ -114,13 +115,13 @@ describe('macroIndicatorReadService', () => {
   })
 
   it('never borrows an older period value for the current period', () => {
-    withRepository(({ repository, seedLegacy }) => {
+    withRepository(async ({ repository, seedLegacy }) => {
       // 本期（11-10）发布行没有年率值；上一期（10-14）有 3.7%。
       repository.upsertReleaseRow(cpiRelease)
       seedLegacy({ indicatorId: '8637', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', previous: '3.7%' })
       seedLegacy({ indicatorId: '8637', scheduledDate: '2026-10-14', scheduledAt: '2026-10-14T12:30:00.000Z', actual: '3.7%', previous: '3.4%' })
 
-      const cpi = factsOf(createMacroIndicatorReadService(repository).read({ asOf }))['US.CPI.NSA.YOY']!
+      const cpi = (await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.CPI.NSA.YOY']!
 
       expect(cpi.state).toBe('missing-current')
       expect(cpi.value).toBeUndefined()
@@ -128,27 +129,27 @@ describe('macroIndicatorReadService', () => {
   })
 
   it('says 未发布 for 核心 PCE, which has no release row at all this month', () => {
-    withRepository(({ repository }) => {
+    withRepository(async ({ repository }) => {
       repository.upsertReleaseRow(cpiRelease)
-      expect(factsOf(createMacroIndicatorReadService(repository).read({ asOf }))['US.CORE_PCE.NSA.YOY'])
+      expect((await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.CORE_PCE.NSA.YOY'])
         .toMatchObject({ state: 'not-recorded' })
     })
   })
 
   it('falls back to the legacy source when the new one has no value for the measure', () => {
-    withRepository(({ repository, seedLegacy }) => {
+    withRepository(async ({ repository, seedLegacy }) => {
       repository.upsertReleaseRow(cpiRelease)
       // 旧源同一天那一行有值（构造出来的情形）：主身份就是这个指标，所以可以用。
       seedLegacy({ indicatorId: '8637', scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', actual: '3.7%', previous: '3.4%' })
 
-      expect(factsOf(createMacroIndicatorReadService(repository).read({ asOf }))['US.CPI.NSA.YOY'])
+      expect((await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.CPI.NSA.YOY'])
         .toMatchObject({ state: 'provided', source: '0xrouter', value: 3.7, unit: 'percent' })
     })
   })
 
   it('refuses a non-canonical as-of instead of reporting every card as 未发布', () => {
-    withRepository(({ repository }) => {
-      expect(() => createMacroIndicatorReadService(repository).read({ asOf: '2026-11-13' })).toThrow()
+    withRepository(async ({ repository }) => {
+      await expect(createMacroIndicatorReadService(repository).read({ asOf: '2026-11-13' })).rejects.toThrow()
     })
   })
 })

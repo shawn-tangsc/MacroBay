@@ -28,7 +28,7 @@ const facts: readonly MacroIndicatorCardFact[] = [
 describe('registerMacroIndicatorIpc', () => {
   it('registers one read method and answers with the four facts', async () => {
     const register = registrar()
-    registerMacroIndicatorIpc(register.register, { read: () => facts }, () => '2026-11-13T10:00:00.000Z')
+    registerMacroIndicatorIpc(register.register, { read: async () => facts }, () => '2026-11-13T10:00:00.000Z')
 
     expect(register.methods).toEqual([MACRO_INDICATOR_IPC_METHODS.read])
     const answer = await register.handlers.get(MACRO_INDICATOR_IPC_METHODS.read)?.({ asOf: '2026-11-13T09:00:00.000Z' })
@@ -44,7 +44,7 @@ describe('registerMacroIndicatorIpc', () => {
   it('sends only the public fact fields, never the raw observation identity', async () => {
     const register = registrar()
     registerMacroIndicatorIpc(register.register, {
-      read: () => [
+      read: async () => [
         { ...facts[0]!, marketFactKey: '["0xrouter","x"]', measure: 'nonfarm_payrolls_change' } as MacroIndicatorCardFact,
         facts[1]!
       ]
@@ -61,7 +61,7 @@ describe('registerMacroIndicatorIpc', () => {
 
   it('reports a failed read as unavailable rather than as an indicator without a value', async () => {
     const register = registrar()
-    registerMacroIndicatorIpc(register.register, { read: () => { throw new Error('disk') } })
+    registerMacroIndicatorIpc(register.register, { read: async () => { throw new Error('disk') } })
 
     expect(await register.handlers.get(MACRO_INDICATOR_IPC_METHODS.read)?.({})).toEqual({ state: 'unavailable', failureCode: 'unreadable' })
   })
@@ -70,7 +70,7 @@ describe('registerMacroIndicatorIpc', () => {
     const register = registrar()
     const seen: string[] = []
     registerMacroIndicatorIpc(register.register, {
-      read: ({ asOf }) => { seen.push(asOf); return [] }
+      read: async ({ asOf }) => { seen.push(asOf); return [] }
     }, () => '2026-11-13T10:00:00.000Z')
 
     await register.handlers.get(MACRO_INDICATOR_IPC_METHODS.read)?.({ asOf: '2026-11-13' })
