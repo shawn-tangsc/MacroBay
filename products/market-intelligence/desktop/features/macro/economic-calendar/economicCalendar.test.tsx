@@ -10,7 +10,8 @@ import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
 import { EconomicCalendar } from './index'
-import { economicCalendarPresentationPolicy } from './economicCalendarModel'
+import { tierVisibilityPolicy }
+  from '../../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
 import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
 import { marketCalendarClient } from '../../../shared/ipc/marketCalendarClient'
 import type { MarketCalendarEvent, MarketCalendarPage } from '../../../../contracts/macro/marketCalendarQueryContracts'
@@ -302,11 +303,11 @@ describe('macro economic calendar', () => {
         await flush()
         const day = container.querySelector('[data-date="2026-08-12"]')!
         // Importance leads in the cell, then the release time — never the kind, which is only the
-        // row's glyph. These rows share one importance, so the six are simply the earliest six.
+        // row's glyph. These rows share one importance, so the visible ones are the earliest two.
         const cellTypes = [...Array.from({ length: economic }, () => 'economic-indicator'),
           ...Array.from({ length: financial }, () => 'financial-event'),
           ...Array.from({ length: central }, () => 'central-bank-activity')]
-          .slice(0, economicCalendarPresentationPolicy.dayEventLimit)
+          .slice(0, tierVisibilityPolicy.maximumVisible)
         expect([...day.querySelectorAll<HTMLElement>('[data-calendar-row]')]
           .map(row => row.querySelector('.mi-economic-calendar__event-title')?.textContent?.split(' ')[0])).toEqual(cellTypes)
         const overflow = events.length - cellTypes.length
@@ -338,7 +339,7 @@ describe('macro economic calendar', () => {
         expect(detail.querySelector<HTMLButtonElement>('[data-calendar-group="central-bank-activity"] [data-calendar-row]')?.dataset.eventStatus).toBe(status)
       } finally { query.mockRestore(); width.mockRestore() }
     })
-  it.each([[2, 3, 5], [0, 5, 5], [8, 3, 6]])('keeps %i high and %i other events reachable, holding %i of them in the month cell', async (high, other, shown) => {
+  it.each([[2, 3, 2], [0, 5, 2], [8, 3, 2]])('keeps %i high and %i other events reachable, holding %i of them in the month cell', async (high, other, shown) => {
     const events = Array.from({ length: high + other }, (_, i) => ({ ...marketEvent, importance: i < high ? 'high' as const : 'low' as const,
       eventKey: `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}` }))
     const query = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue({ state: 'available', month: '2026-08', locale: 'zh', asOf, events, sources: [] })
@@ -347,8 +348,8 @@ describe('macro economic calendar', () => {
       const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [] }), getEventDetail: async () => unavailableDetail() })
       await flush()
       const day = container.querySelector('[data-date="2026-08-12"]')!
-      // The cell is filled from the lower levels once the high ones run out, so a day of five events
-      // needs no more action at all — and the high rows are still the ones that lead it.
+      // The cell names at most two graded rows; the high rows still lead it, and the rest — however
+      // important — are behind the count that opens the day's own list.
       const cellRows = [...day.querySelectorAll<HTMLElement>('[data-calendar-row]')]
       expect(cellRows).toHaveLength(shown)
       expect(cellRows.slice(0, Math.min(high, shown)).map(row => row.dataset.importance))
@@ -386,8 +387,8 @@ describe('macro economic calendar', () => {
       await flush()
       const day = container.querySelector('[data-date="2026-08-12"]')!
       const total = 1 + Number(!isLinked) + extraCount
-      expect(day.querySelectorAll('[data-calendar-row]')).toHaveLength(Math.min(total, 6))
-      if (extraCount) expect(day.querySelector('[data-calendar-more]')?.textContent).toBe(`还有 ${total - 6} 条`)
+      expect(day.querySelectorAll('[data-calendar-row]')).toHaveLength(Math.min(total, 2))
+      if (extraCount) expect(day.querySelector('[data-calendar-more]')?.textContent).toBe(`还有 ${total - 2} 条`)
       else expect(day.querySelector('[data-calendar-more]')).toBeNull()
       if (isLinked) expect(day.querySelector(`[data-market-event="${linked.eventKey}"]`)).toBeNull()
     } finally { spy.mockRestore() }
@@ -445,7 +446,7 @@ describe('macro economic calendar', () => {
       await flush()
       expect(container.querySelector('[data-date="2026-08-12"] [data-calendar-more]')?.textContent).toBe('加载中')
       await act(async () => complete({ ...page, events: [] }))
-      expect(container.querySelector('[data-date="2026-08-12"] [data-calendar-more]')?.textContent).toBe('还有 1 条')
+      expect(container.querySelector('[data-date="2026-08-12"] [data-calendar-more]')?.textContent).toBe('还有 5 条')
     } finally { spy.mockRestore() }
   })
   it('stands the reader day as a grouped event list in the right column and opens no detail for them', async () => {
@@ -717,7 +718,9 @@ describe('macro economic calendar', () => {
     expect(client.getEventDetail).toHaveBeenCalledTimes(2)
   })
 
+  // 格子只给一级、二级指标露名字，所以夹具带一个一级码；不带码的行只进数字（事件型、源内身份）。
   const marketEvent: MarketCalendarEvent = { eventKey: '00000000-0000-4000-8000-000000000001', title: 'Derived independent market event',
+    eventNameKey: 'US.CPI.NSA.YOY',
     countryCode: null, eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-08-12T12:30:00.000Z',
     consensus: { displayValue: '0' }, providerActual: null, providerPrevious: null, source: 'Narwhal',
     sourceObservedAt: '2026-08-05T00:00:00.000Z', coverage: 'observed-unverified' }
@@ -2175,8 +2178,11 @@ describe('macro economic calendar', () => {
       const first = container.querySelector('[data-date="2026-09-01"]')
       expect(first?.getAttribute('data-month')).toBe('outside')
       expect(first?.textContent).toContain('CPI')
-      const second = container.querySelector('[data-date="2026-09-02"]')
-      expect(second?.textContent).toContain(provider.title)
+      // 没有指标码、也不在决议清单里的行只进数字：格子里是计数，名字在那天的列表里。
+      const second = container.querySelector<HTMLElement>('[data-date="2026-09-02"]')!
+      expect(second.querySelector('[data-calendar-more]')?.textContent).toBe('还有 1 条')
+      await act(async () => second.querySelector<HTMLButtonElement>('[data-calendar-more]')!.click())
+      expect(container.querySelector('[data-calendar-day-list]')?.textContent).toContain(provider.title)
     } finally { query.mockRestore() }
   })
 

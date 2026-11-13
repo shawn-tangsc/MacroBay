@@ -16,7 +16,7 @@ export type TierVisibilityInput<T> = Readonly<{ metricKey: string; item: T }>
 
 export type TierVisibilityResult<T> = Readonly<{
   visible: readonly T[]
-  /** 超出显示上限的**一级/二级**条数：折进数字里也不能丢——那是一条重要数据。 */
+  /** 超出显示上限的**一级/二级/决议类事件**条数：折进数字里也不能丢——那是一条重要数据。 */
   hiddenTiered: number
   /** 未分级条数（含事件型与源内身份行）。 */
   hiddenUntiered: number
@@ -28,13 +28,36 @@ export type TierVisibilityResult<T> = Readonly<{
   hiddenTotal: number
 }>
 
+/**
+ * 决议类事件码：**不是指标、没有分级，但读者靠它知道「今天有没有议息」**（Chief 2026-11-14 定）。
+ *
+ * 判据是这张**显式清单**，不是「有没有指标码」也不是事件类型名——按类型猜会把讲话、
+ * 库存、抵押贷款申请一起放进来，格子里又会被名字灌满。要新增决议类事件，就往这里加一行。
+ */
+export const calendarDecisionEventMetricKeys: readonly string[] = Object.freeze([
+  'evt.fomc',
+  'evt.monetary-policy-statement'
+])
+
+export function isDecisionEventMetricKey(metricKey: string): boolean {
+  return calendarDecisionEventMetricKeys.includes(metricKey)
+}
+
+/**
+ * 旧路径的官方条目没有事件码，只有 `titleKey`（`fomc` / `cpi` …）。决议类这一条按同一张清单
+ * 落到事件码上，所以「哪些事件能露名字」仍然只有一处定义。
+ */
+export function decisionEventMetricKeyForTitleKey(titleKey: string): string | undefined {
+  return titleKey === 'fomc' ? 'evt.fomc' : undefined
+}
+
 export const tierVisibilityPolicy = Object.freeze({
   /** 一天在格子里最多显示几条一级/二级：再多名字会把格子撑破。 */
   maximumVisible: 2
 })
 
 /**
- * 收窄规则（日历格子用）：**只写一级、二级的名字，且最多 `maximumVisible` 条**；
+ * 收窄规则（日历格子用）：**只写一级、二级指标与决议类事件的名字，且最多 `maximumVisible` 条**；
  * 其余（未标级的 + 一二级里超出的）**全部计入数字**，一个都不许静默消失。
  *
  * 顺序保持原样，不在这里排序：排序是读取侧的事，这里只决定「谁露名字、谁进数字」。
@@ -47,7 +70,8 @@ export function filterVisibleByTier<T>(input: readonly TierVisibilityInput<T>[],
   let hiddenUntiered = 0
   for (const entry of input) {
     const tier = tierOfMetricKey(entry.metricKey)
-    const tiered = tier === 1 || tier === 2
+    // 一级、二级指标，以及决议类事件（清单在上面）：其余一律进数字。
+    const tiered = tier === 1 || tier === 2 || isDecisionEventMetricKey(entry.metricKey)
     if (tiered && visible.length < maximum) { visible.push(entry.item); continue }
     if (tiered) hiddenTiered += 1
     else hiddenUntiered += 1

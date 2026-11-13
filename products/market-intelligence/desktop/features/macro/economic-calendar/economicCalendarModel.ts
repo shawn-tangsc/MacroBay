@@ -42,7 +42,6 @@ export type EconomicCalendarProjection = {
 }
 
 export const economicCalendarPresentationPolicy = {
-  dayEventLimit: 6,
   calendarWeeks: 6,
   weekdaysPerWeek: 7,
   undatedTimeSortValue: '99:99:99.999Z',
