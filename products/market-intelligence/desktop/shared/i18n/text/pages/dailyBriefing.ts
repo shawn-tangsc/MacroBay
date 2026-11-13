@@ -66,7 +66,7 @@ export const dailyBriefingText = {
     /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
     macroUnreadable: '暂时读不到：',
     macroWebValue: '（网页）',
-    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在 90 秒内完成' },
+    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
     nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用' },
     macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', cancelled: '已取消', timeNotPublished: releaseTimeWords['zh-CN'], surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
     /** 这一栏截断时才说（`02` v2.125）：条数是真摆出来的行数，不是候选总数。 */
@@ -483,7 +483,7 @@ export const dailyBriefingText = {
     /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
     macroUnreadable: 'Not readable right now: ',
     macroWebValue: ' (web)',
-    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish within 90 seconds' },
+    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
     nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled' },
     macro: { actual: 'Actual', consensus: 'Expectation', previous: 'Previous', noConsensus: 'No expectation', cancelled: 'Cancelled', timeNotPublished: releaseTimeWords['en-US'], surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No expectation' } },
     conclusion: { invalidation: 'What would invalidate it', conditions: 'Premises', counter: 'Falsifiers', outlook: 'Outlook', watch: 'Watch', whatWouldChange: 'What would overturn it', regimeChanged: 'View changed', basisHeld: 'Basis held', basisOverturned: 'Basis overturned', basisPartlyHeld: 'Basis partly held', gaps: 'Data gaps', caveats: 'Data limits' },

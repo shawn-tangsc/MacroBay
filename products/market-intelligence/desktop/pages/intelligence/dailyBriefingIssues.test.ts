@@ -158,7 +158,10 @@ describe('daily briefing issues', () => {
       text: zhText,
       formatTime
     })
-    expect(timeout.find((entry) => entry.id === 'data:calendar:calendar-catch-up-timeout')?.title).toContain('90')
+    // 读者只需知道「这次没在限定时间内完成」：90/20 秒是内部预算，写进句子就会随预算改动变成假话。
+    const timeoutTitle = timeout.find((entry) => entry.id === 'data:calendar:calendar-catch-up-timeout')?.title ?? ''
+    expect(timeoutTitle).toContain('限定时间内完成')
+    expect(timeoutTitle).not.toMatch(/\d/)
 
     const nothing = briefingIssues({
       document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } } }),

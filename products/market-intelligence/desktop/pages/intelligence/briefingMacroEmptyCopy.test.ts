@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { productText } from '../../shared/i18n/productText'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
+
+const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
+const enText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
 
 /**
  * 宏观栏「什么都不印」这一档的唯一守卫。
@@ -44,5 +48,26 @@ describe('the empty macro section in a daily briefing', () => {
   it('carries a readable reason with the 读不到 prefix, never as plain "nothing"', () => {
     const copy = briefingMacroEmptyCopy(documentWith('calendar-stale', 42), labels)
     expect(copy).toEqual({ sentence: '暂时读不到：日历数据已过期（最后成功采集在 42 小时前）', unreadable: true })
+  })
+
+  /**
+   * 真表守卫（2026-11-14）：两条补采原因码必须中英都有，而且**「结果未知」是原因，不是「没有」**。
+   *
+   * 为什么钉在这里：认不出的码现在一律不印话，所以少写一个键不会报错、也不会红，
+   * 只会让那一档在界面上**整句消失**——看起来跟「窗口里确实没有」一模一样。
+   * 另外，超时那句不许再带秒数：90/20 是内部预算，写死进句子，下次调上限就是假话。
+   */
+  it('carries both catch-up reason codes in both languages, with no internal number', () => {
+    expect(Object.keys(zhText.macroEmptyCodes).sort()).toEqual(Object.keys(enText.macroEmptyCodes).sort())
+    for (const [name, text] of [['zh-CN', zhText], ['en-US', enText]] as const) {
+      const unknown = briefingMacroEmptyCopy(documentWith('calendar-catch-up-unknown'), text)
+      expect(unknown, name).not.toBeNull()
+      expect(unknown!.unreadable, name).toBe(true)
+      expect(unknown!.sentence, name).not.toContain('{')
+
+      const timeout = briefingMacroEmptyCopy(documentWith('calendar-catch-up-timeout'), text)
+      expect(timeout, name).not.toBeNull()
+      expect(timeout!.sentence, name).not.toMatch(/\d/)
+    }
   })
 })
