@@ -29,6 +29,28 @@ const seeded = (events: number): DatabaseSync => {
   return database
 }
 
+describe('可选字段要能量出来：没有 feed id 的行', () => {
+  it('正常行都带 feed id → 不报；来源认不出的行 → 计数 1，页面照出', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, base)
+    const seen: number[] = []
+    const healthy = createStandardMonthPageReader({ database, resolveTitle: () => 'T', sourceOf: () => 'Narwhal',
+      onMissingSourceFeedId: (count) => seen.push(count) })
+    const page = healthy.queryMonth({ month: '2026-11', locale: 'zh', asOf: '2026-11-14T00:00:00.000Z' })
+    expect(page.state).toBe('available')
+    expect(seen).toEqual([])
+
+    // 认不出的 provider：`sourceFeedId` 缺 → 报数，但**不改行为**（行照出）。
+    upsertCalendarStandardRow(database, { ...base, metricKey: 'US.X.SA.MOM', sourceEventId: 'r-unknown',
+      sourceProviderId: 'some-unknown-provider' })
+    const page2 = healthy.queryMonth({ month: '2026-11', locale: 'zh', asOf: '2026-11-14T00:00:00.000Z' })
+    if (page2.state !== 'available') throw new Error('unavailable')
+    expect(page2.events).toHaveLength(2)
+    expect(seen).toEqual([1])
+  })
+})
+
 describe('月查询接标准表：四件契约', () => {
   it('分页：一页最多 100 条，游标是 UUID，翻完总条数 = 各页之和', () => {
     const query = reader(seeded(150))

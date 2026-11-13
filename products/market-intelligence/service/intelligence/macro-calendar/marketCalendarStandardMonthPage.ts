@@ -38,6 +38,8 @@ export function createStandardMonthPageReader(deps: Readonly<{
   /** 这条行来自哪个源（Narwhal / 旧源），同样由装配处判。 */
   sourceOf: (row: { sourceProviderId: string }) => MarketCalendarEvent['source']
   limit?: number
+  /** 诊断出口：默认进日志；测试可注入哨兵。 */
+  onMissingSourceFeedId?: (count: number, month: string) => void
 }>): StandardMonthPageReader {
   const contexts = new Map<string, { month: string; locale: 'zh' | 'en'; asOf: string; offset: number }>()
   const limit = deps.limit ?? marketCalendarPublicPolicy.maximumEvents
@@ -52,6 +54,13 @@ export function createStandardMonthPageReader(deps: Readonly<{
         })
         // 月内校验：越界的行不许进页（跨月数据串进来是分页最容易犯的错）。
         const inMonth = events.filter((event) => event.scheduledAt.startsWith(`${input.month}-`))
+        // **可选字段要能量出来**：`sourceFeedId` 缺了不等于「没有来源」，而是「这条写入路径没带上」。
+        // 长期不为 0 就说明有路径漏了；不为 0 也不改行为（页面照出），只报数。
+        const missingFeedId = inMonth.filter((event) => event.sourceFeedId === undefined).length
+        if (missingFeedId > 0) {
+          if (deps.onMissingSourceFeedId !== undefined) deps.onMissingSourceFeedId(missingFeedId, input.month)
+          else console.warn(`[macro-calendar] ${input.month} 有 ${missingFeedId} 行没有来源 feed id（写入路径未带上真值）`)
+        }
         const offset = input.cursor === undefined ? 0 : (contexts.get(input.cursor)?.offset ?? -1)
         if (offset < 0) return { state: 'unavailable', failureCode: 'input-invalid' }
         const page = inMonth.slice(offset, offset + limit)

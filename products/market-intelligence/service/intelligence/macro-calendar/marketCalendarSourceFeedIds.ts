@@ -1,3 +1,5 @@
+import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
+
 /**
  * 一行日历数据的**来源 feed id**。
  *
@@ -28,10 +30,15 @@ export function officialFeedIdOf(providerId: string): string | undefined {
     ? providerId : undefined
 }
 
-/** 一行 → feed id：官方行用它的提供方；市场行按事件类别。 */
+/**
+ * 一行 → feed id：官方行用它的提供方；市场行按事件类别，**但前提是这一行确实来自市场源**。
+ * 认不出的 provider 一律 `undefined`——宁可报「没有真值」，也不把它按市场源塞一个 feed id
+ * （那等于给未知来源编一个身份）。
+ */
 export function sourceFeedIdOf(row: Readonly<{ sourceProviderId: string
   eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity' }>): string | undefined {
   const official = officialFeedIdOf(row.sourceProviderId)
   if (official !== undefined) return official
+  if (row.sourceProviderId !== narwhalSourcePolicy.providerId) return undefined
   return marketCalendarSourceFeedIds.narwhal[row.eventType]
 }
