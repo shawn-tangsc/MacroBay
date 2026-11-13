@@ -76,7 +76,8 @@ async function render(input: RenderInput = {}): Promise<{ host: HTMLElement; onP
         ...(input.cadence === undefined ? {} : { cadence: input.cadence }),
         ...(input.cadenceAvailable === undefined ? {} : { cadenceAvailable: input.cadenceAvailable }),
           resolveText,
-          sourceNames: { 'policy-path-market': 'Polymarket' }
+          // 真实名字表：这一屏「每格一行」的不变式要求每一格都取得到名字（取不到就不渲染该行）。
+          sourceNames: { ...t.sourceNames, 'policy-path-market': 'Polymarket' }
         })
       })
     }))

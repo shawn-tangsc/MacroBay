@@ -110,9 +110,16 @@ export function BusinessSettingsView(props: {
   onBusinessChange: (business: BusinessKey) => void
   /** 源 id → 读者看到的名字（来自产品文案，不在组件里写源名）。 */
   sourceNames: Readonly<Record<string, string>>
+  /** 名字取不到时的第二层：源 → 它所属 provider 的显示名。
+   *
+   * **任何情况下不许把源 id 印给读者**（2026-11-13 读者看到 `macro-calendar-narwhal-…` 挤在卡片里）。
+   * 两层都取不到就不渲染这一项，而不是退到 id。
+   */
+  providerNamesBySource?: Readonly<Record<string, string>>
   resolveText: (key: string) => string
 }): React.ReactElement {
-  const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
+  const nameOf = (sourceId: string): string | undefined =>
+    props.sourceNames[sourceId] ?? props.providerNamesBySource?.[sourceId]
   const labelOf = (key: string): string => props.resolveText(`settings.intelligenceSources.businessTabs.${key}`)
   const subtitleOf = (business: BusinessKey): string => {
     // 数字来自数据层：模块数读模块清单，源数读去重后的源集合——删掉一个源，这里跟着变。
@@ -152,6 +159,8 @@ export function BusinessSettingsView(props: {
 export function BusinessSettingsContent(props: {
   business: BusinessKey
   sourceNames: Readonly<Record<string, string>>
+  /** 见 `BusinessSettingsView`：名字取不到时的第二层，绝不退到源 id。 */
+  providerNamesBySource?: Readonly<Record<string, string>>
   resolveText: (key: string) => string
   /**
    * 格级启停：**注入接口**，真实存储在存储线那边。只回显式写过的格；
@@ -191,7 +200,8 @@ export function BusinessSettingsContent(props: {
   cadence?: Readonly<Record<string, SourceCadenceReadout>>
   cadenceAvailable?: boolean
 }): React.ReactElement {
-  const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
+  const nameOf = (sourceId: string): string | undefined =>
+    props.sourceNames[sourceId] ?? props.providerNamesBySource?.[sourceId]
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
   /* 频率读数里的「下次」按读者设置时区显示；格式化只在这里取一次。 */
   const timeZone = useShellTimeZone()
@@ -200,12 +210,15 @@ export function BusinessSettingsContent(props: {
     cell: DashboardCell,
     siblings: readonly string[],
     labelOverride?: string
-  ): React.ReactElement => {
+  ): React.ReactElement | null => {
     const cellId = cellIdOf(moduleId, cell)
+    const label = labelOverride ?? nameOf(cell.sourceId)
+    /* 两层名字都取不到 → 这一项不渲染。宁可少一行，也不把源 id 印给读者。 */
+    if (label === undefined) return null
     return cellRow({
       cellId,
       enabled: cellEnabledOrDefault(props.isCellEnabled?.(cellId), cell.fallback === true),
-      label: labelOverride ?? nameOf(cell.sourceId),
+      label,
       resolveText: props.resolveText,
       siblings,
       sourceId: cell.sourceId,
@@ -295,7 +308,7 @@ export function BusinessSettingsContent(props: {
                     /* 主题卡按自己的名字认，不用 cellId：同一主题下以后可能不止一个源。 */
                     data-business-topic-card={OFFICIAL_COVERAGE[cell.sourceId] ?? cell.sourceId}
                     key={cell.cellKey}>
-                    <div className="business-topic__title">{OFFICIAL_COVERAGE[cell.sourceId] ?? nameOf(cell.sourceId)}</div>
+                    <div className="business-topic__title">{OFFICIAL_COVERAGE[cell.sourceId] ?? nameOf(cell.sourceId) ?? ''}</div>
                     <div className="business-cell__items">
                       {renderCell(modulesForBusiness(props.business)[0]?.id ?? props.business, cell, [])}
                     </div>

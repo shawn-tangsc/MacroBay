@@ -1810,11 +1810,15 @@
 
 .business-card__label {
   min-width: 0;
+  max-width: 100%;
   color: var(--text);
   /* 与源行名字同一档字重。 */
   font-weight: 600;
   font-size: var(--font-meta);
   white-space: nowrap;
+  /* 长名字在窄卡片里省略，**不换行撑高、也不许溢出去压住邻卡**（2026-11-13 读者报：源 id 把两格压在一起）。 */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 源开着时名字是**真按钮**：默认与普通源名同形（无边、无下划线、600、--text）；
@@ -1827,6 +1831,12 @@
   font-weight: 600;
   text-align: left;
   cursor: pointer;
+  /* 名字是真按钮时同样省略：按钮默认 `min-width:auto`，不压住的话长名字会把这一格撑宽。 */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .business-card__label--action:hover {

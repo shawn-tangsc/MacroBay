@@ -19,14 +19,18 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-async function renderContent(business: BusinessKey): Promise<{ host: HTMLElement }> {
+async function renderContent(
+  business: BusinessKey,
+  overrides: Readonly<{ sourceNames?: Record<string, string>; providerNamesBySource?: Record<string, string> }> = {}
+): Promise<{ host: HTMLElement }> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(BusinessSettingsContent, {
     business,
     resolveText,
-    sourceNames: t.sourceNames
+    sourceNames: overrides.sourceNames ?? t.sourceNames,
+    ...(overrides.providerNamesBySource === undefined ? {} : { providerNamesBySource: overrides.providerNamesBySource })
   })))
   return { host }
 }
@@ -60,6 +64,41 @@ describe('业务设置的左列', () => {
     // 选中态沿用树里的 `selected` + `aria-current`。
     expect(rows[0]?.className).toContain('selected')
     expect(rows[0]?.getAttribute('aria-current')).toBe('true')
+  })
+
+/**
+   * 2026-11-13 读者截图：设置里「聚合源」那三格直接把源 id 印出来（`macro-calendar-narwhal-e…`），
+   * 一串挤在一行互相压住。判据写死：**这一屏渲染出来的任何文本里都不许出现源 id**。
+   * 名字两层都取不到时，宁可少渲染这一项，也不许退到 id。
+   */
+  it('never renders a source id as a name, in any of the three fallbacks', async () => {
+    const hasIdFragment = (host: HTMLElement): boolean => (host.textContent ?? '').includes('macro-calendar-')
+
+    // ① 正常：文案表里有名字
+    expect(hasIdFragment((await renderContent('calendar')).host)).toBe(false)
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    // ② 源名缺失 → 退到 provider 名，仍不许出现 id
+    const fallback = await renderContent('calendar', {
+      sourceNames: {},
+      providerNamesBySource: {
+        'macro-calendar-narwhal-economic-data': 'Narwhal',
+        'macro-calendar-narwhal-financial-events': 'Narwhal',
+        'macro-calendar-narwhal-central-bank-activities': 'Narwhal'
+      }
+    })
+    expect(hasIdFragment(fallback.host)).toBe(false)
+    expect(fallback.host.textContent).toContain('Narwhal')
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    // ③ 两层都没有 → 这一项不渲染（行数变少），也不许印 id
+    const dropped = await renderContent('calendar', { sourceNames: {}, providerNamesBySource: {} })
+    expect(hasIdFragment(dropped.host)).toBe(false)
+    expect(dropped.host.querySelectorAll('.business-card__row').length).toBeLessThan(6)
   })
 
   it('writes real counts from the data layer, not hard-coded strings', async () => {

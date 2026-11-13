@@ -50,7 +50,8 @@ async function render(business: BusinessKey, onOpenProcessingSettings?: () => vo
         isSourceEnabled: () => true,
         onCellToggle: vi.fn(),
         resolveText,
-        sourceNames: {},
+        // 名字取自真实表：取不到名字的项按设计不渲染，夹具不给名字会让行数断言失真。
+        sourceNames: productText['zh-CN'].settings.intelligenceSources.sourceNames,
         ...(onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings })
       })
     }))

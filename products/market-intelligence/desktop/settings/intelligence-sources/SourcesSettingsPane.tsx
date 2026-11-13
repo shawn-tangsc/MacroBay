@@ -126,6 +126,14 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     for (const provider of group.providers) for (const source of provider.sources) sourceEnabledById.set(source.sourceId, source.enabled)
   }
   const isSourceEnabled = (sourceId: string): boolean | undefined => sourceEnabledById.get(sourceId)
+  /* 名字取不到时的第二层：源 → 它所属 provider 的显示名。**绝不退到源 id**（读者 2026-11-13 看到
+     `macro-calendar-narwhal-…` 挤在卡片里）。 */
+  const providerNamesBySource: Record<string, string> = {}
+  for (const group of props.view?.groups ?? []) {
+    for (const provider of group.providers) {
+      for (const source of provider.sources) providerNamesBySource[source.sourceId] = provider.displayName
+    }
+  }
   const cadence = useSourceCadence()
   /**
    * 「采集与数据」第二行的数据：**只有可配置的已启用源**才给预设值（不是把下拉画成禁用）。
@@ -252,7 +260,8 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           business={business}
           onBusinessChange={setBusiness}
           resolveText={resolveText}
-          sourceNames={sourceNames} />
+          sourceNames={sourceNames}
+          providerNamesBySource={providerNamesBySource} />
         : <SettingsSourceTree
           bare
           /* 「数据源」这屏**平铺不分组**、列全部可见源（灰的也在）；模块分组只留给「采集与数据」的卡片。 */
@@ -287,7 +296,8 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           cadence={cadence.bySource}
           cadenceAvailable={cadence.available}
           resolveText={resolveText}
-          sourceNames={sourceNames} />
+          sourceNames={sourceNames}
+          providerNamesBySource={providerNamesBySource} />
         : <>
           {props.notice}
           {provider === undefined
