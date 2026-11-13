@@ -52,6 +52,7 @@ import { createPolicyPathQueryService } from './intelligence/policy-path/policyP
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { createMacroIndicatorReadService } from './intelligence/macro-calendar/macroIndicatorReadService'
 import { registerMacroIndicatorIpc } from './intelligence/macro-calendar/ipc/registerMacroIndicatorIpc'
+import { createFredObservationsFetcher, readFredIndicatorYoY } from './intelligence/macro-calendar/fredIndicatorYoY'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
 import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
 import { createSyncAuditStoreIfAvailable } from './intelligence/audit/syncAuditStore'
@@ -606,7 +607,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
-  registerMacroIndicatorIpc(register, createMacroIndicatorReadService(macroCalendarBackend.repository))
+  // FRED 的 key 只从模块那份凭据存储出（`fetchText` 负责加 `api_key`），这里不碰凭据本身。
+  const fredObservations = createFredObservationsFetcher((url, sourceId) => intelligenceModule.fetchText(url, sourceId))
+  registerMacroIndicatorIpc(register, createMacroIndicatorReadService(macroCalendarBackend.repository, {
+    readOfficialYoY: (metricKey) => readFredIndicatorYoY(metricKey, fredObservations)
+  }))
   registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
     // Read-only: the run log joins a task to the analysis it produced, and never writes either side.
     listRuns: () => intelligenceModule.marketAnalysisRuntime.repository.listRuns()

@@ -14,7 +14,8 @@ export const fredIndicatorYoYPolicy = Object.freeze({
   /** 指标身份 → FRED 序列。**只用未季调序列**（与 BLS 公布口径一致）。 */
   seriesByMetricKey: Object.freeze({
     'US.CPI.NSA.YOY': 'CPIAUCNS',
-    'US.CORE_CPI.NSA.YOY': 'CPILFENS'
+    'US.CORE_CPI.NSA.YOY': 'CPILFENS',
+    'US.CORE_PCE.NSA.YOY': 'PCEPILFE'
   } as const),
   /** FRED 直接算好的同比，不是指数。 */
   units: 'pc1'
@@ -88,5 +89,27 @@ export function applyOfficialYoY(
     previousSource: 'fred',
     previousObservedAt: reading.observedAt,
     previousUnreadable: false
+  }
+}
+
+/**
+ * FRED 观测的取数口：URL 只在这里拼一次，请求**必须过装配层注入的 `fetchText`**
+ * （它负责把 `api_key` 加上）——读服务里不碰凭据，也不自己拼 key。
+ */
+export function createFredObservationsFetcher(
+  fetchText: (url: string, sourceId: string) => Promise<string>
+): FredObservationsFetcher {
+  return async ({ seriesId, units, limit }) => {
+    const url = `${fredIndicatorYoYPolicy.endpoint}?${new URLSearchParams({
+      series_id: seriesId, file_type: 'json', sort_order: 'desc', limit: String(limit), units
+    }).toString()}`
+    const body = JSON.parse(await fetchText(url, 'fred-rates-liquidity')) as { observations?: unknown }
+    const rows = Array.isArray(body.observations) ? body.observations : []
+    return rows.flatMap((row) => {
+      if (!row || typeof row !== 'object') return []
+      const record = row as Record<string, unknown>
+      if (typeof record.date !== 'string' || typeof record.value !== 'string') return []
+      return [{ date: record.date, value: record.value }]
+    })
   }
 }

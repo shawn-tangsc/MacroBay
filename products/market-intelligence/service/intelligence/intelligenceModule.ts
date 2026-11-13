@@ -299,6 +299,13 @@ export type IntelligenceModule = {
   }
   marketAnalysisRuntime: MarketAnalysisRuntime
   /** The credentialed macro-market series (synthetic dollar, gold, offshore yuan, stablecoin peg). */
+  /**
+   * 带凭据的取文通道（key 由模块内部的 profile/credential 存储解析，**永远不出模块**）。
+   *
+   * 暴露它是因为「读官方序列」这类只读取数需要一个凭据出口，而另建一套读凭据的路迟早与这份漂开。
+   * 只加这一个方法：pipeline 里已有的 `fetchText` 用法不动。
+   */
+  fetchText: (url: string, sourceId: string) => Promise<string>
   macroMarket: MacroMarketRuntime
   /** Whether that source can spend a credit right now: the reader enabled it and a key is stored. */
   macroMarketReadiness: () => Promise<{ enabled: boolean; hasCredential: boolean }>
@@ -1076,7 +1083,8 @@ export function getIntelligenceModule(
         requestJsonBody: requestZeroXRouterCalendarJsonBody
       },
       marketAnalysisRuntime,
-      macroMarket,
+      fetchText,
+    macroMarket,
       // One reader for the source's own switch and credential, built from the same profile and
       // credential stores the collector reads, so the dashboard cannot disagree with the collector.
       macroMarketReadiness: async () => {
