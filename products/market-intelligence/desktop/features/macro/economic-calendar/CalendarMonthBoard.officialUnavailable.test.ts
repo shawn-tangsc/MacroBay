@@ -112,3 +112,18 @@ describe('a month the official source could not be read for', () => {
     }
   })
 })
+
+describe('S2 之后：读不到与真空月必须分开（这轮的核心）', () => {
+  it('整月读失败且没有任何行 → error（不是空态）', () => {
+    expect(monthSurface({ officialUnavailable: false, monthRead: 'unavailable', officialCount: 0, marketCount: 0 })).toBe('error')
+  })
+
+  it('读到了、这个月确实没有发布 → empty（不是 error）', () => {
+    expect(monthSurface({ officialUnavailable: false, monthRead: 'available', officialCount: 0, marketCount: 0,
+      marketMonthRead: { status: 'read' } })).toBe('empty')
+  })
+
+  it('读失败但市场侧有行 → 照画 + note（有数据就别藏）', () => {
+    expect(monthSurface({ officialUnavailable: false, monthRead: 'unavailable', officialCount: 0, marketCount: 3 })).toBe('note')
+  })
+})
