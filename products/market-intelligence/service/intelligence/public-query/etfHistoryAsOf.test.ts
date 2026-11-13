@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const platformFetch = vi.hoisted(() => vi.fn())
@@ -6,6 +9,7 @@ vi.mock('@platform/network/platformFetch', () => ({ getPlatformFetch: () => plat
 import { createSourceRequestGovernanceQueue } from '../application/sourceRequestGovernance'
 import { createZeroXRouterEtfFlowHistoryClient } from '../application/zeroXRouterEtfFlowHistoryClient'
 import { zeroXRouterSourcePolicy } from '../application/zeroXRouterSourcePolicy'
+import { cryptoEtfFlowFundsUrl } from '../application/cryptoEtfSourcePolicy'
 import { createEtfHistoryAsOf, etfHistoryAsOfPolicy, type EtfHistoryApiWindow } from './etfHistoryAsOf'
 
 const cutoff = '2026-10-30T00:00:00.000Z'
@@ -61,12 +65,12 @@ describe('ETF flow history as of an instant', () => {
       value: 250_000_000,
       tradingDate: '2026-10-29',
       observedAt: '2026-10-29T00:00:00.000Z',
-      sourceUrl: 'https://0xrouter.app/cexdata/etf/bitcoin/flow-history',
+      sourceUrl: cryptoEtfFlowFundsUrl('btc'),
       method: 'historical-api'
     })
     await expect(reader.read({ asset: 'eth', asOf: cutoff })).resolves.toMatchObject({
       state: 'available', asset: 'eth', value: -30_000_000,
-      sourceUrl: 'https://0xrouter.app/cexdata/etf/ethereum/flow-history'
+      sourceUrl: cryptoEtfFlowFundsUrl('eth')
     })
 
     // Both requests go through the existing client: the platform fetch, never a bare fetch, and the
@@ -164,9 +168,45 @@ describe('ETF flow history as of an instant', () => {
       .resolves.toMatchObject({ state: 'available', value: 1, tradingDate: '2026-10-29' })
   })
 
-  it('keeps the provider urls and the read path named in one place', () => {
-    expect(etfHistoryAsOfPolicy.sourceUrl.btc).toBe('https://0xrouter.app/cexdata/etf/bitcoin/flow-history')
-    expect(etfHistoryAsOfPolicy.sourceUrl.eth).toBe('https://0xrouter.app/cexdata/etf/ethereum/flow-history')
+  it('names the CryptoETF urls it actually asks, and no longer the retired source', () => {
+    // 反向红：把来源改回旧源（0xRouter flow-history）→ 这两条立刻红。
+    expect(etfHistoryAsOfPolicy.sourceUrl.btc).toBe(cryptoEtfFlowFundsUrl('btc'))
+    expect(etfHistoryAsOfPolicy.sourceUrl.eth).toBe(cryptoEtfFlowFundsUrl('eth'))
+    expect(etfHistoryAsOfPolicy.sourceUrl.btc).not.toContain('0xrouter')
+    expect(etfHistoryAsOfPolicy.sourceUrl.eth).not.toContain('0xrouter')
     expect(etfHistoryAsOfPolicy.method).toBe('historical-api')
+  })
+
+  it('reports a cutoff outside the 30-day retention as a stated gap — never a zero, never the newest day', async () => {
+    // 免费档只保留最近 30 天：更早的时间点必须「说清为什么没有」，不许拿 0 或最近一天顶上。
+    const rows = ['2026-10-01', '2026-10-02', '2026-10-03'].map(day => Object.freeze({ date: midnight(day), changeUsd: 5_000_000 }))
+    const reader = createEtfHistoryAsOf({
+      requestWindow: async () => Object.freeze({ state: 'available' as const, btc: rows, eth: rows }),
+      now: () => Date.parse(later)
+    })
+    const outside = await reader.read({ asset: 'btc', asOf: '2026-08-01T00:00:00.000Z' })
+    expect(outside.state).toBe('unavailable')
+    expect(outside.state === 'unavailable' ? outside.gapCode : undefined).toBe('historical-as-of-unavailable')
+    expect(outside.state === 'unavailable' ? outside.detail : '').toContain('30 days')
+    expect(JSON.stringify(outside)).not.toContain('"value"')
+  })
+})
+
+describe('the retired ETF source has no read point left', () => {
+  it('keeps the old 0xRouter flow-history URL out of the reader and the backfill provenance', () => {
+    // 用户 2026-11-13：日报回溯改读 CryptoETF。旧源**先不删**（它自己的注册数据还在），但
+    // 读取点与 provenance 里不许再出现旧地址。反向红：把 sourceUrl 改回旧源 → 这段立刻红。
+    const readPathFiles = [
+      'products/market-intelligence/service/intelligence/public-query/etfHistoryAsOf.ts',
+      'products/market-intelligence/service/intelligence/public-query/dailyBriefBackfill.ts'
+    ]
+    const offenders: string[] = []
+    for (const file of readPathFiles) {
+      const source = readFileSync(resolve(process.cwd(), file), 'utf8')
+      if (source.includes('0xrouter.app')) offenders.push(file)
+    }
+    expect(offenders).toHaveLength(0)
+    expect(etfHistoryAsOfPolicy.sourceUrl.btc.startsWith('https://api.cryptoetf.today/')).toBe(true)
+    expect(etfHistoryAsOfPolicy.sourceUrl.eth.startsWith('https://api.cryptoetf.today/')).toBe(true)
   })
 })

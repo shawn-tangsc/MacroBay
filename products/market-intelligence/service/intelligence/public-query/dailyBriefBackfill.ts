@@ -11,6 +11,7 @@ import type {
 } from './macroHistoryAsOf'
 import type { MarketIntelligencePublicQueryService } from './publicQueryService'
 import type { StablecoinHistoryAsOfResult } from './stablecoinHistoryAsOf'
+import { cryptoEtfFlowFundsUrl } from '../application/cryptoEtfSourcePolicy'
 
 /**
  * The daily brief's historical backfill tool.
@@ -303,10 +304,10 @@ const READER_PROVENANCE = Object.freeze({
     method: 'capital-conditions-as-of-snapshot', sourceUrl: 'https://stablecoins.llama.fi/stablecoins'
   }),
   etfBtc: Object.freeze({
-    method: 'etf-current-state-as-of', sourceUrl: 'https://0xrouter.app/cexdata/etf/bitcoin/flow-history'
+    method: 'etf-current-state-as-of', sourceUrl: cryptoEtfFlowFundsUrl('btc')
   }),
   etfEth: Object.freeze({
-    method: 'etf-current-state-as-of', sourceUrl: 'https://0xrouter.app/cexdata/etf/ethereum/flow-history'
+    method: 'etf-current-state-as-of', sourceUrl: cryptoEtfFlowFundsUrl('eth')
   }),
   funding: Object.freeze({
     method: 'funding-rate-history-as-of', sourceUrl: 'https://fapi.binance.com/fapi/v1/fundingRate'

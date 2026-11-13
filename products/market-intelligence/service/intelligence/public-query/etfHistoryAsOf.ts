@@ -1,4 +1,4 @@
-import { zeroXRouterSourcePolicy } from '../application/zeroXRouterSourcePolicy'
+import { cryptoEtfFlowFundsUrl } from '../application/cryptoEtfSourcePolicy'
 import type { EtfFlowHistoryRow } from '../etf/etfFlowHistoryParser'
 
 /**
@@ -10,12 +10,16 @@ import type { EtfFlowHistoryRow } from '../etf/etfFlowHistoryParser'
  * history does cover the trading days the cutoff could see. The backfill tool asks this reader only
  * after the local snapshot has no row at or before the instant; a stored row always wins.
  *
- * Which series answers: the same 0xRouter `flow-history` endpoint the current-state refresh already
- * consumes, through that refresh's client (one API key, one governance queue, the platform's
- * proxy-aware fetch) — no second transport, no raw fetch. The answer is the newest trading day that
- * had *ended* by `asOf`: a daily flow for day D is the flow of D, so it is known once D is over in
- * UTC and never before. That is what keeps a cutoff at D 00:00Z from reporting D's partial flow, and
- * what lets the same cutoff keep D-1's official flow.
+ * Which series answers: **CryptoETF** (`/flows/{asset}/funds`), the same settled-days series the
+ * current-state window now consumes, through that source's client (one API key, one governance queue,
+ * the platform's proxy-aware fetch) — no second transport, no raw fetch. The answer is the newest
+ * trading day that had *ended* by `asOf`: a daily flow for day D is the flow of D, so it is known
+ * once D is over in UTC and never before. That is what keeps a cutoff at D 00:00Z from reporting D's
+ * partial flow, and what lets the same cutoff keep D-1's official flow.
+ *
+ * **Free tier only keeps 30 days.** A cutoff older than the oldest row the source still holds is
+ * therefore `historical-as-of-unavailable`, with the retention named in the detail: it is never
+ * reported as a zero flow and never replaced by the newest day's value.
  *
  * When no interface is available — no client wired, no credential configured, or the source switched
  * off — the answer is `historical-api-unavailable`. When the provider answered but holds nothing at or before the
@@ -27,8 +31,8 @@ export const etfHistoryAsOfPolicy = Object.freeze({
   dayMilliseconds: 24 * 60 * 60 * 1_000,
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
   sourceUrl: Object.freeze({
-    btc: zeroXRouterSourcePolicy.etfFlowHistoryDiagnostic.urls.bitcoin,
-    eth: zeroXRouterSourcePolicy.etfFlowHistoryDiagnostic.urls.ethereum
+    btc: cryptoEtfFlowFundsUrl('btc'),
+    eth: cryptoEtfFlowFundsUrl('eth')
   })
 })
 
@@ -128,7 +132,7 @@ export function createEtfHistoryAsOf(deps: EtfHistoryAsOfDeps) {
         return gap(asset, asOf, 'query-unavailable', 'the ETF flow-history request failed.')
       }
       if (window.state === 'not-configured') {
-        return gap(asset, asOf, 'historical-api-unavailable', 'no 0xRouter ETF flow-history client is configured or enabled in this build.')
+        return gap(asset, asOf, 'historical-api-unavailable', 'no CryptoETF flow-history client is configured or enabled in this build.')
       }
       if (window.state === 'unavailable') {
         return gap(asset, asOf, 'query-unavailable', 'the ETF flow-history request was refused.')
@@ -143,7 +147,14 @@ export function createEtfHistoryAsOf(deps: EtfHistoryAsOfDeps) {
       }
       const flow = newestFlowAt(rows, asOfMs)
       if (!flow) {
-        return gap(asset, asOf, 'historical-as-of-unavailable', 'the ETF flow history holds no trading day that had ended by this instant.')
+        // 两种「这一格没有数」要分开：**这次还没到那天结束**（边界）与**来源只保留 30 天**。
+        // 后者绝不能被画成 0，也不许拿最近一天顶上。
+        const oldest = oldestTradingDate(rows)
+        const requestedDay = asOf.slice(0, 10)
+        return gap(asset, asOf, 'historical-as-of-unavailable',
+          oldest !== undefined && oldest > requestedDay
+            ? `the source keeps only its most recent 30 days (oldest trading day ${oldest}); ${requestedDay} is outside that window, so no flow is reported for it.`
+            : 'the ETF flow history holds no trading day that had ended by this instant.')
       }
       const observedAt = `${flow.tradingDate}T00:00:00.000Z`
       if (observedAt > asOf) {
@@ -194,6 +205,17 @@ function newestFlowAt(rows: readonly EtfFlowHistoryRow[], asOfMs: number): Reado
     .map(([tradingDate, value]) => ({ tradingDate, value: value! }))
     .sort((left, right) => left.tradingDate.localeCompare(right.tradingDate))
   return tradingDates.at(-1)
+}
+
+/** 来源还留着的最早那个交易日（`YYYY-MM-DD`）：用来把「超出保留期」与「那天还没结束」分开。 */
+function oldestTradingDate(rows: readonly EtfFlowHistoryRow[]): string | undefined {
+  let oldest: string | undefined
+  for (const row of rows) {
+    if (!row || typeof row.date !== 'number' || !Number.isFinite(row.date)) continue
+    const day = new Date(row.date).toISOString().slice(0, 10)
+    if (oldest === undefined || day < oldest) oldest = day
+  }
+  return oldest
 }
 
 function gap(asset: unknown, asOf: string, gapCode: EtfHistoryAsOfGapCode, detail: string): EtfHistoryAsOfGap {

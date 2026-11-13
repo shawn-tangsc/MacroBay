@@ -126,7 +126,6 @@ import { createCapitalConditionsSnapshotQueryService } from './capital-condition
 import { createSourceRequestGovernanceQueue } from './application/sourceRequestGovernance'
 import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore } from './store/etfCurrentStateStore'
 import { createEtfCurrentStateRefreshService } from './etf/etfCurrentStateRefreshService'
-import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
 import { createCryptoEtfFlowClient } from './application/cryptoEtfFlowClient'
 import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
 import { allSources } from './application/providerRegistry'
@@ -436,7 +435,6 @@ export function getIntelligenceModule(
     const openInterestWithSignals = createSignalledOpenInterestRefresh({ refresh: openInterestRefresh.refresh,
       readHistory: input => queryOpenInterestHistoryAsync({ ...input, store: perpetualPositioningStore }),
       ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }) })
-    const etfFlowHistoryClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
     const cryptoEtfFlowClient = createCryptoEtfFlowClient(hooks.platformFetch ? { platformFetch: hooks.platformFetch } : {})
     // The macro-market series (dollar, gold, offshore yuan, stablecoin peg) come from a credentialed
     // REST provider, read through the same profile/credential pair every other source uses. The real
@@ -909,13 +907,27 @@ export function getIntelligenceModule(
       const created = Object.freeze({
         etfHistory: createEtfHistoryAsOf({
           requestWindow: async () => {
-            // The same two gates the refresh applies: a switched-off source is not read around, and
-            // a missing key is a missing interface rather than a failed request.
-            const profile = await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)
+            // 同样的两道闸：源关着不绕过去读；没有密钥是「没有接口」，不是「这次读失败」。
+            // 2026-11-13 用户拍板：日报回溯改读 CryptoETF（免费档只保留 30 天；今天切，受影响
+            // 的历史日报为 0 份）。旧源保留不动，但这里不再是它的读取点。
+            const profile = await profileStore.resolveProfile(cryptoEtfSourcePolicy.sourceId)
             if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
-            const credential = await zeroXRouterCredential()
+            const credential = await cryptoEtfCredential()
             if (!credential?.apiKey) return Object.freeze({ state: 'not-configured' as const })
-            return etfFlowHistoryClient.requestWindow(credential.apiKey)
+            const window = await cryptoEtfFlowClient.readSettledWindow(credential.apiKey)
+            const rowsOf = (reading: { days?: readonly { tradingDate: string; netFlowUsd: number }[] } | undefined) =>
+              reading?.days?.map(day => ({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd }))
+            if (window.state === 'available') {
+              return Object.freeze({ state: 'available' as const, btc: rowsOf(window.btc), eth: rowsOf(window.eth) })
+            }
+            if (window.state === 'partial') {
+              return Object.freeze({
+                state: 'partial' as const,
+                ...(window.btc === undefined ? {} : { btc: rowsOf(window.btc) }),
+                ...(window.eth === undefined ? {} : { eth: rowsOf(window.eth) })
+              })
+            }
+            return Object.freeze({ state: 'unavailable' as const })
           }
         }),
         stablecoinHistory: createStablecoinHistoryAsOf({
