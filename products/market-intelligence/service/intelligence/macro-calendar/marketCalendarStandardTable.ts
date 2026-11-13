@@ -119,8 +119,11 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
-      scheduled_at = excluded.scheduled_at,
-      time_precision = excluded.time_precision,
+      -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
+      -- 13:30 抹掉了——读者会看到「只有日期」，而事实是有人给了时刻。
+      -- 精度只从 date 升到 minute，不反向降；新值为空时不覆盖已有值。
+      scheduled_at = coalesce(excluded.scheduled_at, scheduled_at),
+      time_precision = case when excluded.time_precision = 'minute' then 'minute' else time_precision end,
       values_json = excluded.values_json,
       source_provider_id = excluded.source_provider_id,
       source_event_id = excluded.source_event_id,

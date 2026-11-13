@@ -105,3 +105,19 @@ describe('日历只读视图', () => {
     expect(all.filter((row) => row.row_kind === 'estimate')).toHaveLength(1)
   })
 })
+
+describe('同一天两源合并：时刻取 minute 那一方', () => {
+  it('官方只有日期后写，也不抹掉市场的 13:30', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 市场先写：有时刻
+    upsertCalendarStandardRow(database, { ...base, sourceProviderId: 'narwhal', sourceEventId: 'm-1',
+      scheduledAt: '2026-11-06T13:30:00.000Z', timePrecision: 'minute' })
+    // 官方后写：同一天、只有日期、没有时刻
+    upsertCalendarStandardRow(database, { ...base, sourceProviderId: 'bls', sourceEventId: 'o-1',
+      scheduledAt: undefined, timePrecision: 'date' })
+    const [row] = rows(database)
+    expect(row!.scheduled_at).toBe('2026-11-06T13:30:00.000Z')  // 时刻没被抹掉
+    expect(row!.time_precision).toBe('minute')                   // 精度不反向降级
+  })
+})
