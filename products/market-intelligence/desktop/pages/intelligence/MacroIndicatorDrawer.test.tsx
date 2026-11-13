@@ -436,6 +436,8 @@ describe('the three simplified cards', () => {
     const cpi = carouselText(0)
     expect(cpi).toContain('本期暂无预期（盘未开）')
     expect(cpi).not.toContain('另 4 项')
+    // 只剩一句话时它居中（`mk-card__empty`），不贴着左上角——否则看着像没加载完。
+    expect(document.body.querySelector('[data-pair] .mk-card--next .mk-card__empty')).not.toBeNull()
   })
 
   /** 一到三行缺时逐行写「暂无预期」，不折叠——折叠会把「少数有值」一起藏掉。 */

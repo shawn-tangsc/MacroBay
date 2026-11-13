@@ -194,21 +194,24 @@ function NextCard(input: CardInput): React.ReactElement {
             : text.cardFace.whenNext.replace('{period}', next.period)
               .replace('{date}', calendarDisplayDate(next.releaseAt, timeZone).slice(5))}
       </div>
-      <div className="mk-rows">
-        {shown.map((entry) => (
-          <div className="mk-vrow" key={entry.row.metricKey}>
-            <dt>{entry.row.label}</dt>
-            <dd {...(entry.fact?.next?.expected === undefined ? { 'data-na': 'true' } : {})}>
-              {expectedValueText(entry.fact, entry.row, text)}
-            </dd>
-            <span className="mk-chipwrap" />
-          </div>
-        ))}
-      </div>
+      {allMissing
+        // 整页只剩一句话：它在卡片里水平+垂直居中，否则贴着左上角，看着像没加载完。
+        ? <div className="mk-card__empty">{text.cardFace.expectedAllMissing}</div>
+        : <div className="mk-rows">
+          {shown.map((entry) => (
+            <div className="mk-vrow" key={entry.row.metricKey}>
+              <dt>{entry.row.label}</dt>
+              <dd {...(entry.fact?.next?.expected === undefined ? { 'data-na': 'true' } : {})}>
+                {expectedValueText(entry.fact, entry.row, text)}
+              </dd>
+              <span className="mk-chipwrap" />
+            </div>
+          ))}
+        </div>}
       <div className="mk-card__foot">
-        <span>{allMissing
-          ? text.cardFace.expectedAllMissing
-          : stateLine({ rows, text, timeZone, market, volume, observedAt })}</span>
+        {allMissing
+          ? null
+          : <span>{stateLine({ rows, text, timeZone, market, volume, observedAt })}</span>}
         <span>{text.detail}</span>
       </div>
     </article>

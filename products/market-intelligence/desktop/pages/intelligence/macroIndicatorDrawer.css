@@ -304,3 +304,10 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 /* 已发布页的时间标签：3 天内用深金（与右卡的柠绿区分“已发生 / 未发生”）。 */
 .mk-tag--past { border-color: var(--caution); color: var(--caution); font-weight: 600; }
 /* 选中态同时变大小与颜色：只靠颜色，色弱与读屏都分不出来。 */
+
+/* 整页只剩一句话（四行全无预期）：这句话在卡片里水平+垂直居中；
+   有内容的页不动——日期行仍在顶部，四行仍是网格。 */
+.mk-card__empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  text-align: center; color: var(--muted); font-size: var(--font-meta);
+}
