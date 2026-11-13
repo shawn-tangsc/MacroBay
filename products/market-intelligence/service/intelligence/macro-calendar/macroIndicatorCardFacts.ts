@@ -60,6 +60,11 @@ export type MacroIndicatorCardFact = Readonly<{
   value?: number
   /** 首发布时的上一期实际值；缺它就不能显示「较上期」，也不许拿修订值顶。 */
   previousAsPublished?: number
+  /** 上一期那个数从哪来：官方序列（FRED）还是日历库；以及它的观测时刻。 */
+  previousSource?: 'fred' | 'release'
+  previousObservedAt?: string
+  /** 官方序列**读不到**（不是「没有值」）：那一格要说「暂时读不到」，不许拿旧数字冒充。 */
+  previousUnreadable?: boolean
   /**
    * 共识：**五元组**（值 + 期次 + `asOf` + 出处 + 盘口才要的成交量）。今天只接商业源问卷这一档。
    * 期次在 `period` 上——缺它就不带出去（那会变成一个「看起来像答案的数」）。
@@ -71,7 +76,7 @@ export type MacroIndicatorCardFact = Readonly<{
     sourceName: string
   }>
   unit?: 'percent' | 'thousands'
-  source?: 'narwhal' | '0xrouter'
+  source?: 'narwhal' | '0xrouter' | 'fred'
 }>
 
 /** 旧源的 `indicator_id` → 我们规范 key 的反查（同一张表，不另写一份）。 */

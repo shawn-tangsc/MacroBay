@@ -1,0 +1,43 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import { fredIndicatorYoYPolicy, readFredIndicatorYoY } from './fredIndicatorYoY'
+
+/**
+ * 红线：**只用 FRED 直接给的同比**（`units=pc1`），不许拿指数相除。
+ * 这条用例同时钉住请求参数——`units` 一旦不是 `pc1`，读回来的就是指数，除出来就是自算同比。
+ */
+describe('readFredIndicatorYoY', () => {
+  it('asks FRED for its own year-over-year (units=pc1), never for an index', async () => {
+    const fetchObservations = vi.fn(async () => [{ date: '2026-09-01', value: '3.73768' }])
+    await readFredIndicatorYoY('US.CPI.NSA.YOY', fetchObservations)
+    expect(fetchObservations).toHaveBeenCalledWith(expect.objectContaining({
+      seriesId: 'CPIAUCNS', units: fredIndicatorYoYPolicy.units
+    }))
+    expect(fredIndicatorYoYPolicy.units).toBe('pc1')
+  })
+
+  it('returns the value FRED published, with its observation date', async () => {
+    const reading = await readFredIndicatorYoY('US.CORE_CPI.NSA.YOY', async () => [{ date: '2026-09-01', value: '2.56436' }])
+    expect(reading).toEqual({ state: 'ok', value: 2.56436, observedAt: '2026-09-01T00:00:00.000Z', seriesId: 'CPILFENS' })
+  })
+
+  /** FRED 用 `.` 表示缺值：跳过它去拿上一个有值的，不许当 0、也不许当「没有这一期」。 */
+  it('skips FRED empty observations instead of reading them as zero', async () => {
+    const reading = await readFredIndicatorYoY('US.CPI.NSA.YOY', async () => [
+      { date: '2026-10-01', value: '.' },
+      { date: '2026-09-01', value: '3.73768' }
+    ])
+    expect(reading).toMatchObject({ state: 'ok', value: 3.73768 })
+  })
+
+  /** 读失败是「读不到」，不是「没有值」：两者在卡上是两句不同的话。 */
+  it('reports a failed read as unavailable rather than as an absent value', async () => {
+    const reading = await readFredIndicatorYoY('US.CPI.NSA.YOY', async () => { throw new Error('network') })
+    expect(reading).toEqual({ state: 'unavailable', seriesId: 'CPIAUCNS', reason: 'read-failed' })
+  })
+
+  it('reports no observation when every row is empty', async () => {
+    const reading = await readFredIndicatorYoY('US.CPI.NSA.YOY', async () => [{ date: '2026-09-01', value: '.' }])
+    expect(reading).toEqual({ state: 'unavailable', seriesId: 'CPIAUCNS', reason: 'no-observation' })
+  })
+})
