@@ -93,8 +93,8 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
 export function readNextReleaseForMetric(database: DatabaseSync, input: Readonly<{
   metricKey: string
   asOf: string
-}>): Readonly<{ period: string; releaseAt: string }> | undefined {
-  const row = database.prepare(`select scheduled_date, period_key, scheduled_at
+}>): Readonly<{ period: string; releaseAt: string; timePrecision: 'minute' | 'date' }> | undefined {
+  const row = database.prepare(`select scheduled_date, period_key, scheduled_at, time_precision
     from ${calendarStandardTablePolicy.releasesView}
     where metric_key = ? and scheduled_date > ?
     order by scheduled_date asc, coalesce(scheduled_at, '') asc
@@ -102,8 +102,11 @@ export function readNextReleaseForMetric(database: DatabaseSync, input: Readonly
   if (row === undefined) return undefined
   // 形状对齐盘口现查器的入参：`{ metricKey, period, releaseAt, asOf }`。少给期次它就会查错盘，
   // 所以缺 `scheduled_at` 时用当天 00:00（**日期粒度的发布日**），不编时刻。
+  // **必须一起给精度**：日期型的 `releaseAt` 是当天 00:00 的占位，不是真时刻；不给精度，
+  // 下游照着它倒计时就是在编时间（「还有 3 小时」而源从没说过几点）。
   return {
     period: String(row.period_key),
-    releaseAt: row.scheduled_at === null ? `${String(row.scheduled_date)}T00:00:00.000Z` : String(row.scheduled_at)
+    releaseAt: row.scheduled_at === null ? `${String(row.scheduled_date)}T00:00:00.000Z` : String(row.scheduled_at),
+    timePrecision: String(row.time_precision) === 'minute' ? 'minute' as const : 'date' as const
   }
 }

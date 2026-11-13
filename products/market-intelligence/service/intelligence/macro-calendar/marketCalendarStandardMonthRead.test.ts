@@ -69,7 +69,12 @@ describe('下一期排期：读不到就说没有，不许编期次', () => {
     const database = new DatabaseSync(':memory:')
     seed(database)
     expect(readNextReleaseForMetric(database, { metricKey: 'US.PPI.NSA.YOY', asOf: '2026-11-14T00:00:00.000Z' }))
-      .toEqual({ period: '2026-10', releaseAt: '2026-11-10T13:30:00.000Z' })
+      .toEqual({ period: '2026-10', releaseAt: '2026-11-10T13:30:00.000Z', timePrecision: 'minute' })
+    // 日期型排期带 `date`：下游据此不做倒计时（那一刻几点源没说过）。
+    upsertCalendarStandardRow(database, { ...base, metricKey: 'US.DATEONLY.SA.MOM', periodKey: '2026-11',
+      scheduledDate: '2026-12-20', scheduledAt: undefined, timePrecision: 'date', sourceEventId: 'r-dateonly' })
+    expect(readNextReleaseForMetric(database, { metricKey: 'US.DATEONLY.SA.MOM', asOf: '2026-11-14T00:00:00.000Z' }))
+      .toMatchObject({ timePrecision: 'date' })
     expect(readNextReleaseForMetric(database, { metricKey: 'US.PPI.NSA.YOY', asOf: '2026-12-20T00:00:00.000Z' }))
       .toBeUndefined()
     expect(readNextReleaseForMetric(database, { metricKey: 'US.UNKNOWN.SA.MOM', asOf: '2026-11-14T00:00:00.000Z' }))
