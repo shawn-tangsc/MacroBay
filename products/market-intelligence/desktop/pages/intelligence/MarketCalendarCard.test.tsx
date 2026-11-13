@@ -168,7 +168,7 @@ it('names the event and its values in the reader language, not the conclusion la
   expect(host.textContent).toContain('CPI')
   expect(host.textContent).toContain('Actual 1.2%')
   expect(host.textContent).toContain('Previous -0.7%')
-  expect(host.textContent).toContain('Consensus 0.9%')
+  expect(host.textContent).toContain('Expectation 0.9%')
   expect(host.textContent).not.toContain('实际值')
   expect(host.textContent).not.toContain('前值')
   expect(host.textContent).not.toContain('消费者物价指数')

@@ -56,7 +56,7 @@ export const macroIndicatorDrawerText = {
       /* 回退顺序落到哪一档，就把那一档的出处与期次写出来：不写的话，9 月的值挂在 10 月那格里。 */
       previousPeriodFrom: '上一期 {value}（{source} · {period}）',
       previousUnreadable: '上一期 暂时读不到',
-      noConsensus: '暂无共识',
+      noConsensus: '暂无预期',
       consensusSource: '{source} · {asOf}',
       vsPrevious: '较上期（未修正）{value}'
     },
@@ -123,9 +123,9 @@ export const macroIndicatorDrawerText = {
     policyMix: { hike25: 'Hike 25', hike50: 'Hike 50+', other: 'Other' },
     facts: { nextMeeting: 'Next meeting', range: 'Target range', sep: 'SEP median', lastVote: 'Last vote' },
     cards: {
-      cpi: { title: 'CPI YoY', state: '11-10 published', unit: 'YoY', core: 'Core YoY', next: 'Next release', consensus: 'Consensus' },
-      payrolls: { title: 'Payrolls', state: '11-06 published', unit: 'NFP change', unemployment: 'Unemployment', next: 'Next release', consensus: 'Consensus' },
-      pce: { title: 'Core PCE', state: '10-29 published', unit: 'Core YoY', next: 'Next release', consensus: 'Consensus' }
+      cpi: { title: 'CPI YoY', state: '11-10 published', unit: 'YoY', core: 'Core YoY', next: 'Next release', consensus: 'Expectation' },
+      payrolls: { title: 'Payrolls', state: '11-06 published', unit: 'NFP change', unemployment: 'Unemployment', next: 'Next release', consensus: 'Expectation' },
+      pce: { title: 'Core PCE', state: '10-29 published', unit: 'Core YoY', next: 'Next release', consensus: 'Expectation' }
     },
     cardStates: {
       notAvailable: 'Not available',
@@ -136,7 +136,7 @@ export const macroIndicatorDrawerText = {
       previousPeriod: 'Previous {value}',
       previousPeriodFrom: 'Previous {value} ({source} · {period})',
       previousUnreadable: 'Previous: not readable right now',
-      noConsensus: 'No consensus',
+      noConsensus: 'No expectation',
       consensusSource: '{source} · {asOf}',
       vsPrevious: 'vs previous (unrevised) {value}'
     },

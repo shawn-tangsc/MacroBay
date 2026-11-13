@@ -619,7 +619,7 @@ describe('daily brief share card in English', () => {
       .toEqual(['Lower than expected', 'Higher than expected'])
     // The baseline is a footnote under the row, not a third card.
     expect(baseline.parentElement).not.toBe(grid)
-    expect(baseline.textContent).toBe('In line with consensus: The range holds.')
+    expect(baseline.textContent).toBe('In line with the expectation: The range holds.')
   })
 
   it('localizes the inline condition into a Chinese footnote instead of leaking the AI phrase', async () => {
@@ -671,7 +671,7 @@ describe('daily brief share card in English', () => {
     const rendered = await render(withFocus({ consensus: '3.2%', previous: '29' }))
     const meta = rendered.querySelector('.mi-brief-poster__next-meta')!.textContent
 
-    expect(meta).toBe('High impact · United States · Consensus 3.2% · Previous 29')
+    expect(meta).toBe('High impact · United States · Expectation 3.2% · Previous 29')
     expect(rendered.querySelector('.mi-brief-poster__next-values')).toBeNull()
     expect((rendered.querySelector('.mi-brief-poster')!.textContent?.match(/Previous 29/g) ?? [])).toHaveLength(1)
   })
