@@ -6,6 +6,7 @@ import { marketCalendarSourceStatus } from './marketCalendarSourceStatus'
 import type { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import type { MarketRow } from './marketCalendarStorageValidation'
 import { preferredObservation, type MarketObservationCandidate } from './marketCalendarObservationPrecedence'
+import { eventPairVerdict } from '../marketCalendarEventPairing'
 import { narwhalCanonicalIdentityKey, toAlpha3Country, zeroXRouterCanonicalIdentity,
   type MarketCalendarCanonicalIdentity } from '../marketCalendarMetricIdentity'
 
@@ -36,8 +37,15 @@ type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; pairs: Pair[]; sou
   covered: Map<string, string[]>;
   /** 算不出身份、因而不进日历的 Narwhal 行数（行仍在库里，可查）。 */
   unmappedNarwhal: number;
-  /** 事件型 Narwhal 行数：有身份，但配对规则未接，暂不进日历。 */
-  eventRows: number;
+  /** 事件型 Narwhal 的时刻，按 `国家|类型` 归组：旧源的讲话按 60 分钟窗口让位。 */
+  eventInstants: Map<string, string[]>;
+  /** 旧源「只有日期没有时刻」的行，按 `国家|类型|日` 计数：只有唯一候选才允许配对。 */
+  dateLevelCounts: Map<string, number>;
+  /**
+   * 事件型配对计数。**放在一个对象里**：翻页时 `position` 是浅拷贝，数字会被按值复制走，
+   * 只有对象引用能跨页累加——否则最后一页永远只报最后一页的数。
+   */
+  tally: { paired: number; ambiguous: number; rows: number };
   /** 已经投影出去的事件按身份归位：同一身份再来一行时按优先级替换，而不是按顺序留第一行。 */
   chosen: Map<string, { index: number; candidate: MarketObservationCandidate; collectionId: string; observationId: string }> }
 /**
@@ -48,7 +56,9 @@ type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; pairs: Pair[]; sou
  * - 旧源的行：同一 (国家, 指标)、发布日相差 ≤1 天时让位——**配对只在这一步用时间窗，身份
  *   仍是 (国家, 指标, 期间)**。没有指标身份的讲话/会议行原样保留。
  */
-function rowsShowsThisRow(position: { covered: Map<string, string[]>; unmappedNarwhal: number; eventRows: number },
+function rowsShowsThisRow(position: { covered: Map<string, string[]>
+  unmappedNarwhal: number; eventInstants: Map<string, string[]>; dateLevelCounts: Map<string, number>
+  tally: { paired: number; ambiguous: number; rows: number } },
   row: Record<string, unknown>): boolean {
   const scheduledAt = String(row.scheduled_at)
   const day = scheduledAt.slice(0, 10)
@@ -56,21 +66,39 @@ function rowsShowsThisRow(position: { covered: Map<string, string[]>; unmappedNa
     const identityKey = narwhalCanonicalIdentityKey(String(row.candidate_key))
     if (!identityKey) { position.unmappedNarwhal += 1; return false }
     const [countryCode, metricKey] = identityKey.split('|') as [string, string]
-    // 事件型（讲话/财经事件）这一版**先不进日历**：它们的配对规则（同类型 + 时刻窗）还没接，
-    // 硬放进来会和旧源的同名事件各出一行。行在库里、可查，配对接上就放出来。
-    if (metricKey === 'central-bank-activity' || metricKey === 'financial-event') { position.eventRows += 1; return false }
+    if (eventKinds.includes(metricKey)) {
+      // 事件型：时刻记进窗口表，旧源的讲话/财经事件按 60 分钟（或日期级唯一候选）让位。
+      const bucket = `${countryCode}|${metricKey}`
+      const instants = position.eventInstants.get(bucket)
+      if (instants === undefined) position.eventInstants.set(bucket, [scheduledAt])
+      else instants.push(scheduledAt)
+      position.tally.rows += 1
+      return true
+    }
     const bucket = `${countryCode}|${metricKey}`
     const dates = position.covered.get(bucket)
     if (dates === undefined) position.covered.set(bucket, [day])
     else if (!dates.includes(day)) dates.push(day)
     return true
   }
+  const countryCode = row.country_code === null ? '' : toAlpha3Country(String(row.country_code))
   const identity = zeroXRouterCanonicalIdentity({
-    countryCode: row.country_code === null ? null : toAlpha3Country(String(row.country_code)),
+    countryCode: row.country_code === null ? null : countryCode,
     indicatorId: row.indicator_id === null ? null : String(row.indicator_id),
     scheduledAt
   })
-  return identity === undefined || !coveredWithinADay(position.covered, identity, day)
+  if (identity !== undefined) return !coveredWithinADay(position.covered, identity, day)
+  // 没有指标身份的行：讲话、财经事件。同国家 + 同类型 + 时刻差 ≤ 60 分钟算同一件事；
+  // 旧源只有日期时放宽到同一 UTC 日，但只在**当天该国家该类型只有一条候选**时才配。
+  const kind = String(row.event_kind)
+  if (!eventKinds.includes(kind)) return true
+  const instants = position.eventInstants.get(`${countryCode}|${kind}`) ?? []
+  if (instants.length === 0) return true
+  const verdict = eventPairVerdict({ scheduledAt, narwhalInstants: instants,
+    dateLevelCandidateCount: position.dateLevelCounts.get(`${countryCode}|${kind}|${day}`) ?? 0 })
+  if (verdict === 'covered-by-narwhal') { position.tally.paired += 1; return false }
+  if (verdict === 'ambiguous-day') position.tally.ambiguous += 1
+  return true
 }
 
 /** 同国家 + 同指标，发布日相差 ≤1 天即视为同一件事已由新源覆盖。 */
@@ -80,6 +108,32 @@ function coveredWithinADay(covered: ReadonlyMap<string, readonly string[]>,
   if (dates === undefined) return false
   const at = Date.parse(`${day}T00:00:00.000Z`)
   return dates.some((date) => Math.abs(Date.parse(`${date}T00:00:00.000Z`) - at) <= 86_400_000)
+}
+
+/** 事件类型：这两个的配对走「同类型 + 时刻窗」，不走指标身份。 */
+const eventKinds: readonly string[] = ['central-bank-activity', 'financial-event']
+
+/**
+ * 旧源「只有日期没有时刻」的行按 (国家|类型|日) 计数。
+ *
+ * 为什么要预扫：日期级的放宽只在**该日该国家该类型只有一条候选**时才允许配对，而走查是
+ * 流式的——不先数一遍，读到第一条时根本不知道当天还有没有别的候选。
+ */
+function countDateLevelOldRows(batchesByKind: readonly (readonly { descriptorId: string
+  providerId: string; rows: readonly Record<string, unknown>[] }[])[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const candidates of batchesByKind) {
+    for (const candidate of candidates) {
+      if (candidate.providerId === marketCalendarProviderId) continue
+      for (const row of candidate.rows) {
+        if (!eventKinds.includes(String(row.event_kind))) continue
+        if (!String(row.scheduled_at).endsWith('T00:00:00.000Z')) continue
+        const key = `${toAlpha3Country(String(row.country_code ?? ''))}|${String(row.event_kind)}|${String(row.scheduled_at).slice(0, 10)}`
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+    }
+  }
+  return counts
 }
 
 export function createMarketCalendarPublicQueryService(deps: {
@@ -175,7 +229,8 @@ export function createMarketCalendarPublicQueryService(deps: {
           })
           const pairs: Pair[] = selections.flatMap((found) => found.map((selection) => ({ selection })))
           position = { query: { month, locale, asOf }, pairs, sources, index: 0, created: timestamp, chosen: new Map(),
-            covered: new Map(), unmappedNarwhal: 0, eventRows: 0 }
+            covered: new Map(), unmappedNarwhal: 0, eventInstants: new Map(),
+            dateLevelCounts: countDateLevelOldRows(batchesByKind), tally: { paired: 0, ambiguous: 0, rows: 0 } }
         }
         const sources = position.sources
         const events: MarketCalendarEvent[] = []
@@ -246,8 +301,11 @@ export function createMarketCalendarPublicQueryService(deps: {
         if (duplicatesInBatch > 0) {
           console.warn(`[macro-calendar] 同一批次内同一身份出现多行：${duplicatesInBatch} 处，读取按优先级取一行`)
         }
-        if (!input.cursor && position.eventRows > 0) {
-          console.warn(`[macro-calendar] ${position.eventRows} 条 Narwhal 事件型发布已入库，待配对规则接入后显示`)
+        const finished = position.index >= position.pairs.length
+        if (finished && position.tally.rows > 0) {
+          const { rows, paired, ambiguous } = position.tally
+          console.warn(`[macro-calendar] 事件型配对：新源 ${rows} 条，配上 ${paired} 条、`
+            + `新源独有 ${rows - paired} 条、因多候选放弃 ${ambiguous} 条`)
         }
         if (!input.cursor && position.unmappedNarwhal > 0) {
           // 可查的数：这些行**在库里**、只是算不出身份进不了日历；映射补齐后它们自动出现。
