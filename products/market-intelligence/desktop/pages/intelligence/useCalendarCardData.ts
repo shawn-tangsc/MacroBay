@@ -19,6 +19,9 @@ import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
  *
  * Any failure degrades to `unavailable` rather than to an empty window, so "we could not read
  * this" never looks like "nothing is scheduled".
+ *
+ * 例外只有一处，且方向相反：**有行**时一路读不到不降级（官方读不到、市源有行是「缺一半的读」，
+ * 不是错误页）。没有行时任一源没读到就不许判成「空」——两路都读到且都为空才是真的空。
  */
 
 /**
@@ -154,13 +157,16 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
       // A month that answered `unavailable` is a failed read, not an empty window. Losing the
       // provider route only costs its rows (it is the extra route); losing the official route for
       // every month means the card has nothing to stand on.
-      return { events, officialRead: official.state === 'available' }
+      return { events, officialRead: official.state === 'available', providerRead: market !== null }
     })).then(async pages => {
       if (!live) return
-      // Only when neither route produced anything at all is the read a failure. The official route
-      // answering `unavailable` while the provider route still lists a release is a degraded read
-      // with real rows, not an error screen.
-      if (!pages.some(page => page.officialRead || page.events.length > 0)) throw new Error('calendar read failed')
+      // 没有任何一行时，「读不到」不许画成「没有」：只要**任何一路**没读到，就不能声称这一窗没有事件
+      // ——没读到的那个源可能正有事件，说「没有」是替它编答案。两路都读到且都为空，才是真的空。
+      // 有行时不降级：官方路读不到、市源有行是「缺了一半的读」，不是错误页。
+      if (!pages.some(page => page.events.length > 0)
+        && !(pages.every(page => page.officialRead) && pages.every(page => page.providerRead))) {
+        throw new Error('calendar read incomplete')
+      }
       // 只画「来源当前启用」的事件：停掉一条来源，它的事件立刻消失，其余照画；部分可用不整卡降级。
       // 配置读不到（`known: false`）时不过滤——不能用「不知道」当「都关了」。
       const enabled = await sourcesRead

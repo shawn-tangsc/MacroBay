@@ -16,7 +16,7 @@ const asOf = '2026-10-14T12:00:00.000Z'
 const eventAt = '2026-10-14T01:30:00.000Z'
 let root: ReturnType<typeof createRoot> | undefined
 let latest: CalendarCardDataState | undefined
-let mode: 'pending' | 'ok' | 'fail' = 'pending'
+let mode: 'pending' | 'ok' | 'fail' | 'official-empty' = 'pending'
 /** 产品事件通道上的订阅者：这一屏的日历月读口自己订一条（`economic-calendar` 面板）。 */
 let dataChangedHandlers: Array<(data: unknown) => void> = []
 let invoke: ReturnType<typeof vi.fn> | undefined
@@ -43,6 +43,8 @@ function stubPlatform(): void {
     if (method === 'intelligence.macro.economicCalendar.queryMonth') {
       if (mode === 'pending') return new Promise(() => undefined)
       if (mode === 'fail') throw new Error('read failed')
+      // 官方侧读到了、但这一窗确实没有发布；市源那一路读不到（stub 默认回 unavailable）。
+      if (mode === 'official-empty') return { state: 'available', asOf, events: [] }
       const month = (payload as { month?: string } | null)?.month
       return month === '2026-10' ? { state: 'available', asOf, events: [officialEvent] } : { state: 'available', asOf, events: [] }
     }
@@ -86,6 +88,17 @@ it('stays loading on the first frame and never turns a pending read into an erro
 
 it('shows the error state only once the read actually failed', async () => {
   mode = 'fail'
+  await mount()
+  await settle()
+  expect(latest?.state).toBe('error')
+})
+
+/**
+ * 「读不到」不许画成「没有」：官方侧读到了、明确没有发布，而市场那一路读不到——
+ * 这时卡片说「近期没有事件」是在替没读到的那一半编答案。
+ */
+it('reports the error state when one route is unreadable and the other has nothing', async () => {
+  mode = 'official-empty'
   await mount()
   await settle()
   expect(latest?.state).toBe('error')
