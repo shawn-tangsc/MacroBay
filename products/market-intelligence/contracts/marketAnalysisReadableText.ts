@@ -77,7 +77,10 @@ export function readableAnalysisName(names: MarketAnalysisReadableNames | undefi
  * Formats a stored value for reading using its recorded unit.
  *
  * Stored values are raw (`258458629557.07956`) and unreadable at a glance, so USD amounts are
- * scaled to 亿/万 (or B/M/K) and rounded to two decimals.
+ * scaled to 亿/万 (or B/M/K) and every percentage is rounded to two decimals without trailing
+ * zeros. `'percent'` is **the** name for a percentage: the projections used to send `'%'` and fell
+ * through to `String(value)`, which put `-4.270085560647385%` into the prompt and from there into
+ * a published conclusion.
  */
 export function formatReadableAnalysisValue(value: string | number, unit: string | null, locale: MarketAnalysisReadableLocale = 'zh-CN', signed = true): string {
   if (typeof value === 'string') {
@@ -85,7 +88,7 @@ export function formatReadableAnalysisValue(value: string | number, unit: string
     return value.length > limit ? `${value.slice(0, limit)}…` : value
   }
   if (unit === 'USD') return formatReadableUsdAmount(value, locale, signed)
-  if (unit === 'percent') return signed && value > 0 ? `+${value}%` : `${value}%`
+  if (unit === 'percent') return `${signedPrefix(value, signed)}${formatDeviation(value)}%`
   if (unit === 'pp') {
     const number = formatDeviation(value)
     return locale === 'zh-CN' ? `${signedPrefix(value, signed)}${number} 个百分点` : `${signedPrefix(value, signed)}${number}pp`

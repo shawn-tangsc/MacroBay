@@ -47,12 +47,12 @@ describe('projectMacroRates', () => {
     const { facts, caveats, observation } = project(snapshot())
 
     expect(metric(facts, MACRO_RATES_FACT_METRICS.us10y)).toMatchObject({
-      domain: 'macro', subject: 'us-treasury', value: 4.15, unit: '%',
+      domain: 'macro', subject: 'us-treasury', value: 4.15, unit: 'percent',
       sourceId: 'fred-rates-liquidity', observedAt: '2026-10-13T00:00:00.000Z', asOf: AS_OF
     })
-    expect(metric(facts, MACRO_RATES_FACT_METRICS.realRate)).toMatchObject({ value: 1.85, unit: '%' })
-    expect(metric(facts, MACRO_RATES_FACT_METRICS.us2y)).toMatchObject({ value: 4, unit: '%' })
-    expect(metric(facts, MACRO_RATES_FACT_METRICS.breakevenInflation)).toMatchObject({ value: 2.3, unit: '%' })
+    expect(metric(facts, MACRO_RATES_FACT_METRICS.realRate)).toMatchObject({ value: 1.85, unit: 'percent' })
+    expect(metric(facts, MACRO_RATES_FACT_METRICS.us2y)).toMatchObject({ value: 4, unit: 'percent' })
+    expect(metric(facts, MACRO_RATES_FACT_METRICS.breakevenInflation)).toMatchObject({ value: 2.3, unit: 'percent' })
     // "截至 2026-10-13" has to be readable from the fact itself, not only from the snapshot around it.
     expect(metric(facts, MACRO_RATES_FACT_METRICS.us10y)?.observedAt).toContain('2026-10-13')
     expect([...caveats]).toContain(MACRO_RATES_READ_CAVEAT)

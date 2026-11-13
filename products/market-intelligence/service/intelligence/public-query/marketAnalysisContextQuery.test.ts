@@ -595,7 +595,7 @@ describe('market analysis data-access matrix', () => {
     expect(dollar).toMatchObject({
       domain: 'macro', sourceId: 'twelve-data-market', value: 102.24, unit: 'index-point', observedAt: AS_OF
     })
-    expect(result.facts.some(fact => fact.metric === 'dollar-index-return-24h' && fact.unit === '%')).toBe(true)
+    expect(result.facts.some(fact => fact.metric === 'dollar-index-return-24h' && fact.unit === 'percent')).toBe(true)
     expect(result.facts.some(fact => fact.metric === 'gold-price-usd-oz' && fact.unit === 'USD/oz')).toBe(true)
     expect(result.caveats).not.toContain('synthetic-dollar-index')
 
@@ -633,10 +633,10 @@ describe('market analysis data-access matrix', () => {
     expect(result.state).toBe('available')
     if (result.state !== 'available') return
     const tenYear = result.facts.find(fact => fact.metric === 'us-10y-yield')
-    expect(tenYear).toMatchObject({ domain: 'macro', sourceId: 'fred-rates-liquidity', value: 4.15, unit: '%' })
+    expect(tenYear).toMatchObject({ domain: 'macro', sourceId: 'fred-rates-liquidity', value: 4.15, unit: 'percent' })
     // "截至 YYYY-MM-DD": the trading day is readable from the fact, not only from the snapshot.
     expect(tenYear?.observedAt).toBe('2026-09-24T00:00:00.000Z')
-    expect(result.facts.find(fact => fact.metric === 'us-10y-real-yield')?.unit).toBe('%')
+    expect(result.facts.find(fact => fact.metric === 'us-10y-real-yield')?.unit).toBe('percent')
     // A yield difference is basis points, never a percent.
     expect(result.facts.find(fact => fact.metric === 'us-10y-2y-term-spread')).toMatchObject({ unit: 'bp' })
     expect(result.caveats).toContain('official-daily-close')

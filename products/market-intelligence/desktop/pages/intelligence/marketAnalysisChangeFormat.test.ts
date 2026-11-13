@@ -62,7 +62,7 @@ describe('market analysis change formatting', () => {
     expect(formatUsdAmount(258_458_629_557.07956, 'zh-CN', false)).toBe('2584.59 亿美元')
     expect(formatUsdAmount(314_300_000, 'zh-CN')).toBe('+3.14 亿美元')
     expect(formatChangeValue(258_458_629_557.07956, 'USD', 'zh-CN', false)).toBe('2584.59 亿美元')
-    expect(formatChangeValue(-0.003657, 'percent', 'zh-CN')).toBe('-0.003657%')
+    expect(formatChangeValue(-4.270085560647385, 'percent', 'zh-CN')).toBe('-4.27%')
     expect(formatChangeValue(71, null, 'zh-CN')).toBe('71')
   })
 

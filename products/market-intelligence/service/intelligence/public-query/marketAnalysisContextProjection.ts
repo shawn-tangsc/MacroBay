@@ -174,7 +174,7 @@ export function projectFunding(result: FundingRateHistoryResult | undefined, pos
     return
   }
   const points = [...result.btc.map(point => ['BTC', point] as const), ...result.eth.map(point => ['ETH', point] as const)]
-  for (const [index, [asset, point]] of points.entries()) facts.push(fact('funding', asset, 'funding-rate-percent', point.ratePercent, '%', 'binance-futures-positioning', point.observedAt, asOf, 'comparable', `point-${index}`))
+  for (const [index, [asset, point]] of points.entries()) facts.push(fact('funding', asset, 'funding-rate-percent', point.ratePercent, 'percent', 'binance-futures-positioning', point.observedAt, asOf, 'comparable', `point-${index}`))
   projectPositioning(positioning, result, asOf, facts)
   const state = points.length ? 'available' : 'empty'
   const freshness = points.length ? 'fresh' : 'missing'
@@ -228,7 +228,7 @@ export function projectCrossAsset(
       const comparable = completeCoverage(snapshot, assetKey(asset))
       // The window belongs to the metric name: a fact carries no free-text label, so "价格收益 +0.4%"
       // without one left the model unable to tell 15 minutes from three days — it said so.
-      facts.push(fact('cross-asset', asset, `price-return-${window.horizon}`, value, '%', sourceId, snapshot.analysisEnd, asOf,
+      facts.push(fact('cross-asset', asset, `price-return-${window.horizon}`, value, 'percent', sourceId, snapshot.analysisEnd, asOf,
         comparable ? 'comparable' : 'not-comparable', `${window.range}-${window.horizon}`))
       if (!comparable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.notComparable)
     }
@@ -253,7 +253,7 @@ export function projectCrossAsset(
     const value = closedReturn(snapshot, 'index')
     if (value === undefined) continue
     const comparable = completeCoverage(snapshot, 'index')
-    facts.push(fact('cross-asset', instrument.symbol, `price-return-${window.horizon}`, value, '%', instrument.sourceId,
+    facts.push(fact('cross-asset', instrument.symbol, `price-return-${window.horizon}`, value, 'percent', instrument.sourceId,
       snapshot.analysisEnd, asOf, comparable ? 'comparable' : 'not-comparable', `${window.range}-${window.horizon}`))
     if (!comparable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.notComparable)
     caveats.add(instrument.limitation)
@@ -266,7 +266,7 @@ export function projectCrossAsset(
     // Exactly the verifier's arithmetic: BTC's window return minus ETH's, so a prediction written
     // against this fact is checkable by the same yardstick.
     const comparable = completeCoverage(relativeSnapshot, 'btc') && completeCoverage(relativeSnapshot, 'eth')
-    facts.push(fact('cross-asset', 'btc-vs-eth', `relative-return-${relative.horizon}`, btc - eth, '%', sourceId, relativeSnapshot.analysisEnd, asOf,
+    facts.push(fact('cross-asset', 'btc-vs-eth', `relative-return-${relative.horizon}`, btc - eth, 'percent', sourceId, relativeSnapshot.analysisEnd, asOf,
       comparable ? 'comparable' : 'not-comparable', `${relative.range}-${relative.horizon}`))
     if (!comparable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.notComparable)
   }

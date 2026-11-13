@@ -61,7 +61,7 @@ describe('projectCrossAsset', () => {
       const windows = asset === 'USTEC' ? ['24h-24h'] : ['1h-15m', '24h-2h', '24h-24h', '7d-3d']
       for (const suffix of windows) expect(factFor(priceMetrics, asset, suffix), `${asset} ${suffix}`).toBeDefined()
     }
-    expect(priceMetrics.every(entry => entry.comparability === 'comparable' && entry.unit === '%')).toBe(true)
+    expect(priceMetrics.every(entry => entry.comparability === 'comparable' && entry.unit === 'percent')).toBe(true)
     // The window must be readable from the fact itself, not only from its internal id.
     expect(priceMetrics.map(entry => entry.metric).sort()).toEqual([
       'price-return-15m', 'price-return-15m', 'price-return-24h', 'price-return-24h', 'price-return-24h',
@@ -79,7 +79,7 @@ describe('projectCrossAsset', () => {
     const relative = facts.find(entry => entry.metric.startsWith('relative-return'))
 
     // BTC 2h (+2.4 over 24 points at 0.1) minus ETH 2h (+1.2 at 0.05) = +1.2, i.e. BTC stronger.
-    expect(relative).toMatchObject({ subject: 'btc-vs-eth', unit: '%', comparability: 'comparable' })
+    expect(relative).toMatchObject({ subject: 'btc-vs-eth', unit: 'percent', comparability: 'comparable' })
     expect(relative?.value).toBeCloseTo(1.2)
   })
 

@@ -37,7 +37,11 @@ describe('readable analysis text', () => {
     expect(isSignedAnalysisMetric('change-1d-usd')).toBe(true)
     expect(isSignedAnalysisMetric('current-usd')).toBe(false)
     expect(isSignedAnalysisMetric('surprise')).toBe(true)
-    expect(formatReadableAnalysisValue(-0.003657, 'percent')).toBe('-0.003657%')
+    expect(formatReadableAnalysisValue(-4.270085560647385, 'percent')).toBe('-4.27%')
+    expect(formatReadableAnalysisValue(3.75, 'percent')).toBe('+3.75%')
+    expect(formatReadableAnalysisValue(4.1, 'percent')).toBe('+4.1%')
+    // 两位小数的直接结果：更小的值落成 0，而不是把十位小数带出去。
+    expect(formatReadableAnalysisValue(-0.003657, 'percent')).toBe('0%')
     expect(formatReadableAnalysisValue(0.5, 'percent')).toBe('+0.5%')
     expect(formatReadableAnalysisValue(71, 'score')).toBe('71')
     expect(formatReadableAnalysisValue('x'.repeat(200), null)).toBe(`${'x'.repeat(72)}…`)

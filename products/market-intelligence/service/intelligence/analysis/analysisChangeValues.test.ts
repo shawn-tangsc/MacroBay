@@ -59,12 +59,23 @@ describe('the numbers the change digest printed', () => {
   })
 
   it('takes plain numbers too, but only where a value is printed', () => {
-    // 值位是一条普通数字（无百分号）：`0.007999` 这类。模型照抄它是合规的。
+    // 值位是一条普通数字（无百分号）时，模型照抄它是合规的：`index-point` 这类没有单位的档。
     const change = computeSnapshotChange({
-      current: snapshotOf([fact(0, { metric: 'funding-rate-percent', value: 0.007999, unit: '%' })]) as never,
+      current: snapshotOf([fact(0, { metric: 'positioning-state', value: 71, unit: 'index-point' })]) as never,
       previous: snapshotOf([]) as never
     })
-    expect(changeValuesForPrompt(change, 'zh-CN')).toEqual(expect.arrayContaining([0.007999]))
+    expect(changeValuesForPrompt(change, 'zh-CN')).toEqual(expect.arrayContaining([71]))
+  })
+
+  it('prints a percentage as the rounded percentage the reader sees, not the raw float', () => {
+    // 资金费率是百分数：值位印「0.01%」，模型照抄 0.01 合规；原始的 0.007999 不再出现在提示词里。
+    const change = computeSnapshotChange({
+      current: snapshotOf([fact(0, { metric: 'funding-rate-percent', value: 0.007999, unit: 'percent' })]) as never,
+      previous: snapshotOf([]) as never
+    })
+    const values = changeValuesForPrompt(change, 'zh-CN')
+    expect(values).toEqual(expect.arrayContaining([0.01]))
+    expect(values).not.toContain(0.007999)
   })
 
   it('never takes the numbers that are only in the sentence around the values', () => {
