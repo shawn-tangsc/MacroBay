@@ -863,6 +863,26 @@ describe('daily briefing document', () => {
     expect(unread.news.notes.macroEmpty).toBe('calendar-unavailable')
   })
 
+  // 2026-11-14：补跑改成排作业后返回 `{state:'completed'}`，契约里没有这一种。它不能被写成
+  // 「最近一次日历采集失败」——读者会以为源坏了；也不能写成「没有事件」。它有自己的那句话。
+  it('gives a catch-up whose outcome is unknown its own reason, not a failed collection', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: {
+          state: 'available',
+          lastCollectedAt: '2026-10-28T06:27:00.000Z',
+          catchUp: { state: 'unknown', failureCode: 'catch-up-verdict-invalid' }
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.notes.macroEmpty).toBe('calendar-catch-up-unknown')
+    expect(document.news.notes.macroEmpty).not.toBe('calendar-collect-failed')
+    expect(document.news.notes.macroEmpty).not.toBe('past-24h-no-high-impact-release')
+  })
+
   it('allows "nothing happened" only when the reading is fresh and the window is empty', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

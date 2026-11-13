@@ -55,6 +55,15 @@ describe('the catch-up list is the registry\'s "actually collecting" answer', ()
   })
 })
 
+// 等多久与读者被告知的那句话必须同一个数（用户 2026-11-14 定 20 秒）。这条钉的是决定本身：
+// 谁把它改回契约默认的 90 秒，日报就会为一次排不上的采集多等一分半，而超时那句已经不写秒数了，
+// 没有人会从界面上发现。红在这里，而不是靠人记得。
+describe('the catch-up budget', () => {
+  it('is 20 seconds — the same cap the queue trigger uses', () => {
+    expect(BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS).toBe(20_000)
+  })
+})
+
 describe('ensureCalendarFreshForRun', () => {
   it('skips the catch-up when the last success is inside the two-hour window', async () => {
     const refreshNow = vi.fn()
@@ -113,6 +122,21 @@ describe('ensureCalendarFreshForRun', () => {
     })
 
     expect(reading.catchUp).toEqual({ state: 'failed', failureCode: 'queue closed' })
+  })
+
+  // 2026-11-14 的真实形状：补跑改成「排一个作业」后就返回了 `{state:'completed'}`——契约里没有这一种。
+  // 它**不是**采集失败（没有任何东西失败），读的人也不该被告知「源坏了」。落 `unknown`，
+  // 那句话交给补跑之后的新鲜度决定。
+  it('records a verdict the contract does not name as unknown, never as a failed collection', async () => {
+    const reading = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true,
+      refreshNow: async () => ({ state: 'completed', sources: [] }),
+      readFreshness: async () => freshness(staleAt)
+    })
+
+    expect(reading.catchUp).toEqual({ state: 'unknown', failureCode: 'catch-up-verdict-invalid' })
+    // 未知不等于变新：读数还是补跑前那份。
+    expect(reading).toMatchObject({ state: 'available', lastCollectedAt: staleAt })
   })
 
   it('answers "not wired" — not "nothing" — when no freshness reader was injected', async () => {

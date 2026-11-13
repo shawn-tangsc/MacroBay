@@ -536,13 +536,14 @@ function newsEmptyCode(packet: DailyBriefingFactPacket): string {
 }
 
 /**
- * Why the macro section is empty, in the six reason codes of `A0.8` — plus the catch-up timeout.
+ * Why the macro section is empty, in the six reason codes of `A0.8` — plus the catch-up timeout and
+ * the catch-up whose outcome we never learned.
  *
  * The one rule this function exists to enforce: **only a fresh reading of an empty window may say
  * "there was nothing"**. Everything else — switched off, unreadable, never collected, stale, the last
- * collection failed, the catch-up ran out of time, or a packet that carries no freshness reading at
- * all — says "not readable" with its own reason. Folding any of those into "nothing" is the exact
- * defect the reader reported on 2026-11-05.
+ * collection failed, the catch-up ran out of time, the catch-up's outcome is unknown, or a packet that
+ * carries no freshness reading at all — says "not readable" with its own reason. Folding any of those
+ * into "nothing" is the exact defect the reader reported on 2026-11-05.
  *
  * The baseline is the packet's own `asOf`, which *is* `dataAsOf` (`A0.10`): on a backfill the two
  * differ, and measuring against the period's nominal cutoff would make the section show events while
@@ -555,6 +556,10 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   if (!freshness) return 'calendar-unavailable'
   // A catch-up that ran out of time is its own sentence: it did not fail, it did not finish.
   if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
+  // A catch-up we triggered but never learned the outcome of (the command answered with a shape the
+  // contract does not name) gets its own sentence: nothing failed, we simply do not know yet. Writing
+  // "the last collection failed" here tells the reader the source is broken when it is not.
+  if (freshness.catchUp?.state === 'unknown') return 'calendar-catch-up-unknown'
   // A catch-up that failed is a collection failure, which is also not "nothing".
   if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
   const reason = briefingMacroEmptyReason({

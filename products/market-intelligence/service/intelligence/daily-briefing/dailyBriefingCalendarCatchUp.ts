@@ -1,6 +1,5 @@
 import {
   isMarketCalendarFreshness,
-  marketCalendarPublicPolicy,
   type MarketCalendarCollectionFreshness,
   type MarketCalendarFreshness,
   type MarketCalendarRefreshNowResult
@@ -27,8 +26,14 @@ import { BRIEFING_CALENDAR_STALE_AFTER_MS } from './dailyBriefingMacroEmptyReaso
  *    can say that, and that decision lives in `briefingMacroEmptyReason`.
  */
 
-/** The whole budget for one catch-up; the three feeds share it, they do not each get one. */
-export const BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS = marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs
+/**
+ * The whole budget for one catch-up; the feeds share it, they do not each get one.
+ *
+ * **20 s, not the contract's 90 s default**（用户 2026-11-14）：补跑现在排的是作业，日报不该为了
+ * 一次排不上的采集多等一分半；等多久与读者被告知的那句话必须同一个数（那句已不带数字，
+ * 写死秒数会在下次调上限时变成假话）。契约接受 1–120 s，20 s 合法。
+ */
+export const BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS = 20_000
 
 /**
  * The calendar feeds the brief may catch up: **exactly the descriptors the live calendar service
@@ -57,7 +62,14 @@ export function briefingCalendarCatchUpSourceIds(): readonly string[] {
 }
 
 export type BriefingCalendarCatchUp = Readonly<{
-  state: 'skipped' | 'collected' | 'unchanged' | 'failed' | 'timeout'
+  /**
+   * `unknown` is the fourth kind of "we do not know": the command was accepted but answered with a
+   * shape the contract does not name (today's queue-triggered catch-up answers `completed`, which is
+   * the old synchronous verdict). It is **not** a failed collection — nothing failed, we simply did
+   * not learn the outcome — so the reader must not be told "the collection failed". The freshness
+   * reading taken after the trigger is what decides the sentence.
+   */
+  state: 'skipped' | 'collected' | 'unchanged' | 'failed' | 'timeout' | 'unknown'
   /** Only meaningful on `timeout`: how long we actually waited. */
   timeoutMs?: number
   failureCode?: string
@@ -150,8 +162,11 @@ async function runCatchUp(
   if (verdict?.state === 'failed') {
     return Object.freeze({ state: 'failed' as const, ...(typeof verdict.failureCode === 'string' ? { failureCode: verdict.failureCode } : {}) })
   }
-  // A shape the contract does not name: treat it as a failed collection rather than a timeout.
-  return Object.freeze({ state: 'failed' as const, failureCode: 'catch-up-verdict-invalid' })
+  // A shape the contract does not name: the command was accepted, but we did not learn how it went.
+  // Reporting it as a failed collection would be a lie the reader acts on ("采集失败" 让人以为源坏了),
+  // and reporting it as a timeout would invent a duration. Say "unknown" and let the reading after the
+  // trigger decide the sentence.
+  return Object.freeze({ state: 'unknown' as const, failureCode: 'catch-up-verdict-invalid' })
 }
 
 async function readFreshness(
