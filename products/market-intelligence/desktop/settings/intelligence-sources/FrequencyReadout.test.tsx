@@ -1,25 +1,32 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 
 import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
-import { FrequencyReadout } from './FrequencyReadout'
+import { FrequencyReadout, frequencyReadoutLine, frequencyReadoutText } from './FrequencyReadout'
 import type { FrequencyReadoutView } from './sourceCadence'
 
 /**
- * 下拉下方那一行读数（原型 2026-11-13）。
+ * 频率读数：**整条在 ⓘ 浮层里**，第①行是当前值（界面设计 2026-11-13 v4）。
  *
- * 钉的判据：两段独立、不可判定的几种各自有说法、**不写 `--`/`0`/「从未」**、
- * 时刻走平台统一格式化（这里把显示时区钉成 UTC，所以断言的是真值不是「大约」）。
+ * 钉的判据：
+ * - 8 种状态各一条文案键，句子**不拼**（`frequencyReadoutLine` 只选键 + 填已格式化的参数）；
+ * - 读不到 ≠ 0 ≠ 从未：不写 `--`、不写 0、不写「从未采集」；
+ * - 时刻走平台统一格式化（这里把显示时区钉成 UTC，断言的是真值不是「大约」）；
+ * - 正文那一行没有了，样式**不许再有截断/不换行**（原来正好切在「约 17:…」）。
  */
 const T = productText['zh-CN'].settings.intelligenceSources.collectionPolicy
 const resolveText = (key: string): string => resolveProductTextKey('zh-CN', key)
+const TIME_ZONE = 'UTC'
+const INSTANT = '2026-12-01T06:30:00.000Z'
 
 let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => {
@@ -28,96 +35,95 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-async function render(view: FrequencyReadoutView): Promise<HTMLElement> {
-  const host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  await act(async () => {
-    root!.render(createElement(ShellLanguageProvider, {
-      language: 'zh-CN',
-      children: createElement(ShellTimeZoneProvider, {
-        timeZone: 'UTC',
-        children: createElement(FrequencyReadout, { resolveText, view })
-      })
-    }))
-  })
-  return host
+function view(overrides: Partial<FrequencyReadoutView> = {}): FrequencyReadoutView {
+  return { kind: 'interval', intervalSeconds: 900, next: { kind: 'at', instant: INSTANT }, ...overrides } as FrequencyReadoutView
 }
 
-const INSTANT = '2026-12-01T06:30:00.000Z'
+describe('第①行：8 种状态各一条键', () => {
+  it.each([
+    ['at', {}, `${T.durationMinutes}`],
+    ['running', { next: { kind: 'running' } }, ''],
+    ['notStarted', { next: { kind: 'notStarted' } }, ''],
+    ['unreadable', { next: { kind: 'unreadable' } }, '']
+  ] as const)('interval + %s', (kind, overrides, _marker) => {
+    const line = frequencyReadoutLine(view(overrides as Partial<FrequencyReadoutView>), TIME_ZONE, resolveText)
+    expect(line.params?.interval, kind).toBe('15 分钟')
+  })
 
-describe('频率读数那一行', () => {
-  it('正常态：间隔 + 推算出来的下次时刻（读者时区、**带「约」**），两段之间一颗「·」', async () => {
-    const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind: 'at', instant: INSTANT } })
+  it('picks one key per state — the sentence itself is never assembled', () => {
+    expect(frequencyReadoutLine(view(), TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutNextAt')
+    expect(frequencyReadoutLine(view({ next: { kind: 'running' } } as never), TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutRunning')
+    expect(frequencyReadoutLine(view({ next: { kind: 'notStarted' } } as never), TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutNotStarted')
+    expect(frequencyReadoutLine(view({ next: { kind: 'unreadable' } } as never), TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutNextUnreadable')
+    expect(frequencyReadoutLine({ kind: 'manual' }, TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutManual')
+    expect(frequencyReadoutLine({ kind: 'disabled' }, TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutDisabled')
+    expect(frequencyReadoutLine({ kind: 'unscheduled' }, TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutUnscheduled')
+    expect(frequencyReadoutLine({ kind: 'unreadable' }, TIME_ZONE, resolveText).labelKey)
+      .toBe('settings.intelligenceSources.collectionPolicy.readoutScheduleUnreadable')
+  })
+
+  it('reads as one sentence, and never as 0 / -- / 「从未」', () => {
+    // 跨天时平台格式化器会带上「月-日」，这里两种都接受，但必须是统一格式化的那一刻。
+    expect(frequencyReadoutText(view(), TIME_ZONE, resolveText)).toMatch(/^间隔 15 分钟 · 约 (?:\d{2}-\d{2} )?\d{2}:\d{2}$/u)
+    expect(frequencyReadoutText({ kind: 'manual' }, TIME_ZONE, resolveText)).toBe(T.readoutManual)
+    expect(frequencyReadoutText({ kind: 'disabled' }, TIME_ZONE, resolveText)).toBe(T.readoutDisabled)
+    expect(frequencyReadoutText({ kind: 'unscheduled' }, TIME_ZONE, resolveText)).toBe(T.readoutUnscheduled)
+    for (const state of [view({ next: { kind: 'running' } } as never), view({ next: { kind: 'notStarted' } } as never), { kind: 'unreadable' } as const]) {
+      const sentence = frequencyReadoutText(state, TIME_ZONE, resolveText)
+      expect(sentence).not.toMatch(/--|—|从未| 0 /)
+    }
+  })
+
+  it('says 6 小时 for a six-hour interval instead of 360 分钟', () => {
+    expect(frequencyReadoutText(view({ intervalSeconds: 6 * 60 * 60 }), TIME_ZONE, resolveText))
+      .toContain('间隔 6 小时')
+  })
+})
+
+describe('「内置频率」那一行仍在正文里显示读数（不走浮层）', () => {
+  it('renders the sentence and is allowed to wrap — no truncation', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(createElement(ShellLanguageProvider, {
+        language: 'zh-CN',
+        children: createElement(ShellTimeZoneProvider, {
+          timeZone: TIME_ZONE,
+          children: createElement(FrequencyReadout, { resolveText, view: view() })
+        })
+      }))
+    })
     const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
     expect(row, '读数').not.toBeNull()
     expect(row!.textContent).toContain('间隔 15 分钟')
-    // 时刻由平台格式化器给，不在这里拼：跨天它会自己带上月-日。
-    // 正文写「约」：这个值是推算的，写成精确时刻等于替系统下保证。
-    expect(row!.textContent).toContain(`约 ${formatShellClock(INSTANT, { timeZone: 'UTC' })}`)
-    expect(row!.querySelectorAll('.business-card__preset-readout-sep')).toHaveLength(1)
-    expect(row!.textContent).not.toMatch(/--|—|从未/)
-  })
-
-  it('正在采集：只换「下次」那一段，间隔照留，DOM 里不出现任何时刻', async () => {
-    const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind: 'running' } })
-    const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
-    expect(row!.textContent).toContain('间隔 15 分钟')
-    expect(row!.textContent).toContain(T.nextRunning)
-    // 倒计时/时刻一律不许出现：`14:30`、`12-01 06:30` 这类都算。
-    expect(row!.textContent).not.toMatch(/\d{1,2}:\d{2}/)
-  })
-
-  it('从没跑过：不写「立即」、不给时刻，也不预告「启用后会马上跑一次」', async () => {
-    const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind: 'notStarted' } })
-    const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
-    expect(row!.textContent).toBe(`间隔 15 分钟·${T.nextNotStarted}`)
-    expect(row!.textContent).not.toMatch(/\d{1,2}:\d{2}/)
-    expect(row!.textContent).not.toContain('立即')
-    // ⓘ 里也不预告那个行为（那是行为，不是承诺）。
-    expect(`${T.presetIntervalsNote}${T.nextIsEstimateNote}${T.scheduleUnreadableNote}`).not.toContain('立即')
-  })
-
-  it('整天数：6 小时按小时说，不写成 360 分钟', async () => {
-    const host = await render({ kind: 'interval', intervalSeconds: 6 * 60 * 60, next: { kind: 'running' } })
-    expect(host.textContent).toContain('间隔 6 小时')
-  })
-
-  it.each([
-    ['running', T.nextRunning],
-    ['notStarted', T.nextNotStarted],
-    ['unreadable', T.nextUnreadable]
-  ] as const)('有间隔、第二段是 %s：说这一段的实话，不拿占位顶替', async (kind, copy) => {
-    const host = await render({ kind: 'interval', intervalSeconds: 900, next: { kind } })
-    const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
-    expect(row!.textContent).toContain('间隔 15 分钟')
-    expect(row!.textContent).toContain(copy)
-    expect(row!.textContent).not.toMatch(/--|—|从未/)
-  })
-
-  it('手动档：只写「手动：不自动采集」，不写间隔、不写「—」', async () => {
-    const host = await render({ kind: 'manual' })
-    const row = host.querySelector<HTMLElement>('[data-frequency-readout]')
-    expect(row!.getAttribute('data-frequency-readout')).toBe('manual')
-    expect(row!.textContent).toBe(T.manualOnly)
-    expect(row!.textContent).not.toContain('间隔')
-    expect(row!.querySelectorAll('.business-card__preset-readout-sep')).toHaveLength(0)
-  })
-
-  it('源未启用：只写「未启用，不采集」', async () => {
-    const host = await render({ kind: 'disabled' })
-    expect(host.textContent).toBe(T.disabledNoCollect)
-  })
-
-  it('排期里没有它：只写「未安排」，**不显示间隔**（不从开关反推）', async () => {
-    const host = await render({ kind: 'unscheduled' })
-    expect(host.textContent).toBe(T.unscheduled)
-    expect(host.textContent).not.toContain('间隔')
-  })
-
-  it('整批读不到：这一行不画占位（原因进同一颗 ⓘ）', async () => {
-    const host = await render({ kind: 'unreadable' })
+    // 整批排期读不到：这一行不画（正文不留占位）。
+    await act(async () => {
+      root!.render(createElement(ShellLanguageProvider, {
+        language: 'zh-CN',
+        children: createElement(ShellTimeZoneProvider, {
+          timeZone: TIME_ZONE,
+          children: createElement(FrequencyReadout, { resolveText, view: { kind: 'unreadable' } })
+        })
+      }))
+    })
     expect(host.querySelector('[data-frequency-readout]')).toBeNull()
-    expect(host.textContent).not.toMatch(/--|—|0/)
+  })
+
+  it('has no ellipsis/nowrap rule left — the old line cut 「约 17:…」 in half', () => {
+    const css = readFileSync(join(__dirname, 'frequencyReadout.css'), 'utf8')
+    const readoutRule = css.slice(css.indexOf('.business-card__preset-readout {'))
+    const rule = readoutRule.slice(0, readoutRule.indexOf('}'))
+    expect(rule).not.toContain('text-overflow')
+    expect(rule).not.toContain('nowrap')
+    // 放不下就换行，而不是截断。
+    expect(rule).toContain('white-space: normal')
   })
 })

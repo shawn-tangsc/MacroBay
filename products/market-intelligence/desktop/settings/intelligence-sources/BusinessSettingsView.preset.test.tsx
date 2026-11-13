@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { productText } from '../../shared/i18n/productText'
 import { BusinessSettingsContent, otherBusinessGroups, type BusinessKey } from './BusinessSettingsView'
@@ -61,7 +62,9 @@ async function render(input: RenderInput = {}): Promise<{ host: HTMLElement; onP
   await act(async () => {
     root!.render(createElement(ShellLanguageProvider, {
       language: 'zh-CN',
-      children: createElement(BusinessSettingsContent, {
+      children: createElement(ShellTimeZoneProvider, {
+        timeZone: 'UTC',
+        children: createElement(BusinessSettingsContent, {
         business: input.business ?? 'dashboard',
         isCellEnabled: () => true,
         isSourceEnabled: () => input.sourceEnabled ?? true,
@@ -72,8 +75,9 @@ async function render(input: RenderInput = {}): Promise<{ host: HTMLElement; onP
         ...(input.builtinCadence === true ? { builtinCadence: new Set(['policy-path-market']) } : {}),
         ...(input.cadence === undefined ? {} : { cadence: input.cadence }),
         ...(input.cadenceAvailable === undefined ? {} : { cadenceAvailable: input.cadenceAvailable }),
-        resolveText,
-        sourceNames: { 'policy-path-market': 'Polymarket' }
+          resolveText,
+          sourceNames: { 'policy-path-market': 'Polymarket' }
+        })
       })
     }))
   })
@@ -198,10 +202,10 @@ describe('每源第二行：频率', () => {
 })
 
 /**
- * 下拉正下方那一行读数（原型 2026-11-13）：**只是文字**，不新造控件；整批排期读不到时
- * 这一行不画（原因进同一颗 ⓘ），不拿 0 / `--` / 「从未」顶替。
+ * 「频率」那一行：正文只有「频率 ⓘ + 下拉」，读数整条在 ⓘ 浮层里（界面设计 2026-11-13 v4）。
+ * 浮层**恒 4 条**，只有第①条随状态变；改档后第①条的间隔数字必须跟着变。
  */
-describe('频率读数：下拉下方那一段', () => {
+describe('频率读数：收在 ⓘ 浮层里，正文不再占一行', () => {
   const CADENCE = {
     registration: 'registered' as const,
     mode: 'interval' as const,
@@ -210,33 +214,62 @@ describe('频率读数：下拉下方那一段', () => {
     lastRunAt: '2026-12-01T06:15:00.000Z',
     running: false
   }
+  const CARD_ROW = `${ROW} [data-preset-row="policy-path-market"]`
 
-  it('puts the readout under the select, inside the control column', async () => {
+  /** 点开那颗 ⓘ，按行返回浮层内容（每行是一个 `[data-popover-line]`）。 */
+  async function openHelp(row: HTMLElement): Promise<string[]> {
+    const trigger = row.querySelector<HTMLButtonElement>('button[aria-label]')!
+    await act(async () => { trigger.click() })
+    await act(async () => { await Promise.resolve() })
+    const describedBy = trigger.getAttribute('aria-describedby') ?? ''
+    const node = describedBy.split(' ').map((id) => document.getElementById(id)).find((each) => each !== null)
+    return [...(node?.querySelectorAll<HTMLElement>('[data-popover-line]') ?? [])]
+      .map((line) => line.textContent ?? '')
+  }
+
+  it('keeps the body to the label + ⓘ + dropdown, and puts the value in the popover', async () => {
     const { host } = await render({ preset: 'balanced', cadence: { 'policy-path-market': CADENCE } })
-    const row = host.querySelector<HTMLElement>(`${ROW} [data-preset-row="policy-path-market"]`)!
-    const control = row.querySelector<HTMLElement>('.business-card__preset-control')
-    expect(control, '控件列').not.toBeNull()
-    // 读数在控件列里、排在下拉之后：不是另起一行，也不在标签列。
-    expect(control!.lastElementChild?.getAttribute('data-frequency-readout')).toBe('interval-at')
-    expect(control!.textContent).toContain('间隔 15 分钟')
-    // 仍然只有一颗 ⓘ，而且它现在**每行都有**（三档间隔并进同一颗）。
-    expect(row.querySelectorAll('button[aria-label]')).toHaveLength(1)
-    // 说明句只许在浮层里：正文只留字段名 + 值（2026-11-13 正文说明句门禁）。
-    for (const note of [
-      t.collectionPolicy.presetIntervalsNote,
-      t.collectionPolicy.nextIsEstimateNote,
-      t.collectionPolicy.manualPresetNote,
-      t.collectionPolicy.scheduleUnreadableNote
-    ]) expect(row.textContent, note).not.toContain(note)
-  })
-
-  it('draws nothing when the schedule could not be read at all — and says so only in the ⓘ', async () => {
-    const { host } = await render({ preset: 'balanced', cadenceAvailable: false })
-    const row = host.querySelector<HTMLElement>(`${ROW} [data-preset-row="policy-path-market"]`)!
+    const row = host.querySelector<HTMLElement>(CARD_ROW)!
+    // 正文没有读数那一行（截断/错位的来源就此消失），也仍然只有一颗 ⓘ。
     expect(row.querySelector('[data-frequency-readout]')).toBeNull()
-    expect(row.textContent).not.toMatch(/--|—|从未/)
-    // ⓘ 仍在（排期读不到的原因在那里说），下拉仍在。
     expect(row.querySelectorAll('button[aria-label]')).toHaveLength(1)
     expect(row.querySelector('.ant-select-selector')).not.toBeNull()
+    // 说明句与读数都不许进正文。
+    for (const note of [t.collectionPolicy.presetIntervalsNote, t.collectionPolicy.nextIsEstimateNote, t.collectionPolicy.readoutEdgesNote]) {
+      expect(row.textContent, note).not.toContain(note)
+    }
+    const lines = await openHelp(row)
+    expect(lines, '浮层恒 4 条').toHaveLength(4)
+    expect(lines[0]).toContain('间隔 15 分钟')
+    expect(lines[0]).toContain('约 ')
+  })
+
+  it('keeps four lines in the manual state too', async () => {
+    const { host } = await render({ preset: 'manual', cadence: { 'policy-path-market': CADENCE } })
+    const lines = await openHelp(host.querySelector<HTMLElement>(CARD_ROW)!)
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toBe(t.collectionPolicy.readoutManual)
+  })
+
+  it('tracks the cadence after a preset change — the value stays verifiable inside the popover', async () => {
+    // 改成高频（5 分钟）之后重新打开，第①条的间隔数字必须变，而不是还念旧的 15 分钟。
+    const { host } = await render({
+      preset: 'frequent',
+      cadence: { 'policy-path-market': { ...CADENCE, intervalSeconds: 300 } }
+    })
+    const lines = await openHelp(host.querySelector<HTMLElement>(CARD_ROW)!)
+    expect(lines[0]).toContain('间隔 5 分钟')
+    expect(lines[0]).not.toContain('间隔 15 分钟')
+  })
+
+  it('says the schedule could not be read instead of swallowing it', async () => {
+    const { host } = await render({ preset: 'balanced', cadenceAvailable: false })
+    const row = host.querySelector<HTMLElement>(CARD_ROW)!
+    expect(row.querySelector('[data-frequency-readout]')).toBeNull()
+    const lines = await openHelp(row)
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toBe(t.collectionPolicy.readoutScheduleUnreadable)
+    // 「读不到」不许被 0 / `--` / 「从未」顶替（第④条解释句里出现的「不写从未」不算）。
+    expect(lines[0]).not.toMatch(/--|—|^0$|从未采集/)
   })
 })

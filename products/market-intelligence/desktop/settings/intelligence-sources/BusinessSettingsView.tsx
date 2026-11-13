@@ -4,10 +4,11 @@ import { Select, Switch } from 'antd'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { SettingsInfo } from '../settingsInfo'
 import { ProcessingEntryRow } from '../../pages/intelligence/ProcessingEntryRow'
-import { FrequencyReadout } from './FrequencyReadout'
+import { FrequencyReadout, frequencyReadoutLine } from './FrequencyReadout'
 import { frequencyReadoutView, type SourceCadenceReadout } from './sourceCadence'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes } from './sourceSettingRows'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
@@ -192,6 +193,8 @@ export function BusinessSettingsContent(props: {
 }): React.ReactElement {
   const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
+  /* 频率读数里的「下次」按读者设置时区显示；格式化只在这里取一次。 */
+  const timeZone = useShellTimeZone()
   const renderCell = (
     moduleId: string,
     cell: DashboardCell,
@@ -218,6 +221,7 @@ export function BusinessSettingsContent(props: {
       ...(props.builtinCadence?.has(cell.sourceId) === true ? { builtinCadence: true } : {}),
       ...(props.cadence?.[cell.sourceId] === undefined ? {} : { cadence: props.cadence[cell.sourceId] }),
       ...(props.cadenceAvailable === false ? { cadenceUnavailable: true } : {}),
+      timeZone,
     })
   }
   return <div className="intelligence-detail-scroll">
@@ -347,9 +351,21 @@ function cellRow(args: {
   /** 这一批排期没读到：读数不画，ⓘ 里说明。 */
   cadenceUnavailable?: boolean
   resolveText: (key: string) => string
+  /** 显示时区（读数里「下次」的时刻按读者设置格式化）。 */
+  timeZone: string
 }): React.ReactElement {
   const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
   const sourceOff = args.sourceEnabled === false
+  /* 频率读数（2026-11-13 界面设计改口径）：**不再占正文那一行**，整条收进 ⓘ 的浮层、
+     放在解释句之前当第一行——读者点开第一眼就是当前值。正文只剩「频率 ⓘ + 下拉」。 */
+  const readoutView = args.preset === undefined
+    ? undefined
+    : frequencyReadoutView({
+      enabled: !sourceOff,
+      preset: args.preset,
+      scheduleAvailable: args.cadenceUnavailable !== true,
+      ...(args.cadence === undefined ? {} : { cadence: args.cadence })
+    })
   const toggleKey = enabled
     ? 'settings.intelligenceSources.cellEnabled.disable'
     : 'settings.intelligenceSources.cellEnabled.enable'
@@ -449,15 +465,13 @@ function cellRow(args: {
               这里直接写 `Popover` 而不是经过 `SettingsInfo`：门禁认的是调用点上的 `lines=`，
               包一层 helper 会让这四句看起来像正文（2026-11-13 正文说明句门禁抓到的那八条）。 */}
           <Popover
+            /* 固定 4 条（界面设计 2026-11-13 v4）：① 当前值（只有它随状态变）② 三档实际间隔
+               ③「下次」是推算 ④ 手动/读不到两条边界。任何状态都不得长出第 5 条。 */
             lines={[
+              frequencyReadoutLine(readoutView!, args.timeZone, args.resolveText),
               { labelKey: 'settings.intelligenceSources.collectionPolicy.presetIntervalsNote' },
               { labelKey: 'settings.intelligenceSources.collectionPolicy.nextIsEstimateNote' },
-              ...(args.cadenceUnavailable === true
-                ? [{ labelKey: 'settings.intelligenceSources.collectionPolicy.scheduleUnreadableNote' }]
-                : []),
-              ...(args.preset === 'manual'
-                ? [{ labelKey: 'settings.intelligenceSources.collectionPolicy.manualPresetNote' }]
-                : [])
+              { labelKey: 'settings.intelligenceSources.collectionPolicy.readoutEdgesNote' }
             ]}
             resolveText={args.resolveText}
             trigger={(triggerProps) => (
@@ -470,27 +484,16 @@ function cellRow(args: {
                 variant="plain" />
             )} />
         </span>
-        <span className="business-card__preset-control">
-          <Select
-            aria-label={args.resolveText('settings.intelligenceSources.collectionPolicy.collectionPreset')}
-            className="business-card__preset-select"
-            onChange={args.onPresetChange}
-            options={PRESET_VALUES.map((value) => ({
-              value,
-              label: args.resolveText(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
-            }))}
-            size="small"
-            value={args.preset} />
-          {/* 下拉正下方：当前间隔 / 下次采集。只是文字，不新造控件。 */}
-          <FrequencyReadout
-            resolveText={args.resolveText}
-            view={frequencyReadoutView({
-              enabled: !sourceOff,
-              preset: args.preset,
-              scheduleAvailable: args.cadenceUnavailable !== true,
-              ...(args.cadence === undefined ? {} : { cadence: args.cadence })
-            })} />
-        </span>
+        <Select
+          aria-label={args.resolveText('settings.intelligenceSources.collectionPolicy.collectionPreset')}
+          className="business-card__preset-select"
+          onChange={args.onPresetChange}
+          options={PRESET_VALUES.map((value) => ({
+            value,
+            label: args.resolveText(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
+          }))}
+          size="small"
+          value={args.preset} />
       </div>}
   </div>
 }

@@ -433,30 +433,29 @@ export const intelligenceSourcesText = {
       frequent: '高频'
     },
     /**
-     * 下拉下方那一行读数（原型 2026-11-13）：**间隔与下次是两段独立事实**，
-     * 一段读不到只影响那一段。读不到 ≠ 0 ≠ 从未；手动档不写「—」。
-     *
-     * 键就放在 `collectionPolicy` 这一层（与 `frequency` / `builtinCadence` 同一组），
-     * 不再多套一层 `readout`：一行读数只属于这一个字段。
+     * 频率那一行只有一颗 ⓘ，浮层**固定 4 条**（界面设计 2026-11-13 v4）：
+     * ① 当前值（**只有这一条随状态变**，8 种状态各一条键，不拼字符串）
+     * ② 三档在各采集器上的实际间隔（数字式一行）
+     * ③ 「下次」是推算、不是承诺
+     * ④ 两条边界：手动没有下次；排期读不到就说读不到，不写 0、不写从未
+     * 需要第 5 条时先压 ②，不许动 `popoverLimitsGuard`。
      */
-    intervalMinutes: '间隔 {count} 分钟',
-    intervalHours: '间隔 {count} 小时',
-    /* 「约」只加在这一条：这个值是推算的，正文写成精确时刻等于替系统下保证。 */
-    nextAt: '约 {time}',
-    /* 正在采集：只换「下次」那一段，间隔照留，不给倒计时，也不出现任何时刻。 */
-    nextRunning: '正在采集',
-    /* 从没跑过：不写「立即」、不给时刻，也不预告「启用后会马上跑一次」（那是行为不是承诺）。 */
-    nextNotStarted: '尚未开始',
-    nextUnreadable: '下次时间读不到',
-    manualOnly: '手动：不自动采集',
-    disabledNoCollect: '未启用，不采集',
-    /* 排期里没有这个源的作业：只写这一句，不显示间隔（不从开关反推）。 */
-    unscheduled: '未安排',
-    /* 并入同一颗 ⓘ 的两段解释：三档在各采集器上的实际间隔、以及「下次」是推算。 */
-    presetIntervalsNote: '三档在各采集器上不是同一个数字：均衡 = 网页 30 分钟、RSS 15 分钟、接口 10 分钟、状态页 2 分钟、宏观指标 6 小时；频繁约为均衡的三分之一；手动只在按按钮或事件驱动时采。',
-    nextIsEstimateNote: '「下次」是按间隔推算的，实际会随任务队列前后浮动，不是承诺时刻；正在采集时不给倒计时。',
-    /* 整批调度投影读不到（桥缺失或调用失败）时，ⓘ 里补的这一句。 */
-    scheduleUnreadableNote: '这次没读到采集排期，所以「间隔」和「下次」都没有显示。'
+    durationMinutes: '{count} 分钟',
+    durationHours: '{count} 小时',
+    /* ① 的 8 种状态。状态句只用 `·` 接在间隔后面，不起新行。 */
+    readoutNextAt: '间隔 {interval} · 约 {time}',
+    readoutRunning: '间隔 {interval} · 正在采集',
+    readoutNotStarted: '间隔 {interval} · 尚未开始',
+    readoutNextUnreadable: '间隔 {interval} · 下次读不到',
+    readoutManual: '手动：不自动采集',
+    readoutDisabled: '未启用，不采集',
+    readoutUnscheduled: '未安排',
+    /* 整批排期读不到：第①条就是这一句，不许因为收进浮层就不说。 */
+    readoutScheduleUnreadable: '这次没读到采集排期，所以间隔和下次都没有显示。',
+    /* ② 压成数字式一行。 */
+    presetIntervalsNote: '网页 30 分钟 / RSS 15 分钟 / 接口 10 分钟 / 状态页 2 分钟 / 宏观指标 6 小时；频繁约为均衡的 1/3。',
+    nextIsEstimateNote: '「下次」是推算的，会随任务队列前后浮动，不是承诺时刻；正在采集时不给倒计时。',
+    readoutEdgesNote: '手动档只在点按钮或事件驱动时采，没有下次；排期读不到就写读不到，不写 0、也不写从未。'
   },
   credentials: {
     title: '访问凭证',
@@ -1045,25 +1044,25 @@ export const intelligenceSourcesText = {
       frequent: 'Frequent'
     },
     /**
-     * The readout under the preset select (prototype 2026-11-13): interval and next run are
-     * two independent facts; one unreadable segment never blanks the other.
-     *
-     * The keys live directly on `collectionPolicy` (next to `frequency` / `builtinCadence`),
-     * not under an extra `readout` object.
+     * The frequency row has one ⓘ with a **fixed four-line** popover (design 2026-11-13 v4):
+     * (1) the current value — the only line that changes, one key per state, never assembled;
+     * (2) the real interval of each preset, pressed into one numeric line;
+     * (3) “next” is derived, not promised; (4) two edges: manual has no next run, and an
+     * unreadable schedule says so instead of showing 0 or “never”.
      */
-    intervalMinutes: 'Every {count} minutes',
-    intervalHours: 'Every {count} hours',
-    /* "About" only here: the value is derived, so the body text must not sound like a promise. */
-    nextAt: 'About {time}',
-    nextRunning: 'Collecting now',
-    nextNotStarted: 'Not started yet',
-    nextUnreadable: 'Next run time unreadable',
-    manualOnly: 'Manual: no automatic collection',
-    disabledNoCollect: 'Disabled, not collected',
-    unscheduled: 'Not scheduled',
-    presetIntervalsNote: 'The three presets are not one number across collectors: Balanced = web pages 30 minutes, RSS 15 minutes, APIs 10 minutes, status pages 2 minutes, macro metrics 6 hours; Frequent is about a third of Balanced; Manual only collects on demand or on an event.',
-    nextIsEstimateNote: '“Next” is derived from the interval, so it drifts with the job queue. It is not a promised time; while a run is in progress no countdown is shown.',
-    scheduleUnreadableNote: 'The collection schedule could not be read this time, so neither the interval nor the next run is shown.'
+    durationMinutes: '{count} minutes',
+    durationHours: '{count} hours',
+    readoutNextAt: 'Every {interval} · about {time}',
+    readoutRunning: 'Every {interval} · collecting now',
+    readoutNotStarted: 'Every {interval} · not started yet',
+    readoutNextUnreadable: 'Every {interval} · next run unreadable',
+    readoutManual: 'Manual: no automatic collection',
+    readoutDisabled: 'Disabled, not collected',
+    readoutUnscheduled: 'Not scheduled',
+    readoutScheduleUnreadable: 'The collection schedule could not be read this time, so neither the interval nor the next run is shown.',
+    presetIntervalsNote: 'Web pages 30 minutes / RSS 15 minutes / APIs 10 minutes / status pages 2 minutes / macro metrics 6 hours; Frequent is about 1/3 of Balanced.',
+    nextIsEstimateNote: '“Next” is derived from the interval and drifts with the job queue; it is not a promised time, and no countdown is shown while a run is in progress.',
+    readoutEdgesNote: 'Manual only collects on demand or on an event, so it has no next run; when the schedule cannot be read it says so instead of showing 0 or “never”.'
   },
   credentials: {
     title: 'Credentials',
