@@ -15,7 +15,15 @@ export type CalendarEventStatus = typeof CalendarEventStatusPolicy.states[number
  */
 export function calendarEventStatus(item: CalendarDayItem, now: string, timeZone: string,
   attempt?: MarketCalendarRefreshAttempt): CalendarEventStatus {
-  if (item.source === 'official' && item.event.lifecycleState === 'cancelled') return 'cancelled'
+  /**
+   * 生命周期**只读源给的状态**（`releaseStatus`），不按 `source === 'official'` 分支推：
+   * 切到标准表之后所有行都走市场那条路径，按来源分支的话「源说已取消」在界面上永远不出现，
+   * 而且不报错——这正是「凭空消失」。官方旧事件没有 `releaseStatus` 时退回它的 lifecycle。
+   */
+  const releaseStatus = (item.event as { releaseStatus?: string }).releaseStatus
+  const cancelled = releaseStatus !== undefined ? releaseStatus === 'cancelled'
+    : item.source === 'official' && item.event.lifecycleState === 'cancelled'
+  if (cancelled) return 'cancelled'
   const numeric = item.source === 'official' || item.event.eventType === 'economic-indicator'
   const actual = item.source === 'official' ? item.event.actual : item.event.providerActual
   if (item.event.scheduledAt) {
@@ -26,7 +34,9 @@ export function calendarEventStatus(item: CalendarDayItem, now: string, timeZone
   if (item.source === 'official') {
     const today = calendarDisplayDate(now, timeZone)
     if (item.event.scheduledDate > today) return actual ? 'upcoming' : 'time-pending'
-    if (item.event.scheduledDate <= today && item.event.lifecycleState === 'released' && actual) return 'data-received'
+    const published = releaseStatus !== undefined ? releaseStatus === 'published'
+      : item.event.lifecycleState === 'released'
+    if (item.event.scheduledDate <= today && published && actual) return 'data-received'
     if (item.event.scheduledDate < today) return 'awaiting-data'
   }
   return 'time-pending'

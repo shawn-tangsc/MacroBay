@@ -15,6 +15,13 @@ it('projects actual, future, missing-value and cancelled states without inferrin
   expect(statusOf(market({ scheduledAt: '2026-09-11T05:00:00.000Z', providerActual: { displayValue: '0' } }), now)).toBe('upcoming')
   expect(statusOf(official({ lifecycleState: 'cancelled' }), now)).toBe('cancelled')
 })
+it('生命周期读源给的 releaseStatus：市场路径的行也能显示「已取消」', () => {
+  // 切到标准表后所有行都走市场那条路径；按 `source === 'official'` 分支推会让「已取消」永远不出现。
+  expect(statusOf(market({ releaseStatus: 'cancelled' }), now)).toBe('cancelled')
+  expect(statusOf(market({ releaseStatus: 'published', providerActual: { displayValue: '3' } }), now)).toBe('data-received')
+  expect(statusOf(market({ releaseStatus: 'scheduled' }), now)).toBe('awaiting-data')
+})
+
 it('respects date-only evidence and does not treat elapsed speeches as missing economic data', async () => {
   expect(statusOf(official({ lifecycleState: 'released', actual: { displayValue: '0' } }), now)).toBe('data-received')
   expect(statusOf(official(), now)).toBe('time-pending')
