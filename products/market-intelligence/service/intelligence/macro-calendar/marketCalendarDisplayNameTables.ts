@@ -54,6 +54,23 @@ export const marketCalendarMetricDisplayNames: Readonly<Record<string, string>> 
   'US.WHOLESALE_INVENTORIES.SA.MOM': '批发库存（月率）',
 })
 
+/**
+ * 国家码 → 本地化国家名。**只补有码没名的情况**（新源只给 `country_code`）；没有码就不显示，
+ * 不猜。码用 ISO 3166-1 alpha-2（存储层口径，`US` / `DE` 这种）；身份层用 alpha-3，由
+ * `toAlpha3Country` 归一，两者各管一段。
+ */
+export const marketCalendarCountryNames: Readonly<Record<string, Readonly<{ zh: string; en: string }>>> = Object.freeze({
+  US: { zh: '美国', en: 'United States' },
+  CA: { zh: '加拿大', en: 'Canada' },
+  DE: { zh: '德国', en: 'Germany' },
+  GB: { zh: '英国', en: 'United Kingdom' },
+  FR: { zh: '法国', en: 'France' },
+  IT: { zh: '意大利', en: 'Italy' },
+  JP: { zh: '日本', en: 'Japan' },
+  CN: { zh: '中国', en: 'China' },
+  EU: { zh: '欧元区', en: 'Euro area' }
+})
+
 /** 源类型显示名：源给的类型串 → 中文名。都是类型，不含个体。 */
 export const marketCalendarEventTypeDisplayNames: Readonly<Record<string, string>> = Object.freeze({
   'Central bank balance sheet': '央行资产负债表',

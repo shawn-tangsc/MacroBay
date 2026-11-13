@@ -7,6 +7,7 @@ import type { createMarketCalendarEventRepository } from './marketCalendarEventR
 import type { MarketRow } from './marketCalendarStorageValidation'
 import { preferredObservation, type MarketObservationCandidate } from './marketCalendarObservationPrecedence'
 import { marketCalendarDisplayTitle } from '../marketCalendarDisplayNames'
+import { marketCalendarCountryNames } from '../marketCalendarDisplayNameTables'
 import { eventPairVerdict } from '../marketCalendarEventPairing'
 import { narwhalCanonicalIdentityKey, toAlpha3Country, zeroXRouterCanonicalIdentity,
   type MarketCalendarCanonicalIdentity } from '../marketCalendarMetricIdentity'
@@ -111,6 +112,13 @@ function coveredWithinADay(covered: ReadonlyMap<string, readonly string[]>,
   return dates.some((date) => Math.abs(Date.parse(`${date}T00:00:00.000Z`) - at) <= 86_400_000)
 }
 
+/** 有国家码没有国家名时，按码补一个本地化名字；码不认识就不补（不猜、不造）。 */
+function resolvedCountryName(code: unknown, locale: unknown): string | undefined {
+  if (typeof code !== 'string') return undefined
+  const names = marketCalendarCountryNames[code]
+  return names === undefined ? undefined : (locale === 'en' ? names.en : names.zh)
+}
+
 /** 事件类型：这两个的配对走「同类型 + 时刻窗」，不走指标身份。 */
 const eventKinds: readonly string[] = ['central-bank-activity', 'financial-event']
 
@@ -173,7 +181,11 @@ export function createMarketCalendarPublicQueryService(deps: {
       // must use. `sourceObservedAt` is when the batch that stored this row observed it: a later
       // batch that deduplicated the same value is not this observation's time.
       observationKey: String(row.market_fact_key),
-      title, countryCode: row.country_code, ...(row.country_name === null ? {} : { countryName: String(row.country_name) }), eventType: row.event_kind, importance: row.importance,
+      title, countryCode: row.country_code,
+      // 有码没名就按码补本地化名字（新源只给码）；没码就不显示，不猜。
+      ...(row.country_name !== null ? { countryName: String(row.country_name) }
+        : resolvedCountryName(row.country_code, row.locale) === undefined ? {}
+          : { countryName: resolvedCountryName(row.country_code, row.locale)! }), eventType: row.event_kind, importance: row.importance,
       scheduledAt: row.scheduled_at, consensus: value(row.consensus_json), providerPrevious: value(row.provider_previous_json),
       providerActual: value(row.provider_actual_json), source: row.provider_id === marketCalendarLegacyProviderId ? '0xRouter' : marketCalendarSourceName,
       sourceObservedAt: String(row.last_observed_at), coverage: 'observed-unverified',
