@@ -140,6 +140,10 @@
     "service/intelligence/macro-calendar/marketCalendarSourceFeedIds.ts": {
       "count": 6,
       "why": "行 → 来源 feed id 的映射本尊：六个 feed id 就是这张表的全部内容，别处不许再写"
+    },
+    "desktop/pages/intelligence/MacroIndicatorDrawer.tsx": {
+      "count": 1,
+      "why": "卡片页脚按事实自带的 provider 选显示名（Narwhal 用日历既有文案、FRED 用品牌名、旧源不赋名）。这是显示层唯一一处按源选名，不参与任何取数/排序/筛选判断；目标仍是清零。"
     }
   }
 }

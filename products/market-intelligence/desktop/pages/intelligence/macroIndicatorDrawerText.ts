@@ -52,13 +52,17 @@ export const macroIndicatorDrawerText = {
       missingCurrentNoPeriod: '已到发布日期，首发布值未收录',
       notRecorded: '本月未发布',
       previousPeriod: '上一期 {value}',
+      /* 回退顺序落到哪一档，就把那一档的出处与期次写出来：不写的话，9 月的值挂在 10 月那格里。 */
+      previousPeriodFrom: '上一期 {value}（{source} · {period}）',
+      previousUnreadable: '上一期 暂时读不到',
       noConsensus: '暂无共识',
       consensusSource: '{source} · {asOf}',
       vsPrevious: '较上期（未修正）{value}'
     },
     expectedDiff: '预期差 年率 {yoy} · 核心 {core}',
-    source: 'FRED',
-    sourceBls: 'BLS',
+    // 来源按**真实 provider** 显示：写死一个名字等于替数据编出处。
+    /* 官方序列的品牌名；旧源即将删除、不赋品牌名，Narwhal 用日历那份既有文案。 */
+    sourceFred: 'FRED',
     detail: '详情 ↗',
     minicalMonth: '{year} 年 {month} 月',
     minicalTitle: '发布日历',
@@ -124,13 +128,16 @@ export const macroIndicatorDrawerText = {
       missingCurrentNoPeriod: 'released, first-publish value not recorded',
       notRecorded: 'Not released this month',
       previousPeriod: 'Previous {value}',
+      previousPeriodFrom: 'Previous {value} ({source} · {period})',
+      previousUnreadable: 'Previous: not readable right now',
       noConsensus: 'No consensus',
       consensusSource: '{source} · {asOf}',
       vsPrevious: 'vs previous (unrevised) {value}'
     },
     expectedDiff: 'Surprise YoY {yoy} · core {core}',
-    source: 'FRED',
-    sourceBls: 'BLS',
+    // 来源按**真实 provider** 显示：写死一个名字等于替数据编出处。
+    /* 官方序列的品牌名；旧源即将删除、不赋品牌名，Narwhal 用日历那份既有文案。 */
+    sourceFred: 'FRED',
     detail: 'Detail ↗',
     minicalMonth: '{month}/{year}',
     minicalTitle: 'release calendar',

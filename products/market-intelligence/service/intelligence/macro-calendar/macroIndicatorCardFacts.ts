@@ -42,7 +42,6 @@ export type MacroIndicatorCardRow = Readonly<{
   /** 来源问卷给的「预期」原文值，以及它在哪一刻被观测到、由哪个来源给（三样齐全才带得出去）。 */
   consensus?: number
   consensusAsOf?: string
-  consensusSourceName?: string
   period?: string
   releasedAt: string
   unit?: 'percent' | 'thousands'
@@ -73,7 +72,6 @@ export type MacroIndicatorCardFact = Readonly<{
     value: number
     provenance: 'source-survey'
     asOf: string
-    sourceName: string
   }>
   unit?: 'percent' | 'thousands'
   source?: 'narwhal' | '0xrouter' | 'fred'
@@ -100,12 +98,10 @@ export function narwhalMeasuresByMetricKey(metricKey: string): readonly string[]
 /** 同一时刻两个源都有一行时取新源；其余取更晚的那条。 */
 /** 共识必须有值 + 观测时刻 + 出处名；缺一样就不带出去——半个共识比没有更像答案。 */
 function consensusOf(row: MacroIndicatorCardRow): Partial<Pick<MacroIndicatorCardFact, 'consensus'>> {
-  if (row.consensus === undefined || row.consensusAsOf === undefined || row.consensusSourceName === undefined) return {}
+  // 出处 = 这一行的 provider（`fact.source`），不在这里再写一个源名。
+  if (row.consensus === undefined || row.consensusAsOf === undefined) return {}
   if (row.period === undefined) return {}
-  return { consensus: Object.freeze({
-    value: row.consensus, provenance: 'source-survey' as const,
-    asOf: row.consensusAsOf, sourceName: row.consensusSourceName
-  }) }
+  return { consensus: Object.freeze({ value: row.consensus, provenance: 'source-survey' as const, asOf: row.consensusAsOf }) }
 }
 
 function latestRow(rows: readonly MacroIndicatorCardRow[]): MacroIndicatorCardRow | undefined {

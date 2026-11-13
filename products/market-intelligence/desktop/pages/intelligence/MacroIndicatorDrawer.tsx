@@ -10,6 +10,7 @@ import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar, shiftMonth } from './MiniReleaseCalendar'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
+import type { EconomicCalendarText } from '../../features/macro/economic-calendar/economicCalendarText'
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { productText } from '../../shared/i18n/productText'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -376,7 +377,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
               {nextRelease.cpi.kind === 'none' ? null : <div><dt>{text.cards.cpi.next}</dt>
                 <dd>{nextRelease.cpi.kind === 'date' ? nextRelease.cpi.text : text.cardStates.unreadable}</dd></div>}
             </dl>
-            <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
+            <div className="mk-card__f">{cardSourceLabel(cpiFact, text, calendarText)}<span>{text.detail}</span></div>
           </article>
           <article className="mk-card">
             <div className="mk-card__h"><h3>{text.cards.payrolls.title}</h3></div>
@@ -389,7 +390,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
               {nextRelease.payrolls.kind === 'none' ? null : <div><dt>{text.cards.payrolls.next}</dt>
                 <dd>{nextRelease.payrolls.kind === 'date' ? nextRelease.payrolls.text : text.cardStates.unreadable}</dd></div>}
             </dl>
-            <div className="mk-card__f"><span>{text.sourceBls}</span><span>{text.detail}</span></div>
+            <div className="mk-card__f">{cardSourceLabel(payrollsFact, text, calendarText)}<span>{text.detail}</span></div>
           </article>
           <article className="mk-card">
             <div className="mk-card__h"><h3>{text.cards.pce.title}</h3></div>
@@ -401,7 +402,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
               {nextRelease.pce.kind === 'none' ? null : <div><dt>{text.cards.pce.next}</dt>
                 <dd>{nextRelease.pce.kind === 'date' ? nextRelease.pce.text : text.cardStates.unreadable}</dd></div>}
             </dl>
-            <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
+            <div className="mk-card__f">{cardSourceLabel(pceFact, text, calendarText)}<span>{text.detail}</span></div>
           </article>
         </div>
 
@@ -552,6 +553,19 @@ function cardValueClass(fact: MacroIndicatorCardFact | undefined, unreadable?: b
 }
 
 /**
+ * 卡片页脚的数据来源：**按事实里真实的 provider 显示**。
+ *
+ * 原来这里写死「FRED」——而这条链路一次 FRED 都没调用过，那个标签是在替数据编出处。
+ * 没有 provider（例如本期确实没有值）就**不写这一句**，不拿一个名字填空。
+ */
+function cardSourceLabel(fact: MacroIndicatorCardFact | undefined, text: MacroIndicatorDrawerText, calendarText: EconomicCalendarText): React.ReactNode {
+  const provider = fact?.source
+  if (provider === 'fred') return <span>{text.sourceFred}</span>
+  // Narwhal 用日历那份既有文案；旧源即将删除，不赋品牌名。
+  return provider === 'narwhal' ? <span>{calendarText.market.source}</span> : null
+}
+
+/**
  * 「预期」一格：有共识就写值 + 出处与观测时刻（三样齐全才显示），没有就写「暂无共识」。
  * 不写「未提供」——那是「本期没值」，共识没有是另一件事。
  */
@@ -561,7 +575,8 @@ function consensusText(fact: MacroIndicatorCardFact | undefined, text: MacroIndi
   const day = calendarDisplayDate(consensus.asOf, timeZone)
   const short = day.slice(0, 4) === calendarDisplayDate(nowInstant, timeZone).slice(0, 4) ? day.slice(5) : day
   return `${formatCardNumber(consensus.value, fact?.unit)} · ${text.cardStates.consensusSource
-    .replace('{source}', consensus.sourceName).replace('{asOf}', short)}`
+    .replace('{source}', fact?.source === 'fred' ? text.sourceFred : '').replace('{asOf}', short)}`
+    .replace(' ·  · ', ' · ')
 }
 
 /**
@@ -600,9 +615,17 @@ function cardStateText(fact: MacroIndicatorCardFact | undefined, text: MacroIndi
   const base = fact.period === undefined
     ? text.cardStates.missingCurrentNoPeriod
     : text.cardStates.missingCurrent.replace('{period}', formatCardPeriod(fact.period))
-  return fact.previousAsPublished === undefined
-    ? base
-    : `${base} · ${text.cardStates.previousPeriod.replace('{value}', formatCardNumber(fact.previousAsPublished, fact.unit))}`
+  if (fact.previousUnreadable === true) return `${base} · ${text.cardStates.previousUnreadable}`
+  if (fact.previousAsPublished === undefined) return base
+  const value = formatCardNumber(fact.previousAsPublished, fact.unit)
+  // 回退链落到哪一档就标哪一档：官方序列给的就写 FRED + 它自己的期次，不许只写一个数。
+  if (fact.previousSource === 'fred' && fact.previousObservedAt !== undefined) {
+    return `${base} · ${text.cardStates.previousPeriodFrom
+      .replace('{value}', value)
+      .replace('{source}', text.sourceFred)
+      .replace('{period}', formatCardPeriod(fact.previousObservedAt.slice(0, 7)))}`
+  }
+  return `${base} · ${text.cardStates.previousPeriod.replace('{value}', value)}`
 }
 
 function formatCardNumber(value: number, unit: MacroIndicatorCardFact['unit']): string {

@@ -87,7 +87,7 @@ function toNarwhalRow(
     ...(primaryMetricKey === undefined ? {} : { primaryMetricKey }),
     ...(value === undefined ? {} : { measureValues: { [metricKey]: value } }),
     ...(previousAsPublished === undefined ? {} : { previousAsPublished }),
-    ...(consensus === undefined ? {} : { consensus, consensusAsOf: release.detectedAt, consensusSourceName: 'Narwhal' }),
+    ...(consensus === undefined ? {} : { consensus, consensusAsOf: release.detectedAt }),
     ...(period === undefined ? {} : { period }),
     ...(unit === undefined ? {} : { unit }),
     releasedAt: release.scheduledAt ?? `${release.scheduledDate}T00:00:00.000Z`

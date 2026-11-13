@@ -75,11 +75,11 @@ function readFact(value: unknown): MacroIndicatorCardFact | undefined {
  * 共识：**五元组**（值 + 期次 + `asOf` + 出处 + 盘口才要的成交量）。缺任何一样就当没有——
  * 半个共识比没有更像答案。今天只有 `source-survey` 一档。
  */
-function readConsensus(value: unknown): Readonly<{ value: number; provenance: 'source-survey'; asOf: string; sourceName: string }> | undefined {
+function readConsensus(value: unknown): MacroIndicatorCardFact['consensus'] | undefined {
   if (!isObject(value) || value.provenance !== 'source-survey') return undefined
-  if (!isFiniteNumber(value.value) || typeof value.asOf !== 'string' || typeof value.sourceName !== 'string') return undefined
-  if (value.sourceName === '' || !Number.isFinite(Date.parse(value.asOf))) return undefined
-  return { value: value.value, provenance: 'source-survey', asOf: value.asOf, sourceName: value.sourceName }
+  if (!isFiniteNumber(value.value) || typeof value.asOf !== 'string') return undefined
+  if (!Number.isFinite(Date.parse(value.asOf))) return undefined
+  return { value: value.value, provenance: 'source-survey', asOf: value.asOf }
 }
 
 function isCardKey(value: unknown): value is MacroIndicatorCardKey {
