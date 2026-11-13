@@ -129,6 +129,9 @@ import { createEtfCurrentStateRefreshService } from './etf/etfCurrentStateRefres
 import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
 import { createCryptoEtfFlowClient } from './application/cryptoEtfFlowClient'
 import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
+import { allSources } from './application/providerRegistry'
+import { projectJobRegistration } from './application/sourceJobRegistration'
+import { resolveFactSource, type FactSourceResolution, type MarketFactId } from '../../contracts/factSources'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
 import { createFundingRateHistorySqliteStore } from './store/fundingRateHistoryStore'
 import { createPerpetualPositioningSqliteStore } from './store/perpetualPositioningStore'
@@ -478,7 +481,29 @@ export function getIntelligenceModule(
       getApiKey: async () => (await zeroXRouterCredential())?.apiKey,
       evidence: createMacroCalendarEvidenceStore(macroCalendarEvidenceArchive)
     })
+    /**
+     * 每轮现算「谁在供 etf-net-flow」：声明 + 读者开着 + 作业真的注册着 + 就绪。
+     * 不缓存——排期异步注册，启动早于排期的那几轮必须解析成 none，而不是被冻结的错误答案。
+     */
+    const resolveEtfFactSource = async (): Promise<FactSourceResolution> => {
+      const scheduled = new Set(jobRuntime.listSchedules().map((definition) => definition.id))
+      const registration = projectJobRegistration(allSources(), scheduled)
+      const declared = allSources().filter((source) => source.provides?.includes('etf-net-flow') === true)
+      const candidates: Array<Readonly<{ sourceId: string; provides: readonly MarketFactId[]; enabled: boolean; jobRegistered: boolean; readiness: string }>> = []
+      for (const source of declared) {
+        const profile = await profileStore.resolveProfile(source.sourceId)
+        candidates.push({
+          sourceId: source.sourceId,
+          provides: source.provides as readonly MarketFactId[],
+          enabled: profile.enabled,
+          jobRegistered: registration[source.sourceId] === true,
+          readiness: source.readiness
+        })
+      }
+      return resolveFactSource({ factId: 'etf-net-flow', sources: candidates })
+    }
     const etfCurrentStateRefresh = createEtfCurrentStateRefreshService({
+      resolveFactSource: resolveEtfFactSource,
       // 切换后这条链读新源的开关与凭据：用户没填 key 就是静默停采，不是旧源在替它采。
       isEnabled: async () => (await profileStore.resolveProfile(cryptoEtfSourcePolicy.sourceId)).enabled,
       hasCredential: async () => Boolean((await cryptoEtfCredential())?.apiKey),
@@ -941,6 +966,7 @@ export function getIntelligenceModule(
       backfillFor: backfillFactory,
       cache: createDailyBriefFactEnsureJsonCache(join(dataDir, 'daily-brief-fact-ensure.json')),
       isSourceEnabled,
+      resolveFactSource: resolveEtfFactSource,
       now: () => new Date().toISOString(),
     })
     const briefingCalendar = createBriefingCalendarCommands()

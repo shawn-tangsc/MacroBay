@@ -26,7 +26,7 @@ export type DailyBriefFactEnsureEntry = Readonly<{
   lastAttemptAt: string
   lastSuccessAt?: string
   attempts: number
-  gapCode?: DailyBriefBackfillGapCode | 'source-disabled'
+  gapCode?: DailyBriefBackfillGapCode | 'source-disabled' | 'source-conflict'
   detail?: string
   value?: number
   unit?: DailyBriefBackfillUnit

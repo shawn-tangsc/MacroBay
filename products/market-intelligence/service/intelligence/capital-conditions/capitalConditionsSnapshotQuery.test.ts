@@ -26,6 +26,7 @@ describe('capital conditions snapshot query', () => {
     const refresh = createEtfCurrentStateRefreshService({
       isEnabled: async () => true,
       hasCredential: async () => true,
+      resolveFactSource: async () => ({ kind: 'resolved' as const, sourceId: 'cryptoetf-etf-flows' }),
       requestWindow: async () => ({ state: 'available' as const, btc: flowRows('BTC'), eth: flowRows('ETH') }),
       store: etfStore,
       now: () => '2026-08-17T01:00:00.000Z'

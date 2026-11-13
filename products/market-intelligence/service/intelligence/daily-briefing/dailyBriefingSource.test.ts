@@ -148,7 +148,7 @@ function deps(overrides: {
           { sourceId: 'alternative-fear-greed', enabled: true },
           { sourceId: 'binance-futures-positioning', enabled: true },
           { sourceId: 'defillama-stablecoins', enabled: true },
-          { sourceId: '0xrouter-aggregate-provider', enabled: true },
+          { sourceId: 'cryptoetf-etf-flows', enabled: true },
           { sourceId: 'macro-calendar-fed', enabled: true }
         ]
       } as never

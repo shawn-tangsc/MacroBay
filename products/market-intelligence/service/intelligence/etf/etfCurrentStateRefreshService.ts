@@ -1,3 +1,4 @@
+import type { FactSourceResolution } from '../../../contracts/factSources'
 import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
@@ -20,6 +21,11 @@ type EtfWindowRequestResult =
   | Readonly<{ state: 'unavailable' }>
 
 export function createEtfCurrentStateRefreshService(deps: {
+  /**
+   * 每轮现算「谁在供 etf-net-flow」：声明了、读者开着、作业真的注册着、且就绪的那个源。
+   * 不许在启动时算一次缓存起来——排期是异步注册的，早于排期的那几轮会误判成 none。
+   */
+  resolveFactSource: () => Promise<FactSourceResolution>
   isEnabled: () => Promise<boolean>
   hasCredential: () => Promise<boolean>
   requestWindow: () => Promise<EtfWindowRequestResult>
@@ -35,7 +41,12 @@ export function createEtfCurrentStateRefreshService(deps: {
   handOffSignals?: (signals: readonly ModuleSignal[]) => Promise<void>
 }) {
   return {
-    async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged' | 'unavailable' }>> {
+    async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged'; reason?: never } | { state: 'unavailable'; reason?: 'fact.source-conflict' }>> {
+      // 解析每轮现算。冲突 fail-closed：这一轮谁都不写，绝不挑第一个。
+      const resolution = await deps.resolveFactSource()
+      if (resolution.kind === 'conflict') return Object.freeze({ state: 'unavailable' as const, reason: 'fact.source-conflict' as const })
+      // 今天只有 CryptoETF 被授权采；解析出来不是它（或没有）就停手，别拿错客户端静默去采。
+      if (resolution.kind !== 'resolved' || resolution.sourceId !== etfCurrentStateRefreshAdmissionPolicy.sourceId) return unavailable()
       if (!await enabled(deps.isEnabled) || !await enabled(deps.hasCredential)) return unavailable()
       const fetchedAt = deps.now()
       const currentUtcDate = etfCurrentStateRefreshAdmissionPolicy.currentUtcDate(fetchedAt)

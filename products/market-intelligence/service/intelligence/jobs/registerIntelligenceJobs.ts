@@ -8,7 +8,7 @@ import type { createNewsSentimentEnrichmentService } from '../news-sentiment/new
 import type { createNewsSentimentScoringService } from '../news-sentiment/newsSentimentScoringService'
 import { isDefillamaStablecoinRetiredPath } from '../application/sourceCatalog'
 import { isZeroXRouterSource } from '../application/zeroXRouterSourcePolicy'
-import { cryptoEtfSourcePolicy } from '../application/cryptoEtfSourcePolicy'
+import { getSource } from '../application/providerRegistry'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
 import { enqueueIntelligencePipelineJobs } from './enqueueIntelligencePipelineJobs'
 import {
@@ -54,7 +54,9 @@ export function registerIntelligenceJobs(
       await deps.capitalConditions?.refresh()
       return
     }
-    if (isZeroXRouterSource(input.sourceId) || input.sourceId === cryptoEtfSourcePolicy.sourceId) {
+    // 路由按「这个源声明了 etf-net-flow」走，不认具体 id：以后加源只改注册表声明。
+    // 旧锚的分支留着只为过渡期——它 collection 落成 none 后不会再有作业。
+    if (getSource(input.sourceId)?.provides?.includes('etf-net-flow') === true || isZeroXRouterSource(input.sourceId)) {
       await deps.etfFlowHistory?.refresh()
       return
     }

@@ -1,7 +1,8 @@
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import type { DailyBriefBackfillExecutor, DailyBriefDataGap } from './dailyBriefAgentTurn'
 import { collectDataGaps } from './dailyBriefAgentTurn'
-import { DAILY_BRIEFING_SOURCE_IDS } from './dailyBriefingReadingSources'
+import { DAILY_BRIEFING_SOURCE_IDS, ETF_FACT_ID, declaredSourceIdsForFact } from './dailyBriefingReadingSources'
+import type { FactSourceResolution, MarketFactId } from '../../../contracts/factSources'
 import {
   isCanonicalDailyBriefBackfillTime,
   isDailyBriefBackfillResult,
@@ -59,14 +60,17 @@ export type DailyBriefFactEnsureDeps = Readonly<{
   cache: DailyBriefFactEnsureCache
   /** `undefined` is "the profile store could not answer", which is not the same as disabled. */
   isSourceEnabled: (sourceId: string) => Promise<boolean | undefined>
+  /** 每轮现算事实来源；缺席时退回「按注册表声明 + isSourceEnabled」，不写死 id。 */
+  resolveFactSource?: (factId: MarketFactId) => Promise<FactSourceResolution>
   now?: () => string
   onEvent?: (event: Readonly<Record<string, unknown>>) => void
 }>
 
 const METRIC_SOURCES: Readonly<Record<DailyBriefCoreFactMetric, readonly string[]>> = Object.freeze({
   'core-stablecoin-supply-usd': Object.freeze([DAILY_BRIEFING_SOURCE_IDS.stablecoin]),
-  'etf-net-flow-btc': Object.freeze([DAILY_BRIEFING_SOURCE_IDS.etf]),
-  'etf-net-flow-eth': Object.freeze([DAILY_BRIEFING_SOURCE_IDS.etf]),
+  // ETF 由事实解析器现算，不在这里写 id；这两个键保留为空，gate 走 gateFact。
+  'etf-net-flow-btc': Object.freeze([]),
+  'etf-net-flow-eth': Object.freeze([]),
   // The dollar has two writers; the projection prefers the licensed series and falls back to the
   // product's own basket, so either switch makes the metric readable.
   'dxy-level': Object.freeze([DAILY_BRIEFING_SOURCE_IDS.dxyReal, DAILY_BRIEFING_SOURCE_IDS.dxySynthetic]),
@@ -95,9 +99,30 @@ export function createDailyBriefFactEnsure(deps: DailyBriefFactEnsureDeps): Dail
     }
   }
 
-  async function gate(metric: DailyBriefCoreFactMetric): Promise<'enabled' | 'disabled' | 'unknown'> {
+  async function gate(metric: DailyBriefCoreFactMetric): Promise<'enabled' | 'disabled' | 'unknown' | 'conflict'> {
+    if (metric === 'etf-net-flow-btc' || metric === 'etf-net-flow-eth') return gateFact(ETF_FACT_ID)
+    return gateIds(METRIC_SOURCES[metric])
+  }
+
+  /** 事实来源：resolved 判那个源、none 是未启用、conflict 谁都不选、读不到才是 unknown。 */
+  async function gateFact(factId: MarketFactId): Promise<'enabled' | 'disabled' | 'unknown' | 'conflict'> {
+    let resolution: FactSourceResolution | undefined
+    if (deps.resolveFactSource) {
+      try {
+        resolution = await deps.resolveFactSource(factId)
+      } catch {
+        return 'unknown'
+      }
+    }
+    if (resolution?.kind === 'conflict') return 'conflict'
+    if (resolution?.kind === 'none') return 'disabled'
+    const sourceIds = resolution?.kind === 'resolved' ? [resolution.sourceId] : declaredSourceIdsForFact(factId)
+    return gateIds(sourceIds)
+  }
+
+  async function gateIds(sourceIds: readonly string[]): Promise<'enabled' | 'disabled' | 'unknown'> {
     let unknown = false
-    for (const sourceId of METRIC_SOURCES[metric]) {
+    for (const sourceId of sourceIds) {
       let enabled: boolean | undefined
       try {
         enabled = await deps.isSourceEnabled(sourceId)
@@ -176,6 +201,10 @@ export function createDailyBriefFactEnsure(deps: DailyBriefFactEnsureDeps): Dail
           }
           if (gateResult === 'unknown') {
             statuses.push(gapEntry(gap, editionDate, 'query-unavailable', nowIso, 'the source switch could not be read.'))
+            continue
+          }
+          if (gateResult === 'conflict') {
+            statuses.push(gapEntry(gap, editionDate, 'source-conflict', nowIso, 'more than one source declares this fact; no source is chosen.'))
             continue
           }
           const key = dailyBriefFactEnsureKey({ editionDate, metric, asOf: gap.asOf })
@@ -287,7 +316,7 @@ function toEntry(
 function gapEntry(
   gap: DailyBriefDataGap,
   editionDate: string,
-  gapCode: DailyBriefBackfillGapCode | 'source-disabled',
+  gapCode: DailyBriefBackfillGapCode | 'source-disabled' | 'source-conflict',
   nowIso: string,
   detail: string,
   attempts = 0

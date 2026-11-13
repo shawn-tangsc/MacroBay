@@ -5,6 +5,8 @@ import { createEtfCurrentStateRefreshService } from './etfCurrentStateRefreshSer
 import { createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage } from '../store/etfCurrentStateStore'
 import { buildEtfCurrentStateWindow } from './etfCurrentStateWindow'
 
+const resolvedSource = async () => ({ kind: 'resolved' as const, sourceId: 'cryptoetf-etf-flows' })
+
 describe('ETF current-state refresh service', () => {
   it('makes zero network requests and zero writes when the source is disabled or has no credential', async () => {
     for (const gate of [
@@ -14,6 +16,7 @@ describe('ETF current-state refresh service', () => {
       const requestWindow = vi.fn()
       const replace = vi.fn()
       const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
         isEnabled: async () => gate.enabled,
         hasCredential: async () => gate.credential,
         requestWindow,
@@ -35,6 +38,7 @@ describe('ETF current-state refresh service', () => {
       eth: rows('ETH')
     }))
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow,
@@ -51,6 +55,23 @@ describe('ETF current-state refresh service', () => {
         eth: expect.not.arrayContaining([expect.objectContaining({ tradingDate: '2026-09-01' })])
       }
     })
+  })
+
+  it('stops when the fact has no source, and refuses on a conflict', async () => {
+    const requestWindow = vi.fn()
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const base = {
+      isEnabled: async () => true, hasCredential: async () => true,
+      requestWindow, store, now: () => '2026-09-01T12:00:00.000Z'
+    }
+
+    const none = createEtfCurrentStateRefreshService({ ...base, resolveFactSource: async () => ({ kind: 'none' as const }) })
+    await expect(none.refresh()).resolves.toEqual({ state: 'unavailable' })
+
+    const conflict = createEtfCurrentStateRefreshService({ ...base, resolveFactSource: async () => ({ kind: 'conflict' as const, sourceIds: ['a', 'b'] }) })
+    await expect(conflict.refresh()).resolves.toEqual({ state: 'unavailable', reason: 'fact.source-conflict' })
+
+    expect(requestWindow).not.toHaveBeenCalled()
   })
 
   it('refuses to merge a partial answer across a source switch', async () => {
@@ -74,6 +95,7 @@ describe('ETF current-state refresh service', () => {
     await store.replace({ window: legacy, verifiedAt: '2026-09-01T00:00:00.000Z' })
 
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true, hasCredential: async () => true,
       // 只有一支回来了：这个 partial 如果跟旧窗口合并，就会拼出一个混源窗口。
       requestWindow: async () => ({ state: 'partial' as const, btc: rows('BTC') }),
@@ -90,6 +112,7 @@ describe('ETF current-state refresh service', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     try {
       const first = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
         isEnabled: async () => true, hasCredential: async () => true,
         requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
         store, now: () => '2026-09-02T12:00:00.000Z'
@@ -99,6 +122,7 @@ describe('ETF current-state refresh service', () => {
       // 同一天（08-31）的读数在下一轮被改写：这一天早已静置满 30 小时。
       const revised = rows('BTC').map((row) => row.date === Date.parse('2026-08-31T00:00:00.000Z') ? { ...row, changeUsd: -999 } : row)
       const second = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
         isEnabled: async () => true, hasCredential: async () => true,
         requestWindow: async () => ({ state: 'available' as const, btc: revised, eth: rows('ETH') }),
         store, now: () => '2026-09-02T13:00:00.000Z'
@@ -120,6 +144,7 @@ describe('ETF current-state refresh service', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     try {
       const first = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
         isEnabled: async () => true, hasCredential: async () => true,
         requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
         store, now: () => '2026-09-02T05:00:00.000Z'
@@ -129,6 +154,7 @@ describe('ETF current-state refresh service', () => {
       // 09-01 在 09-02T05:00Z 才满 29 小时；下一轮 06:30Z 它刚满窗口，这次变大是补报收尾。
       const late = rows('BTC').map((row) => row.date === Date.parse('2026-09-01T00:00:00.000Z') ? { ...row, changeUsd: -777 } : row)
       const second = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
         isEnabled: async () => true, hasCredential: async () => true,
         requestWindow: async () => ({ state: 'available' as const, btc: late, eth: rows('ETH') }),
         store, now: () => '2026-09-02T06:30:00.000Z'
@@ -144,6 +170,7 @@ describe('ETF current-state refresh service', () => {
   it('fails closed without a write when fewer than five common complete UTC dates remain', async () => {
     const replace = vi.fn()
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC').slice(0, 4), eth: rows('ETH').slice(0, 4) }),
@@ -163,6 +190,7 @@ describe('ETF current-state refresh service', () => {
     // 入参就是运行时真的交出去的那一类：写成无参 mock 会让 `calls[0][0]` 在类型上不存在。
     const handOffSignals = vi.fn<(signals: readonly ModuleSignal[]) => Promise<void>>(async () => undefined)
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({ state: 'available' as const, btc: outflowRows('BTC'), eth: outflowRows('ETH', [1, 2, 3, 4, 5]) }),
@@ -185,6 +213,7 @@ describe('ETF current-state refresh service', () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
     const handOffSignals = vi.fn()
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') }),
@@ -200,6 +229,7 @@ describe('ETF current-state refresh service', () => {
   it('fails closed without a write for a future or non-common asset date', async () => {
     const replace = vi.fn()
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({
@@ -218,6 +248,7 @@ describe('ETF current-state refresh service', () => {
   it('keeps only the latest common complete date set when the source histories differ', async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow: async () => ({
@@ -245,6 +276,7 @@ describe('ETF current-state refresh service', () => {
       .mockResolvedValueOnce({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') })
       .mockResolvedValueOnce({ state: 'partial' as const, btc: windowRows('BTC', ['2026-08-28', '2026-08-29', '2026-08-30', '2026-09-01']), eth: undefined })
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow,
@@ -280,6 +312,7 @@ describe('ETF current-state refresh service', () => {
       .mockReturnValueOnce('2026-09-01T12:00:00.000Z')
       .mockReturnValueOnce('2026-09-02T12:00:00.000Z')
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow,
@@ -306,6 +339,7 @@ describe('ETF current-state refresh service', () => {
       .mockReturnValueOnce('2026-09-01T12:00:00.000Z')
       .mockReturnValueOnce('2026-09-01T13:00:00.000Z')
     const service = createEtfCurrentStateRefreshService({
+        resolveFactSource: resolvedSource,
       isEnabled: async () => true,
       hasCredential: async () => true,
       requestWindow,
