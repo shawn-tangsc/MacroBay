@@ -63,7 +63,9 @@ export const macroIndicatorDrawerText = {
     minicalLegend: { done: '已发布', todo: '待发布', today: '今天' },
     minicalTools: { prev: '上一个月', next: '下一个月', back: '回到本月', refresh: '刷新市场日历', configure: '配置日历', refreshing: '正在刷新…', refreshed: '已刷新' },
     minicalNoData: '暂无日程数据',
-    minicalMore: '{count} 条重要',
+    // 角标：数的是「格子里没显示出来的条数」，不是「重要条数」——所以是 +N，不是「N 条重要」。
+    minicalMore: '+{count}',
+    minicalMoreAria: '还有 {count} 条未显示',
     minicalUnavailable: '暂时读不到这个月的日程',
     mkDay: {
       summary: '与利率相关 {related} 条',
@@ -126,7 +128,8 @@ export const macroIndicatorDrawerText = {
     minicalLegend: { done: 'Published', todo: 'Scheduled', today: 'Today' },
     minicalTools: { prev: 'Previous month', next: 'Next month', back: 'This month', refresh: 'Refresh market calendar', configure: 'Configure calendar', refreshing: 'Refreshing…', refreshed: 'Refreshed' },
     minicalNoData: 'No calendar data yet',
-    minicalMore: '{count} more',
+    minicalMore: '+{count}',
+    minicalMoreAria: '{count} more not shown',
     minicalUnavailable: 'This month\'s schedule is not readable right now',
     mkDay: {
       summary: 'Related to rates {related}',

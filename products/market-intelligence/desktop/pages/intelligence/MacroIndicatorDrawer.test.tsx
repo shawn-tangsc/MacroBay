@@ -104,14 +104,34 @@ describe('key-indicator drawer', () => {
     expect(reads.length).toBeGreaterThan(before)
   })
 
-  it('lists the releases of the day in its cell: three rows, then 「N 条重要」', async () => {
-    // 一天 5 条 → 格子里三条 + 「2 条重要」；数据来自那次按月读，不是内建示例。
+  it('lists three release rows in the cell and marks the rest with a corner badge', async () => {
+    // 一天 5 条 → 格子里三条 + 角标「+2」；数据来自那次按月读，不是内建示例。
     const busyDay = [1, 2, 3, 4, 5].map((index) => dayEvent(`busy-${index}`, `事件 ${index}`, `2026-11-13T${String(9 + index).padStart(2, '0')}:00:00.000Z`))
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => busyDay })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '13')!
     expect(cell.querySelectorAll('.mk-mcell__row')).toHaveLength(3)
-    expect(cell.querySelector('.mk-mcell__more')?.textContent).toBe('2 条重要')
+    const badge = cell.querySelector('.mk-mcell__more')!
+    // 角标数的是「没显示出来的条数」，不是「重要条数」——所以是 +2，不是「2 条重要」。
+    expect(badge.textContent).toBe('+2')
+    expect(badge.getAttribute('aria-label')).toBe('还有 2 条未显示')
+    // 角标不排在事件行里：它不再和事件名挤在同一列。
+    for (const row of Array.from(cell.querySelectorAll('.mk-mcell__row'))) {
+      expect(row.contains(badge)).toBe(false)
+    }
+  })
+
+  /**
+   * 角标是**角标**：绝对定位在右上角、不占行高，所以格子高度与事件行数都不因它变。
+   * 把它改回事件列之后（或压到最后一行下面），这条即红。
+   */
+  it('pins the corner badge absolutely so it cannot take a row', () => {
+    const styles = readFileSync('products/market-intelligence/desktop/pages/intelligence/macroIndicatorDrawer.css', 'utf8')
+    const rule = styles.slice(styles.indexOf('.mk-mcell__more'))
+    const body = rule.slice(0, rule.indexOf('}'))
+    expect(body).toContain('position: absolute')
+    expect(body).toContain('top:')
+    expect(body).not.toContain('bottom:')
   })
 
   it('defaults to today when today has events, and lists only what explains rate expectations', async () => {

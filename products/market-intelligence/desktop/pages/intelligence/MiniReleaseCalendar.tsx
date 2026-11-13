@@ -89,7 +89,10 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
             {shown.map(item => <span className="mk-mcell__row" key={`${item.name}-${item.at}`}>
               <i className={`mk-mdot mk-mdot--${item.state}`} />{item.name}
             </span>)}
-            {hidden > 0 ? <span className="mk-mcell__more">{text.minicalMore.replace('{count}', String(hidden))}</span> : null}
+            {hidden > 0 ? <span className="mk-mcell__more" role="img"
+              aria-label={text.minicalMoreAria.replace('{count}', String(hidden))}>
+              {text.minicalMore.replace('{count}', String(hidden))}
+            </span> : null}
           </button>
         }))}
       </div>
