@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { createAnalysisSignificanceGate } from './analysisSignificanceGate'
+import { createAnalysisSignificanceGate, formatCalendarReadDiagnostic } from './analysisSignificanceGate'
 import type { MacroRoute } from '../public-query/macroRouteQuery'
 
 const asOf = '2026-10-09T12:00:00.000Z'
@@ -264,4 +264,11 @@ it('does not spend a run on every tick just because this build has no calendar w
   const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
   // Unwired is a deliberate configuration, not a failed read: no extra run, no forged reason.
   expect(outcome.decision).toBe('skipped')
+})
+
+it('prints the read state, so "not wired" cannot hide as "nothing happened"', () => {
+  const line = formatCalendarReadDiagnostic(route([], { providerState: 'unavailable' }))
+  expect(JSON.parse(line)).toMatchObject({ kind: 'analysis-calendar-read', provider: { state: 'unavailable' } })
+  const unwired = route([], { officialState: 'unavailable', providerState: 'unavailable' })
+  expect(formatCalendarReadDiagnostic(unwired)).toContain('"state":"unavailable"')
 })

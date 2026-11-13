@@ -27,6 +27,21 @@ function evaluateCalendarSignificance(
   return Object.freeze({ ...decision, decision: 'queued' as const, reasonCode: null, signals: Object.freeze([]) })
 }
 
+/**
+ * 一行诊断，专门回答「这次为什么要/不要按读不到处理」。
+ *
+ * `not-wired` 不触发 fail-open，所以它不发任何信号；但正因为它不发信号，必须留下能被查到的
+ * 记录——否则接线哪天被改坏，看起来和「这个 build 本来就没接」一模一样。
+ */
+export function formatCalendarReadDiagnostic(route: MacroRoute): string {
+  return JSON.stringify({
+    kind: 'analysis-calendar-read',
+    official: { state: route.official.state, reasonCode: route.official.reasonCode ?? null },
+    provider: { state: route.provider.state, reasonCode: route.provider.reasonCode ?? null },
+    asOf: route.asOf, months: route.months
+  })
+}
+
 /** 把两侧状态摊平成策略层认识的基线；策略层只认数据，不认状态。 */
 function flattenBaseline(route: MacroRoute): SignificanceBaseline {
   return { official: route.official.facts, provider: route.provider.facts, months: route.months, asOf: route.asOf }

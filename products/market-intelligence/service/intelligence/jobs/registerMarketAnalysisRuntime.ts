@@ -14,7 +14,7 @@ import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import { buildMarketAnalysisContext } from '../public-query/marketAnalysisContextQuery'
 import { countAnalysisRuns, lastAutoRunAt } from '../analysis/analysisRunCounter'
-import { createAnalysisSignificanceGate } from '../analysis/analysisSignificanceGate'
+import { createAnalysisSignificanceGate, formatCalendarReadDiagnostic } from '../analysis/analysisSignificanceGate'
 import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotTick'
 import type { SessionSlotInstant } from '../analysis/analysisSlotCoverage'
 import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
@@ -507,6 +507,10 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       eventGroupId: value.eventGroupId, triggerKey: value.triggerKey, asOf: value.asOf, previousSnapshot,
       ...(value.attemptLedgerId ? { attemptLedgerId: value.attemptLedgerId } : {})
     })
+    // 读不到的状态在这里落一行；`not-wired` 也要落，否则接线被改坏和「本来没接」分不开。
+    if (gate.route && (gate.route.official.state === 'unavailable' || gate.route.provider.state === 'unavailable')) {
+      console.log(formatCalendarReadDiagnostic(gate.route))
+    }
     if (gate.decision === 'skipped') return { eventGroupId: value.eventGroupId }
     // 日历发布的通知**不在这里**：它跟着采集走（`macroEventLandedNotifier`）。挂在分析闸门上，
     // 读者就会在「日历已刷新、分析没跑/被跳过」时什么也收不到——一件事发生了，不该由另一个开关
