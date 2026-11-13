@@ -173,8 +173,11 @@ export type NarwhalStandardRowInput = Readonly<{
   /** 指标型是 `minute`/`date`（按有没有时刻）；事件型按是否只有日期。 */
   timePrecision?: 'minute' | 'date'
   rowKind?: 'release' | 'estimate'
-  /** 这一行覆盖的 measure 数（测度层守恒用）。 */
-  measureCount?: number
+  /**
+   * 行种类：指标行带一个 measure，事件行没有 measure。
+   * **显式字段，不用 `metricKey.startsWith('evt.')` 嗅探**——换个命名就失效，而且那是拿字符串猜语义。
+   */
+  kind: 'indicator' | 'event'
   previous?: string
   consensus?: string
   actual?: string
@@ -224,7 +227,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
       }
       const first = release.values[0]
       rows.push({
-        countryCode: release.country, metricKey: code, periodKey: release.at.slice(0, 16),
+        kind: 'event', countryCode: release.country, metricKey: code, periodKey: release.at.slice(0, 16),
         scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
         timePrecision: 'minute',
         ...(first?.previous === undefined ? {} : { previous: first.previous }),
@@ -247,6 +250,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
         continue
       }
       rows.push({
+        kind: 'indicator',
         ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
         countryCode: release.country, metricKey, periodKey: period,
         scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,

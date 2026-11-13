@@ -85,7 +85,7 @@ describe('码名', () => {
         seen.set(value, metricKey)
       }
     }
-    expect(entries.length).toBe(160)
+    expect(entries.length).toBe(163)
   })
 
   it('覆盖守卫：每一个在用码都有名字，一个都不许缺', () => {
@@ -95,6 +95,6 @@ describe('码名', () => {
     ])
     const uncovered = [...inUse].filter((key) => nameForMetricKey(key) === undefined)
     expect(uncovered, `这些在用码没有名字：\n${uncovered.join('\n')}`).toEqual([])
-    expect(inUse.size).toBe(160)
+    expect(inUse.size).toBe(163)
   })
 })

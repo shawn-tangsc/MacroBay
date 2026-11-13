@@ -40,6 +40,9 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   /** 21 号别名表给出的短码（`cpi` 这套）；还没有短码的行不带这个字段。 */
   code?: string
 }>>> = Object.freeze({
+  'US.CURRENT_ACCOUNT.NONE.DIFF': { zhFull: '经常帐', zhShort: '经常帐', enFull: 'Current Account Balance', enShort: 'Current Account', locked: false, code: 'current-account' },
+  'US.DALLAS_FED_SERVICES.SA.LEVEL': { zhFull: '达拉斯联储服务业活动指数', zhShort: '达拉斯联储服务业', enFull: 'Dallas Fed Services Index', enShort: 'Dallas Fed Svcs', locked: false, code: 'dallas-fed-services' },
+  'US.DALLAS_FED_SERVICES_REVENUES.SA.LEVEL': { zhFull: '达拉斯联储服务业收入指数', zhShort: '达拉斯联储服务业收入', enFull: 'Dallas Fed Services Revenue Index', enShort: 'Dallas Fed Svcs Revenue', locked: false, code: 'dallas-fed-services-revenues' },
   'US.ADP.SA.CHANGE': { zhFull: 'ADP 就业人数变动', zhShort: 'ADP 就业', enFull: 'ADP Employment Change', enShort: 'ADP Employment', code: 'adp', locked: true },
   'US.AHE.SA.MOM': { zhFull: '平均每小时工资月率', zhShort: '平均时薪（月率）', enFull: 'Average Hourly Earnings, MoM', enShort: 'Avg Hourly Earnings', code: 'average-hourly-earnings', locked: true },
   'US.AHE.NSA.YOY': { zhFull: '平均每小时工资年率', zhShort: '平均时薪 年率', enFull: 'Average Hourly Earnings YoY', enShort: 'Avg Hourly Earnings YoY', locked: false },
@@ -232,8 +235,7 @@ export function nameForMetricKey(metricKey: string): Readonly<{
   }
 }
 
-/** 事件类型名：`evt.*` → 四名（来自 20 号表，17 条）。
- * 事件型行（讲话、声明、库存、抵押贷款申请…）没有指标码，靠这张表才有读者看得懂的名字；
+/** 事件类型名：`evt.*` → 四名（来自 20 号表）。事件型行没有指标码，靠这张表才有读者看得懂的名字；
  * 取不到就退回类型串——**不许显示码本身**，也不许编名字。 */
 export const eventTypeNameByCode: Readonly<Record<string, Readonly<{
   zhFull: string; zhShort: string; enFull: string; enShort: string
@@ -248,14 +250,14 @@ export const eventTypeNameByCode: Readonly<Record<string, Readonly<{
   'evt.fomc': { zhFull: '美联储议息会议', zhShort: '议息会议', enFull: 'FOMC Rate Decision', enShort: 'FOMC' },
   'evt.futures-positioning': { zhFull: '期货持仓', zhShort: '期货持仓', enFull: 'Futures Positioning', enShort: 'Futures Positioning' },
   'evt.household-debt': { zhFull: '家庭债务', zhShort: '家庭债务', enFull: 'Household Debt', enShort: 'Household Debt' },
-  'evt.monetary-policy-minutes': { zhFull: '会议纪要', zhShort: '会议纪要', enFull: 'Monetary Policy Minutes', enShort: 'Minutes' },
-  'evt.monetary-policy-projections': { zhFull: '经济预测', zhShort: '经济预测', enFull: 'Monetary Policy Projections', enShort: 'Projections' },
-  'evt.policy-rate-decision': { zhFull: '利率决议', zhShort: '利率决议', enFull: 'Policy Rate Decision', enShort: 'Rate Decision' },
   'evt.merchandise-trade': { zhFull: '商品贸易', zhShort: '商品贸易', enFull: 'Merchandise Trade', enShort: 'Goods Trade' },
+  'evt.monetary-policy-minutes': { zhFull: '货币政策会议纪要', zhShort: '会议纪要', enFull: 'FOMC Minutes', enShort: 'Minutes' },
   'evt.monetary-policy-press-conference': { zhFull: '货币政策新闻发布会', zhShort: '发布会', enFull: 'Monetary Policy Press Conference', enShort: 'Press Conference' },
+  'evt.monetary-policy-projections': { zhFull: '经济预测摘要', zhShort: '经济预测', enFull: 'FOMC Economic Projections', enShort: 'SEP' },
   'evt.monetary-policy-statement': { zhFull: '货币政策声明', zhShort: '政策声明', enFull: 'Monetary Policy Statement', enShort: 'Policy Statement' },
   'evt.money-and-credit': { zhFull: '货币与信贷', zhShort: '货币与信贷', enFull: 'Money and Credit', enShort: 'Money & Credit' },
   'evt.mortgage-applications': { zhFull: '抵押贷款申请', zhShort: '抵押贷款申请', enFull: 'Mortgage Applications', enShort: 'Mortgage Apps' },
   'evt.oil-rig-count': { zhFull: '石油钻井数', zhShort: '石油钻井数', enFull: 'Oil Rig Count', enShort: 'Rig Count' },
   'evt.petroleum-inventories': { zhFull: '石油库存报告', zhShort: '石油库存', enFull: 'Petroleum Inventories', enShort: 'Petroleum Stocks' },
+  'evt.policy-rate-decision': { zhFull: '利率决议', zhShort: '利率决议', enFull: 'Fed Rate Decision', enShort: 'Rate Decision' },
 })

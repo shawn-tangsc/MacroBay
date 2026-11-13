@@ -435,15 +435,16 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         const counts = dualWriteMeasureRows(database, {
           providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3', observedAt, rows
         }, { onError: (message) => console.warn(`[macro-calendar] 标准表写入失败：${message}`) })
-        const unmappedCount = unmapped.length + Object.values(counts.unmapped).reduce((sum, value) => sum + value, 0)
-        // **被减数来自源**（`sourceTotals`），不从产物反推：构造阶段丢掉的一条既不在 rows、
-        // 也不在 unmapped，若从产物算，输入会跟着少、方程永远平。
-        const inputReleases = sourceTotals.releases
-        const releaseDiff = inputReleases - (counts.written + unmappedCount + counts.failed)
+        // 两层都用**源**当被减数（`sourceTotals`），不从产物反推——构造阶段丢的一条既不在
+        // rows 也不在 unmapped，从产物算输入会跟着少、方程永远平（那就是假绿）。
+        const unmappedReleases = unmapped.length + Object.values(counts.unmapped).reduce((sum, value) => sum + value, 0)
+        const landedReleases = new Set(rows.map((row) => row.sourceEventId)).size
+        const releaseDiff = sourceTotals.releases - (landedReleases + unmappedReleases + counts.failed)
+        // 测度层**只数指标行**：事件型没有 measure，算进去的话每批恒报 −(事件数) 的假红。
+        const landedMeasures = rows.filter((row) => row.kind === 'indicator').length
         const unmappedMeasures = unmapped.reduce((sum, item) => sum + (item.measureKeys?.length ?? 1), 0)
-        const inputMeasures = sourceTotals.measures
-        const measureDiff = inputMeasures - (rows.reduce((sum, row) => sum + (row.measureCount ?? 1), 0) + unmappedMeasures)
-        console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${inputReleases} = 落表 ${counts.written} + 未映射 ${unmappedCount} + 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${inputMeasures}（差 ${measureDiff}）`)
+        const measureDiff = sourceTotals.measures - (landedMeasures + unmappedMeasures)
+        console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 落表 ${landedReleases} + 未映射 ${unmappedReleases} + 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${landedMeasures} + 未映射 measure ${unmappedMeasures}（差 ${measureDiff}）`)
         if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
         if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)
         if (counts.failed > 0) console.warn(`[macro-calendar] 标准行写入失败 ${counts.failed} 条（已计入守恒式）`)

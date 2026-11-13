@@ -10,12 +10,8 @@
  * 对不上的一律 `unmapped`——不猜、不按相似度、不拿名字兜底。
  */
 
-/** Narwhal 的 `values[].measure` → 规范指标键。128 个 measure ↔ 128 个键，双射。
- *
- * 出处：`docs-private/iterations/0.4.4-calendar-sources/16-measure映射-美国全量.csv`
- * （134 行；多出的 6 行是同一次发布被拆成两条 release、两行指向同一个 key，按 measure
- * 去重后是 128 条——表是 `measure` 建的，不是按 release 建的）。
- * 守卫钉住「measure → 多 key」与「key → 多 measure」两个方向。 */
+/** Narwhal 的 `values[].measure` → 规范指标键（132 条，来自 16 号表；`measure ↔ metric_key` 双射）。
+ * 这 132 条是**已见过的**，不是全量：以后每批冒出新的 measure 是正常的，落 `unknown-measure` 就该补。 */
 export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object.freeze({
   adp_employment_change: 'US.ADP.SA.CHANGE',  // usa-employment-statistics
   average_hourly_earnings_mom: 'US.AHE.SA.MOM',  // usa-wages-and-earnings
@@ -45,7 +41,10 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
   cpi_cleveland_mom: 'US.CPI_CLEVELAND.NONE.MOM',  // usa-consumer-prices
   cpi_mom: 'US.CPI.SA.MOM',  // usa-consumer-prices
   cpi_yoy: 'US.CPI.NSA.YOY',  // usa-consumer-prices
+  current_account_balance: 'US.CURRENT_ACCOUNT.NONE.DIFF',  // usa-balance-of-payments
   dallas_fed_manufacturing: 'US.DALLAS_FED_MANUFACTURING.SA.LEVEL',  // usa-dallas-fed-manufacturing-survey
+  dallas_fed_services: 'US.DALLAS_FED_SERVICES.SA.LEVEL',  // usa-dallas-fed-services-survey
+  dallas_fed_services_revenues: 'US.DALLAS_FED_SERVICES_REVENUES.SA.LEVEL',  // usa-dallas-fed-services-survey
   durable_goods_orders_ex_defense_mom: 'US.DURABLE_GOODS_EX_DEFENSE.SA.MOM',  // usa-durable-goods-orders
   durable_goods_orders_ex_transport_mom: 'US.DURABLE_GOODS_EX_TRANSPORT.SA.MOM',  // usa-durable-goods-orders
   durable_goods_orders_mom: 'US.DURABLE_GOODS_ORDERS.SA.MOM',  // usa-durable-goods-orders
@@ -102,6 +101,7 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
   new_home_sales: 'US.NEW_HOME_SALES.SA.COUNT',  // usa-new-home-sales
   new_home_sales_mom: 'US.NEW_HOME_SALES.SA.MOM',  // usa-new-home-sales
   nonfarm_payrolls_change: 'US.NONFARM.SA.CHANGE',  // usa-employment-report
+  nonfarm_productivity_qoq: 'US.PRODUCTIVITY.SA.QOQ',  // usa-productivity-and-costs
   participation_rate: 'US.PARTICIPATION_RATE.SA.RATE',  // usa-unemployment
   pce_price_index_mom: 'US.PCE.SA.MOM',  // usa-income-and-spending
   pce_price_index_yoy: 'US.PCE.NSA.YOY',  // usa-income-and-spending
