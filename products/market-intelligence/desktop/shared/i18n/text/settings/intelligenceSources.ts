@@ -541,6 +541,12 @@ export const intelligenceSourcesText = {
     /* 「数据商预期」= 数据源自己在发布前汇总的分析师预期中值；**不是我们去发问卷**（用户 2026-11-14）。
        悬停里点明是哪家源给的，所以卡片上不必写「问卷」这种像我们动作的词。 */
     sources: { market: '盘口反推', provider: '数据商预期', manual: '手填' },
+    /* 「核心指标」菜单里那一行源：类型标签 + 页脚两句。**只列取值源**——盘口是预期来源，
+       归卡片齿轮，不进这里（否则读者会以为它能供数，关了却发现数还在）。 */
+    valueSourceType: { official: '官方', provider: '数据商' },
+    valueSourceFrequencyReadonly: '频率只读',
+    valueSourceFootnote: '关闭某个源不会删除历史数据，只是不再采集。',
+    valueSourceEmpty: '这个指标还没有可用来源。',
     providerExpectationTitle: '由数据源（{provider}）在发布前汇总的分析师预期中值',
     showVolume: '显示成交量',
     showAsOf: '显示观测时刻',
@@ -1160,6 +1166,10 @@ export const intelligenceSourcesText = {
       options: { defaultChain: 'Market → data provider', marketOnly: 'Market only', surveyOnly: 'Data provider only', manualOnly: 'Manual only' }
     },
     sources: { market: 'Market-implied', provider: 'Data provider expectation', manual: 'Manual' },
+    valueSourceType: { official: 'Official', provider: 'Data provider' },
+    valueSourceFrequencyReadonly: 'Frequency is read-only',
+    valueSourceFootnote: 'Turning a source off keeps its history; it only stops collecting.',
+    valueSourceEmpty: 'No value source is available for this indicator yet.',
     providerExpectationTitle: 'The analyst consensus the data source ({provider}) summarises before release',
     showVolume: 'Show volume',
     showAsOf: 'Show observation time',
