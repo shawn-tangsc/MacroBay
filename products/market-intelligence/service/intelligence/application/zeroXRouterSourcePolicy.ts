@@ -61,12 +61,6 @@ export const zeroXRouterSourcePolicy = Object.freeze({
   })
 })
 
-export const zeroXRouterEtfRefreshSchedulePolicy = Object.freeze({
-  sourceId: zeroXRouterSourcePolicy.sourceId,
-  collectionPreset: 'balanced' as const,
-  intervalSeconds: 10 * 60
-})
-
 export const zeroXRouterCalendarEvidenceAdmissionPolicy = Object.freeze({
   baseUrl: 'https://0xrouter.app/cexdata/calendar',
   paths: Object.freeze({
