@@ -24,7 +24,7 @@ export const polymarketConsensusPolicy = Object.freeze({
 
 export type PolymarketConsensusReading =
   | Readonly<{ state: 'ok'; value: number; marketVolume: number; asOf: string; provenance: 'market-implied' }>
-  | Readonly<{ state: 'unavailable'; reason: 'no-market' | 'no-buckets' | 'after-release' | 'read-failed' }>
+  | Readonly<{ state: 'unavailable'; reason: 'no-market' | 'no-buckets' | 'no-volume' | 'after-release' | 'read-failed' }>
 
 export type PolymarketFetchText = (url: string) => Promise<string>
 
@@ -79,7 +79,9 @@ export async function readPolymarketConsensus(input: Readonly<{
     ...(marketVolume === undefined ? {} : { marketVolume })
   })
   if (gate.state === 'rejected') {
-    return { state: 'unavailable', reason: gate.missing.includes('marketVolume') ? 'no-market' : 'after-release' }
+    // 盘**找到了**、只是成交量读不到：这是「读不到」，不是「没有这个盘」。
+    // 把两者都写成 `no-market`，卡上就会把「我们没查到」说成「市场上没有」。
+    return { state: 'unavailable', reason: gate.missing.includes('marketVolume') ? 'no-volume' : 'after-release' }
   }
   return { state: 'ok', value, marketVolume: marketVolume!, asOf: input.asOf, provenance: 'market-implied' }
 }

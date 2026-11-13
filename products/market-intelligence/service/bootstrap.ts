@@ -54,6 +54,7 @@ import { createMacroIndicatorReadService } from './intelligence/macro-calendar/m
 import { registerMacroIndicatorIpc } from './intelligence/macro-calendar/ipc/registerMacroIndicatorIpc'
 import { createFredObservationsFetcher, readFredIndicatorYoY } from './intelligence/macro-calendar/fredIndicatorYoY'
 import { readNextReleaseForMetric } from './intelligence/macro-calendar/marketCalendarStandardMonthRead'
+import { readStandardActuals } from './intelligence/macro-calendar/macroIndicatorStandardActuals'
 import { readPolymarketConsensus } from './intelligence/macro-calendar/polymarketConsensus'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
 import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
@@ -628,6 +629,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   registerMacroIndicatorIpc(register, createMacroIndicatorReadService(macroCalendarBackend.repository, {
     readOfficialYoY: (metricKey) => readFredIndicatorYoY(metricKey, fredObservations),
     nextReleaseFor: (metricKey, asOf) => readNextReleaseForMetric(standardCalendarDatabase, { metricKey, asOf }),
+    readStandardActual: (metricKey, asOf) => readStandardActuals(standardCalendarDatabase, { metricKey, asOf }),
     readMarketConsensus: (input) => readPolymarketConsensus({
       ...input,
       fetchText: (url) => intelligenceModule.fetchText(url, 'policy-path-market')

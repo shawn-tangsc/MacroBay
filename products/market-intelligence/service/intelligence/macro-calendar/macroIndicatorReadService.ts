@@ -36,7 +36,7 @@ export const macroIndicatorAsOfPolicy = {
  */
 export type MacroMarketConsensusReading =
   | Readonly<{ state: 'ok'; value: number; marketVolume: number; asOf: string }>
-  | Readonly<{ state: 'unavailable'; reason: 'no-market' | 'no-buckets' | 'after-release' | 'read-failed' }>
+  | Readonly<{ state: 'unavailable'; reason: 'no-market' | 'no-buckets' | 'no-volume' | 'after-release' | 'read-failed' }>
 
 export type MacroIndicatorReadDependencies = Readonly<{
   readOfficialYoY?: (metricKey: string) => Promise<FredYoYReading>
@@ -46,6 +46,14 @@ export type MacroIndicatorReadDependencies = Readonly<{
     /** `date` 时 `releaseAt` 是那天的占位：能算天数，不能倒计时。 */
     timePrecision?: 'minute' | 'date'
   }> | undefined
+  /** 同一期同一天多行时的兜底：从标准表取**有 actual 的那行**（回填进来的旧源行就在那里）。 */
+  readStandardActual?: (metricKey: string, asOf: string) => readonly Readonly<{
+    period?: string
+    releasedAt: string
+    observedAt: string
+    providerId: string
+    actual: string
+  }>[]
   readMarketConsensus?: (input: Readonly<{
     metricKey: string
     period: string
@@ -75,8 +83,12 @@ export function createMacroIndicatorReadService(
           const reading = await dependencies.readOfficialYoY!(fact.metricKey).catch((): FredYoYReading => ({ state: 'unavailable', seriesId: '', reason: 'read-failed' }))
           return applyOfficialYoY(fact, reading)
         }))
-      if (dependencies.nextReleaseFor === undefined) return withOfficial
-      return await Promise.all(withOfficial.map((fact) => withNextRelease(fact, dependencies, asOf)))
+      // 本期值的兜底：标准表里同一天可能有「官方空行 + 旧源有值行」，取有值的那行。
+      const withStandard = dependencies.readStandardActual === undefined
+        ? withOfficial
+        : withOfficial.map((fact) => applyStandardActual(fact, dependencies.readStandardActual!(fact.metricKey, asOf)))
+      if (dependencies.nextReleaseFor === undefined) return withStandard
+      return await Promise.all(withStandard.map((fact) => withNextRelease(fact, dependencies, asOf)))
     }
   }
 }
@@ -133,8 +145,36 @@ async function withNextRelease(
     }
   }
   // 读失败与「没有盘」不能混：前者读者该知道是暂时读不到，后者是这个指标确实没有盘。
-  return { ...fact, next: { ...schedule.next, expectedState: reading.reason === 'read-failed' ? 'unreadable' : 'no-market' } }
+  // 「读不到」（请求失败、盘找到了但成交量读不出）与「确实没有盘」必须分开：
+  // 前者说「暂时读不到」，后者才是「暂无预期 / 盘未开」。
+  const unreadable = reading.reason === 'read-failed' || reading.reason === 'no-volume'
+  return { ...fact, next: { ...schedule.next, expectedState: unreadable ? 'unreadable' : 'no-market' } }
 }
+
+/**
+ * 用标准表里**有 actual 的那行**补本期值：只在本期确实没值时补，绝不覆盖已有的值。
+ * 同一天两行（官方 feed 空行 + 旧源有值行）时，「最新那行」未必是有值的那行——这里按有值取。
+ */
+function applyStandardActual(
+  fact: MacroIndicatorCardFact,
+  rows: readonly Readonly<{ period?: string; releasedAt: string; observedAt: string; providerId: string; actual: string }>[]
+): MacroIndicatorCardFact {
+  if (fact.state === 'provided' && fact.value !== undefined) return fact
+  const row = rows.find((entry) => entry.period === undefined || fact.period === undefined || entry.period === fact.period)
+  if (row === undefined) return fact
+  const value = parseSourceNumber(row.actual)
+  if (value === undefined) return fact
+  return {
+    ...fact,
+    state: 'provided',
+    value,
+    releasedAt: row.releasedAt,
+    source: row.providerId === 'narwhal' ? 'narwhal' : '0xrouter',
+    ...(row.period === undefined ? {} : { period: row.period }),
+    ...(row.actual.includes('%') ? { unit: 'percent' as const } : {})
+  }
+}
+
 
 const unitByNarwhalUnit: Readonly<Record<string, 'percent' | 'thousands'>> = Object.freeze({
   percent: 'percent',

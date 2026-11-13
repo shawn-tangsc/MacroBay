@@ -210,6 +210,18 @@ describe('macroIndicatorReadService', () => {
     })
   })
 
+  /** 盘找到了、成交量读不到：说「暂时读不到」，不许说成「没有盘」。 */
+  it('tells an unreadable volume apart from a missing market', async () => {
+    await withRepository(async ({ repository }) => {
+      repository.upsertReleaseRow(payrollRelease)
+      const read = createMacroIndicatorReadService(repository, {
+        nextReleaseFor: () => ({ period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z' }),
+        readMarketConsensus: async () => ({ state: 'unavailable', reason: 'no-volume' })
+      }).read({ asOf })
+      expect((await factsOf(read))['US.NONFARM.SA.CHANGE']!.next).toMatchObject({ expectedState: 'unreadable' })
+    })
+  })
+
   /** 排期查询抛错是「这一个补充信息没拿到」，不该把整卡判成读不到。 */
   it('keeps the facts when the next-release lookup itself throws', async () => {
     await withRepository(async ({ repository }) => {
