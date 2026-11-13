@@ -4,7 +4,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellCompactInstant, formatShellDay } from '@platform/ui/time/shellTimeFormat'
 
 import { expectationBp, type PolicyPathDistribution, type PolicyPathOutcome } from '../../../contracts/policyPath'
-import { pickReadoutWidth, placeReadout } from './readoutPlacement'
+import { pickReadoutWidth, placeReadout, READOUT_TIP_WIDTH } from './readoutPlacement'
 
 /**
  * 「利率数学期望」曲线。
@@ -112,7 +112,8 @@ export function ExpectationChart({ points, events, height, width, text, latest }
   const stageRef = useRef<HTMLDivElement | null>(null)
   const tipRef = useRef<HTMLDivElement | null>(null)
   const [selection, setSelection] = useState<Selection | null>(null)
-  const [tipHeight, setTipHeight] = useState(152)
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
+  const [tipHeight, setTipHeight] = useState(0)
 
   const geometry = useMemo(() => {
     // 原样画收到的宽度：**不许**在这里给自己一个地板宽度。给了，图就比容器宽，
@@ -198,18 +199,37 @@ export function ExpectationChart({ points, events, height, width, text, latest }
     [geometry]
   )
 
+  // 舞台的盒子必须**量**出来，渲染期不许读 ref、也不许退回 prop 尺寸：
+  // 夹边用的盒子一旦不是面板真正的容器，面板就会顺着越出 `.mk-plot` 压到下面的卡片上。
+  useLayoutEffect(() => {
+    const host = stageRef.current
+    if (!host) return
+    const measure = () => {
+      const width = Math.floor(host.clientWidth)
+      const height = Math.floor(host.clientHeight)
+      setStageSize((previous) => previous.width === width && previous.height === height ? previous : { width, height })
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [])
+
+  // 量不到舞台或量不到面板高度时**不显示面板**：拿假尺寸硬算，就是把「没量到」变成「画错地方」。
+  const measured = stageSize.width > 0 && stageSize.height > 0 && tipHeight > 0
+  const panelVisible = selection !== null && measured
   // 宽度由 `pickReadoutWidth` 决定（降级时会换行），所以只量高度：它决定上下往哪边翻。
-  // 只在换点或宽度变化时才量，不在每次移动时读布局。
-  const stageWidth = stageRef.current?.clientWidth || geometry.W
-  const tipWidth = pickReadoutWidth({
-    stageWidth,
-    ...(selection?.pointer ? { pointerX: selection.pointer.x } : {})
-  })
+  const tipWidth = measured
+    ? pickReadoutWidth({
+      stageWidth: stageSize.width,
+      ...(selection?.pointer ? { pointerX: selection.pointer.x } : {})
+    })
+    : READOUT_TIP_WIDTH
   useLayoutEffect(() => {
     const element = tipRef.current
     if (!element) return
-    const measured = element.offsetHeight
-    if (measured > 0 && measured !== tipHeight) setTipHeight(measured)
+    const next = element.offsetHeight
+    if (next > 0 && next !== tipHeight) setTipHeight(next)
   }, [selection?.index, tipWidth, tipHeight])
 
   if (!points.length) return <div className="mk-plot__stage" />
@@ -219,15 +239,12 @@ export function ExpectationChart({ points, events, height, width, text, latest }
   const isLast = selection !== null && geometry.binObservation[selection.index] === points.length - 1
 
   const placeTip = (): Readonly<{ left: number; top: number }> => {
-    if (!selection) return { left: 0, top: 0 }
+    if (!selection || !measured) return { left: 0, top: 0 }
     const point = selected ?? selectable[0]!
     const rect = placeReadout({
       // 用舞台**真实**的盒子，而不是 SVG 的逻辑高度：两者在首帧或动画中可能差几个像素，
       // 差出来的那几像素正好会让面板底部越过绘图区，被上层或裁切吃掉。
-      stage: {
-        width: stageWidth,
-        height: stageRef.current?.clientHeight || geometry.H
-      },
+      stage: { width: stageSize.width, height: stageSize.height },
       tip: { width: tipWidth, height: tipHeight },
       point: { x: point.x, y: point.y },
       ...(selection.pointer ? { pointer: selection.pointer } : {})
@@ -329,8 +346,11 @@ export function ExpectationChart({ points, events, height, width, text, latest }
     <div
       className="mk-tip"
       ref={tipRef}
-      data-active={selection ? 'true' : 'false'}
-      style={{ width: `${tipWidth}px`, transform: `translate(${tip.left.toFixed(1)}px, ${tip.top.toFixed(1)}px)` }}
+      data-active={panelVisible ? 'true' : 'false'}
+      style={{
+        ...(measured ? { width: `${tipWidth}px` } : {}),
+        transform: `translate(${tip.left.toFixed(1)}px, ${tip.top.toFixed(1)}px)`
+      }}
       aria-live={selection?.keyboard ? 'polite' : 'off'}
     >
       {panelPoint ? <PanelContent point={panelPoint} text={text} latest={isLast ? latest : undefined} timeZone={timeZone} /> : null}

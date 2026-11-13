@@ -99,3 +99,16 @@ describe('readout width degradation', () => {
     expect(pickReadoutWidth({ stageWidth: 490 })).toBe(READOUT_TIP_WIDTH)
   })
 })
+
+describe('short stage', () => {
+  it('clamps every pointer position inside a 160px-tall stage with a 152px-tall panel', () => {
+    const shortStage = { width: 480, height: 160 }
+    const tallTip = { width: 168, height: 152 }
+    for (const y of [0, 8, 40, 80, 120, 160]) {
+      const pointer = pointerAt(240, y)
+      const rect = placeReadout({ stage: shortStage, tip: tallTip, point: pointer, pointer })
+      expect(rect.top).toBeGreaterThanOrEqual(READOUT_MARGIN)
+      expect(rect.top + rect.height).toBeLessThanOrEqual(shortStage.height - READOUT_MARGIN)
+    }
+  })
+})

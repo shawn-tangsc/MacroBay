@@ -37,15 +37,35 @@ const late: ExpectationPoint = {
 let root: Root | undefined
 let host: HTMLDivElement | undefined
 
+/**
+ * happy-dom 没有布局：`clientWidth` / `clientHeight` / `offsetHeight` 恒为 0。
+ * 面板现在只认**量到的**盒子，量不到就不显示——所以单测必须先把这些尺寸喂进去，
+ * 否则每条读数用例都会「面板不出现」，而那不是被测行为。
+ */
+function stubBox(width: number, height: number, tipHeight = 152): void {
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => width })
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => height })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => tipHeight })
+}
+
 afterEach(async () => {
   await act(async () => root?.unmount())
   root = undefined
   host?.remove()
   host = undefined
   document.body.innerHTML = ''
+  for (const key of ['clientWidth', 'clientHeight', 'offsetHeight']) {
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]
+  }
 })
 
-async function render(latest?: Readonly<{ changeBp?: number }>, height = 240, width = 480): Promise<HTMLDivElement> {
+async function render(
+  latest?: Readonly<{ changeBp?: number }>,
+  height = 240,
+  width = 480,
+  stageBox?: Readonly<{ width: number; height: number }>
+): Promise<HTMLDivElement> {
+  stubBox(stageBox?.width ?? width, stageBox?.height ?? height)
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -171,6 +191,13 @@ describe('expectation readout panel', () => {
     expect(left).toBeGreaterThanOrEqual(4)
     // 面板与光标之间必须留出空隙：光标 470 不在 [left, left+width] 里。
     expect(left + tip().offsetWidth).toBeLessThanOrEqual(470)
+  })
+
+  it('never shows the panel before the stage box has been measured', async () => {
+    // 舞台量到 0×0（首帧、或 ref 还没挂上）：不许拿 prop 尺寸兜底把面板画到错的位置。
+    const stage = await render(undefined, 240, 480, { width: 0, height: 0 })
+    await move(stage, 240, 100)
+    expect(tip().dataset.active).toBe('false')
   })
 
   it('narrows instead of covering the cursor when the plot is 300px wide', async () => {
