@@ -8,6 +8,8 @@ import {
   type CoreIndicatorValueSource
 } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 
+import './coreIndicators.css'
+
 /**
  * 「核心指标」那一屏：**每个指标用哪些源、各开不开**（Chief 2026-11-14）。
  *
@@ -45,18 +47,24 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
 
   return <div className="business-cell-grid" data-core-indicator-sources="true">
     {coreIndicatorMetricKeys.map((metricKey) => {
+      /* 标题取不到名字就**整张不出**：拼出一个空键只会渲染成空白标题 + 一行源，
+         读者看到的是一张「没有名字的卡」（用户 2026-11-14 截图里的那 7 张）。 */
+      const copyKey = metricCopyKeys[metricKey]
+      if (copyKey === undefined) return null
       /* 名字取不到就不渲染这一行——绝不把 provider id 印给读者。 */
       const rows: readonly Readonly<{ source: CoreIndicatorValueSource; name: string }>[] =
         valueSourcesForMetric(metricKey).flatMap((source) => {
           const name = props.sourceNameOf(source.providerId)
           return name === undefined ? [] : [{ source, name }]
         })
+      /* 一个腿都没有：整张卡也不出。留一张带边框的空白卡，读者只会以为它坏了。 */
+      if (rows.length === 0) return null
       const keyOf = (providerId: string): string => coreIndicatorSourcePreferenceKey(metricKey, providerId)
       const enabledCount = rows.filter((row) => props.disabled[keyOf(row.source.providerId)] !== true).length
 
       return <div className="business-cell" data-core-indicator={metricKey} key={metricKey}>
         <div className="business-cell__title">
-          {t(`settings.intelligenceSources.coreIndicators.metrics.${metricCopyKeys[metricKey] ?? ''}`)}
+          {t(`settings.intelligenceSources.coreIndicators.metrics.${copyKey}`)}
         </div>
         <div className="business-cell__items">
           {rows.length === 0

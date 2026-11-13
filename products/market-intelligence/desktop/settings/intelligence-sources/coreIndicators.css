@@ -1,0 +1,40 @@
+/*
+ * 「核心指标」这一屏的卡片排版（用户 2026-11-14 截图：只有一行的那张卡，内容悬在卡片中间）。
+ *
+ * 外层 `.business-cell-grid` 让同一行的卡片等高（这是对的，卡片不该高高低低）；
+ * 内层 `.business-cell` 是 grid，默认把行拉伸，于是内容少的那张卡把内容摆在垂直中间。
+ * 这里只做一件事：**内容从顶上排**，等高照旧——不藏内容、不写死高度。
+ *
+ * 新类只用属性选择器挂在两个既有容器上，`intelligence-sources.css`（组件线在改）一个字没动。
+ */
+[data-core-indicator-sources="true"] .business-cell {
+  align-content: start;
+}
+
+[data-core-indicator-sources="true"] .business-cell__items {
+  align-content: start;
+}
+
+/*
+ * 源名不许靠省略号让人猜是哪个源（用户 2026-11-14：卡片里被截成「Federal Reserve Eco…」）。
+ *
+ * 这一行本来就是「名字 1fr + 开关 auto」两列，问题在名字被写成 `nowrap + ellipsis`——
+ * 窄卡里只能截断。这里只对**核心指标这一屏**改成：开关固定行尾，名字拿满剩余宽度、
+ * 放不下就换行（不撑破卡片，也不省略）。名字是按钮时同样处理。
+ */
+[data-core-indicator-sources="true"] .business-card__line {
+  align-items: start;
+  gap: 8px;
+}
+
+[data-core-indicator-sources="true"] .business-card__label,
+[data-core-indicator-sources="true"] .business-card__label--action {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
+[data-core-indicator-sources="true"] .business-card__toggle {
+  flex: none;
+}

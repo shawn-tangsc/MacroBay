@@ -321,7 +321,11 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
             ? {}
             : { onOpenSource: (providerId: string) => props.onOpenSourceConfig?.(gateSourceOf(providerId)) })} />
         : null}
-      {isBusiness
+      {/* 两个视图**互斥**：核心指标那一屏由 `CoreIndicatorsSourcesView` 全权渲染。
+          让 `BusinessSettingsContent` 也画一次，它会只给出一个组标题 + 一张空网格
+          （`coreIndicators` 这一项没有模块卡），读者看到的是「底部一块空框」（2026-11-14 截图）。
+          不用「空数据就不画组标题」兜底：那会把「这组真的没有内容」和「这组不该出现」混成一个。 */}
+      {isBusiness && business !== 'coreIndicators'
         ? <BusinessSettingsContent
           business={business}
           {...(onCellToggle === undefined ? {} : { onCellToggle })}
@@ -339,7 +343,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           resolveText={resolveText}
           sourceNames={sourceNames}
           providerNamesBySource={providerNamesBySource} />
-        : <>
+        : business === 'coreIndicators' ? null : <>
           {props.notice}
           {provider === undefined
             ? null
