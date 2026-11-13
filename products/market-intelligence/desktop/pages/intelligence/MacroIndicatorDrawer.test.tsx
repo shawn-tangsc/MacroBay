@@ -114,10 +114,13 @@ describe('key-indicator drawer', () => {
     expect(cell.querySelector('.mk-mcell__more')?.textContent).toBe('2 条重要')
   })
 
-  it('defaults to today when today has events', async () => {
+  it('defaults to today when today has events, and lists only what explains rate expectations', async () => {
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     expect(rightColumnTitle()).toContain('2026-11-13')
-    expect(rightColumn()!.textContent).toContain('上周EIA原油库存变化')
+    expect(rightColumn()!.textContent).toContain('新增就业')
+    // EIA 是 importance=high，但它解释不了利率预期：按判据不进核心层（也不按 importance 筛）。
+    expect(rightColumn()!.textContent).not.toContain('上周EIA原油库存变化')
+    expect(rightColumn()!.textContent).toContain('与利率相关 1 条 · 其他 2 条')
   })
 
   it('picks the nearest day that has events when today is quiet', async () => {
@@ -127,25 +130,33 @@ describe('key-indicator drawer', () => {
     expect(rightColumnTitle()).toContain('2026-11-14')
   })
 
-  it('switches the right column to the day the reader clicks', async () => {
+  it('switches the right column to the day the reader clicks, and folds the rest into one expandable line', async () => {
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     const cell = (day: string) => Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === day)!
     await act(async () => { cell('14').click() })
     expect(rightColumnTitle()).toContain('2026-11-14')
-    expect(rightColumn()!.textContent).toContain('11月消费者信心')
-    expect(rightColumn()!.textContent).not.toContain('上周EIA原油库存变化')
     expect(cell('14').getAttribute('aria-pressed')).toBe('true')
+    // 11-14 只有一条非核心事件：核心层为空 → 给空态句，其余折成一行。
+    expect(rightColumn()!.textContent).toContain(macroIndicatorDrawerText['zh-CN'].mkDay.none)
+    expect(rightColumn()!.textContent).toContain('其他 1 条')
+    // 就地展开：抽屉内的按钮，aria-expanded 真的翻转，展开后那一行才出现。
+    const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    await act(async () => { more.click() })
+    expect((rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement).getAttribute('aria-expanded')).toBe('true')
+    expect(rightColumn()!.textContent).toContain('11月消费者信心')
   })
 
-  it('draws the shared empty state for a day without events, never a blank column', async () => {
+  it('draws an empty sentence for a day without events, never a blank column', async () => {
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '20')!
     await act(async () => { cell.click() })
     expect(rightColumnTitle()).toContain('2026-11-20')
-    expect(rightColumn()!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.unifiedDay.empty)
-    expect(document.body.querySelectorAll('.mk-col-r .mi-economic-calendar__event')).toHaveLength(0)
+    expect(rightColumn()!.textContent).toContain('今天没有影响利率预期的事件')
+    expect(rightColumn()!.textContent).toContain('与利率相关 0 条 · 其他 0 条')
+    expect(document.body.querySelectorAll('.mk-col-r [data-calendar-row]')).toHaveLength(0)
   })
 
   /**
@@ -208,7 +219,7 @@ describe('key-indicator drawer', () => {
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
     expect(list).not.toBeNull()
-    expect(list!.textContent).toContain('上周EIA原油库存变化')
+    expect(list!.textContent).toContain('新增就业')
     // 分组标题用的是日历页同一份词汇，不是这里另写一套。
     expect(list!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.market.kinds['economic-indicator'])
   })
@@ -226,9 +237,15 @@ describe('key-indicator drawer', () => {
   })
 })
 
-function dayEvent(key: string, title: string, scheduledAt: string): MarketCalendarEvent {
+function dayEvent(key: string, title: string, scheduledAt: string, input: Readonly<{
+  measureKeys?: readonly string[]
+  eventType?: MarketCalendarEvent['eventType']
+  importance?: MarketCalendarEvent['importance']
+}> = {}): MarketCalendarEvent {
   return {
-    eventKey: key, title, countryCode: 'US', countryName: '美国', eventType: 'economic-indicator', importance: 'high',
+    eventKey: key, title, countryCode: 'US', countryName: '美国',
+    eventType: input.eventType ?? 'economic-indicator', importance: input.importance ?? 'high',
+    ...(input.measureKeys === undefined ? {} : { measureKeys: input.measureKeys }),
     scheduledAt, consensus: { displayValue: '—' }, providerPrevious: { displayValue: '+0.2%' },
     providerActual: { displayValue: '+0.3%' }, source: 'Narwhal',
     sourceObservedAt: '2026-11-13T00:00:00.000Z', coverage: 'observed-unverified'
@@ -238,9 +255,10 @@ function dayEvent(key: string, title: string, scheduledAt: string): MarketCalend
 /** 真库里 11 月的几条（日期是读者时区的日期）。 */
 const calendarEvents: readonly MarketCalendarEvent[] = [
   // 读侧时区固定 Asia/Shanghai：这些时刻分别落在 11-13 09:00 / 21:30、11-10 21:30、11-14 13:00。
-  dayEvent('e-eia', '上周EIA原油库存变化', '2026-11-13T01:00:00.000Z'),
-  dayEvent('e-ppi', '10月生产者物价指数(年率)', '2026-11-13T13:30:00.000Z'),
-  dayEvent('e-cpi', '10月CPI年率', '2026-11-10T13:30:00.000Z'),
+  dayEvent('e-eia', '上周EIA原油库存变化', '2026-11-13T01:00:00.000Z', { measureKeys: ['US.EIA.CRUDE.STOCKS'] }),
+  dayEvent('e-ppi', '10月生产者物价指数(年率)', '2026-11-13T13:30:00.000Z', { measureKeys: ['US.PPI.NSA.YOY'] }),
+  dayEvent('e-nfp', '新增就业', '2026-11-13T12:30:00.000Z', { measureKeys: ['US.NONFARM.SA.CHANGE'] }),
+  dayEvent('e-cpi', '10月CPI年率', '2026-11-10T13:30:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] }),
   dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z')
 ]
 

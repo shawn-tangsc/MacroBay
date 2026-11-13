@@ -65,6 +65,12 @@ export const macroIndicatorDrawerText = {
     minicalNoData: '暂无日程数据',
     minicalMore: '{count} 条重要',
     minicalUnavailable: '暂时读不到这个月的日程',
+    mkDay: {
+      summary: '与利率相关 {related} 条 · 其他 {other} 条',
+      other: '其他 {count} 条',
+      none: '今天没有影响利率预期的事件',
+      sequence: '{name} · {index}/{total}'
+    },
     weekday: ['一', '二', '三', '四', '五', '六', '日'],
     surprise: { beat: '超预期 {value}', miss: '低于预期 {value}', inline: '符合预期' },
     dataBy: 'Data by',
@@ -121,6 +127,12 @@ export const macroIndicatorDrawerText = {
     minicalNoData: 'No calendar data yet',
     minicalMore: '{count} more',
     minicalUnavailable: 'This month\'s schedule is not readable right now',
+    mkDay: {
+      summary: 'Related to rates {related} · Other {other}',
+      other: 'Other {count}',
+      none: 'No events that move rate expectations today',
+      sequence: '{name} · {index}/{total}'
+    },
     weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     surprise: { beat: 'Above forecast {value}', miss: 'Below forecast {value}', inline: 'In line' },
     dataBy: 'Data by',

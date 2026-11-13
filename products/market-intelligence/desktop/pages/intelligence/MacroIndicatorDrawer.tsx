@@ -4,7 +4,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
-import { Info } from 'lucide-react'
+import { ChevronDown, Info } from 'lucide-react'
 
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
@@ -13,13 +13,14 @@ import { CalendarDayEventList } from '../../features/macro/economic-calendar/Cal
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { productText } from '../../shared/i18n/productText'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { calendarDaySummary } from '../../features/macro/economic-calendar/CalendarDayEventList'
 import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { useCalendarMonthReleases } from './useCalendarMonthReleases'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { expectationBp, expectationEventMoves, matchedRelevantKey } from '../../../contracts/policyPath'
+import {
+  expectationBp, expectationEventMoves, matchedRelevantKey, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS
+} from '../../../contracts/policyPath'
 import type { MacroIndicatorCardFact, MacroIndicatorCardKey } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
@@ -162,6 +163,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt)),
   [releases.events, selectedDay, timeZone])
   const changeMonth = (next: string): void => { setMonth(next); setPickedDay(undefined) }
+  // 右列按「能不能解释利率路径」筛，与曲线标注同一把尺子（判据来自契约，不在这里另写一份）。
+  const dayLayers = useMemo(() => splitDayLayers(dayEvents), [dayEvents])
+  const [othersExpanded, setOthersExpanded] = useState(false)
+  // 换一天就收起「其他」：展开态跟着日期走，不跟着抽屉走。
+  useEffect(() => { setOthersExpanded(false) }, [selectedDay])
   /**
    * 图的尺寸：0 表示**还没量到**。
    *
@@ -363,18 +369,29 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           ? <StateView state="error" reasonCode="unreadable"
             action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: releases.reload }} />
           : releases.state === 'ready'
-            ? <CalendarDayEventList
-              label={calendarText.dayEvents.listLabel}
-              title={calendarText.dayEvents.title.replace('{date}', selectedDay)}
-              summary={calendarDaySummary('complete', dayEvents.length, calendarText)}
-              groups={dayGroups(dayEvents, selectedDay, timeZone)}
-              {...(dayEvents.length ? {} : { emptyText: calendarText.unifiedDay.empty })}
-              marketSources={[]}
-              text={calendarText}
-              statusNow={nowInstant}
-              selectedEventKey={undefined}
-              selectedMarketKey={undefined}
-            />
+            ? <>
+              <CalendarDayEventList
+                label={calendarText.dayEvents.listLabel}
+                title={calendarText.dayEvents.title.replace('{date}', selectedDay)}
+                summary={text.mkDay.summary
+                  .replace('{related}', String(dayLayers.core.length))
+                  .replace('{other}', String(dayLayers.other.length))}
+                groups={dayGroups(dayLayers, selectedDay, timeZone, othersExpanded, text.mkDay.sequence)}
+                {...(dayLayers.core.length ? {} : { emptyText: text.mkDay.none })}
+                marketSources={[]}
+                text={calendarText}
+                statusNow={nowInstant}
+                selectedEventKey={undefined}
+                selectedMarketKey={undefined}
+              />
+              {/* 次要层就地展开：抽屉里的交互，不跳页、不弹窗（日期详情只以抽屉形态出现）。 */}
+              {dayLayers.other.length === 0 ? null : <button className="mk-col-r__more" type="button"
+                aria-expanded={othersExpanded}
+                onClick={() => setOthersExpanded((value) => !value)}>
+                {text.mkDay.other.replace('{count}', String(dayLayers.other.length))}
+                <ChevronDown aria-hidden="true" size={12} data-flip={othersExpanded ? 'true' : 'false'} />
+              </button>}
+            </>
             : <LoadingState label={calendarText.unifiedDay.loading} minHeight={160} />}
       </div>
     </section>
@@ -399,16 +416,58 @@ export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, tod
 }
 
 /** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行），组内按时刻升序。 */
-function dayGroups(events: readonly MarketCalendarEvent[], date: string, timeZone: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+function dayGroups(layers: DayLayers, date: string, timeZone: string, othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+  const shown = othersExpanded ? [...layers.core, ...layers.other] : layers.core
   const order: MarketCalendarEvent['eventType'][] = ['economic-indicator', 'financial-event', 'central-bank-activity']
+  // 同一时刻、同一类型、同名的多条（源只给类型名时就是这样）：加序号，否则读者以为渲染重复。
+  const totals = new Map<string, number>()
+  for (const event of shown) totals.set(`${event.scheduledAt}|${event.title}`, (totals.get(`${event.scheduledAt}|${event.title}`) ?? 0) + 1)
+  const seen = new Map<string, number>()
   return order
     .map(eventType => ({
       eventType,
-      items: events.filter(event => event.eventType === eventType).map((event): CalendarDayItem => ({
-        key: event.eventKey, date, time: calendarDisplayTime(event.scheduledAt, timeZone), source: 'market', event
-      }))
+      items: shown.filter(event => event.eventType === eventType)
+        .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))
+        .map((event): CalendarDayItem => {
+          const identity = `${event.scheduledAt}|${event.title}`
+          const total = totals.get(identity) ?? 1
+          const index = (seen.get(identity) ?? 0) + 1
+          seen.set(identity, index)
+          return {
+            key: event.eventKey, date, time: calendarDisplayTime(event.scheduledAt, timeZone), source: 'market',
+            event: total > 1
+              ? { ...event, title: sequence.replace('{name}', event.title).replace('{index}', String(index)).replace('{total}', String(total)) }
+              : event
+          }
+        })
     }))
     .filter(group => group.items.length > 0)
+}
+
+/**
+ * 右列的三层（产品经理口径，Chief 2026-11-13 裁决）：判据只有身份，**不看 importance、不看名字**。
+ *
+ * - 核心层：四个必标 `metric_key` 的发布 + FOMC 决议/纪要——和曲线标注完全同一把尺子；
+ * - 次要层：其余经济指标，折成一行「其他 N 条」，就地展开；
+ * - 不进层：央行讲话/报告/资产负债表、商品库存、财经事件——不进列表，也不进「其他」的计数。
+ */
+type DayLayers = Readonly<{ core: readonly MarketCalendarEvent[]; other: readonly MarketCalendarEvent[] }>
+
+export function splitDayLayers(events: readonly MarketCalendarEvent[]): DayLayers {
+  const core: MarketCalendarEvent[] = []
+  const other: MarketCalendarEvent[] = []
+  for (const event of events) {
+    if (event.eventType !== 'economic-indicator') continue
+    const relevant = matchedRelevantKey({
+      at: event.scheduledAt, label: event.title,
+      ...(event.eventNameKey === undefined ? {} : { eventNameKey: event.eventNameKey }),
+      ...(event.measureKeys === undefined ? {} : { measureKeys: event.measureKeys }),
+      ...(event.seriesId === undefined ? {} : { seriesId: event.seriesId })
+    }) !== undefined
+      || (event.seriesId !== undefined && (POLICY_PATH_EVENT_RELEVANT_SERIES_IDS as readonly string[]).includes(event.seriesId))
+    ;(relevant ? core : other).push(event)
+  }
+  return { core: core.slice(0, 8), other }
 }
 
 /** 主值是「未提供 / 暂时读不到」时不占读数那档字号：那几个字一旦放大，会比真实数字更抢眼（界面设计定）。 */

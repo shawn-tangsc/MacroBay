@@ -61,6 +61,16 @@
    （界面设计定）。行高 15.9、单行不换行、超长省略由日历那套行组件与它带的 token 负责。 */
 .mk-col-r .mi-economic-calendar__event-kind,
 .mk-col-r .mi-economic-calendar__event-country { display: none; }
+/* 次要层收成一行，就地展开：容器内的一个按钮，不跳页、不弹窗。 */
+.mk-col-r__more {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+  margin-top: 4px; padding: 0; border: 0; background: none; color: var(--muted);
+  font-size: var(--font-meta); cursor: pointer;
+}
+.mk-col-r__more:hover { color: var(--text); }
+.mk-col-r__more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mk-col-r__more svg { transition: transform .15s ease; }
+.mk-col-r__more svg[data-flip='true'] { transform: rotate(180deg); }
 
 .mk-sechead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; flex: none; }
 /* 标题与它的说明图标是一组：图标紧贴标题，读数排在它们之后，不插在中间。 */
