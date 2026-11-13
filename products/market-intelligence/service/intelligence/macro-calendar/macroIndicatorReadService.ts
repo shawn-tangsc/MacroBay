@@ -40,7 +40,12 @@ export type MacroMarketConsensusReading =
 
 export type MacroIndicatorReadDependencies = Readonly<{
   readOfficialYoY?: (metricKey: string) => Promise<FredYoYReading>
-  nextReleaseFor?: (metricKey: string, asOf: string) => Readonly<{ period: string; releaseAt: string }> | undefined
+  nextReleaseFor?: (metricKey: string, asOf: string) => Readonly<{
+    period: string
+    releaseAt: string
+    /** `date` 时 `releaseAt` 是那天的占位：能算天数，不能倒计时。 */
+    timePrecision?: 'minute' | 'date'
+  }> | undefined
   readMarketConsensus?: (input: Readonly<{
     metricKey: string
     period: string
@@ -77,13 +82,15 @@ export function createMacroIndicatorReadService(
 }
 
 /**
- * 下一期：排期 + 那一期的盘口共识。
+ * 下一期：排期 + 那一期的预期。
  *
- * 三件事分开说：
+ * 预期只有一条链（用户 2026-11-14 定）：**盘口 → 数据商 → 不显示**，手填不在这条自动链里。
+ * 取舍只在这里做一次，且**有值必然带来源**——同一列里两种来源混着、读者分不出来，比缺一个数更糟。
+ *
+ * 三种「没有值」分开说：
  * - 没有排期 → 不带 `next`（卡上走「暂无排期」），**不拿上一期凑**；
- * - 有排期、没接盘口 → 只带排期；
- * - 有盘口：读到盘就带值（含成交量），读失败标 `unreadable`（卡上说「暂时读不到」），
- *   确实没盘标 `no-market`（卡上说「暂无共识」）——这两种在读者眼里是两件事。
+ * - 没接盘口 → 只带排期；
+ * - 没盘：`no-market`；读失败：`unreadable`（卡上说「暂时读不到」）。
  */
 async function withNextRelease(
   fact: MacroIndicatorCardFact,
@@ -92,7 +99,13 @@ async function withNextRelease(
 ): Promise<MacroIndicatorCardFact> {
   const next = dependencies.nextReleaseFor!(fact.metricKey, asOf)
   if (next === undefined) return fact
-  const schedule = { next: { period: next.period, releaseAt: next.releaseAt } }
+  const schedule = {
+    next: {
+      period: next.period,
+      releaseAt: next.releaseAt,
+      ...(next.timePrecision === undefined ? {} : { timePrecision: next.timePrecision })
+    }
+  }
   if (dependencies.readMarketConsensus === undefined) return { ...fact, ...schedule }
   let reading: MacroMarketConsensusReading
   try {
@@ -104,8 +117,8 @@ async function withNextRelease(
     return {
       ...fact,
       next: {
-        ...next,
-        consensus: Object.freeze({
+        ...schedule.next,
+        expected: Object.freeze({
           value: reading.value, provenance: 'market-implied' as const,
           asOf: reading.asOf, marketVolume: reading.marketVolume
         })
@@ -113,7 +126,7 @@ async function withNextRelease(
     }
   }
   // 读失败与「没有盘」不能混：前者读者该知道是暂时读不到，后者是这个指标确实没有盘。
-  return { ...fact, next: { ...next, consensusState: reading.reason === 'read-failed' ? 'unreadable' : 'no-market' } }
+  return { ...fact, next: { ...schedule.next, expectedState: reading.reason === 'read-failed' ? 'unreadable' : 'no-market' } }
 }
 
 const unitByNarwhalUnit: Readonly<Record<string, 'percent' | 'thousands'>> = Object.freeze({

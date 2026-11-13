@@ -74,7 +74,7 @@ export type MacroIndicatorCardFact = Readonly<{
     asOf: string
   }>
   /**
-   * **下一期**：排期只从日历那一处来（`nextReleaseFor`），盘口共识只对还没发布的那一期有意义。
+   * **下一期**：排期只从日历那一处来（`nextReleaseFor`），盘口只对还没发布的那一期有意义。
    *
    * 与本期 `consensus` 分成两块，不是为了字段好看：盘是「下一期」的盘，塞进本期那一格，
    * 就是把 10 月的实际配上 11 月的预期——今天反复出的期次错位。
@@ -82,10 +82,24 @@ export type MacroIndicatorCardFact = Readonly<{
   next?: Readonly<{
     period: string
     releaseAt: string
-    /** 盘口反推的共识：有盘才有，成交量也在里面。 */
-    consensus?: Readonly<{ value: number; provenance: 'market-implied'; asOf: string; marketVolume: number }>
-    /** 没有值的原因：`no-market` 是真的没盘；`unreadable` 是读失败，要说「暂时读不到」。 */
-    consensusState?: 'no-market' | 'unreadable'
+    /** 发布时刻的精度：`date` 时 `releaseAt` 只是那天的占位，**能算天数、不能倒计时**。 */
+    timePrecision?: 'minute' | 'date'
+    /**
+     * 预期：**盘口 → 数据商**的取舍只在这里做一次（用户 2026-11-14 定：有盘就用盘口，
+     * 没盘退到数据商，再没有就不显示；手填不在这条自动链里）。
+     *
+     * `provenance` 是**必填**——「预期有值却不带来源」在类型上就不可能，
+     * 因为同一列里两种来源混着而读者分不出来，比缺一个数更糟。
+     */
+    expected?: Readonly<{
+      value: number
+      provenance: 'market-implied' | 'source-survey'
+      asOf: string
+      /** 只有盘口那一档有成交量；数据商没有这个数，就不带这个字段。 */
+      marketVolume?: number
+    }>
+    /** 完全没值时的原因：`no-market` 是确实没盘也没数据商值；`unreadable` 是读失败。 */
+    expectedState?: 'no-market' | 'unreadable'
   }>
   unit?: 'percent' | 'thousands'
   source?: 'narwhal' | '0xrouter' | 'fred'

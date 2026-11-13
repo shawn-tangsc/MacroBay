@@ -174,7 +174,7 @@ describe('macroIndicatorReadService', () => {
       expect(payrolls.consensus).toBeUndefined()
       expect(payrolls.next).toEqual({
         period: '2026-11', releaseAt: '2026-12-04T13:30:00.000Z',
-        consensus: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
+        expected: { value: 112.5, provenance: 'market-implied', asOf: '2026-11-13T20:40:00.000Z', marketVolume: 5285 }
       })
     })
   })
@@ -193,8 +193,20 @@ describe('macroIndicatorReadService', () => {
       const failed = service(async () => { throw new Error('network') })
       const [noMarket, unreadable] = await Promise.all([factsOf(missing), factsOf(failed)])
 
-      expect(noMarket['US.NONFARM.SA.CHANGE']!.next).toMatchObject({ consensusState: 'no-market' })
-      expect(unreadable['US.NONFARM.SA.CHANGE']!.next).toMatchObject({ consensusState: 'unreadable' })
+      expect(noMarket['US.NONFARM.SA.CHANGE']!.next).toMatchObject({ expectedState: 'no-market' })
+      expect(unreadable['US.NONFARM.SA.CHANGE']!.next).toMatchObject({ expectedState: 'unreadable' })
+    })
+  })
+
+  /** 发布时刻的精度要一路带到事实里：`date` 时说得出「不能倒计时」。 */
+  it('carries the release time precision so a date-only schedule never becomes a countdown', async () => {
+    await withRepository(async ({ repository }) => {
+      repository.upsertReleaseRow(payrollRelease)
+      const read = createMacroIndicatorReadService(repository, {
+        nextReleaseFor: () => ({ period: '2026-11', releaseAt: '2026-12-04T00:00:00.000Z', timePrecision: 'date' as const })
+      }).read({ asOf })
+      expect((await factsOf(read))['US.NONFARM.SA.CHANGE']!.next)
+        .toMatchObject({ period: '2026-11', timePrecision: 'date' })
     })
   })
 
