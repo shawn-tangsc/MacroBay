@@ -69,6 +69,11 @@ export const macroIndicatorDrawerText = {
     minicalUnavailable: '暂时读不到这个月的日程',
     mkDay: {
       summary: '与利率相关 {related} 条',
+      /* 值级缺失（不是「读不到」也不是「没有序列」）：经济指标行有发布、源没给数。
+         与 `market.missingValue`（'暂无'，服务前值/时刻缺失）不是一回事，**不许复用**。 */
+      valueMissing: '未提供',
+      /* 日详情顶部那句解释，只出现一次；右列每行已有行尾的 `未提供`，不重复。 */
+      publishedWithoutValues: '已发布 · 来源未提供数值',
       other: '其他 {count} 条',
       collapse: '收起 {count} 条',
       none: '今天没有影响利率预期的事件',
@@ -133,6 +138,8 @@ export const macroIndicatorDrawerText = {
     minicalUnavailable: 'This month\'s schedule is not readable right now',
     mkDay: {
       summary: 'Related to rates {related}',
+      valueMissing: 'Not provided',
+      publishedWithoutValues: 'Published · the source gave no value',
       other: 'Other {count}',
       collapse: 'Collapse {count}',
       none: 'No events that move rate expectations today',
