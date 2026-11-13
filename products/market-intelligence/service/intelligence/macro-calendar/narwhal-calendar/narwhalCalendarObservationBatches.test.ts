@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { narwhalCanonicalIdentityKey } from '../marketCalendarMetricIdentity'
-import { narwhalObservationBatches, narwhalStandardRowInputs,
-  narwhalStandardRowInputsDetailed } from './narwhalCalendarObservationBatches'
+import { narwhalObservationBatches, narwhalStandardRowInputsDetailed } from './narwhalCalendarObservationBatches'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
 const AT = '2026-11-13T13:30:00.000Z'
@@ -55,12 +54,12 @@ describe('Narwhal 发布 → 日历观测批次', () => {
 
 describe('不是发布的东西不进日历', () => {
   it('GDP 即时预测：写进表但标 estimate（不排除）', () => {
-    const rows = narwhalStandardRowInputs([
+    const rows = narwhalStandardRowInputsDetailed([
       release({ releaseId: 'nowcast-1', seriesId: 'usa-gdp-nowcast', period: '2026-Q4',
         values: [{ measure: 'gdp_nowcast_qoq_annualized', concept: 'gdp', actual: '2.1' }] }),
       release({ releaseId: 'gdp-1', seriesId: 'usa-gdp', period: '2026-Q3',
         values: [{ measure: 'gdp_nowcast_qoq_annualized', concept: 'gdp', actual: '3.1' }] })
-    ])
+    ]).rows
     // 两条都写：即时预测标 estimate（日历会过滤掉它），GDP 那条不标（默认 release）。
     expect(rows.map((row) => row.sourceEventId)).toEqual(['nowcast-1', 'gdp-1'])
     expect(rows.find((row) => row.sourceEventId === 'nowcast-1')?.rowKind).toBe('estimate')
@@ -76,6 +75,19 @@ describe('映射不上的行必须交出去，不许静默丢', () => {
     expect(detailed.rows).toHaveLength(0)
     expect(detailed.unmapped).toEqual([
       { sourceKey: 'unknown-1', name: 'Brand new event type', reason: 'unknown-event-type' }
+    ])
+  })
+})
+
+describe('未知 measure 也要交出去（测度层守恒）', () => {
+  it('有期间但 measure 不在映射表 → unknown-measure，带 measureKeys', () => {
+    const detailed = narwhalStandardRowInputsDetailed([
+      release({ releaseId: 'r-x', period: '2026-10',
+        values: [{ measure: 'not_in_table', concept: 'x', actual: '1' }] })
+    ])
+    expect(detailed.rows).toHaveLength(0)
+    expect(detailed.unmapped).toEqual([
+      { sourceKey: 'r-x', name: 'Employment report', reason: 'unknown-measure', measureKeys: ['not_in_table'] }
     ])
   })
 })

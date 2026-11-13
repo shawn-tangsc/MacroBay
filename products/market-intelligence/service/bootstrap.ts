@@ -421,16 +421,31 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       if (written.state !== 'succeeded') console.warn(`[macro-calendar] 观测批次未写入：${written.failureCode ?? 'unknown'}`)
     },
     // 标准行按 measure 拆：一次发布里的每个 measure 各一行，身份各算各的。
-    appendStandardRows: (rows) => {
+    appendStandardRows: (rows, unmapped) => {
       try {
-        ensureCalendarStandardTables(macroCalendarBackend.storage.database)
-        const counts = dualWriteMeasureRows(macroCalendarBackend.storage.database, {
-          providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3',
-          observedAt: new Date().toISOString(), rows
-        }, { onError: (message) => console.warn(`[macro-calendar] 标准行写入失败：${message}`) })
-        if (counts.failed > 0 || Object.values(counts.unmapped).some((value) => value > 0)) {
-          console.warn(`[macro-calendar] 标准行：写入 ${counts.written}、失败 ${counts.failed}、未映射 ${JSON.stringify(counts.unmapped)}`)
+        const database = macroCalendarBackend.storage.database
+        ensureCalendarStandardTables(database)
+        const observedAt = new Date().toISOString()
+        for (const item of unmapped) {
+          recordCalendarUnmapped(database, { providerId: 'narwhal', sourceKey: item.sourceKey,
+            detectedAt: observedAt, rawJson: JSON.stringify({ name: item.name, measureKeys: item.measureKeys ?? [] }),
+            reason: item.reason === 'bad-period' ? 'bad-period'
+              : item.reason === 'unknown-measure' ? 'unknown-measure' : 'unknown-event-type' })
         }
+        const counts = dualWriteMeasureRows(database, {
+          providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3', observedAt, rows
+        }, { onError: (message) => console.warn(`[macro-calendar] 标准表写入失败：${message}`) })
+        const unmappedCount = unmapped.length + Object.values(counts.unmapped).reduce((sum, value) => sum + value, 0)
+        const inputReleases = rows.length + unmapped.length
+        const releaseDiff = inputReleases - (counts.written + unmappedCount + counts.failed)
+        // **两层守恒式**：发布层按条数，测度层按 measure 数（未映射的 measure 从 raw_json 取）。
+        const unmappedMeasures = unmapped.reduce((sum, item) => sum + (item.measureKeys?.length ?? 1), 0)
+        const inputMeasures = rows.reduce((sum, row) => sum + (row.measureCount ?? 1), 0) + unmappedMeasures
+        const measureDiff = inputMeasures - (rows.length + unmappedMeasures)
+        console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${inputReleases} = 落表 ${counts.written} + 未映射 ${unmappedCount} + 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${inputMeasures}（差 ${measureDiff}）`)
+        if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
+        if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)
+        if (counts.failed > 0) console.warn(`[macro-calendar] 标准行写入失败 ${counts.failed} 条（已计入守恒式）`)
       } catch (error) {
         console.warn(`[macro-calendar] 标准行接线异常（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
       }

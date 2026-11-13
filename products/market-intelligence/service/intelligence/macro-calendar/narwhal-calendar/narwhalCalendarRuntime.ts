@@ -27,7 +27,8 @@ export function createNarwhalCalendarRuntime(deps: Readonly<{
   appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
   /** 按 measure 拆行的标准行（S1 双写用）。一次采集给一次，与语言无关。 */
   appendStandardRows?: (rows: readonly NarwhalStandardRowInput[],
-    unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: string }>[]) => void
+    unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: string
+      measureKeys?: readonly string[] }>[]) => void
   /** 观测批次的集合前缀，默认按采集时刻一采集一批。 */
   collectionIdPrefix?: () => string
   now?: () => number

@@ -173,6 +173,8 @@ export type NarwhalStandardRowInput = Readonly<{
   /** 指标型是 `minute`/`date`（按有没有时刻）；事件型按是否只有日期。 */
   timePrecision?: 'minute' | 'date'
   rowKind?: 'release' | 'estimate'
+  /** 这一行覆盖的 measure 数（测度层守恒用）。 */
+  measureCount?: number
   previous?: string
   consensus?: string
   actual?: string
@@ -196,10 +198,14 @@ export const narwhalNotAReleaseSeriesIds: readonly string[] = Object.freeze(['us
  */
 export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParsedRelease[]): Readonly<{
   rows: readonly NarwhalStandardRowInput[]
-  unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: 'unknown-event-type' | 'bad-period' }>[]
+  unmapped: readonly Readonly<{ sourceKey: string; name: string
+    reason: 'unknown-event-type' | 'bad-period' | 'unknown-measure'
+    /** 这个发布里没映射上的 measure（测度层对账用；空表也能看出缺哪些）。 */
+    measureKeys?: readonly string[] }>[]
 }> {
   const rows: NarwhalStandardRowInput[] = []
-  const unmapped: { sourceKey: string; name: string; reason: 'unknown-event-type' | 'bad-period' }[] = []
+  const unmapped: { sourceKey: string; name: string
+    reason: 'unknown-event-type' | 'bad-period' | 'unknown-measure'; measureKeys?: string[] }[] = []
   for (const release of releases) {
     // 不是「排除」，是**写进去并标记**：分析侧只读标准表一个入口，不写表它就彻底不存在；
     // 而日历按 `row_kind = 'release'` 过滤，所以三次估算不会变成三次「GDP 发布」。
@@ -229,7 +235,17 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
     }
     for (const value of release.values) {
       const metricKey = narwhalMeasureMetricKeys[value.measure]
-      if (metricKey === undefined) continue
+      if (metricKey === undefined) {
+        // 有期间、但 measure 不在 128 条映射里——**按发布层守恒算不出来**，必须在这里交出。
+        const existing = unmapped.find((item) => item.sourceKey === release.releaseId)
+        if (existing === undefined) {
+          unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-measure',
+            measureKeys: [value.measure] })
+        } else {
+          existing.measureKeys = [...(existing.measureKeys ?? []), value.measure]
+        }
+        continue
+      }
       rows.push({
         ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
         countryCode: release.country, metricKey, periodKey: period,
@@ -243,7 +259,3 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
   return { rows, unmapped }
 }
 
-/** 只要行的调用方用这个（未映射的交出去由写表那层记）。 */
-export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease[]): readonly NarwhalStandardRowInput[] {
-  return narwhalStandardRowInputsDetailed(releases).rows
-}
