@@ -33,6 +33,12 @@ export const calendarStandardTablePolicy = Object.freeze({
   releasesView: 'mi_calendar_releases',
   unmappedTable: 'mi_calendar_unmapped',
   /**
+   * 「源内发布 id ↔ 标准行」的映射。**一行只能存一个 `source_event_id`**：源把同一身份同一天
+   * 重发两次时，后写的会把前一个 id 覆盖掉，按 id 溯源的清单就会凭空少一条（实测 257 → 252）。
+   * 这张表把每次发布都记下来，于是「清单里有、表里没有」能真的为 0，而不是靠一句解释。
+   */
+  sourceIdsTable: 'mi_calendar_event_source_ids',
+  /**
    * 发布状态闭集，**从源拿**：读侧要分「已发布/排期/取消」不许按日期推——
    * 日期比会在发布当天中午前后判错（源还是 scheduled，日期已过）。
    */
@@ -151,6 +157,16 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       select * from ${eventsTable} where row_kind = 'release';
     create index if not exists idx_calendar_events_month
       on ${eventsTable}(country_code, scheduled_at);
+    create table if not exists ${calendarStandardTablePolicy.sourceIdsTable} (
+      provider_id text not null,
+      source_event_id text not null,
+      country_code text not null,
+      metric_key text not null,
+      period_key text not null,
+      first_scheduled_date text not null,
+      observed_at text not null,
+      primary key(provider_id, source_event_id)
+    );
     create table if not exists ${unmappedTable} (
       provider_id text not null,
       source_key text not null,
@@ -239,6 +255,18 @@ export function calendarValueStateMismatches(database: DatabaseSync): number {
        or (value_state = 'missing' and values_json <> '{}')
        or value_state is null`).get() as { n: number }
   return row.n
+}
+
+/** 记下「这次发布落到了哪一行」（幂等）：一行可以对应多次发布，溯源时不会缺。 */
+export function recordCalendarSourceId(database: DatabaseSync, input: Readonly<{
+  providerId: string; sourceEventId: string; countryCode: string; metricKey: string
+  periodKey: string; firstScheduledDate: string; observedAt: string
+}>): void {
+  database.prepare(`insert or replace into ${calendarStandardTablePolicy.sourceIdsTable}
+    (provider_id, source_event_id, country_code, metric_key, period_key, first_scheduled_date, observed_at)
+    values (?, ?, ?, ?, ?, ?, ?)`)
+    .run(input.providerId, input.sourceEventId, input.countryCode, input.metricKey,
+      input.periodKey, input.firstScheduledDate, input.observedAt)
 }
 
 /** 没映射上的行：进 `unmapped`，**不进日历**；补上映射后按 `raw_json` 重放。 */

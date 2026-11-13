@@ -7,7 +7,7 @@ import { nameByMetricKey } from './marketCalendarCodeNames'
 /** 事件型身份的第二段：不是指标码，`evt.*` 映射还没接。 */
 const EVENT_KINDS: readonly string[] = ['central-bank-activity', 'financial-event']
 import { calendarStandardTablePolicy, findCalendarStandardRowBySource, promoteCalendarStandardRowToCode,
-  recordCalendarUnmapped, upsertCalendarStandardRow,
+  recordCalendarSourceId, recordCalendarUnmapped, upsertCalendarStandardRow,
   type CalendarIdentityKind, type CalendarReleaseStatus, type CalendarUnmappedReason } from './marketCalendarStandardTable'
 
 /**
@@ -99,6 +99,11 @@ export function dualWriteMeasureRows(
         ...(row.actual === undefined ? {} : { firstPublishedActual: row.actual }),
         ...(row.previous === undefined ? {} : { firstPublishedPrevious: row.previous })
       })
+      // 记下「这次发布落到了哪一行」：同一行被源重发时前一个 id 会被覆盖，
+      // 但溯源清单要能查到每一次发布。
+      recordCalendarSourceId(database, { providerId: input.providerId, sourceEventId: row.sourceEventId,
+        countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
+        firstScheduledDate: existing?.firstScheduledDate ?? row.scheduledDate, observedAt: input.observedAt })
       written += 1
     } catch (error) {
       failed += 1
