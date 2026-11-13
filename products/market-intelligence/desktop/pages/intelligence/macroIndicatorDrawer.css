@@ -277,8 +277,8 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 .mk-dot { width: 7px; height: 7px; border-radius: 50%; box-sizing: border-box; flex: none; background: var(--accent); }
 .mk-card--next .mk-dot { background: transparent; border: 1px dashed var(--muted); }
 .mk-src { margin-left: auto; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; flex: none; }
-.mk-card { box-sizing: border-box; min-height: 196px; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); }
-.mk-card--past { border: 1px solid var(--border-strong); }
+.mk-card { position: relative; box-sizing: border-box; height: 196px; border-radius: 12px; padding: 10px 12px 8px; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border-strong); }
+/* 下次发布页：虚线 + 压暗底（原型 `[data-side="next"]` 同一组值）。 */
 .mk-card--next { border: 1px dashed var(--border-strong); background: color-mix(in srgb, var(--surface) 86%, transparent); }
 /* 已发布页超过 3 天：整页降权（规则只作用在已发布页，未来页永不降权）。 */
 .mk-card[data-dim='true'] { border-color: var(--border-subtle); }
@@ -300,7 +300,7 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 .mk-chip--flat { background: transparent; border: 1px solid var(--border-strong); color: var(--muted); }
 :root[data-theme='light'] .mk-chip--up { background: transparent; color: var(--caution); border-color: var(--caution); }
 :root[data-theme='light'] .mk-chip--down { background: transparent; color: var(--info); border-color: var(--info); }
-.mk-card__foot { margin-top: auto; padding-top: 8px; font-size: var(--font-meta); color: var(--muted); line-height: 1.7; display: flex; flex-direction: column; gap: 2px; }
+.mk-card__foot { margin-top: auto; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-weight: 400; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
 .mk-tag[data-soon='true'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 /* 已发布页的时间标签：3 天内用深金（与右卡的柠绿区分“已发生 / 未发生”）。 */
