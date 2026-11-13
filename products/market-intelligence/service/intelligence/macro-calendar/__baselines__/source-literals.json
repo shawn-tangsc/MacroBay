@@ -1,14 +1,127 @@
 {
-  "macroIndicatorCardFacts.ts": 9,
-  "marketCalendarMetricIdentity.ts": 1,
-  "macroIndicatorReadService.ts": 2,
-  "calendarFeedRegistry.ts": 3,
-  "macroCalendarStorageSnapshotEvidence.ts": 1,
-  "0xrouter-calendar/zeroXRouterCalendarCollectionService.ts": 1,
-  "0xrouter-calendar/zeroXRouterCalendarContracts.ts": 3,
-  "0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry.ts": 2,
-  "0xrouter-calendar/marketCalendarStorageValidation.ts": 2,
-  "0xrouter-calendar/marketCalendarPublicQueryService.ts": 2,
-  "narwhal-calendar/narwhalCalendarIngest.ts": 2,
-  "narwhal-calendar/narwhalCalendarObservationBatches.ts": 4
+  "note": "源名字面量基线：新增一处必须在这里登记并写理由；守卫只看「比基线多」。",
+  "files": {
+    "contracts/capitalConditionsQueryContracts.ts": {
+      "count": 3,
+      "why": "资金面契约里的 provider 标识（与日历无关的既有定义）"
+    },
+    "contracts/capitalConditionsQueryTypes.ts": {
+      "count": 1,
+      "why": "资金面契约里的 provider 标识（与日历无关的既有定义）"
+    },
+    "contracts/macro/dashboardFeedStatusContracts.ts": {
+      "count": 3,
+      "why": "看板源状态清单：列的就是 feed id"
+    },
+    "contracts/macro/marketCalendarQueryContracts.ts": {
+      "count": 7,
+      "why": "契约里的 provider id 常量与来源标签定义处"
+    },
+    "desktop/pages/intelligence/useCalendarCardData.ts": {
+      "count": 3,
+      "why": "事件类型→feed 映射：三类事件反查自己的源"
+    },
+    "desktop/shared/ipc/macroIndicatorClient.ts": {
+      "count": 2,
+      "why": "IPC 客户端校验 `source` 字段的取值集合"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarPublicQueryService.ts": {
+      "count": 11,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageValidation.ts": {
+      "count": 8,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarCollectionService.ts": {
+      "count": 3,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarContracts.ts": {
+      "count": 6,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler.ts": {
+      "count": 3,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCentralBankActivitiesParser.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterEconomicDataParser.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterFinancialEventsParser.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry.ts": {
+      "count": 5,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterProviderIndicatorLinkRegistry.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/calendarFeedRegistry.ts": {
+      "count": 14,
+      "why": "注册表：feed 身份就是源 id，这里是定义处"
+    },
+    "service/intelligence/macro-calendar/enabledCalendarFeeds.ts": {
+      "count": 1,
+      "why": "注册表配套：自动采集清单列的是 feed id"
+    },
+    "service/intelligence/macro-calendar/macroCalendarOfficialSourceRegistry.ts": {
+      "count": 13,
+      "why": "官方源描述符表：每行自带 provider/descriptor id"
+    },
+    "service/intelligence/macro-calendar/macroCalendarRepository.ts": {
+      "count": 1,
+      "why": "仓储按 provider 列写入，那一列就是源 id"
+    },
+    "service/intelligence/macro-calendar/macroCalendarStorageSnapshotEvidence.ts": {
+      "count": 2,
+      "why": "存储证据快照按 provider 分组统计"
+    },
+    "service/intelligence/macro-calendar/macroIndicatorCardFacts.ts": {
+      "count": 9,
+      "why": "卡片取值链：narwhal 优先、旧源回退——按源选值，允许"
+    },
+    "service/intelligence/macro-calendar/macroIndicatorReadService.ts": {
+      "count": 2,
+      "why": "读数服务同一回退链"
+    },
+    "service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts": {
+      "count": 2,
+      "why": "provider id 常量定义处（单一来源）"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly.ts": {
+      "count": 1,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarIngest.ts": {
+      "count": 2,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarObservationBatches.ts": {
+      "count": 7,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarScheduler.ts": {
+      "count": 2,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    }
+  },
+  "exempt": [
+    {
+      "path": "desktop/settings/",
+      "why": "设置页要按源渲染开关/健康度，源名是它的主题"
+    },
+    {
+      "path": "desktop/shared/i18n/",
+      "why": "源显示名与 i18n 键本身就是源 id（注册表镜像）"
+    }
+  ]
 }
