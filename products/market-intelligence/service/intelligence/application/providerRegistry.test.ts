@@ -229,8 +229,10 @@ describe('source projections', () => {
       .every((source) => source.requiresProxy === true)).toBe(true)
 
     // 直连就能拿回可用 HTTP 响应（含 401/403：那是缺钥匙/缺 UA）的一律不标。
+    /* 直连可达、**不要**标代理的源。CryptoETF 是实测进来的（2026-11-13：绕开代理直连 200、
+       2.2 秒、路由走 en0 物理网卡），不是「忘了标」——别为了跟币安/OKX 视觉统一补上它。 */
     const reachable = [
-      'defillama-stablecoins', 'defillama-tvl',
+      'cryptoetf-etf-flows', 'defillama-stablecoins', 'defillama-tvl',
       'fred-rates-liquidity', 'alternative-fear-greed', 'federal-reserve-rss', 'cftc-rss',
       'sec-rss', 'bls-economic-series', 'bea-economic-series', 'treasury-fiscal-data',
       'twelve-data-market', 'realmarketapi-market', 'github-releases'
