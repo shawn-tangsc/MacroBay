@@ -183,7 +183,7 @@ function NextCard(input: CardInput): React.ReactElement {
       <div className="mk-card__head">
         <span className="mk-dot" />
         <h4>{group.title}</h4>
-        {tag === undefined ? null : <span className="mk-tag" data-soon={tag.soon ? 'true' : 'false'}>{tag.label}</span>}
+        {tag === undefined ? null : <span className="mk-tag" data-tier={tag.tier}>{tag.label}</span>}
         {input.nav}
         <span className="mk-src">{sourceLabelOf(lead, calendarText, text)}</span>
       </div>
@@ -283,7 +283,7 @@ function countdownTag(
   text: MacroIndicatorDrawerText,
   now: string,
   timeZone: string
-): Readonly<{ label: string; soon: boolean }> | undefined {
+): Readonly<{ label: string; tier: 'far' | 'near' | 'imminent' }> | undefined {
   const countdown = releaseCountdownFor({
     now,
     nowDate: calendarDisplayDate(now, timeZone),
@@ -293,14 +293,15 @@ function countdownTag(
   })
   if (countdown.kind === 'past') return undefined
   if (countdown.kind === 'days') {
+    // 7 天以外也是强调色（只是不加粗）：它提醒「还有多少天」，不该看起来像次要信息。
     return countdown.days === 0
-      ? { label: text.countdown.today, soon: false }
-      : { label: text.countdown.days.replace('{days}', String(countdown.days)), soon: false }
+      ? { label: text.countdown.today, tier: 'imminent' }
+      : { label: text.countdown.days.replace('{days}', String(countdown.days)), tier: countdown.days <= 7 ? 'near' : 'far' }
   }
   if (countdown.kind === 'countdown') {
-    return { label: text.countdown.hoursMinutes.replace('{hours}', String(countdown.hours)).replace('{minutes}', String(countdown.minutes)), soon: true }
+    return { label: text.countdown.hoursMinutes.replace('{hours}', String(countdown.hours)).replace('{minutes}', String(countdown.minutes)), tier: 'imminent' }
   }
-  return { label: text.countdown.minutes.replace('{minutes}', String(countdown.minutes)), soon: true }
+  return { label: text.countdown.minutes.replace('{minutes}', String(countdown.minutes)), tier: 'imminent' }
 }
 
 /** 值：人数类带号（+165K），年率与失业率不带正号，月率与时薪带正负号。 */

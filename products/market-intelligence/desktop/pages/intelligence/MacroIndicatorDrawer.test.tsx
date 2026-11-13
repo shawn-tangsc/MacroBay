@@ -421,6 +421,14 @@ describe('the three simplified cards', () => {
     await act(async () => { target?.click() })
   }
 
+  /** 倒计时 tag 三档都用强调色：7 天外不是灰，24 小时内才实底反白。 */
+  it('colours the countdown tag by how close the release is', async () => {
+    await renderCards(withNextRelease(facts, '2026-12-10T13:30:00.000Z'))
+    await switchPage(0, 'next')
+    const tag = document.body.querySelectorAll('[data-pair]')[0]?.querySelector('.mk-tag')
+    expect(tag?.getAttribute('data-tier')).toBe('far')
+  })
+
   /** 四行全无预期时只剩一句「本期暂无预期」：写「另 4 项」会暗示还有别的内容。 */
   it('says one sentence when every row has no expectation, never 另 N 项', async () => {
     await renderCards(facts)

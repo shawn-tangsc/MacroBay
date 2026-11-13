@@ -297,7 +297,10 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 :root[data-theme='light'] .mk-chip--down { background: transparent; color: var(--info); border-color: var(--info); }
 .mk-card__foot { margin-top: auto; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-weight: 400; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
-.mk-tag[data-soon='true'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+/* 倒计时 tag 一律强调色（用户 2026-11-14）：7 天外也柠绿描边，不再用灰。 */
+.mk-tag[data-tier='far'] { border-color: var(--accent); color: var(--accent); font-weight: 400; }
+.mk-tag[data-tier='near'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.mk-tag[data-tier='imminent'] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
 /* 已发布页的时间标签：3 天内用深金（与右卡的柠绿区分“已发生 / 未发生”）。 */
 .mk-tag--past { border-color: var(--caution); color: var(--caution); font-weight: 600; }
 /* 选中态同时变大小与颜色：只靠颜色，色弱与读屏都分不出来。 */
