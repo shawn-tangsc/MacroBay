@@ -29,6 +29,11 @@ export type MacroCalendarAdmissionRow = Readonly<{
   distanceMs: number
   /** 是否这批里的主测度（19 号表 `is_primary`）；未知时缺省。 */
   isPrimary?: boolean
+  /**
+   * 分级（19 号表 `tier`）：1 是一级指标。分级只决定「谁不许被挤掉」——一级不受同组上限
+   * 约束，但仍然受总额度约束；它不进 `importance`，两者不许互相顶替。
+   */
+  tier?: 1 | 2 | 3
   /** 估算行（如 GDP 即时预测）：不进发布配额。 */
   isEstimate: boolean
   /** 同一估算身份有多行时，取这一列最新的那条。 */
@@ -97,7 +102,10 @@ export function selectMacroCalendarAdmissions(
   for (const row of releases) {
     const group = row.releaseGroup === '' ? `identity:${row.identity}` : row.releaseGroup
     const used = perGroup.get(group) ?? 0
-    if (used >= policy.maximumPerGroup) { droppedByGroup += 1; continue }
+    // 一级指标不受组内上限约束：就业那一组里非农、失业率、时薪都是一级，按组限 1 条会把
+    // 另外两条悄悄挤掉，读者和模型只看到「进了一条」。总额度仍然管。
+    const tierOne = row.tier === 1
+    if (!tierOne && used >= policy.maximumPerGroup) { droppedByGroup += 1; continue }
     if (admitted.length >= policy.maximumRows) { droppedByTotal += 1; continue }
     perGroup.set(group, used + 1)
     admitted.push(row)

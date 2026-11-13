@@ -4,6 +4,7 @@ import {
   type MarketCalendarPage
 } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { marketCalendarReleaseGroupByMetricKey } from '../macro-calendar/marketCalendarReleaseGroups'
+import { tierOfMetricKey } from '../macro-calendar/marketCalendarMetricTiers'
 import {
   marketCalendarObservationPolicy,
   normalizeMarketCalendarEvent,
@@ -93,6 +94,11 @@ export function readAnalysisCalendarMonth(
     observations.push(observation)
   }
   if (selection.droppedByTotal > 0 || selection.droppedByGroup > 0) caveats.add(marketCalendarObservationPolicy.caveats.observationsTruncated)
+  // 一级指标在整月里一条都没有：读成功了（否则早已是 pageUnavailable），所以这不是「读不到」，
+  // 而是「这个月没有一级发布」——多半是排期还没到。两者必须分开写，否则读者无法判断该不该担心。
+  if (!events.some(event => event.eventNameKey !== undefined && tierOfMetricKey(event.eventNameKey) === 1)) {
+    caveats.add('tier1-absent-in-month')
+  }
   return { observations, caveats: [...caveats], readState: 'available' }
 }
 
@@ -115,6 +121,7 @@ function toAdmissionRow(event: MarketCalendarEvent, asOf: string): MacroCalendar
     hasValue: Boolean(event.providerActual ?? event.consensus ?? event.providerPrevious),
     distanceMs: Number.isFinite(scheduledMs) ? Math.abs(Date.parse(asOf) - scheduledMs) : Number.MAX_SAFE_INTEGER,
     isEstimate: event.rowKind === 'estimate',
-    observedAtMs: Date.parse(event.sourceObservedAt ?? '') || 0
+    observedAtMs: Date.parse(event.sourceObservedAt ?? '') || 0,
+    ...(event.eventNameKey === undefined ? {} : { tier: tierOfMetricKey(event.eventNameKey) })
   })
 }

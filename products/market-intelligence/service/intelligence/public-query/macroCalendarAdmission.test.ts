@@ -67,3 +67,23 @@ it('treats an unknown group as its own, never collapsing every unknown into one 
   expect(result.admitted).toHaveLength(3)
   expect(result.droppedByGroup).toBe(0)
 })
+
+it('lets every tier-1 metric through the group cap, but still bounds the total', () => {
+  // 就业那一组的三个一级码同一天发布：按组限 1 条会把另外两条悄悄挤掉。
+  const rows = [
+    row({ identity: 'a', releaseGroup: 'us-employment-situation', tier: 1 }),
+    row({ identity: 'b', releaseGroup: 'us-employment-situation', tier: 1 }),
+    row({ identity: 'c', releaseGroup: 'us-employment-situation', tier: 1 }),
+    row({ identity: 'd', releaseGroup: 'us-employment-situation' })
+  ]
+  const result = selectMacroCalendarAdmissions(rows, { maximumRows: 16, maximumPerGroup: 1 })
+  expect(result.admitted.map(entry => entry.identity)).toEqual(['a', 'b', 'c'])
+  expect(result.droppedByGroup).toBe(1)
+})
+
+it('does not let tier-1 bypass the total budget', () => {
+  const rows = Array.from({ length: 20 }, (_, index) => row({ identity: `t1-${index}`, releaseGroup: `g-${index}`, tier: 1 as const }))
+  const result = selectMacroCalendarAdmissions(rows, { maximumRows: 16, maximumPerGroup: 1 })
+  expect(result.admitted).toHaveLength(16)
+  expect(result.droppedByTotal).toBe(4)
+})
