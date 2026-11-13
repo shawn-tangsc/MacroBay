@@ -492,7 +492,7 @@ function validModelOutput(factId: string, evidenceRefId: string) {
     marketReaction: [],
     supportingEvidence: [{ statement: '数据来自已记录的情绪指标。', evidenceRefId }],
     counterEvidence: [],
-    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['后续数据保持可比'], invalidation: '出现相反事实', status: 'pending' }],
+    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['后续数据保持可比'], invalidation: { kind: 'fact', factId, relation: 'below', statement: '出现相反事实' }, status: 'pending' }],
     directions: [
       { horizon: 'short', direction: 'bullish', rationale: '短期资金流转正。', confidence: 'medium', evidenceRefIds: [evidenceRefId] },
       { horizon: 'medium', direction: 'range', rationale: '中期缺少方向性资金。', confidence: 'low', evidenceRefIds: [evidenceRefId] },
