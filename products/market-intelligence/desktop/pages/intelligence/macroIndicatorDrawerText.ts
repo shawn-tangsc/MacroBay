@@ -41,9 +41,9 @@ export const macroIndicatorDrawerText = {
       lastVote: '上次票型'
     },
     cards: {
-      cpi: { title: 'CPI 年率', state: '11-10 已发布', unit: '同比', core: '核心年率', next: '下次发布' },
-      payrolls: { title: '新增就业', state: '11-06 已发布', unit: '非农新增', unemployment: '失业率', next: '下次发布' },
-      pce: { title: 'PCE 核心', state: '10-29 已发布', unit: '核心同比', next: '下次发布' }
+      cpi: { title: 'CPI 年率', state: '11-10 已发布', unit: '同比', core: '核心年率', next: '下次发布', consensus: '预期' },
+      payrolls: { title: '新增就业', state: '11-06 已发布', unit: '非农新增', unemployment: '失业率', next: '下次发布', consensus: '预期' },
+      pce: { title: 'PCE 核心', state: '10-29 已发布', unit: '核心同比', next: '下次发布', consensus: '预期' }
     },
     cardStates: {
       notAvailable: '未提供',
@@ -52,6 +52,8 @@ export const macroIndicatorDrawerText = {
       missingCurrentNoPeriod: '已到发布日期，首发布值未收录',
       notRecorded: '本月未发布',
       previousPeriod: '上一期 {value}',
+      noConsensus: '暂无共识',
+      consensusSource: '{source} · {asOf}',
       vsPrevious: '较上期（未修正）{value}'
     },
     expectedDiff: '预期差 年率 {yoy} · 核心 {core}',
@@ -111,9 +113,9 @@ export const macroIndicatorDrawerText = {
     policyMix: { hike25: 'Hike 25', hike50: 'Hike 50+', other: 'Other' },
     facts: { nextMeeting: 'Next meeting', range: 'Target range', sep: 'SEP median', lastVote: 'Last vote' },
     cards: {
-      cpi: { title: 'CPI YoY', state: '11-10 published', unit: 'YoY', core: 'Core YoY', next: 'Next release' },
-      payrolls: { title: 'Payrolls', state: '11-06 published', unit: 'NFP change', unemployment: 'Unemployment', next: 'Next release' },
-      pce: { title: 'Core PCE', state: '10-29 published', unit: 'Core YoY', next: 'Next release' }
+      cpi: { title: 'CPI YoY', state: '11-10 published', unit: 'YoY', core: 'Core YoY', next: 'Next release', consensus: 'Consensus' },
+      payrolls: { title: 'Payrolls', state: '11-06 published', unit: 'NFP change', unemployment: 'Unemployment', next: 'Next release', consensus: 'Consensus' },
+      pce: { title: 'Core PCE', state: '10-29 published', unit: 'Core YoY', next: 'Next release', consensus: 'Consensus' }
     },
     cardStates: {
       notAvailable: 'Not available',
@@ -122,6 +124,8 @@ export const macroIndicatorDrawerText = {
       missingCurrentNoPeriod: 'released, first-publish value not recorded',
       notRecorded: 'Not released this month',
       previousPeriod: 'Previous {value}',
+      noConsensus: 'No consensus',
+      consensusSource: '{source} · {asOf}',
       vsPrevious: 'vs previous (unrevised) {value}'
     },
     expectedDiff: 'Surprise YoY {yoy} · core {core}',

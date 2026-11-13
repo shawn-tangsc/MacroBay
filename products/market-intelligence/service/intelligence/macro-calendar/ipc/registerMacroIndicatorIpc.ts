@@ -32,7 +32,7 @@ export function registerMacroIndicatorIpc(
  * 不用 `...fact` 再删：那等于默认把以后新增的字段都送出去——`market_fact_key`、原始 `measure`
  * 名这类内部标识一旦挂上 fact，就会跟着一次「顺手加个字段」漏进窗口。
  */
-function indicatorFactPayload(fact: MacroIndicatorCardFact): Readonly<Record<string, string | number>> {
+function indicatorFactPayload(fact: MacroIndicatorCardFact): Readonly<Record<string, unknown>> {
   return {
     metricKey: fact.metricKey,
     state: fact.state,
@@ -41,7 +41,8 @@ function indicatorFactPayload(fact: MacroIndicatorCardFact): Readonly<Record<str
     ...(fact.value === undefined ? {} : { value: fact.value }),
     ...(fact.previousAsPublished === undefined ? {} : { previousAsPublished: fact.previousAsPublished }),
     ...(fact.unit === undefined ? {} : { unit: fact.unit }),
-    ...(fact.source === undefined ? {} : { source: fact.source })
+    ...(fact.source === undefined ? {} : { source: fact.source }),
+    ...(fact.consensus === undefined ? {} : { consensus: fact.consensus })
   }
 }
 

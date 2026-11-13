@@ -79,12 +79,15 @@ function toNarwhalRow(
   const primaryMetricKey = release.values[0] === undefined ? undefined : narwhalMeasureMetricKeys[release.values[0].measure]
   const previousAsPublished = firstPreviousAsPublished(legacy)
   const period = periodOfLegacy(legacy)
+  // 「预期」= 同一条发布里这个 measure 的 `consensus`；观测时刻用这次发布的 detectedAt。
+  const consensus = parseSourceNumber(entry?.consensus)
   return {
     provider: 'narwhal',
     measureKeys: [metricKey],
     ...(primaryMetricKey === undefined ? {} : { primaryMetricKey }),
     ...(value === undefined ? {} : { measureValues: { [metricKey]: value } }),
     ...(previousAsPublished === undefined ? {} : { previousAsPublished }),
+    ...(consensus === undefined ? {} : { consensus, consensusAsOf: release.detectedAt, consensusSourceName: 'Narwhal' }),
     ...(period === undefined ? {} : { period }),
     ...(unit === undefined ? {} : { unit }),
     releasedAt: release.scheduledAt ?? `${release.scheduledDate}T00:00:00.000Z`

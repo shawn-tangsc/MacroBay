@@ -372,6 +372,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             {cardStateText(cpiFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(cpiFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
               <div><dt>{text.cards.cpi.core}</dt><dd>{cardValueText(coreCpiFact, text, cardFactsUnreadable)}</dd></div>
+              <div><dt>{text.cards.cpi.consensus}</dt><dd>{consensusText(cpiFact, text, timeZone, nowInstant)}</dd></div>
               {nextRelease.cpi.kind === 'none' ? null : <div><dt>{text.cards.cpi.next}</dt>
                 <dd>{nextRelease.cpi.kind === 'date' ? nextRelease.cpi.text : text.cardStates.unreadable}</dd></div>}
             </dl>
@@ -384,6 +385,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             {cardStateText(payrollsFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(payrollsFact, text, cardFactsUnreadable)}</p>}
             <dl className="mk-card__facts">
               <div><dt>{text.cards.payrolls.unemployment}</dt><dd>{cardValueText(unemploymentFact, text, cardFactsUnreadable)}</dd></div>
+              <div><dt>{text.cards.payrolls.consensus}</dt><dd>{consensusText(payrollsFact, text, timeZone, nowInstant)}</dd></div>
               {nextRelease.payrolls.kind === 'none' ? null : <div><dt>{text.cards.payrolls.next}</dt>
                 <dd>{nextRelease.payrolls.kind === 'date' ? nextRelease.payrolls.text : text.cardStates.unreadable}</dd></div>}
             </dl>
@@ -394,8 +396,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             <div className="mk-card__v"><b className={cardValueClass(pceFact, cardFactsUnreadable)}>{cardValueText(pceFact, text, cardFactsUnreadable)}</b><span>{text.cards.pce.unit}</span></div>
             {cardChangeText(pceFact, text) === undefined ? null : <p className="mk-card__chg">{cardChangeText(pceFact, text)}</p>}
             {cardStateText(pceFact, text, cardFactsUnreadable) === undefined ? null : <p className="mk-card__na-line">{cardStateText(pceFact, text, cardFactsUnreadable)}</p>}
-            {nextRelease.pce.kind === 'none' ? null : <dl className="mk-card__facts"><div><dt>{text.cards.pce.next}</dt>
-              <dd>{nextRelease.pce.kind === 'date' ? nextRelease.pce.text : text.cardStates.unreadable}</dd></div></dl>}
+            <dl className="mk-card__facts">
+              <div><dt>{text.cards.pce.consensus}</dt><dd>{consensusText(pceFact, text, timeZone, nowInstant)}</dd></div>
+              {nextRelease.pce.kind === 'none' ? null : <div><dt>{text.cards.pce.next}</dt>
+                <dd>{nextRelease.pce.kind === 'date' ? nextRelease.pce.text : text.cardStates.unreadable}</dd></div>}
+            </dl>
             <div className="mk-card__f"><span>{text.source}</span><span>{text.detail}</span></div>
           </article>
         </div>
@@ -544,6 +549,19 @@ export function splitDayLayers(events: readonly MarketCalendarEvent[]): DayLayer
 /** 主值是「未提供 / 暂时读不到」时不占读数那档字号：那几个字一旦放大，会比真实数字更抢眼（界面设计定）。 */
 function cardValueClass(fact: MacroIndicatorCardFact | undefined, unreadable?: boolean): string | undefined {
   return !unreadable && fact?.state === 'provided' ? undefined : 'mk-card__na'
+}
+
+/**
+ * 「预期」一格：有共识就写值 + 出处与观测时刻（三样齐全才显示），没有就写「暂无共识」。
+ * 不写「未提供」——那是「本期没值」，共识没有是另一件事。
+ */
+function consensusText(fact: MacroIndicatorCardFact | undefined, text: MacroIndicatorDrawerText, timeZone: string, nowInstant: string): string {
+  const consensus = fact?.consensus
+  if (consensus === undefined) return text.cardStates.noConsensus
+  const day = calendarDisplayDate(consensus.asOf, timeZone)
+  const short = day.slice(0, 4) === calendarDisplayDate(nowInstant, timeZone).slice(0, 4) ? day.slice(5) : day
+  return `${formatCardNumber(consensus.value, fact?.unit)} · ${text.cardStates.consensusSource
+    .replace('{source}', consensus.sourceName).replace('{asOf}', short)}`
 }
 
 /**

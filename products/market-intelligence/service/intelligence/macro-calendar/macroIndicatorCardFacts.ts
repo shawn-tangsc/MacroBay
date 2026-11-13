@@ -39,6 +39,10 @@ export type MacroIndicatorCardRow = Readonly<{
    * （用 60 会把「较上期（未修正）+136K」算成 +105K）。
    */
   previousAsPublished?: number
+  /** 来源问卷给的「预期」原文值，以及它在哪一刻被观测到、由哪个来源给（三样齐全才带得出去）。 */
+  consensus?: number
+  consensusAsOf?: string
+  consensusSourceName?: string
   period?: string
   releasedAt: string
   unit?: 'percent' | 'thousands'
@@ -56,6 +60,16 @@ export type MacroIndicatorCardFact = Readonly<{
   value?: number
   /** 首发布时的上一期实际值；缺它就不能显示「较上期」，也不许拿修订值顶。 */
   previousAsPublished?: number
+  /**
+   * 共识：**五元组**（值 + 期次 + `asOf` + 出处 + 盘口才要的成交量）。今天只接商业源问卷这一档。
+   * 期次在 `period` 上——缺它就不带出去（那会变成一个「看起来像答案的数」）。
+   */
+  consensus?: Readonly<{
+    value: number
+    provenance: 'source-survey'
+    asOf: string
+    sourceName: string
+  }>
   unit?: 'percent' | 'thousands'
   source?: 'narwhal' | '0xrouter'
 }>
@@ -79,6 +93,16 @@ export function narwhalMeasuresByMetricKey(metricKey: string): readonly string[]
 }
 
 /** 同一时刻两个源都有一行时取新源；其余取更晚的那条。 */
+/** 共识必须有值 + 观测时刻 + 出处名；缺一样就不带出去——半个共识比没有更像答案。 */
+function consensusOf(row: MacroIndicatorCardRow): Partial<Pick<MacroIndicatorCardFact, 'consensus'>> {
+  if (row.consensus === undefined || row.consensusAsOf === undefined || row.consensusSourceName === undefined) return {}
+  if (row.period === undefined) return {}
+  return { consensus: Object.freeze({
+    value: row.consensus, provenance: 'source-survey' as const,
+    asOf: row.consensusAsOf, sourceName: row.consensusSourceName
+  }) }
+}
+
 function latestRow(rows: readonly MacroIndicatorCardRow[]): MacroIndicatorCardRow | undefined {
   return rows.reduce<MacroIndicatorCardRow | undefined>((best, row) => {
     if (!best) return row
@@ -109,6 +133,7 @@ export function resolveMacroIndicatorFact(
       releasedAt: narwhalValue.releasedAt,
       value: narwhalValue.measureValues![metricKey]!,
       ...(narwhalValue.previousAsPublished === undefined ? {} : { previousAsPublished: narwhalValue.previousAsPublished }),
+      ...consensusOf(narwhalValue),
       ...(narwhalValue.unit === undefined ? {} : { unit: narwhalValue.unit })
     }
   }
@@ -122,6 +147,7 @@ export function resolveMacroIndicatorFact(
       releasedAt: legacy.releasedAt,
       value: legacy.value!,
       ...(legacy.previousAsPublished === undefined ? {} : { previousAsPublished: legacy.previousAsPublished }),
+      ...consensusOf(legacy),
       ...(legacy.unit === undefined ? {} : { unit: legacy.unit })
     }
   }
@@ -137,7 +163,8 @@ export function resolveMacroIndicatorFact(
       metricKey, state: 'missing-current',
       ...(period === undefined ? {} : { period }),
       releasedAt: latestCovering.releasedAt,
-      ...(withPrevious?.previousAsPublished === undefined ? {} : { previousAsPublished: withPrevious.previousAsPublished })
+      ...(withPrevious?.previousAsPublished === undefined ? {} : { previousAsPublished: withPrevious.previousAsPublished }),
+      ...consensusOf(latestCovering)
     }
   }
   return { metricKey, state: 'not-recorded' }
