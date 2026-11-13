@@ -125,7 +125,6 @@ export const macroIndicatorDrawerText = {
     // 来源按**真实 provider** 显示：写死一个名字等于替数据编出处。
     /* 官方序列的品牌名；旧源即将删除、不赋品牌名，Narwhal 用日历那份既有文案。 */
     sourceFred: 'FRED',
-    detail: '详情 ↗',
     minicalMonth: '{year} 年 {month} 月',
     minicalTitle: '发布日历',
     minicalLegend: { done: '已发布', todo: '待发布', today: '今天' },
@@ -251,7 +250,6 @@ export const macroIndicatorDrawerText = {
     // 来源按**真实 provider** 显示：写死一个名字等于替数据编出处。
     /* 官方序列的品牌名；旧源即将删除、不赋品牌名，Narwhal 用日历那份既有文案。 */
     sourceFred: 'FRED',
-    detail: 'Detail ↗',
     minicalMonth: '{month}/{year}',
     minicalTitle: 'release calendar',
     minicalLegend: { done: 'Published', todo: 'Scheduled', today: 'Today' },

@@ -132,7 +132,6 @@ function PastCard(input: CardInput): React.ReactElement {
       </div>
       <div className="mk-card__foot">
         <span>{sourceLine(lead, text, calendarText, timeZone)}</span>
-        <span>{text.detail}</span>
       </div>
     </article>
   )
@@ -212,7 +211,6 @@ function NextCard(input: CardInput): React.ReactElement {
         {allMissing
           ? null
           : <span>{stateLine({ rows, text, timeZone, market, volume, observedAt })}</span>}
-        <span>{text.detail}</span>
       </div>
     </article>
   )
