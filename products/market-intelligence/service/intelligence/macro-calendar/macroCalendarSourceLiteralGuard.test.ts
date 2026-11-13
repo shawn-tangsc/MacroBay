@@ -41,7 +41,8 @@ const I18N_SOURCE_NAME_FILES = Object.freeze([
 ])
 /** 名表的**显式路径清单**：改名或挪位置这里对不上 → 红；清单空着也红。 */
 const NAME_TABLE_PATHS = Object.freeze([
-  'service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts'
+  'service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts',
+  'service/intelligence/macro-calendar/marketCalendarCodeNames.ts'
 ])
 const BASELINE = new URL('./__baselines__/source-literals.json', import.meta.url).pathname
 
