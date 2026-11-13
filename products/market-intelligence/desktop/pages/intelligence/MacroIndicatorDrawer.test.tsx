@@ -415,9 +415,39 @@ describe('the three simplified cards', () => {
   /** 切到另一页：点卡头那颗真按钮（不是手势）。 */
   const switchPage = async (index: number, direction: 'released' | 'next'): Promise<void> => {
     const nav = document.body.querySelectorAll('[data-pair]')[index]?.querySelectorAll<HTMLButtonElement>('.mk-nav button')
+
+
     const target = direction === 'next' ? nav?.[1] : nav?.[0]
     await act(async () => { target?.click() })
   }
+
+  /** 四行全无预期时只剩一句「本期暂无预期」：写「另 4 项」会暗示还有别的内容。 */
+  it('says one sentence when every row has no expectation, never 另 N 项', async () => {
+    await renderCards(facts)
+    await switchPage(0, 'next')
+    const cpi = carouselText(0)
+    expect(cpi).toContain('本期暂无预期（盘未开）')
+    expect(cpi).not.toContain('另 4 项')
+  })
+
+  /** 一到三行缺时逐行写「暂无预期」，不折叠——折叠会把「少数有值」一起藏掉。 */
+  it('writes 暂无预期 row by row when only some rows are missing', async () => {
+    const withOneExpected = facts.map((fact) => fact.metricKey === 'US.CPI.NSA.YOY'
+      ? { ...fact, next: { period: '2026-11', releaseAt: '2026-12-10T13:30:00.000Z', timePrecision: 'minute' as const } }
+      : fact)
+    await renderCards(withOneExpected)
+    await switchPage(0, 'next')
+    const cpi = carouselText(0)
+    expect(cpi).toContain('暂无预期')
+    expect(cpi).not.toContain('另 3 项')
+  })
+
+  /** 取消整卡变灰，同时时间标签**无条件渲染**：旧了不代表坏了，但要让人看得出多久以前。 */
+  it('keeps the card normal and still shows how long ago it was published', async () => {
+    await renderCards(facts)
+    expect(document.body.querySelector('[data-dim="true"]')).toBeNull()
+    expect(carouselText(0)).toMatch(/天前|刚发布|昨天发布|前天发布/)
+  })
   const cardMainValues = () =>
     Array.from(document.body.querySelectorAll('.mk-vrow dd')).map((cell) => cell.textContent ?? '')
 

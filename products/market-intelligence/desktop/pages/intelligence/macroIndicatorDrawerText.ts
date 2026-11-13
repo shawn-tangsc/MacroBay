@@ -93,7 +93,7 @@ export const macroIndicatorDrawerText = {
       volume: '成交量 {value}',
       observed: '观测 {time}',
       beforeRelease: '（发布前）',
-      foldMore: '另 {count} 项暂无预期（盘未开）',
+      expectedAllMissing: '本期暂无预期（盘未开）',
       stateMarket: '有盘',
       stateProvider: '有预期',
       stateNoSchedule: '暂无排期'
@@ -223,7 +223,7 @@ export const macroIndicatorDrawerText = {
       volume: 'Volume {value}',
       observed: 'observed {time}',
       beforeRelease: '(before release)',
-      foldMore: '{count} more with no expectation (market not open)',
+      expectedAllMissing: 'No expectation for this period (market not open)',
       stateMarket: 'Market open',
       stateProvider: 'Data provider',
       stateNoSchedule: 'No schedule'

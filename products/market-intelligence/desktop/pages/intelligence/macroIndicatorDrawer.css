@@ -281,11 +281,6 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 /* 下次发布页：虚线 + 压暗底（原型 `[data-side="next"]` 同一组值）。 */
 .mk-card--next { border: 1px dashed var(--border-strong); background: color-mix(in srgb, var(--surface) 86%, transparent); }
 /* 已发布页超过 3 天：整页降权（规则只作用在已发布页，未来页永不降权）。 */
-.mk-card[data-dim='true'] { border-color: var(--border-subtle); }
-.mk-card[data-dim='true'] .mk-card__head h4,
-.mk-card[data-dim='true'] .mk-vrow dd { color: var(--muted); }
-.mk-card[data-dim='true'] .mk-dot { background: var(--muted); opacity: .6; border-style: solid; }
-.mk-card[data-dim='true'] .mk-chip { opacity: .5; }
 .mk-when { margin: 4px 0 6px; font-size: var(--font-meta); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-rows { margin-top: 6px; }
 .mk-vrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--border-subtle); }

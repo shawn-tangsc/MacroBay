@@ -7,7 +7,6 @@ import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import type { MacroIndicatorCardFact, MacroIndicatorCardKey } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import type { EconomicCalendarText } from '../../features/macro/economic-calendar/economicCalendarText'
-import { calendarUpcomingPolicy } from './calendarUpcomingPolicy'
 import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { releaseCountdownFor } from './releaseCountdown'
 
@@ -111,10 +110,9 @@ function PastCard(input: CardInput): React.ReactElement {
   const facts = group.rows.map((row) => byKey.get(row.metricKey))
   const lead = facts.find((fact) => fact !== undefined)
   const tag = publishedTag(lead, text, now)
-  const dim = tag === undefined && lead?.releasedAt !== undefined
   const loaded = input.facts !== undefined
   return (
-    <article className="mk-card mk-card--past" data-card="released" {...(dim ? { 'data-dim': 'true' } : {})}>
+    <article className="mk-card mk-card--past" data-card="released">
       <div className="mk-card__head">
         <span className="mk-dot" />
         <h4>{group.title}</h4>
@@ -172,9 +170,10 @@ function NextCard(input: CardInput): React.ReactElement {
   const loaded = input.facts !== undefined
   const rows = group.rows.map((row) => ({ row, fact: byKey.get(row.metricKey) }))
   const missing = rows.filter((entry) => entry.fact?.next?.expected === undefined).length
-  // ≥3 行没有预期时折叠：把有值的行留下（行首仍带码名），其余只用一句话说清数量与原因。
-  const folded = missing >= 3
-  const shown = folded ? rows.filter((entry) => entry.fact?.next?.expected !== undefined) : rows
+  // 四行全都没有预期：只剩一句「本期暂无预期（盘未开）」——写「另 4 项」会暗示还有别的内容。
+  // 一到三行缺：逐行写「暂无预期」，不折叠（折叠会把「少数有值」也一起藏掉）。
+  const allMissing = missing === rows.length
+  const shown = allMissing ? [] : rows
   const market = rows.some((entry) => entry.fact?.next?.expected?.provenance === 'market-implied')
   const volume = rows.map((entry) => entry.fact?.next?.expected?.marketVolume).find((entry) => entry !== undefined)
   const observedAt = rows.map((entry) => entry.fact?.next?.expected?.asOf)
@@ -207,8 +206,8 @@ function NextCard(input: CardInput): React.ReactElement {
         ))}
       </div>
       <div className="mk-card__foot">
-        <span>{folded
-          ? text.cardFace.foldMore.replace('{count}', String(missing))
+        <span>{allMissing
+          ? text.cardFace.expectedAllMissing
           : stateLine({ rows, text, timeZone, market, volume, observedAt })}</span>
         <span>{text.detail}</span>
       </div>
@@ -263,13 +262,12 @@ function chipText(
   return { label, tone: flat ? 'flat' : diff > 0 ? 'up' : 'down' }
 }
 
-/** 已发布卡上的时间标签三档：分钟 / 小时 / 天；超过窗口不挂（整卡降权）。 */
+/** 已发布页的时间标签：**无条件渲染**，文案按阶梯往下来（分钟 → 小时 → 昨天/前天 → N 天前）。 */
 function publishedTag(fact: MacroIndicatorCardFact | undefined, text: MacroIndicatorDrawerText, now: string): string | undefined {
   const releasedAt = fact?.releasedAt
   if (releasedAt === undefined) return undefined
   const elapsed = Date.parse(now) - Date.parse(releasedAt)
   if (!Number.isFinite(elapsed) || elapsed < 0) return undefined
-  if (elapsed >= calendarUpcomingPolicy.releasedWindowDays * DAY_MS) return undefined
   // 取整方向与倒计时相反：已过的时间向下取整，<1 分钟统一写 1 分钟（不出现「0 分钟」）。
   if (elapsed < HOUR_MS) return text.published.minutes.replace('{minutes}', String(Math.max(1, Math.floor(elapsed / MINUTE_MS))))
   if (elapsed < DAY_MS) return text.published.hours.replace('{hours}', String(Math.floor(elapsed / HOUR_MS)))
