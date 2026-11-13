@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 /**
  * 标准日历表：**一行 = 一次发布**。主键 = 身份 `(country_code, metric_key, period_key)` +
- * **首次发布日** `first_scheduled_date`（UTS 日期，冻结）。
+ * **首次发布日** `first_scheduled_date`（UTC 日期，冻结）。
  *
  * 为什么第 4 列是**日期**而不是时刻：官方源（BLS 日程等）只给日期、不给时刻，市场行有 13:30。
  * 用分钟做键，同一次发布就成了两行；而**日期是两边都拿得到的粒度**。日期已足够区分「哪一次发布」
@@ -14,13 +14,8 @@ import type { DatabaseSync } from 'node:sqlite'
  * 显示用两列：`scheduled_date`（可变，跨日改期就改它）与 `scheduled_at`（可空，源给到分钟才有）。
  * 合并时取精度是 `minute` 的那一方——官方没有时刻，优先它就是拿空值盖掉 13:30。
  *
- * 为什么时刻进主键：同一指标同一期间可能发两次（密歇根初值 11-06、终值 11-20）。只按身份收敛会把
- * 其中一次发布**静默吞掉**——那是「日历少了一个发布」，不是「修订覆盖」。用时刻区分，规则能写成
- * 一句：**同指标、同期间、不同发布时刻 = 两次发布，各占一行**。不用 `prelim`/`final` 这类人工标签：
- * 源不总给这个信息，判错就是错标；而时刻是源自带、语言无关、不用判断。
- *
- * 两列拆开才有「改期仍是一行」：`first_scheduled_at` 冻结且在主键里；`scheduled_at` 是显示用的，
- * 源改期时就变。**认回「同一次发布」先按源内 id**（`source_provider_id` + `source_event_id`）：
+ * 两列拆开才有「改期仍是一行」：`first_scheduled_date` 冻结且在主键里；`scheduled_date`/`scheduled_at`
+ * 只做显示，源改期就跟着变。**认回「同一次发布」先按源内 id**（`source_provider_id` + `source_event_id`）：
  * 命中就是同一次发布，只更新显示时刻/值/观测时间；找不到才按主键插入。**不写「差几小时内算同一次」
  * 这种容差**——那是替源做判断，判错就把两次发布并成一次，正是要防的事。
  *
