@@ -2,8 +2,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import {
-  ensureCalendarStandardTables, findCalendarStandardRowBySource, recordCalendarUnmapped, upsertCalendarStandardRow,
-  type CalendarStandardRow
+  calendarValueStateMismatches, ensureCalendarStandardTables, findCalendarStandardRowBySource,
+  recordCalendarUnmapped, upsertCalendarStandardRow, type CalendarStandardRow
 } from './marketCalendarStandardTable'
 
 const base: CalendarStandardRow = {
@@ -76,8 +76,8 @@ describe('视图折叠：同一指标同一期重发多次', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
     write(database, { scheduledDate: '2026-11-04', valuesJson: '{"actual":"165"}' })
-    write(database, { scheduledDate: '2026-11-05', valuesJson: '{}', valueState: 'not-provided' })
-    write(database, { scheduledDate: '2026-11-06', valuesJson: '{}', valueState: 'not-provided' })
+    write(database, { scheduledDate: '2026-11-05', valuesJson: '{}', valueState: 'missing' })
+    write(database, { scheduledDate: '2026-11-06', valuesJson: '{}', valueState: 'missing' })
     const view = viewRows(database)
     expect(view).toHaveLength(1)
     expect(view[0]!.scheduled_date).toBe('2026-11-04')
@@ -107,6 +107,45 @@ describe('视图折叠：同一指标同一期重发多次', () => {
     write(database, { periodKey: '2026-10', valuesJson: '{}' })
     write(database, { periodKey: '2026-11', valuesJson: '{"actual":"1"}' })
     expect(viewRows(database)).toHaveLength(2)
+  })
+})
+
+describe('value_state 是物化列：不许漂', () => {
+  const write = (database: DatabaseSync, over: Partial<CalendarStandardRow>) =>
+    upsertCalendarStandardRow(database, { ...base, ...over })
+  const viewCount = (database: DatabaseSync) =>
+    (database.prepare('select count(*) n from mi_calendar_releases').get() as { n: number }).n
+
+  it('先空后值：占位行换成带值行，不出现两行（present 不被 missing 覆盖）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 空值占位先到（源先给日程，值后到）。
+    write(database, { scheduledDate: '2026-11-05', valuesJson: '{}', valueState: 'missing' })
+    const before = database.prepare('select scheduled_date from mi_calendar_releases').all() as { scheduled_date: string }[]
+    expect(before).toEqual([{ scheduled_date: '2026-11-05' }])
+    // 值到了（真实发布日 11-04）：占位行不再是唯一那行，被带值行取代。
+    write(database, { scheduledDate: '2026-11-04', valuesJson: '{"actual":"165"}', valueState: 'present' })
+    const after = database.prepare('select scheduled_date, value_state from mi_calendar_releases').all() as
+      { scheduled_date: string; value_state: string }[]
+    expect(after).toEqual([{ scheduled_date: '2026-11-04', value_state: 'present' }])
+    expect(calendarValueStateMismatches(database)).toBe(0)
+  })
+
+  it('守卫：present 却是空 JSON / missing 却有值，都算不一致', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, { valuesJson: '{"actual":"1"}', valueState: 'present' })
+    write(database, { valuesJson: '{}', valueState: 'missing' })
+    expect(calendarValueStateMismatches(database)).toBe(0)
+    // 造一条漂的（绕过 upsert，模拟以后有人只改一列）。
+    database.prepare(`insert into mi_calendar_events
+      (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision,
+       row_kind, status, identity_kind, value_state, values_json, source_provider_id, source_event_id,
+       parser_version, observed_at, first_seen_at)
+      values ('USA','US.CPI.NSA.YOY','2026-09','2026-10-01','2026-10-01',null,'date','release','published',
+        'code','present','{}','narwhal','bad-1','v1','2026-10-01T00:00:00.000Z','2026-10-01T00:00:00.000Z')`)
+      .run()
+    expect(calendarValueStateMismatches(database)).toBe(1)
   })
 })
 

@@ -114,7 +114,7 @@ describe('「有期间没值」不进 unmapped：它不是映射缺口', () => {
     ])
     expect(detailed.unmapped).toEqual([])
     expect(detailed.rows[0]!.metricKey).toBe('evt.household-debt')
-    expect(detailed.rows[0]!.valueState).toBe('not-provided')
+    expect(detailed.rows[0]!.valueState).toBe('missing')
     expect(detailed.rows[0]!.status).toBe('published')
   })
 

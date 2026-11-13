@@ -87,11 +87,14 @@ export type CalendarStandardRow = Readonly<{
    */
   seriesId?: string
   /**
-   * 值区状态：`not-provided` ＝ 源标了已发布、却一个值都没给。
-   * **单独一列、不塞进 `values_json`**：视图要判「这行有没有值」，`values_json = '{}'` 必须
-   * 就代表「真的没有值」。塞进去会让空行看起来有值，折叠规则当场失效。
+   * 值区状态（**物化列**）：`present` ＝ 有值；`missing` ＝ 没有值。
+   * 单独一列、不塞进 `values_json`：视图靠它判「这行有没有值」，而拿 JSON 字符串比较
+   * （`values_json <> '{}'`）把正确性绑在序列化格式上，写成 `{ }` 或字段顺序变就错。
+   *
+   * 物化列的唯一风险是**会漂**：所以有两条配套——upsert 里「present 不可被 missing 覆盖」，
+   * 以及一致性守卫 `calendarValueStateMismatches()`（和 `values_json` 对不上就报）。
    */
-  valueState?: 'not-provided'
+  valueState?: 'present' | 'missing'
   valuesJson: string
   sourceProviderId: string
   sourceEventId: string
@@ -124,7 +127,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
       source_label text,
       series_id text,
-      value_state text,
+      value_state text check(value_state in ('present', 'missing')),
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
       values_json text not null,
       source_provider_id text not null,
@@ -147,11 +150,11 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
     create view ${calendarStandardTablePolicy.releasesView} as
       select * from ${eventsTable} e
       where e.row_kind = 'release' and (
-        e.values_json <> '{}'
+        e.value_state = 'present'
         or (
           not exists (select 1 from ${eventsTable} v
             where v.country_code = e.country_code and v.metric_key = e.metric_key
-              and v.period_key = e.period_key and v.row_kind = 'release' and v.values_json <> '{}')
+              and v.period_key = e.period_key and v.row_kind = 'release' and v.value_state = 'present')
           and e.first_scheduled_date = (select min(f.first_scheduled_date) from ${eventsTable} f
             where f.country_code = e.country_code and f.metric_key = e.metric_key
               and f.period_key = e.period_key and f.row_kind = 'release')
@@ -186,6 +189,10 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   if (!columns.some((column) => column.name === 'value_state')) {
     database.exec(`alter table ${eventsTable} add column value_state text`)
   }
+  // 存量回填一次：老行的 value_state 是空的，空着会让视图把它们当「没值」折掉。
+  database.exec(`update ${eventsTable}
+    set value_state = case when values_json = '{}' then 'missing' else 'present' end
+    where value_state is null`)
 }
 
 /**
@@ -209,6 +216,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       -- 值也一样：**空值不覆盖有值**。同一次发布后写的往往是「还没有值」那一版
       -- （来源标了已发布却没给值，或两边同一天各说一半），拿 {} 盖掉已有的值等于退回空白。
       values_json = case when excluded.values_json = '{}' then values_json else excluded.values_json end,
+      -- 同一件事的第二半：**present 不可被 missing 覆盖**。只改 values_json 不改这一列的话，
+      -- 先写空、后到值的行会永远记着 missing，视图按它一折就把有值的行折掉。
+      value_state = case when excluded.value_state = 'present' then 'present'
+        else coalesce(value_state, excluded.value_state) end,
       source_provider_id = excluded.source_provider_id,
       source_event_id = excluded.source_event_id,
       parser_version = excluded.parser_version,
@@ -220,9 +231,25 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.identityKind ?? 'code',
       row.sourceLabel ?? null,
       row.seriesId ?? null,
-      row.valueState ?? null,
+      // 没传就**从值本身推**：物化列不允许留空——空着会被视图当「没值」折掉。
+      row.valueState ?? (row.valuesJson === '{}' ? 'missing' : 'present'),
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null)
+}
+
+/**
+ * **一致性守卫**：`value_state='present'` 当且仅当 `values_json` 里真有值。
+ *
+ * 物化列唯一的问题是会漂，而漂了之后它**看起来永远是对的**——这条是它唯一能自证的地方。
+ * 返回不一致的行数；调用方（采集批次日志、对账脚本）必须把它当红看，不能只打印。
+ */
+export function calendarValueStateMismatches(database: DatabaseSync): number {
+  const { eventsTable, } = calendarStandardTablePolicy
+  const row = database.prepare(`select count(*) n from ${eventsTable}
+    where (value_state = 'present' and values_json = '{}')
+       or (value_state = 'missing' and values_json <> '{}')
+       or value_state is null`).get() as { n: number }
+  return row.n
 }
 
 /** 没映射上的行：进 `unmapped`，**不进日历**；补上映射后按 `raw_json` 重放。 */

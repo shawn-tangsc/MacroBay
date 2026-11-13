@@ -195,8 +195,8 @@ export type NarwhalStandardRowInput = Readonly<{
   status: CalendarReleaseStatus
   /** 这一行是由**源的某个 measure** 生成的（测度层对账只数它们）。 */
   fromMeasure?: true
-  /** 源标了已发布、却一个值都没给：值区显示「未提供」。 */
-  valueState?: 'not-provided'
+  /** 源标了已发布、却一个值都没给：值区显示「未提供」（读侧按 status + 无值判）。 */
+  valueState?: 'missing'
   previous?: string
   consensus?: string
   actual?: string
@@ -280,7 +280,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
       if (primaryMetric !== undefined) {
         rows.push({
           kind: 'indicator', identityKind: 'code', status,
-          ...(status === 'published' ? { valueState: 'not-provided' as const } : {}),
+          ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey: primaryMetric, periodKey: period,
           scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
@@ -291,7 +291,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
       if (eventCode !== undefined) {
         rows.push({
           kind: 'event', identityKind: 'code', status,
-          ...(status === 'published' ? { valueState: 'not-provided' as const } : {}),
+          ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           countryCode: release.country, metricKey: eventCode, periodKey: release.at.slice(0, 16),
           scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
         })
@@ -329,7 +329,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
     // —— 四、有期间、没有值、且没有测度依据也没有事件码：源内身份显示 ——
     rows.push({
       kind: 'event', identityKind: 'source', status, sourceLabel: release.name,
-      ...(status === 'published' ? { valueState: 'not-provided' as const } : {}),
+      ...(status === 'published' ? { valueState: 'missing' as const } : {}),
       countryCode: release.country, metricKey: release.releaseId, periodKey: period,
       scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
       timePrecision: 'minute',
