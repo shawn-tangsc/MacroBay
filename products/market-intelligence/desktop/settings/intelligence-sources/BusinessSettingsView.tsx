@@ -20,6 +20,7 @@ import {
   type DashboardCell,
   type DashboardSourceModule
 } from './dashboardSourceModules'
+import { coreIndicatorMetricKeys } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 
 /**
  * 「业务设置」这一屏：左列三项（看板 / 日历 / 舆情）+ 内容区**只有卡片 / 源名**，没有源详情。
@@ -37,7 +38,11 @@ import {
  * 互斥用**每格自己的启停**表达（`cells[cellId]`）：开 B 时同组其它源写 false，不开第二个存储。
  * `selection` 那层留给「选源模型」，这里不写 null——null 在存储里是删键 = 回落默认主源。
  */
-export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment'
+/**
+ * 四个业务分流。第四项（`coreIndicators`）不是模块卡：它按**指标**列取值源与开关
+ * （`(metric_key, provider_id)` 那一层），与卡片齿轮的「预期来源」是两件事。
+ */
+export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment' | 'coreIndicators'
 
 /**
  * 屏内定位（`focus.sourcesData`）：切到哪个业务、滚到哪张模块卡、标出哪一格。
@@ -45,7 +50,11 @@ export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment'
  */
 export type BusinessFocus = Readonly<{ business?: BusinessKey; moduleKey?: string; cellId?: string }>
 
-const BUSINESS_KEYS: readonly BusinessKey[] = ['dashboard', 'calendar', 'sentiment']
+/**
+ * 顺序即左侧导航顺序。第四项排在最后：它按指标列源，形态和前三项（按模块卡）不同，
+ * 放最后读者不会把它当成「又一组模块」。
+ */
+const BUSINESS_KEYS: readonly BusinessKey[] = ['dashboard', 'calendar', 'sentiment', 'coreIndicators']
 
 /** 采集预设三档；值来自 schema（`manual | balanced | frequent`），这里只引用不再定义语义。 */
 const PRESET_VALUES = ['manual', 'balanced', 'frequent'] as const
@@ -123,12 +132,17 @@ export function BusinessSettingsView(props: {
   const labelOf = (key: string): string => props.resolveText(`settings.intelligenceSources.businessTabs.${key}`)
   const subtitleOf = (business: BusinessKey): string => {
     // 数字来自数据层：模块数读模块清单，源数读去重后的源集合——删掉一个源，这里跟着变。
+    /* 三种量词，各说各的：模块 / 源 / 项指标。第四项配的是指标，写成「N 个源」会让读者以为这里能接数据源。 */
     const template = business === 'dashboard'
       ? props.resolveText('settings.intelligenceSources.businessSubtitle.modules')
-      : props.resolveText('settings.intelligenceSources.businessSubtitle.sources')
+      : business === 'coreIndicators'
+        ? props.resolveText('settings.intelligenceSources.businessSubtitle.indicators')
+        : props.resolveText('settings.intelligenceSources.businessSubtitle.sources')
     const count = business === 'dashboard'
       ? modulesForBusiness(business).length
-      : sourceCountForBusiness(business)
+      : business === 'coreIndicators'
+        ? coreIndicatorMetricKeys.length
+        : sourceCountForBusiness(business)
     return template.replace('{count}', String(count))
   }
   /* 只交出**列表本体**：页签条与外层两栏归 `SourcesSettingsPane`（切 tab 不重挂载页签）。 */

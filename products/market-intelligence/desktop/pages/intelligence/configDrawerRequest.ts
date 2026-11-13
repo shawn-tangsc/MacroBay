@@ -10,7 +10,7 @@ import type { BusinessFocus } from '../../settings/intelligence-sources/Business
  */
 export type ConfigDrawerFocus =
   | { menu: 'sources'; providerId?: string; sourceId?: string }
-  | { menu: 'sourcesData'; business?: 'dashboard' | 'calendar' | 'sentiment'; moduleKey?: string; cellId?: string }
+  | { menu: 'sourcesData'; business?: 'dashboard' | 'calendar' | 'sentiment' | 'coreIndicators'; moduleKey?: string; cellId?: string }
   // 两个值就是 DOM 上那两个锚点（`data-processing-section`）：契约与页面共用一套词，不再翻译一次。
   | { menu: 'processing'; section?: 'translation' | 'sentiment' }
   | { menu: 'briefing'; section?: 'generation' | 'ai' | 'model' | 'webSearch' }

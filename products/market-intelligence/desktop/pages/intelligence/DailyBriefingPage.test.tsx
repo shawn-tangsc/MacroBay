@@ -1428,7 +1428,7 @@ describe('daily briefing page', () => {
     act(() => consensusGroup.click())
     // The drawer's body is portalled, so it is looked up on the document, not inside the page div.
     const drawer = document.querySelector<HTMLElement>('[data-issue-drawer]')!
-    expect(drawer.textContent).toContain('CPI: consensus not collected')
+    expect(drawer.textContent).toContain('CPI: expectation not collected')
     // The close control belongs to the shared drawer, so its label is the platform's, not this page's.
     expect(document.querySelector('.mi-issue-drawer .ant-drawer-header')).not.toBeNull()
     expect(drawer.textContent).toContain(englishText.limits.roles.advice)

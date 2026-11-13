@@ -34,6 +34,18 @@ export const blsCoveredMetricKeys: readonly string[] = Object.freeze([
   'US.UNEMPLOYMENT.SA.RATE'
 ])
 
+/**
+ * 这条腿的「总闸」是哪个源（数据源页那颗开关的 sourceId）。
+ *
+ * 与上一层的「按指标取舍」分开：总闸管「这个源采不采」，关掉后这一页那一行要置灰。
+ * 三处一一对应，写得下就不派生出第二份。
+ */
+export const gateSourceIdByProviderId: Readonly<Record<CoreIndicatorValueSource['providerId'], string>> = Object.freeze({
+  narwhal: 'macro-calendar-narwhal-economic-data',
+  'fred-rates-liquidity': 'fred-rates-liquidity',
+  bls: 'macro-calendar-bls'
+})
+
 /** Narwhal 这一腿是否覆盖该指标：从 measure 映射反查，不另存清单。 */
 function narwhalCovers(metricKey: string): boolean {
   return Object.values(narwhalMeasureMetricKeys).includes(metricKey)

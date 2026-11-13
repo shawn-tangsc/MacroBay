@@ -53,8 +53,9 @@ describe('业务设置的左列', () => {
   it('uses the source-tree row structure: avatar + title + subtitle + chevron', async () => {
     const { host } = await render('dashboard')
     const rows = [...host.querySelectorAll('.business-settings__nav .intelligence-provider-row')]
-    expect(rows).toHaveLength(3)
-    expect(rows.map((row) => row.querySelector('strong')?.textContent)).toEqual(['看板', '日历', '舆情'])
+    // 四个业务分流：看板 / 日历 / 舆情 / 核心指标。
+    expect(rows).toHaveLength(4)
+    expect(rows.map((row) => row.querySelector('strong')?.textContent)).toEqual(['看板', '日历', '舆情', '核心指标'])
     for (const row of rows) {
       // 与来源树同一套类：头像位、主文字、副标题、右侧 chevron。
       expect(row.querySelector('.intelligence-source-avatar')).not.toBeNull()
@@ -107,7 +108,8 @@ describe('业务设置的左列', () => {
     expect(subtitles).toEqual([
       `${modulesForBusiness('dashboard').length} 个模块`, // 7
       `${modulesForBusiness('calendar').flatMap((module) => module.sourceIds).length} 个源`, // 6
-      `${modulesForBusiness('sentiment').flatMap((module) => module.sourceIds).length} 个源` // 4
+      `${modulesForBusiness('sentiment').flatMap((module) => module.sourceIds).length} 个源`, // 4
+      '4 项指标' // 这一项数的是指标，不是源
     ])
   })
 

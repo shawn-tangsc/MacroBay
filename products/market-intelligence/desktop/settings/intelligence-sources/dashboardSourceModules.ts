@@ -188,7 +188,9 @@ export function cellEnabledOrDefault(value: boolean | undefined, fallback: boole
 export const BUSINESS_MODULE_IDS = {
   dashboard: ['policy-path', 'fear-greed', 'capital', 'positioning', 'quotes'],
   calendar: ['macro-calendar'],
-  sentiment: ['news']
+  sentiment: ['news'],
+  /* 第四项不是模块卡（按指标列源），所以没有模块；空数组让 `modulesForBusiness` 返回空而不是崩。 */
+  coreIndicators: []
 } as const
 
 export function modulesForBusiness(business: keyof typeof BUSINESS_MODULE_IDS): readonly DashboardSourceModule[] {

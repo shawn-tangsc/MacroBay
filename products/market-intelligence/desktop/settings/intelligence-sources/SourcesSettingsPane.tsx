@@ -11,6 +11,9 @@ import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
 import { useSourceCadence } from './useSourceCadence'
+import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
+import { coreIndicatorSourcePrefsClient } from '../../shared/ipc/coreIndicatorSourcePrefsClient'
+import { gateSourceIdByProviderId } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 import { SourceConfigSurface, type SourceConfigSurfaceProps } from './SourceConfigSurface'
 
 // 样式跟着组件走，不跟着页面入口走：配置抽屉直接渲染本组件、不经过 settings 的 index.tsx，
@@ -133,6 +136,33 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     for (const provider of group.providers) {
       for (const source of provider.sources) providerNamesBySource[source.sourceId] = provider.displayName
     }
+  }
+  /* 第二层配置（指标 × 源）：读一次，缺键 = 开；写失败要把开关拨回去，不能画成已生效。 */
+  const [coreDisabled, setCoreDisabled] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    let active = true
+    void coreIndicatorSourcePrefsClient.read()
+      .then((saved) => { if (active) setCoreDisabled(saved) })
+      .catch(() => { if (active) setCoreDisabled({}) })
+    return () => { active = false }
+  }, [])
+  const gateSourceOf = (providerId: string): string =>
+    gateSourceIdByProviderId[providerId as keyof typeof gateSourceIdByProviderId] ?? providerId
+  const toggleCoreSource = (preferenceKey: string, enabled: boolean): void => {
+    setCoreDisabled((current) => {
+      const next = { ...current }
+      if (enabled) delete next[preferenceKey]
+      else next[preferenceKey] = true
+      return next
+    })
+    void coreIndicatorSourcePrefsClient.write(preferenceKey, enabled).catch(() => {
+      setCoreDisabled((current) => {
+        const next = { ...current }
+        if (enabled) next[preferenceKey] = true
+        else delete next[preferenceKey]
+        return next
+      })
+    })
   }
   const cadence = useSourceCadence()
   /**
@@ -280,6 +310,17 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           action={{ labelKey: 'settings.intelligenceSources.saveFailureRetry', onSelect: props.onRetrySave }}
           resolveText={resolveText}
           tone="danger">{props.saveFailure}</InlineNotice>}
+      {isBusiness && business === 'coreIndicators'
+        ? <CoreIndicatorsSourcesView
+          resolveText={resolveText}
+          sourceNameOf={(providerId) => providerNamesBySource[gateSourceOf(providerId)]}
+          sourceEnabled={(providerId) => isSourceEnabled(gateSourceOf(providerId))}
+          disabled={coreDisabled}
+          onToggle={toggleCoreSource}
+          {...(props.onOpenSourceConfig === undefined
+            ? {}
+            : { onOpenSource: (providerId: string) => props.onOpenSourceConfig?.(gateSourceOf(providerId)) })} />
+        : null}
       {isBusiness
         ? <BusinessSettingsContent
           business={business}
