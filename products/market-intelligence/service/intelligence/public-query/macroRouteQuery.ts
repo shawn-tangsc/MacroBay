@@ -25,9 +25,23 @@ export type MacroRouteQuery = Readonly<{
   queryMarketCalendarMonth?: (input: unknown) => MarketCalendarPage
 }>
 
+/**
+ * 一侧日历「读没读到」，和它读了什么分开。
+ *
+ * 空数组有两种意思：这个月确实没有事件，或者根本读不到。合并成一个数组，读侧就只能把
+ * 「读不到」画成「没有」——这两个状态必须分开表达，调用方判 `state`，不判 `facts.length`。
+ */
+export type CalendarReadState = 'available' | 'unavailable'
+export type CalendarReadReasonCode = 'query-failed' | 'field-missing' | 'timeout' | 'not-wired'
+export type CalendarRead<T> = Readonly<{
+  state: CalendarReadState
+  reasonCode?: CalendarReadReasonCode
+  facts: readonly T[]
+}>
+
 export type MacroRoute = Readonly<{
-  official: readonly MacroEconomicCalendarEventView[]
-  provider: readonly MacroCalendarProviderObservation[]
+  official: CalendarRead<MacroEconomicCalendarEventView>
+  provider: CalendarRead<MacroCalendarProviderObservation>
   months: readonly string[]
   asOf: string
 }>
@@ -49,18 +63,35 @@ export function normalizeMacroRouteMonths(asOf: string, previousAsOf: string | n
 export async function queryMacroRoute(queries: MacroRouteQuery, input: Readonly<{ asOf: string; months: readonly string[] }>): Promise<MacroRoute> {
   const official: MacroEconomicCalendarEventView[] = []
   const provider: MacroCalendarProviderObservation[] = []
+  const officialMonths = { attempted: 0, read: 0 }
+  const providerMonths = { attempted: 0, read: 0 }
   for (const month of input.months.slice(0, macroRouteQueryPolicy.maximumMonths)) {
     if (queries.queryMacroEconomicCalendarMonth) {
+      officialMonths.attempted += 1
       try {
         const page = await queries.queryMacroEconomicCalendarMonth({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents })
-        if (page.state === 'available') official.push(...page.events)
+        if (page.state === 'available') { official.push(...page.events); officialMonths.read += 1 }
       } catch { /* a month that cannot be read contributes nothing, never an exception */ }
     }
     if (queries.queryMarketCalendarMonth) {
+      providerMonths.attempted += 1
       try {
         provider.push(...readMarketCalendarObservations(queries.queryMarketCalendarMonth, { month, asOf: input.asOf }).observations)
+        providerMonths.read += 1
       } catch { /* same: partial ranges stay comparable */ }
     }
   }
-  return { official, provider, months: [...input.months], asOf: input.asOf }
+  // 部分可读仍是「可读」：一个月失败不该把另一个月读到的数据说成读不到。只有「一次都没读成」
+  // 或「根本没接」才是 `unavailable`——那才是调用方必须当成「不知道」而不是「没有」的情况。
+  return {
+    official: readOf(official, officialMonths, queries.queryMacroEconomicCalendarMonth !== undefined),
+    provider: readOf(provider, providerMonths, queries.queryMarketCalendarMonth !== undefined),
+    months: [...input.months], asOf: input.asOf
+  }
+}
+
+function readOf<T>(facts: readonly T[], months: Readonly<{ attempted: number; read: number }>, wired: boolean): CalendarRead<T> {
+  if (!wired) return Object.freeze({ state: 'unavailable', reasonCode: 'not-wired', facts: Object.freeze([...facts]) })
+  if (months.attempted > 0 && months.read === 0) return Object.freeze({ state: 'unavailable', reasonCode: 'query-failed', facts: Object.freeze([...facts]) })
+  return Object.freeze({ state: 'available', facts: Object.freeze([...facts]) })
 }

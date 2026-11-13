@@ -1,10 +1,36 @@
 import { normalizeMacroRouteMonths, type MacroRoute } from '../public-query/macroRouteQuery'
 import { analysisBudgetPolicy, decideBudget, type DailyQuota } from './analysisBudgetPolicy'
 import { countAnalysisRuns, lastAutoRunAt, type AnalysisRunCounts } from './analysisRunCounter'
-import { evaluateSignificance, type SignificanceDecision } from './analysisSignificancePolicy'
+import { analysisSignificancePolicy, evaluateSignificance, type SignificanceDecision } from './analysisSignificancePolicy'
 import { analysisRunLineOf, isGateEligible } from './analysisTriggerSourcePolicy'
 import { projectPreviousBaseline, type PreviousSignificanceBaseline } from './previousSignificanceBaseline'
-import type { SignificanceSignal } from './significanceChangeMatcher'
+import type { SignificanceBaseline, SignificanceSignal } from './significanceChangeMatcher'
+
+/**
+ * 日历读不到时，闸门不许把「不知道」判成「没有变化」。
+ *
+ * 只改一种判定：本来会因「变化低于阈值」被跳过的，改判为放行（fail-open）。预算、间隔、
+ * 时段这些拒绝理由一律不透支——读不到日历不代表可以多花一次额度。放行时 `reasonCode` 留空，
+ * 因为「读不到所以先分析一次」还没有自己的文案码；加码要同时加两处文案，不在这一笔里造。
+ */
+function evaluateCalendarSignificance(
+  input: Parameters<typeof evaluateSignificance>[0],
+  route: MacroRoute
+): SignificanceDecision {
+  const decision = evaluateSignificance(input)
+  // `not-wired` 不是「读不到」：那个 build 本来就没有这条日历，按「可能有事件」放行会让每个
+  // tick 都花一次额度。只有接了却没读成的才算「不知道」。
+  const unreadable = [route.official, route.provider].some(side =>
+    side.state === 'unavailable' && side.reasonCode !== 'not-wired')
+  if (!unreadable) return decision
+  if (decision.decision !== 'skipped' || decision.reasonCode !== analysisSignificancePolicy.reasonCodes.belowThreshold) return decision
+  return Object.freeze({ ...decision, decision: 'queued' as const, reasonCode: null, signals: Object.freeze([]) })
+}
+
+/** 把两侧状态摊平成策略层认识的基线；策略层只认数据，不认状态。 */
+function flattenBaseline(route: MacroRoute): SignificanceBaseline {
+  return { official: route.official.facts, provider: route.provider.facts, months: route.months, asOf: route.asOf }
+}
 
 /**
  * The gate itself: the one place that decides whether a data-driven analysis may spend a model
@@ -118,15 +144,15 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
       const previous: PreviousSignificanceBaseline | null = projectPreviousBaseline(input.previousSnapshot as never)
       const now = dependencies.now()
       const route = await dependencies.queryMacroRoute({ asOf: input.asOf, months: normalizeMacroRouteMonths(input.asOf, previous?.asOf ?? null) })
-      const decision: SignificanceDecision = evaluateSignificance({
+      const decision = evaluateCalendarSignificance({
         triggerKey: input.triggerKey,
         now,
         lastAutoRunAt: dependencies.lastAutoRunAt(input.eventGroupId, now),
         previousAsOf: previous?.asOf ?? null,
-        current: route,
+        current: flattenBaseline(route),
         previous: previous?.values ?? null,
         ...dependencies.countRuns(now)
-      })
+      }, route)
       if (decision.reasonCode !== null) {
         // A refused attempt that arrived with its own ledger row rewrites that row; anything else
         // (the calendar line, the session slots) records a decision of its own as it always has.

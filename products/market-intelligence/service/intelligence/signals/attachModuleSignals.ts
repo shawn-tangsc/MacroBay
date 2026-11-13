@@ -66,8 +66,13 @@ export function attachModuleSignals(host: ModuleSignalHost & {
     // The calendar's own trigger key stays the only one that spends a call; this leg exists so the
     // chip and the analysis name the same release the same way.
     createCalendarSignalQuery({
-      readObservations: async ({ asOf }) =>
-        (await queryMacroRoute(host, { asOf, months: normalizeMacroRouteMonths(asOf, null) })).provider
+      // A side we could not read must surface as an unavailable signal, not as a quiet market:
+      // throwing here is the leg's existing "reported as failed" path (moduleSignalQuery.ts).
+      readObservations: async ({ asOf }) => {
+        const route = await queryMacroRoute(host, { asOf, months: normalizeMacroRouteMonths(asOf, null) })
+        if (route.provider.state === 'unavailable') throw new Error(`calendar-unavailable:${route.provider.reasonCode ?? 'unknown'}`)
+        return route.provider.facts
+      }
     })
   ]
   host.addModuleSignalProducer = (producer) => { producers.push(producer) }

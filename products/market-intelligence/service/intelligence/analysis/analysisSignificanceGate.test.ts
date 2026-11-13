@@ -14,8 +14,15 @@ function event(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function route(official: readonly unknown[]): MacroRoute {
-  return { official, provider: [], months: ['2026-10', '2026-09'], asOf } as unknown as MacroRoute
+function route(
+  official: readonly unknown[],
+  state: { officialState?: 'available' | 'unavailable'; providerState?: 'available' | 'unavailable' } = {}
+): MacroRoute {
+  return {
+    official: { state: state.officialState ?? 'available', facts: official },
+    provider: { state: state.providerState ?? 'available', facts: [] },
+    months: ['2026-10', '2026-09'], asOf
+  } as unknown as MacroRoute
 }
 
 function snapshot(value: string) {
@@ -104,7 +111,7 @@ it('records a provider surprise under its own reason code, and names the release
     consensus: { displayValue: '4.4%' }, consensusState: 'available', surprise: 'beat',
     providerIds: ['macro-calendar-0xrouter-economic-data'], caveats: ['observed-unverified', 'provider-title-is-display-name']
   }
-  const providerRoute = { official: [], provider: [release], months: ['2026-10'], asOf } as unknown as MacroRoute
+  const providerRoute = { official: { state: 'available', facts: [] }, provider: { state: 'available', facts: [release] }, months: ['2026-10'], asOf } as unknown as MacroRoute
   const recordDecision = vi.fn()
   const instance = createAnalysisSignificanceGate({
     now: () => asOf, queryMacroRoute: vi.fn(async () => providerRoute), recordDecision,
@@ -129,7 +136,7 @@ it('stays quiet for a routine provider release even though its actual is new to 
     consensus: { displayValue: '0.7%' }, consensusState: 'available', surprise: 'beat',
     providerIds: ['macro-calendar-0xrouter-economic-data'], caveats: ['observed-unverified', 'provider-title-is-display-name']
   }
-  const providerRoute = { official: [], provider: [routine], months: ['2026-10'], asOf } as unknown as MacroRoute
+  const providerRoute = { official: { state: 'available', facts: [] }, provider: { state: 'available', facts: [routine] }, months: ['2026-10'], asOf } as unknown as MacroRoute
   const recordDecision = vi.fn()
   const instance = createAnalysisSignificanceGate({
     now: () => asOf, queryMacroRoute: vi.fn(async () => providerRoute), recordDecision,
@@ -212,4 +219,49 @@ it('stays silent for an hourly refusal: the day is not used up', async () => {
   const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', asOf, previousSnapshot: snapshot('3.1%') })
   expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
   expect(notifyQuotaExhausted).not.toHaveBeenCalled()
+})
+
+it('queues the run when the calendar could not be read, instead of concluding "no change"', async () => {
+  const recordDecision = vi.fn()
+  const instance = createAnalysisSignificanceGate({
+    now: () => asOf,
+    queryMacroRoute: vi.fn(async () => route([], { providerState: 'unavailable' })),
+    recordDecision, updateDecision: vi.fn(),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    lastAutoRunAt: () => null
+  } as never)
+  const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
+  // "Could not read" must never become "nothing happened": the run is allowed, with no invented reason.
+  expect(outcome).toMatchObject({ decision: 'queued', reasonCode: null })
+})
+
+it('still refuses on budget when the calendar could not be read', async () => {
+  const instance = createAnalysisSignificanceGate({
+    now: () => asOf,
+    queryMacroRoute: vi.fn(async () => route([], { providerState: 'unavailable' })),
+    recordDecision: vi.fn(), updateDecision: vi.fn(),
+    countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 3, calendarRunsThisHour: 3, scheduledRunsToday: 0 }),
+    lastAutoRunAt: () => null
+  } as never)
+  const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
+  // Reading less than expected never buys extra budget.
+  expect(outcome.decision).toBe('skipped')
+  expect(outcome.reasonCode).not.toBeNull()
+})
+
+it('does not spend a run on every tick just because this build has no calendar wired', async () => {
+  const instance = createAnalysisSignificanceGate({
+    now: () => asOf,
+    queryMacroRoute: vi.fn(async () => ({
+      official: { state: 'unavailable', reasonCode: 'not-wired', facts: [] },
+      provider: { state: 'unavailable', reasonCode: 'not-wired', facts: [] },
+      months: ['2026-10'], asOf
+    } as unknown as MacroRoute)),
+    recordDecision: vi.fn(), updateDecision: vi.fn(),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    lastAutoRunAt: () => null
+  } as never)
+  const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
+  // Unwired is a deliberate configuration, not a failed read: no extra run, no forged reason.
+  expect(outcome.decision).toBe('skipped')
 })
