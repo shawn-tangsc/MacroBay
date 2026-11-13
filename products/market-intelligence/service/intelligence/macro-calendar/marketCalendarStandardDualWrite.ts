@@ -39,6 +39,8 @@ export function dualWriteMeasureRows(
       timePrecision?: 'minute' | 'date'
       rowKind?: 'release' | 'estimate'
       identityKind?: CalendarIdentityKind
+      /** `source` 身份行要带源原文名（标准码去名表查，源内 id 查不到）。 */
+      sourceLabel?: string
       status?: CalendarReleaseStatus
       valueState?: 'not-provided'
       previous?: string; consensus?: string; actual?: string }>[] }>,
@@ -75,6 +77,7 @@ export function dualWriteMeasureRows(
         ...(row.rowKind === undefined ? {} : { rowKind: row.rowKind }),
         ...(row.status === undefined ? {} : { status: row.status }),
         ...(row.identityKind === undefined ? {} : { identityKind: row.identityKind }),
+        ...(row.sourceLabel === undefined ? {} : { sourceLabel: row.sourceLabel }),
         valuesJson: JSON.stringify({
           ...(row.valueState === undefined ? {} : { valueState: row.valueState }),
           ...(row.consensus === undefined ? {} : { consensus: row.consensus }),

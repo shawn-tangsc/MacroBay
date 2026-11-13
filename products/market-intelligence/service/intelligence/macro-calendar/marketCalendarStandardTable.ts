@@ -76,6 +76,11 @@ export type CalendarStandardRow = Readonly<{
   status?: CalendarReleaseStatus
   /** 映射得上＝`code`（缺省）；映射不上＝`source`，`metricKey` 存源内标识。 */
   identityKind?: CalendarIdentityKind
+  /**
+   * 源给的原名。**只有 `source` 身份的行需要**：标准码的显示名去名表查，源内 id 查不到，
+   * 所以把源原文名随行存下来——否则日历只能拿一个 uuid 当标题。
+   */
+  sourceLabel?: string
   valuesJson: string
   sourceProviderId: string
   sourceEventId: string
@@ -106,6 +111,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       time_precision text not null check(time_precision in ('minute', 'date')),
       status text not null default 'unknown' check(status in ('scheduled', 'published', 'cancelled', 'unknown')),
       identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
+      source_label text,
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
       values_json text not null,
       source_provider_id text not null,
@@ -142,6 +148,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   if (!columns.some((column) => column.name === 'identity_kind')) {
     database.exec(`alter table ${eventsTable} add column identity_kind text not null default 'code'`)
   }
+  if (!columns.some((column) => column.name === 'source_label')) {
+    database.exec(`alter table ${eventsTable} add column source_label text`)
+  }
 }
 
 /**
@@ -152,9 +161,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   const { eventsTable } = calendarStandardTablePolicy
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
-     status, identity_kind, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
+     status, identity_kind, source_label, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -174,6 +183,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.rowKind ?? 'release',
       row.status ?? 'unknown',
       row.identityKind ?? 'code',
+      row.sourceLabel ?? null,
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null)
 }

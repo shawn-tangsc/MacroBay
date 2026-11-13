@@ -101,12 +101,17 @@ describe('源内身份 → 标准码：原地转正，不新增行', () => {
     expect(rows[0]!.identity_kind).toBe('code')
   })
 
-  it('源内身份的行照常写进表（不被当成未知码退回工作清单）', () => {
+  it('源内身份的行照常写进表（不被当成未知码退回工作清单），并带上源原文名', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
-    const counts = write(database, [row({ kind: 'event' as const })])
+    const counts = write(database, [row({ kind: 'event' as const, sourceLabel: 'Securities transactions' })])
     expect(counts.written).toBe(1)
     expect(counts.unmapped['unknown-measure']).toBe(0)
+    const stored = database.prepare(`select metric_key, identity_kind, source_label from mi_calendar_events`)
+      .get() as { metric_key: string; identity_kind: string; source_label: string }
+    // 没有名字列的话，日历只能拿一个 uuid 当标题——源原文名必须随行存。
+    expect(stored.source_label).toBe('Securities transactions')
+    expect(stored.identity_kind).toBe('source')
   })
 
   it('闭集是硬的：闭集外的状态写不进表（fail-closed，不靠调用方自觉）', () => {

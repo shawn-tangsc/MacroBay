@@ -187,6 +187,8 @@ export type NarwhalStandardRowInput = Readonly<{
   kind: 'indicator' | 'event'
   /** `code`＝标准码身份（可跨源合并）；`source`＝源内身份（照常显示，不跨源合并）。 */
   identityKind: CalendarIdentityKind
+  /** `source` 身份要带源原文名：标准码的显示名去名表查，源内 id 查不到。 */
+  sourceLabel?: string
   /** 源给的发布状态（闭集）：读侧分「已发布/排期/取消」只许读它，不按日期推。 */
   status: CalendarReleaseStatus
   /** 这一行是由**源的某个 measure** 生成的（测度层对账只数它们）。 */
@@ -313,7 +315,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
       // 记一笔工作清单，补上映射后**原地转正**成标准码，不新增行。
       unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-event-type' })
       rows.push({
-        kind: 'event', identityKind: 'source', status,
+        kind: 'event', identityKind: 'source', status, sourceLabel: release.name,
         countryCode: release.country, metricKey: release.releaseId,
         periodKey: release.at.slice(0, 16), scheduledDate: release.eventDate, scheduledAt: release.at,
         sourceEventId: release.releaseId, timePrecision: 'minute',
@@ -324,7 +326,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
 
     // —— 四、有期间、没有值、且没有测度依据也没有事件码：源内身份显示 ——
     rows.push({
-      kind: 'event', identityKind: 'source', status,
+      kind: 'event', identityKind: 'source', status, sourceLabel: release.name,
       ...(status === 'published' ? { valueState: 'not-provided' as const } : {}),
       countryCode: release.country, metricKey: release.releaseId, periodKey: period,
       scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
