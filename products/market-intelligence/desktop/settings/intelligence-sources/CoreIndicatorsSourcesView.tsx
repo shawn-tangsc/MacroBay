@@ -1,5 +1,7 @@
 import { Switch } from 'antd'
 
+import { BusinessCardFrequencyRow } from './BusinessSettingsView'
+
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /* 只从**纯模块**取键的拼法：store 里有 `node:fs`，渲染层导入它会整页加载失败（2026-11-14）。 */
@@ -10,8 +12,7 @@ import {
   type CoreIndicatorValueSource
 } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 
-import { frequencyReadoutText } from './FrequencyReadout'
-import { frequencyReadoutView, type SourceCadenceReadout } from './sourceCadence'
+import type { SourceCadenceReadout } from './sourceCadence'
 
 import './coreIndicators.css'
 
@@ -99,16 +100,6 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
               const gateOff = props.sourceEnabled(source.providerId) === false
               /* 节奏由产品内置作业定（没有独立排期）才写「内置频率」；其余一律读真实的档位与间隔。 */
               const builtin = props.builtinCadenceOf?.(source.providerId) === true
-              const cadenceTextOf = (providerId: string): string => frequencyReadoutText(
-                frequencyReadoutView({
-                  enabled: props.sourceEnabled(providerId) !== false,
-                  ...(props.presetOf?.(providerId) === undefined ? {} : { preset: props.presetOf(providerId)! }),
-                  scheduleAvailable: props.cadenceAvailable !== false,
-                  ...(props.cadenceOf?.(providerId) === undefined ? {} : { cadence: props.cadenceOf(providerId) })
-                }),
-                timeZone,
-                t
-              )
               return <div
                 className="business-card__row"
                 data-core-source-row={preferenceKey}
@@ -116,7 +107,7 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
                 key={preferenceKey}>
                 <div className="business-card__line">
                   {/* 名字 + 类型小字同一列：类型不再挤进频率那一格（两页同一行必须同形）。 */}
-                  <span className="core-indicator-sources__name">
+                  <span className="core-indicator-sources__label">
                     {gateOff && props.onOpenSource !== undefined
                       ? <button
                         className="business-card__label business-card__label--action"
@@ -126,6 +117,9 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
                         title={name}
                         type="button">{name}</button>
                       : <span className="business-card__label" title={name}>{name}</span>}
+                    {/* 类型微标：跟名字**同一行**（界面设计 2026-11-14）——读者扫行时要用的信息，
+                        不另起一行、也不藏进 ⓘ。11/`--muted` 沿用共享的标签档。 */}
+                    <span aria-hidden="true" className="business-card__preset-label">·</span>
                     <span className="business-card__preset-label">
                       {t(`settings.intelligenceSources.coreIndicators.valueSourceType.${source.kind}`)}
                     </span>
@@ -138,17 +132,20 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
                       size="small" />
                   </span>
                 </div>
-                {/* 第二行与其它业务页**同一套**：标签「频率」+ 值。
-                    可调档的源走同一个读数（档位 + 真实间隔，读不到按既有那几种状态说）；
-                    只有真的没有独立排期、由产品内置作业驱动的源才写「内置频率」。 */}
-                <div className="business-card__preset" data-preset-builtin={builtin ? 'true' : undefined}>
-                  <span className="business-card__preset-label-group">
-                    <span className="business-card__preset-label">{t('settings.intelligenceSources.collectionPolicy.frequency')}</span>
-                  </span>
-                  {builtin
-                    ? <span className="business-card__preset-value">{t('settings.intelligenceSources.collectionPolicy.builtinCadence')}</span>
-                    : <span className="business-card__preset-readout">{cadenceTextOf(source.providerId)}</span>}
-                </div>
+                {/* 第二行由**共享组件**渲染（看板同一份）：标签「频率」+ 同一颗 ⓘ + 值。
+                    核心指标这屏没有档位下拉，所以是只读形态；节奏由产品内置作业定的源才走 builtin。 */}
+                <BusinessCardFrequencyRow
+                  dataRow={{ 'data-preset-row': source.providerId }}
+                  {...(builtin
+                    ? { builtinCadence: true }
+                    : {
+                      readOnly: true,
+                      ...(props.presetOf?.(source.providerId) === undefined ? {} : { preset: props.presetOf!(source.providerId) })
+                    })}
+                  {...(props.cadenceOf?.(source.providerId) === undefined ? {} : { cadence: props.cadenceOf(source.providerId) })}
+                  {...(props.cadenceAvailable === false ? { cadenceUnavailable: true } : {})}
+                  resolveText={t}
+                  timeZone={timeZone} />
               </div>
             })}
           {rows.length > 0 && enabledCount === 0

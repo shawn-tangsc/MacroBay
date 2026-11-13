@@ -8,7 +8,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { SettingsInfo } from '../settingsInfo'
 import { ProcessingEntryRow } from '../../pages/intelligence/ProcessingEntryRow'
-import { FrequencyReadout, frequencyReadoutLine } from './FrequencyReadout'
+import { FrequencyReadout, frequencyReadoutLine, frequencyReadoutText } from './FrequencyReadout'
 import { frequencyReadoutView, type SourceCadenceReadout } from './sourceCadence'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes } from './sourceSettingRows'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
@@ -458,69 +458,104 @@ function cellRow(args: {
       </span>}
     </div>
     {/* 第二行：频率（产品 2026-11-12 定：与「开不开」同一屏决定「采多勤」）。
-        **源没开就不画**——那一行整行是跳配置的按钮，行里不能再嵌一个下拉（嵌套交互）；
-        不是「没值所以禁用」（禁用等于承诺以后能开）。 */}
+        **源没开就不画**——那一行整行是跳配置的按钮，行里不能再嵌一个下拉（嵌套交互）。
+        这一行由共享组件渲染：核心指标那一屏用的是同一个组件（不再手拼一遍，否则一定漏掉 ⓘ）。 */}
     {sourceOff
       ? null
-      : args.builtinCadence === true
-        /* 不可调也要**占住这一行**（用户 2026-11-12：否则并排的卡片高高低低）：
-           标签「频率」+ 值「内置频率」+ 一颗 ⓘ 说明为什么内置。**没有 select / 开关 / 勾选框**，
-           「不可操作」靠没有控件外观表达，不靠颜色、不加锁图标。 */
-        ? <div className="business-card__preset" data-preset-row={sourceId} data-preset-builtin="true">
-          <span className="business-card__preset-label-group">
-            <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
-            <SettingsInfo
-              ariaLabelKey="settings.intelligenceSources.collectionPolicy.builtinCadenceNoteAria"
-              labelKeys={['settings.intelligenceSources.collectionPolicy.builtinCadenceNote']}
-              resolveText={args.resolveText} />
-          </span>
-          {/* 有真实调度就读真值（用户 2026-11-13：CryptoETF 走通用调度却被标成内置）；没有作业才写「内置频率」。 */}
-          {args.cadence === undefined
-            ? <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.builtinCadence')}</span>
-            : <FrequencyReadout resolveText={args.resolveText} view={frequencyReadoutView({
-              enabled: true, preset: 'balanced', scheduleAvailable: args.cadenceUnavailable !== true, cadence: args.cadence
-            })} />}
-        </div>
-        : args.preset === undefined || args.onPresetChange === undefined
-      ? null
-      : <div className="business-card__preset" data-preset-row={sourceId} {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId)}>
-        <span className="business-card__preset-label-group">
-          <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
-          {/* 这一行**只有一颗** ⓘ（原型 2026-11-13）：三档在各采集器上的实际间隔、「下次」是推算、
-              手动档为什么不会自动采集、整批排期读不到，四句都在这颗浮层的 `lines` 里；
-              正文只留字段名 + 值（说明句不许进正文）。
-              这里直接写 `Popover` 而不是经过 `SettingsInfo`：门禁认的是调用点上的 `lines=`，
-              包一层 helper 会让这四句看起来像正文（2026-11-13 正文说明句门禁抓到的那八条）。 */}
-          <Popover
-            /* 固定 4 条（界面设计 2026-11-13 v4）：① 当前值（只有它随状态变）② 三档实际间隔
-               ③「下次」是推算 ④ 手动/读不到两条边界。任何状态都不得长出第 5 条。 */
-            lines={[
-              frequencyReadoutLine(readoutView!, args.timeZone, args.resolveText),
-              { labelKey: 'settings.intelligenceSources.collectionPolicy.presetIntervalsNote' },
-              { labelKey: 'settings.intelligenceSources.collectionPolicy.nextIsEstimateNote' },
-              { labelKey: 'settings.intelligenceSources.collectionPolicy.readoutEdgesNote' }
-            ]}
-            resolveText={args.resolveText}
-            trigger={(triggerProps) => (
-              <IconButton
-                {...triggerProps}
-                ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
-                icon={Info}
-                resolveText={args.resolveText}
-                size="sm"
-                variant="plain" />
-            )} />
-        </span>
-        <Select
-          aria-label={args.resolveText('settings.intelligenceSources.collectionPolicy.collectionPreset')}
+      : <BusinessCardFrequencyRow
+        {...(args.builtinCadence === true
+          ? { builtinCadence: true, dataRow: { 'data-preset-row': sourceId } }
+          : {
+            dataRow: { 'data-preset-row': sourceId, ...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId) },
+            ...(args.preset === undefined ? {} : { preset: args.preset }),
+            ...(args.onPresetChange === undefined ? {} : { onPresetChange: args.onPresetChange })
+          })}
+        {...(args.cadence === undefined ? {} : { cadence: args.cadence })}
+        {...(args.cadenceUnavailable === true ? { cadenceUnavailable: true } : {})}
+        resolveText={args.resolveText}
+        timeZone={args.timeZone} />}
+  </div>
+}
+
+/**
+ * 频率那一行：**两页共用的唯一一份**（看板的每一格、核心指标的每一条腿）。
+ *
+ * 三个形态：
+ * - `builtinCadence`：节奏由产品内置作业定 —— 标签 + 「为什么内置」那颗 ⓘ + 值（有真实排期就读真值）；
+ * - 可调档（给了 `preset` + `onPresetChange`）：标签 + 同一颗四行 ⓘ + 档位下拉；
+ * - `readOnly`（核心指标这屏）：标签 + **同一颗四行 ⓘ** + 读数文字（没有下拉）。
+ *
+ * 为什么要抽出来：两页各写一遍时，核心指标那屏漏掉了 ⓘ（用户 2026-11-14 截图），
+ * 补一个细节就要再改一轮。ⓘ 的内容（三档实际间隔 / 下次是推算 / 手动档 / 排期读不到）
+ * 也只在这里写一次。
+ */
+export function BusinessCardFrequencyRow(props: Readonly<{
+  dataRow?: Readonly<Record<string, string | undefined>>
+  preset?: string
+  onPresetChange?: (next: string) => void
+  builtinCadence?: boolean
+  /** 只读一行：核心指标那屏没有档位下拉，只有读数 + 同一颗 ⓘ。 */
+  readOnly?: boolean
+  cadence?: SourceCadenceReadout
+  cadenceUnavailable?: boolean
+  resolveText: (key: string) => string
+  timeZone: string
+}>): React.ReactElement | null {
+  const t = props.resolveText
+  const builtin = props.builtinCadence === true
+  const adjustable = props.preset !== undefined && props.onPresetChange !== undefined
+  if (!builtin && !adjustable && props.readOnly !== true) return null
+  const view = frequencyReadoutView({
+    enabled: true,
+    ...(props.preset === undefined ? {} : { preset: props.preset }),
+    scheduleAvailable: props.cadenceUnavailable !== true,
+    ...(props.cadence === undefined ? {} : { cadence: props.cadence })
+  })
+  return <div className="business-card__preset" {...props.dataRow} data-preset-builtin={builtin ? 'true' : undefined}>
+    <span className="business-card__preset-label-group">
+      <span className="business-card__preset-label">{t('settings.intelligenceSources.collectionPolicy.frequency')}</span>
+      {builtin
+        /* 内置节奏那颗 ⓘ 说的是「为什么内置」，与可调档那颗四行 ⓘ 不是同一份。 */
+        ? <SettingsInfo
+          ariaLabelKey="settings.intelligenceSources.collectionPolicy.builtinCadenceNoteAria"
+          labelKeys={['settings.intelligenceSources.collectionPolicy.builtinCadenceNote']}
+          resolveText={t} />
+        : <Popover
+          /* 固定 4 条（界面设计 2026-11-13 v4）：① 当前值（只有它随状态变）② 三档实际间隔
+             ③「下次」是推算 ④ 手动/读不到两条边界。任何状态都不得长出第 5 条。
+             两页共用这一份，逐字相同。 */
+          lines={[
+            frequencyReadoutLine(view, props.timeZone, t),
+            { labelKey: 'settings.intelligenceSources.collectionPolicy.presetIntervalsNote' },
+            { labelKey: 'settings.intelligenceSources.collectionPolicy.nextIsEstimateNote' },
+            { labelKey: 'settings.intelligenceSources.collectionPolicy.readoutEdgesNote' }
+          ]}
+          resolveText={t}
+          trigger={(triggerProps) => (
+            <IconButton
+              {...triggerProps}
+              ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
+              icon={Info}
+              resolveText={t}
+              size="sm"
+              variant="plain" />
+          )} />}
+    </span>
+    {builtin
+      ? props.cadence === undefined
+        ? <span className="business-card__preset-value">{t('settings.intelligenceSources.collectionPolicy.builtinCadence')}</span>
+        : <FrequencyReadout resolveText={t} view={view} />
+      : adjustable
+        ? <Select
+          aria-label={t('settings.intelligenceSources.collectionPolicy.collectionPreset')}
           className="business-card__preset-select"
-          onChange={args.onPresetChange}
+          onChange={props.onPresetChange}
           options={PRESET_VALUES.map((value) => ({
             value,
-            label: args.resolveText(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
+            label: t(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
           }))}
           size="small"
-          value={args.preset} />
-      </div>}
+          value={props.preset} />
+        : <span className="business-card__preset-readout">{frequencyReadoutText(view, props.timeZone, t)}</span>}
   </div>
 }

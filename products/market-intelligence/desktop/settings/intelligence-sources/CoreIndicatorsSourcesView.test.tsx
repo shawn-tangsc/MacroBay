@@ -191,7 +191,7 @@ describe('频率格：与看板同一套读数，类型不占这一格', () => {
     const host = await render()
     const row = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|fred-rates-liquidity"]')!
     const kind = t.coreIndicators.valueSourceType.official
-    const name = row.querySelector<HTMLElement>('.core-indicator-sources__name')!
+    const name = row.querySelector<HTMLElement>('.core-indicator-sources__label')!
     const frequency = row.querySelector<HTMLElement>('.business-card__preset')!
     expect(name.textContent).toContain(kind)
     expect(frequency.textContent).not.toContain(kind)

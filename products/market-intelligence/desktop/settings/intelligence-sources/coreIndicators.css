@@ -47,13 +47,19 @@
 }
 
 /*
- * 名字列：源名 + 类型小字（官方 / 数据商）竖排。
- * 类型小字原来挤在「频率」那一格里，与看板那页同一行长得不一样；挪到名字下面。
- * 仍是排布属性：字号与颜色沿用 `business-card__preset-label`（共享文件里的那一档）。
+ * 名字那一格：源名 + 类型微标**同一行**（界面设计 2026-11-14：`新增就业 · 官方`）。
+ *
+ * 类型微标只在这一屏有；它不许改变行高节奏——同一行、间距 8，字号与颜色沿用共享的
+ * `business-card__preset-label` 那一档（11 / `--muted`）。
  */
-.core-indicator-sources__name {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.core-indicator-sources__label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.core-indicator-sources__label > .business-card__label,
+.core-indicator-sources__label > .business-card__label--action {
   min-width: 0;
 }
