@@ -12,7 +12,11 @@
  */
 .mi-economic-calendar,
 .mi-calendar-detail,
-.mi-bls-ics-dialog {
+.mi-bls-ics-dialog,
+/* 关键指标抽屉的右列（`.mk-col-r`）也画这一套当日列表，同样需要这批 token：
+   少了它们 `grid-template-columns: var(--mi-calendar-time-width) …` 会在计算值阶段失效、
+   退回单列——行就变成「时刻一行、名字一行」，正是用户在抽屉里看到的样子。 */
+.mk-col-r {
   /* EconomicCalendarMonthLayoutPolicy — design 122 §2.1. */
   --mi-calendar-day-height: 200px;
   --mi-calendar-row-height: 22px;
@@ -51,6 +55,15 @@
   --mi-economic-dialog-list-height: min(360px, 50vh);
   --mi-economic-month-picker-width: 112px;
 }
+/* 抽屉右列比日历页窄得多：同一套行组件，行高档位按界面设计定（11px / 1.45 ≈ 15.9px）。
+   只覆盖这一档 token，不动日历页的 22px。 */
+.mk-col-r {
+  --mi-calendar-row-height: 15.9px;
+  --mi-calendar-title-size: 11px;
+  --mi-calendar-time-size: 11px;
+  --mi-calendar-time-width: 36px;
+}
+
 .mi-economic-calendar {
   height: 100%;
   /* One column, and the detail is an overlay layer on top of it — not a sibling that takes width.
@@ -198,6 +211,9 @@
 .mi-economic-calendar__date { color: var(--mi-economic-muted); height: var(--mi-calendar-row-height); font-variant-numeric: tabular-nums; font-size: var(--mi-calendar-date-size); text-align: left; }
 .mi-economic-calendar__events { display: grid; align-content: start; min-width: 0; }
 .mi-economic-calendar__event { display: grid; grid-template-columns: var(--mi-calendar-time-width) minmax(0, 1fr); align-items: center; height: var(--mi-calendar-row-height); min-width: 0; width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--mi-economic-text); cursor: pointer; font: inherit; padding: 0; text-align: left; }
+/* 没有动作的行（`div`）不是控件：去指针、去悬停反馈。行高与栅格照旧。 */
+div.mi-economic-calendar__event { cursor: default; }
+div.mi-economic-calendar__event:hover { background: transparent; }
 .mi-economic-calendar__event-title { color: var(--mi-calendar-event-status-color); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--mi-calendar-title-size); }
 .mi-economic-calendar__event[data-event-status='cancelled'] .mi-economic-calendar__event-title { text-decoration: line-through; }
 .mi-economic-calendar__event[data-importance='high'] .mi-economic-calendar__event-title { font-weight: 600; }

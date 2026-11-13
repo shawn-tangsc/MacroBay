@@ -5,14 +5,13 @@
  * product's own vocabulary stays in the product module, in both locales, so no visible sentence is
  * ever a literal inside JSX.
  *
- * 两张真数据面（利率期望曲线、政策利率卡）的文案与三张示意卡片的文案在同一张表里，
- * 因为它们在同一个抽屉里读同一份语言设置；`mockTag` 只挂在仍是示意数据的块上。
+ * 抽屉里每一块（曲线、政策卡、三张卡、迷你日历、右列当日事件）都读真数据，这张表里
+ * 没有任何「示意数据」标记——那类标记撤掉之后不许再长回来。
  */
 export const macroIndicatorDrawerText = {
   'zh-CN': {
     title: '关键指标 · 预期变化',
     open: '打开关键指标 · 预期变化',
-    mockTag: '示意数据',
     rateTitle: '利率数学期望',
     rateUnit: 'bp',
     rateNote: '纵轴＝加权期望（bp）· 零以上＝预期加息 / 零以下＝预期降息',
@@ -65,6 +64,7 @@ export const macroIndicatorDrawerText = {
     minicalTools: { prev: '上一个月', next: '下一个月', back: '回到本月', refresh: '刷新市场日历', configure: '配置日历', refreshing: '正在刷新…', refreshed: '已刷新' },
     minicalNoData: '暂无日程数据',
     minicalMore: '{count} 条重要',
+    minicalUnavailable: '暂时读不到这个月的日程',
     weekday: ['一', '二', '三', '四', '五', '六', '日'],
     surprise: { beat: '超预期 {value}', miss: '低于预期 {value}', inline: '符合预期' },
     dataBy: 'Data by',
@@ -73,7 +73,6 @@ export const macroIndicatorDrawerText = {
   'en-US': {
     title: 'Key indicators · expectations',
     open: 'Open key indicators · expectations',
-    mockTag: 'Sample data',
     rateTitle: 'Rate expectation',
     rateUnit: 'bp',
     rateNote: 'Vertical axis = weighted expectation (bp) · above zero = a hike is priced, below = a cut',
@@ -121,6 +120,7 @@ export const macroIndicatorDrawerText = {
     minicalTools: { prev: 'Previous month', next: 'Next month', back: 'This month', refresh: 'Refresh market calendar', configure: 'Configure calendar', refreshing: 'Refreshing…', refreshed: 'Refreshed' },
     minicalNoData: 'No calendar data yet',
     minicalMore: '{count} more',
+    minicalUnavailable: 'This month\'s schedule is not readable right now',
     weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     surprise: { beat: 'Above forecast {value}', miss: 'Below forecast {value}', inline: 'In line' },
     dataBy: 'Data by',

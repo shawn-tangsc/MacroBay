@@ -4,9 +4,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
 import { EXPECTATION_BIN_PX } from './ExpectationChart'
+import { readFileSync } from 'node:fs'
 import { productText } from '../../shared/i18n/productText'
+import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { macroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
@@ -82,13 +85,10 @@ describe('key-indicator drawer', () => {
     expect(document.body.querySelector('.mk-sec')).toBeNull()
   })
 
-  it('really turns the mini calendar page, disables 回到本月 on the current month, and shows a refresh state', async () => {
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
-    })
+  it('draws the real month, switches pages, and re-reads when the refresh button is pressed', async () => {
+    const reads: string[] = []
+    const readMarketEvents = async (month: string) => { reads.push(month); return month === '2026-11' ? calendarEvents : [] }
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents })
     const byName = (name: string) => document.body.querySelector(`button[aria-label="${name}"]`) as HTMLButtonElement
     const title = () => document.body.querySelector('.mk-minical__h h3')!.textContent
     expect(title()).toContain('2026 年 11 月')
@@ -98,23 +98,92 @@ describe('key-indicator drawer', () => {
     expect(byName('回到本月').disabled).toBe(false)
     await act(async () => { byName('回到本月').click() })
     expect(title()).toContain('2026 年 11 月')
+    // 刷新是真的再读一次（不是一段假等待）：读入口被第二次调用。
+    const before = reads.length
     await act(async () => { byName('刷新市场日历').click() })
-    expect(document.body.querySelector('.mk-minical__busy')).not.toBeNull()
+    expect(reads.length).toBeGreaterThan(before)
   })
 
-  it('lists release names in the cells: three rows, then 「N 条重要」 in the bottom-right corner', async () => {
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
-    })
-    const cells = Array.from(document.body.querySelectorAll('.mk-minical__day'))
-    // 2026-11-13 carries five releases in the prototype's data: three named rows + 「2 条重要」.
-    const busy = cells.find(cell => cell.querySelector('em')?.textContent === '13' && cell.querySelector('.mk-mcell__row'))!
-    expect(busy).toBeTruthy()
-    expect(busy.querySelectorAll('.mk-mcell__row')).toHaveLength(3)
-    expect(busy.querySelector('.mk-mcell__more')?.textContent).toBe('2 条重要')
+  it('lists the releases of the day in its cell: three rows, then 「N 条重要」', async () => {
+    // 一天 5 条 → 格子里三条 + 「2 条重要」；数据来自那次按月读，不是内建示例。
+    const busyDay = [1, 2, 3, 4, 5].map((index) => dayEvent(`busy-${index}`, `事件 ${index}`, `2026-11-13T${String(9 + index).padStart(2, '0')}:00:00.000Z`))
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => busyDay })
+    const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
+      .find(value => value.querySelector('em')?.textContent === '13')!
+    expect(cell.querySelectorAll('.mk-mcell__row')).toHaveLength(3)
+    expect(cell.querySelector('.mk-mcell__more')?.textContent).toBe('2 条重要')
+  })
+
+  it('defaults to today when today has events', async () => {
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    expect(rightColumnTitle()).toContain('2026-11-13')
+    expect(rightColumn()!.textContent).toContain('上周EIA原油库存变化')
+  })
+
+  it('picks the nearest day that has events when today is quiet', async () => {
+    // 11-13 没有事件，最近的是 11-14 → 右列应落在 11-14，而不是一个空日子。
+    const events = [dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z'), dayEvent('e-06', '10月新增就业', '2026-11-06T13:30:00.000Z')]
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => events })
+    expect(rightColumnTitle()).toContain('2026-11-14')
+  })
+
+  it('switches the right column to the day the reader clicks', async () => {
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    const cell = (day: string) => Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
+      .find(value => value.querySelector('em')?.textContent === day)!
+    await act(async () => { cell('14').click() })
+    expect(rightColumnTitle()).toContain('2026-11-14')
+    expect(rightColumn()!.textContent).toContain('11月消费者信心')
+    expect(rightColumn()!.textContent).not.toContain('上周EIA原油库存变化')
+    expect(cell('14').getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('draws the shared empty state for a day without events, never a blank column', async () => {
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
+      .find(value => value.querySelector('em')?.textContent === '20')!
+    await act(async () => { cell.click() })
+    expect(rightColumnTitle()).toContain('2026-11-20')
+    expect(rightColumn()!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.unifiedDay.empty)
+    expect(document.body.querySelectorAll('.mk-col-r .mi-economic-calendar__event')).toHaveLength(0)
+  })
+
+  /**
+   * 用户 2026-11-13：日期详情只以抽屉形态出现，「跳到日历页看某一天」的入口一律不许有。
+   * 所以在详情抽屉被复用之前，右列的行**不是控件**——不是画成按钮再写死空函数。
+   */
+  it('draws the day rows as non-interactive lines until the detail drawer is reused', async () => {
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    const rows = Array.from(document.body.querySelectorAll('.mk-col-r [data-calendar-row]'))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) expect(row.tagName).toBe('DIV')
+    expect(document.body.querySelector('.mk-col-r button[data-calendar-row]')).toBeNull()
+  })
+
+  it('shows the error state with a retry when the month cannot be read, and no rows at all', async () => {
+    let calls = 0
+    const readMarketEvents = async () => { calls += 1; return null }
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents })
+    expect(document.body.querySelector('.mk-col-r .state-view')).not.toBeNull()
+    expect(document.body.querySelectorAll('.mk-col-r .mi-economic-calendar__event')).toHaveLength(0)
+    const retry = document.body.querySelector('.mk-col-r .state-view button') as HTMLButtonElement | null
+    expect(retry).not.toBeNull()
+    const before = calls
+    await act(async () => { retry!.click() })
+    expect(calls).toBeGreaterThan(before)
+  })
+
+  it('says 暂无日程数据 in a month with no releases', async () => {
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [] })
+    expect(document.body.querySelector('.mk-minical__nodata')?.textContent).toBe('暂无日程数据')
+  })
+
+  it('carries no sample-data markers any more (ratchet)', () => {
+    // 这一笔之后抽屉里没有任何示意数据：源码里再出现 MOCK / 示意数据 就是回退。
+    for (const file of ['MacroIndicatorDrawer.tsx', 'MiniReleaseCalendar.tsx', 'macroIndicatorDrawerText.ts', 'useCalendarMonthReleases.ts']) {
+      const source = readFileSync(`products/market-intelligence/desktop/pages/intelligence/${file}`, 'utf8')
+      expect(source).not.toMatch(/\bMOCK\b|mockTag/)
+    }
   })
 
   it('keeps the header to a title and one close control — no calendar link', async () => {
@@ -135,35 +204,64 @@ describe('key-indicator drawer', () => {
     expect(document.body.querySelector('.mk-drawer .ant-drawer-body')).not.toBeNull()
   })
 
-  it('reuses the calendar day list, so its surprise and asset lines stay', async () => {
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
-    })
-    // 用户 2026-11-13：右列直接复用日历页那套列表，它自带的两行保留。
+  it('reuses the calendar day list, with the real events of the selected day', async () => {
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
     expect(list).not.toBeNull()
     expect(list!.textContent).toContain('上周EIA原油库存变化')
+    // 分组标题用的是日历页同一份词汇，不是这里另写一套。
+    expect(list!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.market.kinds['economic-indicator'])
   })
 
   it('says 暂无日程数据 in a month that has no releases', async () => {
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await act(async () => {
-      root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
+    await renderDrawer({
+      now: '2026-11-13T10:00:00.000Z',
+      readMarketEvents: async (month: string) => month === '2027-01' ? [] : calendarEvents
     })
-    const prev = document.body.querySelector('button[aria-label="上一个月"]') as HTMLButtonElement
-    const next = document.body.querySelector('button[aria-label="下一个月"]') as HTMLButtonElement
-    // 10 → 11 → 12 → 2027-01 (empty in the prototype's data)
-    for (let step = 0; step < 2; step += 1) await act(async () => { next.click() })
+    const next = () => document.body.querySelector('button[aria-label="下一个月"]') as HTMLButtonElement
+    for (let step = 0; step < 2; step += 1) await act(async () => { next().click() })
+    await act(async () => {})
+    expect(document.body.querySelector('.mk-minical__h h3')!.textContent).toContain('2027 年 1 月')
     expect(document.body.querySelector('.mk-minical__nodata')?.textContent).toBe('暂无日程数据')
-    await act(async () => { prev.click() })
-    expect(document.body.querySelector('.mk-minical__nodata')).toBeNull()
   })
 })
+
+function dayEvent(key: string, title: string, scheduledAt: string): MarketCalendarEvent {
+  return {
+    eventKey: key, title, countryCode: 'US', countryName: '美国', eventType: 'economic-indicator', importance: 'high',
+    scheduledAt, consensus: { displayValue: '—' }, providerPrevious: { displayValue: '+0.2%' },
+    providerActual: { displayValue: '+0.3%' }, source: 'Narwhal',
+    sourceObservedAt: '2026-11-13T00:00:00.000Z', coverage: 'observed-unverified'
+  }
+}
+
+/** 真库里 11 月的几条（日期是读者时区的日期）。 */
+const calendarEvents: readonly MarketCalendarEvent[] = [
+  // 读侧时区固定 Asia/Shanghai：这些时刻分别落在 11-13 09:00 / 21:30、11-10 21:30、11-14 13:00。
+  dayEvent('e-eia', '上周EIA原油库存变化', '2026-11-13T01:00:00.000Z'),
+  dayEvent('e-ppi', '10月生产者物价指数(年率)', '2026-11-13T13:30:00.000Z'),
+  dayEvent('e-cpi', '10月CPI年率', '2026-11-10T13:30:00.000Z'),
+  dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z')
+]
+
+const rightColumn = () => document.body.querySelector('.mk-col-r')
+const rightColumnTitle = () => rightColumn()?.querySelector('h2')?.textContent ?? ''
+
+async function renderDrawer(input: Readonly<{
+  now: string
+  readMarketEvents: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+}>): Promise<void> {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+      <MacroIndicatorDrawer locale="zh-CN"
+        onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
+        now={input.now} readMarketEvents={input.readMarketEvents} />
+    </ShellTimeZoneProvider></ShellLanguageProvider>)
+  })
+}
 
 const reading: PolicyPathReading = {
   meetingDate: '2026-12-09', daysUntilMeeting: 26, hasProjectionMaterials: true,

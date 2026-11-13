@@ -18,7 +18,12 @@ const calendarKindGlyphs: Record<MarketCalendarEvent['eventType'], LucideIcon> =
 }
 
 export function CalendarEventRow({ item, text, statusNow, onSelect, marketSources = [], selected = false }: {
-  item: CalendarDayItem; text: EconomicCalendarText; statusNow: string; onSelect: (item: CalendarDayItem) => void
+  item: CalendarDayItem; text: EconomicCalendarText; statusNow: string
+  /**
+   * `undefined` = 这一行**没有动作**：渲染成非交互的行，不画按钮、不可聚焦、没有悬停指针。
+   * 用它比传一个 `() => undefined` 好——后者长得像能点，点了什么也不发生（假控件）。
+   */
+  onSelect?: (item: CalendarDayItem) => void
   /** Source-level state for this page. Only the market route can carry a storage-limit verdict. */
   marketSources?: readonly MarketCalendarSource[]; selected?: boolean
 }) {
@@ -50,10 +55,34 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // 按钮又会把行内的时间、种类字形、标题一起包成一颗文字按钮——那正是用户否过的样子。所以这里保留
   // 原生 `<button>`：`aria-label` 给名字（同一句也做悬停提示）、原生按钮自带键盘可达、
   // `.mi-economic-calendar__event:hover` 给悬停反馈。用户 2026-11-09 判决：保留，别当漏换的裸按钮。
+  //
+  // 没有 `onSelect` 时没有动作可做，就**不能**画成按钮：同样的内容用 `div` 渲染，行高与栅格不变，
+  // 但不可聚焦、无悬停反馈、无障碍树里也不是控件。
+  const shared = {
+    className: 'mi-economic-calendar__event',
+    'data-market-event': item.source === 'market' ? item.event.eventKey : undefined,
+    'data-calendar-row': true,
+    'data-importance': important ? 'high' : item.source === 'market' ? item.event.importance : undefined,
+    'data-event-status': status
+  } as const
   return <Tooltip dataText={description} resolveText={resolveText}>
-    <button className="mi-economic-calendar__event" data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
-      data-market-event={item.source === 'market' ? item.event.eventKey : undefined} data-calendar-row data-importance={important ? 'high' : item.source === 'market' ? item.event.importance : undefined}
-      data-event-status={status} type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
+    {onSelect === undefined
+      ? <div {...shared}>
+        <RowContent item={item} time={time} kind={kind} important={important} country={country} title={title} KindGlyph={KindGlyph} />
+      </div>
+      : <button {...shared} data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
+        type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
+        <RowContent item={item} time={time} kind={kind} important={important} country={country} title={title} KindGlyph={KindGlyph} />
+      </button>}
+  </Tooltip>
+}
+
+/** 行内内容：按钮态与非交互态必须一模一样，所以只有一份。 */
+function RowContent({ item, time, kind, important, country, title, KindGlyph }: {
+  item: CalendarDayItem; time: string; kind: MarketCalendarEvent['eventType']; important: boolean
+  country: string | undefined; title: string; KindGlyph: LucideIcon
+}) {
+  return <>
       <span className="mi-economic-calendar__event-time">{time}</span>
       {/* The marks sit inside the title, not beside it: a third grid child collapsed the title to an
           ellipsis once already. The kind glyph leads the run so it lines up down the column, and the
@@ -63,6 +92,5 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
         {important ? <span aria-hidden="true" className="mi-economic-calendar__event-marker" data-importance-marker="high" /> : null}
         {country ? <span className="mi-economic-calendar__event-country" data-event-country>{country}</span> : null}{title}
       </span>
-    </button>
-  </Tooltip>
+  </>
 }

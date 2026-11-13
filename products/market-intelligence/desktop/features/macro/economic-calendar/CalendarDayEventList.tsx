@@ -27,7 +27,8 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   statusNow: string
   selectedEventKey: string | undefined
   selectedMarketKey: string | undefined
-  onSelect: (item: CalendarDayItem) => void
+  /** `undefined` = 这一列没有可去的地方：行渲染成非交互形态，不画点头没反应的按钮。 */
+  onSelect?: (item: CalendarDayItem) => void
 }>): React.ReactElement {
   return <section aria-label={label} className="mi-calendar-day-list" data-calendar-day-list ref={listRef}>
     <h2>{title}</h2>

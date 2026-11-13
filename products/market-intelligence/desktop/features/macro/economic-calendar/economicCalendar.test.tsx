@@ -521,13 +521,18 @@ describe('macro economic calendar', () => {
     // it unsets the property instead of falling back — so the body silently lost its padding and the
     // inspector's labels their muted colour. The BLS import dialog lands on `body` too (the platform
     // `Modal` has no container slot), so it must carry the same tokens on its own class.
-    const tokenSelector = '.mi-economic-calendar,\n.mi-calendar-detail,\n.mi-bls-ics-dialog {'
-    expect(styles).toContain(tokenSelector)
-    const tokenRule = styles.slice(styles.indexOf(tokenSelector))
+    // 抽屉右列也画这套列表（`.mk-col-r`）：少了 tokens，行会退回单列——用户在抽屉里看到的
+    // 「时刻一行、名字一行」正是这么来的，所以它必须和详情面板、导入对话框一样承载 tokens。
+    for (const selector of ['.mi-economic-calendar,', '.mi-calendar-detail,', '.mi-bls-ics-dialog,', '.mk-col-r {']) {
+      expect(styles).toContain(selector)
+    }
+    const tokenRule = styles.slice(styles.indexOf('.mi-economic-calendar,'))
     const tokens = tokenRule.slice(tokenRule.indexOf('{') + 1, tokenRule.indexOf('\n}'))
     for (const token of ['--mi-economic-page-inline', '--mi-economic-muted', '--mi-economic-line', '--mi-economic-surface', '--mi-economic-text']) {
       expect(tokens).toContain(`${token}:`)
     }
+    // 右列的行高按界面设计定的那一档（11px / 1.45 ≈ 15.9px），不跟着日历页的 22px。
+    expect(styles).toContain('--mi-calendar-row-height: 15.9px')
     // A close control in the header, and no release-progress row: the detail is the panel's content.
     const closeControl = panel!.querySelector<HTMLButtonElement>('button')!
     expect(closeControl, 'the reader needs a visible way out of a panel').not.toBeNull()

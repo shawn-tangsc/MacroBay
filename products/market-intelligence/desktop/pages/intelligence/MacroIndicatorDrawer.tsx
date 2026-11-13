@@ -12,6 +12,10 @@ import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalenda
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { productText } from '../../shared/i18n/productText'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { calendarDaySummary } from '../../features/macro/economic-calendar/CalendarDayEventList'
+import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
+import { useCalendarMonthReleases } from './useCalendarMonthReleases'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -29,33 +33,12 @@ import './macroIndicatorDrawer.css'
  * 两条数据的来路不同，这里说清，免得下一个人以为整张抽屉都是装饰：
  * - **利率数学期望曲线与政策利率卡读真数据**：曲线来自同一次读数里的逐点序列（`probability.series`），
  *   政策卡复用宿主已经读到的那一份，抽屉里不再取第二遍。
- * - **三张简化卡、迷你日历、右列当日事件仍是示意数据**：它们的取值与下次发布日还没接，
- *   所以各自带着「示意数据」标记；撤标记之前必须先把真数据接上。
+ * - **迷你日历与右列当日事件也是真数据**：走宿主那一次按月读（与曲线标注同一份），
+ *   抽屉里没有示例日程；读不到画错误态、没有事件画空态、正在读画等待态，不回退任何示意数据。
  *
  * 版式逐项照 `2026-11-13-K11-b.html`（1280 抽屉、正文 1248、左列 828 + 右列 403、间距 16）。
  */
-const MOCK = {
-  minical: {
-    /** 每格：[日, 状态]。状态决定圆点颜色。 */
-    weeks: [
-      [[26, 'none'], [27, 'none'], [28, 'none'], [29, 'none'], [30, 'none'], [31, 'none'], [1, 'done']],
-      [[2, 'none'], [3, 'none'], [4, 'none'], [5, 'done'], [6, 'done'], [7, 'none'], [8, 'none']],
-      [[9, 'none'], [10, 'done'], [11, 'none'], [12, 'done'], [13, 'today'], [14, 'none'], [15, 'none']],
-      [[16, 'todo'], [17, 'none'], [18, 'todo'], [19, 'none'], [20, 'todo'], [21, 'none'], [22, 'none']],
-      [[23, 'none'], [24, 'none'], [25, 'todo'], [26, 'none'], [27, 'none'], [28, 'none'], [29, 'none']],
-      [[30, 'none'], [1, 'none'], [2, 'none'], [3, 'none'], [4, 'none'], [5, 'none'], [6, 'none']]
-    ] as const
-  },
-  day: {
-    date: '2026-11-13', total: 57,
-    /** 复用日历页那套行组件，所以这里给的是它认的 `MarketCalendarEvent`。 */
-    events: [
-      marketEvent('mock-eia', '上周EIA原油库存变化(万桶)(至1106)', '01:00', 'economic-indicator', '+519.93%', '-0.35%'),
-      marketEvent('mock-ppi', '10月生产者物价指数(年率)', '21:30', 'economic-indicator', '+2.56%', '+0.87%'),
-      marketEvent('mock-daly', '旧金山联储主席戴利发表讲话', '02:10', 'central-bank-activity', null, null)
-    ]
-  }
-} as const
+
 
 /**
  * 图上标注用的短名：取**让这条发布命中清单的那个指标**的名字，其次主 measure，最后日历标题。
@@ -83,7 +66,7 @@ function nameOfMetricKey(key: string | undefined, text: MacroIndicatorDrawerText
   }
 }
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, now, readMarketEvents }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -114,6 +97,25 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   /** 读数**没读出来**（IPC 失败/端口没通）：卡写「暂时读不到」，与三态里的「未提供」分开。 */
   cardFactsUnreadable?: boolean
   /**
+   * 抽屉的「现在」（规范 UTC 毫秒）。今天、已发布/待发布、以及本月那次读的快照都用它。
+   *
+   * 缺席才退回 `new Date()`：单挂组件（用例、别的落点）没有宿主时钟。
+   */
+  now?: string
+  /**
+   * 这个月的市场事件：**宿主已有的那次按月读**，与曲线标注同一份。
+   *
+   * 不许在这里另开通道——两处各读一次，格子里有点、右列却没有行。
+   */
+  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  /**
+   * 右列的行**没有动作**：日期详情只以抽屉形态出现（用户 2026-11-13 定），而这里还没有接上
+   * 「复用同一个详情抽屉」。按红线不画假控件——行渲染成非交互形态，不传 `onSelect`。
+   *
+   * 翻案条件：产品确认「日详情抽屉保留、且能带日期打开」时，才在同一条通道上打开**同一个**抽屉；
+   * 不许为了这个入口新开页面、不许跳日历页。
+   */
+  /**
    * 读数没读出来时的唯一动作：重读一次，不跳转。
    *
    * **必填**：错误态不带动作出不去（StateView 的 `error.unreadable` 规定要有），而一个点了没反应的
@@ -135,7 +137,31 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const calendarText = productText[locale].pages.intelligence.portal.calendar
   const dayListRef = useRef<HTMLDivElement | null>(null)
   // The right column scrolls on its own; the drawer body does not.
-  const [selectedDay] = useState(MOCK.day.date)
+  const timeZone = useShellTimeZone()
+  // 宿主没给时钟时才取一次「现在」；每渲染都取会让按月的读跟着重读（`asOf` 每次都变）。
+  const fallbackNow = useMemo(() => new Date().toISOString(), [])
+  const nowInstant = now ?? fallbackNow
+  const today = calendarDisplayDate(nowInstant, timeZone)
+  // 月份与选中日是两个真状态：换月清掉选中的那一天，由「今天 / 最近一个有事件的日子」重新定。
+  const [month, setMonth] = useState(today.slice(0, 7))
+  const [pickedDay, setPickedDay] = useState<Readonly<{ month: string; day: string }> | undefined>(undefined)
+  const releases = useCalendarMonthReleases({
+    enabled: open,
+    month,
+    asOf: nowInstant,
+    locale,
+    ...(readMarketEvents ? { readMarketEvents } : {})
+  })
+  const eventDays = useMemo(() => new Set(releases.events.map((event) => calendarDisplayDate(event.scheduledAt, timeZone))),
+    [releases.events, timeZone])
+  const selectedDay = pickedDay !== undefined && pickedDay.month === month
+    ? pickedDay.day
+    : defaultDayFor(month, eventDays, today)
+  const dayEvents = useMemo(() => releases.events
+    .filter((event) => calendarDisplayDate(event.scheduledAt, timeZone) === selectedDay)
+    .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt)),
+  [releases.events, selectedDay, timeZone])
+  const changeMonth = (next: string): void => { setMonth(next); setPickedDay(undefined) }
   /**
    * 图的尺寸：0 表示**还没量到**。
    *
@@ -323,47 +349,63 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           </article>
         </div>
 
-        <MiniReleaseCalendar text={text} {...(onConfigure === undefined ? {} : { onConfigure })} />
+        <MiniReleaseCalendar text={text} month={month} today={today} selectedDay={selectedDay}
+          events={releases.events} timeZone={timeZone} now={nowInstant}
+          state={releases.state} refreshing={releases.refreshing}
+          onSelectDay={(day) => setPickedDay({ month, day })}
+          onMonthChange={changeMonth} onRefresh={releases.reload}
+          {...(onConfigure === undefined ? {} : { onConfigure })} />
       </div>
 
-      {/* 右列直接复用日历页的当日事件列表：它自带的「超预期」「资产涨跌」两行保留（用户 2026-11-13）。 */}
+      {/* 右列直接复用日历页的当日事件列表（用户 2026-11-13）：三种状态分开，谁也不冒充另一种。 */}
       <div className="mk-col-r" ref={dayListRef}>
-        <CalendarDayEventList
-          label={calendarText.dayEvents.listLabel}
-          title={calendarText.dayEvents.title.replace('{date}', MOCK.day.date)}
-          summary={calendarText.unifiedDay.total.replace('{count}', String(MOCK.day.total)) + ' · ' + calendarText.unifiedDay.grouped}
-          groups={dayGroups(MOCK.day.events)}
-          marketSources={[]}
-          text={calendarText}
-          statusNow={MOCK.day.date + 'T00:00:00.000Z'}
-          selectedEventKey={undefined}
-          selectedMarketKey={undefined}
-          onSelect={() => undefined}
-        />
+        {releases.state === 'unavailable'
+          ? <StateView state="error" reasonCode="unreadable"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: releases.reload }} />
+          : releases.state === 'ready'
+            ? <CalendarDayEventList
+              label={calendarText.dayEvents.listLabel}
+              title={calendarText.dayEvents.title.replace('{date}', selectedDay)}
+              summary={calendarDaySummary('complete', dayEvents.length, calendarText)}
+              groups={dayGroups(dayEvents, selectedDay, timeZone)}
+              {...(dayEvents.length ? {} : { emptyText: calendarText.unifiedDay.empty })}
+              marketSources={[]}
+              text={calendarText}
+              statusNow={nowInstant}
+              selectedEventKey={undefined}
+              selectedMarketKey={undefined}
+            />
+            : <LoadingState label={calendarText.unifiedDay.loading} minHeight={160} />}
       </div>
     </section>
   </Drawer>
 }
 
-/** 一条 mock 的市场事件：只为把复用的行组件喂饱，字段与真实形状一致。 */
-function marketEvent(key: string, title: string, time: string, eventType: MarketCalendarEvent['eventType'], actual: string | null, change: string | null): MarketCalendarEvent {
-  return {
-    eventKey: key, title, countryCode: 'US', countryName: '美国', eventType, importance: 'high',
-    scheduledAt: `2026-11-13T${time}:00.000Z`,
-    consensus: { displayValue: '—' }, providerPrevious: { displayValue: change ?? '—' },
-    providerActual: actual === null ? null : { displayValue: actual },
-    source: 'Narwhal', sourceObservedAt: '2026-11-13T00:00:00.000Z', coverage: 'observed-unverified'
+/**
+ * 选中哪一天：今天有事件就是今天；否则取**离今天最近**的那一个有事件的日子（同日距离取靠后的）。
+ * 这个月一条事件都没有时仍选今天（今天不在本月就取 1 号），右列给空态，不是给一个空标题。
+ */
+export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, today: string): string {
+  if (eventDays.has(today) && today.startsWith(`${month}-`)) return today
+  const todayMs = Date.parse(`${today}T00:00:00.000Z`)
+  let best: string | undefined
+  let bestGap = Number.POSITIVE_INFINITY
+  for (const day of [...eventDays].filter((value) => value.startsWith(`${month}-`)).sort()) {
+    const gap = Math.abs(Date.parse(`${day}T00:00:00.000Z`) - todayMs)
+    if (gap <= bestGap) { best = day; bestGap = gap }
   }
+  if (best !== undefined) return best
+  return today.startsWith(`${month}-`) ? today : `${month}-01`
 }
 
-/** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行）。 */
-function dayGroups(events: readonly MarketCalendarEvent[]): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+/** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行），组内按时刻升序。 */
+function dayGroups(events: readonly MarketCalendarEvent[], date: string, timeZone: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
   const order: MarketCalendarEvent['eventType'][] = ['economic-indicator', 'financial-event', 'central-bank-activity']
   return order
     .map(eventType => ({
       eventType,
       items: events.filter(event => event.eventType === eventType).map((event): CalendarDayItem => ({
-        key: event.eventKey, date: '2026-11-13', time: event.scheduledAt.slice(11, 16), source: 'market', event
+        key: event.eventKey, date, time: calendarDisplayTime(event.scheduledAt, timeZone), source: 'market', event
       }))
     }))
     .filter(group => group.items.length > 0)

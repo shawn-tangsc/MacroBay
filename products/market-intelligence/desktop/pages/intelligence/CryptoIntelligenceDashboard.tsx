@@ -319,6 +319,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // 关键指标 · 预期变化：曲线、政策卡与三张简化卡都读真数据。
   const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
+  // 抽屉的「现在」在**每次打开时**取一次：每渲染都取会让按月的读跟着重读同一份快照。
+  const drawerNow = useMemo(() => now().toISOString(), [now, indicatorDrawerOpen])
   // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。
   const curveReleaseEvents = useCurveReleaseEvents({
     enabled: indicatorDrawerOpen,
@@ -489,6 +491,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         releaseEvents={curveReleaseEvents}
         {...(cardFactsView?.state === 'available' ? { cardFacts: cardFactsView.facts } : {})}
         {...(cardFactsView?.state === 'unavailable' ? { cardFactsUnreadable: true } : {})}
+        now={drawerNow}
+        {...(readMarketEvents ? { readMarketEvents } : {})}
         onOpenPolicyDetail={() => { setIndicatorDrawerOpen(false); setPolicyDrawerOpen(true) }} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
