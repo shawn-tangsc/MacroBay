@@ -60,7 +60,6 @@ import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRu
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
 import { getPlatformFetch } from '@platform/network/platformFetch'
-import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
 import { allSources } from './intelligence/application/providerRegistry'
 import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from './intelligence/macro-calendar/marketCalendarStandardTable'
@@ -376,11 +375,20 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   })
   // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
   const calendarReminder = registerCalendarEventReminder({ jobRuntime: deps.jobRuntime, settings: calendarReminderSettings,
-    queryMonth: marketCalendar.queryMonth, submit: (request) => getNotificationRuntime().submit(request), timeZone: () => currentReaderTimeZone() })
+    queryMonth: standardCalendarReader.queryMonth, submit: (request) => getNotificationRuntime().submit(request), timeZone: () => currentReaderTimeZone() })
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected
   // separately from the read surface above, and the brief never constructs a client of its own.
-  intelligenceModule.bindBriefingCalendarRefresh((input) => marketCalendar.refreshNow(input))
+  // 日报的「跑一次采集」＝排一次 Narwhal tick（与 `triggerCollection` 同一条路）。
+  // 旧源那条 `refreshNow` 会随它一起删；语义没变：排上作业才算触发，排不上就如实说失败。
+  intelligenceModule.bindBriefingCalendarRefresh(async (input) => {
+    try {
+      await deps.jobRuntime.enqueueManual('market-intelligence.refreshNarwhalCalendarTick.automatic')
+      return { state: 'completed' as const, sources: [] }
+    } catch {
+      return { state: 'unavailable' as const, sources: [] }
+    }
+  })
   const blsScheduleAndLatestValues = createBlsScheduleAndLatestValuesSyncWorkflow({
     schedule: macroCalendarBackend.blsEmploymentSchedule,
     repository: macroCalendarBackend.repository,
@@ -391,20 +399,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     jobRuntime: deps.jobRuntime,
     profiles: calendarProfiles,
     health: macroCalendarBackend.health
-  })
-  const marketCalendarScheduler = createZeroXRouterCalendarScheduler({
-    jobRuntime: deps.jobRuntime,
-    readReadiness: intelligenceModule.calendarManualDependencies.readReadiness,
-    readEnabledFeeds: readEnabledCalendarFeeds,
-    refreshAutomatic: (enabledFeeds) => marketCalendar.refreshAutomatic(enabledFeeds),
-    // A calendar update must be able to produce a new conclusion. The request is
-    // bounded by the existing trigger budget and cooldown, and it fires only when the
-    // refresh actually stored observations.
-    onRefreshCompleted: async (items) => {
-      await requestMarketAnalysisForCalendarUpdate(items, {
-        requestRefresh: () => intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis(undefined, undefined, 'refresh', 'calendar-refresh')
-      })
-    }
   })
   const beaOfficialReleaseJobs = macroCalendarBackend.beaOfficialReleaseRefresh
     ? createBeaOfficialReleaseJobRuntime({ jobRuntime: deps.jobRuntime, profiles: calendarProfiles, refresh: macroCalendarBackend.beaOfficialReleaseRefresh })
@@ -510,8 +504,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     },
     now: Date.now
   })
-  syncMarketCalendarSchedule = () => marketCalendarScheduler.syncSchedule()
-  void marketCalendarScheduler.initialize()
   void narwhalCalendarAssembly.initialize()
   blsScheduleAndValuesScheduler.initialize()
   void autoEnrollCalendarProviders({ profiles: calendarProfiles, readyProviderIds: readyCalendarProviders })
@@ -547,7 +539,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     crossAssetIndexRuntime?.dispose()
     await crossAssetRuntime?.dispose()
     crossAssetStore?.close()
-    marketCalendarScheduler.dispose()
     narwhalCalendarAssembly.dispose()
     blsScheduleAndValuesScheduler.dispose()
     await marketCalendar.dispose()
@@ -579,7 +570,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   registerMarketAnalysisIpc(register, intelligenceModule.marketAnalysisRuntime.repository, {
     // The same two queries the analysis macro route reads, so an event's context matches it.
     queryMacroEconomicCalendarMonth: macroEconomicCalendarQueryService.queryMonth,
-    queryMarketCalendarMonth: marketCalendar.queryMonth
+    queryMarketCalendarMonth: standardCalendarReader.queryMonth
   }, {
     ...deps,
     // 时间线的「哪个开盘」也按设置的读者时区换算。
