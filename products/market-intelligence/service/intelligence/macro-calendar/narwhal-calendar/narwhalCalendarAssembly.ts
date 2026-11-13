@@ -70,8 +70,11 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
   // 读者开关的**同步缓存**：调度器判定注册是同步的，而档案是异步读的，
   // 所以在 initialize / syncSchedule 里读一次、存成布尔，之后调度器直接问缓存。
   let readerEnabledCache: boolean | undefined
+  let gateRead = false
+  let gateMissingReported = false
   async function refreshGate(): Promise<void> {
     const gate = await deps.readSourceGate?.()
+    gateRead = true
     readerEnabledCache = gate === undefined ? undefined
       : gate.visibility === 'pending' || gate.visibility === 'hidden' ? false : gate.enabled
   }
@@ -85,7 +88,14 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
     // 读者关掉 → `removeSchedule`（不是空转）；再打开 → 重新注册。判据就是缓存里的那个布尔。
     // **fail-closed**：缓存没初始化（还没读过档）按「关」处理，不按「开」——宁可晚一轮，
     // 也不许在读者档案还没读到的时候先替他答应。
-    readerEnabled: () => readerEnabledCache === true,
+    readerEnabled: () => {
+      // 还没读过档就问「读者开没开」＝装配顺序错了（或门没注入）。按「关」处理，并说一次。
+      if (!gateRead && !gateMissingReported) {
+        gateMissingReported = true
+        console.warn('[macro-calendar] 读者开关档案尚未读取，先按关闭处理（不采）')
+      }
+      return readerEnabledCache === true
+    },
     ...(deps.readerEnabled === undefined ? {} : { readerEnabled: deps.readerEnabled }),
     ...(deps.countries === undefined ? {} : { countries: deps.countries })
   })
