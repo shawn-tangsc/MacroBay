@@ -64,7 +64,9 @@ describe('标准行 → 日历事件（queryMonth 形状不变）', () => {
   it('身份串稳定、出处带上；没有名字的行不显示也不报错', () => {
     const rows = readStandardCalendarMonth(seed(), { month: '2026-11' })
     const [first] = standardRowsToMarketEvents(rows, context)
-    expect(first!.eventKey).toBe(rows[0]!.identityKey)
+    // eventKey 是 UUID 形状的派生键：两次派生必须一致（改过的时间不会跳回来）。
+    expect(first!.eventKey).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/)
+    expect(first!.eventKey).toBe(standardRowsToMarketEvents(rows, context)[0]!.eventKey)
     expect(first!.observationKey).toBe(rows[0]!.identityKey)
     expect(first!.sourceObservedAt).toBe('2026-11-10T13:31:00.000Z')
     // 没有名字**也不许消失**：退回码本身，读者至少看得到「这条发布存在」。

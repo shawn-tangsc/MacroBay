@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { StandardMonthRow } from './marketCalendarStandardMonthRead'
 
@@ -22,6 +24,24 @@ const eventTypeOf = (row: StandardMonthRow): MarketCalendarEvent['eventType'] =>
  * 的装配事实；写死在这里就会出现「事件码去指标表查、永远落空」那类静默不显示。
  * 同时，这也让本文件不碰任何源名字面量与名表字段（两者都有守卫，一碰就要登记基线）。
  */
+/**
+ * `eventKey` 必须匹配契约的 UUID 形状，而且**不能随机**：读者手动改过的时刻、选中态都挂在
+ * 这个键上，随机的话每查一次就是一批新键，改过的时间会自己跳回去。
+ *
+ * 派生输入只用**稳定身份**（国家｜码｜期间｜**首发布日**）——不带 `scheduled_date`：
+ * 源改期时那个值会变，键跟着变，改期覆盖全丢。时薪那对因为首发布日不同，天然是两个键。
+ */
+export function eventKeyForIdentity(row: StandardMonthRow): string {
+  const digest = createHash('sha256')
+    .update(`${row.countryCode}|${row.metricKey}|${row.periodKey}|${row.firstScheduledDate}`)
+    .digest('hex')
+  const hex = digest.slice(0, 32).split('')
+  hex[12] = '4'                                    // 版本位：形状合规
+  hex[16] = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16)
+  return `${hex.slice(0, 8).join('')}-${hex.slice(8, 12).join('')}-${hex.slice(12, 16).join('')}-` +
+    `${hex.slice(16, 20).join('')}-${hex.slice(20, 32).join('')}`
+}
+
 export type StandardEventContext = Readonly<{
   locale: 'zh' | 'en'
   resolveTitle: (row: StandardMonthRow) => string | undefined
@@ -40,8 +60,9 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
   const title = context.resolveTitle(row) ?? row.sourceLabel ?? row.metricKey
   const value = (key: string) => (row.values[key] === undefined ? null : { displayValue: row.values[key]! })
   return {
-    // 新读路径的 `eventKey` 就是**稳定身份串**（旧路径是每批变化的 HMAC，下游只能靠 observationKey）。
-    eventKey: row.identityKey,
+    // `eventKey` 由稳定身份派生（UUID 形状、跨查询不变）；`observationKey` 是同一身份的明文串，
+    // 下游要「同一次发布」时用它，要「稳定的键」时用 eventKey。
+    eventKey: eventKeyForIdentity(row),
     observationKey: row.identityKey,
     title,
     countryCode: row.countryCode,
