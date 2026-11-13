@@ -140,7 +140,13 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const dayListRef = useRef<HTMLDivElement | null>(null)
   // The right column scrolls on its own; the drawer body does not.
   const timeZone = useShellTimeZone()
-  // 宿主没给时钟时才取一次「现在」；每渲染都取会让按月的读跟着重读（`asOf` 每次都变）。
+  /**
+   * 「现在」只取一次：宿主给了就用宿主的，没给才在挂载时取。
+   *
+   * **读操作不许把「每次渲染都变的现在时刻」放进依赖。** 这里踩过一次：`asOf` 每渲染都是新字符串，
+   * 按月的读跟着无限重读——用例表现为整文件挂死，真机上表现为反复打接口 + 界面忽明忽暗，
+   * 后者比用例挂死更难发现。要么在挂载时取一次，要么按分钟粒度节流。
+   */
   const fallbackNow = useMemo(() => new Date().toISOString(), [])
   const nowInstant = now ?? fallbackNow
   const today = calendarDisplayDate(nowInstant, timeZone)

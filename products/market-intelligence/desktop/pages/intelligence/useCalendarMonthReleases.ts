@@ -20,7 +20,12 @@ export type CalendarMonthReleases = Readonly<{
 export function useCalendarMonthReleases(input: Readonly<{
   enabled: boolean
   month: string
-  /** 读快照：与「今天」用同一个时刻，否则格子里的「已发布/待发布」会和日期对不上。 */
+  /**
+   * 读快照：与「今天」用同一个时刻，否则格子里的「已发布/待发布」会和日期对不上。
+   *
+   * **它必须是稳定值。** 传一个每次渲染都重新取的「现在」会让这个 effect 每次都跑——
+   * 读操作因此无限重读（真机上反复打接口、界面忽明忽暗）。调用方在挂载时取一次或按分钟节流。
+   */
   asOf?: string
   /** 换语言要重读，否则格子里停在旧语言的名字上。 */
   locale?: string
