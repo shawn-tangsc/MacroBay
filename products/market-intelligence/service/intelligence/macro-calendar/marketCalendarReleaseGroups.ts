@@ -1,5 +1,5 @@
 /**
- * 发布组与主测度：**从 19 号表落成的代码常量**（161 个码 / 56 组）。
+ * 发布组与主测度：**从 19 号表落成的代码常量**（164 个码 / 57 组）。
  *
  * 为什么要有：分析侧配额「同一发布组最多进 N 条」需要用组；组内挑哪几条要用主测度。
  * **运行时不许去读 `docs-private` 的 CSV**——那是内部文档，改一个字运行时行为就跟着变，版本记录里什么都没有。
@@ -46,7 +46,10 @@ export const marketCalendarReleaseGroupByMetricKey: Readonly<Record<string, stri
   'US.CPI.NSA.YOY': 'us-cpi',
   'US.CPI.SA.MOM': 'us-cpi',
   'US.CPI_CLEVELAND.NONE.MOM': 'us-cpi-nowcast',
+  'US.CURRENT_ACCOUNT.NONE.DIFF': 'us-current-account',
   'US.DALLAS_FED_MANUFACTURING.SA.LEVEL': 'us-dallas-fed',
+  'US.DALLAS_FED_SERVICES.SA.LEVEL': 'us-dallas-fed',
+  'US.DALLAS_FED_SERVICES_REVENUES.SA.LEVEL': 'us-dallas-fed',
   'US.DURABLE_GOODS_EX_DEFENSE.SA.MOM': 'us-durable-goods',
   'US.DURABLE_GOODS_EX_TRANSPORT.SA.MOM': 'us-durable-goods',
   'US.DURABLE_GOODS_ORDERS.SA.MOM': 'us-durable-goods',
@@ -185,6 +188,7 @@ export const marketCalendarReleaseGroupPrimary: Readonly<Record<string, string>>
   'us-corporate-profits': 'US.CORPORATE_PROFITS.SA.QOQ',
   'us-cpi': 'US.CPI.NSA.YOY',
   'us-cpi-nowcast': 'US.CPI_CLEVELAND.NONE.MOM',
+  'us-current-account': 'US.CURRENT_ACCOUNT.NONE.DIFF',
   'us-dallas-fed': 'US.DALLAS_FED_MANUFACTURING.SA.LEVEL',
   'us-durable-goods': 'US.DURABLE_GOODS_ORDERS.SA.MOM',
   'us-eia-natural-gas': 'US.EIA_NATURAL_GAS_STOCKS.NONE.CHANGE',
