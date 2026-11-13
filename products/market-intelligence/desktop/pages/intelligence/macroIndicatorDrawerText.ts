@@ -57,37 +57,8 @@ export const macroIndicatorDrawerText = {
       previousPeriodFrom: '上一期 {value}（{source} · {period}）',
       previousUnreadable: '上一期 暂时读不到',
       noConsensus: '暂无预期',
-      consensusSource: '{source} {value} · {asOf}',
-      expectedLabel: '预期',
+      consensusSource: '{source} · {asOf}',
       vsPrevious: '较上期（未修正）{value}'
-    },
-    /**
-     * 下一期卡：只有「还没发生的那一期」会有的字段。
-     * **没有「较上期」**——还没有实际值，「较」没有基准。
-     */
-    nextCard: {
-      header: '下次发布 {period} · {date}',
-      headerNoSchedule: '下次发布 · 暂无排期',
-      releaseDate: '发布日',
-      releaseDateUnknown: '未定',
-      dateOnly: '仅日期',
-      expected: '预期（{period}）',
-      observed: '观测',
-      volume: '成交量',
-      state: '预期状态',
-      stateMarket: '有盘',
-      stateProvider: '有预期',
-      stateNone: '暂无预期',
-      stateNoSchedule: '暂无排期',
-      /* 同一列里两种来源必须肉眼可分：盘口那档带成交量，数据商那档没有这一行。 */
-      marketExpected: '市场预期 · {provider} {value}',
-      providerExpected: '数据商预期 {value}',
-      latest: '最新 {period} · {value} · {source} · {at}',
-      latestNone: '还没有已发布的读数',
-      latestUnreadable: '最新读数暂时读不到',
-      latestSourceCalendar: '经济日历',
-      /* 盘口反推的是发布前那一刻的盘：观测时刻后面要说明这一点，否则读者以为是结果。 */
-      beforeRelease: '（发布前）'
     },
     /**
      * 距发布：>24 小时说整数天；≤24 小时才倒计时；**源只给日期时永远只说天数**（`today` 处理 0 天）。
@@ -176,31 +147,8 @@ export const macroIndicatorDrawerText = {
       previousPeriodFrom: 'Previous {value} ({source} · {period})',
       previousUnreadable: 'Previous: not readable right now',
       noConsensus: 'No expectation',
-      consensusSource: '{source} {value} · {asOf}',
-      expectedLabel: 'Expectation',
+      consensusSource: '{source} · {asOf}',
       vsPrevious: 'vs previous (unrevised) {value}'
-    },
-    nextCard: {
-      header: 'Next release {period} · {date}',
-      headerNoSchedule: 'Next release · no schedule',
-      releaseDate: 'Release date',
-      releaseDateUnknown: 'Unset',
-      dateOnly: 'date only',
-      expected: 'Expectation ({period})',
-      observed: 'Observed',
-      volume: 'Volume',
-      state: 'Expectation status',
-      stateMarket: 'Market open',
-      stateProvider: 'Data provider',
-      stateNone: 'No expectation',
-      stateNoSchedule: 'No schedule',
-      marketExpected: 'Market expectation · {provider} {value}',
-      providerExpected: 'Data provider expectation {value}',
-      latest: 'Latest {period} · {value} · {source} · {at}',
-      latestNone: 'No published reading yet',
-      latestUnreadable: 'Latest reading not readable right now',
-      latestSourceCalendar: 'economic calendar',
-      beforeRelease: '(before release)'
     },
     expectedDiff: 'Surprise YoY {yoy} · core {core}',
     countdown: {

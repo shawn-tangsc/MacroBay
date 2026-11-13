@@ -264,16 +264,3 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 .mk-mdot--today { width: 6px; height: 6px; background: transparent; border: 1px solid var(--accent); box-sizing: border-box; }
 
 /* The day panel: sticky heading, one block per type, one row per event. */
-
-/* 距发布：远的低调、近的用强调色描边；数字等宽，倒计时变动时不抖（界面设计 2026-11-14 定）。
-   不用红不用黄、不加闪烁或脉冲——倒计时本身就在动，再加动画只会烦人。 */
-.mk-tag {
-  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px;
-  border: 1px solid var(--border-strong); color: var(--muted);
-  font-size: var(--font-meta); font-weight: 400; white-space: nowrap;
-  font-variant-numeric: tabular-nums; flex: none;
-}
-.mk-tag[data-soon='true'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-
-/* 卡头的空心点：这一格是「还没发生的那一期」，靠形状区分，不靠那两个字。 */
-.mk-card__dot { width: 6px; height: 6px; border-radius: 999px; border: 1px solid var(--muted); flex: none; }
