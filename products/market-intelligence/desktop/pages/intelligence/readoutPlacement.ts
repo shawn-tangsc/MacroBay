@@ -14,6 +14,10 @@
  */
 export const READOUT_OFFSET = 8
 export const READOUT_MARGIN = 4
+/** 常规宽度。 */
+export const READOUT_TIP_WIDTH = 168
+/** 降级宽度下限：两侧都放不下 168 时收到这里，再放不下才夹回区内（允许压住光标）。 */
+export const READOUT_TIP_MIN_WIDTH = 132
 
 export type ReadoutRect = Readonly<{ left: number; top: number; width: number; height: number }>
 
@@ -73,4 +77,23 @@ export function placeReadout(input: Readonly<{
 export function containsPoint(rect: ReadoutRect, point: Readonly<{ x: number; y: number }>): boolean {
   return point.x >= rect.left - 1 && point.x <= rect.left + rect.width + 1
     && point.y >= rect.top - 1 && point.y <= rect.top + rect.height + 1
+}
+
+/**
+ * 面板宽度：常规 168；**只在两侧都放不下时**收到 132（降级，不滚动、内容不增不减，只换行）。
+ *
+ * 为什么宽度是算出来的而不是 CSS 写死：写死 168 时，靠边的光标两侧都不够，只能夹回区内——
+ * 夹的方式是「左/右各让一点」，面板就会压住光标。先收窄再看放不放得下，能少压一次。
+ * 下限 132 是按内容定的：时刻行与「加息 50+ / 10.3%」那一行在 132 里仍能一行放下。
+ */
+export function pickReadoutWidth(input: Readonly<{ stageWidth: number; pointerX?: number }>): number {
+  const widest = Math.max(READOUT_TIP_MIN_WIDTH, input.stageWidth - 2 * READOUT_MARGIN)
+  const normal = Math.min(READOUT_TIP_WIDTH, widest)
+  if (input.pointerX === undefined) return normal
+  const fits = (width: number): boolean =>
+    input.pointerX === undefined
+      ? false
+      : input.pointerX + READOUT_OFFSET + width <= input.stageWidth - READOUT_MARGIN
+        || input.pointerX - READOUT_OFFSET - width >= READOUT_MARGIN
+  return fits(normal) ? normal : Math.min(READOUT_TIP_MIN_WIDTH, widest)
 }

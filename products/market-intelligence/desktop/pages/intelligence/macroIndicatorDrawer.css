@@ -110,7 +110,8 @@
   /* z-index 要盖过图下面那排卡片与迷你日历（它们都在同一个层叠上下文里）。
      任何祖先都不许再开层叠上下文，否则这个数只在图的内部有效。 */
   position: absolute; left: 0; top: 0; z-index: 30;
-  width: 168px; padding: 7px 9px; line-height: 1.35;
+  /* 宽度由组件按「两侧放不放得下」算出来（168 → 降级 132），这里只给默认值。\n     降级时内容换行、高度随内容，**不出现滚动条**。 */
+  width: 168px; padding: 7px 9px; line-height: 1.35; overflow: visible;
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
   font-size: var(--font-meta); color: var(--text);

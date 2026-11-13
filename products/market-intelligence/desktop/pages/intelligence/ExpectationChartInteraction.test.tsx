@@ -173,6 +173,20 @@ describe('expectation readout panel', () => {
     expect(left + tip().offsetWidth).toBeLessThanOrEqual(470)
   })
 
+  it('narrows instead of covering the cursor when the plot is 300px wide', async () => {
+    const stage = await render(undefined, 240, 300)
+    await move(stage, 150, 100)
+    const panel = tip()
+    expect(panel.style.width).toBe('132px')
+    const left = Number(/translate\(([-\d.]+)px/.exec(panel.style.transform)?.[1] ?? 'NaN')
+    // 收窄后仍整块在图内（左右各留 4px），且不压住光标那一点。
+    expect(left).toBeGreaterThanOrEqual(4)
+    expect(left + 132).toBeLessThanOrEqual(300 - 4)
+    // 内容不增不减：五档一行不少。
+    expect(rows()).toHaveLength(5)
+    expect(document.body.querySelector('.mk-tip__sum')).not.toBeNull()
+  })
+
   it('works from the keyboard: focus, arrows move the point, Esc closes', async () => {
     const stage = await render()
     expect(stage.getAttribute('tabindex')).toBe('0')

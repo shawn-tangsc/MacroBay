@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { containsPoint, placeReadout, READOUT_MARGIN, READOUT_OFFSET, type ReadoutRect } from './readoutPlacement'
+import {
+  containsPoint, pickReadoutWidth, placeReadout, READOUT_MARGIN, READOUT_OFFSET,
+  READOUT_TIP_MIN_WIDTH, READOUT_TIP_WIDTH, type ReadoutRect
+} from './readoutPlacement'
 
 const stage = { width: 480, height: 240 }
 const tip = { width: 168, height: 152 }
@@ -71,5 +74,28 @@ describe('readout placement', () => {
     // 居中：面板中心落在选中点的竖线上（容差 1px 的取整）。
     expect(Math.abs(rect.left + rect.width / 2 - 240)).toBeLessThanOrEqual(1)
     expect(rect.top + rect.height).toBeLessThanOrEqual(200)
+  })
+})
+
+describe('readout width degradation', () => {
+  it('stays at the normal width while one side fits', () => {
+    expect(pickReadoutWidth({ stageWidth: 490, pointerX: 245 })).toBe(READOUT_TIP_WIDTH)
+    // 340 宽、中间那个点：右侧 150+8+168=326 ≤ 336，放得下，不收窄。
+    expect(pickReadoutWidth({ stageWidth: 340, pointerX: 150 })).toBe(READOUT_TIP_WIDTH)
+  })
+
+  it('narrows to the floor only when neither side fits the normal width', () => {
+    // 300 宽：中间那个点，右侧 158+168 越界、左侧 -26 越界 → 收到 132。
+    expect(pickReadoutWidth({ stageWidth: 300, pointerX: 150 })).toBe(READOUT_TIP_MIN_WIDTH)
+    // 同样 300 宽，靠左的点右侧放得下 168，就不该收窄。
+    expect(pickReadoutWidth({ stageWidth: 300, pointerX: 20 })).toBe(READOUT_TIP_WIDTH)
+  })
+
+  it('never asks for more width than the stage can hold', () => {
+    for (const stageWidth of [120, 200, 300, 490]) {
+      expect(pickReadoutWidth({ stageWidth })).toBeLessThanOrEqual(Math.max(READOUT_TIP_MIN_WIDTH, stageWidth - 8))
+    }
+    // 键盘模式没有光标，用常规宽度（除非图比它窄）。
+    expect(pickReadoutWidth({ stageWidth: 490 })).toBe(READOUT_TIP_WIDTH)
   })
 })

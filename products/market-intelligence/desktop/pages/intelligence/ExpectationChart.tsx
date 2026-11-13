@@ -4,7 +4,7 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellCompactInstant, formatShellDay } from '@platform/ui/time/shellTimeFormat'
 
 import { expectationBp, type PolicyPathDistribution, type PolicyPathOutcome } from '../../../contracts/policyPath'
-import { placeReadout } from './readoutPlacement'
+import { pickReadoutWidth, placeReadout } from './readoutPlacement'
 
 /**
  * 「利率数学期望」曲线。
@@ -112,7 +112,7 @@ export function ExpectationChart({ points, events, height, width, text, latest }
   const stageRef = useRef<HTMLDivElement | null>(null)
   const tipRef = useRef<HTMLDivElement | null>(null)
   const [selection, setSelection] = useState<Selection | null>(null)
-  const [tipSize, setTipSize] = useState({ width: 184, height: 152 })
+  const [tipHeight, setTipHeight] = useState(152)
 
   const geometry = useMemo(() => {
     // 原样画收到的宽度：**不许**在这里给自己一个地板宽度。给了，图就比容器宽，
@@ -198,17 +198,19 @@ export function ExpectationChart({ points, events, height, width, text, latest }
     [geometry]
   )
 
-  // 面板文字变了（换点）或首次出现时才量一次尺寸：它决定往哪边翻，不能每次移动都读布局。
+  // 宽度由 `pickReadoutWidth` 决定（降级时会换行），所以只量高度：它决定上下往哪边翻。
+  // 只在换点或宽度变化时才量，不在每次移动时读布局。
+  const stageWidth = stageRef.current?.clientWidth || geometry.W
+  const tipWidth = pickReadoutWidth({
+    stageWidth,
+    ...(selection?.pointer ? { pointerX: selection.pointer.x } : {})
+  })
   useLayoutEffect(() => {
     const element = tipRef.current
     if (!element) return
-    const measuredWidth = element.offsetWidth
-    const measuredHeight = element.offsetHeight
-    if (measuredWidth > 0 && measuredHeight > 0
-      && (measuredWidth !== tipSize.width || measuredHeight !== tipSize.height)) {
-      setTipSize({ width: measuredWidth, height: measuredHeight })
-    }
-  }, [selection?.index, tipSize])
+    const measured = element.offsetHeight
+    if (measured > 0 && measured !== tipHeight) setTipHeight(measured)
+  }, [selection?.index, tipWidth, tipHeight])
 
   if (!points.length) return <div className="mk-plot__stage" />
 
@@ -223,10 +225,10 @@ export function ExpectationChart({ points, events, height, width, text, latest }
       // 用舞台**真实**的盒子，而不是 SVG 的逻辑高度：两者在首帧或动画中可能差几个像素，
       // 差出来的那几像素正好会让面板底部越过绘图区，被上层或裁切吃掉。
       stage: {
-        width: stageRef.current?.clientWidth || geometry.W,
+        width: stageWidth,
         height: stageRef.current?.clientHeight || geometry.H
       },
-      tip: tipSize,
+      tip: { width: tipWidth, height: tipHeight },
       point: { x: point.x, y: point.y },
       ...(selection.pointer ? { pointer: selection.pointer } : {})
     })
@@ -328,7 +330,7 @@ export function ExpectationChart({ points, events, height, width, text, latest }
       className="mk-tip"
       ref={tipRef}
       data-active={selection ? 'true' : 'false'}
-      style={{ transform: `translate(${tip.left.toFixed(1)}px, ${tip.top.toFixed(1)}px)` }}
+      style={{ width: `${tipWidth}px`, transform: `translate(${tip.left.toFixed(1)}px, ${tip.top.toFixed(1)}px)` }}
       aria-live={selection?.keyboard ? 'polite' : 'off'}
     >
       {panelPoint ? <PanelContent point={panelPoint} text={text} latest={isLast ? latest : undefined} timeZone={timeZone} /> : null}

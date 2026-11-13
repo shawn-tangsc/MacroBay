@@ -35,6 +35,15 @@ describe('plot never clips or traps the readout panel', () => {
     }
   })
 
+  it('never makes the follow-the-cursor panel scrollable', () => {
+    // 跟着光标走的面板是 `pointer-events: none`：给它加滚动条就是「看得见、拨不动」的假控件。
+    const tip = ruleOf('.mk-tip')
+    expect(tip).not.toContain('overflow: auto')
+    expect(tip).not.toContain('overflow-y: auto')
+    expect(tip).not.toContain('overflow: scroll')
+    expect(tip).toContain('overflow: visible')
+  })
+
   it('lifts the panel above the cards and does not promote it into a needless layer', () => {
     const tip = ruleOf('.mk-tip')
     expect(tip).toContain('z-index: 30')
