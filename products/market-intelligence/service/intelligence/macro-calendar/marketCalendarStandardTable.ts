@@ -142,24 +142,13 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
     -- **日历只读视图**：一个入口，条件写在这里，不靠每个调用点记得加。
     -- 同表两种行时，「每处都记得 where」是不可靠的：漏一处，估算就混进日历，而且图上看不出来。
     drop view if exists ${calendarStandardTablePolicy.releasesView};
-    -- **视图 ≠ 基表减 estimate**：还多一条折叠规则，拿基表对数时要记得这一条。
-    -- 折叠键 = (国家, 指标, 期间)；保留规则 = 「带值的行全留；一行带值的都没有时，只留首见那行」。
-    -- 由来：源会把同一期重发多次（实测 ADP 十月发了三次，11-05/11-06 两次是空的），
-    -- 日历上就成了三次「ADP 十月发布」。反过来，密歇根初值/终值同属一期但**都带值**，
-    -- 那是两次真实发布，必须都留——所以判据是「有没有值」，不是「差几天」。
+    -- **视图不是修数据的地方**：它只回答「哪些行是发布」，不做身份去重、不做折叠。
+    -- 曾经加过一条「同一期有值时折掉空行」的规则，结果藏掉了真实的行：密歇根 12-18 的终值
+    -- （与 12-04 初值同期、各自都是真发布）、官方时薪 11-06（日期冲突的一方，折掉等于把冲突
+    -- 藏起来）、消费者信贷的未来发布（日报「接下来」直接看不见）。今天藏空行，明天就会藏
+    -- 有值的第二次发布——所以规则撤掉，收口交给写入端（同一 provider + 同一 source_event_id）。
     create view ${calendarStandardTablePolicy.releasesView} as
-      select * from ${eventsTable} e
-      where e.row_kind = 'release' and (
-        e.value_state = 'present'
-        or (
-          not exists (select 1 from ${eventsTable} v
-            where v.country_code = e.country_code and v.metric_key = e.metric_key
-              and v.period_key = e.period_key and v.row_kind = 'release' and v.value_state = 'present')
-          and e.first_scheduled_date = (select min(f.first_scheduled_date) from ${eventsTable} f
-            where f.country_code = e.country_code and f.metric_key = e.metric_key
-              and f.period_key = e.period_key and f.row_kind = 'release')
-        )
-      );
+      select * from ${eventsTable} where row_kind = 'release';
     create index if not exists idx_calendar_events_month
       on ${eventsTable}(country_code, scheduled_at);
     create table if not exists ${unmappedTable} (
