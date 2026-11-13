@@ -10,6 +10,8 @@ import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
 
+import { valueSourcesForMetric } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
+
 /**
  * 「核心指标」这一屏的四条（Chief + 架构师 2026-11-14）：
  * 行来自唯一派生点；缺配置 = 开；总闸关掉时置灰并给去处；腿全关时说「所有源已关闭」而不是「暂无数据」。
@@ -78,9 +80,12 @@ describe('core indicator source page', () => {
   })
 
   it('says all sources are off, which is not the same sentence as having no data', async () => {
-    const host = await render({
-      disabled: { 'US.CPI.NSA.YOY|narwhal': true, 'US.CPI.NSA.YOY|fred-rates-liquidity': true }
-    })
+    /* 关哪几颗按派生表算：腿数会变（BLS 覆盖从 2 条扩到 5 条时这里就红过一次），
+       写死两条等于每次加腿都要来改用例，而用例要守的是「全关时说哪句话」。 */
+    const disabled = Object.fromEntries(
+      valueSourcesForMetric('US.CPI.NSA.YOY').map((source) => [`US.CPI.NSA.YOY|${source.providerId}`, true])
+    )
+    const host = await render({ disabled })
     const card = host.querySelector<HTMLElement>('[data-core-indicator="US.CPI.NSA.YOY"]')!
     expect(card.textContent).toContain(t.coreIndicators.valueSourceAllClosed)
     expect(card.textContent).not.toContain(t.coreIndicators.valueSourceEmpty)
@@ -140,8 +145,10 @@ describe('列数：两条腿并排，不上下叠', () => {
     for (const card of cards) {
       const items = card.querySelector<HTMLElement>('.business-cell__items')!
       const label = card.getAttribute('data-core-indicator') ?? ''
-      expect(card.getAttribute('style') ?? '', label).toContain('--cell-span: 2')
-      expect(items.getAttribute('style') ?? '', label).toContain('--cell-items: 2')
+      // 列数＝这张卡实际有几条腿（最多 3），从派生表算，不在用例里写死。
+      const legs = Math.min(valueSourcesForMetric(label).length, 3)
+      expect(card.getAttribute('style') ?? '', label).toContain(`--cell-span: ${legs}`)
+      expect(items.getAttribute('style') ?? '', label).toContain(`--cell-items: ${legs}`)
     }
   })
 })

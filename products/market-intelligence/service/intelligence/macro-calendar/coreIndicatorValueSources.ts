@@ -1,4 +1,5 @@
 import { fredIndicatorYoYPolicy } from './fredIndicatorYoY'
+import { macroCalendarReleaseValueMappings } from './macroCalendarReleaseValueMappingPolicy'
 import { MACRO_INDICATOR_CARD_KEYS } from './macroIndicatorCardFacts'
 import { narwhalMeasureMetricKeys } from './marketCalendarMetricIdentity'
 
@@ -21,18 +22,40 @@ export type CoreIndicatorValueSource = Readonly<{
   providerId: 'narwhal' | 'fred-rates-liquidity' | 'bls'
   /** 界面上那一行小字的类型：官方 / 数据商。 */
   kind: 'official' | 'provider'
-  /** 这一条腿负责什么（数据侧口径，不是文案）：本期值 / 官方同比 / 官方净变化。 */
-  role: 'current-value' | 'official-yoy' | 'official-change'
+  /**
+   * 这一条腿负责什么（数据侧口径，不是文案）：本期值 / 官方同比 / 官方月率 / 官方净变化 / 官方水平。
+   *
+   * 四档官方的分法由策略表的 `unit` 机械推出，**不在调用处按码分支**——
+   * 界面那行小字要按它写「官方月率」还是「官方同比」，写错等于给这一格贴错口径标签。
+   */
+  role: 'current-value' | 'official-yoy' | 'official-mom' | 'official-change' | 'official-level'
 }>
 
+/** 策略表的 `unit` → 官方腿的 role。新增单位就加一行，不在代码里判断是哪个码。 */
+const roleByReleaseUnit: Readonly<Record<string, CoreIndicatorValueSource['role']>> = Object.freeze({
+  '12-month percent change': 'official-yoy',
+  'monthly percent change': 'official-mom',
+  thousands: 'official-change',
+  percent: 'official-level'
+})
+
 /**
- * BLS 官方直采覆盖的指标（**新增事实**，别处没有）。失业率与新增就业同一条非农发布。
- * 注意：BLS 出口当前被 CDN 边缘拦截，登记保留、显示「读不到」——但「覆盖哪些指标」与「能不能取到」是两件事。
+ * BLS 官方直采覆盖的指标——**从发布取值策略派生，不再手抄清单**。
+ *
+ * 2026-11-14 Chief 核出的缺陷：这里原来写死两条（非农、失业率），而
+ * `macroCalendarReleaseValueMappingPolicy` 把 **5 个**指标标成 `releaseLabel: 'BLS official release'`
+ * （CPI 年率、核心 CPI 年率、非农、失业率、时薪月率），真库里也确实有对应的
+ * `macro-calendar-bls` 行。少登记 3 个的后果不是少一行字：设置页上那三格的 BLS 腿**根本不出现**，
+ * 读者没法单独关掉它，页面也在少报源。手抄清单会漏，派生不会。
+ *
+ * `releaseLabel` 是策略表里已有的事实，这里只筛不改；BLS 出口当前被 CDN 边缘拦截，
+ * 「覆盖哪些指标」与「能不能取到」是两件事，登记照留。
  */
-export const blsCoveredMetricKeys: readonly string[] = Object.freeze([
-  'US.NONFARM.SA.CHANGE',
-  'US.UNEMPLOYMENT.SA.RATE'
-])
+export const blsCoveredMetricKeys: readonly string[] = Object.freeze(
+  macroCalendarReleaseValueMappings
+    .filter((mapping) => mapping.releaseLabel === 'BLS official release')
+    .map((mapping) => mapping.metricKey)
+)
 
 /**
  * 这条腿的「总闸」是哪个源（数据源页那颗开关的 sourceId）。
@@ -66,7 +89,10 @@ export function valueSourcesForMetric(metricKey: string): readonly CoreIndicator
     sources.push({ providerId: 'fred-rates-liquidity', kind: 'official', role: 'official-yoy' })
   }
   if (blsCoveredMetricKeys.includes(metricKey)) {
-    sources.push({ providerId: 'bls', kind: 'official', role: 'official-change' })
+    const mapping = macroCalendarReleaseValueMappings.find((row) =>
+      row.metricKey === metricKey && row.releaseLabel === 'BLS official release')
+    const role = mapping === undefined ? 'official-yoy' : (roleByReleaseUnit[mapping.unit] ?? 'official-yoy')
+    sources.push({ providerId: 'bls', kind: 'official', role })
   }
   return Object.freeze(sources)
 }
