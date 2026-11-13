@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { MacroCalendarRevision } from './macroCalendarContracts'
 import { macroCalendarReleaseValueMappings } from './macroCalendarReleaseValueMappingPolicy'
+import { officialExpansionMetricKeys, officialMetricKeyOfEvent } from './marketCalendarOfficialExpansionPolicy'
 import { nameByMetricKey } from './marketCalendarCodeNames'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import type { CalendarReleaseStatus } from './marketCalendarStandardTable'
@@ -52,9 +53,10 @@ export function officialLifecycleToReleaseStatus(state: MacroCalendarRevision['l
 
 /** 一次官方月查询的结果 → 标准表的行（一家源一批，身份各算各的）。 */
 export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarRevision[]) {
-  return revisions.map((revision) => {
+  const rows = revisions.flatMap((revision) => {
     const metricKey = officialMetricKeyFor(revision.eventKey)
-    return {
+    const period = metricKey === undefined ? revision.periodKey : normalizeOfficialPeriodKey(revision.periodKey)
+    const row = {
     kind: 'event' as const,
     identityKind: metricKey === undefined ? 'source' as const : 'code' as const,
     status: officialLifecycleToReleaseStatus(revision.lifecycleState),
@@ -63,7 +65,7 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
     importance: revision.importance,
     countryCode: normalizeOfficialCountryCode(revision.countryCode),
     metricKey: metricKey ?? revision.eventKey,
-    periodKey: metricKey === undefined ? revision.periodKey : normalizeOfficialPeriodKey(revision.periodKey),
+    periodKey: period,
     scheduledDate: revision.scheduledDate,
     ...(revision.scheduledAt === undefined ? {} : { scheduledAt: revision.scheduledAt }),
     timePrecision: revision.scheduledAt === undefined ? 'date' as const : 'minute' as const,
@@ -72,7 +74,15 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
     ...(revision.consensus === undefined ? {} : { consensus: revision.consensus.displayValue }),
     ...(revision.actual === undefined ? {} : { actual: revision.actual.displayValue })
     }
+    if (metricKey === undefined) return [row]
+    // **按发布组展开**：一次发布给一组身份共享日期。只有自己这一行带值，兄弟行值空。
+    const siblings = officialExpansionMetricKeys(metricKey)
+      .filter((code) => code !== metricKey)
+      .map((code) => ({ ...row, metricKey: code, periodKey: period, scheduledAt: row.scheduledAt,
+        previous: undefined, consensus: undefined, actual: undefined }))
+    return [row, ...siblings]
   })
+  return rows
 }
 
 /**

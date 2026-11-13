@@ -76,12 +76,17 @@ describe('官方发布先进标准表（source 身份）', () => {
         releaseGroupKey: 'US.PCE.RELEASE.2026-M09', periodKey: '2026-M09',
         providerId: 'macro-calendar-bea', lifecycleState: 'scheduled', actual: undefined, previous: undefined })]
     })
-    expect(counts).toEqual({ written: 2, failed: 0 })
+    // **按发布组展开**：CPI 组 4 行（排除两个指数水平）+ PCE 组 4 行 = 8，加上原本两条自己 = 10。
+    expect(counts).toEqual({ written: 10, failed: 0 })
     const rows = database.prepare('select metric_key, identity_kind, status, value_state from mi_calendar_releases order by metric_key')
       .all() as { metric_key: string; identity_kind: string; status: string; value_state: string }[]
-    expect(rows.map((row) => row.metric_key)).toEqual(['US.CPI.NSA.YOY', 'US.PCE.NSA.YOY'])
     expect(rows.every((row) => row.identity_kind === 'code')).toBe(true)
-    expect(rows.map((row) => row.status)).toEqual(['published', 'scheduled'])
-    expect(rows.map((row) => row.value_state)).toEqual(['present', 'missing'])
+    // 验收点：**价格指数水平不单独成行**（同一次发布已有年率与月率）。
+    expect(rows.map((row) => row.metric_key)).not.toContain('US.CPI.NSA.LEVEL')
+    expect(rows.map((row) => row.metric_key)).not.toContain('US.CORE_CPI.SA.LEVEL')
+    // 只有「拿到值的那一个码」带值，展开出来的兄弟码值空。
+    const cpiYear = rows.find((row) => row.metric_key === 'US.CPI.NSA.YOY')!
+    expect(cpiYear.value_state).toBe('present')
+    expect(rows.filter((row) => row.metric_key.startsWith('US.CPI.')).length).toBeGreaterThan(1)
   })
 })
