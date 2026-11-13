@@ -50,6 +50,8 @@ describe('标准行 → 日历事件（queryMonth 形状不变）', () => {
     expect(event.releaseStatus).toBe('published')
     expect(event.providerActual).toEqual({ displayValue: '3.7' })
     expect(event.rowKind).toBe('release')
+    // 真实来源 feed id：官方行不能因为 `source` 只有两档就被标成旧源。
+    expect(event.sourceFeedId).toBe('macro-calendar-bls')
   })
 
   it('事件码：央行讲话归 central-bank-activity；源内身份用源原文名、日期精度', () => {

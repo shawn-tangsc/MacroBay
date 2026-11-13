@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { StandardMonthRow } from './marketCalendarStandardMonthRead'
+import { sourceFeedIdOf } from './marketCalendarSourceFeedIds'
 
 /**
  * 标准行 → 日历事件（`MarketCalendarEvent`）。**`queryMonth` 的对外形状因此不变**——
@@ -74,6 +75,8 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     scheduledAt: row.scheduledAt ?? `${row.scheduledDate}T00:00:00.000Z`,
     consensus: value('consensus'), providerPrevious: value('previous'), providerActual: value('actual'),
     source: context.resolveSource(row),
+    ...(sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) }) === undefined
+      ? {} : { sourceFeedId: sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) })! }),
     sourceObservedAt: row.observedAt, coverage: 'observed-unverified',
     timePrecision: row.timePrecision, releaseStatus: row.status, rowKind: row.rowKind
   }

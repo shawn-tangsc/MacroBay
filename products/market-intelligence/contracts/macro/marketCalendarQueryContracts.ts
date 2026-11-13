@@ -95,6 +95,12 @@ export type MarketCalendarEvent = Readonly<{
    */
   source: 'Narwhal' | '0xRouter'; sourceObservedAt: string; coverage: 'observed-unverified'
   /**
+   * 这条数据的**真实来源 feed id**（`macro-calendar-bls`、`macro-calendar-narwhal-economic-data`…）。
+   * `source` 那两个值表达不了「官方 BLS 发的」——它只有市场/旧源两档，官方行会被标成旧源。
+   * 这个字段先给真值；`source` 的枚举迁移要配文案映射，单独一笔做。
+   */
+  sourceFeedId?: string
+  /**
    * 这条发布到什么精度：`minute` 有时刻、`date` 只有日期。
    * **少了它，日期型事件会被画成 00:00 一条**（README 里那句「缺字段会静默失效」）。
    * 可选：旧的投影不产出它，读侧要按「没有就按时刻渲染」保持兼容。
