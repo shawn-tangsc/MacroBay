@@ -5,6 +5,7 @@ import {
   keepRowsNotCoveredByNarwhal,
   narwhalCanonicalIdentityKey,
   narwhalMeasureMetricKeys,
+  narwhalSourceEventIdForIdentity,
   zeroXRouterCanonicalIdentity,
   zeroXRouterIndicatorIdentities,
   type ZeroXRouterPeriodRule
@@ -22,6 +23,18 @@ describe('identity tables stay one-to-one', () => {
     expect(Object.keys(narwhalMeasureMetricKeys)).toHaveLength(new Set(Object.keys(narwhalMeasureMetricKeys)).size)
     expect(Object.keys(zeroXRouterIndicatorIdentities)).toHaveLength(
       new Set(Object.keys(zeroXRouterIndicatorIdentities)).size)
+  })
+
+  it('keeps measure ↔ metric_key a two-way bijection', () => {
+    // 产品经理 16 号表的口径：128 个 measure ↔ 128 个 key，两边都不许一对多。
+    // 同一次发布拆成两条 release 是允许的（两行指向同一个 key），那不动这张表。
+    const measureByKey = new Map<string, string>()
+    for (const [measure, metricKey] of Object.entries(narwhalMeasureMetricKeys)) {
+      const existing = measureByKey.get(metricKey)
+      expect(existing === undefined || existing === measure, `metric key ${metricKey} is claimed twice`).toBe(true)
+      measureByKey.set(metricKey, measure)
+    }
+    expect(measureByKey.size).toBe(new Set(Object.values(narwhalMeasureMetricKeys)).size)
   })
 
   it('never maps two different Narwhal measures onto one metric key', () => {
@@ -44,9 +57,14 @@ describe('identity tables stay one-to-one', () => {
 
 describe('canonical identity follows the source, not the display name', () => {
   it('reads the period from the release, and derives nothing from the title', () => {
-    expect(narwhalCanonicalIdentityKey('USA|US.CPI.NSA.YOY|2026-10')).toBe('USA|US.CPI.NSA.YOY|2026-10')
-    expect(narwhalCanonicalIdentityKey('USA|US.CPI.NSA.YOY')).toBeUndefined()
-    expect(narwhalCanonicalIdentityKey('USA||2026-10')).toBeUndefined()
+    const sourceEventId = JSON.parse(narwhalSourceEventIdForIdentity(
+      { countryCode: 'USA', metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10' })) as unknown
+    const key = JSON.stringify(['narwhal', 'macro-calendar-narwhal-economic-data', 'zh', sourceEventId])
+    expect(narwhalCanonicalIdentityKey(key)).toBe('USA|US.CPI.NSA.YOY|2026-10')
+    // 算不出身份时写的是来源自己的 release_id：读回来必须是 unmapped，不许猜一个身份。
+    expect(narwhalCanonicalIdentityKey(JSON.stringify(['narwhal', 'macro-calendar-narwhal-economic-data', 'zh',
+      ['001530fb-87a1-4aa3-8be0-30eeaf9344b1', 1]]))).toBeUndefined()
+    expect(narwhalCanonicalIdentityKey('USA|US.CPI.NSA.YOY|2026-10')).toBeUndefined()
   })
 
   it('gives every 0xRouter row with a known indicator its own period', () => {

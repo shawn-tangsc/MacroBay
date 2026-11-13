@@ -6,6 +6,8 @@ import { marketCalendarSourceStatus } from './marketCalendarSourceStatus'
 import type { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import type { MarketRow } from './marketCalendarStorageValidation'
 import { preferredObservation, type MarketObservationCandidate } from './marketCalendarObservationPrecedence'
+import { narwhalCanonicalIdentityKey, zeroXRouterCanonicalIdentity,
+  type MarketCalendarCanonicalIdentity } from '../marketCalendarMetricIdentity'
 
 // Ephemeral main-only page positions, not durable identity or a cache of event history.
 export const marketCalendarPublicPagingPolicy = Object.freeze({ maximumContexts: 128, contextLifetimeMs: 10 * 60 * 1000,
@@ -28,9 +30,53 @@ export type MarketCalendarLinkEvidence = Readonly<{ providerId: string; descript
 export type MarketCalendarEvidenceObserver = (event: MarketCalendarEvent, evidence: MarketCalendarLinkEvidence) => void
 type Selection = { collectionId: string; evidenceHash: string; providerId: string; descriptorId: string
   source: MarketCalendarSource } | undefined
-type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; selections: Selection[]; sources: MarketCalendarSource[]; index: number; storageCursor?: string; created: number;
+type Pair = { selection: Selection }
+type Position = { query: Omit<MarketCalendarQuery, 'cursor'>; pairs: Pair[]; sources: MarketCalendarSource[]; index: number; storageCursor?: string; created: number;
+  /** 这一页已经占住的身份（`country|metric_key` → 发布日），旧源按 ±1 天比对后让位。 */
+  covered: Map<string, string[]>;
+  /** 算不出身份、因而不进日历的 Narwhal 行数（行仍在库里，可查）。 */
+  unmappedNarwhal: number;
   /** 已经投影出去的事件按身份归位：同一身份再来一行时按优先级替换，而不是按顺序留第一行。 */
   chosen: Map<string, { index: number; candidate: MarketObservationCandidate; collectionId: string; observationId: string }> }
+/**
+ * 这一行要不要进日历。
+ *
+ * - Narwhal 的行：**算不出 `(国家, 指标, 期间)` 就不进**（行仍在库里、可查，映射补齐后自然出现）。
+ *   算得出就记下它占住的 (国家|指标 → 发布日)，供旧源让位。
+ * - 旧源的行：同一 (国家, 指标)、发布日相差 ≤1 天时让位——**配对只在这一步用时间窗，身份
+ *   仍是 (国家, 指标, 期间)**。没有指标身份的讲话/会议行原样保留。
+ */
+function rowsShowsThisRow(position: { covered: Map<string, string[]>; unmappedNarwhal: number },
+  row: Record<string, unknown>): boolean {
+  const scheduledAt = String(row.scheduled_at)
+  const day = scheduledAt.slice(0, 10)
+  if (String(row.provider_id) === marketCalendarProviderId) {
+    const identityKey = narwhalCanonicalIdentityKey(String(row.candidate_key))
+    if (!identityKey) { position.unmappedNarwhal += 1; return false }
+    const [countryCode, metricKey] = identityKey.split('|') as [string, string]
+    const bucket = `${countryCode}|${metricKey}`
+    const dates = position.covered.get(bucket)
+    if (dates === undefined) position.covered.set(bucket, [day])
+    else if (!dates.includes(day)) dates.push(day)
+    return true
+  }
+  const identity = zeroXRouterCanonicalIdentity({
+    countryCode: row.country_code === null ? null : String(row.country_code),
+    indicatorId: row.indicator_id === null ? null : String(row.indicator_id),
+    scheduledAt
+  })
+  return identity === undefined || !coveredWithinADay(position.covered, identity, day)
+}
+
+/** 同国家 + 同指标，发布日相差 ≤1 天即视为同一件事已由新源覆盖。 */
+function coveredWithinADay(covered: ReadonlyMap<string, readonly string[]>,
+  identity: MarketCalendarCanonicalIdentity, day: string): boolean {
+  const dates = covered.get(`${identity.countryCode}|${identity.metricKey}`)
+  if (dates === undefined) return false
+  const at = Date.parse(`${day}T00:00:00.000Z`)
+  return dates.some((date) => Math.abs(Date.parse(`${date}T00:00:00.000Z`) - at) <= 86_400_000)
+}
+
 export function createMarketCalendarPublicQueryService(deps: {
   repository: Pick<ReturnType<typeof createMarketCalendarEventRepository>, 'listCollections' | 'listObservationStates'>
   now?: () => number
@@ -95,16 +141,19 @@ export function createMarketCalendarPublicQueryService(deps: {
             if (result.state !== 'succeeded') throw new Error('selection-unavailable')
             return { ...candidate, rows: result.rows }
           }))
-          const selections = batchesByKind.map((candidates, index): Selection => {
-            // 首选「有内容的批次」：一个只有空批次的来源是这个月确实没有发布，不是它没在工作。
+          // 每一类都把**两源的集合**都放进走查队列：Narwhal 在前，旧源在后。同一身份被
+          // Narwhal 占住的旧行，在走过它时直接让位（规则见 `coversIdentity`）。
+          const selections = batchesByKind.map((candidates, index): readonly Selection[] => {
+            const found: Selection[] = []
             for (const candidate of candidates) {
               const row = candidate.rows.find((item) => !emptyStatuses.includes(String(item.status)))
-              if (row) return { collectionId: String(row.collection_id), evidenceHash: String(row.evidence_hash),
+              if (!row) continue
+              found.push({ collectionId: String(row.collection_id), evidenceHash: String(row.evidence_hash),
                 providerId: candidate.providerId, descriptorId: candidate.descriptorId,
                 source: { eventType: policy.kinds[index]!, status: row.status as MarketCalendarSource['status'],
-                  sourceObservedAt: String(row.detected_at) } }
+                  sourceObservedAt: String(row.detected_at) } })
             }
-            return undefined
+            return found
           })
           const sources = batchesByKind.map((candidates, index): MarketCalendarSource => {
             const eventType = policy.kinds[index]!
@@ -119,7 +168,9 @@ export function createMarketCalendarPublicQueryService(deps: {
               sourceObservedAt: String(newest.detected_at) } : { eventType, status: 'unavailable' as const, sourceObservedAt: null }),
               ...(attempt && attempt.attemptedAt <= asOf ? { latestAttempt: attempt } : {}) }
           })
-          position = { query: { month, locale, asOf }, selections, sources, index: 0, created: timestamp, chosen: new Map() }
+          const pairs: Pair[] = selections.flatMap((found) => found.map((selection) => ({ selection })))
+          position = { query: { month, locale, asOf }, pairs, sources, index: 0, created: timestamp, chosen: new Map(),
+            covered: new Map(), unmappedNarwhal: 0 }
         }
         const sources = position.sources
         const events: MarketCalendarEvent[] = []
@@ -130,8 +181,8 @@ export function createMarketCalendarPublicQueryService(deps: {
         // page's byte budget or event bound is reached. The continuation keeps the same cursor
         // and the same event keys, so a later page never repeats or skips an identity.
         let duplicatesInBatch = 0
-        while (position.index < policy.feedByKind.length && events.length < policy.maximumEvents) {
-          const selected = position.selections[position.index]
+        while (position.index < position.pairs.length && events.length < policy.maximumEvents) {
+          const selected = position.pairs[position.index]?.selection
           if (!selected || selected.source.status === 'success-empty' || selected.source.status === 'all-skipped') {
             position.index++; position.storageCursor = undefined; continue
           }
@@ -140,6 +191,7 @@ export function createMarketCalendarPublicQueryService(deps: {
           if (page.state !== 'succeeded') return unavailable()
           let full = false
           for (const row of page.rows) {
+            if (!rowsShowsThisRow(position, row)) continue
             const key = String(row.market_fact_key)
             const candidate = candidateOf(row)
             const seated = position.chosen.get(key)
@@ -189,7 +241,11 @@ export function createMarketCalendarPublicQueryService(deps: {
         if (duplicatesInBatch > 0) {
           console.warn(`[macro-calendar] 同一批次内同一身份出现多行：${duplicatesInBatch} 处，读取按优先级取一行`)
         }
-        const result = { ...envelope, ...(position.index < policy.feedByKind.length ? { nextCursor: remember(position) } : {}) }
+        if (!input.cursor && position.unmappedNarwhal > 0) {
+          // 可查的数：这些行**在库里**、只是算不出身份进不了日历；映射补齐后它们自动出现。
+          console.warn(`[macro-calendar] ${position.unmappedNarwhal} 条 Narwhal 发布算不出 (国家, 指标, 期间)，本月不进日历`)
+        }
+        const result = { ...envelope, ...(position.index < position.pairs.length ? { nextCursor: remember(position) } : {}) }
         return isMarketCalendarPage(result, input) ? result : unavailable()
       } catch { return unavailable() }
     },
