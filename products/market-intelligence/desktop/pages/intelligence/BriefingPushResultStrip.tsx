@@ -43,7 +43,7 @@ export function BriefingPushResultStrip(props: Readonly<{
       <span className="mi-daily-briefing__push-summary" role="status">{result.summary}</span>
       <span className="mi-daily-briefing__push-result-spacer" />
       {/* 句内动作只有一种写法：antd 文本档 + `.text-action`（颜色取 `--accent`）。
-          `type="link"` 走 antd 的 `colorLink`，那是 token 之外的第二个人工交互色。 */}
+          链接档走 antd 的 `colorLink`，那是 token 之外的第二个人工交互色，全仓已不许再用。 */}
       {result.action === undefined ? null : <Button
         className="text-action"
         data-push-action={result.action.key}
