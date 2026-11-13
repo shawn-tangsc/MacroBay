@@ -36,6 +36,7 @@ export type TierVisibilityResult<T> = Readonly<{
  */
 export const calendarDecisionEventMetricKeys: readonly string[] = Object.freeze([
   'evt.fomc',
+  'evt.policy-rate-decision',
   'evt.monetary-policy-statement'
 ])
 
