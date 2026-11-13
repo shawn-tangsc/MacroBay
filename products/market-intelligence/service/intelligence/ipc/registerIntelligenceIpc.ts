@@ -28,6 +28,7 @@ import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotific
 import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
 import type { IntelligenceNotificationTestWiring } from './notificationTestWiring'
 import { getCellEnabledStore, registerCellEnabledIpc } from './registerCellEnabledIpc'
+import { getCoreIndicatorSourcePrefsStore, registerCoreIndicatorSourcePrefsIpc } from './registerCoreIndicatorSourcePrefsIpc'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -115,6 +116,8 @@ export function registerIntelligenceIpc(
      之前这里只 import 了 `registerCellEnabledIpc` 却没调用它——渲染层拿到的是「方法不存在」，
      真机日志里就是 `Unknown product IPC method "market-intelligence.intelligence.readCellEnabled"`。 */
   registerCellEnabledIpc(register, getCellEnabledStore())
+  /* 「指标 × 源」第二层配置：与格级开关同一个装配点，两个存储互不相干。 */
+  registerCoreIndicatorSourcePrefsIpc(register, getCoreIndicatorSourcePrefsStore())
 
   if (notificationTest && calendarReminder) {
     // 注册器这一侧的 `read` 只声明成 `unknown`（它给设置页读整份视图）；测试样例要的是**类型化**的
