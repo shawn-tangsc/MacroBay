@@ -13,18 +13,50 @@ import type { SignificanceBaseline, SignificanceSignal } from './significanceCha
  * 时段这些拒绝理由一律不透支——读不到日历不代表可以多花一次额度。放行时 `reasonCode` 留空，
  * 因为「读不到所以先分析一次」还没有自己的文案码；加码要同时加两处文案，不在这一笔里造。
  */
+type ReadStreak = Readonly<{ official: number; provider: number }>
+
+/**
+ * 连续读不到的次数，按侧计。
+ *
+ * 读不到时放行是「宁可多分析一次」的兜底；但如果它一直读不到，这兜底会每个周期都放行一次，
+ * 直到把当天额度耗光——一次配置错误就能吃掉整天的分析机会。所以同侧连续两次不可读之后，
+ * 兜底关闭；只要有一次读到就清零。它只关这一个口子，预算/间隔/时段三道闸门一律不动。
+ */
+function nextReadStreaks(route: MacroRoute, streak: ReadStreak): ReadStreak {
+  const step = (side: MacroRoute['official'] | MacroRoute['provider'], previous: number): number => {
+    if (side.state === 'available') return 0
+    // `not-wired` 不是「读不到」：那个 build 本来就没有这条日历，不计入连续次数。
+    if (side.reasonCode === 'not-wired') return previous
+    return previous + 1
+  }
+  return Object.freeze({
+    official: step(route.official, streak.official),
+    provider: step(route.provider, streak.provider)
+  })
+}
+
 function evaluateCalendarSignificance(
   input: Parameters<typeof evaluateSignificance>[0],
-  route: MacroRoute
-): SignificanceDecision {
+  route: MacroRoute,
+  streak: ReadStreak
+): Readonly<{ decision: SignificanceDecision; streaks: ReadStreak }> {
   const decision = evaluateSignificance(input)
-  // `not-wired` 不是「读不到」：那个 build 本来就没有这条日历，按「可能有事件」放行会让每个
-  // tick 都花一次额度。只有接了却没读成的才算「不知道」。
-  const unreadable = [route.official, route.provider].some(side =>
-    side.state === 'unavailable' && side.reasonCode !== 'not-wired')
-  if (!unreadable) return decision
-  if (decision.decision !== 'skipped' || decision.reasonCode !== analysisSignificancePolicy.reasonCodes.belowThreshold) return decision
-  return Object.freeze({ ...decision, decision: 'queued' as const, reasonCode: null, signals: Object.freeze([]) })
+  const streaks = nextReadStreaks(route, streak)
+  // 只有当前仍不可读、且还没超过两次的那一侧，才允许把「低于阈值」改判为放行。
+  const unreadable = [['official', route.official, streaks.official], ['provider', route.provider, streaks.provider]] as const
+  const failOpenAllowed = unreadable.some(([, side, count]) =>
+    side.state === 'unavailable' && side.reasonCode !== 'not-wired' && count <= 2)
+  if (!failOpenAllowed) return { decision, streaks }
+  if (decision.decision !== 'skipped' || decision.reasonCode !== analysisSignificancePolicy.reasonCodes.belowThreshold) {
+    return { decision, streaks }
+  }
+  return {
+    decision: Object.freeze({
+      ...decision, decision: 'queued' as const,
+      reasonCode: analysisSignificancePolicy.reasonCodes.calendarUnavailable, signals: Object.freeze([])
+    }),
+    streaks
+  }
 }
 
 /**
@@ -130,6 +162,7 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
     if (scope === undefined) return
     await dependencies.notifyQuotaExhausted?.({ used: quota.used, limit: quota.limit, occurredAt: dependencies.now(), scope })
   }
+  let readStreak: ReadStreak = Object.freeze({ official: 0, provider: 0 })
   return {
     async evaluate(input: SignificanceGateInput): Promise<SignificanceGateOutcome> {
       const line = analysisRunLineOf(input.triggerKey)
@@ -159,7 +192,7 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
       const previous: PreviousSignificanceBaseline | null = projectPreviousBaseline(input.previousSnapshot as never)
       const now = dependencies.now()
       const route = await dependencies.queryMacroRoute({ asOf: input.asOf, months: normalizeMacroRouteMonths(input.asOf, previous?.asOf ?? null) })
-      const decision = evaluateCalendarSignificance({
+      const evaluated = evaluateCalendarSignificance({
         triggerKey: input.triggerKey,
         now,
         lastAutoRunAt: dependencies.lastAutoRunAt(input.eventGroupId, now),
@@ -167,7 +200,9 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
         current: flattenBaseline(route),
         previous: previous?.values ?? null,
         ...dependencies.countRuns(now)
-      }, route)
+      }, route, readStreak)
+      readStreak = evaluated.streaks
+      const decision = evaluated.decision
       if (decision.reasonCode !== null) {
         // A refused attempt that arrived with its own ledger row rewrites that row; anything else
         // (the calendar line, the session slots) records a decision of its own as it always has.

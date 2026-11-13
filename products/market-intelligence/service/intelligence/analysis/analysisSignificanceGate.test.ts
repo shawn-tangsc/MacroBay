@@ -231,8 +231,8 @@ it('queues the run when the calendar could not be read, instead of concluding "n
     lastAutoRunAt: () => null
   } as never)
   const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
-  // "Could not read" must never become "nothing happened": the run is allowed, with no invented reason.
-  expect(outcome).toMatchObject({ decision: 'queued', reasonCode: null })
+  // "Could not read" must never become "nothing happened": the run is allowed, and the reason says why.
+  expect(outcome).toMatchObject({ decision: 'queued', reasonCode: 'calendar-unavailable' })
 })
 
 it('still refuses on budget when the calendar could not be read', async () => {
@@ -271,4 +271,57 @@ it('prints the read state, so "not wired" cannot hide as "nothing happened"', ()
   expect(JSON.parse(line)).toMatchObject({ kind: 'analysis-calendar-read', provider: { state: 'unavailable' } })
   const unwired = route([], { officialState: 'unavailable', providerState: 'unavailable' })
   expect(formatCalendarReadDiagnostic(unwired)).toContain('"state":"unavailable"')
+})
+
+it('stops failing open after two consecutive unreadable reads on the same side', async () => {
+  const instance = createAnalysisSignificanceGate({
+    now: () => asOf,
+    queryMacroRoute: vi.fn(async () => route([], { providerState: 'unavailable' })),
+    recordDecision: vi.fn(), updateDecision: vi.fn(),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    lastAutoRunAt: () => null
+  } as never)
+  const call = () => instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
+  // 第 1、2 次：读不到 → 放行，理由码必须是「日历读不到」，不是「显著性」。
+  expect(await call()).toMatchObject({ decision: 'queued', reasonCode: 'calendar-unavailable' })
+  expect(await call()).toMatchObject({ decision: 'queued', reasonCode: 'calendar-unavailable' })
+  // 第 3 次起不再因为「读不到」放行；这次没有真实变化，所以必须跳过。
+  expect((await call()).decision).toBe('skipped')
+})
+
+it('still queues on a real change after the unreadable streak stops failing open, under the significance code', async () => {
+  const instance = createAnalysisSignificanceGate({
+    now: () => asOf,
+    // 官方侧可读且有真实变化；市场侧一直读不到——兜底关掉后，这条仍必须按显著性放行。
+    queryMacroRoute: vi.fn(async () => route([event()], { providerState: 'unavailable' })),
+    recordDecision: vi.fn(), updateDecision: vi.fn(),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    lastAutoRunAt: () => null
+  } as never)
+  const call = (previous: unknown) => instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: previous as never })
+  await call(snapshot('3.1%'))
+  await call(snapshot('3.1%'))
+  await call(snapshot('3.1%'))
+  // 第 4 次：数据本身有高重要变化 → 照常放行，理由必须是显著性，不是「读不到」。
+  const outcome = await call(snapshot('3.0%'))
+  expect(outcome.decision).toBe('queued')
+  expect(outcome.reasonCode).toBe('significance-confirmed')
+})
+
+it('resets the streak as soon as the side is readable again', async () => {
+  let providerState: 'available' | 'unavailable' = 'unavailable'
+  const instance = createAnalysisSignificanceGate({
+    now: () => asOf,
+    queryMacroRoute: vi.fn(async () => route([], { providerState })),
+    recordDecision: vi.fn(), updateDecision: vi.fn(),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    lastAutoRunAt: () => null
+  } as never)
+  const call = () => instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
+  await call(); await call()
+  providerState = 'available'
+  await call()
+  providerState = 'unavailable'
+  // 恢复过一次就清零，所以这次仍允许放行（第 1 次而非第 3 次）。
+  expect((await call()).decision).toBe('queued')
 })

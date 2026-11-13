@@ -34,7 +34,12 @@ export const analysisSignificancePolicy = Object.freeze({
     sessionSlotAsia: 'session-slot-asia',
     sessionSlotEurope: 'session-slot-europe',
     sessionSlotUs: 'session-slot-us',
-    invalidInput: 'invalid-significance-input'
+    invalidInput: 'invalid-significance-input',
+    /**
+     * 日历读不到、于是先放行一次。与「数据确实变了」的区别就在这里：这条理由说的是
+     * 「我们不知道有没有变化」，不是「我们知道变了」。
+     */
+    calendarUnavailable: 'calendar-unavailable'
   })
 })
 
