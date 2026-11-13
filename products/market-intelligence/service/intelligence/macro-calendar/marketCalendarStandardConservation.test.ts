@@ -5,11 +5,13 @@ import { calendarStandardConservation, type CalendarStandardSourceTotals }
 import type { NarwhalStandardRowInput } from './narwhal-calendar/narwhalCalendarObservationBatches'
 
 const indicator = (sourceEventId: string, metricKey: string): NarwhalStandardRowInput => ({
-  kind: 'indicator', countryCode: 'USA', metricKey, periodKey: '2026-10',
+  kind: 'indicator', identityKind: 'code', status: 'published', fromMeasure: true,
+  countryCode: 'USA', metricKey, periodKey: '2026-10',
   scheduledDate: '2026-11-13', scheduledAt: '2026-11-13T13:30:00.000Z', sourceEventId
 })
 const event = (sourceEventId: string): NarwhalStandardRowInput => ({
-  kind: 'event', countryCode: 'USA', metricKey: 'evt.central-bank-speech', periodKey: '2026-11-13T13:30',
+  kind: 'event', identityKind: 'code', status: 'scheduled',
+  countryCode: 'USA', metricKey: 'evt.central-bank-speech', periodKey: '2026-11-13T13:30',
   scheduledDate: '2026-11-13', scheduledAt: '2026-11-13T13:30:00.000Z', sourceEventId
 })
 const totals = (over: Partial<CalendarStandardSourceTotals>): CalendarStandardSourceTotals =>

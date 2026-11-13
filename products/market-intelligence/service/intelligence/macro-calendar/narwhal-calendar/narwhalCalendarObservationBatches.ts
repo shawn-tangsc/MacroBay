@@ -1,6 +1,7 @@
 import { narwhalEventSourceEventId, narwhalMeasureMetricKeys, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
 import { eventCodeBySourceType } from '../marketCalendarEventCodeTable'
-import type { CalendarUnmappedReason } from '../marketCalendarStandardTable'
+import type { CalendarIdentityKind, CalendarReleaseStatus, CalendarUnmappedReason } from '../marketCalendarStandardTable'
+import { narwhalPrimaryMetricBySeriesId } from './narwhalSeriesPrimaryMetric'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
 /**
@@ -152,6 +153,11 @@ function sourceEventIdOf(release: NarwhalParsedRelease, kind: NarwhalEventKind):
   return JSON.stringify([release.releaseId, 1])
 }
 
+/** 源的状态串 → 闭集。认不出的**不猜**，落 `unknown`。 */
+function releaseStatusOf(raw: string): CalendarReleaseStatus {
+  return raw === 'scheduled' || raw === 'published' || raw === 'cancelled' ? raw : 'unknown'
+}
+
 function displayValueOf(raw: string | undefined): Record<string, string> | undefined {
   return raw === undefined || raw.length === 0 ? undefined : { displayValue: raw }
 }
@@ -179,6 +185,14 @@ export type NarwhalStandardRowInput = Readonly<{
    * **显式字段，不用 `metricKey.startsWith('evt.')` 嗅探**——换个命名就失效，而且那是拿字符串猜语义。
    */
   kind: 'indicator' | 'event'
+  /** `code`＝标准码身份（可跨源合并）；`source`＝源内身份（照常显示，不跨源合并）。 */
+  identityKind: CalendarIdentityKind
+  /** 源给的发布状态（闭集）：读侧分「已发布/排期/取消」只许读它，不按日期推。 */
+  status: CalendarReleaseStatus
+  /** 这一行是由**源的某个 measure** 生成的（测度层对账只数它们）。 */
+  fromMeasure?: true
+  /** 源标了已发布、却一个值都没给：值区显示「未提供」。 */
+  valueState?: 'not-provided'
   previous?: string
   consensus?: string
   actual?: string
@@ -215,60 +229,108 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
     // 不是「排除」，是**写进去并标记**：分析侧只读标准表一个入口，不写表它就彻底不存在；
     // 而日历按 `row_kind = 'release'` 过滤，所以三次估算不会变成三次「GDP 发布」。
     const isEstimate = narwhalNotAReleaseSeriesIds.includes(release.seriesId)
+    const status = releaseStatusOf(release.status)
     const period = release.period
-    if (period === undefined || period.length === 0) {
-      // **没有 `period` 不等于缺数据**：这些几乎全是事件型（讲话、声明、资产负债表、石油库存…），
-      // 源本来就只给「什么时候、是什么类型」。它们走事件型身份 `(国家, evt.类型, 时刻/日期)`。
-      // **带值也算事件型**（例：`policy_rate` 决议那条，值在 `values` 上而不是 release 上）：
-      // 官方 FOMC 那边是事件型，市场这边若当指标型，同一个会议就分成两行。事件型行带值不矛盾。
-      // 映射不到 `evt.*` 的才落 `unknown-event-type`（不是 `bad-period`——源里根本没有期间字段）。
-      const code = eventCodeBySourceType[release.name]
-      if (code === undefined) {
-        unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-event-type' })
-        continue
-      }
-      const first = release.values[0]
-      rows.push({
-        kind: 'event', countryCode: release.country, metricKey: code, periodKey: release.at.slice(0, 16),
-        scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
-        timePrecision: 'minute',
-        ...(first?.previous === undefined ? {} : { previous: first.previous }),
-        ...(first?.consensus === undefined ? {} : { consensus: first.consensus }),
-        ...(first?.actual === undefined ? {} : { actual: first.actual })
-      })
-      continue
+    const primaryMetric = narwhalPrimaryMetricBySeriesId[release.seriesId]
+    const eventCode = eventCodeBySourceType[release.name]
+    const first = release.values[0]
+    const values = {
+      ...(first?.previous === undefined ? {} : { previous: first.previous }),
+      ...(first?.consensus === undefined ? {} : { consensus: first.consensus }),
+      ...(first?.actual === undefined ? {} : { actual: first.actual })
     }
-    // **有期间、一个 measure 都没有**：这类发布既写不出指标行（没有 measure 就没有 `metric_key`），
-    // 也不是「映射不上」，以前在这里静默消失——表里没有、`unmapped` 没有、日志也不说。
-    // 抛开它，发布层守恒式就会差 21（11+12 月美国实测），而且差额指向不了任何一条记录。
-    if (release.values.length === 0) {
-      unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'no-values', measureKeys: [] })
-      continue
-    }
-    for (const value of release.values) {
-      const metricKey = narwhalMeasureMetricKeys[value.measure]
-      if (metricKey === undefined) {
-        // 有期间、但 measure 不在 128 条映射里——**按发布层守恒算不出来**，必须在这里交出。
-        const existing = unmapped.find((item) => item.sourceKey === release.releaseId)
-        if (existing === undefined) {
-          unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-measure',
-            measureKeys: [value.measure] })
-        } else {
-          existing.measureKeys = [...(existing.measureKeys ?? []), value.measure]
+
+    // —— 一、有期间、有值：按 measure 拆行（身份来自 measure 映射）——
+    if (period !== undefined && period.length > 0 && release.values.length > 0) {
+      let anyMapped = false
+      for (const value of release.values) {
+        const metricKey = narwhalMeasureMetricKeys[value.measure]
+        if (metricKey === undefined) {
+          // 有期间、但 measure 不在映射表里——**按发布层守恒算不出来**，必须在这里交出。
+          const existing = unmapped.find((item) => item.sourceKey === release.releaseId)
+          if (existing === undefined) {
+            unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-measure',
+              measureKeys: [value.measure] })
+          } else {
+            existing.measureKeys = [...(existing.measureKeys ?? []), value.measure]
+          }
+          continue
         }
+        anyMapped = true
+        rows.push({
+          kind: 'indicator', identityKind: 'code', status, fromMeasure: true,
+          ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
+          countryCode: release.country, metricKey, periodKey: period,
+          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+          ...(value.previous === undefined ? {} : { previous: value.previous }),
+          ...(value.consensus === undefined ? {} : { consensus: value.consensus }),
+          ...(value.actual === undefined ? {} : { actual: value.actual })
+        })
+      }
+      // 一个 measure 都没映射上 ≠ 这条发布不存在：它已经记进工作清单，**但读者不该因此看不见它**。
+      if (anyMapped) continue
+    }
+
+    // —— 二、有期间、没有值：按「发布组主测度」给它一条空值指标行（和官方日程展开同一套规则）——
+    if (period !== undefined && period.length > 0 && release.values.length === 0) {
+      if (primaryMetric !== undefined) {
+        rows.push({
+          kind: 'indicator', identityKind: 'code', status,
+          ...(status === 'published' ? { valueState: 'not-provided' as const } : {}),
+          ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
+          countryCode: release.country, metricKey: primaryMetric, periodKey: period,
+          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
+        })
         continue
       }
-      rows.push({
-        kind: 'indicator',
-        ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
-        countryCode: release.country, metricKey, periodKey: period,
-        scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
-        ...(value.previous === undefined ? {} : { previous: value.previous }),
-        ...(value.consensus === undefined ? {} : { consensus: value.consensus }),
-        ...(value.actual === undefined ? {} : { actual: value.actual })
-      })
+      // 没有测度依据、但源名登记过事件类型 → 事件型行（照常显示，值区交给「未提供」）。
+      if (eventCode !== undefined) {
+        rows.push({
+          kind: 'event', identityKind: 'code', status,
+          ...(status === 'published' ? { valueState: 'not-provided' as const } : {}),
+          countryCode: release.country, metricKey: eventCode, periodKey: release.at.slice(0, 16),
+          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
+        })
+        continue
+      }
     }
+
+    // —— 三、没有期间（事件型）——
+    if (period === undefined || period.length === 0) {
+      if (eventCode !== undefined) {
+        rows.push({
+          kind: 'event', identityKind: 'code', status,
+          countryCode: release.country, metricKey: eventCode, periodKey: release.at.slice(0, 16),
+          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+          timePrecision: 'minute',
+          ...(first?.previous === undefined ? {} : { previous: first.previous }),
+          ...(first?.consensus === undefined ? {} : { consensus: first.consensus }),
+          ...(first?.actual === undefined ? {} : { actual: first.actual })
+        })
+        continue
+      }
+      // 连事件类型都没登记：**照样显示**，身份用源内 id。它没有共同身份，所以不参与跨源合并；
+      // 记一笔工作清单，补上映射后**原地转正**成标准码，不新增行。
+      unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-event-type' })
+      rows.push({
+        kind: 'event', identityKind: 'source', status,
+        countryCode: release.country, metricKey: release.releaseId,
+        periodKey: release.at.slice(0, 16), scheduledDate: release.eventDate, scheduledAt: release.at,
+        sourceEventId: release.releaseId, timePrecision: 'minute',
+        ...(release.values.length === 1 ? values : {})
+      })
+      continue
+    }
+
+    // —— 四、有期间、没有值、且没有测度依据也没有事件码：源内身份显示 ——
+    rows.push({
+      kind: 'event', identityKind: 'source', status,
+      ...(status === 'published' ? { valueState: 'not-provided' as const } : {}),
+      countryCode: release.country, metricKey: release.releaseId, periodKey: period,
+      scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+      timePrecision: 'minute',
+      ...(release.values.length === 1 ? values : {})
+    })
   }
   return { rows, unmapped }
 }
-

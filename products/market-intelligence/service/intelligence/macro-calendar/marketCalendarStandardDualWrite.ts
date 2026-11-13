@@ -6,8 +6,9 @@ import { nameByMetricKey } from './marketCalendarCodeNames'
 
 /** 事件型身份的第二段：不是指标码，`evt.*` 映射还没接。 */
 const EVENT_KINDS: readonly string[] = ['central-bank-activity', 'financial-event']
-import { calendarStandardTablePolicy, findCalendarStandardRowBySource, recordCalendarUnmapped, upsertCalendarStandardRow,
-  type CalendarUnmappedReason } from './marketCalendarStandardTable'
+import { calendarStandardTablePolicy, findCalendarStandardRowBySource, promoteCalendarStandardRowToCode,
+  recordCalendarUnmapped, upsertCalendarStandardRow,
+  type CalendarIdentityKind, type CalendarReleaseStatus, type CalendarUnmappedReason } from './marketCalendarStandardTable'
 
 /**
  * 观测行 → 标准行的**双写**（S1：只写不读，读取路径一个字节不动）。
@@ -37,6 +38,9 @@ export function dualWriteMeasureRows(
       scheduledDate: string; scheduledAt: string; sourceEventId: string
       timePrecision?: 'minute' | 'date'
       rowKind?: 'release' | 'estimate'
+      identityKind?: CalendarIdentityKind
+      status?: CalendarReleaseStatus
+      valueState?: 'not-provided'
       previous?: string; consensus?: string; actual?: string }>[] }>,
   options?: Readonly<{ onError?: (message: string) => void }>
 ): DualWriteCounts {
@@ -45,8 +49,10 @@ export function dualWriteMeasureRows(
   let failed = 0
   for (const row of input.rows) {
     try {
+      // 源内身份的行没有标准码可查：它是「源里确实有这次发布」，不是缺映射。
+      const isSourceIdentity = row.identityKind === 'source'
       const isEventCode = row.metricKey.startsWith('evt.')
-      if (!isEventCode && nameByMetricKey[row.metricKey] === undefined) {
+      if (!isSourceIdentity && !isEventCode && nameByMetricKey[row.metricKey] === undefined) {
         reasons['unknown-measure'] += 1
         recordCalendarUnmapped(database, { providerId: input.providerId, sourceKey: row.sourceEventId,
           detectedAt: input.observedAt, rawJson: JSON.stringify({ metricKey: row.metricKey }), reason: 'unknown-measure' })
@@ -55,13 +61,22 @@ export function dualWriteMeasureRows(
       const existing = findCalendarStandardRowBySource(database, {
         sourceProviderId: input.providerId, sourceEventId: row.sourceEventId
       })
+      // **原地转正**：原来用源内 id 撑着的那一行，现在有标准码了 → 改这一行的码，不新增行。
+      if (existing !== undefined && existing.identityKind === 'source' && row.identityKind !== 'source'
+        && existing.metricKey !== row.metricKey) {
+        promoteCalendarStandardRowToCode(database, { sourceProviderId: input.providerId,
+          sourceEventId: row.sourceEventId, metricKey: row.metricKey })
+      }
       upsertCalendarStandardRow(database, {
         countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
         scheduledDate: row.scheduledDate, scheduledAt: row.scheduledAt,
         ...(existing === undefined ? {} : { firstScheduledDate: existing.firstScheduledDate }),
         timePrecision: row.timePrecision ?? (row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute'),
         ...(row.rowKind === undefined ? {} : { rowKind: row.rowKind }),
+        ...(row.status === undefined ? {} : { status: row.status }),
+        ...(row.identityKind === undefined ? {} : { identityKind: row.identityKind }),
         valuesJson: JSON.stringify({
+          ...(row.valueState === undefined ? {} : { valueState: row.valueState }),
           ...(row.consensus === undefined ? {} : { consensus: row.consensus }),
           ...(row.previous === undefined ? {} : { previous: row.previous }),
           ...(row.actual === undefined ? {} : { actual: row.actual })

@@ -43,7 +43,9 @@ export function calendarStandardConservation(input: Readonly<{
     ...input.rows.map((row) => row.sourceEventId),
     ...input.unmapped.map((item) => item.sourceKey)
   ])
-  const landedMeasures = input.rows.filter((row) => row.kind === 'indicator').length
+  // **只数由 measure 生成的行**：按「组主测度」补出来的空值行不承载任何 measure，
+  // 数进来会让测度层凭空多出认领（那是另一个方向的假红）。
+  const landedMeasures = input.rows.filter((row) => row.fromMeasure === true).length
   // 未映射条目**只按它列出的 measure 计数**：事件型与 `no-values` 那条本来就有 0 个 measure。
   const unmappedMeasures = input.unmapped.reduce((sum, item) => sum + (item.measureKeys?.length ?? 0), 0)
   const excludedMeasures = input.sourceTotals.measuresOnEventReleases

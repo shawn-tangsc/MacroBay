@@ -32,6 +32,20 @@ export const calendarStandardTablePolicy = Object.freeze({
   /** 日历的唯一读入口（只含 `row_kind = 'release'`）。 */
   releasesView: 'mi_calendar_releases',
   unmappedTable: 'mi_calendar_unmapped',
+  /**
+   * 发布状态闭集，**从源拿**：读侧要分「已发布/排期/取消」不许按日期推——
+   * 日期比会在发布当天中午前后判错（源还是 scheduled，日期已过）。
+   */
+  releaseStatuses: Object.freeze(['scheduled', 'published', 'cancelled', 'unknown'] as const),
+  /**
+   * 身份种类。`code` = 标准码（可跨源合并）；`source` = **源内标识**（映射不上时用它，
+   * 日历照常显示、但**不参与跨源合并**——没有共同身份，硬合就是猜）。
+   *
+   * 不进主键：两种身份的命名空间天然不重叠（标准码是 `US.*`/`evt.*`，源内标识是源的
+   * `release_id`），所以主键 `(国家, metric_key, period, 首发布日)` 已经唯一。**不为它重建表**——
+   * 重建要动主键和已有行，正是最容易藏数据的一步。
+   */
+  identityKinds: Object.freeze(['code', 'source'] as const),
   /** 没映射上的原因闭集。新增值要同时更新这里的注释与用例。 */
   unmappedReasons: Object.freeze(['unknown-measure', 'unknown-event-type', 'bad-period', 'bad-identity',
     'unknown-release-group', 'ambiguous-same-day',
@@ -44,6 +58,8 @@ export const calendarStandardTablePolicy = Object.freeze({
     'no-values'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
+export type CalendarReleaseStatus = typeof calendarStandardTablePolicy.releaseStatuses[number]
+export type CalendarIdentityKind = typeof calendarStandardTablePolicy.identityKinds[number]
 
 export type CalendarStandardRow = Readonly<{
   countryCode: string
@@ -56,6 +72,10 @@ export type CalendarStandardRow = Readonly<{
   /** 首次看到的发布日（UTC）：冻结，**在主键里**。不传时取 `scheduledDate`。 */
   firstScheduledDate?: string
   timePrecision: 'minute' | 'date'
+  /** 源给的发布状态（闭集）。缺省 `unknown`——不猜，也不按日期推。 */
+  status?: CalendarReleaseStatus
+  /** 映射得上＝`code`（缺省）；映射不上＝`source`，`metricKey` 存源内标识。 */
+  identityKind?: CalendarIdentityKind
   valuesJson: string
   sourceProviderId: string
   sourceEventId: string
@@ -84,6 +104,8 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       first_scheduled_date text not null,
       scheduled_at text,
       time_precision text not null check(time_precision in ('minute', 'date')),
+      status text not null default 'unknown' check(status in ('scheduled', 'published', 'cancelled', 'unknown')),
+      identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
       values_json text not null,
       source_provider_id text not null,
@@ -111,6 +133,15 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       primary key(provider_id, source_key, detected_at)
     );
   `)
+  // 老副本是在 status 列之前建的：`create table if not exists` 不会补列，得显式迁移一次，
+  // 缺列时按 `unknown` 回填（**不按日期猜**：日期推状态正是这条要防的）。
+  const columns = database.prepare(`pragma table_info(${eventsTable})`).all() as { name: string }[]
+  if (!columns.some((column) => column.name === 'status')) {
+    database.exec(`alter table ${eventsTable} add column status text not null default 'unknown'`)
+  }
+  if (!columns.some((column) => column.name === 'identity_kind')) {
+    database.exec(`alter table ${eventsTable} add column identity_kind text not null default 'code'`)
+  }
 }
 
 /**
@@ -121,9 +152,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   const { eventsTable } = calendarStandardTablePolicy
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
-     values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
+     status, identity_kind, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -141,6 +172,8 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
     .run(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate,
       row.firstScheduledDate ?? row.scheduledDate, row.scheduledAt ?? null, row.timePrecision,
       row.rowKind ?? 'release',
+      row.status ?? 'unknown',
+      row.identityKind ?? 'code',
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null)
 }
@@ -162,17 +195,32 @@ export function recordCalendarUnmapped(database: DatabaseSync, input: Readonly<{
  * 找不到才按主键插入。**不用时间容差**——那等于替源判断「差几小时算同一次」，判错就把两次
  * 真实发布并成一次。
  */
+/**
+ * **原地转正**：这个源内 id 原来是 `source` 身份，现在补上映射了，就把同一行的 `metric_key`
+ * 换成标准码、`identity_kind` 改成 `code`。**不新增行**——否则每补一次映射，历史里就多一条
+ * 重复，而重复比缺一行更难发现（日历上同一天两个一样的名字）。
+ */
+export function promoteCalendarStandardRowToCode(database: DatabaseSync, input: Readonly<{
+  sourceProviderId: string; sourceEventId: string; metricKey: string
+}>): void {
+  const { eventsTable } = calendarStandardTablePolicy
+  database.prepare(`update ${eventsTable} set metric_key = ?, identity_kind = 'code'
+    where source_provider_id = ? and source_event_id = ? and identity_kind = 'source'`)
+    .run(input.metricKey, input.sourceProviderId, input.sourceEventId)
+}
+
 export function findCalendarStandardRowBySource(database: DatabaseSync, input: Readonly<{
   sourceProviderId: string; sourceEventId: string
 }>): Readonly<{ countryCode: string; metricKey: string; periodKey: string
-  firstScheduledDate: string; sourceEventId: string }> | undefined {
+  firstScheduledDate: string; sourceEventId: string; identityKind: CalendarIdentityKind }> | undefined {
   const { eventsTable } = calendarStandardTablePolicy
-  const row = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date, source_event_id
-    from ${eventsTable} where source_provider_id = ? and source_event_id = ? limit 1`)
+  const row = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date, source_event_id,
+    identity_kind from ${eventsTable} where source_provider_id = ? and source_event_id = ? limit 1`)
     .get(input.sourceProviderId, input.sourceEventId) as Record<string, unknown> | undefined
   return row === undefined ? undefined : {
     countryCode: String(row.country_code), metricKey: String(row.metric_key),
     periodKey: String(row.period_key), firstScheduledDate: String(row.first_scheduled_date),
-    sourceEventId: String(row.source_event_id)
+    sourceEventId: String(row.source_event_id),
+    identityKind: (String(row.identity_kind) === 'source' ? 'source' : 'code') as CalendarIdentityKind
   }
 }

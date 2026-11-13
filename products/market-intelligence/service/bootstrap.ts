@@ -445,6 +445,12 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
         if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)
         if (counts.failed > 0) console.warn(`[macro-calendar] 标准行写入失败 ${counts.failed} 条（已计入守恒式）`)
+        // 三种「没有值」必须分开数：源标了已发布却没值（真缺口）、还没到发布日（排期先行）、
+        // 以及**按源内身份显示**的行。混成一个数就会报出一个假缺口——今天已经数错过两次。
+        const publishedNoValue = rows.filter((row) => row.status === 'published' && row.fromMeasure !== true).length
+        const scheduledAhead = rows.filter((row) => row.status === 'scheduled' && row.fromMeasure !== true).length
+        const sourceIdentityRows = rows.filter((row) => row.identityKind === 'source').length
+        console.warn(`[macro-calendar] 身份：标准码 ${rows.length - sourceIdentityRows} 行 / 源内 ${sourceIdentityRows} 行（源内不参与跨源合并）；无值：已发布 ${publishedNoValue} 行 / 排期 ${scheduledAhead} 行；工作清单 ${unmapped.length} 条`)
       } catch (error) {
         console.warn(`[macro-calendar] 标准行接线异常（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
       }

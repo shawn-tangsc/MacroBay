@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 
-import { dualWriteObservationBatch } from './marketCalendarStandardDualWrite'
+import { dualWriteMeasureRows, dualWriteObservationBatch } from './marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables } from './marketCalendarStandardTable'
 import { narwhalSourceEventIdForIdentity } from './marketCalendarMetricIdentity'
 
@@ -75,5 +75,49 @@ describe('事件型：源类型串 → evt.* 码', () => {
     const counts = dualWriteObservationBatch(database, batch([eventDraft('Some new type', '2026-11-13T15:00:00.000Z')]))
     expect(counts.written).toBe(0)
     expect(counts.unmapped['unknown-event-type']).toBe(1)
+  })
+})
+
+
+describe('源内身份 → 标准码：原地转正，不新增行', () => {
+  const row = (over: Record<string, unknown>) => ({
+    countryCode: 'USA', metricKey: 'r-1', periodKey: '2026-10', scheduledDate: '2026-11-05',
+    scheduledAt: '2026-11-05T13:30:00.000Z', sourceEventId: 'r-1', kind: 'indicator' as const,
+    identityKind: 'source' as const, status: 'published' as const, ...over
+  })
+  const write = (database: DatabaseSync, rows: object[]) => dualWriteMeasureRows(database, {
+    providerId: 'narwhal', parserVersion: 'v1', observedAt: '2026-11-05T13:31:00.000Z', rows: rows as never
+  })
+
+  it('补上映射后同一行改成标准码：一行，不是两行', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, [row({})])
+    write(database, [row({ metricKey: 'US.ADP.SA.CHANGE', identityKind: 'code' as const })])
+    const rows = database.prepare('select metric_key, identity_kind from mi_calendar_events').all() as
+      { metric_key: string; identity_kind: string }[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.metric_key).toBe('US.ADP.SA.CHANGE')
+    expect(rows[0]!.identity_kind).toBe('code')
+  })
+
+  it('源内身份的行照常写进表（不被当成未知码退回工作清单）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const counts = write(database, [row({ kind: 'event' as const })])
+    expect(counts.written).toBe(1)
+    expect(counts.unmapped['unknown-measure']).toBe(0)
+  })
+
+  it('闭集是硬的：闭集外的状态写不进表（fail-closed，不靠调用方自觉）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    write(database, [row({ status: 'published' as const })])
+    const counts = write(database, [row({ metricKey: 'r-2', sourceEventId: 'r-2', scheduledDate: '2026-11-06',
+      status: 'weird' as never })])
+    // 认不出就不许入库：归一成 unknown 是**构造器**的活，写入端只挡，不猜。
+    expect(counts.failed).toBe(1)
+    const rows = database.prepare('select status from mi_calendar_events').all() as { status: string }[]
+    expect(rows.map((entry) => entry.status)).toEqual(['published'])
   })
 })
