@@ -125,3 +125,75 @@ describe('源名：两行截断，全名不丢', () => {
     expect(css.match(forbidden) ?? []).toEqual([])
   })
 })
+
+/**
+ * 两条腿**并排**（用户 2026-11-14 截图：上下叠着）。
+ *
+ * 卡片与项容器都靠 `--cell-span` / `--cell-items` 决定占几列；漏设就是默认 1 列。
+ * 判据：每张卡这两个变量都等于它的腿数（最多 3），不是 1。
+ */
+describe('列数：两条腿并排，不上下叠', () => {
+  it('sets both column variables to the number of legs on every card', async () => {
+    const host = await render()
+    const cards = [...host.querySelectorAll<HTMLElement>('[data-core-indicator]')]
+    expect(cards).toHaveLength(4)
+    for (const card of cards) {
+      const items = card.querySelector<HTMLElement>('.business-cell__items')!
+      const label = card.getAttribute('data-core-indicator') ?? ''
+      expect(card.getAttribute('style') ?? '', label).toContain('--cell-span: 2')
+      expect(items.getAttribute('style') ?? '', label).toContain('--cell-items: 2')
+    }
+  })
+})
+
+/**
+ * 频率那一格跟其它业务页**同一套**（用户 2026-11-14：「没按照这里的源项配置还原」）。
+ *
+ * 判据：同一颗源在两页显示的节奏必须一致；类型标签不占频率格；只有真的没有独立排期、
+ * 由产品内置作业驱动的源才写「内置频率」。
+ */
+describe('频率格：与看板同一套读数，类型不占这一格', () => {
+  const CADENCE = (intervalSeconds: number) => ({
+    registration: 'registered' as const,
+    mode: 'interval' as const,
+    intervalSeconds,
+    nextRunAt: '2026-12-01T06:30:00.000Z',
+    lastRunAt: '2026-12-01T06:15:00.000Z',
+    running: false
+  })
+
+  it('shows FRED real interval (it is an adjustable source), not the builtin label', async () => {
+    const host = await render({
+      presetOf: () => 'balanced',
+      cadenceOf: (providerId: string) => providerId === 'fred-rates-liquidity' ? CADENCE(6 * 60 * 60) : undefined,
+      cadenceAvailable: true,
+      builtinCadenceOf: (providerId: string) => providerId === 'narwhal'
+    })
+    const fredRow = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|fred-rates-liquidity"]')!
+    expect(fredRow.textContent).toContain('间隔 6 小时')
+    expect(fredRow.textContent).not.toContain(t.collectionPolicy.builtinCadence)
+    expect(fredRow.querySelector('[data-preset-builtin="true"]')).toBeNull()
+  })
+
+  it('keeps the builtin label only for the product-owned leg (Narwhal)', async () => {
+    const host = await render({
+      presetOf: () => 'balanced',
+      cadenceOf: () => undefined,
+      cadenceAvailable: true,
+      builtinCadenceOf: (providerId: string) => providerId === 'narwhal'
+    })
+    const narwhalRow = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|narwhal"]')!
+    expect(narwhalRow.querySelector('[data-preset-builtin="true"]')).not.toBeNull()
+    expect(narwhalRow.textContent).toContain(t.collectionPolicy.builtinCadence)
+  })
+
+  it('moves the kind label next to the name, out of the frequency cell', async () => {
+    const host = await render()
+    const row = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|fred-rates-liquidity"]')!
+    const kind = t.coreIndicators.valueSourceType.official
+    const name = row.querySelector<HTMLElement>('.core-indicator-sources__name')!
+    const frequency = row.querySelector<HTMLElement>('.business-card__preset')!
+    expect(name.textContent).toContain(kind)
+    expect(frequency.textContent).not.toContain(kind)
+  })
+})

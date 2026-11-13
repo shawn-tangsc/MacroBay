@@ -317,6 +317,12 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           sourceEnabled={(providerId) => isSourceEnabled(gateSourceOf(providerId))}
           disabled={coreDisabled}
           onToggle={toggleCoreSource}
+          /* 频率那一格与其它业务页同一套：档位读 profile、间隔读排期投影，
+             只有真的没有独立排期的源才写「内置频率」。键都按 provider 背后的源查。 */
+          presetOf={(providerId) => presetValues[gateSourceOf(providerId)]}
+          cadenceOf={(providerId) => cadence.bySource[gateSourceOf(providerId)]}
+          cadenceAvailable={cadence.available}
+          builtinCadenceOf={(providerId) => builtinCadence.has(gateSourceOf(providerId))}
           {...(props.onOpenSourceConfig === undefined
             ? {}
             : { onOpenSource: (providerId: string) => props.onOpenSourceConfig?.(gateSourceOf(providerId)) })} />

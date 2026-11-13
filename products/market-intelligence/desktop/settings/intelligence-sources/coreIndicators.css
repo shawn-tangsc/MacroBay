@@ -45,3 +45,15 @@
 [data-core-indicator-sources="true"] .business-card__toggle {
   flex: none;
 }
+
+/*
+ * 名字列：源名 + 类型小字（官方 / 数据商）竖排。
+ * 类型小字原来挤在「频率」那一格里，与看板那页同一行长得不一样；挪到名字下面。
+ * 仍是排布属性：字号与颜色沿用 `business-card__preset-label`（共享文件里的那一档）。
+ */
+.core-indicator-sources__name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
