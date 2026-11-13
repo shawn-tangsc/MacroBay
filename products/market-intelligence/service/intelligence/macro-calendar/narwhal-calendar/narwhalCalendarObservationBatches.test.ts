@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { narwhalCanonicalIdentityKey } from '../marketCalendarMetricIdentity'
-import { narwhalObservationBatches, narwhalStandardRowInputs } from './narwhalCalendarObservationBatches'
+import { narwhalObservationBatches, narwhalStandardRowInputs,
+  narwhalStandardRowInputsDetailed } from './narwhalCalendarObservationBatches'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
 const AT = '2026-11-13T13:30:00.000Z'
@@ -64,5 +65,17 @@ describe('不是发布的东西不进日历', () => {
     expect(rows.map((row) => row.sourceEventId)).toEqual(['nowcast-1', 'gdp-1'])
     expect(rows.find((row) => row.sourceEventId === 'nowcast-1')?.rowKind).toBe('estimate')
     expect(rows.find((row) => row.sourceEventId === 'gdp-1')?.rowKind).toBeUndefined()
+  })
+})
+
+describe('映射不上的行必须交出去，不许静默丢', () => {
+  it('无 period、类型串不在表里 → 进 unmapped，不消失', () => {
+    const detailed = narwhalStandardRowInputsDetailed([
+      release({ releaseId: 'unknown-1', name: 'Brand new event type', values: [] })
+    ])
+    expect(detailed.rows).toHaveLength(0)
+    expect(detailed.unmapped).toEqual([
+      { sourceKey: 'unknown-1', name: 'Brand new event type', reason: 'unknown-event-type' }
+    ])
   })
 })

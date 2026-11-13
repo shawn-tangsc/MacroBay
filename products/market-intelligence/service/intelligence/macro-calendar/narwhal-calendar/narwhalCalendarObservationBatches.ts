@@ -187,8 +187,19 @@ export type NarwhalStandardRowInput = Readonly<{
  */
 export const narwhalNotAReleaseSeriesIds: readonly string[] = Object.freeze(['usa-gdp-nowcast'])
 
-export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease[]): readonly NarwhalStandardRowInput[] {
+/**
+ * 行 + **没映射上的**（不静默丢）。
+ *
+ * 没有 `period`、类型串又不在 22 号表里的行，以前在构造器里 `continue` 掉了——结果是
+ * `unmapped` 表永远空，而「空表」会被当成「没有未映射」。**映射不上是事实，必须交出去记下来**，
+ * 否缺口统计就是假的。
+ */
+export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParsedRelease[]): Readonly<{
+  rows: readonly NarwhalStandardRowInput[]
+  unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: 'unknown-event-type' | 'bad-period' }>[]
+}> {
   const rows: NarwhalStandardRowInput[] = []
+  const unmapped: { sourceKey: string; name: string; reason: 'unknown-event-type' | 'bad-period' }[] = []
   for (const release of releases) {
     // 不是「排除」，是**写进去并标记**：分析侧只读标准表一个入口，不写表它就彻底不存在；
     // 而日历按 `row_kind = 'release'` 过滤，所以三次估算不会变成三次「GDP 发布」。
@@ -201,7 +212,10 @@ export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease
       // 官方 FOMC 那边是事件型，市场这边若当指标型，同一个会议就分成两行。事件型行带值不矛盾。
       // 映射不到 `evt.*` 的才落 `unknown-event-type`（不是 `bad-period`——源里根本没有期间字段）。
       const code = eventCodeBySourceType[release.name]
-      if (code === undefined) continue
+      if (code === undefined) {
+        unmapped.push({ sourceKey: release.releaseId, name: release.name, reason: 'unknown-event-type' })
+        continue
+      }
       const first = release.values[0]
       rows.push({
         countryCode: release.country, metricKey: code, periodKey: release.at.slice(0, 16),
@@ -226,5 +240,10 @@ export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease
       })
     }
   }
-  return rows
+  return { rows, unmapped }
+}
+
+/** 只要行的调用方用这个（未映射的交出去由写表那层记）。 */
+export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease[]): readonly NarwhalStandardRowInput[] {
+  return narwhalStandardRowInputsDetailed(releases).rows
 }

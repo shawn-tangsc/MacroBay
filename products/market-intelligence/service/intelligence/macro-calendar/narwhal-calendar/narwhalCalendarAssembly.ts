@@ -28,7 +28,8 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
   /** 采集前的门：源还锁着（`pending`）或读者关掉 → 这轮不采。 */
   readSourceGate?: () => Promise<Readonly<{ visibility: string; enabled: boolean }> | undefined>
   /** 按 measure 拆行的标准行（S1 双写用）：一次采集给一次，与语言无关。 */
-  appendStandardRows?: (rows: readonly NarwhalStandardRowInput[]) => void
+  appendStandardRows?: (rows: readonly NarwhalStandardRowInput[],
+    unmapped: readonly Readonly<{ sourceKey: string; name: string; reason: string }>[]) => void
   /** 把发布同时写成日历观测（走日历那张表的同一套写入校验）。 */
   appendObservationBatch?: (batch: NarwhalCalendarBatch) => void
 }>) {
