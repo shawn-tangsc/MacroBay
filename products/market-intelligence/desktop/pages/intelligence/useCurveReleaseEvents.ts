@@ -15,8 +15,10 @@ export type CurveReleaseEvent = Readonly<{
   at: string
   /** 日历当前语言的完整标题；图上会被换成短名。 */
   label: string
-  /** 指标身份（经济数据）与发布类型（央行事件）：两者至少一个，否则这一行不参与标注。 */
-  metricKey?: string
+  /** 主 measure 的身份：只用于展示名，不参与资格。 */
+  eventNameKey?: string
+  /** 这次发布覆盖的全部 metric_key：**资格只看这个列表**。 */
+  measureKeys?: readonly string[]
   seriesId?: string
 }>
 
@@ -65,10 +67,18 @@ export function useCurveReleaseEvents(input: Readonly<{
             const label = typeof record.title === 'string' ? record.title : ''
             if (!Number.isFinite(Date.parse(at)) || !label) continue
             // 身份字段照抄，不按名字补：没有身份的行由契约那层整条挡掉。
-            const metricKey = typeof record.eventNameKey === 'string' ? record.eventNameKey
-              : typeof record.metricKey === 'string' ? record.metricKey : undefined
+            const eventNameKey = typeof record.eventNameKey === 'string' ? record.eventNameKey : undefined
+            const measureKeys = Array.isArray(record.measureKeys)
+              ? record.measureKeys.filter((key): key is string => typeof key === 'string')
+              : undefined
             const seriesId = typeof record.seriesId === 'string' ? record.seriesId : undefined
-            next.push({ at, label, ...(metricKey ? { metricKey } : {}), ...(seriesId ? { seriesId } : {}) })
+            next.push({
+              at,
+              label,
+              ...(eventNameKey ? { eventNameKey } : {}),
+              ...(measureKeys && measureKeys.length ? { measureKeys } : {}),
+              ...(seriesId ? { seriesId } : {})
+            })
           }
         }
         // 同一时刻同名的行只留一条：来源批次的重复不该在图上叠两圈。

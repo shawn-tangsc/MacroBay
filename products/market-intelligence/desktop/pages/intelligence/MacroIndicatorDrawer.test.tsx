@@ -321,7 +321,7 @@ describe('expectation curve inside the drawer', () => {
     await act(async () => {
       root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined}
         onRetryPolicy={() => undefined} policyText={text} policyReading={reading}
-        releaseEvents={[{ at: '2026-11-10T13:30:00.000Z', label: '10月未季调消费者物价指数(年率)', metricKey: 'US.CPI.NSA.YOY' }]} /></ShellLanguageProvider>)
+        releaseEvents={[{ at: '2026-11-10T13:30:00.000Z', label: '10月未季调消费者物价指数(年率)', eventNameKey: 'US.CORE_CPI.SA.MOM', measureKeys: ['US.CORE_CPI.SA.MOM', 'US.CPI.NSA.YOY'] }]} /></ShellLanguageProvider>)
     })
     // 期望差：25×(0.70−0.50) = +5.0bp，标注贴在图顶。
     expect(document.body.querySelector('.mk-plot__svg')?.textContent).toContain('↑ +5.0bp CPI 年率')

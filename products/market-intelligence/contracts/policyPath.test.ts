@@ -221,7 +221,9 @@ describe('weighted expectation', () => {
 
 describe('event attribution on the curve', () => {
   const at = (minute: number): string => new Date(Date.UTC(2026, 9, 30, 12, minute)).toISOString()
-  const cpi = (minute: number, label = 'CPI 年率') => ({ at: at(minute), label, metricKey: 'US.CPI.NSA.YOY' })
+  const cpi = (minute: number, label = 'CPI 年率') => ({
+    at: at(minute), label, eventNameKey: 'US.CPI.NSA.YOY', measureKeys: ['US.CPI.NSA.YOY']
+  })
 
   it('marks an event when the curve moved at least half a point, with the move and the dot height', () => {
     // E = 25×hike25 − 0.25：0.60 → 14.75bp，0.70 → 17.25bp，差 2.5bp。
@@ -238,7 +240,7 @@ describe('event attribution on the curve', () => {
   it('never marks an indicator that is not on the list, however large the move', () => {
     // EIA 天然气库存在旧源里是 importance: high，但它动的是气价，不是加息预期。
     const series = [observation(at(55), 0.2, 0.4), observation(at(65), 0.2, 0.6)]
-    expect(expectationEventMoves(series, [{ at: at(60), label: '上周EIA天然气库存变化', metricKey: 'US.EIA.NATURAL_GAS.STOCKS' }]))
+    expect(expectationEventMoves(series, [{ at: at(60), label: '上周EIA天然气库存变化', measureKeys: ['US.EIA.NATURAL_GAS.STOCKS'] }]))
       .toEqual([])
   })
 
@@ -250,7 +252,7 @@ describe('event attribution on the curve', () => {
   it('marks one release once: two measures at the same instant collapse to the higher-priority one', () => {
     const series = [observation(at(55), 0.2, 0.4), observation(at(65), 0.2, 0.6)]
     const marks = expectationEventMoves(series, [
-      { at: at(60), label: '核心 CPI', metricKey: 'US.CORE_CPI.NSA.YOY' },
+      { at: at(60), label: '核心 CPI', eventNameKey: 'US.CORE_CPI.NSA.YOY', measureKeys: ['US.CORE_CPI.NSA.YOY'] },
       cpi(60)
     ])
     expect(marks).toHaveLength(1)
@@ -274,6 +276,28 @@ describe('event attribution on the curve', () => {
     expect(marks.map((mark) => mark.label)).toEqual(['议息决议', '会议纪要'])
   })
 
+  it('marks a release whose measure list covers a required key, even when its primary measure does not', () => {
+    // 写入端一行只存得下主 measure（这里是核心 CPI 月率）；资格要看这次发布覆盖的全部 measure。
+    const series = [observation(at(55), 0.2, 0.4), observation(at(65), 0.2, 0.6)]
+    const marks = expectationEventMoves(series, [{
+      at: at(60),
+      label: 'Consumer prices',
+      eventNameKey: 'US.CORE_CPI.SA.MOM',
+      measureKeys: ['US.CORE_CPI.SA.MOM', 'US.CPI.NSA.YOY']
+    }])
+    expect(marks).toHaveLength(1)
+  })
+
+  it('never marks a release whose measure list holds none of the required keys, whatever the move', () => {
+    const series = [observation(at(55), 0.2, 0.4), observation(at(65), 0.2, 0.6)]
+    expect(expectationEventMoves(series, [{
+      at: at(60),
+      label: 'Consumer prices',
+      eventNameKey: 'US.CORE_CPI.SA.MOM',
+      measureKeys: ['US.CORE_CPI.SA.MOM']
+    }])).toEqual([])
+  })
+
   it('attributes neither event when two windows overlap', () => {
     const series = [observation(at(50), 0.2, 0.5), observation(at(60), 0.2, 0.7), observation(at(75), 0.2, 0.9)]
     expect(expectationEventMoves(series, [cpi(55), cpi(65)])).toEqual([])
@@ -289,13 +313,13 @@ describe('event attribution on the curve', () => {
 
   it('keeps at most five marks, the largest moves first, then back in time order', () => {
     const series: PolicyPathObservation[] = []
-    const events: Array<{ at: string; label: string; metricKey: string }> = []
+    const events: Array<{ at: string; label: string; measureKeys: string[] }> = []
     for (let index = 0; index < 6; index += 1) {
       const base = index * 60
       series.push(observation(at(base + 50), 0.2, 0.5))
       // 每一步 hike 0.02 → 0.5bp 起，第 6 个是 1.5bp。
       series.push(observation(at(base + 70), 0.2, 0.5 + (index + 1) * 0.02))
-      events.push({ at: at(base + 60), label: `e${index}`, metricKey: 'US.NONFARM.SA.CHANGE' })
+      events.push({ at: at(base + 60), label: `e${index}`, measureKeys: ['US.NONFARM.SA.CHANGE'] })
     }
     expect(expectationEventMoves(series, events).map((mark) => mark.label)).toEqual(['e1', 'e2', 'e3', 'e4', 'e5'])
   })

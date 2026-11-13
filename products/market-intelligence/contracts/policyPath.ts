@@ -428,11 +428,34 @@ export const POLICY_PATH_EVENT_METRIC_PRIORITY = Object.freeze([
 export type PolicyPathEventCandidate = Readonly<{
   at: string
   label: string
-  /** 指标身份（经济数据）。与 `seriesId` 至少有一个；两个都没有的行不参与标注。 */
-  metricKey?: string
+  /**
+   * 主 measure 的身份：**只用来取显示名，不参与资格判断**。
+   *
+   * 一次发布一行，这一格只装「这条事件叫什么」；它不等于这次发布覆盖的全部指标。
+   */
+  eventNameKey?: string
+  /**
+   * 这次发布覆盖的全部 `metric_key`——**资格只看这个列表**。
+   *
+   * 为什么需要它：一次发布包含多个 measure（CPI 年率/核心年率/月率），写入端一行只存得下一个主
+   * measure 的身份。只看 `eventNameKey`，四个必标 key 会在写入时就丢掉，标注永远命中不了。
+   */
+  measureKeys?: readonly string[]
   /** 发布类型（央行事件）：`usa-policy-rate-decision` / `usa-monetary-policy-minutes`。 */
   seriesId?: string
 }>
+
+/**
+ * 这次发布覆盖了哪个必标指标（按优先级取第一个）；一个都没有就是 `undefined`。
+ *
+ * 只认 `measureKeys`，**不看 `eventNameKey`、不看名字**——`eventNameKey` 是主 measure 的显示名，
+ * 一次发布覆盖多个指标时它只代表其中一个，拿它判资格会把另外几个必标指标整条漏掉。
+ */
+export function matchedRelevantKey(event: PolicyPathEventCandidate): string | undefined {
+  const keys = event.measureKeys ?? []
+  return (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[])
+    .find((key) => keys.includes(key))
+}
 
 export const POLICY_PATH_EVENT_POLICY = Object.freeze({
   /** 归因窗口：事件前后各 15 分钟。 */
@@ -463,13 +486,13 @@ export function expectationEventMoves(
   // 第一步：清单之外一律不标（判据只有指标身份 / 发布类型，不看名字、不看 importance）。
   // 没有身份的行（例如今天 0xRouter 的行没有 series_id）即使名字百分百像 FOMC 决议，也不标。
   const relevant = events.filter((event) =>
-    (event.metricKey !== undefined && (POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS as readonly string[]).includes(event.metricKey))
+    matchedRelevantKey(event) !== undefined
     || (event.seriesId !== undefined && (POLICY_PATH_EVENT_RELEVANT_SERIES_IDS as readonly string[]).includes(event.seriesId)))
   // 第二步：同一时刻（同一次发布）只留优先级最高的一条。
   const rankOf = (event: PolicyPathEventCandidate): number => {
     if (event.seriesId === 'usa-policy-rate-decision') return -1
-    if (event.metricKey === undefined) return Number.MAX_SAFE_INTEGER
-    return (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[]).indexOf(event.metricKey)
+    const key = matchedRelevantKey(event)
+    return key === undefined ? Number.MAX_SAFE_INTEGER : (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[]).indexOf(key)
   }
   const byInstant = new Map<string, PolicyPathEventCandidate>()
   for (const event of relevant) {

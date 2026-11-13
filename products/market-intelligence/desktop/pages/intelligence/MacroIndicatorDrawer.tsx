@@ -15,7 +15,7 @@ import { productText } from '../../shared/i18n/productText'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { expectationBp, expectationEventMoves } from '../../../contracts/policyPath'
+import { expectationBp, expectationEventMoves, matchedRelevantKey } from '../../../contracts/policyPath'
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
@@ -61,16 +61,29 @@ const MOCK = {
   }
 } as const
 
-/** 图上标注用的短名：按指标身份/发布类型取当前语言的叫法，取不到才退回日历标题。 */
-function shortEventLabel(event: Readonly<{ label: string; metricKey?: string; seriesId?: string }>, text: MacroIndicatorDrawerText): string {
+/**
+ * 图上标注用的短名：取**让这条发布命中清单的那个指标**的名字，其次主 measure，最后日历标题。
+ *
+ * 为什么先看 `measureKeys`：一次发布覆盖多个指标，主 measure 可能不是解释这次跳动的那个
+ * （CPI 那行的主 measure 是核心月率，命中清单的却是整体年率）。
+ */
+function shortEventLabel(
+  event: Readonly<{ label: string; eventNameKey?: string; measureKeys?: readonly string[]; seriesId?: string }>,
+  text: MacroIndicatorDrawerText
+): string {
   if (event.seriesId === 'usa-policy-rate-decision') return text.eventNames.decision
   if (event.seriesId === 'usa-monetary-policy-minutes') return text.eventNames.minutes
-  switch (event.metricKey) {
+  const matched = matchedRelevantKey({ at: '', label: event.label, ...(event.measureKeys ? { measureKeys: event.measureKeys } : {}) })
+  return nameOfMetricKey(matched ?? event.eventNameKey, text) ?? event.label
+}
+
+function nameOfMetricKey(key: string | undefined, text: MacroIndicatorDrawerText): string | undefined {
+  switch (key) {
     case 'US.CPI.NSA.YOY': return text.eventNames.cpi
     case 'US.CORE_CPI.NSA.YOY': return text.eventNames.coreCpi
     case 'US.NONFARM.SA.CHANGE': return text.eventNames.payrolls
     case 'US.CORE_PCE.NSA.YOY': return text.eventNames.corePce
-    default: return event.label
+    default: return undefined
   }
 }
 
@@ -94,7 +107,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
    *
    * 由宿主从**它已经读到的日历结果**里取；抽屉不为此另发一次日历请求。缺省就是没有标注。
    */
-  releaseEvents?: readonly Readonly<{ at: string; label: string; metricKey?: string; seriesId?: string }>[]
+  releaseEvents?: readonly Readonly<{ at: string; label: string; eventNameKey?: string; measureKeys?: readonly string[]; seriesId?: string }>[]
   /**
    * 读数没读出来时的唯一动作：重读一次，不跳转。
    *
