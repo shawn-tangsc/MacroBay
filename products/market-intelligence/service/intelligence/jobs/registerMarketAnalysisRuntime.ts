@@ -180,6 +180,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   })
   const significanceGate = createAnalysisSignificanceGate({
     now,
+    // 连续读不到的计数落在当天窗口里（UTC 日 + 侧），跨重启不清零。
+    readCalendarReadStreak: (utcDay) => repository.readCalendarReadStreak(utcDay),
+    writeCalendarReadStreak: (input) => repository.writeCalendarReadStreak(input),
     queryMacroRoute: ({ asOf, months }) => queryMacroRoute(input.publicQueryService, { asOf, months }),
     countRuns: (at, excludedRowId) => countAnalysisRuns(repository, at, excludedRowId),
     lastAutoRunAt: (eventGroupId, at) => lastAutoRunAt(repository, eventGroupId, at),

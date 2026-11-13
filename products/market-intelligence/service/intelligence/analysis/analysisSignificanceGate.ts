@@ -106,6 +106,14 @@ export type SignificanceGateDependencies = Readonly<{
    */
   updateDecision: (rowId: string, decision: 'skipped', reasonCode: string) => void
   /**
+   * 连续「读不到」的计数，按 UTC 日与侧持久化（跨重启不清零）。
+   *
+   * 缺省时退回进程内存，只用于测试或没装持久层的老装配；生产装配必须提供，否则一次重启
+   * 会白送两次放宽，正是「一次配置错误烧光额度」的形状。
+   */
+  readCalendarReadStreak?: (utcDay: string) => Readonly<{ official: number; provider: number }>
+  writeCalendarReadStreak?: (input: Readonly<{ utcDay: string; side: 'official' | 'provider'; count: number; updatedAt: string }>) => void
+  /**
    * 当日额度用尽时告诉读者一次（P3）。只在 `day-budget-exhausted` 这一种拒绝上调用：
    * 小时窗口、合并区间、时段的保留位都不是「今天的次数用完了」。缺省表示未装配通知运行时。
    */
@@ -143,6 +151,27 @@ export type SignificanceGateOutcome = Readonly<{
 }>
 
 export function createAnalysisSignificanceGate(dependencies: SignificanceGateDependencies) {
+  const utcDayOf = (now: string): string => now.slice(0, 10)
+  /** 当天窗口的计数：有持久层就读它，没有就用进程内存。 */
+  function calendarReadStreak(now: string): ReadStreak {
+    return dependencies.readCalendarReadStreak?.(utcDayOf(now)) ?? memoryStreak
+  }
+  /** 只写有变化的侧；跨天由主键 `utc_day` 自然分开，不需要显式清零。 */
+  function persistCalendarReadStreak(now: string, next: ReadStreak): void {
+    if (!dependencies.writeCalendarReadStreak) {
+      memoryStreak.official = next.official
+      memoryStreak.provider = next.provider
+      return
+    }
+    const utcDay = utcDayOf(now)
+    for (const side of ['official', 'provider'] as const) {
+      if (next[side] !== memoryStreak[side] || next[side] !== calendarReadStreak(now)[side]) {
+        dependencies.writeCalendarReadStreak({ utcDay, side, count: next[side], updatedAt: now })
+      }
+    }
+    memoryStreak.official = next.official
+    memoryStreak.provider = next.provider
+  }
   /**
    * 「今天的次数用完了」只在每日额度这一种拒绝上通知一次；同一天的重复提交由平台按 UTC 日键合并，
    * 所以这里不必自己数次数（那是去重键的职责，写两处迟早会不一致）。
@@ -162,7 +191,8 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
     if (scope === undefined) return
     await dependencies.notifyQuotaExhausted?.({ used: quota.used, limit: quota.limit, occurredAt: dependencies.now(), scope })
   }
-  let readStreak: ReadStreak = Object.freeze({ official: 0, provider: 0 })
+  // 没有持久层时用的兜底：只在进程内有效，生产装配由 repository 提供。
+  const memoryStreak = { official: 0, provider: 0 }
   return {
     async evaluate(input: SignificanceGateInput): Promise<SignificanceGateOutcome> {
       const line = analysisRunLineOf(input.triggerKey)
@@ -200,8 +230,8 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
         current: flattenBaseline(route),
         previous: previous?.values ?? null,
         ...dependencies.countRuns(now)
-      }, route, readStreak)
-      readStreak = evaluated.streaks
+      }, route, calendarReadStreak(now))
+      persistCalendarReadStreak(now, evaluated.streaks)
       const decision = evaluated.decision
       if (decision.reasonCode !== null) {
         // A refused attempt that arrived with its own ledger row rewrites that row; anything else

@@ -55,6 +55,11 @@ export const triggerStatusPolicy = Object.freeze({
   explainableReasonCodes: Object.freeze({
     significanceConfirmed: 'significance-confirmed',
     significanceBelowThreshold: 'significance-below-threshold',
+    /**
+     * 日历读不到时先放行一次。三种清单（服务端、renderer 白名单、文案表）必须同时有它，
+     * 少一处这条判定就会被客户端静默丢掉。
+     */
+    calendarUnavailable: 'calendar-unavailable',
     /** 只由 provider 发布的"意外"驱动的那次分析（设计 145 §8 A）。 */
     providerSurpriseConfirmed: 'provider-surprise-confirmed',
     semanticNoOp: 'semantic-no-op',

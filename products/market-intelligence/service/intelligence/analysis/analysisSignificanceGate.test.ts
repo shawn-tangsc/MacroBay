@@ -325,3 +325,32 @@ it('resets the streak as soon as the side is readable again', async () => {
   // 恢复过一次就清零，所以这次仍允许放行（第 1 次而非第 3 次）。
   expect((await call()).decision).toBe('queued')
 })
+
+it('keeps the unreadable streak across a restart, and resets it on a new UTC day', async () => {
+  // 模拟持久层：按 UTC 日存两个侧。重启 = 新建一个闸门实例，读同一份存储。
+  const store: { utcDay: string; official: number; provider: number } = { utcDay: '2026-10-09', official: 0, provider: 0 }
+  let now = '2026-10-09T12:00:00.000Z'
+  const gate = () => createAnalysisSignificanceGate({
+    now: () => now,
+    queryMacroRoute: vi.fn(async () => route([], { providerState: 'unavailable' })),
+    recordDecision: vi.fn(), updateDecision: vi.fn(),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
+    lastAutoRunAt: () => null,
+    readCalendarReadStreak: (utcDay: string) => utcDay === store.utcDay
+      ? { official: store.official, provider: store.provider }
+      : { official: 0, provider: 0 },
+    writeCalendarReadStreak: (input: { utcDay: string; side: 'official' | 'provider'; count: number }) => {
+      store.utcDay = input.utcDay; store[input.side] = input.count
+    }
+  } as never)
+  const call = (instance: ReturnType<typeof gate>) => instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf: now, previousSnapshot: snapshot('3.1%') })
+
+  expect((await call(gate())).decision).toBe('queued')
+  expect((await call(gate())).decision).toBe('queued')
+  // 「重启」：新实例读同一份持久计数，第 3 次不再因为读不到放行。
+  expect((await call(gate())).decision).toBe('skipped')
+
+  // 跨天：UTC 日一变，计数从 0 开始。
+  now = '2026-10-10T00:10:00.000Z'
+  expect((await call(gate())).decision).toBe('queued')
+})
