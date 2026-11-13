@@ -146,12 +146,12 @@
       "why": "存储契约搬出旧源目录后仍在用；里面出现的源名是旧源协议字段，删旧源时随之清理"
     },
     "service/intelligence/macro-calendar/coreIndicatorValueSources.ts": {
-      "count": 2,
-      "why": "「指标 → 取值源」的唯一派生点：providerId 联合里出现 narwhal / fred-rates-liquidity / bls 三个源名，count 计 2（bls 那行与联合类型行）；它只声明「哪个源供这个指标」，不参与取数、排序、筛选"
+      "count": 3,
+      "why": "「指标 → 取值源」的唯一派生点：providerId 联合 + 每层总闸的 sourceId 映射（narwhal / fred-rates-liquidity / bls）。只声明「哪个源供这个指标、它的总闸是哪个源」，不参与取数、排序、筛选"
     },
     "desktop/pages/intelligence/IndicatorCards.tsx": {
-      "count": 1,
-      "why": "卡片页把「上一期」的出处标出来（FRED / 数据商 / 旧源），显示层按事实自带的 provider 显示，不参与取数"
+      "count": 2,
+      "why": "卡片页把「上一期 / 本期」的出处标出来（FRED / 数据商），显示层按事实自带的 provider 显示，不参与取数"
     }
   }
 }

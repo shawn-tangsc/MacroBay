@@ -94,11 +94,27 @@ export function readNextReleaseForMetric(database: DatabaseSync, input: Readonly
   metricKey: string
   asOf: string
 }>): Readonly<{ period: string; releaseAt: string; timePrecision: 'minute' | 'date' }> | undefined {
+  /**
+   * 谓词三层，**不能一刀切比日期**（架构师 2026-11-14 抓到）：
+   * 1. 日期先设下界且**含今天**——以前是 `scheduled_date > 今天` 严格大于，于是「今天 21:30 那场」
+   *    在上午 10:00 被整场跳过，卡片显示「下次发布 12-10」，而事实是今晚就有一场；
+   * 2. 只有日期（`scheduled_at` 为空）→ 今天就算，因为我们不知道几点，但读者需要知道「今天有」；
+   * 3. 有时刻 → 同一日期上看**时刻**：今天没到点的仍算下一次，过了的不算。
+   */
   const row = database.prepare(`select scheduled_date, period_key, scheduled_at, time_precision
     from ${calendarStandardTablePolicy.releasesView}
-    where metric_key = ? and scheduled_date > ?
+    where metric_key = ?
+      and scheduled_date >= ?
+      and ( scheduled_at is null
+         or scheduled_date > ?
+         or scheduled_at > ? )
     order by scheduled_date asc, coalesce(scheduled_at, '') asc
-    limit 1`).get(input.metricKey, input.asOf.slice(0, 10)) as Record<string, unknown> | undefined
+    limit 1`).get(
+    input.metricKey,
+    input.asOf.slice(0, 10),
+    input.asOf.slice(0, 10),
+    input.asOf
+  ) as Record<string, unknown> | undefined
   if (row === undefined) return undefined
   // 形状对齐盘口现查器的入参：`{ metricKey, period, releaseAt, asOf }`。少给期次它就会查错盘，
   // 所以缺 `scheduled_at` 时用当天 00:00（**日期粒度的发布日**），不编时刻。

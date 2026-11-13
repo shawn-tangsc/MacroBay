@@ -81,6 +81,30 @@ describe('下一期排期：读不到就说没有，不许编期次', () => {
       .toBeUndefined()
   })
 
+  /**
+   * 「今天还有一场」不许被跳过（架构师 2026-11-14 抓到）。
+   *
+   * 原来的谓词是 `scheduled_date > asOf 的日期`，**严格大于**，于是「今天 21:30 那场」在上午 10:00 查
+   * 会被直接跳过——卡片显示「下次发布 12-10」，而事实是今晚就有一场。那看起来完全正常。
+   */
+  it('counts a release later today when it carries a time', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, metricKey: 'US.TODAY.SA.CHANGE', periodKey: '2026-11',
+      scheduledDate: '2026-11-14', scheduledAt: '2026-11-14T13:30:00.000Z', sourceEventId: 'r-today-minute' })
+    expect(readNextReleaseForMetric(database, { metricKey: 'US.TODAY.SA.CHANGE', asOf: '2026-11-14T02:00:00.000Z' }))
+      .toEqual({ period: '2026-11', releaseAt: '2026-11-14T13:30:00.000Z', timePrecision: 'minute' })
+  })
+
+  it('counts a date-only release due today, because we do not know its time', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, metricKey: 'US.TODAYONLY.SA.MOM', periodKey: '2026-11',
+      scheduledDate: '2026-11-14', scheduledAt: undefined, timePrecision: 'date', sourceEventId: 'r-today-date' })
+    expect(readNextReleaseForMetric(database, { metricKey: 'US.TODAYONLY.SA.MOM', asOf: '2026-11-14T02:00:00.000Z' }))
+      .toMatchObject({ releaseAt: '2026-11-14T00:00:00.000Z', timePrecision: 'date' })
+  })
+
   it('估算不是发布：视图里没有估算行，所以它不会冒出来当「下一次」', () => {
     const database = new DatabaseSync(':memory:')
     seed(database)
