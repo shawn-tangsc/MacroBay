@@ -14,8 +14,8 @@
       "why": "看板源状态清单：列的就是 feed id"
     },
     "contracts/macro/marketCalendarQueryContracts.ts": {
-      "count": 13,
-      "why": "契约里的 provider id 常量与来源标签定义处"
+      "count": 21,
+      "why": "契约里的 provider id 常量与来源标签定义处；19 = 原 13 + `sourceFeeds` 新增的 6 个 feed id（来源真值的唯一出处，属于可命名的整合数据）"
     },
     "desktop/pages/intelligence/useCalendarCardData.ts": {
       "count": 3,
@@ -136,6 +136,10 @@
     "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarScheduler.ts": {
       "count": 2,
       "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "service/intelligence/macro-calendar/marketCalendarSourceFeedIds.ts": {
+      "count": 6,
+      "why": "行 → 来源 feed id 的映射本尊：六个 feed id 就是这张表的全部内容，别处不许再写"
     }
   }
 }

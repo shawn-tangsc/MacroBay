@@ -39,6 +39,16 @@ export const marketCalendarPublicPolicy = Object.freeze({
    */
   collectionFeeds: ['macro-calendar-narwhal-economic-data'],
   /**
+   * 一条事件可以来自哪些**源 feed**。`source` 原来只有 `'Narwhal' | '0xRouter'` 两档，
+   * 表达不了「官方 BLS 发的」，于是官方行被标成旧源。现在以 feed id 为真值，
+   * 两个旧值保留只为兼容还没迁移的旧行，**新写入不许再用旧值**。
+   */
+  sourceFeeds: [
+    'macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
+    'macro-calendar-narwhal-central-bank-activities', 'macro-calendar-bls', 'macro-calendar-bea',
+    'macro-calendar-fed'
+  ],
+  /**
    * 0xRouter 的三个事件身份：**只描述旧来源自己能采什么**（它的采集器、它的尝试台账、
    * 以及按需补跑时能点名的那三个端点）。它不是当前读取来源，也不是按事件类型的映射表
    * ——映射表是 `feedByKind`，采集清单是 `collectionFeeds`。
@@ -93,7 +103,12 @@ export type MarketCalendarEvent = Readonly<{
    * 这条观测由哪个来源给出：`Narwhal` 是当前采集来源；`0xRouter` 只在 Narwhal 这个月的
    * 这一类事件里一行都没有时回落出现（库里还留着切换前的行）。
    */
-  source: 'Narwhal' | '0xRouter'; sourceObservedAt: string; coverage: 'observed-unverified'
+  /**
+   * 来源。**新写入一律给 feed id**（`marketCalendarPublicPolicy.sourceFeeds`）；
+   * `'Narwhal' | '0xRouter'` 是旧行兼容值，读侧应按「feed id 优先、旧值兜底」判。
+   */
+  source: typeof marketCalendarPublicPolicy.sourceFeeds[number] | 'Narwhal' | '0xRouter'
+  sourceObservedAt: string; coverage: 'observed-unverified'
   /**
    * 这条数据的**真实来源 feed id**（`macro-calendar-bls`、`macro-calendar-narwhal-economic-data`…）。
    * `source` 那两个值表达不了「官方 BLS 发的」——它只有市场/旧源两档，官方行会被标成旧源。

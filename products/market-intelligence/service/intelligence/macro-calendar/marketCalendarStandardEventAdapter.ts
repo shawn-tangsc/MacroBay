@@ -74,7 +74,9 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     importance: 'medium',
     scheduledAt: row.scheduledAt ?? `${row.scheduledDate}T00:00:00.000Z`,
     consensus: value('consensus'), providerPrevious: value('previous'), providerActual: value('actual'),
-    source: context.resolveSource(row),
+    // **feed id 优先**：它来自写入时定下的真值；认不出时才回退到装配处给的两档旧值。
+    source: sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) })
+      ?? context.resolveSource(row),
     ...(sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) }) === undefined
       ? {} : { sourceFeedId: sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) })! }),
     sourceObservedAt: row.observedAt, coverage: 'observed-unverified',

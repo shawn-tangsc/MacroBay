@@ -1,4 +1,5 @@
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 
 /**
  * 一行日历数据的**来源 feed id**。
@@ -24,10 +25,12 @@ export const marketCalendarSourceFeedIds = Object.freeze({
   } as const)
 })
 
+type FeedId = typeof marketCalendarPublicPolicy.sourceFeeds[number]
+
 /** 官方提供方 id → 那个提供方的 feed id。**不按名字猜**：认不出就返回 `undefined`。 */
-export function officialFeedIdOf(providerId: string): string | undefined {
+export function officialFeedIdOf(providerId: string): FeedId | undefined {
   return (Object.values(marketCalendarSourceFeedIds.official) as readonly string[]).includes(providerId)
-    ? providerId : undefined
+    ? providerId as FeedId : undefined
 }
 
 /**
@@ -36,7 +39,7 @@ export function officialFeedIdOf(providerId: string): string | undefined {
  * （那等于给未知来源编一个身份）。
  */
 export function sourceFeedIdOf(row: Readonly<{ sourceProviderId: string
-  eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity' }>): string | undefined {
+  eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity' }>): FeedId | undefined {
   const official = officialFeedIdOf(row.sourceProviderId)
   if (official !== undefined) return official
   if (row.sourceProviderId !== narwhalSourcePolicy.providerId) return undefined
