@@ -66,9 +66,10 @@ describe('core indicator source page', () => {
     // antd Switch 在禁用时给原生 `disabled`，不是 `aria-disabled`——按真实标记断言。
     const control = row.querySelector<HTMLButtonElement>('button.ant-switch') ?? row.querySelector<HTMLButtonElement>('button[role="switch"]')
     expect(control?.disabled).toBe(true)
-    // 那一行里有两个按钮（开关 + 去数据源），按类选，别撞到开关上。
-    const jump = row.querySelector<HTMLButtonElement>('.core-indicator-sources__open')!
-    expect(jump.textContent).toBe(t.coreIndicators.valueSourceOpenSource)
+    /* 复用其它业务页那套行之后，总闸关掉时**名字本身**就是那颗「去数据源」按钮
+       （源开着时名字也是按钮，只是点了是打开源详情）——不再另加一颗尾巴按钮。 */
+    const jump = row.querySelector<HTMLButtonElement>('.business-card__label--action')!
+    expect(jump.textContent).toBe('Narwhal 经济数据')
     await act(async () => jump.click())
     expect(onOpenSource).toHaveBeenCalledWith('narwhal')
   })

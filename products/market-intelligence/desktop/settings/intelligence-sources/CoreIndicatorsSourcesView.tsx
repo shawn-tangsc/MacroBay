@@ -43,7 +43,7 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
     'US.CORE_PCE.NSA.YOY': 'corePceYoy'
   }
 
-  return <div className="core-indicator-sources" data-core-indicator-sources="true">
+  return <div className="business-cell-grid" data-core-indicator-sources="true">
     {coreIndicatorMetricKeys.map((metricKey) => {
       /* 名字取不到就不渲染这一行——绝不把 provider id 印给读者。 */
       const rows: readonly Readonly<{ source: CoreIndicatorValueSource; name: string }>[] =
@@ -54,44 +54,56 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
       const keyOf = (providerId: string): string => coreIndicatorSourcePreferenceKey(metricKey, providerId)
       const enabledCount = rows.filter((row) => props.disabled[keyOf(row.source.providerId)] !== true).length
 
-      return <section className="core-indicator-sources__metric" data-core-indicator={metricKey} key={metricKey}>
-        <h3 className="core-indicator-sources__title">
+      return <div className="business-cell" data-core-indicator={metricKey} key={metricKey}>
+        <div className="business-cell__title">
           {t(`settings.intelligenceSources.coreIndicators.metrics.${metricCopyKeys[metricKey] ?? ''}`)}
-        </h3>
-        {rows.length === 0
-          ? <p className="core-indicator-sources__empty">{t('settings.intelligenceSources.coreIndicators.valueSourceEmpty')}</p>
-          : rows.map(({ source, name }) => {
-            const preferenceKey = keyOf(source.providerId)
-            /* 总闸关掉：这一行的细分设置没有意义，置灰并给去处。 */
-            const gateOff = props.sourceEnabled(source.providerId) === false
-            return <div
-              className="core-indicator-sources__row"
-              data-core-source-row={preferenceKey}
-              data-gate-off={gateOff ? 'true' : undefined}
-              key={preferenceKey}>
-              <span className="core-indicator-sources__name">{name}</span>
-              <span className="core-indicator-sources__type">
-                {t(`settings.intelligenceSources.coreIndicators.valueSourceType.${source.kind}`)}
-              </span>
-              <Switch
-                checked={props.disabled[preferenceKey] !== true}
-                disabled={gateOff}
-                onChange={(next) => props.onToggle(preferenceKey, next)}
-                size="small" />
-              {gateOff && props.onOpenSource !== undefined
-                ? <button
-                  className="core-indicator-sources__open"
-                  onClick={() => props.onOpenSource?.(source.providerId)}
-                  type="button">
-                  {t('settings.intelligenceSources.coreIndicators.valueSourceOpenSource')}
-                </button>
-                : null}
-            </div>
-          })}
-        {rows.length > 0 && enabledCount === 0
-          ? <p className="core-indicator-sources__closed">{t('settings.intelligenceSources.coreIndicators.valueSourceAllClosed')}</p>
-          : null}
-      </section>
+        </div>
+        <div className="business-cell__items">
+          {rows.length === 0
+            ? <p className="core-indicator-sources__empty">{t('settings.intelligenceSources.coreIndicators.valueSourceEmpty')}</p>
+            : rows.map(({ source, name }) => {
+              const preferenceKey = keyOf(source.providerId)
+              /* 总闸关掉：这一行的细分设置没有意义，置灰并给去处。 */
+              const gateOff = props.sourceEnabled(source.providerId) === false
+              return <div
+                className="business-card__row"
+                data-core-source-row={preferenceKey}
+                data-gate-off={gateOff ? 'true' : undefined}
+                key={preferenceKey}>
+                <div className="business-card__line">
+                  {gateOff && props.onOpenSource !== undefined
+                    ? <button
+                      className="business-card__label business-card__label--action"
+                      onClick={() => props.onOpenSource?.(source.providerId)}
+                      type="button">{name}</button>
+                    : <span className="business-card__label">{name}</span>}
+                  <span className="business-card__toggle">
+                    <Switch
+                      checked={props.disabled[preferenceKey] !== true}
+                      disabled={gateOff}
+                      onChange={(next) => props.onToggle(preferenceKey, next)}
+                      size="small" />
+                  </span>
+                </div>
+                {/* 第二行与其它业务页同形：只读的「频率 内置频率」+ 这一条腿的类型。
+                    频率归源设置，这里不给控件（与「日历」「舆情」两页一样只是占位）。 */}
+                <div className="business-card__preset" data-preset-builtin="true">
+                  <span className="business-card__preset-label-group">
+                    <span className="business-card__preset-label">{t('settings.intelligenceSources.collectionPolicy.frequency')}</span>
+                  </span>
+                  <span className="business-card__preset-value">
+                    {t(`settings.intelligenceSources.coreIndicators.valueSourceType.${source.kind}`)}
+                    {' · '}
+                    {t('settings.intelligenceSources.collectionPolicy.builtinCadence')}
+                  </span>
+                </div>
+              </div>
+            })}
+          {rows.length > 0 && enabledCount === 0
+            ? <p className="core-indicator-sources__closed">{t('settings.intelligenceSources.coreIndicators.valueSourceAllClosed')}</p>
+            : null}
+        </div>
+      </div>
     })}
   </div>
 }
