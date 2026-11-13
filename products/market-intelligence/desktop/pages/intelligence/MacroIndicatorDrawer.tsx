@@ -7,7 +7,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { ChevronDown, Info } from 'lucide-react'
 
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
-import { MiniReleaseCalendar } from './MiniReleaseCalendar'
+import { MiniReleaseCalendar, shiftMonth } from './MiniReleaseCalendar'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
@@ -15,6 +15,7 @@ import { productText } from '../../shared/i18n/productText'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { useCalendarMonthReleases } from './useCalendarMonthReleases'
+import { useNextMonthReleases } from './useNextMonthReleases'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -165,12 +166,29 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const changeMonth = (next: string): void => { setMonth(next); setPickedDay(undefined) }
   // 右列按「能不能解释利率路径」筛，与曲线标注同一把尺子（判据来自契约，不在这里另写一份）。
   const dayLayers = useMemo(() => splitDayLayers(dayEvents), [dayEvents])
-  // 「下次发布」与右列同一份按月读：找不到就不画这一格（不是写「未提供」——那会让人以为今天该有）。
+  /**
+   * 「下次发布」：先在本月那次读里找未来同一指标；**本月找不到才读下一个月**（一次，按 `asOf` 记住）。
+   * 两个月都找不到就不画这一格——不写「未提供」，也不猜「12 月之后」。
+   */
+  const nextReleaseKeys = useMemo(() => ({
+    cpi: ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY'],
+    payrolls: ['US.NONFARM.SA.CHANGE'],
+    pce: ['US.CORE_PCE.NSA.YOY']
+  }), [])
+  const monthHasNext = useMemo(() => Object.values(nextReleaseKeys)
+    .some((keys) => nextReleaseOf(releases.events, keys, nowInstant, timeZone) === undefined), [nextReleaseKeys, releases.events, nowInstant, timeZone])
+  const nextMonth = useNextMonthReleases({
+    enabled: open && monthHasNext,
+    month: shiftMonth(month, 1),
+    asOf: nowInstant,
+    locale,
+    ...(readMarketEvents ? { readMarketEvents } : {})
+  })
   const nextRelease = useMemo(() => ({
-    cpi: nextReleaseOf(releases.events, ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY'], nowInstant, timeZone),
-    payrolls: nextReleaseOf(releases.events, ['US.NONFARM.SA.CHANGE'], nowInstant, timeZone),
-    pce: nextReleaseOf(releases.events, ['US.CORE_PCE.NSA.YOY'], nowInstant, timeZone)
-  }), [releases.events, nowInstant, timeZone])
+    cpi: nextReleaseOf([...releases.events, ...nextMonth], nextReleaseKeys.cpi, nowInstant, timeZone),
+    payrolls: nextReleaseOf([...releases.events, ...nextMonth], nextReleaseKeys.payrolls, nowInstant, timeZone),
+    pce: nextReleaseOf([...releases.events, ...nextMonth], nextReleaseKeys.pce, nowInstant, timeZone)
+  }), [releases.events, nextMonth, nextReleaseKeys, nowInstant, timeZone])
   const [othersExpanded, setOthersExpanded] = useState(false)
   // 换一天就收起「其他」：展开态跟着日期走，不跟着抽屉走。
   useEffect(() => { setOthersExpanded(false) }, [selectedDay])

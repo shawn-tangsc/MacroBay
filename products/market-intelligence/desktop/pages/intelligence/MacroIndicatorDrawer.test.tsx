@@ -362,6 +362,33 @@ describe('the three simplified cards', () => {
     expect(pce).not.toContain('下次发布')
   })
 
+  it('reads next month only when this month has no future release, and only once per snapshot', async () => {
+    const reads: string[] = []
+    const december = [dayEvent('e-cpi-dec', '11月CPI年率', '2026-12-10T13:30:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] })]
+    const readMarketEvents = async (month: string) => {
+      reads.push(month)
+      return month === '2026-12' ? december : calendarEvents
+    }
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+        <MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
+          now="2026-11-13T10:00:00.000Z" readMarketEvents={readMarketEvents} cardFacts={facts} />
+      </ShellTimeZoneProvider></ShellLanguageProvider>)
+    })
+    const cpiCard = () => document.body.querySelectorAll('.mk-card')[0]!.textContent ?? ''
+    // 11 月这批里 CPI 没有未来行 → 读 12 月，格子写出 12-10。
+    expect(cpiCard()).toContain('12-10')
+    expect(reads.filter((month) => month === '2026-12')).toHaveLength(1)
+    // 切日期、重渲染都不再打一次同一快照。
+    const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
+      .find((value) => value.querySelector('em')?.textContent === '14')!
+    await act(async () => { cell.click() })
+    expect(reads.filter((month) => month === '2026-12')).toHaveLength(1)
+  })
+
   it('says 未提供 for core PCE because this month has no release row', async () => {
     const [, , pce] = await renderCards(facts)
     expect(pce).toContain('未提供')
