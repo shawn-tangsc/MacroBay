@@ -35,6 +35,7 @@ export function dualWriteMeasureRows(
   input: Readonly<{ providerId: string; parserVersion: string; observedAt: string
     rows: readonly Readonly<{ countryCode: string; metricKey: string; periodKey: string
       scheduledDate: string; scheduledAt: string; sourceEventId: string
+      timePrecision?: 'minute' | 'date'
       previous?: string; consensus?: string; actual?: string }>[] }>,
   options?: Readonly<{ onError?: (message: string) => void }>
 ): DualWriteCounts {
@@ -43,7 +44,8 @@ export function dualWriteMeasureRows(
   let failed = 0
   for (const row of input.rows) {
     try {
-      if (nameByMetricKey[row.metricKey] === undefined) {
+      const isEventCode = row.metricKey.startsWith('evt.')
+      if (!isEventCode && nameByMetricKey[row.metricKey] === undefined) {
         reasons['unknown-measure'] += 1
         recordCalendarUnmapped(database, { providerId: input.providerId, sourceKey: row.sourceEventId,
           detectedAt: input.observedAt, rawJson: JSON.stringify({ metricKey: row.metricKey }), reason: 'unknown-measure' })
@@ -56,7 +58,7 @@ export function dualWriteMeasureRows(
         countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
         scheduledDate: row.scheduledDate, scheduledAt: row.scheduledAt,
         ...(existing === undefined ? {} : { firstScheduledDate: existing.firstScheduledDate }),
-        timePrecision: row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute',
+        timePrecision: row.timePrecision ?? (row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute'),
         valuesJson: JSON.stringify({
           ...(row.consensus === undefined ? {} : { consensus: row.consensus }),
           ...(row.previous === undefined ? {} : { previous: row.previous }),

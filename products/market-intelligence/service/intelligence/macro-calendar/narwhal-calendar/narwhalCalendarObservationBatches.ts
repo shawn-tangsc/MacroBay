@@ -1,4 +1,5 @@
 import { narwhalEventSourceEventId, narwhalMeasureMetricKeys, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { eventCodeBySourceType } from '../marketCalendarEventCodeTable'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
 /**
@@ -169,6 +170,8 @@ export type NarwhalStandardRowInput = Readonly<{
   scheduledDate: string
   scheduledAt: string
   sourceEventId: string
+  /** 指标型是 `minute`/`date`（按有没有时刻）；事件型按是否只有日期。 */
+  timePrecision?: 'minute' | 'date'
   previous?: string
   consensus?: string
   actual?: string
@@ -178,7 +181,25 @@ export function narwhalStandardRowInputs(releases: readonly NarwhalParsedRelease
   const rows: NarwhalStandardRowInput[] = []
   for (const release of releases) {
     const period = release.period
-    if (period === undefined || period.length === 0) continue
+    if (period === undefined || period.length === 0) {
+      // **没有 `period` 不等于缺数据**：这些几乎全是事件型（讲话、声明、资产负债表、石油库存…），
+      // 源本来就只给「什么时候、是什么类型」。它们走事件型身份 `(国家, evt.类型, 时刻/日期)`。
+      // **带值也算事件型**（例：`policy_rate` 决议那条，值在 `values` 上而不是 release 上）：
+      // 官方 FOMC 那边是事件型，市场这边若当指标型，同一个会议就分成两行。事件型行带值不矛盾。
+      // 映射不到 `evt.*` 的才落 `unknown-event-type`（不是 `bad-period`——源里根本没有期间字段）。
+      const code = eventCodeBySourceType[release.name]
+      if (code === undefined) continue
+      const first = release.values[0]
+      rows.push({
+        countryCode: release.country, metricKey: code, periodKey: release.at.slice(0, 16),
+        scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+        timePrecision: 'minute',
+        ...(first?.previous === undefined ? {} : { previous: first.previous }),
+        ...(first?.consensus === undefined ? {} : { consensus: first.consensus }),
+        ...(first?.actual === undefined ? {} : { actual: first.actual })
+      })
+      continue
+    }
     for (const value of release.values) {
       const metricKey = narwhalMeasureMetricKeys[value.measure]
       if (metricKey === undefined) continue
