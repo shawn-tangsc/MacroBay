@@ -14,7 +14,7 @@ import type { NarwhalHttpResult, NarwhalRequest } from './narwhalCalendarHttp'
 export const narwhalCalendarCredentialRef = 'macro-calendar-narwhal-economic-data-credentials'
 
 export function createNarwhalCalendarAssembly(deps: Readonly<{
-  jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition'>
+  jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition' | 'listRuns'>
   repository: Parameters<typeof createNarwhalCalendarRuntime>[0]['repository']
   /** 平台网络层（过代理）。装配处传 `getPlatformFetch()`，本模块不直接碰网络。 */
   fetchImpl: typeof fetch

@@ -6,7 +6,7 @@ import { narwhalCalendarSweepPolicy, narwhalCalendarTickPolicy } from './narwhal
 const repository = { upsertReleaseRow: vi.fn(), recordFirstPublished: vi.fn(() => true) } as never
 
 const assemblyFor = (options: Readonly<{ apiKey?: string; readerEnabled?: () => boolean | undefined; fetchImpl?: typeof fetch }> = {}) => {
-  const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(), enqueueDefinition: vi.fn() }
+  const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(), enqueueDefinition: vi.fn(), listRuns: vi.fn(() => []) }
   const assembly = createNarwhalCalendarAssembly({
     jobRuntime,
     repository,

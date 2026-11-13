@@ -13,9 +13,16 @@ import type { createNarwhalCalendarRuntime } from './narwhalCalendarRuntime'
  *   `undefined`＝仍锁着），关掉它就要 `removeSchedule`——否则解锁那天才发现开关是死的。
  *
  * 这条「解锁后开关必须生效」由用例钉住，不靠注释。
+ *
+ * **启动自检**：`interval` + `anchor='lastStart'` 在平台调度器里是朴素 `setInterval`——注册后
+ * 第一次触发在**一个间隔之后**。日扫是 24 小时一次，于是新装或重启后的头 24 小时里
+ * 「今天..+30 天」一条都不会采，读者看到的就是「下半月空着」。这不是「等它跑」，
+ * 是启动后没有补一次。所以注册完立刻查一次「这条定义最近一次成功是什么时候」：
+ * 没有记录、或距今 ≥ 一个间隔 → 立刻排一次；没到期就不跑（不因为重启而白拉一遍）。
+ * **采集窗口不变**，这里只补触发时机。
  */
 export function createNarwhalCalendarScheduler(deps: Readonly<{
-  jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition'>
+  jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition' | 'listRuns'>
   runtime: ReturnType<typeof createNarwhalCalendarRuntime>
   now: () => number
   /** 有密钥才谈得上采集；没配就一个请求都不发（与采集循环同一条判据）。 */
@@ -52,6 +59,22 @@ export function createNarwhalCalendarScheduler(deps: Readonly<{
     return reader === undefined ? true : reader
   }
 
+  /**
+   * 启动自检：到期才补跑。判据只看「最近一次**成功**跑到什么时候」，失败不算数
+   * （失败与没跑在读者眼里是同一件事：这几天没有数据）。
+   */
+  function catchUpIfDue(): void {
+    if (!enabled()) return
+    const now = deps.now()
+    const lastSuccess = deps.jobRuntime.listRuns({ definitionId: narwhalCalendarSweepPolicy.definitionId })
+      .filter((run) => run.status === 'completed')
+      .map((run) => Date.parse(run.completedAt ?? run.startedAt ?? run.createdAt ?? ''))
+      .filter((at) => Number.isFinite(at))
+      .sort((a, b) => b - a)[0]
+    if (lastSuccess !== undefined && now - lastSuccess < narwhalCalendarSweepPolicy.intervalMs) return
+    void deps.jobRuntime.enqueueDefinition(maybeDefinition(narwhalCalendarSweepPolicy))
+  }
+
   return Object.freeze({
     /** 幂等：重复调用只注册一次 handler。 */
     initialize(): void {
@@ -60,6 +83,7 @@ export function createNarwhalCalendarScheduler(deps: Readonly<{
         registered = true
       }
       this.syncSchedule()
+      catchUpIfDue()
     },
     syncSchedule(): void {
       for (const definition of definitions) {

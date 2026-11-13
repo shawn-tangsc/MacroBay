@@ -6,7 +6,7 @@ import { createNarwhalCalendarScheduler } from './narwhalCalendarScheduler'
 const runtime = { run: vi.fn(async () => ({ collector: { state: 'completed', pages: 1, releases: 0 }, firstPublishedCaptured: 0 })) } as never
 
 const schedulerFor = (options: Readonly<{ hasCredential?: boolean; readerEnabled?: () => boolean | undefined }> = {}) => {
-  const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(), enqueueDefinition: vi.fn() }
+  const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(), enqueueDefinition: vi.fn(), listRuns: vi.fn(() => []) }
   const scheduler = createNarwhalCalendarScheduler({
     jobRuntime, runtime, now: () => Date.parse('2026-11-13T00:00:00Z'),
     hasCredential: () => options.hasCredential ?? true,
@@ -59,5 +59,38 @@ describe('narwhal calendar scheduler', () => {
     scheduler.initialize()
     scheduler.dispose()
     expect(jobRuntime.removeSchedule.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('日扫启动自检', () => {
+  const sweepId = 'market-intelligence.refreshNarwhalCalendarSweep.automatic'
+  const setup = (runs: readonly { status: string; startedAt: string; completedAt?: string }[]) => {
+    const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn(),
+      enqueueDefinition: vi.fn(async () => ({})), listRuns: vi.fn(() => runs as never) }
+    const scheduler = createNarwhalCalendarScheduler({ jobRuntime: jobRuntime as never,
+      runtime: { run: vi.fn() } as never, now: () => Date.parse('2026-11-13T10:30:00.000Z'), hasCredential: () => true })
+    scheduler.initialize()
+    return jobRuntime
+  }
+
+  it('从没成功跑过 → 启动就排一次（没有 24 小时空窗）', () => {
+    const jobRuntime = setup([])
+    expect(jobRuntime.enqueueDefinition).toHaveBeenCalledTimes(1)
+    expect(jobRuntime.enqueueDefinition).toHaveBeenCalledWith(expect.objectContaining({ id: sweepId }))
+  })
+
+  it('一小时前刚成功 → 不跑（不为重启白拉一遍）', () => {
+    const jobRuntime = setup([{ status: 'completed', startedAt: '2026-11-13T09:30:00.000Z', completedAt: '2026-11-13T09:31:00.000Z' }])
+    expect(jobRuntime.enqueueDefinition).not.toHaveBeenCalled()
+  })
+
+  it('上次成功已 25 小时 → 补跑一次', () => {
+    const jobRuntime = setup([{ status: 'completed', startedAt: '2026-11-12T08:00:00.000Z', completedAt: '2026-11-12T08:05:00.000Z' }])
+    expect(jobRuntime.enqueueDefinition).toHaveBeenCalledTimes(1)
+  })
+
+  it('上次是失败不算成功 → 仍然补跑', () => {
+    const jobRuntime = setup([{ status: 'failed', startedAt: '2026-11-13T09:40:00.000Z', completedAt: '2026-11-13T09:41:00.000Z' }])
+    expect(jobRuntime.enqueueDefinition).toHaveBeenCalledTimes(1)
   })
 })
