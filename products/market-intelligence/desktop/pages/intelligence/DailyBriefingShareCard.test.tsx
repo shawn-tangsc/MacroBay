@@ -947,3 +947,43 @@ describe('body keeps facts, the why goes into ⓘ', () => {
     expect(opened()).toContain('(the source provides no importance)')
   })
 })
+
+/**
+ * 「这一屏正文里还有没有说明性句子」——用 DOM 回答，不靠人眼。
+ *
+ * 范围限定在**宏观栏与未来栏**（受「正文只留字段名与值」这条管的两处）；结论、导语那些成文段落
+ * 本来就是议论，不在这条口径内。判据两条：正文不出现句号收尾的解读句；不出现括号解释。
+ * 值后缀 `(web)` 是**字段标记**（这一格来自网页），不是解释，所以按具体解释串断，不按「有没有括号」断。
+ */
+describe('no explanatory sentence is left in the visible body', () => {
+  const docWithProse = (): DailyBriefingDocument => {
+    const base = briefing()
+    return {
+      ...base,
+      news: {
+        ...base.news,
+        macro: [
+          { ...base.news.macro[0]!, why: '核心 PPI 走低，投入成本压力缓和。' },
+          { ...base.news.macro[0]!, eventKey: 'US.SPEECH', title: '里奇蒙联储主席巴尔金发表讲话', actual: undefined, previous: undefined, consensus: undefined, why: undefined }
+        ],
+        notes: { macroWindow: { total: 2, indicators: 1, centralBank: 1, financial: 0, hidden: 0 } }
+      },
+      next: { items: [], note: 'next-7d-importance-unknown', tier1Upcoming: [] }
+    }
+  }
+
+  it('keeps the macro and next sections free of sentences and bracketed explanations', async () => {
+    const host = await render(docWithProse())
+    const governed = host.querySelectorAll('[data-macro-window-counts], .mi-brief-poster__macro, .mi-brief-poster__next')
+    const body = Array.from(governed).map((node) => node.textContent ?? '').join(' | ')
+    // 证据（打印出来，人眼只做复核，判据在这两条断言上）：
+    // eslint-disable-next-line no-console
+    console.log('BODY_SCOPE_TEXT:', body)
+    expect(body).not.toContain('。')
+    expect(body).not.toContain('(the source provides no importance)')
+    expect(body).not.toContain('（')
+    // 剩下的确实只有字段与值：短表头、名称、实际、前值。
+    expect(body).toContain('Past 24 hours · ')
+    expect(body).toContain('CPI')
+  })
+})
