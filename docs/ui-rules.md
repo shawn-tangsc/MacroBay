@@ -80,6 +80,7 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | `--danger` | destructive and failure text | decoration, emphasis |
 | `--warning` | caution that is not a failure | errors |
 | `--success` | confirmed / healthy | "no data" |
+| `--info` | **Direction**: "below expectation" border/ink; on the light theme it outlines rather than fills | Any good/bad verdict — a high CPI is not "good" |
 | `--mi-dashboard-*` | dashboard semantic colours | borrowing across modules |
 
 Three gates, each with one hole:
