@@ -206,16 +206,9 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
     {railHeader}
 
     <div className="mi-analysis-agent-workspace__panes" ref={panes}>
-    <div className="mi-analysis-agent-workspace__card">
-      {card}
-    </div>
-
-    <div className="mi-analysis-agent-workspace__divider" role="separator" tabIndex={0} aria-label={t.resize} aria-orientation="horizontal" aria-valuemin={layout.minChatPercent} aria-valuemax={layout.maxChatPercent} aria-valuenow={chatPercent}
-      onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); resize(chatPercent + (event.key === 'ArrowDown' ? layout.keyboardStepPercent : -layout.keyboardStepPercent)) } }}
-      onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId) }}
-      onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = panes.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
-      onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
-    />
+    {/* 日历卡那一行搬走后这里只剩一块：不再有可拖的两块，也不留一条空带。
+        卡与舆情之间靠 `--mi-agent-gap`（12）隔开——两块都有边框，贴 0 会成 2px 双线。 */}
+    {card === undefined ? null : <div className="mi-analysis-agent-workspace__card">{card}</div>}
     <NewsSentimentFeature
       {...(onOpenSettings === undefined ? {} : { onOpenSettings })}
       language={language}

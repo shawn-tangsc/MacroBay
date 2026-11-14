@@ -265,7 +265,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         language={locale ?? 'zh-CN'}
         floatingText={{ open: text.calendarCard.expandAgent, close: text.calendarCard.closeAgent, title: text.calendarCard.agentTitle, clear: text.calendarCard.clearConversation }}
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
-        card={calendarCardNode}
         text={text}
         timeline={timeline}
         selectionState={selectionState}

@@ -301,7 +301,7 @@
   padding-inline: max(0px, min(12px, calc((100% - 336px) / 2)));
 }
 
-.mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); flex: 1; min-height: 0; }
+.mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, 1fr); gap: var(--mi-agent-gap); flex: 1; min-height: 0; }
 
 /*
  * 结论正文可点（界面设计 2026-11-11 签字）：整块淡底、指针，不加边框/阴影/缩放；
