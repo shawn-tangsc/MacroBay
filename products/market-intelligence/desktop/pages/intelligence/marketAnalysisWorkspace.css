@@ -289,6 +289,18 @@
 
 /* Below the policy card the calendar and the news split the remaining height evenly; the divider
    still drags the split, so it starts at half rather than at the old 52%. */
+/*
+ * 右栏顶部那块（政策的卡位）：卡保持 336×330、**外层居中**，不缩放——
+ * 缩放会让 537 项计算值全部作废（11px 字会变 11.8 发虚、1px 描边发毛）。
+ * 内距取 `min(12px, 剩余/2)`：宽屏时 12、窄到差不足 24px 时自动降到「刚好放下」，
+ * 于是卡与下面的舆情左右边界对齐（界面设计 2026-11-15 量的：1440 下栏 360.9、差 24.9）。
+ */
+[data-dashboard-policy-slot] {
+  display: grid;
+  justify-items: center;
+  padding-inline: max(0px, min(12px, calc((100% - 336px) / 2)));
+}
+
 .mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); flex: 1; min-height: 0; }
 
 /*
