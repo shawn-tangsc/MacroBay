@@ -447,8 +447,11 @@ export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, tod
 }
 
 /** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行），组内按时刻升序。 */
-function dayGroups(layers: DayLayers, allDay: readonly MarketCalendarEvent[], date: string, timeZone: string, othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
-  const shown = othersExpanded ? [...layers.core, ...layers.other] : layers.core
+function dayGroups(_layers: DayLayers, allDay: readonly MarketCalendarEvent[], date: string, timeZone: string, _othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+  // **当天的事件全部列出**：不按「是否影响利率」筛，也不丢财经事件与央行活动（用户 2026-11-14）。
+  // 原来这里只画 `layers.core`，而 `splitDayLayers` 只收指标类、还截到 8 条，于是格子角标写着 +6、
+  // 右列只出 3 条——事件被藏起来了。判据：右列条数 = 当天事件总数。
+  const shown = allDay
   const order: MarketCalendarEvent['eventType'][] = ['economic-indicator', 'financial-event', 'central-bank-activity']
   // 同一时刻、同一类型、同名的多条（源只给类型名时就是这样）：加序号，否则读者以为渲染重复。
   // **分母按当天同类型总数**算，不按当前显示了几条——否则展开前后 `2/4` 会变成 `2/9`，像重新排序。

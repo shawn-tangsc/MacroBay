@@ -348,8 +348,11 @@ describe('key-indicator drawer', () => {
     const rows = Array.from(rightColumn()!.querySelectorAll('[data-calendar-row]'))
     const indicatorRow = rows.find((row) => row.textContent?.includes('家庭债务'))!
     expect(indicatorRow.textContent).toContain('未提供')
-    // 讲话类不进右列（不进层），所以这里连行都没有——事件型的「不加」由 `CalendarEventRow` 自己钉。
-    expect(rows.some((row) => row.textContent?.includes('央行讲话'))).toBe(false)
+    // 讲话类**也在右列**（用户 2026-11-14：当天事件全部列出），只是行尾不加「未提供」——
+    // 那两个字只属于「发布过但没给数值」的指标行。
+    const speechRow = rows.find((row) => row.textContent?.includes('央行讲话'))
+    expect(speechRow, 'a speech is listed like any other event of the day').not.toBeUndefined()
+    expect(speechRow!.textContent).not.toContain('未提供')
   })
 
   /**
