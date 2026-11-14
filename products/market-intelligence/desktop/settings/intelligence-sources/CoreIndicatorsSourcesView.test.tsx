@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
-import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
+import { CORE_INDICATOR_METRIC_COPY_KEYS, CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
 
 import { MACRO_INDICATOR_GROUP_METRIC_KEYS, MACRO_INDICATOR_GROUPS }
   from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
@@ -249,6 +249,17 @@ describe('三组十二项：文案齐全、不另设计布局', () => {
    * M3 的判据：**腿数只从 catalog 读**。这条挡「改回自己派生」或「加一层兜底」——
    * 兜底会让换码演练永远看起来绿，而旧路还活着。
    */
+  /**
+   * 改名演练的前提（Chief 2026-11-14）：设置页这 12 条**名称映射**是改名后允许改的唯一一处消费者，
+   * 所以它的键集合必须与卡片 12 行**完全相等**。漏一条不会报错，只会渲染成一张没名字的卡
+   * ——今晚已经出现过一次这个形状，所以要红在这里。
+   */
+  it('maps exactly the twelve card codes to copy keys, no more and no fewer', () => {
+    expect(Object.keys(CORE_INDICATOR_METRIC_COPY_KEYS).sort())
+      .toEqual([...MACRO_INDICATOR_GROUP_METRIC_KEYS].sort())
+    for (const key of Object.values(CORE_INDICATOR_METRIC_COPY_KEYS)) expect(key.trim()).not.toBe('')
+  })
+
   it('reads the legs from the catalog and never derives them itself', () => {
     const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')
     expect(view).toContain('metricCatalog()')

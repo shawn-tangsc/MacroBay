@@ -56,8 +56,14 @@ export type CoreIndicatorsSourcesViewProps = Readonly<{
   builtinCadenceOf?: (providerId: string) => boolean
 }>
 
-/** 指标名 → 文案键：不按「组名 + 行名」拼（拼出来是「CPI 核心年率」，产品口径是「核心 CPI 年率」）。 */
-const metricCopyKeys: Readonly<Record<string, string>> = {
+/**
+ * 指标码 → 文案键：不按「组名 + 行名」拼（拼出来是「CPI 核心年率」，产品口径是「核心 CPI 年率」）。
+ *
+ * 导出是为了让守卫能断言**键集合等于卡片 12 行码的集合**：改名时漏一条，设置页就会少一个标题、
+ * 渲染成一张没名字的卡（今晚出现过这个形状）。名字是文案，不塞进数据层——所以这里是「改名后
+ * 允许改的唯一 1 处消费者」，守卫 C 的基线里写明了这条理由。
+ */
+export const CORE_INDICATOR_METRIC_COPY_KEYS: Readonly<Record<string, string>> = {
   'US.CPI.NSA.YOY': 'cpiYoy', 'US.CPI.SA.MOM': 'cpiMom',
   'US.CORE_CPI.NSA.YOY': 'coreCpiYoy', 'US.CORE_CPI.SA.MOM': 'coreCpiMom',
   'US.NONFARM.SA.CHANGE': 'nonfarm', 'US.UNEMPLOYMENT.SA.RATE': 'unemployment',
@@ -76,7 +82,7 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
   const cellFor = (metricKey: string): React.ReactElement | null => {
     /* 标题取不到名字就**整张不出**：拼出一个空键只会渲染成空白标题 + 一行源，
        读者看到的是一张「没有名字的卡」（用户 2026-11-14 截图里的那 7 张）。 */
-    const copyKey = metricCopyKeys[metricKey]
+    const copyKey = CORE_INDICATOR_METRIC_COPY_KEYS[metricKey]
     if (copyKey === undefined) return null
     /* 名字取不到就不渲染这一行——绝不把 provider id 印给读者。 */
     const rows: readonly Readonly<{ source: CoreIndicatorValueSource; name: string }>[] =
