@@ -18,6 +18,9 @@ import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenera
 const reportedReads = new Set<string>()
 const reportedResults = new Set<string>()
 
+/** 诊断去重：同一组入口条件只报一次。 */
+const entryLogged = new Set<string>()
+
 export function useBriefingEditionReader(input: Readonly<{
   client: Pick<DailyBriefingClient, 'get'>
   editions: readonly DailyBriefingEditionSummary[]
@@ -100,7 +103,20 @@ export function useBriefingEditionReader(input: Readonly<{
     setPinnedDate(date)
     const request = ++requestRef.current
     setRegenerateFailure(null)
+    // 入口一行诊断（用户 2026-11-14 第五次「还是读不出来」）：一次说清**有没有那一行、行级状态、
+    // 尝试次数、语言级状态**，以及最后走了哪一支。否则只能靠猜。
+    const languageStateAtEntry = row?.languages?.find((entry) => entry.locale === target)?.state
+    const entryKey = `${date}|${target}|${periodId ?? ''}|${row?.periodId ?? ''}|${row?.state ?? 'none'}|${String(row?.attemptCount ?? 'unset')}|${languageStateAtEntry ?? 'unset'}`
+    if (!entryLogged.has(entryKey)) {
+      entryLogged.add(entryKey)
+      console.warn(`[daily-briefing] openEdition ${JSON.stringify({
+        date, target, periodIdArg: periodId ?? null, rowFound: row !== undefined,
+        rowPeriodId: row?.periodId ?? null, rowState: row?.state ?? null,
+        attemptCount: row?.attemptCount ?? null, langState: languageStateAtEntry ?? null
+      })}`)
+    }
     if (!row) {
+      console.warn(`[daily-briefing] openEdition branch ${JSON.stringify({ date, target, branch: 'no-row' })}`)
       setView({ status: 'locale-missing', locale: target, date, ...(date !== todayDate ? { historical: true } : {}) })
       return
     }
@@ -110,7 +126,10 @@ export function useBriefingEditionReader(input: Readonly<{
     if (row.state === 'missing' && languageState !== 'published') {
       setView({ status: 'no-edition', date, failed: row.attemptCount !== undefined && row.attemptCount > 0 })
       // 可选字段不能当 0 用：缺席＝不知道试过几次，不是"试过 0 次"；只有明确 0 次才不读。
-      if (row.attemptCount === 0) return
+      if (row.attemptCount === 0) {
+        console.warn(`[daily-briefing] openEdition branch ${JSON.stringify({ date, target, branch: 'missing-and-zero', periodId: row.periodId })}`)
+        return
+      }
     }
     setView((current) => current.status === 'no-edition' && current.date === date ? current : { status: 'loading' })
     void readEdition(date, target, { ...(periodId ? { periodId } : {}) })
