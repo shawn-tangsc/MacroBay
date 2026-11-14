@@ -70,6 +70,9 @@ export type ClockCardText = Readonly<{
   /** 没上环的指标那一行：`{name} 未上环：{reason}`。 */
   unplaced: Readonly<Record<'no-period' | 'period-out-of-range' | 'no-next-release' | 'crowded', string>>
   unplacedLine: string
+  /** 政策块的两种降级（只在政策那块表达，整张卡不降级）。 */
+  policyDisabled: string
+  policyUnreadable: string
   /** 撞牌让位那条：`{name} {days} 天后`。 */
   crowdedLine: string
   /** 交代行头：`另有 {count} 项未上环：{items}`。 */
@@ -78,8 +81,10 @@ export type ClockCardText = Readonly<{
   crowdedMore: string
 }>
 
-export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCalendar, resolveText }: Readonly<{
+export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCalendar, resolveText, policyState }: Readonly<{
   model: ClockCardModel
+  /** 政策那一块的状态：读到就正常画牌；未启用/读不到都只影响这一块，别的牌照旧。 */
+  policyState?: 'disabled' | 'unreadable'
   text: ClockCardText
   /** 日历图标的读屏名（`IconButton` 只收键）。 */
   actionLabelKey: string
@@ -160,7 +165,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       <div className="mi-clock__foot">
         <span>{text.live}</span>
         {/* 原型这一格就是 `<span title>`（不是浮层组件）：来源说明 + 没上环那几行的交代都放在这里。 */}
-        <span className="mi-clock__info" tabIndex={0} title={unplacedNote(model, text)}
+        <span className="mi-clock__info" tabIndex={0} title={unplacedNote(model, text, policyState)}
           data-clock-unplaced={model.unplaced.length}>ⓘ</span>
         <button className="mi-clock__detail" type="button" onClick={onOpenDetail}>{text.detail}</button>
       </div>
@@ -171,7 +176,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
  * 没上环的指标写成一行说明（ⓘ 的提示文字）：取不到周期、周期不合理、没有下一期，
  * 三种原因各一句；一条都没有时只留来源说明。**不许静默消失**。
  */
-function unplacedNote(model: ClockCardModel, text: ClockCardText): string {
+function unplacedNote(model: ClockCardModel, text: ClockCardText, policyState?: 'disabled' | 'unreadable'): string {
   // 撞牌让位的写成「名字 + 还有几天」（最多 3 项，其余折成条数）；其余原因逐条写原因。
   const crowded = model.unplaced.filter((entry) => entry.reason === 'crowded')
   const shown = crowded.slice(0, 3).map((entry) =>
@@ -184,5 +189,6 @@ function unplacedNote(model: ClockCardModel, text: ClockCardText): string {
     text.unplacedLine
       .replace('{name}', text.names[entry.nameKey] ?? entry.nameKey)
       .replace('{reason}', text.unplaced[entry.reason]))
-  return [text.sourceNote, ...(crowdedLine === undefined ? [] : [crowdedLine]), ...lines].join('｜')
+  const policy = policyState === undefined ? [] : [policyState === 'disabled' ? text.policyDisabled : text.policyUnreadable]
+  return [text.sourceNote, ...policy, ...(crowdedLine === undefined ? [] : [crowdedLine]), ...lines].join('｜')
 }

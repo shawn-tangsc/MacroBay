@@ -66,6 +66,12 @@ import { createPortal } from 'react-dom'
 import { PolicyPathSlot } from './PolicyPathSlot'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
 import { useCurveReleaseEvents } from './useCurveReleaseEvents'
+import { ClockCard } from './ClockCard'
+import { buildClockCardModel } from './clockCardModel'
+import { clockScheduleMetrics } from './clockScheduleMetrics'
+import { clockCardText } from './clockCardText'
+import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
@@ -321,6 +327,17 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // 三张简化卡的读数走自己的只读接口（按指标身份取最新已发布）；抽屉只管渲染，不再取第二遍。
   const cardFactsRead = useMacroIndicatorFacts(readsReady, dataRevision)
   const cardFactsView = cardFactsRead.result
+  /**
+   * 时钟卡：日期与周期 P 来自日程（同一个按月读），值来自**与抽屉同一次**卡片读数，
+   * 政策块来自政策读数。角度/透明度/撞牌都在 `clockCardModel` 里算，这里不重算。
+   */
+  const shellTimeZone = useShellTimeZone()
+  const clockToday = calendarDisplayDate(now().toISOString(), shellTimeZone)
+  const clockFacts = cardFactsView?.state === 'available' ? cardFactsView.facts : []
+  /** 政策块的两支降级：只在政策那块表达，整张卡照常画主位与另外三块牌。 */
+  const clockPolicyState: 'disabled' | 'unreadable' | undefined =
+    policyProbability.kind !== 'read' || policyFed.kind !== 'read' ? 'disabled'
+      : policyPath?.state === 'unavailable' ? 'unreadable' : undefined
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // 关键指标 · 预期变化：曲线、政策卡与三张简化卡都读真数据。
   const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
@@ -332,7 +349,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const drawerNow = useMemo(() => now().toISOString(), [now, indicatorDrawerOpen])
   // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。
   const curveReleaseEvents = useCurveReleaseEvents({
-    enabled: indicatorDrawerOpen,
+    // 时钟卡要看日程（上一期/下一期/周期 P），这份按月读不再只服务抽屉。
+    enabled: true,
     ...(readMarketEvents ? { readMarketEvents } : {}),
     // 用曲线那次读数的快照时刻，不另取「现在」：两处各取各的，标注就对不上它标的跳变。
     ...(policyPath?.state === 'available' ? { asOf: policyPath.asOf, reading: policyPath.reading } : {}),
@@ -489,7 +507,34 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           onOpenDetail={() => setIndicatorDrawerOpen(true)}
           resolveKey={resolveProductKey} />
         // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
-        return policySlot ? createPortal(card, policySlot) : card
+        // 本轮旧两格照旧留着，钟表卡叠在它上面：树上没有「缺东西」的中间态。
+        const stacked = <>{<ClockCard
+          model={buildClockCardModel({
+            today: clockToday,
+            metrics: clockScheduleMetrics({
+              today: clockToday,
+              events: curveReleaseEvents.map((event) => ({
+                scheduledAt: event.at,
+                ...(event.measureKeys === undefined ? {} : { measureKeys: event.measureKeys })
+              })),
+              facts: clockFacts,
+              ...(policyPath?.state === 'available' ? {
+                policy: {
+                  meetingDate: policyPath.reading.meetingDate,
+                  ...(policyPath.reading.probability === undefined ? {} : {
+                    probability: { value: policyPath.reading.probability.value }
+                  })
+                }
+              } : {})
+            })
+          })}
+          text={clockCardText[locale]}
+          actionLabelKey="pages.intelligence.portal.calendarCard.openCalendar"
+          onOpenDetail={() => setIndicatorDrawerOpen(true)}
+          onOpenCalendar={() => setIndicatorDrawerOpen(true)}
+          resolveText={resolveProductKey}
+          {...(clockPolicyState === undefined ? {} : { policyState: clockPolicyState })} />}{card}</>
+        return policySlot ? createPortal(stacked, policySlot) : stacked
       })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
