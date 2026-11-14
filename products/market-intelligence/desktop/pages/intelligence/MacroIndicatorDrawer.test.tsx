@@ -412,6 +412,7 @@ const rightColumnTitle = () => rightColumn()?.querySelector('h2')?.textContent ?
 async function renderDrawer(input: Readonly<{
   now: string
   readMarketEvents: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  calendarBlock?: React.ReactNode
 }>): Promise<void> {
   host = document.createElement('div')
   document.body.append(host)
@@ -420,7 +421,8 @@ async function renderDrawer(input: Readonly<{
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
       <MacroIndicatorDrawer locale="zh-CN"
         onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
-        now={input.now} readMarketEvents={input.readMarketEvents} />
+        now={input.now} readMarketEvents={input.readMarketEvents}
+        {...(input.calendarBlock === undefined ? {} : { calendarBlock: input.calendarBlock })} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
 }
@@ -843,4 +845,20 @@ it('groups by event type first, then by metric tier inside 经济指标 only', a
   }
   // 分级照旧只管露名字：一级那条在「一级指标」子组里仍然写着它的名字。
   expect(list.textContent).toContain('消费者物价指数')
+})
+
+/**
+ * 用户 2026-11-15：把「接下来要看的」那一块收到抽屉右列**上方**，事件列表放它下面。
+ * 块由 layout 用**它自己那份 cardData** 构造后作为节点注入——抽屉不复制写法、也不新读一次日历。
+ */
+it('renders the injected calendar block above the day list, without reading the calendar again', async () => {
+  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents,
+    calendarBlock: <div data-test-calendar-block="">接下来要看的</div> })
+  const rail = document.body.querySelector('.mk-col-r')!
+  const injected = rail.querySelector('[data-test-calendar-block]')
+  const list = rail.querySelector('.mi-calendar-day-list')
+  expect(injected, 'the block is drawn from the injected node').not.toBeNull()
+  expect(list).not.toBeNull()
+  // 顺序：块在前、列表在后（同一个滚动区里）。
+  expect(injected!.compareDocumentPosition(list!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })

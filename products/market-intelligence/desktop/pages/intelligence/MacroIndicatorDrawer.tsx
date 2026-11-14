@@ -86,7 +86,7 @@ function nameOfMetricKey(key: string | undefined, text: MacroIndicatorDrawerText
   return nameKey === undefined ? undefined : text.eventNames[nameKey]
 }
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, now, readMarketEvents }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, calendarBlock, now, readMarketEvents }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -107,6 +107,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
    * 由宿主从**它已经读到的日历结果**里取；抽屉不为此另发一次日历请求。缺省就是没有标注。
    */
   releaseEvents?: readonly Readonly<{ at: string; label: string; eventNameKey?: string; measureKeys?: readonly string[]; seriesId?: string }>[]
+  /**
+   * 右列顶部那块「接下来要看的」（用户 2026-11-15 定的顺序：块在上、事件列表在下）。
+   * 元素由 layout 用**它自己那份 `cardData`** 构造后注入——抽屉不再读一遍日历。
+   */
+  calendarBlock?: React.ReactNode
   /**
    * 三张简化卡的取值事实（按 `metric_key` 取，新源优先、缺则旧源）。
    *
@@ -378,6 +383,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
 
       {/* 右列直接复用日历页的当日事件列表（用户 2026-11-13）：三种状态分开，谁也不冒充另一种。 */}
       <div className="mk-col-r" ref={dayListRef}>
+        {/* 块在上：同一份 calendarData 渲染出来的节点，抽屉不复制写法、也不再读一次。 */}
+        {calendarBlock === undefined ? null : <div data-drawer-calendar-block>{calendarBlock}</div>}
         {releases.state === 'unavailable'
           ? <StateView state="error" reasonCode="unreadable"
             action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: releases.reload }} />
