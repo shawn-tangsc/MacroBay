@@ -126,8 +126,8 @@
       "why": "卡片取值链：narwhal 优先、旧源回退——按源选值，允许"
     },
     "service/intelligence/macro-calendar/macroIndicatorReadService.ts": {
-      "count": 2,
-      "why": "读数服务同一回退链"
+      "count": 5,
+      "why": "5 处不是「按源写分支」，而是**数据模型上的源标记**：`toNarwhalRow` / `toLegacyRow` 各自给构造出的行盖一个源标签（各 1 处），`applyStandardActual` 给回填行按 providerId 贴同一个标签（比较 1 处 + 两个取值 2 处）。三条读法完全相同、没有 per-source 逻辑；`0xrouter` 那两处随旧源删除一并消失，届时此处回到 2"
     },
     "service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts": {
       "count": 2,
