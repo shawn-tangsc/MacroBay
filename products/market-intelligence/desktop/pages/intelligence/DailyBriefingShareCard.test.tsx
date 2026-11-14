@@ -877,11 +877,16 @@ describe('the two restored blocks read exactly as before', () => {
 
   it('renders nothing at all for either block when there is nothing to put in it', async () => {
     const base = briefing()
-    const host = await render({ ...base, news: { ...base.news, macro: [], notes: {} }, next: { items: [] } })
+    const host = await render({ ...base, news: { ...base.news, macro: [], notes: {} }, next: { items: [], note: 'next-7d-importance-unknown' } })
     expect(host.querySelector('.mi-brief-poster__macro-head')).toBeNull()
     expect(host.querySelector('.mi-brief-poster__next')).toBeNull()
     const body = host.textContent ?? ''
     expect(body).not.toContain(text.sections.macro)
     expect(body).not.toContain(text.sections.next)
+    // 用户 2026-11-15：空就整块不出现，不写占位句。这一处 DOM 同时是导出海报的来源
+    // （`useBriefingShareActions` 对同一张 poster 调 `toPng`），所以这条断言覆盖屏幕与导出。
+    for (const placeholder of [text.nextEmptyCodes['next-7d-importance-unknown']!, '0 个', '无法判定', '暂无']) {
+      expect(body, placeholder).not.toContain(placeholder)
+    }
   })
 })

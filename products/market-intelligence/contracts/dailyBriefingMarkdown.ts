@@ -55,7 +55,6 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   empty: Readonly<{ news: string; next: string; conclusion: string }>
   newsEmptyCodes: Readonly<Record<string, string>>
   macroEmptyCodes: Readonly<Record<string, string>>
-  nextEmptyCodes: Readonly<Record<string, string>>
   /** 过去 24 小时的总数与构成、另有几条、以及「这段时间没有已收录的发布」（用户 2026-11-14）。 */
   pastWindow: Readonly<{ counts: string; others: string; emptyCollected: string }>
   /** 未来 7 天判不了重要性时的排期小标题。 */
@@ -181,13 +180,11 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
 
   const nextItems = [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
   const tier1Upcoming = document.next.tier1Upcoming ?? []
-  // 只有「判不了重要性」这一档要在这一栏开口说话（产品 2026-11-14）：别的空态沿旧行为不印。
-  const unjudged = document.next.note === 'next-7d-importance-unknown'
-  if (nextItems.length > 0 || tier1Upcoming.length > 0 || unjudged) {
+  // 用户 2026-11-15：没有可关注的事件时**整块不出现**——不写占位句，不写「无法判定」，不写「0 个」。
+  // 这一栏的空态与正文同一条口径：空就整块消失，不替读者解释为什么空。
+  if (nextItems.length > 0 || tier1Upcoming.length > 0) {
     lines.push('', `## ${labels.sections.next}`)
     for (const item of nextItems) lines.push(nextLine(item, options))
-    // 判不了重要性时：主句 + 一级指标排期（**不是高影响事件**，是我们自己的清单）。
-    if (nextItems.length === 0 && unjudged) lines.push('', nextEmpty(document, labels))
     if (tier1Upcoming.length > 0) {
       lines.push('', `### ${labels.nextImportanceUnknown.scheduleTitle}`)
       for (const release of tier1Upcoming) {
@@ -379,11 +376,6 @@ function releaseStamp(
 function emptyNews(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
   const code = document.news.notes.newsEmpty
   return code ? labels.newsEmptyCodes[code] ?? labels.empty.news : labels.empty.news
-}
-
-function nextEmpty(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
-  const code = document.next.note
-  return code ? labels.nextEmptyCodes[code] ?? labels.empty.next : labels.empty.next
 }
 
 function rowLabel(labelKey: string, labels: DailyBriefingMarkdownLabels): string {

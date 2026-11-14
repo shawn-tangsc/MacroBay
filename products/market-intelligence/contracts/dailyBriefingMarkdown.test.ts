@@ -526,7 +526,7 @@ describe('the copied text carries the whole title', () => {
 })
 
 describe('the copied text carries the same two blocks as the page', () => {
-  it('prints the window total, the unshown count, the unjudged sentence and the schedule', () => {
+  it('prints the window total, the unshown count and the schedule, never the placeholder', () => {
     const base = document()
     const withWindow = {
       ...base,
@@ -540,8 +540,20 @@ describe('the copied text carries the same two blocks as the page', () => {
     const text = dailyBriefingToMarkdown(withWindow, options as never)
     expect(text).toContain('7')
     expect(text).toContain('4')
-    expect(text).toContain('无法判定')
+    // 用户 2026-11-15：判不了重要性也不印占位句，空态整块不解释；排期是我们自己的清单，照印。
+    expect(text).not.toContain('无法判定')
     expect(text).toContain('一级指标排期')
     expect(text).toContain('2026-12-10')
+  })
+
+  it('prints no next block at all, not even its heading, when no event qualifies', () => {
+    for (const note of ['next-7d-no-high-impact-event', 'next-7d-importance-unknown']) {
+      const empty = { ...document(), next: { items: [], note } } as never
+      const text = dailyBriefingToMarkdown(empty, options as never)
+      expect(text, note).not.toContain(`## ${labels.sections.next}`)
+      for (const placeholder of ['无法判定', '暂无', '0 个', '没有高影响事件']) {
+        expect(text, `${note}: ${placeholder}`).not.toContain(placeholder)
+      }
+    }
   })
 })
