@@ -45,6 +45,16 @@ const NAME_TABLE_PATHS = Object.freeze([
   'service/intelligence/macro-calendar/marketCalendarCodeNames.ts'
 ])
 const BASELINE = new URL('./__baselines__/source-literals.json', import.meta.url).pathname
+/**
+ * 逐处锚点的基线：每处写「哪段代码、几处、为什么」，`sites` 之和必须等于 `count`。
+ * 少一处就红——删旧源、删 helper 的那笔必须把数字同笔改小，不许留着变成永远不减的数。
+ */
+const ANCHORED_BASELINE = 'service/intelligence/macro-calendar/macroIndicatorReadService.ts'
+/**
+ * 只给构造出的行盖「来源标记」的 helper。定义之外必须还有调用点：
+ * helper 若只服务旧源，旧源退役那笔要连它一起删，并在同一笔把它从这个清单里摘掉。
+ */
+const SOURCE_TAG_HELPERS = Object.freeze(['toNarwhalRow', 'toLegacyRow'])
 
 function files(dir: string): string[] {
   const out: string[] = []
@@ -57,27 +67,89 @@ function files(dir: string): string[] {
   return out
 }
 
+type BaselineEntry = {
+  count: number
+  why?: string
+  sites?: readonly { at: string; count: number; what: string }[]
+}
+type Baseline = { files: Record<string, BaselineEntry> }
+
+function readBaseline(): Baseline {
+  return JSON.parse(readFileSync(BASELINE, 'utf8')) as Baseline
+}
+
+/** 当前每个文件的命中数：与基线同一套数法，别处不许再算一遍。 */
+function currentCounts(): Record<string, number> {
+  const current: Record<string, number> = {}
+  for (const root of ROOTS) {
+    for (const file of files(join(PRODUCT, root))) {
+      const rel = relative(PRODUCT, file)
+      const source = readFileSync(file, 'utf8')
+      const isI18n = rel.includes('shared/i18n/')
+      const hits = isI18n
+        ? (I18N_SOURCE_NAME_FILES.includes(rel) ? 0
+          : source.split('\n').filter((line) => SOURCE_NAME.test(line)).length)
+        : (source.match(PATTERN) ?? []).length
+      if (hits) current[rel] = hits
+    }
+  }
+  return current
+}
+
 describe('源名字面量守卫', () => {
   it('新增一处源名分支必须同时登记基线（四种写法 + .tsx）', () => {
-    const baseline = JSON.parse(readFileSync(BASELINE, 'utf8')) as { files: Record<string, { count: number }> }
-    const current: Record<string, number> = {}
-    for (const root of ROOTS) {
-      for (const file of files(join(PRODUCT, root))) {
-        const rel = relative(PRODUCT, file)
-        const source = readFileSync(file, 'utf8')
-        const isI18n = rel.includes('shared/i18n/')
-        const hits = isI18n
-          ? (I18N_SOURCE_NAME_FILES.includes(rel) ? 0
-            : source.split('\n').filter((line) => SOURCE_NAME.test(line)).length)
-          : (source.match(PATTERN) ?? []).length
-        if (hits) current[rel] = hits
-      }
-    }
+    const baseline = readBaseline()
+    const current = currentCounts()
     const growth = Object.entries(current)
       .filter(([rel, count]) => count > (baseline.files[rel]?.count ?? 0))
       .map(([rel, count]) => `${rel}: ${baseline.files[rel]?.count ?? 0} → ${count}`)
     expect(growth, `源名用法新增，必须在 __baselines__/source-literals.json 登记并写理由：\n${growth.join('\n')}`)
       .toEqual([])
+  })
+})
+
+describe('基线是双向棘轮，不是永久豁免', () => {
+  it('源名用法减少时，数字必须在同一笔改小', () => {
+    // 只挡涨不挡降的棘轮会养出一串「永远减不下去的数」：删了旧源，数字还挂着，下一个读者
+    // 就以为那里真有一处例外。所以降了也红，逼着删减那一笔同时把条目收掉。
+    const baseline = readBaseline()
+    const current = currentCounts()
+    const stale = Object.entries(baseline.files)
+      .filter(([rel, entry]) => (current[rel] ?? 0) < entry.count)
+      .map(([rel, entry]) => `${rel}: 基线 ${entry.count} → 现在 ${current[rel] ?? 0}`)
+    expect(stale, `基线过期：这些文件的源名用法已经减少，必须在同一笔把数字改小（删旧源/删 helper 的那笔要把对应条目一起收掉）：\n${stale.join('\n')}`)
+      .toEqual([])
+  })
+
+  it('读数服务的 5 处必须逐处带锚点——一处代码没了，对应条目就得同笔删', () => {
+    const entry = readBaseline().files[ANCHORED_BASELINE]
+    expect(entry?.sites?.length ?? 0, `这条基线必须逐处列出锚点，不许只留一个数字：${ANCHORED_BASELINE}`).toBeGreaterThan(0)
+  })
+
+  it('带锚点的条目：各处之和等于 count，且每处锚点仍在文件里', () => {
+    const problems: string[] = []
+    for (const [rel, entry] of Object.entries(readBaseline().files)) {
+      if (entry.sites === undefined) continue
+      const sum = entry.sites.reduce((total, site) => total + site.count, 0)
+      if (sum !== entry.count) problems.push(`${rel}: 锚点之和 ${sum} ≠ count ${entry.count}`)
+      const source = readFileSync(join(PRODUCT, rel), 'utf8')
+      for (const site of entry.sites) {
+        if (!site.what.trim()) problems.push(`${rel}: 锚点「${site.at}」没写 what`)
+        if (!source.includes(site.at)) {
+          problems.push(`${rel}: 锚点已不存在「${site.at}」——这段代码删了，就要同笔把 count 改小并删掉这条`)
+        }
+      }
+    }
+    expect(problems, `锚点和代码对不上，基线必须跟着代码走：\n${problems.join('\n')}`).toEqual([])
+  })
+
+  it('盖来源标记的 helper 不许留成死壳（定义之外必须还有调用点）', () => {
+    const source = readFileSync(join(PRODUCT, ANCHORED_BASELINE), 'utf8')
+    const orphans = SOURCE_TAG_HELPERS
+      .filter((helper) => (source.split(`${helper}(`).length - 1) < 2)
+      .map((helper) => `${helper}：定义之外找不到调用点`)
+    expect(orphans, `这些 helper 已经没人用了，却把源名留在文件里、把基线数字顶在上面；` +
+      `旧源退役时连它一起删，并从 SOURCE_TAG_HELPERS 摘掉：\n${orphans.join('\n')}`).toEqual([])
   })
 })
 
