@@ -748,6 +748,31 @@ describe('daily briefing service', () => {
     expect(store.rows.size).toBe(0)
   })
 
+  /**
+   * 超限这一档只在**日志**里带数量（Chief 2026-11-15）：界面上它只是一句「候选数据超出上限」，
+   * 不额外做界面；但真触发时要能证明「确实超了、超在哪一类」，否则和「读不到」分不开。
+   */
+  it('logs which pool overflowed and by how much, without touching the edition', async () => {
+    const store = memoryStore()
+    const source = fakeSource(() => ({
+      ...emptyPacket(),
+      news: { state: 'available', items: Array.from({ length: 201 }, (_, index) => newsCandidate(index)) },
+      calendar: { state: 'available', events: Array.from({ length: 3 }, (_, index) => macroCandidate(index)) }
+    }))
+    const logged: Array<Readonly<{ level: string; event: string; fields?: Record<string, unknown> }>> = []
+    const service = createDailyBriefingService({
+      source, store, now: () => asOf,
+      log: (level, event, fields) => { logged.push({ level, event, ...(fields === undefined ? {} : { fields }) }) }
+    })
+
+    await expect(service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' }))
+      .resolves.toMatchObject({ state: 'unavailable', failureCode: 'candidate-overflow' })
+    const entry = logged.find((item) => item.event === 'briefing.candidate-overflow')
+    expect(entry?.fields).toMatchObject({
+      failureCode: 'candidate-overflow', newsCandidates: 201, newsLimit: 200, macroCandidates: 3, macroLimit: 200
+    })
+  })
+
   it('accepts exactly the 200-candidate budget', async () => {
     const store = memoryStore()
     const source = fakeSource(() => ({

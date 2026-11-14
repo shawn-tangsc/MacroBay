@@ -38,7 +38,7 @@ export { createDailyBriefReadinessFor } from './dailyBriefReadinessGate'
 import { withRunGaps } from './dailyBriefCrossAssetGap'
 import { previousEditionBefore } from './dailyBriefingPreviousEdition'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
-import { candidateOverflow, cutoffDate, isOutputTruncation, turnFailureCode, withDeadline } from './dailyBriefingGenerationGuards'
+import { candidateBudget, cutoffDate, isOutputTruncation, turnFailureCode, withDeadline } from './dailyBriefingGenerationGuards'
 import { openStoredEdition } from './dailyBriefingReadOnlyOpen'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
@@ -539,7 +539,15 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     // A pool above the per-class budget fails before any editorial work or write: the builder caps
     // its rendered sections, and a capped selection would silently stand in for the whole day.
-    if (candidateOverflow(packet, document)) {
+    const budget = candidateBudget(packet, document)
+    if (budget.overflow) {
+      /* 只在日志里带上数量：这一档如果真触发，要能证明「确实超了」、超在哪一类，
+         而不是和「读不到」「没有发布」混成一句。不给它做界面。 */
+      deps.log?.('warn', 'briefing.candidate-overflow', {
+        failureCode: 'candidate-overflow',
+        newsCandidates: budget.newsCandidates, newsLimit: budget.newsLimit,
+        macroCandidates: budget.macroCandidates, macroLimit: budget.macroLimit
+      })
       recorder.end('candidates', 'failed', { failureCode: 'candidate-overflow' })
       return fail('candidate-overflow')
     }

@@ -13,13 +13,32 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
  * actual arrived, cancelled events excluded), which the document keeps whole in `macroCandidates`
  * so the count here reads the same implementation the writer saw.
  */
-export function candidateOverflow(packet: DailyBriefingFactPacket, document: DailyBriefingDocument): boolean {
+export type CandidateBudget = Readonly<{
+  newsCandidates: number
+  macroCandidates: number
+  newsLimit: number
+  macroLimit: number
+  overflow: boolean
+}>
+
+/**
+ * 候选池与上限的**实际数字**，连同是否超限一起给出去。
+ *
+ * 只回一个布尔值时，日志里只能说「超了」，说不出超了多少、哪一类超的——而这一档恰恰是
+ * 「不许静默截断」的守卫：要能证明它是真的超了，而不是别的地方坏了。
+ */
+export function candidateBudget(packet: DailyBriefingFactPacket, document: DailyBriefingDocument): CandidateBudget {
   const newsCandidates = packet.news.items.filter((item) =>
     item.polarity !== 'neutral' && item.strength >= 2 && item.confidence >= 50).length
   const macroCandidates = document.news.macroCandidates?.length ?? 0
-  return newsCandidates > dailyBriefingPolicy.maximumNewsItems ||
-    macroCandidates > dailyBriefingPolicy.maximumMacroItems
+  const newsLimit = dailyBriefingPolicy.maximumNewsItems
+  const macroLimit = dailyBriefingPolicy.maximumMacroItems
+  return Object.freeze({
+    newsCandidates, macroCandidates, newsLimit, macroLimit,
+    overflow: newsCandidates > newsLimit || macroCandidates > macroLimit
+  })
 }
+
 
 export async function withDeadline<T>(read: Promise<T>, milliseconds: number, onTimeout?: () => void): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
