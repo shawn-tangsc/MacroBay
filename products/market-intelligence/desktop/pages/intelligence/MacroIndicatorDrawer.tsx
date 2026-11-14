@@ -302,6 +302,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     mode="modal"
     size="full"
     className="mk-drawer"
+    /* 内层（事件详情）打开时会通过 antd 的 context 推开外层抽屉 180px；这一格是**外层自己的**
+       推开距离，设成 0 它才不会往左挪——加在详情上是没用的（那只控制详情的子抽屉）。 */
+    push={false}
     titleKey="mk.title"
     resolveText={(key: string) => drawerKeys[key] ?? ''}
     footer={<><span>{text.dataBy}</span> <a className="mk-foot-a" href="https://narwhalapi.com" target="_blank" rel="noreferrer">Narwhal API</a></>}
@@ -409,12 +412,10 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           挂到 body 之后它没有 transform 祖先，`inset: 0` 就是整窗，抽屉从窗口左边进来、满高。 */}
       {detailEvent === undefined ? null : createPortal(
         <div className="mk-detail-overlay">
-          {/* `push={false}` 由 `CalendarInspector` 内部那只平台抽屉承担——见下面那处 pass-through。 */}
           <CalendarInspector
             contentId={detailEvent.eventKey}
             onClose={() => setDetailEvent(undefined)}
             open
-            push={false}
             when={detailEvent.scheduledAt}>
             <MarketCalendarInspector event={detailEvent} source={undefined} text={calendarText} />
           </CalendarInspector>

@@ -786,3 +786,19 @@ describe('expectation curve inside the drawer', () => {
     expect(plot.querySelector('.state-view--empty')).not.toBeNull()
   })
 })
+
+/**
+ * 用户 2026-11-15：打开事件详情时，**日历抽屉本身不许往左挪**，要始终贴在右边。
+ *
+ * antd `Drawer` 的推动规则：**内层**打开时会调用外层的 `push()`（这步不看内层自己的 `push`
+ * 参数），外层用**它自己**的 `pushDistance` 做 `translateX(-距离)`，默认 180。所以
+ * `push={false}` 必须加在**外层**那只抽屉上；加在内层是没用的（那控制的是内层的子抽屉）。
+ * 这条拿源码断外层的 `<Drawer>` 带 `push={false}`：改回去即红。
+ */
+it('pins the indicator drawer so an inner drawer cannot push it left', () => {
+  const source = readFileSync('products/market-intelligence/desktop/pages/intelligence/MacroIndicatorDrawer.tsx', 'utf8')
+  const drawerOpen = source.indexOf('<Drawer')
+  expect(drawerOpen).toBeGreaterThan(-1)
+  const head = source.slice(drawerOpen, source.indexOf('>', drawerOpen))
+  expect(head).toContain('push={false}')
+})
