@@ -255,13 +255,15 @@ export const marketCalendarTierByMetricKey: Readonly<Record<string, 1 | 2 | 3>> 
   'US.AHE.SA.MOM': 1,
   'US.CORE_CPI.NSA.YOY': 1,
   'US.CORE_CPI.SA.MOM': 1,
-  'US.CORE_PCE.NSA.YOY': 1,
+  // 'US.CORE_PCE.NSA.YOY' 是同一个概念的未季调变体：今天没有源，与季调那条并列会让日历出现两条。
+  // 降为未分级（表里的 4 → 常量里就是 undefined）：不进日历格子、计入数字，码与组都保留。
   'US.CORE_PCE.SA.YOY': 1,
   'US.CORE_PCE.SA.MOM': 1,
   'US.CPI.NSA.YOY': 1,
   'US.CPI.SA.MOM': 1,
   'US.NONFARM.SA.CHANGE': 1,
-  'US.PCE.NSA.YOY': 1,
+  // 'US.PCE.NSA.YOY' 是同一个概念的未季调变体：今天没有源，与季调那条并列会让日历出现两条。
+  // 降为未分级（表里的 4 → 常量里就是 undefined）：不进日历格子、计入数字，码与组都保留。
   'US.PCE.SA.YOY': 1,
   'US.PCE.SA.MOM': 1,
   'US.UNEMPLOYMENT.SA.RATE': 1,
