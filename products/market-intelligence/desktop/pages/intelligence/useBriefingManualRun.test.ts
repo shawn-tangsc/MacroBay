@@ -33,7 +33,9 @@ describe('a manual run refuses a cutoff that has not happened yet', () => {
     expect(request.locale).toBe('en-US')
     expect(request.generation).toEqual({ asOf: '2026-11-05T08:00:00.000Z', windowHours: 24 })
     // 一次性期号：不是 `default`，也不是刚才那一版的期号。
-    expect(request.periodId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+    // 与定时、补录同一个格式（`period_` + uuid）：手动那条路径曾经自己造裸 UUID，
+    // 详情按那一期查时对不上，界面落到「这一期没有生成」。
+    expect(request.periodId).toMatch(/^period_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
   })
 
   it('refuses a later hour today, and does not write anything', () => {

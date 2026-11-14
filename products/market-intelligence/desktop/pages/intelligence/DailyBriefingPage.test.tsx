@@ -1994,7 +1994,9 @@ it('sends the moment and language the reader picked in the dialog, all the way t
   expect(request.locale).toBe('en-US')
   // 读者时区是 Asia/Shanghai：他选的 08:00 就是这一刻，不是排期里的 07:00。
   expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')
-  expect(request.periodId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/)
+  // 手动这一路的期次编号与定时/补录同一个格式（用户 2026-11-14：以前是裸 UUID，
+  // 详情按那一期查不到，界面写成「这一期没有生成」）。
+  expect(request.periodId).toMatch(/^period_[0-9a-f]{8}-[0-9a-f]{4}-/)
 })
 
 it('asks before replacing an edition that already holds the same cutoff and language, even at another window', async () => {

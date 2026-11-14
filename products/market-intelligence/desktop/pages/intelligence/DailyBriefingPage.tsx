@@ -182,7 +182,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     return { date: screenDocument.edition.date, clock: railClock(period.periodTime, timeZone), language: screenDocument.edition.locale, periodId: period.periodId }
   })()
   const loading = isBriefingLoading(view)
-  const busyLocally = loading || regenerating
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
   // the interface language, while the stored preference itself is left untouched for when it returns.
   const effectiveLocale = pickedLocale ?? locale
@@ -202,7 +201,22 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
   // One question, every source: what this page started, what it is loading for, and what the service
   // says is running right now (a scheduled run, or one started in another window).
-  const generating = busyLocally || progress?.state === 'running'
+  //
+  // **服务说「没在跑」，本地就不许再坚持「生成中」**（用户 2026-11-14 报的卡住）：那次跑在库里
+  // 已经 `published`，界面却一直停在九步未开始。本页那次发起的 flail 只在本页拿不到进度时
+  // （`undefined`，尚未回读）才算数；一旦服务回了 `idle`，真相以服务为准。
+  const generating = loading || regenerating || progress?.state === 'running'
+  // **自愈**：本页记着「我在跑」，但服务连着两次都说「没在跑」→ 以服务为准，把旗子收掉。
+  // 为什么是两次：按下那一刻服务可能还没登记，一次 `idle` 就翻会把刚起的跑判成没起；
+  // 两次（间隔一次轮询）之后仍说没跑，那它确实没跑——界面不许长期停在「生成中」
+  // （用户 2026-11-14 报的卡住：库里已经 published，右侧九步还全是「未开始」）。
+  const idleReads = useRef(0)
+  useEffect(() => {
+    if (!regenerating) { idleReads.current = 0; return }
+    if (progress?.state !== 'idle') { idleReads.current = 0; return }
+    idleReads.current += 1
+    if (idleReads.current >= 2) { idleReads.current = 0; setRegenerating(false) }
+  }, [regenerating, progress?.state])
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
   const { markLocalSettled } = useBriefingBackgroundRunReload(progress?.state === 'running', () => setReloadKey((key) => key + 1))
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it

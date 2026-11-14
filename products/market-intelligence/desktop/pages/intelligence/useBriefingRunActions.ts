@@ -212,7 +212,20 @@ export function useBriefingRunActions(input: Readonly<{
       // 先挂一行"生成中"再开始跑：今天还没有任何版次/运行记录时，列表里连挂进度的那一行都没有，
       // 读者只会看到标题在转、步骤一个都不出。这一行是**这一刻的事实**（确实在跑），跑完由服务
       // 返回的结果替换；失败时下一轮重读会把这一行去掉。
-      const document = await run(request)
+      let document: Awaited<ReturnType<typeof run>>
+      try {
+        document = await run(request)
+      } catch (error) {
+        // 抛错也要收尾：`await` 之后才清旗子的写法，一抛就把「生成中」永远留在界面上
+        // （用户 2026-11-14 报的卡住：库里已经 published，界面还停在九步未开始）。
+        input.setEditions(restoreStartedRow)
+        // 抛错只带回一个原因码：界面的失败块按码说话，正文不许现编句子。
+        input.setRegenerateFailure({ code: 'call-failed' })
+        input.onRunIntent?.(null)
+        input.setRegenerating(false)
+        input.onSettled?.()
+        return
+      }
       // 跑失败/超时也要把起手那一步收回去：新挂的临时行删掉；**已有的一行**（失败那行最常见）
       // 还回它原来的语言状态——不能按"看起来像临时行"去删，它本来就是一条真版次行。
       // 重读失败时也要收：否则这一行会永远停在"生成中"，一个永不结束的正在跑比旧失败更糟。

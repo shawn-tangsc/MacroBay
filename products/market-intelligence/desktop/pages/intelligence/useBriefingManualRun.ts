@@ -1,5 +1,7 @@
 import { instantForWallClock } from '@platform/time/timeZoneClock'
 
+import { createBriefingPeriodId } from '../../../contracts/dailyBriefing/periodId'
+
 import type { DailyBriefingLocale, DailyBriefingWindowHours } from '../../../contracts/dailyBriefing'
 import type { BriefingManualRunDraft } from './BriefingManualRunDialog'
 
@@ -49,7 +51,9 @@ export function useBriefingManualRun(deps: Readonly<{
       return { outcome: 'duplicate', duplicate: { periodId: existing.periodId, asOf, windowHours: draft.windowHours as DailyBriefingWindowHours, language: draft.language } }
     }
     // Opaque and not derived from the time (A11.3); two presses are two issues, not one rewritten.
-    const periodId = globalThis.crypto.randomUUID()
+    // 与定时、补录**同一个生成函数**（用户 2026-11-14 报的「点进去却空」：这里曾自己造裸 UUID，
+    // 详情的期次对不上，于是落空态并写成「没生成」）。
+    const periodId = createBriefingPeriodId()
     void deps.regenerate({ periodId, locale: draft.language, date: draft.date, generation: { asOf, windowHours: draft.windowHours as DailyBriefingWindowHours } })
     return { outcome: 'started' }
   }
