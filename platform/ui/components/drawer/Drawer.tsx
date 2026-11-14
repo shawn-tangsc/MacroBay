@@ -58,6 +58,13 @@ type DrawerBase = {
   className?: string
   resolveText: (key: string) => string
   /**
+   * 与相邻抽屉的关系：`false` = **不推开别人**。antd 默认会把外层的抽屉推开 180px
+   * （`defaultPushState.distance = 180`），而嵌套在别人 React 树里的抽屉（哪怕 portal 到 body）
+   * 仍然通过 context 触发这次推动——「打开详情，主抽屉自己往左挪 180」就是这么来的。
+   * 不传＝antd 默认（保持既有行为，历史调用方一行不用改）。
+   */
+  push?: boolean | { distance?: number }
+  /**
    * **生命周期开关**：关闭后是否卸载内容。原样透传给 antd，**不传即 antd 默认**（不加隐式行为）。
    *
    * 判据：改变「内容何时存在」→ 透传；改变「长什么样」→ 进规格。清单见 `drawer.md`。
@@ -116,7 +123,7 @@ type DrawerHeaderShape =
 export type DrawerProps = DrawerBase & DrawerModeShape & DrawerHeaderShape
 
 export function Drawer(props: DrawerProps): ReactElement {
-  const { open, onClose, size, footer, children, className, resolveText, destroyOnHidden } = props
+  const { open, onClose, size, footer, children, className, resolveText, destroyOnHidden, push } = props
   const inline = props.mode === 'inline'
   const headless = props.header === 'none'
   const width = `min(${SIZE_PX[size]}px, ${VIEWPORT_CAP})`
@@ -170,6 +177,7 @@ export function Drawer(props: DrawerProps): ReactElement {
         </span>
       }
       footer={footer}
+      {...(push === undefined ? {} : { push })}
       {...(destroyOnHidden === undefined ? {} : { destroyOnHidden })}
       mask={!inline}
       maskClosable={!inline}
