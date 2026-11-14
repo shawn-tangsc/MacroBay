@@ -11,9 +11,10 @@ import {
 } from './marketCalendarDisplayNameTables'
 
 describe('两张纯展示表', () => {
-  it('37 个 metric_key 全有中文名（本月 33 条 + 4 个头部指标），且没有重名', () => {
+  // 39 = 原来的 37 + PCE 两个**季调**码（2026-11-14 补码；未季调那两个变体的名字仍在表里）。
+  it('39 个 metric_key 全有中文名（本月 33 条 + 4 个头部指标 + 2 个季调 PCE），且没有重名', () => {
     const keys = Object.keys(marketCalendarMetricDisplayNames)
-    expect(keys).toHaveLength(37)
+    expect(keys).toHaveLength(39)
     expect(new Set(Object.values(marketCalendarMetricDisplayNames)).size).toBe(keys.length)
     for (const name of Object.values(marketCalendarMetricDisplayNames)) {
       // 指标名，不是标题：不许把期间塞进名字里。

@@ -37,4 +37,24 @@ describe('日历按分级收窄：只出一级二级，其余进计数行', () =
     // 一二级超出上限的部分要单独数出来，不能被混进「未分级」。
     expect(result.hiddenTiered).toBeGreaterThan(0)
   })
+
+  /**
+   * 「同一发布只出一条」的证据（架构师 2026-11-14 定，Chief 要求钉成用例）。
+   *
+   * 真实的库里就是这样：BEA 下一次同步会给**季调**码写行，而旧的**未季调**空行还留着
+   * （同一个发布日、同一期次）。两个码是同一个概念的两个变体，影响程度一样，
+   * 所以不能靠 tier 的高低区分；正确结果是**只有有源的那条露名字，另一条计入数字**。
+   *
+   * 这条能红的真情况：有人把未季调变体加回一级（日历上并排列出两条 PCE 年率），
+   * 或者把「未分级」也放行（所有讲、库存一并涌进格子）。夹具里的两行是造的，不碰真库。
+   */
+  it('shows only the seasoned PCE row when one release carries both variants', () => {
+    const sameRelease = [entry('US.CORE_PCE.NSA.YOY'), entry('US.CORE_PCE.SA.YOY')]
+    const result = filterVisibleByTier(sameRelease)
+    expect(result.visible).toEqual(['US.CORE_PCE.SA.YOY'])
+    // 未季调那条没有静默消失：它在数字里，读者看到的「+1」就是它。
+    expect(result.hiddenUntiered).toBe(1)
+    expect(result.hiddenTotal).toBe(1)
+    expect(result.visible.length + result.hiddenTotal).toBe(sameRelease.length)
+  })
 })

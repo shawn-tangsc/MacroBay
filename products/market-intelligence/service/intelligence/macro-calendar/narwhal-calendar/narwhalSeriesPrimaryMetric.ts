@@ -38,7 +38,7 @@ export const narwhalPrimaryMetricBySeriesId: Readonly<Record<string, string>> = 
   'usa-housing-market-index': 'US.NAHB_HOUSING_MARKET.NONE.LEVEL',
   'usa-housing-starts': 'US.HOUSING_STARTS.SA.COUNT',
   'usa-import-and-export-prices': 'US.IMPORT_PRICES.SA.MOM',
-  'usa-income-and-spending': 'US.CORE_PCE.NSA.YOY',
+  'usa-income-and-spending': 'US.CORE_PCE.SA.YOY',
   'usa-industrial-production': 'US.INDUSTRIAL_PRODUCTION.SA.MOM',
   'usa-inflation-expectations': 'US.INFLATION_EXPECTATIONS.NONE.LEVEL',
   'usa-ism-manufacturing-pmi': 'US.ISM_MANUFACTURING.SA.LEVEL',
