@@ -73,11 +73,6 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
     }
     // 诊断：列表说这一期这一语言发布过，这一屏却没有正文。把**实际按哪个三元组判的**写出来，
     // 否则只能靠猜（用户 2026-11-14 的那一屏就是这样查了很久）。
-    console.warn('[daily-briefing] published edition has no body in the pane', {
-      date: view.date, periodId: selection?.periodId, locale: selection?.locale
-    })
-    // 诊断：列表说这一期这一语言发布过，这一屏却没有正文。把**实际按哪个三元组判的**写出来，
-    // 否则只能靠猜（用户 2026-11-14 的那一屏就是这样查了很久）。
 
     return <StateView state="error" reasonCode="unreadable" size="md"
       className="mi-daily-briefing-page__no-edition"

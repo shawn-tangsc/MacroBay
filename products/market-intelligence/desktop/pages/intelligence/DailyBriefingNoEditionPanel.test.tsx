@@ -19,8 +19,8 @@ const base = {
   formatTime,
   onOpenSettings: () => undefined
 }
-const row = (languages: { locale: 'zh-CN' | 'en-US'; state: string }[], periodDeleted = false) => ([{
-  date: '2026-11-14', periodId: 'period_x', periodDeleted, languages
+const row = (languages: { locale: 'zh-CN' | 'en-US'; state: string }[], periodDeleted = false, periodId = 'period_x') => ([{
+  date: '2026-11-14', periodId, periodDeleted, languages
 }] as never)
 
 /**
@@ -67,12 +67,16 @@ describe('the diagnostic line', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     renderToStaticMarkup(createElement(DailyBriefingNoEditionPanel, {
       ...base,
-      selection: { periodId: 'period_x', locale: 'zh-CN' },
-      editions: row([{ locale: 'zh-CN', state: 'published' }]),
+      // 用一个新的期次号：模块级去重会记住前面用例打过的三元组，重复身份不会再打。
+      selection: { periodId: 'period_diag', locale: 'zh-CN' },
+      editions: row([{ locale: 'zh-CN', state: 'published' }], false, 'period_diag'),
       onReread: () => undefined
     } as never))
     const call = warn.mock.calls.find((entry) => String(entry[0]).includes('published edition has no body'))
-    expect(call?.[1]).toEqual({ date: '2026-11-14', periodId: 'period_x', locale: 'zh-CN' })
+    // 日志必须是一行能读的 JSON（对象交给 Electron 会落成 `[object Object]`）。
+    const raw = String(call?.[0])
+    const payload = JSON.parse(raw.slice(raw.indexOf('{"date"')))
+    expect(payload).toMatchObject({ date: '2026-11-14', periodId: 'period_diag', locale: 'zh-CN', viewStatus: 'no-edition' })
     warn.mockRestore()
   })
 })
