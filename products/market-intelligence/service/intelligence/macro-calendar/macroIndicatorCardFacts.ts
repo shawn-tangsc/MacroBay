@@ -64,7 +64,14 @@ export type MacroIndicatorCardFact = Readonly<{
    */
   state: 'provided' | 'missing-current' | 'not-recorded'
   period?: string
+  /** **一次发布**发生的时刻。只有日历库里有那场发布才有；官方序列的一次观测不算。 */
   releasedAt?: string
+  /**
+   * 官方序列的**观测日**（`2026-10-01` 这种月初日期）：它回答「我们什么时候看到这个数」，
+   * 不回答「这件事什么时候发生」。两个时间混用会让读者以为那天有一场发布，而日历上根本没有。
+   * 卡片有 `releasedAt` 就写「刚发布 N 天」，只有这个就写「更新于 MM-DD」。
+   */
+  seriesObservedAt?: string
   value?: number
   /** 首发布时的上一期实际值；缺它就不能显示「较上期」，也不许拿修订值顶。 */
   previousAsPublished?: number

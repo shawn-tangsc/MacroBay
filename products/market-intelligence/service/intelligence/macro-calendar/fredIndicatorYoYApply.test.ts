@@ -23,6 +23,29 @@ describe('applyOfficialYoY', () => {
   })
 
   /**
+   * **观测日不是发布日**（架构师 2026-11-14）：以前这里把 `releasedAt` 设成观测日，
+   * 卡片就会说「10-01 发布」——可 10-01 没有发布，那是序列的一个观测。
+   *
+   * 规则：有真发布日就保留它（写「刚发布 N 天」），没有就只带观测日（写「更新于 MM-DD」）。
+   */
+  it('keeps a real release date and never passes the observation day off as one', () => {
+    const withRelease = applyOfficialYoY(cpi, {
+      state: 'ok', value: 3.7, observedAt: '2026-10-01T00:00:00.000Z', seriesId: 'CPIAUCNS'
+    })
+    // 日历库说过 11-10 发布过 → 那个日期不许被观测日盖掉。
+    expect(withRelease.releasedAt).toBe('2026-11-10T13:30:00.000Z')
+    expect(withRelease.seriesObservedAt).toBe('2026-10-01T00:00:00.000Z')
+
+    // 库里根本没有这场发布（没有 releasedAt）：不许凭空造一个发布日，只带观测日。
+    const noRelease: MacroIndicatorCardFact = { metricKey: 'US.CORE_PCE.SA.YOY', state: 'not-recorded', period: '2026-10' }
+    const fromSeries = applyOfficialYoY(noRelease, {
+      state: 'ok', value: 3.2, observedAt: '2026-10-01T00:00:00.000Z', seriesId: 'PCEPILFE'
+    })
+    expect(fromSeries.releasedAt).toBeUndefined()
+    expect(fromSeries.seriesObservedAt).toBe('2026-10-01T00:00:00.000Z')
+  })
+
+  /**
    * 旧源正在删除：本期由官方给值以后，「上一期」必须也来自官方前一个观测，
    * 否则等旧源消失，那一格会在没人察觉的情况下变空。
    */

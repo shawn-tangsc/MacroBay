@@ -92,6 +92,8 @@ export const macroIndicatorDrawerText = {
       approx: '约 {value}',
       volume: '成交量 {value}',
       observed: '观测 {time}',
+      /* 只有官方序列的**观测日**、没有那次发布时用这句：不写「发布」，那天没有发布。 */
+      updatedAt: '更新于 {date}',
       beforeRelease: '（发布前）',
       expectedAllMissing: '本期暂无预期（盘未开）',
       /* 还没读完 ≠ 没盘：这一档只在读数还在路上时用，读完就换成值或「暂无预期」。 */
@@ -223,6 +225,7 @@ export const macroIndicatorDrawerText = {
       approx: 'about {value}',
       volume: 'Volume {value}',
       observed: 'observed {time}',
+      updatedAt: 'Updated {date}',
       beforeRelease: '(before release)',
       expectedAllMissing: 'No expectation for this period (market not open)',
       /* Not yet read ≠ no market: only while the read is in flight. */

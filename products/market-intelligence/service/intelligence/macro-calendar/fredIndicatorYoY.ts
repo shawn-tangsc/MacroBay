@@ -130,9 +130,11 @@ export function applyOfficialYoY(
     // 本期由官方给值时，「上一期」也取官方前一个观测——旧源正在删除，问它就是问一个正在冻结的值。
     // 官方窗口里拿不到前一个观测 → 这一格是「读不到」，不是「没有」。
     const previous = reading.previous
+    /* **不写 `releasedAt`**：官方序列的一次观测不是一次发布（架构师 2026-11-14）。
+       有真发布日就保留日历库那个（读者看到「刚发布 N 天」），没有就只带观测日（显示「更新于」）。 */
     return {
       ...fact, state: 'provided', value: reading.value, source: 'fred',
-      releasedAt: reading.observedAt,
+      seriesObservedAt: reading.observedAt,
       ...(previous === undefined
         ? { previousUnreadable: true }
         : {
