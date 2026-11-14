@@ -7,10 +7,10 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 /* 只从**纯模块**取键的拼法：store 里有 `node:fs`，渲染层导入它会整页加载失败（2026-11-14）。 */
 import { coreIndicatorSourcePreferenceKey } from '../../../service/intelligence/macro-calendar/coreIndicatorSourcePreferenceKey'
 import { MACRO_INDICATOR_GROUPS } from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
-import {
-  valueSourcesForMetric,
-  type CoreIndicatorValueSource
-} from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
+/* M3（2026-11-14）：这一屏的源腿**只从 catalog 读**，不再自己去派生——腿的出处只有一处。 */
+import { metricCatalog } from '../../../service/intelligence/macro-calendar/marketCalendarMetricCatalog'
+
+import type { CoreIndicatorValueSource } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 
 import type { SourceCadenceReadout } from './sourceCadence'
 
@@ -27,7 +27,8 @@ import './coreIndicators.css'
  * 分组与顺序的唯一出处是 `MACRO_INDICATOR_GROUPS`（三组 × 四行）：这里不自己列指标、不写死数量。
  *
  * 四条行为写死：
- * - 行来自**唯一派生点** `valueSourcesForMetric()`，组件不自己拼清单；几行源就画几行，不补空行；
+ * - 行来自**只读合成索引** `metricCatalog()`（腿的派生仍在 `coreIndicatorValueSources`，这里只读结果）：
+ *   组件不自己拼清单，几行源就画几行，不补空行；
  * - 缺配置 = 开（默认全开，读者第一次进来不会看到所有指标都空）；
  * - **总闸关掉时这一行置灰**，并给一个去数据源的入口——不然读者点了一个灰开关，不知道该去哪儿开；
  * - 一个指标的腿**全被读者关掉**时，说「所有源已关闭（你可调整）」，不是「暂无数据」。
@@ -69,6 +70,8 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
   const t = props.resolveText
   /* 间隔/下次里的时刻按读者设置时区显示，格式化只在这里取一次。 */
   const timeZone = useShellTimeZone()
+  /* 一次建索引，整屏共用：每个指标的腿都从这张索引取，组件自己不派生。 */
+  const catalog = metricCatalog()
 
   const cellFor = (metricKey: string): React.ReactElement | null => {
     /* 标题取不到名字就**整张不出**：拼出一个空键只会渲染成空白标题 + 一行源，
@@ -77,7 +80,7 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
     if (copyKey === undefined) return null
     /* 名字取不到就不渲染这一行——绝不把 provider id 印给读者。 */
     const rows: readonly Readonly<{ source: CoreIndicatorValueSource; name: string }>[] =
-      valueSourcesForMetric(metricKey).flatMap((source) => {
+      (catalog.get(metricKey)?.sources ?? []).flatMap((source) => {
         const name = props.sourceNameOf(source.providerId)
         return name === undefined ? [] : [{ source, name }]
       })
@@ -167,7 +170,8 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
         {MACRO_INDICATOR_GROUPS.map((group) => {
           /* 组占几列与看板的模块卡同算法：组内各卡占列之和，上限 3。 */
           const span = Math.min(
-            group.rows.reduce((sum, row) => sum + Math.min(valueSourcesForMetric(row.metricKey).length, 3), 0),
+            group.rows.reduce((sum, row) =>
+              sum + Math.min(catalog.get(row.metricKey)?.sources.length ?? 0, 3), 0),
             3
           )
           return <section

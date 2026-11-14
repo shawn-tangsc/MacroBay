@@ -245,6 +245,16 @@ describe('三组十二项：文案齐全、不另设计布局', () => {
     }
   })
 
+  /**
+   * M3 的判据：**腿数只从 catalog 读**。这条挡「改回自己派生」或「加一层兜底」——
+   * 兜底会让换码演练永远看起来绿，而旧路还活着。
+   */
+  it('reads the legs from the catalog and never derives them itself', () => {
+    const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')
+    expect(view).toContain('metricCatalog()')
+    expect(view).not.toContain('valueSourcesForMetric(')
+  })
+
   it('carries no layout rule the dashboard does not have', () => {
     const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')
     const css = readFileSync(join(__dirname, 'coreIndicators.css'), 'utf8')
