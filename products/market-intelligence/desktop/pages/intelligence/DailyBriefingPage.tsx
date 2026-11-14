@@ -484,6 +484,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         />,
         text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
+        // 读者选中那一期的身份：空态按 (date, periodId, locale) 分辨「读不到这一版」与「没有这一版」。
+        selectedPeriodId: pickedPeriodId ?? DEFAULT_PERIOD_ID, selectedLocale: effectiveLocale,
         eventTitles: editionEventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled,
         // 设置面已经不在这一页（抽屉是唯一入口），所以这里永远是 false。
         settingsOpen: false,
