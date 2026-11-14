@@ -9,16 +9,39 @@ import { isValidIsoTime } from '../public-query/asOfVisibility'
  * 这里的读法只有一件：把 FRED 的观测行取回来，挑出最新一个有值的，记下它的观测日。
  * 取不到就是「读不到」，不退回日历里的旧值，也不写成「未提供」——三件事必须分得开。
  */
+export type FredSeriesPolicy = Readonly<{
+  seriesId: string
+  /**
+   * 取数口径：`pc1` = 同比（来源直接算好），`pch` = 环比（月率）。
+   *
+   * **口径跟着码走，不跟着调用点走**（架构师 2026-11-14）：`pch` 用在月度序列上是月率，
+   * 用在季度序列上就是季率——只要有一个全局 `units`，接 GDP 那天就会静默错，
+   * 而且错得看不出来。所以这里每个码自带一份，没有一个「看起来是全局」的字段。
+   */
+  units: 'pc1' | 'pch'
+}>
+
 export const fredIndicatorYoYPolicy = Object.freeze({
   endpoint: 'https://api.stlouisfed.org/fred/series/observations',
-  /** 指标身份 → FRED 序列。**只用未季调序列**（与 BLS 公布口径一致）。 */
+  /**
+   * 指标身份 → FRED 序列 + 口径。**季调口径必须和码对上**：
+   * `.SA.MOM` 用季调指数取 `pch`，`.NSA.YOY` 用未季调指数取 `pc1`；
+   * 没有确证对应口径的码**不登记**（例如 `US.PCE.NSA.YOY`：FRED 月度只有季调指数），
+   * 由 `coreIndicatorValueSources` 的例外清单记明原因，不拿季调顶未季调。
+   */
   seriesByMetricKey: Object.freeze({
-    'US.CPI.NSA.YOY': 'CPIAUCNS',
-    'US.CORE_CPI.NSA.YOY': 'CPILFENS',
-    'US.CORE_PCE.NSA.YOY': 'PCEPILFE'
-  } as const),
-  /** FRED 直接算好的同比，不是指数。 */
-  units: 'pc1'
+    // 同比（未季调序列，与 BLS 公布口径一致）
+    'US.CPI.NSA.YOY': { seriesId: 'CPIAUCNS', units: 'pc1' },
+    'US.CORE_CPI.NSA.YOY': { seriesId: 'CPILFENS', units: 'pc1' },
+    'US.CORE_PCE.NSA.YOY': { seriesId: 'PCEPILFE', units: 'pc1' },
+    'US.AHE.NSA.YOY': { seriesId: 'CEU0500000003', units: 'pc1' },
+    // 月率（季调指数，取 `pch`）
+    'US.CPI.SA.MOM': { seriesId: 'CPIAUCSL', units: 'pch' },
+    'US.CORE_CPI.SA.MOM': { seriesId: 'CPILFESL', units: 'pch' },
+    'US.PCE.SA.MOM': { seriesId: 'PCEPI', units: 'pch' },
+    'US.CORE_PCE.SA.MOM': { seriesId: 'PCEPILFE', units: 'pch' },
+    'US.AHE.SA.MOM': { seriesId: 'CES0500000003', units: 'pch' }
+  } as const)
 } as const)
 
 export type FredYoYReading =
@@ -39,8 +62,8 @@ export type FredObservationsFetcher = (input: Readonly<{
 }>) => Promise<readonly Readonly<{ date: string; value: string }>[]>
 
 /** 这个指标有没有官方序列；没有就返回 `undefined`（调用方据此不显示官方那一格）。 */
-export function fredSeriesFor(metricKey: string): string | undefined {
-  return (fredIndicatorYoYPolicy.seriesByMetricKey as Readonly<Record<string, string>>)[metricKey]
+export function fredSeriesFor(metricKey: string): FredSeriesPolicy | undefined {
+  return (fredIndicatorYoYPolicy.seriesByMetricKey as Readonly<Record<string, FredSeriesPolicy>>)[metricKey]
 }
 
 /**
@@ -53,11 +76,12 @@ export async function readFredIndicatorYoY(
   metricKey: string,
   fetchObservations: FredObservationsFetcher
 ): Promise<FredYoYReading> {
-  const seriesId = fredSeriesFor(metricKey)
-  if (seriesId === undefined) return { state: 'unavailable', seriesId: '', reason: 'no-series' }
+  const policy = fredSeriesFor(metricKey)
+  if (policy === undefined) return { state: 'unavailable', seriesId: '', reason: 'no-series' }
+  const seriesId = policy.seriesId
   let rows: readonly Readonly<{ date: string; value: string }>[]
   try {
-    rows = await fetchObservations({ seriesId, units: fredIndicatorYoYPolicy.units, limit: 4 })
+    rows = await fetchObservations({ seriesId, units: policy.units, limit: 4 })
   } catch {
     return { state: 'unavailable', seriesId, reason: 'read-failed' }
   }

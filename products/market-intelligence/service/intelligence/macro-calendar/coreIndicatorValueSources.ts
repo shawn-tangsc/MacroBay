@@ -1,6 +1,7 @@
-import { fredIndicatorYoYPolicy } from './fredIndicatorYoY'
+import { fredSeriesFor } from './fredIndicatorYoY'
 import { macroCalendarReleaseValueMappings } from './macroCalendarReleaseValueMappingPolicy'
 import { MACRO_INDICATOR_CARD_KEYS } from './macroIndicatorCardFacts'
+import { MACRO_INDICATOR_GROUP_METRIC_KEYS } from './macroIndicatorCardGroups'
 import { narwhalMeasureMetricKeys } from './marketCalendarMetricIdentity'
 
 /**
@@ -8,7 +9,7 @@ import { narwhalMeasureMetricKeys } from './marketCalendarMetricIdentity'
  *
  * 三条腿各有各的唯一出处，这里只做并集，**不许把任何一条腿再抄一遍**：
  * - Narwhal（数据商）：`narwhalMeasureMetricKeys`（measure ↔ metric_key 双射）；
- * - FRED（官方同比 / 上一期）：`fredIndicatorYoYPolicy.seriesByMetricKey`；
+ * - FRED（官方同比 / 官方月率 / 上一期）：`fredIndicatorYoYPolicy.seriesByMetricKey`（每码自带 units）；
  * - BLS（官方直采）：下面这一个常量——**这是本文件唯一新增的事实**，因为「BLS 覆盖哪些指标」
  *   此前只存在于运行时行数据里（`sourceProviderId`），没有常量。
  *
@@ -30,6 +31,12 @@ export type CoreIndicatorValueSource = Readonly<{
    */
   role: 'current-value' | 'official-yoy' | 'official-mom' | 'official-change' | 'official-level'
 }>
+
+/** FRED 的取数口径 → 官方腿的 role：`pc1` 是同比，`pch` 是月率，两者不是一回事。 */
+const roleByFredUnits: Readonly<Record<string, CoreIndicatorValueSource['role']>> = Object.freeze({
+  pc1: 'official-yoy',
+  pch: 'official-mom'
+})
 
 /** 策略表的 `unit` → 官方腿的 role。新增单位就加一行，不在代码里判断是哪个码。 */
 const roleByReleaseUnit: Readonly<Record<string, CoreIndicatorValueSource['role']>> = Object.freeze({
@@ -74,9 +81,9 @@ function narwhalCovers(metricKey: string): boolean {
   return Object.values(narwhalMeasureMetricKeys).includes(metricKey)
 }
 
-/** FRED 这一腿是否覆盖该指标：读同比序列映射，不另存清单。 */
+/** FRED 这一腿是否覆盖该指标：读序列映射，不另存清单。 */
 function fredCovers(metricKey: string): boolean {
-  return (fredIndicatorYoYPolicy.seriesByMetricKey as Readonly<Record<string, string>>)[metricKey] !== undefined
+  return fredSeriesFor(metricKey) !== undefined
 }
 
 /** 一个指标的取值源（顺序即界面顺序：数据商（本期值）在前，官方腿在后）。 */
@@ -86,7 +93,11 @@ export function valueSourcesForMetric(metricKey: string): readonly CoreIndicator
     sources.push({ providerId: 'narwhal', kind: 'provider', role: 'current-value' })
   }
   if (fredCovers(metricKey)) {
-    sources.push({ providerId: 'fred-rates-liquidity', kind: 'official', role: 'official-yoy' })
+    const units = fredSeriesFor(metricKey)?.units
+    sources.push({
+      providerId: 'fred-rates-liquidity', kind: 'official',
+      role: (units === undefined ? undefined : roleByFredUnits[units]) ?? 'official-yoy'
+    })
   }
   if (blsCoveredMetricKeys.includes(metricKey)) {
     const mapping = macroCalendarReleaseValueMappings.find((row) =>
@@ -127,4 +138,27 @@ export function coreIndicatorValueSourceRows(): readonly Readonly<{
 /** 兜底自检：菜单列的四项必须都在卡片键里，否则是两张表各写了一份。 */
 export function coreIndicatorKeysMissingFromCards(): readonly string[] {
   return coreIndicatorMetricKeys.filter((key) => !(MACRO_INDICATOR_CARD_KEYS as readonly string[]).includes(key))
+}
+
+/**
+ * 例外：**确实没有官方腿**的指标 + 一句原因（Chief 2026-11-14 定的不变量）。
+ *
+ * 不变量：12 个指标里每一个都必须至少有一条 `kind: 'official'` 的腿；例外只能出现在这张单子里。
+ * 为什么不是「看那条腿是不是退役源」：那要维护一份「谁要退役」的人工状态，而那本身就是下一个
+ * 不同步的地方；「有没有官方腿」退役前后都成立，且能从派生表直接算。
+ *
+ * 单子里只放码 + 原因，**不放序列号猜测值**——留着候选序列号，下一个人就会把它接上。
+ */
+export const coreIndicatorOfficialLegExceptions: readonly Readonly<{ metricKey: string; reason: string }>[] =
+  Object.freeze([
+    Object.freeze({
+      metricKey: 'US.PCE.NSA.YOY',
+      reason: 'FRED 月度只有季调 PCE 价格指数，未季调年率没有确证序列；按口径不拿季调顶未季调，保持「未提供」'
+    })
+  ])
+
+/** 12 个指标里没有官方腿的那些（应当正好等于例外单子）。 */
+export function metricsWithoutOfficialLeg(): readonly string[] {
+  return MACRO_INDICATOR_GROUP_METRIC_KEYS.filter((metricKey) =>
+    !valueSourcesForMetric(metricKey).some((source) => source.kind === 'official'))
 }

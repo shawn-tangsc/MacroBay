@@ -7,7 +7,9 @@ import {
   blsCoveredMetricKeys,
   coreIndicatorKeysMissingFromCards,
   coreIndicatorMetricKeys,
+  coreIndicatorOfficialLegExceptions,
   coreIndicatorValueSourceRows,
+  metricsWithoutOfficialLeg,
   valueSourcesForMetric
 } from './coreIndicatorValueSources'
 import { fredIndicatorYoYPolicy } from './fredIndicatorYoY'
@@ -34,9 +36,39 @@ describe('core indicator value sources', () => {
       .toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-yoy'])
     // 新增就业的官方腿是 BLS，不是 FRED——两条腿别混。
     expect(describeOf('US.NONFARM.SA.CHANGE')).toEqual(['narwhal:current-value', 'bls:official-change'])
-    // role 由策略表的 `unit` 定：万人当量是「净变化」，失业率是「水平」，时薪月率是「月率」。
+    // role 由策略表的 `unit` 定：万人当量是「净变化」，失业率是「水平」。
     expect(describeOf('US.UNEMPLOYMENT.SA.RATE')).toEqual(['narwhal:current-value', 'bls:official-level'])
-    expect(describeOf('US.AHE.SA.MOM')).toEqual(['narwhal:current-value', 'bls:official-mom'])
+    // 时薪月率有三条腿，官方那两条口径是「月率」（`pch` / `monthly percent change`），不是同比。
+    expect(describeOf('US.AHE.SA.MOM')).toEqual([
+      'narwhal:current-value', 'fred-rates-liquidity:official-mom', 'bls:official-mom'
+    ])
+    // 月率其余三格：FRED 一条官方腿，取 `pch`。
+    expect(describeOf('US.CPI.SA.MOM')).toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-mom'])
+    expect(describeOf('US.CORE_CPI.SA.MOM')).toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-mom'])
+    expect(describeOf('US.PCE.SA.MOM')).toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-mom'])
+    expect(describeOf('US.CORE_PCE.SA.MOM')).toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-mom'])
+    // 时薪年率用未季调序列（CEU…，2026-11-14 在 FRED 上确证），不是拿季调的 3.1% 顶。
+    expect(describeOf('US.AHE.NSA.YOY')).toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-yoy'])
+  })
+
+  /**
+   * 不变量（Chief 2026-11-14）：12 个指标每一个都必须至少有一条官方腿，
+   * 例外只能出现在写明原因的单子里。这条能红的真情况：扩腿时漏掉一格、或有人删了例外单子里那条原因。
+   */
+  it('leaves no metric without an official leg, except the ones the list explains', () => {
+    const missing = metricsWithoutOfficialLeg()
+    expect([...missing].sort()).toEqual(coreIndicatorOfficialLegExceptions.map((entry) => entry.metricKey).sort())
+    for (const exception of coreIndicatorOfficialLegExceptions) {
+      expect(exception.reason.length, exception.metricKey).toBeGreaterThan(8)
+      // 例外里不许留序列号猜测值：留着就等于给了下一个人一个「接上它」的理由。
+      for (const policy of Object.values(fredIndicatorYoYPolicy.seriesByMetricKey)) {
+        expect(exception.reason, exception.metricKey).not.toContain(policy.seriesId)
+      }
+    }
+    // 例外单子里的码必须在 12 个之内，否则是给一个不存在的指标开了口子。
+    for (const exception of coreIndicatorOfficialLegExceptions) {
+      expect(MACRO_INDICATOR_GROUP_METRIC_KEYS, exception.metricKey).toContain(exception.metricKey)
+    }
   })
 
   it('keeps the menu list pointing at the same metric keys as the cards', () => {
@@ -91,7 +123,9 @@ describe('core indicator value sources', () => {
     const literals = source.match(/'US\.[A-Z0-9_.]+'/g) ?? []
     // 允许的字面量只剩**产品定的四项核心指标**（2026-11-14 定，不是从卡片行键派生——派生会产出 11 项、7 张空卡）。
     const allowed = new Set([
-      'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.CORE_PCE.NSA.YOY', 'US.NONFARM.SA.CHANGE'
+      ...coreIndicatorMetricKeys,
+      // 例外单子里的码是产品决定（带原因），允许写在这里；腿的清单仍然不许抄。
+      ...coreIndicatorOfficialLegExceptions.map((entry) => entry.metricKey)
     ])
     const extra = literals.filter((literal) => !allowed.has(literal.replace(/'/g, '')))
     expect(extra).toEqual([])
