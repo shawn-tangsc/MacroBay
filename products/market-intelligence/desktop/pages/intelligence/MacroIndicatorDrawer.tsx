@@ -24,12 +24,14 @@ import type { PolicyPathReading } from '../../../service/intelligence/policy-pat
 import {
   expectationBp, expectationEventMoves, matchedRelevantKey, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS
 } from '../../../contracts/policyPath'
-import type { MacroIndicatorCardFact, MacroIndicatorCardKey } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
+import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { Drawer } from '@platform/ui/components/drawer'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
 import { IndicatorCards, type IndicatorCardGroup } from './IndicatorCards'
 import { MACRO_INDICATOR_GROUPS } from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
+// 「一个指标 → 一个码」的只读合成索引：事件短名按概念归一，加变体不用改这里。
+import { metricConceptOf } from '../../../service/intelligence/macro-calendar/marketCalendarMetricCatalog'
 
 import './macroIndicatorDrawer.css'
 
@@ -62,17 +64,24 @@ function shortEventLabel(
   return nameOfMetricKey(matched ?? event.eventNameKey, text) ?? event.label
 }
 
+/**
+ * 事件短名按**概念**取，不按码取（季调/未季调是同一个概念的两个变体）。
+ *
+ * 这就是 M2 要它改读 catalog 的原因：以前换一次口径（NSA→SA）必须在这里补一个 `case`，
+ * 漏了就让那条事件掉进 default、标题退回源原文名——今晚那类「换码漏一处」的坑正是这样来的。
+ * 现在按 `metricConceptOf()` 归一，加变体不用改这里。
+ */
+const eventNameKeyByConcept: Readonly<Record<string, 'cpi' | 'coreCpi' | 'payrolls' | 'corePce'>> = Object.freeze({
+  'US.CPI.YOY': 'cpi',
+  'US.CORE_CPI.YOY': 'coreCpi',
+  'US.NONFARM.CHANGE': 'payrolls',
+  'US.CORE_PCE.YOY': 'corePce'
+})
+
 function nameOfMetricKey(key: string | undefined, text: MacroIndicatorDrawerText): string | undefined {
-  switch (key) {
-    case 'US.CPI.NSA.YOY': return text.eventNames.cpi
-    case 'US.CORE_CPI.NSA.YOY': return text.eventNames.coreCpi
-    case 'US.NONFARM.SA.CHANGE': return text.eventNames.payrolls
-    // 换码必须同笔加：漏了就让这条事件掉进 default、标题退回源原文名。
-    // 未季调那条留着，是为了库里那批旧行（还没收）仍能取到「核心 PCE」这个名字。
-    case 'US.CORE_PCE.SA.YOY':
-    case 'US.CORE_PCE.NSA.YOY': return text.eventNames.corePce
-    default: return undefined
-  }
+  if (key === undefined || key === '') return undefined
+  const nameKey = eventNameKeyByConcept[metricConceptOf(key)]
+  return nameKey === undefined ? undefined : text.eventNames[nameKey]
 }
 
 export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, now, readMarketEvents }: Readonly<{
@@ -274,13 +283,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     ? Math.max(1, Math.ceil((Date.parse(points[points.length - 1]!.at) - Date.parse(points[0]!.at)) / 86_400_000))
     : undefined
   const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
-  const factOf = (key: MacroIndicatorCardKey): MacroIndicatorCardFact | undefined =>
-    cardFacts?.find((fact) => fact.metricKey === key)
-  const cpiFact = factOf('US.CPI.NSA.YOY')
-  const coreCpiFact = factOf('US.CORE_CPI.NSA.YOY')
-  const payrollsFact = factOf('US.NONFARM.SA.CHANGE')
-  const pceFact = factOf('US.CORE_PCE.SA.YOY')
-  const unemploymentFact = factOf('US.UNEMPLOYMENT.SA.RATE')
   // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
   // 图上用短名（完整标题不上图）；名字按身份取，不按标题文本猜。
   const eventMarks = useMemo(() => {
