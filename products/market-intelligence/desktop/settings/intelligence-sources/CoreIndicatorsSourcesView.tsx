@@ -1,6 +1,4 @@
-import { Switch } from 'antd'
-
-import { BusinessCardFrequencyRow } from './BusinessSettingsView'
+import { cellRow } from './BusinessSettingsView'
 
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
@@ -14,7 +12,6 @@ import type { CoreIndicatorValueSource } from '../../../service/intelligence/mac
 
 import type { SourceCadenceReadout } from './sourceCadence'
 
-import './coreIndicators.css'
 
 /**
  * 「核心指标」那一屏：**看板那一屏换个内容**（用户 2026-11-14 定，不另设计）。
@@ -112,53 +109,27 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
           const gateOff = props.sourceEnabled(source.providerId) === false
           /* 节奏由产品内置作业定（没有独立排期）才写「内置频率」；其余一律读真实的档位与间隔。 */
           const builtin = props.builtinCadenceOf?.(source.providerId) === true
-          return <div
-            className="business-card__row"
-            data-core-source-row={preferenceKey}
-            data-gate-off={gateOff ? 'true' : undefined}
-            key={preferenceKey}>
-            <div className="business-card__line">
-              {/* 名字 + 类型小字同一列：类型不再挤进频率那一格（两页同一行必须同形）。 */}
-              <span className="core-indicator-sources__label">
-                {gateOff && props.onOpenSource !== undefined
-                  ? <button
-                    className="business-card__label business-card__label--action"
-                    onClick={() => props.onOpenSource?.(source.providerId)}
-                    /* 名字最多显示两行；**全名**靠 title（悬停）与 DOM 文本（读屏）——
-                       被截掉的部分不许在无障碍层也消失。 */
-                    title={name}
-                    type="button">{name}</button>
-                  : <span className="business-card__label" title={name}>{name}</span>}
-                {/* 类型微标：跟名字**同一行**（界面设计 2026-11-14）——读者扫行时要用的信息，
-                    不另起一行、也不藏进 ⓘ。11/`--muted` 沿用共享的标签档。 */}
-                <span aria-hidden="true" className="business-card__preset-label">·</span>
-                <span className="business-card__preset-label">
-                  {t(`settings.intelligenceSources.coreIndicators.valueSourceType.${source.kind}`)}
-                </span>
-              </span>
-              <span className="business-card__toggle">
-                <Switch
-                  checked={props.disabled[preferenceKey] !== true}
-                  disabled={gateOff}
-                  onChange={(next) => props.onToggle(preferenceKey, next)}
-                  size="small" />
-              </span>
-            </div>
-            {/* 第二行由**共享组件**渲染（看板同一份）：标签「频率」+ 同一颗 ⓘ + 值。
-                核心指标这屏没有档位下拉，所以是只读形态；节奏由产品内置作业定的源才走 builtin。 */}
-            <BusinessCardFrequencyRow
-              dataRow={{ 'data-preset-row': source.providerId }}
-              {...(builtin
-                ? { builtinCadence: true }
-                : {
-                  readOnly: true,
-                  ...(props.presetOf?.(source.providerId) === undefined ? {} : { preset: props.presetOf!(source.providerId) })
-                })}
-              {...(props.cadenceOf?.(source.providerId) === undefined ? {} : { cadence: props.cadenceOf(source.providerId) })}
-              {...(props.cadenceAvailable === false ? { cadenceUnavailable: true } : {})}
-              resolveText={t}
-              timeZone={timeZone} />
-          </div>
+          /* **这一行由看板那份渲染函数生成**（整行可点、源没开不画频率行、开关不冒泡都写在里面）：
+             两页各写一遍时，这三件必错一处——用户已经就这件事问过三次。 */
+          return cellRow({
+            cellId: preferenceKey,
+            enabled: props.disabled[preferenceKey] !== true,
+            label: name,
+            siblings: [],
+            sourceId: source.providerId,
+            ...(props.sourceEnabled === undefined ? {} : { sourceEnabled: props.sourceEnabled(source.providerId) }),
+            onCellToggle: (id, enabled) => props.onToggle(id, enabled),
+            ...(props.onOpenSource === undefined ? {} : { onOpenSourceConfig: props.onOpenSource }),
+            ...(builtin
+              ? { builtinCadence: true }
+              : {
+                ...(props.presetOf?.(source.providerId) === undefined ? {} : { preset: props.presetOf!(source.providerId) })
+              }),
+            ...(props.cadenceOf?.(source.providerId) === undefined ? {} : { cadence: props.cadenceOf(source.providerId) }),
+            ...(props.cadenceAvailable === false ? { cadenceUnavailable: true } : {}),
+            resolveText: t,
+            timeZone
+          })
         })}
         {rows.length > 0 && enabledCount === 0
           ? <p className="core-indicator-sources__closed">{t('settings.intelligenceSources.coreIndicators.valueSourceAllClosed')}</p>

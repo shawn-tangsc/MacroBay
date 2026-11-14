@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { productText } from '../../shared/i18n/productText'
@@ -73,24 +73,21 @@ describe('core indicator source page', () => {
 
   it('shows the switch as ON when there is no saved preference', async () => {
     const host = await render()
-    const switches = [...host.querySelectorAll<HTMLElement>('[data-core-source-row] .ant-switch')]
+    const switches = [...host.querySelectorAll<HTMLElement>('[data-cell-id] .ant-switch')]
     expect(switches.length).toBeGreaterThan(0)
     for (const item of switches) expect(item.getAttribute('aria-checked')).toBe('true')
   })
 
-  it('grays a row out when the source itself is off, and offers the way to open it', async () => {
+  it('grays a row out when the source itself is off, and the whole row opens the source', async () => {
     const onOpenSource = vi.fn()
     const host = await render({ sourceEnabled: (providerId) => providerId !== 'narwhal', onOpenSource })
-    const row = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|narwhal"]')!
-    expect(row.getAttribute('data-gate-off')).toBe('true')
-    // antd Switch 在禁用时给原生 `disabled`，不是 `aria-disabled`——按真实标记断言。
-    const control = row.querySelector<HTMLButtonElement>('button.ant-switch') ?? row.querySelector<HTMLButtonElement>('button[role="switch"]')
+    const row = host.querySelector<HTMLElement>('[data-cell-id="US.CPI.NSA.YOY|narwhal"]')!
+    // 共享行用 `data-source-disabled` 标这一行，并按看板那套改成整行是按钮（不再给名字加尾巴按钮）。
+    expect(row.getAttribute('data-source-disabled')).toBe('true')
+    expect(row.getAttribute('role')).toBe('button')
+    const control = row.querySelector<HTMLButtonElement>('button.ant-switch')
     expect(control?.disabled).toBe(true)
-    /* 复用其它业务页那套行之后，总闸关掉时**名字本身**就是那颗「去数据源」按钮
-       （源开着时名字也是按钮，只是点了是打开源详情）——不再另加一颗尾巴按钮。 */
-    const jump = row.querySelector<HTMLButtonElement>('.business-card__label--action')!
-    expect(jump.textContent).toBe('Narwhal 经济数据')
-    await act(async () => jump.click())
+    await act(async () => row.click())
     expect(onOpenSource).toHaveBeenCalledWith('narwhal')
   })
 
@@ -114,35 +111,28 @@ describe('core indicator source page', () => {
 describe('源名：两行截断，全名不丢', () => {
   const LONG = 'Federal Reserve Economic Data — St. Louis Fed 官方序列'
 
-  it('keeps the full name on the element (title + text) while CSS clamps it to two lines', async () => {
+  it('keeps the full name on the element as text (the shared row does not truncate it away)', async () => {
     const host = await render({ sourceNameOf: (providerId: string) =>
       providerId === 'fred-rates-liquidity' ? LONG : names[providerId] })
-    const label = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|fred-rates-liquidity"] .business-card__label')!
-    // 悬停能看到全名。
-    expect(label.getAttribute('title')).toBe(LONG)
+    const label = host.querySelector<HTMLElement>('[data-cell-id="US.CPI.NSA.YOY|fred-rates-liquidity"] .business-card__label')!
     // 读屏念的是完整名字（DOM 文本没有被截断成两行内容）。
     expect(label.textContent).toBe(LONG)
   })
 
-  it('keeps the full name on the jump button too', async () => {
+  it('keeps the full name on the row that opens the source', async () => {
     const host = await render({
       sourceNameOf: (providerId: string) => providerId === 'narwhal' ? LONG : names[providerId],
       sourceEnabled: (providerId: string) => providerId !== 'narwhal',
       onOpenSource: vi.fn()
     })
-    const jump = host.querySelector<HTMLButtonElement>('[data-core-source-row="US.CPI.NSA.YOY|narwhal"] .business-card__label--action')!
-    expect(jump.getAttribute('title')).toBe(LONG)
-    expect(jump.textContent).toBe(LONG)
+    const row = host.querySelector<HTMLElement>('[data-cell-id="US.CPI.NSA.YOY|narwhal"]')!
+    expect(row.textContent).toContain(LONG)
   })
 
-  it('styles with layout properties only — no colour, font, border, background or min-height', () => {
-    const css = readFileSync(join(__dirname, 'coreIndicators.css'), 'utf8')
-    // 两行截断确实在（不是靠省略号）。
-    expect(css).toContain('-webkit-line-clamp: 2')
-    expect(css).toContain('-webkit-box-orient: vertical')
-    // 只许排布类属性：出现这些就必须回 `intelligence-sources.css` 由组件线改。
-    const forbidden = /(^|[\s;{])(color|font-size|font-weight|font-family|background|border|border-radius|min-height)\s*:/g
-    expect(css.match(forbidden) ?? []).toEqual([])
+  /* 这一屏**不再有自己的样式覆盖**：那四组（行内对齐、两处 align-content、名字两行截断）
+     让「结构一样、长得不一样」。文件已删，用例改成断言它不存在。 */
+  it('ships no stylesheet of its own any more', () => {
+    expect(existsSync(join(__dirname, 'coreIndicators.css'))).toBe(false)
   })
 })
 
@@ -191,7 +181,7 @@ describe('频率格：与看板同一套读数，类型不占这一格', () => {
       cadenceAvailable: true,
       builtinCadenceOf: (providerId: string) => providerId === 'narwhal'
     })
-    const fredRow = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|fred-rates-liquidity"]')!
+    const fredRow = host.querySelector<HTMLElement>('[data-cell-id="US.CPI.NSA.YOY|fred-rates-liquidity"]')!
     expect(fredRow.textContent).toContain('间隔 6 小时')
     expect(fredRow.textContent).not.toContain(t.collectionPolicy.builtinCadence)
     expect(fredRow.querySelector('[data-preset-builtin="true"]')).toBeNull()
@@ -204,20 +194,12 @@ describe('频率格：与看板同一套读数，类型不占这一格', () => {
       cadenceAvailable: true,
       builtinCadenceOf: (providerId: string) => providerId === 'narwhal'
     })
-    const narwhalRow = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|narwhal"]')!
+    const narwhalRow = host.querySelector<HTMLElement>('[data-cell-id="US.CPI.NSA.YOY|narwhal"]')!
     expect(narwhalRow.querySelector('[data-preset-builtin="true"]')).not.toBeNull()
     expect(narwhalRow.textContent).toContain(t.collectionPolicy.builtinCadence)
   })
 
-  it('moves the kind label next to the name, out of the frequency cell', async () => {
-    const host = await render()
-    const row = host.querySelector<HTMLElement>('[data-core-source-row="US.CPI.NSA.YOY|fred-rates-liquidity"]')!
-    const kind = t.coreIndicators.valueSourceType.official
-    const name = row.querySelector<HTMLElement>('.core-indicator-sources__label')!
-    const frequency = row.querySelector<HTMLElement>('.business-card__preset')!
-    expect(name.textContent).toContain(kind)
-    expect(frequency.textContent).not.toContain(kind)
-  })
+  /* 类型微标（`官方 / 数据商`）随共享行取消：看板那一行没有，两屏要一致就不能只有这屏有。 */
 })
 
 /**
@@ -267,9 +249,9 @@ describe('三组十二项：文案齐全、不另设计布局', () => {
   })
 
   it('carries no layout rule the dashboard does not have', () => {
+    /* 只剩视图一个文件可查：这一屏自己的 css 已经删了（上一组用例断言它不存在）。 */
     const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')
-    const css = readFileSync(join(__dirname, 'coreIndicators.css'), 'utf8')
-    for (const source of [view, css]) {
+    for (const source of [view]) {
       expect(source).not.toContain('auto-fit')
       expect(source).not.toContain('minmax(')
       expect(source).not.toContain('grid-template-columns')

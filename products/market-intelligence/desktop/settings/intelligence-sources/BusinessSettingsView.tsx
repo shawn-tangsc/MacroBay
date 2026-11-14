@@ -363,7 +363,14 @@ export function BusinessSettingsContent(props: {
  * **互斥**：同组（同一格）里开一个、其余自动关——一次事件内把同组其它源写 false，
  * 不在界面留「两个源同时开着」的中间态。全关 = 这一格不用。
  */
-function cellRow(args: {
+/**
+ * 一条源项行（看板与核心指标**共用这一份**）。
+ *
+ * 导出它是因为「照抄页面」的正确做法是抄**渲染函数**，不是抄 class 名：
+ * 两边各写一遍时，整行可点、源没开就不画频率行、开关与名字的交互这三件必然长歪
+ * （2026-11-14 用户第三次说「直接复用组件那么难吗」）。
+ */
+export function cellRow(args: {
   cellId: string
   enabled: boolean
   label: string
@@ -473,7 +480,10 @@ function cellRow(args: {
           : {
             dataRow: { 'data-preset-row': sourceId, ...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId) },
             ...(args.preset === undefined ? {} : { preset: args.preset }),
-            ...(args.onPresetChange === undefined ? {} : { onPresetChange: args.onPresetChange })
+            ...(args.onPresetChange === undefined ? {} : { onPresetChange: args.onPresetChange }),
+            /* 只读调用方（核心指标那一屏）不传 `onPresetChange`：那时频率行必须是**读数**，
+               不能画一个点了没反应的下拉——那是假控件。 */
+            ...(args.preset !== undefined && args.onPresetChange === undefined ? { readOnly: true } : {})
           })}
         {...(args.cadence === undefined ? {} : { cadence: args.cadence })}
         {...(args.cadenceUnavailable === true ? { cadenceUnavailable: true } : {})}
