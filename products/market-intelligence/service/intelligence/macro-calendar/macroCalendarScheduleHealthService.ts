@@ -48,7 +48,11 @@ export function createMacroCalendarScheduleHealthService(deps: {
       let outcome: unknown
       try {
         outcome = await deps.workflow.collectAndPersistSchedule(input)
-      } catch {
+      } catch (error) {
+        // **失败原因必须留痕**：这里的 `catch` 原来是空的，采集连续失败 15 次、日志里却只有一句
+        // 「run failed」，事后无从下手。抛错与「工作流自己报失败」分开写。
+        console.warn(`[macro-calendar] ${descriptor.descriptorId} 采集抛错（detectedAt=${input.detectedAt}）：`
+          + `${error instanceof Error ? error.message : String(error)}`)
         return { ...identity, state: 'failed', failureCode: 'workflow-execution-failed' }
       }
       let next
@@ -57,7 +61,16 @@ export function createMacroCalendarScheduleHealthService(deps: {
       } catch {
         return { ...identity, state: 'failed', failureCode: 'health-persist-failed' }
       }
-      if (!next) return { ...identity, state: 'failed', failureCode: 'workflow-result-invalid' }
+      if (!next) {
+        // 工作流跑完了但结果形状不认：把原文打出来，否则和「源挂了」分不开。
+        console.warn(`[macro-calendar] ${descriptor.descriptorId} 采集结果形状不认（detectedAt=${input.detectedAt}）：`
+          + JSON.stringify(outcome).slice(0, 400))
+        return { ...identity, state: 'failed', failureCode: 'workflow-result-invalid' }
+      }
+      if (next.revision.status === 'failed') {
+        console.warn(`[macro-calendar] ${descriptor.descriptorId} 采集报失败（detectedAt=${input.detectedAt}）：`
+          + `failureCode=${String((outcome as { failureCode?: unknown }).failureCode ?? 'unknown')}`)
+      }
       try {
         deps.health.appendMaterialChange(next.revision)
       } catch {
