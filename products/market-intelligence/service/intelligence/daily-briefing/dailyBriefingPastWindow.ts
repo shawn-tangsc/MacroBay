@@ -34,11 +34,14 @@ export function selectPastWindowReleases(
   window: Readonly<{ start: string; end: string; timeZone: string }>
 ): BriefingPastWindowSelection {
   const inWindow = events.filter((event) => briefingEventInWindow(event, window))
+  // 类别缺失的行按经济指标计入：三类相加必须等于总数，否则「共 7 条（1·5·1）」自己就不成立。
+  const categoryOf = (event: DailyBriefingCalendarEvent): NonNullable<DailyBriefingCalendarEvent['category']> =>
+    event.category ?? 'economic-indicator'
   const counts: BriefingPastWindowCounts = Object.freeze({
     total: inWindow.length,
-    indicators: inWindow.filter((event) => event.category === 'economic-indicator').length,
-    centralBank: inWindow.filter((event) => event.category === 'central-bank-activity').length,
-    financial: inWindow.filter((event) => event.category === 'financial-event').length
+    indicators: inWindow.filter((event) => categoryOf(event) === 'economic-indicator').length,
+    centralBank: inWindow.filter((event) => categoryOf(event) === 'central-bank-activity').length,
+    financial: inWindow.filter((event) => categoryOf(event) === 'financial-event').length
   })
   const ordered = [...inWindow].sort((left, right) => {
     const leftValue = left.actual === undefined ? 1 : 0
@@ -47,14 +50,15 @@ export function selectPastWindowReleases(
   })
   const shown: DailyBriefingCalendarEvent[] = []
   const used = { 'economic-indicator': 0, 'central-bank-activity': 0, 'financial-event': 0 }
-  const capOf = (category: DailyBriefingCalendarEvent['category']): number =>
+  const capOf = (category: NonNullable<DailyBriefingCalendarEvent['category']>): number =>
     category === 'economic-indicator' ? briefingPastWindowCaps.indicators
       : category === 'central-bank-activity' ? briefingPastWindowCaps.centralBank
         : briefingPastWindowCaps.financial
   for (const event of ordered) {
     if (shown.length >= briefingPastWindowCaps.total) break
-    if (used[event.category] >= capOf(event.category)) continue
-    used[event.category] += 1
+    const category = categoryOf(event)
+    if (used[category] >= capOf(category)) continue
+    used[category] += 1
     shown.push(event)
   }
   return Object.freeze({ counts, shown: Object.freeze(shown), hidden: counts.total - shown.length })

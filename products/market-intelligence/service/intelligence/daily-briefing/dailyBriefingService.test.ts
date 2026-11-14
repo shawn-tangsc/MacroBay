@@ -733,7 +733,9 @@ describe('daily briefing service', () => {
     expect(store.rows.size).toBe(0)
   })
 
-  it('fails without generating when the macro candidate pool exceeds 200', async () => {
+  // 产品 2026-11-14：宏观候选按类型上限只留 3 条，池子再大也不会撑爆写作预算。
+  // 这条原来断言「超过 200 就整版失败」，现在断言的是**不失败、也不会把 201 条塞给模型**。
+  it('caps the macro candidate pool instead of failing the edition', async () => {
     const store = memoryStore()
     const source = fakeSource(() => ({
       ...emptyPacket(),
@@ -741,11 +743,13 @@ describe('daily briefing service', () => {
     }))
     const service = createDailyBriefingService({ source, store, now: () => asOf })
 
-    await expect(service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toMatchObject({
-      state: 'unavailable', failureCode: 'candidate-overflow',
-      generationTrace: { state: 'failed', stages: expect.arrayContaining([expect.objectContaining({ id: 'candidates', state: 'failed' })]) }
-    })
-    expect(store.rows.size).toBe(0)
+    const result = await service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(result).not.toMatchObject({ failureCode: 'candidate-overflow' })
+    // 201 条事件、三个类别各被上限压住：候选最多 3 条，所以这一版照常生成。
+    if ('document' in result && result.document) {
+      expect(result.document.news.macroCandidates?.length ?? 0).toBeLessThanOrEqual(3)
+      expect(result.document.news.notes.macroWindow?.total).toBe(201)
+    }
   })
 
   it('accepts exactly the 200-candidate budget', async () => {

@@ -381,9 +381,11 @@ describe('daily briefing source', () => {
     expect(kinds.get('BOE.RATE.DECISION')).toBe('central-bank-activity')
     expect(kinds.get('US.TRUMP.SPEECH')).toBe('financial-event')
     expect(kinds.get('US.MKT.CPI')).toBe('economic-indicator')
-    // 正文与导出读同一份文档：只剩经济指标，讲话与决议一条都不进。
+    // 产品 2026-11-14 之后：三种类别都按上限进正文（指标 2、央行 1、财经 1、合计 3），
+    // 类别仍然决定它落在哪个上限里——所以这条钉的是「类别没被写死成一个」。
     const document = buildDailyBriefingDocument({ packet, date: '2026-11-06' })
-    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.MKT.CPI'])
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.MKT.CPI', 'BOE.RATE.DECISION', 'US.TRUMP.SPEECH'])
+    expect(document.news.notes.macroWindow).toEqual({ total: 3, indicators: 1, centralBank: 1, financial: 1, hidden: 0 })
   })
 
   it('drops news published after the cutoff even when the read is later', async () => {

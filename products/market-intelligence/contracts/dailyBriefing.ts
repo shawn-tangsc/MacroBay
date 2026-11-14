@@ -251,6 +251,18 @@ export type DailyBriefingDocument = Readonly<{
       /** 窗口内高影响事件总数（不看有没有实际值）——「事件优先」那一步的数（`A0.12`）。 */
       macroHighImpactCount?: number
       /**
+       * 过去 24 小时窗口里**读到的全部发布**（用户 2026-11-14，schema 17）：总数与按类型的构成。
+       * 明细按类型上限只摆 3 条，这个数说的是那段时间到底有多少事——两者不是同一个数。
+       */
+      macroWindow?: Readonly<{
+        total: number
+        indicators: number
+        centralBank: number
+        financial: number
+        /** 未显示条数（总数 − 明细条数），「另有 N 条」用它。 */
+        hidden: number
+      }>
+      /**
        * 两个来源说两个数的事件键（`02` v2.128）：**值格整格不渲染**，右列「数据缺口与限制」里
        * 恰一条冲突说明。冲突是数据质量问题，不进正文措辞。
        */
@@ -314,7 +326,23 @@ export type DailyBriefingDocument = Readonly<{
     }>
   }>
   conclusion: BriefingConclusion | null
-  next: Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem; candidates?: readonly BriefingNextItem[]; note?: string }>
+  next: Readonly<{
+    items: readonly BriefingNextItem[]
+    focus?: BriefingNextItem
+    candidates?: readonly BriefingNextItem[]
+    note?: string
+    /**
+     * 一级指标的下次发布（用户 2026-11-14，schema 17）：**不是高影响事件**，是我们自己的分级清单。
+     * 它出现在「未来 7 天」判不了重要性的时候，带给读者真实、有日期的日子。
+     */
+    tier1Upcoming?: readonly Readonly<{
+      metricKey: string
+      title: string
+      scheduledAt: string
+      releaseDate: string
+      releaseTimeNotPublished?: true
+    }>[]
+  }>
   comparison?: BriefingComparison
   editorial?: Readonly<{ dataNote?: string; invalidationNote?: string }>
   citations: readonly Readonly<{
