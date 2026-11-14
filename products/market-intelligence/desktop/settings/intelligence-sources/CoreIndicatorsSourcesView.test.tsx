@@ -10,6 +10,8 @@ import { productText } from '../../shared/i18n/productText'
 import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
 
+import { MACRO_INDICATOR_GROUP_METRIC_KEYS, MACRO_INDICATOR_GROUPS }
+  from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 import { valueSourcesForMetric } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 
 /**
@@ -45,10 +47,23 @@ async function render(overrides: Partial<Parameters<typeof CoreIndicatorsSources
 describe('core indicator source page', () => {
   it('lists one card per indicator, with the legs the derivation table gives', async () => {
     const host = await render()
+    /* 三组 × 四行，顺序与 `MACRO_INDICATOR_GROUPS` 完全一致——用例不自己再列一遍指标。 */
+    const groups = [...host.querySelectorAll<HTMLElement>('[data-core-indicator-group]')]
+    expect(groups.map((group) => group.getAttribute('data-core-indicator-group'))).toEqual(
+      MACRO_INDICATOR_GROUPS.map((group) => group.id))
     const cards = [...host.querySelectorAll<HTMLElement>('[data-core-indicator]')]
-    expect(cards.map((card) => card.getAttribute('data-core-indicator'))).toEqual([
-      'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.SA.YOY'
-    ])
+    expect(cards.map((card) => card.getAttribute('data-core-indicator')))
+      .toEqual([...MACRO_INDICATOR_GROUP_METRIC_KEYS])
+    // 每一格都必须有名字：漏一条文案键就是一格空白标题（中英都要有，见下面的用例）。
+    for (const card of cards) {
+      expect(card.querySelector('.business-cell__title')?.textContent?.trim(), String(card.dataset.coreIndicator))
+        .not.toBe('')
+    }
+    // 组标题也必须有：三组的标题键取不到就是一片空白标题。
+    for (const group of groups) {
+      expect(group.querySelector('.business-card__title')?.textContent?.trim(), String(group.dataset.coreIndicatorGroup))
+        .not.toBe('')
+    }
     // 新增就业的官方腿是 BLS；其余三个是 FRED。盘口不在这一页。
     const payrolls = host.querySelector('[data-core-indicator="US.NONFARM.SA.CHANGE"]')!
     expect(payrolls.textContent).toContain('BLS')
@@ -141,7 +156,7 @@ describe('列数：两条腿并排，不上下叠', () => {
   it('sets both column variables to the number of legs on every card', async () => {
     const host = await render()
     const cards = [...host.querySelectorAll<HTMLElement>('[data-core-indicator]')]
-    expect(cards).toHaveLength(4)
+    expect(cards).toHaveLength(MACRO_INDICATOR_GROUP_METRIC_KEYS.length)
     for (const card of cards) {
       const items = card.querySelector<HTMLElement>('.business-cell__items')!
       const label = card.getAttribute('data-core-indicator') ?? ''
@@ -202,5 +217,42 @@ describe('频率格：与看板同一套读数，类型不占这一格', () => {
     const frequency = row.querySelector<HTMLElement>('.business-card__preset')!
     expect(name.textContent).toContain(kind)
     expect(frequency.textContent).not.toContain(kind)
+  })
+})
+
+/**
+ * 文案齐全 + 布局不另设计（2026-11-14 用户：「同样的分组、同样的卡，照看板抄」）。
+ *
+ * 两条各自能红的真情况：① 新增一个指标却忘了加名字键 → 那一格变成空白标题；
+ * ② 有人又给这一屏加 `auto-fit` / `minmax` / 断点 → 看板没有这些，这一屏就不该有。
+ * 注意：第二条是**棘轮**（断言某类规则不存在），它挡新增，不证明现行排布就等于看板。
+ */
+describe('三组十二项：文案齐全、不另设计布局', () => {
+  it('names all three groups and every metric in both languages, with no two the same', async () => {
+    for (const language of ['zh-CN', 'en-US'] as const) {
+      const resolve = (key: string) => resolveProductTextKey(language, key)
+      const host = await render({ resolveText: resolve })
+      const titles = [...host.querySelectorAll<HTMLElement>('[data-core-indicator] .business-cell__title')]
+        .map((node) => node.textContent?.trim() ?? '')
+      expect(titles, language).toHaveLength(MACRO_INDICATOR_GROUP_METRIC_KEYS.length)
+      for (const title of titles) expect(title, language).not.toBe('')
+      expect(new Set(titles).size, `${language} 有重名`).toBe(titles.length)
+
+      const groups = [...host.querySelectorAll<HTMLElement>('[data-core-indicator-group] .business-card__title')]
+        .map((node) => node.textContent?.trim() ?? '')
+      expect(groups, language).toHaveLength(MACRO_INDICATOR_GROUPS.length)
+      for (const title of groups) expect(title, language).not.toBe('')
+    }
+  })
+
+  it('carries no layout rule the dashboard does not have', () => {
+    const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')
+    const css = readFileSync(join(__dirname, 'coreIndicators.css'), 'utf8')
+    for (const source of [view, css]) {
+      expect(source).not.toContain('auto-fit')
+      expect(source).not.toContain('minmax(')
+      expect(source).not.toContain('grid-template-columns')
+      expect(source).not.toMatch(/@media/)
+    }
   })
 })

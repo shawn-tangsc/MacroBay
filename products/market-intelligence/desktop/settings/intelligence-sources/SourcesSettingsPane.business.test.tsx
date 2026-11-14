@@ -331,8 +331,8 @@ describe('核心指标：两个视图互斥', () => {
 
     // 指标卡在。
     expect(host.querySelector('[data-core-indicator-sources="true"]')).not.toBeNull()
-    // 业务内容那一支整个不在（它的根带 data-business-content），所以不会再有组标题 + 空网格。
+    // 业务内容那一支整个不在（那一支的组卡带 `data-business-card`），所以不会再有组标题 + 空网格。
     expect(host.querySelector('[data-business-content]')).toBeNull()
-    expect(host.querySelector('.business-cell-grid:not([data-core-indicator-sources])')).toBeNull()
+    expect(host.querySelector('[data-business-card]')).toBeNull()
   })
 })

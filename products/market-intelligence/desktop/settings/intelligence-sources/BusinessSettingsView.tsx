@@ -20,7 +20,10 @@ import {
   type DashboardCell,
   type DashboardSourceModule
 } from './dashboardSourceModules'
-import { coreIndicatorMetricKeys } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
+import {
+  MACRO_INDICATOR_GROUP_METRIC_KEYS,
+  MACRO_INDICATOR_GROUPS
+} from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 
 /**
  * 「业务设置」这一屏：左列三项（看板 / 日历 / 舆情）+ 内容区**只有卡片 / 源名**，没有源详情。
@@ -133,16 +136,18 @@ export function BusinessSettingsView(props: {
   const subtitleOf = (business: BusinessKey): string => {
     // 数字来自数据层：模块数读模块清单，源数读去重后的源集合——删掉一个源，这里跟着变。
     /* 三种量词，各说各的：模块 / 源 / 项指标。第四项配的是指标，写成「N 个源」会让读者以为这里能接数据源。 */
+    /* 核心指标那一项报**两个数**（组数 · 指标数），两个都从分组表派生，不写死 3 / 12。 */
+    if (business === 'coreIndicators') {
+      return props.resolveText('settings.intelligenceSources.businessSubtitle.coreIndicators')
+        .replace('{groups}', String(MACRO_INDICATOR_GROUPS.length))
+        .replace('{indicators}', String(MACRO_INDICATOR_GROUP_METRIC_KEYS.length))
+    }
     const template = business === 'dashboard'
       ? props.resolveText('settings.intelligenceSources.businessSubtitle.modules')
-      : business === 'coreIndicators'
-        ? props.resolveText('settings.intelligenceSources.businessSubtitle.indicators')
-        : props.resolveText('settings.intelligenceSources.businessSubtitle.sources')
+      : props.resolveText('settings.intelligenceSources.businessSubtitle.sources')
     const count = business === 'dashboard'
       ? modulesForBusiness(business).length
-      : business === 'coreIndicators'
-        ? coreIndicatorMetricKeys.length
-        : sourceCountForBusiness(business)
+      : sourceCountForBusiness(business)
     return template.replace('{count}', String(count))
   }
   /* 只交出**列表本体**：页签条与外层两栏归 `SourcesSettingsPane`（切 tab 不重挂载页签）。 */

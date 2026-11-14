@@ -511,7 +511,7 @@ export const intelligenceSourcesText = {
   businessTabsAria: '业务设置',
   /* 左列三项的副标题：写**有用的事实**（模块数 / 源数），数字从数据层算。 */
   /* 量词是「项指标」：这一项数的是指标，不是来源（写成「N 个源」会让读者以为这里能接数据源）。 */
-  businessSubtitle: { modules: '{count} 个模块', sources: '{count} 个源', indicators: '{count} 项指标' },
+  businessSubtitle: { modules: '{count} 个模块', sources: '{count} 个源', indicators: '{count} 项指标', coreIndicators: '{groups} 类 · {indicators} 项指标' },
   /* 看板页签的分组名：能复用既有标题键的都用既有键（各模块在 dashboardSourceModules 里指过去），
      这里只放**没有现成标题键**的那几个。 */
   dashboardModuleTitles: {
@@ -532,6 +532,14 @@ export const intelligenceSourcesText = {
   coreIndicators: {
     title: '核心指标',
     metrics: { cpiYoy: 'CPI 年率', coreCpiYoy: '核心 CPI 年率', nonfarmPayrolls: '新增就业', corePceYoy: '核心 PCE 年率' },
+    /* 三组 + 十二项：**组名与指标名都从 `macroIndicatorCardGroups` 的顺序来**。
+       指标名不按「组名 + 行名」拼：拼出来是「CPI 核心年率」，而产品口径是「核心 CPI 年率」。 */
+    groups: { cpi: 'CPI', payrolls: '新增就业', pce: 'PCE' },
+    metricNames: {
+      cpiYoy: 'CPI 年率', cpiMom: 'CPI 月率', coreCpiYoy: '核心 CPI 年率', coreCpiMom: '核心 CPI 月率',
+      nonfarm: '非农', unemployment: '失业率', avgHourlyMom: '时薪月率', avgHourlyYoy: '时薪年率',
+      pceYoy: 'PCE 年率', pceMom: 'PCE 月率', corePceYoy: '核心 PCE 年率', corePceMom: '核心 PCE 月率'
+    },
     sourceOrder: {
       label: '来源顺序',
       /* 默认链**只有两档**：盘口 → 数据商预期。手填不在这条链里——它只能被显式选「只用手填」，
@@ -1158,7 +1166,7 @@ export const intelligenceSourcesText = {
   },
   businessTabs: { dashboard: 'Dashboard', calendar: 'Calendar', sentiment: 'Sentiment', coreIndicators: 'Core indicators' },
   businessTabsAria: 'Business settings',
-  businessSubtitle: { modules: '{count} modules', sources: '{count} sources', indicators: '{count} indicators' },
+  businessSubtitle: { modules: '{count} modules', sources: '{count} sources', indicators: '{count} indicators', coreIndicators: '{groups} groups · {indicators} indicators' },
   dashboardModuleTitles: {
     policyPath: 'Policy path',
     marketState: 'Market state'
@@ -1168,6 +1176,12 @@ export const intelligenceSourcesText = {
   coreIndicators: {
     title: 'Core indicators',
     metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },
+    groups: { cpi: 'CPI', payrolls: 'Payrolls', pce: 'PCE' },
+    metricNames: {
+      cpiYoy: 'CPI YoY', cpiMom: 'CPI MoM', coreCpiYoy: 'Core CPI YoY', coreCpiMom: 'Core CPI MoM',
+      nonfarm: 'Nonfarm', unemployment: 'Unemployment', avgHourlyMom: 'Avg hourly MoM', avgHourlyYoy: 'Avg hourly YoY',
+      pceYoy: 'PCE YoY', pceMom: 'PCE MoM', corePceYoy: 'Core PCE YoY', corePceMom: 'Core PCE MoM'
+    },
     sourceOrder: {
       label: 'Source order',
       options: { defaultChain: 'Market → data provider', marketOnly: 'Market only', surveyOnly: 'Data provider only', manualOnly: 'Manual only' }

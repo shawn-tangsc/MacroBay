@@ -109,7 +109,7 @@ describe('业务设置的左列', () => {
       `${modulesForBusiness('dashboard').length} 个模块`, // 7
       `${modulesForBusiness('calendar').flatMap((module) => module.sourceIds).length} 个源`, // 6
       `${modulesForBusiness('sentiment').flatMap((module) => module.sourceIds).length} 个源`, // 4
-      '4 项指标' // 这一项数的是指标，不是源
+      '3 类 · 12 项指标' // 组数与指标数两个数都从分组表派生，不写死
     ])
   })
 
