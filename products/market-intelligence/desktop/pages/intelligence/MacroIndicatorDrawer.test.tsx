@@ -140,6 +140,28 @@ describe('key-indicator drawer', () => {
   })
 
   /**
+   * 换码过渡期：库里旧的**未季调**行（值空）还在，新的**季调**行要等下一轮采集。
+   * 同一期同一发布日两条同时到场时，格子里只能露一条名字——露季调那条（读者在卡上看的就是它），
+   * 未季调那条只进右上角数字，不许并列成两条「核心 PCE 年率」。
+   *
+   * 判据是**两条不同分级**的码走同一套可见性：未季调已降为未分级。谁把它改回一级，这条即红。
+   */
+  it('shows one core-PCE row when the stale NSA row and the SA row land on the same day', async () => {
+    const both = [
+      dayEvent('pce-nsa', '核心 PCE 年率（未季调）', '2026-11-13T13:30:00.000Z', { measureKeys: ['US.CORE_PCE.NSA.YOY'] }),
+      dayEvent('pce-sa', '核心 PCE 年率（季调）', '2026-11-13T13:30:00.000Z', { measureKeys: ['US.CORE_PCE.SA.YOY'] })
+    ]
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => both })
+    const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
+      .find(value => value.querySelector('em')?.textContent === '13')!
+    const rows = Array.from(cell.querySelectorAll('.mk-mcell__row')).map((row) => row.textContent ?? '')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toContain('季调')
+    // 未季调那条没丢：它进了角标数字（露出 + 计数 = 当天全部条目）。
+    expect(cell.querySelector('.mk-mcell__more')?.textContent).toBe('+1')
+  })
+
+  /**
    * 角标是**角标**：绝对定位在右上角、不占行高，所以格子高度与事件行数都不因它变。
    * 把它改回事件列之后（或压到最后一行下面），这条即红。
    */
@@ -432,7 +454,7 @@ describe('the three simplified cards', () => {
 
   /** 给三张卡装上「下一期」，日期由用例指定；PCE 故意不给，用来验证「没有就写暂无排期」。 */
   const withNextRelease = (list: readonly MacroIndicatorCardFact[], releaseAt: string): readonly MacroIndicatorCardFact[] =>
-    list.map((fact) => String(fact.metricKey) === 'US.CORE_PCE.SA.YOY'
+    list.map((fact) => fact.metricKey === 'US.CORE_PCE.SA.YOY'
       ? fact
       : { ...fact, next: { period: '2026-11', releaseAt, timePrecision: 'minute' as const } })
 
