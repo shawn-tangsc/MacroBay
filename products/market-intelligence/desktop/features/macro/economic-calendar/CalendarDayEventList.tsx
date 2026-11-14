@@ -24,7 +24,12 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
    * 缺省（核心为 0）时右上角留白，不写「0 条」。
    */
   summary?: string
-  groups: readonly Readonly<{ eventType: keyof EconomicCalendarText['market']['kinds']; items: readonly CalendarDayItem[] }>[]
+  groups: readonly Readonly<{
+    eventType: keyof EconomicCalendarText['market']['kinds']
+    /** 覆盖默认的「类型 · N 条」标题（抽屉按指标分级分组时用）。 */
+    title?: string
+    items: readonly CalendarDayItem[]
+  }>[]
   /** Shown only when the sources answered and the answer is zero; omitted means no sentence. */
   emptyText?: string
   /**
@@ -51,8 +56,8 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
       <h2>{title}</h2>
       {summary === undefined || summary === '' ? null : <p data-day-summary>{summary}</p>}
     </div>
-    <div role="list">{groups.map(group => <section data-calendar-group={group.eventType} key={group.eventType}>
-      {hideGroupHeadings ? null : <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}
+    <div role="list">{groups.map(group => <section data-calendar-group={group.title ?? group.eventType} key={group.title ?? group.eventType}>
+      {hideGroupHeadings ? null : <h3>{group.title ?? text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}
       {group.items.map(item => <div role="listitem" key={item.key}><CalendarEventRow item={item} marketSources={marketSources} text={text} statusNow={statusNow} {...(missingValueLabel === undefined ? {} : { missingValueLabel })} selected={item.source === 'market' ? item.event.eventKey === selectedMarketKey : item.event.eventKey === selectedEventKey} onSelect={onSelect} /></div>)}
     </section>)}</div>
     {/* A quiet day is a reading, not a missing block: the sources answered and the answer is

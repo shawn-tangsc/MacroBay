@@ -298,8 +298,9 @@ describe('key-indicator drawer', () => {
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
     expect(list).not.toBeNull()
     expect(list!.textContent).toContain('新增就业')
-    // 分组标题用的是日历页同一份词汇，不是这里另写一套。
-    expect(list!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.market.kinds['economic-indicator'])
+    // 分组标题按**指标分级**（用户 2026-11-15）：一级/二级/三级/其他，前三级带星级；
+    // 分级判据只有 `tierOfMetricKey` 一处，行上的类型小字仍来自日历页同一份词汇。
+    expect(list!.textContent).toContain('★ 一级指标 · 1 条')
   })
 
   /**
@@ -801,4 +802,23 @@ it('pins the indicator drawer so an inner drawer cannot push it left', () => {
   expect(drawerOpen).toBeGreaterThan(-1)
   const head = source.slice(drawerOpen, source.indexOf('>', drawerOpen))
   expect(head).toContain('push={false}')
+})
+
+/**
+ * 用户 2026-11-15：右列按指标分级分组（一级/二级/三级/其他），前三级用星级显示。
+ * 判据是**指标码的分级**（`tierOfMetricKey`），不是事件类型、也不是 importance。
+ * 把分组改回按事件类型即红。
+ */
+it('groups the day list by metric tier, with stars for the first three', async () => {
+  const tiered = [
+    dayEvent('e-t1', '10月消费者物价指数(年率)', '2026-11-13T01:00:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] }),
+    dayEvent('e-other', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity' })
+  ]
+  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => tiered })
+  const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!
+  const headings = [...list.querySelectorAll('h3')].map(node => node.textContent ?? '')
+  expect(headings[0]).toMatch(/^★ 一级指标 · \d+ 条$/u)
+  expect(headings.some(heading => heading.includes('其他指标'))).toBe(true)
+  // 一二级的判据来自指标码：同一批事件按类型分组时只会有「经济指标/央行活动」两个标题，这里不是。
+  expect(headings.some(heading => heading.startsWith('经济指标'))).toBe(false)
 })

@@ -153,7 +153,10 @@ export const macroIndicatorDrawerText = {
       none: '今天没有影响利率预期的事件',
       /* 自动跳到别的日子时必须说清：这是哪一天、为什么不是今天。 */
       notToday: '今天没有发布 · 下面是最近一个有发布的日子',
-      sequence: '{name} · {index}/{total}'
+      sequence: '{name} · {index}/{total}',
+      /* 右列按指标分级分组（用户 2026-11-15）：一级/二级/三级用星级显示，未分级的归「其他」。 */
+      tierGroup: '{stars} {tier} · {count} 条',
+      tiers: { '1': '一级指标', '2': '二级指标', '3': '三级指标', other: '其他指标' }
     },
     weekday: ['一', '二', '三', '四', '五', '六', '日'],
     surprise: { beat: '超预期 {value}', miss: '低于预期 {value}', inline: '符合预期' },
@@ -276,7 +279,9 @@ export const macroIndicatorDrawerText = {
       collapse: 'Collapse {count} · none move rate expectations',
       none: 'No events that move rate expectations today',
       notToday: 'Nothing released today · showing the most recent day with a release',
-      sequence: '{name} · {index}/{total}'
+      sequence: '{name} · {index}/{total}',
+      tierGroup: '{stars} {tier} · {count} events',
+      tiers: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Other indicators' }
     },
     weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     surprise: { beat: 'Above forecast {value}', miss: 'Below forecast {value}', inline: 'In line' },

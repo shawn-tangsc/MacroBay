@@ -25,6 +25,7 @@ import {
   expectationBp, expectationEventMoves, matchedRelevantConcept, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS
 } from '../../../contracts/policyPath'
 import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
+import { tierOfMetricKey } from '../../../service/intelligence/macro-calendar/marketCalendarReleaseGroups'
 import { Drawer } from '@platform/ui/components/drawer'
 import { createPortal } from 'react-dom'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
@@ -392,7 +393,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayLayers.core.length === 0 ? {} : {
                   summary: text.mkDay.summary.replace('{related}', String(dayLayers.core.length))
                 })}
-                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, true, text.mkDay.sequence)}
+                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, true, text.mkDay.sequence,
+                  (tier, count) => text.mkDay.tierGroup
+                    .replace('{stars}', tier === 'other' ? '' : '★'.repeat(Number(tier)))
+                    .replace('{tier}', text.mkDay.tiers[tier])
+                    .replace('{count}', String(count)))}
                 {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
@@ -459,26 +464,24 @@ export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, tod
 }
 
 /** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行），组内按时刻升序。 */
-function dayGroups(_layers: DayLayers, allDay: readonly MarketCalendarEvent[], date: string, timeZone: string, _othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
-  // **当天的事件全部列出**：不按「是否影响利率」筛，也不丢财经事件与央行活动（用户 2026-11-14）。
-  // 原来这里只画 `layers.core`，而 `splitDayLayers` 只收指标类、还截到 8 条，于是格子角标写着 +6、
-  // 右列只出 3 条——事件被藏起来了。判据：右列条数 = 当天事件总数。
-  const shown = allDay
-  const order: MarketCalendarEvent['eventType'][] = ['economic-indicator', 'financial-event', 'central-bank-activity']
-  // 同一时刻、同一类型、同名的多条（源只给类型名时就是这样）：加序号，否则读者以为渲染重复。
-  // **分母按当天同类型总数**算，不按当前显示了几条——否则展开前后 `2/4` 会变成 `2/9`，像重新排序。
+function dayGroups(_layers: DayLayers, allDay: readonly MarketCalendarEvent[], date: string, timeZone: string,
+  _othersExpanded: boolean, sequence: string, tierTitle: (tier: DayTier, count: number) => string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; title?: string; items: readonly CalendarDayItem[] }>[] {
+  // 当天事件**全部列出**（用户 2026-11-14），并按**指标分级**分组（用户 2026-11-15）：
+  // 一级 / 二级 / 三级 / 其他。分级判据只有一处：`tierOfMetricKey`（指标码 → 1/2/3）；
+  // 事件型（讲话）与源内身份行没有指标码，归「其他」——分组不按事件类型，类型只是行上的小字。
   const totals = new Map<string, number>()
   for (const event of allDay) {
-    if (event.eventType !== 'economic-indicator') continue
     totals.set(`${event.scheduledAt}|${event.title}`, (totals.get(`${event.scheduledAt}|${event.title}`) ?? 0) + 1)
   }
   const seen = new Map<string, number>()
-  return order
-    .map(eventType => ({
-      eventType,
-      items: shown.filter(event => event.eventType === eventType)
+  return (['1', '2', '3', 'other'] as const)
+    .map(tier => {
+      const bucket = allDay.filter(event => dayTierOf(event) === tier)
         .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))
-        .map((event): CalendarDayItem => {
+      return {
+        eventType: 'economic-indicator' as MarketCalendarEvent['eventType'],
+        ...(bucket.length === 0 ? {} : { title: tierTitle(tier, bucket.length) }),
+        items: bucket.map((event): CalendarDayItem => {
           const identity = `${event.scheduledAt}|${event.title}`
           const total = totals.get(identity) ?? 1
           const index = (seen.get(identity) ?? 0) + 1
@@ -490,8 +493,17 @@ function dayGroups(_layers: DayLayers, allDay: readonly MarketCalendarEvent[], d
               : event
           }
         })
-    }))
+      }
+    })
     .filter(group => group.items.length > 0)
+}
+
+/** 右列分组用的分级：1/2/3 来自指标码，其余（讲话、源内身份行）归 `other`。 */
+export type DayTier = '1' | '2' | '3' | 'other'
+
+export function dayTierOf(event: MarketCalendarEvent): DayTier {
+  const tier = tierOfMetricKey(event.eventNameKey ?? event.measureKeys?.[0] ?? '')
+  return tier === 1 ? '1' : tier === 2 ? '2' : tier === 3 ? '3' : 'other'
 }
 
 /**

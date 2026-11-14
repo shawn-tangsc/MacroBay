@@ -14,7 +14,7 @@ import { macroIndicatorDrawerText } from './macroIndicatorDrawerText'
 describe('macro indicator drawer copy', () => {
   it('carries 未提供 and its one-line explanation in both languages', () => {
     for (const language of ['zh-CN', 'en-US'] as const) {
-      const mkDay = macroIndicatorDrawerText[language].mkDay as Record<string, string>
+      const mkDay = macroIndicatorDrawerText[language].mkDay as unknown as Record<string, string>
       expect(mkDay.valueMissing, language).toBeTruthy()
       expect(mkDay.publishedWithoutValues, language).toBeTruthy()
     }
@@ -22,7 +22,7 @@ describe('macro indicator drawer copy', () => {
 
   it('never degrades the value-missing word into a placeholder', () => {
     for (const language of ['zh-CN', 'en-US'] as const) {
-      const value = (macroIndicatorDrawerText[language].mkDay as Record<string, string>).valueMissing
+      const value = (macroIndicatorDrawerText[language].mkDay as unknown as Record<string, string>).valueMissing
       expect(value, language).not.toBe('暂无')
       expect(value, language).not.toBe('—')
       expect(value.trim().length, language).toBeGreaterThan(0)
