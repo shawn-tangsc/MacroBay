@@ -24,7 +24,7 @@
   --mi-clock-node-future-bg: #97b3e9;
 }
 
-.mi-clock__card { position: relative; width: 336px; height: 330px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.mi-clock { position: relative; width: 336px; height: 330px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
 .mi-clock__svg { position: absolute; left: 12px; top: 12px; width: 312px; height: 306px; pointer-events: none; color: var(--muted); }
 .mi-clock__svg .mi-clock__ring { fill: none; stroke: var(--border-strong); }
 .mi-clock__svg circle[stroke='currentColor'], .mi-clock__svg line { fill: none; stroke: currentColor; }
@@ -58,7 +58,9 @@
 
 .mi-clock__foot { position: absolute; left: 12px; right: 12px; bottom: 1px; height: 14px; display: flex; align-items: center; gap: 8px; padding-top: 0; line-height: 1; font-size: var(--font-meta); color: var(--muted); z-index: 4; }
 .mi-clock__info { margin-left: 2px; color: var(--muted); font-size: var(--font-meta); cursor: help; }
-.mi-clock__detail { margin-left: auto; }
+/* 状态行那颗「详细 ↗」：原型是 `<button>` 带 reset（无底、无边、字用 --text），这里逐条搬。
+   漏了这三条就会被全局按钮样式染成灰底白字——对照脚本里 detail:background-color 一项就会红。 */
+.mi-clock__detail { margin-left: auto; border: 0; background: none; color: var(--text); font-size: var(--font-meta); cursor: pointer; }
 .mi-clock__zone-future { fill: var(--mi-clock-time-future); opacity: 1; }
 .mi-clock__zone-past { fill: var(--mi-clock-time-past); }
 .mi-clock__zoneend { fill: color-mix(in srgb, var(--muted) 55%, var(--surface)); stroke: none; }

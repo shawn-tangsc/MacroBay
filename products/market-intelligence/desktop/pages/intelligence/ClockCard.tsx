@@ -89,8 +89,8 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
 }>): React.ReactElement {
   const center = model.center
   const centerPlaqueId = center === undefined ? undefined : `${center.metricKey}:future`
+  // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
   return <section className="mi-clock" aria-label={text.ariaLabel}>
-    <div className="mi-clock__card">
       <svg className="mi-clock__svg" viewBox={`0 0 ${clockCardGeometry.svgWidth} ${clockCardGeometry.svgHeight}`} aria-hidden="true">
         <defs>
           <filter id="miClockFlowGlow" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="2.5" /></filter>
@@ -164,7 +164,6 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           data-clock-unplaced={model.unplaced.length}>ⓘ</span>
         <button className="mi-clock__detail" type="button" onClick={onOpenDetail}>{text.detail}</button>
       </div>
-    </div>
   </section>
 }
 
