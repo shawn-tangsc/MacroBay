@@ -122,11 +122,15 @@ export function useBriefingEditionReader(input: Readonly<{
     }
     // 「这一版有没有」只认语言级（架构师 2026-11-14）：行级 `state` 取的是 primary 语言那份文档，
     // 与「这一语言发布过没有」可以不一致；用行级去拦，有正文时也会一次读取都不发。
+    // **语言级 `published` 时，任何早退都不成立**（架构师 2026-11-14）：判「这一版有没有」只看
+    // 这一语言发布过没有；行级 `state` 与 `attemptCount` 都不能否决一次读取。
     const languageState = row.languages?.find((entry) => entry.locale === target)?.state
-    if (row.state === 'missing' && languageState !== 'published') {
+    const langPublished = languageState === 'published'
+    if (row.state === 'missing' && !langPublished) {
       setView({ status: 'no-edition', date, failed: row.attemptCount !== undefined && row.attemptCount > 0 })
-      // 可选字段不能当 0 用：缺席＝不知道试过几次，不是"试过 0 次"；只有明确 0 次才不读。
-      if (row.attemptCount === 0) {
+      // 可选字段不能当 0 用：缺席＝不知道试过几次；缺席或 0 次都代表「这一天没有这一版的正文」，
+      // 不必再读一次（读也只会拿回缺失）。
+      if (row.attemptCount === undefined || row.attemptCount === 0) {
         console.warn(`[daily-briefing] openEdition branch ${JSON.stringify({ date, target, branch: 'missing-and-zero', periodId: row.periodId })}`)
         return
       }
