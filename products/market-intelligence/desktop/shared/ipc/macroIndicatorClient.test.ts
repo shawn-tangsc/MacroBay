@@ -18,9 +18,9 @@ const payload = {
     { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' },
     { metricKey: 'US.AHE.SA.MOM', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 0.4, unit: 'percent', source: 'narwhal' },
     { metricKey: 'US.AHE.NSA.YOY', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 3.6, unit: 'percent', source: 'narwhal' },
-    { metricKey: 'US.PCE.NSA.YOY', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 2.8, unit: 'percent', source: 'fred' },
+    { metricKey: 'US.PCE.SA.YOY', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 2.8, unit: 'percent', source: 'fred' },
     { metricKey: 'US.PCE.SA.MOM', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 0.2, unit: 'percent', source: 'fred' },
-    { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 3.1, unit: 'percent', source: 'fred' },
+    { metricKey: 'US.CORE_PCE.SA.YOY', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 3.1, unit: 'percent', source: 'fred' },
     { metricKey: 'US.CORE_PCE.SA.MOM', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T13:30:00.000Z', value: 0.2, unit: 'percent', source: 'fred' }
   ]
 }
