@@ -241,7 +241,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { readEdition, openEdition } = useBriefingEditionReader({
     client, editions, todayDate, readyDocument, requestRef,
     cache: editionCacheRef, periodDate: periodDateRef,
-    setView, setPinnedDate, setRegenerateFailure
+    setView, setPinnedDate, setRegenerateFailure, setPickedLocale, setPickedPeriodId
   })
   openEditionRef.current = openEdition
 

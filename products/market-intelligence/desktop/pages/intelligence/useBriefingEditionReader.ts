@@ -32,6 +32,10 @@ export function useBriefingEditionReader(input: Readonly<{
   setView: (next: DailyBriefingPageViewState | ((current: DailyBriefingPageViewState) => DailyBriefingPageViewState)) => void
   setPinnedDate: (date: string) => void
   setRegenerateFailure: (failure: null) => void
+  /** 点行时**选中期次与语言必须跟着走**（用户 2026-11-15）：只改日期会让身份闸门把读到的文档判成
+   *  「不是这一期」，于是正文变空、落到「没有这一版」。语言徽标那条路一直是写了这两样的。 */
+  setPickedLocale: (locale: 'zh-CN' | 'en-US') => void
+  setPickedPeriodId: (periodId: string) => void
 }>): Readonly<{
   readEdition: (date: string, target: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean; periodId?: string }>) => Promise<Readonly<{
     kind: 'available' | 'missing' | 'failed' | 'unknown'
@@ -41,7 +45,7 @@ export function useBriefingEditionReader(input: Readonly<{
   }>>
   openEdition: (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary, periodId?: string) => void
 }> {
-  const { client, editions, todayDate, readyDocument, requestRef, cache, periodDate, setView, setPinnedDate, setRegenerateFailure } = input
+  const { client, editions, todayDate, readyDocument, requestRef, cache, periodDate, setView, setPinnedDate, setRegenerateFailure, setPickedLocale, setPickedPeriodId } = input
   const readEdition = async (date: string, target: 'zh-CN' | 'en-US', options: Readonly<{ fresh?: boolean; periodId?: string }> = {}): Promise<Readonly<{
     kind: 'available' | 'missing' | 'failed' | 'unknown'
     failureCode?: string
@@ -59,7 +63,7 @@ export function useBriefingEditionReader(input: Readonly<{
     const diagnosticKey = `${date}|${options.periodId ?? 'default'}|${target}|${from}`
     if (!reportedReads.has(diagnosticKey)) {
       reportedReads.add(diagnosticKey)
-      console.info(`[daily-briefing] reading edition ${JSON.stringify({ date, periodId: options.periodId ?? 'default', locale: target, fresh: options.fresh === true })}`)
+      console.warn(`[daily-briefing] reading edition ${JSON.stringify({ date, periodId: options.periodId ?? 'default', locale: target, fresh: options.fresh === true })}`)
     }
     const result = await client.get({ date, locale: target, ...(options.periodId ? { periodId: options.periodId } : {}) })
       .catch((error: unknown) => {
@@ -71,7 +75,7 @@ export function useBriefingEditionReader(input: Readonly<{
       })
     if (!reportedResults.has(`${diagnosticKey}|${result?.state ?? 'threw'}`)) {
       reportedResults.add(`${diagnosticKey}|${result?.state ?? 'threw'}`)
-      console.info(`[daily-briefing] edition read answered ${JSON.stringify({
+      console.warn(`[daily-briefing] edition read answered ${JSON.stringify({
         date, periodId: options.periodId ?? 'default', locale: target,
         from,
         state: result?.state ?? 'threw',
@@ -101,6 +105,10 @@ export function useBriefingEditionReader(input: Readonly<{
     if (readyDocument && readyDocument.edition.date === date && readyDocument.edition.locale === target
       && (periodId === undefined || documentPeriod === wantedPeriod)) return
     setPinnedDate(date)
+    // 选中项**必须**跟着点行走：日期、期次、语言三样一起定，否则身份闸门会把刚读到的文档
+    // 判成「不是这一期」，正文清空、压成「没有这一版」（用户 2026-11-15 的最后一跳）。
+    setPickedLocale(target)
+    setPickedPeriodId(row?.periodId ?? periodId ?? 'default')
     const request = ++requestRef.current
     setRegenerateFailure(null)
     // 入口一行诊断（用户 2026-11-14 第五次「还是读不出来」）：一次说清**有没有那一行、行级状态、
