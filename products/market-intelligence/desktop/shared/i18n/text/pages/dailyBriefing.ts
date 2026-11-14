@@ -94,6 +94,7 @@ export const dailyBriefingText = {
        * 正文里出现这句长句就是违规（用户 2026-11-14 第三次重申）。
        */
       counts: '过去 24 小时：共 {total} 条发布（经济指标 {indicators} · 央行与讲话 {centralBank} · 财经事件 {financial}）',
+      compositionAria: '这段时间发布了什么',
       others: '另有 {count} 条',
       emptyCollected: '这段时间没有已收录的发布'
     },
@@ -521,6 +522,7 @@ export const dailyBriefingText = {
       header: 'Past 24 hours · {count} releases',
       composition: 'Economic indicators {indicators} · Central banks & speeches {centralBank} · Financial events {financial}',
       counts: 'Past 24 hours: {total} releases (economic indicators {indicators} · central banks & speeches {centralBank} · financial events {financial})',
+      compositionAria: 'What was released in this window',
       others: '{count} more',
       emptyCollected: 'No releases collected for this window'
     },

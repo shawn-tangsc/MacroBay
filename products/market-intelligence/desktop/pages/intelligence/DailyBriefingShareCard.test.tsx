@@ -242,9 +242,13 @@ describe('the macro section draws events, and says why it is empty without imply
     const present = rendered.querySelector('[data-macro-parse="present"]')!
     expect(absent).not.toBeNull()
     expect(present).not.toBeNull()
-    // 结构判据：absent 行里**根本不生成**解析容器；present 行里恰一个。
-    expect(absent.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(0)
-    expect(present.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(1)
+    // 结构判据：absent 行里**根本没有** ⓘ；present 行里恰一个（解读收进那里，不进正文）。
+    expect(absent.querySelectorAll('button')).toHaveLength(0)
+    expect(present.querySelectorAll('button')).toHaveLength(1)
+    // 正文里不再出现那句解读——它被**移走**了，不是删掉：点开 ⓘ 还能读到原文。
+    expect(present.textContent).not.toContain('初请低于前值')
+    await act(async () => present.querySelector<HTMLButtonElement>('button')!.click())
+    expect(document.querySelector('[data-popover-content]')?.textContent).toContain('初请低于前值')
     // 讲话行照常显示时刻与标题，但没有值、没有解析，也不出现任何缺失话术。
     expect(absent.textContent).toContain('里奇蒙联储主席巴尔金发表讲话')
     expect(absent.textContent).not.toContain('—')
@@ -854,11 +858,17 @@ describe('the past-24h counts and the tier-1 schedule', () => {
     }
 
     const host = await render(doc)
+    // 表头只写短句 `过去 24 小时 · 7 条`；构成明细进 ⓘ，正文里不再出现那句长句。
     const counts = host.querySelector('[data-macro-window-counts]')?.textContent ?? ''
     expect(counts).toContain('7')
-    expect(counts).toContain('5')
+    expect(counts).not.toContain('economic indicators')
+    const compositionTrigger = host.querySelector<HTMLButtonElement>('[data-macro-window-counts] button')!
+    await act(async () => compositionTrigger.click())
+    expect(document.querySelector('[data-popover-content]')?.textContent).toContain('5')
     expect(host.querySelector('[data-macro-window-others]')?.textContent).toContain('4')
-    expect(host.querySelector('[data-next-note]')?.textContent).toContain('cannot be determined')
+    // 「无法判定」的原因句不在正文：表头写短词，原因进 ⓘ。
+    expect(host.querySelector('[data-next-undetermined]')?.textContent).toContain('Cannot be determined')
+    expect(host.textContent).not.toContain('(the source provides no importance)')
     expect(host.querySelector('[data-next-tier1]')?.textContent).toContain('Tier-1 indicator schedule')
     expect(host.querySelectorAll('[data-next-tier1] li')).toHaveLength(2)
   })
@@ -882,6 +892,58 @@ describe('the unsettled next section', () => {
     const host = await render(doc)
     const text = host.textContent ?? ''
     expect(text).not.toContain('0 high-impact')
-    expect(text.match(/cannot be determined/g) ?? []).toHaveLength(1)
+    // 正文只有表头那个短词（一次）；原因那句整句只出现在 ⓘ 里。
+    expect(text.match(/Cannot be determined/g) ?? []).toHaveLength(1)
+    expect(text).not.toContain('(the source provides no importance)')
+    const noteTrigger = host.querySelector<HTMLButtonElement>('[data-next-undetermined] button')!
+    await act(async () => noteTrigger.click())
+    expect(document.querySelector('[data-popover-content]')?.textContent).toContain('(the source provides no importance)')
+  })
+})
+
+/**
+ * 三条 DOM 判据（Chief 2026-11-15 / 产品 §4.1a「反复出现过的口径，第三次重申」）：
+ * 正文只留字段名、当前值、控件；解释为什么、意味着什么的句子一律进 ⓘ。
+ * 这三条不靠人看，`Popover` 的 content 节点就是「原文被移到哪里」的证据。
+ */
+describe('body keeps facts, the why goes into ⓘ', () => {
+  const explained = (): DailyBriefingDocument => {
+    const base = briefing()
+    return {
+      ...base,
+      news: {
+        ...base.news,
+        macro: [{ ...base.news.macro[0]!, why: '初请低于前值，劳动力市场仍紧，抬高贴现率压力。' }],
+        notes: {}
+      },
+      next: { items: [], note: 'next-7d-importance-unknown', tier1Upcoming: [] }
+    }
+  }
+
+  it('body carries no sentence ending with a full stop', async () => {
+    const host = await render(explained())
+    // 解读那句以「。」收尾；正文里一个字都不该出现。
+    expect(host.textContent).not.toContain('初请低于前值')
+    expect(host.textContent).not.toMatch(/为什么|意味着|劳动力市场/)
+  })
+
+  it('body carries no parenthetical explanation', async () => {
+    const host = await render(explained())
+    expect(host.textContent).not.toContain('(the source provides no importance)')
+    expect(host.textContent).not.toContain('（')
+  })
+
+  it('keeps the moved text readable inside ⓘ instead of deleting it', async () => {
+    const host = await render(explained())
+    const open = async (selector: string): Promise<void> => {
+      const button = host.querySelector<HTMLButtonElement>(selector)!
+      await act(async () => button.click())
+    }
+    const opened = (): string => Array.from(document.querySelectorAll('[data-popover-content]'))
+      .map((node) => node.textContent ?? '').join(' | ')
+    await open('[data-macro-parse="present"] button')
+    expect(opened()).toContain('初请低于前值')
+    await open('[data-next-undetermined] button')
+    expect(opened()).toContain('(the source provides no importance)')
   })
 })

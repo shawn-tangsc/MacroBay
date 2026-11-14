@@ -8,6 +8,10 @@ import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
+import { Info } from 'lucide-react'
+import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 import { editorialNotice } from './dailyBriefingEditorialNotice'
 import { briefingMacroValueLabel } from '../../../contracts/dailyBriefingMacroValueText'
@@ -40,6 +44,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   timeZone?: string
 }>): React.ReactElement {
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
+  // 平台组件（`IconButton` / `Popover`）只收键、句子由调用方解析：用全产品那一处解析器，
+  // 不另建一份映射。未知键返回空串（同 `ui.state.*`），不会把内部键名念给读屏用户。
+  const resolveKey = (key: string): string => resolveProductTextKey(locale, key)
   // The same rows the copied text prints, unmodified: one function, two exports, no second opinion.
   // A stale row is marked stale on the row itself; dropping it here made the PNG and the copied text
   // disagree about the same edition (the image lost rows the text still had).
@@ -147,13 +154,17 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
       {visibleMacro.length > 0 || macroEmpty || (macroWindow?.total ?? 0) > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
-      {/* 总数与构成（产品 2026-11-14）：明细只摆三条，这个数告诉读者这段时间到底有多少事。
-          「筛没了」不许说成「没有」——所以这句话与明细分开，先于明细出现。 */}
-      {macroWindow !== undefined && macroWindow.total > 0 ? <p className="mi-brief-poster__macro-counts" data-macro-window-counts="true">{text.pastWindow.counts
-        .replace('{total}', String(macroWindow.total))
-        .replace('{indicators}', String(macroWindow.indicators))
-        .replace('{centralBank}', String(macroWindow.centralBank))
-        .replace('{financial}', String(macroWindow.financial))}</p> : null}
+      {/* 表头只写短句（`过去 24 小时 · N 条`）；构成明细进这个 ⓘ，不再当正文长句。
+          长句那一版 `pastWindow.counts` 只给导出的成文用，界面正文不许出现。 */}
+      {macroWindow !== undefined && macroWindow.total > 0 ? <p className="mi-brief-poster__macro-counts" data-macro-window-counts="true">{text.pastWindow.header
+        .replace('{count}', String(macroWindow.total))}
+        <Popover content={<span>{text.pastWindow.composition
+          .replace('{indicators}', String(macroWindow.indicators))
+          .replace('{centralBank}', String(macroWindow.centralBank))
+          .replace('{financial}', String(macroWindow.financial))}</span>} trigger={(triggerProps) => (
+          <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.pastWindow.compositionAria"
+            icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
+        )} /></p> : null}
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
           `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
@@ -167,7 +178,12 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
             if (value === undefined) return null
             return <small>{value}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>
           })()}
-          {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
+          {/* 解读不进正文（用户 2026-11-15 第三次重申）：正文只留时间·国家·名称·实际·前值，
+              那句「为什么重要」收进该行的 ⓘ。**移走不是删掉**——用例会在浮层里找原文。 */}
+          {item.why ? <Popover content={<span>{item.why}</span>} trigger={(triggerProps) => (
+            <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.macro.whyAria"
+              icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
+          )} /> : null}
         </div>
       </div>)}
       {/* 不再有"共 N 条（另 M 条未列出）"（用户 2026-11-06）：AI 判定有用的全部显示，
@@ -224,8 +240,16 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       <div className="mi-brief-poster__next-head">
         <h2>{text.sections.next}</h2>
         {/* 判不了重要性时**不许数数**（用户 2026-11-15）：这一档是「无法判定」，写成
-            「0 个高影响事件」就是把「判不出」说成「一个都没有」。计数只在能判定时出现。 */}
-        {doc.next.note === 'next-7d-importance-unknown' ? null : <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>}
+            「0 个高影响事件」就是把「判不出」说成「一个都没有」。计数只在能判定时出现。
+            原因那句（含括号）不进正文，收进这个 ⓘ——**移走不是删掉**，用的是同一个键。 */}
+        {doc.next.note === 'next-7d-importance-unknown'
+          ? <span data-next-undetermined="true">{text.nextImportanceUnknown.heading}
+            {nextNote === undefined ? null : <Popover content={<span>{nextNote}</span>} trigger={(triggerProps) => (
+              <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.nextImportanceUnknown.noteAria"
+                icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
+            )} />}
+          </span>
+          : <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>}
       </div>
       {focusEvent ? <div className="mi-brief-poster__next-focus">
         <div className="mi-brief-poster__next-focus-head">
@@ -234,7 +258,10 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div>
         <h3>{nextTitle(focusEvent, eventTitles, locale)}</h3>
         <p className="mi-brief-poster__next-meta">{nextMeta(focusEvent, text)}</p>
-        {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
+        {focusEvent.why ? <Popover content={<p><b>{text.next.why}</b> {focusEvent.why}</p>} trigger={(triggerProps) => (
+          <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.next.whyAria"
+            icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
+        )} /> : null}
         {watchScenarios.length > 0 || watchBaseline ? <div className="mi-brief-poster__next-watch-block">
           {watchScenarios.length > 0 ? <div className="mi-brief-poster__next-watch-grid" data-watch-count={watchScenarios.length}>
             {watchScenarios.map((entry) => <div className="mi-brief-poster__next-watch" data-watch-kind={entry.kind} key={entry.key}>
@@ -247,7 +274,6 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div> : null}
         <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
       </div> : null}
-      {!focusEvent && nextNote !== undefined ? <p className="mi-brief-poster__next-note" data-next-note={doc.next.note}>{nextNote}</p> : null}
       {!focusEvent && tier1Upcoming.length > 0 ? <div className="mi-brief-poster__next-tier1" data-next-tier1="true">
         <h3>{text.nextImportanceUnknown.scheduleTitle}</h3>
         <ul>
