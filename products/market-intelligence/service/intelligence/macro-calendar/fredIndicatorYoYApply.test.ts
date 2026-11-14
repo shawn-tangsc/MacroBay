@@ -49,7 +49,7 @@ describe('applyOfficialYoY', () => {
   })
 
   it('leaves a card with no release row alone', () => {
-    const pce: MacroIndicatorCardFact = { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' }
+    const pce: MacroIndicatorCardFact = { metricKey: 'US.CORE_PCE.SA.YOY', state: 'not-recorded' }
     expect(applyOfficialYoY(pce, { state: 'unavailable', seriesId: '', reason: 'no-series' })).toEqual(pce)
   })
 

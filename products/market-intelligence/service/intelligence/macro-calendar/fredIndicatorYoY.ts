@@ -33,7 +33,10 @@ export const fredIndicatorYoYPolicy = Object.freeze({
     // 同比（未季调序列，与 BLS 公布口径一致）
     'US.CPI.NSA.YOY': { seriesId: 'CPIAUCNS', units: 'pc1' },
     'US.CORE_CPI.NSA.YOY': { seriesId: 'CPILFENS', units: 'pc1' },
-    'US.CORE_PCE.NSA.YOY': { seriesId: 'PCEPILFE', units: 'pc1' },
+    // PCE 价格指数的公布口径本来就是季调（BEA）：值走 SA 码，标签才和数一致。
+    // NSA 两个码对应「未季调年率」，目前没有未季调序列，留空并进例外清单——不拿季调顶。
+    'US.PCE.SA.YOY': { seriesId: 'PCEPI', units: 'pc1' },
+    'US.CORE_PCE.SA.YOY': { seriesId: 'PCEPILFE', units: 'pc1' },
     'US.AHE.NSA.YOY': { seriesId: 'CEU0500000003', units: 'pc1' },
     // 月率（季调指数，取 `pch`）
     'US.CPI.SA.MOM': { seriesId: 'CPIAUCSL', units: 'pch' },

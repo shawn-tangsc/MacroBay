@@ -131,7 +131,7 @@ describe('macroIndicatorReadService', () => {
   it('says 未发布 for 核心 PCE, which has no release row at all this month', async () => {
     await withRepository(async ({ repository }) => {
       repository.upsertReleaseRow(cpiRelease)
-      expect((await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.CORE_PCE.NSA.YOY'])
+      expect((await factsOf(createMacroIndicatorReadService(repository).read({ asOf })))['US.CORE_PCE.SA.YOY'])
         .toMatchObject({ state: 'not-recorded' })
     })
   })

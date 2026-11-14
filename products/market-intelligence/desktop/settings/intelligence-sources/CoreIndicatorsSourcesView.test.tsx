@@ -47,7 +47,7 @@ describe('core indicator source page', () => {
     const host = await render()
     const cards = [...host.querySelectorAll<HTMLElement>('[data-core-indicator]')]
     expect(cards.map((card) => card.getAttribute('data-core-indicator'))).toEqual([
-      'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY'
+      'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.SA.YOY'
     ])
     // 新增就业的官方腿是 BLS；其余三个是 FRED。盘口不在这一页。
     const payrolls = host.querySelector('[data-core-indicator="US.NONFARM.SA.CHANGE"]')!

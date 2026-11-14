@@ -9,6 +9,7 @@ import {
   coreIndicatorMetricKeys,
   coreIndicatorOfficialLegExceptions,
   coreIndicatorValueSourceRows,
+  metricsDeclaredWithoutOfficialLeg,
   metricsWithoutOfficialLeg,
   valueSourcesForMetric
 } from './coreIndicatorValueSources'
@@ -32,8 +33,13 @@ describe('core indicator value sources', () => {
       .toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-yoy', 'bls:official-yoy'])
     expect(describeOf('US.CORE_CPI.NSA.YOY'))
       .toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-yoy', 'bls:official-yoy'])
-    expect(describeOf('US.CORE_PCE.NSA.YOY'))
+    // PCE 年率两条按**季调**码取（BEA 公布口径就是季调）；NSA 两个码保留但不再装季调值。
+    expect(describeOf('US.CORE_PCE.SA.YOY'))
       .toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-yoy'])
+    expect(describeOf('US.PCE.SA.YOY'))
+      .toEqual(['narwhal:current-value', 'fred-rates-liquidity:official-yoy'])
+    // NSA 码只剩「未季调年率」这个身份，没有官方腿，进例外清单。
+    expect(describeOf('US.CORE_PCE.NSA.YOY')).toEqual([])
     // 新增就业的官方腿是 BLS，不是 FRED——两条腿别混。
     expect(describeOf('US.NONFARM.SA.CHANGE')).toEqual(['narwhal:current-value', 'bls:official-change'])
     // role 由策略表的 `unit` 定：万人当量是「净变化」，失业率是「水平」。
@@ -56,8 +62,9 @@ describe('core indicator value sources', () => {
    * 例外只能出现在写明原因的单子里。这条能红的真情况：扩腿时漏掉一格、或有人删了例外单子里那条原因。
    */
   it('leaves no metric without an official leg, except the ones the list explains', () => {
-    const missing = metricsWithoutOfficialLeg()
-    expect([...missing].sort()).toEqual(coreIndicatorOfficialLegExceptions.map((entry) => entry.metricKey).sort())
+    // 12 张卡行现在每一格都有官方腿；例外里那两个 NSA 码是**留给未季调来源的身份**，不在 12 行里。
+    expect([...metricsWithoutOfficialLeg()].sort()).toEqual([])
+    expect([...metricsDeclaredWithoutOfficialLeg()].sort()).toEqual(['US.CORE_PCE.NSA.YOY', 'US.PCE.NSA.YOY'])
     for (const exception of coreIndicatorOfficialLegExceptions) {
       expect(exception.reason.length, exception.metricKey).toBeGreaterThan(8)
       // 例外里不许留序列号猜测值：留着就等于给了下一个人一个「接上它」的理由。
@@ -65,9 +72,9 @@ describe('core indicator value sources', () => {
         expect(exception.reason, exception.metricKey).not.toContain(policy.seriesId)
       }
     }
-    // 例外单子里的码必须在 12 个之内，否则是给一个不存在的指标开了口子。
+    // 例外单子里的码**必须在 12 行之外**：在 12 行里却没有官方腿，是漏了腿而不是记例外。
     for (const exception of coreIndicatorOfficialLegExceptions) {
-      expect(MACRO_INDICATOR_GROUP_METRIC_KEYS, exception.metricKey).toContain(exception.metricKey)
+      expect(MACRO_INDICATOR_GROUP_METRIC_KEYS as readonly string[], exception.metricKey).not.toContain(exception.metricKey)
     }
   })
 

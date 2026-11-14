@@ -34,7 +34,7 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
   core_cpi_mom: 'US.CORE_CPI.SA.MOM',  // usa-consumer-prices
   core_cpi_yoy: 'US.CORE_CPI.NSA.YOY',  // usa-consumer-prices
   core_pce_price_index_mom: 'US.CORE_PCE.SA.MOM',  // usa-income-and-spending
-  core_pce_price_index_yoy: 'US.CORE_PCE.NSA.YOY',  // usa-income-and-spending
+  core_pce_price_index_yoy: 'US.CORE_PCE.SA.YOY',  // usa-income-and-spending
   core_producer_price_change_mom: 'US.CORE_PPI.SA.MOM',  // usa-producer-prices
   core_producer_price_change_yoy: 'US.CORE_PPI.NSA.YOY',  // usa-producer-prices
   corporate_profits_qoq: 'US.CORPORATE_PROFITS.SA.QOQ',  // usa-corporate-profits
@@ -104,7 +104,7 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
   nonfarm_productivity_qoq: 'US.PRODUCTIVITY.SA.QOQ',  // usa-productivity-and-costs
   participation_rate: 'US.PARTICIPATION_RATE.SA.RATE',  // usa-unemployment
   pce_price_index_mom: 'US.PCE.SA.MOM',  // usa-income-and-spending
-  pce_price_index_yoy: 'US.PCE.NSA.YOY',  // usa-income-and-spending
+  pce_price_index_yoy: 'US.PCE.SA.YOY',  // usa-income-and-spending
   pending_home_sales_mom: 'US.PENDING_HOME_SALES.SA.MOM',  // usa-pending-home-sales
   pending_home_sales_yoy: 'US.PENDING_HOME_SALES.NSA.YOY',  // usa-pending-home-sales
   personal_income_mom: 'US.PERSONAL_INCOME.SA.MOM',  // usa-income-and-spending

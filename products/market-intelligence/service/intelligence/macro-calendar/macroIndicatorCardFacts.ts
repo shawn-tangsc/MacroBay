@@ -24,8 +24,9 @@ export const MACRO_INDICATOR_CARD_KEYS = Object.freeze([
   'US.CPI.NSA.YOY', 'US.CPI.SA.MOM', 'US.CORE_CPI.NSA.YOY', 'US.CORE_CPI.SA.MOM',
   // 就业卡：非农 / 失业率 / 时薪月率 / 时薪年率
   'US.NONFARM.SA.CHANGE', 'US.UNEMPLOYMENT.SA.RATE', 'US.AHE.SA.MOM', 'US.AHE.NSA.YOY',
-  // PCE 卡：年率 / 月率 / 核心年率 / 核心月率
-  'US.PCE.NSA.YOY', 'US.PCE.SA.MOM', 'US.CORE_PCE.NSA.YOY', 'US.CORE_PCE.SA.MOM'
+  // PCE 卡：年率 / 月率 / 核心年率 / 核心月率（年率两条是**季调**：BEA 的公布口径就是季调，
+  // 原来挂在 NSA 码下是码缺了，不是数错了；NSA 两个码保留给将来的未季调来源）
+  'US.PCE.SA.YOY', 'US.PCE.SA.MOM', 'US.CORE_PCE.SA.YOY', 'US.CORE_PCE.SA.MOM'
 ] as const)
 
 export type MacroIndicatorCardKey = typeof MACRO_INDICATOR_CARD_KEYS[number]

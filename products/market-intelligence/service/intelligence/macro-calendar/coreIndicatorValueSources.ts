@@ -123,7 +123,8 @@ export const coreIndicatorMetricKeys: readonly string[] = Object.freeze([
   'US.CPI.NSA.YOY',
   'US.CORE_CPI.NSA.YOY',
   'US.NONFARM.SA.CHANGE',
-  'US.CORE_PCE.NSA.YOY'
+  // PCE 核心年率取**季调**码：BEA 的公布口径就是季调，之前挂在 NSA 码下是码缺了。
+  'US.CORE_PCE.SA.YOY'
 ])
 
 /** 页面与存储都读这一份：(metric_key, provider_id) 的完整清单。 */
@@ -141,24 +142,51 @@ export function coreIndicatorKeysMissingFromCards(): readonly string[] {
 }
 
 /**
- * 例外：**确实没有官方腿**的指标 + 一句原因（Chief 2026-11-14 定的不变量）。
+ * 例外单子（架构师 2026-11-14 定的不变量）：
  *
- * 不变量：12 个指标里每一个都必须至少有一条 `kind: 'official'` 的腿；例外只能出现在这张单子里。
+ * > 每个指标都必须至少有一条 `kind: 'official'` 的腿；例外只能出现在这张单子里。
+ *
  * 为什么不是「看那条腿是不是退役源」：那要维护一份「谁要退役」的人工状态，而那本身就是下一个
  * 不同步的地方；「有没有官方腿」退役前后都成立，且能从派生表直接算。
  *
- * 单子里只放码 + 原因，**不放序列号猜测值**——留着候选序列号，下一个人就会把它接上。
+ * 两类必须分开记，因为**处理方式完全不同**：
+ * - `no-official-leg`：这一格确实没有官方腿，保持「未提供」，等真来源；
+ * - `known-mismatch`：有官方腿，但那条腿的口径与码不符（例如季调值挂在未季调码下）——
+ *   能看、能追，等码或来源补齐后清掉。
+ *
+ * 每条都写「为什么」和「怎么解」，不放序列号猜测值：留着候选序列号，下一个人就会把它接上。
  */
-export const coreIndicatorOfficialLegExceptions: readonly Readonly<{ metricKey: string; reason: string }>[] =
-  Object.freeze([
-    Object.freeze({
-      metricKey: 'US.PCE.NSA.YOY',
-      reason: 'FRED 月度只有季调 PCE 价格指数，未季调年率没有确证序列；按口径不拿季调顶未季调，保持「未提供」'
-    })
-  ])
+export type CoreIndicatorOfficialLegException = Readonly<{
+  metricKey: string
+  kind: 'no-official-leg' | 'known-mismatch'
+  reason: string
+  /** 这条例外怎么解（谁补什么），不是「等等看」。 */
+  resolution: string
+}>
 
-/** 12 个指标里没有官方腿的那些（应当正好等于例外单子）。 */
+export const coreIndicatorOfficialLegExceptions: readonly CoreIndicatorOfficialLegException[] = Object.freeze([
+  Object.freeze({
+    metricKey: 'US.PCE.NSA.YOY',
+    kind: 'no-official-leg',
+    reason: '要的是未季调年率，FRED 月度只有季调 PCE 价格指数，没有确证的未季调序列',
+    resolution: '接真·未季调来源（BEA NIPA 表或 ALFRED vintage）后清掉；在那之前保持「未提供」，不拿季调顶'
+  }),
+  Object.freeze({
+    metricKey: 'US.CORE_PCE.NSA.YOY',
+    kind: 'no-official-leg',
+    reason: '同上：未季调年率没有确证序列；季调值现在走 `US.CORE_PCE.SA.YOY`，这一格不再装季调数',
+    resolution: '接真·未季调来源后清掉；这两个 NSA 码是「未季调年率」的正身，保留不删'
+  })
+] as const)
+
 export function metricsWithoutOfficialLeg(): readonly string[] {
   return MACRO_INDICATOR_GROUP_METRIC_KEYS.filter((metricKey) =>
     !valueSourcesForMetric(metricKey).some((source) => source.kind === 'official'))
+}
+
+/** 例外里 `no-official-leg` 那类的码——它就是上面那条派生结果的答案，两边必须一致。 */
+export function metricsDeclaredWithoutOfficialLeg(): readonly string[] {
+  return coreIndicatorOfficialLegExceptions
+    .filter((exception) => exception.kind === 'no-official-leg')
+    .map((exception) => exception.metricKey)
 }

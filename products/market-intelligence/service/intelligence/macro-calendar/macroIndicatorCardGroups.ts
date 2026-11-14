@@ -49,9 +49,9 @@ export const MACRO_INDICATOR_GROUPS = Object.freeze([
     id: 'pce',
     titleKey: 'pce',
     rows: [
-      { metricKey: 'US.PCE.NSA.YOY', labelKey: 'yoy', kind: 'yoy' },
+      { metricKey: 'US.PCE.SA.YOY', labelKey: 'yoy', kind: 'yoy' },
       { metricKey: 'US.PCE.SA.MOM', labelKey: 'mom', kind: 'mom' },
-      { metricKey: 'US.CORE_PCE.NSA.YOY', labelKey: 'coreYoy', kind: 'yoy' },
+      { metricKey: 'US.CORE_PCE.SA.YOY', labelKey: 'coreYoy', kind: 'yoy' },
       { metricKey: 'US.CORE_PCE.SA.MOM', labelKey: 'coreMom', kind: 'mom' }
     ]
   }

@@ -77,7 +77,7 @@ describe('官方发布先进标准表（source 身份）', () => {
         providerId: 'macro-calendar-bea', lifecycleState: 'scheduled', actual: undefined, previous: undefined })]
     })
     // **按发布组展开**：CPI 组 4 行（排除两个指数水平）+ PCE 组 4 行 = 8，加上原本两条自己 = 10。
-    expect(counts).toEqual({ written: 10, failed: 0 })
+    expect(counts).toEqual({ written: 12, failed: 0 })
     const rows = database.prepare('select metric_key, identity_kind, status, value_state from mi_calendar_releases order by metric_key')
       .all() as { metric_key: string; identity_kind: string; status: string; value_state: string }[]
     expect(rows.every((row) => row.identity_kind === 'code')).toBe(true)

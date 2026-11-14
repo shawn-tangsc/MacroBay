@@ -89,7 +89,7 @@ describe('macro indicator card facts', () => {
   })
 
   it('says 未收录 when the indicator has no release row at all (核心 PCE this month)', () => {
-    expect(rowFor([cpiRow, payrollRow])['US.CORE_PCE.NSA.YOY']).toMatchObject({ state: 'not-recorded' })
+    expect(rowFor([cpiRow, payrollRow])['US.CORE_PCE.SA.YOY']).toMatchObject({ state: 'not-recorded' })
   })
 
   it('ignores a legacy row whose primary identity is a different measure', () => {
@@ -106,6 +106,6 @@ describe('macro indicator card facts', () => {
   it('reverses the legacy indicator ids from the one existing table', () => {
     expect(legacyIndicatorIdsByMetricKey('US.CPI.NSA.YOY')).toEqual(['8637'])
     expect(legacyIndicatorIdsByMetricKey('US.NONFARM.SA.CHANGE')).toEqual(['8656'])
-    expect(legacyIndicatorIdsByMetricKey('US.CORE_PCE.NSA.YOY')).toEqual([])
+    expect(legacyIndicatorIdsByMetricKey('US.CORE_PCE.SA.YOY')).toEqual([])
   })
 })

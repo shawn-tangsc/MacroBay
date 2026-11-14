@@ -6,8 +6,8 @@ import { marketCalendarReleaseGroupByMetricKey as groupOf,
 
 /** 数据常量守卫：一个码一个组；每个组恰好一个主测度且属于该组。 */
 describe('发布组常量', () => {
-  it('164 个码各有唯一组，组名是稳定英文标识', () => {
-    expect(Object.keys(groupOf)).toHaveLength(164)
+  it('166 个码各有唯一组，组名是稳定英文标识', () => {
+    expect(Object.keys(groupOf)).toHaveLength(166)
     for (const [metricKey, group] of Object.entries(groupOf)) {
       expect(metricKey.startsWith('US.'), metricKey).toBe(true)
       expect(group, metricKey).toMatch(/^us-[a-z0-9-]+$/)

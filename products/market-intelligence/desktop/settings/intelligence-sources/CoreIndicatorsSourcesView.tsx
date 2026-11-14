@@ -60,7 +60,7 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
     'US.CPI.NSA.YOY': 'cpiYoy',
     'US.CORE_CPI.NSA.YOY': 'coreCpiYoy',
     'US.NONFARM.SA.CHANGE': 'nonfarmPayrolls',
-    'US.CORE_PCE.NSA.YOY': 'corePceYoy'
+    'US.CORE_PCE.SA.YOY': 'corePceYoy'
   }
 
   return <div className="business-cell-grid" data-core-indicator-sources="true">

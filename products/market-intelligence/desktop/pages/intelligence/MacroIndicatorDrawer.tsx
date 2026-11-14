@@ -276,7 +276,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const cpiFact = factOf('US.CPI.NSA.YOY')
   const coreCpiFact = factOf('US.CORE_CPI.NSA.YOY')
   const payrollsFact = factOf('US.NONFARM.SA.CHANGE')
-  const pceFact = factOf('US.CORE_PCE.NSA.YOY')
+  const pceFact = factOf('US.CORE_PCE.SA.YOY')
   const unemploymentFact = factOf('US.UNEMPLOYMENT.SA.RATE')
   // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
   // 图上用短名（完整标题不上图）；名字按身份取，不按标题文本猜。

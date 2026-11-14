@@ -22,7 +22,7 @@ function registrar(): Readonly<{ methods: string[]; handlers: Map<string, Handle
 
 const facts: readonly MacroIndicatorCardFact[] = [
   { metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z' },
-  { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' }
+  { metricKey: 'US.CORE_PCE.SA.YOY', state: 'not-recorded' }
 ]
 
 describe('registerMacroIndicatorIpc', () => {
