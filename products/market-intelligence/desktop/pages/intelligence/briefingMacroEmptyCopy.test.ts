@@ -92,3 +92,36 @@ describe('the "next 7 days" section when importance is unknown', () => {
     }
   })
 })
+
+/**
+ * 简报两段新增的六句（产品 2026-11-14 定）。这里钉三件：
+ * 1. 中英都齐、都非空；
+ * 2. 占位符一一对得上（`{total}` / `{indicators}` / `{centralBank}` / `{financial}` / `{count}`）——
+ *    少一个占位就会渲染出「共 条发布」；
+ * 3. 空态那句**必须带「已收录」**：窗口里一条都没有时，只能说「没有已收录的发布」，
+ *    不许说成「没有发布」——那是替来源下断言。
+ */
+describe('过去 24 小时与未来段的新六句', () => {
+  it('carries every sentence in both languages with matching placeholders', () => {
+    const expected = [
+      ['pastWindow.counts', ['{total}', '{indicators}', '{centralBank}', '{financial}']],
+      ['pastWindow.others', ['{count}']]
+    ] as const
+    for (const [language, text] of [['zh-CN', zhText], ['en-US', enText]] as const) {
+      for (const [key, placeholders] of expected) {
+        const [group, name] = key.split('.') as [ 'pastWindow', 'counts' | 'others' ]
+        const value = text[group][name]
+        expect(value.trim(), `${language} ${key}`).not.toBe('')
+        for (const placeholder of placeholders) {
+          expect(value, `${language} ${key}`).toContain(placeholder)
+        }
+      }
+      expect(text.pastWindow.emptyCollected.trim(), language).not.toBe('')
+      // 「已收录」不能省：那三个字是这句话唯一诚实的部分。
+      expect(text.pastWindow.emptyCollected, language).toMatch(language === 'zh-CN' ? /已收录/ : /collected/i)
+      expect(text.importanceUnprovided.trim(), language).not.toBe('')
+      expect(text.nextCards.unjudged.trim(), language).not.toBe('')
+      expect(text.nextCards.tier1Heading.trim(), language).not.toBe('')
+    }
+  })
+})
