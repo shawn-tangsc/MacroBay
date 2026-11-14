@@ -1,3 +1,5 @@
+import type { MacroEconomicCalendarImportance } from '../../../contracts/macro/economicCalendarQueryContracts'
+
 export const MACRO_CALENDAR_SCHEMA_VERSION = 1 as const
 
 export type MacroCalendarEventFamily = 'fomc' | 'cpi' | 'core-cpi' | 'consumer-price-index' | 'employment-situation' | 'pce' | 'core-pce' | 'gdp'
@@ -31,7 +33,11 @@ export type MacroCalendarRevision = {
   eventFamily: MacroCalendarEventFamily
   eventNameKey: string
   countryCode: 'US'
-  importance: 'high'
+  /**
+   * 记录自己带的重要性。列是 `not null`，但读取时按三档校验：读到不认识的文本就是「没有值」，
+   * 不拿某一档顶上（详情那一行会写「未提供」）。
+   */
+  importance?: MacroEconomicCalendarImportance
   periodKey: string
   lifecycleState: MacroCalendarLifecycleState
   revisionKind: MacroCalendarRevisionKind

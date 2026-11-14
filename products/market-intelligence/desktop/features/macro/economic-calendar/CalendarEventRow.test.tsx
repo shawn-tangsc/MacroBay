@@ -150,8 +150,8 @@ it('marks a high-importance row before its name, on the calendar cell and the da
   const host = document.createElement('div'); const root = createRoot(host)
   const market = (importance: 'high' | 'medium' | 'low') => ({ key: `market:${importance}`, source: 'market', date: '2026-09-10', time: '08:30',
     event: { eventKey: importance, title: 'Derived topic', importance, eventType: 'economic-indicator' } }) as CalendarDayItem
-  const official = { key: 'official:cpi', source: 'official', date: '2026-09-10', time: '08:30',
-    event: { eventKey: 'US.CPI.RELEASE.2026-M09', labelKey: 'cpi' } } as CalendarDayItem
+  const official = (importance?: 'high' | 'medium' | 'low') => ({ key: 'official:cpi', source: 'official', date: '2026-09-10', time: '08:30',
+    event: { eventKey: 'US.CPI.RELEASE.2026-M09', labelKey: 'cpi', ...(importance === undefined ? {} : { importance }) } }) as CalendarDayItem
   // Both surfaces draw this same row, so one mark covers the cell and the standing day list.
   const render = async (item: CalendarDayItem, copy: EconomicCalendarText = text) => {
     await act(async () => root.render(<CalendarEventRow item={item} text={copy} statusNow="2026-09-10T12:00:00.000Z" onSelect={() => {}} />))
@@ -167,8 +167,13 @@ it('marks a high-importance row before its name, on the calendar cell and the da
     // The mark is not the only carrier: the accessible name states the importance too.
     expect(host.querySelector('button')?.getAttribute('aria-label')).toContain(`${text.details.importance} ${text.importance.high}`)
 
-    await render(official)
-    expect(host.querySelector('[data-importance-marker]'), 'an official row is high by its own route').not.toBeNull()
+    await render(official('high'))
+    expect(host.querySelector('[data-importance-marker]'), 'an official row is high because its record says so').not.toBeNull()
+
+    // 官方行没带重要性就是「判不出」：不戴高标记，也不在无障碍名里说「高」。
+    await render(official())
+    expect(host.querySelector('[data-importance-marker]'), 'a record with no importance is not high').toBeNull()
+    expect(host.querySelector('button')?.getAttribute('aria-label')).not.toContain(text.details.importance)
 
     for (const importance of ['medium', 'low'] as const) {
       await render(market(importance))

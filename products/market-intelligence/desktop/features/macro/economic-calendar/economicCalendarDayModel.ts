@@ -44,8 +44,12 @@ export function calendarDisplayDate(instant: string, timeZone: string): string {
 export function calendarDisplayTime(instant: string, timeZone: string): string {
   return formattersFor(timeZone).time.format(new Date(instant))
 }
+/**
+ * 判不出重要性**不算**最高一档（与 `projectUpcomingCalendarCard` 同一口径）：官方那条也读记录自己的值。
+ * 记录里没有这个字段，就只是「未提供」——行不戴高标记、无障碍名不说「高」。
+ */
 export function isHighImportanceCalendarItem(item: CalendarDayItem): boolean {
-  return item.source === 'official' || item.event.importance === EconomicCalendarUnifiedDayPolicy.visibleImportance
+  return item.event.importance === EconomicCalendarUnifiedDayPolicy.visibleImportance
 }
 
 /**

@@ -317,7 +317,7 @@ function toPublicEvent(revision: MacroCalendarRevision, asOf: string, overrides:
   })
   return {
     eventKey: revision.eventKey, releaseGroupKey: revision.releaseGroupKey, eventFamily: revision.eventFamily,
-    titleKey: revision.eventNameKey, countryCode: revision.countryCode, importance: revision.importance,
+    titleKey: revision.eventNameKey, countryCode: revision.countryCode, ...(revision.importance === undefined ? {} : { importance: revision.importance }),
     periodKey: revision.periodKey, lifecycleState: revision.lifecycleState, coverage: 'available',
     // An edit carries its own date: if the reader moved the release to another day, the row says so.
     scheduledDate: edited?.scheduledDate ?? revision.scheduledDate,
