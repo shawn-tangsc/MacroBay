@@ -398,7 +398,10 @@ export function distributionAtOrBefore(
  * 这份表是产品口径（`15-事件身份口径.md` §十七），要扩只能扩这里；清单之外的指标无论推动量多大都不标。
  */
 export const POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS = Object.freeze([
-  'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY'
+  // 核心 PCE 年率是**同一概念的两个变体**：卡片与日历现在读季调码；库里未季调那批行还没收，
+  // 事件上仍可能只带未季调码，所以两个都列——同一个概念，不该因为换过一次口径就漏标。
+  'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE',
+  'US.CORE_PCE.SA.YOY', 'US.CORE_PCE.NSA.YOY'
 ] as const)
 
 /**
@@ -422,6 +425,8 @@ export const POLICY_PATH_EVENT_METRIC_PRIORITY = Object.freeze([
   'US.NONFARM.SA.CHANGE',
   'US.CPI.NSA.YOY',
   'US.CORE_CPI.NSA.YOY',
+  // 季调在前：同一场发布同时带两种码时，标读者在卡上看到的那个身份。
+  'US.CORE_PCE.SA.YOY',
   'US.CORE_PCE.NSA.YOY'
 ] as const)
 

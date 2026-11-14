@@ -67,6 +67,9 @@ function nameOfMetricKey(key: string | undefined, text: MacroIndicatorDrawerText
     case 'US.CPI.NSA.YOY': return text.eventNames.cpi
     case 'US.CORE_CPI.NSA.YOY': return text.eventNames.coreCpi
     case 'US.NONFARM.SA.CHANGE': return text.eventNames.payrolls
+    // 换码必须同笔加：漏了就让这条事件掉进 default、标题退回源原文名。
+    // 未季调那条留着，是为了库里那批旧行（还没收）仍能取到「核心 PCE」这个名字。
+    case 'US.CORE_PCE.SA.YOY':
     case 'US.CORE_PCE.NSA.YOY': return text.eventNames.corePce
     default: return undefined
   }

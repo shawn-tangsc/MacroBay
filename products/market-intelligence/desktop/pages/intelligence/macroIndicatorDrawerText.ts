@@ -94,6 +94,8 @@ export const macroIndicatorDrawerText = {
       observed: '观测 {time}',
       beforeRelease: '（发布前）',
       expectedAllMissing: '本期暂无预期（盘未开）',
+      /* 还没读完 ≠ 没盘：这一档只在读数还在路上时用，读完就换成值或「暂无预期」。 */
+      loading: '预期读取中',
       stateMarket: '有盘',
       stateProvider: '有预期',
       stateNoSchedule: '暂无排期'
@@ -223,6 +225,8 @@ export const macroIndicatorDrawerText = {
       observed: 'observed {time}',
       beforeRelease: '(before release)',
       expectedAllMissing: 'No expectation for this period (market not open)',
+      /* Not yet read ≠ no market: only while the read is in flight. */
+      loading: 'Reading expectations',
       stateMarket: 'Market open',
       stateProvider: 'Data provider',
       stateNoSchedule: 'No schedule'

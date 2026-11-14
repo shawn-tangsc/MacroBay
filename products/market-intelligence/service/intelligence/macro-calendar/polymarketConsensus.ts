@@ -20,7 +20,9 @@ export const polymarketConsensusPolicy = Object.freeze({
   slugTemplateByMetricKey: Object.freeze({
     'US.CPI.NSA.YOY': '{month}-inflation-us-annual',
     'US.CORE_CPI.NSA.YOY': 'core-cpi-yoy-{month}-{year}',
-    'US.CORE_PCE.NSA.YOY': 'core-pce-yoy-{month}-{year}',
+    // PCE 年率那张卡读**季调**码（BEA 的公布口径就是季调；未季调两条今天无源、不进日历）。
+    // 这张表按码建，换码时必须同笔搬过来——漏了就是「市场开着、我们没去查」，卡上却写「盘未开」。
+    'US.CORE_PCE.SA.YOY': 'core-pce-yoy-{month}-{year}',
     'US.NONFARM.SA.CHANGE': 'how-many-jobs-added-in-{month}-{year}'
   } as const),
   /**

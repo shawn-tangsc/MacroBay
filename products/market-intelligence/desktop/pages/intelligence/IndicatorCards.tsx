@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 
@@ -170,11 +171,20 @@ function NextCard(input: CardInput): React.ReactElement {
   const tag = next === undefined ? undefined : countdownTag(next, text, now, timeZone)
   const loaded = input.facts !== undefined
   const rows = group.rows.map((row) => ({ row, fact: byKey.get(row.metricKey) }))
+  // 三种「这一格没有数」**不许互相冒充**：
+  // - 还没读完（`facts` 缺席）→ 什么都不写；
+  // - 整次读取失败 → 「暂时读不到」；
+  // - 读到了、这一期确实没盘 → 「本期暂无预期（盘未开）」。
+  // 之前四行全缺一律写成最后那句，于是读失败也显示「盘未开」——市场开着，卡说没开。
+  const unreadable = input.unreadable === true
   const missing = rows.filter((entry) => entry.fact?.next?.expected === undefined).length
   // 四行全都没有预期：只剩一句「本期暂无预期（盘未开）」——写「另 4 项」会暗示还有别的内容。
   // 一到三行缺：逐行写「暂无预期」，不折叠（折叠会把「少数有值」也一起藏掉）。
+  // 但只要有哪一格的**原因是读不到**，就逐行画：那一格要写「暂时读不到」，不能被一句「盘未开」盖住。
+  const unreadableRows = rows.filter((entry) => entry.fact?.next?.expectedState === 'unreadable').length
   const allMissing = missing === rows.length
-  const shown = allMissing ? [] : rows
+  const collapse = allMissing && unreadableRows === 0 && !unreadable
+  const shown = collapse ? [] : rows
   const market = rows.some((entry) => entry.fact?.next?.expected?.provenance === 'market-implied')
   const volume = rows.map((entry) => entry.fact?.next?.expected?.marketVolume).find((entry) => entry !== undefined)
   const observedAt = rows.map((entry) => entry.fact?.next?.expected?.asOf)
@@ -195,22 +205,26 @@ function NextCard(input: CardInput): React.ReactElement {
             : text.cardFace.whenNext.replace('{period}', next.period)
               .replace('{date}', calendarDisplayDate(next.releaseAt, timeZone).slice(5))}
       </div>
-      {allMissing
-        // 整页只剩一句话：它在卡片里水平+垂直居中，否则贴着左上角，看着像没加载完。
-        ? <div className="mk-card__empty">{text.cardFace.expectedAllMissing}</div>
-        : <div className="mk-rows">
-          {shown.map((entry) => (
-            <div className="mk-vrow" key={entry.row.metricKey}>
-              <dt>{entry.row.label}</dt>
-              <dd {...(entry.fact?.next?.expected === undefined ? { 'data-na': 'true' } : {})}>
-                {expectedValueText(entry.fact, entry.row, text)}
-              </dd>
-              <span className="mk-chipwrap" />
-            </div>
-          ))}
-        </div>}
+      {unreadable
+        ? <div className="mk-card__empty">{text.cardStates.unreadable}</div>
+        : !loaded
+          ? <div className="mk-card__empty"><LoadingState label={text.cardFace.loading} minHeight={0} /></div>
+          : collapse
+            // 整页只剩一句话：它在卡片里水平+垂直居中，否则贴着左上角，看着像没加载完。
+            ? <div className="mk-card__empty">{text.cardFace.expectedAllMissing}</div>
+            : <div className="mk-rows">
+              {shown.map((entry) => (
+                <div className="mk-vrow" key={entry.row.metricKey}>
+                  <dt>{entry.row.label}</dt>
+                  <dd {...(entry.fact?.next?.expected === undefined ? { 'data-na': 'true' } : {})}>
+                    {expectedValueText(entry.fact, entry.row, text)}
+                  </dd>
+                  <span className="mk-chipwrap" />
+                </div>
+              ))}
+            </div>}
       <div className="mk-card__foot">
-        {allMissing
+        {collapse || unreadable || !loaded
           ? null
           : <span>{stateLine({ rows, text, timeZone, market, volume, observedAt })}</span>}
       </div>
@@ -218,9 +232,11 @@ function NextCard(input: CardInput): React.ReactElement {
   )
 }
 
-/** 右卡一整行的文字：有预期写值（盘口那档带「约」），没有就是「暂无预期」。 */
+/** 右卡一整行的文字：有预期写值（盘口那档带「约」），读不到写「暂时读不到」，确实没盘才写「暂无预期」。 */
 function expectedValueText(fact: MacroIndicatorCardFact | undefined, row: IndicatorRow, text: MacroIndicatorDrawerText): string {
   const expected = fact?.next?.expected
+  // 「读失败 / 盘在但成交量读不出」不属于「这一期没有盘」：两者画成同一句，读者分不出该不该等。
+  if (expected === undefined && fact?.next?.expectedState === 'unreadable') return text.cardStates.unreadable
   if (expected === undefined) return text.cardFace.expectedMissing
   return expected.provenance === 'market-implied'
     ? text.cardFace.approx.replace('{value}', formatValue(expected.value, row.kind))

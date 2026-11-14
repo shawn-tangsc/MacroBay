@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseBucketBounds, polymarketPeriodToken, readPolymarketConsensus } from './polymarketConsensus'
+import { parseBucketBounds, polymarketPeriodToken, polymarketSlugFor, readPolymarketConsensus } from './polymarketConsensus'
 
 /**
  * 2026-11-14 真盘口（裁到用得到的那几个字段）。取数方式是**按 slug 直接查**
@@ -28,7 +28,7 @@ const fetchText = (payloads: readonly string[]) => {
 describe('readPolymarketConsensus', () => {
   it('reverse-engineers 3.2% and carries the volume and observation time', async () => {
     const reading = await readPolymarketConsensus({
-      metricKey: 'US.CORE_PCE.NSA.YOY', period: '2026-10', releaseAt, asOf: beforeRelease,
+      metricKey: 'US.CORE_PCE.SA.YOY', period: '2026-10', releaseAt, asOf: beforeRelease,
       fetchText: fetchText([detailPayload])
     })
     expect(reading).toEqual({ state: 'ok', value: 3.2, marketVolume: 33213.499325, asOf: beforeRelease, provenance: 'market-implied' })
@@ -51,7 +51,7 @@ describe('readPolymarketConsensus', () => {
   /** 判红一：有盘却显示「暂无」——期间对不上时也不许拿别的期次凑。 */
   it('does not borrow another period when the exact period has no market', async () => {
     const reading = await readPolymarketConsensus({
-      metricKey: 'US.CORE_PCE.NSA.YOY', period: '2026-11', releaseAt, asOf: beforeRelease,
+      metricKey: 'US.CORE_PCE.SA.YOY', period: '2026-11', releaseAt, asOf: beforeRelease,
       fetchText: fetchText([emptyPayload])
     })
     expect(reading).toEqual({ state: 'unavailable', reason: 'no-market' })
@@ -60,7 +60,7 @@ describe('readPolymarketConsensus', () => {
   /** 判红二：发布之后不取盘（那时价格是结果，不是预期）。 */
   it('refuses a market read taken at or after the release', async () => {
     const reading = await readPolymarketConsensus({
-      metricKey: 'US.CORE_PCE.NSA.YOY', period: '2026-10', releaseAt, asOf: '2026-11-26T00:00:00.000Z',
+      metricKey: 'US.CORE_PCE.SA.YOY', period: '2026-10', releaseAt, asOf: '2026-11-26T00:00:00.000Z',
       fetchText: fetchText([detailPayload])
     })
     expect(reading).toEqual({ state: 'unavailable', reason: 'after-release' })
@@ -68,10 +68,26 @@ describe('readPolymarketConsensus', () => {
 
   it('says unavailable when the fetch fails, instead of inventing a number', async () => {
     const reading = await readPolymarketConsensus({
-      metricKey: 'US.CORE_PCE.NSA.YOY', period: '2026-10', releaseAt, asOf: beforeRelease,
+      metricKey: 'US.CORE_PCE.SA.YOY', period: '2026-10', releaseAt, asOf: beforeRelease,
       fetchText: async () => { throw new Error('network') }
     })
     expect(reading).toEqual({ state: 'unavailable', reason: 'read-failed' })
+  })
+})
+
+describe('盘口是**按码建的表**，换码必须同笔搬', () => {
+  /**
+   * 用户 2026-11-14 报「三张卡又全空了」的真因：PCE 卡换成了季调码，而 slug 模板表还写着未季调码——
+   * `polymarketSlugFor` 返回 undefined，直接判成 `no-market`，卡上写「盘未开」，可市场一直开着。
+   * 这条用例钉住：**卡片真正读的那个码**必须拼得出 slug。
+   */
+  it('builds the core-PCE slug from the code the card actually reads', () => {
+    expect(polymarketSlugFor('US.CORE_PCE.SA.YOY', '2026-10')).toBe('core-pce-yoy-october-2026')
+  })
+
+  it('returns undefined for a code with no template instead of guessing a slug', () => {
+    // 瞎猜一个 slug 会去查一个不存在的盘，而那个查询看起来完全正常。
+    expect(polymarketSlugFor('US.PCE.SA.MOM', '2026-10')).toBeUndefined()
   })
 })
 
