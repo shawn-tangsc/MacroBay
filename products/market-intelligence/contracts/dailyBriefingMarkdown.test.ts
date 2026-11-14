@@ -524,3 +524,24 @@ describe('the copied text carries the whole title', () => {
     expect(markdown).not.toContain(`${long.slice(0, 40)}…`)
   })
 })
+
+describe('the copied text carries the same two blocks as the page', () => {
+  it('prints the window total, the unshown count, the unjudged sentence and the schedule', () => {
+    const base = document()
+    const withWindow = {
+      ...base,
+      news: { ...base.news, macro: [], notes: { ...base.news.notes, macroWindow: { total: 7, indicators: 1, centralBank: 5, financial: 1, hidden: 4 } } },
+      next: {
+        items: [],
+        note: 'next-7d-importance-unknown',
+        tier1Upcoming: [{ metricKey: 'US.CPI.NSA.YOY', title: 'CPI 年率', scheduledAt: '2026-12-10T00:00:00.000Z', releaseDate: '2026-12-10' }]
+      }
+    } as never
+    const text = dailyBriefingToMarkdown(withWindow, options as never)
+    expect(text).toContain('7')
+    expect(text).toContain('4')
+    expect(text).toContain('无法判定')
+    expect(text).toContain('一级指标排期')
+    expect(text).toContain('2026-12-10')
+  })
+})

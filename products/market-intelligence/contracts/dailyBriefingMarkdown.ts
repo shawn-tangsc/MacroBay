@@ -56,6 +56,10 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   newsEmptyCodes: Readonly<Record<string, string>>
   macroEmptyCodes: Readonly<Record<string, string>>
   nextEmptyCodes: Readonly<Record<string, string>>
+  /** 过去 24 小时的总数与构成、另有几条、以及「这段时间没有已收录的发布」（用户 2026-11-14）。 */
+  pastWindow: Readonly<{ counts: string; others: string; emptyCollected: string }>
+  /** 未来 7 天判不了重要性时的排期小标题。 */
+  nextImportanceUnknown: Readonly<{ scheduleTitle: string }>
   macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>>; timeNotPublished: string }>
   /** 网页取到的值的来源后缀（`02` v2.128）：正文/导出/复制三处同一份。 */
   macroWebValue: string
@@ -108,10 +112,25 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
 
   const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')
   const visibleMacro = document.news.macro.filter((item) => item.visibility !== 'hidden')
-  if (visibleNews.length > 0 || visibleMacro.length > 0) {
+  const macroWindow = document.news.notes.macroWindow
+  if (visibleNews.length > 0 || visibleMacro.length > 0 || (macroWindow !== undefined && macroWindow.total === 0)) {
     lines.push('', `## ${labels.sections.news}`)
     for (const item of visibleNews) lines.push('', newsLine(item, options))
+    // 总数与构成先于明细：明细只摆三条，这个数说的是那段时间到底有多少事（产品 2026-11-14）。
+    if (macroWindow !== undefined && macroWindow.total > 0) {
+      lines.push('', labels.pastWindow.counts
+        .replace('{total}', String(macroWindow.total))
+        .replace('{indicators}', String(macroWindow.indicators))
+        .replace('{centralBank}', String(macroWindow.centralBank))
+        .replace('{financial}', String(macroWindow.financial)))
+    }
     for (const item of visibleMacro) lines.push('', macroLine(item, options))
+    if (macroWindow !== undefined && macroWindow.hidden > 0) {
+      lines.push('', labels.pastWindow.others.replace('{count}', String(macroWindow.hidden)))
+    }
+    if (visibleMacro.length === 0 && macroWindow !== undefined && macroWindow.total === 0) {
+      lines.push('', labels.pastWindow.emptyCollected)
+    }
   }
 
   const rows = briefingDataRows(document)
@@ -161,9 +180,20 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   }
 
   const nextItems = [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
-  if (nextItems.length > 0) {
+  const tier1Upcoming = document.next.tier1Upcoming ?? []
+  // 只有「判不了重要性」这一档要在这一栏开口说话（产品 2026-11-14）：别的空态沿旧行为不印。
+  const unjudged = document.next.note === 'next-7d-importance-unknown'
+  if (nextItems.length > 0 || tier1Upcoming.length > 0 || unjudged) {
     lines.push('', `## ${labels.sections.next}`)
     for (const item of nextItems) lines.push(nextLine(item, options))
+    // 判不了重要性时：主句 + 一级指标排期（**不是高影响事件**，是我们自己的清单）。
+    if (nextItems.length === 0 && unjudged) lines.push('', nextEmpty(document, labels))
+    if (tier1Upcoming.length > 0) {
+      lines.push('', `### ${labels.nextImportanceUnknown.scheduleTitle}`)
+      for (const release of tier1Upcoming) {
+        lines.push(`- ${release.releaseDate} **${options.eventTitle ? options.eventTitle({ title: release.title, titleKey: release.metricKey } as never) : release.title}**`)
+      }
+    }
   }
 
   lines.push('', '---')
