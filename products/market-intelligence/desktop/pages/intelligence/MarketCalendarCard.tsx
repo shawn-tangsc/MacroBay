@@ -42,6 +42,11 @@ export type MarketCalendarCardText = Readonly<{
   reactionHint: string
   openCalendar: string; importanceHigh: string; timePending: string; copyEvent: string; openEventInCalendar: string
   /**
+   * 名单之外、来源没给重要性的事件数（`{count}`）。不列入不等于不存在——
+   * 这行小字让读者知道名单不是全部，和日历格子「未标级只进数字」是同一条规矩。
+   */
+  unscoredCount: string
+  /**
    * 预期差的四种语态。`unavailable` 是「没有一致预期」，`notComparable` 是「有预期但算不出量」；
    * 两者都不得出现任何数字当差值。
    */
@@ -283,6 +288,13 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
             <p className="mi-calendar-card__section">{text.upcomingSection}</p>
             <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
           </> : null}
+          {/* 名单之外还有事件、只是来源没给重要性：不列入，但**不许看起来像不存在**。
+              一行小字、不占条数；为 0 时整行不画（不写「另有 0 条」）。 */}
+          {state === 'ready' && projection.unscoredCount > 0
+            ? <p className="mi-calendar-card__state" data-calendar-card-unscored>
+              {text.unscoredCount.replace('{count}', String(projection.unscoredCount))}
+            </p>
+            : null}
         </div>
         {veil === undefined ? null : <div className="mi-source-veil" data-state={veil}>
           <p className="mi-source-state" data-state={veil}>

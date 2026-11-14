@@ -59,7 +59,7 @@ async function readEnabledCalendarSources(): Promise<Readonly<{ all: readonly st
 }
 
 /** No rows yet. `empty` is the projection's own word for "read, nothing in the window". */
-const emptyProjection: CalendarCardProjection = { today: [], upcoming: [], state: 'empty' }
+const emptyProjection: CalendarCardProjection = { today: [], upcoming: [], unscoredCount: 0, state: 'empty' }
 
 /**
  * What the card is doing, as three states.

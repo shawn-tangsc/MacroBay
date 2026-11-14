@@ -183,8 +183,39 @@ it('stops at the target when the nearest hour already fills it', () => {
 })
 
 it('stays empty and quiet for no events at all', () => {
-  expect(projectUpcomingCalendarCard([], asOf)).toEqual({ today: [], upcoming: [], state: 'empty' })
-  expect(projectUpcomingCalendarCard([event({ importance: 'low' })], asOf).state).toBe('empty')
+  expect(projectUpcomingCalendarCard([], asOf)).toEqual({ today: [], upcoming: [], unscoredCount: 0, state: 'empty' })
+  // 评为 low 的行是「已判定」的，不是「未标级」：它既不列入，也不进那个数。
+  expect(projectUpcomingCalendarCard([event({ importance: 'low' })], asOf))
+    .toMatchObject({ unscoredCount: 0, state: 'empty' })
+})
+
+/**
+ * Chief 2026-11-14：名单之外还有事件、只是来源没给重要性，**不许看起来像不存在**。
+ * 这条同时钉两件事：那个数只数未标级的、名单只收已评为高的，两者不重叠——
+ * 「名单 2 条 + 未标级 3 条 = 窗口内 5 条，逐条不重复」。
+ */
+it('counts the unscored events the list left out, without double-counting any event', () => {
+  const scored = [
+    event({ eventKey: 'a', importance: 'high', scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T00:00:00.000Z' }),
+    event({ eventKey: 'b', importance: 'high', scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T00:00:00.000Z' })
+  ]
+  const unscored = [0, 1, 2].map((index) => event({
+    eventKey: `u${index}`, importance: undefined,
+    scheduledDate: `2026-10-1${5 + index}`, scheduledAt: `2026-10-1${5 + index}T00:00:00.000Z`
+  }))
+  const result = projectUpcomingCalendarCard([...scored, ...unscored], asOf)
+  expect(result.upcoming.map(row => row.eventKey)).toEqual(['a', 'b'])
+  expect(result.unscoredCount).toBe(3)
+  // 逐条不重复：名单里的键与「未标级」那批没有交集；两边相加 = 窗口里全部 5 条。
+  const listed = new Set(result.upcoming.map(row => row.eventKey))
+  expect(unscored.filter(item => listed.has(item.eventKey))).toEqual([])
+  expect(result.upcoming.length + result.unscoredCount).toBe(scored.length + unscored.length)
+})
+
+/** 只有未标级事件时，卡片不能报「没有值得关注的事件」——那会把「判不出」画成「什么都没有」。 */
+it('is not empty when every event in the window is unscored', () => {
+  const unscored = event({ eventKey: 'u', importance: undefined, scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T00:00:00.000Z' })
+  expect(projectUpcomingCalendarCard([unscored], asOf)).toMatchObject({ upcoming: [], unscoredCount: 1, state: 'available' })
 })
 
 it('marks the row that is past its time without a value, and only that row', () => {

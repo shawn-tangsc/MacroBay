@@ -85,7 +85,19 @@ export type CalendarCardSurprise = Readonly<{
   unit: 'pp' | 'relative-percent' | null
   reason: MarketCalendarSurpriseReason | null
 }>
-export type CalendarCardProjection = Readonly<{ today: readonly CalendarCardRow[]; upcoming: readonly CalendarCardRow[]; state: CalendarCardState }>
+export type CalendarCardProjection = Readonly<{
+  today: readonly CalendarCardRow[]
+  upcoming: readonly CalendarCardRow[]
+  /**
+   * 窗口内**来源没给重要性**因而没能进名单的事件数（Chief 2026-11-14 定）。
+   *
+   * 不列入并不等于不存在：这个数就是「被筛掉的那些还在」，和日历格子「未标级只进数字」同一条规矩。
+   * 只数 upcoming 那条窗口（这张卡列的「值得关注」就是这 7 天）；名单只含已评为高的行，
+   * 两者天然不重叠——用例按「名单条数 + 这个数 = 窗口内全部事件」断言。
+   */
+  unscoredCount: number
+  state: CalendarCardState
+}>
 
 /** The instant an event happens at, for ordering and for the window test. */
 function instantOf(event: CalendarCardEvent): string {
@@ -192,8 +204,7 @@ export function projectUpcomingCalendarCard(
 ): CalendarCardProjection {
   /* **「判不出」不许当成「最高一档」**：这张卡的契约是「只列最高一档」（`visibleImportance: ['high']`），
      把来源没给重要性的行塞进来，等于把「不知道」冒充成「重要」——今天库里那 172 条数据商行会立刻占满它。
-     未知既不列入、也不该被当成「什么都没有」：卡上要不要另起一句「另有 N 条未标级」，
-     那是可见文案的口径（Chief 未定），这里不自己发明。 */
+     但也不能让它们静默消失：下面单独数出来，卡上写「另有 N 条未标级」，读者才知道名单之外还有东西。 */
   const topImportance = events.filter(event =>
     event.importance !== undefined && policy.visibleImportance.includes(event.importance))
   const candidates = topImportance
@@ -206,5 +217,15 @@ export function projectUpcomingCalendarCard(
     .sort((left, right) => instantOf(right).localeCompare(instantOf(left)) || left.eventKey.localeCompare(right.eventKey))
     .slice(0, policy.maximumTodayRows)
     .map(event => toRow(event, 'released-changed', asOf))
-  return { today, upcoming, state: today.length > 0 || upcoming.length > 0 ? 'available' : 'empty' }
+  /* 「另有 N 条未标级」：与名单同一个窗口、`importance` 未提供的事件，**不讲类型、不只算指标**。
+     名单那侧只收已评为高的行，所以两者天然不重叠——用例断言「名单 + 这个数 = 窗口内全部事件」。 */
+  const unscoredCount = events.filter(event =>
+    event.importance === undefined
+    && event.lifecycleState === 'scheduled'
+    && withinWindow(event, asOf, policy)).length
+  return {
+    today, upcoming, unscoredCount,
+    // 只有未标级事件时也不能报「没有值得关注的事件」：那会把「判不出」画成「什么都没有」。
+    state: today.length > 0 || upcoming.length > 0 || unscoredCount > 0 ? 'available' : 'empty'
+  }
 }
