@@ -52,7 +52,8 @@ export function useBriefingEditionReader(input: Readonly<{
     }
     // 请求与返回各打一行（用户 2026-11-14：所有版本一起读不到，而链路上一个字都没有）：
     // **按哪个三元组请的、回来的是什么状态、有没有失败码**。同一组身份只打一次，避免刷屏。
-    const diagnosticKey = `${date}|${options.periodId ?? 'default'}|${target}`
+    const from = options.fresh === true ? 'reload' : 'openEdition'
+    const diagnosticKey = `${date}|${options.periodId ?? 'default'}|${target}|${from}`
     if (!reportedReads.has(diagnosticKey)) {
       reportedReads.add(diagnosticKey)
       console.info(`[daily-briefing] reading edition ${JSON.stringify({ date, periodId: options.periodId ?? 'default', locale: target, fresh: options.fresh === true })}`)
@@ -69,6 +70,7 @@ export function useBriefingEditionReader(input: Readonly<{
       reportedResults.add(`${diagnosticKey}|${result?.state ?? 'threw'}`)
       console.info(`[daily-briefing] edition read answered ${JSON.stringify({
         date, periodId: options.periodId ?? 'default', locale: target,
+        from,
         state: result?.state ?? 'threw',
         failureCode: (result as { failureCode?: string } | undefined)?.failureCode ?? null
       })}`)
@@ -102,9 +104,13 @@ export function useBriefingEditionReader(input: Readonly<{
       setView({ status: 'locale-missing', locale: target, date, ...(date !== todayDate ? { historical: true } : {}) })
       return
     }
-    if (row.state === 'missing') {
-      setView({ status: 'no-edition', date, failed: Boolean(row.attemptCount) })
-      if (!row.attemptCount) return
+    // 「这一版有没有」只认语言级（架构师 2026-11-14）：行级 `state` 取的是 primary 语言那份文档，
+    // 与「这一语言发布过没有」可以不一致；用行级去拦，有正文时也会一次读取都不发。
+    const languageState = row.languages?.find((entry) => entry.locale === target)?.state
+    if (row.state === 'missing' && languageState !== 'published') {
+      setView({ status: 'no-edition', date, failed: row.attemptCount !== undefined && row.attemptCount > 0 })
+      // 可选字段不能当 0 用：缺席＝不知道试过几次，不是"试过 0 次"；只有明确 0 次才不读。
+      if (row.attemptCount === 0) return
     }
     setView((current) => current.status === 'no-edition' && current.date === date ? current : { status: 'loading' })
     void readEdition(date, target, { ...(periodId ? { periodId } : {}) })

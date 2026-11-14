@@ -192,7 +192,9 @@ function generationTraceFixture(state: 'success' | 'failed', failed?: string, fa
 const editions: readonly DailyBriefingEditionSummary[] = Array.from({ length: 14 }, (_, index) => {
   const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10)
   return date === '2026-10-28'
-    ? { date, periodId: 'default', locale: 'zh-CN', availableLocales: [], state: 'missing' }
+    // `attemptCount: 0` 是**明确的「一次都没试过」**：这类日子不需要去读（架构师 2026-11-14：
+    // 可选字段缺席＝不知道试过几次，不等于 0；不写这个数就会多发一次读取）。
+    ? { date, periodId: 'default', locale: 'zh-CN', availableLocales: [], state: 'missing', attemptCount: 0 }
     : { date, periodId: 'default', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated', generatedAt: `${date}T00:30:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, readingsAvailable: 4 }
 })
 
