@@ -21,6 +21,13 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
   fetchImpl: typeof fetch
   /** 凭据读取：与调度器同一条判据，装配处不要另判一套。 */
   getCredential: (credentialRef: string) => Promise<Readonly<{ apiKey?: string }> | null>
+  /**
+   * 诊断日志（默认 `console.warn`）。**「读不到凭据」与「没有凭据」是两件事**：
+   * 后者是读者的选择、安静；前者是故障，必须留下一条能查到原因的记录。
+   */
+  log?: (event: 'credential-unreadable' | 'credential-absent' | 'schedule-recovered', detail?: string) => void
+  /** 启动后重试排期的间隔与次数（测试可注入小值）。 */
+  retryPolicy?: Readonly<{ intervalMs: number; attempts: number }>
   now: () => number
   sleep?: (milliseconds: number) => Promise<void>
   countries?: readonly string[]
@@ -38,15 +45,61 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
 }>) {
   // 读到的密钥只活在这个闭包里：`hasCredential()` 用它判注册，`request` 用它发请求。
   let apiKey: string | undefined
+  /** 凭据读取的**结论**：`absent`（读者没配）与 `unreadable`（读失败）必须分开。 */
+  let credentialState: 'unknown' | 'ready' | 'absent' | 'unreadable' = 'unknown'
+  const log = deps.log ?? ((event, detail) => console.warn(`[macro-calendar] narwhal ${event}${detail === undefined ? '' : `: ${detail}`}`))
 
   async function loadCredential(): Promise<void> {
     try {
       const credential = await deps.getCredential(narwhalCalendarCredentialRef)
-      apiKey = credential?.apiKey === undefined || credential.apiKey === '' ? undefined : credential.apiKey
-    } catch {
-      // 读不到凭据 ≠ 没有凭据：这里与「作业不注册」同一条处理，别把异常当成密钥错误。
+      const key = credential?.apiKey
+      apiKey = key === undefined || key === '' ? undefined : key
+      credentialState = apiKey === undefined ? 'absent' : 'ready'
+    } catch (error) {
+      // 读不到凭据 ≠ 没有凭据：作业同样不注册（fail-closed），但**必须留下原因**，
+      // 而且要能被启动后的重试重新排上——否则一次早到的读失败会把采集静默停掉一整轮。
       apiKey = undefined
+      credentialState = 'unreadable'
+      log('credential-unreadable', error instanceof Error ? error.message : undefined)
     }
+  }
+
+  const retryPolicy = deps.retryPolicy ?? { intervalMs: 5_000, attempts: 6 }
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  let retryAttempts = 0
+  /** 启动后因为没凭据而没排上过：恢复时要记一条，读者/排障才知道「它自己回来了」。 */
+  let startedWithoutSchedule = false
+
+  /**
+   * 凭据/开关晚到之后的自愈：再读一次凭据与档案，然后重新对账排期。
+   * 成功排上就停；用尽次数后把「没有凭据」与「读不到凭据」分别记一条，不留空白。
+   */
+  async function retryScheduling(): Promise<void> {
+    await loadCredential()
+    await refreshGate()
+    scheduler.syncSchedule()
+    if (apiKey !== undefined) {
+      if (startedWithoutSchedule) log('schedule-recovered')
+      startedWithoutSchedule = false
+      retryAttempts = 0
+      return
+    }
+    retryAttempts += 1
+    if (retryAttempts >= retryPolicy.attempts) {
+      if (credentialState === 'absent') log('credential-absent')
+      retryAttempts = 0
+      return
+    }
+    retryTimer = setTimeout(() => { void retryScheduling() }, retryPolicy.intervalMs)
+    retryTimer.unref?.()
+  }
+
+  function startRetryIfNeeded(): void {
+    if (apiKey !== undefined || retryTimer !== undefined) return
+    retryAttempts = 0
+    startedWithoutSchedule = true
+    retryTimer = setTimeout(() => { void retryScheduling() }, retryPolicy.intervalMs)
+    retryTimer.unref?.()
   }
 
   const request: NarwhalRequest = async ({ url, headers }) => {
@@ -113,6 +166,9 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
       await loadCredential()
       await refreshGate()
       scheduler.initialize()
+      // 启动那一刻凭据可能还没就绪（存储没装好、或这次读失败）：先 fail-closed 不排，
+      // 再自己回来重试——不能指望「下一次重启」或读者的手动保存来救。
+      startRetryIfNeeded()
     },
     /** 凭据/开关变化后重新对账；凭据变化要重新读一次。 */
     async syncSchedule(): Promise<void> {
@@ -120,7 +176,19 @@ export function createNarwhalCalendarAssembly(deps: Readonly<{
       await refreshGate()
       scheduler.syncSchedule()
     },
-    dispose(): void { scheduler.dispose() },
+    dispose(): void {
+      if (retryTimer !== undefined) clearTimeout(retryTimer)
+      retryTimer = undefined
+      scheduler.dispose()
+    },
+    /** 测试与「凭据保存后」的显式入口：读一次凭据再对账（不清定时器，重试会自己停）。 */
+    async reconcile(): Promise<void> {
+      await loadCredential()
+      await refreshGate()
+      scheduler.syncSchedule()
+    },
+    /** 只读：凭据读取的结论（`absent` 与 `unreadable` 分开），供状态面与用例断言。 */
+    credentialState(): 'unknown' | 'ready' | 'absent' | 'unreadable' { return credentialState },
     runtime
   })
 }
