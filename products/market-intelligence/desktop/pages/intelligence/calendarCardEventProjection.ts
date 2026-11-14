@@ -14,7 +14,7 @@ import type { CalendarCardEvent } from './projectUpcomingCalendarCard'
 
 /** An official event, which owns its lifecycle; mapped only to the card's field names. */
 export function toCardEventFromOfficial(view: Readonly<{
-  eventKey: string; titleKey: string; importance: 'high' | 'medium' | 'low'
+  eventKey: string; titleKey: string; importance?: 'high' | 'medium' | 'low'
   /** 三个官方腿的 `sourceId`；卡片按来源启停过滤时用。 */
   providerIds?: readonly string[]
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
@@ -36,7 +36,7 @@ export function toCardEventFromOfficial(view: Readonly<{
 
 /** A 0xRouter event, whose lifecycle this module derives. */
 export function toCardEventFromProvider(view: Readonly<{
-  eventKey: string; title: string; importance: 'high' | 'medium' | 'low'
+  eventKey: string; title: string; importance?: 'high' | 'medium' | 'low'
   eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   countryName?: string | null
   scheduledAt: string; sourceObservedAt: string

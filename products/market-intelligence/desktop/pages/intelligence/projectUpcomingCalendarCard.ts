@@ -30,7 +30,8 @@ export type CalendarCardEvent = Readonly<{
   titleKey: string
   /** The 0xRouter route's country for this event, already localised; absent on the official route. */
   countryName?: string
-  importance: CalendarCardImportance
+  /** 可缺省：来源没给就没有值（缺省 ≠ 低重要度）。 */
+  importance?: CalendarCardImportance
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
   category: CalendarCardCategory
   scheduledDate: string
@@ -50,7 +51,8 @@ export type CalendarCardRow = Readonly<{
   /** `scheduledDate`, so a date-only event can still show when it is. */
   date: string
   at: string | null
-  importance: CalendarCardImportance
+  /** 可缺省：来源没给就没有值（缺省 ≠ 低重要度）。 */
+  importance?: CalendarCardImportance
   category: CalendarCardCategory
   kind: 'upcoming' | 'released-changed'
   /** 计划时刻已过、值还没到：卡片在这一行上说明它在等，而不是让读者以为什么都没发生。 */
@@ -188,7 +190,12 @@ export function projectUpcomingCalendarCard(
   asOf: string,
   policy: typeof calendarUpcomingPolicy = calendarUpcomingPolicy
 ): CalendarCardProjection {
-  const topImportance = events.filter(event => policy.visibleImportance.includes(event.importance))
+  /* **「判不出」不许当成「最高一档」**：这张卡的契约是「只列最高一档」（`visibleImportance: ['high']`），
+     把来源没给重要性的行塞进来，等于把「不知道」冒充成「重要」——今天库里那 172 条数据商行会立刻占满它。
+     未知既不列入、也不该被当成「什么都没有」：卡上要不要另起一句「另有 N 条未标级」，
+     那是可见文案的口径（Chief 未定），这里不自己发明。 */
+  const topImportance = events.filter(event =>
+    event.importance !== undefined && policy.visibleImportance.includes(event.importance))
   const candidates = topImportance
     .filter(event => event.lifecycleState === 'scheduled' && withinWindow(event, asOf, policy))
     .sort((left, right) => instantOf(left).localeCompare(instantOf(right)) || left.eventKey.localeCompare(right.eventKey))

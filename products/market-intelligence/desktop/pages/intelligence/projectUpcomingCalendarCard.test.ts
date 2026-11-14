@@ -80,6 +80,17 @@ it('lists high importance only, never a lower tier, released or cancelled event'
     .toEqual(['high'])
 })
 
+/**
+ * 来源没给重要性（`undefined`）时**不算最高一档**：把「判不出」列进这张「值得关注」的短名单，
+ * 等于把推测冒充成重要——库里那 172 条数据商行会立刻占满它。
+ * 去掉 `importance !== undefined` 这个判据（改成 `undefined || …`）这条即红。
+ */
+it('does not list an event just because its importance is unknown', () => {
+  const unknown = event({ eventKey: 'unknown', importance: undefined, scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T00:00:00.000Z' })
+  const high = event({ eventKey: 'high', importance: 'high', scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T00:00:00.000Z' })
+  expect(projectUpcomingCalendarCard([unknown, high], asOf).upcoming.map(row => row.eventKey)).toEqual(['high'])
+})
+
 it('lists recently released values that actually moved', () => {
   const moved = event({ eventKey: 'moved', lifecycleState: 'released', scheduledDate: '2026-10-11',
     scheduledAt: '2026-10-11T06:00:00.000Z', actual: { displayValue: '3.2%' }, previous: { displayValue: '3.1%' } })
