@@ -35,6 +35,12 @@ export type StandardMonthRow = Readonly<{
   observedAt: string
   /** 值：键是 `actual` / `previous` / `consensus`；空对象＝没有值。 */
   values: Readonly<Record<string, string>>
+  /**
+   * 源给的重要性；**没有就是没有**（不出现在这个对象里）。标准表这一列本来可空——
+   * 早先读侧拿不到它，就在适配器里写了 `medium` 顶，结果官方那 51 行 high 全被压成 medium，
+   * 读者看到的「没有高影响事件」一半是这个压出来的。
+   */
+  importance?: 'high' | 'medium' | 'low'
 }>
 
 const monthBounds = (month: string): Readonly<{ start: string; endExclusive: string }> => {
@@ -55,7 +61,7 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ? calendarStandardTablePolicy.eventsTable
     : calendarStandardTablePolicy.releasesView
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
-    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label,
+    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, importance,
     source_provider_id, source_event_id, observed_at, values_json
     from ${source}
     where scheduled_date >= ? and scheduled_date < ?
@@ -75,7 +81,10 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ...(row.source_label === null ? {} : { sourceLabel: String(row.source_label) }),
     sourceProviderId: String(row.source_provider_id), sourceEventId: String(row.source_event_id),
     observedAt: String(row.observed_at),
-    values: JSON.parse(String(row.values_json)) as Record<string, string>
+    values: JSON.parse(String(row.values_json)) as Record<string, string>,
+    // 源给的重要性；**没有就不出这个字段**（不拿 medium 顶，那等于替源下判断）。
+    ...(row.importance === null || row.importance === undefined ? {}
+      : { importance: String(row.importance) as 'high' | 'medium' | 'low' })
   }))
 }
 

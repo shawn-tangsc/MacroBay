@@ -70,8 +70,9 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     countryCode: row.countryCode,
     ...(row.identityKind === 'code' ? { eventNameKey: row.metricKey } : {}),
     eventType: eventTypeOf(row),
-    // 标准表没有重要性列：先给 `medium`，等表补上再读（不按数值猜）。
-    importance: 'medium',
+    // 读行里那一列：官方行本来就是 high。行上没有值（源没提供）就先不出这个字段——
+    // 契约把 `importance` 改成可缺省之后，读者看到的就是「未提供」；在此之前调用方会看到 undefined。
+    ...(row.importance === undefined ? {} : { importance: row.importance }),
     scheduledAt: row.scheduledAt ?? `${row.scheduledDate}T00:00:00.000Z`,
     consensus: value('consensus'), providerPrevious: value('previous'), providerActual: value('actual'),
     // **feed id 优先**：它来自写入时定下的真值；认不出时才回退到装配处给的两档旧值。

@@ -120,6 +120,14 @@ type BackfillSourceProfile = Readonly<{
   hasValues: (row: ObservationRow) => boolean
   /** 旧源只补历史：同一身份已经被别的来源写过就不覆盖。 */
   skipIdentitiesOwnedByOthers: boolean
+  /**
+   * 观测表里那一列 `importance` 是不是**事实**。
+   *
+   * 观测表的这一列是 `not null`，Narwhal 那侧没有重要性字段，写入时只能填一个占位值——
+   * 它不是源说的，复制进标准表就等于把我们自己编的 `medium` 当成来源判断，读者会以为
+   * 「这条不重要」。所以 Narwhal 造假的那一份不复制（保持 NULL＝未提供），官方源那份照抄。
+   */
+  importanceIsFact: boolean
 }>
 
 const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, BackfillSourceProfile>> = {
@@ -127,7 +135,8 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
     readIdentity: (row) => row.market_fact_key === null ? undefined : narwhalCanonicalIdentityKey(String(row.market_fact_key)),
     identityRequired: true,
     hasValues: (row) => hasMeasures(row.measure_keys_json),
-    skipIdentitiesOwnedByOthers: false
+    skipIdentitiesOwnedByOthers: false,
+    importanceIsFact: false
   },
   // 旧源：身份在 `indicator_id` 那张表里，期间由发布时刻倒推；多数行本来就没有共同身份
   // （讲话、会议、没登记过的小指标），那是「走源内身份」，不是坏数据。
@@ -141,7 +150,8 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
     identityRequired: false,
     hasValues: (row) => [row.consensus_json, row.provider_previous_json, row.provider_actual_json]
       .some((value) => value !== null && value !== ''),
-    skipIdentitiesOwnedByOthers: true
+    skipIdentitiesOwnedByOthers: true,
+    importanceIsFact: true
   }
 }
 
@@ -273,7 +283,9 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
         ? {} : { previous: displayOf(row.provider_previous_json)! }),
       ...(displayOf(row.consensus_json) === undefined ? {} : { consensus: displayOf(row.consensus_json)! }),
       ...(displayOf(row.provider_actual_json) === undefined ? {} : { actual: displayOf(row.provider_actual_json)! }),
-      ...(row.importance === null ? {} : { importance: row.importance as 'high' | 'medium' | 'low' })
+      // 观测表那列是 `not null`：Narwhal 没有重要性字段，填的是占位值，不当事实复制。
+      ...(row.importance === null || !profile.importanceIsFact ? {}
+        : { importance: row.importance as 'high' | 'medium' | 'low' })
     }
     if (route.kind === 'event') {
       // 事件型身份是（国家, `evt.*` 码, 到分钟）：period 用时刻本身，不借用指标期间。
