@@ -1,5 +1,5 @@
 {
-  "note": "指标码字面量基线（守卫 C）：按文件统计 `'US.` 形态的指标码，双向棘轮——涨了要登记并写理由，减了也必须同笔把数字改小（只挡涨的棘轮会养出永远减不下去的数）。每一条都必须说清「为什么这个字面量必须在这里」。目标不是清零，是让每一处都说得出口。 另：一个指标码今天住在 8–13 张**数据表**里（名称、分组、源侧字典、官方发布、FRED 序列、卡片行、退役表等），真改名时它们各要改一行——那是「关于这个码的事实各改一行」，不是抄件；消费者（盘口/政策路径/回填/卡片）已经是 0 字面量。",
+  "note": "指标码字面量基线（守卫 C）：按文件统计 `'US.` 形态的指标码，双向棘轮——涨了要登记并写理由，减了也必须同笔把数字改小（只挡涨的棘轮会养出永远减不下去的数）。每一条都必须说清「为什么这个字面量必须在这里」。目标不是清零，是让每一处都说得出口。 另：一个指标码今天住在 8–13 张**数据表**里（名称、分组、源侧字典、官方发布、FRED 序列、卡片行、退役表等），真改名时它们各要改一行——那是「关于这个码的事实各改一行」，不是抄件；消费者（盘口/政策路径/回填/卡片）已经是 0 字面量。 2026-11-14：`marketCalendarStandardBackfill.ts` 的 6 处已清零——退役码→当前码与退役清单都改成从 `MACRO_INDICATOR_RETIRED_METRIC_KEYS` 派生，手抄两份的那处没了（基线同笔删掉整条）。",
   "files": {
     "contracts/metricKeyConcept.ts": {
       "count": 14,
@@ -48,10 +48,6 @@
     "service/intelligence/macro-calendar/marketCalendarReleaseGroups.ts": {
       "count": 268,
       "why": "指标→组/分级/主测度的数据表本身：它就是那张事实表，不是抄件"
-    },
-    "service/intelligence/macro-calendar/marketCalendarStandardBackfill.ts": {
-      "count": 6,
-      "why": "退役码→当前码手抄 + 源画像（M5 改成读退役表后应下降）"
     },
     "service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts": {
       "count": 52,

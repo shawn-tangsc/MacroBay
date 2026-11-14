@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { MACRO_INDICATOR_RETIRED_METRIC_KEYS } from './macroIndicatorCardGroups'
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
@@ -36,10 +37,9 @@ export type StandardBackfillProviderId = typeof narwhalSourcePolicy.providerId |
  * 已经降级、没有源；按当年口径重放会再造一批 NSA 行，跟刚降级的码打对台。所以落表前过这一步：
  * 有当前对应码就换成它，没有就不写、记 `unmapped`（不顺手把旧码写回去）。
  */
-const currentMetricKeyByRetiredKey: Readonly<Record<string, string>> = Object.freeze({
-  'US.PCE.NSA.YOY': 'US.PCE.SA.YOY',
-  'US.CORE_PCE.NSA.YOY': 'US.CORE_PCE.SA.YOY'
-})
+const currentMetricKeyByRetiredKey: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(MACRO_INDICATOR_RETIRED_METRIC_KEYS.map((row) => [row.retiredMetricKey, row.currentMetricKey]))
+)
 
 export type StandardBackfillReport = Readonly<{
   observations: number
@@ -100,11 +100,15 @@ function recordUnmappedOnce(database: DatabaseSync, input: Readonly<{ providerId
   recordCalendarUnmapped(database, input)
 }
 
-/** 已退役的码：有码名、有组，但没有源、不进格子；重放不许再制造它们。 */
-const retiredMetricKeys: readonly string[] = Object.freeze([
-  'US.PCE.NSA.YOY',
-  'US.CORE_PCE.NSA.YOY'
-])
+/**
+ * 已退役的码：有码名、有组，但没有源、不进格子；重放不许再制造它们。
+ *
+ * **从退役表派生**（2026-11-14）：原来这里手抄两条，和 `currentMetricKeyByRetiredKey` 各抄一份，
+ * 加一个退役码要改两处——正是今晚「换码漏一处」那个形状。
+ */
+const retiredMetricKeys: readonly string[] = Object.freeze(
+  MACRO_INDICATOR_RETIRED_METRIC_KEYS.map((row) => row.retiredMetricKey)
+)
 const isRetiredMetricKey = (metricKey: string): boolean => retiredMetricKeys.includes(metricKey)
 
 /**
