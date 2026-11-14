@@ -5,10 +5,6 @@
       "count": 14,
       "why": "「指标码 → 概念」的唯一数据表：14 个码各一行（概念串只有三段，不计入本守卫）。这张表的字面量就是身份事实本身，不放在这里就没有任何一处能派生出它；加变体也只加这一行"
     },
-    "contracts/policyPath.ts": {
-      "count": 10,
-      "why": "政策路径标注白名单与同窗优先序（M4 改成按概念后应下降）"
-    },
     "desktop/settings/intelligence-sources/CoreIndicatorsSourcesView.tsx": {
       "count": 12,
       "why": "指标名文案键映射：这一屏的名字来自产品文案，不是码名表；12 条各指一个文案键"
@@ -60,10 +56,6 @@
     "service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts": {
       "count": 52,
       "why": "Narwhal 系列 → 主测度码：外部系列名的落地位置"
-    },
-    "service/intelligence/macro-calendar/polymarketConsensus.ts": {
-      "count": 5,
-      "why": "slug 模板与档位除数（M4 改成按概念后应下降）"
     }
   }
 }

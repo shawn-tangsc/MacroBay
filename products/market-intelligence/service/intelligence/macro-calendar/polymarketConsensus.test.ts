@@ -75,7 +75,7 @@ describe('readPolymarketConsensus', () => {
   })
 })
 
-describe('盘口是**按码建的表**，换码必须同笔搬', () => {
+describe('盘口按**概念**建表（M4）：变体换码不用改这张表', () => {
   /**
    * 用户 2026-11-14 报「三张卡又全空了」的真因：PCE 卡换成了季调码，而 slug 模板表还写着未季调码——
    * `polymarketSlugFor` 返回 undefined，直接判成 `no-market`，卡上写「盘未开」，可市场一直开着。
@@ -85,7 +85,14 @@ describe('盘口是**按码建的表**，换码必须同笔搬', () => {
     expect(polymarketSlugFor('US.CORE_PCE.SA.YOY', '2026-10')).toBe('core-pce-yoy-october-2026')
   })
 
-  it('returns undefined for a code with no template instead of guessing a slug', () => {
+  /** 行为判据（M4）：同一概念的季调与未季调变体取到**同一个市场**，换码不再需要搬表。 */
+  it('resolves both variants of one concept to the same market', () => {
+    expect(polymarketSlugFor('US.CORE_PCE.NSA.YOY', '2026-10'))
+      .toBe(polymarketSlugFor('US.CORE_PCE.SA.YOY', '2026-10'))
+    expect(polymarketSlugFor('US.CPI.NSA.YOY', '2026-11')).toBe('november-inflation-us-annual')
+  })
+
+  it('returns undefined for a concept with no template instead of guessing a slug', () => {
     // 瞎猜一个 slug 会去查一个不存在的盘，而那个查询看起来完全正常。
     expect(polymarketSlugFor('US.PCE.SA.MOM', '2026-10')).toBeUndefined()
   })

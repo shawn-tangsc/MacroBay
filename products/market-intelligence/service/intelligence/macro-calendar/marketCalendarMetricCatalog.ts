@@ -14,9 +14,12 @@ import {
 } from './marketCalendarReleaseGroups'
 import { polymarketConsensusPolicy } from './polymarketConsensus'
 import {
-  POLICY_PATH_EVENT_METRIC_PRIORITY,
-  POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS
+  POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS,
+  POLICY_PATH_EVENT_RELEVANT_CONCEPTS
 } from '../../../contracts/policyPath'
+import { metricConceptOf } from '../../../contracts/metricKeyConcept'
+
+export { metricConceptOf }
 
 /**
  * 指标身份的**只读合成索引**（架构师 2026-11-14 规格 `29-指标映射单表规格.md`）。
@@ -112,11 +115,6 @@ function zeroXRouterIdsFor(metricKey: string): readonly string[] {
 }
 
 /** 所有可能在 catalog 里出现的码：八张表里提到过的并集（没有一处手工列码）。 */
-/** 同一概念的标识：去掉口径段（季调/未季调是同一个概念的变体，影响程度也一样）。 */
-export function metricConceptOf(metricKey: string): string {
-  return metricKey.split('.').filter((segment) => segment !== 'SA' && segment !== 'NSA').join('.')
-}
-
 function allMetricKeys(): readonly string[] {
   const keys = new Set<string>()
   for (const group of MACRO_INDICATOR_GROUPS) for (const row of group.rows) keys.add(row.metricKey)
@@ -126,9 +124,8 @@ function allMetricKeys(): readonly string[] {
   for (const key of Object.values(narwhalMeasureMetricKeys)) keys.add(key)
   for (const entry of Object.values(zeroXRouterIndicatorIdentities)) keys.add(entry.metricKey)
   for (const mapping of macroCalendarReleaseValueMappings) keys.add(mapping.metricKey)
-  for (const key of Object.keys(polymarketConsensusPolicy.slugTemplateByMetricKey as Readonly<Record<string, string>>)) keys.add(key)
-  for (const key of POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS) keys.add(key)
-  for (const key of POLICY_PATH_EVENT_METRIC_PRIORITY) keys.add(key)
+  /* 盘口与政策路径两张表按**概念**建（M4），不再提供指标码；它们不往这里加键，
+     但每个概念都必须由一个指标码承担——守卫 A/B 与概念表双向断言一起把这件事钉住。 */
   /* 退役码也必须是 catalog 里的键：它们有名称、有历史行，消费方还要按概念把它们取出来。 */
   for (const retired of MACRO_INDICATOR_RETIRED_METRIC_KEYS) keys.add(retired.retiredMetricKey)
   return Object.freeze([...keys].sort())
@@ -136,6 +133,7 @@ function allMetricKeys(): readonly string[] {
 
 function mentionedBy(metricKey: string): readonly string[] {
   const tables: string[] = []
+  const concept = metricConceptOf(metricKey)
   if (cardRowFor(metricKey) !== undefined) tables.push('macroIndicatorCardGroups')
   if (groupFactsFor(metricKey) !== undefined) tables.push('marketCalendarReleaseGroups')
   if (nameByMetricKey[metricKey] !== undefined) tables.push('marketCalendarCodeNames')
@@ -143,11 +141,11 @@ function mentionedBy(metricKey: string): readonly string[] {
   if (narwhalMeasuresFor(metricKey).length > 0 || zeroXRouterIdsFor(metricKey).length > 0) {
     tables.push('marketCalendarMetricIdentity')
   }
-  if ((polymarketConsensusPolicy.slugTemplateByMetricKey as Readonly<Record<string, string>>)[metricKey] !== undefined) {
+  if ((polymarketConsensusPolicy.slugTemplateByConcept as Readonly<Record<string, string>>)[concept] !== undefined) {
     tables.push('polymarketConsensus')
   }
-  if ((POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS as readonly string[]).includes(metricKey)
-    || (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[]).includes(metricKey)) {
+  if ((POLICY_PATH_EVENT_RELEVANT_CONCEPTS as readonly string[]).includes(concept)
+    || (POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS as readonly string[]).includes(concept)) {
     tables.push('policyPath')
   }
   return Object.freeze(tables)
@@ -166,8 +164,10 @@ export function metricCatalog(): ReadonlyMap<string, MetricCatalogEntry> {
       narwhalMeasures: narwhalMeasuresFor(metricKey),
       zeroXRouterIndicatorIds: zeroXRouterIdsFor(metricKey)
     })
-    const slugTemplate = (polymarketConsensusPolicy.slugTemplateByMetricKey as Readonly<Record<string, string>>)[metricKey]
-    const divisor = (polymarketConsensusPolicy.valueDivisorByMetricKey as Readonly<Record<string, number>>)[metricKey]
+    /* 盘口与政策路径两张表按**概念**建：同一个概念的季调/未季调变体取到同一个答案。 */
+    const concept = metricConceptOf(metricKey)
+    const slugTemplate = (polymarketConsensusPolicy.slugTemplateByConcept as Readonly<Record<string, string>>)[concept]
+    const divisor = (polymarketConsensusPolicy.valueDivisorByConcept as Readonly<Record<string, number>>)[concept]
     return [metricKey, Object.freeze({
       metricKey,
       ...(name === undefined ? {} : { name }),
@@ -180,8 +180,8 @@ export function metricCatalog(): ReadonlyMap<string, MetricCatalogEntry> {
       ...(slugTemplate === undefined ? {} : { marketSlugTemplate: slugTemplate }),
       ...(divisor === undefined ? {} : { marketValueDivisor: divisor }),
       policyPath: Object.freeze({
-        annotated: (POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS as readonly string[]).includes(metricKey),
-        sameWindowPriority: (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[]).includes(metricKey)
+        annotated: (POLICY_PATH_EVENT_RELEVANT_CONCEPTS as readonly string[]).includes(concept),
+        sameWindowPriority: (POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS as readonly string[]).includes(concept)
       }),
       mentionedBy: mentionedBy(metricKey),
       retiredTo: MACRO_INDICATOR_RETIRED_METRIC_KEYS.find((row) => row.retiredMetricKey === metricKey)?.currentMetricKey

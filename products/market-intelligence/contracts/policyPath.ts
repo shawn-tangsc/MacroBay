@@ -6,6 +6,8 @@
  * all day and a value without an as-of is unfalsifiable.
  */
 
+import { metricConceptOf } from './metricKeyConcept'
+
 export const POLICY_PATH_OUTCOMES = ['no-change', 'hike-25', 'hike-50-plus', 'cut-25', 'cut-50-plus'] as const
 export type PolicyPathOutcome = typeof POLICY_PATH_OUTCOMES[number]
 
@@ -391,17 +393,17 @@ export function distributionAtOrBefore(
  * 单位与方向都走期望口径：概率差的正负可以跟期望差相反，图上一律用期望。
  */
 /**
- * 允许标注的指标清单——**判据只有这一张表**，按指标身份，不按名字、不按 importance、不按国家。
+ * 允许标注的**概念**清单——判据只有这一张表，按指标身份，不按名字、不按 importance、不按国家。
  *
  * 事件标注解释的是「这条曲线为什么跳」，所以只有**影响美联储路径**的指标才配得上：
  * `importance: high` 是对市场的普遍影响（EIA 原油库存也是 high），两者不是一回事。
  * 这份表是产品口径（`15-事件身份口径.md` §十七），要扩只能扩这里；清单之外的指标无论推动量多大都不标。
+ *
+ * 按**概念**列，不按码列（M4）：季调/未季调是同一个指标的两个变体，影响程度一样、该不该标也一样。
+ * 以前码一变一变体就得回来补一行，漏了就漏标；现在概念把变体全盖住，换码不用动这里。
  */
-export const POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS = Object.freeze([
-  // 核心 PCE 年率是**同一概念的两个变体**：卡片与日历现在读季调码；库里未季调那批行还没收，
-  // 事件上仍可能只带未季调码，所以两个都列——同一个概念，不该因为换过一次口径就漏标。
-  'US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE',
-  'US.CORE_PCE.SA.YOY', 'US.CORE_PCE.NSA.YOY'
+export const POLICY_PATH_EVENT_RELEVANT_CONCEPTS = Object.freeze([
+  'US.CPI.YOY', 'US.CORE_CPI.YOY', 'US.NONFARM.CHANGE', 'US.CORE_PCE.YOY'
 ] as const)
 
 /**
@@ -421,13 +423,11 @@ export const POLICY_PATH_EVENT_RELEVANT_SERIES_IDS = Object.freeze([
  * 结果是曲线明明跳了却一条解释都没有。顺序是产品口径：非农 > 失业率 > 时薪；
  * CPI 整体年率 > 核心年率 > 月率；核心 PCE > 整体 PCE。以后扩清单按同一份文档插进来。
  */
-export const POLICY_PATH_EVENT_METRIC_PRIORITY = Object.freeze([
-  'US.NONFARM.SA.CHANGE',
-  'US.CPI.NSA.YOY',
-  'US.CORE_CPI.NSA.YOY',
-  // 季调在前：同一场发布同时带两种码时，标读者在卡上看到的那个身份。
-  'US.CORE_PCE.SA.YOY',
-  'US.CORE_PCE.NSA.YOY'
+export const POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS = Object.freeze([
+  'US.NONFARM.CHANGE',
+  'US.CPI.YOY',
+  'US.CORE_CPI.YOY',
+  'US.CORE_PCE.YOY'
 ] as const)
 
 export type PolicyPathEventCandidate = Readonly<{
@@ -451,15 +451,18 @@ export type PolicyPathEventCandidate = Readonly<{
 }>
 
 /**
- * 这次发布覆盖了哪个必标指标（按优先级取第一个）；一个都没有就是 `undefined`。
+ * 这次发布覆盖了哪个必标**概念**（按优先级取第一个）；一个都没有就是 `undefined`。
  *
  * 只认 `measureKeys`，**不看 `eventNameKey`、不看名字**——`eventNameKey` 是主 measure 的显示名，
  * 一次发布覆盖多个指标时它只代表其中一个，拿它判资格会把另外几个必标指标整条漏掉。
+ *
+ * 比较前把每个 measure 归一到概念：这样同一概念的季调/未季调两条行都命中，
+ * 不需要在这张清单里为每个变体各留一个兼容位（那正是「换码漏一处」的入口）。
  */
-export function matchedRelevantKey(event: PolicyPathEventCandidate): string | undefined {
+export function matchedRelevantConcept(event: PolicyPathEventCandidate): string | undefined {
   const keys = event.measureKeys ?? []
-  return (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[])
-    .find((key) => keys.includes(key))
+  return (POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS as readonly string[])
+    .find((concept) => keys.some((key) => metricConceptOf(key) === concept))
 }
 
 export const POLICY_PATH_EVENT_POLICY = Object.freeze({
@@ -491,13 +494,14 @@ export function expectationEventMoves(
   // 第一步：清单之外一律不标（判据只有指标身份 / 发布类型，不看名字、不看 importance）。
   // 没有身份的行（例如今天 0xRouter 的行没有 series_id）即使名字百分百像 FOMC 决议，也不标。
   const relevant = events.filter((event) =>
-    matchedRelevantKey(event) !== undefined
+    matchedRelevantConcept(event) !== undefined
     || (event.seriesId !== undefined && (POLICY_PATH_EVENT_RELEVANT_SERIES_IDS as readonly string[]).includes(event.seriesId)))
   // 第二步：同一时刻（同一次发布）只留优先级最高的一条。
   const rankOf = (event: PolicyPathEventCandidate): number => {
     if (event.seriesId === 'usa-policy-rate-decision') return -1
-    const key = matchedRelevantKey(event)
-    return key === undefined ? Number.MAX_SAFE_INTEGER : (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[]).indexOf(key)
+    const concept = matchedRelevantConcept(event)
+    return concept === undefined ? Number.MAX_SAFE_INTEGER
+      : (POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS as readonly string[]).indexOf(concept)
   }
   const byInstant = new Map<string, PolicyPathEventCandidate>()
   for (const event of relevant) {

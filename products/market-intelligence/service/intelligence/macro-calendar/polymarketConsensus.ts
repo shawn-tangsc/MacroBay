@@ -1,3 +1,4 @@
+import { metricConceptByMetricKey } from '../../../contracts/metricKeyConcept'
 import { checkConsensusCandidate, weightedMedianFromBuckets, type ConsensusBucket } from './marketConsensusFromBuckets'
 
 /**
@@ -13,24 +14,26 @@ import { checkConsensusCandidate, weightedMedianFromBuckets, type ConsensusBucke
 export const polymarketConsensusPolicy = Object.freeze({
   eventsEndpoint: 'https://gamma-api.polymarket.com/events',
   /**
-   * 指标 → **slug 模板**：按模板拼出这一期的 slug 直接 `?slug=` 查，不走搜索。
+   * **概念** → slug 模板：按模板拼出这一期的 slug 直接 `?slug=` 查，不走搜索。
    * 搜索结果的顺序与期间无关，按标题匹配会漏场（非农那一场标题甚至不带年份）。
    * `{month}` 是英文全拼小写、`{year}` 四位年份。
+   *
+   * 按**概念**建表（M4），不按码：季调/未季调是同一个市场，模板只取决于「这是哪个指标」。
+   * 按码建的时候，换一次口径就得回来搬一行——漏了就是「市场开着、我们没去查」，卡上却写「盘未开」，
+   * 今晚那个 PCE 故障就是这么来的。
    */
-  slugTemplateByMetricKey: Object.freeze({
-    'US.CPI.NSA.YOY': '{month}-inflation-us-annual',
-    'US.CORE_CPI.NSA.YOY': 'core-cpi-yoy-{month}-{year}',
-    // PCE 年率那张卡读**季调**码（BEA 的公布口径就是季调；未季调两条今天无源、不进日历）。
-    // 这张表按码建，换码时必须同笔搬过来——漏了就是「市场开着、我们没去查」，卡上却写「盘未开」。
-    'US.CORE_PCE.SA.YOY': 'core-pce-yoy-{month}-{year}',
-    'US.NONFARM.SA.CHANGE': 'how-many-jobs-added-in-{month}-{year}'
+  slugTemplateByConcept: Object.freeze({
+    'US.CPI.YOY': '{month}-inflation-us-annual',
+    'US.CORE_CPI.YOY': 'core-cpi-yoy-{month}-{year}',
+    'US.CORE_PCE.YOY': 'core-pce-yoy-{month}-{year}',
+    'US.NONFARM.CHANGE': 'how-many-jobs-added-in-{month}-{year}'
   } as const),
   /**
    * 档位标签是「100k to 125k」这种**绝对人数**，而卡片的口径是千（`+165K`）。
-   * 换算只在这里做一次，别让读出来的数带着绝对人数流进渲染层。
+   * 换算只在这里做一次，别让读出来的数带着绝对人数流进渲染层。同样按概念建。
    */
-  valueDivisorByMetricKey: Object.freeze({
-    'US.NONFARM.SA.CHANGE': 1000
+  valueDivisorByConcept: Object.freeze({
+    'US.NONFARM.CHANGE': 1000
   } as const)
 } as const)
 
@@ -49,9 +52,15 @@ export function polymarketPeriodToken(period: string): string | undefined {
   return name === undefined ? undefined : `${name} ${year}`
 }
 
-/** 按模板拼出这一期的 slug（月份英文全拼、小写）；期间不是 `YYYY-MM` 就没有 slug。 */
+/**
+ * 按模板拼出这一期的 slug（月份英文全拼、小写）；期间不是 `YYYY-MM`、或这个指标没有盘口，就没有 slug。
+ *
+ * 先归一到概念再查模板：同一概念的季调/未季调变体取到同一个市场，换码不用回来改这张表。
+ */
 export function polymarketSlugFor(metricKey: string, period: string): string | undefined {
-  const template = (polymarketConsensusPolicy.slugTemplateByMetricKey as Readonly<Record<string, string>>)[metricKey]
+  const concept = metricConceptByMetricKey[metricKey]
+  if (concept === undefined) return undefined
+  const template = (polymarketConsensusPolicy.slugTemplateByConcept as Readonly<Record<string, string>>)[concept]
   if (template === undefined) return undefined
   const [year, month] = period.split('-').map(Number) as [number, number]
   const name = MONTH_NAMES[month - 1]
@@ -84,7 +93,9 @@ export async function readPolymarketConsensus(input: Readonly<{
   const buckets = readBuckets(detail, slug)
   const median = weightedMedianFromBuckets(buckets)
   if (median === undefined) return { state: 'unavailable', reason: 'no-buckets' }
-  const divisor = (polymarketConsensusPolicy.valueDivisorByMetricKey as Readonly<Record<string, number>>)[input.metricKey] ?? 1
+  const concept = metricConceptByMetricKey[input.metricKey]
+  const divisor = (concept === undefined ? undefined
+    : (polymarketConsensusPolicy.valueDivisorByConcept as Readonly<Record<string, number>>)[concept]) ?? 1
   const value = median / divisor
 
   const marketVolume = readVolume(detail, slug)

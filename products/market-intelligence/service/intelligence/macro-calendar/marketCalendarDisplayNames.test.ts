@@ -54,11 +54,11 @@ describe('两张纯展示表', () => {
 
   it('标题用的优先顺序只读契约那一份，不另抄', () => {
     const source = readFileSync(new URL('./marketCalendarDisplayNames.ts', import.meta.url), 'utf8')
-    // 顺序只许来自 `POLICY_PATH_EVENT_METRIC_PRIORITY`：这里出现那四个 key 的字面量就是抄了第二份。
-    for (const key of ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY']) {
-      expect(source).not.toContain(key)
+    // 顺序只许来自 `POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS`：这里出现那四个概念的字面量就是抄了第二份。
+    for (const concept of ['US.CPI.YOY', 'US.CORE_CPI.YOY', 'US.NONFARM.CHANGE', 'US.CORE_PCE.YOY']) {
+      expect(source).not.toContain(concept)
     }
-    expect(source).toContain('POLICY_PATH_EVENT_METRIC_PRIORITY')
+    expect(source).toContain('POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS')
   })
 
   it('这两张表不许进身份与标注资格那条链——结构守卫', () => {

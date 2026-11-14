@@ -329,4 +329,14 @@ describe('event attribution on the curve', () => {
     const series = [observation(at(50), 0.2, 0.5), observation(at(80), 0.2, 0.9)]
     expect(expectationEventMoves(series, [cpi(60)])).toEqual([])
   })
+
+  /**
+   * 概念化（M4）的行为判据：库里还留着未季调的核心 PCE 行，事件只带那个旧码时**照样要标**。
+   * 按码建表时，换码就等于丢掉这批旧事件——那正是这一笔要消灭的。
+   */
+  it('matches a retired variant of the same concept, so old rows are still annotated', () => {
+    const series = [observation(at(55), 0.2, 0.6), observation(at(65), 0.2, 0.7)]
+    const retired = { at: at(60), label: '核心 PCE', measureKeys: ['US.CORE_PCE.NSA.YOY'] }
+    expect(expectationEventMoves(series, [retired]).map((mark) => mark.label)).toEqual(['核心 PCE'])
+  })
 })

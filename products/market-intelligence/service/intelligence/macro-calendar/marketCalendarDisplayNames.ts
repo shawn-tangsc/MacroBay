@@ -1,4 +1,5 @@
-import { POLICY_PATH_EVENT_METRIC_PRIORITY } from '../../../contracts/policyPath'
+import { metricConceptOf } from '../../../contracts/metricKeyConcept'
+import { POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS } from '../../../contracts/policyPath'
 import { marketCalendarEventTypeDisplayNames, marketCalendarMetricDisplayNames } from './marketCalendarDisplayNameTables'
 
 /**
@@ -38,11 +39,12 @@ export function marketCalendarDisplayTitle(input: Readonly<{
   if (input.locale !== 'zh') return input.rawTitle
   // 一次发布覆盖多个指标时，标题取**契约里那份优先顺序**里第一个有中文名的——顺序只有一份，
   // 这里不另写（写了就会和标注归组那份漂开，同一件事两个界面叫两个名字）。
-  for (const key of POLICY_PATH_EVENT_METRIC_PRIORITY) {
-    if (input.measureKeys?.includes(key) === true) {
-      const named = marketCalendarMetricDisplayNames[key]
-      if (named !== undefined) return named
-    }
+  // 顺序按**概念**排（M4）：先把每个 measure 归一到概念再比，季调/未季调两种码都能命中。
+  for (const concept of POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS) {
+    const key = input.measureKeys?.find((candidate) => metricConceptOf(candidate) === concept)
+    if (key === undefined) continue
+    const named = marketCalendarMetricDisplayNames[key]
+    if (named !== undefined) return named
   }
   if (input.eventNameKey !== undefined) {
     const named = marketCalendarMetricDisplayNames[input.eventNameKey]

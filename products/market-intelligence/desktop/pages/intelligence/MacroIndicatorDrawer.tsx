@@ -22,7 +22,7 @@ import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from '
 import { policyPathMonth } from './policyPathMonth'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import {
-  expectationBp, expectationEventMoves, matchedRelevantKey, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS
+  expectationBp, expectationEventMoves, matchedRelevantConcept, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS
 } from '../../../contracts/policyPath'
 import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { Drawer } from '@platform/ui/components/drawer'
@@ -60,7 +60,7 @@ function shortEventLabel(
 ): string {
   if (event.seriesId === 'usa-policy-rate-decision') return text.eventNames.decision
   if (event.seriesId === 'usa-monetary-policy-minutes') return text.eventNames.minutes
-  const matched = matchedRelevantKey({ at: '', label: event.label, ...(event.measureKeys ? { measureKeys: event.measureKeys } : {}) })
+  const matched = matchedRelevantConcept({ at: '', label: event.label, ...(event.measureKeys ? { measureKeys: event.measureKeys } : {}) })
   return nameOfMetricKey(matched ?? event.eventNameKey, text) ?? event.label
 }
 
@@ -498,7 +498,7 @@ export function splitDayLayers(events: readonly MarketCalendarEvent[]): DayLayer
   const other: MarketCalendarEvent[] = []
   for (const event of events) {
     if (event.eventType !== 'economic-indicator') continue
-    const relevant = matchedRelevantKey({
+    const relevant = matchedRelevantConcept({
       at: event.scheduledAt, label: event.title,
       ...(event.eventNameKey === undefined ? {} : { eventNameKey: event.eventNameKey }),
       ...(event.measureKeys === undefined ? {} : { measureKeys: event.measureKeys }),
