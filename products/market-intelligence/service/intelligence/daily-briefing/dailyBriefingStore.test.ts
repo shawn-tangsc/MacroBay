@@ -511,3 +511,35 @@ describe('reading editions written by an earlier storage version', () => {
     expect(await store.get('2026-10-05', 'zh-CN', 'default')).toBeUndefined()
   })
 })
+
+// 用户 2026-11-14：库里有两份期次身份（表列、文档 `edition.periodId`），对不上时「点开是空的」。
+// 读取的那一刻以**表列**为准，文档里那个字段只作展示。
+describe('the stored period identity comes from the column, not the document', () => {
+  it('answers with the column id when the document carries a different one', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const doc = document('2026-11-06', '表列 vs 文档')
+    await store.put({
+      ...edition('2026-11-06', '表列 vs 文档'),
+      periodId: 'period_from_column',
+      windowEnd: '2026-11-06T07:00:00.000Z',
+      document: { ...doc, edition: { ...doc.edition, periodId: 'default', windowEnd: '2026-11-06T07:00:00.000Z', windowHours: 24 } }
+    } as never)
+    const read = await store.get('2026-11-06', 'zh-CN', 'period_from_column')
+    expect(read?.periodId).toBe('period_from_column')
+    expect(read?.document.edition.periodId).toBe('period_from_column')
+  })
+
+  it('answers with the default column id even when the document claims another period', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const doc = document('2026-11-07', '反向')
+    await store.put({
+      ...edition('2026-11-07', '反向'),
+      periodId: 'default',
+      windowEnd: '2026-11-07T07:00:00.000Z',
+      document: { ...doc, edition: { ...doc.edition, periodId: 'period_from_document', windowEnd: '2026-11-07T07:00:00.000Z', windowHours: 24 } }
+    } as never)
+    const read = await store.get('2026-11-07', 'zh-CN', 'default')
+    expect(read?.periodId).toBe('default')
+    expect(read?.document.edition.periodId).toBe('default')
+  })
+})

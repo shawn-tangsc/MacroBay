@@ -485,6 +485,12 @@ function reportUnreadableRow(row: Row, reason: string, detail: Readonly<Record<s
   })}`)
 }
 
+/** 把文档里的期次号覆盖成表列那个值（相同则原样返回，避免无谓复制）。 */
+function normalizedDocument(document: DailyBriefingDocument, periodId: string): DailyBriefingDocument {
+  if (document.edition.periodId === periodId) return document
+  return Object.freeze({ ...document, edition: Object.freeze({ ...document.edition, periodId }) })
+}
+
 function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined {
   if (!row) return undefined
   // A row written before the upgrade carries the old storage version; its document shape is the
@@ -512,13 +518,19 @@ function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined 
     })
     return undefined
   }
+  // **期次身份以表列为准**（用户 2026-11-14）：库里有两份身份（表列、文档 `edition.periodId`），
+  // 今晚「点开是空的」全部源于这两份对不上——列表展示文档里那个，详情按表列去查。
+  // 读出来的那一刻就归一，下游（列表投影、点开、导出、分享卡）自动一致，不用到处改判据。
+  // 文档里那个字段降级为**展示信息**，不再当身份用。
+  const periodId = row.period_id ?? DEFAULT_PERIOD_ID
   return Object.freeze({
     date: row.edition_date,
-    periodId: row.period_id ?? DEFAULT_PERIOD_ID,
+    periodId,
     locale: row.locale as DailyBriefingLocale,
     generatedAt: row.generated_at,
     windowStart: row.window_start,
     windowEnd: row.window_end,
-    document
+    // 期次身份以表列为准：文档里那个字段降级为展示信息（见上方注释）。
+    document: normalizedDocument(document, periodId)
   })
 }
