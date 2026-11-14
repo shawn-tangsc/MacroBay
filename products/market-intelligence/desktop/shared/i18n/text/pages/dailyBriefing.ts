@@ -91,7 +91,6 @@ export const dailyBriefingText = {
     macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', cancelled: '已取消', timeNotPublished: releaseTimeWords['zh-CN'], surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
     /** 这一栏截断时才说（`02` v2.125）：条数是真摆出来的行数，不是候选总数。 */
     conclusion: { invalidation: '什么会推翻它', conditions: '判断前提', counter: '证伪条件', outlook: '前瞻', watch: '观察点', whatWouldChange: '什么会推翻', regimeChanged: '判断有变', basisHeld: '依据成立', basisOverturned: '依据被推翻', basisPartlyHeld: '依据部分成立', gaps: '数据缺口', caveats: '数据限制' },
-    nextCards: { unjudged: '高影响事件无法判定（来源未提供重要性）', tier1Heading: '一级指标排期' },
     next: { category: { 'economic-indicator': '数据', 'financial-event': '金融事件', 'central-bank-activity': '央行' }, focus: '重点关注', count: '{count} 个高影响事件 · 按时间排序', importance: { high: '高影响', medium: '中影响', low: '低影响' }, expected: '预期', previous: '前值', noExpected: '预期未收录', soon: '距现在 {days} 天', why: '为什么关注', watchHigher: '高于预期', watchLower: '低于预期', watchInline: '符合预期', watchOther: '其他情形' },
     citations: '证据',
     translated: '译',
@@ -515,7 +514,6 @@ export const dailyBriefingText = {
     importanceUnprovided: 'Not provided',
     macro: { actual: 'Actual', consensus: 'Expectation', previous: 'Previous', noConsensus: 'No expectation', cancelled: 'Cancelled', timeNotPublished: releaseTimeWords['en-US'], surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No expectation' } },
     conclusion: { invalidation: 'What would invalidate it', conditions: 'Premises', counter: 'Falsifiers', outlook: 'Outlook', watch: 'Watch', whatWouldChange: 'What would overturn it', regimeChanged: 'View changed', basisHeld: 'Basis held', basisOverturned: 'Basis overturned', basisPartlyHeld: 'Basis partly held', gaps: 'Data gaps', caveats: 'Data limits' },
-    nextCards: { unjudged: 'High-impact events cannot be determined (the source provides no importance)', tier1Heading: 'Tier-1 indicator schedule' },
     next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' }, focus: 'Focus', count: '{count} high-impact events · ranked by crypto relevance', importance: { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }, expected: 'Expectation', previous: 'Previous', noExpected: 'Expectation not available', soon: 'In {days} days', why: 'Why it matters', watchHigher: 'Higher than expected', watchLower: 'Lower than expected', watchInline: 'In line with the expectation', watchOther: 'Other scenario' },
     citations: 'Evidence',
     translated: 'Translated',

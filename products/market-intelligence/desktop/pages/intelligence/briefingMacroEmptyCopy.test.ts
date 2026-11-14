@@ -120,8 +120,8 @@ describe('过去 24 小时与未来段的新六句', () => {
       // 「已收录」不能省：那三个字是这句话唯一诚实的部分。
       expect(text.pastWindow.emptyCollected, language).toMatch(language === 'zh-CN' ? /已收录/ : /collected/i)
       expect(text.importanceUnprovided.trim(), language).not.toBe('')
-      expect(text.nextCards.unjudged.trim(), language).not.toBe('')
-      expect(text.nextCards.tier1Heading.trim(), language).not.toBe('')
+      expect(text.nextImportanceUnknown.sentence.trim(), language).not.toBe('')
+      expect(text.nextImportanceUnknown.scheduleTitle.trim(), language).not.toBe('')
     }
   })
 })
