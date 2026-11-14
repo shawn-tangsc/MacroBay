@@ -102,7 +102,11 @@ function isNewsItem(value: unknown): boolean {
 
 function isMacroItem(value: unknown): boolean {
   if (!isRecord(value) || !isText(value.eventKey) || !isText(value.title) || !isText(value.scheduledAt) ||
-    !['high', 'medium', 'low'].includes(String(value.importance)) || !isRecord(value.surprise)) return false
+    // `importance` 缺省＝来源没给（用户 2026-11-14 改成可选），不是非法值：只有**给了**非法值才拒。
+    // 这条曾经让所有中文版整份文档被判非法——`String(undefined)` 是 `'undefined'`，于是读回来
+    // 的正文一律被拒，界面只剩「读取失败」。
+    (value.importance !== undefined && !['high', 'medium', 'low'].includes(String(value.importance)))
+      || !isRecord(value.surprise)) return false
   // Schema 16：官方没公布时刻时，`scheduledAt` 只是排序位，正文印这一对（日期 + 标记）。
   if (!isReleaseTimeNotPublished(value)) return false
   // Schema 14 carries the event's own lifecycle; absent on older rows, never a fourth state.
@@ -161,7 +165,8 @@ function isNext(value: unknown): boolean {
 
 function isNextItem(value: unknown): boolean {
   if (!isRecord(value) || !isText(value.eventKey) || !isText(value.title) || !isText(value.at)) return false
-  if (!['high', 'medium', 'low'].includes(String(value.importance))) return false
+  // 同上：缺省合法，非法值才拒。
+  if (value.importance !== undefined && !['high', 'medium', 'low'].includes(String(value.importance))) return false
   if (!['economic-indicator', 'financial-event', 'central-bank-activity'].includes(String(value.category))) return false
   if (value.countryCode !== undefined && !isText(value.countryCode)) return false
   if (value.countryName !== undefined && !isText(value.countryName)) return false
