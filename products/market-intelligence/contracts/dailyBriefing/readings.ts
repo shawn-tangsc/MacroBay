@@ -312,7 +312,8 @@ export type BriefingMacroItem = Readonly<{
   title: string
   titleKey?: string
   scheduledAt: string
-  importance: 'high' | 'medium' | 'low'
+  /** 来源给的重要性；**可缺省**＝「来源没提供」（用户 2026-11-14），不许用 medium 顶。 */
+  importance?: 'high' | 'medium' | 'low'
   countryCode?: string
   countryName?: string
   actual?: string
@@ -410,7 +411,7 @@ export type BriefingNextItem = Readonly<{
   title: string
   titleKey?: string
   at: string
-  importance: 'high' | 'medium' | 'low'
+  importance?: 'high' | 'medium' | 'low'
   category: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   countryCode?: string
   countryName?: string

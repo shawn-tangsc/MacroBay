@@ -233,7 +233,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           <time>{releaseStamp(item, item.at, text.macro.timeNotPublished, formatTime, 'next')}</time>
           <div>
             <b>{nextCountry(item, text) ? `${nextCountry(item, text)} · ` : ''}{nextTitle(item, eventTitles, locale)}</b>
-            <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>
+            {item.importance === undefined
+              ? null
+              : <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>}
           </div>
           <span>{[item.consensus ? `${text.next.expected} ${item.consensus}` : '', item.previous ? `${text.next.previous} ${item.previous}` : ''].filter(Boolean).join(' · ')}</span>
         </div>)}
@@ -358,7 +360,7 @@ type WatchEntry = Readonly<{ key: string; kind: WatchKind; label: string; implic
 function nextMeta(item: DailyBriefingDocument['next']['items'][number], text: DailyBriefingText): string {
   const country = nextCountry(item, text)
   return [
-    text.next.importance[item.importance],
+    ...(item.importance === undefined ? [] : [text.next.importance[item.importance]]),
     country,
     item.consensus ? `${text.next.expected} ${item.consensus}` : '',
     item.previous ? `${text.next.previous} ${item.previous}` : ''

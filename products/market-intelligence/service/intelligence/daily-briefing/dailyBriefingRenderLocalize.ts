@@ -143,7 +143,8 @@ function officialEvent(
     countryCode: event.countryCode,
     scheduledAt,
     ...(published === undefined ? { releaseTimeNotPublished: true as const, releaseDate: event.scheduledDate } : {}),
-    importance: event.importance,
+    // 缺省就是「来源没提供」：不写这个键，别在这里补一个 medium。
+    ...(event.importance === undefined ? {} : { importance: event.importance }),
     lifecycleState: event.lifecycleState,
     category: 'economic-indicator' as const,
     ...(event.actual ? { actual: event.actual.displayValue } : {}),
@@ -161,10 +162,13 @@ function marketEvent(
   return Object.freeze({
     eventKey: event.eventKey,
     title: event.title,
+    // 指标码随事件带出去：一级指标排期按码认人（`eventNameKey` 是标准表的 `metric_key`）。
+    ...(event.eventNameKey === undefined ? {} : { metricKey: event.eventNameKey }),
     ...(event.countryCode ? { countryCode: event.countryCode } : {}),
     ...(event.countryName ? { countryName: event.countryName } : {}),
     scheduledAt: event.scheduledAt,
-    importance: event.importance,
+    // 缺省就是「来源没提供」：不写这个键，别在这里补一个 medium。
+    ...(event.importance === undefined ? {} : { importance: event.importance }),
     lifecycleState: event.providerActual ? 'released' as const : 'scheduled' as const,
     // 日历源自己就分了类（`eventType`）：讲话、发布会、利率决议是央行活动，别的公告是财经事件。
     // 这里以前对所有事件都写死 `economic-indicator`，于是上面那层"隐藏央行活动与财经事件"的过滤

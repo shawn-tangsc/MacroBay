@@ -24,6 +24,12 @@ export type DailyBriefingCalendarEvent = Readonly<{
   eventKey: string
   title: string
   titleKey?: string
+  /**
+   * 标准表那一行的指标码（`country|metric|period|firstScheduledDate` 里的 `metric`）——只有
+   * 按码成行的来源才带。一级指标排期靠它认人（`dailyBriefingTier1Upcoming`），界面上不显示，
+   * 也不许拿它当显示名：名字是 `title`。
+   */
+  metricKey?: string
   countryCode?: string
   countryName?: string
   /**
@@ -35,7 +41,11 @@ export type DailyBriefingCalendarEvent = Readonly<{
   releaseTimeNotPublished?: true
   /** 与 `releaseTimeNotPublished` 成对：来源公布的日期（`YYYY-MM-DD`，不是瞬时）。 */
   releaseDate?: string
-  importance: 'high' | 'medium' | 'low'
+  /**
+   * 重要度：**可缺省**（Chief 2026-11-14）。源没说这个字段就没有值——`undefined` 是「来源未提供」，
+   * 与 `'low'` 不是一回事：任何按重要性筛的空结果都不许渲染成「没有发生」。
+   */
+  importance?: 'high' | 'medium' | 'low'
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
   category: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   actual?: string
