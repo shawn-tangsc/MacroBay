@@ -75,23 +75,34 @@ export const dailyBriefingText = {
      *
      * 硬约束：**不许把一级排期写成「高影响事件」**——前者是我们的一级清单，后者是来源的判断。
      */
-    nextImportanceUnknown: { sentence: '未来 7 天：高影响事件无法判定（来源未提供重要性）', scheduleTitle: '一级指标排期' },
+    nextImportanceUnknown: { heading: '无法判定', sentence: '未来 7 天：高影响事件无法判定（来源未提供重要性）', noteAria: '为什么无法判定', scheduleTitle: '一级指标排期' },
     /**
      * 过去 24 小时那段（产品 2026-11-14 定）：**先报总数与构成**，再说明细。
      * 总数取自读完之后的全部行，明细按类型配比 2/1/1、合计最多 3；`others` = 总数 − 明细，永远这么算。
      * 一条都没有时只说「没有已收录的发布」，「已收录」三个字不能省。
      */
     pastWindow: {
+      /**
+       * 表头只写**短句**（用户 2026-11-14 第三次重申：正文只留字段名与值，解释进 ⓘ）：
+       * `过去 24 小时 · 3 条`。构成明细单独一个键、只进 ⓘ，不再拼成一句长句塞正文。
+       */
+      header: '过去 24 小时 · {count} 条',
+      composition: '经济指标 {indicators} · 央行与讲话 {centralBank} · 财经事件 {financial}',
+      /**
+       * **只给「导出文本 / 分享海报」用**（那一面是一句话的成文，不是界面正文）。
+       * 界面正文只用上面 `header` + `composition`（构成进 ⓘ）——两处**不许混用**：
+       * 正文里出现这句长句就是违规（用户 2026-11-14 第三次重申）。
+       */
       counts: '过去 24 小时：共 {total} 条发布（经济指标 {indicators} · 央行与讲话 {centralBank} · 财经事件 {financial}）',
       others: '另有 {count} 条',
       emptyCollected: '这段时间没有已收录的发布'
     },
     /** 行级小标签：来源没给重要性时写「未提供」，不挑一档顶上去。 */
     importanceUnprovided: '未提供',
-    macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', cancelled: '已取消', timeNotPublished: releaseTimeWords['zh-CN'], surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
+    macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', cancelled: '已取消', timeNotPublished: releaseTimeWords['zh-CN'], whyAria: '这条发布的解读', surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
     /** 这一栏截断时才说（`02` v2.125）：条数是真摆出来的行数，不是候选总数。 */
     conclusion: { invalidation: '什么会推翻它', conditions: '判断前提', counter: '证伪条件', outlook: '前瞻', watch: '观察点', whatWouldChange: '什么会推翻', regimeChanged: '判断有变', basisHeld: '依据成立', basisOverturned: '依据被推翻', basisPartlyHeld: '依据部分成立', gaps: '数据缺口', caveats: '数据限制' },
-    next: { category: { 'economic-indicator': '数据', 'financial-event': '金融事件', 'central-bank-activity': '央行' }, focus: '重点关注', count: '{count} 个高影响事件 · 按时间排序', importance: { high: '高影响', medium: '中影响', low: '低影响' }, expected: '预期', previous: '前值', noExpected: '预期未收录', soon: '距现在 {days} 天', why: '为什么关注', watchHigher: '高于预期', watchLower: '低于预期', watchInline: '符合预期', watchOther: '其他情形' },
+    next: { category: { 'economic-indicator': '数据', 'financial-event': '金融事件', 'central-bank-activity': '央行' }, focus: '重点关注', whyAria: '为什么关注这条发布', count: '{count} 个高影响事件 · 按时间排序', importance: { high: '高影响', medium: '中影响', low: '低影响' }, expected: '预期', previous: '前值', noExpected: '预期未收录', soon: '距现在 {days} 天', why: '为什么关注', watchHigher: '高于预期', watchLower: '低于预期', watchInline: '符合预期', watchOther: '其他情形' },
     citations: '证据',
     translated: '译',
     polarity: { bearish: '偏空', bullish: '偏多', mixed: '冲突', neutral: '中性' },
@@ -505,16 +516,18 @@ export const dailyBriefingText = {
     macroWebValue: ' (web)',
     macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
     nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'next-7d-importance-unknown': 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled' },
-    nextImportanceUnknown: { sentence: 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', scheduleTitle: 'Tier-1 indicator schedule' },
+    nextImportanceUnknown: { heading: 'Cannot be determined', sentence: 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', noteAria: 'Why this cannot be determined', scheduleTitle: 'Tier-1 indicator schedule' },
     pastWindow: {
+      header: 'Past 24 hours · {count} releases',
+      composition: 'Economic indicators {indicators} · Central banks & speeches {centralBank} · Financial events {financial}',
       counts: 'Past 24 hours: {total} releases (economic indicators {indicators} · central banks & speeches {centralBank} · financial events {financial})',
       others: '{count} more',
       emptyCollected: 'No releases collected for this window'
     },
     importanceUnprovided: 'Not provided',
-    macro: { actual: 'Actual', consensus: 'Expectation', previous: 'Previous', noConsensus: 'No expectation', cancelled: 'Cancelled', timeNotPublished: releaseTimeWords['en-US'], surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No expectation' } },
+    macro: { actual: 'Actual', consensus: 'Expectation', previous: 'Previous', noConsensus: 'No expectation', cancelled: 'Cancelled', timeNotPublished: releaseTimeWords['en-US'], whyAria: 'Why this release matters', surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No expectation' } },
     conclusion: { invalidation: 'What would invalidate it', conditions: 'Premises', counter: 'Falsifiers', outlook: 'Outlook', watch: 'Watch', whatWouldChange: 'What would overturn it', regimeChanged: 'View changed', basisHeld: 'Basis held', basisOverturned: 'Basis overturned', basisPartlyHeld: 'Basis partly held', gaps: 'Data gaps', caveats: 'Data limits' },
-    next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' }, focus: 'Focus', count: '{count} high-impact events · ranked by crypto relevance', importance: { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }, expected: 'Expectation', previous: 'Previous', noExpected: 'Expectation not available', soon: 'In {days} days', why: 'Why it matters', watchHigher: 'Higher than expected', watchLower: 'Lower than expected', watchInline: 'In line with the expectation', watchOther: 'Other scenario' },
+    next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' }, focus: 'Focus', whyAria: 'Why this release matters', count: '{count} high-impact events · ranked by crypto relevance', importance: { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }, expected: 'Expectation', previous: 'Previous', noExpected: 'Expectation not available', soon: 'In {days} days', why: 'Why it matters', watchHigher: 'Higher than expected', watchLower: 'Lower than expected', watchInline: 'In line with the expectation', watchOther: 'Other scenario' },
     citations: 'Evidence',
     translated: 'Translated',
     polarity: { bearish: 'Bearish', bullish: 'Bullish', mixed: 'Mixed', neutral: 'Neutral' },

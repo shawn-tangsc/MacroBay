@@ -103,13 +103,15 @@ describe('the "next 7 days" section when importance is unknown', () => {
  */
 describe('过去 24 小时与未来段的新六句', () => {
   it('carries every sentence in both languages with matching placeholders', () => {
+    /* 表头只带 `{count}`；构成明细是**另一个键**（只进 ⓘ）——两者不许再拼成一句长句。 */
     const expected = [
-      ['pastWindow.counts', ['{total}', '{indicators}', '{centralBank}', '{financial}']],
+      ['pastWindow.header', ['{count}']],
+      ['pastWindow.composition', ['{indicators}', '{centralBank}', '{financial}']],
       ['pastWindow.others', ['{count}']]
     ] as const
     for (const [language, text] of [['zh-CN', zhText], ['en-US', enText]] as const) {
       for (const [key, placeholders] of expected) {
-        const [group, name] = key.split('.') as [ 'pastWindow', 'counts' | 'others' ]
+        const [group, name] = key.split('.') as [ 'pastWindow', 'header' | 'composition' | 'others' ]
         const value = text[group][name]
         expect(value.trim(), `${language} ${key}`).not.toBe('')
         for (const placeholder of placeholders) {
