@@ -14,6 +14,10 @@ import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenera
  * never generates, and it reports what it found — an edition, no edition in this language, a failed
  * attempt — so the caller can say which one it is instead of guessing from a boolean.
  */
+/** 诊断去重：同一次身份 / 同一种状态只报到一次（每 1.5 秒一条会把日志淹掉）。 */
+const reportedReads = new Set<string>()
+const reportedResults = new Set<string>()
+
 export function useBriefingEditionReader(input: Readonly<{
   client: Pick<DailyBriefingClient, 'get'>
   editions: readonly DailyBriefingEditionSummary[]
@@ -46,7 +50,29 @@ export function useBriefingEditionReader(input: Readonly<{
       setView({ status: 'ready', document: cached, kind: date === (periodDate.current ?? todayDate) ? 'today' : 'history' })
       return { kind: 'available' }
     }
-    const result = await client.get({ date, locale: target, ...(options.periodId ? { periodId: options.periodId } : {}) }).catch(() => undefined)
+    // 请求与返回各打一行（用户 2026-11-14：所有版本一起读不到，而链路上一个字都没有）：
+    // **按哪个三元组请的、回来的是什么状态、有没有失败码**。同一组身份只打一次，避免刷屏。
+    const diagnosticKey = `${date}|${options.periodId ?? 'default'}|${target}`
+    if (!reportedReads.has(diagnosticKey)) {
+      reportedReads.add(diagnosticKey)
+      console.info(`[daily-briefing] reading edition ${JSON.stringify({ date, periodId: options.periodId ?? 'default', locale: target, fresh: options.fresh === true })}`)
+    }
+    const result = await client.get({ date, locale: target, ...(options.periodId ? { periodId: options.periodId } : {}) })
+      .catch((error: unknown) => {
+        console.warn(`[daily-briefing] edition read threw ${JSON.stringify({
+          date, periodId: options.periodId ?? 'default', locale: target,
+          error: error instanceof Error ? error.message.slice(0, 160) : String(error).slice(0, 160)
+        })}`)
+        return undefined
+      })
+    if (!reportedResults.has(`${diagnosticKey}|${result?.state ?? 'threw'}`)) {
+      reportedResults.add(`${diagnosticKey}|${result?.state ?? 'threw'}`)
+      console.info(`[daily-briefing] edition read answered ${JSON.stringify({
+        date, periodId: options.periodId ?? 'default', locale: target,
+        state: result?.state ?? 'threw',
+        failureCode: (result as { failureCode?: string } | undefined)?.failureCode ?? null
+      })}`)
+    }
     if (result?.state === 'available') {
       cache.current.set(key, result.document)
       setView({ status: 'ready', document: result.document, kind: date === (periodDate.current ?? todayDate) ? 'today' : 'history' })

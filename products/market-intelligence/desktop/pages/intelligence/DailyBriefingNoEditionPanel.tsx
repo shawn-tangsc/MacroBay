@@ -21,6 +21,9 @@ function noEditionToday(text: DailyBriefingText, timeZone: string, scheduledTime
 }
 
 /** What the pane says for one day the reader selected that has nothing to read. */
+/** 诊断去重：同一组三元组 + 同一种空态只报一次。 */
+const reportedPaneGaps = new Set<string>()
+
 export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTime, todayDate, formatTime, now, onOpenSettings, selection, editions, onReread }: Readonly<{
   view: Extract<DailyBriefingPageViewState, { status: 'no-edition' }>
   text: DailyBriefingText
@@ -53,6 +56,21 @@ export function DailyBriefingNoEditionPanel({ view, text, timeZone, scheduledTim
   const languageState = knownRow?.languages?.find((entry) => entry.locale === selection?.locale)?.state
   const knownButUnreadable = knownRow !== undefined && knownRow.periodDeleted !== true && languageState === 'published'
   if (knownButUnreadable) {
+    // 诊断：列表说这一期这一语言发布过，这一屏却没有正文。三样一次打全——**按哪个三元组判的、
+    // 这一屏处于哪种空态、有没有失败码**；JSON 拼进字符串，别让 Electron 摊成 `[object Object]`。
+    // 同一组身份只打一次：每 1.5 秒一条会把日志淹掉（用户 2026-11-14 的日志就是这样刷屏的）。
+    const diagnosticKey = [view.date, selection?.periodId ?? '', selection?.locale ?? '', view.status,
+      String((view as { failureCode?: string }).failureCode ?? '')].join('|')
+    if (!reportedPaneGaps.has(diagnosticKey)) {
+      reportedPaneGaps.add(diagnosticKey)
+      console.warn(`[daily-briefing] published edition has no body in the pane ${JSON.stringify({
+        date: view.date,
+        periodId: selection?.periodId ?? null,
+        locale: selection?.locale ?? null,
+        viewStatus: view.status,
+        failureCode: (view as { failureCode?: string }).failureCode ?? null
+      })}`)
+    }
     // 诊断：列表说这一期这一语言发布过，这一屏却没有正文。把**实际按哪个三元组判的**写出来，
     // 否则只能靠猜（用户 2026-11-14 的那一屏就是这样查了很久）。
     console.warn('[daily-briefing] published edition has no body in the pane', {

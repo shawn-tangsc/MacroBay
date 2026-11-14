@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import { DEFAULT_PERIOD_ID, type DailyBriefingAttemptRecord, type DailyBriefingDocument, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from '../../../contracts/dailyBriefing'
+import { dailyBriefingPolicy, isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from '../../../contracts/dailyBriefing'
 import type {
   DailyBriefingAttemptEnd,
   DailyBriefingAttemptStart,
@@ -465,6 +465,26 @@ type Row = Readonly<{
   trace_json?: string | null
 }>
 
+/**
+ * 一行读不出来时，**必须留下能读的证据**（用户 2026-11-14：所有版本一起变成「读取失败」，
+ * 而三处 `return undefined` 一声不吭）。同一条身份只报一次，避免每 1.5 秒刷屏。
+ */
+const readFailuresReported = new Set<string>()
+function reportUnreadableRow(row: Row, reason: string, detail: Readonly<Record<string, unknown>> = {}): void {
+  const key = `${row.edition_date}|${row.period_id ?? DEFAULT_PERIOD_ID}|${row.locale}|${reason}`
+  if (readFailuresReported.has(key)) return
+  readFailuresReported.add(key)
+  console.warn(`[daily-briefing] stored edition cannot be read ${JSON.stringify({
+    reason,
+    date: row.edition_date,
+    periodId: row.period_id ?? DEFAULT_PERIOD_ID,
+    locale: row.locale,
+    storageSchemaVersion: row.schema_version,
+    bytes: row.document_json.length,
+    ...detail
+  })}`)
+}
+
 function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined {
   if (!row) return undefined
   // A row written before the upgrade carries the old storage version; its document shape is the
@@ -472,14 +492,26 @@ function parseRow(row: Row | undefined): DailyBriefingStoredEdition | undefined 
   // **存储版本不是文档版本**：bump 之后必须继续读得动上一版写的行（2..当前版本），否则升级那一刻
   // 上一版写的历史会整批消失（2026-11-09 事故：3→4 把 10/30–11/02 与今天的中文版一起藏了起来）。
   // 只拒绝未来版本——这个 build 读不懂还不存在的形状。
-  if (row.schema_version < 2 || row.schema_version > dailyBriefingStoragePolicy.schemaVersion) return undefined
+  if (row.schema_version < 2 || row.schema_version > dailyBriefingStoragePolicy.schemaVersion) {
+    reportUnreadableRow(row, 'storage-version', { supported: dailyBriefingStoragePolicy.schemaVersion })
+    return undefined
+  }
   let document: DailyBriefingDocument
   try {
     document = JSON.parse(row.document_json) as DailyBriefingDocument
-  } catch {
+  } catch (error) {
+    reportUnreadableRow(row, 'json-parse', { error: error instanceof Error ? error.message.slice(0, 120) : String(error).slice(0, 120) })
     return undefined
   }
-  if (!isDailyBriefingDocumentWithinBudget(document)) return undefined
+  if (!isDailyBriefingDocumentWithinBudget(document)) {
+    reportUnreadableRow(row, 'over-budget', {
+      // 上限与文档自己的版本都打出来：版本新一档、形状多了字段时，最容易在这里被静默拒掉。
+      maximumBytes: dailyBriefingPolicy.maximumBytes,
+      documentSchemaVersion: (document as { schemaVersion?: number }).schemaVersion ?? null,
+      policySchemaVersion: dailyBriefingPolicy.schemaVersion
+    })
+    return undefined
+  }
   return Object.freeze({
     date: row.edition_date,
     periodId: row.period_id ?? DEFAULT_PERIOD_ID,
