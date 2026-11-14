@@ -32,8 +32,6 @@ import {
 // 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
 export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
-import { selectPastWindowReleases } from './dailyBriefingPastWindow'
-import { selectTier1UpcomingReleases } from './dailyBriefingTier1Upcoming'
 
 /**
  * 这一版算不算「补跑」：运行时刻明显晚于它的统计截止。
@@ -61,31 +59,19 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const macroCandidates = selectMacroCandidates(packet, new Set(packet.macroWebValueKeys ?? []))
   const macro = selectMacro(packet, macroCandidates)
   // 宏观那一栏空的时候说什么，一次算清：句子、过期几小时、有事件但没值的条数。
-  // 窗口里的总数与构成：来自全部行，与明细分开（产品 2026-11-14）。明细只摆 3 条，
-  // 这个数说的是那段时间到底有多少事；两者混用会写成「共 7 条」却列 0 条。
-  const pastWindow = selectPastWindowReleases(packet.calendar.events, {
-    start: packet.windowStart, end: packet.windowEnd, timeZone: packet.timeZone
-  })
-  const macroWindowNotes = packet.calendar.state === 'available'
-    ? { macroWindow: Object.freeze({ ...pastWindow.counts, hidden: pastWindow.hidden }) }
-    : {}
-  // 窗口里一条都没有时**不落「没有高影响事件」那个码**（产品 2026-11-14）：那句话是替来源下的
-  // 断言。现在的空只分两种——读不到（下面这些码），或「确实没有已收录的发布」（由计数那一块说）。
   const macroEmpty = macro.length > 0 ? undefined : macroEmptyCode(packet)
   // 窗口里到底有多少条高影响事件（不看有没有值）。版面不再印"几条没拿到"（用户 2026-11-06），
   // 所以只留总数；缺值这件事由事实本身表达——事件行在、值格不渲染。
   const highImpact = highImpactEventsInWindow(packet)
   const macroTotals = highImpact.length === 0 ? {} : { macroHighImpactCount: highImpact.length }
-  const macroEmptyNotes = macroEmpty === undefined ? { ...macroWindowNotes } : {
+  const macroEmptyNotes = macroEmpty === undefined ? {} : {
     macroEmpty,
     // The stale sentence names the age; nothing else can fill it truthfully, and the number
     // rides beside the code rather than inside it so the copy stays in the text table.
     ...(macroEmpty === 'calendar-stale' && macroEmptyHours(packet) !== undefined
       ? { macroEmptyHours: macroEmptyHours(packet)! }
-      : {}),
-    ...macroWindowNotes
+      : {})
   }
-  const tier1Upcoming = selectTier1UpcomingReleases(packet.calendar.events, packet.asOf)
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
   const built = buildConclusion(packet)
@@ -142,7 +128,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
       ...(packet.newsSources === undefined || packet.newsSources.length === 0 ? {} : { sources: packet.newsSources }),
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
-        ...macroEmptyNotes,
+        ...(macroEmpty === undefined ? {} : macroEmptyNotes),
         ...macroTotals,
         ...(packet.macroValueConflicts === undefined || packet.macroValueConflicts.length === 0
           ? {}
@@ -164,7 +150,6 @@ export function buildDailyBriefingDocument(input: Readonly<{
       items: next.items,
       ...(next.focus ? { focus: next.focus } : {}),
       ...(nextCandidates.length > 0 ? { candidates: nextCandidates } : {}),
-      ...(tier1Upcoming.length > 0 ? { tier1Upcoming: Object.freeze(tier1Upcoming) } : {}),
       ...(next.items.length > 0 || next.focus ? {} : { note: nextEmptyCode(packet) })
     }),
     citations: built.citations,
@@ -564,7 +549,7 @@ function newsEmptyCode(packet: DailyBriefingFactPacket): string {
  * differ, and measuring against the period's nominal cutoff would make the section show events while
  * claiming it could not read them.
  */
-function macroEmptyCode(packet: DailyBriefingFactPacket): string | undefined {
+function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   if (packet.calendar.state === 'source-disabled') return 'calendar-source-disabled'
   const freshness = packet.calendarFreshness
   // No reading at all (an older caller or a fixture): the section must not claim "nothing happened".
@@ -591,9 +576,7 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string | undefined {
   // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。
   // 反过来也要说清（`02` v2.125 ①）：**已取消的事件仍然算「有事件」**——它照常显示、带取消标记、
   // 值那一格不渲染；"取消了"不等于"发生过却没有数据"，更不等于"没有发生"。
-  // 「确实没有已收录的发布」不再是一个原因码（产品 2026-11-14）：那句话由计数那一块说，
-  // 而不是让宏观栏落到「没有高影响事件」上——那正是今天被否掉的写法。
-  return reason === 'past-24h-no-high-impact-release' ? undefined : reason
+  return reason
 }
 
 /** How many hours the calendar was behind this edition's own data cutoff, for the stale sentence. */
@@ -607,23 +590,7 @@ function macroEmptyHours(packet: DailyBriefingFactPacket): number | undefined {
 function nextEmptyCode(packet: DailyBriefingFactPacket): string {
   if (packet.calendar.state === 'source-disabled') return 'calendar-source-disabled'
   if (packet.calendar.state === 'unavailable') return 'calendar-unavailable'
-  // 未来窗口里有「读到了、但来源没给重要性」的事件 → 判不了高影响，只能说「无法判定」。
-  // 这和「确实没有」是两个状态，不许落到同一个分支（产品 2026-11-14）。
-  if (nextWindowHasUnjudgedEvents(packet)) return 'next-7d-importance-unknown'
   return 'next-7d-no-high-impact-event'
-}
-
-/** 未来 7 天窗口里有没有「来源没给重要性」的事件（已取消的不算：它不会发生）。 */
-function nextWindowHasUnjudgedEvents(packet: DailyBriefingFactPacket): boolean {
-  const today = localDate(packet.windowEnd, packet.timeZone)
-  if (today === undefined) return false
-  const horizon = addDays(today, 7)
-  return packet.calendar.events.some((event) => {
-    if (event.importance !== undefined) return false
-    if (event.lifecycleState === 'cancelled') return false
-    const day = event.releaseTimeNotPublished ? event.releaseDate : localDate(event.scheduledAt, packet.timeZone)
-    return day !== undefined && day >= today && day <= horizon
-  })
 }
 
 function normalizeTitle(value: string): string {

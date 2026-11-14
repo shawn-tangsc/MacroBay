@@ -2,7 +2,6 @@ import type { BriefingMacroItem } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import { localDate } from './dailyBriefingWindow'
 import { briefingEventInWindow } from './dailyBriefingCalendarWindow'
-import { selectPastWindowReleases } from './dailyBriefingPastWindow'
 
 /**
  * 宏观那几行怎么选出来——与文档构造分开。它是一套自己的判断：哪些算候选（窗口内的高影响事件、
@@ -70,14 +69,10 @@ export function selectMacroCandidates(
   packet: DailyBriefingFactPacket,
   webValueKeys: ReadonlySet<string> = new Set()
 ): readonly BriefingMacroItem[] {
-  if (packet.calendar.state !== 'available') return Object.freeze([] as const)
-  // 按**读到的全部行**选，不再只认 high（用户 2026-11-14）：重要性是来源给的，来源没给时一条都
-  // 选不出来，版面就写成「没有高影响事件」——把「筛没了」说成了「没有」。上限与排序在
-  // `selectPastWindowReleases` 里，一类一处实现。
-  const selection = selectPastWindowReleases(packet.calendar.events, {
-    start: packet.windowStart, end: packet.windowEnd, timeZone: packet.timeZone
-  })
-  return Object.freeze(selection.shown.map((event) => toMacroItem(event, webValueKeys.has(event.eventKey))))
+  return Object.freeze([...highImpactEventsInWindow(packet)]
+    .filter((event) => briefingMacroEventVisible(event))
+    .sort((left, right) => surpriseMagnitude(right) - surpriseMagnitude(left) || right.scheduledAt.localeCompare(left.scheduledAt))
+    .map((event) => toMacroItem(event, webValueKeys.has(event.eventKey))))
 }
 
 /**

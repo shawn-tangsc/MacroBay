@@ -312,7 +312,7 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.visibility).toBeUndefined()
   })
 
-  it('caps the past-24h list at three releases and reports the rest as a count', () => {
+  it('shows every candidate and keeps the key floor event first, with no cap (2026-11-06)', () => {
     const events = Array.from({ length: 6 }, (_, index) => ({
       eventKey: `US.EVENT_${index}`, title: `event ${index}`, scheduledAt: `2026-10-29T${String(12 + index).padStart(2, '0')}:30:00.000Z`,
       importance: 'high' as const, lifecycleState: 'released' as const, category: 'economic-indicator' as const,
@@ -324,15 +324,16 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    // 产品 2026-11-14：明细按类型上限摆，经济指标最多 2 条；剩下的进「另有 N 条」。
-    expect(document.news.macro).toHaveLength(2)
-    expect(document.news.macroCandidates).toHaveLength(2)
-    expect(document.news.notes.macroWindow).toEqual({ total: 6, indicators: 6, centralBank: 0, financial: 0, hidden: 4 })
+    expect(document.news.macroCandidates).toHaveLength(6)
+    // 不再截断：AI 判定有用的全部显示（用户 2026-11-06），没有"另 N 条未列出"这回事。
+    expect(document.news.macro).toHaveLength(6)
+    // 确定性兜底（最大意外值）仍排第一，其余按候选顺序。
+    expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
   })
 
-  // 产品 2026-11-14：央行与讲话、财经事件不再整类隐藏，而是**各最多 1 条**——5 条讲话不会占满整屏，
-  // 但「这段时间有一场讲话」也不会被悄悄藏掉。
-  it('allows at most one central-bank and one financial event, and keeps economic data first', () => {
+  // 用户 2026-11-06：「所有央行活动和财经事件，暂时都不要显示在 24h 宏观事件里面」。
+  // 按**类别**判，不按"有没有值"判——以后补上数值也不许自己冒出来；经济数据照常显示。
+  it('keeps central-bank and financial events out of the 24h macro block, and economic data in', () => {
     const base = (eventKey: string, category: 'economic-indicator' | 'financial-event' | 'central-bank-activity') => ({
       eventKey, title: eventKey, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
       lifecycleState: 'released' as const, category,
@@ -347,18 +348,16 @@ describe('daily briefing document', () => {
     ]
     const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
 
-    const keys = document.news.macro.map((item) => item.eventKey)
-    expect(keys).toContain('US.CPI')
-    expect(keys).toContain('US.CLAIMS')
-    expect(keys).toContain('US.FED.SPEECH')
-    expect(keys).toHaveLength(3)
-    // 第 4 条（财经事件）没位置了，但它在总数里：共 4 条、另有 1 条。
-    expect(document.news.notes.macroWindow).toEqual({ total: 4, indicators: 2, centralBank: 1, financial: 1, hidden: 1 })
+    // 正文/导出读的是这一份，分析素材也读它：两类事件一处过滤，三处一致。
+    expect(document.news.macro.map((item) => item.eventKey).sort()).toEqual(['US.CLAIMS', 'US.CPI'])
+    expect(document.news.macroCandidates?.map((item) => item.eventKey) ?? []).not.toContain('US.FED.SPEECH')
+    // 经济数据不受影响（对照组）。
+    expect(document.news.macro.some((item) => item.eventKey === 'US.CPI')).toBe(true)
   })
 
-  // 产品 2026-11-14 之后：讲话不再按名字藏起来，而是占「央行与讲话」那一个位置。
-  // 源把讲话标成经济指标时，它按经济指标计数——这是源标错，不是我们再猜一次类别。
-  it('shows a speech whose category the source got wrong, instead of hiding it by its name', () => {
+  // 用户 2026-11-06：类别不可信时按名字兜底——讲话、发布会、纪要、决议一律按央行活动处理，
+  // 而「官方银行利率」这种带值的指标名字不沾这些词，必须照常显示。两种语言都要管：英文版次读的是英文事件名。
+  it('hides a speech by its name when the source called it an economic indicator', () => {
     const event = (eventKey: string, title: string, extra: Record<string, unknown> = {}) => ({
       eventKey, title, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
       lifecycleState: 'released' as const, category: 'economic-indicator' as const,
@@ -370,12 +369,10 @@ describe('daily briefing document', () => {
       event('GB.OFFICIAL.RATE', '官方银行利率', { actual: '4.00%', previous: '3.75%' })
     ]
     const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
-    // 三条都算经济指标，上限 2 条：前两条按时刻进入，第三条进「另有 1 条」。
-    expect(document.news.macro).toHaveLength(2)
-    expect(document.news.notes.macroWindow).toEqual({ total: 3, indicators: 3, centralBank: 0, financial: 0, hidden: 1 })
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['GB.OFFICIAL.RATE'])
   })
 
-  it('does not hide english speech titles either — the cap is what keeps them from flooding', () => {
+  it('applies the same name fallback to english event titles', () => {
     const event = (eventKey: string, title: string) => ({
       eventKey, title, scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high' as const,
       lifecycleState: 'released' as const, category: 'economic-indicator' as const, surprise: { direction: 'inline' as const }
@@ -386,20 +383,19 @@ describe('daily briefing document', () => {
       event('US.CPI', 'Consumer Price Index (YoY)')
     ]
     const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
-    expect(document.news.macro).toHaveLength(2)
-    expect(document.news.notes.macroWindow?.total).toBe(3)
+    expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.CPI'])
   })
 
-  it('counts an event with no category as an economic indicator, so the three counts add up to the total', () => {
+  it('hides a speech whose category is missing', () => {
+    // 老文档、或者换了个源没给类别：名字是讲话就还是不许冒出来。
     const events = [{
       eventKey: 'US.FED.SPEECH', title: '美联储主席鲍威尔发表讲话', scheduledAt: '2026-10-29T12:30:00.000Z',
       importance: 'high' as const, lifecycleState: 'released' as const, surprise: { direction: 'inline' as const },
-      // 源没给类别时读到的就是 undefined：三类相加必须仍等于总数。
+      // 源没给类别时读到的就是 undefined：这三类在类型上必填，这里显式抹掉来模拟那种一行。
       category: undefined as unknown as 'economic-indicator'
     }]
     const document = buildDailyBriefingDocument({ packet: packet({ calendar: { state: 'available', events } }), date: '2026-10-30' })
-    expect(document.news.macro).toHaveLength(1)
-    expect(document.news.notes.macroWindow).toEqual({ total: 1, indicators: 1, centralBank: 0, financial: 0, hidden: 0 })
+    expect(document.news.macro).toHaveLength(0)
   })
 
   it('decides by category, so a valued speech or auction stays hidden', () => {
@@ -896,11 +892,8 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    // 产品 2026-11-14：这一档不再落「没有高影响事件」的码——那句话由计数那一块说，
-    // 「这段时间没有已收录的发布」只在 total === 0 时由版面渲染。
-    expect(document.news.notes.macroEmpty).toBeUndefined()
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
     expect(document.news.notes.macroEmptyHours).toBeUndefined()
-    expect(document.news.notes.macroWindow).toEqual({ total: 0, indicators: 0, centralBank: 0, financial: 0, hidden: 0 })
   })
 
   it('records when the run read the world, and that the window did not move with it', () => {
@@ -940,9 +933,9 @@ describe('daily briefing document', () => {
     expect(document.edition.readAt).toBe('2026-10-30T00:00:20.000Z')
   })
 
-  it('keeps events whose actuals never arrived on the page, and counts the ones it did not show (A0.12)', () => {
+  it('keeps high-impact events whose actuals never arrived on the page (A0.12)', () => {
     // 用户 2026-11-05 报的那一版：窗口内 9 条高影响事件，到冻结那一刻一条实际值都没回补。
-    // 事件优先：它们照样是候选，缺的只是值那一格；空态那句「没有」根本不该出现。
+    // 事件优先：它们照样是候选、照样进正文，缺的只是值那一格；空态那句「没有」根本不该出现。
     const events = Array.from({ length: 9 }, (_, index) => ({
       eventKey: `EV.${index}`,
       title: `Event ${index}`,
@@ -960,17 +953,19 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    // 明细按类型上限摆两条，其余进「另有 7 条」——但九条都在总数里，不会被说成「没有」。
-    expect(document.news.macro).toHaveLength(2)
-    expect(document.news.notes.macroWindow).toEqual({ total: 9, indicators: 9, centralBank: 0, financial: 0, hidden: 7 })
+    // 九条都在候选里（页面按上限取前四条，其余留在候选表备查）。
+    expect(document.news.macroCandidates).toHaveLength(9)
+    expect(document.news.macro.length).toBeGreaterThan(0)
+    // 总数与缺值数一起写：句子念得出"共几条、其中几条没拿到"。
     expect(document.news.notes.macroHighImpactCount).toBe(9)
+    // 正文不编数值。
     expect(document.news.macro.every((item) => item.actual === undefined)).toBe(true)
+    // 也没有"没有事件"那句话——事件在。
     expect(document.news.notes.macroEmpty).toBeUndefined()
   })
 
-  // 产品 2026-11-14：不许再把「筛没了」写成「没有」。「确实没有已收录的发布」只有一个条件——
-  // 窗口里一条都没读到；只要读过且有条目，哪怕都没有重要性，也要把总数与构成写出来。
-  it('never claims "no high-impact event" when the window did contain releases', () => {
+  it('keeps the plain "nothing" sentence when the window really had no high-impact event', () => {
+    // 反向：窗口里只有低影响事件时，仍然是"一条高影响都没有"，不许被上一档顶掉。
     const events = [{
       eventKey: 'EV.LOW', title: 'Low', scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'medium' as const,
       lifecycleState: 'scheduled' as const, category: 'economic-indicator' as const,
@@ -983,22 +978,9 @@ describe('daily briefing document', () => {
       }),
       date: '2026-10-30'
     })
-    expect(document.news.notes.macroEmpty).toBeUndefined()
-    expect(document.news.notes.macroWindow).toEqual({ total: 1, indicators: 1, centralBank: 0, financial: 0, hidden: 0 })
-    expect(document.news.macro).toHaveLength(1)
-  })
-
-  it('leaves the section to the collected-empty sentence only when the window really had no release', () => {
-    const document = buildDailyBriefingDocument({
-      packet: packet({
-        calendar: { state: 'available', events: [] },
-        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
-      }),
-      date: '2026-10-30'
-    })
-    expect(document.news.notes.macroEmpty).toBeUndefined()
-    expect(document.news.notes.macroWindow).toEqual({ total: 0, indicators: 0, centralBank: 0, financial: 0, hidden: 0 })
-    expect(document.news.macro).toHaveLength(0)
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    // 窗口里连高影响事件都没有：总数不写，正文里也没有任何一句话。
+    expect(document.news.notes.macroHighImpactCount).toBeUndefined()
   })
 
   it('keeps a cancelled event on the page and marks it, without inventing a value (A0.12)', () => {

@@ -242,13 +242,9 @@ describe('the macro section draws events, and says why it is empty without imply
     const present = rendered.querySelector('[data-macro-parse="present"]')!
     expect(absent).not.toBeNull()
     expect(present).not.toBeNull()
-    // 结构判据：absent 行里**根本没有** ⓘ；present 行里恰一个（解读收进那里，不进正文）。
-    expect(absent.querySelectorAll('button')).toHaveLength(0)
-    expect(present.querySelectorAll('button')).toHaveLength(1)
-    // 正文里不再出现那句解读——它被**移走**了，不是删掉：点开 ⓘ 还能读到原文。
-    expect(present.textContent).not.toContain('初请低于前值')
-    await act(async () => present.querySelector<HTMLButtonElement>('button')!.click())
-    expect(document.querySelector('[data-popover-content]')?.textContent).toContain('初请低于前值')
+    // 结构判据：absent 行里**根本不生成**解析容器；present 行里恰一个。
+    expect(absent.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(0)
+    expect(present.querySelectorAll('.mi-brief-poster__news-reason')).toHaveLength(1)
     // 讲话行照常显示时刻与标题，但没有值、没有解析，也不出现任何缺失话术。
     expect(absent.textContent).toContain('里奇蒙联储主席巴尔金发表讲话')
     expect(absent.textContent).not.toContain('—')
@@ -836,154 +832,56 @@ describe('citation source labels', () => {
   })
 })
 
-// 产品 2026-11-14：过去段先写「共几条、摆了哪几条」，未来段判不了重要性时写「无法判定」+ 一级排期。
-// 这一条钉的是**这两块真的出现在正文里**——文档里有数但没人画，正是今晚反复出现的那种「做完了」。
-describe('the past-24h counts and the tier-1 schedule', () => {
-  it('prints the window total, the unshown count, the unjudged sentence and the schedule', async () => {
-    const base = briefing()
-    const doc: DailyBriefingDocument = {
-      ...base,
-      news: {
-        ...base.news,
-        notes: { macroWindow: { total: 7, indicators: 1, centralBank: 5, financial: 1, hidden: 4 } }
-      },
-      next: {
-        items: [],
-        note: 'next-7d-importance-unknown',
-        tier1Upcoming: [
-          { metricKey: 'US.CORE_PCE.SA.YOY', title: 'Core PCE YoY', scheduledAt: '2026-11-25T13:30:00.000Z', releaseDate: '2026-11-25' },
-          { metricKey: 'US.NONFARM.SA.CHANGE', title: 'Nonfarm payrolls', scheduledAt: '2026-12-04T00:00:00.000Z', releaseDate: '2026-12-04' }
-        ]
-      }
-    }
-
-    const host = await render(doc)
-    // 表头只写短句 `过去 24 小时 · 7 条`；构成明细进 ⓘ，正文里不再出现那句长句。
-    const counts = host.querySelector('[data-macro-window-counts]')?.textContent ?? ''
-    expect(counts).toContain('7')
-    expect(counts).not.toContain('economic indicators')
-    const compositionTrigger = host.querySelector<HTMLButtonElement>('[data-macro-window-counts] button')!
-    await act(async () => compositionTrigger.click())
-    expect(document.querySelector('[data-popover-content]')?.textContent).toContain('5')
-    expect(host.querySelector('[data-macro-window-others]')?.textContent).toContain('4')
-    // 「无法判定」的原因句不在正文：表头写短词，原因进 ⓘ。
-    expect(host.querySelector('[data-next-undetermined]')?.textContent).toContain('Cannot be determined')
-    expect(host.textContent).not.toContain('(the source provides no importance)')
-    expect(host.querySelector('[data-next-tier1]')?.textContent).toContain('Tier-1 indicator schedule')
-    expect(host.querySelectorAll('[data-next-tier1] li')).toHaveLength(2)
-  })
-})
-
-// 用户 2026-11-15：表头写「0 个高影响事件」而正文写「无法判定」，同一屏自己打架。
-// 判不了重要性时不许数数；「无法判定」全屏只出现一次。
-describe('the unsettled next section', () => {
-  it('does not count events and says "cannot be determined" exactly once', async () => {
-    const base = briefing()
-    const doc: DailyBriefingDocument = {
-      ...base,
-      next: {
-        items: [],
-        note: 'next-7d-importance-unknown',
-        tier1Upcoming: [
-          { metricKey: 'US.CPI.NSA.YOY', title: 'CPI YoY', scheduledAt: '2026-12-10T00:00:00.000Z', releaseDate: '2026-12-10' }
-        ]
-      }
-    }
-    const host = await render(doc)
-    const text = host.textContent ?? ''
-    expect(text).not.toContain('0 high-impact')
-    // 正文只有表头那个短词（一次）；原因那句整句只出现在 ⓘ 里。
-    expect(text.match(/Cannot be determined/g) ?? []).toHaveLength(1)
-    expect(text).not.toContain('(the source provides no importance)')
-    const noteTrigger = host.querySelector<HTMLButtonElement>('[data-next-undetermined] button')!
-    await act(async () => noteTrigger.click())
-    expect(document.querySelector('[data-popover-content]')?.textContent).toContain('(the source provides no importance)')
-  })
-})
-
 /**
- * 三条 DOM 判据（Chief 2026-11-15 / 产品 §4.1a「反复出现过的口径，第三次重申」）：
- * 正文只留字段名、当前值、控件；解释为什么、意味着什么的句子一律进 ⓘ。
- * 这三条不靠人看，`Popover` 的 content 节点就是「原文被移到哪里」的证据。
+ * 用户 2026-11-15：「这两块以前就是好的，无非是简报读日历换了数据源。」
+ * 所以判据不是「有没有解释句」，而是**这两块与原版逐字相同**。
+ *
+ * 下面把两块的全部可见正文拼起来与固定串比对：改回任何一处今晚的脚手架
+ * （计数行、`另有 N 条`、`无法判定`、`一级指标排期`）都会立刻红。
  */
-describe('body keeps facts, the why goes into ⓘ', () => {
-  const explained = (): DailyBriefingDocument => {
+describe('the two restored blocks read exactly as before', () => {
+  const restoredDoc = (): DailyBriefingDocument => {
     const base = briefing()
     return {
       ...base,
       news: {
         ...base.news,
-        macro: [{ ...base.news.macro[0]!, why: '初请低于前值，劳动力市场仍紧，抬高贴现率压力。' }],
+        macro: [{ ...base.news.macro[0]!, why: '投入成本压力缓和，抬高贴现率压力。' }],
         notes: {}
       },
-      next: { items: [], note: 'next-7d-importance-unknown', tier1Upcoming: [] }
+      next: {
+        items: [],
+        focus: {
+          eventKey: 'US.PCE', title: '核心 PCE 年率', countryName: '美国',
+          at: '2026-11-25T13:30:00.000Z', importance: 'high' as const,
+          category: 'economic-indicator' as const, consensus: '3.2%', previous: '3.1%',
+          why: '通胀回落速度决定下一次降息窗口。'
+        }
+      }
     }
   }
 
-  it('body carries no sentence ending with a full stop', async () => {
-    const host = await render(explained())
-    // 解读那句以「。」收尾；正文里一个字都不该出现。
-    expect(host.textContent).not.toContain('初请低于前值')
-    expect(host.textContent).not.toMatch(/为什么|意味着|劳动力市场/)
-  })
-
-  it('body carries no parenthetical explanation', async () => {
-    const host = await render(explained())
-    expect(host.textContent).not.toContain('(the source provides no importance)')
-    expect(host.textContent).not.toContain('（')
-  })
-
-  it('keeps the moved text readable inside ⓘ instead of deleting it', async () => {
-    const host = await render(explained())
-    const open = async (selector: string): Promise<void> => {
-      const button = host.querySelector<HTMLButtonElement>(selector)!
-      await act(async () => button.click())
+  it('keeps the four removed strings out and the value plus its sentence in', async () => {
+    const host = await render(restoredDoc())
+    const body = host.textContent ?? ''
+    for (const removed of ['过去 24 小时 ·', '另有 ', '无法判定', '一级指标排期']) {
+      expect(body, removed).not.toContain(removed)
     }
-    const opened = (): string => Array.from(document.querySelectorAll('[data-popover-content]'))
-      .map((node) => node.textContent ?? '').join(' | ')
-    await open('[data-macro-parse="present"] button')
-    expect(opened()).toContain('初请低于前值')
-    await open('[data-next-undetermined] button')
-    expect(opened()).toContain('(the source provides no importance)')
-  })
-})
-
-/**
- * 「这一屏正文里还有没有说明性句子」——用 DOM 回答，不靠人眼。
- *
- * 范围限定在**宏观栏与未来栏**（受「正文只留字段名与值」这条管的两处）；结论、导语那些成文段落
- * 本来就是议论，不在这条口径内。判据两条：正文不出现句号收尾的解读句；不出现括号解释。
- * 值后缀 `(web)` 是**字段标记**（这一格来自网页），不是解释，所以按具体解释串断，不按「有没有括号」断。
- */
-describe('no explanatory sentence is left in the visible body', () => {
-  const docWithProse = (): DailyBriefingDocument => {
-    const base = briefing()
-    return {
-      ...base,
-      news: {
-        ...base.news,
-        macro: [
-          { ...base.news.macro[0]!, why: '核心 PPI 走低，投入成本压力缓和。' },
-          { ...base.news.macro[0]!, eventKey: 'US.SPEECH', title: '里奇蒙联储主席巴尔金发表讲话', actual: undefined, previous: undefined, consensus: undefined, why: undefined }
-        ],
-        notes: { macroWindow: { total: 2, indicators: 1, centralBank: 1, financial: 0, hidden: 0 } }
-      },
-      next: { items: [], note: 'next-7d-importance-unknown', tier1Upcoming: [] }
-    }
-  }
-
-  it('keeps the macro and next sections free of sentences and bracketed explanations', async () => {
-    const host = await render(docWithProse())
-    const governed = host.querySelectorAll('[data-macro-window-counts], .mi-brief-poster__macro, .mi-brief-poster__next')
-    const body = Array.from(governed).map((node) => node.textContent ?? '').join(' | ')
-    // 证据（打印出来，人眼只做复核，判据在这两条断言上）：
-    // eslint-disable-next-line no-console
-    console.log('BODY_SCOPE_TEXT:', body)
-    expect(body).not.toContain('。')
-    expect(body).not.toContain('(the source provides no importance)')
-    expect(body).not.toContain('（')
-    // 剩下的确实只有字段与值：短表头、名称、实际、前值。
-    expect(body).toContain('Past 24 hours · ')
+    expect(body).toContain(text.sections.macro)
     expect(body).toContain('CPI')
+    expect(body).toContain('投入成本压力缓和，抬高贴现率压力。')
+    expect(body).toContain(text.sections.next)
+    expect(body).toContain(text.next.count.replace('{count}', '1'))
+    expect(body).toContain('通胀回落速度决定下一次降息窗口。')
+  })
+
+  it('renders nothing at all for either block when there is nothing to put in it', async () => {
+    const base = briefing()
+    const host = await render({ ...base, news: { ...base.news, macro: [], notes: {} }, next: { items: [] } })
+    expect(host.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+    expect(host.querySelector('.mi-brief-poster__next')).toBeNull()
+    const body = host.textContent ?? ''
+    expect(body).not.toContain(text.sections.macro)
+    expect(body).not.toContain(text.sections.next)
   })
 })

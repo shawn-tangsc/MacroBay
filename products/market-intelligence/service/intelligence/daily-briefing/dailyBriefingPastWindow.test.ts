@@ -38,34 +38,19 @@ describe('the past-24h window', () => {
     expect(selection.hidden).toBe(selection.counts.total - selection.shown.length)
   })
 
-  // 类型不限（2/1/1 配比已作废）：明细就是**最近的三条**，讲话照列——不让「今天有没有指标」
-  // 决定「讲话列不列」。这条同时钉住顺序：从新到旧。
-  it('takes the three newest releases regardless of type', () => {
+  // 5 条讲话不许占满整屏：央行类最多 1 条。
+  it('never lets the speech pile take more than one slot', () => {
     const selection = selectPastWindowReleases(realWindow(), window)
-    expect(selection.shown.map((event) => event.title)).toEqual(['央行讲话', '石油钻井数', '央行讲话'])
-    expect(selection.shown.map((event) => event.scheduledAt)).toEqual([
-      '2026-11-14T00:00:00.000Z', '2026-11-13T18:00:00.000Z', '2026-11-13T17:00:00.000Z'
-    ])
-    expect(selection.hidden).toBe(4)
+    expect(selection.shown.filter((event) => event.category === 'central-bank-activity').length).toBeLessThanOrEqual(1)
   })
 
-  // 不看「有没有值」：这一栏按时间读，按值排会让同一份窗口在不同天列出不同内容。
-  it('orders by time, not by whether a value exists', () => {
+  // 有值的指标先上：带 actual 的那条在不带 actual 的前面。
+  it('puts a release with an actual value ahead of one without', () => {
     const selection = selectPastWindowReleases([
       event({ title: '无值指标', scheduledAt: '2026-11-13T13:00:00.000Z' }),
       event({ title: '有值指标', scheduledAt: '2026-11-13T20:00:00.000Z', actual: '0.3' })
     ], window)
-    expect(selection.shown.map((event) => event.title)).toEqual(['有值指标', '无值指标'])
-  })
-
-  // 同一份输入必须给出同一份明细：同一时刻按 `eventKey` 定序，不靠数组原序。
-  it('breaks a same-instant tie by event key so the same input always lists the same three', () => {
-    const at = '2026-11-13T13:30:00.000Z'
-    const selection = selectPastWindowReleases([
-      event({ eventKey: 'b', scheduledAt: at }), event({ eventKey: 'a', scheduledAt: at }),
-      event({ eventKey: 'c', scheduledAt: at }), event({ eventKey: 'd', scheduledAt: '2026-11-13T12:30:00.000Z' })
-    ], window)
-    expect(selection.shown.map((event) => event.eventKey)).toEqual(['a', 'b', 'c'])
+    expect(selection.shown[0]!.title).toBe('有值指标')
   })
 
   // 总数 < 明细条数是不可能发生的：hidden 永远非负，这条防止「共 0 条却列了 1 条」。

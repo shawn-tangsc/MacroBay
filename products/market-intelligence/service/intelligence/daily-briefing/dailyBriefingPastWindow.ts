@@ -27,28 +27,35 @@ export type BriefingPastWindowSelection = Readonly<{
   hidden: number
 }>
 
-/** 明细条数上限。**类型配比不再存在**（2/1/1 已作废）：类型不限，只留一个总数。 */
-export const briefingPastWindowCaps = Object.freeze({ total: 3 })
+export const briefingPastWindowCaps = Object.freeze({ indicators: 2, centralBank: 1, financial: 1, total: 3 })
 
 export function selectPastWindowReleases(
   events: readonly DailyBriefingCalendarEvent[],
   window: Readonly<{ start: string; end: string; timeZone: string }>
 ): BriefingPastWindowSelection {
   const inWindow = events.filter((event) => briefingEventInWindow(event, window))
-  // 类别缺失的行按经济指标计入：三类相加必须等于总数，否则「共 7 条（1·5·1）」自己就不成立。
-  const categoryOf = (event: DailyBriefingCalendarEvent): NonNullable<DailyBriefingCalendarEvent['category']> =>
-    event.category ?? 'economic-indicator'
   const counts: BriefingPastWindowCounts = Object.freeze({
     total: inWindow.length,
-    indicators: inWindow.filter((event) => categoryOf(event) === 'economic-indicator').length,
-    centralBank: inWindow.filter((event) => categoryOf(event) === 'central-bank-activity').length,
-    financial: inWindow.filter((event) => categoryOf(event) === 'financial-event').length
+    indicators: inWindow.filter((event) => event.category === 'economic-indicator').length,
+    centralBank: inWindow.filter((event) => event.category === 'central-bank-activity').length,
+    financial: inWindow.filter((event) => event.category === 'financial-event').length
   })
-  /* 类型不限、按 `scheduledAt` **从新到旧**取前 3 条（产品 §4.1 定稿）：讲话照列，只写时刻/国家/名称。
-     不按类型配比——那会让「今天有没有指标」决定「讲话列不列」，同样的 24 小时会因另一个因素变样。
-     也不按「有没有值」排：这一栏按时间读。同一时刻按 `eventKey` 定序，同一份输入永远给同一份明细。 */
-  const ordered = [...inWindow].sort((left, right) =>
-    right.scheduledAt.localeCompare(left.scheduledAt) || left.eventKey.localeCompare(right.eventKey))
-  const shown = ordered.slice(0, briefingPastWindowCaps.total)
+  const ordered = [...inWindow].sort((left, right) => {
+    const leftValue = left.actual === undefined ? 1 : 0
+    const rightValue = right.actual === undefined ? 1 : 0
+    return leftValue - rightValue || left.scheduledAt.localeCompare(right.scheduledAt)
+  })
+  const shown: DailyBriefingCalendarEvent[] = []
+  const used = { 'economic-indicator': 0, 'central-bank-activity': 0, 'financial-event': 0 }
+  const capOf = (category: DailyBriefingCalendarEvent['category']): number =>
+    category === 'economic-indicator' ? briefingPastWindowCaps.indicators
+      : category === 'central-bank-activity' ? briefingPastWindowCaps.centralBank
+        : briefingPastWindowCaps.financial
+  for (const event of ordered) {
+    if (shown.length >= briefingPastWindowCaps.total) break
+    if (used[event.category] >= capOf(event.category)) continue
+    used[event.category] += 1
+    shown.push(event)
+  }
   return Object.freeze({ counts, shown: Object.freeze(shown), hidden: counts.total - shown.length })
 }
