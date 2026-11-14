@@ -106,7 +106,10 @@ describe('key-indicator drawer', () => {
 
   it('lists three release rows in the cell and marks the rest with a corner badge', async () => {
     // 一天 5 条 → 格子里三条 + 角标「+2」；数据来自那次按月读，不是内建示例。
-    const busyDay = [1, 2, 3, 4, 5].map((index) => dayEvent(`busy-${index}`, `事件 ${index}`, `2026-11-13T${String(9 + index).padStart(2, '0')}:00:00.000Z`))
+    // 一二级指标（CPI / 非农 / PCE）才露名字：格子里最多三条，其余进角标。
+    const tieredMeasures = ['US.CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY', 'US.CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE']
+    const busyDay = [1, 2, 3, 4, 5].map((index) => dayEvent(`busy-${index}`, `事件 ${index}`,
+      `2026-11-13T${String(9 + index).padStart(2, '0')}:00:00.000Z`, { measureKeys: [tieredMeasures[index - 1]!] }))
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => busyDay })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '13')!
@@ -119,6 +122,21 @@ describe('key-indicator drawer', () => {
     for (const row of Array.from(cell.querySelectorAll('.mk-mcell__row'))) {
       expect(row.contains(badge)).toBe(false)
     }
+  })
+
+  // 用户 2026-11-14：格子里**只写一级、二级**的名字，其余（央行讲话、库存这类未标级的）
+  // 全部进角标数字。这条是「名字灌满格子」的反向判据：把 filterVisibleByTier 去掉即红。
+  it('shows no names for untiered events and counts every one of them', async () => {
+    const untiered = [
+      dayEvent('speech-1', '欧洲央行行长拉加德讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity' }),
+      dayEvent('speech-2', '美联储理事讲话', '2026-11-13T03:00:00.000Z', { eventType: 'central-bank-activity' }),
+      dayEvent('stock-1', '上周EIA原油库存变化', '2026-11-13T04:00:00.000Z', { measureKeys: ['US.EIA.CRUDE.STOCKS'] })
+    ]
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => untiered })
+    const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
+      .find(value => value.querySelector('em')?.textContent === '13')!
+    expect(cell.querySelectorAll('.mk-mcell__row')).toHaveLength(0)
+    expect(cell.querySelector('.mk-mcell__more')?.textContent).toBe('+3')
   })
 
   /**
@@ -399,13 +417,13 @@ describe('the three simplified cards', () => {
     { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 3.7, unit: 'percent' },
     { metricKey: 'US.CORE_CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: '2026-11-10T13:30:00.000Z', previousAsPublished: 2.6, unit: 'percent' },
     { metricKey: 'US.NONFARM.SA.CHANGE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 165, previousAsPublished: 29, unit: 'thousands', source: 'narwhal' },
-    { metricKey: 'US.CORE_PCE.NSA.YOY', state: 'not-recorded' },
+    { metricKey: 'US.CORE_PCE.SA.YOY', state: 'not-recorded' },
     { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' }
   ]
 
   /** 给三张卡装上「下一期」，日期由用例指定；PCE 故意不给，用来验证「没有就写暂无排期」。 */
   const withNextRelease = (list: readonly MacroIndicatorCardFact[], releaseAt: string): readonly MacroIndicatorCardFact[] =>
-    list.map((fact) => fact.metricKey === 'US.CORE_PCE.NSA.YOY'
+    list.map((fact) => String(fact.metricKey) === 'US.CORE_PCE.SA.YOY'
       ? fact
       : { ...fact, next: { period: '2026-11', releaseAt, timePrecision: 'minute' as const } })
 

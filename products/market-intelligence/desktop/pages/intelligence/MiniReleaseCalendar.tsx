@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { filterVisibleByTier } from '../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
 import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 
@@ -80,8 +81,12 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
             // 月外的格子不是这个月的日期：画出来只为对齐周次，点了会跳到另一个月——所以不可交互。
             return <div className="mk-minical__day" key={`${rowIndex}-${cell.dateKey}`} data-state={dataState}><em>{cell.day}</em></div>
           }
-          const shown = cell.items.slice(0, CELL_ITEM_LIMIT)
-          const hidden = cell.items.length - shown.length
+          // **格子里只写一级、二级指标与决议类事件的名字**，其余（未标级的讲话、库存这类）全部
+          // 折进右上角那个数字——判据是 `filterVisibleByTier` 一处实现，不在这里另写一套。
+          const tiered = filterVisibleByTier(cell.items.map(item => ({ metricKey: item.metricKey, item })),
+            { maximumVisible: CELL_ITEM_LIMIT })
+          const shown = tiered.visible
+          const hidden = tiered.hiddenTotal
           return <button className="mk-minical__day" type="button" key={`${rowIndex}-${cell.dateKey}`}
             data-state={dataState} aria-pressed={cell.dateKey === selectedDay}
             onClick={() => onSelectDay(cell.dateKey)}>
@@ -102,7 +107,7 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
   </section>
 }
 
-type Item = Readonly<{ name: string; at: string; state: 'done' | 'todo' }>
+type Item = Readonly<{ name: string; at: string; state: 'done' | 'todo'; metricKey: string }>
 type Cell = Readonly<{ dateKey: string; day: number; current: boolean; items: readonly Item[] }>
 
 /** 事件按**读者时区**的日期分组，同一天内按时刻升序。 */
@@ -114,7 +119,7 @@ function groupByDay(events: readonly MarketCalendarEvent[], timeZone: string, no
     if (!Number.isFinite(at)) continue
     const day = calendarDisplayDate(event.scheduledAt, timeZone)
     const items = byDay.get(day) ?? []
-    items.push({ name: event.title, at: event.scheduledAt, state: at <= nowMs ? 'done' : 'todo' })
+    items.push({ name: event.title, at: event.scheduledAt, state: at <= nowMs ? 'done' : 'todo', metricKey: event.eventNameKey ?? event.measureKeys?.[0] ?? '' })
     byDay.set(day, items)
   }
   for (const items of byDay.values()) items.sort((left, right) => Date.parse(left.at) - Date.parse(right.at))
