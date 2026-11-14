@@ -30,7 +30,7 @@ const economicCalendarEmptyStateActionPolicy = { emptyEventCount: 0 } as const
  * state: every value arrives as a prop, so the grid can be reasoned about — and tested — without the
  * page's effects.
  */
-export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable, officialUnavailableDetail, officialFeeds, onRetryMonth, onOpenSettings, marketMonthRead, marketLoading, onRetryMarket }: {
+export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage, officialUnavailable, officialUnavailableDetail, officialFeeds, onRetryMonth, onOpenSettings, marketMonthRead, marketLoading, onRetryMarket, dataStartDate }: {
   statusNow: string
   today: string
   asOf: string
@@ -60,6 +60,8 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   marketLoading?: boolean
   /** 市场侧读不到时的重试：重新读取，不是拿窗口整体状态顶替。 */
   onRetryMarket?: () => void
+  /** 库里最早一天有数据的日期；`undefined`＝这条路径没带上（当成不知道），`null`＝库里还没有数据。 */
+  dataStartDate?: string | null
 }): ReactElement {
   const surface = monthSurface({
     officialUnavailable: officialUnavailable !== undefined,
@@ -94,7 +96,7 @@ export function CalendarMonthBoard({ month, asOf, today, statusNow, onOpenDay, o
   const officialNote = surface === 'note' ? officialUnavailable : undefined
   const officialRow = officialNote === undefined ? null : <p className="mi-economic-calendar__comparison-rule" data-calendar-official-unavailable role="note">{officialNote}{officialUnavailableDetail === undefined ? null : <> {helpTrigger({ text: officialUnavailableDetail })}</>}</p>
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [], today })
-  return <div className="mi-calendar-month-scroll">{notes.map(note => <p className="mi-economic-calendar__comparison-rule" key={note} role="note">{note}</p>)}{officialRow}{state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={text.status.loading} /> : null}{surface === 'no-locale' ? <p className="mi-economic-calendar__comparison-rule" data-calendar-no-locale role="note">{text.noLocaleRowsNote}</p> : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} showEmpty={surface === 'empty'} /></div>
+  return <div className="mi-calendar-month-scroll">{notes.map(note => <p className="mi-economic-calendar__comparison-rule" key={note} role="note">{note}</p>)}{officialRow}{state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={text.status.loading} /> : null}{surface === 'no-locale' ? <p className="mi-economic-calendar__comparison-rule" data-calendar-no-locale role="note">{text.noLocaleRowsNote}</p> : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} showEmpty={surface === 'empty'} dataStartDate={dataStartDate} /></div>
 }
 
 /** 命名月读不到时读者看到的那一句：`query-unavailable` 与状态行共用一句，其余按码各一句。 */
@@ -168,7 +170,7 @@ function CalendarState({ month, text, loading, unavailable = false, onRetry }: {
   </section>
 }
 
-function CalendarMonth({ month, today, statusNow, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage, showEmpty }: {
+function CalendarMonth({ month, today, statusNow, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage, showEmpty, dataStartDate }: {
   statusNow: string
   today: string
   events: readonly EconomicCalendarEventView[]
@@ -183,6 +185,7 @@ function CalendarMonth({ month, today, statusNow, projection, events, selectedEv
   text: EconomicCalendarText
   /** 整块空的时候画不画那个「本月没有任何事件」的空态：来源不提供读者语言时由说明行替代。 */
   showEmpty: boolean
+  dataStartDate?: string | null
 }): ReactElement {
   const timeZone = useShellTimeZone()
   const linkedMarketKeys = new Set(marketEvents.filter(event => event.officialLink).map(event => event.eventKey))
@@ -200,6 +203,7 @@ function CalendarMonth({ month, today, statusNow, projection, events, selectedEv
         </article>
       })}
     </div>
-    {showEmpty && events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyMonthState text={text} /> : null}
+    {showEmpty && events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length
+      ? <CalendarEmptyMonthState text={text} month={month} dataStartDate={dataStartDate} /> : null}
   </section>
 }

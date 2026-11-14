@@ -2186,6 +2186,31 @@ describe('macro economic calendar', () => {
     } finally { query.mockRestore() }
   })
 
+  it('空白月份说清是「早于数据起点」还是「真的没有事件」', async () => {
+    const copy = productText['zh-CN'].pages.intelligence.portal.calendar
+    const page = (dataStartDate: string) => ({ state: 'available' as const, month: '2026-10', locale: 'zh' as const,
+      asOf: '2026-10-15T00:00:00.000Z', events: [], dataStartDate, sources: [
+        { eventType: 'economic-indicator' as const, status: 'success-empty' as const, sourceObservedAt: '2026-10-15T00:00:00.000Z' },
+        { eventType: 'financial-event' as const, status: 'success-empty' as const, sourceObservedAt: '2026-10-15T00:00:00.000Z' },
+        { eventType: 'central-bank-activity' as const, status: 'success-empty' as const, sourceObservedAt: '2026-10-15T00:00:00.000Z' }] })
+    const render = async (dataStartDate: string) => {
+      const spy = vi.spyOn(marketCalendarClient, 'queryMonth').mockResolvedValue(page(dataStartDate))
+      try {
+        const { container } = await renderCalendar({ now: () => new Date('2026-10-15T00:00:00.000Z'),
+          queryMonth: async () => ({ state: 'available', asOf: '2026-10-15T00:00:00.000Z', events: [] }),
+          getEventDetail: async () => unavailableDetail() })
+        await settleCalendar()
+        return container.querySelector('.mi-economic-calendar__empty-state')?.textContent ?? ''
+      } finally { spy.mockRestore() }
+    }
+    // 起点在 11 月：10 月是我们还没有数据，不是「那天没有发布」。
+    expect(await render('2026-11-01')).toContain(copy.status.beforeDataStart)
+    // 起点在 9 月：10 月确实没有事件。
+    const withoutHistory = await render('2026-09-01')
+    expect(withoutHistory).toContain(copy.status.empty)
+    expect(withoutHistory).not.toContain(copy.status.beforeDataStart)
+  })
+
   it('shows the month it could read when a neighbouring month never answers', async () => {
     vi.useFakeTimers()
     try {

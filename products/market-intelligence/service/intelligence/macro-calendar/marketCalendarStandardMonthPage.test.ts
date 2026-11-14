@@ -101,3 +101,16 @@ describe('月查询接标准表：四件契约', () => {
       failureCode: 'input-invalid' })
   })
 })
+
+describe('空月要说清「早于数据起点」', () => {
+  it('页面带上库里最早一天的日期；一条数据都没有时是 null', () => {
+    const database = seeded(0)
+    const empty = reader(database).queryMonth({ month: '2026-10', locale: 'zh', asOf: '2026-11-14T00:00:00.000Z' }) as { dataStartDate?: string | null }
+    expect(empty.dataStartDate).toBeNull()
+    upsertCalendarStandardRow(database, { ...base, scheduledDate: '2026-11-12', firstScheduledDate: '2026-11-12' })
+    upsertCalendarStandardRow(database, { ...base, metricKey: 'US.OTHER.SA.MOM', scheduledDate: '2026-11-05', firstScheduledDate: '2026-11-05' })
+    const page = reader(database).queryMonth({ month: '2026-10', locale: 'zh', asOf: '2026-11-14T00:00:00.000Z' }) as { dataStartDate?: string | null }
+    // 起点取最早那天，不取「这次查的月」——否则往前翻永远不算早于起点。
+    expect(page.dataStartDate).toBe('2026-11-05')
+  })
+})

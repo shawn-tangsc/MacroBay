@@ -146,11 +146,18 @@ function sourceEventIdOf(release: NarwhalParsedRelease, kind: NarwhalEventKind):
       return narwhalSourceEventIdForIdentity({ countryCode: release.country, metricKey, periodKey: release.period })
     }
   }
+  // 指标型但**没有可映射的测度**（排期先到、或源压根没给 measure）：
+  // 源名登记过事件码 → 事件身份 `(国家, 事件码, 时刻)`，采集时就把身份带上；
+  // 连事件码都没有 → 源内身份，中段用 `release_id`，**绝不写裸 id**——裸 id 解不出身份，
+  // 重放时只能记 `bad-identity`，同一批发布就永远补不回日历（实测三条：生产力与成本、
+  // 达拉斯联储服务业调查、政策利率决议）。
+  const fallbackCode = eventCodeBySourceType[release.name]
+  if (fallbackCode !== undefined) return narwhalEventSourceEventId(release.country, fallbackCode, release.at)
   if (kind !== 'economic-indicator') {
     // 事件型身份 = (国家, 类型, 时刻)。时刻取来源给的发布时刻，分钟级。
     return narwhalEventSourceEventId(release.country, kind, release.at)
   }
-  return JSON.stringify([release.releaseId, 1])
+  return narwhalEventSourceEventId(release.country, release.releaseId, release.at)
 }
 
 /** 源的状态串 → 闭集。认不出的**不猜**，落 `unknown`。 */

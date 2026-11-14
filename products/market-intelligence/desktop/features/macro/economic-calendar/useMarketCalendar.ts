@@ -46,6 +46,8 @@ export function useMarketCalendar({ months, locale, now, client = marketCalendar
 }) {
   const [events, setEvents] = useState<readonly MarketCalendarEvent[]>([])
   const [sources, setSources] = useState<readonly MarketCalendarSource[]>([])
+  /** 库里最早一天有数据的日期；`undefined`＝这次没读到（当成不知道），`null`＝库里还没有数据。 */
+  const [dataStartDate, setDataStartDate] = useState<string | null | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [pending, setPending] = useState(false)
   const [failure, setFailure] = useState(false)
@@ -96,7 +98,11 @@ export function useMarketCalendar({ months, locale, now, client = marketCalendar
             states[candidate] = { status: 'failed', reason: 'too-large' }; publish(); setFailure(true); return
           }
           accumulated.push(...fresh)
-          if (candidate === requested.months[0]) sources = page.sources
+          if (candidate === requested.months[0]) {
+            sources = page.sources
+            // 数据起点随命名月那页回来：空月要靠它区分「没有事件」和「早于数据起点」。
+            if (page.dataStartDate !== undefined) setDataStartDate(page.dataStartDate)
+          }
           setEvents([...accumulated]); setSources(sources)
           cursor = page.nextCursor
           if (cursor && pages >= marketCalendarReadPolicy.maximumPages) {
@@ -147,6 +153,8 @@ export function useMarketCalendar({ months, locale, now, client = marketCalendar
     namedMonthState: monthStates[namedMonth] ?? { status: 'not-requested' } as const,
     /** 每个月各自的结论，键是 `YYYY-MM`；未请求（含正在读）的月份是 `not-requested`。 */
     monthStates,
+    /** 库里最早一天有数据的日期；`undefined`＝这次没读到（当成不知道），`null`＝库里还没有数据。 */
+    dataStartDate,
     events, sources, loading, pending, failure, feedback, refresh
   }
 }

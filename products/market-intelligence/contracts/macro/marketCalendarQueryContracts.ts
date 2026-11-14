@@ -150,7 +150,13 @@ export type MarketCalendarRefreshAttempt = Readonly<{ state: 'succeeded' | 'fail
 export type MarketCalendarSource = Readonly<{ eventType: MarketCalendarEvent['eventType']; status: typeof marketCalendarPublicPolicy.statuses[number]; sourceObservedAt: string | null;
   latestAttempt?: MarketCalendarRefreshAttempt }>
 export type MarketCalendarPage = Readonly<{ state: 'available'; month: string; locale: 'zh' | 'en'; asOf: string;
-  events: readonly MarketCalendarEvent[]; sources: readonly MarketCalendarSource[]; nextCursor?: string }> |
+  events: readonly MarketCalendarEvent[]; sources: readonly MarketCalendarSource[];
+  /**
+   * 库里最早一天有数据的日期（`YYYY-MM-DD`）。**空月要说清是「没有事件」还是「早于数据起点」**
+   * ——两者对读者是两件事：一个是那天确实没发布，一个是我们还没有那段数据。
+   * 没有数据时是 `null`（事实）；字段缺席＝这条写入路径没带上（当成「不知道」，不许当成起点）。
+   */
+  dataStartDate?: string | null; nextCursor?: string }> |
   Readonly<{ state: 'unavailable'; failureCode: 'input-invalid' | 'query-unavailable' }>
 export type MarketCalendarRefreshResult = Readonly<{ state: 'completed' | 'partial' | 'unavailable';
   sources: readonly MarketCalendarSource[]; failureCode?: typeof marketCalendarPublicPolicy.refreshFailures[number] }>
@@ -284,7 +290,8 @@ function safeArray<T>(value: unknown, item: (value: unknown) => value is T): val
 }
 export function isMarketCalendarPage(value: unknown, query: MarketCalendarQuery): value is MarketCalendarPage {
   if (marketExact(value, ['state', 'failureCode']) && value.state === 'unavailable') return value.failureCode === 'input-invalid' || value.failureCode === 'query-unavailable'
-  return marketExact(value, ['state', 'month', 'locale', 'asOf', 'events', 'sources'], ['nextCursor']) && value.state === 'available' &&
+  return marketExact(value, ['state', 'month', 'locale', 'asOf', 'events', 'sources'], ['nextCursor', 'dataStartDate']) && value.state === 'available' &&
+    (!Object.hasOwn(value, 'dataStartDate') || value.dataStartDate === null || typeof value.dataStartDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.dataStartDate)) &&
     value.month === query.month && value.locale === query.locale && value.asOf === query.asOf &&
     safeArray(value.events, isMarketCalendarEvent) && value.events.length <= marketCalendarPublicPolicy.maximumEvents && value.events.every(item =>
       isMarketCalendarEvent(item) && item.sourceObservedAt <= query.asOf && item.scheduledAt.startsWith(query.month + '-')) &&

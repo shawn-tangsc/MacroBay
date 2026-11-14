@@ -43,12 +43,24 @@ describe('Narwhal 发布 → 日历观测批次', () => {
     expect(economic!.parseResult.drafts).toHaveLength(1)
   })
 
-  it('算不出身份的发布写来源自己的 release_id，读回来是 unmapped', () => {
+  it('测度映射不上时用源内身份：身份必须可解（国家|release_id|时刻），不再写裸 id', () => {
     const batches = narwhalObservationBatches([release({
+      name: 'Something we have never mapped',
       values: [{ measure: 'not_in_table', concept: 'not_in_table', actual: '1' }], period: '2026-10'
     })], { locale: 'zh', parserVersion: 'v1', collectionIdPrefix: 'x' })
     const draft = batches[0]!.parseResult.drafts[0]!
-    expect(narwhalCanonicalIdentityKey(String(draft.marketFactKey))).toBeUndefined()
+    // 裸 id 解不出身份，重放只能记 bad-identity，那批发布就永远补不回日历（真机上三条就这样丢的）。
+    expect(narwhalCanonicalIdentityKey(String(draft.marketFactKey)))
+      .toBe(`USA|r1|${AT}`)
+  })
+
+  it('源名登记过事件码的指标型发布，采集时就把事件身份带上（政策利率决议那条）', () => {
+    const batches = narwhalObservationBatches([release({
+      name: 'Policy rate decision', values: [], period: undefined
+    })], { locale: 'zh', parserVersion: 'v1', collectionIdPrefix: 'x' })
+    const draft = batches[0]!.parseResult.drafts[0]!
+    expect(narwhalCanonicalIdentityKey(String(draft.marketFactKey)))
+      .toBe(`USA|evt.policy-rate-decision|${AT}`)
   })
 })
 

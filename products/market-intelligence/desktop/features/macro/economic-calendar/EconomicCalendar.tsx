@@ -403,6 +403,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
           onRetryMonth={() => loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))}
           onOpenSettings={onOpenSettings}
           marketMonthRead={market.namedMonthState}
+          dataStartDate={market.dataStartDate}
           marketLoading={market.loading}
           onRetryMarket={() => void market.refresh()}
         />

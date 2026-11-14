@@ -75,6 +75,8 @@ export function createStandardMonthPageReader(deps: Readonly<{
         return {
           state: 'available', month: input.month, locale: input.locale, asOf: input.asOf,
           events: page, sources: sourcesOf(inMonth, input.asOf),
+          // 空月要说清是「没有事件」还是「早于数据起点」：起点从库里最早一天派生，不写死在界面里。
+          dataStartDate: readDataStartDate(deps.database),
           ...(nextCursor === undefined ? {} : { nextCursor })
         }
       } catch {
@@ -97,4 +99,17 @@ function sourcesOf(events: readonly MarketCalendarEvent[], asOf: string): readon
       sourceObservedAt: ofKind.map((event) => event.sourceObservedAt).sort().at(-1) ?? observed
     } as MarketCalendarSource
   })
+}
+
+/**
+ * 库里最早一天有数据的日期（`YYYY-MM-DD`）；一条都没有就是 `null`。
+ *
+ * 这是**唯一**的起点来源：界面不写死日期，也不按「第一个月」去猜——那样换一次数据范围就要改两处。
+ */
+export function readDataStartDate(database: DatabaseSync): string | null {
+  try {
+    const row = database.prepare('select min(scheduled_date) as day from mi_calendar_releases').get() as
+      { day: string | null } | undefined
+    return row?.day ?? null
+  } catch { return null }
 }
