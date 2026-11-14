@@ -831,3 +831,35 @@ describe('citation source labels', () => {
     expect(citationSource({ refId: 'query:0xrouter-etf' }, text)).not.toBe('0xRouter')
   })
 })
+
+// 产品 2026-11-14：过去段先写「共几条、摆了哪几条」，未来段判不了重要性时写「无法判定」+ 一级排期。
+// 这一条钉的是**这两块真的出现在正文里**——文档里有数但没人画，正是今晚反复出现的那种「做完了」。
+describe('the past-24h counts and the tier-1 schedule', () => {
+  it('prints the window total, the unshown count, the unjudged sentence and the schedule', async () => {
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      news: {
+        ...base.news,
+        notes: { macroWindow: { total: 7, indicators: 1, centralBank: 5, financial: 1, hidden: 4 } }
+      },
+      next: {
+        items: [],
+        note: 'next-7d-importance-unknown',
+        tier1Upcoming: [
+          { metricKey: 'US.CORE_PCE.SA.YOY', title: 'Core PCE YoY', scheduledAt: '2026-11-25T13:30:00.000Z', releaseDate: '2026-11-25' },
+          { metricKey: 'US.NONFARM.SA.CHANGE', title: 'Nonfarm payrolls', scheduledAt: '2026-12-04T00:00:00.000Z', releaseDate: '2026-12-04' }
+        ]
+      }
+    }
+
+    const host = await render(doc)
+    const counts = host.querySelector('[data-macro-window-counts]')?.textContent ?? ''
+    expect(counts).toContain('7')
+    expect(counts).toContain('5')
+    expect(host.querySelector('[data-macro-window-others]')?.textContent).toContain('4')
+    expect(host.querySelector('[data-next-note]')?.textContent).toContain('cannot be determined')
+    expect(host.querySelector('[data-next-tier1]')?.textContent).toContain('Tier-1 indicator schedule')
+    expect(host.querySelectorAll('[data-next-tier1] li')).toHaveLength(2)
+  })
+})

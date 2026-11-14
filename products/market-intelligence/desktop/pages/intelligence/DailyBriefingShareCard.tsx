@@ -64,6 +64,11 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   // 「暂时读不到：<原因>」（用户 2026-11-09 放宽呈现分寸后定，`MI-2-R89`）；**确实没有**
   // （窗口里真的没有高影响事件）该函数返回 `null`，正文照旧一个字都不印——那一档的空态形态
   // 仍按 2026-11-06 定稿与 `MI-2-R81` 待裁，这里不选边。
+  const macroWindow = doc.news.notes.macroWindow
+  const tier1Upcoming = doc.next.tier1Upcoming ?? []
+  const nextNote = doc.next.note === undefined
+    ? undefined
+    : (text.nextEmptyCodes as Readonly<Record<string, string | undefined>>)[doc.next.note]
   const macroEmpty = briefingMacroEmptyCopy(doc, {
     macroEmptyCodes: text.macroEmptyCodes,
     macroUnreadable: text.macroUnreadable
@@ -141,7 +146,14 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
-      {visibleMacro.length > 0 || macroEmpty ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {visibleMacro.length > 0 || macroEmpty || (macroWindow?.total ?? 0) > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {/* 总数与构成（产品 2026-11-14）：明细只摆三条，这个数告诉读者这段时间到底有多少事。
+          「筛没了」不许说成「没有」——所以这句话与明细分开，先于明细出现。 */}
+      {macroWindow !== undefined && macroWindow.total > 0 ? <p className="mi-brief-poster__macro-counts" data-macro-window-counts="true">{text.pastWindow.counts
+        .replace('{total}', String(macroWindow.total))
+        .replace('{indicators}', String(macroWindow.indicators))
+        .replace('{centralBank}', String(macroWindow.centralBank))
+        .replace('{financial}', String(macroWindow.financial))}</p> : null}
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
           `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
@@ -164,9 +176,14 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           两列），里面那格才跨两列：海报的网格是逐行的，把这句放成行的兄弟，`grid-column` 不会
           生效，「跨两列」就悄悄做不到。用 `<p>` 而不是 `<span>`：`__macro > span` 那条是给日期
           列的字号与不换行，套在这句上会把它压成 10.5px 单行。 */}
+      {macroWindow !== undefined && macroWindow.hidden > 0 ? <p className="mi-brief-poster__macro-others" data-macro-window-others="true">{text.pastWindow.others.replace('{count}', String(macroWindow.hidden))}</p> : null}
       {visibleMacro.length === 0 && macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
         <p className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</p>
       </div> : null}
+      {visibleMacro.length === 0 && !macroEmpty && macroWindow !== undefined && macroWindow.total === 0
+        ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty="collected-none">
+          <p className="mi-brief-poster__macro-empty">{text.pastWindow.emptyCollected}</p>
+        </div> : null}
 
     </section> : null}
 
@@ -203,7 +220,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div>
     </section> : null}
 
-    {doc.next.items.length > 0 || doc.next.focus ? <section className="mi-brief-poster__next">
+    {doc.next.items.length > 0 || doc.next.focus || nextNote !== undefined || tier1Upcoming.length > 0 ? <section className="mi-brief-poster__next">
       <div className="mi-brief-poster__next-head">
         <h2>{text.sections.next}</h2>
         <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>
@@ -227,6 +244,16 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           </p> : null}
         </div> : null}
         <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
+      </div> : null}
+      {!focusEvent && nextNote !== undefined ? <p className="mi-brief-poster__next-note" data-next-note={doc.next.note}>{nextNote}</p> : null}
+      {!focusEvent && tier1Upcoming.length > 0 ? <div className="mi-brief-poster__next-tier1" data-next-tier1="true">
+        <h3>{text.nextImportanceUnknown.scheduleTitle}</h3>
+        <ul>
+          {tier1Upcoming.map((release) => <li key={release.metricKey}>
+            <b>{eventTitles?.[release.metricKey] ?? release.title}</b>
+            <time>{release.releaseDate}</time>
+          </li>)}
+        </ul>
       </div> : null}
       {otherEvents.length > 0 ? <div className="mi-brief-poster__next-rows">
         {otherEvents.map((item) => <div className="mi-brief-poster__next-row" key={item.eventKey}>
