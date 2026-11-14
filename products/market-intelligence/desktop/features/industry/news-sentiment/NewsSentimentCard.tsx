@@ -54,6 +54,12 @@ function veilAction(
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
 
+/**
+ * 一次露出多少条舆情（用户 2026-11-15 定 15）：首屏与每次「加载更多」用同一个步长。
+ * 筛完不足 15 就显示实际条数——不补空位。
+ */
+export const NEWS_SENTIMENT_VISIBLE_STEP = 15
+
 export function NewsSentimentCard(props: {
   text: NewsSentimentText
   view?: NewsSentimentView
@@ -75,7 +81,12 @@ export function NewsSentimentCard(props: {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
   const available = view?.state === 'available'
-  const [visibleCount, setVisibleCount] = useState(8)
+  /**
+   * 列表默认露出多少条、每次「滚到底」再放多少条（用户 2026-11-15：默认 15）。
+   * 这是**初始可见条数**，不是上限：总数照旧能翻到底。
+   * 步长取同一个 15——和首屏一致，读者滚一次看到的是「再来一屏」，不是零碎的 8。
+   */
+  const [visibleCount, setVisibleCount] = useState(NEWS_SENTIMENT_VISIBLE_STEP)
   const includeNeutral = props.includeNeutral ?? true
   const filteredItems = (view?.items ?? []).filter((item) => passesNeutralFilter(item, includeNeutral))
   const drivers = available
@@ -83,7 +94,7 @@ export function NewsSentimentCard(props: {
         (a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.strength * b.confidence - a.strength * a.confidence
       )
     : []
-  useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
+  useEffect(() => { setVisibleCount(NEWS_SENTIMENT_VISIBLE_STEP) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
   const visibleDrivers = drivers.slice(0, visibleCount)
   // "Nothing read yet" is not "nothing there": only a read that came back may end in empty or error.
   const hasRows = Boolean(view && (view.items?.length ?? 0) > 0)
@@ -223,7 +234,7 @@ export function NewsSentimentCard(props: {
             onScroll={(event) => {
               const node = event.currentTarget
               if (node.scrollTop + node.clientHeight >= node.scrollHeight - 24 && visibleCount < drivers.length) {
-                setVisibleCount((count) => Math.min(count + 8, drivers.length))
+                setVisibleCount((count) => Math.min(count + NEWS_SENTIMENT_VISIBLE_STEP, drivers.length))
               }
             }}
           >

@@ -871,3 +871,32 @@ describe('settings entry', () => {
   })
 
 })
+
+/**
+ * 用户 2026-11-15：舆情列表默认 15 条。
+ * 15 是**初始可见条数**，不是上限——滚到底还要能继续加载（第 16 条要出得来）。
+ */
+it('shows fifteen rows first and keeps loading past them on scroll', async () => {
+  const many: NewsSentimentView = {
+    ...VIEW,
+    items: Array.from({ length: 20 }, (_, index) => ({
+      ...VIEW.items[0]!,
+      itemId: `bulk-${index}`,
+      title: `标题 ${index}`,
+      displayTitle: `标题 ${index}`,
+      publishedAt: new Date(Date.parse('2026-10-24T12:00:00.000Z') - index * 60_000).toISOString()
+    }))
+  }
+  const container = await mountCard(many)
+  const rows = () => container.querySelectorAll('.mi-news-sentiment__drivers button')
+  expect(rows()).toHaveLength(15)
+
+  // 滚到底 → 再放 15 条（不足就取剩余）：第 16 条出现在列表里。
+  const list = container.querySelector<HTMLElement>('.mi-news-sentiment__drivers')!
+  Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 1000 })
+  Object.defineProperty(list, 'clientHeight', { configurable: true, value: 400 })
+  Object.defineProperty(list, 'scrollTop', { configurable: true, value: 600 })
+  await act(async () => { list.dispatchEvent(new Event('scroll', { bubbles: true })) })
+  expect(rows().length).toBeGreaterThanOrEqual(16)
+  expect(rows()).toHaveLength(20)
+})
