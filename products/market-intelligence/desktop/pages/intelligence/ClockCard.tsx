@@ -75,6 +75,8 @@ export type ClockCardText = Readonly<{
   /** 政策块的两种降级（只在政策那块表达，整张卡不降级）。 */
   policyDisabled: string
   policyUnreadable: string
+  /** 政策未启用时那条去开启数据源的路（复用宿主现有的设置入口，不新造）。 */
+  openSources: string
   /** 撞牌让位那条：`{name} {days} 天后`。 */
   crowdedLine: string
   /** 交代行头：`另有 {count} 项未上环：{items}`。 */
@@ -83,10 +85,17 @@ export type ClockCardText = Readonly<{
   crowdedMore: string
 }>
 
-export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCalendar, resolveText, policyState }: Readonly<{
+export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCalendar, resolveText, policyState, onOpenPolicySources, policyNotice }: Readonly<{
   model: ClockCardModel
   /** 政策那一块的状态：读到就正常画牌；未启用/读不到都只影响这一块，别的牌照旧。 */
   policyState?: 'disabled' | 'unreadable'
+  /** 未启用时点「去启用数据源」：走宿主原来的打开设置那条路。 */
+  onOpenPolicySources?: () => void
+  /**
+   * 政策那一块的说明句：由宿主按**原来那三支判断**给出（未启用哪一格 / 源自己关着 / 读不到），
+   * 这里只负责显示——句子怎么来的不搬到卡里，否则两处各判一次必然长歪。
+   */
+  policyNotice?: Readonly<{ sentence: string; actionLabel?: string; onAction?: () => void }>
   text: ClockCardText
   /** 日历图标的读屏名（`IconButton` 只收键）。 */
   actionLabelKey: string
@@ -109,6 +118,12 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  const notice = policyNotice
+    ?? (policyState === undefined ? undefined : {
+      sentence: policyState === 'disabled' ? text.policyDisabled : text.policyUnreadable,
+      ...(policyState === 'disabled' && onOpenPolicySources !== undefined
+        ? { actionLabel: text.openSources, onAction: onOpenPolicySources } : {})
+    })
   const center = model.center
   const centerPlaqueId = center === undefined ? undefined : `${center.metricKey}:future`
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
@@ -180,12 +195,21 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         <IconButton ariaLabelKey={actionLabelKey} icon={Calendar} size="sm" variant="overlay" resolveText={resolveText} onSelect={onOpenCalendar} />
       </div>
 
+      {/* 政策块的降级说明：**看得见**的一行（不是只藏在 ⓘ 里），未启用时还带一条去设置的路。
+          只在政策那一块表达：主位与另外三块牌照常画。 */}
+      {notice === undefined ? null : <div className="mi-clock__policy-note" data-clock-policy={policyState ?? (notice.actionLabel === undefined ? 'unreadable' : 'disabled')}>
+        <span>{notice.sentence}</span>
+        {notice.onAction === undefined || notice.actionLabel === undefined
+          ? null
+          : <button type="button" className="mi-clock__policy-action" onClick={notice.onAction}>{notice.actionLabel}</button>}
+      </div>}
+
+      {/* 状态行（用户 2026-11-15）：只留 ⓘ——「● 实时 · 详细 ↗」删掉；ⓘ 不能删，里面装着
+          「另有 N 项未上环」那条交代。容器保留（它是 ⓘ 的定位上下文），卡高仍 330。 */}
       <div className="mi-clock__foot">
-        <span>{text.live}</span>
         {/* 原型这一格就是 `<span title>`（不是浮层组件）：来源说明 + 没上环那几行的交代都放在这里。 */}
         <span className="mi-clock__info" tabIndex={0} title={unplacedNote(model, text, policyState)}
           data-clock-unplaced={model.unplaced.length}>ⓘ</span>
-        <button className="mi-clock__detail" type="button" onClick={onOpenDetail}>{text.detail}</button>
       </div>
   </section>
   </div>

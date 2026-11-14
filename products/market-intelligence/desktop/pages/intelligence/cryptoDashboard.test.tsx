@@ -1160,11 +1160,15 @@ describe('host wiring: cells switched off and sources judged', () => {
   })
 
   /** 政策路径：两条硬依赖，逐支点名（2026-11-12 架构师批的双格形状）。 */
-  const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-policy-card')!
+  /**
+   * 政策那一块的说明与动作，**由钟表卡接管**（旧 `PolicyPathSlot` 已删，2026-11-15）：
+   * 句子仍由宿主按原来那三支判断算出，只是渲染在钟表卡的政策行里；动作仍是同一条设置入口。
+   */
+  const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-clock')!
   const policySentence = (container: HTMLElement): string =>
-    policyCard(container).querySelector('.mi-source-state')?.textContent?.trim() ?? ''
+    policyCard(container).querySelector('.mi-clock__policy-note > span')?.textContent?.trim() ?? ''
   const policyAction = (container: HTMLElement): HTMLButtonElement =>
-    policyCard(container).querySelector<HTMLButtonElement>('.mi-source-veil button')!
+    policyCard(container).querySelector<HTMLButtonElement>('.mi-clock__policy-action')!
 
   /** 两格的源都启用：这样「另一格」的判定才是 read，单格关掉才看得出点名。 */
   const policySourcesOn = { query: async () => ({ state: 'available' as const, sources: [
@@ -1177,7 +1181,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     // 第 1 支：两格都去读。这次没读到（页面用例里 `policyPathClient` 没接）→ 只说「读不到 + 再试一次」，
     // 不许说成「未启用」——那是把「拿不到」和「没有」混成一句。
     const container = await renderCells({}, { dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     const sentence = policySentence(container)
     expect(sentence).not.toBe(dashboardText.policyPath.probabilityCellOff)
     expect(sentence).not.toBe(dashboardText.policyPath.fedCellOff)
@@ -1189,7 +1193,7 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('policy path: only the probability cell off names that cell, not the calendar', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'policy-path:probability': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     expect(policySentence(container)).toBe(dashboardText.policyPath.probabilityCellOff)
     expect(policySentence(container)).not.toContain(dashboardText.policyPath.fedCellOff)
     await act(async () => policyAction(container).click())
@@ -1199,7 +1203,7 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('policy path: only the Fed calendar off names the calendar, and never blames the odds', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'policy-path:fed': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     expect(policySentence(container)).toBe(dashboardText.policyPath.fedCellOff)
     expect(policySentence(container)).not.toContain(dashboardText.policyPath.probabilityCellOff)
     await act(async () => policyAction(container).click())
@@ -1209,10 +1213,10 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('policy path: both cells off is one sentence naming both, with one configure action', async () => {
     const onConfigureSources = vi.fn()
     const container = await renderCells({ 'policy-path:probability': false, 'policy-path:fed': false }, { onConfigureSources, dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     expect(policySentence(container)).toBe(dashboardText.policyPath.bothCellsOff)
     // 不许拆成两条缺项
-    expect(policyCard(container).querySelectorAll('.mi-source-state')).toHaveLength(1)
+    expect(policyCard(container).querySelectorAll('.mi-clock__policy-note')).toHaveLength(1)
     await act(async () => policyAction(container).click())
     expect(onConfigureSources).toHaveBeenCalledTimes(1)
   })
@@ -1225,7 +1229,7 @@ describe('host wiring: cells switched off and sources judged', () => {
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) }
     })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     const sentence = policySentence(container)
     // 指向源（FOMC 决议市场），不是「这一格没启用」。
     expect(sentence).toContain('FOMC 决议市场')

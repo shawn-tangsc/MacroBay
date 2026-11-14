@@ -63,7 +63,6 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
 
-import { PolicyPathSlot } from './PolicyPathSlot'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
 import { useCurveReleaseEvents } from './useCurveReleaseEvents'
 import { ClockCard } from './ClockCard'
@@ -336,6 +335,42 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const shellTimeZone = useShellTimeZone()
   const clockToday = calendarDisplayDate(now().toISOString(), shellTimeZone)
   const clockFacts = cardFactsView?.state === 'available' ? cardFactsView.facts : []
+  /**
+   * 政策那一块的说明句：**沿用原来那三支判断**（哪一格没开 / 源自己关着 / 整块读不到），
+   * 只是显示位置从旧卡换到钟表卡里——判断只有一处，句子不搬进卡里。
+   */
+  const policyNotice = (() => {
+    const sourceOff = [policyProbability, policyFed].find((decision) => decision.kind === 'source-disabled')
+    if (sourceOff !== undefined && sourceOff.kind === 'source-disabled') {
+      return {
+        sentence: text.policyPath.dependencySourceOff.replace('{source}', resolveProductKey(`settings.intelligenceSources.sourceNames.${sourceOff.sourceId}`)),
+        actionLabel: resolveProductKey('pages.intelligence.portal.data.enableSources'),
+        onAction: onConfigureSources
+      }
+    }
+    const offCells = [policyProbability, policyFed].filter((decision) => decision.kind !== 'read')
+    if (offCells.length === 2) {
+      return { sentence: text.policyPath.bothCellsOff, actionLabel: resolveProductKey('pages.intelligence.portal.data.configureSources'), onAction: onConfigureSources }
+    }
+    if (offCells.length === 1) {
+      const cellKey = policyProbability.kind === 'read' ? 'fed' as const : 'probability' as const
+      return {
+        sentence: cellKey === 'fed' ? text.policyPath.fedCellOff : text.policyPath.probabilityCellOff,
+        actionLabel: resolveProductKey('pages.intelligence.portal.data.enableSources'),
+        // 单格没开：点它落到**那一格**（原来那张卡的行为，不能因为换了个卡片就退化成「打开设置首页」）。
+        onAction: () => onManageSource({ business: 'dashboard', moduleKey: 'policy-path', cellId: dashboardCellId('policy-path', cellKey) })
+      }
+    }
+    if (policyPath?.state === 'unavailable') {
+      // 读不到这一支沿用原来那句状态文案与「再试一次」，不是「未启用」。
+      return {
+        sentence: resolveProductKey('pages.intelligence.portal.data.unreadable'),
+        actionLabel: resolveProductKey('pages.intelligence.portal.data.retry'),
+        onAction: policyPathRead.reload
+      }
+    }
+    return undefined
+  })()
   /** 政策块的两支降级：只在政策那块表达，整张卡照常画主位与另外三块牌。 */
   const clockPolicyState: 'disabled' | 'unreadable' | undefined =
     policyProbability.kind !== 'read' || policyFed.kind !== 'read' ? 'disabled'
@@ -499,17 +534,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {readsReady ? (() => {
         // 三支（读到 / 读不到 / 没启用）**同一个落点**：右栏日历卡上方那块 `policySlot`。
         // 只有读到那支走 portal 会让另外两支落进主栏——用户 2026-11-11 截图报的正是这个。
-        const card = <PolicyPathSlot
-          text={text.policyPath}
-          locale={locale}
-          decisions={{ probability: policyProbability, fed: policyFed }}
-          read={policyPathRead}
-          onConfigureSources={onConfigureSources}
-          onFocusCell={(cellKey) => onManageSource({ business: 'dashboard', moduleKey: 'policy-path', cellId: dashboardCellId('policy-path', cellKey) })}
-          onOpenDetail={() => setIndicatorDrawerOpen(true)}
-          resolveKey={resolveProductKey} />
         // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
-        // 本轮旧两格照旧留着，钟表卡叠在它上面：树上没有「缺东西」的中间态。
+        // 「利率路径 SEP」那张卡已删：它的三支状态（读到/读不到/未启用）由钟表卡的政策块接住。
         const stacked = <>{<ClockCard
           model={buildClockCardModel({
             today: clockToday,
@@ -535,7 +561,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           onOpenDetail={() => setIndicatorDrawerOpen(true)}
           onOpenCalendar={() => setIndicatorDrawerOpen(true)}
           resolveText={resolveProductKey}
-          {...(clockPolicyState === undefined ? {} : { policyState: clockPolicyState })} />}{card}</>
+          {...(clockPolicyState === undefined ? {} : { policyState: clockPolicyState })}
+          {...(clockPolicyState === 'disabled' ? { onOpenPolicySources: onConfigureSources } : {})}
+          {...(policyNotice === undefined ? {} : { policyNotice })} />}</>
         return policySlot ? createPortal(stacked, policySlot) : stacked
       })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}

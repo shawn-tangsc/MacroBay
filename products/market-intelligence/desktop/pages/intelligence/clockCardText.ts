@@ -25,6 +25,7 @@ export const clockCardText = {
     /* 政策块的两支降级：只在政策那一块表达，整张卡不降级（主位与另外三块牌照常显示）。 */
     policyDisabled: '政策利率未启用',
     policyUnreadable: '政策利率暂时读不到',
+    openSources: '去启用数据源',
     crowdedLine: '{name} {days} 天后',
     crowdedLead: '另有 {count} 项未上环：{items}',
     crowdedMore: '另有 {count} 项'
@@ -51,6 +52,7 @@ export const clockCardText = {
     unplacedLine: '{name} not on the ring: {reason}',
     policyDisabled: 'Policy rate is not enabled',
     policyUnreadable: 'Policy rate cannot be read right now',
+    openSources: 'Enable its data source',
     crowdedLine: '{name} in {days} days',
     crowdedLead: '{count} more not on the ring: {items}',
     crowdedMore: '{count} more'
