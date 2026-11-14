@@ -56,8 +56,15 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
     }
   }
   const lastRunAt = completions.sort().at(-1) ?? null
-  // **数据新旧看写入，不看运行**：运行成功但没写进任何行时，界面不能显示成「刚更新」。
-  const lastCollectedAt = input.lastWrittenAt ?? lastRunAt
+  /**
+   * **过期只看「作业有没有跑成」，不看「这次有没有写进新行」**（Chief 2026-11-14 定）。
+   *
+   * 原来取的是「最后写入时刻」，于是源安静几小时没写新行，界面就写成「日历数据已过期」——
+   * 而采集其实一直在正常跑。**源没有新数据 ≠ 采集失败**，这两件事必须分开：前者的答案是
+   * 「今天没有新发布」，后者才是「我们没采到」。写入时刻仍然读（`input.lastWrittenAt`），
+   * 但只在**作业从没跑成过**时兜底：那种情况下有数据也比「什么都没采过」诚实。
+   */
+  const lastCollectedAt = lastRunAt ?? input.lastWrittenAt
   // **这份返回值是公共读数**：`isMarketCalendarFreshness` 用精确键集校验，多一个键整份就作废，
   // 简报于是只能显示「自动同步已停止」。诊断用的 `lastRunAt` 不塞进来——要它就在调用点单独算、
   // 单独记日志（「跑了」与「写入了」本来就是两个数，见上面那两条）。

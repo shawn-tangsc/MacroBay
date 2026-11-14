@@ -23,17 +23,18 @@ it('the reader\'s real value passes the public contract check', () => {
   expect(isMarketCalendarFreshness(value)).toBe(true)
 })
 
-describe('新鲜度：运行时刻与数据写入要分开', () => {
-  it('作业「一直成功」但数据没动时，采集时刻取数据写入那一刻（不显示成刚更新）', () => {
+describe('新鲜度：只看作业跑成没跑成', () => {
+  it('作业一直成功、但源安静没写新行 → 不算过期（源没有新数据 ≠ 采集失败）', () => {
     const freshness = readCalendarFreshnessFromJobRuns({
       listRuns: () => [{ status: 'completed', completedAt: '2026-11-14T04:00:00.000Z' }],
       lastWrittenAt: '2026-11-11T04:00:00.000Z',
       asOf: '2026-11-14T05:00:00.000Z'
     })
-    expect(freshness.lastCollectedAt).toBe('2026-11-11T04:00:00.000Z')   // 数据新旧
+    // 采集时刻取**作业跑成**那一刻：源安静不写新行，界面不能因此写成「过期」。
+    expect(freshness.lastCollectedAt).toBe('2026-11-14T04:00:00.000Z')
     // 诊断字段**不进这份返回值**（公共读数精确键集）：要「跑没跑」就单独算，别塞进公共契约。
     expect(freshness).not.toHaveProperty('lastRunAt')
-    expect(freshness.sources.every((source) => source.lastCollectedAt === '2026-11-11T04:00:00.000Z')).toBe(true)
+    expect(freshness.sources.every((source) => source.lastCollectedAt === '2026-11-14T04:00:00.000Z')).toBe(true)
   })
 
   it('从没写过数据 → 采集时刻为空（事实），不是失败；运行时刻照报', () => {
