@@ -1,0 +1,65 @@
+{
+  "note": "指标码字面量基线（守卫 C）：按文件统计 `'US.` 形态的指标码，双向棘轮——涨了要登记并写理由，减了也必须同笔把数字改小（只挡涨的棘轮会养出永远减不下去的数）。每一条都必须说清「为什么这个字面量必须在这里」。目标不是清零，是让每一处都说得出口。",
+  "files": {
+    "contracts/policyPath.ts": {
+      "count": 10,
+      "why": "政策路径标注白名单与同窗优先序（M4 改成按概念后应下降）"
+    },
+    "desktop/settings/intelligence-sources/CoreIndicatorsSourcesView.tsx": {
+      "count": 12,
+      "why": "指标名文案键映射：这一屏的名字来自产品文案，不是码名表；12 条各指一个文案键"
+    },
+    "service/intelligence/macro-calendar/coreIndicatorValueSources.ts": {
+      "count": 6,
+      "why": "产品定的四项核心指标 + 例外清单两条（其余全靠派生）"
+    },
+    "service/intelligence/macro-calendar/fredIndicatorYoY.ts": {
+      "count": 10,
+      "why": "指标码 × FRED 序列与口径：外部序列号的落地位置（口径跟码走）"
+    },
+    "service/intelligence/macro-calendar/macroCalendarReleaseValueMappingPolicy.ts": {
+      "count": 8,
+      "why": "官方发布 → 指标码：一次发布把值写成哪个身份"
+    },
+    "service/intelligence/macro-calendar/macroIndicatorCardFacts.ts": {
+      "count": 12,
+      "why": "旧源指标 id 的兼容位：历史行还要认它"
+    },
+    "service/intelligence/macro-calendar/macroIndicatorCardGroups.ts": {
+      "count": 16,
+      "why": "3 组 × 4 行（卡片唯一顺序）+ 退役表 2 行（码→码的字面量，catalog 不许有）"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCodeNames.ts": {
+      "count": 166,
+      "why": "四列名称表：人工维护的可见文案，读侧按码取"
+    },
+    "service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts": {
+      "count": 39,
+      "why": "日历行展示名：按码给人读的名字"
+    },
+    "service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts": {
+      "count": 217,
+      "why": "Narwhal measure ↔ 码、旧源 indicator id ↔ 码（源侧字典，外部标识必须逐一列出）"
+    },
+    "service/intelligence/macro-calendar/marketCalendarOfficialExpansionPolicy.ts": {
+      "count": 2,
+      "why": "官方扩表策略：按码说明哪些字段可扩"
+    },
+    "service/intelligence/macro-calendar/marketCalendarReleaseGroups.ts": {
+      "count": 268,
+      "why": "指标→组/分级/主测度的数据表本身：它就是那张事实表，不是抄件"
+    },
+    "service/intelligence/macro-calendar/marketCalendarStandardBackfill.ts": {
+      "count": 6,
+      "why": "退役码→当前码手抄 + 源画像（M5 改成读退役表后应下降）"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts": {
+      "count": 52,
+      "why": "Narwhal 系列 → 主测度码：外部系列名的落地位置"
+    },
+    "service/intelligence/macro-calendar/polymarketConsensus.ts": {
+      "count": 5,
+      "why": "slug 模板与档位除数（M4 改成按概念后应下降）"
+    }
+  }
+}
