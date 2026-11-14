@@ -167,3 +167,30 @@ it('gives the surprise row a coloured badge instead of plain value text', () => 
   expect(styles).toContain('var(--danger)')
   expect(styles).toContain('font-weight: 700')
 })
+
+/**
+ * 用户 2026-11-15：详情抽屉把一条 `importance` 为空的发布显示成「中」。
+ *
+ * 判据两半：必须写「未提供」（`market.missingValue`），且**不许出现**「中」——缺省不是「中等」，
+ * 那是白天在卡片上刚修过的同一个形状，这里不能漏第二处。
+ * 注意这条钉的是**渲染**：数据若是 medium 那是数据的事（写入端不许再拿 medium 占位），
+ * 渲染层只负责「没有就不编」。
+ */
+it('says 未提供 for an event whose source gave no importance, never 中', async () => {
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const host = document.createElement('div'); const root = createRoot(host)
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const event = { eventKey: '00000000-0000-4000-8000-0000000000aa', title: 'Empire State manufacturing survey', countryCode: 'US',
+    eventType: 'economic-indicator' as const, scheduledAt: '2026-11-16T13:30:00.000Z',
+    consensus: { displayValue: '10' }, providerPrevious: { displayValue: '25.5' }, providerActual: null,
+    source: 'Narwhal' as const, sourceObservedAt: '2026-11-13T13:20:07.000Z', coverage: 'observed-unverified' as const }
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={event} text={text} />)))
+    const row = host.querySelector('[data-market-importance]')
+    expect(row?.textContent).toContain(text.market.missingValue)
+    expect(row?.textContent).not.toContain('中')
+    expect(host.textContent).not.toContain('重要性中')
+  } finally {
+    await act(async () => root.unmount()); host.remove()
+  }
+})

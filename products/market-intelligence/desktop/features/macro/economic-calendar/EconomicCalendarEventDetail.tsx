@@ -18,6 +18,10 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
+
+/* 详情抽屉自己也要有加载点：任何表面（日历抽屉、事件详情）渲染这段正文时样式都在。
+   与 `CalendarEventRow.tsx` 那一处是同一份表，CSS 全局，重复 import 由打包器去重。 */
+import './economicCalendar.css'
 import { calendarDisplayDate } from './economicCalendarDayModel'
 import {
   economicCalendarCaveats,

@@ -393,11 +393,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayLayers.core.length === 0 ? {} : {
                   summary: text.mkDay.summary.replace('{related}', String(dayLayers.core.length))
                 })}
-                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, true, text.mkDay.sequence,
-                  (tier, count) => text.mkDay.tierGroup
-                    .replace('{stars}', tier === 'other' ? '' : '★'.repeat(Number(tier)))
-                    .replace('{tier}', text.mkDay.tiers[tier])
-                    .replace('{count}', String(count)))}
+                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, true, text.mkDay.sequence)}
                 {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
@@ -463,24 +459,23 @@ export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, tod
   return today.startsWith(`${month}-`) ? today : `${month}-01`
 }
 
-/** 按事件类型分组；顺序与日历页一致（指标 → 财经 → 央行），组内按时刻升序。 */
+/** 按**事件类型**分组（用户 2026-11-15 改回来）：经济指标 → 财经事件 → 央行活动，组内按时刻升序。
+ *  分组标题用列表组件默认的 `{类型} · {条数}` 模板，不另起「其他指标」这种合并标题。
+ *  分级（一级/二级/未分级）**不是分组维度**：它只决定格子里露不露名字、进不进数字。 */
 function dayGroups(_layers: DayLayers, allDay: readonly MarketCalendarEvent[], date: string, timeZone: string,
-  _othersExpanded: boolean, sequence: string, tierTitle: (tier: DayTier, count: number) => string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; title?: string; items: readonly CalendarDayItem[] }>[] {
-  // 当天事件**全部列出**（用户 2026-11-14），并按**指标分级**分组（用户 2026-11-15）：
-  // 一级 / 二级 / 三级 / 其他。分级判据只有一处：`tierOfMetricKey`（指标码 → 1/2/3）；
-  // 事件型（讲话）与源内身份行没有指标码，归「其他」——分组不按事件类型，类型只是行上的小字。
+  _othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+  // 当天事件**全部列出**（用户 2026-11-14）；同刻同名多条按序号标「第 i/N 条」。
   const totals = new Map<string, number>()
   for (const event of allDay) {
     totals.set(`${event.scheduledAt}|${event.title}`, (totals.get(`${event.scheduledAt}|${event.title}`) ?? 0) + 1)
   }
   const seen = new Map<string, number>()
-  return (['1', '2', '3', 'other'] as const)
-    .map(tier => {
-      const bucket = allDay.filter(event => dayTierOf(event) === tier)
+  return (['economic-indicator', 'financial-event', 'central-bank-activity'] as const)
+    .map(eventType => {
+      const bucket = allDay.filter(event => event.eventType === eventType)
         .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))
       return {
-        eventType: 'economic-indicator' as MarketCalendarEvent['eventType'],
-        ...(bucket.length === 0 ? {} : { title: tierTitle(tier, bucket.length) }),
+        eventType,
         items: bucket.map((event): CalendarDayItem => {
           const identity = `${event.scheduledAt}|${event.title}`
           const total = totals.get(identity) ?? 1

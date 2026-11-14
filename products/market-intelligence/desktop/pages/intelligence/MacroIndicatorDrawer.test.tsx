@@ -298,9 +298,9 @@ describe('key-indicator drawer', () => {
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
     expect(list).not.toBeNull()
     expect(list!.textContent).toContain('新增就业')
-    // 分组标题按**指标分级**（用户 2026-11-15）：一级/二级/三级/其他，前三级带星级；
-    // 分级判据只有 `tierOfMetricKey` 一处，行上的类型小字仍来自日历页同一份词汇。
-    expect(list!.textContent).toContain('★ 一级指标 · 1 条')
+    // 分组标题按**事件类型**（用户 2026-11-15 改回来）：经济指标 / 财经事件 / 央行活动。
+    // 分级只决定格子里露不露名字、进不进数字，不是分组维度。
+    expect(list!.textContent).toContain('经济指标 · ')
   })
 
   /**
@@ -805,20 +805,24 @@ it('pins the indicator drawer so an inner drawer cannot push it left', () => {
 })
 
 /**
- * 用户 2026-11-15：右列按指标分级分组（一级/二级/三级/其他），前三级用星级显示。
- * 判据是**指标码的分级**（`tierOfMetricKey`），不是事件类型、也不是 importance。
- * 把分组改回按事件类型即红。
+ * 用户 2026-11-15（第二次改口）：右列按**事件类型**分组——经济指标 / 央行活动 / 财经事件。
+ * 「其他指标」这种把讲话和商品报告合在一起的标题不许回来；分级（一级/二级）不是分组维度，
+ * 它只决定格子里露不露名字。把分组改回按分级即红。
  */
-it('groups the day list by metric tier, with stars for the first three', async () => {
-  const tiered = [
-    dayEvent('e-t1', '10月消费者物价指数(年率)', '2026-11-13T01:00:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] }),
-    dayEvent('e-other', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity' })
+it('groups the day list by event type, with three headings and no 其他指标', async () => {
+  const mixed = [
+    dayEvent('e-ind', '10月消费者物价指数(年率)', '2026-11-13T01:00:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] }),
+    dayEvent('e-speech', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity' }),
+    dayEvent('e-stock', '上周EIA原油库存变化', '2026-11-13T03:00:00.000Z', { eventType: 'financial-event' })
   ]
-  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => tiered })
+  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => mixed })
   const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!
   const headings = [...list.querySelectorAll('h3')].map(node => node.textContent ?? '')
-  expect(headings[0]).toMatch(/^★ 一级指标 · \d+ 条$/u)
-  expect(headings.some(heading => heading.includes('其他指标'))).toBe(true)
-  // 一二级的判据来自指标码：同一批事件按类型分组时只会有「经济指标/央行活动」两个标题，这里不是。
-  expect(headings.some(heading => heading.startsWith('经济指标'))).toBe(false)
+  expect(headings).toHaveLength(3)
+  expect(headings.some(heading => heading.startsWith('经济指标 · '))).toBe(true)
+  expect(headings.some(heading => heading.startsWith('央行活动 · '))).toBe(true)
+  expect(headings.some(heading => heading.startsWith('财经事件 · '))).toBe(true)
+  expect(headings.some(heading => heading.includes('其他指标'))).toBe(false)
+  // 分级照旧只管露名字：一级指标那条在「经济指标」组里仍然写着它的名字。
+  expect(list.textContent).toContain('消费者物价指数')
 })

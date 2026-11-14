@@ -7,6 +7,11 @@ import { calendarItemType, isHighImportanceCalendarItem, type CalendarDayItem } 
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarEventStatus } from './calendarEventStatusModel'
 
+/* 这份样式表是这一族行与列表的**加载点**：以前由旧日历页 import，页面一删就没人加载，
+   抽屉里的时刻与标题会挤成一行（用户 2026-11-15 报的正是这个）。挂着的是最终会渲染的那片叶子
+   组件，页面层加不加都不影响它。守卫 `economicCalendarCssLoaded.test.ts` 盯着它不许变成「只被测试读」。 */
+import './economicCalendar.css'
+
 /**
  * One glyph per kind, so a cell that mixes kinds says which row is which at a glance. The day list
  * groups by kind under headings instead, but its rows are the same rows.
