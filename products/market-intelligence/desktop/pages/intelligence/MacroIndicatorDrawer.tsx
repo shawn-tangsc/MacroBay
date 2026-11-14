@@ -10,6 +10,8 @@ import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
+import { CalendarInspector } from '../../features/macro/economic-calendar/CalendarInspector'
+import { MarketCalendarInspector } from '../../features/macro/economic-calendar/MarketCalendarEvents'
 import type { EconomicCalendarText } from '../../features/macro/economic-calendar/economicCalendarText'
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { productText } from '../../shared/i18n/productText'
@@ -196,6 +198,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   // 中间空一大片。显式切换过就按读者的选择，换一天再回到默认。
   const othersDefaultOpen = dayLayers.core.length === 0 && dayLayers.other.length > 0
   const [othersExpanded, setOthersExpanded] = useState<boolean | undefined>(undefined)
+  /** 右列点一条事件 → 与经济日历页同一个详情抽屉（`CalendarInspector`，左侧 inline 浮层）。 */
+  const [detailEvent, setDetailEvent] = useState<MarketCalendarEvent | undefined>(undefined)
   const showOthers = othersExpanded ?? othersDefaultOpen
   // 展开态跟着日期走，不跟着抽屉走。
   useEffect(() => { setOthersExpanded(undefined) }, [selectedDay])
@@ -391,7 +395,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 text={calendarText}
                 statusNow={nowInstant}
                 selectedEventKey={undefined}
-                selectedMarketKey={undefined}
+                selectedMarketKey={detailEvent?.eventKey}
+                onSelect={(item) => setDetailEvent(item.source === 'market' ? item.event : undefined)}
               />
               {/* 次要层就地展开：抽屉里的交互，不跳页、不弹窗（日期详情只以抽屉形态出现）。 */}
               {dayLayers.other.length === 0 ? null : <button className="mk-col-r__more" type="button"
@@ -403,6 +408,15 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
             </>
             : <LoadingState label={calendarText.unifiedDay.loading} minHeight={160} />}
       </div>
+      {/* 事件详情：与经济日历页同一个抽屉组件（`CalendarInspector`，左侧 inline、平台上按 Esc/× 关），
+          正文也复用同一份 `MarketCalendarInspector`。点另一条就换内容，同一个抽屉不叠第二层。 */}
+      {detailEvent === undefined ? null : <CalendarInspector
+        contentId={detailEvent.eventKey}
+        onClose={() => setDetailEvent(undefined)}
+        open
+        when={detailEvent.scheduledAt}>
+        <MarketCalendarInspector event={detailEvent} source={undefined} text={calendarText} />
+      </CalendarInspector>}
     </section>
   </Drawer>
 }

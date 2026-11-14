@@ -222,12 +222,21 @@ describe('key-indicator drawer', () => {
    * 用户 2026-11-13：日期详情只以抽屉形态出现，「跳到日历页看某一天」的入口一律不许有。
    * 所以在详情抽屉被复用之前，右列的行**不是控件**——不是画成按钮再写死空函数。
    */
-  it('draws the day rows as non-interactive lines until the detail drawer is reused', async () => {
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
-    const rows = Array.from(document.body.querySelectorAll('.mk-col-r [data-calendar-row]'))
-    expect(rows.length).toBeGreaterThan(0)
-    for (const row of rows) expect(row.tagName).toBe('DIV')
-    expect(document.body.querySelector('.mk-col-r button[data-calendar-row]')).toBeNull()
+  // 用户 2026-11-14：点右列一条事件，要像经济日历页那样**左侧弹出详情抽屉**。
+  // 复用同一个 `CalendarInspector`（平台上按 Esc/× 关）与同一份 `MarketCalendarInspector` 正文，
+  // 不在抽屉里另画一套详情。
+  it('opens the shared detail drawer when a day row is clicked', async () => {
+    // 一二级指标才露名字（上一条用例的规则），所以这里用一条 CPI 年率来点。
+    const tiered = [dayEvent('e-cpi', '10月消费者物价指数(年率)', '2026-11-13T13:30:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] })]
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => tiered })
+    const row = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.mk-col-r button[data-calendar-row]'))
+      .find(candidate => (candidate.getAttribute('aria-label') ?? '').includes('消费者物价指数'))!
+    expect(row, 'a day row is the click target').not.toBeNull()
+    await act(async () => row.click())
+    const detail = document.body.querySelector('[data-calendar-detail-container]')
+    expect(detail, 'the detail drawer is reused, not re-drawn').not.toBeNull()
+    // 正文是这条事件本身（标题出现在详情里，而不是一个空壳抽屉）。
+    expect(detail!.textContent).toContain('10月消费者物价指数(年率)')
   })
 
   it('shows the error state with a retry when the month cannot be read, and no rows at all', async () => {
@@ -475,8 +484,7 @@ describe('the three simplified cards', () => {
   })
 
   /** 一到三行缺时逐行写「暂无预期」，不折叠——折叠会把「少数有值」一起藏掉。 */
-  it('writes 暂无预期 row by row when only some rows are missing', async () => {
-    const withOneExpected = facts.map((fact) => fact.metricKey === 'US.CPI.NSA.YOY'
+  it('writes 暂无预期 row by row when only some rows are missing', async () => {    const withOneExpected = facts.map((fact) => fact.metricKey === 'US.CPI.NSA.YOY'
       ? { ...fact, next: { period: '2026-11', releaseAt: '2026-12-10T13:30:00.000Z', timePrecision: 'minute' as const } }
       : fact)
     await renderCards(withOneExpected)
