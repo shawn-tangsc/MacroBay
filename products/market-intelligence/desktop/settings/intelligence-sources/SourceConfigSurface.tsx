@@ -82,8 +82,8 @@ export type SourceConfigSurfaceProps = {
   translation?: Parameters<typeof ProviderDetail>[0]['translation']
   onChanged?: () => void
   showSourceDetails?: boolean
-  /** 某个源自己的行内动作（BLS 的「导入 ICS」）；见 `ProviderDetail.sourceAction`。 */
-  sourceAction?: (providerId: string) => React.ReactNode
+  /** 某个**源项**自己的行内动作（BLS 的「导入 ICS」）；见 `ProviderDetail.sourceRowAction`。 */
+  sourceRowAction?: (sourceId: string) => React.ReactNode
   /** 这一份渲染在哪个面上；判定本身在 `ProviderDetail` 内部做一次。 */
   surface?: 'settings' | 'panel'
 }
@@ -151,7 +151,7 @@ export function SourceConfigSurface(props: SourceConfigSurfaceProps): React.Reac
     {...(props.translation === undefined ? {} : { translation: props.translation })}
     {...(props.onChanged === undefined ? {} : { onChanged: props.onChanged })}
     showSourceDetails={props.showSourceDetails ?? true}
-    {...(props.sourceAction === undefined ? {} : { sourceAction: props.sourceAction })}
+    {...(props.sourceRowAction === undefined ? {} : { sourceRowAction: props.sourceRowAction })}
     {...(props.surface === undefined ? {} : { surface: props.surface })}
   />
 }

@@ -67,6 +67,11 @@ export type SourceEnabledRowProps = Readonly<{
   onTest?: () => void
   /** 最近一次行内测试的结果；没有测过就不传（不画空壳）。 */
   testState?: 'testing' | 'ok' | 'failed' | 'unsupported'
+  /**
+   * 这一行**自己的**动作节点（目前只有「BLS 官方日程」的导入 ICS）。
+   * 与「测试」同一组、排在它前面：两者都是「对这个源做一件事」，不该一个在行尾、一个漂在别处。
+   */
+  extraAction?: React.ReactNode
 }>
 
 /**
@@ -134,6 +139,7 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
         行上唯一的动作是这颗源自己的「测试」（读者 2026-11-12：每个已接入的源都要能测），
         它排在状态文字左边，测完只追加一个短词，不顶掉「已应用 / 未应用」。 */}
     <span className="source-provider-detail__row-tail">
+      {props.extraAction ?? null}
       {props.onTest === undefined || labels.rowTest === undefined ? null : <button
         className="source-provider-detail__row-test"
         disabled={props.testState === 'testing'}

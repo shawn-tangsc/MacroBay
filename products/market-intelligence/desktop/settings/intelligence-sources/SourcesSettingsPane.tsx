@@ -357,9 +357,10 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
             : <div className="intelligence-detail-scroll"><SourceConfigSurface
               {...surface}
               provider={provider}
-              /* 「导入 BLS ICS」只在 BLS 那一个源上有：按源 id 分支只在这一处调用点，
-                 不在 ProviderDetail 里散开（那里只管「有没有这个插槽」）。 */
-              sourceAction={(providerId) => providerId === 'macro-calendar-bls'
+              /* 「导入 BLS ICS」只属于**BLS 官方日程**这一条源项（用户 2026-11-15：
+                 ICS 导入的是日程，不是数值，所以不挂在「BLS 经济数据」那行，也不在卡片标题行）。
+                 按源项 id 分支只在这一处调用点；ProviderDetail 只管「有没有这个插槽」。 */
+              sourceRowAction={(sourceId) => sourceId === 'macro-calendar-bls'
                 ? <BlsIcsImportAction resolveText={resolveText} />
                 : null} /></div>}
         </>}

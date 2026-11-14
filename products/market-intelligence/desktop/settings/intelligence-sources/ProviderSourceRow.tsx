@@ -22,6 +22,8 @@ export function ProviderSourceRow(props: Readonly<{
   /** 这一行那颗「测试」按钮：没有可测探针的源不传，行上就不出现按钮。 */
   onTest?: () => void
   testState?: 'testing' | 'ok' | 'failed' | 'unsupported'
+  /** 这一行自己的动作（「导入 BLS ICS」），与「测试」同一组。 */
+  extraAction?: React.ReactNode
 }>): React.ReactElement {
   const { source, labels } = props
   const name = labels.sourceNames[source.sourceId] ?? source.displayName
@@ -46,6 +48,7 @@ export function ProviderSourceRow(props: Readonly<{
       {...(props.testState ? { testState: props.testState } : {})}
       tags={tags}
       unavailable={Boolean(unavailable)}
+      {...(props.extraAction === undefined ? {} : { extraAction: props.extraAction })}
     />
   </div>
 }
