@@ -45,8 +45,7 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   lastWrittenAt: string | null
   asOf: string
 }>): Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
-  sources: readonly { descriptorId: string; lastCollectedAt: string | null }[]
-  lastRunAt: string | null }> {
+  sources: readonly { descriptorId: string; lastCollectedAt: string | null }[] }> {
   const completions: string[] = []
   for (const definitionId of [narwhalCalendarTickPolicy.definitionId, narwhalCalendarSweepPolicy.definitionId]) {
     for (const run of input.listRuns({ definitionId })) {
@@ -59,9 +58,11 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   const lastRunAt = completions.sort().at(-1) ?? null
   // **数据新旧看写入，不看运行**：运行成功但没写进任何行时，界面不能显示成「刚更新」。
   const lastCollectedAt = input.lastWrittenAt ?? lastRunAt
+  // **这份返回值是公共读数**：`isMarketCalendarFreshness` 用精确键集校验，多一个键整份就作废，
+  // 简报于是只能显示「自动同步已停止」。诊断用的 `lastRunAt` 不塞进来——要它就在调用点单独算、
+  // 单独记日志（「跑了」与「写入了」本来就是两个数，见上面那两条）。
   return {
     state: 'available', asOf: input.asOf, lastCollectedAt,
-    sources: marketCalendarPublicPolicy.feedByKind.map((descriptorId) => ({ descriptorId, lastCollectedAt })),
-    lastRunAt
+    sources: marketCalendarPublicPolicy.feedByKind.map((descriptorId) => ({ descriptorId, lastCollectedAt }))
   }
 }

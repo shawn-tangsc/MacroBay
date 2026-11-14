@@ -1,11 +1,27 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
+import { isMarketCalendarFreshness } from '../../../contracts/macro/marketCalendarQueryContracts'
+
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
 import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from './marketCalendarFreshnessFromJobs'
 
 const runs = (completed: string[]) => (query: { definitionId: string }) =>
   (completed.includes(query.definitionId) ? [{ status: 'completed', completedAt: completed[0]! }] : [])
+
+/**
+ * 公共读数的**形状守卫**：读取器真实返回值必须过 `isMarketCalendarFreshness`。
+ * 这条在今天以前会红——返回值多了一个诊断字段 `lastRunAt`，而契约用精确键集校验，多一个键整份
+ * 作废，简报只能显示「自动同步已停止」。以后谁再往这份读数里加字段，这条先红。
+ */
+it('the reader\'s real value passes the public contract check', () => {
+  const value = readCalendarFreshnessFromJobRuns({
+    listRuns: () => [{ status: 'completed', completedAt: '2026-11-14T04:00:00.000Z' }],
+    lastWrittenAt: '2026-11-14T03:00:00.000Z',
+    asOf: '2026-11-14T05:00:00.000Z'
+  })
+  expect(isMarketCalendarFreshness(value)).toBe(true)
+})
 
 describe('新鲜度：运行时刻与数据写入要分开', () => {
   it('作业「一直成功」但数据没动时，采集时刻取数据写入那一刻（不显示成刚更新）', () => {
@@ -15,7 +31,8 @@ describe('新鲜度：运行时刻与数据写入要分开', () => {
       asOf: '2026-11-14T05:00:00.000Z'
     })
     expect(freshness.lastCollectedAt).toBe('2026-11-11T04:00:00.000Z')   // 数据新旧
-    expect(freshness.lastRunAt).toBe('2026-11-14T04:00:00.000Z')          // 跑没跑
+    // 诊断字段**不进这份返回值**（公共读数精确键集）：要「跑没跑」就单独算，别塞进公共契约。
+    expect(freshness).not.toHaveProperty('lastRunAt')
     expect(freshness.sources.every((source) => source.lastCollectedAt === '2026-11-11T04:00:00.000Z')).toBe(true)
   })
 
@@ -33,7 +50,7 @@ describe('新鲜度：运行时刻与数据写入要分开', () => {
       listRuns: () => [{ status: 'failed', completedAt: '2026-11-14T04:00:00.000Z' }],
       lastWrittenAt: null, asOf: '2026-11-14T05:00:00.000Z'
     })
-    expect(freshness.lastRunAt).toBeNull()
+    expect(freshness).not.toHaveProperty('lastRunAt')
     expect(new Set(freshness.sources.map((source) => source.lastCollectedAt)).size).toBe(1)
   })
 })
