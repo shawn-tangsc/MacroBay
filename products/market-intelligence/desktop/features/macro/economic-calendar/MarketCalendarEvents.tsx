@@ -48,7 +48,10 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
       <div><dt>{text.details.time}</dt><dd>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</dd></div>
       <div><dt>{text.market.observed}</dt><dd>{formatTime(event.sourceObservedAt, 'second')}</dd></div>
       <div><dt>{text.details.source}</dt><dd data-market-country>{event.countryName ?? event.countryCode ?? text.market.unknownCountry} · {sourceLabel(text, event.source)}</dd></div>
-      <div data-market-importance><dt>{text.details.importance}</dt><dd>{text.market.importance[event.importance]}</dd></div>
+      {/* 源没给重要性就是「未提供」：不许挑一档顶上去（读者会以为那是源的判断）。 */}
+      <div data-market-importance><dt>{text.details.importance}</dt><dd>{event.importance === undefined
+        ? text.market.missingValue
+        : text.market.importance[event.importance as 'high' | 'medium' | 'low']}</dd></div>
     </dl>
     {event.eventType === 'economic-indicator' ? <div className="mi-economic-calendar__values">
       {(['consensus', 'providerActual', 'providerPrevious'] as const).map(key => <div key={key} data-market-value={key}>

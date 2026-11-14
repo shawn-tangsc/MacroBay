@@ -20,7 +20,8 @@ export type CalendarReminderEvent = Readonly<{
   eventKey: string
   title: string
   scheduledAt?: string
-  importance: CalendarReminderImportance
+  /** 源给的重要性；**源没说就没有这个字段**（不拿某一档顶上去）。 */
+  importance?: CalendarReminderImportance
 }>
 
 export type CalendarReminderCandidate = Readonly<{
@@ -96,7 +97,8 @@ export function selectCalendarReminderCandidates(input: Readonly<{
       skip('outside-window')
       continue
     }
-    if (!input.settings.importance.includes(event.importance)) {
+    // 没有重要性＝不在任何已勾选的档位里：按「未选中」跳过（默认只推 high，不推就是对的）。
+    if (event.importance === undefined || !input.settings.importance.includes(event.importance)) {
       skip('importance-not-selected')
       continue
     }

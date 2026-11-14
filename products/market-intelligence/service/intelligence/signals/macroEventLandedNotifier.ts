@@ -139,7 +139,8 @@ export function selectLandedReleases(
     const landedCountries = filter?.landedCountries ?? DEFAULT_CALENDAR_LANDED_COUNTRIES
     if (!calendarLandedCountryMatches(landedCountries, event.countryCode)) continue
     // 重要性按读者勾选的档位放行；缺省仍只推「高」。
-    if (!importance.includes(event.importance)) { importanceNotSelected += 1; continue }
+    // 没有重要性＝不在读者勾选的任何档里（默认只推 high）：计入同一原因，不猜档位。
+    if (event.importance === undefined || !importance.includes(event.importance)) { importanceNotSelected += 1; continue }
     if (event.eventType !== policy.qualifyingEventFamily) continue
     // 指标名为空 → 标题会变成「美国  高于预期」：双空格、没有指标，比不发更糟。
     // 与「算不出偏差不报」同性质，所以算进 suppressed，而不是静默跳过。
