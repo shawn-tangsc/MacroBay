@@ -17,16 +17,12 @@ import {
   type MarketAnalysisCrossAssetInstrument,
   type MarketAnalysisDomainAccess,
   type MarketAnalysisQueryState,
-  type SourceHealthFlag
 } from '../../../contracts/marketAnalysisContracts'
 import type {
   AgentSafeEvidenceRef,
   CapitalConditionsSnapshotResult,
   FearGreedSnapshotResult,
   FundingRateHistoryResult,
-  MarketIntelligenceQueryResult,
-  SourceCoverageAsOf,
-  SourceHealthData
 } from './queryContracts'
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { assessMarketCalendarSurprise } from '../../../contracts/macro/marketCalendarSurprise'
@@ -39,7 +35,7 @@ import type {
 import type { AgentEvidenceRef } from '../../../contracts/marketAnalysisContracts'
 import type { CrossAssetRange, CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { crossAssetAnalysisWindowPolicy } from '../cross-asset/crossAssetAnalysisWindows'
-import type { MarketIntelligencePublicQueryService as PublicQueryService } from './publicQueryService'
+import { hashSafeEvidenceIdentity } from './marketAnalysisContextSupport'
 import { observation, type MarketAnalysisDomainObservation } from './domainObservationMerge'
 
 export { observation }
@@ -403,15 +399,6 @@ export function projectMacroCalendar(
   observations.macro = observation('available', 'fresh', factCount, factCount, [])
 }
 
-export async function safeQuery<T>(query: () => Promise<T>): Promise<T | undefined> {
-  try { return await query() } catch { return undefined }
-}
-
-export async function safeSourceHealth(service: Pick<PublicQueryService, 'getSourceHealth'>, asOf: string): Promise<MarketIntelligenceQueryResult<SourceHealthData> | undefined> {
-  const result = await safeQuery(() => service.getSourceHealth({ asOf }))
-  return isEnvelope(result) && isSourceHealthData(result.data) ? result as MarketIntelligenceQueryResult<SourceHealthData> : undefined
-}
-
 export function fact(domain: AnalysisDomain, subject: string, metric: string, value: string | number | null, unit: string | null, sourceId: string, observedAt: string | null, asOf: string, comparability: AgentFact['comparability'], identitySuffix = '', options: Readonly<{ identityFromEventOnly?: boolean; subjectLabel?: string; sourceUrl?: string }> = {}): AgentFact {
   // `identityFromEventOnly` is for observations whose collection instant changes on every
   // refresh (the 0xRouter macro route): with the instant in the identity, re-collecting the
@@ -430,35 +417,6 @@ export function fact(domain: AnalysisDomain, subject: string, metric: string, va
     ...(options.subjectLabel ? { subjectLabel: options.subjectLabel } : {}),
     ...(options.sourceUrl ? { sourceUrl: options.sourceUrl } : {})
   }
-}
-
-function hashSafeEvidenceIdentity(value: unknown): string {
-  let serialized = ''
-  try { serialized = JSON.stringify(value) } catch { serialized = 'unavailable' }
-  let hash = 2166136261
-  for (let index = 0; index < serialized.length; index += 1) hash = Math.imul(hash ^ serialized.charCodeAt(index), 16777619)
-  return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
-export function compareObservedAt(left: AgentFact, right: AgentFact): number {
-  return (right.observedAt ?? '').localeCompare(left.observedAt ?? '')
-}
-
-export function isEnvelope(value: unknown): value is MarketIntelligenceQueryResult<unknown> {
-  try { return !!value && typeof value === 'object' && 'data' in value && 'evidenceRefs' in value } catch { return false }
-}
-
-export function isSourceHealthData(value: unknown): value is SourceHealthData {
-  try { return !!value && typeof value === 'object' && Array.isArray((value as { sources?: unknown }).sources) } catch { return false }
-}
-
-export function toSourceHealthFlag(source: SourceCoverageAsOf, asOf: string): SourceHealthFlag {
-  const status = source.productionState === 'failed' ? 'failed' : source.productionState === 'stale' ? 'degraded' : source.productionState === 'disabled' || source.productionState === 'fixture-only' || source.productionState === 'planned' ? 'paused' : source.productionState === 'fresh' ? 'healthy' : 'degraded'
-  return { sourceId: source.sourceId, status, asOf }
-}
-
-export function utf8JsonBytes(value: unknown): number {
-  try { return new TextEncoder().encode(JSON.stringify(value)).byteLength } catch { return Number.POSITIVE_INFINITY }
 }
 
 /** True while a calendar fact's subject is only the *kind* of calendar item it came from. */

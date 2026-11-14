@@ -28,7 +28,6 @@ import {
   buildMarketAnalysisDomainAccessMatrix
 } from './marketAnalysisSourceAccess'
 import {
-  compareObservedAt,
   isContextInput,
   normalizeContextMaxFacts,
   observation,
@@ -37,10 +36,6 @@ import {
   projectFunding,
   projectMacroCalendar,
   projectSentiment,
-  safeQuery,
-  safeSourceHealth,
-  toSourceHealthFlag,
-  utf8JsonBytes,
   type MarketAnalysisDomainObservation
 } from './marketAnalysisContextProjection'
 
@@ -51,6 +46,14 @@ export {
   listMarketAnalysisSourceAccess
 } from './marketAnalysisSourceAccess'
 export type { MarketAnalysisDomainAccessMatrix, MarketAnalysisSourceAccess } from './marketAnalysisSourceAccess'
+import {
+  compareObservedAt,
+  hashSafeEvidenceIdentity,
+  safeQuery,
+  safeSourceHealth,
+  toSourceHealthFlag,
+  utf8JsonBytes
+} from './marketAnalysisContextSupport'
 
 const CONTEXT_FACT_DOMAIN_ORDER: readonly AnalysisDomain[] = ['macro', 'cross-asset', 'capital', 'sentiment', 'funding']
 
@@ -295,12 +298,4 @@ function attachQueryEvidence(facts: AgentFact[], evidenceRefs: Map<string, Agent
       ...(fact.sourceUrl ? { sourceUrl: fact.sourceUrl } : {})
     })
   }
-}
-
-function hashSafeEvidenceIdentity(value: unknown): string {
-  let serialized = ''
-  try { serialized = JSON.stringify(value) } catch { serialized = 'unavailable' }
-  let hash = 2166136261
-  for (let index = 0; index < serialized.length; index += 1) hash = Math.imul(hash ^ serialized.charCodeAt(index), 16777619)
-  return (hash >>> 0).toString(16).padStart(8, '0')
 }
