@@ -26,6 +26,7 @@ import {
 } from '../../../contracts/policyPath'
 import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { Drawer } from '@platform/ui/components/drawer'
+import { createPortal } from 'react-dom'
 import { macroIndicatorDrawerText, type MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { nextMeasuredSize } from './macroIndicatorDrawerMeasure'
 import { IndicatorCards, type IndicatorCardGroup } from './IndicatorCards'
@@ -403,13 +404,19 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
       </div>
       {/* 事件详情：与经济日历页同一个抽屉组件（`CalendarInspector`，左侧 inline、平台上按 Esc/× 关），
           正文也复用同一份 `MarketCalendarInspector`。点另一条就换内容，同一个抽屉不叠第二层。 */}
-      {detailEvent === undefined ? null : <CalendarInspector
-        contentId={detailEvent.eventKey}
-        onClose={() => setDetailEvent(undefined)}
-        open
-        when={detailEvent.scheduledAt}>
-        <MarketCalendarInspector event={detailEvent} source={undefined} text={calendarText} />
-      </CalendarInspector>}
+      {/* 事件详情要从**整个应用的左缘**滑出，所以挂到 `document.body`：
+          指标抽屉自身带 transform 动画，`position: fixed` 的子孙会锚到它身上（第一版就弹在抽屉里）。
+          挂到 body 之后它没有 transform 祖先，`inset: 0` 就是整窗，抽屉从窗口左边进来、满高。 */}
+      {detailEvent === undefined ? null : createPortal(
+        <div className="mk-detail-overlay">
+          <CalendarInspector
+            contentId={detailEvent.eventKey}
+            onClose={() => setDetailEvent(undefined)}
+            open
+            when={detailEvent.scheduledAt}>
+            <MarketCalendarInspector event={detailEvent} source={undefined} text={calendarText} />
+          </CalendarInspector>
+        </div>, document.body)}
     </section>
   </Drawer>
 }

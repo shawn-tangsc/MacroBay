@@ -315,3 +315,15 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
   flex: 1; display: flex; align-items: center; justify-content: center;
   text-align: center; color: var(--muted); font-size: var(--font-meta);
 }
+
+/*
+ * 事件详情的承载：挂在 `document.body` 上的一层，铺满整窗、压在指标抽屉之上。
+ * 抽屉本身（`CalendarInspector` → 平台 `Drawer` inline）只在层内左侧落位，所以它会从
+ * **整个应用的左缘**滑进来；层不接收指针，只有抽屉面板接收，背后的指标抽屉照旧可见。
+ */
+.mk-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
