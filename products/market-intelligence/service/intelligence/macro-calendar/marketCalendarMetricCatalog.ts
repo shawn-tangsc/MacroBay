@@ -53,6 +53,8 @@ export type MetricCatalogEntry = Readonly<{
   sourceKeys: Readonly<{ narwhalMeasures: readonly string[]; zeroXRouterIndicatorIds: readonly string[] }>
   /** 盘口 slug 模板（外部约定，只引用不复制）。 */
   marketSlugTemplate?: string
+  /** 盘口档位 → 卡片口径的换算（非农档是绝对人数，卡片是千）：M4 要它，别在消费处再写一遍。 */
+  marketValueDivisor?: number
   /** 政策路径两份清单里在不在（事件标注 / 同窗优先级）。 */
   policyPath: Readonly<{ annotated: boolean; sameWindowPriority: boolean }>
   /**
@@ -165,6 +167,7 @@ export function metricCatalog(): ReadonlyMap<string, MetricCatalogEntry> {
       zeroXRouterIndicatorIds: zeroXRouterIdsFor(metricKey)
     })
     const slugTemplate = (polymarketConsensusPolicy.slugTemplateByMetricKey as Readonly<Record<string, string>>)[metricKey]
+    const divisor = (polymarketConsensusPolicy.valueDivisorByMetricKey as Readonly<Record<string, number>>)[metricKey]
     return [metricKey, Object.freeze({
       metricKey,
       ...(name === undefined ? {} : { name }),
@@ -175,6 +178,7 @@ export function metricCatalog(): ReadonlyMap<string, MetricCatalogEntry> {
       ...(officialLegException === undefined ? {} : { officialLegException }),
       sourceKeys,
       ...(slugTemplate === undefined ? {} : { marketSlugTemplate: slugTemplate }),
+      ...(divisor === undefined ? {} : { marketValueDivisor: divisor }),
       policyPath: Object.freeze({
         annotated: (POLICY_PATH_EVENT_RELEVANT_METRIC_KEYS as readonly string[]).includes(metricKey),
         sameWindowPriority: (POLICY_PATH_EVENT_METRIC_PRIORITY as readonly string[]).includes(metricKey)

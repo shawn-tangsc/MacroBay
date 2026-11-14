@@ -32,8 +32,12 @@ describe('守卫 A：12 行卡片逐行断身份齐全', () => {
         if (entry.group === undefined) missing.push(`${row.metricKey}: 缺 group`)
         if (entry.card === undefined) missing.push(`${row.metricKey}: 缺 card`)
         if (entry.sources.length === 0) missing.push(`${row.metricKey}: 缺 sources（一条腿都没有）`)
-        /* 官方发布这一项两种合格形状：**有发布映射**，或**明确写了例外**（原因 + 怎么解）。
-           两者都没有 = 这个码「官方那边怎么来」没人说过，正是今晚漏掉的那一项。 */
+        /* 官方这一项**三种并列**（Chief 2026-11-14）：
+           ① 有发布映射（BEA/BLS 那条发布把值写成这个身份）；
+           ② 有官方腿（例如只有 FRED 一条官方序列，没有对应的发布映射）；
+           ③ 例外清单里写了 reason + resolution。
+           **例外＝补不上的缺口，不是②的替代品**——四格月率有 FRED 腿，把它们记成缺口会让下一轮的人
+           去「补」一个不需要补的东西。三者都没有 = 这个码「官方那边怎么来」没人说过，正是今晚漏的那一项。 */
         const exception = entry.officialLegException
         const exceptionExplained = exception !== undefined
           && exception.reason.trim().length > 0
@@ -104,6 +108,18 @@ describe('守卫 B：反向孤儿', () => {
       }
     }
     expect(unregistered.join('\n')).toBe('')
+  })
+})
+
+describe('盘口那一半（M4 要读的事实）', () => {
+  it('exposes both the slug template and the bucket divisor, so M4 never restates them', () => {
+    const catalog = metricCatalog()
+    const withSlug = [...catalog.values()].filter((entry) => entry.marketSlugTemplate !== undefined)
+    expect(withSlug.length).toBeGreaterThan(0)
+    for (const entry of withSlug) expect(entry.marketSlugTemplate, entry.metricKey).toMatch(/\{month\}/)
+    /* 非农的档位是绝对人数、卡片口径是千：换算值必须能从 catalog 读到，否则 M4 会在消费处再写一遍 1000。 */
+    const payrolls = withSlug.find((entry) => entry.marketValueDivisor !== undefined)
+    expect(payrolls?.marketValueDivisor).toBe(1000)
   })
 })
 
