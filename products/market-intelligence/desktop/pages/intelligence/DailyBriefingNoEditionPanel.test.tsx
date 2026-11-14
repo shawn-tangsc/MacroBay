@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
@@ -58,5 +58,21 @@ describe('the pane that has nothing to read', () => {
       onReread: () => undefined
     } as never))
     expect(html).not.toContain('读取没有完成')
+  })
+})
+
+// 这一屏要能在日志里说清「按哪个三元组判的」——用户那一版就是没有任何痕迹，查了很久。
+describe('the diagnostic line', () => {
+  it('names the triple it judged by when the store says published but the pane has no body', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    renderToStaticMarkup(createElement(DailyBriefingNoEditionPanel, {
+      ...base,
+      selection: { periodId: 'period_x', locale: 'zh-CN' },
+      editions: row([{ locale: 'zh-CN', state: 'published' }]),
+      onReread: () => undefined
+    } as never))
+    const call = warn.mock.calls.find((entry) => String(entry[0]).includes('published edition has no body'))
+    expect(call?.[1]).toEqual({ date: '2026-11-14', periodId: 'period_x', locale: 'zh-CN' })
+    warn.mockRestore()
   })
 })
