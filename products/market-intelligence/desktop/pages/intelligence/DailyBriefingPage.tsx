@@ -342,9 +342,24 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     locale, text, eventTitles: editionEventTitles, shareRef
   })
 
-  const { failure, editorialBlocked } = briefingFailure({ view, regenerateFailure })
+  // **按事实判失败，不按本地标志**（用户 2026-11-14）：库里这一期这一语言发布过，就显示正文，
+  // 不管本地 `regenerateFailure` 说什么——那一版明明在，界面却写「生成失败」是同一种撒谎。
+  const publishedRow = editions.find((edition) => edition.date === selected.date
+    && edition.periodId === (pickedPeriodId ?? DEFAULT_PERIOD_ID))
+  const publishedHere = publishedRow?.periodDeleted !== true
+    && publishedRow?.languages?.find((entry) => entry.locale === effectiveLocale)?.state === 'published'
+  useEffect(() => {
+    // 有正文就清掉本地失败并重读一次；只在真的挂着失败时动手，避免自激。
+    if (publishedHere !== true || regenerateFailure === null) return
+    setRegenerateFailure(null)
+    setReloadKey((key) => key + 1)
+  }, [publishedHere, regenerateFailure])
+  const { failure, editorialBlocked } = briefingFailure({
+    view,
+    regenerateFailure: publishedHere === true ? null : regenerateFailure
+  })
   // A stored edition under a failure notice is content, not a blocked state.
-  const contentBlocked = editorialBlocked || (regenerateFailure !== null && view.status !== 'ready')
+  const contentBlocked = editorialBlocked || (publishedHere !== true && regenerateFailure !== null && view.status !== 'ready')
   /**
    * The reader's own publication, of the edition on screen.
    *
