@@ -68,7 +68,6 @@ async function render(cellEnabledIo: CellEnabledIo | undefined, extraProps: Reco
           now: () => new Date(asOf),
           onConfigureSources: () => undefined,
           onManageSource: () => undefined,
-          onOpenCalendar: () => undefined,
           text,
           ...(cellEnabledIo === undefined ? {} : { cellEnabledIo }),
           ...extraProps

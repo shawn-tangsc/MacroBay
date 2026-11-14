@@ -115,8 +115,7 @@ async function render() {
           now: () => new Date(asOf),
           onConfigureSources: () => undefined,
           onManageSource: () => undefined,
-          onOpenCalendar: () => undefined,
-          text
+                  text
         } as never)
       })
     )
@@ -264,8 +263,7 @@ describe('看板按「采集写了库」重读自己的读口', () => {
             now: () => new Date(asOf),
             onConfigureSources: () => undefined,
             onManageSource: () => undefined,
-            onOpenCalendar: () => undefined,
-            text
+                      text
           } as never)
         })
       )

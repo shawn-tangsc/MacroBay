@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -32,11 +32,15 @@ describe('导入 ICS 的位置：那一条源项，不是标题行、不是另�
     expect(tail.indexOf('props.extraAction')).toBeLessThan(tail.indexOf('props.onTest'))
   })
 
-  it('keeps the calendar toolbar free of any import entry', () => {
-    const calendar = readFileSync(join(process.cwd(),
-      'products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx'), 'utf8')
-    expect(calendar).not.toContain('BlsIcsImportAction')
-    expect(calendar).not.toContain('ImportBlsIcsDialog')
-    expect(calendar).not.toContain('useBlsIcsImport')
+  it('keeps the calendar surfaces free of any import entry (the old page is gone)', () => {
+    // 2026-11-15：旧日历页整页删除，日历只剩抽屉。这条从「页面上没有导入入口」升级成
+    // 「页面文件已经不存在」——比逐串断言更强：再有人把入口放回去，也没有那一页可放。
+    expect(existsSync(join(process.cwd(),
+      'products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx'))).toBe(false)
+    const drawer = readFileSync(join(process.cwd(),
+      'products/market-intelligence/desktop/pages/intelligence/MacroIndicatorDrawer.tsx'), 'utf8')
+    expect(drawer).not.toContain('BlsIcsImportAction')
+    expect(drawer).not.toContain('ImportBlsIcsDialog')
+    expect(drawer).not.toContain('useBlsIcsImport')
   })
 })

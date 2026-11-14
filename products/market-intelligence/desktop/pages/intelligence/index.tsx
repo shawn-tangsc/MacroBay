@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../shared/i18n/productText'
-import { EconomicCalendar, macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
+import { macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
 import { intelligenceFearGreedClient } from '../../features/industry/fear-greed'
 import { intelligenceFundingRateHistoryClient, intelligenceOpenInterestClient } from '../../features/industry/positioning'
 import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
@@ -125,7 +125,7 @@ function IntelligencePageBody(): React.ReactElement {
    * 但暂时没有入口**。所以 `'portal'` 这一档现在没有任何调用点能落到；它不是死代码，等用户想好
    * 多智能体的入口怎么给，再决定是恢复一个入口还是把这一屏下线。别当成无主代码清掉。
    */
-  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('dashboard')
+  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'briefing'>('dashboard')
   const sampleAvailable = sample.state.scenarioCount > 0
     && sample.state.unavailableReason !== 'no-scenario'
   const openCryptoPrimary = (): void => {
@@ -150,9 +150,9 @@ function IntelligencePageBody(): React.ReactElement {
       // 进入失败保持真实模式；开关仍为 off。
     }
   }
-  // The card asks for the calendar page and hands over what to look at; the page consumes it
-  // when it renders, so no shell navigation contract had to change.
-  const [calendarTarget, setCalendarTarget] = useState<{ month: string; eventKey?: string } | undefined>()
+  /* 看板里「打开日历」现在开的是日历抽屉（旧日历页已删）。抽屉挂在 `CryptoIntelligenceDashboard` 里，
+     所以这里只记一个请求序号：加一 = 请它打开。不去共享它的内部开关，避免把抽屉状态提到页面层。 */
+  const [indicatorDrawerRequest, setIndicatorDrawerRequest] = useState(0)
   /**
    * The 0xRouter month, paged, in the reader's language.
    *
@@ -204,21 +204,12 @@ function IntelligencePageBody(): React.ReactElement {
           onConfigureWebSearch={openWebSearchSettings}
           onOpenSettings={() => openConfigDrawer('briefing')}
         />
-      ) : activeView === 'calendar' ? (
-        <EconomicCalendar
-          client={macroEconomicCalendarClient}
-          now={sampleNow}
-          onBack={() => setActiveView('dashboard')}
-          openTarget={calendarTarget}
-          text={text.calendar}
-          onOpenSettings={() => openConfigDrawer(sourcesDataRequestFor({ business: 'calendar' }))}
-        />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
           onOpenAnalysisSettings={() => openConfigDrawer({ menu: 'analysis' })}
           onOpenSettings={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
-          onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
+          onOpenCalendar={() => setIndicatorDrawerRequest((count) => count + 1)}
           text={text}
           locale={language}
           // The one event-title list the product keeps, read here because the page entry owns the
@@ -270,7 +261,7 @@ function IntelligencePageBody(): React.ReactElement {
           /* 「采集与数据」里点源名/红行：切到「数据源」屏，定位到那个源（滚动/描边/焦点归详情）。 */
           /* 舆情卡右边的入口卡 → 抽屉「内容处理」屏（菜单 7 项不变，同一条 openConfigDrawer 路）。 */
           onOpenProcessingSettings={() => openConfigDrawer({ menu: 'processing' })}
-          onOpenCalendar={() => setActiveView('calendar')}
+          openIndicatorDrawerRequest={indicatorDrawerRequest}
           text={text.dashboard}
         />
         </MarketAnalysisDashboardLayout>

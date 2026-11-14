@@ -977,7 +977,6 @@ mi: miText['zh-CN'],
               }
             },
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '读取范围：{months}（UTC 月，含网格相邻月）；官方每月最多 200 条' },
-            calendarSettings: '配置日历',
             calendarPanel: { title: '日历源', configure: '在数据源中配置', loading: '正在加载日历源…', unavailable: '当前面板没有可配置的日历源。', pending: '待接入', enabled: '已启用', disabled: '未启用' },
             market: { marketReadFailure: { 'input-invalid': '这次读取的请求没有通过校验，刷新一次会重新发起。', 'read-threw': '这次读取没有完成，可以重试。', 'too-large': '这段窗口的事件太多，这次没有读完，可以重试。', 'cursor-loop': '读取没有继续向前，已停下，可以重试。' }, refreshOutcome: { succeeded: '刷新成功', failed: '刷新失败', unattempted: '本次尚未刷新' }, refreshTrigger: { manual: '手动', automatic: '自动' }, attemptFailure: { 'input-invalid': '请求无效', 'credential-not-configured': '未配置凭据', 'response-unavailable': '来源未响应', 'archive-unavailable': '证据归档不可用', 'parse-unavailable': '解析受限', 'storage-unavailable': '存储不可用', 'storage-pressure': '存储受限' }, collectedAt: '数据采集于', retainedData: '显示上次数据', automaticRefresh: '每 {interval} 分钟自动更新', officialActual: '官方公布值', officialPrevious: '官方前值', sourceAdvanced: '该来源此后已更新；以下数值与时间属于上方那条观测。', linkedTimeOfficial: '日历时间：官方', linkedTimeProvider: '日历时间：Narwhal', linkedTimePending: '日历时间：待定', missingValue: '暂无', importance: { high: '高', medium: '中', low: '低' }, locale: 'zh' as const, refresh: '刷新市场日历', loading: '正在读取市场事件…', pending: '正在刷新市场日历…', completed: '市场日历已更新', partial: '部分来源失败，保留已有数据', unavailable: '刷新未完成，已有数据可能过期', queryUnavailable: '市场事件读取受限', settings: '管理市场日历来源', unknownCountry: '未标明国家', consensus: '市场预期', surprise: '预期差', surpriseBeat: '超预期', surpriseMiss: '低于预期', surpriseInline: '符合预期', surpriseUnavailable: '无一致预期', surpriseNotComparable: '预期差不可比', providerPrevious: '前值（Narwhal）', providerActual: '公布值（Narwhal）', comparison: '暂不可比较',
               /* 按真实来源显示：旧的两档枚举把官方行说成「Narwhal」。键是 feed id，不是 provider——
@@ -990,15 +989,12 @@ mi: miText['zh-CN'],
             title: '经济日历',
             info: '日历说明',
             month: '当前月份',
-            monthNavigation: { previous: '上个月', next: '下个月', current: '回到本月', picker: '选择月份' },
             status: { loading: '正在加载经济日历…', empty: '本月没有任何事件。', beforeDataStart: '这个月早于数据起点，还没有这段数据。', noSourceEnabled: '日历来源都没有启用' },
             /* 来源没有读者当前语言的内容：这是「没有这种语言」，不是「本月没有事件」。
                它画在月区的说明行里，不进空态（产品 2026-11-09：空态只属于「都读到了、都为空」）。 */
             noLocaleRowsNote: '这几类日历来源只提供中文条目；本月没有可显示的英文内容。',
             emptyState: { title: '尚未导入或采集官方日程', manageAction: '管理宏观日历' },
             failures: { 'calendar-query-unavailable': '经济日历暂时不可用。', 'query-input-invalid': '经济日历查询无效。', 'event-not-found': '未找到该事件详情。' },
-            backToDashboard: '返回数字货币看板',
-                        weekdays: ['日', '一', '二', '三', '四', '五', '六'],
             importance: { high: '高' },
             states: { scheduled: '待公布', released: '已发布', cancelled: '已取消' },
             categories: { inflation: '通胀', employment: '就业', growth: '增长', 'monetary-policy': '货币政策', consumption: '消费' },
@@ -1038,11 +1034,6 @@ mi: miText['zh-CN'],
               blocked: '暂时不能刷新：官方站点拒绝了当前网络。恢复时间未知。',
               reasonCodeAria: '原因码',
               updated: '已刷新对应完整 BLS 发布组的数据。', unchanged: '对应完整 BLS 发布组的数据已是最新。', unavailable: '对应完整 BLS 发布组的官方数据暂不可用，未保存任何值。'
-            },
-            blsScheduleSync: {
-              schedule: { updated: 'BLS 日程已更新', unchanged: 'BLS 日程已是最新', unavailable: 'BLS 日程暂不可用' },
-              cpi: { updated: 'CPI 值已更新', current: 'CPI 值已是最新', 'not-required': 'CPI 暂无需补抓', unavailable: 'CPI 值暂不可用' },
-              employment: { updated: '就业值已更新', current: '就业值已是最新', 'not-required': '就业暂无需补抓', unavailable: '就业值暂不可用' }
             },
             recordTimes: {
               // 两行只写字段名与值：说明（「不是发布时间」之类）归 ⓘ，不进正文。
@@ -2439,7 +2430,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               }
             },
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Reading {months} (UTC months, including the grid\'s neighbouring months); up to 200 official events per month' },
-            calendarSettings: 'Configure calendar',
             calendarPanel: { title: 'Calendar sources', configure: 'Configure in data sources', loading: 'Loading calendar sources…', unavailable: 'No calendar sources are available for this panel.', pending: 'Pending', enabled: 'Enabled', disabled: 'Disabled' },
             market: { marketReadFailure: { 'input-invalid': 'This read was rejected as invalid; refreshing sends it again.', 'read-threw': 'This read did not finish; you can retry.', 'too-large': 'This window holds more events than one read can finish; you can retry.', 'cursor-loop': 'The read stopped making progress and was cut off; you can retry.' }, refreshOutcome: { succeeded: 'Refresh succeeded', failed: 'Refresh failed', unattempted: 'Not refreshed this session' }, refreshTrigger: { manual: 'Manual', automatic: 'Automatic' }, attemptFailure: { 'input-invalid': 'Invalid request', 'credential-not-configured': 'No credential configured', 'response-unavailable': 'Source did not respond', 'archive-unavailable': 'Evidence archive unavailable', 'parse-unavailable': 'Parsing limited', 'storage-unavailable': 'Storage unavailable', 'storage-pressure': 'Storage limited' }, collectedAt: 'Data collected', retainedData: 'Showing previous data', automaticRefresh: 'Updates automatically every {interval} min', officialActual: 'Official actual', officialPrevious: 'Official previous', sourceAdvanced: 'This source has updated since; the figures and time below belong to the observation above.', linkedTimeOfficial: 'Calendar time: official', linkedTimeProvider: 'Calendar time: Narwhal', linkedTimePending: 'Calendar time: pending', missingValue: 'Unavailable', importance: { high: 'High', medium: 'Medium', low: 'Low' }, locale: 'en' as const, refresh: 'Refresh market calendar', loading: 'Loading market events…', pending: 'Refreshing market calendar…', completed: 'Market calendar updated', partial: 'Some sources failed; existing data retained', unavailable: 'Refresh incomplete; existing data may be stale', queryUnavailable: 'Market events unavailable', settings: 'Manage market calendar source', unknownCountry: 'Country not specified', consensus: 'Market consensus', surprise: 'Surprise', surpriseBeat: 'Above expectation', surpriseMiss: 'Below expectation', surpriseInline: 'In line', surpriseUnavailable: 'No consensus', surpriseNotComparable: 'Surprise not comparable', providerPrevious: 'Previous (Narwhal)', providerActual: 'Actual (Narwhal)', comparison: 'Not comparable yet',
               source: 'Narwhal',
@@ -2449,13 +2439,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             title: 'Economic calendar',
             info: 'Calendar details',
             month: 'Current month',
-            monthNavigation: { previous: 'Previous month', next: 'Next month', current: 'Back to current month', picker: 'Choose month' },
             status: { loading: 'Loading economic calendar…', empty: 'No events this month.', beforeDataStart: 'This month is before the data start, so nothing has been collected for it yet.', noSourceEnabled: 'No calendar source is enabled' },
             noLocaleRowsNote: 'These calendar sources provide Chinese items only; there is no English content to show this month.',
             emptyState: { title: 'No official schedule is imported or collected', manageAction: 'Manage Macro Calendar' },
             failures: { 'calendar-query-unavailable': 'Economic calendar is unavailable.', 'query-input-invalid': 'Economic calendar query is invalid.', 'event-not-found': 'Event detail was not found.' },
-            backToDashboard: 'Back to crypto dashboard',
-                        weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
             importance: { high: 'High' },
             states: { scheduled: 'Scheduled', released: 'Released', cancelled: 'Cancelled' },
             categories: { inflation: 'Inflation', employment: 'Employment', growth: 'Growth', 'monetary-policy': 'Monetary policy', consumption: 'Consumption' },
@@ -2491,11 +2478,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               blocked: 'Refreshing is unavailable: the official site rejects this network; the recovery time is unknown.',
               reasonCodeAria: 'Reason code',
               updated: 'BLS data for the matching complete release family was refreshed.', unchanged: 'BLS data for the matching complete release family is already current.', unavailable: 'Official BLS data is unavailable for the matching complete release family. No values were saved.'
-            },
-            blsScheduleSync: {
-              schedule: { updated: 'BLS schedule updated', unchanged: 'BLS schedule is current', unavailable: 'BLS schedule unavailable' },
-              cpi: { updated: 'CPI values updated', current: 'CPI values are current', 'not-required': 'CPI catch-up not required', unavailable: 'CPI values unavailable' },
-              employment: { updated: 'Employment values updated', current: 'Employment values are current', 'not-required': 'Employment catch-up not required', unavailable: 'Employment values unavailable' }
             },
             recordTimes: {
               createdAt: 'Created',

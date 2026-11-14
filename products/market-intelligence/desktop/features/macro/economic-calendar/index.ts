@@ -1,4 +1,3 @@
-export { EconomicCalendar } from './EconomicCalendar'
 export type { EconomicCalendarText } from './economicCalendarText'
 /** The one drawer shell and the one detail body for an official event, shared by every surface. */
 export { CalendarInspector } from './CalendarInspector'

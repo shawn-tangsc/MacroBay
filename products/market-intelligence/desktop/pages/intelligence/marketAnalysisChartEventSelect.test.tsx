@@ -76,7 +76,6 @@ const dashboardProps = {
   now: () => new Date(asOf),
   onConfigureSources: () => undefined,
   onManageSource: () => undefined,
-  onOpenCalendar: () => undefined,
   // 源级启用表：读到了并且全部启用（真实宿主由 `dashboardFeedStatusClient` 给）。
   dashboardFeedStatusClient: { query: async () => ({ sources: allSourcesEnabled, state: 'available' as const }) } as never,
   crossAssetClient: {
