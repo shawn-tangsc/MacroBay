@@ -1,6 +1,6 @@
 import { Button, DatePicker } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
-import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, Settings2, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, Settings2 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
@@ -29,8 +29,6 @@ import { type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail
 import { CalendarMonthBoard } from './CalendarMonthBoard'
 import { CalendarDayEventList, calendarDaySummary } from './CalendarDayEventList'
 import { calendarDayForMonth, calendarDisplayDate, unifiedCalendarDay, type CalendarDayCoverage, type CalendarDayItem } from './economicCalendarDayModel'
-import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
-import { useBlsIcsImport } from './useBlsIcsImport'
 import { useMarketCalendar } from './useMarketCalendar'
 import { MarketCalendarInspector } from './MarketCalendarEvents'
 import { CalendarSourceStatusInfo, MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
@@ -195,17 +193,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
     }).catch(() => loadMonth(month, true, initialQuery.asOf))
   }, [initialQuery.asOf, initialQuery.month, loadMonth, syncBlsYear])
 
-  const blsIcsImport = useBlsIcsImport({
-    client,
-    onImported: async () => {
-      // The import just wrote rows with a later detection time; reading with the as-of the page
-      // opened with would hide them until the reader switched months.
-      const importedAsOf = toCanonicalUtcMillis(now())
-      setAsOf(importedAsOf)
-      loadMonth(selectedMonthRef.current, true, importedAsOf)
-    }
-  })
-
   const selectedEvent = readSelectedEvent(monthState, selectedEventKey)
   /**
    * A paged read advances a source past the observation the reader picked, and the inspector then
@@ -341,9 +328,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
         </div>
         <div className="mi-economic-calendar__tools">
           <span data-calendar-time-zone={timeZone}>{timeZoneLabel}</span>
-          <Button aria-label={text.manualImport.action} className="mi-economic-calendar__import" icon={<Upload aria-hidden="true" size={15} />} onClick={() => void blsIcsImport.selectFile()} size="small">
-            {text.manualImport.action}
-          </Button>
           <Button aria-label={text.monthNavigation.previous} icon={<ChevronLeft aria-hidden="true" size={15} />} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, -1))}>{text.monthNavigation.previous}</Button>
           <DatePicker
             allowClear={economicCalendarMonthPickerPolicy.allowClear}
@@ -451,12 +435,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget, onOpen
         sourceAdvanced={selectedMarketSourceAdvanced}
         text={text}
         when={detailWhen}
-      />
-      <ImportBlsIcsDialog
-        dialogState={blsIcsImport.dialogState}
-        onClose={blsIcsImport.closeDialog}
-        onConfirm={() => void blsIcsImport.confirmImport()}
-        text={text}
       />
     </main>
   )

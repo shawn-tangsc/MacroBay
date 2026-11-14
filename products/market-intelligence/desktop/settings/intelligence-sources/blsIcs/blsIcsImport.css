@@ -1,0 +1,35 @@
+/*
+ * BLS ICS 导入（设置 → 数据源 → 美国劳工统计局）。
+ *
+ * 平台 `Modal` 把对话框挂在 `body` 上，所以**它必须自己带 token**：变量只声明在
+ * `.mi-economic-calendar` 上时，body 上一个都取不到，计算期整体失效且不报错
+ * （见 `docs-private/10-development/pitfalls/2026-10-15-a-reused-surface-must-carry-its-token-scope.md`）。
+ *
+ * 这些规则从日历样式里搬过来，是因为这一屏已经归设置侧：留在日历那份里，设置页加载不到它。
+ */
+.mi-bls-ics-dialog {
+  --mi-economic-line: var(--border);
+  --mi-economic-surface: var(--surface);
+  --mi-economic-surface-strong: var(--surface-strong);
+  --mi-economic-muted: var(--muted);
+  --mi-economic-text: var(--text);
+  --mi-economic-lime: var(--accent);
+  --mi-economic-dialog-width: min(520px, calc(100vw - 32px));
+}
+
+.mi-bls-ics-dialog .ant-modal-content { background: var(--mi-economic-surface); color: var(--mi-economic-text); }
+.mi-bls-ics-dialog .ant-modal-header { background: transparent; border-bottom-color: var(--mi-economic-line); }
+.mi-bls-ics-dialog .ant-modal-title, .mi-bls-ics-dialog .ant-modal-close { color: var(--mi-economic-text); }
+.mi-bls-ics-dialog.ant-modal { max-width: var(--mi-economic-dialog-width); }
+.mi-bls-ics-dialog__content { display: grid; gap: 14px; }
+.mi-bls-ics-dialog__filename { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--mi-economic-line); border-radius: 8px; background: var(--mi-economic-surface-strong); }
+.mi-bls-ics-dialog__filename span, .mi-bls-ics-dialog__counts dt { color: var(--mi-economic-muted); font-size: 11px; }
+.mi-bls-ics-dialog__filename strong { overflow: hidden; color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.mi-bls-ics-dialog__counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--mi-economic-line); border-radius: 8px; overflow: hidden; background: var(--mi-economic-line); }
+.mi-bls-ics-dialog__counts div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 10px; background: var(--mi-economic-surface); }
+.mi-bls-ics-dialog__counts dd { margin: 0; color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.mi-bls-ics-dialog__status { padding: 9px 11px; border-left: 3px solid var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 8%, var(--mi-economic-surface)); color: var(--mi-economic-text); font-size: 12px; line-height: 1.5; }
+.mi-bls-ics-dialog__status[data-state='failed'] { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--mi-economic-surface)); }
+.mi-bls-ics-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 620px) { .mi-bls-ics-dialog__counts { grid-template-columns: minmax(0, 1fr); } }

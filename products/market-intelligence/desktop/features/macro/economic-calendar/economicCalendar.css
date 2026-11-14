@@ -12,7 +12,6 @@
  */
 .mi-economic-calendar,
 .mi-calendar-detail,
-.mi-bls-ics-dialog,
 /* 关键指标抽屉的右列（`.mk-col-r`）也画这一套当日列表，同样需要这批 token：
    少了它们 `grid-template-columns: var(--mi-calendar-time-width) …` 会在计算值阶段失效、
    退回单列——行就变成「时刻一行、名字一行」，正是用户在抽屉里看到的样子。 */
@@ -280,27 +279,12 @@ div.mi-economic-calendar__event:hover { background: transparent; }
 .mi-economic-calendar__refresh-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .mi-economic-calendar__refresh-blocked { color: var(--mi-economic-muted); font-size: var(--font-meta); line-height: 1.55; }
 .mi-economic-calendar__provenance { border-top: 1px solid var(--mi-economic-line); padding-top: 12px; }
-.mi-bls-ics-dialog .ant-modal-content { background: var(--mi-economic-surface); color: var(--mi-economic-text); }
-.mi-bls-ics-dialog .ant-modal-header { background: transparent; border-bottom-color: var(--mi-economic-line); }
-.mi-bls-ics-dialog .ant-modal-title, .mi-bls-ics-dialog .ant-modal-close { color: var(--mi-economic-text); }
-.mi-bls-ics-dialog.ant-modal { max-width: var(--mi-economic-dialog-width); }
-.mi-bls-ics-dialog__content { display: grid; gap: 14px; }
-.mi-bls-ics-dialog__filename { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--mi-economic-line); border-radius: 8px; background: var(--mi-economic-surface-strong); }
-.mi-bls-ics-dialog__filename span, .mi-bls-ics-dialog__counts dt { color: var(--mi-economic-muted); font-size: 11px; }
-.mi-bls-ics-dialog__filename strong { overflow: hidden; color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.mi-bls-ics-dialog__counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--mi-economic-line); border-radius: 8px; overflow: hidden; background: var(--mi-economic-line); }
-.mi-bls-ics-dialog__counts div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 10px; background: var(--mi-economic-surface); }
-.mi-bls-ics-dialog__counts dd { margin: 0; color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.mi-bls-ics-dialog__status { padding: 9px 11px; border-left: 3px solid var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 8%, var(--mi-economic-surface)); color: var(--mi-economic-text); font-size: 12px; line-height: 1.5; }
-.mi-bls-ics-dialog__status[data-state='failed'] { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--mi-economic-surface)); }
-.mi-bls-ics-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
 
 @media (max-width: 1279px) { .mi-economic-calendar { --mi-economic-page-inline: 24px; } }
 /* The drawer carries the detail on every width now, so its own gutter is the drawer's, not the
    column's: the inspector keeps the type and drops the rule that separated it from the month. */
 .mi-calendar-detail-container .mi-economic-calendar__inspector { grid-template-columns: minmax(0, 1fr); padding: 0; border: 0; }
 @media (max-width: 1023px) { .mi-economic-calendar__workspace { grid-template-columns: minmax(0, 1fr); } .mi-calendar-day-list { padding-left: 0; border-left: 0; border-top: 1px solid var(--mi-economic-line); padding-top: var(--mi-economic-gap); } }
-@media (max-width: 620px) { .mi-economic-calendar__header, .mi-economic-calendar__empty-state { display: grid; } .mi-economic-calendar__tools { justify-content: flex-start; } .mi-bls-ics-dialog__counts { grid-template-columns: minmax(0, 1fr); } }
 
 /* The release time reads as the row's value, not as a control: same type as its neighbours, with a
    quiet affordance that only appears for a row that may still be changed. A released row keeps the

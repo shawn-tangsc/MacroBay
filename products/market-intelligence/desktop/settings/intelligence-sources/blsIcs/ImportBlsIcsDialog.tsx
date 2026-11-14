@@ -4,8 +4,8 @@ import type { ReactElement } from 'react'
 
 import { Modal } from '@platform/ui/components/modal'
 
-import { useProductTextKey } from '../../../shared/i18n/productTextKey'
-import type { EconomicCalendarText } from './economicCalendarText'
+import './blsIcsImport.css'
+
 import type { BlsIcsImportDialogState } from './useBlsIcsImport'
 
 /**
@@ -23,15 +23,19 @@ export const importBlsIcsDialogPolicy = {
   preserveContentAfterClose: false
 } as const
 
+/**
+ * 文案走 `resolveText`（全键路径）而不是引入日历那份 text 类型：这一屏已经搬到设置侧，
+ * **不许反向依赖日历 feature**（Chief 2026-11-15 的第 3 条要求）。键本身仍是产品文案表里那几条。
+ */
 type Props = {
   dialogState: BlsIcsImportDialogState
   onClose: () => void
   onConfirm: () => void
-  text: EconomicCalendarText
+  resolveText: (key: string) => string
 }
 
-export function ImportBlsIcsDialog({ dialogState, onClose, onConfirm, text }: Props): ReactElement | null {
-  const resolveText = useProductTextKey()
+export function ImportBlsIcsDialog({ dialogState, onClose, onConfirm, resolveText }: Props): ReactElement | null {
+  const base = 'pages.intelligence.portal.calendar.manualImport'
   if (dialogState.state === 'closed') return null
   const preview = dialogState.state === 'ready' || dialogState.state === 'importing'
     ? dialogState.preview
@@ -48,14 +52,14 @@ export function ImportBlsIcsDialog({ dialogState, onClose, onConfirm, text }: Pr
       destroyOnHidden={!importBlsIcsDialogPolicy.preserveContentAfterClose}
       footer={ready ? (
         <div className="mi-bls-ics-dialog__footer">
-          <Button onClick={onClose}>{text.manualImport.actions.cancel}</Button>
+          <Button onClick={onClose}>{resolveText(`${base}.actions.cancel`)}</Button>
           <Button icon={<Check aria-hidden="true" size={14} />} loading={importing} onClick={onConfirm} type="primary">
-            {text.manualImport.actions.confirm}
+            {resolveText(`${base}.actions.confirm`)}
           </Button>
         </div>
       ) : (
         <div className="mi-bls-ics-dialog__footer">
-          <Button icon={<X aria-hidden="true" size={14} />} onClick={onClose}>{text.manualImport.actions.close}</Button>
+          <Button icon={<X aria-hidden="true" size={14} />} onClick={onClose}>{resolveText(`${base}.actions.close`)}</Button>
         </div>
       )}
       onClose={onClose}
@@ -65,18 +69,19 @@ export function ImportBlsIcsDialog({ dialogState, onClose, onConfirm, text }: Pr
       width={importBlsIcsDialogPolicy.width}
     >
       <section className="mi-bls-ics-dialog__content" aria-live="polite">
-        {filename ? <p className="mi-bls-ics-dialog__filename"><span>{text.manualImport.filename}</span><strong>{filename}</strong></p> : null}
-        {dialogState.state === 'failed' ? <p className="mi-bls-ics-dialog__status" data-state="failed">{text.manualImport.failures[dialogState.failureCode]}</p> : null}
-        {dialogState.state === 'importing' ? <p className="mi-bls-ics-dialog__status">{text.manualImport.status.importing}</p> : null}
-        {dialogState.state === 'result' ? <p className="mi-bls-ics-dialog__status" data-state="success">{text.manualImport.results[dialogState.result.state]}</p> : null}
-        {preview ? <Counts text={text} counts={preview} /> : null}
+        {filename ? <p className="mi-bls-ics-dialog__filename"><span>{resolveText(`${base}.filename`)}</span><strong>{filename}</strong></p> : null}
+        {dialogState.state === 'failed' ? <p className="mi-bls-ics-dialog__status" data-state="failed">{resolveText(`${base}.failures.${dialogState.failureCode}`)}</p> : null}
+        {dialogState.state === 'importing' ? <p className="mi-bls-ics-dialog__status">{resolveText(`${base}.status.importing`)}</p> : null}
+        {dialogState.state === 'result' ? <p className="mi-bls-ics-dialog__status" data-state="success">{resolveText(`${base}.results.${dialogState.result.state}`)}</p> : null}
+        {preview ? <Counts base={base} counts={preview} resolveText={resolveText} /> : null}
       </section>
     </Modal>
   )
 }
 
-function Counts({ text, counts }: {
-  text: EconomicCalendarText
+function Counts({ base, counts, resolveText }: {
+  base: string
+  resolveText: (key: string) => string
   counts: {
     totalEvents: number
     supportedReleaseGroups: number
@@ -98,7 +103,7 @@ function Counts({ text, counts }: {
   ] as const
   return (
     <dl className="mi-bls-ics-dialog__counts">
-      {rows.map(([key, count]) => count === undefined ? null : <div key={key}><dt>{text.manualImport.counts[key]}</dt><dd>{count}</dd></div>)}
+      {rows.map(([key, count]) => count === undefined ? null : <div key={key}><dt>{resolveText(`${base}.counts.${key}`)}</dt><dd>{count}</dd></div>)}
     </dl>
   )
 }

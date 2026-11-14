@@ -521,10 +521,12 @@ describe('macro economic calendar', () => {
     // `.mi-economic-calendar` ancestor, and an undefined `var()` is invalid at computed-value time —
     // it unsets the property instead of falling back — so the body silently lost its padding and the
     // inspector's labels their muted colour. The BLS import dialog lands on `body` too (the platform
-    // `Modal` has no container slot), so it must carry the same tokens on its own class.
+    // `Modal` has no container slot)。**BLS 导入对话框已搬去设置侧**（2026-11-15，用户要求把入口
+    // 挪进「数据源 → 美国劳工统计局」），它的 token 与样式随组件一起搬到
+    // `settings/intelligence-sources/blsIcs/blsIcsImport.css`，所以这份样式表里不再需要它。
     // 抽屉右列也画这套列表（`.mk-col-r`）：少了 tokens，行会退回单列——用户在抽屉里看到的
-    // 「时刻一行、名字一行」正是这么来的，所以它必须和详情面板、导入对话框一样承载 tokens。
-    for (const selector of ['.mi-economic-calendar,', '.mi-calendar-detail,', '.mi-bls-ics-dialog,', '.mk-col-r {']) {
+    // 「时刻一行、名字一行」正是这么来的，所以它必须和详情面板一样承载 tokens。
+    for (const selector of ['.mi-economic-calendar,', '.mi-calendar-detail,', '.mk-col-r {']) {
       expect(styles).toContain(selector)
     }
     const tokenRule = styles.slice(styles.indexOf('.mi-economic-calendar,'))
@@ -1680,144 +1682,15 @@ describe('macro economic calendar', () => {
     expect(container.querySelectorAll('[data-event-key]')).not.toHaveLength(0)
   })
 
-  it('starts only the existing file picker from the empty month import action', async () => {
-    const selectFiles = vi.fn(async () => [])
-    const readTextFile = vi.fn(async () => ({ path: '', text: '', truncated: false }))
-    installFileBridge(selectFiles, readTextFile)
-    const { container, client } = await renderCalendar({
-      queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
-      getEventDetail: async () => unavailableDetail()
-    })
-
-    await flush()
-    // The manual import is a page-level tool now: it lives in the header toolbar, not in the
-    // empty state's single action slot.
-    await act(async () => container.querySelector<HTMLElement>('.mi-economic-calendar__import')!.click())
-    await flush()
-
-    expect(selectFiles).toHaveBeenCalledTimes(1)
-    expect(readTextFile).not.toHaveBeenCalled()
-    expect(client.previewManualBlsIcs).not.toHaveBeenCalled()
-    expect(client.importManualBlsIcs).not.toHaveBeenCalled()
-    expect(client.queryMonth).toHaveBeenCalledTimes(3)
-    expect(client.getEventDetail).not.toHaveBeenCalled()
-  })
-
-  it('keeps a localized inspector state visible while a selected event detail is loading', async () => {
-    const calendar = await renderCalendar({
-      queryMonth: async () => ({ state: 'available' as const, asOf, events: [blsEvent()] }),
-      getEventDetail: () => new Promise(() => undefined)
-    })
-
-    await flush()
-    await act(async () => calendar.container.querySelector<HTMLButtonElement>('[data-calendar-row]')!.click())
-
-    expect(calendar.container.querySelector('.mi-economic-calendar__inspector')?.textContent).toContain(
-      productText['zh-CN'].pages.intelligence.portal.calendar.status.loading
-    )
-  })
-
-  it('imports a selected local BLS ICS and re-reads the current calendar window without changing asOf', async () => {
-    const path = '/private/downloads/bls.ics'
-    const body = 'BEGIN:VCALENDAR\nSUMMARY:secret\nEND:VCALENDAR'
-    const selectFiles = vi.fn(async () => [path])
-    const readTextFile = vi.fn(async () => ({ path, text: body, truncated: false }))
-    installFileBridge(selectFiles, readTextFile)
-    const { container, client } = await renderCalendar({
-      queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
-      getEventDetail: async () => unavailableDetail(),
-      previewManualBlsIcs: async () => preview(),
-      importManualBlsIcs: async () => ({ ...preview(), state: 'imported' as const }),
-      now: sequenceNow(asOf, asOf)
-    })
-
-    await flush()
-    await act(async () => button(container, '上个月').click())
-    await flush()
-    const importButton = button(container, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.action)
-    expect(importButton.getAttribute('aria-label')).toBe(productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.action)
-    expect(importButton.querySelector('svg')).not.toBeNull()
-    await act(async () => importButton.click())
-    await flush()
-
-    expect(document.body.textContent).toContain('bls.ics')
-    expect(document.body.textContent).toContain(String(preview().supportedReleaseGroups))
-    expect(document.body.textContent).not.toMatch(/private|BEGIN:VCALENDAR|secret|https?:|evidenceHash|rawRecordId|credential/i)
-
-    await act(async () => button(document.body, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.actions.confirm).click())
-    await flush()
-
-    expect(client.previewManualBlsIcs).toHaveBeenCalledWith({ body, truncated: false })
-    expect(client.importManualBlsIcs).toHaveBeenCalledWith({ body, truncated: false })
-    expect(client.queryMonth).toHaveBeenCalledTimes(9)
-    // The import re-reads the month on screen, and only that grid window.
-    expect(client.queryMonth.mock.calls.slice(6).map(([query]) => query.month)).toEqual(['2026-06', '2026-07', '2026-08'])
-    expect(client.queryMonth.mock.calls.slice(6).every(([query]) => query.asOf === asOf)).toBe(true)
-    expect(document.body.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.results.imported)
-  })
-
-  it('shows what an ICS import just wrote by re-reading as of the import', async () => {
-    const path = '/private/downloads/bls.ics'
-    const body = 'BEGIN:VCALENDAR\nEND:VCALENDAR'
-    const importedAt = '2026-08-06T09:00:00.000Z'
-    const imported = blsEvent({ eventKey: 'US.CPI.IMPORTED', scheduledDate: '2026-08-20',
-      scheduledAt: '2026-08-20T12:30:00.000Z', detectedAt: importedAt })
-    installFileBridge(vi.fn(async () => [path]), vi.fn(async () => ({ path, text: body, truncated: false })))
-    const { container, client } = await renderCalendar({
-      now: sequenceNow(asOf, importedAt),
-      queryMonth: async ({ asOf: requestedAsOf }: { asOf: string }) => ({ state: 'available' as const,
-        asOf: requestedAsOf, events: requestedAsOf === importedAt ? [imported] : [] }),
-      getEventDetail: async () => unavailableDetail(),
-      previewManualBlsIcs: async () => preview(),
-      importManualBlsIcs: async () => ({ ...preview(), state: 'imported' as const })
-    })
-
-    await flush()
-    expect(container.querySelector('[data-event-key="US.CPI.IMPORTED"]')).toBeNull()
-    await act(async () => button(container, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.action).click())
-    await flush()
-    await act(async () => button(document.body, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.actions.confirm).click())
-    await settleCalendar()
-
-    // The imported row is a new detection: the re-read has to be as of the import, not of entry.
-    expect(client.queryMonth).toHaveBeenCalledWith(expect.objectContaining({ asOf: importedAt }))
-    expect(container.querySelector('[data-event-key="US.CPI.IMPORTED"]')).not.toBeNull()
-  })
-
-  it('clears a selected event and its detail when the imported-month refresh becomes unavailable', async () => {
-    const path = '/private/downloads/bls.ics'
-    const body = 'BEGIN:VCALENDAR\nEND:VCALENDAR'
-    const event = blsEvent()
-    const selectFiles = vi.fn(async () => [path])
-    const readTextFile = vi.fn(async () => ({ path, text: body, truncated: false }))
-    let imported = false
-    installFileBridge(selectFiles, readTextFile)
-    const { container, client } = await renderCalendar({
-      queryMonth: async ({ month }: { month: string }) => imported
-        ? { state: 'unavailable' as const, failureCode: 'calendar-query-unavailable' as const }
-        : { state: 'available' as const, asOf, events: month === '2026-08' ? [event] : [] },
-      getEventDetail: async () => ({ state: 'available' as const, asOf, event }),
-      previewManualBlsIcs: async () => preview(),
-      importManualBlsIcs: async () => { imported = true; return { ...preview(), state: 'imported' as const } }
-    })
-
-    await flush()
-    await act(async () => eventButton(container, event.eventKey).click())
-    await flush()
-    expect(container.querySelector('.mi-economic-calendar__inspector')?.textContent).toContain('CPI')
-    await act(async () => button(container, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.action).click())
-    await flush()
-    await act(async () => button(document.body, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.actions.confirm).click())
-    await flush()
-
-    expect(client.queryMonth).toHaveBeenCalledTimes(6)
-    expect(container.querySelector('[data-event-key]')).toBeNull()
-    expect(container.querySelector('.mi-economic-calendar__inspector')).toBeNull()
-    // The month went away, so its detail goes with it: the drawer does not outlive its reading.
-    expect(container.querySelector('[data-calendar-detail-container]')).toBeNull()
-    expect(client.getEventDetail).toHaveBeenCalledTimes(1)
-  })
-
+  /**
+   * BLS ICS 导入**已经搬离日历工具栏**（用户 2026-11-15：按钮挪进「数据源 → 美国劳工统计局」那张卡）。
+   *
+   * 这里原先有四条用例（空月份入口打开文件选择器、导入后按导入时刻重读窗口、清掉选中事件等）——
+   * 它们测的是「导入发生在日历页上」这件事，**那条路已经不存在了**，留着只会测一个不存在的按钮。
+   * 导入本身（选文件 → 预览 → 导入 → 结果/失败）由搬家后的
+   * `settings/intelligence-sources/blsIcs/{useBlsIcsImport,ImportBlsIcsDialog}.test` 覆盖；
+   * 「导入后页面按新 observed 重读」随日历页入口一起消失，不再有等价物。
+   */
   it('uses previous, next, the Ant Design month picker, and current reset to load each target grid window with unchanged asOf', async () => {
     const { container, client } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),

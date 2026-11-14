@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../../shared/i18n/productText'
+import { resolveProductTextKey } from '../../../shared/i18n/productTextKey'
 import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
-import type { EconomicCalendarText } from './economicCalendarText'
 
 let root: Root | undefined
 
@@ -55,7 +55,7 @@ describe('ImportBlsIcsDialog', () => {
 
   it('uses English import labels when the calendar uses English copy', async () => {
     const text = productText['en-US'].pages.intelligence.portal.calendar
-    await render({ state: 'ready', filename: 'bls.ics', preview: preview() }, {}, text, 'en-US')
+    await render({ state: 'ready', filename: 'bls.ics', preview: preview() }, {}, 'en-US')
 
     expect(document.body.textContent).toContain(text.manualImport.title)
     expect(document.body.textContent).toContain(text.manualImport.actions.confirm)
@@ -66,7 +66,6 @@ describe('ImportBlsIcsDialog', () => {
 async function render(
   state: Parameters<typeof ImportBlsIcsDialog>[0]['dialogState'],
   handlers: { onConfirm?: () => void; onClose?: () => void } = {},
-  text: EconomicCalendarText = productText['zh-CN'].pages.intelligence.portal.calendar,
   language: 'zh-CN' | 'en-US' = 'zh-CN'
 ) {
   const container = document.createElement('div')
@@ -79,7 +78,7 @@ async function render(
         dialogState={state}
         onClose={handlers.onClose ?? (() => undefined)}
         onConfirm={handlers.onConfirm ?? (() => undefined)}
-        text={text}
+        resolveText={(key) => resolveProductTextKey(language, key)}
       />
     </ShellLanguageProvider>
   ))

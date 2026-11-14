@@ -11,6 +11,7 @@ import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
 import { useSourceCadence } from './useSourceCadence'
+import { BlsIcsImportAction } from './blsIcs/BlsIcsImportAction'
 import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
 import { coreIndicatorSourcePrefsClient } from '../../shared/ipc/coreIndicatorSourcePrefsClient'
 import { gateSourceIdByProviderId } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
@@ -353,7 +354,14 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {props.notice}
           {provider === undefined
             ? null
-            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} /></div>}
+            : <div className="intelligence-detail-scroll"><SourceConfigSurface
+              {...surface}
+              provider={provider}
+              /* 「导入 BLS ICS」只在 BLS 那一个源上有：按源 id 分支只在这一处调用点，
+                 不在 ProviderDetail 里散开（那里只管「有没有这个插槽」）。 */
+              sourceAction={(providerId) => providerId === 'macro-calendar-bls'
+                ? <BlsIcsImportAction resolveText={resolveText} />
+                : null} /></div>}
         </>}
     </div>
   </>

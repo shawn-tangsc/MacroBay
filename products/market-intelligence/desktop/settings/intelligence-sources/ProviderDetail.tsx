@@ -94,7 +94,7 @@ export function offersConnectionTest(provider: { credential: string; sources: Re
   return provider.sources.some((source) => source.capabilities?.testConnection === true)
 }
 
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface, initialSourceId }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface, initialSourceId, sourceAction }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -120,6 +120,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   surface?: 'settings' | 'panel'
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
+  /**
+   * 某个源自己的**行内动作**（名字那一行、官网/测试连接/注册之后）。
+   * 只给确实有这个动作的源返回节点；其余返回 `null`——按源名写分支的地方只在这一处调用点。
+   */
+  sourceAction?: (providerId: string) => React.ReactNode
   /** 只作初值：挂载时把这一源所在行带进视野一次（不做受控、不写回状态；找不到就什么都不做）。 */
   initialSourceId?: string
   /**
@@ -416,6 +421,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
               onClick={() => window.open(provider.signupUrl!, '_blank', 'noopener,noreferrer')}
               size="small">{labels.signup}</Button>
             : null}
+          {/* 源自己的动作（目前只有 BLS 的「导入 ICS」）：同一行、同一个小号文字按钮档。 */}
+          {sourceAction?.(provider.providerId)}
         </span>
         {/* 整组启停：这一行代表一个来源，开关管它下面**全部能力**（用户 2026-11-11，照模型服务供应商那排布）。
             全开 = on、全关 = off、**混合按 off 显示**（点击后全开）——否则读者看不出到底开没开。 */}
