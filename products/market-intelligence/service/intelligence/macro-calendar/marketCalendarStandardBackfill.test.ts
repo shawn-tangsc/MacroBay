@@ -102,7 +102,7 @@ describe('从观测表回填标准表', () => {
       values ('broken', 'narwhal', null, 'broken row', 'USA', 'economic-indicator', '2026-10-15', '2026-10-15T12:30:00.000Z',
         null, null, null, 'high', '[]', '2026-11-14T00:00:00.000Z')`).run()
     const report = backfillStandardRowsFromObservations(database)
-    expect(report.unmapped).toEqual({ 'bad-identity': 1 })
+    expect(report.unmapped).toEqual({ 'bad-identity': 1, 'unknown-measure': 0 })
     expect(standardRows(database)).toHaveLength(0)
     // 再跑一次不新增第二条工作清单行（同一发布、同一原因只记一次）
     backfillStandardRowsFromObservations(database)
@@ -167,5 +167,27 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
     expect(report.written).toBe(0)
     expect(database.prepare('select values_json, source_provider_id from mi_calendar_events').all())
       .toEqual([{ values_json: JSON.stringify({ actual: '9.9' }), source_provider_id: 'narwhal' }])
+  })
+})
+
+describe('重放用当前映射，不用观测行当年的口径', () => {
+  it('已退役的 PCE 未季调码落到季调码上，绝不把旧码写回去', () => {
+    const database = openDatabase()
+    // 旧口径的观测行：身份里编码的是 NSA 码
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, event_kind, scheduled_date,
+       scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
+       measure_keys_json, last_seen_at)
+      values ('retired-nsa', 'narwhal', ?, 'PCE price index', 'USA', 'economic-indicator', '2026-09-25',
+        '2026-09-25T12:30:00.000Z', null, null, '3.5', 'high', '["x"]', '2026-11-14T00:00:00.000Z')`)
+      .run(JSON.stringify(['narwhal', 'macro-calendar-narwhal-economic-data', 'zh',
+        JSON.parse(narwhalSourceEventIdForIdentity({ countryCode: 'USA', metricKey: 'US.PCE.NSA.YOY', periodKey: '2026-09' }))]))
+    const report = backfillStandardRowsFromObservations(database)
+    expect(report.indicator).toBe(1)
+    expect(report.unmapped).toEqual({ 'bad-identity': 0, 'unknown-measure': 0 })
+    const rows = standardRows(database)
+    expect(rows.map((row) => row.metric_key)).toEqual(['US.PCE.SA.YOY'])
+    // 旧码一格都不许进表
+    expect(rows.some((row) => row.metric_key === 'US.PCE.NSA.YOY')).toBe(false)
   })
 })

@@ -4,7 +4,7 @@ import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { routeStandardRelease } from './marketCalendarStandardRowRouting'
-import { ensureCalendarStandardTables, recordCalendarUnmapped }
+import { ensureCalendarStandardTables, recordCalendarUnmapped, type CalendarUnmappedReason }
   from './marketCalendarStandardTable'
 
 /**
@@ -29,6 +29,18 @@ import { ensureCalendarStandardTables, recordCalendarUnmapped }
 const legacyObservationProviderId = '0xrouter' as const
 export type StandardBackfillProviderId = typeof narwhalSourcePolicy.providerId | typeof legacyObservationProviderId
 
+/**
+ * **重放用「当前」映射，不用观测行当年的口径**（架构师 2026-11-14）。
+ *
+ * 观测行是旧码时代的产物：PCE 两个未季调变体（`US.PCE.NSA.YOY`、`US.CORE_PCE.NSA.YOY`）
+ * 已经降级、没有源；按当年口径重放会再造一批 NSA 行，跟刚降级的码打对台。所以落表前过这一步：
+ * 有当前对应码就换成它，没有就不写、记 `unmapped`（不顺手把旧码写回去）。
+ */
+const currentMetricKeyByRetiredKey: Readonly<Record<string, string>> = Object.freeze({
+  'US.PCE.NSA.YOY': 'US.PCE.SA.YOY',
+  'US.CORE_PCE.NSA.YOY': 'US.CORE_PCE.SA.YOY'
+})
+
 export type StandardBackfillReport = Readonly<{
   observations: number
   /** 去重后的发布数：同一个发布可能有多条观测（每个 measure 一条、按批次重复）。 */
@@ -36,7 +48,7 @@ export type StandardBackfillReport = Readonly<{
   indicator: number
   event: number
   source: number
-  unmapped: Readonly<{ 'bad-identity': number }>
+  unmapped: Readonly<{ 'bad-identity': number; 'unknown-measure': number }>
   skipped: number
   /** 同一个身份已经由**别的来源**写过（新源优先）：这些行不覆盖、不新增。 */
   skippedExisting: number
@@ -81,12 +93,19 @@ const displayOf = (json: string | null): string | undefined => {
  * 而是先问「这条发布这个原因记过没有」：记过就不写，第一次照常留当初的时刻。
  */
 function recordUnmappedOnce(database: DatabaseSync, input: Readonly<{ providerId: string
-  sourceKey: string; detectedAt: string; rawJson: string; reason: 'bad-identity' | 'unknown-event-type' }>): void {
+  sourceKey: string; detectedAt: string; rawJson: string; reason: CalendarUnmappedReason }>): void {
   const existing = database.prepare('select 1 from mi_calendar_unmapped where provider_id = ? and source_key = ? and reason = ? limit 1')
     .get(input.providerId, input.sourceKey, input.reason)
   if (existing !== undefined) return
   recordCalendarUnmapped(database, input)
 }
+
+/** 已退役的码：有码名、有组，但没有源、不进格子；重放不许再制造它们。 */
+const retiredMetricKeys: readonly string[] = Object.freeze([
+  'US.PCE.NSA.YOY',
+  'US.CORE_PCE.NSA.YOY'
+])
+const isRetiredMetricKey = (metricKey: string): boolean => retiredMetricKeys.includes(metricKey)
 
 /**
  * 每个来源**怎么读它自己的东西**：身份从哪解、有没有值、解不出身份算不算坏数据。
@@ -146,7 +165,8 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   const exists = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'").get()
   if (exists === undefined) {
     return { observations: 0, releases: 0, indicator: 0, event: 0, source: 0,
-      unmapped: { 'bad-identity': 0 }, skipped: 0, skippedExisting: 0, skippedNoCountry: 0, written: 0 }
+      unmapped: { 'bad-identity': 0, 'unknown-measure': 0 }, skipped: 0, skippedExisting: 0,
+      skippedNoCountry: 0, written: 0 }
   }
   // 同一个发布可能有多条观测（每个 measure 一条，按采集批次重复出现）：按**最新一条**取，
   // 再用发布 id 去重——回填只关心「这次发布最后是什么样」。
@@ -164,6 +184,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   let event = 0
   let source = 0
   let badIdentity = 0
+  let unmappedNoCurrentKey = 0
   let skipped = 0
   let skippedExisting = 0
   let skippedNoCountry = 0
@@ -186,8 +207,22 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       }
       continue
     }
-    const [countryCode, metricKey, periodKey] = (identity === undefined
+    const [countryCode, decodedMetricKey, periodKey] = (identity === undefined
       ? [String(row.country_code ?? ''), '', ''] : parts) as [string, string, string]
+    // 当前映射：已退役的码换到它现在的对应码；没有对应码就不写（绝不把旧码写回去）。
+    const metricKey = decodedMetricKey === '' ? ''
+      : currentMetricKeyByRetiredKey[decodedMetricKey] ?? decodedMetricKey
+    const retiredWithoutCurrentKey = decodedMetricKey !== ''
+      && currentMetricKeyByRetiredKey[decodedMetricKey] === undefined
+      && isRetiredMetricKey(decodedMetricKey)
+    if (retiredWithoutCurrentKey) {
+      unmappedNoCurrentKey += 1
+      if (write) {
+        recordUnmappedOnce(database, { providerId, sourceKey: String(row.source_event_id),
+          detectedAt: observedAt, rawJson: JSON.stringify({ metricKey: decodedMetricKey }), reason: 'unknown-measure' })
+      }
+      continue
+    }
     if (countryCode === '') {
       // 没有国家码：没有身份可言，也不编一个。它不是坏数据，只是这条重放装不下。
       skippedNoCountry += 1
@@ -266,5 +301,6 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       observedAt, rows: standardRows as never }).written
   }
   return { observations: rows.length, releases: latest.size, indicator, event, source,
-    unmapped: { 'bad-identity': badIdentity }, skipped, skippedExisting, skippedNoCountry, written }
+    unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey },
+    skipped, skippedExisting, skippedNoCountry, written }
 }
