@@ -162,7 +162,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           .replace('{indicators}', String(macroWindow.indicators))
           .replace('{centralBank}', String(macroWindow.centralBank))
           .replace('{financial}', String(macroWindow.financial))}</span>} trigger={(triggerProps) => (
-          <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.pastWindow.compositionAria"
+          <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.pastWindow.compositionAria"
             icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
         )} /></p> : null}
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
@@ -181,7 +181,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           {/* 解读不进正文（用户 2026-11-15 第三次重申）：正文只留时间·国家·名称·实际·前值，
               那句「为什么重要」收进该行的 ⓘ。**移走不是删掉**——用例会在浮层里找原文。 */}
           {item.why ? <Popover content={<span>{item.why}</span>} trigger={(triggerProps) => (
-            <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.macro.whyAria"
+            <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.macro.whyAria"
               icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
           )} /> : null}
         </div>
@@ -245,7 +245,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         {doc.next.note === 'next-7d-importance-unknown'
           ? <span data-next-undetermined="true">{text.nextImportanceUnknown.heading}
             {nextNote === undefined ? null : <Popover content={<span>{nextNote}</span>} trigger={(triggerProps) => (
-              <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.nextImportanceUnknown.noteAria"
+              <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.nextImportanceUnknown.noteAria"
                 icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
             )} />}
           </span>
@@ -259,7 +259,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         <h3>{nextTitle(focusEvent, eventTitles, locale)}</h3>
         <p className="mi-brief-poster__next-meta">{nextMeta(focusEvent, text)}</p>
         {focusEvent.why ? <Popover content={<p><b>{text.next.why}</b> {focusEvent.why}</p>} trigger={(triggerProps) => (
-          <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dailyBriefing.next.whyAria"
+          <IconButton {...triggerProps} ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.next.whyAria"
             icon={Info} resolveText={resolveKey} size="sm" variant="plain" />
         )} /> : null}
         {watchScenarios.length > 0 || watchBaseline ? <div className="mi-brief-poster__next-watch-block">
