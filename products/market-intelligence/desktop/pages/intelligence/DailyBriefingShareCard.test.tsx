@@ -863,3 +863,25 @@ describe('the past-24h counts and the tier-1 schedule', () => {
     expect(host.querySelectorAll('[data-next-tier1] li')).toHaveLength(2)
   })
 })
+
+// 用户 2026-11-15：表头写「0 个高影响事件」而正文写「无法判定」，同一屏自己打架。
+// 判不了重要性时不许数数；「无法判定」全屏只出现一次。
+describe('the unsettled next section', () => {
+  it('does not count events and says "cannot be determined" exactly once', async () => {
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      next: {
+        items: [],
+        note: 'next-7d-importance-unknown',
+        tier1Upcoming: [
+          { metricKey: 'US.CPI.NSA.YOY', title: 'CPI YoY', scheduledAt: '2026-12-10T00:00:00.000Z', releaseDate: '2026-12-10' }
+        ]
+      }
+    }
+    const host = await render(doc)
+    const text = host.textContent ?? ''
+    expect(text).not.toContain('0 high-impact')
+    expect(text.match(/cannot be determined/g) ?? []).toHaveLength(1)
+  })
+})

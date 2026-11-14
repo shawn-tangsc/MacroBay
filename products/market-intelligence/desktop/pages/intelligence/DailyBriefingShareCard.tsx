@@ -223,7 +223,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
     {doc.next.items.length > 0 || doc.next.focus || nextNote !== undefined || tier1Upcoming.length > 0 ? <section className="mi-brief-poster__next">
       <div className="mi-brief-poster__next-head">
         <h2>{text.sections.next}</h2>
-        <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>
+        {/* 判不了重要性时**不许数数**（用户 2026-11-15）：这一档是「无法判定」，写成
+            「0 个高影响事件」就是把「判不出」说成「一个都没有」。计数只在能判定时出现。 */}
+        {doc.next.note === 'next-7d-importance-unknown' ? null : <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>}
       </div>
       {focusEvent ? <div className="mi-brief-poster__next-focus">
         <div className="mi-brief-poster__next-focus-head">
