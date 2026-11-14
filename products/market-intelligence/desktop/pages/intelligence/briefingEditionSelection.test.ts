@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { nextEditionAfterDelete } from './briefingEditionSelection'
+import { briefingEditionSelection, nextEditionAfterDelete } from './briefingEditionSelection'
 
 /**
  * 删掉一版之后「下一版是谁」——只算**同一天**的邻居，不跨天。
@@ -41,5 +41,30 @@ describe('nextEditionAfterDelete', () => {
     const rows = [row('a', { locale: 'zh-CN' }), row('a', { locale: 'en-US' })]
     expect(nextEditionAfterDelete(rows, '2026-11-05', { periodId: 'a', locale: 'zh-CN' }))
       .toMatchObject({ periodId: 'a', locale: 'en-US' })
+  })
+})
+
+// 用户 2026-11-14：点一下语言徽标就落进「这一期没有这一版」，连读取都不发。
+// 判据：徽标上的期次与投影里的期次不一致时，仍要用**那一天、那一语言确实发布过**的那一行去读。
+describe('the language badge still opens the edition that exists', () => {
+  it('passes the published row for that day when the badge carries a stale period id', () => {
+    const openEdition = vi.fn()
+    const selection = briefingEditionSelection({
+      editions: [{
+        date: '2026-11-14', periodId: 'period_real', locale: 'zh-CN', availableLocales: ['zh-CN'],
+        languages: [{ locale: 'zh-CN', state: 'published' }]
+      } as never],
+      effectiveLocale: () => 'zh-CN',
+      setPickedLocale: () => undefined,
+      setPickedPeriodId: () => undefined,
+      openEdition
+    } as never)
+
+    selection.selectLocale({ date: '2026-11-14', periodId: 'period_stale', locale: 'zh-CN' })
+
+    expect(openEdition).toHaveBeenCalledTimes(1)
+    const [, , row, periodId] = openEdition.mock.calls[0]!
+    expect(row).toMatchObject({ periodId: 'period_real' })
+    expect(periodId).toBe('period_real')
   })
 })

@@ -26,7 +26,15 @@ export function briefingEditionSelection(input: Readonly<{
     selectLocale(next) {
       input.setPickedLocale(next.locale)
       input.setPickedPeriodId(next.periodId)
-      input.openEdition(next.date, next.locale, undefined, next.periodId)
+      // **徽标点击也要带上那一行**（用户 2026-11-14：「点开是空的」第三例）。
+      // 以前这里传 `undefined`，`openEdition` 只能靠 `editions.find(期次相等)` 二次匹配；
+      // 徽标上的期次与投影里的期次一旦不一致，就落到「没有这一版」，连读都不发。
+      // 先按三元组精确找；找不到再退回「同一天、且这一语言确实发布过」的那一行——
+      // 宁可显示那一天已有的正文，也不许把「有正文」说成「没有这一版」。
+      const exact = input.editions.find((edition) => edition.date === next.date && edition.periodId === next.periodId)
+      const fallback = exact ?? input.editions.find((edition) => edition.date === next.date
+        && (edition.languages ?? []).some((entry) => entry.locale === next.locale && entry.state === 'published'))
+      input.openEdition(next.date, next.locale, fallback, fallback?.periodId ?? next.periodId)
     }
   }
 }
