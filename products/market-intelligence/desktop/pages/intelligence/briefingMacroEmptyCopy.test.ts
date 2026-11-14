@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
@@ -125,5 +128,42 @@ describe('过去 24 小时与未来段的新六句', () => {
       expect(text.nextImportanceUnknown.sentence.trim(), language).not.toBe('')
       expect(text.nextImportanceUnknown.scheduleTitle.trim(), language).not.toBe('')
     }
+  })
+})
+
+/**
+ * `pastWindow.counts`（整句长句）**只允许出现在两种媒介**：复制出去的文本、分享海报。
+ * 界面正文里要用短表头 + ⓘ 里的构成（`header` / `composition`）。
+ *
+ * 静态只能查到「引用发生在哪个文件」，查不到「在正文节点还是海报节点」——分享卡里两者同文件。
+ * 所以这条守的是**新增引用**（谁再往正文接线就多一个文件，立刻红）；
+ * 「正文节点里用了它」那条只能靠关键指标正在写的 DOM 用例。
+ */
+describe('长句键只给导出与海报', () => {
+  it('is referenced only by the markdown export and the share poster', () => {
+    const root = join(process.cwd(), 'products/market-intelligence')
+    const allowed = new Set([
+      'contracts/dailyBriefingMarkdown.ts',
+     'desktop/pages/intelligence/DailyBriefingShareCard.tsx'
+    ])
+    const offenders: string[] = []
+    const visit = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const full = join(directory, entry.name)
+        if (entry.isDirectory()) { if (entry.name !== 'node_modules') visit(full); continue }
+        if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.tsx')) continue
+        if (entry.name.endsWith('.test.ts') || entry.name.endsWith('.test.tsx')) continue
+        const relative = full.slice(root.length + 1)
+        if (relative === 'desktop/shared/i18n/text/pages/dailyBriefing.ts') continue
+        /* 只认**文案键引用**（`text.` / `labels.`）；`dailyBriefingDocument` 里那个 `pastWindow.counts`
+           是选取结果对象的字段，不是文案键，别误伤。 */
+        if (/(?:text|labels)\.pastWindow\.counts/.test(readFileSync(full, 'utf8')) && !allowed.has(relative)) {
+          offenders.push(relative)
+        }
+      }
+    }
+    visit(root)
+    expect(offenders.join('\n'),
+      '这些文件引用了整句长句——正文只许用 header + composition（构成进 ⓘ）').toBe('')
   })
 })
