@@ -13,7 +13,6 @@ import { useMarketAnalysisTimeline } from './useMarketAnalysisTimeline'
 import { NewsSentimentFeature } from '../../features/industry/news-sentiment'
 import { newsSentimentClient } from '../../shared/ipc/newsSentimentClient'
 import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
-import { analysisWorkspaceLayoutPolicy as layout } from './analysisWorkspaceLayoutPolicy'
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { createMarketAnalysisContextRenderers } from './MarketAnalysisContextCard'
@@ -89,7 +88,6 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
   const binding = injectedBinding ?? ownBinding
   const setBinding = onBindingChange ?? setOwnBinding
   const selectionBlocked = selectionState === 'loading' || selectionState === 'unavailable'
-  const [chatPercent, setChatPercent] = useState<number>(layout.initialChatPercent)
   const container = useRef<HTMLElement>(null)
   const panes = useRef<HTMLDivElement>(null)
   const [chatOpen, setChatOpen] = useState(false)
@@ -135,7 +133,6 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
   } : undefined
   const chatContext = newsContext ?? calendarContext
   const chat = useMarketAnalysisChat(binding, t.newConversation, chatContext, selectedAnalysisTitle ?? t.contextAnalysis)
-  const resize = (percent: number) => setChatPercent(Math.max(layout.minChatPercent, Math.min(layout.maxChatPercent, percent)))
 
   // The conversation lives in the floating control now; the card takes its grid row.
   // The surface is the agent page's own message list and composer, so the panel and the full
@@ -201,7 +198,8 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', onOpenS
             : <LoadingState label={selectionState === 'loading' ? text.analysisTimeline.loading : t.loading} fill />}
       </section>
 
-  return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title} style={{ '--mi-chat-percent': `${chatPercent}%` } as CSSProperties}>
+  // 右栏现在只有一块（日历卡那行已搬走）：没有可拖的两块，`--mi-chat-percent` 与拖拽状态一并撤掉。
+  return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title}>
     {/* The policy card keeps its own row; the calendar and the news share what is left in half. */}
     {railHeader}
 
