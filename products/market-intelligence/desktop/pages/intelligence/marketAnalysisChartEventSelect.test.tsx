@@ -101,9 +101,12 @@ async function renderSurface(extra: Partial<Omit<Parameters<typeof MarketAnalysi
   document.body.append(host)
   root = createRoot(host)
   // Mirrors index.tsx: the page's title vocabulary, its drawer and its one selected event.
-  const dashboard = monthEvents
-    ? { ...dashboardProps, client: { queryMonth: vi.fn(async () => monthPage(monthEvents)) } }
-    : dashboardProps
+  // 「接下来要看的」这块已从看板搬进抽屉（2026-11-15）：需要它时由这条参数把抽屉打开。
+  const drawerRequest = (extra as { openIndicatorDrawerRequest?: number }).openIndicatorDrawerRequest
+  const dashboard = {
+    ...(monthEvents ? { ...dashboardProps, client: { queryMonth: vi.fn(async () => monthPage(monthEvents)) } } : dashboardProps),
+    ...(drawerRequest === undefined ? {} : { openIndicatorDrawerRequest: drawerRequest })
+  }
   await act(async () => root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children:
     createElement(MarketAnalysisDashboardLayout, {
       text: portal,
@@ -202,8 +205,10 @@ describe('a chart line selects a calendar event without opening the conversation
       detectedAt, actual: { displayValue: '3.4%' }, previous: { displayValue: '3.1%' }, consensus: null,
       consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: []
     }
-    const host = await renderSurface({}, undefined, [cardEvent])
-    const row = host.querySelector<HTMLElement>('[data-calendar-card-row]')
+    // 卡片已搬进抽屉右列顶部：先让页面请求打开抽屉，行在抽屉里（portal 到 body）。
+    // 抽屉请求是 dashboard 的参数（不是 layout 的），这条助手按约定把它转给 dashboard——这里显式越过 layout 的参数类型。
+    const host = await renderSurface({ openIndicatorDrawerRequest: 1 } as never, undefined, [cardEvent])
+    const row = document.body.querySelector<HTMLElement>('[data-drawer-calendar-block] [data-calendar-card-row]')
     expect(row, 'the released value is in the card\'s today section').not.toBeNull()
     // No consensus is not a verdict: the row keeps its readings and does not add a badge for it.
     expect(row?.querySelector('[data-calendar-surprise]')).toBeNull()
