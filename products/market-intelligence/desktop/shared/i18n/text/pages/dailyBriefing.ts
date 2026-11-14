@@ -67,7 +67,11 @@ export const dailyBriefingText = {
     macroUnreadable: '暂时读不到：',
     macroWebValue: '（网页）',
     macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
-    nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'next-7d-importance-unknown': '未来 7 天：高影响事件无法判定（来源未提供重要性）', 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用' },
+    /**
+     * 「接下来关注」没有条目时**整块不渲染**（用户 2026-11-15），所以这里不再有那两句占位话。
+     * 这两个日历原因仍留着：它们是「读不到」那一档的说辞，不是「没有事件」。
+     */
+    nextEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用' },
     /**
      * 「未来 7 天」这一栏的两段话（产品 2026-11-14 定，因为来源根本没给重要性）：
      * 主句说**我们判不出**（不是「没有」——「没有」是替来源下断言），
@@ -515,7 +519,7 @@ export const dailyBriefingText = {
     macroUnreadable: 'Not readable right now: ',
     macroWebValue: ' (web)',
     macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
-    nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'next-7d-importance-unknown': 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled' },
+    nextEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled' },
     nextImportanceUnknown: { sentence: 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', scheduleTitle: 'Tier-1 indicator schedule' },
     pastWindow: {
       header: 'Past 24 hours · {count} releases',

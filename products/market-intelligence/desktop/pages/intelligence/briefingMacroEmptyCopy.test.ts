@@ -91,7 +91,11 @@ describe('the "next 7 days" section when importance is unknown', () => {
       expect(unknown.sentence.trim(), language).not.toBe('')
       expect(unknown.scheduleTitle.trim(), language).not.toBe('')
       expect(unknown.sentence, language).not.toBe(noEvent)
-      expect(text.nextEmptyCodes['next-7d-importance-unknown'], language).not.toBe(noEvent)
+      /* 「接下来关注」没有条目时整块不渲染（用户 2026-11-15），这两句占位话已从文案表删掉。
+         这里钉住「删干净了」：有人把它们加回来，这条就红——否则文案表里会再长出一句没人渲染的死话。 */
+      const codes = text.nextEmptyCodes as Readonly<Record<string, string | undefined>>
+      expect(codes['next-7d-importance-unknown'], language).toBeUndefined()
+      expect(codes['next-7d-no-high-impact-event'], language).toBeUndefined()
     }
   })
 })
