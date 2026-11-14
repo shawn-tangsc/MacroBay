@@ -24,6 +24,7 @@
   --mi-clock-node-future-bg: #97b3e9;
 }
 
+.mi-clock__viewport { position: relative; width: 100%; min-width: 0; }
 .mi-clock { position: relative; width: 336px; height: 330px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
 .mi-clock__svg { position: absolute; left: 12px; top: 12px; width: 312px; height: 306px; pointer-events: none; color: var(--muted); }
 .mi-clock__svg .mi-clock__ring { fill: none; stroke: var(--border-strong); }

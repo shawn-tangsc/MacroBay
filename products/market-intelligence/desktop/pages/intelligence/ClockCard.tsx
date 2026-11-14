@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 import { Calendar } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -92,10 +94,26 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
   onOpenCalendar: () => void
   resolveText: (key: string) => string
 }>): React.ReactElement {
+  // 用户 2026-11-15：卡要撑满右栏并**等比放大**（早先「不缩放」作废）。
+  // 卡内部一个尺寸都不改，只在外层放大：scale = 容器宽 / 336；容器高度按 330×scale 撑开，
+  // 否则下面的舆情会叠上来。CSS 里 `calc()` 得不到「长度/长度」的无单位比值，所以这里实测一次。
+  const viewport = useRef<HTMLDivElement | null>(null)
+  const [scale, setScale] = useState(1)
+  useEffect(() => {
+    const element = viewport.current
+    if (element === null || typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      if (width > 0) setScale(width / clockCardGeometry.cardWidth)
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   const center = model.center
   const centerPlaqueId = center === undefined ? undefined : `${center.metricKey}:future`
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
-  return <section className="mi-clock" aria-label={text.ariaLabel}>
+  return <div className="mi-clock__viewport" ref={viewport} style={{ height: clockCardGeometry.cardHeight * scale }}>
+  <section className="mi-clock" aria-label={text.ariaLabel} style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
       <svg className="mi-clock__svg" viewBox={`0 0 ${clockCardGeometry.svgWidth} ${clockCardGeometry.svgHeight}`} aria-hidden="true">
         <defs>
           <filter id="miClockFlowGlow" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="2.5" /></filter>
@@ -170,6 +188,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         <button className="mi-clock__detail" type="button" onClick={onOpenDetail}>{text.detail}</button>
       </div>
   </section>
+  </div>
 }
 
 /**
