@@ -71,3 +71,24 @@ describe('the empty macro section in a daily briefing', () => {
     }
   })
 })
+
+/**
+ * 「未来 7 天」那一栏的两段话（产品 2026-11-14 定）：主句说**我们判不出**，
+ * 小标题给自己的一级指标排期。这里钉两件事：
+ * 1. 中英都齐、都非空；
+ * 2. **「无法判定」与「确实没有」必须是两句不同的话**——合并成一句就等于替来源下断言。
+ */
+describe('the "next 7 days" section when importance is unknown', () => {
+  it('carries both sentences in both languages, and never reuses the "nothing there" one', () => {
+    for (const [language, text, noEvent] of [
+      ['zh-CN', zhText, '未来 7 天没有高影响事件'],
+      ['en-US', enText, 'No high-impact event in the next 7 days']
+    ] as const) {
+      const unknown = text.nextImportanceUnknown
+      expect(unknown.sentence.trim(), language).not.toBe('')
+      expect(unknown.scheduleTitle.trim(), language).not.toBe('')
+      expect(unknown.sentence, language).not.toBe(noEvent)
+      expect(text.nextEmptyCodes['next-7d-importance-unknown'], language).not.toBe(noEvent)
+    }
+  })
+})
