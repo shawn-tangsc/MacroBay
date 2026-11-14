@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { routeStandardRelease } from './marketCalendarStandardRowRouting'
@@ -21,7 +22,12 @@ import { ensureCalendarStandardTables, recordCalendarUnmapped }
  * 3. **算不出身份的不吞**：落 `unmapped` 并带原因，和采集时的规矩一致。
  * 4. **dry-run 只读**：`write: false` 时一个字节都不写，连建表都不做（库以只读方式打开）。
  */
-export type StandardBackfillProviderId = 'narwhal' | '0xrouter'
+/**
+ * 回填能读的两种观测表。**旧源的 provider id 只在这里出现一次**：它是那张表里的真值，
+ * 用来选身份解码器，不参与读侧的任何分支。
+ */
+const legacyObservationProviderId = '0xrouter' as const
+export type StandardBackfillProviderId = typeof narwhalSourcePolicy.providerId | typeof legacyObservationProviderId
 
 export type StandardBackfillReport = Readonly<{
   observations: number
@@ -82,22 +88,49 @@ function recordUnmappedOnce(database: DatabaseSync, input: Readonly<{ providerId
   recordCalendarUnmapped(database, input)
 }
 
-/** 一条观测的规范身份（`国家|指标码|期间`）；解不出就是 `undefined`——不猜。 */
-function readIdentity(providerId: StandardBackfillProviderId, row: ObservationRow): string | undefined {
-  if (providerId === 'narwhal') {
-    return row.market_fact_key === null ? undefined : narwhalCanonicalIdentityKey(String(row.market_fact_key))
+/**
+ * 每个来源**怎么读它自己的东西**：身份从哪解、有没有值、解不出身份算不算坏数据。
+ *
+ * 这是一张按来源填的表，不是散在各处的 `if (来源 === …)`：加一个来源＝加一行，判据不会长到
+ * 循环里，也不会出现「这条来自谁都走不同逻辑」的分支。分流仍然只有 `routeStandardRelease`。
+ */
+type BackfillSourceProfile = Readonly<{
+  readIdentity: (row: ObservationRow) => string | undefined
+  /** 身份解不出＝这条发布算不出身份（新源把身份写进了 `market_fact_key`）。 */
+  identityRequired: boolean
+  hasValues: (row: ObservationRow) => boolean
+  /** 旧源只补历史：同一身份已经被别的来源写过就不覆盖。 */
+  skipIdentitiesOwnedByOthers: boolean
+}>
+
+const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, BackfillSourceProfile>> = {
+  [narwhalSourcePolicy.providerId]: {
+    readIdentity: (row) => row.market_fact_key === null ? undefined : narwhalCanonicalIdentityKey(String(row.market_fact_key)),
+    identityRequired: true,
+    hasValues: (row) => hasMeasures(row.measure_keys_json),
+    skipIdentitiesOwnedByOthers: false
+  },
+  // 旧源：身份在 `indicator_id` 那张表里，期间由发布时刻倒推；多数行本来就没有共同身份
+  // （讲话、会议、没登记过的小指标），那是「走源内身份」，不是坏数据。
+  [legacyObservationProviderId]: {
+    readIdentity: (row) => {
+      const identity = zeroXRouterCanonicalIdentity({ countryCode: row.country_code, indicatorId: row.indicator_id,
+        scheduledAt: String(row.scheduled_at ?? '') })
+      return identity === undefined ? undefined
+        : `${identity.countryCode}|${identity.metricKey}|${identity.periodKey}`
+    },
+    identityRequired: false,
+    hasValues: (row) => [row.consensus_json, row.provider_previous_json, row.provider_actual_json]
+      .some((value) => value !== null && value !== ''),
+    skipIdentitiesOwnedByOthers: true
   }
-  const identity = zeroXRouterCanonicalIdentity({ countryCode: row.country_code, indicatorId: row.indicator_id,
-    scheduledAt: String(row.scheduled_at ?? '') })
-  return identity === undefined ? undefined
-    : `${identity.countryCode}|${identity.metricKey}|${identity.periodKey}`
 }
 
 const hasMeasures = (json: string | null): boolean =>
   json !== null && json !== '' && json !== '[]' && json !== 'null'
 
 /**
- * 旧源重放的三条规矩（Chief 2026-11-14）：标 `source_provider_id = '0xrouter'`（界面显示「未标来源」，
+ * 旧源重放的三条规矩（Chief 2026-11-14）：来源照实写旧源的 provider id（界面显示「未标来源」，
  * 不出现品牌名）、**新源写过的身份不覆盖**、备份后跑两遍必须一致。
  */
 export function backfillStandardRowsFromObservations(database: DatabaseSync, input?: Readonly<{
@@ -106,7 +139,8 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   /** `false` = dry-run：只报数，不写库（也不建表）。 */
   write?: boolean
 }>): StandardBackfillReport {
-  const providerId = input?.providerId ?? 'narwhal'
+  const providerId = input?.providerId ?? narwhalSourcePolicy.providerId
+  const profile = backfillSourceProfiles[providerId]
   const write = input?.write ?? true
   if (write) ensureCalendarStandardTables(database)
   const exists = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'").get()
@@ -137,14 +171,14 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   for (const row of latest.values()) {
     // 身份解码按来源：新源从 `market_fact_key` 里解，旧源从 `indicator_id` 查身份表再算期间。
     // 这是「怎么读这个来源的身份」，不是「这类怎么落」——分流仍然只有 `routeStandardRelease` 一处。
-    const identity = readIdentity(providerId, row)
+    const identity = profile.readIdentity(row)
     const parts = identity?.split('|') ?? []
     /**
      * 新源的身份就在 `market_fact_key` 里：解不出＝这条发布算不出身份，记工作清单。
      * 旧源不同：**多数行本来就没有可映射的指标**（讲话、会议、没登记过的小指标），那不是坏数据，
      * 走源内身份照样显示——`indicator_id` 解不出只说明「没有共同身份」，不是「身份坏了」。
      */
-    if (identity === undefined && providerId === 'narwhal') {
+    if (identity === undefined && profile.identityRequired) {
       badIdentity += 1
       if (write) {
         recordUnmappedOnce(database, { providerId, sourceKey: String(row.source_event_id),
@@ -170,13 +204,9 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
     const scheduledDate = String(row.scheduled_date ?? '')
     const scheduledAt = row.scheduled_at === null ? undefined : String(row.scheduled_at)
     const sourceName = String(row.display_name ?? '')
-    // 有没有值：新源看 measure 列表（旧源这一列是空的），旧源看它自己的三个值列。
-    const hasValues = providerId === 'narwhal'
-      ? hasMeasures(row.measure_keys_json)
-      : [row.consensus_json, row.provider_previous_json, row.provider_actual_json]
-        .some((value) => value !== null && value !== '')
     // **分流只有这一处**：实时写入与回填问同一个函数。
-    const route = routeStandardRelease({ hasPeriod: periodKey.length > 0, hasValues, sourceName })
+    const route = routeStandardRelease({ hasPeriod: periodKey.length > 0,
+      hasValues: profile.hasValues(row), sourceName })
     if (route.kind === 'unmapped') {
       badIdentity += 1
       if (write) {
@@ -191,7 +221,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       continue
     }
     // 同一个身份已经由**别的来源**写过（新源自带值）：旧源只补历史，不许覆盖。
-    if (providerId !== 'narwhal') {
+    if (profile.skipIdentitiesOwnedByOthers) {
       const existing = database.prepare(`select source_provider_id as p from mi_calendar_events
         where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ? limit 1`)
         .get(countryCode, route.kind === 'event' ? route.metricKey : metricKey, route.kind === 'event' ? scheduledAt!.slice(0, 16) : periodKey, scheduledDate) as

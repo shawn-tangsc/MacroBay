@@ -139,7 +139,7 @@
     },
     "service/intelligence/macro-calendar/marketCalendarStandardBackfill.ts": {
       "count": 1,
-      "why": "回填脚本只读旧的 narwhal 观测表：那张表本身就是 narwhal 的，行的来源不是分支而是事实；旧源删除时这一行随表一起消失"
+      "why": "回填要读两种来源的观测表：旧源的 provider id 是那张表里的真值，只出现一次，用来选身份解码器（`indicator_id` 表 vs `market_fact_key`），不参与读侧分支；份额保持 1，新增即红"
     },
     "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly.ts": {
       "count": 1,
