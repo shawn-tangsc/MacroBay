@@ -26,9 +26,14 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   summary?: string
   groups: readonly Readonly<{
     eventType: keyof EconomicCalendarText['market']['kinds']
-    /** 覆盖默认的「类型 · N 条」标题（抽屉按指标分级分组时用）。 */
+    /** 覆盖默认的「类型 · N 条」标题（抽屉在组内再分了子组时，总数要从外面给）。 */
     title?: string
     items: readonly CalendarDayItem[]
+    /**
+     * 组内再分的小组（抽屉里只有「经济指标」这一组用：一级/二级/未分级）。
+     * 有子组时这一组自己不直接放行，行都在子组里——两层标题，不是两个平行的组。
+     */
+    subgroups?: readonly Readonly<{ title: string; items: readonly CalendarDayItem[] }>[]
   }>[]
   /** Shown only when the sources answered and the answer is zero; omitted means no sentence. */
   emptyText?: string
@@ -47,6 +52,13 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   /** `undefined` = 这一列没有可去的地方：行渲染成非交互形态，不画点头没反应的按钮。 */
   onSelect?: (item: CalendarDayItem) => void
 }>): React.ReactElement {
+  // One row body for both layers: a type heading over rows, or a type heading over tier subheadings.
+  const renderRow = (item: CalendarDayItem): React.ReactElement => <div role="listitem" key={item.key}>
+    <CalendarEventRow item={item} marketSources={marketSources} text={text} statusNow={statusNow}
+      {...(missingValueLabel === undefined ? {} : { missingValueLabel })}
+      selected={item.source === 'market' ? item.event.eventKey === selectedMarketKey : item.event.eventKey === selectedEventKey}
+      onSelect={onSelect} />
+  </div>
   return <section aria-label={label} className="mi-calendar-day-list" data-calendar-day-list ref={listRef}>
     {/* 标题行两端对齐：左边标题、右边计数。计数原来单独占一段，窄栏（抽屉右列 300px）里会换行、
         和下面的分组标题挤在一起——用户看到的就是「几条重要什么的字样和内容重叠」。
@@ -58,7 +70,12 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
     </div>
     <div role="list">{groups.map(group => <section data-calendar-group={group.title ?? group.eventType} key={group.title ?? group.eventType}>
       {hideGroupHeadings ? null : <h3>{group.title ?? text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}
-      {group.items.map(item => <div role="listitem" key={item.key}><CalendarEventRow item={item} marketSources={marketSources} text={text} statusNow={statusNow} {...(missingValueLabel === undefined ? {} : { missingValueLabel })} selected={item.source === 'market' ? item.event.eventKey === selectedMarketKey : item.event.eventKey === selectedEventKey} onSelect={onSelect} /></div>)}
+      {group.subgroups === undefined
+        ? group.items.map(renderRow)
+        : group.subgroups.map(subgroup => <section data-calendar-subgroup={subgroup.title} key={subgroup.title}>
+            {hideGroupHeadings ? null : <h4>{subgroup.title}</h4>}
+            {subgroup.items.map(renderRow)}
+          </section>)}
     </section>)}</div>
     {/* A quiet day is a reading, not a missing block: the sources answered and the answer is
         zero. It carries no action because nothing the reader can press would produce events, and a

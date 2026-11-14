@@ -805,24 +805,42 @@ it('pins the indicator drawer so an inner drawer cannot push it left', () => {
 })
 
 /**
- * 用户 2026-11-15（第二次改口）：右列按**事件类型**分组——经济指标 / 央行活动 / 财经事件。
- * 「其他指标」这种把讲话和商品报告合在一起的标题不许回来；分级（一级/二级）不是分组维度，
- * 它只决定格子里露不露名字。把分组改回按分级即红。
+ * 用户 2026-11-15（第三次、最终口述）：**类型组照旧，经济指标组内再按分级分子组**。
+ *
+ * 三层：① 经济指标 / 财经事件 / 央行活动；② 只对经济指标再拆 一级/二级/未分级（标题带条数，
+ * 子组条数之和 = 该组总数）；③ 央行活动、财经事件不再拆分级——它们本来没有指标码。
+ * 把分级子组去掉 → 红；把类型组并成「其他指标」→ 也红。
  */
-it('groups the day list by event type, with three headings and no 其他指标', async () => {
+it('groups by event type first, then by metric tier inside 经济指标 only', async () => {
   const mixed = [
-    dayEvent('e-ind', '10月消费者物价指数(年率)', '2026-11-13T01:00:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] }),
+    dayEvent('e-tier1', '10月消费者物价指数(年率)', '2026-11-13T01:00:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] }),
+    dayEvent('e-tier2', '第三季度GDP(年化季率)', '2026-11-13T01:30:00.000Z', { measureKeys: ['US.GDP.SA.ANNUALIZED_QOQ'] }),
+    dayEvent('e-tier0', '10月零售销售(月率)', '2026-11-13T01:45:00.000Z'),
     dayEvent('e-speech', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity' }),
     dayEvent('e-stock', '上周EIA原油库存变化', '2026-11-13T03:00:00.000Z', { eventType: 'financial-event' })
   ]
   await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => mixed })
   const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!
-  const headings = [...list.querySelectorAll('h3')].map(node => node.textContent ?? '')
-  expect(headings).toHaveLength(3)
-  expect(headings.some(heading => heading.startsWith('经济指标 · '))).toBe(true)
-  expect(headings.some(heading => heading.startsWith('央行活动 · '))).toBe(true)
-  expect(headings.some(heading => heading.startsWith('财经事件 · '))).toBe(true)
-  expect(headings.some(heading => heading.includes('其他指标'))).toBe(false)
-  // 分级照旧只管露名字：一级指标那条在「经济指标」组里仍然写着它的名字。
+  const groups = [...list.querySelectorAll('[data-calendar-group]')]
+  const typeHeadings = groups.map(group => group.querySelector('h3')?.textContent ?? '')
+  expect(typeHeadings.some(heading => heading.startsWith('经济指标 · '))).toBe(true)
+  expect(typeHeadings.some(heading => heading.startsWith('央行活动 · '))).toBe(true)
+  expect(typeHeadings.some(heading => heading.startsWith('财经事件 · '))).toBe(true)
+  expect(typeHeadings.some(heading => heading.includes('其他指标'))).toBe(false)
+
+  // 第二层：只有「经济指标」组内有分级子组，标题带条数，条数之和 = 该组总数。
+  const indicator = groups.find(group => (group.querySelector('h3')?.textContent ?? '').startsWith('经济指标'))!
+  const subgroups = [...indicator.children].filter(child => child.hasAttribute('data-calendar-subgroup'))
+  const subheadings = subgroups.map(group => group.querySelector('h4')?.textContent ?? '')
+  expect(subheadings).toEqual(['一级指标 · 1 条', '二级指标 · 1 条', '未分级 · 1 条'])
+  const counts = subgroups.map(group => group.querySelectorAll('[role="listitem"]').length)
+  expect(counts.reduce((sum, count) => sum + count, 0))
+    .toBe(indicator.querySelectorAll('[role="listitem"]').length)
+
+  // 另外两组不拆分级：组内没有小标题。
+  for (const group of groups.filter(entry => !(entry.querySelector('h3')?.textContent ?? '').startsWith('经济指标'))) {
+    expect(group.querySelector('h4'), 'a non-indicator group is not split by tier').toBeNull()
+  }
+  // 分级照旧只管露名字：一级那条在「一级指标」子组里仍然写着它的名字。
   expect(list.textContent).toContain('消费者物价指数')
 })

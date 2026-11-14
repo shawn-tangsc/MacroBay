@@ -393,7 +393,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayLayers.core.length === 0 ? {} : {
                   summary: text.mkDay.summary.replace('{related}', String(dayLayers.core.length))
                 })}
-                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, true, text.mkDay.sequence)}
+                groups={dayGroups(dayEvents, selectedDay, timeZone, text.mkDay.sequence,
+                  (eventType, count) => calendarText.unifiedDay.groupCount
+                    .replace('{type}', calendarText.market.kinds[eventType]).replace('{count}', String(count)),
+                  (tier, count) => text.mkDay.tierGroup
+                    .replace('{tier}', text.mkDay.tiers[tier]).replace('{count}', String(count)))}
                 {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
@@ -459,42 +463,61 @@ export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, tod
   return today.startsWith(`${month}-`) ? today : `${month}-01`
 }
 
-/** 按**事件类型**分组（用户 2026-11-15 改回来）：经济指标 → 财经事件 → 央行活动，组内按时刻升序。
- *  分组标题用列表组件默认的 `{类型} · {条数}` 模板，不另起「其他指标」这种合并标题。
- *  分级（一级/二级/未分级）**不是分组维度**：它只决定格子里露不露名字、进不进数字。 */
-function dayGroups(_layers: DayLayers, allDay: readonly MarketCalendarEvent[], date: string, timeZone: string,
-  _othersExpanded: boolean, sequence: string): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; items: readonly CalendarDayItem[] }>[] {
+/**
+ * 右列两层结构（用户 2026-11-15 定，三次改口后收敛）：
+ *
+ * 1. **第一层按事件类型**：经济指标 → 财经事件 → 央行活动，三组都在，不许并成一个「其他指标」；
+ * 2. **第二层只对经济指标**：组内再按分级分（一级/二级/未分级），标题带条数；
+ * 3. 央行活动、财经事件各自一组，不再拆分级——它们本来没有指标码。
+ *
+ * 分级只决定格子里露不露名字、进不进数字（`filterVisibleByTier`），在这里只用来分子组。
+ */
+function dayGroups(allDay: readonly MarketCalendarEvent[], date: string, timeZone: string, sequence: string,
+  typeTitle: (eventType: MarketCalendarEvent['eventType'], count: number) => string,
+  tierTitle: (tier: DayTier, count: number) => string
+): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; title: string; items: readonly CalendarDayItem[]
+  subgroups?: readonly Readonly<{ title: string; items: readonly CalendarDayItem[] }>[] }>[] {
   // 当天事件**全部列出**（用户 2026-11-14）；同刻同名多条按序号标「第 i/N 条」。
   const totals = new Map<string, number>()
   for (const event of allDay) {
     totals.set(`${event.scheduledAt}|${event.title}`, (totals.get(`${event.scheduledAt}|${event.title}`) ?? 0) + 1)
   }
   const seen = new Map<string, number>()
+  const toItem = (event: MarketCalendarEvent): CalendarDayItem => {
+    const identity = `${event.scheduledAt}|${event.title}`
+    const total = totals.get(identity) ?? 1
+    const index = (seen.get(identity) ?? 0) + 1
+    seen.set(identity, index)
+    return {
+      key: event.eventKey, date, time: calendarDisplayTime(event.scheduledAt, timeZone), source: 'market',
+      event: total > 1
+        ? { ...event, title: sequence.replace('{name}', event.title).replace('{index}', String(index)).replace('{total}', String(total)) }
+        : event
+    }
+  }
+  const byTime = (left: MarketCalendarEvent, right: MarketCalendarEvent): number =>
+    Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt)
   return (['economic-indicator', 'financial-event', 'central-bank-activity'] as const)
     .map(eventType => {
-      const bucket = allDay.filter(event => event.eventType === eventType)
-        .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))
-      return {
-        eventType,
-        items: bucket.map((event): CalendarDayItem => {
-          const identity = `${event.scheduledAt}|${event.title}`
-          const total = totals.get(identity) ?? 1
-          const index = (seen.get(identity) ?? 0) + 1
-          seen.set(identity, index)
-          return {
-            key: event.eventKey, date, time: calendarDisplayTime(event.scheduledAt, timeZone), source: 'market',
-            event: total > 1
-              ? { ...event, title: sequence.replace('{name}', event.title).replace('{index}', String(index)).replace('{total}', String(total)) }
-              : event
-          }
-        })
+      const bucket = allDay.filter(event => event.eventType === eventType).sort(byTime)
+      if (eventType !== 'economic-indicator') {
+        return { eventType, title: typeTitle(eventType, bucket.length), items: bucket.map(toItem) }
       }
+      // 只有指标组有分级：讲话/商品报告/articles 没有指标码，在各自的类型组里不拆。
+      const subgroups = DayTierOrder
+        .map(tier => ({ tier, events: bucket.filter(event => dayTierOf(event) === tier) }))
+        .filter(group => group.events.length > 0)
+        .map(group => ({ title: tierTitle(group.tier, group.events.length), items: group.events.map(toItem) }))
+      return { eventType, title: typeTitle(eventType, bucket.length), items: [], subgroups }
     })
-    .filter(group => group.items.length > 0)
+    .filter(group => group.items.length > 0 || (group.subgroups?.length ?? 0) > 0)
 }
 
 /** 右列分组用的分级：1/2/3 来自指标码，其余（讲话、源内身份行）归 `other`。 */
 export type DayTier = '1' | '2' | '3' | 'other'
+
+/** 子组顺序就是分级顺序：一级 → 二级 → 三级 → 未分级。今天表里没有三级码，那一组自然不出现。 */
+const DayTierOrder = ['1', '2', '3', 'other'] as const
 
 export function dayTierOf(event: MarketCalendarEvent): DayTier {
   const tier = tierOfMetricKey(event.eventNameKey ?? event.measureKeys?.[0] ?? '')

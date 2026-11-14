@@ -154,6 +154,9 @@ export const macroIndicatorDrawerText = {
       /* 自动跳到别的日子时必须说清：这是哪一天、为什么不是今天。 */
       notToday: '今天没有发布 · 下面是最近一个有发布的日子',
       sequence: '{name} · {index}/{total}',
+      /* 「经济指标」组内的第二层：一级/二级/三级用指标码分级，没有码的（讲话、源内身份行）是「未分级」。 */
+      tierGroup: '{tier} · {count} 条',
+      tiers: { '1': '一级指标', '2': '二级指标', '3': '三级指标', other: '未分级' },
     },
     weekday: ['一', '二', '三', '四', '五', '六', '日'],
     surprise: { beat: '超预期 {value}', miss: '低于预期 {value}', inline: '符合预期' },
@@ -277,6 +280,8 @@ export const macroIndicatorDrawerText = {
       none: 'No events that move rate expectations today',
       notToday: 'Nothing released today · showing the most recent day with a release',
       sequence: '{name} · {index}/{total}',
+      tierGroup: '{tier} · {count} events',
+      tiers: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Untiered' },
     },
     weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     surprise: { beat: 'Above forecast {value}', miss: 'Below forecast {value}', inline: 'In line' },

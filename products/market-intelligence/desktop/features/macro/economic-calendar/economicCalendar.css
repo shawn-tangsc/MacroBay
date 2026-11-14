@@ -189,6 +189,9 @@
 .mi-calendar-day-list { display: grid; align-content: start; gap: var(--mi-calendar-group-gap); padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
 .mi-calendar-day-list [data-calendar-group], .mi-calendar-detail-container [data-calendar-group] { border-top: 1px solid var(--mi-economic-line); padding-top: var(--mi-calendar-group-gap); margin-top: var(--mi-calendar-group-gap); }
 .mi-calendar-day-list [data-calendar-group] > h3, .mi-calendar-detail-container [data-calendar-group] > h3 { color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); margin: 0 0 var(--mi-calendar-group-title-gap); }
+/* 第二层（只在「经济指标」组内出现：一级/二级/未分级）：比类型标题低一档、与计数同字号，
+   让读者先看到类型、再看到分级，而不是两排一样大的标题。 */
+.mi-calendar-day-list [data-calendar-subgroup] > h4, .mi-calendar-detail-container [data-calendar-subgroup] > h4 { color: var(--mi-economic-muted); font-size: var(--mi-calendar-time-size); margin: var(--mi-calendar-group-title-gap) 0 var(--mi-calendar-group-title-gap); }
 .mi-calendar-day-list [data-day-summary], .mi-calendar-detail-container [data-day-summary] { color: var(--mi-economic-muted); font-size: var(--mi-calendar-time-size); }
 /* 标题行：标题在左、计数在右，同一行。`min-width: 0` 让标题先被省略，计数 `flex: none` 保完整。 */
 .mi-calendar-day-list__head { display: flex; align-items: baseline; gap: var(--mi-calendar-group-gap); min-width: 0; }
