@@ -542,6 +542,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       {/* 关键指标抽屉：曲线与政策卡读同一份真实读数；三张简化卡读装配层的事实。右侧滑出，与左侧分析详情不是同一层。 */}
       {<MacroIndicatorDrawer open={indicatorDrawerOpen} locale={locale} policyText={text.policyPath}
+        {...(calendarBlock === undefined ? {} : { calendarBlock })}
         {...(policyPath?.state === 'available' ? { policyReading: policyPath.reading } : {})}
         onRetryPolicy={policyPathRead.reload}
         releaseEvents={curveReleaseEvents}

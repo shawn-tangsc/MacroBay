@@ -1513,3 +1513,30 @@ describe('the calendar entry opens the drawer, not a page', () => {
     container.remove()
   })
 })
+
+/**
+ * 用户 2026-11-15：这一块要从看板搬进抽屉右列顶部。
+ * 这条断的是**dashboard 有没有把它转手**——只断抽屉本身会漏掉「收到了却没传」这一跳
+ * （2026-11-15 就漏过一次：layout 注入 → dashboard 收到 → 抽屉里永远是 undefined）。
+ */
+it('hands the injected calendar block down to the drawer, not just to its own props', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => root.render(createElement(CryptoIntelligenceDashboard, {
+    client: dashboardClient(), fearGreedClient: fearGreedClient({
+      state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
+    }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+    now: () => new Date(asOf),
+    onConfigureSources: () => undefined, onManageSource: () => undefined,
+    openIndicatorDrawerRequest: 1,
+    calendarBlock: createElement('div', { 'data-test-calendar-block': '' }, '接下来要看的'),
+    calendarEventTitles: { cpi: 'CPI' },
+    readMarketEvents: async () => [],
+    text: productText['zh-CN'].pages.intelligence.portal.dashboard
+  })))
+  await flush()
+  expect(document.body.querySelector('[data-drawer-calendar-block] [data-test-calendar-block]')).not.toBeNull()
+  await act(async () => root.unmount())
+  container.remove()
+})
