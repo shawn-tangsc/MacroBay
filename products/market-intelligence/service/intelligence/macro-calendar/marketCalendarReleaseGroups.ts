@@ -222,7 +222,9 @@ export const marketCalendarReleaseGroupPrimary: Readonly<Record<string, string>>
   'us-nahb': 'US.NAHB_HOUSING_MARKET.NONE.LEVEL',
   'us-new-home-sales': 'US.NEW_HOME_SALES.SA.COUNT',
   'us-nfib': 'US.NFIB_OPTIMISM.NONE.LEVEL',
-  'us-pce': 'US.CORE_PCE.NSA.YOY',
+  // PCE 组的主测度现在读**季调**码：BEA 的公布口径就是季调，旧 NSA 码留空（等未季调来源），
+  // 指向空码会让组内排序把一个永远没有值的码排第一。
+  'us-pce': 'US.CORE_PCE.SA.YOY',
   'us-pending-home-sales': 'US.PENDING_HOME_SALES.SA.MOM',
   'us-philly-fed': 'US.PHILLY_FED_MANUFACTURING.SA.LEVEL',
   'us-ppi': 'US.PPI.NSA.YOY',
