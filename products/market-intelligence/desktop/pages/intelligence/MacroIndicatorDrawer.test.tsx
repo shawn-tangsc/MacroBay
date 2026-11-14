@@ -178,8 +178,8 @@ describe('key-indicator drawer', () => {
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     expect(rightColumnTitle()).toContain('2026-11-13')
     expect(rightColumn()!.textContent).toContain('新增就业')
-    // EIA 是 importance=high，但它解释不了利率预期：按判据不进核心层（也不按 importance 筛）。
-    expect(rightColumn()!.textContent).not.toContain('上周EIA原油库存变化')
+    // 用户 2026-11-14：这一天的事件**全部列出**，不再分核心/其他两层、不折叠——EIA 也在。
+    expect(rightColumn()!.textContent).toContain('上周EIA原油库存变化')
     // 右上角只写一个数：第二个数本来就有自己那行可点展开，放进标题行会让读者以为有两处入口。
     expect(rightColumn()!.querySelector('[data-day-summary]')?.textContent).toBe('与利率相关 1 条')
   })
@@ -191,30 +191,18 @@ describe('key-indicator drawer', () => {
     expect(rightColumnTitle()).toContain('2026-11-14')
   })
 
-  it('switches the right column to the day the reader clicks, and folds the rest into one expandable line', async () => {
+  it('switches the right column to the day the reader clicks and lists every event of it', async () => {
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
     const cell = (day: string) => Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === day)!
     await act(async () => { cell('14').click() })
     expect(rightColumnTitle()).toContain('2026-11-14')
     expect(cell('14').getAttribute('aria-pressed')).toBe('true')
-    // 11-14 只有一条非核心事件：核心层为空时**默认展开**，不许默认收起成空白
-    //（否则页面同时写着「没有事件」和「其他 N 条」，中间空一大片）。
+    // 事件全部列出；折叠控件不存在（用户 2026-11-14：不许再折叠、不许把事件藏起来）。
     expect(rightColumn()!.textContent).toContain('11月消费者信心')
-    const more = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
-    expect(more.getAttribute('aria-expanded')).toBe('true')
-    // 说明并进了「其他」那组的行里（不再是一整块提示语，也不再和 27 条并存矛盾）。
-    expect(more.textContent).toContain('收起 1 条 · 均不影响利率预期')
-    expect(rightColumn()!.textContent).not.toContain(macroIndicatorDrawerText['zh-CN'].mkDay.none)
-    // 手动收起后回到「其他 N 条」，行消失。
-    await act(async () => { more.click() })
-    const collapsed = rightColumn()!.querySelector('.mk-col-r__more') as HTMLButtonElement
-    expect(collapsed.getAttribute('aria-expanded')).toBe('false')
-    expect(collapsed.textContent).toContain('其他 1 条 · 均不影响利率预期')
-    expect(rightColumn()!.textContent).not.toContain('11月消费者信心')
+    expect(rightColumn()!.querySelector('.mk-col-r__more')).toBeNull()
   })
 
-  /** 不是今天时那句小字：说清是哪天、为什么（自动挑到最近一天时才有）。 */
   it('explains why the shown day is not today', async () => {
     // 今天 11-13 没有发布，最近的一天是 11-14。
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z')] })

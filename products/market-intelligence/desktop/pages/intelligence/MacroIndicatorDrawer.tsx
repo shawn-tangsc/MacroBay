@@ -197,15 +197,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     }))
   })), [text])
 
-  // 核心层为空、但这一天还有别的发布时**默认展开**：收起会让页面同时写着「没有事件」和「其他 27 条」，
-  // 中间空一大片。显式切换过就按读者的选择，换一天再回到默认。
-  const othersDefaultOpen = dayLayers.core.length === 0 && dayLayers.other.length > 0
-  const [othersExpanded, setOthersExpanded] = useState<boolean | undefined>(undefined)
   /** 右列点一条事件 → 与经济日历页同一个详情抽屉（`CalendarInspector`，左侧 inline 浮层）。 */
   const [detailEvent, setDetailEvent] = useState<MarketCalendarEvent | undefined>(undefined)
-  const showOthers = othersExpanded ?? othersDefaultOpen
   // 展开态跟着日期走，不跟着抽屉走。
-  useEffect(() => { setOthersExpanded(undefined) }, [selectedDay])
+  // 这一天的事件**全部列出**：不分「核心 / 其他」两层、也不折叠（用户 2026-11-14）。
+  // 收起会让读者以为当天只有三条、实际三十多条；事件被藏起来就是没显示。
   /**
    * 图的尺寸：0 表示**还没量到**。
    *
@@ -390,8 +386,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayLayers.core.length === 0 ? {} : {
                   summary: text.mkDay.summary.replace('{related}', String(dayLayers.core.length))
                 })}
-                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, showOthers, text.mkDay.sequence)}
-                {...(showOthers ? { hideGroupHeadings: true } : {})}
+                groups={dayGroups(dayLayers, dayEvents, selectedDay, timeZone, true, text.mkDay.sequence)}
                 {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
@@ -401,13 +396,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 selectedMarketKey={detailEvent?.eventKey}
                 onSelect={(item) => setDetailEvent(item.source === 'market' ? item.event : undefined)}
               />
-              {/* 次要层就地展开：抽屉里的交互，不跳页、不弹窗（日期详情只以抽屉形态出现）。 */}
-              {dayLayers.other.length === 0 ? null : <button className="mk-col-r__more" type="button"
-                aria-expanded={showOthers}
-                onClick={() => setOthersExpanded(!showOthers)}>
-                {(showOthers ? text.mkDay.collapse : text.mkDay.other).replace('{count}', String(dayLayers.other.length))}
-                <ChevronDown aria-hidden="true" size={12} data-flip={othersExpanded ? 'true' : 'false'} />
-              </button>}
             </>
             : <LoadingState label={calendarText.unifiedDay.loading} minHeight={160} />}
       </div>
