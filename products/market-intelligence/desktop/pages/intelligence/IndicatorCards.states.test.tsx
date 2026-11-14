@@ -107,3 +107,45 @@ describe('card expectations: unreadable is not the same as no market', () => {
     expect(document.body.querySelector('[class*="loading"]')).not.toBeNull()
   })
 })
+
+/**
+ * 发布日与观测日是两件事（Chief 2026-11-14）：
+ * - **发布日**回答「那次发布什么时候发生」→ 走「刚发布 / 昨天发布 / N 天前」；
+ * - **观测日**只回答「我们什么时候看到这个数」→ 写「更新于 MM-DD」，**不许出现「发布」**。
+ *
+ * 混用会让读者以为那天有一场发布，而日历上根本没有——这条是那件事的唯一判据。
+ */
+describe('released page: 发布 and 更新于 are two different sentences', () => {
+  /** 切到已发布页：点卡头那颗真按钮，不走手势。 */
+  async function renderReleased(facts: readonly MacroIndicatorCardFact[]): Promise<string> {
+    await renderCards({ facts })
+    const nav = document.body.querySelectorAll<HTMLButtonElement>('[data-card="upcoming"] .mk-nav button')
+    await act(async () => { nav[0]?.click() })
+    return document.body.querySelector('[data-card="released"]')?.textContent ?? ''
+  }
+
+  /** 官方序列给了数、日历库里没有那场发布：只有观测日。 */
+  const observedOnly: readonly MacroIndicatorCardFact[] = [
+    { metricKey: 'US.CPI.NSA.YOY', state: 'provided', period: '2026-09', seriesObservedAt: '2026-09-26T00:00:00.000Z', value: 3.7, unit: 'percent', previousAsPublished: 3.4 },
+    { metricKey: 'US.CPI.SA.MOM', state: 'provided', period: '2026-09', seriesObservedAt: '2026-09-26T00:00:00.000Z', value: 0.3, unit: 'percent' }
+  ]
+
+  /** 真有一场发布：两个时间都有，发布日在前。 */
+  const released: readonly MacroIndicatorCardFact[] = [
+    { metricKey: 'US.CPI.NSA.YOY', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T12:30:00.000Z', seriesObservedAt: '2026-10-01T00:00:00.000Z', value: 3.7, unit: 'percent', previousAsPublished: 3.4 },
+    { metricKey: 'US.CPI.SA.MOM', state: 'provided', period: '2026-09', releasedAt: '2026-09-26T12:30:00.000Z', value: 0.3, unit: 'percent' }
+  ]
+
+  it('says 更新于 with the observation date when there is no release at all', async () => {
+    const card = await renderReleased(observedOnly)
+    expect(card).toContain('更新于 09-26')
+    // 那天没有一场发布：整个卡面一个字都不许提「发布」。
+    expect(card).not.toContain('发布')
+  })
+
+  it('keeps the release wording when there really was a release', async () => {
+    const card = await renderReleased(released)
+    expect(card).toContain('发布')
+    expect(card).not.toContain('更新于')
+  })
+})

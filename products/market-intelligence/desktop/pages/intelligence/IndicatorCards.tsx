@@ -112,7 +112,9 @@ function PastCard(input: CardInput): React.ReactElement {
   const { group, byKey, text, calendarText, timeZone, unreadable, resolveKey, now } = input
   const facts = group.rows.map((row) => byKey.get(row.metricKey))
   const lead = facts.find((fact) => fact !== undefined)
-  const tag = publishedTag(lead, text, now)
+  // 两个时间不是一件事：`releasedAt` 是「那次发布发生了」，`seriesObservedAt` 是「我们看到这个数」。
+  // 有发布日才说「刚发布 / 昨天发布」；只有观测日就说「更新于 MM-DD」——日历上并没有那场发布。
+  const tag = publishedTag(lead, text, now) ?? updatedTag(lead, text, timeZone)
   const loaded = input.facts !== undefined
   return (
     <article className="mk-card mk-card--past" data-card="released">
@@ -294,6 +296,25 @@ function publishedTag(fact: MacroIndicatorCardFact | undefined, text: MacroIndic
   if (days === 1) return text.published.yesterday
   if (days === 2) return text.published.beforeYesterday
   return text.published.daysAgo.replace('{days}', String(days))
+}
+
+/**
+ * 只有官方序列的**观测日**时：写「更新于 MM-DD」，**不许写「发布」**。
+ *
+ * 这正是这条标签存在的理由：混用会让读者以为那天有一场发布，而日历上根本没有——
+ * 发布日回答「事情什么时候发生」，观测日只回答「我们什么时候看到这个数」。
+ * 两者都有时发布日优先（`publishedTag` 先返回，这里不参与）。
+ */
+function updatedTag(
+  fact: MacroIndicatorCardFact | undefined,
+  text: MacroIndicatorDrawerText,
+  timeZone: string
+): string | undefined {
+  if (fact?.releasedAt !== undefined) return undefined
+  const observedAt = fact?.seriesObservedAt
+  if (observedAt === undefined) return undefined
+  const date = calendarDisplayDate(observedAt, timeZone)
+  return date.length === 0 ? undefined : text.cardFace.updatedAt.replace('{date}', date.slice(5))
 }
 
 /** 距发布那个 tag：形态由 `releaseCountdownFor` 定，文案按键装配。 */
