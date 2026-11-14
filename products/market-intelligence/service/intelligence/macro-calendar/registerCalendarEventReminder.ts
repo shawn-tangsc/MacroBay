@@ -91,7 +91,8 @@ export function registerCalendarEventReminder(input: Readonly<{
       eventKey: event.observationKey ?? event.eventKey,
       title: event.title,
       scheduledAt: event.scheduledAt,
-      importance: event.importance
+      /* 源没给重要性就不带这个字段：缺省 ≠ 某个更低的重要度（提醒按档位筛，缺省的一律不推）。 */
+      ...(event.importance === undefined ? {} : { importance: event.importance })
     }))
   }
 

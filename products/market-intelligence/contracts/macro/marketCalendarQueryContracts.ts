@@ -102,7 +102,12 @@ export type MarketCalendarEvent = Readonly<{
    * 含义**：前者是「它还包含哪些指标」，后者是「这条事件叫什么」。
    */
   measureKeys?: readonly string[]
-  eventType: typeof marketCalendarPublicPolicy.kinds[number]; importance: typeof marketCalendarPublicPolicy.importance[number]
+  eventType: typeof marketCalendarPublicPolicy.kinds[number]
+  /**
+   * 重要度：**可缺省**（Chief 2026-11-14 定）。源没有这个字段就不写，读侧拿到「没有值」表达「未提供」；
+   * 不新增 `unknown` 枚举值——缺失优先改类型，让「缺失」根本没有可写的值。
+   */
+  importance?: typeof marketCalendarPublicPolicy.importance[number]
   scheduledAt: string; consensus: MarketCalendarValue; providerPrevious: MarketCalendarValue; providerActual: MarketCalendarValue
   /**
    * 这条观测由哪个来源给出：`Narwhal` 是当前采集来源；`0xRouter` 只在 Narwhal 这个月的
@@ -229,8 +234,10 @@ export function isMarketCalendarOfficialLink(value: unknown, providerScheduledAt
   return value.timeDisplaySource === 'date-only' && value.displayScheduledAt === null && providerScheduledAt === undefined
 }
 export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEvent {
-  return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'importance', 'scheduledAt', 'consensus',
-    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId', 'measureKeys',
+  return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'scheduledAt', 'consensus',
+    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], [
+    // `importance` 可选：源没说就没有这个字段（缺省 ≠ 某个更低的重要度）。
+    'importance', 'officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId', 'measureKeys',
       // 切到标准表后适配器**每行都写**这四个（时间精度、生命周期、行类型、来源真值）。
       // 白名单里没有它们时，`marketExact` 判 false → 整页非法 → 读者看到「读不到」，
       // 而行级断言全绿（那一层不跑页面校验）。
@@ -250,7 +257,8 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
     typeof value.eventKey === 'string' && marketCalendarPublicPolicy.opaquePattern.test(value.eventKey) && text(value.title) &&
     (value.countryCode === null || typeof value.countryCode === 'string' && marketCalendarPublicPolicy.countryCodePattern.test(value.countryCode) && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value.countryCode)) &&
     (!Object.hasOwn(value, 'countryName') || text(value.countryName)) &&
-    marketCalendarPublicPolicy.kinds.includes(value.eventType as never) && marketCalendarPublicPolicy.importance.includes(value.importance as never) &&
+    marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
+    (!Object.hasOwn(value, 'importance') || marketCalendarPublicPolicy.importance.includes(value.importance as never)) &&
     marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && ((marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds as readonly unknown[])
       .concat(['Narwhal', '0xRouter', marketCalendarPublicPolicy.unspecifiedSource]).includes(value.source) && value.coverage === 'observed-unverified' &&
     [value.consensus, value.providerPrevious, value.providerActual].every(display) &&

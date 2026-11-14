@@ -149,7 +149,7 @@ function normalizedDraft(value: unknown, scope: ReturnType<typeof marketScope>):
     draft.identityState !== 'unverified' || draft.localeMerge !== 'disabled' || draft.officialLink !== 'disabled' ||
     !instant(draft.scheduledAt) || draft.scheduledDate !== draft.scheduledAt.slice(0, 10) ||
     !isCanonicalCalendarText(draft.displayName) ||
-    !Object.values(zeroXRouterCalendarParserPolicy.importance).includes(draft.importance as never) ||
+    (draft.importance !== undefined && !Object.values(zeroXRouterCalendarParserPolicy.importance).includes(draft.importance as never)) ||
     (draft.countryCode !== undefined && !Object.values(zeroXRouterCalendarParserPolicy.countryCodes).includes(draft.countryCode as never))) reject('invalid-input')
   for (const key of ['countryName', 'indicatorId'] as const) {
     if (draft[key] !== undefined && !(key === 'indicatorId' ? isCanonicalCalendarIdentity(draft[key]) : isCanonicalCalendarText(draft[key]))) reject('invalid-input')
@@ -233,7 +233,7 @@ function buildObservation(value: unknown, scope: ReturnType<typeof marketScope>,
   if (candidates.has(draft.marketFactKey)) reject('invalid-input')
   candidates.add(draft.marketFactKey)
   const business = { event_kind: draft.kind, display_name: draft.displayName, indicator_id: draft.indicatorId ?? null,
-    country_code: draft.countryCode ?? null, country_name: draft.countryName ?? null, importance: draft.importance,
+    country_code: draft.countryCode ?? null, country_name: draft.countryName ?? null, importance: draft.importance ?? null,
     scheduled_date: draft.scheduledDate, scheduled_at: draft.scheduledAt,
     consensus_json: jsonValue(draft.consensus), provider_previous_json: jsonValue(draft.providerPrevious),
     provider_actual_json: jsonValue(draft.providerActual), provider_impact_json: jsonValue(draft.providerImpact ? { label: draft.providerImpact.label, ...(draft.providerImpact.code ? { code: draft.providerImpact.code } : {}) } : undefined), provider_time_status: null }

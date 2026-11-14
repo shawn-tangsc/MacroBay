@@ -19,7 +19,8 @@ export type ZeroXRouterCalendarDraft = Readonly<{
   displayName: string
   countryCode?: 'US' | 'DE'
   countryName?: string
-  importance: 'high' | 'medium' | 'low'
+  /** 可缺省：来源没给重要性就没有值（缺省 ≠ 低重要度）。 */
+  importance?: 'high' | 'medium' | 'low'
   scheduledDate: string
   scheduledAt: string
   indicatorId?: string

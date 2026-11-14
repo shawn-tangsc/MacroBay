@@ -30,7 +30,11 @@ export type MacroCalendarProviderObservation =
     countryCode: string | null
     // 市场行没有源给的「重要性」：观测表里那个 `medium` 是占位。分析侧若按重要性排序/筛选，
     // 必须把这类行当「未分级」排除，别把占位当成我们判断过的值。
-    importance: 'high' | 'medium' | 'low'
+    /**
+     * 可缺省（Chief 2026-11-14）：源没给就不写，**不拿 `medium` 占位**。
+     * 缺省 = 「未分级/无法判定」，与 `'low'` 不是一回事；按重要性筛选/排序的消费点必须处理缺席。
+     */
+    importance?: 'high' | 'medium' | 'low'
     /**
      * **指标码**（`US.CPI.NSA.YOY`）：分析侧要算「同一发布组最多几条」就必须有它，
      * 没有码就查不到组，配额只能退回「按事件」——那等于没限流。
@@ -167,7 +171,8 @@ export function normalizeMarketCalendarEvent(event: MarketCalendarEvent): MacroC
     eventFamily: eventFamilyByEventType[event.eventType],
     titleKey: event.title,
     countryCode: event.countryCode,
-    importance: event.importance,
+    // 源没给就不带这个字段（契约已允许缺省）：不要拿一档默认值顶上去。
+    ...(event.importance === undefined ? {} : { importance: event.importance }),
     periodKey: periodKeyFor(event.scheduledAt),
     lifecycleState: actual ? 'released' : 'scheduled',
     coverage: marketCalendarObservationPolicy.coverage,
