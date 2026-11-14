@@ -5,7 +5,7 @@ import { instant, marketCalendarEffectiveLogicalBytes, marketCalendarObservation
   type MarketCapacity, type MarketCollectionContext, type MarketRow } from './marketCalendarStorageValidation'
 import { createMarketCalendarStorageQueries, operationGuard, type MarketOperationControl } from './marketCalendarStorageQueries'
 import { captureMarketStorageSnapshot } from './marketCalendarStorageSnapshot'
-import { ensureMarketCalendarObservationState, marketCalendarRetentionPolicy } from './marketCalendarStorageReclaim'
+import { ensureMarketCalendarObservationState, ensureRevisionImportanceNullable, marketCalendarRetentionPolicy } from './marketCalendarStorageReclaim'
 
 // MC-V1 design 122: conservative shared-calendar charge, not market attribution.
 // Opted into only by the manual runtime; official writes remain unrestricted.
@@ -81,6 +81,9 @@ export function createMarketCalendarEventRepository(options: {
   // A library written before the write model changed has no `last_seen_at` column and no
   // last-seen ledger; this adds them and backfills from each row's own collection time.
   ensureMarketCalendarObservationState(database)
+  // 记录契约里 `importance` 已经可缺省，列还写着 `not null`——任何一条没带重要性的记录
+  // （官方日程的草稿就是）都会让整次刷新失败。迁移与判据见函数注释。
+  ensureRevisionImportanceNullable(database)
   /**
    * The one shared admission charge: allocated pages minus pages SQLite already returned to
    * its freelist. Never a second copy of the formula, and never a credit when the freelist

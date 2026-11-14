@@ -185,6 +185,56 @@ function apply(database: DatabaseSync, plan: Plan, limit: number): void {
  * Backfill uses each observation's own collection time, which is the truth we already
  * stored; nothing is inferred from the clock at migration time.
  */
+/**
+ * **`mi_macro_calendar_revisions.importance` 从 `not null` 放宽成可空**（单事务、幂等、append-only）。
+ *
+ * 为什么现在必须改：记录契约里这一格已经变成「可缺省」（源没说就不写），而写入端是
+ * `revision.importance ?? null`。列还是 `not null` 时，**任何一条没有重要性的记录都会把整次刷新
+ * 判成失败**——官方日程那两个源（fed / bea）的草稿本来就不带重要性，于是连续失败 15 次，
+ * 日志只有一句「run failed」。实测错误原文：
+ * `NOT NULL constraint failed: mi_macro_calendar_revisions.importance`。
+ *
+ * 三条边界：
+ * 1. **不丢行**：旧表整表拷进新表（列名逐个列，不靠 `select *` 的顺序），123 行原样保留；
+ * 2. **幂等**：仍在 `not null` 才迁移；已经是可空就直接返回 false；
+ * 3. **不许哨兵值**：不写 `''`/`'unknown'`/`'medium'`，没有值就是 NULL。
+ */
+export function ensureRevisionImportanceNullable(database: DatabaseSync): boolean {
+  const columns = database.prepare('pragma table_info(mi_macro_calendar_revisions)').all() as unknown as
+    { name: string; notnull: number }[]
+  const importance = columns.find((column) => column.name === 'importance')
+  if (importance === undefined || importance.notnull === 0) return false
+  const table = 'mi_macro_calendar_revisions'
+  const rebuild = `${table}__nullable_importance`
+  const names = columns.map((column) => column.name)
+  const ddl = database.prepare('select sql from sqlite_master where type = ? and name = ?')
+    .get('table', table) as { sql: string } | undefined
+  if (ddl === undefined) return false
+  // 只把这一列的 `not null` 去掉，其余定义原样保留（主键、唯一约束都在 DDL 里）。
+  const rebuiltDdl = ddl.sql
+    .replace(/^CREATE TABLE\s+\S+/, `CREATE TABLE ${rebuild}`)
+    .replace(/\bimportance\s+text\s+not\s+null\b/i, 'importance text')
+  if (!/importance text(?![^,)]*not null)/i.test(rebuiltDdl)) return false
+  database.exec('begin')
+  try {
+    database.exec(rebuiltDdl)
+    database.exec(`insert into ${rebuild} (${names.join(', ')}) select ${names.join(', ')} from ${table}`)
+    const before = database.prepare(`select count(*) as c from ${table}`).get() as { c: number }
+    const copied = database.prepare(`select count(*) as c from ${rebuild}`).get() as { c: number }
+    if (before.c !== copied.c) throw new Error('revision row count changed during migration')
+    database.exec(`drop table ${table}`)
+    database.exec(`alter table ${rebuild} rename to ${table}`)
+    // 索引随旧表一起没了：按原样重建（表名一样，SQL 直接复用）。
+    database.exec('create index if not exists idx_mi_calendar_event_visible on mi_macro_calendar_revisions(event_key, detected_at_ms desc, recorded_at desc)')
+    database.exec('create index if not exists idx_mi_calendar_month on mi_macro_calendar_revisions(scheduled_date, detected_at_ms desc)')
+    database.exec('commit')
+    return true
+  } catch (error) {
+    database.exec('rollback')
+    throw error
+  }
+}
+
 export function ensureMarketCalendarObservationState(database: DatabaseSync): boolean {
   const fields = database.prepare('pragma table_info(mi_macro_calendar_market_event_observations)')
     .all() as unknown as { name: string }[]
