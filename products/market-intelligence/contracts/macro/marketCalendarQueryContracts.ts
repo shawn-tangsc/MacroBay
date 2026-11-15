@@ -150,6 +150,8 @@ export type MarketCalendarEvent = Readonly<{
    * 二读/三读不显示次数，读者就会把二读当初值——合并了不回显等于把「改过数据」藏起来。
    */
   releaseCount?: number
+  /** 这一期的每一次排期（合并后要能点开看到「第 1 次 11-25、第 2 次 12-23」）。 */
+  releaseDates?: readonly string[]
   source: typeof marketCalendarPublicPolicy.sourceFeeds[number] | 'unspecified' | 'Narwhal' | '0xRouter'
   sourceObservedAt: string
   /**

@@ -6,7 +6,8 @@ import type { NotificationSubmitRequest } from '@platform/notifications'
 import { eventTypeNameByCode, nameByMetricKey } from '../intelligence/macro-calendar/marketCalendarCodeNames'
 import { createStandardMonthPageReader } from '../intelligence/macro-calendar/marketCalendarStandardMonthPage'
 import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from '../intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
-import { zeroXRouterCalendarSchedulerPolicy } from '../intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
+import { zeroXRouterCalendarSchedulerFeeds, zeroXRouterCalendarSchedulerPolicy }
+  from '../intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
 import { createNarwhalCalendarBriefingRefresh } from '../intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
 import { registerCalendarEventReminder } from '../intelligence/macro-calendar/registerCalendarEventReminder'
 
@@ -72,9 +73,13 @@ export function wireCalendarReadings(input: Readonly<{
   // 不写成失败。判 `collected` 与 `unchanged` 看**数据有没有真的写进来**，不看作业跑没跑。
   input.intelligenceModule.bindBriefingCalendarRefresh(createNarwhalCalendarBriefingRefresh({
     jobRuntime: input.jobRuntime,
-    // **补采必须排「当下在写数据的那条作业」**：绑在 narwhal 上时，narwhal 一停就永远补不到，
-    // 还会把失败写成「采集失败」。现在排 0xrouter 三路里的经济数据那一路（三路同一批源）。
+    // **补采必须按**下发名单**排**（不是写死一路）：名单来自 `listSchedules()`，这里给出
+    // sourceId → 作业定义的映射；名单里没有的源跳过，删源时这份映射自然变短。
     definitionId: `${zeroXRouterCalendarSchedulerPolicy.definitionId}.economic-data`,
+    definitionForSourceId: (sourceId) => {
+      const feed = zeroXRouterCalendarSchedulerFeeds.find((entry) => entry.sourceId === sourceId)
+      return feed === undefined ? undefined : `${zeroXRouterCalendarSchedulerPolicy.definitionId}.${feed.key}`
+    },
     readLastWrittenAt: readCalendarLastWrittenAt
   }))
 

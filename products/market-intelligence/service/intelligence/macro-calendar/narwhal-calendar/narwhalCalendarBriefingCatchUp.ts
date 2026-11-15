@@ -36,6 +36,12 @@ export type NarwhalCalendarBriefingRefresh = (
 
 export function createNarwhalCalendarBriefingRefresh(input: Readonly<{
   jobRuntime: BriefingCatchUpJobRuntime
+  /**
+   * 单条源 → 要排的作业定义。**必须真的用起来**：以前这里只排一个写死的定义，而下发的
+   * `sourceIds` 名单只被拿去填返回值——「名单对、命令旧」，比全旧更难查（2026-11-16）。
+   * 不传时退回 `definitionId`（单源场景，例如测试或只剩一条采集作业的构建）。
+   */
+  definitionForSourceId?: (sourceId: string) => string | undefined
   definitionId: string
   /** 数据有没有真的写进来：标准表最近写入时刻。 */
   readLastWrittenAt: () => string | null
@@ -46,22 +52,31 @@ export function createNarwhalCalendarBriefingRefresh(input: Readonly<{
       NARWHAL_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS))
     const sources = request?.sourceIds ?? marketCalendarPublicPolicy.collectionFeeds
     const before = input.readLastWrittenAt()
-    let runId: string
-    try {
-      runId = (await input.jobRuntime.enqueueManual(input.definitionId)).id
-    } catch (error) {
-      return { state: 'failed' as const, failureCode: shortFailureCode(error, 'enqueue-failed') }
+    const started = Date.now()
+    // **按名单逐个排**：名单里有几路就排几路（缺席的源直接跳过，不编定义 id）。
+    const definitions = [...new Set(sources.map((sourceId) =>
+      input.definitionForSourceId?.(sourceId) ?? input.definitionId).filter((id): id is string => typeof id === 'string' && id !== ''))]
+    const runIds: string[] = []
+    for (const definitionId of definitions) {
+      try {
+        runIds.push((await input.jobRuntime.enqueueManual(definitionId)).id)
+      } catch (error) {
+        return { state: 'failed' as const, failureCode: shortFailureCode(error, 'enqueue-failed') }
+      }
     }
-    let settled: Awaited<ReturnType<BriefingCatchUpJobRuntime['waitForRunTerminal']>>
-    try {
-      settled = await input.jobRuntime.waitForRunTerminal(runId, { timeoutMs: budget })
-    } catch (error) {
-      return { state: 'failed' as const, failureCode: shortFailureCode(error, 'wait-failed') }
-    }
-    if (settled.state === 'timeout') return { state: 'timeout' as const, timeoutMs: budget }
-    if (settled.state === 'interrupted') return { state: 'failed' as const, failureCode: 'run-interrupted' }
-    if (settled.run.status !== 'completed') {
-      return { state: 'failed' as const, failureCode: shortFailureCode(settled.run.lastError, `run-${settled.run.status}`) }
+    for (const runId of runIds) {
+      const remaining = Math.max(1, budget - (Date.now() - started))
+      let settled: Awaited<ReturnType<BriefingCatchUpJobRuntime['waitForRunTerminal']>>
+      try {
+        settled = await input.jobRuntime.waitForRunTerminal(runId, { timeoutMs: remaining })
+      } catch (error) {
+        return { state: 'failed' as const, failureCode: shortFailureCode(error, 'wait-failed') }
+      }
+      if (settled.state === 'timeout') return { state: 'timeout' as const, timeoutMs: budget }
+      if (settled.state === 'interrupted') return { state: 'failed' as const, failureCode: 'run-interrupted' }
+      if (settled.run.status !== 'completed') {
+        return { state: 'failed' as const, failureCode: shortFailureCode(settled.run.lastError, `run-${settled.run.status}`) }
+      }
     }
     // 作业成功 ≠ 数据变了：源重复回同一批内容时，这一天没有新数据，回答「未变化」。
     const after = input.readLastWrittenAt()

@@ -108,7 +108,8 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     coverage: officialFeedIdOf(row.sourceProviderId) === undefined ? 'observed-unverified' as const : 'available' as const,
     timePrecision: row.timePrecision, releaseStatus: row.status, rowKind: row.rowKind,
     // 次数只在 >1 时下发（1 次是常态，挂上去就是噪声）；界面 `=== 1` 或缺省都不显示。
-    ...((row.releaseCount ?? 1) > 1 ? { releaseCount: row.releaseCount } : {})
+    ...((row.releaseCount ?? 1) > 1 ? { releaseCount: row.releaseCount } : {}),
+    ...((row.releaseDates ?? []).length > 1 ? { releaseDates: row.releaseDates! } : {})
   }
 }
 

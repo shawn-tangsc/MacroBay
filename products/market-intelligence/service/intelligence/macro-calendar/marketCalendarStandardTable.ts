@@ -179,6 +179,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       -- **这一期发布过几次**（同身份跨来源合并后仍要保留这个数）：二读被当成初值是另一类错，
       -- 合并了却不显示次数＝把「改过数据」藏起来。默认 1，合并迁移会按组写入真实次数。
       release_count integer not null default 1,
+      -- **这一期的每一次排期**（JSON 数组，ISO 日期/时刻）：二读/三读被合并成一行后，
+      -- 读者仍要能点开看到「第 1 次 11-25、第 2 次 12-23」——只给次数等于把细节藏了。
+      release_dates_json text,
       values_json text not null,
       source_provider_id text not null,
       source_event_id text not null,
@@ -244,6 +247,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   }
   if (!columns.some((column) => column.name === 'value_state')) {
     database.exec(`alter table ${eventsTable} add column value_state text`)
+  }
+  if (!columns.some((column) => column.name === 'release_dates_json')) {
+    database.exec(`alter table ${eventsTable} add column release_dates_json text`)
   }
   if (!columns.some((column) => column.name === 'release_count')) {
     database.exec(`alter table ${eventsTable} add column release_count integer not null default 1`)

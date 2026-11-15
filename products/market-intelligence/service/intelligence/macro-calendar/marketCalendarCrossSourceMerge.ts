@@ -81,7 +81,7 @@ export function mergeCrossSourceCalendarRows(database: DatabaseSync): CrossSourc
       where country_code = ? and metric_key = ? and period_key = ? order by first_scheduled_date asc`)
     const deleteRow = database.prepare(`delete from ${table}
       where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
-    const setReleaseCount = database.prepare(`update ${table} set release_count = ?
+    const setReleaseCount = database.prepare(`update ${table} set release_count = ?, release_dates_json = ?
       where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
     const repointLedger = database.prepare(`update mi_calendar_event_source_ids
       set first_scheduled_date = ? where country_code = ? and metric_key = ? and period_key = ?
@@ -102,7 +102,8 @@ export function mergeCrossSourceCalendarRows(database: DatabaseSync): CrossSourc
       const sameSourceDuplicate = !isCrossSource && actuals.length >= 2 && distinct.size === 1
       if (!isCrossSource && !sameSourceDuplicate) {
         for (const row of rows) {
-          setReleaseCount.run(rows.length, group.country_code, group.metric_key, group.period_key, String(row.first_scheduled_date))
+          setReleaseCount.run(rows.length, JSON.stringify(rows.map((item) => String(item.scheduled_date)).sort()),
+            group.country_code, group.metric_key, group.period_key, String(row.first_scheduled_date))
           report.releaseCountRows += 1
         }
         continue
@@ -110,7 +111,8 @@ export function mergeCrossSourceCalendarRows(database: DatabaseSync): CrossSourc
       if (isCrossSource && conflict) {
         report.conflictedGroups += 1
         for (const row of rows) {
-          setReleaseCount.run(rows.length, group.country_code, group.metric_key, group.period_key, String(row.first_scheduled_date))
+          setReleaseCount.run(rows.length, JSON.stringify(rows.map((item) => String(item.scheduled_date)).sort()),
+            group.country_code, group.metric_key, group.period_key, String(row.first_scheduled_date))
           report.releaseCountRows += 1
         }
         continue
@@ -124,11 +126,13 @@ export function mergeCrossSourceCalendarRows(database: DatabaseSync): CrossSourc
       const importance = rows.map((row) => row.importance).find((value) => value !== null) ?? null
       const eventType = rows.map((row) => row.event_type).find((value) => value !== null) ?? null
       database.prepare(`update ${table} set values_json = ?, status = ?, value_state = ?, importance = coalesce(importance, ?),
-          event_type = coalesce(event_type, ?), release_count = ?, first_scheduled_date = ?,
+          event_type = coalesce(event_type, ?), release_count = ?, release_dates_json = ?, first_scheduled_date = ?,
           scheduled_date = ?, scheduled_at = ?, time_precision = ?
         where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
-        .run(JSON.stringify(values), base.status, base.value_state, importance, eventType, rows.length, firstScheduledDate,
-          base.scheduled_date, base.scheduled_at, base.time_precision,
+        .run(JSON.stringify(values), base.status, base.value_state, importance, eventType, rows.length,
+          // 每一次排期：合并前那几行的 `scheduled_date`（排序后原样存，不编时刻）。
+          JSON.stringify(rows.map((row) => String(row.scheduled_date)).sort()),
+          firstScheduledDate, base.scheduled_date, base.scheduled_at, base.time_precision,
           group.country_code, group.metric_key, group.period_key, String(base.first_scheduled_date))
       report.releaseCountRows += 1
       // 台账两家的 id 都留：身份列跟到合并后的首个排期，行上只保留一个 id。
