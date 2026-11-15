@@ -883,6 +883,26 @@ describe('daily briefing document', () => {
     expect(document.news.notes.macroEmpty).not.toBe('past-24h-no-high-impact-release')
   })
 
+  // 用户 2026-11-16（第三次同类）：读数可用且新鲜时，不许因为某一路失败就把空栏写成
+  // 「最近一次日历采集失败」。这不是「没有」被写成「读不到」，而是「空窗」被写成「故障」。
+  it('never blames a collection failure when the reading is usable and fresh', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: {
+          state: 'available',
+          lastCollectedAt: '2026-10-30T00:00:00.000Z',
+          catchUp: { state: 'failed', failureCode: 'some-other-feed-failed' }
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    // 夹具：asOf 00:30，最后一次成功 00:00 —— 读数新鲜、窗口为空。
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    expect(document.news.notes.macroEmpty).not.toBe('calendar-collect-failed')
+  })
+
   it('allows "nothing happened" only when the reading is fresh and the window is empty', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

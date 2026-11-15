@@ -554,14 +554,6 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   const freshness = packet.calendarFreshness
   // No reading at all (an older caller or a fixture): the section must not claim "nothing happened".
   if (!freshness) return 'calendar-unavailable'
-  // A catch-up that ran out of time is its own sentence: it did not fail, it did not finish.
-  if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
-  // A catch-up we triggered but never learned the outcome of (the command answered with a shape the
-  // contract does not name) gets its own sentence: nothing failed, we simply do not know yet. Writing
-  // "the last collection failed" here tells the reader the source is broken when it is not.
-  if (freshness.catchUp?.state === 'unknown') return 'calendar-catch-up-unknown'
-  // A catch-up that failed is a collection failure, which is also not "nothing".
-  if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
   const reason = briefingMacroEmptyReason({
     state: packet.calendar.state === 'unavailable' ? 'unavailable'
       : freshness.state === 'source-disabled' ? 'source-disabled'
@@ -572,6 +564,17 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
     ...(freshness.lastAttemptFailed === undefined ? {} : { lastAttemptFailed: freshness.lastAttemptFailed }),
     dataAsOf: packet.asOf
   })
+  // **读数可用且新鲜时，「窗口为空」优先于任何补跑判定**（用户 2026-11-16）：补跑只是走过的一步，
+  // 它失败/超时/结果未知，都不该把一次读得到的空窗写成故障。只有读数本身不可信时，才轮到它。
+  if (reason !== 'past-24h-no-high-impact-release') {
+    // A catch-up that ran out of time is its own sentence: it did not fail, it did not finish.
+    if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
+    // A catch-up we triggered but never learned the outcome of (the command answered with a shape the
+    // contract does not name) gets its own sentence: nothing failed, we simply do not know yet.
+    if (freshness.catchUp?.state === 'unknown') return 'calendar-catch-up-unknown'
+    // A catch-up that failed is a collection failure, which is also not "nothing".
+    if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
+  }
   // 注意：这一档的「没有」现在**只在窗口里真的一条高影响事件都没有**时才成立——因为候选不再按
   // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。
   // 反过来也要说清（`02` v2.125 ①）：**已取消的事件仍然算「有事件」**——它照常显示、带取消标记、

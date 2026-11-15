@@ -33,11 +33,15 @@ export function briefingMacroEmptyReason(input: Readonly<{
   if (input.state === 'source-disabled') return 'calendar-source-disabled'
   if (input.state === 'unavailable') return 'calendar-unavailable'
   if (input.lastCollectedAt === undefined) return 'calendar-not-collected'
+  const age = Date.parse(input.dataAsOf) - Date.parse(input.lastCollectedAt)
+  // **读数新鲜时，窗口空就是空**（用户 2026-11-16）：别的源最近一次失败改不了这个事实。
+  // 旧顺序把「跨所有源最近一次失败」放在最前，于是 BLS 那一路被拦，整栏就写成「日历采集失败」，
+  // 还建议读者去改配置——第三次同族错误（空窗被写成故障）。
+  if (Number.isFinite(age) && age <= BRIEFING_CALENDAR_STALE_AFTER_MS) return 'past-24h-no-high-impact-release'
+  // 只有读数不新鲜时，才轮到「最近一次失败」或「过期」：
   // 失败晚于成功才算"最近一次失败"：只看"最近一次是不是失败"会把"失败后又有成功"判错。
   const failedAfterSuccess = input.lastAttemptFailed === true && input.lastAttemptAt !== undefined
     && Date.parse(input.lastAttemptAt) > Date.parse(input.lastCollectedAt)
   if (failedAfterSuccess) return 'calendar-collect-failed'
-  const age = Date.parse(input.dataAsOf) - Date.parse(input.lastCollectedAt)
-  if (!Number.isFinite(age) || age > BRIEFING_CALENDAR_STALE_AFTER_MS) return 'calendar-stale'
-  return 'past-24h-no-high-impact-release'
+  return 'calendar-stale'
 }
