@@ -54,11 +54,6 @@
     "file": "products/market-intelligence/desktop/pages/intelligence/AnalysisConclusionDetail.tsx",
     "reason": "注入的值本身是 var(<方向策略里的颜色 token>)，方向是数据不是主题；静态 CSS 写不出「跟着这条结论的方向转色」。"
   },
-  "--mi-chat-percent": {
-    "injectedBy": "MarketAnalysisAgentWorkspace.tsx:191",
-    "file": "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisAgentWorkspace.tsx",
-    "reason": "读者拖出来的上下分栏比例，是交互状态，静态定义会把拖拽结果锁死。"
-  },
   "--chat-message-font-size": {
     "injectedBy": "AssistantChatPane.tsx:154",
     "file": "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantChatPane.tsx",
@@ -83,5 +78,10 @@
     "injectedBy": "BusinessSettingsView.tsx（行内 style 写在 .business-card / .business-cell / .business-cell__items 上）",
     "file": "products/market-intelligence/desktop/settings/intelligence-sources/BusinessSettingsView.tsx",
     "reason": "--cell-items 是运行时按「这一格/这个模块有几个源」算出来的列跨度，一张卡一个值；写进 tokens.css 等于给它一个假的固定值，和布局算法漂开。"
+  },
+  "--o": {
+    "injectedBy": "ClockCard.tsx:172（行内 style 写在每块环牌 `.mi-clock__node` 上）",
+    "file": "products/market-intelligence/desktop/pages/intelligence/ClockCard.tsx",
+    "reason": "--o 是每块环牌的不透明度，由「离今天的天数」现算（0.5 + (天数÷30)² × 0.5）——是数据不是主题；CSS 侧 `opacity: var(--o, 1)` 只是接住它，写进 tokens.css 会给它一个和天数脱钩的假值。"
   }
 }
