@@ -260,6 +260,20 @@ export function toAlpha3Country(code: string): string {
   return alpha3ByAlpha2[code] ?? code
 }
 
+/**
+ * 反向归一：`USA` → `US`（已经是 alpha-2 的原样返回）。
+ *
+ * 存储层两种写法并存（标准表里 `US` 522 行、`USA` 329 行，后者来自按 alpha-3 落库的旧源）。
+ * 显示国家名用的名表以 alpha-2 为键——不归一的话，`USA` 那些行的国家名会是空的，
+ * 而「空」看起来就像「这条没有国家」。
+ */
+export function toAlpha2Country(code: string): string {
+  for (const [alpha2, alpha3] of Object.entries(alpha3ByAlpha2)) {
+    if (alpha3 === code) return alpha2
+  }
+  return code
+}
+
 /** 身份的可比较字符串形式，做 join 用；分隔符取 `|`，三个字段都不含它。 */
 export function canonicalIdentityKey(identity: MarketCalendarCanonicalIdentity): string {
   return `${identity.countryCode}|${identity.metricKey}|${identity.periodKey}`

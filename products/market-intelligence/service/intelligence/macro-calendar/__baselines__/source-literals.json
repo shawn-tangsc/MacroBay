@@ -14,8 +14,8 @@
       "why": "看板源状态清单：列的就是 feed id"
     },
     "contracts/macro/marketCalendarQueryContracts.ts": {
-      "count": 22,
-      "why": "契约里的 provider id 常量与来源标签定义处；19 = 原 13 + `sourceFeeds` 新增的 6 个 feed id（来源真值的唯一出处，属于可命名的整合数据）"
+      "count": 25,
+      "why": "契约里的 provider id 常量与来源标签定义处；25 = 22 + 0xRouter 三路接回采集后新增的 3 个 feed id（真来源必须能指名道姓，否则新行全落 unspecified）"
     },
     "desktop/pages/intelligence/IndicatorCards.tsx": {
       "count": 1,
@@ -143,8 +143,8 @@
       "why": "provider id 常量定义处（单一来源）"
     },
     "service/intelligence/macro-calendar/marketCalendarSourceFeedIds.ts": {
-      "count": 6,
-      "why": "行 → 来源 feed id 的映射本尊：六个 feed id 就是这张表的全部内容，别处不许再写"
+      "count": 10,
+      "why": "来源 → feed id 的**唯一映射表**：官方三条、narwhal 三类、0xRouter 三类（2026-11-16 接回采集后新增 4 处：三路 feed id + provider 判定）"
     },
     "service/intelligence/macro-calendar/marketCalendarStandardBackfill.ts": {
       "count": 1,

@@ -40,6 +40,49 @@ const context = {
   }
 }
 
+describe('0xRouter 三路：来源认得出、国家名算得出（2026-11-16）', () => {
+  it('经济指标行 → 它那一路的 feed id，不再落 `unspecified`；国家名两种写法都认', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 观测表里 0xrouter 的行记的是 provider `0xrouter`、国家码两种写法并存（US / USA）。
+    upsertCalendarStandardRow(database, { ...base, countryCode: 'USA', sourceProviderId: '0xrouter',
+      metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10', scheduledDate: '2026-11-10',
+      scheduledAt: '2026-11-10T13:30:00.000Z', valuesJson: '{"actual":"3.7"}', valueState: 'present' })
+    upsertCalendarStandardRow(database, { ...base, countryCode: 'US', sourceProviderId: '0xrouter',
+      metricKey: 'US.CPI.SA.MOM', periodKey: '2026-10', scheduledDate: '2026-11-10',
+      scheduledAt: '2026-11-10T13:30:00.000Z', valuesJson: '{"actual":"0.3"}', valueState: 'present' })
+    // 事件型：讲话 → 央行活动那一路。
+    upsertCalendarStandardRow(database, { ...base, countryCode: 'US', sourceProviderId: '0xrouter',
+      metricKey: 'evt.central-bank-speech', periodKey: '2026-11-10T14:35', scheduledDate: '2026-11-10',
+      scheduledAt: '2026-11-10T14:35:00.000Z', valuesJson: '{}', valueState: 'missing' })
+    const events = standardRowsToMarketEvents(readStandardCalendarMonth(database, { month: '2026-11' }), context)
+    const byMetric = new Map(events.map((event) => [event.title, event]))
+    const cpi = events.find((event) => event.eventNameKey === 'US.CPI.NSA.YOY')!
+    // ① 来源是它自己那一路，不是「未知来源」。
+    expect(cpi.source).toBe('macro-calendar-0xrouter-economic-data')
+    expect(cpi.sourceFeedId).toBe('macro-calendar-0xrouter-economic-data')
+    expect(cpi.source).not.toBe('unspecified')
+    // ② 国家名按码算出来，`USA` 与 `US` 都认（名表以 alpha-2 为键）。
+    expect(cpi.countryName).toBe('美国')
+    const mom = events.find((event) => event.eventNameKey === 'US.CPI.SA.MOM')!
+    expect(mom.countryName).toBe('美国')
+    const speech = events.find((event) => event.eventType === 'central-bank-activity' && event.sourceFeedId !== undefined)!
+    expect(speech.source).toBe('macro-calendar-0xrouter-central-bank-activities')
+    expect(byMetric.size).toBeGreaterThan(0)
+  })
+
+  it('认不出的 provider 仍是 `unspecified`（不为修这条把所有未知都当市场源）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, sourceProviderId: 'some-unknown-provider',
+      sourceEventId: 'unknown-1' })
+    const [event] = standardRowsToMarketEvents(readStandardCalendarMonth(database, { month: '2026-11' }),
+      { ...context, resolveSource: undefined })
+    expect(event!.source).toBe('unspecified')
+    expect(event!.sourceFeedId).toBeUndefined()
+  })
+})
+
 describe('标准行 → 日历事件（queryMonth 形状不变）', () => {
   it('指标：名称走名表、类别 economic-indicator、精度与状态带上、值挂上', () => {
     const rows = readStandardCalendarMonth(seed(), { month: '2026-11' })

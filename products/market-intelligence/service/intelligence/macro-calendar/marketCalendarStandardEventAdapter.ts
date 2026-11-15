@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { StandardMonthRow } from './marketCalendarStandardMonthRead'
 import { officialFeedIdOf, sourceFeedIdOf } from './marketCalendarSourceFeedIds'
+import { marketCalendarCountryNames } from './marketCalendarDisplayNameTables'
+import { toAlpha2Country } from './marketCalendarMetricIdentity'
 
 /**
  * 标准行 → 日历事件（`MarketCalendarEvent`）。**`queryMonth` 的对外形状因此不变**——
@@ -14,6 +16,18 @@ import { officialFeedIdOf, sourceFeedIdOf } from './marketCalendarSourceFeedIds'
  * 3. **重要性**：标准表**没有**这一列（这是真缺口，不是实现偷懒）——先一律 `medium` 并记在
  *    注释里，等表加上再读；不要按数值大小去猜，那会把「重要性」变成一条没人能解释的规则。
  */
+/**
+ * 行的国家名：**按码查名表**，`US` 与 `USA` 两种写法都认（存储层两种并存）。
+ *
+ * 为什么必须在这里给：列表行只在 `countryName` 有值时才画国家（`CalendarEventRow`），
+ * 旧读法由 0xRouter 的查询侧带名，换到标准表后没人算它，于是整列国家静默消失——
+ * 看起来像「这些事件没有国家」，其实是「我们没算」。
+ */
+const countryNameOf = (code: string, locale: 'zh' | 'en'): string | undefined => {
+  const names = marketCalendarCountryNames[toAlpha2Country(code)]
+  return names === undefined ? undefined : (locale === 'en' ? names.en : names.zh)
+}
+
 const eventTypeOf = (row: StandardMonthRow): MarketCalendarEvent['eventType'] => {
   if (!row.metricKey.startsWith('evt.')) return 'economic-indicator'
   if (/^evt\.(central-bank|monetary-policy)/.test(row.metricKey)) return 'central-bank-activity'
@@ -68,6 +82,8 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     observationKey: row.identityKey,
     title,
     countryCode: row.countryCode,
+    ...(countryNameOf(row.countryCode, context.locale) === undefined
+      ? {} : { countryName: countryNameOf(row.countryCode, context.locale)! }),
     ...(row.identityKind === 'code' ? { eventNameKey: row.metricKey } : {}),
     eventType: eventTypeOf(row),
     // 读行里那一列：官方行本来就是 high。行上没有值（源没提供）就先不出这个字段——

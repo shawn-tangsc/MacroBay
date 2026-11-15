@@ -53,7 +53,12 @@ export const marketCalendarPublicPolicy = Object.freeze({
    */
   sourceFeeds: [
     'macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
-    'macro-calendar-narwhal-central-bank-activities', 'macro-calendar-bls', 'macro-calendar-bea',
+    'macro-calendar-narwhal-central-bank-activities',
+    // 0xRouter 三路 2026-11-16 接回采集后进标准表：它们**也是真来源**，读侧必须能指名道姓，
+    // 否则新进来的每一行都落 `unspecified`（界面把来源画成「未知」）。
+    'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+    'macro-calendar-0xrouter-central-bank-activities',
+    'macro-calendar-bls', 'macro-calendar-bea',
     'macro-calendar-fed'
   ],
   /**

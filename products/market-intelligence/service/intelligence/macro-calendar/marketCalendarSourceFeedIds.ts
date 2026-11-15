@@ -1,4 +1,5 @@
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
+import { zeroXRouterSourcePolicy } from '../application/zeroXRouterSourcePolicy'
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 
 /**
@@ -17,6 +18,12 @@ export const marketCalendarSourceFeedIds = Object.freeze({
     'economic-indicator': 'macro-calendar-narwhal-economic-data',
     'financial-event': 'macro-calendar-narwhal-financial-events',
     'central-bank-activity': 'macro-calendar-narwhal-central-bank-activities'
+  } as const),
+  // 0xrouter 三路按事件类型各有一个 feed（三个作业定义、三个采集端点）。
+  zeroXRouter: Object.freeze({
+    'economic-indicator': 'macro-calendar-0xrouter-economic-data',
+    'financial-event': 'macro-calendar-0xrouter-financial-events',
+    'central-bank-activity': 'macro-calendar-0xrouter-central-bank-activities'
   } as const),
   official: Object.freeze({
     bls: 'macro-calendar-bls',
@@ -42,6 +49,10 @@ export function sourceFeedIdOf(row: Readonly<{ sourceProviderId: string
   eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity' }>): FeedId | undefined {
   const official = officialFeedIdOf(row.sourceProviderId)
   if (official !== undefined) return official
-  if (row.sourceProviderId !== narwhalSourcePolicy.providerId) return undefined
-  return marketCalendarSourceFeedIds.narwhal[row.eventType]
+  if (row.sourceProviderId === narwhalSourcePolicy.providerId) return marketCalendarSourceFeedIds.narwhal[row.eventType]
+  // 0xrouter 的行在观测表里记的 provider 是 `0xrouter`（不是那三个 feed id），按类型分三路。
+  if (row.sourceProviderId === zeroXRouterSourcePolicy.requestGovernance.providerId) {
+    return marketCalendarSourceFeedIds.zeroXRouter[row.eventType]
+  }
+  return undefined
 }
