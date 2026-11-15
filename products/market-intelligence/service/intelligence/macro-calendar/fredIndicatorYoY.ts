@@ -105,6 +105,36 @@ export async function readFredIndicatorYoY(
 }
 
 /**
+ * 按**期次严格相等**取官方观测：目标期没有观测就返回 `undefined`，绝不拿邻期顶。
+ *
+ * 和 `readFredIndicatorYoY` 的区别只在「取哪一条」：那个取最新一条（卡片主位要最新），
+ * 这个取**指定期次**那一条（发布行补值要的是「10 月那行给 10 月的值」）。所以：
+ * - 只认该期的观测；拿到的是别的期就当「这一期没有值」，不顶、不改状态跳变；
+ * - 值保持来源给的原始字符串（不经 `Number` 再转回，格式不被改写）；
+ * - **读失败往上抛**（不返回 `undefined`）：「拿不到」与「这一期没有值」是两件事——补值把读失败
+ *   当成「没有」，就会写下 `missing` 终态、或把一次性补值的迁移标记写成「已补完」，
+ *   于是一次断网永久吞掉那批欠账。
+ */
+export async function readFredObservationForPeriod(
+  metricKey: string,
+  periodKey: string,
+  fetchObservations: FredObservationsFetcher
+): Promise<Readonly<{ period: string; value: string }> | undefined> {
+  const policy = fredSeriesFor(metricKey)
+  if (policy === undefined) return undefined
+  // 12 条够回溯一年：补的是刚过去的发布，不是考古。读失败直接抛给调用方（见上）。
+  const rows = await fetchObservations({ seriesId: policy.seriesId, units: policy.units, limit: 12 })
+  const wanted = periodKey.slice(0, 7)
+  for (const row of rows) {
+    if (!row.date.startsWith(wanted)) continue
+    if (!isValidIsoTime(`${row.date}T00:00:00.000Z`)) continue
+    if (row.value.trim() === '' || row.value.trim() === '.') return undefined
+    return { period: row.date.slice(0, 7), value: row.value.trim() }
+  }
+  return undefined
+}
+
+/**
  * 把官方读数贴到卡片事实上——**优先级：官方序列 > 日历库里的值**（读数），共识仍走日历/盘口。
  *
  * 两件事按「这期还是上期」分：

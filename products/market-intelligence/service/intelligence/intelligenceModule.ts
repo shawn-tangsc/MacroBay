@@ -88,6 +88,8 @@ export type { IntelligenceModulePlatformHooks } from './intelligenceModuleContra
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
 export type IntelligenceModule = {
+  /** 模块启动链的完成信号（默认源迁移 → 会话归位 → 补跑 → 恢复）；一次性工作挂这里，别用微任务。 */
+  startupReady: Promise<void>
   /** Re-anchor the brief schedule after the reader changes their display zone (no settings save). */
   rescheduleBriefingForDisplayTimeZone: (timeZone: string) => Promise<void>
   pipeline: ReturnType<typeof createIntelligencePipeline>
@@ -216,8 +218,7 @@ export function getIntelligenceModule(
       dataDir,
       getAppLanguage,
       timeZone: shellTimeZone,
-      ...(hooks?.eventBusRuntime === undefined ? {} : { eventBusRuntime: hooks.eventBusRuntime }),
-      ...(hooks?.submitNotification === undefined ? {} : { submitNotification: hooks.submitNotification }),
+      ...(hooks?.eventBusRuntime === undefined ? {} : { eventBusRuntime: hooks.eventBusRuntime }), ...(hooks?.submitNotification === undefined ? {} : { submitNotification: hooks.submitNotification }),
       ...(hooks?.log === undefined ? {} : { log: hooks.log })
     })
     /* 名字在这里解构出来：下文近百处引用一个字没改。 */
@@ -329,8 +330,7 @@ export function getIntelligenceModule(
         createDailyBriefingAiSettingsJsonStorage(join(dataDir, 'daily-briefing-settings.json')),
         () => new Date().toISOString()
       ),
-      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
-      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
+      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}), ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
       onModelSaved: async (settings) => {
         if (!hooks?.updateAgent) return
         const model = settings.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : 'unconfigured:default-chat-model'
@@ -546,11 +546,11 @@ export function getIntelligenceModule(
       periods: briefingPeriodsSource,
       links: dailyBriefSessionLinks,
       ...(markAttemptCleaned ? { markAttemptCleaned: (input) => markAttemptCleaned(input) } : {}), ...(hooks?.log === undefined ? {} : { log: hooks.log }),
-      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}),
-      ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {})
+      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}), ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {})
     })
     modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
+      startupReady,
       rescheduleBriefingForDisplayTimeZone,
       pipeline,
       workerRuntime,

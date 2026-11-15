@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
 import { fredSeriesFor } from './fredIndicatorYoY'
 
@@ -40,14 +41,21 @@ const hasActual = (valuesJson: string): boolean => {
 export async function fillHistoricalReleaseValues(database: DatabaseSync, input: Readonly<{
   today: string
   nowMs: number
-  /** 官方序列读数：返回该指标**最新一次**有值的观测（期次 + 值），拿不到返回 undefined。 */
-  readLatest: (metricKey: string) => Promise<Readonly<{ period: string; value: string }> | undefined>
+  /**
+   * 官方序列读数：给它**目标期次**，返回该期确有观测时的（期次 + 值），否则 `undefined`。
+   * 契约里带期次是故意的：只给「最新一条」，调用方就得自己判期次，而「9 月顶 10 月」正是
+   * 那类判断最容易走样的地方。
+   */
+  readLatest: (metricKey: string, periodKey: string) => Promise<Readonly<{ period: string; value: string }> | undefined>
   maximumReads?: number
 }>): Promise<HistoricalValueFillReport> {
+  // 状态集合**从契约的闭集派生**，不在这里再抄一份：`published` 与 `cancelled` 之外都是欠账候选。
+  const openStatuses = marketCalendarPublicPolicy.releaseStatuses
+    .filter((status) => status !== 'published' && status !== 'cancelled')
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date, values_json
     from ${calendarStandardTablePolicy.eventsTable}
-    where scheduled_date <= ? and row_kind = 'release' and status in ('missing', 'scheduled', 'backfilling', 'unknown')`)
-    .all(input.today) as unknown as { country_code: string; metric_key: string; period_key: string
+    where scheduled_date <= ? and row_kind = 'release' and status in (${openStatuses.map(() => '?').join(', ')})`)
+    .all(input.today, ...openStatuses) as unknown as { country_code: string; metric_key: string; period_key: string
       first_scheduled_date: string; values_json: string }[]
   const update = database.prepare(`update ${calendarStandardTablePolicy.eventsTable}
     set status = 'published', value_state = 'present', values_json = ?, observed_at = ?
@@ -60,12 +68,15 @@ export async function fillHistoricalReleaseValues(database: DatabaseSync, input:
   for (const row of rows) {
     if (hasActual(row.values_json)) { skips['already-has-value'] += 1; continue }
     if (fredSeriesFor(row.metric_key) === undefined) { skips['no-series'] += 1; continue }
-    let reading = seen.get(row.metric_key)
-    if (reading === undefined && !seen.has(row.metric_key)) {
+    // 去重键带期次（只按期次前 7 位）：同一指标的相邻两期是**两件事**，按指标去重会让第二期
+    // 永远拿到第一期的读数；而 `2026-10` 与 `2026-M10` 这种同一期的两种写法共用一次请求。
+    const key = `${row.metric_key}|${row.period_key.slice(0, 7)}`
+    let reading = seen.get(key)
+    if (reading === undefined && !seen.has(key)) {
       if (reads >= maximumReads) continue
       reads += 1
-      reading = await input.readLatest(row.metric_key)
-      seen.set(row.metric_key, reading)
+      reading = await input.readLatest(row.metric_key, row.period_key)
+      seen.set(key, reading)
     }
     if (reading === undefined) { skips['no-observation'] += 1; continue }
     // 期次严格相等：`2026-10` 只认 `2026-10`（季度码取前 7 位比较）。
@@ -81,7 +92,7 @@ export async function fillHistoricalReleaseValues(database: DatabaseSync, input:
 export function ensureHistoricalValuesFilled(database: DatabaseSync, input: Readonly<{
   today: string
   nowMs: number
-  readLatest: (metricKey: string) => Promise<Readonly<{ period: string; value: string }> | undefined>
+  readLatest: (metricKey: string, periodKey: string) => Promise<Readonly<{ period: string; value: string }> | undefined>
 }>): Promise<boolean> {
   return (async () => {
     try {

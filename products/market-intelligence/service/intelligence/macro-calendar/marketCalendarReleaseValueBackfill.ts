@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
 import { releaseStatusBackfillPolicy } from './marketCalendarReleaseStatusRule'
 
@@ -46,11 +47,15 @@ export function backfillExpiredReleaseValues(database: DatabaseSync, input: Read
   /** 只扫描这么多行，避免一次启动打爆来源（默认 20）。 */
   maximumReads?: number
 }>): Promise<ReleaseValueBackfillReport> {
+  // 扫描集合同样从契约闭集派生：`missing` 是终态（已放弃，重开会让界面闪），`published`/`cancelled` 无关。
+  const scanStatuses = marketCalendarPublicPolicy.releaseStatuses
+    .filter((status) => status !== 'published' && status !== 'cancelled')
+    .filter((status) => status !== 'missing')
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
       scheduled_date, scheduled_at, status, values_json
     from ${calendarStandardTablePolicy.eventsTable}
-    where scheduled_date <= ? and status in ('scheduled', 'backfilling', 'unknown')
-      and row_kind = 'release'`).all(input.today) as unknown as Row[]
+    where scheduled_date <= ? and status in (${scanStatuses.map(() => '?').join(', ')})
+      and row_kind = 'release'`).all(input.today, ...scanStatuses) as unknown as Row[]
   const update = database.prepare(`update ${calendarStandardTablePolicy.eventsTable}
     set status = ?, values_json = ?, value_state = ?, observed_at = ?
     where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)

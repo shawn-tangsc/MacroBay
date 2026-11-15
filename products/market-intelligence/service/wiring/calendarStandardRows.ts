@@ -5,6 +5,35 @@ import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketC
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
+import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
+
+/**
+ * **一次性历史补值**的接线（管欠账，管未来的是采集作业末尾那次扫描）。
+ *
+ * 两件事必须分清楚：
+ * - `after` 是**模块的启动完成信号**（`intelligenceModule.startupReady`），不是微任务：
+ *   `registerServices` 里 FRED fetcher 的创建晚于启动同步，裸 `queueMicrotask` 会被中途任何
+ *   一个 `await` 边界提前冲刷，于是补值跑在 fetcher 之前、报错又被启动链的吞错吃掉——
+ *   表现和「没接线」一模一样，且最难查。
+ * - `readLatest` 是**惰性 getter 的结果**：真正取值发生在 `after` 兑现之后，那时 fetcher 已建好。
+ *
+ * 失败不阻断启动：`ensureHistoricalValuesFilled` 自己吞错并留一行日志，这里再兜一层
+ * （信号本身被拒时也一样），启动链永远不因补值失败而失败。
+ */
+export function scheduleHistoricalValueFill(input: Readonly<{
+  database: DatabaseSync
+  /** 启动完成信号；补值只在它兑现之后开始。 */
+  after: Promise<unknown>
+  readLatest: (metricKey: string, periodKey: string) => Promise<Readonly<{ period: string; value: string }> | undefined>
+}>): void {
+  void input.after
+    .then(() => ensureHistoricalValuesFilled(input.database, {
+      today: new Date().toISOString().slice(0, 10),
+      nowMs: Date.now(),
+      readLatest: input.readLatest
+    }))
+    .catch((error: unknown) => console.warn(`[macro-calendar] 历史补值调度失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`))
+}
 
 /**
  * 启动时把**本月与下月**的官方发布写进标准表。
@@ -20,6 +49,16 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
   listEffectiveMonthAsOf: Parameters<typeof syncOfficialStandardRows>[1]['listEffectiveMonthAsOf']
   /** 测试可注入的时钟；生产不传，用当前时刻。 */
   now?: () => Date
+  /**
+   * 模块启动完成信号。给了才跑**一次性历史补值**（管欠账的那一笔）；没给就只做同步与回放。
+   *
+   * 为什么必须是信号而不是微任务：FRED fetcher 建在 `registerServices` 靠后的位置，裸微任务会被
+   * 中途任何 `await` 边界提前冲刷，补值于是跑在 fetcher 之前、报错又被启动链的吞错吃掉——
+   * 表现和「没接线」一模一样。
+   */
+  after?: Promise<unknown>
+  /** 历史补值的读数口（惰性：真正取值在 `after` 兑现之后）。 */
+  readLatest?: (metricKey: string, periodKey: string) => Promise<Readonly<{ period: string; value: string }> | undefined>
 }>): void {
   try {
     const database = input.database
@@ -51,5 +90,9 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     }
   } catch (error) {
     console.warn(`[macro-calendar] 官方发布入标准表失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
+  }
+  // 补值排在上面全部之后：同步、回放、状态对账都落完，欠账那批才按「这一期有没有官方观测」补。
+  if (input.after !== undefined && input.readLatest !== undefined) {
+    scheduleHistoricalValueFill({ database: input.database, after: input.after, readLatest: input.readLatest })
   }
 }

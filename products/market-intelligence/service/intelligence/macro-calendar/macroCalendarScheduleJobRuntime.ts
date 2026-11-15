@@ -1,9 +1,12 @@
+import type { DatabaseSync } from 'node:sqlite'
+
 import type { JobRunRecord, JobRuntime } from '@platform/jobs'
 
 import { macroCalendarTransportPolicy } from './macroCalendarPolicy'
 import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import type { MacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 import type { MacroCalendarScheduleHealthService } from './macroCalendarScheduleHealthService'
+import { backfillExpiredReleaseValues } from './marketCalendarReleaseValueBackfill'
 
 type MacroCalendarManualRunResult =
   | { state: 'queued' }
@@ -34,6 +37,9 @@ export const macroCalendarScheduleJobPolicy = {
   manualCompletionObservationMarginMs: macroCalendarManualCompletionObservationMarginMs,
   manualCompletionBudgetMs: macroCalendarManualCompletionBudgetMs,
   manualCompletionPollIntervalMs: 100,
+  /** 补值扫描：轮次上限 + 整体时间预算（作业上限 2 分钟，扫描不许吃掉采集的份额）。 */
+  releaseValueBackfillMaximumReads: 20,
+  releaseValueBackfillBudgetMs: 30 * 1_000,
   jobRetryPolicy: { maxAttempts: 1, backoff: 'none', baseDelayMs: 0, maxDelayMs: 0 }
 } as const
 
@@ -53,10 +59,56 @@ const jobRecordFields = {
   logs: true
 } satisfies Record<keyof JobRunRecord, true>
 
+/**
+ * 发布后补值扫描：**同 handler 末尾、失败只 warn、限次数 + 整体时间预算**。
+ *
+ * 三条都不许松：
+ * 1. 作业成败仍由采集那部分决定——这里任何错都只 `warn` 一行，不向外抛；
+ * 2. 预算用完时**抛错中止**，不返回 `undefined`——返回 undefined 会被扫描判成
+ *    「这一期没值」，把行写成 `missing` 终态，等于用预算耗尽伪造「来源没给」；
+ * 3. 次数上限交给扫描自己的 `maximumReads`（20 次），剩下的留给下一轮。
+ */
+async function runReleaseValueBackfill(
+  deps: Readonly<{ database: DatabaseSync; readActual: (metricKey: string, periodKey: string) => Promise<string | undefined> }>,
+  signal: AbortSignal,
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+): Promise<void> {
+  try {
+    if (signal.aborted) {
+      log?.('warn', 'macro-calendar.release-value-backfill-skipped', { reason: 'job-aborted' })
+      return
+    }
+    const deadlineMs = Date.now() + macroCalendarScheduleJobPolicy.releaseValueBackfillBudgetMs
+    const report = await backfillExpiredReleaseValues(deps.database, {
+      today: new Date().toISOString().slice(0, 10),
+      nowMs: Date.now(),
+      maximumReads: macroCalendarScheduleJobPolicy.releaseValueBackfillMaximumReads,
+      readActual: async (metricKey, periodKey) => {
+        if (Date.now() > deadlineMs) throw new Error('backfill-time-budget-exceeded')
+        return deps.readActual(metricKey, periodKey)
+      }
+    })
+    log?.('info', 'macro-calendar.release-value-backfill', { ...report })
+  } catch (error) {
+    // 预算耗尽或来源异常：这一轮没补到的行原样留着，下一轮再来（不写终态）。
+    log?.('warn', 'macro-calendar.release-value-backfill-failed', {
+      message: error instanceof Error ? error.message : 'unknown'
+    })
+  }
+}
+
 export function createMacroCalendarScheduleJobRuntime(deps: {
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueStartup' | 'enqueueDefinition' | 'getRun'>
   profiles: Pick<MacroCalendarProviderProfileStore, 'list'>
   health: Pick<MacroCalendarScheduleHealthService, 'collectAndUpdateHealth'>
+  /**
+   * 发布后补值扫描的取数口（惰性给：`readActual` 在真正取数时才碰 FRED 的凭据）。
+   * 不传就不扫——测试与没有标准表的场合不需要它。
+   */
+  releaseValues?: Readonly<{
+    database: DatabaseSync
+    readActual: (metricKey: string, periodKey: string) => Promise<string | undefined>
+  }>
   /** 主进程日志出口（`console.warn` 进不了 `app.log`，今晚已经踩过一次）。 */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
 }): MacroCalendarScheduleJobRuntime {
@@ -86,6 +138,12 @@ export function createMacroCalendarScheduleJobRuntime(deps: {
       } catch (error) {
         failures.push(`${descriptorId}/${error instanceof Error ? error.message : 'threw'}`)
       }
+    }
+    // 补值扫描排在**采集与健康记录之后**：一轮采集失败时不动它——采集失败多半是网络或源不可用，
+    // 这时去问 FRED，读失败会被扫描当成「这一期没值」，把行写成 `missing` 终态，
+    // 等于用一次断网伪造「来源没给」。留下来给下一轮。
+    if (deps.releaseValues && failures.length === 0) {
+      await runReleaseValueBackfill(deps.releaseValues, context.signal, deps.log)
     }
     if (failures.length > 0) throw new Error(`${safeJobFailureMessage} ${failures.join(', ')}`)
   })

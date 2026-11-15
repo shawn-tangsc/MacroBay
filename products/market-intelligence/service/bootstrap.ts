@@ -34,7 +34,7 @@ import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntel
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { wireCalendarReadings } from './wiring/calendarReadings'
-import { syncOfficialStandardRowsAtStartup } from './wiring/calendarStandardRows'
+import { scheduleHistoricalValueFill, syncOfficialStandardRowsAtStartup } from './wiring/calendarStandardRows'
 import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
@@ -55,7 +55,7 @@ import { createPolicyPathQueryService } from './intelligence/policy-path/policyP
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { createMacroIndicatorReadService } from './intelligence/macro-calendar/macroIndicatorReadService'
 import { registerMacroIndicatorIpc } from './intelligence/macro-calendar/ipc/registerMacroIndicatorIpc'
-import { createFredObservationsFetcher, readFredIndicatorYoY } from './intelligence/macro-calendar/fredIndicatorYoY'
+import { createFredObservationsFetcher, readFredIndicatorYoY, readFredObservationForPeriod } from './intelligence/macro-calendar/fredIndicatorYoY'
 import { readNextReleaseForMetric } from './intelligence/macro-calendar/marketCalendarStandardMonthRead'
 import { readStandardActuals } from './intelligence/macro-calendar/macroIndicatorStandardActuals'
 import { readPolymarketConsensus } from './intelligence/macro-calendar/polymarketConsensus'
@@ -323,7 +323,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     jobRuntime: deps.jobRuntime,
     profiles: calendarProfiles,
     health: macroCalendarBackend.health,
-    ...(deps.log === undefined ? {} : { log: deps.log })
+    ...(deps.log === undefined ? {} : { log: deps.log }),
+    releaseValues: { database: macroCalendarBackend.storage.database, readActual: async (metricKey, periodKey) => (await readFredObservationForPeriod(metricKey, periodKey, fredObservations))?.value }
   })
   const beaOfficialReleaseJobs = macroCalendarBackend.beaOfficialReleaseRefresh
     ? createBeaOfficialReleaseJobRuntime({ jobRuntime: deps.jobRuntime, profiles: calendarProfiles, refresh: macroCalendarBackend.beaOfficialReleaseRefresh })
@@ -349,9 +350,12 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(macroCalendarBackend.blsEmploymentSchedule ? ['macro-calendar-bls' as const] : [])
   ] as const
   // 启动同步官方发布进标准表，失败不阻断启动（详见 wiring/calendarStandardRows.ts，吞错语义不变）。
+  // 历史补值也挂这一点：`after` 是模块启动完成信号，`readLatest` 是惰性闭包（FRED fetcher 建在后面）。
   syncOfficialStandardRowsAtStartup({
     database: macroCalendarBackend.storage.database,
-    listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf
+    listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf,
+    after: intelligenceModule.startupReady,
+    readLatest: (metricKey, periodKey) => readFredObservationForPeriod(metricKey, periodKey, fredObservations)
   })
   // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
   let narwhalCalendarAssembly: ReturnType<typeof createNarwhalCalendarAssembly> | undefined
@@ -528,10 +532,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     readOfficialYoY: (metricKey) => readFredIndicatorYoY(metricKey, fredObservations),
     nextReleaseFor: (metricKey, asOf) => readNextReleaseForMetric(standardCalendarDatabase, { metricKey, asOf }),
     readStandardActual: (metricKey, asOf) => readStandardActuals(standardCalendarDatabase, { metricKey, asOf }),
-    readMarketConsensus: (input) => readPolymarketConsensus({
-      ...input,
-      fetchText: (url) => intelligenceModule.fetchText(url, 'policy-path-market')
-    })
+    readMarketConsensus: (input) => readPolymarketConsensus({ ...input, fetchText: (url) => intelligenceModule.fetchText(url, 'policy-path-market') })
   }))
   registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
     // Read-only: the run log joins a task to the analysis it produced, and never writes either side.
@@ -638,8 +639,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     release: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.release(leaseId) : { state: 'unavailable' as const }),
     refresh: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.refresh(leaseId) : { state: 'unavailable' as const }),
     testInterface: async () => (crossAssetRuntime ? crossAssetRuntime.testInterface() : { state: 'unavailable' as const }),
-    cancelInterfaceTest: async () =>
-      crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const }),
+    cancelInterfaceTest: async () => (crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const })),
     readConfiguration: () => crossAssetConfiguration.read(),
     readLeaseState: async () => crossAssetRuntime?.leaseState() ?? 'unknown'
   }
