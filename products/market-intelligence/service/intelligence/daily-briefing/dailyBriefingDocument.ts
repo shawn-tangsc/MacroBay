@@ -252,28 +252,34 @@ type NextRelevanceInput = Readonly<{
  * Matching is on the provider's English key, not on display prose, so a translated title does not
  * change the ranking. The role is the event's transmission channel; the score orders the next list
  * and is the fallback focus when the editor does not choose one.
+ *
+ * **认不出的角色返回 `undefined`，不给兜底**（用户 2026-11-16）：曾经这里默认落
+ * `liquidity`（78 分），于是「英伟达全员会」拿到「美元流动性」的分数——把「我没认出来」
+ * 伪装成「我认出来了」。没有角色的行不占「接下来」的席位，不给分。
  */
-export function scoreBriefingNextRelevance(event: NextRelevanceInput): BriefingNextRelevance {
+export function scoreBriefingNextRelevance(event: NextRelevanceInput): BriefingNextRelevance | undefined {
   const text = `${event.eventKey} ${event.titleKey ?? ''} ${event.title}`.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
   const role = classifyNextEvent(text, event.countryCode)
+  if (role === undefined) return undefined
   const weights = nextRelevanceByRole[role]
   return Object.freeze({ role, score: weights.score, reasonCode: weights.reasonCode })
 }
 
-function classifyNextEvent(text: string, countryCode: string | undefined): BriefingNextRelevanceRole {
+function classifyNextEvent(text: string, countryCode: string | undefined): BriefingNextRelevanceRole | undefined {
   if (/(?:^| )etfs?(?: |$)|spot bitcoin|spot ether|spot crypto|grayscale|ishares/.test(text)) return 'etf'
   if (/stablecoin|usdt|usdc|tether|depeg|circle/.test(text)) return 'stablecoin'
   if (/exchange hack|hacked|exploit|insolven|bankrupt|withdrawal (?:halt|freeze)|outage|delist|binance|coinbase|kraken|okx|bybit/.test(text)) return 'exchange-risk'
   if (/(?:^| )sec(?: |$)|cftc|regulat|lawsuit|enforcement|crypto (?:bill|law)|legislation|(?:^| )ban(?: |$)/.test(text)) return 'regulation'
-  if (/(?:^| )fomc(?: |$)|federal reserve|(?:^| )fed(?: |$)|rate decision|interest rate|rate hike|rate cut|ecb|bank of japan|(?:^| )boj(?: |$)|bank of england|(?:^| )boe(?: |$)|美联储|利率|议息/.test(text)) return 'rate-policy'
+  if (/(?:^| )fomc(?: |$)|federal reserve|(?:^| )fed(?: |$)|rate decision|interest rate|rate hike|rate cut|ecb|bank of japan|(?:^| )boj(?: |$)|bank of england|(?:^| )boe(?: |$)|美联储|联储|利率|议息/.test(text)) return 'rate-policy'
   // PMI alone is not automatically Asian: US ISM PMI transmits through the dollar like any other
   // growth print. China (and the region's own policy/credit events) is the `asia-risk` role.
   if (countryCode === 'CN' || /(?:^| )china(?: |$)|(?:^| )cn(?: |$)|caixin|pboc|hong kong|taiwan|evergrande|中国|采购经理/.test(text)) return 'asia-risk'
   if (/(?:^| )cpi(?: |$)|(?:^| )pce(?: |$)|inflation|consumer price|producer price|(?:^| )ppi(?: |$)|hicp|通胀|物价/.test(text)) return 'inflation'
-  if (/non ?farm|payroll|unemployment|jobless|employment|average hourly|wage|(?:^| )adp(?: |$)|jolts|非农|就业|失业|时薪/.test(text)) return 'labor'
+  if (/non ?farm|payroll|unemployment|jobless|employment|average hourly|wage|(?:^| )adp(?: |$)|(?:^| )nfp(?: |$)|jolts|非农|就业|失业|时薪/.test(text)) return 'labor'
   if (/treasury (?:auction|refunding)|(?:^| )(?:note|bond) auction(?: |$)|auction|debt ceiling|(?:^| )repo(?: |$)|balance sheet|(?:^| )qt(?: |$)|(?:^| )qe(?: |$)|(?:^| )tga(?: |$)|liquidity|流动性|拍卖/.test(text)) return 'liquidity'
   if (/(?:^| )opec|crude|(?:^| )oil(?: |$)|natural gas|commodit|欧佩克|石油|原油/.test(text)) return 'commodity'
-  return 'liquidity'
+  // 认不出来就是认不出来：不给角色、不给分（见 `scoreBriefingNextRelevance` 的注释）。
+  return undefined
 }
 
 /**
@@ -313,22 +319,27 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
       const day = localDate(event.scheduledAt, packet.timeZone)
       return Number.isFinite(at) && at > Date.parse(packet.windowEnd) && day <= horizon
     })
-    .map((event) => Object.freeze({
-      eventKey: event.eventKey,
-      title: event.title,
-      ...(event.titleKey ? { titleKey: event.titleKey } : {}),
-      at: event.scheduledAt,
-      ...(event.releaseTimeNotPublished && event.releaseDate
-        ? { releaseTimeNotPublished: true as const, releaseDate: event.releaseDate }
-        : {}),
-      importance: event.importance,
-      category: event.category,
-      ...(event.countryCode ? { countryCode: event.countryCode } : {}),
-      ...(event.countryName ? { countryName: event.countryName } : {}),
-      ...(event.consensus ? { consensus: event.consensus } : {}),
-      ...(event.previous ? { previous: event.previous } : {}),
-      relevance: scoreBriefingNextRelevance(event)
-    }))
+    .flatMap((event): readonly BriefingNextItem[] => {
+      // 没有角色的事件不占席位：候选是给编辑模型读的，放进去等于让它替一个猜测排序。
+      const relevance = scoreBriefingNextRelevance(event)
+      if (relevance === undefined) return []
+      return [Object.freeze({
+        eventKey: event.eventKey,
+        title: event.title,
+        ...(event.titleKey ? { titleKey: event.titleKey } : {}),
+        at: event.scheduledAt,
+        ...(event.releaseTimeNotPublished && event.releaseDate
+          ? { releaseTimeNotPublished: true as const, releaseDate: event.releaseDate }
+          : {}),
+        importance: event.importance,
+        category: event.category,
+        ...(event.countryCode ? { countryCode: event.countryCode } : {}),
+        ...(event.countryName ? { countryName: event.countryName } : {}),
+        ...(event.consensus ? { consensus: event.consensus } : {}),
+        ...(event.previous ? { previous: event.previous } : {}),
+        relevance
+      })]
+    })
     .sort(compareBriefingNextRelevance)
   return Object.freeze(candidates)
 }

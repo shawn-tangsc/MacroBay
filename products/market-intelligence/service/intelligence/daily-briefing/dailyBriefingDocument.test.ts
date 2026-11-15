@@ -11,7 +11,7 @@ import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMark
 import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
-import { buildDailyBriefingDocument, selectMacroFloorItem } from './dailyBriefingDocument'
+import { buildDailyBriefingDocument, scoreBriefingNextRelevance, selectMacroFloorItem } from './dailyBriefingDocument'
 import { briefingMacroCategoryVisible } from './dailyBriefingDocumentMacro'
 import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
@@ -680,6 +680,27 @@ describe('daily briefing document', () => {
     })
     expect(document.data.market.find((row) => row.id === 'btc')).toMatchObject({ state: 'stale', reason: 'stale-fallback', value: { number: -0.43, format: 'percent' }, valueBasis: 'curve' })
     expect(document.data.market.find((row) => row.id === 'eth')).toMatchObject({ state: 'stale', value: { number: -1.21, format: 'percent' }, valueBasis: 'curve' })
+  })
+
+  // 用户 2026-11-16：认不出角色的事件**不占「接下来」的席位、也不给分**。
+  // 旧实现把「没认出来」兜底成流动性 78 分——等于把猜测伪装成判断。
+  it('drops an event it cannot classify instead of scoring it as liquidity', () => {
+    const unknown = {
+      eventKey: 'NVDA.ALL_HANDS', title: '英伟达临时CEO召开全体员工会议',
+      scheduledAt: '2026-11-02T17:00:00.000Z', importance: 'high' as const,
+      lifecycleState: 'scheduled' as const, category: 'financial-event' as const,
+      countryCode: 'US', countryName: 'United States', surprise: { direction: 'consensus-unavailable' as const }
+    }
+    expect(scoreBriefingNextRelevance(unknown)).toBeUndefined()
+
+    const document = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [unknown] } }),
+      date: '2026-10-30'
+    })
+    expect(document.next.focus).toBeUndefined()
+    expect(document.next.items).toEqual([])
+    // 也不许换一个方式把它塞进候选：候选是给模型读的，同样不该有它。
+    expect((document.next.candidates ?? []).map((item) => item.eventKey)).not.toContain('NVDA.ALL_HANDS')
   })
 
   it('keeps all same-release candidates for the agent to choose', () => {
