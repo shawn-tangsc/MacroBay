@@ -86,7 +86,10 @@ describe('intelligenceSources service', () => {
 
     expect(view.counts.total).toBe(sources.length)
     expect(sources.find((source) => source.sourceId === 'alternative-fear-greed')?.enabled).toBe(true)
-    expect(sources.filter((source) => source.providerId === '0xrouter')).toHaveLength(4)
+    /* 旧源 `0xrouter` 已于 2026-11-14 撤销（标准表那 659 行删了、备份在 /tmp）。
+       这里不再断言「它有 4 个源」——断言一个已撤销的源等于把历史当现状；
+       它曾经能测的是「同一 provider 下多个源都被投影出来」，那条现在由下面的
+       「sourceId 去重」与 calendar 面板断言覆盖。 */
     expect(new Set(sources.map((source) => source.sourceId)).size).toBe(sources.length)
   })
 
@@ -115,7 +118,8 @@ describe('intelligenceSources service', () => {
     const dashboardSources = dashboard?.providers.flatMap((provider) => provider.sources) ?? []
     const calendarSources = calendar?.providers.flatMap((provider) => provider.sources) ?? []
     expect(new Set(dashboardSources.map((source) => source.sourceId)).size).toBe(dashboardSources.length)
-    expect(dashboard?.providers.filter((provider) => provider.providerId === '0xrouter')).toHaveLength(1)
+    /* 同上：`0xrouter` 已撤销，不再断言看板面板里还有这一组。
+       面板投影的「无重复」由上面那条 Set 断言守，面板归属由下面 calendar 那条守。 */
     expect(calendarSources.every((source) => source.panels.includes('economic-calendar'))).toBe(true)
   })
 
