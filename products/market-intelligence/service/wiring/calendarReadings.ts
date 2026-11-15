@@ -1,0 +1,79 @@
+import type { DatabaseSync } from 'node:sqlite'
+
+import type { JobRuntime } from '@platform/jobs'
+import type { NotificationSubmitRequest } from '@platform/notifications'
+
+import { eventTypeNameByCode, nameByMetricKey } from '../intelligence/macro-calendar/marketCalendarCodeNames'
+import { createStandardMonthPageReader } from '../intelligence/macro-calendar/marketCalendarStandardMonthPage'
+import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from '../intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
+import { createNarwhalCalendarBriefingRefresh } from '../intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
+import { registerCalendarEventReminder } from '../intelligence/macro-calendar/registerCalendarEventReminder'
+
+import type { CalendarReminderSettingsStore } from '../intelligence/macro-calendar/calendarEventReminderSettingsStore'
+
+import type { IntelligenceModule } from '../intelligence/intelligenceModule'
+
+/**
+ * 日历的**读侧**：标准表月查询 + 新鲜度 + 事件提醒 + 日报的补跑命令（方案 W5 的余下部分）。
+ *
+ * 三件事绑在同一次装配里，是因为它们共用同一个月读取器与同一个「最后写入时刻」：
+ * 拆开会让两个读者各自算一次新鲜度，日报和日历页就会互相打架。
+ *
+ * **只搬不改**：新鲜度仍从作业记录算（`lastRunAt` 与 `lastCollectedAt` 分开）、
+ * 补跑仍是「排一次 tick、最多等 20 秒、按终态回答」，提醒仍走同一份设置与同一个提交口。
+ */
+export function wireCalendarReadings(input: Readonly<{
+  database: DatabaseSync
+  jobRuntime: JobRuntime
+  calendarReminderSettings: CalendarReminderSettingsStore
+  intelligenceModule: IntelligenceModule
+  submitNotification: (request: NotificationSubmitRequest) => Promise<unknown>
+  timeZone: () => string
+}>): Readonly<{
+  standardCalendarReader: ReturnType<typeof createStandardMonthPageReader>
+  calendarReminder: ReturnType<typeof registerCalendarEventReminder>
+}> {
+  // **S2：月查询改读标准表**（`mi_calendar_releases` 视图）。对外仍是 `MarketCalendarPage`，
+  // 上面的分析与日报因此不用改一行。旧观测那条路径保留给新鲜度与证据观察，读数据不再经过它。
+  // 来源由「行 → feed id」的映射算出来（适配器内），装配处不再保留那条
+  // 「其余 → 0xRouter」的死分支——旧源删掉之后它会把认不出的 provider 说成一个不存在的来源。
+  const standardCalendarReader = createStandardMonthPageReader({
+    database: input.database,
+    resolveTitle: (row) => {
+      const metric = nameByMetricKey[row.metricKey]
+      if (metric !== undefined) return metric.zhShort
+      const event = eventTypeNameByCode[row.metricKey]
+      if (event !== undefined) return event.zhShort
+      return row.sourceLabel
+    },
+  })
+  // 新鲜度**从作业记录算**（`582d121` 的读取器）：旧源冻结之后，问旧源采集批次会永远显示很旧，
+  // 于是每版日报都判「数据过期」、每次补跑、每次都写「采集失败」。两个数分开取：
+  // `lastRunAt` 是作业跑没跑，`lastCollectedAt` 是标准表真的写没写（`max(observed_at)`）。
+  const readCalendarLastWrittenAt = () => readStandardTableLastWrittenAt(input.database)
+  input.intelligenceModule.publicQueryService.setMarketCalendarQuery({
+    queryMonth: standardCalendarReader.queryMonth,
+    readCollectionFreshness: async () => readCalendarFreshnessFromJobRuns({
+      listRuns: (query) => input.jobRuntime.listRuns(query),
+      lastWrittenAt: readCalendarLastWrittenAt(),
+      asOf: new Date().toISOString()
+    })
+  })
+  // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
+  const calendarReminder = registerCalendarEventReminder({ jobRuntime: input.jobRuntime, settings: input.calendarReminderSettings,
+    queryMonth: standardCalendarReader.queryMonth, submit: (request) => input.submitNotification(request), timeZone: () => input.timeZone() })
+  // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
+  // A command, not a query — it opens network requests and writes attempts — so it is injected
+  // separately from the read surface above, and the brief never constructs a client of its own.
+  // 日报的「跑一次采集」＝排一次 Narwhal tick（与 `triggerCollection` 同一条路）。
+  // 旧源那条 `refreshNow` 会随它一起删；语义没变：排上作业才算触发，排不上就如实说失败。
+  // 「排上了」不等于「采到了」：排完等作业到终态（最多 20 秒），按终态回答；超时就是超时，
+  // 不写成失败。判 `collected` 与 `unchanged` 看**数据有没有真的写进来**，不看作业跑没跑。
+  input.intelligenceModule.bindBriefingCalendarRefresh(createNarwhalCalendarBriefingRefresh({
+    jobRuntime: input.jobRuntime,
+    definitionId: 'market-intelligence.refreshNarwhalCalendarTick.automatic',
+    readLastWrittenAt: readCalendarLastWrittenAt
+  }))
+
+  return Object.freeze({ standardCalendarReader, calendarReminder })
+}
