@@ -33,6 +33,7 @@ import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerI
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
+import { syncOfficialStandardRowsAtStartup } from './wiring/calendarStandardRows'
 import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
@@ -377,23 +378,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(macroCalendarBackend.beaOfficialReleaseRefresh ? ['macro-calendar-bea' as const] : []),
     ...(macroCalendarBackend.blsEmploymentSchedule ? ['macro-calendar-bls' as const] : [])
   ] as const
-  // **官方发布进标准表**：不写进去，切读侧那天 CPI、非农、FOMC 会从日历上消失。
-  // 启动时把本月与下月同步一次；官方行按「发布键 → 标准码」写，拼不出码的落源内身份（照样显示）。
-  try {
-    const database = macroCalendarBackend.storage.database
-    ensureCalendarStandardTables(database)
-    const now = new Date()
-    const months = [now.toISOString().slice(0, 7),
-      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 7)]
-    const synced = syncOfficialStandardRows(database, {
-      listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf,
-      months, asOf: now.toISOString(), parserVersion: 'official-standard-rows-v1',
-      onError: (message) => console.warn(`[macro-calendar] 官方标准行写入失败：${message}`)
-    })
-    console.warn(`[macro-calendar] 官方发布入标准表：${months.join('/')} 读到 ${synced.revisions} 条、写入 ${synced.written} 条、失败 ${synced.failed} 条`)
-  } catch (error) {
-    console.warn(`[macro-calendar] 官方发布入标准表失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
-  }
+  // 启动同步官方发布进标准表，失败不阻断启动（详见 wiring/calendarStandardRows.ts，吞错语义不变）。
+  syncOfficialStandardRowsAtStartup({
+    database: macroCalendarBackend.storage.database,
+    listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf
+  })
   // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
   let narwhalCalendarAssembly: ReturnType<typeof createNarwhalCalendarAssembly> | undefined
   narwhalCalendarAssembly = createNarwhalCalendarAssembly({
