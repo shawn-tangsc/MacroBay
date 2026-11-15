@@ -6,6 +6,7 @@ import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/ma
 import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
+import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
@@ -89,6 +90,12 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       }
       ensureOfficialHistoryReplayed(database)
       // 「这一行是什么」与重要性回填（迁移 16）：以前没存，读侧只能靠前缀猜（423 行被猜成经济指标）。
+      // 跨源同名合并（迁移 17）：同一次发布两家各报一份不该是两行；值冲突的那组两条都留。
+      const crossSource = mergeCrossSourceCalendarRows(database)
+      if (crossSource.mergedGroups > 0) {
+        console.warn(`[macro-calendar] 跨源合并：${crossSource.groups} 组里合并 ${crossSource.mergedGroups} 组、`
+          + `删 ${crossSource.removedRows} 行；值冲突保留 ${crossSource.conflictedGroups} 组`)
+      }
       const eventTypes = backfillCalendarEventTypes(database)
       if (eventTypes.eventTypeFilled > 0 || eventTypes.importanceFilled > 0) {
         console.warn(`[macro-calendar] 事件类型回填：待补 ${eventTypes.pending} 行、写入类型 `

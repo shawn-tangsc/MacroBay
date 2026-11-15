@@ -176,6 +176,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       -- metric_key 前缀猜——423 行上游 ID 数组因此全被猜成「经济指标」（2026-11-16 查实）。
       -- 空值＝还没回填（迁移 16 会补），读侧此时退回前缀规则。
       event_type text check(event_type in ('economic-indicator', 'financial-event', 'central-bank-activity')),
+      -- **这一期发布过几次**（同身份跨来源合并后仍要保留这个数）：二读被当成初值是另一类错，
+      -- 合并了却不显示次数＝把「改过数据」藏起来。默认 1，合并迁移会按组写入真实次数。
+      release_count integer not null default 1,
       values_json text not null,
       source_provider_id text not null,
       source_event_id text not null,
@@ -241,6 +244,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   }
   if (!columns.some((column) => column.name === 'value_state')) {
     database.exec(`alter table ${eventsTable} add column value_state text`)
+  }
+  if (!columns.some((column) => column.name === 'release_count')) {
+    database.exec(`alter table ${eventsTable} add column release_count integer not null default 1`)
   }
   if (!columns.some((column) => column.name === 'event_type')) {
     database.exec(`alter table ${eventsTable} add column event_type text`)
