@@ -47,9 +47,13 @@ describe('官方历史回放（S1）', () => {
     const database = revisionsDatabase()
     ensureCalendarStandardTables(database)
     const report = replayOfficialHistoryIntoStandardTable(database)
-    const rows = database.prepare('select metric_key, identity_kind, row_kind, status from mi_calendar_events order by metric_key')
-      .all() as { metric_key: string; identity_kind: string; row_kind: string; status: string }[]
+    const rows = database.prepare('select metric_key, period_key, source_event_id, identity_kind, row_kind, status from mi_calendar_events order by metric_key')
+      .all() as { metric_key: string; period_key: string; source_event_id: string; identity_kind: string; row_kind: string; status: string }[]
     expect(rows.map((row) => row.metric_key)).toEqual(['US.CPI.NSA.YOY', 'US.FOMC.2026-12-09'])
+    // 期次只留一种写法：修订表里是来源原样的 `2026-M10`，标准表里必须是 `2026-10`。
+    // 不归一，同一期在表里会落成两行，且补值那行永远问不到 FRED 的值。
+    expect(rows[0]!.period_key).toBe('2026-10')
+    expect(rows[0]!.source_event_id).toBe('US.CPI.RELEASE.2026-10')
     const fomc = rows.find((row) => row.metric_key === 'US.FOMC.2026-12-09')!
     // 另起一套 `evt.fomc` 身份会让同一场会议在主键层面出现两行。
     expect(fomc.identity_kind).toBe('source')

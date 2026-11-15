@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { getMacroCalendarReleaseValueMapping } from './macroCalendarReleaseValueMappingPolicy'
+import { normalizeCalendarPeriodKey, normalizeCalendarSourceEventId } from './marketCalendarPeriodKey'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { recordCalendarUnmapped } from './marketCalendarStandardTable'
 
@@ -72,7 +73,8 @@ function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {
     // 视图 `mi_calendar_releases` 只出 `row_kind='release'`：写成别的，分析读得到、界面读不到。
     rowKind: 'release' as const,
     scheduledDate,
-    sourceEventId: revision.event_key,
+    // 来源 id 与期次同归一：`2026-M10` 是 BLS 内部的参考期写法，标准表只留 `2026-10` 这一种。
+    sourceEventId: normalizeCalendarSourceEventId(revision.event_key),
     ...(revision.scheduled_at === null ? {} : { scheduledAt: revision.scheduled_at }),
     timePrecision: revision.scheduled_at === null ? 'date' as const : 'minute' as const,
     status: revision.lifecycle_state === 'released' ? 'published' as const : 'scheduled' as const,
@@ -81,9 +83,11 @@ function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {
     ...(displayOf(revision.actual_json) === undefined ? {} : { actual: displayOf(revision.actual_json)! })
   }
   if (mapping !== undefined) {
-    // 指标行：期间取源给的期次（`event_key` 里带的那一段已在修订行里定型，这里不推断）。
-    const periodKey = revision.event_key.split('.').at(-1) ?? ''
-    if (periodKey === '') return undefined
+    // 指标行：期间取源给的期次，**但按 `YYYY-MM` 归一**（来源原样是 `2026-M10`）。
+    // 不归一，同一期会在标准表里落成两行，补值那行永远问不到 FRED 的值。
+    const rawPeriod = revision.event_key.split('.').at(-1) ?? ''
+    if (rawPeriod === '') return undefined
+    const periodKey = normalizeCalendarPeriodKey(rawPeriod)
     return { ...shared, metricKey: mapping.metricKey, periodKey }
   }
   if (revision.event_family === 'fomc') {
@@ -142,12 +146,17 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
  * 按行比会把「8 次发布」看成「25 条」，读的人以为覆盖过头。
  */
 export function measureMonthlyDiff(database: DatabaseSync): Readonly<Record<string, readonly string[]>> {
-  const missing = database.prepare(`select r.event_key as event_key, substr(r.scheduled_date, 1, 7) as month
-    from mi_macro_calendar_revisions r
-    where not exists (select 1 from mi_calendar_events e where e.source_event_id = r.event_key)`).all() as unknown as
-    { event_key: string; month: string }[]
+  // 两边都按期次归一后比：行里存的是 `US.CPI.NSA.YOY.RELEASE.2026-10`（标准表只留一种写法），
+  // 修订表里还是来源原样的 `…2026-M10`。只归一一边，同一件事会被差集报成「丢了一条」。
+  const revisions = database.prepare(`select event_key as event_key, substr(scheduled_date, 1, 7) as month
+    from mi_macro_calendar_revisions`).all() as unknown as { event_key: string; month: string }[]
+  const known = new Set((database.prepare('select source_event_id from mi_calendar_events').all() as unknown as
+    { source_event_id: string }[]).map((row) => row.source_event_id))
   const result: Record<string, string[]> = {}
-  for (const row of missing) (result[row.month] ??= []).push(row.event_key)
+  for (const row of revisions) {
+    if (known.has(normalizeCalendarSourceEventId(row.event_key))) continue
+    ;(result[row.month] ??= []).push(row.event_key)
+  }
   return result
 }
 

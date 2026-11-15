@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { ensureCalendarStandardTables } from '../intelligence/macro-calendar/marketCalendarStandardTable'
 import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
+import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
@@ -85,6 +86,12 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
           + `（${JSON.stringify(reconciled.after)}）`)
       }
       ensureOfficialHistoryReplayed(database)
+      // 期次归一（迁移 14）：历史上按 BLS 写法落成 `YYYY-MNN` 的行并回 `YYYY-MM`，幂等、有备份。
+      const mergedPeriods = mergeMPeriodStandardRows(database)
+      if (mergedPeriods.merged > 0 || mergedPeriods.renamed > 0) {
+        console.warn(`[macro-calendar] 期次归一：合并 ${mergedPeriods.merged} 行、改名 ${mergedPeriods.renamed} 行`
+          + `、台账改写 ${mergedPeriods.ledgerRewritten} 条 / 删重 ${mergedPeriods.ledgerDropped} 条`)
+      }
     } catch (error) {
       console.warn(`[macro-calendar] 官方历史回放失败（已忽略，下次启动重试）：${(error as Error)?.message ?? 'unknown'}`)
     }
