@@ -202,7 +202,17 @@
 .mk-card__st { margin: 0; font-size: var(--font-meta); color: var(--muted); }
 .mk-card__f { display: flex; justify-content: space-between; gap: 8px; font-size: var(--font-meta); color: var(--muted); margin-top: auto; border-top: 1px solid var(--border-subtle); padding-top: 6px; }
 
-/* The mini release calendar: fills whatever height is left under the cards. */
+/*
+ * The mini release calendar: fills whatever height is left under the cards.
+ *
+ * `overflow: auto` 是**这一块自己滚**的唯一开关。格子的行高写死成 `repeat(6, 63.8px)`
+ * （六行必须等高等，见下面 `.mk-minical__grid`），六行合计 387.8px；抽屉高度不够时这块会被
+ * flex 压到 186px 上下，而格子是 `flex: none` 缩不动——没有 `overflow` 时那 250px 就**溢出到
+ * 这一块之外**，被 antd 的 `.ant-drawer-body { overflow: auto }` 当成自己的内容，于是滚动条
+ * 长在整个抽屉上（用户 2026-11-16 报的就是这个）。
+ *
+ * 有 `overflow: auto` 之后，多出来的部分在这里面滚，`.mk-col-l` 与抽屉正文都不滚。
+ */
 .mk-minical {
   margin-top: 12px;
   flex: none;
@@ -214,6 +224,7 @@
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  overflow: auto;
 }
 .mk-minical__h { display: flex; align-items: center; gap: 8px; flex: none; min-height: 24px; }
 .mk-minical__tools { display: flex; align-items: center; gap: 2px; flex: none; margin-left: 2px; }
