@@ -22,10 +22,13 @@
   --mi-calendar-title-size: 12px;
   --mi-calendar-time-size: 11px;
   --mi-calendar-time-width: 40px;
-  /* 国家这一格**永远占位**：查得到名字/码就写字，查不到留空——列宽固定，标题的起始
-     x 才在每个行上一样（用户 2026-11-16 第二次要求「事件前面要显示国家」）。
-     28px 的来历：11px 字号下「美国」≈22px、`USA` ≈ 21px，留 2px 分隔与余量。 */
-  --mi-calendar-country-width: 28px;
+  /* 国家这一格**永远占位**：查得到名字/码就写字，查不到就是「未知国家」——列宽固定，
+     标题的起始 x 才在每个行上一样（用户 2026-11-16 第二次要求「事件前面要显示国家」）。
+     52px 是**量出来的**（无头 Chrome + 应用那条字体栈：Inter, ui-sans-serif…；11px）：
+     「未知国家」scrollWidth 46px、`Unknown` 51px，所以 44px 仍会截成「未知…」/`Unknow…`，
+     52px 才两者都放得下（52/52）。28px 年代连「美国」都勉强——那等于把「不知道是哪国」
+     画成一条省略号，而这一格恰恰是这条信息唯一的位置。 */
+  --mi-calendar-country-width: 52px;
   --mi-calendar-date-size: 13px;
   --mi-calendar-day-padding: 8px;
   --mi-calendar-group-gap: 8px;
