@@ -1,5 +1,7 @@
 import type { MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import type { UnmappedCalendarObservation } from '../../../../service/intelligence/macro-calendar/rendering/marketCalendarUnmappedMonthRead'
 import { CalendarEventRow } from './CalendarEventRow'
+import { UnmappedCalendarEventRow } from './UnmappedCalendarEventRow'
 import type { CalendarDayCoverage, CalendarDayItem } from './economicCalendarDayModel'
 import type { EconomicCalendarText } from './economicCalendarText'
 
@@ -12,7 +14,7 @@ import type { EconomicCalendarText } from './economicCalendarText'
  *
  * It is presentational: every value arrives as a prop, and the caller keeps the selection state.
  */
-export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, hideGroupHeadings, missingValueLabel, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect }: Readonly<{
+export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, hideGroupHeadings, missingValueLabel, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect, unmapped, unmappedUnavailable }: Readonly<{
   label: string
   /** The page scrolls this list to the top when the selected day changes; the drawer passes nothing. */
   listRef?: React.RefObject<HTMLElement | null>
@@ -51,6 +53,23 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   selectedMarketKey: string | undefined
   /** `undefined` = 这一列没有可去的地方：行渲染成非交互形态，不画点头没反应的按钮。 */
   onSelect?: (item: CalendarDayItem) => void
+  /**
+   * 「未入标准表」那一组：**没进标准表的观测**，单独成组、排在最后。
+   *
+   * 它与标准表那几组不混：这些行没有重要性、没有发布状态，进那一套分组只会被迫编一个档位。
+   * `title` 与 `aria` 都是调用方给的文案（组标题只出现一次，行内不写字）。
+   */
+  unmapped?: Readonly<{
+    title: string
+    aria: string
+    timeZone: string
+    observations: readonly UnmappedCalendarObservation[]
+  }>
+  /**
+   * 读不到那一支：**给一句「读不到」，不是「0 条」**。缺省（undefined）表示这一格不提这件事
+   * （例如根本没接这条读口的地方）；传空串以外的一句话才渲染。
+   */
+  unmappedUnavailable?: string
 }>): React.ReactElement {
   // One row body for both layers: a type heading over rows, or a type heading over tier subheadings.
   const renderRow = (item: CalendarDayItem): React.ReactElement => <div role="listitem" key={item.key}>
@@ -82,6 +101,17 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
         button that does nothing is worse than none. The sentence stays visible so a blank area
         cannot be mistaken for "not loaded yet". */}
     {emptyText === undefined ? null : <p>{emptyText}</p>}
+    {/* 未映射那一组：形状与标准表组不同（没有分级、没有状态），所以单独一张表、排在最后。 */}
+    {unmapped === undefined || unmapped.observations.length === 0
+      ? null
+      : <section data-calendar-group="unmapped" data-unmapped-group>
+        <h3>{unmapped.title}</h3>
+        <div role="list">{unmapped.observations.map(observation => <div role="listitem" key={observation.key}>
+          <UnmappedCalendarEventRow observation={observation} text={text} timeZone={unmapped.timeZone} unmappedAria={unmapped.aria} />
+        </div>)}</div>
+      </section>}
+    {/* 读不到就明说读不到：**不许**把它写成 0 条，也不许一个字不提地消失。 */}
+    {unmappedUnavailable === undefined ? null : <p data-unmapped-unavailable>{unmappedUnavailable}</p>}
   </section>
 }
 

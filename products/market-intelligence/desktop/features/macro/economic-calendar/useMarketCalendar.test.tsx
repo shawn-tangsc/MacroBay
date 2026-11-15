@@ -10,10 +10,11 @@ let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined })
 const now = () => new Date('2026-09-10T00:00:00.000Z')
 /**
- * The hook's port is `MarketCalendarClient` — four methods. These cases drive reading and the manual
- * refresh, so the freshness and catch-up ports are declared here once instead of being left out of the
- * fake: `unavailable` and `unchanged` are the port's own answers for "cannot tell" and "nothing to do",
- * so a case that starts depending on them would have to say so instead of reading `undefined`.
+ * The hook's port is `MarketCalendarClient`. These cases drive reading and the manual refresh, so the
+ * other ports are declared here once instead of being left out of the fake: `unavailable` and
+ * `unchanged` are the port's own answers for "cannot tell" and "nothing to do", so a case that starts
+ * depending on them would have to say so instead of reading `undefined`.
+ * 未映射月读同理：它给出「读不到」，**不是空数组**——将来哪个用例开始依赖它，也得自己说出来。
  */
 function calendarClient<Parts extends Pick<MarketCalendarClient, 'queryMonth' | 'refresh'>>(
   parts: Parts
@@ -21,7 +22,8 @@ function calendarClient<Parts extends Pick<MarketCalendarClient, 'queryMonth' | 
   return {
     ...parts,
     getCollectionFreshness: vi.fn(async (): Promise<MarketCalendarFreshness> => ({ state: 'unavailable', failureCode: 'query-unavailable' })),
-    refreshNow: vi.fn(async (): Promise<MarketCalendarRefreshNowResult> => ({ state: 'unchanged' }))
+    refreshNow: vi.fn(async (): Promise<MarketCalendarRefreshNowResult> => ({ state: 'unchanged' })),
+    queryUnmappedMonth: vi.fn(async () => ({ state: 'unavailable' as const }))
   }
 }
 it('reads locally, refreshes only on demand and ignores completed requests from a superseded scope', async () => {

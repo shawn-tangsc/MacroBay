@@ -18,6 +18,8 @@ import { productText } from '../../shared/i18n/productText'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { useCalendarMonthReleases } from './useCalendarMonthReleases'
+import { useUnmappedMonthObservations } from './useUnmappedMonthObservations'
+import { mergeCalendarDaySources } from '../../features/macro/economic-calendar/unmappedCalendarMerge'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import { useExpectationSeries } from './useExpectationSeries'
@@ -161,6 +163,32 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     .filter((event) => calendarDisplayDate(event.scheduledAt, timeZone) === selectedDay)
     .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt)),
   [releases.events, selectedDay, timeZone])
+  /**
+   * 未映射观测（进不了标准表的那批）：**只在日历里显示**，经渲染专用 IPC 读（契约 §10）。
+   * 读不到时 `state: 'unavailable'`——列表据此说「读不到」，不报 0 条。
+   */
+  const unmappedMonth = useUnmappedMonthObservations({ enabled: open, month, locale })
+  /**
+   * 两个来源合成一天：排序、去重（服务侧已剔除被标准表接管的行，这里再兜一层）、
+   * 计数都在 `mergeCalendarDaySources` 一处判。**规则不写在这里**，接线只换数据。
+   */
+  const standardDayItems = useMemo(() => dayEvents.map((event) => ({
+    source: 'market' as const,
+    key: `market:${event.eventKey}`,
+    date: selectedDay,
+    time: calendarDisplayTime(event.scheduledAt, timeZone),
+    event
+  })), [dayEvents, selectedDay, timeZone])
+  const mergedDay = useMemo(() => mergeCalendarDaySources({
+    date: selectedDay, timeZone, standard: standardDayItems, unmapped: unmappedMonth.entries
+  }), [selectedDay, timeZone, standardDayItems, unmappedMonth.entries])
+  const unmappedGroup = mergedDay.groups.find((group) => group.kind === 'unmapped')
+  /** 方格计数用：未映射观测按天累计（读者看到的是「今天有几件事」，两个来源都算）。 */
+  const unmappedCountByDay = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const entry of unmappedMonth.entries) counts.set(entry.scheduledDate, (counts.get(entry.scheduledDate) ?? 0) + 1)
+    return counts
+  }, [unmappedMonth.entries])
   const changeMonth = (next: string): void => { setMonth(next); setPickedDay(undefined) }
   // 右列按「能不能解释利率路径」筛，与曲线标注同一把尺子（判据来自契约，不在这里另写一份）。
   const dayLayers = useMemo(() => splitDayLayers(dayEvents), [dayEvents])
@@ -318,6 +346,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           text={text} calendarText={calendarText} timeZone={timeZone} now={nowInstant}
           resolveKey={resolveDrawerKey} />
         <MiniReleaseCalendar text={text} month={month} today={today} selectedDay={selectedDay}
+          unmappedCountByDay={unmappedCountByDay}
           events={releases.events} timeZone={timeZone} now={nowInstant}
           state={releases.state} refreshing={releases.refreshing}
           onSelectDay={(day) => setPickedDay({ month, day })}
@@ -352,6 +381,15 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
+                {...(unmappedGroup === undefined ? {} : {
+                  unmapped: {
+                    title: text.mkDay.unmappedGroup.replace('{count}', String(unmappedGroup.rows.length)),
+                    aria: text.mkDay.unmappedAria,
+                    timeZone,
+                    observations: unmappedGroup.rows.flatMap((row) => row.kind === 'unmapped' ? [row.observation] : [])
+                  }
+                })}
+                {...(unmappedMonth.state === 'unavailable' ? { unmappedUnavailable: text.mkDay.unmappedUnavailable } : {})}
                 text={calendarText}
                 statusNow={nowInstant}
                 selectedEventKey={undefined}

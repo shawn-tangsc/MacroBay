@@ -157,6 +157,12 @@ export const macroIndicatorDrawerText = {
       /* 「经济指标」组内的第二层：一级/二级/三级用指标码分级，没有码的（讲话、源内身份行）是「未分级」。 */
       tierGroup: '{tier} · {count} 条',
       tiers: { '1': '一级指标', '2': '二级指标', '3': '三级指标', other: '未分级' },
+      /* 「未入标准表」：这批观测没进标准表，**不是异常也不是失败**（用户 2026-11-16 定）。
+         组标题只出现一次，行内不写字；读屏在行的可访问名末尾补 `unmappedAria`。 */
+      unmappedGroup: '未入标准表 · {count} 条',
+      unmappedAria: '未入标准表',
+      /* 读不到那一支：不许写成「0 条」——那是把「没读到」画成「没有」。 */
+      unmappedUnavailable: '未入标准表：这次读不到',
     },
     weekday: ['一', '二', '三', '四', '五', '六', '日'],
     surprise: { beat: '超预期 {value}', miss: '低于预期 {value}', inline: '符合预期' },
@@ -282,6 +288,9 @@ export const macroIndicatorDrawerText = {
       sequence: '{name} · {index}/{total}',
       tierGroup: '{tier} · {count} events',
       tiers: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Untiered' },
+      unmappedGroup: 'Not in the standard table · {count}',
+      unmappedAria: 'Not in the standard table',
+      unmappedUnavailable: 'Not in the standard table: not readable right now',
     },
     weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     surprise: { beat: 'Above forecast {value}', miss: 'Below forecast {value}', inline: 'In line' },

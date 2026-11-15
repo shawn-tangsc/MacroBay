@@ -21,7 +21,7 @@ import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
  */
 const CELL_ITEM_LIMIT = 3
 
-export function MiniReleaseCalendar({ text, month, today, selectedDay, events, timeZone, now, state, refreshing, onSelectDay, onMonthChange, onRefresh, onConfigure }: Readonly<{
+export function MiniReleaseCalendar({ text, month, today, selectedDay, events, timeZone, now, state, refreshing, onSelectDay, onMonthChange, onRefresh, onConfigure, unmappedCountByDay }: Readonly<{
   text: MacroIndicatorDrawerText
   /** 当前显示的月份 `YYYY-MM`。 */
   month: string
@@ -42,6 +42,11 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
   onRefresh: () => void
   /** 去日历来源配置；没有落点时按钮禁用，而不是画一颗点了没反应的假按钮。 */
   onConfigure?: () => void
+  /**
+   * 未映射观测**按天**的条数（读者看到的是「今天有几件事」，两个来源都算，Chief 2026-11-16）。
+   * 只进计数、不进名字：格子里只写标准表那些有分级的名字，未映射的名字在当天列表里读。
+   */
+  unmappedCountByDay?: ReadonlyMap<string, number>
 }>): React.ReactElement {
   const currentMonth = today.slice(0, 7)
   const weeks = useMemo(() => buildWeeks(month, groupByDay(events, timeZone, now)), [month, events, timeZone, now])
@@ -76,7 +81,10 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
       <div className="mk-minical__grid">
         {weeks.map((week, rowIndex) => week.map(cell => {
           const isToday = cell.dateKey === today
-          const dataState = isToday ? 'today' : !cell.current ? 'outside' : cell.items.length ? 'ready' : 'nodata'
+          const unmappedCount = unmappedCountByDay?.get(cell.dateKey) ?? 0
+          // 只有未映射观测的那天也是「有事」：它确实有一条事件等着读，不能被画成空日。
+          const hasAny = cell.items.length + unmappedCount > 0
+          const dataState = isToday ? 'today' : !cell.current ? 'outside' : hasAny ? 'ready' : 'nodata'
           if (!cell.current) {
             // 月外的格子不是这个月的日期：画出来只为对齐周次，点了会跳到另一个月——所以不可交互。
             return <div className="mk-minical__day" key={`${rowIndex}-${cell.dateKey}`} data-state={dataState}><em>{cell.day}</em></div>
@@ -86,7 +94,8 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
           const tiered = filterVisibleByTier(cell.items.map(item => ({ metricKey: item.metricKey, item })),
             { maximumVisible: CELL_ITEM_LIMIT })
           const shown = tiered.visible
-          const hidden = tiered.hiddenTotal
+          // 未映射的名字不进格子（格子里只放有分级的名字），但**条数要算**。
+          const hidden = tiered.hiddenTotal + unmappedCount
           return <button className="mk-minical__day" type="button" key={`${rowIndex}-${cell.dateKey}`}
             data-state={dataState} aria-pressed={cell.dateKey === selectedDay}
             onClick={() => onSelectDay(cell.dateKey)}>
