@@ -72,6 +72,11 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // The news sentiment panel is composed by the workbench, not answered as an agent question.
   'intelligence.getNewsSentiment': exposed('query_news_sentiment'),
   'intelligence.getNewsSentimentItem': exposed('get_news_sentiment_item'),
+  /* 三张简化卡的读数面（`6527a39` 加进 manifest，分类漏了）：只给渲染层自己的卡片读，
+     不是 agent 工具面——所以按「渲染层内部视图」排除，理由与下面两条设置读法相同。 */
+  'intelligence.macro.indicator.read': excluded('internal-view'),
+  'intelligence.coreIndicatorSources.read': excluded('internal-view'),
+  'intelligence.coreIndicatorSources.set': excluded('internal-view'),
   'intelligence.getNewsSentimentSettings': excluded('internal-view'),
   'intelligence.saveNewsSentimentSettings': excluded('internal-view'),
   'intelligence.rescoreNewsSentiment': excluded('internal-view'),
