@@ -72,7 +72,10 @@ export function useCalendarMonthReleases(input: Readonly<{
  * 宿主那一路（`readMarketCalendarMonth`）已经把整页校验过一遍；这里仍逐字段确认，
  * 是因为这个入参在宿主那头是 `unknown[]`——一条残行混进格子里，就是一条编出来的日程。
  */
-function marketEventOf(entry: unknown): readonly MarketCalendarEvent[] {
+/**
+ * 一行宿主记录 → 事件。导出只为一件事：**证明 `coverage` 是透传的**（用例在 `useCalendarMonthReleases.test.ts`）。
+ */
+export function marketEventOf(entry: unknown): readonly MarketCalendarEvent[] {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
   const record = entry as Record<string, unknown>
   const eventKey = typeof record.eventKey === 'string' ? record.eventKey : ''
@@ -82,6 +85,8 @@ function marketEventOf(entry: unknown): readonly MarketCalendarEvent[] {
   if (!(marketCalendarPublicPolicy.kinds as readonly unknown[]).includes(record.eventType)) return []
   if (!(marketCalendarPublicPolicy.importance as readonly unknown[]).includes(record.importance)) return []
   if (record.source !== 'Narwhal' && record.source !== '0xRouter') return []
+  // 覆盖口径只认这两档；不认识就别把这一行抬进来——**缺省不是「未核验」**，那会把官方行标错。
+  if (record.coverage !== 'observed-unverified' && record.coverage !== 'available') return []
   const value = (input: unknown): MarketCalendarEvent['consensus'] =>
     input !== null && typeof input === 'object' && typeof (input as { displayValue?: unknown }).displayValue === 'string'
       ? { displayValue: (input as { displayValue: string }).displayValue }
@@ -105,6 +110,9 @@ function marketEventOf(entry: unknown): readonly MarketCalendarEvent[] {
     providerActual: value(record.providerActual),
     source: record.source,
     sourceObservedAt: typeof record.sourceObservedAt === 'string' ? record.sourceObservedAt : '',
-    coverage: 'observed-unverified'
+    /* `coverage` **透传**宿主读回来的那一份，不再在这里另推一遍：
+       同一份数据两处各贴一个标签，迟早出现「同一条事件两个状态」。
+       服务端适配器已经是官方行 `available`、数据商行 `observed-unverified`，这里照抄。 */
+    coverage: record.coverage
   }]
 }
