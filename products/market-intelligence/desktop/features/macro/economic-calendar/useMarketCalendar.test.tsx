@@ -23,7 +23,9 @@ function calendarClient<Parts extends Pick<MarketCalendarClient, 'queryMonth' | 
     ...parts,
     getCollectionFreshness: vi.fn(async (): Promise<MarketCalendarFreshness> => ({ state: 'unavailable', failureCode: 'query-unavailable' })),
     refreshNow: vi.fn(async (): Promise<MarketCalendarRefreshNowResult> => ({ state: 'unchanged' })),
-    queryUnmappedMonth: vi.fn(async () => ({ state: 'unavailable' as const }))
+    queryUnmappedMonth: vi.fn(async () => ({ state: 'unavailable' as const })),
+    // 事件目录读口同理：它给的是自己的「读不到」，不是空数组（空数组只表示「没有匹配」）。
+    queryEvents: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const }))
   }
 }
 it('reads locally, refreshes only on demand and ignores completed requests from a superseded scope', async () => {

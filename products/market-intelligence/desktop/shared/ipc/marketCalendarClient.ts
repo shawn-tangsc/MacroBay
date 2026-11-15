@@ -3,6 +3,9 @@ import { isMarketCalendarFreshness, isMarketCalendarPage, isMarketCalendarQuery,
   type MarketCalendarPage, type MarketCalendarQuery, type MarketCalendarRefreshNowResult,
   type MarketCalendarRefreshResult, type MarketCalendarScope } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { UnmappedCalendarObservation } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarUnmappedMonthRead'
+import type {
+  CalendarEventIndexRead, CalendarEventIndexRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventIndexRead'
 export type MarketCalendarClient = {
   queryMonth: (input: MarketCalendarQuery) => Promise<MarketCalendarPage>
   refresh: (input: MarketCalendarScope) => Promise<MarketCalendarRefreshResult>
@@ -14,6 +17,13 @@ export type MarketCalendarClient = {
    * 出参必须能分清「读到空」和「读不到」——`state: 'unavailable'` 是后者，**不许拿空数组顶替**。
    */
   queryUnmappedMonth: (input: Readonly<{ month: string; locale: 'zh-CN' | 'en-US' }>) => Promise<UnmappedMonthView>
+  /**
+   * 事件目录（一行一个事件身份，渲染专用）：全量清单，按「最近一次发布」倒序。
+   *
+   * 出参两态：`available` 带 `rows`/`total`/`nextCursor`，`unavailable` 带原因码。
+   * **空数组只表示「没有匹配」**，不表示读不到——这一条与未映射月读同一个规矩。
+   */
+  queryEvents: (input: Readonly<{ cursor?: string; pageSize: number; nameQuery?: string; countryCode?: string }>) => Promise<CalendarEventIndexRead>
   /** Bounded catch-up: `timeout` is its own answer and is never reported as a failure. */
   refreshNow: (input: Readonly<{ sourceIds?: readonly string[]; timeoutMs?: number }>) => Promise<MarketCalendarRefreshNowResult>
 }
@@ -31,6 +41,9 @@ export const marketCalendarClient: MarketCalendarClient = {
   async getCollectionFreshness() {
     const value = await invoke(marketCalendarPublicPolicy.methods.getCollectionFreshness, {})
     return isMarketCalendarFreshness(value) ? value : { state: 'unavailable', failureCode: 'query-unavailable' }
+  },
+  async queryEvents(input) {
+    return eventIndexReadOf(await invoke(marketCalendarPublicPolicy.methods.queryEvents, input))
   },
   async queryUnmappedMonth(input) {
     const value = await invoke(marketCalendarPublicPolicy.methods.queryUnmappedMonth, { month: input.month, locale: input.locale })
@@ -76,5 +89,35 @@ export function unmappedMonthViewOf(value: unknown): UnmappedMonthView {
     items,
     undated: typeof record.undated === 'number' ? record.undated : 0,
     superseded: typeof record.superseded === 'number' ? record.superseded : 0
+  }
+}
+
+/**
+ * IPC 回来的东西一律当 `unknown`：形状不合就判「读不到」。
+ *
+ * 与未映射月读同一条边界——**一条残行混进清单就是一条编出来的事件**；而把「读不到」说成
+ * 「没有匹配」同样是撒谎。国家这一列只要原码（名字由渲染层那张表补：归一只有一处）。
+ */
+export function eventIndexReadOf(value: unknown): CalendarEventIndexRead {
+  if (value === null || typeof value !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  const record = value as Record<string, unknown>
+  if (record.state !== 'available' || !Array.isArray(record.rows) || typeof record.total !== 'number') {
+    return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  }
+  for (const entry of record.rows) {
+    if (entry === null || typeof entry !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    const row = entry as Record<string, unknown>
+    if (typeof row.key !== 'string' || row.key === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    if (typeof row.countryCode !== 'string' || row.countryCode === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    if (typeof row.titleIsSourceLabel !== 'boolean') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    if (row.importance !== undefined && !['high', 'medium', 'low'].includes(String(row.importance))) {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+  }
+  return {
+    state: 'available',
+    rows: record.rows as unknown as readonly CalendarEventIndexRow[],
+    total: record.total,
+    ...(typeof record.nextCursor === 'string' ? { nextCursor: record.nextCursor } : {})
   }
 }
