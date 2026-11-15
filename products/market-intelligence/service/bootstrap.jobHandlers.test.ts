@@ -9,7 +9,7 @@ vi.mock('electron', () => ({
   net: { fetch: vi.fn(async () => new Response('{}', { status: 200 })) }
 }))
 
-import { createJobRuntime, type JobRuntime } from '@platform/jobs'
+import type { JobRuntime } from '@platform/jobs'
 import { createEventBusRuntime } from '@platform/message-bus'
 
 import { registerServices } from './bootstrap'
@@ -26,6 +26,45 @@ import { resetIntelligenceModuleForTests } from './intelligence/intelligenceModu
  * 做法：包一层真 `createJobRuntime()`，只拦 `registerHandler` 记 id，然后断言**排序后的集合逐字相等**。
  * 任何一处注册被漏掉/改名，这条就红，而且直接点出少了哪一个。
  */
+/**
+ * **覆盖边界（读这条守卫的人先看这段）**：
+ * 它只断言「注册到 **boot 主 job runtime** 上的 handler 集合」。`sourceRuntimeOrchestrator.ts:6` 的
+ * `market-intelligence.streamWorker` 注册在 **worker runtime** 上，不在下面这 29 个里——
+ * 这里全绿不等于「全产品 handler 一个不少」，那条另一处另有它的守卫。
+ *
+ * **这条用例不干活**：`jobRuntime` 用的是**不调度任何作业的替身**（`setSchedule` / `enqueue*` 都是空实现），
+ * 所以它不会真的跑一次采集、不发网请求、不写用户库；存储路径也被 `electron` 的
+ * `app.getPath` 指到临时目录。曾经用真 `createJobRuntime()` 时，它在装配过程中触发过一条
+ * `[macro-calendar] … parser-output-empty` 的采集失败日志——网络一抖这条守卫就会 flaky，故改为替身。
+ *
+ * 装配过程本身还会打一条 `[macro-calendar] 官方发布入标准表：… 读到 0 条、写入 0 条`：
+ * 那是启动时的标准表同步，读写的库在**临时目录**、`platformFetch` 是 `vi.fn()`（永不发真请求），
+ * 所以它不碰用户数据、不依赖网络；这条断言也不看它的结果。
+ */
+function inertJobRuntime(onRegister: (handlerId: string) => void): JobRuntime {
+  return {
+    registerHandler: (handlerId: string) => { onRegister(handlerId) },
+    setSchedule: () => undefined,
+    removeSchedule: () => undefined,
+    listSchedules: () => [],
+    /* 下面这些在装配阶段不会被调用；真调到了也不许真跑作业——直接抛，让「装配顺手跑一次采集」当场暴露。 */
+    enqueueManual: async () => { throw new Error('guard: enqueueManual is not allowed while snapshotting handlers') },
+    enqueueStartup: async () => { throw new Error('guard: enqueueStartup is not allowed while snapshotting handlers') },
+    enqueueDefinition: async () => { throw new Error('guard: enqueueDefinition is not allowed while snapshotting handlers') },
+    waitForRunTerminal: async () => ({ state: 'timeout' }),
+    cancel: () => undefined,
+    getRun: () => undefined,
+    listRecentRuns: () => [],
+    listRuns: () => [],
+    listRunPage: () => ({ items: [], nextCursor: undefined }),
+    listRunAggregates: () => ({ state: 'unavailable', reasonCode: 'run-history-unavailable' }),
+    recover: () => [],
+    stopAll: () => undefined,
+    createQueuedRun: () => { throw new Error('guard: createQueuedRun is not allowed while snapshotting handlers') },
+    markRunningForTest: () => undefined
+  } as unknown as JobRuntime
+}
+
 const EXPECTED_HANDLER_IDS: readonly string[] = [
   'market-intelligence.analysisSessionSlots',
   'market-intelligence.archiveCompaction',
@@ -63,15 +102,8 @@ beforeEach(() => {
 })
 
 function bootAndCaptureHandlerIds(): readonly string[] {
-  const runtime = createJobRuntime()
   const ids: string[] = []
-  const spying: JobRuntime = {
-    ...runtime,
-    registerHandler: (handlerId, handler) => {
-      ids.push(handlerId)
-      runtime.registerHandler(handlerId, handler)
-    }
-  }
+  const spying = inertJobRuntime((handlerId) => ids.push(handlerId))
   registerServices({
     getTimeZone: () => 'Asia/Shanghai',
     register: () => undefined,
