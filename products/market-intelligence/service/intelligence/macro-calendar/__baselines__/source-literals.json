@@ -14,8 +14,8 @@
       "why": "看板源状态清单：列的就是 feed id"
     },
     "contracts/macro/marketCalendarQueryContracts.ts": {
-      "count": 25,
-      "why": "契约里的 provider id 常量与来源标签定义处；25 = 22 + 0xRouter 三路接回采集后新增的 3 个 feed id（真来源必须能指名道姓，否则新行全落 unspecified）"
+      "count": 27,
+      "why": "契约里的 provider id 常量与来源标签定义处；27 = 22 + 0xRouter 三路 feed id（读侧来源真值）+ 2026-11-16 把 collectionFeeds 对齐到当前在采的三路（补跑命令换源后，校验名单必须同一份）"
     },
     "desktop/pages/intelligence/IndicatorCards.tsx": {
       "count": 1,

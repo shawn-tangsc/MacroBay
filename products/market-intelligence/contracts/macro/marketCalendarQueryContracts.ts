@@ -45,7 +45,15 @@ export const marketCalendarPublicPolicy = Object.freeze({
    * 另两条 feed 带 `coveredBy` 指向它。调用方（简报补跑、按需刷新）只列这一条，列三条就是
    * 同一个端点请求三次。
    */
-  collectionFeeds: ['macro-calendar-narwhal-economic-data'],
+  /**
+   * **当前真正在采的 feed**（补跑命令下发 `sources` 用它校验）。
+   *
+   * 2026-11-16：补采命令已从 narwhal 换到 0xrouter 三路，这份清单必须同笔对齐——否则
+   * `isMarketCalendarRefreshNowResult` 拿返回值去比对旧名单，每次真实补采都被判成 `unknown`，
+   * 界面写「补采结果未知」，比失败更难查。
+   */
+  collectionFeeds: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+    'macro-calendar-0xrouter-central-bank-activities'],
   /**
    * 一条事件可以来自哪些**源 feed**。`source` 原来只有 `'Narwhal' | '0xRouter'` 两档，
    * 表达不了「官方 BLS 发的」，于是官方行被标成旧源。现在以 feed id 为真值，
