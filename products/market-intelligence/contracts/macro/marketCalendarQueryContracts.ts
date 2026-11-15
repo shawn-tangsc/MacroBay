@@ -76,6 +76,11 @@ export const marketCalendarPublicPolicy = Object.freeze({
   /** Bounded catch-up for the daily briefing: one collection, one shared deadline. */
   refreshNow: { defaultTimeoutMs: 90_000, minimumTimeoutMs: 1_000, maximumTimeoutMs: 120_000 },
   methods: { refresh: 'intelligence.macro.marketCalendar.refreshManual', query: 'intelligence.macro.marketCalendar.queryMonth',
+    /**
+     * **只读**：某月「进不了标准表」的观测（渲染专用，用户 2026-11-16 定）。
+     * 与 `queryMonth` 同一族、同一个前缀——另开一个前缀会让「日历的读」散成两族。
+     */
+    queryUnmappedMonth: 'intelligence.macro.marketCalendar.queryUnmappedMonth',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)

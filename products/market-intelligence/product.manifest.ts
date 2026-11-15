@@ -99,6 +99,8 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.crossAsset.query' },
     { method: marketCalendarPublicPolicy.methods.refresh },
     { method: marketCalendarPublicPolicy.methods.query },
+    // 未映射观测的月读：只读、无副作用，只在日历渲染里用（用户 2026-11-16 定）。
+    { method: marketCalendarPublicPolicy.methods.queryUnmappedMonth },
     { method: marketCalendarPublicPolicy.methods.getCollectionFreshness },
     { method: marketCalendarPublicPolicy.methods.refreshNow },
     { method: macroMarketSnapshotPublicPolicy.method },

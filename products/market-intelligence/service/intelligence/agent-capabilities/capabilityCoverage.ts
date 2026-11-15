@@ -49,6 +49,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.crossAsset.query': exposed('get_cross_asset_snapshot'),
 
   'intelligence.macro.marketCalendar.refreshManual': excluded('destructive'),
+  // 未映射观测的月读**只给日历渲染**（用户 2026-11-16）：不进简报、不进 AI 分析，agent 也不读。
+  'intelligence.macro.marketCalendar.queryUnmappedMonth': excluded('internal-view'),
   'intelligence.macro.marketCalendar.queryMonth': exposed('query_macro_calendar'),
   // The freshness read is what the briefing consumes; an agent asking "how old is the
   // calendar" is the same read, so it rides the existing calendar query capability.

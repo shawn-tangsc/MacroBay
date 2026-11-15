@@ -539,9 +539,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   })
   registerMacroEconomicCalendarIpc(auditedRegister, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
-    releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
-    releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
-  }, blsEmploymentMvpRefresh, blsScheduleAndLatestValues, macroCalendarBackend.fedFomcRefresh, marketCalendar)
+    releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides, releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
+  }, blsEmploymentMvpRefresh, blsScheduleAndLatestValues, macroCalendarBackend.fedFomcRefresh, marketCalendar,
+    { database: macroCalendarBackend.storage.database })
   // The dashboard's 市场状态 block reads the collected macro series (synthetic dollar, gold) here.
   // Gold's 最新 cell additionally reads the live tick, which is reported beside the stored level and
   // is read by no window: the returns in this snapshot are computed from stored points alone.

@@ -14,7 +14,9 @@ import { describe, expect, it } from 'vitest'
  * **这条不证明什么**：不证明「简报不会读未映射行」——那由简报线 `5391975` 的命名守卫 + 评审负责。
  * 两条分工不同，别把一条当成两条。
  */
-const PRODUCT_SERVICE = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..')
+// 扫描根是**服务层**（`products/market-intelligence/service`）。渲染层（`desktop/`）import 它的
+// **类型**是合法的：渲染层就是要用它，契约禁的是「服务层反向 import 渲染专用读口」。
+const PRODUCT_SERVICE = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const READER = 'marketCalendarUnmappedMonthRead'
 
 function sourceFiles(dir: string, out: string[] = []): string[] {

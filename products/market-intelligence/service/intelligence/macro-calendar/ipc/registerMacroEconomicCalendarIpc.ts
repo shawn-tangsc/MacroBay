@@ -16,6 +16,7 @@ import { isMarketCalendarFreshness, isMarketCalendarPage, isMarketCalendarQuery,
 import { createMacroCalendarLinkedQueryService, type SafeMarketQuery } from '../macroCalendarLinkedQueryService'
 import { linkZeroXRouterEvent, zeroXRouterOfficialEventLinks } from '../0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry'
 import { createMacroCalendarWriteActions } from '../macroCalendarWriteActions'
+import { listUnmappedCalendarObservationsForRendering } from '../rendering/marketCalendarUnmappedMonthRead'
 import {
   isEmpty,
   isProviderInput,
@@ -41,7 +42,9 @@ export function registerMacroEconomicCalendarIpc(
   blsEmploymentSchedule?: BlsScheduleAndValuesSyncWorkflow,
   fedFomcRefresh?: FedFomcManualRefreshService,
   market?: SafeMarketQuery & { refresh: (input: unknown) => unknown; readCollectionFreshness?: () => Promise<unknown>
-    refreshNow?: (input: unknown) => Promise<unknown> }
+    refreshNow?: (input: unknown) => Promise<unknown> },
+  /** 未映射观测的只读月读（渲染专用）。只给数据库句柄：读口本身只在 `rendering/` 里，别的服务文件不许 import。 */
+  unmappedMonth?: { database: Parameters<typeof listUnmappedCalendarObservationsForRendering>[0] }
 ): void {
   const releaseTimeOverrides = connection?.releaseTimeOverrides
   // Seed the synchronous view before the first query; until it lands, a row falls back to its
@@ -91,6 +94,22 @@ export function registerMacroEconomicCalendarIpc(
       }
     } catch {}
     return { state: 'unavailable', failureCode: 'query-unavailable' }
+  })
+  /**
+   * **未映射观测的月读**（渲染专用，用户 2026-11-16）：只读、无副作用。
+   * 「读不到」用 `state: 'unavailable'` 表达——**不许用空数组**，那会让读者把「没读到」当成「没有」。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryUnmappedMonth, async payload => {
+    try {
+      const month = (payload as { month?: unknown } | undefined)?.month
+      if (typeof month !== 'string' || month === '' || unmappedMonth === undefined) {
+        return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      }
+      const read = listUnmappedCalendarObservationsForRendering(unmappedMonth.database, { month })
+      return { state: 'available', items: read.entries, undated: read.undated, superseded: read.superseded }
+    } catch {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
   })
   // One read method, no payload: the caller asks "how old is the calendar", never "how old
   // is this source in this month". A read that fails answers `unavailable`, never "nothing".
