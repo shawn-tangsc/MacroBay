@@ -34,6 +34,7 @@ import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntel
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { wireCalendarReadings } from './wiring/calendarReadings'
+import { wireZeroXRouterCalendarSchedule } from './wiring/zeroXRouterCalendarSchedule'
 import { scheduleHistoricalValueFill, syncOfficialStandardRowsAtStartup } from './wiring/calendarStandardRows'
 import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
@@ -301,6 +302,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
     readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })
+  const zeroXRouterSchedule = wireZeroXRouterCalendarSchedule({ jobRuntime: deps.jobRuntime, database: macroCalendarBackend.storage.database, refreshAutomatic: (feeds) => marketCalendar.refreshAutomatic(feeds), readReadiness: intelligenceModule.calendarManualDependencies.readReadiness, readEnabledFeeds: readEnabledCalendarFeeds, ...(deps.log === undefined ? {} : { log: deps.log }) })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
   // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
@@ -326,9 +328,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(deps.log === undefined ? {} : { log: deps.log }),
     releaseValues: { database: macroCalendarBackend.storage.database, readActual: async (metricKey, periodKey) => (await readFredObservationForPeriod(metricKey, periodKey, fredObservations))?.value }
   })
-  const beaOfficialReleaseJobs = macroCalendarBackend.beaOfficialReleaseRefresh
-    ? createBeaOfficialReleaseJobRuntime({ jobRuntime: deps.jobRuntime, profiles: calendarProfiles, refresh: macroCalendarBackend.beaOfficialReleaseRefresh })
-    : undefined
+  const beaOfficialReleaseJobs = macroCalendarBackend.beaOfficialReleaseRefresh ? createBeaOfficialReleaseJobRuntime({ jobRuntime: deps.jobRuntime, profiles: calendarProfiles, refresh: macroCalendarBackend.beaOfficialReleaseRefresh }) : undefined
   const blsScheduleAndValuesScheduler = createBlsScheduleAndValuesScheduler({
     jobRuntime: deps.jobRuntime,
     workflow: blsScheduleAndLatestValues,
@@ -458,7 +458,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     blsScheduleAndValuesScheduler.dispose()
     await marketCalendar.dispose()
     await beaOfficialReleaseJobs?.dispose()
-    macroCalendarJobs.dispose()
+    macroCalendarJobs.dispose(); zeroXRouterSchedule.dispose()
     macroCalendarBackend.dispose()
     intelligenceModule.marketAnalysisRuntime.dispose()
     syncAudit?.close()

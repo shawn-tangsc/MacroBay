@@ -87,6 +87,11 @@ const EXPECTED_HANDLER_IDS: readonly string[] = [
   'market-intelligence.reevaluateSentimentScopes',
   'market-intelligence.refreshBeaOfficialReleases',
   'market-intelligence.refreshMacroCalendar',
+  // 0xrouter 三路日历：每条 feed 一个定义（2026-11-16 接回装配；此前全仓没有生产调用点，
+  // 所以「设置里打开了」并不等于「有作业在跑」）。
+  'market-intelligence.refreshMarketCalendar.central-bank-activities',
+  'market-intelligence.refreshMarketCalendar.economic-data',
+  'market-intelligence.refreshMarketCalendar.financial-events',
   'market-intelligence.refreshSentimentAggregates',
   'market-intelligence.reindex',
   'market-intelligence.replayWindow',
