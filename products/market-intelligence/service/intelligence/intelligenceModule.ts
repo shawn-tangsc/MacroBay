@@ -3,16 +3,9 @@ import { readFile } from 'node:fs/promises'
 
 import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 import { createManagedWorkerRuntime } from '@platform/jobs'
-import type { EventBusRuntime } from '@platform/message-bus'
-import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
-import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
-import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
-import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import type { DailyBriefingLocale } from '../../contracts/dailyBriefing'
-import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
-import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 import { app } from 'electron'
 
 import { createIntelligenceFetchText, executeIntelligenceFetchTarget } from './adapters/intelligenceHttpFetch'
@@ -65,7 +58,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
-import { macroWebReadFromHooks, type WebSearchProductHooks } from './webSearchProductHooks'
+import { macroWebReadFromHooks } from './webSearchProductHooks'
 import { briefingNotificationPorts, createBriefingCalendarCommands, type BriefingCalendarRefresh } from './daily-briefing/briefingPorts'
 import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
@@ -114,11 +107,10 @@ import { registerIntelligenceDataChangedEvents } from './jobs/registerIntelligen
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
-import { statSync } from 'node:fs'
 import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createMacroCalendarEvidenceStore } from './macro-calendar/macroCalendarEvidenceStore'
-import { createCapitalConditionsHttpClient, type CapitalConditionsPlatformFetch } from './capital-conditions/capitalConditionsHttpClient'
+import { createCapitalConditionsHttpClient } from './capital-conditions/capitalConditionsHttpClient'
 import { createCapitalConditionsRefreshService } from './capital-conditions/capitalConditionsRefreshService'
 import { createCapitalConditionsSourceIntegration } from './capital-conditions/capitalConditionsSourceIntegration'
 import { createCapitalConditionsStateJsonStorage, createCapitalConditionsCurrentStateStore } from './capital-conditions/stablecoinCapitalCurrentStateStore'
@@ -145,92 +137,11 @@ import { createDashboardFeedStatusQuery, type DashboardFeedStatusQuery } from '.
 import type { GoldLiveRuntime } from './macro-market/goldLiveRuntime'
 import { macroMarketPolicy } from './macro-market/macroMarketPolicy'
 import { requestZeroXRouterCalendarJsonBody } from './application/zeroXRouterHttpTransport'
+import { intelligenceRawRecordStartupRecoveryPolicy, INTELLIGENCE_PRODUCT_ID as PRODUCT_ID, type IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
 
-const PRODUCT_ID = 'market-intelligence'
-
-/**
- * One line at main-process startup naming the bundle that is actually running.
- *
- * The reader and I spent a long stretch comparing a fixed build against a window that had loaded an
- * older one: a renderer reload looks like a restart in the terminal, and the main process quietly
- * keeps the code it started with. Printing the bundle's own modification time (and the start time)
- * makes "which build is live" a fact rather than a deduction.
- */
-function logMainStartupBundle(): void {
-  try {
-    const bundle = statSync(__filename)
-    console.log(JSON.stringify({
-      marker: 'MI_MAIN_STARTUP', productId: PRODUCT_ID,
-      bundleBuiltAt: new Date(bundle.mtimeMs).toISOString(), bundleBytes: bundle.size,
-      startedAt: new Date().toISOString(), pid: process.pid
-    }))
-  } catch {
-    // A marker that cannot be read must never stop the product from starting.
-  }
-}
-logMainStartupBundle()
-
-const intelligenceRawRecordStartupRecoveryPolicy = {
-  completionObservationTimeoutMs: 30_000,
-  definition() {
-    return {
-      id: 'market-intelligence.startup-recover-pending-raw-records',
-      owner: 'product' as const,
-      productId: PRODUCT_ID,
-      handlerId: INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
-      title: 'Recover pending intelligence raw records',
-      trigger: { kind: 'startup' as const },
-      payload: {}
-    }
-  },
-  async completeBeforeSourceRuntime(jobRuntime: Pick<JobRuntime, 'enqueueDefinition' | 'waitForRunTerminal'>): Promise<void> {
-    try {
-      const run = await jobRuntime.enqueueDefinition(this.definition())
-      await jobRuntime.waitForRunTerminal(run.id, {
-        timeoutMs: this.completionObservationTimeoutMs
-      })
-    } catch {
-      // Source runtime recovery remains available when pending raw recovery cannot start or observe completion.
-    }
-  }
-} as const
-
-export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
-  getProviderState?: () => Promise<ProviderState>; /** 平台落盘日志（app.log）：补跑等后台事实走它，console 只在终端里。 */ log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
-  getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
-  /** 模型服务页「默认模型」只读投影；翻译偏好跟随其中的默认翻译模型。 */
-  getModelDefaults?: () => Promise<ModelDefaultsSettings>
-  eventBusRuntime?: EventBusRuntime
-  /** Required: the first call must inject it, and every consumer reads this one. */
-  platformFetch: CapitalConditionsPlatformFetch
-  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. Required: a missing one used to become UTC silently. */
-  getTimeZone: () => string
-  /** The reader changed their display zone: the brief schedule follows it without a settings save. */
-  onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
-  /**
-   * The platform's proxy-aware socket constructor, injected lazily. It is a thunk rather than a
-   * constructor because the desktop shell can only build it once network settings are readable —
-   * binding it eagerly would hand the product a constructor that fails on its first connect.
-   */
-  createPlatformWebSocket?: () => PlatformWebSocketConstructor
-  /** Any source switch, so a product-owned job can arm or drop its own schedule. */
-  onSourceEnabledChanged?: (sourceId: string) => void | Promise<void>
-  /** Reconcile the automatic calendar job registry after a feed switch. */
-  onCalendarEnabledChanged?: () => void | Promise<void>
-  createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
-  /** 自动会话的幂等窄查（按 agentId + originRef）：同一期只复用一条会话。 */
-  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
-  sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
-  cancelAgentSession?: (sessionId: string) => Promise<void> | void
-  appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
-  updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
-  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
-  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
-  /** 平台通知运行时的提交入口（契约 §3.2）；未注入时来源事件不发通知，采集照常。 */
-  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
-  /** 平台「把一条已有记录再推一次手机」的入口（契约 §16.3.4）；只给读者点击的发布按钮用。 */
-  redeliverPush?: import('./daily-briefing/dailyBriefingPublishToPhone').BriefingRedeliver
-}
+/* 产品 id、启动 bundle 标记、原始记录补跑策略、平台 hooks 类型 → `intelligenceModuleContracts.ts`（M1）。
+   hooks 类型从原路径**再导出**：`newsSentimentServices.ts` 等调用的 import 路径一个字没变。 */
+export type { IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
 export type IntelligenceModule = {

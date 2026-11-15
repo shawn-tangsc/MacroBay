@@ -42,7 +42,7 @@
   "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefingDocument.ts": 613,
   "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefingService.ts": 452,
   "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefingValidation.ts": 519,
-  "products/market-intelligence/service/intelligence/intelligenceModule.ts": 1071,
+  "products/market-intelligence/service/intelligence/intelligenceModule.ts": 1044,
   "products/market-intelligence/service/intelligence/jobs/registerMarketAnalysisRuntime.ts": 671,
   "products/market-intelligence/service/intelligence/public-query/marketAnalysisContextProjection.ts": 533,
   "products/market-intelligence/service/intelligence/public-query/marketAnalysisContextQuery.ts": 535,
