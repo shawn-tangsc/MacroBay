@@ -25,6 +25,7 @@ import {
 } from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
 import { validateConclusionSynthesis, briefingConclusionBasis } from './dailyBriefingConclusionValidation'
+import { readerFacingConclusion } from '../../../contracts/dailyBriefing'
 import { failAll, type DailyBriefingValidationFailureEntry, type DailyBriefingValidationFailureResult } from './dailyBriefingValidationFailures'
 import { editorialProse } from './dailyBriefingValidationProse'
 import { validatedNextFocus } from './dailyBriefingNextFocusValidation'
@@ -378,7 +379,10 @@ export function applyDailyBriefingEditorial(
       })
     } : {}),
     ...(editorial.conclusionSynthesis && document.conclusion && priorConclusions.length > 0 ? {
-      conclusion: Object.freeze({
+      // 一篇之内只能有一个时点（产品 2026-11-16 口径）：合成版的结论里，来自旧分析快照的
+      // evidenceStrength / change / topSignal / directions / dataGaps / caveats 不进读者可见的这一份。
+      // 那份记录本身不删——`summaryId` / `synthesizedFrom` 仍指着它。
+      conclusion: Object.freeze(readerFacingConclusion({
         ...document.conclusion,
         direction: editorial.conclusionSynthesis.direction,
         summary: editorial.conclusionSynthesis.summary,
@@ -398,7 +402,7 @@ export function applyDailyBriefingEditorial(
           refuted: Object.freeze([...editorial.conclusionSynthesis.refuted]),
           evidenceRefs: Object.freeze([...editorial.conclusionSynthesis.evidenceRefs])
         })
-      })
+      }))
     } : editorial.conclusionTranslation && document.conclusion ? {
       conclusion: Object.freeze({ ...document.conclusion, translation: editorial.conclusionTranslation })
     } : {}),

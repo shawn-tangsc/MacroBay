@@ -99,7 +99,7 @@ export type {
   BriefingNextItem,
 } from './dailyBriefing/readings'
 // The conclusion and trace shapes live in their own module; re-exported so callers keep one path.
-import { briefingGenerationDisplayRows, briefingGenerationStageIds } from './dailyBriefing/conclusion'
+import { briefingGenerationDisplayRows, briefingGenerationStageIds, readerFacingConclusion } from './dailyBriefing/conclusion'
 import type {
   BriefingCounterEvidence,
   BriefingTopSignal,
@@ -120,7 +120,7 @@ import type {
   DailyBriefingProgressResult,
 } from './dailyBriefing/conclusion'
 
-export { briefingGenerationDisplayRows, briefingGenerationStageIds }
+export { briefingGenerationDisplayRows, briefingGenerationStageIds, readerFacingConclusion }
 export type {
   BriefingCounterEvidence,
   BriefingTopSignal,

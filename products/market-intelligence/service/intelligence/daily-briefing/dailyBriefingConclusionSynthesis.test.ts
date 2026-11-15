@@ -162,6 +162,38 @@ describe('daily briefing conclusion synthesis', () => {
     })
   })
 
+  it('keeps one time point: the earlier analysis snapshot fields never reach the synthesized conclusion', () => {
+    // 旧分析快照的这些话与本期窗口并排时，读者会当成同一件事（产品 2026-11-16 口径：一篇一个时点）。
+    // 合成版的读者可见结论里，它们一律不出现；那份分析记录本身仍在（靠 summaryId / synthesizedFrom 指回）。
+    const base = document()
+    const withStaleAnalysis: DailyBriefingDocument = {
+      ...base,
+      conclusion: {
+        ...base.conclusion!,
+      evidenceStrength: '24 小时价格收益 +1.25%、+3.22%，ETF 与稳定币同向。',
+      change: '旧快照：ETF 净流出扩大。',
+      topSignal: { horizon: 'short', direction: 'bearish', confidence: 'high', rationale: '旧快照的最强信号。', citations: [] },
+      directions: [{ horizon: 'short', direction: 'bearish', confidence: 'high' }],
+      dataGaps: ['旧快照缺 CPI 预期值。'],
+        caveats: ['旧快照：官方未公布发布时间。']
+      }
+    }
+    const validation = validateDailyBriefingEditorial(editorial(synthesis()), withStaleAnalysis, 'zh-CN', [], [bearishPrior()])
+    expect(validation.ok).toBe(true)
+    if (!validation.ok) return
+    const applied = applyDailyBriefingEditorial(withStaleAnalysis, validation.value, { promptVersion: 'v2', model: 'm', source: 'default' }, [bearishPrior()])
+    expect(applied.conclusion?.synthesis).toBe('agent')
+    expect(applied.conclusion?.evidenceStrength).toBeUndefined()
+    expect(applied.conclusion?.change).toBeUndefined()
+    expect(applied.conclusion?.topSignal).toBeNull()
+    expect(applied.conclusion?.directions).toEqual([])
+    expect(applied.conclusion?.dataGaps).toEqual([])
+    expect(applied.conclusion?.caveats).toEqual([])
+    // 本期合成自己的内容还在。
+    expect(applied.conclusion?.summary).toBe(synthesis().summary)
+    expect(applied.conclusion?.synthesizedFrom).toEqual(['analysis:mi-as-1'])
+  })
+
   it('synthesizes multiple priors and lists every one', () => {
     const priors = [bearishPrior(), bullishBriefPrior()]
     const validation = validateDailyBriefingEditorial(editorial(synthesis()), document(), 'zh-CN', [], priors)
