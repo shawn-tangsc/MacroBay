@@ -40,7 +40,7 @@
   "products/market-intelligence/service/intelligence/application/sourceCatalog.ts": 672,
   "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefAgentTurn.ts": 524,
   "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefingDocument.ts": 613,
-  "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefingService.ts": 673,
+  "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefingService.ts": 452,
   "products/market-intelligence/service/intelligence/daily-briefing/dailyBriefingValidation.ts": 519,
   "products/market-intelligence/service/intelligence/intelligenceModule.ts": 1071,
   "products/market-intelligence/service/intelligence/jobs/registerMarketAnalysisRuntime.ts": 671,
