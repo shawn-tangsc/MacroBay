@@ -703,6 +703,36 @@ describe('daily briefing document', () => {
     expect((document.next.candidates ?? []).map((item) => item.eventKey)).not.toContain('NVDA.ALL_HANDS')
   })
 
+  // 一级事件按身份进候选，不按 `importance`（Chief 2026-11-16）：narwhal 那批行重要性是空的，
+  // 它们恰好是 CPI、非农这类最该出现的事件；重要性是我们缺的字段，不是判断它们不重要的理由。
+  it('keeps a first-tier event in the candidates even when its importance is unknown', () => {
+    const event = {
+      eventKey: 'US.CPI.NSA.YOY.2026-10', title: '10月未季调消费者物价指数(年率)', titleKey: 'US.CPI.NSA.YOY',
+      metricKey: 'US.CPI.NSA.YOY',
+      scheduledAt: '2026-11-02T13:30:00.000Z', lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const, surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [event] } }),
+      date: '2026-10-30'
+    })
+    expect(document.next.candidates?.map((item) => item.eventKey)).toContain('US.CPI.NSA.YOY.2026-10')
+  })
+
+  // 0xrouter 那条纪要的身份是指标码为数组，没有 `metricKey`；只能按源原文名认出来。
+  it('keeps a first-tier event that has no metric key, matched by its source title', () => {
+    const minutes = {
+      eventKey: '9151f5c8-0000-4000-8000-000000000001', title: '美联储公布货币政策会议纪要',
+      scheduledAt: '2026-11-02T19:00:00.000Z', lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const, surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [minutes] } }),
+      date: '2026-10-30'
+    })
+    expect(document.next.candidates?.map((item) => item.title)).toContain('美联储公布货币政策会议纪要')
+  })
+
   it('keeps all same-release candidates for the agent to choose', () => {
     const event = (eventKey: string, titleKey: string) => ({
       eventKey, title: titleKey, titleKey, scheduledAt: '2026-11-06T12:30:00.000Z', importance: 'high' as const,

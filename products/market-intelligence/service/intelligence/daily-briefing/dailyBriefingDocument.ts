@@ -31,6 +31,7 @@ import {
 
 // 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
 export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
+import { briefingFirstTierFamily } from './briefingFirstTierEvents'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 /**
@@ -304,7 +305,12 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
   const today = localDate(packet.windowEnd, packet.timeZone)
   const horizon = addDays(today, 7)
   const candidates = packet.calendar.events
-    .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
+    // 一级事件按**身份**进候选，不按重要性：narwhal 那批行重要性是空的，而它们恰是 CPI/非农/
+    // 纪要这类最该出现的事件；重要性缺失是我们没有这个字段，不是「它不重要」。
+    .filter((event) => event.lifecycleState === 'scheduled'
+      && (event.importance === 'high' || briefingFirstTierFamily({
+        eventKey: event.eventKey, title: event.title, titleKey: event.titleKey, metricKey: event.metricKey
+      }) !== undefined))
     // 英文版次只列**有英文名**的事件（`02` `A0.9`）：源里只有中文名的（如央行讲话那条源）不列，
     // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
     .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))

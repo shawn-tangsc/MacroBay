@@ -315,6 +315,33 @@ describe('daily brief agent turn copy', () => {
     expect(writing).toContain('"eventKey": "US.FOMC"')
   })
 
+  // 选材可以少列，但不许把一级事件筛没（Chief 2026-11-16）：模型只选了 PMI 时，CPI 仍要出现。
+  it('keeps a first-tier candidate the editor did not select', async () => {
+    const base = withNextCandidates()
+    const cpi = {
+      eventKey: 'US.CPI.NSA.YOY.2026-10', title: 'CPI year over year', at: '2026-11-03T13:30:00.000Z',
+      importance: 'high' as const, category: 'economic-indicator' as const,
+      relevance: { score: 94, role: 'inflation' as const, reasonCode: 'inflation-discount-rate' }
+    }
+    const document = { ...base, next: { ...base.next, candidates: [...(base.next.candidates ?? []), cpi] } }
+    const selection = { stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: ['CN.NBS_PMI'] }
+    const { runner } = scriptedRunner(selection, editorial(
+      'US.FOMC',
+      'The policy path sets the discount rate for BTC and ETH.'
+    ))
+
+    const result = await runDailyBriefAgentTurn({ runner, document, locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    const keys = result.document.next.items.map((item) => item.eventKey)
+    expect(keys).toContain('US.CPI.NSA.YOY.2026-10')
+    expect(keys).toContain('CN.NBS_PMI')
+    // 一级事件排在前面；上限仍然遵守。
+    expect(keys[0]).toBe('US.CPI.NSA.YOY.2026-10')
+    expect(keys.length).toBeLessThanOrEqual(3)
+  })
+
   it('ignores an unknown focus key instead of failing the edition', async () => {
     const selection = {
       stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],

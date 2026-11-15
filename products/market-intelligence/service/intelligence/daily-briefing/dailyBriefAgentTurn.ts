@@ -9,6 +9,7 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { stoppedOutcome } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
+import { briefingFirstTierFamily, mergeFirstTierNext } from './briefingFirstTierEvents'
 import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
@@ -418,10 +419,19 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const orderedNext = [...selectedNext].sort(compareBriefingNextRelevance)
   // Deterministic floor: when the editor hid every other event, the next most relevant one stays
   // visible. `maximumNextItems` excludes the focus, so the rendered list is focus + 3 = 4.
-  const nextItems = (orderedNext.length > 0
+  // 一级事件**必须出现**（用户/Chief 2026-11-16）：模型可以少列，但不许把 FOMC 纪要、CPI、非农
+  // 这类筛没。一级事件排在前面，其余保持编辑的选择顺序，总条数仍受同一个上限约束。
+  const firstTierNext = relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey
+    && briefingFirstTierFamily({ eventKey: item.eventKey, title: item.title, titleKey: item.titleKey }) !== undefined)
+  const selectedForItems = orderedNext.length > 0
     ? orderedNext
-    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey).slice(0, 1))
-    .slice(0, dailyBriefingPolicy.maximumNextItems)
+    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey).slice(0, 1)
+  const nextItems = mergeFirstTierNext({
+    ...(focus?.eventKey ? { focusEventKey: focus.eventKey } : {}),
+    selected: selectedForItems,
+    mustKeep: firstTierNext,
+    limit: dailyBriefingPolicy.maximumNextItems
+  })
   const selectedNews = newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items
   const selectedMacro = macroIds ? macroCandidates.filter((item) => macroIds.has(`macro:${item.eventKey}`)) : macroCandidates
   // Selection decides visibility. The system never unions a release the editor did not select: a
