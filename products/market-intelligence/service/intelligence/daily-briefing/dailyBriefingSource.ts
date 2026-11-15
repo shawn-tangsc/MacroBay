@@ -55,12 +55,11 @@ export type DailyBriefingSourceDeps = Readonly<{
    * `refreshNow` absent means the build never wired it (a wiring gap), which is a different branch
    * from a bound command that fails when called.
    */
-  calendarCommands?: Readonly<{ refreshNow?: (input: { timeoutMs: number }) => Promise<unknown> }>
-  /**
-   * 运行时已注册的作业定义 id（`jobRuntime.listSchedules()` 的投影）。日报补跑「谁此刻在采」
-   * 只认它；登记表的 `collection`/`optIn` 回答不了这个问题。
-   */
-  calendarRegisteredSchedules?: () => readonly string[]
+  calendarCommands?: Readonly<{
+    refreshNow?: (input: { timeoutMs: number }) => Promise<unknown>
+    /** 运行时已注册的作业定义 id（`jobRuntime.listSchedules()` 的投影）；补跑清单只认它。 */
+    registeredScheduleIds?: () => readonly string[]
+  }>
   policyPathQuery?: { read: (input: { asOf: string }) => import('../policy-path/policyPathQueryService').PolicyPathReading | undefined }
   /**
    * Stored brief editions, read-only. Optional so a build without a briefing store still produces a
@@ -113,8 +112,8 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         ...(deps.calendarCommands?.refreshNow
           ? { refreshNow: deps.calendarCommands.refreshNow }
           : {}),
-        ...(deps.calendarRegisteredSchedules
-          ? { registeredScheduleIds: deps.calendarRegisteredSchedules }
+        ...(deps.calendarCommands?.registeredScheduleIds
+          ? { registeredScheduleIds: deps.calendarCommands.registeredScheduleIds }
           : {})
       })
       const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })

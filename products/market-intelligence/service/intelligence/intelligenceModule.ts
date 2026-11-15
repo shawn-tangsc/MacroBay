@@ -988,7 +988,7 @@ export function getIntelligenceModule(
       resolveFactSource: resolveEtfFactSource,
       now: () => new Date().toISOString(),
     })
-    const briefingCalendar = createBriefingCalendarCommands()
+    const briefingCalendar = createBriefingCalendarCommands(() => jobRuntime.listSchedules().map((definition) => definition.id))
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
@@ -1005,8 +1005,6 @@ export function getIntelligenceModule(
         // 来源静默/连续失败（`02` v2.167）：读采集运行状态，写进冻结的日报文档。
         sourceStates: () => pipeline.listRuntimeStates(),
         calendarCommands: briefingCalendar.commands,
-        // 补跑清单只认运行时排期：登记表回答不了「此刻在采」这个事实。
-        calendarRegisteredSchedules: () => jobRuntime.listSchedules().map((definition) => definition.id),
         macroWebRead: macroWebReadFromHooks(hooks, () => dailyBriefingAiSettings.getView()),
       }),
       store: dailyBriefingStore,
