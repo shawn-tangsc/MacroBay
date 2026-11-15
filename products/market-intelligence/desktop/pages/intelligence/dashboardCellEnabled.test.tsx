@@ -158,7 +158,12 @@ describe('dashboard cells read only when the reader left them on', () => {
 
 
 describe('policy path keeps one placement in every state', () => {
-  it('renders the disabled card inside the right-rail slot, not in the main column', async () => {
+  /**
+   * 2026-11-15 布局改了：政策那张卡不再存在，它的三支状态由**钟表卡的政策行**接住，
+   * 钟表卡在左栏顶部那一排里；右栏顶部改放 AI 结论。能力（未启用要说清、要能去开）不变，
+   * 由 `cryptoDashboard.test.tsx` 里那 5 条迁移用例继续盯着。
+   */
+  it('says the rate cell is off inside the clock card, and keeps the rail for the conclusion', async () => {
     const slot = document.createElement('div')
     slot.setAttribute('data-dashboard-policy-slot', '')
     document.body.append(slot)
@@ -166,10 +171,10 @@ describe('policy path keeps one placement in every state', () => {
       { read: async () => ({ [dashboardCellId('policy-path', 'probability')]: false }) },
       { policySlot: slot }
     )
-    // 三支都进同一个落点：没启用这一支也在右栏。句子现在按**是哪一格没启用**点名
-    // （2026-11-12 双格形状），不再是一句笼统的「来源没有启用」。
-    expect(slot.textContent).toContain('利率未启用')
-    expect(container.textContent).not.toContain('利率未启用')
+    // 句子仍按**哪一格没启用**点名，但渲染在钟表卡里（左栏那一排），不再是旧政策卡。
+    expect(container.querySelector('.mi-clock__policy-note')?.textContent).toContain('利率未启用')
+    // 右栏顶部那格现在只装 AI 结论的挂点，不再装政策卡。
+    expect(slot.querySelector('[data-dashboard-conclusion-slot]')).not.toBeNull()
     slot.remove()
   })
 })

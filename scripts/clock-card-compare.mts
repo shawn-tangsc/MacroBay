@@ -38,7 +38,6 @@ const SELECTORS: ReadonlyArray<readonly [string, string, string]> = [
   ['nodeCenter', '.n__node[data-center]', '.mi-clock__node[data-center]'],
   ['nodePast', '.n__node--past', '.mi-clock__node--past'],
   ['foot', '.n__foot', '.mi-clock__foot'],
-  ['detail', '.n__foot button', '.mi-clock__detail'],
   ['info', '.n__info', '.mi-clock__info']
 ]
 
@@ -117,7 +116,7 @@ function implementationPage(model: Readonly<{ withIcon: boolean }>): string {
     ${plaque('future', '新增就业', '+142K', 231.38, 284.2, 0.7006, true)}
     ${plaque('future', '政策利率', '86.8%', 139.93, 297.05, 0.82)}
     ${plaque('past', 'CPI 年率', '3.74%', 51.09, 97.5, 1)}
-    <div class="mi-clock__foot"><span>● 实时</span><span class="mi-clock__info" tabindex="0">ⓘ</span><button class="mi-clock__detail" type="button">详细 ↗</button></div>
+    <div class="mi-clock__foot"><span class="mi-clock__info" tabindex="0">ⓘ</span></div>
     ${model.withIcon ? `<div class="mi-clock__action"><button type="button" class="ant-btn mi-clock__action-button" aria-label="打开日历" style="width:22px;height:22px">📅</button></div>` : ''}
 </section>
 <script>${MEASURE_SCRIPT(SELECTORS, PROPERTIES, 'impl')}</script>

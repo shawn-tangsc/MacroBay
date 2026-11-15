@@ -65,7 +65,7 @@ import { createPortal } from 'react-dom'
 
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
 import { useCurveReleaseEvents } from './useCurveReleaseEvents'
-import { ClockCardSlot } from './ClockCardSlot'
+import { DashboardMacroRow } from './DashboardMacroRow'
 import { buildClockCardModel } from './clockCardModel'
 import { clockScheduleMetrics } from './clockScheduleMetrics'
 import { clockCardText } from './clockCardText'
@@ -460,11 +460,24 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         </ConfirmProvider>
       </ErrorBoundary>
 
-      {/* Named mount point: the analysis workspace portals its latest-conclusion
-          card in here, directly under the macro release strip, so the card reads
-          as part of this dashboard without the dashboard knowing timeline data. */}
-      <div ref={conclusionSlot} data-dashboard-conclusion-slot />
-
+      {/* 左栏顶部一排两块（用户 2026-11-15）：钟表 336 固定 + 利率数学期望占满剩余。
+          间距只有 8，这一排不带左右内距；AI 结论已搬到右栏（下面那个 portal）。 */}
+      <DashboardMacroRow
+        pending={!readsReady}
+        locale={locale}
+        text={text}
+        today={clockToday}
+        events={curveReleaseEvents}
+        facts={clockFacts}
+        {...(policyPath?.state === 'available' ? { reading: policyPath.reading } : {})}
+        policyUnavailable={policyPath?.state === 'unavailable'}
+        reloadPolicy={policyPathRead.reload}
+        probability={policyProbability}
+        fed={policyFed}
+        onConfigureSources={onConfigureSources}
+        onManageSource={onManageSource}
+        onOpenDrawer={() => setIndicatorDrawerOpen(true)}
+        resolveKey={resolveProductKey} />
       {crossAssetClient ? <CrossAssetObservationPanel
         client={crossAssetClient}
         rowStates={rowStates}
@@ -492,26 +505,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源没有启用」+ 去启用；
           读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
       {readsReady ? (() => {
-        // 三支（读到 / 读不到 / 没启用）**同一个落点**：右栏日历卡上方那块 `policySlot`。
-        // 只有读到那支走 portal 会让另外两支落进主栏——用户 2026-11-11 截图报的正是这个。
-        // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
-        // 「利率路径 SEP」那张卡已删：它的三支状态（读到/读不到/未启用）由钟表卡的政策块接住。
-        const stacked = <ClockCardSlot
-          locale={locale}
-          text={text}
-          today={clockToday}
-          events={curveReleaseEvents}
-          facts={clockFacts}
-          {...(policyPath?.state === 'available' ? { reading: policyPath.reading } : {})}
-          policyUnavailable={policyPath?.state === 'unavailable'}
-          reloadPolicy={policyPathRead.reload}
-          probability={policyProbability}
-          fed={policyFed}
-          onConfigureSources={onConfigureSources}
-          onManageSource={onManageSource}
-          onOpenDrawer={() => setIndicatorDrawerOpen(true)}
-          resolveKey={resolveProductKey} />
-        return policySlot ? createPortal(stacked, policySlot) : stacked
+        // 右栏顶部现在装 AI 结论（原来钟表卡在这里）：同一栏、占满整栏。
+        const conclusionMount = <div ref={conclusionSlot} data-dashboard-conclusion-slot />
+        return policySlot ? createPortal(conclusionMount, policySlot) : conclusionMount
       })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}

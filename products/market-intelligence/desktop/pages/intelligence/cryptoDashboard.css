@@ -644,3 +644,24 @@
 .mi-capital-conditions__signal-statement { display: inline-flex; border-radius: 3px; }
 .mi-capital-conditions__signal-statement:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
+
+/*
+ * 左栏顶部那一排（用户 2026-11-15）：钟表卡 + 利率数学期望。
+ * 钟表固定 336（内部尺寸不动、`transform` 无缩放）；期望图吃满剩余；间距只有 8，这一排不带左右内距。
+ */
+.mi-crypto-dashboard__macro-row { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.mi-crypto-dashboard__macro-row > .mi-clock { flex: none; }
+.mi-crypto-dashboard__macro-row > .mk-dash-expectation { flex: 1 1 auto; min-width: 0; }
+
+/* 期望图那一格：与钟表同高 330，卡片外观与抽屉里那块同族（边框/圆角/底色用同一批 token）。 */
+.mk-dash-expectation { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px 12px 12px 52px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.mk-dash-expectation__head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mk-dash-expectation__head > h2 { margin: 0; font-size: var(--font-body); font-weight: 600; color: var(--muted-strong); white-space: nowrap; }
+.mk-dash-expectation__value { font-size: var(--font-metric-md); line-height: 1.05; font-weight: 650; font-variant-numeric: tabular-nums; }
+.mk-dash-expectation__value > i { margin-left: 2px; font-size: var(--font-meta); font-style: normal; color: var(--muted); }
+.mk-dash-expectation__absent { font-size: var(--font-meta); color: var(--muted); }
+.mk-dash-expectation__plot { flex: 1 1 auto; min-height: 0; min-width: 0; }
+
+/* 右栏顶部现在装 AI 结论（原来钟表卡在这）：占满整栏、不留居中内距。 */
+[data-dashboard-policy-slot] { display: block; padding-inline: 0; }

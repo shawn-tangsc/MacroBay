@@ -20,9 +20,10 @@ import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/e
 import { useCalendarMonthReleases } from './useCalendarMonthReleases'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
+import { useExpectationSeries } from './useExpectationSeries'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import {
-  expectationBp, expectationEventMoves, matchedRelevantConcept, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS
+  matchedRelevantConcept, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS
 } from '../../../contracts/policyPath'
 import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { tierOfMetricKey } from '../../../service/intelligence/macro-calendar/marketCalendarReleaseGroups'
@@ -49,42 +50,6 @@ import './macroIndicatorDrawer.css'
  * 版式逐项照 `2026-11-13-K11-b.html`（1280 抽屉、正文 1248、左列 828 + 右列 403、间距 16）。
  */
 
-
-/**
- * 图上标注用的短名：取**让这条发布命中清单的那个指标**的名字，其次主 measure，最后日历标题。
- *
- * 为什么先看 `measureKeys`：一次发布覆盖多个指标，主 measure 可能不是解释这次跳动的那个
- * （CPI 那行的主 measure 是核心月率，命中清单的却是整体年率）。
- */
-function shortEventLabel(
-  event: Readonly<{ label: string; eventNameKey?: string; measureKeys?: readonly string[]; seriesId?: string }>,
-  text: MacroIndicatorDrawerText
-): string {
-  if (event.seriesId === 'usa-policy-rate-decision') return text.eventNames.decision
-  if (event.seriesId === 'usa-monetary-policy-minutes') return text.eventNames.minutes
-  const matched = matchedRelevantConcept({ at: '', label: event.label, ...(event.measureKeys ? { measureKeys: event.measureKeys } : {}) })
-  return nameOfMetricKey(matched ?? event.eventNameKey, text) ?? event.label
-}
-
-/**
- * 事件短名按**概念**取，不按码取（季调/未季调是同一个概念的两个变体）。
- *
- * 这就是 M2 要它改读 catalog 的原因：以前换一次口径（NSA→SA）必须在这里补一个 `case`，
- * 漏了就让那条事件掉进 default、标题退回源原文名——今晚那类「换码漏一处」的坑正是这样来的。
- * 现在按 `metricConceptOf()` 归一，加变体不用改这里。
- */
-const eventNameKeyByConcept: Readonly<Record<string, 'cpi' | 'coreCpi' | 'payrolls' | 'corePce'>> = Object.freeze({
-  'US.CPI.YOY': 'cpi',
-  'US.CORE_CPI.YOY': 'coreCpi',
-  'US.NONFARM.CHANGE': 'payrolls',
-  'US.CORE_PCE.YOY': 'corePce'
-})
-
-function nameOfMetricKey(key: string | undefined, text: MacroIndicatorDrawerText): string | undefined {
-  if (key === undefined || key === '') return undefined
-  const nameKey = eventNameKeyByConcept[metricConceptOf(key)]
-  return nameKey === undefined ? undefined : text.eventNames[nameKey]
-}
 
 export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, calendarBlock, now, readMarketEvents }: Readonly<{
   locale: 'zh-CN' | 'en-US'
@@ -269,36 +234,15 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
 
   useEffect(() => () => observerRef.current?.disconnect(), [])
 
-  // 序列 → 曲线的逐点值。公式只有一份（契约里的 `expectationBp`），这里只负责搬。
-  const points = useMemo<readonly ExpectationPoint[]>(() => {
-    const series = policyReading?.probability?.series
-    if (!series) return []
-    return series.flatMap((point) => {
-      const bp = expectationBp(point.values)
-      return Number.isFinite(bp) ? [{ at: point.at, bp, values: point.values }] : []
-    })
-  }, [policyReading])
-  const latestBp = points[points.length - 1]?.bp
-  const delta = policyReading?.probability?.expectationChange24hBp
+  // 序列与事件标注：与看板首页那张图**同一份**推导（`useExpectationSeries`），不各写一遍。
+  const { points, latestBp, delta, truncatedDays, eventMarks } = useExpectationSeries(policyReading, releaseEvents, text)
+  const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
   // 三种变化句各有各的边界：没有基准说「无历史可比」，不是 +0.0bp；差 0 才说持平。
   const deltaText = delta === undefined
     ? text.rateNoHistory
     : Math.abs(delta) < 0.05
       ? text.rateFlat
       : (delta > 0 ? text.rateDeltaUp : text.rateDeltaDown).replace('{value}', Math.abs(delta).toFixed(1))
-  const truncatedDays = policyReading?.probability?.seriesTruncated && points.length > 1
-    ? Math.max(1, Math.ceil((Date.parse(points[points.length - 1]!.at) - Date.parse(points[0]!.at)) / 86_400_000))
-    : undefined
-  const policyMonth = policyReading ? policyPathMonth(policyReading.meetingDate, locale) : ''
-  // 事件标注：推动量、±15 分钟窗口、同窗不归因、最多 5 条——规则全在契约里，这里只搬。
-  // 图上用短名（完整标题不上图）；名字按身份取，不按标题文本猜。
-  const eventMarks = useMemo(() => {
-    const series = policyReading?.probability?.series
-    if (!series || !releaseEvents?.length) return []
-    const named = releaseEvents.map((event) => ({ ...event, label: shortEventLabel(event, text) }))
-    return expectationEventMoves(series, named)
-  }, [policyReading, releaseEvents, text])
-
   // 挂到 body：抽屉是 1280 的右侧浮层，如果落在右栏或某个 overflow 容器里，会被祖先裁掉——
   // 表现正是「点了没反应」。portal 让它以视口为参照，和其它浮层同一层。
   // 平台 `Drawer` 的 modal 档：遮罩、锁焦点、点遮罩关闭、Esc、关闭后焦点回位都是它的能力，
