@@ -35,7 +35,8 @@ export type DualWriteCounts = Readonly<{
 
 /**
  * **按 measure 拆行**的写入（S1 正式路径）：一次发布里的每个 measure 各一行，身份各算各的。
- * 观测草稿那条 `dualWriteObservationBatch` 保留给「从旧形状回放」的对账用，**日常采集走这条**。
+ * （旧形状回放那条 `dualWriteObservationBatch` 已删除：全仓 0 个生产调用者、且没有零值判据，
+ * 留着就是绕过零值规则的第二个写入入口。）
  */
 export function dualWriteMeasureRows(
   database: DatabaseSync,
@@ -204,82 +205,3 @@ function isZeroValue(value: string): boolean {
 const emptyReasons = (): Record<CalendarUnmappedReason, number> =>
   ({ 'unknown-measure': 0, 'unknown-event-type': 0, 'bad-period': 0, 'bad-identity': 0,
     'unknown-release-group': 0, 'ambiguous-same-day': 0, 'no-values': 0 })
-
-export function dualWriteObservationBatch(
-  database: DatabaseSync,
-  batch: Readonly<{ providerId: string; parserVersion: string; observedAt: string
-    drafts: readonly ObservationLike[] }>,
-  options?: Readonly<{ onError?: (message: string) => void }>
-): DualWriteCounts {
-  const reasons = emptyReasons()
-  let written = 0
-  let failed = 0
-  for (const draft of batch.drafts) {
-    try {
-      const identity = narwhalCanonicalIdentityKey(String(draft.marketFactKey))
-      const parts = identity?.split('|') ?? []
-      if (identity === undefined || parts.length !== 3) {
-        reasons['bad-identity'] += 1
-        recordCalendarUnmapped(database, { providerId: batch.providerId, sourceKey: String(draft.marketFactKey),
-          detectedAt: batch.observedAt, rawJson: JSON.stringify({ name: draft.displayName ?? '' }), reason: 'bad-identity' })
-        continue
-      }
-      const [countryCode, metricKey, periodKey] = parts as [string, string, string]
-      const named = nameByMetricKey[metricKey]
-      if (named === undefined) {
-        // 事件型行的身份第二段是**事件类型**（`central-bank-activity`），不是指标码——它们的
-        // `evt.*` 映射还没接，所以记 `unknown-event-type`，别混进「缺指标映射」里：
-        // 两者该修的地方不同（一个补事件类型表，一个补指标码）。
-        const eventType = EVENT_KINDS.includes(metricKey)
-        if (eventType) {
-          // 事件型：用**源给的类型串**翻成 `evt.*` 码（不按名字猜）。类型串是显示名，但它在
-          // 这张表里是**键**，不是匹配依据——未知串照旧落 unmapped。
-          const code = eventCodeBySourceType[String(draft.displayName ?? '')]
-          if (code !== undefined) {
-            const minute = String(draft.scheduledAt ?? '').slice(0, 16)
-            upsertCalendarStandardRow(database, {
-              countryCode, metricKey: code, periodKey: minute,
-              scheduledDate: String(draft.scheduledDate ?? ''), scheduledAt: String(draft.scheduledAt ?? ''),
-              timePrecision: 'minute', valuesJson: '{}', sourceProviderId: batch.providerId,
-              sourceEventId: String(draft.marketFactKey), parserVersion: batch.parserVersion,
-              observedAt: batch.observedAt, firstSeenAt: batch.observedAt
-            })
-            written += 1
-            continue
-          }
-        }
-        const reason: CalendarUnmappedReason = eventType ? 'unknown-event-type' : 'unknown-measure'
-        reasons[reason] += 1
-        recordCalendarUnmapped(database, { providerId: batch.providerId, sourceKey: String(draft.marketFactKey),
-          detectedAt: batch.observedAt, rawJson: JSON.stringify({ metricKey }), reason })
-        continue
-      }
-      const scheduledAt = String(draft.scheduledAt ?? '')
-      const scheduledDate = String(draft.scheduledDate ?? scheduledAt.slice(0, 10))
-      const existing = findCalendarStandardRowBySource(database, {
-        sourceProviderId: batch.providerId, sourceEventId: String(draft.marketFactKey)
-      })
-      upsertCalendarStandardRow(database, {
-        countryCode, metricKey, periodKey, scheduledDate, scheduledAt,
-        ...(existing === undefined ? {} : { firstScheduledDate: existing.firstScheduledDate }),
-        timePrecision: scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute',
-        valuesJson: JSON.stringify({
-          ...(draft.consensus === undefined ? {} : { consensus: draft.consensus.displayValue }),
-          ...(draft.providerPrevious === undefined ? {} : { previous: draft.providerPrevious.displayValue }),
-          ...(draft.providerActual === undefined ? {} : { actual: draft.providerActual.displayValue })
-        }),
-        sourceProviderId: batch.providerId, sourceEventId: String(draft.marketFactKey),
-        parserVersion: batch.parserVersion, observedAt: batch.observedAt, firstSeenAt: batch.observedAt,
-        ...(draft.providerActual === undefined ? {} : { firstPublishedActual: draft.providerActual.displayValue }),
-        ...(draft.providerPrevious === undefined ? {} : { firstPublishedPrevious: draft.providerPrevious.displayValue })
-      })
-      written += 1
-    } catch (error) {
-      // **不许拖停采集**：记一笔、继续下一行。
-      failed += 1
-      options?.onError?.((error as Error)?.message ?? 'unknown')
-    }
-  }
-  // 观测草稿这条老路径不按「同身份同日」合并（它只写身份算得出的行），所以恒 0。
-  return { written, unmapped: reasons, failed, mergedSameDay: 0 }
-}
