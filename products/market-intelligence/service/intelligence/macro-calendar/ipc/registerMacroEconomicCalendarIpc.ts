@@ -17,6 +17,7 @@ import { createMacroCalendarLinkedQueryService, type SafeMarketQuery } from '../
 import { linkZeroXRouterEvent, zeroXRouterOfficialEventLinks } from '../0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry'
 import { createMacroCalendarWriteActions } from '../macroCalendarWriteActions'
 import { listUnmappedCalendarObservationsForRendering } from '../rendering/marketCalendarUnmappedMonthRead'
+import { readCalendarEventIndex } from '../rendering/marketCalendarEventIndexRead'
 import {
   isEmpty,
   isProviderInput,
@@ -43,7 +44,7 @@ export function registerMacroEconomicCalendarIpc(
   fedFomcRefresh?: FedFomcManualRefreshService,
   market?: SafeMarketQuery & { refresh: (input: unknown) => unknown; readCollectionFreshness?: () => Promise<unknown>
     refreshNow?: (input: unknown) => Promise<unknown> },
-  /** 未映射观测的只读月读（渲染专用）。只给数据库句柄：读口本身只在 `rendering/` 里，别的服务文件不许 import。 */
+  /** 渲染专用只读口的数据库句柄（未映射月读 + 事件清单）。读口本身只在 `rendering/` 里。 */
   unmappedMonth?: { database: Parameters<typeof listUnmappedCalendarObservationsForRendering>[0] }
 ): void {
   const releaseTimeOverrides = connection?.releaseTimeOverrides
@@ -107,6 +108,26 @@ export function registerMacroEconomicCalendarIpc(
       }
       const read = listUnmappedCalendarObservationsForRendering(unmappedMonth.database, { month })
       return { state: 'available', items: read.entries, undated: read.undated, superseded: read.superseded }
+    } catch {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+  })
+  /**
+   * **事件清单**（渲染专用，用户 2026-11-16）：一行一个事件身份，按「最近一次发布」倒序分页。
+   * 空数组只表示「没有匹配」；读不到给 `unavailable`——两者不许混。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryEvents, async payload => {
+    try {
+      if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      const query = (payload ?? {}) as { cursor?: unknown; pageSize?: unknown; nameQuery?: unknown; countryCode?: unknown }
+      const read = readCalendarEventIndex(unmappedMonth.database, {
+        today: new Date().toISOString().slice(0, 10),
+        ...(typeof query.cursor === 'string' ? { cursor: query.cursor } : {}),
+        ...(typeof query.pageSize === 'number' ? { pageSize: query.pageSize } : {}),
+        ...(typeof query.nameQuery === 'string' ? { nameQuery: query.nameQuery } : {}),
+        ...(typeof query.countryCode === 'string' ? { countryCode: query.countryCode } : {})
+      })
+      return read
     } catch {
       return { state: 'unavailable', reasonCode: 'query-unavailable' }
     }

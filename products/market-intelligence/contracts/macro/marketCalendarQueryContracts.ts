@@ -81,6 +81,8 @@ export const marketCalendarPublicPolicy = Object.freeze({
      * 与 `queryMonth` 同一族、同一个前缀——另开一个前缀会让「日历的读」散成两族。
      */
     queryUnmappedMonth: 'intelligence.macro.marketCalendar.queryUnmappedMonth',
+    /** 事件清单（一行一个事件身份，渲染专用只读口）：核对「每个事件去哪看官方发布」。 */
+    queryEvents: 'intelligence.macro.marketCalendar.queryEvents',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)

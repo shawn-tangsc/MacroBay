@@ -242,6 +242,16 @@ export function nameForMetricKey(metricKey: string): Readonly<{
 
 /** 事件类型名：`evt.*` → 四名（来自 20 号表）。事件型行没有指标码，靠这张表才有读者看得懂的名字；
  * 取不到就退回类型串——**不许显示码本身**，也不许编名字。 */
+/**
+ * 名表条目的**一对名字**（中英各四列）。读侧以前只取中文简称，名称筛选要中英都能搜，
+ * 所以统一从这里取——四个字段名只在这张名表里出现（守卫按字段形状抓的正是这类文件）。
+ */
+export function calendarNamesFor(metricKey: string): Readonly<{
+  zhFull: string; zhShort: string; enFull: string; enShort: string
+}> | undefined {
+  return nameByMetricKey[metricKey] ?? eventTypeNameByCode[metricKey]
+}
+
 export const eventTypeNameByCode: Readonly<Record<string, Readonly<{
   zhFull: string; zhShort: string; enFull: string; enShort: string
 }>>> = Object.freeze({
