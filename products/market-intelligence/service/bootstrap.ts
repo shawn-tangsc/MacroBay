@@ -184,7 +184,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   })
   const register: ProductIpcRegistrar = sampleMode.wrap(deps.register)
   sampleMode.registerIpc(register)
-  let syncMarketCalendarSchedule: (() => Promise<void>) | undefined
   // A product-owned job arms its own schedule from the switch; the module only forwards the event.
   const sourceEnableListeners = new Map<string, () => void>()
   const platformFetch = deps.platformFetch ?? (() => { throw new Error('market-intelligence-platform-fetch-required') })
@@ -213,7 +212,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(deps.getNetworkSettings
       ? { createPlatformWebSocket: () => createPlatformWebSocketFactory({ getNetworkSettings: deps.getNetworkSettings! }) }
       : {}),
-    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => { void syncMarketCalendarSchedule?.(); void narwhalCalendarAssembly?.syncSchedule() },
+    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => { void narwhalCalendarAssembly?.syncSchedule() },
     // 读者一拨开关，产品自有作业就跟着排期/撤期（`sourceEnableListeners` 在下面装配时登记）。
     // 通用采集作业与宏观市场、DXY、Nasdaq 100 那几条不由这里管：它们的闸是服务里的同一处。
     onSourceEnabledChanged: (sourceId) => { sourceEnableListeners.get(sourceId)?.() }
