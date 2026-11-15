@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { JobHandler } from '@platform/jobs'
 
+import { createEnabledZeroXRouterFeeds } from '../intelligence/macro-calendar/enabledCalendarFeeds'
 import { narwhalSourceEventIdForIdentity } from '../intelligence/macro-calendar/marketCalendarMetricIdentity'
 import { wireZeroXRouterCalendarSchedule } from './zeroXRouterCalendarSchedule'
 
@@ -98,6 +99,27 @@ describe('0xrouter 三路日历调度接线', () => {
     const economicHandler = [...jobs.handlers.entries()].find(([id]) => id.includes('economic-data'))?.[1]
     await economicHandler!()
     expect(refreshAutomatic).toHaveBeenCalledWith([feeds.economicData])
+    schedule.dispose()
+  })
+
+  it('装配层喂的是 0xrouter 自己的启用读取器：档案里启用的三路都必须注册（接错读取器就不注册）', async () => {
+    const jobs = fakeJobRuntime()
+    // 真读取器 + 真档案形状：三路都启用，而它们**不在**通用自动采集名单里。
+    const readEnabledFeeds = createEnabledZeroXRouterFeeds({
+      listProfiles: async () => Object.values(feeds).map((sourceId) => ({ sourceId, enabled: true }))
+    })
+    const schedule = wireZeroXRouterCalendarSchedule({
+      jobRuntime: jobs.runtime, database: new DatabaseSync(':memory:'),
+      refreshAutomatic: async () => ({ state: 'succeeded', items: [] }),
+      readReadiness: async () => ({ enabled: true, hasCredential: true }),
+      readEnabledFeeds, startImmediately: false
+    })
+    await schedule.initialize()
+    expect(jobs.scheduled.sort()).toEqual([
+      'market-intelligence.refreshMarketCalendar.automatic.central-bank-activities',
+      'market-intelligence.refreshMarketCalendar.automatic.economic-data',
+      'market-intelligence.refreshMarketCalendar.automatic.financial-events'
+    ])
     schedule.dispose()
   })
 

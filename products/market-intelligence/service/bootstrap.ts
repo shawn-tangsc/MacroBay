@@ -28,7 +28,7 @@ import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossA
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
 import { createNotificationTestWiring } from './intelligence/ipc/notificationTestWiring'
-import { createEnabledCalendarFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
+import { createEnabledCalendarFeeds, createEnabledZeroXRouterFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
@@ -302,7 +302,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
     readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })
-  const zeroXRouterSchedule = wireZeroXRouterCalendarSchedule({ jobRuntime: deps.jobRuntime, database: macroCalendarBackend.storage.database, refreshAutomatic: (feeds) => marketCalendar.refreshAutomatic(feeds), readReadiness: intelligenceModule.calendarManualDependencies.readReadiness, readEnabledFeeds: readEnabledCalendarFeeds, ...(deps.log === undefined ? {} : { log: deps.log }) })
+  const zeroXRouterSchedule = wireZeroXRouterCalendarSchedule({ jobRuntime: deps.jobRuntime, database: macroCalendarBackend.storage.database, refreshAutomatic: (feeds) => marketCalendar.refreshAutomatic(feeds), readReadiness: intelligenceModule.calendarManualDependencies.readReadiness, readEnabledFeeds: createEnabledZeroXRouterFeeds({ listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles() }), ...(deps.log === undefined ? {} : { log: deps.log }) })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
   // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
