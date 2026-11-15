@@ -13,6 +13,8 @@ import { describe, expect, it } from 'vitest'
 const ROOT = join(process.cwd(), 'products/market-intelligence')
 const ALLOWED = new Set([
   'service/intelligence/daily-briefing/dailyBriefingStore.ts',
+  // 读那一半从 store 里分出去了（文件超行数），仍然是同一条读取路径，不是第二个读点。
+  'service/intelligence/daily-briefing/dailyBriefingStoreRow.ts',
   'service/intelligence/daily-briefing/dailyBriefingStorageMigration.ts'
 ])
 
