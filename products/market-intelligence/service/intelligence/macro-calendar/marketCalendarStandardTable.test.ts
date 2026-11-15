@@ -2,8 +2,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import {
-  calendarValueStateMismatches, ensureCalendarStandardTables, findCalendarStandardRowBySource,
-  recordCalendarUnmapped, upsertCalendarStandardRow, type CalendarStandardRow
+  calendarValueStateMismatches, countOrphanSourceIds, ensureCalendarStandardTables, findCalendarStandardRowBySource,
+  pruneOrphanSourceIds, recordCalendarSourceId, recordCalendarUnmapped, upsertCalendarStandardRow, type CalendarStandardRow
 } from './marketCalendarStandardTable'
 
 const base: CalendarStandardRow = {
@@ -179,5 +179,37 @@ describe('同一天两源合并：时刻取 minute 那一方', () => {
     const [row] = rows(database)
     expect(row!.scheduled_at).toBe('2026-11-06T13:30:00.000Z')  // 时刻没被抹掉
     expect(row!.time_precision).toBe('minute')                   // 精度不反向降级
+  })
+})
+
+describe('台账零孤儿（可跑判据，不是一次性脚本）', () => {
+  const record = (database: DatabaseSync, sourceEventId: string) => recordCalendarSourceId(database, {
+    providerId: 'narwhal', sourceEventId, countryCode: base.countryCode, metricKey: base.metricKey,
+    periodKey: base.periodKey, firstScheduledDate: base.scheduledDate, observedAt: '2026-11-10T13:31:00.000Z'
+  })
+  /** 真孤儿：`source_event_id` 查不到，身份（国家+码+期间+首发布日）也查不到。 */
+  const recordGhost = (database: DatabaseSync) => recordCalendarSourceId(database, {
+    providerId: 'narwhal', sourceEventId: 'ghost-event', countryCode: 'USA', metricKey: 'US.GHOST.SA.MOM',
+    periodKey: '2099-01', firstScheduledDate: '2099-01-01', observedAt: '2026-11-10T13:31:00.000Z'
+  })
+
+  it('造一条指向不存在事件的台账行 → 能被查出来，清掉之后为 0，再清一次仍是 0（幂等）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, base)
+    record(database, base.sourceEventId)      // 指向存在的行：不是孤儿
+    recordGhost(database)                     // 指向不存在的事件、身份也不存在：孤儿
+    expect(countOrphanSourceIds(database)).toBe(1)
+    expect(pruneOrphanSourceIds(database)).toBe(1)
+    expect(countOrphanSourceIds(database)).toBe(0)
+    expect(pruneOrphanSourceIds(database)).toBe(0)
+  })
+
+  it('源重发覆盖了 source_event_id 时，按身份匹配的旧台账不算孤儿（只按 id 比会误删）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, sourceEventId: 'newest-id' })
+    record(database, 'older-id-same-identity')
+    expect(countOrphanSourceIds(database)).toBe(0)
   })
 })
