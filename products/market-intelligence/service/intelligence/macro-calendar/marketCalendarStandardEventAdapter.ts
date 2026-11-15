@@ -106,7 +106,9 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     sourceObservedAt: row.observedAt,
     // **官方行不贴「未核验」**：它本身就是核验过的来源。判据只有一处——feed id 是不是官方那三条。
     coverage: officialFeedIdOf(row.sourceProviderId) === undefined ? 'observed-unverified' as const : 'available' as const,
-    timePrecision: row.timePrecision, releaseStatus: row.status, rowKind: row.rowKind
+    timePrecision: row.timePrecision, releaseStatus: row.status, rowKind: row.rowKind,
+    // 次数只在 >1 时下发（1 次是常态，挂上去就是噪声）；界面 `=== 1` 或缺省都不显示。
+    ...((row.releaseCount ?? 1) > 1 ? { releaseCount: row.releaseCount } : {})
   }
 }
 

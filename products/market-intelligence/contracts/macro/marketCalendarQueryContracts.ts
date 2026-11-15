@@ -137,6 +137,11 @@ export type MarketCalendarEvent = Readonly<{
    * 来源。**新写入一律给 feed id**（`marketCalendarPublicPolicy.sourceFeeds`）；
    * `'Narwhal' | '0xRouter'` 是旧行兼容值，读侧应按「feed id 优先、旧值兜底」判。
    */
+  /**
+   * 这一期发布过几次（>1 时界面要显示「本期 N 次」）。
+   * 二读/三读不显示次数，读者就会把二读当初值——合并了不回显等于把「改过数据」藏起来。
+   */
+  releaseCount?: number
   source: typeof marketCalendarPublicPolicy.sourceFeeds[number] | 'unspecified' | 'Narwhal' | '0xRouter'
   sourceObservedAt: string
   /**

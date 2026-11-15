@@ -28,6 +28,8 @@ export type StandardMonthRow = Readonly<{
   scheduledAt?: string
   timePrecision: 'minute' | 'date'
   rowKind: 'release' | 'estimate'
+  /** 这一期发布过几次（同源多次真实发布 / 跨源合并前的行数）；缺省按 1。 */
+  releaseCount?: number
   /** 写入侧存下来的「这是什么」；空值＝还没回填，读侧退前缀规则。 */
   eventType?: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   status: CalendarReleaseStatus
@@ -65,7 +67,7 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ? calendarStandardTablePolicy.eventsTable
     : calendarStandardTablePolicy.releasesView
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
-    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, importance, event_type,
+    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, importance, event_type, release_count,
     source_provider_id, source_event_id, observed_at, values_json
     from ${source}
     where scheduled_date >= ? and scheduled_date < ?
@@ -79,6 +81,8 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ...(row.scheduled_at === null ? {} : { scheduledAt: String(row.scheduled_at) }),
     timePrecision: String(row.time_precision) === 'minute' ? 'minute' as const : 'date' as const,
     rowKind: String(row.row_kind) === 'estimate' ? 'estimate' as const : 'release' as const,
+    // **这一期发布过几次**（合并后仍保留）：二读/三读不显示次数，读者就会把二读当初值。
+    releaseCount: Number(row.release_count ?? 1),
     // 写入侧存下来的「这是什么」；空值留给适配器退前缀规则（不是默认成经济指标）。
     ...(row.event_type === null ? {} : { eventType: String(row.event_type) as 'economic-indicator' | 'financial-event' | 'central-bank-activity' }),
     // 闭集从契约派生，不在读侧再写一遍字面量。

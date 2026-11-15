@@ -38,6 +38,10 @@ export const zeroXRouterCalendarSchedulerFeeds = Object.freeze([
 
 type CalendarFeed = typeof zeroXRouterCalendarSchedulerFeeds[number]
 
+/** 三路各自的作业定义 id（新鲜度读取器要按「当前在跑的作业」算，不能写死别的源）。 */
+export const zeroXRouterCalendarSchedulerDefinitionIds: readonly string[] = Object.freeze(
+  zeroXRouterCalendarSchedulerFeeds.map((feed) => `${zeroXRouterCalendarSchedulerPolicy.definitionId}.${feed.key}`))
+
 export type ZeroXRouterCalendarAutomaticRefresh = Readonly<{
   refreshAutomatic: (enabledFeeds?: readonly string[]) => Promise<{ state: string; failureCode?: string; items: readonly unknown[] }>
 }>

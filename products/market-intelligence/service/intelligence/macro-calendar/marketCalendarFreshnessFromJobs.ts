@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { narwhalCalendarSweepPolicy, narwhalCalendarTickPolicy } from './narwhal-calendar/narwhalCalendarJob'
+import { zeroXRouterCalendarSchedulerDefinitionIds } from './0xrouter-calendar/zeroXRouterCalendarScheduler'
 
 /**
  * **新鲜度改写**：删掉旧源之后，「数据新不新」的唯一依据就是**采集作业自己跑成什么样**。
@@ -39,6 +40,20 @@ export function readStandardTableLastWrittenAt(database: DatabaseSync): string |
 export type JobRunLike = Readonly<{ status?: string; completedAt?: string; startedAt?: string
   createdAt?: string; definitionId?: string }>
 
+/**
+ * **当前真正在写的采集作业**（2026-11-16 修）。
+ *
+ * 原来只认 narwhal 的两个定义；narwhal 一停（最后一次完成 11-13），这个数就冻在 11-13，
+ * 而 0xrouter 三路每分钟都在写（1180 次、最后一次 11-22:52）——于是「数据 8 分钟新」被算成
+ * 「过期两天」，简报触发补采、补采又绑在 narwhal 上，最后写成「这次补采没有成功」。
+ * 判定的输入必须是**当下在跑的那几条作业**，删源时这份清单自己会变短。
+ */
+export const calendarCollectionJobDefinitionIds: readonly string[] = Object.freeze([
+  narwhalCalendarTickPolicy.definitionId,
+  narwhalCalendarSweepPolicy.definitionId,
+  ...zeroXRouterCalendarSchedulerDefinitionIds
+])
+
 export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   listRuns: (query: { definitionId: string }) => readonly JobRunLike[]
   /** 数据里最近一次真正写入的时刻（标准表 `max(observed_at)`）；没有数据就是 `null`。 */
@@ -47,7 +62,7 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
 }>): Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
   sources: readonly { descriptorId: string; lastCollectedAt: string | null }[] }> {
   const completions: string[] = []
-  for (const definitionId of [narwhalCalendarTickPolicy.definitionId, narwhalCalendarSweepPolicy.definitionId]) {
+  for (const definitionId of calendarCollectionJobDefinitionIds) {
     for (const run of input.listRuns({ definitionId })) {
       if (run.status !== 'completed') continue
       const at = run.completedAt ?? run.startedAt ?? run.createdAt
