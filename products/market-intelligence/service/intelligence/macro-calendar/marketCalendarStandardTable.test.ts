@@ -18,6 +18,36 @@ const rows = (database: DatabaseSync) =>
   database.prepare('select * from mi_calendar_events').all() as Record<string, unknown>[]
 
 describe('标准日历表', () => {
+  it('**旧数据不许盖新数据**：按数据自身的观测时刻比，不按写入时刻', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 官方 11-16 写进去的值（它自己的观测时刻也是 11-16）。
+    upsertCalendarStandardRow(database, { ...base, valuesJson: JSON.stringify({ actual: '170' }),
+      sourceProviderId: 'macro-calendar-bls', observedAt: '2026-11-16T09:00:00.000Z',
+      dataObservedAt: '2026-11-16T08:55:00.000Z' })
+    // 0xrouter 那批是 **11-12 的数据、今天才写入**：它的数据时刻更旧，不许覆盖。
+    upsertCalendarStandardRow(database, { ...base, valuesJson: JSON.stringify({ actual: '160' }),
+      sourceProviderId: '0xrouter', observedAt: '2026-11-16T10:00:00.000Z',
+      dataObservedAt: '2026-11-12T21:41:00.000Z' })
+    const row = rows(database)[0]!
+    expect(JSON.parse(String(row['values_json']))).toEqual({ actual: '170' })
+    // 数据时刻也没被更旧的那个倒退。
+    expect(row['data_observed_at']).toBe('2026-11-16T08:55:00.000Z')
+  })
+
+  it('官方那格是空的：0xrouter 的旧值可以填进去（没有值才允许旧数据补）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 官方只给了 previous/consensus，`actual` 缺席。
+    upsertCalendarStandardRow(database, { ...base, valuesJson: JSON.stringify({ previous: '29' }),
+      sourceProviderId: 'macro-calendar-bls', observedAt: '2026-11-16T09:00:00.000Z',
+      dataObservedAt: '2026-11-16T08:55:00.000Z' })
+    upsertCalendarStandardRow(database, { ...base, valuesJson: JSON.stringify({ actual: '160' }),
+      sourceProviderId: '0xrouter', observedAt: '2026-11-16T10:00:00.000Z',
+      dataObservedAt: '2026-11-12T21:41:00.000Z' })
+    expect(JSON.parse(String(rows(database)[0]!['values_json']))).toEqual({ previous: '29', actual: '160' })
+  })
+
   it('一身份一行：同身份再写是覆盖，不是新增', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)

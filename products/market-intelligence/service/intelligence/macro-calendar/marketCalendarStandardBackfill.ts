@@ -75,6 +75,7 @@ type ObservationRow = Readonly<{
   provider_actual_json: string | null
   importance: string | null
   measure_keys_json: string | null
+  last_seen_at: string | null
 }>
 
 const displayOf = (json: string | null): string | undefined => {
@@ -189,7 +190,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   const rows = database.prepare(`select source_event_id, market_fact_key, display_name, country_code,
     indicator_id, event_kind,
     scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
-    measure_keys_json
+    measure_keys_json, last_seen_at
     from mi_macro_calendar_market_event_observations
     where provider_id = ?
     order by source_event_id, coalesce(last_seen_at, '') asc`).all(providerId) as unknown as ObservationRow[]
@@ -283,6 +284,9 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       countryCode,
       scheduledDate,
       sourceEventId: String(row.source_event_id),
+      // **数据自身的观测时刻**＝来源最后一次说它是什么时候的（`last_seen_at`），不是我们写入的时刻。
+      // 覆盖判定按它比，否则三天前的数据在今天写入会赢，把官方刚写的值盖回旧的。
+      ...(row.last_seen_at === null || row.last_seen_at === '' ? {} : { dataObservedAt: row.last_seen_at }),
       ...(scheduledAt === undefined ? {} : { scheduledAt }),
       timePrecision: scheduledAt === undefined || scheduledAt.endsWith('T00:00:00.000Z') ? 'date' as const : 'minute' as const,
       ...(displayOf(row.provider_previous_json) === undefined

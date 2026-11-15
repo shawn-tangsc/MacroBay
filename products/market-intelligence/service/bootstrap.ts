@@ -479,7 +479,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     readEnabledCalendarFeeds, readTimeZone: currentReaderTimeZone, getAppLanguage: deps.getAppLanguage
   }), () => getNotificationRuntime().resolvePushChannels())
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
-  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
+  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule, { onProfilesChanged: async () => { await zeroXRouterSchedule.syncSchedule(); await narwhalCalendarAssembly.syncSchedule() } })
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())
   registerIntelligenceTranslationIpc(register, deps.jobRuntime, intelligenceModule)
   registerMarketAnalysisIpc(register, intelligenceModule.marketAnalysisRuntime.repository, {
