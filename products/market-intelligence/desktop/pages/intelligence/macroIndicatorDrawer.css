@@ -61,13 +61,11 @@
   padding-left: 16px;
   overflow-y: auto;
 }
-/* 右列只留「时刻 · 事件名」：种类字形（那个 ↗）和国旗/国名在这 300px 的列里只是挤掉名字的装饰
-   （界面设计定）。行高 15.9、单行不换行、超长省略由日历那套行组件与它带的 token 负责。 */
-.mk-col-r .mi-economic-calendar__event-kind,
-.mk-col-r .mi-economic-calendar__event-country { display: none; }
-/* 那一列在这里整列收起：国家格 `display: none` 之后这一行只剩两个子元素，若仍是日历页的三列
-   网格，标题会掉进 28px 的国家列里。所以这一层把网格改回两列（只覆盖列定义，行高不变）。 */
-.mk-col-r .mi-economic-calendar__event { grid-template-columns: var(--mi-calendar-time-width) minmax(0, 1fr); }
+/* 右列只省掉**种类字形**（那个 ↗）：它在这一列是装饰。
+   **国家不省**——用户 2026-11-16 说了三次「事件前面要显示国家」，而这一列正是他看的那个列表：
+   以前这里把国家格一起 `display: none` 掉（11-13 为窄列写的），结果界面上一行都没有国家，而所有
+   断言都跑在不带 `.mk-col-r` 的独立渲染里、全绿。加格的提交必须连着这一层一起看。 */
+.mk-col-r .mi-economic-calendar__event-kind { display: none; }
 /* 右列里那种「说清一句」的小字：不是空态块，只是解释这一列为什么是现在这样。 */
 .mk-col-r__note { margin: 0 0 4px; font-size: var(--font-meta); color: var(--muted); }
 /* 次要层收成一行，就地展开：容器内的一个按钮，不跳页、不弹窗。 */
