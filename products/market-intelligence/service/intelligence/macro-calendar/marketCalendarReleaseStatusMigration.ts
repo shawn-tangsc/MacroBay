@@ -15,7 +15,8 @@ import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
  */
 export const releaseStatusMigrationPolicy = Object.freeze({
   backupTable: 'mi_calendar_events__pre_v13',
-  statuses: Object.freeze(['scheduled', 'published', 'cancelled', 'unknown', 'backfilling', 'missing'] as const)
+  /** 闭集**只引用契约那一份**，不在这里再抄一遍值。 */
+  statuses: calendarStandardTablePolicy.releaseStatuses
 })
 
 const columns = Object.freeze([

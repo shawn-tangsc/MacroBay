@@ -1,5 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
+
 import { calendarStandardTablePolicy, type CalendarIdentityKind, type CalendarReleaseStatus }
   from './marketCalendarStandardTable'
 
@@ -75,8 +77,9 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ...(row.scheduled_at === null ? {} : { scheduledAt: String(row.scheduled_at) }),
     timePrecision: String(row.time_precision) === 'minute' ? 'minute' as const : 'date' as const,
     rowKind: String(row.row_kind) === 'estimate' ? 'estimate' as const : 'release' as const,
-    status: (['scheduled', 'published', 'cancelled', 'unknown'].includes(String(row.status))
-      ? String(row.status) : 'unknown') as CalendarReleaseStatus,
+    // 闭集从契约派生，不在读侧再写一遍字面量。
+    status: (marketCalendarPublicPolicy.releaseStatuses as readonly string[]).includes(String(row.status))
+      ? String(row.status) as CalendarReleaseStatus : 'unknown',
     identityKind: String(row.identity_kind) === 'source' ? 'source' as const : 'code' as const,
     ...(row.source_label === null ? {} : { sourceLabel: String(row.source_label) }),
     sourceProviderId: String(row.source_provider_id), sourceEventId: String(row.source_event_id),

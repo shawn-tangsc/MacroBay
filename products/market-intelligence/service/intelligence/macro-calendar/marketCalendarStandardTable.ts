@@ -1,4 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
+
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { sourceIdOverwriteOnWrite } from './marketCalendarSourceIdAudit'
 
 /**
@@ -48,7 +50,8 @@ export const calendarStandardTablePolicy = Object.freeze({
    * `backfilling`（界面「待补值」），窗口外是 `missing`（「未提供」）。旧行的 `unknown` 保留读兼容，
    * 读侧按 `missing` 处理，不单开第六态。
    */
-  releaseStatuses: Object.freeze(['scheduled', 'published', 'cancelled', 'unknown', 'backfilling', 'missing'] as const),
+  /** 闭集**引用契约那一份**，这里不写字面量（守卫见 `marketCalendarReleaseStatusUnionGuard`）。 */
+  releaseStatuses: marketCalendarPublicPolicy.releaseStatuses,
   /**
    * 身份种类。`code` = 标准码（可跨源合并）；`source` = **源内标识**（映射不上时用它，
    * 日历照常显示、但**不参与跨源合并**——没有共同身份，硬合就是猜）。
@@ -141,7 +144,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       first_scheduled_date text not null,
       scheduled_at text,
       time_precision text not null check(time_precision in ('minute', 'date')),
-      status text not null default 'unknown' check(status in ('scheduled', 'published', 'cancelled', 'unknown')),
+      status text not null default 'unknown' check(status in (${marketCalendarPublicPolicy.releaseStatuses.map((status) => `'${status}'`).join(', ')})),
       identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
       source_label text,
       series_id text,

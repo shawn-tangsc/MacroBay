@@ -13,7 +13,9 @@ export const marketCalendarPublicPolicy = Object.freeze({
   instantPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
   opaquePattern: /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
   kinds: ['economic-indicator', 'financial-event', 'central-bank-activity'],
-  importance: ['high', 'medium', 'low'], countryCodePattern: /^[A-Z]{2,3}$/, forbiddenCountryCodes: ['ZZ'],
+  importance: ['high', 'medium', 'low'],
+  /** 发布状态闭集（六值）：**唯一定义在这里**，别处只许引用，不许再写一遍字面量。 */
+  releaseStatuses: ['scheduled', 'published', 'cancelled', 'unknown', 'backfilling', 'missing'], countryCodePattern: /^[A-Z]{2,3}$/, forbiddenCountryCodes: ['ZZ'],
   /**
    * `no-locale-rows`：这条来源**根本不发布该语言**（今天：`financial-events` /
    * `central-bank-activities` 的 en 请求永远返回空数组）。它与 `success-empty`
@@ -142,8 +144,14 @@ export type MarketCalendarEvent = Readonly<{
    * 可选：旧的投影不产出它，读侧要按「没有就按时刻渲染」保持兼容。
    */
   timePrecision?: 'minute' | 'date'
-  /** 源给的发布状态：读侧分「已发布 / 排期 / 取消」只许读它，不按日期推。 */
-  releaseStatus?: 'scheduled' | 'published' | 'cancelled' | 'unknown'
+  /**
+   * 源给的发布状态：读侧分「已发布 / 排期 / 待补值 / 未提供 / 取消」**只许读它，不按日期推**。
+   *
+   * **这条联合是唯一定义**（渲染模型、适配器、校验都从它派生）：`scheduled` 只用于「还没到发布日」；
+   * 过期无值在 24h 补值窗口内是 `backfilling`（界面「待补值」），窗口外是 `missing`（「未提供」）；
+   * `unknown` 是旧行的读兼容，读侧按 `missing` 处理，不单开第六态。
+   */
+  releaseStatus?: (typeof marketCalendarPublicPolicy.releaseStatuses)[number]
   /**
    * 行类型：`estimate` 是**随时更新的估算**（GDP 即时预测那类），不是一次发布。
    * 日历页的查询里正常不会有它；分析侧按身份取「最新估算」时要靠它分辨。
@@ -254,7 +262,7 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
       // 而行级断言全绿（那一层不跑页面校验）。
       'timePrecision', 'releaseStatus', 'rowKind', 'sourceFeedId']) &&
     (!Object.hasOwn(value, 'timePrecision') || value.timePrecision === 'minute' || value.timePrecision === 'date') &&
-    (!Object.hasOwn(value, 'releaseStatus') || ['scheduled', 'published', 'cancelled', 'unknown'].includes(String(value.releaseStatus))) &&
+    (!Object.hasOwn(value, 'releaseStatus') || (marketCalendarPublicPolicy.releaseStatuses as readonly string[]).includes(String(value.releaseStatus))) &&
     (!Object.hasOwn(value, 'rowKind') || value.rowKind === 'release' || value.rowKind === 'estimate') &&
     (!Object.hasOwn(value, 'sourceFeedId') ||
       (marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds.includes(String(value.sourceFeedId)) ||
