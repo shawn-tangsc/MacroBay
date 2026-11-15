@@ -212,6 +212,13 @@
  * 长在整个抽屉上（用户 2026-11-16 报的就是这个）。
  *
  * 有 `overflow: auto` 之后，多出来的部分在这里面滚，`.mk-col-l` 与抽屉正文都不滚。
+ *
+ * **高度边界（实测，见 `macroIndicatorDrawerMinicalScroll.test.ts` 里那张表）**：
+ *   ≥743px：正文不滚，多出来的高度全给这一块，它自己滚；
+ *   <743px：正文允许滚——125px 地板 + 上面 578px（顶部行 330 + 卡片块 200 + 标题 ~48）
+ *            已经塞不进可视高度，此时宁可正文滚，也不把日历压成「看得见、摸不到」。
+ * 743 不是「≥660」：要同时做到「正文不滚」和「日历至少看得见一行」，窗口至少要
+ * 578 + 12（margin）+ 125（地板）+ 48（正文内距）≈ 763，实测 743 起正文不再滚。
  */
 .mk-minical {
   margin-top: 12px;
@@ -223,7 +230,9 @@
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  min-height: 0;
+  /* 地板 = 表头 24 + 星期行 ~17 + 一整行格子 63.8 + 内距 18 + 上下边线 2 ≈ 125。
+     没有这条地板时，矮窗口会把它压到 18px：盒子还在、一个日期也读不到，等于没有日历。 */
+  min-height: 125px;
   overflow: auto;
 }
 .mk-minical__h { display: flex; align-items: center; gap: 8px; flex: none; min-height: 24px; }

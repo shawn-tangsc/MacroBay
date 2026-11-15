@@ -9,9 +9,17 @@ import { describe, expect, it } from 'vitest'
  * 在单测里恒为 0，真正的滚动量只能在浏览器引擎里量。行为证据见下面的实测数字（2026-11-16，
  * 无头 Chrome，直接加载本文件这份样式表，DOM 按抽屉真实层级搭、格子里 6 周 × 每天 3 条事件）：
  *
- *   改前（`.mk-minical` 没有 overflow）：body 800/1041 → 正文滚 241px，日历块自己被压到 186px
- *   改后（`overflow: auto` 加上）：     body 800/800  → 正文不滚；日历块 186/452 自己滚
- *   视口高 660 / 700 / 760 / 900 四档同样：body 800…900/同值 不滚，日历块自己滚
+ * | 视口高 | 正文 内容/可视 | 正文 | 日历块 内容/可视 |
+ * |---|---|---|---|
+ * | 600 | 743 / 600 | 滚（允许） | 143 / 452 自己滚 |
+ * | 660 | 743 / 660 | 滚（允许） | 143 / 452 自己滚 |
+ * | 700 | 743 / 700 | 滚（允许） | 143 / 452 自己滚 |
+ * | 750 | 750 / 750 | **不滚** | 143 / 452 自己滚 |
+ * | 800 | 800 / 800 | **不滚** | 186 / 452 自己滚 |
+ * | 900 | 900 / 900 | **不滚** | 286 / 452 自己滚 |
+ *
+ * 改前（没有 `overflow`、没有地板）：800 高时正文 1041/800 滚 241px；600 高时它自己被压到
+ * 18px——盒子还在、一个日期也读不到。两条一起修，才有上表。
  *
  * 这段判据守的是「不被悄悄改回去」：把 `overflow: auto` 删掉、或把格子的固定行高改成
  * 可伸缩（那会让六行不等高，见 `.mk-minical__grid` 的注释），滚动条就会再长出到抽屉上。
@@ -30,8 +38,13 @@ describe('the mini release calendar scrolls itself, never the drawer', () => {
     // 六行格子是 `flex: none` + 固定行高（下面那条），所以这块一定是「内容比盒子高」；
     // 没有 overflow 时多出来的部分会溢出到 `.mk-col-l` 之外，被 antd 的正文接住。
     expect(rulesOf('.mk-minical')).toContain('overflow: auto')
-    // 盒子必须能被压小，否则它自己就成了把正文顶高的那一块。
-    expect(rulesOf('.mk-minical')).toContain('min-height: 0')
+  })
+
+  it('never lets the block collapse below one readable row', () => {
+    // 没有地板时矮窗口会把它压到 18px：盒子在、一个日期都读不到，等于没有日历。
+    // 地板要 ≥ 表头 24 + 星期行 17 + 一行格子 63.8 + 内距 18 + 边线 2。
+    const floor = /min-height:\s*(\d+(?:\.\d+)?)px/u.exec(rulesOf('.mk-minical'))?.[1]
+    expect(Number(floor)).toBeGreaterThanOrEqual(63.8 + 24 + 17 + 18 + 2 - 1)
   })
 
   it('keeps the six week rows fixed, which is why the block has to scroll', () => {
