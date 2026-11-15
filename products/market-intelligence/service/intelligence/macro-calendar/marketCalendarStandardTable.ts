@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { sourceIdOverwriteOnWrite } from './marketCalendarSourceIdAudit'
 
 /**
  * 标准日历表：**一行 = 一次发布**。主键 = 身份 `(country_code, metric_key, period_key)` +
@@ -42,7 +43,12 @@ export const calendarStandardTablePolicy = Object.freeze({
    * 发布状态闭集，**从源拿**：读侧要分「已发布/排期/取消」不许按日期推——
    * 日期比会在发布当天中午前后判错（源还是 scheduled，日期已过）。
    */
-  releaseStatuses: Object.freeze(['scheduled', 'published', 'cancelled', 'unknown'] as const),
+  /**
+   * 五态闭集（产品口径 2026-11-16）：`scheduled` 只用于「还没到发布日」；过期无值在 24h 窗口内是
+   * `backfilling`（界面「待补值」），窗口外是 `missing`（「未提供」）。旧行的 `unknown` 保留读兼容，
+   * 读侧按 `missing` 处理，不单开第六态。
+   */
+  releaseStatuses: Object.freeze(['scheduled', 'published', 'cancelled', 'unknown', 'backfilling', 'missing'] as const),
   /**
    * 身份种类。`code` = 标准码（可跨源合并）；`source` = **源内标识**（映射不上时用它，
    * 日历照常显示、但**不参与跨源合并**——没有共同身份，硬合就是猜）。
@@ -216,6 +222,13 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
  */
 export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): void {
   const { eventsTable } = calendarStandardTablePolicy
+  // 先量一眼「同身份换 id」：只打日志、不改数据；旧 id 不在台账里会单独记真红标记。
+  sourceIdOverwriteOnWrite(database, {
+    eventsTable, sourceIdsTable: calendarStandardTablePolicy.sourceIdsTable
+  }, {
+    countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
+    firstScheduledDate: row.firstScheduledDate ?? row.scheduledDate, sourceEventId: row.sourceEventId
+  })
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
