@@ -4,6 +4,7 @@ import { ensureCalendarStandardTables } from '../intelligence/macro-calendar/mar
 import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
+import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 
 /**
  * 启动时把**本月与下月**的官方发布写进标准表。
@@ -37,6 +38,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     try {
       // 状态 CHECK 四值 → 五值（重建表、旧表留作回滚点、视图显式重建）。与回放同一点、同事务语义。
       ensureReleaseStatusCheckExtended(database)
+      // 过期却还挂着 `scheduled` 的行按五态规则对账（幂等：状态由日期+有没有值推导，跑两遍一致）。
+      const reconciled = reconcileExpiredReleaseStatuses(database,
+        { today: now.toISOString().slice(0, 10), nowMs: now.getTime() })
+      if (reconciled.updated > 0) {
+        console.warn(`[macro-calendar] 过期发布状态对账：扫描 ${reconciled.scanned} 行、改写 ${reconciled.updated} 行`
+          + `（${JSON.stringify(reconciled.after)}）`)
+      }
       ensureOfficialHistoryReplayed(database)
     } catch (error) {
       console.warn(`[macro-calendar] 官方历史回放失败（已忽略，下次启动重试）：${(error as Error)?.message ?? 'unknown'}`)
