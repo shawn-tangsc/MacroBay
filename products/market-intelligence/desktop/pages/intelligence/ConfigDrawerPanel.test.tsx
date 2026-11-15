@@ -11,7 +11,8 @@ import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSetting
 import { ConfigDrawerPanel, type ConfigDrawerScreen } from './ConfigDrawerPanel'
 
 const dashboard = readFileSync(
-  resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/CryptoIntelligenceDashboard.tsx'),
+  // 设置抽屉 2026-11-16 从看板主文件搬进 `DashboardSettingsDrawer`：每屏一层边界的扫描根随之搬家。
+  resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/DashboardSettingsDrawer.tsx'),
   'utf8'
 )
 
