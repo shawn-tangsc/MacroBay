@@ -75,6 +75,8 @@ export type BriefingCalendarCatchUp = Readonly<{
   state: 'skipped' | 'no-registered-jobs' | 'collected' | 'unchanged' | 'failed' | 'timeout' | 'unknown'
   /** Only meaningful on `timeout`: how long we actually waited. */
   timeoutMs?: number
+  /** Only on `skipped`: 为什么没补。`already-caught-up-this-period` = 本期内已经补过一次（策略跳过，不是失败）。 */
+  reasonCode?: 'already-caught-up-this-period'
   failureCode?: string
 }>
 
@@ -105,6 +107,11 @@ export type BriefingCalendarCatchUpDeps = Readonly<{
    * 缺席 = 这个 build 没接运行时投影，此时不发起补跑（不许退回按开关推断）。
    */
   registeredScheduleIds?: () => readonly string[]
+  /**
+   * 同一统计期内**最多补一次**（用户 2026-11-16，Chief 定）。这是「要不要发请求」的策略，
+   * 不是采集结果：跳过既不算失败、也不算「补了但没变」。缺席 = 不限制（窄测试替身）。
+   */
+  catchUpBudget?: Readonly<{ alreadyAttempted: () => boolean; markAttempted: () => void }>
   /** This run's own data cutoff (`A0.10`): the baseline freshness is measured from. */
   dataAsOf: string
   /** Whether the reader has the calendar source switched on at all. */
@@ -132,6 +139,12 @@ export async function ensureCalendarFreshForRun(
   if (!deps.registeredScheduleIds) return Object.freeze(readingFrom(first))
   const sourceIds = briefingCalendarCatchUpSourceIds(new Set(deps.registeredScheduleIds()))
   if (sourceIds.length === 0) return Object.freeze({ ...readingFrom(first), catchUp: Object.freeze({ state: 'no-registered-jobs' as const }) })
+  // 本期内已经补过一次：这次直接跳过。不写失败态，也不产生「补采没成功」那句话——
+  // 我们只是决定不再发请求，采集本身没有任何结果可报。
+  if (deps.catchUpBudget?.alreadyAttempted()) {
+    return Object.freeze({ ...readingFrom(first), catchUp: Object.freeze({ state: 'skipped' as const, reasonCode: 'already-caught-up-this-period' as const }) })
+  }
+  deps.catchUpBudget?.markAttempted()
   const catchUp = await runCatchUp(deps.refreshNow, sourceIds)
   // ③ Judge only the reading that came *after* the catch-up. A pre-catch-up reading would let the
   //    edition claim stale data it just replaced, and vice versa.

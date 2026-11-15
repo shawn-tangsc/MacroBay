@@ -201,6 +201,29 @@ describe('ensureCalendarFreshForRun', () => {
     for (const id of passed) expect(id).not.toContain('narwhal')
   })
 
+  // 用户 2026-11-16（Chief 定）：同一统计期内**最多补一次**。上限是「要不要发请求」的策略，
+  // 不是采集结果；跳过不写失败态、也不产生「补采没成功」那句话。
+  it('attempts at most one catch-up in the same period', async () => {
+    const attempted = new Set<string>()
+    const budget = { alreadyAttempted: () => attempted.has('period-1'), markAttempted: () => attempted.add('period-1') }
+    const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: [marketCalendarPublicPolicy.collectionFeeds[0]!] }))
+
+    const first = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
+      catchUpBudget: budget, readFreshness: async () => freshness(staleAt)
+    })
+    const second = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
+      catchUpBudget: budget, readFreshness: async () => freshness(staleAt)
+    })
+
+    expect(refreshNow).toHaveBeenCalledTimes(1)
+    expect(first.catchUp?.state).not.toBe('skipped')
+    expect(second.catchUp).toMatchObject({ state: 'skipped', reasonCode: 'already-caught-up-this-period' })
+    // 跳过不是失败：没有 failureCode，也不会被写成「补采没成功」。
+    expect(second.catchUp !== undefined && 'failureCode' in second.catchUp).toBe(false)
+  })
+
   it('attempts nothing at all when no collection job is scheduled', async () => {
     const refreshNow = vi.fn()
     const reading = await ensureCalendarFreshForRun({

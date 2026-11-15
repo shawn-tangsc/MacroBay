@@ -166,7 +166,7 @@ export type DailyBriefingStore = BriefingEditionSlotStore & BriefingAttemptRunSt
  */
 export type DailyBriefingSource = Readonly<{
   /** `asOf` = 读数那一刻（运行时刻）；`windowEnd` = 这一版的统计截止。缺省时两者相同。 */
-  readFacts: (input: Readonly<{ asOf: string; windowEnd?: string; windowHours?: number }>) => Promise<DailyBriefingFactSnapshot>
+  readFacts: (input: Readonly<{ asOf: string; windowEnd?: string; windowHours?: number; periodId?: string }>) => Promise<DailyBriefingFactSnapshot>
   renderPacket: (facts: DailyBriefingFactSnapshot, locale: DailyBriefingLocale, timeZone: string) => Promise<DailyBriefingFactPacket>
 }>
 

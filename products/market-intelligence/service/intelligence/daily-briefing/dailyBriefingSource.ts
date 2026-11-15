@@ -87,13 +87,15 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   // 放进这个键会各采一遍（同一批数读两次，还可能两次看到不一样的东西），把窗口拿出去则相反——
   // 24h 与 4h 会复用同一份，4h 那份拿到的是 24h 的数。键里只放这两样，别的一样都不放。
   const collected = new Map<string, Promise<DailyBriefingFactSnapshot>>()
+  // 本期是否已经补过（期号 + 当天）。只影响「要不要再发补采请求」，不进文档、不进任何状态。
+  const caughtUpPeriods = new Map<string, true>()
   /**
    * 读一次数据：`asOf` 是**读数的那一刻**（运行时刻），`windowEnd` 是这一版的**统计截止**。
    *
    * 两者不是一回事，而且现在必须分开（用户 2026-11-05 定）：窗口仍卡在截止前 N 小时，但读的是
    * 跑起来这一刻最新的库——这样"截止后才回补的实际值"重跑就能用上，而不是把时间倒回截止那一刻。
    */
-  const collect = async (asOf: string, windowEnd: string, windowHours: number): Promise<DailyBriefingFactSnapshot> => {
+  const collect = async (asOf: string, windowEnd: string, windowHours: number, periodId: string | undefined): Promise<DailyBriefingFactSnapshot> => {
       const input = { asOf, windowEnd, windowHours }
       const enabled = await readEnabled(deps)
       // The reader's statistical window decides the fact interval; every window-scoped read below
@@ -101,9 +103,15 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       const windowStart = new Date(Date.parse(input.windowEnd) - windowHours * HOUR_MS).toISOString()
       // The calendar's catch-up runs here, before any calendar month is read: the section's reason
       // must come from the reading this run judged, not from a second one taken later.
+      // 同一期（期号 + 当天）最多补采一次：第二版生成不再为同一批数据重复发请求。
+      const catchUpPeriod = `${periodId ?? 'default'}|${input.asOf.slice(0, 10)}`
       const calendarFreshness = await ensureCalendarFreshForRun({
         dataAsOf: input.asOf,
         enabled: enabled.calendar,
+        catchUpBudget: {
+          alreadyAttempted: () => caughtUpPeriods.has(catchUpPeriod),
+          markAttempted: () => { caughtUpPeriods.set(catchUpPeriod, true) }
+        },
         // Both ports stay optional at the type level: an unwired build lands on "not readable"
         // instead of crashing, and that is a different branch from a port that fails when called.
         ...(deps.publicQuery.queryMarketCalendarFreshness
@@ -175,7 +183,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       const cached = collected.get(key)
       if (cached) return cached
       // 失败不缓存：一次读挂了不该让同一时刻的重试也拿那次失败。
-      const promise = collect(input.asOf, windowEnd, windowHours).catch((error: unknown) => { collected.delete(key); throw error })
+      const promise = collect(input.asOf, windowEnd, windowHours, input.periodId).catch((error: unknown) => { collected.delete(key); throw error })
       collected.set(key, promise)
       // 有界：只留最近几次，长期运行不会把每次采集都攥在内存里。
       if (collected.size > 8) {

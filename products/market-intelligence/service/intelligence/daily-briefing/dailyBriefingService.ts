@@ -281,7 +281,7 @@ export function createDailyBriefingService(deps: Readonly<{
     let packet: DailyBriefingFactPacket
     let facts: DailyBriefingFactSnapshot
     try {
-      facts = await withDeadline(deps.source.readFacts({ asOf: readAt, windowEnd: input.asOf, windowHours: input.windowHours }), 15_000)
+      facts = await withDeadline(deps.source.readFacts({ asOf: readAt, windowEnd: input.asOf, windowHours: input.windowHours, periodId: input.periodId }), 15_000)
       // Rendering is text-only work over the frozen facts; it is not a second read.
       // The facts are period-independent; the identity is this run's, so it is attached here rather
       // than inside the source (which never sees a period). Every edition this run writes then
