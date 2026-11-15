@@ -295,6 +295,10 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       countryCode,
       scheduledDate,
       sourceEventId: String(row.source_event_id),
+      // 观测表里本来就知道「这是什么」：原样写进标准表（类型闭集之外的写法就不写，读完退前缀）。
+      ...(['economic-indicator', 'financial-event', 'central-bank-activity'].includes(String(row.event_kind))
+        ? { eventType: String(row.event_kind) as 'economic-indicator' | 'financial-event' | 'central-bank-activity' }
+        : {}),
       // **数据自身的观测时刻**＝来源最后一次说它是什么时候的（`last_seen_at`），不是我们写入的时刻。
       // 覆盖判定按它比，否则三天前的数据在今天写入会赢，把官方刚写的值盖回旧的。
       ...(row.last_seen_at === null || row.last_seen_at === '' ? {} : { dataObservedAt: row.last_seen_at }),

@@ -28,6 +28,8 @@ export type StandardMonthRow = Readonly<{
   scheduledAt?: string
   timePrecision: 'minute' | 'date'
   rowKind: 'release' | 'estimate'
+  /** 写入侧存下来的「这是什么」；空值＝还没回填，读侧退前缀规则。 */
+  eventType?: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   status: CalendarReleaseStatus
   identityKind: CalendarIdentityKind
   /** `source` 身份行才有：源原文名（标准码的显示名去名表查）。 */
@@ -63,7 +65,7 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ? calendarStandardTablePolicy.eventsTable
     : calendarStandardTablePolicy.releasesView
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
-    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, importance,
+    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, importance, event_type,
     source_provider_id, source_event_id, observed_at, values_json
     from ${source}
     where scheduled_date >= ? and scheduled_date < ?
@@ -77,6 +79,8 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ...(row.scheduled_at === null ? {} : { scheduledAt: String(row.scheduled_at) }),
     timePrecision: String(row.time_precision) === 'minute' ? 'minute' as const : 'date' as const,
     rowKind: String(row.row_kind) === 'estimate' ? 'estimate' as const : 'release' as const,
+    // 写入侧存下来的「这是什么」；空值留给适配器退前缀规则（不是默认成经济指标）。
+    ...(row.event_type === null ? {} : { eventType: String(row.event_type) as 'economic-indicator' | 'financial-event' | 'central-bank-activity' }),
     // 闭集从契约派生，不在读侧再写一遍字面量。
     status: (marketCalendarPublicPolicy.releaseStatuses as readonly string[]).includes(String(row.status))
       ? String(row.status) as CalendarReleaseStatus : 'unknown',

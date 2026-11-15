@@ -5,6 +5,7 @@ import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketC
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
+import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
@@ -87,6 +88,12 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
           + `（${JSON.stringify(reconciled.after)}）`)
       }
       ensureOfficialHistoryReplayed(database)
+      // 「这一行是什么」与重要性回填（迁移 16）：以前没存，读侧只能靠前缀猜（423 行被猜成经济指标）。
+      const eventTypes = backfillCalendarEventTypes(database)
+      if (eventTypes.eventTypeFilled > 0 || eventTypes.importanceFilled > 0) {
+        console.warn(`[macro-calendar] 事件类型回填：待补 ${eventTypes.pending} 行、写入类型 `
+          + `${eventTypes.eventTypeFilled} 行、写入重要性 ${eventTypes.importanceFilled} 行`)
+      }
       // 期次归一（迁移 14）：历史上按 BLS 写法落成 `YYYY-MNN` 的行并回 `YYYY-MM`，幂等、有备份。
       const mergedPeriods = mergeMPeriodStandardRows(database)
       // 国家码归一（迁移 15）：`USA` 这类历史写法并回 alpha-2，撞行合并、台账同归一，幂等、有备份。

@@ -72,6 +72,9 @@ function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {
     countryCode: 'USA',
     // 视图 `mi_calendar_releases` 只出 `row_kind='release'`：写成别的，分析读得到、界面读不到。
     rowKind: 'release' as const,
+    // 回放也知道「这是什么」：fomc 是央行活动，其余（cpi/就业/PCE/GDP）都是经济指标。
+    eventType: (revision.event_family === 'fomc' ? 'central-bank-activity' : 'economic-indicator') as
+      'economic-indicator' | 'central-bank-activity',
     scheduledDate,
     // 来源 id 与期次同归一：`2026-M10` 是 BLS 内部的参考期写法，标准表只留 `2026-10` 这一种。
     sourceEventId: normalizeCalendarSourceEventId(revision.event_key),

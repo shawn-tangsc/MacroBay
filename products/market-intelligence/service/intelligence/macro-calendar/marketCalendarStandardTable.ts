@@ -144,6 +144,11 @@ export type CalendarStandardRow = Readonly<{
    * 在卡片里对（最新值就是估算）。**不记 `unmapped`**：它不是映射不上，是本来就不是发布。
    */
   rowKind?: 'release' | 'estimate'
+  /**
+   * **这一行是什么**（经济数据 / 财经事件 / 央行活动），写入侧的已知事实。
+   * 不传就不写（历史行由迁移 16 回填），读侧在空值时才退回 `metric_key` 前缀规则。
+   */
+  eventType?: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   /** 第一次看到这一期时来源给的 actual / previous；之后修订**不覆盖**，没有就不写。 */
   firstPublishedActual?: string
   firstPublishedPrevious?: string
@@ -167,6 +172,10 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       importance text check(importance in ('high', 'medium', 'low')),
       value_state text check(value_state in ('present', 'missing')),
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
+      -- **这一行是什么**（经济数据 / 财经事件 / 央行活动）。写入时知道，以前没存，读侧只能靠
+      -- metric_key 前缀猜——423 行上游 ID 数组因此全被猜成「经济指标」（2026-11-16 查实）。
+      -- 空值＝还没回填（迁移 16 会补），读侧此时退回前缀规则。
+      event_type text check(event_type in ('economic-indicator', 'financial-event', 'central-bank-activity')),
       values_json text not null,
       source_provider_id text not null,
       source_event_id text not null,
@@ -233,6 +242,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   if (!columns.some((column) => column.name === 'value_state')) {
     database.exec(`alter table ${eventsTable} add column value_state text`)
   }
+  if (!columns.some((column) => column.name === 'event_type')) {
+    database.exec(`alter table ${eventsTable} add column event_type text`)
+  }
   if (!columns.some((column) => column.name === 'data_observed_at')) {
     // 老行没有这一列：按写入时刻回填（它是我们唯一有的事实），之后的写入按真值比。
     database.exec(`alter table ${eventsTable} add column data_observed_at text`)
@@ -269,8 +281,8 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
-     first_published_actual, first_published_previous, data_observed_at)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     first_published_actual, first_published_previous, data_observed_at, event_type)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -298,6 +310,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       -- 先写空、后到值的行会永远记着 missing，视图按它一折就把有值的行折掉。
       value_state = case when excluded.value_state = 'present' then 'present'
         else coalesce(value_state, excluded.value_state) end,
+      event_type = coalesce(excluded.event_type, event_type),
       source_provider_id = excluded.source_provider_id,
       source_event_id = excluded.source_event_id,
       parser_version = excluded.parser_version,
@@ -315,7 +328,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null,
       // 数据时刻不传就按写入时刻算：没有这一级的来源不许因为「不知道数据时刻」而永远覆盖不了。
-      row.dataObservedAt ?? row.observedAt)
+      row.dataObservedAt ?? row.observedAt,
+      // 写入侧知道「这是什么」就存下来；不知道（历史/旧调用方）留空，读侧才退前缀规则。
+      row.eventType ?? null)
 }
 
 /**

@@ -32,6 +32,9 @@ const countryNameOf = (code: string, locale: 'zh' | 'en'): string | undefined =>
 }
 
 const eventTypeOf = (row: StandardMonthRow): MarketCalendarEvent['eventType'] => {
+  // **先读写入侧存下来的事实**（迁移 16 之后每一行都有）；只有空值才退回前缀规则。
+  // 以前只靠前缀，423 行上游 ID 数组（`["212058",70663]`）全被猜成经济指标。
+  if (row.eventType !== undefined) return row.eventType
   if (!row.metricKey.startsWith('evt.')) return 'economic-indicator'
   if (/^evt\.(central-bank|monetary-policy)/.test(row.metricKey)) return 'central-bank-activity'
   return 'financial-event'

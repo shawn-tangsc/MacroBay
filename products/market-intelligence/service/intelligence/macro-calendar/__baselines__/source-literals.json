@@ -169,6 +169,10 @@
     "desktop/pages/intelligence/macroIndicatorCardCopy.tsx": {
       "count": 1,
       "why": "卡片页脚按事实自带的 provider 选显示名（Narwhal 用日历既有文案、FRED 用品牌名、旧源不赋名）。这是显示层唯一一处按源选名，不参与任何取数/排序/筛选判断；目标仍是清零。2026-11-16 抽屉拆分成 `macroIndicatorCardCopy.tsx` 后，这一处随之搬家——计数不变，只是文件变了。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarEventTypeBackfill.ts": {
+      "count": 1,
+      "why": "迁移 16 只用它判定「哪个来源的 importance 是事实」（0xrouter 的照抄、narwhal 的 medium 是占位值不复制）；不是一个按源分支的读法，回填后这条判断就该消失——属于可命名的整合数据"
     }
   }
 }

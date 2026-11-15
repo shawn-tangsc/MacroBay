@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import { calendarNamesFor } from '../marketCalendarCodeNames'
+import { calendarNamesFor, type CalendarNamePair } from '../marketCalendarCodeNames'
 
 /**
  * **仅渲染层**：事件清单（一行一个事件身份，不是一次发布）。
@@ -19,15 +19,11 @@ import { calendarNamesFor } from '../marketCalendarCodeNames'
  * 就需要两套都给。没有名表条目的（约 420 个上游原始 ID 数组身份）退回 `source_label`，
  * 并用 `titleIsSourceLabel` 标出来——那是「源原文名」，不是我们起的名字。
  */
-export type CalendarEventIndexRow = Readonly<{
+export type CalendarEventIndexRow = Partial<CalendarNamePair> & Readonly<{
   /** 稳定键（身份），分页与渲染都用它，不用行号。 */
   key: string
   countryCode: string
   metricKey: string
-  zhFull?: string
-  zhShort?: string
-  enFull?: string
-  enShort?: string
   sourceLabel?: string
   /** 名字位显示的是源原文名（不是名表条目）。 */
   titleIsSourceLabel: boolean
