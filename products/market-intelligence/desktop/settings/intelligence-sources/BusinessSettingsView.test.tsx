@@ -138,6 +138,27 @@ describe('业务设置的左列', () => {
     const cards = [...calendar.host.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
     expect(cards.map((card) => card.getAttribute('data-business-cell-card'))).toEqual(['official', 'aggregate'])
     expect(cards.map((card) => card.querySelector('.business-cell__title')?.textContent)).toEqual(['官方源', '聚合源'])
+    /* 聚合源里再按**提供方**分一层（2026-11-15 读者截图：「这几个怎么没有显示他们对应的源」）：
+       三条 Narwhal 落在一张标题为 Narwhal 的卡里，三条 0xRouter 落在一张标题为 0xRouter 的卡里。
+       标题读投影的提供方显示名；这里没给 `providerNamesBySource`，退回注册表的 `providerDisplayName`。 */
+    const providerCards = [...cards[1]!.querySelectorAll<HTMLElement>('[data-business-provider-card]')]
+    expect(providerCards.map((card) => card.getAttribute('data-business-provider-card')))
+      .toEqual(['provider:narwhal', 'provider:0xrouter'])
+    expect(providerCards.map((card) => card.querySelector('.business-topic__title')?.textContent))
+      .toEqual(['Narwhal', '0xRouter'])
+    expect(providerCards.map((card) => card.querySelectorAll('.business-card__row').length)).toEqual([3, 3])
+    /* 每条源都落在**自己提供方**那张卡里：0xRouter 卡里的三行必须真是 0xRouter 的三条 feed。 */
+    expect([...providerCards[1]!.querySelectorAll<HTMLElement>('.business-card__row')]
+      .map((row) => row.getAttribute('data-business-row')))
+      .toEqual([
+        'macro-calendar-0xrouter-economic-data',
+        'macro-calendar-0xrouter-financial-events',
+        'macro-calendar-0xrouter-central-bank-activities'
+      ])
+    /* 0xRouter 那条**维护用**的接入凭据源不进日历面板：它不供日历，也不许把哪张卡头挤掉。
+       它要是被画进来，卡里就会出现这个名字或这个 id。 */
+    expect(calendar.host.textContent).not.toContain('0xRouter 接入凭据')
+    expect(calendar.host.textContent).not.toContain('0xrouter-aggregate-provider')
     // 官方源卡下面还有一层「管什么」的卡，每张里面才是源名 + 开关（用户 2026-11-11）。
     const topics = [...cards[0]!.querySelectorAll<HTMLElement>('[data-business-topic-card]')]
     expect(topics.map((topic) => topic.getAttribute('data-business-topic-card'))).toEqual(['利率决议', 'GDP / PCE', 'CPI / 就业'])
@@ -162,6 +183,21 @@ describe('业务设置的左列', () => {
     expect(sentimentCards[0]!.querySelector('.business-cell__title')).toBeNull()
     // 「舆情评分」不是源，不添行。
     expect(sentiment.host.textContent).not.toContain('舆情评分')
+  })
+
+  it('titles the aggregate cards with the provider name from the projection, never with an id', async () => {
+    /* 投影给了提供方显示名就用它（与源详情同一份），注册表只是第二层；
+       两层都没有就只画卡不画标题——**任何情况下不把 provider id 印给读者**。 */
+    const named = await renderContent('calendar', {
+      providerNamesBySource: {
+        'macro-calendar-0xrouter-economic-data': '聚合数据供应商（0xRouter）',
+        'macro-calendar-narwhal-economic-data': 'Narwhal'
+      }
+    })
+    const titles = [...named.host.querySelectorAll<HTMLElement>('[data-business-provider-card] .business-topic__title')]
+      .map((node) => node.textContent)
+    expect(titles).toEqual(['Narwhal', '聚合数据供应商（0xRouter）'])
+    expect(named.host.textContent).not.toContain('provider:')
   })
 })
 

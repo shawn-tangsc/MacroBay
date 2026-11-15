@@ -100,6 +100,41 @@ const OFFICIAL_COVERAGE: Readonly<Record<string, string>> = {
   'macro-calendar-bls': 'CPI / 就业'
 }
 
+/**
+ * 聚合源里再按**提供方**分一层（2026-11-15 读者截图：「这几个怎么没有显示他们对应的源」）。
+ *
+ * 日历那张「聚合源」卡原本是一排没有归属的行，Narwhal 与 0xRouter 的源混在一起，
+ * 读者只能从源名猜是谁给的。提供方不在组件里写：`providerId` / `providerDisplayName` 读
+ * `calendarFeedRegistry`，显示名优先用投影给的（`providerNamesBySource`，与源详情同一份）。
+ * 两级都取不到时**标题留空**——宁可少一个卡头，也不把 provider id 印给读者。
+ */
+export type ProviderGroup = Readonly<{ key: string; label: string; cells: readonly DashboardCell[] }>
+
+export function providerGroupsOf(
+  cells: readonly DashboardCell[],
+  providerNamesBySource?: Readonly<Record<string, string>>
+): readonly ProviderGroup[] {
+  const feeds = calendarFeedRegistry as Readonly<Record<string, { providerId?: string; providerDisplayName?: string }>>
+  const order: string[] = []
+  const byProvider = new Map<string, DashboardCell[]>()
+  for (const cell of cells) {
+    const providerId = feeds[cell.sourceId]?.providerId ?? cell.sourceId
+    const bucket = byProvider.get(providerId)
+    if (bucket === undefined) {
+      byProvider.set(providerId, [cell])
+      order.push(providerId)
+    } else {
+      bucket.push(cell)
+    }
+  }
+  return order.map((providerId) => {
+    const group = byProvider.get(providerId)!
+    const first = group[0]!
+    const label = providerNamesBySource?.[first.sourceId] ?? feeds[first.sourceId]?.providerDisplayName ?? ''
+    return { key: `provider:${providerId}`, label, cells: group }
+  })
+}
+
 /** 日历按 feed 的 `owner` 分官方 / 聚合；舆情只有一张。判据来自注册表，不在组件里写源 id。 */
 export function otherBusinessGroups(
   business: BusinessKey,
@@ -337,15 +372,37 @@ export function BusinessSettingsContent(props: {
                     </div>
                   </div>)}
                 </div>
-                : <div
-                  className="business-cell__items"
-                  style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
-                  {group.cells.map((cell) => renderCell(
-                    modulesForBusiness(props.business)[0]?.id ?? props.business,
-                    cell,
-                    []
-                  ))}
-                </div>}
+                : props.business === 'calendar'
+                  /* 聚合源再按提供方分一层（2026-11-15）：一张「0xRouter」卡里三行、一张「Narwhal」卡里三行，
+                     读者才知道这三条是哪家的源。标题取投影里的提供方显示名，取不到就只画卡不画标题。 */
+                  ? <div className="business-topic-grid">
+                    {providerGroupsOf(group.cells, props.providerNamesBySource).map((provider) => <div
+                      className="business-topic"
+                      data-business-provider-card={provider.key}
+                      key={provider.key}>
+                      {provider.label === ''
+                        ? null
+                        : <div className="business-topic__title">{provider.label}</div>}
+                      {/* 提供方卡比「聚合源」那张窄，所以卡里的行**竖排**（不传 `--cell-items`，
+                          它默认 1 列）：三条源各占一行，名字与开关都不会被挤扁。 */}
+                      <div className="business-cell__items">
+                        {provider.cells.map((cell) => renderCell(
+                          modulesForBusiness(props.business)[0]?.id ?? props.business,
+                          cell,
+                          []
+                        ))}
+                      </div>
+                    </div>)}
+                  </div>
+                  : <div
+                    className="business-cell__items"
+                    style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
+                    {group.cells.map((cell) => renderCell(
+                      modulesForBusiness(props.business)[0]?.id ?? props.business,
+                      cell,
+                      []
+                    ))}
+                  </div>}
             </div>)}
           </div>
           {/* 舆情卡内部、四个源之后的一行收尾（用户 2026-11-11 改判：不再是网格里的小卡）：
