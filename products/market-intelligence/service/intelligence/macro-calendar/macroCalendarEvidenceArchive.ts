@@ -14,9 +14,39 @@ import { join } from 'node:path'
 import type { RawRecordStore } from '../application/rawRecordStore'
 import type { AppendRawRecordInput, RawIntelligenceRecord } from '../schema/intelligenceRecord'
 
+/**
+ * **每个 owner 各自的元数据配额**（不是「人人 16MB」）。
+ *
+ * 原来的判据是「整库 serializedBytes ≤ 16MB」。实测（2026-11-16）：库里 19.51MB，其中
+ * `generic-intelligence` 占 **19.13MB / 5583 条**、`macro-calendar` 只占 **0.39MB / 495 条**——
+ * 共享预算被别的源吃满，把日历饿死，于是每次采集在「预留」这一步就判 `evidence-persist-failed`，
+ * 而且耗时只有 88–243ms（还没发请求就失败）。
+ *
+ * 所以：**按 owner 计量 + 一条全局软上限**。既不连坐（日历自己的 0.39MB 离 4MB 差得远），
+ * 也不让总库失控（全局超软上限就拒绝并打一行结构化日志）。
+ *
+ * 数字的依据：
+ * - `macro-calendar` 4MB：现值 0.39MB 的约 10 倍，够未来几个月的证据行；载荷本体已经归档成文件，
+ *   进这份 JSON 的只有元数据；
+ * - `generic-intelligence` 12MB：**现值 19.13MB 已经越界**，所以它必须自己的保留期降下来
+ *   （实测 ≤7 天可腾出 14.5MB），这条归情报采集线；
+ * - 全局软上限 32MB：现值 19.51MB，留出日历余量，又能挡住「N 个 owner × 各自配额」的总量失控。
+ * 调这三个数的人必须看到上面这段理由——不要只改数字。
+ */
+export const rawRecordMetadataQuotaPolicy = Object.freeze({
+  perOwnerBytes: Object.freeze({
+    'macro-calendar': 4 * 1024 * 1024,
+    'generic-intelligence': 12 * 1024 * 1024
+  } as Readonly<Record<string, number>>),
+  /** 没登记的 owner：给一个保守的小额度，同样受全局软上限约束。 */
+  defaultOwnerBytes: 2 * 1024 * 1024,
+  globalBytes: 32 * 1024 * 1024
+} as const)
+
 export const macroCalendarEvidenceArchivePolicy = Object.freeze({
   maximumArchiveBytes: 900 * 1024 * 1024,
-  maximumMetadataBytes: 16 * 1024 * 1024,
+  /** 全局软上限（旧字段保留为别名：判据已改为按 owner + 全局两条，见 `rawRecordMetadataQuotaPolicy`）。 */
+  maximumMetadataBytes: rawRecordMetadataQuotaPolicy.globalBytes,
   maximumRecordMetadataBytes: 32 * 1024,
   metadataEnvelopeOverheadBytes: 64,
   processingOwner: 'macro-calendar',
@@ -95,10 +125,28 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
     }
   }
 
+  /**
+   * 两条判据：**本 owner 的已用量 + 本条 ≤ 本 owner 配额**，且**整库 ≤ 全局软上限**。
+   * 超了各打一行结构化日志（哪一条越界、owner、已用、申请），不静默拒绝。
+   */
   function hasMetadataCapacity(additionalBytes: number): boolean {
     try {
-      return input.rawRecords.inspectSnapshot().serializedBytes + reservedMetadataBytes + additionalBytes <=
-        macroCalendarEvidenceArchivePolicy.maximumMetadataBytes
+      const ownerQuota = rawRecordMetadataQuotaPolicy.perOwnerBytes[macroCalendarEvidenceArchivePolicy.processingOwner]
+        ?? rawRecordMetadataQuotaPolicy.defaultOwnerBytes
+      const ownerUsed = input.rawRecords.listByProcessingOwner(macroCalendarEvidenceArchivePolicy.processingOwner,
+        Number.MAX_SAFE_INTEGER).reduce((sum, record) => sum + Buffer.byteLength(JSON.stringify(record)), 0)
+      const globalUsed = input.rawRecords.inspectSnapshot().serializedBytes
+      if (ownerUsed + reservedMetadataBytes + additionalBytes > ownerQuota) {
+        console.warn(`[macro-calendar] 证据元数据超出本 source 配额：owner=${macroCalendarEvidenceArchivePolicy.processingOwner}`
+          + ` used=${ownerUsed} reserved=${reservedMetadataBytes} ask=${additionalBytes} quota=${ownerQuota}`)
+        return false
+      }
+      if (globalUsed + reservedMetadataBytes + additionalBytes > rawRecordMetadataQuotaPolicy.globalBytes) {
+        console.warn(`[macro-calendar] 证据元数据超出全局软上限：used=${globalUsed} reserved=${reservedMetadataBytes}`
+          + ` ask=${additionalBytes} cap=${rawRecordMetadataQuotaPolicy.globalBytes}`)
+        return false
+      }
+      return true
     } catch {
       return false
     }
