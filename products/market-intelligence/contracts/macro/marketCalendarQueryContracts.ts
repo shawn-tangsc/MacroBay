@@ -1,5 +1,11 @@
 // Product-owned public boundary for design 122. No storage/provider-native identities.
 export const marketCalendarPublicPolicy = Object.freeze({
+  /**
+   * 覆盖口径的**闭集**：只有这两档，一处定义。
+   * 加一档 = 改这里 + 补齐所有消费侧的显式分支；`coverageClosedSet.test.ts` 会盯着
+   * 「档位与消费点是否同步」，避免新档位在抽屉里悄悄变成「整行不收」。
+   */
+  coverage: ['available', 'observed-unverified'] as const,
   maximumEvents: 100, pageBytes: 256 * 1024, eventBytes: 8 * 1024, textCharacters: 512, textBytes: 1024,
   /** Bound on the stable observation identity a projection may carry. */
   maximumObservationKeyChars: 256,
@@ -123,7 +129,7 @@ export type MarketCalendarEvent = Readonly<{
    * `observed-unverified`＝数据商观测、未经官方核验；`available`＝官方来源这一行本身就是核验过的。
    * 标准表适配器按 `officialFeedIdOf(sourceProviderId)` 分流：官方行不再被统一降级成未核验。
    */
-  coverage: 'observed-unverified' | 'available'
+  coverage: typeof marketCalendarPublicPolicy.coverage[number]
   /**
    * 这条数据的**真实来源 feed id**（`macro-calendar-bls`、`macro-calendar-narwhal-economic-data`…）。
    * `source` 那两个值表达不了「官方 BLS 发的」——它只有市场/旧源两档，官方行会被标成旧源。
@@ -266,7 +272,7 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
     (!Object.hasOwn(value, 'importance') || marketCalendarPublicPolicy.importance.includes(value.importance as never)) &&
     marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && ((marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds as readonly unknown[])
       .concat(['Narwhal', '0xRouter', marketCalendarPublicPolicy.unspecifiedSource]).includes(value.source) &&
-    (value.coverage === 'observed-unverified' || value.coverage === 'available') &&
+    (marketCalendarPublicPolicy.coverage as readonly unknown[]).includes(value.coverage) &&
     [value.consensus, value.providerPrevious, value.providerActual].every(display) &&
     (value.eventType === 'economic-indicator' || [value.consensus, value.providerPrevious, value.providerActual].every(item => item === null)) &&
     (!Object.hasOwn(value, 'officialLink') || value.eventType === 'economic-indicator' &&

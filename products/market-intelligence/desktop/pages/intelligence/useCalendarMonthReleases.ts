@@ -86,7 +86,7 @@ export function marketEventOf(entry: unknown): readonly MarketCalendarEvent[] {
   if (!(marketCalendarPublicPolicy.importance as readonly unknown[]).includes(record.importance)) return []
   if (record.source !== 'Narwhal' && record.source !== '0xRouter') return []
   // 覆盖口径只认这两档；不认识就别把这一行抬进来——**缺省不是「未核验」**，那会把官方行标错。
-  if (record.coverage !== 'observed-unverified' && record.coverage !== 'available') return []
+  if (!(marketCalendarPublicPolicy.coverage as readonly unknown[]).includes(record.coverage)) return []
   const value = (input: unknown): MarketCalendarEvent['consensus'] =>
     input !== null && typeof input === 'object' && typeof (input as { displayValue?: unknown }).displayValue === 'string'
       ? { displayValue: (input as { displayValue: string }).displayValue }
@@ -113,6 +113,6 @@ export function marketEventOf(entry: unknown): readonly MarketCalendarEvent[] {
     /* `coverage` **透传**宿主读回来的那一份，不再在这里另推一遍：
        同一份数据两处各贴一个标签，迟早出现「同一条事件两个状态」。
        服务端适配器已经是官方行 `available`、数据商行 `observed-unverified`，这里照抄。 */
-    coverage: record.coverage
+    coverage: record.coverage as MarketCalendarEvent['coverage']
   }]
 }
