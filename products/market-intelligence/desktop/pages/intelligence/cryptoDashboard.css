@@ -661,7 +661,10 @@
 .mk-dash-expectation__value { font-size: var(--font-metric-md); line-height: 1.05; font-weight: 650; font-variant-numeric: tabular-nums; }
 .mk-dash-expectation__value > i { margin-left: 2px; font-size: var(--font-meta); font-style: normal; color: var(--muted); }
 .mk-dash-expectation__absent { font-size: var(--font-meta); color: var(--muted); }
-.mk-dash-expectation__plot { flex: 1 1 auto; min-height: 0; min-width: 0; }
+/* 这一格**必须是定位祖先**：图的舞台是 `.mk-plot__stage { position:absolute; inset:0 }`，
+   抽屉里靠 `.mk-plot { position:relative }` 把它框在图上。少了这句，舞台会贴到更外层，
+   鼠标在哪都不会触发读数面板——用户 2026-11-15 报的「鼠标一动就出面板」就是这个。 */
+.mk-dash-expectation__plot { position: relative; flex: 1 1 auto; min-height: 0; min-width: 0; }
 
 /* 右栏顶部现在装 AI 结论（原来钟表卡在这）：占满整栏、不留居中内距。 */
 [data-dashboard-policy-slot] { display: block; padding-inline: 0; }
