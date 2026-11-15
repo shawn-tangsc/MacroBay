@@ -12,16 +12,33 @@ import { releaseStatusBackfillPolicy } from './marketCalendarReleaseStatusRule'
  * 拿不到 → 窗口内 `backfilling`、窗口外或次数用尽 `missing`。
  *
  * 三条硬边界：
- * 1. **结构性无值不发请求**：`evt.*` 事件码与 `US.FOMC.*` 决议本来就没有实际值，直接落
- *    `missing`（原因 `structurally-absent`）——否则每次扫描会白打几十个请求；
+ * 1. **结构性无值不发请求**：`evt.*` 事件码、`US.FOMC.*` 决议，以及**明确登记的「这一期源头
+ *    就没有值」**（见下方 policy）一律直接落 `missing`（原因 `structurally-absent`）——
+ *    否则每次扫描会白打几十个请求，而且这些行永远补不上、只会每天被扫一遍；
  * 2. **同一轮同一条只请求一次**：按（指标码, 期次）去重，多个测度行共用一次读数；
  * 3. **只填空字段**：已有 `actual` 不覆盖（逐字段合并那套在写入端，这里先看有没有）。
  */
+/**
+ * **结构性无源**：这一期在源头上就不存在值，不是「还没发」也不是「读不到」。
+ *
+ * 目前只有一条：`2026-10` 的 CPI 年率——2025-10 的 CPI 从未发布，分母不存在，同比在来源里
+ * 就是空的。**不得标成永久**：`2026-11` 起年率自动有值，所以这里按「指标码 + 期次」逐条登记，
+ * 而不是按指标码一刀切。
+ */
+export const releaseValueBackfillPolicy = Object.freeze({
+  structurallyAbsentPeriods: Object.freeze([
+    'US.CPI.NSA.YOY|2026-10',
+    'US.CORE_CPI.NSA.YOY|2026-10'
+  ])
+})
+
 export type ReleaseValueBackfillReport = Readonly<{
   scanned: number
   requests: number
   filled: number
   structural: number
+  /** 表里当前处于结构性无值终态的行数（含早就落了 `missing` 的老行）：诊断看这个数，不是「又放弃了几条」。 */
+  structuralAbsent: number
   stillBackfilling: number
   gaveUp: number
 }>
@@ -29,8 +46,22 @@ export type ReleaseValueBackfillReport = Readonly<{
 type Row = Readonly<{ country_code: string; metric_key: string; period_key: string; first_scheduled_date: string
   scheduled_date: string; scheduled_at: string | null; status: string; values_json: string }>
 
-const isStructural = (metricKey: string): boolean =>
-  metricKey.startsWith('evt.') || metricKey.startsWith('US.FOMC.')
+const isStructural = (metricKey: string, periodKey: string): boolean =>
+  metricKey.startsWith('evt.') || metricKey.startsWith('US.FOMC.') ||
+  (releaseValueBackfillPolicy.structurallyAbsentPeriods as readonly string[]).includes(`${metricKey}|${periodKey}`)
+
+/**
+ * 结构性无值且已是终态的行数。补值扫描**不去扫它们**（终态不进扫描集），所以这个数只能单独量：
+ * 否则「今天没有一条结构性无值」和「结构性无值被漏扫了」在日志里长得一样。
+ */
+function countStructuralAbsent(database: DatabaseSync): number {
+  const periods = releaseValueBackfillPolicy.structurallyAbsentPeriods as readonly string[]
+  const periodClause = periods.map(() => '(metric_key = ? and period_key = ?)').join(' or ')
+  const row = database.prepare(`select count(*) n from ${calendarStandardTablePolicy.eventsTable}
+    where status = 'missing' and (metric_key like 'evt.%' or metric_key like 'US.FOMC.%' or ${periodClause})`)
+    .get(...periods.flatMap((key) => key.split('|'))) as { n: number }
+  return Number(row.n)
+}
 
 const actualOf = (valuesJson: string): string | undefined => {
   try {
@@ -72,7 +103,7 @@ export function backfillExpiredReleaseValues(database: DatabaseSync, input: Read
       const releaseAtMs = Date.parse(row.scheduled_at ?? `${row.scheduled_date}T00:00:00.000Z`)
       const expiredLongAgo = input.nowMs - (Number.isFinite(releaseAtMs) ? releaseAtMs : input.nowMs)
         > releaseStatusBackfillPolicy.windowMs
-      if (isStructural(row.metric_key)) {
+      if (isStructural(row.metric_key, row.period_key)) {
         // 结构性无值：不发请求，直接终态（原因 `structurally-absent`）。
         update.run('missing', row.values_json, 'missing', observedAt,
           row.country_code, row.metric_key, row.period_key, row.first_scheduled_date)
@@ -105,6 +136,7 @@ export function backfillExpiredReleaseValues(database: DatabaseSync, input: Read
         stillBackfilling += 1
       }
     }
-    return { scanned: rows.length, requests, filled, structural, stillBackfilling, gaveUp }
+    return { scanned: rows.length, requests, filled, structural,
+      structuralAbsent: countStructuralAbsent(database), stillBackfilling, gaveUp }
   })()
 }

@@ -26,12 +26,13 @@ function setupDatabase(status: 'missing' | 'scheduled' = 'missing'): DatabaseSyn
   // 迁移标记表在生产由日历迁移建（回放/状态迁移那两个版本号写在里面）；这里按同形补上，
   // 否则 `ensureHistoricalValuesFilled` 读标记会失败，表现成「补值没生效」。
   database.exec('create table if not exists mi_macro_calendar_migrations (version integer primary key)')
-  upsertCalendarStandardRow(database, row('US.CPI.NSA.YOY', '2026-10', '2026-11-10', status))
+  // 用月率那一条做扫描样本：年率 2026-10 已登记为「结构性无源」，走的是 0 请求那条路径。
+  upsertCalendarStandardRow(database, row('US.CPI.SA.MOM', '2026-10', '2026-11-10', status))
   return database
 }
 
 const readFilled = (database: DatabaseSync) =>
-  database.prepare("select status, values_json from mi_calendar_events where metric_key = 'US.CPI.NSA.YOY'")
+  database.prepare("select status, values_json from mi_calendar_events where metric_key = 'US.CPI.SA.MOM'")
     .get() as { status: string; values_json: string }
 
 describe('历史补值挂在启动完成信号上', () => {
@@ -50,7 +51,7 @@ describe('历史补值挂在启动完成信号上', () => {
     expect(readFilled(database).status).toBe('missing')
 
     releaseStartup()
-    await vi.waitFor(() => expect(asked).toEqual(['US.CPI.NSA.YOY']))
+    await vi.waitFor(() => expect(asked).toEqual(['US.CPI.SA.MOM']))
     await vi.waitFor(() => expect(readFilled(database).status).toBe('published'))
     expect(JSON.parse(readFilled(database).values_json)).toEqual({ actual: '3.7' })
 
@@ -58,7 +59,7 @@ describe('历史补值挂在启动完成信号上', () => {
     scheduleHistoricalValueFill({ database, after: Promise.resolve(), readLatest: async () => { asked.push('again'); return undefined } })
     await Promise.resolve()
     await Promise.resolve()
-    expect(asked).toEqual(['US.CPI.NSA.YOY'])
+    expect(asked).toEqual(['US.CPI.SA.MOM'])
   })
 
   it('信号被拒或读数抛错都不外抛：启动链不因补值失败而失败', async () => {
