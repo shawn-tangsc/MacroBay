@@ -57,7 +57,10 @@ export function briefingCalendarCatchUpSourceIds(): readonly string[] {
     // 判据三条一起：**市场侧**（`owner === 'market'`，官方日程那三条也是 `provider`，不能只看它）、
     // **真的在采**（`collection !== 'none'`）、**不是被别的 feed 覆盖的那两条**（`coveredBy` 为空）。
     // 今天正好一条：`macro-calendar-narwhal-economic-data`。
-    .filter(feed => feed.owner === 'market' && feed.collection !== 'none' && feed.coveredBy === undefined)
+    /* `optIn !== true`：**读者启用后才采**的补充源不算「此刻在采」——没配置就没有作业，
+       把它算进来会让 `refreshNow` 对着一个没注册的作业发命令。 */
+    .filter(feed => feed.owner === 'market' && feed.collection !== 'none'
+      && feed.coveredBy === undefined && feed.optIn !== true)
     .map(feed => feed.feedId)
 }
 

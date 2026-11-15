@@ -440,6 +440,11 @@ export const agentRegistry: readonly AgentDefinition[] = [
           'macro-calendar-narwhal-economic-data',
           'macro-calendar-narwhal-financial-events',
           'macro-calendar-narwhal-central-bank-activities',
+          /* 0xRouter 三路：读者可配置的补充源（2026-11-15 用户定），所以也要进这个 agent 的日历组，
+             否则「面板是 agent 子集」那条守卫会红——面板里有的源，agent 必须能读。 */
+          'macro-calendar-0xrouter-economic-data',
+          'macro-calendar-0xrouter-financial-events',
+          'macro-calendar-0xrouter-central-bank-activities',
           'macro-calendar-coinmarketcal',
           'federal-reserve-rss',
           'fred-rates-liquidity',

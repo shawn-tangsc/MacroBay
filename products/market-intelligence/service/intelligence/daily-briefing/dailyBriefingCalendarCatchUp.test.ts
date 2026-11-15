@@ -28,8 +28,11 @@ function freshness(lastCollectedAt: string | null, attempt?: { attemptedAt: stri
 describe('the catch-up list is the registry\'s "actually collecting" answer', () => {
   // 清单恒等于「注册表里 collection 非 none 的 feed」——不手抄、不读契约。
   it('equals exactly the feeds the registry says are collecting', () => {
+    /* 与实现同一判据：**在市场侧、有采集作业、不被别的 feed 覆盖、且不是「读者启用后才采」**。
+       `optIn` 那条是 2026-11-15 加的：0xRouter 三路是补充源，没配置就没有作业，不能算在采。 */
     const collecting = Object.values(calendarFeedRegistry)
-      .filter(feed => feed.owner === 'market' && feed.collection !== 'none' && feed.coveredBy === undefined)
+      .filter(feed => feed.owner === 'market' && feed.collection !== 'none'
+        && feed.coveredBy === undefined && feed.optIn !== true)
       .map(feed => feed.feedId)
     expect([...briefingCalendarCatchUpSourceIds()].sort()).toEqual([...collecting].sort())
   })

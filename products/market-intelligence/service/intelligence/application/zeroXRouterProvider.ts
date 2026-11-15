@@ -26,6 +26,11 @@ export const zeroXRouterProvider: ProviderDefinition = provider({
          门控就是读者自己的 profile 开关。看不见却还在供数，就是一个关不掉的源；看得见、关得掉，
          才是真控制。`runNow: 'none'`（没有手动采集），密钥可测（探针打 /account/balance）。
          等日报回溯真切到 CryptoETF、这条零调用之后，再整条删登记（删源是读者可见变化，产品先点头）。 */
+      /* 三路日历源：**读者可配置、默认关**。启用才由 `zeroXRouterCalendarScheduler` 注册作业；
+         不进 `AUTOMATIC_CALENDAR_FEED_IDS`（采集归日历线自己的调度器拥有，通用名单加了会去刷错的东西）。 */
+      src({ purposes: ['calendar'], sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: 'Market calendar · economic data', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: false }, requiresProxy: true }),
+      src({ purposes: ['calendar'], sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: 'Market calendar · financial events', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: false }, requiresProxy: true }),
+      src({ purposes: ['calendar'], sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: 'Market calendar · central bank activities', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: false }, requiresProxy: true }),
       src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: [], maintenanceOnly: true, collection: 'none', capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
     ]
   })

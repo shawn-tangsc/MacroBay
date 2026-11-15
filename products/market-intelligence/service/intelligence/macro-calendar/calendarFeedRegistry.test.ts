@@ -11,6 +11,10 @@ describe('calendar feed registry', () => {
       'macro-calendar-narwhal-economic-data',
       'macro-calendar-narwhal-financial-events',
       'macro-calendar-narwhal-central-bank-activities',
+      /* 0xRouter 三路在 2026-11-15 起重新可配置（读者启用才注册定时任务），排在聚合源之后、待接入之前。 */
+      'macro-calendar-0xrouter-economic-data',
+      'macro-calendar-0xrouter-financial-events',
+      'macro-calendar-0xrouter-central-bank-activities',
       'macro-calendar-coinmarketcal'
     ])
   })

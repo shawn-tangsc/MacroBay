@@ -20,6 +20,14 @@ export type CalendarFeedDefinition = {
    * 只在状态列写「由同一次采集覆盖」。
    */
   coveredBy?: CalendarFeedId
+  /**
+   * **读者启用后才采集**（不是默认在跑）。
+   *
+   * 为什么要有这个字段：`collection: 'job'` 说的是「启用了就按作业采」，不等于「此刻正在采」。
+   * 补跑清单、健康状态这类「运行时事实」必须能区分两者——0xRouter 三路是补充源，
+   * 没配置就不该注册定时任务（用户 2026-11-15），也不该被日报补跑当成在采的源。
+   */
+  optIn?: true
 }
 
 export type CalendarFeedCapabilities = {
@@ -36,6 +44,11 @@ const calendarFeedOrder = [
   'macro-calendar-narwhal-economic-data',
   'macro-calendar-narwhal-financial-events',
   'macro-calendar-narwhal-central-bank-activities',
+  /* 0xRouter 三路：**读者可配置、默认关**（用户 2026-11-15：「只有配置了的，才注册定时获取的任务」）。
+     采集由 `zeroXRouterCalendarScheduler` 拥有，启用才注册作业；进表身份另由来源权重口径决定。 */
+  'macro-calendar-0xrouter-economic-data',
+  'macro-calendar-0xrouter-financial-events',
+  'macro-calendar-0xrouter-central-bank-activities',
   'macro-calendar-coinmarketcal'
 ] as const
 
@@ -93,6 +106,40 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     dashboardSection: 'macro-calendar',
     /** 一次采集写三类，作业挂在这一条上。 */
     schedule: { kind: 'job', intervalSeconds: 30 * 60 }
+  },
+  'macro-calendar-0xrouter-economic-data': {
+    feedId: 'macro-calendar-0xrouter-economic-data',
+    optIn: true,
+    providerId: '0xrouter',
+    providerDisplayName: '0xRouter',
+    displayName: '市场日历 · 经济数据',
+    description: '市场来源的经济数据日历；读者启用后才会注册定时采集。',
+    owner: 'market',
+    collection: 'job',
+    dashboardSection: 'macro-calendar',
+    schedule: { kind: 'job', intervalSeconds: 30 * 60 }
+  },
+  'macro-calendar-0xrouter-financial-events': {
+    feedId: 'macro-calendar-0xrouter-financial-events',
+    optIn: true,
+    providerId: '0xrouter',
+    providerDisplayName: '0xRouter',
+    displayName: '市场日历 · 金融事件',
+    description: '市场来源的金融事件日历；读者启用后才会注册定时采集。',
+    owner: 'market',
+    collection: 'job',
+    dashboardSection: 'macro-calendar',
+  },
+  'macro-calendar-0xrouter-central-bank-activities': {
+    feedId: 'macro-calendar-0xrouter-central-bank-activities',
+    optIn: true,
+    providerId: '0xrouter',
+    providerDisplayName: '0xRouter',
+    displayName: '市场日历 · 央行活动',
+    description: '市场来源的央行活动日历；读者启用后才会注册定时采集。',
+    owner: 'market',
+    collection: 'job',
+    dashboardSection: 'macro-calendar',
   },
   'macro-calendar-narwhal-financial-events': {
     feedId: 'macro-calendar-narwhal-financial-events',

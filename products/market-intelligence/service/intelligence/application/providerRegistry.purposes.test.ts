@@ -41,6 +41,11 @@ describe('the derived panels match what the registry declared before purposes ex
     ['cryptopanic', []],
     ['coinmarketcal', []],
     ['macro-calendar-coinmarketcal', []],
+    /* 0xRouter 三路日历源 2026-11-15 恢复为读者可配置的补充源：只供日历面板，不进看板。
+       它们在 provider 的 sources 里排在 ETF 那条之前，所以快照也在这里。 */
+    ['macro-calendar-0xrouter-economic-data', ['economic-calendar']],
+    ['macro-calendar-0xrouter-financial-events', ['economic-calendar']],
+    ['macro-calendar-0xrouter-central-bank-activities', ['economic-calendar']],
     ['0xrouter-aggregate-provider', []],
     /* Narwhal 三条日历源已进注册表（另一条线），快照按它在 provider 顺序里的位置登记。 */
     ['macro-calendar-narwhal-economic-data', ['dashboard', 'economic-calendar']],

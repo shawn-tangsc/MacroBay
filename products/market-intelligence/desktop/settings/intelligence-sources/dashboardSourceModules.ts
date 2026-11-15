@@ -116,7 +116,12 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
        **cellKey 保留旧字面量**（`0xRouter …` 那三个），读者已存的格级开关才不会静默重置。 */
     ['Narwhal 经济数据', 'macro-calendar-narwhal-economic-data', false, '0xRouter 经济数据'],
     ['Narwhal 财经事件', 'macro-calendar-narwhal-financial-events', false, '0xRouter 财经事件'],
-    ['Narwhal 央行活动', 'macro-calendar-narwhal-central-bank-activities', false, '0xRouter 央行活动']
+    ['Narwhal 央行活动', 'macro-calendar-narwhal-central-bank-activities', false, '0xRouter 央行活动'],
+    /* 0xRouter 三路：**读者可配置的补充源**（用户 2026-11-15）。默认关——没配置就不注册定时任务。
+       cellKey 用自己的前缀：旧的 `0xRouter …` 那三个键已经被 Narwhal 三行占用（保留是为了读者存过的格级开关）。 */
+    ['市场日历 · 经济数据', 'macro-calendar-0xrouter-economic-data', false, '0xrouter-economic-data'],
+    ['市场日历 · 金融事件', 'macro-calendar-0xrouter-financial-events', false, '0xrouter-financial-events'],
+    ['市场日历 · 央行活动', 'macro-calendar-0xrouter-central-bank-activities', false, '0xrouter-central-bank-activities']
   ]),
   moduleOf('quotes', `${TITLES}.marketState`, [
     ['BTC', 'binance-futures-positioning'],

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { allSources, getSource } from '../../../service/intelligence/application/providerRegistry'
 import { resolveFactSource } from '../../../contracts/factSources'
-import { DASHBOARD_SOURCE_MODULES } from './dashboardSourceModules'
+import { DASHBOARD_SOURCE_MODULES, modulesForBusiness } from './dashboardSourceModules'
 
 /**
  * 看板每个格声明的源，必须在来源注册表里、并且**供给看板**（`panels` 含 `'dashboard'`）。
@@ -14,7 +14,10 @@ import { DASHBOARD_SOURCE_MODULES } from './dashboardSourceModules'
 describe('every dashboard cell names a source the registry feeds to the dashboard panel', () => {
   it('resolves every cell source, and each one supplies the dashboard panel', () => {
     const offenders: string[] = []
-    for (const module of DASHBOARD_SOURCE_MODULES) {
+    /* 只看**看板业务**的模块：`macro-calendar` / `news` 属于日历与舆情业务，
+       它们的格挂的是只供日历/舆情面板的源（看板面板本来就不含它们），拿它们来比 dashboard 面板会误报。
+       这一条要守的是「看板格不许挂只供别处的源」，所以范围就是看板的五个模块。 */
+    for (const module of modulesForBusiness('dashboard')) {
       for (const cell of module.cells) {
         const source = getSource(cell.sourceId)
         if (source === undefined) {

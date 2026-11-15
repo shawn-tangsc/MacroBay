@@ -42,8 +42,8 @@
       "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
     },
     "desktop/settings/intelligence-sources/dashboardSourceModules.ts": {
-      "count": 3,
-      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+      "count": 6,
+      "why": "业务设置里每张卡的源 id 清单：格与源一一对应，也是数据不是分支。3→6 是同一个原因（0xRouter 三路日历源重新可配置）；它们与 Narwhal 那三行并列，cellKey 用的是自己的前缀，避免覆盖读者已存的格级开关。"
     },
     "desktop/shared/ipc/macroIndicatorClient.ts": {
       "count": 2,
@@ -94,8 +94,8 @@
       "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
     },
     "service/intelligence/macro-calendar/calendarFeedRegistry.ts": {
-      "count": 17,
-      "why": "注册表：feed 身份就是源 id，这里是定义处"
+      "count": 32,
+      "why": "日历 feed 登记表本身：每条 feed 的 id 就是这张表的数据，不是分支。2026-11-15 由 17 涨到 32，是新增 0xRouter 三路源（用户要求「只有配置了的才注册定时任务」）——这三条是数据表自身的一部分，不是抄件；将来删源时同笔降回。"
     },
     "service/intelligence/macro-calendar/coreIndicatorValueSources.ts": {
       "count": 3,

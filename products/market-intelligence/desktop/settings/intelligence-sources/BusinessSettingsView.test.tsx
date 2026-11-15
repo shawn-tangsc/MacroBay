@@ -107,21 +107,23 @@ describe('业务设置的左列', () => {
     const subtitles = [...host.querySelectorAll('.business-settings__nav .intelligence-provider-main small')].map((node) => node.textContent)
     expect(subtitles).toEqual([
       `${modulesForBusiness('dashboard').length} 个模块`, // 7
-      `${modulesForBusiness('calendar').flatMap((module) => module.sourceIds).length} 个源`, // 6
+      /* 9 = Fed / BEA / BLS + Narwhal 三条 + 0xRouter 三条（2026-11-15 起读者可配置的补充源）。 */
+      `${modulesForBusiness('calendar').flatMap((module) => module.sourceIds).length} 个源`,
       `${modulesForBusiness('sentiment').flatMap((module) => module.sourceIds).length} 个源`, // 4
       '3 类 · 12 项指标' // 组数与指标数两个数都从分组表派生，不写死
     ])
   })
 
   it('recounts when a source leaves the mapping', async () => {
-    // 反向：源数是从数据层算的——把经济日历少挂一个源，副标题立刻从 6 变 5。
+    // 反向：源数是从数据层算的——把经济日历少挂一个源，副标题立刻跟着减一。
     const module = modulesForBusiness('calendar')[0]!
     const original = module.cells
     try {
       ;(module as unknown as { cells: typeof original }).cells = original.slice(1)
       const { host } = await render('dashboard')
       const subtitles = [...host.querySelectorAll('.business-settings__nav .intelligence-provider-main small')].map((node) => node.textContent)
-      expect(subtitles[1]).toBe('5 个源')
+      const remaining = modulesForBusiness('calendar')[0]!.cells.length
+      expect(subtitles[1]).toBe(`${remaining} 个源`)
     } finally {
       ;(module as unknown as { cells: typeof original }).cells = original
     }
@@ -129,8 +131,9 @@ describe('业务设置的左列', () => {
 
   it('splits calendar into 官方源 / 聚合源 cards and keeps sentiment as one card', async () => {
     const calendar = await renderContent('calendar')
-    // 6 行 = Fed / BEA / BLS + Narwhal 三条（换源已切完，0xRouter 三条已退出）。
-    expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(6)
+    /* 9 行 = Fed / BEA / BLS + Narwhal 三条 + **0xRouter 三条**。
+       2026-11-15 用户改口：0xRouter 三条日历源恢复为读者可配置的补充源（只有配置了才注册定时任务）。 */
+    expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(9)
     // 日历也走两层卡片：第二层两张数据卡片，标题按注册表的 owner 分。
     const cards = [...calendar.host.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
     expect(cards.map((card) => card.getAttribute('data-business-cell-card'))).toEqual(['official', 'aggregate'])

@@ -196,6 +196,9 @@ export const intelligenceSourcesText = {
     'github-releases': '维护备用，暂不向读者提供内容',
     'kraken-status': '维护备用，暂不向读者提供内容',
     'kraken-system-status': '维护备用，暂不向读者提供内容',
+    'macro-calendar-0xrouter-economic-data': '市场来源的经济指标日程；可选补充源，启用后才会定时采集',
+    'macro-calendar-0xrouter-financial-events': '市场来源的财经事件日程；可选补充源，启用后才会定时采集',
+    'macro-calendar-0xrouter-central-bank-activities': '市场来源的央行活动日程；可选补充源，启用后才会定时采集',
     'macro-calendar-narwhal-central-bank-activities': '央行会议与公开活动的日程',
     'macro-calendar-narwhal-economic-data': '经济指标的发布日程与市场预期',
     'macro-calendar-narwhal-financial-events': '财经事件的发生日程与时间点',
@@ -217,6 +220,9 @@ export const intelligenceSourcesText = {
     'macro-calendar-bea': 'BEA 官方发布', 'bea-economic-series': 'BEA 经济数据',
     'macro-calendar-bls': 'BLS 官方日程', 'bls-economic-series': 'BLS 经济数据',
     /* 采集与数据 → 日历那三张卡读的是这张表，缺了就直接印源 id（2026-11-13 读者看到的就是这个）。 */
+    'macro-calendar-0xrouter-economic-data': '市场日历 · 经济数据',
+    'macro-calendar-0xrouter-financial-events': '市场日历 · 金融事件',
+    'macro-calendar-0xrouter-central-bank-activities': '市场日历 · 央行活动',
     'macro-calendar-narwhal-economic-data': 'Narwhal 经济数据',
     'macro-calendar-narwhal-financial-events': 'Narwhal 财经事件',
     'macro-calendar-narwhal-central-bank-activities': 'Narwhal 央行活动',
@@ -855,6 +861,9 @@ export const intelligenceSourcesText = {
   /** Source-list conditions (C5): the chip says "value · N left"; the clear button is one word. */
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
+    'macro-calendar-0xrouter-economic-data': 'Market-sourced economic release schedule; optional supplement, collected only after you enable it',
+    'macro-calendar-0xrouter-financial-events': 'Market-sourced financial event schedule; optional supplement, collected only after you enable it',
+    'macro-calendar-0xrouter-central-bank-activities': 'Market-sourced central-bank activity schedule; optional supplement, collected only after you enable it',
     '0xrouter-aggregate-provider': 'Shared credential for the three market calendars',
     'alternative-fear-greed': 'The current Fear & Greed reading',
     'macro-calendar-narwhal-economic-data': 'Economic release schedule and market expectations',
@@ -896,6 +905,9 @@ export const intelligenceSourcesText = {
     'twelve-data-market': 'Dollar, gold and offshore yuan quotes',
   },
   sourceNames: {
+    'macro-calendar-0xrouter-economic-data': 'Market calendar · economic data',
+    'macro-calendar-0xrouter-financial-events': 'Market calendar · financial events',
+    'macro-calendar-0xrouter-central-bank-activities': 'Market calendar · central bank activities',
     'macro-calendar-fed': 'Federal Reserve official schedule', 'federal-reserve-rss': 'Federal Reserve press releases',
     'macro-calendar-bea': 'BEA official releases', 'bea-economic-series': 'BEA economic data',
     'macro-calendar-bls': 'BLS official schedule', 'bls-economic-series': 'BLS economic data',

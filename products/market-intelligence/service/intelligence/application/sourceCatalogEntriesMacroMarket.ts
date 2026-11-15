@@ -122,6 +122,36 @@ const catalogEntries: IntelligenceSourceCatalogEntry[] = [
      登记进目录的原因很具体：凭证保存走 `testCredentials -> requireDefinition -> getIntelligenceSourceDefinition`，
      只认目录里的源；没有这张条目，填了有效 key 点保存会抛「Unknown intelligence source」。
      `readiness: 'planned'` 让 `supportsRunNow` 恒为 false——没有采集器就不许出现「立即采集」。 */
+  /* 0xRouter 三路日历源：**读者可配置、默认关**（用户 2026-11-15：只有配置了的才注册定时任务）。
+     采集由 `zeroXRouterCalendarScheduler` 拥有；这里登记是为了让它能出现在日历配置里、
+     并让凭证保存与测试连接走同一条 `requireDefinition` 路径。 */
+  source({
+    sourceId: 'macro-calendar-0xrouter-economic-data', displayName: 'Market calendar · economic data',
+    sourceGroup: 'aggregate-data-provider', adapterType: 'rest-api-poller', category: 'macro',
+    parserStrategy: '0xrouter-calendar-economic-data-v1', reliabilityTier: 'aggregator', authMode: 'api-key',
+    readiness: 'live', defaultEnabled: false, supportsRunNow: true,
+    supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    /* 0xRouter 没有单独的 `baseUrl` 字段：origin 从探针 URL 取，避免这里再抄一个域名。 */
+    adapterConfig: { baseUrl: new URL(zeroXRouterSourcePolicy.connectionProbe.url).origin }
+  }),
+  source({
+    sourceId: 'macro-calendar-0xrouter-financial-events', displayName: 'Market calendar · financial events',
+    sourceGroup: 'aggregate-data-provider', adapterType: 'rest-api-poller', category: 'macro',
+    parserStrategy: '0xrouter-calendar-financial-events-v1', reliabilityTier: 'aggregator', authMode: 'api-key',
+    readiness: 'live', defaultEnabled: false, supportsRunNow: true,
+    supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    /* 0xRouter 没有单独的 `baseUrl` 字段：origin 从探针 URL 取，避免这里再抄一个域名。 */
+    adapterConfig: { baseUrl: new URL(zeroXRouterSourcePolicy.connectionProbe.url).origin }
+  }),
+  source({
+    sourceId: 'macro-calendar-0xrouter-central-bank-activities', displayName: 'Market calendar · central bank activities',
+    sourceGroup: 'aggregate-data-provider', adapterType: 'rest-api-poller', category: 'macro',
+    parserStrategy: '0xrouter-calendar-central-bank-activities-v1', reliabilityTier: 'aggregator', authMode: 'api-key',
+    readiness: 'live', defaultEnabled: false, supportsRunNow: true,
+    supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    /* 0xRouter 没有单独的 `baseUrl` 字段：origin 从探针 URL 取，避免这里再抄一个域名。 */
+    adapterConfig: { baseUrl: new URL(zeroXRouterSourcePolicy.connectionProbe.url).origin }
+  }),
   source({
     sourceId: narwhalSourcePolicy.sourceId, displayName: 'Narwhal economic data', sourceGroup: 'aggregate-data-provider',
     adapterType: 'rest-api-poller', category: 'macro', parserStrategy: 'narwhal-calendar-economic-data-v1',

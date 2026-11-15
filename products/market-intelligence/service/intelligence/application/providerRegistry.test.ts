@@ -189,16 +189,28 @@ describe('source projections', () => {
     }
   })
 
-  it('keeps 0xRouter out of every panel after the switch, still visible and still switchable', () => {
-    /* 换源后 0xRouter 的日历三条已归 Narwhal、ETF 改由 CryptoETF 定时采，它自己不再供任何面板。
-       剩下的那条**必须可见**：日报的 ETF 历史回溯仍按需读它，门控是读者自己的开关——
-       看不见却还在供数，就是一个关不掉的源。 */
+  it('keeps 0xRouter out of the dashboard panel but configurable in the calendar panel', () => {
+    /* 2026-11-15 用户改口：0xRouter 三条日历源**恢复为读者可配置的补充源**
+       （「只有配置了的，才注册定时获取的任务」）。所以：
+       - 看板面板里仍然没有它（它不供看板事实）；
+       - 日历面板里**有**这三条，能开关、能被读到启用状态；
+       - ETF 那条仍是维护用（可见、可测、不采集）。 */
     expect(panelView('dashboard')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(false)
-    expect(panelView('economic-calendar')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(false)
+    expect(panelView('economic-calendar')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(true)
     const router = providerRegistry.find((provider) => provider.providerId === '0xrouter')
-    expect(router?.sources.map((source) => source.sourceId)).toEqual(['0xrouter-aggregate-provider'])
-    expect(router?.sources[0]).toMatchObject({ maintenanceOnly: true, collection: 'none', purposes: [], capabilities: { runNow: 'none', testConnection: true } })
-    expect(router?.sources[0]?.visibility).not.toBe('hidden')
+    expect(router?.sources.map((source) => source.sourceId)).toEqual([
+      'macro-calendar-0xrouter-economic-data',
+      'macro-calendar-0xrouter-financial-events',
+      'macro-calendar-0xrouter-central-bank-activities',
+      '0xrouter-aggregate-provider'
+    ])
+    for (const source of router?.sources.slice(0, 3) ?? []) {
+      expect(source.purposes).toEqual(['calendar'])
+      expect(source.collection).toBe('job')
+      expect(source.visibility).not.toBe('hidden')
+    }
+    expect(router?.sources[3]).toMatchObject({ maintenanceOnly: true, collection: 'none', purposes: [], capabilities: { runNow: 'none', testConnection: true } })
+    expect(router?.sources[3]?.visibility).not.toBe('hidden')
   })
 
   it('marks every proxy-only source as needing a proxy and leaves reachable sources unmarked', () => {
