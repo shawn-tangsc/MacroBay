@@ -19,6 +19,12 @@ const uiStates = ['data-received', 'upcoming', 'awaiting-data', 'storage-limited
  * 渲染侧状态 = 界面判定档 + **契约里的发布状态**（`backfilling` / `missing` / `cancelled` 等）。
  * 后者不在这里再写一遍：字面量只出现在契约一处，这里用类型组合取过来。
  */
+/**
+ * **本模型的档位 = 界面判定档 + 契约里本模型会返回的那几档；不是发布状态表的副本。**
+ * 发布状态的唯一出处是契约（`marketCalendarPublicPolicy.releaseStatuses`）；这里多出来的
+ * `data-received / upcoming / awaiting-data / storage-limited / time-pending / elapsed-unconfirmed`
+ * 是「有没有值 / 是不是还没到点 / 是否存储受限」这类**界面判定**，契约里没有也不该有。
+ */
 export const CalendarEventStatusPolicy = Object.freeze({ states: uiStates })
 /**
  * 契约状态里**本模型真的会返回**的那三档。剩下的 `scheduled` / `published` / `unknown` 是

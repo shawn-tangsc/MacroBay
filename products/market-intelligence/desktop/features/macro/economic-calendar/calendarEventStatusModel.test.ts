@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+
+import { marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { CalendarEventStatusPolicy } from './calendarEventStatusModel'
 import type { CalendarDayItem } from './economicCalendarDayModel'
 import { calendarEventStatus } from './calendarEventStatusModel'
 
@@ -79,13 +82,28 @@ describe('post-release states', () => {
     // 夹具只关心状态判定需要的字段，其余按既有夹具惯例强转；类型来源仍是契约。
   }) as unknown as CalendarDayItem
 
-  /**
-   * `backfilling` / `missing` 的透传断言**等契约扩成五态后再加**：现在契约仍是四值联合，
-   * 在这里写死这两个字面量就是「渲染侧自己另写一份联合」，那正是要避免的事。
-   * 渲染模型已经认得这两档（`CalendarEventStatusPolicy.states` 含它们），缺的只是契约那一句。
-   */
-  it('keeps an overdue row out of 待发布 even before the five-state contract lands', () => {
+  it('passes backfilling and missing through from the source', () => {
+    expect(calendarEventStatus(item('backfilling'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('backfilling')
+    expect(calendarEventStatus(item('missing'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('missing')
+  })
+
+  it('keeps an overdue row out of 待发布', () => {
     expect(calendarEventStatus(item('scheduled'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('awaiting-data')
+  })
+
+  /**
+   * 渲染侧与契约的对应关系**写死成一条断言**：契约的六档里，界面直接显示其中三档
+   * （`backfilling` / `missing` / `cancelled`），另外三档是源那侧的词、由界面判定改写成
+   * `awaiting-data`（过期没值）或 `data-received`（有值）。契约再加一档时，这条会红——
+   * 逼人决定「这一档界面怎么显示」，而不是让它悄悄掉进某个默认分支。
+   */
+  it('accounts for every contract release status', () => {
+    const displayed = ['backfilling', 'missing', 'cancelled']
+    const rewritten = { scheduled: 'awaiting-data', published: 'data-received', unknown: 'awaiting-data' }
+    const contract = [...marketCalendarPublicPolicy.releaseStatuses]
+    expect([...displayed, ...Object.keys(rewritten)].sort()).toEqual([...contract].sort())
+    expect(CalendarEventStatusPolicy.states).toContain('awaiting-data')
+    expect(CalendarEventStatusPolicy.states).toContain('data-received')
   })
 
   it('never calls an overdue release 待发布: overdue without a value is 待补值', () => {
