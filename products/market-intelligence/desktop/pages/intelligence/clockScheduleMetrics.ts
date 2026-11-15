@@ -1,3 +1,4 @@
+import { metricConceptOf } from '../../../contracts/metricKeyConcept'
 import type { ClockScheduleMetric } from './clockCardModel'
 import { clockDayGap } from './clockCardModel'
 
@@ -12,9 +13,14 @@ import { clockDayGap } from './clockCardModel'
  *
  * 政策利率没有「日程 + 值」两份：会议日来自政策读数，值取盘口主推档概率。
  */
+/**
+ * 环上画哪两个指标：用**概念串**（`US.CPI.YOY`）而不是四段指标码。
+ * 同一个概念的季调/未季调变体对读者是同一个指标，匹配时一律走 `metricConceptOf`——
+ * 这样新增变体不用改这里，也不会在源码里落一串指标码字面量（门禁 C）。
+ */
 export const clockRingMetricKeys = Object.freeze([
-  { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy' },
-  { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls' }
+  { concept: 'US.CPI.YOY', nameKey: 'cpiYoy' },
+  { concept: 'US.NONFARM.CHANGE', nameKey: 'nonfarmPayrolls' }
 ] as const)
 
 /** 日程里这张卡要读的字段；缺 `measureKeys` 的行不参与匹配（不按名字猜）。 */
@@ -47,9 +53,10 @@ export function clockScheduleMetrics(input: Readonly<{
 }>): readonly ClockScheduleMetric[] {
   const metrics: ClockScheduleMetric[] = []
   for (const metric of clockRingMetricKeys) {
-    const fact = input.facts.find((entry) => entry.metricKey === metric.metricKey)
+    const isThisConcept = (metricKey: string): boolean => metricConceptOf(metricKey) === metric.concept
+    const fact = input.facts.find((entry) => isThisConcept(entry.metricKey))
     const dates = input.events
-      .filter((event) => (event.measureKeys ?? []).includes(metric.metricKey) && Number.isFinite(Date.parse(event.scheduledAt)))
+      .filter((event) => (event.measureKeys ?? []).some((key) => isThisConcept(key)) && Number.isFinite(Date.parse(event.scheduledAt)))
       .map((event) => clockDateOf(event.scheduledAt))
       .sort()
     const past = dates.filter((date) => date <= input.today)
@@ -63,7 +70,8 @@ export function clockScheduleMetrics(input: Readonly<{
         : nextDate !== undefined ? clockDayGap(lastDate, nextDate)
           : undefined
     metrics.push({
-      metricKey: metric.metricKey,
+      // 牌的身份用概念串：同一概念的两个变体不会在卡上分成两个指标。
+      metricKey: metric.concept,
       nameKey: metric.nameKey,
       ...(lastDate === undefined ? {} : {
         lastRelease: {

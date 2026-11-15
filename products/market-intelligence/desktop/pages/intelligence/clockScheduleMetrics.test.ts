@@ -25,8 +25,9 @@ const events: readonly ClockScheduleEvent[] = [
 ]
 
 it('takes dates and the period from the schedule, values from the same read as the drawer', () => {
+  // 牌的身份用**概念串**（`US.CPI.YOY`）：季调/未季调是同一概念的变体，匹配走 `metricConceptOf`。
   const metrics = clockScheduleMetrics({ today: '2026-11-15', events, facts })
-  const cpi = metrics.find((metric) => metric.metricKey === 'US.CPI.NSA.YOY')!
+  const cpi = metrics.find((metric) => metric.metricKey === 'US.CPI.YOY')!
   // 本期 CPI 没有实际值 → 牌的数值位用上一期的结果，不编一个「本期」的。
   expect(cpi.lastRelease).toEqual({ date: '2026-11-10', value: '3.74%' })
   // 下一期来自读数里的 next（日程那边只读到过去两个月）。
@@ -36,7 +37,7 @@ it('takes dates and the period from the schedule, values from the same read as t
 
 it('keeps the expectation absent when the read has none, so the card writes 预期未提供', () => {
   const metrics = clockScheduleMetrics({ today: '2026-11-15', events, facts })
-  const payrolls = metrics.find((metric) => metric.metricKey === 'US.NONFARM.SA.CHANGE')!
+  const payrolls = metrics.find((metric) => metric.metricKey === 'US.NONFARM.CHANGE')!
   expect(payrolls.lastRelease?.value).toBe('+165K')
   expect(payrolls.nextRelease?.expected).toBeUndefined()
   const model = buildClockCardModel({ today: '2026-11-15', metrics })
@@ -58,5 +59,5 @@ it('gives today’s four plaques and one line for the crowded fifth', () => {
     today: '2026-11-15', events, facts, policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
   }) })
   expect(model.plaques).toHaveLength(4)
-  expect(model.unplaced).toEqual([expect.objectContaining({ metricKey: 'US.CPI.NSA.YOY', reason: 'crowded', daysUntil: 25 })])
+  expect(model.unplaced).toEqual([expect.objectContaining({ metricKey: 'US.CPI.YOY', reason: 'crowded', daysUntil: 25 })])
 })
