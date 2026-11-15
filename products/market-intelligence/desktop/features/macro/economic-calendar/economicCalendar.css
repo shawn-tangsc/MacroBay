@@ -223,7 +223,7 @@
 .mi-economic-calendar__day[data-month='outside'] .mi-economic-calendar__date { color: color-mix(in srgb, var(--mi-economic-muted) 48%, transparent); }
 .mi-economic-calendar__date { color: var(--mi-economic-muted); height: var(--mi-calendar-row-height); font-variant-numeric: tabular-nums; font-size: var(--mi-calendar-date-size); text-align: left; }
 .mi-economic-calendar__events { display: grid; align-content: start; min-width: 0; }
-.mi-economic-calendar__event { position: relative; display: grid; grid-template-columns: var(--mi-calendar-time-width) var(--mi-calendar-country-width) minmax(0, 1fr); align-items: center; height: var(--mi-calendar-row-height); min-width: 0; width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--mi-economic-text); cursor: pointer; font: inherit; padding: 0 0 0 6px; text-align: left; }
+.mi-economic-calendar__event { position: relative; display: grid; grid-template-columns: var(--mi-calendar-time-width) var(--mi-calendar-country-width) minmax(0, 1fr); align-items: center; height: var(--mi-calendar-row-height); min-width: 0; width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--mi-economic-text); cursor: pointer; font: inherit; padding: 0; text-align: left; }
 /* 没有动作的行（`div`）不是控件：去指针、去悬停反馈。行高与栅格照旧。 */
 div.mi-economic-calendar__event { cursor: default; }
 div.mi-economic-calendar__event:hover { background: transparent; }
@@ -242,13 +242,6 @@ div.mi-economic-calendar__event:hover { background: transparent; }
    cell. Inline, the ellipsis applies to "country + name" as one string. */
 /* 格子的宽度由第二列给（`--mi-calendar-country-width`），这里只负责「不把列撑开、超长省略」。
    它是网格的第二子元素、**永远渲染**（没有国家时是空串）——少了它，标题会掉进这一列。 */
-/* 行首那根 2px 竖标：**每一行都留这 6px 位**（上面 `padding-left`），只有未映射行填色——
-   标与不标都不让时间列位移。竖标用绝对定位，不进栅格：进栅格就多一列，标题立刻变窄。
-   颜色用 `--muted` 而不是边框色：这是唯一的语义标记，边框色对背景只有约 1.8:1（界面设计）。 */
-.mi-economic-calendar__event[data-unmapped='true']::before {
-  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  width: 2px; height: 12px; border-radius: 1px; background: var(--muted);
-}
 .mi-economic-calendar__event-country { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 2px; color: var(--mi-economic-muted); font-size: calc(var(--mi-calendar-title-size) - 1px); font-weight: 400; }
 .mi-economic-calendar__event:hover, .mi-economic-calendar__event[aria-pressed='true'] { border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 10%, var(--mi-economic-surface)); }
 .mi-economic-calendar__event-time { min-width: 0; overflow: hidden; color: var(--mi-economic-muted); font-variant-numeric: tabular-nums; font-size: var(--mi-calendar-time-size); text-align: left; text-overflow: ellipsis; white-space: nowrap; }

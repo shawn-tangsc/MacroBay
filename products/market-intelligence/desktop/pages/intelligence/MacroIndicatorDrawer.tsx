@@ -164,6 +164,16 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt)),
   [releases.events, selectedDay, timeZone])
   /**
+   * 右列两层分组（类型在外、指标组内再分分级）：判据在 `macroIndicatorDrawerModel`，
+   * 这里只把文案函数交过去。**tab 的条数也从这一份算**，不另数一遍。
+   */
+  const dayGroupsList = useMemo(() => dayGroups(dayEvents, selectedDay, timeZone, text.mkDay.sequence,
+    (eventType, count) => calendarText.unifiedDay.groupCount
+      .replace('{type}', calendarText.market.kinds[eventType]).replace('{count}', String(count)),
+    (tier, count) => text.mkDay.tierGroup
+      .replace('{tier}', text.mkDay.tiers[tier]).replace('{count}', String(count))),
+  [dayEvents, selectedDay, timeZone, calendarText, text])
+  /**
    * 未映射观测（进不了标准表的那批）：**只在日历里显示**，经渲染专用 IPC 读（契约 §10）。
    * 读不到时 `state: 'unavailable'`——列表据此说「读不到」，不报 0 条。
    */
@@ -183,6 +193,27 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     date: selectedDay, timeZone, standard: standardDayItems, unmapped: unmappedMonth.entries
   }), [selectedDay, timeZone, standardDayItems, unmappedMonth.entries])
   const unmappedGroup = mergedDay.groups.find((group) => group.kind === 'unmapped')
+  /** 当天未映射条数（tab 上的数字用它；读不到时**不显示数字**）。 */
+  const unmappedCount = unmappedGroup === undefined ? 0 : unmappedGroup.rows.length
+  /**
+   * 当天的 tab（用户 2026-11-16：两个来源分 tab 看，不混在一列）。
+   *
+   * **跨日期保持**：读者在找同一类东西，翻到别的日子不该让他重选一遍。
+   */
+  const [dayTab, setDayTab] = useState<'standard' | 'unmapped'>('standard')
+  /** tab 上的数字是**当天那个 tab 的条数**；两个来源各自算，不混。 */
+  const standardCount = useMemo(() => dayGroupsList.reduce((total, group) =>
+    total + group.items.length + (group.subgroups ?? []).reduce((sum, subgroup) => sum + subgroup.items.length, 0), 0),
+  [dayGroupsList])
+  /** tab 文案走抽屉自己的那张表（`mkDay.*`），不在这里拼字。 */
+  const drawerCopy = (key: string): string => (text.mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key
+  const dayTabItems = useMemo(() => [
+    { value: 'standard', labelKey: 'tabStandard', labelParams: { count: String(standardCount) } },
+    // 读不到时**不带数字**：数量未知写 0 就是把「读不到」画成「没有」。
+    unmappedMonth.state === 'unavailable'
+      ? { value: 'unmapped', labelKey: 'tabUnmappedUnknown' }
+      : { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(unmappedCount) } }
+  ], [standardCount, unmappedMonth.state, unmappedCount])
   /** 方格计数用：未映射观测按天累计（读者看到的是「今天有几件事」，两个来源都算）。 */
   const unmappedCountByDay = useMemo(() => {
     const counts = new Map<string, number>()
@@ -373,23 +404,27 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayLayers.core.length === 0 ? {} : {
                   summary: text.mkDay.summary.replace('{related}', String(dayLayers.core.length))
                 })}
-                groups={dayGroups(dayEvents, selectedDay, timeZone, text.mkDay.sequence,
-                  (eventType, count) => calendarText.unifiedDay.groupCount
-                    .replace('{type}', calendarText.market.kinds[eventType]).replace('{count}', String(count)),
-                  (tier, count) => text.mkDay.tierGroup
-                    .replace('{tier}', text.mkDay.tiers[tier]).replace('{count}', String(count)))}
+                groups={dayGroupsList}
                 {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
-                {...(unmappedGroup === undefined ? {} : {
+                sourceTabs={{
+                  value: dayTab,
+                  onChange: (value) => setDayTab(value === 'unmapped' ? 'unmapped' : 'standard'),
+                  items: dayTabItems,
+                  ariaLabelKey: 'tabsAria',
+                  resolveText: drawerCopy,
                   unmapped: {
-                    title: text.mkDay.unmappedGroup.replace('{count}', String(unmappedGroup.rows.length)),
-                    aria: text.mkDay.unmappedAria,
+                    observations: unmappedGroup === undefined ? [] : unmappedGroup.rows.flatMap((row) => row.kind === 'unmapped' ? [row.observation] : []),
                     timeZone,
-                    observations: unmappedGroup.rows.flatMap((row) => row.kind === 'unmapped' ? [row.observation] : [])
+                    aria: text.mkDay.unmappedAria,
+                    emptyText: text.mkDay.unmappedEmpty,
+                    emptyNote: text.mkDay.unmappedEmptyNote.replace('{count}', String(standardCount)),
+                    unavailableText: text.mkDay.unmappedUnavailable,
+                    unavailableNote: text.mkDay.unmappedUnavailableNote,
+                    unavailable: unmappedMonth.state === 'unavailable'
                   }
-                })}
-                {...(unmappedMonth.state === 'unavailable' ? { unmappedUnavailable: text.mkDay.unmappedUnavailable } : {})}
+                }}
                 text={calendarText}
                 statusNow={nowInstant}
                 selectedEventKey={undefined}

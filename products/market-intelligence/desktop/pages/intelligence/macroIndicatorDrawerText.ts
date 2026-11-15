@@ -157,12 +157,19 @@ export const macroIndicatorDrawerText = {
       /* 「经济指标」组内的第二层：一级/二级/三级用指标码分级，没有码的（讲话、源内身份行）是「未分级」。 */
       tierGroup: '{tier} · {count} 条',
       tiers: { '1': '一级指标', '2': '二级指标', '3': '三级指标', other: '未分级' },
-      /* 「未入标准表」：这批观测没进标准表，**不是异常也不是失败**（用户 2026-11-16 定）。
-         组标题只出现一次，行内不写字；读屏在行的可访问名末尾补 `unmappedAria`。 */
-      unmappedGroup: '未入标准表 · {count} 条',
+      /* 两个 tab（界面设计 2026-11-16）：条数进标签，**0 也显示 `(0)`**——tab 条是框架，
+         不随当天数据变形，否则读者会以为功能没了。读不到时不带数字（数量未知，写 0 就是撒谎）。 */
+      tabStandard: '标准表 ({count})',
+      tabUnmapped: '未入标准表 ({count})',
+      tabUnmappedUnknown: '未入标准表',
+      tabsAria: '按来源切换当天事件',
+      /* 未映射行上读屏补的一句；行内不写（视觉上已经在那个 tab 里了）。 */
       unmappedAria: '未入标准表',
-      /* 读不到那一支：不许写成「0 条」——那是把「没读到」画成「没有」。 */
+      /* 空与读不到是两件事，句子必须能分开。 */
+      unmappedEmpty: '这一天没有未入标准表的事件',
+      unmappedEmptyNote: '标准表 {count} 条照常在左边那个 tab 里。',
       unmappedUnavailable: '未入标准表：这次读不到',
+      unmappedUnavailableNote: '不是没有，是这次没读到。',
     },
     weekday: ['一', '二', '三', '四', '五', '六', '日'],
     surprise: { beat: '超预期 {value}', miss: '低于预期 {value}', inline: '符合预期' },
@@ -288,9 +295,15 @@ export const macroIndicatorDrawerText = {
       sequence: '{name} · {index}/{total}',
       tierGroup: '{tier} · {count} events',
       tiers: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Untiered' },
-      unmappedGroup: 'Not in the standard table · {count}',
-      unmappedAria: 'Not in the standard table',
-      unmappedUnavailable: 'Not in the standard table: not readable right now',
+      tabStandard: 'Standard ({count})',
+      tabUnmapped: 'Not mapped ({count})',
+      tabUnmappedUnknown: 'Not mapped',
+      tabsAria: 'Switch the day\'s events by source',
+      unmappedAria: 'Not mapped',
+      unmappedEmpty: 'No unmapped events on this day',
+      unmappedEmptyNote: 'The {count} standard events are in the other tab.',
+      unmappedUnavailable: 'Not mapped: not readable right now',
+      unmappedUnavailableNote: 'Not empty — this read did not come back.',
     },
     weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     surprise: { beat: 'Above forecast {value}', miss: 'Below forecast {value}', inline: 'In line' },

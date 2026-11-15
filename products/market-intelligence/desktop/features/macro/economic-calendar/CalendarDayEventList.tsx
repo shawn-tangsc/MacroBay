@@ -1,3 +1,5 @@
+import { Tabs } from '@platform/ui/components/tabs'
+import type { ChoiceItem } from '@platform/ui/components/choice/choiceItem'
 import type { MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import type { UnmappedCalendarObservation } from '../../../../service/intelligence/macro-calendar/rendering/marketCalendarUnmappedMonthRead'
 import { CalendarEventRow } from './CalendarEventRow'
@@ -14,7 +16,7 @@ import type { EconomicCalendarText } from './economicCalendarText'
  *
  * It is presentational: every value arrives as a prop, and the caller keeps the selection state.
  */
-export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, hideGroupHeadings, missingValueLabel, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect, unmapped, unmappedUnavailable }: Readonly<{
+export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, hideGroupHeadings, missingValueLabel, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect, sourceTabs }: Readonly<{
   label: string
   /** The page scrolls this list to the top when the selected day changes; the drawer passes nothing. */
   listRef?: React.RefObject<HTMLElement | null>
@@ -54,22 +56,30 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   /** `undefined` = 这一列没有可去的地方：行渲染成非交互形态，不画点头没反应的按钮。 */
   onSelect?: (item: CalendarDayItem) => void
   /**
-   * 「未入标准表」那一组：**没进标准表的观测**，单独成组、排在最后。
+   * 当天列表上方的两个 tab（用户 2026-11-16：两个来源不要混在一列，分 tab 切换看）。
    *
-   * 它与标准表那几组不混：这些行没有重要性、没有发布状态，进那一套分组只会被迫编一个档位。
-   * `title` 与 `aria` 都是调用方给的文案（组标题只出现一次，行内不写字）。
+   * 分组只在渲染层：合并函数只管排序、去重、计数，`tab` 这个概念不进去。
+   * 读不到时 `items` 里那项**不带计数**——数量未知写 `(0)` 就是把「读不到」画成「没有」。
    */
-  unmapped?: Readonly<{
-    title: string
-    aria: string
-    timeZone: string
-    observations: readonly UnmappedCalendarObservation[]
+  sourceTabs?: Readonly<{
+    value: string
+    onChange: (value: string) => void
+    items: readonly ChoiceItem[]
+    ariaLabelKey: string
+    resolveText: (key: string) => string
+    unmapped: Readonly<{
+      observations: readonly UnmappedCalendarObservation[]
+      timeZone: string
+      /** 读屏补的那句（行内不写：视觉上已经在那个 tab 里了）。 */
+      aria: string
+      emptyText: string
+      emptyNote: string
+      unavailableText: string
+      unavailableNote: string
+      /** 读不到：**不给 0 条**，给两句「读不到」。 */
+      unavailable: boolean
+    }>
   }>
-  /**
-   * 读不到那一支：**给一句「读不到」，不是「0 条」**。缺省（undefined）表示这一格不提这件事
-   * （例如根本没接这条读口的地方）；传空串以外的一句话才渲染。
-   */
-  unmappedUnavailable?: string
 }>): React.ReactElement {
   // One row body for both layers: a type heading over rows, or a type heading over tier subheadings.
   const renderRow = (item: CalendarDayItem): React.ReactElement => <div role="listitem" key={item.key}>
@@ -78,15 +88,7 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
       selected={item.source === 'market' ? item.event.eventKey === selectedMarketKey : item.event.eventKey === selectedEventKey}
       onSelect={onSelect} />
   </div>
-  return <section aria-label={label} className="mi-calendar-day-list" data-calendar-day-list ref={listRef}>
-    {/* 标题行两端对齐：左边标题、右边计数。计数原来单独占一段，窄栏（抽屉右列 300px）里会换行、
-        和下面的分组标题挤在一起——用户看到的就是「几条重要什么的字样和内容重叠」。
-        计数右对齐、不换行；放不下时**标题先省略**，计数保完整——它是读者判断「有没有被截断」的唯一依据。
-        读序不变：标题在前、计数在后，仍在同一个标题行里。 */}
-    <div className="mi-calendar-day-list__head">
-      <h2>{title}</h2>
-      {summary === undefined || summary === '' ? null : <p data-day-summary>{summary}</p>}
-    </div>
+  const standardBody = <>
     <div role="list">{groups.map(group => <section data-calendar-group={group.title ?? group.eventType} key={group.title ?? group.eventType}>
       {hideGroupHeadings ? null : <h3>{group.title ?? text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}
       {group.subgroups === undefined
@@ -101,17 +103,37 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
         button that does nothing is worse than none. The sentence stays visible so a blank area
         cannot be mistaken for "not loaded yet". */}
     {emptyText === undefined ? null : <p>{emptyText}</p>}
-    {/* 未映射那一组：形状与标准表组不同（没有分级、没有状态），所以单独一张表、排在最后。 */}
-    {unmapped === undefined || unmapped.observations.length === 0
-      ? null
-      : <section data-calendar-group="unmapped" data-unmapped-group>
-        <h3>{unmapped.title}</h3>
-        <div role="list">{unmapped.observations.map(observation => <div role="listitem" key={observation.key}>
-          <UnmappedCalendarEventRow observation={observation} text={text} timeZone={unmapped.timeZone} unmappedAria={unmapped.aria} />
-        </div>)}</div>
-      </section>}
-    {/* 读不到就明说读不到：**不许**把它写成 0 条，也不许一个字不提地消失。 */}
-    {unmappedUnavailable === undefined ? null : <p data-unmapped-unavailable>{unmappedUnavailable}</p>}
+  </>
+  const unmapped = sourceTabs?.unmapped
+  const unmappedBody = unmapped === undefined ? null : unmapped.unavailable
+    // 读不到：两句都说清「不是没有」。**不出 0 条**。
+    ? <div data-unmapped-unavailable>
+      <p>{unmapped.unavailableText}</p>
+      <p className="mi-calendar-day-list__note">{unmapped.unavailableNote}</p>
+    </div>
+    : unmapped.observations.length === 0
+      // 确实为空：与「读不到」是两件事，句子不许复用。
+      ? <div data-unmapped-empty>
+        <p>{unmapped.emptyText}</p>
+        <p className="mi-calendar-day-list__note">{unmapped.emptyNote}</p>
+      </div>
+      : <div role="list">{unmapped.observations.map(observation => <div role="listitem" key={observation.key}>
+        <UnmappedCalendarEventRow observation={observation} text={text} timeZone={unmapped.timeZone} unmappedAria={unmapped.aria} />
+      </div>)}</div>
+  return <section aria-label={label} className="mi-calendar-day-list" data-calendar-day-list ref={listRef}>
+    {/* 标题行两端对齐：左边标题、右边计数。计数原来单独占一段，窄栏（抽屉右列 300px）里会换行、
+        和下面的分组标题挤在一起——用户看到的就是「几条重要什么的字样和内容重叠」。
+        计数右对齐、不换行；放不下时**标题先省略**，计数保完整——它是读者判断「有没有被截断」的唯一依据。
+        读序不变：标题在前、计数在后，仍在同一个标题行里。 */}
+    <div className="mi-calendar-day-list__head">
+      <h2>{title}</h2>
+      {summary === undefined || summary === '' ? null : <p data-day-summary>{summary}</p>}
+    </div>
+    {/* 两个来源分两个 tab（用户 2026-11-16）：全部渲染、非活动的只加 `hidden`，切回来时
+        选中项与会话都还在——那是 `Tabs` 已经订好的行为，这里不重写。 */}
+    {sourceTabs === undefined ? standardBody : <Tabs items={sourceTabs.items} value={sourceTabs.value}
+      onChange={sourceTabs.onChange} ariaLabelKey={sourceTabs.ariaLabelKey} resolveText={sourceTabs.resolveText}
+      panels={{ standard: standardBody, unmapped: unmappedBody }} />}
   </section>
 }
 
