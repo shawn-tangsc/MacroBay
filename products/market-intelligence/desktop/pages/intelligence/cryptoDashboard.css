@@ -226,7 +226,10 @@
 .mi-capital-conditions__chart-legend i[data-series='funds'] { background: var(--mi-dashboard-etf-funds); }
 .mi-capital-conditions__chart-legend i[data-series='btc'] { background: var(--mi-dashboard-etf-btc); }
 .mi-capital-conditions__chart-legend i[data-series='eth'] { background: var(--mi-dashboard-etf-eth); }
-.mi-capital-conditions__chart { display: flex; align-items: stretch; position: relative; height: auto; min-height: var(--mi-dashboard-etf-flow-chart-height); min-width: 0; margin-left: var(--mi-dashboard-etf-flow-axis-width); padding: 4px 0; background: linear-gradient(to bottom, transparent calc(50% - 1px), var(--mi-dashboard-line) calc(50% - 1px), var(--mi-dashboard-line) calc(50% + 1px), transparent calc(50% + 1px)); cursor: crosshair; }
+/* 与钟表卡同一条规矩：图里的提示框是 `position:absolute; z-index:3`，
+   卡若不自建层叠上下文，它会跟就地渲染的抽屉（同为 3）比先后，可能压到抽屉上。
+   `isolation: isolate` 只收口层级，不改尺寸颜色。 */
+.mi-capital-conditions__chart { isolation: isolate; display: flex; align-items: stretch; position: relative; height: auto; min-height: var(--mi-dashboard-etf-flow-chart-height); min-width: 0; margin-left: var(--mi-dashboard-etf-flow-axis-width); padding: 4px 0; background: linear-gradient(to bottom, transparent calc(50% - 1px), var(--mi-dashboard-line) calc(50% - 1px), var(--mi-dashboard-line) calc(50% + 1px), transparent calc(50% + 1px)); cursor: crosshair; }
 .mi-capital-conditions__chart-axis { position: absolute; z-index: 1; inset: 0 auto 0 calc(-1 * var(--mi-dashboard-etf-flow-axis-width)); display: grid; grid-template-rows: 1fr 1fr 1fr; width: calc(var(--mi-dashboard-etf-flow-axis-width) - 7px); color: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 1; pointer-events: none; text-align: right; }
 .mi-capital-conditions__chart-axis span { align-self: center; }
 .mi-capital-conditions__chart-axis span:first-child { align-self: start; }

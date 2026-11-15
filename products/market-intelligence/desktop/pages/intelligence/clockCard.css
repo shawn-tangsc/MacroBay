@@ -25,7 +25,10 @@
 }
 
 .mi-clock__viewport { position: relative; width: 100%; min-width: 0; }
-.mi-clock { position: relative; width: 336px; height: 330px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+/* 层叠上下文只在这张卡内部成立：牌是 `position:absolute` + `z-index:4/9`，卡若不自建上下文，
+   牌的层级会跳到外层，和「分析详情」那种 `z-index:3` 的就地抽屉比大小——牌就压到抽屉上面去了
+   （用户 2026-11-15 的截图）。`isolation: isolate` 只建上下文、不改任何尺寸与颜色，符合「卡内部不动」。 */
+.mi-clock { isolation: isolate; position: relative; width: 336px; height: 330px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
 .mi-clock__svg { position: absolute; left: 12px; top: 12px; width: 312px; height: 306px; pointer-events: none; color: var(--muted); }
 .mi-clock__svg .mi-clock__ring { fill: none; stroke: var(--border-strong); }
 .mi-clock__svg circle[stroke='currentColor'], .mi-clock__svg line { fill: none; stroke: currentColor; }
