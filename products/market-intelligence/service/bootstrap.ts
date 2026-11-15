@@ -33,6 +33,7 @@ import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerI
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
+import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
@@ -261,73 +262,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   intelligenceModule.setPolicyPathQuery(policyPathQueryService)
   policyPathRuntime.start()
   sourceEnableListeners.set('policy-path-market', () => { void policyPathRuntime.sync() })
-  const crossAssetConfiguration = createCrossAssetSourceConfiguration({ profileStore: intelligenceModule.crossAssetProfiles })
-  let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined
-  try { crossAssetStore = createCrossAssetStore(join(getIntelligenceProductDataDir(), crossAssetStoragePolicy.fileName)) }
-  catch { /* Preserve the unavailable feature database; other product capabilities remain usable. */ }
-  const crossAssetClient = createBinanceCrossAssetClient({ platformFetch: deps.platformFetch ?? (async () => { throw new Error('dependency-unavailable') }), requestGovernanceQueue: intelligenceModule.requestGovernanceQueue })
-  if (crossAssetStore) installBriefMarketBackfill(crossAssetStore, crossAssetClient)
-  // The real Nasdaq 100 index is collected by its own five-minute job into the same store the Binance
-  // proxy writes to: the row prefers the licensed index and falls back to the labelled proxy, and both
-  // legs have to be on disk for that choice to be made from data rather than from hope. One store, one
-  // connection — two writers of one SQLite file would be a second writer of one table.
-  const crossAssetIndexRuntime = crossAssetStore ? createCrossAssetIndexRuntime({
-    jobRuntime: deps.jobRuntime,
-    store: crossAssetStore,
-    resolveProfile: sourceId => intelligenceModule.crossAssetProfiles.resolveProfile(sourceId),
-    getCredential: credentialRef => intelligenceModule.sourceCredentials.getByRef(credentialRef),
-    onError: (error, sourceId) => {
-      // A code, a symbol and nothing else: the failure message names the source, never the URL the key
-      // travelled in.
-      console.log(JSON.stringify({ marker: 'MI_CROSS_ASSET_INDEX_ERROR', sourceId, symbolCode: crossAssetPolicy.index.symbol, message: String(error).slice(0, 200) }))
-    }
-  }) : undefined
-  const crossAssetRuntime = crossAssetStore ? createCrossAssetRuntime({
-    now: Date.now, store: crossAssetStore, client: crossAssetClient,
-    readEnabled: async () => {
-      const configuration = await crossAssetConfiguration.read()
-      if (configuration.state === 'unknown') throw new Error('configuration-unavailable')
-      return configuration.enabled
-    },
-    createStream: onState => {
-      if (!deps.getNetworkSettings) throw new Error('dependency-unavailable')
-      return createBinanceCrossAssetStream({ now: Date.now, onState,
-        platformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: deps.getNetworkSettings }) })
-    }
-  }) : undefined
-  const crossAssetQuery = crossAssetStore && crossAssetRuntime ? createCrossAssetSnapshotQuery({
-    now: Date.now, store: crossAssetStore, live: crossAssetRuntime.snapshot,
-    // The row's leg is chosen from what the licensed feed last managed to do, never from the clock: a
-    // closed session is a successful tick and keeps the real index on the row.
-    indexFeed: () => crossAssetIndexRuntime?.state() ?? { state: 'pending' },
-    // The dollar and gold lines: the very macro store the 市场状态 table's rows are read from, so a
-    // chart line and a table cell can never disagree about what the dollar did. Read on every query
-    // rather than cached with the analysis — it is another database on another cadence.
-    macroSeries: (seriesId, fromMs, toMs) => intelligenceModule.macroMarket.store.series(seriesId, fromMs, toMs)
-  }) : undefined
-  registerCrossAssetIpc(register, { now: Date.now, runtime: crossAssetRuntime, query: crossAssetQuery, configuration: crossAssetConfiguration })
-  // Both market stores answer one retention policy, by one daily job and one look at startup: a store
-  // that has been kept since the product shipped has months of folding to do, and waiting for the first
-  // midnight would leave the reader's disk exactly as it was for a day.
-  if (crossAssetStore) {
-    const newsStore = intelligenceModule.newsSentiment.store
-    registerMarketRetention({
-      jobRuntime: deps.jobRuntime,
-      macroStore: intelligenceModule.macroMarket.store,
-      crossAssetStore,
-      analysisRepository: intelligenceModule.marketAnalysisRuntime.repository,
-      ...(newsStore ? { newsStore } : {})
-    })
-  }
-  // One cross-asset source, two readers with two shapes: the analysis context reads through the
-  // public query method, which validates with the renderer's own parser, while the prediction
-  // verifier takes the raw synchronous query and parses the snapshot itself. Handing the async
-  // method to the verifier would make `parseCrossAssetSnapshot(Promise)` return undefined and
-  // silently produce no observations at all.
-  if (crossAssetQuery) {
-    intelligenceModule.publicQueryService.setCrossAssetQuery({ query: input => crossAssetQuery.query(input) })
-    intelligenceModule.marketAnalysisRuntime.setCrossAssetQuery(input => crossAssetQuery.query(input))
-  }
+  const {
+    crossAssetConfiguration, crossAssetStore, crossAssetRuntime, crossAssetIndexRuntime, crossAssetQuery
+  } = wireCrossAsset({ register, deps, intelligenceModule, productDataDir: getIntelligenceProductDataDir() })
   const blsEmploymentMvpRefresh = createBlsEmploymentMvpRefreshService({
     valuesBridge: blsPythonRequestsBridge,
     evidence: intelligenceModule.macroCalendarEvidenceReady
