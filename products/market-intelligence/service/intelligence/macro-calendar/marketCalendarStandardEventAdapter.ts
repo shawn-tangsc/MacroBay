@@ -22,6 +22,9 @@ import { toAlpha2Country } from './marketCalendarMetricIdentity'
  * 为什么必须在这里给：列表行只在 `countryName` 有值时才画国家（`CalendarEventRow`），
  * 旧读法由 0xRouter 的查询侧带名，换到标准表后没人算它，于是整列国家静默消失——
  * 看起来像「这些事件没有国家」，其实是「我们没算」。
+ *
+ * **这里的 `toAlpha2Country` 是给历史行留的兼容层**（库里还有 329 行 `USA`，写入端已改为
+ * 只落 alpha-2）。新写入的行到这里时本就是 alpha-2，这行归一不改变结果。
  */
 const countryNameOf = (code: string, locale: 'zh' | 'en'): string | undefined => {
   const names = marketCalendarCountryNames[toAlpha2Country(code)]

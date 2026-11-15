@@ -39,7 +39,8 @@ describe('source-id overwrite is measured, not explained away', () => {
 
     expect(auditSourceIdMismatches(database, tables)).toEqual([{
       month: '2026-11',
-      countryCode: 'USA',
+      // 写入端已把国家码归一到 alpha-2（2026-11-16），行里读出来就是 `US`。
+      countryCode: 'US',
       metricKey: 'US.CORE_PCE.SA.YOY',
       firstScheduledDate: '2026-11-25',
       ledgerSourceEventId: 'US.CORE_PCE.2026-10',

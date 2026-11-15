@@ -18,6 +18,20 @@ const rows = (database: DatabaseSync) =>
   database.prepare('select * from mi_calendar_events').all() as Record<string, unknown>[]
 
 describe('标准日历表', () => {
+  it('国家码写入端归一到 alpha-2：`USA` 落成 `US`，台账同一份口径', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, countryCode: 'USA' })
+    upsertCalendarStandardRow(database, { ...base, metricKey: 'US.CPI.SA.MOM', periodKey: '2026-10',
+      countryCode: 'US' })
+    const stored = database.prepare('select distinct country_code from mi_calendar_events').all() as
+      { country_code: string }[]
+    // 守卫：标准表里只许出现两字母大写的 alpha-2；写 `USA` 也不会留下第二种写法。
+    expect(stored.map((row) => row.country_code)).toEqual(['US'])
+    expect(stored.every((row) => /^[A-Z]{2}$/.test(row.country_code))).toBe(true)
+  })
+
+
   it('**旧数据不许盖新数据**：按数据自身的观测时刻比，不按写入时刻', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)

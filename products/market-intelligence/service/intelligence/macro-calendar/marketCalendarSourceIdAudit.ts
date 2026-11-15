@@ -1,5 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { toAlpha2Country } from './marketCalendarMetricIdentity'
+
 /**
  * 「行上记的发布 id」与「台账里的发布 id」不一致的测量。
  *
@@ -64,9 +66,11 @@ export function sourceIdOverwriteOnWrite(
   }>
 ): Readonly<{ month: string; previousSourceEventId: string; nextSourceEventId: string; tracedInLedger: boolean }> | undefined {
   try {
+    // 国家码在写入端已归一到 alpha-2，这里按同一口径查，否则「旧写法进来的写」会被当成「新行」而漏报。
     const previous = database.prepare(`select source_event_id as id from ${tables.eventsTable}
       where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ? limit 1`)
-      .get(input.countryCode, input.metricKey, input.periodKey, input.firstScheduledDate) as { id?: unknown } | undefined
+      .get(toAlpha2Country(input.countryCode), input.metricKey, input.periodKey, input.firstScheduledDate) as
+      { id?: unknown } | undefined
     if (previous?.id === undefined || String(previous.id) === input.sourceEventId) return undefined
     const previousSourceEventId = String(previous.id)
     const traced = database.prepare(`select 1 as hit from ${tables.sourceIdsTable}

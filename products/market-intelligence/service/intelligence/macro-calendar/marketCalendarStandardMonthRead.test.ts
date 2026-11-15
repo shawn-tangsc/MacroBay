@@ -45,7 +45,8 @@ describe('从标准表读一个月', () => {
     const database = new DatabaseSync(':memory:')
     seed(database)
     const [row] = readStandardCalendarMonth(database, { month: '2026-11' })
-    expect(row!.identityKey).toBe('USA|US.CPI.NSA.YOY|2026-10|2026-11-10')
+    // 国家码在写入端归一到 alpha-2：身份串跟着是 `US`（2026-11-16）。
+    expect(row!.identityKey).toBe('US|US.CPI.NSA.YOY|2026-10|2026-11-10')
     expect(row!.observedAt).toBe('2026-11-10T13:31:00.000Z')
     expect(row!.sourceProviderId).toBe('macro-calendar-bls')
     expect(row!.timePrecision).toBe('minute')
