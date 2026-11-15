@@ -24,8 +24,9 @@ it('keeps the card copy complete and identical in both locales', () => {
 it('names every string the card and the column controls need', () => {
   expect(Object.keys(card('zh-CN')).sort()).toEqual([
     'agentTitle', 'awaitingData', 'categories', 'clearConversation', 'closeAgent', 'collapseAgent', 'copyEvent', 'dxy', 'empty', 'eventContext', 'expandAgent', 'importanceHigh', 'loading', 'openCalendar', 'openEventInCalendar', 'reactionHint', 'refresh', 'releasedEmpty',
-    'staleNotice', 'surprise', 'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'unscoredCount', 'upcomingSection'
+    'staleNotice', 'surprise', 'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'unknownCountry', 'unscoredCount', 'upcomingSection'
   ])
-  // `loading` and `staleNotice` arrived with the three waiting states; a key the card renders but
-  // this list does not know about is exactly what makes the list stop meaning anything.
+  // `loading` and `staleNotice` arrived with the three waiting states; `unknownCountry` arrived with
+  // the three-step country fallback (the card used to draw nothing when the name was missing).
+  // 这张表的用处就在这：卡片渲染了、而这份清单不知道的键，正是让清单失去意义的那种漂移。
 })
