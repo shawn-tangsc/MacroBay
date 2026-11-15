@@ -12,7 +12,7 @@ import type { CatalogRow } from './calendarEventCatalogModel'
  */
 const text: CatalogText = {
   title: '本月的事件', nameFilter: '按名称筛选', countryFilter: '按国家筛选', importanceFilter: '按重要性筛选',
-  importanceAny: '', columns: { name: '名称', country: '国家', date: '日期', time: '时刻', importance: '重要性' },
+  importanceAny: '', columns: { name: '名称', country: '国家', period: '期间', date: '最近一次发布', next: '下次发布', time: '时刻', importance: '重要性' },
   sourceLabelTag: '源原文名', loading: '', unavailable: '', noMatch: '', pageSizeLabel: '',
   importance: { high: '高', medium: '中', low: '低' }
 }
@@ -26,7 +26,7 @@ const render = async (props: Readonly<{ rows: readonly CatalogRow[]; state: 'rea
   document.body.append(host)
   const root = createRoot(host)
   await act(async () => root.render(<CalendarEventsCatalogDialog open onClose={() => undefined} text={text}
-    columns={['name', 'country', 'time']} rows={props.rows} state={props.state} />))
+    columns={['name', 'country', 'period', 'date', 'next']} rows={props.rows} state={props.state} />))
   return { body: document.body, done: async () => { await act(async () => root.unmount()); host.remove() } }
 }
 
@@ -56,5 +56,25 @@ it('shows the empty state when the answer is zero rows', async () => {
     expect(view.body.querySelector('.ant-table')).toBeNull()
     // 空态与读不到是两种态：这条要有空态，且不该是错误态。
     expect(view.body.querySelector('.ant-empty') ?? view.body.querySelector('[data-state]')).not.toBeNull()
+  } finally { await view.done() }
+})
+
+it('shows the period and both release dates, and leaves them empty when there are none', async () => {
+  // 空着是真的没有；写「暂无」「—」是在替数据撒谎（与「缺少 ≠ 没查到」同一条）。
+  const view = await render({
+    state: 'ready',
+    rows: [
+      row('a', 'CPI 年率', { period: '2026-M10', lastRelease: '2026-11-12', nextRelease: '2026-12-10' }),
+      row('b', '无日期的事件', {})
+    ]
+  })
+  try {
+    const cells = [...view.body.querySelectorAll('.ant-table-tbody tr')].map((tr) => tr.textContent ?? '')
+    expect(cells[0]).toContain('2026-M10')
+    expect(cells[0]).toContain('2026-11-12')
+    expect(cells[0]).toContain('2026-12-10')
+    // 无值：那几格是空的，不许出现占位词。
+    expect(cells[1]).not.toContain('暂无')
+    expect(cells[1]).not.toContain('—')
   } finally { await view.done() }
 })

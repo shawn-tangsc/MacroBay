@@ -63,7 +63,7 @@ export function CalendarEventsCatalog({ open, onClose, text, catalog, locale, ca
 
   return <CalendarEventsCatalogDialog open={open} onClose={onClose} text={{ ...catalog, title: text.title }}
     key={attempt} rows={rows} state={state}
-    columns={['name', 'country', 'date']} onRetry={() => setAttempt((value) => value + 1)} />
+    columns={['name', 'country', 'period', 'date', 'next']} onRetry={() => setAttempt((value) => value + 1)} />
 }
 
 /**

@@ -30,7 +30,7 @@ export type CatalogText = Readonly<{
   countryFilter: string
   importanceFilter: string
   importanceAny: string
-  columns: Readonly<{ name: string; country: string; date: string; time: string; importance: string }>
+  columns: Readonly<{ name: string; country: string; period: string; date: string; next: string; time: string; importance: string }>
   sourceLabelTag: string
   loading: string
   unavailable: string
@@ -41,7 +41,7 @@ export type CatalogText = Readonly<{
 
 const PAGE_SIZES = [50, 100, 200] as const
 
-export type CatalogColumn = 'name' | 'country' | 'date' | 'time' | 'importance'
+export type CatalogColumn = 'name' | 'country' | 'period' | 'date' | 'next' | 'time' | 'importance'
 
 export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, columns, onRetry }: Readonly<{
   open: boolean
@@ -85,6 +85,8 @@ export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, 
           columns={columns.map((column) => {
             if (column === 'name') return { title: text.columns.name, dataIndex: 'title', render: (_value: unknown, row: CatalogRow) => <span data-catalog-name>{row.title}{row.titleIsSourceLabel ? <em className="mi-catalog__tag">{text.sourceLabelTag}</em> : null}</span> }
             if (column === 'country') return { title: text.columns.country, dataIndex: 'countryLabel' }
+            if (column === 'period') return { title: text.columns.period, dataIndex: 'period', render: (value: string | undefined) => value ?? '' }
+            if (column === 'next') return { title: text.columns.next, dataIndex: 'nextRelease', render: (value: string | undefined) => value ?? '' }
             if (column === 'date') return { title: text.columns.date, dataIndex: 'lastRelease', render: (value: string | undefined) => value ?? '' }
             if (column === 'time') return { title: text.columns.time, dataIndex: 'time', render: (value: string | undefined) => value ?? '' }
             return { title: text.columns.importance, dataIndex: 'importance', render: (value: CatalogRow['importance']) => value === undefined ? '' : text.importance[value] }
