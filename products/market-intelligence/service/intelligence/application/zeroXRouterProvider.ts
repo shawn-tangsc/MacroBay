@@ -34,3 +34,13 @@ export const zeroXRouterProvider: ProviderDefinition = provider({
       src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: [], maintenanceOnly: true, collection: 'none', capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
     ]
   })
+
+/**
+ * 三路日历源的 id：从上面的定义**现算**，不让人在 agent 分组里再抄一遍。
+ *
+ * 「面板 ⊆ agent」那条守卫要求：日历面板里出现的源，crypto agent 必须能读。所以 agent 分组展开这一份；
+ * 加第四路日历源时它自动进组，不会出现「面板有、agent 没登记」的漏项。
+ */
+export const zeroXRouterCalendarSourceIds: readonly string[] = zeroXRouterProvider.sources
+  .filter((source) => source.purposes?.includes('calendar') === true)
+  .map((source) => source.sourceId)
