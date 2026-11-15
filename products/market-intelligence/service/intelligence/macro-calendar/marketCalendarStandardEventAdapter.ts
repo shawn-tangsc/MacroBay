@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { StandardMonthRow } from './marketCalendarStandardMonthRead'
-import { sourceFeedIdOf } from './marketCalendarSourceFeedIds'
+import { officialFeedIdOf, sourceFeedIdOf } from './marketCalendarSourceFeedIds'
 
 /**
  * 标准行 → 日历事件（`MarketCalendarEvent`）。**`queryMonth` 的对外形状因此不变**——
@@ -81,7 +81,9 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
       ?? context.resolveSource?.(row) ?? 'unspecified',
     ...(sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) }) === undefined
       ? {} : { sourceFeedId: sourceFeedIdOf({ sourceProviderId: row.sourceProviderId, eventType: eventTypeOf(row) })! }),
-    sourceObservedAt: row.observedAt, coverage: 'observed-unverified',
+    sourceObservedAt: row.observedAt,
+    // **官方行不贴「未核验」**：它本身就是核验过的来源。判据只有一处——feed id 是不是官方那三条。
+    coverage: officialFeedIdOf(row.sourceProviderId) === undefined ? 'observed-unverified' as const : 'available' as const,
     timePrecision: row.timePrecision, releaseStatus: row.status, rowKind: row.rowKind
   }
 }

@@ -80,3 +80,35 @@ describe('标准行 → 日历事件（queryMonth 形状不变）', () => {
       sourceLabel: undefined }], { ...context, resolveTitle: () => undefined })).toHaveLength(1)
   })
 })
+
+/**
+ * S2：**官方行不再被贴「未核验」**。
+ *
+ * 标准行进分析/日历前都要过这个适配器，原来它把所有行一律写成 `observed-unverified`——
+ * 官方那 51 行 high 也因此被降级。判据只有一处：`officialFeedIdOf(sourceProviderId)`。
+ */
+describe('coverage 按来源分流（官方 available / 数据商 observed-unverified）', () => {
+  const rowFor = (sourceProviderId: string) => ({
+    identityKey: `USA|US.CPI.NSA.YOY|2026-10|2026-11-10`, countryCode: 'USA',
+    metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10', firstScheduledDate: '2026-11-10',
+    scheduledDate: '2026-11-10', scheduledAt: '2026-11-10T13:30:00.000Z', timePrecision: 'minute' as const,
+    rowKind: 'release' as const, status: 'published' as const, identityKind: 'code' as const,
+    sourceProviderId, sourceEventId: 'e-1', observedAt: '2026-11-10T13:31:00.000Z',
+    values: {} as Record<string, string>
+  })
+  const context = { locale: 'zh' as const, resolveTitle: () => 'CPI 年率' }
+
+  it('同一个官方行分流前是 observed-unverified、分流后是 available', () => {
+    const event = standardRowToMarketEvent(rowFor('macro-calendar-bls'), context)
+    // 分流判据命中官方 feed id → 不再贴未核验（改前这里固定是 observed-unverified）。
+    expect(event.coverage).toBe('available')
+  })
+
+  it('数据商的行仍然是 observed-unverified（不许被这条改动顺带放开）', () => {
+    expect(standardRowToMarketEvent(rowFor('narwhal'), context).coverage).toBe('observed-unverified')
+  })
+
+  it('认不出的 provider 退回 observed-unverified，不当成官方', () => {
+    expect(standardRowToMarketEvent(rowFor('some-unknown-provider'), context).coverage).toBe('observed-unverified')
+  })
+})

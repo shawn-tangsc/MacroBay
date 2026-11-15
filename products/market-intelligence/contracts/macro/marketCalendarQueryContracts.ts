@@ -118,7 +118,12 @@ export type MarketCalendarEvent = Readonly<{
    * `'Narwhal' | '0xRouter'` 是旧行兼容值，读侧应按「feed id 优先、旧值兜底」判。
    */
   source: typeof marketCalendarPublicPolicy.sourceFeeds[number] | 'unspecified' | 'Narwhal' | '0xRouter'
-  sourceObservedAt: string; coverage: 'observed-unverified'
+  sourceObservedAt: string
+  /**
+   * `observed-unverified`＝数据商观测、未经官方核验；`available`＝官方来源这一行本身就是核验过的。
+   * 标准表适配器按 `officialFeedIdOf(sourceProviderId)` 分流：官方行不再被统一降级成未核验。
+   */
+  coverage: 'observed-unverified' | 'available'
   /**
    * 这条数据的**真实来源 feed id**（`macro-calendar-bls`、`macro-calendar-narwhal-economic-data`…）。
    * `source` 那两个值表达不了「官方 BLS 发的」——它只有市场/旧源两档，官方行会被标成旧源。
@@ -260,7 +265,8 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
     marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
     (!Object.hasOwn(value, 'importance') || marketCalendarPublicPolicy.importance.includes(value.importance as never)) &&
     marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && ((marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds as readonly unknown[])
-      .concat(['Narwhal', '0xRouter', marketCalendarPublicPolicy.unspecifiedSource]).includes(value.source) && value.coverage === 'observed-unverified' &&
+      .concat(['Narwhal', '0xRouter', marketCalendarPublicPolicy.unspecifiedSource]).includes(value.source) &&
+    (value.coverage === 'observed-unverified' || value.coverage === 'available') &&
     [value.consensus, value.providerPrevious, value.providerActual].every(display) &&
     (value.eventType === 'economic-indicator' || [value.consensus, value.providerPrevious, value.providerActual].every(item => item === null)) &&
     (!Object.hasOwn(value, 'officialLink') || value.eventType === 'economic-indicator' &&

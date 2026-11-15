@@ -42,6 +42,10 @@ describe('market calendar exact safe contracts', () => {
     const officialLink = { officialEventKey: 'US.CPI.RELEASE.2026-M08', officialPeriodKey: '2026-M08',
       officialScheduledDate: '2026-09-11', officialScheduledAt: null, officialDetectedAt: input.asOf,
       timeDisplaySource: 'provider-scheduled', displayScheduledAt: event.scheduledAt }
+    // coverage 是二值：数据商观测未核验，官方来源本身就是核验过的。瞎写的值仍被拒。
+    expect(c.isMarketCalendarEvent({ ...event, coverage: 'available' })).toBe(true)
+    expect(c.isMarketCalendarEvent({ ...event, coverage: 'observed-unverified' })).toBe(true)
+    expect(c.isMarketCalendarEvent({ ...event, coverage: 'verified' })).toBe(false)
     expect(c.isMarketCalendarEvent({ ...event, officialLink })).toBe(true)
     for (const extra of [{ evidenceHash: 'a'.repeat(64) }, { indicatorId: 'private' }, { collectionId: 'private' },
       { timeDisplaySource: 'observed' }, { displayScheduledAt: input.asOf }, { officialDetectedAt: 'invalid' }]) {
