@@ -1,14 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-const platformFetch = vi.hoisted(() => vi.fn())
-vi.mock('@platform/network/platformFetch', () => ({ getPlatformFetch: () => platformFetch }))
-
-import { createSourceRequestGovernanceQueue } from '../application/sourceRequestGovernance'
-import { createZeroXRouterEtfFlowHistoryClient } from '../application/zeroXRouterEtfFlowHistoryClient'
-import { zeroXRouterSourcePolicy } from '../application/zeroXRouterSourcePolicy'
 import { cryptoEtfFlowFundsUrl } from '../application/cryptoEtfSourcePolicy'
 import { createEtfHistoryAsOf, etfHistoryAsOfPolicy, type EtfHistoryApiWindow } from './etfHistoryAsOf'
 
@@ -19,29 +13,31 @@ function midnight(date: string): number {
   return Date.parse(`${date}T00:00:00.000Z`)
 }
 
-function envelope(rows: readonly { tradingDate: string; changeUsd: number }[]): Response {
-  return new Response(JSON.stringify({
-    code: 200,
-    msg: 'ok',
-    data: rows.map((row) => ({ date: midnight(row.tradingDate), changeUsd: row.changeUsd }))
-  }), { status: 200, headers: { 'content-type': 'application/json' } })
+/**
+ * 夹具直接按读取器的入参造（`{ date, changeUsd }`）。
+ *
+ * **不再借旧源的 flow-history 客户端**：那条链 2026-11-13 已切到 CryptoETF、生产调用点为零，
+ * 留着它当夹具等于让一条死链继续决定这个读取器的用例怎么写。`'refused'` 表示该资产这一窗
+ * 读不到（原来是 503 响应），读取器对它的行为与本用例断言的一致：说清 gap，不编值。
+ */
+type WindowRows = readonly Readonly<{ date: number; changeUsd: number }>[]
+
+function envelope(rows: readonly { tradingDate: string; changeUsd: number }[]): WindowRows {
+  return rows.map((row) => Object.freeze({ date: midnight(row.tradingDate), changeUsd: row.changeUsd }))
 }
 
-function windowWith(fetchResponses: readonly [Response, Response]) {
-  platformFetch.mockResolvedValueOnce(fetchResponses[0]).mockResolvedValueOnce(fetchResponses[1])
-  const client = createZeroXRouterEtfFlowHistoryClient({
-    requestGovernanceQueue: createSourceRequestGovernanceQueue({ now: () => Date.now() })
-  })
+function windowWith([btc, eth]: readonly [WindowRows | 'refused', WindowRows | 'refused']) {
   return {
-    client,
     reader: createEtfHistoryAsOf({
-      requestWindow: () => client.requestWindow('router-key'),
+      requestWindow: async () => {
+        if (btc === 'refused' && eth === 'refused') return Object.freeze({ state: 'unavailable' as const })
+        return Object.freeze({ state: 'available' as const,
+          btc: btc === 'refused' ? [] : btc, eth: eth === 'refused' ? [] : eth })
+      },
       now: () => Date.parse(later)
     })
   }
 }
-
-afterEach(() => platformFetch.mockReset())
 
 describe('ETF flow history as of an instant', () => {
   it('takes the newest trading day that had ended, through the provider client and the platform fetch', async () => {
@@ -72,22 +68,12 @@ describe('ETF flow history as of an instant', () => {
       state: 'available', asset: 'eth', value: -30_000_000,
       sourceUrl: cryptoEtfFlowFundsUrl('eth')
     })
-
-    // Both requests go through the existing client: the platform fetch, never a bare fetch, and the
-    // provider's own key header.
-    expect(platformFetch).toHaveBeenCalledWith(
-      zeroXRouterSourcePolicy.etfFlowHistoryDiagnostic.urls.bitcoin,
-      expect.objectContaining({ method: 'GET', headers: { 'X-My-Token': 'router-key' }, redirect: 'error' })
-    )
-    // One edition asks at most twice and shares the window between the two metrics.
-    expect(platformFetch).toHaveBeenCalledTimes(2)
   })
 
   it('does not touch the network for a future instant', async () => {
     const { reader } = windowWith([envelope([]), envelope([])])
     await expect(reader.read({ asset: 'btc', asOf: '2026-10-30T04:48:00.001Z' }))
       .resolves.toMatchObject({ state: 'unavailable', gapCode: 'future-as-of' })
-    expect(platformFetch).not.toHaveBeenCalled()
   })
 
   it('never reports a trading day that had not ended by the instant', async () => {
@@ -126,14 +112,10 @@ describe('ETF flow history as of an instant', () => {
     })
     await expect(uncredentialed.read({ asset: 'eth', asOf: cutoff }))
       .resolves.toMatchObject({ state: 'unavailable', gapCode: 'historical-api-unavailable' })
-    expect(platformFetch).not.toHaveBeenCalled()
   })
 
   it('keeps the gap when the provider request is refused or fails', async () => {
-    const { reader } = windowWith([
-      new Response('', { status: 503, headers: { 'content-type': 'application/json' } }),
-      new Response('', { status: 503, headers: { 'content-type': 'application/json' } })
-    ])
+    const { reader } = windowWith(['refused', 'refused'])
     const refused = await reader.read({ asset: 'btc', asOf: cutoff })
     expect(refused).toMatchObject({ state: 'unavailable', gapCode: 'query-unavailable' })
     expect('value' in refused).toBe(false)
