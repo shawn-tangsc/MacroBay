@@ -69,8 +69,6 @@ import { DashboardMacroRow } from './DashboardMacroRow'
 import { buildClockCardModel } from './clockCardModel'
 import { clockScheduleMetrics } from './clockScheduleMetrics'
 import { clockCardText } from './clockCardText'
-import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
-import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
@@ -78,25 +76,7 @@ import { useMacroIndicatorFacts } from './useMacroIndicatorFacts'
 import { cellOffFor } from './dashboardCellOff'
 import { QUOTES_ROW_CELL_KEYS, quoteRowPresentation } from './dashboardQuotesRows'
 import { useDataChangeRevision } from './useDataChangeRevision'
-
-/**
- * 把平台 `useConfirm` 变成抽屉要的 `confirmDiscard`：必须在 provider 之内取，所以单独一层。
- * 弹窗本身（居中在抽屉之上、「继续编辑」默认聚焦、Esc=继续编辑、「丢掉改动」静止即红）由平台
- * `Confirm` 负责，这里只转交文案与动作。
- */
-function DrawerDiscardConfirm({ children }: Readonly<{
-  children: (confirmDiscard: NonNullable<React.ComponentProps<typeof ConfigSettingsDrawer>['confirmDiscard']>) => ReactNode
-}>): React.ReactElement {
-  const confirm = useConfirm()
-  return <>{children((input) => confirm({
-    title: input.title,
-    description: input.body,
-    confirmLabel: input.confirmLabel,
-    cancelLabel: input.cancelLabel,
-    tone: 'danger',
-    onConfirm: input.onDiscard
-  }))}</>
-}
+import { DashboardSettingsDrawer } from './DashboardSettingsDrawer'
 
 type CryptoDashboardText = {
   workspaceLabel: string
@@ -332,8 +312,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    * 时钟卡：日期与周期 P 来自日程（同一个按月读），值来自**与抽屉同一次**卡片读数，
    * 政策块来自政策读数。角度/透明度/撞牌都在 `clockCardModel` 里算，这里不重算。
    */
-  const shellTimeZone = useShellTimeZone()
-  const clockToday = calendarDisplayDate(now().toISOString(), shellTimeZone)
   const clockFacts = cardFactsView?.state === 'available' ? cardFactsView.facts : []
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // 关键指标 · 预期变化：曲线、政策卡与三张简化卡都读真数据。
@@ -409,56 +387,20 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         </div>
       </header>
 
-      {/* TODO(0.4.3-settings-drawer): 数据接入后删除。静态版式抽屉，只画结构。
-          两层边界：这一层保「抽屉外壳自己崩了不影响背后这一页」；每一屏另有一层
-          `ConfigDrawerPanel`，屏幕内的崩溃只在抽屉正文里显示，不落到主列顶端。 */}
-      <ErrorBoundary scope="drawer">
-        {/* 局部一层 ConfirmProvider：这一块被单独渲染（页面用例、抽屉用例）时也拿得到确认框；
-            应用里它嵌在 AppShell 的 provider 之内，文案与主题照样跟着走。 */}
-        <ConfirmProvider>
-          <DrawerDiscardConfirm>
-            {(confirmDiscard) => <ConfigSettingsDrawer
-              confirmDiscard={confirmDiscard}
-          /* 计数变化就重新挂载：每次都落到请求的那一屏（连点同一个入口也算一次）。 */
-          key={`settings-drawer-${openSettingsRequest ?? 0}`}
-          initialMenu={initialSettingsMenu}
-          isScreenDirty={() => hostScreenDirty(drawerScreen.dirty, sourcesDraftDirty)}
-          onClose={() => setSettingsDrawerOpen(false)}
-          open={settingsDrawerOpen}
-          analysisPanel={<ConfigDrawerPanel screen="analysis"><AnalysisSettingsPanel onState={setDrawerScreen} /></ConfigDrawerPanel>}
-          screenDirty={drawerScreen.dirty}
-          onScreenSave={drawerScreen.save}
-          screenSaving={drawerScreen.saving}
-          {...(drawerScreen.failure === undefined ? {} : { screenSaveFailure: drawerScreen.failure })}
-          briefingPanel={<ConfigDrawerPanel screen="briefing"><DailyBriefingSettingsPanel
-              {...(initialDrawerSection?.menu === 'briefing'
-                ? { initialSection: initialDrawerSection.section as BriefingSection }
-                : {})}
-              onState={setDrawerScreen} /></ConfigDrawerPanel>}
-          processingPanel={<ConfigDrawerPanel screen="processing"><ProcessingSettingsPanel
-              {...(initialDrawerSection?.menu === 'processing'
-                ? { initialSection: initialDrawerSection.section as ProcessingSection }
-                : {})} /></ConfigDrawerPanel>}
-          runLogPanel={<ConfigDrawerPanel screen="run-log"><RunLogDrawerPanel /></ConfigDrawerPanel>}
-          notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel
-              {...(initialDrawerSection?.menu === 'notifications'
-                ? { initialSection: initialDrawerSection.section as NotificationSection }
-                : {})} /></ConfigDrawerPanel>}
-              /* 两屏都收抽屉给的定位/导航：点源名只在抽屉内换菜单，不走页面级「打开抽屉」。 */
-              sourcesPanel={(nav) => <ConfigDrawerPanel screen="sources"><DashboardSourcesPanel
-                pane="sources"
-                {...(nav.focusSourceId === undefined ? {} : { initialSourceId: nav.focusSourceId })}
-                initialFilter={initialSourceFilter}
-                onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
-              sourcesDataPanel={(nav) => <ConfigDrawerPanel screen="sourcesData"><DashboardSourcesPanel
-                pane="business"
-                {...(initialBusinessPosition === undefined ? {} : { initialBusinessPosition })}
-                onOpenSourceConfig={nav.openSource}
-                {...(onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings })}
-                onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
-          </DrawerDiscardConfirm>
-        </ConfirmProvider>
-      </ErrorBoundary>
+      {/* 设置抽屉：外壳、两层边界、丢弃确认都在 `DashboardSettingsDrawer` 里（2026-11-16 抽出）。 */}
+      <DashboardSettingsDrawer
+        open={settingsDrawerOpen}
+        requestKey={openSettingsRequest ?? 0}
+        initialMenu={initialSettingsMenu}
+        {...(initialDrawerSection === undefined ? {} : { initialDrawerSection })}
+        initialSourceFilter={initialSourceFilter}
+        {...(initialBusinessPosition === undefined ? {} : { initialBusinessPosition })}
+        {...(onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings })}
+        sourcesDraftDirty={sourcesDraftDirty}
+        screen={drawerScreen}
+        onScreenState={setDrawerScreen}
+        onClose={() => setSettingsDrawerOpen(false)}
+        onDraftChange={setSourcesDraftDirty} />
 
       {/* 左栏顶部一排两块（用户 2026-11-15）：钟表 336 固定 + 利率数学期望占满剩余。
           间距只有 8，这一排不带左右内距；AI 结论已搬到右栏（下面那个 portal）。 */}
@@ -466,7 +408,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         pending={!readsReady}
         locale={locale}
         text={text}
-        today={clockToday}
+        now={now}
         events={curveReleaseEvents}
         facts={clockFacts}
         {...(policyPath?.state === 'available' ? { reading: policyPath.reading } : {})}

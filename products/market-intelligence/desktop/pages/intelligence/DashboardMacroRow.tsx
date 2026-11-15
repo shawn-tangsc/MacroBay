@@ -1,6 +1,8 @@
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import type { productText } from '../../shared/i18n/productText'
 import type { CellReadDecision } from './dashboardCellEnabled'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { ClockCardSlot } from './ClockCardSlot'
 import { ExpectationPanel } from './ExpectationPanel'
 import type { ExpectationSeriesEvent } from './useExpectationSeries'
@@ -16,12 +18,13 @@ type DashboardText = Readonly<{ policyPath: typeof productText['zh-CN' | 'en-US'
  * 两块读**同一次**读数：都由宿主传下来的那一个 `PolicyPathReading` 驱动，同一个 `asOf`。
  */
 export function DashboardMacroRow({
-  locale, text, today, events, facts, reading, policyUnavailable, reloadPolicy,
+  locale, text, now, events, facts, reading, policyUnavailable, reloadPolicy,
   probability, fed, onConfigureSources, onManageSource, onOpenDrawer, resolveKey, pending = false
 }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   text: DashboardText
-  today: string
+  /** 「今天」按这里的时钟与读者时区算——两块共用同一个日期，不各取一次。 */
+  now: () => Date
   events: readonly { at: string; measureKeys?: readonly string[] }[]
   facts: Parameters<typeof ClockCardSlot>[0]['facts']
   reading?: PolicyPathReading
@@ -36,6 +39,7 @@ export function DashboardMacroRow({
   /** 第一次读数还没回来：两块都先不画结论，也不说「读不到」。 */
   pending?: boolean
 }>): React.ReactElement {
+  const today = calendarDisplayDate(now().toISOString(), useShellTimeZone())
   return <div className="mi-crypto-dashboard__macro-row">
     <ClockCardSlot
       locale={locale}
