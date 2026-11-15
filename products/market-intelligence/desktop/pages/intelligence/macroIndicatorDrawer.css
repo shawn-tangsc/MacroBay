@@ -354,3 +354,5 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 .mi-catalog__filters > * { flex: 1 1 180px; min-width: 0; }
 .mi-catalog__pager { display: flex; justify-content: flex-end; margin-top: 8px; }
 .mi-catalog__tag { margin-left: 6px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-style: normal; }
+/* 格内的「这一期发过几次」：紧凑记号，不占一行、不换行。 */
+.mk-mcell__repeat { margin-left: 2px; flex: none; font-style: normal; font-size: var(--font-meta); color: var(--caution); }

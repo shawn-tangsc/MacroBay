@@ -109,6 +109,10 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
             <em>{cell.day}</em>
             {shown.map(item => <span className="mk-mcell__row" key={`${item.name}-${item.at}`}>
               <i className={`mk-mdot mk-mdot--${item.state}`} />{item.name}
+              {/* 格内用紧凑记号（`×2`）：整句「本期 2 次」在当日列表那一行里，格子里塞句子会挤掉名字。 */}
+              {item.releaseCount !== undefined && item.releaseCount > 1
+                ? <em className="mk-mcell__repeat" data-release-count={item.releaseCount}>{`×${item.releaseCount}`}</em>
+                : null}
             </span>)}
             {hidden > 0 ? <span className="mk-mcell__more" role="img"
               aria-label={text.minicalMoreAria.replace('{count}', String(hidden))}>
@@ -123,7 +127,7 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
   </section>
 }
 
-type Item = Readonly<{ name: string; at: string; state: 'done' | 'todo'; metricKey: string }>
+type Item = Readonly<{ name: string; at: string; state: 'done' | 'todo'; metricKey: string; releaseCount?: number }>
 type Cell = Readonly<{ dateKey: string; day: number; current: boolean; items: readonly Item[] }>
 
 /** 事件按**读者时区**的日期分组，同一天内按时刻升序。 */
@@ -135,7 +139,12 @@ function groupByDay(events: readonly MarketCalendarEvent[], timeZone: string, no
     if (!Number.isFinite(at)) continue
     const day = calendarDisplayDate(event.scheduledAt, timeZone)
     const items = byDay.get(day) ?? []
-    items.push({ name: event.title, at: event.scheduledAt, state: at <= nowMs ? 'done' : 'todo', metricKey: event.eventNameKey ?? event.measureKeys?.[0] ?? '' })
+    items.push({
+      name: event.title, at: event.scheduledAt, state: at <= nowMs ? 'done' : 'todo',
+      metricKey: event.eventNameKey ?? event.measureKeys?.[0] ?? '',
+      // 合并后同一期可能发过不止一次：次数跟着条目走，格子里才不会被当成一次。
+      ...(event.releaseCount === undefined ? {} : { releaseCount: event.releaseCount })
+    })
     byDay.set(day, items)
   }
   for (const items of byDay.values()) items.sort((left, right) => Date.parse(left.at) - Date.parse(right.at))
