@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { declaredSourceIdsForFact } from './dailyBriefingReadingSources'
+
 import { createCapitalConditionsSnapshotQueryService } from '../capital-conditions/capitalConditionsSnapshotQuery'
 import {
   createCapitalConditionsCurrentStateStore,
@@ -120,11 +122,13 @@ async function packetWith(input: Readonly<{
     } as never,
     news: { query: async () => ({ state: 'unavailable', asOf: CUTOFF, generatedAt: CUTOFF, window: '24h', items: [], caveats: [] }) } as never,
     profiles: {
+      // ETF 那一档由注册表决定谁提供 `etf-net-flow`：不写死某个源 id ——
+      // 写死会让「源已降为维护用、不再采集」的那天变成「ETF 读不到」，而事实是没人声明它了。
       listProfiles: async () => [
         { sourceId: 'alternative-fear-greed', enabled: true },
         { sourceId: 'binance-futures-positioning', enabled: true },
         { sourceId: 'defillama-stablecoins', enabled: true },
-        { sourceId: '0xrouter-aggregate-provider', enabled: true }
+        ...declaredSourceIdsForFact('etf-net-flow').map((sourceId) => ({ sourceId, enabled: true }))
       ]
     } as never
   }

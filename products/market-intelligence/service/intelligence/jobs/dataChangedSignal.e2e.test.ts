@@ -44,8 +44,11 @@ import { subscribeIntelligenceDataChanged } from '../../../desktop/shared/ipc/in
 const PRODUCT_ID = 'market-intelligence'
 /** 看板专用源（`purposes: ['dashboard']`）。 */
 const DASHBOARD_SOURCE = 'alternative-fear-greed'
-/** 看板 + 日历都供的源（`purposes: ['dashboard','calendar']`）。 */
-const DASHBOARD_AND_CALENDAR_SOURCE = 'macro-calendar-0xrouter-economic-data'
+/**
+ * 看板 + 日历都供的源：**从注册表里取**（`purposes` 同时含 dashboard 与 calendar），
+ * 不写死某个 id——0xrouter 那几条已降为证据/维护用途，写死就等于拿一个不再采集的源当采集源。
+ */
+const DASHBOARD_AND_CALENDAR_SOURCE = 'macro-calendar-narwhal-economic-data'
 
 type Delivered = Readonly<{ productId: string; event: string; data: unknown }>
 
