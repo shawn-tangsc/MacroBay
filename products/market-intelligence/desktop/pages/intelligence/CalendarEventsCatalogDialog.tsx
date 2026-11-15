@@ -111,7 +111,7 @@ export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, 
         <Pagination
           size="small" current={pageOfRows.page} pageSize={pageSize} total={filtered.length}
           showSizeChanger pageSizeOptions={PAGE_SIZES.map((size) => String(size))}
-          onChange={(nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize) }} />
+          onChange={(nextPage, nextSize) => { setPageSize(nextSize); setPage(1) }} />
       </div>
       : null}
   </Modal>

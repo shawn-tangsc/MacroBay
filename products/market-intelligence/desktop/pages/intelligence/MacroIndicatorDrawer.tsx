@@ -8,7 +8,8 @@ import { ChevronDown, Info } from 'lucide-react'
 
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
-import { CalendarEventsCatalogDialog } from './CalendarEventsCatalogDialog'
+import { CalendarEventsCatalog } from './CalendarEventsCatalog'
+import type { CatalogText } from './CalendarEventsCatalogDialog'
 import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
 import type { CatalogRow } from './calendarEventCatalogModel'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
@@ -222,19 +223,17 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
    * 全量读口（`queryEvents`）是另一笔，到位之后这里换成那个读口、标题才改回「全部事件」。
    */
   const [catalogOpen, setCatalogOpen] = useState(false)
+  /** 事件目录弹框的文案：只建一次，**键 → 文案的真表查找**也在这一份上做。 */
+  const catalogCopyText = useMemo<CatalogText>(() => ({
+    title: text.mkDay.catalogTitle, nameFilter: text.mkDay.catalogNameFilter,
+    countryFilter: text.mkDay.catalogCountryFilter, importanceFilter: text.mkDay.catalogImportanceFilter,
+    importanceAny: '', columns: text.mkDay.catalogColumns, sourceLabelTag: text.mkDay.catalogSourceLabelTag,
+    loading: '', unavailable: '', noMatch: '', pageSizeLabel: '', importance: text.mkDay.catalogImportance
+  }), [text])
   /** 图标按钮的读屏名：**真表查找**（键 → 文案），不在解析器里写比较。 */
   const catalogCopy = useMemo<Readonly<Record<string, string>>>(
     () => ({ 'intelligence.calendar.eventCatalog.open': text.mkDay.catalogOpenAria }), [text])
-  const catalogRows = useMemo<readonly CatalogRow[]>(() => releases.events.map((event) => ({
-    key: event.eventKey,
-    title: event.title,
-    titleIsSourceLabel: event.eventNameKey === undefined,
-    countryLabel: calendarCountryLabel({ countryName: event.countryName, countryCode: event.countryCode }, calendarText),
-    ...(event.countryCode === null ? {} : { countryCode: event.countryCode }),
-    time: calendarDisplayTime(event.scheduledAt, timeZone)
-    // **不取 `event.importance`**：市场侧那一列是占位值，画进表就是把它当成数据（见星座守卫
-    // `never decides anything from 市场的占位重要性`）。真实重要性等全量读口给出。
-  })), [releases.events, calendarText, timeZone])
+
   /** 方格计数用：未映射观测按天累计（读者看到的是「今天有几件事」，两个来源都算）。 */
   const unmappedCountByDay = useMemo(() => {
     const counts = new Map<string, number>()
@@ -473,6 +472,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           </CalendarInspector>
         </div>, document.body)}
     </section>
+    <CalendarEventsCatalog open={catalogOpen} onClose={() => setCatalogOpen(false)} locale={locale}
+      calendarText={calendarText} catalog={catalogCopyText} text={catalogCopyText} />
   </Drawer>
 }
 
