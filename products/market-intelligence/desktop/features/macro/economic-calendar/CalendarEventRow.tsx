@@ -23,7 +23,7 @@ const calendarKindGlyphs: Record<MarketCalendarEvent['eventType'], LucideIcon> =
   'central-bank-activity': Landmark
 }
 
-export function CalendarEventRow({ item, text, statusNow, onSelect, marketSources = [], selected = false, missingValueLabel }: {
+export function CalendarEventRow({ item, text, statusNow, onSelect, marketSources = [], selected = false, missingValueLabel, repeatCountLabel }: {
   item: CalendarDayItem; text: EconomicCalendarText; statusNow: string
   /**
    * `undefined` = 这一行**没有动作**：渲染成非交互的行，不画按钮、不可聚焦、没有悬停指针。
@@ -37,6 +37,8 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
    * 「缺值」这个概念，标上会把「源说发布了却没给数」和「这类事件永远没有数」混成一团。
    */
   missingValueLabel?: string
+  /** 「本期 N 次」的模板（含 `{count}`）；不给就不显示——这一层不拼句子。 */
+  repeatCountLabel?: string
 }) {
   const title = item.source === 'market' ? item.event.title : text.events[item.event.labelKey]
   const time = item.time ?? text.unifiedDay.timePending
@@ -52,6 +54,13 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // （`calendarCountryLabel`）：名字 → 原始码 → 「未知国家」，三级只在那里判一次
   // （用户 2026-11-16 定了两次：先「名字是什么就显示什么」，再「没有国家数据时显示未知国家」）。
   const country = item.source === 'market' ? calendarCountryLabel(item.event, text) : undefined
+  /**
+   * 「本期 N 次」：合并之后同一期可能来自多次发布（GDP 二读/三读）。**只在 >1 时出**——
+   * 1 次是常态，挂上去就是噪声；不显示 = 「这一期就发过一次」，这是事实而不是缺少。
+   */
+  const releaseCount = item.source === 'market' ? item.event.releaseCount : undefined
+  const repeatLabel = releaseCount !== undefined && releaseCount > 1 && repeatCountLabel !== undefined
+    ? repeatCountLabel.replace('{count}', String(releaseCount)) : undefined
   const kind = calendarItemType(item)
   const KindGlyph = calendarKindGlyphs[kind]
   const important = isHighImportanceCalendarItem(item)
@@ -83,19 +92,20 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   return <Tooltip dataText={description} resolveText={resolveText}>
     {onSelect === undefined
       ? <div {...shared}>
-        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} />
+        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} />
       </div>
       : <button {...shared} data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
         type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
-        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} />
+        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} />
       </button>}
   </Tooltip>
 }
 
 /** 行内内容：按钮态与非交互态必须一模一样，所以只有一份。 */
-function RowContent({ time, kind, important, country, title, KindGlyph }: {
+function RowContent({ time, kind, important, country, title, KindGlyph, repeatLabel, releaseCount }: {
   time: string; kind: MarketCalendarEvent['eventType']; important: boolean
   country: string | undefined; title: string; KindGlyph: LucideIcon
+  repeatLabel: string | undefined; releaseCount: number | undefined
 }) {
   return <>
       <span className="mi-economic-calendar__event-time">{time}</span>
@@ -115,6 +125,7 @@ function RowContent({ time, kind, important, country, title, KindGlyph }: {
         <span aria-hidden="true" className="mi-economic-calendar__event-kind" data-event-kind={kind}><KindGlyph size={11} /></span>
         {important ? <span aria-hidden="true" className="mi-economic-calendar__event-marker" data-importance-marker="high" /> : null}
         {title}
+        {repeatLabel === undefined ? null : <em className="mi-economic-calendar__event-repeat" data-release-count={releaseCount}>{repeatLabel}</em>}
       </span>
   </>
 }

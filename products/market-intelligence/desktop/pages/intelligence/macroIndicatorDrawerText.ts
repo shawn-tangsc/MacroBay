@@ -171,6 +171,7 @@ export const macroIndicatorDrawerText = {
       unmappedUnavailable: '未入标准表：这次读不到',
       unmappedUnavailableNote: '不是没有，是这次没读到。',
       /* 事件目录弹框（头部按钮打开）。范围写在标题里：全量读口到位之前如实写「本月」。 */
+      repeatCount: '本期 {count} 次',
       catalogTitle: '全部事件',
       catalogOpenAria: '打开全部事件表',
       catalogNameFilter: '按名称筛选（中英均可）',
@@ -313,6 +314,7 @@ export const macroIndicatorDrawerText = {
       unmappedEmptyNote: 'The {count} standard events are in the other tab.',
       unmappedUnavailable: 'Not mapped: not readable right now',
       unmappedUnavailableNote: 'Not empty — this read did not come back.',
+      repeatCount: '{count} releases this period',
       catalogTitle: 'All events',
       catalogOpenAria: 'Open the full event table',
       catalogNameFilter: 'Filter by name (any language)',

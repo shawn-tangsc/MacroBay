@@ -16,7 +16,7 @@ import type { EconomicCalendarText } from './economicCalendarText'
  *
  * It is presentational: every value arrives as a prop, and the caller keeps the selection state.
  */
-export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, hideGroupHeadings, missingValueLabel, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect, sourceTabs }: Readonly<{
+export function CalendarDayEventList({ label, title, summary, groups, emptyText, listRef, hideGroupHeadings, missingValueLabel, marketSources, text, statusNow, selectedEventKey, selectedMarketKey, onSelect, sourceTabs, repeatCountLabel }: Readonly<{
   label: string
   /** The page scrolls this list to the top when the selected day changes; the drawer passes nothing. */
   listRef?: React.RefObject<HTMLElement | null>
@@ -48,6 +48,8 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   hideGroupHeadings?: boolean
   /** 行尾「未提供」的文案；不给就不显示（日历页默认不给，抽屉右列给）。 */
   missingValueLabel?: string
+  /** 「本期 N 次」的模板（含 `{count}`）；不给就不显示。 */
+  repeatCountLabel?: string
   marketSources: readonly MarketCalendarSource[]
   text: EconomicCalendarText
   statusNow: string
@@ -85,6 +87,7 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   const renderRow = (item: CalendarDayItem): React.ReactElement => <div role="listitem" key={item.key}>
     <CalendarEventRow item={item} marketSources={marketSources} text={text} statusNow={statusNow}
       {...(missingValueLabel === undefined ? {} : { missingValueLabel })}
+      {...(repeatCountLabel === undefined ? {} : { repeatCountLabel })}
       selected={item.source === 'market' ? item.event.eventKey === selectedMarketKey : item.event.eventKey === selectedEventKey}
       onSelect={onSelect} />
   </div>

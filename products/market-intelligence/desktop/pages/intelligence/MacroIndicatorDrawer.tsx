@@ -430,6 +430,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 {...(dayEvents.length === 0 ? { emptyText: calendarText.unifiedDay.empty } : {})}
                 marketSources={[]}
                 missingValueLabel={text.mkDay.valueMissing}
+                repeatCountLabel={text.mkDay.repeatCount}
                 sourceTabs={{
                   value: dayTab,
                   onChange: (value) => setDayTab(value === 'unmapped' ? 'unmapped' : 'standard'),

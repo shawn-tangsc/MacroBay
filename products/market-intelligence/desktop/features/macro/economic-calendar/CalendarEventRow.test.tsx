@@ -269,3 +269,20 @@ it('leads every row with a glyph for its kind, on the calendar cell and the day 
     expect(css).not.toMatch(/\.mi-economic-calendar__event-kind\s*\{[^}]*#[0-9a-f]{3,8}/i)
   } finally { await act(async () => root.unmount()) }
 }, MOUNT_TIMEOUT_MS)
+
+it('marks a period that was released more than once, and stays silent when it was released once', async () => {
+  // 合并之后同一期可能来自多次发布（GDP 二读/三读）：不显示次数，读者会把二读当初值。
+  // 反向也钉住：1 次不显示——那是常态，挂上去就是噪声。
+  const { CalendarEventRow } = await import('./CalendarEventRow')
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const host = document.createElement('div'); const root = createRoot(host)
+  const item = (releaseCount?: number) => ({ key: 'market:gdp', source: 'market', date: '2026-10-30', time: '08:30',
+    event: { eventKey: 'gdp', title: 'GDP 年化', countryCode: 'US', countryName: '美国', importance: 'high',
+      eventType: 'economic-indicator', scheduledAt: '2026-10-30T00:30:00.000Z', ...(releaseCount === undefined ? {} : { releaseCount }) } } as unknown as CalendarDayItem)
+  try {
+    await act(async () => root.render(<CalendarEventRow item={item(2)} text={text} statusNow="2026-10-30T07:00:00.000Z" onSelect={() => {}} repeatCountLabel="本期 {count} 次" />))
+    expect(host.querySelector('[data-release-count]')?.textContent).toBe('本期 2 次')
+    await act(async () => root.render(<CalendarEventRow item={item(undefined)} text={text} statusNow="2026-10-30T07:00:00.000Z" onSelect={() => {}} repeatCountLabel="本期 {count} 次" />))
+    expect(host.querySelector('[data-release-count]')).toBeNull()
+  } finally { await act(async () => root.unmount()) }
+}, MOUNT_TIMEOUT_MS)
