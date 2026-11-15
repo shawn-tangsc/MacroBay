@@ -165,28 +165,24 @@ describe('the macro section draws events, and says why it is empty without imply
     assertClean(rendered)
   })
 
-  it('says the macro section could not be read, and why, when the calendar failed', async () => {
-    // 用户 2026-11-09（`MI-2-R89`，呈现分寸放宽后）：空栏不再只靠右列解释——正文用同一句
-    // 「暂时读不到：<原因>」说出来，与「数据缺口与限制」是同一个推导、同一句话。
-    // 「确实没有」那一档仍不印（见上一条）：区分「拿不到」和「没有」，不把前者写成后者。
-    // 期望句由同一张文案表推出（过期那条还要填上小时数），不是手抄一句话：文案一改，用例跟着改。
-    const cases: Array<{ notes: DailyBriefingDocument['news']['notes']; expected: string }> = [
-      { notes: { macroEmpty: 'calendar-stale', macroEmptyHours: 42 }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-stale'].replace('{hours}', '42')}` },
-      { notes: { macroEmpty: 'calendar-catch-up-timeout' }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-catch-up-timeout']}` },
-      { notes: { macroEmpty: 'calendar-unavailable' }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-unavailable']}` }
+  it('draws no macro block at all when the calendar could not be read', async () => {
+    // 用户 2026-11-15：**读不到就整块不显示**——标题、占位句都不留，和「未来 7 天没有可关注
+    // 的就整块不出现」同一条规矩。为什么没有，读者去「问题清单」看（那一处仍是唯一出口）。
+    const cases: Array<DailyBriefingDocument['news']['notes']> = [
+      { macroEmpty: 'calendar-collect-failed' },
+      { macroEmpty: 'calendar-stale', macroEmptyHours: 42 },
+      { macroEmpty: 'calendar-catch-up-timeout' },
+      { macroEmpty: 'calendar-unavailable' },
+      { macroEmpty: 'calendar-not-collected' }
     ]
-    for (const { notes, expected } of cases) {
+    for (const notes of cases) {
+      const reason = notes.macroEmpty
       const rendered = await render(emptyMacro(notes))
-      expect(rendered.querySelector('.mi-brief-poster__macro-head')?.textContent).toBe(text.sections.macro)
-      const rows = rendered.querySelectorAll('.mi-brief-poster__macro')
-      expect(rows).toHaveLength(1)
-      const row = rendered.querySelector('.mi-brief-poster__macro-row-empty')
-      expect(row?.getAttribute('data-macro-empty')).toBe('unreadable')
-      expect(row?.textContent).toBe(expected)
-      // 仍然是一个判断，不是一句哭诉：说原因，但不出现「没数据/没拿到」这类把事说死的词。
-      for (const word of ['没数据', '没拿到', '未拿到', '未公布', '没有已发布的高影响事件']) {
-        expect(rendered.textContent, word).not.toContain(word)
-      }
+      expect(rendered.querySelector('.mi-brief-poster__news-section'), reason).toBeNull()
+      expect(rendered.querySelector('.mi-brief-poster__macro-head'), reason).toBeNull()
+      expect(rendered.querySelectorAll('.mi-brief-poster__macro'), reason).toHaveLength(0)
+      expect(rendered.querySelector('[data-macro-empty]'), reason).toBeNull()
+      assertClean(rendered)
     }
   })
 

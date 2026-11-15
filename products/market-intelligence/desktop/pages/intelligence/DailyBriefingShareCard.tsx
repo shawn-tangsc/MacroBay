@@ -8,7 +8,6 @@ import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
-import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 import { editorialNotice } from './dailyBriefingEditorialNotice'
 import { briefingMacroValueLabel } from '../../../contracts/dailyBriefingMacroValueText'
 import { BriefingDataArea } from './BriefingDataArea'
@@ -60,14 +59,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
     .filter((item) => item.visibility !== 'hidden')
     .map((item) => ({ item, at: item.scheduledAt, id: item.eventKey }))).map((entry) => entry.item)
   /* 这一屏不写「共几条 / 另有 N 条 / 无法判定 / 一级指标排期」（用户 2026-11-15 要求还原 11-05 版）：
-     空窗与判不了重要性时都**整块不显示**——「不把筛没了说成没有」靠不显示兑现，不靠一句解释。
-     例外：**读不到**（源失败/未启用/过期/采集失败）仍要说明，凭 `briefingMacroEmptyCopy` 一句；
-     「确实没有」它返回 null，那一档整块不显示。 */
-  const macroEmpty = briefingMacroEmptyCopy(doc, {
-    macroEmptyCodes: text.macroEmptyCodes,
-    macroUnreadable: text.macroUnreadable
-  })
-  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null
+     空窗、判不了重要性、**读不到**三种都**整块不显示**——「不把筛没了说成没有」靠不显示兑现，
+     不靠一句解释。为什么没有，读者去「问题清单」看（`dailyBriefingIssues` 那一处仍是唯一出口）。 */
+  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
   const hasData = chosen.length > 0
   // What the forecast stands on: the synthesis's own premises and falsifiers, plus the one line that
   // says whether the earlier read held. The audit-only detail also carries the forward view, the
@@ -137,7 +131,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
-      {visibleMacro.length > 0 || macroEmpty ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
           `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
@@ -157,10 +151,6 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div>)}
       {/* 不再有"共 N 条（另 M 条未列出）"（用户 2026-11-06）：AI 判定有用的全部显示，
           所以这句话在正文与导出里都不该存在——它描述的截断已经不存在了。 */}
-      {/* 读不到时说明一句；「确实没有」时整块不显示（11-05 版就是这样，用户 2026-11-15 要求还原）。 */}
-      {visibleMacro.length === 0 && macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
-        <p className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</p>
-      </div> : null}
 
     </section> : null}
 

@@ -525,6 +525,18 @@ describe('the copied text carries the whole title', () => {
   })
 })
 
+describe('the copied text draws no macro block when the calendar could not be read', () => {
+  it('omits the whole news section for every unreadable reason', () => {
+    // 用户 2026-11-15：读不到就整块不显示，屏幕上、复制文本、导出图一致；原因留给问题清单。
+    for (const code of ['calendar-collect-failed', 'calendar-unavailable', 'calendar-stale', 'calendar-catch-up-timeout']) {
+      const doc = { ...document(), news: { items: [], macro: [], notes: { macroEmpty: code } } }
+      const text = dailyBriefingToMarkdown(doc, options as never)
+      expect(text, code).not.toContain(`## ${labels.sections.news}`)
+      expect(text, code).not.toContain(labels.macroUnreadable.trim())
+    }
+  })
+})
+
 describe('the copied text carries the same two blocks as the page', () => {
   it('prints the window total, the unshown count and the schedule, never the placeholder', () => {
     const base = document()

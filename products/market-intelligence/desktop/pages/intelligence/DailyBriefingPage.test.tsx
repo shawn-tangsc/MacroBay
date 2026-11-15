@@ -2222,12 +2222,11 @@ it('keeps the stored edition under a one-line failure mark when a retry fails af
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
-it('names a calendar that could not be read in the paper and in the audit column, with a re-read on that row', async () => {
+it('keeps an unreadable calendar out of the paper, and in the audit column with a re-read', async () => {
   /*
-   * 口径已变（`8beefb1`，简报线 2026-11-09 02:42）：v2.124 的「正文一个字都不说、只在右列说」
-   * 被推翻了——正文现在用**一句话**说清为什么这一栏是空的，且这句话与右列**同一句**。
-   * 这里按新事实改断言，不是把红的改绿：正文出现的是「暂时读不到：<原因>」，不是「没数据」；
-   * 右列那条缺口与「只重读、不起 run」的判据原样保留。
+   * 口径（用户 2026-11-15）：**读不到就整块不显示**——正文里不留标题、不留「暂时读不到」占位句，
+   * 和「未来 7 天没有可关注的就整块不出现」同一条规矩。为什么没有，只留在右列问题清单，
+   * 那一条连同「只重读、不起 run」的判据原样保留。
    */
   const doc = briefingDocument()
   const client = fakeClient({
@@ -2237,14 +2236,13 @@ it('names a calendar that could not be read in the paper and in the audit column
     }))
   })
   const dom = await renderPage(client)
-  // 正文：这一栏保留标题，并在栏内说出原因——不是三句「没有」中的任何一句。
-  expect(dom.querySelector('.mi-daily-briefing-page__paper .mi-brief-poster__macro-head')).not.toBeNull()
-  const emptyLine = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper [data-macro-empty="unreadable"]')
-  expect(emptyLine).not.toBeNull()
-  expect(emptyLine!.textContent).toContain(text.macroUnreadable)
-  expect(emptyLine!.textContent).toContain(text.macroEmptyCodes['calendar-stale']!.replace('{hours}', '42'))
+  const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+  // 正文：整块不出现——标题、空态行、占位句都没有。
+  expect(paper.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+  expect(paper.querySelector('[data-macro-empty]')).toBeNull()
+  expect(paper.textContent).not.toContain(text.macroUnreadable)
   for (const word of ['没数据', '没拿到', '未拿到', '未公布']) {
-    expect(dom.querySelector('.mi-daily-briefing-page__paper')!.textContent).not.toContain(word)
+    expect(paper.textContent).not.toContain(word)
   }
   // 右列：恰好一条日历缺口，且带重试。
   const retry = dom.querySelector<HTMLElement>('[data-issue-retry="true"]')
