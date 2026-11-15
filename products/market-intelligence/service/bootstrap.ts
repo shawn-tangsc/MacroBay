@@ -322,7 +322,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const macroCalendarJobs = createMacroCalendarScheduleJobRuntime({
     jobRuntime: deps.jobRuntime,
     profiles: calendarProfiles,
-    health: macroCalendarBackend.health
+    health: macroCalendarBackend.health,
+    ...(deps.log === undefined ? {} : { log: deps.log })
   })
   const beaOfficialReleaseJobs = macroCalendarBackend.beaOfficialReleaseRefresh
     ? createBeaOfficialReleaseJobRuntime({ jobRuntime: deps.jobRuntime, profiles: calendarProfiles, refresh: macroCalendarBackend.beaOfficialReleaseRefresh })

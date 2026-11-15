@@ -57,9 +57,20 @@ export function createMacroCalendarScheduleJobRuntime(deps: {
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueStartup' | 'enqueueDefinition' | 'getRun'>
   profiles: Pick<MacroCalendarProviderProfileStore, 'list'>
   health: Pick<MacroCalendarScheduleHealthService, 'collectAndUpdateHealth'>
+  /** 主进程日志出口（`console.warn` 进不了 `app.log`，今晚已经踩过一次）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
 }): MacroCalendarScheduleJobRuntime {
   let disposed = false
   deps.jobRuntime.registerHandler(macroCalendarScheduleJobPolicy.handlerId, async (payload, context) => {
+    /**
+     * **诊断一行，不改判定**：18 次失败每次只用 88–243ms，而真发一次请求要 321–1476ms——
+     * 说明采集在联网之前就判了失败。真库副本上「传一个已 abort 的 signal」能精确复现同样的形状
+     * （两个源都 failed、3ms、`network-request-failed`），所以最可能是作业交过来的 signal 已经中止。
+     * 这里只记录它进来时的状态与原因（超时 / 取消 / 关机），下一次运行就能定死是哪一种。
+     */
+    deps.log?.('warn', 'macro-calendar.schedule.handler-signal', { runId: context.jobRunId,
+      aborted: context.signal.aborted, reason: String((context.signal as { reason?: unknown }).reason ?? 'none'),
+      payloadKeys: isPlainRecord(payload) ? Object.keys(payload) : [] })
     const descriptors = await selectDescriptors(deps.profiles, payload)
     if (!descriptors) throw new Error(safeJobFailureMessage)
 
