@@ -26,6 +26,8 @@ export const crossAssetTextKeys = Object.freeze({
   hintAnalysis: 'pages.intelligence.portal.dashboard.crossAsset.hintAnalysis',
   hintCoverage: 'pages.intelligence.portal.dashboard.crossAsset.hintCoverage',
   hintCorrelations: 'pages.intelligence.portal.dashboard.crossAsset.hintCorrelations',
+  /** 本段没有可比数据的线：原因句，图标题 ⓘ 的最后一行。 */
+  noComparableDataReason: 'pages.intelligence.portal.dashboard.crossAsset.lineNoComparableDataReason',
   unavailable: 'pages.intelligence.portal.dashboard.crossAsset.unavailable',
   states: Object.freeze({
     disabled: 'pages.intelligence.portal.dashboard.crossAsset.states.disabled',

@@ -20,6 +20,38 @@ export function chartLinesHiddenBy(hiddenRows: readonly string[]): readonly Cros
   return crossAssetChartLines.filter((line) => hiddenRows.includes(line))
 }
 
+const isCryptoLine = (line: LineId): line is CrossAssetId => line === 'index' || line === 'btc' || line === 'eth'
+
+/** A line's points on the window grid: the crypto legs from their own curves, the dollar and gold from the macro ones. */
+function pointsOfLine(
+  curves: CrossAssetSnapshot['curves'], macroCurves: CrossAssetSnapshot['macroCurves'], line: LineId
+): readonly { at: string; returnPercent: number | null }[] {
+  return isCryptoLine(line) ? curves[line] ?? [] : macroCurves?.[line] ?? []
+}
+
+/**
+ * 本段没有可比数据的线：这条线一个点都没有值，也没有仍在形成的尾巴。
+ *
+ * 说的是**数据**，不是渲染——线画不出来是结果，读者要的是「这一段的数据怎么了」。**读失败不在这里**：
+ * 整条通道没读到、或某一格没启用/读不到时，线根本不进图例（调用点的 `hiddenLines` 与状态分支各管各的）。
+ * 美元/黄金两条线只在真有曲线时才进图例，所以空数组不算「本段无数据」——那是这一腿压根没有数据。
+ *
+ * 图例后面那句话与图标题 ⓘ 里的原因都从这里来：一个判据，两处转述。
+ */
+export function linesWithoutComparableData(input: Readonly<{
+  curves: CrossAssetSnapshot['curves']
+  macroCurves?: CrossAssetSnapshot['macroCurves']
+  forming?: CrossAssetSnapshot['forming']
+}>): readonly CrossAssetChartLineId[] {
+  return crossAssetChartLines.filter(line => {
+    const points = pointsOfLine(input.curves, input.macroCurves, line)
+    if (points.length === 0) return isCryptoLine(line)
+    if (points.some(point => point.returnPercent !== null)) return false
+    // 仍在形成的那一段也是画得出来的点：没有收盘值不等于这条线什么都没有。
+    return !isCryptoLine(line) || (input.forming?.[line]?.returnPercent ?? null) === null
+  })
+}
+
 export const crossAssetChartPolicy = Object.freeze({ width: 1000, height: 200, inset: 8, tooltipWidth: 210, tooltipHeight: 128, offset: 12,
   tickSlots: 3,
   assets: ['index', 'btc', 'eth'] as const,
@@ -33,8 +65,8 @@ type LineId = CrossAssetId | CrossAssetMacroProxyId
 type Text = {
   chart: string; assets: Record<CrossAssetId, string>; macroAssets: Record<CrossAssetMacroProxyId, string>
   noData: string; forming: string
-  /** 图例里那条没画出来的线后面标一句（原因在图标题的 ⓘ 里）。 */
-  lineNotDrawn: string
+  /** 图例里那条本段没有可比数据的线，名字后面说一句（原因在图标题的 ⓘ 里）。说的是数据，不是渲染。 */
+  lineNoComparableData: string
   /** What a line's tooltip and its accessible name read: the time, then what happened. */
   eventLine: string; eventsCollapsed: string
   /** 同一分钟里官方与 provider 都在、却没能确认是同一条发布时，线上要说明这件事（设计 145 §8 B）。 */
@@ -73,8 +105,12 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   const listed: readonly LineId[] = [...policy.assets, ...policy.macroProxies.filter(proxy => (macroCurves?.[proxy]?.length ?? 0) > 0)]
     .filter(id => hiddenLines?.includes(id as CrossAssetChartLineId) !== true)
   const visible = listed.filter(id => !hidden.includes(id))
+  /** 本窗内没有可比数据的线：图例名字后面说一句，图标题的 ⓘ 说原因——同一个判据（见 `linesWithoutComparableData`）。 */
+  const withoutComparableData = linesWithoutComparableData({
+    curves, ...(macroCurves === undefined ? {} : { macroCurves }), ...(forming === undefined ? {} : { forming })
+  })
   const pointsOf = (id: LineId): readonly { at: string; returnPercent: number | null }[] =>
-    id in curves ? curves[id as CrossAssetId] : macroCurves?.[id as CrossAssetMacroProxyId] ?? []
+    pointsOfLine(curves, macroCurves, id)
   /** The macro legs have no live tail: their provider publishes a close, it does not stream one. */
   const formingOf = (id: LineId) => id in curves ? forming?.[id as CrossAssetId] : undefined
   const labelOf = (id: LineId): string => id in curves ? text.assets[id as CrossAssetId] : text.macroAssets[id as CrossAssetMacroProxyId]
@@ -125,13 +161,10 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
   }
   return <div className="mi-cross-asset__chart">
     <div className="mi-cross-asset__legend">{listed.map(id => {
-      // 一条线画不画得出来：本窗内至少一个点有值（或有一根仍在形成的尾巴）。
-      const drawn = pointsOf(id).some(point => point.returnPercent !== null)
-        || (formingOf(id)?.returnPercent ?? null) !== null
       return <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
         onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}
-        {/* 没画出来就标一句：否则读者会以为这条线被藏了（用户 2026-11-11）。 */}
-        {drawn ? null : <small className="mi-cross-asset__legend-undrawn" data-undrawn={id}>{text.lineNotDrawn}</small>}
+        {/* 本段没有可比数据就说一句：读者要知道这条线的数据怎么了，不是线被藏了（用户 2026-11-16）。 */}
+        {withoutComparableData.includes(id) ? <small className="mi-cross-asset__legend-no-data" data-no-comparable-data={id}>{text.lineNoComparableData}</small> : null}
       </Button>})}</div>
     <div className="mi-cross-asset__chart-frame">
       <div className="mi-cross-asset__y-axis">{(max === min ? [0] : [max, 0, min].filter((value, index, all) => all.indexOf(value) === index)).map(value => <span key={value} style={{ top: `${y(value) / policy.height * 100}%` }}>{percent(value)}</span>)}</div>

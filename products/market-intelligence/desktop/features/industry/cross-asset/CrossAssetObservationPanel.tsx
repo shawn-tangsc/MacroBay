@@ -20,7 +20,7 @@ import { useCrossAssetObservation } from './useCrossAssetObservation'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
-import { chartLinesHiddenBy, CrossAssetReturnChart } from './CrossAssetReturnChart'
+import { chartLinesHiddenBy, CrossAssetReturnChart, linesWithoutComparableData } from './CrossAssetReturnChart'
 import { CircleSlash, TriangleAlert } from 'lucide-react'
 
 import { CellStateCard, type CellStateKind } from '../../../pages/intelligence/DashboardCellState'
@@ -246,12 +246,16 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       }
     ]
   } : { lines: [{ labelKey: crossAssetTextKeys.unavailable }] }
-  /** 图上画不出来的线（本窗内曲线全是空点）：图例标「未绘制」，原因进图标题的 ⓘ。 */
-  const undrawnChartLines = snapshot === undefined ? [] : (['index', 'btc', 'eth'] as const)
-    .filter(asset => (snapshot.curves[asset] ?? []).every(point => point.returnPercent === null))
-  const historyHintLines: readonly HintLine[] = undrawnChartLines.length === 0
+  /**
+   * 本段没有可比数据的线（本窗内曲线全是空点）：图例在名字后面说「本段无数据」，原因进图标题的 ⓘ。
+   * 判据与图例同源（`linesWithoutComparableData`），所以「哪条线没有数据」只有一个说法；
+   * 美元/黄金也算——休市或源停更时它们的整窗都是空点，读者看到的正是「美元 DXY 本段无数据」（用户 2026-11-16）。
+   * 读失败不走这一支：通道没读到、格没启用、源没启用时线根本不进图例。
+   */
+  const noComparableChartLines = snapshot === undefined ? [] : linesWithoutComparableData(snapshot)
+  const historyHintLines: readonly HintLine[] = noComparableChartLines.length === 0
     ? historyHint.lines
-    : [...historyHint.lines, { labelKey: 'pages.intelligence.portal.dashboard.crossAsset.lineNotDrawnReason' }]
+    : [...historyHint.lines, { labelKey: crossAssetTextKeys.noComparableDataReason }]
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.

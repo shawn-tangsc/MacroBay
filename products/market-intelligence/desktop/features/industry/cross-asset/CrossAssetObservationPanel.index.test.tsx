@@ -62,6 +62,8 @@ async function render(input: Readonly<{
   queryFailure?: 'query' | 'contract'
   /** BTC/ETH 实时报价那条腿的状态（默认两者都是 `missing`）。 */
   quotes?: Partial<Record<'btc' | 'eth', 'live' | 'stale' | 'missing'>>
+  /** 美元/黄金两条线读的宏观序列；不给＝这一版没有宏观库，图上没有这两条线。 */
+  macroSeries?: (seriesId: string, fromMs: number, toMs: number) => readonly { atMs: number; value: number }[]
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -85,7 +87,8 @@ async function render(input: Readonly<{
           .filter(entry => entry.barOpenMs >= request.fromMs && entry.barOpenMs <= request.toMs && entry.barEndMs <= request.asOfMs)
     } as never,
     live: () => live,
-    indexFeed: () => ({ state: input.feed })
+    indexFeed: () => ({ state: input.feed }),
+    ...(input.macroSeries === undefined ? {} : { macroSeries: input.macroSeries })
     // The hook opens on the 24h range, and it hides a snapshot whose range is not the one it asked for.
   }).query({ range: input.range ?? '24h' })
   const client = {
@@ -179,9 +182,9 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       // The licensed index is the standard instrument: no proxy label, because it is not a proxy.
       expect(page.host.querySelector('[data-index-proxy="true"]')).toBeNull()
       // 合法指数这一腿在这个夹具里没有任何可画的点（289 个点全是空），所以图例照样列出、
-      // 名字后面标「未绘制」——不标会让读者以为线被藏了。
+      // 名字后面说「本段无数据」——不标会让读者以为线被藏了。
       expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
-        .toEqual([`${text.indexNames.real}${text.lineNotDrawn}`, 'BTC', 'ETH'])
+        .toEqual([`${text.indexNames.real}${text.lineNoComparableData}`, 'BTC', 'ETH'])
       expect(page.host.querySelector('[data-market-state-tag="closed"]')).toBeNull()
       expect(page.host.querySelector('[data-asset-price="index"]')?.textContent).toBe('25017.00')
       expect(cell(page.host, '15m').textContent).toMatch(/[0-9]/)
@@ -426,21 +429,65 @@ describe('「无数据」那句按腿说（用户 2026-11-11）', () => {
   })
 })
 
-describe('图例里没画出来的线要有标记（用户 2026-11-11）', () => {
-  it('marks a line whose curve has no drawable point, and keeps the reason in the title ⓘ', async () => {
-    // 这个夹具里合法指数那一腿 289 个点全是空：线画不出来，但图例照样列出。
+describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', () => {
+  it('says there is no data in this stretch instead of talking about the renderer, and keeps the reason in the title ⓘ', async () => {
+    // 这个夹具里合法指数那一腿 289 个点全是空：没有可比数据，图例照样列出。
     const page = await render({ nowMs: at('2026-07-15T15:00:00.000Z'), feed: 'ready', liveState: 'disabled', bySymbol: bothLegs(at('2026-07-15T15:00:00.000Z')) })
     try {
-      const undrawn = page.host.querySelector('[data-undrawn="index"]')
-      expect(undrawn).not.toBeNull()
-      expect(undrawn?.textContent).toBe(text.lineNotDrawn)
-      // 画得出来的线没有这个标记。
-      expect(page.host.querySelector('[data-undrawn="btc"]')).toBeNull()
+      const noData = page.host.querySelector('[data-no-comparable-data="index"]')
+      expect(noData).not.toBeNull()
+      expect(noData?.textContent).toBe(text.lineNoComparableData)
+      // 有数据的线没有这个标记。
+      expect(page.host.querySelector('[data-no-comparable-data="btc"]')).toBeNull()
+      // 说的是数据，不是渲染：这句里不许出现「画 / 绘制 / 渲染」。
+      expect(text.lineNoComparableData).not.toMatch(/绘制|渲染|画/)
+      // 原因句同样说数据、不说实现：不出现「线要求 / 5 分钟 K 线」这类实现细节。
+      expect(text.lineNoComparableDataReason).not.toMatch(/K 线|要求|绘制|渲染|画/)
       // 原因在图标题那颗 ⓘ 的浮层里（点开才渲染），图例里不再铺解释。
-      expect(undrawn?.textContent).not.toContain(text.lineNotDrawnReason)
+      expect(noData?.textContent).not.toContain(text.lineNoComparableDataReason)
       const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
       await act(async () => hint.click())
-      expect(document.body.textContent).toContain(text.lineNotDrawnReason)
+      expect(document.body.textContent).toContain(text.lineNoComparableDataReason)
+    } finally { await page.unmount() }
+  })
+
+  it('covers the dollar line too: a weekend leaves every point empty, and the reason is still reachable', async () => {
+    // 用户 2026-11-16 截图：美元 DXY 后面跟着一句说渲染器的话。周末美元没有新收盘，整窗都是空点——
+    // 这不是读失败，是这一段没有可比数据。宏观两条线也得有同一句，不能只有三条资产腿有。
+    const nowMs = at('2026-07-19T12:00:00.000Z') // Sunday
+    const page = await render({
+      nowMs, feed: 'ready', bySymbol: bothLegs(nowMs),
+      // 只有一次收盘，落在窗口开始前 30 小时：够锚定窗口（上限 72 小时），但整窗没有新收盘
+      // （carry 上限 24 小时），所以每个点都是空的。
+      macroSeries: seriesId => seriesId === 'xau-usd' ? [] : [{ atMs: nowMs - 54 * 3_600_000, value: 102 }]
+    })
+    try {
+      const noData = page.host.querySelector('[data-no-comparable-data="dxy"]')
+      expect(noData).not.toBeNull()
+      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="dxy"]')?.textContent)
+        .toBe(`${text.assetLabels.dxy}${text.lineNoComparableData}`)
+      // 黄金这一腿没有曲线，图例里根本没有它，所以也不会被标成「本段无数据」。
+      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="gold"]')).toBeNull()
+      const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
+      await act(async () => hint.click())
+      expect(document.body.textContent).toContain(text.lineNoComparableDataReason)
+    } finally { await page.unmount() }
+  })
+
+  it('does not lend this sentence to a read failure: an unreadable row leaves the legend instead', async () => {
+    // 「这一段没有可比数据」与「这次读不到」是两件事：读不到时这条线根本不进图例，状态由表里那一行说；
+    // 不许把读失败画成数据缺口（用户红线：缺什么、读不到什么，分开说）。
+    const nowMs = at('2026-07-19T12:00:00.000Z')
+    const page = await render({
+      nowMs, feed: 'ready', bySymbol: bothLegs(nowMs),
+      macroSeries: seriesId => seriesId === 'xau-usd' ? [] : [{ atMs: nowMs - 54 * 3_600_000, value: 102 }],
+      rowStates: { dxy: 'unreadable' }
+    })
+    try {
+      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="dxy"]')).toBeNull()
+      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
+      // 行自己的状态照旧在表里：读不到说的是读失败，不是「没有数据」。
+      expect(page.host.querySelector('[data-status-row="dxy"]')?.textContent).toContain('暂时读不到')
     } finally { await page.unmount() }
   })
 })

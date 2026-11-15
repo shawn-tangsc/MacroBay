@@ -470,9 +470,10 @@ mi: miText['zh-CN'],
               /* 窗口不可用时的那句（与「本次还没落库」分开：后者已由服务端回退到上一根桶，不会到这里）。 */
               windowNoPair: '库里没有这一窗口的收盘对',
               quoteLegReasons: { missing: '这笔资产在实时 trade 流里一条成交都没收到（流可能没连上）。', stale: '最后一笔成交已超过 15 秒，实时报价按过期处理。' },
-              /* 图上没画出来的那条线：图例照样列出，名字后面标一句，否则读者以为线被藏了。 */
-              lineNotDrawn: '未绘制',
-              lineNotDrawnReason: '线要求本窗内每个点都有连续的 5 分钟 K 线；这一段没凑齐，所以这条线没画。',
+              /* 本段没有可比数据的那条线：图例照样列出，名字后面说一句**这一段的数据怎么了**，原因进图标题的 ⓘ。
+                 说的是数据，不是渲染——读者关心的是这条线的数据，不是「画没画」。 */
+              lineNoComparableData: '本段无数据',
+              lineNoComparableDataReason: '这一段没有凑齐连续的收盘数据，所以没有可比曲线。',
               staleRead: '这次刷新没读出来，下面是上一次的读数。',
               // 界面设计 2026-11-09 的条件①：这句要说清「重启之后才生效」与「怎么重启」，不能只写「版本不一致」。
               contractMismatch: '界面与主进程的版本不一致，当前数据无法读取。重启之后才会生效：点下面的「重启应用」，或完全退出观潮再打开——只刷新页面不够。',
@@ -1977,8 +1978,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               quoteLeg: { missing: 'Live quote not connected', stale: 'Live quote out of date' },
               windowNoPair: 'No close pair for this window in the store',
               quoteLegReasons: { missing: 'No trade for this asset arrived on the live trade stream (the stream may not be connected).', stale: 'The last trade is more than 15 seconds old, so the live quote counts as out of date.' },
-              lineNotDrawn: 'not drawn',
-              lineNotDrawnReason: 'A line needs five-minute bars at every point in this window; this stretch is not complete, so the line is not drawn.',
+              // What happened to the data, not what the renderer did with it.
+              lineNoComparableData: 'no data in this stretch',
+              lineNoComparableDataReason: 'This stretch has no complete run of closes, so there is no comparable curve.',
               staleRead: 'The refresh failed; the readings below are from the last successful read.',
               // Condition ①: say that a restart is what makes it take effect, and how to restart.
               contractMismatch: 'The interface and the main process are running different versions, so this data cannot be read. A restart is what makes it take effect: press “Restart the app” below, or quit the app completely and open it again; reloading the page is not enough.',
