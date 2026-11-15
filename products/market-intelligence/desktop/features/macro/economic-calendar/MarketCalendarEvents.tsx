@@ -46,7 +46,15 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
     <p>{sourceLabel(text, event.source)} · {text.market.kinds[event.eventType]}</p><h2>{event.title}</h2>
     <p><MarketCalendarSourceStatus source={shownSource} text={text} variant="full" /></p>
     <dl className="mi-economic-calendar__metadata">
-      <div><dt>{text.details.time}</dt><dd>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</dd></div>
+      {/* 合并后同一期可能发过多次（GDP 二读/三读）：**每一次排期都列出来**，只写合并后的那一个，
+          读者会把二读当初值。序号是事实（第几次），时间也是事实，两者之间不写阶段名。 */}
+      <div><dt>{text.details.time}</dt><dd>
+        {event.releaseDates !== undefined && event.releaseDates.length > 1
+          ? <span data-release-dates>{event.releaseDates.map((date, index) => <span key={date} data-release-date>
+            {index + 1} · {date}{index === event.releaseDates!.length - 1 ? '' : '　'}
+          </span>)}</span>
+          : <>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</>}
+      </dd></div>
       <div><dt>{text.market.observed}</dt><dd>{formatTime(event.sourceObservedAt, 'second')}</dd></div>
       <div><dt>{text.details.source}</dt><dd data-market-country>{calendarCountryLabel(event, text)} · {sourceLabel(text, event.source)}</dd></div>
       {/* 源没给重要性就是「未提供」：不许挑一档顶上去（读者会以为那是源的判断）。 */}

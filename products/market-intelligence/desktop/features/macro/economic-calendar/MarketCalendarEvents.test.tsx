@@ -194,3 +194,26 @@ it('says 未提供 for an event whose source gave no importance, never 中', asy
     await act(async () => root.unmount()); host.remove()
   }
 })
+
+it('lists every schedule of a period that was released more than once', async () => {
+  // 合并之后同一期可能发过多次（GDP 二读 11-25 / 三读 12-23）：只写合并后那一个，读者会把二读当初值。
+  // 序号与时间都是事实；这里不写「初值/终值」——那是推断。
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const event = { eventKey: '00000000-0000-4000-8000-000000000002', title: 'GDP 年化', countryCode: 'US',
+    eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-11-25T13:30:00.000Z',
+    consensus: null, providerPrevious: null, providerActual: null, source: '0xRouter' as const,
+    sourceObservedAt: '2026-11-16T00:00:00.000Z', coverage: 'observed-unverified' as const,
+    releaseDates: ['2026-11-25', '2026-12-23'] }
+  const host = document.createElement('div'); const root = createRoot(host)
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={event} text={text} />)))
+    const dates = [...host.querySelectorAll('[data-release-date]')].map((element) => element.textContent?.trim() ?? '')
+    expect(dates).toHaveLength(2)
+    expect(dates[0]).toContain('2026-11-25')
+    expect(dates[1]).toContain('2026-12-23')
+    // 只发过一次的事件不出现这份清单。
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...event, releaseDates: undefined }} text={text} />)))
+    expect(host.querySelector('[data-release-dates]')).toBeNull()
+  } finally { await act(async () => root.unmount()) }
+})
