@@ -4,6 +4,7 @@ import { ensureCalendarStandardTables } from '../intelligence/macro-calendar/mar
 import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
+import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
@@ -88,6 +89,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       ensureOfficialHistoryReplayed(database)
       // 期次归一（迁移 14）：历史上按 BLS 写法落成 `YYYY-MNN` 的行并回 `YYYY-MM`，幂等、有备份。
       const mergedPeriods = mergeMPeriodStandardRows(database)
+      // 国家码归一（迁移 15）：`USA` 这类历史写法并回 alpha-2，撞行合并、台账同归一，幂等、有备份。
+      const normalizedCountries = normalizeCalendarCountryCodes(database)
+      if (normalizedCountries.renamed > 0 || normalizedCountries.merged > 0) {
+        console.warn(`[macro-calendar] 国家码归一：待归一 ${normalizedCountries.pending} 行、改名 `
+          + `${normalizedCountries.renamed} 行、合并 ${normalizedCountries.merged} 行、台账改写 `
+          + `${normalizedCountries.ledgerRewritten} 条`)
+      }
       if (mergedPeriods.merged > 0 || mergedPeriods.renamed > 0) {
         console.warn(`[macro-calendar] 期次归一：合并 ${mergedPeriods.merged} 行、改名 ${mergedPeriods.renamed} 行`
           + `、台账改写 ${mergedPeriods.ledgerRewritten} 条 / 删重 ${mergedPeriods.ledgerDropped} 条`)

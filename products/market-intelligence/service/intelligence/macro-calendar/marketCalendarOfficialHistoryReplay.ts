@@ -150,8 +150,18 @@ export function measureMonthlyDiff(database: DatabaseSync): Readonly<Record<stri
   // 修订表里还是来源原样的 `…2026-M10`。只归一一边，同一件事会被差集报成「丢了一条」。
   const revisions = database.prepare(`select event_key as event_key, substr(scheduled_date, 1, 7) as month
     from mi_macro_calendar_revisions`).all() as unknown as { event_key: string; month: string }[]
-  const known = new Set((database.prepare('select source_event_id from mi_calendar_events').all() as unknown as
-    { source_event_id: string }[]).map((row) => row.source_event_id))
+  // 两条来源都算「这条发布落下来了」：行上的当前 id，**以及台账里记过的 id**。
+  // 为什么必须带上台账：一行只能存一个 id，同一次发布被别的来源后写覆盖后，原 id 只留在台账里
+  // （国家归一合并那 31 行时就是这种形状——把带 replay id 的那行并掉了，行上的 id 已经不是它）。
+  // 只认行上的 id，同一件事会被差集报成「丢了一条」。
+  const known = new Set<string>()
+  for (const row of database.prepare('select source_event_id from mi_calendar_events').all() as unknown as
+    { source_event_id: string }[]) known.add(row.source_event_id)
+  const ledgerTable = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_calendar_event_source_ids'").get()
+  if (ledgerTable !== undefined) {
+    for (const row of database.prepare('select source_event_id from mi_calendar_event_source_ids').all() as unknown as
+      { source_event_id: string }[]) known.add(row.source_event_id)
+  }
   const result: Record<string, string[]> = {}
   for (const row of revisions) {
     if (known.has(normalizeCalendarSourceEventId(row.event_key))) continue
