@@ -171,6 +171,37 @@ describe('daily briefing issues', () => {
     expect(nothing.some((entry) => entry.id.startsWith('data:calendar'))).toBe(false)
   })
 
+  // 用户 2026-11-16：来源已经启用时，建议里不许再说「去启用宏观日历」——那是把人引去改一个
+  // 本来就没问题的配置。启用与否由原因码本身决定：只有 `calendar-source-disabled` 才是没启用。
+  it('never tells the reader to enable a calendar that is already enabled', () => {
+    const enabled = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-collect-failed' } } }),
+      text: zhText,
+      formatTime
+    })
+    const failed = enabled.find((entry) => entry.id === 'data:calendar:calendar-collect-failed')!
+    expect(failed.advice).toBe(zhText.limits.advice.checkSource)
+    expect(failed.advice).not.toBe(zhText.limits.advice.checkCalendar)
+
+    const disabled = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-source-disabled' } } }),
+      text: zhText,
+      formatTime
+    })
+    const off = disabled.find((entry) => entry.id === 'data:calendar:calendar-source-disabled')!
+    expect(off.advice).toBe(zhText.limits.advice.checkCalendar)
+
+    // 补采失败要有自己的原因与建议：说「这次补采没成功」，不指向开关。
+    const catchUp = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-catch-up-failed' } } }),
+      text: zhText,
+      formatTime
+    })
+    const catchUpIssue = catchUp.find((entry) => entry.id === 'data:calendar:calendar-catch-up-failed')!
+    expect(catchUpIssue.title).toContain('补采')
+    expect(catchUpIssue.advice).toBe(zhText.limits.advice.checkSource)
+  })
+
   it('explains the fear-and-greed baseline and how long ago it was last published', () => {
     const fearGreed = pulse({
       id: 'fear-greed', group: 'sentiment', labelKey: 'dailyBriefing.row.fearGreed',

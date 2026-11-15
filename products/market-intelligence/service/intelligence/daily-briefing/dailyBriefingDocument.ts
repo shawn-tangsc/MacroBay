@@ -583,8 +583,8 @@ function macroEmptyCode(packet: DailyBriefingFactPacket): string {
     // A catch-up we triggered but never learned the outcome of (the command answered with a shape the
     // contract does not name) gets its own sentence: nothing failed, we simply do not know yet.
     if (freshness.catchUp?.state === 'unknown') return 'calendar-catch-up-unknown'
-    // A catch-up that failed is a collection failure, which is also not "nothing".
-    if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
+    // 补跑失败是「我们这次去补没成功」，不是「源的采集历史失败」：两者一句话说清会误导读者。
+    if (freshness.catchUp?.state === 'failed') return 'calendar-catch-up-failed'
   }
   // 注意：这一档的「没有」现在**只在窗口里真的一条高影响事件都没有**时才成立——因为候选不再按
   // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。

@@ -315,14 +315,17 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   }
   if (macroEmpty?.unreadable) {
     const code = document.news.notes.macroEmpty ?? 'calendar-unavailable'
-    add({ id: `data:calendar:${code}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: macroEmpty.sentence, advice: text.limits.advice.checkCalendar })
+    // 只有「来源未启用」才建议去启用；其它原因都说明来源开着，建议检查来源而不是开关
+    // （用户 2026-11-16：把读者引去改一个本来没问题的配置，比不说更糟）。
+    const advice = code === 'calendar-source-disabled' ? text.limits.advice.checkCalendar : text.limits.advice.checkSource
+    add({ id: `data:calendar:${code}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: macroEmpty.sentence, advice })
   }
   // 「接下来 7 日」那一段只由它自己的 note 说明，与上面那栏不是同一件事，照旧单独报。
   const nextNote = document.next.note
   if (document.news.notes.macroEmpty === undefined && nextNote === 'calendar-source-disabled') {
     add({ id: 'data:calendar:disabled', severity: 'warning', category: 'data', template: 'calendar-disabled', source: text.limits.sources.calendar, at, title: text.limits.calendarDisabled, advice: text.limits.advice.checkCalendar })
   } else if (document.news.notes.macroEmpty === undefined && nextNote === 'calendar-unavailable') {
-    add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkCalendar })
+    add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkSource })
   }
 }
 

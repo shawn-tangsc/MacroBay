@@ -886,6 +886,25 @@ describe('daily briefing document', () => {
 
   // 2026-11-14：补跑改成排作业后返回 `{state:'completed'}`，契约里没有这一种。它不能被写成
   // 「最近一次日历采集失败」——读者会以为源坏了；也不能写成「没有事件」。它有自己的那句话。
+  // 用户 2026-11-16（架构复核）：补跑失败 ≠ 采集历史失败。我们触发的那次补采没成功，
+  // 不能写成「最近一次日历采集失败」——那是把一件我们做过的事说成源的长期状态。
+  it('gives a failed catch-up its own reason, not "the last collection failed"', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: {
+          state: 'available',
+          lastCollectedAt: '2026-10-28T06:27:00.000Z',
+          catchUp: { state: 'failed', failureCode: 'queue-closed' }
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.notes.macroEmpty).toBe('calendar-catch-up-failed')
+    expect(document.news.notes.macroEmpty).not.toBe('calendar-collect-failed')
+  })
+
   it('gives a catch-up whose outcome is unknown its own reason, not a failed collection', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

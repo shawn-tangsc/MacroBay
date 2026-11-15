@@ -66,7 +66,7 @@ export const dailyBriefingText = {
     /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
     macroUnreadable: '暂时读不到：',
     macroWebValue: '（网页）',
-    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
+    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-failed': '这次补采没有成功', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
     /**
      * 「未来 7 天」这一栏的两段话（产品 2026-11-14 定，因为来源根本没给重要性）：
      * 主句说**我们判不出**（不是「没有」——「没有」是替来源下断言），
@@ -513,7 +513,7 @@ export const dailyBriefingText = {
     /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
     macroUnreadable: 'Not readable right now: ',
     macroWebValue: ' (web)',
-    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
+    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-failed': 'This catch-up attempt did not succeed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
     nextImportanceUnknown: { sentence: 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', scheduleTitle: 'Tier-1 indicator schedule' },
     pastWindow: {
       header: 'Past 24 hours · {count} releases',
