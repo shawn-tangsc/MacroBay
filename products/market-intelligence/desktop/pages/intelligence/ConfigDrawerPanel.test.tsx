@@ -76,16 +76,21 @@ describe('configuration drawer panels keep their own failure inside the drawer',
       - 其余五屏是节点。
       两边都钉住，才既保住「每屏一层边界」又保住「两屏收抽屉给的导航」。
     */
-    const screens: ReadonlyArray<[string, ConfigDrawerScreen, 'callback' | 'node']> = [
-      ['analysisPanel', 'analysis', 'node'],
-      ['briefingPanel', 'briefing', 'node'],
-      ['processingPanel', 'processing', 'node'],
-      ['runLogPanel', 'run-log', 'node'],
-      ['notificationsPanel', 'notifications', 'node'],
-      ['sourcesPanel', 'sources', 'callback'],
-      ['sourcesDataPanel', 'sourcesData', 'callback']
-    ]
-    for (const [prop, screen, shape] of screens) {
+    // 屏清单从类型派生（`Record<ConfigDrawerScreen, …>`），不是手写数组：契约再加一屏，
+    // 这里不补就编译不过，不会变成「守卫静默少检一屏」。
+    const WIRING: Record<ConfigDrawerScreen, readonly [prop: string, shape: 'callback' | 'node']> = {
+      analysis: ['analysisPanel', 'node'],
+      briefing: ['briefingPanel', 'node'],
+      processing: ['processingPanel', 'node'],
+      'run-log': ['runLogPanel', 'node'],
+      notifications: ['notificationsPanel', 'node'],
+      sources: ['sourcesPanel', 'callback'],
+      sourcesData: ['sourcesDataPanel', 'callback']
+    }
+    const screens = Object.entries(WIRING) as ReadonlyArray<
+      [ConfigDrawerScreen, readonly [prop: string, shape: 'callback' | 'node']]
+    >
+    for (const [screen, [prop, shape]] of screens) {
       const wired = shape === 'callback'
         ? new RegExp(`${prop}=\\{\\(nav\\) => <ConfigDrawerPanel screen="${screen}">`, 'u')
         : new RegExp(`${prop}=\\{<ConfigDrawerPanel screen="${screen}">`, 'u')
