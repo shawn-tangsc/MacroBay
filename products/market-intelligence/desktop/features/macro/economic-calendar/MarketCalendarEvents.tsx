@@ -51,7 +51,7 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
       <div><dt>{text.details.time}</dt><dd>
         {event.releaseDates !== undefined && event.releaseDates.length > 1
           ? <span data-release-dates>{event.releaseDates.map((date, index) => <span key={date} data-release-date>
-            {index + 1} · {date}{index === event.releaseDates!.length - 1 ? '' : '　'}
+            {text.details.releaseOrdinal.replace('{index}', String(index + 1))} · {date}{index === event.releaseDates!.length - 1 ? '' : '　'}
           </span>)}</span>
           : <>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</>}
       </dd></div>

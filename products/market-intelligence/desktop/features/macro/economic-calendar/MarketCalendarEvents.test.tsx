@@ -210,7 +210,10 @@ it('lists every schedule of a period that was released more than once', async ()
     await act(async () => root.render(scoped(<MarketCalendarInspector event={event} text={text} />)))
     const dates = [...host.querySelectorAll('[data-release-date]')].map((element) => element.textContent?.trim() ?? '')
     expect(dates).toHaveLength(2)
+    // 「第 N 次」是那一期的第几次发布——只写日期读者不容易看出这是同一期的多次发布。
+    expect(dates[0]).toContain('第 1 次')
     expect(dates[0]).toContain('2026-11-25')
+    expect(dates[1]).toContain('第 2 次')
     expect(dates[1]).toContain('2026-12-23')
     // 只发过一次的事件不出现这份清单。
     await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...event, releaseDates: undefined }} text={text} />)))
