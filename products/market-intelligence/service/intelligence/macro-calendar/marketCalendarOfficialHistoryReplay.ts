@@ -20,7 +20,16 @@ import { recordCalendarUnmapped } from './marketCalendarStandardTable'
  */
 export const officialHistoryReplayPolicy = Object.freeze({
   parserVersion: 'official-history-replay-v1',
-  providerId: 'macro-calendar-official-replay'
+  providerId: 'macro-calendar-official-replay',
+  /**
+   * 迁移标记（`mi_macro_calendar_migrations.version`）。**启动时幂等回放一次**：
+   * 有这一行就跳过，不必每次开应用都重放。
+   *
+   * 为什么不在外部脚本里直接写线上库：用户的实例开着、连接在跑，另一个进程往同一个库写，
+   * 即使 WAL 能扛，也会出现「应用缓存里的行数与库里不一致」这种看不见的偏差；
+   * 而手工跑完，应用下次启动也不会知道该再确认一次。做成启动迁移，用户什么都不用做。
+   */
+  migrationVersion: 12
 })
 
 type RevisionRow = Readonly<{
@@ -140,4 +149,29 @@ export function measureMonthlyDiff(database: DatabaseSync): Readonly<Record<stri
   const result: Record<string, string[]> = {}
   for (const row of missing) (result[row.month] ??= []).push(row.event_key)
   return result
+}
+
+/**
+ * 启动时调用：已回放过就跳过，否则回放一次并写迁移标记（**同一事务**，失败不留半标记）。
+ * 返回是否真的跑了回放。
+ */
+export function ensureOfficialHistoryReplayed(database: DatabaseSync, input?: Readonly<{ write?: boolean }>): boolean {
+  const write = input?.write ?? true
+  try {
+    const marker = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?')
+      .get(officialHistoryReplayPolicy.migrationVersion)
+    if (marker !== undefined) return false
+  } catch { return false }
+  if (!write) return true
+  database.exec('begin')
+  try {
+    replayOfficialHistoryIntoStandardTable(database)
+    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)')
+      .run(officialHistoryReplayPolicy.migrationVersion)
+    database.exec('commit')
+    return true
+  } catch (error) {
+    try { database.exec('rollback') } catch { /* 保留原始错误 */ }
+    throw error
+  }
 }

@@ -79,3 +79,18 @@ describe('官方历史回放（S1）', () => {
     expect(count).toBe(1)
   })
 })
+
+describe('启动时幂等回放（迁移标记）', () => {
+  it('第一次跑回放并写标记，第二次直接跳过（不重放、不改行）', async () => {
+    const { ensureOfficialHistoryReplayed, officialHistoryReplayPolicy } = await import('./marketCalendarOfficialHistoryReplay')
+    const database = revisionsDatabase()
+    ensureCalendarStandardTables(database)
+    database.exec('create table if not exists mi_macro_calendar_migrations (version integer primary key)')
+    expect(ensureOfficialHistoryReplayed(database)).toBe(true)
+    const afterFirst = (database.prepare('select count(*) c from mi_calendar_events').get() as { c: number }).c
+    expect(database.prepare('select 1 from mi_macro_calendar_migrations where version = ?')
+      .get(officialHistoryReplayPolicy.migrationVersion)).toBeDefined()
+    expect(ensureOfficialHistoryReplayed(database)).toBe(false)
+    expect((database.prepare('select count(*) c from mi_calendar_events').get() as { c: number }).c).toBe(afterFirst)
+  })
+})
