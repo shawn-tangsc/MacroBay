@@ -30,6 +30,15 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 }
 
 describe('渲染专用读口的依赖方向', () => {
+  it('**只有一份**：`rendering/` 之外不许再有同名文件（搬家用 `mv`，不是复制）', () => {
+    // 2026-11-16 的事故：搬文件那笔只提交了「新建」，旧路径的删除留在索引里没进 HEAD，
+    // 于是仓库里同时存在两份同名模块——而结构棘轮只查 import，查不出重复定义。
+    const offenders = sourceFiles(PRODUCT_SERVICE)
+      .map((file) => relative(PRODUCT_SERVICE, file))
+      .filter((rel) => rel.endsWith(`${READER}.ts`) && !rel.includes('rendering/'))
+    expect(offenders).toEqual([])
+  })
+
   it('除 `ipc/` 与 `rendering/` 外，服务层没有任何文件 import 它', () => {
     const offenders: string[] = []
     for (const file of sourceFiles(PRODUCT_SERVICE)) {
