@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { CalendarDayItem } from './economicCalendarDayModel'
 import { calendarEventStatus } from './calendarEventStatusModel'
 
@@ -58,4 +58,31 @@ it('separates "the source has not published yet" from "our collection was refuse
     .toBe('data-received')
   // The official route is not subject to the shared market-calendar ceiling.
   expect(statusOf(official({ scheduledDate: '2026-09-10' }), now, pressure)).toBe('awaiting-data')
+})
+
+/**
+ * 五态口径（界面设计 2026-11-16）：发布后的两种新状态由**源给**，不由渲染层按时间推；
+ * 过期后任何一处都不许出现「待发布」——这正是用户 11-10 CPI 那幕。
+ */
+describe('post-release states', () => {
+  const item = (releaseStatus: string, actual?: { displayValue: string }): CalendarDayItem => ({
+    key: `market-${releaseStatus}`, date: '2026-11-10', time: '21:30', source: 'market',
+    event: {
+      eventKey: `evt-${releaseStatus}`, title: 'CPI', eventType: 'economic-indicator', importance: 'high',
+      scheduledAt: '2026-11-10T13:30:00.000Z', releaseStatus,
+      ...(actual === undefined ? {} : { providerActual: actual }),
+      consensus: null, providerPrevious: null, source: 'Narwhal',
+      sourceObservedAt: '2026-11-10T13:20:00.000Z', coverage: 'observed-unverified'
+    }
+  })
+
+  it('passes backfilling and missing through from the source', () => {
+    expect(calendarEventStatus(item('backfilling'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('backfilling')
+    expect(calendarEventStatus(item('missing'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('missing')
+  })
+
+  it('never calls an overdue release 待发布: overdue without a value is 待补值', () => {
+    const status = calendarEventStatus(item('scheduled'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')
+    expect(status).toBe('awaiting-data')
+  })
 })

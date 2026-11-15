@@ -130,7 +130,9 @@ it('never lets an overdue cell read as "no data": storage-limited and not-yet-pu
     const answered = { ...item, event: { ...item.event, sourceObservedAt: '2026-10-14T13:05:00.000Z' } } as CalendarDayItem
     await act(async () => root.render(<CalendarEventRow item={answered} marketSources={refused} text={text} statusNow={statusNow} onSelect={() => {}} />))
     expect(host.querySelector('button')!.dataset.eventStatus).toBe('awaiting-data')
-    expect(host.querySelector('button')!.getAttribute('aria-label')).toContain('待发布')
+    // 2026-11-16 五态口径：过期且没值 = **待补值**。以前这里读「待发布」，正是用户 11-10 CPI
+    // 那幕的直接来源（发布完了还当没发）。断言改成新词，语义没放宽。
+    expect(host.querySelector('button')!.getAttribute('aria-label')).toContain('待补值')
 
     // Two different meanings, two different sentences, in both locales.
     for (const copy of [text, english]) {

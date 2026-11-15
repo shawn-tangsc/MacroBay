@@ -2,7 +2,7 @@ import type { MarketCalendarRefreshAttempt } from '../../../../contracts/macro/m
 import { calendarDisplayDate, type CalendarDayItem } from './economicCalendarDayModel'
 
 export const CalendarEventStatusPolicy = Object.freeze({
-  states: ['data-received', 'upcoming', 'awaiting-data', 'storage-limited', 'time-pending', 'elapsed-unconfirmed', 'cancelled'] as const
+  states: ['data-received', 'upcoming', 'awaiting-data', 'backfilling', 'missing', 'storage-limited', 'time-pending', 'elapsed-unconfirmed', 'cancelled'] as const
 })
 export type CalendarEventStatus = typeof CalendarEventStatusPolicy.states[number]
 /**
@@ -24,6 +24,14 @@ export function calendarEventStatus(item: CalendarDayItem, now: string, timeZone
   const cancelled = releaseStatus !== undefined ? releaseStatus === 'cancelled'
     : item.source === 'official' && item.event.lifecycleState === 'cancelled'
   if (cancelled) return 'cancelled'
+  /**
+   * 发布后的两种新状态（日历线 2026-11-16 的五态口径）：
+   * - `backfilling`：已过发布时点、还没值，仍在 24 小时补值窗口内 → 界面「待补值」；
+   * - `missing`：窗口结束仍没有 → 界面「未提供」。
+   * 都是**源给的状态**，不由渲染层按时间推——推出来的值会和补值扫描各说各话。
+   */
+  if (releaseStatus === 'backfilling') return 'backfilling'
+  if (releaseStatus === 'missing') return 'missing'
   const numeric = item.source === 'official' || item.event.eventType === 'economic-indicator'
   const actual = item.source === 'official' ? item.event.actual : item.event.providerActual
   if (item.event.scheduledAt) {
