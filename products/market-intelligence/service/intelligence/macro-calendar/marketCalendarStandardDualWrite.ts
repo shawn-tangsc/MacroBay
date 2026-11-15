@@ -96,9 +96,12 @@ export function dualWriteMeasureRows(
        */
       const existingValues = existing === undefined ? {} : readValuesJson(database, existing)
       const writable = {
-        actual: writableValue(row.actual, row.status, existingValues.actual),
-        previous: writableValue(row.previous, row.status, existingValues.previous),
-        consensus: writableValue(row.consensus, row.status, existingValues.consensus)
+        // 状态门只作用于 `actual`：只有「这一行还没发布却带了实际值」才是占位。
+        // `previous` / `consensus` 在未发布行上是**已知真值**（上一期 0K、预期 0.0%），
+        // 把它们也塞进状态门，会把「预期 0.0%」这种最常见的情况丢掉。
+        actual: writableActual(row.actual, row.status, existingValues.actual),
+        previous: writableValue(row.previous, existingValues.previous),
+        consensus: writableValue(row.consensus, existingValues.consensus)
       }
       // **原地转正**：原来用源内 id 撑着的那一行，现在有标准码了 → 改这一行的码，不新增行。
       if (existing !== undefined && existing.identityKind === 'source' && row.identityKind !== 'source'
@@ -165,12 +168,19 @@ type ObservationLike = Readonly<{
  * 两者合起来就是——**没有既有值时，真 0 照写；已经有非空值时，0 不许把它盖掉**。
  * 来源的 `status` 只用来判「这一行还没发布」：未发布却带 0 的，按占位处理，不写。
  */
-function writableValue(value: string | undefined, status: CalendarReleaseStatus | undefined,
-  existing: string | undefined): string | undefined {
+/** 非实际值字段（`previous` / `consensus`）：缺席与空串不写；零值不许盖掉已有非空值。 */
+function writableValue(value: string | undefined, existing: string | undefined): string | undefined {
   if (value === undefined || value.trim() === '') return undefined
   if (!isZeroValue(value)) return value
-  if (status !== undefined && status !== 'published') return undefined
   return existing === undefined || existing.trim() === '' ? value : undefined
+}
+
+/** 实际值：在上一行规则之外，**未发布行的 0 视为占位**（这一行还没有实际值可言）。 */
+function writableActual(value: string | undefined, status: CalendarReleaseStatus | undefined,
+  existing: string | undefined): string | undefined {
+  if (value === undefined || value.trim() === '') return undefined
+  if (isZeroValue(value) && status !== undefined && status !== 'published' && status !== 'unknown') return undefined
+  return writableValue(value, existing)
 }
 
 /** 已有行里的值（逐字段合并前用来判断「零值会不会盖掉真值」）。 */

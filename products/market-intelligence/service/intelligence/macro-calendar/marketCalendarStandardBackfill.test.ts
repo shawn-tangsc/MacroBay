@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { narwhalSourceEventIdForIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { backfillStandardRowsFromObservations } from './marketCalendarStandardBackfill'
+import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
 
 /**
@@ -222,5 +223,47 @@ describe('零值与空值的判据（用户口径 2026-11-15）', () => {
     backfillStandardRowsFromObservations(database)
     const row = database.prepare('select values_json from mi_calendar_events').get() as { values_json: string }
     expect(JSON.parse(row.values_json)).toEqual({ actual: '165' })
+  })
+})
+
+describe('状态门只作用于 actual（架构师 2026-11-15 复核）', () => {
+  // 走真正带 `status` 的写入路径：观测表没有状态列，回填行本身分不出「未发布」，
+  // 所以这三条断在 `dualWriteMeasureRows` 上——状态门就在那里。
+  const writeRow = (database: DatabaseSync, input: Readonly<{ actual?: string; previous?: string; consensus?: string; status: 'scheduled' | 'published' }>) => {
+    ensureCalendarStandardTables(database)
+    dualWriteMeasureRows(database, { providerId: 'narwhal', parserVersion: 'v1',
+      observedAt: '2026-11-15T00:00:00.000Z', rows: [{
+        countryCode: 'USA', metricKey: 'US.NONFARM.SA.CHANGE', periodKey: '2026-11',
+        scheduledDate: '2026-12-04', sourceEventId: 'probe-row', status: input.status,
+        ...(input.actual === undefined ? {} : { actual: input.actual }),
+        ...(input.previous === undefined ? {} : { previous: input.previous }),
+        ...(input.consensus === undefined ? {} : { consensus: input.consensus })
+      }] })
+  }
+  const read = (database: DatabaseSync) => JSON.parse(String(
+    (database.prepare('select values_json from mi_calendar_events').get() as { values_json: string }).values_json)) as Record<string, string>
+
+  it('scheduled + consensus = 0.0 → 必须落库（预期 0.0% 几乎只出现在未发布行）', () => {
+    const database = new DatabaseSync(':memory:')
+    writeRow(database, { consensus: '0.0', status: 'scheduled' })
+    expect(read(database)).toEqual({ consensus: '0.0' })
+  })
+
+  it('scheduled + previous = 0 → 必须落库（上一期新增就业 0K 发布前就是已知真值）', () => {
+    const database = new DatabaseSync(':memory:')
+    writeRow(database, { previous: '0', status: 'scheduled' })
+    expect(read(database)).toEqual({ previous: '0' })
+  })
+
+  it('scheduled + actual = 0 → 不许落库（这一行还没有实际值，0 是占位）', () => {
+    const database = new DatabaseSync(':memory:')
+    writeRow(database, { actual: '0', status: 'scheduled' })
+    expect(read(database)).toEqual({})
+  })
+
+  it('published + actual = 0 → 必须落库（真 0 是合法值）', () => {
+    const database = new DatabaseSync(':memory:')
+    writeRow(database, { actual: '0', status: 'published' })
+    expect(read(database)).toEqual({ actual: '0' })
   })
 })
