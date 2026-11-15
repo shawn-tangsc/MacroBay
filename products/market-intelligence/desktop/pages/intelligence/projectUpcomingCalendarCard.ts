@@ -30,6 +30,8 @@ export type CalendarCardEvent = Readonly<{
   titleKey: string
   /** The 0xRouter route's country for this event, already localised; absent on the official route. */
   countryName?: string
+  /** 国家码原值（名字查不到时的第二档）。 */
+  countryCode?: string
   /** 可缺省：来源没给就没有值（缺省 ≠ 低重要度）。 */
   importance?: CalendarCardImportance
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
@@ -47,6 +49,8 @@ export type CalendarCardRow = Readonly<{
   titleKey: string
   /** The 0xRouter route's country, already localised; absent on the official route. */
   countryName?: string
+  /** 国家码原值（名字查不到时的第二档）。 */
+  countryCode?: string
   month: string
   /** `scheduledDate`, so a date-only event can still show when it is. */
   date: string
@@ -159,6 +163,7 @@ function toRow(event: CalendarCardEvent, kind: CalendarCardRow['kind'], asOf: st
   return {
     eventKey: event.eventKey, titleKey: event.titleKey,
     ...(event.countryName ? { countryName: event.countryName } : {}),
+    ...(event.countryCode ? { countryCode: event.countryCode } : {}),
     month: instantOf(event).slice(0, 7),
     date: event.scheduledDate, at: event.scheduledAt ?? null, importance: event.importance, category: event.category, kind,
     actual: event.actual?.displayValue ?? null,

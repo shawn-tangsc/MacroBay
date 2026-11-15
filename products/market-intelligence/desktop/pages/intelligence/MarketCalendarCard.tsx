@@ -19,6 +19,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useSampleNow } from './SampleModeProvider'
 import { calendarCardReactionPolicy } from './calendarCardReaction'
 import type { MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
+import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
 import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingCalendarCard'
 
 /**
@@ -35,6 +36,8 @@ export type MarketCalendarCardText = Readonly<{
   loading: string
   /** Shown over rows kept from an earlier successful read, when the newest read failed. */
   staleNotice: string
+  /** 国家查不到时显示的那句（与 `market.unknownCountry` 同一个事实）。 */
+  unknownCountry: string
   /** Says its own window: an empty section must read as «nothing was released in N days», never as «no data». */
   releasedEmpty: string
   awaitingData: string
@@ -182,7 +185,9 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
           <span className="mi-calendar-card__row-title">
             {/* Where the event is, which the 0xRouter route publishes and the official one does not:
                 a list of indicators without countries is unreadable once two of them share a name. */}
-            {entry.countryName ? <em className="mi-calendar-card__row-country" data-country>{entry.countryName}</em> : null}
+            {/* 与当日列表**同一个函数**：名字 → 源给的国家码原样 → 「未知国家」。
+                以前这里只认名字、缺了就整格消失——同一件事两个判断，用户看到的就是「一块有一块没有」。 */}
+            <em className="mi-calendar-card__row-country" data-country>{calendarCountryLabel({ countryName: entry.countryName, countryCode: entry.countryCode }, { market: { unknownCountry: text.unknownCountry } })}</em>
             {readableAnalysisName(text.readableNames, 'eventName', entry.titleKey)}
           </span>
           {statesSurprise(entry) ? null : <span className="mi-calendar-card__row-value">{valuesOf(entry)}</span>}

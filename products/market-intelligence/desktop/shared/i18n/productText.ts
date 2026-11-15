@@ -193,6 +193,8 @@ mi: miText['zh-CN'],
           },
           calendarCard: {
             title: '接下来要看的', todaySection: '最近已公布（有变化）', upcomingSection: '待发布',
+            /* 与 `market.unknownCountry` 是同一个事实的两处文案；两处必须逐字相同（守卫在 `MarketCalendarCard.test.tsx`）。 */
+            unknownCountry: '未知国家',
             empty: '未来 7 天无高重要性事件', unavailable: '日历数据暂不可用', refresh: '刷新',
             loading: '正在读取日历…', staleNotice: '最新一次读取没有完成，下面是上一次的读数。',
             releasedEmpty: '最近 {days} 天内没有已公布的事件',
@@ -1715,6 +1717,7 @@ mi: miText['en-US'],
           },
           calendarCard: {
             title: 'What to watch', todaySection: 'Recently released, value moved', upcomingSection: 'Upcoming',
+            unknownCountry: 'Unknown',
             empty: 'No high-importance events in the next 7 days', unavailable: 'Calendar data is unavailable', refresh: 'Refresh',
             loading: 'Reading the calendar…', staleNotice: 'The latest read did not finish; these are the previous readings.',
             releasedEmpty: 'No released events in the last {days} days.',

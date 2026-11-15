@@ -39,6 +39,8 @@ export function toCardEventFromProvider(view: Readonly<{
   eventKey: string; title: string; importance?: 'high' | 'medium' | 'low'
   eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   countryName?: string | null
+  /** 源给的国家码原值；名字查不到时显示它，而不是留空。 */
+  countryCode?: string | null
   scheduledAt: string; sourceObservedAt: string
   providerActual?: Readonly<{ displayValue: string }> | null
   providerPrevious?: Readonly<{ displayValue: string }> | null
@@ -47,6 +49,7 @@ export function toCardEventFromProvider(view: Readonly<{
   return {
     eventKey: view.eventKey, titleKey: view.title, importance: view.importance,
     ...(view.countryName ? { countryName: view.countryName } : {}),
+    ...(view.countryCode === undefined || view.countryCode === null ? {} : { countryCode: view.countryCode }),
     category: view.eventType,
     lifecycleState: providerLifecycleState(view), scheduledDate: view.scheduledAt.slice(0, 10),
     scheduledAt: view.scheduledAt, detectedAt: view.sourceObservedAt,

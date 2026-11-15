@@ -43,6 +43,30 @@ async function render(node: React.ReactElement, language: 'zh-CN' | 'en-US' = 'z
   return host
 }
 
+it('shows the country through the same three-step fallback as the day list', async () => {
+  // 用户 2026-11-16：这张卡以前写的是「有名字才画」，缺了就整格消失；当日列表那条是
+  // 名字 → 原码 → 「未知国家」。同一件事两个判断，屏幕上就是「一块有一块没有」。
+  const cases = [
+    [{ countryName: '美国', countryCode: 'US' }, '美国'],
+    [{ countryCode: 'USA' }, 'USA'],
+    [{}, '未知国家']
+  ] as const
+  for (const [country, expected] of cases) {
+    const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row(country)], state: 'available', unscoredCount: 0 }}
+      state="ready" sourcesState="available" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+    expect(host.querySelector('[data-country]')?.textContent, JSON.stringify(country)).toBe(expected)
+    host.remove()
+  }
+})
+
+it('keeps the card’s unknown-country copy word-for-word with the day list’s', () => {
+  // 两处文案是同一个事实；一字之差就会在屏幕上出现两种说法。这条是那个漂移的棘轮。
+  for (const language of ['zh-CN', 'en-US'] as const) {
+    expect(productText[language].pages.intelligence.portal.calendarCard.unknownCountry)
+      .toBe(productText[language].pages.intelligence.portal.calendar.market.unknownCountry)
+  }
+})
+
 it('keeps the frame and the rows, and veils only the data area when no source is enabled', async () => {
   // 2026-11-11 终稿：不是「整块换掉卡」，而是卡框/标题/数据区照常在，上面盖一层遮罩。
   // 断「日期分组容器仍在 DOM 里（被遮罩盖住）」——这正是把整块替换改回去会红的那一条。
