@@ -26,6 +26,8 @@ export type CatalogRow = Readonly<{
   countryLabel: string
   /** 期间（`2026-M10` 这种；没有就不给）。 */
   period?: string
+  /** 发布时刻（`HH:mm`，读者时区）；本月范围内有。 */
+  time?: string
   /** 最近一次发布（期间 + 日期，已格式化）；没有就不给。 */
   lastRelease?: string
   /** 下次发布（已格式化）；没有就不给。 */

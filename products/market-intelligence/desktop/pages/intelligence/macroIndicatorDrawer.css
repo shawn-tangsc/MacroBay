@@ -348,3 +348,9 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
   z-index: 1200;
   pointer-events: none;
 }
+
+/* 事件目录弹框：一条筛选项行 + 表格 + 分页。列宽由 antd 表格自己排，这里只管间距与那枚「源原文名」角标。 */
+.mi-catalog__filters { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.mi-catalog__filters > * { flex: 1 1 180px; min-width: 0; }
+.mi-catalog__pager { display: flex; justify-content: flex-end; margin-top: 8px; }
+.mi-catalog__tag { margin-left: 6px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-style: normal; }

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ListTree, RefreshCw } from 'lucide-react'
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import { LoadingState } from '@platform/ui/components/loading'
 
@@ -21,7 +22,7 @@ import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
  */
 const CELL_ITEM_LIMIT = 3
 
-export function MiniReleaseCalendar({ text, month, today, selectedDay, events, timeZone, now, state, refreshing, onSelectDay, onMonthChange, onRefresh, onConfigure, unmappedCountByDay }: Readonly<{
+export function MiniReleaseCalendar({ text, month, today, selectedDay, events, timeZone, now, state, refreshing, onSelectDay, onMonthChange, onRefresh, onConfigure, onOpenCatalog, catalogAriaOf, unmappedCountByDay }: Readonly<{
   text: MacroIndicatorDrawerText
   /** 当前显示的月份 `YYYY-MM`。 */
   month: string
@@ -42,6 +43,10 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
   onRefresh: () => void
   /** 去日历来源配置；没有落点时按钮禁用，而不是画一颗点了没反应的假按钮。 */
   onConfigure?: () => void
+  /** 打开事件目录弹框：**日历组件头部**的那颗按钮（用户 2026-11-16）。 */
+  onOpenCatalog?: () => void
+  /** 读屏名解析器：由调用方给真表查找（`mkDay` 那一份），不在组件里拼句子。 */
+  catalogAriaOf?: (key: string) => string
   /**
    * 未映射观测**按天**的条数（读者看到的是「今天有几件事」，两个来源都算，Chief 2026-11-16）。
    * 只进计数、不进名字：格子里只写标准表那些有分级的名字，未映射的名字在当天列表里读。
@@ -72,6 +77,8 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
         <button className="mk-iconbtn" type="button" aria-label={text.minicalTools.refresh} onClick={onRefresh}>
           <RefreshCw aria-hidden="true" size={14} />
         </button>
+        {onOpenCatalog === undefined ? null : <IconButton ariaLabelKey="intelligence.calendar.eventCatalog.open" size="sm" icon={ListTree}
+          onSelect={() => onOpenCatalog()} resolveText={(key) => catalogAriaOf?.(key) ?? key} />}
         <button className="mk-textbtn" type="button" aria-label={text.minicalTools.configure} disabled={onConfigure === undefined}
           {...(onConfigure === undefined ? {} : { onClick: onConfigure })}>{text.minicalTools.configure}</button>
       </span>

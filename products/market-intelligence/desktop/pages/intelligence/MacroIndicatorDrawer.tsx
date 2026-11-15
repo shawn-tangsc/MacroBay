@@ -8,6 +8,9 @@ import { ChevronDown, Info } from 'lucide-react'
 
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
+import { CalendarEventsCatalogDialog } from './CalendarEventsCatalogDialog'
+import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
+import type { CatalogRow } from './calendarEventCatalogModel'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
 import { CalendarInspector } from '../../features/macro/economic-calendar/CalendarInspector'
@@ -214,6 +217,24 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
       ? { value: 'unmapped', labelKey: 'tabUnmappedUnknown' }
       : { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(unmappedCount) } }
   ], [standardCount, unmappedMonth.state, unmappedCount])
+  /**
+   * 事件目录弹框。**范围 = 本月**（`releases.events`），标题也如实这么写：
+   * 全量读口（`queryEvents`）是另一笔，到位之后这里换成那个读口、标题才改回「全部事件」。
+   */
+  const [catalogOpen, setCatalogOpen] = useState(false)
+  /** 图标按钮的读屏名：**真表查找**（键 → 文案），不在解析器里写比较。 */
+  const catalogCopy = useMemo<Readonly<Record<string, string>>>(
+    () => ({ 'intelligence.calendar.eventCatalog.open': text.mkDay.catalogOpenAria }), [text])
+  const catalogRows = useMemo<readonly CatalogRow[]>(() => releases.events.map((event) => ({
+    key: event.eventKey,
+    title: event.title,
+    titleIsSourceLabel: event.eventNameKey === undefined,
+    countryLabel: calendarCountryLabel({ countryName: event.countryName, countryCode: event.countryCode }, calendarText),
+    ...(event.countryCode === null ? {} : { countryCode: event.countryCode }),
+    time: calendarDisplayTime(event.scheduledAt, timeZone)
+    // **不取 `event.importance`**：市场侧那一列是占位值，画进表就是把它当成数据（见星座守卫
+    // `never decides anything from 市场的占位重要性`）。真实重要性等全量读口给出。
+  })), [releases.events, calendarText, timeZone])
   /** 方格计数用：未映射观测按天累计（读者看到的是「今天有几件事」，两个来源都算）。 */
   const unmappedCountByDay = useMemo(() => {
     const counts = new Map<string, number>()
@@ -382,6 +403,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           state={releases.state} refreshing={releases.refreshing}
           onSelectDay={(day) => setPickedDay({ month, day })}
           onMonthChange={changeMonth} onRefresh={releases.reload}
+          onOpenCatalog={() => setCatalogOpen(true)}
+          catalogAriaOf={(key) => catalogCopy[key] ?? key}
           {...(onConfigure === undefined ? {} : { onConfigure })} />
       </div>
 
