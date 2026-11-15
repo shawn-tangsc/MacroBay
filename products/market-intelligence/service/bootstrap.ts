@@ -35,7 +35,6 @@ import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registe
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { wireCalendarReadings } from './wiring/calendarReadings'
 import { syncOfficialStandardRowsAtStartup } from './wiring/calendarStandardRows'
-import { ensureOfficialHistoryReplayed } from './intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
@@ -354,11 +353,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     database: macroCalendarBackend.storage.database,
     listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf
   })
-  // **官方历史回放（S1）做成启动迁移**：带版本标记，跑过一次就跳过。不在外部脚本里写线上库——
-  // 用户的实例开着、连接在跑，另一个进程写同一个库会出现「应用缓存与库不一致」这种看不见的偏差。
-  try {
-    ensureOfficialHistoryReplayed(macroCalendarBackend.storage.database)
-  } catch { /* 回放失败不阻断启动：下一次启动会重试（标记与回放同一事务，失败不留半标记） */ }
   // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
   let narwhalCalendarAssembly: ReturnType<typeof createNarwhalCalendarAssembly> | undefined
   narwhalCalendarAssembly = createNarwhalCalendarAssembly({

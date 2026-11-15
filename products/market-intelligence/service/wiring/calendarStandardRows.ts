@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { ensureCalendarStandardTables } from '../intelligence/macro-calendar/marketCalendarStandardTable'
 import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketCalendarOfficialSourceRows'
+import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 
 /**
  * 启动时把**本月与下月**的官方发布写进标准表。
@@ -30,6 +31,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       onError: (message: string) => console.warn(`[macro-calendar] 官方标准行写入失败：${message}`)
     })
     console.warn(`[macro-calendar] 官方发布入标准表：${months.join('/')} 读到 ${synced.revisions} 条、写入 ${synced.written} 条、失败 ${synced.failed} 条`)
+    // **官方历史回放（S1）挂在这里**：同一个启动点、同一套「失败不阻断启动」的语义。
+    // 带版本标记（迁移 12），跑过一次就跳过；bootstrap 一行都不用新增。
+    try {
+      ensureOfficialHistoryReplayed(database)
+    } catch (error) {
+      console.warn(`[macro-calendar] 官方历史回放失败（已忽略，下次启动重试）：${(error as Error)?.message ?? 'unknown'}`)
+    }
   } catch (error) {
     console.warn(`[macro-calendar] 官方发布入标准表失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
   }
