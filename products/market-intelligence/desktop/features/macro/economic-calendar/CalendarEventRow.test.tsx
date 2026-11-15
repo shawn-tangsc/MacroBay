@@ -87,6 +87,33 @@ it('shows the provider country before the title, and never a country for an offi
   } finally { await act(async () => root.unmount()) }
 }, MOUNT_TIMEOUT_MS)
 
+it('never leaves the country cell blank: an unmapped code is shown exactly as the source wrote it', async () => {
+  // 用户 2026-11-16：名字是什么就显示什么。映射表只认两字母码，`USA` 查不到名字时**原样显示
+  // `USA`**——空掉等于把「读不到」画成「没有」，整列会静默消失。名字命中时仍显示名字。
+  const { CalendarEventRow } = await import('./CalendarEventRow')
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const host = document.createElement('div'); const root = createRoot(host)
+  const row = (event: Record<string, unknown>) => ({ key: 'market:x', source: 'market', date: '2026-10-14', time: '20:30', event }) as CalendarDayItem
+  try {
+    // ① 查不到名字 → 显示源给的原值，不替它改名、不猜
+    await act(async () => root.render(<CalendarEventRow item={row({ eventKey: 'usa-cpi', title: '9月CPI', countryCode: 'USA', importance: 'high', eventType: 'economic-indicator' })} text={text} statusNow="2026-10-14T00:00:00.000Z" onSelect={() => {}} />))
+    expect(host.querySelector('[data-event-country]')?.textContent).toBe('USA')
+    expect(host.querySelector('.mi-economic-calendar__event-title')?.textContent).toBe('USA9月CPI')
+    expect(host.querySelector('button')?.getAttribute('aria-label')).toContain('USA')
+
+    // ② 映射命中 → 显示名字，不是码
+    await act(async () => root.render(<CalendarEventRow item={row({ eventKey: 'us-cpi', title: '9月CPI', countryCode: 'US', countryName: '美国', importance: 'high', eventType: 'economic-indicator' })} text={text} statusNow="2026-10-14T00:00:00.000Z" onSelect={() => {}} />))
+    expect(host.querySelector('[data-event-country]')?.textContent).toBe('美国')
+
+    // ③ 两者都没有 → 这一格不画，但事件本身照常（时间、标题、状态一个不少）
+    await act(async () => root.render(<CalendarEventRow item={row({ eventKey: 'no-country', title: '无国家的事件', importance: 'high', eventType: 'economic-indicator', scheduledAt: '2026-10-13T00:00:00.000Z', providerActual: { displayValue: '1.2' } })} text={text} statusNow="2026-10-14T00:00:00.000Z" onSelect={() => {}} />))
+    expect(host.querySelector('[data-event-country]')).toBeNull()
+    expect(host.querySelector('.mi-economic-calendar__event-time')?.textContent).toBe('20:30')
+    expect(host.textContent).toContain('无国家的事件')
+    expect(host.querySelector('button')?.getAttribute('data-event-status')).toBe('data-received')
+  } finally { await act(async () => root.unmount()) }
+}, MOUNT_TIMEOUT_MS)
+
 it('exposes the same status color state and localized tooltip label to assistive technology', async () => {
   const { CalendarEventRow } = await import('./CalendarEventRow')
   const text = productText['zh-CN'].pages.intelligence.portal.calendar

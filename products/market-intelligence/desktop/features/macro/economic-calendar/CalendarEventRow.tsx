@@ -6,6 +6,7 @@ import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarItemType, isHighImportanceCalendarItem, type CalendarDayItem } from './economicCalendarDayModel'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarEventStatus } from './calendarEventStatusModel'
+import { calendarCountryLabel } from './calendarCountryLabel'
 
 /* 这份样式表是这一族行与列表的**加载点**：以前由旧日历页 import，页面一删就没人加载，
    抽屉里的时刻与标题会挤成一行（用户 2026-11-15 报的正是这个）。挂着的是最终会渲染的那片叶子
@@ -47,9 +48,9 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // that switches this hint to a key later must not also have to find a new resolver.
   const resolveText = useProductTextKey()
   // The 0xRouter route carries the country; the official route is US-only and says so in its own
-  // copy, so a country chip there would be noise. Read straight from the provider, which localises
-  // the name with the same request (a code like `US` would be a machine token to the reader).
-  const country = item.source === 'market' ? item.event.countryName : undefined
+  // copy, so a country chip there would be noise. 名字优先，查不到就**原样显示源给的国家码**
+  // （`calendarCountryLabel`）：查不到名字就空掉，等于把「读不到」画成「没有」（用户 2026-11-16）。
+  const country = item.source === 'market' ? calendarCountryLabel(item.event) : undefined
   const kind = calendarItemType(item)
   const KindGlyph = calendarKindGlyphs[kind]
   const important = isHighImportanceCalendarItem(item)
