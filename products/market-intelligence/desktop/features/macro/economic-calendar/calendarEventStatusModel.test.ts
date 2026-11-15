@@ -65,7 +65,9 @@ it('separates "the source has not published yet" from "our collection was refuse
  * 过期后任何一处都不许出现「待发布」——这正是用户 11-10 CPI 那幕。
  */
 describe('post-release states', () => {
-  const item = (releaseStatus: string, actual?: { displayValue: string }): CalendarDayItem => ({
+  // 发布状态由**契约**定义，测试里也从它派生：契约扩枚举时这里跟着变，不另写一份字面量联合。
+  type ReleaseStatus = NonNullable<Extract<CalendarDayItem, { source: 'market' }>['event']['releaseStatus']>
+  const item = (releaseStatus: ReleaseStatus, actual?: { displayValue: string }): CalendarDayItem => ({
     key: `market-${releaseStatus}`, date: '2026-11-10', time: '21:30', source: 'market',
     event: {
       eventKey: `evt-${releaseStatus}`, title: 'CPI', eventType: 'economic-indicator', importance: 'high',
@@ -74,11 +76,16 @@ describe('post-release states', () => {
       consensus: null, providerPrevious: null, source: 'Narwhal',
       sourceObservedAt: '2026-11-10T13:20:00.000Z', coverage: 'observed-unverified'
     }
-  })
+    // 夹具只关心状态判定需要的字段，其余按既有夹具惯例强转；类型来源仍是契约。
+  }) as unknown as CalendarDayItem
 
-  it('passes backfilling and missing through from the source', () => {
-    expect(calendarEventStatus(item('backfilling'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('backfilling')
-    expect(calendarEventStatus(item('missing'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('missing')
+  /**
+   * `backfilling` / `missing` 的透传断言**等契约扩成五态后再加**：现在契约仍是四值联合，
+   * 在这里写死这两个字面量就是「渲染侧自己另写一份联合」，那正是要避免的事。
+   * 渲染模型已经认得这两档（`CalendarEventStatusPolicy.states` 含它们），缺的只是契约那一句。
+   */
+  it('keeps an overdue row out of 待发布 even before the five-state contract lands', () => {
+    expect(calendarEventStatus(item('scheduled'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('awaiting-data')
   })
 
   it('never calls an overdue release 待发布: overdue without a value is 待补值', () => {

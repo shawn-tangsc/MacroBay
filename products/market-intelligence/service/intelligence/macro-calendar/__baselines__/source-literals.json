@@ -21,10 +21,6 @@
       "count": 1,
       "why": "卡片页把「本期」的出处标出来（FRED / 数据商），显示层按事实自带的 provider 选显示名，不参与取数；原 2 处随「上一期」那行去掉降到 1"
     },
-    "desktop/pages/intelligence/MacroIndicatorDrawer.tsx": {
-      "count": 1,
-      "why": "卡片页脚按事实自带的 provider 选显示名（Narwhal 用日历既有文案、FRED 用品牌名、旧源不赋名）。这是显示层唯一一处按源选名，不参与任何取数/排序/筛选判断；目标仍是清零。"
-    },
     "desktop/pages/intelligence/useCalendarCardData.ts": {
       "count": 3,
       "why": "事件类型→feed 映射：三类事件反查自己的源"
@@ -169,6 +165,10 @@
     "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarScheduler.ts": {
       "count": 2,
       "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "desktop/pages/intelligence/macroIndicatorCardCopy.tsx": {
+      "count": 1,
+      "why": "卡片页脚按事实自带的 provider 选显示名（Narwhal 用日历既有文案、FRED 用品牌名、旧源不赋名）。这是显示层唯一一处按源选名，不参与任何取数/排序/筛选判断；目标仍是清零。2026-11-16 抽屉拆分成 `macroIndicatorCardCopy.tsx` 后，这一处随之搬家——计数不变，只是文件变了。"
     }
   }
 }
