@@ -17,7 +17,6 @@ import { createIntelligenceTranslationService } from './application/intelligence
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createSourceProfileStore } from './application/sourceProfileStore'
-import { disableMaintenanceOnlyKeylessSources, migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
 import { createNewsSentimentSettingsStore } from './news-sentiment/newsSentimentSettingsStore'
 import { createNewsSentimentSqliteStore } from './news-sentiment/newsSentimentStore'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
@@ -42,7 +41,7 @@ import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import type { BriefingPeriodsEditor } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
-import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort, findLatestBriefingSessionId } from './daily-briefing/dailyBriefEditorSessionPort'
+import { createDailyBriefEditorSessionPort, findLatestBriefingSessionId } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
 import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
@@ -76,11 +75,12 @@ import type { DashboardFeedStatusQuery } from './macro-market/dashboardFeedStatu
 import type { GoldLiveRuntime } from './macro-market/goldLiveRuntime'
 import { macroMarketPolicy } from './macro-market/macroMarketPolicy'
 import { requestZeroXRouterCalendarJsonBody } from './application/zeroXRouterHttpTransport'
-import { intelligenceRawRecordStartupRecoveryPolicy, INTELLIGENCE_PRODUCT_ID as PRODUCT_ID, type IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
+import { INTELLIGENCE_PRODUCT_ID as PRODUCT_ID, type IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
 import { createIntelligenceStores } from './intelligenceModuleStores'
 import { createIntelligenceMarketData } from './intelligenceModuleMarketData'
 import { createIntelligenceNewsSentiment } from './intelligenceModuleNewsSentiment'
 import { createIntelligenceRuntimes } from './intelligenceModuleRuntimes'
+import { createIntelligenceStartup } from './intelligenceModuleStartup'
 
 /* 产品 id、启动 bundle 标记、原始记录补跑策略、平台 hooks 类型 → `intelligenceModuleContracts.ts`（M1）。
    hooks 类型从原路径**再导出**：`newsSentimentServices.ts` 等调用的 import 路径一个字没变。 */
@@ -298,37 +298,17 @@ export function getIntelligenceModule(
     })
     /* 名字在这里解构出来：表面与启动链引用一个字没改。 */
     const { archiveService, replayService, publicQueryService, marketAnalysisRuntime, sourcesService } = runtimes
-    // The dashboard's first screen (sentiment, fear & greed, stablecoin capital) is fed by sources
-    // that need no credential; a fresh install should not require toggling them on before the cards
-    // can do anything. An existing profile wins, so a reader's "off" is never overridden.
-    // 一次性迁移：老安装里「免钥匙 + live」的源曾被旧默认写成关，这里打开一次（标记写在
-    // `intelligence-source-migration-markers.json`，之后读者再关就是关）。口径见
-    // `isDefaultEnabledDefinition`：免钥匙 + 已就绪即默认启用，维护备用（还没用上）的除外。
-    const migrationMarkers = join(dataDir, 'intelligence-source-migration-markers.json')
-    const ensureDefaultSources = migrateKeylessSourceDefaults({ markerPath: migrationMarkers, store: profileStore })
-      // 第二条：把维护备用那批关回去（第一条先把它们一起打开了，顺序不能反）。
-      .then(() => disableMaintenanceOnlyKeylessSources({ markerPath: migrationMarkers, store: profileStore }))
-      .catch(() => undefined)
-    // 历史日报编辑会话的身份归位：只改身份字段（消息与内容不动），幂等，失败不阻断启动但要留痕。
-    const earlierBriefingSessionMigration = ensureDefaultSources
-      .then(() => claimExistingBriefingSessions({
-        links: dailyBriefSessionLinks,
-        agentId: 'daily-brief-editor',
-        ...(hooks.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
-        ...(hooks.updateAgentSession ? { updateAgentSession: hooks.updateAgentSession } : {})
-      }))
-      .then((result) => {
-        if (result.updated > 0) hooks.log?.('info', 'daily-brief-session-migration', { updated: result.updated, skipped: result.skipped })
-      })
-      .catch((error: unknown) => {
-        hooks.log?.('warn', 'daily-brief-session-migration-failed', { message: error instanceof Error ? error.message : String(error) })
-      })
-    const startupReady = earlierBriefingSessionMigration
-      .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
-      .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
-      .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
-      .then(() => undefined, () => undefined)
-    void startupReady
+    const startup = createIntelligenceStartup({
+      jobRuntime,
+      dataDir,
+      profileStore,
+      sourcesService,
+      marketAnalysisRuntime,
+      /* 惰性读：链接存储的构造在下面日报那段，晚于这里。 */
+      briefingSessionLinks: () => dailyBriefSessionLinks,
+      hooks
+    })
+    const { startupReady } = startup
     // Best-effort seed: `readSettings` already falls back to defaults when the file is absent, so
     // a failed write during shutdown must not surface as an unhandled rejection.
     void (async () => {
