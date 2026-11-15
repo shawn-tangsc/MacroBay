@@ -34,7 +34,14 @@ export type MacroCalendarScheduleHealthWorkflow = {
 export function createMacroCalendarScheduleHealthService(deps: {
   workflow: MacroCalendarScheduleHealthWorkflow
   health: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>
+  /**
+   * 装配层注进来的日志出口。**别用 `console.warn`**：主进程的 JSON 日志只收这条通道，
+   * `console.warn` 走 stdout——开发时在终端里、打包后直接丢。上一版就是这样「加了留痕、实际没有」：
+   * 采集连续失败 18 次，`app.log` 里按「采集」筛 0 条命中。
+   */
+  log?: (level: 'warn', event: string, fields?: Record<string, unknown>) => void
 }): MacroCalendarScheduleHealthService {
+  const log = (event: string, fields: Record<string, unknown>): void => { deps.log?.('warn', event, fields) }
   return {
     async collectAndUpdateHealth(input) {
       if (!isValidInput(input)) return { descriptorId: safeDescriptorId(input), state: 'failed', failureCode: 'collection-input-invalid' }
@@ -51,8 +58,8 @@ export function createMacroCalendarScheduleHealthService(deps: {
       } catch (error) {
         // **失败原因必须留痕**：这里的 `catch` 原来是空的，采集连续失败 15 次、日志里却只有一句
         // 「run failed」，事后无从下手。抛错与「工作流自己报失败」分开写。
-        console.warn(`[macro-calendar] ${descriptor.descriptorId} 采集抛错（detectedAt=${input.detectedAt}）：`
-          + `${error instanceof Error ? error.message : String(error)}`)
+        log('macro-calendar.schedule.collect-threw', { descriptorId: descriptor.descriptorId,
+          detectedAt: input.detectedAt, message: error instanceof Error ? error.message : String(error) })
         return { ...identity, state: 'failed', failureCode: 'workflow-execution-failed' }
       }
       let next
@@ -68,8 +75,8 @@ export function createMacroCalendarScheduleHealthService(deps: {
         return { ...identity, state: 'failed', failureCode: 'workflow-result-invalid' }
       }
       if (next.revision.status === 'failed') {
-        console.warn(`[macro-calendar] ${descriptor.descriptorId} 采集报失败（detectedAt=${input.detectedAt}）：`
-          + `failureCode=${String((outcome as { failureCode?: unknown }).failureCode ?? 'unknown')}`)
+        log('macro-calendar.schedule.collect-failed', { descriptorId: descriptor.descriptorId,
+          detectedAt: input.detectedAt, failureCode: String((outcome as { failureCode?: unknown }).failureCode ?? 'unknown') })
       }
       try {
         deps.health.appendMaterialChange(next.revision)

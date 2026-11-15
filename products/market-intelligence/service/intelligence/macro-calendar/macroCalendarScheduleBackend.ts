@@ -40,6 +40,8 @@ export function createMacroCalendarScheduleBackend(input: {
    * and reports `provider-disabled` while the settings panel says enabled.
    */
   profiles?: MacroCalendarProviderProfileStore
+  /** 装配层注入的日志出口（进主进程 JSON 日志）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
 }) {
   const profiles = input.profiles ?? createMacroCalendarProviderProfileStore(createMacroCalendarProviderProfileJsonStorage(join(input.dataDir, 'macro-calendar-provider-profiles.json')))
   const healthStore = createMacroCalendarProviderHealthStore(createMacroCalendarProviderHealthJsonStorage(join(input.dataDir, 'macro-calendar-provider-health.json')))
@@ -91,7 +93,8 @@ export function createMacroCalendarScheduleBackend(input: {
         return result
       }
     }
-    const health = createMacroCalendarScheduleHealthService({ workflow, health: healthStore })
+    const health = createMacroCalendarScheduleHealthService({ workflow, health: healthStore,
+      ...(input.log === undefined ? {} : { log: input.log }) })
     const manualBlsIcs = createManualBlsIcsImportService({ evidence, repository, now: () => new Date().toISOString() })
     const fedFomcRefresh = fedFomcDecisionRefresh
       ? createFedFomcManualRefreshService({ repository, refresh: fedFomcDecisionRefresh, now: () => new Date().toISOString() })

@@ -63,18 +63,20 @@ export function createMacroCalendarScheduleJobRuntime(deps: {
     const descriptors = await selectDescriptors(deps.profiles, payload)
     if (!descriptors) throw new Error(safeJobFailureMessage)
 
-    let failed = false
+    // `lastError` 是**唯一被持久化的现场**：只写一句通用文案，等于事后没有任何线索。
+    // 所以把「哪个 descriptor、什么 failureCode」带进错误消息里。
+    const failures: string[] = []
     for (const descriptorId of descriptors) {
       try {
         const result = await deps.health.collectAndUpdateHealth({
           descriptorId, runId: context.jobRunId, detectedAt: new Date().toISOString(), signal: context.signal
         })
-        if (!isSuccessfulHealth(result, descriptorId)) failed = true
-      } catch {
-        failed = true
+        if (!isSuccessfulHealth(result, descriptorId)) failures.push(`${descriptorId}/${failureCodeOf(result)}`)
+      } catch (error) {
+        failures.push(`${descriptorId}/${error instanceof Error ? error.message : 'threw'}`)
       }
     }
-    if (failed) throw new Error(safeJobFailureMessage)
+    if (failures.length > 0) throw new Error(`${safeJobFailureMessage} ${failures.join(', ')}`)
   })
 
   return {
@@ -212,6 +214,10 @@ async function selectDescriptors(
   if (isExactPayload(payload, ['providerId'])) return enabledDescriptorFor(profiles, payload.providerId).then((descriptor) => descriptor ? [descriptor] : undefined)
   if (!isExactPayload(payload, [])) return undefined
   return enabledDescriptors(profiles)
+}
+
+function failureCodeOf(value: unknown): string {
+  return isPlainRecord(value) && typeof value.failureCode === 'string' ? value.failureCode : 'unknown'
 }
 
 function isSuccessfulHealth(value: unknown, descriptorId: string): boolean {

@@ -236,7 +236,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     blsScheduleBridge: blsPythonRequestsBridge,
     evidenceArchive: intelligenceModule.macroCalendarEvidenceArchive,
     evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
-    profiles: calendarProfiles
+    profiles: calendarProfiles,
+    // 采集失败的现场必须进主进程日志：`console.warn` 走 stdout，打包后直接丢。
+    ...(deps.log === undefined ? {} : { log: deps.log })
   })
   const macroEconomicCalendarQueryService = createMacroEconomicCalendarQueryService({ repository: macroCalendarBackend.repository })
   intelligenceModule.publicQueryService.setMacroEconomicCalendarQuery(macroEconomicCalendarQueryService)
