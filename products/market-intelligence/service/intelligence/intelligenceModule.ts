@@ -20,13 +20,9 @@ import { createDefaultTranslationSettings } from './application/intelligenceTran
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createSourceProfileStore } from './application/sourceProfileStore'
 import { disableMaintenanceOnlyKeylessSources, migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
-import {
-  createNewsSentimentSettingsJsonStorage,
-  createNewsSentimentSettingsStore
-} from './news-sentiment/newsSentimentSettingsStore'
-import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './news-sentiment/newsSentimentStore'
+import { createNewsSentimentSettingsStore } from './news-sentiment/newsSentimentSettingsStore'
+import { createNewsSentimentSqliteStore } from './news-sentiment/newsSentimentStore'
 import { rebuildNewsSentimentStorage } from './news-sentiment/newsSentimentStoreRecovery'
-import { createNewsSentimentServices } from './news-sentiment/newsSentimentServices'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
@@ -65,7 +61,6 @@ import {
   createDailyBriefingSettingsService,
   type DailyBriefingSettingsService
 } from './daily-briefing/dailyBriefingSettingsService'
-import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
@@ -75,7 +70,6 @@ import { registerIntelligenceDataChangedEvents } from './jobs/registerIntelligen
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
-import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createCapitalConditionsSourceIntegration } from './capital-conditions/capitalConditionsSourceIntegration'
 import { createSourceRequestGovernanceQueue } from './application/sourceRequestGovernance'
@@ -91,6 +85,7 @@ import { requestZeroXRouterCalendarJsonBody } from './application/zeroXRouterHtt
 import { intelligenceRawRecordStartupRecoveryPolicy, INTELLIGENCE_PRODUCT_ID as PRODUCT_ID, type IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
 import { createIntelligenceStores } from './intelligenceModuleStores'
 import { createIntelligenceMarketData } from './intelligenceModuleMarketData'
+import { createIntelligenceNewsSentiment } from './intelligenceModuleNewsSentiment'
 
 /* 产品 id、启动 bundle 标记、原始记录补跑策略、平台 hooks 类型 → `intelligenceModuleContracts.ts`（M1）。
    hooks 类型从原路径**再导出**：`newsSentimentServices.ts` 等调用的 import 路径一个字没变。 */
@@ -262,7 +257,6 @@ export function getIntelligenceModule(
         }),
       fetch: hooks.platformFetch as unknown as typeof fetch
     })
-    let newsSentimentStore: ReturnType<typeof createNewsSentimentSqliteStore> | undefined
     const translationService = createIntelligenceTranslationService({
       storage: translationStorage,
       pipeline,
@@ -272,79 +266,21 @@ export function getIntelligenceModule(
       getProviderState: hooks?.getProviderState,
       getModelDefaults: hooks?.getModelDefaults
     })
-    const newsSentimentSettingsStore = createNewsSentimentSettingsStore(
-      createNewsSentimentSettingsJsonStorage(join(dataDir, 'intelligence-news-sentiment-settings.json'))
-    )
-    const newsSentimentFilePath = join(dataDir, newsSentimentStoragePolicy.fileName)
-    try {
-      newsSentimentStore = createNewsSentimentSqliteStore(newsSentimentFilePath)
-    } catch {
-      // A broken database must not take the rest of the product down; news sentiment stays unavailable.
-      newsSentimentStore = undefined
-    }
-    const assembleNewsSentiment = (store: ReturnType<typeof createNewsSentimentSqliteStore>) =>
-      createNewsSentimentServices(store, {
-        pipeline,
-        settingsStore: newsSentimentSettingsStore,
-        translationService,
-        translationSettingsStorage: translationStorage,
-        invoke: structuredModelInvocation.invoke,
-        getAppLanguage,
-        profileStore,
-        hooks,
-        dataDir
-      })
-    const newsSentimentPieces = newsSentimentStore ? assembleNewsSentiment(newsSentimentStore) : undefined
-    const newsSentimentEnrichment = newsSentimentPieces?.enrichment
-    const newsSentimentScoring = newsSentimentPieces?.scoring
-    const newsSentimentBodyTranslation = newsSentimentPieces?.bodyTranslation
-    const newsSentimentQuery = newsSentimentPieces?.query
-    const readNewsSentimentSettings = async (): Promise<NewsSentimentSettingsView> => {
-      const settings = await newsSentimentSettingsStore.getSettings()
-      const [providerState, modelDefaults] = await Promise.all([
-        hooks?.getProviderState?.().catch(() => undefined) ?? Promise.resolve(undefined),
-        hooks?.getModelDefaults?.().catch(() => undefined) ?? Promise.resolve(undefined)
-      ])
-      const resolution = resolveNewsSentimentModel({
-        settings,
-        modelDefaults: modelDefaults ?? null,
-        providers: providerState?.providers ?? []
-      })
-      const fastResolution = modelDefaults?.fastModelId
-        ? resolveConfiguredModel({
-            value: modelDefaults.fastModelId,
-            providers: providerState?.providers ?? [],
-            isModelAcceptable: (_provider, model) => model.capabilities.chat === true
-          })
-        : undefined
-      return {
-        settings,
-        resolution,
-        ...(fastResolution?.ok
-          ? { defaultFastModel: { providerId: fastResolution.ref.providerId, modelId: fastResolution.ref.modelId, name: `${fastResolution.providerName} · ${fastResolution.modelName}` } }
-          : {})
-      }
-    }
-    const newsSentimentSettings = {
-      get: readNewsSentimentSettings,
-      save: async (patch: Partial<NewsSentimentSettings>) => {
-        await newsSentimentSettingsStore.save(patch)
-        return readNewsSentimentSettings()
-      }
-    }
-    // 一份可更新的出口：读者重建把库换成新的以后，IPC / Agent 读到的是同一份新服务。
-    const newsSentimentExposure: IntelligenceModule['newsSentiment'] = {
-      settingsStore: newsSentimentSettingsStore,
-      ...(newsSentimentStore ? { store: newsSentimentStore } : {}),
-      ...(newsSentimentEnrichment ? { enrichment: newsSentimentEnrichment } : {}),
-      ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {}),
-      ...(newsSentimentQuery ? { query: newsSentimentQuery } : {}),
-      ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
-      settings: newsSentimentSettings,
-      rebuildStorage: () => {
-        throw new Error('news-sentiment-storage-unavailable')
-      }
-    }
+    const newsSentiment = createIntelligenceNewsSentiment({
+      dataDir,
+      pipeline,
+      translationService,
+      translationStorage,
+      structuredModelInvocation,
+      getAppLanguage,
+      profileStore,
+      hooks
+    })
+    /* 名字在这里解构出来：重建那一笔（I 段）与表面都读这四个。 */
+    const {
+      newsSentimentExposure, assembleNewsSentiment, newsSentimentFilePath, newsSentimentStore,
+      newsSentimentEnrichment, newsSentimentScoring
+    } = newsSentiment
     const archiveService = createIntelligenceArchiveService({
       rawRecordStore,
       archiveBaseDir: join(dataDir, 'intelligence-archive'),
