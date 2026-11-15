@@ -5,6 +5,7 @@ import {
   type MarketCalendarFreshness
 } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarFeedRegistry } from '../macro-calendar/calendarFeedRegistry'
+import { sourceJobIds } from '../application/sourceJobRegistration'
 import { BRIEFING_CALENDAR_STALE_AFTER_MS } from './dailyBriefingMacroEmptyReason'
 
 /**
@@ -45,22 +46,21 @@ export const BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS = 20_000
  * `fed`/`bea` keep their own official schedule and are never caught up here.
  */
 /**
- * 补跑清单 = **注册表里此刻真的在采的那些 feed**（`collection !== 'none'`）。
+ * 补跑清单 = **此刻真的有作业在跑的那些市场侧 feed**。
  *
- * 为什么不读契约里的 `collectionFeeds`：那个字段说的是「这份 provider 契约登记了哪条采集入口」，
- * 是**契约**；补跑要的是**运行时事实**——登记了但采集器还没接的（Narwhal 这一版）不能进清单，
- * 否则 `refreshNow` 只会回 `unavailable`。也不新增「谁在采」的字段：那是第二个答案，还得手动跟
- * 注册表同步，漏一次就是同一处红。采集器落地时只改注册表那一行，清单自动跟上。
+ * 判据只有一个：该 feed 的作业定义在 `jobRuntime.listSchedules()` 里（装配层把那份投影传进来）。
+ * **不从注册表的 `collection` 或 `optIn` 推断**——那是「登记了什么 / 默认要不要开」，不是
+ * 「此刻在采」。两个方向的错都会发生：把没注册的源算进来，`refreshNow` 会对着不存在的作业发命令；
+ * 读者刚启用的源被静态标记挡掉，该补的没补。
+ *
+ * 其余两条过滤回答的是另一个问题：**该不该由日报去补**——市场侧（官方日程自己有排期）、
+ * 不被别的 feed 覆盖（Narwhal 一次调用写三类，只有一条作业）。
  */
-export function briefingCalendarCatchUpSourceIds(): readonly string[] {
+export function briefingCalendarCatchUpSourceIds(registeredDefinitionIds: ReadonlySet<string>): readonly string[] {
   return Object.values(calendarFeedRegistry)
-    // 判据三条一起：**市场侧**（`owner === 'market'`，官方日程那三条也是 `provider`，不能只看它）、
-    // **真的在采**（`collection !== 'none'`）、**不是被别的 feed 覆盖的那两条**（`coveredBy` 为空）。
-    // 今天正好一条：`macro-calendar-narwhal-economic-data`。
-    /* `optIn !== true`：**读者启用后才采**的补充源不算「此刻在采」——没配置就没有作业，
-       把它算进来会让 `refreshNow` 对着一个没注册的作业发命令。 */
-    .filter(feed => feed.owner === 'market' && feed.collection !== 'none'
-      && feed.coveredBy === undefined && feed.optIn !== true)
+    .filter(feed => feed.owner === 'market' && feed.coveredBy === undefined)
+    .filter(feed => sourceJobIds({ sourceId: feed.feedId, kind: 'market-calendar', collection: feed.collection })
+      .some(id => registeredDefinitionIds.has(id)))
     .map(feed => feed.feedId)
 }
 
@@ -72,7 +72,7 @@ export type BriefingCalendarCatchUp = Readonly<{
    * not learn the outcome — so the reader must not be told "the collection failed". The freshness
    * reading taken after the trigger is what decides the sentence.
    */
-  state: 'skipped' | 'collected' | 'unchanged' | 'failed' | 'timeout' | 'unknown'
+  state: 'skipped' | 'no-registered-jobs' | 'collected' | 'unchanged' | 'failed' | 'timeout' | 'unknown'
   /** Only meaningful on `timeout`: how long we actually waited. */
   timeoutMs?: number
   failureCode?: string
@@ -99,6 +99,12 @@ export type BriefingCalendarCatchUpDeps = Readonly<{
   readFreshness?: () => Promise<unknown>
   /** The one write command the brief may run. Absent means the same thing, for the trigger. */
   refreshNow?: (input: { sourceIds: readonly string[]; timeoutMs: number }) => Promise<unknown>
+  /**
+   * 运行时已注册的作业定义 id（`jobRuntime.listSchedules()` 的投影）。**「此刻在采」只认它**：
+   * 登记表里的 `collection`/`optIn` 说的是「登记了什么、默认要不要开」，回答不了这个问题。
+   * 缺席 = 这个 build 没接运行时投影，此时不发起补跑（不许退回按开关推断）。
+   */
+  registeredScheduleIds?: () => readonly string[]
   /** This run's own data cutoff (`A0.10`): the baseline freshness is measured from. */
   dataAsOf: string
   /** Whether the reader has the calendar source switched on at all. */
@@ -123,7 +129,10 @@ export async function ensureCalendarFreshForRun(
   // "stale". Nothing was attempted, and that is not a failure.
   if (!deps.refreshNow) return Object.freeze(readingFrom(first))
 
-  const catchUp = await runCatchUp(deps.refreshNow)
+  if (!deps.registeredScheduleIds) return Object.freeze(readingFrom(first))
+  const sourceIds = briefingCalendarCatchUpSourceIds(new Set(deps.registeredScheduleIds()))
+  if (sourceIds.length === 0) return Object.freeze({ ...readingFrom(first), catchUp: Object.freeze({ state: 'no-registered-jobs' as const }) })
+  const catchUp = await runCatchUp(deps.refreshNow, sourceIds)
   // ③ Judge only the reading that came *after* the catch-up. A pre-catch-up reading would let the
   //    edition claim stale data it just replaced, and vice versa.
   const second = await readFreshness(deps.readFreshness)
@@ -139,12 +148,13 @@ export function isFreshAt(lastCollectedAt: string | null | undefined, dataAsOf: 
 }
 
 async function runCatchUp(
-  refreshNow: NonNullable<BriefingCalendarCatchUpDeps['refreshNow']>
+  refreshNow: NonNullable<BriefingCalendarCatchUpDeps['refreshNow']>,
+  sourceIds: readonly string[]
 ): Promise<BriefingCalendarCatchUp> {
   let raw: unknown
   try {
     raw = await refreshNow({
-      sourceIds: briefingCalendarCatchUpSourceIds(),
+      sourceIds,
       timeoutMs: BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS
     })
   } catch (error) {

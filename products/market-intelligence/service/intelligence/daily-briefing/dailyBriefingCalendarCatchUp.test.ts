@@ -25,36 +25,45 @@ function freshness(lastCollectedAt: string | null, attempt?: { attemptedAt: stri
   }
 }
 
-describe('the catch-up list is the registry\'s "actually collecting" answer', () => {
-  // 清单恒等于「注册表里 collection 非 none 的 feed」——不手抄、不读契约。
-  it('equals exactly the feeds the registry says are collecting', () => {
-    /* 与实现同一判据：**在市场侧、有采集作业、不被别的 feed 覆盖、且不是「读者启用后才采」**。
-       `optIn` 那条是 2026-11-15 加的：0xRouter 三路是补充源，没配置就没有作业，不能算在采。 */
-    const collecting = Object.values(calendarFeedRegistry)
-      .filter(feed => feed.owner === 'market' && feed.collection !== 'none'
-        && feed.coveredBy === undefined && feed.optIn !== true)
-      .map(feed => feed.feedId)
-    expect([...briefingCalendarCatchUpSourceIds()].sort()).toEqual([...collecting].sort())
+/** 真实作业定义 id：Narwhal 两条，0xRouter 每条一份 `<automatic>.<feedKey>`。 */
+const narwhalJobIds = [
+  'market-intelligence.refreshNarwhalCalendarTick.automatic',
+  'market-intelligence.refreshNarwhalCalendarSweep.automatic'
+] as const
+const zeroXRouterJobId = (key: string): string => `market-intelligence.refreshMarketCalendar.automatic.${key}`
+const registered = (...ids: readonly string[]): ReadonlySet<string> => new Set(ids)
+
+describe('the catch-up list is the runtime schedule projection', () => {
+  // 「此刻在采」只认 `listSchedules()`：登记表的 collection/optIn 是「登记了什么、默认要不要开」。
+  it('lists exactly the market feeds whose job is registered', () => {
+    expect(briefingCalendarCatchUpSourceIds(registered(...narwhalJobIds)))
+      .toEqual(['macro-calendar-narwhal-economic-data'])
+    expect(briefingCalendarCatchUpSourceIds(registered())).toEqual([])
   })
 
-  // 反向、最重要：**登记 ≠ 在采**。Narwhal 这一版三条都登记了，但只有「登记、没接采集器」，
-  // 一条都不许进补跑清单——否则 refreshNow 只会回 unavailable。
-  // 反向、最重要：**被覆盖的那两条不进清单**（一次写三类的作业只挂第一条）。
-  it('leaves the feeds covered by another feed out of the list', () => {
+  it('adds a reader-enabled feed the moment its job is registered, without touching the call site', () => {
+    const ids = briefingCalendarCatchUpSourceIds(registered(...narwhalJobIds, zeroXRouterJobId('economic-data')))
+    expect(ids).toEqual(['macro-calendar-narwhal-economic-data', 'macro-calendar-0xrouter-economic-data'])
+    // 停用（作业撤掉）= 从清单消失，同一个函数、同一个输入形状。
+    const disabled = briefingCalendarCatchUpSourceIds(registered(...narwhalJobIds))
+    expect(disabled).not.toContain('macro-calendar-0xrouter-economic-data')
+  })
+
+  // 被覆盖的那两条由同一次采集写三类，不该单独补：即使有人给它们挂了一个假作业，也不进清单。
+  it('leaves the feeds covered by another feed out of the list, even with a registered job', () => {
     const covered = Object.values(calendarFeedRegistry).filter(feed => feed.coveredBy !== undefined)
     expect(covered.length).toBeGreaterThan(0)
-    for (const feed of covered) expect(briefingCalendarCatchUpSourceIds()).not.toContain(feed.feedId)
+    const fakeJobs = covered.flatMap(feed => [`market-intelligence.collect:${feed.feedId}`, zeroXRouterJobId(feed.feedId)])
+    for (const feed of covered) {
+      expect(briefingCalendarCatchUpSourceIds(registered(...narwhalJobIds, ...fakeJobs))).not.toContain(feed.feedId)
+    }
   })
 
-  // 时间性：接上采集器之后它自动进清单，调用点一个字不改（B 相对「新增字段」的全部收益）。
-  it('picks a feed up automatically once the registry says it collects', () => {
-    const feed = Object.values(calendarFeedRegistry).find(candidate => candidate.coveredBy !== undefined)!
-    const patched = { ...feed, collection: 'job' as const, coveredBy: undefined }
-    const collecting = [...Object.values(calendarFeedRegistry).filter(candidate => candidate.feedId !== feed.feedId), patched]
-    const ids = collecting.filter(candidate => candidate.owner === 'market' && candidate.collection !== 'none' && candidate.coveredBy === undefined).map(candidate => candidate.feedId)
-    expect(ids).toContain(feed.feedId)
-    // 与实现的判据同形：同样的过滤函数对注册表取值。
-    expect(briefingCalendarCatchUpSourceIds()).not.toContain(feed.feedId)
+  // 官方日程有自己的排期，日报不替它补。
+  it('never lists official-schedule feeds', () => {
+    const officialJobs = ['market-intelligence.syncBlsScheduleAndValues.automatic', 'market-intelligence.collect:macro-calendar-fed']
+    const ids = briefingCalendarCatchUpSourceIds(registered(...narwhalJobIds, ...officialJobs))
+    expect(ids).toEqual(['macro-calendar-narwhal-economic-data'])
   })
 })
 
@@ -84,7 +93,7 @@ describe('ensureCalendarFreshForRun', () => {
     const reads = [freshness(staleAt), freshness(dataAsOf)]
     let call = 0
     const reading = await ensureCalendarFreshForRun({
-      dataAsOf, enabled: true, refreshNow,
+      dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...narwhalJobIds],
       readFreshness: async () => reads[call++]!
     })
 
@@ -98,7 +107,7 @@ describe('ensureCalendarFreshForRun', () => {
 
   it('keeps the stale reading when the catch-up runs out of time, and reports a timeout', async () => {
     const reading = await ensureCalendarFreshForRun({
-      dataAsOf, enabled: true,
+      dataAsOf, enabled: true, registeredScheduleIds: () => [...narwhalJobIds],
       refreshNow: async () => ({ state: 'timeout' as const, timeoutMs: 90_000 }),
       readFreshness: async () => freshness(staleAt)
     })
@@ -109,7 +118,7 @@ describe('ensureCalendarFreshForRun', () => {
 
   it('records a failed catch-up as failed, never as timeout', async () => {
     const reading = await ensureCalendarFreshForRun({
-      dataAsOf, enabled: true,
+      dataAsOf, enabled: true, registeredScheduleIds: () => [...narwhalJobIds],
       refreshNow: async () => ({ state: 'failed' as const, failureCode: 'credential-not-configured' }),
       readFreshness: async () => freshness(staleAt)
     })
@@ -119,7 +128,7 @@ describe('ensureCalendarFreshForRun', () => {
 
   it('treats a throwing command as a failure, and keeps going', async () => {
     const reading = await ensureCalendarFreshForRun({
-      dataAsOf, enabled: true,
+      dataAsOf, enabled: true, registeredScheduleIds: () => [...narwhalJobIds],
       refreshNow: async () => { throw new Error('queue closed') },
       readFreshness: async () => freshness(staleAt)
     })
@@ -132,7 +141,7 @@ describe('ensureCalendarFreshForRun', () => {
   // 那句话交给补跑之后的新鲜度决定。
   it('records a verdict the contract does not name as unknown, never as a failed collection', async () => {
     const reading = await ensureCalendarFreshForRun({
-      dataAsOf, enabled: true,
+      dataAsOf, enabled: true, registeredScheduleIds: () => [...narwhalJobIds],
       refreshNow: async () => ({ state: 'completed', sources: [] }),
       readFreshness: async () => freshness(staleAt)
     })
@@ -146,12 +155,58 @@ describe('ensureCalendarFreshForRun', () => {
   // 以前这种半截形状会被当成真结果记下来（于是补跑后判「采到了」），现在落 unknown。
   it('rejects a half-valid verdict: the contract validates the shape, not just the state word', async () => {
     const reading = await ensureCalendarFreshForRun({
-      dataAsOf, enabled: true,
+      dataAsOf, enabled: true, registeredScheduleIds: () => [...narwhalJobIds],
       refreshNow: async () => ({ state: 'collected' }),
       readFreshness: async () => freshness(staleAt)
     })
 
     expect(reading.catchUp).toEqual({ state: 'unknown', failureCode: 'catch-up-verdict-invalid' })
+  })
+
+  it('commands only the feeds whose jobs are registered, and names them exactly', async () => {
+    const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: ['macro-calendar-narwhal-economic-data'] }))
+    const reads = [freshness(staleAt), freshness(dataAsOf)]
+    let call = 0
+    await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow,
+      registeredScheduleIds: () => [...narwhalJobIds, zeroXRouterJobId('economic-data')],
+      readFreshness: async () => reads[call++]!
+    })
+
+    expect(refreshNow).toHaveBeenCalledWith({
+      sourceIds: ['macro-calendar-narwhal-economic-data', 'macro-calendar-0xrouter-economic-data'],
+      timeoutMs: BRIEFING_CALENDAR_CATCH_UP_TIMEOUT_MS
+    })
+  })
+
+  it('sends no command to a feed whose job is not registered', async () => {
+    const refreshNow = vi.fn(async (_input: { sourceIds: readonly string[]; timeoutMs: number }) =>
+      ({ state: 'collected' as const, sources: ['macro-calendar-narwhal-economic-data'] }))
+    const reads = [freshness(staleAt), freshness(dataAsOf)]
+    let call = 0
+    await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow,
+      registeredScheduleIds: () => [...narwhalJobIds],
+      readFreshness: async () => reads[call++]!
+    })
+
+    const passed = refreshNow.mock.calls[0]![0].sourceIds
+    // 读者没启用的补充源不在名单里：对它发命令只会得到 input-invalid。
+    expect(passed).toEqual(['macro-calendar-narwhal-economic-data'])
+    for (const id of passed) expect(id).not.toContain('0xrouter')
+  })
+
+  it('attempts nothing at all when no collection job is scheduled', async () => {
+    const refreshNow = vi.fn()
+    const reading = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow,
+      registeredScheduleIds: () => [],
+      readFreshness: async () => freshness(staleAt)
+    })
+
+    // 不是失败、也不是「排上了」：没有任何作业可补。读数保持过期，原因码照旧说「过期」。
+    expect(reading).toMatchObject({ state: 'available', lastCollectedAt: staleAt, catchUp: { state: 'no-registered-jobs' } })
+    expect(refreshNow).not.toHaveBeenCalled()
   })
 
   it('answers "not wired" — not "nothing" — when no freshness reader was injected', async () => {
@@ -210,11 +265,12 @@ describe('isFreshAt', () => {
  * 这条守卫会在 id 被删掉/改名的当天变红，而不是等到补跑空跑或报错才发现。
  */
 describe('the catch-up list', () => {
-  it('holds only registered descriptors, and only the ones the registry says are collecting', () => {
-    // 不再是「等于契约里那三条」：契约说的是登记，补跑要的是在采（今天一条）。
-    expect([...briefingCalendarCatchUpSourceIds()]).toEqual(['macro-calendar-narwhal-economic-data'])
+  it('holds only registered descriptors, and only the ones the runtime says are running', () => {
+    // 契约说的是「登记了哪条采集入口」，补跑要的是「此刻有作业在跑」——今天只有 Narwhal 那一条。
+    const ids = briefingCalendarCatchUpSourceIds(registered(...narwhalJobIds))
+    expect([...ids]).toEqual(['macro-calendar-narwhal-economic-data'])
     expect(marketCalendarPublicPolicy.feedByKind).toContain('macro-calendar-narwhal-economic-data')
-    for (const feedId of briefingCalendarCatchUpSourceIds()) {
+    for (const feedId of ids) {
       // 「登记」看的是日历 feed 注册表（证据源注册表里没有市场侧 feed，那是另一张表）。
       expect(calendarFeedRegistry[feedId as keyof typeof calendarFeedRegistry]).toBeDefined()
     }
