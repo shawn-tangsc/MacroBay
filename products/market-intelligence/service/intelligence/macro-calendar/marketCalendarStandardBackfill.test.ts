@@ -53,6 +53,31 @@ const standardRows = (database: DatabaseSync) =>
   database.prepare('select metric_key, identity_kind, period_key from mi_calendar_events order by metric_key').all() as Record<string, unknown>[]
 
 describe('从观测表回填标准表', () => {
+  it('缺国家的观测不进标准表，但落进未映射表（原因 missing-country），再跑不新增', () => {
+    const database = openDatabase()
+    // 一条没有国家码的观测（各国央行讲话那类）：1484 条以前既不进表也不进未映射，等于消失。
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, event_kind, scheduled_date,
+       scheduled_at, provider_actual_json, importance, measure_keys_json, last_seen_at)
+      values ('no-country-1', '0xrouter', null, 'ECB speech', null, 'central-bank-activity', '2026-11-10',
+        '2026-11-10T12:00:00.000Z', null, 'high', '[]', '2026-11-14T00:00:00.000Z')`).run()
+    ensureCalendarStandardTables(database)
+    const first = backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: '2026-11-16T00:00:00.000Z' })
+    expect(first.unmappedMissingCountry).toBe(1)
+    // 不进标准表
+    expect((database.prepare("select count(*) c from mi_calendar_events where source_event_id = 'no-country-1'")
+      .get() as { c: number }).c).toBe(0)
+    // 但在未映射表里，原因写清是「身份缺国家」，不是「身份本身坏」
+    const unmapped = database.prepare(`select reason, raw_json from mi_calendar_unmapped where source_key = 'no-country-1'`)
+      .all() as { reason: string; raw_json: string }[]
+    expect(unmapped.map((row) => row.reason)).toEqual(['missing-country'])
+    expect(JSON.parse(unmapped[0]!.raw_json)).toMatchObject({ name: 'ECB speech', scheduledDate: '2026-11-10' })
+    // 幂等：同一 source_key 重复扫描不重复插入
+    backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: '2026-11-16T00:00:00.000Z' })
+    expect((database.prepare("select count(*) c from mi_calendar_unmapped where source_key = 'no-country-1'")
+      .get() as { c: number }).c).toBe(1)
+  })
+
   it('dry-run 一条都不写（库也可能是只读打开的）', () => {
     const database = openDatabase()
     observe(database, { metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10', displayName: 'cpi yoy', scheduledAt: '2026-10-15T12:30:00.000Z' })

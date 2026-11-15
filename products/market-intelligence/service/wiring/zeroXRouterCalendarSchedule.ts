@@ -60,7 +60,7 @@ export function wireZeroXRouterCalendarSchedule(input: Readonly<{
         { providerId: input.observationProviderId ?? '0xrouter' })
       input.log?.('info', 'macro-calendar.zero-xrouter-standard-rows', {
         releases: report.releases, written: report.written,
-        skippedExisting: report.skippedExisting, skippedNoCountry: report.skippedNoCountry
+        skippedExisting: report.skippedExisting, unmappedMissingCountry: report.unmappedMissingCountry
       })
     }
   })

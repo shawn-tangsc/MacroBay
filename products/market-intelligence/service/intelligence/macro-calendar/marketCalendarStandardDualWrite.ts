@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
-import { narwhalCanonicalIdentityKey } from './marketCalendarMetricIdentity'
+import { narwhalCanonicalIdentityKey, toAlpha2Country } from './marketCalendarMetricIdentity'
 import { eventCodeBySourceType } from './marketCalendarEventCodeTable'
 import { nameByMetricKey } from './marketCalendarCodeNames'
 
@@ -84,7 +84,7 @@ export function dualWriteMeasureRows(
         const collision = database.prepare(`select source_event_id from ${calendarStandardTablePolicy.eventsTable}
           where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?
             and source_event_id <> ? limit 1`)
-          .get(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate, row.sourceEventId) as
+          .get(toAlpha2Country(row.countryCode), row.metricKey, row.periodKey, row.scheduledDate, row.sourceEventId) as
           { source_event_id: string } | undefined
         if (collision !== undefined) mergedSameDay += 1
       }
@@ -204,4 +204,4 @@ function isZeroValue(value: string): boolean {
 
 const emptyReasons = (): Record<CalendarUnmappedReason, number> =>
   ({ 'unknown-measure': 0, 'unknown-event-type': 0, 'bad-period': 0, 'bad-identity': 0,
-    'unknown-release-group': 0, 'ambiguous-same-day': 0, 'no-values': 0 })
+    'unknown-release-group': 0, 'ambiguous-same-day': 0, 'no-values': 0, 'missing-country': 0 })

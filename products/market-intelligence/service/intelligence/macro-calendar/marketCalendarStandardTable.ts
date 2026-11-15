@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { toAlpha2Country } from './marketCalendarMetricIdentity'
 import { sourceIdOverwriteOnWrite } from './marketCalendarSourceIdAudit'
 
 /**
@@ -70,7 +71,14 @@ export const calendarStandardTablePolicy = Object.freeze({
      * 前者要问源为什么发空发布，后者要补映射，修法不同。这条路径以前三无（表里没有、
      * `unmapped` 没有、日志也不说），发布层守恒式一上线就把它量出来了。
      */
-    'no-values'] as const)
+    'no-values',
+    /**
+     * **身份缺国家**（2026-11-16 用户口径）：观测本身没带国家码，算不出「哪个国家的这次发布」。
+     * 它和 `bad-identity` 是两件事：那个是「身份本身坏了」（拼不出三段），这个是「少了其中一段」。
+     * 以前这类行**静默跳过**（既不进表、也不进未映射），1484 条就这么消失了——用户一句话点出：
+     * 不落表可以，但**必须落在未映射的库里**，否则「筛掉了」被读成「没有」。
+     */
+    'missing-country'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
 export type CalendarReleaseStatus = typeof calendarStandardTablePolicy.releaseStatuses[number]
@@ -242,11 +250,20 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
  */
 export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): void {
   const { eventsTable } = calendarStandardTablePolicy
+  /**
+   * **国家码在写入端归一到 alpha-2**（2026-11-16，Chief 拍板）。
+   *
+   * 这条表里两种写法曾并存：`US` 522 行、`USA` 329 行（narwhal/官方回放/BLS/BEA/Fed 写的是 alpha-3）。
+   * 不归一到写入端，每个消费者都得自己反向归一，第三个写法出现时又要改一轮，而「哪一处漏了归一」
+   * 会以「某个界面没国家」的形式散布各处。展示侧的 `toAlpha2Country` 从此只服务**历史行**的兼容，
+   * 不再是常态路径。
+   */
+  const countryCode = toAlpha2Country(row.countryCode)
   // 先量一眼「同身份换 id」：只打日志、不改数据；旧 id 不在台账里会单独记真红标记。
   sourceIdOverwriteOnWrite(database, {
     eventsTable, sourceIdsTable: calendarStandardTablePolicy.sourceIdsTable
   }, {
-    countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
+    countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
     firstScheduledDate: row.firstScheduledDate ?? row.scheduledDate, sourceEventId: row.sourceEventId
   })
   database.prepare(`insert into ${eventsTable}
@@ -285,7 +302,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       source_event_id = excluded.source_event_id,
       parser_version = excluded.parser_version,
       observed_at = excluded.observed_at`)
-    .run(row.countryCode, row.metricKey, row.periodKey, row.scheduledDate,
+    .run(countryCode, row.metricKey, row.periodKey, row.scheduledDate,
       row.firstScheduledDate ?? row.scheduledDate, row.scheduledAt ?? null, row.timePrecision,
       row.rowKind ?? 'release',
       row.status ?? 'unknown',
@@ -324,7 +341,8 @@ export function recordCalendarSourceId(database: DatabaseSync, input: Readonly<{
   database.prepare(`insert or replace into ${calendarStandardTablePolicy.sourceIdsTable}
     (provider_id, source_event_id, country_code, metric_key, period_key, first_scheduled_date, observed_at)
     values (?, ?, ?, ?, ?, ?, ?)`)
-    .run(input.providerId, input.sourceEventId, input.countryCode, input.metricKey,
+    // 台账的身份列与标准行同一口径（alpha-2）：不一致会让「按身份匹配」的孤儿判据把正常台账判成孤儿。
+    .run(input.providerId, input.sourceEventId, toAlpha2Country(input.countryCode), input.metricKey,
       input.periodKey, input.firstScheduledDate, input.observedAt)
 }
 

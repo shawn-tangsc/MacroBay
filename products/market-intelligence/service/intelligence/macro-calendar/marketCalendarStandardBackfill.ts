@@ -56,7 +56,8 @@ export type StandardBackfillReport = Readonly<{
    * 旧源里**没有国家码**的行（各国央行讲话等，实测 1484 条）：没有国家就没有身份，
    * 也不许给它编一个（编一个就把它们挂到美国日历上）。它们不是坏数据，只是这条重放装不下。
    */
-  skippedNoCountry: number
+  /** 缺国家、已落进未映射表的行（原因 `missing-country`）：它们不进日历，但**不再消失**。 */
+  unmappedMissingCountry: number
   /** 真正交给写入端的行数；dry-run 时恒为 0（没有写）。 */
   written: number
 }>
@@ -183,7 +184,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   if (exists === undefined) {
     return { observations: 0, releases: 0, indicator: 0, event: 0, source: 0,
       unmapped: { 'bad-identity': 0, 'unknown-measure': 0 }, skipped: 0, skippedExisting: 0,
-      skippedNoCountry: 0, written: 0 }
+      unmappedMissingCountry: 0, written: 0 }
   }
   // 同一个发布可能有多条观测（每个 measure 一条，按采集批次重复出现）：按**最新一条**取，
   // 再用发布 id 去重——回填只关心「这次发布最后是什么样」。
@@ -204,7 +205,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   let unmappedNoCurrentKey = 0
   let skipped = 0
   let skippedExisting = 0
-  let skippedNoCountry = 0
+  let unmappedMissingCountry = 0
   const standardRows: Record<string, unknown>[] = []
   for (const row of latest.values()) {
     // 身份解码按来源：新源从 `market_fact_key` 里解，旧源从 `indicator_id` 查身份表再算期间。
@@ -241,8 +242,18 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       continue
     }
     if (countryCode === '') {
-      // 没有国家码：没有身份可言，也不编一个。它不是坏数据，只是这条重放装不下。
-      skippedNoCountry += 1
+      // 没有国家码：没有身份可言，也不编一个——但**不许静默跳过**（用户 2026-11-16）：
+      // 落进未映射表，原因 `missing-country`。它是「筛掉了」，不是「没有这次发布」。
+      unmappedMissingCountry += 1
+      if (write) {
+        recordUnmappedOnce(database, { providerId, sourceKey: String(row.source_event_id),
+          detectedAt: observedAt, reason: 'missing-country' as CalendarUnmappedReason,
+          rawJson: JSON.stringify({
+            name: row.display_name ?? '', eventKind: row.event_kind ?? '',
+            scheduledDate: row.scheduled_date ?? '', scheduledAt: row.scheduled_at ?? '',
+            indicatorId: row.indicator_id ?? ''
+          }) })
+      }
       continue
     }
     if (identity !== undefined && parts.length !== 3) {
@@ -324,5 +335,5 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   }
   return { observations: rows.length, releases: latest.size, indicator, event, source,
     unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey },
-    skipped, skippedExisting, skippedNoCountry, written }
+    skipped, skippedExisting, unmappedMissingCountry, written }
 }
