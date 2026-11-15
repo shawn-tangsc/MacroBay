@@ -8,41 +8,18 @@ import { createStructuredModelInvocationService } from '@platform/ai/invocation/
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
 import { app } from 'electron'
 
-import { createIntelligenceFetchText, executeIntelligenceFetchTarget } from './adapters/intelligenceHttpFetch'
 import { createIntelligenceArchiveService } from './application/intelligenceArchiveService'
 import { createIntelligencePipeline } from './application/intelligencePipeline'
-import { createSourceIssueWiring } from './application/sourceIssueWiring'
-import { createIntelligenceEventPublisher } from './application/intelligenceEventPublisher'
 import { createIntelligenceReplayService } from './application/intelligenceReplayService'
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
-import { DEFAULT_SOURCE_FRESHNESS_MS } from './application/macroSourceHealth'
 import { createMarketIntelligencePublicQueryService } from './public-query/publicQueryService'
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
 import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
 import { createMarketAnalysisSettingsService } from './application/marketAnalysisSettingsService'
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
-import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
+import { createSourceProfileStore } from './application/sourceProfileStore'
 import { disableMaintenanceOnlyKeylessSources, migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
-import {
-  createIntelligenceCredentialJsonStorage,
-  createIntelligenceCredentialStore
-} from './store/intelligenceCredentialStore'
-import {
-  createIntelligencePipelineJsonStorage,
-  readIntelligencePipelineSnapshotSync
-} from './store/intelligencePipelineStateStorage'
-import {
-  createIntelligenceRuntimeStateJsonStorage,
-  readIntelligenceRuntimeStateSync
-} from './store/intelligenceRuntimeStateStorage'
-import {
-  createIntelligenceRuntimeStateHistoryJsonStorage,
-  readIntelligenceRuntimeStateHistorySync
-} from './store/intelligenceRuntimeStateHistoryStorage'
-import {
-  createIntelligenceTranslationJsonStorage
-} from './store/intelligenceTranslationStorage'
 import {
   createNewsSentimentSettingsJsonStorage,
   createNewsSentimentSettingsStore
@@ -95,10 +72,6 @@ import { createSignalledOpenInterestRefresh } from './signals/openInterestSignal
 import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import {
-  createRawRecordJsonStorage,
-  readRawRecordSnapshotSync
-} from './store/rawRecordStorage'
-import {
   INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
   INTELLIGENCE_REPLAY_WINDOW_JOB
 } from './jobs/intelligenceJobIds'
@@ -138,6 +111,7 @@ import type { GoldLiveRuntime } from './macro-market/goldLiveRuntime'
 import { macroMarketPolicy } from './macro-market/macroMarketPolicy'
 import { requestZeroXRouterCalendarJsonBody } from './application/zeroXRouterHttpTransport'
 import { intelligenceRawRecordStartupRecoveryPolicy, INTELLIGENCE_PRODUCT_ID as PRODUCT_ID, type IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
+import { createIntelligenceStores } from './intelligenceModuleStores'
 
 /* 产品 id、启动 bundle 标记、原始记录补跑策略、平台 hooks 类型 → `intelligenceModuleContracts.ts`（M1）。
    hooks 类型从原路径**再导出**：`newsSentimentServices.ts` 等调用的 import 路径一个字没变。 */
@@ -269,62 +243,19 @@ export function getIntelligenceModule(
     const hooks = modulePlatformHooks
     const dataDir = getProductDataDir()
     const getAppLanguage = hooks?.getAppLanguage ?? (async () => 'zh-CN' as const)
-    const profileStore = createSourceProfileStore(
-      createProfileJsonStorage(join(dataDir, 'intelligence-source-profiles.json'))
-    )
-    const rawRecordStorage = createRawRecordJsonStorage(join(dataDir, 'intelligence-raw-records.json'))
-    const rawRecordStore = createRawRecordStore({
-      storage: rawRecordStorage,
-      snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json'))
+    const stores = createIntelligenceStores({
+      dataDir,
+      getAppLanguage,
+      timeZone: shellTimeZone,
+      ...(hooks?.eventBusRuntime === undefined ? {} : { eventBusRuntime: hooks.eventBusRuntime }),
+      ...(hooks?.submitNotification === undefined ? {} : { submitNotification: hooks.submitNotification }),
+      ...(hooks?.log === undefined ? {} : { log: hooks.log })
     })
-    const macroCalendarEvidenceArchive = createMacroCalendarEvidenceArchive({
-      rawRecords: rawRecordStore,
-      archiveDirectory: join(dataDir, 'macro-calendar-evidence')
-    })
-    const macroCalendarEvidenceMigration = macroCalendarEvidenceArchive.migrateInlineBodies()
-    const pipelineStateStorage = createIntelligencePipelineJsonStorage(
-      join(dataDir, 'intelligence-pipeline-state.json')
-    )
-    const runtimeStateStorage = createIntelligenceRuntimeStateJsonStorage(
-      join(dataDir, 'intelligence-runtime-state.json')
-    )
-    const runtimeStateHistoryStorage = createIntelligenceRuntimeStateHistoryJsonStorage(
-      join(dataDir, 'intelligence-runtime-state-history.json')
-    )
-    const translationStorage = createIntelligenceTranslationJsonStorage({
-      settingsPath: join(dataDir, 'intelligence-translation-settings.json'),
-      recordsPath: join(dataDir, 'intelligence-translation-records.json'),
-      appLanguage: getAppLanguage
-    })
-    const credentialStore = createIntelligenceCredentialStore(
-      createIntelligenceCredentialJsonStorage(join(dataDir, 'intelligence-credentials.json'))
-    )
-    const fetchText = createIntelligenceFetchText({ profileStore, credentialStore })
-    const fetchMetricTarget = (target: Parameters<typeof executeIntelligenceFetchTarget>[0], sourceId: string) =>
-      executeIntelligenceFetchTarget(target, sourceId, { profileStore, credentialStore })
-    const eventPublisher = hooks?.eventBusRuntime
-      ? createIntelligenceEventPublisher(hooks.eventBusRuntime)
-      : undefined
-    const sourceIssues = createSourceIssueWiring({ defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS, timeZone: shellTimeZone,
-      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }),
-      ...(hooks?.log === undefined ? {} : { log: hooks.log }) })
-    const pipeline = createIntelligencePipeline({
-      profileStore,
-      rawRecordStore,
-      fetchText,
-      fetchMetricTarget,
-      snapshot: readIntelligencePipelineSnapshotSync(join(dataDir, 'intelligence-pipeline-state.json')),
-      stateStorage: pipelineStateStorage,
-      runtimeStateSnapshot: readIntelligenceRuntimeStateSync(join(dataDir, 'intelligence-runtime-state.json')),
-      runtimeStateStorage,
-      runtimeStateHistorySnapshot: readIntelligenceRuntimeStateHistorySync(
-        join(dataDir, 'intelligence-runtime-state-history.json')
-      ),
-      runtimeStateHistoryStorage,
-      eventPublisher,
-      ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier })
-    })
-    sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
+    /* 名字在这里解构出来：下文近百处引用一个字没改。 */
+    const {
+      profileStore, rawRecordStore, macroCalendarEvidenceArchive, macroCalendarEvidenceMigration,
+      translationStorage, credentialStore, fetchText, pipeline
+    } = stores
     const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
       storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))
     })
