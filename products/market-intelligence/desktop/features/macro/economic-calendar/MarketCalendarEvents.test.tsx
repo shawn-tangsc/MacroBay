@@ -23,7 +23,7 @@ it('renders provider-only economic values and unknown country without numerical 
     await act(async () => root.render(scoped(<MarketCalendarInspector event={event} text={text} />)))
     expect(host.textContent).toContain('市场预期')
     expect(host.textContent).toContain('公布值（Narwhal）')
-    expect(host.textContent).toContain('未标明国家')
+    expect(host.textContent).toContain('未知国家')
     expect(host.textContent).toContain('暂不可比较')
     // 这条来源**给过**这条事件（有时间），所以不再说「本次尚未刷新」——时间与那句话不许自相矛盾。
     expect(host.textContent).not.toContain('本次尚未刷新')
@@ -82,7 +82,7 @@ it('prefers safe countryName, then code, then the localized unknown fallback', a
     await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base, countryCode: 'US' }} text={text} />)))
     expect(host.querySelector('[data-market-country]')?.textContent).toContain('US')
     await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base, countryCode: null }} text={text} />)))
-    expect(host.querySelector('[data-market-country]')?.textContent).toContain('未标明国家')
+    expect(host.querySelector('[data-market-country]')?.textContent).toContain('未知国家')
   } finally { await act(async () => root.unmount()) }
 })
 

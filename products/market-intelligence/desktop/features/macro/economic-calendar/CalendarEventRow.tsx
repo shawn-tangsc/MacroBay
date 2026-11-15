@@ -49,8 +49,9 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   const resolveText = useProductTextKey()
   // The 0xRouter route carries the country; the official route is US-only and says so in its own
   // copy, so a country chip there would be noise. 名字优先，查不到就**原样显示源给的国家码**
-  // （`calendarCountryLabel`）：查不到名字就空掉，等于把「读不到」画成「没有」（用户 2026-11-16）。
-  const country = item.source === 'market' ? calendarCountryLabel(item.event) : undefined
+  // （`calendarCountryLabel`）：名字 → 原始码 → 「未知国家」，三级只在那里判一次
+  // （用户 2026-11-16 定了两次：先「名字是什么就显示什么」，再「没有国家数据时显示未知国家」）。
+  const country = item.source === 'market' ? calendarCountryLabel(item.event, text) : undefined
   const kind = calendarItemType(item)
   const KindGlyph = calendarKindGlyphs[kind]
   const important = isHighImportanceCalendarItem(item)
@@ -98,13 +99,22 @@ function RowContent({ time, kind, important, country, title, KindGlyph }: {
 }) {
   return <>
       <span className="mi-economic-calendar__event-time">{time}</span>
-      {/* The marks sit inside the title, not beside it: a third grid child collapsed the title to an
-          ellipsis once already. The kind glyph leads the run so it lines up down the column, and the
-          importance dot follows it directly ahead of the name. */}
+      {/*
+        国家是**固定的第二列**（用户 2026-11-16 第二次要求「事件前面要显示国家」）：列宽由
+        `--mi-calendar-country-width` 给，这一格**永远渲染**——没有国家时是空串。少了这个元素，
+        标题会掉进这一列、整列错位；有了它，有没有国家的事件标题都从同一个 x 开始。
+
+        以前它是标题内的行内片段（当时为了省下窄月格里的宽度），代价是「查不到名字就整格消失」，
+        而用户要的正是「事件前面必须显示国家」。所以那一版判断在 2026-11-16 被推翻：宁可少几像素
+        标题宽度，也不让国家列时有时无。
+      */}
+      <span className="mi-economic-calendar__event-country" data-event-country={country ?? undefined}>{country}</span>
+      {/* The marks sit inside the title: the kind glyph leads the run so it lines up down the column,
+          and the importance dot follows it directly ahead of the name. */}
       <span className="mi-economic-calendar__event-title">
         <span aria-hidden="true" className="mi-economic-calendar__event-kind" data-event-kind={kind}><KindGlyph size={11} /></span>
         {important ? <span aria-hidden="true" className="mi-economic-calendar__event-marker" data-importance-marker="high" /> : null}
-        {country ? <span className="mi-economic-calendar__event-country" data-event-country>{country}</span> : null}{title}
+        {title}
       </span>
   </>
 }

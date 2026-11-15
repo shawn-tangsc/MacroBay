@@ -1,19 +1,20 @@
 /**
- * 国家这一格显示什么：**映射出的名字 → 源给的国家码 → 什么都没有**。
+ * 国家这一格显示什么：**映射出的名字 → 源给的国家码原样 → 「未知国家」**。
  *
- * 用户 2026-11-16 定的规则：名字是什么就显示什么。查不到中文名时**原样显示源给的国家码**
- * （`US` 就显示 `US`、`USA` 就显示 `USA`），不替它改名、也不猜；两者都没有才不画这一格。
+ * 用户 2026-11-16 定了两次：先是「名字是什么就显示什么」，再是「没有国家数据的时候，显示
+ * 未知国家」。所以这一格**永远有内容**，不留空：
+ * - 查得到名字 → 「美国」；
+ * - 查不到名字 → 源给的原值，`US` 就 `US`、`USA` 就 `USA`，**不改名、不猜**；
+ * - 两者都没有 → 走 i18n 的「未知国家」。不用「—」「N/A」：那是「没有这一项」，
+ *   而这里是「我们不知道是哪国」——两件事，读者要能分清。
  *
- * 为什么不是「查不到就不画」：那是把「读不到」画成「没有」——国家列会整列静默消失，而事件
- * 本身还在，读者看不出这一行少了信息。今晚这条已经踩过一次（适配器只给码、没人算名）。
- *
- * **一处定义**：行（`CalendarEventRow`）与详情面板（`MarketCalendarEvents`）共用这一条链。
- * 唯一的差别在「两者都没有」之后：行不画这一格；详情面板要说出「未知国家」——同一个事实，
- * 两种表达，都在调用点决定，不在这里再分叉。
+ * **三级只在这里判一次**（架构师 2026-11-16 的要求）：行组件与详情面板都只调它，不许在调用点
+ * 再补一段 `?? 未知国家`。写成两处 if 链的话，将来加第三档（比如别名表）就会出现「一处改了、
+ * 一处没改」，而三条 DOM 判据断的本来是同一个实现。
  */
-export function calendarCountryLabel(event: Readonly<{
-  countryName?: string | undefined
-  countryCode?: string | null
-}>): string | undefined {
-  return event.countryName ?? event.countryCode ?? undefined
+export function calendarCountryLabel(
+  event: Readonly<{ countryName?: string | undefined; countryCode?: string | null }>,
+  text: Readonly<{ market: Readonly<{ unknownCountry: string }> }>
+): string {
+  return event.countryName ?? event.countryCode ?? text.market.unknownCountry
 }
