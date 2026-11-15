@@ -1,7 +1,6 @@
 import { calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
-import { decisionEventMetricKeyForTitleKey, filterVisibleByTier, tierVisibilityPolicy } from '../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
-import { getMacroCalendarReleaseValueMapping } from '../../../service/intelligence/macro-calendar/macroCalendarReleaseValueMappingPolicy'
+import { filterVisibleByTier } from '../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
 import { tierOfMetricKey } from '../../../service/intelligence/macro-calendar/marketCalendarReleaseGroups'
 import { matchedRelevantConcept, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS } from '../../../contracts/policyPath'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'

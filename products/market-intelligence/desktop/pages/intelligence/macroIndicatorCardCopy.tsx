@@ -8,7 +8,6 @@ import { calendarDisplayDate } from '../../features/macro/economic-calendar/econ
 import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import type { EconomicCalendarText } from '../../features/macro/economic-calendar/economicCalendarText'
 import type { MacroIndicatorCardFact } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
-import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 /** 主值是「未提供 / 暂时读不到」时不占读数那档字号：那几个字一旦放大，会比真实数字更抢眼（界面设计定）。 */
 export function cardValueClass(fact: MacroIndicatorCardFact | undefined, unreadable?: boolean): string | undefined {
