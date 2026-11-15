@@ -393,6 +393,9 @@ export function applyDailyBriefingEditorial(
         ...briefingConclusionBasis(editorial.conclusionSynthesis),
         synthesis: 'agent' as const,
         synthesizedFrom: Object.freeze(priorConclusions.map((conclusion) => conclusion.id)),
+        // 读者看到的「推翻条件」就是合成的这一句；数与事件已在 `validateConclusionSynthesis` 里
+        // 对本期文档的数值白名单验过，指不到的数写不出来。
+        refutation: editorial.conclusionSynthesis.whatWouldChange,
         synthesisDetail: Object.freeze({
           ...editorial.conclusionSynthesis,
           conditions: Object.freeze([...editorial.conclusionSynthesis.conditions]),

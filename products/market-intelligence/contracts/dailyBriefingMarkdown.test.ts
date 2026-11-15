@@ -145,6 +145,13 @@ describe('the copied text says when the release time was not published', () => {
 })
 
 describe('a web-sourced value says so in the copy too (v2.128)', () => {
+  it('prints the synthesized overturn sentence that the page shows', () => {
+    // 合成版的推翻条件是一条文档级 `refutation`；页面上看得到，导出的文字里也必须看得到。
+    const doc = document({ conclusion: { ...document().conclusion!, refutation: '若 ETF 转为净流入，则偏空判断失效。' } })
+    const markdown = dailyBriefingToMarkdown(doc, options)
+    expect(markdown).toContain('若 ETF 转为净流入，则偏空判断失效。')
+  })
+
   it('prints the same value label the card prints, suffix included', () => {
     const base = document()
     const web = dailyBriefingToMarkdown({

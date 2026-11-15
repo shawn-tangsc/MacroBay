@@ -107,10 +107,12 @@ describe('daily briefing document guard at schema 13', () => {
 
   it('accepts the current schema row and refuses only a version past it', () => {
     // 文档落库后必须被自己读回来：守卫只拒绝「比现在更新」的版本。
-    // 16 起宏观/「接下来」两栏可带「官方没公布发布时刻」的日期与标记。
-    const current = { ...document(), schemaVersion: 16 as const, policyVersion: 'daily-briefing.v24' as const }
+    // 16 起宏观/「接下来」两栏可带「官方没公布发布时刻」的日期与标记；17 起结论可带「推翻条件」。
+    const current = { ...document(), schemaVersion: 17 as const, policyVersion: 'daily-briefing.v24' as const }
     expect(isDocument(current)).toBe(true)
-    expect(isDocument({ ...current, schemaVersion: 17 as unknown as 16 })).toBe(false)
+    // 读上一版写的行：没有「推翻条件」的 16 版照旧可读，不因升版把历史文档判成损坏。
+    expect(isDocument({ ...current, schemaVersion: 16 as unknown as 17 })).toBe(true)
+    expect(isDocument({ ...current, schemaVersion: 18 as unknown as 17 })).toBe(false)
   })
 
   it('carries the news-source list a schema-15 edition froze, and refuses an unknown state', () => {

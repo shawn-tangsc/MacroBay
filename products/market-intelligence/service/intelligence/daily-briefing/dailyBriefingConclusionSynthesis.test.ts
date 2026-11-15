@@ -194,6 +194,17 @@ describe('daily briefing conclusion synthesis', () => {
     expect(applied.conclusion?.synthesizedFrom).toEqual(['analysis:mi-as-1'])
   })
 
+  it('exposes the overturn sentence as the document-level refutation, not as an invalidation list', () => {
+    // 产品 2026-11-16：合成只给一句话、没有 asset/horizonEnd，所以它是一条文档级「推翻条件」，
+    // 不复用按资产/期限列的 `invalidations`；两个名字含义不同，不能混。
+    const validation = validateDailyBriefingEditorial(editorial(synthesis()), document(), 'zh-CN', [], [bearishPrior()])
+    expect(validation.ok).toBe(true)
+    if (!validation.ok) return
+    const applied = applyDailyBriefingEditorial(document(), validation.value, { promptVersion: 'v2', model: 'm', source: 'default' }, [bearishPrior()])
+    expect(applied.conclusion?.refutation).toBe(synthesis().whatWouldChange)
+    expect(applied.conclusion?.invalidations).toEqual([])
+  })
+
   it('synthesizes multiple priors and lists every one', () => {
     const priors = [bearishPrior(), bullishBriefPrior()]
     const validation = validateDailyBriefingEditorial(editorial(synthesis()), document(), 'zh-CN', [], priors)

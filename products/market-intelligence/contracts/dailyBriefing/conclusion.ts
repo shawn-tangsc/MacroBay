@@ -88,6 +88,13 @@ export type BriefingConclusion = Readonly<{
   change?: string
   conditions: readonly string[]
   invalidations: readonly Readonly<{ asset: 'BTC' | 'ETH'; horizonEnd: string; text: string }>[]
+  /**
+   * 读者看到的「推翻条件」一句话（产品 2026-11-16 定）：合成版的 `whatWouldChange` 就落在这里。
+   *
+   * 它**不是** `invalidations`：那一条按资产与期限列，是分析自己的失效条件；合成只给一句话，
+   * 没有资产与期限可填，硬套就是编字段。旧版没有这个字段——读出来就没有这一行，不写「未知」。
+   */
+  refutation?: string
   counterEvidence: readonly BriefingCounterEvidence[]
   topSignal: BriefingTopSignal | null
   evidenceStrength?: string

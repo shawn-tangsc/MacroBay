@@ -172,6 +172,9 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     for (const invalidation of conclusion.invalidations) {
       lines.push(`- ${labels.conclusion.invalidation}: ${escapeMarkdown(invalidation.text)}`)
     }
+    // 合成版的推翻条件是一句话（文档级 `refutation`），不是按资产/期限列的 `invalidations`；
+    // 页面上看得到的那一行，导出的文字里也必须看得到（2026-11-04 同一类缺陷）。
+    if (conclusion.refutation) lines.push(`- ${labels.conclusion.invalidation}: ${escapeMarkdown(conclusion.refutation)}`)
     if (conclusion.conditions.length > 0) lines.push(`- ${labels.conclusion.conditions}: ${conclusion.conditions.map(escapeMarkdown).join(' · ')}`)
     for (const claim of conclusion.counterEvidence) {
       lines.push(`- ${labels.conclusion.counter}: ${escapeMarkdown(claim.statement)} ${claim.citations.map((index) => `[${index}]`).join('')}`.trimEnd())

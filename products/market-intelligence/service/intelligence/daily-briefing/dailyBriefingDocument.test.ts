@@ -472,7 +472,7 @@ describe('daily briefing document', () => {
 
     // 14 起宏观事件带自己的 `lifecycleState`，15 起新闻源静默/失败进文档（`02` v2.167），
     // 16 起宏观/接下来两栏可带「官方没公布发布时刻」的日期与标记。
-    expect(document.schemaVersion).toBe(16)
+    expect(document.schemaVersion).toBe(17)
     // The id is a name, not the clock: this version's single fixed period.
     expect(document.edition.periodId).toBe('default')
     // The nominal cutoff, not the (later) actual generation moment; ISO milliseconds like generatedAt.
