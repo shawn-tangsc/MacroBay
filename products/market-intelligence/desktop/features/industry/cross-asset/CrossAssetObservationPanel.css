@@ -64,6 +64,13 @@
 .mi-cross-asset__legend { display: flex; gap: 12px; margin-block: 10px; }
 .mi-cross-asset__legend button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--mi-cross-asset-text); cursor: pointer; font: inherit; padding: 0; }
 .mi-cross-asset__legend button[aria-pressed="false"] { opacity: .4; }
+/*
+ * 本段没有可比数据的那一条：**不是控件**（这条线本来就没有画出来，点它没有任何可见结果），
+ * 所以没有颜色点、没有指针、没有按下态，也不能聚焦。名字与其它图例同级同色，后面小字说数据怎么了；
+ * 11 号 / --muted 属于行内小字档（ui-rules：行内小字 = --font-meta / --line-meta）。
+ */
+.mi-cross-asset__legend-no-data { display: inline-flex; align-items: center; gap: 6px; color: var(--mi-cross-asset-text); font: inherit; }
+.mi-cross-asset__legend-no-data small { color: var(--mi-cross-asset-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 .mi-cross-asset [data-asset="index"], .mi-cross-asset [data-asset-line="index"], .mi-cross-asset [data-forming-line="index"] { --asset-color: var(--mi-cross-asset-index); }
 .mi-cross-asset [data-asset="btc"], .mi-cross-asset [data-asset-line="btc"], .mi-cross-asset [data-forming-line="btc"] { --asset-color: var(--mi-cross-asset-btc); }
 .mi-cross-asset [data-asset="eth"], .mi-cross-asset [data-asset-line="eth"], .mi-cross-asset [data-forming-line="eth"] { --asset-color: var(--mi-cross-asset-eth); }

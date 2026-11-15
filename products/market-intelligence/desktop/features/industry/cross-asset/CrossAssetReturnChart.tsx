@@ -160,12 +160,17 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
       tooltipTop: Math.max(policy.inset, Math.min(mouseY + policy.offset, box.height - height - policy.inset)) })
   }
   return <div className="mi-cross-asset__chart">
-    <div className="mi-cross-asset__legend">{listed.map(id => {
-      return <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
-        onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}
-        {/* 本段没有可比数据就说一句：读者要知道这条线的数据怎么了，不是线被藏了（用户 2026-11-16）。 */}
-        {withoutComparableData.includes(id) ? <small className="mi-cross-asset__legend-no-data" data-no-comparable-data={id}>{text.lineNoComparableData}</small> : null}
-      </Button>})}</div>
+    <div className="mi-cross-asset__legend">{listed.map(id => (
+      // 本段没有可比数据的那一条不是控件：这条线本来就没有画出来，点它没有任何可见结果，留着就是假控件
+      // （界面设计 2026-11-16）。它只说这条线的数据怎么了——没有颜色点、不可点、没有按下态；
+      // 为什么没有仍在图标题那颗 ⓘ 里，不在这里开第二个入口。有数据的照旧是切换按钮。
+      withoutComparableData.includes(id)
+        ? <span className="mi-cross-asset__legend-no-data" data-asset={id} data-no-comparable-data={id} key={id}>
+            {labelOf(id)}<small>{text.lineNoComparableData}</small>
+          </span>
+        : <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
+            onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}</Button>
+    ))}</div>
     <div className="mi-cross-asset__chart-frame">
       <div className="mi-cross-asset__y-axis">{(max === min ? [0] : [max, 0, min].filter((value, index, all) => all.indexOf(value) === index)).map(value => <span key={value} style={{ top: `${y(value) / policy.height * 100}%` }}>{percent(value)}</span>)}</div>
       <div ref={plotRef} data-cross-asset-plot className="mi-cross-asset__plot" role="group" aria-label={text.chart} tabIndex={0}

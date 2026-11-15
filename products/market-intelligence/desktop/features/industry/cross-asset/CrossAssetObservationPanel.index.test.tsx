@@ -182,9 +182,11 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       // The licensed index is the standard instrument: no proxy label, because it is not a proxy.
       expect(page.host.querySelector('[data-index-proxy="true"]')).toBeNull()
       // 合法指数这一腿在这个夹具里没有任何可画的点（289 个点全是空），所以图例照样列出、
-      // 名字后面说「本段无数据」——不标会让读者以为线被藏了。
-      expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
+      // 名字后面说「本段无数据」——但它不是控件：点它没有任何可见结果（界面设计 2026-11-16）。
+      expect([...page.host.querySelectorAll('.mi-cross-asset__legend > *')].map(item => item.textContent))
         .toEqual([`${text.indexNames.real}${text.lineNoComparableData}`, 'BTC', 'ETH'])
+      expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
+        .toEqual(['BTC', 'ETH'])
       expect(page.host.querySelector('[data-market-state-tag="closed"]')).toBeNull()
       expect(page.host.querySelector('[data-asset-price="index"]')?.textContent).toBe('25017.00')
       expect(cell(page.host, '15m').textContent).toMatch(/[0-9]/)
@@ -436,9 +438,17 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
     try {
       const noData = page.host.querySelector('[data-no-comparable-data="index"]')
       expect(noData).not.toBeNull()
-      expect(noData?.textContent).toBe(text.lineNoComparableData)
-      // 有数据的线没有这个标记。
+      // 它是图例里的一行文字，不是控件：不是 button、不在 button 里、不能聚焦、没有颜色点。
+      expect(noData?.closest('button')).toBeNull()
+      expect(noData?.tagName).toBe('SPAN')
+      expect(noData?.getAttribute('tabindex')).toBeNull()
+      expect(noData?.getAttribute('role')).toBeNull()
+      expect(noData?.querySelector('i')).toBeNull()
+      expect(noData?.textContent).toBe(`${text.indexNames.real}${text.lineNoComparableData}`)
+      expect(noData?.querySelector('small')?.textContent).toBe(text.lineNoComparableData)
+      // 有数据的线照旧是切换按钮，也没有这个标记。
       expect(page.host.querySelector('[data-no-comparable-data="btc"]')).toBeNull()
+      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="btc"]')).not.toBeNull()
       // 说的是数据，不是渲染：这句里不许出现「画 / 绘制 / 渲染」。
       expect(text.lineNoComparableData).not.toMatch(/绘制|渲染|画/)
       // 原因句同样说数据、不说实现：不出现「线要求 / 5 分钟 K 线」这类实现细节。
@@ -464,10 +474,17 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
     try {
       const noData = page.host.querySelector('[data-no-comparable-data="dxy"]')
       expect(noData).not.toBeNull()
-      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="dxy"]')?.textContent)
-        .toBe(`${text.assetLabels.dxy}${text.lineNoComparableData}`)
+      // 这一条不是按钮：无数据的线点不出任何可见结果，留着就是假控件（界面设计 2026-11-16）。
+      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="dxy"]')).toBeNull()
+      expect(noData?.closest('button')).toBeNull()
+      expect(noData?.getAttribute('tabindex')).toBeNull()
+      expect(noData?.querySelector('i')).toBeNull()
+      expect(noData?.textContent).toBe(`${text.assetLabels.dxy}${text.lineNoComparableData}`)
+      // 有数据的几条照旧是切换按钮，顺序不变。
+      expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
+        .toEqual(['QQQ', 'BTC', 'ETH'])
       // 黄金这一腿没有曲线，图例里根本没有它，所以也不会被标成「本段无数据」。
-      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="gold"]')).toBeNull()
+      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="gold"]')).toBeNull()
       const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
       await act(async () => hint.click())
       expect(document.body.textContent).toContain(text.lineNoComparableDataReason)
@@ -484,7 +501,7 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
       rowStates: { dxy: 'unreadable' }
     })
     try {
-      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="dxy"]')).toBeNull()
+      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
       expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
       // 行自己的状态照旧在表里：读不到说的是读失败，不是「没有数据」。
       expect(page.host.querySelector('[data-status-row="dxy"]')?.textContent).toContain('暂时读不到')
