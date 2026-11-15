@@ -87,6 +87,19 @@ export function dualWriteMeasureRows(
           { source_event_id: string } | undefined
         if (collision !== undefined) mergedSameDay += 1
       }
+      /**
+       * **空值不写、占位 0 当缺失、真 0 照写**（用户口径 2026-11-15）。
+       *
+       * 判据必须落在这一处：字段缺席 / 空串 → 不写（不清空已有值）；值是 0 且该来源这一行还没发布
+       * （`status !== 'published'`）→ 当成占位，不写；**已发布行的 0 是合法值**（新增就业 0K、
+       * 环比 0.0%），照常写入——否则真实的零增长永远显示成「未提供」。
+       */
+      const existingValues = existing === undefined ? {} : readValuesJson(database, existing)
+      const writable = {
+        actual: writableValue(row.actual, row.status, existingValues.actual),
+        previous: writableValue(row.previous, row.status, existingValues.previous),
+        consensus: writableValue(row.consensus, row.status, existingValues.consensus)
+      }
       // **原地转正**：原来用源内 id 撑着的那一行，现在有标准码了 → 改这一行的码，不新增行。
       if (existing !== undefined && existing.identityKind === 'source' && row.identityKind !== 'source'
         && existing.metricKey !== row.metricKey) {
@@ -106,12 +119,12 @@ export function dualWriteMeasureRows(
         ...(row.seriesId === undefined ? {} : { seriesId: row.seriesId }),
         ...(row.importance === undefined ? {} : { importance: row.importance }),
         // **由这份值本身算**，不从调用方传：物化列一旦允许调用方随便传，就会漂。
-        valueState: row.actual === undefined && row.previous === undefined && row.consensus === undefined
+        valueState: writable.actual === undefined && writable.previous === undefined && writable.consensus === undefined
           ? 'missing' as const : 'present' as const,
         valuesJson: JSON.stringify({
-          ...(row.consensus === undefined ? {} : { consensus: row.consensus }),
-          ...(row.previous === undefined ? {} : { previous: row.previous }),
-          ...(row.actual === undefined ? {} : { actual: row.actual })
+          ...(writable.consensus === undefined ? {} : { consensus: writable.consensus }),
+          ...(writable.previous === undefined ? {} : { previous: writable.previous }),
+          ...(writable.actual === undefined ? {} : { actual: writable.actual })
         }),
         sourceProviderId: input.providerId, sourceEventId: row.sourceEventId,
         parserVersion: input.parserVersion, observedAt: input.observedAt, firstSeenAt: input.observedAt,
@@ -144,6 +157,39 @@ type ObservationLike = Readonly<{
   providerPrevious?: Readonly<{ displayValue: string }>
   providerActual?: Readonly<{ displayValue: string }>
 }>
+
+/**
+ * 字段缺席 / 空串 → 不写；**零值不覆盖已有的非空值**。
+ *
+ * 用户口径原话是「空值、零值不覆盖实际有的值」，而「真实的 0 是合法值」（新增就业 0K、环比 0.0%）：
+ * 两者合起来就是——**没有既有值时，真 0 照写；已经有非空值时，0 不许把它盖掉**。
+ * 来源的 `status` 只用来判「这一行还没发布」：未发布却带 0 的，按占位处理，不写。
+ */
+function writableValue(value: string | undefined, status: CalendarReleaseStatus | undefined,
+  existing: string | undefined): string | undefined {
+  if (value === undefined || value.trim() === '') return undefined
+  if (!isZeroValue(value)) return value
+  if (status !== undefined && status !== 'published') return undefined
+  return existing === undefined || existing.trim() === '' ? value : undefined
+}
+
+/** 已有行里的值（逐字段合并前用来判断「零值会不会盖掉真值」）。 */
+function readValuesJson(database: DatabaseSync, existing: Readonly<{ countryCode: string; metricKey: string
+  periodKey: string; firstScheduledDate: string }>): Readonly<Record<string, string | undefined>> {
+  try {
+    const row = database.prepare(`select values_json from ${calendarStandardTablePolicy.eventsTable}
+      where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ? limit 1`)
+      .get(existing.countryCode, existing.metricKey, existing.periodKey, existing.firstScheduledDate) as
+      { values_json: string } | undefined
+    return row === undefined ? {} : JSON.parse(row.values_json) as Record<string, string | undefined>
+  } catch { return {} }
+}
+
+/** `0` / `0.0` / `-0%` 这类：数值上是零，但要靠发布状态区分真零与占位零。 */
+function isZeroValue(value: string): boolean {
+  const numeric = Number(value.replace(/[%+,]/g, ''))
+  return Number.isFinite(numeric) && numeric === 0
+}
 
 const emptyReasons = (): Record<CalendarUnmappedReason, number> =>
   ({ 'unknown-measure': 0, 'unknown-event-type': 0, 'bad-period': 0, 'bad-identity': 0,

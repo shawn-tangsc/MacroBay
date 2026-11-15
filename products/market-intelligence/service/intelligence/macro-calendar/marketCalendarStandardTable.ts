@@ -228,9 +228,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       -- 精度只从 date 升到 minute，不反向降；新值为空时不覆盖已有值。
       scheduled_at = coalesce(excluded.scheduled_at, scheduled_at),
       time_precision = case when excluded.time_precision = 'minute' then 'minute' else time_precision end,
-      -- 值也一样：**空值不覆盖有值**。同一次发布后写的往往是「还没有值」那一版
-      -- （来源标了已发布却没给值，或两边同一天各说一半），拿 {} 盖掉已有的值等于退回空白。
-      values_json = case when excluded.values_json = '{}' then values_json else excluded.values_json end,
+      -- 值要**逐字段**合并，不是整块替换：先写 actual+previous，后到的源只带 previous 时，
+      -- 整块替换会把 actual 抹掉（实测能复现；真库今天 0 条命中，是因为每个写入方都三字段齐给，
+      -- 0xrouter 一恢复就会发作）。缺席的字段保留旧值，带了的字段覆盖——json_patch 正是这个语义。
+      values_json = case when excluded.values_json = '{}' then values_json else json_patch(values_json, excluded.values_json) end,
       -- 同一件事的第二半：**present 不可被 missing 覆盖**。只改 values_json 不改这一列的话，
       -- 先写空、后到值的行会永远记着 missing，视图按它一折就把有值的行折掉。
       value_state = case when excluded.value_state = 'present' then 'present'

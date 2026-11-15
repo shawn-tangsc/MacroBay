@@ -26,6 +26,19 @@ describe('标准日历表', () => {
     expect(rows(database)).toHaveLength(1)
   })
 
+  it('值逐字段合并：后到的源只带 previous 时，不抹掉已有的 actual', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, base)
+    // 0xrouter 恢复之后就会这么写：官方/别的源已经给了 actual，它这一批只带 previous。
+    upsertCalendarStandardRow(database, { ...base,
+      valuesJson: JSON.stringify({ previous: '60' }), sourceProviderId: '0xrouter',
+      sourceEventId: 'r-other-source', observedAt: '2026-11-14T09:00:00.000Z' })
+    const [row] = rows(database)
+    // 整块替换会把 actual 抹成没有（实测复现过）；缺的字段必须保留。
+    expect(JSON.parse(String(row!.values_json))).toEqual({ actual: '165', previous: '60' })
+  })
+
   it('修订覆盖值，但首发布值冻结（非农 29 不会被 60 冲掉）', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)

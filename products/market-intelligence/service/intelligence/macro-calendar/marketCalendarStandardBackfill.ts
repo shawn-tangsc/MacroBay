@@ -154,7 +154,9 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
     identityRequired: false,
     hasValues: (row) => [row.consensus_json, row.provider_previous_json, row.provider_actual_json]
       .some((value) => value !== null && value !== ''),
-    skipIdentitiesOwnedByOthers: true,
+    // 新口径：**来源同权**。这里原来是「新源写过的不覆盖」——那是来源优先级的旧实现，
+    // 与用户定的「谁拿到非空值谁写、后到的覆盖」直接冲突，所以对所有来源一律 false。
+    skipIdentitiesOwnedByOthers: false,
     importanceIsFact: true
   }
 }
