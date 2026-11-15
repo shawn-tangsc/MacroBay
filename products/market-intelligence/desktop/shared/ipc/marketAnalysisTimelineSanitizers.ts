@@ -10,7 +10,6 @@ import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalys
 import type { AnalysisConclusion, AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
 import { SUMMARY_OPTIONAL_FIELDS, SUMMARY_REQUIRED_FIELDS } from './marketAnalysisSummaryWhitelist'
 import type {
-  MarketAnalysisAttempt,
   MarketAnalysisChangeView,
   MarketAnalysisSettingsView,
   MarketAnalysisTimelineDetail,

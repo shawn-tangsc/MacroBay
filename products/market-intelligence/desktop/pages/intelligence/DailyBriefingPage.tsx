@@ -1,65 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CircleHelp } from 'lucide-react'
-import { toPng } from 'html-to-image'
 
-import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
-import { LoadingState } from '@platform/ui/components/loading'
-import { StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import { DEFAULT_PERIOD_ID, briefingEditionPeriod, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
-import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { DAILY_BRIEFING_DOCUMENT_INVALID } from '../../shared/ipc/dailyBriefingFailureCodes'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
-import { briefingTextForLocale, resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
+import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
-import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
 import { briefingScreenEdition } from './briefingScreenEdition'
 import { useBriefingShareActions } from './useBriefingShareActions'
-import { runBriefingRegenerate } from './runBriefingRegenerate'
 import { useBriefingEditionDelete } from './useBriefingEditionDelete'
-import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingDocumentInvalidIssue } from './briefingDocumentInvalidIssue'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
-import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
 import { DailyBriefingPageBar } from './DailyBriefingPageBar'
-import { DailyBriefingLiveSteps, runningElapsedMsFor, runningRowName } from './DailyBriefingLiveSteps'
+import { runningElapsedMsFor, runningRowName } from './DailyBriefingLiveSteps'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { useBriefingSettingsFacts } from './useBriefingSettingsFacts'
 import { useBriefingReload } from './useBriefingReload'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
-import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
-import { DailyBriefingAttempts } from './DailyBriefingAttempts'
-import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
-import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
-import { briefingEditionSelection, nextEditionAfterDelete } from './briefingEditionSelection'
-import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
-import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
-import { posterProps } from './dailyBriefingPoster'
+import { briefingEditionSelection } from './briefingEditionSelection'
 import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
-import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
-import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
 import './dailyBriefingShareCard.css'
-import {
-  editorialFailureText,
-  issueCountsText,
-  localDate,
-  briefingFailure,
-  briefingListFacts,
-  mergeEditionSummary,
-  summaryFromDocument,
-  withDeadline
-} from './dailyBriefingPageDerived'
+import { localDate, briefingFailure, briefingListFacts } from './dailyBriefingPageDerived'
 
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
 import { DailyBriefingAppendix } from './DailyBriefingAppendix'
@@ -69,14 +38,12 @@ import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingBackgroundRunReload } from './useBriefingBackgroundRunReload'
 import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import { useBriefingRunActions, type BriefingRunIntent } from './useBriefingRunActions'
-import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingManualRun } from './useBriefingManualRun'
 import { briefingManualRunReport, briefingManualRunningLabel } from './briefingManualRunOutcome'
 import { briefingPageChrome } from './briefingPageChrome'
 import { briefingPublishInputs } from './briefingPublishInputs'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
-import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -211,7 +178,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // duration would turn a guess into a measurement.
   const runningStage = generating && !progressUnreadable && liveProgress ? runningRowName(liveProgress, text) : undefined
   const runningElapsedMs = runningStage === undefined || liveProgress === undefined ? undefined : runningElapsedMsFor(liveProgress)
-
 
   // 三项事实一次读出来（web search、时区、写不了的语言），外加"该重读了"这个计数：抽屉关了、窗口
   // 重新聚焦、别的窗口改了设置，都只是把计数 +1。

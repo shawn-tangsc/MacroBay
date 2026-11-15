@@ -1,30 +1,16 @@
 import { Button } from 'antd'
-import { hostScreenDirty } from './drawerScreenDirty'
 
-import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { LoadingState } from '@platform/ui/components/loading'
-import { ErrorBoundary } from '@platform/ui/components/error-boundary'
-import { ConfigDrawerPanel } from './ConfigDrawerPanel'
 import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
-import type { ProcessingSection } from './ProcessingSettingsPanel'
-import type { BriefingSection } from './DailyBriefingSettingsPanel'
-import type { NotificationSection } from '../../settings/intelligence-notification/NotificationDrawerScreen'
-import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
-import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
-import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
-import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
-import { AnalysisSettingsPanel } from './AnalysisSettingsPanel'
 import { DailyBriefingSettingsPanel, type BriefingScreenState } from './DailyBriefingSettingsPanel'
 import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
-import { RunLogDrawerPanel } from './RunLogDrawerPanel'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { Info } from 'lucide-react'
 
-import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
+import type { MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
 import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
 import { DivergencePanel } from '../../features/industry/divergence/DivergencePanel'
 import { PositioningPanel } from '../../features/industry/positioning/PositioningPanel'
@@ -35,13 +21,22 @@ import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../con
 import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 import type { DashboardCapitalCellAvailability, DashboardCapitalCellOff } from '../../features/industry/capital-conditions/CapitalConditionsPanel'
 
-import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
-import { dashboardRealSourcePolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
-import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
-import type { DashboardPositioningViewState } from './dashboardOpenInterestModel'
+import type { DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
+import type { DashboardFearGreedState } from './dashboardFearGreedModel'
 import { projectPositioningCells } from './dashboardPositioningSourceState'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { cellLabel, cellSourceChoices, dashboardCellId, decideCellRead, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo, type CellReadDecision, type SourceEnabledMap } from './dashboardCellEnabled'
+import {
+  cellLabel,
+  cellSourceChoices,
+  dashboardCellId,
+  decideCellRead,
+  resolveDashboardReadGates,
+  selectedDollarSourceId,
+  useDashboardCellEnabled,
+  type CellEnabledIo,
+  type CellReadDecision,
+  type SourceEnabledMap
+} from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -66,11 +61,7 @@ import { createPortal } from 'react-dom'
 import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
 import { useCurveReleaseEvents } from './useCurveReleaseEvents'
 import { DashboardMacroRow } from './DashboardMacroRow'
-import { buildClockCardModel } from './clockCardModel'
-import { clockScheduleMetrics } from './clockScheduleMetrics'
-import { clockCardText } from './clockCardText'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
-import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
 import { useMacroIndicatorFacts } from './useMacroIndicatorFacts'
 import { cellOffFor } from './dashboardCellOff'
