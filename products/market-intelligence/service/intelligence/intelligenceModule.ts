@@ -14,15 +14,12 @@ import { createIntelligenceReplayService } from './application/intelligenceRepla
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
 import { createMarketIntelligencePublicQueryService } from './public-query/publicQueryService'
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
-import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
-import { createMarketAnalysisSettingsService } from './application/marketAnalysisSettingsService'
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createSourceProfileStore } from './application/sourceProfileStore'
 import { disableMaintenanceOnlyKeylessSources, migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
 import { createNewsSentimentSettingsStore } from './news-sentiment/newsSentimentSettingsStore'
 import { createNewsSentimentSqliteStore } from './news-sentiment/newsSentimentStore'
-import { rebuildNewsSentimentStorage } from './news-sentiment/newsSentimentStoreRecovery'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
@@ -65,10 +62,7 @@ import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/
 import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_REPLAY_WINDOW_JOB } from './jobs/intelligenceJobIds'
-import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
-import { registerIntelligenceDataChangedEvents } from './jobs/registerIntelligenceDataChanged'
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
-import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createCapitalConditionsSourceIntegration } from './capital-conditions/capitalConditionsSourceIntegration'
@@ -86,6 +80,7 @@ import { intelligenceRawRecordStartupRecoveryPolicy, INTELLIGENCE_PRODUCT_ID as 
 import { createIntelligenceStores } from './intelligenceModuleStores'
 import { createIntelligenceMarketData } from './intelligenceModuleMarketData'
 import { createIntelligenceNewsSentiment } from './intelligenceModuleNewsSentiment'
+import { createIntelligenceRuntimes } from './intelligenceModuleRuntimes'
 
 /* 产品 id、启动 bundle 标记、原始记录补跑策略、平台 hooks 类型 → `intelligenceModuleContracts.ts`（M1）。
    hooks 类型从原路径**再导出**：`newsSentimentServices.ts` 等调用的 import 路径一个字没变。 */
@@ -276,139 +271,33 @@ export function getIntelligenceModule(
       profileStore,
       hooks
     })
-    /* 名字在这里解构出来：重建那一笔（I 段）与表面都读这四个。 */
-    const {
-      newsSentimentExposure, assembleNewsSentiment, newsSentimentFilePath, newsSentimentStore,
-      newsSentimentEnrichment, newsSentimentScoring
-    } = newsSentiment
-    const archiveService = createIntelligenceArchiveService({
+    /* 表面读它；重建与作业依赖都在 M5 那个工厂里消费整份。 */
+    const { newsSentimentExposure } = newsSentiment
+    const runtimes = createIntelligenceRuntimes({
+      jobRuntime,
+      dataDir,
+      timeZone: shellTimeZone,
+      getAppLanguage,
+      pipeline,
       rawRecordStore,
-      archiveBaseDir: join(dataDir, 'intelligence-archive'),
-      compactTranslationRecords: async (retentionMode) => {
-        const result = await translationService.compactDerivedRecords({ retentionMode })
-        return result.removedCount
-      }
-    })
-    const replayService = createIntelligenceReplayService({
-      pipeline,
-      enqueueJob: async (jobId, payload) => {
-        await jobRuntime.enqueueDefinition({
-          id: `${jobId}:${String(payload.sourceId ?? 'global')}:${Date.now()}`,
-          owner: 'product',
-          productId: PRODUCT_ID,
-          handlerId: jobId,
-          title: `Intelligence ${jobId.split('.').pop()}`,
-          trigger: { kind: 'manual' },
-          payload
-        })
-      }
-    })
-
-    // Passed by reference on purpose: a rebuild swaps the services, and the registered handlers
-    // must see the new ones without being re-registered (a second registration throws).
-    const intelligenceJobDeps: Parameters<typeof registerIntelligenceJobs>[1] = {
-      pipeline,
-      archiveService,
-      replayService,
       translationService,
       capitalConditions,
-      etfFlowHistory: etfCurrentStateRefresh,
-      fundingRateHistory: fundingRateHistoryRefresh,
-      openInterest: openInterestWithSignals,
-      ...(newsSentimentEnrichment && newsSentimentScoring
-        ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
-        : {})
-    }
-    registerIntelligenceJobs(jobRuntime, intelligenceJobDeps)
-    /* 采集写了库 → 发一条 `intelligence.dataChanged`（形状见合同，映射在 `jobs/dataChangedJobMap.ts`）。 */
-    registerIntelligenceDataChangedEvents(PRODUCT_ID)
-    // Judgments are event-driven: normalize only sends the items it just created. A cleared
-    // database, a partial write failure, or a settings change leaves older admitted items with no
-    // current row and no event to bring them back. One idempotent pass per start reconciles them
-    // from title and summary; the score service skips anything already current and caps the pass.
-    if (newsSentimentStore) {
-      void enqueueIntelligencePipelineJobs(
-        jobRuntime,
-        [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
-        { limit: 500 }
-      ).catch(() => undefined)
-    }
-    const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore, perpetualPositioningStore })
-    // The divergence card asks whether the day's news was priced; that needs the same scored
-    // headlines the news page and the analysis read, not the sentiment aggregate (which only
-    // exists for market-wide scopes).
-    const syncNewsSentimentPublicQuery = (): void => {
-      const query = newsSentimentExposure.query
-      publicQueryService.setNewsSentimentQuery(query ? { query: (input) => query.query(input) } : undefined)
-    }
-    syncNewsSentimentPublicQuery()
-    // 读者主动重建：库正常 → 清空重抓；库打不开 → 先隔离现场、再建新库，并把新服务接回所有出口。
-    newsSentimentExposure.rebuildStorage = () => {
-      const existing = newsSentimentExposure.store
-      if (existing) {
-        existing.clearAll()
-        return {}
-      }
-      const rebuilt = rebuildNewsSentimentStorage(newsSentimentFilePath)
-      const pieces = assembleNewsSentiment(rebuilt.store)
-      newsSentimentExposure.store = rebuilt.store
-      newsSentimentExposure.enrichment = pieces.enrichment
-      newsSentimentExposure.scoring = pieces.scoring
-      newsSentimentExposure.bodyTranslation = pieces.bodyTranslation
-      newsSentimentExposure.query = pieces.query
-      intelligenceJobDeps.newsSentiment = {
-        enrichItems: pieces.enrichment.enrichItems,
-        scoreItems: pieces.scoring.scoreItems
-      }
-      syncNewsSentimentPublicQuery()
-      return rebuilt.quarantinedCopy ? { quarantinedCopy: rebuilt.quarantinedCopy } : {}
-    }
-    // The analysis switches own the model as well as the on/off state: a background job may only
-    // spend a request on a model the reader enabled it with.
-    const marketAnalysisSettingsService = createMarketAnalysisSettingsService({
-      store: createMarketAnalysisSettingsStore(
-        createMarketAnalysisSettingsJsonStorage(join(dataDir, 'intelligence-analysis-settings.json'))
-      ),
-      now: () => new Date().toISOString(),
-      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
-      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {})
-    })
-    const marketAnalysisRuntime = registerMarketAnalysisRuntime({
-      jobRuntime,
-      // 开盘时刻按设置的读者时区换算（唯一提供者）。
-      timeZone: shellTimeZone,
-      eventBusRuntime: hooks?.eventBusRuntime,
-      pipeline,
-      publicQueryService,
-      structuredModelInvocation,
-      settingsService: marketAnalysisSettingsService,
-      getAppLanguage,
-      // 重点舆情进分析：与「Key sentiment」卡读的是同一个查询，窗口由分析运行时决定。
-      // 动态读出口：库重建后不必重启分析运行时。库打不开时抛错，分析把这一域记成
-      // `news-sentiment-unavailable`（与原先「没有读取器」同一条缺口，不是「没有舆情」）。
-      newsSentimentQuery: {
-        query: async (input) => {
-          const query = newsSentimentExposure.query
-          if (!query) throw new Error('news-sentiment-storage-unavailable')
-          return query.query(input)
-        }
-      },
-      ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
-      dataDir
-    })
-    const sourcesService = createIntelligenceSourcesService({
+      capitalConditionsQuery,
+      fundingRateHistoryStore,
+      perpetualPositioningStore,
+      etfCurrentStateRefresh,
+      fundingRateHistoryRefresh,
+      openInterestWithSignals,
+      newsSentiment,
       profileStore,
-      pipeline,
-      jobRuntime,
       workerRuntime,
-      replayService,
-      capitalConditions,
       credentialStore,
-      onCalendarEnabledChanged: hooks?.onCalendarEnabledChanged,
-      onSourceEnabledChanged: hooks?.onSourceEnabledChanged,
       requestGovernanceQueue,
-      ...(hooks?.platformFetch ? { platformFetch: hooks.platformFetch as typeof fetch } : {})
+      structuredModelInvocation,
+      hooks
     })
+    /* 名字在这里解构出来：表面与启动链引用一个字没改。 */
+    const { archiveService, replayService, publicQueryService, marketAnalysisRuntime, sourcesService } = runtimes
     // The dashboard's first screen (sentiment, fear & greed, stablecoin capital) is fed by sources
     // that need no credential; a fresh install should not require toggling them on before the cards
     // can do anything. An existing profile wins, so a reader's "off" is never overridden.
