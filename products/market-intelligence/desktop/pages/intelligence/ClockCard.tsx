@@ -192,7 +192,8 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           「另有 N 项未上环」那条交代。容器保留（它是 ⓘ 的定位上下文），卡高仍 330。 */}
       <div className="mi-clock__foot">
         {/* 原型这一格就是 `<span title>`（不是浮层组件）：来源说明 + 没上环那几行的交代都放在这里。 */}
-        <span className="mi-clock__info" tabIndex={0} title={unplacedNote(model, text, policyState)}
+        <span className="mi-clock__info" tabIndex={0}
+          title={[text.sourceNote, ...unplacedLines(model, text, policyState)].join('｜')}
           data-clock-unplaced={model.unplaced.length}>ⓘ</span>
       </div>
   </section>
@@ -200,9 +201,9 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
 
 /**
  * 没上环的指标写成一行说明（ⓘ 的提示文字）：取不到周期、周期不合理、没有下一期，
- * 三种原因各一句；一条都没有时只留来源说明。**不许静默消失**。
+ * 三种原因各一句。ⓘ 的第一行「来源说明」由入口那行拼，这里只给后面几行。**不许静默消失**。
  */
-function unplacedNote(model: ClockCardModel, text: ClockCardText, policyState?: 'disabled' | 'unreadable'): string {
+function unplacedLines(model: ClockCardModel, text: ClockCardText, policyState?: 'disabled' | 'unreadable'): string[] {
   // 撞牌让位的写成「名字 + 还有几天」（最多 3 项，其余折成条数）；其余原因逐条写原因。
   const crowded = model.unplaced.filter((entry) => entry.reason === 'crowded')
   const shown = crowded.slice(0, 3).map((entry) =>
@@ -216,5 +217,5 @@ function unplacedNote(model: ClockCardModel, text: ClockCardText, policyState?: 
       .replace('{name}', text.names[entry.nameKey] ?? entry.nameKey)
       .replace('{reason}', text.unplaced[entry.reason]))
   const policy = policyState === undefined ? [] : [policyState === 'disabled' ? text.policyDisabled : text.policyUnreadable]
-  return [text.sourceNote, ...policy, ...(crowdedLine === undefined ? [] : [crowdedLine]), ...lines].join('｜')
+  return [...policy, ...(crowdedLine === undefined ? [] : [crowdedLine]), ...lines]
 }
