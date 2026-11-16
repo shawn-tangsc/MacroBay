@@ -19,6 +19,16 @@ it('keeps the two locales in step, with no extra or missing code', () => {
   expect(Object.keys(reasons('zh-CN')).sort()).toEqual(Object.values(triggerStatusPolicy.explainableReasonCodes).sort())
 })
 
+it('does not let an item trigger claim the analysis answers that item', () => {
+  // 2026-11-16：一条中性、无标的的新闻被判「高重要性、已开始分析」，读者自然以为结论会回应它；
+  // 而触发项不在冻结快照里，结论无法回应它，规则也验不了。触发那一行只陈述**排了一次分析**，
+  // 不承诺分析的对象。要改回「这条情报…」，先把触发项冻进快照、让规则能验（单独的需求）。
+  expect(reasons('zh-CN')['severity-confirmed']).not.toContain('这条情报')
+  expect(reasons('zh-CN')['severity-confirmed']).not.toContain('高重要性')
+  expect(reasons('en-US')['severity-confirmed']!).not.toContain('intelligence')
+  expect(reasons('en-US')['severity-confirmed']!.toLowerCase()).not.toContain('high-importance')
+})
+
 it('never shows a raw token as the user-facing wording', () => {
   for (const [code, text] of Object.entries(reasons('zh-CN'))) expect(text).not.toBe(code)
   for (const [code, text] of Object.entries(reasons('en-US'))) expect(text).not.toBe(code)
