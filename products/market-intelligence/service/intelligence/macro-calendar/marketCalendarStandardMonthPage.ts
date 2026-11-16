@@ -6,6 +6,8 @@ import type { MarketCalendarEvent, MarketCalendarPage, MarketCalendarSource }
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { standardRowsToMarketEvents, type StandardEventContext } from './marketCalendarStandardEventAdapter'
 import { readStandardCalendarMonth } from './marketCalendarStandardMonthRead'
+import { calendarFeedRegistry } from './calendarFeedRegistry'
+import { feedLiveness, readProviderLastBatches, type CalendarFeedLiveness } from './marketCalendarFeedLiveness'
 
 /**
  * **月查询接在标准表上**（S2 的最后一刀）：对外仍是 `MarketCalendarPage`，调用方一行不改。
@@ -74,7 +76,7 @@ export function createStandardMonthPageReader(deps: Readonly<{
         }
         return {
           state: 'available', month: input.month, locale: input.locale, asOf: input.asOf,
-          events: page, sources: sourcesOf(inMonth, input.asOf),
+          events: page, sources: sourcesOf(inMonth, input.asOf, readProviderLastBatches(deps.database)),
           // 空月要说清是「没有事件」还是「早于数据起点」：起点从库里最早一天派生，不写死在界面里。
           dataStartDate: readDataStartDate(deps.database),
           ...(nextCursor === undefined ? {} : { nextCursor })
@@ -86,19 +88,53 @@ export function createStandardMonthPageReader(deps: Readonly<{
   }
 }
 
-/** 三条，顺序对齐 `kinds`；「读到了但这一类没有行」与「读失败」是两种状态。 */
-function sourcesOf(events: readonly MarketCalendarEvent[], asOf: string): readonly MarketCalendarSource[] {
+/**
+ * 三条，顺序对齐 `kinds`；「读到了但这一类没有行」与「读失败」是两种状态。
+ *
+ * 每条再带**出数状态**（`lastBatchAt` / `collectorSilent`）：这一类事件背后的源最近一次成功采集
+ * 是什么时候、是不是已经错过好几个自己的周期。判据在 `marketCalendarFeedLiveness`，这里只把
+ * 「这一类背后有哪些 feed」查出来交过去——一个 feed 都没有（例如历史行没带 `sourceFeedId`）时
+ * 不下判据，不猜。
+ */
+function sourcesOf(
+  events: readonly MarketCalendarEvent[], asOf: string,
+  batches: ReadonlyMap<string, string>
+): readonly MarketCalendarSource[] {
   // 「读到了、这一类没有行」也要给观测时刻：契约只允许 `unavailable` 的观测时刻为空，
   // 其余状态必须是有效时刻——填 `asOf` 是诚实的（这一刻我们读过，确实没有这一类）。
   const observed = events.map((event) => event.sourceObservedAt).sort().at(-1) ?? asOf
   return marketCalendarPublicPolicy.kinds.map((kind) => {
     const ofKind = events.filter((event) => event.eventType === kind)
+    const liveness = kindLiveness(ofKind, asOf, batches)
     return {
       eventType: kind,
       status: ofKind.length === 0 ? 'success-empty' : 'success',
-      sourceObservedAt: ofKind.map((event) => event.sourceObservedAt).sort().at(-1) ?? observed
+      sourceObservedAt: ofKind.map((event) => event.sourceObservedAt).sort().at(-1) ?? observed,
+      ...(liveness === undefined ? {} : {
+        ...(liveness.lastBatchAt === null ? {} : { lastBatchAt: liveness.lastBatchAt }),
+        collectorSilent: liveness.silent
+      })
     } as MarketCalendarSource
   })
+}
+
+/**
+ * 这一类事件背后的出数状态。
+ *
+ * 一个 kind 背后可能有多个 feed（并存期间 Narwhal 与 0xrouter 都写）：**只要还有一个在出数，
+ * 这一类就不是「已停止出数」**——读者看到的数据仍然在被刷新。所以「停」取交集，「最后批次」取最新。
+ * 一个 feed 都查不出来时返回 `undefined`：不判，比编一个更诚实。
+ */
+function kindLiveness(
+  events: readonly MarketCalendarEvent[], asOf: string, batches: ReadonlyMap<string, string>
+): CalendarFeedLiveness | undefined {
+  const feeds = [...new Set(events.map((event) => event.sourceFeedId).filter((feedId): feedId is string => feedId !== undefined))]
+    .map((feedId) => calendarFeedRegistry[feedId as keyof typeof calendarFeedRegistry])
+    .filter((feed): feed is NonNullable<typeof feed> => feed !== undefined)
+  if (feeds.length === 0) return undefined
+  const states = feeds.map((feed) => feedLiveness({ feedId: feed.feedId, providerId: feed.providerId, batches, asOf }))
+  const lastBatchAt = states.map((state) => state.lastBatchAt).filter((at): at is string => at !== null).sort().at(-1) ?? null
+  return { feedId: feeds[0]!.feedId, lastBatchAt, silent: states.every((state) => state.silent) }
 }
 
 /**

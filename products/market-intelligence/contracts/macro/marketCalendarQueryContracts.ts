@@ -199,7 +199,17 @@ export type MarketCalendarRefreshAttempt = Readonly<{ state: 'succeeded' | 'fail
   failureCode?: typeof marketCalendarPublicPolicy.attemptFailures[number]
   trigger?: typeof marketCalendarPublicPolicy.attemptTriggers[number] }>
 export type MarketCalendarSource = Readonly<{ eventType: MarketCalendarEvent['eventType']; status: typeof marketCalendarPublicPolicy.statuses[number]; sourceObservedAt: string | null;
-  latestAttempt?: MarketCalendarRefreshAttempt }>
+  latestAttempt?: MarketCalendarRefreshAttempt
+  /**
+   * 这一类事件背后的源，**最近一次成功采集批次**的时刻。
+   *
+   * 与 `sourceObservedAt` 是两个问题：后者是「来源最后一次给出这一条」（翻到几年前那个月当然很旧），
+   * 前者是「我们这边最近一次成功采到东西」。只有后者能回答「这条源是不是停了」——2026-11-16
+   * Narwhal 自 11-13T13:20Z 起零产出，界面却一路正常，就是没人回答过这个问题。
+   */
+  lastBatchAt?: string
+  /** 连续错过 N 个自己的采集周期（判据在 `marketCalendarFeedLiveness`）。从未成功过的源不判。 */
+  collectorSilent?: boolean }>
 export type MarketCalendarPage = Readonly<{ state: 'available'; month: string; locale: 'zh' | 'en'; asOf: string;
   events: readonly MarketCalendarEvent[]; sources: readonly MarketCalendarSource[];
   /**
@@ -323,9 +333,11 @@ function refreshAttempt(value: unknown): value is MarketCalendarRefreshAttempt {
     (!Object.hasOwn(value, 'trigger') || marketCalendarPublicPolicy.attemptTriggers.includes(value.trigger as never))
 }
 function source(value: unknown): value is MarketCalendarSource {
-  return marketExact(value, ['eventType', 'status', 'sourceObservedAt'], ['latestAttempt']) && marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
+  return marketExact(value, ['eventType', 'status', 'sourceObservedAt'], ['latestAttempt', 'lastBatchAt', 'collectorSilent']) && marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
     marketCalendarPublicPolicy.statuses.includes(value.status as never) &&
     (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt)) &&
+    (!Object.hasOwn(value, 'lastBatchAt') || marketInstant(value.lastBatchAt)) &&
+    (!Object.hasOwn(value, 'collectorSilent') || typeof value.collectorSilent === 'boolean') &&
     (value.status === 'unavailable' ? value.sourceObservedAt === null : marketInstant(value.sourceObservedAt))
 }
 function safeArray<T>(value: unknown, item: (value: unknown) => value is T): value is readonly T[] {

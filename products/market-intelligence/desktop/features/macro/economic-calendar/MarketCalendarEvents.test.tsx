@@ -262,3 +262,36 @@ it('names the indicators covered, and keeps the two ways of covering none apart'
     expect(identity()).toContain('源未给出')
   } finally { await act(async () => root.unmount()) }
 })
+
+/**
+ * 「这条源还在出数吗」——**按采集批次判，不按事件上的时刻判**。
+ *
+ * 用户 2026-11-16：Narwhal 自 11-13T13:20Z 起零产出，界面一路正常，直到读者拿着错的预期值
+ * （10，实际 18）来问。判据在服务端算（`marketCalendarFeedLiveness`：连续错过 N 个自己的周期），
+ * 这一条只钉**渲染**：停了就把「最后成功批次」写进正文；没停就一个字都不多。
+ *
+ * 为什么不拿事件上的 `sourceObservedAt` 判：它是「来源最后一次给出这一条」，翻到几年前的月份
+ * 天然很旧，按它判会把每一个历史月份都写成「已停止出数」。批次回答的是另一个问题。
+ */
+it('says a source stopped producing, with the time of its last successful batch', async () => {
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const host = document.createElement('div'); const root = createRoot(host)
+  const event = { eventKey: '00000000-0000-4000-8000-0000000000f1', title: 'Empire State manufacturing survey',
+    countryCode: 'US', eventType: 'economic-indicator' as const, importance: 'high' as const,
+    scheduledAt: '2026-11-16T13:30:00.000Z', consensus: { displayValue: '10' }, providerPrevious: null,
+    providerActual: { displayValue: '7.8' }, source: 'Narwhal' as const,
+    sourceObservedAt: '2026-11-13T23:21:33.876Z', coverage: 'observed-unverified' as const }
+  const silent = { eventType: 'economic-indicator' as const, status: 'success' as const,
+    sourceObservedAt: '2026-11-13T23:21:33.876Z', lastBatchAt: '2026-11-13T13:20:07.915Z', collectorSilent: true }
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={event} source={silent} text={text} />)))
+    const status = host.querySelector('[data-market-source-status]')?.textContent ?? ''
+    expect(status).toContain('已停止出数（最后 2026-11-13 13:20:07 GMT）')
+
+    // 恢复一批 → 停止句消失（正常状态下这句一个字都不该出现）。
+    await act(async () => root.render(scoped(<MarketCalendarInspector
+      event={event} source={{ ...silent, lastBatchAt: '2026-11-16T13:50:00.000Z', collectorSilent: false }} text={text} />)))
+    expect(host.querySelector('[data-market-source-status]')?.textContent).not.toContain('已停止出数')
+  } finally { await act(async () => root.unmount()) }
+})

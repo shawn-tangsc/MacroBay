@@ -68,6 +68,15 @@ export function calendarSourceStatusFragments(
     else detail.push(`${text.market.lastGivenAt} ${observedAt}`)
   }
 
+  // **这条源还在出数吗**：判据在服务端按采集批次算（`marketCalendarFeedLiveness`），这里只印结论。
+  // 它是异常句（读者必须当场知道这条源的数字可能停在上一次采集），所以进正文；时刻是**最后一次
+  // 成功批次**，不是「来源最后一次给出这一条」——后者在翻历史月份时天然很旧，判不出停没停。
+  if (source.collectorSilent === true) {
+    body.push(source.lastBatchAt === undefined
+      ? text.market.collectorStoppedNoTime
+      : text.market.collectorStopped.replace('{at}', formatTime(source.lastBatchAt, 'second')))
+  }
+
   if (marketCalendarAutomaticRefreshPolicy.automatic) {
     detail.push(text.market.automaticRefresh.replace('{interval}', String(marketCalendarAutomaticRefreshPolicy.intervalMinutes)))
   }
