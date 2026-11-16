@@ -83,6 +83,7 @@ MIT 许可证只覆盖代码，不覆盖行情数据或供应商内容。MacroBa
 
 - [快速开始](./getting-started/quick-start.zh-CN.md)
 - [安装](./getting-started/installation.zh-CN.md)
+- [下载与安装](./getting-started/download-and-install.zh-CN.md)
 - [第一次运行](./getting-started/first-run.zh-CN.md)
 - [产品概览](./product/overview.zh-CN.md)
 - [分析流程](./product/analysis-workflow.zh-CN.md)

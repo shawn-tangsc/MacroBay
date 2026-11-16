@@ -96,6 +96,7 @@ messages, one channel at a time. See [Status and limitations](reference/status-a
 
 - [Quick start](./getting-started/quick-start.md)
 - [Installation](./getting-started/installation.md)
+- [Download and install](./getting-started/download-and-install.md)
 - [First run](./getting-started/first-run.md)
 - [Product overview](./product/overview.md)
 - [Analysis workflow](./product/analysis-workflow.md)

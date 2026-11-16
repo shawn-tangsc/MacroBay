@@ -6,6 +6,8 @@
 [Releases 页面](https://github.com/shawn-tangsc/MacroBay/releases)。本文说明如何从源码构建；要把构建结果变成可分发的 `.dmg` 或 Windows
 安装器，见[打包](../development/packaging.zh-CN.md)。
 
+已经下载了安装包？看[下载与安装](./download-and-install.zh-CN.md)。
+
 ## 环境要求
 
 - **Node.js 22 或更高版本**
