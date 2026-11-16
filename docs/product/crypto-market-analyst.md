@@ -69,7 +69,9 @@ as an empty panel pretending to be complete.
   none. Without them the desk still runs on a smaller set of panels.
 - **A local proxy for some sources.** A few data endpoints reject mainland-China network requests; they
   only collect through a proxy.
-- **macOS.** It is the verified platform; Windows and Linux are expected to run but are not validated.
+- **macOS.** The primary development and build platform; it was actually installed and used during
+  0.4.0, and has not been re-verified by a real install since. Windows and Linux are expected to run
+  but are not validated.
 
 ## ⚠️ A local proxy is required for some sources
 
