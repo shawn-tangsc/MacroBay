@@ -86,3 +86,27 @@ describe('事件清单读口（一行一个事件身份）', () => {
       .toMatchObject({ state: 'available', rows: [], total: 0 })
   })
 })
+
+describe('源内身份的中英两条合成一条（读取层去重，不动库）', () => {
+  it('同一数组指标 id + 同期的中英两行 → 一条；中文名优先，英文原文仍可搜到', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 真实形状：源对同一件事发了中文名与英文名两条，metric_key 的第一段都是 214790。
+    upsertCalendarStandardRow(database, { ...row('["214790",79090]', '2026-11-16T13:30', '2026-11-16', {
+      countryCode: 'US', identityKind: 'source', sourceLabel: '11月纽约联储制造业指数'
+    }), sourceEventId: 'zh-214790' })
+    upsertCalendarStandardRow(database, { ...row('["214790",79095]', '2026-11-16T13:30', '2026-11-16', {
+      countryCode: 'US', identityKind: 'source', sourceLabel: 'New York Fed manufacturing Index(Nov)'
+    }), sourceEventId: 'en-214790' })
+    const read = readCalendarEventIndex(database, { today })
+    if (read.state !== 'available') throw new Error('unavailable')
+    expect(read.total).toBe(1)                       // 两条 → 一条
+    expect(read.rows[0]!.zhShort ?? read.rows[0]!.sourceLabel).toContain('纽约联储')   // 中文优先
+    // 英文原文保留下来可搜（否则读者按英文名找不到这条）
+    const english = readCalendarEventIndex(database, { today, nameQuery: 'New York Fed' })
+    expect(english.state === 'available' && english.rows.length).toBe(1)
+    // 中文也搜得到
+    const chinese = readCalendarEventIndex(database, { today, nameQuery: '纽约联储' })
+    expect(chinese.state === 'available' && chinese.rows.length).toBe(1)
+  })
+})

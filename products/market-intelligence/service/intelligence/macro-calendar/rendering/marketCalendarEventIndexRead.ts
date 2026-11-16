@@ -149,6 +149,19 @@ export function readCalendarEventIndex(database: DatabaseSync, input: Readonly<{
         eventType: eventTypeOf(aggregate.metric_key)
       }))
     }
+    // **同源内身份的中英两条合成一条**（用户 2026-11-16）：源对同一件事发了一条中文名、一条英文名，
+    // 两条被当成两个事件收进来，表里一半是重复。身份取「数组 id 的第一段 + 期次月份」，
+    // 名字优先中文、英文名保留下来可搜——**只改读取层，不动库**（库里的重复另立一笔）。
+    const merged = new Map<string, CalendarEventIndexRow>()
+    for (const row of rows) {
+      const groupKey = `${row.countryCode}|${sourceInternalIdOf(row.metricKey)}|${(row.period ?? '').slice(0, 7)}`
+      const existing = merged.get(groupKey)
+      if (existing === undefined) { merged.set(groupKey, { ...row, key: groupKey }); continue }
+      merged.set(groupKey, mergeSameFaceRows(existing, row, groupKey))
+    }
+    const deduped = [...merged.values()]
+    rows.length = 0
+    rows.push(...deduped)
     // 排序：最近一次发布日 **倒序**，同日用稳定键升序——**tiebreaker 必须是唯一的**，
     // 否则同一天的那批事件在翻页边界上会重复出现或漏掉（真数据里同日几十条很常见）。
     rows.sort((left, right) => {
@@ -169,6 +182,36 @@ export function readCalendarEventIndex(database: DatabaseSync, input: Readonly<{
   } catch {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }
   }
+}
+
+/**
+ * 源内身份：数组形 `["214790",79090]` 的第一段就是指标身份（同一条发布的多个 measure 共用它）。
+ * 非数组形（规范码）原样返回。**这是「源自己说的身份」，不是我们猜的映射。**
+ */
+export function sourceInternalIdOf(metricKey: string): string {
+  const match = /^\["(\d+)"/.exec(metricKey)
+  return match === null ? metricKey : `id:${match[1]}`
+}
+
+const hasCjk = (value: string): boolean => /[\u4e00-\u9fff]/.test(value)
+
+/** 中英两条合成一条：中文名字段给中文那条，英文原文留给搜索；时间取更早/更晚的两个极端。 */
+function mergeSameFaceRows(left: CalendarEventIndexRow, right: CalendarEventIndexRow, key: string): CalendarEventIndexRow {
+  const zhSource = hasCjk(left.sourceLabel ?? '') || !hasCjk(right.sourceLabel ?? '') ? left : right
+  const enSource = zhSource === left ? right : left
+  const lastDates = [left.lastRelease?.date, right.lastRelease?.date].filter((value): value is string => value !== undefined).sort()
+  const nextDates = [left.nextRelease?.date, right.nextRelease?.date].filter((value): value is string => value !== undefined).sort()
+  return Object.freeze({
+    ...zhSource,
+    key,
+    // **显示名留中文那条**（`sourceLabel`），英文那条塞进 `enFull` 槽位——它只被搜索命中列使用，
+    // 既不覆盖显示名，也不会让英文读者搜不到（英文原文仍是可搜字段之一）。
+    ...(enSource.sourceLabel === undefined ? {} : { enFull: enSource.sourceLabel }),
+    ...(lastDates.length === 0 ? {} : { lastRelease: { date: lastDates[lastDates.length - 1]!,
+      ...(zhSource.lastRelease?.scheduledAt === undefined ? {} : { scheduledAt: zhSource.lastRelease.scheduledAt }) } }),
+    ...(nextDates.length === 0 ? {} : { nextRelease: { date: nextDates[0]! } }),
+    ...(zhSource.importance === undefined ? {} : { importance: zhSource.importance })
+  })
 }
 
 /** 供 IPC 层与用例复用：游标 → 两个分量（避免各写一份解析）。 */
