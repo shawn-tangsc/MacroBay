@@ -12,6 +12,14 @@ import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalen
 export type CalendarMonthReleases = Readonly<{
   state: 'idle' | 'loading' | 'ready' | 'unavailable'
   events: readonly MarketCalendarEvent[]
+  /**
+   * 这份 `events` 是**哪一个月**读回来的（`YYYY-MM`）。
+   *
+   * 没有它，调用方分不清「这个月的读数已到」和「换了月、新读数还没回来，手上是上个月那一份」：
+   * `month` 是当下要读的月，它一变 state 还是上一次的 `ready`。按事件定位的入口（「在日历中打开」）
+   * 正是踩这个空档——拿上个月的结果去找这个月的事件，找不到就当没有。
+   */
+  readMonth?: string
   /** 只有**手动刷新**才置位：换月也在读，但那时不该把整格换成转圈。 */
   refreshing: boolean
   reload: () => void
@@ -33,6 +41,7 @@ export function useCalendarMonthReleases(input: Readonly<{
 }>): CalendarMonthReleases {
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle')
   const [events, setEvents] = useState<readonly MarketCalendarEvent[]>([])
+  const [readMonth, setReadMonth] = useState<string | undefined>(undefined)
   const [refreshing, setRefreshing] = useState(false)
   const [tick, setTick] = useState(0)
   // 读入口放进 ref：宿主每次渲染都可能传新函数，进依赖会让同一份快照被反复读。
@@ -46,6 +55,7 @@ export function useCalendarMonthReleases(input: Readonly<{
     if (!enabled || !read || !asOf) {
       setState('idle')
       setEvents([])
+      setReadMonth(undefined)
       setRefreshing(false)
       return undefined
     }
@@ -54,16 +64,18 @@ export function useCalendarMonthReleases(input: Readonly<{
     void read(month, asOf)
       .then((page) => {
         if (!current) return
+        // 只有这一页真的回来了才记住它属于哪个月：先记下、再交结果，调用方拿到的永远自洽。
+        setReadMonth(month)
         if (page === null) { setState('unavailable'); setEvents([]); return }
         setState('ready')
         setEvents(page.flatMap(marketEventOf))
       })
-      .catch(() => { if (current) { setState('unavailable'); setEvents([]) } })
+      .catch(() => { if (current) { setReadMonth(month); setState('unavailable'); setEvents([]) } })
       .finally(() => { if (current) setRefreshing(false) })
     return () => { current = false }
   }, [enabled, month, asOf, locale, tick])
 
-  return { state, events, refreshing, reload }
+  return { state, events, readMonth, refreshing, reload }
 }
 
 /**

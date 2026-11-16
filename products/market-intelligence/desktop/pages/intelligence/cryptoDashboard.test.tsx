@@ -1479,7 +1479,7 @@ describe('the calendar entry opens the drawer, not a page', () => {
       }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf),
       onConfigureSources: () => undefined, onManageSource: () => undefined,
-      openIndicatorDrawerRequest: 0,
+      openIndicatorDrawerRequest: { seq: 0 },
       calendarEventTitles: { cpi: 'CPI' },
       readMarketEvents: async () => [{
         eventKey: 'evt-cpi', title: 'CPI', countryCode: 'US', countryName: '美国', measureKeys: ['US.CPI.NSA.YOY'],
@@ -1491,14 +1491,14 @@ describe('the calendar entry opens the drawer, not a page', () => {
     await flush()
     expect(document.body.querySelector('.mk-minical')).toBeNull()
 
-    // 页面层点那颗图标 = 序号加一（`onOpenCalendar` 就是这么接的）。
+    // 页面层点那颗图标 = 递一个新的请求（序号加一；`openCalendar` 就是这么接的）。
     await act(async () => drawerRoot.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient({
         state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf),
       onConfigureSources: () => undefined, onManageSource: () => undefined,
-      openIndicatorDrawerRequest: 1,
+      openIndicatorDrawerRequest: { seq: 1 },
       calendarEventTitles: { cpi: 'CPI' },
       readMarketEvents: async () => [{
         eventKey: 'evt-cpi', title: 'CPI', countryCode: 'US', countryName: '美国', measureKeys: ['US.CPI.NSA.YOY'],
@@ -1533,7 +1533,7 @@ it('hands the injected calendar block down to the drawer, not just to its own pr
     }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
     now: () => new Date(asOf),
     onConfigureSources: () => undefined, onManageSource: () => undefined,
-    openIndicatorDrawerRequest: 1,
+    openIndicatorDrawerRequest: { seq: 1 },
     calendarBlock: createElement('div', { 'data-test-calendar-block': '' }, '接下来要看的'),
     calendarEventTitles: { cpi: 'CPI' },
     readMarketEvents: async () => [],

@@ -23,6 +23,7 @@ import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../settings/intelligence-sources/sourceWrites'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
+import type { CalendarDrawerRequest } from './macroIndicatorDrawerModel'
 import { createCalendarCardReactionReader } from './calendarCardReaction'
 
 import { SampleModeProvider, useSampleMode } from './SampleModeProvider'
@@ -150,9 +151,22 @@ function IntelligencePageBody(): React.ReactElement {
       // 进入失败保持真实模式；开关仍为 off。
     }
   }
-  /* 看板里「打开日历」现在开的是日历抽屉（旧日历页已删）。抽屉挂在 `CryptoIntelligenceDashboard` 里，
-     所以这里只记一个请求序号：加一 = 请它打开。不去共享它的内部开关，避免把抽屉状态提到页面层。 */
-  const [indicatorDrawerRequest, setIndicatorDrawerRequest] = useState(0)
+  /**
+   * 打开日历抽屉的**唯一入口**（旧日历页已删，日历只剩这一扇抽屉）。
+   *
+   * 三个入口都走这里：看板那张日历卡的图标（它指着自己正在看的那个月）、行上的「在日历中打开」
+   * （再加一条 `eventKey`）、右栏发布日历的图标。抽屉挂在 `CryptoIntelligenceDashboard` 里，
+   * 页面层只递一个请求——序号加一 = 请它打开，`month` / `eventKey` 是这一次要落到的位置，
+   * 不再只是「打开一下」：读者点了 3 月那张卡却看到 11 月，就是这个参数被丢掉造成的。
+   */
+  const [calendarDrawerRequest, setCalendarDrawerRequest] = useState<CalendarDrawerRequest>({ seq: 0 })
+  const openCalendar = (month?: string, eventKey?: string): void => {
+    setCalendarDrawerRequest((previous) => ({
+      seq: previous.seq + 1,
+      ...(month === undefined ? {} : { month }),
+      ...(eventKey === undefined ? {} : { eventKey })
+    }))
+  }
   /**
    * The 0xRouter month, paged, in the reader's language.
    *
@@ -209,7 +223,7 @@ function IntelligencePageBody(): React.ReactElement {
           key={sample.sessionKey}
           onOpenAnalysisSettings={() => openConfigDrawer({ menu: 'analysis' })}
           onOpenSettings={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
-          onOpenCalendar={() => setIndicatorDrawerRequest((count) => count + 1)}
+          onOpenCalendar={openCalendar}
           text={text}
           locale={language}
           // The one event-title list the product keeps, read here because the page entry owns the
@@ -261,7 +275,7 @@ function IntelligencePageBody(): React.ReactElement {
           /* 「采集与数据」里点源名/红行：切到「数据源」屏，定位到那个源（滚动/描边/焦点归详情）。 */
           /* 舆情卡右边的入口卡 → 抽屉「内容处理」屏（菜单 7 项不变，同一条 openConfigDrawer 路）。 */
           onOpenProcessingSettings={() => openConfigDrawer({ menu: 'processing' })}
-          openIndicatorDrawerRequest={indicatorDrawerRequest}
+          openIndicatorDrawerRequest={calendarDrawerRequest}
           text={text.dashboard}
         />
         </MarketAnalysisDashboardLayout>

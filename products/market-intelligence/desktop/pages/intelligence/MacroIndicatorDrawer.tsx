@@ -21,7 +21,8 @@ import type { CalendarDayItem } from '../../features/macro/economic-calendar/eco
 import { productText } from '../../shared/i18n/productText'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
-import { useCalendarMonthReleases } from './useCalendarMonthReleases'
+import { useCalendarDrawerPosition } from './useCalendarDrawerPosition'
+import { useDrawerPlotMeasure } from './useDrawerPlotMeasure'
 import { useUnmappedMonthObservations } from './useUnmappedMonthObservations'
 import { mergeCalendarDaySources } from '../../features/macro/economic-calendar/unmappedCalendarMerge'
 import { PolicyPathCard, PolicyPathUnavailable, type PolicyPathCardText } from './PolicyPathCard'
@@ -57,7 +58,7 @@ import './macroIndicatorDrawer.css'
  */
 
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, calendarBlock, now, readMarketEvents }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, calendarBlock, now, readMarketEvents }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -65,6 +66,13 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
    */
   open?: boolean
   onClose: () => void
+  /**
+   * 这一次打开要落到哪个月 / 哪条事件。由宿主把**入口自己的位置**递进来：
+   * 看板那张日历卡指哪个月、行上的「在日历中打开」指哪条事件。
+   *
+   * 定位**只随请求序号生效一次**，落法在下面那段 effect 里；缺省就是不动（按「今天」）。
+   */
+  openTarget?: CalendarDrawerRequest
   /**
    * 曲线与政策利率卡读**同一份读数**：宿主已经读到的那一份，抽屉里不再取第二遍。
    * 读不到时不编数——曲线与卡各自走「读不到」形态。
@@ -148,25 +156,17 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
   const fallbackNow = useMemo(() => new Date().toISOString(), [])
   const nowInstant = now ?? fallbackNow
   const today = calendarDisplayDate(nowInstant, timeZone)
-  // 月份与选中日是两个真状态：换月清掉选中的那一天，由「今天 / 最近一个有事件的日子」重新定。
-  const [month, setMonth] = useState(today.slice(0, 7))
-  const [pickedDay, setPickedDay] = useState<Readonly<{ month: string; day: string }> | undefined>(undefined)
-  const releases = useCalendarMonthReleases({
-    enabled: open,
-    month,
-    asOf: nowInstant,
-    locale,
-    ...(readMarketEvents ? { readMarketEvents } : {})
-  })
-  const eventDays = useMemo(() => new Set(releases.events.map((event) => calendarDisplayDate(event.scheduledAt, timeZone))),
-    [releases.events, timeZone])
-  const selectedDay = pickedDay !== undefined && pickedDay.month === month
-    ? pickedDay.day
-    : defaultDayFor(month, eventDays, today)
-  const dayEvents = useMemo(() => releases.events
-    .filter((event) => calendarDisplayDate(event.scheduledAt, timeZone) === selectedDay)
-    .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt)),
-  [releases.events, selectedDay, timeZone])
+  // 月份、右列那一天、左缘的详情：都在 `useCalendarDrawerPosition` 里（含入口带定位与关抽屉清场）。
+  const { month, releases, selectedDay, dayWasPicked, dayEvents, detailEvent, changeMonth, selectDay, selectEvent, clear: clearPosition }
+    = useCalendarDrawerPosition({
+      open,
+      ...(openTarget === undefined ? {} : { openTarget }),
+      today,
+      timeZone,
+      asOf: nowInstant,
+      locale,
+      ...(readMarketEvents === undefined ? {} : { readMarketEvents })
+    })
   /**
    * 右列两层分组（类型在外、指标组内再分分级）：判据在 `macroIndicatorDrawerModel`，
    * 这里只把文案函数交过去。**tab 的条数也从这一份算**，不另数一遍。
@@ -240,7 +240,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     for (const entry of unmappedMonth.entries) counts.set(entry.scheduledDate, (counts.get(entry.scheduledDate) ?? 0) + 1)
     return counts
   }, [unmappedMonth.entries])
-  const changeMonth = (next: string): void => { setMonth(next); setPickedDay(undefined) }
   // 右列按「能不能解释利率路径」筛，与曲线标注同一把尺子（判据来自契约，不在这里另写一份）。
   const dayLayers = useMemo(() => splitDayLayers(dayEvents), [dayEvents])
   /**
@@ -257,61 +256,21 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     }))
   })), [text])
 
-  /** 右列点一条事件 → 与经济日历页同一个详情抽屉（`CalendarInspector`，左侧 inline 浮层）。 */
-  const [detailEvent, setDetailEvent] = useState<MarketCalendarEvent | undefined>(undefined)
+  /**
+   * 关外层抽屉时一并清掉内层详情与没落完的定位。
+   *
+   * 详情是挂到 `document.body` 的整窗浮层，不跟着抽屉卸载：只关外层，它会留在窗口左缘，
+   * 下一次打开就顶着一份上一次的详情。定位同理，不能带着去下一次。
+   */
+  const closeDrawer = (): void => {
+    clearPosition()
+    onClose()
+  }
   // 展开态跟着日期走，不跟着抽屉走。
   // 这一天的事件**全部列出**：不分「核心 / 其他」两层、也不折叠（用户 2026-11-14）。
   // 收起会让读者以为当天只有三条、实际三十多条；事件被藏起来就是没显示。
-  /**
-   * 图的尺寸：0 表示**还没量到**。
-   *
-   * 结构约定（这块已经三次跑出格子：横条、面板被裁、整张图压到右边的卡上）：
-   * **图、读数面板、事件标注，任何一部分都不许出现在自己的盒子之外。**
-   * 所以尺寸只认量到的值，量不到就不画；不要用「先给一个默认宽高」「给个地板」
-   * 「用 overflow 裁掉」这三种方式兜底——前两种会画到格子外，第三种会把面板一起裁掉。
-   */
-  const [plotWidth, setPlotWidth] = useState(0)
-  const [plotHeight, setPlotHeight] = useState(0)
-  const plotRef = useRef<HTMLDivElement | null>(null)
-  const heroRef = useRef<HTMLDivElement | null>(null)
-  const observerRef = useRef<ResizeObserver | null>(null)
-
-  const measure = useCallback(() => {
-    // 写回值永远来自「量到的那个数」：量不到（首帧 clientWidth=0）就保持上一次的值，
-    // 不给自己任何地板宽度/高度——地板正是「量 340 写 380」这种自激的入口。
-    const host = plotRef.current
-    setPlotWidth((previous) => nextMeasuredSize(previous, host ? Math.floor(host.clientWidth) : 0))
-    // 行高由卡片内容决定：量卡本身（它的第一个子元素），不是量被拉伸过的槽位。
-    const card = heroRef.current?.firstElementChild ?? heroRef.current
-    if (card) setPlotHeight((previous) => nextMeasuredSize(previous, Math.ceil(card.getBoundingClientRect().height)))
-  }, [])
-
-  /**
-   * 用**回调 ref** 量尺寸，而不是挂在组件上的 `useLayoutEffect`。
-   *
-   * 抽屉的内容是 antd 在打开后挂进来的：组件的 layout effect 第一次跑时 `.mk-plot` 还没挂上
-   * （实测 `plotRef.current === null`），于是尺寸一直是 0；以前用 560/264 的初始值掩盖了这件事，
-   * 而那个假尺寸正是「整张图比格子宽、压到右边卡片」的来源。回调 ref 在节点真正挂上时触发，
-   * 量到的就是真实盒子；ResizeObserver 跟上后续的尺寸变化。
-   */
-  const attachPlot = useCallback((node: HTMLDivElement | null) => {
-    observerRef.current?.disconnect()
-    plotRef.current = node
-    if (!node) return
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(node)
-    if (heroRef.current) observer.observe(heroRef.current)
-    observerRef.current = observer
-  }, [measure])
-
-  const attachHero = useCallback((node: HTMLDivElement | null) => {
-    heroRef.current = node
-    measure()
-    if (node && observerRef.current) observerRef.current.observe(node)
-  }, [measure])
-
-  useEffect(() => () => observerRef.current?.disconnect(), [])
+  // 图的尺寸只认量到的值（量不到就不画）：测量链在 `useDrawerPlotMeasure` 里。
+  const { plotWidth, plotHeight, attachPlot, attachHero } = useDrawerPlotMeasure()
 
   // 序列与事件标注：与看板首页那张图**同一份**推导（`useExpectationSeries`），不各写一遍。
   const { points, latestBp, delta, truncatedDays, eventMarks } = useExpectationSeries(policyReading, releaseEvents, text)
@@ -337,7 +296,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
     titleKey="mk.title"
     resolveText={(key: string) => drawerKeys[key] ?? ''}
     footer={<><span>{text.dataBy}</span> <a className="mk-foot-a" href="https://narwhalapi.com" target="_blank" rel="noreferrer">Narwhal API</a></>}
-    onClose={onClose}
+    onClose={closeDrawer}
   >
     <section className="mk-sec" aria-label={text.title}>
       <div className="mk-col-l">
@@ -400,7 +359,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           unmappedCountByDay={unmappedCountByDay}
           events={releases.events} timeZone={timeZone} now={nowInstant}
           state={releases.state} refreshing={releases.refreshing}
-          onSelectDay={(day) => setPickedDay({ month, day })}
+          onSelectDay={selectDay}
           onMonthChange={changeMonth} onRefresh={releases.reload}
           onOpenCatalog={() => setCatalogOpen(true)}
           catalogAriaOf={(key) => catalogCopy[key] ?? key}
@@ -417,7 +376,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
           : releases.state === 'ready'
             ? <>
               {/* 自动挑到别的日子时要说清是哪一天、为什么——否则读者以为标题里的日期是「今天」。 */}
-              {pickedDay === undefined && selectedDay !== today
+              {!dayWasPicked && selectedDay !== today
                 ? <p className="mk-col-r__note" data-day-not-today>{text.mkDay.notToday}</p> : null}
               <CalendarDayEventList
                 label={calendarText.dayEvents.listLabel}
@@ -452,7 +411,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
                 statusNow={nowInstant}
                 selectedEventKey={undefined}
                 selectedMarketKey={detailEvent?.eventKey}
-                onSelect={(item) => setDetailEvent(item.source === 'market' ? item.event : undefined)}
+                onSelect={(item) => selectEvent(item.source === 'market' ? item.event : undefined)}
               />
             </>
             : <LoadingState label={calendarText.unifiedDay.loading} minHeight={160} />}
@@ -466,7 +425,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
         <div className="mk-detail-overlay">
           <CalendarInspector
             contentId={detailEvent.eventKey}
-            onClose={() => setDetailEvent(undefined)}
+            onClose={() => selectEvent(undefined)}
             open
             when={detailEvent.scheduledAt}>
             <MarketCalendarInspector event={detailEvent} source={undefined} text={calendarText} />
@@ -480,7 +439,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, onConfigure
 
 // 纯函数与卡片文案分别搬进两个聚焦模块（这里只留组件本体）；对外仍从本文件转出，
 // 现有调用点与用例一行不用改。
-import { nextReleaseOf, defaultDayFor, dayGroups, dayTierOf, splitDayLayers, type DayTier, type DayLayers } from './macroIndicatorDrawerModel'
+import { nextReleaseOf, defaultDayFor, dayGroups, dayTierOf, splitDayLayers, type CalendarDrawerRequest, type DayTier, type DayLayers } from './macroIndicatorDrawerModel'
 import {
   cardValueClass, cardSourceLabel, previousText, CardWhy, consensusText,
   cardValueText, cardChangeText, cardStateText, formatCardNumber, formatCardPeriod
@@ -488,7 +447,7 @@ import {
 
 export {
   nextReleaseOf, defaultDayFor, dayGroups, dayTierOf, splitDayLayers,
-  type DayTier, type DayLayers
+  type CalendarDrawerRequest, type DayTier, type DayLayers
 } from './macroIndicatorDrawerModel'
 export {
   cardValueClass, cardSourceLabel, previousText, CardWhy, consensusText,

@@ -7,6 +7,20 @@ import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalenda
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 
 /**
+ * 「打开日历抽屉，并落到这一个位置」。
+ *
+ * `seq` 回答的是「又点了一次」——同一个目标再点一次也要生效（读者可能已经翻走了）。
+ * 而定位**只在序号变化时落一次**：页面为别的原因重渲染，不许把翻过月份的读者拽回来。
+ * `month` 是 `YYYY-MM`（显示时区），入口都从自己正在看的那一格拿到它；
+ * `eventKey` 只有「在日历中打开某一件事」才带。
+ */
+export type CalendarDrawerRequest = Readonly<{
+  seq: number
+  month?: string
+  eventKey?: string
+}>
+
+/**
  * 下一次发布：在**同一次按月读**的结果里按身份找「现在之后」最近的一条。
  *
  * 找不到就返回 `undefined`，调用方**不画这一格**——写「未提供」会让人以为今天该有一次发布。

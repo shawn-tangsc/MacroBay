@@ -58,7 +58,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
 
-import { MacroIndicatorDrawer } from './MacroIndicatorDrawer'
+import { MacroIndicatorDrawer, type CalendarDrawerRequest } from './MacroIndicatorDrawer'
 import { useCurveReleaseEvents } from './useCurveReleaseEvents'
 import { DashboardMacroRow } from './DashboardMacroRow'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
@@ -99,11 +99,11 @@ type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEn
    */
   onManageSource: (focus?: BusinessFocus) => void
   /**
-   * 看板里「打开日历」的入口（右栏那张发布日历的图标）：旧日历页已删，现在打开的是日历抽屉。
-   * 抽屉状态在本组件里，所以页面层只递一个**请求序号**——加一 = 请打开；
-   * 不去共享内部开关，也不为了一个入口把状态提到页面层。
+   * 看板里「打开日历」的入口（右栏那张发布日历的图标、日历卡的图标、「在日历中打开」）：
+   * 旧日历页已删，现在打开的是日历抽屉。抽屉状态在本组件里，所以页面层只递一个**请求**——
+   * 序号加一 = 请打开，`month`/`eventKey` 是这一次要落到的位置；不去共享内部开关。
    */
-  openIndicatorDrawerRequest?: number
+  openIndicatorDrawerRequest?: CalendarDrawerRequest
   /** 「接下来要看的」那块（layout 用同一次 cardData 构造后注入），透传给抽屉。 */
   calendarBlock?: React.ReactNode }
 
@@ -307,9 +307,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // 关键指标 · 预期变化：曲线、政策卡与三张简化卡都读真数据。
   const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
-  // 页面层请求打开日历抽屉（右栏那张发布日历的图标）：请求序号一变就开，不去共享内部开关。
+  // 页面层请求打开日历抽屉：请求序号一变就开，不去共享内部开关。定位由抽屉按序号自己落一次。
   useEffect(() => {
-    if ((openIndicatorDrawerRequest ?? 0) > 0) setIndicatorDrawerOpen(true)
+    if ((openIndicatorDrawerRequest?.seq ?? 0) > 0) setIndicatorDrawerOpen(true)
   }, [openIndicatorDrawerRequest])
   // 抽屉的「现在」在**每次打开时**取一次：每渲染都取会让按月的读跟着重读同一份快照。
   const drawerNow = useMemo(() => now().toISOString(), [now, indicatorDrawerOpen])
@@ -452,7 +452,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         releaseEvents={curveReleaseEvents}
         {...(cardFactsView?.state === 'available' ? { cardFacts: cardFactsView.facts } : {})}
         {...(cardFactsView?.state === 'unavailable' ? { cardFactsUnreadable: true } : {})}
-        now={drawerNow}
+        now={drawerNow} openTarget={openIndicatorDrawerRequest}
         {...(readMarketEvents ? { readMarketEvents } : {})}
         onOpenPolicyDetail={() => { setIndicatorDrawerOpen(false); setPolicyDrawerOpen(true) }} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}

@@ -102,7 +102,7 @@ async function renderSurface(extra: Partial<Omit<Parameters<typeof MarketAnalysi
   root = createRoot(host)
   // Mirrors index.tsx: the page's title vocabulary, its drawer and its one selected event.
   // 「接下来要看的」这块已从看板搬进抽屉（2026-11-15）：需要它时由这条参数把抽屉打开。
-  const drawerRequest = (extra as { openIndicatorDrawerRequest?: number }).openIndicatorDrawerRequest
+  const drawerRequest = (extra as { openIndicatorDrawerRequest?: { seq: number } }).openIndicatorDrawerRequest
   const dashboard = {
     ...(monthEvents ? { ...dashboardProps, client: { queryMonth: vi.fn(async () => monthPage(monthEvents)) } } : dashboardProps),
     ...(drawerRequest === undefined ? {} : { openIndicatorDrawerRequest: drawerRequest })
@@ -207,7 +207,7 @@ describe('a chart line selects a calendar event without opening the conversation
     }
     // 卡片已搬进抽屉右列顶部：先让页面请求打开抽屉，行在抽屉里（portal 到 body）。
     // 抽屉请求是 dashboard 的参数（不是 layout 的），这条助手按约定把它转给 dashboard——这里显式越过 layout 的参数类型。
-    const host = await renderSurface({ openIndicatorDrawerRequest: 1 } as never, undefined, [cardEvent])
+    const host = await renderSurface({ openIndicatorDrawerRequest: { seq: 1 } } as never, undefined, [cardEvent])
     const row = document.body.querySelector<HTMLElement>('[data-drawer-calendar-block] [data-calendar-card-row]')
     expect(row, 'the released value is in the card\'s today section').not.toBeNull()
     // No consensus is not a verdict: the row keeps its readings and does not add a badge for it.
