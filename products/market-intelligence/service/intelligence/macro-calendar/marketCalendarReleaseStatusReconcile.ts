@@ -31,8 +31,13 @@ const countByStatus = (database: DatabaseSync): Record<string, number> => {
   return Object.fromEntries(rows.map((row) => [row.status, row.c]))
 }
 
+/**
+ * **「有实际值」只认 `values_json.actual`**，不认 `value_state`。
+ *
+ * `value_state = present` 的含义是「这一行有值区」（可能只有预期/前值），拿它当「已发布」的判据
+ * 就会把「只有预期」的行判成已发布——帝国大厦那条正是这样被选中的（用户 2026-11-16 报）。
+ */
 const hasActual = (row: Row): boolean => {
-  if (row.value_state === 'present') return true
   try {
     const values = JSON.parse(row.values_json) as { actual?: unknown }
     return typeof values.actual === 'string' && values.actual.trim() !== ''
@@ -48,7 +53,12 @@ export function reconcileExpiredReleaseStatuses(database: DatabaseSync, input: R
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
       scheduled_date, scheduled_at, status, value_state, values_json
     from ${calendarStandardTablePolicy.eventsTable}
-    where scheduled_date <= ? and status in ('scheduled', 'unknown')`).all(input.today) as unknown as Row[]
+    where scheduled_date <= ? and (status in ('scheduled', 'unknown')
+      -- **已发布却没有实际值**：只有预期值时不算发布（用户 2026-11-16 报的帝国大厦那条就是）。
+      -- 「优先信已发布」的逻辑会选中它，所以这类行必须按规则退回去。
+      or (status = 'published' and (json_extract(values_json, '$.actual') is null
+        or trim(cast(json_extract(values_json, '$.actual') as text)) = '')))`)
+    .all(input.today) as unknown as Row[]
   const update = database.prepare(`update ${calendarStandardTablePolicy.eventsTable} set status = ?
     where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
   let updated = 0
@@ -57,7 +67,9 @@ export function reconcileExpiredReleaseStatuses(database: DatabaseSync, input: R
     for (const row of rows) {
       const releaseAtMs = Date.parse(row.scheduled_at ?? `${row.scheduled_date}T00:00:00.000Z`)
       const next: DerivedReleaseStatus = deriveReleaseStatus({
-        sourceStatus: row.status === 'unknown' ? 'unknown' : 'scheduled',
+        // `published` 但没值的行按「来源说已发布、事实没值」处理：derive 会退回 backfilling/missing。
+        sourceStatus: row.status === 'published' ? 'published'
+          : row.status === 'unknown' ? 'unknown' : 'scheduled',
         scheduledDate: row.scheduled_date,
         today: input.today,
         hasActual: hasActual(row),
