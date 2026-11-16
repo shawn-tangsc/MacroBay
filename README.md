@@ -75,13 +75,15 @@ and whatever could not be collected is reported as a gap instead of being quietl
 This build is **not code-signed and not notarized**, so the first launch takes two steps:
 
 1. **macOS** — drag the app into *Applications*, then **right-click (Control-click) the app → Open**
-   and confirm **Open** in the dialog. Double-clicking is blocked by Gatekeeper. If macOS still
-   refuses, run `xattr -dr com.apple.quarantine /Applications/MacroBay.app` in Terminal and open it
-   again.
+   and confirm **Open** in the dialog. Double-clicking is blocked by Gatekeeper. **If the menu has no
+   Open item** (macOS 15 and later removed it), open **System Settings → Privacy & Security**, find
+   the app near the bottom of the page and click **Open Anyway**.
 2. **Windows** — run the installer. When SmartScreen says *Windows protected your PC*, click
    **More info → Run anyway**.
 
-Every update you download repeats those same two steps, until a signed build ships.
+Every update you download repeats those same two steps, until a signed build ships. When neither
+path works, the fallback is in
+[Download and install](docs/getting-started/download-and-install.md).
 
 The Intel build is `MacroBay-x64.dmg`: **built, but not yet verified on Intel hardware**. The Apple
 Silicon download link above is unchanged, and `latest-mac.yml` is produced only by the arm64 job.
