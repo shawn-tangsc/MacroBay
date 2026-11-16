@@ -25,6 +25,31 @@ const output = (overrides: {
 }) as never
 
 describe('trigger focus mode', () => {
+  // R37：新闻事实永远不进变化记录，所以新闻触发的首跑只能靠指针拿到焦点。没有这一档，规则在
+  // 最该管的那一次里从来不生效（运行时事故：validation_mode = not-applicable:no-change）。
+  const newsFacts = [{ factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1', subject: 'BTC' }]
+  const pointer = { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1' }
+
+  it('answers from the trigger pointer even when the change record is empty', () => {
+    expect(resolveTriggerFocus({ facts: newsFacts, trigger: pointer }))
+      .toEqual({ mode: 'strict', triggers: [{ factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1', subject: 'BTC' }] })
+  })
+
+  it('degrades to the reference check when the trigger fact has no readable subject', () => {
+    expect(resolveTriggerFocus({ facts: [{ factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1', subject: '' }], trigger: pointer }).mode)
+      .toBe('reference-only')
+  })
+
+  it('treats a pointer that cannot be resolved as truncated rather than "no trigger"', () => {
+    expect(resolveTriggerFocus({ facts: [], trigger: pointer }).mode).toBe('not-applicable:truncated')
+  })
+
+  it('still refuses an answer that cites the news but never points at it', () => {
+    const focus = resolveTriggerFocus({ facts: newsFacts, trigger: pointer })
+    expect(missingTriggerFocus(output({ cited: ['ev-1'] }), focus)).toBe(true)
+    expect(missingTriggerFocus(output({ cited: ['news:item-1'], change: 'BTC 相关消息出现。' }), focus)).toBe(false)
+  })
+
   it('does not run when the snapshot has no change record', () => {
     expect(resolveTriggerFocus({ facts: frozen })).toEqual({ mode: 'not-applicable:no-change', triggers: [] })
   })

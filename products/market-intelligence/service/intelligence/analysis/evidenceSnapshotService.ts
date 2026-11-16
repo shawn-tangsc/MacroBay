@@ -1,4 +1,4 @@
-import type { EvidenceSnapshot, MarketAnalysisContextAvailable } from '../../../contracts/marketAnalysisContracts'
+import type { EvidenceSnapshot, MarketAnalysisContextAvailable, SnapshotTrigger } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalysisContracts'
 import { buildAnalysisSnapshotHash } from './analysisHash'
 import { computeSnapshotChange } from './snapshotChange'
@@ -9,6 +9,11 @@ export type EvidenceSnapshotService = Readonly<{
     context: MarketAnalysisContextAvailable
     /** The predecessor in the same event group, used for the frozen change record. */
     previous?: Pick<EvidenceSnapshot, 'snapshotHash' | 'change' | 'facts' | 'missingDomains' | 'caveats' | 'evidenceRefs'>
+    /**
+     * 触发指针（R37）：这次运行被哪条新闻发起。只有新闻触发才给；它不进 `snapshotHash`
+     * （指纹是证据的指纹，指针是「为什么跑」），也不进变化记录。
+     */
+    trigger?: SnapshotTrigger
   }>) => EvidenceSnapshot
 }>
 
@@ -27,7 +32,7 @@ export function createEvidenceSnapshotService(deps: Readonly<{ now: () => string
       id: deps.idFactory(), schemaVersion: MARKET_ANALYSIS_CONTRACT_POLICY.schemaVersion, eventGroupId: input.eventGroupId, asOf: input.context.asOf,
       dataCutoff: input.context.dataCutoff, snapshotHash, profileId: input.context.profileId, facts,
       missingDomains, caveats, evidenceRefs, sourceHealth: input.context.sourceHealth.map(item => ({ ...item })),
-      change, createdAt: deps.now(), policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
+      change, ...(input.trigger ? { trigger: input.trigger } : {}), createdAt: deps.now(), policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
     })
   }
   return { freeze }

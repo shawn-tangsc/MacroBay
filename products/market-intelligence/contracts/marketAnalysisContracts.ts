@@ -4,6 +4,7 @@ import type {
   SourceHealthFlag,
   SnapshotFactChange,
   SnapshotChange,
+  SnapshotTrigger,
   EvidenceSnapshot,
 } from './marketAnalysisEvidenceContracts'
 
@@ -14,15 +15,16 @@ export type {
   SourceHealthFlag,
   SnapshotFactChange,
   SnapshotChange,
+  SnapshotTrigger,
   EvidenceSnapshot,
 } from './marketAnalysisEvidenceContracts'
 
 export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
   /**
-   * Bumped from 1 when the policy-path facts started carrying `sourceUrl`: new snapshots are
-   * written as 2, while a stored 1 is still a valid snapshot (the field is optional).
+   * 3：快照可以带触发指针 `trigger`（R37）。旧版本照旧有效——字段可选，读取端接受 1–3；
+   * 1 是 policy-path 事实还没有 `sourceUrl` 的时代。
    */
-  schemaVersion: 2,
+  schemaVersion: 3,
   dataAccessProfileId: 'crypto-market-analysis-v1',
   outputSchemaVersion: 2,
   maximumModelFieldCharacters: 2_000,

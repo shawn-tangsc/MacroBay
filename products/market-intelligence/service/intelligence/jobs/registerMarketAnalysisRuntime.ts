@@ -6,7 +6,9 @@ import type {
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
 
-import { MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
+import { logMarketAnalysisContextDiagnostic } from '../analysis/analysisContextDiagnostic'
+/** 诊断标记的格式化仍从这里导出：既有调用方与用例不用改 import。 */
+export { formatMarketAnalysisContextDiagnostic } from '../analysis/analysisContextDiagnostic'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindows'
 import { buildMarketAnalysisVerificationObservations, readFundingHistory } from '../analysis/verificationObservations'
@@ -35,6 +37,7 @@ import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createAnalysisConclusionManualSend, type AnalysisConclusionSend } from '../analysis/analysisConclusionManualSend'
 import { createAnalysisNoticeDeps, createReleaseCoverageReader, notifyAbandonedRelease } from './analysisReleaseNoticeWiring'
 import { createRunSessionBinding, type RunSessionPort } from './analysisRunSessionPort'
+import { triggeredNewsForFreeze } from '../analysis/analysisTriggeredNewsFact'
 import { hasEligibleAnalysisAnchor, readCanonicalAsOf, readSignificanceSignals, readString, resolveDomain, safeJson } from './analysisRuntimePayload'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
@@ -70,17 +73,6 @@ export type MarketAnalysisRuntime = Readonly<{
   setRunSessionPort: (port: RunSessionPort | undefined) => void
   dispose: () => void
 }>
-
-export function formatMarketAnalysisContextDiagnostic(input: Readonly<{
-  asOf: string
-  macroQueryState: string
-  macroEventCount: number
-  macroFactCount: number
-  macroEvidenceCount: number
-  macroCaveats: readonly string[]
-}>): string {
-  return JSON.stringify({ marker: 'MI_ANALYSIS_MACRO_CONTEXT', ...input })
-}
 
 const MARKET_ANALYSIS_CONSUMER_ID = 'market-intelligence.market-analysis-trigger'
 
@@ -140,7 +132,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * 触发判定用的**单条**情绪判定读取器：新闻的重要性由它给出（见 `analysisItemSeverity`）。
    * 缺省时新闻条目拿不到判定，严重度停在 medium——不冒充重要，也不触发分析。
    */
-  latestNewsSentiment?: (itemId: string, asOf: string) => NewsSentimentVerdict | undefined
+  latestNewsSentiment?: (itemId: string, asOf: string) => import('../schema/newsSentiment').NewsSentimentRecord | undefined
   dataDir: string
   now?: () => string
   /**
@@ -388,9 +380,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
 
   const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled,
       createGroup: async itemId => {
-        const change = await resolveChange({ changeId: itemId })
-        if (!change) throw new Error('analysis-not-eligible')
-        const group = groups.create(change)
+        const resolved = await resolveChange({ changeId: itemId })
+        if (!resolved) throw new Error('analysis-not-eligible')
+        const group = groups.create(resolved.change)
         repository.appendEventGroup(group)
         return group
       }
@@ -459,8 +451,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
 
 
   async function groupChange(payload: unknown): Promise<Record<string, unknown> | void> {
-    const change = await resolveChange(payload)
-    if (!change) return
+    const resolved = await resolveChange(payload)
+    if (!resolved) return
+    const change = resolved.change
     const existing = repository.findEventGroupByMergeKey(eventGroupMergeKey(change))
     const result = groups.addChange(existing, change)
     if (result.previousGroupId) {
@@ -513,11 +506,14 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     if (decision.decision !== 'queued' || !decision.phase) return
     // The row id rides the freeze payload so a later refusal can rewrite this very attempt instead
     // of leaving it counted as a spent call.
-    return { eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now(), ...(attemptLedgerId ? { attemptLedgerId } : {}) }
+    return {
+      eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now(),
+      ...(attemptLedgerId ? { attemptLedgerId } : {}), ...(resolved.triggeredItemId ? { triggeredItemId: resolved.triggeredItemId } : {})
+    }
   }
 
   async function freezeSnapshot(payload: unknown): Promise<Record<string, unknown> | void> {
-    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string }
+    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string; triggeredItemId?: string }
     const previousSnapshot = repository.listSnapshots(value.eventGroupId).at(-1)
     // Decided before anything is built: a skipped evaluation must not leave a snapshot or a run.
     const gate = await significanceGate.evaluate({
@@ -535,15 +531,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const context = await buildMarketAnalysisContext({ eventGroupId: value.eventGroupId, asOf: value.asOf }, input.publicQueryService,
       { triggeredEventKeys: gate.triggeredEventKeys })
     if (context.state !== 'available') throw new Error(context.errorCode)
-    const macro = context.domainAccess.find(domain => domain.domain === 'macro')
-    console.log(formatMarketAnalysisContextDiagnostic({
-      asOf: context.asOf,
-      macroQueryState: macro?.queryState ?? 'missing',
-      macroEventCount: context.facts.filter(fact => fact.domain === 'macro' && fact.metric === MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.eventName).length,
-      macroFactCount: context.facts.filter(fact => fact.domain === 'macro').length,
-      macroEvidenceCount: context.evidenceRefs.filter(ref => ref.sourceId.startsWith('macro-calendar-')).length,
-      macroCaveats: macro?.caveats ?? ['macro-domain-missing']
-    }))
+    logMarketAnalysisContextDiagnostic(context)
     const group = repository.getEventGroup(value.eventGroupId)
     if (!group) throw new Error('analysis-event-group-not-found')
     const enriched = await appendAnalysisEventEvidence(context, group, input.publicQueryService, () => input.pipeline.listRevisions())
@@ -560,9 +548,17 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       asOf: value.asOf,
       ...(sentimentSince ? { since: sentimentSince } : {})
     }, () => input.pipeline.listRevisions())
+    // 触发项按条目身份强制进快照（R37 §1）：窗口选材会因为「判定还没落地」把它漏掉，而这次运行
+    // 正是它发起的。建不出证据引用就整跑失败——不发布一份没读过新闻的综述。
+    const triggered = await triggeredNewsForFreeze(withSentiment, {
+      triggeredItemId: value.triggeredItemId, items: input.pipeline.listItems(),
+      verdict: value.triggeredItemId ? readLatestVerdict(value.triggeredItemId) : undefined,
+      query: input.publicQueryService, listRevisions: () => input.pipeline.listRevisions()
+    })
     const snapshot = snapshots.freeze({
       eventGroupId: value.eventGroupId,
-      context: withSentiment,
+      context: triggered.context,
+      ...(triggered.trigger ? { trigger: triggered.trigger } : {}),
       // The predecessor fixes the frozen "what changed" record for this snapshot.
       ...(previousSnapshot ? { previous: previousSnapshot } : {})
     })
@@ -612,7 +608,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * 单条情绪判定（判定时刻之前最后一次）。读不到就当「还没判」：宁可等下一跳，也不把一次
    * 存储故障写成「这条不重要」——账本行一旦写下，读者看到的就是一个判定。
    */
-  function readLatestVerdict(itemId: string): NewsSentimentVerdict | undefined {
+  function readLatestVerdict(itemId: string): import('../schema/newsSentiment').NewsSentimentRecord | undefined {
     try {
       return input.latestNewsSentiment?.(itemId, now())
     } catch {
@@ -620,7 +616,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     }
   }
 
-  async function resolveChange(payload: unknown): Promise<AnalysisChange | undefined> {
+  async function resolveChange(payload: unknown): Promise<{ change: AnalysisChange; triggeredItemId?: string } | undefined> {
     const itemId = readString(payload, 'changeId') ?? readString(payload, 'eventRef')
     const item = itemId ? input.pipeline.listItems().find(candidate => candidate.itemId === itemId || candidate.clusterId === itemId) : undefined
     if (!item) return
@@ -635,7 +631,10 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const decision = decideItemTriggerSeverity(item, verdict)
     if (decision.decision === 'await-verdict') return
     const severity = decision.severity
-    return {
+    // 主触发：只有新闻类来源才写指针（R37 §1.1）。别用 itemTriggerKeys 判——那两个键里还有一个是
+    // 日历发布，按它判会把日历触发的运行也写成「被一条新闻触发」。
+    const triggeredItemId = isNewsSeveritySource(item.sourceId) ? item.itemId : undefined
+    return { change: {
       changeId: item.itemId,
       domain,
       eventRef: item.itemId,
@@ -653,7 +652,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       sourceKind: item.sourceTrust === 'high' ? 'official' : 'proxy',
       comparability: 'comparable',
       groupType: domain === 'macro' ? 'macro' : domain === 'capital' ? 'capital' : domain === 'funding' ? 'funding' : domain === 'cross-asset' ? 'cross-asset' : 'sentiment'
-    }
+    }, ...(triggeredItemId ? { triggeredItemId } : {}) }
   }
 }
 

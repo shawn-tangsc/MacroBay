@@ -49,13 +49,15 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     // The attempt's ledger row id travels with the freeze work: the gate rewrites that row when it
     // refuses the attempt, so a refused attempt stops counting as a spent model call.
     const attemptLedgerId = typeof result.attemptLedgerId === 'string' ? result.attemptLedgerId : undefined
+    // 主触发条目跟着冻结工作走：它要在冻结时按条目身份补进快照（R37 §1），而冻结作业只收到这袋字段。
+    const triggeredItemId = typeof result.triggeredItemId === 'string' ? result.triggeredItemId : undefined
     await enqueue(jobRuntime, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, {
       eventGroupId: result.eventGroupId, triggerKey: result.triggerKey, analysisPhase: result.analysisPhase, asOf: result.asOf,
-      ...(attemptLedgerId ? { attemptLedgerId } : {})
+      ...(attemptLedgerId ? { attemptLedgerId } : {}), ...(triggeredItemId ? { triggeredItemId } : {})
     }, `freeze:${String(result.eventGroupId)}`)
   })
   jobRuntime.registerHandler(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, async (payload, context) => {
-    assertPayload(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf'], ['attemptLedgerId'])
+    assertPayload(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf'], ['attemptLedgerId', 'triggeredItemId'])
     // The trigger line owns the attempt row; without its id a later refusal cannot be recorded
     // against that attempt, so the work is refused rather than run and counted unmarked. Enforced
     // at the payload boundary so no caller can enqueue this work without the id it needs.

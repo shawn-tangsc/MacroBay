@@ -615,4 +615,94 @@ describe('market analysis runtime sentiment wiring', () => {
       await rm(directory, { recursive: true, force: true })
     }
   })
+
+  it('pins the triggering news into the snapshot with a pointer, and fails closed when it cannot', async () => {
+    // R37 §1/§2.3：新闻触发的首跑，`change` 永远为空（新闻不进变化记录），只能靠指针回答「读哪条」。
+    const directory = await mkdtemp(`${tmpdir()}/mi-analysis-trigger-pointer-`)
+    const asOf = '2026-11-16T09:07:42.000Z'
+    const publishedAt = '2026-11-16T08:46:00.000Z'
+    const handlers = new Map<string, JobHandler>()
+    const jobRuntime = {
+      registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler),
+      enqueueDefinition: vi.fn(async (definition: { id: string }) => ({ id: definition.id })),
+      listRuns: () => [],
+      enqueueStartup: vi.fn(async (id: string) => ({ id }))
+    } as never
+    const triggerItem = item({
+      itemId: 'news-trigger-1', sourceId: 'coindesk-rss', title: 'JPMorgan and DBS complete cross-border payment trial',
+      summary: 'The banks said the pilot has no direct market impact.', publishedAt, detectedAt: publishedAt,
+      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+    })
+    const verdict = {
+      itemId: 'news-trigger-1', sourceId: 'coindesk-rss', publishedAt, scoredAt: '2026-11-16T09:07:50.718Z',
+      polarity: 'bearish' as const, strength: 3, confidence: 80, symbols: ['BTC'] as const,
+      reasonCode: 'etf-outflow', evidenceQuote: 'cross-border payment pilot with no direct crypto impact',
+      engine: 'model' as const, caveats: []
+    }
+    const evidence = () => {
+      const ref = {
+        evidenceRefId: 'news:news-trigger-1', itemId: 'news-trigger-1', sourceId: 'coindesk-rss',
+        occurredAt: publishedAt, publishedAt, detectedAt: publishedAt, computedAt: null,
+        visibleAt: publishedAt, excerptHash: 'b'.repeat(64)
+      }
+      return { state: 'available', evidenceRefs: [ref], data: { evidenceRef: ref, title: triggerItem.title, excerpt: 'body', sourceUrl: triggerItem.url } }
+    }
+    const build = (query: unknown) => registerMarketAnalysisRuntime({
+      jobRuntime,
+      pipeline: { listItems: () => [triggerItem], listRevisions: () => [] } as never,
+      publicQueryService: { getEvidenceExcerpt: query } as never,
+      latestNewsSentiment: () => verdict as never,
+      structuredModelInvocation: { invoke: vi.fn() } as never,
+      settingsService: createRuntimeSettingsService(), dataDir: directory, now: () => asOf
+    })
+    const context = { jobRunId: 'trigger-pointer', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
+    const group = {
+      id: 'mi-eg-trigger', schemaVersion: 1 as const, status: 'open' as const, groupType: 'sentiment' as const,
+      mergeKey: 'sentiment|news-trigger-1', firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-11-16T11:07:42.000Z',
+      eventRefs: ['news-trigger-1'], triggerCount: 0, reviewCount: 0, currentSummaryId: null,
+      supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
+    }
+    const runtime = build(async () => evidence())
+    try {
+      runtime.repository.appendEventGroup(group)
+      await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1' }, context)
+      const [snapshot] = runtime.repository.listSnapshots(group.id)
+      expect(snapshot!.trigger).toEqual({ source: 'intelligence-item', itemId: 'news-trigger-1', factId: 'triggered-news:news-trigger-1', evidenceRefId: 'news:news-trigger-1' })
+      const fact = snapshot!.facts.find(candidate => candidate.factId === 'triggered-news:news-trigger-1')!
+      expect(fact).toMatchObject({ metric: 'news-sentiment', domain: 'sentiment', subject: 'BTC', evidenceRefId: 'news:news-trigger-1' })
+      expect(String(fact.value)).toContain(triggerItem.title)
+      expect(String(fact.value)).toContain(verdict.evidenceQuote)
+      // 触发事实不进变化记录：变化仍是「市场数据动了什么」。
+      expect(snapshot!.change?.facts.some(candidate => candidate.metric === 'news-sentiment') ?? false).toBe(false)
+    } finally {
+      runtime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+
+    // 没有触发条目 → 没有指针（日历/时段/手动这条路照旧）。
+    const plainRuntime = build(async () => evidence())
+    try {
+      plainRuntime.repository.appendEventGroup(group)
+      await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf }, context)
+      expect(plainRuntime.repository.listSnapshots(group.id)[0]!.trigger).toBeUndefined()
+    } finally {
+      plainRuntime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+
+    // 建不出证据引用 → 冻结直接失败，不跑模型、不留快照。
+    const failingRuntime = build(async () => { throw new Error('evidence-read-failed') })
+    try {
+      failingRuntime.repository.appendEventGroup(group)
+      await expect(handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1' }, context))
+        .rejects.toThrow('analysis-missing-evidence:news-trigger-evidence-missing')
+      expect(failingRuntime.repository.listSnapshots(group.id)).toEqual([])
+    } finally {
+      failingRuntime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
 })

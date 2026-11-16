@@ -117,6 +117,23 @@ describe('marketAnalysisRepository', () => {
     repository.close()
   })
 
+  it('stores the trigger pointer and reads it back; a snapshot without one stays valid', () => {
+    // R37：指针属于那一次运行，读时重算不出来（与 `change` 不同），所以必须落库；旧行没有这一列
+    // 或值为空就是「没有触发记录」，不是读失败。
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    const base = snapshot('mi-es-TR1', 'mi-eg-0001', 'A')
+    const trigger = { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'ev-A' }
+    repository.appendSnapshot({ ...base, schemaVersion: 3, trigger })
+    repository.appendSnapshot({ ...snapshot('mi-es-TR2', 'mi-eg-0001', 'B'), schemaVersion: 2 })
+
+    expect(repository.getSnapshot('mi-es-TR1')?.trigger).toEqual(trigger)
+    expect(repository.getSnapshot('mi-es-TR2')?.trigger).toBeUndefined()
+    // 同一批事实，有无指针 → 同一个 hash：指纹是证据的指纹，指针只说「为什么跑」。
+    expect(repository.getSnapshot('mi-es-TR1')?.snapshotHash).toBe(base.snapshotHash)
+    repository.close()
+  })
+
   it('accepts a schema-2 snapshot whose facts and evidence carry a source URL', () => {
     const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
     repository.appendEventGroup(group())
