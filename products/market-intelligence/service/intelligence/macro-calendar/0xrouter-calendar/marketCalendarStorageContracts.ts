@@ -17,7 +17,11 @@ export type ZeroXRouterCalendarDraft = Readonly<{
   localeMerge: 'disabled'
   officialLink: 'disabled'
   displayName: string
-  countryCode?: 'US' | 'DE'
+  /**
+   * 国家码：白名单映射后的 alpha-2 / `EMU`，或**认不出但形状像国家码**的原码（2–3 位大写字母）。
+   * 早前只允许 `'US' | 'DE'`，于是源给的 JP/GB/CA 只能被丢掉——类型收得比事实窄，也是一种丢数据。
+   */
+  countryCode?: string
   countryName?: string
   /** 可缺省：来源没给重要性就没有值（缺省 ≠ 低重要度）。 */
   importance?: 'high' | 'medium' | 'low'
@@ -55,7 +59,15 @@ export const zeroXRouterCalendarParserPolicy = Object.freeze({
   controlCharacters: /[\u0000-\u001f\u007f-\u009f]/u,
   identityPattern: /^[A-Za-z0-9_-]+$/,
   placeholders: Object.freeze(['', '-', '--', '—', 'n/a', 'null']),
-  countryCodes: Object.freeze({ USA: 'US', US: 'US', GER: 'DE', DE: 'DE' } as const),
+  /**
+   * 源实际会返回的国家码（fixture 实测：US 107 / JP 105 / EU 105 / GB 104 / CA 104 次，另有 USA、GER）。
+   * 早前只认四个值，其余**被静默丢掉**，于是那些行落到未映射表（`missing-country` 1869 行）——
+   * 不是源没给，是我们没接住。`EU` 归 `EMU`（欧元区），不要写成 `EU`：`EU` 含非欧元国，
+   * 与「欧盟 vs 欧元区」混用会让两个身份撞在一起。
+   */
+  countryCodes: Object.freeze({
+    USA: 'US', US: 'US', GER: 'DE', DE: 'DE', JP: 'JP', EU: 'EMU', GB: 'GB', CA: 'CA'
+  } as const),
   importance: Object.freeze({ 1: 'low', 2: 'medium', 3: 'high' } as const)
 })
 
@@ -136,8 +148,17 @@ export function calendarEventDraft(
     row.locale !== locale || typeof row.star !== 'number' || !Object.hasOwn(policy.importance, row.star)) return undefined
   const countryName = row.countryName == null ? undefined : calendarText(row.countryName)
   if (row.countryName != null && !countryName) return undefined
-  const countryCode = typeof row.countryCode === 'string' && Object.hasOwn(policy.countryCodes, row.countryCode)
-    ? policy.countryCodes[row.countryCode as keyof typeof policy.countryCodes] : undefined
+  /**
+   * **认不出的国家码不许丢**（用户 2026-11-17）：看起来像国家码（2–3 位大写字母）就原样带下来，
+   * 先保留原码进标准表——能显示、能筛选，国家名暂时就是原码；等映射补上再归一。
+   * 丢掉一个码等于把那一整行变成「未知国家」，而丢掉是静默的：1869 行就是这么没的。
+   */
+  const rawCountryCode = typeof row.countryCode === 'string' ? row.countryCode.trim().toUpperCase() : ''
+  const countryCode = rawCountryCode === ''
+    ? undefined
+    : Object.hasOwn(policy.countryCodes, rawCountryCode)
+      ? policy.countryCodes[rawCountryCode as keyof typeof policy.countryCodes]
+      : /^[A-Z]{2,3}$/.test(rawCountryCode) ? rawCountryCode : undefined
   // Candidate row identity only: never use this unverified key for revision chains or locale merge.
   const sourceEventId = JSON.stringify([calendarId, row.id])
   return {
