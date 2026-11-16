@@ -54,14 +54,17 @@ function render(input: MarketAnalysisTimelineDetail, onRegenerate?: () => void):
 }
 
 describe('the conclusion language note', () => {
-  it('says which language the conclusion was written in, and offers regenerate', () => {
+  it('keeps the language note in the icon, not in the body, and offers regenerate', () => {
+    // 正文说明句门禁：说明句只许进 ⓘ。行内只剩「重新生成」，那句话在 hover/点击展开的浮层里。
     const onRegenerate = vi.fn()
     render(detail({ schemaVersion: 2, proseLanguage: 'en-US' }), onRegenerate)
-    const note = host.querySelector('.mi-analysis-conclusion__language')
-    expect(note?.textContent).toContain('这条结论是按英语写的。')
-    const button = note?.querySelector('button')
-    expect(button?.textContent).toBe(text.regenerateConclusion)
-    act(() => { button!.click() })
+    const row = host.querySelector('.mi-analysis-conclusion__language')!
+    expect(row.textContent).not.toContain('这条结论是按英语写的。')
+    // ⓘ 的读屏名是短名，不是整句说明。
+    const info = row.querySelector('button[aria-label]') as HTMLButtonElement
+    expect(info.getAttribute('aria-label')).toBe('语言说明')
+    const regenerate = [...row.querySelectorAll('button')].find(button => button.textContent === text.regenerateConclusion)!
+    act(() => { regenerate.click() })
     expect(onRegenerate).toHaveBeenCalledTimes(1)
   })
 

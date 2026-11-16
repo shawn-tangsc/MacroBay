@@ -4,6 +4,10 @@ import type { MarketAnalysisTimelineDetail } from '../../shared/ipc/marketAnalys
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { Popover } from '@platform/ui/components/popover'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Info } from 'lucide-react'
+import { analysisConclusionLanguageNoteKey, conclusionLanguageNote } from './analysisConclusionLanguageNote'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { ANALYSIS_STATUS_KEY, ANALYSIS_STATUS_TONE } from './analysisStatusPresentation'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
@@ -95,9 +99,8 @@ export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonl
    *
    * 旧记录没有这个字段：不标注、不猜、不写「语言未知」——那就是噪声。语言一致时也不标注。
    */
-  const languageNote = summary.proseLanguage !== undefined && summary.proseLanguage !== uiLanguage
-    ? text.conclusionLanguageNote.replace('{language}', displayLanguageName(summary.proseLanguage, uiLanguage))
-    : undefined
+  const languageNote = conclusionLanguageNote(text, summary.proseLanguage, uiLanguage,
+    language => displayLanguageName(language, uiLanguage))
   // Two contract generations: a structured conclusion (current) or the legacy labelled paragraph,
   // read through the same projection the at-a-glance card uses.
   const { direction, blocks } = readConclusion(summary, conclusionReadableNames, locale)
@@ -109,8 +112,19 @@ export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonl
         <p className="mi-analysis-timeline__section-label">{text.conclusion}</p>
         {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}
       </header>
+      {/* 说明句收进 ⓘ（用户 2026-11-10：正文只放结论，说明统一收进 icon hover）；
+          行内只留读得懂的一句话动作「重新生成」。 */}
       {languageNote === undefined ? null : <p className="mi-analysis-conclusion__language" role="note">
-        {languageNote}{' '}
+        <Popover
+          content={<p>{languageNote}</p>}
+          trigger={(triggerProps) => <IconButton
+            {...triggerProps}
+            ariaLabelKey={analysisConclusionLanguageNoteKey}
+            icon={Info}
+            resolveText={resolveProductText}
+            size="sm"
+            variant="plain" />}
+        />
         {onRegenerate === undefined ? null : <Button className="text-action" onClick={onRegenerate} size="small" type="text">{text.regenerateConclusion}</Button>}
       </p>}
       {(detail.summary.directions ?? []).length > 0 ? <AnalysisDirectionsBlock directions={detail.summary.directions!} text={text.directions} /> : null}
