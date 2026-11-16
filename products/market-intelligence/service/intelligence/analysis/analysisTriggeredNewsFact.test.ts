@@ -84,6 +84,18 @@ describe('触发项作为强制事实进快照（R37 §1）', () => {
     expect(JSON.stringify(fact)).not.toContain('tokenised deposit pilot has no direct market impact')
   })
 
+  it('没有标的时 subject 留空，让焦点降级为只查引用', async () => {
+    // 回落成 'market' 会让 strict 模式要求正文出现这个英文词：中文结论永远满足不了，
+    // 手动解读一条无标的新闻（那条 JPMorgan）就会「点了必失败」。
+    const outcome = await appendTriggeredNewsFact(context, {
+      itemId: item.itemId, items: [item], verdict: { ...verdict, symbols: [] }, query: queryReturning()
+    })
+    if (outcome.state !== 'appended') throw new Error('expected appended')
+    const fact = outcome.context.facts[0]!
+    expect(fact.subject).toBe('')
+    expect(fact.subjectLabel).toBe(item.title)
+  })
+
   it('摘录与标题相同只写一遍（规则引擎的摘录就是标题截断）', async () => {
     const outcome = await appendTriggeredNewsFact(context, {
       itemId: item.itemId, items: [item], verdict: { ...verdict, evidenceQuote: item.title }, query: queryReturning()

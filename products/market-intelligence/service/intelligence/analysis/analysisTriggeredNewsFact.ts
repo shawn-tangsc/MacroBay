@@ -7,7 +7,7 @@ import {
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
 import type { NewsSentimentRecord } from '../schema/newsSentiment'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
-import { analysisNewsSentimentPolicy, composeFactValue, sentimentSubject } from './analysisNewsSentimentEvidence'
+import { analysisNewsSentimentPolicy, composeFactValue } from './analysisNewsSentimentEvidence'
 import { marketAnalysisUnsafeOutputPolicy } from './analysisConstants'
 
 /**
@@ -79,7 +79,10 @@ export async function appendTriggeredNewsFact(
     // 与窗口概览同一个 metric：`computeSnapshotChange` 只比非舆情事实，所以它永远不会被当成
     // 「市场数据动了什么」——合并稿要的正是这个，不需要新规则。
     metric: 'news-sentiment',
-    subject: sentimentSubject({ symbols: input.verdict.symbols }),
+    // 没有标的就留空：焦点据此降级为 `reference-only`（只要求引用证据）。回落成 `'market'`
+    // 会让 strict 模式要求正文出现这个英文词——中文结论永远满足不了，手动解读无标的新闻必败。
+    subject: input.verdict.symbols.find(symbol => symbol === 'BTC' || symbol === 'ETH') ?? '',
+    subjectLabel: title,
     value: composeFactValue(titleAsItem, quote),
     unit: null,
     sourceId: item.sourceId,
