@@ -208,7 +208,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * 调用点不拼句子；共用一份 `labelParams` 的旧写法已随契约取消——同一页两套气泡不行。
    * 没有快照时只留一行「暂不可用」，与原来那句同一个键。
    */
-  const historyHint: { lines: readonly HintLine[] } = snapshot ? {
+  const historyPopover: { lines: readonly HintLine[] } = snapshot ? {
     lines: [
       { labelKey: crossAssetTextKeys.hintAnalysis, params: { time: formatTime(snapshot.analysisEnd, 'second') } },
       {
@@ -254,11 +254,11 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       count: String(planRefusedLines.length - 1)
     }
   }
-  const historyHintLines: readonly HintLine[] = refusalHint !== undefined
-    ? [...historyHint.lines, refusalHint]
+  const historyPopoverLines: readonly HintLine[] = refusalHint !== undefined
+    ? [...historyPopover.lines, refusalHint]
     : noComparableChartLines.length === 0
-      ? historyHint.lines
-      : [...historyHint.lines, { labelKey: crossAssetTextKeys.noComparableDataReason }]
+      ? historyPopover.lines
+      : [...historyPopover.lines, { labelKey: crossAssetTextKeys.noComparableDataReason }]
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
@@ -394,7 +394,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       </div>
       {crossAssetReadingEnabled && !allChartLinesUnusable ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <FocusPopover
-          lines={historyHintLines}
+          lines={historyPopoverLines}
           resolveText={resolveProductText}
           trigger={(triggerProps) => (
             // The same IconButton as the status block's help: two explanations beside two titles
