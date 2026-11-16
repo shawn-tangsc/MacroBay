@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import { Button, Input, Pagination, Select, Table } from 'antd'
 
@@ -48,10 +49,10 @@ export type MappingRulesText = Readonly<{
   tabsAria: string
   exportLabel: string
   exportEmpty: string
-  /** 导出按钮旁那句：导出的是全部行，与当前筛选无关。 */
-  exportAllNote: string
-  /** 页签下面那句（带 `{count}`）：本表只统计指标，事件数量从读口来。 */
-  eventScopeNote: string
+  /** 导出按钮旁那颗 ⓘ（导出的是全部行，与当前筛选无关）——说明句不许印在正文里。 */
+  exportAllHelp: ReactNode
+  /** 页签下面那颗 ⓘ（带 `{count}` 的那句）——数字由本组件从读口给。 */
+  eventScopeHelp: (eventCount: number) => ReactNode
   /** 分级筛选器的占位（与「按国家筛选」同一种选择器）；选项复用 `tiers` 四档。 */
   tierFilter: string
   /** 导出文件里的三个工作表名。 */
@@ -129,7 +130,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
     ? null
     : <span className="mi-catalog__filters-help" data-event-scope>
       {/* 解释性句子收进 ⓘ：平时不占一行，读者问「为什么这边少了、那边没涨」时点开就有。 */}
-      {helpTrigger({ text: text.eventScopeNote.replace('{count}', String(eventCount)) })}
+      {text.eventScopeHelp(eventCount)}
     </span>
   const items: readonly ChoiceItem[] = [
     { value: 'mapped', labelKey: 'tabMapped', labelParams: { count: String(counts.mapped) } },
@@ -245,7 +246,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
             void window.platform?.app?.saveFile?.(exportFileName(text.title, new Date()), buildXlsx(sheets))
           }}>{text.exportLabel}</Button>
         {/* 筛选框里可能正输着词：必须有一句说清导出的是全部，否则会被当成「导错了」。 */}
-        <span className="mi-catalog__footer-label" data-export-scope>{text.exportAllNote}</span>
+        <span className="mi-catalog__footer-label" data-export-scope>{text.exportAllHelp}</span>
         <Pager total={activeTotal} page={activePage} pageSize={pageSize}
           onPage={setActivePage}
           onSize={(size) => { setPageSize(size); setMappedPage(1); setUnmappedPage(1) }} />

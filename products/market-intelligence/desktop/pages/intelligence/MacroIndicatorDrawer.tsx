@@ -230,7 +230,10 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     tabMapped: text.mkDay.mappingTabMapped, tabUnmapped: text.mkDay.mappingTabUnmapped,
     tabsAria: text.mkDay.mappingTabsAria,
     exportLabel: text.mkDay.mappingExport, exportEmpty: text.mkDay.mappingExportEmpty,
-    exportAllNote: text.mkDay.mappingExportAllNote, eventScopeNote: text.mkDay.mappingEventScopeNote,
+    // 两句都是说明句：只许进 ⓘ（正文说明句门禁）。节点在这里造、弹框只负责摆位置。
+    exportAllHelp: helpTrigger({ text: text.mkDay.mappingExportAllNote }),
+    eventScopeHelp: (eventCount: number) =>
+      helpTrigger({ text: text.mkDay.mappingEventScopeNote.replace('{count}', String(eventCount)) }),
     tierFilter: text.mkDay.mappingTierFilter,
     childSuffix: text.mkDay.mappingChildSuffix,
     sheetMapped: text.mkDay.mappingSheetMapped, sheetUnmapped: text.mkDay.mappingSheetUnmapped

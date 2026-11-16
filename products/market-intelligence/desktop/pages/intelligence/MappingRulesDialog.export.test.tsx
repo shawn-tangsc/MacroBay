@@ -8,6 +8,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
+import { helpTrigger } from '@platform/ui/components/popover'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
@@ -31,7 +32,10 @@ const text = {
   columns: mkDay.mappingColumns, tiers: mkDay.mappingTiers, unmappedColumns: mkDay.mappingUnmappedColumns,
   tabMapped: mkDay.mappingTabMapped, tabUnmapped: mkDay.mappingTabUnmapped, tabsAria: mkDay.mappingTabsAria,
   exportLabel: mkDay.mappingExport, exportEmpty: mkDay.mappingExportEmpty,
-  exportAllNote: mkDay.mappingExportAllNote, eventScopeNote: mkDay.mappingEventScopeNote,
+  // 两句说明都只进 ⓘ（正文说明句门禁）：夹具按真调用点的形状给节点，不给句子。
+  exportAllHelp: helpTrigger({ text: mkDay.mappingExportAllNote }),
+  eventScopeHelp: (eventCount: number) =>
+    helpTrigger({ text: mkDay.mappingEventScopeNote.replace('{count}', String(eventCount)) }),
   tierFilter: mkDay.mappingTierFilter,
   childSuffix: mkDay.mappingChildSuffix,
   sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped
@@ -209,8 +213,13 @@ it('lists every source id a code answers to, and leaves the cell blank for a cod
  */
 it('exports every row regardless of the filter, and says so next to the button', async () => {
   await mount()
-  // 按钮旁必须有一句话，否则读者会把「全量」当成「导错了」。
-  expect(document.body.querySelector('[data-export-scope]')?.textContent).toContain('全部行')
+  // 按钮旁必须有这颗 ⓘ，否则读者会把「全量」当成「导错了」；**句子本身不进正文**。
+  expect(document.body.textContent).not.toContain('导出的是两张表的全部行')
+  const scopeHelp = document.body.querySelector('[data-export-scope] [aria-label]') as HTMLElement
+  expect(scopeHelp, '导出范围那颗 ⓘ 不见了').not.toBeNull()
+  await act(async () => { scopeHelp.click() })
+  await act(async () => { await Promise.resolve() })
+  expect(document.body.textContent).toContain('导出的是两张表的全部行')
 
   const input = document.body.querySelector('.mi-catalog__filters input') as HTMLInputElement
   await act(async () => {
