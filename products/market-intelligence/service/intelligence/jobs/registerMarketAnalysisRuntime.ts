@@ -6,7 +6,6 @@ import type {
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
 
-import { logMarketAnalysisContextDiagnostic } from '../analysis/analysisContextDiagnostic'
 /** 诊断标记的格式化仍从这里导出：既有调用方与用例不用改 import。 */
 export { formatMarketAnalysisContextDiagnostic } from '../analysis/analysisContextDiagnostic'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
@@ -14,7 +13,6 @@ import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindo
 import { buildMarketAnalysisVerificationObservations, readFundingHistory } from '../analysis/verificationObservations'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
-import { buildMarketAnalysisContext } from '../public-query/marketAnalysisContextQuery'
 import { countAnalysisRuns, lastAutoRunAt } from '../analysis/analysisRunCounter'
 import { createAnalysisSignificanceGate, formatCalendarReadDiagnostic } from '../analysis/analysisSignificanceGate'
 import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotTick'
@@ -37,7 +35,7 @@ import { createAnalysisOrchestrator } from '../analysis/analysisOrchestrator'
 import { createAnalysisConclusionManualSend, type AnalysisConclusionSend } from '../analysis/analysisConclusionManualSend'
 import { createAnalysisNoticeDeps, createReleaseCoverageReader, notifyAbandonedRelease } from './analysisReleaseNoticeWiring'
 import { createRunSessionBinding, type RunSessionPort } from './analysisRunSessionPort'
-import { triggeredNewsForFreeze } from '../analysis/analysisTriggeredNewsFact'
+import { prepareMarketAnalysisSnapshot } from '../analysis/analysisSnapshotPreparation'
 import { hasEligibleAnalysisAnchor, readCanonicalAsOf, readSignificanceSignals, readString, resolveDomain, safeJson } from './analysisRuntimePayload'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
@@ -49,8 +47,6 @@ import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettin
 import { createPredictionVerificationService } from '../analysis/predictionVerificationService'
 import type { PredictionVerificationObservation } from '../analysis/predictionVerificationService'
 import { parseCrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
-import { appendAnalysisEventEvidence } from '../analysis/analysisEventEvidence'
-import { appendAnalysisNewsSentiment, newsSentimentSince } from '../analysis/analysisNewsSentimentEvidence'
 import { registerMarketAnalysisJobs } from './registerMarketAnalysisJobs'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB, ANALYSIS_SESSION_SLOTS_JOB, RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 import { createInitialMarketAnalysisRequest, initialMarketAnalysisRequestPolicy } from './requestInitialMarketAnalysis'
@@ -528,37 +524,25 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // 日历发布的通知**不在这里**：它跟着采集走（`macroEventLandedNotifier`）。挂在分析闸门上，
     // 读者就会在「日历已刷新、分析没跑/被跳过」时什么也收不到——一件事发生了，不该由另一个开关
     // 决定要不要说出来。
-    const context = await buildMarketAnalysisContext({ eventGroupId: value.eventGroupId, asOf: value.asOf }, input.publicQueryService,
-      { triggeredEventKeys: gate.triggeredEventKeys })
-    if (context.state !== 'available') throw new Error(context.errorCode)
-    logMarketAnalysisContextDiagnostic(context)
     const group = repository.getEventGroup(value.eventGroupId)
     if (!group) throw new Error('analysis-event-group-not-found')
-    const enriched = await appendAnalysisEventEvidence(context, group, input.publicQueryService, () => input.pipeline.listRevisions())
     // Decided before the (up to twenty) per-item evidence reads: a refused first analysis must not
     // pay for the sentiment window it is not going to publish.
     const runHistory = repository.listRuns()
     if (value.analysisPhase === 'initial' && runHistory.some(run => run.eventGroupId === group.id && initialMarketAnalysisRequestPolicy.blockingStatuses.includes(run.status))) throw new Error('analysis-already-available')
-    // 「重点舆情」从上次生成开始累计到本次：同一个窗口内的新闻只进入一次结论，中性条目被过滤。
-    // 上次生成的时间取最近一次已发布运行的开始时刻；没有就退回本组上一份快照的时点。
-    // 模块再把窗口压到「理论上的上一档盘口」——分析最大跨度 8 小时，关播三天也不会倒灌三天新闻。
-    const sentimentSince = newsSentimentSince(runHistory, previousSnapshot?.asOf)
-    const withSentiment = await appendAnalysisNewsSentiment(enriched, input.publicQueryService, input.newsSentimentQuery, {
-      timeZone: timeZone(),
-      asOf: value.asOf,
-      ...(sentimentSince ? { since: sentimentSince } : {})
-    }, () => input.pipeline.listRevisions())
-    // 触发项按条目身份强制进快照（R37 §1）：窗口选材会因为「判定还没落地」把它漏掉，而这次运行
-    // 正是它发起的。建不出证据引用就整跑失败——不发布一份没读过新闻的综述。
-    const triggered = await triggeredNewsForFreeze(withSentiment, {
-      triggeredItemId: value.triggeredItemId, items: input.pipeline.listItems(),
-      verdict: value.triggeredItemId ? readLatestVerdict(value.triggeredItemId) : undefined,
-      query: input.publicQueryService, listRevisions: () => input.pipeline.listRevisions()
-    })
+    // 建上下文、追加锚点与舆情、补触发项、算指纹——与只读接口共用同一个函数（架构师裁定 §9.2）。
+    const prepared = await prepareMarketAnalysisSnapshot({
+      publicQueryService: input.publicQueryService, pipeline: input.pipeline, repository,
+      ...(input.newsSentimentQuery ? { newsSentimentQuery: input.newsSentimentQuery } : {}),
+      ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
+      timeZone
+    }, { eventGroupId: value.eventGroupId, asOf: value.asOf, triggeredEventKeys: gate.triggeredEventKeys,
+      ...(value.triggeredItemId ? { triggeredItemId: value.triggeredItemId } : {}) })
+    if ('state' in prepared) throw new Error(prepared.errorCode)
     const snapshot = snapshots.freeze({
       eventGroupId: value.eventGroupId,
-      context: triggered.context,
-      ...(triggered.trigger ? { trigger: triggered.trigger } : {}),
+      context: prepared.context,
+      ...(prepared.trigger ? { trigger: prepared.trigger } : {}),
       // The predecessor fixes the frozen "what changed" record for this snapshot.
       ...(previousSnapshot ? { previous: previousSnapshot } : {})
     })
