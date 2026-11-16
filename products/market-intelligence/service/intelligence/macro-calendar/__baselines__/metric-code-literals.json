@@ -30,8 +30,8 @@
       "why": "3 组 × 4 行（卡片唯一顺序）+ 退役表 2 行（码→码的字面量，catalog 不许有）"
     },
     "service/intelligence/macro-calendar/marketCalendarCodeNames.ts": {
-      "count": 178,
-      "why": "名表查表的装配处：把「码 → 四列名」的各来源表合并成一次查找。德国码空间按来源单独成表（35 个码），本文件必须列出它们才能被 calendarNamesFor 查到——这不是散落的码字面量，是那张表的装配清单；德国表新增/改名时这一处同笔跟着改。"
+      "count": 189,
+      "why": "码名表：每个指标码的四列名必须写在这里（中文全名/简称、英文全名/简称）。新增德国与子项码时同笔 +11，删码要同笔减。"
     },
     "service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts": {
       "count": 39,
@@ -54,8 +54,8 @@
       "why": "Narwhal 系列 → 主测度码：外部系列名的落地位置"
     },
     "service/intelligence/macro-calendar/marketCalendarZeroXRouterSourceMappings.ts": {
-      "count": 56,
-      "why": "0xrouter 的「源内 id → 指标码」映射表：身份事实本身，与 narwhal 的码表分开存；这里出现的码是映射的目标，删掉就取不出身份。"
+      "count": 139,
+      "why": "0xrouter 的「源内 id → 指标码」表：id 与码都是字面量，这张表的存在就是「按来源分开的码空间」。本批补映射 +83，删映射要同笔减。"
     }
   }
 }
