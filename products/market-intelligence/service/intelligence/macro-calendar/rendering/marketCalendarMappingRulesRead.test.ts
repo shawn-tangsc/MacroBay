@@ -27,6 +27,12 @@ function seed(): DatabaseSync {
       sourceProviderId: '0xrouter', sourceEventId: `x-${periodKey}`, parserVersion: 'v1', observedAt: now, firstSeenAt: now
     })
   }
+  // 一条**指标码身份**的行：`rowCount` 按指标码数，CPI 年率那条必须数到它。
+  upsertCalendarStandardRow(database, {
+    countryCode: 'US', metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-09', scheduledDate: '2026-10-15',
+    timePrecision: 'date' as const, status: 'published' as const, valuesJson: '{"actual":"3.7%"}',
+    sourceProviderId: 'narwhal', sourceEventId: 'cpi-2026-09', parserVersion: 'v1', observedAt: now, firstSeenAt: now
+  })
   // 合并过的行带英文原文名（迁移 18 把英文那条并入 `source_label_en`）。
   database.prepare(`update mi_calendar_events set source_label_en = ?
     where source_label = '11月纽约联储制造业指数'`).run('New York Fed manufacturing index(Nov)')
@@ -51,6 +57,9 @@ describe('映射规则表读口', () => {
     expect(ism.names).toEqual({ zh: 'ISM 制造业 PMI', en: 'ISM Manufacturing PMI' })
     // 分级与覆盖行数：分级读现有表（CPI 是一级），行数真读库——85 条里必然有 0。
     expect(cpi.tier).toBe(1)
+    // 行数按**指标码**数：CPI 年率那条在库里有多行（不是按源内 id 数出来的 0）。
+    expect(cpi.rowCount).toBeGreaterThan(0)
+    // 同时也真有 0 的（那个指标的库行还没出现）——这一列是真读出来的，不是常量。
     expect(read.mapped.some((rule) => rule.rowCount === 0)).toBe(true)
     expect(read.mapped.every((rule) => typeof rule.rowCount === 'number' && rule.rowCount >= 0)).toBe(true)
     expect(read.mapped.every((rule) => rule.names === null

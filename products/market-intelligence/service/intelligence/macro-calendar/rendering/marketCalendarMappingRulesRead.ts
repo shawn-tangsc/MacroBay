@@ -45,8 +45,13 @@ export type MappingRuleRow = Readonly<{
    */
   tier: 1 | 2 | 3 | null
   /**
-   * **这条规则在库里实际覆盖多少行**（0 就是 0）：85 条里多数是 `0`，因为那个源内 id
-   * 还没出现在数据里。看得见才分得清「规则在起作用」和「规则只是写在纸上」。
+   * **这条例则映射到的指标，在库里有多少行**（按 `metricKey` 数，**不是按源内 id**）。
+   *
+   * 早前一版按源内 id 数，结果 85 条全是 0——规则表记的是 `4013` 这类旧源 id，而库里现在跑的
+   * 是另一批 360 个 id，两批一个都不重合。那个数没有意义：它回答的是「这条 id 现在有没有数据」，
+   * 读者要问的是「这条规则管的指标库里有多少行」。
+   *
+   * `0` 仍然是 0：说明这个指标现在库里没有行，看得见才不会把「规则只是写在纸上」当成在起作用。
    */
   rowCount: number
 }>
@@ -126,6 +131,12 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         min(source_label_en) as label_en
       from mi_calendar_events where metric_key glob '*[[]*' group by metric_key`)
       .all() as unknown as { metric_key: string; n: number; label: string | null; label_en: string | null }[]
+    // 按**指标码**数行（不是按源内 id）：这是读者问的那个问题，见 `rowCount` 的说明。
+    const rowsByMetricKey = new Map<string, number>()
+    for (const row of database.prepare(`select metric_key, count(*) as n from mi_calendar_events
+        where row_kind = 'release' group by metric_key`).all() as unknown as { metric_key: string; n: number }[]) {
+      rowsByMetricKey.set(row.metric_key, Number(row.n))
+    }
     const byId = new Map<string, Aggregate>()
     for (const row of rows) {
       const id = sourceInternalIdOf(row.metric_key).replace(/^id:/, '')
@@ -140,7 +151,7 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         basis: official === null ? null : official.basis, officialUrl: official?.url ?? null,
         names: mappingRuleNames(entry.metricKey),
         tier: tierOfMetricKey(entry.metricKey) ?? null,
-        rowCount: byId.get(sourceId)?.rows ?? 0 })
+        rowCount: rowsByMetricKey.get(entry.metricKey) ?? 0 })
     })
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
