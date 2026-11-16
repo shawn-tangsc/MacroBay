@@ -56,7 +56,7 @@ function summary(runId: string): AnalysisSummary {
     transmissionHypotheses: [{ statement: '风险偏好下降压低 BTC。', evidenceRefIds: [`news:${itemId}`] }],
     marketReaction: [{ statement: 'BTC 走弱。', factIds: [`triggered-news:${itemId}`], evidenceRefIds: [`news:${itemId}`] }],
     supportingEvidence: [{ statement: '页面报道债券收益率上行。', evidenceRefId: `news:${itemId}` }], counterEvidence: [],
-    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '偏空', conditions: ['资金继续流出'], invalidation: '资金转正', status: 'pending' }],
+    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '偏空', conditions: ['资金继续流出'], invalidation: '资金转正', status: 'running' }],
     directions: [
       { horizon: 'short', direction: 'bearish', rationale: '新闻与价格同向。', confidence: 'medium', evidenceRefIds: [`news:${itemId}`] },
       { horizon: 'medium', direction: 'range', rationale: '中期缺方向。', confidence: 'low', evidenceRefIds: [`news:${itemId}`] },
@@ -64,7 +64,7 @@ function summary(runId: string): AnalysisSummary {
     ],
     nextCatalysts: [{ statement: '关注下一次资金数据。', evidenceRefIds: [`news:${itemId}`] }], dataCaveats: [], evidenceRefs: [`news:${itemId}`],
     createdAt: publishedAt
-  } as AnalysisSummary
+  } as unknown as AnalysisSummary
 }
 
 const timelineRow = (runId: string): TimelineEntry => ({
@@ -89,20 +89,26 @@ it('shows the run while it is still being read, then turns that same row into th
     const queued = service.listTimeline({ limit: 50 })
     expect(queued.items).toHaveLength(1)
     expect(queued.items[0]).toMatchObject({
-      analysisRunId: run.id, kind: 'analysis', status: 'pending', occurredAt: queuedAt,
-      summaryRef: null, safeTitle: '', groupType: 'sentiment', groupSubject: headline
+      analysisRunId: run.id, runKey: run.id, kind: 'analysis', status: 'running', occurredAt: queuedAt,
+      summaryRef: null, safeTitle: '', failureCode: null, groupType: 'sentiment', groupSubject: headline
     })
 
     // ② 开始跑：同一条，时刻换成开始时刻（读者看到的是「什么时候开始的」）。
     expect(repository.claimRun(run.id, startedAt)).toBe(true)
     expect(service.listTimeline({ limit: 50 }).items).toHaveLength(1)
-    expect(service.listTimeline({ limit: 50 }).items[0]).toMatchObject({ analysisRunId: run.id, status: 'pending', occurredAt: startedAt })
+    expect(service.listTimeline({ limit: 50 }).items[0]).toMatchObject({ analysisRunId: run.id, runKey: run.id, status: 'running', occurredAt: startedAt })
 
     // ③ 发布：同一次运行变成已发布行，条数仍是 1——不是删一行加一行。
     repository.commitSuccessfulAnalysis({ runId: run.id, summary: summary(run.id), predictions: [], timeline: timelineRow(run.id) })
     const published = service.listTimeline({ limit: 50 })
     expect(published.items).toHaveLength(1)
-    expect(published.items[0]).toMatchObject({ analysisRunId: run.id, status: 'published', summaryRef: 'mi-as-1', groupSubject: headline })
+    // 同一次运行的 `runKey` 跨两态不变：界面靠它就地换状态，行不换身份。
+    expect(published.items[0]).toMatchObject({ analysisRunId: run.id, runKey: run.id, status: 'published', summaryRef: 'mi-as-1', groupSubject: headline })
+    expect(published.items[0]!.failureCode).toBeNull()
+    // 同一分析运行只许一行：界面拿 `analysisRunId ?? id` 认行，撞 key 会让 React 复用错行。
+    expect(published.items.filter(item => item.runKey === run.id)).toHaveLength(1)
+    const keys = published.items.map(item => item.runKey)
+    expect(new Set(keys).size).toBe(keys.length)
   } finally {
     repository.close()
   }
@@ -124,7 +130,10 @@ it('turns a run that dies without publishing into a failed row rather than leavi
 
     const page = service.listTimeline({ limit: 50 })
     expect(page.items).toHaveLength(1)
-    expect(page.items[0]).toMatchObject({ analysisRunId: run.id, status: 'failed', summaryRef: null })
+    expect(page.items[0]).toMatchObject({
+      analysisRunId: run.id, runKey: run.id, status: 'failed', summaryRef: null,
+      failureCode: 'analysis-run-interrupted'
+    })
   } finally {
     repository.close()
   }

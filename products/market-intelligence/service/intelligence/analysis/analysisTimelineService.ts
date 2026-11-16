@@ -56,13 +56,24 @@ export type RendererChangeView = Readonly<{
 }>
 
 /**
- * 一次运行在时间轴上的状态：发布过的行是前三种；**还没发布**的运行补成 `pending` / `failed`。
- * 同一次运行前后两态用 `analysisRunId` 对齐（列表拿它作为一行，不是 `id`）。
+ * 一次运行在时间轴上的状态：发布过的行是前三种；**还没发布**的运行补成 `running` / `failed`。
+ *
+ * 用 `running` 而不是 `pending`：`pending` 在文案表里已经是预测条目的「待验证」，同一个 token
+ * 两种含义，时间轴、最新结论卡、结论详情、详情抽屉四个页面必然分叉。`running` 本来就在运行
+ * 状态词表里，一处一词。
  */
-export type RendererTimelineStatus = TimelineEntry['status'] | 'pending' | 'failed'
+export type RendererTimelineStatus = TimelineEntry['status'] | 'running' | 'failed'
 
 export type RendererTimelineEntry = Readonly<Omit<Pick<TimelineEntry, 'id' | 'eventGroupId' | 'analysisRunId' | 'kind' | 'status' | 'occurredAt' | 'summaryRef' | 'safeTitle' | 'safeExcerpt' | 'direction' | 'version'>, 'status'> & {
   status: RendererTimelineStatus
+  /**
+   * 同一次运行稳定不变的键：`running` → `published` / `failed` 之间不变，界面靠它就地把那
+   * 一行换状态、行数不变（`id` 会从 `run:<runId>` 变成真实时间轴行 id）。没有运行的旧行用
+   * `entry:<id>`。
+   */
+  runKey: string
+  /** `failed` 行上运行自己的失败码；界面遇到未知码兜一句「解析失败」，不把码印给读者。 */
+  failureCode: string | null
   /** Why the newest automatic decision for this group happened, or why it did not. */
   triggerStatus: TriggerStatus | null
   /**
@@ -186,7 +197,9 @@ function unpublishedRunEntries(
         eventGroupId: run.eventGroupId,
         analysisRunId: run.id,
         kind: run.analysisPhase === 'review' ? 'review' : 'analysis',
-        status: pendingRunStatuses.has(run.status) ? 'pending' : 'failed',
+        status: pendingRunStatuses.has(run.status) ? 'running' : 'failed',
+        runKey: run.id,
+        failureCode: failedRunStatuses.has(run.status) ? run.failureCode ?? null : null,
         // 排队那一刻就要出现在时间轴上：读者是按下按钮之后立刻去找它的。
         occurredAt: run.startedAt ?? run.queuedAt,
         summaryRef: null,
@@ -279,6 +292,9 @@ function toTimelineEntry(entry: TimelineEntry, summary?: { eventAssessment?: str
   // Entry-level rather than page-level: `listTimeline` may span several event groups.
   return {
     ...safe,
+    // 同一次运行在「正在解析 → 已发布」之间用同一个键，行不换身份。
+    runKey: entry.analysisRunId ?? `entry:${entry.id}`,
+    failureCode: null,
     safeExcerpt: summary?.conclusion?.summary ?? summary?.eventAssessment ?? safe.safeExcerpt,
     direction: (summary?.conclusion?.direction as TimelineEntry['direction']) ?? safe.direction ?? null,
     triggerStatus,

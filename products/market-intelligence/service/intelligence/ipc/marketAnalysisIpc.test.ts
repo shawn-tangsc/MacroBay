@@ -114,8 +114,11 @@ describe('marketAnalysisIpc', () => {
     expect(firstPage).toMatchObject({ schemaVersion: 1, nextCursor: 'opaque-next' })
     // 已发布行 + 一次失败运行补出来的行（那次运行没有时间轴行，读者回看时要能看到它失败了）。
     expect(firstPage.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'mi-tl-1', status: 'published' }),
-      expect.objectContaining({ id: 'run:mi-ar-failed', status: 'failed', analysisRunId: 'mi-ar-failed', safeTitle: '' })
+      expect.objectContaining({ id: 'mi-tl-1', status: 'published', runKey: 'mi-ar-1', failureCode: null }),
+      expect.objectContaining({
+        id: 'run:mi-ar-failed', status: 'failed', analysisRunId: 'mi-ar-failed',
+        runKey: 'mi-ar-failed', failureCode: 'analysis-invalid-output-schema', safeTitle: ''
+      })
     ]))
     // 运行行上的其它字段不进渲染层。
     expect(JSON.stringify(firstPage.items)).not.toContain('privateBody')
