@@ -84,9 +84,14 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       // 过期却还挂着 `scheduled` 的行按五态规则对账（幂等：状态由日期+有没有值推导，跑两遍一致）。
       const reconciled = reconcileExpiredReleaseStatuses(database,
         { today: now.toISOString().slice(0, 10), nowMs: now.getTime() })
+      // **对账要留下「往哪个方向翻」**：只说「改写 N 行」看不出是 published→backfilling 还是反过来。
+      // 用户 2026-11-16 的验收样本就靠这一行：narwhal 那行 published→待补值、0xrouter 两行 backfilling→已发布。
       if (reconciled.updated > 0) {
+        const delta = Object.fromEntries([...new Set([...Object.keys(reconciled.before), ...Object.keys(reconciled.after)])]
+          .map((status) => [status, (reconciled.after[status] ?? 0) - (reconciled.before[status] ?? 0)])
+          .filter(([, change]) => change !== 0))
         console.warn(`[macro-calendar] 过期发布状态对账：扫描 ${reconciled.scanned} 行、改写 ${reconciled.updated} 行`
-          + `（${JSON.stringify(reconciled.after)}）`)
+          + `、方向 ${JSON.stringify(delta)}、现状 ${JSON.stringify(reconciled.after)}`)
       }
       ensureOfficialHistoryReplayed(database)
       // 「这一行是什么」与重要性回填（迁移 16）：以前没存，读侧只能靠前缀猜（423 行被猜成经济指标）。
