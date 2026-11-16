@@ -6,6 +6,7 @@ import type { UnmappedCalendarObservation } from '../../../service/intelligence/
 import type {
   CalendarEventIndexRead, CalendarEventIndexRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventIndexRead'
+import type { MappingRulesRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 export type MarketCalendarClient = {
   queryMonth: (input: MarketCalendarQuery) => Promise<MarketCalendarPage>
   refresh: (input: MarketCalendarScope) => Promise<MarketCalendarRefreshResult>
@@ -24,6 +25,11 @@ export type MarketCalendarClient = {
    * **空数组只表示「没有匹配」**，不表示读不到——这一条与未映射月读同一个规矩。
    */
   queryEvents: (input: Readonly<{ cursor?: string; pageSize: number; nameQuery?: string; countryCode?: string }>) => Promise<CalendarEventIndexRead>
+  /**
+   * 映射规则（源内 id ↔ 我们的指标码）与库里还没映射的 id：**只读、全量下发**。
+   * 数据量很小（85 条规则 + 数百个 id），一次给完，前端本地筛选与分页。
+   */
+  queryMappingRules: () => Promise<MappingRulesRead>
   /** Bounded catch-up: `timeout` is its own answer and is never reported as a failure. */
   refreshNow: (input: Readonly<{ sourceIds?: readonly string[]; timeoutMs?: number }>) => Promise<MarketCalendarRefreshNowResult>
 }
@@ -41,6 +47,10 @@ export const marketCalendarClient: MarketCalendarClient = {
   async getCollectionFreshness() {
     const value = await invoke(marketCalendarPublicPolicy.methods.getCollectionFreshness, {})
     return isMarketCalendarFreshness(value) ? value : { state: 'unavailable', failureCode: 'query-unavailable' }
+  },
+  async queryMappingRules() {
+    const value = await invoke(marketCalendarPublicPolicy.methods.queryMappingRules, {})
+    return mappingRulesReadOf(value)
   },
   async queryEvents(input) {
     return eventIndexReadOf(await invoke(marketCalendarPublicPolicy.methods.queryEvents, input))
@@ -120,4 +130,21 @@ export function eventIndexReadOf(value: unknown): CalendarEventIndexRead {
     total: record.total,
     ...(typeof record.nextCursor === 'string' ? { nextCursor: record.nextCursor } : {})
   }
+}
+
+/** IPC 形状不合就判「读不到」：一份缺字段的规则表会让人以为「没有这条规则」。 */
+export function mappingRulesReadOf(value: unknown): MappingRulesRead {
+  if (value === null || typeof value !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  const record = value as Record<string, unknown>
+  if (record.state !== 'available' || !Array.isArray(record.mapped) || !Array.isArray(record.unmapped)) {
+    return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  }
+  for (const entry of [...record.mapped, ...record.unmapped]) {
+    if (entry === null || typeof entry !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    const row = entry as Record<string, unknown>
+    if (typeof row.sourceId !== 'string' || row.sourceId === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    if (typeof row.rowCount !== 'number' && typeof row.metricKey !== 'string') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  }
+  if (record.counts === null || typeof record.counts !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  return record as unknown as MappingRulesRead
 }
