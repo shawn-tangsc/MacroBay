@@ -85,6 +85,8 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   // 单独记日志（「跑了」与「写入了」本来就是两个数，见上面那两条）。
   return {
     state: 'available', asOf: input.asOf, lastCollectedAt,
-    sources: marketCalendarPublicPolicy.feedByKind.map((descriptorId) => ({ descriptorId, lastCollectedAt }))
+    // 报的是**采集描述符**（当下在采的三条），不是 `feedByKind` 里旧源的 feed id——
+    // 后者会让整份读数被契约校验判成不可用，或者把一条停跑的源算进「最差」。
+    sources: marketCalendarPublicPolicy.descriptors.map((descriptorId) => ({ descriptorId, lastCollectedAt }))
   }
 }

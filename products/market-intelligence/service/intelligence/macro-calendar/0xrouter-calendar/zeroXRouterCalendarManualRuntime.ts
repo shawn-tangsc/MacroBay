@@ -179,13 +179,19 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
      */
     readCollectionFreshness(enabledSourceIds?: readonly string[]): MarketCalendarFreshness {
       try {
-        const enabled = enabledSourceIds ?? marketCalendarPublicPolicy.feedByKind
+        /**
+         * **默认按「真正在采的」三条解析，不按 `feedByKind`**（2026-11-16，今天第三次同类问题）。
+         * `feedByKind` 是「按类事件查映射」，里的 id 还是旧源的 feed id；拿它算新鲜度，
+         * 会把一条停跑两天的旧源当成「启用的来源」，取最差就永远是 59 小时前——
+         * 于是每版都判过期、每次都触发补采、每次都写「采集超时/失败」。
+         */
+        const enabled = enabledSourceIds ?? marketCalendarPublicPolicy.descriptors
         const highWater = attempts.listCollectionHighWater()
         const allAttempts = attempts.listAttempts()
         const sources = marketCalendarPublicPolicy.kinds.map((_, index) => {
           // 一类事件只报一个来源：新来源有采集记录就报它，否则报切换前那个——
           // 与读取侧同一条规则，否则「数据来自谁」和「新鲜度说的是谁」会各说各话。
-          const descriptorId = sourceFor(index, highWater) ?? marketCalendarPublicPolicy.feedByKind[index]!
+          const descriptorId = sourceFor(index, highWater) ?? marketCalendarPublicPolicy.descriptors[index]!
           const lastCollectedAt = readWorstEnabledCollection(
             highWater.filter((row) => row.descriptorId === descriptorId), [descriptorId])
           const latestAttempt = latestAttemptFor(allAttempts, descriptorId)
@@ -201,12 +207,10 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
       const index = marketCalendarPublicPolicy.kinds.indexOf(eventType)
       if (index < 0) return undefined
       const attemptsOfLocale = attempts.listAttempts().filter((row) => row.locale === scope.locale)
-      // 同一类事件先认新来源的尝试，没有再认切换前的：两个来源都可能有失败记录，先说的算。
-      for (const descriptorId of [marketCalendarPublicPolicy.feedByKind[index]!, marketCalendarPublicPolicy.descriptors[index]!]) {
-        const attempt = latestAttemptFor(attemptsOfLocale, descriptorId, scope.month)
-        if (attempt) return attempt
-      }
-      return undefined
+      // **只认当下在采的那个描述符**（2026-11-16）：旧源的 feed id 已经停跑，先问它等于把
+      // 一条两天前的失败记录当成「这一类事件的最新尝试」。`feedByKind` 只管按类查映射。
+      const attempt = latestAttemptFor(attemptsOfLocale, marketCalendarPublicPolicy.descriptors[index]!, scope.month)
+      return attempt ?? undefined
     },
     refreshManual(input: unknown): Promise<RefreshResult> {
       if (stopped || !deps.evidenceReady) return unavailable('readiness-unavailable')
@@ -258,7 +262,7 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
  */
 /** 这一类事件这一期真正有采集记录的那个来源；两个都没有时返回 undefined。 */
 function sourceFor(index: number, highWater: readonly { descriptorId: string }[]): string | undefined {
-  for (const descriptorId of [marketCalendarPublicPolicy.feedByKind[index]!, marketCalendarPublicPolicy.descriptors[index]!]) {
+  for (const descriptorId of [marketCalendarPublicPolicy.descriptors[index]!]) {
     if (highWater.some((row) => row.descriptorId === descriptorId)) return descriptorId
   }
   return undefined

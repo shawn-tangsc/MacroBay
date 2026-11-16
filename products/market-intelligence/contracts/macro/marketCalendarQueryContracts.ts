@@ -369,13 +369,20 @@ export function isMarketCalendarFreshness(value: unknown): value is MarketCalend
   if (!marketInstant(value.asOf)) return false
   if (value.lastCollectedAt !== null && !marketInstant(value.lastCollectedAt)) return false
   if (!safeArray(value.sources, sourceFreshness)) return false
-  return value.sources.length === marketCalendarPublicPolicy.feedByKind.length &&
-    value.sources.every((item, index) => item.descriptorId === marketCalendarPublicPolicy.feedByKind[index]) &&
+  /**
+   * 新鲜度报的是**采集描述符**（当下在采的那三条）。校验同时接受切换前那三个 feed id：
+   * 读侧已改成报描述符，但**旧测试夹具与在途版本**仍可能给旧 id——校验的职责是「id 认识、
+   * 数量对齐」，不是替读侧决定用哪套。两边都只允许「已知 id」，长度必须是三类事件那三条。
+   */
+  const knownSourceIds = [...marketCalendarPublicPolicy.descriptors, ...marketCalendarPublicPolicy.feedByKind]
+  return value.sources.length === marketCalendarPublicPolicy.descriptors.length &&
+    value.sources.every((item) => (knownSourceIds as readonly string[]).includes(item.descriptorId)) &&
     value.sources.every(item => item.lastCollectedAt === null || item.lastCollectedAt <= (value.asOf as string))
 }
 function sourceFreshness(value: unknown): value is MarketCalendarCollectionFreshness {
   return marketExact(value, ['descriptorId', 'lastCollectedAt'], ['latestAttempt']) &&
-    typeof value.descriptorId === 'string' && (marketCalendarPublicPolicy.feedByKind as readonly string[]).includes(value.descriptorId) &&
+    typeof value.descriptorId === 'string' &&
+      ([...marketCalendarPublicPolicy.descriptors, ...marketCalendarPublicPolicy.feedByKind] as readonly string[]).includes(value.descriptorId) &&
     (value.lastCollectedAt === null || marketInstant(value.lastCollectedAt)) &&
     (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt))
 }

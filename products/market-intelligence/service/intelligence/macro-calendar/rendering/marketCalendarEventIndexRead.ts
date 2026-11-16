@@ -106,7 +106,7 @@ function detailOf(database: DatabaseSync, countryCode: string, metricKey: string
 /**
  * 读一页事件清单。
  *
- * - `nameQuery`：空格拆词，**每个词都要在某一列命中**；命中列集合＝zhFull/zhShort/enFull/enShort
+ * - `nameQuery`：空格拆词，**每个词都要在某一列命中**；命中列集合＝名表那四列（中英全称/简称）
  *   ＋`sourceLabel`（源原文名）。英文大小写折叠。**不拼接字段**（拼接会造出跨字段假命中）。
  * - `countryCode`：独立筛选（不与名字混，混了 `US` 会命中所有美国事件，看起来像名字匹配其实是身份匹配）。
  * - `cursor`：上一页最后一行的 `cursorOf`；`pageSize` 上限按 200。
