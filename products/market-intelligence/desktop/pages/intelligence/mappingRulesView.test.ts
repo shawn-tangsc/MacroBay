@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type {
   DirectMetricRow, MappingRuleRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
-import { filterDirectByTier, filterMappedByTier, sortDirectMetrics, sortMappedRules, tierKeyOf } from './mappingRulesView'
+import {
+  expandToFamily, filterDirectByTier, filterMappedByTier, sortDirectMetrics, sortMappedRules, tierKeyOf
+} from './mappingRulesView'
 
 const row = (sourceId: string, metricKey: string, tier: 1 | 2 | 3 | null, rowCount: number): MappingRuleRow =>
   ({ sourceId, metricKey, periodRule: 'month', basis: null, officialUrl: null, names: null, tier, rowCount })
@@ -69,5 +71,43 @@ describe('direct 段', () => {
     expect(filterDirectByTier(rows, '1').map((row) => row.metricKey)).toEqual(['US.PCE.SA.MOM'])
     expect(filterDirectByTier(rows, 'other').map((row) => row.metricKey)).toEqual(['US.GDP.SA.ANNUALIZED_QOQ'])
     expect(filterDirectByTier(rows, 'all')).toHaveLength(2)
+  })
+})
+
+describe('族分组与父带子', () => {
+  const fam = (sourceId: string, metricKey: string, rowCount: number,
+    extra: Readonly<{ kind?: 'parent' | 'child'; parentMetricKey?: string | null; childOrder?: number }> = {}
+  ): MappingRuleRow => ({ ...row(sourceId, metricKey, null, rowCount), ...extra })
+
+  const parentRow = fam('p1', 'US.PHILLY.FED.SA.LEVEL', 9, { kind: 'parent', parentMetricKey: null })
+  const childLate = fam('c2', 'US.PHILLY.FED.ORDERS.SA.LEVEL', 1,
+    { kind: 'child', parentMetricKey: 'US.PHILLY.FED.SA.LEVEL', childOrder: 2 })
+  const childFirst = fam('c0', 'US.PHILLY.FED.SHIPMENTS.SA.LEVEL', 3,
+    { kind: 'child', parentMetricKey: 'US.PHILLY.FED.SA.LEVEL', childOrder: 0 })
+  const childMiddle = fam('c1', 'US.PHILLY.FED.PRICES.SA.LEVEL', 2,
+    { kind: 'child', parentMetricKey: 'US.PHILLY.FED.SA.LEVEL', childOrder: 1 })
+  const big = fam('big', 'US.UNEMPLOYMENT.SA.RATE', 12)
+
+  it('keeps a family together: parent first, children by childOrder', () => {
+    // 读口给的顺序是乱的（含字母序相反的），这里要的是「族内按词表序」。
+    const rows = [childLate, childFirst, big, childMiddle, parentRow]
+    expect(sortMappedRules(rows).map((entry) => entry.sourceId))
+      .toEqual(['big', 'p1', 'c0', 'c1', 'c2'])
+  })
+
+  it('does not reorder children when the read port gives no childOrder', () => {
+    const a = fam('a', 'US.X.A.SA.LEVEL', 1, { kind: 'child', parentMetricKey: 'US.X.SA.LEVEL' })
+    const b = fam('b', 'US.X.B.SA.LEVEL', 1, { kind: 'child', parentMetricKey: 'US.X.SA.LEVEL' })
+    expect(sortMappedRules([a, b]).map((entry) => entry.sourceId)).toEqual(['a', 'b'])
+  })
+
+  it('pulls in the children when a parent matches, and only itself when a child matches', () => {
+    const rows = [big, parentRow, childFirst, childMiddle, childLate]
+    expect(expandToFamily(rows, [parentRow]).map((entry) => entry.sourceId))
+      .toEqual(['p1', 'c0', 'c1', 'c2'])
+    // 命中子项只出子项：把母项也拉进来，读者会以为自己搜到了母项。
+    expect(expandToFamily(rows, [childMiddle]).map((entry) => entry.sourceId)).toEqual(['c1'])
+    // 没有族信息时行为不变。
+    expect(expandToFamily(rows, [big]).map((entry) => entry.sourceId)).toEqual(['big'])
   })
 })

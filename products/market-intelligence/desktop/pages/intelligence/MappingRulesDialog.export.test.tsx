@@ -33,6 +33,7 @@ const text = {
   exportLabel: mkDay.mappingExport, exportEmpty: mkDay.mappingExportEmpty,
   tierFilter: mkDay.mappingTierFilter,
   directColumns: mkDay.mappingDirectColumns, directEmpty: mkDay.mappingDirectEmpty, tabDirect: mkDay.mappingTabDirect,
+  childSuffix: mkDay.mappingChildSuffix,
   sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped,
   sheetDirect: mkDay.mappingSheetDirect
 }
@@ -158,7 +159,10 @@ it('shows the third tab and exports a third worksheet when the section is there'
   // 这一段没有源内 id：表里只有指标码、名称、分级、库里行数四列。
   const section = document.body.querySelector('[data-mapping-section="direct"]')
   expect(section?.textContent).toContain('US.PCE.SA.MOM')
-  expect(section?.textContent).toContain('核心 PCE 月率 · PCE Price Index, MoM')
+  // 名称格：中文名 + 小字灰字英文名，**中间不再有「·」**（英文缺失时更不许留半个分隔符）。
+  expect(section?.textContent).toContain('核心 PCE 月率')
+  expect(section?.textContent).toContain('PCE Price Index, MoM')
+  expect(section?.querySelector('.mi-name__en')?.textContent).toBe('PCE Price Index, MoM')
   // 名表查不到的行：名称格空着，分级显示「未分级」，行数照实写。
   expect(section?.textContent).toContain('未分级')
   expect(section?.textContent).toContain('US.GDP.SA.ANNUALIZED_QOQ')
@@ -183,4 +187,57 @@ it('shows the third tab and exports a third worksheet when the section is there'
   expect((third.match(/<row /gu) ?? []).length).toBe(3)
   expect(third).toContain('US.PCE.SA.MOM')
   expect(third).not.toContain('US.CPI.NSA.YOY')
+})
+
+/**
+ * 子母项（Chief 2026-11-17）：名称格里给归属小字，母项排在自己分项前面，
+ * 搜母指标名时它的分项一起出来（搜子项只出子项）。
+ */
+const phillyParent = 'US.PHILLY_FED_MANUFACTURING.SA.LEVEL'
+const familyView: MappingRulesRead = {
+  state: 'available',
+  mapped: [
+    { sourceId: 'c0', metricKey: 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL', periodRule: 'month',
+      basis: null, officialUrl: null, names: { zh: '费城联储制造业装船', en: 'Philly Fed Shipments' },
+      tier: null, rowCount: 3, kind: 'child', parentMetricKey: phillyParent, childOrder: 0 },
+    { sourceId: 'p1', metricKey: phillyParent, periodRule: 'month', basis: null, officialUrl: null,
+      names: { zh: '费城联储制造业指数', en: 'Philly Fed Manufacturing Index' },
+      tier: 1, rowCount: 9, kind: 'parent', parentMetricKey: null },
+    { sourceId: 'c1', metricKey: 'US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month',
+      basis: null, officialUrl: null, names: { zh: '费城联储制造业新订单', en: 'Philly Fed New Orders' },
+      tier: null, rowCount: 2, kind: 'child', parentMetricKey: phillyParent, childOrder: 1 },
+    { sourceId: 'other', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodRule: 'month', basis: null, officialUrl: null,
+      names: { zh: '失业率', en: 'Unemployment Rate' }, tier: 1, rowCount: 13 }
+  ],
+  unmapped: [],
+  counts: { mapped: 4, unmapped: 0, unmappedRows: 0 }
+}
+
+it('puts a parent ahead of its children and shows the owning parent as small text', async () => {
+  await mount(familyView)
+  const rows = dataRows()
+  expect(rows).toHaveLength(4)
+  // 行数最多的族在最前（失业率 13 行），其余三行是费城那一族且母项带头。
+  expect(rows[0]).toContain('US.UNEMPLOYMENT.SA.RATE')
+  expect(rows[1]).toContain(phillyParent)
+  // 子项带归属小字：母指标名 + 「· 子项」；母项自己不重复一遍自己的名字。
+  expect(rows[2]).toContain('费城联储制造业装船')
+  expect(rows[2]).toContain('费城联储制造业指数 · 子项')
+  expect(rows[1]).not.toContain('· 子项')
+})
+
+it('brings the children along when the search matches the parent only', async () => {
+  await mount(familyView)
+  const input = document.body.querySelector('.mi-catalog__filters input') as HTMLInputElement
+  expect(input).not.toBeNull()
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, '费城联储制造业指数')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  // 母项名里带「费城联储制造业指数」，子项名里是「费城联储制造业装船」——不含母名的整串，必须靠父带子补齐。
+  const rows = dataRows()
+  expect(rows).toHaveLength(3)
+  expect(rows[0]).toContain(phillyParent)
+  expect(rows[1]).toContain('US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL')
 })

@@ -144,7 +144,18 @@ export function mappingRulesReadOf(value: unknown): MappingRulesRead {
     const row = entry as Record<string, unknown>
     if (typeof row.sourceId !== 'string' || row.sourceId === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
     if (typeof row.rowCount !== 'number' && typeof row.metricKey !== 'string') return { state: 'unavailable', reasonCode: 'query-unavailable' }
-    // `names` 是「中文简称 · 英文全名」那一格的唯一来源：形状不对就别放行，否则格子会拼出半句。
+    // 层级字段可缺（旧载荷没有）；有就必须自洽——否则界面会画出一个不属于任何母项的子项。
+    if (row.kind !== undefined && row.kind !== 'parent' && row.kind !== 'child') {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+    if (row.parentMetricKey !== undefined && row.parentMetricKey !== null
+      && (typeof row.parentMetricKey !== 'string' || row.parentMetricKey === '')) {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+    if (row.childOrder !== undefined && (typeof row.childOrder !== 'number' || !Number.isInteger(row.childOrder))) {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+    // `names` 是名称格里的唯一来源：形状不对就别放行，否则格子会拼出半句。
     if (row.names !== undefined && row.names !== null) {
       const names = row.names as { zh?: unknown; en?: unknown }
       if (typeof names.zh !== 'string' || typeof names.en !== 'string') return { state: 'unavailable', reasonCode: 'query-unavailable' }

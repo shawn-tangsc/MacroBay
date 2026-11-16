@@ -232,6 +232,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     exportLabel: text.mkDay.mappingExport, exportEmpty: text.mkDay.mappingExportEmpty,
     tierFilter: text.mkDay.mappingTierFilter,
     directColumns: text.mkDay.mappingDirectColumns, directEmpty: text.mkDay.mappingDirectEmpty,
+    childSuffix: text.mkDay.mappingChildSuffix,
     tabDirect: text.mkDay.mappingTabDirect,
     sheetMapped: text.mkDay.mappingSheetMapped, sheetUnmapped: text.mkDay.mappingSheetUnmapped,
     sheetDirect: text.mkDay.mappingSheetDirect

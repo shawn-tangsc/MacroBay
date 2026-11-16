@@ -192,6 +192,8 @@ export const macroIndicatorDrawerText = {
       mappingTabDirect: '无需映射 ({count})',
       mappingDirectEmpty: '没有匹配的指标',
       mappingDirectColumns: { metricKey: '指标码', name: '名称', tier: '分级', rows: '库里行数' },
+      /* 子项的归属小字：`母指标名 · 子项`。母名查不到时这里只写「子项」。 */
+      mappingChildSuffix: '子项',
       /* 导出文件里的三个工作表名（不是页签文案：页签带条数，工作表名不带）。 */
       mappingSheetMapped: '已映射',
       mappingSheetUnmapped: '未映射',
@@ -358,6 +360,7 @@ export const macroIndicatorDrawerText = {
       mappingTabDirect: 'No rule needed ({count})',
       mappingDirectEmpty: 'No matching metrics',
       mappingDirectColumns: { metricKey: 'Metric key', name: 'Name', tier: 'Tier', rows: 'Rows in store' },
+      mappingChildSuffix: 'sub-item',
       mappingSheetMapped: 'Mapped',
       mappingSheetUnmapped: 'Unmapped',
       mappingSheetDirect: 'No rule needed',

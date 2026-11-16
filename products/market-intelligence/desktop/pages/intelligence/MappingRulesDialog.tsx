@@ -12,9 +12,10 @@ import type {
 import { buildXlsx } from '@platform/files/export/xlsx'
 import { directExportRows, exportFileName, mappedExportRows, sampleText, unmappedExportRows } from './mappingRulesExport'
 import {
-  filterDirectByTier, filterMappedByTier, sortDirectMetrics, sortMappedRules, tierKeyOf,
+  expandToFamily, filterDirectByTier, filterMappedByTier, sortDirectMetrics, sortMappedRules, tierKeyOf,
   type TierFilter, type TierKey
 } from './mappingRulesView'
+import { MetricNameText } from '../../shared/MetricNameText'
 
 /**
  * 「映射规则」弹框：**两个页签**（已映射 / 未映射），筛选框在页签上方、两段共用。
@@ -41,6 +42,8 @@ export type MappingRulesText = Readonly<{
   unmappedColumns: Readonly<{ sourceId: string; rows: string; sample: string }>
   /** 第三个页签：进来就带指标码、不需要规则的指标。 */
   directColumns: Readonly<{ metricKey: string; name: string; tier: string; rows: string }>
+  /** 子项归属小字里的「子项」两个字（可见文案，不写在组件里）。 */
+  childSuffix: string
   directEmpty: string
   tabMapped: string
   tabUnmapped: string
@@ -85,24 +88,39 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   const needle = query.trim().toLowerCase()
   const hit = (values: readonly (string | null | undefined)[]): boolean =>
     needle === '' || values.some((value) => has(value) && value.toLowerCase().includes(needle))
+  /** 母指标的中文名：用来给子项写归属小字。查不到的母码不编名字，只留「子项」两个字。 */
+  const parentNameOf = (metricKey: string): string | null => {
+    if (view?.state !== 'available') return null
+    const row = [...view.mapped, ...(view.direct ?? [])].find((entry) => entry.metricKey === metricKey)
+    return row?.names?.zh ?? null
+  }
+  /** 子项的归属小字：`母指标名 · 子项`；母名查不到就只写「子项」，不拿母码冒充名字。 */
+  const ownerTextOf = (row: Readonly<{ parentMetricKey?: string | null; kind?: 'parent' | 'child' }>): string | null => {
+    if (row.kind !== 'child' || row.parentMetricKey == null) return null
+    const parentName = parentNameOf(row.parentMetricKey)
+    return parentName === null ? text.childSuffix : `${parentName} · ${text.childSuffix}`
+  }
   /**
-   * 已映射：先按筛选词与分级筛，再按「行数降序 → 分级 → 指标码」摆。
+   * 已映射：筛选词 + 分级筛 → **父带子** → 按族分组。
    * 排序是**读者可见的顺序**，导出也用这一份——两边顺序一致，不会「屏幕上一个样、文件里另一个样」。
    */
-  const mapped = useMemo(() => (view?.state === 'available'
-    ? sortMappedRules(filterMappedByTier(view.mapped.filter((row) =>
-      hit([row.sourceId, row.metricKey, row.basis, row.officialUrl, row.names?.zh, row.names?.en])), tierFilter))
-    : []), [view, needle, tierFilter])
+  const mapped = useMemo(() => {
+    if (view?.state !== 'available') return []
+    const candidates = view.mapped.filter((row) =>
+      hit([row.sourceId, row.metricKey, row.basis, row.officialUrl, row.names?.zh, row.names?.en]))
+    return sortMappedRules(filterMappedByTier(expandToFamily(view.mapped, candidates), tierFilter))
+  }, [view, needle, tierFilter])
   const unmapped = useMemo(() => (view?.state === 'available' ? view.unmapped.filter((row) =>
     hit([row.sourceId, row.sampleLabel, row.sampleLabelEn])) : []), [view, needle])
   /**
    * 无需映射：**整段没有就不显示这个页签**（旧载荷），有就按同一把尺子摆。
    * 这一段是「我们一共支持哪些指标」的答案，所以不能用「空表」冒充「没有这一段」。
    */
-  const direct = useMemo(() => (view?.state === 'available' && view.direct !== undefined
-    ? sortDirectMetrics(filterDirectByTier(view.direct.filter((row) =>
-      hit([row.metricKey, row.names?.zh, row.names?.en])), tierFilter))
-    : []), [view, needle, tierFilter])
+  const direct = useMemo(() => {
+    if (view?.state !== 'available' || view.direct === undefined) return []
+    const candidates = view.direct.filter((row) => hit([row.metricKey, row.names?.zh, row.names?.en]))
+    return sortDirectMetrics(filterDirectByTier(expandToFamily(view.direct, candidates), tierFilter))
+  }, [view, needle, tierFilter])
 
   const counts = view?.state === 'available' ? view.counts : { mapped: 0, unmapped: 0, unmappedRows: 0 }
   const directCount = counts.direct
@@ -124,9 +142,11 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
         { title: text.columns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
         { title: text.columns.metricKey, dataIndex: 'metricKey', className: 'mi-catalog__cell-nowrap' },
         {
-          // 中英放在同一格（`中文简称 · 英文全名`）；没有名表条目就空着，不拿指标码拼假英文名。
+          // 中文名为主语、英文名小字灰字跟在后面，子项再带归属小字（`母指标名 · 子项`）。
+          // 没有名表条目就空着，不拿指标码拼假英文名——三处共用一个组件，规则不各写一套。
           title: text.columns.name, dataIndex: 'names',
-          render: (value: MappingRuleRow['names']) => value === null ? '' : `${value.zh} · ${value.en}`
+          render: (value: MappingRuleRow['names'], row) =>
+            <MetricNameText zh={value?.zh} en={value?.en} owner={ownerTextOf(row)} />
         },
         {
           // 分级直接读读口的 `tier`（分级表只有一处）；`null` 显示「未分级」，不空着。
@@ -170,7 +190,8 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
         { title: text.directColumns.metricKey, dataIndex: 'metricKey', className: 'mi-catalog__cell-nowrap' },
         {
           title: text.directColumns.name, dataIndex: 'names',
-          render: (value: DirectMetricRow['names']) => value === null ? '' : `${value.zh} · ${value.en}`
+          render: (value: DirectMetricRow['names'], row) =>
+            <MetricNameText zh={value?.zh} en={value?.en} owner={ownerTextOf(row)} />
         },
         {
           title: text.directColumns.tier, dataIndex: 'tier', className: 'mi-catalog__cell-nowrap',

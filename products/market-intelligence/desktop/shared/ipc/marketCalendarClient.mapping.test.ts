@@ -65,3 +65,27 @@ describe('mappingRulesReadOf · direct', () => {
     expect(mappingRulesReadOf({ ...ok, direct: [], counts: { ...ok.counts, direct: 1 } }).state).toBe('unavailable')
   })
 })
+
+/**
+ * 层级字段：**可缺，不能错**。缺了就是旧载荷（界面不显示归属小字），错了会让子项挂在不存在的
+ * 母项下面——那比不显示更糟。
+ */
+describe('mappingRulesReadOf · hierarchy', () => {
+  const base = { ...ok.mapped[0]!, kind: 'child' as const, parentMetricKey: 'US.X.SA.LEVEL', childOrder: 0 }
+
+  it('accepts a well-formed child row and a plain row with no hierarchy fields', () => {
+    expect(mappingRulesReadOf({ ...ok, mapped: [base] }).state).toBe('available')
+    expect(mappingRulesReadOf({ ...ok, mapped: [{ ...ok.mapped[0] }] }).state).toBe('available')
+  })
+  it('refuses hierarchy fields that do not hold together', () => {
+    const cases = [
+      { ...base, kind: 'grandchild' },
+      { ...base, parentMetricKey: '' },
+      { ...base, childOrder: 'first' },
+      { ...base, childOrder: 1.5 }
+    ]
+    for (const broken of cases) {
+      expect(mappingRulesReadOf({ ...ok, mapped: [broken] }).state, JSON.stringify(broken)).toBe('unavailable')
+    }
+  })
+})
