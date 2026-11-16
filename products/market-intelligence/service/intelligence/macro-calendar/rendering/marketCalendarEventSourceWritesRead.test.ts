@@ -36,7 +36,7 @@ describe('按事件身份取各来源', () => {
     // 0xrouter 的数组身份 `214790` 通过映射认得这个码；narwhal 直接用码。
     seedStandard(database, 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL', 'narwhal', 'backfilling', { consensus: '10', previous: '25.5' })
     seedStandard(database, '["214790",79095]', '0xrouter', 'published', { consensus: '18.0', actual: '7.8', previous: '25.5' })
-    const read = readEventSourceWrites(database, { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL' })
+    const read = readEventSourceWrites(database, { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL', scheduledDate: '2026-11-16' })
     if (read.state !== 'available') throw new Error('unavailable')
     expect(read.providerCount).toBe(2)
     expect(read.rows.every((row) => row.source === 'observation')).toBe(true)
@@ -52,18 +52,30 @@ describe('按事件身份取各来源', () => {
     database.prepare(`insert into mi_macro_calendar_revisions (revision_id, event_key, provider_id, scheduled_date,
       lifecycle_state, actual_json, detected_at) values ('r1','US.FOMC.2026-10-28','macro-calendar-fed','2026-10-30',
       'released','{"displayValue":"3.75%–4.00%"}','2026-10-30T00:00:00.000Z')`).run()
-    const read = readEventSourceWrites(database, { metricKey: 'US.FOMC.2026-10-28' })
+    // 修订行的 `scheduled_date` 是那一期的发布日，读口按它过滤。
+
+    const read = readEventSourceWrites(database, { metricKey: 'US.FOMC.2026-10-28', scheduledDate: '2026-10-30' })
     if (read.state !== 'available') throw new Error('unavailable')
     expect(read.rows).toHaveLength(1)
     expect(read.rows[0]).toMatchObject({ source: 'revision', providerId: 'macro-calendar-fed', actual: '3.75%–4.00%' })
     expect(read.hasRevisionChain).toBe(true)
   })
 
+  it('期次是必需条件：同一指标不同月份互不混入', () => {
+    const database = setup()
+    seedStandard(database, 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL', 'narwhal', 'backfilling', { consensus: '10' })
+    const read = readEventSourceWrites(database, { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL', scheduledDate: '2026-10-15' })
+    // 同一条码在 11 月有行，问 10 月时不该把它带出来。
+    expect(read.state).toBe('unavailable')
+    expect(readEventSourceWrites(database, { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL' } as never))
+      .toEqual({ state: 'unavailable', reasonCode: 'query-input-invalid' })
+  })
+
   it('什么都没有时是「读不到」，不是空数组', () => {
     const database = setup()
-    expect(readEventSourceWrites(database, { metricKey: 'US.NOPE.SA.MOM' }))
+    expect(readEventSourceWrites(database, { metricKey: 'US.NOPE.SA.MOM', scheduledDate: '2026-11-16' }))
       .toEqual({ state: 'unavailable', reasonCode: 'query-unavailable' })
-    expect(readEventSourceWrites(database, { metricKey: '' }))
+    expect(readEventSourceWrites(database, { metricKey: '', scheduledDate: '2026-11-16' }))
       .toEqual({ state: 'unavailable', reasonCode: 'query-input-invalid' })
   })
 })

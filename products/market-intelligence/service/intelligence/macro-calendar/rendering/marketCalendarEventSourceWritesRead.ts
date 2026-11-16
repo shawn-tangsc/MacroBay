@@ -70,17 +70,28 @@ function sourceIdsFor(metricKey: string): string[] {
   return ids
 }
 
-export function readEventSourceWrites(database: DatabaseSync, input: Readonly<{ metricKey: unknown }>): EventSourceWritesRead {
-  if (typeof input.metricKey !== 'string' || input.metricKey.trim() === '') {
+/**
+ * `scheduledDate`（`YYYY-MM-DD`）是**必需**的：没有它，这个读口会把这个指标的**所有月份**都返回——
+ * 点开 11 月那期，10 月、9 月的写入记录会一起出来，两块变几十块。详情行上的
+ * `MarketCalendarEvent.scheduledAt` 的日期部分就是它，不需要新字段。
+ */
+export function readEventSourceWrites(database: DatabaseSync, input: Readonly<{
+  metricKey: unknown
+  scheduledDate: unknown
+}>): EventSourceWritesRead {
+  if (typeof input.metricKey !== 'string' || input.metricKey.trim() === ''
+    || typeof input.scheduledDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.scheduledDate)) {
     return { state: 'unavailable', reasonCode: 'query-input-invalid' }
   }
   const metricKey = input.metricKey.trim()
+  const scheduledDate = input.scheduledDate
   try {
     const rows: EventSourceWriteRow[] = []
     // ① 修订表：官方来源的写入记录（Who wrote what, when）——**没有历史补不回来**。
     for (const row of database.prepare(`select provider_id, scheduled_date, lifecycle_state, consensus_json,
-        actual_json, previous_json from mi_macro_calendar_revisions where event_key = ? order by detected_at desc`)
-      .all(metricKey) as unknown as Record<string, unknown>[]) {
+        actual_json, previous_json from mi_macro_calendar_revisions
+        where event_key = ? and scheduled_date = ? order by detected_at desc`)
+      .all(metricKey, scheduledDate) as unknown as Record<string, unknown>[]) {
       rows.push(Object.freeze({
         source: 'revision' as const,
         providerId: String(row.provider_id),
@@ -95,9 +106,10 @@ export function readEventSourceWrites(database: DatabaseSync, input: Readonly<{ 
     // ② 标准表：**当前**各来源的值（市场来源只在这里，没有历史）。
     const sourceIds = sourceIdsFor(metricKey)
     const identityClause = ['metric_key = ?', ...sourceIds.map(() => 'metric_key like ?')].join(' or ')
-    const params: string[] = [metricKey, ...sourceIds.map((id) => `["${id}",%`)]
+    // 参数顺序跟 SQL 里的占位符顺序一致：先 `scheduled_date`（在 identity 子句之前），再 identity。
+    const params: string[] = [scheduledDate, metricKey, ...sourceIds.map((id) => `["${id}",%`)]
     for (const row of database.prepare(`select metric_key, source_provider_id, observed_at, status, values_json
-        from mi_calendar_events where row_kind = 'release' and (${identityClause})
+        from mi_calendar_events where row_kind = 'release' and scheduled_date = ? and (${identityClause})
         order by observed_at desc`).all(...params) as unknown as Record<string, unknown>[]) {
       rows.push(Object.freeze({
         source: 'observation' as const,
