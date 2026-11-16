@@ -80,7 +80,7 @@ import { calendarStandardConservation } from './intelligence/macro-calendar/mark
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { createNarwhalCalendarBriefingRefresh }
   from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
-import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt }
+import { readStandardTableLastWrittenAt }
   from './intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
 import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calendar/bea-official-release/beaOfficialReleaseJobRuntime'
