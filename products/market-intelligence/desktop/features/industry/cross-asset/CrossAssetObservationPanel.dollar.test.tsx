@@ -97,4 +97,26 @@ describe('the dollar row on the market-status table', () => {
     expect(row?.querySelectorAll('[data-asset-price], [data-asset-return]')).toHaveLength(0)
     expect(tag(host)).toBeNull()
   })
+
+  it('says how old the level is once it passes the one stale threshold, and nothing while it is fresh', async () => {
+    // 新鲜时一个字都不加：一条每 5 分钟更新的读数挂一句「截至」只会变成噪声。
+    const fresh = await render(snapshotOf([realReading()]))
+    expect(fresh.querySelector('[data-reading-age="dxy"]')).toBeNull()
+
+    // 31 分钟（> 仓里那一处 30 分钟阈值）就说旧，并给出截至哪一刻——时间由格式化器给，不在这里拼。
+    const stale = await render(snapshotOf([realReading(asOfMs - 31 * 60_000)]))
+    const age = stale.querySelector('[data-reading-age="dxy"]')
+    expect(age?.textContent).toBe('偏旧 · 截至 2026-09-14 11:29:00 GMT')
+    // 它是说明，不是控件。
+    expect(age?.getAttribute('tabindex')).toBeNull()
+    expect(age?.closest('button')).toBeNull()
+  })
+
+  it('names a plan refusal in the same slot instead of leaving a bare old level', async () => {
+    // 供应商不再提供 DXY：读数还是它最后一次给的值，句子换成带原因的整句（不是两个数、两句话）。
+    const refused = { ...realReading(asOfMs - 48 * 60 * 60_000), sourceFailure: 'symbol-not-supported' as const }
+    const host = await render(snapshotOf([refused]))
+    expect(host.querySelector('[data-reading-age="dxy"]')?.textContent)
+      .toBe('偏旧 · 截至 2026-09-12 12:00:00 GMT · 套餐不提供')
+  })
 })

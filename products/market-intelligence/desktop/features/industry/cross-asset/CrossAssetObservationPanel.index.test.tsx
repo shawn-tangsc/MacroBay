@@ -64,6 +64,8 @@ async function render(input: Readonly<{
   quotes?: Partial<Record<'btc' | 'eth', 'live' | 'stale' | 'missing'>>
   /** 美元/黄金两条线读的宏观序列；不给＝这一版没有宏观库，图上没有这两条线。 */
   macroSeries?: (seriesId: string, fromMs: number, toMs: number) => readonly { atMs: number; value: number }[]
+  /** 美元那条宏观读数（含服务侧挂的永久拒绝）；不给＝这一格没有宏观读数。 */
+  macroReading?: Readonly<{ atMs: number; sourceFailure?: 'symbol-not-supported' }>
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -109,6 +111,18 @@ async function render(input: Readonly<{
       cellStateLabels: { disabled: '数据未被启用', unreadable: '暂时读不到' }
     }),
     ...(input.sourceStatusStale === undefined ? {} : { sourceStatusStale: input.sourceStatusStale }),
+    ...(input.macroReading === undefined ? {} : {
+      // 美元那条读数：`sourceFailure` 由服务侧按采集器的品种级失败挂上来（这里只是夹具）。
+      macroSnapshot: {
+        state: 'available' as const, asOf: new Date(input.nowMs).toISOString(),
+        source: { enabled: true, hasCredential: true },
+        readings: [{
+          seriesId: 'dxy-real', level: 103.407, atMs: input.macroReading.atMs, returns: {},
+          ...(input.macroReading.sourceFailure === undefined ? {} : { sourceFailure: input.macroReading.sourceFailure })
+        }],
+        caveats: []
+      }
+    }),
     ...(input.onEnableData === undefined ? {} : { onEnableData: input.onEnableData })
   })))
   return { host, client, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
@@ -488,6 +502,26 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
       const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
       await act(async () => hint.click())
       expect(document.body.textContent).toContain(text.lineNoComparableDataReason)
+    } finally { await page.unmount() }
+  })
+
+  it('names the plan in the legend and one line in the title ⓘ when the provider no longer carries the instrument', async () => {
+    // 真机 2026-11-16：套餐掉档，DXY 每天被拒。图例说「套餐不提供」，ⓘ 一行点名并给出最近收盘；
+    // 整块 ⓘ 仍只有 4 行（三条固定说明 + 这一行），所以那一句通用原因不再出现（界面设计 2026-11-16）。
+    const nowMs = at('2026-07-19T12:00:00.000Z')
+    const refusedAt = at('2026-07-17T21:55:00.000Z')
+    const page = await render({
+      nowMs, feed: 'ready', bySymbol: bothLegs(nowMs),
+      macroSeries: seriesId => seriesId === 'xau-usd' ? [] : [{ atMs: nowMs - 54 * 3_600_000, value: 102 }],
+      macroReading: { atMs: refusedAt, sourceFailure: 'symbol-not-supported' }
+    })
+    try {
+      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')?.textContent)
+        .toBe(`${text.assetLabels.dxy}${text.lineNoDataPlanRefused}`)
+      const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
+      await act(async () => hint.click())
+      expect(document.body.textContent).toContain('供应商当前套餐不提供这个品种，最近一次收盘 2026-07-17 21:55:00 GMT')
+      expect(document.body.textContent).not.toContain(text.lineNoComparableDataReason)
     } finally { await page.unmount() }
   })
 

@@ -9,6 +9,9 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { crossAssetTextKeys } from './crossAssetTextKeys'
 import { LoadingState } from '@platform/ui/components/loading'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
+// 「偏旧」的阈值只认仓里那一处定义：另开一个数，两处迟早漂成两种说法（界面设计 2026-11-16）。
+import { dashboardPositioningPresentationPolicy } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
 /**
  * 市场状态表里三行行情（纳指 / BTC / ETH）与它们共用的单元格、空行、末次收盘说明。
@@ -162,4 +165,49 @@ export function IndexObservation({ snapshot, text, formatTime }: {
 }): React.ReactElement | null {
   const at = snapshot.lastClosed?.index?.at
   return at ? <>{` · ${text.lastClosedBar} `}<time>{formatTime(at, 'second')}</time></> : null
+}
+
+/**
+ * 美元 / 黄金这两行：水平、四个窗口，以及行名旁那句「偏旧 · 截至 …」。
+ *
+ * 从面板抽出来的理由与这个文件原本存在的理由相同：面板顶到 500 行硬线。渲染一字未改。
+ */
+export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
+  id: 'dxy' | 'gold'; reading?: MacroMarketSnapshotReading; text: Text
+  formatTime: (value: string, precision: 'second') => string
+  /** 快照自己的 asOf：判「这条读数比阈值旧」的时钟，不读宿主时间（否则同一屏两次渲染会不一致）。 */
+  asOfMs?: number
+}): React.ReactElement {
+  // The live tick rides beside the collected level and never replaces it: the four window cells below
+  // still come from stored points, and the freshness tag marks the 最新 cell as an unclosed value.
+  const live = reading?.live
+  const resolveText = useProductTextKey()
+  /**
+   * 「偏旧」只认仓里那一处阈值（`staleAfterMs`），不另开一个数：两个数早晚会漂成两种说法。
+   * 被供应商永久拒绝时换整句——「套餐不提供」是原因，不是另一种新鲜度（界面设计 2026-11-16）。
+   */
+  const stale = reading !== undefined && asOfMs !== undefined &&
+    asOfMs - reading.atMs > dashboardPositioningPresentationPolicy.staleAfterMs
+  const age = stale && reading !== undefined
+    ? fillLabelParams(
+        resolveText(reading.sourceFailure === undefined ? crossAssetTextKeys.staleAsOf : crossAssetTextKeys.staleAsOfPlanNotServed),
+        { time: formatTime(new Date(reading.atMs).toISOString(), 'second') }
+      )
+    : undefined
+  return <tr data-status-row={id} data-connected="true">
+    <th scope="row"><span>{text.assetLabels[id]}
+      {/* The synthetic label rides with the level: a level this product computed is never shown as
+          if it were the licensed index, and the caveat sentence is one hover away. */}
+      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
+        aria-label={text.syntheticCaveat}
+        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex}>{text.syntheticTag}</em> : null}
+      {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
+          after the price reads as if it qualified the number itself. */}
+      {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
+      {/* 新鲜时一个字都不加：旧了才说旧，且说清截至哪一刻。 */}
+      {age === undefined ? null : <small className="mi-cross-asset__reading-age" data-reading-age={id}>{age}</small>}
+    </span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
+    <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
+    <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
+  </tr>
 }

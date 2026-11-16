@@ -14,7 +14,7 @@ import {
 const text = {
   ...productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset,
   // 面板在调用点补上宏观两条线的名字（真实调用点同样如此）。
-  macroAssets: { dxy: '美元', gold: '黄金' }
+  macroAssets: { dxy: '美元', gold: '黄金' }, lineNoDataPlanRefused: '本段无数据 · 套餐不提供'
 }
 const point = (at: string, returnPercent: number) => ({ at, returnPercent })
 const curve = [point('2026-07-16T01:00:00.000Z', 0), point('2026-07-16T02:00:00.000Z', 0.4)]

@@ -20,17 +20,19 @@ import { useCrossAssetObservation } from './useCrossAssetObservation'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
-import { chartLinesHiddenBy, CrossAssetReturnChart, linesWithoutComparableData } from './CrossAssetReturnChart'
+import { chartLinesHiddenBy, CrossAssetReturnChart, linesWithoutComparableData, type CrossAssetChartLineId } from './CrossAssetReturnChart'
 import { CircleSlash, TriangleAlert } from 'lucide-react'
 
 import { CellStateCard, type CellStateKind } from '../../../pages/intelligence/DashboardCellState'
+// 「偏旧」的阈值只认仓里那一处定义：另开一个数，两处迟早漂成两种说法（界面设计 2026-11-16）。
+import { dashboardPositioningPresentationPolicy } from '../../../pages/intelligence/dashboardOpenInterestModel'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
 import { CrossAssetStatusHeading } from './CrossAssetStatusHeading'
 import { CrossAssetQuoteLegStatus } from './CrossAssetQuoteLegStatus'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
 import {
-  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, PlannedStatusRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
+  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
   type MacroDriverId, type RowMetrics, type Text
 } from './crossAssetStatusRows'
 import { crossAssetTextKeys, crossAssetWindowLabelKeys } from './crossAssetTextKeys'
@@ -105,29 +107,6 @@ function RatesStatusRow({ id, reading, rates, text }: {
       {...(extras.mixedObservationDates ? { 'data-mixed-observation-dates': MARKET_ANALYSIS_CONTEXT_CAVEATS.macroRatesMixedPeriods } : {})}>
       <strong>{change}</strong>{detail ? <small data-asset-daily-detail={id}>{detail}</small> : null}
     </td>
-  </tr>
-}
-function MacroStatusRow({ id, reading, text, formatTime }: {
-  id: 'dxy' | 'gold'; reading?: MacroMarketSnapshotReading; text: Text
-  formatTime: (value: string, precision: 'second') => string
-}): React.ReactElement {
-  // The live tick rides beside the collected level and never replaces it: the four window cells below
-  // still come from stored points, and the freshness tag marks the 最新 cell as an unclosed value.
-  const live = reading?.live
-  const resolveText = useProductTextKey()
-  return <tr data-status-row={id} data-connected="true">
-    <th scope="row"><span>{text.assetLabels[id]}
-      {/* The synthetic label rides with the level: a level this product computed is never shown as
-          if it were the licensed index, and the caveat sentence is one hover away. */}
-      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
-        aria-label={text.syntheticCaveat}
-        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex}>{text.syntheticTag}</em> : null}
-      {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
-          after the price reads as if it qualified the number itself. */}
-      {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
-    </span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
-    <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
-    <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>
 }
 export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
@@ -213,6 +192,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   // An unavailable snapshot contributes nothing: the macro rows fall back to 未接入 rather than to
   // a level the dashboard cannot vouch for.
   const readings = macroSnapshot && macroSnapshot.state !== 'unavailable' ? macroSnapshot.readings : []
+  /** 快照自己的时刻：判「偏旧」的时钟只取这一处，不读宿主时间（同一屏两次渲染不会给出两种答案）。 */
+  const snapshotAsOfMs = macroSnapshot !== undefined && macroSnapshot.state !== 'unavailable'
+    ? Date.parse(macroSnapshot.asOf)
+    : undefined
   const rateReadings = rates && rates.state !== 'unavailable' ? rates.readings : []
   const rateBySeries = new Map(rateReadings.map(reading => [reading.seriesId, reading]))
   const statusRows = resolveCrossAssetStatusRows(readings, rateReadings, {
@@ -253,9 +236,29 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * 读失败不走这一支：通道没读到、格没启用、源没启用时线根本不进图例。
    */
   const noComparableChartLines = snapshot === undefined ? [] : linesWithoutComparableData(snapshot)
-  const historyHintLines: readonly HintLine[] = noComparableChartLines.length === 0
-    ? historyHint.lines
-    : [...historyHint.lines, { labelKey: crossAssetTextKeys.noComparableDataReason }]
+  /**
+   * 被供应商**永久**拒绝的腿（读数自带 `sourceFailure`，判据在服务侧）：图例尾注要说「套餐不提供」，
+   * ⓘ 里给最近收盘最新的一条、其余合并成一句。整块 ⓘ 仍只有 4 行（界面设计 2026-11-16）：
+   * 三条固定说明 + 这里一行，所以"被拒"优先于"没有可比数据"，两者不叠加。
+   */
+  const planRefusedLines: readonly Readonly<{ line: CrossAssetChartLineId; name: string; atMs: number }>[] =
+    (['dxy', 'gold'] as const).flatMap(line => {
+      const reading = crossAssetMacroReading(readings, line)
+      return reading?.sourceFailure === undefined ? [] : [{ line, name: text.assetLabels[line], atMs: reading.atMs }]
+    }).sort((left, right) => right.atMs - left.atMs)
+  const refusalHint: HintLine | undefined = planRefusedLines.length === 0 ? undefined : {
+    labelKey: planRefusedLines.length > 1 ? crossAssetTextKeys.planNotServedReasonMore : crossAssetTextKeys.planNotServedReason,
+    params: {
+      name: planRefusedLines[0]!.name,
+      time: formatTime(new Date(planRefusedLines[0]!.atMs).toISOString(), 'second'),
+      count: String(planRefusedLines.length - 1)
+    }
+  }
+  const historyHintLines: readonly HintLine[] = refusalHint !== undefined
+    ? [...historyHint.lines, refusalHint]
+    : noComparableChartLines.length === 0
+      ? historyHint.lines
+      : [...historyHint.lines, { labelKey: crossAssetTextKeys.noComparableDataReason }]
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
@@ -282,7 +285,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       ? <PlannedStatusRow key={row.id} id={row.id} text={text} />
       : row.id === 'dxy' || row.id === 'gold'
         ? <MacroStatusRow key={row.id} id={row.id} text={text} formatTime={formatTime}
-            reading={crossAssetMacroReading(readings, row.id)} />
+            reading={crossAssetMacroReading(readings, row.id)}
+            {...(snapshotAsOfMs === undefined ? {} : { asOfMs: snapshotAsOfMs })} />
         : row.id === 'us10y' || row.id === 'realRate'
           ? <RatesStatusRow key={row.id} id={row.id} text={text} rates={rateBySeries}
               reading={rateBySeries.get(crossAssetRatesSeriesIds[row.id])!} />
@@ -426,6 +430,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         {(() => {
           return snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
           hiddenLines={chartLinesHiddenBy([...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {})])}
+          planRefusedLines={planRefusedLines.map(entry => entry.line)}
           events={eventLines.lines} eventsCollapsed={eventLines.collapsed} onSelectEvent={selectEvent}
           text={{ ...text, assets: { ...text.assets, index: indexRowName(snapshot, text) },
             // The macro lines carry the very names the 市场状态 rows beside them carry: one instrument,
