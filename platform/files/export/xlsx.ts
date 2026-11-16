@@ -176,13 +176,19 @@ function zip(files: ReadonlyArray<readonly [name: string, bytes: Uint8Array]>): 
 }
 
 /**
- * 二维表 → xlsx 字节。行与列都按传入顺序，**第一行通常当表头**（表头就是第一行，不再单独传一个
- * `header`：同一件事只留一种写法，空表时传 `[表头]` 即可）。
+ * 二维表 → xlsx 字节。行与列都按传入顺序，**第一行就是表头**（不再单独传一个 `header`：同一件事
+ * 只留一种写法，空表传 `[表头]` 即可）。
  *
  * 传一个表或一组表都行；一组表按数组顺序成为 `sheet1`、`sheet2`……
+ *
+ * **零行的工作表直接抛错**（`rows.length === 0`）：那是调用方漏了表头，而不是「一张空表」。
+ * 静默放过去的话，第一行数据会顶上去当表头，文件打开看着正常、只是少一行——这种错最难查。
  */
 export function buildXlsx(input: XlsxSheet | readonly XlsxSheet[]): Uint8Array {
   const sheets = Array.isArray(input) ? input : [input as XlsxSheet]
   if (sheets.length === 0) throw new Error('xlsx needs at least one sheet')
+  for (const sheet of sheets) {
+    if (sheet.rows.length === 0) throw new Error(`xlsx sheet "${sheet.name}" needs a header row`)
+  }
   return zip(parts(sheets).map(([name, xml]) => [name, encoder.encode(xml)] as const))
 }

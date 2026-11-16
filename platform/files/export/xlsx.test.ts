@@ -100,3 +100,15 @@ it('cleans worksheet names Excel would reject, and keeps them unique', () => {
 it('refuses to build a file with no worksheet', () => {
   expect(() => buildXlsx([])).toThrow('xlsx needs at least one sheet')
 })
+
+it('refuses a worksheet with no rows, so a missing header cannot pass as data', () => {
+  // 漏了表头时，第一行数据会顶上去当表头：文件能打开、看着正常，只是少一行。这是最难查的那种错。
+  expect(() => buildXlsx({ name: '已映射', rows: [] })).toThrow('needs a header row')
+  // 多表时任何一张零行也拒，不只看第一张。
+  expect(() => buildXlsx([
+    { name: '已映射', rows: [['源内 id']] },
+    { name: '未映射', rows: [] }
+  ])).toThrow('xlsx sheet "未映射" needs a header row')
+  // 只有表头是合法的空表：这才代表「这一栏没有」。
+  expect(() => buildXlsx({ name: '未映射', rows: [['源内 id']] })).not.toThrow()
+})
