@@ -13,6 +13,7 @@ import {
   type MarketAnalysisTimelineDetail,
   type MarketAnalysisTimelineEntry
 } from '../../shared/ipc/marketAnalysisTimelineClient'
+import { requestNewsInterpretation, type NewsInterpretationRequestView } from '../../shared/ipc/newsInterpretationClient'
 
 export type AnalysisSelectionState = 'none' | 'loading' | 'ready' | 'unavailable'
 export type AnalysisRequestState = 'idle' | 'loading' | 'queued' | 'still-running' | 'unavailable' | 'not-ready' | 'failed' | 'already-available'
@@ -75,6 +76,12 @@ export type UseMarketAnalysisTimelineResult = Readonly<{
   loadMore: () => void
   requestInitialAnalysis: () => Promise<void>
   requestRefreshAnalysis: () => Promise<void>
+  /**
+   * 按条「AI 解读」：**和「立即分析」共用同一套请求状态**（`loading` → `queued` → 同一个有界
+   * 轮询），所以界面上只有一种「正在解析」，不会两个入口各转各的圈。返回业务结果，让调用方按
+   * 它自己的四态文案解释「没开始」的那几档——那几档不是失败，也不留一个永远转圈的按钮。
+   */
+  requestItemAnalysis: (itemId: string) => Promise<NewsInterpretationRequestView>
   /**
    * 「重新生成这一条」：同一事件组再分析一次，产生新记录（旧记录不动）。走既有入口，
    * 只是把目标从「最近一条」换成读者正在看的那一组。
@@ -415,6 +422,29 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     return pollForCompletion(baselineEntryId)
   }
 
+  /**
+   * Per-item request behind "AI 解读". It deliberately reuses `pollForCompletion`, the same state
+   * machine the timeline's own action uses: one `queued` means one thing on every surface. A refusal
+   * (no judgment, not eligible, not ready, transport) never started a run, so it releases the action
+   * instead of pretending something is in flight; the caller shows its own sentence for that case.
+   */
+  const requestItemAnalysis = async (itemId: string): Promise<NewsInterpretationRequestView> => {
+    setRequestState('loading')
+    setRequestFailure(undefined)
+    const result = await requestNewsInterpretation(itemId)
+    if (result.state === 'queued' || result.state === 'in-flight') {
+      await pollForCompletion(state.entries[0]?.id)
+      return result
+    }
+    if (result.state === 'already-available') {
+      setRequestState('already-available')
+      void load()
+      return result
+    }
+    setRequestState('idle')
+    return result
+  }
+
   const requestRefreshAnalysis = async (): Promise<void> => {
     // The retry after a contract rejection lives in the analysis orchestrator, not here: it must
     // also cover scheduled runs and runs whose panel is closed, and it re-asks against the same
@@ -487,7 +517,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   return {
     state, attempt, requestState, requestFailure, selectionState, details, detailState, load, select, clearSelection, ensureDetail,
     loadMore: () => { void load(state.nextCursor ?? undefined) },
-    requestInitialAnalysis, requestRefreshAnalysis, regenerateConclusion
+    requestInitialAnalysis, requestRefreshAnalysis, requestItemAnalysis, regenerateConclusion
   }
 }
 
