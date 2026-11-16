@@ -25,6 +25,11 @@ import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
  * - 台账 `source_event_id` 全部**改指到留下的那一行**（删掉台账条目，下次采集英文 id 会再插一行，
  *   合并当场失效——这是这一笔最容易做漏的地方）；
  * - 整表备份、单事务、行数对账、迁移版本幂等（跑第二遍 0 变更）、**不 drop 表**。
+ *
+ * **写入端现在还能产生这种行吗？——不能。** 依据：`upsertCalendarStandardRow` 在写入前按
+ * 「源 + 国家 + 数组身份 + 期次」认回已有那一行，英文名进 `source_label_en`，不再插第二行；
+ * 台账也记 upsert 真正写进去的身份。所以这条迁移是一次性的（三个守卫用例分别断库里合并后
+ * 只剩一行、台账改指、再跑 0 变更）。
  */
 export const calendarSourceNameMergePolicy = Object.freeze({
   migrationVersion: 18,

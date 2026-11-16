@@ -36,12 +36,16 @@ const emptyReport = (): EventTypeBackfillReport => ({ pending: 0, eventTypeFille
 export function backfillCalendarEventTypes(database: DatabaseSync): EventTypeBackfillReport {
   const table = calendarStandardTablePolicy.eventsTable
   const version = calendarEventTypeBackfillPolicy.migrationVersion
-  const done = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?').get(version)
-  if (done !== undefined) return emptyReport()
+  /**
+   * **不再用「跑过一次」当「现在没有缺口」**（2026-11-17 根因）：这里原来有一道版本闸，
+   * 第一次跑完写个标记就永远返回，于是之后每次采集新进来的行都留着空的 `event_type`——
+   * 标记在、缺口也在，两边看起来都正常。判据改成**当前缺口**：下面按差集补，补完再算一次。
+   * 标记行同时清掉，免得以后有人翻到它以为还在受它控制。
+   */
+  database.prepare('delete from mi_macro_calendar_migrations where version = ?').run(version)
   const pending = Number((database.prepare(`select count(*) as n from ${table} where event_type is null`).get() as { n: number }).n)
   const observations = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'").get()
   if (pending === 0 && observations === undefined) {
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
     return emptyReport()
   }
   const report = { pending, eventTypeFilled: 0, importanceFilled: 0 }
@@ -77,7 +81,8 @@ export function backfillCalendarEventTypes(database: DatabaseSync): EventTypeBac
         when metric_key like 'evt.%' then 'financial-event'
         else 'economic-indicator' end
       where event_type is null`).run().changes)
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
+    // 补完不留标记：判据是「当前还有多少行为空」，不是「跑过没有」。
+    database.prepare('delete from mi_macro_calendar_migrations where version = ?').run(version)
     database.exec('commit')
     return report
   } catch (error) {
