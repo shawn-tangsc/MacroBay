@@ -77,7 +77,7 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
         <button className="mk-iconbtn" type="button" aria-label={text.minicalTools.refresh} onClick={onRefresh}>
           <RefreshCw aria-hidden="true" size={14} />
         </button>
-        {onOpenCatalog === undefined ? null : <IconButton ariaLabelKey="intelligence.calendar.eventCatalog.open" size="sm" icon={ListTree}
+        {onOpenCatalog === undefined ? null : <IconButton ariaLabelKey="intelligence.calendar.mappingRules.open" size="sm" icon={ListTree}
           onSelect={() => onOpenCatalog()} resolveText={(key) => catalogAriaOf?.(key) ?? key} />}
         <button className="mk-textbtn" type="button" aria-label={text.minicalTools.configure} disabled={onConfigure === undefined}
           {...(onConfigure === undefined ? {} : { onClick: onConfigure })}>{text.minicalTools.configure}</button>

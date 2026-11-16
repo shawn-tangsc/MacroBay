@@ -8,9 +8,8 @@ import { helpTrigger } from '@platform/ui/components/popover'
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import { CalendarEventsCatalog } from './CalendarEventsCatalog'
-import type { CatalogText } from './CalendarEventsCatalogDialog'
+import type { MappingRulesText } from './MappingRulesDialog'
 import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
-import type { CatalogRow } from './calendarEventCatalogModel'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { CalendarDayEventList } from '../../features/macro/economic-calendar/CalendarDayEventList'
 import { CalendarInspector } from '../../features/macro/economic-calendar/CalendarInspector'
@@ -221,15 +220,18 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
    */
   const [catalogOpen, setCatalogOpen] = useState(false)
   /** 事件目录弹框的文案：只建一次，**键 → 文案的真表查找**也在这一份上做。 */
-  const catalogCopyText = useMemo<CatalogText>(() => ({
-    title: text.mkDay.catalogTitle, nameFilter: text.mkDay.catalogNameFilter,
-    countryFilter: text.mkDay.catalogCountryFilter, importanceFilter: text.mkDay.catalogImportanceFilter,
-    importanceAny: '', columns: text.mkDay.catalogColumns, sourceLabelTag: text.mkDay.catalogSourceLabelTag,
-    loading: '', unavailable: '', noMatch: '', pageSizeLabel: '', importance: text.mkDay.catalogImportance
+  /** 映射规则弹框的文案：只建一次，键 → 文案的真表查找也在这一份上做。 */
+  const mappingCopyText = useMemo<MappingRulesText>(() => ({
+    title: text.mkDay.mappingTitle, filter: text.mkDay.mappingFilter,
+    mapped: text.mkDay.mappingMapped, unmapped: text.mkDay.mappingUnmapped,
+    mappedEmpty: text.mkDay.mappingMappedEmpty, unmappedEmpty: text.mkDay.mappingUnmappedEmpty,
+    unavailable: text.mkDay.mappingUnavailable,
+    columns: text.mkDay.mappingColumns, unmappedColumns: text.mkDay.mappingUnmappedColumns,
+    official: text.mkDay.mappingOfficial
   }), [text])
   /** 图标按钮的读屏名：**真表查找**（键 → 文案），不在解析器里写比较。 */
   const catalogCopy = useMemo<Readonly<Record<string, string>>>(
-    () => ({ 'intelligence.calendar.eventCatalog.open': text.mkDay.catalogOpenAria }), [text])
+    () => ({ 'intelligence.calendar.mappingRules.open': text.mkDay.mappingOpenAria }), [text])
 
   /** 方格计数用：未映射观测按天累计（读者看到的是「今天有几件事」，两个来源都算）。 */
   const unmappedCountByDay = useMemo(() => {
@@ -428,8 +430,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
           </CalendarInspector>
         </div>, document.body)}
     </section>
-    <CalendarEventsCatalog open={catalogOpen} onClose={() => setCatalogOpen(false)} locale={locale}
-      calendarText={calendarText} catalog={catalogCopyText} text={catalogCopyText} />
+    <CalendarEventsCatalog open={catalogOpen} onClose={() => setCatalogOpen(false)} text={mappingCopyText} />
   </Drawer>
 }
 

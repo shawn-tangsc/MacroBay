@@ -12,13 +12,11 @@ import { productText } from '../../shared/i18n/productText'
  * 而按钮根本打不开（弹框没挂进抽屉）。所以这里点的是抽屉头部那颗按钮，断的是弹框里的表。
  */
 const events = vi.hoisted(() => ({
-  queryEvents: async () => ({
+  queryMappingRules: async () => ({
     state: 'available' as const,
-    total: 2,
-    rows: [
-      { key: 'US.CPI.NSA.YOY', countryCode: 'US', metricKey: 'US.CPI.NSA.YOY', zhShort: 'CPI 年率', enShort: 'CPI YoY', titleIsSourceLabel: false, period: '2026-M10', lastRelease: { date: '2026-11-12' } },
-      { key: '["212058",70663]', countryCode: 'DE', metricKey: '["212058",70663]', sourceLabel: 'transmutation in seasonally adjusted unemployment', titleIsSourceLabel: true }
-    ]
+    mapped: [{ sourceId: '214790', metricKey: 'US.X.SA.MOM', periodRule: 'same-month', basis: null, officialUrl: null }],
+    unmapped: [{ sourceId: '10113', rowCount: 8, sampleLabel: '密歇根现况' }],
+    counts: { mapped: 85, unmapped: 249, unmappedRows: 833 }
   })
 }))
 vi.mock('../../shared/ipc/marketCalendarClient', () => ({
@@ -53,13 +51,13 @@ it('opens the full event table from the calendar header button', async () => {
         readCalendarMonth={async () => ({ events: [], sources: [] })} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
-  const trigger = document.body.querySelector('[aria-label="打开全部事件表"]')
+  const trigger = document.body.querySelector('[aria-label="打开映射规则表"]')
   expect(trigger, '日历头部那颗按钮没渲染出来').not.toBeNull()
   await act(async () => { (trigger as HTMLElement).click() })
   // 点完之后：弹框标题 + 表里的两行（含那条只有源原文名的）。
-  expect(document.body.textContent).toContain('全部事件')
+  expect(document.body.textContent).toContain('映射规则')
   await act(async () => { await Promise.resolve() })
-  const names = [...document.body.querySelectorAll('[data-catalog-name]')].map((element) => element.textContent ?? '')
-  expect(names.length).toBeGreaterThan(0)
-  expect(names.join('|')).toContain('CPI 年率')
+  // 两段各自渲染：已映射一条、未映射一个 id。
+  expect(document.body.querySelector('[data-mapping-section="mapped"]')?.textContent).toContain('214790')
+  expect(document.body.querySelector('[data-mapping-section="unmapped"]')?.textContent).toContain('10113')
 })
