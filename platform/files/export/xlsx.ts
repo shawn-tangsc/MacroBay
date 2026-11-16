@@ -1,18 +1,43 @@
 /**
- * 最小 xlsx 生成器：**零依赖**，手写 zip（STORE 不压缩）+ 五个 OOXML 部件。
+ * 最小 xlsx 生成器：**零依赖**，手写 zip（STORE 不压缩）+ 最小 OOXML 部件。
  *
  * 为什么不用库：导出一个几千行的表，不值得引入一整条供应链依赖（`exceljs` 会带进 zip、
  * XML、日期等一整套）。这里只做一件事：把二维字符串表写成 Excel 能打开的文件。
  *
+ * **多工作表**（用户 2026-11-17）：一次可以写多张表，各占一个 `sheetN.xml`，由 `workbook.xml`
+ * 与它的关系文件串起来。一张表也走同一条路（只有 `sheet1.xml`），所以「一个」不是特例。
+ *
  * 格式要点（写错就打不开，所以每条都在用例里读回来核过）：
  * - zip 用 **STORE**（method 0），CRC32 必须对，否则 Excel 报「文件已损坏」；
  * - 单元格用 `inlineStr`，不建 sharedStrings（省一层间接，少一处出错）；
- * - `[Content_Types].xml` 必须声明 rels/xml 扩展名与 workbook/sheet 的 content type。
+ * - `[Content_Types].xml` 必须声明 rels/xml 扩展名与 workbook/sheet 的 content type，
+ *   且**每张工作表各一条 Override**——少一条那张表就打不开；
+ * - 工作表名有字符集限制（`\ / ? * [ ] :`）与 31 字上限，这里统一清洗后写进文件。
  */
 export type XlsxCell = string | number | null | undefined
 export type XlsxSheet = Readonly<{ name: string; rows: readonly (readonly XlsxCell[])[] }>
 
 const encoder = new TextEncoder()
+
+/** 工作表名上限（Excel 的硬限制），超了会被截断。 */
+const MAX_SHEET_NAME = 31
+/** OOXML 不允许出现在工作表名里的字符。 */
+const ILLEGAL_SHEET_CHARS = /[\\/?*[\]:]/gu
+
+/** 清洗工作表名：去非法字符、截 31 字；同名时追加 ` (2)`，否则 Excel 打不开。 */
+function sheetNames(sheets: readonly XlsxSheet[]): string[] {
+  const seen = new Set<string>()
+  return sheets.map((sheet) => {
+    const base = sheet.name.replace(ILLEGAL_SHEET_CHARS, '').trim().slice(0, MAX_SHEET_NAME) || 'Sheet'
+    let candidate = base
+    for (let copy = 2; seen.has(candidate.toLowerCase()); copy += 1) {
+      const suffix = ` (${copy})`
+      candidate = `${base.slice(0, MAX_SHEET_NAME - suffix.length)}${suffix}`
+    }
+    seen.add(candidate.toLowerCase())
+    return candidate
+  })
+}
 
 /** CRC32（zip 校验用）。表按 0xEDB88320 反向多项式预生成。 */
 const CRC_TABLE = ((): Uint32Array => {
@@ -62,17 +87,30 @@ function sheetXml(sheet: XlsxSheet): string {
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows}</sheetData></worksheet>`
 }
 
-const parts = (sheet: XlsxSheet): ReadonlyArray<readonly [name: string, xml: string]> => [
-  ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`],
-  ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+function parts(sheets: readonly XlsxSheet[]): ReadonlyArray<readonly [name: string, xml: string]> {
+  const names = sheetNames(sheets)
+  const overrides = sheets.map((_sheet, index) =>
+    `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+  ).join('')
+  const workbookSheets = names.map((name, index) =>
+    `<sheet name="${escapeXml(name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`
+  ).join('')
+  const workbookRels = sheets.map((_sheet, index) =>
+    `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`
+  ).join('')
+  return [
+    ['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${overrides}</Types>`],
+    ['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
-  ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${escapeXml(sheet.name)}" sheetId="1" r:id="rId1"/></sheets></workbook>`],
-  ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`],
-  ['xl/worksheets/sheet1.xml', sheetXml(sheet)]
-]
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${workbookSheets}</sheets></workbook>`],
+    ['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${workbookRels}</Relationships>`],
+    ...sheets.map((sheet, index) =>
+      [`xl/worksheets/sheet${index + 1}.xml`, sheetXml(sheet)] as const)
+  ]
+}
 
 /** 把若干部件打成 STORE 模式的 zip。STORE 不压缩：xlsx 本来就小，省掉 deflate 实现。 */
 function zip(files: ReadonlyArray<readonly [name: string, bytes: Uint8Array]>): Uint8Array {
@@ -137,7 +175,14 @@ function zip(files: ReadonlyArray<readonly [name: string, bytes: Uint8Array]>): 
   return out
 }
 
-/** 二维表 → xlsx 字节。行与列都按传入顺序，第一行通常当表头。 */
-export function buildXlsx(sheet: XlsxSheet): Uint8Array {
-  return zip(parts(sheet).map(([name, xml]) => [name, encoder.encode(xml)] as const))
+/**
+ * 二维表 → xlsx 字节。行与列都按传入顺序，**第一行通常当表头**（表头就是第一行，不再单独传一个
+ * `header`：同一件事只留一种写法，空表时传 `[表头]` 即可）。
+ *
+ * 传一个表或一组表都行；一组表按数组顺序成为 `sheet1`、`sheet2`……
+ */
+export function buildXlsx(input: XlsxSheet | readonly XlsxSheet[]): Uint8Array {
+  const sheets = Array.isArray(input) ? input : [input as XlsxSheet]
+  if (sheets.length === 0) throw new Error('xlsx needs at least one sheet')
+  return zip(parts(sheets).map(([name, xml]) => [name, encoder.encode(xml)] as const))
 }
