@@ -65,8 +65,16 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     }
     const group = await deps.ensureGroup(itemId)
     if (!group) return { state: 'failed', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.eventGroupNotFound }
+    // 组里已经有一份分析时，冻结必须以「重跑」而不是「首跑」进入：首跑在冻结边界会被
+    // `analysis-already-available` 挡掉，读者会看到「点了没反应」。两条路径都必须带触发指针——
+    // 串 `manual.refresh` = 一篇市场综述，正是这次线上看到的样子。
+    const existing = Boolean(group.currentSummaryId) || deps.repository.listRuns()
+      .some(run => run.eventGroupId === group.id && run.status === 'succeeded')
     const outcome = await deps.enqueue({
-      eventGroupId: group.id, triggerKey: 'manual.initial', analysisPhase: 'initial', asOf: deps.now(), triggeredItemId: itemId
+      eventGroupId: group.id,
+      triggerKey: existing ? 'manual.refresh' : 'manual.initial',
+      analysisPhase: existing ? 'correction' : 'initial',
+      asOf: deps.now(), triggeredItemId: itemId
     })
     if (outcome.state === 'enqueued') return { state: 'queued', itemId, ...(outcome.runId ? { runId: outcome.runId } : {}) }
     if (outcome.state === 'in-flight') return { state: 'in-flight', itemId, ...(outcome.runId ? { runId: outcome.runId } : {}) }

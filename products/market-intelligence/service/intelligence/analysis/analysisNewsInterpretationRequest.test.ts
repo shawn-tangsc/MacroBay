@@ -146,10 +146,27 @@ describe('按条解读：再判要不要跑', () => {
     preparedFingerprint.value = 'different-evidence'
     const changed = harness({ runs: [run('succeeded')] })
     await expect(changed.request('item-1')).resolves.toEqual({ state: 'queued', itemId: 'item-1', runId: 'mi-ar-2' })
-    expect(changed.enqueue).toHaveBeenCalledWith(expect.objectContaining({ triggeredItemId: 'item-1', triggerKey: 'manual.initial' }))
+    expect(changed.enqueue).toHaveBeenCalledWith(expect.objectContaining({ triggeredItemId: 'item-1', triggerKey: 'manual.refresh' }))
 
     const failedBefore = harness({ runs: [run('failed')] })
     await expect(failedBefore.request('item-1')).resolves.toMatchObject({ state: 'queued' })
+  })
+
+  it('carries the trigger item into the freeze payload on both phases (initial and correction)', async () => {
+    // 线上那次：运行成功、快照 96 条事实里没有那条新闻、trigger_json 为 NULL——读者花一次钱拿到
+    // 一篇与新闻无关的市场综述。指针必须随载荷进冻结；组里已有分析时走 correction，同样要带。
+    preparedFingerprint.value = 'ev'
+    const first = harness({ runs: [] })
+    await first.request('item-1')
+    expect(first.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      triggerKey: 'manual.initial', analysisPhase: 'initial', triggeredItemId: 'item-1'
+    }))
+    preparedFingerprint.value = 'ev-different'
+    const again = harness({ runs: [run('succeeded')] })
+    await again.request('item-1')
+    expect(again.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      triggerKey: 'manual.refresh', analysisPhase: 'correction', triggeredItemId: 'item-1'
+    }))
   })
 
   it('refuses with insufficient-facts when the news cannot be cited at all', async () => {
