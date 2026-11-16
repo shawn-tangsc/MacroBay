@@ -1,6 +1,26 @@
 /* 只搬位置，不改句子：本条文案归这个文件独占，改之前先看清它属于哪条线。 */
 export const miText = {
   'zh-CN': {
+  aiInterpretation: {
+    // 可见标题自解释（产品定），菜单项仍是动作名「AI 解读」，两者不是一回事。
+    title: '这条新闻对市场的影响',
+    // 产品终版（2026-11-16）：只进 ⓘ 浮层，正文不放；日历事件详情复用同一组件时语义同样成立。
+    info: '这条新闻影响哪些资产、影响是什么；没有影响时也会直说。',
+    infoAria: '这一节说明什么',
+    generating: '正在生成',
+    retry: '再试一次',
+    meta: '生成于 {time} · 依据：该条新闻 + 当时快照（{count} 条证据）',
+    audit: {
+      summary: '审计信息',
+      asOf: '分析时点',
+      dataCutoff: '数据截止',
+      factCount: '事实条数',
+      evidenceRefCount: '证据引用',
+      domains: '覆盖域',
+      runId: '分析运行',
+      snapshotHash: '快照'
+    }
+  },
   newsSentiment: {
     unavailable: '舆情暂时不可用。',
     'sources-disabled': '数据源未开启',
@@ -11,6 +31,24 @@ export const miText = {
   }
 },
   'en-US': {
+  aiInterpretation: {
+    title: 'How this story affects the market',
+    info: 'Which assets this story affects and how; when it affects nothing, it says so too.',
+    infoAria: 'What this section explains',
+    generating: 'Generating',
+    retry: 'Try again',
+    meta: 'Generated {time} · Based on: this story + the snapshot at the time ({count} evidence refs)',
+    audit: {
+      summary: 'Audit details',
+      asOf: 'Analyzed at',
+      dataCutoff: 'Data cutoff',
+      factCount: 'Facts',
+      evidenceRefCount: 'Evidence refs',
+      domains: 'Domains',
+      runId: 'Analysis run',
+      snapshotHash: 'Snapshot'
+    }
+  },
   newsSentiment: {
     unavailable: 'News sentiment is unavailable.',
     'sources-disabled': 'Data sources are off',

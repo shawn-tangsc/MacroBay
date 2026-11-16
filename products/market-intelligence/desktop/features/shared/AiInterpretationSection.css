@@ -1,0 +1,61 @@
+/*
+ * 「AI 解读」小节（舆情详情与日历事件详情共用一份，R37）。
+ *
+ * 档位照界面设计定稿：节标题 13/650、元信息 11/--line-meta/--muted、正文 12/1.6/--text；
+ * 节与上一节间距 16，节内 gap 6。颜色只走 token。
+ */
+.mi-ai-interpretation {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  min-width: 0;
+}
+.mi-ai-interpretation__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.mi-ai-interpretation__title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--font-section);
+  font-weight: 650;
+  line-height: 1.45;
+}
+.mi-ai-interpretation__meta {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-ai-interpretation__body { display: grid; gap: 6px; }
+.mi-ai-interpretation__body p {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--font-body);
+  line-height: 1.6;
+}
+.mi-ai-interpretation__failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-body);
+  line-height: 1.6;
+}
+.mi-ai-interpretation__audit {
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+}
+.mi-ai-interpretation__audit summary { cursor: pointer; }
+.mi-ai-interpretation__audit dl { display: grid; gap: 2px; margin: 4px 0 0; }
+.mi-ai-interpretation__audit dl > div { display: flex; gap: 6px; }
+.mi-ai-interpretation__audit dt { flex: none; color: var(--muted-strong, var(--muted)); }
+.mi-ai-interpretation__audit dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
