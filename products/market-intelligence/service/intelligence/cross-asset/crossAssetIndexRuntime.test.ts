@@ -123,4 +123,24 @@ describe('cross-asset licensed index feed', () => {
     await handler()
     expect(fetchImpl).toHaveBeenCalledOnce()
   })
+
+  it('hands a permanent refusal to the notifier and keeps transient failures out of it', async () => {
+    // 套餐不含 USTEC 时供应商回 400 + ERR_0008：这条腿永远拿不到真实指数，读者只会一直看到代理。
+    const refusal = {
+      statusCode: 400, message: 'One or more validation errors occurred.',
+      errors: [{ propertyName: '', errorCode: 'ERR_0008_SYMBOL_NOT_SUPPORTED', errorMessage: 'Symbol is not supported' }]
+    }
+    const onPermanentRefusal = vi.fn()
+    const refused = setup({ fetchImpl: fetchOf(refusal, 400), onPermanentRefusal })
+    await refused.runtime.run(now)
+    expect(onPermanentRefusal).toHaveBeenCalledTimes(1)
+    expect(onPermanentRefusal).toHaveBeenCalledWith('USTEC')
+
+    // 临时失败（限流）不走这条：动作不同，由来源的连续失败那条事件负责。
+    const transientNotifier = vi.fn()
+    const transient = setup({ fetchImpl: fetchOf({ message: 'slow down' }, 429), onPermanentRefusal: transientNotifier })
+    await transient.runtime.run(now)
+    expect(transientNotifier).not.toHaveBeenCalled()
+    expect(transient.onError).toHaveBeenCalledTimes(1)
+  })
 })

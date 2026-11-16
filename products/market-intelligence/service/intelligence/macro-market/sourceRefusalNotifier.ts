@@ -29,8 +29,12 @@ export type SourceRefusalNotice = Readonly<{
   symbols: readonly string[]
 }>
 
-export function isPermanentRefusal(code: RealMarketApiFailureCode): boolean {
-  return PERMANENT_REFUSAL_CODES.includes(code)
+/**
+ * 永久拒绝的判据。参数收成 `string`：调用方各自的失败码闭集不同（跨资产那条还有 `disabled`
+ * 这类非失败值），判据本身只认这几枚码，不需要把每个调用方的类型搬过来。
+ */
+export function isPermanentRefusal(code: string): boolean {
+  return (PERMANENT_REFUSAL_CODES as readonly string[]).includes(code)
 }
 
 export function buildSourceRefusalRequest(notice: SourceRefusalNotice, occurredAt: string): NotificationSubmitRequest {

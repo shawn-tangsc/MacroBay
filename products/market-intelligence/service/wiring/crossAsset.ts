@@ -15,6 +15,7 @@ import { registerCrossAssetIpc } from '../intelligence/cross-asset/registerCross
 import { installBriefMarketBackfill } from '../intelligence/daily-briefing/dailyBriefMarketBackfill'
 import { registerMarketRetention } from '../intelligence/retention/registerMarketRetention'
 import { crossAssetPolicy } from '../intelligence/cross-asset/crossAssetPolicy'
+import { notifySourceRefusal } from '../intelligence/macro-market/sourceRefusalNotifier'
 
 import type { ProductBootstrapDependencies } from '../bootstrap'
 import type { IntelligenceModule } from '../intelligence/intelligenceModule'
@@ -58,6 +59,15 @@ export function wireCrossAsset(input: Readonly<{
       // A code, a symbol and nothing else: the failure message names the source, never the URL the key
       // travelled in.
       console.log(JSON.stringify({ marker: 'MI_CROSS_ASSET_INDEX_ERROR', sourceId, symbolCode: crossAssetPolicy.index.symbol, message: String(error).slice(0, 200) }))
+    },
+    /**
+     * 真实纳指这条腿被永久拒绝时也通知一次：它只在"指数休市/代理拿不到"时才接手，永远拒绝的话
+     * 读者只会看到代理，永远不知道已付费的那条腿其实没在用（用户 2026-11-16）。
+     */
+    onPermanentRefusal: (symbolCode) => {
+      const submit = input.intelligenceModule.submitNotification
+      if (submit === undefined) return
+      void notifySourceRefusal(submit, { sourceId: crossAssetPolicy.index.sourceId, symbols: [symbolCode] }, new Date().toISOString())
     }
   }) : undefined
   const crossAssetRuntime = crossAssetStore ? createCrossAssetRuntime({

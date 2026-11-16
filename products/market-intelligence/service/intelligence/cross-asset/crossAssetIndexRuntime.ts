@@ -2,6 +2,7 @@ import type { JobRuntime } from '@platform/jobs'
 import type { RealMarketApiFailureCode } from '../macro-market/realMarketApiPolicy'
 import { realMarketApiCandleUrl } from '../macro-market/realMarketApiTimeSeries'
 import { createRealMarketApiTransport } from '../macro-market/realMarketApiTransport'
+import { isPermanentRefusal } from '../macro-market/sourceRefusalNotifier'
 import type { ClosedBar } from './binanceCrossAssetClient'
 import { crossAssetPolicy } from './crossAssetPolicy'
 import { crossAssetIndexBars } from './crossAssetIndexFeed'
@@ -48,6 +49,11 @@ export function createCrossAssetIndexRuntime(deps: Readonly<{
   fetchImpl?: typeof fetch
   now?: () => number
   onError?: (error: unknown, sourceId: string) => void
+  /**
+   * 品种被供应商永久拒绝（套餐不含 / 品种下架）时交出去一次：这条腿只在"真实指数接手"时
+   * 才会被读者看见，它永远拒绝时也必须有人知道（用户 2026-11-16「还要通知出来」）。
+   */
+  onPermanentRefusal?: (symbolCode: string) => void
 }>): CrossAssetIndexRuntime {
   const now = deps.now ?? Date.now
   const policy = crossAssetPolicy.index
@@ -60,6 +66,8 @@ export function createCrossAssetIndexRuntime(deps: Readonly<{
   /** Every failure is recorded the same way: a code in memory, a code in the log, never a URL. */
   function fail(code: CrossAssetIndexFailureCode): CrossAssetIndexRunResult {
     state = 'unavailable'; failureCode = code
+    // 永久拒绝与临时失败分开交出去：前者要通知（续费/换源），后者按原有日志即可。
+    if (isPermanentRefusal(code)) deps.onPermanentRefusal?.(policy.symbol)
     deps.onError?.(new Error(`cross-asset-index ${code}`), policy.sourceId)
     return Object.freeze({ state: 'unavailable' as const, failureCode: code })
   }
