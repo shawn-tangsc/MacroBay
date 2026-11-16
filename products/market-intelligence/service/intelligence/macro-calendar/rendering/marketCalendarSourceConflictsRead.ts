@@ -1,5 +1,25 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { zeroXRouterIndicatorIdentities } from '../marketCalendarMetricIdentity'
+import { zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
+import { germanSourceMetricMappings } from '../marketCalendarGermanSourceMappings'
+
+/**
+ * **跨源比较前要归一三件：期次、身份、量纲**（用户 2026-11-17）。少一件就是假冲突：
+ * 期次（拿发布时刻当月）、身份（数组身份与规范码分不到一组）、量纲（单位没入库，`#57`）。
+ *
+ * 身份归一在这里做：数组身份先按映射表解到规范码，**解不出的要报数**（`unresolvedIds`），
+ * 不许静默留在原身份上——那会变成「看起来比较过了，其实只剩一家」。
+ */
+function resolveMetricKey(metricKey: string): { code: string; resolved: boolean } {
+  const match = /^\["(\d+)"/.exec(metricKey)
+  if (match === null) return { code: metricKey, resolved: true }
+  const sourceId = match[1]!
+  const entry = zeroXRouterIndicatorIdentities[sourceId] ?? zeroXRouterSourceMetricMappings[sourceId]
+    ?? germanSourceMetricMappings[sourceId]
+  return entry === undefined ? { code: metricKey, resolved: false } : { code: entry.metricKey, resolved: true }
+}
+
 /**
  * **#40 的读口：同一发布日、同一字段、两侧都有值且不相等 → 并列 + 标记**（用户 2026-11-17 定）。
  *
@@ -29,6 +49,8 @@ export type SourceConflictsRead = Readonly<{
   conflicts: readonly SourceConflict[]
   /** 参与判定的多来源组数（同一身份同一日、来源 ≥2），用来判断「标记是不是天天亮」。 */
   multiSourceGroups: number
+  /** **身份解不出映射的 id 数**：不为 0 就说明这轮比较不完整（不许静默留在原身份上）。 */
+  unresolvedIds: number
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-input-invalid' | 'query-unavailable' }>
 
 const textOf = (value: unknown): string | null =>
@@ -55,9 +77,12 @@ export function readSourceValueConflicts(database: DatabaseSync, input: Readonly
     // 只可能有一行——不同期次的数不是「两个来源给了不同值」，是**两条不同期的发布**。
     // 少了期次，11-06 那两条（narwhal 记 `2026-09`、0xrouter 记 `2026-10`）会被并列成「不一致」，
     // 那是凭空造出「同一期有两个值」这个事实（`#56` 期次不可跨源比较）。
+    const unresolvedIds = new Set<string>()
     const groups = new Map<string, Record<string, Record<SourceConflictField, string | null>>>()
     for (const row of rows) {
-      const key = `${String(row.country_code)}|${String(row.metric_key)}|${String(row.period_key)}`
+      const identity = resolveMetricKey(String(row.metric_key))
+      if (!identity.resolved) unresolvedIds.add(String(row.metric_key))
+      const key = `${String(row.country_code)}|${identity.code}|${String(row.period_key)}`
       const byProvider = groups.get(key) ?? {}
       byProvider[String(row.source_provider_id)] = valuesOf(row.values_json)
       groups.set(key, byProvider)
@@ -83,6 +108,6 @@ export function readSourceValueConflicts(database: DatabaseSync, input: Readonly
       }
     }
     return Object.freeze({ state: 'available' as const, scheduledDate,
-      conflicts: Object.freeze(conflicts), multiSourceGroups })
+      conflicts: Object.freeze(conflicts), multiSourceGroups, unresolvedIds: unresolvedIds.size })
   } catch { return { state: 'unavailable', reasonCode: 'query-unavailable' } }
 }

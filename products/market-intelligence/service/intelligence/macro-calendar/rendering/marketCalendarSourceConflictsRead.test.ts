@@ -43,6 +43,8 @@ describe('#40 多源不一致', () => {
     const read = readSourceValueConflicts(database, { scheduledDate: '2026-11-16' })
     if (read.state !== 'available') throw new Error('unavailable')
     expect(read.multiSourceGroups).toBe(1)
+    // 身份解不出映射的 id 数必须是 0——否则「比较过了」其实只剩一家。
+    expect(read.unresolvedIds).toBe(0)
     // 只有预期不一致：实际只有 0xrouter 给（一侧缺值不算冲突）、前值两家相同（不算冲突）。
     expect(read.conflicts).toHaveLength(1)
     expect(read.conflicts[0]).toMatchObject({ field: 'consensus', values: { narwhal: '10', '0xrouter': '18' } })
