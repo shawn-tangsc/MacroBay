@@ -1,4 +1,3 @@
-import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -116,7 +115,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    */
   calendarEventTitles?: Record<string, string>
   /** The 0xRouter month's events, injected by the page: the chart's lines read both calendars. */
-  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<import('./readMarketCalendarMonth').MarketCalendarMonthRead | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
   /**
