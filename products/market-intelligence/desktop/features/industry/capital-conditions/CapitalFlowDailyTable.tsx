@@ -58,10 +58,12 @@ export function CapitalFlowDailyTable({ rows, text }: Readonly<{
 }
 
 function DailyCell({ value, scope, text }: Readonly<{
-  value: number
+  /** 这一天这一条线没有数据（例如只有稳定币、没有 ETF）：画横杠，不补 0。 */
+  value?: number
   scope: string
   text: DailyTableText
 }>): React.ReactElement {
+  if (value === undefined) return <td data-flow-missing="true">—</td>
   const direction = value > 0 ? 'inflow' : value < 0 ? 'outflow' : 'zero'
   return <td aria-label={flowAccessibleName(text, value, direction, scope)} data-flow-direction={direction}>
     {formatFlowUsd(value)}

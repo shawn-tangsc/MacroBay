@@ -11,7 +11,7 @@ import {
   isVisibleEtfPublicSnapshot,
   type EtfPublicAssetSnapshot
 } from '../../../../contracts/intelligenceQueryContracts'
-import { selectVisibleFlowRows, type FlowChartRow } from './capitalFlowRows'
+import { recentFlowDates, type FlowChartRow } from './capitalFlowRows'
 
 export const dashboardCapitalConditionsPresentationPolicy = {
   usd: {
@@ -190,7 +190,7 @@ export function projectDashboardCapitalConditionsSnapshot(value: unknown, asOf: 
     if (!currentUsd || !change1dUsd || !change1dPercent || !change7dUsd || !change7dPercent || !change30dUsd || !change30dPercent) return { state: 'unavailable', reason: 'value-unformattable' }
     const dailyFlows = isValidCapitalConditionsDailyFlows(core.dailyFlows, asOf) ? core.dailyFlows : undefined
     const etfReading = projectEtf(value.etf, asOf)
-    const flowHistory = projectFlowHistory(dailyFlows, etfReading)
+    const flowHistory = projectFlowHistory(dailyFlows, etfReading, asOf)
     return {
       state: 'available', conclusion: value.conclusion, etfReading, ...(flowHistory === 'unavailable' ? {} : { flowHistory }), observedAt: core.observedAt,
       currentUsd, change1dUsd, change1dPercent, change7dUsd, change7dPercent, change30dUsd, change30dPercent,
@@ -306,21 +306,27 @@ function etfCoverage(
   })
 }
 
-function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[] | undefined, etf: DashboardEtfReading): DashboardFlowHistory | 'unavailable' {
+function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[] | undefined, etf: DashboardEtfReading, asOf: string): DashboardFlowHistory | 'unavailable' {
   if (!stablecoinHistory) return 'unavailable'
-  // 只有「快照根本读不到」才算取不到；缺一支时按日交集自然变空，报 `not-yet` 而不是 `unavailable`——
-  // 那是「这几天凑不齐同一批日子」，不是「读不到」。
+  // 只有「快照根本读不到」才算取不到；缺一支只是那几天没有那一条线，横轴照常走，报 `not-yet`
+  // 而不是 `unavailable`——那是「这几天的读数不够」，不是「读不到」。
   if (etf.missing?.btc === 'source-unreadable' && etf.missing?.eth === 'source-unreadable') return 'unavailable'
   const funds = new Map(stablecoinHistory.map((row) => [row.tradingDate, row.netFlowUsd]))
+  const btc = new Map((etf.btc?.rows ?? []).map((row) => [row.tradingDate, row.netFlowUsd]))
   const eth = new Map((etf.eth?.rows ?? []).map((row) => [row.tradingDate, row.netFlowUsd]))
-  const rows = (etf.btc?.rows ?? []).flatMap((btc) => {
-    const fund = funds.get(btc.tradingDate)
-    const ether = eth.get(btc.tradingDate)
-    return fund === undefined || ether === undefined ? [] : [{ tradingDate: btc.tradingDate, funds: fund, btc: btc.netFlowUsd, eth: ether }]
-  })
-  if (rows.length === 0) return { state: 'not-yet', availableDays: 0 }
-  if (rows.length < capitalConditionsDailyFlowPolicy.minimumChartRows) return { state: 'not-yet', availableDays: rows.length }
-  return { state: 'available', rows: selectVisibleFlowRows(rows, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows) }
+  // **横轴是日历，不是「有数据的那几天」**（用户 2026-11-16：「不管这一天有没有数据，轴上都要
+  // 推进到这一天」）：从 asOf 那天往前取 count 天，每天一格；三條线哪天有值就带哪条，缺的留空
+  // （原来的写法只保留三条同一天都有值的日子，ETF 一停更整张图就停在那天）。
+  const rows = recentFlowDates(asOf, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows).map((tradingDate) => ({
+    tradingDate,
+    ...(funds.has(tradingDate) ? { funds: funds.get(tradingDate) as number } : {}),
+    ...(btc.has(tradingDate) ? { btc: btc.get(tradingDate) as number } : {}),
+    ...(eth.has(tradingDate) ? { eth: eth.get(tradingDate) as number } : {})
+  }))
+  // 只有**真有数**的日子才算覆盖：空格子照旧占着横轴，但不冒充「那天有读数」。
+  const withData = rows.filter((row) => row.funds !== undefined || row.btc !== undefined || row.eth !== undefined)
+  if (withData.length < capitalConditionsDailyFlowPolicy.minimumChartRows) return { state: 'not-yet', availableDays: withData.length }
+  return { state: 'available', rows }
 }
 
 function projectEtfAsset(value: EtfPublicAssetSnapshot): DashboardEtfFlowAsset | undefined {

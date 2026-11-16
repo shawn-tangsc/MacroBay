@@ -88,7 +88,7 @@ describe('dashboard capital conditions model', () => {
     expect(JSON.stringify(result)).not.toContain('cumulative')
   })
 
-  it('merges only common persisted capital, BTC, and ETH dates into three-series chart rows', () => {
+  it('keeps one slot per calendar day up to asOf, carrying whichever series exist', () => {
     const result = projectDashboardCapitalConditionsSnapshot({
       state: 'available', asOf, conclusion: 'partial', etf: etfSnapshot(),
       coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 254_900_000_000, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 1, change30dPercent: 0.01, dailyFlows: stablecoinRows() }
@@ -107,18 +107,24 @@ describe('dashboard capital conditions model', () => {
     expect(result.etfReading.eth!.rows).toHaveLength(30)
     expect(result.etfReading.btc!.rows.at(-2)).toMatchObject({ direction: 'zero', magnitudePercent: 0 })
     if (result.flowHistory?.state !== 'available') throw new Error('expected a readable flow history')
-    expect(result.flowHistory.rows[0]).toEqual({ tradingDate: '2026-08-11', funds: -23, btc: 24, eth: -24 })
-    expect(result.flowHistory.rows).toHaveLength(7)
+    // 横轴是日历，不是「有数据的那几天」：从 asOf 往前 7 天，每天一格。
+    expect(result.flowHistory.rows.map((row) => row.tradingDate)).toEqual([
+      '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16', '2026-08-17', '2026-08-18'
+    ])
+    // 有数据的那天三条线都在；数值照旧来自两份流水。
+    expect(result.flowHistory.rows[0]).toEqual({ tradingDate: '2026-08-12', funds: -24, btc: 25, eth: -25 })
+    // **今天（asOf 那一天）一个数据都没有，仍要占最后一格**（用户 2026-11-16）。
+    expect(result.flowHistory.rows.at(-1)).toEqual({ tradingDate: '2026-08-18' })
   })
 
-  it('reports too few aligned days as "not yet" instead of "the sources failed"', () => {
-    // Valid stablecoin history, but the ETF window only overlaps its last three days.
+  it('reports too few days with any reading as "not yet" instead of "the sources failed"', () => {
+    // 稳定币只有最后三天，ETF 那一份整个落在窗口之前：横轴照旧 7 格，但有读数的只有 3 天。
     const result = projectDashboardCapitalConditionsSnapshot({
-      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshotStartingAt('2026-08-15', 5),
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshotStartingAt('2026-07-20', 5),
       coreStablecoins: {
         observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
         change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0,
-        dailyFlows: stablecoinRows()
+        dailyFlows: stablecoinRows().slice(-3)
       }
     }, asOf)
 
@@ -126,13 +132,14 @@ describe('dashboard capital conditions model', () => {
     expect(result.flowHistory).toEqual({ state: 'not-yet', availableDays: 3 })
   })
 
-  it('reports zero aligned days as "not yet" with a zero count', () => {
+  it('reports zero days with any reading as "not yet" with a zero count', () => {
+    // 两份流水都落在横轴窗口之前：格子都在，但没有一天有读数。
     const result = projectDashboardCapitalConditionsSnapshot({
       state: 'available', asOf, conclusion: 'partial', etf: etfSnapshotStartingAt('2026-06-01', 5),
       coreStablecoins: {
         observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1,
         change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0,
-        dailyFlows: stablecoinRows()
+        dailyFlows: stablecoinRows().slice(0, 3)
       }
     }, asOf)
 

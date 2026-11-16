@@ -1,19 +1,37 @@
-/** One day of the flow chart: the stablecoin series plus the two ETF series, already aligned. */
-export type FlowChartRow = { tradingDate: string; funds: number; btc: number; eth: number }
+/**
+ * One day of the flow chart: the stablecoin series plus the two ETF series.
+ *
+ * **三条线各自可能缺**（用户 2026-11-16：「有一个数据就要显示」）：某一天可能只有稳定币、
+ * 也可能只有 ETF 两条之一。缺的那条就是 `undefined`——不是 0（0 是「那天净流是零」），
+ * 画的时候跳过它，不画假柱子。
+ */
+export type FlowChartRow = {
+  tradingDate: string
+  funds?: number
+  btc?: number
+  eth?: number
+}
+
+/** 这一行三种序列里到底有哪几条（画图、测试都按它走，别再各自判一次）。 */
+export const FLOW_SERIES = ['funds', 'btc', 'eth'] as const
 
 /**
- * The one place the chart window is cut.
+ * 横轴的日期序列：**从 asOf 那一天往前数 count 天，每天一格**（用户 2026-11-16：
+ * 「不管这一天有没有数据，轴上都要推进到这一天」「今天一个数据都没有，最新的 x 轴也应该是今天」）。
  *
- * The projection already hands over an aligned series; this cut makes "the days the chart is
- * showing" a named thing so the bar-top labels and the daily table cannot each slice their own
- * window and drift apart.
+ * 所以横轴是**日历**，不是「有数据的那几天」：没有数据的那天只是一个空格子，柱子不画，
+ * 但它Still占一格，日期照常出现在刻度上。日期一律按 asOf 的 **UTC 日**取——流水行的
+ * `tradingDate` 就是源自己的 UTC 日，用读者时区去推会整体错一天。
  */
-export function selectVisibleFlowRows(
-  rows: readonly FlowChartRow[],
-  visibleRows: number
-): readonly FlowChartRow[] {
-  const count = Math.max(0, Math.min(visibleRows, rows.length))
-  return count === rows.length ? rows : rows.slice(rows.length - count)
+export function recentFlowDates(asOf: string, count: number): readonly string[] {
+  const day = asOf.slice(0, 10)
+  const anchor = Date.parse(`${day}T00:00:00.000Z`)
+  if (!Number.isFinite(anchor) || count <= 0) return []
+  const dates: string[] = []
+  for (let offset = count - 1; offset >= 0; offset -= 1) {
+    dates.push(new Date(anchor - offset * 86_400_000).toISOString().slice(0, 10))
+  }
+  return dates
 }
 
 /**

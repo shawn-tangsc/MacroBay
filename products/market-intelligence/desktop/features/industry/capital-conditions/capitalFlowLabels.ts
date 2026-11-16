@@ -16,13 +16,16 @@ export function pickFlowLabelIndexes(rows: readonly FlowChartRow[]): readonly nu
   let outflowIndex = -1
   let outflowValue = Number.POSITIVE_INFINITY
   for (let index = 0; index < rows.length; index += 1) {
+    // 标签只贴在**稳定币**那条线上；没有它的日子（只有 ETF）不参与挑选。
     const value = rows[index]!.funds
+    if (value === undefined) continue
     if (value > 0 && value > inflowValue) { inflowIndex = index; inflowValue = value }
     if (value < 0 && value < outflowValue) { outflowIndex = index; outflowValue = value }
   }
   if (inflowIndex >= 0) selected.add(inflowIndex)
   if (outflowIndex >= 0) selected.add(outflowIndex)
-  selected.add(rows.length - 1)
+  // 「最后一天」只在它有稳定币那条线时才当标签位：没有柱子可贴，标了也是浮在空处。
+  if (rows[rows.length - 1]?.funds !== undefined) selected.add(rows.length - 1)
   return [...selected].sort((left, right) => left - right)
 }
 

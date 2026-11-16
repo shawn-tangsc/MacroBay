@@ -48,3 +48,22 @@ describe('the chart carries its own box', () => {
     expect(markup).toContain('class="mi-capital-conditions__chart-ticks"')
   })
 })
+
+describe('a day without any reading', () => {
+  it('still holds its axis slot, and draws no bar for it', () => {
+    // 用户 2026-11-16：今天一个数据都没有，最新的 x 轴也应该是今天——空格子占位，但不画假柱子。
+    const withEmptyDay: FlowChartRow[] = [
+      { tradingDate: '2026-11-13', funds: -883_700_000, btc: 110_300_000, eth: -88_600_000 },
+      { tradingDate: '2026-11-14', funds: -200_000_000 },
+      { tradingDate: '2026-11-16' }
+    ]
+    const markup = renderToStaticMarkup(createElement(CapitalFlowChart, { rows: withEmptyDay, text }))
+    expect(markup).toContain('data-trading-date="2026-11-16"')
+    const empty = /<div class="mi-capital-conditions__chart-day" data-trading-date="2026-11-16"[\s\S]*?<\/div><\/div>/.exec(markup)?.[0] ?? ''
+    expect(empty).not.toContain('data-series')
+    // 只有稳定币那一天：画一根 funds 柱，不补 btc/eth。
+    const fundsOnly = /data-trading-date="2026-11-14"[\s\S]*?<\/div><\/div>/.exec(markup)?.[0] ?? ''
+    expect(fundsOnly).toContain('data-series="funds"')
+    expect(fundsOnly).not.toContain('data-series="btc"')
+  })
+})
