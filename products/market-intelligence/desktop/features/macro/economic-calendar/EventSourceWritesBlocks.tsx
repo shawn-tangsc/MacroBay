@@ -36,24 +36,64 @@ function sameShown(left: string, right: string): boolean {
   return left.trim() === right.trim()
 }
 
-/** 这一期里「两侧都有值、且不相等」的字段——**只并列，不判对错**（#56/#57 未解决前判不了）。 */
-export function fieldConflicts(rows: readonly EventSourceWriteRow[]): readonly Readonly<{
+/**
+ * 一行的「统计期」：`2026-09` 与 `2026-10` 是两个月；`2026-11-16T13:30` 这种写法的前 7 位也是
+ * `2026-11`。**只有同一个月才算同一期**——跨月比较出来的「不一致」是假的（消费信贷那组就是
+ * narwhal 的 9 月对 0xrouter 的 10 月）。
+ */
+const monthOf = (periodKey: string): string => periodKey.slice(0, 7)
+
+export type SourceWriteRowWithPeriod = EventSourceWriteRow & Readonly<{ periodKey?: string }>
+
+/**
+ * 同一期内「两侧都有值、且不相等」的字段——**只并列，不判对错**（#56/#57 未解决前判不了）。
+ *
+ * **期次缺一不可**：任何一行没有 `periodKey`，这里就一个冲突都不报。宁可这一版不显示标记，
+ * 也不能把「9 月的数」和「10 月的数」并排说成「两家不一致」——那等于凭空造一个事实。
+ */
+export function fieldConflicts(rows: readonly SourceWriteRowWithPeriod[]): readonly Readonly<{
   field: 'consensus' | 'actual' | 'previous'
   values: readonly Readonly<{ providerId: string; value: string }>[]
 }>[] {
+  if (rows.some((row) => typeof row.periodKey !== 'string' || row.periodKey.trim() === '')) return []
+  const byMonth = new Map<string, SourceWriteRowWithPeriod[]>()
+  for (const row of rows) {
+    const key = monthOf(row.periodKey!)
+    byMonth.set(key, [...(byMonth.get(key) ?? []), row])
+  }
   const fields = ['consensus', 'actual', 'previous'] as const
   const out: { field: typeof fields[number]; values: { providerId: string; value: string }[] }[] = []
-  for (const field of fields) {
-    const present = rows.flatMap((row) => (row[field] === null ? [] : [{ providerId: row.providerId, value: row[field]! }]))
-    if (present.length < 2) continue
-    if (present.every((entry) => sameShown(entry.value, present[0]!.value))) continue
-    out.push({ field, values: present })
+  for (const sameMonth of byMonth.values()) {
+    if (new Set(sameMonth.map((row) => row.providerId)).size < 2) continue
+    for (const field of fields) {
+      const present = sameMonth.flatMap((row) =>
+        (row[field] === null ? [] : [{ providerId: row.providerId, value: row[field]! }]))
+      if (present.length < 2) continue
+      if (present.every((entry) => sameShown(entry.value, present[0]!.value))) continue
+      out.push({ field, values: present })
+    }
   }
   return out
 }
 
+/**
+ * 同一发布日、但**期次不同**的来源：不并列、不标冲突，只如实说明「另一家记的是哪一期」
+ * （界面设计 2026-11-17 的第二种形态）。两条不同期次的发布，各是各的行。
+ */
+export function otherPeriodRows(rows: readonly SourceWriteRowWithPeriod[]): readonly Readonly<{
+  providerId: string; periodKey: string
+}>[] {
+  const periods = rows.flatMap((row) => (typeof row.periodKey === 'string' && row.periodKey !== ''
+    ? [{ providerId: row.providerId, periodKey: row.periodKey }] : []))
+  if (periods.length < 2) return []
+  const counts = new Map<string, number>()
+  for (const entry of periods) counts.set(entry.periodKey, (counts.get(entry.periodKey) ?? 0) + 1)
+  const majority = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+  return periods.filter((entry) => entry.periodKey !== majority)
+}
+
 export function EventSourceWritesBlocks({ rows, text }: Readonly<{
-  rows: readonly EventSourceWriteRow[]
+  rows: readonly SourceWriteRowWithPeriod[]
   text: EconomicCalendarText
 }>): React.ReactElement | null {
   const formatTime = useShellTimeFormat()
@@ -65,6 +105,7 @@ export function EventSourceWritesBlocks({ rows, text }: Readonly<{
   }
   const value = (shown: string | null): string => shown ?? text.details.valueNotProvided
   const conflicts = fieldConflicts(rows)
+  const otherPeriods = otherPeriodRows(rows)
   const fieldLabel: Readonly<Record<string, string>> = {
     consensus: text.market.consensus, actual: text.market.providerActual, previous: text.market.providerPrevious
   }
@@ -75,6 +116,10 @@ export function EventSourceWritesBlocks({ rows, text }: Readonly<{
   }
   return <section className="mi-source-writes" data-source-writes>
     <h3>{text.details.sourceWritesTitle}</h3>
+    {/* 同一发布日、不同期次：**不并列、不标冲突**，只说清另一家记的是哪一期。 */}
+    {otherPeriods.length === 0 ? null : <p className="mi-source-writes__other-period" data-other-period>
+      {otherPeriods.map((entry) => `${entry.providerId} ${entry.periodKey}`).join(' · ')}
+    </p>}
     {/* 不一致的字段**先摆出来**：两块各自的数要并排看才能对照，散在下面容易只看到一家。 */}
     {conflicts.length === 0 ? null : <div className="mi-source-writes__conflicts" data-source-conflicts>
       {conflicts.map(({ field, values }) => <p key={field} data-conflict-field={field} className="mi-source-writes__conflict">

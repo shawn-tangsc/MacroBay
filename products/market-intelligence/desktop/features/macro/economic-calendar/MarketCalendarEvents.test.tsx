@@ -343,9 +343,11 @@ it('asks for the per-source writes only when it has both identity and period, an
         return { state: 'available' as const, metricKey: input.metricKey, providerCount: 2, hasRevisionChain: false,
           rows: [
             { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-16T21:49:41.793Z',
-              status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: input.metricKey },
+              status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: input.metricKey,
+              periodKey: '2026-11' },
             { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-16T13:30:00.000Z',
-              status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: '["214790",79095]' }
+              status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: '["214790",79095]',
+              periodKey: '2026-11-16T13:30' }
           ] }
       }
     }
@@ -392,9 +394,11 @@ it('drops the surprise sentence when the sources disagree on consensus', async (
         state: 'available' as const, metricKey: input.metricKey, providerCount: 2, hasRevisionChain: false,
         rows: [
           { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-16T21:49:41.793Z',
-            status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: input.metricKey },
+            status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: input.metricKey,
+            periodKey: '2026-11' },
           { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-16T13:30:00.000Z',
-            status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: input.metricKey }
+            status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: input.metricKey,
+            periodKey: '2026-11-16T13:30' }
         ]
       })
     }

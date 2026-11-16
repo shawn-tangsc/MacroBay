@@ -225,7 +225,9 @@ export function eventSourceWritesReadOf(value: unknown): EventSourceWritesRead {
     for (const field of ['consensus', 'actual', 'previous'] as const) {
       if (row[field] !== null && typeof row[field] !== 'string') return unavailable
     }
+    if (row.periodKey !== undefined && typeof row.periodKey !== 'string') return unavailable
     rows.push({
+      ...(typeof row.periodKey === 'string' ? { periodKey: row.periodKey } : {}),
       source: row.source as EventSourceWriteRow['source'],
       providerId: row.providerId as string,
       observedAt: row.observedAt as string,

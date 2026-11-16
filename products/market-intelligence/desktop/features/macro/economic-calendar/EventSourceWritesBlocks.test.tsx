@@ -67,9 +67,11 @@ it('labels a provider that does have revision writes as write records', async ()
 it('lists disagreeing fields side by side with the source name, and never picks one', async () => {
   const rows = [
     { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-16T21:49:41.793Z',
-      status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL' },
+      status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL',
+      periodKey: '2026-11' },
     { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-16T13:30:00.000Z',
-      status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: '["214790",79095]' }
+      status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: '["214790",79095]',
+      periodKey: '2026-11-16T13:30' }
   ]
   const host = document.createElement('div'); const root = createRoot(host)
   try {
@@ -88,13 +90,53 @@ it('lists disagreeing fields side by side with the source name, and never picks 
 it('does not call a formatting difference a conflict', async () => {
   const rows = [
     { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-09T00:00:00.000Z',
-      status: 'published', consensus: null, actual: '0.7', previous: '0.6', identityKey: 'US.WHOLESALE_INVENTORIES.SA.MOM' },
+      status: 'published', consensus: null, actual: '0.7', previous: '0.6', identityKey: 'US.WHOLESALE_INVENTORIES.SA.MOM',
+      periodKey: '2026-09' },
     { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-09T00:00:00.000Z',
-      status: 'published', consensus: null, actual: '0.7%', previous: '0.6%', identityKey: 'US.WHOLESALE_INVENTORIES.SA.MOM' }
+      status: 'published', consensus: null, actual: '0.7%', previous: '0.6%', identityKey: 'US.WHOLESALE_INVENTORIES.SA.MOM',
+      periodKey: '2026-09' }
   ]
   const host = document.createElement('div'); const root = createRoot(host)
   try {
     await act(async () => root.render(scoped(<EventSourceWritesBlocks rows={rows} text={text} />)))
     expect(host.querySelector('[data-source-conflicts]')).toBeNull()
+  } finally { await act(async () => root.unmount()) }
+})
+
+/**
+ * **跨月不许并成「不一致」**（Chief 2026-11-17）：消费信贷那组 narwhal 记 9 月、0xrouter 记 10 月，
+ * 两个 4.35 倍的数比的是两个不同的月。期次不同只说明「另一家记的是哪一期」，不标冲突；
+ * 期次缺失（读口还没给）时**一个冲突都不报**——宁可这一版不显示标记，也不能造假事实。
+ */
+it('never calls two different periods a conflict', async () => {
+  const rows = [
+    { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-06T00:00:00.000Z',
+      status: 'published', consensus: null, actual: '6.4', previous: '1.9',
+      identityKey: 'US.CONSUMER_CREDIT.SA.CHANGE', periodKey: '2026-09' },
+    { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-06T00:00:00.000Z',
+      status: 'published', consensus: '12.0', actual: '27.84', previous: '8.280',
+      identityKey: 'US.CONSUMER_CREDIT.SA.CHANGE', periodKey: '2026-10' }
+  ]
+  const host = document.createElement('div'); const root = createRoot(host)
+  try {
+    await act(async () => root.render(scoped(<EventSourceWritesBlocks rows={rows} text={text} />)))
+    expect(host.querySelector('[data-source-conflicts]')).toBeNull()
+    // 但要说清另一家记的是哪一期，读者才不会以为两家报的是同一个月。
+    expect(host.querySelector('[data-other-period]')?.textContent).toContain('2026-10')
+  } finally { await act(async () => root.unmount()) }
+})
+
+it('reports no conflict at all when the read port gives no period', async () => {
+  const rows = [
+    { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-06T00:00:00.000Z',
+      status: 'published', consensus: '10', actual: null, previous: null, identityKey: 'US.CONSUMER_CREDIT.SA.CHANGE' },
+    { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-06T00:00:00.000Z',
+      status: 'published', consensus: '18', actual: null, previous: null, identityKey: 'US.CONSUMER_CREDIT.SA.CHANGE' }
+  ]
+  const host = document.createElement('div'); const root = createRoot(host)
+  try {
+    await act(async () => root.render(scoped(<EventSourceWritesBlocks rows={rows} text={text} />)))
+    expect(host.querySelector('[data-source-conflicts]')).toBeNull()
+    expect(host.querySelector('[data-other-period]')).toBeNull()
   } finally { await act(async () => root.unmount()) }
 })
