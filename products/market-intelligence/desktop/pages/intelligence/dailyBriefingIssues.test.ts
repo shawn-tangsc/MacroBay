@@ -51,7 +51,7 @@ it('moves "really nothing" into the body and out of the gap list', () => {
     news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } }
   })
   const issues = briefingIssues({ document: doc, text: zhText, formatTime })
-  expect(issues.some((issue) => issue.template === 'macro-quiet')).toBe(false)
+  expect(issues.some((issue) => issue.id === 'data:macro:quiet')).toBe(false)
   expect(issues.some((issue) => issue.id.startsWith('data:calendar'))).toBe(false)
 
   // 正文那句与这一档同源：不带「读不到」前缀，也不是一句「没有已收录的发布」。

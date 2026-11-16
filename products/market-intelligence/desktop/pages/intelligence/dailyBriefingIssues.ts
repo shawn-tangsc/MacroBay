@@ -36,7 +36,7 @@ export type BriefingIssueTemplate =
   | 'backfill-done' | 'backfill-generic'
   | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure' | 'document-invalid'
   | 'evidence-gap' | 'evidence-caveat' | 'evidence-no-citation' | 'evidence-conflict' | 'evidence-none'
-  | 'timing-late' | 'macro-quiet'
+  | 'timing-late'
 
 /** The stable code behind a template; two templates may share a code but never a group. */
 export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
@@ -55,9 +55,7 @@ export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, 
   'system-failure': 'generation-failure', 'document-invalid': 'document-invalid',
   'evidence-gap': 'data-gap', 'evidence-caveat': 'data-caveat', 'evidence-no-citation': 'uncited-counter-evidence',
   'evidence-conflict': 'source-conflict', 'evidence-none': 'no-citations',
-  'timing-late': 'late-generation',
-  // A quiet window is not a gap: its own code so it can never merge with an unreadable calendar.
-  'macro-quiet': 'macro-quiet'
+  'timing-late': 'late-generation'
 }
 
 export type BriefingIssue = Readonly<{
