@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { localizedPairFor } from '../marketCalendarCodeNames'
 import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
-import { subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
+import { subItemOrderOf, subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
 
 /**
@@ -62,6 +62,8 @@ export type MappingRuleRow = Readonly<{
   parentMetricKey?: string | null
   /** `parent` = 母指标（或普通指标），`child` = 子项。界面据此显示「· 子项」小字。 */
   kind?: 'parent' | 'child'
+  /** 子项在词表里的序号（同族排序用）；母码/普通指标没有这个数。 */
+  childOrder?: number
 }>
 
 /**
@@ -85,6 +87,8 @@ export type DirectMetricRow = Readonly<{
   parentMetricKey?: string | null
   /** `parent` = 母指标（或普通指标），`child` = 子项。界面据此显示「· 子项」小字。 */
   kind?: 'parent' | 'child'
+  /** 子项在词表里的序号（同族排序用）；母码/普通指标没有这个数。 */
+  childOrder?: number
 }>
 
 export type UnmappedSourceIdRow = Readonly<{
@@ -194,7 +198,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         tier: tierOfMetricKey(entry.metricKey) ?? null,
         rowCount: rowsByMetricKey.get(entry.metricKey) ?? 0,
         parentMetricKey: subItemParentByMetricKey[entry.metricKey] ?? null,
-        kind: subItemParentByMetricKey[entry.metricKey] === undefined ? 'parent' as const : 'child' as const })
+        kind: subItemParentByMetricKey[entry.metricKey] === undefined ? 'parent' as const : 'child' as const,
+        ...(subItemOrderOf(entry.metricKey) === undefined ? {} : { childOrder: subItemOrderOf(entry.metricKey) }) })
     })
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
     const direct: DirectMetricRow[] = [...rowsByMetricKey.entries()]

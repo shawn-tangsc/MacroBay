@@ -65,6 +65,10 @@ describe('映射规则表读口', () => {
     // 子项码有上级、母码没有：费城联储装船 → 费城联储制造业。
     const shipments = read.mapped.find((rule) => rule.metricKey === 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL')
     expect(shipments?.parentMetricKey).toBe('US.PHILLY_FED_MANUFACTURING.SA.LEVEL')
+    expect(shipments?.kind).toBe('child')
+    // 子项内部按词表顺序排：装船(0) 在新订单(1) 之前，界面不用自己写一份中文词表。
+    expect(shipments?.childOrder).toBe(0)
+    expect(read.mapped.find((rule) => rule.metricKey === 'US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL')?.childOrder).toBe(1)
     expect(read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')?.parentMetricKey).toBeNull()
     expect(read.mapped.every((rule) => rule.names === null
       || (rule.names.zh.trim() !== '' && rule.names.en.trim() !== ''))).toBe(true)

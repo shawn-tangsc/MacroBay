@@ -88,3 +88,24 @@ export const subItemParentByMetricKey: Readonly<Record<string, string>> = Object
   'US.KANSAS_FED_MANUFACTURING.PRODUCTION.SA.LEVEL': 'US.KANSAS_FED_MANUFACTURING.SA.LEVEL',
   'US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE': 'US.CAPACITY_UTILIZATION.SA.RATE'
 })
+
+/**
+ * **子项在词表里的顺序**（用户 2026-11-17：排序按族分组、子项内部按词表序）。
+ * 界面不许自己写一份中文词表去排——那是把命名规则复制第二份；顺序由词表本身给出。
+ */
+const SUB_ITEM_WORD_ORDER: readonly string[] = Object.freeze([
+  'SHIPMENTS', 'NEW_ORDERS', 'UNFILLED_ORDERS', 'INVENTORIES', 'EMPLOYMENT',
+  'WORK_HOURS', 'PRICES_PAID', 'PRICES_RECEIVED', 'PRODUCTION', 'MANUFACTURING',
+  'CURRENT', 'EXPECTATIONS'
+])
+
+/** 子项码 → 它在词表里的序号（母码/普通指标没有这个数）。 */
+export function subItemOrderOf(metricKey: string): number | undefined {
+  const parent = subItemParentByMetricKey[metricKey]
+  if (parent === undefined) return undefined
+  const segments = metricKey.split('.')
+  if (segments.length < 3) return undefined
+  const word = segments[segments.length - 3] ?? ''
+  const index = SUB_ITEM_WORD_ORDER.indexOf(word)
+  return index < 0 ? undefined : index
+}
