@@ -56,7 +56,7 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   newsEmptyCodes: Readonly<Record<string, string>>
   macroEmptyCodes: Readonly<Record<string, string>>
   /** 过去 24 小时的总数与构成、另有几条、以及「这段时间没有已收录的发布」（用户 2026-11-14）。 */
-  pastWindow: Readonly<{ counts: string; others: string; emptyCollected: string; noHighImpact: string }>
+  pastWindow: Readonly<{ counts: string; others: string; emptyCollected: string; noRelease: string; noHighImpact: string }>
   /** 未来 7 天判不了重要性时的排期小标题。 */
   nextImportanceUnknown: Readonly<{ scheduleTitle: string }>
   macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>>; timeNotPublished: string }>
@@ -113,7 +113,10 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   const visibleMacro = document.news.macro.filter((item) => item.visibility !== 'hidden')
   const macroWindow = document.news.notes.macroWindow
   // 「确实没有高影响发布」正文要印一句（用户 2026-11-16）；「读不到」仍不印。
-  const macroQuiet = document.news.notes.macroEmpty === 'past-24h-no-high-impact-release'
+  const macroQuietCode = document.news.notes.macroEmpty === 'past-24h-no-release' ? 'past-24h-no-release'
+    : document.news.notes.macroEmpty === 'past-24h-no-high-impact-release' ? 'past-24h-no-high-impact-release'
+      : undefined
+  const macroQuiet = macroQuietCode !== undefined
   if (visibleNews.length > 0 || visibleMacro.length > 0 || macroQuiet || (macroWindow !== undefined && macroWindow.total === 0)) {
     lines.push('', `## ${labels.sections.news}`)
     for (const item of visibleNews) lines.push('', newsLine(item, options))
@@ -132,7 +135,7 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     if (visibleMacro.length === 0 && macroWindow !== undefined && macroWindow.total === 0) {
       lines.push('', labels.pastWindow.emptyCollected)
     }
-    if (visibleMacro.length === 0 && macroQuiet) lines.push('', labels.pastWindow.noHighImpact)
+    if (visibleMacro.length === 0 && macroQuiet) lines.push('', macroQuietCode === 'past-24h-no-release' ? labels.pastWindow.noRelease : labels.pastWindow.noHighImpact)
   }
 
   const rows = briefingDataRows(document)

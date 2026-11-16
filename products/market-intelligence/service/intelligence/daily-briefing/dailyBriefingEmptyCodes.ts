@@ -1,4 +1,5 @@
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import { briefingEventInWindow } from './dailyBriefingCalendarWindow'
 import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
 
 /**
@@ -35,7 +36,8 @@ export function macroEmptyCode(packet: DailyBriefingFactPacket): string {
   })
   // **读数可用且新鲜时，「窗口为空」优先于任何补跑判定**（用户 2026-11-16）：补跑只是走过的一步，
   // 它失败/超时/结果未知，都不该把一次读得到的空窗写成故障。只有读数本身不可信时，才轮到它。
-  if (reason !== 'past-24h-no-high-impact-release') {
+  const emptyWindow = reason === 'past-24h-no-high-impact-release'
+  if (!emptyWindow) {
     // A catch-up that ran out of time is its own sentence: it did not fail, it did not finish.
     if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
     // A catch-up we triggered but never learned the outcome of (the command answered with a shape the
@@ -44,11 +46,21 @@ export function macroEmptyCode(packet: DailyBriefingFactPacket): string {
     // 补跑失败是「我们这次去补没成功」，不是「源的采集历史失败」：两者一句话说清会误导读者。
     if (freshness.catchUp?.state === 'failed') return 'calendar-catch-up-failed'
   }
+  // 「一条发布都没有」与「有发布但都被重要性筛掉」是两句话（产品 2026-11-16）：窗口总数是 0 时
+  // 说「没有高影响」等于暗示「有低影响被筛掉了」，那是把「没有」说成「筛没了」。
+  if (emptyWindow && !calendarWindowHasAnyEvent(packet)) return 'past-24h-no-release'
   // 注意：这一档的「没有」现在**只在窗口里真的一条高影响事件都没有**时才成立——因为候选不再按
   // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。
   // 反过来也要说清（`02` v2.125 ①）：**已取消的事件仍然算「有事件」**——它照常显示、带取消标记、
   // 值那一格不渲染；"取消了"不等于"发生过却没有数据"，更不等于"没有发生"。
   return reason
+}
+
+/** 窗口里（按日界与时刻，与列表同一套判断）到一条事件都没有了吗。 */
+function calendarWindowHasAnyEvent(packet: DailyBriefingFactPacket): boolean {
+  if (packet.calendar.state !== 'available') return false
+  const window = { start: packet.windowStart, end: packet.windowEnd, timeZone: packet.timeZone }
+  return packet.calendar.events.some((event) => briefingEventInWindow(event, window))
 }
 
 /** 日历落后本期数据截止多少小时，给「读数陈旧」那一句用。 */

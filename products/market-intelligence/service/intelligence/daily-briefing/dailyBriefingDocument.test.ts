@@ -968,22 +968,37 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    // 夹具：asOf 00:30，最后一次成功 00:00 —— 读数新鲜、窗口为空。
-    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
+    // 夹具：asOf 00:30，最后一次成功 00:00 —— 读数新鲜、窗口里一条事件都没有，所以是 A 不是 B。
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-release')
     expect(document.news.notes.macroEmpty).not.toBe('calendar-collect-failed')
   })
 
-  it('allows "nothing happened" only when the reading is fresh and the window is empty', () => {
-    const document = buildDailyBriefingDocument({
+  it('separates "no release at all" from "releases filtered by importance"', () => {
+    const fresh = { state: 'available' as const, lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' as const } }
+    const nothing = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [] }, calendarFreshness: fresh }),
+      date: '2026-10-30'
+    })
+    // 窗口里一条事件都没有 → A；说「没有高影响」等于暗示「有低影响被筛掉了」。
+    expect(nothing.news.notes.macroEmpty).toBe('past-24h-no-release')
+    expect(nothing.news.notes.macroEmptyHours).toBeUndefined()
+
+    const filtered = buildDailyBriefingDocument({
       packet: packet({
-        calendar: { state: 'available', events: [] },
-        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+        calendar: {
+          state: 'available',
+          events: [{
+            eventKey: 'US.LOW', title: 'low-impact release', scheduledAt: '2026-10-29T12:00:00.000Z',
+            importance: 'medium', lifecycleState: 'released', category: 'economic-indicator',
+            surprise: { direction: 'consensus-unavailable' }
+          }]
+        },
+        calendarFreshness: fresh
       }),
       date: '2026-10-30'
     })
-
-    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
-    expect(document.news.notes.macroEmptyHours).toBeUndefined()
+    // 有发布、但都被重要性筛掉 → B。
+    expect(filtered.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
   })
 
   it('records when the run read the world, and that the window did not move with it', () => {

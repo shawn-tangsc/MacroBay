@@ -48,18 +48,19 @@ it('moves "really nothing" into the body and out of the gap list', () => {
   const base = document()
   const doc = document({
     edition: { ...base.edition, windowHours: 24 },
-    news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } }
+    news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-release' } }
   })
   const issues = briefingIssues({ document: doc, text: zhText, formatTime })
-  expect(issues.some((issue) => issue.id === 'data:macro:quiet')).toBe(false)
+  expect(issues.some((issue) => issue.template === 'timing-late')).toBe(false)
   expect(issues.some((issue) => issue.id.startsWith('data:calendar'))).toBe(false)
 
   // 正文那句与这一档同源：不带「读不到」前缀，也不是一句「没有已收录的发布」。
   expect(briefingMacroEmptyCopy(doc, {
     macroEmptyCodes: zhText.macroEmptyCodes,
     macroUnreadable: zhText.macroUnreadable,
+    pastWindowNoRelease: zhText.pastWindow.noRelease,
     pastWindowNoHighImpact: zhText.pastWindow.noHighImpact
-  })).toEqual({ sentence: zhText.pastWindow.noHighImpact, unreadable: false })
+  })).toEqual({ sentence: zhText.pastWindow.noRelease, unreadable: false })
 })
 
 function pulse(overrides: Partial<BriefingPulseRow> = {}): BriefingPulseRow {

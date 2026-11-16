@@ -26,13 +26,15 @@ const labels = {
     'past-24h-no-high-impact-release': '过去 24 小时没有已发布的高影响事件'
   },
   macroUnreadable: '暂时读不到：',
+  pastWindowNoRelease: '过去 24 小时没有宏观发布',
   pastWindowNoHighImpact: '过去 24 小时没有高影响宏观发布'
 } as const
 
 /** 真表是整份文案对象；这一层只吃三个字段，测试与调用点用同一个映射。 */
-const copyLabels = (text: Readonly<{ macroEmptyCodes: Record<string, string>; macroUnreadable: string; pastWindow: { noHighImpact: string } }>) => ({
+const copyLabels = (text: Readonly<{ macroEmptyCodes: Record<string, string>; macroUnreadable: string; pastWindow: { noRelease: string; noHighImpact: string } }>) => ({
   macroEmptyCodes: text.macroEmptyCodes,
   macroUnreadable: text.macroUnreadable,
+  pastWindowNoRelease: text.pastWindow.noRelease,
   pastWindowNoHighImpact: text.pastWindow.noHighImpact
 })
 
@@ -41,8 +43,11 @@ function documentWith(macroEmpty: string | undefined, macroEmptyHours?: number) 
 }
 
 describe('the empty macro section in a daily briefing', () => {
-  it('says one plain sentence when the window really had no high-impact event', () => {
-    // 用户 2026-11-16 改口径：整块消失会让读者以为功能没了；这一档正文印一句、不算「读不到」。
+  it('uses two different sentences for "no release at all" and "filtered by importance"', () => {
+    // 用户 2026-11-16：整块消失会让读者以为功能没了；两档正文各印一句、都不算「读不到」。
+    // 窗口里一条都没有时说「没有高影响」，等于暗示「有低影响被筛掉了」——那是把没有说成筛没了。
+    expect(briefingMacroEmptyCopy(documentWith('past-24h-no-release'), labels))
+      .toEqual({ sentence: '过去 24 小时没有宏观发布', unreadable: false })
     expect(briefingMacroEmptyCopy(documentWith('past-24h-no-high-impact-release'), labels))
       .toEqual({ sentence: '过去 24 小时没有高影响宏观发布', unreadable: false })
   })

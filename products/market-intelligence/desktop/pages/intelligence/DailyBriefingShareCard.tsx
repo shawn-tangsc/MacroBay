@@ -65,6 +65,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const macroEmpty = briefingMacroEmptyCopy(doc, {
     macroEmptyCodes: text.macroEmptyCodes,
     macroUnreadable: text.macroUnreadable,
+    pastWindowNoRelease: text.pastWindow.noRelease,
     pastWindowNoHighImpact: text.pastWindow.noHighImpact
   })
   const macroQuiet = macroEmpty !== null && !macroEmpty.unreadable ? macroEmpty : undefined

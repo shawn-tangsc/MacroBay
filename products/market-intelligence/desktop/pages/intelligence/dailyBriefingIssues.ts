@@ -295,6 +295,7 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   const macroEmpty = briefingMacroEmptyCopy(document, {
     macroEmptyCodes: text.macroEmptyCodes,
     macroUnreadable: text.macroUnreadable,
+    pastWindowNoRelease: text.pastWindow.noRelease,
     pastWindowNoHighImpact: text.pastWindow.noHighImpact
   })
   // 「确实没有高影响事件」现在**正文已经印了那句**（用户 2026-11-16）：这里不再记一条 info，
