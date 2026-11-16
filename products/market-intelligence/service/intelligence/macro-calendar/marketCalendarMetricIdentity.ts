@@ -1,4 +1,5 @@
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
+import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 
 /**
@@ -151,7 +152,11 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
 })
 
 /** 0xRouter 的 `indicator_id`（已落库的 `indicator_id` 列）→ 规范指标键与期间规则。 */
-export type ZeroXRouterPeriodRule = 'month' | 'week_end' | 'quarter'
+/**
+ * 期次取法。**事件型用 `event_date`**（用户 2026-11-17 定：事件身份 = 类型 + 日期）：
+ * 一场活动一个身份。同月按 `month` 合并，会把一个月里的两场讲话并成一条、日期也并掉。
+ */
+export type ZeroXRouterPeriodRule = 'month' | 'week_end' | 'quarter' | 'event_date'
 export type ZeroXRouterIdentityEntry = Readonly<{ metricKey: string; periodRule: ZeroXRouterPeriodRule }>
 export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouterIdentityEntry>> = Object.freeze({
   '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month' },
@@ -324,10 +329,15 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   // 同一个来源（0xrouter）下按**国家**分表：美国一张、德国一张，**按国家选表**。
   // 不做「三张表依次试」：那样一个德国 id 若挂在错误的国家下会照样解出身份，
   // 把国家字段的错变成身份层的错（德国 GfK 的 id 配上 US 会算出「美国 GfK」）。
-  const entry = row.countryCode === 'DE'
+  // 事件型先查（它们不是指标，也不按国家分表：一场讲话的身份是「类型 + 日期」+ 国家）。
+  const entry = zeroXRouterEventIdentities[row.indicatorId] ?? (row.countryCode === 'DE'
     ? germanSourceMetricMappings[row.indicatorId]
-    : zeroXRouterIndicatorIdentities[row.indicatorId] ?? zeroXRouterSourceMetricMappings[row.indicatorId]
+    : zeroXRouterIndicatorIdentities[row.indicatorId] ?? zeroXRouterSourceMetricMappings[row.indicatorId])
   if (!entry) return undefined
+  // 事件型：期次就是那一场活动的日期（UTC 当天），不落到月，避免同月多场被并成一条。
+  if (entry.periodRule === 'event_date') {
+    return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey: row.scheduledAt.slice(0, 10) }
+  }
   const periodKey = entry.periodRule === 'month' ? previousMonthKey(row.scheduledAt)
     : entry.periodRule === 'week_end' ? previousWeekEndingKey(row.scheduledAt)
     : previousQuarterKey(row.scheduledAt)

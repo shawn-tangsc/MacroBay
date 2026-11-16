@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { localizedPairFor } from '../marketCalendarCodeNames'
 import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
+import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
 import { germanSourceMetricMappings } from '../marketCalendarGermanSourceMappings'
 import { subItemOrderOf, subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
@@ -177,7 +178,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
     const allIdentityEntries: [string, { metricKey: string; periodRule: ZeroXRouterPeriodRule }][] = [
       ...Object.entries(zeroXRouterIndicatorIdentities),
       ...Object.entries(zeroXRouterSourceMetricMappings),
-      ...Object.entries(germanSourceMetricMappings)
+      ...Object.entries(germanSourceMetricMappings),
+      // 事件型（`evt.*`）：它们不是指标，但同样「已经认出身份」，所以不再算未映射
+      ...Object.entries(zeroXRouterEventIdentities)
     ]
     /**
      * **一行 = 一个指标码**（用户 2026-11-17：两个页签并成一个）。
@@ -194,10 +197,22 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       idsByCode.set(entry.metricKey, [...(idsByCode.get(entry.metricKey) ?? []), sourceId])
       if (!ruleByCode.has(entry.metricKey)) ruleByCode.set(entry.metricKey, entry.periodRule)
     }
-    // 库里以**码身份**进来的指标（不含数组身份与 `evt.*` 事件码）：它们不需要规则，但同属「已认得」。
-    const directCodes = [...rowsByMetricKey.keys()]
-      .filter((metricKey) => !metricKey.startsWith('[') && !metricKey.startsWith('evt.'))
-    const allCodes = new Set<string>([...idsByCode.keys(), ...directCodes])
+    /**
+     * **这不是指标的行不进这张表**（Chief 2026-11-17：讲话、会议是事件，不是指标）：
+     * - `evt.*` 事件码（央行讲话那类）：它们用事件身份，不该出现在「id → 指标码」这张表里；
+     * - `[` 开头的数组身份是**未映射**的原始键，不是码。
+     *
+     * 判据在**合并之前**就滤掉，而不是合并后再删——否则一个 evt 身份一旦被登记进映射表，
+     * 它会先从「未映射」消失（对），再悄悄出现在「已映射」里（错），而那张表的每一行读者都会
+     * 当成一个「指标」。
+     */
+    const isMetricCode = (metricKey: string): boolean =>
+      !metricKey.startsWith('[') && !metricKey.startsWith('evt.')
+    const directCodes = [...rowsByMetricKey.keys()].filter(isMetricCode)
+    const allCodes = new Set<string>([
+      ...[...idsByCode.keys()].filter(isMetricCode),
+      ...directCodes
+    ])
     const mapped: MappingRuleRow[] = [...allCodes].map((metricKey) => {
       const official = officialPageFor(metricKey)
       return Object.freeze({
