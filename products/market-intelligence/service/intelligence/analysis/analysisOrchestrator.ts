@@ -253,12 +253,16 @@ export function createAnalysisOrchestrator(deps: Readonly<{
           return fail(runRecord.id, 'failed', failureCode, failureDetailCode)
         }
         repaired = true
+        // 修复调用是**另一次调用**：存档里要和首答分开，否则事后只能看到三行「initial」，
+        // 看不出哪一行是首答、哪两行是被丢掉的重写。
+        nextCallKind = 'repair'
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
       }
       validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
       if (validated.ok) break
       if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !repairableRejection.has(validated.errorCode)) break
+      nextCallKind = 'repair'
       messages = [...messages, ...repairMessage(validated, invocation.output)]
     }
     if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')

@@ -208,6 +208,19 @@ describe('analysisOrchestrator', () => {
     expect(messages.at(-1)!.content).toContain('顶层必须恰好是')
   })
 
+  it('records the repair call as its own call kind, so a post-mortem can tell the answers apart', async () => {
+    // 线上那次事故的存档里三次调用全是 `initial`：修复调用没有被标出来，事后看不出哪一行是首答。
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: true as const, output: { conclusion: 'not a contract' }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const begin = vi.fn((_input: { callKind: string }) => ({ id: `io-${begin.mock.calls.length}`, createdAt: asOf }))
+    const repository = createRepository({ analysisIo: { begin, complete: vi.fn() } })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'succeeded' })
+    expect(begin.mock.calls.map(([input]) => input.callKind)).toEqual(['initial', 'repair'])
+  })
+
   it('tells the model which direction horizon is missing, not to fix its citations', async () => {
     const incomplete = validOutput()
     incomplete.directions = incomplete.directions.filter(entry => entry.horizon !== 'long')
