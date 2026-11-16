@@ -97,8 +97,19 @@ describe('按条解读：先判能不能跑', () => {
     await expect(request('missing-item')).resolves.toEqual({ state: 'not-eligible', itemId: 'missing-item', reason: 'item-not-found' })
     const other = harness({ items: [{ ...item, sourceId: 'alternative-fear-greed' }] })
     await expect(other.request('item-1')).resolves.toEqual({ state: 'not-eligible', itemId: 'item-1', reason: 'source-not-covered' })
-    const ineligible = harness({ items: [{ ...item, sourceTrust: 'low' }] })
-    await expect(ineligible.request('item-1')).resolves.toEqual({ state: 'not-eligible', itemId: 'item-1', reason: 'item-not-eligible' })
+    // 没有发布时间就建不出触发事实（它要引发生时刻）：这一条仍是「不能单独解读」，且不排运行。
+    const noTime = harness({ items: [{ ...item, publishedAt: '' }] })
+    await expect(noTime.request('item-1')).resolves.toEqual({ state: 'not-eligible', itemId: 'item-1', reason: 'item-not-eligible' })
+    expect(noTime.enqueue).not.toHaveBeenCalled()
+  })
+
+  it('admits a low-trust item inside the judged sources when it has a judgment', async () => {
+    // 手动入口的准入不是自动分析那把「值不值得花预算」的尺子：读者点名要读这一条，意愿本身就是准入。
+    // 线上那次被拒就是这条——有情绪判定，却因为信任度/标签没过自动分析的门槛被告知「不够格」。
+    preparedFingerprint.value = 'ev'
+    const lowTrust = harness({ items: [{ ...item, sourceTrust: 'low', processingLabelsJson: '{}' }] })
+    await expect(lowTrust.request('item-1')).resolves.toMatchObject({ state: 'queued' })
+    expect(lowTrust.enqueue).toHaveBeenCalledWith(expect.objectContaining({ triggeredItemId: 'item-1' }))
   })
 
   it('refuses an item with no sentiment judgment, and never queues', async () => {

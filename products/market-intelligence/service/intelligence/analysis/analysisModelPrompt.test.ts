@@ -44,10 +44,20 @@ describe('analysis model prompt trigger contract (R37)', () => {
     expect(system).toContain('不许把新闻里的金额直接当成市场影响')
   })
 
+  it('requires source wording that matches how credible the source is', () => {
+    // 准入放开之后低可信来源也能被解读，措辞就不能把页面抓取升格成「某方宣布」。
+    // 这条只写在提示词里：能写成一组的词规则不进校验。
+    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    expect(system).toContain('来源措辞必须与这条来源的可信度相符')
+    expect(system).toContain('该页面显示')
+    expect(system).toContain('不得写成「某方宣布」「官方表示」')
+  })
+
   it('stays out of runs that a news item did not trigger', () => {
     const system = systemPrompt(snapshot({ facts: [triggerFact] }))
     expect(system).not.toContain('本次运行由**一条新闻**触发')
     expect(system).not.toContain('conclusion.newsImpact')
+    expect(system).not.toContain('来源措辞必须与这条来源的可信度相符')
   })
 })
 

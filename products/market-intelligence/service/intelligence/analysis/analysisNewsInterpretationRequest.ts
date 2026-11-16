@@ -14,7 +14,8 @@ import type { PreparationDependencies } from './analysisSnapshotPreparation'
  * 按条「AI 解读」：写端点的判读流程（R37 §1.1 / §9.4）。
  *
  * 顺序是有意的——**先判能不能跑，再判要不要跑**：
- * 1. 条目不存在 / 源不在覆盖范围 / 过不了可分析过滤 → `not-eligible` 三档；
+ * 1. 条目不存在 / 源不在覆盖范围 / 没有可引用的发布时间 → `not-eligible` 三档；自动分析那把
+ *    「值不值得花预算」的尺子（信任度、`relevanceOutcome`、`sentimentEligible`）不在这里用；
  * 2. 没有情绪判定 → `no-judgment`（读者只能等，不给重试；不先补判定，那要为一次点击多花一次模型调用）；
  * 3. 开关与模型就绪 → `not-ready`，**在入队前判**，否则先回 queued 再变成一次失败；
  * 4. 同组在飞 → `in-flight`（单飞，连点不会排第二条）；
@@ -44,7 +45,7 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     const item = deps.pipeline.listItems().find(candidate => candidate.itemId === itemId)
     if (!item) return { state: 'not-eligible', itemId, reason: NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.itemNotFound }
     if (!isNewsSeveritySource(item.sourceId)) return { state: 'not-eligible', itemId, reason: NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.sourceNotCovered }
-    if (!isAnalysable(item)) return { state: 'not-eligible', itemId, reason: NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.itemNotEligible }
+    if (!hasCitablePublication(item)) return { state: 'not-eligible', itemId, reason: NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.itemNotEligible }
     if (!deps.latestNewsSentiment?.(itemId, deps.now())) return { state: 'no-judgment', itemId }
     if (!await deps.isEnabled()) return { state: 'not-ready', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.notEnabled }
     if (!await deps.hasModel()) return { state: 'not-ready', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.providerNotReady }
@@ -98,15 +99,18 @@ function failureFor(itemId: string, errorCode: string): NewsInterpretationReques
   return { state: 'failed', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.requestFailed }
 }
 
-/** 可分析过滤与旧手动入口同一套（信任 / 时间 / 标签），两处各写一份就是两把尺子。 */
-function isAnalysable(item: IntelligenceItem): boolean {
-  if (item.sourceTrust !== 'high' || !item.publishedAt) return false
-  try {
-    const labels = JSON.parse(item.processingLabelsJson ?? '{}') as Record<string, unknown>
-    return labels.relevanceOutcome === 'full-intelligence' && labels.sentimentEligible === true
-  } catch {
-    return false
-  }
+/**
+ * 手动入口的准入**不套自动分析那把尺子**：自动分析判的是「这条值不值得花预算」，所以要信任度、
+ * 要 `relevanceOutcome: full-intelligence`、要 `sentimentEligible`；读者在界面上点名要读这一条，
+ * 这个意愿本身就是准入。用预算的尺子量读者的点名，就会出现「点一条已经有情绪判定的新闻，
+ * 被告知不在可单独解读的范围内」——今天这次。
+ *
+ * 这里只留「这条新闻能不能被解读」的一条硬前提：有发布时间（触发事实要引它当发生时刻；
+ * 没有时间戳的残片建不出触发事实，冻结那边本就会 fail-closed）。没有判定由下一步回 `no-judgment`，
+ * 有判定却建不出证据引用由冻结回 `insufficient-facts`——两件事各有出口，不混进「不够格」。
+ */
+function hasCitablePublication(item: IntelligenceItem): boolean {
+  return Boolean(item.publishedAt)
 }
 
 /** 判定是否已经写下来（端点只用它判 `no-judgment`；方向与强度由冻结路径与校验负责）。 */

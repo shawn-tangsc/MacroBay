@@ -78,6 +78,7 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
       '如果确实查不出传导链：`verdict: "no-transmission"`，`checkedFactIds` 至少两条（写明查过哪些事实）、`reason` 一句话说明为什么没有传导。',
       '如果缺关键信息：`verdict: "cannot-determine"`，`missing.item` 只能是 amount / symbol / time / market-data，`missing.state` 只能是 not-yet / source-empty / unreadable；**不许自造同义词，也不许用「信息不足」一句代替**。',
       '三条禁止：不许只复述新闻；不许硬贴利好利空（方向必须由数据与机制给出）；不许把新闻里的金额直接当成市场影响——金额要变成市场影响，必须经过一个市场变量（资金流、成交、持仓、费率），并把那条变量写出来。',
+      '来源措辞必须与这条来源的可信度相符：当来源是页面抓取、公告页抽取这类不足以当作官方口径的来源时，正文要写成「该页面显示…」「该公告页称…」（英文 the page shows / the announcement page states），不得写成「某方宣布」「官方表示」（announced / officially stated）这种把内容升格成既成事实的口径；只有官方机构自己发布的材料才可以写成主体宣布。',
       '`conclusion.newsImpact` 只在这种由新闻发起的运行里出现；其它运行不要写这个字段。'
     ] : []),
     // The run was triggered by a specific change; citing something else and narrating the backdrop
