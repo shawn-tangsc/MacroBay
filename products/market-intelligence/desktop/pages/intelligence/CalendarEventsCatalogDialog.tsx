@@ -39,7 +39,16 @@ export type CatalogText = Readonly<{
   importance: Readonly<Record<'high' | 'medium' | 'low', string>>
 }>
 
-const PAGE_SIZES = [50, 100, 200] as const
+const PAGE_SIZES = [20, 50, 100] as const
+
+/**
+ * 期间那一列：源有时给 `2026-M10`（指标期次），有时给 `2026-11-16T13:30`（时刻）。
+ * **只有长成 ISO 时刻的才截到年月**——一律 `slice(0,7)` 会把 `2026-M10` 截成 `2026-M1`。
+ */
+function periodLabel(value: string | undefined): string {
+  if (value === undefined) return ''
+  return /^\d{4}-\d{2}-\d{2}/u.test(value) ? value.slice(0, 7) : value
+}
 
 export type CatalogColumn = 'name' | 'country' | 'period' | 'date' | 'next' | 'time' | 'importance'
 
@@ -85,7 +94,9 @@ export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, 
           columns={columns.map((column) => {
             if (column === 'name') return { title: text.columns.name, dataIndex: 'title', render: (_value: unknown, row: CatalogRow) => <span data-catalog-name>{row.title}{row.titleIsSourceLabel ? <em className="mi-catalog__tag">{text.sourceLabelTag}</em> : null}</span> }
             if (column === 'country') return { title: text.columns.country, dataIndex: 'countryLabel' }
-            if (column === 'period') return { title: text.columns.period, dataIndex: 'period', render: (value: string | undefined) => value ?? '' }
+            // 期间是「哪一期」，不是时刻：源里有时给到 `2026-11-16T13:30`，这里只取年月，
+            // 时刻属于「最近一次发布」那一列，两列各说一件事。
+            if (column === 'period') return { title: text.columns.period, dataIndex: 'period', className: 'mi-catalog__cell-nowrap', render: (value: string | undefined) => periodLabel(value) }
             if (column === 'next') return { title: text.columns.next, dataIndex: 'nextRelease', render: (value: string | undefined) => value ?? '' }
             if (column === 'date') return { title: text.columns.date, dataIndex: 'lastRelease', render: (value: string | undefined) => value ?? '' }
             if (column === 'time') return { title: text.columns.time, dataIndex: 'time', render: (value: string | undefined) => value ?? '' }
@@ -94,7 +105,7 @@ export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, 
 
   return <Modal
     open={open}
-    width="expanded"
+    width="maximum"
     titleKey="calendarCatalogTitle"
     resolveText={(key) => key === 'calendarCatalogTitle' ? text.title : key}
     onClose={onClose}

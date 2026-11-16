@@ -65,15 +65,19 @@ it('shows the period and both release dates, and leaves them empty when there ar
     state: 'ready',
     rows: [
       row('a', 'CPI 年率', { period: '2026-M10', lastRelease: '2026-11-12', nextRelease: '2026-12-10' }),
-      row('b', '无日期的事件', {})
+      row('b', '无日期的事件', { period: '2026-11-16T13:30:00.000Z' })
     ]
   })
   try {
     const cells = [...view.body.querySelectorAll('.ant-table-tbody tr')].map((tr) => tr.textContent ?? '')
+    // 期间只显示年月：源有时给到 `2026-11-16T13:30`，时刻属于「最近一次发布」那一列。
     expect(cells[0]).toContain('2026-M10')
     expect(cells[0]).toContain('2026-11-12')
     expect(cells[0]).toContain('2026-12-10')
     // 无值：那几格是空的，不许出现占位词。
+    // 源把时刻当期间给过来时，只留年月：时刻属于「最近一次发布」那一列。
+    expect(cells[1]).toContain('2026-11')
+    expect(cells[1]).not.toContain('13:30')
     expect(cells[1]).not.toContain('暂无')
     expect(cells[1]).not.toContain('—')
   } finally { await view.done() }

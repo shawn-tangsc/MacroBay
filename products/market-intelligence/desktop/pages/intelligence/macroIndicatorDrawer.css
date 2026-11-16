@@ -390,3 +390,5 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 .mi-catalog__tag { margin-left: 6px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-style: normal; }
 /* 格内的「这一期发过几次」：紧凑记号，不占一行、不换行。 */
 .mk-mcell__repeat { margin-left: 2px; flex: none; font-style: normal; font-size: var(--font-meta); color: var(--caution); }
+/* 目录表的日期类格子不换行：以前「最近一次发布」被挤成两行，一列两行会让整表行高不齐。 */
+.mi-catalog__cell-nowrap { white-space: nowrap; }
