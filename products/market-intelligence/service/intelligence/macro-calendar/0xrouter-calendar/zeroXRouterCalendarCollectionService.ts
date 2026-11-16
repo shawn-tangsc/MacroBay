@@ -67,6 +67,19 @@ export function createZeroXRouterCalendarCollectionService(deps: Readonly<{
         // The repository already named the verdict; folding it here would erase the one
         // signal the panel needs to tell "shared calendar is full" from "storage is down".
         failureCode: written.failureCode === 'storage-pressure' ? 'storage-pressure' : 'storage-unavailable' }
+      // **认不出的国家码：按码聚合打一条日志**（一次采集几千行，逐行打等于没有日志）。
+      // 「认不出就丢」是今晚 1869 行消失的方式，所以留下的码必须能被看见，否则没人知道漏了哪些。
+      const unknownCountries = new Map<string, number>()
+      for (const draft of parsed.drafts) {
+        const code = draft.countryCode
+        if (code === undefined || code.length > 3) continue
+        if (['US', 'DE', 'JP', 'GB', 'CA', 'EMU'].includes(code)) continue
+        unknownCountries.set(code, (unknownCountries.get(code) ?? 0) + 1)
+      }
+      if (unknownCountries.size > 0) {
+        console.warn(`[macro-calendar] 未知国家码 ${unknownCountries.size} 种：`
+          + JSON.stringify(Object.fromEntries([...unknownCountries].sort((left, right) => right[1] - left[1]))))
+      }
       const { inputRows, skippedRows } = parsed.diagnostics
       return { state: 'succeeded', inputRows, skippedRows, storedRows: parsed.drafts.length,
         status: !inputRows ? 'success-empty' : inputRows === skippedRows ? 'all-skipped' : skippedRows ? 'partial' : 'success' }
