@@ -1,4 +1,4 @@
-import { Button, Checkbox } from 'antd'
+import { Button, Switch } from 'antd'
 import { Info } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -18,7 +18,10 @@ export function CrossAssetStatusHeading({ text, resolveProductText, action, togg
   resolveProductText: (key: string) => string
   /** 有源没配好 →「启用数据」；配好了但读不到 →「再试一次」；都读到 → 不给。 */
   action?: Readonly<{ label: string; run: () => void }>
-  /** 标题右上的勾：勾上＝不显示来源不可用的行。读者自己选，默认照旧显示。 */
+  /**
+   * 标题右上的开关：开＝不显示来源不可用的行。
+   * 说明放进它前面那颗 ⓘ（多行/一句都说清），开关本身只留一个可访问名——正文不铺解释。
+   */
   toggle?: Readonly<{ label: string; checked: boolean; onChange: (checked: boolean) => void }>
 }>): React.ReactElement {
   return <div className="mi-cross-asset__quote-heading"><h3>{text.statusTitle}</h3>
@@ -42,9 +45,18 @@ export function CrossAssetStatusHeading({ text, resolveProductText, action, togg
           variant="plain"
         />
       )} />
-    {/* 右角：一个勾（要不要看这类行）+ 同屏唯一的那颗「补数据」按钮。 */}
+    {/* 右角：ⓘ（说明这句开关管什么）+ 开关 + 同屏唯一的那颗「补数据」按钮。 */}
     <span className="mi-cross-asset__heading-actions">
-      {toggle === undefined ? null : <Checkbox checked={toggle.checked} onChange={event => toggle.onChange(event.target.checked)}>{toggle.label}</Checkbox>}
+      {toggle === undefined ? null : <>
+        <FocusPopover labelKey={crossAssetTextKeys.hideUnavailableRows} resolveText={resolveProductText}
+          trigger={(triggerProps) => (
+            <IconButton ariaLabelKey={crossAssetTextKeys.hideUnavailableRows} expanded={triggerProps.expanded}
+              icon={Info} onBlur={triggerProps.onBlur} onFocus={triggerProps.onFocus}
+              onMouseEnter={triggerProps.onMouseEnter} onMouseLeave={triggerProps.onMouseLeave}
+              onSelect={triggerProps.onSelect} resolveText={resolveProductText} size="sm" variant="plain" />
+          )} />
+        <Switch size="small" checked={toggle.checked} onChange={toggle.onChange} aria-label={toggle.label} />
+      </>}
       {action === undefined ? null : <Button size="small" onClick={action.run}>{action.label}</Button>}
     </span>
   </div>

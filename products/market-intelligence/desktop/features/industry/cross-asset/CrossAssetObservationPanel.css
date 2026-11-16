@@ -54,7 +54,7 @@
 .mi-cross-asset__chart { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 /* 标题右角：一个勾 + 那张卡唯一的按钮；`margin-left:auto` 把它们一起推到最右。 */
 .mi-cross-asset__heading-actions { margin-left: auto; display: inline-flex; align-items: center; gap: var(--mi-cross-asset-gap-small); }
-.mi-cross-asset__heading-actions .ant-checkbox-wrapper { font-size: inherit; }
+.mi-cross-asset__heading-actions .ant-switch { margin: 0; }
 .mi-cross-asset__chart-actions, .mi-cross-asset__quote-heading, .mi-cross-asset__status { display: flex; align-items: center; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
 .mi-cross-asset__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-cross-asset-gap); }
 .mi-cross-asset__body > * { min-width: 0; box-sizing: border-box; }

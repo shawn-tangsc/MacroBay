@@ -516,16 +516,20 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
       macroReading: { atMs: refusedAt, sourceFailure: 'symbol-not-supported' }
     })
     try {
-      // 表里：整行只剩一句状态，没有数字、没有窗口、没有那句「偏旧 · 截至 …」。
+      // 默认开：这一行根本不出现（用户 2026-11-16 第二版口径）。
+      expect(page.host.querySelector('[data-status-row="dxy"]')).toBeNull()
+      // 图例里这条线也不出现。
+      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
+      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
+      // 关掉开关：整行遮住，只剩一句状态，没有数字、窗口、日期句。
+      const toggle = page.host.querySelector<HTMLElement>('[role="switch"]')!
+      await act(async () => toggle.click())
       const row = page.host.querySelector('[data-status-row="dxy"]')!
       expect(row.getAttribute('data-source-state')).toBe('unreadable')
       expect(row.textContent).toContain(text.sourceRefused)
       expect(row.querySelector('[data-asset-price]')).toBeNull()
       expect(row.querySelector('[data-asset-return]')).toBeNull()
       expect(row.querySelector('[data-reading-age]')).toBeNull()
-      // 图例里这条线根本不出现。
-      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
-      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
       // 原因只在 ⓘ 里说一次。
       const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
       await act(async () => hint.click())

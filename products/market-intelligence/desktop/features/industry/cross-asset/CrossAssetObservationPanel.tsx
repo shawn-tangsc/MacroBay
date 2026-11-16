@@ -191,8 +191,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   }
   // An unavailable snapshot contributes nothing: the macro rows fall back to 未接入 rather than to
   // a level the dashboard cannot vouch for.
-  // 默认**显示**：把缺失藏起来是我的判断，不该默认替读者做。勾上才隐藏。
-  const [hideUnavailable, setHideUnavailable] = useState(false)
+  // 默认**隐藏**（用户 2026-11-16 定）：开关关了才把这类行显示出来。
+  const [hideUnavailable, setHideUnavailable] = useState(true)
   const readings = macroSnapshot && macroSnapshot.state !== 'unavailable' ? macroSnapshot.readings : []
   /** 快照自己的时刻：判「偏旧」的时钟只取这一处，不读宿主时间（同一屏两次渲染不会给出两种答案）。 */
   const snapshotAsOfMs = macroSnapshot !== undefined && macroSnapshot.state !== 'unavailable'

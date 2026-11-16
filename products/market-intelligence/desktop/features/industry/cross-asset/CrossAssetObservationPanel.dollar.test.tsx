@@ -112,28 +112,23 @@ describe('the dollar row on the market-status table', () => {
     expect(age?.closest('button')).toBeNull()
   })
 
-  it('lets the reader hide rows whose source is unavailable, and shows them by default', async () => {
-    // 默认显示：把缺失藏起来是判断，不该替读者做；勾上才隐藏，取消就回来。
+  it('hides rows whose source is unavailable by default, and the switch brings the covered row back', async () => {
+    // 用户 2026-11-16 第二版：**默认开**（不显示这类行），开关关掉才显示；显示时整行遮住、只剩一句状态。
     const refused = { ...realReading(asOfMs - 48 * 60 * 60_000), sourceFailure: 'symbol-not-supported' as const }
     const host = await render(snapshotOf([refused]))
-    expect(dollarRow(host)?.getAttribute('data-source-state')).toBe('unreadable')
-    expect(host.querySelector('.mi-cross-asset__heading-actions')?.textContent).toContain(text.hideUnavailableRows)
-    const box = host.querySelector<HTMLInputElement>('.mi-cross-asset__heading-actions input[type="checkbox"]')!
-    await act(async () => box.click())
     expect(dollarRow(host)).toBeNull()
-    await act(async () => box.click())
-    expect(dollarRow(host)).not.toBeNull()
-  })
 
-  it('covers the whole row when the provider no longer carries the instrument', async () => {
-    // 用户 2026-11-16：源不能用就像关格一样整行挡住——不留旧水平、不留日期、不留说明句子。
-    const refused = { ...realReading(asOfMs - 48 * 60 * 60_000), sourceFailure: 'symbol-not-supported' as const }
-    const host = await render(snapshotOf([refused]))
+    const toggle = host.querySelector<HTMLElement>('[role="switch"]')!
+    expect(toggle.getAttribute('aria-label')).toBe(text.hideUnavailableRows)
+    await act(async () => toggle.click())
     const row = dollarRow(host)
     expect(row?.getAttribute('data-source-state')).toBe('unreadable')
     expect(row?.textContent).toContain(text.sourceRefused)
     expect(row?.querySelector('[data-asset-price]')).toBeNull()
     expect(row?.querySelectorAll('[data-asset-return]')).toHaveLength(0)
     expect(row?.querySelector('[data-reading-age]')).toBeNull()
+
+    await act(async () => toggle.click())
+    expect(dollarRow(host)).toBeNull()
   })
 })
