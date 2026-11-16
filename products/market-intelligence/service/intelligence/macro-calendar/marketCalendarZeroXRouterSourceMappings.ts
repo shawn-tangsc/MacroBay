@@ -94,6 +94,11 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214280': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '215018': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '213488': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
+  // 达拉斯三个子项（母族已有子项体系，词都在闭集里）与芝加哥 PMI（既有码）
+  '214207': { metricKey: 'US.DALLAS_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
+  '214209': { metricKey: 'US.DALLAS_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month' },
+  '214204': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL', periodRule: 'month' },
+  '214350': { metricKey: 'US.CHICAGO_PMI.SA.LEVEL', periodRule: 'month' },
   // 里奇蒙德一族（三个独立母码，不新开子项体系）：码本来就存在，只补映射。
   '212683': { metricKey: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
   '214237': { metricKey: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
