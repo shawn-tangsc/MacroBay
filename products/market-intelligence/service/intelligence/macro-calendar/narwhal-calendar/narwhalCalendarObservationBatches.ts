@@ -165,6 +165,20 @@ function releaseStatusOf(raw: string): CalendarReleaseStatus {
   return raw === 'scheduled' || raw === 'published' || raw === 'cancelled' ? raw : 'unknown'
 }
 
+/**
+ * `published` 的定义是**有实际值**（用户 2026-11-16 报的帝国大厦那条）。
+ *
+ * 源把一条标成 `published` 却只给了预期与前值时，原样落库会让「已发布优先」的取舍逻辑选中它——
+ * 那条就是这样成为权威的（预期 10，官方 18）。所以这类行退回 `backfilling`：值区照旧说
+ * 「未提供」，而 24 小时窗口过后由 `reconcileExpiredReleaseStatuses` 落成 `missing`。
+ *
+ * 判据只看**这一行自己的**实际值，不看同一条发布里别的 measure：一条发布里某个测度有值、
+ * 另一个没有，两行本来就该各自算。
+ */
+function publishedNeedsActual(raw: CalendarReleaseStatus, actual: string | undefined): CalendarReleaseStatus {
+  return raw === 'published' && (actual === undefined || actual.trim() === '') ? 'backfilling' : raw
+}
+
 function displayValueOf(raw: string | undefined): Record<string, string> | undefined {
   return raw === undefined || raw.length === 0 ? undefined : { displayValue: raw }
 }
@@ -269,7 +283,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
         }
         anyMapped = true
         rows.push({
-          kind: 'indicator', identityKind: 'code', status, fromMeasure: true,
+          kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, value.actual), fromMeasure: true,
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey, periodKey: period,
           scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
@@ -286,7 +300,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
     if (period !== undefined && period.length > 0 && release.values.length === 0) {
       if (primaryMetric !== undefined) {
         rows.push({
-          kind: 'indicator', identityKind: 'code', status,
+          kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
           ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey: primaryMetric, periodKey: period,
@@ -297,7 +311,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
       // 没有测度依据、但源名登记过事件类型 → 事件型行（照常显示，值区交给「未提供」）。
       if (eventCode !== undefined) {
         rows.push({
-          kind: 'event', identityKind: 'code', status,
+          kind: 'event', identityKind: 'code', status: publishedNeedsActual(status, undefined),
           ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           countryCode: release.country, metricKey: eventCode, periodKey: release.at.slice(0, 16),
           scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
@@ -310,7 +324,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
     if (period === undefined || period.length === 0) {
       if (eventCode !== undefined) {
         rows.push({
-          kind: 'event', identityKind: 'code', status,
+          kind: 'event', identityKind: 'code', status: publishedNeedsActual(status, first?.actual),
           countryCode: release.country, metricKey: eventCode, periodKey: release.at.slice(0, 16),
           scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
           timePrecision: 'minute',
@@ -335,7 +349,7 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
 
     // —— 四、有期间、没有值、且没有测度依据也没有事件码：源内身份显示 ——
     rows.push({
-      kind: 'event', identityKind: 'source', status, sourceLabel: release.name,
+      kind: 'event', identityKind: 'source', status: publishedNeedsActual(status, undefined), sourceLabel: release.name,
       ...(status === 'published' ? { valueState: 'missing' as const } : {}),
       countryCode: release.country, metricKey: release.releaseId, periodKey: period,
       scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,

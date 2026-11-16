@@ -119,14 +119,27 @@ describe('「有期间没值」不进 unmapped：它不是映射缺口', () => {
     expect(detailed.rows[0]!.status).toBe('scheduled')
   })
 
-  it('已发布无值、无测度依据但有事件码 → 事件型行 + 「未提供」', () => {
+  it('源说已发布但没有实际值 → 不落 published，退回待补值（用户 2026-11-16）', () => {
+    // 帝国大厦那条就是这样进库的：narwhal 标 published、只有预期与前值，而「已发布优先」的取舍
+    // 逻辑会把它当成权威。published 的定义是**有实际值**；没有实际值就只能退回待补值，
+    // 24 小时窗口过后由对账落 missing。
     const detailed = narwhalStandardRowInputsDetailed([
       release({ releaseId: 'nv-pub', name: 'Household debt', seriesId: 'usa-household-debt',
         period: '2026-09', status: 'published', eventDate: '2026-11-04', values: [] })
     ])
     expect(detailed.unmapped).toEqual([])
     expect(detailed.rows[0]!.metricKey).toBe('evt.household-debt')
-    expect(detailed.rows[0]!.valueState).toBe('missing')
+    expect(detailed.rows[0]!.status).toBe('backfilling')
+  })
+
+  it('有实际值的 published 照旧是 published', () => {
+    // 用表里登记过的 measure：没登记的 measure 会走「源内身份」那一支，测不到这条判据。
+    const detailed = narwhalStandardRowInputsDetailed([
+      release({ releaseId: 'nv-act', name: 'Employment situation', seriesId: 'usa-nonfarm-payrolls',
+        period: '2026-10', status: 'published', eventDate: '2026-11-06',
+        values: [{ measure: 'nonfarm_payrolls_change', concept: 'nonfarm_payrolls_change',
+          previous: '29', consensus: '50', actual: '165' }] })
+    ])
     expect(detailed.rows[0]!.status).toBe('published')
   })
 

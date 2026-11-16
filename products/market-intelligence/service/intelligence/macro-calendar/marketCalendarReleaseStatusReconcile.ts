@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
 import { deriveReleaseStatus, type DerivedReleaseStatus } from './marketCalendarReleaseStatusRule'
 
@@ -49,16 +50,22 @@ export function reconcileExpiredReleaseStatuses(database: DatabaseSync, input: R
   nowMs: number
 }>): ReleaseStatusReconcileReport {
   const before = countByStatus(database)
-  // 只碰「过期 + 状态还是 scheduled/unknown」的行：`published`/`cancelled`/新两态不动，避免来回改写。
+  // 状态字面量**只许出现在契约闭集里**（`marketCalendarReleaseStatusUnionGuard`）：能往下走的几档
+  // 从闭集派生，「已发布」单独走「没有实际值」那一支，取消与有值的已发布一律不动。
+  const reDerivable = marketCalendarPublicPolicy.releaseStatuses
+    .filter((status) => status !== 'published' && status !== 'cancelled')
+  // 只碰「过期 + 状态还能往下走」的行：`published`（有实际值）/`cancelled` 不动，避免来回改写。
+  // `backfilling` 也在里面：没有实际值的行会被写入端先退回 backfilling（见 `publishedNeedsActual`），
+  // 24 小时窗口一过就必须由这里落成 missing——否则它会永远停在「待补值」，也就是另一种谎。
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
       scheduled_date, scheduled_at, status, value_state, values_json
     from ${calendarStandardTablePolicy.eventsTable}
-    where scheduled_date <= ? and (status in ('scheduled', 'unknown')
+    where scheduled_date <= ? and (status in (${reDerivable.map(() => '?').join(', ')})
       -- **已发布却没有实际值**：只有预期值时不算发布（用户 2026-11-16 报的帝国大厦那条就是）。
       -- 「优先信已发布」的逻辑会选中它，所以这类行必须按规则退回去。
       or (status = 'published' and (json_extract(values_json, '$.actual') is null
         or trim(cast(json_extract(values_json, '$.actual') as text)) = '')))`)
-    .all(input.today) as unknown as Row[]
+    .all(input.today, ...reDerivable) as unknown as Row[]
   const update = database.prepare(`update ${calendarStandardTablePolicy.eventsTable} set status = ?
     where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
   let updated = 0

@@ -46,4 +46,16 @@ describe('published 必须有实际值', () => {
     expect(report.updated).toBe(0)
     expect((database.prepare('select status from mi_calendar_events').get() as { status: string }).status).toBe('published')
   })
+
+  it('写入端退回的 backfilling，窗口一过由对账落成 missing（不会永远停在待补值）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 写入端已经把「只有预期」的行退回 backfilling（帝国大厦那条的形状）。
+    upsertCalendarStandardRow(database, row(JSON.stringify({ consensus: '10', previous: '25.5' }), 'scheduled'))
+    reconcileExpiredReleaseStatuses(database, { today, nowMs: Date.parse(now) })
+    expect((database.prepare('select status from mi_calendar_events').get() as { status: string }).status).toBe('backfilling')
+    // 三天后再对账一次：窗口早过，必须落 missing。
+    reconcileExpiredReleaseStatuses(database, { today, nowMs: Date.parse('2026-11-19T13:40:00.000Z') })
+    expect((database.prepare('select status from mi_calendar_events').get() as { status: string }).status).toBe('missing')
+  })
 })
