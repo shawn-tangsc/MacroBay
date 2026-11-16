@@ -15,7 +15,8 @@ Already downloaded an installer? See [Download and install](./download-and-insta
 - A desktop session capable of running Electron
 - A model provider account and API key for the first real conversation
 
-The current release is developed and verified on macOS. Windows and Linux builds have not been
+macOS is the primary development and build platform; it was actually installed and used during 0.4.0,
+and has not been re-verified by a real install since. Windows and Linux builds have not been
 validated end to end yet; treat them as experimental.
 
 ## Install dependencies
