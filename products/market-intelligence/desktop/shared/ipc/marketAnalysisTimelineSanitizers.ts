@@ -161,7 +161,10 @@ function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'
 
 function sanitizeConclusion(value: unknown): AnalysisConclusion | undefined | false {
   if (value === undefined || value === null) return undefined
-  if (!isExactRecord(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'])) return false
+  // `newsImpact` 是 R37 加给按条解读的字段（schema 3）：详情抽屉不渲染它，但它存在时
+  // 不能把整份结论判成不可读——多一个可选字段就让时间轴详情打不开，是今天线上那次
+  // 「读取失败」的直接原因。
+  if (!isExactRecordWithOptionals(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'], ['newsImpact'])) return false
   const direction = sanitizeDirectionKey(value.direction)
   if (!direction || !isText(value.summary) || !isText(value.change) || !isText(value.causalChain) ||
     !(value.macro === null || isText(value.macro)) || !(value.evidenceStrength === null || isText(value.evidenceStrength))) return false

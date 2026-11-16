@@ -82,6 +82,39 @@ describe('marketAnalysisTimelineClient', () => {
     expect(result.state === 'available' ? result.detail.summary.eventAssessment : undefined).toBeUndefined()
   })
 
+  it('keeps a schema-3 conclusion readable when it carries the per-news newsImpact field', async () => {
+    // R37 给按条解读的结论加了 newsImpact。详情抽屉不渲染它，但**它存在时不能把整份结论
+    // 判成不可读**——线上 2026-11-17 07:26 那次「读取失败」就是这一条：多一个可选字段，
+    // 时间轴详情和最新结论卡整块打不开。
+    const entry = {
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
+      occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '偏空。', direction: 'bearish' as const, version: 1
+    }
+    const summary = {
+      id: 'mi-as-1', schemaVersion: 3, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
+      conclusion: {
+        direction: 'bearish', summary: '偏空。', change: 'ETF 净流出。', causalChain: '资金流出 → 承压。',
+        conditions: ['持续流出。'], macro: null, evidenceStrength: null, dataGaps: [],
+        newsImpact: { verdict: 'evaluated', checks: [{ effect: 'supports', factId: 'mi-fact-1' }] }
+      },
+      knownFacts: [], transmissionHypotheses: [], marketReaction: [], supportingEvidence: [], counterEvidence: [], scenarios: [],
+      directions: [], nextCatalysts: [], dataCaveats: [], evidenceRefs: ['mi-ev-1'], createdAt: asOf
+    }
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method === 'marketAnalysis.getAnalysisRun') return {
+        id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
+        queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 1
+      }
+      if (method === 'marketAnalysis.getSummary') return summary
+      return []
+    })
+    vi.stubGlobal('window', { platform: { products: { invoke } } })
+
+    const result = await marketAnalysisTimelineClient.getDetail(entry)
+    expect(result.state).toBe('available')
+    expect(result.state === 'available' ? result.detail.summary.conclusion?.direction : undefined).toBe('bearish')
+  })
+
   /**
    * 「这条结论是用英文写的」这句事实只能来自记录本身：
    * v2 摘要带 `proseLanguage`，v1 摘要没有它——读出来就是不标注，绝不当成当前语言，
