@@ -103,6 +103,8 @@ export const marketIntelligenceProductManifest = {
     { method: marketCalendarPublicPolicy.methods.queryUnmappedMonth },
     // 事件清单：只读、渲染专用（核对「每个事件去哪看官方发布」）。
     { method: marketCalendarPublicPolicy.methods.queryEvents },
+    // 映射规则表：只读、渲染专用。
+    { method: marketCalendarPublicPolicy.methods.queryMappingRules },
     { method: marketCalendarPublicPolicy.methods.getCollectionFreshness },
     { method: marketCalendarPublicPolicy.methods.refreshNow },
     { method: macroMarketSnapshotPublicPolicy.method },

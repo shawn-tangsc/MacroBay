@@ -18,6 +18,7 @@ import { linkZeroXRouterEvent, zeroXRouterOfficialEventLinks } from '../0xrouter
 import { createMacroCalendarWriteActions } from '../macroCalendarWriteActions'
 import { listUnmappedCalendarObservationsForRendering } from '../rendering/marketCalendarUnmappedMonthRead'
 import { readCalendarEventIndex } from '../rendering/marketCalendarEventIndexRead'
+import { readCalendarMappingRules } from '../rendering/marketCalendarMappingRulesRead'
 import {
   isEmpty,
   isProviderInput,
@@ -131,6 +132,11 @@ export function registerMacroEconomicCalendarIpc(
     } catch {
       return { state: 'unavailable', reasonCode: 'query-unavailable' }
     }
+  })
+  /** **映射规则表**（只读、渲染专用）：已映射 85 条 + 未映射 id（按行数排序）+ 三个计数。 */
+  register(productId, marketCalendarPublicPolicy.methods.queryMappingRules, async () => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    return readCalendarMappingRules(unmappedMonth.database)
   })
   // One read method, no payload: the caller asks "how old is the calendar", never "how old
   // is this source in this month". A read that fails answers `unavailable`, never "nothing".

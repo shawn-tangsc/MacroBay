@@ -91,6 +91,8 @@ export const marketCalendarPublicPolicy = Object.freeze({
     queryUnmappedMonth: 'intelligence.macro.marketCalendar.queryUnmappedMonth',
     /** 事件清单（一行一个事件身份，渲染专用只读口）：核对「每个事件去哪看官方发布」。 */
     queryEvents: 'intelligence.macro.marketCalendar.queryEvents',
+    /** 映射规则表（只读，渲染专用）：现有规则 + 库里未映射的源内 id。 */
+    queryMappingRules: 'intelligence.macro.marketCalendar.queryMappingRules',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)
