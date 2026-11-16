@@ -31,7 +31,10 @@ export const zeroXRouterProvider: ProviderDefinition = provider({
       src({ purposes: ['calendar'], sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: 'Market calendar · economic data', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: false }, requiresProxy: true }),
       src({ purposes: ['calendar'], sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: 'Market calendar · financial events', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: false }, requiresProxy: true }),
       src({ purposes: ['calendar'], sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: 'Market calendar · central bank activities', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: false }, requiresProxy: true }),
-      src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: [], maintenanceOnly: true, collection: 'none', capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
+      /* 备源（用户 2026-11-17：「旧源给我加回来，互相补充，新的覆盖旧的」）：它重新声明`etf-net-flow`
+         并按作业采——主源 CryptoETF 不可用时由刷新链的优先级解析退到它；两个都开着不再冲突。
+         数据行仍按各自来源打标，窗口契约不允许混源，所以同一轮永远只有一个源的窗口。 */
+      src({ purposes: ['dashboard', 'briefing'], sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', provides: ['etf-net-flow'], collection: 'job', readiness: 'live', capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
     ]
   })
 

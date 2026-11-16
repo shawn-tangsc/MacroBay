@@ -427,7 +427,7 @@ export const agentRegistry: readonly AgentDefinition[] = [
     activation: 'available',
     groups: [
       { groupId: 'fear-greed', agentId: 'crypto', tier: 'required', sourceIds: ['alternative-fear-greed'] },
-      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', cryptoEtfSourcePolicy.sourceId, 'realmarketapi-market', 'twelve-data-market'] },
+      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', cryptoEtfSourcePolicy.sourceId, '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market'] },
       { groupId: 'funding-rate', agentId: 'crypto', tier: 'required', sourceIds: ['binance-futures-positioning'] },
       {
         groupId: 'macro-calendar',

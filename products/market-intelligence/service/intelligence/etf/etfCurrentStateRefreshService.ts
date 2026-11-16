@@ -3,7 +3,7 @@ import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
 import { reportSettledEtfRevisions } from './etfSettledRevision'
-import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, type EtfAsset, type EtfDailyFlow } from './etfCurrentStateWindow'
+import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, type EtfAsset, type EtfDailyFlow, type EtfFlowSourceId } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
 export const etfCurrentStateRefreshAdmissionPolicy = Object.freeze({
@@ -26,9 +26,11 @@ export function createEtfCurrentStateRefreshService(deps: {
    * 不许在启动时算一次缓存起来——排期是异步注册的，早于排期的那几轮会误判成 none。
    */
   resolveFactSource: () => Promise<FactSourceResolution>
-  isEnabled: () => Promise<boolean>
-  hasCredential: () => Promise<boolean>
-  requestWindow: () => Promise<EtfWindowRequestResult>
+  /** 按**解析出来的那个源**问开关与凭据（备源有它自己的一把 key）。 */
+  isEnabled: (sourceId: string) => Promise<boolean>
+  hasCredential: (sourceId: string) => Promise<boolean>
+  /** 按**解析出来的那个源**取窗口（主源不可用时解析器会给出备源）。 */
+  requestWindow: (sourceId: EtfFlowSourceId) => Promise<EtfWindowRequestResult>
   store: Pick<EtfCurrentStateStore, 'replace'> & Partial<Pick<EtfCurrentStateStore, 'read'>>
   now: () => string
   /**
@@ -45,23 +47,27 @@ export function createEtfCurrentStateRefreshService(deps: {
       // 解析每轮现算。冲突 fail-closed：这一轮谁都不写，绝不挑第一个。
       const resolution = await deps.resolveFactSource()
       if (resolution.kind === 'conflict') return Object.freeze({ state: 'unavailable' as const, reason: 'fact.source-conflict' as const })
-      // 今天只有 CryptoETF 被授权采；解析出来不是它（或没有）就停手，别拿错客户端静默去采。
-      if (resolution.kind !== 'resolved' || resolution.sourceId !== etfCurrentStateRefreshAdmissionPolicy.sourceId) return unavailable()
-      if (!await enabled(deps.isEnabled) || !await enabled(deps.hasCredential)) return unavailable()
+      // 两个源都授权采（**主源 CryptoETF、备源 0xRouter**，优先级由装配处的解析器决定）；
+      // 解析出来不在允许集里（或没有）就停手，别拿错客户端静默去采。
+      if (resolution.kind !== 'resolved') return unavailable()
+      const resolvedSource = resolution.sourceId
+      if (!(etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(resolvedSource)) return unavailable()
+      const sourceId = resolvedSource as EtfFlowSourceId
+      if (!await enabled(() => deps.isEnabled(sourceId)) || !await enabled(() => deps.hasCredential(sourceId))) return unavailable()
       const fetchedAt = deps.now()
       const currentUtcDate = etfCurrentStateRefreshAdmissionPolicy.currentUtcDate(fetchedAt)
       if (!currentUtcDate) return unavailable()
       try {
-        const requested = await deps.requestWindow()
+        const requested = await deps.requestWindow(sourceId)
         if (requested.state === 'unavailable') return unavailable()
         const previous = requested.state === 'partial' && deps.store.read ? await deps.store.read() : null
         // 换源期的 partial 不许跨源合并：上一次窗口是旧来源时，补进来的两半会混源，整窗校验必红。
         // 保留旧窗口、整轮 unavailable，等两支都成功再整窗替换。
-        if (requested.state === 'partial' && previous?.snapshot && etfWindowSource(previous.snapshot.window) !== etfCurrentStateRefreshAdmissionPolicy.sourceId) return unavailable()
+        if (requested.state === 'partial' && previous?.snapshot && etfWindowSource(previous.snapshot.window) !== sourceId) return unavailable()
         const btc = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.btc, requested.btc) : requested.btc
         const eth = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.eth, requested.eth) : requested.eth
         if (!btc || !eth) return unavailable()
-        const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate })
+        const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate, sourceId })
         if (!built) return unavailable()
         // 写之前先留一份旧窗口**和它被读到的时刻**：只有这两样一起，才知道「上次读到它时
         // 已经定稿了吗」——只看当前这一读，会把补报完成当成判后又变。
@@ -116,9 +122,11 @@ function buildWindow(input: Readonly<{
   eth: readonly EtfFlowHistoryRow[]
   fetchedAt: string
   currentUtcDate: string
+  /** 这一窗的数据来自哪个源：行上如实写它，别把备源的数记成主源的。 */
+  sourceId: EtfFlowSourceId
 }>) {
-  const btc = toFlows(input.btc, 'BTC', input.fetchedAt, input.currentUtcDate)
-  const eth = toFlows(input.eth, 'ETH', input.fetchedAt, input.currentUtcDate)
+  const btc = toFlows(input.btc, 'BTC', input.fetchedAt, input.currentUtcDate, input.sourceId)
+  const eth = toFlows(input.eth, 'ETH', input.fetchedAt, input.currentUtcDate, input.sourceId)
   if (!btc || !eth) return undefined
   const completeDates = btc.map((flow) => flow.tradingDate)
     .filter((date) => eth.some((flow) => flow.tradingDate === date))
@@ -136,7 +144,7 @@ function buildWindow(input: Readonly<{
   return Object.freeze({ ...built.window, ...(revision ? { revision } : {}) })
 }
 
-function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string): readonly EtfDailyFlow[] | undefined {
+function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string, sourceId: EtfFlowSourceId): readonly EtfDailyFlow[] | undefined {
   const dates = new Set<string>()
   const flows: EtfDailyFlow[] = []
   for (const row of rows) {
@@ -147,7 +155,7 @@ function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt:
     flows.push(Object.freeze({
       asset, tradingDate, netFlowUsd: row.changeUsd,
       observedAt: `${tradingDate}T00:00:00.000Z`, fetchedAt,
-      source: etfCurrentStateRefreshAdmissionPolicy.sourceId,
+      source: sourceId,
       ...(row.updateTime ? { sourceRevision: row.updateTime } : {})
     }))
   }

@@ -10,6 +10,11 @@ import { allSources } from './providerRegistry'
  * **一次固定下来的改前事实**：派生一旦让某个源凭空多出 `dashboard`，读者就会在没被要求的情况下
  * 在看板上看到它，那是可见行为变化而不是重构。
  */
+/**
+ * **2026-11-17 的一处有意的改动**：`0xrouter-aggregate-provider` 从 `[]` 变成 `['dashboard']`。
+ * 这不是派生漂移，是用户要求（「旧源给我加回来，互相补充，新的覆盖旧的」）——它重新声明
+ * `etf-net-flow` 作 CryptoETF 的备源，因此出现在看板的 ETF 那一格。除此之外逐源一字不动。
+ */
 describe('the derived panels match what the registry declared before purposes existed', () => {
   it('keeps every source on exactly the same panels, neither added nor removed', () => {
     expect(allSources().map((source) => [source.sourceId, source.panels])).toEqual([
@@ -46,7 +51,7 @@ describe('the derived panels match what the registry declared before purposes ex
     ['macro-calendar-0xrouter-economic-data', ['economic-calendar']],
     ['macro-calendar-0xrouter-financial-events', ['economic-calendar']],
     ['macro-calendar-0xrouter-central-bank-activities', ['economic-calendar']],
-    ['0xrouter-aggregate-provider', []],
+    ['0xrouter-aggregate-provider', ['dashboard']],
     /* Narwhal 三条日历源已进注册表（另一条线），快照按它在 provider 顺序里的位置登记。 */
     ['macro-calendar-narwhal-economic-data', ['dashboard', 'economic-calendar']],
     ['macro-calendar-narwhal-financial-events', ['dashboard', 'economic-calendar']],

@@ -46,11 +46,19 @@ describe('the ETF cell asks for a fact instead of naming a supplier', () => {
     expect(capitalCell.fact).toBe('etf-net-flow')
   })
 
-  it('takes the supplier from the resolver, so a second source needs no edit here', () => {
+  it('names both the primary and the standby source for the same fact', () => {
+    // 2026-11-17：旧源加回来作备源。格子表里主源 + 备源各一行（备源是 `fallback`，默认关），
+    // 两行声明的是**同一个事实**——谁真的在供由刷新链按优先级解析，界面不写死供应商。
+    const etfRows = DASHBOARD_SOURCE_MODULES.find((module) => module.id === 'capital')!.cells
+      .filter((cell) => cell.sourceId === 'cryptoetf-etf-flows' || cell.sourceId === '0xrouter-aggregate-provider')
+    expect(etfRows.map((row) => row.sourceId)).toEqual(['cryptoetf-etf-flows', '0xrouter-aggregate-provider'])
+    expect(etfRows.map((row) => row.fallback === true)).toEqual([false, true])
+    // 两个源都声明了这个事实（注册表一处）：解析器因此会看到两个候选，优先级在刷新链里判。
+    const declared = allSources().filter((source) => source.provides?.includes(capitalCell.fact!) === true)
+    expect(declared.map((source) => source.sourceId).sort()).toEqual(['0xrouter-aggregate-provider', 'cryptoetf-etf-flows'])
     const fromRegistry = allSources().map((source) => ({
       sourceId: source.sourceId, provides: source.provides, enabled: true, jobRegistered: true, readiness: source.readiness
     }))
-    expect(resolveFactSource({ factId: capitalCell.fact!, sources: fromRegistry }))
-      .toEqual({ kind: 'resolved', sourceId: 'cryptoetf-etf-flows' })
+    expect(resolveFactSource({ factId: capitalCell.fact!, sources: fromRegistry }).kind).toBe('conflict')
   })
 })

@@ -9,6 +9,7 @@ import { projectJobRegistration } from './application/sourceJobRegistration'
 import { createCryptoEtfFlowClient } from './application/cryptoEtfFlowClient'
 import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
+import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
 import { createSourceRequestGovernanceQueue } from './application/sourceRequestGovernance'
 import { createEtfCurrentStateRefreshService } from './etf/etfCurrentStateRefreshService'
 import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore } from './store/etfCurrentStateStore'
@@ -127,6 +128,16 @@ export function createIntelligenceMarketData(input: {
     const profile = await profileStore.resolveProfile(cryptoEtfSourcePolicy.sourceId)
     return profile.credentialRef ? credentialStore.getByRef(profile.credentialRef) : null
   }
+  /**
+   * ETF 两个源的优先级（用户 2026-11-17：**新的覆盖旧的、旧的补新的**）。
+   * 数组顺序就是优先级：主源 CryptoETF 在前，备源 0xrouter 在后。
+   */
+  const etfSourcePrecedence = [cryptoEtfSourcePolicy.sourceId, zeroXRouterSourcePolicy.sourceId] as const
+  /** 每个源读它自己 profile 上的凭据；备源用的是 0xRouter 那把 key（与三路日历共用）。 */
+  const etfApiKey = async (sourceId: string): Promise<string | undefined> => {
+    const credential = sourceId === zeroXRouterSourcePolicy.sourceId ? await zeroXRouterCredential() : await cryptoEtfCredential()
+    return credential?.apiKey
+  }
   // One reader for the strip's macro and cross-asset feed lines: the same profile store and
   // credential store the collectors read, the macro store's own outcome notes, and the pipeline's
   // health for the generic FRED collector. The key itself never leaves the credential store.
@@ -160,19 +171,44 @@ export function createIntelligenceMarketData(input: {
         readiness: source.readiness
       })
     }
-    return resolveFactSource({ factId: 'etf-net-flow', sources: candidates })
+    // **优先级，不是冲突**（用户 2026-11-17：旧源加回来、互相补充、新的覆盖旧的）。
+    // 主源 CryptoETF 合格就用它；它不可用（没开/没作业/没就绪）才退到备源 0xRouter。
+    // 两个都开着时不再 fail-closed——那会让「两源互补」变成「两源都不采」。
+    const byId = new Map(candidates.map((candidate) => [candidate.sourceId, candidate]))
+    for (const sourceId of etfSourcePrecedence) {
+      const candidate = byId.get(sourceId)
+      if (candidate && candidate.enabled && candidate.jobRegistered && candidate.readiness === 'live') {
+        return Object.freeze({ kind: 'resolved' as const, sourceId })
+      }
+    }
+    return Object.freeze({ kind: 'none' as const })
   }
+  const zeroXRouterEtfFlowClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
   const etfCurrentStateRefresh = createEtfCurrentStateRefreshService({
     resolveFactSource: resolveEtfFactSource,
-    // 切换后这条链读新源的开关与凭据：用户没填 key 就是静默停采，不是旧源在替它采。
-    isEnabled: async () => (await profileStore.resolveProfile(cryptoEtfSourcePolicy.sourceId)).enabled,
-    hasCredential: async () => Boolean((await cryptoEtfCredential())?.apiKey),
-    requestWindow: async () => {
-      const credential = await cryptoEtfCredential()
-      if (!credential?.apiKey) return Object.freeze({ state: 'unavailable' as const })
+    // 每个源读**它自己的**开关与凭据：备源关了就是它不采，不会被主源的 key 顶替。
+    isEnabled: async (sourceId: string) => (await profileStore.resolveProfile(sourceId)).enabled,
+    hasCredential: async (sourceId: string) => Boolean(await etfApiKey(sourceId)),
+    requestWindow: async (sourceId: string) => {
+      const apiKey = await etfApiKey(sourceId)
+      if (!apiKey) return Object.freeze({ state: 'unavailable' as const })
       const toRows = (days: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[]) =>
         days.map((day) => Object.freeze({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd }))
-      const result = await cryptoEtfFlowClient.readSettledWindow(credential.apiKey)
+      // 两个源的客户端形状不同（一个按资产给 audit，一个直接给两支的行），各走各的分支。
+      if (sourceId === zeroXRouterSourcePolicy.sourceId) {
+        const zero = await zeroXRouterEtfFlowClient.requestWindow(apiKey)
+        // 这个客户端给的就是 `{ date, changeUsd }`（已经是窗口要的行形状），不再走 `toRows`。
+        if (zero.state === 'available') return Object.freeze({ state: 'available' as const, btc: zero.btc, eth: zero.eth })
+        if (zero.state === 'partial') {
+          return Object.freeze({
+            state: 'partial' as const,
+            ...(zero.btc ? { btc: zero.btc } : {}),
+            ...(zero.eth ? { eth: zero.eth } : {})
+          })
+        }
+        return Object.freeze({ state: 'unavailable' as const })
+      }
+      const result = await cryptoEtfFlowClient.readSettledWindow(apiKey)
       if (result.state === 'available') {
         return Object.freeze({ state: 'available' as const, btc: toRows(result.btc.days), eth: toRows(result.eth.days) })
       }

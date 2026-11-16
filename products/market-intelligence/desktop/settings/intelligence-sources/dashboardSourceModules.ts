@@ -68,6 +68,7 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   恐惧与贪婪: 'index',
   稳定币: 'stablecoin',
   ETF: 'etf',
+  'ETF（备用）': 'etf-fallback',
   永续持仓名义额: 'oi',
   资金费率: 'funding',
 }
@@ -102,7 +103,9 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
   moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.fearGreed.title', [['恐惧与贪婪', 'alternative-fear-greed']]),
   moduleOf('capital', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.capital', [
     ['稳定币', 'defillama-stablecoins'],
-    ['ETF', 'cryptoetf-etf-flows', false, undefined, 'etf-net-flow']
+    ['ETF', 'cryptoetf-etf-flows', false, undefined, 'etf-net-flow'],
+    /* 备源（用户 2026-11-17：旧源加回来、互相补充）：主源不可用时顶上的那一行，与「美元（备用）」同形态。 */
+    ['ETF（备用）', '0xrouter-aggregate-provider', true]
   ]),
   moduleOf('positioning', 'pages.intelligence.portal.dashboard.positioning.title', [
     ['永续持仓名义额', 'binance-futures-positioning'],

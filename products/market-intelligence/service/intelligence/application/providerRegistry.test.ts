@@ -31,7 +31,7 @@ function panelSourceIds(panelId: PanelId): string[] {
 }
 
 describe('provider registry contract', () => {
-  it('hands the ETF reading to the new source and stops the old one, without losing the calendar key', () => {
+  it('hands the ETF reading to the new source and keeps the old one as its standby, without losing the calendar key', () => {
     const source = getSource('cryptoetf-etf-flows')
     expect(source?.collection).toBe('adapter')
     expect(source?.purposes).toEqual(['dashboard', 'briefing'])
@@ -39,10 +39,13 @@ describe('provider registry contract', () => {
     // The four-state line follows an explicit flag, so it no longer doubles as a switch lock.
     expect(getProvider('cryptoetf')?.credentialStateLine).toBe(true)
     expect(getProvider('cryptoetf')?.category).toBe('crypto')
-    // The old aggregate source collects nothing but keeps the key the three calendars share.
-    const retired = getSource('0xrouter-aggregate-provider')
-    expect(retired?.collection).toBe('none')
-    expect(retired?.purposes).toEqual([])
+    // 备源（用户 2026-11-17「旧源给我加回来，互相补充，新的覆盖旧的」）：重新声明 ETF 净流、
+    // 按作业采；两个都开着不再冲突——优先级由刷新链的解析器决定（主源 CryptoETF 在前）。
+    const standby = getSource('0xrouter-aggregate-provider')
+    expect(standby?.collection).toBe('job')
+    expect(standby?.purposes).toEqual(['dashboard', 'briefing'])
+    expect(standby?.provides).toEqual(['etf-net-flow'])
+    expect(standby?.maintenanceOnly ?? false).toBe(false)
     expect(getProvider('0xrouter')?.credentialSourceId).toBe('0xrouter-aggregate-provider')
     const definition = getIntelligenceSourceDefinition('cryptoetf-etf-flows')!
     const config = resolveRuntimeConfig({
@@ -59,17 +62,14 @@ describe('provider registry contract', () => {
    * 判据不是「只有某一个 provider」，而是**带标记的 provider 必须真是「只验证密钥、还不采集」**——
    * 标记一旦被当成装饰挂在会采集的源上，那一行就会对读者说「本版不采集数据」的假话。
    */
-  it('declares the ETF fact on the source that runs, and on nothing else', () => {
+  it('declares the ETF fact on exactly the two sources that can serve it', () => {
     const claimants = allSources().filter((source) => source.provides?.includes('etf-net-flow') === true)
-    expect(claimants.map((source) => source.sourceId)).toEqual(['cryptoetf-etf-flows'])
-    // 旧锚已经摘了采集授权：声明了反而会被解析成候选。
-    expect(getSource('0xrouter-aggregate-provider')?.provides ?? []).toEqual([])
-    // 读者把它的 profile 关掉以后，解析结果是 none——不是猜一个、也不是 unknown。
-    const views = allSources().map((source) => ({ ...source, enabled: source.sourceId === 'cryptoetf-etf-flows' ? false : true, jobRegistered: true }))
-    expect(resolveFactSource({ factId: 'etf-net-flow', sources: views })).toEqual({ kind: 'none' })
+    expect(claimants.map((source) => source.sourceId).sort()).toEqual(['0xrouter-aggregate-provider', 'cryptoetf-etf-flows'])
+    // 通用解析器仍是 fail-closed（两源同时合格 = conflict）；**ETF 那条链自己按优先级解析**，
+    // 不调用它——见 `intelligenceModuleMarketData` 的 `etfSourcePrecedence`。
     const running = allSources().map((source) => ({ ...source, enabled: true, jobRegistered: true }))
-    expect(resolveFactSource({ factId: 'etf-net-flow', sources: running }))
-      .toEqual({ kind: 'resolved', sourceId: 'cryptoetf-etf-flows' })
+    const conflicted = resolveFactSource({ factId: 'etf-net-flow', sources: running })
+    expect(conflicted.kind).toBe('conflict')
   })
 
   it('keeps the verification-only marker only on providers that still collect nothing', () => {
@@ -189,13 +189,13 @@ describe('source projections', () => {
     }
   })
 
-  it('keeps 0xRouter out of the dashboard panel but configurable in the calendar panel', () => {
-    /* 2026-11-15 用户改口：0xRouter 三条日历源**恢复为读者可配置的补充源**
-       （「只有配置了的，才注册定时获取的任务」）。所以：
-       - 看板面板里仍然没有它（它不供看板事实）；
-       - 日历面板里**有**这三条，能开关、能被读到启用状态；
-       - ETF 那条仍是维护用（可见、可测、不采集）。 */
-    expect(panelView('dashboard')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(false)
+  it('keeps 0xRouter in both panels: dashboard as the ETF standby, calendar as the three feeds', () => {
+    /* 2026-11-17 用户改口（「旧源给我加回来，互相补充，新的覆盖旧的」）：0xRouter 的 ETF 源
+       **恢复采集**、重新声明 `etf-net-flow`，作 CryptoETF 的备源。所以：
+       - 看板面板里**有**它（ETF 那一格的备源行）；
+       - 日历面板里仍有那三条，能开关、能被读到启用状态；
+       - ETF 那条不再是「维护用」：有作业、可单跑、密钥可测。 */
+    expect(panelView('dashboard')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(true)
     expect(panelView('economic-calendar')?.providers.some((provider) => provider.providerId === '0xrouter')).toBe(true)
     const router = providerRegistry.find((provider) => provider.providerId === '0xrouter')
     expect(router?.sources.map((source) => source.sourceId)).toEqual([
@@ -209,7 +209,8 @@ describe('source projections', () => {
       expect(source.collection).toBe('job')
       expect(source.visibility).not.toBe('hidden')
     }
-    expect(router?.sources[3]).toMatchObject({ maintenanceOnly: true, collection: 'none', purposes: [], capabilities: { runNow: 'none', testConnection: true } })
+    expect(router?.sources[3]).toMatchObject({ collection: 'job', purposes: ['dashboard', 'briefing'], provides: ['etf-net-flow'], capabilities: { runNow: 'none', testConnection: true } })
+    expect(router?.sources[3]?.maintenanceOnly ?? false).toBe(false)
     expect(router?.sources[3]?.visibility).not.toBe('hidden')
   })
 
