@@ -14,7 +14,10 @@ import { productText } from '../../shared/i18n/productText'
 const events = vi.hoisted(() => ({
   queryMappingRules: async () => ({
     state: 'available' as const,
-    mapped: [{ sourceId: '214790', metricKey: 'US.X.SA.MOM', periodRule: 'same-month', basis: null, officialUrl: null }],
+    mapped: [
+      { sourceId: '214790', metricKey: 'US.X.SA.MOM', periodRule: 'same-month', basis: 'BLS · 发布页', officialUrl: 'https://www.bls.gov/news.release/cpi.nr0.htm' },
+      { sourceId: '10113', metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: 'same-month', basis: null, officialUrl: null }
+    ],
     unmapped: [{ sourceId: '10113', rowCount: 8, sampleLabel: '密歇根现况' }],
     counts: { mapped: 85, unmapped: 249, unmappedRows: 833 }
   })
@@ -60,4 +63,9 @@ it('opens the full event table from the calendar header button', async () => {
   // 两段各自渲染：已映射一条、未映射一个 id。
   expect(document.body.querySelector('[data-mapping-section="mapped"]')?.textContent).toContain('214790')
   expect(document.body.querySelector('[data-mapping-section="unmapped"]')?.textContent).toContain('10113')
+  // 官方查看显示**地址本身**（不是「官方 ↗」占位），没有地址的那条格子空着。
+  const links = [...document.body.querySelectorAll('[data-official]')]
+  expect(links).toHaveLength(1)
+  expect(links[0]!.textContent).toContain('bls.gov')
+  expect(links[0]!.getAttribute('title')).toBe('https://www.bls.gov/news.release/cpi.nr0.htm')
 })

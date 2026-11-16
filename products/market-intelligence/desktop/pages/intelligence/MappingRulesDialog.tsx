@@ -30,10 +30,18 @@ export type MappingRulesText = Readonly<{
   unavailable: string
   columns: Readonly<{ sourceId: string; metricKey: string; periodRule: string; basis: string; official: string }>
   unmappedColumns: Readonly<{ sourceId: string; rows: string; sample: string }>
-  official: string
 }>
 
 const PAGE_SIZES = [20, 50, 100] as const
+
+/**
+ * 地址在格子里省略中间：开头保留主机与路径前段、结尾保留最后一段，中间给省略号。
+ * 悬停仍能看到完整地址（`title`），点开是原文——读者要的是「哪个机构的哪一页」，不是一句「官方」。
+ */
+function shortUrl(value: string): string {
+  if (value.length <= 56) return value
+  return `${value.slice(0, 34)}…${value.slice(-18)}`
+}
 const has = (value: string | null | undefined): value is string => typeof value === 'string' && value !== ''
 
 export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Readonly<{
@@ -77,7 +85,10 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
                 {
                   title: text.columns.official, dataIndex: 'officialUrl',
                   render: (value: string | null) => has(value)
-                    ? <a href={value} target="_blank" rel="noreferrer" data-official>{text.official}</a>
+                    // 用户要的是**地址本身**（去求证、去复制），不是一个「官方 ↗」按钮。
+                    // 太长就省略中间，但 `title` 保留完整地址，悬停能看到。
+                    ? <a href={value} target="_blank" rel="noreferrer" title={value} data-official
+                      className="mi-catalog__url">{shortUrl(value)}</a>
                     : null
                 }
               ]} />}

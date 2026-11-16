@@ -406,3 +406,6 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 /* 表头吸顶：滚动时列名不跟着跑掉（滚动容器是 `.mi-catalog__table`，不是整页）。 */
 .mi-catalog__table .ant-table-thead > tr > th { position: sticky; top: 0; z-index: 1; }
 .mi-catalog__pager { flex: none; }
+/* 官方查看：直接显示地址本身。列可以宽（表格滚动），超长在格子内省略、`title` 带全址。 */
+.mi-catalog__url { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-meta); }
