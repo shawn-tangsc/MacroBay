@@ -86,11 +86,13 @@ the roadmap.
 
 ## Current status
 
-The app runs from source, and packaged installers ship too: macOS on Apple silicon is verified; the
-Intel build ships but has not been verified on Intel hardware; the Windows x64 installer builds in CI
-and on Windows 11 x64 and ships, with its installed app not yet accepted; Linux is not packaged.
-Both installers are unsigned and not notarized. All five channels send and receive one-to-one
-messages, one channel at a time. See [Status and limitations](reference/status-and-limitations.md).
+The app runs from source, and packaged installers ship too: the arm64 installer builds and ships with
+each release; it was installed and used by a user on an Apple silicon machine during 0.4.0, but has not
+been re-verified by a real install since 0.4.1. The Intel build ships but has not been verified on Intel
+hardware. The Windows x64 installer builds in CI and on Windows 11 x64 and ships, with no real install
+accepted yet (no Windows environment was available). Linux is not packaged. Both installers are
+unsigned and not notarized. All five channels send and receive one-to-one messages, one channel at a
+time. See [Status and limitations](reference/status-and-limitations.md).
 
 ## Documentation
 
