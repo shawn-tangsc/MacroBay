@@ -1114,6 +1114,32 @@ describe('AI 解读：点击触发（写端点）只把结果落到右栏', () =
     expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
   })
 
+  it('triggering on a non-selected row selects it first, so the section is about that row', async () => {
+    const invoke = vi.fn(async (_product: string, method: string, payload: { itemId?: string }) => {
+      if (method === READ) return { ...readNone, itemId: payload?.itemId ?? 'item-a' }
+      if (method === REQUEST) return { state: 'queued', itemId: payload?.itemId ?? 'item-a' }
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    await mountDrawer({ translationEnabled: false })
+    // 右键第二行（默认选中的是第一行）。
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
+    expect(rows.length).toBeGreaterThan(1)
+    const secondTitle = rows[1]?.querySelector('.mi-news-drawer__title')?.textContent ?? ''
+    await act(async () => { rows[1]?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 8, clientY: 8 })) })
+    await act(async () => {})
+    await act(async () => {})
+    const item = [...document.body.querySelectorAll<HTMLElement>('.ant-menu-item')].find((node) => node.textContent === 'AI 解读')
+    await act(async () => { item?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+
+    // 右栏切到第二行，那一节是提交中（不是“没反应”）。
+    const detailTitle = document.body.querySelector('.mi-news-drawer__detail h3')?.textContent ?? ''
+    expect(secondTitle.length).toBeGreaterThan(0)
+    expect(detailTitle).toBe(secondTitle)
+    expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+  })
+
   it('a queued request converges: the submitting state ends in a real result', async () => {
     let requested = false
     let readsAfterRequest = 0
