@@ -9,6 +9,7 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { crossAssetTextKeys } from './crossAssetTextKeys'
 import { LoadingState } from '@platform/ui/components/loading'
+import { TriangleAlert } from 'lucide-react'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 // 「偏旧」的阈值只认仓里那一处定义：另开一个数，两处迟早漂成两种说法（界面设计 2026-11-16）。
 import { dashboardPositioningPresentationPolicy } from '../../../pages/intelligence/dashboardOpenInterestModel'
@@ -209,5 +210,25 @@ export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
     </span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
     <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
+  </tr>
+}
+
+/**
+ * 供应商不再提供这个品种：**整行盖住**，只留一句状态。
+ *
+ * 与「格关了 / 读不到」同一套遮罩样式（用户 2026-11-16：源不能用就像关格一样挡住，不要说明文字）。
+ * 抽到行组件模块只为控面板体积，渲染一字未改。
+ */
+export function SourceUnavailableRow({ id, label, windows, statusText }: Readonly<{
+  id: MacroDriverId; label: string; windows: number; statusText: string
+}>): React.ReactElement {
+  return <tr aria-disabled="true" data-source-state="unreadable" data-status-row={id}>
+    <th scope="row"><span>{label}</span></th>
+    <td className="mi-cross-asset__state-cell" colSpan={1 + windows}>
+      <span className="mi-source-state" data-state="unreadable">
+        <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
+        {statusText}
+      </span>
+    </td>
   </tr>
 }

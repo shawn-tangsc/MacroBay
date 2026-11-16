@@ -32,7 +32,7 @@ import { CrossAssetQuoteLegStatus } from './CrossAssetQuoteLegStatus'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
 import {
-  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
+  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
   type MacroDriverId, type RowMetrics, type Text
 } from './crossAssetStatusRows'
 import { crossAssetTextKeys, crossAssetWindowLabelKeys } from './crossAssetTextKeys'
@@ -281,22 +281,12 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         </td>
       </tr>
     }
-    /**
-     * 供应商不再提供这个品种：**整行盖住**，只留一句状态——与「格关了 / 读不到」同一套样式
-     * （用户 2026-11-16：不要说明文字，源不能用就像关格一样挡住；原因只在图标题的 ⓘ 里）。
-     */
+    // 供应商不再提供这个品种：整行盖住（行组件模块里的那一个），原因只在图标题的 ⓘ 里。
     if (row.id === 'dxy' || row.id === 'gold') {
       const reading = crossAssetMacroReading(readings, row.id)
       if (reading?.sourceFailure !== undefined) {
-        return <tr aria-disabled="true" data-source-state="unreadable" data-status-row={row.id}>
-          <th scope="row"><span>{text.assetLabels[row.id]}</span></th>
-          <td className="mi-cross-asset__state-cell" colSpan={1 + crossAssetWindows.length}>
-            <span className="mi-source-state" data-state="unreadable">
-              <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
-              {resolveProductText(crossAssetTextKeys.sourceRefused)}
-            </span>
-          </td>
-        </tr>
+        return <SourceUnavailableRow key={row.id} id={row.id} label={text.assetLabels[row.id]}
+          windows={crossAssetWindows.length} statusText={resolveProductText(crossAssetTextKeys.sourceRefused)} />
       }
     }
     return row.state === 'loading'
