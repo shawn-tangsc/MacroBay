@@ -8,6 +8,7 @@ import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/ma
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
+import { fixCalendarEventCountries } from '../intelligence/macro-calendar/marketCalendarEventCountryFix'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
@@ -101,6 +102,11 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       if (crossSource.mergedGroups > 0) {
         console.warn(`[macro-calendar] 跨源合并：${crossSource.groups} 组里合并 ${crossSource.mergedGroups} 组、`
           + `删 ${crossSource.removedRows} 行；值冲突保留 ${crossSource.conflictedGroups} 组`)
+      }
+      // 事件国家按机构归属（迁移 19）：威廉姆斯归 USA、拉加德/连恩归 EMU——按机构，不按开会地点。
+      const countryFixed = fixCalendarEventCountries(database)
+      if (countryFixed.updated > 0) {
+        console.warn(`[macro-calendar] 事件国家修正：扫描 ${countryFixed.scanned} 条规则、改写 ${countryFixed.updated} 行`)
       }
       // 同源中英两条合并（迁移 18）：源对同一件事发了中文名、英文名两条，身份第一段相同，库里是两行。
       // 合并后中文名做显示、英文原文进 `source_label_en` 仍可搜；台账改指到留下的那一行。
