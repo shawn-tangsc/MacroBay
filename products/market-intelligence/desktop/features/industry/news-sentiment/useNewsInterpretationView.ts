@@ -9,11 +9,11 @@ export type NewsInterpretationFailure = Readonly<{ itemId: string; sentenceKey: 
 /** 轮询间隔：运行没结束前，界面每 3 秒重读一次。 */
 export const NEWS_INTERPRETATION_POLL_MS = 3_000
 /**
- * 等多久就认定「等不到了」。一次解读正常 1.5–2 分钟，给到 3 分钟。
+ * 等多久就认定「等不到了」。一次解读正常 1.5–2 分钟，给到 4 分钟（约两倍余量）：等太短会把一次慢跑误判成失败。
  * 到点无论服务端说什么，界面都必须落失败态并给重试——「正在生成」绝不允许永驻：
  * 服务端挂住、应用中途被关、或者一次运行卡在 inflight，读者都得拿到一个能行动的结论。
  */
-export const NEWS_INTERPRETATION_WAIT_MS = 180_000
+export const NEWS_INTERPRETATION_WAIT_MS = 240_000
 
 /**
  * 「AI 解读」的读取 + 提交状态机（R37）：抽屉只保留渲染与挂载，这一块单独成模块。
