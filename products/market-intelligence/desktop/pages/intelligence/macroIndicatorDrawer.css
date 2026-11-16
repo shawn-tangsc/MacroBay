@@ -392,3 +392,17 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 .mk-mcell__repeat { margin-left: 2px; flex: none; font-style: normal; font-size: var(--font-meta); color: var(--caution); }
 /* 目录表的日期类格子不换行：以前「最近一次发布」被挤成两行，一列两行会让整表行高不齐。 */
 .mi-catalog__cell-nowrap { white-space: nowrap; }
+
+/*
+ * 事件目录弹框：**给高度、内部纵向三段**（筛选固定 / 表格滚动 / 分页固定）。
+ *
+ * 只放宽宽度不给高度时，antd 弹框按内容自适应，表格被压到只剩表头——用户看到的就是「几乎没行」。
+ * 高度取 `min(80vh, 760px)`：1280×800 下是 640，1440×900 下是 720；两者都放得下 10 行以上。
+ */
+.mi-catalog-dialog .ant-modal-body { max-height: none; }
+.mi-catalog__body { display: flex; flex-direction: column; height: min(80vh, 760px); min-height: 0; }
+.mi-catalog__filters { flex: none; }
+.mi-catalog__table { flex: 1; min-height: 0; overflow: auto; }
+/* 表头吸顶：滚动时列名不跟着跑掉（滚动容器是 `.mi-catalog__table`，不是整页）。 */
+.mi-catalog__table .ant-table-thead > tr > th { position: sticky; top: 0; z-index: 1; }
+.mi-catalog__pager { flex: none; }

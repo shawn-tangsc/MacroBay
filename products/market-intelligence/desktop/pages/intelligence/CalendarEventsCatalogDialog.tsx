@@ -110,6 +110,9 @@ export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, 
     resolveText={(key) => key === 'calendarCatalogTitle' ? text.title : key}
     onClose={onClose}
     className="mi-catalog-dialog">
+    {/* 弹框给高度、内部纵向 flex：筛选固定、表格滚动、分页固定在底部。
+        以前只放宽了宽度没给高度，弹框按内容自适应，表被压到只剩表头。 */}
+    <div className="mi-catalog__body">
     <div className="mi-catalog__filters">
       <Input allowClear value={filters.name} placeholder={text.nameFilter} aria-label={text.nameFilter}
         onChange={(event) => { setFilters({ ...filters, name: event.target.value }); setPage(1) }} />
@@ -118,7 +121,7 @@ export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, 
       <Input allowClear value={filters.importance} placeholder={text.importanceFilter} aria-label={text.importanceFilter}
         onChange={(event) => { setFilters({ ...filters, importance: event.target.value }); setPage(1) }} />
     </div>
-    {body}
+    <div className="mi-catalog__table">{body}</div>
     {state === 'ready' && filtered.length > 0
       ? <div className="mi-catalog__pager">
         <Pagination
@@ -127,5 +130,6 @@ export function CalendarEventsCatalogDialog({ open, onClose, text, rows, state, 
           onChange={(nextPage, nextSize) => { setPageSize(nextSize); setPage(1) }} />
       </div>
       : null}
+    </div>
   </Modal>
 }
