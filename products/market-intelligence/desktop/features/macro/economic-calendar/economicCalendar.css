@@ -281,6 +281,10 @@ div.mi-economic-calendar__event:hover { background: transparent; }
 .mi-economic-calendar__values div:last-child { border-bottom: 0; }
 .mi-economic-calendar__values span { color: var(--mi-economic-muted); font-size: 11px; }
 .mi-economic-calendar__values strong { color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; text-align: right; }
+/* 值 + 标记：同一个右侧子项里，标记紧贴值（界面设计 2026-11-16）。
+   标记是**说明**，不是控件：无背景/描边/内距/hover/cursor，不进 Tab 序；字族跟正文，不继承值的等宽。 */
+.mi-calendar-value { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.mi-calendar-value__marker { color: var(--mi-economic-muted); font-family: inherit; font-size: var(--font-meta); font-weight: 400; }
 /* 预期差是这一屏的判断，不是又一条读数：给它底色、描边和更大字号；方向用既有颜色 token。 */
 .mi-economic-calendar__values [data-market-value='surprise'] { align-items: center; }
 .mi-economic-calendar__values [data-market-value='surprise'] span { color: var(--mi-economic-text); font-weight: 650; }

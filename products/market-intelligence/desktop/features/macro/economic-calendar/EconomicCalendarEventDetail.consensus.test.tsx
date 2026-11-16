@@ -140,6 +140,32 @@ describe('the official detail’s expectation row', () => {
     expect(row.textContent).toContain(text.details.consensusFromMarket)
   })
 
+  /**
+   * 标记的**位置**（界面设计 2026-11-16 抓出的反例）：以前它是值行的第三个子项，被
+   * `space-between` 推到行右端，看起来像「行尾可点的动作」；而且在同一个类名上全仓没有一条 CSS。
+   *
+   * 定稿：值 + 标记包在**同一个右侧子项**里，标记紧贴值、用 `·` 连、间距 4；不进 Tab 序、不加 role，
+   * 但读屏要能念到。这一条同时钉住「那一行只有两个子项」——标记回到行尾就会红。
+   */
+  it('keeps the source note inside the value cell, not as a row-end action', async () => {
+    const host = await render({ ...base, officialConsensus: null, linkedConsensus: { displayValue: '6.5万' } })
+    const row = host.querySelector('[data-consensus="market"]')!
+    // 只有两个子项：标签 + 值块。多一个子项就是「被推到行右端」的那个形状。
+    expect(row.children).toHaveLength(2)
+    const marker = row.querySelector('[data-value-marker="consensus-from-market"]')!
+    expect(marker.textContent).toContain('·')
+    expect(marker.textContent).toContain(text.details.consensusFromMarket)
+    // 标记和值在同一个父节点里。
+    expect(marker.parentElement?.querySelector('strong')?.textContent).toBe('6.5万')
+    // 不可聚焦、不是控件。
+    expect(marker.getAttribute('tabindex')).toBeNull()
+    expect(marker.getAttribute('role')).toBeNull()
+    expect(marker.getAttribute('aria-hidden')).toBeNull()
+    expect(marker.tagName).not.toBe('BUTTON')
+    // 那个没有 CSS 的遗留类名一并消失。
+    expect(host.querySelector('.mi-economic-calendar__consensus-source')).toBeNull()
+  })
+
   it('says the expectation is missing only when neither side has an observation', async () => {
     const host = await render({ ...base, officialConsensus: undefined, linkedConsensus: undefined })
     const row = host.querySelector('[data-consensus]')!

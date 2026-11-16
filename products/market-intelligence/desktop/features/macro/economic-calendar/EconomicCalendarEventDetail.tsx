@@ -185,10 +185,16 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
         return <>
           <div data-consensus={consensus.state === 'value' ? consensus.source : consensus.state}>
             <span>{text.market.consensus}</span>
-            <strong>{shown}</strong>
-            {consensus.state === 'value' && consensus.source === 'market'
-              ? <em className="mi-economic-calendar__consensus-source">{text.details.consensusFromMarket}</em>
-              : null}
+            {/* 值 + 标记**同一个右侧子项**（界面设计 2026-11-16）：以前那枚 <em> 是这一行的第三个子项，
+                被 `space-between` 推到行右端，看起来像「行尾可点的动作」，而且那个类名全仓没有 CSS。
+                标记紧贴值、用 `·` 连、间距 4；不进 Tab 序、不加 role，读屏照常能念到。 */}
+            <span className="mi-calendar-value">
+              <strong>{shown}</strong>
+              {consensus.state === 'value' && consensus.source === 'market'
+                ? <span className="mi-calendar-value__marker" data-value-marker="consensus-from-market">
+                  {`· ${text.details.consensusFromMarket}`}</span>
+                : null}
+            </span>
           </div>
           {consensus.state === 'unreadable'
             ? <p className="mi-economic-calendar__comparison-rule" data-consensus-gap>{linkedConsensusFailure === true
