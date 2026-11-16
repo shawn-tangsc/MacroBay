@@ -5,6 +5,7 @@ import type { StandardMonthRow } from './marketCalendarStandardMonthRead'
 import { officialFeedIdOf, sourceFeedIdOf } from './marketCalendarSourceFeedIds'
 import { marketCalendarCountryNames } from './marketCalendarDisplayNameTables'
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
+import { hierarchyForMetricKey } from './marketCalendarZeroXRouterSourceMappings'
 
 /**
  * 标准行 → 日历事件（`MarketCalendarEvent`）。**`queryMonth` 的对外形状因此不变**——
@@ -107,6 +108,10 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     // **官方行不贴「未核验」**：它本身就是核验过的来源。判据只有一处——feed id 是不是官方那三条。
     coverage: officialFeedIdOf(row.sourceProviderId) === undefined ? 'observed-unverified' as const : 'available' as const,
     timePrecision: row.timePrecision, releaseStatus: row.status, rowKind: row.rowKind,
+    // **指标层级**（用户 2026-11-17）：只有规范码行才有层级；普通指标没有这一段，详情整行不显示。
+    // 名字与词表序由层级表给，这里只负责搬过去——渲染层不拼、不数点号。
+    ...(row.identityKind === 'code' && hierarchyForMetricKey(row.metricKey) !== undefined
+      ? { hierarchy: hierarchyForMetricKey(row.metricKey)! } : {}),
     // 次数只在 >1 时下发（1 次是常态，挂上去就是噪声）；界面 `=== 1` 或缺省都不显示。
     ...((row.releaseCount ?? 1) > 1 ? { releaseCount: row.releaseCount } : {}),
     ...((row.releaseDates ?? []).length > 1 ? { releaseDates: row.releaseDates! } : {})

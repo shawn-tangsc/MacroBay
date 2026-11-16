@@ -187,6 +187,13 @@ export type MarketCalendarEvent = Readonly<{
    * 可选：旧的投影不产出，缺了就是「不知道」，按发布对待。
    */
   rowKind?: 'release' | 'estimate'
+  /**
+   * **指标层级**（用户 2026-11-17）：母指标拆出的分项，详情里要说清「它属于谁」或「它由哪些分项组成」。
+   *
+   * 名字（`parentName` / `childNames`）由服务端从层级表取，**渲染层不拼、不数点号**；
+   * 普通指标没有这一层，`undefined` 时详情整行不显示（不画空标签）。`childNames` 按词表序。
+   */
+  hierarchy?: Readonly<{ kind: 'parent' | 'child'; parentName?: string; childNames?: readonly string[] }>
   officialLink?: MarketCalendarOfficialLink
 }>
 /**

@@ -295,3 +295,36 @@ it('says a source stopped producing, with the time of its last successful batch'
     expect(host.querySelector('[data-market-source-status]')?.textContent).not.toContain('已停止出数')
   } finally { await act(async () => root.unmount()) }
 })
+
+/**
+ * 「指标层级」那一行（用户 2026-11-17）：子项说清属于谁、母项列出分项。
+ * 名字由服务端从层级表给，这里只验**渲染**：缺这一段整行不画，不出现空标签。
+ */
+it('shows the indicator level for a child and for a parent, and no row when there is none', async () => {
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const host = document.createElement('div'); const root = createRoot(host)
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const base = { eventKey: '00000000-0000-4000-8000-000000000021', title: '费城联储制造业装船指数', countryCode: 'US',
+    eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-11-16T13:30:00.000Z',
+    consensus: null, providerPrevious: null, providerActual: null,
+    source: 'Narwhal' as const, sourceObservedAt: '2026-11-16T14:00:00.000Z', coverage: 'observed-unverified' as const }
+  const row = () => host.querySelector('[data-content-hierarchy]')
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector text={text}
+      event={{ ...base, hierarchy: { kind: 'child' as const, parentName: '费城联储制造业指数' } }} />)))
+    expect(row()?.textContent).toBe('指标层级所属指标：费城联储制造业指数')
+
+    await act(async () => root.render(scoped(<MarketCalendarInspector text={text}
+      event={{ ...base, hierarchy: { kind: 'parent' as const,
+        childNames: ['费城联储制造业装船', '费城联储制造业新订单'] } }} />)))
+    expect(row()?.textContent).toBe('指标层级分项：费城联储制造业装船、费城联储制造业新订单')
+
+    // 普通指标没有这一层：整行不画，不留一个空标签。
+    await act(async () => root.render(scoped(<MarketCalendarInspector text={text} event={base} />)))
+    expect(row()).toBeNull()
+    // 子项但缺母名（半份数据）：也不画，不写「所属指标：源未给出」占位。
+    await act(async () => root.render(scoped(<MarketCalendarInspector text={text}
+      event={{ ...base, hierarchy: { kind: 'child' as const } }} />)))
+    expect(row()).toBeNull()
+  } finally { await act(async () => root.unmount()) }
+})

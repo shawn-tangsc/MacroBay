@@ -155,3 +155,39 @@ describe('coverage 按来源分流（官方 available / 数据商 observed-unver
     expect(standardRowToMarketEvent(rowFor('some-unknown-provider'), context).coverage).toBe('observed-unverified')
   })
 })
+
+/**
+ * 指标层级：由适配器从层级表搬过来（用户 2026-11-17）。
+ *
+ * 判据三条：子项带母中文名、母项带按词表序的分项、普通指标**没有这个字段**（详情整行不显示）。
+ */
+describe('指标层级随事件一起下发', () => {
+  const phillyChild = 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL'
+  const phillyParent = 'US.PHILLY_FED_MANUFACTURING.SA.LEVEL'
+  const read = (): ReturnType<typeof standardRowsToMarketEvents> => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    for (const metricKey of [phillyChild, phillyParent, 'US.CPI.NSA.YOY']) {
+      upsertCalendarStandardRow(database, { ...base, metricKey, periodKey: '2026-11',
+        scheduledAt: '2026-11-16T13:30:00.000Z', valuesJson: '{"actual":"1"}', valueState: 'present' })
+    }
+    return standardRowsToMarketEvents(readStandardCalendarMonth(database, { month: '2026-11' }), context)
+  }
+
+  it('gives a child its parent name and a parent its children in word order', () => {
+    const events = read()
+    const child = events.find((event) => event.eventNameKey === phillyChild)!
+    const parent = events.find((event) => event.eventNameKey === phillyParent)!
+    expect(child.hierarchy?.kind).toBe('child')
+    expect(child.hierarchy?.parentName).toContain('费城联储制造业')
+    expect(parent.hierarchy?.kind).toBe('parent')
+    // 词表序：装船在第一位（不是字母序，也不是行数序）。
+    expect(parent.hierarchy?.childNames?.[0]).toContain('装船')
+    expect((parent.hierarchy?.childNames ?? []).length).toBeGreaterThan(1)
+  })
+
+  it('leaves an ordinary metric without the field at all', () => {
+    const cpi = read().find((event) => event.eventNameKey === 'US.CPI.NSA.YOY')!
+    expect('hierarchy' in cpi).toBe(false)
+  })
+})
