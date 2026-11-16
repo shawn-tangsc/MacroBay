@@ -35,7 +35,8 @@ describe('provider registry contract', () => {
     const source = getSource('cryptoetf-etf-flows')
     expect(source?.collection).toBe('adapter')
     expect(source?.purposes).toEqual(['dashboard', 'briefing'])
-    expect(source?.capabilities).toEqual({ runNow: 'none', testConnection: true })
+    // 2026-11-17：主源打开手动采集（用户要「手动补一次」），走的是产品自己的 ETF 刷新。
+    expect(source?.capabilities).toEqual({ runNow: 'job', testConnection: true })
     // The four-state line follows an explicit flag, so it no longer doubles as a switch lock.
     expect(getProvider('cryptoetf')?.credentialStateLine).toBe(true)
     expect(getProvider('cryptoetf')?.category).toBe('crypto')

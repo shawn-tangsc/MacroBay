@@ -113,8 +113,9 @@ const catalogEntries: IntelligenceSourceCatalogEntry[] = [
     sourceId: cryptoEtfSourcePolicy.sourceId, displayName: 'CryptoETF ETF flows', sourceGroup: 'aggregate-data-provider',
     adapterType: 'rest-api-poller', category: 'mainstream-news', parserStrategy: 'cryptoetf-etf-funds-v1',
     intelligenceLayer: 'industry', dataDomain: 'crypto-market', reliabilityTier: 'aggregator', authMode: 'api-key',
-    // Round 1: reachable and testable, deliberately collectable by nothing yet — both stated, neither implied.
-    readiness: 'live', supportsRunNow: false, supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
+    // 2026-11-17：读者可以手动触发一次采集（用户要「手动补一次」）。它走的是产品自己的
+    // ETF 刷新作业（同一轮里主源 + 备源合并），不是另一条采集路径。
+    readiness: 'live', supportsRunNow: true, supportsSentiment: false, supportsReplay: false, collectionOwner: 'product',
     readinessNote: 'BTC/ETH 现货 ETF 每日净流入（T+1，逐基金可对账）；由产品自有刷新任务按 10 分钟采集，读数只取定稿交易日。',
     adapterConfig: { baseUrl: cryptoEtfSourcePolicy.apiBaseUrl }, requestGovernance: cryptoEtfSourcePolicy.requestGovernance
   }),

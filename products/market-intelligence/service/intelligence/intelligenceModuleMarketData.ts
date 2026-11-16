@@ -209,7 +209,11 @@ export function createIntelligenceMarketData(input: {
         const toRows = (days: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[]): readonly EtfFlowHistoryRow[] =>
           days.map((day) => Object.freeze({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd, source: id }))
         if (id === zeroXRouterSourcePolicy.sourceId) {
-          const zero = await zeroXRouterEtfFlowClient.requestWindow(apiKey)
+          // 备源失败现在**不静默**：以前它吞掉原因，界面只表现为「没补上」，谁都查不出为什么。
+          // 每支的传输阶段与解析结果各记一条 marker，落 app.log。
+          const zero = await zeroXRouterEtfFlowClient.requestWindow(apiKey, (diagnostic) => {
+            console.log(JSON.stringify({ marker: 'MI_ETF_STANDBY_DIAGNOSTIC', sourceId: id, asset: diagnostic.asset, transportStage: diagnostic.transportStage, parser: diagnostic.parser }))
+          })
           const tag = (rows: readonly EtfFlowHistoryRow[] | undefined) => rows?.map((row) => Object.freeze({ ...row, source: id }))
           return Object.freeze({ ...(zero.state !== 'unavailable' && zero.btc ? { btc: tag(zero.btc) } : {}), ...(zero.state !== 'unavailable' && zero.eth ? { eth: tag(zero.eth) } : {}) })
         }
@@ -227,6 +231,11 @@ export function createIntelligenceMarketData(input: {
       const standby = await read(standbyId)
       const btc = mergeEtfAssetDays(primary.btc, standby.btc)
       const eth = mergeEtfAssetDays(primary.eth, standby.eth)
+      // 合并结果本身也留一条：主源/备源各给几天、并完几天——「有没有补上」不必再靠猜。
+      console.log(JSON.stringify({
+        marker: 'MI_ETF_MERGE', primary: primaryId, standby: standbyId ?? null,
+        primaryBtcDays: primary.btc?.length ?? 0, standbyBtcDays: standby.btc?.length ?? 0, mergedBtcDays: btc?.length ?? 0
+      }))
       if (btc && eth) return Object.freeze({ state: 'available' as const, btc, eth })
       if (btc || eth) return Object.freeze({ state: 'partial' as const, ...(btc ? { btc } : {}), ...(eth ? { eth } : {}) })
       return Object.freeze({ state: 'unavailable' as const })

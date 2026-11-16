@@ -17,15 +17,18 @@ describe('collectCapitalConditionsSources', () => {
 
     await collectCapitalConditionsSources()
 
-    expect(capitalConditionsCollectableSourceIds).toEqual(['defillama-stablecoins'])
+    // 2026-11-17：ETF 那一半也能手动重采（主源打开了手动采集），点一下走的仍是产品自己的
+    // ETF 刷新——同一轮里主源 + 备源合并。
+    expect(capitalConditionsCollectableSourceIds).toEqual(['defillama-stablecoins', 'cryptoetf-etf-flows'])
     expect(invoke.mock.calls).toEqual([
-      ['market-intelligence', 'intelligenceSources.runNow', { sourceId: 'defillama-stablecoins' }]
+      ['market-intelligence', 'intelligenceSources.runNow', { sourceId: 'defillama-stablecoins' }],
+      ['market-intelligence', 'intelligenceSources.runNow', { sourceId: 'cryptoetf-etf-flows' }]
     ])
   })
 
-  it('leaves the ETF provider out, because its catalog entry does not authorize Run Now', () => {
-    // `0xrouter-aggregate-provider` is the panel's ETF half, but `supportsRunNow: false` makes
-    // `intelligenceSources.runNow` throw for it, which would fail the reader's click every time.
+  it('still leaves the standby out, because it is merged into the primary\'s round', () => {
+    // `0xrouter-aggregate-provider` 的目录项仍是 `supportsRunNow: false`——它是被合并的一方，
+    // 单独给它一颗按钮只会重复采一次；触发主源那一轮就已经把两源都取了。
     expect(capitalConditionsCollectableSourceIds).not.toContain('0xrouter-aggregate-provider')
   })
 

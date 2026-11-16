@@ -32,7 +32,7 @@ export const cryptoEtfProvider: ProviderDefinition = provider({
         purposes: ['dashboard', 'briefing'],
         /* 声明「我能供 ETF 净流」。谁真的在供由解析器现算：开着 + 作业真注册 + 就绪。 */
         provides: ['etf-net-flow'],
-        capabilities: { runNow: 'none', testConnection: true },
+        capabilities: { runNow: 'job', testConnection: true },
         readiness: 'live',
         adapterRef: cryptoEtfSourcePolicy.sourceId
       })
