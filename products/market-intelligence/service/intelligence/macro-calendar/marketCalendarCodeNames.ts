@@ -61,6 +61,8 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.BUSINESS_INVENTORIES.SA.MOM': { zhFull: '企业库存', zhShort: '企业库存', enFull: 'Business Inventories', enShort: 'Business Inventories', locked: false },
   'US.CAPACITY_UTILIZATION.SA.RATE': { zhFull: '产能利用率', zhShort: '产能利用率', enFull: 'Capacity Utilization', enShort: 'Capacity Utilization', locked: false },
   'US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE': { zhFull: '制造业产能利用率', zhShort: '制造业产能利用率', enFull: 'Manufacturing Capacity Utilization', enShort: 'Mfg Capacity Utilization', locked: false },
+  // 20 城口径单独一个码（用户 2026-11-17：只给「20 城季调」建码；10 城与未季调不建）
+  'US.CASE_SHILLER_20.SA.YOY': { zhFull: '标普/凯斯席勒 20 城房价指数年率（季调）', zhShort: '凯斯席勒 20 城年率', enFull: 'S&P CoreLogic Case-Shiller 20-City Home Price Index YoY (SA)', enShort: 'Case-Shiller 20-City YoY', locked: false },
   'US.CASE_SHILLER_COMPOSITE.SA.MOM': { zhFull: '标普/凯斯席勒房价指数月率', zhShort: '凯斯席勒房价 月率', enFull: 'S&P CoreLogic Case-Shiller Home Price Index MoM', enShort: 'Case-Shiller MoM', locked: false },
   'US.CASE_SHILLER_COMPOSITE.NSA.YOY': { zhFull: '标普/凯斯席勒房价指数年率', zhShort: '凯斯席勒房价 年率', enFull: 'S&P CoreLogic Case-Shiller Home Price Index YoY', enShort: 'Case-Shiller YoY', locked: false },
   'US.CHALLENGER_JOB_CUTS.NONE.COUNT': { zhFull: '挑战者企业裁员', zhShort: '挑战者裁员', enFull: 'Challenger Job Cuts', enShort: 'Challenger Cuts', locked: false },

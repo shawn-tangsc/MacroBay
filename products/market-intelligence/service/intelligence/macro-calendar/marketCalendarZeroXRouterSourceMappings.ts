@@ -94,6 +94,14 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214280': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '215018': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '213488': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
+  // FHFA 房价（既有码：月率 SA.MOM、年率 NSA.YOY）
+  '214226': { metricKey: 'US.FHFA_HOUSE_PRICE.SA.MOM', periodRule: 'month' },
+  '214985': { metricKey: 'US.FHFA_HOUSE_PRICE.SA.MOM', periodRule: 'month' },
+  '214227': { metricKey: 'US.FHFA_HOUSE_PRICE.NSA.YOY', periodRule: 'month' },
+  '214986': { metricKey: 'US.FHFA_HOUSE_PRICE.NSA.YOY', periodRule: 'month' },
+  // 标普/凯斯席勒 **20 城季调年率**（新码）；10 城与未季调那 8 条**刻意不映射**
+  '214228': { metricKey: 'US.CASE_SHILLER_20.SA.YOY', periodRule: 'month' },
+  '214987': { metricKey: 'US.CASE_SHILLER_20.SA.YOY', periodRule: 'month' },
   // 达拉斯三个子项（母族已有子项体系，词都在闭集里）与芝加哥 PMI（既有码）
   '214207': { metricKey: 'US.DALLAS_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
   '214209': { metricKey: 'US.DALLAS_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month' },
