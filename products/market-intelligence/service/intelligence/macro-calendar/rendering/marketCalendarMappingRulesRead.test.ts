@@ -43,6 +43,13 @@ function seed(): DatabaseSync {
     timePrecision: 'date' as const, status: 'published' as const, valuesJson: '{"actual":"0.3%"}',
     sourceProviderId: 'narwhal', sourceEventId: 'pce-2026-09', parserVersion: 'v1', observedAt: now, firstSeenAt: now
   })
+  // 一条**事件型**的行（讲话）：它是事件，不是指标，不该出现在这张表里。
+  upsertCalendarStandardRow(database, {
+    countryCode: 'US', metricKey: 'evt.central-bank-speech', periodKey: '2026-11-05T14:00',
+    scheduledDate: '2026-11-05', scheduledAt: '2026-11-05T14:00:00.000Z', timePrecision: 'minute' as const,
+    status: 'published' as const, valuesJson: '{}', sourceProviderId: '0xrouter',
+    sourceEventId: 'speech-2026-11-05', parserVersion: 'v1', observedAt: now, firstSeenAt: now
+  })
   // 合并过的行带英文原文名（迁移 18 把英文那条并入 `source_label_en`）。
   database.prepare(`update mi_calendar_events set source_label_en = ?
     where source_label = '11月未识别指标'`).run('Unidentified indicator(Nov)')
@@ -85,6 +92,8 @@ describe('映射规则表读口', () => {
     // 同时也真有 0 的（那个指标的库行还没出现）——这一列是真读出来的，不是常量。
     expect(read.mapped.some((rule) => rule.rowCount === 0)).toBe(true)
     expect(read.mapped.every((rule) => typeof rule.rowCount === 'number' && rule.rowCount >= 0)).toBe(true)
+    // **事件不是指标**：`evt.*` 一行都不许出现在这张表里（Chief 2026-11-17）。
+    expect(read.mapped.some((rule) => rule.metricKey.startsWith('evt.'))).toBe(false)
     // 规则里的 id 都落在 `sourceIds` 上；只以码进来（没有任何规则）的是空数组 + 无期次规则。
     expect(read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')?.sourceIds).toEqual(['8637'])
     const directOnly = read.mapped.find((rule) => rule.metricKey === 'US.PCE.SA.MOM')
