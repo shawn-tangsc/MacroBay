@@ -595,6 +595,50 @@ describe('analysisOrchestrator', () => {
   })
 })
 
+describe('news-triggered runs that ignore the news are not published (R37 C)', () => {
+  it('fails the run with the rule instead of publishing a market recap', async () => {
+    // 触发项进了快照，但结论没写 newsImpact：整条拒绝、不发布，读者看到失败与重试，
+    // 不会读到一份「没读那条新闻」的综述。
+    const updateRunStatus = vi.fn()
+    const commitSuccessfulAnalysis = vi.fn()
+    const newsSnapshot = {
+      ...fixtureSnapshot(),
+      facts: [
+        fixtureFact('triggered-news:item-1', 'news:item-1', 'news-sentiment', 'sentiment', 'BTC'),
+        fixtureFact('fact-1', 'evidence-1', 'actual', 'macro', 'CPI'),
+        fixtureFact('fact-2', 'evidence-2', 'etf-net-flow', 'capital', 'BTC')
+      ],
+      evidenceRefs: [{ evidenceRefId: 'news:item-1' }, { evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-2' }],
+      trigger: { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1' }
+    }
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ getSnapshot: () => newsSnapshot, updateRunStatus, commitSuccessfulAnalysis }),
+      structuredModelInvocation: {
+        invoke: vi.fn(async () => ({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory()
+    })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toMatchObject({ status: 'invalid-output', errorCode: 'analysis-missing-evidence' })
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ failureDetailCode: expect.stringMatching(/news-trigger-not-cited|sentiment-not-weighed/u) }))
+    expect(commitSuccessfulAnalysis).not.toHaveBeenCalled()
+  })
+})
+
+function fixtureFact(factId: string, evidenceRefId: string, metric: string, domain: string, subject: string) {
+  return { factId, evidenceRefId, metric, domain, subject, value: 1, unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const }
+}
+
+function fixtureSnapshot() {
+  return {
+    id: 'mi-es-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotHash: 'snapshot-hash', profileId: 'crypto-market-analysis-v1',
+    facts: [fixtureFact('fact-1', 'evidence-1', 'actual', 'macro', 'CPI')],
+    missingDomains: [], caveats: [], evidenceRefs: [{ evidenceRefId: 'evidence-1' }], sourceHealth: [], createdAt: asOf, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
+  } as unknown as import('../../../contracts/marketAnalysisContracts').EvidenceSnapshot
+}
+
 function createRepository(overrides: Record<string, unknown> = {}) {
   const run: AnalysisRun = {
     id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',

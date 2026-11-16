@@ -12,14 +12,16 @@ import {
   type Scenario,
   type AnalysisInvalidation,
   type AgentFact,
-  type AnalysisConclusion
+  type AnalysisConclusion,
+  type SnapshotTrigger
 } from '../../../contracts/marketAnalysisContracts'
 import { isMarketReactionFact, marketAnalysisValidationPolicy } from './analysisConstants'
 import { containsUnsafeOutput, formatUnsafeOutputRedaction, isPlainRecord, redactUnsafeOutput, utf8Length, type AnalysisOutputRedaction } from './analysisOutputRedaction'
 export { formatUnsafeOutputRedaction } from './analysisOutputRedaction'
 export type { AnalysisOutputRedaction } from './analysisOutputRedaction'
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
-import { isAnalysisNewsImpact } from './analysisNewsImpactValidation'
+import { analysisNewsImpactRules, isAnalysisNewsImpact, newsImpactDefectOf } from './analysisNewsImpactValidation'
+
 import { policyProbabilityDefect, untracedProsePercentageDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 import {
@@ -29,7 +31,7 @@ import {
 } from './analysisDivergenceConsistency'
 
 export type FrozenAnalysisEvidence = Readonly<{
-  facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'comparability' | 'freshness' | 'value' | 'observedAt'>[]
+  facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'domain' | 'subject' | 'comparability' | 'freshness' | 'value' | 'observedAt'>[]
   evidenceRefs: readonly Pick<EvidenceClaim, 'evidenceRefId'>[]
   /**
    * 变更摘要里**印给模型看过**的百分数（第二个集合，架构师 2026-11-11）。
@@ -38,6 +40,8 @@ export type FrozenAnalysisEvidence = Readonly<{
    * 不并进 `facts`——合成事实会多出不存在的 factId，并让同一个 metric 前后出现两条。
    */
   changeValues?: readonly number[]
+  /** 触发指针（R37）：只有舆情触发的运行才有；新闻解读的必答校验读它。 */
+  trigger?: SnapshotTrigger
 }>
 
 /** 背离立场块的形状与判定在 `analysisDivergenceConsistency`（体积门禁要求抽离）；类型从这里照旧导出。 */
@@ -101,6 +105,13 @@ export const analysisValidationRules = Object.freeze({
    * the repairable set, so the model gets its one rewrite; the detail names this rule.
    */
   triggerFocus: 'missing-trigger-focus',
+  // 触发型分析的必答块（R37 C）：判据与理由写在 `analysisNewsImpactValidation`，这里只列码。
+  newsTriggerNotCited: 'news-trigger-not-cited',
+  newsImpactInsufficientData: 'news-impact-insufficient-data',
+  newsImpactContradictionMismatch: 'news-impact-contradiction-mismatch',
+  newsImpactInvalidation: 'news-impact-invalidation',
+  newsImpactMissingState: 'news-impact-missing-state',
+  newsImpactUnchecked: 'news-impact-unchecked',
   /**
    * 失效条件引用了一个快照里不存在的 id 或时刻（例如「跌破支撑」这种没有事实出处的价位）。
    * 判据是数据：factId 在快照事实里、at 在快照的时刻里；不读那句话怎么写。
@@ -130,9 +141,9 @@ export type AnalysisShapeDefect = `shape:${string}`
 
 export type AnalysisOutputValidationResult =
   | Readonly<{ ok: true; value: ValidatedAnalysisModelOutput; redactions: readonly AnalysisOutputRedaction[] }>
-  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule | AnalysisShapeDefect; detail?: AnalysisProbabilityDefect }>
+  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule | AnalysisShapeDefect; detail?: AnalysisProbabilityDefect | string }>
 
-function missingEvidence(rule: AnalysisValidationRule, detail?: AnalysisProbabilityDefect): AnalysisOutputValidationResult {
+function missingEvidence(rule: AnalysisValidationRule, detail?: AnalysisProbabilityDefect | string): AnalysisOutputValidationResult {
   return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule, ...(detail ? { detail } : {}) }
 }
 
@@ -272,16 +283,17 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   // 重点舆情是本次分析必须权衡的输入：至少一条实质性论证要引用它，否则「带上了」只是 prompt 里的
   // 一句话。只认论证区（事实、支撑/反向证据、方向、催化剂、传导假设），不认顶层 evidenceRefs 清单。
   const sentimentRefs = new Set(snapshot.facts.filter(fact => fact.metric === 'news-sentiment' && fact.evidenceRefId).map(fact => fact.evidenceRefId!))
-  if (sentimentRefs.size > 0) {
-    const citedEvidence = new Set([
-      ...output.knownFacts.flatMap(claim => claim.evidenceRefIds),
-      ...output.transmissionHypotheses.flatMap(claim => claim.evidenceRefIds),
-      ...output.supportingEvidence.map(claim => claim.evidenceRefId),
-      ...output.counterEvidence.map(claim => claim.evidenceRefId),
-      ...output.directions.flatMap(entry => entry.evidenceRefIds),
-      ...output.nextCatalysts.flatMap(claim => claim.evidenceRefIds)
-    ])
-    if (![...sentimentRefs].some(ref => citedEvidence.has(ref))) return missingEvidence(analysisValidationRules.sentimentNotWeighed)
+  // 论证区引用（事实、传导、支撑/反向、方向、催化剂）：不是顶层 evidenceRefs 清单——那份是登记。
+  const citedEvidence = new Set([
+    ...output.knownFacts.flatMap(claim => claim.evidenceRefIds),
+    ...output.transmissionHypotheses.flatMap(claim => claim.evidenceRefIds),
+    ...output.supportingEvidence.map(claim => claim.evidenceRefId),
+    ...output.counterEvidence.map(claim => claim.evidenceRefId),
+    ...output.directions.flatMap(entry => entry.evidenceRefIds),
+    ...output.nextCatalysts.flatMap(claim => claim.evidenceRefIds)
+  ])
+  if (sentimentRefs.size > 0 && ![...sentimentRefs].some(ref => citedEvidence.has(ref))) {
+    return missingEvidence(analysisValidationRules.sentimentNotWeighed)
   }
   // 背离立场（`02` 系统设计 §背离一致性）：只判**说出来的**那些对——不写就是没意见。
   // 与证据相反即拒；pairId 认不出来是引用缺陷（不许就地编一对）。
@@ -300,6 +312,9 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   // Only when the caller could resolve a trigger source; a snapshot with no change record never
   // ran this rule and must not be judged by it.
   if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
+  // R37 C：触发型分析的必答块；只比 id 与结构，没有触发指针时不管。规则码由模块定义，这里不重抄。
+  const newsImpactDefect = newsImpactDefectOf({ output: { conclusion: output.conclusion }, snapshot, focus, reasoningEvidenceRefIds: citedEvidence })
+  if (newsImpactDefect) return missingEvidence(newsImpactDefect.rule as AnalysisValidationRule, newsImpactDefect.detail)
 
   return { ok: true, value: output, redactions }
 }

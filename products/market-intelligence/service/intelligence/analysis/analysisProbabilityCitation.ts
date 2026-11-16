@@ -126,7 +126,9 @@ export function untracedProsePercentageDefect(output: ProseBearingOutput, snapsh
     ]),
     ...output.transmissionHypotheses.map(hypothesis => hypothesis.statement),
     ...output.nextCatalysts.map(catalyst => catalyst.statement),
-    ...output.directions.map(direction => direction.rationale)
+    ...output.directions.map(direction => direction.rationale),
+    // 新闻解读里的一句话同样是正文：它写的每个百分数也要有出处（R37 C 第 6 条）。
+    ...(output.conclusion.newsImpact?.verdict === 'no-transmission' ? [output.conclusion.newsImpact.reason] : [])
   ].join('\n')
   for (const value of percentagesIn(prose)) {
     if (!tracedToSnapshot(value, allowed)) return analysisProbabilityDefects.proseNumberNotInSnapshot

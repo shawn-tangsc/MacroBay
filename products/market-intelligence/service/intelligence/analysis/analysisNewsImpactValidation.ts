@@ -1,5 +1,5 @@
 import type {
-  AnalysisInvalidation, AnalysisNewsImpact, AnalysisSummary, AnalysisConclusion, EvidenceSnapshot
+  AnalysisInvalidation, AnalysisNewsImpact, AnalysisConclusion, SnapshotTrigger
 } from '../../../contracts/marketAnalysisContracts'
 import type { TriggerFocus } from './analysisTriggerFocus'
 
@@ -32,8 +32,12 @@ const MISSING_STATES: ReadonlySet<string> = new Set(['not-yet', 'source-empty', 
 export type NewsImpactDefect = Readonly<{ rule: string; detail: string }>
 
 type VerifyInput = Readonly<{
-  output: Pick<AnalysisSummary, 'conclusion'> & { conclusion: AnalysisConclusion }
-  snapshot: Pick<EvidenceSnapshot, 'facts' | 'trigger'>
+  output: Readonly<{ conclusion: AnalysisConclusion }>
+  /** 只读得到校验真正需要的那几个字段；冻结证据与快照都满足它。 */
+  snapshot: Readonly<{
+    facts: readonly Readonly<{ factId: string; domain: string; metric: string; subject?: string; evidenceRefId?: string | null }>[]
+    trigger?: SnapshotTrigger
+  }>
   focus: TriggerFocus | undefined
   /** 论证区引用到的那批证据（支撑/反向/传导/方向/催化剂）。 */
   reasoningEvidenceRefIds: ReadonlySet<string>

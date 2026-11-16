@@ -18,6 +18,12 @@ const publishedAt = '2026-11-16T08:46:00.000Z'
  * 事故样本（2026-11-16）：CoinDesk 的跨境支付新闻，自己的情绪判定写着中性、强度 1、
  * 没有标的、「对 BTC、ETH 没有直接影响」，却被判成高重要性并启动了一次分析。
  */
+// 触发判定读的是整条判定记录（含判定时刻与置信度）：只要三个结构化字段是无法定严重度的。
+const verdictRecord = (value: NewsSentimentVerdict) => ({
+  itemId: 'item-rss:guid:614afcd7', sourceId: 'coindesk-rss', publishedAt,
+  scoredAt: '2026-11-16T09:07:50.718Z', confidence: 88, reasonCode: 'no-direct-crypto-impact',
+  engine: 'model' as const, caveats: [] as string[], ...value, symbols: [...value.symbols]
+})
 const neutralNoSymbol: NewsSentimentVerdict = { polarity: 'neutral', strength: 1, symbols: [] }
 const directionalBitcoin: NewsSentimentVerdict = { polarity: 'bearish', strength: 3, symbols: ['BTC'] }
 
@@ -62,7 +68,7 @@ async function driveChange(input: {
     pipeline: { listItems: () => [input.item], listRevisions: () => [] } as unknown as IntelligencePipeline,
     publicQueryService: {} as MarketIntelligencePublicQueryService,
     structuredModelInvocation: { invoke: async () => { throw new Error('分组阶段不得调用模型') } },
-    ...(input.verdict ? { latestNewsSentiment: () => input.verdict } : {}),
+    ...(input.verdict ? { latestNewsSentiment: () => verdictRecord(input.verdict!) } : {}),
     dataDir,
     now: () => asOf
   })
