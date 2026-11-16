@@ -1,6 +1,7 @@
 import type { AnalysisRun, AnalysisPhase, EventGroup, EvidenceSnapshot } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalysisContracts'
 import { buildAnalysisIdempotencyKey } from './analysisHash'
+import { ANALYSIS_RUN_INTERRUPTED, isStalledAnalysisRun } from './analysisRunStaleness'
 
 export const analysisRunPolicy = Object.freeze({
   version: 'cryptoMarketAnalysisTriggerPolicy.v1',
@@ -56,6 +57,13 @@ export type AnalysisRunEnqueueInput = Readonly<{
 export type AnalysisRunService = Readonly<{
   enqueue: (input: AnalysisRunEnqueueInput) => { created: boolean; run: AnalysisRun }
   recover: () => AnalysisRunRecovery
+  /**
+   * 把卡住的运行判成失败（`analysis-run-interrupted` / `run-stalled`）。
+   *
+   * 重启对账只在进程启动时跑一次；进程活着但调用、作业或计时器没了的那类，需要在运行中
+   * 周期性地收尸，否则它会一直占着「这条新闻正在解读」。返回被判失败的运行 id。
+   */
+  sweepStalled: () => readonly string[]
   recordDecision: (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string; snapshotHash?: string | null; analysisRunId?: string | null }>) => string | undefined
 }>
 
@@ -79,7 +87,8 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
     const runs = deps.repository.listRuns?.() ?? []
     for (const run of runs) {
       if (run.status !== 'running') continue
-      if (deps.repository.updateRunStatus({ id: run.id, status: 'failed', failureCode: 'runtime-recovered', failureDetailCode: 'runtime-recovered', completedAt: deps.now() })) failed.push(run.id)
+      // 重启之后不可能还有代码在跑这次运行：判成「被打断」，不是模型失败。
+      if (deps.repository.updateRunStatus({ id: run.id, status: 'failed', failureCode: ANALYSIS_RUN_INTERRUPTED, failureDetailCode: 'runtime-stopped', completedAt: deps.now() })) failed.push(run.id)
     }
     const groups = deps.repository.listEventGroups?.() ?? []
     for (const group of groups) {
@@ -133,6 +142,14 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
     }
     return { failed, stale, dispatch }
   }
+  const sweepStalled = (): readonly string[] => {
+    const stalled: string[] = []
+    for (const run of deps.repository.listRuns?.() ?? []) {
+      if (!isStalledAnalysisRun(run, deps.now())) continue
+      if (deps.repository.updateRunStatus({ id: run.id, status: 'failed', failureCode: ANALYSIS_RUN_INTERRUPTED, failureDetailCode: 'run-stalled', completedAt: deps.now() })) stalled.push(run.id)
+    }
+    return stalled
+  }
   /**
    * Writes one attempt to the ledger and answers with the row id. The id is what a later stage
    * flips when it refuses the attempt: a refusal must rewrite *this* row, because the counting
@@ -141,5 +158,5 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
   const recordDecision = (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string; snapshotHash?: string | null; analysisRunId?: string | null }>): string | undefined => {
     return deps.repository.appendTriggerLedger?.({ id: `${analysisRunPolicy.triggerLedgerIdPrefix}${deps.idFactory()}`, eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, changeHash: input.changeHash, decision: input.decision, reasonCode: input.reasonCode, snapshotHash: input.snapshotHash ?? null, analysisRunId: input.analysisRunId ?? null, createdAt: deps.now() })
   }
-  return { enqueue, recover, recordDecision }
+  return { enqueue, recover, sweepStalled, recordDecision }
 }

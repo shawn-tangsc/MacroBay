@@ -99,6 +99,13 @@ describe('只读判读：哪条解读、能不能读', () => {
     expect('summaryId' in result).toBe(false)
   })
 
+  it('does not report a stalled run as in flight: a dead run must not read as "being generated"', async () => {
+    // 22:07 排上、06:08 还是 running 的那种行：收尸之前也不许让界面继续等。
+    const stalled = { ...run('running'), queuedAt: '2026-11-16T00:00:00.000Z', startedAt: '2026-11-16T00:00:00.000Z', completedAt: null }
+    const result = await reader({ run: stalled })('item-1')
+    expect(result.state).toBe('none')
+  })
+
   it('reports none for an item that was never read', async () => {
     const result = await reader()('item-unknown')
     expect(result).toEqual({ itemId: 'item-unknown', state: 'none', currentEvidenceFingerprint: null })

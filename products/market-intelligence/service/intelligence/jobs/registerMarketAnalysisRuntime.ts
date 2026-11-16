@@ -52,6 +52,7 @@ import { createPredictionVerificationService } from '../analysis/predictionVerif
 import type { PredictionVerificationObservation } from '../analysis/predictionVerificationService'
 import { parseCrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { registerMarketAnalysisJobs } from './registerMarketAnalysisJobs'
+import { createAnalysisRunHousekeeping } from './marketAnalysisRunHousekeeping'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB, ANALYSIS_SESSION_SLOTS_JOB, RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 import { createInitialMarketAnalysisRequest, initialMarketAnalysisRequestPolicy } from './requestInitialMarketAnalysis'
 import { createSignalAnalysisRequest, type SignalAnalysisService } from './requestSignalAnalysis'
@@ -305,27 +306,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
         metadata: { asOf, verified: result.verified, skipped: result.skipped }
       })
     },
-    recoverRuns: async (_payload, context) => {
-      if (!await isEnabled()) return
-      const recovery = runs.recover()
-      // The service can only write rows; this is the only place that can hand a recovered
-      // run to the job runtime, and the freeze path is not available to it (recovery
-      // analyses a snapshot that already exists, so there is nothing to freeze). A run
-      // that still has a live job is left alone: dispatching it twice would make the
-      // second run job fail on `claimRun`.
-      const dispatch = recovery.dispatch.filter(run => input.jobRuntime.listRuns({
-        handlerId: RUN_MARKET_ANALYSIS_JOB,
-        statuses: ['queued', 'running'],
-        payload: { analysisRunId: run.analysisRunId },
-        limit: 1
-      }).length === 0)
-      await context.log({
-        level: 'info',
-        message: `Recovered ${recovery.failed.length} market analysis run(s); expired ${recovery.stale.length}; dispatching ${dispatch.length}.`,
-        metadata: { failed: recovery.failed.length, stale: recovery.stale.length, dispatching: dispatch.length }
-      })
-      return { dispatch }
-    }
+    // `isEnabled` 定义在这个对象之后：这里只传取值函数，调用时才读它。
+    ...createAnalysisRunHousekeeping({ isEnabled: () => isEnabled(), runs, jobRuntime: input.jobRuntime })
   }, { startRecovery: false })
 
   /**

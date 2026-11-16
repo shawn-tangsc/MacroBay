@@ -80,6 +80,7 @@ export const syncRunHandlerCatalog: Readonly<Record<string, CatalogEntry>> = {
   'market-intelligence.assessChangedItems': { taskLabel: '变更判定', action: 'analysis' },
   'market-intelligence.groupMarketAnalysisChange': { taskLabel: '变更分组', action: 'analysis' },
   'market-intelligence.recoverMarketAnalysisRuns': { taskLabel: '分析恢复', action: 'analysis' },
+  'market-intelligence.sweepStalledAnalysisRuns': { taskLabel: '分析收尸', action: 'analysis' },
   'market-intelligence.analysisSessionSlots': { taskLabel: '分析盘口', action: 'analysis' },
   'market-intelligence.verifyMarketAnalysisPredictions': { taskLabel: '预测校验', action: 'analysis' },
   'market-intelligence.refreshSentimentAggregates': { taskLabel: '舆情汇总', action: 'analysis' },

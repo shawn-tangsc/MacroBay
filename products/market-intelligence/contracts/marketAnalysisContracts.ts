@@ -171,7 +171,9 @@ export const MARKET_ANALYSIS_ERROR_CODES = Object.freeze({
   archiveUnavailable: 'analysis-archive-unavailable',
   predictionUnsupportedCondition: 'analysis-prediction-unsupported-condition',
   insufficientData: 'analysis-insufficient-data',
-  notAvailable: 'analysis-not-available'
+  notAvailable: 'analysis-not-available',
+  /** 运行没跑完就没了：进程停了、调用没回来、作业掉了。不是模型也不是数据的错，读者可再试一次。 */
+  runInterrupted: 'analysis-run-interrupted'
 })
 
 /**

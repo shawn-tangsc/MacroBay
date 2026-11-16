@@ -16,7 +16,7 @@ import {
   registerMarketAnalysisRuntime,
   resolveMarketAnalysisSeverity
 } from './registerMarketAnalysisRuntime'
-import { ANALYSIS_SESSION_SLOTS_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, RUN_MARKET_ANALYSIS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB } from './marketAnalysisJobIds'
+import { ANALYSIS_SESSION_SLOTS_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, RUN_MARKET_ANALYSIS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB } from './marketAnalysisJobIds'
 
 import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettingsStore } from '../application/marketAnalysisSettingsStore'
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
@@ -374,20 +374,20 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     try {
       // Off means off: nothing is armed and no work is created, so a stored "off" cannot spend a
       // request on the next tick. (The startup sync reads the stored settings, so wait for it.)
-      await vi.waitFor(() => expect(removed).toHaveLength(3))
+      await vi.waitFor(() => expect(removed).toHaveLength(4))
       expect(scheduled).toEqual([])
       // A stored "off" also clears anything an earlier process left armed.
-      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB])
+      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB])
       await expect(runtime.requestInitialAnalysis(classifiedItem.itemId, undefined, 'initial', 'manual'))
         .rejects.toThrow('analysis-not-enabled')
       expect(enqueueDefinition).not.toHaveBeenCalled()
 
       await runtime.updateSettings({ enabled: true, providerId: 'provider-1', modelId: 'model-1' })
-      expect(scheduled).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB])
+      expect(scheduled).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB])
 
       removed.length = 0
       await runtime.updateSettings({ enabled: false })
-      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB])
+      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB])
     } finally {
       runtime.dispose()
       await rm(directory, { recursive: true, force: true })

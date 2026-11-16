@@ -1,5 +1,6 @@
 import type { JobRuntime } from '@platform/jobs'
 import type { AnalysisPhase } from '../../../contracts/marketAnalysisContracts'
+import { isStalledAnalysisRun } from '../analysis/analysisRunStaleness'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
 
 /**
@@ -32,7 +33,7 @@ export type EnqueueAnalysisRunInput = Readonly<{
 
 export function createAnalysisRunEnqueuer(deps: Readonly<{
   jobRuntime: Pick<JobRuntime, 'enqueueDefinition' | 'waitForRunTerminal' | 'listRuns'>
-  repository: Readonly<{ listRuns: () => readonly { eventGroupId: string; status: string; id: string }[] }>
+  repository: Readonly<{ listRuns: () => readonly { eventGroupId: string; status: string; id: string; queuedAt: string; startedAt: string | null }[] }>
   now: () => string
 }>): (input: EnqueueAnalysisRunInput) => Promise<EnqueueAnalysisRunOutcome> {
   const pending = new Set<string>()
@@ -41,8 +42,12 @@ export function createAnalysisRunEnqueuer(deps: Readonly<{
       handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, statuses: ['queued', 'running'],
       payload: { eventGroupId: input.eventGroupId }, limit: 1
     })
+    // 卡住的运行不挡新人：它不会再动，挡着只会让读者点一次换回一句「正在解读」。
+    // 收尸归恢复与周期性清点，这里只保证这一次点击真的能排上。
     const inFlightRun = deps.repository.listRuns()
-      .find(run => run.eventGroupId === input.eventGroupId && (analysisRunEnqueuePolicy.inFlightStatuses as readonly string[]).includes(run.status))
+      .find(run => run.eventGroupId === input.eventGroupId &&
+        (analysisRunEnqueuePolicy.inFlightStatuses as readonly string[]).includes(run.status) &&
+        !isStalledAnalysisRun({ status: run.status as 'queued' | 'running', queuedAt: run.queuedAt, startedAt: run.startedAt }, deps.now()))
     if (pending.has(input.eventGroupId) || active.length > 0 || inFlightRun) {
       return { state: 'in-flight', ...(inFlightRun ? { runId: inFlightRun.id } : {}) }
     }

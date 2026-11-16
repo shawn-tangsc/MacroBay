@@ -30,11 +30,11 @@ describe('analysisRunService', () => {
     expect(service.enqueue(base).run).toMatchObject({ modelProviderId: null, modelId: null })
   })
 
-  it('converts running runs to failed runtime-recovered on restart', () => {
+  it('converts running runs to an interrupted failure on restart', () => {
     const updateRunStatus = vi.fn(() => true)
     const service = createAnalysisRunService({ repository: { updateRunStatus, listRuns: () => [{ id: 'mi-ar-1', status: 'running' }] } as never, now: () => asOf, idFactory: () => 'mi-ar-2' })
     expect(service.recover()).toEqual({ failed: ['mi-ar-1'], stale: [], dispatch: [] })
-    expect(updateRunStatus).toHaveBeenCalledWith({ id: 'mi-ar-1', status: 'failed', failureCode: 'runtime-recovered', failureDetailCode: 'runtime-recovered', completedAt: asOf })
+    expect(updateRunStatus).toHaveBeenCalledWith({ id: 'mi-ar-1', status: 'failed', failureCode: 'analysis-run-interrupted', failureDetailCode: 'runtime-stopped', completedAt: asOf })
   })
 
   it('uses the repository unique index to return the same persisted run for an identical snapshot', () => {

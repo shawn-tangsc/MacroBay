@@ -3,6 +3,7 @@ import type { NewsInterpretationLastRun, NewsInterpretationReadResult } from '..
 import { buildEvidenceFingerprint } from './analysisHash'
 import { prepareMarketAnalysisSnapshot, type PreparationDependencies } from './analysisSnapshotPreparation'
 import { isNewsSeveritySource } from './analysisItemSeverity'
+import { isStalledAnalysisRun } from './analysisRunStaleness'
 
 /**
  * 「AI 解读」的只读判读：这条新闻有没有已有解读、是哪份证据的。
@@ -38,7 +39,10 @@ export function createNewsInterpretationReader(
     const group = deps.repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
     if (!group) return { itemId, state: 'none', currentEvidenceFingerprint }
     const runs = deps.repository.listRuns().filter(run => run.eventGroupId === group.id)
-    const inFlight = runs.find(run => run.status === 'queued' || run.status === 'running')
+    // 卡住的运行不算「正在解读」：进程被挂起、调用没回来、作业掉了，这三种都会留下一条永远
+    // `running` 的行；把它当在飞，界面就永远显示「正在生成」。收尸由恢复与周期性清点负责，
+    // 这里只保证读者不会看到一个不会再动的进度。
+    const inFlight = runs.find(run => (run.status === 'queued' || run.status === 'running') && !isStalledAnalysisRun(run, deps.now()))
     if (inFlight) return { itemId, state: 'in-flight', runId: inFlight.id, currentEvidenceFingerprint }
     // 为这条新闻冻过快照的那些运行，按结束时刻从新到旧：同组别的条目的摘要不能算这条的解读。
     const forItem = runs
