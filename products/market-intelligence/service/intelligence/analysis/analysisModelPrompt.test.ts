@@ -29,12 +29,53 @@ describe('analysis model prompt trigger contract (R37)', () => {
   it('names the triggering news as the run cause and requires the four answers', () => {
     const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
     expect(system).toContain('本次运行由**一条新闻**触发')
-    expect(system).toContain('triggered-news:<itemId>')
+    // 触发项由载荷里的 trigger 段指名，而不是一个模型永远收不到的 `triggered-news:<itemId>`。
+    expect(system).toContain('用户消息 trigger 段指向的就是它')
+    expect(system).not.toContain('factId 为 `triggered-news:<itemId>`')
     expect(system).toContain('不要照抄标题')
     expect(system).toContain('用**当前数据**印证或否证它')
     expect(system).toContain('conclusion.newsImpact')
     expect(system).toContain('no-transmission')
     expect(system).toContain('cannot-determine')
+  })
+
+  it('hands the model a resolvable trigger with the news text in full', () => {
+    // 线上那次：facts 里是 f90 句柄，规则却叫它找 `triggered-news:<itemId>`；而且事实值被 72 字
+    // 截断，标题断在中间、源摘录整段没了。触发段要给出句柄和完整内容。
+    const long = `${'x'.repeat(80)} HEADLINE-END｜QUOTE-END`
+    const messages = buildAnalysisMessages(snapshot({
+      facts: [{ ...triggerFact, value: long }], trigger,
+      evidenceRefs: [{ evidenceRefId: 'news:item-1' }] as never
+    }))
+    const user = JSON.parse(messages.find(message => message.role === 'user')!.content) as Record<string, unknown>
+    expect(user.trigger).toMatchObject({
+      factRef: expect.stringMatching(/^f\d+$/),
+      evidenceRef: expect.stringMatching(/^e\d+$/),
+      subject: 'BTC',
+      fact: long
+    })
+  })
+
+  it('does not tell a news-triggered run that the change record is what triggered it', () => {
+    // 两个互相矛盾的「本次运行由…触发」是模型跑偏的直接原因：它照着 change 那条写成了稳定币综述。
+    const change = {
+      sequence: 2, previousSnapshotHash: 'h0',
+      facts: [{ factId: 'mi-fact-stablecoin', subject: 'BTC', domain: 'capital', metric: 'stablecoin-supply' }],
+      missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: [], caveatsRemoved: [],
+      evidenceRefsAdded: [], evidenceRefsRemoved: []
+    }
+    const withTrigger = systemPrompt(snapshot({ facts: [triggerFact], trigger, change } as never))
+    expect(withTrigger).not.toContain('本次运行由输入 change 段里的变化触发')
+    expect(withTrigger).toContain('**不是**本次运行的原因')
+    const withoutTrigger = systemPrompt(snapshot({ change } as never))
+    expect(withoutTrigger).toContain('本次运行由输入 change 段里的变化触发')
+  })
+
+  it('states the two checks the trigger-focus rule rejects on', () => {
+    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    expect(system).toContain('必须出现在论证区')
+    expect(system).toContain('顶层 evidenceRefs 清单不算回答')
+    expect(system).toContain('写出 `trigger.subject` 这个标的名称本身')
   })
 
   it('states the three prohibitions for a news reading', () => {
