@@ -47,10 +47,14 @@ export function createNewsInterpretationReader(
       .find(entry => entry.snapshot?.trigger?.itemId === itemId)
     if (!answered?.snapshot) return { itemId, state: 'none', currentEvidenceFingerprint }
     const snapshot = answered.snapshot
+    // 正文只有摘要 id 这一条路（`getSummary({id})`）；拿不到摘要就不许报 `available`——
+    // 摘要行会被保留策略删掉而同组的运行行留下，那种组合只回 runId 就是「成功但空节」。
+    const summary = deps.repository.getSummaryForRun(answered.run.id)
+    if (!summary) return { itemId, state: 'none', currentEvidenceFingerprint }
     const triggerFact = snapshot.facts.find(fact => fact.factId === snapshot.trigger?.factId)
     return {
-      itemId, state: 'available', runId: answered.run.id,
-      ...(answered.run.completedAt ? { generatedAt: answered.run.completedAt } : {}),
+      itemId, state: 'available', runId: answered.run.id, summaryId: summary.id,
+      generatedAt: summary.createdAt ?? answered.run.completedAt ?? answered.run.queuedAt,
       snapshotHash: snapshot.snapshotHash,
       dataAsOf: snapshot.asOf,
       evidenceScope: {

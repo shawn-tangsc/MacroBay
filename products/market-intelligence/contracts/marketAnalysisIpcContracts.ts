@@ -111,24 +111,41 @@ export type NewsInterpretationEvidenceScope = Readonly<{
 }>
 
 /**
- * 只读结果（R37 §9.2）：判断「查看 / 再次解读」只比 `evidenceFingerprint` 与
+ * 只读结果（R37 §9.2 / §9.3）：判断「查看 / 再次解读」只比 `evidenceFingerprint` 与
  * `currentEvidenceFingerprint` 这一对；`snapshotHash` 随结果返回但**只作审计**。
+ *
+ * **按 `state` 收窄**：`available` 与（写端点的）`already-available` 里 `summaryId` 非空——
+ * 「available」的定义就是「有已发布摘要、且此刻读得到」：摘要行会被保留策略删掉，而运行行可能
+ * 因为被别的账本引用而留下来；只回 `runId` 就是「成功但空节」，正是这一节存在的理由要避免的。
  */
-export type NewsInterpretationReadResult = Readonly<{
-  itemId: string
-  state: 'none' | 'available' | 'in-flight'
-  runId?: string
-  /** 已有解读产出的时刻。 */
-  generatedAt?: string
-  snapshotHash?: string
-  dataAsOf?: string
-  evidenceScope?: NewsInterpretationEvidenceScope
-  evidenceFingerprint?: string
-  /** 此刻会冻结成的证据指纹；算不出来（这条建不出证据引用）时为 null。 */
-  currentEvidenceFingerprint: string | null
-  /** 触发事实在快照里的显示名（标题）。界面按 `subjectLabel ?? subject` 取值，别直接读空的 subject。 */
-  subjectLabel?: string
-}>
+export type NewsInterpretationReadResult =
+  | Readonly<{
+    itemId: string
+    state: 'none'
+    /** 此刻会冻结成的证据指纹；算不出来（这条建不出证据引用）时为 null。 */
+    currentEvidenceFingerprint: string | null
+  }>
+  | Readonly<{
+    itemId: string
+    state: 'in-flight'
+    runId: string
+    currentEvidenceFingerprint: string | null
+  }>
+  | Readonly<{
+    itemId: string
+    state: 'available'
+    runId: string
+    /** 正文的入口：`getSummary({ id })` 收的就是它。 */
+    summaryId: string
+    generatedAt: string
+    snapshotHash: string
+    dataAsOf: string
+    evidenceScope: NewsInterpretationEvidenceScope
+    evidenceFingerprint: string
+    currentEvidenceFingerprint: string | null
+    /** 触发事实在快照里的显示名（标题）。界面按 `subjectLabel ?? subject` 取值。 */
+    subjectLabel?: string
+  }>
 
 export function isNewsInterpretationReadInput(value: unknown): value is Readonly<{ itemId: string }> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) return false
