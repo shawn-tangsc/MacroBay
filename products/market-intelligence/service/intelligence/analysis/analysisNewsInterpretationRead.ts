@@ -1,4 +1,5 @@
-import type { NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
+import type { AnalysisRun } from '../../../contracts/marketAnalysisContracts'
+import type { NewsInterpretationLastRun, NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
 import { buildEvidenceFingerprint } from './analysisHash'
 import { prepareMarketAnalysisSnapshot, type PreparationDependencies } from './analysisSnapshotPreparation'
 import { isNewsSeveritySource } from './analysisItemSeverity'
@@ -39,18 +40,20 @@ export function createNewsInterpretationReader(
     const runs = deps.repository.listRuns().filter(run => run.eventGroupId === group.id)
     const inFlight = runs.find(run => run.status === 'queued' || run.status === 'running')
     if (inFlight) return { itemId, state: 'in-flight', runId: inFlight.id, currentEvidenceFingerprint }
-    // 最近一次「成功、且它的快照就是为这条新闻冻的」：同组别的条目的摘要不能算这条的解读。
-    const answered = runs
-      .filter(run => run.status === 'succeeded')
-      .sort((left, right) => (right.completedAt ?? right.queuedAt).localeCompare(left.completedAt ?? left.queuedAt))
+    // 为这条新闻冻过快照的那些运行，按结束时刻从新到旧：同组别的条目的摘要不能算这条的解读。
+    const forItem = runs
+      .filter(run => run.snapshotId)
       .map(run => ({ run, snapshot: deps.repository.getSnapshot(run.snapshotId) }))
-      .find(entry => entry.snapshot?.trigger?.itemId === itemId)
-    if (!answered?.snapshot) return { itemId, state: 'none', currentEvidenceFingerprint }
+      .filter(entry => entry.snapshot?.trigger?.itemId === itemId)
+      .sort((left, right) => finishedAt(right.run).localeCompare(finishedAt(left.run)))
+    const answered = forItem.find(entry => entry.run.status === 'succeeded')
+    const lastRun = lastRunOf(forItem[0])
+    if (!answered?.snapshot) return { itemId, state: 'none', currentEvidenceFingerprint, ...(lastRun ? { lastRun } : {}) }
     const snapshot = answered.snapshot
     // 正文只有摘要 id 这一条路（`getSummary({id})`）；拿不到摘要就不许报 `available`——
     // 摘要行会被保留策略删掉而同组的运行行留下，那种组合只回 runId 就是「成功但空节」。
     const summary = deps.repository.getSummaryForRun(answered.run.id)
-    if (!summary) return { itemId, state: 'none', currentEvidenceFingerprint }
+    if (!summary) return { itemId, state: 'none', currentEvidenceFingerprint, ...(lastRun ? { lastRun } : {}) }
     const triggerFact = snapshot.facts.find(fact => fact.factId === snapshot.trigger?.factId)
     return {
       itemId, state: 'available', runId: answered.run.id, summaryId: summary.id,
@@ -66,5 +69,28 @@ export function createNewsInterpretationReader(
       currentEvidenceFingerprint,
       ...(triggerFact?.subjectLabel ? { subjectLabel: triggerFact.subjectLabel } : {})
     }
+  }
+}
+
+/** 结束时刻（没有结束时刻用排队时刻；两者都没有就排到最后）。 */
+function finishedAt(run: AnalysisRun): string {
+  return run.completedAt ?? run.queuedAt ?? ''
+}
+
+/** 这些终态意味着「点过了，但没有正文可读」。 */
+const UNPRODUCTIVE_RUN_STATUSES: ReadonlySet<AnalysisRun['status']> =
+  new Set<AnalysisRun['status']>(['failed', 'invalid-output', 'cancelled', 'stale', 'superseded'])
+
+/**
+ * 最近一次运行没产出时，把失败报给界面（读者据此看到失败态 + 重试，而不是停在「正在生成」）。
+ * 只报最近一次：更早的失败已被后一次尝试覆盖，报它会让读者以为点过一次失败就永远失败。
+ */
+function lastRunOf(entry: Readonly<{ run: AnalysisRun }> | undefined): NewsInterpretationLastRun | undefined {
+  if (!entry || !UNPRODUCTIVE_RUN_STATUSES.has(entry.run.status)) return undefined
+  return {
+    runId: entry.run.id,
+    status: entry.run.status as NewsInterpretationLastRun['status'],
+    failureCode: entry.run.failureCode ?? null,
+    finishedAt: entry.run.completedAt ?? null
   }
 }

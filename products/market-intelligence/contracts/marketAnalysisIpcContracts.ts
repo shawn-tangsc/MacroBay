@@ -111,6 +111,21 @@ export type NewsInterpretationEvidenceScope = Readonly<{
 }>
 
 /**
+ * 最近一次按条运行结束了、但没有正文：读者点过这一条，等到的是失败。
+ *
+ * 没有这一档，失败在界面上只能表现为「正在生成」停在那里——运行结束、摘要没有，只读接口回
+ * `none`，界面分不出「还没点过」和「点了、失败了」。`failureCode` 是运行自己的码（取消这类
+ * 终态没有码时为 null），界面按它决定「再试一次」还是「去看原因」。
+ */
+export type NewsInterpretationLastRun = Readonly<{
+  runId: string
+  status: 'failed' | 'invalid-output' | 'cancelled' | 'stale' | 'superseded'
+  failureCode: string | null
+  /** 运行结束时刻；旧记录可能只有排队时刻。 */
+  finishedAt: string | null
+}>
+
+/**
  * 只读结果（R37 §9.2 / §9.3）：判断「查看 / 再次解读」只比 `evidenceFingerprint` 与
  * `currentEvidenceFingerprint` 这一对；`snapshotHash` 随结果返回但**只作审计**。
  *
@@ -124,6 +139,8 @@ export type NewsInterpretationReadResult =
     state: 'none'
     /** 此刻会冻结成的证据指纹；算不出来（这条建不出证据引用）时为 null。 */
     currentEvidenceFingerprint: string | null
+    /** 最近一次按条运行失败了才有：界面据此显示失败态并给重试，而不是停在「正在生成」。 */
+    lastRun?: NewsInterpretationLastRun
   }>
   | Readonly<{
     itemId: string

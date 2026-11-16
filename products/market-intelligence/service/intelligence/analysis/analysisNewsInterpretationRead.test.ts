@@ -77,7 +77,20 @@ describe('只读判读：哪条解读、能不能读', () => {
 
   it('reports none — not available — when the summary row is gone but the run succeeded', async () => {
     // 摘要被保留策略删掉、运行行因别的账本引用留下：只回 runId 就是「成功但空节」。
-    await expect(reader({ summary: undefined })('item-1')).resolves.toMatchObject({ state: 'none' })
+    const result = await reader({ summary: undefined })('item-1')
+    expect(result).toMatchObject({ state: 'none' })
+    // 成功过、只是摘要没了：这不是「点了失败」，不给失败态，否则读者会以为要重试。
+    expect(result.state === 'none' ? result.lastRun : 'n/a').toBeUndefined()
+  })
+
+  it('reports the last run failure so the section can show a retry instead of waiting forever', async () => {
+    // 线上那次：运行 invalid-output、没有摘要；只回 none 时界面停在「正在生成」。
+    const rejected = { ...run('invalid-output'), failureCode: 'analysis-missing-evidence', failureDetailCode: 'missing-trigger-focus' } as AnalysisRun
+    const result = await reader({ run: rejected })('item-1')
+    expect(result).toMatchObject({
+      state: 'none',
+      lastRun: { runId: 'mi-ar-1', status: 'invalid-output', failureCode: 'analysis-missing-evidence', finishedAt: asOf }
+    })
   })
 
   it('reports in-flight without a summary id while a run is still queued', async () => {
