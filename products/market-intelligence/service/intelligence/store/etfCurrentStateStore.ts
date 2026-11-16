@@ -310,7 +310,12 @@ function sameWindow(left: EtfCurrentStateWindow, right: EtfCurrentStateWindow): 
   return JSON.stringify(materialWindow(left)) === JSON.stringify(materialWindow(right))
 }
 
-type MaterialEtfDailyFlow = Omit<EtfDailyFlow, 'fetchedAt'>
+/**
+ * 材料行 = 提供方给的事实。`fetchedAt`（这一轮抓取的时刻）与 `firstSeenAt`（第一次进库的时刻）
+ * 都是记账，不是事实：它们一变就当成「数据变了」，会撞上「定稿后不许改」的闸门，
+ * 而 revision 又不覆盖它们——结果是永远写不进去。所以两者一起从比较里剥掉。
+ */
+type MaterialEtfDailyFlow = Omit<EtfDailyFlow, 'fetchedAt' | 'firstSeenAt'>
 type MaterialEtfCurrentStateWindow = Omit<EtfCurrentStateWindow, 'btc' | 'eth'> & Readonly<{
   btc: readonly MaterialEtfDailyFlow[]
   eth: readonly MaterialEtfDailyFlow[]
@@ -319,8 +324,8 @@ type MaterialEtfCurrentStateWindow = Omit<EtfCurrentStateWindow, 'btc' | 'eth'> 
 function materialWindow(window: EtfCurrentStateWindow): MaterialEtfCurrentStateWindow {
   return {
     ...window,
-    btc: window.btc.map(({ fetchedAt: _fetchedAt, ...flow }) => flow),
-    eth: window.eth.map(({ fetchedAt: _fetchedAt, ...flow }) => flow)
+    btc: window.btc.map(({ fetchedAt: _fetchedAt, firstSeenAt: _firstSeenAt, ...flow }) => flow),
+    eth: window.eth.map(({ fetchedAt: _fetchedAt, firstSeenAt: _firstSeenAt, ...flow }) => flow)
   }
 }
 

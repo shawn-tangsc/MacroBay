@@ -130,12 +130,33 @@ async function enabled(read: () => Promise<boolean>): Promise<boolean> {
  *
  * `fetchedAt` 每轮刷新都变，回答不了这个问题——用户问「16 号怎么还没来」时要的是这一列。
  */
-function priorFirstSeenAt(window: EtfCurrentStateWindow | undefined): ReadonlyMap<string, string> {
+function priorFirstSeenAt(window: EtfCurrentStateWindow | undefined): Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }> {
   const seen = new Map<string, string>()
+  const known = new Set<string>()
   for (const flow of window ? [...window.btc, ...window.eth] : []) {
-    if (flow.firstSeenAt) seen.set(`${flow.asset}:${flow.tradingDate}`, flow.firstSeenAt)
+    const key = `${flow.asset}:${flow.tradingDate}`
+    known.add(key)
+    if (flow.firstSeenAt) seen.set(key, flow.firstSeenAt)
   }
-  return seen
+  return { seen, known }
+}
+
+/**
+ * 一行该写什么「第一次进库」：
+ * - 旧窗口记过 → 原样继承；
+ * - 旧窗口有这一天、但当时还没有这一列（升级前的行）→ **不写**，就是「不知道」，
+ *   不能拿这一轮的时间冒充它，否则每一行都会说自己今天才到；
+ * - 旧窗口没有这一天 → 这一轮。
+ */
+function firstSeenAtFor(
+  key: string,
+  firstSeen: Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }>,
+  fetchedAt: string
+): Readonly<{ firstSeenAt?: string }> {
+  const inherited = firstSeen.seen.get(key)
+  if (inherited !== undefined) return Object.freeze({ firstSeenAt: inherited })
+  if (firstSeen.known.has(key)) return Object.freeze({})
+  return Object.freeze({ firstSeenAt: fetchedAt })
 }
 
 function buildWindow(input: Readonly<{
@@ -145,7 +166,7 @@ function buildWindow(input: Readonly<{
   currentUtcDate: string
   /** 这一窗的数据来自哪个源：行上如实写它，别把备源的数记成主源的。 */
   sourceId: EtfFlowSourceId
-  firstSeen: ReadonlyMap<string, string>
+  firstSeen: Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }>
 }>) {
   const btc = toFlows(input.btc, 'BTC', input.fetchedAt, input.currentUtcDate, input.sourceId, input.firstSeen)
   const eth = toFlows(input.eth, 'ETH', input.fetchedAt, input.currentUtcDate, input.sourceId, input.firstSeen)
@@ -166,7 +187,7 @@ function buildWindow(input: Readonly<{
   return Object.freeze({ ...built.window, ...(revision ? { revision } : {}) })
 }
 
-function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string, sourceId: EtfFlowSourceId, firstSeen: ReadonlyMap<string, string>): readonly EtfDailyFlow[] | undefined {
+function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string, sourceId: EtfFlowSourceId, firstSeen: Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }>): readonly EtfDailyFlow[] | undefined {
   const dates = new Set<string>()
   const flows: EtfDailyFlow[] = []
   for (const row of rows) {
@@ -177,8 +198,8 @@ function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt:
     flows.push(Object.freeze({
       asset, tradingDate, netFlowUsd: row.changeUsd,
       observedAt: `${tradingDate}T00:00:00.000Z`, fetchedAt,
-      // 见过的日子保留它原来的第一次进库时刻；新日子就是这一轮。
-      firstSeenAt: firstSeen.get(`${asset}:${tradingDate}`) ?? fetchedAt,
+      // 见过的日子保留它原来记下的时刻；新来的那一轮才是 fetchedAt。
+      ...firstSeenAtFor(`${asset}:${tradingDate}`, firstSeen, fetchedAt),
       source: (row.source ?? sourceId) as EtfFlowSourceId,
       ...(row.updateTime ? { sourceRevision: row.updateTime } : {})
     }))

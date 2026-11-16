@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { createEtfCurrentStateRefreshService } from './etfCurrentStateRefreshService'
 import { createEtfCurrentStateStore, createInMemoryEtfCurrentStateStorage } from '../store/etfCurrentStateStore'
-import { buildEtfCurrentStateWindow } from './etfCurrentStateWindow'
+import { buildEtfCurrentStateWindow, etfWindowRevision } from './etfCurrentStateWindow'
 
 const resolvedSource = async () => ({ kind: 'resolved' as const, sourceId: 'cryptoetf-etf-flows' })
 
@@ -117,6 +117,49 @@ describe('ETF current-state refresh service', () => {
     expect(byDate.get('2026-08-21')!.firstSeenAt).toBe('2026-08-26T12:00:00.000Z')
     expect(byDate.get('2026-08-24')!.firstSeenAt).toBe('2026-08-28T12:00:00.000Z')
     expect(byDate.get('2026-08-17')!.fetchedAt).toBe('2026-08-28T12:00:00.000Z')
+  })
+
+  it('leaves the landing time unknown for rows that were already there before the field existed', async () => {
+    const days = ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21']
+    const flows = (asset: 'BTC' | 'ETH') => days.map((tradingDate, index) => ({
+      asset, tradingDate, netFlowUsd: index + 1,
+      observedAt: `${tradingDate}T00:00:00.000Z`, fetchedAt: '2026-08-26T12:00:00.000Z', source: 'cryptoetf-etf-flows'
+    }))
+    const built = buildEtfCurrentStateWindow({
+      asOf: '2026-08-26T12:00:00.000Z', completeThrough: '2026-08-21', completeDates: days,
+      btc: flows('BTC') as never, eth: flows('ETH') as never
+    })
+    if (built.state !== 'available') throw new Error('expected a valid seed window')
+    // 真实落库的窗口一定带 revision（第一轮刷新就会补上）；没有它 `replace` 的换版闸门过不去。
+    const seededWindow = Object.freeze({
+      ...built.window,
+      revision: etfWindowRevision([...built.window.btc, ...built.window.eth])
+    })
+    const store = createEtfCurrentStateStore({
+      storage: createInMemoryEtfCurrentStateStorage({
+        schemaVersion: 2,
+        snapshot: { window: seededWindow, verifiedAt: '2026-08-26T12:00:00.000Z' },
+        health: { lastAttemptAt: '2026-08-26T12:00:00.000Z', lastSuccessAt: '2026-08-26T12:00:00.000Z', snapshotReplaceCount: 1, snapshotNoWriteCount: 0, rejectionCount: 0 }
+      })
+    })
+    const raw = (asset: 'BTC' | 'ETH') => days.map((tradingDate, index) => ({
+      asset, date: Date.parse(`${tradingDate}T00:00:00.000Z`), change: index + 1,
+      changeUsd: index + 1, source: 'cryptoetf-etf-flows'
+    }))
+    const service = createEtfCurrentStateRefreshService({
+      resolveFactSource: resolvedSource,
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow: async () => ({ state: 'available' as const, btc: raw('BTC'), eth: raw('ETH') }),
+      store,
+      now: () => '2026-08-28T12:00:00.000Z'
+    })
+    // 先钉住这一轮真的走到了写库（否则「没写」也会显得像通过）。
+    await expect(service.refresh()).resolves.toEqual({ state: 'unchanged' })
+
+    const read = await store.read()
+    // 升级前的行没有这一列 —— 写「不知道」，不拿这一轮的时间冒充。
+    expect(read!.snapshot!.window.btc.every((flow) => flow.firstSeenAt === undefined)).toBe(true)
   })
 
   it('stops when the fact has no source, and refuses on a conflict', async () => {
