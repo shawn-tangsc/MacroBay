@@ -49,6 +49,8 @@ export type MappingRulesText = Readonly<{
   exportEmpty: string
   /** 导出按钮旁那句：导出的是全部行，与当前筛选无关。 */
   exportAllNote: string
+  /** 页签下面那句（带 `{count}`）：本表只统计指标，事件数量从读口来。 */
+  eventScopeNote: string
   /** 分级筛选器的占位（与「按国家筛选」同一种选择器）；选项复用 `tiers` 四档。 */
   tierFilter: string
   /** 导出文件里的三个工作表名。 */
@@ -117,14 +119,26 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   const fullMapped = useMemo(() => (view?.state === 'available' ? sortMappedRules(view.mapped) : []), [view])
   const fullUnmapped = useMemo(() => (view?.state === 'available' ? view.unmapped : []), [view])
   const counts = view?.state === 'available' ? view.counts : { mapped: 0, unmapped: 0, unmappedRows: 0 }
+  /**
+   * 页签下面那句：解释「未映射少了、已映射没涨」。数字**只从读口取**（`counts.eventIdentities`），
+   * 缺这个数就不显示这句话——写死一个数字，等于让界面替数据说话。
+   */
+  const eventCount = view?.state === 'available' ? view.counts.eventIdentities : undefined
+  const eventScopeNote = eventCount === undefined
+    ? null
+    : <p className="mi-catalog__note" data-event-scope>
+      {text.eventScopeNote.replace('{count}', String(eventCount))}
+    </p>
   const items: readonly ChoiceItem[] = [
     { value: 'mapped', labelKey: 'tabMapped', labelParams: { count: String(counts.mapped) } },
     { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(counts.unmapped) } }
   ]
   const copy: Readonly<Record<string, string>> = { tabMapped: text.tabMapped, tabUnmapped: text.tabUnmapped }
 
-  const mappedPanel = mapped.length === 0
-    ? <p className="mi-catalog__note">{text.mappedEmpty}</p>
+  const mappedPanel = <>
+    {eventScopeNote}
+    {mapped.length === 0
+      ? <p className="mi-catalog__note">{text.mappedEmpty}</p>
     : <Table<MappingRuleRow> size="small" rowKey="metricKey" pagination={false}
       dataSource={paged(mapped, mappedPage, pageSize)}
       columns={[
@@ -161,17 +175,21 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
         // 这条规则在库里实际覆盖多少行：0 也显示（0 是事实，空着会被当成「没读」）。
         { title: text.columns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap',
           render: (value: number) => String(value) }
-      ]} />
+      ]} />}
+  </>
 
-  const unmappedPanel = unmapped.length === 0
-    ? <p className="mi-catalog__note">{text.unmappedEmpty}</p>
+  const unmappedPanel = <>
+    {eventScopeNote}
+    {unmapped.length === 0
+      ? <p className="mi-catalog__note">{text.unmappedEmpty}</p>
     : <Table<UnmappedSourceIdRow> size="small" rowKey="sourceId" pagination={false}
       dataSource={paged(unmapped, unmappedPage, pageSize)}
       columns={[
         { title: text.unmappedColumns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel', render: (_value: string | null, row) => sampleText(row) }
-      ]} />
+      ]} />}
+  </>
 
   const body = view === undefined
     ? <StateView state="loading" />

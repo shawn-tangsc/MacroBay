@@ -31,7 +31,7 @@ const text = {
   columns: mkDay.mappingColumns, tiers: mkDay.mappingTiers, unmappedColumns: mkDay.mappingUnmappedColumns,
   tabMapped: mkDay.mappingTabMapped, tabUnmapped: mkDay.mappingTabUnmapped, tabsAria: mkDay.mappingTabsAria,
   exportLabel: mkDay.mappingExport, exportEmpty: mkDay.mappingExportEmpty,
-  exportAllNote: mkDay.mappingExportAllNote,
+  exportAllNote: mkDay.mappingExportAllNote, eventScopeNote: mkDay.mappingEventScopeNote,
   tierFilter: mkDay.mappingTierFilter,
   childSuffix: mkDay.mappingChildSuffix,
   sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped
@@ -49,7 +49,7 @@ const view: MappingRulesRead = {
       officialUrl: null, names: null, tier: 2, rowCount: 5 }
   ],
   unmapped: [{ sourceId: '10267', rowCount: 8, sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
-  counts: { mapped: 3, unmapped: 1, unmappedRows: 8 }
+  counts: { mapped: 3, unmapped: 1, unmappedRows: 8, eventIdentities: 99 }
 }
 
 let root: Root | undefined
@@ -157,7 +157,7 @@ const familyView: MappingRulesRead = {
       names: { zh: '失业率', en: 'Unemployment Rate' }, tier: 1, rowCount: 13 }
   ],
   unmapped: [],
-  counts: { mapped: 4, unmapped: 0, unmappedRows: 0 }
+  counts: { mapped: 4, unmapped: 0, unmappedRows: 0, eventIdentities: 99 }
 }
 
 it('puts a parent ahead of its children and shows the owning parent as small text', async () => {
@@ -237,4 +237,20 @@ it('exports every row regardless of the filter, and says so next to the button',
   // 行数 = 表头 + 读口给的计数（不是「屏幕上那 1 行」）。
   expect(rowsOf(first)).toBe(1 + view.counts.mapped)
   expect(rowsOf(second)).toBe(1 + view.counts.unmapped)
+})
+
+/**
+ * 页签下面那句说明（Chief 2026-11-17）：读者看到「未映射少了、已映射没涨」会以为丢东西。
+ * 数字**必须来自读口**——换个计数，句子跟着变；读口没给这个数时，不显示这句话。
+ */
+it('explains the event identities from the read port, not from a hardcoded number', async () => {
+  await mount()
+  expect(document.body.querySelector('[data-event-scope]')?.textContent).toContain('99')
+
+  await act(async () => root?.unmount())
+  host?.remove()
+  document.body.innerHTML = ''
+  await mount({ ...view, counts: { ...view.counts, eventIdentities: 7 } })
+  expect(document.body.querySelector('[data-event-scope]')?.textContent).toContain('7')
+  expect(document.body.querySelector('[data-event-scope]')?.textContent).not.toContain('99')
 })

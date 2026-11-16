@@ -179,6 +179,8 @@ export const macroIndicatorDrawerText = {
       mappingExportEmpty: '当前没有可导出的行',
       /* 导出按钮旁那句（用户 2026-11-17：导出是全表，别管筛选）。 */
       mappingExportAllNote: '导出的是两张表的全部行，与当前筛选无关',
+      /* 页签下面那句，解释「未映射少了、已映射没涨」：数字从读口取，不写死。 */
+      mappingEventScopeNote: '本表只统计指标。讲话与会议共 {count} 条已归为事件身份，显示在日历里，不计入此表。',
       mappingTabMapped: '已映射 ({count})',
       mappingTabUnmapped: '未映射 ({count})',
       mappingTabsAria: '切换已映射与未映射',
@@ -344,6 +346,7 @@ export const macroIndicatorDrawerText = {
       mappingExport: 'Export to Excel',
       mappingExportEmpty: 'Nothing to export from this tab',
       mappingExportAllNote: 'Exports every row of both sheets, regardless of the current filter',
+      mappingEventScopeNote: 'This table counts indicators only. {count} speeches and meetings now carry event identities and appear in the calendar; they are not counted here.',
       mappingTabMapped: 'Mapped ({count})',
       mappingTabUnmapped: 'Unmapped ({count})',
       mappingTabsAria: 'Switch between mapped and unmapped',

@@ -97,7 +97,12 @@ export type MappingRulesRead = Readonly<{
    * `mapped` 是**按指标码去重后**的条数：同一个码如果既有源内 id、又直接以码进来，只算一行
    * （用户 2026-11-17：两个页签并成一个）。所以它**不等于**规则条数之和。
    */
-  counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number }>
+  /**
+   * `mapped` 是**指标码数**（不含 `evt.*`），`eventIdentities` 是**事件身份数**——两个体系分开数：
+   * 一场讲话不是指标，不进 `mapped`；但它确实被认出来了，界面上要用这个数解释「为什么未映射少了、
+   * 已映射没涨」。事件一条都不进本表的行。
+   */
+  counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number; eventIdentities: number }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
 
 type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null; sampleLabelEn: string | null }>
@@ -239,7 +244,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       mapped: Object.freeze(mapped),
       unmapped: Object.freeze(unmapped),
       counts: Object.freeze({ mapped: mapped.length, unmapped: unmapped.length,
-        unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0) })
+        unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0),
+        eventIdentities: Object.keys(zeroXRouterEventIdentities).length })
     })
   } catch {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }
