@@ -346,6 +346,25 @@ describe('daily briefing service', () => {
     expect(await service.getProgress({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).toEqual({ state: 'idle' })
   })
 
+  // 用户 2026-11-16：一版生成只打一行结构化诊断，字段正好四个、不带任何敏感信息。
+  it('prints exactly one macro diagnostic line per generated edition', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const store = memoryStore()
+      const source = fakeSource()
+      const service = createDailyBriefingService({ source, store, now: () => asOf })
+      await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+      const lines = log.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[daily-briefing.macro] '))
+      expect(lines).toHaveLength(1)
+      const payload = JSON.parse(lines[0]!.slice('[daily-briefing.macro] '.length))
+      expect(Object.keys(payload).sort()).toEqual(['ageMinutes', 'asOf', 'macroEmpty', 'windowHours'])
+      expect(payload.windowHours).toBe(24)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   it('generates today once, stores it and prunes the retention window', async () => {
     const store = memoryStore()
     const source = fakeSource()

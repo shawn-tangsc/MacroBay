@@ -21,6 +21,7 @@ import {
   isDailyBriefingWindowHours
 } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
+import { briefingMacroDiagnostic, formatBriefingMacroDiagnostic } from './briefingMacroDiagnostic'
 import { createPublishToPhone, type BriefingPublishOutcome, type BriefingRedeliver } from './dailyBriefingPublishToPhone'
 import { createBriefingProgressReader, progressLookup } from './dailyBriefingProgressReader'
 import { isCurrent, markEditorialFailure, withEditorialModel } from './dailyBriefingEditorialState'
@@ -304,6 +305,10 @@ export function createDailyBriefingService(deps: Readonly<{
       const previous = await previousEditionBefore(deps.store, input.date, input.locale)
       document = buildDailyBriefingDocument({ packet, date: input.date, ...(previous ? { previous: previous.document } : {}) })
       document = withRunGaps(document, { failure: packet.market.crossAssetFailure, readinessWait: market.readinessWait, backfilled: market.backfillAttempted, locale: input.locale })
+      // 一版生成只打一次：这一版宏观栏最终写进文档的原因码、当时的年龄与窗口（用户 2026-11-16
+      // 的埋点要求）。字段名与日历线 `[macro-calendar.freshness]` / `[macro-calendar.catchup]`
+      // 对齐，用 `asOf` 一条 grep 串起一版的三条记录；不带凭据、URL 或 key。
+      console.log(formatBriefingMacroDiagnostic(briefingMacroDiagnostic(document, packet)))
       recorder.end('candidates', 'success')
     } catch {
       recorder.end('candidates', 'failed', { failureCode: 'build-failed' })
