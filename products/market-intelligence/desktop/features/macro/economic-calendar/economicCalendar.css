@@ -291,11 +291,18 @@ div.mi-economic-calendar__event:hover { background: transparent; }
 .mi-economic-calendar__refresh-blocked { color: var(--mi-economic-muted); font-size: var(--font-meta); line-height: 1.55; }
 .mi-economic-calendar__provenance { border-top: 1px solid var(--mi-economic-line); padding-top: 12px; }
 
-@media (max-width: 1279px) { .mi-economic-calendar { --mi-economic-page-inline: 24px; } }
+/*
+ * 这里原先有两条**窗口断点**（1279 与 1023），都随旧日历页一起失去了对象：它们改的
+ * `.mi-economic-calendar` 与 `.mi-economic-calendar__workspace` 已经没有任何调用点渲染，
+ * 而落在 `.mi-calendar-day-list` 上的那条「窄了就撤掉左边框、改成上边框」正是抽屉里的那一列——
+ * 于是窗口 1024 时抽屉里那列被剥掉边框、两列却仍并排挤着，窗口 1024–1279 之间又完全没人管。
+ *
+ * 现在这条收放归抽屉自己：`macroIndicatorDrawer.css` 用 `.ant-drawer-body` 当容器（`@container
+ * mk-drawer`），量的是抽屉正文真正剩下的宽度。日历这套样式不再对窗口宽度做任何判断。
+ */
 /* The drawer carries the detail on every width now, so its own gutter is the drawer's, not the
    column's: the inspector keeps the type and drops the rule that separated it from the month. */
 .mi-calendar-detail-container .mi-economic-calendar__inspector { grid-template-columns: minmax(0, 1fr); padding: 0; border: 0; }
-@media (max-width: 1023px) { .mi-economic-calendar__workspace { grid-template-columns: minmax(0, 1fr); } .mi-calendar-day-list { padding-left: 0; border-left: 0; border-top: 1px solid var(--mi-economic-line); padding-top: var(--mi-economic-gap); } }
 
 /* The release time reads as the row's value, not as a control: same type as its neighbours, with a
    quiet affordance that only appears for a row that may still be changed. A released row keeps the

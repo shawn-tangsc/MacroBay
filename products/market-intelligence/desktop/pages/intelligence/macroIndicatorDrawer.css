@@ -23,7 +23,13 @@
 
 /* 平台 Drawer 的正文留白（设计稿 14/16），只在本抽屉范围内生效。 */
 /* `className` 落在内容面板上，不在 `.ant-drawer` 根上——所以这里不能写 `.mk-drawer.ant-drawer`。 */
-.mk-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; }
+/*
+ * 正文同时是**容器查询的容器**：下面两列的收放问的是「这一格还剩多宽」，不是「窗口有多宽」。
+ * 抽屉是 `full` 档（1280，上限 94vw），同一扇窗里它可能是 1280，也可能是 962——窗口宽度
+ * 回答不了这个问题，写成窗口 `@media` 时抽屉里永远不会触发。量的是本格的 content box，
+ * 也就是两列真正能用的宽度。
+ */
+.mk-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; container-type: inline-size; container-name: mk-drawer; }
 .mk-drawer .ant-drawer-footer { padding: 6px 16px; }
   border: 0;
   background: transparent;
@@ -78,6 +84,22 @@
 .mk-col-r__more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mk-col-r__more svg { transition: transform .15s ease; }
 .mk-col-r__more svg[data-flip='true'] { transform: rotate(180deg); }
+
+/*
+ * 容器放不下两列时，当日事件列堆到读数列下面，而不是把它挤成一条缝。
+ *
+ * 阈值从这三个数来，别凭手感挪：读数列是设计锁死的 **828**，列间距 **16**，右列最少要
+ * **320** 才放得下「时刻 36 + 国家 52 + 标题 + 数值」那一行（同 `--mi-economic-inspector-width`）。
+ * 828 + 16 + 320 = 1164，所以 1163px 及以下收成一列；`full` 档自己的正文宽 1248，仍在两列。
+ *
+ * 收起来之后：整块改成按内容高（`height: auto`），由正文那一格自己滚，避免两列各自一条滚动条；
+ * 分隔线从左边挪到上边，当日列表自带的那层左边框一并去掉，否则竖线会留在半空。
+ */
+@container mk-drawer (max-width: 1163px) {
+  .mk-sec { grid-template-columns: minmax(0, 1fr); height: auto; width: 100%; align-self: flex-start; }
+  .mk-col-r { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: 12px; }
+  .mk-col-r .mi-calendar-day-list { padding-left: 0; border-left: 0; }
+}
 
 .mk-sechead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; flex: none; }
 /* 标题与它的说明图标是一组：图标紧贴标题，读数排在它们之后，不插在中间。 */
