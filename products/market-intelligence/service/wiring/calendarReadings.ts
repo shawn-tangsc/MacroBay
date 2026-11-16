@@ -55,8 +55,8 @@ export function wireCalendarReadings(input: Readonly<{
   const readCalendarLastWrittenAt = () => readStandardTableLastWrittenAt(input.database)
   input.intelligenceModule.publicQueryService.setMarketCalendarQuery({
     queryMonth: standardCalendarReader.queryMonth,
+    // **判定只有一个数**：标准表 `max(observed_at)`；作业记录不参与（用户 2026-11-16 定死）。
     readCollectionFreshness: async () => readCalendarFreshnessFromJobRuns({
-      listRuns: (query) => input.jobRuntime.listRuns(query),
       lastWrittenAt: readCalendarLastWrittenAt(),
       asOf: new Date().toISOString()
     })

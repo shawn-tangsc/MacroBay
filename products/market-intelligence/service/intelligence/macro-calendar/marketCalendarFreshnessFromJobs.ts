@@ -54,23 +54,25 @@ export const calendarCollectionJobDefinitionIds: readonly string[] = Object.free
   ...zeroXRouterCalendarSchedulerDefinitionIds
 ])
 
+/**
+ * **判定只读一个数**（用户 2026-11-16 定死）：`select max(observed_at) from mi_calendar_events`。
+ *
+ * 今晚同一个坑摔了六次，根因只有一个：判定去问「作业叫什么名字」，而换源时作业名改过一次、
+ * 两套 id 并存，每处按 id 找作业就漏一处。库里写了就是写了——与哪条作业、哪个来源无关。
+ *
+ * 采集尝试（attempts）**只作展示**：「最近一次尝试」那句话用它，不参与任何判定分支。
+ */
 export function readCalendarFreshnessFromJobRuns(input: Readonly<{
-  listRuns: (query: { definitionId: string }) => readonly JobRunLike[]
-  /** 数据里最近一次真正写入的时刻（标准表 `max(observed_at)`）；没有数据就是 `null`。 */
+  /** 数据里最近一次真正写入的时刻（标准表 `max(observed_at)`）；**唯一判定输入**。 */
   lastWrittenAt: string | null
   asOf: string
+  /** 展示输入：每路最近一次尝试（attempts 表）。不传就不出这个字段，不编。 */
+  latestAttempts?: readonly Readonly<{ descriptorId: string
+    latestAttempt?: { attemptedAt: string; state: string } }>[]
 }>): Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
-  sources: readonly { descriptorId: string; lastCollectedAt: string | null }[] }> {
-  const completions: string[] = []
-  for (const definitionId of calendarCollectionJobDefinitionIds) {
-    for (const run of input.listRuns({ definitionId })) {
-      if (run.status !== 'completed') continue
-      const at = run.completedAt ?? run.startedAt ?? run.createdAt
-      if (at === undefined) continue
-      completions.push(at)
-    }
-  }
-  const lastRunAt = completions.sort().at(-1) ?? null
+  sources: readonly { descriptorId: string; lastCollectedAt: string | null
+    latestAttempt?: { attemptedAt: string; state: string } }[] }> {
+  // 作业记录不再参与判定（判定的唯一依据是 `lastWrittenAt`）。
   /**
    * **过期只看「作业有没有跑成」，不看「这次有没有写进新行」**（Chief 2026-11-14 定）。
    *
@@ -79,7 +81,7 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
    * 「今天没有新发布」，后者才是「我们没采到」。写入时刻仍然读（`input.lastWrittenAt`），
    * 但只在**作业从没跑成过**时兜底：那种情况下有数据也比「什么都没采过」诚实。
    */
-  const lastCollectedAt = lastRunAt ?? input.lastWrittenAt
+  const lastCollectedAt = input.lastWrittenAt
   // **这份返回值是公共读数**：`isMarketCalendarFreshness` 用精确键集校验，多一个键整份就作废，
   // 简报于是只能显示「自动同步已停止」。诊断用的 `lastRunAt` 不塞进来——要它就在调用点单独算、
   // 单独记日志（「跑了」与「写入了」本来就是两个数，见上面那两条）。
@@ -87,6 +89,9 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
     state: 'available', asOf: input.asOf, lastCollectedAt,
     // 报的是**采集描述符**（当下在采的三条），不是 `feedByKind` 里旧源的 feed id——
     // 后者会让整份读数被契约校验判成不可用，或者把一条停跑的源算进「最差」。
-    sources: marketCalendarPublicPolicy.descriptors.map((descriptorId) => ({ descriptorId, lastCollectedAt }))
+    sources: marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
+      const attempt = input.latestAttempts?.find((entry) => entry.descriptorId === descriptorId)?.latestAttempt
+      return { descriptorId, lastCollectedAt, ...(attempt === undefined ? {} : { latestAttempt: attempt }) }
+    })
   }
 }
