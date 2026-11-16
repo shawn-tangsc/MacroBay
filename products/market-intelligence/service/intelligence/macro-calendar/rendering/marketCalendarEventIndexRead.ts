@@ -53,6 +53,7 @@ type Aggregate = Readonly<{
   next_at: string | null
   importance: string | null
   source_label: string | null
+  source_label_en: string | null
 }>
 
 const eventTypeOf = (metricKey: string): CalendarEventIndexRow['eventType'] => {
@@ -70,14 +71,18 @@ const cursorKey = (cursor: string): readonly [string, string] => {
 }
 
 /** 名字优先级：名表四列（中英各一对）→ 源原文名。都没有就不硬编。 */
-function namesOf(metricKey: string, sourceLabel: string | null) {
+function namesOf(metricKey: string, sourceLabel: string | null, sourceLabelEn: string | null = null) {
   // 回退链：**码名表 → 源内身份名表 → 源原文名**（用户 2026-11-16 定）。
   const names = calendarNamesFor(metricKey)
   const identity = sourceIdentityDisplayNames[sourceInternalIdOf(metricKey).replace(/^id:/, '')]
   const fallback = sourceLabel === null || sourceLabel.trim() === '' ? undefined : sourceLabel.trim()
   const display = names ?? (identity === undefined ? undefined : namePairFromSourceIdentity(identity.zh, identity.en))
+  // **英文原文名单独存一列**（迁移 18 把库里中英两条合并成一行）：名表/身份名表已经给了英文就不覆盖，
+  // 它只进搜索命中列，不改变显示名。
+  const englishFallback = sourceLabelEn === null || sourceLabelEn.trim() === '' ? undefined : sourceLabelEn.trim()
   return {
     ...(display === undefined ? {} : { ...display }),
+    ...(display === undefined && englishFallback !== undefined ? englishSearchName(englishFallback) : {}),
     ...(fallback === undefined ? {} : { sourceLabel: fallback }),
     // 只有真回退到「源原文名」时才算，源内名表命中是**我们给的名字**，不标。
     titleIsSourceLabel: display === undefined && fallback !== undefined
@@ -89,7 +94,8 @@ function aggregates(database: DatabaseSync, today: string): Aggregate[] {
   return database.prepare(`select country_code, metric_key,
       max(case when scheduled_date <= ?1 then scheduled_date end) as last_date,
       min(case when scheduled_date > ?1 then scheduled_date end) as next_date,
-      max(importance) as importance, max(source_label) as source_label
+      max(importance) as importance, max(source_label) as source_label,
+      max(source_label_en) as source_label_en
     from mi_calendar_events where row_kind = 'release'
     group by country_code, metric_key`).all(today) as unknown as Aggregate[]
 }
@@ -129,7 +135,7 @@ export function readCalendarEventIndex(database: DatabaseSync, input: Readonly<{
     const rows: CalendarEventIndexRow[] = []
     for (const aggregate of aggregates(database, input.today)) {
       if (input.countryCode !== undefined && input.countryCode !== '' && aggregate.country_code !== input.countryCode) continue
-      const names = namesOf(aggregate.metric_key, aggregate.source_label)
+      const names = namesOf(aggregate.metric_key, aggregate.source_label, aggregate.source_label_en)
       if (words.length > 0) {
         // 命中列集合 = 名表四列 + 源原文名。**不拼接**（拼接会造出跨字段假命中）。
         const haystack = Object.values(names)

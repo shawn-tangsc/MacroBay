@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
 import { sourceIdOverwriteOnWrite } from './marketCalendarSourceIdAudit'
+import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketCalendarSameIdentityWrite'
 
 /**
  * 标准日历表：**一行 = 一次发布**。主键 = 身份 `(country_code, metric_key, period_key)` +
@@ -168,6 +169,10 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       status text not null default 'unknown' check(status in (${marketCalendarPublicPolicy.releaseStatuses.map((status) => `'${status}'`).join(', ')})),
       identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
       source_label text,
+      -- **源给的英文原文名**（迁移 18）：源对同一件事发了中文名、英文名两条，库里合并成一行后
+      -- 中文那条做显示名，英文那条不能丢——英文读者搜 New York Fed 还得命中。这一列只进
+      -- 搜索命中列，不覆盖显示名（与读取层英文全称槽位同一语义）。
+      source_label_en text,
       series_id text,
       importance text check(importance in ('high', 'medium', 'low')),
       value_state text check(value_state in ('present', 'missing')),
@@ -239,6 +244,10 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   if (!columns.some((column) => column.name === 'source_label')) {
     database.exec(`alter table ${eventsTable} add column source_label text`)
   }
+  // 迁移 18 的列：老副本没有它，`create table if not exists` 不会补。缺列就补，不猜内容。
+  if (!columns.some((column) => column.name === 'source_label_en')) {
+    database.exec(`alter table ${eventsTable} add column source_label_en text`)
+  }
   if (!columns.some((column) => column.name === 'importance')) {
     database.exec(`alter table ${eventsTable} add column importance text`)
   }
@@ -272,7 +281,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
  * 写一行标准事件。**修订覆盖值，但冻结首发布两列**——`on conflict` 的 `do update` 里
  * 刻意不出现 `first_published_*`，也不写 `first_seen_at`。
  */
-export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): void {
+export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): Readonly<{
+  countryCode: string; metricKey: string; periodKey: string; firstScheduledDate: string
+}> {
   const { eventsTable } = calendarStandardTablePolicy
   /**
    * **国家码在写入端归一到 alpha-2**（2026-11-16，Chief 拍板）。
@@ -283,18 +294,30 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
    * 不再是常态路径。
    */
   const countryCode = toAlpha2Country(row.countryCode)
+  /**
+   * **认回「同一件事的另一条名字」**（迁移 18）：源对同一件事发中文名、英文名两条，数组身份
+   * 第一段相同。只删不堵的话，下一次采集就把刚合掉的那行插回来——所以写入端在这里改指到
+   * 已存在的那一行，并把英文原文名存进 `source_label_en`（显示名仍用中文）。
+   */
+  const sameIdentity = resolveSameSourceIdentityTarget(database, {
+    countryCode, sourceProviderId: row.sourceProviderId, metricKey: row.metricKey, periodKey: row.periodKey
+  })
+  const metricKey = sameIdentity?.metricKey ?? row.metricKey
+  const periodKey = sameIdentity?.periodKey ?? row.periodKey
+  const firstScheduledDate = sameIdentity?.firstScheduledDate ?? row.firstScheduledDate ?? row.scheduledDate
+  const labels = sourceLabelsForWrite(sameIdentity, row.sourceLabel)
   // 先量一眼「同身份换 id」：只打日志、不改数据；旧 id 不在台账里会单独记真红标记。
   sourceIdOverwriteOnWrite(database, {
     eventsTable, sourceIdsTable: calendarStandardTablePolicy.sourceIdsTable
   }, {
-    countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
-    firstScheduledDate: row.firstScheduledDate ?? row.scheduledDate, sourceEventId: row.sourceEventId
+    countryCode, metricKey, periodKey,
+    firstScheduledDate, sourceEventId: row.sourceEventId
   })
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
-     status, identity_kind, source_label, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
+     status, identity_kind, source_label, source_label_en, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
      first_published_actual, first_published_previous, data_observed_at, event_type)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -322,17 +345,20 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       -- 先写空、后到值的行会永远记着 missing，视图按它一折就把有值的行折掉。
       value_state = case when excluded.value_state = 'present' then 'present'
         else coalesce(value_state, excluded.value_state) end,
+      -- 两个名字分头存（迁移 18）：中文名做显示、英文原文只进搜索命中列；谁先到都不拿空值盖掉已有值。
+      source_label = coalesce(excluded.source_label, source_label),
+      source_label_en = coalesce(excluded.source_label_en, source_label_en),
       event_type = coalesce(excluded.event_type, event_type),
       source_provider_id = excluded.source_provider_id,
       source_event_id = excluded.source_event_id,
       parser_version = excluded.parser_version,
       observed_at = excluded.observed_at`)
-    .run(countryCode, row.metricKey, row.periodKey, row.scheduledDate,
-      row.firstScheduledDate ?? row.scheduledDate, row.scheduledAt ?? null, row.timePrecision,
+    .run(countryCode, metricKey, periodKey, row.scheduledDate,
+      firstScheduledDate, row.scheduledAt ?? null, row.timePrecision,
       row.rowKind ?? 'release',
       row.status ?? 'unknown',
       row.identityKind ?? 'code',
-      row.sourceLabel ?? null,
+      labels.sourceLabel, labels.sourceLabelEn,
       row.seriesId ?? null,
       row.importance ?? null,
       // 没传就**从值本身推**：物化列不允许留空——空着会被视图当「没值」折掉。
@@ -343,6 +369,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.dataObservedAt ?? row.observedAt,
       // 写入侧知道「这是什么」就存下来；不知道（历史/旧调用方）留空，读侧才退前缀规则。
       row.eventType ?? null)
+  // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
+  // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
+  return { countryCode, metricKey, periodKey, firstScheduledDate }
 }
 
 /**

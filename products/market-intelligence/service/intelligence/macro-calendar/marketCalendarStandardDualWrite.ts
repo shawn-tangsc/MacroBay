@@ -110,7 +110,7 @@ export function dualWriteMeasureRows(
         promoteCalendarStandardRowToCode(database, { sourceProviderId: input.providerId,
           sourceEventId: row.sourceEventId, metricKey: row.metricKey })
       }
-      upsertCalendarStandardRow(database, {
+      const placed = upsertCalendarStandardRow(database, {
         countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
         scheduledDate: row.scheduledDate,
         ...(row.scheduledAt === undefined ? {} : { scheduledAt: row.scheduledAt }),
@@ -136,10 +136,11 @@ export function dualWriteMeasureRows(
         ...(row.previous === undefined ? {} : { firstPublishedPrevious: row.previous })
       })
       // 记下「这次发布落到了哪一行」：同一行被源重发时前一个 id 会被覆盖，
-      // 但溯源清单要能查到每一次发布。
+      // 但溯源清单要能查到每一次发布。**身份取 upsert 真正写进去的那一组**：中英两条会被认回到
+      // 同一行（迁移 18），写这一笔带来的 id 会让台账指向一个不存在的身份。
       recordCalendarSourceId(database, { providerId: input.providerId, sourceEventId: row.sourceEventId,
-        countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
-        firstScheduledDate: existing?.firstScheduledDate ?? row.scheduledDate, observedAt: input.observedAt })
+        countryCode: placed.countryCode, metricKey: placed.metricKey, periodKey: placed.periodKey,
+        firstScheduledDate: placed.firstScheduledDate, observedAt: input.observedAt })
       written += 1
     } catch (error) {
       failed += 1

@@ -7,6 +7,7 @@ import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketC
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
+import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
@@ -100,6 +101,15 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       if (crossSource.mergedGroups > 0) {
         console.warn(`[macro-calendar] 跨源合并：${crossSource.groups} 组里合并 ${crossSource.mergedGroups} 组、`
           + `删 ${crossSource.removedRows} 行；值冲突保留 ${crossSource.conflictedGroups} 组`)
+      }
+      // 同源中英两条合并（迁移 18）：源对同一件事发了中文名、英文名两条，身份第一段相同，库里是两行。
+      // 合并后中文名做显示、英文原文进 `source_label_en` 仍可搜；台账改指到留下的那一行。
+      const sameSourceNames = mergeSameSourceNameRows(database)
+      if (sameSourceNames.mergedGroups > 0) {
+        console.warn(`[macro-calendar] 同源中英合并：${sameSourceNames.groups} 组里合并 `
+          + `${sameSourceNames.mergedGroups} 组、删 ${sameSourceNames.removedRows} 行、`
+          + `留下英文原文名 ${sameSourceNames.englishNameStored} 行、台账改指 ${sameSourceNames.ledgerRewritten} 条、`
+          + `同月改期未合并 ${sameSourceNames.rescheduledKept} 组（两次排期记录，不是重复）`)
       }
       const eventTypes = backfillCalendarEventTypes(database)
       if (eventTypes.eventTypeFilled > 0 || eventTypes.importanceFilled > 0) {
