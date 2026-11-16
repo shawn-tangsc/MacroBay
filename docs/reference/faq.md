@@ -46,8 +46,9 @@ connected in this version.** See [Status and limitations](./status-and-limitatio
 
 ## Does it work on Windows or Linux?
 
-macOS is the verified development platform. The Electron code is expected to run elsewhere, but
-Windows and Linux have not been validated end to end. Treat them as experimental and report
+macOS is the primary development and build platform; it was actually installed and used during 0.4.0,
+and has not been re-verified by a real install since. The Electron code is expected to run elsewhere,
+but Windows and Linux have not been validated end to end. Treat them as experimental and report
 concrete failures.
 
 ## Can I use it without a dashboard or live data?
