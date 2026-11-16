@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { release } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 import { readTextFilePreview } from '../../../files/attachments/textFilePreview'
 import {
@@ -175,6 +175,27 @@ export function registerWindowIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: Windo
     return result.canceled ? [] : result.filePaths
   })
   ipcMain.handle(IpcChannels.appReadTextFile, async (_event: IpcMainInvokeEvent, path: string) => readTextFilePreview(path))
+  ipcMain.handle(IpcChannels.appSaveFile, async (_event: IpcMainInvokeEvent, payload: unknown) => {
+    // 只收「建议文件名 + 字节」。**不收路径**：路径必须由下面这个对话框让用户选。
+    if (!payload || typeof payload !== 'object') throw new Error('Invalid save payload.')
+    const { suggestedName, bytes: rawBytes } = payload as { suggestedName?: unknown; bytes?: unknown }
+    const bytes = rawBytes instanceof Uint8Array
+      ? rawBytes
+      : rawBytes instanceof ArrayBuffer ? new Uint8Array(rawBytes) : null
+    if (!bytes || bytes.byteLength === 0 || bytes.byteLength > 20 * 1024 * 1024) {
+      throw new Error('Save payload is empty or too large.')
+    }
+    // 建议名只留最后一段文件名，别让它带出目录。
+    const name = typeof suggestedName === 'string' && suggestedName.trim() !== ''
+      ? basename(suggestedName.trim())
+      : 'export.bin'
+    const window = getMainWindow()
+    const options = { defaultPath: name, ...(name.endsWith('.xlsx') ? { filters: [{ name: 'Excel', extensions: ['xlsx'] }] } : {}) }
+    const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || result.filePath === undefined || result.filePath === '') return { state: 'cancelled' as const }
+    await writeFile(result.filePath, bytes)
+    return { state: 'saved' as const, path: result.filePath }
+  })
   ipcMain.handle(IpcChannels.appSaveClipboardImage, async (_event: IpcMainInvokeEvent, payload: unknown) => {
     // Renderer paste path: clipboard pixels are not a filesystem path, so write one temp file and
     // hand the existing attachment reader a normal path.

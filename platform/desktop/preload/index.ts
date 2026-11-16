@@ -86,6 +86,9 @@ const api = {
     relaunch: () => ipcRenderer.invoke(IpcChannels.appRelaunch),
     saveClipboardImage: (data: Uint8Array, mimeType: string) =>
       ipcRenderer.invoke(IpcChannels.appSaveClipboardImage, { data, mimeType }),
+    /** 存一段字节到用户选的文件。**只给「建议名 + 字节」**，路径由 main 的对话框决定。 */
+    saveFile: (suggestedName: string, bytes: Uint8Array) =>
+      ipcRenderer.invoke(IpcChannels.appSaveFile, { suggestedName, bytes }),
     onQuotedToMain: (callback: (text: string) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, text: string) => callback(text)
       ipcRenderer.on(IpcChannels.appQuoteToMain, listener)
