@@ -34,7 +34,7 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     // `analysisSharedRules`. A rule that is true of only one path does not belong there.
     renderSharedRulesBlock(),
     '字段结构如下（字符串说明是类型说明，不能原样复制）：',
-    JSON.stringify(analysisPromptSchemaExample()),
+    JSON.stringify(analysisPromptSchemaExample({ triggeredNews: Boolean(snapshot.trigger) })),
     `每个字符串不超过 ${marketAnalysisValidationPolicy.maximumFieldCharacters} 字符；每个数组不超过 ${marketAnalysisValidationPolicy.maximumCollectionItems} 项。`,
     '没有证据支持的列表必须为 []；每条事实必须使用它自己的 evidenceRefId，禁止用其他事件的证据支持当前行情。',
     '引用必须逐字一致：knownFacts 的每条 evidenceRefIds 只能写该事实自己那一个 evidenceRef 句柄，不得追加第二项；marketReaction 的每条 evidenceRefIds 必须恰好是被引用 factIds 各自事实的 evidenceRef 句柄集合。校验器要求两边完全相等，多写一个也会被整份拒绝。',
@@ -68,6 +68,18 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     + directionKeys.join('、') + '；界面会按读者语言取标签，正文里不要再写任何方向标记或段落标签。',
     'conclusion.causalChain 必须按「起因事件 → 中间变量（美元、实际利率、流动性、杠杆或资金流）→ 对该资产的作用方向 → 因此本判断成立的条件」的顺序写清机制。因果链必须用现有证据说明当前最可能的机制与作用方向；不得只写「若…可能…」这类条件句而不给出机制本身，也不得把条件式假设当作唯一解释。',
     'conclusion.summary 必须先写结论（机制与作用方向的判断），conclusion.change 再写本次数据变化；只给方向、没有结论句的输出会被直接拒绝发布。',
+    // 舆情触发的运行：这次不再是市场综述。四个问题缺一不可，且必答块只在有触发指针时出现。
+    ...(snapshot.trigger ? [
+      '本次运行由**一条新闻**触发：输入里 factId 为 `triggered-news:<itemId>` 的那条事实就是它（metric 同为「新闻舆情」）。这一段是必答的，不是背景。四件事都要写：',
+      '① 这条新闻是什么：谁做了什么、为什么与加密市场有关，一句话说清，**不要照抄标题**，也不要通篇复述新闻；',
+      '② 它影响哪个标的（BTC 或 ETH）；',
+      '③ 用**当前数据**印证或否证它：`conclusion.newsImpact` 取 `verdict: "evaluated"`，`checks` 至少两条、每条都取非舆情事实的 factRef，`effect` 写 supports 或 contradicts；两种都有时 `contradiction` 必须为 true，只有一种时为 false；`checks` 里的事实至少要跨两个不同读数——同一读数写两遍不算两条；',
+      '④ 给出这次解读的失效条件：`invalidation` 必须指到快照里的一条事实（`kind: "fact"` + `factId` + `relation`）或快照里的一个时刻（`kind: "instant"` + `at`），不许写没有出处的价位；`statement` 是给读者看的那句话。',
+      '如果确实查不出传导链：`verdict: "no-transmission"`，`checkedFactIds` 至少两条（写明查过哪些事实）、`reason` 一句话说明为什么没有传导。',
+      '如果缺关键信息：`verdict: "cannot-determine"`，`missing.item` 只能是 amount / symbol / time / market-data，`missing.state` 只能是 not-yet / source-empty / unreadable；**不许自造同义词，也不许用「信息不足」一句代替**。',
+      '三条禁止：不许只复述新闻；不许硬贴利好利空（方向必须由数据与机制给出）；不许把新闻里的金额直接当成市场影响——金额要变成市场影响，必须经过一个市场变量（资金流、成交、持仓、费率），并把那条变量写出来。',
+      '`conclusion.newsImpact` 只在这种由新闻发起的运行里出现；其它运行不要写这个字段。'
+    ] : []),
     // The run was triggered by a specific change; citing something else and narrating the backdrop
     // is the failure mode this rule exists for. Stated in the first answer, not only on retry.
     ...((snapshot.change?.facts ?? []).length > 0 ? [

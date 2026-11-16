@@ -17,6 +17,40 @@ function snapshot(overrides: Partial<EvidenceSnapshot> = {}): EvidenceSnapshot {
 const systemPrompt = (input: EvidenceSnapshot = snapshot()) =>
   buildAnalysisMessages(input).find(message => message.role === 'system')!.content
 
+describe('analysis model prompt trigger contract (R37)', () => {
+  const triggerFact = {
+    factId: 'triggered-news:item-1', domain: 'sentiment' as const, subject: 'BTC',
+    metric: 'news-sentiment', value: 'bearish · strength 3/5 · confidence 80%｜title｜quote',
+    unit: null, sourceId: 'coindesk-rss', sourceLabel: 'CoinDesk RSS', observedAt: asOf, asOf,
+    freshness: 'fresh' as const, confidence: 0.8, comparability: 'not-comparable' as const, evidenceRefId: 'news:item-1'
+  }
+  const trigger = { source: 'intelligence-item' as const, itemId: 'item-1', factId: triggerFact.factId, evidenceRefId: 'news:item-1' }
+
+  it('names the triggering news as the run cause and requires the four answers', () => {
+    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    expect(system).toContain('本次运行由**一条新闻**触发')
+    expect(system).toContain('triggered-news:<itemId>')
+    expect(system).toContain('不要照抄标题')
+    expect(system).toContain('用**当前数据**印证或否证它')
+    expect(system).toContain('conclusion.newsImpact')
+    expect(system).toContain('no-transmission')
+    expect(system).toContain('cannot-determine')
+  })
+
+  it('states the three prohibitions for a news reading', () => {
+    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    expect(system).toContain('不许只复述新闻')
+    expect(system).toContain('不许硬贴利好利空')
+    expect(system).toContain('不许把新闻里的金额直接当成市场影响')
+  })
+
+  it('stays out of runs that a news item did not trigger', () => {
+    const system = systemPrompt(snapshot({ facts: [triggerFact] }))
+    expect(system).not.toContain('本次运行由**一条新闻**触发')
+    expect(system).not.toContain('conclusion.newsImpact')
+  })
+})
+
 describe('analysis model prompt conclusion contract', () => {
   it('requires the conclusion to carry an explicit causal chain, not only a verdict and data', () => {
     const system = systemPrompt()

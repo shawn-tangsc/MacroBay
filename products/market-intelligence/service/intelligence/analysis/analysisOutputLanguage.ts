@@ -48,7 +48,7 @@ function displayLanguageName(language: string): string {
  * 方向是 key 而不是词，所以这份示例对所有语言都是同一份：模型不需要挑选「中文版还是英文版
  * 的标记」，只需要按 `analysisProseDirective` 写正文。
  */
-export function analysisPromptSchemaExample(): Record<string, unknown> {
+export function analysisPromptSchemaExample(options: Readonly<{ triggeredNews?: boolean }> = {}): Record<string, unknown> {
   const policy = marketAnalysisValidationPolicy
   return {
     conclusion: {
@@ -59,7 +59,25 @@ export function analysisPromptSchemaExample(): Record<string, unknown> {
       conditions: ['<一个成立条件>'],
       macro: '<宏观侧的一句话；没有就写 null>',
       evidenceStrength: '<哪一侧证据更强、为什么；没有就写 null>',
-      dataGaps: ['<一个数据缺口，以及它如何影响置信度>']
+      dataGaps: ['<一个数据缺口，以及它如何影响置信度>'],
+      // 只有「这条运行由一条新闻发起」时才出现；三支互斥，示例给 evaluated 那一支。
+      ...(options.triggeredNews ? {
+        newsImpact: {
+          verdict: 'evaluated 或 no-transmission 或 cannot-determine',
+          checks: [
+            { factId: '<市场事实的 factRef>', effect: 'supports 或 contradicts' },
+            { factId: '<另一条市场事实的 factRef>', effect: 'supports 或 contradicts' }
+          ],
+          contradiction: '<checks 里两种 effect 同时出现就写 true，否则 false>',
+          invalidation: {
+            kind: 'fact 或 instant',
+            factId: '<kind=fact 时：快照里事实的 factRef>',
+            relation: 'below 或 above（kind=fact 时必填）',
+            at: '<kind=instant 时：快照里的 ISO 时刻>',
+            statement: '<读者能读到的失效条件>'
+          }
+        }
+      } : {})
     },
     knownFacts: [{ factId: '输入事实的 factRef 原文', statement: '<该事实描述>', evidenceRefIds: ['该事实的 evidenceRef 原文'] }],
     transmissionHypotheses: [{ statement: '<条件式传导假设，不能声称因果已确认>', evidenceRefIds: ['输入中的 evidenceRef 原文'] }],

@@ -19,6 +19,7 @@ import { containsUnsafeOutput, formatUnsafeOutputRedaction, isPlainRecord, redac
 export { formatUnsafeOutputRedaction } from './analysisOutputRedaction'
 export type { AnalysisOutputRedaction } from './analysisOutputRedaction'
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
+import { isAnalysisNewsImpact } from './analysisNewsImpactValidation'
 import { policyProbabilityDefect, untracedProsePercentageDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 import {
@@ -181,7 +182,7 @@ const outputSections: readonly (readonly [string, (value: unknown) => boolean])[
  */
 function isConclusion(value: unknown): value is AnalysisConclusion {
   if (!isPlainRecord(value)) return false
-  if (!hasExactKeys(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'])) return false
+  if (!hasExactKeys(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'], ['newsImpact'])) return false
   return isDirectionKey(value.direction)
     && isBoundedText(value.summary)
     && isBoundedText(value.change)
@@ -190,6 +191,8 @@ function isConclusion(value: unknown): value is AnalysisConclusion {
     && (value.macro === null || isBoundedText(value.macro))
     && (value.evidenceStrength === null || isBoundedText(value.evidenceStrength))
     && isBoundedTextCollection(value.dataGaps)
+    // 触发型分析的必答块（R37）：只在这里判形状；「有指针就必须写」是规则层的事（C 笔）。
+    && (value.newsImpact === undefined || isAnalysisNewsImpact(value.newsImpact))
 }
 
 function isDirectionKey(value: unknown): value is AnalysisConclusion['direction'] {
@@ -320,9 +323,13 @@ function invalidSchema(rule?: AnalysisValidationRule | AnalysisShapeDefect): Ana
   return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema, ...(rule ? { rule } : {}) }
 }
 
-function hasExactKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (!isPlainRecord(value) || Object.keys(value).length !== keys.length) return false
-  return keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+function hasExactKeys(value: unknown, keys: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
+  if (!isPlainRecord(value)) return false
+  const present = Object.keys(value)
+  // 必填键一个不能少、可选键一个不能多：多出的键就是模型自造的字段，落库后没人读得懂。
+  if (present.length < keys.length || present.length > keys.length + optional.length) return false
+  if (!keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))) return false
+  return present.every((key) => keys.includes(key) || optional.includes(key))
 }
 
 function isFactClaims(value: unknown): value is FactClaim[] {

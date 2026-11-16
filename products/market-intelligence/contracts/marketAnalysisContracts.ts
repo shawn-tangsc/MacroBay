@@ -26,7 +26,7 @@ export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
    */
   schemaVersion: 3,
   dataAccessProfileId: 'crypto-market-analysis-v1',
-  outputSchemaVersion: 2,
+  outputSchemaVersion: 3,
   maximumModelFieldCharacters: 2_000,
   maximumModelOutputBytes: 256 * 1024,
   maximumCollectionItems: 160,
@@ -363,7 +363,7 @@ export type AnalysisRun = Readonly<{
   policyVersion: string
   promptVersion: string
   skillVersion: string
-  outputSchemaVersion: 1 | 2
+  outputSchemaVersion: 1 | 2 | 3
   jobRunId: string | null
   traceId: string | null
   failureCode: string | null
@@ -392,6 +392,35 @@ export type AnalysisRun = Readonly<{
  * fields are prose in the language the run was asked to answer in. Keeping the structure here means
  * the validator and every surface read fields, never natural-language tokens.
  */
+/** 一条新闻对一个标的的市场含义：印证还是否证，用哪两个读数、什么情况下不成立。 */
+export type AnalysisNewsImpactEffect = 'supports' | 'contradicts'
+
+/**
+ * 触发型分析的必答块（R37 §3）。只有快照带 `trigger` 时必填。
+ *
+ * 三支互斥：查得到 → `evaluated`；查过但没有传导 → `no-transmission`；缺关键信息 → `cannot-determine`。
+ * 缺口用闭集枚举表达，界面按「缺哪一项 × 三种状态」拼句，校验不读句子。
+ */
+export type AnalysisNewsImpact =
+  | Readonly<{
+    verdict: 'evaluated'
+    /** 至少两条、都是市场域事实（不是舆情事实），用来印证或否证这条新闻。 */
+    checks: readonly Readonly<{ factId: string; effect: AnalysisNewsImpactEffect }>[]
+    /** 必须等于「checks 里同时出现 supports 与 contradicts」。 */
+    contradiction: boolean
+    invalidation: AnalysisInvalidation
+  }>
+  | Readonly<{
+    verdict: 'no-transmission'
+    /** 查过哪些事实（≥2），证明是「查过没有传导」而不是懒得写。 */
+    checkedFactIds: readonly string[]
+    reason: string
+  }>
+  | Readonly<{
+    verdict: 'cannot-determine'
+    missing: Readonly<{ item: 'amount' | 'symbol' | 'time' | 'market-data'; state: 'not-yet' | 'source-empty' | 'unreadable' }>
+  }>
+
 export type AnalysisConclusion = Readonly<{
   direction: AnalysisConclusionDirection
   /** The one-sentence verdict: mechanism and its effect on the asset. */
@@ -408,6 +437,8 @@ export type AnalysisConclusion = Readonly<{
   evidenceStrength: string | null
   /** Gaps in the evidence and how each one limits confidence. */
   dataGaps: readonly string[]
+  /** 触发型分析必答：这条新闻对标的的市场含义（R37）。只有快照带触发指针时才有。 */
+  newsImpact?: AnalysisNewsImpact
 }>
 
 export type AnalysisSummary = Readonly<{
