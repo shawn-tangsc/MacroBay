@@ -32,7 +32,9 @@ const text = {
   tabMapped: mkDay.mappingTabMapped, tabUnmapped: mkDay.mappingTabUnmapped, tabsAria: mkDay.mappingTabsAria,
   exportLabel: mkDay.mappingExport, exportEmpty: mkDay.mappingExportEmpty,
   tierFilter: mkDay.mappingTierFilter,
-  sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped
+  directColumns: mkDay.mappingDirectColumns, directEmpty: mkDay.mappingDirectEmpty, tabDirect: mkDay.mappingTabDirect,
+  sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped,
+  sheetDirect: mkDay.mappingSheetDirect
 }
 const view: MappingRulesRead = {
   state: 'available',
@@ -64,13 +66,13 @@ afterEach(async () => {
   root = undefined; host?.remove(); document.body.innerHTML = ''
 })
 
-async function mount(): Promise<void> {
+async function mount(shown: MappingRulesRead = view): Promise<void> {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
-      <MappingRulesDialog open onClose={() => undefined} text={text} view={view} />
+      <MappingRulesDialog open onClose={() => undefined} text={text} view={shown} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
 }
@@ -125,4 +127,60 @@ it('exports one file with both worksheets, each carrying its own rows', async ()
   expect(first).toContain('US.CPI.NSA.YOY')
   expect(second).not.toContain('US.CPI.NSA.YOY')
   expect(second).toContain('5-10 年通胀预期')
+})
+
+/**
+ * 「无需映射」这一段是「我们一共支持哪些指标」的答案（PCE、GDP、FOMC 不经过映射规则）。
+ * 两条判据分开放：整段缺失时那个页签**不许出现**；有这一段时导出多一张工作表。
+ */
+const withDirect: MappingRulesRead = {
+  ...view,
+  direct: [
+    { metricKey: 'US.PCE.SA.MOM', names: { zh: '核心 PCE 月率', en: 'PCE Price Index, MoM' }, tier: 1, rowCount: 7 },
+    { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', names: null, tier: null, rowCount: 4 }
+  ],
+  counts: { ...view.counts, direct: 2 }
+}
+
+it('hides the third tab when the payload has no such section', async () => {
+  await mount()
+  const labels = [...document.body.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent ?? '')
+  // 旧载荷没有这一段：不显示页签，也不画一张空表——「没有下发」和「一个都没有」不是同一件事。
+  expect(labels.some((label) => label.includes('无需映射'))).toBe(false)
+})
+
+it('shows the third tab and exports a third worksheet when the section is there', async () => {
+  await mount(withDirect)
+  const tab = [...document.body.querySelectorAll('[role="tab"]')].find((node) => (node.textContent ?? '').includes('无需映射'))
+  expect(tab, '无需映射页签没出现').toBeDefined()
+  expect(tab!.textContent).toContain('2')
+  await act(async () => { (tab as HTMLElement).click() })
+  // 这一段没有源内 id：表里只有指标码、名称、分级、库里行数四列。
+  const section = document.body.querySelector('[data-mapping-section="direct"]')
+  expect(section?.textContent).toContain('US.PCE.SA.MOM')
+  expect(section?.textContent).toContain('核心 PCE 月率 · PCE Price Index, MoM')
+  // 名表查不到的行：名称格空着，分级显示「未分级」，行数照实写。
+  expect(section?.textContent).toContain('未分级')
+  expect(section?.textContent).toContain('US.GDP.SA.ANNUALIZED_QOQ')
+  // 分级筛选在这一段也有（这一段的每行都有分级）。
+  expect(document.body.querySelector('[data-tier-filter]')).not.toBeNull()
+
+  const button = document.body.querySelector('[data-catalog-export]') as HTMLElement
+  await act(async () => { button.click() })
+  await act(async () => { await Promise.resolve() })
+  const dir = mkdtempSync(join(tmpdir(), 'mapping-export-3-'))
+  const file = join(dir, 'out.xlsx')
+  writeFileSync(file, saved!.bytes)
+  execFileSync('unzip', ['-o', '-q', file, '-d', join(dir, 'un')], { stdio: 'pipe' })
+  expect(readdirSync(join(dir, 'un', 'xl', 'worksheets')))
+    .toEqual(['sheet1.xml', 'sheet2.xml', 'sheet3.xml'])
+  const workbook = readFileSync(join(dir, 'un', 'xl', 'workbook.xml'), 'utf8')
+  expect(workbook).toContain('name="已映射"')
+  expect(workbook).toContain('name="未映射"')
+  expect(workbook).toContain('name="无需映射"')
+  const third = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet3.xml'), 'utf8')
+  // 1 行表头 + 2 行数据，且只装这一段的指标。
+  expect((third.match(/<row /gu) ?? []).length).toBe(3)
+  expect(third).toContain('US.PCE.SA.MOM')
+  expect(third).not.toContain('US.CPI.NSA.YOY')
 })

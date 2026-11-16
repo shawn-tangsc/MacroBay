@@ -26,3 +26,42 @@ describe('mappingRulesReadOf', () => {
     }
   })
 })
+
+/**
+ * 「无需映射」那一段：**整段可缺，有就必须对**。
+ *
+ * 缺 = 旧载荷，界面不显示那个页签；半份 = 读者会把这个页签当成「全部指标」，那是更糟的谎。
+ */
+const direct = [{ metricKey: 'US.PCE.SA.MOM', names: { zh: '核心 PCE 月率', en: 'PCE Price Index, MoM' }, tier: 1, rowCount: 7 }]
+
+describe('mappingRulesReadOf · direct', () => {
+  it('passes the section through when it is well formed', () => {
+    const view = mappingRulesReadOf({ ...ok, direct, counts: { ...ok.counts, direct: 1 } })
+    expect(view.state).toBe('available')
+    expect(view.state === 'available' && view.direct?.[0]?.metricKey).toBe('US.PCE.SA.MOM')
+  })
+  it('accepts an old payload with no such section', () => {
+    const view = mappingRulesReadOf(ok)
+    expect(view.state).toBe('available')
+    expect(view.state === 'available' && view.direct).toBeUndefined()
+  })
+  it('refuses a malformed section instead of showing a partial tab', () => {
+    const cases = [
+      { metricKey: '', tier: 1, rowCount: 1 },                          // 空指标码
+      { metricKey: 'US.PCE.SA.MOM', tier: 4, rowCount: 1 },             // 分级越界
+      { metricKey: 'US.PCE.SA.MOM', tier: 1, rowCount: -1 },            // 负数行数
+      { metricKey: 'US.PCE.SA.MOM', tier: 1, rowCount: 1.5 },           // 非整数
+      { metricKey: 'US.PCE.SA.MOM', tier: 1, rowCount: 1, names: { zh: '只有中文' } }
+    ]
+    for (const broken of cases) {
+      expect(mappingRulesReadOf({ ...ok, direct: [broken], counts: { ...ok.counts, direct: 1 } }).state,
+        JSON.stringify(broken)).toBe('unavailable')
+    }
+    // 段本身不是数组也拒。
+    expect(mappingRulesReadOf({ ...ok, direct: {}, counts: { ...ok.counts, direct: 1 } }).state).toBe('unavailable')
+  })
+  it('refuses a tab count that disagrees with the rows it labels', () => {
+    // 页签上写 1、段里 0 条：标题与内容不符，正是最难被发现的谎。
+    expect(mappingRulesReadOf({ ...ok, direct: [], counts: { ...ok.counts, direct: 1 } }).state).toBe('unavailable')
+  })
+})

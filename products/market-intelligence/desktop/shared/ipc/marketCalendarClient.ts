@@ -151,5 +151,32 @@ export function mappingRulesReadOf(value: unknown): MappingRulesRead {
     }
   }
   if (record.counts === null || typeof record.counts !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  /**
+   * `direct`（无需映射的指标）整段**可缺**：旧载荷没有它，界面就不显示那个页签。
+   * 但**有就必须是对的**——半份数据放行，读者会把这个页签当成「全部指标」。
+   */
+  if (record.direct !== undefined) {
+    if (!Array.isArray(record.direct)) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    for (const entry of record.direct) {
+      if (entry === null || typeof entry !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      const row = entry as Record<string, unknown>
+      if (typeof row.metricKey !== 'string' || row.metricKey === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      if (!(row.tier === null || row.tier === 1 || row.tier === 2 || row.tier === 3)) {
+        return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      }
+      if (typeof row.rowCount !== 'number' || !Number.isInteger(row.rowCount) || row.rowCount < 0) {
+        return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      }
+      if (row.names !== undefined && row.names !== null) {
+        const names = row.names as { zh?: unknown; en?: unknown }
+        if (typeof names.zh !== 'string' || typeof names.en !== 'string') {
+          return { state: 'unavailable', reasonCode: 'query-unavailable' }
+        }
+      }
+    }
+    // 页签上的数字来自 `counts`，与段内实际条数不一致就是「标题说 185、表里 184」那种谎。
+    const counts = record.counts as Record<string, unknown>
+    if (counts.direct !== record.direct.length) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  }
   return record as unknown as MappingRulesRead
 }

@@ -1,4 +1,6 @@
-import type { MappingRuleRow } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import type {
+  DirectMetricRow, MappingRuleRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 
 /**
  * 映射规则表的**看法**（排序与分级筛选）——纯函数，与读口分开：
@@ -9,6 +11,8 @@ import type { MappingRuleRow } from '../../../service/intelligence/macro-calenda
  * 排序规则（用户 2026-11-17）：**库里行数降序 → 分级（一、二、三、未分级）→ 指标码**。
  * 行数排在最前，是因为读者要的答案是「哪些规则真的在起作用」；`0` 行的那批沉到后面，
  * 但它们**仍然显示**（0 是事实，不是「没有这条规则」）。
+ *
+ * 三个页签用**同一把尺子**：同一份数据在两个页签里顺序不同，读者会当成两处 bug。
  */
 export type TierKey = '1' | '2' | '3' | 'other'
 export type TierFilter = TierKey | 'all'
@@ -21,15 +25,28 @@ export function tierKeyOf(tier: 1 | 2 | 3 | null): TierKey {
 /** 分级的高低序：一级在前，未分级最后。 */
 const TIER_RANK: Readonly<Record<TierKey, number>> = { '1': 0, '2': 1, '3': 2, other: 3 }
 
-export function sortMappedRules(rows: readonly MappingRuleRow[]): MappingRuleRow[] {
-  return [...rows].sort((left, right) =>
-    right.rowCount - left.rowCount
+/** 行数降序 → 分级 → 指标码。三个页签共用的前半段。 */
+function byRowsThenTier(left: Readonly<{ rowCount: number; tier: 1 | 2 | 3 | null; metricKey: string }>,
+  right: Readonly<{ rowCount: number; tier: 1 | 2 | 3 | null; metricKey: string }>): number {
+  return right.rowCount - left.rowCount
     || TIER_RANK[tierKeyOf(left.tier)] - TIER_RANK[tierKeyOf(right.tier)]
     || left.metricKey.localeCompare(right.metricKey)
+}
+
+export function sortMappedRules(rows: readonly MappingRuleRow[]): MappingRuleRow[] {
+  return [...rows].sort((left, right) => byRowsThenTier(left, right)
     // 同一个指标码可能有多条源内 id（不同写法），最后按 id 定序，免得顺序随查询漂移。
     || left.sourceId.localeCompare(right.sourceId))
 }
 
+export function sortDirectMetrics(rows: readonly DirectMetricRow[]): DirectMetricRow[] {
+  return [...rows].sort(byRowsThenTier)
+}
+
 export function filterMappedByTier(rows: readonly MappingRuleRow[], tier: TierFilter): MappingRuleRow[] {
+  return tier === 'all' ? [...rows] : rows.filter((row) => tierKeyOf(row.tier) === tier)
+}
+
+export function filterDirectByTier(rows: readonly DirectMetricRow[], tier: TierFilter): DirectMetricRow[] {
   return tier === 'all' ? [...rows] : rows.filter((row) => tierKeyOf(row.tier) === tier)
 }

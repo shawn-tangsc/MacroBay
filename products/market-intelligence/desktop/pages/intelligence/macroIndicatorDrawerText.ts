@@ -188,9 +188,14 @@ export const macroIndicatorDrawerText = {
       mappingColumns: { sourceId: '源内 id', metricKey: '指标码', name: '名称', tier: '分级', periodRule: '期次规则', basis: '依据', official: '官方查看', rows: '库里行数（按指标码）' },
       mappingTiers: { '1': '一级', '2': '二级', '3': '三级', other: '未分级' },
       mappingTierFilter: '按分级筛选',
-      /* 导出文件里的两个工作表名（不是页签文案：页签带条数，工作表名不带）。 */
+      /* 第三个页签：进来就带指标码、不需要映射规则的指标。 */
+      mappingTabDirect: '无需映射 ({count})',
+      mappingDirectEmpty: '没有匹配的指标',
+      mappingDirectColumns: { metricKey: '指标码', name: '名称', tier: '分级', rows: '库里行数' },
+      /* 导出文件里的三个工作表名（不是页签文案：页签带条数，工作表名不带）。 */
       mappingSheetMapped: '已映射',
       mappingSheetUnmapped: '未映射',
+      mappingSheetDirect: '无需映射',
       mappingUnmappedColumns: { sourceId: '源内 id', rows: '行数', sample: '样本名字' },
       catalogTitle: '全部事件',
       catalogOpenAria: '打开全部事件表',
@@ -350,8 +355,12 @@ export const macroIndicatorDrawerText = {
       mappingColumns: { sourceId: 'Source id', metricKey: 'Metric key', name: 'Name', tier: 'Tier', periodRule: 'Period rule', basis: 'Basis', official: 'Official', rows: 'Rows in store (by metric key)' },
       mappingTiers: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Untiered' },
       mappingTierFilter: 'Filter by tier',
+      mappingTabDirect: 'No rule needed ({count})',
+      mappingDirectEmpty: 'No matching metrics',
+      mappingDirectColumns: { metricKey: 'Metric key', name: 'Name', tier: 'Tier', rows: 'Rows in store' },
       mappingSheetMapped: 'Mapped',
       mappingSheetUnmapped: 'Unmapped',
+      mappingSheetDirect: 'No rule needed',
       mappingUnmappedColumns: { sourceId: 'Source id', rows: 'Rows', sample: 'Sample name' },
       catalogTitle: 'All events',
       catalogOpenAria: 'Open the full event table',

@@ -1,7 +1,9 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import type { MappingRuleRow } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
-import { filterMappedByTier, sortMappedRules, tierKeyOf } from './mappingRulesView'
+import type {
+  DirectMetricRow, MappingRuleRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import { filterDirectByTier, filterMappedByTier, sortDirectMetrics, sortMappedRules, tierKeyOf } from './mappingRulesView'
 
 const row = (sourceId: string, metricKey: string, tier: 1 | 2 | 3 | null, rowCount: number): MappingRuleRow =>
   ({ sourceId, metricKey, periodRule: 'month', basis: null, officialUrl: null, names: null, tier, rowCount })
@@ -48,4 +50,24 @@ it('filters by tier without dropping the untiered bucket', () => {
 it('maps a missing tier to the untiered key, never to a tier', () => {
   expect([1, 2, 3].map((tier) => tierKeyOf(tier as 1 | 2 | 3))).toEqual(['1', '2', '3'])
   expect(tierKeyOf(null)).toBe('other')
+})
+
+describe('direct 段', () => {
+  const direct = (metricKey: string, tier: 1 | 2 | 3 | null, rowCount: number): DirectMetricRow =>
+    ({ metricKey, names: null, tier, rowCount })
+
+  it('sorts with the same measure as the mapped tab', () => {
+    const rows = [direct('US.ZZZ.NONE.LEVEL', 1, 0), direct('US.PCE.SA.MOM', 1, 7),
+      direct('US.GDP.SA.ANNUALIZED_QOQ', null, 7), direct('US.AAA.NONE.LEVEL', 1, 7)]
+    // 行数降序，同数按一/二/三/未分级，再按指标码——与已映射页签一致，两个页签顺序不同会被当成两处 bug。
+    expect(sortDirectMetrics(rows).map((row) => row.metricKey))
+      .toEqual(['US.AAA.NONE.LEVEL', 'US.PCE.SA.MOM', 'US.GDP.SA.ANNUALIZED_QOQ', 'US.ZZZ.NONE.LEVEL'])
+  })
+
+  it('filters by tier', () => {
+    const rows = [direct('US.PCE.SA.MOM', 1, 7), direct('US.GDP.SA.ANNUALIZED_QOQ', null, 4)]
+    expect(filterDirectByTier(rows, '1').map((row) => row.metricKey)).toEqual(['US.PCE.SA.MOM'])
+    expect(filterDirectByTier(rows, 'other').map((row) => row.metricKey)).toEqual(['US.GDP.SA.ANNUALIZED_QOQ'])
+    expect(filterDirectByTier(rows, 'all')).toHaveLength(2)
+  })
 })
