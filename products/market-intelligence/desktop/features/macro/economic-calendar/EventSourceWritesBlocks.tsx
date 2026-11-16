@@ -32,6 +32,14 @@ const STATUS_ALIAS: Readonly<Record<string, string>> = {
  * 比不出来就不比：这一项不进冲突列表，而不是猜一个结论。
  */
 const SCALED = /[KkMmBb万亿]$/u
+/**
+ * **这是一道临时闸门，等 #57 落地就拆，不要再往上叠判断**（Chief 2026-11-17）。
+ *
+ * 现在值只有展示串，带量纲的（`0.0K`、`1.2M`）判不出数值，所以「比不了就不比」。
+ * `34-值存数值与单位-技术方案.md` 落地后，行上会有 `numericValue / unit / numericSource`：
+ * 那时把这个函数**改成读数值与单位**（同单位才比、`unknown` 不比），而不是在它外面再加一层 if——
+ * 两层判断叠着，下一处改口径时必然只改到一层。
+ */
 const comparable = (value: string): boolean => !SCALED.test(value.trim()) && !/,/u.test(value)
 
 function sameShown(left: string, right: string): boolean {
