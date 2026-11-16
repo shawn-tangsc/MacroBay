@@ -9,6 +9,7 @@ import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marke
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
 import { fixCalendarEventCountries } from '../intelligence/macro-calendar/marketCalendarEventCountryFix'
+import { fixFomcEventTypes } from '../intelligence/macro-calendar/marketCalendarFomcEventTypeFix'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
@@ -107,6 +108,11 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       const countryFixed = fixCalendarEventCountries(database)
       if (countryFixed.updated > 0) {
         console.warn(`[macro-calendar] 事件国家修正：扫描 ${countryFixed.scanned} 条规则、改写 ${countryFixed.updated} 行`)
+      }
+      // FOMC 各次会议被标成「经济指标」（迁移 20）：身份不变，只把类别改回事件。
+      const fomcFixed = fixFomcEventTypes(database)
+      if (fomcFixed.updated > 0) {
+        console.warn(`[macro-calendar] FOMC 类别修正：识别 ${fomcFixed.scanned} 行、改写 ${fomcFixed.updated} 行`)
       }
       // 同源中英两条合并（迁移 18）：源对同一件事发了中文名、英文名两条，身份第一段相同，库里是两行。
       // 合并后中文名做显示、英文原文进 `source_label_en` 仍可搜；台账改指到留下的那一行。
