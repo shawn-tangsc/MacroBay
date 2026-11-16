@@ -94,6 +94,11 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214280': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '215018': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '213488': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
+  // 核心零售月率 2 条 → `US.RETAIL_SALES_EX_AUTOS.SA.MOM`
+  // 依据是**数值**不是名字：同期预期 0.4% 与控制组 0.1 不同（排除控制组）、亿美元口径 6051.88 落在
+  // ex-autos 的量级上。亿美元那 2 条**不映射**：同一条发布同时给 +0.9% 与 −4.2%，口径不明。
+  '213942': { metricKey: 'US.RETAIL_SALES_EX_AUTOS.SA.MOM', periodRule: 'month' },
+  '214824': { metricKey: 'US.RETAIL_SALES_EX_AUTOS.SA.MOM', periodRule: 'month' },
   // 谘商会消费者预期/现况（母族已有子项体系，两个词都在闭集里）
   '214233': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month' },
   '214992': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month' },
