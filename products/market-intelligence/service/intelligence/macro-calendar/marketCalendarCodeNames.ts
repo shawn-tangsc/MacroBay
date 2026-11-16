@@ -58,6 +58,7 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.BUILDING_PERMITS.NONE.MOM': { zhFull: '营建许可月率', zhShort: '营建许可 月率', enFull: 'Building Permits MoM', enShort: 'Building Permits MoM', locked: false },
   'US.BUSINESS_INVENTORIES.SA.MOM': { zhFull: '企业库存', zhShort: '企业库存', enFull: 'Business Inventories', enShort: 'Business Inventories', locked: false },
   'US.CAPACITY_UTILIZATION.SA.RATE': { zhFull: '产能利用率', zhShort: '产能利用率', enFull: 'Capacity Utilization', enShort: 'Capacity Utilization', locked: false },
+  'US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE': { zhFull: '制造业产能利用率', zhShort: '制造业产能利用率', enFull: 'Manufacturing Capacity Utilization', enShort: 'Mfg Capacity Utilization', locked: false },
   'US.CASE_SHILLER_COMPOSITE.SA.MOM': { zhFull: '标普/凯斯席勒房价指数月率', zhShort: '凯斯席勒房价 月率', enFull: 'S&P CoreLogic Case-Shiller Home Price Index MoM', enShort: 'Case-Shiller MoM', locked: false },
   'US.CASE_SHILLER_COMPOSITE.NSA.YOY': { zhFull: '标普/凯斯席勒房价指数年率', zhShort: '凯斯席勒房价 年率', enFull: 'S&P CoreLogic Case-Shiller Home Price Index YoY', enShort: 'Case-Shiller YoY', locked: false },
   'US.CHALLENGER_JOB_CUTS.NONE.COUNT': { zhFull: '挑战者企业裁员', zhShort: '挑战者裁员', enFull: 'Challenger Job Cuts', enShort: 'Challenger Cuts', locked: false },
@@ -84,6 +85,9 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.CPI.NSA.YOY': { zhFull: '消费者物价指数（CPI）年率', zhShort: 'CPI 年率', enFull: 'Consumer Price Index (CPI), YoY', enShort: 'CPI YoY', code: 'cpi', locked: true },
   'US.CPI_CLEVELAND.NONE.MOM': { zhFull: '克利夫兰联储 CPI 即时预测', zhShort: '克利夫兰 CPI 预测', enFull: 'Cleveland Fed CPI Nowcast', enShort: 'Cleveland CPI', locked: false },
   'US.DALLAS_FED_MANUFACTURING.SA.LEVEL': { zhFull: '达拉斯联储制造业活动指数', zhShort: '达拉斯联储制造业', enFull: 'Dallas Fed Manufacturing Index', enShort: 'Dallas Fed Mfg', locked: false },
+  'US.DALLAS_FED_MANUFACTURING.PRODUCTION.SA.LEVEL': { zhFull: '达拉斯联储制造业产出指数', zhShort: '达拉斯联储制造业产出', enFull: 'Dallas Fed Manufacturing Production', enShort: 'Dallas Fed Mfg Production', locked: false },
+  'US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL': { zhFull: '达拉斯联储制造业原材料支付价格指数', zhShort: '达拉斯联储制造业原材料支付价格', enFull: 'Dallas Fed Manufacturing Prices Paid for Raw Materials', enShort: 'Dallas Fed Mfg Prices Paid', locked: false },
+  'US.DALLAS_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL': { zhFull: '达拉斯联储制造业装船指数', zhShort: '达拉斯联储制造业装船', enFull: 'Dallas Fed Manufacturing Shipments', enShort: 'Dallas Fed Mfg Shipments', locked: false },
   'US.DURABLE_GOODS_EX_DEFENSE.SA.MOM': { zhFull: '耐用品订单（除国防）', zhShort: '耐用品订单除国防', enFull: 'Durable Goods Orders ex Defense', enShort: 'Durables ex Defense', locked: false },
   'US.DURABLE_GOODS_EX_TRANSPORT.SA.MOM': { zhFull: '耐用品订单（除运输）', zhShort: '耐用品订单除运输', enFull: 'Durable Goods Orders ex Transportation', enShort: 'Durables ex Transport', locked: false },
   'US.DURABLE_GOODS_ORDERS.SA.MOM': { zhFull: '耐用品订单', zhShort: '耐用品订单', enFull: 'Durable Goods Orders', enShort: 'Durables', locked: false },
@@ -94,6 +98,9 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.EIA_NATURAL_GAS_STOCKS.NONE.CHANGE': { zhFull: 'EIA 天然气库存', zhShort: 'EIA 天然气库存', enFull: 'EIA Natural Gas Storage', enShort: 'EIA Nat Gas', locked: false },
   'US.EIA_REFINERY_UTILIZATION.NONE.RATE': { zhFull: 'EIA 精炼厂设备利用率', zhShort: '炼厂开工率', enFull: 'EIA Refinery Utilization', enShort: 'Refinery Utilization', locked: false },
   'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL': { zhFull: '纽约联储制造业指数', zhShort: '纽约联储制造业', enFull: 'Empire State Manufacturing Index', enShort: 'Empire State', locked: false },
+  'US.EMPIRE_STATE_MANUFACTURING.NEW_ORDERS.SA.LEVEL': { zhFull: '纽约联储制造业新订单指数', zhShort: '纽约联储制造业新订单', enFull: 'Empire State Manufacturing New Orders', enShort: 'Empire State Mfg New Orders', locked: false },
+  'US.EMPIRE_STATE_MANUFACTURING.PRICES_PAID.SA.LEVEL': { zhFull: '纽约联储制造业物价支付指数', zhShort: '纽约联储制造业物价支付', enFull: 'Empire State Manufacturing Prices Paid', enShort: 'Empire State Mfg Prices Paid', locked: false },
+  'US.EMPIRE_STATE_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL': { zhFull: '纽约联储制造业物价获得指数', zhShort: '纽约联储制造业物价获得', enFull: 'Empire State Manufacturing Prices Received', enShort: 'Empire State Mfg Prices Received', locked: false },
   'US.EXISTING_HOME_SALES.SA.COUNT': { zhFull: '成屋销售总数（年化）', zhShort: '成屋销售', enFull: 'Existing Home Sales, Annualized', enShort: 'Existing Home Sales', code: 'existing-home-sales', locked: true },
   'US.EXISTING_HOME_SALES.SA.MOM': { zhFull: '成屋销售月率', zhShort: '成屋销售 月率', enFull: 'Existing Home Sales MoM', enShort: 'Existing Home Sales MoM', locked: false },
   'US.EXPORTS.NONE.AMOUNT': { zhFull: '出口额', zhShort: '出口', enFull: 'Exports', enShort: 'Exports', locked: false },
@@ -139,6 +146,7 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.JOLTS_QUITS.SA.COUNT': { zhFull: 'JOLTS 离职人数', zhShort: '离职人数', enFull: 'JOLTS Quits', enShort: 'Quits', locked: false },
   'US.KANSAS_FED_COMPOSITE.SA.LEVEL': { zhFull: '堪萨斯联储综合指数', zhShort: '堪萨斯联储综合', enFull: 'Kansas City Fed Composite Index', enShort: 'KC Fed Composite', locked: false },
   'US.KANSAS_FED_MANUFACTURING.SA.LEVEL': { zhFull: '堪萨斯联储制造业指数', zhShort: '堪萨斯联储制造业', enFull: 'Kansas City Fed Manufacturing Index', enShort: 'KC Fed Mfg', locked: false },
+  'US.KANSAS_FED_MANUFACTURING.PRODUCTION.SA.LEVEL': { zhFull: '堪萨斯联储制造业产出指数', zhShort: '堪萨斯联储制造业产出', enFull: 'Kansas City Fed Manufacturing Production', enShort: 'KC Fed Mfg Production', locked: false },
   'US.LEI.SA.MOM': { zhFull: '经济领先指标', zhShort: '领先指标', enFull: 'Leading Economic Index', enShort: 'LEI', locked: false },
   'US.LEI_EMPLOYMENT_TRENDS.NONE.LEVEL': { zhFull: '领先指标·就业趋势指数', zhShort: '就业趋势', enFull: 'Leading Indicators Employment Trends', enShort: 'LEI Employment Trends', code: 'leading-indicators-employment-trends', locked: true },
   'US.LOGISTICS_MANAGERS_INDEX.NONE.LEVEL': { zhFull: '物流经理指数', zhShort: '物流经理指数', enFull: 'Logistics Managers Index', enShort: 'LMI', code: 'logistics-managers-index', locked: true },
@@ -173,6 +181,10 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.PHILLY_FED_CAPEX.SA.LEVEL': { zhFull: '费城联储资本支出指数', zhShort: '费城联储资本支出', enFull: 'Philadelphia Fed Capex Index', enShort: 'Philly Fed Capex', locked: false },
   'US.PHILLY_FED_EMPLOYMENT.SA.LEVEL': { zhFull: '费城联储就业指数', zhShort: '费城联储就业', enFull: 'Philadelphia Fed Employment', enShort: 'Philly Fed Employment', locked: false },
   'US.PHILLY_FED_MANUFACTURING.SA.LEVEL': { zhFull: '费城联储制造业指数', zhShort: '费城联储制造业', enFull: 'Philadelphia Fed Manufacturing Index', enShort: 'Philly Fed Mfg', locked: false },
+  'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL': { zhFull: '费城联储制造业装船指数', zhShort: '费城联储制造业装船', enFull: 'Philadelphia Fed Manufacturing Shipments', enShort: 'Philly Fed Mfg Shipments', locked: false },
+  'US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL': { zhFull: '费城联储制造业新订单指数', zhShort: '费城联储制造业新订单', enFull: 'Philadelphia Fed Manufacturing New Orders', enShort: 'Philly Fed Mfg New Orders', locked: false },
+  'US.PHILLY_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL': { zhFull: '费城联储制造业物价支付指数', zhShort: '费城联储制造业物价支付', enFull: 'Philadelphia Fed Manufacturing Prices Paid', enShort: 'Philly Fed Mfg Prices Paid', locked: false },
+  'US.PHILLY_FED_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL': { zhFull: '费城联储制造业物价获得指数', zhShort: '费城联储制造业物价获得', enFull: 'Philadelphia Fed Manufacturing Prices Received', enShort: 'Philly Fed Mfg Prices Received', locked: false },
   'US.PHILLY_FED_NEW_ORDERS.SA.LEVEL': { zhFull: '费城联储新订单指数', zhShort: '费城联储新订单', enFull: 'Philadelphia Fed New Orders', enShort: 'Philly Fed New Orders', locked: false },
   'US.PHILLY_FED_PRICES_PAID.SA.LEVEL': { zhFull: '费城联储物价支付指数', zhShort: '费城联储物价', enFull: 'Philadelphia Fed Prices Paid', enShort: 'Philly Fed Prices', locked: false },
   'US.PPI.SA.LEVEL': { zhFull: '生产者物价指数', zhShort: 'PPI', enFull: 'Producer Price Index', enShort: 'PPI', locked: false },
@@ -247,6 +259,15 @@ export function nameForMetricKey(metricKey: string): Readonly<{
  * 所以统一从这里取——四个字段名只在这张名表里出现（守卫按字段形状抓的正是这类文件）。
  */
 export type CalendarNamePair = Readonly<{ zhFull: string; zhShort: string; enFull: string; enShort: string }>
+
+/**
+ * 「中文简称 + 英文全名」这一对（映射规则表「名称」那一列用的形状）。**形状只在这张表里声明**：
+ * 别处各写一份 `zhShort`/`enFull`，守卫会把这些文件当成「没登记的名表」抓出来。
+ */
+export function localizedPairFor(metricKey: string): Readonly<{ zh: string; en: string }> | undefined {
+  const names = calendarNamesFor(metricKey)
+  return names === undefined ? undefined : { zh: names.zhShort, en: names.enFull }
+}
 
 export function calendarNamesFor(metricKey: string): CalendarNamePair | undefined {
   return nameByMetricKey[metricKey] ?? eventTypeNameByCode[metricKey]

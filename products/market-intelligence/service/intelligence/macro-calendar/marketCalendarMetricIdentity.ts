@@ -1,3 +1,5 @@
+import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
+
 /**
  * 跨源规范身份的**数据常量**：源内码 → `metric_key`。
  *
@@ -317,7 +319,8 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   countryCode: string | null; indicatorId: string | null; scheduledAt: string
 }>): MarketCalendarCanonicalIdentity | undefined {
   if (!row.countryCode || !row.indicatorId) return undefined
-  const entry = zeroXRouterIndicatorIdentities[row.indicatorId]
+  // 两个来源的 id 命名空间分开：0xrouter 自己那张表是「按来源拆」的起点（迁移后新增）。
+  const entry = zeroXRouterIndicatorIdentities[row.indicatorId] ?? zeroXRouterSourceMetricMappings[row.indicatorId]
   if (!entry) return undefined
   const periodKey = entry.periodRule === 'month' ? previousMonthKey(row.scheduledAt)
     : entry.periodRule === 'week_end' ? previousWeekEndingKey(row.scheduledAt)

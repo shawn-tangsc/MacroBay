@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
-import { calendarNamesFor } from '../marketCalendarCodeNames'
+import { localizedPairFor } from '../marketCalendarCodeNames'
 import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
@@ -141,9 +141,8 @@ function officialPageFor(metricKey: string): Readonly<{ url: string; basis: stri
  * 名表没有这条就 `null`——**宁可不显示，也不写一个读起来像专名的码**。
  */
 export function mappingRuleNames(metricKey: string): Readonly<{ zh: string; en: string }> | null {
-  const names = calendarNamesFor(metricKey)
-  if (names === undefined) return null
-  return Object.freeze({ zh: names.zhShort, en: names.enFull })
+  const pair = localizedPairFor(metricKey)
+  return pair === undefined ? null : Object.freeze({ ...pair })
 }
 
 export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRead {
