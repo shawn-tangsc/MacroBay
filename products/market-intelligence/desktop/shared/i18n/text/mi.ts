@@ -14,7 +14,7 @@ export const miText = {
     menuUnreadable: '暂时读不到这条解读',
     unreachable: '没送到分析服务，可再试一次',
     retry: '再试一次',
-    meta: '生成于 {time} · 依据：该条新闻 + 当时快照（{count} 条证据）',
+    meta: '生成于 {time} · 依据：该条新闻 + 解读时的数据（{count} 条证据）',
     audit: {
       summary: '审计信息',
       asOf: '分析时点',
@@ -23,7 +23,7 @@ export const miText = {
       evidenceRefCount: '证据引用',
       domains: '覆盖域',
       runId: '分析运行',
-      snapshotHash: '快照'
+      snapshotHash: '数据版本'
     }
   },
   newsSentiment: {
@@ -46,7 +46,7 @@ export const miText = {
     menuUnreadable: 'This interpretation cannot be read right now',
     unreachable: 'The request did not reach the analysis service; try again',
     retry: 'Try again',
-    meta: 'Generated {time} · Based on: this story + the snapshot at the time ({count} evidence refs)',
+    meta: 'Generated {time} · Based on: this story + the data available when it was generated ({count} pieces of evidence)',
     audit: {
       summary: 'Audit details',
       asOf: 'Analyzed at',
@@ -55,7 +55,7 @@ export const miText = {
       evidenceRefCount: 'Evidence refs',
       domains: 'Domains',
       runId: 'Analysis run',
-      snapshotHash: 'Snapshot'
+      snapshotHash: 'Data version'
     }
   },
   newsSentiment: {
