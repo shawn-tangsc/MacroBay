@@ -490,6 +490,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // 时间线的「哪个开盘」也按设置的读者时区换算。
     timeZone: () => currentReaderTimeZone(),
     requestInitialAnalysis: intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis,
+    readNewsInterpretation: intelligenceModule.marketAnalysisRuntime.readNewsInterpretation,
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })

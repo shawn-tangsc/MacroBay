@@ -7,6 +7,10 @@ export const MARKET_ANALYSIS_IPC_METHODS = Object.freeze({
   startFollowUp: 'marketAnalysis.startFollowUp',
   getWorkspaceBinding: 'marketAnalysis.getWorkspaceBinding',
   requestInitialAnalysis: 'marketAnalysis.requestInitialAnalysis',
+  /** 按单条新闻发起一次解读（R37）。与旧命令共用服务层核心，但 IPC 语义独立。 */
+  requestNewsInterpretation: 'marketAnalysis.requestNewsInterpretation',
+  /** 只读：这条新闻有没有已有解读、是哪份证据的——点之前就能决定菜单显示「查看」还是「再次解读」。 */
+  readNewsInterpretation: 'marketAnalysis.readNewsInterpretation',
   getLatestAttempt: 'marketAnalysis.getLatestAttempt',
   /** The facts the system holds for one calendar event the reader selected. */
   calendarEventContext: 'marketAnalysis.calendarEventContext',
@@ -96,3 +100,38 @@ export const NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS = Object.freeze({
 } as const)
 
 export type NewsInterpretationNotEligibleReason = (typeof NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS)[keyof typeof NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS]
+
+/** 已有解读依据的范围：界面在 11px 那行只用 `factCount`，写「N 条证据」用 `evidenceRefCount`（两者不相等）。 */
+export type NewsInterpretationEvidenceScope = Readonly<{
+  asOf: string
+  dataCutoff: string
+  factCount: number
+  evidenceRefCount: number
+  domains: readonly string[]
+}>
+
+/**
+ * 只读结果（R37 §9.2）：判断「查看 / 再次解读」只比 `evidenceFingerprint` 与
+ * `currentEvidenceFingerprint` 这一对；`snapshotHash` 随结果返回但**只作审计**。
+ */
+export type NewsInterpretationReadResult = Readonly<{
+  itemId: string
+  state: 'none' | 'available' | 'in-flight'
+  runId?: string
+  /** 已有解读产出的时刻。 */
+  generatedAt?: string
+  snapshotHash?: string
+  dataAsOf?: string
+  evidenceScope?: NewsInterpretationEvidenceScope
+  evidenceFingerprint?: string
+  /** 此刻会冻结成的证据指纹；算不出来（这条建不出证据引用）时为 null。 */
+  currentEvidenceFingerprint: string | null
+  /** 触发事实在快照里的显示名（标题）。界面按 `subjectLabel ?? subject` 取值，别直接读空的 subject。 */
+  subjectLabel?: string
+}>
+
+export function isNewsInterpretationReadInput(value: unknown): value is Readonly<{ itemId: string }> {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) return false
+  const candidate = value as Record<string, unknown>
+  return Object.keys(candidate).length === 1 && typeof candidate.itemId === 'string' && candidate.itemId.length > 0 && candidate.itemId.length <= 200
+}

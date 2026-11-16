@@ -42,7 +42,7 @@ export type PreparedMarketAnalysisSnapshot = Readonly<{
 export type PreparationDependencies = Readonly<{
   publicQueryService: MarketIntelligencePublicQueryService
   pipeline: Pick<IntelligencePipeline, 'listItems' | 'listRevisions'>
-  repository: Pick<MarketAnalysisRepository, 'getEventGroup' | 'listSnapshots' | 'listRuns'>
+  repository: Pick<MarketAnalysisRepository, 'getEventGroup' | 'listEventGroups' | 'getSnapshot' | 'listSnapshots' | 'listRuns'>
   newsSentimentQuery?: AnalysisNewsSentimentQuery
   latestNewsSentiment?: (itemId: string, asOf: string) => NewsSentimentRecord | undefined
   timeZone: () => string

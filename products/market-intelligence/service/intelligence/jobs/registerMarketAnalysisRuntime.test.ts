@@ -8,6 +8,7 @@ import type { JobHandler } from '@platform/jobs'
 import { createEventBusRuntime } from '@platform/message-bus'
 
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
+import { buildEvidenceFingerprint } from '../analysis/analysisHash'
 import { INTELLIGENCE_EVENT_TOPICS } from '../schema/intelligenceEvents'
 import {
   buildMarketAnalysisVerificationObservations,
@@ -675,6 +676,14 @@ describe('market analysis runtime sentiment wiring', () => {
       expect(String(fact.value)).toContain(verdict.evidenceQuote)
       // 触发事实不进变化记录：变化仍是「市场数据动了什么」。
       expect(snapshot!.change?.facts.some(candidate => candidate.metric === 'news-sentiment') ?? false).toBe(false)
+      // 只读接口与写路径共用同一个预计算：只读侧算出的当前指纹 == 写路径刚冻下的那份证据的指纹。
+      // 「查看 / 再次解读」只比这一对；`snapshotHash` 的输入含 asOf，读写各算一次必然不同，不参与判断。
+      const read = await runtime.readNewsInterpretation('news-trigger-1')
+      // 冻结刚排上、运行还没跑完：如实说「在飞」，不假装已有解读。
+      expect(read).toMatchObject({ state: 'in-flight', runId: expect.any(String) })
+      expect(read.currentEvidenceFingerprint).toBe(buildEvidenceFingerprint({ facts: snapshot!.facts, evidenceRefs: snapshot!.evidenceRefs }))
+      // 没有解读的条目走 none，且当前指纹仍然给得出来（界面据此判断能不能点）。
+      await expect(runtime.readNewsInterpretation('not-a-real-item')).resolves.toMatchObject({ state: 'none', currentEvidenceFingerprint: null })
     } finally {
       runtime.dispose()
       await rm(directory, { recursive: true, force: true })

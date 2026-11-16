@@ -36,6 +36,9 @@ import { createAnalysisConclusionManualSend, type AnalysisConclusionSend } from 
 import { createAnalysisNoticeDeps, createReleaseCoverageReader, notifyAbandonedRelease } from './analysisReleaseNoticeWiring'
 import { createRunSessionBinding, type RunSessionPort } from './analysisRunSessionPort'
 import { prepareMarketAnalysisSnapshot } from '../analysis/analysisSnapshotPreparation'
+import { createNewsInterpretationReader } from '../analysis/analysisNewsInterpretationRead'
+import { buildEvidenceFingerprint } from '../analysis/analysisHash'
+import type { NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
 import { hasEligibleAnalysisAnchor, readCanonicalAsOf, readSignificanceSignals, readString, resolveDomain, safeJson } from './analysisRuntimePayload'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
@@ -64,6 +67,8 @@ export type MarketAnalysisRuntime = Readonly<{
   requestSignalAnalysis: SignalAnalysisService
   /** 抽屉里那枚「发送到频道」：按运行 id 取结论，走与自动推送同一条提交路。 */
   sendConclusion: AnalysisConclusionSend
+  /** 只读：这条新闻有没有已有解读、是哪份证据的（R37 §9.2）。 */
+  readNewsInterpretation: (itemId: string) => Promise<NewsInterpretationReadResult>
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
   /** Mounted by the bootstrap: the session ports are injected there, not built here. */
   setRunSessionPort: (port: RunSessionPort | undefined) => void
@@ -401,6 +406,13 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     log: async input => { await jobLog?.(input) }
   })
 
+  const readNewsInterpretation = createNewsInterpretationReader({
+    publicQueryService: input.publicQueryService, pipeline: input.pipeline, repository,
+    ...(input.newsSentimentQuery ? { newsSentimentQuery: input.newsSentimentQuery } : {}),
+    ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
+    timeZone, now
+  })
+
   return {
     repository,
     startRecovery,
@@ -422,6 +434,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       if (!isMarketAnalysisEnabled(before) && isMarketAnalysisEnabled(saved)) await startRecovery()
       return saved
     },
+    readNewsInterpretation,
     requestInitialAnalysis,
     requestSignalAnalysis,
     setRunSessionPort: runSession.setPort,

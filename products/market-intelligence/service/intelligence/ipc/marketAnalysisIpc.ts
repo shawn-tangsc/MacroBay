@@ -1,6 +1,6 @@
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
-import { MARKET_ANALYSIS_IPC_METHODS } from '../../../contracts/marketAnalysisIpcContracts'
+import { MARKET_ANALYSIS_IPC_METHODS, isNewsInterpretationReadInput, type NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
 import { createAnalysisTimelineService } from '../analysis/analysisTimelineService'
 import { macroCalendarEventContextReaders, type MacroCalendarEventContextQuerySources } from '../public-query/macroCalendarEventContextReaders'
 import { macroCalendarEventContextFromReads } from '../public-query/macroCalendarEventContextAdapter'
@@ -19,6 +19,8 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
   calendar: MacroCalendarEventContextQuerySources = {},
   sessions: AnalysisSessionDependencies & {
     requestInitialAnalysis?: (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource) => Promise<{ itemId: string; queued: true }>
+    /** 只读：这条新闻有没有已有解读、是哪份证据的（R37）。 */
+    readNewsInterpretation?: (itemId: string) => Promise<NewsInterpretationReadResult>
     /** 读者时区：时间线的「哪个开盘」按它换算。 */
     timeZone?: () => string
     getAnalysisSettings?: () => Promise<MarketAnalysisSettings>
@@ -80,6 +82,12 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
       return sessions.requestInitialAnalysis(itemId, undefined, 'refresh', 'manual')
     }
     return sessions.requestInitialAnalysis(undefined, retryRunId, (mode ?? 'initial') as 'initial' | 'refresh', 'manual')
+  })
+  register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.readNewsInterpretation, async (payload) => {
+    // 每条命令自己的载荷校验：不认识的形状一律边界错误，不做兼容读取器。
+    if (!isNewsInterpretationReadInput(payload)) throw new Error('market-analysis-invalid-input')
+    if (!sessions.readNewsInterpretation) throw new Error('analysis-initial-request-unavailable')
+    return sessions.readNewsInterpretation(payload.itemId)
   })
 }
 

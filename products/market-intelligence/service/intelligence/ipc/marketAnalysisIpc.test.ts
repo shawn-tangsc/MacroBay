@@ -43,6 +43,35 @@ function harness() {
   return { handlers, repository, sessions }
 }
 
+describe('read-only news interpretation endpoint (R37)', () => {
+  const harnessWithReader = (readNewsInterpretation: (itemId: string) => Promise<unknown>) => {
+    const handlers = new Map<string, (payload: unknown) => unknown | Promise<unknown>>()
+    registerMarketAnalysisIpc((_productId, method, handler) => handlers.set(method, handler), {
+      getEventGroup: () => undefined, listRuns: () => [], getSnapshot: () => undefined, getSummary: () => undefined,
+      listTimeline: () => ({ items: [] }), getTimelineEntry: () => undefined, getRun: () => undefined,
+      getSummaryForRun: () => undefined, listPredictions: () => []
+    } as never, {}, { readNewsInterpretation: readNewsInterpretation as never })
+    return handlers
+  }
+
+  it('delegates the item id and returns whatever the reader says', async () => {
+    const read = vi.fn(async (itemId: string) => ({ itemId, state: 'available' as const, currentEvidenceFingerprint: 'fp-current' }))
+    const handlers = harnessWithReader(read)
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.readNewsInterpretation)?.({ itemId: 'item-1' }))
+      .resolves.toMatchObject({ state: 'available', currentEvidenceFingerprint: 'fp-current' })
+    expect(read).toHaveBeenCalledWith('item-1')
+  })
+
+  it('refuses its own payload shape instead of reusing another command’s reader', async () => {
+    const handlers = harnessWithReader(async (itemId: string) => ({ itemId, state: 'none' as const, currentEvidenceFingerprint: null }))
+    const handler = handlers.get(MARKET_ANALYSIS_IPC_METHODS.readNewsInterpretation)!
+    await expect(handler({})).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler({ itemId: 'item-1', extra: true })).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler({ itemId: '' })).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler('item-1')).rejects.toThrow('market-analysis-invalid-input')
+  })
+})
+
 describe('marketAnalysisIpc', () => {
   it('returns the latest persisted attempt without private provider or snapshot content', () => {
     const { handlers } = harness()
