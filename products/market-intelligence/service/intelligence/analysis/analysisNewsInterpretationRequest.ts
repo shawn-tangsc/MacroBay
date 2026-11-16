@@ -49,6 +49,10 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     if (!await deps.isEnabled()) return { state: 'not-ready', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.notEnabled }
     if (!await deps.hasModel()) return { state: 'not-ready', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.providerNotReady }
 
+    // 先确保事件组存在：当前证据指纹是按组算的，第一次点这条时还没有组，先建组才能判断
+    // 「这条新闻此刻能不能建出可引用的证据」，也才能在排运行之前 fail-closed。
+    const group = await deps.ensureGroup(itemId)
+    if (!group) return { state: 'failed', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.eventGroupNotFound }
     const read = await readNewsInterpretation(itemId)
     if (read.state === 'in-flight') return { state: 'in-flight', itemId, runId: read.runId }
     if (read.state === 'available' && read.currentEvidenceFingerprint === read.evidenceFingerprint) {
@@ -63,8 +67,6 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     if (read.currentEvidenceFingerprint === null) {
       return { state: 'insufficient-facts', itemId, details: { reason: NEWS_INTERPRETATION_INSUFFICIENT_REASONS.triggerEvidenceMissing } }
     }
-    const group = await deps.ensureGroup(itemId)
-    if (!group) return { state: 'failed', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.eventGroupNotFound }
     // 组里已经有一份分析时，冻结必须以「重跑」而不是「首跑」进入：首跑在冻结边界会被
     // `analysis-already-available` 挡掉，读者会看到「点了没反应」。两条路径都必须带触发指针——
     // 串 `manual.refresh` = 一篇市场综述，正是这次线上看到的样子。

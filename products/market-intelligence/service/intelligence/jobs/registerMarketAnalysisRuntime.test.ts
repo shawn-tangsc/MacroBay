@@ -546,6 +546,82 @@ function crossAssetSnapshot(asOf: string, range: '1h' | '24h' | '7d', btcReturn:
   }
 }
 
+describe('news interpretation end to end (R37 acceptance)', () => {
+  it('a queued per-item reading freezes a snapshot whose trigger points at that item', async () => {
+    // 线上那次：运行成功、快照里没有那条新闻、指针 NULL，读者拿到一篇市场综述。这条用例钉的就是
+    // 那一段：写端点 → 冻结载荷 → 快照 trigger + triggered-news 事实。
+    const directory = await mkdtemp(`${tmpdir()}/mi-analysis-news-e2e-`)
+    const asOf = '2026-11-16T12:08:39.563Z'
+    const publishedAt = '2026-11-16T11:40:00.000Z'
+    const handlers = new Map<string, JobHandler>()
+    const enqueueDefinition = vi.fn(async (definition: { id: string; handlerId?: string; payload?: unknown }) => {
+      // 真的跑一次冻结，而不是假装排上了：这是「快照里有没有指针」的唯一判据。
+      if (definition.handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB) {
+        await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+          definition.payload,
+          { jobRunId: 'e2e-freeze', signal: new AbortController().signal, log: async () => undefined, progress: async () => undefined }
+        )
+      }
+      return { id: definition.id }
+    })
+    const jobRuntime = {
+      registerHandler: (id: string, handler: JobHandler) => { handlers.set(id, handler) },
+      enqueueDefinition,
+      waitForRunTerminal: async () => ({ state: 'terminal', run: { status: 'completed', result: { analysisRunId: 'mi-ar-e2e' } } }),
+      listRuns: () => [], enqueueStartup: vi.fn(async (id: string) => ({ id }))
+    } as never
+    const newsItem = item({
+      itemId: 'news-e2e-1', sourceId: 'coindesk-rss',
+      title: 'Singapore, Germany test cross-border payments to reduce settlement risk',
+      summary: 'The two central banks trialled tokenised settlement.', publishedAt, detectedAt: publishedAt,
+      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+    })
+    const evidence = () => {
+      const ref = {
+        evidenceRefId: 'news:news-e2e-1', itemId: 'news-e2e-1', sourceId: 'coindesk-rss',
+        occurredAt: publishedAt, publishedAt, detectedAt: publishedAt, computedAt: null,
+        visibleAt: publishedAt, excerptHash: 'c'.repeat(64)
+      }
+      return { state: 'available', evidenceRefs: [ref], data: { evidenceRef: ref, title: newsItem.title, excerpt: 'body', sourceUrl: newsItem.url } }
+    }
+    const now = () => asOf
+    const settings = createMarketAnalysisSettingsService({
+      store: createMarketAnalysisSettingsStore(
+        createInMemoryMarketAnalysisSettingsStorage({ enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }),
+        () => asOf
+      ),
+      now: () => asOf
+    })
+    const runtime = registerMarketAnalysisRuntime({
+      jobRuntime,
+      pipeline: { listItems: () => [newsItem], listRevisions: () => [] } as never,
+      publicQueryService: { getEvidenceExcerpt: async () => evidence() } as never,
+      latestNewsSentiment: () => ({
+        itemId: 'news-e2e-1', sourceId: 'coindesk-rss', publishedAt, scoredAt: '2026-11-16T11:45:00.000Z',
+        polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'cross-border-settlement',
+        evidenceQuote: 'cross-border payments settlement risk', engine: 'model', caveats: []
+      }) as never,
+      structuredModelInvocation: { invoke: vi.fn() } as never,
+      settingsService: settings, dataDir: directory, now
+    })
+    try {
+      const result = await runtime.requestNewsInterpretation('news-e2e-1')
+      expect(result).toMatchObject({ state: 'queued', itemId: 'news-e2e-1' })
+      const group = runtime.repository.listEventGroups().find(candidate => candidate.eventRefs.includes('news-e2e-1'))!
+      const snapshot = runtime.repository.listSnapshots(group.id).at(-1)!
+      // 判据一：指针非空且 itemId 等于入参。
+      expect(snapshot.trigger).toMatchObject({ source: 'intelligence-item', itemId: 'news-e2e-1' })
+      // 判据二：那条新闻以 triggered-news:<itemId> 进了 facts，模型读得到。
+      expect(snapshot.facts.some(fact => fact.factId === 'triggered-news:news-e2e-1' && fact.metric === 'news-sentiment')).toBe(true)
+      // 判据三：指针可解析，所以焦点不是「不适用」——结论才有机会被要求引用它。
+      expect(runtime.repository.listRuns().at(-1)?.validationMode).not.toBe('not-applicable:no-change')
+    } finally {
+      runtime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('market analysis runtime sentiment wiring', () => {
   it('freezes the sentiment it read as citable facts before dispatching the run', async () => {
     const directory = await mkdtemp(`${tmpdir()}/mi-analysis-sentiment-`)

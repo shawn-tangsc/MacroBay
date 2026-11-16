@@ -417,8 +417,15 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     timeZone, now,
     isEnabled, hasModel: async () => isMarketAnalysisModelSet(await settingsService.getSettings()),
     ensureGroup: async itemId => {
+      // 已有组就用它（同一条新闻的第二次点击不该再建一个组）；没有才建，并且**必须落库**——
+      // 不落库时冻结阶段查不到组，会把它当成「证据建不出来」，读者看到的是 insufficient-facts。
+      const existing = repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
+      if (existing) return existing
       const resolved = await resolveChange({ changeId: itemId })
-      return resolved ? groups.create(resolved.change) : undefined
+      if (!resolved) return undefined
+      const group = groups.create(resolved.change)
+      repository.appendEventGroup(group)
+      return group
     },
     enqueue: createAnalysisRunEnqueuer({ jobRuntime: input.jobRuntime, repository, now })
   })
