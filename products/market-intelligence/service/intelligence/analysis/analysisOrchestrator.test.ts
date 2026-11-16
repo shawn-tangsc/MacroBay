@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { AnalysisRun, EvidenceSnapshot, EventGroup } from '../../../contracts/marketAnalysisContracts'
 import { createAnalysisOrchestrator, marketAnalysisInvocationPolicy } from './analysisOrchestrator'
+import { buildAnalysisReferenceMap } from './analysisReferenceHandles'
 import { analysisUpstreamRetryPolicy } from './analysisUpstreamRetry'
 
 const asOf = '2026-09-28T00:00:00.000Z'
@@ -637,6 +638,73 @@ describe('news-triggered runs that ignore the news are not published (R37 C)', (
     expect(result).toMatchObject({ status: 'invalid-output', errorCode: 'analysis-missing-evidence' })
     expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ failureDetailCode: expect.stringMatching(/news-trigger-not-cited|sentiment-not-weighed/u) }))
     expect(commitSuccessfulAnalysis).not.toHaveBeenCalled()
+  })
+
+  it('publishes a news reading whose checks cite fact handles — the resolver must reach newsImpact', async () => {
+    // 线上那次：三份原始输出都按句柄引用（f1/f92/f27…），解析器没改写 newsImpact，校验把句柄当成
+    // 「快照里没有的事实」，整篇被判成 check-fact-not-in-snapshot——模型写得完全对，死在接线。
+    const commitSuccessfulAnalysis = vi.fn()
+    const newsSnapshot = {
+      ...fixtureSnapshot(),
+      facts: [
+        fixtureFact('triggered-news:item-1', 'news:item-1', 'news-sentiment', 'sentiment', 'BTC'),
+        fixtureFact('fact-1', 'evidence-1', 'actual', 'macro', 'CPI'),
+        fixtureFact('fact-2', 'evidence-2', 'etf-net-flow', 'capital', 'BTC')
+      ],
+      evidenceRefs: [{ evidenceRefId: 'news:item-1' }, { evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-2' }],
+      trigger: { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1' }
+    }
+    const handles = buildAnalysisReferenceMap(newsSnapshot)
+    const f = (factId: string): string => handles.factHandleById.get(factId)!
+    const e = (evidenceRefId: string): string => handles.evidenceHandleById.get(evidenceRefId)!
+    const citation = [e('evidence-1')]
+    const output = {
+      conclusion: {
+        direction: 'bearish' as const,
+        summary: '这条新闻指向 BTC 的风险偏好，当前资金面与价格读数同向偏空。',
+        change: '这条新闻本身没有改变快照里的市场读数，BTC 的判定仍来自 ETF 与价格。',
+        causalChain: '新闻 → 风险偏好下降 → BTC 承压，因此 BTC 偏空。',
+        conditions: ['资金面继续流出。'],
+        macro: null,
+        evidenceStrength: null,
+        dataGaps: [],
+        newsImpact: {
+          verdict: 'evaluated' as const,
+          contradiction: false,
+          checks: [{ factId: f('fact-2'), effect: 'supports' as const }, { factId: f('fact-1'), effect: 'supports' as const }],
+          invalidation: { kind: 'fact' as const, factId: f('fact-2'), relation: 'above', statement: 'ETF 净流入转正。' }
+        }
+      },
+      knownFacts: [{ factId: f('fact-1'), statement: 'CPI 实际值为 3.2%。', evidenceRefIds: [e('evidence-1')] }],
+      transmissionHypotheses: [{ statement: '风险偏好可能受到影响。', evidenceRefIds: citation }],
+      marketReaction: [{ statement: 'BTC 短期反应偏弱。', factIds: [f('fact-2')], evidenceRefIds: [e('evidence-2')] }],
+      supportingEvidence: [{ statement: '新闻本身的证据', evidenceRefId: e('news:item-1') }],
+      counterEvidence: [],
+      scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['价格数据保持可比'], invalidation: { kind: 'fact', factId: f('fact-1'), relation: 'below', statement: '出现相反事实' }, status: 'pending' }],
+      directions: [
+        { horizon: 'short', direction: 'bearish', rationale: '资金面偏空。', confidence: 'medium', evidenceRefIds: citation },
+        { horizon: 'medium', direction: 'range', rationale: '中期缺少方向性资金。', confidence: 'low', evidenceRefIds: citation },
+        { horizon: 'long', direction: 'undecided', rationale: '长期证据不足。', confidence: 'low', evidenceRefIds: citation }
+      ],
+      nextCatalysts: [{ statement: '关注下一次官方数据。', evidenceRefIds: citation }],
+      dataCaveats: [],
+      evidenceRefs: [e('news:item-1'), e('evidence-1'), e('evidence-2')]
+    }
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ getSnapshot: () => newsSnapshot, commitSuccessfulAnalysis }),
+      structuredModelInvocation: {
+        invoke: vi.fn(async () => ({ ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory()
+    })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toEqual({ status: 'succeeded' })
+    expect(commitSuccessfulAnalysis).toHaveBeenCalledTimes(1)
+    const committed = commitSuccessfulAnalysis.mock.calls[0]![0] as { summary: { conclusion: { newsImpact?: { checks: readonly { factId: string }[] } } } }
+    // 存下来的必须是真事实 id，不是句柄——审计与后续读回看到的是同一个东西。
+    expect(committed.summary.conclusion.newsImpact?.checks.map(check => check.factId)).toEqual(['fact-2', 'fact-1'])
   })
 })
 
