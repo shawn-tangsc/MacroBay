@@ -1,7 +1,10 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
+import { germanSourceMetricMappings } from '../marketCalendarGermanSourceMappings'
+import { zeroXRouterIndicatorIdentities } from '../marketCalendarMetricIdentity'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from '../marketCalendarStandardTable'
+import { zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { readCalendarMappingRules } from './marketCalendarMappingRulesRead'
 
 /**
@@ -18,9 +21,9 @@ function seed(): DatabaseSync {
   // 一个数组身份、两期（同一指标发布了两次）：未映射段按**行数**计，仍只出一个 id。
   // 第二行带英文原文名（迁移 18 合并后存在 `source_label_en`），用来断「样本名中英都给」。
   // 中英两条已经在写入端与迁移 18 合成一行，不再拿它当「两行」的样本。
-  for (const [periodKey, label] of [['2026-10-16T13:30', '10月纽约联储制造业指数'], ['2026-11-16T13:30', '11月纽约联储制造业指数']] as const) {
+  for (const [periodKey, label] of [['2026-10-16T13:30', '10月未识别指标'], ['2026-11-16T13:30', '11月未识别指标']] as const) {
     upsertCalendarStandardRow(database, {
-      countryCode: 'US', metricKey: '["214790",79090]', periodKey,
+      countryCode: 'US', metricKey: '["999999",79090]', periodKey,
       scheduledDate: periodKey.slice(0, 10), timePrecision: 'minute' as const, status: 'backfilling' as const,
       valuesJson: '{}', identityKind: 'source' as const, sourceLabel: label,
       ...(label.startsWith('11') ? {} : {}),
@@ -35,16 +38,19 @@ function seed(): DatabaseSync {
   })
   // 合并过的行带英文原文名（迁移 18 把英文那条并入 `source_label_en`）。
   database.prepare(`update mi_calendar_events set source_label_en = ?
-    where source_label = '11月纽约联储制造业指数'`).run('New York Fed manufacturing index(Nov)')
+    where source_label = '11月未识别指标'`).run('Unidentified indicator(Nov)')
   return database
 }
 
 describe('映射规则表读口', () => {
-  it('已映射 117 条（旧表 85 + 0xrouter 32）：字段齐、计数由服务端给、依据推不出就 null', () => {
+  it('已映射 = 三张表之和（旧表 85 + 0xrouter 32 + 德国 71）：字段齐、计数由服务端给、依据推不出就 null', () => {
     const read = readCalendarMappingRules(seed())
     if (read.state !== 'available') throw new Error('unavailable')
-    expect(read.mapped).toHaveLength(117)
-    expect(read.counts.mapped).toBe(117)
+    // **按来源各一张表**：读口只做并集，条数就是三张表之和（不写死数字，表一长就该跟着长）。
+    expect(read.counts.mapped).toBe(Object.keys(zeroXRouterIndicatorIdentities).length
+      + Object.keys(zeroXRouterSourceMetricMappings).length
+      + Object.keys(germanSourceMetricMappings).length)
+    expect(read.mapped).toHaveLength(read.counts.mapped)
     // BLS 的 CPI 有官方页（机构 + 页面类型能推），ISM 那类推不出必须 null
     const cpi = read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')!
     expect(cpi.officialUrl).toBe('https://www.bls.gov/news.release/')
@@ -93,11 +99,15 @@ describe('映射规则表读口', () => {
     if (read.state !== 'available') throw new Error('unavailable')
     expect(read.unmapped).toHaveLength(1)
     // 样本名只是「这一行长什么样」，取该 id 的第一行；**判据是行数**，不锁日期顺序。
-    expect(read.unmapped[0]!.sourceId).toBe('214790')
+    expect(read.unmapped[0]!.sourceId).toBe('999999')
     expect(read.unmapped[0]!.rowCount).toBe(2)
-    expect(read.unmapped[0]!.sampleLabel).toContain('纽约联储制造业指数')
+    expect(read.unmapped[0]!.sampleLabel).toContain('未识别指标')
     // 有英文原文名就给出来（同一条 id 下有一行带就够了）：界面把它放同一格 `中文 · English`。
-    expect(read.unmapped[0]!.sampleLabelEn).toBe('New York Fed manufacturing index(Nov)')
+    expect(read.unmapped[0]!.sampleLabelEn).toBe('Unidentified indicator(Nov)')
+    // **已经认得出来的 id 不许再报「未映射」**：三张表里任何一张认得都算。报错了读者会去补已经做完的事。
+    for (const mappedId of ['214790', '213844', '8637']) {
+      expect(read.unmapped.some((row) => row.sourceId === mappedId), mappedId).toBe(false)
+    }
     expect(read.counts.unmapped).toBe(1)
     expect(read.counts.unmappedRows).toBe(2)
   })

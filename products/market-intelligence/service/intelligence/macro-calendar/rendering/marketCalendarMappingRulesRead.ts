@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { localizedPairFor } from '../marketCalendarCodeNames'
 import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
+import { germanSourceMetricMappings } from '../marketCalendarGermanSourceMappings'
 import { subItemOrderOf, subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
 
@@ -185,10 +186,17 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         sampleLabel: current?.sampleLabel ?? row.label,
         sampleLabelEn: current?.sampleLabelEn ?? row.label_en })
     }
-    // 两张表合起来才是「这个来源现在认得哪些 id」：旧表 85 条 + 0xrouter 自己的 32 条（子项码那批）。
+    /**
+     * 「现在认得哪些 id」= 三张表合起来：旧表 85 条 + 0xrouter 自己的 32 条（子项码那批）
+     * + 德国自己那张 71 条（用户 2026-11-17 建码后）。**按来源各一张表**，这里只做并集。
+     *
+     * 少了德国这张，表会把 71 个已经认得的 id 报成「未映射」——那是最坏的一种错：
+     * 读者照着它去补映射，补的其实是已经做完的事。
+     */
     const allIdentityEntries: [string, { metricKey: string; periodRule: ZeroXRouterPeriodRule }][] = [
       ...Object.entries(zeroXRouterIndicatorIdentities),
-      ...Object.entries(zeroXRouterSourceMetricMappings)
+      ...Object.entries(zeroXRouterSourceMetricMappings),
+      ...Object.entries(germanSourceMetricMappings)
     ]
     const mapped: MappingRuleRow[] = allIdentityEntries.map(([sourceId, entry]) => {
       const official = officialPageFor(entry.metricKey)
@@ -207,8 +215,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       .map(([metricKey, rowCount]) => Object.freeze({ metricKey, rowCount,
         names: mappingRuleNames(metricKey), tier: tierOfMetricKey(metricKey) ?? null }))
       .sort((left, right) => right.rowCount - left.rowCount || left.metricKey.localeCompare(right.metricKey))
+    const recognized = new Set(allIdentityEntries.map(([sourceId]) => sourceId))
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
-      .filter((entry) => zeroXRouterIndicatorIdentities[entry.sourceId] === undefined)
+      .filter((entry) => !recognized.has(entry.sourceId))
       .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows,
         sampleLabel: entry.sampleLabel, sampleLabelEn: entry.sampleLabelEn }))
       .sort((left, right) => right.rowCount - left.rowCount || left.sourceId.localeCompare(right.sourceId))
