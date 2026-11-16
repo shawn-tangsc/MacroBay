@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { JobRuntime } from '@platform/jobs'
 import type { NotificationSubmitRequest } from '@platform/notifications'
 
+import { marketCalendarPublicPolicy } from '../../contracts/macro/marketCalendarQueryContracts'
 import { eventTypeNameByCode, nameByMetricKey } from '../intelligence/macro-calendar/marketCalendarCodeNames'
 import { createStandardMonthPageReader } from '../intelligence/macro-calendar/marketCalendarStandardMonthPage'
 import { readCalendarFreshnessFromJobRuns, readStandardTableLastWrittenAt } from '../intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
@@ -49,15 +50,36 @@ export function wireCalendarReadings(input: Readonly<{
       return row.sourceLabel
     },
   })
-  // 新鲜度**从作业记录算**（`582d121` 的读取器）：旧源冻结之后，问旧源采集批次会永远显示很旧，
-  // 于是每版日报都判「数据过期」、每次补跑、每次都写「采集失败」。两个数分开取：
-  // `lastRunAt` 是作业跑没跑，`lastCollectedAt` 是标准表真的写没写（`max(observed_at)`）。
+  /**
+   * **判定只读一个数**：标准表 `max(observed_at)`（用户 2026-11-16 定死）。
+   * 曾经这里写着「新鲜度从作业记录算」，换源时那次 68 小时的误判就是照那段话实现的——
+   * 作业会改名、会停跑，数据不会。注释与代码相反比死代码更危险，所以这段按实际写。
+   */
   const readCalendarLastWrittenAt = () => readStandardTableLastWrittenAt(input.database)
+  /**
+   * **展示输入**：「最近一次采集尝试」（attempts 表，按当前三条描述符取最新一条）。
+   * 它不参与判定，但必须真的喂进去——否则简报里「最近一次采集失败」那句话永远不出现，
+   * 而且不报错、只会静默消失（能力在、喂输入的人不在，这种最难发现）。
+   */
+  const readLatestAttempts = (): readonly { descriptorId: string
+    latestAttempt?: { attemptedAt: string; state: string } }[] => {
+    try {
+      const pick = input.database.prepare(`select descriptor_id, attempted_at, state
+        from mi_macro_calendar_market_refresh_attempts where descriptor_id = ?
+        order by attempted_at desc limit 1`)
+      return marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
+        const row = pick.get(descriptorId) as { attempted_at?: string; state?: string } | undefined
+        return { descriptorId, ...(row?.attempted_at === undefined || row.state === undefined
+          ? {} : { latestAttempt: { attemptedAt: row.attempted_at, state: row.state } }) }
+      })
+    } catch { return [] }
+  }
   input.intelligenceModule.publicQueryService.setMarketCalendarQuery({
     queryMonth: standardCalendarReader.queryMonth,
     // **判定只有一个数**：标准表 `max(observed_at)`；作业记录不参与（用户 2026-11-16 定死）。
     readCollectionFreshness: async () => readCalendarFreshnessFromJobRuns({
       lastWrittenAt: readCalendarLastWrittenAt(),
+      latestAttempts: readLatestAttempts(),
       asOf: new Date().toISOString()
     })
   })
