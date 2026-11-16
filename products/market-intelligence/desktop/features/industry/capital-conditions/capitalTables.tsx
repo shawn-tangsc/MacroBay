@@ -243,10 +243,11 @@ export function EtfTable({ reading, text, onRetry, skeleton = false, cellOff }: 
 function EtfRow({ asset, label, missing, text }: {
   asset?: DashboardEtfFlowAsset
   label: string
-  /** 这一支读不到时由模型给的原因；有 `asset` 就不用它。 */
+  /** 这一支读不到时由模型给的原因；有 `asset` 就用它。 */
   missing?: DashboardEtfMissingReason
   text: CapitalTableText
 }): React.ReactElement {
+  const dataText = useProductTextKey() as (key: string) => string
   // 这一支没值：说「未知」并给原因，**不补 0、不拿另一支顶**。
   if (asset === undefined) {
     return <tr data-etf-missing={missing ?? 'asset-missing'}>
@@ -257,12 +258,26 @@ function EtfRow({ asset, label, missing, text }: {
     </tr>
   }
   const latest = asset.rows.at(-1)
+  /**
+   * 「这行数是截到哪一天的」写在**行名下面**（界面设计 2026-11-17 定的形态）：
+   * 它是整行的 as-of（5 日/20 日/连续都以它结尾），不是「最新」那一格自己的；
+   * 而且行名这列没有 `data-flow-direction`，日期天生不会跟着红绿变色。
+   *
+   * 交易日就是日历日，按 ISO 键取月-日：**不许走 `formatShellInstant`**——那是瞬时格式化器，
+   * 会按读者时区换算，美西读者会看到前一天。
+   */
+  const asOf = latest
+    ? format(dataText('pages.intelligence.portal.dashboard.capitalConditions.rowAsOf'), { day: latest.tradingDate.slice(5) })
+    : undefined
   const days = latest ? consecutiveDirectionDays(asset.rows, latest.direction) : 0
   const streak = latest && days > 0
     ? format(days === 1 ? text.streakSingle : text.streak, { flow: text.shortFlowDirections[latest.direction], count: days })
     : ''
   return <tr>
-    <th scope="row"><i className="mi-capital-conditions__asset-dot" data-series={asset.asset.toLowerCase()} aria-hidden="true" />{label}</th>
+    <th scope="row">
+      <i className="mi-capital-conditions__asset-dot" data-series={asset.asset.toLowerCase()} aria-hidden="true" />{label}
+      {asOf === undefined ? null : <span className="mi-capital-conditions__etf-row-as-of">{asOf}</span>}
+    </th>
     <td data-flow-direction={flowDirection(asset.latestNetFlowUsd)}>{asset.latestNetFlowUsd}</td>
     {asset.cumulative.map((window) => <td key={window.windowDays} data-flow-direction={flowDirection(window.netFlowUsd)}>{window.netFlowUsd}</td>)}
     <td className="mi-capital-conditions__streak" data-flow-direction={latest?.direction}>{streak}</td>
