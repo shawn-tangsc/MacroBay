@@ -52,7 +52,26 @@ describe('「AI 解读」结果条文案（R37 §9.4）', () => {
     expect(states.sort()).toEqual([
       'analysis-event-group-not-found', 'analysis-initial-request-failed', 'analysis-initial-request-unavailable',
       'analysis-not-enabled', 'analysis-provider-not-ready',
-      'insufficient-facts:market-facts-below-minimum', 'insufficient-facts:trigger-evidence-missing'
+      'insufficient-facts:market-facts-below-minimum', 'insufficient-facts:trigger-evidence-missing',
+      'no-judgment', 'not-eligible'
     ].sort())
+  })
+})
+
+describe('「没有判定」与「不够格」不和兜底共用一句话', () => {
+  it('gives each its own sentence in both locales, with no action', () => {
+    const fallback = newsInterpretationResultCopy({})
+    for (const state of ['no-judgment', 'not-eligible'] as const) {
+      const entry = newsInterpretationResultCopy({ state })
+      expect(entry.action).toBeNull()
+      expect(entry.sentenceKey).not.toBe(fallback.sentenceKey)
+      for (const locale of ['zh-CN', 'en-US'] as const) {
+        const sentence = resolve(entry.sentenceKey, locale)
+        expect(typeof sentence, `${locale} ${state}`).toBe('string')
+        expect(sentence, `${locale} ${state} must differ from fallback`).not.toBe(resolve(fallback.sentenceKey, locale))
+      }
+      // 两个状态之间也不许共用一句：它们是两件事（等得到 vs 本来就不该点）。
+      expect(entry.sentenceKey).not.toBe(newsInterpretationResultCopy({ state: state === 'no-judgment' ? 'not-eligible' : 'no-judgment' }).sentenceKey)
+    }
   })
 })

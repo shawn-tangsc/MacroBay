@@ -46,6 +46,14 @@ const BY_CODE: Readonly<Record<NewsInterpretationFailureCode, CopyEntry>> = Obje
   [NEWS_INTERPRETATION_FAILURE_CODES.eventGroupNotFound]: state(NEWS_INTERPRETATION_FAILURE_CODES.eventGroupNotFound)
 })
 
+/** 写端点两个「本来就不该开始」的结局：与失败码、与兜底句都不是同一句话。 */
+export type NewsInterpretationResultState = 'no-judgment' | 'not-eligible'
+
+const BY_STATE: Readonly<Record<NewsInterpretationResultState, CopyEntry>> = Object.freeze({
+  'no-judgment': state('no-judgment'),
+  'not-eligible': state('not-eligible')
+})
+
 const BY_INSUFFICIENT: Readonly<Record<NewsInterpretationInsufficientReason, CopyEntry>> = Object.freeze({
   [NEWS_INTERPRETATION_INSUFFICIENT_REASONS.triggerEvidenceMissing]: insufficient(NEWS_INTERPRETATION_INSUFFICIENT_REASONS.triggerEvidenceMissing),
   [NEWS_INTERPRETATION_INSUFFICIENT_REASONS.marketFactsBelowMinimum]: insufficient(NEWS_INTERPRETATION_INSUFFICIENT_REASONS.marketFactsBelowMinimum)
@@ -54,10 +62,13 @@ const BY_INSUFFICIENT: Readonly<Record<NewsInterpretationInsufficientReason, Cop
 const FALLBACK: CopyEntry = Object.freeze({ sentenceKey: `${BASE}.fallback.sentence`, action: null })
 
 export function newsInterpretationResultCopy(input: Readonly<{
+  /** 写端点的 `no-judgment` / `not-eligible`：不是失败，是「本来就不该开始」。 */
+  state?: string
   failureCode?: string
   /** 只在 `insufficient-facts` 这一档有意义。 */
   insufficientReason?: string
 }>): CopyEntry {
+  if (input.state !== undefined && input.state in BY_STATE) return BY_STATE[input.state as NewsInterpretationResultState]
   if (input.failureCode !== undefined && input.failureCode in BY_CODE) return BY_CODE[input.failureCode as NewsInterpretationFailureCode]
   if (input.insufficientReason !== undefined && input.insufficientReason in BY_INSUFFICIENT) {
     return BY_INSUFFICIENT[input.insufficientReason as NewsInterpretationInsufficientReason]
@@ -67,6 +78,7 @@ export function newsInterpretationResultCopy(input: Readonly<{
 
 /** 所有会出句子的键（守卫用例逐条解析，确保两种语言都真有这两句）。 */
 export const newsInterpretationResultCopyKeys: readonly string[] = Object.freeze([
+  ...Object.values(BY_STATE).map(entry => entry.sentenceKey),
   ...Object.values(BY_CODE).map(entry => entry.sentenceKey),
   ...Object.values(BY_INSUFFICIENT).map(entry => entry.sentenceKey),
   FALLBACK.sentenceKey

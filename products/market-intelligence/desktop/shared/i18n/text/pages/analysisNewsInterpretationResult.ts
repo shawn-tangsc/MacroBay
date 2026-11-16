@@ -13,7 +13,10 @@ export const analysisNewsInterpretationResultText = {
       'analysis-initial-request-failed': { sentence: '这次没能排上分析', action: '再试一次' },
       'analysis-event-group-not-found': { sentence: '这条的内部状态对不上，刷新后再试', action: '刷新' },
       'insufficient-facts:trigger-evidence-missing': { sentence: '这条新闻的引用建不出来，暂时没法解读它', action: '查看原因' },
-      'insufficient-facts:market-facts-below-minimum': { sentence: '当前可用的市场读数不足两条，解读只能编，先不跑', action: '查看原因' }
+      'insufficient-facts:market-facts-below-minimum': { sentence: '当前可用的市场读数不足两条，解读只能编，先不跑', action: '查看原因' },
+      // 「没有判定」与「不够格」不是一个意思：前者只能等，后者本来就不该点。两件事不许共用兜底那一句。
+      'no-judgment': { sentence: '这条还没有情绪判定，等判定写下来才能解读', action: null },
+      'not-eligible': { sentence: '这条不在可单独解读的范围内', action: null }
     },
     /** 表外的码只落到这一句：读者能做的只有再试一次。 */
     fallback: { sentence: '这次没能开始解读', action: null }
@@ -26,7 +29,9 @@ export const analysisNewsInterpretationResultText = {
       'analysis-initial-request-failed': { sentence: 'The analysis could not be queued this time', action: 'Try again' },
       'analysis-event-group-not-found': { sentence: 'This item is out of step internally; refresh and try again', action: 'Refresh' },
       'insufficient-facts:trigger-evidence-missing': { sentence: 'The evidence reference for this news could not be built, so it cannot be read yet', action: 'See why' },
-      'insufficient-facts:market-facts-below-minimum': { sentence: 'Fewer than two market readings are available, so a reading would have to invent them; not running it', action: 'See why' }
+      'insufficient-facts:market-facts-below-minimum': { sentence: 'Fewer than two market readings are available, so a reading would have to invent them; not running it', action: 'See why' },
+      'no-judgment': { sentence: 'This item has no sentiment judgment yet; it can be read once one is written', action: null },
+      'not-eligible': { sentence: 'This item is not something that can be read on its own', action: null }
     },
     fallback: { sentence: 'The reading could not start this time', action: null }
   }
