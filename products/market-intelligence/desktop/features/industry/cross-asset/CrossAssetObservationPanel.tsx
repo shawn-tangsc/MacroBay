@@ -191,6 +191,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   }
   // An unavailable snapshot contributes nothing: the macro rows fall back to 未接入 rather than to
   // a level the dashboard cannot vouch for.
+  // 默认**显示**：把缺失藏起来是我的判断，不该默认替读者做。勾上才隐藏。
+  const [hideUnavailable, setHideUnavailable] = useState(false)
   const readings = macroSnapshot && macroSnapshot.state !== 'unavailable' ? macroSnapshot.readings : []
   /** 快照自己的时刻：判「偏旧」的时钟只取这一处，不读宿主时间（同一屏两次渲染不会给出两种答案）。 */
   const snapshotAsOfMs = macroSnapshot !== undefined && macroSnapshot.state !== 'unavailable'
@@ -314,9 +316,12 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   }
   const dailyRowIds = ['us10y', 'realRate']
   // 关掉的格整行不画：不是 0，也不是「未接入」那种占位。
-  const visibleRows = hideStatusRows === undefined || hideStatusRows.length === 0
+  /** 被供应商永久拒绝的行：勾上「不显示来源不可用的行」时它们整行不出现。 */
+  const unavailableRowIds = (['dxy', 'gold'] as const).filter(id => crossAssetMacroReading(readings, id)?.sourceFailure !== undefined)
+  const visibleRows = (hideStatusRows === undefined || hideStatusRows.length === 0
     ? statusRows
-    : statusRows.filter(row => !hideStatusRows.includes(row.id))
+    : statusRows.filter(row => !hideStatusRows.includes(row.id)))
+    .filter(row => !(hideUnavailable && unavailableRowIds.includes(row.id as 'dxy' | 'gold')))
   // 跨资产图：三条线都不可用才整图不画（至少一条可用就照画）。
   const rowStateOf = (id: CrossAssetStatusId): CellStateKind | undefined => cellStateLabels === undefined ? undefined : rowStates?.[id]
   /** 有没有源没配好（未配置 / 未启用）：决定标题那颗是「启用数据」还是「再试一次」。 */
@@ -355,7 +360,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       {/* The left slot keeps its historical class name; its content is the cross-asset status block:
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
-        <CrossAssetStatusHeading text={text} resolveProductText={resolveProductText} {...(titleAction === undefined ? {} : { action: titleAction })} />
+        <CrossAssetStatusHeading text={text} resolveProductText={resolveProductText}
+          {...(titleAction === undefined ? {} : { action: titleAction })}
+          toggle={{
+            label: resolveProductText(crossAssetTextKeys.hideUnavailableRows),
+            checked: hideUnavailable,
+            onChange: setHideUnavailable
+          }} />
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>

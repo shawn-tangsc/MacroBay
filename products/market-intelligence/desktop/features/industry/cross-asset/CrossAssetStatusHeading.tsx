@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Checkbox } from 'antd'
 import { Info } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -13,11 +13,13 @@ import type { Text } from './crossAssetStatusRows'
  * 搬出主文件只为控体积（门禁 500 行），行为一字未改；按钮什么时候出现、说什么、
  * 点了去哪，仍由调用方算好再传进来（`action`）——这里不认识数据、不判断状态。
  */
-export function CrossAssetStatusHeading({ text, resolveProductText, action }: Readonly<{
+export function CrossAssetStatusHeading({ text, resolveProductText, action, toggle }: Readonly<{
   text: Text
   resolveProductText: (key: string) => string
   /** 有源没配好 →「启用数据」；配好了但读不到 →「再试一次」；都读到 → 不给。 */
   action?: Readonly<{ label: string; run: () => void }>
+  /** 标题右上的勾：勾上＝不显示来源不可用的行。读者自己选，默认照旧显示。 */
+  toggle?: Readonly<{ label: string; checked: boolean; onChange: (checked: boolean) => void }>
 }>): React.ReactElement {
   return <div className="mi-cross-asset__quote-heading"><h3>{text.statusTitle}</h3>
     {/* 这段是代理说明，一段话而不是一句：走浮层（多行走浮层），点一下钉住。
@@ -40,7 +42,10 @@ export function CrossAssetStatusHeading({ text, resolveProductText, action }: Re
           variant="plain"
         />
       )} />
-    {/* 标题右边、ⓘ 之后：同屏唯一的那颗「补数据」按钮。 */}
-    {action === undefined ? null : <Button size="small" onClick={action.run}>{action.label}</Button>}
+    {/* 右角：一个勾（要不要看这类行）+ 同屏唯一的那颗「补数据」按钮。 */}
+    <span className="mi-cross-asset__heading-actions">
+      {toggle === undefined ? null : <Checkbox checked={toggle.checked} onChange={event => toggle.onChange(event.target.checked)}>{toggle.label}</Checkbox>}
+      {action === undefined ? null : <Button size="small" onClick={action.run}>{action.label}</Button>}
+    </span>
   </div>
 }
