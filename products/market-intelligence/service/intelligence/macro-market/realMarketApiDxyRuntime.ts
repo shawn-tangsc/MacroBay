@@ -35,6 +35,11 @@ export function createRealMarketApiDxyRuntime(deps: Readonly<{
   fetchImpl?: typeof fetch
   now?: () => number
   onError?: (error: unknown, sourceId: string) => void
+  /**
+   * 每一轮的结论，含运行级成功但某只品种被拒的那种。通知与诊断都只从这里取品种级失败：
+   * 采集器本身不接线通知，它只管"这一轮拿到了什么"。
+   */
+  onResult?: (result: RealMarketApiDxyRunResult) => void
 }>): RealMarketApiDxyRuntime {
   const collector = createRealMarketApiCollector({
     transport: createRealMarketApiTransport(deps.fetchImpl),
@@ -74,6 +79,11 @@ export function createRealMarketApiDxyRuntime(deps: Readonly<{
       } else {
         noteOutcome(result.state)
       }
+      /**
+       * 每一轮的结论都交出去一次（含"黄金成功、美元被拒"这种运行级成功的轮次）：
+       * 品种级失败只在这份结果里，源状态的注记与通知都靠它（用户 2026-11-16）。
+       */
+      deps.onResult?.(result)
       return result
     } catch (error) {
       // A collector failure must never take the scheduler down with it, and the message stays a code:

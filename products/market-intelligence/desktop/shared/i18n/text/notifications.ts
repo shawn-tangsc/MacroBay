@@ -126,6 +126,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceStale)]: '这个源在它的静默窗口内没有带来新条目。去设置里检查它的开关和连接。',
     [REASON(IDS.sourceStale)]: '最后一条新内容出现在这个窗口之前，之后的采集都没有带来新条目。',
 
+    [TITLE(IDS.sourceSymbolRefused)]: '{sourceName} 不再提供 {symbols}',
+    [BODY(IDS.sourceSymbolRefused)]: '供应商把这个品种列为「不受支持」，这部分数据会一直是空白；重试不会恢复，换套餐或换源后自动恢复。',
+    [REASON(IDS.sourceSymbolRefused)]: '供应商以「品种不受支持」拒绝请求；这是永久状态，不是这一次没读到。',
+
     [TITLE(IDS.briefingReady)]: '日报已完成',
     [BODY(IDS.briefingReady)]: '{date} {time} {language}这一期已经生成。',
     [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
@@ -218,6 +222,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.sourceStale)]: '{sourceName} has had no new items',
     [BODY(IDS.sourceStale)]: 'This source brought no new items for longer than its silence window. Check its switch and connection in settings.',
     [REASON(IDS.sourceStale)]: 'The last new item arrived before this window; collections since then brought nothing new.',
+
+    [TITLE(IDS.sourceSymbolRefused)]: '{sourceName} no longer carries {symbols}',
+    [BODY(IDS.sourceSymbolRefused)]: 'The provider lists this instrument as unsupported, so this data stays blank; retrying will not help, but a different plan or source restores it.',
+    [REASON(IDS.sourceSymbolRefused)]: 'The provider refused the request as an unsupported instrument — a permanent state, not a one-off read failure.',
 
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
     [BODY(IDS.briefingReady)]: 'The {date} {time} {language} edition is ready.',

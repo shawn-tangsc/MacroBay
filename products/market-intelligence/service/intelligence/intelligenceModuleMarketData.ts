@@ -104,7 +104,10 @@ export function createIntelligenceMarketData(input: {
     resolveProfile: sourceId => profileStore.resolveProfile(sourceId),
     getCredential: credentialRef => credentialStore.getByRef(credentialRef as never),
     dataDirectory: dataDir,
-    onError: (error, sourceId) => { console.log(JSON.stringify({ marker: 'MI_MACRO_MARKET_ERROR', sourceId, message: String(error).slice(0, 200) })) }
+    onError: (error, sourceId) => { console.log(JSON.stringify({ marker: 'MI_MACRO_MARKET_ERROR', sourceId, message: String(error).slice(0, 200) })) },
+    // 品种被供应商永久拒绝（套餐不含/品种下架）要主动说一次：只写在卡面上读者不会去看
+    // （用户 2026-11-16「出现这种情况，还要通知出来」）。
+    ...(submitNotification === undefined ? {} : { submitNotification })
   })
   // The gold stream shares that source's switch and credential but never its store: it is built only
   // when the desktop shell could hand over the platform socket, so a headless run has no stream.

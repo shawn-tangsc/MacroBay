@@ -1,11 +1,17 @@
 import { join } from 'node:path'
 import { getPlatformFetch } from '@platform/network/platformFetch'
 import type { JobRuntime } from '@platform/jobs'
+import type {
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationSubmitContracts'
 import { createMacroMarketCollector, type MacroMarketCollectionResult, type MacroMarketTransport } from './macroMarketCollector'
 import { registerMacroMarketJob } from './macroMarketJob'
 import { macroMarketPolicy } from './macroMarketPolicy'
 import { createMacroMarketStore, macroMarketStoragePolicy, type MacroMarketStore } from './macroMarketStore'
 import { createRealMarketApiDxyRuntime, type RealMarketApiDxyRuntime } from './realMarketApiDxyRuntime'
+import { realMarketApiPolicy } from './realMarketApiPolicy'
+import { isPermanentRefusal, notifySourceRefusal } from './sourceRefusalNotifier'
 
 type Profile = Readonly<{ credentialRef?: string | null; enabled?: boolean }>
 type Credential = Readonly<{ apiKey?: string }>
@@ -57,6 +63,11 @@ export function createMacroMarketRuntime(deps: Readonly<{
   now?: () => number
   /** The failing source id travels with the error: a failure is never filed under the other source. */
   onError?: (error: unknown, sourceId: string) => void
+  /**
+   * 通知端口：只有"品种被供应商永久拒绝"这一种会用它（`symbol-not-supported`）。
+   * 运行级失败与陈旧走 `source.consecutive-failed` / `source.stale`，不在这里重复。
+   */
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 }>): MacroMarketRuntime {
   const store = createMacroMarketStore(join(deps.dataDirectory, macroMarketStoragePolicy.fileName))
   const collector = createMacroMarketCollector({
@@ -91,7 +102,15 @@ export function createMacroMarketRuntime(deps: Readonly<{
     resolveProfile: deps.resolveProfile, getCredential: deps.getCredential,
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
     ...(deps.now ? { now: deps.now } : {}),
-    ...(deps.onError ? { onError: deps.onError } : {})
+    ...(deps.onError ? { onError: deps.onError } : {}),
+    // 品种被永久拒绝：只认 `symbol-not-supported` 这类码，每 24 小时最多一条（平台按 sourceId 去重）。
+    onResult: (result) => {
+      if (!('failures' in result) || result.failures === undefined) return
+      const symbols = result.failures.filter(failure => isPermanentRefusal(failure.failureCode)).map(failure => failure.symbolCode)
+      if (symbols.length === 0) return
+      void notifySourceRefusal(deps.submitNotification,
+        { sourceId: realMarketApiPolicy.sourceId, symbols }, new Date((deps.now ?? Date.now)()).toISOString())
+    }
   })
   registerMacroMarketJob(deps.jobRuntime, run)
   return { store, run, runRealMarketApiDxy: realMarketApiDxy.run }

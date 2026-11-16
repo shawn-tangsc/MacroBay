@@ -398,6 +398,23 @@ export const marketIntelligenceProductManifest = {
       conditionWindowMs: 86_400_000,
       requestedBypassQuietHours: false
     }),
+    /**
+     * 供应商把这个品种列为不受支持（套餐不含 / 品种下架）——永久状态。
+     *
+     * 与 `source.consecutive-failed` 分开：那条的正文与动作是「去设置查密钥或代理」，而这里查密钥
+     * 没用，必须续费、换品种或换源。用户 2026-11-16 原话「出现这种情况，还要通知出来」。
+     * 去重键沿用平台的 `sourceIssue(sourceId)`：同一来源一天一条，多只品种合并进同一条。
+     */
+    notificationEvent('market-intelligence.source.symbol-not-supported', {
+      category: 'needs-action',
+      body: true,
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyBuilder: 'sourceIssue',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.briefing.ready', {
       category: 'completed',
       body: true,

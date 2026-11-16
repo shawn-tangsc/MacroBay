@@ -90,5 +90,11 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   analysisConclusion: 'market-intelligence.analysis.conclusion',
   sourceConsecutiveFailed: 'market-intelligence.source.consecutive-failed',
   sourceStale: 'market-intelligence.source.stale',
+  /**
+   * 供应商把这个品种列为「不受支持」（套餐不含 / 品种下架）：永久状态，重试不会恢复。
+   * 与 `consecutive-failed` 分开，因为动作不同——续费或换源，不是查密钥（用户 2026-11-16
+   * 「出现这种情况，还要通知出来」）。
+   */
+  sourceSymbolRefused: 'market-intelligence.source.symbol-not-supported',
   timezoneInvalid: 'market-intelligence.timezone.invalid'
 })

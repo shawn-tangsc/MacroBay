@@ -47,6 +47,12 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
   'market-intelligence.calendar.refresh-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  /**
+   * 品种被供应商永久拒绝（套餐不含 / 品种下架）。用户 2026-11-16 原话「出现这种情况，还要通知出来」：
+   * 批准 `center` + `toast` + `desktop`，与同组的另两条来源事件同档；不批免打扰穿透——它是
+   * 24 小时一条的常驻状况，不是必须叫醒人的事。
+   */
+  'market-intelligence.source.symbol-not-supported': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
   'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
