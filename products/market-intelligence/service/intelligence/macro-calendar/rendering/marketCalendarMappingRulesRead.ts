@@ -54,7 +54,13 @@ export type MappingRuleRow = Readonly<{
 export type UnmappedSourceIdRow = Readonly<{
   sourceId: string
   rowCount: number
+  /** 样本中文名（源原文）。 */
   sampleLabel: string | null
+  /**
+   * 样本英文原文名（迁移 18 合并后存在 `source_label_en`）：没有就是 `null`。
+   * 界面把两段放同一格 `中文 · English`，**没有英文就只显示中文**，不留半句。
+   */
+  sampleLabelEn: string | null
 }>
 
 export type MappingRulesRead = Readonly<{
@@ -65,7 +71,7 @@ export type MappingRulesRead = Readonly<{
   counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
 
-type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null }>
+type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null; sampleLabelEn: string | null }>
 
 /**
  * 指标码 → 发布机构页面。**只按「机构 + 页面类型」的模板填**，不做逐条手抄：
@@ -116,15 +122,17 @@ export function mappingRuleNames(metricKey: string): Readonly<{ zh: string; en: 
 export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRead {
   try {
     // 源内身份＝数组第一段（`["214790",79090]` → `214790`）；规范码不是这里的对象。
-    const rows = database.prepare(`select metric_key, count(*) as n, min(source_label) as label
+    const rows = database.prepare(`select metric_key, count(*) as n, min(source_label) as label,
+        min(source_label_en) as label_en
       from mi_calendar_events where metric_key glob '*[[]*' group by metric_key`)
-      .all() as unknown as { metric_key: string; n: number; label: string | null }[]
+      .all() as unknown as { metric_key: string; n: number; label: string | null; label_en: string | null }[]
     const byId = new Map<string, Aggregate>()
     for (const row of rows) {
       const id = sourceInternalIdOf(row.metric_key).replace(/^id:/, '')
       const current = byId.get(id)
       byId.set(id, { sourceId: id, rows: (current?.rows ?? 0) + Number(row.n),
-        sampleLabel: current?.sampleLabel ?? row.label })
+        sampleLabel: current?.sampleLabel ?? row.label,
+        sampleLabelEn: current?.sampleLabelEn ?? row.label_en })
     }
     const mapped: MappingRuleRow[] = Object.entries(zeroXRouterIndicatorIdentities).map(([sourceId, entry]) => {
       const official = officialPageFor(entry.metricKey)
@@ -137,7 +145,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
       .filter((entry) => zeroXRouterIndicatorIdentities[entry.sourceId] === undefined)
-      .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows, sampleLabel: entry.sampleLabel }))
+      .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows,
+        sampleLabel: entry.sampleLabel, sampleLabelEn: entry.sampleLabelEn }))
       .sort((left, right) => right.rowCount - left.rowCount || left.sourceId.localeCompare(right.sourceId))
     return Object.freeze({
       state: 'available' as const,

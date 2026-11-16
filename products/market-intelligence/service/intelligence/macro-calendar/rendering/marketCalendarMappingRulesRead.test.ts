@@ -16,15 +16,20 @@ function seed(): DatabaseSync {
   const database = new DatabaseSync(':memory:')
   ensureCalendarStandardTables(database)
   // 一个数组身份、两期（同一指标发布了两次）：未映射段按**行数**计，仍只出一个 id。
+  // 第二行带英文原文名（迁移 18 合并后存在 `source_label_en`），用来断「样本名中英都给」。
   // 中英两条已经在写入端与迁移 18 合成一行，不再拿它当「两行」的样本。
   for (const [periodKey, label] of [['2026-10-16T13:30', '10月纽约联储制造业指数'], ['2026-11-16T13:30', '11月纽约联储制造业指数']] as const) {
     upsertCalendarStandardRow(database, {
       countryCode: 'US', metricKey: '["214790",79090]', periodKey,
       scheduledDate: periodKey.slice(0, 10), timePrecision: 'minute' as const, status: 'backfilling' as const,
       valuesJson: '{}', identityKind: 'source' as const, sourceLabel: label,
+      ...(label.startsWith('11') ? {} : {}),
       sourceProviderId: '0xrouter', sourceEventId: `x-${periodKey}`, parserVersion: 'v1', observedAt: now, firstSeenAt: now
     })
   }
+  // 合并过的行带英文原文名（迁移 18 把英文那条并入 `source_label_en`）。
+  database.prepare(`update mi_calendar_events set source_label_en = ?
+    where source_label = '11月纽约联储制造业指数'`).run('New York Fed manufacturing index(Nov)')
   return database
 }
 
@@ -60,6 +65,8 @@ describe('映射规则表读口', () => {
     expect(read.unmapped[0]!.sourceId).toBe('214790')
     expect(read.unmapped[0]!.rowCount).toBe(2)
     expect(read.unmapped[0]!.sampleLabel).toContain('纽约联储制造业指数')
+    // 有英文原文名就给出来（同一条 id 下有一行带就够了）：界面把它放同一格 `中文 · English`。
+    expect(read.unmapped[0]!.sampleLabelEn).toBe('New York Fed manufacturing index(Nov)')
     expect(read.counts.unmapped).toBe(1)
     expect(read.counts.unmappedRows).toBe(2)
   })
