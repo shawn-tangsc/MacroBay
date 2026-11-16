@@ -14,6 +14,9 @@ export type SourceConflictField = 'actual' | 'consensus' | 'previous'
 
 export type SourceConflict = Readonly<{
   metricKey: string
+  /** **同一期次**的冲突才叫不一致；期次不同是两条发布，不是冲突。 */
+  periodKey: string
+  countryCode: string
   scheduledDate: string
   field: SourceConflictField
   /** 每个来源给了什么：`{ providerId: value }`，只含**真的有值**的来源。 */
@@ -45,12 +48,16 @@ export function readSourceValueConflicts(database: DatabaseSync, input: Readonly
   }
   const scheduledDate = input.scheduledDate
   try {
-    const rows = database.prepare(`select country_code, metric_key, scheduled_date, source_provider_id, values_json
+    const rows = database.prepare(`select country_code, metric_key, period_key, scheduled_date, source_provider_id, values_json
       from mi_calendar_events where row_kind = 'release' and scheduled_date = ?
       order by metric_key asc, source_provider_id asc`).all(scheduledDate) as unknown as Record<string, unknown>[]
+        // **分组键必须含期次**：标准表主键是 `(国家, 指标码, 期次, 首发布日)`，所以「同一期次同一身份」
+    // 只可能有一行——不同期次的数不是「两个来源给了不同值」，是**两条不同期的发布**。
+    // 少了期次，11-06 那两条（narwhal 记 `2026-09`、0xrouter 记 `2026-10`）会被并列成「不一致」，
+    // 那是凭空造出「同一期有两个值」这个事实（`#56` 期次不可跨源比较）。
     const groups = new Map<string, Record<string, Record<SourceConflictField, string | null>>>()
     for (const row of rows) {
-      const key = `${String(row.country_code)}|${String(row.metric_key)}`
+      const key = `${String(row.country_code)}|${String(row.metric_key)}|${String(row.period_key)}`
       const byProvider = groups.get(key) ?? {}
       byProvider[String(row.source_provider_id)] = valuesOf(row.values_json)
       groups.set(key, byProvider)
@@ -61,7 +68,7 @@ export function readSourceValueConflicts(database: DatabaseSync, input: Readonly
       const providerIds = Object.keys(byProvider)
       if (providerIds.length < 2) continue
       multiSourceGroups += 1
-      const metricKey = key.slice(key.indexOf('|') + 1)
+      const [countryCode, metricKey, periodKey] = key.split('|') as [string, string, string]
       for (const field of ['actual', 'consensus', 'previous'] as const) {
         const values: Record<string, string> = {}
         for (const providerId of providerIds) {
@@ -71,7 +78,8 @@ export function readSourceValueConflicts(database: DatabaseSync, input: Readonly
         // **一侧缺值不算冲突**：只有两家都给了、且不相等，才是「多源不一致」。
         if (Object.keys(values).length < 2) continue
         if (new Set(Object.values(values)).size < 2) continue
-        conflicts.push(Object.freeze({ metricKey, scheduledDate, field, values: Object.freeze(values) }))
+        conflicts.push(Object.freeze({ metricKey, periodKey, countryCode, scheduledDate, field,
+          values: Object.freeze(values) }))
       }
     }
     return Object.freeze({ state: 'available' as const, scheduledDate,

@@ -24,21 +24,22 @@ function setup(): DatabaseSync {
  * 夹具必须照这个形状造，否则造出来的「多来源组」在真库里根本不存在。
  */
 function seed(database: DatabaseSync, providerId: string, metricKey: string,
-  scheduledDate: string, values: Record<string, string>, periodKey = 'p'): void {
+  scheduledDate: string, values: Record<string, string>, periodKey = 'p', firstScheduled = ''): void {
   database.prepare(`insert into mi_calendar_events
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, time_precision, status,
      identity_kind, source_label, value_state, values_json, source_provider_id, source_event_id, parser_version,
      observed_at, first_seen_at, event_type, release_count)
     values ('US', ?, ?, ?, ?, 'date', 'published', 'code', 'x', 'present', ?, ?, ?, 'v1', ?, ?,
-      'economic-indicator', 1)`).run(metricKey, periodKey, scheduledDate, scheduledDate, JSON.stringify(values), providerId,
+      'economic-indicator', 1)`).run(metricKey, periodKey, scheduledDate, firstScheduled || scheduledDate, JSON.stringify(values), providerId,
     `${providerId}-${metricKey}-${periodKey}`, now, now)
 }
 
 describe('#40 多源不一致', () => {
   it('两家都有值且不等 → 并列；只有一家有值 → 不算冲突', () => {
     const database = setup()
-    seed(database, 'narwhal', 'US.X.SA.MOM', '2026-11-16', { consensus: '10', previous: '25.5' }, '2026-10')
-    seed(database, '0xrouter', 'US.X.SA.MOM', '2026-11-16', { consensus: '18', previous: '25.5', actual: '7.8' }, '2026-11-16T13:30')
+    // **同期两源**只能靠不同的首发布日共存（主键含它）：这才是「同一期、两个来源」的形状。
+    seed(database, 'narwhal', 'US.X.SA.MOM', '2026-11-16', { consensus: '10', previous: '25.5' }, '2026-10', '2026-11-16')
+    seed(database, '0xrouter', 'US.X.SA.MOM', '2026-11-16', { consensus: '18', previous: '25.5', actual: '7.8' }, '2026-10', '2026-11-17')
     const read = readSourceValueConflicts(database, { scheduledDate: '2026-11-16' })
     if (read.state !== 'available') throw new Error('unavailable')
     expect(read.multiSourceGroups).toBe(1)
@@ -47,14 +48,15 @@ describe('#40 多源不一致', () => {
     expect(read.conflicts[0]).toMatchObject({ field: 'consensus', values: { narwhal: '10', '0xrouter': '18' } })
   })
 
-  it('不判对错、不挑一个：两个值都原样留着（期次不可跨源比较、单位没入库）', () => {
+  it('**同一发布日、期次不同**不是冲突：那是两条不同期的发布（消费信贷那组）', () => {
     const database = setup()
     seed(database, 'narwhal', 'US.CONSUMER_CREDIT.SA.CHANGE', '2026-11-06', { actual: '6.4', previous: '1.9' }, '2026-09')
     seed(database, '0xrouter', 'US.CONSUMER_CREDIT.SA.CHANGE', '2026-11-06', { actual: '27.84', previous: '8.280' }, '2026-10')
     const read = readSourceValueConflicts(database, { scheduledDate: '2026-11-06' })
     if (read.state !== 'available') throw new Error('unavailable')
-    expect(read.conflicts.map((entry) => entry.field).sort()).toEqual(['actual', 'previous'])
-    expect(read.conflicts.every((entry) => Object.keys(entry.values).length === 2)).toBe(true)
+    // 6.4 与 27.84 是「9 月」和「10 月」两个数——并列成「不一致」等于凭空造事实。
+    expect(read.conflicts).toEqual([])
+    expect(read.multiSourceGroups).toBe(0)
   })
 
   it('单一来源的日期没有任何冲突；期次写法不可比时以 scheduled_date 配对', () => {
