@@ -267,7 +267,11 @@ mi: miText['zh-CN'],
               translationStatus: { waiting: '等待翻译', queue: '正在翻译 {done}/{total}', translating: '翻译中', translated: '已翻译', failed: '翻译失败', contextMenu: '右键更多操作', translateOne: '翻译此条', retranslateOne: '重新翻译' },
               clearFilters: '清除筛选',
               loadMore: '加载更多',
-              settings: '设置'
+              settings: '设置',
+              // 右键菜单的「AI 解读」四态（动作名，不是节标题）。
+              menuInterpretation: 'AI 解读',
+              menuInterpretationView: '查看 AI 解读',
+              menuInterpretationAgain: '再次解读'
             },
             availability: {
               missing: '还没有配置来源',
@@ -1787,7 +1791,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               translationStatus: { waiting: 'Waiting', queue: 'Translating {done}/{total}', translating: 'Translating', translated: 'Translated', failed: 'Failed', contextMenu: 'Right-click for actions', translateOne: 'Translate this item', retranslateOne: 'Retranslate' },
               clearFilters: 'Clear filters',
               loadMore: 'Load more',
-              settings: 'Settings'
+              settings: 'Settings',
+              menuInterpretation: 'AI interpretation',
+              menuInterpretationView: 'View AI interpretation',
+              menuInterpretationAgain: 'Interpret again'
             },
             availability: {
               missing: 'No sources configured yet',

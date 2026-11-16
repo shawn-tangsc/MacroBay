@@ -7,6 +7,8 @@ export const miText = {
     // 产品终版（2026-11-16）：只进 ⓘ 浮层，正文不放；日历事件详情复用同一组件时语义同样成立。
     info: '这条新闻影响哪些资产、影响是什么；没有影响时也会直说。',
     infoAria: '这一节说明什么',
+    // 菜单项是动作名，与节标题不是一回事（节标题自解释「这条新闻对市场的影响」）。
+    readFailed: '暂时读不到这条解读，可再试一次',
     generating: '正在生成',
     retry: '再试一次',
     meta: '生成于 {time} · 依据：该条新闻 + 当时快照（{count} 条证据）',
@@ -35,6 +37,7 @@ export const miText = {
     title: 'How this story affects the market',
     info: 'Which assets this story affects and how; when it affects nothing, it says so too.',
     infoAria: 'What this section explains',
+    readFailed: 'This interpretation could not be read; try again',
     generating: 'Generating',
     retry: 'Try again',
     meta: 'Generated {time} · Based on: this story + the snapshot at the time ({count} evidence refs)',

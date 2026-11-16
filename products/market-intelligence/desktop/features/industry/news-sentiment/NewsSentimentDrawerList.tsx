@@ -91,7 +91,8 @@ export function NewsSentimentDrawerList(props: Readonly<{
                 aria-label={text.openItem.replace('{title}', props.translatedTitles[row.itemId] ?? row.displayTitle ?? row.title)}
                 className="mi-news-drawer__row-open"
                 onClick={() => { props.onOpenRow(row) }}
-                onContextMenu={props.translationEnabled ? (event) => { event.preventDefault(); props.onRowContextMenu(row.itemId, event.clientX, event.clientY) } : undefined}
+                // 右键菜单不再被翻译开关绑住：翻译关着也要能开（至少有一项 AI 解读）。
+                onContextMenu={(event) => { event.preventDefault(); props.onRowContextMenu(row.itemId, event.clientX, event.clientY) }}
                 onKeyDown={props.translationEnabled ? (event) => {
                   // A context menu reachable only by right-click is unreachable from the keyboard.
                   if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return

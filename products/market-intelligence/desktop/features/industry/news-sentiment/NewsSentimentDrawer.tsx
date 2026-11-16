@@ -13,12 +13,19 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
+import { productText } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 import { NewsSentimentDrawerList } from './NewsSentimentDrawerList'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
+import { AiInterpretationSection } from '../../shared/AiInterpretationSection'
+import { newsInterpretationMenuItem } from './newsSentimentInterpretationMenu'
+import { useNewsInterpretationRead } from './useNewsInterpretationRead'
+import { readInterpretationSummary } from '../../../shared/ipc/newsInterpretationClient'
 import { labelText, sentimentIcon } from './newsSentimentPresentation'
 import type { NewsSentimentFilters } from './useNewsSentiment'
 import { filterNewsSentimentRows } from './newsSentimentFilters'
@@ -107,6 +114,8 @@ export function NewsSentimentDrawer(props: {
     client: props.client
   })
 
+  const activeRead = useNewsInterpretationRead(activeId, props.open)
+  const menuRead = useNewsInterpretationRead(contextMenu?.itemId, contextMenu !== undefined)
   const activeTranslationState = activeId ? translationStates[activeId] ?? active?.bodyTranslationState ?? 'missing' : 'missing'
   const activeTranslatedBody = activeId ? translatedBodies[activeId] ?? detail?.translatedBodyExcerpt : undefined
   const hasTranslatedBody = Boolean(activeTranslatedBody) || activeTranslationState === 'translated'
@@ -122,9 +131,15 @@ export function NewsSentimentDrawer(props: {
 
   // One item, named by whether this row already has a translation. Platform `MenuItem` takes a key,
   // so the sentence still comes from this feature's text resolver.
+  // 菜单第一项常驻（AI 解读），翻译项自己按开关出现：菜单不再被翻译开关绑住。
   const menuItems: MenuItem[] = useMemo(
-    () => drawerTranslateMenuItem({ contextMenuItemId: contextMenu?.itemId, translationStates, rows }),
-    [contextMenu, rows, translationStates]
+    () => [
+      newsInterpretationMenuItem(menuRead.view, menuRead.loading),
+      ...(translationEnabled
+        ? drawerTranslateMenuItem({ contextMenuItemId: contextMenu?.itemId, translationStates, rows })
+        : [])
+    ],
+    [contextMenu?.itemId, menuRead.loading, menuRead.view, rows, translationEnabled, translationStates]
   )
 
   const sourceOptions = useMemo(
@@ -384,6 +399,7 @@ export function NewsSentimentDrawer(props: {
                     detail?.bodyExcerpt ?? text.drawer.detail.noBody
                   )}
                 </div>
+                <DrawerInterpretation view={activeRead.view} onRetry={activeRead.reload} />
                 <footer>
                   {detail?.promptVersion ? <span>{text.drawer.detail.prompt}: {detail.promptVersion}</span> : null}
                   {active.url ? <a href={active.url} rel="noreferrer" target="_blank">{text.drawer.detail.openOriginal} ↗</a> : null}
@@ -400,17 +416,82 @@ export function NewsSentimentDrawer(props: {
         <ContextMenu
           anchor={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
           ariaLabelKey="news.sentiment.more"
-          items={translationEnabled && contextMenu ? menuItems : []}
+          items={contextMenu ? menuItems : []}
           onClose={() => setContextMenu(undefined)}
           onSelect={(key) => {
-            if (key !== 'translate' || !contextMenu) return
+            if (!contextMenu) return
+            if (key === 'interpretation') {
+              // 这一笔只接「查看」（已完成解读且证据指纹没变）：把该条选到右栏。
+              // 「AI 解读 / 再次解读」的真实触发等写端点下一笔接，**现在不发任何调用**。
+              if (menuRead.view?.state === 'available'
+                && menuRead.view.evidenceFingerprint !== undefined
+                && menuRead.view.evidenceFingerprint === menuRead.view.currentEvidenceFingerprint) {
+                setSelectedId(contextMenu.itemId)
+              }
+              return
+            }
+            if (key !== 'translate') return
             const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
             void translateItem(contextMenu.itemId, translated)
           }}
-          open={translationEnabled && contextMenu !== undefined}
+          open={contextMenu !== undefined && menuItems.length > 0}
           resolveText={resolveIconText}
         />
       </div>
     </Drawer>
   )
+}
+
+/**
+ * 右栏那一节「AI 解读」（R37）：状态由只读接口驱动，不靠内存。
+ *
+ * 成功态的**正文**要按 `summaryId` 去 `marketAnalysis.getSummary` 取；那个字段还没落进只读接口，
+ * 所以这一段先只有可见元信息 + 审计折叠（`paragraphs` 留空）。字段一到就补一行取正文，不改这里的分支。
+ */
+function DrawerInterpretation(props: Readonly<{
+  view?: import('../../../shared/ipc/newsInterpretationClient').NewsInterpretationReadView
+  onRetry: () => void
+}>): React.ReactElement | null {
+  const copy = productText[useShellLanguage()].mi.aiInterpretation
+  const { view } = props
+  const summaryId = view?.state === 'available' ? view.summaryId : undefined
+  const [paragraphs, setParagraphs] = useState<readonly string[]>()
+  const [summaryFailed, setSummaryFailed] = useState(false)
+
+  useEffect(() => {
+    if (summaryId === undefined) { setParagraphs(undefined); setSummaryFailed(false); return }
+    let active = true
+    setSummaryFailed(false)
+    void readInterpretationSummary(summaryId).then((next) => {
+      if (!active) return
+      if (next === undefined) setSummaryFailed(true)
+      else setParagraphs(next)
+    })
+    return () => { active = false }
+  }, [summaryId, props.onRetry])
+
+  if (view === undefined || view.state === 'none') return null
+  if (view.state === 'in-flight') return <AiInterpretationSection state="pending" />
+  if (view.state === 'unreadable') {
+    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetry} state="failed" />
+  }
+  if (view.generatedAt === undefined || view.evidenceScope === undefined || summaryId === undefined) {
+    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetry} state="failed" />
+  }
+  if (summaryFailed) {
+    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetry} state="failed" />
+  }
+  if (paragraphs === undefined) return <AiInterpretationSection state="pending" />
+  return <AiInterpretationSection
+    audit={{
+      asOf: view.evidenceScope.asOf,
+      dataCutoff: view.evidenceScope.dataCutoff,
+      domains: view.evidenceScope.domains,
+      factCount: view.evidenceScope.factCount,
+      ...(view.runId === undefined ? {} : { runId: view.runId }),
+      ...(view.snapshotHash === undefined ? {} : { snapshotHash: view.snapshotHash })
+    }}
+    meta={{ evidenceRefCount: view.evidenceScope.evidenceRefCount, generatedAt: view.generatedAt }}
+    paragraphs={paragraphs}
+    state="ready" />
 }

@@ -900,3 +900,128 @@ it('shows fifteen rows first and keeps loading past them on scroll', async () =>
   expect(rows().length).toBeGreaterThanOrEqual(16)
   expect(rows()).toHaveLength(20)
 })
+
+describe('AI 解读入口（只读接口驱动，菜单不被翻译开关绑住）', () => {
+  const READ_METHOD = 'marketAnalysis.readNewsInterpretation'
+  const baseRead = {
+    itemId: 'item-a',
+    state: 'available' as const,
+    runId: 'run-1',
+    summaryId: 'summary-1',
+    generatedAt: '2026-10-24T12:30:00.000Z',
+    snapshotHash: 'snap-1',
+    dataAsOf: '2026-10-24T12:00:00.000Z',
+    evidenceFingerprint: 'fp-1',
+    currentEvidenceFingerprint: 'fp-1',
+    subjectLabel: 'A headline',
+    evidenceScope: {
+      asOf: '2026-10-24T12:00:00.000Z',
+      dataCutoff: '2026-10-24T11:00:00.000Z',
+      factCount: 300,
+      evidenceRefCount: 155,
+      domains: ['market', 'funds']
+    }
+  }
+  const SUMMARY = {
+    id: 'summary-1',
+    analysisRunId: 'run-1',
+    conclusion: {
+      summary: '这条新闻压制了风险偏好，BTC 首当其冲。',
+      change: '过去两小时资金费率回落。',
+      causalChain: '监管消息 → 风险偏好下降 → 永续合约承压。'
+    }
+  }
+  const stubRead = (result: unknown): void => {
+    ;(window as unknown as { platform: unknown }).platform = {
+      products: {
+        invoke: vi.fn(async (_product: string, method: string) => {
+          if (method === READ_METHOD) return result
+          if (method === 'marketAnalysis.getSummary') return SUMMARY
+          return undefined
+        })
+      }
+    }
+  }
+  // 抽屉渲染在 document.body 的 portal 里，行不在宿主容器内。
+  const openRowMenu = async (): Promise<void> => {
+    const row = document.body.querySelector<HTMLButtonElement>('.mi-news-drawer__row-open')
+    expect(row).not.toBeNull()
+    await act(async () => { row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 12, clientY: 12 })) })
+    await act(async () => {})
+    await act(async () => {})
+  }
+  const menuLabels = (): string[] =>
+    [...document.body.querySelectorAll('.ant-menu-item')].map((node) => node.textContent ?? '')
+
+  it('keeps the menu (and the AI item) when translation is off', async () => {
+    stubRead(baseRead)
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    expect(menuLabels()).toContain('查看 AI 解读')
+    expect(menuLabels()).not.toContain('翻译此条')
+  })
+
+  it('says "AI 解读" when there is no interpretation yet', async () => {
+    stubRead({ ...baseRead, state: 'none', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    expect(menuLabels()).toContain('AI 解读')
+  })
+
+  it('says "再次解读" when the evidence fingerprint changed', async () => {
+    stubRead({ ...baseRead, currentEvidenceFingerprint: 'fp-2' })
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    expect(menuLabels()).toContain('再次解读')
+  })
+
+  it('greys out the running row without attaching a reason', async () => {
+    stubRead({ ...baseRead, state: 'in-flight', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    const item = [...document.body.querySelectorAll('.ant-menu-item')].find((node) => node.textContent === 'AI 解读')
+    expect(item).toBeDefined()
+    expect(item?.className).toContain('disabled')
+  })
+
+  it('draws the section from the read result, and nothing for none', async () => {
+    stubRead(baseRead)
+    await mountDrawer({ translationEnabled: false })
+    // 读状态 → 取摘要正文是两跳，都要落地。
+    await act(async () => {})
+    await act(async () => {})
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section).not.toBeNull()
+    expect(section.querySelector('[data-ai-interpretation-meta]')?.textContent).toContain('155')
+    expect(section.querySelector('[data-ai-interpretation-meta]')?.textContent).not.toContain('300')
+    expect(section.querySelector('details')?.textContent).toContain('300')
+    // available 时正文必须真的渲染出来（不是只有元信息）。
+    expect(section.textContent).toContain('这条新闻压制了风险偏好，BTC 首当其冲。')
+    expect(section.textContent).toContain('监管消息 → 风险偏好下降 → 永续合约承压。')
+  })
+
+  it('draws no section when there is nothing to show', async () => {
+    stubRead({ ...baseRead, state: 'none', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    expect(document.body.querySelector('[data-ai-interpretation]')).toBeNull()
+  })
+
+  it('shows the pending and the unreadable states honestly', async () => {
+    stubRead({ ...baseRead, state: 'in-flight', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+  })
+
+  it('treats a read failure as unreadable with one retry, never as "none"', async () => {
+    ;(window as unknown as { platform: unknown }).platform = {
+      products: { invoke: vi.fn(async () => { throw new Error('boom') }) }
+    }
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section?.getAttribute('data-state')).toBe('failed')
+    expect(section?.querySelector('button.text-action')).not.toBeNull()
+  })
+})
