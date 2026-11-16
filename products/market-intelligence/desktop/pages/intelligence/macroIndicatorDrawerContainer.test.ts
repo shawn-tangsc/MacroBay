@@ -75,10 +75,22 @@ describe('the drawer judges its columns by its own width', () => {
     const block = blockAt(drawerCss, `@container mk-drawer (max-width: ${threshold}px)`)
     expect(block).toBeDefined()
     expect(block).toContain('grid-template-columns: minmax(0, 1fr)')
-    // 收成一列后，右侧那列改由上方一条分隔线承担；当日列表自己那层左边框要去掉，否则多一条竖线。
+    // 收成一列后，右侧那列改由上方一条分隔线承担。
     expect(block).toContain('.mk-col-r')
     expect(block).toContain('border-top')
-    expect(block).toContain('.mk-col-r .mi-calendar-day-list')
+  })
+
+  it('keeps the day list from drawing a second border and a second gutter inside the column', () => {
+    // 右列自己那条线就是分隔线。当日列表在日历页里自带 `padding-left: 22 + border-left: 1`
+    // （`economicCalendar.css`），两层叠在一起：320 的轨道给行内容只剩 280，两列模式下还多一条同色竖线。
+    // 所以「撤掉内层」是**基础规则**，不是收成一列时才撤——两种模式都要只有一条线。
+    const inner = rules(drawerCss).find((rule) => rule.selector === '.mk-col-r .mi-calendar-day-list')
+    expect(inner?.body).toContain('padding-left: 0')
+    expect(inner?.body).toContain('border-left: 0')
+    // 反向：不许在 `@container` 里再撤一次（那样两列模式下仍是两层）。
+    const condition = /@container\s+mk-drawer\s*\(max-width:\s*(\d+)px\)/u.exec(drawerCss)!
+    expect(blockAt(drawerCss, `@container mk-drawer (max-width: ${condition[1]}px)`))
+      .not.toContain('.mi-calendar-day-list')
   })
 
   it('never asks the window for a drawer width', () => {

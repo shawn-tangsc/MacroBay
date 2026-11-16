@@ -28,6 +28,14 @@
  * 抽屉是 `full` 档（1280，上限 94vw），同一扇窗里它可能是 1280，也可能是 962——窗口宽度
  * 回答不了这个问题，写成窗口 `@media` 时抽屉里永远不会触发。量的是本格的 content box，
  * 也就是两列真正能用的宽度。
+ *
+ * 代价与前提，下一个人要知道：
+ * - `container-type: inline-size` 只对**宽度来自外部**的盒子安全。哪天有人把它挪到
+ *   `inline-block` / `fit-content` / `max-content` 的盒子上，宽度会静默塌成 0（如何做都量到 0 的探针实测）；
+ * - 这个容器挂的是 antd 的 `.ant-drawer-body`。平台 `Drawer` 目前没有给正文单独起类的入口，
+ *   所以这里依赖 antd 的那个类名：它哪天被改名，容器就消失，收放**永久失效而用例仍然全绿**
+ *   （守卫读的是我们自己的样式表文本）。要根治得给平台 `Drawer` 加一个正文类（走 `classNames.body`），
+ *   那是共享组件线的文件，不在这条线里顺手改。
  */
 .mk-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; container-type: inline-size; container-name: mk-drawer; }
 .mk-drawer .ant-drawer-footer { padding: 6px 16px; }
@@ -67,6 +75,11 @@
   padding-left: 16px;
   overflow-y: auto;
 }
+/* 右列自己那条 `border-left` 就是分隔线：当日列表在日历页里自带 `padding-left` 22 与
+   `border-left` 1（`economicCalendar.css`），而 `--mi-economic-line` 与列那条同色。两层叠起来，
+   320 的轨道给行内容只剩 280，两列模式下还看得到相距 16 的两条同色竖线。所以内层这一对**在基础
+   规则里就撤掉**，不是收成一列时才撤——两种模式都只留一条线、一份内距。 */
+.mk-col-r .mi-calendar-day-list { padding-left: 0; border-left: 0; }
 /* 右列只省掉**种类字形**（那个 ↗）：它在这一列是装饰。
    **国家不省**——用户 2026-11-16 说了三次「事件前面要显示国家」，而这一列正是他看的那个列表：
    以前这里把国家格一起 `display: none` 掉（11-13 为窄列写的），结果界面上一行都没有国家，而所有
@@ -88,17 +101,16 @@
 /*
  * 容器放不下两列时，当日事件列堆到读数列下面，而不是把它挤成一条缝。
  *
- * 阈值从这三个数来，别凭手感挪：读数列是设计锁死的 **828**，列间距 **16**，右列最少要
- * **320** 才放得下「时刻 36 + 国家 52 + 标题 + 数值」那一行（同 `--mi-economic-inspector-width`）。
+ * 阈值从这三个数来，别凭手感挪：读数列是设计锁死的 **828**，列间距 **16**，右列最少要 **320**
+ * ——这个 320 就是 `--mi-economic-inspector-width` 那一档，不是把行里的列宽加起来的和。
  * 828 + 16 + 320 = 1164，所以 1163px 及以下收成一列；`full` 档自己的正文宽 1248，仍在两列。
  *
  * 收起来之后：整块改成按内容高（`height: auto`），由正文那一格自己滚，避免两列各自一条滚动条；
- * 分隔线从左边挪到上边，当日列表自带的那层左边框一并去掉，否则竖线会留在半空。
+ * 分隔线从左边挪到上边（当日列表内层那条线已经在基础规则里撤掉，见上）。
  */
 @container mk-drawer (max-width: 1163px) {
   .mk-sec { grid-template-columns: minmax(0, 1fr); height: auto; width: 100%; align-self: flex-start; }
   .mk-col-r { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: 12px; }
-  .mk-col-r .mi-calendar-day-list { padding-left: 0; border-left: 0; }
 }
 
 .mk-sechead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; flex: none; }
