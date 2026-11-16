@@ -94,6 +94,13 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214280': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '215018': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '213488': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
+  // 谘商会消费者预期/现况（母族已有子项体系，两个词都在闭集里）
+  '214233': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month' },
+  '214992': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month' },
+  '214234': { metricKey: 'US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL', periodRule: 'month' },
+  '214993': { metricKey: 'US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL', periodRule: 'month' },
+  // 就业成本指数（新码；不是 `UNIT_LABOR_COSTS`，那个已有且是另一个指标）
+  '214345': { metricKey: 'US.ECI.SA.QOQ', periodRule: 'quarter' },
   // 月份变体：**同族 + 同测度**，季调档按「该族该测度只有唯一码」才落（SA/NSA 并存时跳过）
   '213978': { metricKey: 'US.INDUSTRIAL_PRODUCTION.SA.MOM', periodRule: 'month' },
   '213979': { metricKey: 'US.MANUFACTURING_PRODUCTION.SA.MOM', periodRule: 'month' },
