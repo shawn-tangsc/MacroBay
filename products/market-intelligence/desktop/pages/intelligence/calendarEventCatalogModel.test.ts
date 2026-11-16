@@ -14,10 +14,7 @@ const row = (over: Partial<CatalogRow> = {}): CatalogRow => ({
   key: 'US.CPI.NSA.YOY',
   title: 'CPI 年率',
   titleIsSourceLabel: false,
-  zhFull: '消费者物价指数（年率）',
-  zhShort: 'CPI 年率',
-  enFull: 'Consumer Price Index (YoY)',
-  enShort: 'CPI YoY',
+  names: ['消费者物价指数（年率）', 'CPI 年率', 'Consumer Price Index (YoY)', 'CPI YoY'],
   countryLabel: '美国',
   countryCode: 'US',
   period: '2026-M10',
@@ -45,7 +42,7 @@ describe('the catalog name filter', () => {
   })
 
   it('falls back to the source label only when all four name fields are empty', () => {
-    const nameless = row({ key: '["212058",70663]', titleIsSourceLabel: true, zhFull: undefined, zhShort: undefined, enFull: undefined, enShort: undefined, sourceLabel: 'transmutation in seasonally adjusted unemployment' })
+    const nameless = row({ key: '["212058",70663]', titleIsSourceLabel: true, names: ['transmutation in seasonally adjusted unemployment'] })
     // 那约 420 行只剩源原文名：按它搜得到，按英文名搜不到是**数据事实**，不是搜索坏了。
     expect(filterCatalogRows([nameless], { ...EMPTY_CATALOG_FILTERS, name: 'transmutation' })).toHaveLength(1)
     expect(filterCatalogRows([nameless], { ...EMPTY_CATALOG_FILTERS, name: 'unemployment rate yoy' })).toHaveLength(0)
@@ -55,7 +52,7 @@ describe('the catalog name filter', () => {
 
   it('does not match across a field boundary, which is why the fields are not concatenated', () => {
     // 中文名结尾 + 英文名开头拼起来会造出假命中：这里断的是「不拼接」。
-    const target = row({ zhFull: '消费者物价指数', zhShort: undefined, enFull: 'Index of retail sales', enShort: undefined })
+    const target = row({ names: ['消费者物价指数', 'Index of retail sales'] })
     expect(filterCatalogRows([target], { ...EMPTY_CATALOG_FILTERS, name: '指数Index' })).toHaveLength(0)
   })
 })

@@ -18,7 +18,7 @@ const text: CatalogText = {
 }
 
 const row = (key: string, title: string, over: Partial<CatalogRow> = {}): CatalogRow => ({
-  key, title, titleIsSourceLabel: false, countryLabel: '美国', countryCode: 'US', time: '08:30', ...over
+  key, title, titleIsSourceLabel: false, names: [title], countryLabel: '美国', countryCode: 'US', time: '08:30', ...over
 })
 
 const render = async (props: Readonly<{ rows: readonly CatalogRow[]; state: 'ready' | 'loading' | 'unavailable' }>) => {

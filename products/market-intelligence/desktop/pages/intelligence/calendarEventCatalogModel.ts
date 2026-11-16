@@ -16,11 +16,14 @@ export type CatalogRow = Readonly<{
   title: string
   /** 名称位是不是源原文名（那约 420 行）：要标注，读者才知道这条没有名表条目。 */
   titleIsSourceLabel: boolean
-  zhFull?: string
-  zhShort?: string
-  enFull?: string
-  enShort?: string
-  sourceLabel?: string
+  /**
+   * 参与名称匹配的**若干列**（中全/中简/英全/英简；四列都空时是源原文名那一列）。
+   *
+   * 收成「一组字符串」而不是四个具名字段，是因为**这一层不需要知道名字表长什么样**：
+   * 名表只有一处（`marketCalendarDisplayNameTables.ts`），这里只是用它的内容做匹配。
+   * 每个词必须落在**同一列**里命中——不拼接字段，拼接会造出「中文名结尾 + 英文名开头」的假命中。
+   */
+  names: readonly string[]
   countryCode?: string
   /** 国家显示名（与列表同一套回退：名字 → 原码 → 未知国家）。 */
   countryLabel: string
@@ -39,16 +42,10 @@ export type CatalogFilters = Readonly<{ name: string; country: string; importanc
 
 export const EMPTY_CATALOG_FILTERS: CatalogFilters = Object.freeze({ name: '', country: '', importance: '' })
 
-/** 参与名称匹配的四个字段；四者都空时才退到 `sourceLabel`。 */
-function nameFields(row: CatalogRow): readonly string[] {
-  const four = [row.zhFull, row.zhShort, row.enFull, row.enShort].filter((value): value is string => typeof value === 'string' && value !== '')
-  return four.length > 0 ? four : (row.sourceLabel === undefined || row.sourceLabel === '' ? [] : [row.sourceLabel])
-}
-
-/** 一个词命中：任一字段包含它（英文折叠大小写）。 */
+/** 一个词命中：**某一列**包含它（英文折叠大小写）。 */
 function matchesWord(row: CatalogRow, word: string): boolean {
   const needle = word.toLowerCase()
-  return nameFields(row).some((field) => field.toLowerCase().includes(needle))
+  return row.names.some((field) => field.toLowerCase().includes(needle))
 }
 
 /** 名称框：按空格拆词，每个词都要在某一个字段里命中（可以各自落在不同字段）。 */

@@ -80,15 +80,15 @@ function toCatalogRow(
   const zh = row.zhShort ?? row.zhFull
   const en = row.enShort ?? row.enFull
   const title = (locale === 'en-US' ? (en ?? zh) : (zh ?? en)) ?? row.sourceLabel ?? row.key
+  // 参与匹配的列：四列里非空的那些；**四列都空时才退回源原文名**（那约 420 行）。
+  const fourNames = [row.zhFull, row.zhShort, row.enFull, row.enShort]
+    .filter((value): value is string => value !== undefined && value !== '')
+  const names = fourNames.length > 0 ? fourNames : [row.sourceLabel ?? row.key]
   return {
     key: row.key,
     title,
     titleIsSourceLabel: row.titleIsSourceLabel,
-    ...(row.zhFull === undefined ? {} : { zhFull: row.zhFull }),
-    ...(row.zhShort === undefined ? {} : { zhShort: row.zhShort }),
-    ...(row.enFull === undefined ? {} : { enFull: row.enFull }),
-    ...(row.enShort === undefined ? {} : { enShort: row.enShort }),
-    ...(row.sourceLabel === undefined ? {} : { sourceLabel: row.sourceLabel }),
+    names,
     countryCode: row.countryCode,
     countryLabel: calendarCountryLabel({ countryCode: row.countryCode }, text),
     ...(row.period === undefined ? {} : { period: row.period }),
