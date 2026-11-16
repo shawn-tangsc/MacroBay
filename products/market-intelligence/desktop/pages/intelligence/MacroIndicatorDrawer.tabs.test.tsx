@@ -111,7 +111,9 @@ describe('the day list splits its two sources into tabs, inside the real drawer'
     await act(async () => { (tabs[1] as HTMLElement).click() })
     const panel = view.querySelector('[data-unmapped-unavailable]')
     expect(panel?.textContent).toContain(drawerText.mkDay.unmappedUnavailable)
-    expect(panel?.textContent).toContain(drawerText.mkDay.unmappedUnavailableNote)
+    // 原因句收进 ⓘ：正文只剩状态词，按钮在同一块里（正文说明句门禁）。
+    expect(panel?.textContent).not.toContain(drawerText.mkDay.unmappedUnavailableNote)
+    expect(panel?.querySelector('button[aria-label="查看说明"]')).not.toBeNull()
   })
 
   it('says the day has none when the answer really is zero', async () => {

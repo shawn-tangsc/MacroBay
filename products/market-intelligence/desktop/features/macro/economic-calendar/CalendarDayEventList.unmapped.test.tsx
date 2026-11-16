@@ -53,8 +53,8 @@ const list = (unmapped: Readonly<Record<string, unknown>>, over: Readonly<Record
     ],
     unmapped: {
       observations: [], timeZone: 'UTC', aria: '未入标准表',
-      emptyText: '这一天没有未入标准表的事件', emptyNote: '标准表 0 条照常在左边那个 tab 里。',
-      unavailableText: '未入标准表：这次读不到', unavailableNote: '不是没有，是这次没读到。',
+      emptyText: '这一天没有未入标准表的事件', emptyHelp: <span data-test-help>标准表 0 条照常在左边那个 tab 里。</span>,
+      unavailableText: '未入标准表：这次读不到', unavailableHelp: <span data-test-help>不是没有，是这次没读到。</span>,
       unavailable: false, ...unmapped
     }
   }}
@@ -82,7 +82,8 @@ it('says it could not be read instead of claiming zero', async () => {
   try {
     const panel = view.host.querySelector('[data-unmapped-unavailable]')
     expect(panel?.textContent).toContain('未入标准表：这次读不到')
-    expect(panel?.textContent).toContain('不是没有，是这次没读到。')
+    // 原因句是调用方给的 ⓘ 节点：状态词在正文，说明挂在它后面（正文说明句门禁）。
+    expect(panel?.querySelector('[data-test-help]')?.textContent).toBe('不是没有，是这次没读到。')
     // 读不到时**不出现**「这一天没有…」那句，也不出 0 条。
     expect(view.host.querySelector('[data-unmapped-empty]')).toBeNull()
     expect(view.host.querySelectorAll('[data-unmapped="true"]')).toHaveLength(0)

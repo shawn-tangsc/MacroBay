@@ -2,9 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
-import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
-import { ChevronDown, Info } from 'lucide-react'
+import { helpTrigger } from '@platform/ui/components/popover'
 
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
@@ -133,8 +131,6 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
   // 平台 Drawer 与 Popover 都只收键；这张表把本抽屉的键映到产品自己的文案表（查表，不是 key→句子的分支）。
   const drawerKeys: Readonly<Record<string, string>> = {
     'mk.title': text.title,
-    'mk.rateNote': text.rateNote,
-    'mk.rateNoteAria': text.rateNoteAria,
     'mk.cardWhy': text.missingCurrentWhy,
     'mk.cardWhyAria': text.missingCurrentWhyAria,
     'mk.carousel.prev': text.carousel.prev,
@@ -305,11 +301,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
               说明句不挂在正文里——正文只留数字，读法收进这颗 ⓘ 的浮层。 */}
           <div className="mk-sec__title">
             <h2 className="mk-sec__t">{text.rateTitle}</h2>
-            <Popover
-              labelKey="mk.rateNote"
-              resolveText={resolveDrawerKey}
-              trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey="mk.rateNoteAria"
-                icon={Info} size="sm" variant="plain" resolveText={resolveDrawerKey} />} />
+            {/* 说明句本体只在 ⓘ 里（正文说明句门禁）：正文那行只剩标题与读数。 */}
+            {helpTrigger({ text: text.rateNote })}
           </div>
           {latestBp === undefined
             ? <b className="mk-sec__v mk-sec__v--absent">{text.rateUnreadable}</b>
@@ -401,9 +394,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
                     timeZone,
                     aria: text.mkDay.unmappedAria,
                     emptyText: text.mkDay.unmappedEmpty,
-                    emptyNote: text.mkDay.unmappedEmptyNote.replace('{count}', String(standardCount)),
+                    emptyHelp: helpTrigger({ text: text.mkDay.unmappedEmptyNote.replace('{count}', String(standardCount)) }),
                     unavailableText: text.mkDay.unmappedUnavailable,
-                    unavailableNote: text.mkDay.unmappedUnavailableNote,
+                    unavailableHelp: helpTrigger({ text: text.mkDay.unmappedUnavailableNote }),
                     unavailable: unmappedMonth.state === 'unavailable'
                   }
                 }}

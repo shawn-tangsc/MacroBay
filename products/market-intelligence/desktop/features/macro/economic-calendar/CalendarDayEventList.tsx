@@ -1,4 +1,5 @@
 import { Tabs } from '@platform/ui/components/tabs'
+import type { ReactNode } from 'react'
 import type { ChoiceItem } from '@platform/ui/components/choice/choiceItem'
 import type { MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import type { UnmappedCalendarObservation } from '../../../../service/intelligence/macro-calendar/rendering/marketCalendarUnmappedMonthRead'
@@ -75,9 +76,9 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
       /** 读屏补的那句（行内不写：视觉上已经在那个 tab 里了）。 */
       aria: string
       emptyText: string
-      emptyNote: string
+      emptyHelp?: ReactNode
       unavailableText: string
-      unavailableNote: string
+      unavailableHelp?: ReactNode
       /** 读不到：**不给 0 条**，给两句「读不到」。 */
       unavailable: boolean
     }>
@@ -111,14 +112,14 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
   const unmappedBody = unmapped === undefined ? null : unmapped.unavailable
     // 读不到：两句都说清「不是没有」。**不出 0 条**。
     ? <div data-unmapped-unavailable>
-      <p>{unmapped.unavailableText}</p>
-      <p className="mi-calendar-day-list__note">{unmapped.unavailableNote}</p>
+      {/* 说明句收进 ⓘ（正文说明句门禁）：状态词留在这里，原因只在悬停/聚焦时展开。
+          节点由调用方用 `helpTrigger` 构造，这一层不认识文案键。 */}
+      <p>{unmapped.unavailableText}{unmapped.unavailableHelp === undefined ? null : <> {unmapped.unavailableHelp}</>}</p>
     </div>
     : unmapped.observations.length === 0
       // 确实为空：与「读不到」是两件事，句子不许复用。
       ? <div data-unmapped-empty>
-        <p>{unmapped.emptyText}</p>
-        <p className="mi-calendar-day-list__note">{unmapped.emptyNote}</p>
+        <p>{unmapped.emptyText}{unmapped.emptyHelp === undefined ? null : <> {unmapped.emptyHelp}</>}</p>
       </div>
       : <div role="list">{unmapped.observations.map(observation => <div role="listitem" key={observation.key}>
         <UnmappedCalendarEventRow observation={observation} text={text} timeZone={unmapped.timeZone} unmappedAria={unmapped.aria} />

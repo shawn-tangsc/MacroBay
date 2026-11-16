@@ -654,7 +654,8 @@ describe('the note lives in the info popover', () => {
       root!.render(<ShellLanguageProvider language="zh-CN"><MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text} /></ShellLanguageProvider>)
     })
     const head = document.body.querySelector('.mk-sechead')!
-    const trigger = head.querySelector('button[aria-label="利率数学期望的说明"]') as HTMLButtonElement
+    // 读屏名归平台的 `helpTrigger`（`ui.help.trigger`）：同一个 ⓘ 在哪一页都是这一句。
+    const trigger = head.querySelector('button[aria-label="查看说明"]') as HTMLButtonElement
     expect(trigger).not.toBeNull()
     // 标题 → ⓘ → 读数：图标必须在读数之前，不能跟到数字后面。
     const readout = head.querySelector('.mk-sec__v')!
