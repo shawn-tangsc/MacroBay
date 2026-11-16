@@ -94,6 +94,11 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214280': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '215018': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '213488': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
+  // GDP 平减指数（初值/修正值同一码的两次发布）与最终销售（初值/修正值同上）
+  '214281': { metricKey: 'US.GDP_DEFLATOR.SA.QOQ', periodRule: 'quarter' },
+  '215019': { metricKey: 'US.GDP_DEFLATOR.SA.QOQ', periodRule: 'quarter' },
+  '214279': { metricKey: 'US.FINAL_SALES.SA.ANNUALIZED_QOQ', periodRule: 'quarter' },
+  '215017': { metricKey: 'US.FINAL_SALES.SA.ANNUALIZED_QOQ', periodRule: 'quarter' },
   // FHFA 房价（既有码：月率 SA.MOM、年率 NSA.YOY）
   '214226': { metricKey: 'US.FHFA_HOUSE_PRICE.SA.MOM', periodRule: 'month' },
   '214985': { metricKey: 'US.FHFA_HOUSE_PRICE.SA.MOM', periodRule: 'month' },

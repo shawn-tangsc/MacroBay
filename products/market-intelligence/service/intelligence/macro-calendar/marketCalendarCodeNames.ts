@@ -122,6 +122,9 @@ export const nameByMetricKey: Readonly<Record<string, Readonly<{
   'US.FHFA_HOUSE_PRICE.NSA.YOY': { zhFull: 'FHFA 房价指数年率', zhShort: 'FHFA 房价 年率', enFull: 'FHFA House Price Index YoY', enShort: 'FHFA HPI YoY', locked: false },
   // 官方 BEA 发布的 GDP 与下面的**即时预测不是同一件事**：中文简称带「年化季率」，
   // 撞成两个「GDP」读者分不清哪个是官方值。短码 `gdp` 是九个老码之一，不新造。
+  // 两个新族（产品经理判定值得建）：GDP 平减指数、最终销售
+  'US.GDP_DEFLATOR.SA.QOQ': { zhFull: 'GDP 平减指数（季调季率）', zhShort: 'GDP 平减指数', enFull: 'GDP Price Index (SA, QoQ)', enShort: 'GDP Deflator', locked: false },
+  'US.FINAL_SALES.SA.ANNUALIZED_QOQ': { zhFull: '最终销售（年化季率）', zhShort: '最终销售', enFull: 'Final Sales of Domestic Product (Annualized QoQ)', enShort: 'Final Sales', locked: false },
   'US.GDP.SA.ANNUALIZED_QOQ': { zhFull: '国内生产总值（年化季率）', zhShort: 'GDP 年化季率', enFull: 'Gross Domestic Product, Annualized QoQ', enShort: 'GDP Ann. QoQ', code: 'gdp', locked: true },
   'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ': { zhFull: 'GDP 即时预测（年化季率）', zhShort: 'GDP 即时预测', enFull: 'GDP Nowcast, Annualized QoQ', enShort: 'GDP Nowcast', code: 'gdp-nowcast', locked: true },
   'US.GOVERNMENT_PAYROLLS.SA.CHANGE': { zhFull: '政府部门就业人数变动', zhShort: '政府就业', enFull: 'Government Payrolls Change', enShort: 'Government Payrolls', code: 'government-payrolls', locked: true },
