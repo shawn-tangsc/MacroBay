@@ -532,18 +532,18 @@ describe('the copied text carries the whole title', () => {
   })
 })
 
-describe('the copied text says "really nothing" out loud', () => {
-  it('prints the quiet sentence for an empty window, and never for an unreadable calendar', () => {
-    const quiet = dailyBriefingToMarkdown({
-      ...document(), news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } }
-    }, options as never)
-    expect(quiet).toContain(labels.pastWindow.noHighImpact)
-
-    const unreadable = dailyBriefingToMarkdown({
-      ...document(), news: { items: [], macro: [], notes: { macroEmpty: 'calendar-collect-failed' } }
-    }, options as never)
-    expect(unreadable).not.toContain(labels.pastWindow.noHighImpact)
-    expect(unreadable).not.toContain(labels.macroUnreadable.trim())
+describe('the copied text keeps a quiet window empty', () => {
+  it('prints neither quiet sentence and no news section, for either wording', () => {
+    // 用户 2026-11-16：这句只在「数据缺口与限制」里留痕；复制文本与卡片一致——一空就整块不显示。
+    for (const code of ['past-24h-no-release', 'past-24h-no-high-impact-release'] as const) {
+      const copied = dailyBriefingToMarkdown({
+        ...document(), news: { items: [], macro: [], notes: { macroEmpty: code } }
+      }, options as never)
+      expect(copied, code).not.toContain(labels.pastWindow.noRelease)
+      expect(copied, code).not.toContain(labels.pastWindow.noHighImpact)
+      expect(copied, code).not.toContain(`## ${labels.sections.news}`)
+      expect(copied, code).not.toContain(labels.macroUnreadable.trim())
+    }
   })
 })
 

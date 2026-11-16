@@ -2255,6 +2255,42 @@ it('keeps an unreadable calendar out of the paper, and in the audit column with 
   expect(client.regenerate).not.toHaveBeenCalled()
 })
 
+it('keeps a quiet window out of the paper, and leaves one info row with no re-read', async () => {
+  /*
+   * 用户 2026-11-16：「过去 24 小时没有宏观发布」不要出现在正文，显示在留痕区域就好。
+   * 留痕里是**提示**（不是警告），也不挂「重新读取」——它说的是这段时间确实没有，不是读不到。
+   */
+  const doc = briefingDocument()
+  const client = fakeClient({
+    getToday: vi.fn(async () => ({
+      state: 'available' as const,
+      document: { ...doc, news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-release' as const } } }
+    }))
+  })
+  const dom = await renderPage(client)
+  const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+  expect(paper.querySelector('.mi-brief-poster__news-section')).toBeNull()
+  expect(paper.textContent).not.toContain(text.pastWindow.noRelease)
+  expect(paper.textContent).not.toContain(text.pastWindow.noHighImpact)
+
+  const aside = dom.querySelector<HTMLElement>('[data-briefing-issues]')!
+  const gapSummary = aside.querySelector<HTMLElement>('[data-briefing-gaps] summary')!
+  if (!aside.querySelector<HTMLDetailsElement>('[data-briefing-gaps]')!.open) act(() => gapSummary.click())
+  const quiet = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
+    .filter((button) => button.querySelector('.mi-daily-briefing-page__group-label')?.textContent === text.limits.groupLabels['macro-quiet'])
+  expect(quiet).toHaveLength(1)
+  expect(quiet[0]!.getAttribute('data-group-severity')).toBe('info')
+  expect(quiet[0]!.textContent).toContain(text.limits.severity.info)
+  expect(quiet[0]!.textContent).toContain(text.limits.groupCount.replace('{count}', '1'))
+  // 「确实没有」没有可重试的动作：重试挂在读不到那一条上。
+  expect(aside.querySelector('[data-issue-retry]')).toBeNull()
+
+  act(() => quiet[0]!.click())
+  const drawer = document.querySelector<HTMLElement>('[data-issue-drawer]')!
+  expect(drawer.textContent).toContain(text.pastWindow.noRelease)
+  expect(drawer.textContent).toContain(text.limits.advice.macroQuiet)
+})
+
 it('takes today from the reader’s calendar, not from the schedule or the list', async () => {
   vi.setSystemTime(new Date('2026-10-29T22:00:00.000Z')) // 06:00 于 Asia/Shanghai，还没到 07:00
   // 用户 2026-11-06 拍板：**没有"当前期"这回事**。日期只有一个来源——读者本地日历的今天。

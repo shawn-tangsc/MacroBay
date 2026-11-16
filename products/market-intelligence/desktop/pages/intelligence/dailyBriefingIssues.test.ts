@@ -8,7 +8,6 @@ import type {
 } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
-import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 
 const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const enText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -43,24 +42,32 @@ function document(overrides: Partial<DailyBriefingDocument> = {}): DailyBriefing
   }
 }
 
-it('moves "really nothing" into the body and out of the gap list', () => {
-  // 用户 2026-11-16：整块消失会让读者以为功能没了，所以正文印一句；它不是缺口，缺口里不再重复。
+it('records a quiet window once, as an info row, in the wording the window actually had', () => {
+  // 用户 2026-11-16：正文不印这句（一空就整块不显示），信息留在「数据缺口与限制」：一条**提示**，
+  // 不是告警，也不带「去检查来源」这类动作——它说的是「这段时间确实没有」，不是「读不到」。
   const base = document()
-  const doc = document({
-    edition: { ...base.edition, windowHours: 24 },
-    news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-release' } }
+  const issuesFor = (code: 'past-24h-no-release' | 'past-24h-no-high-impact-release') => briefingIssues({
+    document: document({
+      edition: { ...base.edition, windowHours: 24 },
+      news: { items: [], macro: [], notes: { macroEmpty: code } }
+    }),
+    text: zhText,
+    formatTime
   })
-  const issues = briefingIssues({ document: doc, text: zhText, formatTime })
-  expect(issues.some((issue) => issue.template === 'timing-late')).toBe(false)
-  expect(issues.some((issue) => issue.id.startsWith('data:calendar'))).toBe(false)
 
-  // 正文那句与这一档同源：不带「读不到」前缀，也不是一句「没有已收录的发布」。
-  expect(briefingMacroEmptyCopy(doc, {
-    macroEmptyCodes: zhText.macroEmptyCodes,
-    macroUnreadable: zhText.macroUnreadable,
-    pastWindowNoRelease: zhText.pastWindow.noRelease,
-    pastWindowNoHighImpact: zhText.pastWindow.noHighImpact
-  })).toEqual({ sentence: zhText.pastWindow.noRelease, unreadable: false })
+  const cases = [
+    ['past-24h-no-release', zhText.pastWindow.noRelease],
+    ['past-24h-no-high-impact-release', zhText.pastWindow.noHighImpact]
+  ] as const
+  for (const [code, sentence] of cases) {
+    const issues = issuesFor(code)
+    const quiet = issues.filter((issue) => issue.template === 'macro-quiet')
+    expect(quiet, code).toHaveLength(1)
+    expect(quiet[0]!.severity, code).toBe('info')
+    expect(quiet[0]!.title, code).toBe(sentence)
+    // 一句解释就够：同一件事不再冒出一条日历告警（那会让「确实没有」看起来像「读不到」）。
+    expect(issues.some((issue) => issue.id.startsWith('data:calendar')), code).toBe(false)
+  }
 })
 
 function pulse(overrides: Partial<BriefingPulseRow> = {}): BriefingPulseRow {

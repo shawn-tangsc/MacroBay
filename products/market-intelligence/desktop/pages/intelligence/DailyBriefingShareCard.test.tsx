@@ -165,14 +165,17 @@ describe('the macro section draws events, and says why it is empty without imply
     assertClean(rendered)
   })
 
-  it('prints one plain sentence when the window really had no high-impact release', async () => {
-    // 用户 2026-11-16：整块消失会让读者以为功能没了；这一档正文印一句，不加标题、不算读不到。
-    const rendered = await render(emptyMacro({ macroEmpty: 'past-24h-no-high-impact-release' }))
-    const line = rendered.querySelector('[data-macro-quiet="true"]')
-    expect(line?.textContent).toBe(text.pastWindow.noHighImpact)
-    expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
-    expect(rendered.querySelector('[data-macro-empty]')).toBeNull()
-    expect(rendered.textContent).not.toContain('暂时读不到')
+  it('prints nothing at all when the window really had no release, in both wordings', async () => {
+    // 用户 2026-11-16：这句不进正文（原话「不要这句，显示在留痕区域就好了」）。空窗就是整块不显示，
+    // 信息只在「数据缺口与限制」里留一条提示——所以两句都不许出现在卡片上。
+    for (const code of ['past-24h-no-release', 'past-24h-no-high-impact-release'] as const) {
+      const rendered = await render(emptyMacro({ macroEmpty: code }))
+      expect(rendered.querySelector('.mi-brief-poster__news-section'), code).toBeNull()
+      expect(rendered.querySelector('[data-macro-quiet]'), code).toBeNull()
+      expect(rendered.textContent, code).not.toContain(text.pastWindow.noRelease)
+      expect(rendered.textContent, code).not.toContain(text.pastWindow.noHighImpact)
+      assertClean(rendered)
+    }
   })
 
   it('draws no macro block at all when the calendar could not be read', async () => {

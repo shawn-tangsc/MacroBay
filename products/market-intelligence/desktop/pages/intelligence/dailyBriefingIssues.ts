@@ -36,7 +36,7 @@ export type BriefingIssueTemplate =
   | 'backfill-done' | 'backfill-generic'
   | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure' | 'document-invalid'
   | 'evidence-gap' | 'evidence-caveat' | 'evidence-no-citation' | 'evidence-conflict' | 'evidence-none'
-  | 'timing-late'
+  | 'timing-late' | 'macro-quiet'
 
 /** The stable code behind a template; two templates may share a code but never a group. */
 export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
@@ -55,7 +55,9 @@ export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, 
   'system-failure': 'generation-failure', 'document-invalid': 'document-invalid',
   'evidence-gap': 'data-gap', 'evidence-caveat': 'data-caveat', 'evidence-no-citation': 'uncited-counter-evidence',
   'evidence-conflict': 'source-conflict', 'evidence-none': 'no-citations',
-  'timing-late': 'late-generation'
+  'timing-late': 'late-generation',
+  // 空窗不是缺口：它有自己的码，永远不许和「读不到」合并成同一条。
+  'macro-quiet': 'macro-quiet'
 }
 
 export type BriefingIssue = Readonly<{
@@ -290,16 +292,29 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
       advice: text.limits.advice.checkSource
     })
   }
-  // 宏观那栏为什么空：**与正文共用同一个推导**（`briefingMacroEmptyCopy`），所以读者在两处
-  // 读到的是同一句话。以前这里把六档原因码压成两句，过期/从未采集/采集失败全被静默吞掉。
+  // 宏观那栏为什么空：两档「确实没有」记一条**提示**，其余原因记**警告**。句子来自同一个映射
+  // （`briefingMacroEmptyCopy`），A/B 分档只有一处判断，问题清单不会各说各的。
   const macroEmpty = briefingMacroEmptyCopy(document, {
     macroEmptyCodes: text.macroEmptyCodes,
     macroUnreadable: text.macroUnreadable,
     pastWindowNoRelease: text.pastWindow.noRelease,
     pastWindowNoHighImpact: text.pastWindow.noHighImpact
   })
-  // 「确实没有高影响事件」现在**正文已经印了那句**（用户 2026-11-16）：这里不再记一条 info，
-  // 否则同一件事会说两遍。它本来就不是缺口，删掉后「数据缺口」也不会虚增一条。
+  // 窗口里确实没有：正文不印（用户 2026-11-16），信息只留在这里。它是**提示**不是警告——「确实
+  // 没有」不需要处理，但必须留痕，否则读者会以为这一栏是漏了；补上它也不会让「数据缺口」虚增，
+  // 因为它带自己的码与模板。建议仍是「无需处理」，不改任何来源配置。
+  if (macroEmpty !== null && !macroEmpty.unreadable) {
+    add({
+      id: 'data:macro:quiet',
+      severity: 'info',
+      category: 'data',
+      template: 'macro-quiet',
+      source: text.limits.sources.calendar,
+      at,
+      title: macroEmpty.sentence,
+      advice: text.limits.advice.macroQuiet
+    })
+  }
   if (macroEmpty?.unreadable) {
     const code = document.news.notes.macroEmpty ?? 'calendar-unavailable'
     // 只有「来源未启用」才建议去启用；其它原因都说明来源开着，建议检查来源而不是开关

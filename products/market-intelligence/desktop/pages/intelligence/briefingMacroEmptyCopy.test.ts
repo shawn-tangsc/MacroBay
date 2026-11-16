@@ -44,7 +44,7 @@ function documentWith(macroEmpty: string | undefined, macroEmptyHours?: number) 
 
 describe('the empty macro section in a daily briefing', () => {
   it('uses two different sentences for "no release at all" and "filtered by importance"', () => {
-    // 用户 2026-11-16：整块消失会让读者以为功能没了；两档正文各印一句、都不算「读不到」。
+    // 用户 2026-11-16：这两句话只在「数据缺口与限制」里出现（正文不印），都不算「读不到」。
     // 窗口里一条都没有时说「没有高影响」，等于暗示「有低影响被筛掉了」——那是把没有说成筛没了。
     expect(briefingMacroEmptyCopy(documentWith('past-24h-no-release'), labels))
       .toEqual({ sentence: '过去 24 小时没有宏观发布', unreadable: false })

@@ -222,6 +222,9 @@ export const dailyBriefingText = {
         'news-disabled': '新闻来源未启用', 'news-unavailable': '新闻舆情不可用',
         'news-source-silent': '新闻源很久没有新条目', 'news-source-failed': '新闻源采集失败',
         'calendar-disabled': '日历来源未启用', 'calendar-unavailable': '日历不可用',
+        // 空窗两档（A 窗口里没有发布 / B 有发布但被重要性筛掉）共用这一个短标签：说的是「这一栏为空」，
+        // 不替读者判断是哪一档——具体那句在标题里。
+        'macro-quiet': '宏观栏为空',
         'macro-consensus': '预期值未收录', 'macro-actual': '实际值未收录', 'macro-previous': '前值未收录', 'macro-value-conflict': '来源数值冲突',
         'backfill-done': '核心数据回补', 'backfill-generic': '核心数据回补',
         'ai-fallback': '模型回落', 'ai-websearch': 'WebSearch 未授权', 'ai-failure': 'AI 编辑未完成',
@@ -273,6 +276,7 @@ export const dailyBriefingText = {
         widenWindow: '把统计窗口调到 24 小时以上，或等下一期。',
         fillConsensus: '在宏观日历来源里补齐预期值；缺失时结论不计算预期差。',
         checkCalendar: '在「配置情报源」里启用宏观日历，或等日历采集恢复。',
+        macroQuiet: '无需处理；记在这里是为了说明这一栏确实为空。',
         checkNews: '在「配置情报源」里启用新闻来源，或等舆情采集恢复。',
         backfill: '无需操作；若同一指标反复回补，检查常规采集是否按时完成。',
         modelFallback: '在模型服务里恢复自选模型，或继续使用默认模型。',
@@ -643,6 +647,7 @@ export const dailyBriefingText = {
         'news-disabled': 'News sources disabled', 'news-unavailable': 'News sentiment unavailable',
         'news-source-silent': 'A news source has gone quiet', 'news-source-failed': 'A news source keeps failing',
         'calendar-disabled': 'Calendar sources disabled', 'calendar-unavailable': 'Calendar unavailable',
+        'macro-quiet': 'Macro section empty',
         'macro-consensus': 'Expectation not collected', 'macro-actual': 'Actual not collected', 'macro-previous': 'Previous not collected', 'macro-value-conflict': 'Sources disagree',
         'backfill-done': 'Core data backfill', 'backfill-generic': 'Core data backfill',
         'ai-fallback': 'Model fallback', 'ai-websearch': 'WebSearch not authorized', 'ai-failure': 'AI editing incomplete',
@@ -693,6 +698,7 @@ export const dailyBriefingText = {
         widenWindow: 'Set the statistics window to 24 hours or more, or wait for the next edition.',
         fillConsensus: 'Fill in the expected value in the macro calendar source; without it the conclusion cannot compute a surprise.',
         checkCalendar: 'Enable the macro calendar under intelligence sources, or wait for calendar collection to recover.',
+        macroQuiet: 'Nothing to do; recorded so an empty section is not mistaken for a gap.',
         checkNews: 'Enable news sources under intelligence sources, or wait for sentiment collection to recover.',
         backfill: 'No action needed; if the same metric keeps backfilling, check that routine collection runs on time.',
         modelFallback: 'Restore the selected model in the model service, or keep using the default.',
