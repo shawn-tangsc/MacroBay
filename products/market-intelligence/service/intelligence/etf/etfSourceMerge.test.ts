@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import * as mergeModule from './etfSourceMerge'
 import { buildEtfCurrentStateWindow } from './etfCurrentStateWindow'
 
-import { mergeEtfAssetDays } from './etfSourceMerge'
+import { etfMergePrecedence, mergeEtfAssetDays, readMergedEtfRows } from './etfSourceMerge'
 
 const day = (iso: string): number => Date.parse(`${iso}T00:00:00.000Z`)
 const row = (iso: string, changeUsd: number, source: string) => ({ date: day(iso), changeUsd, source })
@@ -83,5 +83,49 @@ describe('tagging source rows with the window source id', () => {
     }).state
     expect(build('0xrouter')).toBe('available')
     expect(build('0xrouter-aggregate-provider')).toBe('unavailable')
+  })
+})
+
+/**
+ * 合并方向不许跟着「这一轮谁被解析成主源」走：启动那几轮排期是异步注册的，方向一抖，
+ * 备源的值就会盖掉主源，而且同一个 10 分钟里两个作业各写一个不同窗口（后到的那个落库）。
+ */
+describe('reading both sources in a fixed merge order', () => {
+  const days = ['2026-08-27', '2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31']
+  const rows = (source: string, value: number) => days.map((iso) => ({ date: day(iso), changeUsd: value, source }))
+
+  it('lets CryptoETF win a disagreeing day whichever source the round resolved to', async () => {
+    const merged = await readMergedEtfRows({
+      read: async (sourceId) => ({
+        btc: rows(sourceId === 'cryptoetf-etf-flows' ? 'cryptoetf-etf-flows' : '0xrouter', sourceId === 'cryptoetf-etf-flows' ? 100 : 7),
+        eth: rows(sourceId === 'cryptoetf-etf-flows' ? 'cryptoetf-etf-flows' : '0xrouter', sourceId === 'cryptoetf-etf-flows' ? 100 : 7)
+      })
+    })
+    expect(merged.state).toBe('available')
+    if (merged.state !== 'available') return
+    // 值不同 → 主源（CryptoETF）那条，不是「这一轮被解析出来的那个源」那条。
+    expect(merged.btc.map((row) => [row.source, row.changeUsd])).toEqual(days.map(() => ['cryptoetf-etf-flows', 100]))
+  })
+
+  it('keeps the standby row where the two agree, and fills only the days the primary lacks', async () => {
+    const primaryBtc = [
+      { date: day('2026-08-30'), changeUsd: 100, source: 'cryptoetf-etf-flows' },
+      { date: day('2026-08-31'), changeUsd: 100, source: 'cryptoetf-etf-flows' }
+    ]
+    const merged = await readMergedEtfRows({
+      read: async (sourceId) => sourceId === 'cryptoetf-etf-flows'
+        ? { btc: primaryBtc, eth: primaryBtc }
+        : { btc: rows('0xrouter', 7), eth: rows('0xrouter', 7) }
+    })
+    if (merged.state !== 'available') throw new Error('expected a complete window')
+    expect(merged.btc.map((row) => [new Date(row.date).toISOString().slice(0, 10), row.source]))
+      .toEqual([
+        ['2026-08-27', '0xrouter'], ['2026-08-28', '0xrouter'], ['2026-08-29', '0xrouter'],
+        ['2026-08-30', 'cryptoetf-etf-flows'], ['2026-08-31', 'cryptoetf-etf-flows']
+      ])
+  })
+
+  it('names CryptoETF first in the order, so every reader of the list reads one order', () => {
+    expect(etfMergePrecedence).toEqual(['cryptoetf-etf-flows', '0xrouter-aggregate-provider'])
   })
 })

@@ -8,7 +8,7 @@ import { allSources } from './application/providerRegistry'
 import { projectJobRegistration } from './application/sourceJobRegistration'
 import { createCryptoEtfFlowClient } from './application/cryptoEtfFlowClient'
 import type { EtfFlowHistoryRow } from './etf/etfFlowHistoryParser'
-import { mergeEtfAssetDays, tagEtfSourceRows } from './etf/etfSourceMerge'
+import { etfMergePrecedence, readMergedEtfRows, tagEtfSourceRows } from './etf/etfSourceMerge'
 import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
 import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
@@ -134,7 +134,7 @@ export function createIntelligenceMarketData(input: {
    * ETF 两个源的优先级（用户 2026-11-17：**新的覆盖旧的、旧的补新的**）。
    * 数组顺序就是优先级：主源 CryptoETF 在前，备源 0xrouter 在后。
    */
-  const etfSourcePrecedence = [cryptoEtfSourcePolicy.sourceId, zeroXRouterSourcePolicy.sourceId] as const
+  const etfSourcePrecedence = etfMergePrecedence
   /** 每个源读它自己 profile 上的凭据；备源用的是 0xRouter 那把 key（与三路日历共用）。 */
   const etfApiKey = async (sourceId: string): Promise<string | undefined> => {
     const credential = sourceId === zeroXRouterSourcePolicy.sourceId ? await zeroXRouterCredential() : await cryptoEtfCredential()
@@ -198,9 +198,7 @@ export function createIntelligenceMarketData(input: {
      * - 只有一边有值：用那一边（备源把主源缺的天补上）；
      * - 每一行写它自己的 `source`，窗口归属由 `etfWindowSource` 回答（主源在场就是主源）。
      */
-    requestWindow: async (sourceId: string) => {
-      const primaryId = sourceId
-      const standbyId = etfSourcePrecedence.find((candidate) => candidate !== primaryId)
+    requestWindow: async () => {
       /**
        * 行上的来源**只由** `tagEtfSourceRows` 盖：采集侧拿到的是注册表 id，窗口契约认的是窗口 id，
        * 直接把注册表 id 写进行里会让整窗 fail-closed，而失败在刷新层只剩一句 `undefined`
@@ -239,18 +237,15 @@ export function createIntelligenceMarketData(input: {
         }
         return Object.freeze({})
       }
-      const primary = await read(primaryId)
-      const standby = await read(standbyId)
-      const btc = mergeEtfAssetDays(primary.btc, standby.btc)
-      const eth = mergeEtfAssetDays(primary.eth, standby.eth)
-      // 合并结果本身也留一条：主源/备源各给几天、并完几天——「有没有补上」不必再靠猜。
-      console.log(JSON.stringify({
-        marker: 'MI_ETF_MERGE', primary: primaryId, standby: standbyId ?? null,
-        primaryBtcDays: primary.btc?.length ?? 0, standbyBtcDays: standby.btc?.length ?? 0, mergedBtcDays: btc?.length ?? 0
-      }))
-      if (btc && eth) return Object.freeze({ state: 'available' as const, btc, eth })
-      if (btc || eth) return Object.freeze({ state: 'partial' as const, ...(btc ? { btc } : {}), ...(eth ? { eth } : {}) })
-      return Object.freeze({ state: 'unavailable' as const })
+      // 合并方向由 `etfMergePrecedence` 决定，**不看解析结果**：排期是异步注册的，启动那几轮里
+      // 「谁被解析成主源」会抖，跟着它定方向就会让备源盖掉主源，还会一轮写出两个不同窗口。
+      return readMergedEtfRows({
+        read,
+        onMerged: (info) => {
+          // 合并结果留一条：主源/备源各给几天、并完几天——「有没有补上」不必再靠猜。
+          console.log(JSON.stringify({ marker: 'MI_ETF_MERGE', ...info }))
+        }
+      })
     },
     store: etfCurrentStateStore,
     now: () => new Date().toISOString(),

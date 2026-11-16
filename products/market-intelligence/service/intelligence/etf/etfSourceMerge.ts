@@ -42,3 +42,47 @@ export function tagEtfSourceRows(
   if (rows === undefined || source === undefined) return undefined
   return Object.freeze(rows.map((row) => Object.freeze({ ...row, source })))
 }
+
+/**
+ * 合并方向是**常量**：主源永远是 CryptoETF，备源永远是 0xRouter。
+ *
+ * 「这一轮谁被解析成主源」只管「能不能采」，不许决定谁覆盖谁：启动那几轮里排期是异步注册的，
+ * 谁先注册谁就被解析成主源，方向跟着抖一次，同一份数据就能写出两个不同的窗口——而最后落库的
+ * 是后到的那个（2026-11-17 启动时的现场：备源的值反而盖掉了主源）。
+ */
+export const etfMergePrecedence = Object.freeze(['cryptoetf-etf-flows', '0xrouter-aggregate-provider'] as const)
+
+export type EtfSourceRows = Readonly<{
+  btc?: readonly EtfFlowHistoryRow[]
+  eth?: readonly EtfFlowHistoryRow[]
+}>
+
+export type EtfMergedWindow =
+  | Readonly<{ state: 'available'; btc: readonly EtfFlowHistoryRow[]; eth: readonly EtfFlowHistoryRow[] }>
+  | Readonly<{ state: 'partial'; btc?: readonly EtfFlowHistoryRow[]; eth?: readonly EtfFlowHistoryRow[] }>
+  | Readonly<{ state: 'unavailable' }>
+
+/**
+ * 读两支、按**固定先后**合并。调用方只提供「按 id 读一支」，不提供顺序——
+ * 顺序只有一个来源（`etfMergePrecedence`），所以解析器怎么抖都不会把方向调过来。
+ */
+export async function readMergedEtfRows(input: {
+  read: (sourceId: string) => Promise<EtfSourceRows>
+  onMerged?: (info: Readonly<{ primary: string; standby: string; primaryBtcDays: number; standbyBtcDays: number; mergedBtcDays: number }>) => void
+}): Promise<EtfMergedWindow> {
+  const [primaryId, standbyId] = etfMergePrecedence
+  const primary = await input.read(primaryId)
+  const standby = await input.read(standbyId)
+  const btc = mergeEtfAssetDays(primary.btc, standby.btc)
+  const eth = mergeEtfAssetDays(primary.eth, standby.eth)
+  input.onMerged?.(Object.freeze({
+    primary: primaryId,
+    standby: standbyId,
+    primaryBtcDays: primary.btc?.length ?? 0,
+    standbyBtcDays: standby.btc?.length ?? 0,
+    mergedBtcDays: btc?.length ?? 0
+  }))
+  if (btc && eth) return Object.freeze({ state: 'available' as const, btc, eth })
+  if (btc || eth) return Object.freeze({ state: 'partial' as const, ...(btc ? { btc } : {}), ...(eth ? { eth } : {}) })
+  return Object.freeze({ state: 'unavailable' as const })
+}
