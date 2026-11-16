@@ -275,6 +275,22 @@ describe('createStructuredModelInvocationService', () => {
     expect(result).toMatchObject({ ok: false, errorCode: 'timeout' })
   })
 
+  it('reports the budget expiring even when the transport ignores the abort', async () => {
+    // 线上那次：Electron 的 net.fetch 在 abort 之后八小时没有 resolve 也没有 reject，运行行
+    // 一直 `running`。预算到点必须自己把调用方放出来，不能只靠 transport 尊重信号。
+    const fetch = vi.fn(() => new Promise<Response>(() => undefined))
+    const service = createStructuredModelInvocationService({ getProviderState: async () => createReadyProviderState(), fetch: fetch as unknown as typeof globalThis.fetch })
+
+    const result = await service.invoke({
+      taskId: 'task-deaf-transport',
+      messages: [{ role: 'user', content: 'never answers' }],
+      timeoutMs: 5,
+      parse: (value) => value
+    })
+
+    expect(result).toMatchObject({ ok: false, errorCode: 'timeout' })
+  })
+
   it('reports a caller abort as cancelled instead of a timeout', async () => {
     const fetch = vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
