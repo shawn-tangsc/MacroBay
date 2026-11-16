@@ -62,6 +62,36 @@ export const calendarCollectionJobDefinitionIds: readonly string[] = Object.free
  *
  * 采集尝试（attempts）**只作展示**：「最近一次尝试」那句话用它，不参与任何判定分支。
  */
+/** 判定阈值（与 `BRIEFING_CALENDAR_STALE_AFTER_MS` 同一个数，这里只用于日志口径）。 */
+export const calendarFreshnessThresholdMinutes = 120
+
+/**
+ * 判定现场的**结构化埋点**：每版生成只打一行。
+ *
+ * 为什么放这儿：今晚最费力的是「一直在猜数字」——每次都要翻代码推「它拿的是哪个时刻」。
+ * 这行把判定当场用的四个数写下来（写入时刻、判定时刻、年龄、阈值、结论）。
+ * **去重**：同一次生成里这个读取器被问多次，按「写入时刻 + 分钟」折叠，避免刷屏。
+ * 不打印凭据/URL/来源名——安全四项照旧。
+ */
+const loggedFreshnessKeys = new Set<string>()
+function logFreshnessOnce(input: Readonly<{ lastCollectedAt: string | null; asOf: string }>): void {
+  const key = `${input.lastCollectedAt ?? 'null'}|${input.asOf.slice(0, 16)}`
+  if (loggedFreshnessKeys.has(key)) return
+  loggedFreshnessKeys.add(key)
+  try {
+    const ageMinutes = input.lastCollectedAt === null ? null
+      : Math.round(((Date.parse(input.asOf) - Date.parse(input.lastCollectedAt)) / 60_000) * 10) / 10
+    console.warn(JSON.stringify({
+      marker: 'macro-calendar.freshness',
+      lastWrittenAt: input.lastCollectedAt,
+      asOf: input.asOf,
+      ageMinutes,
+      thresholdMinutes: calendarFreshnessThresholdMinutes,
+      verdict: ageMinutes === null ? 'stale' : ageMinutes > calendarFreshnessThresholdMinutes ? 'stale' : 'fresh'
+    }))
+  } catch { /* 埋点不许影响判定 */ }
+}
+
 export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   /** 数据里最近一次真正写入的时刻（标准表 `max(observed_at)`）；**唯一判定输入**。 */
   lastWrittenAt: string | null
@@ -85,6 +115,9 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   // **这份返回值是公共读数**：`isMarketCalendarFreshness` 用精确键集校验，多一个键整份就作废，
   // 简报于是只能显示「自动同步已停止」。诊断用的 `lastRunAt` 不塞进来——要它就在调用点单独算、
   // 单独记日志（「跑了」与「写入了」本来就是两个数，见上面那两条）。
+  // **埋点：判定现场一行，每版只打一次**（同一次生成里这个读取器会被问多次）。
+  // 字段固定，与补采、简报两行同名，一次 grep 就能串起一版。
+  logFreshnessOnce({ lastCollectedAt, asOf: input.asOf })
   return {
     state: 'available', asOf: input.asOf, lastCollectedAt,
     // 报的是**采集描述符**（当下在采的三条），不是 `feedByKind` 里旧源的 feed id——

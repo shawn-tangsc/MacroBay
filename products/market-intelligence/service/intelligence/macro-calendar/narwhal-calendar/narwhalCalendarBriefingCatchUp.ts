@@ -52,6 +52,7 @@ export function createNarwhalCalendarBriefingRefresh(input: Readonly<{
       NARWHAL_CALENDAR_BRIEFING_CATCH_UP_CEILING_MS))
     const sources = request?.sourceIds ?? marketCalendarPublicPolicy.collectionFeeds
     const before = input.readLastWrittenAt()
+    const startedAt = Date.now()
     const started = Date.now()
     // **按名单逐个排**：名单里有几路就排几路（缺席的源直接跳过，不编定义 id）。
     const definitions = [...new Set(sources.map((sourceId) =>
@@ -80,9 +81,18 @@ export function createNarwhalCalendarBriefingRefresh(input: Readonly<{
     }
     // 作业成功 ≠ 数据变了：源重复回同一批内容时，这一天没有新数据，回答「未变化」。
     const after = input.readLastWrittenAt()
-    if (after === null || after === before) return { state: 'unchanged' as const }
-    return { state: 'collected' as const, sources: [...sources] }
+    const verdict = after === null || after === before ? 'unchanged' as const : 'collected' as const
+    // **埋点：补采现场一行**（发给哪几路、结果、耗时），与判定那行同名可串。
+    logCatchUp({ definitions: definitions.length, sources: sources.length, verdict, elapsedMs: Date.now() - startedAt })
+    return verdict === 'unchanged' ? { state: 'unchanged' } : { state: 'collected', sources: [...sources] }
   }
+}
+
+/** 补采埋点：字段固定，不打印 URL/凭据。失败与超时也各打一行（结果码不同）。 */
+function logCatchUp(input: Readonly<{ definitions: number; sources: number; verdict: string; elapsedMs: number }>): void {
+  try {
+    console.warn(JSON.stringify({ marker: 'macro-calendar.catch-up', ...input }))
+  } catch { /* 埋点不许影响补采 */ }
 }
 
 function shortFailureCode(error: unknown, fallback: string): string {
