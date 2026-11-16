@@ -10,7 +10,7 @@ import { marketCalendarClient } from '../../shared/ipc/marketCalendarClient'
  * 与「读不到」的边界：`unavailable` 是独立一态，**空数组只表示「没有匹配」**——两件事不许合并，
  * 否则「读不到」会被画成「一条规则都没有」。
  */
-export function CalendarEventsCatalog({ open, onClose, text }: Readonly<{
+export function MappingRulesPanel({ open, onClose, text }: Readonly<{
   open: boolean
   onClose: () => void
   text: MappingRulesText

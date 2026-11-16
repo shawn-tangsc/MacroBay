@@ -7,7 +7,7 @@ import { helpTrigger } from '@platform/ui/components/popover'
 
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
-import { CalendarEventsCatalog } from './CalendarEventsCatalog'
+import { MappingRulesPanel } from './MappingRulesPanel'
 import type { MappingRulesText } from './MappingRulesDialog'
 import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
@@ -430,7 +430,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
           </CalendarInspector>
         </div>, document.body)}
     </section>
-    <CalendarEventsCatalog open={catalogOpen} onClose={() => setCatalogOpen(false)} text={mappingCopyText} />
+    <MappingRulesPanel open={catalogOpen} onClose={() => setCatalogOpen(false)} text={mappingCopyText} />
   </Drawer>
 }
 
