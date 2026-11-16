@@ -29,7 +29,9 @@ export type MappingRulesText = Readonly<{
   mappedEmpty: string
   unmappedEmpty: string
   unavailable: string
-  columns: Readonly<{ sourceId: string; metricKey: string; name: string; periodRule: string; basis: string; official: string }>
+  columns: Readonly<{ sourceId: string; metricKey: string; name: string; tier: string; periodRule: string; basis: string; official: string; rows: string }>
+  /** 分级的四个说法；`null` 显示 `other`（未分级），**不空着**。 */
+  tiers: Readonly<Record<'1' | '2' | '3' | 'other', string>>
   unmappedColumns: Readonly<{ sourceId: string; rows: string; sample: string }>
   tabMapped: string
   tabUnmapped: string
@@ -85,6 +87,11 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
           title: text.columns.name, dataIndex: 'names',
           render: (value: MappingRuleRow['names']) => value === null ? '' : `${value.zh} · ${value.en}`
         },
+        {
+          // 分级直接读读口的 `tier`（分级表只有一处）；`null` 显示「未分级」，不空着。
+          title: text.columns.tier, dataIndex: 'tier', className: 'mi-catalog__cell-nowrap',
+          render: (value: 1 | 2 | 3 | null) => value === null ? text.tiers.other : text.tiers[String(value) as '1' | '2' | '3']
+        },
         { title: text.columns.periodRule, dataIndex: 'periodRule', className: 'mi-catalog__cell-nowrap' },
         { title: text.columns.basis, dataIndex: 'basis', width: 180, render: (value: string | null) => value ?? '' },
         {
@@ -94,7 +101,10 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
             ? <a href={value} target="_blank" rel="noreferrer" title={value} data-official
               className="mi-catalog__url">{shortUrl(value)}</a>
             : null
-        }
+        },
+        // 这条规则在库里实际覆盖多少行：0 也显示（0 是事实，空着会被当成「没读」）。
+        { title: text.columns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap',
+          render: (value: number) => String(value) }
       ]} />
 
   const unmappedPanel = unmapped.length === 0

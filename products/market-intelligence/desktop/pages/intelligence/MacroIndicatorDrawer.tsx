@@ -226,7 +226,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     mapped: text.mkDay.mappingMapped, unmapped: text.mkDay.mappingUnmapped,
     mappedEmpty: text.mkDay.mappingMappedEmpty, unmappedEmpty: text.mkDay.mappingUnmappedEmpty,
     unavailable: text.mkDay.mappingUnavailable,
-    columns: text.mkDay.mappingColumns, unmappedColumns: text.mkDay.mappingUnmappedColumns,
+    columns: text.mkDay.mappingColumns, tiers: text.mkDay.mappingTiers, unmappedColumns: text.mkDay.mappingUnmappedColumns,
     tabMapped: text.mkDay.mappingTabMapped, tabUnmapped: text.mkDay.mappingTabUnmapped,
     tabsAria: text.mkDay.mappingTabsAria
   }), [text])
