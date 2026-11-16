@@ -140,3 +140,24 @@ it('reports no conflict at all when the read port gives no period', async () => 
     expect(host.querySelector('[data-other-period]')).toBeNull()
   } finally { await act(async () => root.unmount()) }
 })
+
+/**
+ * 量纲不明的值不比（#57：我们存的是展示串不是数）。`0.0K` 与 `0` 在数值上能读成一样、在事实上
+ * 可能是两种量纲；`isZeroValue` 那个静默 bug 就是「拿展示串当数」的直接代价，这里不重犯。
+ */
+it('skips the comparison when a value carries a scale suffix', async () => {
+  const rows = [
+    { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-03T00:00:00.000Z',
+      status: 'published', consensus: '0.0K', actual: null, previous: null,
+      identityKey: 'US.JOLTS_OPENINGS.SA.COUNT', periodKey: '2026-09' },
+    { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-03T00:00:00.000Z',
+      status: 'published', consensus: '0', actual: null, previous: null,
+      identityKey: 'US.JOLTS_OPENINGS.SA.COUNT', periodKey: '2026-09' }
+  ]
+  const host = document.createElement('div'); const root = createRoot(host)
+  try {
+    await act(async () => root.render(scoped(<EventSourceWritesBlocks rows={rows} text={text} />)))
+    // 两个值照常显示在两块里，但不戴「不一致」的帽子。
+    expect(host.querySelector('[data-source-conflicts]')).toBeNull()
+  } finally { await act(async () => root.unmount()) }
+})

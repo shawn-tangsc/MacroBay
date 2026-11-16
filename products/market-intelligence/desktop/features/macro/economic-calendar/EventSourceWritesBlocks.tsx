@@ -26,9 +26,16 @@ const STATUS_ALIAS: Readonly<Record<string, string>> = {
 
 /**
  * 两个显示值是否算「不一样」：`0.7` 与 `0.7%`、`1,234` 与 `1234` 是同一个数，不能因为写法不同就报不一致。
- * 数字比数字，比不出来的退回原文比较。
+ *
+ * **带量纲后缀的值不比**（`0.0K`、`1.2M`、`3亿`）：我们存的是展示串不是数（#57），
+ * 那一刻把 `0.0K` 读成 0 就会把「零」判成「不是零」——`isZeroValue` 那个 bug 就是同一个形状。
+ * 比不出来就不比：这一项不进冲突列表，而不是猜一个结论。
  */
+const SCALED = /[KkMmBb万亿]$/u
+const comparable = (value: string): boolean => !SCALED.test(value.trim()) && !/,/u.test(value)
+
 function sameShown(left: string, right: string): boolean {
+  if (!comparable(left) || !comparable(right)) return true
   const strip = (value: string): string => value.replace(/[%$,\s]/gu, '')
   const a = Number(strip(left))
   const b = Number(strip(right))
@@ -69,6 +76,8 @@ export function fieldConflicts(rows: readonly SourceWriteRowWithPeriod[]): reado
       const present = sameMonth.flatMap((row) =>
         (row[field] === null ? [] : [{ providerId: row.providerId, value: row[field]! }]))
       if (present.length < 2) continue
+      // 有量纲后缀（或千分位）时这条不判：判不了就不判，别拿猜的结论去标「不一致」。
+      if (present.some((entry) => !comparable(entry.value))) continue
       if (present.every((entry) => sameShown(entry.value, present[0]!.value))) continue
       out.push({ field, values: present })
     }
