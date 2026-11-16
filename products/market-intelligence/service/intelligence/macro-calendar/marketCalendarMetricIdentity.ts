@@ -1,3 +1,4 @@
+import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 
 /**
@@ -320,7 +321,12 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
 }>): MarketCalendarCanonicalIdentity | undefined {
   if (!row.countryCode || !row.indicatorId) return undefined
   // 两个来源的 id 命名空间分开：0xrouter 自己那张表是「按来源拆」的起点（迁移后新增）。
-  const entry = zeroXRouterIndicatorIdentities[row.indicatorId] ?? zeroXRouterSourceMetricMappings[row.indicatorId]
+  // 同一个来源（0xrouter）下按**国家**分表：美国一张、德国一张，**按国家选表**。
+  // 不做「三张表依次试」：那样一个德国 id 若挂在错误的国家下会照样解出身份，
+  // 把国家字段的错变成身份层的错（德国 GfK 的 id 配上 US 会算出「美国 GfK」）。
+  const entry = row.countryCode === 'DE'
+    ? germanSourceMetricMappings[row.indicatorId]
+    : zeroXRouterIndicatorIdentities[row.indicatorId] ?? zeroXRouterSourceMetricMappings[row.indicatorId]
   if (!entry) return undefined
   const periodKey = entry.periodRule === 'month' ? previousMonthKey(row.scheduledAt)
     : entry.periodRule === 'week_end' ? previousWeekEndingKey(row.scheduledAt)
