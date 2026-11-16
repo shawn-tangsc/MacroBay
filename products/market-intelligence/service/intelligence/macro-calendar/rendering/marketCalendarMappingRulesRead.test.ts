@@ -44,6 +44,10 @@ describe('映射规则表读口', () => {
     // 中英名：`zh` 取简称、`en` 取全名；名表没有的码必须是 null，不许拿码拼。
     expect(cpi.names).toEqual({ zh: 'CPI 年率', en: 'Consumer Price Index (CPI), YoY' })
     expect(ism.names).toEqual({ zh: 'ISM 制造业 PMI', en: 'ISM Manufacturing PMI' })
+    // 分级与覆盖行数：分级读现有表（CPI 是一级），行数真读库——85 条里必然有 0。
+    expect(cpi.tier).toBe(1)
+    expect(read.mapped.some((rule) => rule.rowCount === 0)).toBe(true)
+    expect(read.mapped.every((rule) => typeof rule.rowCount === 'number' && rule.rowCount >= 0)).toBe(true)
     expect(read.mapped.every((rule) => rule.names === null
       || (rule.names.zh.trim() !== '' && rule.names.en.trim() !== ''))).toBe(true)
   })

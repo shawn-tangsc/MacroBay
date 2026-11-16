@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { calendarNamesFor } from '../marketCalendarCodeNames'
 import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
+import { tierOfMetricKey } from '../marketCalendarMetricTiers'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
 
 /**
@@ -38,6 +39,16 @@ export type MappingRuleRow = Readonly<{
    * 不拿指标码拼一个假英文名（拼出来的东西读起来像我们给的名字，其实是码）。
    */
   names: Readonly<{ zh: string; en: string }> | null
+  /**
+   * **分级**（用户 2026-11-17）：`1 | 2 | 3 | null`（`null` = 未分级）。读现有分级表，
+   * **不在这里另算**——分级是指标的属性，两处各算一份迟早会给出两个答案。
+   */
+  tier: 1 | 2 | 3 | null
+  /**
+   * **这条规则在库里实际覆盖多少行**（0 就是 0）：85 条里多数是 `0`，因为那个源内 id
+   * 还没出现在数据里。看得见才分得清「规则在起作用」和「规则只是写在纸上」。
+   */
+  rowCount: number
 }>
 
 export type UnmappedSourceIdRow = Readonly<{
@@ -119,7 +130,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       const official = officialPageFor(entry.metricKey)
       return Object.freeze({ sourceId, metricKey: entry.metricKey, periodRule: entry.periodRule,
         basis: official === null ? null : official.basis, officialUrl: official?.url ?? null,
-        names: mappingRuleNames(entry.metricKey) })
+        names: mappingRuleNames(entry.metricKey),
+        tier: tierOfMetricKey(entry.metricKey) ?? null,
+        rowCount: byId.get(sourceId)?.rows ?? 0 })
     })
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
