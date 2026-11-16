@@ -1025,3 +1025,91 @@ describe('AI 解读入口（只读接口驱动，菜单不被翻译开关绑住�
     expect(section?.querySelector('button.text-action')).not.toBeNull()
   })
 })
+
+describe('AI 解读：点击触发（写端点）只把结果落到右栏', () => {
+  const READ = 'marketAnalysis.readNewsInterpretation'
+  const REQUEST = 'marketAnalysis.requestNewsInterpretation'
+  const SUMMARY = 'marketAnalysis.getSummary'
+  const readNone = {
+    itemId: 'item-a', state: 'none' as const,
+    currentEvidenceFingerprint: 'fp-1'
+  }
+  const readAvailable = {
+    itemId: 'item-a', state: 'available' as const, runId: 'run-1', summaryId: 'summary-1',
+    generatedAt: '2026-10-24T12:30:00.000Z', snapshotHash: 'snap-1', dataAsOf: '2026-10-24T12:00:00.000Z',
+    evidenceFingerprint: 'fp-1', currentEvidenceFingerprint: 'fp-1',
+    evidenceScope: { asOf: '2026-10-24T12:00:00.000Z', dataCutoff: '2026-10-24T11:00:00.000Z', factCount: 300, evidenceRefCount: 155, domains: ['market'] }
+  }
+  const summaryBody = { id: 'summary-1', analysisRunId: 'run-1', conclusion: { summary: '正文一句话。', change: '变了。', causalChain: '链。' } }
+
+  const stub = (handlers: Readonly<{ read?: unknown; request?: unknown; summary?: unknown }>): { invoke: ReturnType<typeof vi.fn> } => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === READ) return handlers.read
+      if (method === REQUEST) return handlers.request
+      if (method === SUMMARY) return handlers.summary
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    return { invoke }
+  }
+  const clickMenuItem = async (label: string): Promise<void> => {
+    const item = [...document.body.querySelectorAll<HTMLElement>('.ant-menu-item')]
+      .find((node) => node.textContent === label)
+    expect(item).not.toBeUndefined()
+    await act(async () => { item?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+  }
+  const openMenu = async (): Promise<void> => {
+    const row = document.body.querySelector<HTMLButtonElement>('.mi-news-drawer__row-open')
+    await act(async () => { row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 8, clientY: 8 })) })
+    await act(async () => {})
+    await act(async () => {})
+  }
+
+  it('queued keeps the section in its submitting state (not an empty section)', async () => {
+    const { invoke } = stub({ read: readNone, request: { state: 'queued', itemId: 'item-a' } })
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    await clickMenuItem('AI 解读')
+    expect(invoke.mock.calls.some((call) => call[1] === REQUEST)).toBe(true)
+    expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+  })
+
+  it('a failed request shows one reason and a retry that really re-requests', async () => {
+    const { invoke } = stub({
+      read: readNone,
+      request: { state: 'failed', itemId: 'item-a', failureCode: 'analysis-initial-request-failed' }
+    })
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    await clickMenuItem('AI 解读')
+
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section?.getAttribute('data-state')).toBe('failed')
+    expect(section.textContent?.trim()).not.toBe('')
+    const retry = section.querySelector('button.text-action')
+    expect(retry).not.toBeNull()
+    const before = invoke.mock.calls.filter((call) => call[1] === REQUEST).length
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST).length).toBe(before + 1)
+  })
+
+  it('already-available does not queue a second run and renders the real body', async () => {
+    const { invoke } = stub({
+      read: readAvailable,
+      request: {
+        state: 'already-available', itemId: 'item-a', runId: 'run-1', summaryId: 'summary-1',
+        generatedAt: '2026-10-24T12:30:00.000Z', snapshotHash: 'snap-1', dataAsOf: '2026-10-24T12:00:00.000Z',
+        evidenceScope: readAvailable.evidenceScope, evidenceFingerprint: 'fp-1'
+      },
+      summary: summaryBody
+    })
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    // 读接口说 available 且指纹一致 → 菜单是「查看」，点了不发请求。
+    await clickMenuItem('查看 AI 解读')
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+    expect(document.body.querySelector('[data-ai-interpretation]')?.textContent).toContain('正文一句话。')
+  })
+})

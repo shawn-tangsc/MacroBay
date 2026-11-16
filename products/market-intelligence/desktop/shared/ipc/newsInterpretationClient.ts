@@ -1,6 +1,7 @@
 import {
   MARKET_ANALYSIS_IPC_METHODS,
-  type NewsInterpretationReadResult
+  type NewsInterpretationReadResult,
+  type NewsInterpretationRequestResult
 } from '../../../contracts/marketAnalysisIpcContracts'
 
 const PRODUCT_ID = 'market-intelligence'
@@ -52,6 +53,33 @@ export async function readInterpretationSummary(summaryId: string): Promise<read
       .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
   } catch {
     return undefined
+  }
+}
+
+/** 写端点的结果；传输层失败单独一档，不冒充业务码（读者的下一步不同）。 */
+export type NewsInterpretationRequestView =
+  | NewsInterpretationRequestResult
+  | Readonly<{ state: 'unreachable'; itemId: string }>
+
+/**
+ * 触发一次「AI 解读」。结果只回业务联合：`queued` / `already-available` / `in-flight` /
+ * `no-judgment` / `insufficient-facts` / `not-eligible` / `not-ready` / `failed`。
+ * 连点由服务端单飞兜住，客户端不加防抖门槛。
+ */
+export async function requestNewsInterpretation(itemId: string): Promise<NewsInterpretationRequestView> {
+  try {
+    if (!window.platform?.products?.invoke) return { state: 'unreachable', itemId }
+    const result = await window.platform.products.invoke(
+      PRODUCT_ID,
+      MARKET_ANALYSIS_IPC_METHODS.requestNewsInterpretation,
+      { itemId }
+    ) as NewsInterpretationRequestResult
+    if (result === null || typeof result !== 'object' || result.itemId !== itemId || typeof result.state !== 'string') {
+      return { state: 'unreachable', itemId }
+    }
+    return result
+  } catch {
+    return { state: 'unreachable', itemId }
   }
 }
 

@@ -25,7 +25,8 @@ import { NewsSentimentStrength } from './NewsSentimentStrength'
 import { AiInterpretationSection } from '../../shared/AiInterpretationSection'
 import { newsInterpretationMenuItem } from './newsSentimentInterpretationMenu'
 import { useNewsInterpretationRead } from './useNewsInterpretationRead'
-import { readInterpretationSummary } from '../../../shared/ipc/newsInterpretationClient'
+import { readInterpretationSummary, requestNewsInterpretation } from '../../../shared/ipc/newsInterpretationClient'
+import { newsInterpretationResultCopy } from '../../../shared/i18n/newsInterpretationResultCopy'
 import { labelText, sentimentIcon } from './newsSentimentPresentation'
 import type { NewsSentimentFilters } from './useNewsSentiment'
 import { filterNewsSentimentRows } from './newsSentimentFilters'
@@ -115,7 +116,32 @@ export function NewsSentimentDrawer(props: {
   })
 
   const activeRead = useNewsInterpretationRead(activeId, props.open)
+  /** 触发中的条目 + 失败结果（结果只落右栏那一节；菜单不显示进度/失败）。 */
+  const [interpretationSubmitting, setInterpretationSubmitting] = useState<string>()
+  const [interpretationFailure, setInterpretationFailure] = useState<Readonly<{ itemId: string; sentenceKey: string; retry: boolean }>>()
   const menuRead = useNewsInterpretationRead(contextMenu?.itemId, contextMenu !== undefined)
+  const submitInterpretation = useCallback((itemId: string): void => {
+    setInterpretationSubmitting(itemId)
+    setInterpretationFailure(undefined)
+    void requestNewsInterpretation(itemId).then((result) => {
+      if (result.state === 'queued' || result.state === 'in-flight') {
+        activeRead.reload()
+        return
+      }
+      setInterpretationSubmitting(undefined)
+      if (result.state === 'already-available') {
+        activeRead.reload()
+        return
+      }
+      const copy = result.state === 'insufficient-facts'
+        ? newsInterpretationResultCopy({ insufficientReason: result.details.reason })
+        : result.state === 'not-ready' || result.state === 'failed'
+          ? newsInterpretationResultCopy({ failureCode: result.failureCode })
+          : newsInterpretationResultCopy({})
+      setInterpretationFailure({ itemId, sentenceKey: copy.sentenceKey, retry: copy.action === 'retry' })
+    })
+  }, [activeRead])
+
   const activeTranslationState = activeId ? translationStates[activeId] ?? active?.bodyTranslationState ?? 'missing' : 'missing'
   const activeTranslatedBody = activeId ? translatedBodies[activeId] ?? detail?.translatedBodyExcerpt : undefined
   const hasTranslatedBody = Boolean(activeTranslatedBody) || activeTranslationState === 'translated'
@@ -399,7 +425,11 @@ export function NewsSentimentDrawer(props: {
                     detail?.bodyExcerpt ?? text.drawer.detail.noBody
                   )}
                 </div>
-                <DrawerInterpretation view={activeRead.view} onRetry={activeRead.reload} />
+                <DrawerInterpretation
+                  failure={interpretationFailure?.itemId === activeId ? interpretationFailure : undefined}
+                  onRetry={() => { if (activeId !== undefined) submitInterpretation(activeId) }}
+                  submitting={interpretationSubmitting === activeId}
+                  view={activeRead.view} />
                 <footer>
                   {detail?.promptVersion ? <span>{text.drawer.detail.prompt}: {detail.promptVersion}</span> : null}
                   {active.url ? <a href={active.url} rel="noreferrer" target="_blank">{text.drawer.detail.openOriginal} ↗</a> : null}
@@ -421,13 +451,14 @@ export function NewsSentimentDrawer(props: {
           onSelect={(key) => {
             if (!contextMenu) return
             if (key === 'interpretation') {
-              // 这一笔只接「查看」（已完成解读且证据指纹没变）：把该条选到右栏。
-              // 「AI 解读 / 再次解读」的真实触发等写端点下一笔接，**现在不发任何调用**。
+              // 「查看」只把该条选到右栏，**不发请求**；「AI 解读 / 再次解读」才触发。
               if (menuRead.view?.state === 'available'
                 && menuRead.view.evidenceFingerprint !== undefined
                 && menuRead.view.evidenceFingerprint === menuRead.view.currentEvidenceFingerprint) {
                 setSelectedId(contextMenu.itemId)
+                return
               }
+              submitInterpretation(contextMenu.itemId)
               return
             }
             if (key !== 'translate') return
@@ -450,9 +481,12 @@ export function NewsSentimentDrawer(props: {
  */
 function DrawerInterpretation(props: Readonly<{
   view?: import('../../../shared/ipc/newsInterpretationClient').NewsInterpretationReadView
+  submitting: boolean
+  failure?: Readonly<{ itemId: string; sentenceKey: string; retry: boolean }>
   onRetry: () => void
 }>): React.ReactElement | null {
   const copy = productText[useShellLanguage()].mi.aiInterpretation
+  const resolveText = useProductTextKey()
   const { view } = props
   const summaryId = view?.state === 'available' ? view.summaryId : undefined
   const [paragraphs, setParagraphs] = useState<readonly string[]>()
@@ -470,6 +504,13 @@ function DrawerInterpretation(props: Readonly<{
     return () => { active = false }
   }, [summaryId, props.onRetry])
 
+  if (props.failure !== undefined) {
+    return <AiInterpretationSection
+      failure={{ sentence: resolveText(props.failure.sentenceKey) || copy.readFailed, canRetry: props.failure.retry }}
+      {...(props.failure.retry ? { onRetry: props.onRetry } : {})}
+      state="failed" />
+  }
+  if (props.submitting) return <AiInterpretationSection state="pending" />
   if (view === undefined || view.state === 'none') return null
   if (view.state === 'in-flight') return <AiInterpretationSection state="pending" />
   if (view.state === 'unreadable') {
