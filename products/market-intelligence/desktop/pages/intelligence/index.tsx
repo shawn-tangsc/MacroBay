@@ -179,14 +179,8 @@ function IntelligencePageBody(): React.ReactElement {
     (month: string, asOf: string) => readMarketCalendarMonth(marketCalendarClient, { month, locale: language === 'en-US' ? 'en' : 'zh', asOf }),
     [language]
   )
-  /**
-   * The same month, narrowed to its events for the chart: the lines need what happened and when, not
-   * how the provider's own refresh went. The drawer gets the full read, because its body prints both.
-   */
-  const readMarketEvents = useCallback(
-    async (month: string, asOf: string) => (await readMarketMonth(month, asOf))?.events ?? null,
-    [readMarketMonth]
-  )
+  // 图表竖线、曲线标注与抽屉**读同一次月查询**：整页（事件 + 来源状态）一起给，消费方各取所需。
+  // 以前这里把它削成 `events` 再往下传，抽屉就永远拿不到「这条源已停止出数」。
 
   return (
     <div className="mi-sample-surface">
@@ -230,7 +224,7 @@ function IntelligencePageBody(): React.ReactElement {
           // locale: the cross-asset panel names its lines with it instead of growing a second copy.
           calendarEventTitles={text.analysisWorkspace.readableNames.eventName}
           // The chart's event lines read both calendar routes; the provider's is injected here.
-          readMarketEvents={readMarketEvents}
+          readCalendarMonth={readMarketMonth}
           // 卡片上一行「±30 分」反应（原型 ④）：读法在 `calendarCardReaction.ts` 里，页面只给客户端。
           readCalendarReaction={readCalendarCardReaction}
           // The calendar's own detail surface, injected: the cross-asset feature never learns the

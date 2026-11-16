@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { useEffect, useRef, useState } from 'react'
 
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -5,7 +6,7 @@ import type { PolicyPathReading } from '../../../service/intelligence/policy-pat
 /**
  * 曲线窗口里已发生的发布/事件，供曲线标注「这一刻动了多少」。
  *
- * 取数只有一条通道：宿主原来读日历用的那个 `readMarketEvents`（按月、按 asOf）。
+ * 取数只有一条通道：宿主原来读日历用的那个 `readCalendarMonth`（按月、按 asOf）。
  * 这里不新建客户端、不新开 IPC；只是把曲线覆盖的那几个月读一遍，因为页面原有的日历读
  * 只覆盖它自己的窗口（几天），盖不住曲线回溯的 30 天。
  *
@@ -25,7 +26,7 @@ export type CurveReleaseEvent = Readonly<{
 export function useCurveReleaseEvents(input: Readonly<{
   /** 抽屉关着就不读：没人看的东西不花一次请求。 */
   enabled: boolean
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /**
    * 曲线那次读数的 `asOf`——**不许自己 `new Date()`**。
    *
@@ -40,8 +41,8 @@ export function useCurveReleaseEvents(input: Readonly<{
 }>): readonly CurveReleaseEvent[] {
   const [events, setEvents] = useState<readonly CurveReleaseEvent[]>([])
   // 读入口放进 ref：页面每次渲染都可能传一个新函数，进依赖会让同一个快照被反复读。
-  const reader = useRef(input.readMarketEvents)
-  reader.current = input.readMarketEvents
+  const reader = useRef(input.readCalendarMonth)
+  reader.current = input.readCalendarMonth
   const { enabled, asOf, locale, reading } = input
   const windowStart = reading?.probability?.series?.[0]?.at
   const windowEnd = reading?.probability?.series?.at(-1)?.at
@@ -60,7 +61,8 @@ export function useCurveReleaseEvents(input: Readonly<{
         if (!current) return
         const next: CurveReleaseEvent[] = []
         for (const page of pages) {
-          for (const entry of page ?? []) {
+          // 读入口给整页（事件 + 来源状态）；标注只要事件。
+          for (const entry of page?.events ?? []) {
             if (!entry || typeof entry !== 'object') continue
             const record = entry as Record<string, unknown>
             const at = typeof record.scheduledAt === 'string' ? record.scheduledAt : ''

@@ -1481,11 +1481,11 @@ describe('the calendar entry opens the drawer, not a page', () => {
       onConfigureSources: () => undefined, onManageSource: () => undefined,
       openIndicatorDrawerRequest: { seq: 0 },
       calendarEventTitles: { cpi: 'CPI' },
-      readMarketEvents: async () => [{
+      readCalendarMonth: async () => ({ events: [{
         eventKey: 'evt-cpi', title: 'CPI', countryCode: 'US', countryName: '美国', measureKeys: ['US.CPI.NSA.YOY'],
         eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-08-10T12:30:00.000Z',
         source: 'Narwhal', sourceObservedAt: '2026-08-04T09:00:00.000Z', coverage: 'observed-unverified'
-      }],
+      }] as never, sources: [] }),
       text: productText['zh-CN'].pages.intelligence.portal.dashboard
     })))
     await flush()
@@ -1500,11 +1500,11 @@ describe('the calendar entry opens the drawer, not a page', () => {
       onConfigureSources: () => undefined, onManageSource: () => undefined,
       openIndicatorDrawerRequest: { seq: 1 },
       calendarEventTitles: { cpi: 'CPI' },
-      readMarketEvents: async () => [{
+      readCalendarMonth: async () => ({ events: [{
         eventKey: 'evt-cpi', title: 'CPI', countryCode: 'US', countryName: '美国', measureKeys: ['US.CPI.NSA.YOY'],
         eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-08-10T12:30:00.000Z',
         source: 'Narwhal', sourceObservedAt: '2026-08-04T09:00:00.000Z', coverage: 'observed-unverified'
-      }],
+      }] as never, sources: [] }),
       text: productText['zh-CN'].pages.intelligence.portal.dashboard
     })))
     await flush()
@@ -1536,7 +1536,7 @@ it('hands the injected calendar block down to the drawer, not just to its own pr
     openIndicatorDrawerRequest: { seq: 1 },
     calendarBlock: createElement('div', { 'data-test-calendar-block': '' }, '接下来要看的'),
     calendarEventTitles: { cpi: 'CPI' },
-    readMarketEvents: async () => [],
+    readCalendarMonth: async () => ({ events: [] as never, sources: [] }),
     text: productText['zh-CN'].pages.intelligence.portal.dashboard
   })))
   await flush()

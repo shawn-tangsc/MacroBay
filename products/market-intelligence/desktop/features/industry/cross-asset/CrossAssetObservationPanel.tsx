@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from '../../../pages/intelligence/readMarketCalendarMonth'
 import { useEffect, useState } from 'react'
 import { Button } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
@@ -109,7 +110,7 @@ function RatesStatusRow({ id, reading, rates, text }: {
     </td>
   </tr>
 }
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readCalendarMonth, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
@@ -158,7 +159,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * came through the provider alone (initial claims, retail sales, PPI) drew nothing at all even
    * though the calendar listed it. Optional, and its failure costs only the provider's lines.
    */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /**
    * Opening the event's drawer and recording it is the page's business, not the chart's.
    *
@@ -178,7 +179,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * The hook owns the fetch, the month bookkeeping and the failure path; this component only draws
    * what it returns and hands a picked line back up.
    */
-  const eventLines = useCrossAssetEventLines({ calendar, readMarketEvents, eventTitles: text.eventTitles, windowStart: snapshot?.windowStart, windowEnd: snapshot?.analysisEnd, asOf: snapshot?.asOf })
+  const eventLines = useCrossAssetEventLines({ calendar, readCalendarMonth, eventTitles: text.eventTitles, windowStart: snapshot?.windowStart, windowEnd: snapshot?.analysisEnd, asOf: snapshot?.asOf })
   /**
    * The same event read from two months would be one line either way; the first event names the line's
    * month, because a minute cannot belong to two. With no page listening the callback is absent and

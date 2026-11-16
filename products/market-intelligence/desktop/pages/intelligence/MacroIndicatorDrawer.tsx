@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -56,7 +57,7 @@ import './macroIndicatorDrawer.css'
  */
 
 
-export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, calendarBlock, now, readMarketEvents }: Readonly<{
+export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget, onConfigure, onRetryPolicy, policyReading, policyText, onOpenPolicyDetail, releaseEvents, cardFacts, cardFactsUnreadable, calendarBlock, now, readCalendarMonth }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   /**
    * 受控开关。宿主**常挂**这个组件、只翻 `open`，关闭动画与「焦点回原位」才跑得完；
@@ -109,7 +110,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
    *
    * 不许在这里另开通道——两处各读一次，格子里有点、右列却没有行。
    */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /**
    * 右列的行**没有动作**：日期详情只以抽屉形态出现（用户 2026-11-13 定），而这里还没有接上
    * 「复用同一个详情抽屉」。按红线不画假控件——行渲染成非交互形态，不传 `onSelect`。
@@ -161,7 +162,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
       timeZone,
       asOf: nowInstant,
       locale,
-      ...(readMarketEvents === undefined ? {} : { readMarketEvents })
+      ...(readCalendarMonth === undefined ? {} : { readCalendarMonth })
     })
   /**
    * 右列两层分组（类型在外、指标组内再分分级）：判据在 `macroIndicatorDrawerModel`，
@@ -421,7 +422,9 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
             onClose={() => selectEvent(undefined)}
             open
             when={detailEvent.scheduledAt}>
-            <MarketCalendarInspector event={detailEvent} source={undefined} text={calendarText} />
+            <MarketCalendarInspector event={detailEvent}
+              source={releases.sources.find((source) => source.eventType === detailEvent.eventType)}
+              text={calendarText} />
           </CalendarInspector>
         </div>, document.body)}
     </section>

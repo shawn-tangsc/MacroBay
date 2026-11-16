@@ -175,13 +175,13 @@ describe('a chart line selects a calendar event without opening the conversation
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
       source: 'Narwhal' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
     }
-    const readMarketEvents = vi.fn(async () => [provider])
-    const host = await renderSurface({ readMarketEvents })
+    const readCalendarMonth = vi.fn(async () => ({ events: [provider], sources: [] }))
+    const host = await renderSurface({ readCalendarMonth })
 
     // Two lines now: the official CPI the calendar list holds, and the provider's release.
     const lines = [...host.querySelectorAll<HTMLElement>('[data-event-line]')]
     expect(lines.map(line => line.textContent)).toContain('9月零售销售(月率)')
-    expect(readMarketEvents).toHaveBeenCalled()
+    expect(readCalendarMonth).toHaveBeenCalled()
 
     const providerLine = lines.find(line => line.textContent === '9月零售销售(月率)')!
     await act(async () => providerLine.click())
@@ -283,7 +283,7 @@ describe('the same release reads the same on the line and in its drawer', () => 
     }
     const officialOnly = pageClient({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' })
     const host = await renderSurface({
-      readMarketEvents: vi.fn(async () => [provider]),
+      readCalendarMonth: vi.fn(async () => ({ events: [provider], sources: [] })),
       renderEventDetailDrawer: (selection: SelectedCalendarEvent, onClose: () => void) =>
         createElement(SelectedCalendarEventDrawer, { client: officialOnly as never, selection, now: () => new Date(asOf), text: portal.calendar, onClose,
           readMarketMonth: async () => ({ events: [provider], sources: [] }) })

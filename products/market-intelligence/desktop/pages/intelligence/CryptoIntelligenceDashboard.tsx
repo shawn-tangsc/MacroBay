@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -107,7 +108,7 @@ type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEn
   /** 「接下来要看的」那块（layout 用同一次 cardData 构造后注入），透传给抽屉。 */
   calendarBlock?: React.ReactNode }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, openIndicatorDrawerRequest, calendarBlock, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, openIndicatorDrawerRequest, calendarBlock, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readCalendarMonth, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -115,7 +116,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    */
   calendarEventTitles?: Record<string, string>
   /** The 0xRouter month's events, injected by the page: the chart's lines read both calendars. */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
   /**
@@ -317,7 +318,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const curveReleaseEvents = useCurveReleaseEvents({
     // 时钟卡要看日程（上一期/下一期/周期 P），这份按月读不再只服务抽屉。
     enabled: true,
-    ...(readMarketEvents ? { readMarketEvents } : {}),
+    ...(readCalendarMonth ? { readCalendarMonth } : {}),
     // 用曲线那次读数的快照时刻，不另取「现在」：两处各取各的，标注就对不上它标的跳变。
     ...(policyPath?.state === 'available' ? { asOf: policyPath.asOf, reading: policyPath.reading } : {}),
     locale
@@ -427,7 +428,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // The panel reads the same calendar this dashboard already reads, rather than reaching for a
         // second client of its own: one month query per window, one source of truth for the events.
         calendar={client}
-        readMarketEvents={readMarketEvents}
+        readCalendarMonth={readCalendarMonth}
         // …and it hands a picked line up rather than opening anything itself: the page owns both the
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
@@ -453,7 +454,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         {...(cardFactsView?.state === 'available' ? { cardFacts: cardFactsView.facts } : {})}
         {...(cardFactsView?.state === 'unavailable' ? { cardFactsUnreadable: true } : {})}
         now={drawerNow} openTarget={openIndicatorDrawerRequest}
-        {...(readMarketEvents ? { readMarketEvents } : {})}
+        {...(readCalendarMonth ? { readCalendarMonth } : {})}
         onOpenPolicyDetail={() => { setIndicatorDrawerOpen(false); setPolicyDrawerOpen(true) }} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not

@@ -121,12 +121,13 @@ describe('cross-asset event lines', () => {
   })
 
   // 0xRouter 路线：官方那九个 family 之外的数据发布（初请、零售销售、PPI…）以前图上一条都没有。
+  // 读入口给整页（事件 + 来源状态）；这几条用例只关心事件。
   const marketMonth = (events: readonly Record<string, unknown>[]) =>
-    async (month: string) => month === '2026-09' ? events : []
+    async (month: string) => ({ events: (month === '2026-09' ? events : []) as never, sources: [] })
 
   it('draws the provider\'s data releases beside the official ones, and no speeches or summits', async () => {
     const rendered = await render({
-      readMarketEvents: marketMonth([
+      readCalendarMonth: marketMonth([
         marketEvent({ providerActual: { displayValue: '0.8%' } }),
         // High importance to the calendar, but not a release: it explains nothing about a step.
         marketEvent({ eventKey: 'b', title: '美联储理事鲍曼参加一场炉边谈话', eventType: 'central-bank-activity' }),
@@ -152,7 +153,7 @@ describe('cross-asset event lines', () => {
     const rendered = await render({
       text: { ...crossAssetText, eventTitles: { cpi: '消费者物价指数（CPI）' } },
       calendar: page([calendarEvent({ eventKey: officialKey, publishedAt: '2026-09-30T18:00:00.000Z' })]),
-      readMarketEvents: marketMonth([marketEvent({
+      readCalendarMonth: marketMonth([marketEvent({
         eventKey: 'f', title: '9月未季调消费者物价指数(年率)', scheduledAt: '2026-09-30T18:00:00.000Z',
         officialLink: { officialEventKey: officialKey }
       })])
@@ -172,7 +173,7 @@ describe('cross-asset event lines', () => {
     const rendered = await render({
       text: { ...crossAssetText, eventTitles: { cpi: '消费者物价指数（CPI）' } },
       calendar: page([calendarEvent({ eventKey: officialKey, publishedAt: '2026-09-30T18:00:00.000Z' })]),
-      readMarketEvents: marketMonth([marketEvent({
+      readCalendarMonth: marketMonth([marketEvent({
         eventKey: 'g', title: '9月未季调消费者物价指数(年率)', scheduledAt: '2026-09-30T18:00:00.000Z'
       })])
     })
@@ -190,7 +191,7 @@ describe('cross-asset event lines', () => {
     const rendered = await render({
       text: { ...crossAssetText, eventTitles: { cpi: '消费者物价指数（CPI）' } },
       calendar: page([calendarEvent({ eventKey: 'US.CPI.RELEASE.2026-M09', publishedAt: '2026-09-30T18:00:00.000Z' })]),
-      readMarketEvents: marketMonth([marketEvent({
+      readCalendarMonth: marketMonth([marketEvent({
         eventKey: 'h', title: '9月零售销售(月率)', scheduledAt: '2026-09-30T18:00:00.000Z'
       })])
     })
@@ -213,18 +214,18 @@ describe('cross-asset event lines', () => {
     vi.useFakeTimers()
     const nextTick = { ...snapshot, asOf: '2026-10-01T12:00:01.000Z' }
     const queryMonth = vi.fn(async (input: { month: string; asOf: string }) => ({ state: 'available', asOf: input.asOf, events: [] }))
-    const readMarketEvents = vi.fn(async () => [])
-    const rendered = await render({ calendar: { queryMonth }, readMarketEvents }, [snapshot, nextTick])
+    const readCalendarMonth = vi.fn(async () => ({ events: [] as never, sources: [] }))
+    const rendered = await render({ calendar: { queryMonth }, readCalendarMonth }, [snapshot, nextTick])
     try {
       // One read per month the window touches: two, for a window that crosses midnight on the 30th.
       const queriedMonths = queryMonth.mock.calls.map(call => call[0].month)
       expect(queriedMonths).toEqual(['2026-09', '2026-10'])
-      expect(readMarketEvents.mock.calls.length).toBe(2)
+      expect(readCalendarMonth.mock.calls.length).toBe(2)
       // Two polls of the same window: one at +1s (the next snapshot) and one past the lease renewal.
       await act(async () => { await vi.advanceTimersByTimeAsync(1100) })
       await act(async () => { await vi.advanceTimersByTimeAsync(1100) })
       expect(queryMonth.mock.calls.map(call => call[0].month)).toEqual(queriedMonths)
-      expect(readMarketEvents.mock.calls.length).toBe(2)
+      expect(readCalendarMonth.mock.calls.length).toBe(2)
     } finally { await rendered.unmount(); vi.useRealTimers() }
   })
 })

@@ -24,7 +24,7 @@ function Probe({ read, windowStart, windowEnd, enabled = true, asOf = AS_OF, loc
     : undefined
   const events = useCurveReleaseEvents({
     enabled,
-    ...(read ? { readMarketEvents: read } : {}),
+    ...(read ? { readCalendarMonth: async (month: string, at: string) => { const events = await read(month, at); return events === null ? null : { events: events as never, sources: [] } } } : {}),
     asOf,
     locale,
     ...(reading ? { reading } : {})

@@ -84,7 +84,10 @@ async function render(input: Readonly<{
   openTarget?: CalendarDrawerRequest
   now?: string
   onClose?: () => void
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  /** 这一路的来源状态：停摆那句要靠它才出现在读者眼前。 */
+  sources?: readonly Readonly<{ eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
+    status: 'success'; sourceObservedAt: string; lastBatchAt?: string; collectorSilent?: boolean }>[]
 }>): Promise<void> {
   if (host === undefined) {
     host = document.createElement('div')
@@ -94,11 +97,16 @@ async function render(input: Readonly<{
   const open = input.open ?? true
   const onClose = input.onClose ?? (() => undefined)
   const now = input.now ?? '2026-11-16T10:00:00.000Z'
-  const readMarketEvents = input.readMarketEvents ?? readMarch
+  const readEvents = input.readCalendarMonth ?? readMarch
+  // 读入口现在给整页（事件 + 来源状态）；这些用例只关心事件，包一层。
+  const readCalendarMonth = async (month: string, asOf: string) => {
+    const events = await readEvents(month, asOf)
+    return events === null ? null : { events: events as never, sources: input.sources ?? [] }
+  }
   await act(async () => {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
       <MacroIndicatorDrawer locale="zh-CN" open={open} onClose={onClose} onRetryPolicy={() => undefined}
-        policyText={policyText} now={now} readMarketEvents={readMarketEvents}
+        policyText={policyText} now={now} readCalendarMonth={readCalendarMonth}
         {...(input.openTarget === undefined ? {} : { openTarget: input.openTarget })} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
@@ -155,4 +163,22 @@ describe('opening the calendar drawer at a target', () => {
     expect(detail()).toBeNull()
     expect(monthTitle()).toContain('2026 年 3 月')
   })
+})
+
+/**
+ * **「已停止出数」要真的出现在读者的抽屉里**（用户 2026-11-16 那个错数的善后）。
+ *
+ * 服务端算出了 per-feed 的出数状态（`02e5695`），但抽屉当时只拿到事件、拿不到来源状态，
+ * 所以那句永远没地方落地。这一条钉的是**整条链**：月查询的 `sources` → 抽屉 → 事件详情的来源状态。
+ */
+it('shows the stopped-source line inside the drawer detail, from the month read', async () => {
+  await render({
+    openTarget: { seq: 1, month: '2026-03', eventKey: 'cpi-mar' },
+    sources: [{
+      eventType: 'economic-indicator', status: 'success', sourceObservedAt: '2026-03-01T00:00:00.000Z',
+      lastBatchAt: '2026-03-01T00:00:00.000Z', collectorSilent: true
+    }]
+  })
+  const status = document.body.querySelector('[data-market-source-status]')?.textContent ?? ''
+  expect(status).toContain('已停止出数（最后 2026-03-01')
 })

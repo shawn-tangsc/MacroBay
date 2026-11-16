@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from '../../../pages/intelligence/readMarketCalendarMonth'
 import { useEffect, useRef, useState } from 'react'
 import { crossAssetEventLines, type CrossAssetEventLine, type CrossAssetEventLineSource } from './crossAssetEventLines'
 import { crossAssetMarketEventSources, officialEventKeysInWindow } from './crossAssetMarketEventLines'
@@ -24,7 +25,7 @@ export type CrossAssetEventLines = Readonly<{
 /** Nothing read yet, or a calendar that failed: no lines, and nothing to collapse. */
 export const emptyCrossAssetEventLines: CrossAssetEventLines = Object.freeze({ lines: [], collapsed: 0, months: {} })
 
-export function useCrossAssetEventLines({ calendar, readMarketEvents, eventTitles, windowStart, windowEnd, asOf }: Readonly<{
+export function useCrossAssetEventLines({ calendar, readCalendarMonth, eventTitles, windowStart, windowEnd, asOf }: Readonly<{
   /** The official calendar, read by month: the only place this panel learns what was published. */
   calendar: Readonly<{ queryMonth: (input: { month: string; asOf: string }) => Promise<unknown> }>
   /**
@@ -34,7 +35,7 @@ export function useCrossAssetEventLines({ calendar, readMarketEvents, eventTitle
    * the rest of the US data calendar, and a day whose releases came through the provider alone would
    * otherwise show nothing. Optional: without it the chart draws the official rows only.
    */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /**
    * The calendar's title vocabulary, handed down by the page. Without it the key is shown rather
    * than a name invented here, which would be a second list of event names and would drift.
@@ -66,7 +67,8 @@ export function useCrossAssetEventLines({ calendar, readMarketEvents, eventTitle
       return {
         month: months[index] ?? official,
         page: await calendar.queryMonth({ month: official, asOf }).catch(() => undefined),
-        market: await readMarketEvents?.(month, asOf).catch(() => null) ?? null
+        // 读入口给的是整页（事件 + 来源状态）；这里只要事件，来源状态归抽屉。
+        market: (await readCalendarMonth?.(month, asOf).catch(() => null))?.events ?? null
       }
     }))
       .then(pages => {
@@ -115,7 +117,7 @@ export function useCrossAssetEventLines({ calendar, readMarketEvents, eventTitle
     return () => { current = false }
     // `asOf` is deliberately absent: it moves every second while the window moves every five minutes
     // (see `readAsOf`), and re-reading two months of two calendars per second is not a read anyone asked for.
-  }, [calendar, eventTitles, readMarketEvents, windowEnd, windowStart])
+  }, [calendar, eventTitles, readCalendarMonth, windowEnd, windowStart])
   return lines
 }
 

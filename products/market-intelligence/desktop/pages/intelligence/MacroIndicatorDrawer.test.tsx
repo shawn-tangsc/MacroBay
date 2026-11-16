@@ -87,8 +87,8 @@ describe('key-indicator drawer', () => {
 
   it('draws the real month, switches pages, and re-reads when the refresh button is pressed', async () => {
     const reads: string[] = []
-    const readMarketEvents = async (month: string) => { reads.push(month); return month === '2026-11' ? calendarEvents : [] }
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents })
+    const readCalendarMonth = async (month: string) => { reads.push(month); return month === '2026-11' ? calendarEvents : [] }
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth })
     const byName = (name: string) => document.body.querySelector(`button[aria-label="${name}"]`) as HTMLButtonElement
     const title = () => document.body.querySelector('.mk-minical__h h3')!.textContent
     expect(title()).toContain('2026 年 11 月')
@@ -110,7 +110,7 @@ describe('key-indicator drawer', () => {
     const tieredMeasures = ['US.CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY', 'US.CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE']
     const busyDay = [1, 2, 3, 4, 5].map((index) => dayEvent(`busy-${index}`, `事件 ${index}`,
       `2026-11-13T${String(9 + index).padStart(2, '0')}:00:00.000Z`, { measureKeys: [tieredMeasures[index - 1]!] }))
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => busyDay })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => busyDay })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '13')!
     expect(cell.querySelectorAll('.mk-mcell__row')).toHaveLength(3)
@@ -132,7 +132,7 @@ describe('key-indicator drawer', () => {
       dayEvent('speech-2', '美联储理事讲话', '2026-11-13T03:00:00.000Z', { eventType: 'central-bank-activity' }),
       dayEvent('stock-1', '上周EIA原油库存变化', '2026-11-13T04:00:00.000Z', { measureKeys: ['US.EIA.CRUDE.STOCKS'] })
     ]
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => untiered })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => untiered })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '13')!
     expect(cell.querySelectorAll('.mk-mcell__row')).toHaveLength(0)
@@ -151,7 +151,7 @@ describe('key-indicator drawer', () => {
       dayEvent('pce-nsa', '核心 PCE 年率（未季调）', '2026-11-13T13:30:00.000Z', { measureKeys: ['US.CORE_PCE.NSA.YOY'] }),
       dayEvent('pce-sa', '核心 PCE 年率（季调）', '2026-11-13T13:30:00.000Z', { measureKeys: ['US.CORE_PCE.SA.YOY'] })
     ]
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => both })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => both })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '13')!
     const rows = Array.from(cell.querySelectorAll('.mk-mcell__row')).map((row) => row.textContent ?? '')
@@ -175,7 +175,7 @@ describe('key-indicator drawer', () => {
   })
 
   it('defaults to today when today has events, and lists only what explains rate expectations', async () => {
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => calendarEvents })
     expect(rightColumnTitle()).toContain('2026-11-13')
     expect(rightColumn()!.textContent).toContain('新增就业')
     // 用户 2026-11-14：这一天的事件**全部列出**，不再分核心/其他两层、不折叠——EIA 也在。
@@ -187,12 +187,12 @@ describe('key-indicator drawer', () => {
   it('picks the nearest day that has events when today is quiet', async () => {
     // 11-13 没有事件，最近的是 11-14 → 右列应落在 11-14，而不是一个空日子。
     const events = [dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z'), dayEvent('e-06', '10月新增就业', '2026-11-06T13:30:00.000Z')]
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => events })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => events })
     expect(rightColumnTitle()).toContain('2026-11-14')
   })
 
   it('switches the right column to the day the reader clicks and lists every event of it', async () => {
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => calendarEvents })
     const cell = (day: string) => Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === day)!
     await act(async () => { cell('14').click() })
@@ -205,7 +205,7 @@ describe('key-indicator drawer', () => {
 
   it('explains why the shown day is not today', async () => {
     // 今天 11-13 没有发布，最近的一天是 11-14。
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z')] })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => [dayEvent('e-14', '11月消费者信心', '2026-11-14T05:00:00.000Z')] })
     const note = document.body.querySelector('.mk-col-r [data-day-not-today]')
     expect(note?.textContent).toBe(macroIndicatorDrawerText['zh-CN'].mkDay.notToday)
     // 读者自己挑的那天不加这句——标题里的日期就是他点的。
@@ -216,7 +216,7 @@ describe('key-indicator drawer', () => {
   })
 
   it('draws the right empty sentence for a day without events, never a blank column', async () => {
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => calendarEvents })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '20')!
     await act(async () => { cell.click() })
@@ -238,7 +238,7 @@ describe('key-indicator drawer', () => {
   it('opens the shared detail drawer when a day row is clicked', async () => {
     // 一二级指标才露名字（上一条用例的规则），所以这里用一条 CPI 年率来点。
     const tiered = [dayEvent('e-cpi', '10月消费者物价指数(年率)', '2026-11-13T13:30:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] })]
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => tiered })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => tiered })
     const row = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.mk-col-r button[data-calendar-row]'))
       .find(candidate => (candidate.getAttribute('aria-label') ?? '').includes('消费者物价指数'))!
     expect(row, 'a day row is the click target').not.toBeNull()
@@ -251,8 +251,8 @@ describe('key-indicator drawer', () => {
 
   it('shows the error state with a retry when the month cannot be read, and no rows at all', async () => {
     let calls = 0
-    const readMarketEvents = async () => { calls += 1; return null }
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents })
+    const readCalendarMonth = async () => { calls += 1; return null }
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth })
     expect(document.body.querySelector('.mk-col-r .state-view')).not.toBeNull()
     expect(document.body.querySelectorAll('.mk-col-r .mi-economic-calendar__event')).toHaveLength(0)
     const retry = document.body.querySelector('.mk-col-r .state-view button') as HTMLButtonElement | null
@@ -263,7 +263,7 @@ describe('key-indicator drawer', () => {
   })
 
   it('says 暂无日程数据 in a month with no releases', async () => {
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [] })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => [] })
     expect(document.body.querySelector('.mk-minical__nodata')?.textContent).toBe('暂无日程数据')
   })
 
@@ -294,7 +294,7 @@ describe('key-indicator drawer', () => {
   })
 
   it('reuses the calendar day list, with the real events of the selected day', async () => {
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => calendarEvents })
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
     expect(list).not.toBeNull()
     expect(list!.textContent).toContain('新增就业')
@@ -308,7 +308,7 @@ describe('key-indicator drawer', () => {
    * 那样在 300px 的右列里会换行，和下面的分组标题挤在一起（用户报的「字样和内容重叠」）。
    */
   it('keeps the day count on the title row instead of its own paragraph', async () => {
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => calendarEvents })
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!
     const head = list.querySelector(':scope > .mi-calendar-day-list__head')
     expect(head).not.toBeNull()
@@ -344,7 +344,7 @@ describe('key-indicator drawer', () => {
     const past = '2026-11-13T01:00:00.000Z'
     const indicator = { ...dayEvent('e-missing', '10月家庭债务', past, { measureKeys: [] }), providerActual: null }
     const speech = { ...dayEvent('e-speech', '央行讲话', past, { eventType: 'central-bank-activity' }), providerActual: null }
-    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => [indicator, speech] })
+    await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => [indicator, speech] })
     // 指标行进了「其他」（没有与利率相关的身份）；核心层为空时默认展开，直接能看到行尾两个字。
     const rows = Array.from(rightColumn()!.querySelectorAll('[data-calendar-row]'))
     const indicatorRow = rows.find((row) => row.textContent?.includes('家庭债务'))!
@@ -371,7 +371,7 @@ describe('key-indicator drawer', () => {
   it('says 暂无日程数据 in a month that has no releases', async () => {
     await renderDrawer({
       now: '2026-11-13T10:00:00.000Z',
-      readMarketEvents: async (month: string) => month === '2027-01' ? [] : calendarEvents
+      readCalendarMonth: async (month: string) => month === '2027-01' ? [] : calendarEvents
     })
     const next = () => document.body.querySelector('button[aria-label="下一个月"]') as HTMLButtonElement
     for (let step = 0; step < 2; step += 1) await act(async () => { next().click() })
@@ -411,7 +411,7 @@ const rightColumnTitle = () => rightColumn()?.querySelector('h2')?.textContent ?
 
 async function renderDrawer(input: Readonly<{
   now: string
-  readMarketEvents: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth: (month: string, asOf: string) => Promise<readonly unknown[] | null>
   calendarBlock?: React.ReactNode
 }>): Promise<void> {
   host = document.createElement('div')
@@ -421,7 +421,11 @@ async function renderDrawer(input: Readonly<{
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
       <MacroIndicatorDrawer locale="zh-CN"
         onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
-        now={input.now} readMarketEvents={input.readMarketEvents}
+        now={input.now} readCalendarMonth={async (month, asOf) => {
+          // 用例只关心事件：读入口现在给整页（事件 + 来源状态），包一层在这里。
+          const events = await input.readCalendarMonth(month, asOf)
+          return events === null ? null : { events: events as never, sources: [] }
+        }}
         {...(input.calendarBlock === undefined ? {} : { calendarBlock: input.calendarBlock })} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
@@ -563,14 +567,17 @@ describe('the three simplified cards', () => {
 
   it('does not read a second month for 下次发布 anymore', async () => {
     const reads: string[] = []
-    const readMarketEvents = async (month: string) => { reads.push(month); return calendarEvents }
+    const readCalendarMonth = async (month: string) => {
+      reads.push(month)
+      return { events: calendarEvents, sources: [] }
+    }
     host = document.createElement('div')
     document.body.append(host)
     root = createRoot(host)
     await act(async () => {
       root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
         <MacroIndicatorDrawer locale="zh-CN" onClose={() => undefined} onRetryPolicy={() => undefined} policyText={text}
-          now="2026-11-13T10:00:00.000Z" readMarketEvents={readMarketEvents}
+          now="2026-11-13T10:00:00.000Z" readCalendarMonth={readCalendarMonth}
           cardFacts={withNextRelease(facts, '2026-12-10T13:30:00.000Z')} />
       </ShellTimeZoneProvider></ShellLanguageProvider>)
     })
@@ -822,7 +829,7 @@ it('groups by event type first, then by metric tier inside 经济指标 only', a
     dayEvent('e-speech', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity' }),
     dayEvent('e-stock', '上周EIA原油库存变化', '2026-11-13T03:00:00.000Z', { eventType: 'financial-event' })
   ]
-  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => mixed })
+  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => mixed })
   const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!
   const groups = [...list.querySelectorAll('[data-calendar-group]')]
   const typeHeadings = groups.map(group => group.querySelector('h3')?.textContent ?? '')
@@ -853,7 +860,7 @@ it('groups by event type first, then by metric tier inside 经济指标 only', a
  * 块由 layout 用**它自己那份 cardData** 构造后作为节点注入——抽屉不复制写法、也不新读一次日历。
  */
 it('renders the injected calendar block above the day list, without reading the calendar again', async () => {
-  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readMarketEvents: async () => calendarEvents,
+  await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => calendarEvents,
     calendarBlock: <div data-test-calendar-block="">接下来要看的</div> })
   const rail = document.body.querySelector('.mk-col-r')!
   const injected = rail.querySelector('[data-test-calendar-block]')

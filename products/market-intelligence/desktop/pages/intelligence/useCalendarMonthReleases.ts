@@ -1,10 +1,11 @@
+import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
+import type { MarketCalendarEvent, MarketCalendarSource } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 
 /**
- * 抽屉里那一个月的事件：**走宿主已有的那一次日历读**（`readMarketEvents`，按月 + `asOf`）。
+ * 抽屉里那一个月的事件：**走宿主已有的那一次日历读**（`readCalendarMonth`，按月 + `asOf`）。
  *
  * 不新建客户端、不新开 IPC：抽屉的迷你日历和右列当日列表是同一份数据的两种画法，
  * 各读一次会出现「格子里有点、右列没有」。
@@ -12,6 +13,8 @@ import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalen
 export type CalendarMonthReleases = Readonly<{
   state: 'idle' | 'loading' | 'ready' | 'unavailable'
   events: readonly MarketCalendarEvent[]
+  /** 这一路的来源状态（`lastBatchAt` / `collectorSilent` 在这里）；没读到就是空数组。 */
+  sources: readonly MarketCalendarSource[]
   /**
    * 这份 `events` 是**哪一个月**读回来的（`YYYY-MM`）。
    *
@@ -37,16 +40,18 @@ export function useCalendarMonthReleases(input: Readonly<{
   asOf?: string
   /** 换语言要重读，否则格子里停在旧语言的名字上。 */
   locale?: string
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
 }>): CalendarMonthReleases {
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle')
   const [events, setEvents] = useState<readonly MarketCalendarEvent[]>([])
+  /** 这一路的来源状态（与事件同一次读）。空数组＝这一次没有来源状态，不是「都停了」。 */
+  const [sources, setSources] = useState<readonly MarketCalendarSource[]>([])
   const [readMonth, setReadMonth] = useState<string | undefined>(undefined)
   const [refreshing, setRefreshing] = useState(false)
   const [tick, setTick] = useState(0)
   // 读入口放进 ref：宿主每次渲染都可能传新函数，进依赖会让同一份快照被反复读。
-  const reader = useRef(input.readMarketEvents)
-  reader.current = input.readMarketEvents
+  const reader = useRef(input.readCalendarMonth)
+  reader.current = input.readCalendarMonth
   const { enabled, month, asOf, locale } = input
   const reload = useCallback(() => { setRefreshing(true); setTick(value => value + 1) }, [])
 
@@ -55,6 +60,7 @@ export function useCalendarMonthReleases(input: Readonly<{
     if (!enabled || !read || !asOf) {
       setState('idle')
       setEvents([])
+      setSources([])
       setReadMonth(undefined)
       setRefreshing(false)
       return undefined
@@ -66,16 +72,18 @@ export function useCalendarMonthReleases(input: Readonly<{
         if (!current) return
         // 只有这一页真的回来了才记住它属于哪个月：先记下、再交结果，调用方拿到的永远自洽。
         setReadMonth(month)
-        if (page === null) { setState('unavailable'); setEvents([]); return }
+        if (page === null) { setState('unavailable'); setEvents([]); setSources([]); return }
         setState('ready')
-        setEvents(page.flatMap(marketEventOf))
+        setEvents(page.events.flatMap(marketEventOf))
+        // 来源状态与事件同一次读回来：抽屉靠它把「这条源已停止出数」写出来。
+        setSources(page.sources)
       })
       .catch(() => { if (current) { setReadMonth(month); setState('unavailable'); setEvents([]) } })
       .finally(() => { if (current) setRefreshing(false) })
     return () => { current = false }
   }, [enabled, month, asOf, locale, tick])
 
-  return { state, events, readMonth, refreshing, reload }
+  return { state, events, sources, readMonth, refreshing, reload }
 }
 
 /**

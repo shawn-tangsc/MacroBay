@@ -20,10 +20,21 @@ import { marketCalendarReadPolicy } from '../../features/macro/economic-calendar
  * Returns null when the route is unavailable, so a caller can tell "nothing scheduled" from "we could
  * not read this".
  */
+/**
+ * 一次按月读的**完整结果**：事件，以及这一路的来源状态。
+ *
+ * 两者必须一起走：来源状态里有「这条源是不是已经停止出数」和它最后一次成功批次，抽屉要靠它把
+ * 「数据可能停在上一次采集」写出来。只传事件的旧形状让那一句永远没地方落地（2026-11-16）。
+ */
+export type MarketCalendarMonthRead = Readonly<{
+  events: readonly MarketCalendarEvent[]
+  sources: readonly MarketCalendarSource[]
+}>
+
 export async function readMarketCalendarMonth(
   client: Pick<MarketCalendarClient, 'queryMonth'>,
   query: Readonly<{ month: string; locale: 'zh' | 'en'; asOf: string }>
-): Promise<Readonly<{ events: readonly MarketCalendarEvent[]; sources: readonly MarketCalendarSource[] }> | null> {
+): Promise<MarketCalendarMonthRead | null> {
   const events: MarketCalendarEvent[] = []
   let sources: readonly MarketCalendarSource[] = []
   let cursor: string | undefined

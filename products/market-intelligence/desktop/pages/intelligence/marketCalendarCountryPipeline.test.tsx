@@ -12,7 +12,7 @@ import { dayGroups } from './macroIndicatorDrawerModel'
 /**
  * 从「路由读回来的那一页」到「行上的国家」，整条链一次走完。
  *
- * 为什么要这一条：之前所有国家判据都把 `readMarketEvents` 或 `MarketCalendarEvent` **桩掉**了，
+ * 为什么要这一条：之前所有国家判据都把 `readCalendarMonth` 或 `MarketCalendarEvent` **桩掉**了，
  * 于是链路中段（`marketEventOf` 的字段白名单、`dayGroups` 造行）掉一个字段也全绿——
  * 用户屏幕上一个国家都没有，用例却是 199 例通过。这一条从**页事件的形状**开始，不用桩。
  *

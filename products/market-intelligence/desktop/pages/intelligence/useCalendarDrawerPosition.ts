@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 import { defaultDayFor, type CalendarDrawerRequest } from './macroIndicatorDrawerModel'
+import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { useCalendarMonthReleases, type CalendarMonthReleases } from './useCalendarMonthReleases'
 
 /**
@@ -43,9 +44,9 @@ export function useCalendarDrawerPosition(input: Readonly<{
   /** 按月读的快照时刻，必须是稳定值（每次渲染都变会让它无限重读）。 */
   asOf: string
   locale: 'zh-CN' | 'en-US'
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
 }>): CalendarDrawerPosition {
-  const { open, openTarget, today, timeZone, asOf, locale, readMarketEvents } = input
+  const { open, openTarget, today, timeZone, asOf, locale, readCalendarMonth } = input
   // 月份与选中日是两个真状态：换月清掉选中的那一天，由「今天 / 最近一个有事件的日子」重新定。
   const [month, setMonth] = useState(today.slice(0, 7))
   const [pickedDay, setPickedDay] = useState<Readonly<{ month: string; day: string }> | undefined>(undefined)
@@ -55,7 +56,7 @@ export function useCalendarDrawerPosition(input: Readonly<{
     month,
     asOf,
     locale,
-    ...(readMarketEvents === undefined ? {} : { readMarketEvents })
+    ...(readCalendarMonth === undefined ? {} : { readCalendarMonth })
   })
   const eventDays = useMemo(() => new Set(releases.events.map((event) => calendarDisplayDate(event.scheduledAt, timeZone))),
     [releases.events, timeZone])

@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { cloneElement, useCallback, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Segmented } from '@platform/ui/components/segmented'
@@ -48,7 +49,7 @@ export type MarketAnalysisDashboardInjection = Readonly<{
   /** The calendar's event-title vocabulary, read once by the page entry and rendered by the panel. */
   calendarEventTitles?: Record<string, string>
   /** The 0xRouter month's events, read once here because the page owns the locale and the client. */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
 }>
@@ -76,7 +77,7 @@ const workspaceSwitchKeys = Object.freeze({
   agent: 'pages.intelligence.portal.analysisWorkspace.title'
 })
 
-export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
+export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readCalendarMonth, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
   /** 舆情那颗设置入口：打开配置抽屉、落在「采集与数据」的**舆情组**（未传时舆情仍用本地弹框）。 */
   onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   /**
@@ -96,7 +97,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
    * provider route's paging or its language: the chart's event lines read both calendars through it.
    * The event drawer takes the same reader's full answer, sources included, from the page directly.
    */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /**
    * The page's own event-detail surface, injected rather than imported: the cross-asset feature must
    * never learn the calendar's text contract, and the page is the one layer that may know both.
@@ -231,7 +232,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
           policySlot: policyHost,
           onSelectChartEvent: selectChartEvent,
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
-          ...(readMarketEvents ? { readMarketEvents } : {})
+          ...(readCalendarMonth ? { readCalendarMonth } : {})
         })}
         {onOpenAnalysisSettings === undefined
           ? <MarketAnalysisSettingsDialog

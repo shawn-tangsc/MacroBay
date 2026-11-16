@@ -50,7 +50,7 @@ it('opens the full event table from the calendar header button', async () => {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
       <MacroIndicatorDrawer locale="zh-CN" now="2026-11-12T04:00:00.000Z" onClose={() => undefined}
         onRetryPolicy={() => undefined} policyText={productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath}
-        readMarketEvents={async () => []} />
+        readCalendarMonth={async () => ({ events: [], sources: [] })} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
   const trigger = document.body.querySelector('[aria-label="打开全部事件表"]')

@@ -6,7 +6,7 @@ import { clockDayGap } from './clockCardModel'
  * 时钟卡的挂点输入：**日程给日期、卡片读数给值**。
  *
  * 两样缺一不可，而且各有唯一来源：
- * - **日期与周期 P 只从日程读**（`readMarketEvents` 那条按月读）。P = 上一期与再上一期的间隔，
+ * - **日期与周期 P 只从日程读**（`readCalendarMonth` 那条按月读）。P = 上一期与再上一期的间隔，
  *   这是「同一指标相邻两次发布」的唯一算法；从期次月份推 P 是猜，不做。
  * - **值只从卡片读数读**（`macroIndicatorClient.read(asOf)` 的 facts）——**与抽屉同一次读数**，
  *   两处各读一遍迟早出现「卡上和抽屉里数字不一样」。

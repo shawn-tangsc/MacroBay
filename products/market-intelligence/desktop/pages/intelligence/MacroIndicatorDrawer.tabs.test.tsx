@@ -73,7 +73,7 @@ async function mount(): Promise<HTMLElement> {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
       <MacroIndicatorDrawer locale="zh-CN" now="2026-11-12T04:00:00.000Z" onClose={() => undefined}
         onRetryPolicy={() => undefined} policyText={policyText}
-        readMarketEvents={async () => [event('a', 'CPI 年率'), event('b', '零售销售')]} />
+        readCalendarMonth={async () => ({ events: [event('a', 'CPI 年率'), event('b', '零售销售')], sources: [] })} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
   // 抽屉是 portal 到 body 的（平台 Drawer 的行为）：查 host 会什么也查不到。
