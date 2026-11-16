@@ -11,7 +11,7 @@ import {
   isVisibleEtfPublicSnapshot,
   type EtfPublicAssetSnapshot
 } from '../../../../contracts/intelligenceQueryContracts'
-import { recentFlowDates, type FlowChartRow } from './capitalFlowRows'
+import { previousFlowDate, recentFlowDates, type FlowChartRow } from './capitalFlowRows'
 
 export const dashboardCapitalConditionsPresentationPolicy = {
   usd: {
@@ -317,7 +317,13 @@ function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[
   // **横轴是日历，不是「有数据的那几天」**（用户 2026-11-16：「不管这一天有没有数据，轴上都要
   // 推进到这一天」）：从 asOf 那天往前取 count 天，每天一格；三條线哪天有值就带哪条，缺的留空
   // （原来的写法只保留三条同一天都有值的日子，ETF 一停更整张图就停在那天）。
-  const rows = recentFlowDates(asOf, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows).map((tradingDate) => ({
+  const today = asOf.slice(0, 10)
+  // 用户 2026-11-16：「如果当天无数据就不显示，仅当天，但是前一天前无论有没有数据都要展示」。
+  // 所以窗口结束日 = 今天（今天真有数）或昨天（今天没数就不画今天这一格）；**窗口长度固定**，
+  // 结束日往前退一天，历史那几天一格不少——缺数的那天是缺口，不是被删掉、也不是 0。
+  const hasToday = funds.has(today) || btc.has(today) || eth.has(today)
+  const windowEnd = hasToday ? today : previousFlowDate(today)
+  const rows = recentFlowDates(windowEnd, dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows).map((tradingDate) => ({
     tradingDate,
     ...(funds.has(tradingDate) ? { funds: funds.get(tradingDate) as number } : {}),
     ...(btc.has(tradingDate) ? { btc: btc.get(tradingDate) as number } : {}),

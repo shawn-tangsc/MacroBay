@@ -24,6 +24,7 @@ export const FLOW_SERIES = ['funds', 'btc', 'eth'] as const
  * `tradingDate` 就是源自己的 UTC 日，用读者时区去推会整体错一天。
  */
 export function recentFlowDates(asOf: string, count: number): readonly string[] {
+  // 接受 ISO 瞬时或日串：只取前 10 位，别的部分不参与（日期一律是源的 UTC 日）。
   const day = asOf.slice(0, 10)
   const anchor = Date.parse(`${day}T00:00:00.000Z`)
   if (!Number.isFinite(anchor) || count <= 0) return []
@@ -40,4 +41,9 @@ export function recentFlowDates(asOf: string, count: number): readonly string[] 
  */
 export function shortFlowDate(tradingDate: string): string {
   return tradingDate.length > 5 ? tradingDate.slice(-5) : tradingDate
+}
+
+/** 前一天的 UTC 日串：`2026-11-16` → `2026-11-15`。 */
+export function previousFlowDate(day: string): string {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10)
 }
