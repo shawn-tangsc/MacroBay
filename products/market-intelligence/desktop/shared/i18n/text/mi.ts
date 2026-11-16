@@ -13,6 +13,7 @@ export const miText = {
     readResult: '读取结果',
     menuUnreadable: '暂时读不到这条解读',
     unreachable: '没送到分析服务，可再试一次',
+    runFailed: '这次解读跑完了但没生成出结果，可再试一次',
     retry: '再试一次',
     meta: '生成于 {time} · 依据：该条新闻 + 解读时的数据（{count} 条证据）',
     audit: {
@@ -45,6 +46,7 @@ export const miText = {
     readResult: 'Read result',
     menuUnreadable: 'This interpretation cannot be read right now',
     unreachable: 'The request did not reach the analysis service; try again',
+    runFailed: 'The interpretation ran but produced no result; try again',
     retry: 'Try again',
     meta: 'Generated {time} · Based on: this story + the data available when it was generated ({count} pieces of evidence)',
     audit: {

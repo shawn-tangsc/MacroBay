@@ -5,6 +5,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { readInterpretationSummary, type NewsInterpretationReadView } from '../../../shared/ipc/newsInterpretationClient'
+import { newsInterpretationResultCopy } from '../../../shared/i18n/newsInterpretationResultCopy'
 import { AiInterpretationSection } from '../../shared/AiInterpretationSection'
 
 /**
@@ -51,7 +52,19 @@ export function NewsSentimentInterpretation(props: Readonly<{
       state="failed" />
   }
   if (props.submitting) return <AiInterpretationSection onReadResult={props.onReadResult} state="pending" />
-  if (view === undefined || view.state === 'none') return null
+  if (view === undefined) return null
+  if (view.state === 'none') {
+    // 跑过但没结果（`lastRun`）：必须显示失败态 + 再试一次，不能退回「从没点过」。
+    if (view.lastRun === undefined) return null
+    const mapped = newsInterpretationResultCopy({ ...(view.lastRun.failureCode === null ? {} : { failureCode: view.lastRun.failureCode }) })
+    const sentence = mapped.sentenceKey === newsInterpretationResultCopy({}).sentenceKey
+      ? copy.runFailed
+      : resolveText(mapped.sentenceKey)
+    return <AiInterpretationSection
+      failure={{ sentence: sentence || copy.runFailed, canRetry: true }}
+      onRetry={props.onRetrySubmit}
+      state="failed" />
+  }
   if (view.state === 'in-flight') return <AiInterpretationSection onReadResult={props.onReadResult} state="pending" />
   if (view.state === 'unreadable') {
     return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetryRead} state="failed" />

@@ -1095,6 +1095,29 @@ describe('AI 解读：点击触发（写端点）只把结果落到右栏', () =
     expect(invoke.mock.calls.filter((call) => call[1] === REQUEST).length).toBe(before + 1)
   })
 
+  it('an asynchronously failed run lands in the failed state, never stays "generating"', async () => {
+    // 现场：运行排上后失败、没有摘要 → 只读接口回 none + lastRun。界面必须显示失败 + 再试一次。
+    const lastRunRead = {
+      itemId: 'item-a', state: 'none' as const, currentEvidenceFingerprint: 'fp-1',
+      lastRun: { runId: 'run-9', status: 'invalid-output', failureCode: 'missing-trigger-focus', finishedAt: '2026-11-16T13:28:22.000Z' }
+    }
+    const { invoke } = stub({ read: lastRunRead })
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    await act(async () => {})
+
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section?.getAttribute('data-state')).toBe('failed')
+    expect(section?.textContent?.trim()).not.toBe('')
+    const retry = section.querySelector('button.text-action') as HTMLButtonElement
+    expect(retry).not.toBeNull()
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+    // 「再试一次」= 重新排一次解读（失败不算已有解读）。
+    await act(async () => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(1)
+  })
+
   it('a read failure retry only re-reads: it never queues an analysis', async () => {
     const invoke = vi.fn(async (_product: string, method: string) => {
       if (method === READ) throw new Error('boom')
