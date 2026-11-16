@@ -91,6 +91,34 @@ describe('ETF current-state refresh service', () => {
     })
   })
 
+  it('records when each trading day first landed, and keeps that time while the refresh time moves', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const daysOf = (extra: string | undefined) => ['2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', ...(extra ? [extra] : [])]
+    const rowsFor = (asset: 'BTC' | 'ETH', days: readonly string[]) => days.map((tradingDate, index) => ({
+      asset, date: Date.parse(`${tradingDate}T00:00:00.000Z`), change: index + 1,
+      changeUsd: asset === 'BTC' ? index + 1 : -(index + 1)
+    }))
+    const round = (fetchedAt: string, days: readonly string[]) => createEtfCurrentStateRefreshService({
+      resolveFactSource: resolvedSource,
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow: async () => ({ state: 'available' as const, btc: rowsFor('BTC', days), eth: rowsFor('ETH', days) }),
+      store,
+      now: () => fetchedAt
+    })
+
+    await expect(round('2026-08-26T12:00:00.000Z', daysOf(undefined)).refresh()).resolves.toEqual({ state: 'updated' })
+    await expect(round('2026-08-28T12:00:00.000Z', daysOf('2026-08-24')).refresh()).resolves.toEqual({ state: 'updated' })
+
+    const read = await store.read()
+    const byDate = new Map(read!.snapshot!.window.btc.map((flow) => [flow.tradingDate, flow]))
+    // 老日子保留第一次进库的时刻（不是这一轮的 fetchedAt），新来的那天才记成这一轮。
+    expect(byDate.get('2026-08-17')!.firstSeenAt).toBe('2026-08-26T12:00:00.000Z')
+    expect(byDate.get('2026-08-21')!.firstSeenAt).toBe('2026-08-26T12:00:00.000Z')
+    expect(byDate.get('2026-08-24')!.firstSeenAt).toBe('2026-08-28T12:00:00.000Z')
+    expect(byDate.get('2026-08-17')!.fetchedAt).toBe('2026-08-28T12:00:00.000Z')
+  })
+
   it('stops when the fact has no source, and refuses on a conflict', async () => {
     const requestWindow = vi.fn()
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })

@@ -3,7 +3,7 @@ import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
 import { reportSettledEtfRevisions } from './etfSettledRevision'
-import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, etfWindowSourceIdFor, type EtfAsset, type EtfDailyFlow, type EtfFlowSourceId } from './etfCurrentStateWindow'
+import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, etfWindowSourceIdFor, type EtfAsset, type EtfCurrentStateWindow, type EtfDailyFlow, type EtfFlowSourceId } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
 export const etfCurrentStateRefreshAdmissionPolicy = Object.freeze({
@@ -73,8 +73,6 @@ export function createEtfCurrentStateRefreshService(deps: {
         const btc = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.btc, requested.btc) : requested.btc
         const eth = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.eth, requested.eth) : requested.eth
         if (!btc || !eth) return unavailable()
-        const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate, sourceId })
-        if (!built) return unavailable()
         // 写之前先留一份旧窗口**和它被读到的时刻**：只有这两样一起，才知道「上次读到它时
         // 已经定稿了吗」——只看当前这一读，会把补报完成当成判后又变。
         const priorSnapshot = deps.store.read
@@ -82,6 +80,10 @@ export function createEtfCurrentStateRefreshService(deps: {
           : null
         const priorWindow = priorSnapshot?.snapshot?.window
         const priorAsOf = priorSnapshot?.snapshot?.verifiedAt
+        // 每一行的「第一次进库」从旧窗口继承；旧窗口还没有这一天，才是这一轮进来的（用户 2026-11-17）。
+        const firstSeen = priorFirstSeenAt(priorWindow)
+        const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate, sourceId, firstSeen })
+        if (!built) return unavailable()
         // `replace` is async: the write's own verdict decides whether this round produced news.
         const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
@@ -123,6 +125,19 @@ async function enabled(read: () => Promise<boolean>): Promise<boolean> {
   try { return await read() } catch { return false }
 }
 
+/**
+ * 「这一天的读数几点第一次进库」：按 `资产:交易日` 建索引，从上一份窗口继承。
+ *
+ * `fetchedAt` 每轮刷新都变，回答不了这个问题——用户问「16 号怎么还没来」时要的是这一列。
+ */
+function priorFirstSeenAt(window: EtfCurrentStateWindow | undefined): ReadonlyMap<string, string> {
+  const seen = new Map<string, string>()
+  for (const flow of window ? [...window.btc, ...window.eth] : []) {
+    if (flow.firstSeenAt) seen.set(`${flow.asset}:${flow.tradingDate}`, flow.firstSeenAt)
+  }
+  return seen
+}
+
 function buildWindow(input: Readonly<{
   btc: readonly EtfFlowHistoryRow[]
   eth: readonly EtfFlowHistoryRow[]
@@ -130,9 +145,10 @@ function buildWindow(input: Readonly<{
   currentUtcDate: string
   /** 这一窗的数据来自哪个源：行上如实写它，别把备源的数记成主源的。 */
   sourceId: EtfFlowSourceId
+  firstSeen: ReadonlyMap<string, string>
 }>) {
-  const btc = toFlows(input.btc, 'BTC', input.fetchedAt, input.currentUtcDate, input.sourceId)
-  const eth = toFlows(input.eth, 'ETH', input.fetchedAt, input.currentUtcDate, input.sourceId)
+  const btc = toFlows(input.btc, 'BTC', input.fetchedAt, input.currentUtcDate, input.sourceId, input.firstSeen)
+  const eth = toFlows(input.eth, 'ETH', input.fetchedAt, input.currentUtcDate, input.sourceId, input.firstSeen)
   if (!btc || !eth) return undefined
   const completeDates = btc.map((flow) => flow.tradingDate)
     .filter((date) => eth.some((flow) => flow.tradingDate === date))
@@ -150,7 +166,7 @@ function buildWindow(input: Readonly<{
   return Object.freeze({ ...built.window, ...(revision ? { revision } : {}) })
 }
 
-function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string, sourceId: EtfFlowSourceId): readonly EtfDailyFlow[] | undefined {
+function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string, sourceId: EtfFlowSourceId, firstSeen: ReadonlyMap<string, string>): readonly EtfDailyFlow[] | undefined {
   const dates = new Set<string>()
   const flows: EtfDailyFlow[] = []
   for (const row of rows) {
@@ -161,6 +177,8 @@ function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt:
     flows.push(Object.freeze({
       asset, tradingDate, netFlowUsd: row.changeUsd,
       observedAt: `${tradingDate}T00:00:00.000Z`, fetchedAt,
+      // 见过的日子保留它原来的第一次进库时刻；新日子就是这一轮。
+      firstSeenAt: firstSeen.get(`${asset}:${tradingDate}`) ?? fetchedAt,
       source: (row.source ?? sourceId) as EtfFlowSourceId,
       ...(row.updateTime ? { sourceRevision: row.updateTime } : {})
     }))

@@ -24,6 +24,12 @@ export type EtfDailyFlow = Readonly<{
   fetchedAt: string
   source: EtfFlowSourceId
   sourceRevision?: string
+  /**
+   * 这个交易日的读数**第一次进库**的时刻（UTC）。`fetchedAt` 每轮刷新都会变，回答不了
+   * 「这条数据几点到的」；读者问「为什么还没有 16 号」时，要的就是这一列（用户 2026-11-17）。
+   * 老窗口没有这一列（写入前就存在），所以校验上它是可选的：没有就是「不知道」，不凭空补。
+   */
+  firstSeenAt?: string
 }>
 
 export type EtfCurrentStateWindow = Readonly<{
@@ -91,9 +97,10 @@ function validateAssetRows(rows: readonly EtfDailyFlow[], asset: EtfAsset, compl
 }
 
 function isFlow(value: unknown, asset: EtfAsset): value is EtfDailyFlow {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['asset', 'tradingDate', 'netFlowUsd', 'observedAt', 'fetchedAt', 'source', 'sourceRevision'])) return false
+  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['asset', 'tradingDate', 'netFlowUsd', 'observedAt', 'fetchedAt', 'source', 'sourceRevision', 'firstSeenAt'])) return false
   return value.asset === asset && isTradingDate(value.tradingDate) && isUsdFlow(value.netFlowUsd) &&
     isCanonicalUtcMillis(value.observedAt) && isCanonicalUtcMillis(value.fetchedAt) &&
+    (value.firstSeenAt === undefined || isCanonicalUtcMillis(value.firstSeenAt)) &&
     (etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(value.source as string) && (value.sourceRevision === undefined || isSafeRevision(value.sourceRevision))
 }
 
