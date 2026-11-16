@@ -228,7 +228,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     unavailable: text.mkDay.mappingUnavailable,
     columns: text.mkDay.mappingColumns, tiers: text.mkDay.mappingTiers, unmappedColumns: text.mkDay.mappingUnmappedColumns,
     tabMapped: text.mkDay.mappingTabMapped, tabUnmapped: text.mkDay.mappingTabUnmapped,
-    tabsAria: text.mkDay.mappingTabsAria
+    tabsAria: text.mkDay.mappingTabsAria,
+    exportLabel: text.mkDay.mappingExport, exportEmpty: text.mkDay.mappingExportEmpty
   }), [text])
   /** 图标按钮的读屏名：**真表查找**（键 → 文案），不在解析器里写比较。 */
   const catalogCopy = useMemo<Readonly<Record<string, string>>>(

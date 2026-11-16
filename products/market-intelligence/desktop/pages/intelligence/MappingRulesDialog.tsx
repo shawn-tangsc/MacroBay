@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Input, Pagination, Table } from 'antd'
+import { Button, Input, Pagination, Table } from 'antd'
 
 import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
@@ -9,6 +9,8 @@ import type { ChoiceItem } from '@platform/ui/components/choice/choiceItem'
 import type {
   MappingRuleRow, MappingRulesRead, UnmappedSourceIdRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import { buildXlsx } from '@platform/files/export/xlsx'
+import { exportFileName, mappedExportRows, sampleText, unmappedExportRows } from './mappingRulesExport'
 
 /**
  * 「映射规则」弹框：**两个页签**（已映射 / 未映射），筛选框在页签上方、两段共用。
@@ -36,6 +38,8 @@ export type MappingRulesText = Readonly<{
   tabMapped: string
   tabUnmapped: string
   tabsAria: string
+  exportLabel: string
+  exportEmpty: string
 }>
 
 const PAGE_SIZES = [20, 50, 100] as const
@@ -114,7 +118,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
       columns={[
         { title: text.unmappedColumns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap' },
-        { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel', render: (value: string | null) => value ?? '' }
+        { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel', render: (_value: string | null, row) => sampleText(row) }
       ]} />
 
   const body = view === undefined
@@ -147,6 +151,17 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
       <div className="mi-catalog__table">{body}</div>
       {/* 分页条固定在弹框底部：表格区是唯一滚动容器，它不跟着行滚。 */}
       <div className="mi-catalog__footer">
+        <Button size="small" className="mi-catalog__export" data-catalog-export
+          disabled={view?.state !== 'available' || (tab === 'mapped' ? mapped.length : unmapped.length) === 0}
+          onClick={() => {
+            // 导出的是**当前页签筛选结果的全量**，不是当前页——「导出」看起来像全量就不能只给一页。
+            const rows = tab === 'mapped'
+              ? mappedExportRows(mapped, { columns: text.columns, tiers: text.tiers })
+              : unmappedExportRows(unmapped, { columns: text.unmappedColumns })
+            const name = exportFileName(`${text.title}-${tab === 'mapped' ? text.tabMapped : text.tabUnmapped}`
+              .replace(/\{\w+\}/gu, '').trim(), new Date())
+            void window.platform?.app?.saveFile?.(name, buildXlsx({ name: text.title, rows }))
+          }}>{text.exportLabel}</Button>
         <Pager total={activeTotal} page={tab === 'mapped' ? mappedPage : unmappedPage} pageSize={pageSize}
           onPage={(next) => { if (tab === 'mapped') setMappedPage(next); else setUnmappedPage(next) }}
           onSize={(size) => { setPageSize(size); setMappedPage(1); setUnmappedPage(1) }} />
