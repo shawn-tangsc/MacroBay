@@ -243,6 +243,27 @@ describe('the licensed source\'s one-time deep backfill', () => {
     store.close()
   })
 
+  it('clears the symbol-level failure note on the tick where both instruments answered again', async () => {
+    // 注记只写不擦的后果是真实的（用户 2026-11-16）：套餐恢复以后，源状态仍然会把那只品种报成
+    // "失败"，因为旧值从来没人清。空串就是"这一轮没有品种失败"，不是缺失。
+    const store = withDeepBackfillDone(openStore())
+    const refusal = {
+      statusCode: 400, message: 'One or more validation errors occurred.',
+      errors: [{ propertyName: '', errorCode: 'ERR_0008_SYMBOL_NOT_SUPPORTED', errorMessage: 'Symbol is not supported' }]
+    }
+    const refusing: RealMarketApiTransport = async url => requestedSymbol(url) === 'XAUUSD'
+      ? { state: 'ok', status: 400, body: refusal }
+      : { state: 'ok', status: 200, body: instrumentBody(url) }
+    await collectorFor(store, refusing).run(at(0))
+    expect(store.readNote(realMarketApiPolicy.notes.lastSymbolFailures)).toBe('XAUUSD:symbol-not-supported')
+
+    const { transport } = transportFor()
+    const result = await collectorFor(store, transport).run(at(0) + realMarketApiPolicy.intervalMs)
+    expect(result).not.toHaveProperty('failures')
+    expect(store.readNote(realMarketApiPolicy.notes.lastSymbolFailures)).toBe('')
+    store.close()
+  })
+
   it('collects on its own five-minute cadence and no sooner, measured from the last successful tick', async () => {
     const store = withDeepBackfillDone(openStore())
     const { transport, urls } = transportFor()

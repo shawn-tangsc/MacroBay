@@ -43,6 +43,21 @@ export function realMarketApiFailureCode(httpStatus: number): RealMarketApiFailu
 }
 
 /**
+ * The provider refusing a symbol this plan does not carry: HTTP 400 with
+ * `errors[].errorCode = 'ERR_0008_SYMBOL_NOT_SUPPORTED'`.
+ *
+ * It is a fact about the subscription, not about this tick — retrying every five minutes cannot fix
+ * it. Folding it into `response-invalid` is what let a lapsed plan look like a malformed response:
+ * the dollar index was refused 288 times a day while the dashboard still printed Friday's level.
+ */
+function symbolNotSupported(payload: unknown): boolean {
+  if (!plainRecord(payload)) return false
+  const errors = (payload as { errors?: unknown }).errors
+  return Array.isArray(errors)
+    && errors.some(entry => plainRecord(entry) && entry.errorCode === 'ERR_0008_SYMBOL_NOT_SUPPORTED')
+}
+
+/**
  * A price response is exactly the shape the provider published, or it is not a price at all.
  *
  * `symbolCode` is a parameter because two instruments already ride this one parser — the licensed
@@ -54,6 +69,8 @@ export function parseRealMarketApiPrice(
   httpStatus = 200,
   symbolCode: string = realMarketApiPolicy.symbolCode
 ): RealMarketApiPointsResult {
+  // A symbol the plan does not carry is its own fact; every other error status is a tick-level one.
+  if (symbolNotSupported(payload)) return Object.freeze({ state: 'unavailable' as const, failureCode: 'symbol-not-supported' as const })
   // An error status is a failure whatever the body happens to look like: a page that carries a price
   // under a 401 is the provider telling us the request was refused, not answering it.
   if (httpStatus >= 400) return unavailable(httpStatus)
@@ -76,6 +93,7 @@ export function parseRealMarketApiCandles(
   httpStatus = 200,
   symbolCode: string = realMarketApiPolicy.symbolCode
 ): RealMarketApiPointsResult {
+  if (symbolNotSupported(payload)) return Object.freeze({ state: 'unavailable' as const, failureCode: 'symbol-not-supported' as const })
   if (httpStatus >= 400) return unavailable(httpStatus)
   if (!plainRecord(payload)) return unavailable(httpStatus)
   const rows = (payload as { data?: unknown }).data
@@ -123,6 +141,7 @@ export function parseRealMarketApiBars(
   httpStatus = 200,
   symbolCode: string = realMarketApiPolicy.symbolCode
 ): RealMarketApiBarsResult {
+  if (symbolNotSupported(payload)) return Object.freeze({ state: 'unavailable' as const, failureCode: 'symbol-not-supported' as const })
   if (httpStatus >= 400) return barsUnavailable(httpStatus)
   if (!plainRecord(payload)) return barsUnavailable(httpStatus)
   const rows = (payload as { data?: unknown }).data
