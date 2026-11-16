@@ -96,6 +96,19 @@ export const marketCalendarPublicPolicy = Object.freeze({
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)
+/**
+ * **「可存国家码」的唯一谓词**（用户 2026-11-17）：形状 + 禁用码，写入侧与读取侧都调它。
+ *
+ * 之前形状正则有**三份**（合同常量、storage validation、storage contracts），读写两侧还各有一套：
+ * 一旦上游给出 `ZZ`，数据能写进标准表、读侧却整页判非法 → 读者看到「读不到」。
+ * 一个规则一个谓词，这类分叉就不可能发生——grep 表只需要证明调用点。
+ */
+export function isStorableCountryCode(value: unknown): value is string {
+  return typeof value === 'string'
+    && marketCalendarPublicPolicy.countryCodePattern.test(value)
+    && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value)
+}
+
 export type MarketCalendarScope = Readonly<{ month: string; locale: 'zh' | 'en' }>
 export type MarketCalendarQuery = MarketCalendarScope & Readonly<{ asOf: string; cursor?: string }>
 export type MarketCalendarValue = Readonly<{ displayValue: string }> | null
@@ -320,7 +333,7 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
     (!Object.hasOwn(value, 'seriesId') || (typeof value.seriesId === 'string' && value.seriesId.length > 0 && value.seriesId.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&
     (!Object.hasOwn(value, 'observationKey') || (typeof value.observationKey === 'string' && value.observationKey.length > 0 && value.observationKey.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&
     typeof value.eventKey === 'string' && marketCalendarPublicPolicy.opaquePattern.test(value.eventKey) && text(value.title) &&
-    (value.countryCode === null || typeof value.countryCode === 'string' && marketCalendarPublicPolicy.countryCodePattern.test(value.countryCode) && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value.countryCode)) &&
+    (value.countryCode === null || isStorableCountryCode(value.countryCode)) &&
     (!Object.hasOwn(value, 'countryName') || text(value.countryName)) &&
     marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
     (!Object.hasOwn(value, 'importance') || marketCalendarPublicPolicy.importance.includes(value.importance as never)) &&

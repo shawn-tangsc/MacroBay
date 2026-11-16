@@ -1,3 +1,4 @@
+import { isStorableCountryCode } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { createHash } from 'node:crypto'
 import { zeroXRouterCalendarTransportPolicy } from '../../application/zeroXRouterSourcePolicy'
 import {
@@ -153,7 +154,7 @@ function normalizedDraft(value: unknown, scope: ReturnType<typeof marketScope>):
     // 国家码按**形状**校验，不按白名单值：解析阶段已经把「认得出来的」归一（US/DE/JP/EMU/GB/CA），
     // 认不出的按原样保留（2–3 位大写字母），它的存在就是为了能进库、能被看见、能被补映射。
     // 这里再按白名单拒一次，等于把「不丢未知码」这句在下一层又推翻——2026-11-17 整批 storage-unavailable 就是这个。
-    (draft.countryCode !== undefined && !(typeof draft.countryCode === 'string' && /^[A-Z]{2,3}$/.test(draft.countryCode)))) reject('invalid-input')
+    (draft.countryCode !== undefined && !isStorableCountryCode(draft.countryCode))) reject('invalid-input')
   for (const key of ['countryName', 'indicatorId'] as const) {
     if (draft[key] !== undefined && !(key === 'indicatorId' ? isCanonicalCalendarIdentity(draft[key]) : isCanonicalCalendarText(draft[key]))) reject('invalid-input')
   }

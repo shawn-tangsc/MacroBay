@@ -1,3 +1,4 @@
+import { isStorableCountryCode } from '../../../../contracts/macro/marketCalendarQueryContracts'
 // Internal parser output only. These drafts do not establish stable event identity.
 export type ZeroXRouterCalendarLocale = 'zh' | 'en'
 export type ZeroXRouterCalendarDescriptor =
@@ -158,7 +159,8 @@ export function calendarEventDraft(
     ? undefined
     : Object.hasOwn(policy.countryCodes, rawCountryCode)
       ? policy.countryCodes[rawCountryCode as keyof typeof policy.countryCodes]
-      : /^[A-Z]{2,3}$/.test(rawCountryCode) ? rawCountryCode : undefined
+      // 形状 + 禁用码走同一个谓词：写入侧接受的值，读取侧必须全部能读（`ZZ` 是占位，按无国家处理）。
+      : isStorableCountryCode(rawCountryCode) ? rawCountryCode : undefined
   // Candidate row identity only: never use this unverified key for revision chains or locale merge.
   const sourceEventId = JSON.stringify([calendarId, row.id])
   return {
