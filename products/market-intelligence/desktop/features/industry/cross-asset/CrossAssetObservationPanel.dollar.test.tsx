@@ -112,11 +112,15 @@ describe('the dollar row on the market-status table', () => {
     expect(age?.closest('button')).toBeNull()
   })
 
-  it('names a plan refusal in the same slot instead of leaving a bare old level', async () => {
-    // 供应商不再提供 DXY：读数还是它最后一次给的值，句子换成带原因的整句（不是两个数、两句话）。
+  it('covers the whole row when the provider no longer carries the instrument', async () => {
+    // 用户 2026-11-16：源不能用就像关格一样整行挡住——不留旧水平、不留日期、不留说明句子。
     const refused = { ...realReading(asOfMs - 48 * 60 * 60_000), sourceFailure: 'symbol-not-supported' as const }
     const host = await render(snapshotOf([refused]))
-    expect(host.querySelector('[data-reading-age="dxy"]')?.textContent)
-      .toBe('偏旧 · 截至 2026-09-12 12:00:00 GMT · 套餐不提供')
+    const row = dollarRow(host)
+    expect(row?.getAttribute('data-source-state')).toBe('unreadable')
+    expect(row?.textContent).toContain(text.sourceRefused)
+    expect(row?.querySelector('[data-asset-price]')).toBeNull()
+    expect(row?.querySelectorAll('[data-asset-return]')).toHaveLength(0)
+    expect(row?.querySelector('[data-reading-age]')).toBeNull()
   })
 })

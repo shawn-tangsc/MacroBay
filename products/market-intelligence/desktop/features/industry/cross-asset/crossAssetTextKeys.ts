@@ -28,9 +28,10 @@ export const crossAssetTextKeys = Object.freeze({
   hintCorrelations: 'pages.intelligence.portal.dashboard.crossAsset.hintCorrelations',
   /** 本段没有可比数据的线：原因句，图标题 ⓘ 的最后一行。 */
   noComparableDataReason: 'pages.intelligence.portal.dashboard.crossAsset.lineNoComparableDataReason',
-  /** 读数比阈值旧时挂在行名旁的那句（与 LiveBadge 同槽）；被拒时用整句的另一版。 */
+  /** 读数比阈值旧时挂在行名旁的那句（与 LiveBadge 同槽）。 */
   staleAsOf: 'pages.intelligence.portal.dashboard.crossAsset.staleAsOf',
-  staleAsOfPlanNotServed: 'pages.intelligence.portal.dashboard.crossAsset.staleAsOfPlanNotServed',
+  /** 供应商永久不提供这个品种：整行遮住，只留这一句状态。 */
+  sourceRefused: 'pages.intelligence.portal.dashboard.crossAsset.sourceRefused',
   /** 品种被供应商永久拒绝时 ⓘ 的那一行（有更多只被拒时用 `…More` 合并成一句，仍只占一行）。 */
   planNotServedReason: 'pages.intelligence.portal.dashboard.crossAsset.planNotServedReason',
   planNotServedReasonMore: 'pages.intelligence.portal.dashboard.crossAsset.planNotServedReasonMore',

@@ -481,13 +481,11 @@ mi: miText['zh-CN'],
               lineNoComparableDataReason: '这一段没有凑齐连续的收盘数据，所以没有可比曲线。',
               /* 读数比阈值旧时挂在行名旁边的那句（与 LiveBadge 同槽）；{time} 走统一格式化，调用点不手拼日期。 */
               staleAsOf: '偏旧 · 截至 {time}',
-              /* 供应商永久拒绝这个品种时：同一槽、同一档，换的是整句而不是在调用点拼尾巴。 */
-              staleAsOfPlanNotServed: '偏旧 · 截至 {time} · 套餐不提供',
-              /* ⓘ 里的原因：先给最近收盘最新的一条，其余合并成一句；整块仍受 4 行上限约束。 */
+              /* 供应商永久不提供这个品种：整行遮住只留这一句（用户 2026-11-16：源不能用就像关格一样挡住，少写字）。 */
+              sourceRefused: '来源不再提供',
+              /* 原因收进 ⓘ：先给最近收盘最新的一条，其余合并成一句；整块仍受 4 行上限约束。 */
               planNotServedReason: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}。',
               planNotServedReasonMore: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}；另有 {count} 个品种同样不提供。',
-              /* 图例尾注：被拒那条说清「不提供」，其余条目仍是「本段无数据」。 */
-              lineNoDataPlanRefused: '本段无数据 · 套餐不提供',
               staleRead: '这次刷新没读出来，下面是上一次的读数。',
               // 界面设计 2026-11-09 的条件①：这句要说清「重启之后才生效」与「怎么重启」，不能只写「版本不一致」。
               contractMismatch: '界面与主进程的版本不一致，当前数据无法读取。重启之后才会生效：点下面的「重启应用」，或完全退出观潮再打开——只刷新页面不够。',
@@ -2001,10 +1999,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               lineNoComparableDataReason: 'This stretch has no complete run of closes, so there is no comparable curve.',
               // Sits beside the row name, in the same slot as the live badge; `{time}` is formatted once.
               staleAsOf: 'Out of date · as of {time}',
-              staleAsOfPlanNotServed: 'Out of date · as of {time} · not offered on this plan',
+              sourceRefused: 'no longer offered',
               planNotServedReason: '{name}: the provider does not offer this instrument on the current plan; last close {time}.',
               planNotServedReasonMore: '{name}: the provider does not offer this instrument on the current plan; last close {time}; {count} more are also unavailable.',
-              lineNoDataPlanRefused: 'no data in this stretch · not offered on this plan',
               staleRead: 'The refresh failed; the readings below are from the last successful read.',
               // Condition ①: say that a restart is what makes it take effect, and how to restart.
               contractMismatch: 'The interface and the main process are running different versions, so this data cannot be read. A restart is what makes it take effect: press “Restart the app” below, or quit the app completely and open it again; reloading the page is not enough.',

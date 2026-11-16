@@ -190,7 +190,7 @@ export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
     asOfMs - reading.atMs > dashboardPositioningPresentationPolicy.staleAfterMs
   const age = stale && reading !== undefined
     ? fillLabelParams(
-        resolveText(reading.sourceFailure === undefined ? crossAssetTextKeys.staleAsOf : crossAssetTextKeys.staleAsOfPlanNotServed),
+        resolveText(crossAssetTextKeys.staleAsOf),
         { time: formatTime(new Date(reading.atMs).toISOString(), 'second') }
       )
     : undefined

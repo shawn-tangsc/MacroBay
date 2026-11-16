@@ -67,8 +67,6 @@ type Text = {
   noData: string; forming: string
   /** 图例里那条本段没有可比数据的线，名字后面说一句（原因在图标题的 ⓘ 里）。说的是数据，不是渲染。 */
   lineNoComparableData: string
-  /** 同一个位置，但这条线没有数据的原因是供应商永久不提供这个品种（套餐/下架）。 */
-  lineNoDataPlanRefused: string
   /** What a line's tooltip and its accessible name read: the time, then what happened. */
   eventLine: string; eventsCollapsed: string
   /** 同一分钟里官方与 provider 都在、却没能确认是同一条发布时，线上要说明这件事（设计 145 §8 B）。 */
@@ -76,13 +74,8 @@ type Text = {
 }
 const percent = (value: number) => `${value < 0 ? '−' : value > 0 ? '+' : ''}${Math.abs(value) > 0 && Math.abs(value) < .01 ? '<0.01' : Math.abs(value).toFixed(2)}%`
 
-export function CrossAssetReturnChart({ curves, macroCurves, forming, events, eventsCollapsed, onSelectEvent, text, hiddenLines, planRefusedLines }: {
+export function CrossAssetReturnChart({ curves, macroCurves, forming, events, eventsCollapsed, onSelectEvent, text, hiddenLines }: {
   curves: CrossAssetSnapshot['curves']; macroCurves?: CrossAssetSnapshot['macroCurves']
-  /**
-   * 供应商永久不提供的品种对应的线：它们的尾注要写明「套餐不提供」，其余条目仍是「本段无数据」。
-   * 判据在服务侧（读数自带的 `sourceFailure`），这里只负责选句子。
-   */
-  planRefusedLines?: readonly CrossAssetChartLineId[]
   /**
    * 读者在设置里关掉的格：这些线连同图例一起不画（不是画 0、不是灰掉）。
    * 与图内那颗「点图例隐藏」是两件事：那个是读者临时看图，这个是这一格根本不读。
@@ -173,7 +166,7 @@ export function CrossAssetReturnChart({ curves, macroCurves, forming, events, ev
       // 为什么没有仍在图标题那颗 ⓘ 里，不在这里开第二个入口。有数据的照旧是切换按钮。
       withoutComparableData.includes(id)
         ? <span className="mi-cross-asset__legend-no-data" data-asset={id} data-no-comparable-data={id} key={id}>
-            {labelOf(id)}<small>{planRefusedLines?.includes(id) ? text.lineNoDataPlanRefused : text.lineNoComparableData}</small>
+            {labelOf(id)}<small>{text.lineNoComparableData}</small>
           </span>
         : <Button key={id} type="text" size="small" data-asset={id} aria-pressed={visible.includes(id)} disabled={visible.length === 1 && visible.includes(id)}
             onClick={() => setHidden(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])}><i />{labelOf(id)}</Button>

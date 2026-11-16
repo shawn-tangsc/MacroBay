@@ -279,6 +279,24 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         </td>
       </tr>
     }
+    /**
+     * 供应商不再提供这个品种：**整行盖住**，只留一句状态——与「格关了 / 读不到」同一套样式
+     * （用户 2026-11-16：不要说明文字，源不能用就像关格一样挡住；原因只在图标题的 ⓘ 里）。
+     */
+    if (row.id === 'dxy' || row.id === 'gold') {
+      const reading = crossAssetMacroReading(readings, row.id)
+      if (reading?.sourceFailure !== undefined) {
+        return <tr aria-disabled="true" data-source-state="unreadable" data-status-row={row.id}>
+          <th scope="row"><span>{text.assetLabels[row.id]}</span></th>
+          <td className="mi-cross-asset__state-cell" colSpan={1 + crossAssetWindows.length}>
+            <span className="mi-source-state" data-state="unreadable">
+              <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
+              {resolveProductText(crossAssetTextKeys.sourceRefused)}
+            </span>
+          </td>
+        </tr>
+      }
+    }
     return row.state === 'loading'
     ? <LoadingStatusRow key={row.id} id={row.id} text={text} />
     : row.state === 'planned'
@@ -429,8 +447,9 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}
         {(() => {
           return snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
-          hiddenLines={chartLinesHiddenBy([...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {})])}
-          planRefusedLines={planRefusedLines.map(entry => entry.line)}
+          hiddenLines={chartLinesHiddenBy([
+            ...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {}), ...planRefusedLines.map(entry => entry.line)
+          ])}
           events={eventLines.lines} eventsCollapsed={eventLines.collapsed} onSelectEvent={selectEvent}
           text={{ ...text, assets: { ...text.assets, index: indexRowName(snapshot, text) },
             // The macro lines carry the very names the 市场状态 rows beside them carry: one instrument,

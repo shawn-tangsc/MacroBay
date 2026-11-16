@@ -505,9 +505,9 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
     } finally { await page.unmount() }
   })
 
-  it('names the plan in the legend and one line in the title ⓘ when the provider no longer carries the instrument', async () => {
-    // 真机 2026-11-16：套餐掉档，DXY 每天被拒。图例说「套餐不提供」，ⓘ 一行点名并给出最近收盘；
-    // 整块 ⓘ 仍只有 4 行（三条固定说明 + 这一行），所以那一句通用原因不再出现（界面设计 2026-11-16）。
+  it('covers the whole row and drops the line from the legend when the provider no longer carries the instrument', async () => {
+    // 真机 2026-11-16 + 用户当日口径：源不能用就像关格一样**整行挡住**，图上**直接不出现**这条线；
+    // 不要说明文字，原因只在图标题的 ⓘ 里（一行，合计仍 4 行）。
     const nowMs = at('2026-07-19T12:00:00.000Z')
     const refusedAt = at('2026-07-17T21:55:00.000Z')
     const page = await render({
@@ -516,8 +516,17 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
       macroReading: { atMs: refusedAt, sourceFailure: 'symbol-not-supported' }
     })
     try {
-      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')?.textContent)
-        .toBe(`${text.assetLabels.dxy}${text.lineNoDataPlanRefused}`)
+      // 表里：整行只剩一句状态，没有数字、没有窗口、没有那句「偏旧 · 截至 …」。
+      const row = page.host.querySelector('[data-status-row="dxy"]')!
+      expect(row.getAttribute('data-source-state')).toBe('unreadable')
+      expect(row.textContent).toContain(text.sourceRefused)
+      expect(row.querySelector('[data-asset-price]')).toBeNull()
+      expect(row.querySelector('[data-asset-return]')).toBeNull()
+      expect(row.querySelector('[data-reading-age]')).toBeNull()
+      // 图例里这条线根本不出现。
+      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
+      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
+      // 原因只在 ⓘ 里说一次。
       const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
       await act(async () => hint.click())
       expect(document.body.textContent).toContain('供应商当前套餐不提供这个品种，最近一次收盘 2026-07-17 21:55:00 GMT')
