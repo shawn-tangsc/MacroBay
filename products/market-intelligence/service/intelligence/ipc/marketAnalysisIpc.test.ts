@@ -110,9 +110,15 @@ describe('marketAnalysisIpc', () => {
 
   it('supports timeline pagination through the product IPC boundary', async () => {
     const { handlers, repository } = harness()
-    expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: 'mi-eg-1', limit: 1 })).toEqual({
-      schemaVersion: 1, items: [expect.objectContaining({ id: 'mi-tl-1' })], nextCursor: 'opaque-next'
-    })
+    const firstPage = handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: 'mi-eg-1', limit: 1 }) as { schemaVersion: number; items: readonly Record<string, unknown>[]; nextCursor: string | null }
+    expect(firstPage).toMatchObject({ schemaVersion: 1, nextCursor: 'opaque-next' })
+    // 已发布行 + 一次失败运行补出来的行（那次运行没有时间轴行，读者回看时要能看到它失败了）。
+    expect(firstPage.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'mi-tl-1', status: 'published' }),
+      expect.objectContaining({ id: 'run:mi-ar-failed', status: 'failed', analysisRunId: 'mi-ar-failed', safeTitle: '' })
+    ]))
+    // 运行行上的其它字段不进渲染层。
+    expect(JSON.stringify(firstPage.items)).not.toContain('privateBody')
     expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: 'mi-eg-1', cursor: 'opaque-next', limit: 1 })).toMatchObject({ items: [], nextCursor: null })
     expect(repository.listTimeline).toHaveBeenNthCalledWith(2, { eventGroupId: 'mi-eg-1', cursor: 'opaque-next', limit: 1 })
   })
