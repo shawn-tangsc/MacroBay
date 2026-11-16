@@ -499,7 +499,9 @@ describe('market calendar independent observations', () => {
     (input: any) => { input.parseResult.drafts[0].locale = 'en' },
     (input: any) => { input.parseResult.drafts[0].kind = 'financial-event' },
     (input: any) => { input.parseResult.drafts[0].marketFactKey = 'forged' },
-    (input: any) => { input.parseResult.drafts[0].countryCode = 'ZZ' },
+    // 形状像国家码的未知码现在**允许**进库（2026-11-17：`ZZ` 那种保留下来，不再静默丢）；
+    // 这里改成形状就不对的写法，锁的仍然是「畸形输入整批拒、不留半条」。
+    (input: any) => { input.parseResult.drafts[0].countryCode = 'zz' },
     (input: any) => { input.parseResult.drafts[0].consensus.numericValue = 0 },
     (input: any) => { input.parseResult.drafts[0].scheduledAt = 'invalid' }
   ])('rejects mismatched or unsafe input atomically %#', (mutate) => {
