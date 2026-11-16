@@ -31,6 +31,7 @@ const text = {
   columns: mkDay.mappingColumns, tiers: mkDay.mappingTiers, unmappedColumns: mkDay.mappingUnmappedColumns,
   tabMapped: mkDay.mappingTabMapped, tabUnmapped: mkDay.mappingTabUnmapped, tabsAria: mkDay.mappingTabsAria,
   exportLabel: mkDay.mappingExport, exportEmpty: mkDay.mappingExportEmpty,
+  exportAllNote: mkDay.mappingExportAllNote,
   tierFilter: mkDay.mappingTierFilter,
   childSuffix: mkDay.mappingChildSuffix,
   sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped
@@ -199,4 +200,41 @@ it('lists every source id a code answers to, and leaves the cell blank for a cod
   expect(pce.textContent ?? '').not.toContain('·')
   expect(pce.querySelectorAll('td')[0]?.textContent, '源内 id 格应为空').toBe('')
   expect(pce.querySelectorAll('td')[4]?.textContent, '期次规则格应为空').toBe('')
+})
+
+/**
+ * 导出是**全表**（用户 2026-11-17）：「你别管我界面上有没有筛选」。
+ *
+ * 判据用读口给的 `counts` 去比，不写死数字：屏幕上被筛到 1 行，文件里仍必须是 234 / 257 那种全量。
+ */
+it('exports every row regardless of the filter, and says so next to the button', async () => {
+  await mount()
+  // 按钮旁必须有一句话，否则读者会把「全量」当成「导错了」。
+  expect(document.body.querySelector('[data-export-scope]')?.textContent).toContain('全部行')
+
+  const input = document.body.querySelector('.mi-catalog__filters input') as HTMLInputElement
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, 'CPI')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  // 表确实被筛窄了——不然这条用例证明不了「忽略筛选」。
+  expect(dataRows()).toHaveLength(1)
+
+  const button = document.body.querySelector('[data-catalog-export]') as HTMLElement
+  await act(async () => { button.click() })
+  await act(async () => { await Promise.resolve() })
+  // 文件名不带筛选词：同一个按钮同一天不该给出两个名字不同、内容也不同的文件。
+  expect(saved!.name).toMatch(/^映射规则-\d{4}-\d{2}-\d{2}\.xlsx$/u)
+
+  const dir = mkdtempSync(join(tmpdir(), 'mapping-export-all-'))
+  const file = join(dir, 'out.xlsx')
+  writeFileSync(file, saved!.bytes)
+  execFileSync('unzip', ['-o', '-q', file, '-d', join(dir, 'un')], { stdio: 'pipe' })
+  const first = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet1.xml'), 'utf8')
+  const second = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet2.xml'), 'utf8')
+  const rowsOf = (xml: string): number => (xml.match(/<row /gu) ?? []).length
+  // 行数 = 表头 + 读口给的计数（不是「屏幕上那 1 行」）。
+  expect(rowsOf(first)).toBe(1 + view.counts.mapped)
+  expect(rowsOf(second)).toBe(1 + view.counts.unmapped)
 })

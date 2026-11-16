@@ -230,6 +230,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     tabMapped: text.mkDay.mappingTabMapped, tabUnmapped: text.mkDay.mappingTabUnmapped,
     tabsAria: text.mkDay.mappingTabsAria,
     exportLabel: text.mkDay.mappingExport, exportEmpty: text.mkDay.mappingExportEmpty,
+    exportAllNote: text.mkDay.mappingExportAllNote,
     tierFilter: text.mkDay.mappingTierFilter,
     childSuffix: text.mkDay.mappingChildSuffix,
     sheetMapped: text.mkDay.mappingSheetMapped, sheetUnmapped: text.mkDay.mappingSheetUnmapped

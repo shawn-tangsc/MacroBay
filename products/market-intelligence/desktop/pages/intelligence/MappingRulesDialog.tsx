@@ -47,6 +47,8 @@ export type MappingRulesText = Readonly<{
   tabsAria: string
   exportLabel: string
   exportEmpty: string
+  /** 导出按钮旁那句：导出的是全部行，与当前筛选无关。 */
+  exportAllNote: string
   /** 分级筛选器的占位（与「按国家筛选」同一种选择器）；选项复用 `tiers` 四档。 */
   tierFilter: string
   /** 导出文件里的三个工作表名。 */
@@ -106,6 +108,14 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   }, [view, needle, tierFilter])
   const unmapped = useMemo(() => (view?.state === 'available' ? view.unmapped.filter((row) =>
     hit([row.sourceId, row.sampleLabel, row.sampleLabelEn])) : []), [view, needle])
+  /**
+   * **导出的全量**（用户 2026-11-17）：不管筛选框里输的是什么、分级选的是哪一档，导出的都是整张表。
+   *
+   * 读者点「导出」多半是要去核对总量，不是要一份「我刚筛过的那几行」；而文件一旦带上筛选结果，
+   * 同一个按钮在同一天会给出内容不同的文件，事后没人说得清哪份是对的。顺序仍与界面同一把尺子。
+   */
+  const fullMapped = useMemo(() => (view?.state === 'available' ? sortMappedRules(view.mapped) : []), [view])
+  const fullUnmapped = useMemo(() => (view?.state === 'available' ? view.unmapped : []), [view])
   const counts = view?.state === 'available' ? view.counts : { mapped: 0, unmapped: 0, unmappedRows: 0 }
   const items: readonly ChoiceItem[] = [
     { value: 'mapped', labelKey: 'tabMapped', labelParams: { count: String(counts.mapped) } },
@@ -208,17 +218,19 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
       {/* 分页条固定在弹框底部：表格区是唯一滚动容器，它不跟着行滚。 */}
       <div className="mi-catalog__footer">
         <Button size="small" className="mi-catalog__export" data-catalog-export
-          disabled={view?.state !== 'available' || (mapped.length === 0 && unmapped.length === 0)}
+          disabled={view?.state !== 'available' || (counts.mapped === 0 && counts.unmapped === 0)}
           onClick={() => {
-            // 导出的是**每个页签各自筛选结果的全量**，不是当前页、也不看停在哪一页签：
-            // 读者点「导出」要的是一份能拿去核对的完整文件，不是「我眼前这一屏」。
+            // 导出的是**两张表的全量**，与界面上的筛选、页码、当前停在哪一页签都无关。
             const sheets = [
               // 空表也写：只留表头。整张表消失会被读成「没有这类数据」，一张只有表头的空表才是「这栏没有」。
-              { name: text.sheetMapped, rows: mappedExportRows(mapped, { columns: text.columns, tiers: text.tiers }) },
-              { name: text.sheetUnmapped, rows: unmappedExportRows(unmapped, { columns: text.unmappedColumns }) }
+              { name: text.sheetMapped, rows: mappedExportRows(fullMapped, { columns: text.columns, tiers: text.tiers }) },
+              { name: text.sheetUnmapped, rows: unmappedExportRows(fullUnmapped, { columns: text.unmappedColumns }) }
             ]
+            // 文件名固定：它不该反映一次筛选，否则同一天导两次会得到两个名字不同、内容也可能不同的文件。
             void window.platform?.app?.saveFile?.(exportFileName(text.title, new Date()), buildXlsx(sheets))
           }}>{text.exportLabel}</Button>
+        {/* 筛选框里可能正输着词：必须有一句说清导出的是全部，否则会被当成「导错了」。 */}
+        <span className="mi-catalog__footer-label" data-export-scope>{text.exportAllNote}</span>
         <Pager total={activeTotal} page={activePage} pageSize={pageSize}
           onPage={setActivePage}
           onSize={(size) => { setPageSize(size); setMappedPage(1); setUnmappedPage(1) }} />

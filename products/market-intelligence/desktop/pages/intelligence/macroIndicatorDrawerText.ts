@@ -177,6 +177,8 @@ export const macroIndicatorDrawerText = {
       mappingFilter: '按 id / 指标码 / 名字筛选',
       mappingExport: '导出 Excel',
       mappingExportEmpty: '当前没有可导出的行',
+      /* 导出按钮旁那句（用户 2026-11-17：导出是全表，别管筛选）。 */
+      mappingExportAllNote: '导出的是两张表的全部行，与当前筛选无关',
       mappingTabMapped: '已映射 ({count})',
       mappingTabUnmapped: '未映射 ({count})',
       mappingTabsAria: '切换已映射与未映射',
@@ -341,6 +343,7 @@ export const macroIndicatorDrawerText = {
       mappingFilter: 'Filter by id / metric key / name',
       mappingExport: 'Export to Excel',
       mappingExportEmpty: 'Nothing to export from this tab',
+      mappingExportAllNote: 'Exports every row of both sheets, regardless of the current filter',
       mappingTabMapped: 'Mapped ({count})',
       mappingTabUnmapped: 'Unmapped ({count})',
       mappingTabsAria: 'Switch between mapped and unmapped',
