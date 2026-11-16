@@ -125,6 +125,9 @@ describe('德国数组身份：只补显示名，不动身份', () => {
     // 名字来自源内身份名表（不是机翻残句），英文也能搜
     expect(entry!.zhShort).toBe('批发物价指数(年率)')
     expect(entry!.enFull).toBe('Wholesale Price Index (YoY)')
+    // 身份名表只给中英各一条，读侧要的是**四列都有**（全称/简称各自成列，搜索命中列按列判）：
+    // 这一条钉住「两条名字 → 四列」这处转换，别让它以后只填中文或只填全称。
+    expect([entry!.zhFull, entry!.enShort]).toEqual(['批发物价指数(年率)', 'Wholesale Price Index (YoY)'])
     // **身份没动**：`metric_key` 仍是源给的那个数组
     expect(entry!.metricKey).toBe('["9553",79010]')
     expect(readCalendarEventIndex(database, { today, nameQuery: 'wholesale price' }).state).toBe('available')

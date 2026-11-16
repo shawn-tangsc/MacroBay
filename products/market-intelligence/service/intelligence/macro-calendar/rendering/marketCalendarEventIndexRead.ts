@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import { calendarNamesFor, type CalendarNamePair } from '../marketCalendarCodeNames'
+import { calendarNamesFor, englishSearchName, namePairFromSourceIdentity, type CalendarNamePair } from '../marketCalendarCodeNames'
 import { sourceIdentityDisplayNames } from '../macroCalendarSourceIdentityNames'
 
 /**
@@ -75,8 +75,7 @@ function namesOf(metricKey: string, sourceLabel: string | null) {
   const names = calendarNamesFor(metricKey)
   const identity = sourceIdentityDisplayNames[sourceInternalIdOf(metricKey).replace(/^id:/, '')]
   const fallback = sourceLabel === null || sourceLabel.trim() === '' ? undefined : sourceLabel.trim()
-  const display = names ?? (identity === undefined ? undefined : { zhFull: identity.zh, zhShort: identity.zh,
-    enFull: identity.en, enShort: identity.en })
+  const display = names ?? (identity === undefined ? undefined : namePairFromSourceIdentity(identity.zh, identity.en))
   return {
     ...(display === undefined ? {} : { ...display }),
     ...(fallback === undefined ? {} : { sourceLabel: fallback }),
@@ -210,9 +209,9 @@ function mergeSameFaceRows(left: CalendarEventIndexRow, right: CalendarEventInde
   return Object.freeze({
     ...zhSource,
     key,
-    // **显示名留中文那条**（`sourceLabel`），英文那条塞进 `enFull` 槽位——它只被搜索命中列使用，
+    // **显示名留中文那条**（`sourceLabel`），英文那条塞进英文全称那一格——它只被搜索命中列使用，
     // 既不覆盖显示名，也不会让英文读者搜不到（英文原文仍是可搜字段之一）。
-    ...(enSource.sourceLabel === undefined ? {} : { enFull: enSource.sourceLabel }),
+    ...(enSource.sourceLabel === undefined ? {} : englishSearchName(enSource.sourceLabel)),
     ...(lastDates.length === 0 ? {} : { lastRelease: { date: lastDates[lastDates.length - 1]!,
       ...(zhSource.lastRelease?.scheduledAt === undefined ? {} : { scheduledAt: zhSource.lastRelease.scheduledAt }) } }),
     ...(nextDates.length === 0 ? {} : { nextRelease: { date: nextDates[0]! } }),

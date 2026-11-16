@@ -252,6 +252,23 @@ export function calendarNamesFor(metricKey: string): CalendarNamePair | undefine
   return nameByMetricKey[metricKey] ?? eventTypeNameByCode[metricKey]
 }
 
+/**
+ * 源内身份名表只给「中文名 + 英文名」两条，读侧要的是这里那四列（中英各全称/简称）。
+ * **在这一处拼**：四个字段名只许出现在名表里（守卫按字段形状抓的就是这类文件），
+ * 读侧不再自己声明这个形状，也不许各拼一份。
+ */
+export function namePairFromSourceIdentity(zh: string, en: string): CalendarNamePair {
+  return { zhFull: zh, zhShort: zh, enFull: en, enShort: en }
+}
+
+/**
+ * 同一身份的中英两条合并时，英文原文只占「英文全称」那一格——它只被搜索命中列使用，
+ * 既不覆盖显示名，也不让英文读者搜不到。返回的是**一段覆盖值**，不是完整一对。
+ */
+export function englishSearchName(en: string): Partial<CalendarNamePair> {
+  return { enFull: en }
+}
+
 export const eventTypeNameByCode: Readonly<Record<string, Readonly<{
   zhFull: string; zhShort: string; enFull: string; enShort: string
 }>>> = Object.freeze({
