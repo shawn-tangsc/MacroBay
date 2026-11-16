@@ -40,11 +40,11 @@ function seed(): DatabaseSync {
 }
 
 describe('映射规则表读口', () => {
-  it('已映射 85 条：字段齐、计数由服务端给、依据推不出就 null', () => {
+  it('已映射 117 条（旧表 85 + 0xrouter 32）：字段齐、计数由服务端给、依据推不出就 null', () => {
     const read = readCalendarMappingRules(seed())
     if (read.state !== 'available') throw new Error('unavailable')
-    expect(read.mapped).toHaveLength(85)
-    expect(read.counts.mapped).toBe(85)
+    expect(read.mapped).toHaveLength(117)
+    expect(read.counts.mapped).toBe(117)
     // BLS 的 CPI 有官方页（机构 + 页面类型能推），ISM 那类推不出必须 null
     const cpi = read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')!
     expect(cpi.officialUrl).toBe('https://www.bls.gov/news.release/')
@@ -62,6 +62,10 @@ describe('映射规则表读口', () => {
     // 同时也真有 0 的（那个指标的库行还没出现）——这一列是真读出来的，不是常量。
     expect(read.mapped.some((rule) => rule.rowCount === 0)).toBe(true)
     expect(read.mapped.every((rule) => typeof rule.rowCount === 'number' && rule.rowCount >= 0)).toBe(true)
+    // 子项码有上级、母码没有：费城联储装船 → 费城联储制造业。
+    const shipments = read.mapped.find((rule) => rule.metricKey === 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL')
+    expect(shipments?.parentMetricKey).toBe('US.PHILLY_FED_MANUFACTURING.SA.LEVEL')
+    expect(read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')?.parentMetricKey).toBeNull()
     expect(read.mapped.every((rule) => rule.names === null
       || (rule.names.zh.trim() !== '' && rule.names.en.trim() !== ''))).toBe(true)
   })

@@ -102,6 +102,8 @@ describe('源内身份的中英两条合成一条（读取层去重，不动库�
     if (read.state !== 'available') throw new Error('unavailable')
     expect(read.total).toBe(1)                       // 两条 → 一条
     expect(read.rows[0]!.zhShort ?? read.rows[0]!.sourceLabel).toContain('纽约联储')   // 中文优先
+    // 英文名单独给一个字段（界面用小字灰字跟在中文后面）；中文名那条做显示，英文名来自合并时留下的原文。
+    expect(read.rows[0]!.titleEn ?? '').toContain('New York Fed manufacturing Index')
     // 英文原文保留下来可搜（否则读者按英文名找不到这条）
     const english = readCalendarEventIndex(database, { today, nameQuery: 'New York Fed' })
     expect(english.state === 'available' && english.rows.length).toBe(1)

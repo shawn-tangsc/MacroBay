@@ -28,6 +28,12 @@ export type CalendarEventIndexRow = Partial<CalendarNamePair> & Readonly<{
   sourceLabel?: string
   /** 名字位显示的是源原文名（不是名表条目）。 */
   titleIsSourceLabel: boolean
+  /**
+   * **英文名**（用户 2026-11-17）：界面在中文名后面跟一行小字灰字，**不单独占一列**。
+   * 取值顺序：名表的英文全名 → 合并时留下的源英文原文名（`source_label_en`）→ `null`。
+   * `null` 时只显示中文，**不留「·」或空括号**（半句话比没有更让人困惑）。
+   */
+  titleEn: string | null
   /** 最近一次已发布那一期的期间（没有已发布的就是空）。 */
   period?: string
   lastRelease?: Readonly<{ date: string; scheduledAt?: string }>
@@ -80,12 +86,14 @@ function namesOf(metricKey: string, sourceLabel: string | null, sourceLabelEn: s
   // **英文原文名单独存一列**（迁移 18 把库里中英两条合并成一行）：名表/身份名表已经给了英文就不覆盖，
   // 它只进搜索命中列，不改变显示名。
   const englishFallback = sourceLabelEn === null || sourceLabelEn.trim() === '' ? undefined : sourceLabelEn.trim()
+  const englishName = display?.enFull ?? englishFallback ?? null
   return {
     ...(display === undefined ? {} : { ...display }),
     ...(display === undefined && englishFallback !== undefined ? englishSearchName(englishFallback) : {}),
     ...(fallback === undefined ? {} : { sourceLabel: fallback }),
     // 只有真回退到「源原文名」时才算，源内名表命中是**我们给的名字**，不标。
-    titleIsSourceLabel: display === undefined && fallback !== undefined
+    titleIsSourceLabel: display === undefined && fallback !== undefined,
+    titleEn: englishName
   }
 }
 

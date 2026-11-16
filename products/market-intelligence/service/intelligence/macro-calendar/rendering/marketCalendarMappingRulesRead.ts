@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { localizedPairFor } from '../marketCalendarCodeNames'
 import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
+import { subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
 
 /**
@@ -54,6 +55,13 @@ export type MappingRuleRow = Readonly<{
    * `0` 仍然是 0：说明这个指标现在库里没有行，看得见才不会把「规则只是写在纸上」当成在起作用。
    */
   rowCount: number
+  /**
+   * **上级指标**（用户 2026-11-17）：子项码给出母码，母码与普通指标为 `null`。
+   * 由显式表给出，**不让渲染层截字符串反推**——五段/四段的差别是命名规则的内部细节。
+   */
+  parentMetricKey?: string | null
+  /** `parent` = 母指标（或普通指标），`child` = 子项。界面据此显示「· 子项」小字。 */
+  kind?: 'parent' | 'child'
 }>
 
 /**
@@ -70,6 +78,13 @@ export type DirectMetricRow = Readonly<{
   names: Readonly<{ zh: string; en: string }> | null
   tier: 1 | 2 | 3 | null
   rowCount: number
+  /**
+   * **上级指标**（用户 2026-11-17）：子项码给出母码，母码与普通指标为 `null`。
+   * 由显式表给出，**不让渲染层截字符串反推**——五段/四段的差别是命名规则的内部细节。
+   */
+  parentMetricKey?: string | null
+  /** `parent` = 母指标（或普通指标），`child` = 子项。界面据此显示「· 子项」小字。 */
+  kind?: 'parent' | 'child'
 }>
 
 export type UnmappedSourceIdRow = Readonly<{
@@ -166,13 +181,20 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         sampleLabel: current?.sampleLabel ?? row.label,
         sampleLabelEn: current?.sampleLabelEn ?? row.label_en })
     }
-    const mapped: MappingRuleRow[] = Object.entries(zeroXRouterIndicatorIdentities).map(([sourceId, entry]) => {
+    // 两张表合起来才是「这个来源现在认得哪些 id」：旧表 85 条 + 0xrouter 自己的 32 条（子项码那批）。
+    const allIdentityEntries: [string, { metricKey: string; periodRule: ZeroXRouterPeriodRule }][] = [
+      ...Object.entries(zeroXRouterIndicatorIdentities),
+      ...Object.entries(zeroXRouterSourceMetricMappings)
+    ]
+    const mapped: MappingRuleRow[] = allIdentityEntries.map(([sourceId, entry]) => {
       const official = officialPageFor(entry.metricKey)
       return Object.freeze({ sourceId, metricKey: entry.metricKey, periodRule: entry.periodRule,
         basis: official === null ? null : official.basis, officialUrl: official?.url ?? null,
         names: mappingRuleNames(entry.metricKey),
         tier: tierOfMetricKey(entry.metricKey) ?? null,
-        rowCount: rowsByMetricKey.get(entry.metricKey) ?? 0 })
+        rowCount: rowsByMetricKey.get(entry.metricKey) ?? 0,
+        parentMetricKey: subItemParentByMetricKey[entry.metricKey] ?? null,
+        kind: subItemParentByMetricKey[entry.metricKey] === undefined ? 'parent' as const : 'child' as const })
     })
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
     const direct: DirectMetricRow[] = [...rowsByMetricKey.entries()]
