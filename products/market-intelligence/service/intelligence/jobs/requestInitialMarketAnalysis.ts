@@ -22,7 +22,8 @@ export function createInitialMarketAnalysisRequest(deps: {
   repository: MarketAnalysisRepository
   jobRuntime: JobRuntime
   listItems: () => IntelligenceItem[]
-  createGroup: (itemId: string) => EventGroup
+  /** 建组读当刻的情绪判定，所以允许异步；同步实现（测试与无判定装配）照样能用。 */
+  createGroup: (itemId: string) => EventGroup | Promise<EventGroup>
   now: () => string
   /** The capability's switch. Absent (headless/test wiring) leaves the request ungated. */
   isEnabled?: () => Promise<boolean>
@@ -45,7 +46,7 @@ export function createInitialMarketAnalysisRequest(deps: {
       : itemId ? items.find(candidate => candidate.itemId === itemId)
         : items.sort((left, right) => left.detectedAt.localeCompare(right.detectedAt)).at(-1)
     if (!item) throw new Error('analysis-not-eligible')
-    const group = retryGroup ?? deps.repository.listEventGroups().find(candidate => candidate.eventRefs.includes(item.itemId)) ?? deps.createGroup(item.itemId)
+    const group = retryGroup ?? deps.repository.listEventGroups().find(candidate => candidate.eventRefs.includes(item.itemId)) ?? await deps.createGroup(item.itemId)
     const activeFreeze = deps.jobRuntime.listRuns({ handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB,
       statuses: ['queued', 'running'], payload: { eventGroupId: group.id }, limit: 1 })
     const manual = source === 'manual'

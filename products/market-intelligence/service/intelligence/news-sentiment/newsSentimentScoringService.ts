@@ -13,6 +13,7 @@ import {
 } from '../schema/newsSentiment'
 import { buildNewsSentimentMessages, parseNewsPolarityModelOutput } from './newsSentimentModel'
 import { scoreNewsWithRules } from './newsSentimentRules'
+import { isTriggerableNewsVerdict } from '../analysis/analysisItemSeverity'
 import { storyKeyOf, utcDayBucket, type StoryKeyCandidate } from './newsSentimentStoryKey'
 import { createNewsSentimentAlertOutlet } from './newsSentimentAlertOutlet'
 import { buildSentimentAlertRequest } from './newsSentimentAlertRequest'
@@ -41,6 +42,13 @@ export type NewsSentimentScoringResult = Readonly<{
   failed: number
   /** Model calls spent by this run, retries included — the same allowance the pass is capped by. */
   modelCalls: number
+  /**
+   * 本轮写下的判定里，够格单独触发一次市场分析的条目（方向明确、有标的、强度过门槛）。
+   *
+   * 分析触发不能靠采集那一刻的那条事件：判定是这一步才写的（事故样本里分组比判定早 8 秒），
+   * 那时候还没有任何东西能说明这条新闻重不重要。所以清单从这里交出去，由调用方补一次触发。
+   */
+  triggerCandidates: readonly Readonly<{ itemId: string; scoredAt: string }>[]
 }>
 
 /** 154 §7.1：单条失败重试 1 次（一次调用 + 一次重试）。 */
@@ -145,6 +153,7 @@ export function createNewsSentimentScoringService(deps: {
       let skipped = 0
       let failed = 0
       let modelCalls = 0
+      const triggerCandidates: { itemId: string; scoredAt: string }[] = []
       // 154 §7.1: three judgments in a row without a model answer means this run stops paying for one.
       let consecutiveModelFailures = 0
 
@@ -318,6 +327,9 @@ export function createNewsSentimentScoringService(deps: {
           caveats: [...new Set([...judgment.caveats, ...bodyCaveats, ...caveats])]
         }
         deps.store.upsertSentiment(record)
+        // 这条判定的严重度现在才成立：够格就交出去，让分析补一次触发。判据只有一份
+        // （`analysisItemSeverity`），不在这里另写一套「重要性」。
+        if (isTriggerableNewsVerdict(record)) triggerCandidates.push({ itemId: record.itemId, scoredAt: record.scoredAt })
         await Promise.resolve(
           alertOutlet?.onJudged({
             ...record,
@@ -337,7 +349,7 @@ export function createNewsSentimentScoringService(deps: {
 
       const requestedCount = requestedIds ? requestedIds.size : admitted.length
       skipped = Math.max(0, requestedCount - candidates.length)
-      return { processed, model: modelCount, rules: rulesCount, skipped, failed, modelCalls }
+      return { processed, model: modelCount, rules: rulesCount, skipped, failed, modelCalls, triggerCandidates }
     }
   }
 }

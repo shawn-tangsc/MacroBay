@@ -21,6 +21,10 @@ import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } fro
 import { queryMacroRoute } from '../public-query/macroRouteQuery'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
 import { createAnalysisTriggerPolicy, type TriggerHistoryEntry } from '../analysis/analysisTriggerPolicy'
+import {
+  decideItemTriggerSeverity, isNewsSeveritySource,
+  type ItemTriggerSeverity, type NewsSentimentVerdict
+} from '../analysis/analysisItemSeverity'
 import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from '../analysis/eventGroupService'
 import { analysisReleaseCoalescingPolicy } from '../analysis/analysisReleaseCoalescing'
 import { createEvidenceSnapshotService } from '../analysis/evidenceSnapshotService'
@@ -102,11 +106,16 @@ export function resolveMarketAnalysisConsumerRegistration(
   return registration
 }
 
-export function resolveMarketAnalysisSeverity(item: import('../schema/intelligenceRecord').IntelligenceItem): 'low' | 'medium' | 'high' | 'critical' {
-  const labels = safeJson(item.processingLabelsJson)
-  if (item.severityHint === 'critical') return 'critical'
-  if (item.severityHint === 'warning') return 'medium'
-  return labels.relevanceOutcome === 'full-intelligence' && labels.sentimentEligible === true ? 'high' : 'low'
+/**
+ * 一条情报的严重度。判据与「要不要等判定」都在 `analysisItemSeverity` 里，这里只做投影。
+ * `verdict` 缺省在两种情况下是对的：非新闻条目（从来没有判定），以及新闻还没判过（给 medium）。
+ */
+export function resolveMarketAnalysisSeverity(
+  item: import('../schema/intelligenceRecord').IntelligenceItem,
+  verdict?: NewsSentimentVerdict
+): ItemTriggerSeverity {
+  const decision = decideItemTriggerSeverity(item, verdict)
+  return decision.decision === 'decided' ? decision.severity : 'medium'
 }
 
 export function registerMarketAnalysisRuntime(input: Readonly<{
@@ -127,6 +136,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
    * `news-sentiment-unavailable`，而不是把「没有舆情」当成「没有新闻」。
    */
   newsSentimentQuery?: import('../analysis/analysisNewsSentimentEvidence').AnalysisNewsSentimentQuery
+  /**
+   * 触发判定用的**单条**情绪判定读取器：新闻的重要性由它给出（见 `analysisItemSeverity`）。
+   * 缺省时新闻条目拿不到判定，严重度停在 medium——不冒充重要，也不触发分析。
+   */
+  latestNewsSentiment?: (itemId: string, asOf: string) => NewsSentimentVerdict | undefined
   dataDir: string
   now?: () => string
   /**
@@ -373,8 +387,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   }
 
   const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled,
-      createGroup: itemId => {
-        const change = resolveChange({ changeId: itemId })
+      createGroup: async itemId => {
+        const change = await resolveChange({ changeId: itemId })
         if (!change) throw new Error('analysis-not-eligible')
         const group = groups.create(change)
         repository.appendEventGroup(group)
@@ -445,7 +459,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
 
 
   async function groupChange(payload: unknown): Promise<Record<string, unknown> | void> {
-    const change = resolveChange(payload)
+    const change = await resolveChange(payload)
     if (!change) return
     const existing = repository.findEventGroupByMergeKey(eventGroupMergeKey(change))
     const result = groups.addChange(existing, change)
@@ -594,7 +608,19 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     await context.log({ level: result.status === 'succeeded' ? 'info' : 'error', message: 'Market analysis result', metadata: { analysisRunId: run.id, status: result.status, ...(result.errorCode ? { errorCode: result.errorCode } : {}) } })
   }
 
-  function resolveChange(payload: unknown): AnalysisChange | undefined {
+  /**
+   * 单条情绪判定（判定时刻之前最后一次）。读不到就当「还没判」：宁可等下一跳，也不把一次
+   * 存储故障写成「这条不重要」——账本行一旦写下，读者看到的就是一个判定。
+   */
+  function readLatestVerdict(itemId: string): NewsSentimentVerdict | undefined {
+    try {
+      return input.latestNewsSentiment?.(itemId, now())
+    } catch {
+      return undefined
+    }
+  }
+
+  async function resolveChange(payload: unknown): Promise<AnalysisChange | undefined> {
     const itemId = readString(payload, 'changeId') ?? readString(payload, 'eventRef')
     const item = itemId ? input.pipeline.listItems().find(candidate => candidate.itemId === itemId || candidate.clusterId === itemId) : undefined
     if (!item) return
@@ -604,7 +630,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       .sort((left, right) => left.detectedAt.localeCompare(right.detectedAt))
       .at(-2)
     const domain = resolveDomain(labels.dataDomain, item.sourceId)
-    const severity = resolveMarketAnalysisSeverity(item)
+    const verdict = isNewsSeveritySource(item.sourceId) ? readLatestVerdict(item.itemId) : undefined
+    // 新闻还没判定时这里不决定、也不写账本行——理由见 `decideItemTriggerSeverity`。
+    const decision = decideItemTriggerSeverity(item, verdict)
+    if (decision.decision === 'await-verdict') return
+    const severity = decision.severity
     return {
       changeId: item.itemId,
       domain,

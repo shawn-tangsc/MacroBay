@@ -197,6 +197,9 @@ export function createIntelligenceRuntimes(input: {
         return query.query(input)
       }
     },
+    // 触发判定要单独问「这一条判过没有、判成什么」，窗口查询答不了。同样动态读出口：
+    // 库重建后不必重启分析运行时；库打不开时返回 undefined，严重度停在「还没判」。
+    latestNewsSentiment: (itemId, asOf) => newsSentimentExposure.store?.getLatestSentiment(itemId, asOf),
     ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
     dataDir
   })

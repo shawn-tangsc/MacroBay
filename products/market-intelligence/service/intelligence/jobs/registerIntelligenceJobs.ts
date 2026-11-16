@@ -11,6 +11,7 @@ import { isZeroXRouterSource } from '../application/zeroXRouterSourcePolicy'
 import { getSource } from '../application/providerRegistry'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
 import { enqueueIntelligencePipelineJobs } from './enqueueIntelligencePipelineJobs'
+import { GROUP_MARKET_ANALYSIS_CHANGE_JOB } from './marketAnalysisJobIds'
 import {
   INTELLIGENCE_ARCHIVE_COMPACTION_JOB,
   INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB,
@@ -162,6 +163,8 @@ export function registerIntelligenceJobs(
       level: 'info',
       message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, skipped ${result.skipped}.`
     })
+    // 新闻的严重度只能在这一步之后才成立（判定刚写下来）。重建是重算历史，不是新事件，不补触发。
+    if (!input.rebuild) await enqueueNewsSentimentAnalysisTriggers(jobRuntime, result.triggerCandidates)
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB, async (payload, context) => {
@@ -241,4 +244,35 @@ export function registerIntelligenceJobs(
     await pipeline.assessChangedItems({})
     await context.log({ level: 'info', message: 'Reindexed intelligence records.' })
   })
+}
+
+/**
+ * 判定写下来之后，把够格的那几条交回分析触发这条路。
+ *
+ * 走的是与采集事件同一个 handler、同一个载荷形状，所以分组、账本、去重、额度的规矩只有一份。
+ * 定义 id 带判定时刻：同一条判定不会重复排队，重新判定才会得到新 id。
+ */
+async function enqueueNewsSentimentAnalysisTriggers(
+  jobRuntime: JobRuntime,
+  candidates: readonly Readonly<{ itemId: string; scoredAt: string }>[]
+): Promise<void> {
+  for (const candidate of candidates) {
+    try {
+      await jobRuntime.enqueueDefinition({
+        id: `market-analysis:news-sentiment:${candidate.itemId}:${candidate.scoredAt}`,
+        owner: 'product',
+        productId: 'market-intelligence',
+        handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB,
+        title: 'Group market analysis change',
+        // 流水线内部串起来的作业都记 manual：这里没有对应的订阅主题，写个假主题会让运行记录说谎。
+        trigger: { kind: 'manual' },
+        payload: { changeId: candidate.itemId, eventRef: candidate.itemId }
+      })
+    } catch (error) {
+      // 排队失败不该把评分这一步判成失败：重跑会跳过已评的条目，触发就永远补不上。
+      console.error(
+        `market-intelligence.news-sentiment-trigger-enqueue-failed: ${candidate.itemId}: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
 }

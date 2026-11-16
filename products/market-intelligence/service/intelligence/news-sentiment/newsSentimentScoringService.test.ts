@@ -114,6 +114,26 @@ async function harness(options: {
 }
 
 describe('newsSentimentScoringService', () => {
+  it('only hands back the judgments worth an analysis to the trigger', async () => {
+    // 事故样本那一类：中性、无标的的新闻照样会被判断（那是对的），但不该因此触发一次分析。
+    const { service } = await harness({
+      withModel: false,
+      items: [
+        item({ itemId: 'item-a' }),
+        item({
+          itemId: 'item-b',
+          title: 'JPMorgan and DBS complete cross-border payment trial',
+          summary: 'The banks said the tokenised deposit pilot carries no direct crypto market impact.',
+          publishedAt: '2026-10-24T11:00:00.000Z'
+        })
+      ]
+    })
+    const result = await service.scoreItems({})
+
+    expect(result).toMatchObject({ processed: 2, rules: 2 })
+    expect(result.triggerCandidates.map((candidate) => candidate.itemId)).toEqual(['item-a'])
+  })
+
   it('stores a model judgment with its engine version', async () => {
     const { store, service, invoke } = await harness({ withModel: true })
     const result = await service.scoreItems({ itemIds: ['item-a'] })
