@@ -11,6 +11,11 @@ import type { ZeroXRouterPeriodRule } from './marketCalendarMetricIdentity'
  * 它们的 id 也不建码——看着像合法码的族名一旦存在，生成器以后会往它上面继续叠。
  */
 export const germanSourceMetricMappings: Readonly<Record<string, Readonly<{ metricKey: string; periodRule: ZeroXRouterPeriodRule }>>> = Object.freeze({
+  // 已有指标换了个 id（同一码的月度变体）：**只加映射，名表不动**——那四个码的四列名本来就有。
+  '212227': { metricKey: 'DE.MANUFACTURING_ORDERS.SA.MOM', periodRule: 'month' },
+  '212262': { metricKey: 'DE.EXPORTS.SA.MOM', periodRule: 'month' },
+  '212264': { metricKey: 'DE.INDUSTRIAL_OUTPUT.SA.MOM', periodRule: 'month' },
+  '213207': { metricKey: 'DE.ZEW_ECONOMIC_STATUS.NONE.LEVEL', periodRule: 'month' },
   '214634': { metricKey: 'DE.WHOLESALE_PRICE.NONE.MOM', periodRule: 'month' },
   '214635': { metricKey: 'DE.WHOLESALE_PRICE.NONE.YOY', periodRule: 'month' },
   '213623': { metricKey: 'DE.MARKIT_BME_MANUFACTURING_PMI.NONE.LEVEL', periodRule: 'month' },
