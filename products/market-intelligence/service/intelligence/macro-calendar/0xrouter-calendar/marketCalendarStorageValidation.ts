@@ -37,7 +37,7 @@ export const zeroXRouterCalendarStoragePolicy = Object.freeze({
   canonicalInstantPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
   descriptorKinds: marketCalendarDescriptorKinds,
   draftFields: Object.freeze(['providerId', 'descriptorId', 'kind', 'locale', 'sourceEventId', 'marketFactKey',
-    'identityState', 'localeMerge', 'officialLink', 'displayName', 'countryCode', 'countryName', 'importance',
+    'identityState', 'localeMerge', 'officialLink', 'displayName', 'countryCode', 'placeholderCountryCode', 'countryName', 'importance',
     'scheduledDate', 'scheduledAt', 'indicatorId', 'consensus', 'providerPrevious', 'providerActual', 'providerImpact',
     // 这条发布覆盖的指标 key 列表（与 `indicatorId` 是两件事：一个是主 measure，一个是全体）。
     'measureKeys']),

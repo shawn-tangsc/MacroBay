@@ -23,6 +23,11 @@ export type ZeroXRouterCalendarDraft = Readonly<{
    * 早前只允许 `'US' | 'DE'`，于是源给的 JP/GB/CA 只能被丢掉——类型收得比事实窄，也是一种丢数据。
    */
   countryCode?: string
+  /**
+   * 源给的占位国家码（如 `ZZ`）。`countryCode` 为「无国家」，**但这一条必须能被数出来**——
+   * 否则占位码从「丢行」变成「静默归为无国家」，仍然不可见（用户 2026-11-17）。
+   */
+  placeholderCountryCode?: string
   countryName?: string
   /** 可缺省：来源没给重要性就没有值（缺省 ≠ 低重要度）。 */
   importance?: 'high' | 'medium' | 'low'
@@ -167,7 +172,9 @@ export function calendarEventDraft(
     marketFactKey: JSON.stringify(['0xrouter', descriptorId, locale, sourceEventId]),
     identityState: 'unverified', localeMerge: 'disabled', officialLink: 'disabled',
     displayName, importance: policy.importance[row.star as keyof typeof policy.importance],
-    ...(countryCode ? { countryCode } : {}), ...(countryName ? { countryName } : {}),
+    ...(countryCode ? { countryCode } : {}),
+    ...(verdict.state === 'none' && verdict.reason === 'placeholder' ? { placeholderCountryCode: rawCountryCode } : {}),
+    ...(countryName ? { countryName } : {}),
     scheduledAt, scheduledDate: scheduledAt.slice(0, 10)
   }
 }

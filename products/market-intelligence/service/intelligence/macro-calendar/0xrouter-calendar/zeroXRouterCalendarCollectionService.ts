@@ -72,7 +72,14 @@ export function createZeroXRouterCalendarCollectionService(deps: Readonly<{
       const unknownCountries = new Map<string, number>()
       for (const draft of parsed.drafts) {
         const code = draft.countryCode
-        if (code === undefined || code.length > 3) continue
+        // 占位码（`ZZ`）在解析层是 `{ state: 'none', reason: 'placeholder' }`，不会带进 draft 的
+        // `countryCode`；这里按「源给的原始码」再判一次，让它能被数出来而不是静默归为无国家。
+        if (code === undefined) {
+          const placeholder = draft.placeholderCountryCode
+          if (placeholder !== undefined) unknownCountries.set(placeholder, (unknownCountries.get(placeholder) ?? 0) + 1)
+          continue
+        }
+        if (code.length > 3) continue
         if (['US', 'DE', 'JP', 'GB', 'CA', 'EMU'].includes(code)) continue
         unknownCountries.set(code, (unknownCountries.get(code) ?? 0) + 1)
       }

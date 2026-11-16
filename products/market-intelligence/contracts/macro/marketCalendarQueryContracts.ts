@@ -106,8 +106,13 @@ export const marketCalendarPublicPolicy = Object.freeze({
 export type CountryCodeVerdict =
   /** 可以落地（已归一或原样保留）。 */
   | Readonly<{ state: 'code'; code: string }>
-  /** **没有国家，但这一行保留**：形状像国家码却被判为占位（如 `ZZ`），或源就没给。 */
-  | Readonly<{ state: 'none' }>
+  /**
+   * **没有国家，但这一行保留**。`reason` 分两种，不能共用：
+   * - `absent`：源就没给国家；
+   * - `placeholder`：源给了占位码（如 `ZZ`）——**必须能被数出来**，否则它从「丢行」变成
+   *   「静默归为无国家」，仍然不可见（用户 2026-11-17）。
+   */
+  | Readonly<{ state: 'none'; reason: 'absent' | 'placeholder' }>
   /** 形状都不像：这是畸形输入，按调用方的策略整批判非法。 */
   | Readonly<{ state: 'invalid' }>
 
@@ -116,13 +121,15 @@ export type CountryCodeVerdict =
  * 就是三路采集同时挂掉的复现条件——一行没有国家只是这一行降级，不该让整批失败。
  */
 export function resolveCountryCode(value: unknown): CountryCodeVerdict {
-  if (value === undefined || value === null) return { state: 'none' }
+  if (value === undefined || value === null) return { state: 'none', reason: 'absent' }
   if (typeof value !== 'string') return { state: 'invalid' }
   const trimmed = value.trim()
-  if (trimmed === '') return { state: 'none' }
+  if (trimmed === '') return { state: 'none', reason: 'absent' }
   if (!marketCalendarPublicPolicy.countryCodePattern.test(trimmed)) return { state: 'invalid' }
   // 占位码（如 `ZZ`）：按「无国家」处理，**行保留**，并计入未知码日志——不是非法输入。
-  if ((marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(trimmed)) return { state: 'none' }
+  if ((marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(trimmed)) {
+    return { state: 'none', reason: 'placeholder' }
+  }
   return { state: 'code', code: trimmed }
 }
 
