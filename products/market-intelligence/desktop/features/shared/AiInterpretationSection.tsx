@@ -31,23 +31,35 @@ import './AiInterpretationSection.css'
  */
 export type AiInterpretationState = 'idle' | 'pending' | 'failed' | 'ready'
 
-export type AiInterpretationSectionProps = Readonly<{
-  state: AiInterpretationState
-  /** `ready` 时必填：生成时刻（ISO，由组件统一格式化）+ 快照里的证据引用条数。 */
-  meta?: Readonly<{ generatedAt: string; evidenceRefCount: number }>
-  /** 审计折叠里的内容；不进可见正文。 */
-  audit?: Readonly<{
-    asOf: string
-    dataCutoff: string
-    domains: readonly string[]
-    factCount: number
-    runId?: string
-    snapshotHash?: string
+/**
+ * 按 `state` 收窄的判别联合：`ready` 必须带 meta，`failed` 必须带 failure——
+ * 否则「成功但没有元信息」「失败但没有原因」这两种空节在类型上就造不出来（日历复用时同样成立）。
+ */
+export type AiInterpretationSectionProps =
+  | Readonly<{ state: 'idle' }>
+  | Readonly<{
+    state: 'pending'
+    /** 提交后长时间没收敛时，读者可以自己催一次读（不是排新分析）。 */
+    onReadResult?: () => void
   }>
-  paragraphs?: readonly string[]
-  failure?: Readonly<{ sentence: string; canRetry: boolean }>
-  onRetry?: () => void
-}>
+  | Readonly<{
+    state: 'failed'
+    failure: Readonly<{ sentence: string; canRetry: boolean }>
+    onRetry?: () => void
+  }>
+  | Readonly<{
+    state: 'ready'
+    meta: Readonly<{ generatedAt: string; evidenceRefCount: number }>
+    audit?: Readonly<{
+      asOf: string
+      dataCutoff: string
+      domains: readonly string[]
+      factCount: number
+      runId?: string
+      snapshotHash?: string
+    }>
+    paragraphs: readonly string[]
+  }>
 
 export function AiInterpretationSection(props: AiInterpretationSectionProps): React.ReactElement | null {
   const language = useShellLanguage()
@@ -57,12 +69,12 @@ export function AiInterpretationSection(props: AiInterpretationSectionProps): Re
   const resolveText = useProductTextKey()
 
   const metaLine = useMemo(() => {
-    if (props.state !== 'ready' || props.meta === undefined) return undefined
+    if (props.state !== 'ready') return undefined
     return fillLabelParams(copy.meta, {
       time: formatTime(props.meta.generatedAt, 'minute'),
       count: String(props.meta.evidenceRefCount)
     })
-  }, [copy.meta, formatTime, props.meta, props.state])
+  }, [copy.meta, formatTime, props])
 
   if (props.state === 'idle') return null
 
@@ -78,18 +90,20 @@ export function AiInterpretationSection(props: AiInterpretationSectionProps): Re
             {...triggerProps}
             ariaLabelKey="mi.aiInterpretation.infoAria"
             icon={Info}
-            onSelect={() => undefined}
             resolveText={resolveText}
             size="sm"
             variant="plain" />
         )} />
     </div>
 
-    {props.state === 'pending' ? (
+    {props.state === 'pending' ? <div className="mi-ai-interpretation__pending">
       <LoadingState label={copy.generating} layout="inline" size="sm" />
-    ) : null}
+      {props.onReadResult === undefined
+        ? null
+        : <Button className="text-action" onClick={props.onReadResult} size="small" type="text">{copy.readResult}</Button>}
+    </div> : null}
 
-    {props.state === 'failed' && props.failure !== undefined ? (
+    {props.state === 'failed' ? (
       <p className="mi-ai-interpretation__failure">
         <span>{props.failure.sentence}</span>
         {props.failure.canRetry && props.onRetry !== undefined
@@ -98,10 +112,10 @@ export function AiInterpretationSection(props: AiInterpretationSectionProps): Re
       </p>
     ) : null}
 
-    {props.state === 'ready' && metaLine !== undefined ? <>
+    {props.state === 'ready' ? <>
       <p className="mi-ai-interpretation__meta" data-ai-interpretation-meta>{metaLine}</p>
       <div className="mi-ai-interpretation__body">
-        {(props.paragraphs ?? []).map((paragraph, index) => <p key={`${index}-${paragraph.slice(0, 12)}`}>{paragraph}</p>)}
+        {props.paragraphs.map((paragraph, index) => <p key={`${index}-${paragraph.slice(0, 12)}`}>{paragraph}</p>)}
       </div>
       {props.audit === undefined ? null : <details className="mi-ai-interpretation__audit">
         <summary>{copy.audit.summary}</summary>
@@ -109,7 +123,7 @@ export function AiInterpretationSection(props: AiInterpretationSectionProps): Re
           <div><dt>{copy.audit.asOf}</dt><dd>{formatTime(props.audit.asOf, 'second')}</dd></div>
           <div><dt>{copy.audit.dataCutoff}</dt><dd>{formatTime(props.audit.dataCutoff, 'second')}</dd></div>
           <div><dt>{copy.audit.factCount}</dt><dd>{props.audit.factCount}</dd></div>
-          <div><dt>{copy.audit.evidenceRefCount}</dt><dd>{props.meta?.evidenceRefCount ?? ''}</dd></div>
+          <div><dt>{copy.audit.evidenceRefCount}</dt><dd>{props.meta.evidenceRefCount}</dd></div>
           <div><dt>{copy.audit.domains}</dt><dd>{props.audit.domains.join(' · ')}</dd></div>
           {props.audit.runId === undefined ? null : <div><dt>{copy.audit.runId}</dt><dd>{props.audit.runId}</dd></div>}
           {props.audit.snapshotHash === undefined ? null : <div><dt>{copy.audit.snapshotHash}</dt><dd>{props.audit.snapshotHash}</dd></div>}

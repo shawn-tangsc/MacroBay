@@ -48,18 +48,18 @@ describe('drawerTranslateMenuItem', () => {
 
   it('says "translate" when no row is under the menu', () => {
     expect(drawerTranslateMenuItem({ contextMenuItemId: undefined, translationStates: {}, rows }))
-      .toEqual([{ key: 'translate', labelKey: 'news.sentiment.translate' }])
+      .toEqual([{ key: 'translate', labelKey: 'pages.intelligence.portal.newsSentiment.drawer.translationStatus.translateOne' }])
   })
 
   it('says "retranslate" for a row that already has a translation', () => {
     expect(drawerTranslateMenuItem({ contextMenuItemId: 'a', translationStates: {}, rows }))
-      .toEqual([{ key: 'translate', labelKey: 'news.sentiment.retranslate' }])
+      .toEqual([{ key: 'translate', labelKey: 'pages.intelligence.portal.newsSentiment.drawer.translationStatus.retranslateOne' }])
     expect(drawerTranslateMenuItem({ contextMenuItemId: 'b', translationStates: {}, rows }))
-      .toEqual([{ key: 'translate', labelKey: 'news.sentiment.translate' }])
+      .toEqual([{ key: 'translate', labelKey: 'pages.intelligence.portal.newsSentiment.drawer.translationStatus.translateOne' }])
   })
 
   it('lets the queue state win over what the record says', () => {
     expect(drawerTranslateMenuItem({ contextMenuItemId: 'b', translationStates: { b: 'translated' }, rows }))
-      .toEqual([{ key: 'translate', labelKey: 'news.sentiment.retranslate' }])
+      .toEqual([{ key: 'translate', labelKey: 'pages.intelligence.portal.newsSentiment.drawer.translationStatus.retranslateOne' }])
   })
 })

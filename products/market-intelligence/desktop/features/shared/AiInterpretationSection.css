@@ -7,7 +7,6 @@
 .mi-ai-interpretation {
   display: grid;
   gap: 6px;
-  margin-top: 16px;
   min-width: 0;
 }
 .mi-ai-interpretation__head {
@@ -19,9 +18,9 @@
 .mi-ai-interpretation__title {
   margin: 0;
   color: var(--text-strong);
-  font-size: var(--font-section);
+  font-size: var(--font-body);
   font-weight: 650;
-  line-height: 1.45;
+  line-height: var(--line-body);
 }
 .mi-ai-interpretation__meta {
   margin: 0;
@@ -29,8 +28,10 @@
   color: var(--muted);
   font-size: var(--font-meta);
   line-height: var(--line-meta);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* 默认单行会正好截在「（N 条证据）」上；允许最多两行，超了才省略。 */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 .mi-ai-interpretation__body { display: grid; gap: 6px; }
 .mi-ai-interpretation__body p {
@@ -38,6 +39,12 @@
   color: var(--text);
   font-size: var(--font-body);
   line-height: 1.6;
+}
+.mi-ai-interpretation__pending {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 .mi-ai-interpretation__failure {
   display: flex;

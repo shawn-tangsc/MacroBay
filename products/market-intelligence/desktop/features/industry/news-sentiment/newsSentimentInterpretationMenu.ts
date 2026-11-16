@@ -12,15 +12,24 @@ import type { NewsInterpretationReadView } from '../../../shared/ipc/newsInterpr
  *
  * 只返回这一项；翻译项由调用方自己拼——菜单不再被翻译开关绑住。
  */
+const OPEN = 'pages.intelligence.portal.newsSentiment.drawer.menuInterpretation'
+const VIEW = 'pages.intelligence.portal.newsSentiment.drawer.menuInterpretationView'
+const AGAIN = 'pages.intelligence.portal.newsSentiment.drawer.menuInterpretationAgain'
+const UNREADABLE = 'mi.aiInterpretation.menuUnreadable'
+
 export function newsInterpretationMenuItem(view: NewsInterpretationReadView | undefined, loading: boolean): MenuItem {
-  if (loading || view === undefined || view.state === 'unreadable' || view.state === 'in-flight') {
-    return { key: 'interpretation', labelKey: 'news.sentiment.interpretation', disabled: true }
+  // 读不到要给理由（禁用项必须说清为什么不能点）；正在跑与短暂加载不附原因。
+  if (view !== undefined && view.state === 'unreadable') {
+    return { key: 'interpretation', labelKey: UNREADABLE, disabled: true }
   }
-  if (view.state === 'none') return { key: 'interpretation', labelKey: 'news.sentiment.interpretation' }
+  if (loading || view === undefined || view.state === 'in-flight') {
+    return { key: 'interpretation', labelKey: OPEN, disabled: true }
+  }
+  if (view.state === 'none') return { key: 'interpretation', labelKey: OPEN }
   const unchanged = view.evidenceFingerprint !== undefined
     && view.evidenceFingerprint === view.currentEvidenceFingerprint
   return {
     key: 'interpretation',
-    labelKey: unchanged ? 'news.sentiment.interpretationView' : 'news.sentiment.interpretationAgain'
+    labelKey: unchanged ? VIEW : AGAIN
   }
 }

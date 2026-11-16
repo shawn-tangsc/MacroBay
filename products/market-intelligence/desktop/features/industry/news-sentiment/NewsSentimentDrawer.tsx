@@ -120,11 +120,19 @@ export function NewsSentimentDrawer(props: {
   const [interpretationSubmitting, setInterpretationSubmitting] = useState<string>()
   const [interpretationFailure, setInterpretationFailure] = useState<Readonly<{ itemId: string; sentenceKey: string; retry: boolean }>>()
   const menuRead = useNewsInterpretationRead(contextMenu?.itemId, contextMenu !== undefined)
+  // 收敛：读接口已经有结果（或这次真的没有）时，「提交中」必须结束——不许一直停在正在生成。
+  useEffect(() => {
+    if (interpretationSubmitting === undefined) return
+    if (interpretationSubmitting !== activeId) return
+    const state = activeRead.view?.state
+    if (state === 'available') setInterpretationSubmitting(undefined)
+  }, [activeId, activeRead.view, interpretationSubmitting])
   const submitInterpretation = useCallback((itemId: string): void => {
     setInterpretationSubmitting(itemId)
     setInterpretationFailure(undefined)
     void requestNewsInterpretation(itemId).then((result) => {
       if (result.state === 'queued' || result.state === 'in-flight') {
+        // 排上了就立刻重读一次看看能不能收敛；还在跑就停在「提交中」，并给读者一颗「读取结果」。
         activeRead.reload()
         return
       }
@@ -133,11 +141,18 @@ export function NewsSentimentDrawer(props: {
         activeRead.reload()
         return
       }
-      const copy = result.state === 'insufficient-facts'
-        ? newsInterpretationResultCopy({ insufficientReason: result.details.reason })
-        : result.state === 'not-ready' || result.state === 'failed'
-          ? newsInterpretationResultCopy({ failureCode: result.failureCode })
-          : newsInterpretationResultCopy({})
+      // 三种「没开始」必须三种说法：没送到（客户端自己的事，可重试）/ 没判定 / 不够格。
+      if (result.state === 'unreachable') {
+        setInterpretationFailure({ itemId, sentenceKey: 'mi.aiInterpretation.unreachable', retry: true })
+        return
+      }
+      const copy = result.state === 'no-judgment' || result.state === 'not-eligible'
+        ? newsInterpretationResultCopy({ state: result.state })
+        : result.state === 'insufficient-facts'
+          ? newsInterpretationResultCopy({ insufficientReason: result.details.reason })
+          : result.state === 'not-ready' || result.state === 'failed'
+            ? newsInterpretationResultCopy({ failureCode: result.failureCode })
+            : newsInterpretationResultCopy({})
       setInterpretationFailure({ itemId, sentenceKey: copy.sentenceKey, retry: copy.action === 'retry' })
     })
   }, [activeRead])
@@ -427,7 +442,9 @@ export function NewsSentimentDrawer(props: {
                 </div>
                 <DrawerInterpretation
                   failure={interpretationFailure?.itemId === activeId ? interpretationFailure : undefined}
-                  onRetry={() => { if (activeId !== undefined) submitInterpretation(activeId) }}
+                  onReadResult={activeRead.reload}
+                  onRetryRead={activeRead.reload}
+                  onRetrySubmit={() => { if (activeId !== undefined) submitInterpretation(activeId) }}
                   submitting={interpretationSubmitting === activeId}
                   view={activeRead.view} />
                 <footer>
@@ -445,7 +462,7 @@ export function NewsSentimentDrawer(props: {
             says which row and which item. */}
         <ContextMenu
           anchor={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
-          ariaLabelKey="news.sentiment.more"
+          ariaLabelKey="pages.intelligence.portal.newsSentiment.drawer.moreActions"
           items={contextMenu ? menuItems : []}
           onClose={() => setContextMenu(undefined)}
           onSelect={(key) => {
@@ -466,7 +483,7 @@ export function NewsSentimentDrawer(props: {
             void translateItem(contextMenu.itemId, translated)
           }}
           open={contextMenu !== undefined && menuItems.length > 0}
-          resolveText={resolveIconText}
+          resolveText={resolveProductText}
         />
       </div>
     </Drawer>
@@ -483,7 +500,12 @@ function DrawerInterpretation(props: Readonly<{
   view?: import('../../../shared/ipc/newsInterpretationClient').NewsInterpretationReadView
   submitting: boolean
   failure?: Readonly<{ itemId: string; sentenceKey: string; retry: boolean }>
-  onRetry: () => void
+  /** 读失败/正文读失败的重试：只重读，不排新分析。 */
+  onRetryRead: () => void
+  /** 写失败（`failed` 且动作是 retry）的重试：真的重发一次。 */
+  onRetrySubmit: () => void
+  /** 「读取结果」：催一次读，不排新分析。 */
+  onReadResult: () => void
 }>): React.ReactElement | null {
   const copy = productText[useShellLanguage()].mi.aiInterpretation
   const resolveText = useProductTextKey()
@@ -502,27 +524,27 @@ function DrawerInterpretation(props: Readonly<{
       else setParagraphs(next)
     })
     return () => { active = false }
-  }, [summaryId, props.onRetry])
+  }, [summaryId])
 
   if (props.failure !== undefined) {
     return <AiInterpretationSection
       failure={{ sentence: resolveText(props.failure.sentenceKey) || copy.readFailed, canRetry: props.failure.retry }}
-      {...(props.failure.retry ? { onRetry: props.onRetry } : {})}
+      {...(props.failure.retry ? { onRetry: props.onRetrySubmit } : {})}
       state="failed" />
   }
-  if (props.submitting) return <AiInterpretationSection state="pending" />
+  if (props.submitting) return <AiInterpretationSection onReadResult={props.onReadResult} state="pending" />
   if (view === undefined || view.state === 'none') return null
-  if (view.state === 'in-flight') return <AiInterpretationSection state="pending" />
+  if (view.state === 'in-flight') return <AiInterpretationSection onReadResult={props.onReadResult} state="pending" />
   if (view.state === 'unreadable') {
-    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetry} state="failed" />
+    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetryRead} state="failed" />
   }
   if (view.generatedAt === undefined || view.evidenceScope === undefined || summaryId === undefined) {
-    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetry} state="failed" />
+    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetryRead} state="failed" />
   }
   if (summaryFailed) {
-    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetry} state="failed" />
+    return <AiInterpretationSection failure={{ sentence: copy.readFailed, canRetry: true }} onRetry={props.onRetryRead} state="failed" />
   }
-  if (paragraphs === undefined) return <AiInterpretationSection state="pending" />
+  if (paragraphs === undefined) return <AiInterpretationSection onReadResult={props.onReadResult} state="pending" />
   return <AiInterpretationSection
     audit={{
       asOf: view.evidenceScope.asOf,

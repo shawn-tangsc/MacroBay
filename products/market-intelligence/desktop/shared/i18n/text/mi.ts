@@ -10,6 +10,9 @@ export const miText = {
     // 菜单项是动作名，与节标题不是一回事（节标题自解释「这条新闻对市场的影响」）。
     readFailed: '暂时读不到这条解读，可再试一次',
     generating: '正在生成',
+    readResult: '读取结果',
+    menuUnreadable: '暂时读不到这条解读',
+    unreachable: '没送到分析服务，可再试一次',
     retry: '再试一次',
     meta: '生成于 {time} · 依据：该条新闻 + 当时快照（{count} 条证据）',
     audit: {
@@ -39,6 +42,9 @@ export const miText = {
     infoAria: 'What this section explains',
     readFailed: 'This interpretation could not be read; try again',
     generating: 'Generating',
+    readResult: 'Read result',
+    menuUnreadable: 'This interpretation cannot be read right now',
+    unreachable: 'The request did not reach the analysis service; try again',
     retry: 'Try again',
     meta: 'Generated {time} · Based on: this story + the snapshot at the time ({count} evidence refs)',
     audit: {

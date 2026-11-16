@@ -39,6 +39,8 @@ export function drawerTranslateMenuItem(input: {
     : undefined
   return [{
     key: 'translate',
-    labelKey: state === 'translated' ? 'news.sentiment.retranslate' : 'news.sentiment.translate'
+    labelKey: state === 'translated'
+      ? 'pages.intelligence.portal.newsSentiment.drawer.translationStatus.retranslateOne'
+      : 'pages.intelligence.portal.newsSentiment.drawer.translationStatus.translateOne'
   }]
 }

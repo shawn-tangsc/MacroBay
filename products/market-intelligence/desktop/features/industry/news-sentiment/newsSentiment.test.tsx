@@ -1095,6 +1095,60 @@ describe('AI 解读：点击触发（写端点）只把结果落到右栏', () =
     expect(invoke.mock.calls.filter((call) => call[1] === REQUEST).length).toBe(before + 1)
   })
 
+  it('a read failure retry only re-reads: it never queues an analysis', async () => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === READ) throw new Error('boom')
+      if (method === SUMMARY) return summaryBody
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    const retry = section.querySelector('button.text-action') as HTMLButtonElement
+    expect(retry).not.toBeNull()
+    const readsBefore = invoke.mock.calls.filter((call) => call[1] === READ).length
+    await act(async () => { retry.click() })
+    await act(async () => {})
+    expect(invoke.mock.calls.filter((call) => call[1] === READ).length).toBe(readsBefore + 1)
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+  })
+
+  it('a queued request converges: the submitting state ends in a real result', async () => {
+    let requested = false
+    let readsAfterRequest = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === READ) {
+        // 点之前一直是 none；排上之后：第一次 in-flight，催一次读 → available（带正文）。
+        if (!requested) return readNone
+        readsAfterRequest += 1
+        if (readsAfterRequest === 1) return { ...readAvailable, state: 'in-flight', summaryId: undefined, evidenceFingerprint: undefined }
+        return readAvailable
+      }
+      if (method === REQUEST) { requested = true; return { state: 'queued', itemId: 'item-a' } }
+      if (method === SUMMARY) return summaryBody
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    await clickMenuItem('AI 解读')
+    // 提交中，但不是一个只能等死的壳：有「读取结果」。
+    let pending = document.body.querySelector('[data-ai-interpretation]')
+    expect(pending?.getAttribute('data-state')).toBe('pending')
+    const readNow = [...(pending?.querySelectorAll('button.text-action') ?? [])]
+      .find((button) => button.textContent === '读取结果') as HTMLButtonElement | undefined
+    expect(readNow).toBeDefined()
+    await act(async () => { readNow?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+    await act(async () => {})
+
+    pending = document.body.querySelector('[data-ai-interpretation]')
+    expect(pending?.getAttribute('data-state')).toBe('ready')
+    expect(pending?.textContent).toContain('正文一句话。')
+  })
+
   it('already-available does not queue a second run and renders the real body', async () => {
     const { invoke } = stub({
       read: readAvailable,
