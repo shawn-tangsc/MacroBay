@@ -3,7 +3,7 @@ import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
 import { reportSettledEtfRevisions } from './etfSettledRevision'
-import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, type EtfAsset, type EtfDailyFlow, type EtfFlowSourceId } from './etfCurrentStateWindow'
+import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, etfWindowSourceIdFor, type EtfAsset, type EtfDailyFlow, type EtfFlowSourceId } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
 export const etfCurrentStateRefreshAdmissionPolicy = Object.freeze({
@@ -29,8 +29,11 @@ export function createEtfCurrentStateRefreshService(deps: {
   /** 按**解析出来的那个源**问开关与凭据（备源有它自己的一把 key）。 */
   isEnabled: (sourceId: string) => Promise<boolean>
   hasCredential: (sourceId: string) => Promise<boolean>
-  /** 按**解析出来的那个源**取窗口（主源不可用时解析器会给出备源）。 */
-  requestWindow: (sourceId: EtfFlowSourceId) => Promise<EtfWindowRequestResult>
+  /**
+   * 按**解析出来的那个源**取窗口（主源不可用时解析器会给出备源）。
+   * 参数是解析器给出的**注册表 id**：客户端按 id 选，行上的来源由装配处用窗口 id 盖。
+   */
+  requestWindow: (sourceId: string) => Promise<EtfWindowRequestResult>
   store: Pick<EtfCurrentStateStore, 'replace'> & Partial<Pick<EtfCurrentStateStore, 'read'>>
   now: () => string
   /**
@@ -51,14 +54,18 @@ export function createEtfCurrentStateRefreshService(deps: {
       // 解析出来不在允许集里（或没有）就停手，别拿错客户端静默去采。
       if (resolution.kind !== 'resolved') return unavailable()
       const resolvedSource = resolution.sourceId
-      if (!(etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(resolvedSource)) return unavailable()
-      const sourceId = resolvedSource as EtfFlowSourceId
-      if (!await enabled(() => deps.isEnabled(sourceId)) || !await enabled(() => deps.hasCredential(sourceId))) return unavailable()
+      // 解析器给的是注册表 id，窗口契约认的是窗口 id——翻译只走 `etfWindowSourceIdFor`。
+      // 少了这一步，备源被解析出来的那一轮整轮 fail-closed，而且哪一层都不报错（2026-11-17）。
+      const sourceId = etfWindowSourceIdFor(resolvedSource)
+      if (!sourceId) return unavailable()
+      if (!(etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(sourceId)) return unavailable()
+      // 开关与凭据按**注册表 id**问（profile 是按它存的）；`sourceId` 只用于行上的来源与窗口归属。
+      if (!await enabled(() => deps.isEnabled(resolvedSource)) || !await enabled(() => deps.hasCredential(resolvedSource))) return unavailable()
       const fetchedAt = deps.now()
       const currentUtcDate = etfCurrentStateRefreshAdmissionPolicy.currentUtcDate(fetchedAt)
       if (!currentUtcDate) return unavailable()
       try {
-        const requested = await deps.requestWindow(sourceId)
+        const requested = await deps.requestWindow(resolvedSource)
         if (requested.state === 'unavailable') return unavailable()
         const previous = requested.state === 'partial' && deps.store.read ? await deps.store.read() : null
         // 换源期不再拦混源：窗口契约从 2026-11-17 起允许行级来源（主源 + 备源互补），

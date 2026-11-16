@@ -57,6 +57,40 @@ describe('ETF current-state refresh service', () => {
     })
   })
 
+  it('writes when the fact falls back to the standby, whose id the window contract spells differently', async () => {
+    // 主源关掉、只剩 0xRouter 时，解析器给出的是**注册表 id**；窗口契约认的是窗口 id。
+    // 两者没对上时整轮静默不写（2026-11-17 的「备源接进来就再没进过数」），所以这一条钉的是映射。
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    // 开关、凭据、取窗口都按**注册表 id**问（profile 与客户端都按它存）；窗口 id 只进窗口。
+    const asked: string[] = []
+    const service = createEtfCurrentStateRefreshService({
+      resolveFactSource: async () => ({ kind: 'resolved' as const, sourceId: '0xrouter-aggregate-provider' }),
+      isEnabled: async (sourceId) => { asked.push(`enabled:${sourceId}`); return true },
+      hasCredential: async (sourceId) => { asked.push(`credential:${sourceId}`); return true },
+      requestWindow: async (sourceId) => {
+        asked.push(`window:${sourceId}`)
+        return {
+          state: 'available' as const,
+          btc: rows('BTC').map((row) => ({ ...row, source: '0xrouter' })),
+          eth: rows('ETH').map((row) => ({ ...row, source: '0xrouter' }))
+        }
+      },
+      store,
+      now: () => '2026-09-01T12:00:00.000Z'
+    })
+
+    await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
+    expect(asked).toEqual([
+      'enabled:0xrouter-aggregate-provider',
+      'credential:0xrouter-aggregate-provider',
+      'window:0xrouter-aggregate-provider'
+    ])
+    await expect(store.readAvailable({ asOf: '2026-09-01T12:00:00.000Z' })).resolves.toMatchObject({
+      state: 'available',
+      verifiedAt: '2026-09-01T12:00:00.000Z'
+    })
+  })
+
   it('stops when the fact has no source, and refuses on a conflict', async () => {
     const requestWindow = vi.fn()
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })

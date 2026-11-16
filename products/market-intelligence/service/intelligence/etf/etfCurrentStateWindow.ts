@@ -141,6 +141,27 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[])
 }
 
 /**
+ * 注册表 id → 窗口 id。**两个词表对同一件事只有一个翻译点**（就这里）。
+ *
+ * 窗口契约的 `allowedSourceIds` 是换源期留下的词表：主源用注册表 id，旧聚合源用窗口 id
+ * `'0xrouter'`（旧行按它写的，读迁移只认它）。采集侧拿到的是注册表 id
+ * `'0xrouter-aggregate-provider'`——直接写进行里，整窗就会 fail-closed：既不落库、也不记拒绝，
+ * 读者只看到「数据一直不更新」（2026-11-17 的现场）。
+ */
+const etfWindowSourceIdsByRegistryId: Readonly<Record<string, EtfFlowSourceId>> = Object.freeze({
+  'cryptoetf-etf-flows': 'cryptoetf-etf-flows',
+  '0xrouter-aggregate-provider': '0xrouter',
+  // 旧行与旧调用点本来就用窗口 id：认同一个值，不逼调用方先查表。
+  '0xrouter': '0xrouter'
+})
+
+/** 认不出来就返回 undefined：宁可不写这一支，也不写一行会被整窗拒绝的来源。 */
+export function etfWindowSourceIdFor(sourceId: string): EtfFlowSourceId | undefined {
+  return etfWindowSourceIdsByRegistryId[sourceId]
+}
+
+
+/**
  * 窗口归属哪个来源：**主源在场就是主源**（用户 2026-11-17 的「新的覆盖旧的」），
  * 主源一天都没有才归备源。行级的 `source` 才是「这一天这条线是谁给的」。
  */

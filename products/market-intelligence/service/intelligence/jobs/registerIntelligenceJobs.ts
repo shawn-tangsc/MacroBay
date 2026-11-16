@@ -41,7 +41,7 @@ export function registerIntelligenceJobs(
       scoreItems: ReturnType<typeof createNewsSentimentScoringService>['scoreItems']
     }
     capitalConditions?: { refresh: () => Promise<unknown> }
-    etfFlowHistory?: { refresh: () => Promise<unknown> }
+    etfFlowHistory?: { refresh: () => Promise<Readonly<{ state: string; reason?: string }>> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
     openInterest?: { refresh: (input?: Readonly<{ log?: (entry: Readonly<{ level: 'warn'; message: string }>) => void | Promise<void> }>) => Promise<unknown> }
   }
@@ -58,7 +58,15 @@ export function registerIntelligenceJobs(
     // 路由按「这个源声明了 etf-net-flow」走，不认具体 id：以后加源只改注册表声明。
     // 旧锚的分支留着只为过渡期——它 collection 落成 none 后不会再有作业。
     if (getSource(input.sourceId)?.provides?.includes('etf-net-flow') === true || isZeroXRouterSource(input.sourceId)) {
-      await deps.etfFlowHistory?.refresh()
+      const refreshed = await deps.etfFlowHistory?.refresh()
+      // 这一轮到底写没写，运行记录里要自己说出来：`unavailable` 时库里的 `last_attempt_at` 不动，
+      // 界面上只剩「采集完成」，读者和我们都只能猜（2026-11-17 查了半天的那次）。
+      if (refreshed !== undefined) {
+        await context.log({
+          level: refreshed.state === 'unavailable' ? 'warn' : 'info',
+          message: `ETF window refresh: ${refreshed.state}${refreshed.reason ? ` (${refreshed.reason})` : ''}.`
+        })
+      }
       return
     }
     // One source, two series: the funding rate and the notional open interest it cannot be

@@ -8,7 +8,7 @@ import { allSources } from './application/providerRegistry'
 import { projectJobRegistration } from './application/sourceJobRegistration'
 import { createCryptoEtfFlowClient } from './application/cryptoEtfFlowClient'
 import type { EtfFlowHistoryRow } from './etf/etfFlowHistoryParser'
-import { mergeEtfAssetDays } from './etf/etfSourceMerge'
+import { mergeEtfAssetDays, tagEtfSourceRows } from './etf/etfSourceMerge'
 import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
 import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
@@ -201,28 +201,40 @@ export function createIntelligenceMarketData(input: {
     requestWindow: async (sourceId: string) => {
       const primaryId = sourceId
       const standbyId = etfSourcePrecedence.find((candidate) => candidate !== primaryId)
+      /**
+       * 行上的来源**只由** `tagEtfSourceRows` 盖：采集侧拿到的是注册表 id，窗口契约认的是窗口 id，
+       * 直接把注册表 id 写进行里会让整窗 fail-closed，而失败在刷新层只剩一句 `undefined`
+       * ——2026-11-17「备源接进来就再没进过数」就是这么来的。
+       */
+      const toRows = (days: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[], id: string): readonly EtfFlowHistoryRow[] | undefined =>
+        tagEtfSourceRows(days.map((day) => ({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd })), id)
       const read = async (id: string | undefined): Promise<Readonly<{ btc?: readonly EtfFlowHistoryRow[]; eth?: readonly EtfFlowHistoryRow[] }>> => {
         if (id === undefined) return Object.freeze({})
         const profile = await profileStore.resolveProfile(id)
         const apiKey = profile.enabled ? await etfApiKey(id) : undefined
         if (!apiKey) return Object.freeze({})
-        const toRows = (days: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[]): readonly EtfFlowHistoryRow[] =>
-          days.map((day) => Object.freeze({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd, source: id }))
         if (id === zeroXRouterSourcePolicy.sourceId) {
           // 备源失败现在**不静默**：以前它吞掉原因，界面只表现为「没补上」，谁都查不出为什么。
-          // 每支的传输阶段与解析结果各记一条 marker，落 app.log。
+          // 每支的传输阶段与解析结果各记一条 marker。
           const zero = await zeroXRouterEtfFlowClient.requestWindow(apiKey, (diagnostic) => {
             console.log(JSON.stringify({ marker: 'MI_ETF_STANDBY_DIAGNOSTIC', sourceId: id, asset: diagnostic.asset, transportStage: diagnostic.transportStage, parser: diagnostic.parser }))
           })
-          const tag = (rows: readonly EtfFlowHistoryRow[] | undefined) => rows?.map((row) => Object.freeze({ ...row, source: id }))
-          return Object.freeze({ ...(zero.state !== 'unavailable' && zero.btc ? { btc: tag(zero.btc) } : {}), ...(zero.state !== 'unavailable' && zero.eth ? { eth: tag(zero.eth) } : {}) })
+          if (zero.state === 'unavailable') return Object.freeze({})
+          const btc = zero.btc ? tagEtfSourceRows(zero.btc, id) : undefined
+          const eth = zero.eth ? tagEtfSourceRows(zero.eth, id) : undefined
+          return Object.freeze({ ...(btc ? { btc } : {}), ...(eth ? { eth } : {}) })
         }
         const result = await cryptoEtfFlowClient.readSettledWindow(apiKey)
-        if (result.state === 'available') return Object.freeze({ btc: toRows(result.btc.days), eth: toRows(result.eth.days) })
+        if (result.state === 'available') {
+          const btc = toRows(result.btc.days, id)
+          const eth = toRows(result.eth.days, id)
+          if (!btc || !eth) return Object.freeze({})
+          return Object.freeze({ btc, eth })
+        }
         if (result.state === 'partial') {
           return Object.freeze({
-            ...(result.btc?.state === 'available' ? { btc: toRows(result.btc.days) } : {}),
-            ...(result.eth?.state === 'available' ? { eth: toRows(result.eth.days) } : {})
+            ...(result.btc?.state === 'available' ? { btc: toRows(result.btc.days, id) } : {}),
+            ...(result.eth?.state === 'available' ? { eth: toRows(result.eth.days, id) } : {})
           })
         }
         return Object.freeze({})

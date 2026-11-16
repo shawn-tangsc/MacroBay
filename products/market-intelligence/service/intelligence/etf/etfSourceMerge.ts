@@ -1,3 +1,4 @@
+import { etfWindowSourceIdFor } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
 
 /**
@@ -24,4 +25,20 @@ export function mergeEtfAssetDays(
   }
   const merged = [...byDate.values()].sort((left, right) => left.date - right.date)
   return merged.length === 0 ? undefined : merged
+}
+
+/**
+ * 给一支流水盖上「它属于哪个来源」，用的是**窗口 id**，不是采集侧的注册表 id。
+ *
+ * 这一步不许省：两套词表（注册表 / 窗口契约）只在 `etfWindowSourceIdFor` 里翻译一次，
+ * 调用方直接把注册表 id 写进行里，整窗会被 `allowedSourceIds` 拒掉——而拒绝发生在窗口构建里，
+ * 刷新层只看到 `undefined`，读者看到的是「数据不更新」（2026-11-17）。
+ */
+export function tagEtfSourceRows(
+  rows: readonly EtfFlowHistoryRow[] | undefined,
+  sourceId: string
+): readonly EtfFlowHistoryRow[] | undefined {
+  const source = etfWindowSourceIdFor(sourceId)
+  if (rows === undefined || source === undefined) return undefined
+  return Object.freeze(rows.map((row) => Object.freeze({ ...row, source })))
 }
