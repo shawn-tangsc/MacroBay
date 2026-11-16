@@ -14,6 +14,8 @@ export const miText = {
     menuUnreadable: '暂时读不到这条解读',
     unreachable: '没送到分析服务，可再试一次',
     runFailed: '这次解读跑完了但没生成出结果，可再试一次',
+    // 等过时限（3 分钟）仍没有结果：服务端可能挂住、或应用中途被关。必须落失败态，不许继续转圈。
+    waitExceeded: '这次没跑完，可再试一次',
     retry: '再试一次',
     meta: '生成于 {time} · 依据：该条新闻 + 解读时的数据（{count} 条证据）',
     audit: {
@@ -47,6 +49,8 @@ export const miText = {
     menuUnreadable: 'This interpretation cannot be read right now',
     unreachable: 'The request did not reach the analysis service; try again',
     runFailed: 'The interpretation ran but produced no result; try again',
+    // Waited past the 3-minute limit with no result (server stuck, or the app closed mid-run).
+    waitExceeded: 'The run did not finish in time; try again',
     retry: 'Try again',
     meta: 'Generated {time} · Based on: this story + the data available when it was generated ({count} pieces of evidence)',
     audit: {

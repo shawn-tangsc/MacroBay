@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { requestNewsInterpretation } from '../../../shared/ipc/newsInterpretationClient'
 import { newsInterpretationResultCopy } from '../../../shared/i18n/newsInterpretationResultCopy'
 import { useNewsInterpretationRead } from './useNewsInterpretationRead'
 
 export type NewsInterpretationFailure = Readonly<{ itemId: string; sentenceKey: string; retry: boolean }>
+
+/** 轮询间隔：运行没结束前，界面每 3 秒重读一次。 */
+export const NEWS_INTERPRETATION_POLL_MS = 3_000
+/**
+ * 等多久就认定「等不到了」。一次解读正常 1.5–2 分钟，给到 3 分钟。
+ * 到点无论服务端说什么，界面都必须落失败态并给重试——「正在生成」绝不允许永驻：
+ * 服务端挂住、应用中途被关、或者一次运行卡在 inflight，读者都得拿到一个能行动的结论。
+ */
+export const NEWS_INTERPRETATION_WAIT_MS = 180_000
 
 /**
  * 「AI 解读」的读取 + 提交状态机（R37）：抽屉只保留渲染与挂载，这一块单独成模块。
@@ -35,23 +44,58 @@ export function useNewsInterpretationView(input: Readonly<{
   const [submittingItemId, setSubmittingItemId] = useState<string>()
   const [failure, setFailure] = useState<NewsInterpretationFailure>()
 
-  // 收敛：读接口已经有结果时，「提交中」必须结束——不许一直停在「正在生成」。
+  // 收敛：读接口已经有结果时，「提交中」结束、失败态也清掉；读接口明确失败（`none` + `lastRun`）时，
+  // 提交态同样必须结束——不结束就会盖住失败态，让读者永远等下去。
   useEffect(() => {
+    const view = activeRead.view
+    if (view?.state === 'available') setFailure(undefined)
     if (submittingItemId === undefined || submittingItemId !== input.activeItemId) return
-    if (activeRead.view?.state === 'available') setSubmittingItemId(undefined)
+    if (view?.state === 'available' || (view?.state === 'none' && view.lastRun !== undefined)) {
+      setSubmittingItemId(undefined)
+    }
   }, [activeRead.view, input.activeItemId, submittingItemId])
 
-  // 轮询：一次运行可能要一两分钟，界面不能只靠读者手点。每 3 秒重读一次，最多 40 次（2 分钟）。
+  // 轮询 + 总时限（本地发起的那一次）：每 3 秒重读一次，到点仍没终态就落失败。
+  // reload 走 ref：否则每次重读都会重建 effect、把计时器清零——那正是「转圈停不下来」的成因之一。
+  const reloadRef = useRef(activeRead.reload)
+  reloadRef.current = activeRead.reload
   useEffect(() => {
     if (submittingItemId === undefined) return
-    let tries = 0
+    const startedAt = Date.now()
     const timer = setInterval(() => {
-      tries += 1
-      if (tries > 40) { clearInterval(timer); return }
-      activeRead.reload()
-    }, 3000)
+      if (Date.now() - startedAt >= NEWS_INTERPRETATION_WAIT_MS) {
+        clearInterval(timer)
+        setSubmittingItemId(undefined)
+        setFailure({ itemId: submittingItemId, sentenceKey: 'mi.aiInterpretation.waitExceeded', retry: true })
+        return
+      }
+      reloadRef.current()
+    }, NEWS_INTERPRETATION_POLL_MS)
     return () => { clearInterval(timer) }
-  }, [activeRead, submittingItemId])
+  }, [submittingItemId])
+
+  // 服务端已经在跑、但不是这一屏发起的那一次（比如上次点完关掉应用、或运行挂死）：
+  // 一样要有时限。只读接口一直回 `in-flight`，界面就不能一直转圈——到点落失败并可重试。
+  const inFlightSince = useRef<Readonly<{ itemId: string; at: number }> | undefined>(undefined)
+  useEffect(() => {
+    const itemId = input.activeItemId
+    const view = activeRead.view
+    if (itemId === undefined || submittingItemId !== undefined || view?.state !== 'in-flight') {
+      inFlightSince.current = undefined
+      return
+    }
+    const now = Date.now()
+    if (inFlightSince.current?.itemId !== itemId) inFlightSince.current = { itemId, at: now }
+    const remaining = NEWS_INTERPRETATION_WAIT_MS - (now - inFlightSince.current.at)
+    if (remaining <= 0) {
+      setFailure({ itemId, sentenceKey: 'mi.aiInterpretation.waitExceeded', retry: true })
+      return
+    }
+    const timer = setTimeout(() => {
+      setFailure({ itemId, sentenceKey: 'mi.aiInterpretation.waitExceeded', retry: true })
+    }, remaining)
+    return () => { clearTimeout(timer) }
+  }, [activeRead.view, input.activeItemId, submittingItemId])
 
   const submit = useCallback((itemId: string): void => {
     setSubmittingItemId(itemId)

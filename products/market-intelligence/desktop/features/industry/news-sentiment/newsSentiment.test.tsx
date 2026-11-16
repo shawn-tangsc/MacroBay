@@ -11,6 +11,7 @@ import { NewsSentimentDrawer } from './NewsSentimentDrawer'
 import { NewsSentimentFeature } from './NewsSentimentFeature'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
+import { NEWS_INTERPRETATION_POLL_MS, NEWS_INTERPRETATION_WAIT_MS } from './useNewsInterpretationView'
 
 const text = productText['zh-CN'].pages.intelligence.portal.newsSentiment
 
@@ -1196,6 +1197,65 @@ describe('AI 解读：点击触发（写端点）只把结果落到右栏', () =
     pending = document.body.querySelector('[data-ai-interpretation]')
     expect(pending?.getAttribute('data-state')).toBe('ready')
     expect(pending?.textContent).toContain('正文一句话。')
+  })
+
+  it('gives up at the wait budget when the run stays in flight, instead of spinning forever', async () => {
+    // 现场（2026-11-17）：运行挂死，只读接口一直回 in-flight。界面不许无限等——到上限必须落到失败态。
+    vi.useFakeTimers()
+    try {
+      const { invoke } = stub({ read: { itemId: 'item-a', state: 'in-flight', currentEvidenceFingerprint: 'fp-1' } })
+      await mountDrawer({ translationEnabled: false })
+      await act(async () => {})
+      expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+
+      await act(async () => { vi.advanceTimersByTime(NEWS_INTERPRETATION_WAIT_MS + NEWS_INTERPRETATION_POLL_MS) })
+      await act(async () => {})
+
+      const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+      expect(section?.getAttribute('data-state')).toBe('failed')
+      expect(section.textContent).toContain('这次没跑完，可再试一次')
+      const retry = section.querySelector('button.text-action') as HTMLButtonElement
+      expect(retry).not.toBeNull()
+      // 只是等超时，没排过任何运行；重试才真的发请求。
+      expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+      await act(async () => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      await act(async () => {})
+      expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives up at the wait budget after a queued run that never lands', async () => {
+    vi.useFakeTimers()
+    try {
+      let requested = false
+      const invoke = vi.fn(async (_product: string, method: string) => {
+        if (method === READ) {
+          return requested
+            ? { itemId: 'item-a', state: 'in-flight', currentEvidenceFingerprint: 'fp-1' }
+            : readNone
+        }
+        if (method === REQUEST) { requested = true; return { state: 'queued', itemId: 'item-a' } }
+        return undefined
+      })
+      ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+      await mountDrawer({ translationEnabled: false })
+      await openMenu()
+      await clickMenuItem('AI 解读')
+      expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+
+      await act(async () => { vi.advanceTimersByTime(NEWS_INTERPRETATION_WAIT_MS + NEWS_INTERPRETATION_POLL_MS) })
+      await act(async () => {})
+
+      const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+      expect(section?.getAttribute('data-state')).toBe('failed')
+      expect(section.textContent).toContain('这次没跑完，可再试一次')
+      expect(section.querySelector('button.text-action')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('already-available does not queue a second run and renders the real body', async () => {
