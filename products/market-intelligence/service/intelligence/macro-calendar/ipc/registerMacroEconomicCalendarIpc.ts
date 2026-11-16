@@ -19,6 +19,7 @@ import { createMacroCalendarWriteActions } from '../macroCalendarWriteActions'
 import { listUnmappedCalendarObservationsForRendering } from '../rendering/marketCalendarUnmappedMonthRead'
 import { readCalendarEventIndex } from '../rendering/marketCalendarEventIndexRead'
 import { readCalendarMappingRules } from '../rendering/marketCalendarMappingRulesRead'
+import { readEventSourceWrites } from '../rendering/marketCalendarEventSourceWritesRead'
 import {
   isEmpty,
   isProviderInput,
@@ -137,6 +138,22 @@ export function registerMacroEconomicCalendarIpc(
   register(productId, marketCalendarPublicPolicy.methods.queryMappingRules, async () => {
     if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
     return readCalendarMappingRules(unmappedMonth.database)
+  })
+  /**
+   * **按事件身份取各来源的写入/观测**（只读、渲染专用）：入参必须有期次。
+   * 少了期次就返回输入非法，而不是「返回这个指标所有月份」——那会把几十期混成一块。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryEventSourceWrites, async payload => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    const input = (payload ?? {}) as { metricKey?: unknown; scheduledDate?: unknown }
+    try {
+      return readEventSourceWrites(unmappedMonth.database, {
+        metricKey: input.metricKey,
+        scheduledDate: input.scheduledDate
+      })
+    } catch {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
   })
   // One read method, no payload: the caller asks "how old is the calendar", never "how old
   // is this source in this month". A read that fails answers `unavailable`, never "nothing".

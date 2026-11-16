@@ -13,6 +13,8 @@ import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarCountryLabel } from './calendarCountryLabel'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
+import { EventSourceWritesBlocks } from './EventSourceWritesBlocks'
+import { useEventSourceWrites } from './useEventSourceWrites'
 
 /**
  * 来源显示名：**feed id → 名字**，认不出用「未标来源」，都不是就退回旧的通用名。
@@ -70,6 +72,13 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
       : hierarchy.childNames === undefined || hierarchy.childNames.length === 0 ? undefined
         : text.details.hierarchyChildren.replace('{names}',
           hierarchy.childNames.join(text.details.hierarchySeparator))
+  /**
+   * 各来源记录（#47）：只有同时拿到**指标身份**和**期次**才读——没有期次会读回这个指标的
+   * 所有月份，几十期混成一块。日期取 `scheduledAt` 的日期部分（存的就是源给的发布日）。
+   */
+  const sourceWrites = useEventSourceWrites(event.eventNameKey === undefined ? undefined : {
+    metricKey: event.eventNameKey, scheduledDate: event.scheduledAt.slice(0, 10)
+  })
   const shownSource: MarketCalendarSource = sourceAgrees
     ? source
     : { eventType: event.eventType, status: 'success', sourceObservedAt: event.sourceObservedAt }
@@ -93,6 +102,10 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
         ? text.market.missingValue
         : text.market.importance[event.importance as 'high' | 'medium' | 'low']}</dd></div>
     </dl>
+    {/* 各来源记录（#47）：一个来源一块，narwhal 与 0xrouter 各写什么并排看，不拼成一条。 */}
+    {sourceWrites?.state === 'available'
+      ? <EventSourceWritesBlocks rows={sourceWrites.rows} text={text} />
+      : null}
     {/* 事件内容（用户 2026-11-13 #7；边界由 Chief 2026-11-16 划）：只用记录里已有的字段，
         取不到就如实说，不拿别的事件凑。数据里还没有一句话式的事件描述，所以这一段现在能给的是
         「它覆盖哪些指标」与「它是哪一条」；描述从哪来要产品定，落到库里之后在这里加一行。 */}

@@ -93,6 +93,11 @@ export const marketCalendarPublicPolicy = Object.freeze({
     queryEvents: 'intelligence.macro.marketCalendar.queryEvents',
     /** 映射规则表（只读，渲染专用）：现有规则 + 库里未映射的源内 id。 */
     queryMappingRules: 'intelligence.macro.marketCalendar.queryMappingRules',
+    /**
+     * **按事件身份取各来源写了什么**（只读，渲染专用）：`#47` 详情分块与 `#40` 冲突共用。
+     * 双源读取——修订表给「谁在什么时候写过什么」（只有官方来源），标准表给「每个来源当前的值」。
+     */
+    queryEventSourceWrites: 'intelligence.macro.marketCalendar.queryEventSourceWrites',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)

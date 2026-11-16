@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
 
@@ -327,4 +327,55 @@ it('shows the indicator level for a child and for a parent, and no row when ther
       event={{ ...base, hierarchy: { kind: 'child' as const } }} />)))
     expect(row()).toBeNull()
   } finally { await act(async () => root.unmount()) }
+})
+
+/**
+ * #47 的接线判据（用户 2026-11-17）：详情里**按来源分块**，帝国大厦那期两边各写什么并排看；
+ * 没有指标身份或没有期次时**不读、不画**——空块比没有块更容易被误解。
+ */
+it('asks for the per-source writes only when it has both identity and period, and renders them apart', async () => {
+  vi.resetModules()
+  const calls: { metricKey: string; scheduledDate: string }[] = []
+  vi.doMock('../../../shared/ipc/marketCalendarClient', () => ({
+    marketCalendarClient: {
+      queryEventSourceWrites: async (input: { metricKey: string; scheduledDate: string }) => {
+        calls.push(input)
+        return { state: 'available' as const, metricKey: input.metricKey, providerCount: 2, hasRevisionChain: false,
+          rows: [
+            { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-16T21:49:41.793Z',
+              status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: input.metricKey },
+            { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-16T13:30:00.000Z',
+              status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: '["214790",79095]' }
+          ] }
+      }
+    }
+  }))
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const host = document.createElement('div'); const root = createRoot(host)
+  const textZh = productText['zh-CN'].pages.intelligence.portal.calendar
+  const base = { eventKey: '00000000-0000-4000-8000-000000000031', title: '帝国大厦制造业指数', countryCode: 'US',
+    eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-11-16T13:30:00.000Z',
+    consensus: null, providerPrevious: null, providerActual: null,
+    source: 'Narwhal' as const, sourceObservedAt: '2026-11-16T14:00:00.000Z', coverage: 'observed-unverified' as const }
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector text={textZh}
+      event={{ ...base, eventNameKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL' }} />)))
+    await act(async () => { await Promise.resolve() })
+    // 入参必须带期次（不带就会读回这个指标的所有月份）。
+    expect(calls).toEqual([{ metricKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL', scheduledDate: '2026-11-16' }])
+    const blocks = [...host.querySelectorAll('[data-source-block]')]
+    expect(blocks.map((block) => block.getAttribute('data-source-block'))).toEqual(['narwhal', '0xrouter'])
+    expect(blocks[0]!.textContent).toContain('10')
+    expect(blocks[1]!.textContent).toContain('7.8')
+
+    // 没有指标身份：不读、不画。
+    calls.length = 0
+    await act(async () => root.render(scoped(<MarketCalendarInspector text={textZh} event={base} />)))
+    expect(calls).toHaveLength(0)
+    expect(host.querySelector('[data-source-writes]')).toBeNull()
+  } finally {
+    await act(async () => root.unmount())
+    vi.doUnmock('../../../shared/ipc/marketCalendarClient')
+    vi.resetModules()
+  }
 })

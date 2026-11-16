@@ -101,6 +101,7 @@ export const marketIntelligenceProductManifest = {
     { method: marketCalendarPublicPolicy.methods.query },
     // 未映射观测的月读：只读、无副作用，只在日历渲染里用（用户 2026-11-16 定）。
     { method: marketCalendarPublicPolicy.methods.queryUnmappedMonth },
+    { method: marketCalendarPublicPolicy.methods.queryEventSourceWrites },
     // 事件清单：只读、渲染专用（核对「每个事件去哪看官方发布」）。
     { method: marketCalendarPublicPolicy.methods.queryEvents },
     // 映射规则表：只读、渲染专用。

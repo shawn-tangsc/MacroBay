@@ -7,6 +7,9 @@ import type {
   CalendarEventIndexRead, CalendarEventIndexRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventIndexRead'
 import type { MappingRulesRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import type {
+  EventSourceWritesRead, EventSourceWriteRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventSourceWritesRead'
 export type MarketCalendarClient = {
   queryMonth: (input: MarketCalendarQuery) => Promise<MarketCalendarPage>
   refresh: (input: MarketCalendarScope) => Promise<MarketCalendarRefreshResult>
@@ -30,6 +33,12 @@ export type MarketCalendarClient = {
    * 数据量很小（85 条规则 + 数百个 id），一次给完，前端本地筛选与分页。
    */
   queryMappingRules: () => Promise<MappingRulesRead>
+  /**
+   * 某一期、某个指标身份下**各来源写了什么**（只读，渲染专用）：`#47` 详情分块用。
+   *
+   * 入参必须带 `scheduledDate`：不带就会拿到这个指标所有月份，几十期混成一块。
+   */
+  queryEventSourceWrites: (input: Readonly<{ metricKey: string; scheduledDate: string }>) => Promise<EventSourceWritesRead>
   /** Bounded catch-up: `timeout` is its own answer and is never reported as a failure. */
   refreshNow: (input: Readonly<{ sourceIds?: readonly string[]; timeoutMs?: number }>) => Promise<MarketCalendarRefreshNowResult>
 }
@@ -51,6 +60,12 @@ export const marketCalendarClient: MarketCalendarClient = {
   async queryMappingRules() {
     const value = await invoke(marketCalendarPublicPolicy.methods.queryMappingRules, {})
     return mappingRulesReadOf(value)
+  },
+  async queryEventSourceWrites(input) {
+    const value = await invoke(marketCalendarPublicPolicy.methods.queryEventSourceWrites, {
+      metricKey: input.metricKey, scheduledDate: input.scheduledDate
+    })
+    return eventSourceWritesReadOf(value)
   },
   async queryEvents(input) {
     return eventIndexReadOf(await invoke(marketCalendarPublicPolicy.methods.queryEvents, input))
@@ -182,4 +197,50 @@ export function mappingRulesReadOf(value: unknown): MappingRulesRead {
   }
   if (record.counts === null || typeof record.counts !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
   return record as unknown as MappingRulesRead
+}
+
+/**
+ * 各来源写入/观测的形状守卫：**半份数据放行比读不到更糟**——少一行来源，读者会以为「只有一家在报」。
+ * 值允许 `null`（＝这一家没给），但字段必须在；`source` 只认两个值。
+ */
+export function eventSourceWritesReadOf(value: unknown): EventSourceWritesRead {
+  const unavailable = { state: 'unavailable', reasonCode: 'query-unavailable' } as const
+  if (value === null || typeof value !== 'object') return unavailable
+  const record = value as Record<string, unknown>
+  if (record.state === 'unavailable') {
+    const reason = record.reasonCode
+    return reason === 'query-input-invalid' || reason === 'query-unavailable'
+      ? { state: 'unavailable', reasonCode: reason }
+      : unavailable
+  }
+  if (record.state !== 'available' || !Array.isArray(record.rows)) return unavailable
+  const rows: EventSourceWriteRow[] = []
+  for (const entry of record.rows) {
+    if (entry === null || typeof entry !== 'object') return unavailable
+    const row = entry as Record<string, unknown>
+    if (row.source !== 'revision' && row.source !== 'observation') return unavailable
+    for (const field of ['providerId', 'observedAt', 'status', 'identityKey'] as const) {
+      if (typeof row[field] !== 'string' || (row[field] as string) === '') return unavailable
+    }
+    for (const field of ['consensus', 'actual', 'previous'] as const) {
+      if (row[field] !== null && typeof row[field] !== 'string') return unavailable
+    }
+    rows.push({
+      source: row.source as EventSourceWriteRow['source'],
+      providerId: row.providerId as string,
+      observedAt: row.observedAt as string,
+      status: row.status as string,
+      consensus: row.consensus as string | null,
+      actual: row.actual as string | null,
+      previous: row.previous as string | null,
+      identityKey: row.identityKey as string
+    })
+  }
+  return {
+    state: 'available',
+    metricKey: String(record.metricKey ?? ''),
+    rows,
+    providerCount: rows.length === 0 ? 0 : new Set(rows.map((row) => row.providerId)).size,
+    hasRevisionChain: rows.some((row) => row.source === 'revision')
+  }
 }

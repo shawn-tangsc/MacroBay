@@ -166,9 +166,9 @@ describe('registerMacroEconomicCalendarIpc', () => {
       listEffectiveMonthAsOf: () => [], getEffectiveEventAsOf: () => undefined
     } as never, importService as never)
 
-    // 14 read methods (freshness + 未映射月读 + 事件清单 + 映射规则) plus the two release-time
-    // writes the reader's editor uses.
-    expect([...handlers]).toHaveLength(17)
+    // 15 read methods (freshness + 未映射月读 + 事件清单 + 映射规则 + 各来源记录) plus the two
+    // release-time writes the reader's editor uses.
+    expect([...handlers]).toHaveLength(18)
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.queryMonth)?.({ month: '2026-08' })).resolves.toEqual({ state: 'unavailable', failureCode: 'query-input-invalid' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getEventDetail)?.({ eventKey: 'US.FOMC.2026-12-09', asOf: '2026-08-04T00:00:00.000Z' })).resolves.toEqual({ state: 'unavailable', failureCode: 'event-not-found' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.previewManualBlsIcs)?.({ body: 'bad', truncated: false })).resolves.toEqual({ state: 'failed', failureCode: 'invalid-file' })
@@ -186,8 +186,8 @@ describe('registerMacroEconomicCalendarIpc', () => {
       getProviderHealth: () => ({ state: 'available', providers: [] })
     } as never)
 
-    // 22 = 20 + 事件清单读口（2026-11-16）+ 映射规则读口（2026-11-16，均为渲染专用只读路由）
-    expect([...handlers]).toHaveLength(22)
+    // 23 = 20 + 事件清单读口 + 映射规则读口 + 各来源记录读口（均为渲染专用只读路由）
+    expect([...handlers]).toHaveLength(23)
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getProviderPageState)?.({})).resolves.toEqual({ state: 'unavailable', failureCode: 'provider-settings-unavailable' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.saveProviderProfile)?.({ providerId: 'macro-calendar-fed', enabled: true, sourceUrl: 'https://secret.example.test' })).resolves.toEqual({ state: 'failed', failureCode: 'provider-settings-unavailable' })
     await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.runProviderNow)?.({ providerId: 'macro-calendar-fed' })).resolves.toEqual({ state: 'failed', failureCode: 'provider-settings-unavailable' })
