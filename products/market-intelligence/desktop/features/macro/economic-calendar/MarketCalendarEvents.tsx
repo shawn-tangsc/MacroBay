@@ -39,6 +39,23 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
   // the older reading: that is the rule this used to enforce by rendering nothing at all.
   const sourceAgrees = source !== undefined && source.eventType === event.eventType &&
     source.sourceObservedAt === event.sourceObservedAt
+  /**
+   * 「事件内容」那一段能说的两件事，都只从**这条记录自己的字段**取（用户 2026-11-13 #7）。
+   *
+   * 覆盖指标分三档，不许合并成一句话：
+   * - 记录里带了 `measureKeys` → 列出来；
+   * - 带了但是空数组 → 这条事件本来就不覆盖指标（讲话、会议），写「这条事件不覆盖指标」；
+   * - 字段根本没带 → 源这一条没给，写「源未给出」。
+   * 后两种是「没有」的两种来路，混成一句读者就分不清是源没给还是本来没有。
+   */
+  const measureKeys = event.measureKeys
+  const coverageText = measureKeys === undefined
+    ? text.details.valueNotProvided
+    : measureKeys.length === 0
+      ? text.details.contentCoverageNone
+      : measureKeys.join(' · ')
+  /** 事件标识：身份键优先，其次源自己的事件 id；两样都没有才写「源未给出」。 */
+  const identityText = event.eventNameKey ?? event.seriesId ?? text.details.valueNotProvided
   const shownSource: MarketCalendarSource = sourceAgrees
     ? source
     : { eventType: event.eventType, status: 'success', sourceObservedAt: event.sourceObservedAt }
@@ -62,6 +79,16 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
         ? text.market.missingValue
         : text.market.importance[event.importance as 'high' | 'medium' | 'low']}</dd></div>
     </dl>
+    {/* 事件内容（用户 2026-11-13 #7；边界由 Chief 2026-11-16 划）：只用记录里已有的字段，
+        取不到就如实说，不拿别的事件凑。数据里还没有一句话式的事件描述，所以这一段现在能给的是
+        「它覆盖哪些指标」与「它是哪一条」；描述从哪来要产品定，落到库里之后在这里加一行。 */}
+    <section className="mi-calendar-content" data-calendar-content>
+      <h3>{text.details.content}</h3>
+      <dl className="mi-economic-calendar__metadata">
+        <div data-content-coverage><dt>{text.details.contentCoverage}</dt><dd>{coverageText}</dd></div>
+        <div data-content-identity><dt>{text.details.contentIdentity}</dt><dd>{identityText}</dd></div>
+      </dl>
+    </section>
     {event.eventType === 'economic-indicator' ? <div className="mi-economic-calendar__values">
       {(['consensus', 'providerActual', 'providerPrevious'] as const).map(key => <div key={key} data-market-value={key}>
         <span>{text.market[key]}</span><strong>{event[key]?.displayValue ?? text.market.missingValue}</strong>

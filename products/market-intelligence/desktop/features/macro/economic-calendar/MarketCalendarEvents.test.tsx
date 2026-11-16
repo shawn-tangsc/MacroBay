@@ -220,3 +220,45 @@ it('lists every schedule of a period that was released more than once', async ()
     expect(host.querySelector('[data-release-dates]')).toBeNull()
   } finally { await act(async () => root.unmount()) }
 })
+
+/**
+ * 「事件内容」那一段：只用记录里已有的字段，**「没有」的两种来路不许写成同一句**。
+ *
+ * 用户 2026-11-13 定 #7（经济日历补事件内容），Chief 2026-11-16 划界：从现有字段取，取不到就
+ * 如实显示，不许拿别的事件凑。这里钉三件事：
+ * - 带了覆盖指标 → 列出来；
+ * - 带了但是空数组 → 这条事件本来就不覆盖指标（讲话/会议）；
+ * - 字段根本没带 → 源这一条没给（「源未给出」）。
+ * 后两种都是「没有」，但来路不同；混成一句，读者分不清是源没给还是本来没有。
+ */
+it('names the indicators covered, and keeps the two ways of covering none apart', async () => {
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const host = document.createElement('div'); const root = createRoot(host)
+  const base = { eventKey: '00000000-0000-4000-8000-0000000000c1', title: 'CPI', countryCode: 'US',
+    eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-09-10T00:00:00.000Z',
+    consensus: null, providerPrevious: null, providerActual: null,
+    source: 'Narwhal' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
+  const coverage = (): string => host.querySelector('[data-content-coverage]')?.textContent ?? ''
+  const identity = (): string => host.querySelector('[data-content-identity]')?.textContent ?? ''
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector
+      event={{ ...base, measureKeys: ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY'], eventNameKey: 'US.CPI.NSA.YOY' }} text={text} />)))
+    expect(host.querySelector('[data-calendar-content]')?.textContent).toContain('事件内容')
+    expect(coverage()).toContain('US.CPI.NSA.YOY')
+    expect(coverage()).toContain('US.CORE_CPI.NSA.YOY')
+    expect(identity()).toBe('事件标识US.CPI.NSA.YOY')
+
+    // 源给了身份、但这条事件不覆盖指标（讲话类）→ 说「不覆盖」，不说「源未给出」。
+    await act(async () => root.render(scoped(<MarketCalendarInspector
+      event={{ ...base, eventType: 'central-bank-activity', measureKeys: [], seriesId: 'usa-speech' }} text={text} />)))
+    expect(coverage()).toContain('这条事件不覆盖指标')
+    expect(identity()).toBe('事件标识usa-speech')
+
+    // 字段根本没带 → 源未给出；identity 也退到 seriesId，再没有才说源未给出。
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={base} text={text} />)))
+    expect(coverage()).toContain('源未给出')
+    expect(coverage()).not.toContain('不覆盖指标')
+    expect(identity()).toContain('源未给出')
+  } finally { await act(async () => root.unmount()) }
+})
