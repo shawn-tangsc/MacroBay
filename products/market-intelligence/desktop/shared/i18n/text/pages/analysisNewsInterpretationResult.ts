@@ -16,6 +16,8 @@ export const analysisNewsInterpretationResultText = {
       'insufficient-facts:market-facts-below-minimum': { sentence: '当前可用的市场读数不足两条，解读只能编，先不跑', action: '查看原因' },
       // 「没有判定」与「不够格」不是一个意思：前者只能等，后者本来就不该点。两件事不许共用兜底那一句。
       'no-judgment': { sentence: '这条还没有情绪判定，等判定写下来才能解读', action: null },
+      // 运行被打断/卡住：它不是「跑完了」，也不是「没能开始」——那句话会说错话（没有与拿不到要分开）。
+      'analysis-run-interrupted': { sentence: '这次解读没跑完（应用关了或运行时中断），可再试一次', action: '再试一次' },
       'not-eligible': { sentence: '这条不在可单独解读的范围内', action: null }
     },
     /** 表外的码只落到这一句：读者能做的只有再试一次。 */
@@ -31,6 +33,7 @@ export const analysisNewsInterpretationResultText = {
       'insufficient-facts:trigger-evidence-missing': { sentence: 'The evidence reference for this news could not be built, so it cannot be read yet', action: 'See why' },
       'insufficient-facts:market-facts-below-minimum': { sentence: 'Fewer than two market readings are available, so a reading would have to invent them; not running it', action: 'See why' },
       'no-judgment': { sentence: 'This item has no sentiment judgment yet; it can be read once one is written', action: null },
+      'analysis-run-interrupted': { sentence: 'The interpretation was interrupted (the app closed or the runtime stopped); try again', action: 'Try again' },
       'not-eligible': { sentence: 'This item is not something that can be read on its own', action: null }
     },
     fallback: { sentence: 'The reading could not start this time', action: null }

@@ -35,6 +35,20 @@ describe('「AI 解读」结果条文案（R37 §9.4）', () => {
     expect(newsInterpretationResultCopy({ insufficientReason: 'market-facts-below-minimum' }).action).toBe('details')
   })
 
+  it('says "did not finish" for an interrupted run, with a retry — not the fallback sentence', () => {
+    // 启动对账（进程停了）与周期清点（运行卡住）都落这个码。它不是「跑完了」，也不是「没能开始」。
+    const entry = newsInterpretationResultCopy({ failureCode: 'analysis-run-interrupted' })
+    expect(entry.action).toBe('retry')
+    expect(entry.actionKey).toBeTruthy()
+    const fallback = newsInterpretationResultCopy({})
+    expect(entry.sentenceKey).not.toBe(fallback.sentenceKey)
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      expect(resolve(entry.sentenceKey, locale), locale).toBeTruthy()
+      expect(resolve(entry.actionKey!, locale), `${locale} action`).toBeTruthy()
+      expect(resolve(entry.sentenceKey, locale)).not.toBe(resolve(fallback.sentenceKey, locale))
+    }
+  })
+
   it('falls back for codes outside the table instead of forwarding every analysis-* code', () => {
     const entry = newsInterpretationResultCopy({ failureCode: 'analysis-provider-error' })
     expect(entry.sentenceKey).toBe('pages.intelligence.portal.dashboard.newsInterpretationResult.fallback.sentence')
@@ -51,7 +65,7 @@ describe('「AI 解读」结果条文案（R37 §9.4）', () => {
     const states = Object.keys(((resolve('pages.intelligence.portal.dashboard.newsInterpretationResult.states', 'zh-CN') as Record<string, unknown>)))
     expect(states.sort()).toEqual([
       'analysis-event-group-not-found', 'analysis-initial-request-failed', 'analysis-initial-request-unavailable',
-      'analysis-not-enabled', 'analysis-provider-not-ready',
+      'analysis-not-enabled', 'analysis-provider-not-ready', 'analysis-run-interrupted',
       'insufficient-facts:market-facts-below-minimum', 'insufficient-facts:trigger-evidence-missing',
       'no-judgment', 'not-eligible'
     ].sort())
