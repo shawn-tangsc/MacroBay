@@ -62,3 +62,37 @@ export function isMarketAnalysisCalendarEventContextInput(value: unknown): value
     && typeof candidate.month === 'string' && /^\d{4}-\d{2}$/.test(candidate.month)
     && typeof candidate.asOf === 'string' && Number.isFinite(Date.parse(candidate.asOf))
 }
+
+/**
+ * 按条「AI 解读」的请求结果契约（R37 §9.4）。
+ *
+ * 端点为两件事负责：请求能不能排上、排上了是哪一条运行。模型跑成没跑成不归它（那是结果条与
+ * 失败通知的事）。码是闭集：表外的码一律落默认，**不许把 `analysis-*` 全量直通**——界面每加一个
+ * 码就要加一句，而多数码读者无从行动。
+ */
+export const NEWS_INTERPRETATION_FAILURE_CODES = Object.freeze({
+  notEnabled: 'analysis-not-enabled',
+  providerNotReady: 'analysis-provider-not-ready',
+  requestUnavailable: 'analysis-initial-request-unavailable',
+  requestFailed: 'analysis-initial-request-failed',
+  eventGroupNotFound: 'analysis-event-group-not-found'
+} as const)
+
+export type NewsInterpretationFailureCode = (typeof NEWS_INTERPRETATION_FAILURE_CODES)[keyof typeof NEWS_INTERPRETATION_FAILURE_CODES]
+
+/** 事实不够时还能说清是哪一种——两份可查原因都指向「我们的问题」，阅读动作是「查看原因」。 */
+export const NEWS_INTERPRETATION_INSUFFICIENT_REASONS = Object.freeze({
+  triggerEvidenceMissing: 'trigger-evidence-missing',
+  marketFactsBelowMinimum: 'market-facts-below-minimum'
+} as const)
+
+export type NewsInterpretationInsufficientReason = (typeof NEWS_INTERPRETATION_INSUFFICIENT_REASONS)[keyof typeof NEWS_INTERPRETATION_INSUFFICIENT_REASONS]
+
+/** 本来就不该单独解读的三档：条目不存在 / 源不在覆盖范围 / 过不了可分析过滤。 */
+export const NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS = Object.freeze({
+  itemNotFound: 'item-not-found',
+  sourceNotCovered: 'source-not-covered',
+  itemNotEligible: 'item-not-eligible'
+} as const)
+
+export type NewsInterpretationNotEligibleReason = (typeof NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS)[keyof typeof NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS]

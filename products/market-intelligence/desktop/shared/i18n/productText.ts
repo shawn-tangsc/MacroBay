@@ -13,6 +13,7 @@
 import { miText } from './text/mi'
 import { registeredEventNames } from '../../../contracts/indicatorNames'
 import { dailyBriefingText } from './text/pages/dailyBriefing'
+import { analysisNewsInterpretationResultText } from './text/pages/analysisNewsInterpretationResult'
 import { releaseTimeWords } from './text/releaseTimeWords'
 import { macroCalendarText } from './text/settings/macroCalendar'
 import { intelligenceSourcesText } from './text/settings/intelligenceSources'
@@ -952,7 +953,8 @@ mi: miText['zh-CN'],
               sourceUnknown: '暂时读不到',
               sourceStale: '来源状态：上一次成功的读数 · {time}'
             },
-            dailyBriefing: dailyBriefingText['zh-CN']
+            dailyBriefing: dailyBriefingText['zh-CN'],
+            newsInterpretationResult: analysisNewsInterpretationResultText['zh-CN']
           },
           calendar: {
             /* 架构师定的停用说明（逐字，改字要先过情报模块产品经理）。{date} 来自源注册表的
@@ -2421,7 +2423,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sourceStale: 'Source status: last successful reading · {time}'
             },
             // One row per feed in Source status. `{tag}` is the panel's own synthetic/proxy label.
-            dailyBriefing: dailyBriefingText['en-US']
+            dailyBriefing: dailyBriefingText['en-US'],
+            newsInterpretationResult: analysisNewsInterpretationResultText['en-US']
           },
           calendar: {
             blsUnavailableNotice: 'BLS official calendar: this network cannot fetch it automatically (the official site returns 403) and automatic sync has stopped; the BLS events in the database come from the last successful sync ({date}), and their release times are unknown.',
