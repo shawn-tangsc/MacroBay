@@ -980,6 +980,94 @@ describe('market analysis timeline client refusals', () => {
   })
 })
 
+describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-11-17）', () => {
+  const publishedRow = {
+    id: 'mi-tl-done', eventGroupId: 'mi-eg-done', analysisRunId: 'mi-ar-done', kind: 'analysis',
+    status: 'published', runKey: 'mi-ar-done', failureCode: null, occurredAt: asOf,
+    summaryRef: 'mi-as-done', safeTitle: '市场分析已生成', safeExcerpt: '市场情绪偏谨慎', version: 1,
+    triggerStatus: null, groupType: 'sentiment', groupSubject: '上一次那条结论'
+  }
+  // 服务侧对还没有发布的行：`safeTitle` 是空串、没有 summaryRef / safeExcerpt，
+  // 状态词与「正在解析」由界面文案表给，不由服务端给。
+  const runningRow = {
+    id: 'run:mi-ar-run', eventGroupId: 'mi-eg-run', analysisRunId: 'mi-ar-run', kind: 'analysis',
+    status: 'running', runKey: 'mi-ar-run', failureCode: null, occurredAt: asOf,
+    summaryRef: null, safeTitle: '', safeExcerpt: null, version: 1, triggerStatus: null,
+    groupType: 'sentiment', groupSubject: '美联储官员暗示放缓缩表'
+  }
+
+  /** 时间轴页面数据；其余 IPC（设置）给一个读不出来的空载荷，面板照常可见。 */
+  const page = (items: readonly unknown[]) => (method: string): unknown =>
+    method === 'marketAnalysis.listTimeline'
+      ? { schemaVersion: 1, items, nextCursor: null }
+      : { schemaVersion: 1, items: [], nextCursor: null }
+
+  async function mount(stub: (method: string) => unknown): Promise<HTMLDivElement> {
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => stub(method)) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+    return container
+  }
+
+  it('running 行显示「正在解析」且不可点，「立即分析」禁用并给出原因', async () => {
+    const container = await mount(page([runningRow]))
+    const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
+    // 空标题的 running 行必须活下来：sanitizer 若按「标题不可为空」判死，整屏会一条不剩。
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.textContent).toContain(text.status.running)
+    // 没有摘要可看，所以不可点：不是按钮，也不出 chevron。
+    expect(container.querySelector('button.mi-analysis-timeline__entry')).toBeNull()
+    expect(container.querySelector('.mi-analysis-timeline__chevron')).toBeNull()
+    // 禁用不能只留一个灰块：旁边必须有原因，且原因与禁用读同一个派生值。
+    const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
+    expect(action?.disabled).toBe(true)
+    expect(container.textContent).toContain(text.analysisInFlightReason)
+  })
+
+  it('已发布行与 running 行同屏时，两条都显示', async () => {
+    const container = await mount(page([publishedRow, runningRow]))
+    const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
+    expect(rows).toHaveLength(2)
+    expect(container.textContent).toContain(text.status.published)
+    expect(container.textContent).toContain(text.status.running)
+  })
+
+  it('同一条运行：runKey 不变 → 那一行变「已发布」，条数不变、按钮恢复可点', async () => {
+    let items: readonly unknown[] = [runningRow]
+    let reload: (() => Promise<void>) | undefined
+    function WithReload(): React.ReactElement {
+      const timeline = useMarketAnalysisTimeline({ text })
+      reload = async () => { await timeline.load() }
+      return createElement(MarketAnalysisTimeline, { text, timeline })
+    }
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => page(items)(method)) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(WithReload)))
+    await flushReads()
+    expect(container.querySelectorAll('.mi-analysis-timeline__entry')).toHaveLength(1)
+    expect(container.textContent).toContain(text.status.running)
+
+    // 同一次运行发布：`id` 换成真实时间轴行 id，`runKey` 不变——列表靠它认行，所以不是删一行加一行。
+    items = [{ ...publishedRow, id: 'mi-tl-after-run', analysisRunId: 'mi-ar-run', runKey: 'mi-ar-run' }]
+    await act(async () => { await reload?.() })
+    await flushReads()
+
+    const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
+    expect(rows).toHaveLength(1)
+    expect(container.textContent).toContain(text.status.published)
+    expect(container.textContent).not.toContain(text.status.running)
+    // 跑到终态 → 按钮恢复可点，原因句也一起消失。
+    const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
+    expect(action?.disabled).toBe(false)
+    expect(container.textContent).not.toContain(text.analysisInFlightReason)
+  })
+})
+
 /** Product calls other than the panel's own settings read, which every mount performs. */
 function productCalls(invoke: { mock: { calls: unknown[][] } }): unknown[][] {
   return invoke.mock.calls.filter(([, method]) => method !== 'marketAnalysis.getSettings')

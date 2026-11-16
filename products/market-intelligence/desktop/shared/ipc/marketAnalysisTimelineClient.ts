@@ -56,7 +56,12 @@ export type MarketAnalysisTimelineEntry = Readonly<{
   eventGroupId: string
   analysisRunId: string | null
   kind: 'event' | 'analysis' | 'review' | 'prediction-update' | 'system'
-  status: 'published' | 'stale' | 'superseded'
+  /** 还没发布或没跑成：`running` / `failed`（不用 `pending`——那是预测条目的「待验证」）。 */
+  status: 'published' | 'stale' | 'superseded' | 'running' | 'failed'
+  /** 同一次运行不变的键：`running` → `published`/`failed`，界面靠它就地换状态；缺省退 `analysisRunId ?? id`。 */
+  runKey?: string
+  /** 运行自己的失败码（只对 `failed` 行有意义）；未知码由界面兜一句「解析失败」，不印码。 */
+  failureCode?: string | null
   occurredAt: string
   summaryRef: string | null
   safeTitle: string

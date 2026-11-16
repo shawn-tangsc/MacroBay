@@ -75,22 +75,41 @@ function sanitizeEntry(value: unknown): MarketAnalysisTimelineEntry | undefined 
   // `triggerStatus` is optional on purpose: a newer renderer must keep working against a
   // payload from an older main process (or a mixed build), where a mandatory key turned the
   // whole panel into "detail unavailable" instead of simply showing no decision yet.
-  if (!isExactRecordWithOptionals(value, ['id', 'eventGroupId', 'analysisRunId', 'kind', 'status', 'occurredAt', 'summaryRef', 'safeTitle', 'safeExcerpt', 'version'], ['triggerStatus', 'direction', 'groupType', 'groupSubject']) ||
+  //
+  // `runKey` / `failureCode` and the two run states (`running` / `failed`) are the same kind of
+  // addition: an older main process never sends them, and a renderer that demanded them would
+  // turn a whole page into "unavailable" instead of one row without a key.
+  if (!isExactRecordWithOptionals(value, ['id', 'eventGroupId', 'analysisRunId', 'kind', 'status', 'occurredAt', 'summaryRef', 'safeTitle', 'safeExcerpt', 'version'], ['triggerStatus', 'direction', 'groupType', 'groupSubject', 'runKey', 'failureCode']) ||
     !isText(value.id) || !isText(value.eventGroupId) || (value.analysisRunId !== null && !isText(value.analysisRunId)) ||
     !['event', 'analysis', 'review', 'prediction-update', 'system'].includes(value.kind as string) ||
-    !['published', 'stale', 'superseded'].includes(value.status as string) || !isCanonicalTime(value.occurredAt) ||
-    (value.summaryRef !== null && !isText(value.summaryRef)) || !isText(value.safeTitle) ||
+    !['published', 'stale', 'superseded', 'running', 'failed'].includes(value.status as string) || !isCanonicalTime(value.occurredAt) ||
+    (value.summaryRef !== null && !isText(value.summaryRef)) || !titleIsReadable(value.status as string, value.safeTitle) ||
     (value.safeExcerpt !== null && !isText(value.safeExcerpt)) || typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1) return undefined
-  const entry = value as { groupType?: unknown; groupSubject?: unknown }
+  const optional = value as { groupType?: unknown; groupSubject?: unknown; runKey?: unknown; failureCode?: unknown }
   return {
     ...(value as MarketAnalysisTimelineEntry),
     direction: sanitizeDirectionKey((value as { direction?: unknown }).direction) ?? null,
     triggerStatus: sanitizeTriggerStatus((value as { triggerStatus?: unknown }).triggerStatus),
     // Both are optional against an older main process, and a non-text value is dropped rather than
     // rendered: the panel prints these strings directly.
-    groupType: isText(entry.groupType) ? entry.groupType : null,
-    groupSubject: isText(entry.groupSubject) ? entry.groupSubject : null
+    groupType: isText(optional.groupType) ? optional.groupType : null,
+    groupSubject: isText(optional.groupSubject) ? optional.groupSubject : null,
+    // 运行词与失败码：`runKey` 老主进程没有就整字段不出现（界面按 `analysisRunId ?? id` 退）；
+    // `failureCode` 同理——没发就不出现，发了但不是文本按「没有」处理。宁可少一个键，
+    // 也不把一个来路不明的串印到读者面前；老载荷的形状也因此逐字节不变。
+    ...(isText(optional.runKey) ? { runKey: optional.runKey } : {}),
+    ...(optional.failureCode === undefined ? {} : { failureCode: isText(optional.failureCode) ? optional.failureCode : null })
   }
+}
+
+/**
+ * 标题可读性：发布行必须有标题（`safeTitle` 是读者看的那一行字）；**`running` / `failed` 行
+ * 没有摘要，服务侧按约定给空串**，此时标题由状态词承担（「正在解析」/「解析失败」走文案键）。
+ * 只给这两档开这个口子，其余状态多一个空标题就整条丢掉——那是坏数据，不是无标题。
+ */
+function titleIsReadable(status: string, title: unknown): boolean {
+  if (status === 'running' || status === 'failed') return title === '' || isText(title)
+  return isText(title)
 }
 
 export function sanitizeDetail(entry: MarketAnalysisTimelineEntry, run: unknown, summary: unknown, predictions: unknown): { state: 'available'; detail: MarketAnalysisTimelineDetail } | undefined {

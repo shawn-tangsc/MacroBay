@@ -38,6 +38,8 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   analysisRefreshFailed: string
   /** The bounded wait ended while the run was still queued/running. */
   analysisStillRunning: string
+  /** 「立即分析」被禁用的原因：有运行正在解析。禁用不许只留一个灰块。 */
+  analysisInFlightReason: string
   analysisServiceNotReady: string
   retryAnalysis: string
   /** Label of the control that puts an error banner away. */
@@ -95,7 +97,12 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
   const { state, attempt, requestState } = timeline
   // `loading` is only the short request leg; the run itself stays `queued` while it works, so the
   // button's own icon must spin for both states instead of freezing next to a disabled label.
-  const analysisInFlight = requestState === 'loading' || requestState === 'queued'
+  //
+  // 「正在解析」**不能只看本窗口发起的请求**：自动跑起来、或别处触发的运行，`requestState` 是 `idle`，
+  // 按钮就会亮着、点下去被服务端单飞拦——读者体感是「能点但没用」。所以禁用读**时间轴条目**里有没有
+  // `running`，和那一行用同一个派生值（一处事实一处定义，两处一分叉就又会「能点但没反应」）。
+  const runInFlight = state.entries.some((entry) => entry.status === 'running')
+  const analysisInFlight = requestState === 'loading' || requestState === 'queued' || runInFlight
   const formatTime = useShellTimeFormat()
   const resolveProductText = useProductTextKey()
   // An attempt that ended without publishing, kept so an empty list can say why it is empty.
@@ -162,9 +169,13 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
           {/* The one analysis action sits at the far right, where a separate refresh button used to
               be: the list refreshes itself (live poll, focus), so a second control that only re-read
               it was an action that could not change anything a reader cares about. */}
-          {state.entries.length > 0 ? <Button className="mi-analysis-timeline__reanalyse" aria-busy={analysisInFlight || undefined}
-            disabled={analysisInFlight} onClick={() => void timeline.requestRefreshAnalysis()}
-            icon={analysisInFlight ? <LoadingSpinner size="sm" /> : <RefreshCw aria-hidden="true" size={14} />}>{text.refreshAnalysis}</Button> : null}
+          {state.entries.length > 0 ? <div className="mi-analysis-timeline__reanalyse">
+            <Button aria-busy={analysisInFlight || undefined}
+              disabled={analysisInFlight} onClick={() => void timeline.requestRefreshAnalysis()}
+              icon={analysisInFlight ? <LoadingSpinner size="sm" /> : <RefreshCw aria-hidden="true" size={14} />}>{text.refreshAnalysis}</Button>
+            {/* 禁用必须说原因：灰块旁边没有一句「为什么」，读者只会反复点。原因句与禁用读同一个派生值。 */}
+            {analysisInFlight ? <small role="status" className="mi-analysis-timeline__reanalyse-reason">{text.analysisInFlightReason}</small> : null}
+          </div> : null}
         </div>
       </header>
       <div className="mi-analysis-timeline__workspace-wrap">
@@ -207,14 +218,24 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
             dismissLabelKey="pages.intelligence.portal.analysisTimeline.dismissError"
             onDismiss={refreshError.dismiss}
           /> : null}
-          {state.entries.slice(0, shown.visible).map((entry) => { const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? ''); const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null; // A row, not a button: the whole line is one action (select and open this conclusion), and
-        // it is registered as a clickable row in the exception list. Selection is announced with
-        // `aria-current`, never by background colour alone, and the chevron shows the row is openable.
-        return <button className={`mi-analysis-timeline__entry${state.selected?.id === entry.id ? ' is-selected' : ''}`} key={entry.id} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button" aria-current={state.selected?.id === entry.id ? 'true' : undefined}>
+          {state.entries.slice(0, shown.visible).map((entry) => {
+        const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? '')
+        const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null
+        // 一次运行一行：`runKey` 在「正在解析 → 已发布 / 失败」之间不变，所以 React 复用的是同一行，
+        // 不是删一行加一行。老主进程没有 `runKey` 时按 `analysisRunId ?? id` 退（依赖一次运行产一行）。
+        const rowKey = entry.runKey ?? entry.analysisRunId ?? entry.id
+        // `running` / `failed` 没有摘要、没有 `summaryRef`，点开只会是空白：渲染成**不可点**的行，
+        // 不出 chevron、不触发选中。宁可它只是「能看见」，也不要「点得进去却是空」。
+        const selectable = entry.status !== 'running' && entry.status !== 'failed'
+        // `failed` 行给一句人话原因；未知码不印码，药丸本身已经说了「解析失败」。
+        const failureDetail = entry.status === 'failed' && entry.failureCode ? text.failureReasons[entry.failureCode] : undefined
+        const selected = state.selected?.id === entry.id
+        const content = <>
             <span><time>{formatTime(entry.occurredAt, 'second')}</time><StatusPill labelKey={ANALYSIS_STATUS_KEY[entry.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[entry.status]} /></span>
             {/* Which event this row is about. Two conclusions published seconds apart are two
                 different events; without the name they read as one conclusion posted twice. */}
             {groupCaption ? <small className="mi-analysis-timeline__group">{groupCaption}</small> : null}
+            {failureDetail ? <small className="mi-analysis-timeline__failure">{failureDetail}</small> : null}
             {/* The tag and the conclusion share one line, so they live in one flex item: a row is a
                 column flex container, and siblings there would stack whatever their display is. */}
             {direction || entry.safeExcerpt ? <span className="mi-analysis-timeline__headline">
@@ -223,7 +244,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
               </span> : null}
               {entry.safeExcerpt ? <span className="mi-analysis-timeline__conclusion-line">{toReadableConclusionText(conclusionWithoutDirection(entry.safeExcerpt), conclusionReadableNames, language)}</span> : null}
             </span> : null}
-            <ChevronRight className="mi-analysis-timeline__chevron" size={14} aria-hidden="true" />
+            {selectable ? <ChevronRight className="mi-analysis-timeline__chevron" size={14} aria-hidden="true" /> : null}
             {entry.triggerStatus ? <small className="mi-analysis-timeline__trigger-status" data-trigger-status={entry.triggerStatus.reasonCode}>
               {/* "since" fits a condition the gate keeps re-observing; a reader's own click is a
                   one-off moment, so it reads as a time instead. The token list is the service
@@ -237,7 +258,14 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
                 : ''}
               （{formatTime(entry.triggerStatus.decidedAt, 'second')}{oneOffTriggerReasons.has(entry.triggerStatus.reasonCode) ? '' : ` ${text.triggerStatus.since}`}）
             </small> : null}
-          </button> })}
+        </>
+        // A row, not a button: the whole line is one action (select and open this conclusion), and
+        // it is registered as a clickable row in the exception list. Selection is announced with
+        // `aria-current`, never by background colour alone, and the chevron shows the row is openable.
+        return selectable
+          ? <button className={`mi-analysis-timeline__entry${selected ? ' is-selected' : ''}`} key={rowKey} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button" aria-current={selected ? 'true' : undefined}>{content}</button>
+          : <div className="mi-analysis-timeline__entry mi-analysis-timeline__entry--static" key={rowKey} data-entry-status={entry.status}>{content}</div>
+      })}
           {canPull ? <div className="mi-analysis-timeline__pull" ref={pullTarget}>
             {/* Kept as a real control beside the scroll: a keyboard or screen-reader reader cannot
                 perform a pull, and it is also what the sentinel above is measured against. */}

@@ -18,9 +18,12 @@ export type AnalysisStatus = AnalysisEntryStatus | AnalysisPredictionStatus
  *
  * 选档回答的只有「这个状态对读者有什么要求」：
  * - `published` / `confirmed`：在正常工作，不用管 → `ok`；
- * - `pending`：还没定论，等它 → `info`；
+ * - `pending` / `running`：还没定论，等它 → `info`（`running` 是「这一条正在解析」：读者要知道它在动，
+ *   不需要动手，所以是提示色而不是红——红只留给出错）；
  * - `stale` / `partially-confirmed` / `insufficient-data`：该看一眼 → `warn`；
- * - `superseded` / `expired` / `invalidated`：已经结束，不需要动作 → `muted`。
+ * - `superseded` / `expired` / `invalidated`：已经结束，不需要动作 → `muted`；
+ * - `failed`：这一次没跑成（输出不合法、模型调用失败、被取消）→ `bad`。它和 `invalidated` 不同：
+ *   后者是一个已经结束的判断，前者是应用没把这件事做完，属于「出错」。
  *
  * `invalidated` **不是 `bad`**：红色在这个应用里只表示「出错／读取失败」；「结论已失效」是一个
  * 已经结束的判断，不是应用坏了。标红会让真正的错误不再显眼。
@@ -30,6 +33,8 @@ export const ANALYSIS_STATUS_TONE: Record<AnalysisStatus, StatusPillTone> = {
   stale: 'warn',
   superseded: 'muted',
   pending: 'info',
+  running: 'info',
+  failed: 'bad',
   confirmed: 'ok',
   'partially-confirmed': 'warn',
   invalidated: 'muted',
@@ -46,6 +51,8 @@ export const ANALYSIS_STATUS_KEY: Record<AnalysisStatus, string> = {
   stale: 'pages.intelligence.portal.analysisTimeline.status.stale',
   superseded: 'pages.intelligence.portal.analysisTimeline.status.superseded',
   pending: 'pages.intelligence.portal.analysisTimeline.status.pending',
+  running: 'pages.intelligence.portal.analysisTimeline.status.running',
+  failed: 'pages.intelligence.portal.analysisTimeline.status.failed',
   confirmed: 'pages.intelligence.portal.analysisTimeline.status.confirmed',
   'partially-confirmed': 'pages.intelligence.portal.analysisTimeline.status.partially-confirmed',
   invalidated: 'pages.intelligence.portal.analysisTimeline.status.invalidated',
