@@ -38,10 +38,10 @@ describe('0xrouter 子项码与族名', () => {
     }
   })
 
-  it('90 个 id 落在 46 个码上，码里不含月份，GfK 两条不给码', () => {
+  it('108 个 id 落在 52 个码上，码里不含月份，GfK 两条不给码', () => {
     const entries = Object.entries(zeroXRouterSourceMetricMappings)
-    expect(entries).toHaveLength(90)
-    expect(new Set(entries.map(([, entry]) => entry.metricKey)).size).toBe(46)
+    expect(entries).toHaveLength(108)
+    expect(new Set(entries.map(([, entry]) => entry.metricKey)).size).toBe(55)
     for (const [id, entry] of entries) {
       expect(entry.metricKey).not.toMatch(/\d{4}[-_]\d{2}/)
       expect(id).toMatch(/^\d+$/)

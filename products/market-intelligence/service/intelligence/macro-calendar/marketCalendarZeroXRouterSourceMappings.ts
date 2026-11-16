@@ -94,6 +94,27 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214280': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '215018': { metricKey: 'US.CORPORATE_PROFITS.SA.QOQ', periodRule: 'quarter' },
   '213488': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
+  // 月份变体：**同族 + 同测度**，季调档按「该族该测度只有唯一码」才落（SA/NSA 并存时跳过）
+  '213978': { metricKey: 'US.INDUSTRIAL_PRODUCTION.SA.MOM', periodRule: 'month' },
+  '213979': { metricKey: 'US.MANUFACTURING_PRODUCTION.SA.MOM', periodRule: 'month' },
+  '214150': { metricKey: 'US.MICHIGAN_CURRENT.NONE.LEVEL', periodRule: 'month' },
+  '214151': { metricKey: 'US.MICHIGAN_EXPECTATIONS.NONE.LEVEL', periodRule: 'month' },
+  '214202': { metricKey: 'US.CHICAGO_FED_NATIONAL_ACTIVITY.NONE.LEVEL', periodRule: 'month' },
+  '214235': { metricKey: 'US.NEW_HOME_SALES.SA.MOM', periodRule: 'month' },
+  '214293': { metricKey: 'US.PERSONAL_INCOME.SA.MOM', periodRule: 'month' },
+  '214692': { metricKey: 'US.HOUSING_STARTS.SA.MOM', periodRule: 'month' },
+  '214828': { metricKey: 'US.INDUSTRIAL_PRODUCTION.SA.MOM', periodRule: 'month' },
+  '214829': { metricKey: 'US.MANUFACTURING_PRODUCTION.SA.MOM', periodRule: 'month' },
+  '214861': { metricKey: 'US.HOUSING_STARTS.SA.MOM', periodRule: 'month' },
+  '214940': { metricKey: 'US.MICHIGAN_CURRENT.NONE.LEVEL', periodRule: 'month' },
+  '214941': { metricKey: 'US.MICHIGAN_EXPECTATIONS.NONE.LEVEL', periodRule: 'month' },
+  '214974': { metricKey: 'US.CHICAGO_FED_NATIONAL_ACTIVITY.NONE.LEVEL', periodRule: 'month' },
+  '215028': { metricKey: 'US.PERSONAL_INCOME.SA.MOM', periodRule: 'month' },
+  '215029': { metricKey: 'US.NEW_HOME_SALES.SA.MOM', periodRule: 'month' },
+  // 零售销售**总量**：码本来就有（`US.RETAIL_SALES.SA.MOM`），只是这两个 id 没接上
+  '213940': { metricKey: 'US.RETAIL_SALES.SA.MOM', periodRule: 'month' },
+  '214822': { metricKey: 'US.RETAIL_SALES.SA.MOM', periodRule: 'month' },
+
   // GDP 平减指数（初值/修正值同一码的两次发布）与最终销售（初值/修正值同上）
   '214281': { metricKey: 'US.GDP_DEFLATOR.SA.QOQ', periodRule: 'quarter' },
   '215019': { metricKey: 'US.GDP_DEFLATOR.SA.QOQ', periodRule: 'quarter' },
