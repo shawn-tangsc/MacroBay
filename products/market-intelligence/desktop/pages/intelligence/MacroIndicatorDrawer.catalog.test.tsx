@@ -63,6 +63,14 @@ it('opens the full event table from the calendar header button', async () => {
   // 两段各自渲染：已映射一条、未映射一个 id。
   expect(document.body.querySelector('[data-mapping-section="mapped"]')?.textContent).toContain('214790')
   expect(document.body.querySelector('[data-mapping-section="unmapped"]')?.textContent).toContain('10113')
+  // 两个页签都在、带读口给的条数（前端不自己数）。
+  // 抽屉右列那两个来源页签也是 role=tab，所以按文案挑出弹框里的两个。
+  const tabs = [...document.body.querySelectorAll('[role="tab"]')]
+    .map((tab) => tab.textContent ?? '')
+    .filter((label) => label.includes('已映射') || (label.includes('未映射') && !label.includes('未入')))
+  expect(tabs).toHaveLength(2)
+  expect(tabs[0]).toContain('85')
+  expect(tabs[1]).toContain('249')
   // 官方查看显示**地址本身**（不是「官方 ↗」占位），没有地址的那条格子空着。
   const links = [...document.body.querySelectorAll('[data-official]')]
   expect(links).toHaveLength(1)
