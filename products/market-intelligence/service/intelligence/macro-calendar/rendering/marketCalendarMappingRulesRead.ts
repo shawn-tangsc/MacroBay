@@ -56,6 +56,22 @@ export type MappingRuleRow = Readonly<{
   rowCount: number
 }>
 
+/**
+ * **无需映射的指标**（用户 2026-11-17）：进来时就带规范指标码，根本不需要「源内 id → 码」这条规则。
+ *
+ * 为什么单开一段：这张表原来只回答「哪些数字 id 还没认出来」，把筛选设成「一级」时只剩 BLS 那批，
+ * 读者会以为我们没有 PCE、GDP、FOMC——它们确实在，只是**不经过映射**。一个弹框里要同时看清
+ * 「一共支持哪些指标」和「哪一批还要补映射」。
+ *
+ * 只收 `identity_kind = 'code'` 且非 `evt.*` 的行：事件型（央行讲话、商品报告）不是指标。
+ */
+export type DirectMetricRow = Readonly<{
+  metricKey: string
+  names: Readonly<{ zh: string; en: string }> | null
+  tier: 1 | 2 | 3 | null
+  rowCount: number
+}>
+
 export type UnmappedSourceIdRow = Readonly<{
   sourceId: string
   rowCount: number
@@ -72,8 +88,14 @@ export type MappingRulesRead = Readonly<{
   state: 'available'
   mapped: readonly MappingRuleRow[]
   unmapped: readonly UnmappedSourceIdRow[]
+  /**
+   * 进来就带指标码、不需要规则的指标（按库里行数降序）。**读口一定会给**；类型上可缺是为了
+   * 兼容没有这一段的旧载荷——界面看到缺就**不显示第三个页签**，而不是画一张空表。
+   */
+  direct?: readonly DirectMetricRow[]
   /** 三个数由服务端给（前端不自己数，否则筛选后标题计数会对不上实际行数）。 */
-  counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number }>
+  /** `direct` 同上面的理由可缺；有 `direct` 时它必然与 `counts.direct` 相等。 */
+  counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number; direct?: number }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
 
 type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null; sampleLabelEn: string | null }>
@@ -154,6 +176,11 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         rowCount: rowsByMetricKey.get(entry.metricKey) ?? 0 })
     })
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
+    const direct: DirectMetricRow[] = [...rowsByMetricKey.entries()]
+      .filter(([metricKey]) => !metricKey.startsWith('[') && !metricKey.startsWith('evt.'))
+      .map(([metricKey, rowCount]) => Object.freeze({ metricKey, rowCount,
+        names: mappingRuleNames(metricKey), tier: tierOfMetricKey(metricKey) ?? null }))
+      .sort((left, right) => right.rowCount - left.rowCount || left.metricKey.localeCompare(right.metricKey))
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
       .filter((entry) => zeroXRouterIndicatorIdentities[entry.sourceId] === undefined)
       .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows,
@@ -163,8 +190,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       state: 'available' as const,
       mapped: Object.freeze(mapped),
       unmapped: Object.freeze(unmapped),
+      direct: Object.freeze(direct),
       counts: Object.freeze({ mapped: mapped.length, unmapped: unmapped.length,
-        unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0) })
+        unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0), direct: direct.length })
     })
   } catch {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }

@@ -66,6 +66,20 @@ describe('映射规则表读口', () => {
       || (rule.names.zh.trim() !== '' && rule.names.en.trim() !== ''))).toBe(true)
   })
 
+  it('无需映射那一段：直接带指标码进来的指标，带分级与行数，事件码不算', () => {
+    const read = readCalendarMappingRules(seed())
+    if (read.state !== 'available') throw new Error('unavailable')
+    // 夹具里的 CPI 码行就是「不需要规则也能进来」的那类。
+    const direct = read.direct ?? []
+    expect(direct.map((entry) => entry.metricKey)).toContain('US.CPI.NSA.YOY')
+    const cpi = direct.find((entry) => entry.metricKey === 'US.CPI.NSA.YOY')!
+    expect(cpi).toMatchObject({ rowCount: 1, tier: 1 })
+    expect(cpi.names?.zh).toBe('CPI 年率')
+    expect(read.counts.direct).toBe(direct.length)
+    // 数组身份（源内 id）和事件码都不该出现在这一段。
+    expect(direct.some((entry) => entry.metricKey.startsWith('[') || entry.metricKey.startsWith('evt.'))).toBe(false)
+  })
+
   it('未映射段按行数从大到小排，一个 id 的多行合计成行数', () => {
     const read = readCalendarMappingRules(seed())
     if (read.state !== 'available') throw new Error('unavailable')
