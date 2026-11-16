@@ -38,7 +38,7 @@ import { wireZeroXRouterCalendarSchedule } from './wiring/zeroXRouterCalendarSch
 import { scheduleHistoricalValueFill, syncOfficialStandardRowsAtStartup } from './wiring/calendarStandardRows'
 import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
-import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
+import { newsInterpretationWiring, registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { ProductAgentPlatformDeps } from '@platform/desktop/main/productAgentPlatformWiring'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
@@ -490,8 +490,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // 时间线的「哪个开盘」也按设置的读者时区换算。
     timeZone: () => currentReaderTimeZone(),
     requestInitialAnalysis: intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis,
-    readNewsInterpretation: intelligenceModule.marketAnalysisRuntime.readNewsInterpretation,
-    requestNewsInterpretation: intelligenceModule.marketAnalysisRuntime.requestNewsInterpretation,
+    ...newsInterpretationWiring(intelligenceModule.marketAnalysisRuntime),
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })

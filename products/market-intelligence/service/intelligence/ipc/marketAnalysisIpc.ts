@@ -132,3 +132,21 @@ function asFollowUpInput(payload: unknown): { eventGroupId: string; analysisRunI
     ...(typeof value.existingSessionId === 'string' ? { existingSessionId: value.existingSessionId } : {})
   }
 }
+
+/**
+ * 按条「AI 解读」的两条命令接到哪个运行时方法上（R37）。
+ *
+ * 与 IPC 注册放在一处：注册的会话契约变了，这里跟着变；装配文件只交一次。两条一起给，免得接了
+ * 一条忘了另一条。
+ */
+type NewsInterpretationSessions = Readonly<{
+  readNewsInterpretation: (itemId: string) => Promise<NewsInterpretationReadResult>
+  requestNewsInterpretation: (itemId: string) => Promise<NewsInterpretationRequestResult>
+}>
+
+export function newsInterpretationWiring(runtime: NewsInterpretationSessions): NewsInterpretationSessions {
+  return {
+    readNewsInterpretation: itemId => runtime.readNewsInterpretation(itemId),
+    requestNewsInterpretation: itemId => runtime.requestNewsInterpretation(itemId)
+  }
+}

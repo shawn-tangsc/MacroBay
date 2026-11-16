@@ -36,3 +36,11 @@ export function briefingMacroDiagnostic(
 export function formatBriefingMacroDiagnostic(input: BriefingMacroDiagnostic): string {
   return `[daily-briefing.macro] ${JSON.stringify(input)}`
 }
+
+/** 生成路径用的一行式入口：一版一次，字段见 `BriefingMacroDiagnostic`。 */
+export function logBriefingMacroDiagnostic(
+  document: Pick<DailyBriefingDocument, 'news'>,
+  packet: Pick<DailyBriefingFactPacket, 'asOf' | 'windowHours' | 'calendarFreshness'>
+): void {
+  console.log(formatBriefingMacroDiagnostic(briefingMacroDiagnostic(document, packet)))
+}
