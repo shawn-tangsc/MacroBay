@@ -445,8 +445,8 @@ export function NewsSentimentDrawer(props: {
 /**
  * 右栏那一节「AI 解读」（R37）：状态由只读接口驱动，不靠内存。
  *
- * 成功态的**正文**要按 `summaryId` 去 `marketAnalysis.getSummary` 取；那个字段还没落进只读接口，
- * 所以这一段先只有可见元信息 + 审计折叠（`paragraphs` 留空）。字段一到就补一行取正文，不改这里的分支。
+ * 成功态的**正文**按 `summaryId` 去 `marketAnalysis.getSummary` 取——`summaryId` 由只读接口在
+ * `available` 时提供（必填、按 state 收窄）；不要在界面侧另找 summary 或反查时间线。
  */
 function DrawerInterpretation(props: Readonly<{
   view?: import('../../../shared/ipc/newsInterpretationClient').NewsInterpretationReadView
