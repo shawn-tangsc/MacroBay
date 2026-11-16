@@ -409,3 +409,17 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 /* 官方查看：直接显示地址本身。列可以宽（表格滚动），超长在格子内省略、`title` 带全址。 */
 .mi-catalog__url { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-meta); }
+
+/*
+ * 映射规则弹框的宽度：**产品侧临时覆盖**。
+ *
+ * 平台 Modal 只有四档（420/520/720/860），这张表要塞下长指标码 + 整条 URL，860 怎么分都挤。
+ * 这里按 92vw / 上限 1400 临时放大；正解是平台加一档宽表宽度（已登记 #48，归前端组件线）。
+ */
+.ant-modal.mi-catalog-dialog { width: min(1400px, 92vw) !important; max-width: 92vw; }
+/* 底部固定栏：两段各自的分页 + 导出。分页不再跟着表格滚。 */
+.mi-catalog__footer { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: 8px; }
+.mi-catalog__footer-label { font-size: var(--font-meta); color: var(--muted); }
+.mi-catalog__section { margin: 8px 0 4px; font-size: var(--font-section); color: var(--text-strong); }
+.mi-catalog__note { margin: 4px 0 8px; font-size: var(--font-meta); color: var(--muted); }

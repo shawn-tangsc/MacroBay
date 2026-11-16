@@ -81,9 +81,9 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
                 { title: text.columns.metricKey, dataIndex: 'metricKey', className: 'mi-catalog__cell-nowrap' },
                 { title: text.columns.periodRule, dataIndex: 'periodRule', className: 'mi-catalog__cell-nowrap' },
                 // `basis` 现在一律 null：列在、格子空着。
-                { title: text.columns.basis, dataIndex: 'basis', render: (value: string | null) => value ?? '' },
+                { title: text.columns.basis, dataIndex: 'basis', width: 180, render: (value: string | null) => value ?? '' },
                 {
-                  title: text.columns.official, dataIndex: 'officialUrl',
+                  title: text.columns.official, dataIndex: 'officialUrl', width: 380,
                   render: (value: string | null) => has(value)
                     // 用户要的是**地址本身**（去求证、去复制），不是一个「官方 ↗」按钮。
                     // 太长就省略中间，但 `title` 保留完整地址，悬停能看到。
@@ -92,8 +92,6 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
                     : null
                 }
               ]} />}
-          <Pager total={mapped.length} page={mappedPage} pageSize={pageSize}
-            onPage={setMappedPage} onSize={(size) => { setPageSize(size); setMappedPage(1) }} />
         </section>
         <section data-mapping-section="unmapped">
           <h3 className="mi-catalog__section">{text.unmapped
@@ -108,8 +106,6 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
                 { title: text.unmappedColumns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap' },
                 { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel', render: (value: string | null) => value ?? '' }
               ]} />}
-          <Pager total={unmapped.length} page={unmappedPage} pageSize={pageSize}
-            onPage={setUnmappedPage} onSize={(size) => { setPageSize(size); setUnmappedPage(1) }} />
         </section>
       </>
 
@@ -122,6 +118,14 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
           onChange={(event) => { setQuery(event.target.value); setMappedPage(1); setUnmappedPage(1) }} />
       </div>
       <div className="mi-catalog__table">{body}</div>
+      <div className="mi-catalog__footer">
+        <span className="mi-catalog__footer-label">{text.mapped.replace('{count}', String(view?.state === 'available' ? view.counts.mapped : 0))}</span>
+        <Pager total={mapped.length} page={mappedPage} pageSize={pageSize}
+          onPage={setMappedPage} onSize={(size) => { setPageSize(size); setMappedPage(1) }} />
+        <span className="mi-catalog__footer-label">{text.unmapped.replace('{count}', String(view?.state === 'available' ? view.counts.unmapped : 0)).replace('{rows}', String(view?.state === 'available' ? view.counts.unmappedRows : 0))}</span>
+        <Pager total={unmapped.length} page={unmappedPage} pageSize={pageSize}
+          onPage={setUnmappedPage} onSize={(size) => { setPageSize(size); setUnmappedPage(1) }} />
+      </div>
     </div>
   </Modal>
 }
@@ -138,6 +142,10 @@ function Pager({ total, page, pageSize, onPage, onSize }: Readonly<{
   return <div className="mi-catalog__pager">
     <Pagination size="small" current={page} pageSize={pageSize} total={total} showSizeChanger
       pageSizeOptions={PAGE_SIZES.map((size) => String(size))}
-      onChange={(_next, size) => { onSize(size) }} />
+      onChange={(next, size) => {
+        // 之前这里只处理了 size，页码被吞掉——点页码没反应就是这个。
+        if (size !== pageSize) onSize(size)
+        else onPage(next)
+      }} />
   </div>
 }
