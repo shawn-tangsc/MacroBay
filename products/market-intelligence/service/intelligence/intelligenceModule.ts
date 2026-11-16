@@ -3,10 +3,7 @@ import { readFile } from 'node:fs/promises'
 
 import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 import { createManagedWorkerRuntime } from '@platform/jobs'
-import type {
-  NotificationSubmitOutcome,
-  NotificationSubmitRequest
-} from '@platform/notifications/contracts/notificationSubmitContracts'
+import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationSubmitContracts'
 import type { DailyBriefingLocale } from '../../contracts/dailyBriefing'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
@@ -174,10 +171,7 @@ export type IntelligenceModule = {
    * cross-asset rows actually read. Read-only, and the credential leaves as a boolean.
    */
   dashboardFeedStatus: Pick<DashboardFeedStatusQuery, 'status'>
-  /**
-   * 通知提交口（平台注入）。装配层用它给「品种被供应商永久拒绝」这类事件发一次提醒：
-   * 不是每条采集都发，而是只有需要读者换动作的那几种（用户 2026-11-16）。
-   */
+  /** 通知提交口（平台注入）：装配层用它给「品种被永久拒绝」这类事件发一次提醒（用户 2026-11-16）。 */
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   setPolicyPathQuery: (query: PolicyPathQueryService) => void
   bindBriefingCalendarRefresh: (refresh: BriefingCalendarRefresh) => void

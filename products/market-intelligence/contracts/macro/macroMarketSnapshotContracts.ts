@@ -67,6 +67,11 @@ export const macroMarketSnapshotPublicPolicy = Object.freeze({
   maximumLevelAbs: 1e9,
   maximumSnapshotBytes: 16 * 1024,
   /**
+   * 读数可能背着的「永久拒绝」原因。闭集只收**永久**这一类：临时失败不进这个字段，
+   * 否则同一个格子会一会儿说"读不到"一会儿说"不提供"，读者没法判断要不要动手。
+   */
+  sourceFailures: Object.freeze(['symbol-not-supported'] as const),
+  /**
    * The live leg of the gold row. The provider's free tier admits only XAU/USD, so gold is the one
    * series that may carry a live tick, and this is the only state vocabulary the wire admits for it.
    * The price is a string for the same reason a Binance quote is: it is a decimal the provider
@@ -83,6 +88,8 @@ export const macroMarketSnapshotPublicPolicy = Object.freeze({
 export type MacroMarketWindow = typeof macroMarketSnapshotPublicPolicy.windows[number]
 export type MacroMarketCaveat = typeof macroMarketCaveats[keyof typeof macroMarketCaveats]
 export type MacroMarketLiveState = typeof macroMarketSnapshotPublicPolicy.live.states[number]
+/** 供应商永久拒绝这个品种：套餐不含 / 品种下架。闭集见 `sourceFailures`。 */
+export type MacroMarketSourceFailure = typeof macroMarketSnapshotPublicPolicy.sourceFailures[number]
 
 /** The latest value that is not a closed bar: shown beside the row, used by no window return. */
 export type MacroMarketLiveTick = Readonly<{ state: MacroMarketLiveState; price: string; atMs: number }>
@@ -96,6 +103,13 @@ export type MacroMarketSnapshotReading = Readonly<{
   synthetic?: true
   /** Admitted on the gold reading only, and only while a tick exists to show. */
   live?: MacroMarketLiveTick
+  /**
+   * 这一条读数背后的品种被供应商**永久**拒绝了（套餐不含 / 品种下架）。它和"这次没读到"是两件事：
+   * 这条水平是供应商最后一次给的值，重试不会更新，卡片要说出来（用户 2026-11-16）。
+   *
+   * 闭集只有"永久"这一类：临时失败（限流、超时）不进这个字段，`level` 旧不旧由时间判。
+   */
+  sourceFailure?: MacroMarketSourceFailure
 }>
 
 /** Whether the source behind the snapshot could have collected at all: enabled, and keyed. */
@@ -154,7 +168,8 @@ export function parseMacroMarketSnapshot(value: unknown): MacroMarketSnapshotVie
     const readings = value.readings.map(reading => Object.freeze({
       seriesId: reading.seriesId, level: reading.level, atMs: reading.atMs,
       returns: Object.freeze({ ...reading.returns }), ...(reading.synthetic ? { synthetic: true as const } : {}),
-      ...(reading.live ? { live: Object.freeze({ state: reading.live.state, price: reading.live.price, atMs: reading.live.atMs }) } : {})
+      ...(reading.live ? { live: Object.freeze({ state: reading.live.state, price: reading.live.price, atMs: reading.live.atMs }) } : {}),
+      ...(reading.sourceFailure === undefined ? {} : { sourceFailure: reading.sourceFailure })
     }))
     const view = Object.freeze({
       state: value.state, asOf: value.asOf,
@@ -166,12 +181,15 @@ export function parseMacroMarketSnapshot(value: unknown): MacroMarketSnapshotVie
 }
 
 function isReading(value: unknown): value is MacroMarketSnapshotReading {
-  if (!exactFields(value, ['seriesId', 'level', 'atMs', 'returns'], ['synthetic', 'live'])) return false
+  if (!exactFields(value, ['seriesId', 'level', 'atMs', 'returns'], ['synthetic', 'live', 'sourceFailure'])) return false
   const policy = macroMarketSnapshotPublicPolicy
   if (!policy.seriesIds.includes(value.seriesId as string)) return false
   if (typeof value.level !== 'number' || !Number.isFinite(value.level) || Math.abs(value.level) > policy.maximumLevelAbs) return false
   if (!Number.isSafeInteger(value.atMs) || (value.atMs as number) < 0) return false
   if (Object.hasOwn(value, 'synthetic') && (value.synthetic !== true || value.seriesId !== policy.syntheticSeriesId)) return false
+  // 永久拒绝的原因也是闭集：供应商的原话、错误体、URL 一律不许从这里过。
+  if (Object.hasOwn(value, 'sourceFailure') &&
+    (typeof value.sourceFailure !== 'string' || !(policy.sourceFailures as readonly string[]).includes(value.sourceFailure))) return false
   // The live leg belongs to gold alone, so a live tick on the dollar, the yuan or the peg is a
   // contract violation rather than an extra field to be ignored.
   if (Object.hasOwn(value, 'live') && (value.seriesId !== policy.live.seriesId || !isLive(value.live))) return false

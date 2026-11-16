@@ -58,6 +58,17 @@ describe('macro market snapshot contract', () => {
     expect(parseMacroMarketSnapshot({ ...snapshot, readings: [realDollar, { ...realDollar, synthetic: true }] })).toBeUndefined()
   })
 
+  it('admits the permanent-refusal reason on a reading and refuses anything outside its closed set', () => {
+    // 卡片要说「供应商不再提供这个品种」就靠这一个字段；但供应商的原话、临时失败码都不许过界，
+    // 否则同一格会一会儿说"读不到"一会儿说"不提供"。
+    const refusedDollar = { seriesId: 'dxy-real', level: 103.407, atMs: Date.parse(asOf), returns: { '15m': 0.1 }, sourceFailure: 'symbol-not-supported' }
+    const view = parseMacroMarketSnapshot({ ...snapshot, readings: [refusedDollar, gold], caveats: ['provider-time-series'] })
+    expect(view && 'readings' in view && view.readings[0]).toMatchObject({ sourceFailure: 'symbol-not-supported' })
+    for (const bad of ['plan-restricted', 'Symbol is not supported', '', 42, null, ['symbol-not-supported']]) {
+      expect(parseMacroMarketSnapshot({ ...snapshot, readings: [{ ...refusedDollar, sourceFailure: bad }] })).toBeUndefined()
+    }
+  })
+
   it('admits only the empty request object and never runs a caller accessor', () => {
     expect(isMacroMarketSnapshotQuery({})).toBe(true)
     for (const bad of [undefined, null, [], { asOf }, { range: '24h' }, Object.create(null)]) {

@@ -6,6 +6,8 @@ import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroM
 import { macroMarketPolicy } from './macroMarketPolicy'
 import { createMacroMarketSnapshotQuery } from './macroMarketSnapshotQuery'
 import { createMacroMarketStore } from './macroMarketStore'
+import { realMarketApiPolicy as relPolicy } from './realMarketApiPolicy'
+const relNotes = relPolicy.notes
 
 const directories: string[] = []
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
@@ -182,6 +184,33 @@ describe('the macro-market snapshot', () => {
       expect(reading.live).toBeUndefined()
       expect(reading.level).toBe(4155.5)
     }
+    store.close()
+  })
+
+  it('carries a permanent refusal on the reading it belongs to, and nothing else', () => {
+    // 真机 2026-11-16：DXY 被套餐拒、黄金照常。卡片要知道"这条读数是供应商不再提供的品种"，
+    // 才能把「偏旧」和「不提供」说出来；临时失败不进这个字段。
+    const directory = mkdtempSync(join(tmpdir(), 'macro-snapshot-')); directories.push(directory)
+    const store = createMacroMarketStore(join(directory, 'macro-market.sqlite'))
+    const series = macroMarketPolicy.series
+    store.append([
+      { series: series.dollarIndexReal, atMs: at(60), value: 103.407, observedAtMs: at(60) },
+      { series: series.gold, atMs: at(60), value: 4155.5, observedAtMs: at(60) }
+    ])
+    const readings = () => createMacroMarketSnapshotQuery({ store, now: () => at(60) }).snapshot().readings
+
+    store.note(relNotes.lastSymbolFailures, 'DXY:symbol-not-supported')
+    const refused = readings()
+    expect(refused.find(reading => reading.seriesId === series.dollarIndexReal)?.sourceFailure).toBe('symbol-not-supported')
+    expect(refused.find(reading => reading.seriesId === series.gold)?.sourceFailure).toBeUndefined()
+
+    // 限流这类临时失败不进读数：由来源状态与时间说明，不是"供应商不再提供"。
+    store.note(relNotes.lastSymbolFailures, 'DXY:rate-limited')
+    expect(readings().every(reading => reading.sourceFailure === undefined)).toBe(true)
+
+    // 恢复后采集把 note 清空，读数也必须跟着干净（旧值不许越过之后的成功）。
+    store.note(relNotes.lastSymbolFailures, '')
+    expect(readings().every(reading => reading.sourceFailure === undefined)).toBe(true)
     store.close()
   })
 })
