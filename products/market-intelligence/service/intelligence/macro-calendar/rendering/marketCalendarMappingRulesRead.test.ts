@@ -51,6 +51,12 @@ describe('映射规则表读口', () => {
       + Object.keys(zeroXRouterSourceMetricMappings).length
       + Object.keys(germanSourceMetricMappings).length)
     expect(read.mapped).toHaveLength(read.counts.mapped)
+    /**
+     * **同一张表被并两次**是最难发现的一类错：`mapped` 会从 188 变成 259，每行都正常、数字只是更大，
+     * 看着不像坏。所以这里两个方向都断：条数等于三份之和，且**一个 id 只出现一次**。
+     * 后者也能抓住「两张表撞了同一个 id」——那会让身份解析在两张表之间二选一，同样是错的。
+     */
+    expect(new Set(read.mapped.map((rule) => rule.sourceId)).size).toBe(read.mapped.length)
     // BLS 的 CPI 有官方页（机构 + 页面类型能推），ISM 那类推不出必须 null
     const cpi = read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')!
     expect(cpi.officialUrl).toBe('https://www.bls.gov/news.release/')
