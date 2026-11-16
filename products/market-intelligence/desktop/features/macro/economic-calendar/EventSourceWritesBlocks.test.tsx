@@ -59,3 +59,42 @@ it('labels a provider that does have revision writes as write records', async ()
     expect(block.textContent?.match(/源未给出/gu)?.length).toBe(3)
   } finally { await act(async () => root.unmount()) }
 })
+
+/**
+ * #40 的范围（Chief 2026-11-17 定）：**两侧都有值且不相等 → 并列 + 标记，不挑一个、不判对错**。
+ * 一侧没给不算冲突；写法不同但数值相同也不算（`0.7` 与 `0.7%` 是同一个数）。
+ */
+it('lists disagreeing fields side by side with the source name, and never picks one', async () => {
+  const rows = [
+    { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-16T21:49:41.793Z',
+      status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL' },
+    { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-16T13:30:00.000Z',
+      status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: '["214790",79095]' }
+  ]
+  const host = document.createElement('div'); const root = createRoot(host)
+  try {
+    await act(async () => root.render(scoped(<EventSourceWritesBlocks rows={rows} text={text} />)))
+    const conflicts = [...host.querySelectorAll('[data-conflict-field]')]
+    // 只有预期不一致：实际只有一家给（缺失不是冲突），前值两源相同。
+    expect(conflicts).toHaveLength(1)
+    expect(conflicts[0]!.getAttribute('data-conflict-field')).toBe('consensus')
+    // 两个值都在，各带来源名，**不挑一个**。
+    expect(conflicts[0]!.textContent).toContain('narwhal 10')
+    expect(conflicts[0]!.textContent).toContain('0xrouter 18.0')
+    expect(conflicts[0]!.textContent).toContain('预期多源不一致')
+  } finally { await act(async () => root.unmount()) }
+})
+
+it('does not call a formatting difference a conflict', async () => {
+  const rows = [
+    { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-09T00:00:00.000Z',
+      status: 'published', consensus: null, actual: '0.7', previous: '0.6', identityKey: 'US.WHOLESALE_INVENTORIES.SA.MOM' },
+    { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-09T00:00:00.000Z',
+      status: 'published', consensus: null, actual: '0.7%', previous: '0.6%', identityKey: 'US.WHOLESALE_INVENTORIES.SA.MOM' }
+  ]
+  const host = document.createElement('div'); const root = createRoot(host)
+  try {
+    await act(async () => root.render(scoped(<EventSourceWritesBlocks rows={rows} text={text} />)))
+    expect(host.querySelector('[data-source-conflicts]')).toBeNull()
+  } finally { await act(async () => root.unmount()) }
+})

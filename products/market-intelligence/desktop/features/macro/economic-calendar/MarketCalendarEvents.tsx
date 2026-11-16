@@ -13,7 +13,7 @@ import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarCountryLabel } from './calendarCountryLabel'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
-import { EventSourceWritesBlocks } from './EventSourceWritesBlocks'
+import { EventSourceWritesBlocks, fieldConflicts } from './EventSourceWritesBlocks'
 import { useEventSourceWrites } from './useEventSourceWrites'
 
 /**
@@ -79,6 +79,12 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
   const sourceWrites = useEventSourceWrites(event.eventNameKey === undefined ? undefined : {
     metricKey: event.eventNameKey, scheduledDate: event.scheduledAt.slice(0, 10)
   })
+  /**
+   * 预期是否唯一（#40 产品口径）：**两个来源的预期不同时，差异句整句不出现**——同一个实际值落在
+   * 两个预期之间时，「高于/低于」的符号会翻转。判据是「预期是否唯一」，不是「这一次碰巧同向」。
+   */
+  const consensusNotUnique = sourceWrites?.state === 'available'
+    && fieldConflicts(sourceWrites.rows).some((conflict) => conflict.field === 'consensus')
   const shownSource: MarketCalendarSource = sourceAgrees
     ? source
     : { eventType: event.eventType, status: 'success', sourceObservedAt: event.sourceObservedAt }
@@ -126,8 +132,11 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
         <span>{text.market[key]}</span><strong>{event[key]?.displayValue ?? text.market.missingValue}</strong>
       </div>)}
       {/* 预期差读契约同一函数：三种语态与看板卡片逐字一致，缺少预期时不出现任何数字。 */}
-      {event.providerActual ? <div data-market-value="surprise" data-surprise={toCalendarSurpriseView(surprise)}>
-        <span>{text.market.surprise}</span><strong>{surpriseText(surprise, text, language)}</strong>
+      {event.providerActual ? <div data-market-value="surprise" data-surprise={toCalendarSurpriseView(surprise)}
+        data-multi-consensus={consensusNotUnique ? 'true' : undefined}>
+        <span>{text.market.surprise}</span><strong>{consensusNotUnique
+          ? text.details.sourceWritesUncomparable
+          : surpriseText(surprise, text, language)}</strong>
       </div> : null}
     </div> : null}
     {event.officialLink ? <div data-linked-official-values>

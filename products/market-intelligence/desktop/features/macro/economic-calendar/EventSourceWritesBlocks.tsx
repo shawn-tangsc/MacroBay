@@ -24,6 +24,34 @@ const STATUS_ALIAS: Readonly<Record<string, string>> = {
   cancelled: 'cancelled'
 }
 
+/**
+ * 两个显示值是否算「不一样」：`0.7` 与 `0.7%`、`1,234` 与 `1234` 是同一个数，不能因为写法不同就报不一致。
+ * 数字比数字，比不出来的退回原文比较。
+ */
+function sameShown(left: string, right: string): boolean {
+  const strip = (value: string): string => value.replace(/[%$,\s]/gu, '')
+  const a = Number(strip(left))
+  const b = Number(strip(right))
+  if (Number.isFinite(a) && Number.isFinite(b)) return a === b
+  return left.trim() === right.trim()
+}
+
+/** 这一期里「两侧都有值、且不相等」的字段——**只并列，不判对错**（#56/#57 未解决前判不了）。 */
+export function fieldConflicts(rows: readonly EventSourceWriteRow[]): readonly Readonly<{
+  field: 'consensus' | 'actual' | 'previous'
+  values: readonly Readonly<{ providerId: string; value: string }>[]
+}>[] {
+  const fields = ['consensus', 'actual', 'previous'] as const
+  const out: { field: typeof fields[number]; values: { providerId: string; value: string }[] }[] = []
+  for (const field of fields) {
+    const present = rows.flatMap((row) => (row[field] === null ? [] : [{ providerId: row.providerId, value: row[field]! }]))
+    if (present.length < 2) continue
+    if (present.every((entry) => sameShown(entry.value, present[0]!.value))) continue
+    out.push({ field, values: present })
+  }
+  return out
+}
+
 export function EventSourceWritesBlocks({ rows, text }: Readonly<{
   rows: readonly EventSourceWriteRow[]
   text: EconomicCalendarText
@@ -36,8 +64,27 @@ export function EventSourceWritesBlocks({ rows, text }: Readonly<{
     return (text.eventStatus as unknown as Readonly<Record<string, string>>)[key] ?? status
   }
   const value = (shown: string | null): string => shown ?? text.details.valueNotProvided
+  const conflicts = fieldConflicts(rows)
+  const fieldLabel: Readonly<Record<string, string>> = {
+    consensus: text.market.consensus, actual: text.market.providerActual, previous: text.market.providerPrevious
+  }
+  const fieldMark: Readonly<Record<string, string>> = {
+    consensus: text.details.sourceWritesConsensusConflict,
+    actual: text.details.sourceWritesActualConflict,
+    previous: text.details.sourceWritesPreviousConflict
+  }
   return <section className="mi-source-writes" data-source-writes>
     <h3>{text.details.sourceWritesTitle}</h3>
+    {/* 不一致的字段**先摆出来**：两块各自的数要并排看才能对照，散在下面容易只看到一家。 */}
+    {conflicts.length === 0 ? null : <div className="mi-source-writes__conflicts" data-source-conflicts>
+      {conflicts.map(({ field, values }) => <p key={field} data-conflict-field={field} className="mi-source-writes__conflict">
+        <span className="mi-source-writes__conflict-label">{fieldLabel[field]}</span>
+        {values.map((entry) => <span key={entry.providerId} className="mi-source-writes__conflict-value">
+          {entry.providerId} {entry.value}
+        </span>)}
+        <mark className="mi-source-writes__mark">{fieldMark[field]}</mark>
+      </p>)}
+    </div>}
     {providers.map((providerId) => {
       const block = rows.filter((row) => row.providerId === providerId)
       const kind = block.some((row) => row.source === 'revision')

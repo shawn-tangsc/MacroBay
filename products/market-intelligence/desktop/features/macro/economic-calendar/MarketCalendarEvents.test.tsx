@@ -379,3 +379,46 @@ it('asks for the per-source writes only when it has both identity and period, an
     vi.resetModules()
   }
 })
+
+/**
+ * 产品口径（Chief 2026-11-17）：**预期有两个不同值时，差异句整句不出现**——同一个实际值落在两个
+ * 预期之间时，「高于/低于」的符号会翻转。判据是「预期是否唯一」，不是「这次碰巧同向」。
+ */
+it('drops the surprise sentence when the sources disagree on consensus', async () => {
+  vi.resetModules()
+  vi.doMock('../../../shared/ipc/marketCalendarClient', () => ({
+    marketCalendarClient: {
+      queryEventSourceWrites: async (input: { metricKey: string }) => ({
+        state: 'available' as const, metricKey: input.metricKey, providerCount: 2, hasRevisionChain: false,
+        rows: [
+          { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-16T21:49:41.793Z',
+            status: 'backfilling', consensus: '10', actual: null, previous: '25.5', identityKey: input.metricKey },
+          { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-16T13:30:00.000Z',
+            status: 'published', consensus: '18.0', actual: '7.8', previous: '25.5', identityKey: input.metricKey }
+        ]
+      })
+    }
+  }))
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const host = document.createElement('div'); const root = createRoot(host)
+  const textZh = productText['zh-CN'].pages.intelligence.portal.calendar
+  const base = { eventKey: '00000000-0000-4000-8000-000000000041', title: '帝国大厦制造业指数', countryCode: 'US',
+    eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-11-16T13:30:00.000Z',
+    consensus: { displayValue: '10' }, providerPrevious: { displayValue: '25.5' }, providerActual: { displayValue: '7.8' },
+    source: 'Narwhal' as const, sourceObservedAt: '2026-11-16T14:00:00.000Z', coverage: 'observed-unverified' as const }
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector text={textZh}
+      event={{ ...base, eventNameKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL' }} />)))
+    await act(async () => { await Promise.resolve() })
+    const surprise = host.querySelector('[data-market-value="surprise"]')!
+    // 不是「低于预期」这种句子：预期不唯一，比较本身没有定义。
+    expect(surprise.getAttribute('data-multi-consensus')).toBe('true')
+    expect(surprise.textContent).not.toContain('低于')
+    expect(surprise.textContent).not.toContain('高于')
+    expect(surprise.textContent).toContain('暂不比较')
+  } finally {
+    await act(async () => root.unmount())
+    vi.doUnmock('../../../shared/ipc/marketCalendarClient')
+    vi.resetModules()
+  }
+})
