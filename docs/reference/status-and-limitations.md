@@ -43,14 +43,15 @@ the app → Open** (a double-click is refused), or run
 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`. The Windows installer is unsigned too:
 SmartScreen shows *Windows protected your PC* and the user picks **More info → Run anyway**. Both
 prompts return after **every downloaded update**, not just the first install. Windows packaging is
-configured and its installer builds both in CI and on Windows 11 x64 hardware, but the installed app is
-not accepted yet; Linux packaging is not configured. There is no auto-update channel. See
-[Packaging](../development/packaging.md).
+configured and its installer builds both in CI and on Windows 11 x64 hardware, but no real install has
+been accepted yet (no Windows environment was available); Linux packaging is not configured. There is
+no auto-update channel. See [Packaging](../development/packaging.md).
 
 ## Platform support
 
-- **macOS**: arm64 is developed and verified; the x64 installer ships with each release but has not
-  been verified on Intel hardware.
+- **macOS**: the arm64 installer builds and ships with each release; it was installed and used by a
+  user on an Apple silicon machine during 0.4.0, but has not been re-verified by a real install since
+  0.4.1. The x64 installer ships with each release but has not been verified on Intel hardware.
 - **Windows / Linux**: the Electron code is expected to run, but end-to-end behavior has not been
   validated. Treat these platforms as experimental and report concrete failures.
 

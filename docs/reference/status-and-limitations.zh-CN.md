@@ -36,12 +36,14 @@ MacroBay 当前版本是 `0.4.3`。本文说明现在能用什么，以及目前
 或执行 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`。Windows 安装器同样未签名：
 SmartScreen 显示「Windows 已保护你的电脑」，用户选择**更多信息 → 仍要运行**。这两个提示在
 **每次下载更新后都会重现**，不只是第一次安装。Windows 的打包已配置，安装器既能由 CI 构建、也能在
-Windows 11 x64 真机上构建产出，但安装后的运行态尚未验收；Linux 尚未配置打包。也没有自动更新通道。
+Windows 11 x64 真机上构建产出，但安装后的运行态未做真机安装验收（缺 Windows 环境）；Linux 尚未配置
+打包。也没有自动更新通道。
 详见[打包](../development/packaging.zh-CN.md)。
 
 ## 平台支持
 
-- **macOS**：arm64 已开发和验证；x64 安装包随版本发布，但还没有在 Intel 真机上验收。
+- **macOS**：arm64 安装包可以构建并随版本发布；0.4.0 期间有用户在 Apple 芯片机器上实际安装使用过，
+  0.4.1 起没有再做过真机安装验收。x64 安装包随版本发布，但还没有在 Intel 真机上验收。
 - **Windows / Linux**：Electron 代码理论上可以运行，但尚未做端到端验证。请按实验性支持对待，并报告
   具体失败。
 
