@@ -240,17 +240,21 @@ it('exports every row regardless of the filter, and says so next to the button',
 })
 
 /**
- * 页签下面那句说明（Chief 2026-11-17）：读者看到「未映射少了、已映射没涨」会以为丢东西。
- * 数字**必须来自读口**——换个计数，句子跟着变；读口没给这个数时，不显示这句话。
+ * 「为什么未映射少了、已映射没涨」的解释（Chief 2026-11-17）：
+ * **不印在正文里**，收进一颗 ⓘ；点开才看到，数字仍从读口取。
  */
-it('explains the event identities from the read port, not from a hardcoded number', async () => {
+it('keeps the event-scope explanation behind an info trigger, with the count from the read port', async () => {
   await mount()
-  expect(document.body.querySelector('[data-event-scope]')?.textContent).toContain('99')
+  // 正文里不许有那句说明（规则：说明性句子进浮层）。
+  expect(document.body.textContent).not.toContain('本表只统计指标')
+  const anchor = document.body.querySelector('[data-event-scope]')!
+  expect(anchor, '没有那颗说明图标').not.toBeNull()
+  const trigger = anchor.querySelector('[aria-label]') as HTMLElement
+  expect(trigger.getAttribute('aria-label')).not.toBe('')
 
-  await act(async () => root?.unmount())
-  host?.remove()
-  document.body.innerHTML = ''
-  await mount({ ...view, counts: { ...view.counts, eventIdentities: 7 } })
-  expect(document.body.querySelector('[data-event-scope]')?.textContent).toContain('7')
-  expect(document.body.querySelector('[data-event-scope]')?.textContent).not.toContain('99')
+  // 点开才看到那句话，数字来自读口（99）。
+  await act(async () => { trigger.click() })
+  await act(async () => { await Promise.resolve() })
+  expect(document.body.textContent).toContain('本表只统计指标')
+  expect(document.body.textContent).toContain('99')
 })

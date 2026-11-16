@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Button, Input, Pagination, Select, Table } from 'antd'
 
 import { Modal } from '@platform/ui/components/modal'
+import { helpTrigger } from '@platform/ui/components/popover'
 import { StateView } from '@platform/ui/components/state'
 import { Tabs } from '@platform/ui/components/tabs'
 import type { ChoiceItem } from '@platform/ui/components/choice/choiceItem'
@@ -126,18 +127,17 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   const eventCount = view?.state === 'available' ? view.counts.eventIdentities : undefined
   const eventScopeNote = eventCount === undefined
     ? null
-    : <p className="mi-catalog__note" data-event-scope>
-      {text.eventScopeNote.replace('{count}', String(eventCount))}
-    </p>
+    : <span className="mi-catalog__filters-help" data-event-scope>
+      {/* 解释性句子收进 ⓘ：平时不占一行，读者问「为什么这边少了、那边没涨」时点开就有。 */}
+      {helpTrigger({ text: text.eventScopeNote.replace('{count}', String(eventCount)) })}
+    </span>
   const items: readonly ChoiceItem[] = [
     { value: 'mapped', labelKey: 'tabMapped', labelParams: { count: String(counts.mapped) } },
     { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(counts.unmapped) } }
   ]
   const copy: Readonly<Record<string, string>> = { tabMapped: text.tabMapped, tabUnmapped: text.tabUnmapped }
 
-  const mappedPanel = <>
-    {eventScopeNote}
-    {mapped.length === 0
+  const mappedPanel = mapped.length === 0
       ? <p className="mi-catalog__note">{text.mappedEmpty}</p>
     : <Table<MappingRuleRow> size="small" rowKey="metricKey" pagination={false}
       dataSource={paged(mapped, mappedPage, pageSize)}
@@ -175,12 +175,9 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
         // 这条规则在库里实际覆盖多少行：0 也显示（0 是事实，空着会被当成「没读」）。
         { title: text.columns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap',
           render: (value: number) => String(value) }
-      ]} />}
-  </>
+      ]} />
 
-  const unmappedPanel = <>
-    {eventScopeNote}
-    {unmapped.length === 0
+  const unmappedPanel = unmapped.length === 0
       ? <p className="mi-catalog__note">{text.unmappedEmpty}</p>
     : <Table<UnmappedSourceIdRow> size="small" rowKey="sourceId" pagination={false}
       dataSource={paged(unmapped, unmappedPage, pageSize)}
@@ -188,8 +185,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
         { title: text.unmappedColumns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel', render: (_value: string | null, row) => sampleText(row) }
-      ]} />}
-  </>
+      ]} />
 
   const body = view === undefined
     ? <StateView state="loading" />
@@ -231,6 +227,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
           aria-label={text.tierFilter} data-tier-filter
           options={TIER_OPTIONS.map((key) => ({ value: key, label: text.tiers[key] }))}
           onChange={(value) => { setTierFilter(value ?? 'all'); setMappedPage(1) }} />}
+        {eventScopeNote}
       </div>
       <div className="mi-catalog__table">{body}</div>
       {/* 分页条固定在弹框底部：表格区是唯一滚动容器，它不跟着行滚。 */}

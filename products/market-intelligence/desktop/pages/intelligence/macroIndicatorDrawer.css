@@ -386,6 +386,8 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
 /* 事件目录弹框：一条筛选项行 + 表格 + 分页。列宽由 antd 表格自己排，这里只管间距与那枚「源原文名」角标。 */
 .mi-catalog__filters { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .mi-catalog__filters > * { flex: 1 1 180px; min-width: 0; }
+/* 说明用的 ⓘ：不吃搜索框的宽度，与控件同高对齐。 */
+.mi-catalog__filters > .mi-catalog__filters-help { flex: 0 0 auto; align-self: center; display: flex; }
 /* 分级筛选是四个固定选项，不需要和搜索框平分整行宽度：给它一个够放下「未分级」的定宽。 */
 .mi-catalog__filters > .mi-catalog__filter-select { flex: 0 1 148px; }
 .mi-catalog__pager { display: flex; justify-content: flex-end; margin-top: 8px; }
