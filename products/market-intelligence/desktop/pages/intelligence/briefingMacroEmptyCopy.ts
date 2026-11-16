@@ -20,6 +20,8 @@ export type BriefingMacroEmptyCopyLabels = Readonly<{
   macroEmptyCodes: Readonly<Record<string, string>>
   /** The prefix that turns a reason into a sentence the reader understands, e.g. "暂时读不到：". */
   macroUnreadable: string
+  /** 「过去 24 小时没有高影响宏观发布」——这一档**正文要印**（用户 2026-11-16 改口径）。 */
+  pastWindowNoHighImpact: string
 }>
 
 export function briefingMacroEmptyCopy(
@@ -30,9 +32,9 @@ export function briefingMacroEmptyCopy(
   // No note: an edition written before reasons were recorded. Saying nothing is the only honest
   // answer — the sentence would have to invent which of the six reasons applied.
   if (!code) return null
-  // 「窗口里真的没有高影响事件」**不印任何话**（用户 2026-11-06）：正文里说"没有"会让人觉得这张
-  // 简报不可信；那一栏干脆整块不出现。所以这里返回 `null`，版面据此不渲染该栏。
-  if (code === 'past-24h-no-high-impact-release') return null
+  // 「窗口里真的没有高影响事件」**正文要说一句**（用户 2026-11-16 改口径）：整块消失会让读者
+  // 以为功能没了，而这和「确实没有」是两回事。这句话不是「读不到」，所以 `unreadable: false`。
+  if (code === 'past-24h-no-high-impact-release') return Object.freeze({ sentence: labels.pastWindowNoHighImpact, unreadable: false })
   // 认不出的原因码：**一句话都不说**（产品 2026-11-06，v2.135）。以前这里回落到
   // 「过去 24 小时没有已发布的高影响事件」——那是把一个"不知道为什么"说成"确实没有"，
   // 而且那句话本身已被禁令删除。说不出来就不说，版面与留痕都不编。

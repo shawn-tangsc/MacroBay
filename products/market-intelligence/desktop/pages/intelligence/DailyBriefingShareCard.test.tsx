@@ -165,6 +165,16 @@ describe('the macro section draws events, and says why it is empty without imply
     assertClean(rendered)
   })
 
+  it('prints one plain sentence when the window really had no high-impact release', async () => {
+    // 用户 2026-11-16：整块消失会让读者以为功能没了；这一档正文印一句，不加标题、不算读不到。
+    const rendered = await render(emptyMacro({ macroEmpty: 'past-24h-no-high-impact-release' }))
+    const line = rendered.querySelector('[data-macro-quiet="true"]')
+    expect(line?.textContent).toBe(text.pastWindow.noHighImpact)
+    expect(rendered.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+    expect(rendered.querySelector('[data-macro-empty]')).toBeNull()
+    expect(rendered.textContent).not.toContain('暂时读不到')
+  })
+
   it('draws no macro block at all when the calendar could not be read', async () => {
     // 用户 2026-11-15：**读不到就整块不显示**——标题、占位句都不留，和「未来 7 天没有可关注
     // 的就整块不出现」同一条规矩。为什么没有，读者去「问题清单」看（那一处仍是唯一出口）。

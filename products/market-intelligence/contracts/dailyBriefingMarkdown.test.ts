@@ -532,6 +532,21 @@ describe('the copied text carries the whole title', () => {
   })
 })
 
+describe('the copied text says "really nothing" out loud', () => {
+  it('prints the quiet sentence for an empty window, and never for an unreadable calendar', () => {
+    const quiet = dailyBriefingToMarkdown({
+      ...document(), news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } }
+    }, options as never)
+    expect(quiet).toContain(labels.pastWindow.noHighImpact)
+
+    const unreadable = dailyBriefingToMarkdown({
+      ...document(), news: { items: [], macro: [], notes: { macroEmpty: 'calendar-collect-failed' } }
+    }, options as never)
+    expect(unreadable).not.toContain(labels.pastWindow.noHighImpact)
+    expect(unreadable).not.toContain(labels.macroUnreadable.trim())
+  })
+})
+
 describe('the copied text draws no macro block when the calendar could not be read', () => {
   it('omits the whole news section for every unreadable reason', () => {
     // 用户 2026-11-15：读不到就整块不显示，屏幕上、复制文本、导出图一致；原因留给问题清单。

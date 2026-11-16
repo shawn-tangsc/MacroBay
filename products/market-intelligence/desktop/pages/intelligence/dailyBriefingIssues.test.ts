@@ -43,34 +43,23 @@ function document(overrides: Partial<DailyBriefingDocument> = {}): DailyBriefing
   }
 }
 
-it('records "really nothing" as an info trace entry while the body stays silent', () => {
-  // 用户 2026-11-09：正文一个字不印（现状不动），但留痕区要能看出「不是漏了，是确实没有」。
+it('moves "really nothing" into the body and out of the gap list', () => {
+  // 用户 2026-11-16：整块消失会让读者以为功能没了，所以正文印一句；它不是缺口，缺口里不再重复。
   const base = document()
   const doc = document({
     edition: { ...base.edition, windowHours: 24 },
     news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } }
   })
   const issues = briefingIssues({ document: doc, text: zhText, formatTime })
-  const quiet = issues.find((issue) => issue.template === 'macro-quiet')!
-  expect(quiet).toMatchObject({
-    severity: 'info',
-    category: 'data',
-    title: '近 24 小时内没有高影响事件',
-    advice: '无需处理；记在这里是为了说明这一栏确实为空。'
-  })
-  // 分组行有名字，不是一个只有严重度的空标签。
-  const group = groupBriefingIssues(issues, zhText).find((item) => item.template === 'macro-quiet')!
-  expect(group.label).toBe('确实没有高影响事件')
-  // 英文同一句，不是中文模板套英文界面。
-  const enQuiet = briefingIssues({ document: doc, text: enText, formatTime }).find((issue) => issue.template === 'macro-quiet')!
-  expect(enQuiet.title).toBe('No high-impact event in the past 24 hours')
-  expect(enQuiet.advice).toBe('Nothing to do; recorded so an empty section is not mistaken for a gap.')
+  expect(issues.some((issue) => issue.template === 'macro-quiet')).toBe(false)
+  expect(issues.some((issue) => issue.id.startsWith('data:calendar'))).toBe(false)
 
-  // 正文那句仍然一个字不印——这条守卫没改。
+  // 正文那句与这一档同源：不带「读不到」前缀，也不是一句「没有已收录的发布」。
   expect(briefingMacroEmptyCopy(doc, {
     macroEmptyCodes: zhText.macroEmptyCodes,
-    macroUnreadable: zhText.macroUnreadable
-  })).toBeNull()
+    macroUnreadable: zhText.macroUnreadable,
+    pastWindowNoHighImpact: zhText.pastWindow.noHighImpact
+  })).toEqual({ sentence: zhText.pastWindow.noHighImpact, unreadable: false })
 })
 
 function pulse(overrides: Partial<BriefingPulseRow> = {}): BriefingPulseRow {

@@ -296,23 +296,11 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   // 读到的是同一句话。以前这里把六档原因码压成两句，过期/从未采集/采集失败全被静默吞掉。
   const macroEmpty = briefingMacroEmptyCopy(document, {
     macroEmptyCodes: text.macroEmptyCodes,
-    macroUnreadable: text.macroUnreadable
+    macroUnreadable: text.macroUnreadable,
+    pastWindowNoHighImpact: text.pastWindow.noHighImpact
   })
-  // 「确实没有高影响事件」：正文不印（`briefingMacroEmptyCopy` 仍返回 null），这里只记一条
-  // info 留痕，让查账的人看出不是漏了。没有动作、不是告警，也不与「读不到」共用一个码。
-  if (document.news.notes.macroEmpty === 'past-24h-no-high-impact-release') {
-    const hours = document.edition.windowHours ?? 24
-    add({
-      id: 'data:macro:quiet',
-      severity: 'info',
-      category: 'data',
-      template: 'macro-quiet',
-      source: text.limits.sources.calendar,
-      at,
-      title: text.limits.macroQuiet.replace('{hours}', String(hours)),
-      advice: text.limits.advice.macroQuiet
-    })
-  }
+  // 「确实没有高影响事件」现在**正文已经印了那句**（用户 2026-11-16）：这里不再记一条 info，
+  // 否则同一件事会说两遍。它本来就不是缺口，删掉后「数据缺口」也不会虚增一条。
   if (macroEmpty?.unreadable) {
     const code = document.news.notes.macroEmpty ?? 'calendar-unavailable'
     // 只有「来源未启用」才建议去启用；其它原因都说明来源开着，建议检查来源而不是开关

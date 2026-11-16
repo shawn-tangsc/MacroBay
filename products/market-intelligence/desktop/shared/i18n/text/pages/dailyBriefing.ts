@@ -94,7 +94,8 @@ export const dailyBriefingText = {
        */
       counts: '过去 24 小时：共 {total} 条发布（经济指标 {indicators} · 央行与讲话 {centralBank} · 财经事件 {financial}）',
       others: '另有 {count} 条',
-      emptyCollected: '这段时间没有已收录的发布'
+      emptyCollected: '这段时间没有已收录的发布',
+      noHighImpact: '过去 24 小时没有高影响宏观发布'
     },
     /** 行级小标签：来源没给重要性时写「未提供」，不挑一档顶上去。 */
     importanceUnprovided: '未提供',
@@ -520,7 +521,8 @@ export const dailyBriefingText = {
       composition: 'Economic indicators {indicators} · Central banks & speeches {centralBank} · Financial events {financial}',
       counts: 'Past 24 hours: {total} releases (economic indicators {indicators} · central banks & speeches {centralBank} · financial events {financial})',
       others: '{count} more',
-      emptyCollected: 'No releases collected for this window'
+      emptyCollected: 'No releases collected for this window',
+      noHighImpact: 'No high-impact macro release in the past 24 hours'
     },
     importanceUnprovided: 'Not provided',
     macro: { actual: 'Actual', consensus: 'Expectation', previous: 'Previous', noConsensus: 'No expectation', cancelled: 'Cancelled', timeNotPublished: releaseTimeWords['en-US'], surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No expectation' } },

@@ -25,17 +25,26 @@ const labels = {
     'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）',
     'past-24h-no-high-impact-release': '过去 24 小时没有已发布的高影响事件'
   },
-  macroUnreadable: '暂时读不到：'
+  macroUnreadable: '暂时读不到：',
+  pastWindowNoHighImpact: '过去 24 小时没有高影响宏观发布'
 } as const
+
+/** 真表是整份文案对象；这一层只吃三个字段，测试与调用点用同一个映射。 */
+const copyLabels = (text: Readonly<{ macroEmptyCodes: Record<string, string>; macroUnreadable: string; pastWindow: { noHighImpact: string } }>) => ({
+  macroEmptyCodes: text.macroEmptyCodes,
+  macroUnreadable: text.macroUnreadable,
+  pastWindowNoHighImpact: text.pastWindow.noHighImpact
+})
 
 function documentWith(macroEmpty: string | undefined, macroEmptyHours?: number) {
   return { news: { notes: { ...(macroEmpty === undefined ? {} : { macroEmpty }), ...(macroEmptyHours === undefined ? {} : { macroEmptyHours }) } } } as never
 }
 
 describe('the empty macro section in a daily briefing', () => {
-  it('says nothing at all when the window really had no high-impact event', () => {
-    // 这一条就是「宏观栏不印」的判据：不许变成一句「过去 24 小时没有…」。
-    expect(briefingMacroEmptyCopy(documentWith('past-24h-no-high-impact-release'), labels)).toBeNull()
+  it('says one plain sentence when the window really had no high-impact event', () => {
+    // 用户 2026-11-16 改口径：整块消失会让读者以为功能没了；这一档正文印一句、不算「读不到」。
+    expect(briefingMacroEmptyCopy(documentWith('past-24h-no-high-impact-release'), labels))
+      .toEqual({ sentence: '过去 24 小时没有高影响宏观发布', unreadable: false })
   })
 
   it('says nothing when the edition recorded no reason at all', () => {
@@ -63,12 +72,12 @@ describe('the empty macro section in a daily briefing', () => {
   it('carries both catch-up reason codes in both languages, with no internal number', () => {
     expect(Object.keys(zhText.macroEmptyCodes).sort()).toEqual(Object.keys(enText.macroEmptyCodes).sort())
     for (const [name, text] of [['zh-CN', zhText], ['en-US', enText]] as const) {
-      const unknown = briefingMacroEmptyCopy(documentWith('calendar-catch-up-unknown'), text)
+      const unknown = briefingMacroEmptyCopy(documentWith('calendar-catch-up-unknown'), copyLabels(text))
       expect(unknown, name).not.toBeNull()
       expect(unknown!.unreadable, name).toBe(true)
       expect(unknown!.sentence, name).not.toContain('{')
 
-      const timeout = briefingMacroEmptyCopy(documentWith('calendar-catch-up-timeout'), text)
+      const timeout = briefingMacroEmptyCopy(documentWith('calendar-catch-up-timeout'), copyLabels(text))
       expect(timeout, name).not.toBeNull()
       expect(timeout!.sentence, name).not.toMatch(/\d/)
     }
