@@ -61,9 +61,8 @@ export function createEtfCurrentStateRefreshService(deps: {
         const requested = await deps.requestWindow(sourceId)
         if (requested.state === 'unavailable') return unavailable()
         const previous = requested.state === 'partial' && deps.store.read ? await deps.store.read() : null
-        // 换源期的 partial 不许跨源合并：上一次窗口是旧来源时，补进来的两半会混源，整窗校验必红。
-        // 保留旧窗口、整轮 unavailable，等两支都成功再整窗替换。
-        if (requested.state === 'partial' && previous?.snapshot && etfWindowSource(previous.snapshot.window) !== sourceId) return unavailable()
+        // 换源期不再拦混源：窗口契约从 2026-11-17 起允许行级来源（主源 + 备源互补），
+        // 每一行自己带 source，窗口归属由 `etfWindowSource` 回答，所以「补一支」不会再拼出假口径。
         const btc = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.btc, requested.btc) : requested.btc
         const eth = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.eth, requested.eth) : requested.eth
         if (!btc || !eth) return unavailable()
@@ -155,7 +154,7 @@ function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt:
     flows.push(Object.freeze({
       asset, tradingDate, netFlowUsd: row.changeUsd,
       observedAt: `${tradingDate}T00:00:00.000Z`, fetchedAt,
-      source: sourceId,
+      source: (row.source ?? sourceId) as EtfFlowSourceId,
       ...(row.updateTime ? { sourceRevision: row.updateTime } : {})
     }))
   }
@@ -165,7 +164,8 @@ function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt:
 function mergeRows(previous: readonly EtfDailyFlow[] | undefined, incoming: readonly EtfFlowHistoryRow[] | undefined): readonly EtfFlowHistoryRow[] | undefined {
   if (!previous && !incoming) return undefined
   const byDate = new Map<number, EtfFlowHistoryRow>()
-  for (const row of previous ?? []) byDate.set(Date.parse(`${row.tradingDate}T00:00:00.000Z`), { date: Date.parse(`${row.tradingDate}T00:00:00.000Z`), changeUsd: row.netFlowUsd, ...(row.sourceRevision ? { updateTime: row.sourceRevision } : {}) })
+  // **带上原来那一行的来源**：partial 合并时旧行不该被重新盖上本轮解析出来的源。
+  for (const row of previous ?? []) byDate.set(Date.parse(`${row.tradingDate}T00:00:00.000Z`), { date: Date.parse(`${row.tradingDate}T00:00:00.000Z`), changeUsd: row.netFlowUsd, source: row.source, ...(row.sourceRevision ? { updateTime: row.sourceRevision } : {}) })
   for (const row of incoming ?? []) byDate.set(row.date, row)
   return [...byDate.values()].sort((left, right) => left.date - right.date)
 }

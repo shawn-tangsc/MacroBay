@@ -48,7 +48,7 @@ export function buildEtfCurrentStateWindow(input: {
   if (!isCanonicalUtcMillis(input.asOf) || !isCompleteDateSet(input.completeDates, input.completeThrough, input.asOf.slice(0, 10))) return unavailable()
   const btc = validateAssetRows(input.btc, 'BTC', input.completeThrough)
   const eth = validateAssetRows(input.eth, 'ETH', input.completeThrough)
-  if (!btc || !eth || !sameDates(btc, eth) || !sameSource([...btc, ...eth]) || !sameDatesAsCompleteSet(btc, input.completeDates)) return unavailable()
+  if (!btc || !eth || !sameDates(btc, eth) || !sameDatesAsCompleteSet(btc, input.completeDates)) return unavailable()
 
   const windowEnd = btc.at(-1)!.tradingDate
   if (windowEnd !== input.completeThrough) return unavailable()
@@ -67,7 +67,7 @@ export function isValidEtfCurrentStateWindow(window: unknown): window is EtfCurr
   if (!isTradingDate(window.windowEnd) || !Array.isArray(window.capitalConclusionDates) || !window.capitalConclusionDates.every(isTradingDate)) return false
   const btc = validateAssetRows(window.btc as readonly EtfDailyFlow[], 'BTC', window.windowEnd)
   const eth = validateAssetRows(window.eth as readonly EtfDailyFlow[], 'ETH', window.windowEnd)
-  return !!btc && !!eth && sameDates(btc, eth) && sameSource([...btc, ...eth]) &&
+  return !!btc && !!eth && sameDates(btc, eth) &&
     btc.at(-1)?.tradingDate === window.windowEnd && eth.at(-1)?.tradingDate === window.windowEnd &&
     window.capitalConclusionDates.length === etfCurrentStateWindowPolicy.capitalConclusionRows &&
     sameDatesAsCompleteSet(btc.slice(-etfCurrentStateWindowPolicy.capitalConclusionRows), window.capitalConclusionDates) &&
@@ -84,8 +84,10 @@ function validateAssetRows(rows: readonly EtfDailyFlow[], asset: EtfAsset, compl
     canonical.push(Object.freeze({ ...row }))
   }
   if (!canonical.every((row, index) => index === 0 || canonical[index - 1]!.tradingDate < row.tradingDate)) return undefined
-  // 一个窗口只有一个来源：混源会让 DTO 的 sourceId 说谎，也会把两个口径拼进同一条累计。
-  return canonical.every((row) => row.source === canonical[0]!.source) ? canonical : undefined
+  // **允许混源**（用户 2026-11-17：主源 + 备源互相补充）。每一行自己带 `source`，
+  // 窗口归属由 `etfWindowSource` 统一回答（主源在就用主源），所以 DTO 的 `sourceId` 不会说谎；
+  // 累计只按数值求和，行上哪来的不影响口径——它本来就只是这一天的净流。
+  return canonical
 }
 
 function isFlow(value: unknown, asset: EtfAsset): value is EtfDailyFlow {
@@ -93,11 +95,6 @@ function isFlow(value: unknown, asset: EtfAsset): value is EtfDailyFlow {
   return value.asset === asset && isTradingDate(value.tradingDate) && isUsdFlow(value.netFlowUsd) &&
     isCanonicalUtcMillis(value.observedAt) && isCanonicalUtcMillis(value.fetchedAt) &&
     (etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(value.source as string) && (value.sourceRevision === undefined || isSafeRevision(value.sourceRevision))
-}
-
-/** 整窗（两支合起来）去重后必须恰好一个来源。比「首行相同」严：任何一处混源都拦得住。 */
-function sameSource(rows: readonly EtfDailyFlow[]): boolean {
-  return rows.length > 0 && rows.every((row) => row.source === rows[0]!.source)
 }
 
 function sameDates(left: readonly EtfDailyFlow[], right: readonly EtfDailyFlow[]): boolean {
@@ -143,9 +140,15 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[])
   return Object.keys(value).every((key) => allowed.includes(key))
 }
 
-/** 窗口的单一来源。调用方先确认窗口合法，所以这里不会拿到空数组或混源。 */
+/**
+ * 窗口归属哪个来源：**主源在场就是主源**（用户 2026-11-17 的「新的覆盖旧的」），
+ * 主源一天都没有才归备源。行级的 `source` 才是「这一天这条线是谁给的」。
+ */
 export function etfWindowSource(window: EtfCurrentStateWindow): EtfFlowSourceId {
-  return window.btc[0]!.source
+  const rows = [...window.btc, ...window.eth]
+  return rows.some((row) => row.source === etfCurrentStateWindowPolicy.sourceId)
+    ? etfCurrentStateWindowPolicy.sourceId
+    : rows[0]!.source
 }
 
 /**

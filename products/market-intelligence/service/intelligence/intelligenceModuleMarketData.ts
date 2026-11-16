@@ -7,6 +7,8 @@ import type { PlatformWebSocketConstructor } from '@platform/network/platformWeb
 import { allSources } from './application/providerRegistry'
 import { projectJobRegistration } from './application/sourceJobRegistration'
 import { createCryptoEtfFlowClient } from './application/cryptoEtfFlowClient'
+import type { EtfFlowHistoryRow } from './etf/etfFlowHistoryParser'
+import { mergeEtfAssetDays } from './etf/etfSourceMerge'
 import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
 import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
@@ -189,34 +191,44 @@ export function createIntelligenceMarketData(input: {
     // 每个源读**它自己的**开关与凭据：备源关了就是它不采，不会被主源的 key 顶替。
     isEnabled: async (sourceId: string) => (await profileStore.resolveProfile(sourceId)).enabled,
     hasCredential: async (sourceId: string) => Boolean(await etfApiKey(sourceId)),
+    /**
+     * 取窗口 = **主源 + 备源各取一次，逐日合并**（用户 2026-11-17：「互相补充，新的覆盖旧的，
+     * 只有数据变化的时候」）：
+     * - 同一天两个源都有值：**值相同保留旧行**（不翻来源、不产生一次变更）；值不同用主源的；
+     * - 只有一边有值：用那一边（备源把主源缺的天补上）；
+     * - 每一行写它自己的 `source`，窗口归属由 `etfWindowSource` 回答（主源在场就是主源）。
+     */
     requestWindow: async (sourceId: string) => {
-      const apiKey = await etfApiKey(sourceId)
-      if (!apiKey) return Object.freeze({ state: 'unavailable' as const })
-      const toRows = (days: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[]) =>
-        days.map((day) => Object.freeze({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd }))
-      // 两个源的客户端形状不同（一个按资产给 audit，一个直接给两支的行），各走各的分支。
-      if (sourceId === zeroXRouterSourcePolicy.sourceId) {
-        const zero = await zeroXRouterEtfFlowClient.requestWindow(apiKey)
-        // 这个客户端给的就是 `{ date, changeUsd }`（已经是窗口要的行形状），不再走 `toRows`。
-        if (zero.state === 'available') return Object.freeze({ state: 'available' as const, btc: zero.btc, eth: zero.eth })
-        if (zero.state === 'partial') {
+      const primaryId = sourceId
+      const standbyId = etfSourcePrecedence.find((candidate) => candidate !== primaryId)
+      const read = async (id: string | undefined): Promise<Readonly<{ btc?: readonly EtfFlowHistoryRow[]; eth?: readonly EtfFlowHistoryRow[] }>> => {
+        if (id === undefined) return Object.freeze({})
+        const profile = await profileStore.resolveProfile(id)
+        const apiKey = profile.enabled ? await etfApiKey(id) : undefined
+        if (!apiKey) return Object.freeze({})
+        const toRows = (days: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[]): readonly EtfFlowHistoryRow[] =>
+          days.map((day) => Object.freeze({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd, source: id }))
+        if (id === zeroXRouterSourcePolicy.sourceId) {
+          const zero = await zeroXRouterEtfFlowClient.requestWindow(apiKey)
+          const tag = (rows: readonly EtfFlowHistoryRow[] | undefined) => rows?.map((row) => Object.freeze({ ...row, source: id }))
+          return Object.freeze({ ...(zero.state !== 'unavailable' && zero.btc ? { btc: tag(zero.btc) } : {}), ...(zero.state !== 'unavailable' && zero.eth ? { eth: tag(zero.eth) } : {}) })
+        }
+        const result = await cryptoEtfFlowClient.readSettledWindow(apiKey)
+        if (result.state === 'available') return Object.freeze({ btc: toRows(result.btc.days), eth: toRows(result.eth.days) })
+        if (result.state === 'partial') {
           return Object.freeze({
-            state: 'partial' as const,
-            ...(zero.btc ? { btc: zero.btc } : {}),
-            ...(zero.eth ? { eth: zero.eth } : {})
+            ...(result.btc?.state === 'available' ? { btc: toRows(result.btc.days) } : {}),
+            ...(result.eth?.state === 'available' ? { eth: toRows(result.eth.days) } : {})
           })
         }
-        return Object.freeze({ state: 'unavailable' as const })
+        return Object.freeze({})
       }
-      const result = await cryptoEtfFlowClient.readSettledWindow(apiKey)
-      if (result.state === 'available') {
-        return Object.freeze({ state: 'available' as const, btc: toRows(result.btc.days), eth: toRows(result.eth.days) })
-      }
-      if (result.state === 'partial') {
-        const btc = result.btc?.state === 'available' ? toRows(result.btc.days) : undefined
-        const eth = result.eth?.state === 'available' ? toRows(result.eth.days) : undefined
-        return Object.freeze({ state: 'partial' as const, ...(btc ? { btc } : {}), ...(eth ? { eth } : {}) })
-      }
+      const primary = await read(primaryId)
+      const standby = await read(standbyId)
+      const btc = mergeEtfAssetDays(primary.btc, standby.btc)
+      const eth = mergeEtfAssetDays(primary.eth, standby.eth)
+      if (btc && eth) return Object.freeze({ state: 'available' as const, btc, eth })
+      if (btc || eth) return Object.freeze({ state: 'partial' as const, ...(btc ? { btc } : {}), ...(eth ? { eth } : {}) })
       return Object.freeze({ state: 'unavailable' as const })
     },
     store: etfCurrentStateStore,

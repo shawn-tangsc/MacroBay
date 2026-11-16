@@ -74,7 +74,7 @@ describe('ETF current-state refresh service', () => {
     expect(requestWindow).not.toHaveBeenCalled()
   })
 
-  it('refuses to merge a partial answer across a source switch', async () => {
+  it('merges a partial answer across a source switch, because every row carries its own source', async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
     const btcRows = rows('BTC')
     const ethRows = rows('ETH')
@@ -97,13 +97,19 @@ describe('ETF current-state refresh service', () => {
     const service = createEtfCurrentStateRefreshService({
         resolveFactSource: resolvedSource,
       isEnabled: async () => true, hasCredential: async () => true,
-      // 只有一支回来了：这个 partial 如果跟旧窗口合并，就会拼出一个混源窗口。
+      // 只有一支回来了：窗口契约从 2026-11-17 起允许行级来源，所以这一支照常并进旧窗口，
+      // 旧行保留 0xrouter 的标、新行写本轮解析出来的源。
       requestWindow: async () => ({ state: 'partial' as const, btc: rows('BTC') }),
       store, now: () => '2026-09-02T12:00:00.000Z'
     })
 
-    await expect(service.refresh()).resolves.toEqual({ state: 'unavailable' })
-    expect((await store.read())?.snapshot?.window).toEqual(legacy)
+    await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
+    const stored = (await store.read())?.snapshot?.window
+    expect(stored).toBeDefined()
+    const sources = new Set([...(stored?.btc ?? []), ...(stored?.eth ?? [])].map((row) => row.source))
+    // 旧窗口的行仍是旧源，新并进来的行是本轮解析出来的源——两种来源并存，窗口归属看主源。
+    expect(sources.has('0xrouter')).toBe(true)
+    expect([...sources].some((source) => source !== '0xrouter')).toBe(true)
   })
 
   // 定稿后仍变的交易日：写一行计数（不是静默），这是「30 小时余量够不够」的唯一数据来源。

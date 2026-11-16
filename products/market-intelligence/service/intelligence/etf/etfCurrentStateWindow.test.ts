@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildEtfCurrentStateWindow,
+  etfWindowSource,
   etfCurrentStateWindowPolicy,
   isValidEtfCurrentStateWindow,
   type EtfDailyFlow
@@ -35,19 +36,23 @@ describe('ETF current-state window', () => {
       .toEqual({ state: 'unavailable' })
   })
 
-  it('rejects a window that mixes two sources, and still accepts a legacy-only window', () => {
+  it('accepts a window that mixes the two sources, and keeps the window owned by the primary', () => {
+    // 用户 2026-11-17：「旧源加回来，互相补充」——同一个窗口里允许主源与备源的行并存，
+    // 行上说清「这一天是谁给的」，窗口归属统一由 `etfWindowSource` 回答（主源在场就是主源）。
     const btc = [...flows('BTC', 5)]
     btc[btc.length - 1] = { ...btc[btc.length - 1]!, source: 'cryptoetf-etf-flows' }
-
-    expect(buildEtfCurrentStateWindow(inputFor(btc, flows('ETH', 5)))).toEqual({ state: 'unavailable' })
-
-    // 架构师给的反例：BTC = [旧, 新]、ETH = 全旧。首行相同，只查首行会放过去；整窗去重必须红。
-    const handBuilt = { btc, eth: flows('ETH', 5), windowEnd: '2026-08-30', capitalConclusionDates: flows('BTC', 5).slice(-5).map((row) => row.tradingDate) }
-    expect(isValidEtfCurrentStateWindow(handBuilt)).toBe(false)
+    const mixed = buildEtfCurrentStateWindow(inputFor(btc, flows('ETH', 5)))
+    expect(mixed.state).toBe('available')
+    if (mixed.state === 'available') {
+      expect(mixed.window.btc.map((row) => row.source)).toEqual(['0xrouter', '0xrouter', '0xrouter', '0xrouter', 'cryptoetf-etf-flows'])
+      expect(etfWindowSource(mixed.window)).toBe('cryptoetf-etf-flows')
+    }
 
     const legacy = flows('BTC', 5).map((row) => ({ ...row, source: '0xrouter' as const }))
     const legacyEth = flows('ETH', 5).map((row) => ({ ...row, source: '0xrouter' as const }))
-    expect(buildEtfCurrentStateWindow(inputFor(legacy, legacyEth)).state).toBe('available')
+    const legacyOnly = buildEtfCurrentStateWindow(inputFor(legacy, legacyEth))
+    expect(legacyOnly.state).toBe('available')
+    if (legacyOnly.state === 'available') expect(etfWindowSource(legacyOnly.window)).toBe('0xrouter')
   })
 
   it('rejects duplicate, missing and non-common dates instead of zero filling either asset', () => {

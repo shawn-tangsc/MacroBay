@@ -108,15 +108,20 @@ describe('intelligenceModule 市场数据段', () => {
     expect(await created.resolveEtfFactSource()).toEqual({ kind: 'none' })
   })
 
-  it('开着且作业注册着时，解析结果与搬前的判据逐项相等（不硬编码源 id）', async () => {
+  it('两源都开着且都注册了作业时，按优先级取主源——不再是 conflict（用户 2026-11-17）', async () => {
     const enabled = DECLARED.map((source) => source.sourceId)
     const scheduled = DECLARED.map((source) => intelligenceCollectJobId(source.sourceId))
-    const { created, profileStore } = await marketData({ scheduledJobIds: scheduled, enabledSourceIds: enabled })
+    const { created } = await marketData({ scheduledJobIds: scheduled, enabledSourceIds: enabled })
     const actual = await created.resolveEtfFactSource()
-    expect(actual).toEqual(await expectedResolution(profileStore, scheduled))
-    expect(actual.kind).not.toBe('none')
-    // 同一个输入现算两次必须一致（这段刻意不缓存：启动早于排期的那几轮要解析成 none）。
+    // 主源 CryptoETF 在前：备源开着也不会把结果顶成 conflict，更不会让两源都不采。
+    expect(actual).toEqual({ kind: 'resolved', sourceId: 'cryptoetf-etf-flows' })
     expect(await created.resolveEtfFactSource()).toEqual(actual)
+  })
+
+  it('主源关掉时退到备源 0xRouter——「互相补充」的那一半', async () => {
+    const scheduled = DECLARED.map((source) => intelligenceCollectJobId(source.sourceId))
+    const { created } = await marketData({ scheduledJobIds: scheduled, enabledSourceIds: ['0xrouter-aggregate-provider'] })
+    expect(await created.resolveEtfFactSource()).toEqual({ kind: 'resolved', sourceId: '0xrouter-aggregate-provider' })
   })
 
   it('读者关着时，即使作业注册着也解析成 none——「开关」那一环不能丢', async () => {
