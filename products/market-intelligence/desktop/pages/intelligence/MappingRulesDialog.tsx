@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Pagination, Table } from 'antd'
+import { Button, Input, Pagination, Select, Table } from 'antd'
 
 import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
@@ -11,6 +11,7 @@ import type {
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 import { buildXlsx } from '@platform/files/export/xlsx'
 import { exportFileName, mappedExportRows, sampleText, unmappedExportRows } from './mappingRulesExport'
+import { filterMappedByTier, sortMappedRules, tierKeyOf, type TierFilter, type TierKey } from './mappingRulesView'
 
 /**
  * 「映射规则」弹框：**两个页签**（已映射 / 未映射），筛选框在页签上方、两段共用。
@@ -40,9 +41,16 @@ export type MappingRulesText = Readonly<{
   tabsAria: string
   exportLabel: string
   exportEmpty: string
+  /** 分级筛选器的占位（与「按国家筛选」同一种选择器）；选项复用 `tiers` 四档。 */
+  tierFilter: string
+  /** 导出文件里的两个工作表名。 */
+  sheetMapped: string
+  sheetUnmapped: string
 }>
 
 const PAGE_SIZES = [20, 50, 100] as const
+/** 分级筛的四个选项，顺序就是读者看到的顺序：一、二、三、未分级。 */
+const TIER_OPTIONS: readonly TierKey[] = ['1', '2', '3', 'other']
 const has = (value: string | null | undefined): value is string => typeof value === 'string' && value !== ''
 
 /** 地址太长时省略中间；`title` 保留全址，悬停能看到。 */
@@ -59,6 +67,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   onRetry?: () => void
 }>): React.ReactElement {
   const [query, setQuery] = useState('')
+  const [tierFilter, setTierFilter] = useState<TierFilter>('all')
   const [tab, setTab] = useState<'mapped' | 'unmapped'>('mapped')
   const [mappedPage, setMappedPage] = useState(1)
   const [unmappedPage, setUnmappedPage] = useState(1)
@@ -67,10 +76,16 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   const needle = query.trim().toLowerCase()
   const hit = (values: readonly (string | null | undefined)[]): boolean =>
     needle === '' || values.some((value) => has(value) && value.toLowerCase().includes(needle))
-  const mapped = useMemo(() => (view?.state === 'available' ? view.mapped.filter((row) =>
-    hit([row.sourceId, row.metricKey, row.basis, row.officialUrl, row.names?.zh, row.names?.en])) : []), [view, needle])
+  /**
+   * 已映射：先按筛选词与分级筛，再按「行数降序 → 分级 → 指标码」摆。
+   * 排序是**读者可见的顺序**，导出也用这一份——两边顺序一致，不会「屏幕上一个样、文件里另一个样」。
+   */
+  const mapped = useMemo(() => (view?.state === 'available'
+    ? sortMappedRules(filterMappedByTier(view.mapped.filter((row) =>
+      hit([row.sourceId, row.metricKey, row.basis, row.officialUrl, row.names?.zh, row.names?.en])), tierFilter))
+    : []), [view, needle, tierFilter])
   const unmapped = useMemo(() => (view?.state === 'available' ? view.unmapped.filter((row) =>
-    hit([row.sourceId, row.sampleLabel])) : []), [view, needle])
+    hit([row.sourceId, row.sampleLabel, row.sampleLabelEn])) : []), [view, needle])
 
   const counts = view?.state === 'available' ? view.counts : { mapped: 0, unmapped: 0, unmappedRows: 0 }
   const items: readonly ChoiceItem[] = [
@@ -94,7 +109,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
         {
           // 分级直接读读口的 `tier`（分级表只有一处）；`null` 显示「未分级」，不空着。
           title: text.columns.tier, dataIndex: 'tier', className: 'mi-catalog__cell-nowrap',
-          render: (value: 1 | 2 | 3 | null) => value === null ? text.tiers.other : text.tiers[String(value) as '1' | '2' | '3']
+          render: (value: 1 | 2 | 3 | null) => text.tiers[tierKeyOf(value)]
         },
         { title: text.columns.periodRule, dataIndex: 'periodRule', className: 'mi-catalog__cell-nowrap' },
         { title: text.columns.basis, dataIndex: 'basis', width: 180, render: (value: string | null) => value ?? '' },
@@ -147,20 +162,27 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
       <div className="mi-catalog__filters">
         <Input allowClear value={query} placeholder={text.filter} aria-label={text.filter}
           onChange={(event) => { setQuery(event.target.value); setMappedPage(1); setUnmappedPage(1) }} />
+        {/* 分级筛选只在「已映射」页签出现：未映射的 id 还没有分级，给它一个筛选器就是这个控件在撒谎。 */}
+        {tab === 'mapped' ? <Select<TierFilter> allowClear className="mi-catalog__filter-select"
+          value={tierFilter === 'all' ? undefined : tierFilter} placeholder={text.tierFilter}
+          aria-label={text.tierFilter} data-tier-filter
+          options={TIER_OPTIONS.map((key) => ({ value: key, label: text.tiers[key] }))}
+          onChange={(value) => { setTierFilter(value ?? 'all'); setMappedPage(1) }} /> : null}
       </div>
       <div className="mi-catalog__table">{body}</div>
       {/* 分页条固定在弹框底部：表格区是唯一滚动容器，它不跟着行滚。 */}
       <div className="mi-catalog__footer">
         <Button size="small" className="mi-catalog__export" data-catalog-export
-          disabled={view?.state !== 'available' || (tab === 'mapped' ? mapped.length : unmapped.length) === 0}
+          disabled={view?.state !== 'available' || (mapped.length === 0 && unmapped.length === 0)}
           onClick={() => {
-            // 导出的是**当前页签筛选结果的全量**，不是当前页——「导出」看起来像全量就不能只给一页。
-            const rows = tab === 'mapped'
-              ? mappedExportRows(mapped, { columns: text.columns, tiers: text.tiers })
-              : unmappedExportRows(unmapped, { columns: text.unmappedColumns })
-            const name = exportFileName(`${text.title}-${tab === 'mapped' ? text.tabMapped : text.tabUnmapped}`
-              .replace(/\{\w+\}/gu, '').trim(), new Date())
-            void window.platform?.app?.saveFile?.(name, buildXlsx({ name: text.title, rows }))
+            // 导出的是**两张表各自筛选结果的全量**，不是当前页、也不看停在哪一页签：
+            // 读者点「导出」要的是一份能拿去核对的完整文件，不是「我眼前这一屏」。
+            const sheets = [
+              // 空表也写：只留表头。整张表消失会被读成「没有这类数据」，一张只有表头的空表才是「这栏没有」。
+              { name: text.sheetMapped, rows: mappedExportRows(mapped, { columns: text.columns, tiers: text.tiers }) },
+              { name: text.sheetUnmapped, rows: unmappedExportRows(unmapped, { columns: text.unmappedColumns }) }
+            ]
+            void window.platform?.app?.saveFile?.(exportFileName(text.title, new Date()), buildXlsx(sheets))
           }}>{text.exportLabel}</Button>
         <Pager total={activeTotal} page={tab === 'mapped' ? mappedPage : unmappedPage} pageSize={pageSize}
           onPage={(next) => { if (tab === 'mapped') setMappedPage(next); else setUnmappedPage(next) }}

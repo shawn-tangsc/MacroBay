@@ -1,4 +1,5 @@
 import type { MappingRuleRow, UnmappedSourceIdRow } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import { tierKeyOf } from './mappingRulesView'
 
 /**
  * 导出的两件纯事：**文件名净化** 与 **行映射**。
@@ -17,7 +18,11 @@ export function exportFileName(base: string, now: Date): string {
   return `${cleaned === '' ? 'export' : cleaned}-${stamp}.xlsx`
 }
 
-/** 已映射段：八列，与界面同一顺序。`tier` 为 `null` 写「未分级」，`rowCount` 为 0 写 0。 */
+/**
+ * 已映射工作表：八列，与界面同一顺序。`tier` 为 `null` 写「未分级」，`rowCount` 为 0 写 0。
+ *
+ * 一个工作表**至少有一行表头**：空表也是「只有表头」，不是「没有这张表」。
+ */
 export function mappedExportRows(rows: readonly MappingRuleRow[], text: Readonly<{
   columns: Readonly<Record<'sourceId' | 'metricKey' | 'name' | 'tier' | 'periodRule' | 'basis' | 'official' | 'rows', string>>
   tiers: Readonly<Record<'1' | '2' | '3' | 'other', string>>
@@ -28,7 +33,7 @@ export function mappedExportRows(rows: readonly MappingRuleRow[], text: Readonly
     row.sourceId,
     row.metricKey,
     row.names === null ? '' : `${row.names.zh} · ${row.names.en}`,
-    row.tier === null ? text.tiers.other : text.tiers[String(row.tier) as '1' | '2' | '3'],
+    text.tiers[tierKeyOf(row.tier)],
     row.periodRule,
     row.basis ?? '',
     row.officialUrl ?? '',
