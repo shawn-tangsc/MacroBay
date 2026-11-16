@@ -84,43 +84,55 @@ export const germanSourceMetricMappings: Readonly<Record<string, Readonly<{ metr
   '215037': { metricKey: 'DE.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL', periodRule: 'month' },
 })
 
-/** 码 → 四列名（`zh` 取源给的中文名，`en` 取源给的英文原名去掉期次与括号）。 */
+/**
+ * 码 → 四列名。
+ *
+ * **名字由码决定，不由某一期决定**（用户 2026-11-17 的教训）：早先这 35 条是照源样本名抄的，
+ * 于是每条名字里都带着「9月」「终值」——十月的事件会显示成「9月…」，而 `DE.CPI.NSA.MOM` 与
+ * `.YOY` 两个不同的数**显示成同一个名字**。所以这里：
+ *
+ * - 不含期次（不出现「9月」「第三季度」）；
+ * - 不含修订阶段（「终值」「初值」是同一码的两次发布，不是名字）；
+ * - 同族不同测度必须能分辨（`消费者物价指数（月率）` / `（年率）`）；
+ * - `enShort` 是**独立写出来的短名**（`German CPI MoM`），不是把 `enFull` 截到 20 字——
+ *   截断会截在词中间，还会留下不平衡的括号。
+ */
 export const germanMetricNames: Readonly<Record<string, Readonly<{ zhFull: string; zhShort: string; enFull: string; enShort: string }>>> = Object.freeze({
-  'DE.ACTUAL_RETAIL_SALES.NONE.MOM': { zhFull: '9月实际零售销售(月率)', zhShort: '9月实际零售销售', enFull: 'Actual Retail Sales (MoM)(Sep)', enShort: 'Actual Retail Sales (MoM)(Se' },
-  'DE.ACTUAL_RETAIL_SALES.NONE.YOY': { zhFull: '9月实际零售销售(年率)', zhShort: '9月实际零售销售', enFull: 'Actual Retail Sales (YoY)(Sep)', enShort: 'Actual Retail Sales (YoY)(Se' },
-  'DE.ADJUSTED_TRADE_BALANCE.SA.LEVEL': { zhFull: '8月季调后贸易帐(十亿欧元)', zhShort: '8月季调后贸易帐', enFull: 'Seasonally Adjusted Trade Balance (billion EUR)(Aug)', enShort: 'Seasonally Adjusted Trade Ba' },
-  'DE.CPI.NSA.MOM': { zhFull: '9月消费者物价指数终值(月率)', zhShort: '9月消费者物价终值', enFull: 'Consumer Price Index (MoM)(Final)(Sep)', enShort: 'Consumer Price Index (MoM)(F' },
-  'DE.CPI.NSA.YOY': { zhFull: '9月消费者物价指数终值(年率)', zhShort: '9月消费者物价终值', enFull: 'Consumer Price Index (YoY)(Final)(Sep)', enShort: 'Consumer Price Index (YoY)(F' },
-  'DE.EXPORTS.SA.MOM': { zhFull: '8月季调后出口(月率)', zhShort: '8月季调后出口', enFull: 'Seasonally adjusted Exports (MoM)(Aug)', enShort: 'Seasonally adjusted Exports ' },
-  'DE.EXPORTS_PRICE.NONE.MOM': { zhFull: '9月出口物价指数(月率)', zhShort: '9月出口物价', enFull: 'Exports price index (MoM)(Sep)', enShort: 'Exports price index (MoM)(Se' },
-  'DE.EXPORTS_PRICE.NONE.YOY': { zhFull: '9月出口物价指数(年率)', zhShort: '9月出口物价', enFull: 'Exports price index (YoY)(Sep)', enShort: 'Exports price index (YoY)(Se' },
-  'DE.GDP.SA.QOQ': { zhFull: '第三季度季调后GDP初值(季率)', zhShort: '第三季度季调后GDP初值', enFull: 'Seasonally adjusted GDP(QoQ)(Preliminary)(Q3)', enShort: 'Seasonally adjusted GDP(QoQ)' },
-  'DE.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL': { zhFull: '11月GfK消费者信心指数', zhShort: '11月GfK消费者信心', enFull: 'GfK Consumer Confidence Index(Nov)', enShort: 'GfK Consumer Confidence Inde' },
-  'DE.HICP.NSA.MOM': { zhFull: '9月调和消费者物价指数终值(月率)', zhShort: '9月调和消费者物价终值', enFull: 'Harmonized Consumer Price Index (MoM)(Final)(Sep)', enShort: 'Harmonized Consumer Price In' },
-  'DE.HICP.NSA.YOY': { zhFull: '9月调和消费者物价指数终值(年率)', zhShort: '9月调和消费者物价终值', enFull: 'Harmonized Consumer Price Index (YoY)(Final)(Sep)', enShort: 'Harmonized Consumer Price In' },
-  'DE.IFO_BUSINESS_CLIMATE.NONE.LEVEL': { zhFull: '10月IFO商业景气指数', zhShort: '10月IFO商业景气', enFull: 'IFO business climate Index(Oct)', enShort: 'IFO business climate Index(O' },
-  'DE.IFO_BUSINESS_EXPECTATIONS.NONE.LEVEL': { zhFull: '10月IFO商业预期指数', zhShort: '10月IFO商业预期', enFull: 'IFO Business Expectations Index(Oct)', enShort: 'IFO Business Expectations In' },
-  'DE.IFO_BUSINESS_STATUS.NONE.LEVEL': { zhFull: '10月IFO商业现况指数', zhShort: '10月IFO商业现况', enFull: 'IFO Business Status Index(Oct)', enShort: 'IFO Business Status Index(Oc' },
-  'DE.IMPORTS.SA.MOM': { zhFull: '8月季调后进口(月率)', zhShort: '8月季调后进口', enFull: 'Seasonally adjusted Imports (MoM)(Aug)', enShort: 'Seasonally adjusted Imports ' },
-  'DE.IMPORTS_PRICE.NONE.MOM': { zhFull: '9月进口物价指数(月率)', zhShort: '9月进口物价', enFull: 'Imports price index (MoM)(Sep)', enShort: 'Imports price index (MoM)(Se' },
-  'DE.IMPORTS_PRICE.NONE.YOY': { zhFull: '9月进口物价指数(年率)', zhShort: '9月进口物价', enFull: 'Imports price index (YoY)(Sep)', enShort: 'Imports price index (YoY)(Se' },
-  'DE.INDUSTRIAL_OUTPUT.SA.MOM': { zhFull: '8月季调后工业产出(月率)', zhShort: '8月季调后工业产出', enFull: 'Seasonally adjusted industrial output (MoM)(Aug)', enShort: 'Seasonally adjusted industri' },
-  'DE.MANUFACTURING_ORDERS.SA.MOM': { zhFull: '8月季调后制造业订单(月率)', zhShort: '8月季调后制造业订单', enFull: 'Seasonally adjusted manufacturing orders (MoM)(Aug)', enShort: 'Seasonally adjusted manufact' },
-  'DE.MARKIT_BME_COMPOSITE_PURCHASING.NONE.LEVEL': { zhFull: '9月综合采购经理人指数终值', zhShort: '9月综合采购经理人终值', enFull: 'Markit/BME Composite Purchasing Managers Index (Final)(Sep)', enShort: 'Markit/BME Composite Purchas' },
-  'DE.MARKIT_BME_CONSTRUCTION_PURCHASING.NONE.LEVEL': { zhFull: '9月建筑业采购经理人指数', zhShort: '9月建筑业采购经理人', enFull: 'Markit/BME Construction Purchasing Managers Index(Sep)', enShort: 'Markit/BME Construction Purc' },
-  'DE.MARKIT_BME_MANUFACTURING_PMI.NONE.LEVEL': { zhFull: '9月制造业采购经理人指数终值', zhShort: '9月制造业采购经理人终值', enFull: 'Markit/BME Manufacturing Purchasing Managers Index (Final)(Sep)', enShort: 'Markit/BME Manufacturing Pur' },
-  'DE.MARKIT_BME_SERVICES_PURCHASING.NONE.LEVEL': { zhFull: '9月服务业采购经理人指数终值', zhShort: '9月服务业采购经理人终值', enFull: 'Markit/BME Services Purchasing Managers Index (Final)(Sep)', enShort: 'Markit/BME Services Purchasi' },
-  'DE.PRODUCER_PRICE.NONE.MOM': { zhFull: '9月生产者物价指数(月率)', zhShort: '9月生产者物价', enFull: 'Producer Price Index (MoM)(Sep)', enShort: 'Producer Price Index (MoM)(S' },
-  'DE.PRODUCER_PRICE.NONE.YOY': { zhFull: '9月生产者物价指数(年率)', zhShort: '9月生产者物价', enFull: 'Producer Price Index (YoY)(Sep)', enShort: 'Producer Price Index (YoY)(S' },
-  'DE.TOTAL_NUMBER_OF_UNEMPLOYED.NONE.LEVEL': { zhFull: '10月未季调失业总人数(万人)', zhShort: '10月未季调失业总人数', enFull: 'Total number of unemployed people not adjusted seasonally (10,000 people)(Oct)', enShort: 'Total number of unemployed p' },
-  'DE.TOTAL_NUMBER_OF_UNEMPLOYED.SA.LEVEL': { zhFull: '10月季调后失业总人数(万人)', zhShort: '10月季调后失业总人数', enFull: 'Seasonally adjusted total number of unemployed people (10,000 people)(Oct)', enShort: 'Seasonally adjusted total nu' },
-  'DE.UNADJUSTED_MANUFACTURING_ORDERS.NONE.YOY': { zhFull: '8月未季调制造业订单(年率)', zhShort: '8月未季调制造业订单', enFull: 'Unadjusted Manufacturing Orders (YoY)(Aug)', enShort: 'Unadjusted Manufacturing Ord' },
-  'DE.UNEMPLOYMENT.SA.RATE': { zhFull: '10月季调后失业率(官方)', zhShort: '10月季调后失业率', enFull: 'Seasonally adjusted unemployment rate (official)(Oct)', enShort: 'Seasonally adjusted unemploy' },
-  'DE.GDP.NSA.YOY': { zhFull: '第三季度未季调GDP初值(年率)', zhShort: '第三季度未季调GDP初值', enFull: 'Unseasonally adjusted GDP(YoY)(Preliminary)(Q3)', enShort: 'Unseasonally adjusted GDP(Yo' },
-  'DE.WHOLESALE_PRICE.NONE.MOM': { zhFull: '10月批发物价指数(月率)', zhShort: '10月批发物价', enFull: 'Wholesale Price Index (MoM)(Oct)', enShort: 'Wholesale Price Index (MoM)(' },
-  'DE.WHOLESALE_PRICE.NONE.YOY': { zhFull: '10月批发物价指数(年率)', zhShort: '10月批发物价', enFull: 'Wholesale Price Index (YoY)(Oct)', enShort: 'Wholesale Price Index (YoY)(' },
-  'DE.ZEW_ECONOMIC_SENTIMENT.NONE.LEVEL': { zhFull: '10月ZEW经济景气指数', zhShort: '10月ZEW经济景气', enFull: 'ZEW Economic Sentiment Index(Oct)', enShort: 'ZEW Economic Sentiment Index' },
-  'DE.ZEW_ECONOMIC_STATUS.NONE.LEVEL': { zhFull: '10月ZEW经济现况指数', zhShort: '10月ZEW经济现况', enFull: 'ZEW Economic Status Index(Oct)', enShort: 'ZEW Economic Status Index(Oc' },
+  'DE.ACTUAL_RETAIL_SALES.NONE.MOM': { zhFull: '实际零售销售（月率）', zhShort: '实际零售销售', enFull: 'Actual Retail Sales (MoM)', enShort: 'German Retail Sales MoM' },
+  'DE.ACTUAL_RETAIL_SALES.NONE.YOY': { zhFull: '实际零售销售（年率）', zhShort: '实际零售销售', enFull: 'Actual Retail Sales (YoY)', enShort: 'German Retail Sales YoY' },
+  'DE.ADJUSTED_TRADE_BALANCE.SA.LEVEL': { zhFull: '季调后贸易帐（十亿欧元）', zhShort: '季调后贸易帐', enFull: 'Seasonally Adjusted Trade Balance (billion EUR)', enShort: 'German Trade Balance SA' },
+  'DE.CPI.NSA.MOM': { zhFull: '消费者物价指数（月率）', zhShort: '消费者物价指数', enFull: 'Consumer Price Index (MoM)', enShort: 'German CPI MoM' },
+  'DE.CPI.NSA.YOY': { zhFull: '消费者物价指数（年率）', zhShort: '消费者物价指数', enFull: 'Consumer Price Index (YoY)', enShort: 'German CPI YoY' },
+  'DE.EXPORTS.SA.MOM': { zhFull: '季调后出口（月率）', zhShort: '季调后出口', enFull: 'Seasonally Adjusted Exports (MoM)', enShort: 'German Exports MoM' },
+  'DE.EXPORTS_PRICE.NONE.MOM': { zhFull: '出口物价指数（月率）', zhShort: '出口物价指数', enFull: 'Export Price Index (MoM)', enShort: 'German Export Prices MoM' },
+  'DE.EXPORTS_PRICE.NONE.YOY': { zhFull: '出口物价指数（年率）', zhShort: '出口物价指数', enFull: 'Export Price Index (YoY)', enShort: 'German Export Prices YoY' },
+  'DE.GDP.SA.QOQ': { zhFull: '季调后国内生产总值（季率）', zhShort: '季调后GDP', enFull: 'Seasonally Adjusted GDP (QoQ)', enShort: 'German GDP QoQ SA' },
+  'DE.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL': { zhFull: 'GfK消费者信心指数', zhShort: 'GfK消费者信心', enFull: 'GfK Consumer Confidence Index', enShort: 'German GfK Confidence' },
+  'DE.HICP.NSA.MOM': { zhFull: '调和消费者物价指数（月率）', zhShort: '调和消费者物价指数', enFull: 'Harmonised Index of Consumer Prices (MoM)', enShort: 'German HICP MoM' },
+  'DE.HICP.NSA.YOY': { zhFull: '调和消费者物价指数（年率）', zhShort: '调和消费者物价指数', enFull: 'Harmonised Index of Consumer Prices (YoY)', enShort: 'German HICP YoY' },
+  'DE.IFO_BUSINESS_CLIMATE.NONE.LEVEL': { zhFull: 'IFO商业景气指数', zhShort: 'IFO商业景气', enFull: 'Ifo Business Climate Index', enShort: 'German Ifo Climate' },
+  'DE.IFO_BUSINESS_EXPECTATIONS.NONE.LEVEL': { zhFull: 'IFO商业预期指数', zhShort: 'IFO商业预期', enFull: 'Ifo Business Expectations Index', enShort: 'German Ifo Expectations' },
+  'DE.IFO_BUSINESS_STATUS.NONE.LEVEL': { zhFull: 'IFO商业现况指数', zhShort: 'IFO商业现况', enFull: 'Ifo Business Situation Index', enShort: 'German Ifo Situation' },
+  'DE.IMPORTS.SA.MOM': { zhFull: '季调后进口（月率）', zhShort: '季调后进口', enFull: 'Seasonally Adjusted Imports (MoM)', enShort: 'German Imports MoM' },
+  'DE.IMPORTS_PRICE.NONE.MOM': { zhFull: '进口物价指数（月率）', zhShort: '进口物价指数', enFull: 'Import Price Index (MoM)', enShort: 'German Import Prices MoM' },
+  'DE.IMPORTS_PRICE.NONE.YOY': { zhFull: '进口物价指数（年率）', zhShort: '进口物价指数', enFull: 'Import Price Index (YoY)', enShort: 'German Import Prices YoY' },
+  'DE.INDUSTRIAL_OUTPUT.SA.MOM': { zhFull: '季调后工业产出（月率）', zhShort: '季调后工业产出', enFull: 'Seasonally Adjusted Industrial Output (MoM)', enShort: 'German Industrial Output MoM' },
+  'DE.MANUFACTURING_ORDERS.SA.MOM': { zhFull: '季调后制造业订单（月率）', zhShort: '季调后制造业订单', enFull: 'Seasonally Adjusted Manufacturing Orders (MoM)', enShort: 'German Factory Orders MoM' },
+  'DE.MARKIT_BME_COMPOSITE_PURCHASING.NONE.LEVEL': { zhFull: '综合采购经理人指数', zhShort: '综合PMI', enFull: 'Composite Purchasing Managers Index', enShort: 'German Composite PMI' },
+  'DE.MARKIT_BME_CONSTRUCTION_PURCHASING.NONE.LEVEL': { zhFull: '建筑业采购经理人指数', zhShort: '建筑业PMI', enFull: 'Construction Purchasing Managers Index', enShort: 'German Construction PMI' },
+  'DE.MARKIT_BME_MANUFACTURING_PMI.NONE.LEVEL': { zhFull: '制造业采购经理人指数', zhShort: '制造业PMI', enFull: 'Manufacturing Purchasing Managers Index', enShort: 'German Manufacturing PMI' },
+  'DE.MARKIT_BME_SERVICES_PURCHASING.NONE.LEVEL': { zhFull: '服务业采购经理人指数', zhShort: '服务业PMI', enFull: 'Services Purchasing Managers Index', enShort: 'German Services PMI' },
+  'DE.PRODUCER_PRICE.NONE.MOM': { zhFull: '生产者物价指数（月率）', zhShort: '生产者物价指数', enFull: 'Producer Price Index (MoM)', enShort: 'German PPI MoM' },
+  'DE.PRODUCER_PRICE.NONE.YOY': { zhFull: '生产者物价指数（年率）', zhShort: '生产者物价指数', enFull: 'Producer Price Index (YoY)', enShort: 'German PPI YoY' },
+  'DE.TOTAL_NUMBER_OF_UNEMPLOYED.NONE.LEVEL': { zhFull: '未季调失业人数（万人）', zhShort: '未季调失业人数', enFull: 'Unadjusted Number of Unemployed (10k people)', enShort: 'German Unemployed NSA' },
+  'DE.TOTAL_NUMBER_OF_UNEMPLOYED.SA.LEVEL': { zhFull: '季调后失业人数（万人）', zhShort: '季调后失业人数', enFull: 'Seasonally Adjusted Number of Unemployed (10k people)', enShort: 'German Unemployed SA' },
+  'DE.UNADJUSTED_MANUFACTURING_ORDERS.NONE.YOY': { zhFull: '未季调制造业订单（年率）', zhShort: '未季调制造业订单', enFull: 'Unadjusted Manufacturing Orders (YoY)', enShort: 'German Factory Orders NSA YoY' },
+  'DE.UNEMPLOYMENT.SA.RATE': { zhFull: '季调后失业率（官方）', zhShort: '季调后失业率', enFull: 'Seasonally Adjusted Unemployment Rate (Official)', enShort: 'German Unemployment Rate SA' },
+  'DE.GDP.NSA.YOY': { zhFull: '未季调国内生产总值（年率）', zhShort: '未季调GDP', enFull: 'Unadjusted GDP (YoY)', enShort: 'German GDP YoY NSA' },
+  'DE.WHOLESALE_PRICE.NONE.MOM': { zhFull: '批发物价指数（月率）', zhShort: '批发物价指数', enFull: 'Wholesale Price Index (MoM)', enShort: 'German Wholesale Prices MoM' },
+  'DE.WHOLESALE_PRICE.NONE.YOY': { zhFull: '批发物价指数（年率）', zhShort: '批发物价指数', enFull: 'Wholesale Price Index (YoY)', enShort: 'German Wholesale Prices YoY' },
+  'DE.ZEW_ECONOMIC_SENTIMENT.NONE.LEVEL': { zhFull: 'ZEW经济景气指数', zhShort: 'ZEW经济景气', enFull: 'ZEW Economic Sentiment Index', enShort: 'German ZEW Sentiment' },
+  'DE.ZEW_ECONOMIC_STATUS.NONE.LEVEL': { zhFull: 'ZEW经济现况指数', zhShort: 'ZEW经济现况', enFull: 'ZEW Economic Situation Index', enShort: 'German ZEW Situation' },
 })
 
 /** 展示开关轴（`tier`）：德国**一级 0 个**、二级这 7 个、其余不写（不写即未分级）。 */
