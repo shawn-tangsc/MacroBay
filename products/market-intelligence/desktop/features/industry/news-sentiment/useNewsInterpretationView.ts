@@ -86,15 +86,18 @@ export function useNewsInterpretationView(input: Readonly<{
     }
     const now = Date.now()
     if (inFlightSince.current?.itemId !== itemId) inFlightSince.current = { itemId, at: now }
-    const remaining = NEWS_INTERPRETATION_WAIT_MS - (now - inFlightSince.current.at)
-    if (remaining <= 0) {
-      setFailure({ itemId, sentenceKey: 'mi.aiInterpretation.waitExceeded', retry: true })
-      return
-    }
-    const timer = setTimeout(() => {
-      setFailure({ itemId, sentenceKey: 'mi.aiInterpretation.waitExceeded', retry: true })
-    }, remaining)
-    return () => { clearTimeout(timer) }
+    const startedAt = inFlightSince.current.at
+    // 这条路也要轮询：运行可能在时限内就结束，界面必须自己收敛到结果，
+    // 不能等到时限才动——那样一次一分多钟的正常运行会被当成「没跑完」。
+    const timer = setInterval(() => {
+      if (Date.now() - startedAt >= NEWS_INTERPRETATION_WAIT_MS) {
+        clearInterval(timer)
+        setFailure({ itemId, sentenceKey: 'mi.aiInterpretation.waitExceeded', retry: true })
+        return
+      }
+      reloadRef.current()
+    }, NEWS_INTERPRETATION_POLL_MS)
+    return () => { clearInterval(timer) }
   }, [activeRead.view, input.activeItemId, submittingItemId])
 
   const submit = useCallback((itemId: string): void => {

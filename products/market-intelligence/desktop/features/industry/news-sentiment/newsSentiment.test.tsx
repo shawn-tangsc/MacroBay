@@ -1258,6 +1258,42 @@ describe('AI 解读：点击触发（写端点）只把结果落到右栏', () =
     }
   })
 
+  it('converges on its own when a run that was already in flight finishes inside the budget', async () => {
+    // 打开抽屉时运行已在跑（不是本屏发起）：界面必须自己轮询到结果，
+    // 不许干等到时限再报「没跑完」——那样一次正常的一分多钟会被误判成失败。
+    vi.useFakeTimers()
+    try {
+      let reads = 0
+      const invoke = vi.fn(async (_product: string, method: string) => {
+        if (method === READ) {
+          reads += 1
+          if (reads <= 2) return { itemId: 'item-a', state: 'in-flight', currentEvidenceFingerprint: 'fp-1' }
+          return readAvailable
+        }
+        if (method === 'marketAnalysis.getSummary') return summaryBody
+        return undefined
+      })
+      ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+      await mountDrawer({ translationEnabled: false })
+      await act(async () => {})
+      expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+
+      // 一次只推进一个轮询周期：每次重读后要让 React 先落地，否则同一段假时间里
+      // 只会有第一次定时器触发（状态更新是异步的）。
+      for (let poll = 0; poll < 4; poll += 1) {
+        await act(async () => { vi.advanceTimersByTime(NEWS_INTERPRETATION_POLL_MS) })
+        await act(async () => {})
+      }
+
+      const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+      expect(section?.getAttribute('data-state')).toBe('ready')
+      expect(section.textContent).toContain('正文一句话。')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('already-available does not queue a second run and renders the real body', async () => {
     const { invoke } = stub({
       read: readAvailable,
