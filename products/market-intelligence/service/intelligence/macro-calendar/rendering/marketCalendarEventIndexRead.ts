@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarNamesFor, type CalendarNamePair } from '../marketCalendarCodeNames'
+import { sourceIdentityDisplayNames } from '../macroCalendarSourceIdentityNames'
 
 /**
  * **仅渲染层**：事件清单（一行一个事件身份，不是一次发布）。
@@ -70,12 +71,17 @@ const cursorKey = (cursor: string): readonly [string, string] => {
 
 /** 名字优先级：名表四列（中英各一对）→ 源原文名。都没有就不硬编。 */
 function namesOf(metricKey: string, sourceLabel: string | null) {
+  // 回退链：**码名表 → 源内身份名表 → 源原文名**（用户 2026-11-16 定）。
   const names = calendarNamesFor(metricKey)
+  const identity = sourceIdentityDisplayNames[sourceInternalIdOf(metricKey).replace(/^id:/, '')]
   const fallback = sourceLabel === null || sourceLabel.trim() === '' ? undefined : sourceLabel.trim()
+  const display = names ?? (identity === undefined ? undefined : { zhFull: identity.zh, zhShort: identity.zh,
+    enFull: identity.en, enShort: identity.en })
   return {
-    ...(names === undefined ? {} : { ...names }),
+    ...(display === undefined ? {} : { ...display }),
     ...(fallback === undefined ? {} : { sourceLabel: fallback }),
-    titleIsSourceLabel: names === undefined && fallback !== undefined
+    // 只有真回退到「源原文名」时才算，源内名表命中是**我们给的名字**，不标。
+    titleIsSourceLabel: display === undefined && fallback !== undefined
   }
 }
 

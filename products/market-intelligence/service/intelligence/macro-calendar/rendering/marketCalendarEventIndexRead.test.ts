@@ -110,3 +110,23 @@ describe('源内身份的中英两条合成一条（读取层去重，不动库�
     expect(chinese.state === 'available' && chinese.rows.length).toBe(1)
   })
 })
+
+describe('德国数组身份：只补显示名，不动身份', () => {
+  it('源内名表命中 → 显示我们的中英名；`metric_key` 一个字都不变', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const german = row('["9553",79010]', '2026-10-14T07:00', '2026-10-14', {
+      countryCode: 'DE', identityKind: 'source', sourceLabel: 'transmutation in seasonally adjusted unemployment'
+    })
+    upsertCalendarStandardRow(database, german)
+    const read = readCalendarEventIndex(database, { today })
+    if (read.state !== 'available') throw new Error('unavailable')
+    const [entry] = read.rows
+    // 名字来自源内身份名表（不是机翻残句），英文也能搜
+    expect(entry!.zhShort).toBe('批发物价指数(年率)')
+    expect(entry!.enFull).toBe('Wholesale Price Index (YoY)')
+    // **身份没动**：`metric_key` 仍是源给的那个数组
+    expect(entry!.metricKey).toBe('["9553",79010]')
+    expect(readCalendarEventIndex(database, { today, nameQuery: 'wholesale price' }).state).toBe('available')
+  })
+})
