@@ -65,6 +65,23 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214830': { metricKey: 'US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE', periodRule: 'month' },
   // ⑥ 谘商会消费者信心（母：214232 / 214991）
   '214232': { metricKey: 'US.CONSUMER_CONFIDENCE.SA.LEVEL', periodRule: 'month' },
+  // 里奇蒙德一族（三个独立母码，不新开子项体系）：码本来就存在，只补映射。
+  '212683': { metricKey: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
+  '214237': { metricKey: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
+  '214994': { metricKey: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
+  '214238': { metricKey: 'US.RICHMOND_FED_SERVICES.SA.LEVEL', periodRule: 'month' },
+  '214995': { metricKey: 'US.RICHMOND_FED_SERVICES.SA.LEVEL', periodRule: 'month' },
+  '214239': { metricKey: 'US.RICHMOND_FED_SHIPMENTS.SA.LEVEL', periodRule: 'month' },
+  '214996': { metricKey: 'US.RICHMOND_FED_SHIPMENTS.SA.LEVEL', periodRule: 'month' },
+  // 进出口物价：码已有（`US.EXPORT_PRICES.*` / `US.IMPORT_PRICES.*`），按月率/年率对口径。
+  '213973': { metricKey: 'US.EXPORT_PRICES.SA.MOM', periodRule: 'month' },
+  '213974': { metricKey: 'US.EXPORT_PRICES.NSA.YOY', periodRule: 'month' },
+  '214818': { metricKey: 'US.EXPORT_PRICES.SA.MOM', periodRule: 'month' },
+  '214819': { metricKey: 'US.EXPORT_PRICES.NSA.YOY', periodRule: 'month' },
+  '213975': { metricKey: 'US.IMPORT_PRICES.SA.MOM', periodRule: 'month' },
+  '213976': { metricKey: 'US.IMPORT_PRICES.NSA.YOY', periodRule: 'month' },
+  '214820': { metricKey: 'US.IMPORT_PRICES.SA.MOM', periodRule: 'month' },
+  '214821': { metricKey: 'US.IMPORT_PRICES.NSA.YOY', periodRule: 'month' },
   '214991': { metricKey: 'US.CONSUMER_CONFIDENCE.SA.LEVEL', periodRule: 'month' }
 })
 
