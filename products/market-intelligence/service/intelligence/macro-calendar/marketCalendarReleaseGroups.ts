@@ -1,3 +1,4 @@
+import { germanTierByMetricKey } from './marketCalendarGermanSourceMappings'
 /**
  * 发布组与主测度：**从 19 号表落成的代码常量**（164 个码 / 57 组）。
  *
@@ -302,7 +303,7 @@ export const marketCalendarTierByMetricKey: Readonly<Record<string, 1 | 2 | 3>> 
 
 /** 一个码的分级；没标就是「未分级」（返回 `undefined`，不返回 4）。 */
 export function tierOfMetricKey(metricKey: string): 1 | 2 | 3 | undefined {
-  return marketCalendarTierByMetricKey[metricKey]
+  return marketCalendarTierByMetricKey[metricKey] ?? germanTierByMetricKey[metricKey]
 }
 
 /** 一级码集合：配额与缺口检查用它，别在调用点各自写一份。 */

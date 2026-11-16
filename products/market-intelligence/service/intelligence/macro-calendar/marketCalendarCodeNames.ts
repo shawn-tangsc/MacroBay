@@ -1,3 +1,5 @@
+import { germanMetricNames } from './marketCalendarGermanSourceMappings'
+
 /**
  * 码名：**族名（measure-free）+ 测度词** 拼出来，已上线的 38 条用 `manualName` 冻结。
  *
@@ -270,7 +272,8 @@ export function localizedPairFor(metricKey: string): Readonly<{ zh: string; en: 
 }
 
 export function calendarNamesFor(metricKey: string): CalendarNamePair | undefined {
-  return nameByMetricKey[metricKey] ?? eventTypeNameByCode[metricKey]
+  // **按来源分开的德国名表**：德国码不在美国那张表里，各自独立（用户 2026-11-17）。
+  return nameByMetricKey[metricKey] ?? eventTypeNameByCode[metricKey] ?? germanMetricNames[metricKey]
 }
 
 /**
