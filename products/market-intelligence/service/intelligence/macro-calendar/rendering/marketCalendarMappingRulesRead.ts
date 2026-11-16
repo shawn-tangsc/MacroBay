@@ -32,6 +32,12 @@ export type MappingRuleRow = Readonly<{
    * `null`（`null` 界面上留空，不写「无公开页」——那要逐条核过才敢写）。
    */
   officialUrl: string | null
+  /**
+   * **中英名**（用户 2026-11-17）：「指标码」那一列旁边显示一行名字，`zh · en` 三段用 `·` 分隔
+   * 是界面的事。`zh` 取中文简称、`en` 取英文全名——**查不到名表条目就是 `null`**，
+   * 不拿指标码拼一个假英文名（拼出来的东西读起来像我们给的名字，其实是码）。
+   */
+  names: Readonly<{ zh: string; en: string }> | null
 }>
 
 export type UnmappedSourceIdRow = Readonly<{
@@ -86,6 +92,16 @@ function officialPageFor(metricKey: string): Readonly<{ url: string; basis: stri
   return null
 }
 
+/**
+ * 指标码 → 中英名（只读名表，不拼码）：`zh` 用简称、`en` 用全名。
+ * 名表没有这条就 `null`——**宁可不显示，也不写一个读起来像专名的码**。
+ */
+export function mappingRuleNames(metricKey: string): Readonly<{ zh: string; en: string }> | null {
+  const names = calendarNamesFor(metricKey)
+  if (names === undefined) return null
+  return Object.freeze({ zh: names.zhShort, en: names.enFull })
+}
+
 export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRead {
   try {
     // 源内身份＝数组第一段（`["214790",79090]` → `214790`）；规范码不是这里的对象。
@@ -102,7 +118,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
     const mapped: MappingRuleRow[] = Object.entries(zeroXRouterIndicatorIdentities).map(([sourceId, entry]) => {
       const official = officialPageFor(entry.metricKey)
       return Object.freeze({ sourceId, metricKey: entry.metricKey, periodRule: entry.periodRule,
-        basis: official === null ? null : official.basis, officialUrl: official?.url ?? null })
+        basis: official === null ? null : official.basis, officialUrl: official?.url ?? null,
+        names: mappingRuleNames(entry.metricKey) })
     })
       .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]

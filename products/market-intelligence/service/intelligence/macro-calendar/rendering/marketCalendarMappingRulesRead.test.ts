@@ -41,6 +41,11 @@ describe('映射规则表读口', () => {
     const ism = read.mapped.find((rule) => rule.metricKey === 'US.ISM_MANUFACTURING.SA.LEVEL')!
     expect(ism.officialUrl).toBeNull()
     expect(ism.basis).toBeNull()
+    // 中英名：`zh` 取简称、`en` 取全名；名表没有的码必须是 null，不许拿码拼。
+    expect(cpi.names).toEqual({ zh: 'CPI 年率', en: 'Consumer Price Index (CPI), YoY' })
+    expect(ism.names).toEqual({ zh: 'ISM 制造业 PMI', en: 'ISM Manufacturing PMI' })
+    expect(read.mapped.every((rule) => rule.names === null
+      || (rule.names.zh.trim() !== '' && rule.names.en.trim() !== ''))).toBe(true)
   })
 
   it('未映射段按行数从大到小排，一个 id 的多行合计成行数', () => {
