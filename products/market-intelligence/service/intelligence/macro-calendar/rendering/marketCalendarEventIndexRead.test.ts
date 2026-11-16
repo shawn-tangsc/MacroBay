@@ -135,3 +135,17 @@ describe('德国数组身份：只补显示名，不动身份', () => {
     expect(readCalendarEventIndex(database, { today, nameQuery: 'wholesale price' }).state).toBe('available')
   })
 })
+
+describe('详情那一行的「指标层级」', () => {
+  it('子项给所属指标的中文名；母项给出分项并按词表序；普通指标整段不给', async () => {
+    const { hierarchyForMetricKey } = await import('../marketCalendarZeroXRouterSourceMappings')
+    expect(hierarchyForMetricKey('US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL'))
+      .toEqual({ kind: 'child', parentName: '费城联储制造业' })
+    const parent = hierarchyForMetricKey('US.PHILLY_FED_MANUFACTURING.SA.LEVEL')
+    expect(parent?.kind).toBe('parent')
+    // 词表序：装船 → 新订单 → 物价支付 → 物价获得（不是按字母、也不是按行数）
+    expect(parent?.childNames).toEqual(['费城联储制造业装船', '费城联储制造业新订单', '费城联储制造业物价支付', '费城联储制造业物价获得'])
+    // 普通指标没有层级：界面整行不显示，不画空标签。
+    expect(hierarchyForMetricKey('US.CPI.NSA.YOY')).toBeUndefined()
+  })
+})

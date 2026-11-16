@@ -1,3 +1,4 @@
+import { localizedPairFor } from './marketCalendarCodeNames'
 import type { ZeroXRouterPeriodRule } from './marketCalendarMetricIdentity'
 
 /**
@@ -108,4 +109,43 @@ export function subItemOrderOf(metricKey: string): number | undefined {
   const word = segments[segments.length - 3] ?? ''
   const index = SUB_ITEM_WORD_ORDER.indexOf(word)
   return index < 0 ? undefined : index
+}
+
+/**
+ * **详情里那一行「指标层级」**（用户 2026-11-17）：子项给「所属指标」，母项给「分项」。
+ *
+ * 三条规定：子项要给**母指标的中文名**（给母码对读者没意义）而不是只写一句「这是子项」；
+ * 母项要列出**分项的中文名**并按词表顺序；两者都从层级表取，**不在渲染层拼接**。
+ * 没有层级关系（普通指标）返回 `undefined`，界面整行不显示——不画空标签。
+ */
+export function hierarchyForMetricKey(metricKey: string): Readonly<{
+  kind: 'parent' | 'child'
+  parentName?: string
+  childNames?: readonly string[]
+}> | undefined {
+  return hierarchyOf(metricKey)
+}
+
+const hierarchyOf = (metricKey: string): Readonly<{
+  kind: 'parent' | 'child'
+  parentName?: string
+  childNames?: readonly string[]
+}> | undefined => {
+  const parent = subItemParentByMetricKey[metricKey]
+  if (parent !== undefined) {
+    const parentName = nameOf(parent)
+    return parentName === undefined ? { kind: 'child' } : { kind: 'child', parentName }
+  }
+  const children = Object.entries(subItemParentByMetricKey)
+    .filter(([, mother]) => mother === metricKey)
+    .sort(([left], [right]) => (subItemOrderOf(left) ?? 99) - (subItemOrderOf(right) ?? 99))
+    .map(([child]) => nameOf(child))
+    .filter((name): name is string => name !== undefined)
+  return children.length === 0 ? undefined : { kind: 'parent', childNames: children }
+}
+
+/** 中文简称（界面那一行用的是读者看得懂的名字，不是码）。 */
+const nameOf = (metricKey: string): string | undefined => {
+  const pair = localizedPairFor(metricKey)
+  return pair?.zh
 }

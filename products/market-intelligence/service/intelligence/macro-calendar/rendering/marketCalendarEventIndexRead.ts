@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarNamesFor, englishSearchName, namePairFromSourceIdentity, type CalendarNamePair } from '../marketCalendarCodeNames'
 import { sourceIdentityDisplayNames } from '../macroCalendarSourceIdentityNames'
+import { hierarchyForMetricKey } from '../marketCalendarZeroXRouterSourceMappings'
 
 /**
  * **仅渲染层**：事件清单（一行一个事件身份，不是一次发布）。
@@ -34,6 +35,11 @@ export type CalendarEventIndexRow = Partial<CalendarNamePair> & Readonly<{
    * `null` 时只显示中文，**不留「·」或空括号**（半句话比没有更让人困惑）。
    */
   titleEn: string | null
+  /**
+   * **指标层级**（详情里那一行）：子项给「所属指标」的中文名，母项给出分项中文名（按词表序）。
+   * 普通指标没有这一项，界面整行不显示——不画空标签。
+   */
+  hierarchy?: Readonly<{ kind: 'parent' | 'child'; parentName?: string; childNames?: readonly string[] }>
   /** 最近一次已发布那一期的期间（没有已发布的就是空）。 */
   period?: string
   lastRelease?: Readonly<{ date: string; scheduledAt?: string }>
@@ -165,7 +171,9 @@ export function readCalendarEventIndex(database: DatabaseSync, input: Readonly<{
           nextRelease: { date: aggregate.next_date, ...(nextDetail.scheduledAt === undefined ? {} : { scheduledAt: nextDetail.scheduledAt }) }
         }),
         ...(aggregate.importance === null ? {} : { importance: aggregate.importance as 'high' | 'medium' | 'low' }),
-        eventType: eventTypeOf(aggregate.metric_key)
+        eventType: eventTypeOf(aggregate.metric_key),
+        ...(hierarchyForMetricKey(aggregate.metric_key) === undefined
+          ? {} : { hierarchy: hierarchyForMetricKey(aggregate.metric_key) })
       }))
     }
     // **同源内身份的中英两条合成一条**（用户 2026-11-16）：源对同一件事发了一条中文名、一条英文名，
