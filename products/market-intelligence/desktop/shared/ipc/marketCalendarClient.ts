@@ -144,6 +144,11 @@ export function mappingRulesReadOf(value: unknown): MappingRulesRead {
     const row = entry as Record<string, unknown>
     if (typeof row.sourceId !== 'string' || row.sourceId === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
     if (typeof row.rowCount !== 'number' && typeof row.metricKey !== 'string') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    // `names` 是「中文简称 · 英文全名」那一格的唯一来源：形状不对就别放行，否则格子会拼出半句。
+    if (row.names !== undefined && row.names !== null) {
+      const names = row.names as { zh?: unknown; en?: unknown }
+      if (typeof names.zh !== 'string' || typeof names.en !== 'string') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
   }
   if (record.counts === null || typeof record.counts !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
   return record as unknown as MappingRulesRead

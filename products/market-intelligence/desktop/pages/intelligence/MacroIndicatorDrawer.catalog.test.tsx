@@ -15,8 +15,8 @@ const events = vi.hoisted(() => ({
   queryMappingRules: async () => ({
     state: 'available' as const,
     mapped: [
-      { sourceId: '214790', metricKey: 'US.X.SA.MOM', periodRule: 'same-month', basis: 'BLS · 发布页', officialUrl: 'https://www.bls.gov/news.release/cpi.nr0.htm' },
-      { sourceId: '10113', metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: 'same-month', basis: null, officialUrl: null }
+      { sourceId: '214790', metricKey: 'US.CPI.NSA.YOY', periodRule: 'same-month', basis: 'BLS · 发布页', officialUrl: 'https://www.bls.gov/news.release/cpi.nr0.htm', names: { zh: 'CPI 年率', en: 'Consumer Price Index (CPI), YoY' } },
+      { sourceId: '10113', metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: 'same-month', basis: null, officialUrl: null, names: { zh: '密歇根现况', en: 'Michigan Current Conditions' } }
     ],
     unmapped: [{ sourceId: '10113', rowCount: 8, sampleLabel: '密歇根现况' }],
     counts: { mapped: 85, unmapped: 249, unmappedRows: 833 }
@@ -76,4 +76,6 @@ it('opens the full event table from the calendar header button', async () => {
   expect(links).toHaveLength(1)
   expect(links[0]!.textContent).toContain('bls.gov')
   expect(links[0]!.getAttribute('title')).toBe('https://www.bls.gov/news.release/cpi.nr0.htm')
+  // 名称列：中英放同一格（`中文简称 · 英文全名`）。
+  expect(document.body.textContent).toContain('CPI 年率 · Consumer Price Index (CPI), YoY')
 })

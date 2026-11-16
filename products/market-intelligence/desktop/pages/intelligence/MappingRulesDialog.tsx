@@ -29,7 +29,7 @@ export type MappingRulesText = Readonly<{
   mappedEmpty: string
   unmappedEmpty: string
   unavailable: string
-  columns: Readonly<{ sourceId: string; metricKey: string; periodRule: string; basis: string; official: string }>
+  columns: Readonly<{ sourceId: string; metricKey: string; name: string; periodRule: string; basis: string; official: string }>
   unmappedColumns: Readonly<{ sourceId: string; rows: string; sample: string }>
   tabMapped: string
   tabUnmapped: string
@@ -62,7 +62,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   const hit = (values: readonly (string | null | undefined)[]): boolean =>
     needle === '' || values.some((value) => has(value) && value.toLowerCase().includes(needle))
   const mapped = useMemo(() => (view?.state === 'available' ? view.mapped.filter((row) =>
-    hit([row.sourceId, row.metricKey, row.basis, row.officialUrl])) : []), [view, needle])
+    hit([row.sourceId, row.metricKey, row.basis, row.officialUrl, row.names?.zh, row.names?.en])) : []), [view, needle])
   const unmapped = useMemo(() => (view?.state === 'available' ? view.unmapped.filter((row) =>
     hit([row.sourceId, row.sampleLabel])) : []), [view, needle])
 
@@ -80,6 +80,11 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
       columns={[
         { title: text.columns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
         { title: text.columns.metricKey, dataIndex: 'metricKey', className: 'mi-catalog__cell-nowrap' },
+        {
+          // 中英放在同一格（`中文简称 · 英文全名`）；没有名表条目就空着，不拿指标码拼假英文名。
+          title: text.columns.name, dataIndex: 'names',
+          render: (value: MappingRuleRow['names']) => value === null ? '' : `${value.zh} · ${value.en}`
+        },
         { title: text.columns.periodRule, dataIndex: 'periodRule', className: 'mi-catalog__cell-nowrap' },
         { title: text.columns.basis, dataIndex: 'basis', width: 180, render: (value: string | null) => value ?? '' },
         {
