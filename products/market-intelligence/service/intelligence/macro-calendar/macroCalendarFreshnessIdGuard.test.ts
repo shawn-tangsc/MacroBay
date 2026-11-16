@@ -12,6 +12,13 @@ import { describe, expect, it } from 'vitest'
  * 只许用 `descriptors`（当下真正在采的那三条采集描述符）。
  *
  * 判据落在这几份文件上：它们各自回答那三个问题之一。新加这类逻辑时必须把文件加进清单。
+ *
+ * **删除旧源那一笔必须同笔做两件事**（2026-11-16，Chief 要求记在会被看见的地方）：
+ * ① 把 `marketCalendarQueryContracts.ts` 里新鲜度校验的**兼容口收紧**——现在同时接受
+ *    旧 feed id 与当前 `descriptors`，旧源删掉后只许留 `descriptors`，否则兼容口留久了
+ *    就成了「旧 id 照样能用」；
+ * ② 把 `marketCalendarFreshnessFromJobs.ts` 的允许清单去旧源那两条（它现在还把它们算进
+ *    「在跑的采集作业」，是为了迁移期不误报）。
  */
 const GUARDED = [
   'service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarManualRuntime.ts',
