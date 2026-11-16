@@ -12,11 +12,12 @@ and live outside this repository's public docs, so nothing here restates them a 
 
 - **macOS (arm64 + x64)**: `pnpm dist:mac` produces the arm64 `.dmg`; `pnpm dist:mac:x64`
   produces the x64 `.dmg` (run it on an Intel machine, or cross-build after installing the x64 agent
-  CLI). The arm64 build is verified from mount to a running dashboard; the x64 build is built and
-  checked at the file-architecture level, but **not yet verified on Intel hardware**.
+  CLI). The arm64 build succeeds; a user actually ran it during 0.4.0, and no real install has been
+  recorded since 0.4.1. The x64 build is built and checked at the file-architecture level, but **not
+  yet verified on Intel hardware**.
 - **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. The release workflow builds it on
-  `windows-latest`, and the build also runs through on Windows 11 x64 hardware. The *installed* app
-  is not accepted yet.
+  `windows-latest`, and the build also runs through on Windows 11 x64 hardware. No real install has
+  been accepted yet (no Windows environment was available).
 - **Linux**: no packager configuration.
 
 ## CI verification and releases
