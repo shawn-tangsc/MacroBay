@@ -32,17 +32,20 @@ const text = {
   tabMapped: mkDay.mappingTabMapped, tabUnmapped: mkDay.mappingTabUnmapped, tabsAria: mkDay.mappingTabsAria,
   exportLabel: mkDay.mappingExport, exportEmpty: mkDay.mappingExportEmpty,
   tierFilter: mkDay.mappingTierFilter,
-  directColumns: mkDay.mappingDirectColumns, directEmpty: mkDay.mappingDirectEmpty, tabDirect: mkDay.mappingTabDirect,
   childSuffix: mkDay.mappingChildSuffix,
-  sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped,
-  sheetDirect: mkDay.mappingSheetDirect
+  sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped
 }
 const view: MappingRulesRead = {
   state: 'available',
   mapped: [
-    { sourceId: '10113', metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: 'month', basis: null, officialUrl: null, names: null, tier: null, rowCount: 0 },
-    { sourceId: '214790', metricKey: 'US.CPI.NSA.YOY', periodRule: 'month', basis: 'BLS · 发布页', officialUrl: null, names: { zh: 'CPI 年率', en: 'Consumer Price Index (CPI), YoY' }, tier: 1, rowCount: 12 },
-    { sourceId: '4013', metricKey: 'US.PPI.NSA.YOY', periodRule: 'month', basis: null, officialUrl: null, names: null, tier: 2, rowCount: 5 }
+    // 一个码一行：这条有三个 id，格子用 ` · ` 连起来。
+    { sourceIds: ['213623', '214135', '214386'], metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: 'month',
+      basis: null, officialUrl: null, names: null, tier: null, rowCount: 0 },
+    { sourceIds: ['214790'], metricKey: 'US.CPI.NSA.YOY', periodRule: 'month', basis: 'BLS · 发布页',
+      officialUrl: null, names: { zh: 'CPI 年率', en: 'Consumer Price Index (CPI), YoY' }, tier: 1, rowCount: 12 },
+    // 只有码、没有任何源内 id 的行：两格空着（空 = 它本来就没有 id）。
+    { sourceIds: [], metricKey: 'US.PCE.SA.MOM', periodRule: null, basis: null,
+      officialUrl: null, names: null, tier: 2, rowCount: 5 }
   ],
   unmapped: [{ sourceId: '10267', rowCount: 8, sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
   counts: { mapped: 3, unmapped: 1, unmappedRows: 8 }
@@ -80,15 +83,17 @@ async function mount(shown: MappingRulesRead = view): Promise<void> {
 
 const dataRows = (): string[] => [...(document.body.querySelector('[data-mapping-section="mapped"]')
   ?.querySelectorAll('tbody tr.ant-table-row') ?? [])].map((row) => row.textContent ?? '')
+const dataRowNodes = (): Element[] => [...(document.body.querySelector('[data-mapping-section="mapped"]')
+  ?.querySelectorAll('tbody tr.ant-table-row') ?? [])]
 
 it('shows the rows in rows-in-store order, not in read order', async () => {
   await mount()
   const rows = dataRows()
   expect(rows).toHaveLength(3)
-  // 12 行的 CPI 排第一，其次 5 行的 PPI，0 行的密歇根垫底——这是读者问的那个顺序。
-  expect(rows[0]).toContain('214790')
-  expect(rows[1]).toContain('4013')
-  expect(rows[2]).toContain('10113')
+  // 12 行的 CPI 排第一；两条 5 行的是「未分级(0 条?)」…按同体量比分级：二级那条在前，未分级垫底。
+  expect(rows[0]).toContain('US.CPI.NSA.YOY')
+  expect(rows[1]).toContain('US.PCE.SA.MOM')
+  expect(rows[2]).toContain('US.MICHIGAN.NONE.LEVEL')
 })
 
 it('offers the tier filter on the mapped tab only', async () => {
@@ -131,65 +136,6 @@ it('exports one file with both worksheets, each carrying its own rows', async ()
 })
 
 /**
- * 「无需映射」这一段是「我们一共支持哪些指标」的答案（PCE、GDP、FOMC 不经过映射规则）。
- * 两条判据分开放：整段缺失时那个页签**不许出现**；有这一段时导出多一张工作表。
- */
-const withDirect: MappingRulesRead = {
-  ...view,
-  direct: [
-    { metricKey: 'US.PCE.SA.MOM', names: { zh: '核心 PCE 月率', en: 'PCE Price Index, MoM' }, tier: 1, rowCount: 7 },
-    { metricKey: 'US.GDP.SA.ANNUALIZED_QOQ', names: null, tier: null, rowCount: 4 }
-  ],
-  counts: { ...view.counts, direct: 2 }
-}
-
-it('hides the third tab when the payload has no such section', async () => {
-  await mount()
-  const labels = [...document.body.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent ?? '')
-  // 旧载荷没有这一段：不显示页签，也不画一张空表——「没有下发」和「一个都没有」不是同一件事。
-  expect(labels.some((label) => label.includes('无需映射'))).toBe(false)
-})
-
-it('shows the third tab and exports a third worksheet when the section is there', async () => {
-  await mount(withDirect)
-  const tab = [...document.body.querySelectorAll('[role="tab"]')].find((node) => (node.textContent ?? '').includes('无需映射'))
-  expect(tab, '无需映射页签没出现').toBeDefined()
-  expect(tab!.textContent).toContain('2')
-  await act(async () => { (tab as HTMLElement).click() })
-  // 这一段没有源内 id：表里只有指标码、名称、分级、库里行数四列。
-  const section = document.body.querySelector('[data-mapping-section="direct"]')
-  expect(section?.textContent).toContain('US.PCE.SA.MOM')
-  // 名称格：中文名 + 小字灰字英文名，**中间不再有「·」**（英文缺失时更不许留半个分隔符）。
-  expect(section?.textContent).toContain('核心 PCE 月率')
-  expect(section?.textContent).toContain('PCE Price Index, MoM')
-  expect(section?.querySelector('.mi-name__en')?.textContent).toBe('PCE Price Index, MoM')
-  // 名表查不到的行：名称格空着，分级显示「未分级」，行数照实写。
-  expect(section?.textContent).toContain('未分级')
-  expect(section?.textContent).toContain('US.GDP.SA.ANNUALIZED_QOQ')
-  // 分级筛选在这一段也有（这一段的每行都有分级）。
-  expect(document.body.querySelector('[data-tier-filter]')).not.toBeNull()
-
-  const button = document.body.querySelector('[data-catalog-export]') as HTMLElement
-  await act(async () => { button.click() })
-  await act(async () => { await Promise.resolve() })
-  const dir = mkdtempSync(join(tmpdir(), 'mapping-export-3-'))
-  const file = join(dir, 'out.xlsx')
-  writeFileSync(file, saved!.bytes)
-  execFileSync('unzip', ['-o', '-q', file, '-d', join(dir, 'un')], { stdio: 'pipe' })
-  expect(readdirSync(join(dir, 'un', 'xl', 'worksheets')))
-    .toEqual(['sheet1.xml', 'sheet2.xml', 'sheet3.xml'])
-  const workbook = readFileSync(join(dir, 'un', 'xl', 'workbook.xml'), 'utf8')
-  expect(workbook).toContain('name="已映射"')
-  expect(workbook).toContain('name="未映射"')
-  expect(workbook).toContain('name="无需映射"')
-  const third = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet3.xml'), 'utf8')
-  // 1 行表头 + 2 行数据，且只装这一段的指标。
-  expect((third.match(/<row /gu) ?? []).length).toBe(3)
-  expect(third).toContain('US.PCE.SA.MOM')
-  expect(third).not.toContain('US.CPI.NSA.YOY')
-})
-
-/**
  * 子母项（Chief 2026-11-17）：名称格里给归属小字，母项排在自己分项前面，
  * 搜母指标名时它的分项一起出来（搜子项只出子项）。
  */
@@ -197,16 +143,16 @@ const phillyParent = 'US.PHILLY_FED_MANUFACTURING.SA.LEVEL'
 const familyView: MappingRulesRead = {
   state: 'available',
   mapped: [
-    { sourceId: 'c0', metricKey: 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL', periodRule: 'month',
+    { sourceIds: ['c0'], metricKey: 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL', periodRule: 'month',
       basis: null, officialUrl: null, names: { zh: '费城联储制造业装船', en: 'Philly Fed Shipments' },
       tier: null, rowCount: 3, kind: 'child', parentMetricKey: phillyParent, childOrder: 0 },
-    { sourceId: 'p1', metricKey: phillyParent, periodRule: 'month', basis: null, officialUrl: null,
+    { sourceIds: ['p1'], metricKey: phillyParent, periodRule: 'month', basis: null, officialUrl: null,
       names: { zh: '费城联储制造业指数', en: 'Philly Fed Manufacturing Index' },
       tier: 1, rowCount: 9, kind: 'parent', parentMetricKey: null },
-    { sourceId: 'c1', metricKey: 'US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month',
+    { sourceIds: ['c1'], metricKey: 'US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month',
       basis: null, officialUrl: null, names: { zh: '费城联储制造业新订单', en: 'Philly Fed New Orders' },
       tier: null, rowCount: 2, kind: 'child', parentMetricKey: phillyParent, childOrder: 1 },
-    { sourceId: 'other', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodRule: 'month', basis: null, officialUrl: null,
+    { sourceIds: ['other'], metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodRule: 'month', basis: null, officialUrl: null,
       names: { zh: '失业率', en: 'Unemployment Rate' }, tier: 1, rowCount: 13 }
   ],
   unmapped: [],
@@ -240,4 +186,17 @@ it('brings the children along when the search matches the parent only', async ()
   expect(rows).toHaveLength(3)
   expect(rows[0]).toContain(phillyParent)
   expect(rows[1]).toContain('US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL')
+})
+
+it('lists every source id a code answers to, and leaves the cell blank for a code with none', async () => {
+  await mount()
+  const rows = dataRows()
+  // 一个码一行：三个 id 用 ` · ` 连在一格，不拆成三行。
+  const michigan = rows.find((row) => row.includes('US.MICHIGAN.NONE.LEVEL'))!
+  expect(michigan).toContain('213623 · 214135 · 214386')
+  // 只有码、没有 id 的行：这一格空着（空表示它本来就没有 id，不是读失败），期次规则那格也空着。
+  const pce = dataRowNodes().find((row) => (row.textContent ?? '').includes('US.PCE.SA.MOM'))!
+  expect(pce.textContent ?? '').not.toContain('·')
+  expect(pce.querySelectorAll('td')[0]?.textContent, '源内 id 格应为空').toBe('')
+  expect(pce.querySelectorAll('td')[4]?.textContent, '期次规则格应为空').toBe('')
 })

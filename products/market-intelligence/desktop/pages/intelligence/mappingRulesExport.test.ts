@@ -26,9 +26,10 @@ describe('sampleText', () => {
 describe('the exported rows', () => {
   it('carries a header plus every filtered row, with tier and row count readable', () => {
     const rows = mappedExportRows([
-      { sourceId: '214790', metricKey: 'US.CPI.NSA.YOY', periodRule: 'month', basis: 'BLS · 发布页',
+      { sourceIds: ['214790'], metricKey: 'US.CPI.NSA.YOY', periodRule: 'month', basis: 'BLS · 发布页',
         officialUrl: 'https://www.bls.gov/x', names: { zh: 'CPI 年率', en: 'CPI YoY' }, tier: 1, rowCount: 12 },
-      { sourceId: '10113', metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: 'month', basis: null,
+      // 直接以码进来、没有任何规则的行：id 与期次规则都空着，其余照常。
+      { sourceIds: [], metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: null, basis: null,
         officialUrl: null, names: null, tier: null, rowCount: 0 }
     ], { columns, tiers })
     expect(rows).toHaveLength(3)
@@ -38,6 +39,11 @@ describe('the exported rows', () => {
     expect(rows[2]![7]).toBe(0)
     // 没有名表条目时名称格空着，不拿指标码拼假名。
     expect(rows[2]![2]).toBe('')
+    // 没有源内 id 也不许编一个：空白就是空白。
+    expect(rows[2]![0]).toBe('')
+    expect(rows[2]![4]).toBe('')
+    // 多个 id 用 ` · ` 连在一格（合并页签后一个码一行）。
+    expect(rows[1]![0]).toBe('214790')
   })
 
   it('exports the unmapped section with the bilingual sample in one cell', () => {

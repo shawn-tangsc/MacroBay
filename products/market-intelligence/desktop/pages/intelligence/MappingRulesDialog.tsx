@@ -7,13 +7,12 @@ import { Tabs } from '@platform/ui/components/tabs'
 import type { ChoiceItem } from '@platform/ui/components/choice/choiceItem'
 
 import type {
-  DirectMetricRow, MappingRuleRow, MappingRulesRead, UnmappedSourceIdRow
+  MappingRuleRow, MappingRulesRead, UnmappedSourceIdRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 import { buildXlsx } from '@platform/files/export/xlsx'
-import { directExportRows, exportFileName, mappedExportRows, sampleText, unmappedExportRows } from './mappingRulesExport'
+import { exportFileName, mappedExportRows, sampleText, unmappedExportRows } from './mappingRulesExport'
 import {
-  expandToFamily, filterDirectByTier, filterMappedByTier, sortDirectMetrics, sortMappedRules, tierKeyOf,
-  type TierFilter, type TierKey
+  expandToFamily, filterMappedByTier, sortMappedRules, tierKeyOf, type TierFilter, type TierKey
 } from './mappingRulesView'
 import { MetricNameText } from '../../shared/MetricNameText'
 
@@ -41,13 +40,10 @@ export type MappingRulesText = Readonly<{
   tiers: Readonly<Record<'1' | '2' | '3' | 'other', string>>
   unmappedColumns: Readonly<{ sourceId: string; rows: string; sample: string }>
   /** 第三个页签：进来就带指标码、不需要规则的指标。 */
-  directColumns: Readonly<{ metricKey: string; name: string; tier: string; rows: string }>
   /** 子项归属小字里的「子项」两个字（可见文案，不写在组件里）。 */
   childSuffix: string
-  directEmpty: string
   tabMapped: string
   tabUnmapped: string
-  tabDirect: string
   tabsAria: string
   exportLabel: string
   exportEmpty: string
@@ -56,7 +52,6 @@ export type MappingRulesText = Readonly<{
   /** 导出文件里的三个工作表名。 */
   sheetMapped: string
   sheetUnmapped: string
-  sheetDirect: string
 }>
 
 const PAGE_SIZES = [20, 50, 100] as const
@@ -79,10 +74,9 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
 }>): React.ReactElement {
   const [query, setQuery] = useState('')
   const [tierFilter, setTierFilter] = useState<TierFilter>('all')
-  const [tab, setTab] = useState<'mapped' | 'unmapped' | 'direct'>('mapped')
+  const [tab, setTab] = useState<'mapped' | 'unmapped'>('mapped')
   const [mappedPage, setMappedPage] = useState(1)
   const [unmappedPage, setUnmappedPage] = useState(1)
-  const [directPage, setDirectPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])
 
   const needle = query.trim().toLowerCase()
@@ -91,7 +85,7 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   /** 母指标的中文名：用来给子项写归属小字。查不到的母码不编名字，只留「子项」两个字。 */
   const parentNameOf = (metricKey: string): string | null => {
     if (view?.state !== 'available') return null
-    const row = [...view.mapped, ...(view.direct ?? [])].find((entry) => entry.metricKey === metricKey)
+    const row = view.mapped.find((entry) => entry.metricKey === metricKey)
     return row?.names?.zh ?? null
   }
   /** 子项的归属小字：`母指标名 · 子项`；母名查不到就只写「子项」，不拿母码冒充名字。 */
@@ -107,39 +101,29 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
   const mapped = useMemo(() => {
     if (view?.state !== 'available') return []
     const candidates = view.mapped.filter((row) =>
-      hit([row.sourceId, row.metricKey, row.basis, row.officialUrl, row.names?.zh, row.names?.en]))
+      hit([...row.sourceIds, row.metricKey, row.basis, row.officialUrl, row.names?.zh, row.names?.en]))
     return sortMappedRules(filterMappedByTier(expandToFamily(view.mapped, candidates), tierFilter))
   }, [view, needle, tierFilter])
   const unmapped = useMemo(() => (view?.state === 'available' ? view.unmapped.filter((row) =>
     hit([row.sourceId, row.sampleLabel, row.sampleLabelEn])) : []), [view, needle])
-  /**
-   * 无需映射：**整段没有就不显示这个页签**（旧载荷），有就按同一把尺子摆。
-   * 这一段是「我们一共支持哪些指标」的答案，所以不能用「空表」冒充「没有这一段」。
-   */
-  const direct = useMemo(() => {
-    if (view?.state !== 'available' || view.direct === undefined) return []
-    const candidates = view.direct.filter((row) => hit([row.metricKey, row.names?.zh, row.names?.en]))
-    return sortDirectMetrics(filterDirectByTier(expandToFamily(view.direct, candidates), tierFilter))
-  }, [view, needle, tierFilter])
-
   const counts = view?.state === 'available' ? view.counts : { mapped: 0, unmapped: 0, unmappedRows: 0 }
-  const directCount = counts.direct
-  const hasDirect = directCount !== undefined
   const items: readonly ChoiceItem[] = [
     { value: 'mapped', labelKey: 'tabMapped', labelParams: { count: String(counts.mapped) } },
-    { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(counts.unmapped) } },
-    ...(hasDirect ? [{ value: 'direct', labelKey: 'tabDirect', labelParams: { count: String(directCount) } }] : [])
+    { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(counts.unmapped) } }
   ]
-  const copy: Readonly<Record<string, string>> = {
-    tabMapped: text.tabMapped, tabUnmapped: text.tabUnmapped, tabDirect: text.tabDirect
-  }
+  const copy: Readonly<Record<string, string>> = { tabMapped: text.tabMapped, tabUnmapped: text.tabUnmapped }
 
   const mappedPanel = mapped.length === 0
     ? <p className="mi-catalog__note">{text.mappedEmpty}</p>
-    : <Table<MappingRuleRow> size="small" rowKey="sourceId" pagination={false}
+    : <Table<MappingRuleRow> size="small" rowKey="metricKey" pagination={false}
       dataSource={paged(mapped, mappedPage, pageSize)}
       columns={[
-        { title: text.columns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
+        {
+          // 一个码一行，认得它的源内 id 全列出来；**空 = 它本来就是码身份进来的**（那两格空着，
+          // 不是「没读到」——它没有 id 可写）。
+          title: text.columns.sourceId, dataIndex: 'sourceIds', className: 'mi-catalog__cell-nowrap',
+          render: (value: readonly string[]) => value.join(' · ')
+        },
         { title: text.columns.metricKey, dataIndex: 'metricKey', className: 'mi-catalog__cell-nowrap' },
         {
           // 中文名为主语、英文名小字灰字跟在后面，子项再带归属小字（`母指标名 · 子项`）。
@@ -153,7 +137,8 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
           title: text.columns.tier, dataIndex: 'tier', className: 'mi-catalog__cell-nowrap',
           render: (value: 1 | 2 | 3 | null) => text.tiers[tierKeyOf(value)]
         },
-        { title: text.columns.periodRule, dataIndex: 'periodRule', className: 'mi-catalog__cell-nowrap' },
+        { title: text.columns.periodRule, dataIndex: 'periodRule', className: 'mi-catalog__cell-nowrap',
+          render: (value: string | null) => value ?? '' },
         { title: text.columns.basis, dataIndex: 'basis', width: 180, render: (value: string | null) => value ?? '' },
         {
           title: text.columns.official, dataIndex: 'officialUrl', width: 380,
@@ -178,29 +163,6 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
         { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel', render: (_value: string | null, row) => sampleText(row) }
       ]} />
 
-  /**
-   * 第三个页签：**没有源内 id**——这正是它的意思（这些指标进来就带码，不经过映射规则）。
-   * 期次规则 / 依据 / 官方查看 三列对「没有规则」的行无从填，所以不给，免得空着被读成「查不到」。
-   */
-  const directPanel = direct.length === 0
-    ? <p className="mi-catalog__note">{text.directEmpty}</p>
-    : <Table<DirectMetricRow> size="small" rowKey="metricKey" pagination={false}
-      dataSource={paged(direct, directPage, pageSize)}
-      columns={[
-        { title: text.directColumns.metricKey, dataIndex: 'metricKey', className: 'mi-catalog__cell-nowrap' },
-        {
-          title: text.directColumns.name, dataIndex: 'names',
-          render: (value: DirectMetricRow['names'], row) =>
-            <MetricNameText zh={value?.zh} en={value?.en} owner={ownerTextOf(row)} />
-        },
-        {
-          title: text.directColumns.tier, dataIndex: 'tier', className: 'mi-catalog__cell-nowrap',
-          render: (value: 1 | 2 | 3 | null) => text.tiers[tierKeyOf(value)]
-        },
-        { title: text.directColumns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap',
-          render: (value: number) => String(value) }
-      ]} />
-
   const body = view === undefined
     ? <StateView state="loading" />
     : view.state !== 'available'
@@ -208,24 +170,21 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
       ? <StateView state="error" reasonCode="unreadable"
         action={{ labelKey: 'ui.state.action.retry', onSelect: () => onRetry?.() }} />
       : <Tabs items={items} value={tab} onChange={(value) => {
-        const next = value === 'unmapped' || value === 'direct' ? value : 'mapped'
+        const next = value === 'unmapped' ? 'unmapped' : 'mapped'
         setTab(next)
         // 切换页签回到第 1 页：筛选词保留，但页码各自独立，停在上一个页签的页码会越界成空表。
         if (next === 'mapped') setMappedPage(1)
-        else if (next === 'direct') setDirectPage(1)
         else setUnmappedPage(1)
       }} ariaLabelKey="tabsAria" resolveText={(key) => copy[key] ?? key}
         panels={{
           mapped: <section data-mapping-section="mapped">{mappedPanel}</section>,
-          unmapped: <section data-mapping-section="unmapped">{unmappedPanel}</section>,
-          ...(hasDirect ? { direct: <section data-mapping-section="direct">{directPanel}</section> } : {})
+          unmapped: <section data-mapping-section="unmapped">{unmappedPanel}</section>
         }} />
 
-  const activeTotal = tab === 'mapped' ? mapped.length : tab === 'direct' ? direct.length : unmapped.length
-  const activePage = tab === 'mapped' ? mappedPage : tab === 'direct' ? directPage : unmappedPage
+  const activeTotal = tab === 'mapped' ? mapped.length : unmapped.length
+  const activePage = tab === 'mapped' ? mappedPage : unmappedPage
   const setActivePage = (next: number): void => {
     if (tab === 'mapped') setMappedPage(next)
-    else if (tab === 'direct') setDirectPage(next)
     else setUnmappedPage(next)
   }
 
@@ -236,37 +195,33 @@ export function MappingRulesDialog({ open, onClose, text, view, onRetry }: Reado
       {/* 筛选框在页签上方、两段共用；改筛选两段都回第 1 页。 */}
       <div className="mi-catalog__filters">
         <Input allowClear value={query} placeholder={text.filter} aria-label={text.filter}
-          onChange={(event) => { setQuery(event.target.value); setMappedPage(1); setUnmappedPage(1); setDirectPage(1) }} />
+          onChange={(event) => { setQuery(event.target.value); setMappedPage(1); setUnmappedPage(1) }} />
         {/* 分级筛选在「已映射」与「无需映射」出现——两段的行都有分级；未映射的 id 还没有分级，
             给它一个筛选器就是这个控件在撒谎。 */}
         {tab === 'unmapped' ? null : <Select<TierFilter> allowClear className="mi-catalog__filter-select"
           value={tierFilter === 'all' ? undefined : tierFilter} placeholder={text.tierFilter}
           aria-label={text.tierFilter} data-tier-filter
           options={TIER_OPTIONS.map((key) => ({ value: key, label: text.tiers[key] }))}
-          onChange={(value) => { setTierFilter(value ?? 'all'); setMappedPage(1); setDirectPage(1) }} />}
+          onChange={(value) => { setTierFilter(value ?? 'all'); setMappedPage(1) }} />}
       </div>
       <div className="mi-catalog__table">{body}</div>
       {/* 分页条固定在弹框底部：表格区是唯一滚动容器，它不跟着行滚。 */}
       <div className="mi-catalog__footer">
         <Button size="small" className="mi-catalog__export" data-catalog-export
-          disabled={view?.state !== 'available'
-            || (mapped.length === 0 && unmapped.length === 0 && direct.length === 0)}
+          disabled={view?.state !== 'available' || (mapped.length === 0 && unmapped.length === 0)}
           onClick={() => {
             // 导出的是**每个页签各自筛选结果的全量**，不是当前页、也不看停在哪一页签：
             // 读者点「导出」要的是一份能拿去核对的完整文件，不是「我眼前这一屏」。
             const sheets = [
               // 空表也写：只留表头。整张表消失会被读成「没有这类数据」，一张只有表头的空表才是「这栏没有」。
               { name: text.sheetMapped, rows: mappedExportRows(mapped, { columns: text.columns, tiers: text.tiers }) },
-              { name: text.sheetUnmapped, rows: unmappedExportRows(unmapped, { columns: text.unmappedColumns }) },
-              // 旧载荷没有 `direct` 这一段时不写这张表：凭空造一张空的「无需映射」比不给更误导。
-              ...(hasDirect ? [{ name: text.sheetDirect,
-                rows: directExportRows(direct, { columns: text.directColumns, tiers: text.tiers }) }] : [])
+              { name: text.sheetUnmapped, rows: unmappedExportRows(unmapped, { columns: text.unmappedColumns }) }
             ]
             void window.platform?.app?.saveFile?.(exportFileName(text.title, new Date()), buildXlsx(sheets))
           }}>{text.exportLabel}</Button>
         <Pager total={activeTotal} page={activePage} pageSize={pageSize}
           onPage={setActivePage}
-          onSize={(size) => { setPageSize(size); setMappedPage(1); setUnmappedPage(1); setDirectPage(1) }} />
+          onSize={(size) => { setPageSize(size); setMappedPage(1); setUnmappedPage(1) }} />
       </div>
     </div>
   </Modal>

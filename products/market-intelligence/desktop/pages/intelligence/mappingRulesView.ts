@@ -1,5 +1,5 @@
 import type {
-  DirectMetricRow, MappingRuleRow
+  MappingRuleRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 
 /**
@@ -74,15 +74,7 @@ export function sortMappedRules(rows: readonly MappingRuleRow[]): MappingRuleRow
   return families(rows).flat()
 }
 
-export function sortDirectMetrics(rows: readonly DirectMetricRow[]): DirectMetricRow[] {
-  return families(rows).flat()
-}
-
 export function filterMappedByTier(rows: readonly MappingRuleRow[], tier: TierFilter): MappingRuleRow[] {
-  return tier === 'all' ? [...rows] : rows.filter((row) => tierKeyOf(row.tier) === tier)
-}
-
-export function filterDirectByTier(rows: readonly DirectMetricRow[], tier: TierFilter): DirectMetricRow[] {
   return tier === 'all' ? [...rows] : rows.filter((row) => tierKeyOf(row.tier) === tier)
 }
 

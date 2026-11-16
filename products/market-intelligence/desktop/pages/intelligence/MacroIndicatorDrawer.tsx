@@ -231,11 +231,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     tabsAria: text.mkDay.mappingTabsAria,
     exportLabel: text.mkDay.mappingExport, exportEmpty: text.mkDay.mappingExportEmpty,
     tierFilter: text.mkDay.mappingTierFilter,
-    directColumns: text.mkDay.mappingDirectColumns, directEmpty: text.mkDay.mappingDirectEmpty,
     childSuffix: text.mkDay.mappingChildSuffix,
-    tabDirect: text.mkDay.mappingTabDirect,
-    sheetMapped: text.mkDay.mappingSheetMapped, sheetUnmapped: text.mkDay.mappingSheetUnmapped,
-    sheetDirect: text.mkDay.mappingSheetDirect
+    sheetMapped: text.mkDay.mappingSheetMapped, sheetUnmapped: text.mkDay.mappingSheetUnmapped
   }), [text])
   /** 图标按钮的读屏名：**真表查找**（键 → 文案），不在解析器里写比较。 */
   const catalogCopy = useMemo<Readonly<Record<string, string>>>(

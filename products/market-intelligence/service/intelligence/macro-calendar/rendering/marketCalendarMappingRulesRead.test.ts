@@ -36,6 +36,13 @@ function seed(): DatabaseSync {
     timePrecision: 'date' as const, status: 'published' as const, valuesJson: '{"actual":"3.7%"}',
     sourceProviderId: 'narwhal', sourceEventId: 'cpi-2026-09', parserVersion: 'v1', observedAt: now, firstSeenAt: now
   })
+  // 一条**没有任何规则**的码身份行（PCE 月率不在三张规则表里）：合并后它与规则行同在一个页签，
+  // 但「源内 id / 期次规则」两格是空的——空表示「它本来就没有 id」，不是「没读到」。
+  upsertCalendarStandardRow(database, {
+    countryCode: 'US', metricKey: 'US.PCE.SA.MOM', periodKey: '2026-09', scheduledDate: '2026-09-26',
+    timePrecision: 'date' as const, status: 'published' as const, valuesJson: '{"actual":"0.3%"}',
+    sourceProviderId: 'narwhal', sourceEventId: 'pce-2026-09', parserVersion: 'v1', observedAt: now, firstSeenAt: now
+  })
   // 合并过的行带英文原文名（迁移 18 把英文那条并入 `source_label_en`）。
   database.prepare(`update mi_calendar_events set source_label_en = ?
     where source_label = '11月未识别指标'`).run('Unidentified indicator(Nov)')
@@ -43,20 +50,24 @@ function seed(): DatabaseSync {
 }
 
 describe('映射规则表读口', () => {
-  it('已映射 = 三张表之和（旧表 85 + 0xrouter 32 + 德国 71）：字段齐、计数由服务端给、依据推不出就 null', () => {
+  it('已映射按**指标码**收口：一个码一行，认得它的源内 id 全列出来', () => {
     const read = readCalendarMappingRules(seed())
     if (read.state !== 'available') throw new Error('unavailable')
-    // **按来源各一张表**：读口只做并集，条数就是三张表之和（不写死数字，表一长就该跟着长）。
-    expect(read.counts.mapped).toBe(Object.keys(zeroXRouterIndicatorIdentities).length
-      + Object.keys(zeroXRouterSourceMetricMappings).length
-      + Object.keys(germanSourceMetricMappings).length)
-    expect(read.mapped).toHaveLength(read.counts.mapped)
     /**
-     * **同一张表被并两次**是最难发现的一类错：`mapped` 会从 188 变成 259，每行都正常、数字只是更大，
-     * 看着不像坏。所以这里两个方向都断：条数等于三份之和，且**一个 id 只出现一次**。
-     * 后者也能抓住「两张表撞了同一个 id」——那会让身份解析在两张表之间二选一，同样是错的。
+     * **一行 = 一个指标码**（用户 2026-11-17 合并两个页签）。两条判据：
+     * 1. 条数 = 「三张表的码」∪「库里以码身份进来的码」——**不是**规则条数之和（一个码可能有好几个 id，
+     *    也可能既是规则目标又直接以码进来）；
+     * 2. 一个码只出现一次。重复出现在这里不会报错，只会让读者以为有两件事。
      */
-    expect(new Set(read.mapped.map((rule) => rule.sourceId)).size).toBe(read.mapped.length)
+    const ruleCodes = new Set([
+      ...Object.values(zeroXRouterIndicatorIdentities).map((entry) => entry.metricKey),
+      ...Object.values(zeroXRouterSourceMetricMappings).map((entry) => entry.metricKey),
+      ...Object.values(germanSourceMetricMappings).map((entry) => entry.metricKey),
+      'US.CPI.NSA.YOY'
+    ])
+    expect(new Set(read.mapped.map((rule) => rule.metricKey)).size).toBe(read.mapped.length)
+    expect(read.counts.mapped).toBe(read.mapped.length)
+    expect(read.mapped.length).toBeGreaterThanOrEqual(ruleCodes.size)
     // BLS 的 CPI 有官方页（机构 + 页面类型能推），ISM 那类推不出必须 null
     const cpi = read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')!
     expect(cpi.officialUrl).toBe('https://www.bls.gov/news.release/')
@@ -74,6 +85,15 @@ describe('映射规则表读口', () => {
     // 同时也真有 0 的（那个指标的库行还没出现）——这一列是真读出来的，不是常量。
     expect(read.mapped.some((rule) => rule.rowCount === 0)).toBe(true)
     expect(read.mapped.every((rule) => typeof rule.rowCount === 'number' && rule.rowCount >= 0)).toBe(true)
+    // 规则里的 id 都落在 `sourceIds` 上；只以码进来（没有任何规则）的是空数组 + 无期次规则。
+    expect(read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')?.sourceIds).toEqual(['8637'])
+    const directOnly = read.mapped.find((rule) => rule.metricKey === 'US.PCE.SA.MOM')
+    expect(directOnly?.sourceIds).toEqual([])
+    expect(directOnly?.periodRule).toBeNull()
+    expect(directOnly?.rowCount).toBe(1)
+    const germanWithIds = read.mapped.find((rule) => rule.metricKey === 'DE.WHOLESALE_PRICE.NONE.MOM')
+    expect(germanWithIds?.sourceIds.length).toBeGreaterThan(0)
+    expect(germanWithIds?.periodRule).toBe('month')
     // 子项码有上级、母码没有：费城联储装船 → 费城联储制造业。
     const shipments = read.mapped.find((rule) => rule.metricKey === 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL')
     expect(shipments?.parentMetricKey).toBe('US.PHILLY_FED_MANUFACTURING.SA.LEVEL')
@@ -84,20 +104,6 @@ describe('映射规则表读口', () => {
     expect(read.mapped.find((rule) => rule.metricKey === 'US.CPI.NSA.YOY')?.parentMetricKey).toBeNull()
     expect(read.mapped.every((rule) => rule.names === null
       || (rule.names.zh.trim() !== '' && rule.names.en.trim() !== ''))).toBe(true)
-  })
-
-  it('无需映射那一段：直接带指标码进来的指标，带分级与行数，事件码不算', () => {
-    const read = readCalendarMappingRules(seed())
-    if (read.state !== 'available') throw new Error('unavailable')
-    // 夹具里的 CPI 码行就是「不需要规则也能进来」的那类。
-    const direct = read.direct ?? []
-    expect(direct.map((entry) => entry.metricKey)).toContain('US.CPI.NSA.YOY')
-    const cpi = direct.find((entry) => entry.metricKey === 'US.CPI.NSA.YOY')!
-    expect(cpi).toMatchObject({ rowCount: 1, tier: 1 })
-    expect(cpi.names?.zh).toBe('CPI 年率')
-    expect(read.counts.direct).toBe(direct.length)
-    // 数组身份（源内 id）和事件码都不该出现在这一段。
-    expect(direct.some((entry) => entry.metricKey.startsWith('[') || entry.metricKey.startsWith('evt.'))).toBe(false)
   })
 
   it('未映射段按行数从大到小排，一个 id 的多行合计成行数', () => {

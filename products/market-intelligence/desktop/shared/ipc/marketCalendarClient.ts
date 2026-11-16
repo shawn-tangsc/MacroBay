@@ -139,11 +139,21 @@ export function mappingRulesReadOf(value: unknown): MappingRulesRead {
   if (record.state !== 'available' || !Array.isArray(record.mapped) || !Array.isArray(record.unmapped)) {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }
   }
-  for (const entry of [...record.mapped, ...record.unmapped]) {
+  /**
+   * 已映射：**一个码一行**（用户 2026-11-17 合并两个页签）。`sourceIds` 是字符串数组——空数组表示
+   * 「它本来就是码身份进来的」，不是读失败；`periodRule` 可以为 `null`（没有规则）。
+   */
+  for (const entry of record.mapped) {
     if (entry === null || typeof entry !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
     const row = entry as Record<string, unknown>
-    if (typeof row.sourceId !== 'string' || row.sourceId === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
-    if (typeof row.rowCount !== 'number' && typeof row.metricKey !== 'string') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    if (typeof row.metricKey !== 'string' || row.metricKey === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    if (!Array.isArray(row.sourceIds) || row.sourceIds.some((id) => typeof id !== 'string' || id === '')) {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+    if (row.periodRule !== null && typeof row.periodRule !== 'string') {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+    if (typeof row.rowCount !== 'number') return { state: 'unavailable', reasonCode: 'query-unavailable' }
     // 层级字段可缺（旧载荷没有）；有就必须自洽——否则界面会画出一个不属于任何母项的子项。
     if (row.kind !== undefined && row.kind !== 'parent' && row.kind !== 'child') {
       return { state: 'unavailable', reasonCode: 'query-unavailable' }
@@ -158,36 +168,18 @@ export function mappingRulesReadOf(value: unknown): MappingRulesRead {
     // `names` 是名称格里的唯一来源：形状不对就别放行，否则格子会拼出半句。
     if (row.names !== undefined && row.names !== null) {
       const names = row.names as { zh?: unknown; en?: unknown }
-      if (typeof names.zh !== 'string' || typeof names.en !== 'string') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      if (typeof names.zh !== 'string' || typeof names.en !== 'string') {
+        return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      }
     }
+  }
+  /** 未映射：仍是**源内 id 一行**（它没有码，只有 id）。 */
+  for (const entry of record.unmapped) {
+    if (entry === null || typeof entry !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    const row = entry as Record<string, unknown>
+    if (typeof row.sourceId !== 'string' || row.sourceId === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    if (typeof row.rowCount !== 'number') return { state: 'unavailable', reasonCode: 'query-unavailable' }
   }
   if (record.counts === null || typeof record.counts !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
-  /**
-   * `direct`（无需映射的指标）整段**可缺**：旧载荷没有它，界面就不显示那个页签。
-   * 但**有就必须是对的**——半份数据放行，读者会把这个页签当成「全部指标」。
-   */
-  if (record.direct !== undefined) {
-    if (!Array.isArray(record.direct)) return { state: 'unavailable', reasonCode: 'query-unavailable' }
-    for (const entry of record.direct) {
-      if (entry === null || typeof entry !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
-      const row = entry as Record<string, unknown>
-      if (typeof row.metricKey !== 'string' || row.metricKey === '') return { state: 'unavailable', reasonCode: 'query-unavailable' }
-      if (!(row.tier === null || row.tier === 1 || row.tier === 2 || row.tier === 3)) {
-        return { state: 'unavailable', reasonCode: 'query-unavailable' }
-      }
-      if (typeof row.rowCount !== 'number' || !Number.isInteger(row.rowCount) || row.rowCount < 0) {
-        return { state: 'unavailable', reasonCode: 'query-unavailable' }
-      }
-      if (row.names !== undefined && row.names !== null) {
-        const names = row.names as { zh?: unknown; en?: unknown }
-        if (typeof names.zh !== 'string' || typeof names.en !== 'string') {
-          return { state: 'unavailable', reasonCode: 'query-unavailable' }
-        }
-      }
-    }
-    // 页签上的数字来自 `counts`，与段内实际条数不一致就是「标题说 185、表里 184」那种谎。
-    const counts = record.counts as Record<string, unknown>
-    if (counts.direct !== record.direct.length) return { state: 'unavailable', reasonCode: 'query-unavailable' }
-  }
   return record as unknown as MappingRulesRead
 }

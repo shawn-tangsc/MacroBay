@@ -25,9 +25,15 @@ import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
  * `basis` 现在一律 `null`：现有 85 条在代码里没有「依据」这一栏，不许编；补条目时才要求写。
  */
 export type MappingRuleRow = Readonly<{
-  sourceId: string
+  /**
+   * 这个指标码认得的**源内 id**（用户 2026-11-17 合并页签后）：一个码一行，这里列出所有认得它的
+   * 数字 id（`213623 · 214135`）。**空数组 = 这个码本来就是码身份进来的**，没有经过任何映射规则
+   * ——界面那两格空着，不是「没读到」。
+   */
+  sourceIds: readonly string[]
   metricKey: string
-  periodRule: ZeroXRouterPeriodRule
+  /** 期次规则；直接以码进来、没有任何规则时是 `null`。 */
+  periodRule: ZeroXRouterPeriodRule | null
   basis: string | null
   /**
    * **官方查看地址**（用户 2026-11-16）：属于**指标码**而不是源内 id——同一个指标不管从哪个源
@@ -67,31 +73,6 @@ export type MappingRuleRow = Readonly<{
   childOrder?: number
 }>
 
-/**
- * **无需映射的指标**（用户 2026-11-17）：进来时就带规范指标码，根本不需要「源内 id → 码」这条规则。
- *
- * 为什么单开一段：这张表原来只回答「哪些数字 id 还没认出来」，把筛选设成「一级」时只剩 BLS 那批，
- * 读者会以为我们没有 PCE、GDP、FOMC——它们确实在，只是**不经过映射**。一个弹框里要同时看清
- * 「一共支持哪些指标」和「哪一批还要补映射」。
- *
- * 只收 `identity_kind = 'code'` 且非 `evt.*` 的行：事件型（央行讲话、商品报告）不是指标。
- */
-export type DirectMetricRow = Readonly<{
-  metricKey: string
-  names: Readonly<{ zh: string; en: string }> | null
-  tier: 1 | 2 | 3 | null
-  rowCount: number
-  /**
-   * **上级指标**（用户 2026-11-17）：子项码给出母码，母码与普通指标为 `null`。
-   * 由显式表给出，**不让渲染层截字符串反推**——五段/四段的差别是命名规则的内部细节。
-   */
-  parentMetricKey?: string | null
-  /** `parent` = 母指标（或普通指标），`child` = 子项。界面据此显示「· 子项」小字。 */
-  kind?: 'parent' | 'child'
-  /** 子项在词表里的序号（同族排序用）；母码/普通指标没有这个数。 */
-  childOrder?: number
-}>
-
 export type UnmappedSourceIdRow = Readonly<{
   sourceId: string
   rowCount: number
@@ -108,14 +89,14 @@ export type MappingRulesRead = Readonly<{
   state: 'available'
   mapped: readonly MappingRuleRow[]
   unmapped: readonly UnmappedSourceIdRow[]
-  /**
-   * 进来就带指标码、不需要规则的指标（按库里行数降序）。**读口一定会给**；类型上可缺是为了
-   * 兼容没有这一段的旧载荷——界面看到缺就**不显示第三个页签**，而不是画一张空表。
-   */
-  direct?: readonly DirectMetricRow[]
   /** 三个数由服务端给（前端不自己数，否则筛选后标题计数会对不上实际行数）。 */
-  /** `direct` 同上面的理由可缺；有 `direct` 时它必然与 `counts.direct` 相等。 */
-  counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number; direct?: number }>
+  /**
+   * 三个数由服务端给（前端不自己数）。
+   *
+   * `mapped` 是**按指标码去重后**的条数：同一个码如果既有源内 id、又直接以码进来，只算一行
+   * （用户 2026-11-17：两个页签并成一个）。所以它**不等于**规则条数之和。
+   */
+  counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
 
 type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null; sampleLabelEn: string | null }>
@@ -198,23 +179,40 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       ...Object.entries(zeroXRouterSourceMetricMappings),
       ...Object.entries(germanSourceMetricMappings)
     ]
-    const mapped: MappingRuleRow[] = allIdentityEntries.map(([sourceId, entry]) => {
-      const official = officialPageFor(entry.metricKey)
-      return Object.freeze({ sourceId, metricKey: entry.metricKey, periodRule: entry.periodRule,
+    /**
+     * **一行 = 一个指标码**（用户 2026-11-17：两个页签并成一个）。
+     *
+     * 合并前是「一行 = 一条规则」，于是同一个码会出多行（德国 PMI 有 3 个 id），而直接以码进来的
+     * 指标又是另一段——读者得在两个页签之间自己对齐。现在按码收口：
+     * - 认得它的源内 id 全列进 `sourceIds`（多个用 `·` 连）；**空数组 = 它本来就是码身份**；
+     * - `periodRule` 取这张码上所有规则里第一个（同一码的几条规则期次一致；不一致时以第一条为准，
+     *   不在这里编一个「混合」值）。
+     */
+    const idsByCode = new Map<string, string[]>()
+    const ruleByCode = new Map<string, ZeroXRouterPeriodRule>()
+    for (const [sourceId, entry] of allIdentityEntries) {
+      idsByCode.set(entry.metricKey, [...(idsByCode.get(entry.metricKey) ?? []), sourceId])
+      if (!ruleByCode.has(entry.metricKey)) ruleByCode.set(entry.metricKey, entry.periodRule)
+    }
+    // 库里以**码身份**进来的指标（不含数组身份与 `evt.*` 事件码）：它们不需要规则，但同属「已认得」。
+    const directCodes = [...rowsByMetricKey.keys()]
+      .filter((metricKey) => !metricKey.startsWith('[') && !metricKey.startsWith('evt.'))
+    const allCodes = new Set<string>([...idsByCode.keys(), ...directCodes])
+    const mapped: MappingRuleRow[] = [...allCodes].map((metricKey) => {
+      const official = officialPageFor(metricKey)
+      return Object.freeze({
+        metricKey,
+        sourceIds: Object.freeze((idsByCode.get(metricKey) ?? []).slice().sort()),
+        periodRule: ruleByCode.get(metricKey) ?? null,
         basis: official === null ? null : official.basis, officialUrl: official?.url ?? null,
-        names: mappingRuleNames(entry.metricKey),
-        tier: tierOfMetricKey(entry.metricKey) ?? null,
-        rowCount: rowsByMetricKey.get(entry.metricKey) ?? 0,
-        parentMetricKey: subItemParentByMetricKey[entry.metricKey] ?? null,
-        kind: subItemParentByMetricKey[entry.metricKey] === undefined ? 'parent' as const : 'child' as const,
-        ...(subItemOrderOf(entry.metricKey) === undefined ? {} : { childOrder: subItemOrderOf(entry.metricKey) }) })
-    })
-      .sort((left, right) => left.sourceId.localeCompare(right.sourceId))
-    const direct: DirectMetricRow[] = [...rowsByMetricKey.entries()]
-      .filter(([metricKey]) => !metricKey.startsWith('[') && !metricKey.startsWith('evt.'))
-      .map(([metricKey, rowCount]) => Object.freeze({ metricKey, rowCount,
-        names: mappingRuleNames(metricKey), tier: tierOfMetricKey(metricKey) ?? null }))
-      .sort((left, right) => right.rowCount - left.rowCount || left.metricKey.localeCompare(right.metricKey))
+        names: mappingRuleNames(metricKey),
+        tier: tierOfMetricKey(metricKey) ?? null,
+        rowCount: rowsByMetricKey.get(metricKey) ?? 0,
+        parentMetricKey: subItemParentByMetricKey[metricKey] ?? null,
+        kind: subItemParentByMetricKey[metricKey] === undefined ? 'parent' as const : 'child' as const,
+        ...(subItemOrderOf(metricKey) === undefined ? {} : { childOrder: subItemOrderOf(metricKey) })
+      })
+    }).sort((left, right) => left.metricKey.localeCompare(right.metricKey))
     const recognized = new Set(allIdentityEntries.map(([sourceId]) => sourceId))
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
       .filter((entry) => !recognized.has(entry.sourceId))
@@ -225,9 +223,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       state: 'available' as const,
       mapped: Object.freeze(mapped),
       unmapped: Object.freeze(unmapped),
-      direct: Object.freeze(direct),
       counts: Object.freeze({ mapped: mapped.length, unmapped: unmapped.length,
-        unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0), direct: direct.length })
+        unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0) })
     })
   } catch {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }

@@ -1,5 +1,5 @@
 import type {
-  DirectMetricRow, MappingRuleRow, UnmappedSourceIdRow
+  MappingRuleRow, UnmappedSourceIdRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 import { tierKeyOf } from './mappingRulesView'
 
@@ -32,11 +32,11 @@ export function mappedExportRows(rows: readonly MappingRuleRow[], text: Readonly
   const header = [text.columns.sourceId, text.columns.metricKey, text.columns.name, text.columns.tier,
     text.columns.periodRule, text.columns.basis, text.columns.official, text.columns.rows]
   return [header, ...rows.map((row) => [
-    row.sourceId,
+    row.sourceIds.join(' · '),
     row.metricKey,
     row.names === null ? '' : `${row.names.zh} · ${row.names.en}`,
     text.tiers[tierKeyOf(row.tier)],
-    row.periodRule,
+    row.periodRule ?? '',
     row.basis ?? '',
     row.officialUrl ?? '',
     row.rowCount
@@ -59,16 +59,3 @@ export function unmappedExportRows(rows: readonly UnmappedSourceIdRow[], text: R
   return [header, ...rows.map((row) => [row.sourceId, row.rowCount, sampleText(row)])]
 }
 
-/** 无需映射段：指标码 · 名称（中·英）· 分级 · 库里行数——没有「源内 id」，它本来就不经过映射。 */
-export function directExportRows(rows: readonly DirectMetricRow[], text: Readonly<{
-  columns: Readonly<Record<'metricKey' | 'name' | 'tier' | 'rows', string>>
-  tiers: Readonly<Record<'1' | '2' | '3' | 'other', string>>
-}>): readonly (readonly (string | number)[])[] {
-  const header = [text.columns.metricKey, text.columns.name, text.columns.tier, text.columns.rows]
-  return [header, ...rows.map((row) => [
-    row.metricKey,
-    row.names === null ? '' : `${row.names.zh} · ${row.names.en}`,
-    text.tiers[tierKeyOf(row.tier)],
-    row.rowCount
-  ])]
-}
