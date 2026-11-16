@@ -1,4 +1,4 @@
-import { isStorableCountryCode } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { resolveCountryCode } from '../../../../contracts/macro/marketCalendarQueryContracts'
 // Internal parser output only. These drafts do not establish stable event identity.
 export type ZeroXRouterCalendarLocale = 'zh' | 'en'
 export type ZeroXRouterCalendarDescriptor =
@@ -155,12 +155,11 @@ export function calendarEventDraft(
    * 丢掉一个码等于把那一整行变成「未知国家」，而丢掉是静默的：1869 行就是这么没的。
    */
   const rawCountryCode = typeof row.countryCode === 'string' ? row.countryCode.trim().toUpperCase() : ''
-  const countryCode = rawCountryCode === ''
-    ? undefined
-    : Object.hasOwn(policy.countryCodes, rawCountryCode)
-      ? policy.countryCodes[rawCountryCode as keyof typeof policy.countryCodes]
-      // 形状 + 禁用码走同一个谓词：写入侧接受的值，读取侧必须全部能读（`ZZ` 是占位，按无国家处理）。
-      : isStorableCountryCode(rawCountryCode) ? rawCountryCode : undefined
+  // 三态谓词：`code` 落地、`none` 当作没有国家（行保留）、`invalid` 交给上层判非法，不在这里静默丢。
+  const verdict = resolveCountryCode(rawCountryCode)
+  const countryCode = verdict.state !== 'code' ? undefined
+    : Object.hasOwn(policy.countryCodes, verdict.code)
+      ? policy.countryCodes[verdict.code as keyof typeof policy.countryCodes] : verdict.code
   // Candidate row identity only: never use this unverified key for revision chains or locale merge.
   const sourceEventId = JSON.stringify([calendarId, row.id])
   return {

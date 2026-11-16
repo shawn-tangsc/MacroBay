@@ -103,10 +103,32 @@ export const marketCalendarPublicPolicy = Object.freeze({
  * 一旦上游给出 `ZZ`，数据能写进标准表、读侧却整页判非法 → 读者看到「读不到」。
  * 一个规则一个谓词，这类分叉就不可能发生——grep 表只需要证明调用点。
  */
+export type CountryCodeVerdict =
+  /** 可以落地（已归一或原样保留）。 */
+  | Readonly<{ state: 'code'; code: string }>
+  /** **没有国家，但这一行保留**：形状像国家码却被判为占位（如 `ZZ`），或源就没给。 */
+  | Readonly<{ state: 'none' }>
+  /** 形状都不像：这是畸形输入，按调用方的策略整批判非法。 */
+  | Readonly<{ state: 'invalid' }>
+
+/**
+ * **三态**，不是布尔（用户 2026-11-17）：用 `false` 同时表示「这一行没有国家」和「这批数据非法」，
+ * 就是三路采集同时挂掉的复现条件——一行没有国家只是这一行降级，不该让整批失败。
+ */
+export function resolveCountryCode(value: unknown): CountryCodeVerdict {
+  if (value === undefined || value === null) return { state: 'none' }
+  if (typeof value !== 'string') return { state: 'invalid' }
+  const trimmed = value.trim()
+  if (trimmed === '') return { state: 'none' }
+  if (!marketCalendarPublicPolicy.countryCodePattern.test(trimmed)) return { state: 'invalid' }
+  // 占位码（如 `ZZ`）：按「无国家」处理，**行保留**，并计入未知码日志——不是非法输入。
+  if ((marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(trimmed)) return { state: 'none' }
+  return { state: 'code', code: trimmed }
+}
+
+/** 便捷判断：只问「能不能落地」，用于读取侧校验（`none` 与 `invalid` 都不可落地）。 */
 export function isStorableCountryCode(value: unknown): value is string {
-  return typeof value === 'string'
-    && marketCalendarPublicPolicy.countryCodePattern.test(value)
-    && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value)
+  return resolveCountryCode(value).state === 'code'
 }
 
 export type MarketCalendarScope = Readonly<{ month: string; locale: 'zh' | 'en' }>
