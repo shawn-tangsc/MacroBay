@@ -85,7 +85,7 @@ describe('码名', () => {
         seen.set(value, metricKey)
       }
     }
-    expect(entries.length).toBe(178)
+    expect(entries.length).toBe(180)
   })
 
   it('覆盖守卫：每一个在用码都有名字，一个都不许缺', () => {

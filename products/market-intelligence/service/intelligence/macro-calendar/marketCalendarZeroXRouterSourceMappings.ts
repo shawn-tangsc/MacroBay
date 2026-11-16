@@ -29,6 +29,11 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '213925': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month' },
   '214793': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month' },
   '213924': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
+  // 就业子项：`EMPLOYMENT` 早就在闭集里，只是当时有词没数据；现在数据来了，补两个码（词表不动）。
+  '213926': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
+  '214791': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
+  '213936': { metricKey: 'US.PHILLY_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
+  '214907': { metricKey: 'US.PHILLY_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
   '214792': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.PRICES_PAID.SA.LEVEL', periodRule: 'month' },
   '213923': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL', periodRule: 'month' },
   '214794': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL', periodRule: 'month' },
