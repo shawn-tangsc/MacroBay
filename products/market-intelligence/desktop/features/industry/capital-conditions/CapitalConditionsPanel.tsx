@@ -5,7 +5,7 @@ import { CircleSlash, Info, TriangleAlert } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
+import { Popover, helpTrigger } from '@platform/ui/components/popover'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { InlineNotice } from '@platform/ui/components/inline-notice'
@@ -56,6 +56,8 @@ type Text = {
   observedAt: string
   etfFlow: string
   chartWindow: string
+  /** 窗口那句的说明：今天没读数时为什么图上没有今天（只进浮层，不进正文）。 */
+  chartWindowHelp: string
   infoAria: string
   chartScopeNoteMain: string
   chartScopeNoteEtf: string
@@ -345,6 +347,9 @@ function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false, cellOf
           trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
             icon={Info} size="sm" resolveText={resolveText} variant="plain" />} />
         <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
+        {/* 窗口那句旁边的 ⓘ：读者看到「今天怎么没有」时，答案在这里，不进正文。
+            用平台 `helpTrigger`（读屏名归平台，与日历线那批同一个入口）。 */}
+        {helpTrigger({ text: text.chartWindowHelp })}
       </div>
       <button type="button" className="mi-capital-conditions__daily-button"
         aria-haspopup="dialog" onClick={() => setDialogOpen(true)}>{text.expandDaily}</button>
