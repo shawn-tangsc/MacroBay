@@ -4,6 +4,7 @@ import { analysisTimelineRefreshPolicy, type AnalysisTimelineRefreshPolicy } fro
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
 import { isAlreadyAvailableError, withReadTimeout } from './marketAnalysisTimelineRead'
+import { createAnalysisRequestRunner } from './marketAnalysisRequestRunner'
 
 // Kept importable from here: callers and tests already name this module.
 export { isAlreadyAvailableError } from './marketAnalysisTimelineRead'
@@ -16,15 +17,9 @@ import {
 import { requestNewsInterpretation, type NewsInterpretationRequestView } from '../../shared/ipc/newsInterpretationClient'
 
 export type AnalysisSelectionState = 'none' | 'loading' | 'ready' | 'unavailable'
-export type AnalysisRequestState = 'idle' | 'loading' | 'queued' | 'still-running' | 'unavailable' | 'not-ready' | 'failed' | 'already-available'
-/**
- * Where a failed request failed.
- *
- * A refusal before a run exists ("the service said no") and a run that finished without
- * publishing are different failures, and rendering both as "the request did not go through"
- * told the reader nothing about the analysis they had just asked for.
- */
-export type AnalysisRequestFailure = 'request' | 'run'
+// 两个请求态类型住在请求状态机那一侧；这里再导出，既有调用点不用改 import。
+export type { AnalysisRequestFailure, AnalysisRequestState } from './marketAnalysisRequestState'
+import type { AnalysisRequestFailure as Failure, AnalysisRequestState as RequestState } from './marketAnalysisRequestState'
 
 /** Text slice the workspace surfaces need; owned by the product i18n registry. */
 export type AnalysisTimelineText = Readonly<{
@@ -61,9 +56,9 @@ type State = Readonly<{
 export type UseMarketAnalysisTimelineResult = Readonly<{
   state: State
   attempt: MarketAnalysisAttempt | null
-  requestState: AnalysisRequestState
+  requestState: RequestState
   /** Set with `requestState === 'failed'`; absent for every other state. */
-  requestFailure?: AnalysisRequestFailure
+  requestFailure?: Failure
   selectionState: AnalysisSelectionState
   /** Detail cache so the latest-conclusion card and the drawer share one fetch per node. */
   details: Readonly<Record<string, MarketAnalysisTimelineDetail>>
@@ -116,8 +111,8 @@ export function useMarketAnalysisTimeline(input: Readonly<{
 }>): UseMarketAnalysisTimelineResult {
   const policy = input.policy ?? analysisTimelineRefreshPolicy
   const [state, setState] = useState<State>({ loading: true, entries: [] })
-  const [requestState, setRequestState] = useState<AnalysisRequestState>('idle')
-  const [requestFailure, setRequestFailure] = useState<AnalysisRequestFailure>()
+  const [requestState, setRequestState] = useState<RequestState>('idle')
+  const [requestFailure, setRequestFailure] = useState<Failure>()
   const [attempt, setAttempt] = useState<MarketAnalysisAttempt | null>(null)
   const generation = useRef(0)
   const selectionGeneration = useRef(0)
@@ -330,135 +325,14 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     setState(current => ({ ...current, selected: undefined, detail: undefined, detailLoading: false }))
   }
 
-  type PollOutcome = 'published' | 'failed' | 'pending' | 'unreadable'
-  type PollResult = Readonly<{ outcome: PollOutcome }>
-
-  const pollForCompletion = async (baselineEntryId: string | undefined, pollAttempt = 0): Promise<PollResult> => {
-    setRequestState('queued')
-    const loaded = await load(undefined, true)
-    if (!loaded) {
-      // The read itself failed. Leaving the request `queued` kept the action disabled forever with
-      // no poll left to end it; the list already reports the read failure, so release the action.
-      setRequestState('idle')
-      return { outcome: 'unreadable' }
-    }
-    const published = loaded.entries[0]
-    if (published && published.id !== baselineEntryId) {
-      setRequestState('idle')
-      return { outcome: 'published' }
-    }
-    const latest = loaded.attempt
-    // `stale`/`superseded` never publish either: they are terminal for this reader's purposes,
-    // and leaving them out made the poll run to its limit and report a failure with no reason.
-    const terminalFailure = latest && ['failed', 'invalid-output', 'cancelled', 'stale', 'superseded'].includes(latest.status)
-    if (terminalFailure) {
-      setRequestState('failed')
-      setRequestFailure('run')
-      return { outcome: 'failed' }
-    }
-    if (latest?.status === 'succeeded') {
-      // A succeeded run whose node never appeared is a real "not published", unlike a run that
-      // is still working inside its budget.
-      setRequestState('failed')
-      setRequestFailure('run')
-      return { outcome: 'failed' }
-    }
-    if (pollAttempt >= policy.maxPollAttempts) {
-      const stillRunning = Boolean(latest && ['queued', 'running'].includes(latest.status))
-      if (stillRunning) {
-        // Stop watching without claiming a failure: the run is past the job budget but may still
-        // land, and the live poll will show it. The action is released and the panel says it is
-        // still running; `queued` here would leave the button disabled with no timer left.
-        setRequestState('still-running')
-        return { outcome: 'pending' }
-      }
-      setRequestState('failed')
-      setRequestFailure('run')
-      return { outcome: 'failed' }
-    }
-    await new Promise<void>(resolve => { pollTimer.current = setTimeout(resolve, policy.pollIntervalMs) })
-    return pollForCompletion(baselineEntryId, pollAttempt + 1)
-  }
-
-  const requestInitialAnalysis = async (): Promise<void> => {
-    setRequestState('loading')
-    setRequestFailure(undefined)
-    const result = await marketAnalysisTimelineClient.requestInitialAnalysis(attempt && ['failed', 'invalid-output', 'cancelled'].includes(attempt.status) ? attempt.id : undefined)
-    if (result.state !== 'queued') {
-      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
-      setRequestState(next)
-      if (next === 'failed') setRequestFailure('request')
-      return
-    }
-    await pollForCompletion(undefined)
-  }
-
-  /**
-   * One refresh request: queue the run and wait for it to publish or fail.
-   *
-   * A refusal (`already-available`, `not-ready`, an IPC error) is reported as `request`; a run
-   * that finished without publishing is reported as `run`, so the surface can say which happened.
-   */
-  const enqueueRefresh = async (baselineEntryId: string | undefined, eventGroupId?: string): Promise<PollResult | 'refused'> => {
-    setRequestState('loading')
-    setRequestFailure(undefined)
-    let result: Awaited<ReturnType<typeof marketAnalysisTimelineClient.requestInitialAnalysis>>
-    try {
-      result = await marketAnalysisTimelineClient.requestInitialAnalysis(undefined, 'refresh', eventGroupId)
-    } catch (error) {
-      // The service refuses with `analysis-already-available` when a usable analysis already exists —
-      // including the run it just finished. That is not a failure to report as "not published".
-      const already = isAlreadyAvailableError(error)
-      setRequestState(already ? 'already-available' : 'failed')
-      if (!already) setRequestFailure('request')
-      return 'refused'
-    }
-    if (result.state !== 'queued') {
-      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
-      setRequestState(next)
-      if (next === 'failed') setRequestFailure('request')
-      return 'refused'
-    }
-    return pollForCompletion(baselineEntryId)
-  }
-
-  /**
-   * Per-item request behind "AI 解读". It deliberately reuses `pollForCompletion`, the same state
-   * machine the timeline's own action uses: one `queued` means one thing on every surface. A refusal
-   * (no judgment, not eligible, not ready, transport) never started a run, so it releases the action
-   * instead of pretending something is in flight; the caller shows its own sentence for that case.
-   */
-  const requestItemAnalysis = async (itemId: string): Promise<NewsInterpretationRequestView> => {
-    setRequestState('loading')
-    setRequestFailure(undefined)
-    const result = await requestNewsInterpretation(itemId)
-    if (result.state === 'queued' || result.state === 'in-flight') {
-      await pollForCompletion(state.entries[0]?.id)
-      return result
-    }
-    if (result.state === 'already-available') {
-      setRequestState('already-available')
-      void load()
-      return result
-    }
-    setRequestState('idle')
-    return result
-  }
-
-  const requestRefreshAnalysis = async (): Promise<void> => {
-    // The retry after a contract rejection lives in the analysis orchestrator, not here: it must
-    // also cover scheduled runs and runs whose panel is closed, and it re-asks against the same
-    // frozen snapshot. The poll simply keeps waiting while that second answer is produced.
-    await enqueueRefresh(state.entries[0]?.id)
-  }
-
-  /**
-   * 旧结论的语言与当前界面不同时，读者点的「重新生成」：同一事件组再跑一次，产生**新记录**。
-   * 旧记录原样留着（结论可追溯）——这里从不覆盖已发布的东西。
-   */
-  const regenerateConclusion = async (eventGroupId: string): Promise<void> => {
-    await enqueueRefresh(state.entries[0]?.id, eventGroupId)
-  }
+  // 请求一次分析、等它发布的状态机：时间轴自己的按钮与按条「AI 解读」共用同一份（见 runner 模块）。
+  const requests = createAnalysisRequestRunner({
+    policy, load,
+    latestEntryId: () => state.entries[0]?.id,
+    retryRunId: () => attempt && ['failed', 'invalid-output', 'cancelled'].includes(attempt.status) ? attempt.id : undefined,
+    setRequestState, setRequestFailure, pollTimer,
+    client: marketAnalysisTimelineClient, requestNewsInterpretation
+  })
 
   const selectionState: AnalysisSelectionState = state.selected
     ? state.detailLoading ? 'loading' : state.detail ? 'ready' : 'unavailable'
@@ -517,7 +391,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   return {
     state, attempt, requestState, requestFailure, selectionState, details, detailState, load, select, clearSelection, ensureDetail,
     loadMore: () => { void load(state.nextCursor ?? undefined) },
-    requestInitialAnalysis, requestRefreshAnalysis, requestItemAnalysis, regenerateConclusion
+    ...requests
   }
 }
 
