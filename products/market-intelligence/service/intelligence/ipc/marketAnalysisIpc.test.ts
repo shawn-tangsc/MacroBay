@@ -62,6 +62,21 @@ describe('read-only news interpretation endpoint (R37)', () => {
     expect(read).toHaveBeenCalledWith('item-1')
   })
 
+  it('validates the write payload with its own reader and delegates the item id', async () => {
+    const handlers = new Map<string, (payload: unknown) => unknown | Promise<unknown>>()
+    const request = vi.fn(async (itemId: string) => ({ state: 'queued' as const, itemId }))
+    registerMarketAnalysisIpc((_productId, method, handler) => handlers.set(method, handler), {
+      getEventGroup: () => undefined, listRuns: () => [], getSnapshot: () => undefined, getSummary: () => undefined,
+      listTimeline: () => ({ items: [] }), getTimelineEntry: () => undefined, getRun: () => undefined,
+      getSummaryForRun: () => undefined, listPredictions: () => []
+    } as never, {}, { requestNewsInterpretation: request as never })
+    const handler = handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestNewsInterpretation)!
+    await expect(handler({ itemId: 'item-1' })).resolves.toEqual({ state: 'queued', itemId: 'item-1' })
+    expect(request).toHaveBeenCalledWith('item-1')
+    await expect(handler({ itemId: 'item-1', window: '1h' })).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler({})).rejects.toThrow('market-analysis-invalid-input')
+  })
+
   it('refuses its own payload shape instead of reusing another command’s reader', async () => {
     const handlers = harnessWithReader(async (itemId: string) => ({ itemId, state: 'none' as const, currentEvidenceFingerprint: null }))
     const handler = handlers.get(MARKET_ANALYSIS_IPC_METHODS.readNewsInterpretation)!

@@ -1,5 +1,5 @@
 import { NEWS_SENTIMENT_SOURCE_IDS } from '../schema/newsSentiment'
-import type { NewsPolarity, NewsSentimentSymbol } from '../schema/newsSentiment'
+import type { NewsPolarity, NewsSentimentRecord, NewsSentimentSymbol } from '../schema/newsSentiment'
 
 /**
  * 一条情报值不值得花一次分析：判据是它自己的**情绪判定**，不是「够不够格进情报」。
@@ -122,5 +122,21 @@ export function decideItemTriggerSeverity(item: SeverityItem, verdict?: NewsSent
       ...(item.severityHint ? { severityHint: item.severityHint } : {}),
       admitted, news, ...(verdict ? { verdict } : {})
     })
+  }
+}
+
+/**
+ * 单条情绪判定（判定时刻之前最后一次）。读不到就当「还没判」：宁可等下一跳，也不把一次存储故障
+ * 写成「这条不重要」——账本行一旦写下，读者看到的就是一个判定。
+ */
+export function readLatestNewsSentiment(
+  reader: ((itemId: string, asOf: string) => NewsSentimentRecord | undefined) | undefined,
+  itemId: string,
+  asOf: string
+): NewsSentimentRecord | undefined {
+  try {
+    return reader?.(itemId, asOf)
+  } catch {
+    return undefined
   }
 }

@@ -22,7 +22,7 @@ import { queryMacroRoute } from '../public-query/macroRouteQuery'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
 import { createAnalysisTriggerPolicy, type TriggerHistoryEntry } from '../analysis/analysisTriggerPolicy'
 import {
-  decideItemTriggerSeverity, isNewsSeveritySource,
+  decideItemTriggerSeverity, isNewsSeveritySource, readLatestNewsSentiment,
   type ItemTriggerSeverity, type NewsSentimentVerdict
 } from '../analysis/analysisItemSeverity'
 import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from '../analysis/eventGroupService'
@@ -36,9 +36,10 @@ import { createAnalysisConclusionManualSend, type AnalysisConclusionSend } from 
 import { createAnalysisNoticeDeps, createReleaseCoverageReader, notifyAbandonedRelease } from './analysisReleaseNoticeWiring'
 import { createRunSessionBinding, type RunSessionPort } from './analysisRunSessionPort'
 import { prepareMarketAnalysisSnapshot } from '../analysis/analysisSnapshotPreparation'
-import { createNewsInterpretationReader } from '../analysis/analysisNewsInterpretationRead'
+import { createNewsInterpretationEndpoints } from '../analysis/analysisNewsInterpretationRequest'
+import { createAnalysisRunEnqueuer } from './analysisRunEnqueue'
 import { buildEvidenceFingerprint } from '../analysis/analysisHash'
-import type { NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
+import type { NewsInterpretationReadResult, NewsInterpretationRequestResult } from '../../../contracts/marketAnalysisIpcContracts'
 import { hasEligibleAnalysisAnchor, readCanonicalAsOf, readSignificanceSignals, readString, resolveDomain, safeJson } from './analysisRuntimePayload'
 import { createSignalScanRunner } from '../signals/signalScanRunner'
 import { createSessionSlotChecks } from './analysisSessionSlotChecks'
@@ -69,6 +70,8 @@ export type MarketAnalysisRuntime = Readonly<{
   sendConclusion: AnalysisConclusionSend
   /** 只读：这条新闻有没有已有解读、是哪份证据的（R37 §9.2）。 */
   readNewsInterpretation: (itemId: string) => Promise<NewsInterpretationReadResult>
+  /** 写：按这条新闻发起一次解读（R37 §1.1）；与旧手动入口共用入队核心，IPC 语义独立。 */
+  requestNewsInterpretation: (itemId: string) => Promise<NewsInterpretationRequestResult>
   setCrossAssetQuery: (query: ((input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown) | undefined) => void
   /** Mounted by the bootstrap: the session ports are injected there, not built here. */
   setRunSessionPort: (port: RunSessionPort | undefined) => void
@@ -406,11 +409,18 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     log: async input => { await jobLog?.(input) }
   })
 
-  const readNewsInterpretation = createNewsInterpretationReader({
+  // 只读判读与写端点共用同一套预计算与同一份单飞账本（R37 §9）；两者只在这里构造一次。
+  const newsInterpretation = createNewsInterpretationEndpoints({
     publicQueryService: input.publicQueryService, pipeline: input.pipeline, repository,
     ...(input.newsSentimentQuery ? { newsSentimentQuery: input.newsSentimentQuery } : {}),
     ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
-    timeZone, now
+    timeZone, now,
+    isEnabled, hasModel: async () => isMarketAnalysisModelSet(await settingsService.getSettings()),
+    ensureGroup: async itemId => {
+      const resolved = await resolveChange({ changeId: itemId })
+      return resolved ? groups.create(resolved.change) : undefined
+    },
+    enqueue: createAnalysisRunEnqueuer({ jobRuntime: input.jobRuntime, repository, now })
   })
 
   return {
@@ -434,7 +444,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       if (!isMarketAnalysisEnabled(before) && isMarketAnalysisEnabled(saved)) await startRecovery()
       return saved
     },
-    readNewsInterpretation,
+    readNewsInterpretation: newsInterpretation.readNewsInterpretation,
+    requestNewsInterpretation: newsInterpretation.requestNewsInterpretation,
     requestInitialAnalysis,
     requestSignalAnalysis,
     setRunSessionPort: runSession.setPort,
@@ -601,18 +612,6 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     await context.log({ level: result.status === 'succeeded' ? 'info' : 'error', message: 'Market analysis result', metadata: { analysisRunId: run.id, status: result.status, ...(result.errorCode ? { errorCode: result.errorCode } : {}) } })
   }
 
-  /**
-   * 单条情绪判定（判定时刻之前最后一次）。读不到就当「还没判」：宁可等下一跳，也不把一次
-   * 存储故障写成「这条不重要」——账本行一旦写下，读者看到的就是一个判定。
-   */
-  function readLatestVerdict(itemId: string): import('../schema/newsSentiment').NewsSentimentRecord | undefined {
-    try {
-      return input.latestNewsSentiment?.(itemId, now())
-    } catch {
-      return undefined
-    }
-  }
-
   async function resolveChange(payload: unknown): Promise<{ change: AnalysisChange; triggeredItemId?: string } | undefined> {
     const itemId = readString(payload, 'changeId') ?? readString(payload, 'eventRef')
     const item = itemId ? input.pipeline.listItems().find(candidate => candidate.itemId === itemId || candidate.clusterId === itemId) : undefined
@@ -623,7 +622,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       .sort((left, right) => left.detectedAt.localeCompare(right.detectedAt))
       .at(-2)
     const domain = resolveDomain(labels.dataDomain, item.sourceId)
-    const verdict = isNewsSeveritySource(item.sourceId) ? readLatestVerdict(item.itemId) : undefined
+    const verdict = isNewsSeveritySource(item.sourceId) ? readLatestNewsSentiment(input.latestNewsSentiment, item.itemId, now()) : undefined
     // 新闻还没判定时这里不决定、也不写账本行——理由见 `decideItemTriggerSeverity`。
     const decision = decideItemTriggerSeverity(item, verdict)
     if (decision.decision === 'await-verdict') return

@@ -147,8 +147,57 @@ export type NewsInterpretationReadResult =
     subjectLabel?: string
   }>
 
+/**
+ * 写端点的载荷：与只读同形，但**各写各的读取器**——一条命令一个读取器，改一条不会悄悄改到另一条。
+ */
+export function isNewsInterpretationRequestInput(value: unknown): value is Readonly<{ itemId: string }> {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) return false
+  const candidate = value as Record<string, unknown>
+  return Object.keys(candidate).length === 1 && typeof candidate.itemId === 'string' && candidate.itemId.length > 0 && candidate.itemId.length <= 200
+}
+
 export function isNewsInterpretationReadInput(value: unknown): value is Readonly<{ itemId: string }> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) return false
   const candidate = value as Record<string, unknown>
   return Object.keys(candidate).length === 1 && typeof candidate.itemId === 'string' && candidate.itemId.length > 0 && candidate.itemId.length <= 200
 }
+
+/** `not-ready` 与 `failed` 的闭集（§9.4）：表外的码一律落默认，不把 `analysis-*` 全量直通。 */
+export type NewsInterpretationNotReadyCode =
+  | typeof NEWS_INTERPRETATION_FAILURE_CODES.notEnabled
+  | typeof NEWS_INTERPRETATION_FAILURE_CODES.providerNotReady
+  | typeof NEWS_INTERPRETATION_FAILURE_CODES.requestUnavailable
+
+export type NewsInterpretationFailedCode =
+  | typeof NEWS_INTERPRETATION_FAILURE_CODES.requestFailed
+  | typeof NEWS_INTERPRETATION_FAILURE_CODES.eventGroupNotFound
+
+/**
+ * 写端点 `marketAnalysis.requestNewsInterpretation` 的结果（§1.1）。
+ *
+ * `already-available` 与只读的 `available` 同一个收窄规则：`summaryId` 必填，且它指向的那条摘要
+ * 必须真的读得到——否则渲染不出正文就是「成功但空节」。
+ */
+export type NewsInterpretationRequestResult =
+  | Readonly<{ state: 'queued'; itemId: string; runId?: string }>
+  | Readonly<{
+    state: 'already-available'
+    itemId: string
+    runId: string
+    summaryId: string
+    generatedAt: string
+    snapshotHash: string
+    dataAsOf: string
+    evidenceScope: NewsInterpretationEvidenceScope
+    evidenceFingerprint: string
+  }>
+  | Readonly<{ state: 'in-flight'; itemId: string; runId?: string }>
+  | Readonly<{ state: 'no-judgment'; itemId: string }>
+  | Readonly<{
+    state: 'insufficient-facts'
+    itemId: string
+    details: Readonly<{ reason: NewsInterpretationInsufficientReason; marketFactCount?: number; minimum?: number }>
+  }>
+  | Readonly<{ state: 'not-eligible'; itemId: string; reason: NewsInterpretationNotEligibleReason }>
+  | Readonly<{ state: 'not-ready'; itemId: string; failureCode: NewsInterpretationNotReadyCode }>
+  | Readonly<{ state: 'failed'; itemId: string; failureCode: NewsInterpretationFailedCode }>

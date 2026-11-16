@@ -5,6 +5,7 @@ import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository
 import { resolveTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
 import type { AnalysisSessionSlot } from '../analysis/analysisSchedulePolicy'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
+import { createAnalysisRunEnqueuer } from './analysisRunEnqueue'
 
 // Product-owned manual retry policy: an observation timeout never ends the background job.
 export const initialMarketAnalysisRequestPolicy = Object.freeze({
@@ -28,7 +29,7 @@ export function createInitialMarketAnalysisRequest(deps: {
   /** The capability's switch. Absent (headless/test wiring) leaves the request ungated. */
   isEnabled?: () => Promise<boolean>
 }) {
-  const pending = new Set<string>()
+  const enqueue = createAnalysisRunEnqueuer({ jobRuntime: deps.jobRuntime, repository: deps.repository, now: deps.now })
   return async (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource, slot?: AnalysisSessionSlot): Promise<{ itemId: string; queued: true }> => {
     if (mode !== 'initial' && mode !== 'refresh') throw new Error('analysis-invalid-request')
     // Asked before anything is written: a disabled capability must not create a group, a freeze job
@@ -54,7 +55,7 @@ export function createInitialMarketAnalysisRequest(deps: {
     // the reader who clicked 重新分析 is asking for the run that is already on its way, so
     // reporting it as queued is the honest answer. Refusing the click with "已有最新分析"
     // told the reader nothing was happening at the exact moment something was.
-    const inFlight = pending.has(group.id) || activeFreeze.length > 0 ||
+    const inFlight = activeFreeze.length > 0 ||
       deps.repository.listRuns().some(run => run.eventGroupId === group.id && initialMarketAnalysisRequestPolicy.inFlightStatuses.includes(run.status))
     if (inFlight) {
       if (manual) return { itemId: item.itemId, queued: true }
@@ -69,18 +70,12 @@ export function createInitialMarketAnalysisRequest(deps: {
       ? initialMarketAnalysisRequestPolicy.inFlightStatuses
       : initialMarketAnalysisRequestPolicy.blockingStatuses
     if (!manualCorrection && ((mode === 'initial' && group.currentSummaryId) || deps.repository.listRuns().some(run => run.eventGroupId === group.id && blockingStatuses.includes(run.status)))) throw new Error('analysis-already-available')
-    pending.add(group.id)
-    try {
-      const job = await deps.jobRuntime.enqueueDefinition({
-        id: `market-analysis:manual-freeze:${group.id}`, owner: 'product', productId: 'market-intelligence',
-        handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, title: mode === 'refresh' ? 'Refresh market analysis snapshot' : 'Freeze first market analysis snapshot', trigger: { kind: 'manual' },
-        payload: { eventGroupId: group.id, triggerKey, analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now() }
-      })
-      // Observe the freeze boundary so pre-run query/storage errors cannot masquerade as queued work.
-      const terminal = await deps.jobRuntime.waitForRunTerminal(job.id, { timeoutMs: initialMarketAnalysisRequestPolicy.freezeObservationTimeoutMs })
-      if (terminal.state !== 'terminal' || terminal.run.status !== 'completed') throw new Error('analysis-initial-request-failed')
-      return { itemId: item.itemId, queued: true }
-    } finally { pending.delete(group.id) }
+    // 入队与冻结观察是两条手动入口共用的那一段（§9.1）；旧命令对「在飞」返回 queued，语义不变。
+    const outcome = await enqueue({
+      eventGroupId: group.id, triggerKey, analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now()
+    })
+    if (outcome.state === 'enqueued' || outcome.state === 'in-flight') return { itemId: item.itemId, queued: true }
+    throw new Error('analysis-initial-request-failed')
   }
 }
 

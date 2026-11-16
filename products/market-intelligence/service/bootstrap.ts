@@ -491,6 +491,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     timeZone: () => currentReaderTimeZone(),
     requestInitialAnalysis: intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis,
     readNewsInterpretation: intelligenceModule.marketAnalysisRuntime.readNewsInterpretation,
+    requestNewsInterpretation: intelligenceModule.marketAnalysisRuntime.requestNewsInterpretation,
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })

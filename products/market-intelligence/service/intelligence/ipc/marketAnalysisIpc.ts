@@ -1,6 +1,6 @@
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
-import { MARKET_ANALYSIS_IPC_METHODS, isNewsInterpretationReadInput, type NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
+import { MARKET_ANALYSIS_IPC_METHODS, isNewsInterpretationReadInput, isNewsInterpretationRequestInput, type NewsInterpretationReadResult, type NewsInterpretationRequestResult } from '../../../contracts/marketAnalysisIpcContracts'
 import { createAnalysisTimelineService } from '../analysis/analysisTimelineService'
 import { macroCalendarEventContextReaders, type MacroCalendarEventContextQuerySources } from '../public-query/macroCalendarEventContextReaders'
 import { macroCalendarEventContextFromReads } from '../public-query/macroCalendarEventContextAdapter'
@@ -21,6 +21,8 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
     requestInitialAnalysis?: (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource) => Promise<{ itemId: string; queued: true }>
     /** 只读：这条新闻有没有已有解读、是哪份证据的（R37）。 */
     readNewsInterpretation?: (itemId: string) => Promise<NewsInterpretationReadResult>
+    /** 写：按这条新闻发起一次解读（R37 §1.1）。 */
+    requestNewsInterpretation?: (itemId: string) => Promise<NewsInterpretationRequestResult>
     /** 读者时区：时间线的「哪个开盘」按它换算。 */
     timeZone?: () => string
     getAnalysisSettings?: () => Promise<MarketAnalysisSettings>
@@ -88,6 +90,11 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
     if (!isNewsInterpretationReadInput(payload)) throw new Error('market-analysis-invalid-input')
     if (!sessions.readNewsInterpretation) throw new Error('analysis-initial-request-unavailable')
     return sessions.readNewsInterpretation(payload.itemId)
+  })
+  register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.requestNewsInterpretation, async (payload) => {
+    if (!isNewsInterpretationRequestInput(payload)) throw new Error('market-analysis-invalid-input')
+    if (!sessions.requestNewsInterpretation) throw new Error('analysis-initial-request-unavailable')
+    return sessions.requestNewsInterpretation(payload.itemId)
   })
 }
 
