@@ -44,6 +44,8 @@ const SIGNED_TABLE: Readonly<Record<string, Readonly<{
   // 只批手机（2026-11-18 用户改口径：舆情不进中心）。桌面由 `news.item-arrived` 那条负责，
   // 两条各自只干一件事；补一格 center 就会把舆情塞回中心。
   'market-intelligence.sentiment.alert': { levels: ['channel'], bypassQuietHours: false },
+  // 非低重要性舆情：**只桌面**（2026-11-18 用户定），且不穿免打扰。
+  'market-intelligence.news.item-arrived': { levels: ['desktop'], bypassQuietHours: false },
   'market-intelligence.analysis.conclusion': { levels: ['center', 'channel'], bypassQuietHours: false },
   // 分析没跑成（2026-11-18 产品经理签署）：**只批中心**——不进桌面、不进手机、不穿免打扰。
   'market-intelligence.analysis.failed': { levels: ['center'], bypassQuietHours: false }

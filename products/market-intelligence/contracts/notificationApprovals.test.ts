@@ -36,7 +36,9 @@ describe('market-intelligence approvals', () => {
       'market-intelligence.source.stale',
       // a318e5a（2026-11-16）加了这条的批准与声明，却没同步这张期望表——HEAD 上它一直是红的。
       'market-intelligence.source.symbol-not-supported',
-      'market-intelligence.timezone.invalid'
+      'market-intelligence.timezone.invalid',
+      // 2026-11-18（R40）：非低重要性舆情**只发桌面**——桌面说「来了条要紧的」，手机那条另算。
+      'market-intelligence.news.item-arrived'
     ])
   })
 
@@ -61,7 +63,7 @@ describe('market-intelligence approvals', () => {
     ])
   })
 
-  it('leaves five events without a toast, on purpose', () => {
+  it('leaves these events without a toast, on purpose', () => {
     // 提示默认开：关掉桌面时它是唯一的本机提醒。不批提示的三条都有理由，不是漏配：
     // - 日报完成：**桌面批准、提示不批**——11-04 用户原话「不弹提示」，11-06 只要求桌面通知，
     //   两格不是一回事，留着提示就是替他多要一次打扰（别顺手补回来）；
@@ -73,6 +75,8 @@ describe('market-intelligence approvals', () => {
       'market-intelligence.briefing.ready',
       'market-intelligence.calendar.refresh-failed',
       'market-intelligence.sentiment.alert',
+      // 非低重要性舆情（2026-11-18）：只批桌面。提示是另一种打扰，桌面已经说了一次。
+      'market-intelligence.news.item-arrived',
       'market-intelligence.analysis.conclusion',
       // 分析没跑成（2026-11-18）：只批中心——不进桌面、不进手机，提示那一格没有获批。
       'market-intelligence.analysis.failed'
@@ -84,7 +88,10 @@ describe('market-intelligence approvals', () => {
     //
     // center 不是天然必答项：2026-11-18 用户定「舆情不进中心」（R40 §3），`sentiment.alert` 因此
     // 只留手机。**例外必须逐条列出来**，不能让这条不变量退化成「想撤就撤」。
-    const CENTER_WITHDRAWN = ['market-intelligence.sentiment.alert'] as const
+    const CENTER_WITHDRAWN = [
+      'market-intelligence.sentiment.alert',
+      'market-intelligence.news.item-arrived'
+    ] as const
     for (const id of ids) {
       if (!(CENTER_WITHDRAWN as readonly string[]).includes(id)) {
         expect(levelsOf(id), `${id} 必须含 center`).toContain('center')

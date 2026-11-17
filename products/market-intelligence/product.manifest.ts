@@ -357,6 +357,18 @@ export const marketIntelligenceProductManifest = {
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),
+    notificationEvent('market-intelligence.news.item-arrived', {
+      category: 'reminder',
+      body: true,
+      requiresUserAction: false,
+      // 只申请桌面（2026-11-18 用户定：桌面说「来了条要紧的」，手机由 `sentiment.alert` 负责，
+      // 中心不掺和舆情）。批准表也只批这一档，两边同一个值。
+      requestedDisruptionLevels: ['desktop'],
+      // 一条新闻一条：键里只有 itemId，重复提交由平台合并（不会弹第二次）。
+      dedupeKeyTemplate: 'news-arrival:{itemId}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.macro.event-landed', {
       category: 'reminder',
       // 三值齐 / 缺前值 / 缺预期（后者今天不可达，键留着等放宽筛选）。

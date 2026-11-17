@@ -8,7 +8,9 @@ import {
   INTELLIGENCE_ARCHIVE_COMPACTION_JOB,
   INTELLIGENCE_COLLECT_SOURCE_JOB,
   INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
+  INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB,
   INTELLIGENCE_REFRESH_SENTIMENT_AGGREGATES_JOB,
+  INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB,
   INTELLIGENCE_REPLAY_WINDOW_JOB,
   INTELLIGENCE_TRANSLATE_ITEMS_JOB
 } from './intelligenceJobIds'
@@ -88,7 +90,8 @@ describe('registerIntelligenceJobs', () => {
     expect(enqueueDefinition).toHaveBeenCalledWith(
       expect.objectContaining({
         handlerId: INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
-        payload: { sourceId: 'coindesk-rss' }
+        // 这个桩里 `listItems()` 是空的 ⇒ 这一轮就是「该源首采」（建档），要一路带到评分那一步。
+        payload: { sourceId: 'coindesk-rss', firstCollection: true }
       })
     )
 
@@ -112,6 +115,81 @@ describe('registerIntelligenceJobs', () => {
         payload: { sourceId: 'coindesk-rss', newItemIds: ['item-1'], itemIds: ['item-1'] }
       })
     )
+  })
+
+  it('carries the source-first-collection flag from collection all the way to the scoring pass', async () => {
+    // 判据（R40 §5）：某个源的**第一次**成功采集是建档，不是「来新闻了」，整轮一条都不许响。
+    // 这条判据跨了四个 handler，所以只能在这里验：只看某一段都会得出「有人带着这个标记」，看不出它是不是断在中途。
+    const handlers = new Map<string, JobHandler>()
+    const enqueueDefinition = vi.fn(async (_definition: { handlerId: string; payload: Record<string, unknown> }) => ({ id: 'run-1' }))
+    const jobRuntime = {
+      registerHandler(handlerId: string, handler: JobHandler) { handlers.set(handlerId, handler) },
+      enqueueDefinition
+    } as unknown as JobRuntime
+    const scoreItems = vi.fn(async (_input: Record<string, unknown>) => ({
+      processed: 1, model: 0, rules: 1, skipped: 0, failed: 0, modelCalls: 0, triggerCandidates: []
+    }))
+    const enrichItems = vi.fn(async (_input: Record<string, unknown>) => ({ processed: 1, available: 1, tooShort: 0, failed: 0, skipped: 0 }))
+    registerIntelligenceJobs(jobRuntime, {
+      pipeline: createPipelineStub(),
+      newsSentiment: { enrichItems, scoreItems }
+    })
+
+    // ① 采集：库里这个源一条都没有 → 这一轮是建档。
+    await handlers.get(INTELLIGENCE_COLLECT_SOURCE_JOB)!({ sourceId: 'coindesk-rss' }, createContext('collect-run'))
+    expect(enqueueDefinition).toHaveBeenCalledWith(expect.objectContaining({
+      handlerId: INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
+      payload: { sourceId: 'coindesk-rss', firstCollection: true }
+    }))
+
+    // ② 归一化：把标记原样交给下游。
+    enqueueDefinition.mockClear()
+    await handlers.get(INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB)!(
+      { sourceId: 'coindesk-rss', firstCollection: true },
+      createContext('normalize-run')
+    )
+    for (const call of enqueueDefinition.mock.calls) {
+      expect((call[0] as { payload: Record<string, unknown> }).payload.firstCollection).toBe(true)
+    }
+
+    // ③ 抓正文：再交给评分时标记还在。
+    enqueueDefinition.mockClear()
+    await handlers.get(INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB)!(
+      { itemIds: ['item-1'], firstCollection: true },
+      createContext('enrich-run')
+    )
+    expect(enqueueDefinition).toHaveBeenCalledWith(expect.objectContaining({
+      handlerId: INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB,
+      payload: expect.objectContaining({ newItemIds: ['item-1'], firstCollection: true })
+    }))
+
+    // ④ 评分：翻译成「这一轮不发桌面提醒」。
+    await handlers.get(INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB)!(
+      { itemIds: ['item-1'], firstCollection: true },
+      createContext('score-run')
+    )
+    expect(scoreItems).toHaveBeenCalledWith(expect.objectContaining({ itemIds: ['item-1'], suppressArrivalNotices: true }))
+  })
+
+  it('leaves the flag off when the source already had items, so a normal round still rings', async () => {
+    const handlers = new Map<string, JobHandler>()
+    const enqueueDefinition = vi.fn(async (_definition: { handlerId: string; payload: Record<string, unknown> }) => ({ id: 'run-1' }))
+    const jobRuntime = {
+      registerHandler(handlerId: string, handler: JobHandler) { handlers.set(handlerId, handler) },
+      enqueueDefinition
+    } as unknown as JobRuntime
+    const pipeline = createPipelineStub()
+    ;(pipeline.listItems as unknown as { mockReturnValue: (value: unknown) => void }).mockReturnValue([
+      { itemId: 'old-1', sourceId: 'coindesk-rss', title: 'older story', publishedAt: '2026-10-20T00:00:00.000Z' }
+    ])
+    registerIntelligenceJobs(jobRuntime, { pipeline })
+
+    await handlers.get(INTELLIGENCE_COLLECT_SOURCE_JOB)!({ sourceId: 'coindesk-rss' }, createContext('collect-run'))
+
+    const enqueue = enqueueDefinition.mock.calls
+      .map((call) => call[0] as { handlerId: string; payload: Record<string, unknown> })
+      .find((call) => call.handlerId === INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB)
+    expect(enqueue?.payload.firstCollection).toBeUndefined()
   })
 
   it('rejects forged retired stablecoin replay and archive jobs before services run', async () => {

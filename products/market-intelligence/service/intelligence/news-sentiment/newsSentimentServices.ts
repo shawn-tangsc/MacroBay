@@ -120,7 +120,17 @@ export function createNewsSentimentServices(
     ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
     ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
     invoke: structuredModelInvocation.invoke,
-    ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), thresholdFilePath: join(dataDir, 'intelligence-news-push-threshold.json'), submit: hooks.submitNotification } } : {}),
+    ...(hooks?.submitNotification
+      ? {
+          notificationDelivery: {
+            ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName),
+            thresholdFilePath: join(dataDir, 'intelligence-news-push-threshold.json'),
+            submit: hooks.submitNotification,
+            // 桌面提醒正文里的时刻按读者设置时区写（`IntelligenceModulePlatformHooks` 必填项）。
+            timeZone: hooks.getTimeZone
+          }
+        }
+      : {}),
     now
   })
   const bodyTranslation = createNewsSentimentBodyTranslationService({

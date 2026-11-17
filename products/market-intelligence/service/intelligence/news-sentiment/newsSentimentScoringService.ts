@@ -19,6 +19,7 @@ import { createNewsSentimentAlertOutlet } from './newsSentimentAlertOutlet'
 import { buildSentimentAlertRequest } from './newsSentimentAlertRequest'
 import { createNewsPushThresholdStore } from './newsPushThresholdStore'
 import { createNewsPushLedgerStore } from './newsPushLedgerStore'
+import { isNewsArrivalWorthNotifying, notifyNewsArrival } from './newsArrivalNotice'
 
 export { newsPushLedgerPolicy } from './newsPushLedgerStore'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
@@ -73,16 +74,18 @@ export function createNewsSentimentScoringService(deps: {
   now: () => string
   maxPerRun?: number
   /**
-   * 推送出口。给了它，每条判断落库之后过一遍三道闸；没给就一条都不推（默认关）。
+   * 平台的通知提交入口（尺寸一致的两条出口共用它）：阈值推送与「新抓到的舆情」桌面提醒。
+   * 给了它，每条判断落库之后各自过自己的闸；没给就一条都不推（默认关）。
    *
-   * 它**不影响评分**：通知那边抖一下不该让这一轮评分算失败，所以异常在这里吞掉。代价说清楚——
-   * 提交失败的那条已经在账本里记成「推过」，不会重推；宁可漏一条，也不重复打扰。
+   * 它**不影响评分**：通知那边抖一下不该让这一轮评分算失败，所以异常在出口里吞掉。
    */
-  alertDelivery?: {
+  notificationDelivery?: {
     ledgerPath: string
     submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
     /** 读者设的强度门槛存在这个文件里（与账本同目录）；缺省「中」。 */
     thresholdFilePath?: string
+    /** 读者时区（设置里那个）：桌面通知正文里的时刻按它写。 */
+    timeZone?: () => string
   }
 }) {
   /**
@@ -91,16 +94,16 @@ export function createNewsSentimentScoringService(deps: {
    */
   // 门槛是推送判定的输入，闸门本身是纯函数、不读设置：读在这里做一次，把值传进去。
   // 没给路径（测试里的轻量装配）就不落盘，判定按缺省「中」——不临时造一个文件出来当存储。
-  const pushThresholdStore = deps.alertDelivery?.thresholdFilePath
-    ? createNewsPushThresholdStore(deps.alertDelivery.thresholdFilePath)
+  const pushThresholdStore = deps.notificationDelivery?.thresholdFilePath
+    ? createNewsPushThresholdStore(deps.notificationDelivery.thresholdFilePath)
     : undefined
-  const alertOutlet = deps.alertDelivery
+  const alertOutlet = deps.notificationDelivery
     ? createNewsSentimentAlertOutlet({
-        ledger: createNewsPushLedgerStore(deps.alertDelivery.ledgerPath),
+        ledger: createNewsPushLedgerStore(deps.notificationDelivery.ledgerPath),
         deliver: async (alert) => {
           const request = buildSentimentAlertRequest(alert)
           if (!request) return
-          await deps.alertDelivery!.submit({
+          await deps.notificationDelivery!.submit({
             eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.sentimentAlert,
             ...request
           })
@@ -119,7 +122,14 @@ export function createNewsSentimentScoringService(deps: {
      */
     readPushThreshold: (): NewsSentimentTierThreshold =>
       pushThresholdStore?.read().pushThreshold ?? 'medium',
-    async scoreItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentScoringResult> {
+    async scoreItems(input: {
+      itemIds?: string[]
+      limit?: number
+      /** 重建/重跑历史（读者主动重算）：不是「来了新新闻」，一条提醒都不发。 */
+      rebuild?: boolean
+      /** 该源的首轮采集（建档）：整轮不发，几时几百条都不该响一遍。 */
+      suppressArrivalNotices?: boolean
+    }): Promise<NewsSentimentScoringResult> {
       const settings = await deps.settingsStore.getSettings()
       const [providerState, modelDefaults] = await Promise.all([
         deps.getProviderState?.().catch(() => undefined) ?? Promise.resolve(undefined),
@@ -142,9 +152,11 @@ export function createNewsSentimentScoringService(deps: {
       const runBudget = Math.max(1, input.limit ?? deps.maxPerRun ?? 20)
       const candidates = admitted
         .filter((item) => !requestedIds || requestedIds.has(item.itemId))
-        .filter((item) => !isCurrent(deps.store.getLatestSentiment(item.itemId, deps.now()), useModel, modelRef))
+        // 有没有旧判定在写之前就要知道：**第一次判定**才算「来了条新闻」，后补/重跑都不补发。
+        .map((item) => ({ item, earlier: deps.store.getLatestSentiment(item.itemId, deps.now()) }))
+        .filter((entry) => !isCurrent(entry.earlier, useModel, modelRef))
         // The pass is capped; newest first so the visible window fills before older backlog.
-        .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
+        .sort((left, right) => (right.item.publishedAt ?? '').localeCompare(left.item.publishedAt ?? ''))
         .slice(0, runBudget)
 
       let processed = 0
@@ -214,7 +226,17 @@ export function createNewsSentimentScoringService(deps: {
         return peers
       }
 
-      for (const item of candidates) {
+      /**
+       * 桌面提醒的到达判据（R40 §5 的三道门槛，缺一不发）：
+       * A 运行类型——`rebuild`（重跑历史）整轮不发；
+       * B 条目级——`itemIds` 是 normalize 交上来的**本轮首次入库**那批，不在里面就不是新来的；
+       * C 源级首次——`suppressArrivalNotices` 由采集侧按「这个源之前库内 0 条」给出，整轮不发。
+       * 另加一条：这条**以前没有任何判定**（后补的判定不补发）。
+       */
+      const arrivalIds = input.itemIds?.length ? new Set(input.itemIds) : undefined
+      const arrivalNoticesAllowed = arrivalIds !== undefined && input.rebuild !== true && input.suppressArrivalNotices !== true
+
+      for (const { item, earlier } of candidates) {
         if (!item.publishedAt) {
           failed += 1
           continue
@@ -327,6 +349,22 @@ export function createNewsSentimentScoringService(deps: {
           caveats: [...new Set([...judgment.caveats, ...bodyCaveats, ...caveats])]
         }
         deps.store.upsertSentiment(record)
+        // 桌面提醒：判定写下来的这一刻判断（不是条目入库那一刻——那时还没有强度）。
+        if (
+          arrivalNoticesAllowed
+          && earlier === undefined
+          && arrivalIds?.has(item.itemId) === true
+          && isNewsArrivalWorthNotifying({ title: item.title, polarity: record.polarity, strength: record.strength })
+        ) {
+          await notifyNewsArrival(deps.notificationDelivery?.submit, {
+            itemId: record.itemId,
+            headline: item.title,
+            sourceName: getIntelligenceSourceDefinition(item.sourceId)?.displayName ?? item.sourceId,
+            polarity: record.polarity,
+            publishedAt: record.publishedAt,
+            timeZone: deps.notificationDelivery?.timeZone?.() ?? 'UTC'
+          })
+        }
         // 这条判定的严重度现在才成立：够格就交出去，让分析补一次触发。判据只有一份
         // （`analysisItemSeverity`），不在这里另写一套「重要性」。
         if (isTriggerableNewsVerdict(record)) triggerCandidates.push({ itemId: record.itemId, scoredAt: record.scoredAt })

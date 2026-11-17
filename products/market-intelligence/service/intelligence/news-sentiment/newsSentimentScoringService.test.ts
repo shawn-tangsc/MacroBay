@@ -61,8 +61,15 @@ async function harness(options: {
   output?: () => Record<string, unknown>
   alertLedger?: string
   submitAlert?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  /** 「新抓到的舆情」桌面提醒的提交点（与阈值推送共用同一个平台入口，但断言分开看）。 */
+  submitNotice?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  timeZone?: string
+  /** 传进来就复用同一个库：用来验「同一条第二次判定」这类跨两轮的行为。 */
+  store?: ReturnType<typeof createNewsSentimentSqliteStore>
+  /** 第二轮的「现在」要往后挪：判定表按 (item_id, scored_at) 唯一。 */
+  now?: string
 }) {
-  const store = createNewsSentimentSqliteStore(':memory:')
+  const store = options.store ?? createNewsSentimentSqliteStore(':memory:')
   store.upsertDocument({
     itemId: 'item-a',
     sourceId: 'coindesk-rss',
@@ -98,14 +105,16 @@ async function harness(options: {
         }
       : {}),
     invoke,
-    now: () => '2026-10-24T13:00:00.000Z',
-    ...(options.alertLedger
+    now: () => options.now ?? '2026-10-24T13:00:00.000Z',
+    ...(options.alertLedger || options.submitNotice
       ? {
-          alertDelivery: {
-            ledgerPath: options.alertLedger,
+          notificationDelivery: {
+            ledgerPath: options.alertLedger ?? ':memory:',
             submit:
               options.submitAlert ??
-              (async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'], suppressedLevels: [] }))
+              options.submitNotice ??
+              (async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'], suppressedLevels: [] })),
+            timeZone: () => options.timeZone ?? 'Asia/Shanghai'
           }
         }
       : {})
@@ -182,14 +191,16 @@ describe('newsSentimentScoringService', () => {
     expect(second?.why).toBe('选举结果改变监管预期。')
   })
 
-  it('sends nothing while the outlet is not switched on, and a submission failure does not fail the pass', async () => {
-    const submitAlert = vi.fn(async () => {
+  it('sends no threshold alert while the outlet is not switched on, and a submission failure does not fail the pass', async () => {
+    const submitAlert = vi.fn(async (_request: NotificationSubmitRequest) => {
       throw new Error('notification runtime is down')
     })
     const { store, service } = await harness({ withModel: true, alertLedger: ':memory:', submitAlert })
     await expect(service.scoreItems({ itemIds: ['item-a'] })).resolves.toMatchObject({ processed: 1 })
-    // 开关默认关（账本里没有水位）：判定点跑过，但一条都没提交。
-    expect(submitAlert).not.toHaveBeenCalled()
+    // 开关默认关（账本里没有水位）：**阈值推送**一条都没提交。桌面提醒是另一条事件，由它自己的
+    // 到达判据决定（R40），这里只钉阈值那一条不会因为开关没开就发出去。
+    const alertCalls = submitAlert.mock.calls.filter((call) => call[0].eventTypeId === 'market-intelligence.sentiment.alert')
+    expect(alertCalls).toHaveLength(0)
     expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')).toBeDefined()
   })
 
@@ -349,7 +360,7 @@ describe('the scoring service exposes the push threshold it judges with', () => 
       settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
       invoke: vi.fn() as unknown as NewsSentimentInvoke,
       now: () => '2026-10-24T13:00:00.000Z',
-      alertDelivery: {
+      notificationDelivery: {
         ledgerPath: join(mkdtempSync(join(tmpdir(), 'news-ledger-')), 'ledger.sqlite'),
         thresholdFilePath,
         submit: async (): Promise<NotificationSubmitOutcome> => ({ kind: 'accepted', recordId: 'r', levels: ['center'], suppressedLevels: [] })
@@ -376,5 +387,123 @@ describe('the scoring service exposes the push threshold it judges with', () => 
     })
     expect(service.readPushThreshold()).toBe('medium')
     expect(service.pushThreshold).toBeUndefined()
+  })
+})
+
+describe('one desktop notice per non-low story that just arrived (R40)', () => {
+  const accepted = async (_request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> =>
+    ({ kind: 'accepted', recordId: 'r', levels: ['desktop'], suppressedLevels: [] })
+
+  /** 判据①：非低条目入库 → 桌面恰好一条，且动作与行为一致（这一版不许写「查看这条」）。 */
+  it('rings the desktop exactly once for a non-low story, and the action only opens the page', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service } = await harness({ withModel: true, submitNotice })
+
+    await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(submitNotice).toHaveBeenCalledTimes(1)
+    const request = submitNotice.mock.calls[0]![0] as NotificationSubmitRequest
+    expect(request.eventTypeId).toBe('market-intelligence.news.item-arrived')
+    // 标题：来源 · 条目标题（源与主体都在）。
+    expect(request.rendered?.['zh-CN']?.title).toContain('·')
+    expect(request.rendered?.['zh-CN']?.title).toContain('SEC Approves Spot Ethereum ETF Options')
+    // 正文：偏向 · 时间（判定已出，所以不会有「判定中」）。
+    expect(request.rendered?.['zh-CN']?.body).toContain('偏多')
+    expect(request.rendered?.['zh-CN']?.body).toMatch(/\d{2}-\d{2} \d{2}:\d{2}/u)
+    // 动作：只到舆情页，标签是「打开舆情」——写了「查看这条」就是撒谎（判据⑤）。
+    expect(request.actions).toHaveLength(1)
+    expect(request.actions[0]?.id).toBe('open-sentiment')
+    expect(request.actions[0]?.kind).toBe('open')
+    expect(request.actions[0]?.labelRef).toMatchObject({ scope: 'product', key: 'notification.action.market-intelligence.open-sentiment' })
+    expect(JSON.stringify(request.rendered)).not.toContain('查看这条')
+    expect(JSON.stringify(request.rendered)).not.toContain('View this')
+  })
+
+  it('stays silent for a weak story (strength = 1)', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service } = await harness({
+      withModel: false,
+      submitNotice,
+      items: [item({ title: 'Weekly recap: a quiet weekend in crypto markets', summary: 'Nothing moved much.' })]
+    })
+
+    const result = await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(result.processed).toBe(1)
+    expect(submitNotice).not.toHaveBeenCalled()
+  })
+
+  it('stays silent for a routine announcement even at strength 2', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service } = await harness({
+      withModel: true,
+      submitNotice,
+      output: () => ({ ...modelOutput(), polarity: 'neutral', strength: 2, symbols: [] }),
+      items: [item({ title: 'OKX to Perform Scheduled Maintenance on the RFQ System' })]
+    })
+
+    await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(submitNotice).not.toHaveBeenCalled()
+  })
+
+  it('stays silent for a neutral story whose strength is high — importance is not direction', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service } = await harness({
+      withModel: true,
+      submitNotice,
+      output: () => ({ ...modelOutput(), polarity: 'neutral', strength: 3, symbols: [] }),
+      items: [item({ title: 'Exchange publishes its quarterly reserve attestation' })]
+    })
+
+    await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(submitNotice).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not ring a second time when the same item is judged again', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service, store } = await harness({ withModel: true, submitNotice })
+    await service.scoreItems({ itemIds: ['item-a'] })
+    expect(submitNotice).toHaveBeenCalledTimes(1)
+
+    // 第二次判定真的会发生（引擎从模型换成规则 ⇒ 旧判定「不是当前的」，同一条会被重新写一次）。
+    // 这条新闻已经有判定，就不是「刚到的新新闻」——不许再响第二声。
+    const rulesPass = await harness({ withModel: false, submitNotice, store, now: '2026-10-24T13:05:00.000Z' })
+    await rulesPass.service.scoreItems({ itemIds: ['item-a'] })
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:05:00.000Z')?.engine).toBe('rules')
+
+    expect(submitNotice).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays silent for 50 backfilled stories that arrive without an arrival set', async () => {
+    const submitNotice = vi.fn(accepted)
+    const many = Array.from({ length: 50 }, (_, index) =>
+      item({ itemId: `bulk-${index}`, title: `SEC approves ETF options ${index}`, publishedAt: `2026-10-24T${String(10 + (index % 10)).padStart(2, '0')}:00:00.000Z` })
+    )
+    const { service } = await harness({ withModel: true, submitNotice, items: many })
+
+    const result = await service.scoreItems({ limit: 50 })
+
+    expect(result.processed).toBe(50)
+    expect(submitNotice).not.toHaveBeenCalled()
+  })
+
+  it('stays silent for the source’s first collection, even with hundreds of new items', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service } = await harness({ withModel: true, submitNotice, items: [item({ itemId: 'item-a' }), item({ itemId: 'item-b', title: 'SEC approves another ETF' })] })
+
+    await service.scoreItems({ itemIds: ['item-a', 'item-b'], suppressArrivalNotices: true })
+
+    expect(submitNotice).not.toHaveBeenCalled()
+  })
+
+  it('stays silent when the pass is a rebuild of history', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service } = await harness({ withModel: true, submitNotice })
+
+    await service.scoreItems({ itemIds: ['item-a'], rebuild: true })
+
+    expect(submitNotice).not.toHaveBeenCalled()
   })
 })

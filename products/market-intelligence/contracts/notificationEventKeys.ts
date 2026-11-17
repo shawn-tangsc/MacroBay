@@ -39,6 +39,14 @@ export const OPEN_BRIEFING_ACTION_KEY = productNotificationActionKey('market-int
  */
 export const ACKNOWLEDGE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'acknowledge')
 
+/**
+ * 「打开舆情」：新抓到舆情那条通知的唯一动作。
+ *
+ * 这一版**只到舆情页、不定位到具体某条**（壳层的通知跳转今天只认产品页与设置分区，产品实体
+ * 定位能力还没落）。所以标签只能写「打开舆情」——写「查看这条」而点完不定位，就是撒谎。
+ */
+export const OPEN_SENTIMENT_ACTION_KEY = productNotificationActionKey('market-intelligence', 'open-sentiment')
+
 /** 分析失败通知的三个动作标签（只在「分析没跑成」那条上用）。 */
 export const ANALYSIS_RETRY_ACTION_KEY = productNotificationActionKey('market-intelligence', 'retry-analysis')
 export const ANALYSIS_TIMELINE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'view-timeline')
@@ -91,6 +99,11 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   /** 市场日历（0xRouter 那条腿）一次刷新没成功。手动与自动同一条，读者要的是「这次没刷成」。 */
   calendarRefreshFailed: 'market-intelligence.calendar.refresh-failed',
   sentimentAlert: 'market-intelligence.sentiment.alert',
+  /**
+   * 一条非低重要性的舆情刚入库（R40，用户 2026-11-18）：**只发桌面，不进中心、不进手机**。
+   * 手机那条仍由 `sentiment.alert`（阈值）负责，两条各自只干一件事。
+   */
+  newsItemArrived: 'market-intelligence.news.item-arrived',
   /** N12：信号唤起的那次分析出结论了（只在这一条路径发）。 */
   analysisConclusion: 'market-intelligence.analysis.conclusion',
   /**

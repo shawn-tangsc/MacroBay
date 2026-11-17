@@ -5,7 +5,7 @@ export const SIGNED_BY = '情报模块产品经理' as const
 /** 签署日期。 */
 export const SIGNED_AT = '2026-11-18' as const
 /** 对 `canonicalApprovalText({ formatVersion: 1, signedBy: SIGNED_BY, signedAt: SIGNED_AT, events })` 的 sha256（UTF-8 字节）。 */
-export const SIGNATURE = 'sha256:4d83e5d20593861a2d38fce4e56cdeaa757091ed31549deb0e49ec099b5bb189' as const
+export const SIGNATURE = 'sha256:a53909983c4ab8fa21e40789f2fbfbfddf3089e81f2dab876016669f98973e77' as const
 
 /**
  * 情报模块**签署过的批准值**（与「申请」分开的两份数据之一）。
@@ -61,6 +61,13 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
    * 桌面由另一条事件负责（`news.item-arrived`，只桌面），两条各自只干一件事。
    */
   'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['channel'], approvedBypassQuietHours: false },
+  /**
+   * 一条非低重要性的舆情刚入库（R40，用户 2026-11-18）。
+   *
+   * **只批桌面**：不进中心、不进手机、不穿免打扰。桌面会打断人，读者设了免打扰就是不想被打断，
+   * 这条最该尊重；手机上那条由 `sentiment.alert` 负责，两条各只说一件事。
+   */
+  'market-intelligence.news.item-arrived': { approvedDisruptionLevels: ['desktop'], approvedBypassQuietHours: false },
   'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
   /**
    * 分析没跑成（2026-11-18 产品经理签署）。

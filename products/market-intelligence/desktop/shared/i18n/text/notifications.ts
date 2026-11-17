@@ -2,6 +2,7 @@ import type { NotificationCopyTableSet } from '@platform/notifications/contracts
 
 import { indicatorNames } from '../../../../contracts/indicatorNames'
 import { macroEventNotificationSentences } from '../../../../contracts/macroEventNotificationSentences'
+import { newsArrivalTemplates } from '../../../../contracts/newsArrivalSentences'
 import { sentimentAlertTemplates } from '../../../../contracts/sentimentAlertSentences'
 import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
@@ -11,6 +12,7 @@ import {
   ANALYSIS_TIMELINE_ACTION_KEY,
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
   OPEN_BRIEFING_ACTION_KEY,
+  OPEN_SENTIMENT_ACTION_KEY,
   notificationEventBodyKey,
   notificationEventNamedKey,
   notificationEventHeadlineKey,
@@ -33,8 +35,18 @@ export type MarketIntelligenceNotificationCopy = NotificationCopyTableSet
 const TITLE = notificationEventTitleKey
 
 /** 两种语言各一个别名：表里每一行都短，读起来像一句话而不是一条寻址。 */
-const zh = { signal: signalNotificationSentences['zh-CN'], macro: macroEventNotificationSentences['zh-CN'], alert: sentimentAlertTemplates['zh-CN'] }
-const en = { signal: signalNotificationSentences['en-US'], macro: macroEventNotificationSentences['en-US'], alert: sentimentAlertTemplates['en-US'] }
+const zh = {
+  signal: signalNotificationSentences['zh-CN'],
+  macro: macroEventNotificationSentences['zh-CN'],
+  alert: sentimentAlertTemplates['zh-CN'],
+  arrival: newsArrivalTemplates['zh-CN']
+}
+const en = {
+  signal: signalNotificationSentences['en-US'],
+  macro: macroEventNotificationSentences['en-US'],
+  alert: sentimentAlertTemplates['en-US'],
+  arrival: newsArrivalTemplates['en-US']
+}
 const BODY = notificationEventBodyKey
 const REASON = notificationEventReasonKey
 
@@ -43,6 +55,8 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.briefingFailed)]: '日报没生成出来',
     // 产品动作的标签（v2.58）：与正文同一条解析链路。句子与搬家前逐字相同。
     [OPEN_BRIEFING_ACTION_KEY]: '打开日报',
+    // R40：这一版**只到舆情页、不定位到某一条**，所以只能写「打开舆情」——写「查看这条」就是撒谎。
+    [OPEN_SENTIMENT_ACTION_KEY]: '打开舆情',
     [ACKNOWLEDGE_ACTION_KEY]: '知道了',
     [ANALYSIS_RETRY_ACTION_KEY]: '重试',
     [ANALYSIS_TIMELINE_ACTION_KEY]: '查看时间轴',
@@ -149,6 +163,11 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.analysisFailed, 'connection')]: '这次没有连上模型服务，所以没有得出解读。检查模型配置或网络后可以重试。',
     [BODY(IDS.analysisFailed)]: '这次分析没有完成，时间轴里能看到失败与重试。',
     [REASON(IDS.analysisFailed)]: '分析失败了，而你在等它的结果。',
+    // R40：非低重要性舆情进桌面。正文与标题由源头拼成品（来源 · 标题 / 偏向 · 时间），
+    // 这张表是给「没有成品句」的读取路径与历史记录用的回退句。
+    [TITLE(IDS.newsItemArrived)]: zh.arrival.title,
+    [BODY(IDS.newsItemArrived)]: zh.arrival.body,
+    [REASON(IDS.newsItemArrived)]: zh.arrival.reason,
     // 分析额度那条正文里的线名：句子属于产品自己的分析线，平台文案表里不再寄存（v2.59）。
     'notification.analysis-line.market-intelligence.event': '行情变动分析',
     'notification.analysis-line.market-intelligence.calendar': '日历事件分析',
@@ -160,6 +179,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
   'en-US': Object.freeze({
     [TITLE(IDS.briefingFailed)]: 'The daily briefing did not generate',
     [OPEN_BRIEFING_ACTION_KEY]: 'Open briefing',
+    [OPEN_SENTIMENT_ACTION_KEY]: 'Open news',
     [ACKNOWLEDGE_ACTION_KEY]: 'Got it',
     [ANALYSIS_RETRY_ACTION_KEY]: 'Retry',
     [ANALYSIS_TIMELINE_ACTION_KEY]: 'View timeline',
@@ -252,6 +272,11 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.analysisFailed, 'connection')]: 'The model service could not be reached, so no reading was produced. Check the model settings or your network, then try again.',
     [BODY(IDS.analysisFailed)]: 'This analysis did not finish; the timeline shows the failure and the retry.',
     [REASON(IDS.analysisFailed)]: 'An analysis failed while you were waiting for it.',
+    // R40: a non-low-importance story reaches the desktop. Title and body are built at the source;
+    // these are the fallback sentences used when a record is read without rendered copy.
+    [TITLE(IDS.newsItemArrived)]: en.arrival.title,
+    [BODY(IDS.newsItemArrived)]: en.arrival.body,
+    [REASON(IDS.newsItemArrived)]: en.arrival.reason,
     // Line names used inside the analysis-quota sentence: they belong to this product's analysis lines,
     // so the platform copy table no longer carries them (v2.59).
     'notification.analysis-line.market-intelligence.event': 'market-move analysis',

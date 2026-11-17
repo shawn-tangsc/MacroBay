@@ -77,6 +77,9 @@ export function registerIntelligenceJobs(
       await deps.openInterest?.refresh({ log: context.log })
       return
     }
+    // 这个源在这次采集**之前**库里有没有条目：没有就是「建档」那一轮（一次几百条也不该响一遍）。
+    // 条目是 normalize 才建的，所以此刻读到的还是上一轮的结果。
+    const sourceHadItems = deps.pipeline.listItems().some((item) => item.sourceId === input.sourceId)
     const result = await pipeline.collectSource({
       sourceId: input.sourceId,
       runId: input.runId ?? context.jobRunId
@@ -105,16 +108,18 @@ export function registerIntelligenceJobs(
       ...(reasonCode === undefined ? {} : { reasonCode })
     })
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
-      sourceId: input.sourceId
+      sourceId: input.sourceId,
+      ...(sourceHadItems ? {} : { firstCollection: true })
     })
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB, async (payload, context) => {
-    const input = payload as { sourceId?: string; limit?: number; newItemIds?: string[] }
+    const input = payload as { sourceId?: string; limit?: number; newItemIds?: string[]; firstCollection?: boolean }
     const result = await pipeline.normalizeRawRecords(input)
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
       sourceId: input.sourceId,
-      newItemIds: result.newItemIds
+      newItemIds: result.newItemIds,
+      ...(input.firstCollection ? { firstCollection: true } : {})
     })
     await context.log({ level: 'info', message: 'Normalized pending raw records.' })
   })
@@ -141,7 +146,7 @@ export function registerIntelligenceJobs(
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, async (payload, context) => {
-    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number }
+    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number; firstCollection?: boolean }
     if (!deps.newsSentiment) {
       await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
       return
@@ -155,18 +160,24 @@ export function registerIntelligenceJobs(
       await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], { rebuild: true })
     } else if (input.itemIds?.length) {
       await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {
-        newItemIds: input.itemIds
+        newItemIds: input.itemIds,
+        ...(input.firstCollection ? { firstCollection: true } : {})
       })
     }
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB, async (payload, context) => {
-    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number }
+    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number; firstCollection?: boolean }
     if (!deps.newsSentiment) {
       await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
       return
     }
-    const result = await deps.newsSentiment.scoreItems(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds, limit: input.limit })
+    const result = await deps.newsSentiment.scoreItems({
+      ...(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds, limit: input.limit }),
+      ...(input.rebuild ? { rebuild: true } : {}),
+      // 建档那一轮整轮不发（`firstCollection` 由采集侧按「这个源之前库内 0 条」给出）。
+      ...(input.firstCollection ? { suppressArrivalNotices: true } : {})
+    })
     await context.log({
       level: 'info',
       message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, skipped ${result.skipped}.`
