@@ -552,13 +552,38 @@ describe('one desktop notice per non-low story that just arrived (R40)', () => {
     expect(submitNotice).not.toHaveBeenCalled()
   })
 
-  it('stays silent for the source’s first collection, even with hundreds of new items', async () => {
+  it('stays silent for the source’s first collection, even with 200 new items', async () => {
+    // PRD §5 的原句判据：新源（库内 0 条）首采 200 条 → 0 条。建档不是「来了 200 条新闻」。
     const submitNotice = vi.fn(accepted)
-    const { service } = await harness({ withModel: true, submitNotice, items: [item({ itemId: 'item-a' }), item({ itemId: 'item-b', title: 'SEC approves another ETF' })] })
+    const many = Array.from({ length: 200 }, (_, index) =>
+      item({ itemId: `first-${index}`, title: `SEC approves ETF options ${index}`, publishedAt: `2026-10-24T${String(10 + (index % 10)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}:00.000Z` })
+    )
+    const { service } = await harness({ withModel: true, submitNotice, items: many })
 
-    await service.scoreItems({ itemIds: ['item-a', 'item-b'], suppressArrivalNotices: true })
+    const result = await service.scoreItems({ itemIds: many.map((entry) => (entry as { itemId: string }).itemId), suppressArrivalNotices: true })
 
+    // 一轮的评分上限是 20 条（重启后的那几轮会把剩下的补完）；**无论判了多少条，建档这一轮 0 通知**。
+    expect(result.processed).toBe(20)
     expect(submitNotice).not.toHaveBeenCalled()
+  })
+
+  it('sends one notice per item — five non-low items in one round make five notices', async () => {
+    // PRD §4：每条一弹、不合并。合并成「本轮 N 条」会让点开失去意义。
+    const submitNotice = vi.fn(accepted)
+    const five = Array.from({ length: 5 }, (_, index) =>
+      item({ itemId: `round-${index}`, title: `SEC approves ETF options ${index}`, publishedAt: `2026-10-24T12:0${index}:00.000Z` })
+    )
+    const { service } = await harness({ withModel: true, submitNotice, items: five })
+
+    await service.scoreItems({ itemIds: five.map((entry) => (entry as { itemId: string }).itemId) })
+
+    expect(submitNotice).toHaveBeenCalledTimes(5)
+    // 每条各一个去重键（按 itemId），所以平台那边不会把它们并成一条。
+    const dedupeIds = submitNotice.mock.calls.map((call) => {
+      const request = call[0] as NotificationSubmitRequest
+      return request.dedupeVars.builder === 'template' ? request.dedupeVars.vars.itemId : undefined
+    })
+    expect(new Set(dedupeIds).size).toBe(5)
   })
 
   it('stays silent when the pass is a rebuild of history', async () => {
