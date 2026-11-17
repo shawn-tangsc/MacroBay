@@ -38,8 +38,6 @@ export type AnalysisPromptExtras = Readonly<{
   systemRules?: readonly string[]
   /** 替换「本次运行由 change 段触发」那句：触发型运行要说明 change 不是原因。 */
   changeRule?: string
-  /** 把 `conclusion.newsImpact` 放进字段结构示例。 */
-  includeNewsImpact?: boolean
   /** 用户消息里的 trigger 段；句柄由这里统一映射。 */
   trigger?: AnalysisPromptTrigger
 }>
@@ -60,7 +58,7 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     // `analysisSharedRules`. A rule that is true of only one path does not belong there.
     renderSharedRulesBlock(),
     '字段结构如下（字符串说明是类型说明，不能原样复制）：',
-    JSON.stringify(analysisPromptSchemaExample({ includeNewsImpact: extras.includeNewsImpact === true })),
+    JSON.stringify(analysisPromptSchemaExample()),
     `每个字符串不超过 ${marketAnalysisValidationPolicy.maximumFieldCharacters} 字符；每个数组不超过 ${marketAnalysisValidationPolicy.maximumCollectionItems} 项。`,
     '没有证据支持的列表必须为 []；每条事实必须使用它自己的 evidenceRefId，禁止用其他事件的证据支持当前行情。',
     '引用必须逐字一致：knownFacts 的每条 evidenceRefIds 只能写该事实自己那一个 evidenceRef 句柄，不得追加第二项；marketReaction 的每条 evidenceRefIds 必须恰好是被引用 factIds 各自事实的 evidenceRef 句柄集合。校验器要求两边完全相等，多写一个也会被整份拒绝。',

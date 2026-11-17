@@ -60,3 +60,20 @@ it('自动链路级：连续 3 次失败，或最近一次成功后 2 小时零�
   const oldSuccess = { status: 'succeeded', completedAt: new Date(Date.parse(at) - 121 * 60_000).toISOString(), queuedAt: at }
   expect(shouldReportAutomaticFailure({ occurredAt: at, history: [failed(1), oldSuccess] })).toBe(true)
 })
+
+it('④ 新闻解读：正文说清是新闻，动作只有重试，不给不存在的「查看时间轴」', () => {
+  const news = buildAnalysisFailureRequest({ ...base, kind: 'manual', analysisKind: 'news', triggerKey: 'news.manual' })
+  expect(news.rendered!['zh-CN']!.title).toContain('新闻解读')
+  expect(news.rendered!['zh-CN']!.body).toContain('新闻解读')
+  expect(news.rendered!['zh-CN']!.body).not.toContain('时间轴')
+  const labelKeys = news.actions.map(action => action.labelRef && 'key' in action.labelRef ? action.labelRef.key : null)
+  // 新闻解读不写时间轴：只有「重试」，没有那条会指向市场时间轴的入口。
+  expect(labelKeys).toEqual([ANALYSIS_RETRY_ACTION_KEY])
+  // 连接类仍是「检查模型连接」，不给重试。
+  const connection = buildAnalysisFailureRequest({
+    ...base, kind: 'manual', analysisKind: 'news', triggerKey: 'news.manual',
+    failureCode: 'analysis-provider-error', failureDetailCode: 'connect-failed'
+  })
+  expect(connection.actions.map(action => action.labelRef && 'key' in action.labelRef ? action.labelRef.key : null)).toEqual([ANALYSIS_CHECK_MODEL_ACTION_KEY])
+  expect(connection.rendered!['zh-CN']!.body).toContain('检查模型配置或网络后可以重试')
+})

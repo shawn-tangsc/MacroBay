@@ -77,3 +77,12 @@ describe('manual analysis failure notice', () => {
     await expect(notifyManualAnalysisFailure(undefined, failedRun)).resolves.toBeUndefined()
   })
 })
+
+it('says a news reading failed, not a market analysis', () => {
+  const request = buildManualAnalysisFailureRequest({ ...failedRun, analysisKind: 'news' })
+  // 平台模板是「你刚才点的那次分析没成：{reason}」；新闻线把类别放进 reason，正文才分得清。
+  expect(request?.rendered?.['zh-CN']?.body).toContain('这是新闻解读')
+  expect(request?.rendered?.['en-US']?.body).toContain('this was a news reading')
+  // 市场线的正文不变。
+  expect(buildManualAnalysisFailureRequest(failedRun)?.rendered?.['zh-CN']?.body).not.toContain('这是新闻解读')
+})

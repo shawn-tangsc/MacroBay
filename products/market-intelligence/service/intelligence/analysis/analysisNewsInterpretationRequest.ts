@@ -76,7 +76,9 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     const outcome = await deps.enqueue({
       analysisKind: 'news',
       eventGroupId: group.id,
-      triggerKey: existing ? 'manual.refresh' : 'manual.initial',
+      // 按条解读只有这一个触发键（R39 §6）：它进 gate-exempt（手动路径），不占自动额度；
+      // 首跑/重跑的区别由 phase 表达，不再借用 manual.* 的键。
+      triggerKey: 'news.manual',
       analysisPhase: existing ? 'correction' : 'initial',
       asOf: deps.now(), triggeredItemId: itemId
     })

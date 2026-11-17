@@ -16,15 +16,9 @@ import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
 import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
 import { analysisUpstreamRetryPolicy, decideUpstreamRetry, waitForRetry } from './analysisUpstreamRetry'
-import {
-  formatUnsafeOutputRedaction,
-  validateAnalysisModelOutput,
-  type AnalysisOutputValidationResult,
-  type FrozenAnalysisEvidence,
-  type ValidatedAnalysisModelOutput
-} from './analysisOutputValidator'
+import { formatUnsafeOutputRedaction } from './analysisOutputValidator'
 import type { AnalysisSessionInput } from './analysisModelPrompt'
-import { lineFor } from './analysisLineRegistry'
+import { lineFor, type AnalysisLineContext, type AnalysisLineValidationResult } from './analysisLineRegistry'
 import { sessionBriefForTriggerKey } from './analysisSessionContext'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
 import type { SignificanceSignal } from './significanceChangeMatcher'
@@ -170,9 +164,13 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // 全仓唯一的选择点：按 run 行上的类别取线，不按触发键猜。`run.analysisKind` 从库里读，
     // 恢复、重放、别的入口都绕不过去。
     const line = lineFor(runRecord.analysisKind)
-    let messages = line.buildMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
+    const lineContext: AnalysisLineContext = {
+      timeZone: deps.timeZone(),
+      ...(proseLanguage === undefined ? {} : { proseLanguage })
+    }
+    let messages = line.buildMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, lineContext)
     let invocation: InvocationResult | undefined
-    let validated: AnalysisOutputValidationResult | undefined
+    let validated: AnalysisLineValidationResult | undefined
     // One immediate repair attempt, inside the same run and against the same frozen snapshot.
     // A model that answers outside the contract once is not a failed analysis: the previous
     // product required the reader to press "Analyze now" again (which is exactly what they did,
@@ -266,7 +264,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
       }
-      validated = line.validate(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
+      validated = line.validate(JSON.stringify(invocation.output), frozenEvidence, triggerFocus, lineContext)
       if (validated.ok) break
       if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !line.repairableRejections.has(validated.errorCode)) break
       nextCallKind = 'repair'
@@ -340,7 +338,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // here; automatic failures are throttled by their own levels and must not wake the reader.
     const run = deps.repository.getRun(id)
     if (run && isGateExempt(run.triggerKey)) {
-      await deps.notifyManualFailure?.({ runId: id, failureCode: errorCode, failureDetailCode, occurredAt: completedAt })
+      await deps.notifyManualFailure?.({ runId: id, analysisKind: run.analysisKind, failureCode: errorCode, failureDetailCode, occurredAt: completedAt })
     } else if (run) {
       await announceRunOutcome(run.triggerKey)
     }

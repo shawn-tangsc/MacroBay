@@ -6,6 +6,7 @@ import type {
   AnalysisRun, EvidenceSnapshot, EventGroup
 } from '../../../contracts/marketAnalysisContracts'
 import type { ValidatedAnalysisModelOutput } from './analysisOutputValidator'
+import type { NewsInterpretationBody } from '../../../contracts/newsInterpretationContracts'
 import { buildAnalysisSnapshotHash } from './analysisHash'
 import { createAnalysisRunService } from './analysisRunService'
 import { lineFor } from './analysisLineRegistry'
@@ -68,6 +69,26 @@ const output: ValidatedAnalysisModelOutput = {
   nextCatalysts: [], dataCaveats: [], evidenceRefs: ['ev-A']
 }
 
+const newsBody: NewsInterpretationBody = {
+  analysisKind: 'news', schemaVersion: 1,
+  what: {
+    evidenceRefId: 'ev-A', actor: '据报道，', action: '某公司宣布裁员。',
+    whyRelated: '这会压低风险偏好，对 BTC 偏空。', stance: 'bearish'
+  },
+  reading: {
+    checks: [
+      { evidenceRefId: 'ev-A', effect: 'supports', statement: 'ETF 净流出，截至 2026-09-25 16:30 GMT+8。' },
+      { evidenceRefId: 'ev-A', effect: 'supports', statement: '资金面同样偏弱，截至 2026-09-25 16:30 GMT+8。' }
+    ],
+    contradiction: false, verdict: 'supports'
+  },
+  outlook: {
+    direction: 'bearish', mechanism: '短期偏空。新闻压低风险偏好，若资金流转正则这个判断作废。',
+    watchFor: [{ refKind: 'fact', ref: 'fact-A' }], invalidation: { refKind: 'fact', factId: 'fact-A' }
+  },
+  gaps: []
+}
+
 function claimedRun(
   repository: ReturnType<typeof createMarketAnalysisRepository>,
   analysisKind: 'market' | 'news',
@@ -85,7 +106,7 @@ function claimedRun(
 
 it('keeps the trigger contract out of the market line and in the news line', () => {
   const triggered = snapshot(true)
-  const market = lineFor('market').buildMessages(triggered, [], undefined, 'zh-CN')
+  const market = lineFor('market').buildMessages(triggered, [], undefined, { timeZone: 'UTC', proseLanguage: 'zh-CN' })
   const marketSystem = market.find(message => message.role === 'system')!.content
   const marketUser = JSON.parse(market.find(message => message.role === 'user')!.content) as Record<string, unknown>
   // 断在产出上：市场线即使拿到带 trigger 的快照，也没有触发段、没有 trigger 注入。
@@ -95,12 +116,14 @@ it('keeps the trigger contract out of the market line and in the news line', () 
   expect(marketSystem).not.toContain('来源归属要自然')
   expect(marketUser.trigger).toBeUndefined()
 
-  const news = lineFor('news').buildMessages(triggered, [], undefined, 'zh-CN')
+  const news = lineFor('news').buildMessages(triggered, [], undefined, { timeZone: 'UTC', proseLanguage: 'zh-CN' })
   const newsSystem = news.find(message => message.role === 'system')!.content
   const newsUser = JSON.parse(news.find(message => message.role === 'user')!.content) as Record<string, unknown>
-  expect(newsSystem).toContain('本次运行由**一条新闻**触发')
-  expect(newsSystem).toContain('整篇按**三段**写')
-  expect(newsUser.trigger).toMatchObject({ subject: 'BTC' })
+  // 新闻线走自己的契约：三段由 what/reading/outlook 承载，触发新闻单独作为 news 段给出。
+  expect(newsSystem).toContain('三段各管一件事，顺序由字段承载')
+  expect(newsSystem).toContain('每条 check 的 `statement` 必须逐字包含该事实的 `observedAtText`')
+  expect(newsUser.news).toMatchObject({ subject: 'BTC' })
+  expect(newsUser.marketFactRefs).toBeInstanceOf(Array)
 })
 
 it('writes the line’s own prompt and skill versions onto the run row', () => {
@@ -111,7 +134,7 @@ it('writes the line’s own prompt and skill versions onto the run row', () => {
     const market = claimedRun(repository, 'market', 'mi-ar-market').id
     const news = claimedRun(repository, 'news', 'mi-ar-news').id
     expect(repository.getRun(market)).toMatchObject({ analysisKind: 'market', promptVersion: 'market-analysis-v2', skillVersion: 'market-analysis-v1' })
-    expect(repository.getRun(news)).toMatchObject({ analysisKind: 'news', promptVersion: 'news-analysis-v1', skillVersion: 'news-analysis-v1' })
+    expect(repository.getRun(news)).toMatchObject({ analysisKind: 'news', promptVersion: 'news-analysis-v2', skillVersion: 'news-analysis-v1' })
   } finally {
     repository.close()
   }
@@ -125,8 +148,8 @@ it('keeps the news line’s record out of the market surfaces', async () => {
     const run = claimedRun(repository, 'news')
     const appendRunSummary = vi.fn(async () => undefined)
     const notifyAnalysisConclusion = vi.fn(async () => undefined)
-    await lineFor('news').persist(run, output, {
-      repository, snapshot: snapshot(), now: later, idFactory: () => 'mi-as-1',
+    await lineFor('news').persist(run, newsBody, {
+      repository, snapshot: snapshot(true), now: later, idFactory: () => 'mi-as-1',
       appendRunSummary, notifyAnalysisConclusion
     })
 
@@ -142,8 +165,8 @@ it('keeps the news line’s record out of the market surfaces', async () => {
 
     // 同一条新闻的第二次解读：版本按行递增，不撞 (event_group_id, version) 唯一键。
     const second = claimedRun(repository, 'news', 'mi-ar-news-2', 'correction')
-    await lineFor('news').persist(second, output, {
-      repository, snapshot: snapshot(), now: later, idFactory: () => 'mi-as-2',
+    await lineFor('news').persist(second, newsBody, {
+      repository, snapshot: snapshot(true), now: later, idFactory: () => 'mi-as-2',
       appendRunSummary, notifyAnalysisConclusion
     })
     expect(repository.getSummaryForRun(second.id)?.version).toBe(2)

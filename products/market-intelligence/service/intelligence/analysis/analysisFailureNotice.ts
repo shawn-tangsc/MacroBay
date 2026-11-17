@@ -5,6 +5,7 @@ import {
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS
 } from '../../../contracts/notificationEventKeys'
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
+import type { AnalysisKind } from '../../../contracts/analysisKinds'
 
 /**
  * 分析没跑成时发一条应用内通知（用户 2026-11-17「失败了，怎么不报应用内通知出来」）。
@@ -23,6 +24,8 @@ import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 export type AnalysisFailureNoticeInput = Readonly<{
   /** `manual` = 读者点名要的那次（含按条解读）；其余都算自动。 */
   kind: 'manual' | 'automatic'
+  /** 哪条线的运行：通知正文要能看出被解读的是一条新闻还是一次市场分析（R39 §7）。 */
+  analysisKind?: AnalysisKind
   runId: string
   eventGroupId: string
   triggerKey: string
@@ -38,9 +41,9 @@ export function classifyAnalysisFailure(input: Pick<AnalysisFailureNoticeInput, 
   return input.failureDetailCode === 'connect-failed' || input.failureCode === 'analysis-provider-error' ? 'connection' : 'other'
 }
 
-/** 手动 = 读者按下的那条路径（`manual.*`，按条解读也在其中）。 */
+/** 手动 = 读者按下的那条路径（`manual.*` 与按条解读的 `news.manual`）。 */
 export function isManualTriggerKey(triggerKey: string): boolean {
-  return triggerKey.startsWith('manual.')
+  return triggerKey === 'news.manual' || triggerKey.startsWith('manual.')
 }
 
 export const analysisFailureNoticePolicy = Object.freeze({
@@ -90,7 +93,24 @@ export function buildAnalysisFailureRequest(input: AnalysisFailureNoticeInput): 
   const failureClass = classifyAnalysisFailure(input)
   // 成品句子在源头拼（与 `taskFailureNotifier` 同一姿态）：产品事件的文案不在平台表里，
   // 提交时把两种语言一次备好，读取端按读者当前语言挑——成品句和「存键」两种形状，平台都收。
-  const rendered = {
+  // 正文按 kind 说清是哪一类（R39 §7）：一条新闻的解读失败，不能说成「时间轴里能看到」。
+  const news = input.analysisKind === 'news'
+  const rendered = news ? {
+    'zh-CN': {
+      title: '新闻解读没能生成',
+      body: failureClass === 'connection'
+        ? '这次没有连上模型服务，所以没有得出这条新闻的解读。检查模型配置或网络后可以重试。'
+        : '这次新闻解读没有完成，可以在新闻抽屉里重试。',
+      reason: '新闻解读失败了，而你在等它的结果。'
+    },
+    'en-US': {
+      title: 'News reading did not run',
+      body: failureClass === 'connection'
+        ? 'The model service could not be reached, so no reading of this news item was produced. Check the model settings or your network, then try again.'
+        : 'This news reading did not finish; you can retry from the news drawer.',
+      reason: 'A news reading failed while you were waiting for it.'
+    }
+  } as const : {
     'zh-CN': {
       title: '分析没能生成',
       body: failureClass === 'connection'
@@ -115,7 +135,13 @@ export function buildAnalysisFailureRequest(input: AnalysisFailureNoticeInput): 
       id: 'check-model', kind: 'open', deeplink: checkModelDeeplink,
       labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_CHECK_MODEL_ACTION_KEY }
     }]
-    : input.kind === 'manual'
+    : news
+      // 新闻解读不进时间轴：动作只有「重试」，不给「查看时间轴」——那条 deeplink 里没有这条解读。
+      ? (input.kind === 'manual' ? [{
+        id: 'retry-analysis', kind: 'custom',
+        labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_RETRY_ACTION_KEY }
+      }] : [])
+      : input.kind === 'manual'
       ? [{
         id: 'retry-analysis', kind: 'custom',
         labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_RETRY_ACTION_KEY }

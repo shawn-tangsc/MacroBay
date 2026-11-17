@@ -1,11 +1,9 @@
-import type { AppLanguage } from '@platform/settings/schema/appSettings'
-
 import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalysisContracts'
 import { analysisConclusionPushEligible } from './analysisConclusionPush'
 import type { AnalysisLine } from './analysisLineRegistry'
-import { buildAnalysisMessages, type AnalysisSessionInput } from './analysisModelPrompt'
+import { buildAnalysisMessages } from './analysisModelPrompt'
 import { repairableRejection } from './analysisModelRepair'
-import { validateAnalysisModelOutput } from './analysisOutputValidator'
+import { validateAnalysisModelOutput, type ValidatedAnalysisModelOutput } from './analysisOutputValidator'
 import { buildAnalysisSummary, buildPredictionRecords, buildPublishedTimeline } from './analysisRecordBuilders'
 
 /**
@@ -22,23 +20,24 @@ export const marketAnalysisLine: AnalysisLine = Object.freeze({
   skillVersion: 'market-analysis-v1',
   outputSchemaVersion: MARKET_ANALYSIS_CONTRACT_POLICY.outputSchemaVersion,
 
-  buildMessages(snapshot, significanceSignals, session, proseLanguage) {
-    return buildAnalysisMessages(snapshot, significanceSignals, session, proseLanguage)
+  buildMessages(snapshot, significanceSignals, session, context) {
+    return buildAnalysisMessages(snapshot, significanceSignals, session, context.proseLanguage)
   },
 
   validate(raw, evidence, focus) {
-    // 市场线关掉新闻触发型必答块（R39）：它不读触发指针，不该被「没回答那条新闻」拒收。
-    return validateAnalysisModelOutput(raw, evidence, focus, { newsTriggerRules: false })
+    return validateAnalysisModelOutput(raw, evidence, focus)
   },
 
   repairableRejections: repairableRejection,
 
   async persist(run, output, deps) {
+    // 线自己的校验器产出的值：这里把类型收回来，别的线看不到它。
+    const validated = output as ValidatedAnalysisModelOutput
     const group = deps.repository.getEventGroup?.(run.eventGroupId)
     if (!group) throw new Error('analysis-event-group-not-found')
     const currentVersion = group.currentSummaryId ? deps.repository.getSummary?.(group.currentSummaryId)?.version ?? 0 : 0
-    const summary = buildAnalysisSummary(run, output, currentVersion + 1, deps.now, deps.idFactory, deps.proseLanguage)
-    const predictions = buildPredictionRecords(summary, output, deps.now, deps.idFactory)
+    const summary = buildAnalysisSummary(run, validated, currentVersion + 1, deps.now, deps.idFactory, deps.proseLanguage)
+    const predictions = buildPredictionRecords(summary, validated, deps.now, deps.idFactory)
     const timeline = buildPublishedTimeline(run, summary, deps.idFactory)
     deps.repository.commitSuccessfulAnalysis({ runId: run.id, summary, predictions, timeline })
     // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。失败不阻断发布，
@@ -54,8 +53,8 @@ export const marketAnalysisLine: AnalysisLine = Object.freeze({
       try {
         const trigger = deps.readTriggerSignal?.(run.triggerKey) ?? {}
         const citedFactIds = Object.freeze([...new Set([
-          ...output.knownFacts.map((claim) => claim.factId),
-          ...output.marketReaction.flatMap((claim) => claim.factIds)
+          ...validated.knownFacts.map((claim) => claim.factId),
+          ...validated.marketReaction.flatMap((claim) => claim.factIds)
         ])])
         await deps.notifyAnalysisConclusion({
           runId: run.id,
@@ -63,12 +62,12 @@ export const marketAnalysisLine: AnalysisLine = Object.freeze({
           // 桶 = 原因码 + 事件：不同事件各算一次，同一条事件重复触发仍是一个桶。
           bucket: `${triggerReasonCode ?? 'signal'}:${run.eventGroupId}`,
           cutoff: deps.snapshot.asOf,
-          summary: output.conclusion.summary,
-          conclusionDirection: output.conclusion.direction,
+          summary: validated.conclusion.summary,
+          conclusionDirection: validated.conclusion.direction,
           citedFactIds,
           ...(trigger.direction === undefined ? {} : { triggerDirection: trigger.direction }),
           ...(trigger.factIds === undefined ? {} : { triggerFactIds: trigger.factIds }),
-          citedCount: output.evidenceRefs.length,
+          citedCount: validated.evidenceRefs.length,
           occurredAt: deps.now
         })
       } catch {

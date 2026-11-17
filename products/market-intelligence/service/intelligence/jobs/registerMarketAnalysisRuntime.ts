@@ -613,7 +613,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       const manual = isManualTriggerKey(settled.triggerKey)
       if (manual || shouldReportAutomaticFailure({ occurredAt: settled.completedAt ?? now(), history })) {
         await notifyAnalysisFailure(input.submitNotification, {
-          kind: manual ? 'manual' : 'automatic',
+          kind: manual ? 'manual' : 'automatic', analysisKind: settled.analysisKind,
           runId: settled.id, eventGroupId: settled.eventGroupId, triggerKey: settled.triggerKey,
           failureCode, failureDetailCode: settled.failureDetailCode ?? null,
           occurredAt: settled.completedAt ?? now()

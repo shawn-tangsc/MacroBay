@@ -119,43 +119,8 @@ export function resolveAnalysisReferences<T>(output: T, map: AnalysisReferenceMa
           : scenario
       })
     } : {}),
-    // 「按条解读」那四问也在按句柄引用事实：checks[].factId、no-transmission 的 checkedFactIds、
-    // 失效条件里的 factId。漏掉这一支，模型写的是合法句柄、校验拿到的却还是句柄，整篇会被判成
-    // `check-fact-not-in-snapshot`——说得像「引用了快照里没有的读数」，其实是解析没走到这里。
-    ...(record.conclusion && typeof record.conclusion === 'object'
-      ? { conclusion: rewriteConclusionReferences(record.conclusion as Record<string, unknown>, resolveFact) }
-      : {}),
     ...(Array.isArray(record.evidenceRefs) ? { evidenceRefs: record.evidenceRefs.map(entry => typeof entry === 'string' ? resolveEvidence(entry) : entry) } : {})
   } as T
-}
-
-/** `conclusion.newsImpact` 三种分支里所有按事实引用的字段。 */
-function rewriteConclusionReferences(
-  conclusion: Record<string, unknown>,
-  resolveFact: (value: string) => string
-): Record<string, unknown> {
-  const impact = conclusion.newsImpact
-  if (!impact || typeof impact !== 'object' || Array.isArray(impact)) return conclusion
-  const entry = impact as Record<string, unknown>
-  const checks = Array.isArray(entry.checks)
-    ? entry.checks.map(check => {
-      if (!check || typeof check !== 'object') return check
-      const claim = check as Record<string, unknown>
-      return typeof claim.factId === 'string' ? { ...claim, factId: resolveFact(claim.factId) } : check
-    })
-    : entry.checks
-  const checkedFactIds = Array.isArray(entry.checkedFactIds)
-    ? entry.checkedFactIds.map(id => typeof id === 'string' ? resolveFact(id) : id)
-    : entry.checkedFactIds
-  const invalidation = entry.invalidation && typeof entry.invalidation === 'object' && !Array.isArray(entry.invalidation)
-    ? rewriteInvalidation(entry.invalidation as Record<string, unknown>, resolveFact)
-    : entry.invalidation
-  return { ...conclusion, newsImpact: { ...entry, ...(checks !== undefined ? { checks } : {}), ...(checkedFactIds !== undefined ? { checkedFactIds } : {}), ...(invalidation !== undefined ? { invalidation } : {}) } }
-}
-
-function rewriteInvalidation(invalidation: Record<string, unknown>, resolveFact: (value: string) => string): Record<string, unknown> {
-  if (invalidation.kind !== 'fact' || typeof invalidation.factId !== 'string') return invalidation
-  return { ...invalidation, factId: resolveFact(invalidation.factId) }
 }
 
 function resolveReference(value: string, byHandle: ReadonlyMap<string, string>, knownIds: ReadonlySet<string>): string {

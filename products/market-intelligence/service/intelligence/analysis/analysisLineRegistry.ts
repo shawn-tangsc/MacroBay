@@ -1,12 +1,11 @@
 import type { StructuredModelMessage } from '@platform/ai/invocation/structuredModelInvocationTypes'
-import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
 import type { AnalysisKind } from '../../../contracts/analysisKinds'
 import type {
   AnalysisRun, AnalysisSummary, EvidenceSnapshot, Prediction, TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import type { AnalysisSessionInput } from './analysisModelPrompt'
-import type { AnalysisOutputValidationResult, FrozenAnalysisEvidence, ValidatedAnalysisModelOutput } from './analysisOutputValidator'
+import type { AnalysisOutputRedaction, FrozenAnalysisEvidence } from './analysisOutputValidator'
 import type { TriggerFocus } from './analysisTriggerFocus'
 import type { SignificanceSignal } from './significanceChangeMatcher'
 import type { AnalysisConclusionNotice } from './analysisConclusionNotifier'
@@ -50,6 +49,22 @@ export type AnalysisLinePersistDeps = Readonly<{
   readTriggerSignal?: (triggerKey: string) => Readonly<{ direction?: 'bullish' | 'bearish'; factIds?: readonly string[] }>
 }>
 
+/**
+ * 一次运行在提示词与校验时读得到的环境。
+ *
+ * `timeZone` 是读者设置时区：新闻线的 `observedAtText` 要用它与界面同一个格式化函数算出来，
+ * 校验再拿同一个串比对。市场线不看它。
+ */
+export type AnalysisLineContext = Readonly<{
+  timeZone: string
+  proseLanguage?: 'zh-CN' | 'en-US'
+}>
+
+/** 校验结果只对「成功/失败 + 拒收码」有共同形状；`value` 的语义由线自己拥有。 */
+export type AnalysisLineValidationResult =
+  | Readonly<{ ok: true; value: unknown; redactions: readonly AnalysisOutputRedaction[] }>
+  | Readonly<{ ok: false; errorCode: string; rule?: string; detail?: string; redactions?: readonly AnalysisOutputRedaction[] }>
+
 export type AnalysisLine = Readonly<{
   analysisKind: AnalysisKind
   promptVersion: string
@@ -59,13 +74,18 @@ export type AnalysisLine = Readonly<{
     snapshot: EvidenceSnapshot,
     significanceSignals: readonly SignificanceSignal[],
     session: AnalysisSessionInput | undefined,
-    proseLanguage: AppLanguage | undefined
+    context: AnalysisLineContext
   ) => StructuredModelMessage[]
-  validate: (raw: string, evidence: FrozenAnalysisEvidence, focus: TriggerFocus | undefined) => AnalysisOutputValidationResult
+  validate: (
+    raw: string,
+    evidence: FrozenAnalysisEvidence,
+    focus: TriggerFocus | undefined,
+    context: AnalysisLineContext
+  ) => AnalysisLineValidationResult
   /** 哪些拒收码值得同快照再问一遍；每条线自己定。 */
   repairableRejections: ReadonlySet<string>
   /** 写库与发布副作用。市场线写预测、时间轴、组指针、会话摘要与推送；新闻线只写记录。 */
-  persist: (run: AnalysisRun, output: ValidatedAnalysisModelOutput, deps: AnalysisLinePersistDeps) => Promise<void>
+  persist: (run: AnalysisRun, output: unknown, deps: AnalysisLinePersistDeps) => Promise<void>
 }>
 
 const lines: Readonly<Record<AnalysisKind, AnalysisLine>> = Object.freeze({

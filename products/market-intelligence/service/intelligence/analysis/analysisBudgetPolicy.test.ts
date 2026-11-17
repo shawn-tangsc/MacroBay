@@ -117,3 +117,12 @@ it('accounts by run (failures included) and derives the worst case from the retr
   expect(analysisBudgetPolicy.accounting.worstCaseModelCallsPerRun)
     .toBe(analysisUpstreamRetryPolicy.maximumCallsPerRun * marketAnalysisJobPolicy.runRetryPolicy.maxAttempts)
 })
+
+it('lets a per-item news reading through even when every automatic quota is spent', () => {
+  // R39 §6：手动解读不占自动额度，但 IO 行照写（用量由模型调用那一层 +1）。
+  expect(decideBudget({
+    triggerKey: 'news.manual', ...roomy,
+    hourRuns: analysisBudgetPolicy.maximumHourlyRuns, dayRuns: analysisBudgetPolicy.maximumDailyRuns,
+    eventRunsToday: 48, calendarRunsToday: 9
+  })).toEqual({ decision: 'queued', reasonCode: null })
+})

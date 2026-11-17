@@ -1,4 +1,5 @@
 import type { AnalysisKind } from './analysisKinds'
+import type { NewsInterpretationRecord } from './newsInterpretationContracts'
 import type {
   AgentFact,
   AgentEvidenceRef,
@@ -478,6 +479,13 @@ export type AnalysisSummary = Readonly<{
   eventAssessment?: string
   /** Structured conclusion written by current runs. */
   conclusion?: AnalysisConclusion
+  /**
+   * 新闻线的结构化记录（R39 C）。
+   *
+   * 抽屉不读它——界面只渲染 `conclusion` 的三段正文；它随记录整块存，供校验、审计与将来
+   * 换渲染。市场分析的摘要没有这个字段。
+   */
+  newsInterpretation?: NewsInterpretationRecord
   knownFacts: readonly FactClaim[]
   transmissionHypotheses: readonly Hypothesis[]
   marketReaction: readonly ReactionClaim[]

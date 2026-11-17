@@ -48,39 +48,6 @@ describe('analysis reference handles', () => {
     expect(resolved.evidenceRefs).toEqual([snapshot.evidenceRefs[0]!.evidenceRefId, ' f2 '])
   })
 
-  it('puts the real ids back inside the news reading, where every check cites a fact handle', () => {
-    // 线上那次：三份原始输出都写了 f1/f92/f27/f20/f52，快照里全都有；解析器没改写 newsImpact，
-    // 校验就把句柄当成「快照里没有的事实」拒掉，报成 check-fact-not-in-snapshot。
-    const resolved = resolveAnalysisReferences({
-      conclusion: {
-        direction: 'bearish', summary: 'x', change: 'x', causalChain: 'x',
-        newsImpact: {
-          verdict: 'evaluated', contradiction: true,
-          checks: [{ factId: ' f1 ', effect: 'supports' }, { factId: 'f2', effect: 'contradicts' }],
-          invalidation: { kind: 'fact', factId: 'F2', relation: 'above', statement: 'x' }
-        }
-      }
-    }, buildAnalysisReferenceMap(snapshot))
-
-    const impact = resolved.conclusion.newsImpact!
-    expect(impact.verdict).toBe('evaluated')
-    if (impact.verdict !== 'evaluated') throw new Error('expected evaluated')
-    expect(impact.checks.map(check => check.factId)).toEqual([snapshot.facts[0]!.factId, snapshot.facts[1]!.factId])
-    expect(impact.invalidation).toMatchObject({ kind: 'fact', factId: snapshot.facts[1]!.factId })
-    // 其余结论字段原样带过来：解析只换引用，不改句子。
-    expect(resolved.conclusion.summary).toBe('x')
-  })
-
-  it('also resolves the fact handles a no-transmission check lists', () => {
-    const resolved = resolveAnalysisReferences({
-      conclusion: { direction: 'range', summary: 'x', change: 'x', causalChain: 'x',
-        newsImpact: { verdict: 'no-transmission', checkedFactIds: ['f1', 'f2'], reason: 'x' } }
-    }, buildAnalysisReferenceMap(snapshot))
-    const impact = resolved.conclusion.newsImpact!
-    if (impact.verdict !== 'no-transmission') throw new Error('expected no-transmission')
-    expect(impact.checkedFactIds).toEqual([snapshot.facts[0]!.factId, snapshot.facts[1]!.factId])
-  })
-
   it('leaves an id that is already real, and anything unrecognised, exactly as it is', () => {
     const map = buildAnalysisReferenceMap(snapshot)
     // A stored encoding contains upper case, so resolution must not lower-case a real id.

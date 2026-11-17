@@ -20,7 +20,6 @@ import { containsUnsafeOutput, formatUnsafeOutputRedaction, isPlainRecord, redac
 export { formatUnsafeOutputRedaction } from './analysisOutputRedaction'
 export type { AnalysisOutputRedaction } from './analysisOutputRedaction'
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
-import { analysisNewsImpactRules, isAnalysisNewsImpact, newsImpactDefectOf } from './analysisNewsImpactValidation'
 
 import { policyProbabilityDefect, untracedProsePercentageDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
@@ -105,13 +104,6 @@ export const analysisValidationRules = Object.freeze({
    * the repairable set, so the model gets its one rewrite; the detail names this rule.
    */
   triggerFocus: 'missing-trigger-focus',
-  // 触发型分析的必答块（R37 C）：判据与理由写在 `analysisNewsImpactValidation`，这里只列码。
-  newsTriggerNotCited: 'news-trigger-not-cited',
-  newsImpactInsufficientData: 'news-impact-insufficient-data',
-  newsImpactContradictionMismatch: 'news-impact-contradiction-mismatch',
-  newsImpactInvalidation: 'news-impact-invalidation',
-  newsImpactMissingState: 'news-impact-missing-state',
-  newsImpactUnchecked: 'news-impact-unchecked',
   /**
    * 失效条件引用了一个快照里不存在的 id 或时刻（例如「跌破支撑」这种没有事实出处的价位）。
    * 判据是数据：factId 在快照事实里、at 在快照的时刻里；不读那句话怎么写。
@@ -193,7 +185,8 @@ const outputSections: readonly (readonly [string, (value: unknown) => boolean])[
  */
 function isConclusion(value: unknown): value is AnalysisConclusion {
   if (!isPlainRecord(value)) return false
-  if (!hasExactKeys(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'], ['newsImpact'])) return false
+  // R39 C：`newsImpact` 从**新市场输出契约**里移除（类型上只读历史），模型多写就是自造字段。
+  if (!hasExactKeys(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'])) return false
   return isDirectionKey(value.direction)
     && isBoundedText(value.summary)
     && isBoundedText(value.change)
@@ -202,8 +195,6 @@ function isConclusion(value: unknown): value is AnalysisConclusion {
     && (value.macro === null || isBoundedText(value.macro))
     && (value.evidenceStrength === null || isBoundedText(value.evidenceStrength))
     && isBoundedTextCollection(value.dataGaps)
-    // 触发型分析的必答块（R37）：只在这里判形状；「有指针就必须写」是规则层的事（C 笔）。
-    && (value.newsImpact === undefined || isAnalysisNewsImpact(value.newsImpact))
 }
 
 function isDirectionKey(value: unknown): value is AnalysisConclusion['direction'] {
@@ -238,8 +229,7 @@ function topLevelShapeDefect(value: unknown): AnalysisShapeDefect | undefined {
  * （默认值，保持既有调用方行为）。`missingTriggerFocus` 不在此列：它是「回答了 change 吗」，
  * 市场线仍然要过。
  */
-export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence, focus?: TriggerFocus,
-  options: Readonly<{ newsTriggerRules?: boolean }> = {}): AnalysisOutputValidationResult {
+export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence, focus?: TriggerFocus): AnalysisOutputValidationResult {
   if (utf8Length(input) > marketAnalysisValidationPolicy.maximumOutputBytes) return invalidSchema('shape:too-large')
 
   let value: unknown
@@ -320,12 +310,6 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   // Only when the caller could resolve a trigger source; a snapshot with no change record never
   // ran this rule and must not be judged by it.
   if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
-  // R37 C：触发型分析的必答块；只比 id 与结构，没有触发指针时不管。规则码由模块定义，这里不重抄。
-  // 市场线显式关掉这一段（R39）：它不读触发指针，不该被新闻线的必答块拒收。
-  if (options.newsTriggerRules !== false) {
-    const newsImpactDefect = newsImpactDefectOf({ output: { conclusion: output.conclusion }, snapshot, focus, reasoningEvidenceRefIds: citedEvidence })
-    if (newsImpactDefect) return missingEvidence(newsImpactDefect.rule as AnalysisValidationRule, newsImpactDefect.detail)
-  }
 
   return { ok: true, value: output, redactions }
 }

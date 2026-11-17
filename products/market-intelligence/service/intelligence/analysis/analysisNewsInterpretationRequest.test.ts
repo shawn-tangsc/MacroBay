@@ -26,7 +26,7 @@ const group: EventGroup = {
 
 const run = (status: AnalysisRun['status']): AnalysisRun => ({
   id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: group.id, snapshotId: 'mi-es-1', snapshotHash: 'snap-hash',
-  analysisPhase: 'initial', triggerKey: 'manual.initial', idempotencyKey: 'key', status, attempt: 1,
+  analysisPhase: 'initial', triggerKey: 'news.manual', idempotencyKey: 'key', status, attempt: 1,
   retryRunOf: null, retryOfRunId: null, modelProviderId: null, modelId: null, policyVersion: 'p', promptVersion: 'v',
   skillVersion: 's', outputSchemaVersion: 3, jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null,
   validationMode: 'strict', queuedAt: asOf, startedAt: asOf, completedAt: asOf
@@ -157,7 +157,7 @@ describe('按条解读：再判要不要跑', () => {
     preparedFingerprint.value = 'different-evidence'
     const changed = harness({ runs: [run('succeeded')] })
     await expect(changed.request('item-1')).resolves.toEqual({ state: 'queued', itemId: 'item-1', runId: 'mi-ar-2' })
-    expect(changed.enqueue).toHaveBeenCalledWith(expect.objectContaining({ triggeredItemId: 'item-1', triggerKey: 'manual.refresh' }))
+    expect(changed.enqueue).toHaveBeenCalledWith(expect.objectContaining({ triggeredItemId: 'item-1', triggerKey: 'news.manual' }))
 
     const failedBefore = harness({ runs: [run('failed')] })
     await expect(failedBefore.request('item-1')).resolves.toMatchObject({ state: 'queued' })
@@ -170,13 +170,13 @@ describe('按条解读：再判要不要跑', () => {
     const first = harness({ runs: [] })
     await first.request('item-1')
     expect(first.enqueue).toHaveBeenCalledWith(expect.objectContaining({
-      triggerKey: 'manual.initial', analysisPhase: 'initial', triggeredItemId: 'item-1'
+      triggerKey: 'news.manual', analysisPhase: 'initial', triggeredItemId: 'item-1'
     }))
     preparedFingerprint.value = 'ev-different'
     const again = harness({ runs: [run('succeeded')] })
     await again.request('item-1')
     expect(again.enqueue).toHaveBeenCalledWith(expect.objectContaining({
-      triggerKey: 'manual.refresh', analysisPhase: 'correction', triggeredItemId: 'item-1'
+      triggerKey: 'news.manual', analysisPhase: 'correction', triggeredItemId: 'item-1'
     }))
   })
 
