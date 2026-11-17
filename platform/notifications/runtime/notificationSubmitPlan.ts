@@ -10,6 +10,7 @@
  */
 import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import {
+  allowsCenterOmission,
   type NotificationApprovedLevel,
   type NotificationEventCatalog,
   type NotificationEventCatalogEntry
@@ -234,6 +235,16 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
   const levels = narrowed === undefined
     ? approved
     : approved.filter((level) => narrowed.includes(level))
+  // 收窄能把 `center` 撤掉——但**只对允许省略 center 的事件成立**。装配期守卫（目录登记时）挡的是
+  // 「批准表本身不写 center」，按次收窄是另一条能产生投递的路：失败、要读者动手、持续状况的事件
+  // 只要提交时传一个不含 center 的收窄，就绕开了那条守卫，读者会丢一条该留在中心的事实。
+  // 判据直接复用目录那一份（`allowsCenterOmission`），不在这里复制第二套条件。
+  if (!levels.includes('center') && !allowsCenterOmission(entry)) {
+    return rejected(
+      'surface-not-approved',
+      `notification event "${entry.id}" requires a centre record and cannot be narrowed away`
+    )
+  }
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
