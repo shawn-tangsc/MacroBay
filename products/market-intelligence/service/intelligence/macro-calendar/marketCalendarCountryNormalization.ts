@@ -62,8 +62,16 @@ const emptyReport = (): CountryNormalizationReport =>
  * - `UK` 是两字母、形状合格，但它不是合法 alpha-2（那是 `GB`）——按形状筛会漏掉它（真库 16 行）；
  * - 判据要能表达「还有多少行不是规范写法」，形状只是其中一种不合规。
  */
-const pendingRows = (database: DatabaseSync, table: string): EventRow[] =>
-  (database.prepare(`select * from ${table}`).all() as unknown as EventRow[])
+/**
+ * 待归一的行，**带 `rowid`**。
+ *
+ * 为什么按 `rowid` 而不是按身份四元组：主键里那几列可能是 `NULL`，而 SQL 里 `= NULL` 永远不成立，
+ * 于是「目标键上有没有一行」这一步会漏掉真实存在的行，改名的 `update` 随后撞主键——
+ * 真库副本上一次就是这么 `constraint failed` 的。按 `rowid` 定位一行，既不依赖列是否为空，
+ * 也不会一次改到多行。
+ */
+const pendingRows = (database: DatabaseSync, table: string): readonly (EventRow & { rowId: number })[] =>
+  (database.prepare(`select rowid as rowId, * from ${table}`).all() as unknown as (EventRow & { rowId: number })[])
     .filter((row) => toAlpha2Country(row.country_code ?? '') !== (row.country_code ?? ''))
 
 export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNormalizationReport {
@@ -87,9 +95,13 @@ export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNo
   database.exec('begin')
   try {
     database.exec(`create table if not exists ${calendarCountryNormalizationPolicy.backupTable} as select * from ${table}`)
-    const findTarget = database.prepare(`select * from ${table}
-      where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
-    // 同一身份可能同时有 `US` 与 `USA` 两行：先按身份分组，避免「先改一个又把另一个改坏」。
+    // `is` 是 null 安全的相等：主键里那几列允许为 `NULL`，用 `=` 会漏掉真实存在的同键行。
+    const findTarget = database.prepare(`select rowid as rowId, * from ${table}
+      where country_code is ? and metric_key is ? and period_key is ? and first_scheduled_date is ?
+        and rowid <> ?`)
+    const renameByRowId = database.prepare(`update ${table} set country_code = ? where rowid = ?`)
+    const deleteByRowId = database.prepare(`delete from ${table} where rowid = ?`)
+    // 同一身份可能同时有 `US` 与 `USA` 两行：改名后若目标键已存在，先合并、再删掉这一行。
     for (const stray of pending) {
       const metricKey = stray.metric_key ?? ''
       const periodKey = stray.period_key ?? ''
@@ -98,11 +110,10 @@ export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNo
       // 归一之后仍然不是合法的两字母码（源给了别的东西）：不动它，留给未映射/人工判断，
       // 但**不阻断整笔迁移**——它本来就不能进身份。
       if (!/^[A-Z]{2}$/.test(target)) continue
-      const existing = findTarget.get(target, metricKey, periodKey, firstScheduledDate) as EventRow | undefined
+      const existing = findTarget.get(target, metricKey, periodKey, firstScheduledDate, stray.rowId) as
+        (EventRow & { rowId: number }) | undefined
       if (existing === undefined) {
-        database.prepare(`update ${table} set country_code = ? where country_code = ? and metric_key = ?
-          and period_key = ? and first_scheduled_date = ?`)
-          .run(target, stray.country_code, metricKey, periodKey, firstScheduledDate)
+        renameByRowId.run(target, stray.rowId)
         report.renamed += 1
       } else {
         const strayWins = !hasActual(existing.values_json ?? '') && hasActual(stray.values_json ?? '')
@@ -117,7 +128,7 @@ export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNo
             series_id = coalesce(series_id, ?),
             first_published_actual = coalesce(first_published_actual, ?),
             first_published_previous = coalesce(first_published_previous, ?)
-          where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
+          where rowid = ?`)
           .run(values,
             strayWins ? 1 : 0, stray.status,
             strayWins ? 1 : 0, stray.value_state,
@@ -125,10 +136,8 @@ export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNo
             strayWins ? 1 : 0, stray.data_observed_at ?? stray.observed_at,
             stray.scheduled_at, stray.importance, stray.series_id,
             stray.first_published_actual, stray.first_published_previous,
-            target, metricKey, periodKey, firstScheduledDate)
-        database.prepare(`delete from ${table} where country_code = ? and metric_key = ? and period_key = ?
-          and first_scheduled_date = ?`)
-          .run(stray.country_code, metricKey, periodKey, firstScheduledDate)
+            existing.rowId)
+        deleteByRowId.run(stray.rowId)
         report.merged += 1
       }
     }

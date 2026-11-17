@@ -60,4 +60,28 @@ describe('国家码归一是差集，不是版本标记', () => {
     const markers = database.prepare('select count(*) n from mi_macro_calendar_migrations where version = 15').get() as { n: number }
     expect(markers.n).toBe(0)
   })
+
+  /**
+   * 真库副本上撞过的那个坑：**改名撞主键**。旧实现「查目标键上有没有一行」用的是 `=`，改名用
+   * `update ... where 四元组`——两处都依赖主键列非空。真库那张表是迁出来的，主键列**允许 NULL**
+   * （代码新建的表不允许，这也是一处 schema 漂移），`= NULL` 永远不成立，于是它以为目标键空着，
+   * 接着改名撞上真实存在的那一行，整笔迁移 `constraint failed` 回滚。现在按 `rowid` 定位、
+   * 用 `is` 做 null 安全比较。
+   */
+  it('目标键上已有同名行时合并成一行，值保留有值的那份', () => {
+    const database = setup()
+    seed(database, 'FR', 'FR.CPI.NSA.YOY', '2026-11')
+    // 已有行补一个实际值，合并后不许丢。
+    database.prepare(`update mi_calendar_events set values_json = '{"actual":"1.9"}', value_state = 'present'
+      where country_code = 'FR'`).run()
+    seed(database, 'FRA', 'FR.CPI.NSA.YOY', '2026-11')
+    const report = normalizeCalendarCountryCodes(database)
+    expect(report.merged).toBe(1)
+    expect(report.renamed).toBe(0)
+    const rows = database.prepare('select country_code, values_json from mi_calendar_events').all() as
+      { country_code: string; values_json: string }[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.country_code).toBe('FR')
+    expect(JSON.parse(rows[0]!.values_json)).toEqual({ actual: '1.9' })
+  })
 })
