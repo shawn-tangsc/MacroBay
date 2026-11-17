@@ -1,3 +1,4 @@
+import { marketAnalysisTimelineLimits } from '../../../contracts/marketAnalysisTimelineLimits'
 import type { AnalysisRun, AnalysisSummary, Prediction, TimelineEntry } from '../../../contracts/marketAnalysisContracts'
 import { analysisWorkspacePolicy, type AnalysisFollowUpInput } from '../../../contracts/analysisWorkspaceContracts'
 import { projectTriggerStatus, type TriggerStatus, type TriggerStatusRow } from './triggerStatusProjection'
@@ -176,7 +177,7 @@ export function createAnalysisTimelineService(deps: Readonly<{
  */
 const pendingRunStatuses: ReadonlySet<string> = new Set(['queued', 'running'])
 const failedRunStatuses: ReadonlySet<string> = new Set(['failed', 'invalid-output', 'cancelled'])
-const maximumUnpublishedEntries = 20
+const maximumUnpublishedEntries = marketAnalysisTimelineLimits.unpublishedItems
 
 function unpublishedRunEntries(
   deps: { repository: Repository },
