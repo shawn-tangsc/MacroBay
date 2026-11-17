@@ -220,8 +220,8 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
     input.request.namespace === 'test'
   const quietHours: QuietHoursDecision = { inside: insideQuietHours, bypassed: bypassQuietHours }
   const approved = effectiveLevels(surfaces, !insideQuietHours || bypassQuietHours)
-  // 按次收窄（`narrowedDisruptionLevels`）：**只许收窄、不许放大**；`center` 是平台必达，传的数组里
-  // 没有它也保留。不传＝与今天逐字一致（下面那行不会改变任何东西）。
+  // 按次收窄（`narrowedDisruptionLevels`）：**只许收窄、不许放大**。`center` 与其余档一样可被收窄掉
+  // （它是批准档之一，不是必达记录）；不传＝按批准表来。
   const narrowed = input.request.narrowedDisruptionLevels
   if (narrowed !== undefined) {
     // 收窄只能**变少**、不能**变出**：出现批准表没批的档位就是生产者写错了，**拒收**，
@@ -231,10 +231,9 @@ export function planNotificationSubmit(input: NotificationSubmitPlanInput): Noti
       return rejected('surface-not-approved', `notification event "${entry.id}" narrowed to an unapproved level: ${unapproved.join(', ')}`)
     }
   }
-  // `center` 不是可被收窄的面，是必达记录：传不传它都在，所以 `['channel']` 的含义就是「channel + center」。
   const levels = narrowed === undefined
     ? approved
-    : approved.filter((level) => level === 'center' || narrowed.includes(level))
+    : approved.filter((level) => narrowed.includes(level))
   // 地址规范化**只做一次**，写进记录：之后中心按钮与手机末尾那一行读的是同一个值。
   // 两端各 trim 一次不算保证——一个带首尾空白的地址会「中心能开、手机打不开」，读者只会觉得推错了。
   const request: NotificationSubmitRequest = { ...input.request, actions: input.request.actions.map(normalizeActionUrl) }
@@ -304,7 +303,8 @@ function toLegacyRequest(
     ...(request.rendered === undefined ? {} : { rendered: request.rendered }),
     severity: request.severity ?? 'info',
     priority: 'normal',
-    requestedChannels: localChannels.length > 0 ? [...localChannels] : ['center'],
+    // 没有本机档就是空数组：中心不再是兜底（批准表没写 center 就不进中心）。
+    requestedChannels: [...localChannels],
     ...(request.actions.length === 0 ? {} : { actions: [...request.actions] }),
     ...(request.deeplink === undefined ? {} : { deeplink: request.deeplink }),
     dedupeKey,
@@ -354,7 +354,8 @@ function createRecord(
     severity: request.severity ?? 'info',
     priority: 'normal',
     appliedLevels: [...levels],
-    channels: localChannels.length > 0 ? [...localChannels] : ['center'],
+    // 空数组是合法的：只有手机档的事件不在本机任何表面留条目（记录仍在，只是不进中心）。
+    channels: [...localChannels],
     state: 'unread',
     ...(request.deeplink === undefined ? {} : { deeplink: request.deeplink }),
     actions: [...request.actions],

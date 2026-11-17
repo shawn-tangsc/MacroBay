@@ -26,6 +26,13 @@ export type NotificationSurfaceDecision = Readonly<{
   desktop: boolean
   toast: boolean
   /**
+   * 这条通知**要不要出现在中心**（记录面，不是打扰面）。
+   *
+   * 它只回答「批准表里有没有 center」：不受本机开关、读者选择、免打扰影响——
+   * 中心是记录，记录不因「现在不想被打扰」消失。批准表没写 center，这条就不进中心列表。
+   */
+  center: boolean
+  /**
    * `channel` 只回答「批准 ∩ 选择」；**免打扰不在这里判**——那是提交规划的事
    * （S6：窗口内本机与手机一律安静，只进中心），两件事不能混进同一个布尔。
    */
@@ -62,7 +69,9 @@ export function decideNotificationSurfaces(input: {
     input.approvedDisruptionLevels.includes('channel') &&
     selection.channel !== false &&
     input.eventChannelEnabled !== false
-  return Object.freeze({ desktop, toast, channel })
+  // center 与另外三档不同：它是**记录面**，只由批准表决定（没有开关、没有选择、没有免打扰）。
+  const center = input.approvedDisruptionLevels.includes('center')
+  return Object.freeze({ desktop, toast, channel, center })
 }
 
 /**

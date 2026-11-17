@@ -148,6 +148,18 @@ const REQUESTED_LEVELS: readonly NotificationRequestedLevel[] = ['toast', 'popup
  *  3. 申请档位都在闭集里、且不含 `center`；
  *  4. 申请 ⊆ 批准（`channel` 例外，见契约 §4）。
  */
+/**
+ * 谁允许省略 center（方案 §4）：一条属性判据，不靠人记、不看事件 id。
+ *
+ * 三项同时满足才算：提醒类、不需要读者动手、一次发生。额度/安全/连接类都在别的档里，天然被挡住。
+ * 新增一条 reminder 事件会自动获得资格，但一旦它改成 `requiresUserAction` 就当场红。
+ */
+export function allowsCenterOmission(declaration: Pick<NotificationEventDeclaration, 'category' | 'requiresUserAction' | 'dedupeUnit'>): boolean {
+  return declaration.category === 'reminder' &&
+    declaration.requiresUserAction === false &&
+    declaration.dedupeUnit === 'occurrence'
+}
+
 export function createNotificationEventCatalog(input: {
   sources: readonly NotificationEventDeclarationSource[]
 }): NotificationEventCatalog {
@@ -184,6 +196,12 @@ export function createNotificationEventCatalog(input: {
       // 只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
       const approvedDisruptionLevels = approval?.approvedDisruptionLevels ?? ['center']
       if (approval !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
+      // center 是批准档之一，可以省略——但**只给这一种事件**：提醒类（reminder）、不需要读者动手、
+      // 一次发生（occurrence）。失败、要读者处理、持续状况必须留在中心，否则读者会丢事实。
+      // 违反就**装配期拒收**：静默按 required 补上，会让一张写错的批准表永远发现不了。
+      if (!approvedDisruptionLevels.includes('center') && !allowsCenterOmission(declaration)) {
+        throw new Error(`notification-event-center-omission-not-allowed:${declaration.id}`)
+      }
       // 免打扰穿透只给**诊断**事件（读者亲手点的那一下）：批准里写了穿透、声明却不是诊断事件
       // → 装配期红，点名 id。否则「谁能穿透」就退化成批准文件里的一行字，没有代码依据。
       if (approval?.approvedBypassQuietHours === true && declaration.diagnostic !== true) {

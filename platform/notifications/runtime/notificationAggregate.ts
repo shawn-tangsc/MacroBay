@@ -123,7 +123,12 @@ export function foldSuppressedIntoLatest(input: {
   }
 }
 
-/** 4a「中心必达」：凡走打断式通道的通知，`channels` 恒含 `center`。 */
+/**
+ * 自检那条旧构造路径用的形状助手：打断式通道会把 `center` 补进 `channels`。
+ *
+ * 2026-11-18 起 `center` 是**批准档之一**，不再无条件注入（见 `effectiveLevels`）；
+ * 自检事件本身批准里就有 center，所以这里只是保持那条请求的形状不变，不是「必达」规则。
+ */
 export function withCenterForDisruptiveChannels(
   request: NotificationRequest,
   channels: readonly NotificationChannel[]
