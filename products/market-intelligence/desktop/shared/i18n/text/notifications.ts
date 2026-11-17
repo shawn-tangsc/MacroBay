@@ -6,6 +6,9 @@ import { sentimentAlertTemplates } from '../../../../contracts/sentimentAlertSen
 import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
   ACKNOWLEDGE_ACTION_KEY,
+  ANALYSIS_CHECK_MODEL_ACTION_KEY,
+  ANALYSIS_RETRY_ACTION_KEY,
+  ANALYSIS_TIMELINE_ACTION_KEY,
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
   OPEN_BRIEFING_ACTION_KEY,
   notificationEventBodyKey,
@@ -41,6 +44,9 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     // 产品动作的标签（v2.58）：与正文同一条解析链路。句子与搬家前逐字相同。
     [OPEN_BRIEFING_ACTION_KEY]: '打开日报',
     [ACKNOWLEDGE_ACTION_KEY]: '知道了',
+    [ANALYSIS_RETRY_ACTION_KEY]: '重试',
+    [ANALYSIS_TIMELINE_ACTION_KEY]: '查看时间轴',
+    [ANALYSIS_CHECK_MODEL_ACTION_KEY]: '检查模型连接',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '{date} {time} {language}这一期没有生成出来。',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了，但解读没出来。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
@@ -155,6 +161,9 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.briefingFailed)]: 'The daily briefing did not generate',
     [OPEN_BRIEFING_ACTION_KEY]: 'Open briefing',
     [ACKNOWLEDGE_ACTION_KEY]: 'Got it',
+    [ANALYSIS_RETRY_ACTION_KEY]: 'Retry',
+    [ANALYSIS_TIMELINE_ACTION_KEY]: 'View timeline',
+    [ANALYSIS_CHECK_MODEL_ACTION_KEY]: 'Check model connection',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'The {date} {time} {language} edition failed to generate.',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',

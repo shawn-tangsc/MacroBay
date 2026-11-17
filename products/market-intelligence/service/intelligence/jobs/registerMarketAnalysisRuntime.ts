@@ -52,6 +52,7 @@ import { createPredictionVerificationService } from '../analysis/predictionVerif
 import type { PredictionVerificationObservation } from '../analysis/predictionVerificationService'
 import { parseCrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { registerMarketAnalysisJobs } from './registerMarketAnalysisJobs'
+import { isManualTriggerKey, notifyAnalysisFailure, shouldReportAutomaticFailure } from '../analysis/analysisFailureNotice'
 import { createAnalysisRunHousekeeping } from './marketAnalysisRunHousekeeping'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB, ANALYSIS_SESSION_SLOTS_JOB, RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 import { createInitialMarketAnalysisRequest, initialMarketAnalysisRequestPolicy } from './requestInitialMarketAnalysis'
@@ -597,6 +598,24 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const carried = readSignificanceSignals(payload)
     const result = await analysisOrchestrator.run({ analysisRunId: run.id, signal: context.signal, ...(carried.length > 0 ? { significanceSignals: carried } : {}) })
     await context.log({ level: result.status === 'succeeded' ? 'info' : 'error', message: 'Market analysis result', metadata: { analysisRunId: run.id, status: result.status, ...(result.errorCode ? { errorCode: result.errorCode } : {}) } })
+    // 失败要有人回答（用户 2026-11-17）：手动每一次都发；自动只报链路级（连续 3 次或 2 小时零成功），
+    // 30 分钟同码合并、次数由平台合并计数给。通知发不出去不影响运行记录。
+    if (result.status === 'failed' || result.status === 'invalid-output') {
+      const settled = repository.getRun(run.id) ?? run
+      const failureCode = settled.failureCode ?? result.errorCode ?? null
+      const history = repository.listRuns()
+        .filter(candidate => candidate.eventGroupId === run.eventGroupId && candidate.id !== run.id && candidate.queuedAt <= settled.queuedAt)
+        .sort((left, right) => right.queuedAt.localeCompare(left.queuedAt))
+      const manual = isManualTriggerKey(settled.triggerKey)
+      if (manual || shouldReportAutomaticFailure({ occurredAt: settled.completedAt ?? now(), history })) {
+        await notifyAnalysisFailure(input.submitNotification, {
+          kind: manual ? 'manual' : 'automatic',
+          runId: settled.id, eventGroupId: settled.eventGroupId, triggerKey: settled.triggerKey,
+          failureCode, failureDetailCode: settled.failureDetailCode ?? null,
+          occurredAt: settled.completedAt ?? now()
+        })
+      }
+    }
   }
 
   async function resolveChange(payload: unknown): Promise<{ change: AnalysisChange; triggeredItemId?: string } | undefined> {

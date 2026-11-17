@@ -39,6 +39,11 @@ export const OPEN_BRIEFING_ACTION_KEY = productNotificationActionKey('market-int
  */
 export const ACKNOWLEDGE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'acknowledge')
 
+/** 分析失败通知的三个动作标签（只在「分析没跑成」那条上用）。 */
+export const ANALYSIS_RETRY_ACTION_KEY = productNotificationActionKey('market-intelligence', 'retry-analysis')
+export const ANALYSIS_TIMELINE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'view-timeline')
+export const ANALYSIS_CHECK_MODEL_ACTION_KEY = productNotificationActionKey('market-intelligence', 'check-model')
+
 /**
  * 事件下的任意一段文案键：`notification.event.<id>.<path>`（如 `country.US`、`indicator.cpi`）。
  *
