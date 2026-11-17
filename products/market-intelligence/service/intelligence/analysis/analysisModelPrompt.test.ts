@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { EvidenceSnapshot } from '../../../contracts/marketAnalysisContracts'
 import { buildAnalysisMessages } from './analysisModelPrompt'
+import { buildNewsAnalysisMessages } from './newsAnalysisPrompt'
 
 const asOf = '2026-10-07T09:06:14.792Z'
 
@@ -17,6 +18,10 @@ function snapshot(overrides: Partial<EvidenceSnapshot> = {}): EvidenceSnapshot {
 const systemPrompt = (input: EvidenceSnapshot = snapshot()) =>
   buildAnalysisMessages(input).find(message => message.role === 'system')!.content
 
+// 触发段已搬到新闻线（R39 B）：市场线的 builder 不再认识 trigger，这组契约断言的是新闻线。
+const newsSystemPrompt = (input: EvidenceSnapshot = snapshot()) =>
+  buildNewsAnalysisMessages(input).find(message => message.role === 'system')!.content
+
 describe('analysis model prompt trigger contract (R37)', () => {
   const triggerFact = {
     factId: 'triggered-news:item-1', domain: 'sentiment' as const, subject: 'BTC',
@@ -27,7 +32,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
   const trigger = { source: 'intelligence-item' as const, itemId: 'item-1', factId: triggerFact.factId, evidenceRefId: 'news:item-1' }
 
   it('names the triggering news as the run cause and requires the four answers', () => {
-    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    const system = newsSystemPrompt(snapshot({ facts: [triggerFact], trigger }))
     expect(system).toContain('本次运行由**一条新闻**触发')
     // 触发项由载荷里的 trigger 段指名，而不是一个模型永远收不到的 `triggered-news:<itemId>`。
     expect(system).toContain('用户消息 trigger 段指向的就是它')
@@ -43,7 +48,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
     // 线上那次：facts 里是 f90 句柄，规则却叫它找 `triggered-news:<itemId>`；而且事实值被 72 字
     // 截断，标题断在中间、源摘录整段没了。触发段要给出句柄和完整内容。
     const long = `${'x'.repeat(80)} HEADLINE-END｜QUOTE-END`
-    const messages = buildAnalysisMessages(snapshot({
+    const messages = buildNewsAnalysisMessages(snapshot({
       facts: [{ ...triggerFact, value: long }], trigger,
       evidenceRefs: [{ evidenceRefId: 'news:item-1' }] as never
     }))
@@ -64,22 +69,22 @@ describe('analysis model prompt trigger contract (R37)', () => {
       missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: [], caveatsRemoved: [],
       evidenceRefsAdded: [], evidenceRefsRemoved: []
     }
-    const withTrigger = systemPrompt(snapshot({ facts: [triggerFact], trigger, change } as never))
+    const withTrigger = newsSystemPrompt(snapshot({ facts: [triggerFact], trigger, change } as never))
     expect(withTrigger).not.toContain('本次运行由输入 change 段里的变化触发')
     expect(withTrigger).toContain('**不是**本次运行的原因')
-    const withoutTrigger = systemPrompt(snapshot({ change } as never))
+    const withoutTrigger = newsSystemPrompt(snapshot({ change } as never))
     expect(withoutTrigger).toContain('本次运行由输入 change 段里的变化触发')
   })
 
   it('states the two checks the trigger-focus rule rejects on', () => {
-    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    const system = newsSystemPrompt(snapshot({ facts: [triggerFact], trigger }))
     expect(system).toContain('必须出现在论证区')
     expect(system).toContain('顶层 evidenceRefs 清单不算回答')
     expect(system).toContain('写出 `trigger.subject` 这个标的名称本身')
   })
 
   it('states the three prohibitions for a news reading', () => {
-    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    const system = newsSystemPrompt(snapshot({ facts: [triggerFact], trigger }))
     expect(system).toContain('不许只复述新闻')
     expect(system).toContain('不许硬贴利好利空')
     expect(system).toContain('不许把新闻里的金额直接当成市场影响')
@@ -87,7 +92,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
 
   it('keeps source attribution natural and rare, instead of prefixing every block', () => {
     // 用户看到的毛病：「该页面显示」在一篇里出现三次，摘要/变化/因果链各一次——像模板。
-    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    const system = newsSystemPrompt(snapshot({ facts: [triggerFact], trigger }))
     expect(system).toContain('来源归属要自然，别把它当每段的固定前缀')
     expect(system).toContain('「该消息称」「报道称」「据该报道」')
     expect(system).toContain('只有当来源确实是页面抓取、没有署名时，才写「该页面显示」')
@@ -99,7 +104,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
   it('makes the summary agree with the trigger fact instead of contradicting it', () => {
     // 线上硬错：新闻说「ETF 流出连续期结束」，摘要写「ETF 持续净流出」，同一份的因果链又说「以单日
     // +790 万美元结束」——读者看第一行就得到相反的事实。这是事实一致性，不是句式。
-    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    const system = newsSystemPrompt(snapshot({ facts: [triggerFact], trigger }))
     expect(system).toContain('摘要里关于这条新闻的陈述，必须与 trigger.fact 的原文一致')
     expect(system).toContain('新闻说某段流出**结束**了，摘要就不能写它还**在持续**')
     expect(system).toContain('摘要与 causalChain 之间同样不许互相矛盾')
@@ -108,7 +113,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
 
   it('forbids prose about how the input is shaped, in every run', () => {
     // 线上原句「本次数据没有新变化，变化段为空；信息增量来自……」——读者看到的是输入长什么样。
-    const system = systemPrompt()
+    const system = newsSystemPrompt()
     expect(system).toContain('正文不许交代「输入长什么样」')
     expect(system).toContain('「变化段为空」')
     expect(system).toContain('「信息增量来自…」')
@@ -118,7 +123,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
 
   it('orders the reading in three sections: the news first, then the data change, then the outlook', () => {
     // 用户 2026-11-18：「摘要里全是市场条件，新闻只在第二段从句里出现」——主语顺序要反过来。
-    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    const system = newsSystemPrompt(snapshot({ facts: [triggerFact], trigger }))
     expect(system).toContain('整篇按**三段**写，一段一件事，顺序不许调换')
     expect(system).toContain('`conclusion.summary` 的主语必须是这条新闻，不是市场')
     expect(system).toContain('**不许**在这一段堆市场条件')
@@ -133,7 +138,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
   })
 
   it('stays out of runs that a news item did not trigger', () => {
-    const system = systemPrompt(snapshot({ facts: [triggerFact] }))
+    const system = newsSystemPrompt(snapshot({ facts: [triggerFact] }))
     expect(system).not.toContain('本次运行由**一条新闻**触发')
     expect(system).not.toContain('conclusion.newsImpact')
     expect(system).not.toContain('来源归属要自然')

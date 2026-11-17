@@ -130,6 +130,7 @@ export function createSignalAnalysisRequest(deps: Readonly<{
         trigger: { kind: 'manual' },
         // `analysisPhase: 'correction'`：信号是对已有判断的修正，不是首篇。
         payload: {
+          analysisKind: 'market',
           eventGroupId: group.id,
           triggerKey,
           analysisPhase: 'correction',

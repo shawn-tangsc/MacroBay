@@ -122,7 +122,7 @@ async function createHarness(input: Readonly<{ withMetricEvents?: boolean }> = {
       const snapshotHash = buildAnalysisSnapshotHash(snapshot)
       runtime.repository.appendSnapshot({ ...snapshot, snapshotHash })
       const enqueuedRun = createAnalysisRunService({ repository: runtime.repository, now: () => clock.now, idFactory: () => `mi-ar-${itemId}` })
-        .enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
+        .enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
       runtime.repository.linkTriggerLedgerRun({ id: row.id, analysisRunId: enqueuedRun.run.id, snapshotHash })
       if (status === 'succeeded') {
         runtime.repository.claimRun(enqueuedRun.run.id, clock.now)

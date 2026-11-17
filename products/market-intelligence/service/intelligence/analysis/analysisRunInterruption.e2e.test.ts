@@ -71,7 +71,7 @@ it('a run killed mid-call reads as failure + retry after the restart, never as "
     repository.appendSnapshot(snapshot)
     const first = createAnalysisRunService({ repository, now: () => queuedAt, idFactory: () => 'mi-ar-b4db8df4' })
     const { run } = first.enqueue({
-      eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
       analysisPhase: 'initial', triggerKey: 'manual.initial'
     })
     // 真实时序：认领 → 写调用存档 → 调用发出去了（存档停在 inflight，正是现场那一行）。
@@ -107,7 +107,7 @@ it('a run that stalls while the process stays up is swept, so the section stops 
     repository.appendSnapshot(snapshot)
     const first = createAnalysisRunService({ repository, now: () => queuedAt, idFactory: () => 'mi-ar-b4db8df4' })
     const { run } = first.enqueue({
-      eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
       analysisPhase: 'initial', triggerKey: 'manual.initial'
     })
     repository.claimRun(run.id, queuedAt)

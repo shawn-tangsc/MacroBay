@@ -10,11 +10,10 @@ import {
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
-import { ensureAnalysisRunSession, appendAnalysisRunSessionSummary } from './analysisRunSessionEnsure'
+import { ensureAnalysisRunSession } from './analysisRunSessionEnsure'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
-import { analysisConclusionPushEligible } from './analysisConclusionPush'
 import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
 import { analysisUpstreamRetryPolicy, decideUpstreamRetry, waitForRetry } from './analysisUpstreamRetry'
 import {
@@ -24,7 +23,8 @@ import {
   type FrozenAnalysisEvidence,
   type ValidatedAnalysisModelOutput
 } from './analysisOutputValidator'
-import { buildAnalysisMessages, type AnalysisSessionInput } from './analysisModelPrompt'
+import type { AnalysisSessionInput } from './analysisModelPrompt'
+import { lineFor } from './analysisLineRegistry'
 import { sessionBriefForTriggerKey } from './analysisSessionContext'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
 import type { SignificanceSignal } from './significanceChangeMatcher'
@@ -51,7 +51,11 @@ type Repository = Readonly<{
   triggerReasonOf?: (runId: string) => string | undefined
   claimRun: (id: string, startedAt: string) => boolean
   updateRunStatus: (input: { id: string; status: AnalysisRun['status']; completedAt?: string; failureCode?: string; failureDetailCode?: string }) => boolean
-  commitSuccessfulAnalysis: (input: { runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline: TimelineEntry }) => void
+  commitSuccessfulAnalysis: (input: {
+    runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline?: TimelineEntry; recordGroupPointer?: boolean
+  }) => void
+  /** 新闻线算记录版本用；市场线走组指针。 */
+  latestSummaryVersion?: (eventGroupId: string) => number
 }>
 
 type InvocationResult = StructuredModelTaskResult<unknown>
@@ -163,7 +167,10 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const model = runRecord.modelProviderId && runRecord.modelId
       ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
       : {}
-    let messages = buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
+    // 全仓唯一的选择点：按 run 行上的类别取线，不按触发键猜。`run.analysisKind` 从库里读，
+    // 恢复、重放、别的入口都绕不过去。
+    const line = lineFor(runRecord.analysisKind)
+    let messages = line.buildMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
     let invocation: InvocationResult | undefined
     let validated: AnalysisOutputValidationResult | undefined
     // One immediate repair attempt, inside the same run and against the same frozen snapshot.
@@ -259,9 +266,9 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
       }
-      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
+      validated = line.validate(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
       if (validated.ok) break
-      if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !repairableRejection.has(validated.errorCode)) break
+      if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !line.repairableRejections.has(validated.errorCode)) break
       nextCallKind = 'repair'
       messages = [...messages, ...repairMessage(validated, invocation.output)]
     }
@@ -285,64 +292,21 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     if (validated.redactions.length > 0) console.log(formatUnsafeOutputRedaction(runRecord.id, validated.redactions))
     if (signal.aborted) return cancel(runRecord.id)
 
-    const group = deps.repository.getEventGroup(runRecord.eventGroupId)
-    if (!group) return fail(runRecord.id, 'failed', 'analysis-event-group-not-found')
-    const currentVersion = group.currentSummaryId ? deps.repository.getSummary?.(group.currentSummaryId)?.version ?? 0 : 0
-    const summary = toSummary(runRecord, validated.value, currentVersion + 1, deps.now(), deps.idFactory, proseLanguage)
-    const predictions = toPredictions(summary, validated.value, deps.now(), deps.idFactory)
-    const timeline: TimelineEntry = {
-      id: makeId('mi-tl-', deps.idFactory()), schemaVersion: 1, eventGroupId: runRecord.eventGroupId, analysisRunId: runRecord.id,
-      kind: runRecord.analysisPhase === 'review' ? 'review' : 'analysis', status: 'published', occurredAt: summary.createdAt,
-      summaryRef: summary.id,
-      safeTitle: '市场分析已生成',
-      safeExcerpt: summary.conclusion?.summary ?? summary.eventAssessment ?? null,
-      direction: summary.conclusion?.direction ?? null,
-      version: summary.version
-    }
     try {
-      deps.repository.commitSuccessfulAnalysis({ runId: runRecord.id, summary, predictions, timeline })
+      await line.persist(runRecord, validated.value, {
+        repository: deps.repository,
+        snapshot,
+        now: deps.now(),
+        idFactory: deps.idFactory,
+        ...(proseLanguage === undefined ? {} : { proseLanguage }),
+        ...(deps.appendRunSummary === undefined ? {} : { appendRunSummary: deps.appendRunSummary }),
+        ...(deps.notifyAnalysisConclusion === undefined ? {} : { notifyAnalysisConclusion: deps.notifyAnalysisConclusion }),
+        ...(deps.readTriggerSignal === undefined ? {} : { readTriggerSignal: deps.readTriggerSignal })
+      })
     } catch {
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
     if (retried) deps.repository.retry?.record(runRecord.id, 'succeeded')
-    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。失败不阻断发布，
-    // 留痕在 helper 里（读者打开只剩卡片时，事后只有那条 marker 能查得到）。
-    await appendAnalysisRunSessionSummary({
-      runId: runRecord.id,
-      summary: summary.conclusion?.summary ?? summary.eventAssessment ?? '',
-      ...(deps.appendRunSummary ? { append: deps.appendRunSummary } : {})
-    })
-    // N12：**达到门槛**的那次、写入记录之后，提交一次结论推送。判据是原因码，不是触发键——
-    // 键记的是阶段，消息面达门槛的运行也长着宏观的样子（`analysisConclusionPushEligible` 一处判）。
-    const triggerReasonCode = deps.repository.triggerReasonOf?.(runRecord.id)
-    if (deps.notifyAnalysisConclusion !== undefined && analysisConclusionPushEligible({
-      triggerKey: runRecord.triggerKey,
-      ...(triggerReasonCode === undefined ? {} : { reasonCode: triggerReasonCode })
-    })) {
-      try {
-        const trigger = deps.readTriggerSignal?.(runRecord.triggerKey) ?? {}
-        const citedFactIds = Object.freeze([...new Set([
-          ...validated.value.knownFacts.map((claim) => claim.factId),
-          ...validated.value.marketReaction.flatMap((claim) => claim.factIds)
-        ])])
-        await deps.notifyAnalysisConclusion({
-          runId: runRecord.id,
-          triggerKey: runRecord.triggerKey,
-          // 桶 = 原因码 + 事件：不同事件各算一次，同一条事件重复触发仍是一个桶。
-          bucket: `${triggerReasonCode ?? 'signal'}:${runRecord.eventGroupId}`,
-          cutoff: snapshot.asOf,
-          summary: validated.value.conclusion.summary,
-          conclusionDirection: validated.value.conclusion.direction,
-          citedFactIds,
-          ...(trigger.direction === undefined ? {} : { triggerDirection: trigger.direction }),
-          ...(trigger.factIds === undefined ? {} : { triggerFactIds: trigger.factIds }),
-          citedCount: validated.value.evidenceRefs.length,
-          occurredAt: deps.now()
-        })
-      } catch {
-        // 通知是记录的附加物：发不出去不许把一次成功的分析变成失败。
-      }
-    }
     // A success may end a failure episode; the decision is made once, from the same rows the notices
     // are judged from, so "recovered" and "still failing" can never both be true.
     await announceRunOutcome(runRecord.triggerKey)
@@ -384,29 +348,6 @@ export function createAnalysisOrchestrator(deps: Readonly<{
   }
 
   return { run }
-}
-
-function toSummary(run: AnalysisRun, output: ValidatedAnalysisModelOutput, version: number, createdAt: string, idFactory: () => string,
-  proseLanguage?: 'zh-CN' | 'en-US'): AnalysisSummary {
-  // 提示词在语言读不到时按中文写（`buildAnalysisMessages` 的默认），所以记录也写中文：
-  // 记录的是「这份正文实际用的语言」，不是「读没读到设置」。
-  return {
-    id: makeId('mi-as-', idFactory()), schemaVersion: 3, analysisKind: run.analysisKind, analysisRunId: run.id, eventGroupId: run.eventGroupId, version,
-    proseLanguage: proseLanguage ?? 'zh-CN', ...output, createdAt
-  }
-}
-
-function toPredictions(summary: AnalysisSummary, output: ValidatedAnalysisModelOutput, createdAt: string, idFactory: () => string): Prediction[] {
-  return output.scenarios.map((scenario) => {
-    const horizonMs = scenario.horizon === '0-15m' ? 15 * 60_000 : scenario.horizon === '15m-2h' ? 2 * 60 * 60_000 : scenario.horizon === '2h-24h' ? 24 * 60 * 60_000 : 3 * 24 * 60 * 60_000
-    const horizonEnd = new Date(Date.parse(createdAt) + horizonMs).toISOString()
-    return { id: makeId('mi-pr-', idFactory()), schemaVersion: 1, summaryId: summary.id, asset: scenario.asset, horizonStart: createdAt, horizonEnd, baseCase: scenario.baseCase, conditions: scenario.conditions, nextCatalyst: output.nextCatalysts[0]?.statement ?? null, status: 'pending', verificationDueAt: horizonEnd, createdAt,
-      invalidation: typeof scenario.invalidation === 'string' ? scenario.invalidation : scenario.invalidation.statement }
-  })
-}
-
-function makeId(prefix: string, value: string): string {
-  return value.startsWith(prefix) ? value : `${prefix}${value}`
 }
 
 function mapInvocationError(errorCode: string): string {

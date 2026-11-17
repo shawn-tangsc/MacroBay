@@ -52,7 +52,7 @@ function setup() {
     const snapshotHash = buildAnalysisSnapshotHash(snapshot)
     repository.appendSnapshot({ ...snapshot, snapshotHash })
     const { run } = createAnalysisRunService({ repository, now: () => asOf, idFactory: () => 'mi-ar-original' })
-      .enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
+      .enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
     repository.updateRunStatus({ id: run.id, status: 'failed', failureCode: 'analysis-provider-error' })
     return run.id
   }
@@ -67,7 +67,7 @@ function setup() {
     const snapshotHash = buildAnalysisSnapshotHash(snapshot)
     repository.appendSnapshot({ ...snapshot, snapshotHash })
     return createAnalysisRunService({ repository, now: () => asOf, idFactory: () => 'mi-ar-inflight' })
-      .enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'correction', triggerKey: 'manual.refresh' }).run.id
+      .enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'correction', triggerKey: 'manual.refresh' }).run.id
   }
 }
 

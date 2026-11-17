@@ -74,6 +74,7 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     const existing = Boolean(group.currentSummaryId) || deps.repository.listRuns()
       .some(run => run.eventGroupId === group.id && run.status === 'succeeded')
     const outcome = await deps.enqueue({
+      analysisKind: 'news',
       eventGroupId: group.id,
       triggerKey: existing ? 'manual.refresh' : 'manual.initial',
       analysisPhase: existing ? 'correction' : 'initial',

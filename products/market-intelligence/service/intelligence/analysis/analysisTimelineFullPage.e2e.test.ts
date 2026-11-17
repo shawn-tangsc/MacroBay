@@ -55,7 +55,7 @@ it('a full first page — 50 published rows plus 20 unpublished runs — is stil
     const runs = createAnalysisRunService({ repository, now: () => asOf, idFactory: (() => { let n = 0; return () => `mi-ar-p${++n}` })() })
     // 50 条已发布行
     for (let index = 0; index < marketAnalysisTimelineLimits.pageItems; index += 1) {
-      const { run } = runs.enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial', triggerKey: `published.${index}` })
+      const { run } = runs.enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial', triggerKey: `published.${index}` })
       repository.claimRun(run.id, asOf)
       repository.commitSuccessfulAnalysis({
         runId: run.id, summary: summaryFor(`mi-as-${index}`, run.id, index + 1), predictions: [],
@@ -65,7 +65,7 @@ it('a full first page — 50 published rows plus 20 unpublished runs — is stil
     // 20 条跑挂了的运行（没有摘要、没有时间轴行）
     const failures = createAnalysisRunService({ repository, now: () => asOf, idFactory: (() => { let n = 0; return () => `mi-ar-f${++n}` })() })
     for (let index = 0; index < marketAnalysisTimelineLimits.unpublishedItems; index += 1) {
-      const { run } = failures.enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial', triggerKey: `failed.${index}` })
+      const { run } = failures.enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial', triggerKey: `failed.${index}` })
       repository.claimRun(run.id, asOf)
       repository.updateRunStatus({ id: run.id, status: 'failed', failureCode: 'analysis-provider-error', completedAt: asOf })
     }

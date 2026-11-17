@@ -231,7 +231,15 @@ function topLevelShapeDefect(value: unknown): AnalysisShapeDefect | undefined {
   return `shape:top-level:${details.join(',') || 'unknown'}`
 }
 
-export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence, focus?: TriggerFocus): AnalysisOutputValidationResult {
+/**
+ * `newsTriggerRules`：触发型必答块是否参与校验（R39 §2「校验按线取」）。
+ *
+ * 市场线传 `false`——它不看触发指针，也不该被「没回答那条新闻」拒收；新闻线传 `true`
+ * （默认值，保持既有调用方行为）。`missingTriggerFocus` 不在此列：它是「回答了 change 吗」，
+ * 市场线仍然要过。
+ */
+export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence, focus?: TriggerFocus,
+  options: Readonly<{ newsTriggerRules?: boolean }> = {}): AnalysisOutputValidationResult {
   if (utf8Length(input) > marketAnalysisValidationPolicy.maximumOutputBytes) return invalidSchema('shape:too-large')
 
   let value: unknown
@@ -313,8 +321,11 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   // ran this rule and must not be judged by it.
   if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
   // R37 C：触发型分析的必答块；只比 id 与结构，没有触发指针时不管。规则码由模块定义，这里不重抄。
-  const newsImpactDefect = newsImpactDefectOf({ output: { conclusion: output.conclusion }, snapshot, focus, reasoningEvidenceRefIds: citedEvidence })
-  if (newsImpactDefect) return missingEvidence(newsImpactDefect.rule as AnalysisValidationRule, newsImpactDefect.detail)
+  // 市场线显式关掉这一段（R39）：它不读触发指针，不该被新闻线的必答块拒收。
+  if (options.newsTriggerRules !== false) {
+    const newsImpactDefect = newsImpactDefectOf({ output: { conclusion: output.conclusion }, snapshot, focus, reasoningEvidenceRefIds: citedEvidence })
+    if (newsImpactDefect) return missingEvidence(newsImpactDefect.rule as AnalysisValidationRule, newsImpactDefect.detail)
+  }
 
   return { ok: true, value: output, redactions }
 }

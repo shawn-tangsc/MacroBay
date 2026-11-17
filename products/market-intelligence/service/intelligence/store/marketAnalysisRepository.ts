@@ -162,7 +162,13 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     claimRun(id: string, startedAt: string) {
       return Number(sqlite.database.prepare("update mi_analysis_runs set status='running', started_at=? where id=? and status='queued'").run(startedAt, id).changes) === 1
     },
-    commitSuccessfulAnalysis(value: Readonly<{ runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline: TimelineEntry; archive?: MarketAnalysisArchiveMetadata }>) {
+    /**
+     * 写入一条成功记录。
+     *
+     * `timeline` 与 `recordGroupPointer` 是两条线的差别：市场线写时间轴并把摘要挂成组的当前结论；
+     * 新闻线两样都不写（组上没有市场摘要，新闻解读只活在抽屉里）。预测行由调用方给，新闻线传空。
+     */
+    commitSuccessfulAnalysis(value: Readonly<{ runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline?: TimelineEntry; recordGroupPointer?: boolean; archive?: MarketAnalysisArchiveMetadata }>) {
       const database = sqlite.database
       database.exec('begin immediate')
       try {
@@ -182,14 +188,18 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
           if (predictionValue.summaryId !== value.summary.id || Date.parse(predictionValue.horizonEnd) <= Date.parse(predictionValue.horizonStart)) throw new Error('analysis-prediction-invalid')
           database.prepare(`insert into mi_analysis_predictions (id,schema_version,summary_id,asset,horizon_start,horizon_end,payload_json,status,verification_due_at,created_at) values (?,?,?,?,?,?,?,?,?,?)`).run(predictionValue.id, predictionValue.schemaVersion, predictionValue.summaryId, predictionValue.asset, predictionValue.horizonStart, predictionValue.horizonEnd, json(predictionValue), predictionValue.status, predictionValue.verificationDueAt, predictionValue.createdAt)
         }
-        if (value.timeline.eventGroupId !== run.eventGroupId || value.timeline.analysisRunId !== run.id || value.timeline.summaryRef !== value.summary.id) throw new Error('analysis-timeline-reference-invalid')
-        insertTimeline(database, value.timeline)
-        const current = database.prepare('select current_summary_id from mi_analysis_event_groups where id = ?').get(run.eventGroupId) as Row | undefined
-        const currentSummaryId = typeof current?.current_summary_id === 'string' ? current.current_summary_id : null
-        const currentSummary = currentSummaryId ? database.prepare('select version,created_at from mi_analysis_summaries where id = ?').get(currentSummaryId) as Row | undefined : undefined
-        const currentVersion = Number(currentSummary?.version ?? 0)
-        const currentCreatedAt = typeof currentSummary?.created_at === 'string' ? currentSummary.created_at : ''
-        if (value.summary.version > currentVersion && value.summary.createdAt > currentCreatedAt) database.prepare('update mi_analysis_event_groups set current_summary_id=?, updated_at=?, revision=revision+1 where id=?').run(value.summary.id, value.summary.createdAt, run.eventGroupId)
+        if (value.timeline) {
+          if (value.timeline.eventGroupId !== run.eventGroupId || value.timeline.analysisRunId !== run.id || value.timeline.summaryRef !== value.summary.id) throw new Error('analysis-timeline-reference-invalid')
+          insertTimeline(database, value.timeline)
+        }
+        if (value.recordGroupPointer !== false) {
+          const current = database.prepare('select current_summary_id from mi_analysis_event_groups where id = ?').get(run.eventGroupId) as Row | undefined
+          const currentSummaryId = typeof current?.current_summary_id === 'string' ? current.current_summary_id : null
+          const currentSummary = currentSummaryId ? database.prepare('select version,created_at from mi_analysis_summaries where id = ?').get(currentSummaryId) as Row | undefined : undefined
+          const currentVersion = Number(currentSummary?.version ?? 0)
+          const currentCreatedAt = typeof currentSummary?.created_at === 'string' ? currentSummary.created_at : ''
+          if (value.summary.version > currentVersion && value.summary.createdAt > currentCreatedAt) database.prepare('update mi_analysis_event_groups set current_summary_id=?, updated_at=?, revision=revision+1 where id=?').run(value.summary.id, value.summary.createdAt, run.eventGroupId)
+        }
         database.prepare("update mi_analysis_runs set status='succeeded', completed_at=? where id=?").run(value.summary.createdAt, run.id)
         database.exec('commit')
       } catch (error) {
@@ -235,6 +245,13 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     },
     getSummary(id: string) { const row = sqlite.database.prepare('select payload_json from mi_analysis_summaries where id=?').get(id) as Row | undefined; return row ? JSON.parse(String(row.payload_json)) as AnalysisSummary : undefined },
     getSummaryForRun(analysisRunId: string) { const row = sqlite.database.prepare('select payload_json from mi_analysis_summaries where analysis_run_id=?').get(analysisRunId) as Row | undefined; return row ? JSON.parse(String(row.payload_json)) as AnalysisSummary : undefined },
+    /**
+     * 组里已写过的最大版本。
+     *
+     * 新闻线不挂组指针，没法从 `current_summary_id` 读版本；而 `(event_group_id, version)` 是唯一键，
+     * 第二次解读同一条新闻必须能接着往上编，否则那条记录写不进去。
+     */
+    latestSummaryVersion(eventGroupId: string) { const row = sqlite.database.prepare('select max(version) as version from mi_analysis_summaries where event_group_id=?').get(eventGroupId) as Row | undefined; return Number(row?.version ?? 0) },
     listPredictions(summaryId: string) { return (sqlite.database.prepare('select payload_json from mi_analysis_predictions where summary_id=? order by rowid asc').all(summaryId) as Row[]).map(row => JSON.parse(String(row.payload_json)) as Prediction) },
     /**
      * The verdicts, oldest first, optionally inside a window.

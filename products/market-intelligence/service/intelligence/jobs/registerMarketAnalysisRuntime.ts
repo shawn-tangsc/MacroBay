@@ -46,6 +46,7 @@ import { createSessionSlotChecks } from './analysisSessionSlotChecks'
 import { resolveTriggerFocus } from '../analysis/analysisTriggerFocus'
 import { isMarketAnalysisEnabled, isMarketAnalysisModelSet, type MarketAnalysisSettings, type MarketAnalysisSettingsPatch } from '../application/marketAnalysisSettings'
 import { MARKET_ANALYSIS_ERROR_CODES } from '../../../contracts/marketAnalysisContracts'
+import type { AnalysisKind } from '../../../contracts/analysisKinds'
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
 import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettingsStore } from '../application/marketAnalysisSettingsStore'
 import { createPredictionVerificationService } from '../analysis/predictionVerificationService'
@@ -521,7 +522,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   }
 
   async function freezeSnapshot(payload: unknown): Promise<Record<string, unknown> | void> {
-    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string; triggeredItemId?: string }
+    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string; triggeredItemId?: string; analysisKind?: AnalysisKind }
     const previousSnapshot = repository.listSnapshots(value.eventGroupId).at(-1)
     // Decided before anything is built: a skipped evaluation must not leave a snapshot or a run.
     const gate = await significanceGate.evaluate({
@@ -564,6 +565,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const settings = await settingsService.getSettings()
     const model = isMarketAnalysisModelSet(settings) ? { providerId: settings.providerId, modelId: settings.modelId } : null
     const result = runs.enqueue({
+      // 冻结载荷是跨重启的：R39 之前排上的那次不带类别，而那时所有冻结都归市场线。
+      // 现在每个入队点都显式给类别；这里的回退只兜升级瞬间还在队列里的旧载荷。
+      analysisKind: value.analysisKind ?? 'market',
       eventGroupId: value.eventGroupId, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
       analysisPhase: value.analysisPhase, triggerKey: value.triggerKey, model,
       // Decided here, with the snapshot in hand: no change record / cut facts / degraded subject are

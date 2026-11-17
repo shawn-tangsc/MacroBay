@@ -48,7 +48,7 @@ function displayLanguageName(language: string): string {
  * 方向是 key 而不是词，所以这份示例对所有语言都是同一份：模型不需要挑选「中文版还是英文版
  * 的标记」，只需要按 `analysisProseDirective` 写正文。
  */
-export function analysisPromptSchemaExample(options: Readonly<{ triggeredNews?: boolean }> = {}): Record<string, unknown> {
+export function analysisPromptSchemaExample(options: Readonly<{ includeNewsImpact?: boolean }> = {}): Record<string, unknown> {
   const policy = marketAnalysisValidationPolicy
   return {
     conclusion: {
@@ -60,8 +60,8 @@ export function analysisPromptSchemaExample(options: Readonly<{ triggeredNews?: 
       macro: '<宏观侧的一句话；没有就写 null>',
       evidenceStrength: '<哪一侧证据更强、为什么；没有就写 null>',
       dataGaps: ['<一个数据缺口，以及它如何影响置信度>'],
-      // 只有「这条运行由一条新闻发起」时才出现；三支互斥，示例给 evaluated 那一支。
-      ...(options.triggeredNews ? {
+      // 只有新闻线才出现；三支互斥，示例给 evaluated 那一支。市场线的示例里没有这个字段。
+      ...(options.includeNewsImpact ? {
         newsImpact: {
           verdict: 'evaluated 或 no-transmission 或 cannot-determine',
           checks: [

@@ -1,12 +1,11 @@
 import type { AnalysisRun, AnalysisPhase, EventGroup, EvidenceSnapshot } from '../../../contracts/marketAnalysisContracts'
-import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalysisContracts'
+import type { AnalysisKind } from '../../../contracts/analysisKinds'
 import { buildAnalysisIdempotencyKey } from './analysisHash'
+import { lineFor } from './analysisLineRegistry'
 import { ANALYSIS_RUN_INTERRUPTED, isStalledAnalysisRun } from './analysisRunStaleness'
 
 export const analysisRunPolicy = Object.freeze({
   version: 'cryptoMarketAnalysisTriggerPolicy.v1',
-  promptVersion: 'market-analysis-v2',
-  skillVersion: 'market-analysis-v1',
   triggerLedgerIdPrefix: 'mi-ledger-',
   restartInitialWindowMs: 30 * 60 * 1_000
 })
@@ -43,6 +42,8 @@ export type AnalysisRunRecovery = Readonly<{
 export type AnalysisRunModelRef = Readonly<{ providerId: string; modelId: string }>
 
 export type AnalysisRunEnqueueInput = Readonly<{
+  /** 这条运行属于哪条解析线。由调用方指定——`news` 只从按条解读入口进来。 */
+  analysisKind: AnalysisKind
   eventGroupId: string
   snapshotId: string
   snapshotHash: string
@@ -70,13 +71,14 @@ export type AnalysisRunService = Readonly<{
 export function createAnalysisRunService(deps: Readonly<{ repository: Repository; now: () => string; idFactory: () => string }>): AnalysisRunService {
   const enqueue = (input: AnalysisRunEnqueueInput) => {
     const queuedAt = deps.now()
+    // 提示词/技能/输出契约的版本是线的事实：运行行必须写「哪条线的第几版」，不能写全局常量。
+    const line = lineFor(input.analysisKind)
     const run: AnalysisRun = {
-      // A 笔暂时全部归市场线：今天的新闻触发解读仍走市场提示词，C 笔拆线后才由调用方指定。
-      id: deps.idFactory(), schemaVersion: 1, analysisKind: 'market', eventGroupId: input.eventGroupId, snapshotId: input.snapshotId,
+      id: deps.idFactory(), schemaVersion: 1, analysisKind: input.analysisKind, eventGroupId: input.eventGroupId, snapshotId: input.snapshotId,
       snapshotHash: input.snapshotHash, analysisPhase: input.analysisPhase, triggerKey: input.triggerKey,
       idempotencyKey: buildAnalysisIdempotencyKey(input), status: 'queued', attempt: 1, retryOfRunId: null,
       modelProviderId: input.model?.providerId ?? null, modelId: input.model?.modelId ?? null, policyVersion: analysisRunPolicy.version,
-      promptVersion: analysisRunPolicy.promptVersion, skillVersion: analysisRunPolicy.skillVersion, outputSchemaVersion: MARKET_ANALYSIS_CONTRACT_POLICY.outputSchemaVersion,
+      promptVersion: line.promptVersion, skillVersion: line.skillVersion, outputSchemaVersion: line.outputSchemaVersion,
       jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, validationMode: input.validationMode ?? null, queuedAt, startedAt: null, completedAt: null
     }
     return deps.repository.enqueueRun(run)
@@ -126,7 +128,7 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
         stale.push(run.id)
       }
       if (!hasSuccessfulInitial && !initialPending && withinRestartWindow) {
-        const result = enqueue({ eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
+        const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
         if (result.created) {
           recordDecision({ eventGroupId: group.id, triggerKey: result.run.triggerKey, changeHash: latest.snapshotHash, decision: 'queued', reasonCode: 'restart-initial-compensated', snapshotHash: latest.snapshotHash, analysisRunId: result.run.id })
           dispatch.push({ analysisRunId: result.run.id, eventGroupId: group.id })
@@ -134,7 +136,7 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
       }
       const reviewPending = activeRuns.some(run => run.analysisPhase === 'review')
       if (group.reviewCount < 2 && !reviewPending && Number.isFinite(Date.parse(group.reviewDeadlineAt)) && Date.parse(deps.now()) <= Date.parse(group.reviewDeadlineAt) && hasSuccessfulInitial) {
-        const result = enqueue({ eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'review', triggerKey: 'market-reaction.15m' })
+        const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'review', triggerKey: 'market-reaction.15m' })
         if (result.created) {
           recordDecision({ eventGroupId: group.id, triggerKey: result.run.triggerKey, changeHash: latest.snapshotHash, decision: 'queued', reasonCode: 'restart-review-compensated', snapshotHash: latest.snapshotHash, analysisRunId: result.run.id })
           dispatch.push({ analysisRunId: result.run.id, eventGroupId: group.id })

@@ -80,7 +80,7 @@ it('shows the run while it is still being read, then turns that same row into th
     repository.appendSnapshot(snapshot)
     const runs = createAnalysisRunService({ repository, now: () => queuedAt, idFactory: () => 'mi-ar-new' })
     const { run } = runs.enqueue({
-      eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
       analysisPhase: 'initial', triggerKey: 'manual.initial'
     })
     const service = createAnalysisTimelineService({ repository, timeZone: () => 'Asia/Shanghai' })
@@ -121,7 +121,7 @@ it('turns a run that dies without publishing into a failed row rather than leavi
     repository.appendSnapshot(snapshot)
     const runs = createAnalysisRunService({ repository, now: () => queuedAt, idFactory: () => 'mi-ar-dead' })
     const { run } = runs.enqueue({
-      eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
       analysisPhase: 'initial', triggerKey: 'manual.initial'
     })
     repository.claimRun(run.id, startedAt)

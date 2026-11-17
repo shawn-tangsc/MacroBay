@@ -11,7 +11,7 @@ describe('analysisRunService', () => {
   it('uses the canonical idempotency key and returns an existing run without incrementing attempts', () => {
     const enqueueRun = vi.fn((run) => ({ created: true, run }))
     const service = createAnalysisRunService({ repository: { enqueueRun } as never, now: () => asOf, idFactory: () => 'mi-ar-1' })
-    const input = { eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
+    const input = { analysisKind: 'market' as const, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
     const result = service.enqueue(input)
     expect(result.run.idempotencyKey).toBe(buildAnalysisIdempotencyKey(input))
     expect(result.run.attempt).toBe(1)
@@ -21,7 +21,7 @@ describe('analysisRunService', () => {
   it('records the model the run was queued for, and leaves it empty when none was chosen', () => {
     const enqueueRun = vi.fn((run) => ({ created: true, run }))
     const service = createAnalysisRunService({ repository: { enqueueRun } as never, now: () => asOf, idFactory: () => 'mi-ar-1' })
-    const base = { eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
+    const base = { analysisKind: 'market' as const, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
 
     expect(service.enqueue({ ...base, model: { providerId: 'provider-1', modelId: 'model-1' } }).run)
       .toMatchObject({ modelProviderId: 'provider-1', modelId: 'model-1' })
@@ -44,7 +44,7 @@ describe('analysisRunService', () => {
     repository.appendEventGroup(eventGroup)
     repository.appendSnapshot(snapshot)
     const service = createAnalysisRunService({ repository, now: () => asOf, idFactory: () => `mi-ar-${Math.random()}` })
-    const input = { eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
+    const input = { analysisKind: 'market' as const, eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
     const first = service.enqueue(input)
     const second = service.enqueue(input)
     expect(first.created).toBe(true)
@@ -72,7 +72,7 @@ describe('analysisRunService', () => {
     let index = 0
     const service = createAnalysisRunService({ repository, now: () => asOf, idFactory: () => `mi-ar-retry-${++index}` })
     const run = (snapshot: EvidenceSnapshot) => service.enqueue({
-      eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
       analysisPhase: 'initial', triggerKey: 'schedule.asia.open'
     })
     expect(run(first).created).toBe(true)

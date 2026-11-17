@@ -445,7 +445,10 @@ export type AnalysisConclusion = Readonly<{
   evidenceStrength: string | null
   /** Gaps in the evidence and how each one limits confidence. */
   dataGaps: readonly string[]
-  /** 触发型分析必答：这条新闻对标的的市场含义（R37）。只有快照带触发指针时才有。 */
+  /**
+   * 触发型分析的新闻含义（R37）。**只读历史**：R39 之后市场线不再写这个字段，也不再按它拒收；
+   * 旧摘要照旧读得出来。新闻线在 C 笔换成 `NewsInterpretation` 契约之前仍可能写它。
+   */
   newsImpact?: AnalysisNewsImpact
 }>
 

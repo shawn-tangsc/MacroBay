@@ -72,7 +72,7 @@ export function createInitialMarketAnalysisRequest(deps: {
     if (!manualCorrection && ((mode === 'initial' && group.currentSummaryId) || deps.repository.listRuns().some(run => run.eventGroupId === group.id && blockingStatuses.includes(run.status)))) throw new Error('analysis-already-available')
     // 入队与冻结观察是两条手动入口共用的那一段（§9.1）；旧命令对「在飞」返回 queued，语义不变。
     const outcome = await enqueue({
-      eventGroupId: group.id, triggerKey, analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now()
+      analysisKind: 'market', eventGroupId: group.id, triggerKey, analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now()
     })
     if (outcome.state === 'enqueued' || outcome.state === 'in-flight') return { itemId: item.itemId, queued: true }
     throw new Error('analysis-initial-request-failed')

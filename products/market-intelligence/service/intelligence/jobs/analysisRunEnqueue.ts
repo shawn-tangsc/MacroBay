@@ -1,5 +1,6 @@
 import type { JobRuntime } from '@platform/jobs'
 import type { AnalysisPhase } from '../../../contracts/marketAnalysisContracts'
+import type { AnalysisKind } from '../../../contracts/analysisKinds'
 import { isStalledAnalysisRun } from '../analysis/analysisRunStaleness'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
 
@@ -23,6 +24,8 @@ export type EnqueueAnalysisRunOutcome =
   | Readonly<{ state: 'failed'; errorCode: string }>
 
 export type EnqueueAnalysisRunInput = Readonly<{
+  /** 这次冻结要落在哪条线上：冻结作业只带这一袋字段，run 行靠它选线。 */
+  analysisKind: AnalysisKind
   eventGroupId: string
   triggerKey: string
   analysisPhase: AnalysisPhase
@@ -60,6 +63,7 @@ export function createAnalysisRunEnqueuer(deps: Readonly<{
         trigger: { kind: 'manual' },
         payload: {
           eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, analysisPhase: input.analysisPhase, asOf: input.asOf,
+          analysisKind: input.analysisKind,
           ...(input.triggeredItemId ? { triggeredItemId: input.triggeredItemId } : {})
         }
       })

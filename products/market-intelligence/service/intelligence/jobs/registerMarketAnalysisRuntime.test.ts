@@ -270,7 +270,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
       const snapshotHash = hash(snapshot)
       runtime.repository.appendSnapshot({ ...snapshot, snapshotHash })
       createRuns({ repository: runtime.repository, now: () => asOf, idFactory: () => 'mi-ar-orphan' })
-        .enqueue({ eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
+        .enqueue({ analysisKind: 'market', eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
       const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
       const dispatched = () => enqueueDefinition.mock.calls.map(([definition]) => definition).filter(definition => definition.handlerId === RUN_MARKET_ANALYSIS_JOB)
       await handlers.get(RECOVER_MARKET_ANALYSIS_RUNS_JOB)!({}, context)
@@ -314,7 +314,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
       const { createAnalysisRunService } = await import('../analysis/analysisRunService')
       const snapshotHash = buildAnalysisSnapshotHash(snapshot)
       runtime.repository.appendSnapshot({ ...snapshot, snapshotHash })
-      createAnalysisRunService({ repository: runtime.repository, now: () => snapshot.asOf, idFactory: () => 'mi-ar-retry' }).enqueue({ eventGroupId: 'mi-eg-existing', snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
+      createAnalysisRunService({ repository: runtime.repository, now: () => snapshot.asOf, idFactory: () => 'mi-ar-retry' }).enqueue({ analysisKind: 'market', eventGroupId: 'mi-eg-existing', snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
       // The queued run is the answer, not a refusal: one freeze job for the group, still.
       const freezesSoFar = enqueueDefinition.mock.calls.filter(([definition]) => definition.handlerId === 'market-intelligence.freezeMarketAnalysisSnapshot').length
       await expect(runtime.requestInitialAnalysis(undefined, undefined, 'initial', 'manual')).resolves.toEqual({ itemId: classifiedItem.itemId, queued: true })
