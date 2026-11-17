@@ -176,12 +176,13 @@ describe('MarketAnalysisTimeline', () => {
     await flushReads()
 
     // Nothing applied yet: no error surface, and no empty state pretending the list is empty.
-    expect(container.textContent).not.toContain(text.unavailable)
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
     expect(container.querySelector('.mi-analysis-timeline__list')?.textContent ?? '').not.toContain(text.empty)
 
-    // The budget runs out, and only now does the failure become visible.
+    // The budget runs out, and only now does the failure become visible — 判据是统一错误面本身，
+    // 不是某一句话：那句「读不到」的措辞会随产品口径改，而「有没有出口」不会。
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); await Promise.resolve() })
-    expect(container.textContent).toContain(text.unavailable)
+    expect(container.querySelector('[data-state="error"]')).not.toBeNull()
     expect(container.textContent).not.toContain('private failure')
   })
 
@@ -1077,3 +1078,39 @@ function productCalls(invoke: { mock: { calls: unknown[][] } }): unknown[][] {
 function labelled(button: Element, text: string): boolean {
   return (button.textContent ?? '').replace(/\s+/gu, '') === text.replace(/\s+/gu, '')
 }
+
+/**
+ * 时间轴自己读不到时，不许落成「暂无已发布的消息分析」（2026-11-17，模块启动失败那次）。
+ * 那一句在说「你没有分析」，而事实是「这次读不到」——两件事，两种面。
+ */
+describe('时间轴读失败：错误态 + 重试，不是「暂无」', () => {
+  it('listTimeline 抛 product-runtime-unavailable → 统一错误面与重试，且不出现「暂无」', async () => {
+    vi.useFakeTimers()
+    let listReads = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') { listReads += 1; throw new Error('product-runtime-unavailable') }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    // 有界重试跑完（10 次 / 30s 预算）才落失败态。
+    await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
+
+    expect(container.textContent).not.toContain(text.empty)
+    const stateView = container.querySelector('[data-state="error"]')
+    expect(stateView).not.toBeNull()
+    // 不再是那句没有出口的裸 <p role="alert">。
+    expect(container.querySelector('p[role="alert"]')).toBeNull()
+    const retry = stateView?.querySelector<HTMLButtonElement>('button.state-view__action')
+    expect(retry).not.toBeNull()
+    const before = listReads
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(listReads).toBeGreaterThan(before)
+    vi.useRealTimers()
+  })
+})

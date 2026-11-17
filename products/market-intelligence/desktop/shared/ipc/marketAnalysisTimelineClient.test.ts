@@ -164,12 +164,21 @@ describe('marketAnalysisTimelineClient', () => {
 
   it('fails closed when the product IPC is unavailable or extends the safe contract', async () => {
     vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => ({ schemaVersion: 1, items: [], nextCursor: null, extra: true })) } } })
-    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toEqual({ state: 'unavailable' })
+    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toEqual({ state: 'unavailable', reason: 'read-failed' })
   })
 
   it('distinguishes an empty published timeline from an unavailable product IPC', async () => {
-    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => { throw new Error('runtime unavailable') }) } } })
-    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toEqual({ state: 'unavailable' })
+    // 空页是「读到了，确实没有」；模块没起来是「读不到」——两者绝不许塌成同一个形状，
+    // 塌了界面就只能把「读不到」画成「暂无」（2026-11-17 用户截图那张卡片）。
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => ({ schemaVersion: 1, items: [], nextCursor: null })) } } })
+    await expect(marketAnalysisTimelineClient.listTimeline())
+      .resolves.toEqual({ state: 'available', page: { schemaVersion: 1, items: [], nextCursor: null } })
+    // 主进程在模块启动失败时抛的就是这个码。
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => { throw new Error('product-runtime-unavailable') }) } } })
+    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toMatchObject({ state: 'unavailable', reason: 'product-runtime-unavailable' })
+    // 其余读失败也说「读不到」，但不冒充「模块没起来」。
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => { throw new Error('socket hang up') }) } } })
+    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toMatchObject({ state: 'unavailable', reason: 'read-failed' })
   })
 
   it('joins a selected timeline entry only to its matching safe run and summary detail', async () => {

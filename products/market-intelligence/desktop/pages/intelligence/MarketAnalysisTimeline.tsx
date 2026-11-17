@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { toReadableConclusionText } from '../../../contracts/marketAnalysisReadableText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -183,7 +184,20 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
         <aside className="mi-analysis-timeline__list" aria-label={text.timeline}>
           <h2>{text.timeline}</h2>
           {state.loading ? <LoadingState label={text.loading} minHeight={160} /> : null}
-          {state.failed ? <p role="alert" className="mi-analysis-timeline__state">{text.unavailable}</p> : null}
+          {/* 读失败要能重试：一句「暂不可用」既没出口也不说明「不是没有」，读者只能猜。
+              句子复用产品既有那句「这项数据暂时读不到，不是你没有」（与结论卡、抽屉同一口径）。 */}
+          {state.failed ? <StateView
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void timeline.load() }}
+            productReason={{
+              key: 'mi.analysisTimeline.listUnreadable',
+              resolve: (key, _params) => key === 'mi.analysisTimeline.listUnreadable'
+                ? resolveProductText('pages.intelligence.portal.data.drawerUnavailable')
+                : ''
+            }}
+            reasonCode="unreadable"
+            size="md"
+            state="error"
+          /> : null}
           {state.lastRead && text.readTrace ? <p className="mi-analysis-timeline__state" data-timeline-read={state.lastRead}>{text.readTrace}：{state.lastRead}</p> : null}
           {!state.loading && !state.failed && state.entries.length === 0 ? <>
             <p className="mi-analysis-timeline__state">{text.empty}</p>

@@ -132,3 +132,72 @@ describe('the latest conclusion card when the detail cannot be read', () => {
     expect(ensureDetail.mock.calls.at(-1)?.[0]).toMatchObject({ id: 'mi-tl-1' })
   })
 })
+
+/**
+ * 「读不到」不许画成「没有」（2026-11-17，用户截图「暂无已发布的 AI 结论」，而库里 20:10 有一条）。
+ *
+ * 根因链：情报模块启动失败 → IPC 置 unavailable → `listTimeline` 抛 `product-runtime-unavailable`
+ * → 卡片在 `!latest && !state.loading` 上直接印了「暂无」。那一句是在说「你没有结论」，而事实是
+ * 「这次读不到」。两条判据：① 读失败要落错误态 + 重试，且不许出现「暂无」；② 只有读成功且确实为空
+ * 才是「暂无」。
+ */
+describe('the latest conclusion card when the timeline itself cannot be read', () => {
+  /** 每次 `listTimeline` 都抛模块不可用；其余 IPC 给一个读不出来的空载荷。 */
+  function stubUnavailableRuntime(): { reads: () => number } {
+    let listReads = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') {
+        listReads += 1
+        throw new Error('product-runtime-unavailable')
+      }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    return { reads: () => listReads }
+  }
+
+  it('模块不可用 → 错误态 + 重试，绝不出现「暂无已发布」', async () => {
+    vi.useFakeTimers()
+    const stub = stubUnavailableRuntime()
+    const holder: { current?: UseMarketAnalysisTimelineResult } = {}
+    function Probe(): React.ReactElement {
+      const timeline = useMarketAnalysisTimeline({ text })
+      holder.current = timeline
+      return createElement(LatestAnalysisConclusionCard, { text, workspaceText, timeline, onOpenDetail: vi.fn() } as never)
+    }
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null, createElement(Probe))))
+    // 有界重试跑完才落失败态（10 次 / 30s 预算）。
+    await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
+
+    expect(holder.current?.state.failed).toBe(true)
+    // 原因要真的带出来：模块没起来，不是「读到了但没有」。
+    expect(holder.current?.state.failure).toBe('product-runtime-unavailable')
+    // ① 不许说「暂无」——那句话在说读者没有结论。
+    expect(host?.textContent).not.toContain(workspaceText.latestConclusionEmpty)
+    // ② 错误态走统一状态面，并且有出口。
+    const stateView = host?.querySelector('[data-state="error"]')
+    expect(stateView).not.toBeNull()
+    const retry = stateView?.querySelector<HTMLButtonElement>('button.state-view__action')
+    expect(retry).not.toBeNull()
+    // ③ 那个出口真的再读一次，不是装饰。
+    const before = stub.reads()
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(stub.reads()).toBeGreaterThan(before)
+    vi.useRealTimers()
+  })
+
+  it('读成功且确实没有已发布条目 → 才是「暂无」', async () => {
+    const timeline = {
+      state: { entries: [], loading: false, failed: false, nextCursor: null },
+      details: {},
+      detailState: {},
+      load: vi.fn()
+    } as unknown as UseMarketAnalysisTimelineResult
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText, timeline, onOpenDetail: vi.fn() } as never))))
+    expect(host?.textContent).toContain(workspaceText.latestConclusionEmpty)
+    expect(host?.querySelector('[data-state="error"]')).toBeNull()
+  })
+})

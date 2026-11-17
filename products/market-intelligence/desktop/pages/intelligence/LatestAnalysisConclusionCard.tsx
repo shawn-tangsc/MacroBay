@@ -122,7 +122,22 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
       </div>
     </header>
     {!latest && state.loading ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
-    {!latest && !state.loading ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
+    {/* 列表读失败 ≠ 没有结论。以前这里不区分，模块没启动时 reader 看到的是「暂无已发布的 AI 结论」——
+        把「读不到」画成「没有」，正是这一轮反复防的那件事。失败走统一状态面 + 真重读整页。 */}
+    {!latest && !state.loading && state.failed ? <StateView
+      action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void timeline.load() }}
+      productReason={{
+        key: 'mi.latestConclusion.listUnreadable',
+        resolve: (key, _params) => key === 'mi.latestConclusion.listUnreadable'
+          ? workspaceText.conclusionUnreadable ?? workspaceText.latestConclusionUnavailable
+          : ''
+      }}
+      reasonCode="unreadable"
+      size="md"
+      state="error"
+    /> : null}
+    {/* 只有「读成功且真的没有已发布条目」才说暂无。 */}
+    {!latest && !state.loading && !state.failed ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
     {latest && pending === 'loading' ? <div aria-label={workspaceText.openDetail} className="mi-analysis-conclusion-card__body mi-analysis-conclusion-card__body--action"
       onClick={requestOpen} onKeyDown={onBodyKeyDown} role="button" tabIndex={0}>
       <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} />

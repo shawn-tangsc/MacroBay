@@ -10,17 +10,13 @@ import {
   sanitizePage,
   sanitizeSettings
 } from './marketAnalysisTimelineSanitizers'
+import { listUnavailable, readFailureReason, unavailable, type MarketAnalysisTimelineReadFailure } from './marketAnalysisTimelineReadFailure'
 
 // 「渲染层能认哪些触发原因码」随校验器一起搬进了 `marketAnalysisTimelineSanitizers`；
 // 这一处对外名字与路径不变（多处引用从这里取）。
 export { explainableTriggerReasonCodes } from './marketAnalysisTimelineSanitizers'
 
 const PRODUCT_ID = 'market-intelligence'
-
-/** 读不到就是读不到：这个形状只由本文件返回，校验器不需要它。 */
-function unavailable(): { state: 'unavailable' } {
-  return { state: 'unavailable' }
-}
 
 /** Structured "what changed" for a run, safe for the renderer. */
 export type MarketAnalysisChangeView = Readonly<{
@@ -158,7 +154,7 @@ export type MarketAnalysisSettingsSaveResult =
 export type MarketAnalysisTimelineClient = Readonly<{
   getSettings: () => Promise<MarketAnalysisSettingsView | undefined>
   saveSettings: (patch: MarketAnalysisSettingsPatch) => Promise<MarketAnalysisSettingsSaveResult>
-  listTimeline: (input?: { cursor?: string }) => Promise<{ state: 'available'; page: MarketAnalysisTimelinePage } | { state: 'unavailable' }>
+  listTimeline: (input?: { cursor?: string }) => Promise<{ state: 'available'; page: MarketAnalysisTimelinePage } | { state: 'unavailable'; reason: MarketAnalysisTimelineReadFailure }>
   /**
    * 既有入口：`retryRunId` 重跑失败的那次；`mode: 'refresh'` 为同一事件组再分析一次；
    * `eventGroupId` 让「重新生成」指着读者正在看的那一组，而不是「最近一条」。
@@ -192,10 +188,12 @@ export const marketAnalysisTimelineClient: MarketAnalysisTimelineClient = {
   },
   async listTimeline(input = {}) {
     try {
-      if (!window.platform?.products?.invoke) return unavailable()
-      return sanitizePage(await window.platform.products.invoke(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.listTimeline, input)) ?? unavailable()
-    } catch {
-      return unavailable()
+      // 没有 preload 桥就是模块没起来，与「读到了但没内容」是两件事。
+      if (!window.platform?.products?.invoke) return listUnavailable('product-runtime-unavailable')
+      return sanitizePage(await window.platform.products.invoke(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.listTimeline, input)) ?? listUnavailable('read-failed')
+    } catch (error) {
+      // 原因不吞：吞掉就变成一句无原因的「读不到」，界面只能靠猜，最后画成「暂无」。
+      return listUnavailable(readFailureReason(error))
     }
   },
   async getLatestAttempt() {

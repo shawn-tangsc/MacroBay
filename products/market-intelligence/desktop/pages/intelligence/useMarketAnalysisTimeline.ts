@@ -14,6 +14,7 @@ import {
   type MarketAnalysisTimelineDetail,
   type MarketAnalysisTimelineEntry
 } from '../../shared/ipc/marketAnalysisTimelineClient'
+import type { MarketAnalysisTimelineReadFailure } from '../../shared/ipc/marketAnalysisTimelineReadFailure'
 import { requestNewsInterpretation, type NewsInterpretationRequestView } from '../../shared/ipc/newsInterpretationClient'
 
 export type AnalysisSelectionState = 'none' | 'loading' | 'ready' | 'unavailable'
@@ -39,6 +40,11 @@ type State = Readonly<{
    */
   refreshing?: boolean
   failed?: boolean
+  /**
+   * 上一次读**为什么**没成：`product-runtime-unavailable` 是情报模块本身没启动起来，其余是
+   * 「这次没读出来」。界面上两者都是「读不到」，但诊断与用例要能分开。
+   */
+  failure?: MarketAnalysisTimelineReadFailure
   /**
    * Outcome of the most recent read, kept only so the empty state can say what
    * actually happened. The renderer console does not reach the host terminal, so
@@ -176,9 +182,10 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       : { ...current, loading: true, failed: false })
     try {
       const result = await withReadTimeout(marketAnalysisTimelineClient.listTimeline(cursor ? { cursor } : {}), policy.readTimeoutMs)
-      const trace = result?.state === 'available'
-        ? `${result.state}:${result.page.items.length}`
-        : result?.state ?? 'timeout'
+      const trace = result === undefined
+        ? 'timeout'
+        : result.state === 'available' ? `available:${result.page.items.length}` : `unavailable:${result.reason}`
+      const failure: MarketAnalysisTimelineReadFailure = result?.state === 'unavailable' ? result.reason : 'read-failed'
       setState(current => ({ ...current, lastRead: trace }))
       // A read that never settled or was unavailable is a visible failure, never a
       // permanent spinner; a background retry below heals a transient one.
@@ -200,7 +207,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
         // Either data was already on screen (keep it, mark it stale) or the budget is spent (this is
         // the first and final failure, so it may be shown).
         initialFailureSince.current = undefined
-        setState(current => ({ ...current, lastRead: `${trace}->unavailable`, failed: true }))
+        setState(current => ({ ...current, lastRead: `${trace}->unavailable`, failed: true, failure }))
         if (!cursor) settled.current = true
         return undefined
       }
