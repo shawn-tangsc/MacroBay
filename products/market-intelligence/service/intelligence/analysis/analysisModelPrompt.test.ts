@@ -33,7 +33,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
     expect(system).toContain('用户消息 trigger 段指向的就是它')
     expect(system).not.toContain('factId 为 `triggered-news:<itemId>`')
     expect(system).toContain('不要照抄标题')
-    expect(system).toContain('用**当前数据**印证或否证它')
+    expect(system).toContain('印证或否证必须结构化')
     expect(system).toContain('conclusion.newsImpact')
     expect(system).toContain('no-transmission')
     expect(system).toContain('cannot-determine')
@@ -116,14 +116,20 @@ describe('analysis model prompt trigger contract (R37)', () => {
     expect(system).toContain('市场读数没有新的变动，方向判断沿用上一次')
   })
 
-  it('assigns each of the three blocks one job, and forbids repeating the same fact', () => {
-    // 用户原话：「你自己看看里面的像不像一个真人对新闻的解读」——三块在同一件事上复述。
+  it('orders the reading in three sections: the news first, then the data change, then the outlook', () => {
+    // 用户 2026-11-18：「摘要里全是市场条件，新闻只在第二段从句里出现」——主语顺序要反过来。
     const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
-    expect(system).toContain('三块各管一件事，不许互相复述')
-    expect(system).toContain('`conclusion.summary` 一次说清「这条新闻 + 当前数据 → 方向/影响」')
-    expect(system).toContain('`conclusion.change` 只写**数据本身**变在哪')
-    expect(system).toContain('新闻作为起因**只提一次**')
-    expect(system).toContain('同一条事实在一条解读里只出现一次')
+    expect(system).toContain('整篇按**三段**写，一段一件事，顺序不许调换')
+    expect(system).toContain('`conclusion.summary` 的主语必须是这条新闻，不是市场')
+    expect(system).toContain('**不许**在这一段堆市场条件')
+    expect(system).toContain('**第二段（再用库里的数据解释现在发生了什么变化）')
+    expect(system).toContain('是在**印证**还是**反驳**第一段里那件事')
+    expect(system).toContain('这两项打架')
+    expect(system).toContain('**第三段（最后给对未来的看法）')
+    expect(system).toContain('什么情况下这个看法作废')
+    // change 不再禁止提新闻：它是对照对象，只是不许复述细节。
+    expect(system).toContain('可以也应该提到那條新闻')
+    expect(system).toContain('不许复述新闻的细节')
   })
 
   it('stays out of runs that a news item did not trigger', () => {
