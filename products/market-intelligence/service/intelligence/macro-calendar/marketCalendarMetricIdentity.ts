@@ -276,8 +276,15 @@ export function toAlpha3Country(code: string): string {
  * 而「空」看起来就像「这条没有国家」。
  */
 export function toAlpha2Country(code: string): string {
-  // `UK` 不是合法 alpha-2（那是 `GB`），只是常见缩写；按 ISO 事实归一，不是按惯例。
-  if (code === 'UK') return 'GB'
+  /**
+   * 源给的三位写法里，有几个**不是 ISO alpha-3**，而是常见缩写或 IOC 码（`PHI` 是菲律宾的 IOC 码，
+   * ISO 是 `PHL`）。库里实测到这几种：`FRA / ITA / AUS / PHI / SIN / INA`——补一张显式别名表，
+   * 因为靠 alpha-3 反查永远命中不了它们，那 50 行就会一直是三位写法。
+   */
+  const aliases: Record<string, string> = {
+    UK: 'GB', SIN: 'SG', INA: 'ID', PHI: 'PH', FRA: 'FR', ITA: 'IT', AUS: 'AU', GER: 'DE', USA: 'US'
+  }
+  if (aliases[code] !== undefined) return aliases[code]!
   for (const [alpha2, alpha3] of Object.entries(alpha3ByAlpha2)) {
     if (alpha3 === code) return alpha2
   }

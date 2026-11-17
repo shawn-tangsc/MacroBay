@@ -98,7 +98,8 @@ export function normalizeSourcePeriods(database: DatabaseSync): SourcePeriodMigr
     if (after !== before - report.droppedRows) {
       throw new Error(`period normalize row count mismatch: before=${before} after=${after} dropped=${report.droppedRows}`)
     }
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
+    // 不留标记：判据是「还有多少行是发布时刻形状」，不是「跑过没有」。
+    database.prepare('delete from mi_macro_calendar_migrations where version = ?').run(version)
     database.exec('commit')
     return report
   } catch (error) {
@@ -119,8 +120,11 @@ export function normalizeSourcePeriods(database: DatabaseSync): SourcePeriodMigr
 export function normalizeSourcePeriodsByShape(database: DatabaseSync): SourcePeriodMigrationReport {
   const table = calendarStandardTablePolicy.eventsTable
   const version = calendarSourcePeriodPolicy.shapeMigrationVersion
-  const done = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?').get(version)
-  if (done !== undefined) return { scanned: 0, rewritten: 0, unknown: 0, mergedGroups: 0, droppedRows: 0 }
+  /**
+   * **判据是缺口，不是版本标记**（用户 2026-11-17）：写入端每采集一轮就会再写进一批「发布时刻当
+   * 期次」的行，靠一次性标记清完库存没有意义——真库实测清理后又冒出 467 行。
+   * 所以每次启动都扫一遍「`period_key` 里含大写 T」的行。
+   */
   const rows = database.prepare(`select country_code, metric_key, period_key, scheduled_date, first_scheduled_date,
       source_event_id, source_label, source_label_en, values_json, observed_at
     from ${table} where period_key like '%T%'`).all() as unknown as Record<string, unknown>[]
@@ -179,7 +183,8 @@ export function normalizeSourcePeriodsByShape(database: DatabaseSync): SourcePer
     if (after !== before - report.droppedRows) {
       throw new Error(`period shape normalize row count mismatch: before=${before} after=${after} dropped=${report.droppedRows}`)
     }
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
+    // 不留标记：判据是「还有多少行是发布时刻形状」，不是「跑过没有」。
+    database.prepare('delete from mi_macro_calendar_migrations where version = ?').run(version)
     database.exec('commit')
     return report
   } catch (error) {
