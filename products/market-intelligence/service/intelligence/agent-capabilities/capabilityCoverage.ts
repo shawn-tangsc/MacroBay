@@ -54,6 +54,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // 事件清单同样只给渲染层（核对清单用），agent 不读。
   'intelligence.macro.marketCalendar.queryEvents': excluded('internal-view'),
   'intelligence.macro.marketCalendar.queryMappingRules': excluded('internal-view'),
+  // 码表读口（`d675ee1` 那张表的服务端）：只给渲染层的映射弹框核对用，agent 不读。
+  'intelligence.macro.marketCalendar.queryCodeTable': excluded('internal-view'),
   'intelligence.macro.marketCalendar.queryMonth': exposed('query_macro_calendar'),
   // The freshness read is what the briefing consumes; an agent asking "how old is the
   // calendar" is the same read, so it rides the existing calendar query capability.
