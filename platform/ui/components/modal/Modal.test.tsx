@@ -22,11 +22,15 @@ vi.mock('antd', async (importOriginal) => {
     ...actual,
     Modal: (props: Record<string, unknown>) => {
       passedProps.push(props)
-      // 用捕获到的真组件渲染：它的 props 类型这里拿不到，摊开前先收成一个宽签名。
-      // （原来写的是 `{...(props as never)}`——`never` 不能摊开，只是这个文件平时不进
-      // typecheck 程序，一直没被报出来；这次它随提交进了程序，就顺手修掉。）
-      const Passthrough = actual.Modal as unknown as (input: Record<string, unknown>) => React.ReactElement
-      return <Passthrough {...props} />
+      /*
+        用捕获到的真组件渲染：它的 props 类型这里拿不到，所以要一次显式转换。
+        转换的目标是**真组件自己的 props 类型**（照 `Drawer.test.tsx` 的先例），不是
+        `Record<string, unknown>`：后者能过编译，但属性名写错也不红——那正是「为了过编译放宽类型」。
+        （原来写的是 `{...(props as never)}`：`never` 不能摊开，只是这个文件平时不进 typecheck 程序，
+        一直没被报出来。）
+      */
+      const Passthrough = actual.Modal as unknown as typeof actual.Modal
+      return <Passthrough {...(props as React.ComponentProps<typeof Passthrough>)} />
     }
   }
 })
@@ -171,7 +175,8 @@ describe('Modal 的宽度', () => {
       compact: '420px',
       standard: '520px',
       expanded: '720px',
-      maximum: '860px'
+      maximum: '860px',
+      full: '1280px'
     }
     for (const [width, px] of Object.entries(expected)) {
       await mount({ width: width as ModalProps['width'] })
