@@ -48,9 +48,16 @@
     "bypass": false,
     "channel": true
   },
+  "market-intelligence.news.item-arrived": {
+    "levels": [
+      "desktop"
+    ],
+    "group": null,
+    "bypass": false,
+    "channel": false
+  },
   "market-intelligence.sentiment.alert": {
     "levels": [
-      "center",
       "channel"
     ],
     "group": null,

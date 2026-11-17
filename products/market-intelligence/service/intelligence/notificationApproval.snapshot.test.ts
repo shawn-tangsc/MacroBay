@@ -18,6 +18,13 @@ import { marketIntelligenceProductManifest as manifest } from '../../product.man
  * 唯一的已知差异是 `analysis.conclusion`（另有裁定，单独追）；
  * 平台目录代码在这批里一个字没改。唯一允许新增的是本次加的 `platform.notification.self-test`，
  * 它单独断言、不进比对。
+ *
+ * **2026-11-18 的两处期望值改动是有意的产品决定，不是漂移**（R40，需求稿
+ * `docs-private/iterations/r40-news-arrival-notice/01-prd.md` §3 / §7）：
+ * - `sentiment.alert`：`['center','channel']` → `['channel']`（舆情不进中心；手机腿保留，所以
+ *   `reachesPhone` 仍是 true）；
+ * - 新增 `news.item-arrived`：`['desktop']`（非低重要性舆情只发桌面，手机腿 false）。
+ * 改这里的期望值等于改产品决定：两条必须与批准文件、签署表一起动，不许单改一边。
  */
 const snapshot = JSON.parse(
   readFileSync(join(__dirname, 'notificationApproval.snapshot.json'), 'utf8')
