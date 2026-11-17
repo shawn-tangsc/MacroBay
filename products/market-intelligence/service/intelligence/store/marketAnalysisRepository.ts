@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
+import { marketAnalysisTimelineLimits } from '../../../contracts/marketAnalysisTimelineLimits'
 import type {
   AnalysisRun,
   AnalysisSummary,
@@ -39,8 +40,8 @@ import {
 export type { MarketAnalysisArchiveMetadata } from './marketAnalysisRepositoryRows'
 
 const MARKET_ANALYSIS_SCHEMA_VERSION = 3
-const DEFAULT_TIMELINE_PAGE_SIZE = 50
-const MAX_TIMELINE_PAGE_SIZE = 50
+const DEFAULT_TIMELINE_PAGE_SIZE = marketAnalysisTimelineLimits.pageItems
+const MAX_TIMELINE_PAGE_SIZE = marketAnalysisTimelineLimits.pageItems
 const CURSOR_TTL_MS = 15 * 60 * 1000
 
 /**

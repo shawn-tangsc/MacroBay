@@ -9,6 +9,7 @@
 import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalysisContracts'
 import type { AnalysisConclusion, AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
 import { SUMMARY_OPTIONAL_FIELDS, SUMMARY_REQUIRED_FIELDS } from './marketAnalysisSummaryWhitelist'
+import { marketAnalysisTimelineLimits, timelineItemsWithinLimit } from '../../../contracts/marketAnalysisTimelineLimits'
 import type {
   MarketAnalysisChangeView,
   MarketAnalysisSettingsView,
@@ -18,7 +19,18 @@ import type {
   MarketAnalysisTriggerStatus
 } from './marketAnalysisTimelineClient'
 
-const MAX_TIMELINE_ITEMS = 50
+/**
+ * 一页的上限不是「页面大小」：首页还会补进最多 20 条还没发布的运行，两者相加才是传输上限。
+ * 数字与理由都在 `contracts/marketAnalysisTimelineLimits`（服务侧读同一组数）。
+ */
+const MAX_PAGE_ITEMS = marketAnalysisTimelineLimits.maximumItems
+
+/**
+ * 一条结论里最多渲染多少行（事实 / 传导 / 证据 / 预测）。这是**版面与读屏的渲染上限**，
+ * 与「一页时间轴能放几条」是两件事——它们曾经共用过一个常量，于是把页面容差提到 70 时
+ * 顺手把这里也放宽了，既有用例当场红（`knownFacts` 54 条不再被截到 50）。各归各位。
+ */
+const MAX_RENDERED_ROWS = 50
 /**
  * Bound on a list the model authored: the same ceiling the summary validator upstream enforces, so
  * this side can never refuse a collection the service itself accepted.
@@ -38,7 +50,7 @@ export function sanitizeSettings(value: unknown): MarketAnalysisSettingsView | u
 }
 
 export function sanitizePage(value: unknown): { state: 'available'; page: MarketAnalysisTimelinePage } | undefined {
-  if (!isExactRecord(value, ['schemaVersion', 'items', 'nextCursor']) || value.schemaVersion !== 1 || !Array.isArray(value.items) || value.items.length > MAX_TIMELINE_ITEMS || (value.nextCursor !== null && !isText(value.nextCursor))) return undefined
+  if (!isExactRecord(value, ['schemaVersion', 'items', 'nextCursor']) || value.schemaVersion !== 1 || !Array.isArray(value.items) || !timelineItemsWithinLimit(value.items.length) || (value.nextCursor !== null && !isText(value.nextCursor))) return undefined
   const items = value.items.map(sanitizeEntry)
   if (items.some((item) => !item)) return undefined
   return { state: 'available', page: { schemaVersion: 1, items: items as MarketAnalysisTimelineEntry[], nextCursor: value.nextCursor } }
@@ -227,7 +239,7 @@ function sanitizeDirections(value: unknown): NonNullable<MarketAnalysisTimelineD
     return { horizon: entry.horizon, direction: entry.direction, rationale: entry.rationale, confidence: entry.confidence }
   })
   return directions.every(Boolean)
-    ? (directions as NonNullable<MarketAnalysisTimelineDetail['summary']['directions']>).slice(0, MAX_TIMELINE_ITEMS)
+    ? (directions as NonNullable<MarketAnalysisTimelineDetail['summary']['directions']>).slice(0, MAX_RENDERED_ROWS)
     : false
 }
 
@@ -245,7 +257,7 @@ function sanitizeStatementClaims(value: unknown, fields: readonly string[]): rea
     if (!isExactRecord(item, fields) || !isText(item.statement)) return undefined
     return { statement: item.statement }
   })
-  return claims.some(item => !item) ? undefined : (claims as readonly Readonly<{ statement: string }>[]).slice(0, MAX_TIMELINE_ITEMS)
+  return claims.some(item => !item) ? undefined : (claims as readonly Readonly<{ statement: string }>[]).slice(0, MAX_RENDERED_ROWS)
 }
 
 function sanitizePredictions(value: unknown): MarketAnalysisTimelineDetail['predictions'] | undefined {
@@ -258,7 +270,7 @@ function sanitizePredictions(value: unknown): MarketAnalysisTimelineDetail['pred
     if (!conditions) return undefined
     return { id: item.id, asset: item.asset as 'BTC' | 'ETH', baseCase: item.baseCase, conditions, invalidation: item.invalidation, status: item.status as MarketAnalysisTimelineDetail['predictions'][number]['status'], verificationDueAt: item.verificationDueAt }
   })
-  return predictions.some((item) => !item) ? undefined : (predictions as MarketAnalysisTimelineDetail['predictions']).slice(0, MAX_TIMELINE_ITEMS)
+  return predictions.some((item) => !item) ? undefined : (predictions as MarketAnalysisTimelineDetail['predictions']).slice(0, MAX_RENDERED_ROWS)
 }
 
 /**
