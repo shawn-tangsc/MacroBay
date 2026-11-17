@@ -14,14 +14,17 @@ import { readCalendarCodeTable } from './marketCalendarCodeTableRead'
 const database = new DatabaseSync(':memory:')
 
 describe('码表读口', () => {
-  it('整表下发：指标 224 / 事件 20，官网页全部待补且带闭集理由', () => {
+  it('整表下发：指标 224 / 事件 20；待补的行必须带闭集理由，有页的行必须有 URL', () => {
     const read = readCalendarCodeTable(database)
     if (read.state !== 'available') throw new Error('unavailable')
-    expect(read.counts).toMatchObject({ total: 244, metric: 224, event: 20, withOfficialSource: 0, pendingOfficialSource: 244 })
-    // 待补必须带理由，且不许是自由文本。
+    expect(read.counts).toMatchObject({ total: 244, metric: 224, event: 20 })
+    // 已经按机构补了一批（Destatis 等），所以两个数都不写死，只断关系：
+    expect(read.counts.withOfficialSource).toBeGreaterThan(0)
+    expect(read.counts.withOfficialSource + read.counts.pendingOfficialSource).toBe(244)
     for (const row of read.rows) {
       const source = row.officialSource
-      expect('pending' in source && source.reason, `${row.code} 官网页理由`).toBe('official-source-todo')
+      if ('pending' in source) expect(source.reason).toBe('official-source-todo')
+      else expect(source.url.startsWith('https://')).toBe(true)
     }
   })
 
