@@ -57,14 +57,6 @@
       "count": 139,
       "why": "0xrouter 的「源内 id → 指标码」表：id 与码都是字面量，这张表的存在就是「按来源分开的码空间」。本批补映射 +83，删映射要同笔减。"
     },
-    "service/intelligence/macro-calendar/marketCalendarCodeTable.ts": {
-      "count": 460,
-      "why": "标准码表本体（含四列名与事件码）：码表的存在就是把码收成一处，它必须写码；四名里的括号里可能带码形串，按实际计数登记。"
-    },
-    "service/intelligence/macro-calendar/marketCalendarCountryCodeTable.ts": {
-      "count": 1362,
-      "why": "按国家建出的新码表：每个指标码一行，码就是身份事实，`US.` 开头的那些必须在这里（基准码表里没有）。**这个数字随建码增长**：涨了要在同一笔说明是哪张判定表建的（39/40 号），不许只改数字 2026-11-18：+77 是 `supersededBy`——77 个重复码各自要写清「并到哪个码」，那个码必须逐个写在这里，这正是退役链的事实（78 组重复，77 个标 retired，保留码都是老表在用）。 2026-11-18：`US.CONFERENCE_BOARD_SYNCHRONIZATION_METRIC`（机翻）退役、新建 `US.COINCIDENT_INDEX.NONE.MOM`，行内码出现次数 +3。"
-    },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings.ts": {
       "count": 725,
       "why": "源内 id → 码的映射表：每条必须写出目标码，这是「这个源的这个 id 是什么」的唯一记录。只收期次可定、测度一致的；定不了的不写，所以条数少于源身份是有意的"
@@ -72,6 +64,14 @@
     "service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts": {
       "count": 117,
       "why": "德国来源的「源内 id → 码」表：与 0xrouter 那张同性质，按来源分开存。之前漏登记是因为守卫只认单引号 US 前缀码，现在认全了。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCodeTable.json": {
+      "count": 460,
+      "why": "标准码表的数据本体（244 行）：键与 code 字段各出现一次，四名里可能带码形串。数据从 .ts 搬进 JSON 后，这里是它唯一的家。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountryCodeTable.json": {
+      "count": 1362,
+      "why": "按国家建出的码空间（642 行）的数据本体：一个码出现 2–3 次（键、code、父子引用）。维护方式是改脚本重跑，不手改这个文件。"
     }
   }
 }

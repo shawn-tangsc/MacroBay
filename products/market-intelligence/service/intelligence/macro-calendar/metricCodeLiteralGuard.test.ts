@@ -41,7 +41,9 @@ function walkSourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const full = join(directory, entry.name)
     if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : walkSourceFiles(full)
-    if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.tsx')) return []
+    // **数据文件也要扫**：码表搬到 JSON 之后，`.ts` 里一个码字面量都没有了；只扫 TS 等于守卫
+    // 自己走开了、还显示「0 处」——那是最坏的一种绿。JSON 里同样按同一个正则计数。
+    if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.tsx') && !entry.name.endsWith('.json')) return []
     if (entry.name.endsWith('.test.ts') || entry.name.endsWith('.test.tsx')) return []
     return [full]
   })
