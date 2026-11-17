@@ -681,6 +681,67 @@ describe('news line through the orchestrator (R39 C)', () => {
     expect(appendRunSummary).not.toHaveBeenCalled()
     expect(notifyAnalysisConclusion).not.toHaveBeenCalled()
   })
+
+  it('shows the reader what is missing and refuses to give a direction when the model reports gaps', async () => {
+    const newsFact = fixtureFact('triggered-news:item-1', 'news:item-1', 'news-sentiment', 'sentiment', 'BTC')
+    const macroFact = { ...fixtureFact('fact-1', 'evidence-1', 'actual', 'macro', 'CPI'), value: 3.2 }
+    const capitalFact = { ...fixtureFact('fact-2', 'evidence-2', 'etf-net-flow-usd', 'capital', 'BTC'), value: -2.92 }
+    const newsSnapshot = {
+      ...fixtureSnapshot(),
+      facts: [newsFact, macroFact, capitalFact],
+      evidenceRefs: [{ evidenceRefId: 'news:item-1' }, { evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-2' }],
+      trigger: { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1' }
+    } as unknown as EvidenceSnapshot
+    const handles = buildAnalysisReferenceMap(newsSnapshot)
+    const f = (factId: string): string => handles.factHandleById.get(factId)!
+    const e = (evidenceRefId: string): string => handles.evidenceHandleById.get(evidenceRefId)!
+    const output = {
+      what: { evidenceRef: e('news:item-1'), actor: '据报道，', action: '某公司宣布裁员。', whyRelated: '风险偏好承压，偏向偏空。', stance: 'bearish' },
+      reading: {
+        checks: [
+          { evidenceRef: e('evidence-1'), effect: 'supports', statement: 'CPI 3.2%。' },
+          { evidenceRef: e('evidence-2'), effect: 'supports', statement: 'ETF 净流出 -2.92%。' }
+        ],
+        contradiction: false, verdict: 'supports'
+      },
+      // 判不了：金额缺、只能等后续披露。方向必须写 undecided，读者正文不出现方向。
+      outlook: {
+        direction: 'undecided',
+        mechanism: '内部记录：短期偏空，但金额缺失，无法判断。',
+        watchFor: [{ refKind: 'fact', ref: f('fact-1') }],
+        invalidation: { refKind: 'fact', factRef: f('fact-2') }
+      },
+      gaps: [{ item: 'amount', state: 'not-yet', note: '原文没给金额，等后续披露才能判断。' }]
+    }
+    const commitSuccessfulAnalysis = vi.fn()
+    const newsRun = {
+      ...fixtureRunShape(),
+      analysisKind: 'news' as const, triggerKey: 'news.manual',
+      promptVersion: 'news-analysis-v2', skillVersion: 'news-analysis-v1', outputSchemaVersion: 1
+    }
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({
+        getRun: () => newsRun, getSnapshot: () => newsSnapshot, listSnapshots: () => [newsSnapshot],
+        latestSummaryVersion: () => 0, commitSuccessfulAnalysis
+      }),
+      structuredModelInvocation: {
+        invoke: vi.fn(async () => ({ ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory()
+    })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    const summary = (commitSuccessfulAnalysis.mock.calls[0]![0] as Record<string, unknown>).summary as Record<string, unknown>
+    const conclusion = summary.conclusion as Record<string, unknown>
+    // 第二段说缺哪一项，第三段说无法判断 + 何时能判断。
+    expect(conclusion.change).toBe('金额尚未公布。')
+    expect(conclusion.causalChain).toContain('无法判断')
+    expect(conclusion.causalChain).toContain('等后续披露才能判断')
+    // 判不了却给方向是需求稿禁止的：机制里那句「短期偏空」不许漏到读者正文。
+    expect(conclusion.causalChain).not.toContain('偏空')
+    expect(conclusion.causalChain).not.toContain('短期')
+    expect(conclusion.direction).toBe('undecided')
+  })
 })
 
 function fixtureFact(factId: string, evidenceRefId: string, metric: string, domain: string, subject: string) {

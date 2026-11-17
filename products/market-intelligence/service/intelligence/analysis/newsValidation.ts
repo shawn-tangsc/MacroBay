@@ -81,17 +81,49 @@ type NewsModelOutput = Readonly<{
 }>
 
 /**
+ * 缺口三态的读者说法。产品口径（R39 §4.6）：判不了时第二段说「缺哪一项」，第三段说
+ * 「无法判断 + 何时能判断」，**不写方向**——判不了却给了判断是需求稿明确禁止的。
+ *
+ * 这是服务端唯一一处按 `item × state` 拼读者句子的地方；`gaps.note` 有则用它说「何时能判断」，
+ * 没有就写一句「等这些信息可读之后再判断」。两语言各一份，随 `proseLanguage` 选。
+ */
+const GAP_COPY = Object.freeze({
+  'zh-CN': {
+    item: { amount: '金额', symbol: '标的', time: '时间', 'market-data': '市场读数' },
+    state: { 'not-yet': '尚未公布', 'source-empty': '来源里没有', unreadable: '读不出来' },
+    pair: (item: string, state: string) => `${item}${state}`,
+    join: '；', end: '。', fallbackWhen: '等这些信息可读之后再判断。', cannotJudge: '无法判断；'
+  },
+  'en-US': {
+    item: { amount: 'The amount', symbol: 'The symbol', time: 'The time', 'market-data': 'The market figures' },
+    state: { 'not-yet': 'is not available yet', 'source-empty': 'is missing at the source', unreadable: 'cannot be read' },
+    pair: (item: string, state: string) => `${item} ${state}`,
+    join: '; ', end: '.', fallbackWhen: 'once this information can be read.', cannotJudge: 'Cannot tell yet; '
+  }
+} as const)
+
+/**
  * 三段正文的唯一映射：`what → summary`、`reading → change`、`outlook.mechanism → causalChain`。
  *
- * 三个字段各自就是读者句子（提示词要求），这里只做去空与拼接——不替换词、不补模板，
- * 所以不存在「服务端另写一份正文」和「界面看到的和校验比的不是一回事」两种可能。
- * `gaps` 的 `note` 补进第二段：一条解读缺什么，读者要在第二段看到。
+ * 正常判读时三个字段各自就是读者句子（提示词要求），这里只做去空与拼接——不替换词、不补模板。
+ * **有 `gaps` 就是判不了**（产品口径）：第二段换成缺口句（`item × state` 拼句），第三段换成
+ * 「无法判断 + 何时能判断」，`outlook.mechanism` 与方向都不进正文——判不了却给方向是禁止的。
  */
-export function toSummaryParagraphs(record: Pick<NewsInterpretationRecord, 'what' | 'reading' | 'outlook' | 'gaps'>): NewsInterpretationParagraphs {
+export function toSummaryParagraphs(
+  record: Pick<NewsInterpretationRecord, 'what' | 'reading' | 'outlook' | 'gaps'>,
+  language: 'zh-CN' | 'en-US' = 'zh-CN'
+): NewsInterpretationParagraphs {
   const join = (parts: readonly (string | undefined)[]): string => parts.map(part => part?.trim() ?? '').filter(Boolean).join('')
+  const summary = join([record.what.actor, record.what.action, record.what.whyRelated])
+  if (record.gaps.length > 0) {
+    const copy = GAP_COPY[language]
+    const missing = record.gaps.map(gap => copy.pair(copy.item[gap.item], copy.state[gap.state])).join(copy.join)
+    const when = join(record.gaps.map(gap => gap.note)) || copy.fallbackWhen
+    return { summary, change: `${missing}${copy.end}`, causalChain: `${copy.cannotJudge}${when}` }
+  }
   return {
-    summary: join([record.what.actor, record.what.action, record.what.whyRelated]),
-    change: join([...record.reading.checks.map(check => check.statement), ...record.gaps.map(gap => gap.note)]),
+    summary,
+    change: join(record.reading.checks.map(check => check.statement)),
     causalChain: record.outlook.mechanism.trim()
   }
 }
@@ -156,11 +188,14 @@ function validateBody(
   }
   // 11. 失效条件只能指到快照里真的有的东西。
   if (!invalidationResolves(outlook.invalidation, snapshot)) return failMissing(newsInterpretationRules.invalidationUnresolvable)
+  const paragraphs = toSummaryParagraphs(body, context.proseLanguage ?? 'zh-CN')
   // 12. 第二段必须逐字包含每条被引用事实的读者格式观测时刻（按不同时刻串去重，不解析）。
-  const paragraphs = toSummaryParagraphs(body)
-  const requiredTimes = new Set(marketChecks.map(({ fact }) => observedAtText(fact!, context)))
-  for (const time of requiredTimes) {
-    if (time.length > 0 && !paragraphs.change.includes(time)) return failMissing(newsInterpretationRules.checkTimeMissing, time)
+  // 有 `gaps` 时第二段是缺口句、不是读数段：这条不适用（判不了时读者不该被要求读读数的时刻）。
+  if (gaps.length === 0) {
+    const requiredTimes = new Set(marketChecks.map(({ fact }) => observedAtText(fact!, context)))
+    for (const time of requiredTimes) {
+      if (time.length > 0 && !paragraphs.change.includes(time)) return failMissing(newsInterpretationRules.checkTimeMissing, time)
+    }
   }
   // 13. 三段里的每个百分数都要有快照出处（复用市场同一条判据）。
   const numberDefect: AnalysisProbabilityDefect | undefined = untracedProsePercentageDefect({

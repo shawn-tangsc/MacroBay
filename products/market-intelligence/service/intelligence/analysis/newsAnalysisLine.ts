@@ -41,7 +41,7 @@ export const newsAnalysisLine: AnalysisLine = Object.freeze({
 
   async persist(run, output, deps) {
     const body = output as NewsInterpretationBody
-    const paragraphs = toSummaryParagraphs(body)
+    const paragraphs = toSummaryParagraphs(body, deps.proseLanguage ?? 'zh-CN')
     // 落库前三段非空：空段会被渲染侧静默丢掉，等于少一段（映射是唯一实现，这里只做关口）。
     if (!paragraphs.summary.trim() || !paragraphs.change.trim() || !paragraphs.causalChain.trim()) {
       throw new Error('news-interpretation-paragraphs-empty')

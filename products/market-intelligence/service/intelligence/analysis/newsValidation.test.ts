@@ -159,10 +159,16 @@ it('rejects a percentage that has no snapshot source', () => {
   })).toBe(newsInterpretationRules.numberNotInSnapshot)
 })
 
-it('keeps a gap note on the second paragraph instead of inventing a fourth section', () => {
+it('turns gaps into “what is missing” + “cannot judge yet”, and writes no direction', () => {
   const result = validate(output => {
     (output.gaps as unknown[]) = [{ item: 'amount', state: 'not-yet', note: '原文没给金额，等后续披露才能判断。' }]
   })
   if (!result.ok) throw new Error(`expected ok, got ${result.rule}`)
-  expect(result.paragraphs.change).toContain('原文没给金额，等后续披露才能判断。')
+  // 产品口径：判不了时第二段说缺哪一项，第三段说无法判断 + 何时能判断，不写方向。
+  expect(result.paragraphs.change).toBe('金额尚未公布。')
+  expect(result.paragraphs.causalChain).toBe('无法判断；原文没给金额，等后续披露才能判断。')
+  expect(result.paragraphs.causalChain).not.toContain('偏空')
+  expect(result.paragraphs.causalChain).not.toContain('短期偏空')
+  // 缺口句里没有读数时刻：时刻那条在有 gaps 时不适用（第二段不是读数段）。
+  expect(result.paragraphs.change).not.toContain(time('fact-A'))
 })
