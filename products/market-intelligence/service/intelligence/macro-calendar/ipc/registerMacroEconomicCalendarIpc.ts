@@ -20,6 +20,7 @@ import { listUnmappedCalendarObservationsForRendering } from '../rendering/marke
 import { readCalendarEventIndex } from '../rendering/marketCalendarEventIndexRead'
 import { readCalendarMappingRules } from '../rendering/marketCalendarMappingRulesRead'
 import { readEventSourceWrites } from '../rendering/marketCalendarEventSourceWritesRead'
+import { readCalendarCodeTable } from '../rendering/marketCalendarCodeTableRead'
 import {
   isEmpty,
   isProviderInput,
@@ -138,6 +139,11 @@ export function registerMacroEconomicCalendarIpc(
   register(productId, marketCalendarPublicPolicy.methods.queryMappingRules, async () => {
     if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
     return readCalendarMappingRules(unmappedMonth.database)
+  })
+  /** **标准码表整表**（只读、渲染专用）：弹框「码表」页签用，244 行一次下发。 */
+  register(productId, marketCalendarPublicPolicy.methods.queryCodeTable, async () => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    return readCalendarCodeTable(unmappedMonth.database)
   })
   /**
    * **按事件身份取各来源的写入/观测**（只读、渲染专用）：入参必须有期次。

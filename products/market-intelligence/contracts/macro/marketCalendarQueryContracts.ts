@@ -98,6 +98,11 @@ export const marketCalendarPublicPolicy = Object.freeze({
      * 双源读取——修订表给「谁在什么时候写过什么」（只有官方来源），标准表给「每个来源当前的值」。
      */
     queryEventSourceWrites: 'intelligence.macro.marketCalendar.queryEventSourceWrites',
+    /**
+     * **标准码表整表**（只读，渲染专用，2026-11-17）：弹框「码表」页签用。244 行一次下发，
+     * 每行带官网页（待补带闭集理由，**不许空链接**）与「有多少个源内 id 认得它」（不下发 id 列表）。
+     */
+    queryCodeTable: 'intelligence.macro.marketCalendar.queryCodeTable',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)
