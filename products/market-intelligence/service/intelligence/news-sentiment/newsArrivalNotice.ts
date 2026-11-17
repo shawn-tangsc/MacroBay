@@ -11,16 +11,22 @@ import { isRoutineNewsNotice } from './newsSentimentRules'
  * 新抓到一条舆情 → 桌面通知（R40，用户 2026-11-18）。
  *
  * 口径全部由产品给定，这里只落可判的那几条：
- * 1. **只看强度、不看方向**：`strength >= 2` 就发（中性但强度高也发——「重要但没方向」读者该知道）；
- * 2. **低重要性不发**：`strength = 1`，或这条被判为例行公告（沿用 `isRoutineNewsNotice`，不另造一套）；
+ * 1. **只看强度、不看方向**：`strength >= 3` 就发（中性但强度高也发——「重要但没方向」读者该知道）；
+ * 2. **低重要性不发**：`strength <= 2`，或这条被判为例行公告（沿用 `isRoutineNewsNotice`，不另造一套）；
  * 3. **没有判定不发、判定后补也不补发**：所以调用点只在「判定刚写下来」那一步，且要求这条
  *    以前一条判定都没有（见 `newsSentimentScoringService` 的到达判据）；
  * 4. **只桌面**：批准表只批 `desktop`，不穿免打扰（免打扰时段平台一档都不试）；
  * 5. **每条一弹、不合并**：去重键只带 `itemId`，同一件事重复提交由平台合并，不会弹第二次。
  */
 export const newsArrivalNoticePolicy = Object.freeze({
-  /** 「不低重要性」的门槛：`strength = 1` 是弱，2 起才算不低。 */
-  minimumStrength: 2
+  /**
+   * 「不低重要性」的门槛：**`strength >= 3`**（2026-11-18 用户口径：≤2 就是低）。
+   *
+   * 与手机那条同门槛：手机默认门槛「中」按 `tierOf` 也是 `strength >= 3`（≤2 弱 / 3 中 / ≥4 强），
+   * 所以桌面与手机是同一批条目——不是两套尺子。两处数值各自有主（这里是桌面，门槛在
+   * `newsSentimentTiers`），**改一处必须同时看另一处**。
+   */
+  minimumStrength: 3
 })
 
 /** 该不该发：只判强度与例行公告，**不判方向**。 */

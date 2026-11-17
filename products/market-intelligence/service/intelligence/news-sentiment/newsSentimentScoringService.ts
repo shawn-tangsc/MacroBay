@@ -401,6 +401,16 @@ function isAdmittedItem(item: {
   return typeof item.summary === 'string' && OKX_TYPES.has(item.summary.trim())
 }
 
+/**
+ * 「这条已经有当前口径的判定了吗」——**不含提示词版本**（2026-11-18 用户口径：历史不动、新条目用新尺）。
+ *
+ * 以前这里还比 `latest.promptVersion === NEWS_SENTIMENT_PROMPT_VERSION`，代价是：升一次版本，
+ * 721 条历史全部变成「未判过」，得再花 36 轮 × 20 条的模型调用把整库刷一遍，而用户要的只是
+ * 「新条目用新尺」。所以比的是**这台机器上是谁判的**（引擎 + 供应商/模型），提示词版本不参与。
+ *
+ * **代价写在明处**：从此改提示词**不会**自动重评任何历史。要重评必须显式发起（读者「重建」
+ * 那条路，`rebuild: true`）——那是有人决定的动作，不是每次启动的副作用。
+ */
 function isCurrent(
   latest: NewsSentimentRecord | undefined,
   useModel: boolean,
@@ -408,9 +418,5 @@ function isCurrent(
 ): boolean {
   if (!latest) return false
   if (!useModel) return latest.engine === 'rules'
-  return (
-    latest.engine === 'model' &&
-    latest.promptVersion === NEWS_SENTIMENT_PROMPT_VERSION &&
-    latest.modelRef === modelRef
-  )
+  return latest.engine === 'model' && latest.modelRef === modelRef
 }

@@ -10,6 +10,24 @@ import { parseNewsSentimentEntities } from './newsSentimentEntities'
 
 export type NewsSentimentMessages = Array<{ role: 'system' | 'user'; content: string }>
 
+/**
+ * 强度 1–5 的**唯一措辞来源**（用户 2026-11-18 批准的最终版，逐字照落）。
+ *
+ * 两个消费者：模型提示词（拼进 system prompt）与守卫用例。**放在这里而不放文案表**：它不是给读者
+ * 看的句子，是给模型的一把尺子；进文案表就会有人当成可改的 UI 文案。
+ *
+ * 为什么是常量而不是提示词里的一段散文：皮尺一变，同一档的「3」在两轮之间就不是一件事了，
+ * 而 `strength` 会直接喂给推送门槛与触发判定。改这五条 = 改档位语义，必须同时升
+ * `NEWS_SENTIMENT_PROMPT_VERSION`，否则新旧记录混在一张表里没人看得出来。
+ */
+export const NEWS_SENTIMENT_STRENGTH_SCALE = Object.freeze([
+  { level: 1, definition: '与加密市场无关（例行公告、企业融资、业务无关行业）' },
+  { level: 2, definition: '加密行业内部相关，但只涉及单一资产/小众项目，无外溢' },
+  { level: 3, definition: '影响整体风险偏好或一类资产（大盘科技与半导体财报、美股大盘、美元/利率/美债、监管政策表态、主流金融机构动作）' },
+  { level: 4, definition: '直接影响 BTC/ETH 资金流或供需（ETF 大额申赎、稳定币供给剧变、交易所/托管风险、主流链安全事件、头部政策落地）' },
+  { level: 5, definition: '可能改变趋势的冲击（监管禁令/重大执法、头部交易所暴雷、脱锚、国家级采用或禁止、创纪录的 ETF 流入流出）' }
+] as const)
+
 export type ParsedNewsPolarity =
   | { ok: true; value: NewsSentimentJudgment }
   | { ok: false; errorCode: 'news-model-invalid-output' }
@@ -24,6 +42,9 @@ const SYSTEM_PROMPT = [
   'Only BTC and ETH are valid symbols; use an empty list when the article names neither.',
   'evidenceQuote must be copied from the article, at most 200 characters.',
   'Use neutral when the article has no directional content.',
+  // 五档量尺：整段只有这一处来源，模型与守卫读的是同一个常量。
+  'strength is how far this item can move the crypto market; use only these five levels: '
+    + NEWS_SENTIMENT_STRENGTH_SCALE.map((entry) => `${entry.level} = ${entry.definition}`).join('；') + '。',
   // Entities feed cross-source merging, so they must name the event rather than restate the headline:
   // the same election reported by ten outlets has to come out with the same names.
   'entities are the named people, organisations, bills, coins and events the article is about; give at most 12,',

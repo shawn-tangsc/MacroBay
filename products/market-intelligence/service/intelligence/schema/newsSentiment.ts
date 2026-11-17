@@ -90,8 +90,13 @@ export const NEWS_SENTIMENT_WINDOW_MS: Readonly<Record<NewsSentimentWindow, numb
   all: 100 * 365 * 24 * 60 * 60 * 1000
 }
 
-/** 提示词版本：改动提示词必须同时改它，否则旧判断不会被重新评分。 */
-export const NEWS_SENTIMENT_PROMPT_VERSION = 'news-polarity-v2'
+/**
+ * 提示词版本：改动提示词必须同时改它，否则旧判断不会被重新评分。
+ *
+ * v3（2026-11-18）：强度改成**五档量尺**并写死进提示词（`NEWS_SENTIMENT_STRENGTH_SCALE`）。
+ * **历史不回溯改写**：旧行留在 v2，只有被判过「不是当前版本」的条目在下一轮才会用 v3 重写一次。
+ */
+export const NEWS_SENTIMENT_PROMPT_VERSION = 'news-polarity-v3'
 
 /** 正文抽取器版本：选择器变更时递增，旧正文不会被当成新格式复用。 */
 

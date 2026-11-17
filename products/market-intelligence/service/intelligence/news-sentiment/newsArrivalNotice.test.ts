@@ -25,12 +25,14 @@ const BASE: NewsArrivalNoticeInput & { sourceName: string } = {
 }
 
 describe('isNewsArrivalWorthNotifying', () => {
-  it('holds back weak stories (strength = 1)', () => {
+  it('holds back the whole low tier (strength 1 and 2)', () => {
+    // 用户 2026-11-18：≤2 就是低。2 是最容易被写回 1 的边界，所以单独钉一次。
     expect(isNewsArrivalWorthNotifying({ title: 'A quiet weekend', polarity: 'neutral', strength: 1 })).toBe(false)
+    expect(isNewsArrivalWorthNotifying({ title: 'Ether ETF options approved', polarity: 'bullish', strength: 2 })).toBe(false)
   })
 
-  it('lets a story through as soon as strength reaches 2', () => {
-    expect(isNewsArrivalWorthNotifying({ title: 'Ether ETF options approved', polarity: 'bullish', strength: 2 })).toBe(true)
+  it('lets a story through as soon as strength reaches 3 — the same threshold the phone uses', () => {
+    expect(isNewsArrivalWorthNotifying({ title: 'Ether ETF options approved', polarity: 'bullish', strength: 3 })).toBe(true)
   })
 
   it('judges importance without looking at direction', () => {
@@ -39,6 +41,8 @@ describe('isNewsArrivalWorthNotifying', () => {
   })
 
   it('holds back routine announcements — the existing routine rule decides, not a second one', () => {
+    // 例行公告今天定义在 `strength <= 2` 这一档，所以它本来也落在门槛下面；这条留在这里是因为
+    // 例行规则若放宽档位，门槛不该替它决定——两件事各自有一次判据。
     expect(isNewsArrivalWorthNotifying({ title: 'OKX to Perform Scheduled Maintenance on the RFQ System', polarity: 'neutral', strength: 2 })).toBe(false)
     // 同一条标题若是利空的真事故（强度 4），那是新闻、不是例行公告。
     expect(isNewsArrivalWorthNotifying({ title: 'System maintenance caused a 6-hour outage', polarity: 'bearish', strength: 4 })).toBe(true)

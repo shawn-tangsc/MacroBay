@@ -119,7 +119,7 @@ async function harness(options: {
         }
       : {})
   })
-  return { store, service, invoke }
+  return { store, service, invoke, modelRef: `${providerId}:${modelId}` }
 }
 
 describe('newsSentimentScoringService', () => {
@@ -390,6 +390,56 @@ describe('the scoring service exposes the push threshold it judges with', () => 
   })
 })
 
+describe('prompt version: stamped on new judgments, and never a reason to re-judge history', () => {
+  it('writes news-polarity-v3 on a fresh model judgment', async () => {
+    const { service, store } = await harness({ withModel: true })
+    await service.scoreItems({ itemIds: ['item-a'] })
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')?.promptVersion).toBe('news-polarity-v3')
+  })
+
+  it('re-judges nothing when only the prompt version moved: 0 re-judged, 0 model calls, same strength', async () => {
+    // 用户 2026-11-18 口径：历史不动、新条目用新尺。升版本不许把 721 条历史变成「待判」——
+    // 那要再花 36 轮 × 20 条模型调用把整库刷一遍。
+    const { service, store, invoke, modelRef } = await harness({ withModel: true })
+    store.upsertSentiment({
+      itemId: 'item-a', sourceId: 'coindesk-rss', publishedAt: '2026-10-24T12:00:00.000Z',
+      scoredAt: '2026-10-23T09:00:00.000Z', polarity: 'bearish', strength: 4, confidence: 75,
+      symbols: ['BTC'], reasonCode: 'old-rule', engine: 'model', modelRef,
+      promptVersion: 'news-polarity-v2', caveats: []
+    })
+
+    const result = await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(result.processed).toBe(0)
+    expect(result.modelCalls).toBe(0)
+    expect(invoke).not.toHaveBeenCalled()
+    const row = store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')
+    expect(row?.promptVersion).toBe('news-polarity-v2')
+    expect(row?.strength).toBe(4)
+    expect(row?.polarity).toBe('bearish')
+  })
+
+  it('still re-judges when the model behind the judgment changed', async () => {
+    // 去掉的只是「提示词版本」这一项；供应商/模型换了仍然要重判（那是另一台模型给的判断）。
+    const { service, store, invoke } = await harness({ withModel: true })
+    store.upsertSentiment({
+      itemId: 'item-a', sourceId: 'coindesk-rss', publishedAt: '2026-10-24T12:00:00.000Z',
+      scoredAt: '2026-10-23T09:00:00.000Z', polarity: 'bearish', strength: 4, confidence: 75,
+      symbols: ['BTC'], reasonCode: 'old-rule', engine: 'model', modelRef: 'someone-else:old-model',
+      promptVersion: 'news-polarity-v2', caveats: []
+    })
+
+    const result = await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(result.processed).toBe(1)
+    expect(invoke).toHaveBeenCalledTimes(1)
+    const row = store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')
+    expect(row?.promptVersion).toBe('news-polarity-v3')
+    // 旧行没有被就地改写：按它当时的 asOf 读，仍然是 v2。
+    expect(store.getLatestSentiment('item-a', '2026-10-23T10:00:00.000Z')?.promptVersion).toBe('news-polarity-v2')
+  })
+})
+
 describe('one desktop notice per non-low story that just arrived (R40)', () => {
   const accepted = async (_request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome> =>
     ({ kind: 'accepted', recordId: 'r', levels: ['desktop'], suppressedLevels: [] })
@@ -419,7 +469,7 @@ describe('one desktop notice per non-low story that just arrived (R40)', () => {
     expect(JSON.stringify(request.rendered)).not.toContain('View this')
   })
 
-  it('stays silent for a weak story (strength = 1)', async () => {
+  it('stays silent for the whole low tier: strength 1', async () => {
     const submitNotice = vi.fn(accepted)
     const { service } = await harness({
       withModel: false,
@@ -433,7 +483,20 @@ describe('one desktop notice per non-low story that just arrived (R40)', () => {
     expect(submitNotice).not.toHaveBeenCalled()
   })
 
-  it('stays silent for a routine announcement even at strength 2', async () => {
+  it('stays silent for the low-tier boundary: strength 2 is still low', async () => {
+    const submitNotice = vi.fn(accepted)
+    const { service } = await harness({
+      withModel: true,
+      submitNotice,
+      output: () => ({ ...modelOutput(), polarity: 'bullish', strength: 2 })
+    })
+
+    await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(submitNotice).not.toHaveBeenCalled()
+  })
+
+  it('stays silent for a routine announcement', async () => {
     const submitNotice = vi.fn(accepted)
     const { service } = await harness({
       withModel: true,
