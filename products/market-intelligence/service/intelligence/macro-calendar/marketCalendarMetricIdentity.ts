@@ -282,7 +282,9 @@ export function toAlpha2Country(code: string): string {
    * 因为靠 alpha-3 反查永远命中不了它们，那 50 行就会一直是三位写法。
    */
   const aliases: Record<string, string> = {
-    UK: 'GB', SIN: 'SG', INA: 'ID', PHI: 'PH', FRA: 'FR', ITA: 'IT', AUS: 'AU', GER: 'DE', USA: 'US'
+    UK: 'GB', SIN: 'SG', INA: 'ID', PHI: 'PH', FRA: 'FR', ITA: 'IT', AUS: 'AU', GER: 'DE', USA: 'US',
+    // `BEL`（比利时）是合法 alpha-3，但反查表里没有 `BE` 这一条——真库里它一直是三位写法。
+    BEL: 'BE'
   }
   if (aliases[code] !== undefined) return aliases[code]!
   for (const [alpha2, alpha3] of Object.entries(alpha3ByAlpha2)) {

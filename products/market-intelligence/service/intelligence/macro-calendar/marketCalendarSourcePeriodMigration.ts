@@ -125,8 +125,8 @@ export function normalizeSourcePeriodsByShape(database: DatabaseSync): SourcePer
    * 期次」的行，靠一次性标记清完库存没有意义——真库实测清理后又冒出 467 行。
    * 所以每次启动都扫一遍「`period_key` 里含大写 T」的行。
    */
-  const rows = database.prepare(`select country_code, metric_key, period_key, scheduled_date, first_scheduled_date,
-      source_event_id, source_label, source_label_en, values_json, observed_at
+  const rows = database.prepare(`select rowid as rowId, country_code, metric_key, period_key, scheduled_date,
+      first_scheduled_date, source_event_id, source_label, source_label_en, values_json, observed_at
     from ${table} where period_key like '%T%'`).all() as unknown as Record<string, unknown>[]
   const report = { scanned: rows.length, rewritten: 0, unknown: 0, mergedGroups: 0, droppedRows: 0 }
   const before = Number((database.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n)
@@ -135,7 +135,34 @@ export function normalizeSourcePeriodsByShape(database: DatabaseSync): SourcePer
     database.exec(`create table if not exists ${calendarSourcePeriodPolicy.backupTable} as select * from ${table}`)
     database.exec(`create table if not exists ${calendarSourcePeriodPolicy.droppedTable} as
       select * from ${table} where 0`)
-    const groups = new Map<string, Record<string, unknown>[]>()
+    const hasValue = (values: unknown): boolean => {
+      try { return Object.keys(JSON.parse(String(values ?? '{}'))).length > 0 } catch { return false }
+    }
+    /**
+     * **按 `rowid` 定位，不按四元组拼串**（Chief 2026-11-18）。
+     *
+     * 旧版按「国家 + 指标 + 期次 + 首发布日」拼串，然后 `update ... where 四元组`：主键列在**迁出来的**
+     * 表上允许 `NULL`，`String(null)` 会拼出 `"null"`、`= ?` 也永远不成立；而且归一后的目标键上
+     * 可能已经有一行**不在扫描范围里**的行（它不是发布时刻形状），于是改名撞主键、整笔回滚。
+     * 这就是这条归一在启动链上从来没生效过的原因。现在先给全部行建「当前键 → rowid」索引，
+     * 改名时同步搬索引，目标键已有行就合并。
+     */
+    const keyOf = (country: unknown, metricKey: unknown, periodKey: unknown, firstDate: unknown): string =>
+      JSON.stringify([country ?? null, metricKey ?? null, periodKey ?? null, firstDate ?? null])
+    const index = new Map<string, { rowId: number; valuesJson: unknown }>()
+    const all = database.prepare(`select rowid as rowId, country_code, metric_key, period_key,
+        first_scheduled_date, values_json from ${table}`).all() as unknown as
+      { rowId: number; country_code: unknown; metric_key: unknown; period_key: unknown
+        first_scheduled_date: unknown; values_json: unknown }[]
+    for (const row of all) {
+      index.set(keyOf(row.country_code, row.metric_key, row.period_key, row.first_scheduled_date),
+        { rowId: row.rowId, valuesJson: row.values_json })
+    }
+    const renameByRowId = database.prepare(`update ${table} set period_key = ? where rowid = ?`)
+    const deleteByRowId = database.prepare(`delete from ${table} where rowid = ?`)
+    const archiveLoser = database.prepare(`insert into ${calendarSourcePeriodPolicy.droppedTable}
+      select * from ${table} where rowid = ?`)
+    const fillTarget = database.prepare(`update ${table} set values_json = ? where rowid = ?`)
     for (const row of rows) {
       // **事件型（`evt.*`）的期次就是那一场活动的日期**（事件身份 = 类型 + 日期），
       // 标题里本来就没有期次后缀，解不出不是「缺失」，而是「事件没有统计月」这个概念。
@@ -145,39 +172,27 @@ export function normalizeSourcePeriodsByShape(database: DatabaseSync): SourcePer
       const periodKey = isEvent ? String(row.scheduled_date)
         : derived === null ? `unknown:${String(row.source_event_id)}` : derived.periodKey
       if (derived === null && !isEvent) report.unknown += 1
+      const targetKey = keyOf(row.country_code, row.metric_key, periodKey, row.first_scheduled_date)
+      const currentKey = keyOf(row.country_code, row.metric_key, row.period_key, row.first_scheduled_date)
+      // 期次没变（`unknown:` 那一批本来就已经是明确缺失）：不动它，也不重复计数。
+      if (targetKey === currentKey) continue
       report.rewritten += 1
-      const key = `${String(row.country_code)}|${String(row.metric_key)}|${periodKey}|${String(row.first_scheduled_date)}`
-      groups.set(key, [...(groups.get(key) ?? []), { ...row, finalPeriod: periodKey }])
-    }
-    const hasValue = (row: Record<string, unknown>): boolean => {
-      try { return Object.keys(JSON.parse(String(row.values_json ?? '{}'))).length > 0 } catch { return false }
-    }
-    const drop = database.prepare(`delete from ${table}
-      where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
-    const keep = new Map<string, Record<string, unknown>>()
-    for (const [key, group] of groups) {
-      const ranked = [...group].sort((left, right) =>
-        Number(hasValue(right)) - Number(hasValue(left)) ||
-        String(right.observed_at).localeCompare(String(left.observed_at)))
-      const winner = ranked[0]!
-      keep.set(key, winner)
-      if (ranked.length < 2) continue
-      report.mergedGroups += 1
-      for (const loser of ranked.slice(1)) {
-        database.prepare(`insert into ${calendarSourcePeriodPolicy.droppedTable}
-          select * from ${calendarSourcePeriodPolicy.backupTable}
-          where country_code = ? and metric_key = ? and period_key = ? and source_event_id = ? limit 1`)
-          .run(String(loser.country_code), String(loser.metric_key), String(loser.period_key), String(loser.source_event_id))
-        drop.run(String(loser.country_code), String(loser.metric_key), String(loser.period_key),
-          String(loser.first_scheduled_date))
-        report.droppedRows += 1
+      const occupied = index.get(targetKey)
+      if (occupied === undefined) {
+        renameByRowId.run(periodKey, Number(row.rowId))
+        index.delete(currentKey)
+        index.set(targetKey, { rowId: Number(row.rowId), valuesJson: row.values_json })
+        continue
       }
-    }
-    const rewrite = database.prepare(`update ${table} set period_key = ?
-      where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
-    for (const winner of keep.values()) {
-      rewrite.run(String(winner.finalPeriod), String(winner.country_code), String(winner.metric_key),
-        String(winner.period_key), String(winner.first_scheduled_date))
+      // 目标键上已经有一行：有实际值的一方并过去（与标准表「旧数据不许盖新数据」同一条），然后删掉这一行。
+      if (hasValue(row.values_json) && !hasValue(occupied.valuesJson)) {
+        fillTarget.run(String(row.values_json), occupied.rowId)
+        occupied.valuesJson = row.values_json
+      }
+      archiveLoser.run(Number(row.rowId))
+      deleteByRowId.run(Number(row.rowId))
+      report.mergedGroups += 1
+      report.droppedRows += 1
     }
     const after = Number((database.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n)
     if (after !== before - report.droppedRows) {
