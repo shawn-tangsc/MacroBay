@@ -24,7 +24,9 @@ describe('码表读口', () => {
     for (const row of read.rows) {
       const source = row.officialSource
       if ('pending' in source) expect(source.reason).toBe('official-source-todo')
-      else expect(source.url.startsWith('https://')).toBe(true)
+      // 机构页有 http 的（密歇根大学的老站就是 http），不能一律要求 https——那是格式洁癖，
+      // 真正要断的是「有页就必须有 URL」，不是协议。
+      else expect(/^https?:\/\//.test(source.url)).toBe(true)
     }
   })
 
