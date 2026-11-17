@@ -138,6 +138,34 @@ describe('analysisRunService', () => {
     expect(repository.enqueueRun).not.toHaveBeenCalled()
   })
 
+  it('retires a queued market run whose snapshot was frozen for a news item, and keeps news runs', () => {
+    // R39：升级前由自动新闻触发排下的市场运行，重启后不许再被派去跑——它读不到那条新闻。
+    const latestAt = '2026-09-27T00:10:00.000Z'
+    const group: EventGroup = { id: 'mi-eg-news-recovery', schemaVersion: 1, status: 'open', groupType: 'sentiment', mergeKey: 'sentiment|news|BTC|x', firstObservedAt: asOf, lastObservedAt: latestAt, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['item-news'], triggerCount: 1, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: latestAt }
+    const newsSnapshot = {
+      ...makeSnapshot('mi-es-news', group.id, latestAt, 'news-hash'),
+      schemaVersion: 3 as const,
+      trigger: { source: 'intelligence-item' as const, itemId: 'item-news', factId: 'triggered-news:item-news', evidenceRefId: 'news:item-news' }
+    }
+    const legacyMarketRun: AnalysisRun = { ...makeRun('mi-ar-legacy-news', group.id, newsSnapshot.id, newsSnapshot.snapshotHash), status: 'queued' }
+    const manualNewsRun: AnalysisRun = { ...makeRun('mi-ar-news-run', group.id, newsSnapshot.id, newsSnapshot.snapshotHash), analysisKind: 'news', triggerKey: 'news.manual', status: 'queued' }
+    const updateRunStatus = vi.fn(() => true)
+    const repository = {
+      listRuns: () => [legacyMarketRun, manualNewsRun], listEventGroups: () => [group], listSnapshots: () => [newsSnapshot],
+      updateRunStatus, enqueueRun: vi.fn(), appendTriggerLedger: vi.fn()
+    }
+    const service = createAnalysisRunService({ repository: repository as never, now: () => '2026-09-27T00:20:00.000Z', idFactory: () => 'mi-ar-unused' })
+    expect(service.recover()).toEqual({
+      failed: [],
+      stale: ['mi-ar-legacy-news'],
+      dispatch: [{ analysisRunId: 'mi-ar-news-run', eventGroupId: group.id }]
+    })
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ id: 'mi-ar-legacy-news', status: 'stale', failureCode: 'news-trigger-retired' }))
+    expect(updateRunStatus).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'mi-ar-news-run' }))
+    // 新闻组不补市场运行。
+    expect(repository.enqueueRun).not.toHaveBeenCalled()
+  })
+
   it('expires a queued run whose snapshot is past the restart window instead of blocking the group', () => {
     const latestAt = '2026-09-27T00:10:00.000Z'
     const group: EventGroup = { id: 'mi-eg-expired', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|expired', firstObservedAt: asOf, lastObservedAt: latestAt, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['event-1'], triggerCount: 1, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: latestAt }

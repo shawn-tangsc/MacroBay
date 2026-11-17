@@ -743,7 +743,7 @@ describe('market analysis runtime sentiment wiring', () => {
     try {
       runtime.repository.appendEventGroup(group)
       await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
-        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1' }, context)
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1', analysisKind: 'news' }, context)
       const [snapshot] = runtime.repository.listSnapshots(group.id)
       expect(snapshot!.trigger).toEqual({ source: 'intelligence-item', itemId: 'news-trigger-1', factId: 'triggered-news:news-trigger-1', evidenceRefId: 'news:news-trigger-1' })
       const fact = snapshot!.facts.find(candidate => candidate.factId === 'triggered-news:news-trigger-1')!
@@ -782,7 +782,7 @@ describe('market analysis runtime sentiment wiring', () => {
     try {
       failingRuntime.repository.appendEventGroup(group)
       await expect(handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
-        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1' }, context))
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1', analysisKind: 'news' }, context))
         .rejects.toThrow('analysis-missing-evidence:news-trigger-evidence-missing')
       expect(failingRuntime.repository.listSnapshots(group.id)).toEqual([])
     } finally {

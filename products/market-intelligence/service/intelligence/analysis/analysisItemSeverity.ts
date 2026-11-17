@@ -43,11 +43,6 @@ export function isNewsSeveritySource(sourceId: string): boolean {
   return NEWS_SEVERITY_SOURCES.has(sourceId)
 }
 
-/** 够不够格单独触发一次分析。与下面的严重度同源，避免两套尺子。 */
-export function isTriggerableNewsVerdict(verdict: NewsSentimentVerdict): boolean {
-  return newsVerdictSeverity(verdict) === 'high'
-}
-
 /**
  * 新闻的情绪判定 → 严重度。
  *

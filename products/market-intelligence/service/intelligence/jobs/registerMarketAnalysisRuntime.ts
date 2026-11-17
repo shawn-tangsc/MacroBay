@@ -462,6 +462,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   async function groupChange(payload: unknown): Promise<Record<string, unknown> | void> {
     const resolved = await resolveChange(payload)
     if (!resolved) return
+    // R39：新闻解读没有自动触发。新作业不再产生（评分/采集两步都不再排），旧队列里的也在
+    // 建组之前止步——否则会白花一次市场分析，而且快照带着一条模型看不到的新闻指针。
+    if (resolved.newsItem) return
     const change = resolved.change
     const existing = repository.findEventGroupByMergeKey(eventGroupMergeKey(change))
     const result = groups.addChange(existing, change)
@@ -517,12 +520,15 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // of leaving it counted as a spent call.
     return {
       eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now(),
-      ...(attemptLedgerId ? { attemptLedgerId } : {}), ...(resolved.triggeredItemId ? { triggeredItemId: resolved.triggeredItemId } : {})
+      ...(attemptLedgerId ? { attemptLedgerId } : {})
     }
   }
 
   async function freezeSnapshot(payload: unknown): Promise<Record<string, unknown> | void> {
     const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string; triggeredItemId?: string; analysisKind?: AnalysisKind }
+    // R39：带「新闻触发指针」的冻结作业只允许来自手动按条解读（它显式带 `analysisKind:'news'`）。
+    // 旧队列里由自动评分排下的这类作业没有类别，到这里直接止步，不产出市场运行。
+    if (value.triggeredItemId !== undefined && value.analysisKind !== 'news') return { eventGroupId: value.eventGroupId }
     const previousSnapshot = repository.listSnapshots(value.eventGroupId).at(-1)
     // Decided before anything is built: a skipped evaluation must not leave a snapshot or a run.
     const gate = await significanceGate.evaluate({
@@ -591,6 +597,13 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const analysisRunId = readString(payload, 'analysisRunId')
     const run = analysisRunId ? repository.getRun(analysisRunId) : undefined
     if (!run) return
+    // R39：升级前由自动新闻触发排下的市场运行，即使作业直接跑到这里也不许调模型——它读不到
+    // 那条新闻。恢复路径另有同一判断，这里是最后一道（重启后作业可能先于恢复执行）。
+    if (run.analysisKind !== 'news' && repository.getSnapshot?.(run.snapshotId)?.trigger) {
+      repository.updateRunStatus({ id: run.id, status: 'stale', completedAt: now(), failureCode: 'news-trigger-retired', failureDetailCode: 'news-trigger-retired' })
+      await context.log({ level: 'info', message: 'Market analysis retired: news-triggered runs are manual-only', metadata: { analysisRunId: run.id } })
+      return
+    }
     // The switch may have been turned off while this run sat in the queue. Ending it as cancelled
     // says what happened; calling the model anyway would spend the request the switch was there to
     // prevent.
@@ -622,7 +635,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     }
   }
 
-  async function resolveChange(payload: unknown): Promise<{ change: AnalysisChange; triggeredItemId?: string } | undefined> {
+  async function resolveChange(payload: unknown): Promise<{ change: AnalysisChange; newsItem: boolean } | undefined> {
     const itemId = readString(payload, 'changeId') ?? readString(payload, 'eventRef')
     const item = itemId ? input.pipeline.listItems().find(candidate => candidate.itemId === itemId || candidate.clusterId === itemId) : undefined
     if (!item) return
@@ -639,7 +652,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const severity = decision.severity
     // 主触发：只有新闻类来源才写指针（R37 §1.1）。别用 itemTriggerKeys 判——那两个键里还有一个是
     // 日历发布，按它判会把日历触发的运行也写成「被一条新闻触发」。
-    const triggeredItemId = isNewsSeveritySource(item.sourceId) ? item.itemId : undefined
+    // R39：新闻条目不再产触发指针——按条解读只由读者手动发起。这里仍要把「这是新闻」报给
+    // `groupChange`，让旧队列里的自动新闻作业在**建组之前**止步（不写组、不写账本、不排冻结）。
+    const newsItem = isNewsSeveritySource(item.sourceId)
     return { change: {
       changeId: item.itemId,
       domain,
@@ -658,7 +673,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       sourceKind: item.sourceTrust === 'high' ? 'official' : 'proxy',
       comparability: 'comparable',
       groupType: domain === 'macro' ? 'macro' : domain === 'capital' ? 'capital' : domain === 'funding' ? 'funding' : domain === 'cross-asset' ? 'cross-asset' : 'sentiment'
-    }, ...(triggeredItemId ? { triggeredItemId } : {}) }
+    }, newsItem }
   }
 }
 

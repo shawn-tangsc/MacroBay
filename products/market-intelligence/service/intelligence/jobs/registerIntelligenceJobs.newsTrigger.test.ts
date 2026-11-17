@@ -13,7 +13,8 @@ type Scored = Readonly<{
   skipped: number
   failed: number
   modelCalls: number
-  triggerCandidates: readonly Readonly<{ itemId: string; scoredAt: string }>[]
+  /** 旧版本还会返回它；新版本不产出，这里故意留着，验证「即使有也不排分析」。 */
+  triggerCandidates?: readonly Readonly<{ itemId: string; scoredAt: string }>[]
 }>
 
 function harness(scoreItems: (input: unknown) => Promise<Scored>) {
@@ -33,34 +34,23 @@ function harness(scoreItems: (input: unknown) => Promise<Scored>) {
 const context = { jobRunId: 'news-trigger', signal: new AbortController().signal, log: async () => undefined, progress: async () => undefined }
 
 /**
- * 事故链路的那一环：判定写在评分这一步（比采集事件晚几秒），所以触发必须由评分这一步补。
- * 没有这一环，新闻就再也触发不了分析——不是「不重要」，是没人叫醒它。
+ * R39：新闻解读只有读者手动触发。评分这一步过去会把「有标的、非中性、强度 ≥2」的判定
+ * 交回分析触发路径，结果排了一次读不到那条新闻的市场分析。现在这一环整个移除；
+ * 旧形状的返回值（还带 `triggerCandidates`）也不许再排。
  */
-describe('新闻判定落地后补一次分析触发', () => {
-  it('把够格的判定交回分析触发这条路，身份带上判定时刻避免重复排队', async () => {
+describe('新闻判定落地后不再补分析触发（R39）', () => {
+  it('does not enqueue an analysis even if the score result still carries trigger candidates', async () => {
     const { handlers, enqueueDefinition } = harness(async () => ({
       processed: 1, model: 0, rules: 1, skipped: 0, failed: 0, modelCalls: 0,
       triggerCandidates: [{ itemId: 'item-x', scoredAt: '2026-11-16T09:07:50.718Z' }]
     }))
     await handlers.get(INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB)!({ itemIds: ['item-x'] }, context as never)
 
-    expect(enqueueDefinition).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'market-analysis:news-sentiment:item-x:2026-11-16T09:07:50.718Z',
-      handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB,
-      payload: { changeId: 'item-x', eventRef: 'item-x' }
-    }))
-  })
-
-  it('没有够格的判定就不排任何分析', async () => {
-    const { handlers, enqueueDefinition } = harness(async () => ({
-      processed: 1, model: 0, rules: 1, skipped: 0, failed: 0, modelCalls: 0, triggerCandidates: []
-    }))
-    await handlers.get(INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB)!({ itemIds: ['item-x'] }, context as never)
-
     expect(enqueueDefinition).not.toHaveBeenCalled()
+    expect(enqueueDefinition).not.toHaveBeenCalledWith(expect.objectContaining({ handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB }))
   })
 
-  it('重建是重算历史，不是新事件：不补触发', async () => {
+  it('does not enqueue one for a rebuild either', async () => {
     const { handlers, enqueueDefinition } = harness(async () => ({
       processed: 1, model: 0, rules: 1, skipped: 0, failed: 0, modelCalls: 0,
       triggerCandidates: [{ itemId: 'item-x', scoredAt: '2026-11-16T09:07:50.718Z' }]

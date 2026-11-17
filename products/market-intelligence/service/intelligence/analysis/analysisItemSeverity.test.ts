@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   analysisItemSeverityPolicy,
   isNewsSeveritySource,
-  isTriggerableNewsVerdict,
   resolveItemTriggerSeverity
 } from './analysisItemSeverity'
 
@@ -21,7 +20,6 @@ describe('一条情报的严重度：判据是情绪判定，不是准入资格'
       severityHint: 'info', admitted: true, news: true, verdict: crossBorderPaymentVerdict
     })
     expect(severity).toBe('low')
-    expect(isTriggerableNewsVerdict(crossBorderPaymentVerdict)).toBe(false)
   })
 
   it('同样够格进情报，但方向明确、强度够、有标的的新闻，才判到 high', () => {
@@ -29,7 +27,6 @@ describe('一条情报的严重度：判据是情绪判定，不是准入资格'
       severityHint: 'info', admitted: true, news: true, verdict: directionalVerdict
     })
     expect(severity).toBe('high')
-    expect(isTriggerableNewsVerdict(directionalVerdict)).toBe(true)
   })
 
   it('中性但带着标的，最多到 medium，构成不了 high', () => {

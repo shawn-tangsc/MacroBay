@@ -99,15 +99,28 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
       const latest = snapshots.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id)).at(0)
       if (!latest) continue
       const groupRuns = runs.filter(run => run.eventGroupId === group.id)
+      // R39：新闻解读没有自动触发。快照带触发指针的组里，旧的 **市场** 运行（升级前由自动
+      // 新闻触发排下的）不许再被恢复去跑——重放出来的只会是一次读不到那条新闻的市场分析。
+      // 新闻线的运行（`analysisKind: 'news'`）不受影响，手动解读的历史行照常恢复。
+      const newsTriggeredGroup = Boolean(latest.trigger)
+      const retiredNewsRuns = new Set<string>()
       for (const run of groupRuns) {
         if (run.status !== 'queued' && run.status !== 'running') continue
+        if (newsTriggeredGroup && run.analysisKind !== 'news') {
+          if (deps.repository.updateRunStatus({ id: run.id, status: 'stale', failureCode: 'news-trigger-retired', failureDetailCode: 'news-trigger-retired', completedAt: deps.now() })) {
+            recordDecision({ eventGroupId: group.id, triggerKey: run.triggerKey, changeHash: run.snapshotHash, decision: 'skipped', reasonCode: 'news-trigger-retired', snapshotHash: latest.snapshotHash, analysisRunId: run.id })
+            stale.push(run.id)
+            retiredNewsRuns.add(run.id)
+          }
+          continue
+        }
         if (run.snapshotId !== latest.id || run.snapshotHash !== latest.snapshotHash) {
           deps.repository.updateRunStatus({ id: run.id, status: 'stale', failureCode: 'restart-expired', failureDetailCode: 'restart-expired', completedAt: deps.now() })
           recordDecision({ eventGroupId: group.id, triggerKey: run.triggerKey, changeHash: run.snapshotHash, decision: 'skipped', reasonCode: 'restart-expired', snapshotHash: latest.snapshotHash, analysisRunId: run.id })
           stale.push(run.id)
         }
       }
-      const activeRuns = groupRuns.filter(run => (run.status === 'queued' || run.status === 'running') && run.snapshotId === latest.id && run.snapshotHash === latest.snapshotHash)
+      const activeRuns = groupRuns.filter(run => !retiredNewsRuns.has(run.id) && (run.status === 'queued' || run.status === 'running') && run.snapshotId === latest.id && run.snapshotHash === latest.snapshotHash)
       const hasSuccessfulInitial = groupRuns.some(run => run.analysisPhase === 'initial' && run.status === 'succeeded')
       const initialPending = activeRuns.some(run => run.analysisPhase === 'initial')
       const initialAge = Date.parse(deps.now()) - Date.parse(latest.createdAt)
@@ -127,7 +140,8 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
         recordDecision({ eventGroupId: group.id, triggerKey: run.triggerKey, changeHash: run.snapshotHash, decision: 'skipped', reasonCode: 'restart-expired', snapshotHash: latest.snapshotHash, analysisRunId: run.id })
         stale.push(run.id)
       }
-      if (!hasSuccessfulInitial && !initialPending && withinRestartWindow) {
+      // 新闻组不补市场运行：它的组只为按条解读存在（R39）。
+      if (!newsTriggeredGroup && !hasSuccessfulInitial && !initialPending && withinRestartWindow) {
         const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
         if (result.created) {
           recordDecision({ eventGroupId: group.id, triggerKey: result.run.triggerKey, changeHash: latest.snapshotHash, decision: 'queued', reasonCode: 'restart-initial-compensated', snapshotHash: latest.snapshotHash, analysisRunId: result.run.id })
@@ -135,7 +149,7 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
         }
       }
       const reviewPending = activeRuns.some(run => run.analysisPhase === 'review')
-      if (group.reviewCount < 2 && !reviewPending && Number.isFinite(Date.parse(group.reviewDeadlineAt)) && Date.parse(deps.now()) <= Date.parse(group.reviewDeadlineAt) && hasSuccessfulInitial) {
+      if (!newsTriggeredGroup && group.reviewCount < 2 && !reviewPending && Number.isFinite(Date.parse(group.reviewDeadlineAt)) && Date.parse(deps.now()) <= Date.parse(group.reviewDeadlineAt) && hasSuccessfulInitial) {
         const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'review', triggerKey: 'market-reaction.15m' })
         if (result.created) {
           recordDecision({ eventGroupId: group.id, triggerKey: result.run.triggerKey, changeHash: latest.snapshotHash, decision: 'queued', reasonCode: 'restart-review-compensated', snapshotHash: latest.snapshotHash, analysisRunId: result.run.id })

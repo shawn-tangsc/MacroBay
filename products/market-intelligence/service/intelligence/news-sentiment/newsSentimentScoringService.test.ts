@@ -123,7 +123,7 @@ async function harness(options: {
 }
 
 describe('newsSentimentScoringService', () => {
-  it('only hands back the judgments worth an analysis to the trigger', async () => {
+  it('scores every admitted item and hands back no analysis-trigger candidates', async () => {
     // 事故样本那一类：中性、无标的的新闻照样会被判断（那是对的），但不该因此触发一次分析。
     const { service } = await harness({
       withModel: false,
@@ -140,7 +140,8 @@ describe('newsSentimentScoringService', () => {
     const result = await service.scoreItems({})
 
     expect(result).toMatchObject({ processed: 2, rules: 2 })
-    expect(result.triggerCandidates.map((candidate) => candidate.itemId)).toEqual(['item-a'])
+    // R39：新闻解读只由读者手动发起。评分结果不再携带触发候选——放回去就是自动分析的入口。
+    expect(result).not.toHaveProperty('triggerCandidates')
   })
 
   it('stores a model judgment with its engine version', async () => {
