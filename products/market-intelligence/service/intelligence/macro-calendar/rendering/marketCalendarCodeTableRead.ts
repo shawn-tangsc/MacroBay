@@ -93,7 +93,10 @@ export function readCalendarCodeTable(database: DatabaseSync): CodeTableRead {
         kind: row.kind,
         names: row.names,
         countryCode: row.countryCode,
-        countryName: row.countryCode === null ? null : (marketCalendarCountryNames[row.countryCode]?.zh ?? null),
+        // `EMU` 是我们唯一的非 ISO 例外（欧元区没有 alpha-2）：国名复用 `EU` 那一条，
+      // 不在国名表里复制第二份（那份表有「一个名字只对应一个码」的守卫）。
+      countryName: row.countryCode === null ? null
+        : (marketCalendarCountryNames[row.countryCode === 'EMU' ? 'EU' : row.countryCode]?.zh ?? null),
         tier: row.tier,
         // 事件行没有测度与季调档：给 null，不编一个「LEVEL」。
         measure: row.kind === 'metric' ? row.measure : null,
