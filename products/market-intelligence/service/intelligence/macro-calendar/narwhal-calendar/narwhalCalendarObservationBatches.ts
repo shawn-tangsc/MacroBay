@@ -2,6 +2,7 @@ import { narwhalEventSourceEventId, narwhalMeasureMetricKeys, narwhalSourceEvent
 import { eventCodeBySourceType } from '../marketCalendarEventCodeTable'
 import type { CalendarIdentityKind, CalendarReleaseStatus, CalendarUnmappedReason } from '../marketCalendarStandardTable'
 import { narwhalPrimaryMetricBySeriesId } from './narwhalSeriesPrimaryMetric'
+import { marketCalendarCountrySourceMappings } from '../marketCalendarCountrySourceMappings'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
 /**
@@ -247,6 +248,28 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
     /** 这个发布里没映射上的 measure（测度层对账用；空表也能看出缺哪些）。 */
     measureKeys?: readonly string[] }>[]
 }> {
+/**
+ * **源内 id → 码**（按国家建的那张映射表），**落行前**就要查（2026-11-18 Chief 定）。
+ *
+ * 以前：采集先写 `identity_kind='source'`，指望事后转正。可 23:00 那批采集把 746 行源内身份
+ * 又写了回来，`source` 从 1045 涨回 1785——「补完又被新数据冲掉」，因为写入端根本没查映射表。
+ * 判据：**采集一轮之后 `identity_kind='source'` 不再增长**。转正脚本只处理历史存量。
+ *
+ * 只认同国家的码：跨国家的映射是数据错误，写进去就是把一国的发布挂到另一国名下。
+ */
+function countryMappedMetricKey(releaseId: string, country: string): string | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(releaseId)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(parsed) || (typeof parsed[0] !== 'string' && typeof parsed[0] !== 'number')) return undefined
+  const entry = marketCalendarCountrySourceMappings[String(parsed[0])]
+  if (entry === undefined) return undefined
+  return entry.metricKey.startsWith(`${country}.`) ? entry.metricKey : undefined
+}
+
   const rows: NarwhalStandardRowInput[] = []
   const unmapped: { sourceKey: string; name: string
     reason: CalendarUnmappedReason; measureKeys?: string[] }[] = []
@@ -258,6 +281,8 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
     const period = release.period
     const primaryMetric = narwhalPrimaryMetricBySeriesId[release.seriesId]
     const eventCode = eventCodeBySourceType[release.name]
+    // **映射表里有就直接写码**：这一行不该先记成源内身份再等转正。
+    const countryMetric = countryMappedMetricKey(release.releaseId, release.country)
     const first = release.values[0]
     const values = {
       ...(first?.previous === undefined ? {} : { previous: first.previous }),
@@ -308,6 +333,17 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
         })
         continue
       }
+      // 映射表里有这一条的码 → 直接按指标行写（不再写源内身份等转正）。
+      if (countryMetric !== undefined) {
+        rows.push({
+          kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+          ...(status === 'published' ? { valueState: 'missing' as const } : {}),
+          ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
+          countryCode: release.country, metricKey: countryMetric, periodKey: period,
+          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
+        })
+        continue
+      }
       // 没有测度依据、但源名登记过事件类型 → 事件型行（照常显示，值区交给「未提供」）。
       if (eventCode !== undefined) {
         rows.push({
@@ -347,7 +383,18 @@ export function narwhalStandardRowInputsDetailed(releases: readonly NarwhalParse
       continue
     }
 
-    // —— 四、有期间、没有值、且没有测度依据也没有事件码：源内身份显示 ——
+    // —— 四、有期间、没有值、且没有测度依据也没有事件码：先查映射表，查不到才用源内身份 ——
+    if (countryMetric !== undefined) {
+      rows.push({
+        kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+        ...(status === 'published' ? { valueState: 'missing' as const } : {}),
+        ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
+        countryCode: release.country, metricKey: countryMetric, periodKey: period,
+        scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+        ...(release.values.length === 1 ? values : {})
+      })
+      continue
+    }
     rows.push({
       kind: 'event', identityKind: 'source', status: publishedNeedsActual(status, undefined), sourceLabel: release.name,
       ...(status === 'published' ? { valueState: 'missing' as const } : {}),

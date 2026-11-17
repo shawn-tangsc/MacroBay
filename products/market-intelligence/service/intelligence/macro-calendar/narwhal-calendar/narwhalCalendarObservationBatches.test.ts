@@ -168,6 +168,28 @@ describe('「有期间无值」不再进 unmapped（那是另一类事实）', (
   })
 })
 
+describe('写入端先查映射表：不再写源内身份等转正', () => {
+  it('按国家的源内 id 映射里有这条 → 直接写码（判据：采集一轮后 source 不增长）', () => {
+    // 206580 → JP.INVENTORY.NONE.MOM 是映射表里的一条；国家必须对得上才算。
+    const detailed = narwhalStandardRowInputsDetailed([
+      release({ releaseId: '["206580",1]', country: 'JP', name: '在庫', seriesId: 'no-such-series',
+        period: '2026-10', values: [] })
+    ])
+    expect(detailed.rows).toHaveLength(1)
+    expect(detailed.rows[0]!.identityKind).toBe('code')
+    expect(detailed.rows[0]!.metricKey).toBe('JP.INVENTORY.NONE.MOM')
+  })
+
+  it('映射到别国的码 → 仍用源内身份（跨国家不写）', () => {
+    const detailed = narwhalStandardRowInputsDetailed([
+      release({ releaseId: '["206580",1]', country: 'US', name: '在庫', seriesId: 'no-such-series',
+        period: '2026-10', values: [] })
+    ])
+    expect(detailed.rows[0]!.identityKind).toBe('source')
+    expect(detailed.rows[0]!.metricKey).toBe('["206580",1]')
+  })
+})
+
 describe('未知 measure 也要交出去（测度层守恒）', () => {
   it('有期间但 measure 不在映射表 → 记 unknown-measure，同时用源内身份显示', () => {
     const detailed = narwhalStandardRowInputsDetailed([
