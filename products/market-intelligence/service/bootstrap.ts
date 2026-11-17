@@ -355,7 +355,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     database: macroCalendarBackend.storage.database,
     listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf,
     after: intelligenceModule.startupReady,
-    readLatest: (metricKey, periodKey) => readFredObservationForPeriod(metricKey, periodKey, fredObservations)
+    readLatest: (metricKey, periodKey) => readFredObservationForPeriod(metricKey, periodKey, fredObservations),
+    // 启动迁移的每一步都要能在 `app.log` 里查到：主进程的 `console.warn` 不写进那份日志。
+    ...(deps.log === undefined ? {} : { log: deps.log })
   })
   // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
   let narwhalCalendarAssembly: ReturnType<typeof createNarwhalCalendarAssembly> | undefined
