@@ -103,9 +103,15 @@ export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNo
     const deleteByRowId = database.prepare(`delete from ${table} where rowid = ?`)
     // 同一身份可能同时有 `US` 与 `USA` 两行：改名后若目标键已存在，先合并、再删掉这一行。
     for (const stray of pending) {
-      const metricKey = stray.metric_key ?? ''
-      const periodKey = stray.period_key ?? ''
-      const firstScheduledDate = stray.first_scheduled_date ?? ''
+      /**
+       * **不许把 `NULL` 折成空串**：主键列在迁出来的表上允许为 `NULL`，折成 `''` 之后
+       * 「目标键上有没有一行」永远查不到那些 NULL 行（`is ''` 不等于 `is null`），
+       * 于是它以为目标键空着、直接改名，撞上那些真实行——真库副本上就是这样 `UNIQUE constraint
+       * failed` 的。原样保留 `null`，让 null 安全比较按真实值去比。
+       */
+      const metricKey = stray.metric_key ?? null
+      const periodKey = stray.period_key ?? null
+      const firstScheduledDate = stray.first_scheduled_date ?? null
       const target = toAlpha2Country(stray.country_code ?? '')
       // 归一之后仍然不是合法的两字母码（源给了别的东西）：不动它，留给未映射/人工判断，
       // 但**不阻断整笔迁移**——它本来就不能进身份。
