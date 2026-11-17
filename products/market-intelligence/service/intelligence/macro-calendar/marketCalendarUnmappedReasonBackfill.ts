@@ -8,9 +8,10 @@
  * 分类只看**事实**，不看字面：
  * 1. 源自己给的 `eventKind` 不是 `economic-indicator`（央行活动、金融事件）→ 事件；
  * 2. 已转正（`identity_kind = 'code'）或源内 id 在按国家的映射表里且同国家 → 清单里的过期条目，删；
- * 3. 标题能唯一对上该国码表的一个码：测度定得出期次（`MOM`/`YOY`/`QOQ`）→ 缺的是映射条目，
+ * 3. 标准表里根本没有这一行（采集时缺国家被跳过）→ `no-standard-row`：不在等映射；
+ * 4. 标题能唯一对上该国码表的一个码：测度定得出期次（`MOM`/`YOY`/`QOQ`）→ 缺的是映射条目，
  *    读者眼里仍是「没有码」→ `no-code`；测度定不出（`LEVEL`/`AMOUNT`/…) → `bad-period`；
- * 4. 其余 → `no-code`。
+ * 5. 其余 → `no-code`。
  *
  * 三条硬约束：
  * - **幂等**：同一库跑两次结果一致，第二次不会有任何写；
@@ -103,6 +104,8 @@ UnmappedReasonReport {
     let reason: string
     if (eventKind !== '' && eventKind !== 'economic-indicator') reason = 'unknown-event-type'
     else if (event?.identity_kind === 'code') reason = 'stale'
+    // 没有标准行：当年因缺国家被跳过，之后没人写回来——它不在等映射（没有行可挂）。
+    else if (event === undefined) reason = 'no-standard-row'
     else if (country === null) reason = 'no-code'
     else {
       const mapped = parts[0] === undefined ? undefined : marketCalendarCountrySourceMappings[parts[0]]

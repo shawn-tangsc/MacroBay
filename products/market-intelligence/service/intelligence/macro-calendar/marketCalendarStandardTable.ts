@@ -85,7 +85,13 @@ export const calendarStandardTablePolicy = Object.freeze({
      * 只是那一段（族/测度）还没有码。它和 `bad-identity` 的区别是「没建码」不是「拼不出来」，
      * 和 `bad-period` 的区别是「连码都没有」不是「有码缺期次」——三种修法不同，不能合成一个数。
      */
-    'no-code'] as const)
+    'no-code',
+    /**
+     * **没有标准行**（2026-11-18 Chief 定）：这条源内身份当年因为缺国家被跳过，之后没有任何东西
+     * 把它写进标准表——**它不在等映射，也没有行可挂映射**。留在「未映射」里会让那个数永远压不下去，
+     * 也看不出真正缺什么：849 条里 751 条是这种，其中 642 条映射其实早就写好了。
+     */
+    'no-standard-row'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
 export type CalendarReleaseStatus = typeof calendarStandardTablePolicy.releaseStatuses[number]
