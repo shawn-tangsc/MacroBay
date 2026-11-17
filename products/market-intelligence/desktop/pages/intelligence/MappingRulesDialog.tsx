@@ -59,6 +59,20 @@ export type MappingRulesText = Readonly<{
   sheetUnmapped: string
 }>
 
+/**
+ * 码表九列的宽度，**只在这里定义一次**。
+ *
+ * 为什么收成常量：一屏能不能同时看到九列，是这九个数的和加上单元格内距，与弹框可用宽度之比。
+ * 弹框 `full` 档是 1280，但 antd 的 `max-width: calc(100vw - 32px)` 会先扣掉 32——**窗口 1280 时
+ * 真实可用只有 1248**（要真吃到 1280 得窗口 ≥1312）。上一版验收按「窗口 ≥1280 不横滚」写，
+ * 其实测的是 1248；这里按 1248 重新配过一次，并把预算写成用例（改宽了会红）：
+ * 960（九列）+ 144（9 格 × 左右各 8）＝ 1104 ≤ 1248 − 48（弹框内距）− 16（纵向滚动条）＝ 1184。
+ */
+export const CODE_TABLE_COLUMN_WIDTHS = {
+  code: 124, country: 72, name: 300, tier: 60, measure: 100,
+  official: 92, status: 72, sourceIds: 56, dataVolume: 84
+} as const
+
 const PAGE_SIZES = [20, 50, 100] as const
 const has = (value: string | null | undefined): value is string => typeof value === 'string' && value !== ''
 
@@ -130,17 +144,17 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
       dataSource={paged(codeRows, codePage, pageSize)}
       columns={[
         {
-          title: text.codeColumns.code, dataIndex: 'code', width: 132, className: 'mi-catalog__cell-nowrap',
+          title: text.codeColumns.code, dataIndex: 'code', width: CODE_TABLE_COLUMN_WIDTHS.code, className: 'mi-catalog__cell-nowrap',
           render: (value: string) => <span title={value} data-code>{shortCode(value)}</span>
         },
         {
           // **国家在名称前面**（用户 2026-11-17）。名字由读口给（同一张国名表），渲染层不拼；
           // 读口给 null 就写「未知国家」——空着会被读成「这一行没有国家这一项」。
-          title: text.codeColumns.country, width: 72, className: 'mi-catalog__cell-nowrap',
+          title: text.codeColumns.country, width: CODE_TABLE_COLUMN_WIDTHS.country, className: 'mi-catalog__cell-nowrap',
           render: (_value: unknown, row) => <span data-country>{row.countryName ?? text.unknownCountry}</span>
         },
         {
-          title: text.codeColumns.name, dataIndex: 'names', width: 340,
+          title: text.codeColumns.name, dataIndex: 'names', width: CODE_TABLE_COLUMN_WIDTHS.name,
           render: (value: CodeTableReadRow['names']) =>
             <span title={`${value.zhFull} · ${value.enFull}`} className="mi-catalog__code-name">
               <MetricNameText zh={value.zhFull} en={value.enFull} />
@@ -148,24 +162,24 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
         },
         {
           // 分级与口径**分开两列**（用户 2026-11-17）：一格两件事，读者分不清哪个是级别。
-          title: text.codeColumns.tier, width: 60, className: 'mi-catalog__cell-nowrap',
+          title: text.codeColumns.tier, width: CODE_TABLE_COLUMN_WIDTHS.tier, className: 'mi-catalog__cell-nowrap',
           render: (_value: unknown, row) => <span data-tier>{row.tier === null ? '' : String(row.tier)}</span>
         },
         {
-          title: text.codeColumns.measure, width: 118,
+          title: text.codeColumns.measure, width: CODE_TABLE_COLUMN_WIDTHS.measure,
           render: (_value: unknown, row) => <span data-measure>{[row.measure, row.seasonality].filter(has).join(' · ')}</span>
         },
         {
-          title: text.codeColumns.official, width: 92,
+          title: text.codeColumns.official, width: CODE_TABLE_COLUMN_WIDTHS.official,
           render: (_value: unknown, row) => officialCell(row)
         },
         {
-          title: text.codeColumns.status, dataIndex: 'status', width: 72, className: 'mi-catalog__cell-nowrap',
+          title: text.codeColumns.status, dataIndex: 'status', width: CODE_TABLE_COLUMN_WIDTHS.status, className: 'mi-catalog__cell-nowrap',
           render: (value: CodeTableReadRow['status']) =>
             <span data-code-status={value}>{text.codeStatus[value]}</span>
         },
         {
-          title: text.codeColumns.sourceIds, dataIndex: 'sourceIdCount', width: 56,
+          title: text.codeColumns.sourceIds, dataIndex: 'sourceIdCount', width: CODE_TABLE_COLUMN_WIDTHS.sourceIds,
           className: 'mi-catalog__cell-nowrap',
           // 0 就是 0：没有任何源认得它，这一格是这张表最有用的一处。
           render: (value: number) => String(value)
@@ -173,7 +187,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
         {
           // 数据量紧挨「源 id 数」，两个标签各写各的：一个是「有多少发布行」，一个是「认得几个源内 id」。
           // 默认顺序不动（仍按码）；**列头可点排序**，点一下就能把 0 的码排到眼前。
-          title: text.codeColumns.dataVolume, dataIndex: 'releaseRowCount', width: 84,
+          title: text.codeColumns.dataVolume, dataIndex: 'releaseRowCount', width: CODE_TABLE_COLUMN_WIDTHS.dataVolume,
           className: 'mi-catalog__cell-nowrap',
           sorter: (left: CodeTableReadRow, right: CodeTableReadRow) => left.releaseRowCount - right.releaseRowCount,
           render: (value: number) => <span data-data-volume>{String(value)}</span>
