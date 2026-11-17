@@ -62,12 +62,12 @@
       "why": "标准码表本体（含四列名与事件码）：码表的存在就是把码收成一处，它必须写码；四名里的括号里可能带码形串，按实际计数登记。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountryCodeTable.ts": {
-      "count": 1084,
-      "why": "按国家建出的码空间（30 国 542 行）：同样是一张码表，一个码必然出现两三次（键、code 字段、父子引用），这不是散落字面量。"
+      "count": 1282,
+      "why": "按国家建出的新码表：每个指标码一行，码就是身份事实，`US.` 开头的那些必须在这里（基准码表里没有）。**这个数字随建码增长**：涨了要在同一笔说明是哪张判定表建的（39/40 号），不许只改数字"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings.ts": {
-      "count": 635,
-      "why": "源内身份 → 码的映射表：映射的目标就是码，删掉就取不出身份。这一批是「按国家建码」带来的 +582。"
+      "count": 725,
+      "why": "源内 id → 码的映射表：每条必须写出目标码，这是「这个源的这个 id 是什么」的唯一记录。只收期次可定、测度一致的；定不了的不写，所以条数少于源身份是有意的"
     },
     "service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts": {
       "count": 117,
