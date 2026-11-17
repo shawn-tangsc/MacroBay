@@ -11,6 +11,9 @@ import type {
 import {
   mostSevereSkippedEvidence, parseSignalEvidence, signalEvidenceJson
 } from '../../../contracts/moduleSignalEvidence'
+import {
+  ANALYSIS_KIND_MISSING_ERROR, analysisKindOf, isAnalysisKind, type AnalysisKind
+} from '../../../contracts/analysisKinds'
 import { buildAnalysisSnapshotHash, snapshotHashInput } from '../analysis/analysisHash'
 
 /**
@@ -58,7 +61,24 @@ export function validateSnapshot(value: EvidenceSnapshot): void {
   if (!value.id.startsWith('mi-es-') || (value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3) || value.snapshotHash !== buildAnalysisSnapshotHash(snapshotHashInput(value))) throw new Error('analysis-snapshot-invalid')
 }
 
-export function validateRun(value: AnalysisRun): void { if (!value.id.startsWith('mi-ar-') || value.schemaVersion !== 1) throw new Error('analysis-run-invalid') }
+export function validateRun(value: AnalysisRun): void {
+  if (!value.id.startsWith('mi-ar-') || value.schemaVersion !== 1) throw new Error('analysis-run-invalid')
+  // 写路径必填（R39）：缺类别不许静默落成 market，那会让一次遗忘变成今天的市场结论。
+  if (value.analysisKind === undefined || value.analysisKind === null) throw new Error(ANALYSIS_KIND_MISSING_ERROR)
+  if (!isAnalysisKind(value.analysisKind)) throw new Error('analysis-run-invalid')
+}
+
+/**
+ * 摘要写入前的类别关口（R39）。
+ *
+ * 与 `validateRun` 同一条规矩：**写必填、不 coalesce**。可空只是类型上给 R39 之前的记录留的，
+ * 读侧由 `analysisKindOf` 把旧行归成 market。
+ */
+export function requireSummaryAnalysisKind(value: AnalysisSummary): AnalysisKind {
+  if (value.analysisKind === undefined || value.analysisKind === null) throw new Error(ANALYSIS_KIND_MISSING_ERROR)
+  if (!isAnalysisKind(value.analysisKind)) throw new Error(ANALYSIS_KIND_MISSING_ERROR)
+  return value.analysisKind
+}
 
 export function validateArchiveMetadata(value: MarketAnalysisArchiveMetadata | undefined): void {
   if (!value) return
@@ -85,7 +105,10 @@ export function validateSummaryReferences(summary: AnalysisSummary, snapshot: Ev
 
 export function fromEventGroup(row: StoredRow): EventGroup { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, status: row.status as EventGroup['status'], groupType: row.group_type as EventGroup['groupType'], mergeKey: String(row.merge_key), firstObservedAt: String(row.first_observed_at), lastObservedAt: String(row.last_observed_at), reviewDeadlineAt: String(row.review_deadline_at), eventRefs: JSON.parse(String(row.event_refs_json)), triggerCount: Number(row.trigger_count), reviewCount: Number(row.review_count), currentSummaryId: row.current_summary_id as string | null, supersededByGroupId: row.superseded_by_group_id as string | null, revision: Number(row.revision), createdAt: String(row.created_at), updatedAt: String(row.updated_at) } }
 export function fromSnapshot(row: StoredRow): EvidenceSnapshot { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1 | 2 | 3, eventGroupId: String(row.event_group_id), asOf: String(row.as_of), dataCutoff: String(row.data_cutoff), snapshotHash: String(row.snapshot_hash), profileId: 'crypto-market-analysis-v1', facts: JSON.parse(String(row.facts_json)), missingDomains: JSON.parse(String(row.missing_domains_json)), caveats: JSON.parse(String(row.caveats_json)), evidenceRefs: JSON.parse(String(row.evidence_refs_json)), sourceHealth: JSON.parse(String(row.source_health_json)), createdAt: String(row.created_at), policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1', ...(row.trigger_json ? { trigger: JSON.parse(String(row.trigger_json)) as SnapshotTrigger } : {}) } }
-export function fromRun(row: StoredRow): AnalysisRun { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, eventGroupId: String(row.event_group_id), snapshotId: String(row.snapshot_id), snapshotHash: String(row.snapshot_hash), analysisPhase: row.analysis_phase as AnalysisRun['analysisPhase'], triggerKey: String(row.trigger_key), idempotencyKey: String(row.idempotency_key), status: row.status as AnalysisRun['status'], attempt: Number(row.attempt), retryOfRunId: row.retry_of_run_id as string | null, modelProviderId: row.model_provider_id as string | null, modelId: row.model_id as string | null, policyVersion: String(row.policy_version), promptVersion: String(row.prompt_version), skillVersion: String(row.skill_version), outputSchemaVersion: Number(row.output_schema_version) as 1 | 2, jobRunId: row.job_run_id as string | null, traceId: row.trace_id as string | null, failureCode: row.failure_code as string | null, failureDetailCode: row.failure_detail_code as string | null, validationMode: (row.validation_mode as AnalysisRun['validationMode']) ?? null, ...(row.notification_episode_run_id ? { notificationEpisodeRunId: row.notification_episode_run_id as string } : {}), ...(row.retry_used_at ? { retryUsedAt: String(row.retry_used_at) } : {}), ...(row.retry_result ? { retryResult: row.retry_result as AnalysisRun['retryResult'] } : {}), queuedAt: String(row.queued_at), startedAt: row.started_at as string | null, completedAt: row.completed_at as string | null } }
+export function fromRun(row: StoredRow): AnalysisRun {
+  // 读侧唯一的 `null → market` 兜底：旧行、旧归档、回退后旧版写入的行都在这里归口。
+  return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, analysisKind: analysisKindOf(row), eventGroupId: String(row.event_group_id), snapshotId: String(row.snapshot_id), snapshotHash: String(row.snapshot_hash), analysisPhase: row.analysis_phase as AnalysisRun['analysisPhase'], triggerKey: String(row.trigger_key), idempotencyKey: String(row.idempotency_key), status: row.status as AnalysisRun['status'], attempt: Number(row.attempt), retryOfRunId: row.retry_of_run_id as string | null, modelProviderId: row.model_provider_id as string | null, modelId: row.model_id as string | null, policyVersion: String(row.policy_version), promptVersion: String(row.prompt_version), skillVersion: String(row.skill_version), outputSchemaVersion: Number(row.output_schema_version) as 1 | 2, jobRunId: row.job_run_id as string | null, traceId: row.trace_id as string | null, failureCode: row.failure_code as string | null, failureDetailCode: row.failure_detail_code as string | null, validationMode: (row.validation_mode as AnalysisRun['validationMode']) ?? null, ...(row.notification_episode_run_id ? { notificationEpisodeRunId: row.notification_episode_run_id as string } : {}), ...(row.retry_used_at ? { retryUsedAt: String(row.retry_used_at) } : {}), ...(row.retry_result ? { retryResult: row.retry_result as AnalysisRun['retryResult'] } : {}), queuedAt: String(row.queued_at), startedAt: row.started_at as string | null, completedAt: row.completed_at as string | null }
+}
 export function fromTimeline(row: StoredRow): TimelineEntry { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, eventGroupId: String(row.event_group_id), analysisRunId: row.analysis_run_id as string | null, kind: row.kind as TimelineEntry['kind'], status: row.status as TimelineEntry['status'], occurredAt: String(row.occurred_at), summaryRef: row.summary_ref as string | null, safeTitle: String(row.safe_title), safeExcerpt: row.safe_excerpt as string | null, direction: (row.direction as TimelineEntry['direction']) ?? null, version: Number(row.version) } }
 export function fromLedger(row: StoredRow): PredictionLedgerEntry { return { predictionId: String(row.prediction_id), schemaVersion: 1, asset: row.asset as PredictionLedgerEntry['asset'], horizonStart: String(row.horizon_start), horizonEnd: String(row.horizon_end), predicate: row.predicate === null ? null : String(row.predicate), conditionCount: Number(row.condition_count), status: row.status as AnalysisPredictionStatus, reasonCode: String(row.reason_code), ruleVersion: row.rule_version as PredictionLedgerEntry['ruleVersion'], evidenceRefs: JSON.parse(String(row.evidence_refs_json)) as string[], evidenceRefCount: Number(row.evidence_ref_count), predictionCreatedAt: String(row.prediction_created_at), evaluatedAt: String(row.evaluated_at) } }
 export function stableMergeKey(value: string): string { const parts = value.split('|'); return parts.slice(0, -1).join('|') }

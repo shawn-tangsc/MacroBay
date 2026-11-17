@@ -129,7 +129,7 @@ async function createHarness(input: Readonly<{ withMetricEvents?: boolean }> = {
         runtime.repository.commitSuccessfulAnalysis({
           runId: enqueuedRun.run.id,
           summary: {
-            id: `mi-as-${itemId}`, schemaVersion: 1, analysisRunId: enqueuedRun.run.id, eventGroupId: group.id, version: 1,
+            id: `mi-as-${itemId}`, schemaVersion: 1, analysisKind: 'market', analysisRunId: enqueuedRun.run.id, eventGroupId: group.id, version: 1,
             conclusion: {
               direction: 'range', summary: '结论', change: '变化', causalChain: '机制', conditions: [],
               macro: null, evidenceStrength: null, dataGaps: []

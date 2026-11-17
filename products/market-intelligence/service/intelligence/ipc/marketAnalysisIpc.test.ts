@@ -16,7 +16,10 @@ function harness() {
       items: input.cursor === 'opaque-next' ? [] : [timelineEntry], nextCursor: input.cursor ? null : 'opaque-next'
     })),
     getTimelineEntry: vi.fn(() => timelineEntry),
-    listRuns: vi.fn(() => [{ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', privateBody: 'never-display' }]),
+    records: {
+      latestAttempt: vi.fn(() => ({ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', privateBody: 'never-display' })),
+      listRuns: vi.fn(() => [{ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', startedAt: null, privateBody: 'never-display' }])
+    },
     getEventGroup: vi.fn((id: string) => id === 'mi-eg-1' ? { id, currentSummaryId: 'mi-as-1', eventRefs: ['item-1'] } : undefined),
     getRun: vi.fn(() => ({
       id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial' as const, status: 'succeeded' as const,
@@ -47,7 +50,7 @@ describe('read-only news interpretation endpoint (R37)', () => {
   const harnessWithReader = (readNewsInterpretation: (itemId: string) => Promise<unknown>) => {
     const handlers = new Map<string, (payload: unknown) => unknown | Promise<unknown>>()
     registerMarketAnalysisIpc((_productId, method, handler) => handlers.set(method, handler), {
-      getEventGroup: () => undefined, listRuns: () => [], getSnapshot: () => undefined, getSummary: () => undefined,
+      getEventGroup: () => undefined, records: { latestAttempt: () => undefined }, getSnapshot: () => undefined, getSummary: () => undefined,
       listTimeline: () => ({ items: [] }), getTimelineEntry: () => undefined, getRun: () => undefined,
       getSummaryForRun: () => undefined, listPredictions: () => []
     } as never, {}, { readNewsInterpretation: readNewsInterpretation as never })
@@ -66,7 +69,7 @@ describe('read-only news interpretation endpoint (R37)', () => {
     const handlers = new Map<string, (payload: unknown) => unknown | Promise<unknown>>()
     const request = vi.fn(async (itemId: string) => ({ state: 'queued' as const, itemId }))
     registerMarketAnalysisIpc((_productId, method, handler) => handlers.set(method, handler), {
-      getEventGroup: () => undefined, listRuns: () => [], getSnapshot: () => undefined, getSummary: () => undefined,
+      getEventGroup: () => undefined, records: { latestAttempt: () => undefined }, getSnapshot: () => undefined, getSummary: () => undefined,
       listTimeline: () => ({ items: [] }), getTimelineEntry: () => undefined, getRun: () => undefined,
       getSummaryForRun: () => undefined, listPredictions: () => []
     } as never, {}, { requestNewsInterpretation: request as never })

@@ -41,7 +41,7 @@ function snapshot(id: string, eventGroupId: string, value: string): EvidenceSnap
 
 function run(id: string, eventGroupId: string, snapshotId: string, idempotencyKey: string, snapshotHash = snapshot('mi-es-A1', eventGroupId, 'A').snapshotHash): AnalysisRun {
   return {
-    id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey,
+    id, schemaVersion: 1, analysisKind: 'market', eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey,
     status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: 'provider', modelId: 'model', policyVersion: 'policy.v1', promptVersion: 'prompt.v1', skillVersion: 'skill.v1', outputSchemaVersion: 1,
     jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, validationMode: null, queuedAt: asOf, startedAt: null, completedAt: null
   }
@@ -49,7 +49,7 @@ function run(id: string, eventGroupId: string, snapshotId: string, idempotencyKe
 
 function summary(id: string, analysisRunId: string, eventGroupId: string, version = 1): AnalysisSummary {
   return {
-    id, schemaVersion: 1, analysisRunId, eventGroupId, version, eventAssessment: '通胀数据高于预期',
+    id, schemaVersion: 1, analysisKind: 'market', analysisRunId, eventGroupId, version, eventAssessment: '通胀数据高于预期',
     knownFacts: [{ factId: 'fact-A', statement: 'actual=3.2', evidenceRefIds: ['ev-A'] }],
     transmissionHypotheses: [{ statement: '流动性预期收紧', evidenceRefIds: ['ev-A'] }],
     marketReaction: [{ statement: 'BTC 下跌', factIds: ['fact-A'], evidenceRefIds: ['ev-A'] }],

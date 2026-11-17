@@ -1,3 +1,4 @@
+import type { AnalysisKind } from './analysisKinds'
 import type {
   AgentFact,
   AgentEvidenceRef,
@@ -351,6 +352,11 @@ export type AnalysisRetryResult = 'succeeded' | 'failed' | 'cancelled'
 export type AnalysisRun = Readonly<{
   id: string
   schemaVersion: 1
+  /**
+   * 这条运行属于哪条解析线（R39）。写入必填；旧行由存储层读成 `market`，
+   * 新写入缺这一项会被 `validateRun` 拒绝——默认值只给历史数据兜底。
+   */
+  analysisKind: AnalysisKind
   eventGroupId: string
   snapshotId: string
   snapshotHash: string
@@ -447,6 +453,13 @@ export type AnalysisSummary = Readonly<{
   id: string
   /** 1 = 没有语言字段；2 = 带 `proseLanguage`；3 = 失效条件换成引用快照的结构。 */
   schemaVersion: 1 | 2 | 3
+  /**
+   * 这份正文属于哪条解析线（R39）。
+   *
+   * 类型上可空是因为 R39 之前发布的记录里没有这个字段；**新写入必须带**，
+   * `commitSuccessfulAnalysis` 缺它即失败。读侧由存储层按旧行归 `market`。
+   */
+  analysisKind?: AnalysisKind
   analysisRunId: string
   /**
    * 这份正文是用哪种语言写的（生成时的界面语言）。旧记录没有这个字段：读出来是不认识、

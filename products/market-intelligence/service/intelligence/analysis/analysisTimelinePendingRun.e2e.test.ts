@@ -51,7 +51,7 @@ const snapshot: EvidenceSnapshot = {
 
 function summary(runId: string): AnalysisSummary {
   return {
-    id: 'mi-as-1', schemaVersion: 1, analysisRunId: runId, eventGroupId: group.id, version: 1,
+    id: 'mi-as-1', schemaVersion: 1, analysisKind: 'market', analysisRunId: runId, eventGroupId: group.id, version: 1,
     knownFacts: [{ factId: `triggered-news:${itemId}`, statement: '新闻被判定为偏空。', evidenceRefIds: [`news:${itemId}`] }],
     transmissionHypotheses: [{ statement: '风险偏好下降压低 BTC。', evidenceRefIds: [`news:${itemId}`] }],
     marketReaction: [{ statement: 'BTC 走弱。', factIds: [`triggered-news:${itemId}`], evidenceRefIds: [`news:${itemId}`] }],
@@ -139,6 +139,37 @@ it('turns a run that dies without publishing into a failed row rather than leavi
   }
 })
 
+it('keeps a running and a failed news-line run off the market timeline', () => {
+  const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+  try {
+    repository.appendEventGroup(group)
+    repository.appendSnapshot(snapshot)
+    const base = {
+      schemaVersion: 1 as const, analysisKind: 'news' as const, eventGroupId: group.id, snapshotId: snapshot.id,
+      snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial' as const, triggerKey: 'news.manual',
+      modelProviderId: 'provider', modelId: 'model', policyVersion: 'policy.v1', promptVersion: 'news-prompt.v1',
+      skillVersion: 'news-skill.v1', outputSchemaVersion: 1 as const, jobRunId: null, traceId: null,
+      failureCode: null, failureDetailCode: null, validationMode: null, attempt: 1, retryOfRunId: null,
+      startedAt: null as string | null, completedAt: null as string | null
+    }
+    const running = repository.enqueueRun({
+      ...base, id: 'mi-ar-news-running', idempotencyKey: 'news-running', status: 'queued', queuedAt
+    }).run
+    const failed = repository.enqueueRun({
+      ...base, id: 'mi-ar-news-failed', idempotencyKey: 'news-failed', status: 'queued', queuedAt: '2026-11-17T06:57:00.000Z'
+    }).run
+    repository.claimRun(running.id, startedAt)
+    repository.claimRun(failed.id, startedAt)
+    repository.updateRunStatus({ id: failed.id, status: 'failed', failureCode: 'analysis-run-interrupted', failureDetailCode: 'run-stalled', completedAt: publishedAt })
+
+    const service = createAnalysisTimelineService({ repository, timeZone: () => 'Asia/Shanghai' })
+    // 市场时间轴只认市场线：新闻解读正在跑或跑挂了，都不许在这里出现。
+    expect(service.listTimeline({ limit: 50 }).items).toHaveLength(0)
+  } finally {
+    repository.close()
+  }
+})
+
 it('does not inject unpublished rows into a page opened with a cursor', () => {
   // 正在跑的运行永远属于最新那一屏；往历史页里塞会让游标对不上。这条用替身仓库，
   // 真仓库的游标校验在 store 用例里另有覆盖。
@@ -146,7 +177,7 @@ it('does not inject unpublished rows into a page opened with a cursor', () => {
     timeZone: () => 'Asia/Shanghai',
     repository: {
       listTimeline: () => ({ items: [], nextCursor: 'opaque' }),
-      listRuns: () => [{ id: 'mi-ar-1', eventGroupId: group.id, analysisPhase: 'initial', status: 'running', snapshotId: snapshot.id, queuedAt, startedAt }],
+      records: { listRuns: () => [{ id: 'mi-ar-1', eventGroupId: group.id, analysisPhase: 'initial', status: 'running', snapshotId: snapshot.id, queuedAt, startedAt }] },
       getEventGroup: () => ({ id: group.id, currentSummaryId: null })
     } as never
   })

@@ -27,7 +27,7 @@ const snapshot: EvidenceSnapshot = {
 
 function summaryFor(id: string, runId: string, version: number): AnalysisSummary {
   return {
-    id, schemaVersion: 1, analysisRunId: runId, eventGroupId: group.id, version, eventAssessment: '通胀数据高于预期',
+    id, schemaVersion: 1, analysisKind: 'market', analysisRunId: runId, eventGroupId: group.id, version, eventAssessment: '通胀数据高于预期',
     knownFacts: [{ factId: 'fact-A', statement: 'actual=3.2', evidenceRefIds: ['ev-A'] }],
     transmissionHypotheses: [{ statement: '流动性预期收紧', evidenceRefIds: ['ev-A'] }],
     marketReaction: [{ statement: 'BTC 下跌', factIds: ['fact-A'], evidenceRefIds: ['ev-A'] }],

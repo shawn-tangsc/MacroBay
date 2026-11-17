@@ -4,6 +4,7 @@ import { analysisWorkspacePolicy, type AnalysisFollowUpInput } from '../../../co
 import { projectTriggerStatus, type TriggerStatus, type TriggerStatusRow } from './triggerStatusProjection'
 import { withSnapshotChange } from './snapshotChange'
 import type { EvidenceSnapshot } from '../../../contracts/marketAnalysisContracts'
+import type { AnalysisRecordReader } from '../store/analysisRecordReader'
 
 type ComparableSnapshot = Pick<EvidenceSnapshot, 'id' | 'eventGroupId' | 'createdAt' | 'snapshotHash' | 'facts' | 'missingDomains' | 'caveats' | 'evidenceRefs' | 'change'>
 
@@ -22,8 +23,13 @@ type Repository = Readonly<{
   getSummaryForRun: (analysisRunId: string) => AnalysisSummary | undefined
   listPredictions: (summaryId: string) => readonly Prediction[]
   listTriggerLedger?: (eventGroupId: string) => readonly TriggerStatusRow[]
-  /** 只有已发布运行会写时间轴行；排队/运行中/失败的运行靠它补进来。 */
-  listRuns?: () => readonly AnalysisRun[]
+  /**
+   * 只有已发布运行会写时间轴行；排队/运行中/失败的运行靠它补进来。
+   *
+   * 走读侧 reader（R39 §5.3）：它在这里过滤 `analysisKind:'market'`，新闻解读的运行绝不
+   * 出现在市场时间轴上。绕开它直接读 run 表，就是那条已知泄漏点。
+   */
+  records?: Pick<AnalysisRecordReader, 'listRuns'>
 }>
 
 /**
@@ -185,10 +191,10 @@ function unpublishedRunEntries(
   eventGroupId: string | undefined,
   represented: ReadonlySet<string>
 ): RendererTimelineEntry[] {
-  const runs = deps.repository.listRuns?.() ?? []
+  const runs = deps.repository.records?.listRuns({ analysisKind: 'market', ...(eventGroupId === undefined ? {} : { eventGroupId }) }) ?? []
   return runs
     .filter(run => (pendingRunStatuses.has(run.status) || failedRunStatuses.has(run.status)) &&
-      !represented.has(run.id) && (eventGroupId === undefined || run.eventGroupId === eventGroupId))
+      !represented.has(run.id))
     .sort((left, right) => right.queuedAt.localeCompare(left.queuedAt))
     .slice(0, maximumUnpublishedEntries)
     .map(run => {

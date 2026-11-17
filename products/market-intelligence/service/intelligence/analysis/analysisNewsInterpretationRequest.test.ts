@@ -25,7 +25,7 @@ const group: EventGroup = {
 }
 
 const run = (status: AnalysisRun['status']): AnalysisRun => ({
-  id: 'mi-ar-1', schemaVersion: 1, eventGroupId: group.id, snapshotId: 'mi-es-1', snapshotHash: 'snap-hash',
+  id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: group.id, snapshotId: 'mi-es-1', snapshotHash: 'snap-hash',
   analysisPhase: 'initial', triggerKey: 'manual.initial', idempotencyKey: 'key', status, attempt: 1,
   retryRunOf: null, retryOfRunId: null, modelProviderId: null, modelId: null, policyVersion: 'p', promptVersion: 'v',
   skillVersion: 's', outputSchemaVersion: 3, jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null,

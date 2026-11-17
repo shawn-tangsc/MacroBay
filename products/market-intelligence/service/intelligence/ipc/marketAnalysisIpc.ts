@@ -50,7 +50,8 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.calendarEventContext, (payload) =>
     macroCalendarEventContextFromReads(macroCalendarEventContextReaders(calendar), asCalendarEventContextInput(payload)))
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.getLatestAttempt, () => {
-    const run = repository.listRuns()[0]
+    // 只认市场线的最近一次运行（R39 §5.3）：否则一条新闻解读会冒充「最近一次尝试」。
+    const run = repository.records.latestAttempt({ analysisKind: 'market' })
     if (!run) return null
     const knownCode = Object.values(MARKET_ANALYSIS_ERROR_CODES).find(code => code === run.failureCode)
     return { id: run.id, status: run.status, failureCode: run.failureCode ? knownCode ?? 'analysis-provider-error' : null,

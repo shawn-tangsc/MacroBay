@@ -286,7 +286,7 @@ describe('analysisOrchestrator', () => {
 
   it('answers a failure the reader asked for, and stays quiet for an automatic one', async () => {
     const runWith = (triggerKey: string): AnalysisRun => ({
-      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
       modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
       skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
@@ -463,7 +463,7 @@ describe('analysisOrchestrator', () => {
 
   describe('the analysis-conclusion push (N12)', () => {
     const runFixture = (triggerKey: string) => ({
-      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
       modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
       skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
@@ -579,7 +579,7 @@ describe('analysisOrchestrator', () => {
   it('calls the model recorded on the run, and leaves the choice open for a run without one', async () => {
     const invoke = vi.fn(async (_request: unknown) => ({ ok: true as const, output: validOutput(), providerId: 'provider-9', modelId: 'model-9', trace: { taskId: 'mi-ar-1', durationMs: 1 } }))
     const run = {
-      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: 'key', status: 'queued', attempt: 1,
       retryOfRunId: null, modelProviderId: 'provider-9', modelId: 'model-9', policyVersion: 'policy', promptVersion: 'market-analysis-v1',
       skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
@@ -722,7 +722,7 @@ function fixtureSnapshot() {
 
 function createRepository(overrides: Record<string, unknown> = {}) {
   const run: AnalysisRun = {
-    id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+    id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
     analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: 'key', status: 'queued', attempt: 1,
     retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
     skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,

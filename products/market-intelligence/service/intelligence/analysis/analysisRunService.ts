@@ -71,7 +71,8 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
   const enqueue = (input: AnalysisRunEnqueueInput) => {
     const queuedAt = deps.now()
     const run: AnalysisRun = {
-      id: deps.idFactory(), schemaVersion: 1, eventGroupId: input.eventGroupId, snapshotId: input.snapshotId,
+      // A 笔暂时全部归市场线：今天的新闻触发解读仍走市场提示词，C 笔拆线后才由调用方指定。
+      id: deps.idFactory(), schemaVersion: 1, analysisKind: 'market', eventGroupId: input.eventGroupId, snapshotId: input.snapshotId,
       snapshotHash: input.snapshotHash, analysisPhase: input.analysisPhase, triggerKey: input.triggerKey,
       idempotencyKey: buildAnalysisIdempotencyKey(input), status: 'queued', attempt: 1, retryOfRunId: null,
       modelProviderId: input.model?.providerId ?? null, modelId: input.model?.modelId ?? null, policyVersion: analysisRunPolicy.version,

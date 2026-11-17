@@ -13,7 +13,7 @@ const asOf = '2026-11-08T03:00:00.000Z'
 const clickAt = '2026-11-08T12:44:00.000Z'
 
 const run = (overrides: Partial<AnalysisRun> = {}): AnalysisRun => ({
-  id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+  id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
   analysisPhase: 'initial', triggerKey: 'signal.open-interest.oi-liquidation-proxy', idempotencyKey: 'key',
   status: 'succeeded', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null,
   policyVersion: 'policy', promptVersion: 'market-analysis-v1', skillVersion: 'market-analysis-v1',

@@ -391,7 +391,7 @@ function toSummary(run: AnalysisRun, output: ValidatedAnalysisModelOutput, versi
   // 提示词在语言读不到时按中文写（`buildAnalysisMessages` 的默认），所以记录也写中文：
   // 记录的是「这份正文实际用的语言」，不是「读没读到设置」。
   return {
-    id: makeId('mi-as-', idFactory()), schemaVersion: 3, analysisRunId: run.id, eventGroupId: run.eventGroupId, version,
+    id: makeId('mi-as-', idFactory()), schemaVersion: 3, analysisKind: run.analysisKind, analysisRunId: run.id, eventGroupId: run.eventGroupId, version,
     proseLanguage: proseLanguage ?? 'zh-CN', ...output, createdAt
   }
 }
