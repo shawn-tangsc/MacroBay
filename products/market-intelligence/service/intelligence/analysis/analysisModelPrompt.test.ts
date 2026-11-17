@@ -85,20 +85,32 @@ describe('analysis model prompt trigger contract (R37)', () => {
     expect(system).toContain('不许把新闻里的金额直接当成市场影响')
   })
 
-  it('requires source wording that matches how credible the source is', () => {
-    // 准入放开之后低可信来源也能被解读，措辞就不能把页面抓取升格成「某方宣布」。
-    // 这条只写在提示词里：能写成一组的词规则不进校验。
+  it('keeps source attribution natural and rare, instead of prefixing every block', () => {
+    // 用户看到的毛病：「该页面显示」在一篇里出现三次，摘要/变化/因果链各一次——像模板。
     const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
-    expect(system).toContain('来源措辞必须与这条来源的可信度相符')
-    expect(system).toContain('该页面显示')
-    expect(system).toContain('不得写成「某方宣布」「官方表示」')
+    expect(system).toContain('来源归属要自然，别把它当每段的固定前缀')
+    expect(system).toContain('「该消息称」「报道称」「据该报道」')
+    expect(system).toContain('只有当来源确实是页面抓取、没有署名时，才写「该页面显示」')
+    expect(system).toContain('来源归属**最多出现一次**')
+    // 不得升格成既成事实的口径，这条仍然在。
+    expect(system).toContain('**不得**写成「某方宣布」「官方表示」')
+  })
+
+  it('assigns each of the three blocks one job, and forbids repeating the same fact', () => {
+    // 用户原话：「你自己看看里面的像不像一个真人对新闻的解读」——三块在同一件事上复述。
+    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    expect(system).toContain('三块各管一件事，不许互相复述')
+    expect(system).toContain('`conclusion.summary` 一次说清「这条新闻 + 当前数据 → 方向/影响」')
+    expect(system).toContain('`conclusion.change` 只写**数据本身**变在哪')
+    expect(system).toContain('新闻作为起因**只提一次**')
+    expect(system).toContain('同一条事实在一条解读里只出现一次')
   })
 
   it('stays out of runs that a news item did not trigger', () => {
     const system = systemPrompt(snapshot({ facts: [triggerFact] }))
     expect(system).not.toContain('本次运行由**一条新闻**触发')
     expect(system).not.toContain('conclusion.newsImpact')
-    expect(system).not.toContain('来源措辞必须与这条来源的可信度相符')
+    expect(system).not.toContain('来源归属要自然')
   })
 })
 
