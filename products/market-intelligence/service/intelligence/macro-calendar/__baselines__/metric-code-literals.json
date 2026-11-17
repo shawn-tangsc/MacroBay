@@ -60,6 +60,14 @@
     "service/intelligence/macro-calendar/marketCalendarCodeTable.ts": {
       "count": 390,
       "why": "标准码表的本体：每个码就是一行字面量。这张表的存在意义就是把「码」收成一处，所以它必须写码——把码也算成散落字面量，这张表就没法存在。新增/删码时同笔改这个数。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountryCodeTable.ts": {
+      "count": 192,
+      "why": "按国家建出的新码表：每个指标码一行，码本身就是身份事实。`US.` 开头的那些必须写在这里——它们不在基准码表里（基准是旧的两源码），没有这张表这些码就不存在；码与四列名同一行，拆开放必然漂"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings.ts": {
+      "count": 38,
+      "why": "源内 id → 新码的映射表：每条都写目标码，这是「这个源的这个 id 是什么」的唯一记录。只收能机械定出期次的（MOM/YOY→月、QOQ→季），定不了的（LEVEL/AMOUNT/RATE/COUNT）不写，所以条数比源身份少是有意的"
     }
   }
 }

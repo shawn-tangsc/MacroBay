@@ -45,7 +45,12 @@ const NAME_TABLE_PATHS = Object.freeze([
   'service/intelligence/macro-calendar/marketCalendarCodeNames.ts',
   'service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts',
   /* 标准码表（`9650d74`）：四列名 **就住在这里**——它就是名表本体，不是又长出一份。 */
-  'service/intelligence/macro-calendar/marketCalendarCodeTable.ts'
+  'service/intelligence/macro-calendar/marketCalendarCodeTable.ts',
+  /*
+   * 按国家建出的新码表（`5647ea4`）：与基准码表**同一职责**——对外提供「码 → 四列名」，
+   * 每个码的中英全称/简称只在这里写一次。它同样是名表本体，不是又抄了一份列名。
+   */
+  'service/intelligence/macro-calendar/marketCalendarCountryCodeTable.ts'
 ])
 const BASELINE = new URL('./__baselines__/source-literals.json', import.meta.url).pathname
 /**

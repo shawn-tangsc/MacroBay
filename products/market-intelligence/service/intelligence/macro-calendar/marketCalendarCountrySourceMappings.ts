@@ -523,4 +523,8 @@ export const marketCalendarCountrySourceMappings: Readonly<Record<string,
   '215068': { metricKey: 'IT.UNADJUSTED_INDUSTRIAL_SALES.NSA.YOY', periodRule: 'month' },
   '215069': { metricKey: 'IT.INDUSTRIAL_SALES.SA.MOM', periodRule: 'month' },
   '215071': { metricKey: 'US.WHOLESALE_INVENTORY.NONE.MOM', periodRule: 'month' },
+  '212384': { metricKey: 'CH.PRODUCER_IMPORTS_PRICE.NONE.MOM', periodRule: 'month' },
+  '212385': { metricKey: 'CH.PRODUCER_IMPORTS_PRICE.NONE.YOY', periodRule: 'month' },
+  '212780': { metricKey: 'AU.LOANS_PRIVATE_BUSINESS.NONE.YOY', periodRule: 'month' },
+  '213593': { metricKey: 'US.PERSONAL_CONSUMPTION_EXPENDITURE.NONE.MOM', periodRule: 'month' },
 })
