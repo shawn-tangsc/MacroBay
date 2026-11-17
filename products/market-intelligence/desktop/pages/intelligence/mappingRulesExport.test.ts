@@ -24,31 +24,36 @@ describe('sampleText', () => {
 })
 
 describe('the exported rows', () => {
-  const codeColumns = { code: '码', name: '名称', tierMeasure: '分级 · 口径', official: '官网页', status: '状态', sourceIds: '源 id 数' }
+  const codeColumns = { code: '码', country: '国家', name: '名称', tierMeasure: '分级 · 口径', official: '官网页', status: '状态', sourceIds: '源 id 数' }
   const statusWords = { active: '生效', 'not-built': '不建', pending: '待补', retired: '已退役' } as const
 
   it('writes one row per code with the official page as a link or a word, never a blank', () => {
     const rows = codeTableExportRows([
       { code: 'US.CPI.NSA.YOY', kind: 'metric', names: { zhFull: 'CPI 年率', zhShort: 'CPI', enFull: 'Consumer Price Index (YoY)', enShort: 'CPI' },
-        tier: 1, measure: 'YOY', seasonality: 'NSA', status: 'active', reason: null,
+        countryCode: 'US', countryName: '美国', tier: 1, measure: 'YOY', seasonality: 'NSA', status: 'active', reason: null,
         officialSource: { agency: 'BLS', url: 'https://www.bls.gov/x', pageKind: 'release', verifiedAt: '2026-11-17', basis: '发布目录' },
         sourceIdCount: 3 },
       // 待补与不建：一个写词、一个写破折号，都不许留下空链接。
       { code: 'US.X.NONE.LEVEL', kind: 'metric', names: { zhFull: '某指标', zhShort: '某', enFull: 'Something', enShort: 'S' },
-        tier: null, measure: 'LEVEL', seasonality: 'NONE', status: 'pending', reason: 'official-source-todo',
+        countryCode: 'US', countryName: '美国', tier: null, measure: 'LEVEL', seasonality: 'NONE', status: 'pending',
+        reason: 'official-source-todo',
         officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 },
       { code: 'US.Y.NONE.LEVEL', kind: 'metric', names: { zhFull: '不建指标', zhShort: '不建', enFull: 'Not built', enShort: 'NB' },
-        tier: null, measure: 'LEVEL', seasonality: 'NONE', status: 'not-built', reason: 'no-reader',
+        countryCode: null, countryName: null, tier: null, measure: 'LEVEL', seasonality: 'NONE', status: 'not-built',
+        reason: 'no-reader',
         officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 }
-    ], { columns: codeColumns, status: statusWords, officialPending: '待核', officialNone: '—' })
+    ], { columns: codeColumns, status: statusWords, officialPending: '待核', officialNone: '—', unknownCountry: '未知国家' })
     expect(rows).toHaveLength(4)
     expect(rows[0]![0]).toBe('码')
-    expect(rows[1]![3]).toBe('https://www.bls.gov/x')
-    expect(rows[2]![3]).toBe('待核')
-    expect(rows[3]![3]).toBe('—')
+    // 第 2 列是国家（在名称前面）：读口给 null 时写「未知国家」，不空着。
+    expect(rows[1]![1]).toBe('美国')
+    expect(rows[3]![1]).toBe('未知国家')
+    expect(rows[1]![4]).toBe('https://www.bls.gov/x')
+    expect(rows[2]![4]).toBe('待核')
+    expect(rows[3]![4]).toBe('—')
     // **源 id 数 0 写 0**：那是「没有源认得它」，不是空。
-    expect(rows[3]![5]).toBe(0)
-    expect(rows[1]![4]).toBe('生效')
+    expect(rows[3]![6]).toBe(0)
+    expect(rows[1]![5]).toBe('生效')
   })
 
   it('exports the unmapped section with the bilingual sample in one cell', () => {

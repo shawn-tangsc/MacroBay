@@ -276,6 +276,11 @@ export function codeTableReadOf(value: unknown): CodeTableRead {
     if (typeof row.sourceIdCount !== 'number' || !Number.isInteger(row.sourceIdCount) || row.sourceIdCount < 0) {
       return unavailable
     }
+    // 国家现在**必填**（读口一定给）：缺字段或类型不对一律判读不到，不允许渲染层兜底。
+    for (const field of ['countryCode', 'countryName'] as const) {
+      if (row[field] !== null && typeof row[field] !== 'string') return unavailable
+    }
+    if (!Object.hasOwn(row, 'countryCode') || !Object.hasOwn(row, 'countryName')) return unavailable
     const names = row.names as { zhFull?: unknown; enFull?: unknown } | null
     if (names === null || typeof names !== 'object'
       || typeof names.zhFull !== 'string' || typeof names.enFull !== 'string') return unavailable

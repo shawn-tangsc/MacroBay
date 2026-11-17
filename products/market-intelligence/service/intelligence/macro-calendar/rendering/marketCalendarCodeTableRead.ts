@@ -25,9 +25,9 @@ export type CodeTableReadRow = Readonly<{
    * 国家码（`US`/`DE`/`EMU`）；没有国家的事件写 null，不猜。**读口一定会给**；类型上可缺是为了兼容
    * 还没跟上这条形状的旧夹具——界面缺这两个字段就不显示国家列，不画一个空列。
    */
-  countryCode?: string | null
+  countryCode: string | null
   /** 国家名的**中文**写法，取自现有国名表——渲染层不许自己拼，否则同一国家会有两种写法。 */
-  countryName?: string | null
+  countryName: string | null
   tier: CodeTableRow['tier']
   measure: string | null
   seasonality: string | null

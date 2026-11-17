@@ -23,15 +23,17 @@ export function exportFileName(base: string, now: Date): string {
  * 待补写「待核」、不建写「—」，绝不写一个空链接（空链接会被读成「这个码没有官网页」）。
  */
 export function codeTableExportRows(rows: readonly CodeTableReadRow[], text: Readonly<{
-  columns: Readonly<Record<'code' | 'name' | 'tierMeasure' | 'official' | 'status' | 'sourceIds', string>>
+  columns: Readonly<Record<'code' | 'country' | 'name' | 'tierMeasure' | 'official' | 'status' | 'sourceIds', string>>
+  unknownCountry: string
   status: Readonly<Record<'active' | 'not-built' | 'pending' | 'retired', string>>
   officialPending: string
   officialNone: string
 }>): readonly (readonly (string | number)[])[] {
-  const header = [text.columns.code, text.columns.name, text.columns.tierMeasure,
+  const header = [text.columns.code, text.columns.country, text.columns.name, text.columns.tierMeasure,
     text.columns.official, text.columns.status, text.columns.sourceIds]
   return [header, ...rows.map((row) => [
     row.code,
+    row.countryName ?? text.unknownCountry,
     `${row.names.zhFull} · ${row.names.enFull}`,
     [row.tier === null ? '' : String(row.tier), [row.measure, row.seasonality].filter((part) => part !== null).join(' · ')]
       .filter((part) => part !== '').join(' · '),

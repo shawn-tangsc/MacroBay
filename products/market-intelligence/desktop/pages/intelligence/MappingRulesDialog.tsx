@@ -36,7 +36,9 @@ export type MappingRulesText = Readonly<{
   tabUnmapped: string
   tabsAria: string
   unavailable: string
-  codeColumns: Readonly<Record<'code' | 'name' | 'tierMeasure' | 'official' | 'status' | 'sourceIds', string>>
+  codeColumns: Readonly<Record<'code' | 'country' | 'name' | 'tierMeasure' | 'official' | 'status' | 'sourceIds', string>>
+  /** 没有国家时写什么（与日历同一句「未知国家」，不另造一个词）。 */
+  unknownCountry: string
   codeStatus: Readonly<Record<'active' | 'not-built' | 'pending' | 'retired', string>>
   officialOpen: string
   officialPending: string
@@ -119,7 +121,13 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
           render: (value: string) => <span title={value} data-code>{shortCode(value)}</span>
         },
         {
-          title: text.codeColumns.name, dataIndex: 'names', width: 410,
+          // **国家在名称前面**（用户 2026-11-17）。名字由读口给（同一张国名表），渲染层不拼；
+          // 读口给 null 就写「未知国家」——空着会被读成「这一行没有国家这一项」。
+          title: text.codeColumns.country, width: 72, className: 'mi-catalog__cell-nowrap',
+          render: (_value: unknown, row) => <span data-country>{row.countryName ?? text.unknownCountry}</span>
+        },
+        {
+          title: text.codeColumns.name, dataIndex: 'names', width: 340,
           render: (value: CodeTableReadRow['names']) =>
             <span title={`${value.zhFull} · ${value.enFull}`} className="mi-catalog__code-name">
               <MetricNameText zh={value.zhFull} en={value.enFull} />
@@ -204,7 +212,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
             const sheets = [
               { name: text.sheetCodes, rows: codeTableExportRows(codes?.state === 'available' ? codes.rows : [], {
                 columns: text.codeColumns, status: text.codeStatus, officialPending: text.officialPending,
-                officialNone: text.officialNone
+                officialNone: text.officialNone, unknownCountry: text.unknownCountry
               }) },
               { name: text.sheetUnmapped, rows: unmappedExportRows(view?.state === 'available' ? view.unmapped : [],
                 { columns: text.unmappedColumns }) }

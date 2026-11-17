@@ -15,12 +15,12 @@ const events = vi.hoisted(() => ({
   queryCodeTable: async () => ({
     state: 'available' as const,
     rows: [
-      { code: 'US.CPI.NSA.YOY', kind: 'metric' as const,
+      { code: 'US.CPI.NSA.YOY', kind: 'metric' as const, countryCode: 'US', countryName: '美国',
         names: { zhFull: 'CPI 年率', zhShort: 'CPI', enFull: 'Consumer Price Index (YoY)', enShort: 'CPI' },
         tier: 1 as const, measure: 'YOY', seasonality: 'NSA', status: 'active' as const, reason: null,
         officialSource: { agency: 'BLS', url: 'https://www.bls.gov/x', pageKind: 'release' as const,
           verifiedAt: '2026-11-17', basis: '发布目录' }, sourceIdCount: 2 },
-      { code: 'US.X.NONE.LEVEL', kind: 'metric' as const,
+      { code: 'US.X.NONE.LEVEL', kind: 'metric' as const, countryCode: 'US', countryName: '美国',
         names: { zhFull: '某指标', zhShort: '某', enFull: 'Something', enShort: 'S' },
         tier: null, measure: 'LEVEL', seasonality: 'NONE', status: 'pending' as const, reason: 'official-source-todo',
         officialSource: { pending: true as const, reason: 'official-source-todo' as const }, sourceIdCount: 0 }
@@ -97,5 +97,7 @@ it('opens the full event table from the calendar header button', async () => {
   // 源 id 数 0 显示 0（不是空）。
   const cells = [...document.body.querySelectorAll('[data-mapping-section="codes"] tbody tr.ant-table-row')]
   expect(cells).toHaveLength(2)
-  expect(cells[1]!.querySelectorAll('td')[5]?.textContent).toBe('0')
+  // 国家列插在名称前（第 2 列），源 id 数是第 7 列。
+  expect(cells[0]!.querySelectorAll('td')[1]?.textContent).toContain('美国')
+  expect(cells[1]!.querySelectorAll('td')[6]?.textContent).toBe('0')
 })

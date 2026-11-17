@@ -181,7 +181,7 @@ export const macroIndicatorDrawerText = {
       mappingExportAllNote: '导出的是两张表的全部行，与当前筛选无关',
       /* 页签下面那句，解释「未映射少了、已映射没涨」：数字从读口取，不写死。 */
       mappingTabCodes: '码表 ({count})',
-      mappingCodeColumns: { code: '码', name: '名称', tierMeasure: '分级 · 口径', official: '官网页', status: '状态', sourceIds: '源 id 数' },
+      mappingCodeColumns: { code: '码', country: '国家', name: '名称', tierMeasure: '分级 · 口径', official: '官网页', status: '状态', sourceIds: '源 id 数' },
       mappingCodeStatus: { active: '生效', 'not-built': '不建', pending: '待补', retired: '已退役' },
       mappingOfficialOpen: '查看', mappingOfficialPending: '待核', mappingOfficialNone: '—',
       mappingCodeEmpty: '没有匹配的码',
@@ -343,7 +343,7 @@ export const macroIndicatorDrawerText = {
       mappingExportEmpty: 'Nothing to export from this tab',
       mappingExportAllNote: 'Exports every row of both sheets, regardless of the current filter',
       mappingTabCodes: 'Code table ({count})',
-      mappingCodeColumns: { code: 'Code', name: 'Name', tierMeasure: 'Tier · measure', official: 'Official page', status: 'Status', sourceIds: 'Source ids' },
+      mappingCodeColumns: { code: 'Code', country: 'Country', name: 'Name', tierMeasure: 'Tier · measure', official: 'Official page', status: 'Status', sourceIds: 'Source ids' },
       mappingCodeStatus: { active: 'Active', 'not-built': 'Not built', pending: 'Pending', retired: 'Retired' },
       mappingOfficialOpen: 'Open', mappingOfficialPending: 'Unverified', mappingOfficialNone: '—',
       mappingCodeEmpty: 'No matching codes',

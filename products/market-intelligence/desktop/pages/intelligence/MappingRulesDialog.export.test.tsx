@@ -32,6 +32,7 @@ const text = {
   tabCodes: mkDay.mappingTabCodes, tabUnmapped: mkDay.mappingTabUnmapped,
   tabsAria: mkDay.mappingTabsAria, unavailable: mkDay.mappingUnavailable,
   codeColumns: mkDay.mappingCodeColumns, codeStatus: mkDay.mappingCodeStatus,
+  unknownCountry: '未知国家',
   officialOpen: mkDay.mappingOfficialOpen, officialPending: mkDay.mappingOfficialPending,
   officialNone: mkDay.mappingOfficialNone, codeEmpty: mkDay.mappingCodeEmpty,
   unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
@@ -42,6 +43,7 @@ const text = {
 const codeRow = (code: string, extra: Partial<CodeTableReadRow> = {}): CodeTableReadRow => ({
   code, kind: 'metric' as const,
   names: { zhFull: '核心 PCE 年率', zhShort: '核心 PCE', enFull: 'Core PCE (YoY)', enShort: 'Core PCE' },
+  countryCode: 'US', countryName: '美国',
   tier: 1 as const, measure: 'YOY', seasonality: 'NSA', status: 'active' as const, reason: null,
   officialSource: { agency: 'BEA', url: 'https://www.bea.gov/x', pageKind: 'release' as const,
     verifiedAt: '2026-11-17', basis: '发布目录' },
@@ -51,9 +53,9 @@ const codes: CodeTableRead = {
   state: 'available',
   rows: [
     codeRow('US.CORE_PCE.NSA.YOY'),
-    codeRow('US.NO_SOURCE.NONE.LEVEL', { status: 'pending', reason: 'official-source-todo',
+    codeRow('US.NO_SOURCE.NONE.LEVEL', { status: 'pending', reason: 'official-source-todo', countryCode: null, countryName: null,
       officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 }),
-    codeRow('US.NOT_BUILT.NONE.LEVEL', { status: 'not-built', reason: 'no-reader',
+    codeRow('US.NOT_BUILT.NONE.LEVEL', { status: 'not-built', reason: 'no-reader', countryCode: null, countryName: null,
       officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 })
   ],
   counts: { total: 3, metric: 3, event: 0, withOfficialSource: 1, pendingOfficialSource: 2 }
@@ -122,8 +124,11 @@ it('keeps the code tail visible, and never leaves the official cell blank or a d
   expect(pending.getAttribute('href')).toBeNull()
   // 不建/退役：破折号，没有链接。
   expect(body[2]!.querySelector('[data-official], [data-official-pending]')).toBeNull()
+  // 国家列在名称之前；读口给 null 时写「未知国家」，不空着。
+  expect(body[0]!.querySelectorAll('td')[1]?.textContent).toContain('美国')
+  expect(body[1]!.querySelectorAll('td')[1]?.textContent).toContain('未知国家')
   // **源 id 数 0 显示 0**，不是空。
-  const lastCell = (row: Element): string => row.querySelectorAll('td')[5]?.textContent ?? ''
+  const lastCell = (row: Element): string => row.querySelectorAll('td')[6]?.textContent ?? ''
   expect(lastCell(body[1]!)).toBe('0')
   expect(lastCell(body[0]!)).toBe('2')
 })
