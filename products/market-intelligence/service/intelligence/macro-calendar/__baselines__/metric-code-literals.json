@@ -62,8 +62,8 @@
       "why": "标准码表本体（含四列名与事件码）：码表的存在就是把码收成一处，它必须写码；四名里的括号里可能带码形串，按实际计数登记。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountryCodeTable.ts": {
-      "count": 1282,
-      "why": "按国家建出的新码表：每个指标码一行，码就是身份事实，`US.` 开头的那些必须在这里（基准码表里没有）。**这个数字随建码增长**：涨了要在同一笔说明是哪张判定表建的（39/40 号），不许只改数字"
+      "count": 1359,
+      "why": "按国家建出的新码表：每个指标码一行，码就是身份事实，`US.` 开头的那些必须在这里（基准码表里没有）。**这个数字随建码增长**：涨了要在同一笔说明是哪张判定表建的（39/40 号），不许只改数字 2026-11-18：+77 是 `supersededBy`——77 个重复码各自要写清「并到哪个码」，那个码必须逐个写在这里，这正是退役链的事实（78 组重复，77 个标 retired，保留码都是老表在用）。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings.ts": {
       "count": 725,
