@@ -5,7 +5,7 @@ export const SIGNED_BY = '情报模块产品经理' as const
 /** 签署日期。 */
 export const SIGNED_AT = '2026-11-18' as const
 /** 对 `canonicalApprovalText({ formatVersion: 1, signedBy: SIGNED_BY, signedAt: SIGNED_AT, events })` 的 sha256（UTF-8 字节）。 */
-export const SIGNATURE = 'sha256:17bdffa7ff64cdb597bd32d8e5b287a8f93ffeead790f804ca9c778abd6d982f' as const
+export const SIGNATURE = 'sha256:4d83e5d20593861a2d38fce4e56cdeaa757091ed31549deb0e49ec099b5bb189' as const
 
 /**
  * 情报模块**签署过的批准值**（与「申请」分开的两份数据之一）。
@@ -54,7 +54,13 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
    */
   'market-intelligence.source.symbol-not-supported': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+  /**
+   * 舆情到强度门槛（N10）。
+   *
+   * **2026-11-18 用户改口径**：舆情**不进中心**（R40 需求 §3），所以撤掉 `center`，只留 `channel`。
+   * 桌面由另一条事件负责（`news.item-arrived`，只桌面），两条各自只干一件事。
+   */
+  'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['channel'], approvedBypassQuietHours: false },
   'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
   /**
    * 分析没跑成（2026-11-18 产品经理签署）。

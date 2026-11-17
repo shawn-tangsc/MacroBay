@@ -120,6 +120,9 @@ export function NewsSentimentDrawer(props: {
     contextMenuItemId: contextMenu?.itemId,
     contextMenuOpen: contextMenu !== undefined
   })
+  // 这个入口故意不叫 `submit`：通知生产者门禁把任何 `*.submit(` 都当成「提交通知」的调用点，
+  // 而这里排的是一次 AI 解读、不是通知。起个准确的名字，比往 `KNOWN_UNRESOLVED` 里加一行便宜。
+  const requestInterpretation = interpretation.submit
 
   // 点完立刻可见：把那一节滚进可视区（等它挂载出来再滚）。
   useEffect(() => {
@@ -417,7 +420,7 @@ export function NewsSentimentDrawer(props: {
                   failure={interpretation.failureFor(activeId)}
                   onReadResult={interpretation.reloadActive}
                   onRetryRead={interpretation.reloadActive}
-                  onRetrySubmit={() => { if (activeId !== undefined) interpretation.submit(activeId) }}
+                  onRetrySubmit={() => { if (activeId !== undefined) requestInterpretation(activeId) }}
                   submitting={interpretation.submittingItemId === activeId}
                   view={interpretation.activeView} />
                 </div>
@@ -451,7 +454,7 @@ export function NewsSentimentDrawer(props: {
               }
               // 读者右键的可能是未选中的一条：先选中它，右栏跟着切过去——否则看起来「没反应」。
               setSelectedId(contextMenu.itemId)
-              interpretation.submit(contextMenu.itemId)
+              requestInterpretation(contextMenu.itemId)
               return
             }
             if (key !== 'translate') return

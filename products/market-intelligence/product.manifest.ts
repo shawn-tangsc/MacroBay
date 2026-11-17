@@ -350,7 +350,7 @@ export const marketIntelligenceProductManifest = {
       // 只有「有来源」一种正文：缺来源名的条目不提交（三段必须齐，空段会被文案门禁拒成 copy-missing）。
       bodyVariants: ['withSource'],
       requiresUserAction: false,
-      // 信息类：只进中心与手机，桌面与提示都不申请。
+      // 信息类：只进手机（2026-11-18 用户定：舆情不进中心），桌面与提示都不申请。
       requestedDisruptionLevels: ['channel'],
       // 同一件事一条：键由 `storyKey` 构成（跨媒体归并键，同簇一个键），重复提交由平台合并计数。
       dedupeKeyTemplate: 'sentiment-alert:{storyKey}',

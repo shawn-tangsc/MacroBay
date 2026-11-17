@@ -50,7 +50,7 @@ describe('market-intelligence approvals', () => {
 
   it('keeps the phone leg to the six events the user approved for it', () => {
     // N2 日报完成、N3 信号、N5 宏观事件、N11 事件开始前、N10 舆情、分析结论。
-    // N10 与结论只批 center + channel——桌面与提示两档明确不加。
+    // N10 只批手机（2026-11-18 撤掉 center），结论批 center + channel——两档的差别是产品决定。
     expect(ids.filter((id) => levelsOf(id).includes('channel'))).toEqual([
       'market-intelligence.briefing.ready',
       'market-intelligence.signal.triggered',
@@ -79,10 +79,18 @@ describe('market-intelligence approvals', () => {
     ])
   })
 
-  it('always keeps center and never approves a quiet-hours bypass', () => {
+  it('never approves a quiet-hours bypass, and keeps center everywhere it was not withdrawn on purpose', () => {
     // 「谁能穿透免打扰」在平台侧是自检那条；产品事件一条都不穿透（多放一条就是替读者多批一次打扰）。
+    //
+    // center 不是天然必答项：2026-11-18 用户定「舆情不进中心」（R40 §3），`sentiment.alert` 因此
+    // 只留手机。**例外必须逐条列出来**，不能让这条不变量退化成「想撤就撤」。
+    const CENTER_WITHDRAWN = ['market-intelligence.sentiment.alert'] as const
     for (const id of ids) {
-      expect(levelsOf(id), `${id} 必须含 center`).toContain('center')
+      if (!(CENTER_WITHDRAWN as readonly string[]).includes(id)) {
+        expect(levelsOf(id), `${id} 必须含 center`).toContain('center')
+      } else {
+        expect(levelsOf(id), `${id} 撤了 center 就不许再留`).not.toContain('center')
+      }
       expect(approvals[id]!.approvedBypassQuietHours, `${id} 不应批准穿透免打扰`).toBe(false)
     }
   })
