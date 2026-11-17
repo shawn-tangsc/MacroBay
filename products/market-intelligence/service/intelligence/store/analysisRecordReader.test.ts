@@ -27,11 +27,11 @@ const asOf = '2026-09-25T08:30:00.000Z'
 const later = '2026-09-25T08:31:00.000Z'
 const itemId = 'item-rss:guid:news-1'
 
-function group(id = 'mi-eg-1'): EventGroup {
+function group(id = 'mi-eg-1', refs: readonly string[] = [itemId]): EventGroup {
   return {
     id, schemaVersion: 1, status: 'monitoring', groupType: 'macro', mergeKey: `US.CPI|${id}`,
     firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-25T09:00:00.000Z',
-    eventRefs: [itemId], triggerCount: 1, reviewCount: 0, currentSummaryId: null,
+    eventRefs: [...refs], triggerCount: 1, reviewCount: 0, currentSummaryId: null,
     supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
   }
 }
@@ -56,10 +56,11 @@ function snapshot(id = 'mi-es-1', eventGroupId = 'mi-eg-1'): EvidenceSnapshot {
   }
 }
 
-function run(id: string, analysisKind: AnalysisKind, idempotencyKey: string, queuedAt = asOf): AnalysisRun {
+function run(id: string, analysisKind: AnalysisKind, idempotencyKey: string, queuedAt = asOf,
+  eventGroupId = 'mi-eg-1', snapshotId = 'mi-es-1'): AnalysisRun {
   return {
-    id, schemaVersion: 1, analysisKind, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1',
-    snapshotHash: snapshot().snapshotHash, analysisPhase: 'initial', triggerKey: `${analysisKind}.manual`,
+    id, schemaVersion: 1, analysisKind, eventGroupId, snapshotId,
+    snapshotHash: snapshot(snapshotId, eventGroupId).snapshotHash, analysisPhase: 'initial', triggerKey: `${analysisKind}.manual`,
     idempotencyKey, status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: 'provider', modelId: 'model',
     policyVersion: 'policy.v1', promptVersion: `${analysisKind}-prompt.v1`, skillVersion: `${analysisKind}-skill.v1`,
     outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null,
@@ -111,7 +112,6 @@ it('refuses a run or a summary written without an analysis kind', () => {
     expect(() => repository.enqueueRun(bareRun as unknown as AnalysisRun)).toThrow('storage-analysis-kind-missing')
     // 显式 null 同样拒：否则它会被 SQLite 收下，读侧再兜成 market——正是这条规则要防的。
     expect(() => repository.enqueueRun({ ...run('mi-ar-null', 'market', 'null-run'), analysisKind: null as never })).toThrow('storage-analysis-kind-missing')
-    expect(() => repository.enqueueRun({ ...run('mi-ar-bogus', 'market', 'bogus-run'), analysisKind: 'calendar' as never })).toThrow('analysis-run-invalid')
     expect(repository.getRun('mi-ar-bare')).toBeUndefined()
     expect(repository.getRun('mi-ar-null')).toBeUndefined()
 
@@ -129,6 +129,29 @@ it('refuses a run or a summary written without an analysis kind', () => {
     // 拒绝之后没有留下半条记录：摘要没写，运行仍是 running。
     expect(repository.getSummaryForRun(queued.id)).toBeUndefined()
     expect(repository.getRun(queued.id)?.status).toBe('running')
+  } finally {
+    repository.close()
+  }
+})
+
+it('reports an unknown kind as invalid, never as a missing one', () => {
+  const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+  try {
+    seed(repository)
+    // 有值但不在闭集：是「传错了」，不是「没传」——两种失败必须分得开，否则排障会找错方向。
+    expect(() => repository.enqueueRun({ ...run('mi-ar-bogus', 'market', 'bogus-run'), analysisKind: 'calendar' as never }))
+      .toThrow('storage-analysis-kind-invalid')
+    const queued = repository.enqueueRun(run('mi-ar-1', 'market', 'run-1')).run
+    expect(repository.claimRun(queued.id, later)).toBe(true)
+    expect(() => repository.commitSuccessfulAnalysis({
+      runId: queued.id, summary: { ...summary('mi-as-bogus', queued.id, 'market'), analysisKind: 'newsx' } as unknown as AnalysisSummary,
+      predictions: [], timeline: timeline('mi-as-bogus', queued.id)
+    })).toThrow('storage-analysis-kind-invalid')
+    // 真的没传仍是 missing：两个串不许互借。
+    expect(() => repository.commitSuccessfulAnalysis({
+      runId: queued.id, summary: { ...summary('mi-as-null', queued.id, 'market'), analysisKind: null } as unknown as AnalysisSummary,
+      predictions: [], timeline: timeline('mi-as-null', queued.id)
+    })).toThrow('storage-analysis-kind-missing')
   } finally {
     repository.close()
   }
@@ -218,6 +241,27 @@ it('keeps a newer succeeded news run out of the latest market attempt', () => {
     expect(repository.records.latestAttempt({ analysisKind: 'market' })?.id).toBe(market.id)
     expect(repository.records.latestAttempt({ analysisKind: 'news' })?.id).toBe(news.id)
     expect(repository.records.latestForItem({ analysisKind: 'market', itemId })?.run.id).toBe(market.id)
+  } finally {
+    repository.close()
+  }
+})
+
+it('matches latestForItem on the exact event reference of the requested item', () => {
+  const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+  try {
+    const itemA = 'item-rss:guid:news-a'
+    const itemB = 'item-rss:guid:news-b'
+    repository.appendEventGroup(group('mi-eg-a', [itemA]))
+    repository.appendEventGroup(group('mi-eg-b', [itemB]))
+    repository.appendSnapshot(snapshot('mi-es-a', 'mi-eg-a'))
+    repository.appendSnapshot(snapshot('mi-es-b', 'mi-eg-b'))
+    // B 更新：若按「最新一条」而不是按条目取，A 就会串到 B 的解读。
+    const runA = repository.enqueueRun(run('mi-ar-news-a', 'news', 'news-a', asOf, 'mi-eg-a', 'mi-es-a')).run
+    const runB = repository.enqueueRun(run('mi-ar-news-b', 'news', 'news-b', later, 'mi-eg-b', 'mi-es-b')).run
+
+    expect(repository.records.latestForItem({ analysisKind: 'news', itemId: itemA })?.run.id).toBe(runA.id)
+    expect(repository.records.latestForItem({ analysisKind: 'news', itemId: itemB })?.run.id).toBe(runB.id)
+    expect(repository.records.latestForItem({ analysisKind: 'news', itemId: 'item-rss:guid:missing' })).toBeUndefined()
   } finally {
     repository.close()
   }

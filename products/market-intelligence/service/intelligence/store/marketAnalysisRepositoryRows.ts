@@ -12,7 +12,7 @@ import {
   mostSevereSkippedEvidence, parseSignalEvidence, signalEvidenceJson
 } from '../../../contracts/moduleSignalEvidence'
 import {
-  ANALYSIS_KIND_MISSING_ERROR, analysisKindOf, isAnalysisKind, type AnalysisKind
+  ANALYSIS_KIND_INVALID_ERROR, ANALYSIS_KIND_MISSING_ERROR, analysisKindOf, isAnalysisKind, type AnalysisKind
 } from '../../../contracts/analysisKinds'
 import { buildAnalysisSnapshotHash, snapshotHashInput } from '../analysis/analysisHash'
 
@@ -64,8 +64,9 @@ export function validateSnapshot(value: EvidenceSnapshot): void {
 export function validateRun(value: AnalysisRun): void {
   if (!value.id.startsWith('mi-ar-') || value.schemaVersion !== 1) throw new Error('analysis-run-invalid')
   // 写路径必填（R39）：缺类别不许静默落成 market，那会让一次遗忘变成今天的市场结论。
+  // 缺失与非法分开报：前者是「没传」，后者是「传错了」。
   if (value.analysisKind === undefined || value.analysisKind === null) throw new Error(ANALYSIS_KIND_MISSING_ERROR)
-  if (!isAnalysisKind(value.analysisKind)) throw new Error('analysis-run-invalid')
+  if (!isAnalysisKind(value.analysisKind)) throw new Error(ANALYSIS_KIND_INVALID_ERROR)
 }
 
 /**
@@ -76,7 +77,7 @@ export function validateRun(value: AnalysisRun): void {
  */
 export function requireSummaryAnalysisKind(value: AnalysisSummary): AnalysisKind {
   if (value.analysisKind === undefined || value.analysisKind === null) throw new Error(ANALYSIS_KIND_MISSING_ERROR)
-  if (!isAnalysisKind(value.analysisKind)) throw new Error(ANALYSIS_KIND_MISSING_ERROR)
+  if (!isAnalysisKind(value.analysisKind)) throw new Error(ANALYSIS_KIND_INVALID_ERROR)
   return value.analysisKind
 }
 

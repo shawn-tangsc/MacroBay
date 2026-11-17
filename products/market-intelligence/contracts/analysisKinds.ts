@@ -20,6 +20,14 @@ export type AnalysisKind = (typeof ANALYSIS_KINDS)[number]
  */
 export const ANALYSIS_KIND_MISSING_ERROR = 'storage-analysis-kind-missing'
 
+/**
+ * 写入侧类别有值、但不在闭集里的内部错误串。
+ *
+ * 与 `ANALYSIS_KIND_MISSING_ERROR` 分开：缺失是「调用方没传」，非法是「传错了」。混成一个串，
+ * 排障的人会去查调用方漏传，实际却是拼错或传了别的线。两条线、run 与摘要共用这一个串。
+ */
+export const ANALYSIS_KIND_INVALID_ERROR = 'storage-analysis-kind-invalid'
+
 export function isAnalysisKind(value: unknown): value is AnalysisKind {
   return typeof value === 'string' && (ANALYSIS_KINDS as readonly string[]).includes(value)
 }

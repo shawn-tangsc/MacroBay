@@ -82,8 +82,13 @@ export function createAnalysisRecordReader(database: DatabaseSync): AnalysisReco
 
     latestForItem(input) {
       const [kindClause, kindParameters] = kindWhere('mi_analysis_runs', input.analysisKind)
-      // 一条新闻的组身份就是 `event_refs_json` 里含有它：沿用「每条新闻一个组」的既有做法，
-      // 不给组加类别列。这里只回答「这条新闻最近一次属于该线的运行」，正文再按 run 取。
+      // 匹配键是**原始 `itemId`**，不是带前缀的标识：`mi_analysis_event_groups.event_refs_json`
+      // 存的是 `resolveChange` 里的 `change.eventRef = item.itemId`（`eventGroupService.create`
+      // 写 `eventRefs: [change.eventRef]`，合并时追加同一个值）。`triggered-news:<itemId>` 只是
+      // 冻结快照里 fact 的 `factId` 前缀，不在 `event_refs` 里；既有 R37 读法同样是
+      // `eventRefs.includes(itemId)`。因此这里按 `json_each` 的键值精确匹配，不做前后缀匹配，
+      // 否则 A 条目的抽屉会读出 B 条目的解读。
+      // 沿用「每条新闻一个组」的既有做法，不给组加类别列；正文再按 run 取。
       const row = database.prepare(`select mi_analysis_runs.* from mi_analysis_runs join mi_analysis_event_groups on mi_analysis_event_groups.id = mi_analysis_runs.event_group_id
         where ${kindClause} and exists (select 1 from json_each(mi_analysis_event_groups.event_refs_json) as event_ref where event_ref.value = ?)
         order by mi_analysis_runs.queued_at desc, mi_analysis_runs.id desc limit 1`).get(...kindParameters, input.itemId) as StoredRow | undefined
