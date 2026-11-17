@@ -56,6 +56,10 @@
     "service/intelligence/macro-calendar/marketCalendarZeroXRouterSourceMappings.ts": {
       "count": 139,
       "why": "0xrouter 的「源内 id → 指标码」表：id 与码都是字面量，这张表的存在就是「按来源分开的码空间」。本批补映射 +83，删映射要同笔减。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCodeTable.ts": {
+      "count": 390,
+      "why": "标准码表的本体：每个码就是一行字面量。这张表的存在意义就是把「码」收成一处，所以它必须写码——把码也算成散落字面量，这张表就没法存在。新增/删码时同笔改这个数。"
     }
   }
 }

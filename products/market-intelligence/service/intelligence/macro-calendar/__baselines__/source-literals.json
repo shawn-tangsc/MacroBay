@@ -173,6 +173,14 @@
     "service/intelligence/macro-calendar/marketCalendarEventTypeBackfill.ts": {
       "count": 1,
       "why": "迁移 16 只用它判定「哪个来源的 importance 是事实」（0xrouter 的照抄、narwhal 的 medium 是占位值不复制）；不是一个按源分支的读法，回填后这条判断就该消失——属于可命名的整合数据"
+    },
+    "service/intelligence/macro-calendar/rendering/marketCalendarEventSourceWritesRead.ts": {
+      "count": 2,
+      "why": "#47 的详情读口：两块各是一条来源记录，来源 id 是这一块的身份，必须在查询里写出来（这里只读，不做来源分支判断）。"
+    },
+    "desktop/features/macro/economic-calendar/calendarTwoSourceValue.ts": {
+      "count": 2,
+      "why": "同一期两个来源并列显示的取值/标签：两块的来源名就是这两块的身份，组件只负责显示这两块；换成查表也只是把同一事实挪远一层。"
     }
   }
 }

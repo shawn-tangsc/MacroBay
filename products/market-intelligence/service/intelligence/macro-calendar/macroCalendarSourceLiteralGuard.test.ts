@@ -43,7 +43,9 @@ const I18N_SOURCE_NAME_FILES = Object.freeze([
 const NAME_TABLE_PATHS = Object.freeze([
   'service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts',
   'service/intelligence/macro-calendar/marketCalendarCodeNames.ts',
-  'service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts'
+  'service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts',
+  /* 标准码表（`9650d74`）：四列名 **就住在这里**——它就是名表本体，不是又长出一份。 */
+  'service/intelligence/macro-calendar/marketCalendarCodeTable.ts'
 ])
 const BASELINE = new URL('./__baselines__/source-literals.json', import.meta.url).pathname
 /**
@@ -208,7 +210,14 @@ describe('名表按字段形状抓，不靠命名', () => {
   it('四列名表字段出现两处以上的文件，必须在名表清单里', () => {
     // 锚不是文件名（`calendarCodeTable.ts` 这种根本匹配不上正则），而是**字段形状**：
     // 同时出现 `zhFull/zhShort/enFull/enShort` 里两个以上 → 它就是一张四列名表，必须登记。
+    //
+    // 判定必须落在**数据**上而不是类型上：`{ zhFull: string }` 是类型声明，`row.names?.zhFull` 是读取，
+    // 两者都不构成「一张名表」。第一版用 `includes(field)`，于是客户端的类型形状和导出映射也被当成
+    // 名表抓了出来——那种误判最后只能靠往清单里塞文件摆平，而清单一旦开始塞不相干的东西就不再有意义。
+    // 所以这里要求「字段名后面紧跟一个字符串字面量」。
     const FIELDS = ['zhFull', 'zhShort', 'enFull', 'enShort'] as const
+    const isNameTableField = (source: string, field: string): boolean =>
+      new RegExp(`\\b${field}\\s*:\\s*['\"\`]`).test(source)
     const offenders: string[] = []
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
@@ -219,7 +228,7 @@ describe('名表按字段形状抓，不靠命名', () => {
         const rel = relative(PRODUCT, full)
         if (NAME_TABLE_PATHS.includes(rel) || rel.includes('shared/i18n/')) continue
         const source = readFileSync(full, 'utf8')
-        if (FIELDS.filter((field) => source.includes(field)).length >= 2) offenders.push(rel)
+        if (FIELDS.filter((field) => isNameTableField(source, field)).length >= 2) offenders.push(rel)
       }
     }
     walk(PRODUCT)
