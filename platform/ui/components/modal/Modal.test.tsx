@@ -22,7 +22,11 @@ vi.mock('antd', async (importOriginal) => {
     ...actual,
     Modal: (props: Record<string, unknown>) => {
       passedProps.push(props)
-      return <actual.Modal {...(props as never)} />
+      // 用捕获到的真组件渲染：它的 props 类型这里拿不到，摊开前先收成一个宽签名。
+      // （原来写的是 `{...(props as never)}`——`never` 不能摊开，只是这个文件平时不进
+      // typecheck 程序，一直没被报出来；这次它随提交进了程序，就顺手修掉。）
+      const Passthrough = actual.Modal as unknown as (input: Record<string, unknown>) => React.ReactElement
+      return <Passthrough {...props} />
     }
   }
 })
@@ -159,7 +163,7 @@ describe('Modal 的打开态与关闭', () => {
 
 describe('Modal 的宽度', () => {
   it('offers four widths and no fifth', () => {
-    expect(MODAL_WIDTHS).toEqual(['compact', 'standard', 'expanded', 'maximum'])
+    expect(MODAL_WIDTHS).toEqual(['compact', 'standard', 'expanded', 'maximum', 'full'])
   })
 
   it('measures each width from the one table, never from the call site', async () => {

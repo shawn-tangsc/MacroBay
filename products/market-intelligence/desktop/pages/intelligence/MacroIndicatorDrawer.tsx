@@ -228,6 +228,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     tabCodes: text.mkDay.mappingTabCodes, tabUnmapped: text.mkDay.mappingTabUnmapped,
     tabsAria: text.mkDay.mappingTabsAria, unavailable: text.mkDay.mappingUnavailable,
     codeColumns: text.mkDay.mappingCodeColumns, codeStatus: text.mkDay.mappingCodeStatus,
+    countryAll: text.mkDay.mappingCountryAll, countryFilter: text.mkDay.mappingCountryFilter,
     // 「未知国家」用日历那一份文案：同一个事实只留一处定义。
     unknownCountry: calendarText.market.unknownCountry,
     officialOpen: text.mkDay.mappingOfficialOpen, officialPending: text.mkDay.mappingOfficialPending,

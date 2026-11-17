@@ -23,26 +23,30 @@ export function exportFileName(base: string, now: Date): string {
  * 待补写「待核」、不建写「—」，绝不写一个空链接（空链接会被读成「这个码没有官网页」）。
  */
 export function codeTableExportRows(rows: readonly CodeTableReadRow[], text: Readonly<{
-  columns: Readonly<Record<'code' | 'country' | 'name' | 'tierMeasure' | 'official' | 'status' | 'sourceIds', string>>
+  columns: Readonly<Record<'code' | 'country' | 'name' | 'tier' | 'measure' | 'official' | 'status'
+    | 'sourceIds' | 'dataVolume', string>>
   unknownCountry: string
   status: Readonly<Record<'active' | 'not-built' | 'pending' | 'retired', string>>
   officialPending: string
   officialNone: string
 }>): readonly (readonly (string | number)[])[] {
-  const header = [text.columns.code, text.columns.country, text.columns.name, text.columns.tierMeasure,
-    text.columns.official, text.columns.status, text.columns.sourceIds]
+  // 与界面**同一组列、同一顺序**（用户 2026-11-17）：读者拿导出表去核对，两处不一致就是第二套说法。
+  const header = [text.columns.code, text.columns.country, text.columns.name, text.columns.tier,
+    text.columns.measure, text.columns.official, text.columns.status, text.columns.sourceIds,
+    text.columns.dataVolume]
   return [header, ...rows.map((row) => [
     row.code,
     row.countryName ?? text.unknownCountry,
     `${row.names.zhFull} · ${row.names.enFull}`,
-    [row.tier === null ? '' : String(row.tier), [row.measure, row.seasonality].filter((part) => part !== null).join(' · ')]
-      .filter((part) => part !== '').join(' · '),
+    row.tier === null ? '' : String(row.tier),
+    [row.measure, row.seasonality].filter((part) => part !== null).join(' · '),
     // 与界面同一规则：不建、退役的码不写地址也不写「待核」——那是决定，不是待补。
     row.status === 'not-built' || row.status === 'retired'
       ? text.officialNone
       : 'pending' in row.officialSource ? text.officialPending : row.officialSource.url,
     text.status[row.status],
-    row.sourceIdCount
+    row.sourceIdCount,
+    row.releaseRowCount
   ])]
 }
 

@@ -35,7 +35,18 @@ export type CodeTableReadRow = Readonly<{
   /** 状态理由（闭集）；`active` 为 null。 */
   reason: NotBuiltReason | PendingReason | null
   officialSource: OfficialSource | Readonly<{ pending: true; reason: PendingReason }>
+  /** **认得这个码的源内 id 个数**（不是数据量：两者回答不同问题，界面上挨着摆、标签各写各的）。 */
   sourceIdCount: number
+  /**
+   * **这个码在库里有多少条发布数据**（用户 2026-11-17 定）：标准表里 `row_kind = 'release'` 且
+   * `metric_key` 等于它的行数。
+   *
+   * 为什么不是观测行数：观测表是**审计流水**（每批每源一行），同一期反复采集会多行，数出来是
+   * 「我们采过几次」；为什么不是源内 id 数：那回答的是「认得几个旧源 id」，与数据量无关
+   * （早前按源内 id 数，85 条规则全是 0）。一条发布一行、多源合并后不重复，才是读者问的那个数。
+   * `row_kind` 过滤保留：GDP nowcast 那类随时更新的估算不是「发布」。
+   */
+  releaseRowCount: number
 }>
 
 export type CodeTableRead = Readonly<{
@@ -57,9 +68,24 @@ function sourceIdCounts(): ReadonlyMap<string, number> {
   return counts
 }
 
-export function readCalendarCodeTable(_database: DatabaseSync): CodeTableRead {
+export function readCalendarCodeTable(database: DatabaseSync): CodeTableRead {
   try {
     const counts = sourceIdCounts()
+    // 一个码一条发布算一行。
+    //
+    // **表还没建**（新库、一次都没采过）不是「读不到」：那是「库里确实还没有数据」，一律按 0。
+    // 真读失败（锁、IO）会让 `prepare/all` 抛出去 → 外层 catch → 整表 unavailable，两者不混。
+    const releaseRows = new Map<string, number>()
+    const hasEventsTable = database.prepare(
+      `select name from sqlite_master where type = 'table' and name = 'mi_calendar_events'`
+    ).get() !== undefined
+    if (hasEventsTable) {
+      for (const row of database.prepare(
+        `select metric_key, count(*) as n from mi_calendar_events where row_kind = 'release' group by metric_key`
+      ).all() as unknown as { metric_key: string; n: number }[]) {
+        releaseRows.set(row.metric_key, Number(row.n))
+      }
+    }
     const rows: CodeTableReadRow[] = Object.values(marketCalendarCodeTable)
       .sort((left, right) => left.code.localeCompare(right.code))
       .map((row) => Object.freeze({
@@ -75,7 +101,8 @@ export function readCalendarCodeTable(_database: DatabaseSync): CodeTableRead {
         status: row.status,
         reason: row.reason ?? null,
         officialSource: row.officialSource,
-        sourceIdCount: counts.get(row.code) ?? 0
+        sourceIdCount: counts.get(row.code) ?? 0,
+        releaseRowCount: releaseRows.get(row.code) ?? 0
       }))
     const withOfficialSource = rows.filter((row) => !('pending' in row.officialSource)).length
     return Object.freeze({

@@ -32,11 +32,11 @@ import './modal.css'
  */
 
 /** 四档宽度，仅此四档。像素只在下面这张表里出现一次。 */
-export const MODAL_WIDTHS = ['compact', 'standard', 'expanded', 'maximum'] as const
+export const MODAL_WIDTHS = ['compact', 'standard', 'expanded', 'maximum', 'full'] as const
 
 export type ModalWidth = (typeof MODAL_WIDTHS)[number]
 
-const WIDTH_PX: Record<ModalWidth, number> = { compact: 420, standard: 520, expanded: 720, maximum: 860 }
+const WIDTH_PX: Record<ModalWidth, number> = { compact: 420, standard: 520, expanded: 720, maximum: 860, full: 1280 }
 
 /** 两种形态，仅此两种。`center` 不是「更好看」，而是另一种语义：任务在屏幕正中。 */
 export const MODAL_ALIGNS = ['top', 'center'] as const

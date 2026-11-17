@@ -50,3 +50,48 @@ describe('码表读口', () => {
     expect(Object.keys(read.rows[0]!)).not.toContain('sourceIds')
   })
 })
+
+/**
+ * 「数据量」= 这个码在**标准表**里有多少条**发布**（`row_kind = 'release'`）。
+ *
+ * 三个边界各钉一条：
+ * - 同一码的 estimate 行（GDP nowcast 那类随时更新的估算）**不算**发布数据量，这个口子现在不留以后会咬人；
+ * - 一个码有 12 条 → 数 12；另一个码一条没有 → **0**，不是缺失；
+ * - 表还没建（新库、一次没采过）→ 一律 0，**不把「还没有数据」写成「读不到」**。
+ */
+describe('码表的「数据量」', () => {
+  const withEvents = (rows: readonly { metric: string; kind: string }[]): ReturnType<typeof readCalendarCodeTable> => {
+    const database = new DatabaseSync(':memory:')
+    database.exec(`create table mi_calendar_events (metric_key text not null, row_kind text not null)`)
+    const insert = database.prepare('insert into mi_calendar_events (metric_key, row_kind) values (?, ?)')
+    for (const row of rows) insert.run(row.metric, row.kind)
+    return readCalendarCodeTable(database)
+  }
+
+  it('counts release rows per code and treats estimate rows as not-published', () => {
+    const read = withEvents([
+      { metric: 'US.CPI.NSA.YOY', kind: 'release' },
+      { metric: 'US.CPI.NSA.YOY', kind: 'release' },
+      // 同码的估算行：不进数据量。
+      { metric: 'US.CPI.NSA.YOY', kind: 'estimate' }
+    ])
+    if (read.state !== 'available') throw new Error('unavailable')
+    const cpi = read.rows.find((row) => row.code === 'US.CPI.NSA.YOY')
+    expect(cpi?.releaseRowCount).toBe(2)
+  })
+
+  it('reports 0 for a code the library has no rows for', () => {
+    const read = withEvents([{ metric: 'US.CPI.NSA.YOY', kind: 'release' }])
+    if (read.state !== 'available') throw new Error('unavailable')
+    const withoutRows = read.rows.filter((row) => row.releaseRowCount === 0)
+    expect(withoutRows.length).toBe(read.rows.length - 1)
+    // 0 是一个数字，不是缺失：类型上必须有这个字段。
+    for (const row of read.rows) expect(typeof row.releaseRowCount).toBe('number')
+  })
+
+  it('treats a missing table as "no data yet", not as unreadable', () => {
+    const read = readCalendarCodeTable(new DatabaseSync(':memory:'))
+    if (read.state !== 'available') throw new Error('新库不该被判成读不到')
+    expect(read.rows.every((row) => row.releaseRowCount === 0)).toBe(true)
+  })
+})

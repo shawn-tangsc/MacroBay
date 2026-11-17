@@ -36,6 +36,7 @@ const text = {
   officialOpen: mkDay.mappingOfficialOpen, officialPending: mkDay.mappingOfficialPending,
   officialNone: mkDay.mappingOfficialNone, codeEmpty: mkDay.mappingCodeEmpty,
   unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
+  countryAll: mkDay.mappingCountryAll, countryFilter: mkDay.mappingCountryFilter,
   exportLabel: mkDay.mappingExport,
   resolveCopy: (key: string) => (mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
   sheetCodes: mkDay.mappingSheetCodes, sheetUnmapped: mkDay.mappingSheetUnmapped
@@ -47,14 +48,15 @@ const codeRow = (code: string, extra: Partial<CodeTableReadRow> = {}): CodeTable
   tier: 1 as const, measure: 'YOY', seasonality: 'NSA', status: 'active' as const, reason: null,
   officialSource: { agency: 'BEA', url: 'https://www.bea.gov/x', pageKind: 'release' as const,
     verifiedAt: '2026-11-17', basis: '发布目录' },
-  sourceIdCount: 2, ...extra
+  sourceIdCount: 2, releaseRowCount: 12, ...extra
 })
 const codes: CodeTableRead = {
   state: 'available',
   rows: [
     codeRow('US.CORE_PCE.NSA.YOY'),
+    // 这条没有源认得、库里也没有发布行：两格都要写 0（不是空、不是「待补」）。
     codeRow('US.NO_SOURCE.NONE.LEVEL', { status: 'pending', reason: 'official-source-todo', countryCode: null, countryName: null,
-      officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 }),
+      officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0, releaseRowCount: 0 }),
     codeRow('US.NOT_BUILT.NONE.LEVEL', { status: 'not-built', reason: 'no-reader', countryCode: null, countryName: null,
       officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 })
   ],
@@ -127,10 +129,12 @@ it('keeps the code tail visible, and never leaves the official cell blank or a d
   // 国家列在名称之前；读口给 null 时写「未知国家」，不空着。
   expect(body[0]!.querySelectorAll('td')[1]?.textContent).toContain('美国')
   expect(body[1]!.querySelectorAll('td')[1]?.textContent).toContain('未知国家')
-  // **源 id 数 0 显示 0**，不是空。
-  const lastCell = (row: Element): string => row.querySelectorAll('td')[6]?.textContent ?? ''
-  expect(lastCell(body[1]!)).toBe('0')
-  expect(lastCell(body[0]!)).toBe('2')
+  // **源 id 数 0 显示 0**，不是空；**数据量 0 也写 0**（它是最后一列，紧挨源 id 数）。
+  const cellAt = (row: Element, index: number): string => row.querySelectorAll('td')[index]?.textContent ?? ''
+  expect(cellAt(body[1]!, 7)).toBe('0')
+  expect(cellAt(body[0]!, 7)).toBe('2')
+  expect(cellAt(body[1]!, 8)).toBe('0')
+  expect(cellAt(body[0]!, 8)).toBe('12')
 })
 
 it('exports both sheets in full even when the table is filtered', async () => {
@@ -164,4 +168,38 @@ it('exports both sheets in full even when the table is filtered', async () => {
   const second = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet2.xml'), 'utf8')
   expect((first.match(/<row /gu) ?? []).length).toBe(4)
   expect((second.match(/<row /gu) ?? []).length).toBe(2)
+})
+
+/**
+ * 用户 2026-11-17 的四条：展开后八列同屏、分级与口径分开、国家筛选、数据量列。
+ *
+ * 这一条钉**界面结构**：列头九格（码/国家/名称/分级/口径/官网页/状态/源 id 数/数据量）、
+ * 数据量紧挨源 id 数且**列头可点排序**、国家下拉默认「全部国家」。
+ * 真机观感（一屏能不能同屏看清）归用户看，这里只保证结构在。
+ */
+it('shows nine columns with data volume next to source ids, sortable, and a country filter', async () => {
+  await mount()
+  // 两个页签的表格都在 DOM 里（非活动的只加 hidden），所以**限定在码表那一段**里数。
+  const codeSection = document.body.querySelector('[data-mapping-section="codes"]')!
+  const headerCells = [...codeSection.querySelectorAll('.ant-table-thead th')]
+    .map((cell) => cell.textContent ?? '')
+  expect(headerCells).toEqual(['码', '国家', '名称', '分级', '口径', '官网页', '状态', '源 id 数', '数据量'])
+
+  // 列头可点排序：点「数据量」把 0 的那条换到最前（默认顺序按码，不动）。
+  const rowsBefore = [...codeSection.querySelectorAll('.ant-table-tbody tr.ant-table-row')]
+    .map((row) => row.querySelector('[data-code]')?.textContent ?? '')
+  expect(rowsBefore[0]).toContain('CORE_PCE')
+  const volumeHeader = headerCells.indexOf('数据量')
+  await act(async () => {
+    codeSection.querySelectorAll('.ant-table-thead th')[volumeHeader]!.dispatchEvent(
+      new MouseEvent('click', { bubbles: true }))
+  })
+  const rowsAfter = [...codeSection.querySelectorAll('.ant-table-tbody tr.ant-table-row')]
+    .map((row) => row.querySelector('[data-code]')?.textContent ?? '')
+  expect(rowsAfter[0], '排序后 0 数据量的码应在最前').not.toBe(rowsBefore[0])
+
+  // 国家下拉存在、默认「全部国家」，选项与数据同一份（美国 / 未知国家）。
+  const select = document.body.querySelector('[data-country-filter]')
+  expect(select, '没有国家筛选取').not.toBeNull()
+  expect(document.body.textContent).toContain('全部国家')
 })

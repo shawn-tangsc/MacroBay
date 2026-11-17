@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Pagination, Table } from 'antd'
+import { Button, Input, Pagination, Select, Table } from 'antd'
 
 import { Modal } from '@platform/ui/components/modal'
 import { helpTrigger } from '@platform/ui/components/popover'
@@ -36,7 +36,10 @@ export type MappingRulesText = Readonly<{
   tabUnmapped: string
   tabsAria: string
   unavailable: string
-  codeColumns: Readonly<Record<'code' | 'country' | 'name' | 'tierMeasure' | 'official' | 'status' | 'sourceIds', string>>
+  codeColumns: Readonly<Record<'code' | 'country' | 'name' | 'tier' | 'measure' | 'official' | 'status' | 'sourceIds' | 'dataVolume', string>>
+  /** 国家筛选的两个词：「全部国家」与那颗下拉的读屏名。 */
+  countryAll: string
+  countryFilter: string
   /** 没有国家时写什么（与日历同一句「未知国家」，不另造一个词）。 */
   unknownCountry: string
   codeStatus: Readonly<Record<'active' | 'not-built' | 'pending' | 'retired', string>>
@@ -75,6 +78,8 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
   onRetry?: () => void
 }>): React.ReactElement {
   const [query, setQuery] = useState('')
+  /** 国家筛选：`''` = 全部国家（默认）。选项从**同一份码表数据**派生，不另查一次。 */
+  const [country, setCountry] = useState('')
   const [tab, setTab] = useState<'codes' | 'unmapped'>('codes')
   const [codePage, setCodePage] = useState(1)
   const [unmappedPage, setUnmappedPage] = useState(1)
@@ -84,9 +89,17 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
   const hit = (values: readonly (string | null | undefined)[]): boolean =>
     needle === '' || values.some((value) => has(value) && value.toLowerCase().includes(needle))
 
+  const countryOptions = useMemo(() => {
+    if (codes?.state !== 'available') return [] as { value: string; label: string }[]
+    const seen = new Set<string>()
+    for (const row of codes.rows) seen.add(row.countryName ?? text.unknownCountry)
+    return [{ value: '', label: text.countryAll },
+      ...[...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))]
+  }, [codes, text.countryAll, text.unknownCountry])
   const codeRows = useMemo(() => (codes?.state === 'available'
     ? codes.rows.filter((row) => hit([row.code, row.names.zhFull, row.names.enFull]))
-    : []), [codes, needle])
+      .filter((row) => country === '' || (row.countryName ?? text.unknownCountry) === country)
+    : []), [codes, needle, country, text.unknownCountry])
   const unmappedRows = useMemo(() => (view?.state === 'available'
     ? view.unmapped.filter((row) => hit([row.sourceId, row.sampleLabel, row.sampleLabelEn]))
     : []), [view, needle])
@@ -134,11 +147,13 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
             </span>
         },
         {
-          title: text.codeColumns.tierMeasure, width: 96,
-          render: (_value: unknown, row) => <span className="mi-catalog__code-meta">
-            <span data-tier>{row.tier === null ? '' : String(row.tier)}</span>
-            <span data-measure>{[row.measure, row.seasonality].filter(has).join(' · ')}</span>
-          </span>
+          // 分级与口径**分开两列**（用户 2026-11-17）：一格两件事，读者分不清哪个是级别。
+          title: text.codeColumns.tier, width: 60, className: 'mi-catalog__cell-nowrap',
+          render: (_value: unknown, row) => <span data-tier>{row.tier === null ? '' : String(row.tier)}</span>
+        },
+        {
+          title: text.codeColumns.measure, width: 118,
+          render: (_value: unknown, row) => <span data-measure>{[row.measure, row.seasonality].filter(has).join(' · ')}</span>
         },
         {
           title: text.codeColumns.official, width: 92,
@@ -154,6 +169,14 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
           className: 'mi-catalog__cell-nowrap',
           // 0 就是 0：没有任何源认得它，这一格是这张表最有用的一处。
           render: (value: number) => String(value)
+        },
+        {
+          // 数据量紧挨「源 id 数」，两个标签各写各的：一个是「有多少发布行」，一个是「认得几个源内 id」。
+          // 默认顺序不动（仍按码）；**列头可点排序**，点一下就能把 0 的码排到眼前。
+          title: text.codeColumns.dataVolume, dataIndex: 'releaseRowCount', width: 84,
+          className: 'mi-catalog__cell-nowrap',
+          sorter: (left: CodeTableReadRow, right: CodeTableReadRow) => left.releaseRowCount - right.releaseRowCount,
+          render: (value: number) => <span data-data-volume>{String(value)}</span>
         }
       ]} />
 
@@ -194,13 +217,16 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
     else setUnmappedPage(next)
   }
 
-  return <Modal open={open} width="maximum" titleKey="mappingRulesTitle"
+  return <Modal open={open} width="full" titleKey="mappingRulesTitle"
     resolveText={(key) => key === 'mappingRulesTitle' ? text.title : key}
     onClose={onClose} className="mi-catalog-dialog">
     <div className="mi-catalog__body">
       <div className="mi-catalog__filters">
         <Input allowClear value={query} placeholder={text.filter} aria-label={text.filter}
           onChange={(event) => { setQuery(event.target.value); setCodePage(1); setUnmappedPage(1) }} />
+        {/* 国家筛选取同一份码表数据；「全部国家」是默认，切回它不该还要再点一次清除。 */}
+        <Select size="small" value={country} aria-label={text.countryFilter} options={[...countryOptions]}
+          onChange={(value) => { setCountry(value); setCodePage(1) }} data-country-filter />
       </div>
       <div className="mi-catalog__table">{body}</div>
       <div className="mi-catalog__footer">
