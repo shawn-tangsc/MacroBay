@@ -6,6 +6,7 @@ import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/ma
 import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
 import { normalizeSourcePeriods, normalizeSourcePeriodsByShape } from '../intelligence/macro-calendar/marketCalendarSourcePeriodMigration'
+import { backfillObservationCountries } from '../intelligence/macro-calendar/marketCalendarObservationCountryBackfill'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
@@ -142,6 +143,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       if (periodByShape.rewritten > 0) {
         console.warn(`[macro-calendar] 期次按形状归一：重算 ${periodByShape.rewritten} 行、缺失 ${periodByShape.unknown} 行、`
           + `撞行 ${periodByShape.mergedGroups} 组、删 ${periodByShape.droppedRows} 行`)
+      }
+      // **按 indicatorId 补观测的国家（迁移 24）**：同一个 id 就是同一个序列，它在别的观测里带过国家，
+      // 这一条就该是那个国家——这是事实不是猜。必须先于国家码归一跑，否则补进来的三位写法当场又不规范。
+      const observationCountries = backfillObservationCountries(database)
+      if (observationCountries.updated > 0) {
+        console.warn(`[macro-calendar] 观测国家补齐：补 ${observationCountries.updated} 条`
+          + `（${observationCountries.indicatorIds} 个 indicatorId）、补不了 ${observationCountries.unresolvable} 条`)
       }
       // 国家码归一（迁移 15）：`USA` 这类历史写法并回 alpha-2，撞行合并、台账同归一，幂等、有备份。
       const normalizedCountries = normalizeCalendarCountryCodes(database)
