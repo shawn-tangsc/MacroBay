@@ -28,6 +28,7 @@ import {
 import type { NotificationDeliveryContent } from './notificationRouting'
 import {
   compareNotifications,
+  isCenterRecord,
   notificationCursorKey,
   resumeIndex,
   unreadStateOf
@@ -62,6 +63,9 @@ export function composeNotificationReadSurface(input: NotificationReadSurfaceInp
     const unreadFirst = query.unreadFirst === true
 
     const filtered = state.records.filter((record: NotificationRecord) => {
+      // 中心只列批准档里有 `center` 的记录：不写 center 的事件仍然落库（审计行照旧），
+      // 只是不出现在中心、也不计未读。老记录没有 appliedLevels，按含 center 处理。
+      if (!isCenterRecord(record)) return false
       if (query.productId && record.productId !== query.productId) return false
       if (allowedStates && !allowedStates.has(record.state)) return false
       if (!allowedStates && !isActiveNotification(record, now) && record.state !== 'read' && record.state !== 'acknowledged') {
