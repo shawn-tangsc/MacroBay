@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { marketCalendarCodeTable } from './marketCalendarCodeTable'
+import { codeTableReasonSets, marketCalendarCodeTable } from './marketCalendarCodeTable'
 import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
@@ -43,6 +43,33 @@ describe('标准码表', () => {
       if (!ok) problems.push(`${row.code} 官网页既不是机构页也不是 pending+理由`)
     }
     expect(problems.slice(0, 8)).toEqual([])
+  })
+
+  it('状态只取四个值，理由必须与状态匹配，且不许留自由文本占位', () => {
+    const STATUSES = ['active', 'not-built', 'pending', 'retired'] as const
+    const problems: string[] = []
+    for (const row of rows) {
+      if (!(STATUSES as readonly string[]).includes(row.status)) problems.push(`${row.code} 状态非法：${row.status}`)
+      if (row.status === 'active' && row.reason !== undefined) problems.push(`${row.code} active 不该带理由`)
+      if (row.status === 'not-built'
+        && !(codeTableReasonSets['not-built'] as readonly string[]).includes(row.reason ?? '')) {
+        problems.push(`${row.code} not-built 的理由不在闭集里：${row.reason ?? '(缺)'}`)
+      }
+      if (row.status === 'pending'
+        && !(codeTableReasonSets.pending as readonly string[]).includes(row.reason ?? '')) {
+        problems.push(`${row.code} pending 的理由不在闭集里：${row.reason ?? '(缺)'}`)
+      }
+      if (row.status === 'retired' && (row.supersededBy ?? '') === '') problems.push(`${row.code} retired 缺 supersededBy`)
+      // 官网页待补理由同样取自闭集，不许是占位句子。
+      const source = row.officialSource
+      if ('pending' in source && !(codeTableReasonSets.pending as readonly string[]).includes(source.reason)) {
+        problems.push(`${row.code} 官网页待补理由不在闭集里：${source.reason}`)
+      }
+    }
+    expect(problems.slice(0, 8)).toEqual([])
+    // 闭集本身不许被写窄或写宽。
+    expect(codeTableReasonSets['not-built']).toHaveLength(4)
+    expect(codeTableReasonSets.pending).toHaveLength(5)
   })
 
   it('事件身份不参与分级：`evt.*` 的 kind 是 event、tier 为 null', () => {
