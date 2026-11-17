@@ -10,6 +10,9 @@ import type { MappingRulesRead } from '../../../service/intelligence/macro-calen
 import type {
   EventSourceWritesRead, EventSourceWriteRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventSourceWritesRead'
+import type {
+  CodeTableRead, CodeTableReadRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
 export type MarketCalendarClient = {
   queryMonth: (input: MarketCalendarQuery) => Promise<MarketCalendarPage>
   refresh: (input: MarketCalendarScope) => Promise<MarketCalendarRefreshResult>
@@ -39,6 +42,8 @@ export type MarketCalendarClient = {
    * 入参必须带 `scheduledDate`：不带就会拿到这个指标所有月份，几十期混成一块。
    */
   queryEventSourceWrites: (input: Readonly<{ metricKey: string; scheduledDate: string }>) => Promise<EventSourceWritesRead>
+  /** 码表（只读整表，渲染专用）：一个码一行，带分级 · 口径 · 官网页 · 状态 · 认得它的源内 id 数。 */
+  queryCodeTable: () => Promise<CodeTableRead>
   /** Bounded catch-up: `timeout` is its own answer and is never reported as a failure. */
   refreshNow: (input: Readonly<{ sourceIds?: readonly string[]; timeoutMs?: number }>) => Promise<MarketCalendarRefreshNowResult>
 }
@@ -60,6 +65,9 @@ export const marketCalendarClient: MarketCalendarClient = {
   async queryMappingRules() {
     const value = await invoke(marketCalendarPublicPolicy.methods.queryMappingRules, {})
     return mappingRulesReadOf(value)
+  },
+  async queryCodeTable() {
+    return codeTableReadOf(await invoke(marketCalendarPublicPolicy.methods.queryCodeTable, {}))
   },
   async queryEventSourceWrites(input) {
     const value = await invoke(marketCalendarPublicPolicy.methods.queryEventSourceWrites, {
@@ -245,4 +253,46 @@ export function eventSourceWritesReadOf(value: unknown): EventSourceWritesRead {
     providerCount: rows.length === 0 ? 0 : new Set(rows.map((row) => row.providerId)).size,
     hasRevisionChain: rows.some((row) => row.source === 'revision')
   }
+}
+
+/**
+ * 码表的形状守卫：**半份数据放行比读不到更糟**——少一行，读者会以为那个码不存在。
+ *
+ * 官网页两种形态都必须自洽：要么是机构页（`url` + 机构 + 依据齐全），要么是「待补 + 闭集理由」；
+ * 出现 `pending` 却带 `url`、或者两者都没有，一律判读不到——**绝不放一个空链接过去**。
+ */
+export function codeTableReadOf(value: unknown): CodeTableRead {
+  const unavailable = { state: 'unavailable', reasonCode: 'query-unavailable' } as const
+  if (value === null || typeof value !== 'object') return unavailable
+  const record = value as Record<string, unknown>
+  if (record.state !== 'available' || !Array.isArray(record.rows)) return unavailable
+  const rows: CodeTableReadRow[] = []
+  for (const entry of record.rows) {
+    if (entry === null || typeof entry !== 'object') return unavailable
+    const row = entry as Record<string, unknown>
+    if (typeof row.code !== 'string' || row.code === '') return unavailable
+    if (row.kind !== 'metric' && row.kind !== 'event') return unavailable
+    if (!['active', 'not-built', 'pending', 'retired'].includes(String(row.status))) return unavailable
+    if (typeof row.sourceIdCount !== 'number' || !Number.isInteger(row.sourceIdCount) || row.sourceIdCount < 0) {
+      return unavailable
+    }
+    const names = row.names as { zhFull?: unknown; enFull?: unknown } | null
+    if (names === null || typeof names !== 'object'
+      || typeof names.zhFull !== 'string' || typeof names.enFull !== 'string') return unavailable
+    const source = row.officialSource as Record<string, unknown> | null
+    if (source === null || typeof source !== 'object') return unavailable
+    if (source.pending === true) {
+      if (typeof source.reason !== 'string' || source.reason === '') return unavailable
+      if (source.url !== undefined) return unavailable
+    } else {
+      for (const field of ['agency', 'url', 'basis'] as const) {
+        if (typeof source[field] !== 'string' || (source[field] as string) === '') return unavailable
+      }
+    }
+    rows.push(row as unknown as CodeTableReadRow)
+  }
+  const counts = record.counts as Record<string, unknown> | null
+  if (counts === null || typeof counts !== 'object') return unavailable
+  if (typeof counts.total !== 'number' || typeof counts.metric !== 'number') return unavailable
+  return { state: 'available', rows, counts: counts as unknown as Extract<CodeTableRead, { state: 'available' }>['counts'] }
 }

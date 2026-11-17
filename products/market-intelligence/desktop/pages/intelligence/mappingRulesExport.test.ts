@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { exportFileName, mappedExportRows, sampleText, unmappedExportRows } from './mappingRulesExport'
+import { codeTableExportRows, exportFileName, sampleText, unmappedExportRows } from './mappingRulesExport'
 
 /** 导出两件事的判据：文件名净化、导出的是**筛选全量**而不是当前页。 */
 const columns = { sourceId: 'id', metricKey: '码', name: '名称', tier: '分级', periodRule: '期次', basis: '依据', official: '官方', rows: '行数' }
@@ -24,26 +24,31 @@ describe('sampleText', () => {
 })
 
 describe('the exported rows', () => {
-  it('carries a header plus every filtered row, with tier and row count readable', () => {
-    const rows = mappedExportRows([
-      { sourceIds: ['214790'], metricKey: 'US.CPI.NSA.YOY', periodRule: 'month', basis: 'BLS · 发布页',
-        officialUrl: 'https://www.bls.gov/x', names: { zh: 'CPI 年率', en: 'CPI YoY' }, tier: 1, rowCount: 12 },
-      // 直接以码进来、没有任何规则的行：id 与期次规则都空着，其余照常。
-      { sourceIds: [], metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: null, basis: null,
-        officialUrl: null, names: null, tier: null, rowCount: 0 }
-    ], { columns, tiers })
-    expect(rows).toHaveLength(3)
-    expect(rows[0]![0]).toBe('id')
-    // `tier: null` → 「未分级」；`rowCount: 0` → 0（空着会被读成「没有这条规则」）。
-    expect(rows[2]![3]).toBe('未分级')
-    expect(rows[2]![7]).toBe(0)
-    // 没有名表条目时名称格空着，不拿指标码拼假名。
-    expect(rows[2]![2]).toBe('')
-    // 没有源内 id 也不许编一个：空白就是空白。
-    expect(rows[2]![0]).toBe('')
-    expect(rows[2]![4]).toBe('')
-    // 多个 id 用 ` · ` 连在一格（合并页签后一个码一行）。
-    expect(rows[1]![0]).toBe('214790')
+  const codeColumns = { code: '码', name: '名称', tierMeasure: '分级 · 口径', official: '官网页', status: '状态', sourceIds: '源 id 数' }
+  const statusWords = { active: '生效', 'not-built': '不建', pending: '待补', retired: '已退役' } as const
+
+  it('writes one row per code with the official page as a link or a word, never a blank', () => {
+    const rows = codeTableExportRows([
+      { code: 'US.CPI.NSA.YOY', kind: 'metric', names: { zhFull: 'CPI 年率', zhShort: 'CPI', enFull: 'Consumer Price Index (YoY)', enShort: 'CPI' },
+        tier: 1, measure: 'YOY', seasonality: 'NSA', status: 'active', reason: null,
+        officialSource: { agency: 'BLS', url: 'https://www.bls.gov/x', pageKind: 'release', verifiedAt: '2026-11-17', basis: '发布目录' },
+        sourceIdCount: 3 },
+      // 待补与不建：一个写词、一个写破折号，都不许留下空链接。
+      { code: 'US.X.NONE.LEVEL', kind: 'metric', names: { zhFull: '某指标', zhShort: '某', enFull: 'Something', enShort: 'S' },
+        tier: null, measure: 'LEVEL', seasonality: 'NONE', status: 'pending', reason: 'official-source-todo',
+        officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 },
+      { code: 'US.Y.NONE.LEVEL', kind: 'metric', names: { zhFull: '不建指标', zhShort: '不建', enFull: 'Not built', enShort: 'NB' },
+        tier: null, measure: 'LEVEL', seasonality: 'NONE', status: 'not-built', reason: 'no-reader',
+        officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 }
+    ], { columns: codeColumns, status: statusWords, officialPending: '待核', officialNone: '—' })
+    expect(rows).toHaveLength(4)
+    expect(rows[0]![0]).toBe('码')
+    expect(rows[1]![3]).toBe('https://www.bls.gov/x')
+    expect(rows[2]![3]).toBe('待核')
+    expect(rows[3]![3]).toBe('—')
+    // **源 id 数 0 写 0**：那是「没有源认得它」，不是空。
+    expect(rows[3]![5]).toBe(0)
+    expect(rows[1]![4]).toBe('生效')
   })
 
   it('exports the unmapped section with the bilingual sample in one cell', () => {

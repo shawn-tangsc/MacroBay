@@ -221,22 +221,19 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
   const [catalogOpen, setCatalogOpen] = useState(false)
   /** 事件目录弹框的文案：只建一次，**键 → 文案的真表查找**也在这一份上做。 */
   /** 映射规则弹框的文案：只建一次，键 → 文案的真表查找也在这一份上做。 */
+  /** 码表 / 未映射弹框的文案：只建一次，键 → 文案的真表查找也在这一份上做。 */
   const mappingCopyText = useMemo<MappingRulesText>(() => ({
     title: text.mkDay.mappingTitle, filter: text.mkDay.mappingFilter,
-    mapped: text.mkDay.mappingMapped, unmapped: text.mkDay.mappingUnmapped,
-    mappedEmpty: text.mkDay.mappingMappedEmpty, unmappedEmpty: text.mkDay.mappingUnmappedEmpty,
-    unavailable: text.mkDay.mappingUnavailable,
-    columns: text.mkDay.mappingColumns, tiers: text.mkDay.mappingTiers, unmappedColumns: text.mkDay.mappingUnmappedColumns,
-    tabMapped: text.mkDay.mappingTabMapped, tabUnmapped: text.mkDay.mappingTabUnmapped,
-    tabsAria: text.mkDay.mappingTabsAria,
-    exportLabel: text.mkDay.mappingExport, exportEmpty: text.mkDay.mappingExportEmpty,
-    // 两句都是说明句：只许进 ⓘ（正文说明句门禁）。节点在这里造、弹框只负责摆位置。
-    exportAllHelp: helpTrigger({ text: text.mkDay.mappingExportAllNote }),
-    eventScopeHelp: (eventCount: number) =>
-      helpTrigger({ text: text.mkDay.mappingEventScopeNote.replace('{count}', String(eventCount)) }),
-    tierFilter: text.mkDay.mappingTierFilter,
-    childSuffix: text.mkDay.mappingChildSuffix,
-    sheetMapped: text.mkDay.mappingSheetMapped, sheetUnmapped: text.mkDay.mappingSheetUnmapped
+    tabCodes: text.mkDay.mappingTabCodes, tabUnmapped: text.mkDay.mappingTabUnmapped,
+    tabsAria: text.mkDay.mappingTabsAria, unavailable: text.mkDay.mappingUnavailable,
+    codeColumns: text.mkDay.mappingCodeColumns, codeStatus: text.mkDay.mappingCodeStatus,
+    officialOpen: text.mkDay.mappingOfficialOpen, officialPending: text.mkDay.mappingOfficialPending,
+    officialNone: text.mkDay.mappingOfficialNone, codeEmpty: text.mkDay.mappingCodeEmpty,
+    unmappedColumns: text.mkDay.mappingUnmappedColumns, unmappedEmpty: text.mkDay.mappingUnmappedEmpty,
+    exportLabel: text.mkDay.mappingExport,
+    // 说明句由弹框自己按键取（它只出现在 ⓘ 里）；这里只交一个「键 → 文案」的查表函数。
+    resolveCopy: (key) => (text.mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
+    sheetCodes: text.mkDay.mappingSheetCodes, sheetUnmapped: text.mkDay.mappingSheetUnmapped
   }), [text])
   /** 图标按钮的读屏名：**真表查找**（键 → 文案），不在解析器里写比较。 */
   const catalogCopy = useMemo<Readonly<Record<string, string>>>(

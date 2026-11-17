@@ -8,52 +8,61 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-import { helpTrigger } from '@platform/ui/components/popover'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import type { MappingRulesRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import type {
+  CodeTableRead, CodeTableReadRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
 import { macroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { MappingRulesDialog } from './MappingRulesDialog'
 
 /**
- * 导出与排序的界面判据：
+ * 码表 / 未映射两个页签的判据（用户 2026-11-17）：
  *
- * 1. 点一次「导出 Excel」，文件里**两张工作表都在**，各自行数正确（只核第一张等于没验第二张）；
- * 2. 表里的顺序就是读者要的「行数降序」，不是读口给的顺序；
- * 3. 分级筛选只出现在「已映射」——未映射的 id 还没有分级。
+ * 1. 「已映射」整块没了，第一页是**码表**（一个码一行）；
+ * 2. 官网页三态都不留空链接：`查看`（真链接）/ `待核`（纯文字，理由在 title）/ `—`（不建、退役）；
+ * 3. **源 id 数 0 照样显示 0**——那是「没有任何源认得它」，是这张表最有用的一格；
+ * 4. 码列中段省略但末段留着（`.YOY` 不能被切掉）；导出是两张表的全量，不看筛选。
  */
 const mkDay = macroIndicatorDrawerText['zh-CN'].mkDay
 const text = {
   title: mkDay.mappingTitle, filter: mkDay.mappingFilter,
-  mapped: mkDay.mappingMapped, unmapped: mkDay.mappingUnmapped,
-  mappedEmpty: mkDay.mappingMappedEmpty, unmappedEmpty: mkDay.mappingUnmappedEmpty,
-  unavailable: mkDay.mappingUnavailable,
-  columns: mkDay.mappingColumns, tiers: mkDay.mappingTiers, unmappedColumns: mkDay.mappingUnmappedColumns,
-  tabMapped: mkDay.mappingTabMapped, tabUnmapped: mkDay.mappingTabUnmapped, tabsAria: mkDay.mappingTabsAria,
-  exportLabel: mkDay.mappingExport, exportEmpty: mkDay.mappingExportEmpty,
-  // 两句说明都只进 ⓘ（正文说明句门禁）：夹具按真调用点的形状给节点，不给句子。
-  exportAllHelp: helpTrigger({ text: mkDay.mappingExportAllNote }),
-  eventScopeHelp: (eventCount: number) =>
-    helpTrigger({ text: mkDay.mappingEventScopeNote.replace('{count}', String(eventCount)) }),
-  tierFilter: mkDay.mappingTierFilter,
-  childSuffix: mkDay.mappingChildSuffix,
-  sheetMapped: mkDay.mappingSheetMapped, sheetUnmapped: mkDay.mappingSheetUnmapped
+  tabCodes: mkDay.mappingTabCodes, tabUnmapped: mkDay.mappingTabUnmapped,
+  tabsAria: mkDay.mappingTabsAria, unavailable: mkDay.mappingUnavailable,
+  codeColumns: mkDay.mappingCodeColumns, codeStatus: mkDay.mappingCodeStatus,
+  officialOpen: mkDay.mappingOfficialOpen, officialPending: mkDay.mappingOfficialPending,
+  officialNone: mkDay.mappingOfficialNone, codeEmpty: mkDay.mappingCodeEmpty,
+  unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
+  exportLabel: mkDay.mappingExport,
+  resolveCopy: (key: string) => (mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
+  sheetCodes: mkDay.mappingSheetCodes, sheetUnmapped: mkDay.mappingSheetUnmapped
+}
+const codeRow = (code: string, extra: Partial<CodeTableReadRow> = {}): CodeTableReadRow => ({
+  code, kind: 'metric' as const,
+  names: { zhFull: '核心 PCE 年率', zhShort: '核心 PCE', enFull: 'Core PCE (YoY)', enShort: 'Core PCE' },
+  tier: 1 as const, measure: 'YOY', seasonality: 'NSA', status: 'active' as const, reason: null,
+  officialSource: { agency: 'BEA', url: 'https://www.bea.gov/x', pageKind: 'release' as const,
+    verifiedAt: '2026-11-17', basis: '发布目录' },
+  sourceIdCount: 2, ...extra
+})
+const codes: CodeTableRead = {
+  state: 'available',
+  rows: [
+    codeRow('US.CORE_PCE.NSA.YOY'),
+    codeRow('US.NO_SOURCE.NONE.LEVEL', { status: 'pending', reason: 'official-source-todo',
+      officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 }),
+    codeRow('US.NOT_BUILT.NONE.LEVEL', { status: 'not-built', reason: 'no-reader',
+      officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 })
+  ],
+  counts: { total: 3, metric: 3, event: 0, withOfficialSource: 1, pendingOfficialSource: 2 }
 }
 const view: MappingRulesRead = {
   state: 'available',
-  mapped: [
-    // 一个码一行：这条有三个 id，格子用 ` · ` 连起来。
-    { sourceIds: ['213623', '214135', '214386'], metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: 'month',
-      basis: null, officialUrl: null, names: null, tier: null, rowCount: 0 },
-    { sourceIds: ['214790'], metricKey: 'US.CPI.NSA.YOY', periodRule: 'month', basis: 'BLS · 发布页',
-      officialUrl: null, names: { zh: 'CPI 年率', en: 'Consumer Price Index (CPI), YoY' }, tier: 1, rowCount: 12 },
-    // 只有码、没有任何源内 id 的行：两格空着（空 = 它本来就没有 id）。
-    { sourceIds: [], metricKey: 'US.PCE.SA.MOM', periodRule: null, basis: null,
-      officialUrl: null, names: null, tier: 2, rowCount: 5 }
-  ],
+  mapped: [],
   unmapped: [{ sourceId: '10267', rowCount: 8, sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
-  counts: { mapped: 3, unmapped: 1, unmappedRows: 8, eventIdentities: 99 }
+  counts: { mapped: 0, unmapped: 1, unmappedRows: 8, eventIdentities: 99 } as never
 }
 
 let root: Root | undefined
@@ -75,195 +84,79 @@ afterEach(async () => {
   root = undefined; host?.remove(); document.body.innerHTML = ''
 })
 
-async function mount(shown: MappingRulesRead = view): Promise<void> {
+async function mount(): Promise<void> {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
-      <MappingRulesDialog open onClose={() => undefined} text={text} view={shown} />
+      <MappingRulesDialog open onClose={() => undefined} text={text} view={view} codes={codes} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
 }
 
-const dataRows = (): string[] => [...(document.body.querySelector('[data-mapping-section="mapped"]')
-  ?.querySelectorAll('tbody tr.ant-table-row') ?? [])].map((row) => row.textContent ?? '')
-const dataRowNodes = (): Element[] => [...(document.body.querySelector('[data-mapping-section="mapped"]')
+const rows = (): Element[] => [...(document.body.querySelector('[data-mapping-section="codes"]')
   ?.querySelectorAll('tbody tr.ant-table-row') ?? [])]
 
-it('shows the rows in rows-in-store order, not in read order', async () => {
+it('replaces the old first tab with the code table, one row per code', async () => {
   await mount()
-  const rows = dataRows()
-  expect(rows).toHaveLength(3)
-  // 12 行的 CPI 排第一；两条 5 行的是「未分级(0 条?)」…按同体量比分级：二级那条在前，未分级垫底。
-  expect(rows[0]).toContain('US.CPI.NSA.YOY')
-  expect(rows[1]).toContain('US.PCE.SA.MOM')
-  expect(rows[2]).toContain('US.MICHIGAN.NONE.LEVEL')
+  const tabs = [...document.body.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent ?? '')
+  expect(tabs.some((label) => label.includes('码表'))).toBe(true)
+  // 「已映射」整块删掉了：页签里不该再有它。
+  expect(tabs.some((label) => label.includes('已映射'))).toBe(false)
+  expect(rows()).toHaveLength(3)
 })
 
-it('offers the tier filter on the mapped tab only', async () => {
+it('keeps the code tail visible, and never leaves the official cell blank or a dead link', async () => {
   await mount()
-  expect(document.body.querySelector('[data-tier-filter]')).not.toBeNull()
-  const tabs = [...document.body.querySelectorAll('[role="tab"]')]
-  const unmappedTab = tabs.find((tab) => (tab.textContent ?? '').includes('未映射'))!
-  await act(async () => { (unmappedTab as HTMLElement).click() })
-  // 未映射的 id 还没有分级：给它一个分级筛选器，这个控件就在撒谎。
-  expect(document.body.querySelector('[data-tier-filter]')).toBeNull()
+  const body = rows()
+  // 短码原样；长码中段省略但**末段必须留着**——`.YOY` 被切掉，两个码就分不出来了。
+  expect(body[0]!.querySelector('[data-code]')?.textContent).toBe('US.CORE_PCE.NSA.YOY')
+  expect(body[0]!.querySelector('[data-code]')?.getAttribute('title')).toBe('US.CORE_PCE.NSA.YOY')
+  expect(body[0]!.querySelector('[data-official]')?.getAttribute('href')).toBe('https://www.bea.gov/x')
+  expect(body[0]!.querySelector('[data-official]')?.textContent).toBe('查看')
+  // 待补：纯文字，`title` 给理由，**没有 href**。
+  const pending = body[1]!.querySelector('[data-official-pending]')!
+  expect(pending.textContent).toBe('待核')
+  expect(pending.getAttribute('title')).toBe('official-source-todo')
+  expect(pending.getAttribute('href')).toBeNull()
+  // 不建/退役：破折号，没有链接。
+  expect(body[2]!.querySelector('[data-official], [data-official-pending]')).toBeNull()
+  // **源 id 数 0 显示 0**，不是空。
+  const lastCell = (row: Element): string => row.querySelectorAll('td')[5]?.textContent ?? ''
+  expect(lastCell(body[1]!)).toBe('0')
+  expect(lastCell(body[0]!)).toBe('2')
 })
 
-it('exports one file with both worksheets, each carrying its own rows', async () => {
+it('exports both sheets in full even when the table is filtered', async () => {
   await mount()
+  const input = document.body.querySelector('.mi-catalog__filters input') as HTMLInputElement
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, '核心 PCE')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(rows().length).toBeGreaterThan(0)
+
+  // 这句说明在 ⓘ 里，不在正文：正文出现它就会把页脚变成一行说明书。
+  expect(document.body.textContent).not.toContain('全部行')
+  expect(document.body.querySelector('[data-export-scope] [aria-label]')).not.toBeNull()
   const button = document.body.querySelector('[data-catalog-export]') as HTMLElement
-  expect(button).not.toBeNull()
   await act(async () => { button.click() })
   await act(async () => { await Promise.resolve() })
-  expect(saved, '导出没有走到保存桥').toBeDefined()
   expect(saved!.name).toMatch(/^映射规则-\d{4}-\d{2}-\d{2}\.xlsx$/u)
 
-  const dir = mkdtempSync(join(tmpdir(), 'mapping-export-'))
+  const dir = mkdtempSync(join(tmpdir(), 'code-export-'))
   const file = join(dir, 'out.xlsx')
   writeFileSync(file, saved!.bytes)
   execFileSync('unzip', ['-o', '-q', file, '-d', join(dir, 'un')], { stdio: 'pipe' })
-  // 两张工作表都在文件里。
   expect(readdirSync(join(dir, 'un', 'xl', 'worksheets'))).toEqual(['sheet1.xml', 'sheet2.xml'])
   const workbook = readFileSync(join(dir, 'un', 'xl', 'workbook.xml'), 'utf8')
-  expect(workbook).toContain('name="已映射"')
+  expect(workbook).toContain('name="码表"')
   expect(workbook).toContain('name="未映射"')
+  // 行数是**全量**：1 行表头 + 3 个码、1 + 1 个未映射 id。
   const first = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet1.xml'), 'utf8')
   const second = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet2.xml'), 'utf8')
-  // 已映射：1 行表头 + 3 行数据；未映射：1 行表头 + 1 行数据。
   expect((first.match(/<row /gu) ?? []).length).toBe(4)
   expect((second.match(/<row /gu) ?? []).length).toBe(2)
-  // 两张表各自装自己的东西，不是把同一份抄两遍。
-  expect(first).toContain('US.CPI.NSA.YOY')
-  expect(second).not.toContain('US.CPI.NSA.YOY')
-  expect(second).toContain('5-10 年通胀预期')
-})
-
-/**
- * 子母项（Chief 2026-11-17）：名称格里给归属小字，母项排在自己分项前面，
- * 搜母指标名时它的分项一起出来（搜子项只出子项）。
- */
-const phillyParent = 'US.PHILLY_FED_MANUFACTURING.SA.LEVEL'
-const familyView: MappingRulesRead = {
-  state: 'available',
-  mapped: [
-    { sourceIds: ['c0'], metricKey: 'US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL', periodRule: 'month',
-      basis: null, officialUrl: null, names: { zh: '费城联储制造业装船', en: 'Philly Fed Shipments' },
-      tier: null, rowCount: 3, kind: 'child', parentMetricKey: phillyParent, childOrder: 0 },
-    { sourceIds: ['p1'], metricKey: phillyParent, periodRule: 'month', basis: null, officialUrl: null,
-      names: { zh: '费城联储制造业指数', en: 'Philly Fed Manufacturing Index' },
-      tier: 1, rowCount: 9, kind: 'parent', parentMetricKey: null },
-    { sourceIds: ['c1'], metricKey: 'US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'month',
-      basis: null, officialUrl: null, names: { zh: '费城联储制造业新订单', en: 'Philly Fed New Orders' },
-      tier: null, rowCount: 2, kind: 'child', parentMetricKey: phillyParent, childOrder: 1 },
-    { sourceIds: ['other'], metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodRule: 'month', basis: null, officialUrl: null,
-      names: { zh: '失业率', en: 'Unemployment Rate' }, tier: 1, rowCount: 13 }
-  ],
-  unmapped: [],
-  counts: { mapped: 4, unmapped: 0, unmappedRows: 0, eventIdentities: 99 }
-}
-
-it('puts a parent ahead of its children and shows the owning parent as small text', async () => {
-  await mount(familyView)
-  const rows = dataRows()
-  expect(rows).toHaveLength(4)
-  // 行数最多的族在最前（失业率 13 行），其余三行是费城那一族且母项带头。
-  expect(rows[0]).toContain('US.UNEMPLOYMENT.SA.RATE')
-  expect(rows[1]).toContain(phillyParent)
-  // 子项带归属小字：母指标名 + 「· 子项」；母项自己不重复一遍自己的名字。
-  expect(rows[2]).toContain('费城联储制造业装船')
-  expect(rows[2]).toContain('费城联储制造业指数 · 子项')
-  expect(rows[1]).not.toContain('· 子项')
-})
-
-it('brings the children along when the search matches the parent only', async () => {
-  await mount(familyView)
-  const input = document.body.querySelector('.mi-catalog__filters input') as HTMLInputElement
-  expect(input).not.toBeNull()
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-    setter.call(input, '费城联储制造业指数')
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  // 母项名里带「费城联储制造业指数」，子项名里是「费城联储制造业装船」——不含母名的整串，必须靠父带子补齐。
-  const rows = dataRows()
-  expect(rows).toHaveLength(3)
-  expect(rows[0]).toContain(phillyParent)
-  expect(rows[1]).toContain('US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL')
-})
-
-it('lists every source id a code answers to, and leaves the cell blank for a code with none', async () => {
-  await mount()
-  const rows = dataRows()
-  // 一个码一行：三个 id 用 ` · ` 连在一格，不拆成三行。
-  const michigan = rows.find((row) => row.includes('US.MICHIGAN.NONE.LEVEL'))!
-  expect(michigan).toContain('213623 · 214135 · 214386')
-  // 只有码、没有 id 的行：这一格空着（空表示它本来就没有 id，不是读失败），期次规则那格也空着。
-  const pce = dataRowNodes().find((row) => (row.textContent ?? '').includes('US.PCE.SA.MOM'))!
-  expect(pce.textContent ?? '').not.toContain('·')
-  expect(pce.querySelectorAll('td')[0]?.textContent, '源内 id 格应为空').toBe('')
-  expect(pce.querySelectorAll('td')[4]?.textContent, '期次规则格应为空').toBe('')
-})
-
-/**
- * 导出是**全表**（用户 2026-11-17）：「你别管我界面上有没有筛选」。
- *
- * 判据用读口给的 `counts` 去比，不写死数字：屏幕上被筛到 1 行，文件里仍必须是 234 / 257 那种全量。
- */
-it('exports every row regardless of the filter, and says so next to the button', async () => {
-  await mount()
-  // 按钮旁必须有这颗 ⓘ，否则读者会把「全量」当成「导错了」；**句子本身不进正文**。
-  expect(document.body.textContent).not.toContain('导出的是两张表的全部行')
-  const scopeHelp = document.body.querySelector('[data-export-scope] [aria-label]') as HTMLElement
-  expect(scopeHelp, '导出范围那颗 ⓘ 不见了').not.toBeNull()
-  await act(async () => { scopeHelp.click() })
-  await act(async () => { await Promise.resolve() })
-  expect(document.body.textContent).toContain('导出的是两张表的全部行')
-
-  const input = document.body.querySelector('.mi-catalog__filters input') as HTMLInputElement
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-    setter.call(input, 'CPI')
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  // 表确实被筛窄了——不然这条用例证明不了「忽略筛选」。
-  expect(dataRows()).toHaveLength(1)
-
-  const button = document.body.querySelector('[data-catalog-export]') as HTMLElement
-  await act(async () => { button.click() })
-  await act(async () => { await Promise.resolve() })
-  // 文件名不带筛选词：同一个按钮同一天不该给出两个名字不同、内容也不同的文件。
-  expect(saved!.name).toMatch(/^映射规则-\d{4}-\d{2}-\d{2}\.xlsx$/u)
-
-  const dir = mkdtempSync(join(tmpdir(), 'mapping-export-all-'))
-  const file = join(dir, 'out.xlsx')
-  writeFileSync(file, saved!.bytes)
-  execFileSync('unzip', ['-o', '-q', file, '-d', join(dir, 'un')], { stdio: 'pipe' })
-  const first = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet1.xml'), 'utf8')
-  const second = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet2.xml'), 'utf8')
-  const rowsOf = (xml: string): number => (xml.match(/<row /gu) ?? []).length
-  // 行数 = 表头 + 读口给的计数（不是「屏幕上那 1 行」）。
-  expect(rowsOf(first)).toBe(1 + view.counts.mapped)
-  expect(rowsOf(second)).toBe(1 + view.counts.unmapped)
-})
-
-/**
- * 「为什么未映射少了、已映射没涨」的解释（Chief 2026-11-17）：
- * **不印在正文里**，收进一颗 ⓘ；点开才看到，数字仍从读口取。
- */
-it('keeps the event-scope explanation behind an info trigger, with the count from the read port', async () => {
-  await mount()
-  // 正文里不许有那句说明（规则：说明性句子进浮层）。
-  expect(document.body.textContent).not.toContain('本表只统计指标')
-  const anchor = document.body.querySelector('[data-event-scope]')!
-  expect(anchor, '没有那颗说明图标').not.toBeNull()
-  const trigger = anchor.querySelector('[aria-label]') as HTMLElement
-  expect(trigger.getAttribute('aria-label')).not.toBe('')
-
-  // 点开才看到那句话，数字来自读口（99）。
-  await act(async () => { trigger.click() })
-  await act(async () => { await Promise.resolve() })
-  expect(document.body.textContent).toContain('本表只统计指标')
-  expect(document.body.textContent).toContain('99')
 })

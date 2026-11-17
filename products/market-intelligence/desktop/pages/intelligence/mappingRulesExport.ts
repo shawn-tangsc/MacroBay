@@ -1,7 +1,5 @@
-import type {
-  MappingRuleRow, UnmappedSourceIdRow
-} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
-import { tierKeyOf } from './mappingRulesView'
+import type { UnmappedSourceIdRow } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import type { CodeTableReadRow } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
 
 /**
  * 导出的两件纯事：**文件名净化** 与 **行映射**。
@@ -21,25 +19,28 @@ export function exportFileName(base: string, now: Date): string {
 }
 
 /**
- * 已映射工作表：八列，与界面同一顺序。`tier` 为 `null` 写「未分级」，`rowCount` 为 0 写 0。
- *
- * 一个工作表**至少有一行表头**：空表也是「只有表头」，不是「没有这张表」。
+ * 码表工作表：一个码一行，与界面同一顺序。官网页三态与界面一致——**有页写地址本身**，
+ * 待补写「待核」、不建写「—」，绝不写一个空链接（空链接会被读成「这个码没有官网页」）。
  */
-export function mappedExportRows(rows: readonly MappingRuleRow[], text: Readonly<{
-  columns: Readonly<Record<'sourceId' | 'metricKey' | 'name' | 'tier' | 'periodRule' | 'basis' | 'official' | 'rows', string>>
-  tiers: Readonly<Record<'1' | '2' | '3' | 'other', string>>
+export function codeTableExportRows(rows: readonly CodeTableReadRow[], text: Readonly<{
+  columns: Readonly<Record<'code' | 'name' | 'tierMeasure' | 'official' | 'status' | 'sourceIds', string>>
+  status: Readonly<Record<'active' | 'not-built' | 'pending' | 'retired', string>>
+  officialPending: string
+  officialNone: string
 }>): readonly (readonly (string | number)[])[] {
-  const header = [text.columns.sourceId, text.columns.metricKey, text.columns.name, text.columns.tier,
-    text.columns.periodRule, text.columns.basis, text.columns.official, text.columns.rows]
+  const header = [text.columns.code, text.columns.name, text.columns.tierMeasure,
+    text.columns.official, text.columns.status, text.columns.sourceIds]
   return [header, ...rows.map((row) => [
-    row.sourceIds.join(' · '),
-    row.metricKey,
-    row.names === null ? '' : `${row.names.zh} · ${row.names.en}`,
-    text.tiers[tierKeyOf(row.tier)],
-    row.periodRule ?? '',
-    row.basis ?? '',
-    row.officialUrl ?? '',
-    row.rowCount
+    row.code,
+    `${row.names.zhFull} · ${row.names.enFull}`,
+    [row.tier === null ? '' : String(row.tier), [row.measure, row.seasonality].filter((part) => part !== null).join(' · ')]
+      .filter((part) => part !== '').join(' · '),
+    // 与界面同一规则：不建、退役的码不写地址也不写「待核」——那是决定，不是待补。
+    row.status === 'not-built' || row.status === 'retired'
+      ? text.officialNone
+      : 'pending' in row.officialSource ? text.officialPending : row.officialSource.url,
+    text.status[row.status],
+    row.sourceIdCount
   ])]
 }
 
