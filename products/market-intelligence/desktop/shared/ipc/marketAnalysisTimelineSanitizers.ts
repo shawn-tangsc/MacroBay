@@ -145,7 +145,7 @@ function sanitizeRun(value: unknown): MarketAnalysisTimelineDetail['run'] | unde
   return { id: value.id, eventGroupId: value.eventGroupId, analysisPhase: value.analysisPhase as MarketAnalysisTimelineDetail['run']['analysisPhase'], status: value.status as MarketAnalysisTimelineDetail['run']['status'], asOf: value.asOf, dataCutoff: value.dataCutoff, evidenceCount: value.evidenceCount, change: change ?? null }
 }
 
-function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'] | undefined {
+export function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'] | undefined {
   // 白名单只从 `marketAnalysisSummaryWhitelist` 读（守卫用例与这里同一份）。可选键缺席一律不判错：
   // 两种契约世代的摘要都要能渲染，少一个可选字段不许把详情变成「读不到」。
   if (!isExactRecordWithOptionals(value, SUMMARY_REQUIRED_FIELDS, SUMMARY_OPTIONAL_FIELDS) ||

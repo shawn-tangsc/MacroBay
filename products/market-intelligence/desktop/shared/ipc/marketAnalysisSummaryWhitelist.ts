@@ -33,8 +33,14 @@ export const SUMMARY_REQUIRED_FIELDS = [
 /**
  * `proseLanguage`：v2 摘要记下「这份正文用哪种语言写的」。旧记录（v1）没有它——读出来是
  * 「不认识」，不标注、不崩，绝不当成当前语言。
+ *
+ * `analysisKind`：R39 起服务端落库时给摘要加类别（`market` / `news`）。它是**可选**的：
+ * 旧摘要没有这个键，必填会让历史记录读不出。2026-11-18 的「读取失败」就是它没登记在这里，
+ * `isExactRecordWithOptionals` 把整条判成不可读。
+ *
+ * `newsInterpretation`：R39 新闻线的结构化记录，随新闻摘要整块存；市场摘要没有它。
  */
-export const SUMMARY_OPTIONAL_FIELDS = ['directions', 'eventAssessment', 'conclusion', 'divergences', 'proseLanguage'] as const
+export const SUMMARY_OPTIONAL_FIELDS = ['directions', 'eventAssessment', 'conclusion', 'divergences', 'proseLanguage', 'analysisKind', 'newsInterpretation'] as const
 
 /** 白名单覆盖的键全集（读取端允许出现的全部顶层键）。 */
 export const SUMMARY_ACCEPTED_FIELDS: ReadonlySet<string> = new Set<string>([
