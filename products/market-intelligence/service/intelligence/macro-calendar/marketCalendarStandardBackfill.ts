@@ -2,7 +2,8 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { MACRO_INDICATOR_RETIRED_METRIC_KEYS } from './macroIndicatorCardGroups'
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
-import { narwhalCanonicalIdentityKey, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
+import { narwhalCanonicalIdentityKey, toAlpha2Country, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
+import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { routeStandardRelease } from './marketCalendarStandardRowRouting'
 import { ensureCalendarStandardTables, recordCalendarUnmapped, type CalendarUnmappedReason }
@@ -144,14 +145,39 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
     skipIdentitiesOwnedByOthers: false,
     importanceIsFact: false
   },
-  // 旧源：身份在 `indicator_id` 那张表里，期间由发布时刻倒推；多数行本来就没有共同身份
+  // 旧源：身份在 `indicator_id` 那张表里；多数行本来就没有共同身份
   // （讲话、会议、没登记过的小指标），那是「走源内身份」，不是坏数据。
   [legacyObservationProviderId]: {
+    /**
+     * **期次在写入时就归一**（用户 2026-11-17 定；Chief 2026-11-17 落在这一层）。
+     *
+     * 这里原来直接把 `zeroXRouterCanonicalIdentity` 算出的 `periodKey` 当身份的一部分，而那个值
+     * 是**发布时刻**（`2026-11-16T13:30`）或「发布日的上一月」——都不是期次。真期次只隐含在源标题里
+     * （`… (Sep)`、`11月纽约联储制造业指数`）。不在这里改，每个采集周期都会重新写进一批假期次，
+     * 启动时那两条按缺口扫的迁移只能一直跟在后面擦。
+     *
+     * 三条规则：
+     * - 标题解得出 → 用解析值（`periodFromSourceTitle` 认英文月份/季度，也认 `11月` / `第三季度`）；
+     * - 解不出 → `unknown:<国家>~<指标码>~<发布日>`：语义是**明确缺失**，同一发布的所有行共用一个值
+     *   （中英两条、初值/终值两条本来就是一回事），因此仍会合并成一行；分隔符不用 `|`，
+     *   那个是身份串的分隔符，混进去会把身份拆错；
+     * - 事件码（`evt.*`）不解析标题：期次就是活动当天，由下游 `routeStandardRelease` 按
+     *   `scheduledAt` 取到分钟。
+     *
+     * 国家码同一处归一到 alpha-2：身份串是这个值的第一处落地，留着三位写法会与写库后的两位
+     * 对不上，认回身份时又认不回来。
+     */
     readIdentity: (row) => {
       const identity = zeroXRouterCanonicalIdentity({ countryCode: row.country_code, indicatorId: row.indicator_id,
         scheduledAt: String(row.scheduled_at ?? '') })
-      return identity === undefined ? undefined
-        : `${identity.countryCode}|${identity.metricKey}|${identity.periodKey}`
+      if (identity === undefined) return undefined
+      const countryCode = toAlpha2Country(identity.countryCode)
+      const scheduledDate = String(row.scheduled_date ?? '')
+      const periodKey = identity.metricKey.startsWith('evt.')
+        ? String(row.scheduled_at ?? '').slice(0, 10)
+        : periodFromSourceTitle(String(row.display_name ?? ''), scheduledDate)?.periodKey
+          ?? `unknown:${countryCode}~${identity.metricKey}~${scheduledDate}`
+      return `${countryCode}|${identity.metricKey}|${periodKey}`
     },
     identityRequired: false,
     hasValues: (row) => [row.consensus_json, row.provider_previous_json, row.provider_actual_json]

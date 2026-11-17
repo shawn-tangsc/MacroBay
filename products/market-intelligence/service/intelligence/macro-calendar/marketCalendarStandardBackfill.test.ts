@@ -189,7 +189,7 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
       (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
        scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
        importance, measure_keys_json, last_seen_at)
-      values ('["78",1]', '0xrouter', null, 'CPI yoy', 'USA', ?, 'economic-indicator',
+      values ('["78",1]', '0xrouter', null, 'CPI yoy(Sep)', 'USA', ?, 'economic-indicator',
         '2026-10-15', '2026-10-15T12:30:00.000Z', null, null, '3.5', 'high', null, '2026-11-14T00:00:00.000Z')`)
       .run(mapped[0])
     const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
@@ -201,6 +201,48 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
     expect(row!.source_provider_id).toBe('0xrouter')
     // 逐字段合并：旧值里剩下的字段不会被抹掉。
     expect(JSON.parse(row!.values_json)).toEqual({ actual: '9.9' })
+  })
+
+  /** 期次在写入时就归一（用户 2026-11-17 定；Chief 落在观测→标准行这一层）。 */
+  it('期次从标题解：消费信贷那条真期次是 2026-09，不是发布月 2026-11', () => {
+    const database = openOldDatabase()
+    ensureCalendarStandardTables(database)
+    const mapped = Object.entries(zeroXRouterIndicatorIdentities)
+      .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["214522",78543]', '0xrouter', null,
+        'Changes in consumer credit (billions of dollars)(Sep)', 'USA', ?, 'economic-indicator',
+        '2026-11-06', '2026-11-06T13:30:00.000Z', null, null, '27.84', 'high', null, '2026-11-14T00:00:00.000Z')`)
+      .run(mapped[0])
+    backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    const row = database.prepare('select country_code, period_key from mi_calendar_events').get() as
+      { country_code: string; period_key: string }
+    expect(row.period_key).toBe('2026-09')
+    // 国家码同一处归一到 alpha-2：身份串与写库后的列不会是两种写法。
+    expect(row.country_code).toBe('US')
+  })
+
+  it('标题没有期次后缀 → 明确缺失的 unknown:<国家>~<码>~<发布日>，不拿发布时刻顶', () => {
+    const database = openOldDatabase()
+    ensureCalendarStandardTables(database)
+    const mapped = Object.entries(zeroXRouterIndicatorIdentities)
+      .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["900",1]', '0xrouter', null, 'Some index without period', 'USA', ?, 'economic-indicator',
+        '2026-11-16', '2026-11-16T13:30:00.000Z', null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
+      .run(mapped[0])
+    backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    const row = database.prepare('select period_key from mi_calendar_events').get() as { period_key: string }
+    expect(row.period_key.startsWith('unknown:US~')).toBe(true)
+    // 分隔符不许用 `|`：那是身份串的分隔符，混进去会把身份拆错。
+    expect(row.period_key.includes('|')).toBe(false)
+    expect(row.period_key).not.toContain('T13:30')
   })
 })
 
