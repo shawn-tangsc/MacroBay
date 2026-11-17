@@ -5,6 +5,8 @@ import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketC
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
+import { promoteSourceIdentities } from '../intelligence/macro-calendar/marketCalendarSourcePromotion'
+import { recomputeUnmappedReasons } from '../intelligence/macro-calendar/marketCalendarUnmappedReasonBackfill'
 import { normalizeSourcePeriods, normalizeSourcePeriodsByShape } from '../intelligence/macro-calendar/marketCalendarSourcePeriodMigration'
 import { backfillObservationCountries } from '../intelligence/macro-calendar/marketCalendarObservationCountryBackfill'
 import { fillObservationCountriesByName } from '../intelligence/macro-calendar/marketCalendarObservationCountryNameFill'
@@ -165,6 +167,24 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
         console.warn(`[macro-calendar] 国家码归一：待归一 ${normalizedCountries.pending} 行、改名 `
           + `${normalizedCountries.renamed} 行、合并 ${normalizedCountries.merged} 行、台账改写 `
           + `${normalizedCountries.ledgerRewritten} 条`)
+      }
+      /**
+       * **源内身份转正**（把算得出身份的 `identity_kind='source'` 行就地改码）与**未映射原因重算**。
+       *
+       * 这两步原来接在 narwhal 的采集回调里，而 narwhal 观测表 2026-11-14 起停写——**那个回调
+       * 永远不会触发**，所以映射补了 700 多条、转正数一直是 0，读者那边照旧显示未映射。
+       * 接到启动链上：每次启动先转正、再重算，顺序不能反（转正会删掉清单里的过期条目，
+       * 先重算会把「已转正」算成缺码）。
+       */
+      const promotion = promoteSourceIdentities(database)
+      if (promotion.scanned > 0) {
+        console.warn(`[macro-calendar] 源内身份转正：扫描 ${promotion.scanned} / 转正 ${promotion.promoted}`
+          + ` / 仍无身份 ${promotion.stillSource}`)
+      }
+      const reasons = recomputeUnmappedReasons(database)
+      if (reasons.scanned > 0) {
+        console.warn(`[macro-calendar] 未映射原因重算：扫描 ${reasons.scanned} 条、改写 ${reasons.updated} 条、`
+          + `删除 ${reasons.deleted} 条、现状 ${JSON.stringify(reasons.counts)}`)
       }
       if (mergedPeriods.merged > 0 || mergedPeriods.renamed > 0) {
         console.warn(`[macro-calendar] 期次归一：合并 ${mergedPeriods.merged} 行、改名 ${mergedPeriods.renamed} 行`

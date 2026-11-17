@@ -70,7 +70,28 @@ export const marketCalendarCountryNames: Readonly<Record<string, Readonly<{ zh: 
   IT: { zh: '意大利', en: 'Italy' },
   JP: { zh: '日本', en: 'Japan' },
   CN: { zh: '中国', en: 'China' },
-  EU: { zh: '欧元区', en: 'Euro area' }
+  EU: { zh: '欧元区', en: 'Euro area' },
+  AU: { zh: '澳大利亚', en: 'Australia' },
+  NZ: { zh: '新西兰', en: 'New Zealand' },
+  KR: { zh: '韩国', en: 'South Korea' },
+  CH: { zh: '瑞士', en: 'Switzerland' },
+  SG: { zh: '新加坡', en: 'Singapore' },
+  TW: { zh: '中国台湾', en: 'Taiwan' },
+  HK: { zh: '中国香港', en: 'Hong Kong' },
+  VN: { zh: '越南', en: 'Vietnam' },
+  TH: { zh: '泰国', en: 'Thailand' },
+  ID: { zh: '印度尼西亚', en: 'Indonesia' },
+  IN: { zh: '印度', en: 'India' },
+  MY: { zh: '马来西亚', en: 'Malaysia' },
+  PH: { zh: '菲律宾', en: 'Philippines' },
+  BR: { zh: '巴西', en: 'Brazil' },
+  MX: { zh: '墨西哥', en: 'Mexico' },
+  ZA: { zh: '南非', en: 'South Africa' },
+  TR: { zh: '土耳其', en: 'Turkey' },
+  RU: { zh: '俄罗斯', en: 'Russia' },
+  NO: { zh: '挪威', en: 'Norway' },
+  SE: { zh: '瑞典', en: 'Sweden' },
+  UA: { zh: '乌克兰', en: 'Ukraine' }
 })
 
 /** 源类型显示名：源给的类型串 → 中文名。都是类型，不含个体。 */
