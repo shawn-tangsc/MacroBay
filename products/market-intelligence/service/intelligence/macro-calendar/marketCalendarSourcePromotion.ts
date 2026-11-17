@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
 import { eventCodeBySourceType } from './marketCalendarEventCodeTable'
 import { narwhalPrimaryMetricBySeriesId } from './narwhal-calendar/narwhalSeriesPrimaryMetric'
+import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySourceMappings'
 
 /**
  * **转正入口**：把 `identity_kind = 'source'` 的行按**当前映射表**重算身份，算得出的原地改成
@@ -17,8 +18,27 @@ import { narwhalPrimaryMetricBySeriesId } from './narwhal-calendar/narwhalSeries
  * 2. **dryRun 不写库**：只报会转正几条。
  * 3. **清单联动**：转正成功后，`unmapped` 里对应的条目一起移除——否则清单会一直挂着
  *    已经解决的行，久了就没人看。
+ * 4. **三张映射表都要查**（2026-11-18 Chief 判定）：series 主测度、事件类型串、**按国家的源内 id
+ *    映射**。前两张查不到就落到第三张——只查前两张时，按国家建的那批映射写进去了、`identity_kind`
+ *    却还是 `source`，读者那边照旧显示未映射。查到的码**必须与该行同国家**，否则不转正：
+ *    跨国家的映射是数据错误，转正会把一个国家的发布挂到另一个国家名下。
  */
 export type PromotionCounts = Readonly<{ scanned: number; promoted: number; stillSource: number }>
+
+/** 源内 id → 标准码（按国家建的那张表）。`source_event_id` 是 `["<indicator id>",<序号>]`。 */
+function countryMappedMetricKey(sourceEventId: string, countryCode: string): string | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(sourceEventId)
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(parsed) || (typeof parsed[0] !== 'string' && typeof parsed[0] !== 'number')) return undefined
+  const entry = marketCalendarCountrySourceMappings[String(parsed[0])]
+  if (entry === undefined) return undefined
+  // 只认同国家的码：跨国家的映射是数据错误，转正会把一国的发布挂到另一国名下。
+  return entry.metricKey.startsWith(`${countryCode}.`) ? entry.metricKey : undefined
+}
 
 export function promoteSourceIdentities(database: DatabaseSync, options?: Readonly<{
   provider?: string
@@ -39,6 +59,7 @@ export function promoteSourceIdentities(database: DatabaseSync, options?: Readon
     // 先按 series（组主测度的依据），再按源类型串（事件码）。**都不猜名字**：两张表里没有就是没有。
     const metricKey = (row.series_id === null ? undefined : narwhalPrimaryMetricBySeriesId[row.series_id])
       ?? (row.source_label === null ? undefined : eventCodeBySourceType[row.source_label])
+      ?? countryMappedMetricKey(row.source_event_id, row.country_code)
     if (metricKey === undefined || metricKey === row.metric_key) continue
     if (options?.dryRun !== true) {
       try {

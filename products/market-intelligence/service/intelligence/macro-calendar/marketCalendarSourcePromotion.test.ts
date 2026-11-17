@@ -35,6 +35,25 @@ describe('转正入口：promoteSourceIdentities', () => {
     expect(rows[0]!.identity_kind).toBe('code')
   })
 
+  it('series 与事件类型都查不到时，按国家的源内 id 映射也参与转正', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 206580 → JP.INVENTORY.NONE.MOM 是「按国家建出的码 → 源内 id」那张表里的一条。
+    upsertCalendarStandardRow(database, sourceRow({ countryCode: 'JP', metricKey: 'r-jp',
+      sourceEventId: '["206580",1]', seriesId: null, sourceLabel: '在庫' }))
+    expect(promoteSourceIdentities(database)).toEqual({ scanned: 1, promoted: 1, stillSource: 0 })
+    expect(rowsOf(database)[0]).toMatchObject({ metric_key: 'JP.INVENTORY.NONE.MOM', identity_kind: 'code' })
+  })
+
+  it('源内 id 映射到别国的码时不转正（跨国家是数据错误，不许挂过去）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, sourceRow({ countryCode: 'US', metricKey: 'r-us',
+      sourceEventId: '["206580",1]', seriesId: null, sourceLabel: '在庫' }))
+    expect(promoteSourceIdentities(database)).toEqual({ scanned: 1, promoted: 0, stillSource: 1 })
+    expect(rowsOf(database)[0]).toMatchObject({ metric_key: 'r-us', identity_kind: 'source' })
+  })
+
   it('同身份同一天已有标准码行 → 并进去（删源内那行），不留两行', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
