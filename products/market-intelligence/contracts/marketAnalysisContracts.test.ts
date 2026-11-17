@@ -14,7 +14,8 @@ import {
 describe('marketAnalysisContracts', () => {
   it('owns the schema, bounded model-output, and immutable ID policy', () => {
     expect(MARKET_ANALYSIS_CONTRACT_POLICY).toMatchObject({
-      schemaVersion: 2,
+      // R37 B 把输出 schema 从 2 升到 3（多一个 newsImpact），这条断言当时没跟上——HEAD 上一直是红的。
+      schemaVersion: 3,
       dataAccessProfileId: 'crypto-market-analysis-v1',
       maximumModelFieldCharacters: 2_000,
       maximumModelOutputBytes: 256 * 1024

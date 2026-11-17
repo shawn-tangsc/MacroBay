@@ -457,6 +457,24 @@ export const marketIntelligenceProductManifest = {
       // 不穿免打扰：这条说"结论出来了"，不是必须立刻打断读者的那种事。
       requestedBypassQuietHours: false
     }),
+    // 分析没跑成（2026-11-17 用户「失败了，怎么不报应用内通知出来」；2026-11-18 产品经理签署只 `center`）。
+    // 手动与自动共用一个事件：**手动每一次都报**（读者就在应用里等），自动只报链路级（连续 3 次或
+    // 2 小时零成功）——逐次报会把 15 分钟一次的东西刷成噪音。
+    // 去重键由提交侧拼进 `identity`：手动 `manual:{runId}`（一次一条，连点由单飞挡在入队前），
+    // 自动 `{triggerKey}:{failureCode}:{bucket30m}`（同一码 30 分钟一条，正文的次数由合并计数给）。
+    // 不同 `failureCode` 键不同 ⇒ 绝不合并：读者要做的事不一样。
+    notificationEvent('market-intelligence.analysis.failed', {
+      category: 'failure',
+      body: true,
+      requiresUserAction: true,
+      // `center` 是默认面，不写进申请；桌面/手机/提示一概不要。
+      requestedDisruptionLevels: [],
+      dedupeKeyTemplate: 'analysis-failed:{identity}',
+      dedupeUnit: 'occurrence',
+      // 同一 failureCode 最多 4 条；平台的上限单位是「读者日」，与「24 小时」的差别写在提交说明里。
+      dailyLimit: 4,
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.timezone.invalid', {
       category: 'needs-action',
       body: true,

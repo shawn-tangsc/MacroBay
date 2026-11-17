@@ -88,6 +88,15 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   sentimentAlert: 'market-intelligence.sentiment.alert',
   /** N12：信号唤起的那次分析出结论了（只在这一条路径发）。 */
   analysisConclusion: 'market-intelligence.analysis.conclusion',
+  /**
+   * 分析没跑成（2026-11-17 用户「失败了，怎么不报应用内通知出来」）。
+   *
+   * 手动与自动共用一个事件、**只有 `center` 一档**：手动失败读者在等，自动失败只报链路级
+   * （连续 3 次或 2 小时零成功），两种都不该弹桌面或手机。去重键由提交侧拼：
+   * 手动 `analysis-failed:manual:{runId}`、自动 `analysis-failed:{triggerKey}:{failureCode}:{bucket30m}`，
+   * 见 `product.manifest.ts` 的同名声明。
+   */
+  analysisFailed: 'market-intelligence.analysis.failed',
   sourceConsecutiveFailed: 'market-intelligence.source.consecutive-failed',
   sourceStale: 'market-intelligence.source.stale',
   /**

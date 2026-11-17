@@ -3,9 +3,9 @@ import type { NotificationEventPolicyEntry } from '@platform/notifications/contr
 /** 签署人（情报模块产品经理）。改档位只能由签署人改，签名哈希守卫会拦。 */
 export const SIGNED_BY = '情报模块产品经理' as const
 /** 签署日期。 */
-export const SIGNED_AT = '2026-11-11' as const
+export const SIGNED_AT = '2026-11-18' as const
 /** 对 `canonicalApprovalText({ formatVersion: 1, signedBy: SIGNED_BY, signedAt: SIGNED_AT, events })` 的 sha256（UTF-8 字节）。 */
-export const SIGNATURE = 'sha256:dc204543e378a7f8d3285e820d1a9ef1be73e455b56e3dcb91ea521723840c9c' as const
+export const SIGNATURE = 'sha256:17bdffa7ff64cdb597bd32d8e5b287a8f93ffeead790f804ca9c778abd6d982f' as const
 
 /**
  * 情报模块**签署过的批准值**（与「申请」分开的两份数据之一）。
@@ -55,5 +55,12 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
   'market-intelligence.source.symbol-not-supported': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
-  'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
+  'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+  /**
+   * 分析没跑成（2026-11-18 产品经理签署）。
+   *
+   * **只批中心**：不进桌面、不进手机、不穿免打扰。理由：手动失败读者就在应用里等，中心那条够用；
+   * 自动失败是链路问题（连续 3 次或 2 小时零成功才发），凌晨把读者叫起来没有收益。
+   */
+  'market-intelligence.analysis.failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
 })

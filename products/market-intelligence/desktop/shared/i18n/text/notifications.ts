@@ -138,6 +138,11 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: '分析结论',
     [BODY(IDS.analysisConclusion)]: '这次分析的结论已经出来了。',
     [REASON(IDS.analysisConclusion)]: '你订阅了信号触发的分析结论提醒。',
+    [TITLE(IDS.analysisFailed)]: '分析没能生成',
+    // 连接类单独一句：不许写成「解读失败/读不懂」——读者会以为是我们读不懂新闻，实际是没连上。
+    [notificationEventVariantKey(IDS.analysisFailed, 'connection')]: '这次没有连上模型服务，所以没有得出解读。检查模型配置或网络后可以重试。',
+    [BODY(IDS.analysisFailed)]: '这次分析没有完成，时间轴里能看到失败与重试。',
+    [REASON(IDS.analysisFailed)]: '分析失败了，而你在等它的结果。',
     // 分析额度那条正文里的线名：句子属于产品自己的分析线，平台文案表里不再寄存（v2.59）。
     'notification.analysis-line.market-intelligence.event': '行情变动分析',
     'notification.analysis-line.market-intelligence.calendar': '日历事件分析',
@@ -234,6 +239,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: 'Analysis conclusion',
     [BODY(IDS.analysisConclusion)]: 'The conclusion from this analysis is ready.',
     [REASON(IDS.analysisConclusion)]: 'You subscribed to signal-triggered analysis conclusions.',
+    [TITLE(IDS.analysisFailed)]: 'Analysis did not run',
+    [notificationEventVariantKey(IDS.analysisFailed, 'connection')]: 'The model service could not be reached, so no reading was produced. Check the model settings or your network, then try again.',
+    [BODY(IDS.analysisFailed)]: 'This analysis did not finish; the timeline shows the failure and the retry.',
+    [REASON(IDS.analysisFailed)]: 'An analysis failed while you were waiting for it.',
     // Line names used inside the analysis-quota sentence: they belong to this product's analysis lines,
     // so the platform copy table no longer carries them (v2.59).
     'notification.analysis-line.market-intelligence.event': 'market-move analysis',

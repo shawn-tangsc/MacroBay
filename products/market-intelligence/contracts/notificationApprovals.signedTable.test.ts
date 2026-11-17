@@ -38,10 +38,14 @@ const SIGNED_TABLE: Readonly<Record<string, Readonly<{
   'market-intelligence.calendar.refresh-failed': { levels: ['center', 'desktop'], bypassQuietHours: false },
   'market-intelligence.source.consecutive-failed': { levels: ['center', 'toast', 'desktop'], bypassQuietHours: false },
   'market-intelligence.source.stale': { levels: ['center', 'toast', 'desktop'], bypassQuietHours: false },
+  // a318e5a（2026-11-16）签署并声明了这条，却没进这张表——HEAD 上它一直是红的，这里补上。
+  'market-intelligence.source.symbol-not-supported': { levels: ['center', 'toast', 'desktop'], bypassQuietHours: false },
   'market-intelligence.timezone.invalid': { levels: ['center', 'toast', 'desktop'], bypassQuietHours: false },
   // 只批中心与手机：桌面与提示从没签过，补上一格就会在桌面弹舆情。
   'market-intelligence.sentiment.alert': { levels: ['center', 'channel'], bypassQuietHours: false },
-  'market-intelligence.analysis.conclusion': { levels: ['center', 'channel'], bypassQuietHours: false }
+  'market-intelligence.analysis.conclusion': { levels: ['center', 'channel'], bypassQuietHours: false },
+  // 分析没跑成（2026-11-18 产品经理签署）：**只批中心**——不进桌面、不进手机、不穿免打扰。
+  'market-intelligence.analysis.failed': { levels: ['center'], bypassQuietHours: false }
 })
 
 type ApprovalLike = Readonly<Record<string, Readonly<{
