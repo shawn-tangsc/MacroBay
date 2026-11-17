@@ -79,7 +79,13 @@ export const calendarStandardTablePolicy = Object.freeze({
      * 以前这类行**静默跳过**（既不进表、也不进未映射），1484 条就这么消失了——用户一句话点出：
      * 不落表可以，但**必须落在未映射的库里**，否则「筛掉了」被读成「没有」。
      */
-    'missing-country'] as const)
+    'missing-country',
+    /**
+     * **有国家、也有标题，但码表里找不到对应的码**（2026-11-18 Chief 定）：身份的三段算得出来，
+     * 只是那一段（族/测度）还没有码。它和 `bad-identity` 的区别是「没建码」不是「拼不出来」，
+     * 和 `bad-period` 的区别是「连码都没有」不是「有码缺期次」——三种修法不同，不能合成一个数。
+     */
+    'no-code'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
 export type CalendarReleaseStatus = typeof calendarStandardTablePolicy.releaseStatuses[number]
