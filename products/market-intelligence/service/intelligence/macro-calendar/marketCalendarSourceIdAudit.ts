@@ -50,21 +50,21 @@ export function auditSourceIdMismatches(database: DatabaseSync, tables: SourceId
 }
 
 /**
- * 写之前查一眼：这个身份的行现在写着另一个发布 id 吗？
+ * 写之前查一眼：这个身份的行现在写着另一个发布 id 吗？**只测量、不打印**。
  *
- * 覆盖本身是设计允许的（一行只能存一个 id），所以返回事实并**只打日志**；判断是否合规交给
- * 日志里那两个标记：
- * - `MI_CALENDAR_SOURCE_ID_OVERWRITTEN`：旧 id 在台账里（同一次发布被后写覆盖，允许）；
- * - `MI_CALENDAR_SOURCE_ID_OVERWRITTEN_UNTRACED`：旧 id 不在台账里（没有留痕的覆盖，真红）。
+ * 覆盖本身是设计允许的（一行只能存一个 id），但**写侧现在按「先到的赢」处理**
+ * （`upsertCalendarStandardRow`）：旧 id 还在台账里就保持原值，不再每次刷新被另一个
+ * locale 的 id 翻回去（用户 2026-11-18 报的 1190 条/轮成对告警就是这个）。所以这里返回事实，
+ * 由调用方决定「保留旧 id」还是「写新的」，日志由批次收口处汇总一行。
  */
-export function sourceIdOverwriteOnWrite(
+export function sourceIdOnWrite(
   database: DatabaseSync,
   tables: SourceIdTables,
   input: Readonly<{
     countryCode: string; metricKey: string; periodKey: string
     firstScheduledDate: string; sourceEventId: string
   }>
-): Readonly<{ month: string; previousSourceEventId: string; nextSourceEventId: string; tracedInLedger: boolean }> | undefined {
+): Readonly<{ previousSourceEventId: string; tracedInLedger: boolean }> | undefined {
   try {
     // 国家码在写入端已归一到 alpha-2，这里按同一口径查，否则「旧写法进来的写」会被当成「新行」而漏报。
     const previous = database.prepare(`select source_event_id as id from ${tables.eventsTable}
@@ -76,17 +76,45 @@ export function sourceIdOverwriteOnWrite(
     const traced = database.prepare(`select 1 as hit from ${tables.sourceIdsTable}
       where source_event_id = ? and metric_key = ? and first_scheduled_date = ? limit 1`)
       .get(previousSourceEventId, input.metricKey, input.firstScheduledDate) as { hit?: unknown } | undefined
-    const tracedInLedger = traced !== undefined
-    const payload = {
-      month: input.firstScheduledDate.slice(0, 7),
-      metricKey: input.metricKey,
-      previousSourceEventId,
-      nextSourceEventId: input.sourceEventId,
-      tracedInLedger
-    }
-    console.warn(`[macro-calendar] ${tracedInLedger ? 'MI_CALENDAR_SOURCE_ID_OVERWRITTEN' : 'MI_CALENDAR_SOURCE_ID_OVERWRITTEN_UNTRACED'} ${JSON.stringify(payload)}`)
-    return Object.freeze(payload)
+    return Object.freeze({ previousSourceEventId, tracedInLedger: traced !== undefined })
   } catch {
     return undefined
   }
+}
+
+export type SourceIdOverwritePayload = Readonly<{
+  month: string; metricKey: string
+  previousSourceEventId: string; nextSourceEventId: string; tracedInLedger: boolean
+}>
+
+/** 一次「真的改了 id」的事实，供批次汇总打印。 */
+export function sourceIdOverwritePayload(
+  input: Readonly<{ metricKey: string; firstScheduledDate: string; sourceEventId: string }>,
+  probe: Readonly<{ previousSourceEventId: string; tracedInLedger: boolean }>
+): SourceIdOverwritePayload {
+  return Object.freeze({
+    month: input.firstScheduledDate.slice(0, 7),
+    metricKey: input.metricKey,
+    previousSourceEventId: probe.previousSourceEventId,
+    nextSourceEventId: input.sourceEventId,
+    tracedInLedger: probe.tracedInLedger
+  })
+}
+
+/**
+ * **每轮一行**，不是每行一条。
+ *
+ * 原来每写一行打一条：Narwhal/0xRouter 一轮写几百行、成对覆盖时启动日志一分钟刷 1190 条，
+ * 真红（`UNTRACED`）被淹没在噪声里。汇总只报两个数：`overwrites`（真改了 id 的次数）与
+ * `untraced`（旧 id 不在台账里的次数——那才是真红）；全为 0 时**一条都不打**。
+ */
+export function logSourceIdOverwriteSummary(payloads: readonly SourceIdOverwritePayload[]): void {
+  if (payloads.length === 0) return
+  const untraced = payloads.filter((payload) => !payload.tracedInLedger)
+  console.warn(`[macro-calendar] MI_CALENDAR_SOURCE_ID_OVERWRITTEN_SUMMARY ${JSON.stringify({
+    overwrites: payloads.length,
+    untraced: untraced.length,
+    months: [...new Set(payloads.map((payload) => payload.month))].sort(),
+    samples: payloads.slice(0, 3)
+  })}`)
 }

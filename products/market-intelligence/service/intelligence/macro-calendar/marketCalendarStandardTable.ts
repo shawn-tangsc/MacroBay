@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
-import { sourceIdOverwriteOnWrite } from './marketCalendarSourceIdAudit'
+import { sourceIdOnWrite, sourceIdOverwritePayload, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
 import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketCalendarSameIdentityWrite'
 
 /**
@@ -289,6 +289,8 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
  */
 export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): Readonly<{
   countryCode: string; metricKey: string; periodKey: string; firstScheduledDate: string
+  /** 这一笔真的把行上的发布 id 改掉了：交给批次收口处汇总打印，不在这里逐行打。 */
+  sourceIdOverwrite?: SourceIdOverwritePayload
 }> {
   const { eventsTable } = calendarStandardTablePolicy
   /**
@@ -312,13 +314,25 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   const periodKey = sameIdentity?.periodKey ?? row.periodKey
   const firstScheduledDate = sameIdentity?.firstScheduledDate ?? row.firstScheduledDate ?? row.scheduledDate
   const labels = sourceLabelsForWrite(sameIdentity, row.sourceLabel)
-  // 先量一眼「同身份换 id」：只打日志、不改数据；旧 id 不在台账里会单独记真红标记。
-  sourceIdOverwriteOnWrite(database, {
+  /**
+   * **同一身份的发布 id 取「先到的赢」，不是 last-write-wins**（用户 2026-11-18 报的 1190 条/轮）。
+   *
+   * 源对同一次发布发中英两条（数组身份第一段相同、第二段不同），两条落到同一行；后写的那条
+   * 每次刷新都把行上的 `source_event_id` 改回自己，于是同一对 id 在一轮里来回翻、启动日志成对刷屏。
+   * 规矩：**旧 id 还在台账里就保持原值**（台账记每一次发布，所以它证明这个 id 是真的），
+   * 只有旧 id 不在台账里（没有留痕的覆盖）才写新的——那种是真红，照样测量并计入汇总。
+   */
+  const probe = sourceIdOnWrite(database, {
     eventsTable, sourceIdsTable: calendarStandardTablePolicy.sourceIdsTable
   }, {
     countryCode, metricKey, periodKey,
     firstScheduledDate, sourceEventId: row.sourceEventId
   })
+  const keepFirst = probe !== undefined && probe.tracedInLedger
+  const sourceEventId = keepFirst ? probe.previousSourceEventId : row.sourceEventId
+  const sourceIdOverwrite = probe === undefined || keepFirst
+    ? undefined
+    : sourceIdOverwritePayload({ metricKey, firstScheduledDate, sourceEventId: row.sourceEventId }, probe)
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, source_label_en, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
@@ -369,7 +383,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.importance ?? null,
       // 没传就**从值本身推**：物化列不允许留空——空着会被视图当「没值」折掉。
       row.valueState ?? (row.valuesJson === '{}' ? 'missing' : 'present'),
-      row.valuesJson, row.sourceProviderId, row.sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
+      row.valuesJson, row.sourceProviderId, sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null,
       // 数据时刻不传就按写入时刻算：没有这一级的来源不许因为「不知道数据时刻」而永远覆盖不了。
       row.dataObservedAt ?? row.observedAt,
@@ -377,7 +391,8 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.eventType ?? null)
   // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
   // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
-  return { countryCode, metricKey, periodKey, firstScheduledDate }
+  return { countryCode, metricKey, periodKey, firstScheduledDate,
+    ...(sourceIdOverwrite === undefined ? {} : { sourceIdOverwrite }) }
 }
 
 /**

@@ -9,6 +9,7 @@ const EVENT_KINDS: readonly string[] = ['central-bank-activity', 'financial-even
 import { calendarStandardTablePolicy, findCalendarStandardRowBySource, promoteCalendarStandardRowToCode,
   recordCalendarSourceId, recordCalendarUnmapped, upsertCalendarStandardRow,
   type CalendarIdentityKind, type CalendarReleaseStatus, type CalendarUnmappedReason } from './marketCalendarStandardTable'
+import { logSourceIdOverwriteSummary, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
 
 /**
  * 观测行 → 标准行的**双写**（S1：只写不读，读取路径一个字节不动）。
@@ -65,6 +66,8 @@ export function dualWriteMeasureRows(
   let written = 0
   let failed = 0
   let mergedSameDay = 0
+  // 「真的把行上的发布 id 改掉了」的次数：**每轮汇总一行**，不逐行打（启动日志一分钟 1190 条就是逐行打出来的）。
+  const sourceIdOverwrites: SourceIdOverwritePayload[] = []
   for (const row of input.rows) {
     try {
       // 源内身份的行没有标准码可查：它是「源里确实有这次发布」，不是缺映射。
@@ -138,6 +141,7 @@ export function dualWriteMeasureRows(
       // 记下「这次发布落到了哪一行」：同一行被源重发时前一个 id 会被覆盖，
       // 但溯源清单要能查到每一次发布。**身份取 upsert 真正写进去的那一组**：中英两条会被认回到
       // 同一行（迁移 18），写这一笔带来的 id 会让台账指向一个不存在的身份。
+      if (placed.sourceIdOverwrite !== undefined) sourceIdOverwrites.push(placed.sourceIdOverwrite)
       recordCalendarSourceId(database, { providerId: input.providerId, sourceEventId: row.sourceEventId,
         countryCode: placed.countryCode, metricKey: placed.metricKey, periodKey: placed.periodKey,
         firstScheduledDate: placed.firstScheduledDate, observedAt: input.observedAt })
@@ -147,6 +151,7 @@ export function dualWriteMeasureRows(
       options?.onError?.((error as Error)?.message ?? 'unknown')
     }
   }
+  logSourceIdOverwriteSummary(sourceIdOverwrites)
   return { written, unmapped: reasons, failed, mergedSameDay }
 }
 
