@@ -22,7 +22,14 @@ const BASELINE_PATH = join(PRODUCT_ROOT,
   'service/intelligence/macro-calendar/__baselines__/metric-code-literals.json')
 
 /** 指标码的形状是 `US.<测度>.<口径>.<量纲>`：四段起。两段的 `US.CPI` 是发布前缀，不是码。 */
-const METRIC_LITERAL = /'US\.[A-Z0-9_]+(?:\.[A-Z0-9_]+){2,}'/g
+/**
+ * 指标码字面量。三条都不能省：
+ * - **两种引号都认**：码表数据文件整行重建后是 `"US.CPI.NSA.YOY"`，只认单引号会让 542 行**从统计里消失**，
+ *   棘轮于是「192 → 0」——那不是减少，是我们看不见了，比涨了更危险；
+ * - **国家前缀不写死 `US`**：现在有 AU/JP/GB/CN 等 30 国的码，只抓 `US.` 等于放过其余国家；
+ * - 四段起：两段的 `US.CPI` 是发布前缀，不是码。
+ */
+const METRIC_LITERAL = /["']((?:[A-Z]{2}|EMU)\.[A-Z0-9_]+(?:\.[A-Z0-9_]+){2,})["']/g
 
 type Baseline = Readonly<{
   note: string
