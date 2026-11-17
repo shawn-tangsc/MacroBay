@@ -55,19 +55,31 @@ const hasActual = (json: string): boolean => cleanValues(json).actual !== undefi
 const emptyReport = (): CountryNormalizationReport =>
   ({ pending: 0, renamed: 0, merged: 0, ledgerRewritten: 0 })
 
-/** 需要归一的行：不是两字母大写。`US` 之外所有写法都在这里（`USA`、`usa`、空的都算）。 */
+/**
+ * 需要归一的行：**归一后与现值不同**的行，而不是「形状不像两字母」的行。
+ *
+ * 两个理由：
+ * - `UK` 是两字母、形状合格，但它不是合法 alpha-2（那是 `GB`）——按形状筛会漏掉它（真库 16 行）；
+ * - 判据要能表达「还有多少行不是规范写法」，形状只是其中一种不合规。
+ */
 const pendingRows = (database: DatabaseSync, table: string): EventRow[] =>
-  database.prepare(`select * from ${table} where country_code is null or country_code not glob '[A-Z][A-Z]'`)
-    .all() as unknown as EventRow[]
+  (database.prepare(`select * from ${table}`).all() as unknown as EventRow[])
+    .filter((row) => toAlpha2Country(row.country_code ?? '') !== (row.country_code ?? ''))
 
 export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNormalizationReport {
   const table = calendarStandardTablePolicy.eventsTable
   const version = calendarCountryNormalizationPolicy.migrationVersion
-  const done = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?').get(version)
-  if (done !== undefined) return emptyReport()
+  /**
+   * **判据是差集，不是版本标记**（用户 2026-11-17，待办 #53 的口径）。
+   *
+   * 这里原来有一道版本闸：`version 15` 记过就永远返回。于是 v15 跑完之后新进来的行——`FRA 9`、
+   * `ITA 6`、`AUS 2`、`USA 1`、`UK 16`、`SIN 2` 那 36 行——**再也不会被归一**，而且没人报错。
+   * 国家码归一是「持续补齐」，不是「改写既有旧数据一次」，判据只能是当前还有多少行不合形状。
+   */
   const pending = pendingRows(database, table)
   if (pending.length === 0) {
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
+    // 顺手清掉历史标记：留着它，下一个人会以为这条归一还受它控制。
+    database.prepare('delete from mi_macro_calendar_migrations where version = ?').run(version)
     return emptyReport()
   }
   const before = Number((database.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n)
@@ -131,7 +143,8 @@ export function normalizeCalendarCountryCodes(database: DatabaseSync): CountryNo
     if (after !== before - report.merged) {
       throw new Error(`country normalization row count mismatch: before=${before} after=${after} merged=${report.merged}`)
     }
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
+    // 不留标记：判据是「还有多少行不合形状」，不是「跑过没有」。
+    database.prepare('delete from mi_macro_calendar_migrations where version = ?').run(version)
     database.exec('commit')
     return report
   } catch (error) {

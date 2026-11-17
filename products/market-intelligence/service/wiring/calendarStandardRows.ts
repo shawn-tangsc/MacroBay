@@ -5,6 +5,7 @@ import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketC
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
+import { normalizeSourcePeriods, normalizeSourcePeriodsByShape } from '../intelligence/macro-calendar/marketCalendarSourcePeriodMigration'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
@@ -130,6 +131,18 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       }
       // 期次归一（迁移 14）：历史上按 BLS 写法落成 `YYYY-MNN` 的行并回 `YYYY-MM`，幂等、有备份。
       const mergedPeriods = mergeMPeriodStandardRows(database)
+      // **期次归一（迁移 21）：按身份重算**；迁移 22：**按形状**重算（`period_key` 含发布时刻的一律重算，
+      // 不吃「按名单筛、名单漏了」那个亏）。22 必须在 21 之后：21 只覆盖数组身份行，22 收剩下的码身份行。
+      const periodByName = normalizeSourcePeriods(database)
+      if (periodByName.rewritten > 0) {
+        console.warn(`[macro-calendar] 期次归一：重算 ${periodByName.rewritten} 行、缺失 ${periodByName.unknown} 行、`
+          + `撞行 ${periodByName.mergedGroups} 组、删 ${periodByName.droppedRows} 行`)
+      }
+      const periodByShape = normalizeSourcePeriodsByShape(database)
+      if (periodByShape.rewritten > 0) {
+        console.warn(`[macro-calendar] 期次按形状归一：重算 ${periodByShape.rewritten} 行、缺失 ${periodByShape.unknown} 行、`
+          + `撞行 ${periodByShape.mergedGroups} 组、删 ${periodByShape.droppedRows} 行`)
+      }
       // 国家码归一（迁移 15）：`USA` 这类历史写法并回 alpha-2，撞行合并、台账同归一，幂等、有备份。
       const normalizedCountries = normalizeCalendarCountryCodes(database)
       if (normalizedCountries.renamed > 0 || normalizedCountries.merged > 0) {

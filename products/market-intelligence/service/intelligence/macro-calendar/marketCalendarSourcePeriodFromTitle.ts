@@ -33,6 +33,22 @@ export function periodFromSourceTitle(title: string, publishedDate: string): Sou
   if (!/^\d{4}-\d{2}-\d{2}$/.test(publishedDate)) return null
   const publishedYear = Number(publishedDate.slice(0, 4))
   const publishedMonth = Number(publishedDate.slice(5, 7))
+  // **中文标题也要能解**（`11月纽约联储制造业指数`、`第三季度…`）：同一事件有 en/zh 两行，
+  // 若只有英文能解，谁写入 `period_key` 就决定结果——那是拿 locale 决定事实。
+  const zhMonth = /(\d{1,2})月/.exec(title)
+  if (zhMonth !== null) {
+    const month = Number(zhMonth[1])
+    if (month >= 1 && month <= 12) {
+      const year = month > publishedMonth ? publishedYear - 1 : publishedYear
+      return { periodKey: `${year}-${String(month).padStart(2, '0')}`, from: 'title-month' }
+    }
+  }
+  const zhQuarter = /第?([一二三四1-4])季度/.exec(title)
+  if (zhQuarter !== null) {
+    const map: Record<string, string> = { 一: '1', 二: '2', 三: '3', 四: '4' }
+    const quarter = map[zhQuarter[1]!] ?? zhQuarter[1]!
+    return { periodKey: `${publishedYear}-Q${quarter}`, from: 'title-quarter' }
+  }
   const groups = groupsOf(title)
   // 从后往前找：期次一般挂在最后，但 `(Sep)(Final)` 这种也在。
   for (const group of [...groups].reverse()) {

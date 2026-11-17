@@ -276,6 +276,8 @@ export function toAlpha3Country(code: string): string {
  * 而「空」看起来就像「这条没有国家」。
  */
 export function toAlpha2Country(code: string): string {
+  // `UK` 不是合法 alpha-2（那是 `GB`），只是常见缩写；按 ISO 事实归一，不是按惯例。
+  if (code === 'UK') return 'GB'
   for (const [alpha2, alpha3] of Object.entries(alpha3ByAlpha2)) {
     if (alpha3 === code) return alpha2
   }

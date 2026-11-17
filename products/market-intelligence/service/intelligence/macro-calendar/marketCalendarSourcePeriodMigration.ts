@@ -18,7 +18,10 @@ import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
  * - 备份整表、单事务、行数对账（368 → 366）、二次运行 0 变更。
  */
 export const calendarSourcePeriodPolicy = Object.freeze({
+  /** 迁移 21：按**身份**（数组身份行）重算期次。 */
   migrationVersion: 21,
+  /** 迁移 22：按**形状**（`period_key like '%T%'`）重算——不吃「按名单筛、名单漏了」那个亏。 */
+  shapeMigrationVersion: 22,
   backupTable: 'mi_calendar_events__period_v21',
   droppedTable: 'mi_calendar_events__period_merge_dropped_v21'
 })
@@ -52,7 +55,6 @@ export function normalizeSourcePeriods(database: DatabaseSync): SourcePeriodMigr
     for (const row of rows) {
       const derived = periodFromSourceTitle(String(row.source_label_en ?? row.source_label ?? ''), String(row.scheduled_date))
       const periodKey = derived === null ? `unknown:${String(row.source_event_id)}` : derived.periodKey
-      if (derived === null) report.unknown += 1
       if (periodKey !== String(row.period_key)) report.rewritten += 1
       const key = `${String(row.country_code)}|${String(row.metric_key)}|${periodKey}|${String(row.first_scheduled_date)}`
       groups.set(key, [...(groups.get(key) ?? []), { ...row, finalPeriod: periodKey }])
@@ -95,6 +97,87 @@ export function normalizeSourcePeriods(database: DatabaseSync): SourcePeriodMigr
     const after = Number((database.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n)
     if (after !== before - report.droppedRows) {
       throw new Error(`period normalize row count mismatch: before=${before} after=${after} dropped=${report.droppedRows}`)
+    }
+    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
+    database.exec('commit')
+    return report
+  } catch (error) {
+    database.exec('rollback')
+    throw error
+  }
+}
+
+/**
+ * **迁移 22：按形状重算期次**（用户 2026-11-17 定）。
+ *
+ * 迁移 21 只处理了数组身份行，漏掉了「已经是规范码、但期次仍写发布时刻」的行——真库里这样的还有
+ * 134 行（`2026-11-06` 消费信贷那条就是）。所以判据不按身份，按**形状**：`period_key like '%T%'`
+ * 的行一律重算，不管它是数组身份还是码身份。
+ *
+ * 完成判据是一条不变量：**全表 `period_key like '%T%'` 的行数 = 0**。
+ */
+export function normalizeSourcePeriodsByShape(database: DatabaseSync): SourcePeriodMigrationReport {
+  const table = calendarStandardTablePolicy.eventsTable
+  const version = calendarSourcePeriodPolicy.shapeMigrationVersion
+  const done = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?').get(version)
+  if (done !== undefined) return { scanned: 0, rewritten: 0, unknown: 0, mergedGroups: 0, droppedRows: 0 }
+  const rows = database.prepare(`select country_code, metric_key, period_key, scheduled_date, first_scheduled_date,
+      source_event_id, source_label, source_label_en, values_json, observed_at
+    from ${table} where period_key like '%T%'`).all() as unknown as Record<string, unknown>[]
+  const report = { scanned: rows.length, rewritten: 0, unknown: 0, mergedGroups: 0, droppedRows: 0 }
+  const before = Number((database.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n)
+  database.exec('begin')
+  try {
+    database.exec(`create table if not exists ${calendarSourcePeriodPolicy.backupTable} as select * from ${table}`)
+    database.exec(`create table if not exists ${calendarSourcePeriodPolicy.droppedTable} as
+      select * from ${table} where 0`)
+    const groups = new Map<string, Record<string, unknown>[]>()
+    for (const row of rows) {
+      // **事件型（`evt.*`）的期次就是那一场活动的日期**（事件身份 = 类型 + 日期），
+      // 标题里本来就没有期次后缀，解不出不是「缺失」，而是「事件没有统计月」这个概念。
+      const isEvent = String(row.metric_key).startsWith('evt.')
+      const derived = isEvent ? null : (periodFromSourceTitle(String(row.source_label_en ?? row.source_label ?? ''),
+        String(row.scheduled_date)) ?? periodFromSourceTitle(String(row.source_label ?? ''), String(row.scheduled_date)))
+      const periodKey = isEvent ? String(row.scheduled_date)
+        : derived === null ? `unknown:${String(row.source_event_id)}` : derived.periodKey
+      if (derived === null && !isEvent) report.unknown += 1
+      report.rewritten += 1
+      const key = `${String(row.country_code)}|${String(row.metric_key)}|${periodKey}|${String(row.first_scheduled_date)}`
+      groups.set(key, [...(groups.get(key) ?? []), { ...row, finalPeriod: periodKey }])
+    }
+    const hasValue = (row: Record<string, unknown>): boolean => {
+      try { return Object.keys(JSON.parse(String(row.values_json ?? '{}'))).length > 0 } catch { return false }
+    }
+    const drop = database.prepare(`delete from ${table}
+      where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
+    const keep = new Map<string, Record<string, unknown>>()
+    for (const [key, group] of groups) {
+      const ranked = [...group].sort((left, right) =>
+        Number(hasValue(right)) - Number(hasValue(left)) ||
+        String(right.observed_at).localeCompare(String(left.observed_at)))
+      const winner = ranked[0]!
+      keep.set(key, winner)
+      if (ranked.length < 2) continue
+      report.mergedGroups += 1
+      for (const loser of ranked.slice(1)) {
+        database.prepare(`insert into ${calendarSourcePeriodPolicy.droppedTable}
+          select * from ${calendarSourcePeriodPolicy.backupTable}
+          where country_code = ? and metric_key = ? and period_key = ? and source_event_id = ? limit 1`)
+          .run(String(loser.country_code), String(loser.metric_key), String(loser.period_key), String(loser.source_event_id))
+        drop.run(String(loser.country_code), String(loser.metric_key), String(loser.period_key),
+          String(loser.first_scheduled_date))
+        report.droppedRows += 1
+      }
+    }
+    const rewrite = database.prepare(`update ${table} set period_key = ?
+      where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
+    for (const winner of keep.values()) {
+      rewrite.run(String(winner.finalPeriod), String(winner.country_code), String(winner.metric_key),
+        String(winner.period_key), String(winner.first_scheduled_date))
+    }
+    const after = Number((database.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n)
+    if (after !== before - report.droppedRows) {
+      throw new Error(`period shape normalize row count mismatch: before=${before} after=${after} dropped=${report.droppedRows}`)
     }
     database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
     database.exec('commit')
