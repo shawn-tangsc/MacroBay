@@ -33,6 +33,10 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'marketAnalysis.startFollowUp': excluded('destructive'),
   'marketAnalysis.getWorkspaceBinding': excluded('internal-view'),
   'marketAnalysis.requestInitialAnalysis': excluded('destructive'),
+  // 按条解读的只读口只给新闻抽屉渲染（菜单状态、失败态），不回答 agent 问题。
+  'marketAnalysis.readNewsInterpretation': excluded('internal-view'),
+  // 按条解读会花一次模型调用并排一次运行，与 `requestInitialAnalysis` 同类：不交给 agent 直接触发。
+  'marketAnalysis.requestNewsInterpretation': excluded('destructive'),
   'marketAnalysis.getLatestAttempt': excluded('internal-view'),
   'marketAnalysis.calendarEventContext': excluded('internal-view'),
   'marketAnalysis.getSettings': excluded('user-private-data'),
@@ -56,6 +60,10 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.marketCalendar.queryMappingRules': excluded('internal-view'),
   // 码表读口（`d675ee1` 那张表的服务端）：只给渲染层的映射弹框核对用，agent 不读。
   'intelligence.macro.marketCalendar.queryCodeTable': excluded('internal-view'),
+  // 事件详情的「各来源写入」块同样是渲染层拼装（`useEventSourceWrites`），不回答 agent 问题。
+  // 依据：实现里零写语句（`marketCalendarEventSourceWritesRead` 全是 SELECT）、消费方只有详情页那一个
+  // hook、入参必须带指标码 + 期次（一次一条事件）——分析/简报/agent 都不读它。
+  'intelligence.macro.marketCalendar.queryEventSourceWrites': excluded('internal-view'),
   'intelligence.macro.marketCalendar.queryMonth': exposed('query_macro_calendar'),
   // The freshness read is what the briefing consumes; an agent asking "how old is the
   // calendar" is the same read, so it rides the existing calendar query capability.
