@@ -56,8 +56,27 @@ const MEASURE_SUFFIX: Record<string, string> = {
 type CsvRow = { country: string; zh: string; target: string }
 const csvRows: CsvRow[] = []
 const lines = readFileSync(CSV, 'utf8').split('\n').filter((line) => line.trim() !== '')
+/** 判定表里中文名含逗号（`营建许可(月率), 季调`），按引号解析，不能裸 split。 */
+function splitCsvLine(line: string): string[] {
+  const cells: string[] = []
+  let cell = ''
+  let quoted = false
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]!
+    if (quoted) {
+      if (char === '"' && line[index + 1] === '"') { cell += '"'; index += 1 }
+      else if (char === '"') quoted = false
+      else cell += char
+    } else if (char === '"') quoted = true
+    else if (char === ',') { cells.push(cell); cell = '' }
+    else cell += char
+  }
+  cells.push(cell)
+  return cells
+}
+
 for (const line of lines.slice(1)) {
-  const cells = line.split(',')
+  const cells = splitCsvLine(line)
   const target = cells[4]?.trim() ?? ''
   if (target === '') continue
   csvRows.push({ country: cells[1]?.trim() ?? '', zh: cells[2]?.trim() ?? '', target })
@@ -99,13 +118,19 @@ for (const row of csvRows) if (!existing.has(row.target)) wanted.set(row.target,
 
 const fresh: { code: string; line: string }[] = []
 let noEnglish = 0
+let noChinese = 0
 for (const [code, source] of [...wanted].sort((a, b) => a[0].localeCompare(b[0]))) {
   const segments = code.split('.')
   if (segments.length !== 4) throw new Error(`码不是四段：${code}`)
   const [country, family, seasonality, measure] = segments as [string, string, string, string]
-  const zh = stripPeriodAndStage(source.zh)
-  if (zh === '') throw new Error(`剥离期次后中文名为空：${code} ← ${source.zh}`)
-  const en = englishFor(country, family, measure)
+  // **locale 错位**：源把英文标题放进了中文列。这时中文名留空（并计入 name-incomplete），
+  // 英文从标题本身取——不能再把英文塞回中文列，那样以后没有任何地方看得出缺了名。
+  const nameIsChinese = /[\u4e00-\u9fff]/.test(source.zh)
+  const zh = nameIsChinese ? stripPeriodAndStage(source.zh) : ''
+  if (nameIsChinese && zh === '') throw new Error(`剥离期次后中文名为空：${code} ← ${source.zh}`)
+  if (!nameIsChinese) noChinese += 1
+  const fromTitle = nameIsChinese ? '' : stripPeriodAndStage(source.zh).replace(/\s*\([^)]*$/, '').trim()
+  const en = fromTitle !== '' ? fromTitle : englishFor(country, family, measure)
   if (en === '') noEnglish += 1
   const official = "{ pending: true, reason: 'official-source-todo' }"
   const line =
@@ -152,6 +177,6 @@ if (leftover.length > 0) {
 writeFileSync(COUNTRY, `${head}${all.join('\n')}\n${closing}`)
 console.log(
   `判定表目标码 ${new Set(csvRows.map((r) => r.target)).size} 个；` +
-    `新建 ${inserted} 个；英文名复用表内同族 ${inserted - noEnglish} 个、留空 ${noEnglish} 个；` +
+    `新建 ${inserted} 个；英文名有值 ${inserted - noEnglish} 个、留空 ${noEnglish} 个；中文名留空（locale 错位）${noChinese} 个；` +
     `名字含期次/阶段 ${leftover.length} 行`,
 )
