@@ -1,0 +1,47 @@
+import { DatabaseSync } from 'node:sqlite'
+import { describe, expect, it } from 'vitest'
+
+import { readCalendarCodeTable } from './marketCalendarCodeTableRead'
+
+/**
+ * 码表页签的读口（用户 2026-11-17：弹框只留「码表 / 未映射」两个页签）。
+ *
+ * 三条判据：
+ * - 一次下发整表，计数由服务端给；
+ * - **官网页绝不下发空链接**：待补就带闭集理由，否则读者会把「还没核」读成「没有官网页」；
+ * - 每个码带 `sourceIdCount`，但**不下发 id 列表**——页签只需要看出「有没有源认它」。
+ */
+const database = new DatabaseSync(':memory:')
+
+describe('码表读口', () => {
+  it('整表下发：指标 224 / 事件 20，官网页全部待补且带闭集理由', () => {
+    const read = readCalendarCodeTable(database)
+    if (read.state !== 'available') throw new Error('unavailable')
+    expect(read.counts).toMatchObject({ total: 244, metric: 224, event: 20, withOfficialSource: 0, pendingOfficialSource: 244 })
+    // 待补必须带理由，且不许是自由文本。
+    for (const row of read.rows) {
+      const source = row.officialSource
+      expect('pending' in source && source.reason, `${row.code} 官网页理由`).toBe('official-source-todo')
+    }
+  })
+
+  it('事件行没有测度与季调档（给 null，不编一个 LEVEL）', () => {
+    const read = readCalendarCodeTable(database)
+    if (read.state !== 'available') throw new Error('unavailable')
+    const fomc = read.rows.find((row) => row.code === 'evt.fomc')!
+    expect(fomc).toMatchObject({ kind: 'event', tier: null, measure: null, seasonality: null, status: 'active' })
+    const cpi = read.rows.find((row) => row.code === 'US.CPI.NSA.YOY')!
+    expect(cpi.measure).toBe('YOY')
+    expect(cpi.seasonality).toBe('NSA')
+  })
+
+  it('每个码带 sourceIdCount（不下发 id 列表）：有源认的码数大于 0 且不超过总数', () => {
+    const read = readCalendarCodeTable(database)
+    if (read.state !== 'available') throw new Error('unavailable')
+    const withIds = read.rows.filter((row) => row.sourceIdCount > 0)
+    expect(withIds.length).toBeGreaterThan(0)
+    expect(withIds.length).toBeLessThan(read.rows.length)
+    // 行上只有计数，没有 id 数组——页签不展示逐个对照。
+    expect(Object.keys(read.rows[0]!)).not.toContain('sourceIds')
+  })
+})
