@@ -72,6 +72,7 @@ import { allSources } from './intelligence/application/providerRegistry'
 import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from './intelligence/macro-calendar/marketCalendarStandardTable'
 import { promoteSourceIdentities } from './intelligence/macro-calendar/marketCalendarSourcePromotion'
+import { recomputeUnmappedReasons } from './intelligence/macro-calendar/marketCalendarUnmappedReasonBackfill'
 import { syncOfficialStandardRows } from './intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { createStandardMonthPageReader } from './intelligence/macro-calendar/marketCalendarStandardMonthPage'
 import { eventTypeNameByCode, nameByMetricKey } from './intelligence/macro-calendar/marketCalendarCodeNames'
@@ -376,6 +377,14 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         const promotion = promoteSourceIdentities(database)
         if (promotion.scanned > 0) {
           console.warn(`[macro-calendar] 源内身份转正：扫描 ${promotion.scanned} / 转正 ${promotion.promoted} / 仍无身份 ${promotion.stillSource}`)
+        }
+        // **原因也要自己保持正确**（2026-11-18 用户定）：`missing-country` 是写入那一刻的原因，
+        // 国家后来补上、码后来建出来，那一行却还挂着旧原因，盘点读到的永远是假数。转正之后再重算，
+        // 顺序不能反：转正会删掉清单里的过期条目，先重算会把「已转正」算成缺码。幂等，跑前备份。
+        const reasons = recomputeUnmappedReasons(database)
+        if (reasons.deleted > 0 || reasons.updated > 0) {
+          const detail = Object.entries(reasons.counts).map(([reason, count]) => `${reason} ${count}`).join(' / ')
+          console.warn(`[macro-calendar] 未映射原因重算：扫描 ${reasons.scanned} / 删过期 ${reasons.deleted} / 改判 ${reasons.updated}（${detail}）`)
         }
         for (const item of unmapped) {
           // `reason` **原样落库**：这里曾用三段白名单映射，任何新原因都会被悄悄改写成
