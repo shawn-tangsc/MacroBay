@@ -81,6 +81,7 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
       '如果缺关键信息：`verdict: "cannot-determine"`，`missing.item` 只能是 amount / symbol / time / market-data，`missing.state` 只能是 not-yet / source-empty / unreadable；**不许自造同义词，也不许用「信息不足」一句代替**。',
       '三条禁止：不许只复述新闻；不许硬贴利好利空（方向必须由数据与机制给出）；不许把新闻里的金额直接当成市场影响——金额要变成市场影响，必须经过一个市场变量（资金流、成交、持仓、费率），并把那条变量写出来。',
       '来源归属要自然，别把它当每段的固定前缀：默认写「该消息称」「报道称」「据该报道」（英文 the report said / according to the report）；只有当来源确实是页面抓取、没有署名时，才写「该页面显示」（the page shows）。整条解读里来源归属**最多出现一次**——第一次交代清楚，后面直接讲事实与传导，不要每段重新挂一遍前缀；也**不得**写成「某方宣布」「官方表示」（announced / officially stated）这种把内容升格成既成事实的口径，只有官方机构自己的材料才可以写主体宣布。',
+      '**摘要里关于这条新闻的陈述，必须与 trigger.fact 的原文一致**：方向、状态（在持续 / 已经结束 / 由流出转为流入）、数量都照原文，不许改写成一厢情愿的版本——新闻说某段流出**结束**了，摘要就不能写它还**在持续**。摘要与 causalChain 之间同样不许互相矛盾；拿不准的部分**就不写**，只写方向与影响，不要把没把握的细节塞进第一行。',
       '三块各管一件事，不许互相复述：`conclusion.summary` 一次说清「这条新闻 + 当前数据 → 方向/影响」，**不再复述新闻细节**；`conclusion.change` 只写**数据本身**变在哪，**不提这条新闻**；`conclusion.causalChain` 写传导路径（新闻 → 中间变量 → 标的），新闻作为起因**只提一次**，后面不再重复同一句。**同一条事实在一条解读里只出现一次**，宁短不长——同一条新闻在摘要、变化、因果链里各说一遍，读起来就是模板，不是判断。',
       '`conclusion.newsImpact` 只在这种由新闻发起的运行里出现；其它运行不要写这个字段。'
     ] : []),
@@ -92,7 +93,10 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
         ? '输入 change 段只是相对上一次快照的差异，**不是**本次运行的原因：本次运行由 trigger 段那条新闻触发。change 仍要照实写进 conclusion.change（不得编造、也不得当作没有变化），但它不能代替对那条新闻的回答。'
         : '本次运行由输入 change 段里的变化触发：结论必须回到那条变化本身——在 supportingEvidence / marketReaction / directions 里引用它的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的原文，不要改写）。只引用不提、或改讲宏观背景，都会被判为「没回答触发的事件」并作废。'
     ] : []),
-    'conclusion.change 必须引用输入 change 段里的具体字段与数值；当 change 为 no-change 时，必须写明没有新变化，不得编造。event-excerpt 是历史消息，不代表当前市场值。没有可比行情时 marketReaction 为 []。',
+    'conclusion.change 必须引用输入 change 段里的具体字段与数值；当 change 为 no-change、没有可比的变化时，用一句读者能懂的话说明市场读数这段时间没有新的变动（例如「市场读数没有新的变动，方向判断沿用上一次」），不得编造。event-excerpt 是历史消息，不代表当前市场值。没有可比行情时 marketReaction 为 []。',
+    // 线上原句：「本次数据没有新变化，变化段为空；信息增量来自……」——读者看到的是输入长什么样，
+    // 不是判断。过程话与结构话一律不写。
+    '正文不许交代「输入长什么样」：「变化段为空」「该段为空」「信息增量来自…」「输入里没有…」「快照里没有…」「字段」「段落」这类话一律不写。某一块确实没有内容时，写它对读者意味着什么（数据没动、方向不变），不要描述段落结构。',
     'conclusion.conditions 每条写一个成立条件；conclusion.dataGaps 每条写一个数据缺口并说明它如何影响置信度。macro 与 evidenceStrength 没有内容时写 null。当已有证据指向相反方向时，必须在 evidenceStrength 里明确哪一侧证据更强、为什么，不得用「信号冲突」或「置信度有限」笼统收尾。',
     'directions 必须为三个周期各给一条，一条一个周期：'
     + marketAnalysisValidationPolicy.directionHorizons.map(horizon => `${horizon}=${marketAnalysisValidationPolicy.directionWindows[horizon]}`).join('、')

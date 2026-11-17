@@ -96,6 +96,26 @@ describe('analysis model prompt trigger contract (R37)', () => {
     expect(system).toContain('**不得**写成「某方宣布」「官方表示」')
   })
 
+  it('makes the summary agree with the trigger fact instead of contradicting it', () => {
+    // 线上硬错：新闻说「ETF 流出连续期结束」，摘要写「ETF 持续净流出」，同一份的因果链又说「以单日
+    // +790 万美元结束」——读者看第一行就得到相反的事实。这是事实一致性，不是句式。
+    const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
+    expect(system).toContain('摘要里关于这条新闻的陈述，必须与 trigger.fact 的原文一致')
+    expect(system).toContain('新闻说某段流出**结束**了，摘要就不能写它还**在持续**')
+    expect(system).toContain('摘要与 causalChain 之间同样不许互相矛盾')
+    expect(system).toContain('拿不准的部分**就不写**')
+  })
+
+  it('forbids prose about how the input is shaped, in every run', () => {
+    // 线上原句「本次数据没有新变化，变化段为空；信息增量来自……」——读者看到的是输入长什么样。
+    const system = systemPrompt()
+    expect(system).toContain('正文不许交代「输入长什么样」')
+    expect(system).toContain('「变化段为空」')
+    expect(system).toContain('「信息增量来自…」')
+    // 没有可比变化时仍要说一句读者能懂的话，只是不许描述段落结构。
+    expect(system).toContain('市场读数没有新的变动，方向判断沿用上一次')
+  })
+
   it('assigns each of the three blocks one job, and forbids repeating the same fact', () => {
     // 用户原话：「你自己看看里面的像不像一个真人对新闻的解读」——三块在同一件事上复述。
     const system = systemPrompt(snapshot({ facts: [triggerFact], trigger }))
@@ -111,6 +131,7 @@ describe('analysis model prompt trigger contract (R37)', () => {
     expect(system).not.toContain('本次运行由**一条新闻**触发')
     expect(system).not.toContain('conclusion.newsImpact')
     expect(system).not.toContain('来源归属要自然')
+    expect(system).not.toContain('摘要里关于这条新闻的陈述')
   })
 })
 
