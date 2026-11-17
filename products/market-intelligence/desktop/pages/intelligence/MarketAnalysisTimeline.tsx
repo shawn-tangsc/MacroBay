@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { Tabs } from '@platform/ui/components/tabs'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { toReadableConclusionText } from '../../../contracts/marketAnalysisReadableText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -31,7 +32,13 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   empty: string
   /** Optional so partial text objects used outside the full i18n bundle still type-check. */
   readTrace?: string
+  /** 列表区不再有可见标题（用户 2026-11-18）；这个键只留作可访问名以外的历史字段。 */
   timeline: string
+  /** 两个页签：成功（有正文的行）与失败（没有正文的行）。 */
+  tabSuccess: string
+  tabFailed: string
+  /** tablist 的可访问名。 */
+  tabsAria: string
   requestInitialAnalysis: string
   refreshAnalysis: string
   initialAnalysisQueued: string
@@ -137,8 +144,18 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
   // Eight nodes at a time, and reaching the end of what is shown is what brings the next eight in —
   // instantly while the workspace still holds read nodes, and by reading on once it does not.
   const [pages, setPages] = useState(1)
-  const shown = analysisTimelinePaging(state.entries.length, pages)
-  const canPull = shown.hasUnread || Boolean(state.nextCursor)
+  // 「成功 / 失败」两个页签共用一个已加载列表与同一个翻页位置：切 tab 不重读、也不把翻到的
+  // 位置退回去（用户 2026-11-18）。失败只装没有正文的行；其余（已发布 / 过期 / 已替代 /
+  // 正在解析）归成功——「正在解析」那条跑完就落在成功里，读者不用为它再切一次。
+  const [tab, setTab] = useState<'success' | 'failed'>('success')
+  const successEntries = state.entries.filter((entry) => entry.status !== 'failed')
+  const failedEntries = state.entries.filter((entry) => entry.status === 'failed')
+  // 每个页签各自算「已经翻到几条」，否则一边翻到 40 条会把另一边也撑开。
+  const shownSuccess = analysisTimelinePaging(successEntries.length, pages)
+  const shownFailed = analysisTimelinePaging(failedEntries.length, pages)
+  const shown = tab === 'failed' ? shownFailed : shownSuccess
+  // 「失败」页没有下一页可翻：历史失败不在存储的时间轴表里，服务只在第一页补进还没发布的运行。
+  const canPull = shown.hasUnread || (tab === 'success' && Boolean(state.nextCursor))
   const revealMore = (): void => {
     setPages(current => current + 1)
     if (!shown.hasUnread && state.nextCursor) timeline.loadMore()
@@ -159,6 +176,56 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
     observer.observe(target)
     return () => observer.disconnect()
   }, [canPull])
+
+  /** 一行时间轴节点：两个页签共用这一份，行为与样式一字不改。 */
+  const renderEntry = (entry: MarketAnalysisTimelineEntry): React.ReactElement => {
+  const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? '')
+  const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null
+  // 一次运行一行：`runKey` 在「正在解析 → 已发布 / 失败」之间不变，所以 React 复用的是同一行，
+  // 不是删一行加一行。老主进程没有 `runKey` 时按 `analysisRunId ?? id` 退（依赖一次运行产一行）。
+  const rowKey = entry.runKey ?? entry.analysisRunId ?? entry.id
+  // `running` / `failed` 没有摘要、没有 `summaryRef`，点开只会是空白：渲染成**不可点**的行，
+  // 不出 chevron、不触发选中。宁可它只是「能看见」，也不要「点得进去却是空」。
+  const selectable = entry.status !== 'running' && entry.status !== 'failed'
+  // `failed` 行给一句人话原因；未知码不印码，药丸本身已经说了「解析失败」。
+  const failureDetail = entry.status === 'failed' && entry.failureCode ? text.failureReasons[entry.failureCode] : undefined
+  const selected = state.selected?.id === entry.id
+  const content = <>
+      <span><time>{formatTime(entry.occurredAt, 'second')}</time><StatusPill labelKey={ANALYSIS_STATUS_KEY[entry.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[entry.status]} /></span>
+      {/* Which event this row is about. Two conclusions published seconds apart are two
+          different events; without the name they read as one conclusion posted twice. */}
+      {groupCaption ? <small className="mi-analysis-timeline__group">{groupCaption}</small> : null}
+      {failureDetail ? <small className="mi-analysis-timeline__failure">{failureDetail}</small> : null}
+      {/* The tag and the conclusion share one line, so they live in one flex item: a row is a
+          column flex container, and siblings there would stack whatever their display is. */}
+      {direction || entry.safeExcerpt ? <span className="mi-analysis-timeline__headline">
+        {direction ? <span className="mi-analysis-timeline__direction" data-direction={direction}>
+          {localizedDirectionTerm(direction, language)}
+        </span> : null}
+        {entry.safeExcerpt ? <span className="mi-analysis-timeline__conclusion-line">{toReadableConclusionText(conclusionWithoutDirection(entry.safeExcerpt), conclusionReadableNames, language)}</span> : null}
+      </span> : null}
+      {selectable ? <ChevronRight className="mi-analysis-timeline__chevron" size={14} aria-hidden="true" /> : null}
+      {entry.triggerStatus ? <small className="mi-analysis-timeline__trigger-status" data-trigger-status={entry.triggerStatus.reasonCode}>
+        {/* "since" fits a condition the gate keeps re-observing; a reader's own click is a
+            one-off moment, so it reads as a time instead. The token list is the service
+            policy's, mirrored here rather than imported: that module pulls in test-only
+            imports through its policy chain. */}
+        {text.triggerStatus.label}：{text.triggerStatus.reasons[entry.triggerStatus.reasonCode]}
+        {entry.triggerStatus.slotOpenAt
+          // Which open it served, and whether it was late: a 16:00 open analysed at 01:21 the
+          // next morning looked like a mistake until the line said so.
+          ? `（${text.triggerStatus.slotOpen}${formatTime(entry.triggerStatus.slotOpenAt, 'minute')}${entry.triggerStatus.slotDelayed ? `，${text.triggerStatus.slotDelayed}` : ''}）`
+          : ''}
+        （{formatTime(entry.triggerStatus.decidedAt, 'second')}{oneOffTriggerReasons.has(entry.triggerStatus.reasonCode) ? '' : ` ${text.triggerStatus.since}`}）
+      </small> : null}
+  </>
+  // A row, not a button: the whole line is one action (select and open this conclusion), and
+  // it is registered as a clickable row in the exception list. Selection is announced with
+  // `aria-current`, never by background colour alone, and the chevron shows the row is openable.
+  return selectable
+    ? <button className={`mi-analysis-timeline__entry${selected ? ' is-selected' : ''}`} key={rowKey} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button" aria-current={selected ? 'true' : undefined}>{content}</button>
+    : <div className="mi-analysis-timeline__entry mi-analysis-timeline__entry--static" key={rowKey} data-entry-status={entry.status}>{content}</div>
+  }
 
   return (
     <section className="mi-analysis-timeline" aria-label={text.title} data-analysis-enabled={analysisEnabled === undefined ? 'unknown' : String(analysisEnabled)}>
@@ -181,8 +248,10 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
       </header>
       <div className="mi-analysis-timeline__workspace-wrap">
       <div className="mi-analysis-timeline__workspace" aria-hidden={masked || undefined}>
+        {/* 列表区不再有可见标题（用户 2026-11-18：那一行不要了，内容上移）。可访问名交给 Tabs 那组
+            页签，标题字样因此不再出现在 DOM 里。 */}
+        {/* 列表区不再有可见标题（用户 2026-11-18：那一行不要了，内容上移）；可访问名留在 aside 上。 */}
         <aside className="mi-analysis-timeline__list" aria-label={text.timeline}>
-          <h2>{text.timeline}</h2>
           {state.loading ? <LoadingState label={text.loading} minHeight={160} /> : null}
           {/* 读失败要能重试：一句「暂不可用」既没出口也不说明「不是没有」，读者只能猜。
               句子复用产品既有那句「这项数据暂时读不到，不是你没有」（与结论卡、抽屉同一口径）。 */}
@@ -199,7 +268,23 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
             state="error"
           /> : null}
           {state.lastRead && text.readTrace ? <p className="mi-analysis-timeline__state" data-timeline-read={state.lastRead}>{text.readTrace}：{state.lastRead}</p> : null}
+          {state.entries.length > 0 && requestState === 'already-available' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisRefreshAlreadyAvailable}</p> : null}
+          {state.entries.length > 0 && requestState === 'not-ready' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisServiceNotReady}</p> : null}
+          {state.entries.length > 0 && requestState === 'still-running' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisStillRunning}</p> : null}
+          {refreshError.visible ? <AnalysisRequestErrorBanner
+            // A run that finished without publishing is not a request that failed: the click was
+            // accepted, the analysis was rejected. Saying "the request did not go through" for
+            // both made a rejected model answer look like a dead button.
+            message={timeline.requestFailure === 'run' ? text.attemptFailed : text.analysisRefreshFailed}
+            // Only a run failure has a reason. A refused click must not inherit the previous
+            // attempt's reason, which would attribute an old run's defect to this request.
+            detail={timeline.requestFailure === 'run' && attempt?.failureCode ? text.failureReasons[attempt.failureCode] : undefined}
+            dismissLabelKey="pages.intelligence.portal.analysisTimeline.dismissError"
+            onDismiss={refreshError.dismiss}
+          /> : null}
+          {/* 整份列表一条都没有：保持原来的「首次分析」块，不摆两个空页签再在底下放一次按钮。 */}
           {!state.loading && !state.failed && state.entries.length === 0 ? <>
+            {/* 整份列表为空时仍用产品那句（页签不出现，也不摆两个空态）。 */}
             <p className="mi-analysis-timeline__state">{text.empty}</p>
             {failedAttempt && attemptError.visible ? <AnalysisRequestErrorBanner
               message={text.attemptFailed}
@@ -218,68 +303,26 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
               onDismiss={initialError.dismiss}
             /> : null}
           </> : null}
-          {state.entries.length > 0 && requestState === 'already-available' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisRefreshAlreadyAvailable}</p> : null}
-          {state.entries.length > 0 && requestState === 'not-ready' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisServiceNotReady}</p> : null}
-          {state.entries.length > 0 && requestState === 'still-running' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisStillRunning}</p> : null}
-          {refreshError.visible ? <AnalysisRequestErrorBanner
-            // A run that finished without publishing is not a request that failed: the click was
-            // accepted, the analysis was rejected. Saying "the request did not go through" for
-            // both made a rejected model answer look like a dead button.
-            message={timeline.requestFailure === 'run' ? text.attemptFailed : text.analysisRefreshFailed}
-            // Only a run failure has a reason. A refused click must not inherit the previous
-            // attempt's reason, which would attribute an old run's defect to this request.
-            detail={timeline.requestFailure === 'run' && attempt?.failureCode ? text.failureReasons[attempt.failureCode] : undefined}
-            dismissLabelKey="pages.intelligence.portal.analysisTimeline.dismissError"
-            onDismiss={refreshError.dismiss}
+          {/* 两个页签：成功＝有正文的行，失败＝没有正文的行。两块面板都真渲染（Tabs 全部挂载、
+              非活动的加 hidden），行渲染共用 `renderEntry`，分页与「加载更多」两边都在。 */}
+          {state.entries.length > 0 ? <Tabs
+            items={[
+              { value: 'success', labelKey: 'pages.intelligence.portal.analysisTimeline.tabSuccess' },
+              { value: 'failed', labelKey: 'pages.intelligence.portal.analysisTimeline.tabFailed' }
+            ]}
+            value={tab}
+            onChange={(next) => setTab(next === 'failed' ? 'failed' : 'success')}
+            ariaLabelKey="pages.intelligence.portal.analysisTimeline.tabsAria"
+            resolveText={resolveProductText}
+            panels={{
+              success: successEntries.length === 0
+                ? <StateView reasonCode="not-yet" size="md" state="empty" />
+                : <>{successEntries.slice(0, shownSuccess.visible).map(renderEntry)}</>,
+              failed: failedEntries.length === 0
+                ? <StateView reasonCode="not-yet" size="md" state="empty" />
+                : <>{failedEntries.slice(0, shownFailed.visible).map(renderEntry)}</>
+            }}
           /> : null}
-          {state.entries.slice(0, shown.visible).map((entry) => {
-        const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? '')
-        const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null
-        // 一次运行一行：`runKey` 在「正在解析 → 已发布 / 失败」之间不变，所以 React 复用的是同一行，
-        // 不是删一行加一行。老主进程没有 `runKey` 时按 `analysisRunId ?? id` 退（依赖一次运行产一行）。
-        const rowKey = entry.runKey ?? entry.analysisRunId ?? entry.id
-        // `running` / `failed` 没有摘要、没有 `summaryRef`，点开只会是空白：渲染成**不可点**的行，
-        // 不出 chevron、不触发选中。宁可它只是「能看见」，也不要「点得进去却是空」。
-        const selectable = entry.status !== 'running' && entry.status !== 'failed'
-        // `failed` 行给一句人话原因；未知码不印码，药丸本身已经说了「解析失败」。
-        const failureDetail = entry.status === 'failed' && entry.failureCode ? text.failureReasons[entry.failureCode] : undefined
-        const selected = state.selected?.id === entry.id
-        const content = <>
-            <span><time>{formatTime(entry.occurredAt, 'second')}</time><StatusPill labelKey={ANALYSIS_STATUS_KEY[entry.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[entry.status]} /></span>
-            {/* Which event this row is about. Two conclusions published seconds apart are two
-                different events; without the name they read as one conclusion posted twice. */}
-            {groupCaption ? <small className="mi-analysis-timeline__group">{groupCaption}</small> : null}
-            {failureDetail ? <small className="mi-analysis-timeline__failure">{failureDetail}</small> : null}
-            {/* The tag and the conclusion share one line, so they live in one flex item: a row is a
-                column flex container, and siblings there would stack whatever their display is. */}
-            {direction || entry.safeExcerpt ? <span className="mi-analysis-timeline__headline">
-              {direction ? <span className="mi-analysis-timeline__direction" data-direction={direction}>
-                {localizedDirectionTerm(direction, language)}
-              </span> : null}
-              {entry.safeExcerpt ? <span className="mi-analysis-timeline__conclusion-line">{toReadableConclusionText(conclusionWithoutDirection(entry.safeExcerpt), conclusionReadableNames, language)}</span> : null}
-            </span> : null}
-            {selectable ? <ChevronRight className="mi-analysis-timeline__chevron" size={14} aria-hidden="true" /> : null}
-            {entry.triggerStatus ? <small className="mi-analysis-timeline__trigger-status" data-trigger-status={entry.triggerStatus.reasonCode}>
-              {/* "since" fits a condition the gate keeps re-observing; a reader's own click is a
-                  one-off moment, so it reads as a time instead. The token list is the service
-                  policy's, mirrored here rather than imported: that module pulls in test-only
-                  imports through its policy chain. */}
-              {text.triggerStatus.label}：{text.triggerStatus.reasons[entry.triggerStatus.reasonCode]}
-              {entry.triggerStatus.slotOpenAt
-                // Which open it served, and whether it was late: a 16:00 open analysed at 01:21 the
-                // next morning looked like a mistake until the line said so.
-                ? `（${text.triggerStatus.slotOpen}${formatTime(entry.triggerStatus.slotOpenAt, 'minute')}${entry.triggerStatus.slotDelayed ? `，${text.triggerStatus.slotDelayed}` : ''}）`
-                : ''}
-              （{formatTime(entry.triggerStatus.decidedAt, 'second')}{oneOffTriggerReasons.has(entry.triggerStatus.reasonCode) ? '' : ` ${text.triggerStatus.since}`}）
-            </small> : null}
-        </>
-        // A row, not a button: the whole line is one action (select and open this conclusion), and
-        // it is registered as a clickable row in the exception list. Selection is announced with
-        // `aria-current`, never by background colour alone, and the chevron shows the row is openable.
-        return selectable
-          ? <button className={`mi-analysis-timeline__entry${selected ? ' is-selected' : ''}`} key={rowKey} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button" aria-current={selected ? 'true' : undefined}>{content}</button>
-          : <div className="mi-analysis-timeline__entry mi-analysis-timeline__entry--static" key={rowKey} data-entry-status={entry.status}>{content}</div>
-      })}
           {canPull ? <div className="mi-analysis-timeline__pull" ref={pullTarget}>
             {/* Kept as a real control beside the scroll: a keyboard or screen-reader reader cannot
                 perform a pull, and it is also what the sentinel above is measured against. */}
