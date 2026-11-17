@@ -13,6 +13,7 @@ import {
   type EconomicCalendarRefreshState,
   type EconomicCalendarText
 } from '../../features/macro/economic-calendar'
+import { EventDetailLayer } from './EventDetailLayer'
 import type { SelectedCalendarEvent } from './selectedCalendarEvent'
 
 /**
@@ -132,7 +133,9 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
 
   // The inspector owns its title now (one platform key), and announces which row the panel is showing:
   // `contentId` is the identity, `when` is the value that tells two same-named events apart.
-  return <CalendarInspector open contentId={selection.eventKey} when={selection.label} onClose={onClose}>
+  // **同一个承载层**：这条入口原来直接渲染在调用方的子树里，被带 `transform` 的抽屉祖先困住，
+  // 于是「同样的详情，从这里打开在弹框下面、从右列打开在弹框上面」。
+  return <EventDetailLayer><CalendarInspector open contentId={selection.eventKey} when={selection.label} onClose={onClose}>
     {detail.state === 'loading' ? <EconomicCalendarEventDetailState state="loading" text={text.status.loading} /> : null}
     {detail.state === 'available' ? <EconomicCalendarEventDetail
       event={detail.event}
@@ -168,5 +171,5 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
       ? <EconomicCalendarEventDetailState state="error" text={text.failures[detail.failureCode]}
           onRetry={() => setReload(value => value + 1)} />
       : null}
-  </CalendarInspector>
+  </CalendarInspector></EventDetailLayer>
 }

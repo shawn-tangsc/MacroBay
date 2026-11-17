@@ -264,7 +264,8 @@ describe('the same release reads the same on the line and in its drawer', () => 
 
     await act(async () => line!.click())
     await flush()
-    const drawerTitle = host.querySelector('[data-calendar-detail-container] h2')
+    // 详情现在挂在 `document.body`（逃出带 transform 的抽屉祖先），所以不在渲染宿主里找。
+    const drawerTitle = document.body.querySelector('[data-calendar-detail-container] h2')
     // Both surfaces, one name — and it is the analysis side's, not the calendar's former wording.
     expect(drawerTitle?.textContent).toBe(registeredCoreCpi)
     expect(drawerTitle?.textContent).toBe(line?.textContent)
@@ -295,7 +296,7 @@ describe('the same release reads the same on the line and in its drawer', () => 
     await act(async () => providerLine!.click())
     await flush()
     // 长尾事件不起中文名：两个面都用 provider 自己的 displayName。
-    expect(host.querySelector('[data-calendar-detail-container] h2')?.textContent).toBe(providerTitle)
+    expect(document.body.querySelector('[data-calendar-detail-container] h2')?.textContent).toBe(providerTitle)
     expect(providerLine?.textContent).toBe(providerTitle)
   })
 })

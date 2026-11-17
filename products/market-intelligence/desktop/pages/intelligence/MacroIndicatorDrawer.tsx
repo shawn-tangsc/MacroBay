@@ -8,6 +8,7 @@ import { helpTrigger } from '@platform/ui/components/popover'
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import { MappingRulesPanel } from './MappingRulesPanel'
+import { EventDetailLayer } from './EventDetailLayer'
 import type { MappingRulesText } from './MappingRulesDialog'
 import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
@@ -227,6 +228,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     tabCodes: text.mkDay.mappingTabCodes, tabUnmapped: text.mkDay.mappingTabUnmapped,
     tabsAria: text.mkDay.mappingTabsAria, unavailable: text.mkDay.mappingUnavailable,
     codeColumns: text.mkDay.mappingCodeColumns, codeStatus: text.mkDay.mappingCodeStatus,
+    // 「未知国家」用日历那一份文案：同一个事实只留一处定义。
+    unknownCountry: calendarText.market.unknownCountry,
     officialOpen: text.mkDay.mappingOfficialOpen, officialPending: text.mkDay.mappingOfficialPending,
     officialNone: text.mkDay.mappingOfficialNone, codeEmpty: text.mkDay.mappingCodeEmpty,
     unmappedColumns: text.mkDay.mappingUnmappedColumns, unmappedEmpty: text.mkDay.mappingUnmappedEmpty,
@@ -423,8 +426,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
       {/* 事件详情要从**整个应用的左缘**滑出，所以挂到 `document.body`：
           指标抽屉自身带 transform 动画，`position: fixed` 的子孙会锚到它身上（第一版就弹在抽屉里）。
           挂到 body 之后它没有 transform 祖先，`inset: 0` 就是整窗，抽屉从窗口左边进来、满高。 */}
-      {detailEvent === undefined ? null : createPortal(
-        <div className="mk-detail-overlay">
+      {detailEvent === undefined ? null : <EventDetailLayer>
           <CalendarInspector
             contentId={detailEvent.eventKey}
             onClose={() => selectEvent(undefined)}
@@ -434,7 +436,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
               source={releases.sources.find((source) => source.eventType === detailEvent.eventType)}
               text={calendarText} />
           </CalendarInspector>
-        </div>, document.body)}
+        </EventDetailLayer>}
     </section>
     <MappingRulesPanel open={catalogOpen} onClose={() => setCatalogOpen(false)} text={mappingCopyText} />
   </Drawer>

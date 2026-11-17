@@ -61,6 +61,9 @@ function clientWith(result: unknown, overrides: Partial<MacroEconomicCalendarCli
 }
 
 async function render(client: MacroEconomicCalendarClient, onClose = vi.fn(), readMarketMonth?: Parameters<typeof SelectedCalendarEventDrawer>[0]['readMarketMonth']): Promise<HTMLDivElement> {
+  // 详情现在 portal 到 body：上一棵树不卸掉，它的那份详情会留在 body 上，后一条用例就查到旧内容。
+  await act(async () => { root?.unmount() })
+  document.body.querySelectorAll('[data-layer="detail"]').forEach((node) => node.remove())
   host = document.createElement('div')
   document.body.append(host)
   const localRoot = createRoot(host)
@@ -76,13 +79,13 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     const detail = officialEvent({ actual: { displayValue: '0.3%' }, previous: { displayValue: '0.2%' }, lifecycleState: 'released' as const })
     const host = await render(clientWith({ state: 'available', asOf, event: detail }))
 
-    expect(host.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
+    expect(document.body.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
     // 与日历页同一只抽屉（R38）：`inline`、无遮罩，出口是平台抽屉自己那颗关闭键。
-    expect(host.querySelector('.mi-calendar-detail')).not.toBeNull()
-    expect(host.querySelector('.ant-drawer')?.classList.contains('drawer--inline')).toBe(true)
-    expect(host.querySelector('.ant-drawer-mask')).toBeNull()
-    expect(host.querySelector('.ant-drawer-header button[aria-label]')).not.toBeNull()
-    const body = host.querySelector('[data-calendar-detail-container]')!
+    expect(document.body.querySelector('.mi-calendar-detail')).not.toBeNull()
+    expect(document.body.querySelector('.ant-drawer')?.classList.contains('drawer--inline')).toBe(true)
+    expect(document.body.querySelector('.ant-drawer-mask')).toBeNull()
+    expect(document.body.querySelector('.ant-drawer-header button[aria-label]')).not.toBeNull()
+    const body = document.body.querySelector('[data-calendar-detail-container]')!
     // 同一个发布，竖线与抽屉同名：抽屉读的是分析侧那份词表（设计 145 §8 D）。
     expect(body.textContent).toContain(portal.analysisWorkspace.readableNames.eventName['core-cpi'])
     expect(body.textContent).toContain(text.details.importance)
@@ -103,20 +106,20 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
   it('carries the drawer\'s one visible way out', async () => {
     const onClose = vi.fn()
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), onClose)
-    await act(async () => host.querySelector<HTMLButtonElement>('.ant-drawer-header button[aria-label]')!.click())
+    await act(async () => document.body.querySelector<HTMLButtonElement>('.ant-drawer-header button[aria-label]')!.click())
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('says why it is empty when the detail cannot be read, and never invents a value', async () => {
     const host = await render(clientWith({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' } as never))
-    const body = host.querySelector('[data-calendar-detail-container]')
+    const body = document.body.querySelector('[data-calendar-detail-container]')
     expect(body?.textContent).toContain(text.failures['event-not-found'])
-    expect(host.querySelector('.mi-economic-calendar__values')).toBeNull()
+    expect(document.body.querySelector('.mi-economic-calendar__values')).toBeNull()
 
     const rejected = await render(clientWith(undefined, { getEventDetail: vi.fn(async () => { throw new Error('ipc down') }) } as never))
     // A read failure is the shared state now: the sentence and the retry both come from the platform,
     // because the product's own line promised nothing the reader could act on.
-    const failed = rejected.querySelector('[data-calendar-detail-container]')
+    const failed = document.body.querySelector('[data-calendar-detail-container]')
     expect(failed?.querySelector('.state-view')).not.toBeNull()
     expect(failed?.querySelector('.state-view__action')).not.toBeNull()
     expect(failed?.textContent).not.toContain(text.failures['calendar-query-unavailable'])
@@ -133,7 +136,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
       source: 'Narwhal' as const, sourceObservedAt: '2026-10-14T12:31:00.000Z', coverage: 'observed-unverified' as const
     }
     const host = await render(clientWith({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' } as never), vi.fn(), async () => ({ events: [provider], sources: [] }))
-    const body = host.querySelector('[data-calendar-detail-container]')
+    const body = document.body.querySelector('[data-calendar-detail-container]')
     expect(body?.textContent).toContain('9月零售销售(月率)')
     expect(body?.textContent).toContain('0.8%')
     expect(body?.textContent).toContain(text.market.importance.high)
@@ -147,7 +150,7 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
 
   it('still says 未找到 when neither route carries the event', async () => {
     const host = await render(clientWith({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' } as never), vi.fn(), async () => ({ events: [], sources: [] }))
-    expect(host.querySelector('[data-calendar-detail-container]')?.textContent).toContain(text.failures['event-not-found'])
+    expect(document.body.querySelector('[data-calendar-detail-container]')?.textContent).toContain(text.failures['event-not-found'])
   })
 
   it('prints the provider route\'s own refresh state, not a made-up 尚未刷新', async () => {
@@ -167,13 +170,13 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     }
     const host = await render(clientWith({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' } as never), vi.fn(),
       async () => ({ events: [provider], sources: [source] }))
-    const status = host.querySelector('[data-market-source-status="economic-indicator"]')
+    const status = document.body.querySelector('[data-market-source-status="economic-indicator"]')
     expect(status?.textContent).toContain(text.market.refreshOutcome.failed)
     expect(status?.textContent).toContain(text.market.refreshTrigger.automatic)
     expect(status?.textContent).toContain(text.market.attemptFailure['parse-unavailable'])
     expect(status?.textContent).toContain(text.market.statuses.partial)
     // The source agrees with the observation, so nothing claims it moved past it.
-    expect(host.querySelector('[data-source-advanced]')).toBeNull()
+    expect(document.body.querySelector('[data-source-advanced]')).toBeNull()
   })
 
   it('says which observation the values belong to when the live source has moved past it', async () => {
@@ -186,9 +189,9 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     const source = { eventType: 'economic-indicator' as const, status: 'success' as const, sourceObservedAt: '2026-10-15T14:00:00.000Z' }
     const host = await render(clientWith({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' } as never), vi.fn(),
       async () => ({ events: [provider], sources: [source] }))
-    expect(host.querySelector('[data-source-advanced]')?.textContent).toBe(text.market.sourceAdvanced)
+    expect(document.body.querySelector('[data-source-advanced]')?.textContent).toBe(text.market.sourceAdvanced)
     // The values are still the observation's own, with its own time.
-    expect(host.querySelector('[data-market-value="providerActual"]')?.textContent).toContain('0.8%')
+    expect(document.body.querySelector('[data-market-value="providerActual"]')?.textContent).toContain('0.8%')
   })
 })
 
@@ -212,7 +215,7 @@ describe('the drawer pairs an official event with its admitted market observatio
     const readMarketMonth = vi.fn(async () => linkedMarket({ displayValue: '0.3%' }))
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
     expect(readMarketMonth).toHaveBeenCalledTimes(1)
-    const row = host.querySelector('[data-consensus]')!
+    const row = document.body.querySelector('[data-consensus]')!
     expect(row.getAttribute('data-consensus')).toBe('market')
     expect(row.textContent).toContain('0.3%')
     expect(row.textContent).toContain(text.details.consensusFromMarket)
@@ -221,15 +224,15 @@ describe('the drawer pairs an official event with its admitted market observatio
   it('says the expectation is missing when the paired observation has none either', async () => {
     const readMarketMonth = vi.fn(async () => linkedMarket(null))
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
-    expect(host.querySelector('[data-consensus="missing"]')?.textContent).toContain(text.details.consensusMissing)
+    expect(document.body.querySelector('[data-consensus="missing"]')?.textContent).toContain(text.details.consensusMissing)
   })
 
   it('says the market read failed, which is not the same as no expectation', async () => {
     const readMarketMonth = vi.fn(async () => { throw new Error('ipc down') })
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
-    const row = host.querySelector('[data-consensus]')!
+    const row = document.body.querySelector('[data-consensus]')!
     expect(row.getAttribute('data-consensus')).toBe('unreadable')
-    expect(host.querySelector('[data-consensus-gap]')?.textContent).toBe(text.details.consensusReadFailedReason)
+    expect(document.body.querySelector('[data-consensus-gap]')?.textContent).toBe(text.details.consensusReadFailedReason)
   })
 
   it('does not pair a different indicator that happens to share the release minute', async () => {
@@ -247,7 +250,7 @@ describe('the drawer pairs an official event with its admitted market observatio
     const readMarketMonth = vi.fn(async () => otherAtSameInstant)
     const host = await render(clientWith({ state: 'available', asOf, event: officialEvent() }), vi.fn(), readMarketMonth)
     // 没有映射 → 不配对：既不用那条 4.1%，也不说「未对上」（那同样是在断言两行同一件事）。
-    const row = host.querySelector('[data-consensus]')!
+    const row = document.body.querySelector('[data-consensus]')!
     expect(row.getAttribute('data-consensus')).toBe('missing')
     expect(row.textContent).not.toContain('4.1%')
     expect(host.textContent).not.toContain('未对上')

@@ -376,10 +376,23 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
  * 抽屉本身（`CalendarInspector` → 平台 `Drawer` inline）只在层内左侧落位，所以它会从
  * **整个应用的左缘**滑进来；层不接收指针，只有抽屉面板接收，背后的指标抽屉照旧可见。
  */
+/*
+ * **弹层层级：一处定义，规则只有一条「后打开的在上面」**（用户 2026-11-17）。
+ *
+ * 弹框（antd Modal）用 antd 默认的 1000；事件详情是在弹框之后打开的，所以必须在它上面。
+ * 不要把数字写进组件：层级只有这组 token，改一次全改。
+ * `--mi-layer-modal` 与 antd 的默认值同值，写在这里是为了让「谁比谁高」能一眼比出来。
+ */
+:root {
+  --mi-layer-modal: 1000;
+  --mi-layer-detail: 1200;
+  --mi-layer-floating: 1300;
+}
+
 .mk-detail-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: var(--mi-layer-detail);
   pointer-events: none;
 }
 
