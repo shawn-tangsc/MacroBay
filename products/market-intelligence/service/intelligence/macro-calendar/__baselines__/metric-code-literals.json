@@ -58,8 +58,8 @@
       "why": "0xrouter 的「源内 id → 指标码」表：id 与码都是字面量，这张表的存在就是「按来源分开的码空间」。本批补映射 +83，删映射要同笔减。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings.ts": {
-      "count": 725,
-      "why": "源内 id → 码的映射表：每条必须写出目标码，这是「这个源的这个 id 是什么」的唯一记录。只收期次可定、测度一致的；定不了的不写，所以条数少于源身份是有意的"
+      "count": 736,
+      "why": "源内 id → 码的映射表：每条必须写出目标码，这是「这个源的这个 id 是什么」的唯一记录。只收期次可定、测度一致的；定不了的不写，所以条数少于源身份是有意的 2026-11-18：+11 条是「源内 id → 码」的确定性补齐（11 条源标题剥掉期次后在该国码表里唯一命中，测度 MOM/YOY/QOQ 能定出期次）。"
     },
     "service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts": {
       "count": 117,
