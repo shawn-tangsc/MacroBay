@@ -211,7 +211,13 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         {conclusionHost ? createPortal(<LatestAnalysisConclusionCard
           text={detailText}
           // 读不到时用 productText 里既有那口径句（与抽屉同一句），不另写一版。
-          workspaceText={{ ...workspaceText, conclusionUnreadable: resolveWorkspaceText('pages.intelligence.portal.data.drawerUnavailable') }}
+          workspaceText={{
+            ...workspaceText,
+            conclusionUnreadable: resolveWorkspaceText('pages.intelligence.portal.data.drawerUnavailable'),
+            // 重试按钮的字与失败码的人话都复用时间轴那一份：两处各写一句，改一处就会分叉。
+            retryAnalysis: timelineText.retryAnalysis,
+            failureReasons: timelineText.failureReasons
+          }}
           timeline={timeline}
           onOpenDetail={entry => { setOpenEntry(entry); timeline.ensureDetail(entry) }}
           onOpenTimeline={() => setTimelineOpen(true)}

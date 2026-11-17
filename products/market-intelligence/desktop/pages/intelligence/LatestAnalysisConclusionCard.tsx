@@ -30,6 +30,15 @@ export type LatestConclusionText = Readonly<{
    * 可选：老调用点没有它时回落到 `latestConclusionUnavailable`，不因此不渲染。
    */
   conclusionUnreadable?: string
+  /**
+   * 「最近一次解析失败」这条提示的抬头。可选：没有它就整条不渲染（绝不硬编一句兜底）。
+   * 它住在 `analysisWorkspace` 组里，与这张卡的其余文案同源。
+   */
+  latestConclusionAttemptFailed?: string
+  /** 重试按钮的字（复用时间轴那条，不另写一句动作文案）。 */
+  retryAnalysis?: string
+  /** 失败码 → 人话（同一张表，时间轴与卡片读同一份，未知码不印码也不编句子）。 */
+  failureReasons?: Record<string, string>
   openDetail: string
 }>
 
@@ -58,6 +67,15 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   /** 读者点了正文、但详情还在读：读好之后自动打开抽屉（不是点完没反应）。 */
   const [openWhenReady, setOpenWhenReady] = useState(false)
   const latest = selectLatestPublishedEntry(state.entries)
+  // 外层这张卡只显示**已发布**的结论，于是「刚才那次失败了」在卡上原本一个字都没有：读者看到
+  // 20:10 的成功结论，以为它就是最新状态。条目按时间倒序，取第一条 `failed` 与已发布那条比时刻。
+  const latestFailure = state.entries.find((entry) => entry.status === 'failed')
+  const failureIsNewer = latestFailure !== undefined && (latest === undefined || latestFailure.occurredAt > latest.occurredAt)
+  // 有运行在跑时不给「重试」：点了只会被服务端单飞拦（那正是「能点但没用」）。跑完它自己会换态。
+  const runInFlight = state.entries.some((entry) => entry.status === 'running')
+  const failureReason = latestFailure?.failureCode === undefined || latestFailure.failureCode === null
+    ? undefined
+    : workspaceText.failureReasons?.[latestFailure.failureCode]
   const detail = latest ? details[latest.id] : undefined
   const pending = latest ? detailState[latest.id] : undefined
   // Both contract generations, read exactly as the drawer reads them: the structured conclusion
@@ -121,6 +139,16 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
         {onOpenTimeline ? <Button size="small" onClick={onOpenTimeline}>{openTimelineLabel}</Button> : null}
       </div>
     </header>
+    {/* 上一次成功照常显示，但**不许让人以为它代表最新一次**：失败条压在结论上面。 */}
+    {failureIsNewer ? <div className="mi-analysis-conclusion-card__attempt-failure" role="status" data-attempt-failure={latestFailure.failureCode ?? 'unknown'}>
+      <span className="mi-analysis-conclusion-card__attempt-failure-label">
+        {workspaceText.latestConclusionAttemptFailed ?? ''}（<time>{formatTime(latestFailure.occurredAt, 'minute')}</time>）
+      </span>
+      {failureReason ? <span className="mi-analysis-conclusion-card__attempt-failure-reason">{failureReason}</span> : null}
+      {runInFlight || workspaceText.retryAnalysis === undefined || workspaceText.latestConclusionAttemptFailed === undefined
+        ? null
+        : <Button size="small" onClick={() => void timeline.requestRefreshAnalysis()}>{workspaceText.retryAnalysis}</Button>}
+    </div> : null}
     {!latest && state.loading ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
     {/* 列表读失败 ≠ 没有结论。以前这里不区分，模块没启动时 reader 看到的是「暂无已发布的 AI 结论」——
         把「读不到」画成「没有」，正是这一轮反复防的那件事。失败走统一状态面 + 真重读整页。 */}
@@ -137,7 +165,7 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
       state="error"
     /> : null}
     {/* 只有「读成功且真的没有已发布条目」才说暂无。 */}
-    {!latest && !state.loading && !state.failed ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
+    {!latest && !state.loading && !state.failed && !failureIsNewer ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
     {latest && pending === 'loading' ? <div aria-label={workspaceText.openDetail} className="mi-analysis-conclusion-card__body mi-analysis-conclusion-card__body--action"
       onClick={requestOpen} onKeyDown={onBodyKeyDown} role="button" tabIndex={0}>
       <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} />

@@ -201,3 +201,87 @@ describe('the latest conclusion card when the timeline itself cannot be read', (
     expect(host?.querySelector('[data-state="error"]')).toBeNull()
   })
 })
+
+/**
+ * 外层卡也要说「刚才失败了」（用户 2026-11-18：「出现这种情况了，外面那层也要显示出来」）。
+ *
+ * 时间轴里有 00:54 的解析失败，卡上却还是 20:10 的成功结论、一个字不提——读者会把上次成功当成
+ * 现在。判据：① 有比已发布更新的失败时，卡上同时出现「那条已发布结论」与「最近一次解析失败（时刻）·
+ * 重试」；② 只有已发布时不许出现失败条；③ 时刻走统一格式化（`<time>`），句子用失败码对应的人话。
+ */
+describe('the latest conclusion card when the newest attempt failed', () => {
+  const publishedEntry = {
+    id: 'mi-tl-published', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-ok', kind: 'analysis' as const,
+    status: 'published' as const, runKey: 'mi-ar-ok', failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成',
+    safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType: 'sentiment', groupSubject: '新闻标题'
+  }
+  const failedEntry = {
+    ...publishedEntry,
+    id: 'run:mi-ar-fail', analysisRunId: 'mi-ar-fail', runKey: 'mi-ar-fail', status: 'failed' as const,
+    failureCode: 'analysis-provider-error', occurredAt: '2026-11-18T00:54:00.000Z',
+    summaryRef: null, safeTitle: '', safeExcerpt: null
+  }
+  const cardDetail = {
+    summary: {
+      id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-ok', eventGroupId: 'mi-eg-1', version: 1,
+      eventAssessment: '市场情绪偏谨慎', knownFacts: [], transmissionHypotheses: [], marketReaction: [],
+      supportingEvidence: [], counterEvidence: [], scenarios: [], nextCatalysts: [], dataCaveats: [],
+      evidenceRefs: [], createdAt: asOf
+    }
+  }
+  const cardWorkspaceText = {
+    ...workspaceText,
+    retryAnalysis: text.retryAnalysis,
+    failureReasons: text.failureReasons
+  }
+
+  function timelineWith(entries: readonly unknown[], extra: Record<string, unknown> = {}) {
+    return {
+      state: { entries, loading: false, failed: false, nextCursor: null },
+      details: { 'mi-tl-published': cardDetail },
+      detailState: {},
+      requestRefreshAnalysis: vi.fn(),
+      ensureDetail: vi.fn(),
+      ...extra
+    } as unknown as UseMarketAnalysisTimelineResult
+  }
+
+  async function mount(timeline: UseMarketAnalysisTimelineResult): Promise<void> {
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText: cardWorkspaceText, timeline, onOpenDetail: vi.fn() } as never))))
+  }
+
+  it('已发布 20:10 + 失败 00:54 → 结论与失败条同时在，重试真的重排一次', async () => {
+    const timeline = timelineWith([failedEntry, publishedEntry])
+    await mount(timeline)
+
+    // ① 上次成功的那条仍然在（不许把已发布内容撤掉）
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+    // ② 失败条可见：抬头 + 时刻 + 人话原因
+    const strip = host?.querySelector('[data-attempt-failure]')
+    expect(strip).not.toBeNull()
+    expect(strip?.textContent).toContain(cardWorkspaceText.latestConclusionAttemptFailed)
+    expect(strip?.querySelector('time')?.textContent ?? '').not.toBe('')
+    expect(strip?.textContent).toContain(text.failureReasons['analysis-provider-error'])
+    // 不印码
+    expect(strip?.textContent).not.toContain('analysis-provider-error')
+    // ③ 重试走「再分析一次」，不是刷新页面
+    const retry = Array.from(strip?.querySelectorAll('button') ?? []).find((button) => button.textContent === text.retryAnalysis)
+    expect(retry).toBeDefined()
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect((timeline as unknown as { requestRefreshAnalysis: ReturnType<typeof vi.fn> }).requestRefreshAnalysis).toHaveBeenCalledTimes(1)
+  })
+
+  it('只有已发布时，不许出现失败条', async () => {
+    await mount(timelineWith([publishedEntry]))
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+  })
+
+  it('只有失败、没有已发布时：说失败，不说「暂无」', async () => {
+    await mount(timelineWith([failedEntry], { details: {} }))
+    expect(host?.querySelector('[data-attempt-failure]')).not.toBeNull()
+    expect(host?.textContent).not.toContain(workspaceText.latestConclusionEmpty)
+  })
+})

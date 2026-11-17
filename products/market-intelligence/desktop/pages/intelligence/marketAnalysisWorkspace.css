@@ -32,6 +32,18 @@
 .mi-analysis-conclusion-card time { color: var(--muted); font-size: 11px; }
 .mi-analysis-conclusion-card__conclusion { margin: 0; color: var(--text-strong); font-size: 13px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
 .mi-analysis-conclusion-card__hint, .mi-analysis-conclusion-card__state { margin: 0; color: var(--muted); font-size: 10px; }
+/* 「最近一次解析失败」：压在结论上面的一条可见交代。
+   下面那条已发布结论仍然显示，但它**不是最新一次**——不写这一条，读者会把 20:10 的成功当成现在。 */
+.mi-analysis-conclusion-card__attempt-failure {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 10px; padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--caution) 45%, var(--border));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--caution) 10%, var(--surface));
+  font-size: var(--font-meta); line-height: var(--line-meta);
+}
+.mi-analysis-conclusion-card__attempt-failure-label { color: var(--text-strong); }
+.mi-analysis-conclusion-card__attempt-failure-reason { color: var(--muted); }
 
 /* 方向标记：受控词表 + 语义色；无标记的结论保持中性，不做猜测着色。 */
 .mi-analysis-conclusion__direction { display: inline-flex; align-items: center; margin-right: 6px; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--mi-conclusion-direction) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--mi-conclusion-direction) 14%, transparent); color: var(--mi-conclusion-direction); font-size: 10px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; vertical-align: middle; }
