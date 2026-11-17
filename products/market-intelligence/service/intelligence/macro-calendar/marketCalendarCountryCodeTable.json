@@ -2965,8 +2965,8 @@
     "names": {
       "zhFull": "规模以上工业增加值(月率)",
       "zhShort": "规模以上工业增加值(月率)",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "Value added of industrial enterprises above designated size (MoM)",
+      "enShort": "Value added of industrial enterprises above designated size (MoM)"
     },
     "tier": null,
     "parentCode": null,
@@ -2987,8 +2987,8 @@
     "names": {
       "zhFull": "规模以上工业增加值(年率)",
       "zhShort": "规模以上工业增加值(年率)",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "Value added of industrial enterprises above designated size (YoY)",
+      "enShort": "Value added of industrial enterprises above designated size (YoY)"
     },
     "tier": null,
     "parentCode": null,
@@ -5380,27 +5380,6 @@
     },
     "status": "active"
   },
-  "FI.CEO.NONE.LEVEL": {
-    "code": "FI.CEO.NONE.LEVEL",
-    "kind": "metric",
-    "countryCode": "FI",
-    "names": {
-      "zhFull": "欧洲央行管委雷恩与国际金融协会(IIF)CEO亚当斯就欧洲、美国及全球经济议题展",
-      "zhShort": "欧洲央行管委雷恩与国际金融协会(IIF)CEO亚当斯就欧洲、美国及全球经济议题展",
-      "enFull": "",
-      "enShort": ""
-    },
-    "tier": null,
-    "parentCode": null,
-    "childOrder": null,
-    "measure": "LEVEL",
-    "seasonality": "NONE",
-    "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
-    },
-    "status": "active"
-  },
   "FR.CDAF_COMPOSITE_PMI.NONE.LEVEL": {
     "code": "FR.CDAF_COMPOSITE_PMI.NONE.LEVEL",
     "kind": "metric",
@@ -5408,8 +5387,8 @@
     "names": {
       "zhFull": "综合采购经理人指数初值",
       "zhShort": "综合采购经理人指数初值",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "CDAF Composite PMI",
+      "enShort": "CDAF Composite PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -5429,8 +5408,8 @@
     "names": {
       "zhFull": "制造业采购经理人指数初值",
       "zhShort": "制造业采购经理人指数初值",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "CDAF Manufacturing PMI",
+      "enShort": "CDAF Manufacturing PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -5450,8 +5429,8 @@
     "names": {
       "zhFull": "服务业采购经理人指数初值",
       "zhShort": "服务业采购经理人指数初值",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "CDAF Services PMI",
+      "enShort": "CDAF Services PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -6374,8 +6353,8 @@
     "names": {
       "zhFull": "制造业采购经理人指数",
       "zhShort": "制造业采购经理人指数",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "CIPS Manufacturing PMI",
+      "enShort": "CIPS Manufacturing PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -6395,8 +6374,8 @@
     "names": {
       "zhFull": "服务业采购经理人指数",
       "zhShort": "服务业采购经理人指数",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "CIPS Services PMI",
+      "enShort": "CIPS Services PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -7468,8 +7447,8 @@
     "names": {
       "zhFull": "Rightmove平均房屋要价指数(月率)",
       "zhShort": "Rightmove平均房屋要价指数(月率)",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "Rightmove House Price Index (MoM)",
+      "enShort": "Rightmove House Price Index (MoM)"
     },
     "tier": null,
     "parentCode": null,
@@ -7490,8 +7469,8 @@
     "names": {
       "zhFull": "Rightmove平均房屋要价指数(年率)",
       "zhShort": "Rightmove平均房屋要价指数(年率)",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "Rightmove House Price Index (YoY)",
+      "enShort": "Rightmove House Price Index (YoY)"
     },
     "tier": null,
     "parentCode": null,
@@ -8071,8 +8050,8 @@
     "names": {
       "zhFull": "综合采购经理人指数",
       "zhShort": "综合采购经理人指数",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "ADACI Composite PMI",
+      "enShort": "ADACI Composite PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -8092,8 +8071,8 @@
     "names": {
       "zhFull": "制造业采购经理人指数",
       "zhShort": "制造业采购经理人指数",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "ADACI Manufacturing PMI",
+      "enShort": "ADACI Manufacturing PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -8113,8 +8092,8 @@
     "names": {
       "zhFull": "服务业采购经理人指数",
       "zhShort": "服务业采购经理人指数",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "ADACI Services PMI",
+      "enShort": "ADACI Services PMI"
     },
     "tier": null,
     "parentCode": null,
@@ -10262,8 +10241,8 @@
     "names": {
       "zhFull": "短观大型制造业资本支出",
       "zhShort": "短观大型制造业资本支出",
-      "enFull": "",
-      "enShort": ""
+      "enFull": "TANKAN Large Manufacturing Capital Expenditure",
+      "enShort": "TANKAN Large Manufacturing Capital Expenditure"
     },
     "tier": null,
     "parentCode": null,
@@ -11249,27 +11228,6 @@
       "pageKind": "data-api",
       "verifiedAt": "2026-11-18",
       "basis": "新西兰统计局 · 数据入口（兜底）"
-    },
-    "status": "active"
-  },
-  "NZ.ANDREW_TURNER.NONE.LEVEL": {
-    "code": "NZ.ANDREW_TURNER.NONE.LEVEL",
-    "kind": "metric",
-    "countryCode": "NZ",
-    "names": {
-      "zhFull": "新西兰联储货币组项目主管Andrew Turner参加一场座谈会",
-      "zhShort": "新西兰联储货币组项目主管Andrew Turner参加一场座谈会",
-      "enFull": "",
-      "enShort": ""
-    },
-    "tier": null,
-    "parentCode": null,
-    "childOrder": null,
-    "measure": "LEVEL",
-    "seasonality": "NONE",
-    "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
     },
     "status": "active"
   },
@@ -14440,27 +14398,6 @@
     },
     "status": "retired",
     "supersededBy": "US.PHILLY_FED_MANUFACTURING.SA.LEVEL"
-  },
-  "US.Q3.NONE.LEVEL": {
-    "code": "US.Q3.NONE.LEVEL",
-    "kind": "metric",
-    "countryCode": "US",
-    "names": {
-      "zhFull": "英伟达在美股盘后公布Q3财报",
-      "zhShort": "英伟达在美股盘后公布Q3财报",
-      "enFull": "",
-      "enShort": ""
-    },
-    "tier": null,
-    "parentCode": null,
-    "childOrder": null,
-    "measure": "LEVEL",
-    "seasonality": "NONE",
-    "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
-    },
-    "status": "active"
   },
   "US.REAL_GDP.NONE.ANNUALIZED_QOQ": {
     "code": "US.REAL_GDP.NONE.ANNUALIZED_QOQ",
