@@ -7,6 +7,7 @@ import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketC
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
 import { normalizeSourcePeriods, normalizeSourcePeriodsByShape } from '../intelligence/macro-calendar/marketCalendarSourcePeriodMigration'
 import { backfillObservationCountries } from '../intelligence/macro-calendar/marketCalendarObservationCountryBackfill'
+import { fillObservationCountriesByName } from '../intelligence/macro-calendar/marketCalendarObservationCountryNameFill'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
 import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
@@ -143,6 +144,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       if (periodByShape.rewritten > 0) {
         console.warn(`[macro-calendar] 期次按形状归一：重算 ${periodByShape.rewritten} 行、缺失 ${periodByShape.unknown} 行、`
           + `撞行 ${periodByShape.mergedGroups} 组、删 ${periodByShape.droppedRows} 行`)
+      }
+      // **按源给的国家名补 country_code（迁移 25）**：源一直给了名字，我们只是没做名字→码。
+      // 必须先于「按 indicatorId 继承」跑——名字是源的一手事实，继承只是二手补法。
+      const byName = fillObservationCountriesByName(database)
+      if (byName.updated > 0 || byName.unknownNames > 0) {
+        console.warn(`[macro-calendar] 观测国家按名补齐：补 ${byName.updated} 条`
+          + `、名字不在表里 ${byName.unknownNames} 条（不猜，需登记写法）`)
       }
       // **按 indicatorId 补观测的国家（迁移 24）**：同一个 id 就是同一个序列，它在别的观测里带过国家，
       // 这一条就该是那个国家——这是事实不是猜。必须先于国家码归一跑，否则补进来的三位写法当场又不规范。
