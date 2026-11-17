@@ -30,6 +30,8 @@ export const crossAssetTextKeys = Object.freeze({
   noComparableDataReason: 'pages.intelligence.portal.dashboard.crossAsset.lineNoComparableDataReason',
   /** 读数比阈值旧时挂在行名旁的那句（与 LiveBadge 同槽）。 */
   staleAsOf: 'pages.intelligence.portal.dashboard.crossAsset.staleAsOf',
+  /** 行名旁那颗 ⓘ：这一行的说明句只在浮层里，正文不留。 */
+  rowHint: 'pages.intelligence.portal.dashboard.crossAsset.rowHint',
   /** 供应商永久不提供这个品种：整行遮住，只留这一句状态。 */
   sourceRefused: 'pages.intelligence.portal.dashboard.crossAsset.sourceRefused',
   /** 标题右上的勾：不显示这类行（勾上＝隐藏）。 */

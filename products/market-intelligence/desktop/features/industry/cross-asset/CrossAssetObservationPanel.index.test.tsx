@@ -529,7 +529,7 @@ describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', ()
       expect(row.textContent).toContain(text.sourceRefused)
       expect(row.querySelector('[data-asset-price]')).toBeNull()
       expect(row.querySelector('[data-asset-return]')).toBeNull()
-      expect(row.querySelector('[data-reading-age]')).toBeNull()
+      expect(row.querySelector('button[aria-label]')).toBeNull()
       // 原因只在 ⓘ 里说一次。
       const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
       await act(async () => hint.click())

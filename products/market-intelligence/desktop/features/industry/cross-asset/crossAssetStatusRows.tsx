@@ -9,6 +9,9 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { crossAssetTextKeys } from './crossAssetTextKeys'
 import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover as FocusPopover } from '@platform/ui/components/popover'
+import { Info } from 'lucide-react'
 import { TriangleAlert } from 'lucide-react'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 // 「偏旧」的阈值只认仓里那一处定义：另开一个数，两处迟早漂成两种说法（界面设计 2026-11-16）。
@@ -20,6 +23,26 @@ import { dashboardPositioningPresentationPolicy } from '../../../pages/intellige
  * 从 `CrossAssetObservationPanel` 抽出来，只为一件事：那个文件被体积门禁挡在 500 行线上。
  * 抽的是**渲染**，不是新行为——同一个 Props、同一批键、同样的 `data-*` 标记，行为一模一样。
  */
+/**
+ * 行名旁那颗 ⓘ：这一行的**说明句**（原来印在名字下面那行灰字）。
+ *
+ * 一律用平台浮层：同一张表里同类入口不许两种形状——美元/黄金这类行除了说明句，还可能带
+ * 「偏旧 · 截至 …」，多行就得是浮层；只有一句的行也走同一个（用户 2026-11-16：正文不留说明文字）。
+ */
+export function RowHint({ id, name, lines }: { id: string; name: string; lines: readonly string[] }): React.ReactElement | null {
+  const resolveText = useProductTextKey()
+  if (lines.length === 0) return null
+  return <FocusPopover content={<div className="mi-cross-asset__row-hint" data-row-hint={id}>
+    {lines.map((line, index) => <p key={index}>{line}</p>)}
+  </div>}
+    trigger={(triggerProps) => (
+      <IconButton ariaLabelKey={crossAssetTextKeys.rowHint} ariaLabelParams={{ name }} expanded={triggerProps.expanded} icon={Info}
+        onBlur={triggerProps.onBlur} onFocus={triggerProps.onFocus} onMouseEnter={triggerProps.onMouseEnter}
+        onMouseLeave={triggerProps.onMouseLeave} onSelect={triggerProps.onSelect}
+        resolveText={resolveText} size="sm" variant="plain" />
+    )} />
+}
+
 export function indexRowName(snapshot: CrossAssetSnapshot | undefined, text: Text): string {
   return snapshot?.indexSource === 'real' ? text.indexNames.real : text.indexNames.proxy
 }
@@ -86,7 +109,7 @@ export function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMe
  */
 export function LoadingStatusRow({ id, text }: { id: MacroDriverId; text: Text }): React.ReactElement {
   return <tr data-status-row={id} data-connected="false" data-status-loading="true">
-    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
+    <th scope="row"><span>{text.assetLabels[id]}<RowHint id={id} name={text.assetLabels[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} /></span></th>
     <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><LoadingState layout="inline" size="sm" label={text.loading} /></td>
   </tr>
 }
@@ -94,7 +117,7 @@ export function LoadingStatusRow({ id, text }: { id: MacroDriverId; text: Text }
 /** No figure and no value cell at all: the row states the gap instead of filling it. */
 export function PlannedStatusRow({ id, text }: { id: MacroDriverId; text: Text }): React.ReactElement {
   return <tr data-status-row={id} data-connected="false">
-    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
+    <th scope="row"><span>{text.assetLabels[id]}<RowHint id={id} name={text.assetLabels[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} /></span></th>
     <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><span>{text.notConnected}</span><small>{text.notConnectedHint}</small></td>
   </tr>
 }
@@ -111,7 +134,7 @@ export function PlannedStatusRow({ id, text }: { id: MacroDriverId; text: Text }
 
 export function AssetStatusRow({ id, snapshot, text }: { id: CrossAssetId; snapshot?: CrossAssetSnapshot; text: Text }): React.ReactElement {
   return <tr data-status-row={id} data-connected="true">
-    <th scope="row"><span>{text.assets[id]}</span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
+    <th scope="row"><span>{text.assets[id]}<RowHint id={id} name={text.assets[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} /></span></th>
     <td data-asset-price={id}>{priceOf(snapshot, id)}</td>
     <WindowCells id={id} metrics={assetMetrics(snapshot, id)} text={text} />
   </tr>
@@ -136,7 +159,7 @@ export function IndexStatusRow({ snapshot, text, formatTime }: {
   if (source === 'unavailable') {
     return <tr data-status-row="index" data-connected="false" data-index-source="unavailable" data-market-state="unavailable"
       data-index-name={indexRowName(snapshot, text)}>
-      <th scope="row"><span>{indexRowName(snapshot, text)}</span><small>{text.statusReads.index}</small></th>
+      <th scope="row"><span>{indexRowName(snapshot, text)}<RowHint id="index" name={indexRowName(snapshot, text)} lines={[text.statusReads.index]} /></span></th>
       <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><span>{text.notConnected}</span><small>{text.notConnectedHint}</small></td>
     </tr>
   }
@@ -155,7 +178,7 @@ export function IndexStatusRow({ snapshot, text, formatTime }: {
         aria-label={text.proxyCaveat}>{text.proxyTag}</em> : null}
       {marketState === 'closed' ? <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
         aria-label={text.marketClosedHint}>{text.marketClosed}</em> : null}
-    </span>{text.statusReads.index ? <small>{text.statusReads.index}</small> : null}</th>
+    <RowHint id="index" name={indexRowName(snapshot, text)} lines={[text.statusReads.index]} /></span></th>
     <td data-asset-price="index" data-last-closed-at={lastClosed?.at}>{value === undefined ? text.notConnected : livePriceText(value)}</td>
     <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />
   </tr>
@@ -205,9 +228,8 @@ export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
       {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
           after the price reads as if it qualified the number itself. */}
       {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
-      {/* 新鲜时一个字都不加：旧了才说旧，且说清截至哪一刻。 */}
-      {age === undefined ? null : <small className="mi-cross-asset__reading-age" data-reading-age={id}>{age}</small>}
-    </span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
+    </span>
+    <RowHint id={id} name={text.assetLabels[id]} lines={[...(text.statusReads[id] ? [text.statusReads[id]] : []), ...(age === undefined ? [] : [age])]} /></th>
     <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>

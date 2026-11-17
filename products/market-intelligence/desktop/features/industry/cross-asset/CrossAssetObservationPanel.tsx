@@ -33,7 +33,7 @@ import { CrossAssetQuoteLegStatus } from './CrossAssetQuoteLegStatus'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
 import {
-  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
+  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, RowHint, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
   type MacroDriverId, type RowMetrics, type Text
 } from './crossAssetStatusRows'
 import { crossAssetTextKeys, crossAssetWindowLabelKeys } from './crossAssetTextKeys'
@@ -99,7 +99,7 @@ function RatesStatusRow({ id, reading, rates, text }: {
   // 这一格不是控件：撤掉浮层与焦点停靠，说明改由可访问名承载（同一件事不占一个键盘站）。
   const dailyDescription = dailyFacts.map(line => resolveText(line.labelKey)).join(text.hintListSep)
   return <tr data-status-row={id} data-connected="true" data-observation-date={reading.period}>
-    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
+    <th scope="row"><span>{text.assetLabels[id]}<RowHint id={id} name={text.assetLabels[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} /></span></th>
     <td data-asset-price={id}>{reading.actual.toFixed(2)}%</td>
     <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
       aria-label={dailyDescription}

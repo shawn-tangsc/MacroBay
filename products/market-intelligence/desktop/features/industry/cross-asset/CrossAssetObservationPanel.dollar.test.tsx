@@ -98,18 +98,21 @@ describe('the dollar row on the market-status table', () => {
     expect(tag(host)).toBeNull()
   })
 
-  it('says how old the level is once it passes the one stale threshold, and nothing while it is fresh', async () => {
-    // 新鲜时一个字都不加：一条每 5 分钟更新的读数挂一句「截至」只会变成噪声。
+  it('keeps the row description in the ⓘ, and adds the age sentence there only once stale', async () => {
+    // 正文不再印说明文字：行名旁只有一颗 ⓘ，浮层里第一段是这一行的说明句。
     const fresh = await render(snapshotOf([realReading()]))
-    expect(fresh.querySelector('[data-reading-age="dxy"]')).toBeNull()
+    const freshTrigger = fresh.querySelector<HTMLButtonElement>('[data-status-row="dxy"] button[aria-label]')!
+    await act(async () => freshTrigger.click())
+    expect(document.body.textContent).toContain(text.statusReads.dxy)
+    // 新鲜时浮层里没有那句日期。
+    expect(document.body.textContent).not.toContain('偏旧 · 截至')
+  })
 
-    // 31 分钟（> 仓里那一处 30 分钟阈值）就说旧，并给出截至哪一刻——时间由格式化器给，不在这里拼。
+  it('moves the age sentence into the same ⓘ once the reading passes the one stale threshold', async () => {
     const stale = await render(snapshotOf([realReading(asOfMs - 31 * 60_000)]))
-    const age = stale.querySelector('[data-reading-age="dxy"]')
-    expect(age?.textContent).toBe('偏旧 · 截至 2026-09-14 11:29:00 GMT')
-    // 它是说明，不是控件。
-    expect(age?.getAttribute('tabindex')).toBeNull()
-    expect(age?.closest('button')).toBeNull()
+    const trigger = stale.querySelector<HTMLButtonElement>('[data-status-row="dxy"] button[aria-label]')!
+    await act(async () => trigger.click())
+    expect(document.body.textContent).toContain('偏旧 · 截至 2026-09-14 11:29:00 GMT')
   })
 
   it('hides rows whose source is unavailable by default, and the switch brings the covered row back', async () => {
@@ -126,7 +129,7 @@ describe('the dollar row on the market-status table', () => {
     expect(row?.textContent).toContain(text.sourceRefused)
     expect(row?.querySelector('[data-asset-price]')).toBeNull()
     expect(row?.querySelectorAll('[data-asset-return]')).toHaveLength(0)
-    expect(row?.querySelector('[data-reading-age]')).toBeNull()
+    expect(row?.querySelector('button[aria-label]')).toBeNull()
 
     await act(async () => toggle.click())
     expect(dollarRow(host)).toBeNull()

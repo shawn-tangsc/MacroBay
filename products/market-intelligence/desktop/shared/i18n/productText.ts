@@ -560,6 +560,8 @@ mi: miText['zh-CN'],
                   'index-proxy': '纳指取的是代币化代理', 'dxy-synthetic': '美元为合成指数', 'gold-synthetic': '黄金为合成报价'
                 }
               },
+              /* 行名旁那颗 ⓘ 的可访问名：这一行的说明句只在它的浮层里。 */
+              rowHint: '{name}：这一行的说明',
               statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', us10y: '名义资金成本', realRate: '与 BTC 关系最直接', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
               btcIndex: 'BTC − 纳斯达克 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: '样本', coverage: '历史覆盖',
               states: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', limited: '资源受限', unavailable: '不可用', missing: '无数据' },
@@ -2078,6 +2080,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   'index-proxy': 'the index leg is the tokenised proxy', 'dxy-synthetic': 'the dollar is a synthetic index', 'gold-synthetic': 'gold is a synthetic quote'
                 }
               },
+              rowHint: '{name}: about this row',
               statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', us10y: 'Nominal cost of money', realRate: 'The most direct link to BTC', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
               btcIndex: 'BTC − Nasdaq 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: 'Samples', coverage: 'History coverage',
               states: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', limited: 'Resource limited', unavailable: 'Unavailable', missing: 'No data' },
