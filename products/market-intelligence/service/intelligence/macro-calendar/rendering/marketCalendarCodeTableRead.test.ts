@@ -17,10 +17,14 @@ describe('码表读口', () => {
   it('整表下发：指标 224 / 事件 20；待补的行必须带闭集理由，有页的行必须有 URL', () => {
     const read = readCalendarCodeTable(database)
     if (read.state !== 'available') throw new Error('unavailable')
-    expect(read.counts).toMatchObject({ total: 244, metric: 224, event: 20 })
+    // 码表 = 244 条既有码 + 603 条按国家新建的码（去重后 824）；不写死行数，
+    // 断「事件 20 条固定、指标占绝大多数」——否则每建一批码都要改一次数字。
+    expect(read.counts.event).toBe(20)
+    expect(read.counts.metric).toBeGreaterThan(700)
+    expect(read.counts.total).toBe(read.counts.metric + read.counts.event)
     // 已经按机构补了一批（Destatis 等），所以两个数都不写死，只断关系：
     expect(read.counts.withOfficialSource).toBeGreaterThan(0)
-    expect(read.counts.withOfficialSource + read.counts.pendingOfficialSource).toBe(244)
+    expect(read.counts.withOfficialSource + read.counts.pendingOfficialSource).toBe(read.counts.total)
     for (const row of read.rows) {
       const source = row.officialSource
       if ('pending' in source) expect(source.reason).toBe('official-source-todo')

@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { CodeStatus, CodeTableRow, NotBuiltReason, OfficialSource, PendingReason } from '../marketCalendarCodeTable'
 import { marketCalendarCodeTable } from '../marketCalendarCodeTable'
+import { marketCalendarCountryCodeTable } from '../marketCalendarCountryCodeTable'
 import { marketCalendarCountryNames } from '../marketCalendarDisplayNameTables'
 import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
 import { zeroXRouterIndicatorIdentities } from '../marketCalendarMetricIdentity'
@@ -86,7 +87,9 @@ export function readCalendarCodeTable(database: DatabaseSync): CodeTableRead {
         releaseRows.set(row.metric_key, Number(row.n))
       }
     }
-    const rows: CodeTableReadRow[] = Object.values(marketCalendarCodeTable)
+    // **两张表并成一个视图**：244 条既有码 + 603 条按国家新建的码，同一个码只出现一次。
+    const mergedRows = { ...marketCalendarCodeTable, ...marketCalendarCountryCodeTable }
+    const rows: CodeTableReadRow[] = Object.values(mergedRows)
       .sort((left, right) => left.code.localeCompare(right.code))
       .map((row) => Object.freeze({
         code: row.code,
