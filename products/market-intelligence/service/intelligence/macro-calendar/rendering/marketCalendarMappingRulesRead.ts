@@ -6,6 +6,7 @@ import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../m
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
 import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
 import { germanSourceMetricMappings } from '../marketCalendarGermanSourceMappings'
+import { marketCalendarCountrySourceMappings } from '../marketCalendarCountrySourceMappings'
 import { subItemOrderOf, subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
 
@@ -162,6 +163,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       ...Object.entries(zeroXRouterIndicatorIdentities),
       ...Object.entries(zeroXRouterSourceMetricMappings),
       ...Object.entries(germanSourceMetricMappings),
+      // 按国家建码的第二批映射（1106 条）：映射是机械的，判断在族名表里做完了。
+      ...Object.entries(marketCalendarCountrySourceMappings),
       // 事件型（`evt.*`）：它们不是指标，但同样「已经认出身份」，所以不再算未映射
       ...Object.entries(zeroXRouterEventIdentities)
     ]

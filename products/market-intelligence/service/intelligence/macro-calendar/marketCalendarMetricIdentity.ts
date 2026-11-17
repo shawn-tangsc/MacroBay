@@ -1,4 +1,5 @@
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
+import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySourceMappings'
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 
@@ -343,7 +344,8 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   // 事件型先查（它们不是指标，也不按国家分表：一场讲话的身份是「类型 + 日期」+ 国家）。
   const entry = zeroXRouterEventIdentities[row.indicatorId] ?? (row.countryCode === 'DE'
     ? germanSourceMetricMappings[row.indicatorId]
-    : zeroXRouterIndicatorIdentities[row.indicatorId] ?? zeroXRouterSourceMetricMappings[row.indicatorId])
+    : zeroXRouterIndicatorIdentities[row.indicatorId] ?? zeroXRouterSourceMetricMappings[row.indicatorId]
+      ?? marketCalendarCountrySourceMappings[row.indicatorId])
   if (!entry) return undefined
   // 事件型：期次就是那一场活动的日期（UTC 当天），不落到月，避免同月多场被并成一条。
   if (entry.periodRule === 'event_date') {
