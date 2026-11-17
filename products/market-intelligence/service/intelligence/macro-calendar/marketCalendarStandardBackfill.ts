@@ -348,8 +348,16 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       // 源内身份：源里确实有这次发布，只是还没有标准码——照样进日历，不跨源合并。
       // 身份用**源自己的发布 id**；解出了标准码的那一档保留码（它确实指向某个指标）。
       const sourceIdentity = identity === undefined ? String(row.source_event_id) : metricKey
-      // 没有期间可借时，身份落在**发布时刻**上（到分钟）——与实时写入的「源内身份」同一条规则。
-      const sourcePeriod = identity === undefined ? scheduledAt!.slice(0, 16) : periodKey
+      /**
+       * 算不出标准码的那一档**也没有期次**，于是这里原来拿发布时刻顶（`2026-11-16T13:30`）。
+       * 那是同一类错，只是换了个分支：读者看到的「期次」是那一刻几点发的，不是这一期是什么。
+       * 现在与有码那一档同一条规则——标题解得出来就用，解不出就记明确缺失
+       * （`unknown:<source_event_id>`，每行唯一，不会与他行同期）。
+       */
+      const sourcePeriod = identity === undefined
+        ? (periodFromSourceTitle(String(row.display_name ?? ''), scheduledDate)?.periodKey
+          ?? `unknown:${String(row.source_event_id)}`)
+        : periodKey
       standardRows.push({ ...shared, metricKey: sourceIdentity, periodKey: sourcePeriod,
         identityKind: 'source' as const, ...(sourceName === '' ? {} : { sourceLabel: sourceName }) })
       source += 1

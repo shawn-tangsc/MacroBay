@@ -225,6 +225,27 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
     expect(row.country_code).toBe('US')
   })
 
+  /**
+   * 同一类错的第二条支路：**算不出标准码**的行（源内身份）在旧代码里拿发布时刻当期次
+   * （`2026-11-16T13:30`）。真库实测：写入端归一之后新行里仍有 136 行是这个形状，
+   * 因为那些行走的是这一档。期次归一只改一半，等于没改。
+   */
+  it('源内身份行也按期次规则走：标题有 (Sep) 就用 2026-09，不用发布时刻', () => {
+    const database = openOldDatabase()
+    ensureCalendarStandardTables(database)
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["999999",1]', '0xrouter', null, 'Unmapped survey (Sep)', 'USA', '999999', 'economic-indicator',
+        '2026-11-06', '2026-11-06T13:30:00.000Z', null, null, '2.0', 'high', null, '2026-11-14T00:00:00.000Z')`).run()
+    backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    const row = database.prepare('select metric_key, period_key, identity_kind from mi_calendar_events').get() as
+      { metric_key: string; period_key: string; identity_kind: string }
+    expect(row.identity_kind).toBe('source')
+    expect(row.period_key).toBe('2026-09')
+  })
+
   it('标题没有期次后缀 → 明确缺失的 unknown:<国家>~<码>~<发布日>，不拿发布时刻顶', () => {
     const database = openOldDatabase()
     ensureCalendarStandardTables(database)
