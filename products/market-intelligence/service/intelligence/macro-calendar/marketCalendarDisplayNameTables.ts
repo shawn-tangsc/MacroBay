@@ -70,7 +70,9 @@ export const marketCalendarCountryNames: Readonly<Record<string, Readonly<{ zh: 
   IT: { zh: '意大利', en: 'Italy' },
   JP: { zh: '日本', en: 'Japan' },
   CN: { zh: '中国', en: 'China' },
-  EU: { zh: '欧元区', en: 'Euro area' }
+  EU: { zh: '欧元区', en: 'Euro area' },
+  // `EMU` 是我们唯一的非 ISO 例外（欧元区没有 alpha-2），国名与 `EU` 同义。
+  EMU: { zh: '欧元区', en: 'Euro area' }
 })
 
 /** 源类型显示名：源给的类型串 → 中文名。都是类型，不含个体。 */

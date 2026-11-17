@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { localizedPairFor } from '../marketCalendarCodeNames'
+import { marketCalendarCodeTable } from '../marketCalendarCodeTable'
 import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
 import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
@@ -113,40 +114,17 @@ type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string 
  * - 推不出来的（ISM、S&P Global、密歇根、谘商会、MBA、Baker Hughes、各地区联储调查等）
  *   一律 `null`：它们的公开页要逐条核过才敢写（#34 的白名单），猜一个比空着坏。
  */
-function officialPageFor(metricKey: string): Readonly<{ url: string; basis: string }> | null {
-  const key = metricKey
-  if (key.startsWith('US.CPI.') || key.startsWith('US.CORE_CPI.') || key.startsWith('US.PPI.')
-    || key.startsWith('US.CORE_PPI.') || key.startsWith('US.EXPORT_PRICES')) {
-    return { url: 'https://www.bls.gov/news.release/', basis: 'BLS · 发布页（news.release 目录）' }
-  }
-  if (key.startsWith('US.NONFARM.') || key.startsWith('US.UNEMPLOYMENT') || key.startsWith('US.AHE.')
-    || key.startsWith('US.REAL_AHE.') || key.startsWith('US.PARTICIPATION_RATE') || key.startsWith('US.AVERAGE_WEEKLY_HOURS')
-    || key.startsWith('US.PRIVATE_PAYROLLS') || key.startsWith('US.JOLTS')) {
-    return { url: 'https://www.bls.gov/news.release/', basis: 'BLS · 发布页（news.release 目录）' }
-  }
-  if (key.startsWith('US.JOBLESS_CLAIMS')) return { url: 'https://www.dol.gov/ui/data.pdf', basis: 'DOL · 周度申领报告' }
-  if (key.startsWith('US.GDP') || key.startsWith('US.PCE.') || key.startsWith('US.CORE_PCE.')
-    || key.startsWith('US.PERSONAL_') || key.startsWith('US.CORPORATE_PROFITS') || key.startsWith('US.TRADE_BALANCE')
-    || key.startsWith('US.EXPORTS') || key.startsWith('US.IMPORTS')) {
-    return { url: 'https://www.bea.gov/news', basis: 'BEA · 发布页（news 目录）' }
-  }
-  if (key.startsWith('US.FOMC')) return { url: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm', basis: 'Fed · FOMC 日历页' }
-  if (key.startsWith('US.EIA_')) return { url: 'https://www.eia.gov/petroleum/supply/weekly/', basis: 'EIA · 周度石油状况报告' }
-  if (key.startsWith('US.FEDERAL_BUDGET')) return { url: 'https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/', basis: '财政部 · 月度报表' }
-  if (key.startsWith('US.RETAIL_SALES') || key.startsWith('US.DURABLE_GOODS') || key.startsWith('US.FACTORY_ORDERS')
-    || key.startsWith('US.BUILDING_PERMITS') || key.startsWith('US.HOUSING_STARTS') || key.startsWith('US.NEW_HOME_SALES')
-    || key.startsWith('US.BUSINESS_INVENTORIES') || key.startsWith('US.WHOLESALE_') || key.startsWith('US.CONSTRUCTION_SPENDING')
-    || key.startsWith('US.CORE_CAPEX_ORDERS')) {
-    return { url: 'https://www.census.gov/economic-indicators/', basis: '普查局 · 经济指标页' }
-  }
-  // 商业/会员机构与地区联储调查：公开页要逐条核（#34 白名单），现在一律 null。
-  return null
+/**
+ * **官网只从码表拿**（用户 2026-11-17）。这里原来是一条 17 个 `startsWith` 的 if 链——那是第二份真源，
+ * 会和码表分叉；现在只查码表：有机构页就返回，`pending` 就返回 null（界面显示「待核」）。
+ */
+export function officialPageFor(metricKey: string): Readonly<{ url: string; basis: string }> | null {
+  const row = marketCalendarCodeTable[metricKey]
+  if (row === undefined) return null
+  const source = row.officialSource
+  return 'pending' in source ? null : { url: source.url, basis: source.basis }
 }
 
-/**
- * 指标码 → 中英名（只读名表，不拼码）：`zh` 用简称、`en` 用全名。
- * 名表没有这条就 `null`——**宁可不显示，也不写一个读起来像专名的码**。
- */
 export function mappingRuleNames(metricKey: string): Readonly<{ zh: string; en: string }> | null {
   const pair = localizedPairFor(metricKey)
   return pair === undefined ? null : Object.freeze({ ...pair })

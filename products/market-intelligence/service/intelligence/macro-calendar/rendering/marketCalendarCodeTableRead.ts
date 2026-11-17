@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { CodeStatus, CodeTableRow, NotBuiltReason, OfficialSource, PendingReason } from '../marketCalendarCodeTable'
 import { marketCalendarCodeTable } from '../marketCalendarCodeTable'
+import { marketCalendarCountryNames } from '../marketCalendarDisplayNameTables'
 import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
 import { zeroXRouterIndicatorIdentities } from '../marketCalendarMetricIdentity'
 import { zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
@@ -20,6 +21,13 @@ export type CodeTableReadRow = Readonly<{
   code: string
   kind: CodeTableRow['kind']
   names: CodeTableRow['names']
+  /**
+   * 国家码（`US`/`DE`/`EMU`）；没有国家的事件写 null，不猜。**读口一定会给**；类型上可缺是为了兼容
+   * 还没跟上这条形状的旧夹具——界面缺这两个字段就不显示国家列，不画一个空列。
+   */
+  countryCode?: string | null
+  /** 国家名的**中文**写法，取自现有国名表——渲染层不许自己拼，否则同一国家会有两种写法。 */
+  countryName?: string | null
   tier: CodeTableRow['tier']
   measure: string | null
   seasonality: string | null
@@ -58,6 +66,8 @@ export function readCalendarCodeTable(_database: DatabaseSync): CodeTableRead {
         code: row.code,
         kind: row.kind,
         names: row.names,
+        countryCode: row.countryCode,
+        countryName: row.countryCode === null ? null : (marketCalendarCountryNames[row.countryCode]?.zh ?? null),
         tier: row.tier,
         // 事件行没有测度与季调档：给 null，不编一个「LEVEL」。
         measure: row.kind === 'metric' ? row.measure : null,
