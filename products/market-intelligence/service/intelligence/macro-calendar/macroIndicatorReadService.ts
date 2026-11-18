@@ -89,19 +89,25 @@ export function createMacroIndicatorReadService(
           const reading = await dependencies.readOfficialYoY!(fact.metricKey).catch((): FredYoYReading => ({ state: 'unavailable', seriesId: '', reason: 'read-failed' }))
           return applyOfficialYoY(fact, reading)
         }))
+      /**
+       * 期次层的「为什么没有数」先算：它决定**这一格属于哪一期**。
+       *
+       * 顺序很重要：先补值再判原因，会把 CPI 2026-10 的「无此数据」用 2026-09 的旧值填掉——
+       * 9 月有数是事实，但它不是这一格要显示的那一期。
+       */
+      const withGap = dependencies.readCardGap === undefined
+        ? withOfficial
+        : withOfficial.map((fact) => {
+          const gap = dependencies.readCardGap!(fact.metricKey, asOf)
+          return gap === undefined ? fact : Object.freeze({ ...fact, gap })
+        })
       // 本期值的兜底：标准表里同一天可能有「官方空行 + 旧源有值行」，取有值的那行。
       const withStandard = dependencies.readStandardActual === undefined
-        ? withOfficial
-        : withOfficial.map((fact) => applyStandardActual(fact, dependencies.readStandardActual!(fact.metricKey, asOf)))
-      const withNext = dependencies.nextReleaseFor === undefined
+        ? withGap
+        : withGap.map((fact) => applyStandardActual(fact, dependencies.readStandardActual!(fact.metricKey, asOf)))
+      return dependencies.nextReleaseFor === undefined
         ? withStandard
         : await Promise.all(withStandard.map((fact) => withNextRelease(fact, dependencies, asOf)))
-      if (dependencies.readCardGap === undefined) return withNext
-      // 期次层的「为什么没有数」：待发布 / 无此数据 / 未提供。**只挂在这一格上**，不改整码状态。
-      return withNext.map((fact) => {
-        const gap = dependencies.readCardGap!(fact.metricKey, asOf)
-        return gap === undefined ? fact : Object.freeze({ ...fact, gap })
-      })
     }
   }
 }
@@ -173,6 +179,11 @@ function applyStandardActual(
   rows: readonly Readonly<{ period?: string; releasedAt: string; observedAt: string; providerId: string; actual: string }>[]
 ): MacroIndicatorCardFact {
   if (fact.state === 'provided' && fact.value !== undefined) return fact
+  /**
+   * **这一期已经有说法了**（无此数据 / 未提供）：不要拿更早那期的值把它填上。
+   * 那是另一期的数——放在这一格会让读者把 9 月的数当成 10 月的。
+   */
+  if (fact.gap?.missing !== undefined) return fact
   const row = rows.find((entry) => entry.period === undefined || fact.period === undefined || entry.period === fact.period)
   if (row === undefined) return fact
   const value = parseSourceNumber(row.actual)

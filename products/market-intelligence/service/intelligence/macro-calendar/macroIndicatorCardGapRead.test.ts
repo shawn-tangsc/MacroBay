@@ -73,3 +73,47 @@ describe('readMacroIndicatorCardGap', () => {
     expect(readMacroIndicatorCardGap(seed(), { metricKey: 'US.NOT.THERE', asOf: now })).toBeUndefined()
   })
 })
+
+/**
+ * **默认期次 = 最近一期有已发布内容的期次**（用户 2026-11-19，Chief 转达）：
+ * PCE 1–9 月有值、10/11 月是 scheduled 时，卡片必须落在 9 月，不能因为"未来还有一期"就写成待发布。
+ * 只有**全部期次都未发布**时，才显示最近一期的「待发布」。
+ */
+describe('default period', () => {
+  const seedWith = (rows: readonly Readonly<{ period: string; date: string; at?: string; scheduled?: boolean; actual?: string }>[]): DatabaseSync => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    for (const row of rows) {
+      upsertCalendarStandardRow(database, {
+        countryCode: 'US', metricKey: 'US.PCE.SA.MOM', periodKey: row.period, scheduledDate: row.date,
+        ...(row.at === undefined ? {} : { scheduledAt: row.at }),
+        timePrecision: row.at === undefined ? 'date' as const : 'minute' as const,
+        status: row.scheduled === true ? 'scheduled' as const : 'published' as const,
+        valuesJson: row.actual === undefined ? '{}' : JSON.stringify({ actual: row.actual }),
+        sourceProviderId: 'narwhal', sourceEventId: `pce-${row.period}`,
+        parserVersion: 'v1', observedAt: now, firstSeenAt: now
+      })
+    }
+    return database
+  }
+
+  it('leaves the choice to the value chain when an earlier period already has a value', () => {
+    // PCE 形状：1–9 月有值，10/11 月未发布 → 不给「待发布」，卡片落在 9 月（值由读数链给）。
+    const database = seedWith([
+      { period: '2026-08', date: '2026-09-30', actual: '0.32' },
+      { period: '2026-09', date: '2026-10-29', actual: '0.49' },
+      { period: '2026-10', date: '2026-11-25', at: '2026-11-25T13:30:00.000Z', scheduled: true },
+      { period: '2026-11', date: '2026-12-23', at: '2026-12-23T13:30:00.000Z', scheduled: true }
+    ])
+    expect(readMacroIndicatorCardGap(database, { metricKey: 'US.PCE.SA.MOM', asOf: now })).toBeUndefined()
+  })
+
+  it('reports the nearest upcoming period only when nothing has been published at all', () => {
+    const database = seedWith([
+      { period: '2026-10', date: '2026-11-25', at: '2026-11-25T13:30:00.000Z', scheduled: true },
+      { period: '2026-11', date: '2026-12-23', at: '2026-12-23T13:30:00.000Z', scheduled: true }
+    ])
+    expect(readMacroIndicatorCardGap(database, { metricKey: 'US.PCE.SA.MOM', asOf: now }))
+      .toEqual({ pending: { period: '2026-10', releaseAt: '2026-11-25T13:30:00.000Z' } })
+  })
+})

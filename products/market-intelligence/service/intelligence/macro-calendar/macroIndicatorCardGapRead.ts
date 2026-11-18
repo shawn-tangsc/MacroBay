@@ -41,6 +41,20 @@ export function readMacroIndicatorCardGap(
       })
     }
     /**
+     * **默认期次 = 最近一期有已发布内容的期次**（用户 2026-11-19，Chief 转达）：
+     * 只要过去有一期**有值**（`values_json` 带 actual），卡片就该落在那一期上，
+     * 不能因为"未来还有一期没发布"就把整张卡写成「待发布」——PCE 的 1–9 月都有值、
+     * 10 月 11-25 才发，卡片必须落在 9 月。
+     *
+     * 有内容的历史期存在时这里返回 `undefined`：值由读数那条链给，本函数不掺和。
+     */
+    const publishedWithValue = database.prepare(`select 1 from mi_calendar_events
+      where metric_key = ? and row_kind = 'release'
+        and coalesce(scheduled_at, scheduled_date) < ?
+        and values_json like '%"actual"%'
+      limit 1`).get(input.metricKey, input.asOf)
+    if (publishedWithValue !== undefined) return undefined
+    /**
      * 待发布：**排期在 asOf 之后**的那一行（`scheduled`），取最近一期——
      * 隔两期之后的事不是「这一期还没发布」，写成待发布会让读者以为下一期马上到。
      */
