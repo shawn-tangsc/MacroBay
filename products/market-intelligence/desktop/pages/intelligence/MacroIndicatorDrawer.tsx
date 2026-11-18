@@ -238,6 +238,11 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     reasonAll: text.mkDay.mappingReasonAll,
     tierStars: text.mkDay.mappingTierStars, tierAria: text.mkDay.mappingTierAria,
     tierFilterMulti: text.mkDay.mappingTierFilterMulti, countryFilterMulti: text.mkDay.mappingCountryFilterMulti,
+    officialFilterMulti: text.mkDay.mappingOfficialFilterMulti,
+    officialStates: {
+      checked: text.mkDay.mappingOfficialChecked, pending: text.mkDay.mappingOfficialPending,
+      none: text.mkDay.mappingOfficialNone
+    },
     exportLabel: text.mkDay.mappingExport,
     tabEvents: text.mkDay.mappingTabEvents, eventColumns: text.mkDay.mappingEventColumns,
     eventsEmpty: text.mkDay.mappingEventsEmpty, sheetEvents: text.mkDay.mappingSheetEvents,

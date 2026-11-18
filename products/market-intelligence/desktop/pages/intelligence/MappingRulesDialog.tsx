@@ -65,6 +65,12 @@ export type MappingRulesText = Readonly<{
   tierAria: Readonly<Record<'1' | '2' | '3' | 'other', string>>
   tierFilterMulti: string
   countryFilterMulti: string
+  /**
+   * **官网页筛选**（用户 2026-11-19）：三档与那一列同义——已核（有机构页）/ 待核（还没核到）/
+   * `—`（不建或退役，没有页）。多选，选项只列当前表里真实出现过的档。
+   */
+  officialFilterMulti: string
+  officialStates: Readonly<Record<'checked' | 'pending' | 'none', string>>
   unmappedEmpty: string
   /** 「只看有数据的」：860 个码里只有约 570 个真落过行，打开时第一眼该看到有内容的。 */
   onlyWithData: string
@@ -141,6 +147,8 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
   const [countries, setCountries] = useState<readonly string[]>([])
   /** 分级筛选（**多选**）：空数组 = 全部。档位键 `1|2|3|other`。 */
   const [tiers, setTiers] = useState<readonly string[]>([])
+  /** 官网页筛选（**多选**）：空数组 = 全部。档位键 `checked|pending|none`。 */
+  const [officials, setOfficials] = useState<readonly string[]>([])
   const [tab, setTab] = useState<'codes' | 'unmapped' | 'events'>('codes')
   const [codePage, setCodePage] = useState(1)
   const [unmappedPage, setUnmappedPage] = useState(1)
@@ -165,6 +173,24 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
     for (const row of events.rows) seen.add(row.countryName ?? '—')
     return [...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))
   }, [events])
+  /**
+   * 官网页三档，**只有这一处判定**：列里的显示与筛选选项都走它。
+   *
+   * `not-built`/`retired` 是「决定不补」，不是「待补」——它们与「还没核到」必须分开，
+   * 否则读者会把「不打算建页」当成「等我们补」。
+   */
+  const officialStateOf = (row: CodeTableReadRow): 'checked' | 'pending' | 'none' =>
+    row.status === 'not-built' || row.status === 'retired' ? 'none'
+      : 'pending' in row.officialSource ? 'pending' : 'checked'
+  /** 官网页选项：只列当前表里真实出现过的档，与列同义。 */
+  const officialOptions = useMemo(() => {
+    if (codes?.state !== 'available') return [] as { value: string; label: string }[]
+    const seen = new Set<string>()
+    for (const row of codes.rows) seen.add(officialStateOf(row))
+    const order = ['checked', 'pending', 'none'] as const
+    return order.filter((key) => seen.has(key))
+      .map((key) => ({ value: key, label: text.officialStates[key] }))
+  }, [codes, text.officialStates])
   /**
    * 分级选项：只列**当前表里真实出现过**的档位。
    *
@@ -193,10 +219,11 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
       .filter((row) => countries.length === 0 || countries.includes(row.countryName ?? '—'))
       .filter((row) => tiers.length === 0
         || tiers.includes(row.tier === null ? 'other' : String(row.tier)))
+      .filter((row) => officials.length === 0 || officials.includes(officialStateOf(row)))
       .filter((row) => !onlyWithData || row.releaseRowCount > 0)
     return [...rows].sort((left, right) =>
       right.releaseRowCount - left.releaseRowCount || left.code.localeCompare(right.code))
-  }, [codes, needle, countries, tiers, onlyWithData])
+  }, [codes, needle, countries, tiers, officials, onlyWithData])
   const unmappedRows = useMemo(() => {
     if (view?.state !== 'available') return []
     return view.unmapped
@@ -233,8 +260,10 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
   }
 
   const officialCell = (row: CodeTableReadRow): React.ReactElement | string => {
+    // 三档判定与筛选**共用 `officialStateOf`**：两处各写一遍，就会出现「列里待核、按已核能筛到」。
+    const state = officialStateOf(row)
     // 决定不建、已经退役的码不放链接：那不是「待补」，是「不打算补」。
-    if (row.status === 'not-built' || row.status === 'retired') return text.officialNone
+    if (state === 'none') return text.officialNone
     if ('pending' in row.officialSource) {
       // `待核` 是纯文字，理由放 title：**不渲染成链接**，否则读者会以为点得开。
       return <span data-official-pending title={row.officialSource.reason}>{text.officialPending}</span>
@@ -449,6 +478,11 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
           value={[...tiers]} aria-label={text.tierFilterMulti} placeholder={text.tierFilterMulti}
           options={tierOptions} onChange={(value) => { setTiers(value); setCodePage(1) }}
           data-tier-filter maxTagCount="responsive" /> : null}
+        {/* 官网页筛选（用户 2026-11-19）：与国家和分级同一形态；三档与列同义，清空即全部。 */}
+        {tab === 'codes' ? <Select mode="multiple" allowClear size="small" className="mi-catalog__filter-select"
+          value={[...officials]} aria-label={text.officialFilterMulti} placeholder={text.officialFilterMulti}
+          options={officialOptions} onChange={(value) => { setOfficials(value); setCodePage(1) }}
+          data-official-filter maxTagCount="responsive" /> : null}
       </div>
       <div className="mi-catalog__table">{body}</div>
       <div className="mi-catalog__footer">

@@ -41,6 +41,8 @@ const text = {
   reasonAll: mkDay.mappingReasonAll,
   tierStars: mkDay.mappingTierStars, tierAria: mkDay.mappingTierAria,
   tierFilterMulti: mkDay.mappingTierFilterMulti, countryFilterMulti: mkDay.mappingCountryFilterMulti,
+  officialFilterMulti: mkDay.mappingOfficialFilterMulti,
+  officialStates: { checked: mkDay.mappingOfficialChecked, pending: mkDay.mappingOfficialPending, none: mkDay.mappingOfficialNone },
   countryAll: mkDay.mappingCountryAll, countryFilter: mkDay.mappingCountryFilter,
   exportLabel: mkDay.mappingExport,
   resolveCopy: (key: string) => (mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
@@ -344,4 +346,45 @@ it('lists events on their own tab, without the mapping-only filters', async () =
   // 这一页没有原因筛选、没有分级筛选（它们属于「该归到码上的数据」那一页）。
   expect(document.body.querySelector('[data-reason-filter]')).toBeNull()
   expect(document.body.querySelector('[data-tier-filter]')).toBeNull()
+})
+
+/**
+ * 官网页筛选（用户 2026-11-19）：多选、选项只列真实出现过的档、与其他筛选「且」、清空回全量。
+ *
+ * 三档与那一列同义：`已核`（有机构页）/ `待核`（还没核到）/ `—`（不建或退役，没有页）。
+ */
+async function pickFilterOption(filter: string, label: string): Promise<void> {
+  const selector = document.body.querySelector(`${filter} .ant-select-selector`) as HTMLElement
+  await act(async () => { selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+  const option = [...document.querySelectorAll('.ant-select-item-option')]
+    .find((node) => (node.textContent ?? '').trim() === label) as HTMLElement | undefined
+  expect(option, `下拉里没有「${label}」这一项`).toBeDefined()
+  await act(async () => { option!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+}
+
+const visibleCodes = (): string[] => rows().map((row) => row.querySelector('[data-code]')?.getAttribute('title') ?? '')
+
+it('filters the code table by official page, alone and together with the country filter', async () => {
+  await mount()
+  expect(visibleCodes()).toHaveLength(3)
+
+  // ① 只看「待核」→ 只剩没有官网页的那条。
+  await pickFilterOption('[data-official-filter]', '待核')
+  expect(visibleCodes()).toEqual(['US.NO_SOURCE.NONE.LEVEL'])
+
+  // ② 再勾「已核」→ 同一筛选内部是「或」：两条都在；「不建」那条仍然不在。
+  await pickFilterOption('[data-official-filter]', '已核')
+  expect(visibleCodes().sort()).toEqual(['US.CORE_PCE.NSA.YOY', 'US.NO_SOURCE.NONE.LEVEL'])
+
+  // ③ 清空 → 回到全量。
+  const clear = document.body.querySelector('[data-official-filter] .ant-select-clear') as HTMLElement | null
+  expect(clear, '多选框应当有清除按钮').not.toBeNull()
+  await act(async () => { clear!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+  expect(visibleCodes()).toHaveLength(3)
+
+  // ④ 国家 + 官网页同时选 → 取交集（美国 + 待核 = 只有那条）。
+  // 夹具里「待核」那条没有国家：先按国家选美国，再勾「已核」→ 只有核心 PCE 一条。
+  await pickFilterOption('[data-country-filter]', '美国')
+  await pickFilterOption('[data-official-filter]', '已核')
+  expect(visibleCodes()).toEqual(['US.CORE_PCE.NSA.YOY'])
 })

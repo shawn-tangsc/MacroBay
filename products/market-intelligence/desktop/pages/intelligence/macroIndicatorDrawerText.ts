@@ -208,6 +208,8 @@ export const macroIndicatorDrawerText = {
       mappingTierStars: { '1': '★★★', '2': '★★', '3': '★', other: '—' },
       mappingTierAria: { '1': '一级（三颗星）', '2': '二级（两颗星）', '3': '三级（一颗星）', other: '未分级' },
       mappingTierFilterMulti: '按分级筛选（可多选）', mappingCountryFilterMulti: '按国家筛选（可多选）',
+      /* 官网页筛选：三档与那一列同义（已核 = 有机构页；待核 = 还没核到；— = 不建/退役，没有页）。 */
+      mappingOfficialFilterMulti: '按官网页筛选（可多选）', mappingOfficialChecked: '已核',
       /* 分级的中文名：导出里与星级同一格（`★★★ 一级`），界面只画星星，读屏名另有一套。 */
       mappingTierNames: { '1': '一级', '2': '二级', '3': '三级', other: '未分级' },
       /* 第三个页签：经济事件与央行活动——**不参与映射**，所以这一页没有原因筛选，也没有分级。 */
@@ -392,6 +394,7 @@ export const macroIndicatorDrawerText = {
       mappingTierStars: { '1': '★★★', '2': '★★', '3': '★', other: '—' },
       mappingTierAria: { '1': 'Tier 1 (three stars)', '2': 'Tier 2 (two stars)', '3': 'Tier 3 (one star)', other: 'Untiered' },
       mappingTierFilterMulti: 'Filter by tier (multi)', mappingCountryFilterMulti: 'Filter by country (multi)',
+      mappingOfficialFilterMulti: 'Filter by official page (multi)', mappingOfficialChecked: 'Verified',
       mappingTierNames: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Untiered' },
       mappingTabEvents: 'Events ({count})',
       mappingEventColumns: { time: 'Time', country: 'Country', title: 'Title', provider: 'Source', status: 'Status' },
