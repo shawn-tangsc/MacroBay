@@ -163,6 +163,14 @@
 .mi-cross-asset__status-table tbody th .mi-cross-asset__row-name { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; white-space: nowrap; max-width: 100%; }
 /* 弹层触发器的直接子项是 Popover 的锚点 span（里面才是 button），所以 `flex: none` 下到直接子项。 */
 .mi-cross-asset__status-table tbody th .mi-cross-asset__row-name > * { flex: none; }
+/*
+ * 壳层 `apps/desktop-shell/.../styles.css` 还有一条**同名**的 `.icon-button`（32px 高、1px 描边、
+ * 宽 32），与平台组件的 `.icon-button` 撞在一起：平台 `plain` 的「无边框透明底」被那条盖掉，
+ * 于是每颗 ⓘ 都像一枚 22px 的小方块（用户 2026-11-18：「那么大，好丑啊」）。
+ * 这里只在本卡作用域内按回平台的本意（特异性 0,2,0 > 0,1,0，不用 !important）；
+ * 类名冲突本身归前端组件线，已单独报。
+ */
+.mi-cross-asset__row-name .icon-button { border: 0; background: transparent; }
 .mi-cross-asset__status-table tbody th small { color: var(--muted); font-size: 9.5px; font-weight: 400; }
 .mi-cross-asset__status-table tbody td { text-align: right; white-space: nowrap; font-size: 9.5px; }
 /* One hairline between numeric columns, header included: four windows of signed percentages need a

@@ -51,7 +51,7 @@ export function RowHint({ id, name, lines }: { id: string; name: string; lines: 
  * 撑住，标签（代理/休市/实时）留在这个容器外面，窄列时它们自己换行，但图标永远贴着名字。
  */
 export function RowName({ name, hint }: { name: string; hint?: React.ReactNode }): React.ReactElement {
-  return <span className="mi-cross-asset__row-name">{name}{hint}</span>
+  return <span className="mi-cross-asset__row-name">{hint}{name}</span>
 }
 
 export function indexRowName(snapshot: CrossAssetSnapshot | undefined, text: Text): string {

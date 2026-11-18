@@ -653,14 +653,18 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     const iconAt = css.indexOf('.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name > * {')
     expect(css.slice(iconAt, css.indexOf('}', iconAt))).toContain('flex: none')
 
-    // 结构：图标在名字那一组里面，不是 th 的裸兄弟（裸兄弟才会被排到下一行）。
+    // 结构：图标与名字同一组、不是裸兄弟，且**排在名字前面**（用户 2026-11-18：「放标题前面试试看」）。
     const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
     try {
       for (const id of ['index', 'btc', 'eth', 'dxy'] as const) {
         const th = page.host.querySelector(`[data-status-row="${id}"] th`)!
-        expect(th.querySelector('.mi-cross-asset__row-name button[aria-label]')).not.toBeNull()
+        const group = th.querySelector('.mi-cross-asset__row-name')!
+        expect(group.querySelector('button[aria-label]')).not.toBeNull()
         expect(th.querySelector(':scope > button')).toBeNull()
+        expect(group.firstElementChild?.querySelector('button[aria-label]')).not.toBeNull()
       }
+      // 壳层那条同名 `.icon-button` 的描边被本卡按回无边框（否则每颗 ⓘ 都像一枚小方块）。
+      expect(css).toContain('.mi-cross-asset__row-name .icon-button { border: 0; background: transparent; }')
     } finally { await page.unmount() }
   })
 
