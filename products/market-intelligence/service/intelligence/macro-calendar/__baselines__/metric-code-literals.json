@@ -74,7 +74,7 @@
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ca.ts": {
-      "count": 58,
+      "count": 59,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ch.ts": {
@@ -110,7 +110,7 @@
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/jp.ts": {
-      "count": 96,
+      "count": 100,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/kr.ts": {

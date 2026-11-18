@@ -6,6 +6,10 @@ import type { ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
  * 只收期次可定、测度一致的映射；目标码必须存在于码表（守卫在索引里断）。
  */
 export const mapping_JP: Readonly<Record<string, Readonly<{ metricKey: string; periodRule: ZeroXRouterPeriodRule }>>> = Object.freeze({
+  '4261': { metricKey: 'JP.PURCHASED_FOREIGN_STOCKS_WEEK.NONE.AMOUNT', periodRule: 'week_end' },
+  '4263': { metricKey: 'JP.PURCHASED_FOREIGN_BONDS_WEEK.NONE.AMOUNT', periodRule: 'week_end' },
+  '4266': { metricKey: 'JP.FOREIGN_INVESTORS_BOUGHT_JAPAN_STOCKS_DAY.NONE.AMOUNT', periodRule: 'week_end' },
+  '4269': { metricKey: 'JP.WEEK_FOREIGN_INVESTORS_BOUGHT_DAY_BONDS.NONE.AMOUNT', periodRule: 'week_end' },
   '206580': { metricKey: 'JP.INVENTORY.NONE.MOM', periodRule: 'month' },
   '212244': { metricKey: 'JP.ALL_HOUSEHOLD_EXPENDITURES.NONE.MOM', periodRule: 'month' },
   '212260': { metricKey: 'JP.LEADING_METRIC.NONE.MOM', periodRule: 'month' },
