@@ -255,7 +255,7 @@ describe('per-feed schedule registration follows the enabled feeds', () => {
       readEnabledFeeds: enabled,
       refreshAutomatic: async () => ({ state: 'completed', items: [] })
     })
-    return { scheduler, ids: () => [...scheduled.keys()].sort() }
+    return { scheduler, ids: () => [...scheduled.keys()].sort(), definitionOf: (id: string) => scheduled.get(id) }
   }
 
   const definitionIdFor = (sourceId: string): string => {
@@ -289,6 +289,30 @@ describe('per-feed schedule registration follows the enabled feeds', () => {
     enabled = []
     await scheduler.syncSchedule()
     expect(ids()).toEqual([])
+    scheduler.dispose()
+  })
+
+  /**
+   * 2026-11-19 用户定：源端瞬断靠**一次**重试吃掉，不等到下个 10 分钟周期。
+   * 只加一次——源若在限流，第二次重试会把偶发失败放大成连续失败。
+   */
+  it('每路只带一次重试（30 秒后），且最坏时长短于周期——重试不会与下个 tick 并发', async () => {
+    const { scheduler, definitionOf } = reconcileHarness(() => twoFeeds)
+    await scheduler.initialize()
+    for (const sourceId of twoFeeds) {
+      const definition = definitionOf(definitionIdFor(sourceId))!
+      const retry = definition.retryPolicy!
+      const timeoutMs = definition.timeoutMs!
+      expect(retry).toEqual({
+        maxAttempts: 2, backoff: 'fixed', baseDelayMs: 30_000, maxDelayMs: 30_000
+      })
+      // 重试复用同一次运行、同一条定义：`concurrencyKey` 就是这一路自己的 handler id，
+      // 所以重试期间下个 tick 想跑也会被同一条 key 挡住（平台按 key 串行）。
+      expect(definition.concurrencyKey).toBe(definition.handlerId)
+      // 预算：两次尝试的超时 + 一次退避，必须仍小于 30 分钟的周期，否则重试会撞进下一个 tick。
+      expect(timeoutMs * retry.maxAttempts + retry.baseDelayMs)
+        .toBeLessThan(zeroXRouterCalendarSchedulerPolicy.intervalMs)
+    }
     scheduler.dispose()
   })
 
