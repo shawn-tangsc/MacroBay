@@ -63,15 +63,20 @@ describe('the conclusion language note', () => {
     // ⓘ 的读屏名是短名，不是整句说明。
     const info = row.querySelector('button[aria-label]') as HTMLButtonElement
     expect(info.getAttribute('aria-label')).toBe('语言说明')
-    const regenerate = [...row.querySelectorAll('button')].find(button => button.textContent === text.regenerateConclusion)!
+    // 「重新生成」是这一屏自己的动作，不在那条语言说明里（曾经误嵌在里面：没有语言说明时整个
+    // 动作都不渲染，市场分析组因此白丢一个入口）。
+    expect(row.textContent).not.toContain(text.regenerateConclusion)
+    const regenerate = [...host.querySelectorAll('button')].find(button => button.textContent === text.regenerateConclusion)!
     act(() => { regenerate.click() })
     expect(onRegenerate).toHaveBeenCalledTimes(1)
   })
 
-  it('says nothing when the record carries no language (older summaries)', () => {
+  it('says nothing about language when the record carries none (older summaries), and still offers regenerate', () => {
+    // 旧记录没有语言字段：不标注、不猜。但「重新生成」与语言无关，它必须还在——这条动作曾因为
+    // 被嵌进语言说明的条件里而一起消失。
     render(detail({ schemaVersion: 1 }), vi.fn())
     expect(host.querySelector('.mi-analysis-conclusion__language')).toBeNull()
-    expect(host.querySelector('button')).toBeNull()
+    expect([...host.querySelectorAll('button')].some(button => button.textContent === text.regenerateConclusion)).toBe(true)
   })
 
   it('says nothing when the recorded language is the one being read', () => {
