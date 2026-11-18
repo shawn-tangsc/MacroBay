@@ -1,7 +1,6 @@
 import type { NotificationEventDeclaration } from '../../../platform/notifications/contracts/notificationEventCatalog'
 
 import { notificationEvent } from './notificationEventDeclaration'
-import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS } from './notificationEventKeys'
 
 /**
  * R42：资金面读数变了 → 应用内提醒（用户 2026-11-18「每次 etf 和稳定币有数据更新了，应用内要弹框」）。
@@ -14,9 +13,12 @@ import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS } from './notificatio
  *
  * 声明住在这里而不是 `product.manifest.ts`：那个文件已经越过 500 行门禁，新事件往里堆就是
  * 让门禁红上加红。装配端仍从 manifest 的 `notificationEvents` 收表，这里只把两条整块搬出来。
+ *
+ * **id 必须写成字面量**：仓库级生产者门禁以 `notificationEvent('…')` 的实参当作「受管事件的登记处」，
+ * 写成 `IDS.xxx` 常量它读不到，提交点里的 `EVENT_IDS.xxx` 就解析不出来，事件会被判成「声明了没人发」。
  */
 export const capitalFlowNotificationEvents: readonly NotificationEventDeclaration[] = Object.freeze([
-  notificationEvent(IDS.capitalFlowEtfUpdated, {
+  notificationEvent('market-intelligence.capital-flow.etf-updated', {
     category: 'reminder',
     // 两种正文：新的一天 / 你已经看过的那天被修订。变体名与文案表的 `…body.<variant>` 逐字对应。
     bodyVariants: ['arrived', 'revised'],
@@ -30,7 +32,7 @@ export const capitalFlowNotificationEvents: readonly NotificationEventDeclaratio
     dedupeUnit: 'occurrence',
     requestedBypassQuietHours: false
   }),
-  notificationEvent(IDS.capitalFlowStablecoinUpdated, {
+  notificationEvent('market-intelligence.capital-flow.stablecoin-updated', {
     category: 'reminder',
     body: true,
     requiresUserAction: false,
