@@ -9009,8 +9009,8 @@
     "names": {
       "zhFull": "同步指标修正值",
       "zhShort": "同步指标修正值",
-      "enFull": "Conference Board Coincident Index (MoM)",
-      "enShort": "Conference Board Coincident Index (MoM)"
+      "enFull": "Coincident Index (Level)",
+      "enShort": "Coincident Index"
     },
     "tier": null,
     "parentCode": null,
@@ -9508,7 +9508,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.FOREIGN_INVESTORS_BOUGHT_JAPAN_STOCKS_DAY.NONE.AMOUNT"
   },
   "JP.FOREIGN_STOCK_PURCHASES.NONE.LEVEL": {
     "code": "JP.FOREIGN_STOCK_PURCHASES.NONE.LEVEL",
@@ -10062,7 +10063,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.PURCHASED_FOREIGN_BONDS_WEEK.NONE.AMOUNT"
   },
   "JP.PURCHASED_FOREIGN_STOCKS_WEEK.NONE.AMOUNT": {
     "code": "JP.PURCHASED_FOREIGN_STOCKS_WEEK.NONE.AMOUNT",
@@ -10110,7 +10112,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.PURCHASED_FOREIGN_STOCKS_WEEK.NONE.AMOUNT"
   },
   "JP.REAL_GDP.NONE.AMOUNT": {
     "code": "JP.REAL_GDP.NONE.AMOUNT",
@@ -10689,7 +10692,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.WEEK_FOREIGN_INVESTORS_BOUGHT_DAY_BONDS.NONE.AMOUNT"
   },
   "KR.CONSUMER_CONFIDENCE.NONE.LEVEL": {
     "code": "KR.CONSUMER_CONFIDENCE.NONE.LEVEL",
