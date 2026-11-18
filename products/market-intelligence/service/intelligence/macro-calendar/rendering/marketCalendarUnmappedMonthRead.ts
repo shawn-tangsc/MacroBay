@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import type { CalendarUnmappedReason } from '../marketCalendarStandardTable'
+import { groupUnmappedByRelease, mergedReasonOf } from '../marketCalendarUnmappedGrouping'
 
 /**
  * **仅渲染层**：某一月里「进不了标准表」的观测（用户 2026-11-16 拍板）。
@@ -80,6 +81,17 @@ function parseRaw(raw: string): Record<string, unknown> {
 }
 
 /** 月视图的一行：`month` 是 `YYYY-MM`。日期按 `raw_json.scheduledDate` 取（源里的原值）。 */
+/** 源内 id：`["<id>",<序号>]` 取第一段；不是数组（测试或旧数据）就用整串，不抛。 */
+function sourceIdOf(sourceKey: string): string {
+  try {
+    const parsed: unknown = JSON.parse(sourceKey)
+    if (Array.isArray(parsed) && parsed.length > 0) return String(parsed[0])
+  } catch {
+    // 不是 JSON 就当整串是 id
+  }
+  return sourceKey
+}
+
 export function listUnmappedCalendarObservationsForRendering(
   database: DatabaseSync,
   input: Readonly<{ month: string }>
@@ -139,7 +151,24 @@ export function listUnmappedCalendarObservationsForRendering(
     // 事件不进映射列表（它们有自己的页），也不在这里返回行——事件读口只一处。
     if (row.reason !== 'unknown-event-type') entries.push(entry)
   }
+  // **一场发布一行**（Chief 2026-11-18）：中英两条只作标签、原因只写一条。合并逻辑只有一份
+  // （`marketCalendarUnmappedGrouping`），弹框列表、页签计数、导出都从同一个函数取。
+  const grouped = groupUnmappedByRelease(entries.map((entry) => ({
+    ...entry,
+    sourceId: sourceIdOf(entry.sourceKey),
+    hasStandardRow: promoted.get(entry.sourceKey) !== undefined,
+  })))
+  const merged = grouped.map((group) => {
+    const first = group[0]!
+    const titles = [...new Set(group.map((item) => item.title))]
+    return Object.freeze({
+      ...first,
+      title: titles.join(' · '),
+      // 只有「中英两条并成一条」时才重定原因；单条保持它自己真实的原因（别把 no-code 改写成别的）。
+      reason: (group.length > 1 ? mergedReasonOf(group) : first.reason) as CalendarUnmappedReason,
+    })
+  })
   return Object.freeze({
-    entries: Object.freeze(entries), undated, superseded, noStandardRow, events, noCode, periodUnresolved
+    entries: Object.freeze(merged), undated, superseded, noStandardRow, events, noCode, periodUnresolved
   })
 }
