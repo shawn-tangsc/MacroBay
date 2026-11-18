@@ -87,3 +87,20 @@ describe('未映射原因重算：recomputeUnmappedReasons', () => {
     expect(reasonsOf(database)).toEqual([{ reason: 'missing-country' }])
   })
 })
+
+describe('名字规范化：区间括号（2026-11-18）', () => {
+  it('带「（至0925）」的样名剥掉后能命中该国码；不带括号的不受影响', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // `JP.PURCHASED_FOREIGN_BONDS_WEEK.NONE.AMOUNT` 在码表里；源标题带着「（至0925）」。
+    recordCalendarUnmapped(database, unmappedRow({
+      sourceKey: '["999001",2]',
+      rawJson: JSON.stringify({ name: 'Purchased foreign bonds last week (billion yen)（至0925）', eventKind: 'economic-indicator' }),
+    }))
+    // 用一个**不在映射表里**的源内 id：这样分类只取决于名字能不能对上码，而不是映射。
+    upsertCalendarStandardRow(database, standardRow({ sourceEventId: '["999001",2]', countryCode: 'JP' }))
+    recomputeUnmappedReasons(database)
+    // 剥掉区间括号后名字是「purchased foreign bonds last week (billion yen)」，与码表英文名一致。
+    expect(reasonsOf(database)).toEqual([{ reason: 'period-unresolved' }])
+  })
+})

@@ -35,6 +35,12 @@ export type UnmappedReasonReport = Readonly<{
   counts: Readonly<Partial<Record<string, number>>>
 }>
 
+/**
+ * **区间括号**（`（至0925）` / `(to 0925)`）：它是源标题里「截至哪一天」的区间写法，不是期次词，
+ * 也不是码名的一部分。剥掉只用于**比对**，落库的 raw 一个字不改（Chief 2026-11-18）。
+ */
+const RANGE_PARENTHETICAL = /[（(]\s*(?:至|to)\s*\d{4}\s*[）)]/giu
+
 const PERIOD = [/^第[一二三四]季度/u, /^\d{4}年/u, /^\d{1,2}月/u, /^\d{1,2}-\d{1,2}月/u,
   /\((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\)/iu, /\(Q[1-4]\)/iu]
 const STAGE = [/\(Preliminary\)/iu, /\(Final\)/iu, /\(Revised\)/iu, /^初值/u, /^终值/u, /^修正值/u,
@@ -42,7 +48,7 @@ const STAGE = [/\(Preliminary\)/iu, /\(Final\)/iu, /\(Revised\)/iu, /^初值/u, 
 
 /** 剥掉期次与阶段后比对：名字属于那一行，码不该带着它。 */
 function comparableName(name: string): string {
-  let text = name.replaceAll('（', '(').replaceAll('）', ')').trim()
+  let text = name.replace(RANGE_PARENTHETICAL, '').replaceAll('（', '(').replaceAll('）', ')').trim()
   for (let round = 0; round < 4; round += 1) {
     const before = text
     for (const pattern of PERIOD) text = text.replace(pattern, '').trim()
