@@ -120,6 +120,13 @@ export type MappingRulesRead = Readonly<{
    * 一场讲话不是指标，不进 `mapped`；但它确实被认出来了，界面上要用这个数解释「为什么未映射少了、
    * 已映射没涨」。事件一条都不进本表的行。
    */
+  /**
+   * **诊断明细**：四类各自的行（只读、折叠显示，**不进主列表**）。用户 2026-11-18：
+   * 主列表正常情况下是空的；但「没有对应的码」那 61 条任何时刻都该查得到是什么、什么时候出现的。
+   *
+   * 数据来自 `mi_calendar_unmapped`（唯一真源，一行一个 id），不再从观测表反推。
+   */
+  diagnosticRows: Readonly<Partial<Record<UnmappedReason, readonly UnmappedSourceIdRow[]>>>
   counts: Readonly<{
     mapped: number
     /** **只算真正在等映射的**（事件/无标准行/缺期次/无码都排除，见 `diagnostics`）。 */
@@ -273,8 +280,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
     const DIAGNOSTIC_ONLY = new Set(['unknown-event-type', 'no-standard-row', 'period-unresolved',
       'bad-period', 'no-code'])
     const reasonById = new Map<string, string>()
-    const reasonRows = database.prepare(`select source_key, reason from mi_calendar_unmapped`).all() as unknown as
-      { source_key: string; reason: string }[]
+    const reasonRows = database.prepare(`select provider_id, source_key, reason, first_seen_at
+      from mi_calendar_unmapped`).all() as unknown as
+      { provider_id: string; source_key: string; reason: string; first_seen_at: string | null }[]
     for (const row of reasonRows) {
       const id = sourceIdOfSourceKey(row.source_key)
       if (id !== undefined && !reasonById.has(id)) reasonById.set(id, row.reason)
@@ -334,10 +342,32 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         reason: reasonFor.get(entry.sourceId) ?? 'no-code',
         sampleLabel: entry.sampleLabel, sampleLabelEn: entry.sampleLabelEn }))
       .sort((left, right) => right.rowCount - left.rowCount || left.sourceId.localeCompare(right.sourceId))
+    /**
+     * 诊断明细：只读 `mi_calendar_unmapped`（唯一真源），一行一个 id。
+     * 标题从事件行取（同一 id 可能有多行，取第一份有名字的）；取不到就空着，不编。
+     */
+    const diagnosticRows: Partial<Record<UnmappedReason, UnmappedSourceIdRow[]>> = {}
+    for (const row of reasonRows) {
+      const id = sourceIdOfSourceKey(row.source_key)
+      if (id === undefined) continue
+      const reason = row.reason as UnmappedReason
+      const aggregate = byId.get(id)
+      const entry = Object.freeze({
+        sourceId: id, rowCount: aggregate?.rows ?? 0,
+        firstSeenAt: row.first_seen_at ?? null, providerIds: Object.freeze([row.provider_id]),
+        reason, sampleLabel: aggregate?.sampleLabel ?? null, sampleLabelEn: aggregate?.sampleLabelEn ?? null
+      })
+      diagnosticRows[reason] = [...(diagnosticRows[reason] ?? []), entry]
+    }
+    for (const reason of Object.keys(diagnosticRows) as UnmappedReason[]) {
+      diagnosticRows[reason] = [...diagnosticRows[reason]!].sort((left, right) =>
+        (left.firstSeenAt ?? '').localeCompare(right.firstSeenAt ?? '') || left.sourceId.localeCompare(right.sourceId))
+    }
     return Object.freeze({
       state: 'available' as const,
       mapped: Object.freeze(mapped),
       unmapped: Object.freeze(unmapped),
+      diagnosticRows: Object.freeze(diagnosticRows),
       counts: Object.freeze({ mapped: mapped.length, unmapped: unmapped.length,
         unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0),
         eventIdentities: Object.keys(zeroXRouterEventIdentities).length,

@@ -38,6 +38,7 @@ const text = {
   unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
   unmappedReasons: mkDay.mappingUnmappedReasons, reasonFilter: mkDay.mappingReasonFilter,
   reasonAll: mkDay.mappingReasonAll,
+  diagnosticsTitle: mkDay.mappingDiagnosticsTitle, diagnosticsNote: mkDay.mappingDiagnosticsNote,
   countryAll: mkDay.mappingCountryAll, countryFilter: mkDay.mappingCountryFilter,
   exportLabel: mkDay.mappingExport,
   resolveCopy: (key: string) => (mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
@@ -71,7 +72,12 @@ const view: MappingRulesRead = {
   unmapped: [{ sourceId: '10267', rowCount: 8, firstSeenAt: '2026-11-17T02:00:00.000Z',
     providerIds: ['0xrouter'], reason: 'no-code' as const,
     sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
-  counts: { mapped: 0, unmapped: 1, unmappedRows: 8, eventIdentities: 99 } as never
+  diagnosticRows: { 'no-code': [{ sourceId: '10267', rowCount: 8, firstSeenAt: '2026-11-17T02:00:00.000Z',
+    providerIds: ['0xrouter'], reason: 'no-code' as const,
+    sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }] },
+  counts: { mapped: 0, unmapped: 1, unmappedRows: 8, eventIdentities: 99,
+    diagnostics: { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 1 },
+    unclassified: 0 }
 }
 
 let root: Root | undefined
@@ -255,4 +261,8 @@ it('explains the empty state and shows first-seen, sources and the raw title on 
     .find((tab) => (tab.textContent ?? '').includes('未映射')) as HTMLElement
   await act(async () => { emptyTab.click() })
   expect(document.body.textContent).toContain('暂无未收录的新事件')
+  // 主列表空着，但诊断区仍能查到那几条：折叠块里带 原因 · 标题 · 首次出现 · 来源。
+  expect(document.body.querySelector('[data-diagnostics]')).not.toBeNull()
+  expect(document.body.querySelectorAll('[data-diagnostic-row]')).toHaveLength(1)
+  expect(document.body.textContent).toContain('没有对应的码')
 })

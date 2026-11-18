@@ -236,6 +236,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     unmappedColumns: text.mkDay.mappingUnmappedColumns, unmappedEmpty: text.mkDay.mappingUnmappedEmpty,
     unmappedReasons: text.mkDay.mappingUnmappedReasons, reasonFilter: text.mkDay.mappingReasonFilter,
     reasonAll: text.mkDay.mappingReasonAll,
+    diagnosticsTitle: text.mkDay.mappingDiagnosticsTitle, diagnosticsNote: text.mkDay.mappingDiagnosticsNote,
     exportLabel: text.mkDay.mappingExport,
     // 说明句由弹框自己按键取（它只出现在 ⓘ 里）；这里只交一个「键 → 文案」的查表函数。
     resolveCopy: (key) => (text.mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,

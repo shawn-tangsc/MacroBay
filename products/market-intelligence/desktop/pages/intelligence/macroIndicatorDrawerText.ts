@@ -204,6 +204,8 @@ export const macroIndicatorDrawerText = {
         'no-values': '这次没带数值'
       },
       mappingReasonFilter: '按原因筛选', mappingReasonAll: '全部原因',
+      mappingDiagnosticsTitle: '诊断：没进日历的东西',
+      mappingDiagnosticsNote: '这些不在上面的列表里——它们各有去处，点开能看具体是哪几条。',
       catalogTitle: '全部事件',
       catalogOpenAria: '打开全部事件表',
       catalogNameFilter: '按名称筛选（中英均可）',
@@ -373,6 +375,8 @@ export const macroIndicatorDrawerText = {
         'no-values': 'No values in this release'
       },
       mappingReasonFilter: 'Filter by reason', mappingReasonAll: 'All reasons',
+      mappingDiagnosticsTitle: 'Diagnostics: what did not reach the calendar',
+      mappingDiagnosticsNote: 'Not in the list above — each has its own next step. Expand to see which rows.',
       catalogTitle: 'All events',
       catalogOpenAria: 'Open the full event table',
       catalogNameFilter: 'Filter by name (any language)',

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Button, Checkbox, Input, Pagination, Select, Table } from 'antd'
 
 import { Modal } from '@platform/ui/components/modal'
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import { helpTrigger } from '@platform/ui/components/popover'
 import { StateView } from '@platform/ui/components/state'
 import { Tabs } from '@platform/ui/components/tabs'
@@ -56,6 +57,8 @@ export type MappingRulesText = Readonly<{
   unmappedReasons: Readonly<Record<string, string>>
   reasonFilter: string
   reasonAll: string
+  diagnosticsTitle: string
+  diagnosticsNote: string
   unmappedEmpty: string
   /** 「只看有数据的」：860 个码里只有约 570 个真落过行，打开时第一眼该看到有内容的。 */
   onlyWithData: string
@@ -233,8 +236,39 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
         }
       ]} />
 
-  const unmappedPanel = unmappedRows.length === 0
-    ? <p className="mi-catalog__note">{text.unmappedEmpty}</p>
+  /**
+   * **诊断区**（用户 2026-11-18）：主列表只放「新出现、码表里没有的」，正常情况下是空的；
+   * 那四类各有去处，但「没有对应的码」那 61 条任何时刻都得查得到——所以折叠在下面，
+   * **只读、不混进主列表**。
+   */
+  // 旧载荷可能没有这一段（诊断区是后加的）：缺了就当没有，不把整张表判成崩。
+  const diagnostics = view?.state === 'available' && view.diagnosticRows !== undefined
+    ? (Object.entries(view.diagnosticRows) as [string, readonly UnmappedSourceIdRow[]][])
+      .filter(([, list]) => list.length > 0)
+    : []
+  const diagnosticsPanel = diagnostics.length === 0 ? null : <section className="mi-catalog__diagnostics"
+    data-diagnostics>
+    <h3>{text.diagnosticsTitle}</h3>
+    <p className="mi-catalog__note">{text.diagnosticsNote}</p>
+    {diagnostics.map(([reason, list]) => <CollapsibleGroup key={reason}
+      titleText={text.unmappedReasons[reason] ?? reason} metaText={String(list.length)}
+      resolveText={(key) => key} maxBodyHeight={240}>
+      <ul className="mi-catalog__diagnostic-list">
+        {list.map((row) => <li key={`${reason}:${row.sourceId}`} data-diagnostic-row>
+          <span className="mi-catalog__cell-nowrap">{row.sourceId}</span>
+          <span className="mi-catalog__diagnostic-title">{sampleText(row)}</span>
+          <span className="mi-catalog__footer-label">
+            {row.firstSeenAt === null ? '' : formatTime(row.firstSeenAt, 'second')}
+            {row.providerIds.length === 0 ? '' : ` · ${row.providerIds.join(' · ')}`}
+          </span>
+        </li>)}
+      </ul>
+    </CollapsibleGroup>)}
+  </section>
+
+  const unmappedPanel = <>
+    {unmappedRows.length === 0
+      ? <p className="mi-catalog__note">{text.unmappedEmpty}</p>
     : <Table<UnmappedSourceIdRow> size="small" rowKey="sourceId" pagination={false}
       dataSource={paged(unmappedRows, unmappedPage, pageSize)}
       columns={[
@@ -253,7 +287,9 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
           title: text.unmappedColumns.reason, dataIndex: 'reason', className: 'mi-catalog__cell-nowrap',
           render: (value: string) => <span data-unmapped-reason={value}>{text.unmappedReasons[value] ?? value}</span>
         }
-      ]} />
+      ]} />}
+    {diagnosticsPanel}
+  </>
 
   const loading = view === undefined || codes === undefined
   const unreadable = view?.state !== 'available' || codes?.state !== 'available'
