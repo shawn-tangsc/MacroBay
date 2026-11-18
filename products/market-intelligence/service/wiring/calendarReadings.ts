@@ -11,6 +11,7 @@ import { zeroXRouterCalendarSchedulerFeeds, zeroXRouterCalendarSchedulerPolicy }
   from '../intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
 import { createNarwhalCalendarBriefingRefresh } from '../intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
 import { registerCalendarEventReminder } from '../intelligence/macro-calendar/registerCalendarEventReminder'
+import { registerCalendarIntegrityJob } from '../intelligence/macro-calendar/marketCalendarIntegrityJob'
 
 import type { CalendarReminderSettingsStore } from '../intelligence/macro-calendar/calendarEventReminderSettingsStore'
 
@@ -86,6 +87,12 @@ export function wireCalendarReadings(input: Readonly<{
   // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
   const calendarReminder = registerCalendarEventReminder({ jobRuntime: input.jobRuntime, settings: input.calendarReminderSettings,
     queryMonth: standardCalendarReader.queryMonth, submit: (request) => input.submitNotification(request), timeZone: () => input.timeZone() })
+  // **数据一致性巡检**（用户 2026-11-19 定）：每天跑一次五项扫描，任一不为 0 就报出来。
+  // 只读、零网络、不改数据；启动时的那一次盘点在 `syncOfficialStandardRowsAtStartup` 里。
+  registerCalendarIntegrityJob(input.jobRuntime, {
+    database: input.database,
+    log: (line) => { console.log(JSON.stringify(line)) }
+  })
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected
   // separately from the read surface above, and the brief never constructs a client of its own.

@@ -19,6 +19,7 @@ import { fixFomcEventTypes } from '../intelligence/macro-calendar/marketCalendar
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
+import { auditCalendarIntegrity, calendarIntegrityGaps } from '../intelligence/macro-calendar/marketCalendarIntegrityAudit'
 
 /**
  * **一次性历史补值**的接线（管欠账，管未来的是采集作业末尾那次扫描）。
@@ -228,6 +229,27 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     }
   } catch (error) {
     report(`[macro-calendar] 官方发布入标准表失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
+  }
+  /**
+   * **启动零网络盘点**（用户 2026-11-19 定）：五项扫描只读，不和任何源打交道。
+   *
+   * **必须在上面那条 `try` 之外**：源不可用时 `syncOfficialStandardRows` 抛错会被外层 catch
+   * 吞掉，写在里面就一条都不跑——而「网络不通时盘点照样给出欠账数」正是这一步的判据。
+   * 单独一次 try：盘点自己失败（库被锁、表缺）也只留一行日志，不阻断启动。
+   * 启动只**报告**缺口，不在这里补值——补值走后台（`scheduleHistoricalValueFill`），
+   * 巡检走 `@platform/jobs` 每天一次。
+   */
+  try {
+    const counts = auditCalendarIntegrity(input.database, {
+      today: (input.now ?? (() => new Date()))().toISOString().slice(0, 10)
+    })
+    const gaps = calendarIntegrityGaps(counts)
+    report(`[macro-calendar] 数据一致性盘点：present无值 ${counts.presentWithoutActual}、`
+      + `missing有值 ${counts.missingWithActual}、同期重复 ${counts.duplicateGroups}组/${counts.duplicateRows}行、`
+      + `一二级过期欠账 ${counts.tierOverdueWithoutValueOrReason}、期次未解 ${counts.unresolvedPeriodRows}`
+      + (gaps.length > 0 ? ` ← 有缺口：${gaps.join('、')}` : ''))
+  } catch (error) {
+    report(`[macro-calendar] 数据一致性盘点失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
   }
   // 补值排在上面全部之后：同步、回放、状态对账都落完，欠账那批才按「这一期有没有官方观测」补。
   if (input.after !== undefined && input.readLatest !== undefined) {

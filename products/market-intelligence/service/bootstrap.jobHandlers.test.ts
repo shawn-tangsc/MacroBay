@@ -70,6 +70,7 @@ const EXPECTED_HANDLER_IDS: readonly string[] = [
   'market-intelligence.archiveCompaction',
   'market-intelligence.assessChangedItems',
   'market-intelligence.calendar-event-reminder',
+  'market-intelligence.calendar-integrity-audit',
   'market-intelligence.collect-cross-asset-index',
   'market-intelligence.collect-macro-market',
   'market-intelligence.collect-policy-path',

@@ -51,4 +51,30 @@ describe('启动链：syncOfficialStandardRowsAtStartup', () => {
       now: () => new Date('2026-11-18T00:00:00.000Z'),
     })).not.toThrow()
   })
+
+  /**
+   * **启动零网络盘点**（用户 2026-11-19 定）：源不可用（等价「启动时网络不通」）时，
+   * 应用照常起来、盘点照样跑、欠账数被记进日志，且不抛错。
+   */
+  it('启动时源不可用：盘点仍跑并记录欠账数，不阻断启动', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 种一条 ①（标着有值、其实只有前值）当欠账样本。
+    upsertCalendarStandardRow(database, {
+      ...sourceRow(), countryCode: 'US', metricKey: 'US.TEST.NONE.LEVEL', sourceEventId: 'x-audit',
+      valuesJson: '{"previous":"1.0"}', identityKind: 'code', periodKey: '2026-10',
+    })
+    database.prepare("update mi_calendar_events set value_state = 'present'").run()
+    const lines: string[] = []
+    expect(() => syncOfficialStandardRowsAtStartup({
+      database,
+      listEffectiveMonthAsOf: () => { throw new Error('网络不可用') },
+      now: () => new Date('2026-11-19T00:00:00.000Z'),
+      log: (_level, _event, fields) => { lines.push(String(fields?.message ?? '')) },
+    })).not.toThrow()
+    const auditLine = lines.find((line) => line.includes('数据一致性盘点'))
+    expect(auditLine).toBeDefined()
+    expect(auditLine).toContain('present无值 1')
+    expect(auditLine).toContain('有缺口')
+  })
 })
