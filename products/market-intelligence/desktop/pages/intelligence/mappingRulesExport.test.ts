@@ -81,6 +81,7 @@ describe('the exported rows', () => {
       columns: { sourceId: '源内 id', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
       reasons: { 'no-code': '没有对应的码', 'period-unresolved': '源没给统计期' },
       reasonUnknown: '无法确认',
+      firstSeenUnknown: '无法确认',
       formatTime: (instant) => `T(${instant})`
     })
     expect(rows[0]).toEqual(['源内 id', '原因', '首次出现', '来源', '标题原文', '行数'])
@@ -90,6 +91,18 @@ describe('the exported rows', () => {
     expect(rows[1]![3]).toBe('0xrouter · narwhal')
     expect(rows[1]![4]).toBe('批发物价指数 · Wholesale prices')
     expect(rows[1]![5]).toBe(4)
+  })
+
+  it('writes a word, not a blank, when the first-seen time is missing', () => {
+    const rows = unmappedExportRows([
+      { sourceId: '999999', rowCount: 1, firstSeenAt: null, providerIds: ['0xrouter'],
+        reason: 'no-standard-row', sampleLabel: '残行', sampleLabelEn: null }
+    ], {
+      columns: { sourceId: '源内 id', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
+      reasons: { 'no-standard-row': '没进标准表' }, reasonUnknown: '无法确认', firstSeenUnknown: '无法确认',
+      formatTime: (instant) => instant
+    })
+    expect(rows[1]![2]).toBe('无法确认')
   })
 
   it('exports events with the same five columns as the tab', () => {

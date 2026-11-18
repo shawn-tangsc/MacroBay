@@ -461,7 +461,8 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
               }) },
               { name: text.sheetUnmapped, rows: unmappedExportRows(view?.state === 'available' ? view.unmapped : [], {
                 columns: text.unmappedColumns, reasons: text.unmappedReasons,
-                reasonUnknown: text.statusUnknown, formatTime: (instant) => formatTime(instant, 'second')
+                reasonUnknown: text.statusUnknown, firstSeenUnknown: text.statusUnknown,
+                formatTime: (instant) => formatTime(instant, 'second')
               }) },
               { name: text.sheetEvents, rows: eventExportRows(events?.state === 'available' ? events.rows : [], {
                 columns: text.eventColumns, statusLabels: text.eventStatus,
