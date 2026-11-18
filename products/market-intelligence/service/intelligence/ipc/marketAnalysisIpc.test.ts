@@ -16,6 +16,17 @@ function harness() {
       items: input.cursor === 'opaque-next' ? [] : [timelineEntry], nextCursor: input.cursor ? null : 'opaque-next'
     })),
     getTimelineEntry: vi.fn(() => timelineEntry),
+    listFailedRuns: vi.fn(() => ({
+      items: [{
+        id: 'mi-ar-failed', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1',
+        snapshotHash: 'snapshot-hash', analysisPhase: 'initial', triggerKey: 'manual.refresh', idempotencyKey: 'key',
+        status: 'failed', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, policyVersion: 'policy',
+        promptVersion: 'market-analysis-v2', skillVersion: 'market-analysis-v1', outputSchemaVersion: 3,
+        jobRunId: null, traceId: null, failureCode: 'analysis-timeout', failureDetailCode: 'timeout', validationMode: null,
+        queuedAt: '2026-09-28T00:00:00.000Z', startedAt: '2026-09-28T00:00:01.000Z', completedAt: '2026-09-28T00:01:00.000Z'
+      }],
+      nextCursor: null
+    })),
     records: {
       latestAttempt: vi.fn(() => ({ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', privateBody: 'never-display' })),
       listRuns: vi.fn(() => [{ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', startedAt: null, privateBody: 'never-display' }])
@@ -135,6 +146,24 @@ describe('marketAnalysisIpc', () => {
     expect(() => handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: '' })).toThrow('analysis-invalid-request')
     expect(() => handlers.get(MARKET_ANALYSIS_IPC_METHODS.getWorkspaceBinding)?.({ eventGroupId: 'missing' })).toThrow('analysis-not-available')
     expect(repository.listTimeline).not.toHaveBeenCalled()
+  })
+
+  it('serves the failed-run page through its own read endpoint and validates its input', () => {
+    const { handlers, repository } = harness()
+    expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.listFailedRuns)?.({ limit: 50 })).toEqual({
+      schemaVersion: 1,
+      items: [expect.objectContaining({
+        id: 'run:mi-ar-failed', analysisRunId: 'mi-ar-failed', status: 'failed', safeTitle: '',
+        summaryRef: null, runKey: 'mi-ar-failed', failureCode: 'analysis-timeout'
+      })],
+      nextCursor: null
+    })
+    expect(repository.listFailedRuns).toHaveBeenCalledWith({ limit: 50 })
+    // 边界错误与时间轴同一套：不认识的游标是 cursor 错误，页大小越界是 request 错误。
+    const handler = handlers.get(MARKET_ANALYSIS_IPC_METHODS.listFailedRuns)!
+    expect(() => handler({ limit: 0 })).toThrow('analysis-invalid-request')
+    expect(() => handler({ limit: 51 })).toThrow('analysis-invalid-request')
+    expect(() => handler({ cursor: 7 })).toThrow('analysis-invalid-cursor')
   })
 
   it('returns safe timeline, run, summary, prediction and workspace DTOs', async () => {

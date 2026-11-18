@@ -26,6 +26,8 @@ const excluded = (reason: ExclusionReason): CoverageDecision => ({ state: 'exclu
 export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDecision>> = {
   // Analysis runs and predictions: the analysis agent owns this conversation state itself.
   'marketAnalysis.listTimeline': excluded('internal-view'),
+  // 失败页只给渲染层读运行历史（分页读口），不回答 agent 问题。
+  'marketAnalysis.listFailedRuns': excluded('internal-view'),
   'marketAnalysis.getTimelineEntry': excluded('internal-view'),
   'marketAnalysis.getAnalysisRun': excluded('user-private-data'),
   'marketAnalysis.getSummary': excluded('internal-view'),

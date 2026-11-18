@@ -2,6 +2,7 @@ import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegist
 
 import { MARKET_ANALYSIS_IPC_METHODS, isNewsInterpretationReadInput, isNewsInterpretationRequestInput, type NewsInterpretationReadResult, type NewsInterpretationRequestResult } from '../../../contracts/marketAnalysisIpcContracts'
 import { createAnalysisTimelineService } from '../analysis/analysisTimelineService'
+import { createAnalysisFailedRunReader } from '../analysis/analysisFailedRunRead'
 import { macroCalendarEventContextReaders, type MacroCalendarEventContextQuerySources } from '../public-query/macroCalendarEventContextReaders'
 import { macroCalendarEventContextFromReads } from '../public-query/macroCalendarEventContextAdapter'
 import { isMarketAnalysisCalendarEventContextInput, isMarketAnalysisSettingsPatchInput, type MarketAnalysisCalendarEventContextInput } from '../../../contracts/marketAnalysisIpcContracts'
@@ -28,12 +29,15 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
     getAnalysisSettings?: () => Promise<MarketAnalysisSettings>
     updateAnalysisSettings?: (patch: Readonly<{ enabled?: boolean; providerId?: string; modelId?: string }>) => Promise<MarketAnalysisSettings>
   } = {}): void {
+  const failedRuns = createAnalysisFailedRunReader(repository)
   const service = createAnalysisTimelineService({
     repository,
     timeZone: sessions.timeZone ?? (() => 'UTC'),
     createFollowUpSession: createAnalysisFollowUpSession(sessions)
   })
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.listTimeline, (payload) => service.listTimeline(asTimelineInput(payload)))
+  // 失败页的独立读口：只读、分页；输入校验与时间轴同一套边界（不认识的形状一律边界错误）。
+  register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.listFailedRuns, (payload) => failedRuns.list(asFailedRunsInput(payload)))
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.getTimelineEntry, (payload) => service.getTimelineEntry(requiredId(payload, 'id')))
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.getAnalysisRun, (payload) => service.getAnalysisRun(requiredId(payload, 'id')))
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.getSummary, (payload) => service.getSummary(requiredId(payload, 'id')))
@@ -97,6 +101,14 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
     if (!sessions.requestNewsInterpretation) throw new Error('analysis-initial-request-unavailable')
     return sessions.requestNewsInterpretation(payload.itemId)
   })
+}
+
+function asFailedRunsInput(payload: unknown): { cursor?: string | null; limit?: number } {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {}
+  const value = payload as Record<string, unknown>
+  if (value.cursor !== undefined && value.cursor !== null && (typeof value.cursor !== 'string' || !value.cursor)) throw new Error('analysis-invalid-cursor')
+  if (value.limit !== undefined && (!Number.isSafeInteger(value.limit) || Number(value.limit) < 1 || Number(value.limit) > 50)) throw new Error('analysis-invalid-request')
+  return { ...(typeof value.cursor === 'string' ? { cursor: value.cursor } : {}), ...(value.cursor === null ? { cursor: null } : {}), ...(typeof value.limit === 'number' ? { limit: value.limit } : {}) }
 }
 
 function asTimelineInput(payload: unknown): { eventGroupId?: string; cursor?: string | null; limit?: number } {

@@ -66,6 +66,8 @@ export const marketAnalysisStoragePolicy = Object.freeze({
 })
 
 export type MarketAnalysisTimelinePage = Readonly<{ items: TimelineEntry[]; nextCursor: string | null }>
+/** 失败运行分页（读者要「失败页能看到所有失败」）：条目是运行行，不是时间轴行。 */
+export type MarketAnalysisFailedRunPage = Readonly<{ items: readonly AnalysisRun[]; nextCursor: string | null }>
 export type MarketAnalysisRepository = Readonly<ReturnType<typeof createRepository>>
 type Row = StoredRow
 type RepositoryInput = ({ filePath: string; storage?: never } | { storage: MarketAnalysisSqlite; filePath?: never })
@@ -146,6 +148,13 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     },
     getRun(id: string) { const row = sqlite.database.prepare('select * from mi_analysis_runs where id = ?').get(id) as Row | undefined; return row ? fromRun(row) : undefined },
     listRuns() { return (sqlite.database.prepare('select * from mi_analysis_runs order by queued_at desc, id desc').all() as Row[]).map(fromRun) },
+    /**
+     * 失败运行分页。类别过滤仍在唯一的 reader 里（`records.listFailedRuns`），这里只暴露给
+     * 服务层与 IPC；市场失败页只认市场线，新闻解读的失败留在新闻抽屉。
+     */
+    listFailedRuns(input: Readonly<{ cursor?: string | null; limit?: number }>): MarketAnalysisFailedRunPage {
+      return records.listFailedRuns({ analysisKind: 'market', ...input })
+    },
     getSnapshotArchive(id: string) {
       const row = sqlite.database.prepare('select archive_ref,archive_hash,archive_bytes,archive_schema_version,archive_status from mi_analysis_snapshots where id=?').get(id) as Row | undefined
       return row?.archive_ref ? { archiveRef: String(row.archive_ref), archiveHash: String(row.archive_hash), archiveBytes: Number(row.archive_bytes), archiveSchemaVersion: Number(row.archive_schema_version), archiveStatus: row.archive_status as MarketAnalysisArchiveMetadata['archiveStatus'] } : undefined

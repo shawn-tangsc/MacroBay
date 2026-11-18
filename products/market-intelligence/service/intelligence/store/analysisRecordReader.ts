@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { AnalysisRun, AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
 import { analysisKindOf, type AnalysisKind } from '../../../contracts/analysisKinds'
+import { marketAnalysisTimelineLimits } from '../../../contracts/marketAnalysisTimelineLimits'
 import { fromRun, type StoredRow } from './marketAnalysisRepositoryRows'
 
 /**
@@ -25,6 +26,14 @@ export type AnalysisRecord = Readonly<{
 export type AnalysisRecordReader = Readonly<{
   kindOf: (recordOrRow: Readonly<{ analysisKind?: unknown; analysis_kind?: unknown }> | null | undefined) => AnalysisKind
   listRuns: (input: Readonly<{ analysisKind: AnalysisKind; eventGroupId?: string; since?: string; limit?: number }>) => readonly AnalysisRun[]
+  /**
+   * 失败运行分页（读者要「失败页能看到所有失败」）。
+   *
+   * 与时间轴分页**分开**：时间轴游标是已发布行的 `(occurred_at, id)`，失败运行只能按
+   * `mi_analysis_runs` 的 `(queued_at, id)`；混用会出现两种游标语义。这里的游标编码最后一行、
+   * 无状态、可重放（同一游标重复调用返回同一页）。
+   */
+  listFailedRuns: (input: Readonly<{ analysisKind: AnalysisKind; cursor?: string | null; limit?: number }>) => Readonly<{ items: readonly AnalysisRun[]; nextCursor: string | null }>
   getRecordForRun: (input: Readonly<{ analysisKind: AnalysisKind; runId: string }>) => AnalysisRecord | undefined
   latestForItem: (input: Readonly<{ analysisKind: AnalysisKind; itemId: string }>) => AnalysisRecord | undefined
   latestAttempt: (input: Readonly<{ analysisKind: AnalysisKind }>) => AnalysisRun | undefined
@@ -48,6 +57,21 @@ function summaryFromRow(row: StoredRow): AnalysisSummary {
   const payload = JSON.parse(String(row.payload_json)) as AnalysisSummary
   // 列是存储事实；归档记录只有载荷里的字段，退回它；两者都没有才是旧的 market 行。
   return { ...payload, analysisKind: analysisKindOf({ ...payload, analysis_kind: row.analysis_kind }) }
+}
+
+/** 失败运行分页的游标：最后一行 `(queued_at, id)` 的 base64url 编码，无状态、可重放。 */
+function encodeRunCursor(run: Readonly<{ queuedAt: string; id: string }>): string {
+  return Buffer.from(JSON.stringify([run.queuedAt, run.id]), 'utf8').toString('base64url')
+}
+
+function decodeRunCursor(cursor: string): Readonly<{ queuedAt: string; id: string }> {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown
+    if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') throw new Error('bad cursor')
+    return { queuedAt: parsed[0], id: parsed[1] }
+  } catch {
+    throw new Error('analysis-invalid-cursor')
+  }
 }
 
 export function createAnalysisRecordReader(database: DatabaseSync): AnalysisRecordReader {
@@ -93,6 +117,29 @@ export function createAnalysisRecordReader(database: DatabaseSync): AnalysisReco
         where ${kindClause} and exists (select 1 from json_each(mi_analysis_event_groups.event_refs_json) as event_ref where event_ref.value = ?)
         order by mi_analysis_runs.queued_at desc, mi_analysis_runs.id desc limit 1`).get(...kindParameters, input.itemId) as StoredRow | undefined
       return row ? recordForRun(String(row.id)) : undefined
+    },
+
+    listFailedRuns(input) {
+      // 页大小与时间轴同一档（50），不新增上限；渲染侧一页只认 70，50 条一定收得下。
+      const limit = Number.isSafeInteger(input.limit)
+        ? Math.max(1, Math.min(marketAnalysisTimelineLimits.pageItems, input.limit!))
+        : marketAnalysisTimelineLimits.pageItems
+      const [kindClause, kindParameters] = kindWhere('mi_analysis_runs', input.analysisKind)
+      const position = input.cursor ? decodeRunCursor(input.cursor) : undefined
+      const filters = [kindClause, "status in ('failed','invalid-output','cancelled')"]
+      const parameters: (string | number)[] = [...kindParameters]
+      if (position) {
+        filters.push('(queued_at < ? or (queued_at = ? and id < ?))')
+        parameters.push(position.queuedAt, position.queuedAt, position.id)
+      }
+      parameters.push(limit + 1)
+      const rows = database.prepare(`select * from mi_analysis_runs where ${filters.join(' and ')} order by queued_at desc, id desc limit ?`).all(...parameters) as StoredRow[]
+      const items = rows.slice(0, limit).map(fromRun)
+      const last = items.at(-1)
+      return {
+        items,
+        nextCursor: rows.length > limit && last ? encodeRunCursor({ queuedAt: last.queuedAt, id: last.id }) : null
+      }
     },
 
     latestAttempt(input) {

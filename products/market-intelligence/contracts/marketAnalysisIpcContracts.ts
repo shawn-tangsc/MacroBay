@@ -1,5 +1,7 @@
 export const MARKET_ANALYSIS_IPC_METHODS = Object.freeze({
   listTimeline: 'marketAnalysis.listTimeline',
+  /** 失败页的独立读口：按运行表分页（时间轴游标语义不同，不能合并）。 */
+  listFailedRuns: 'marketAnalysis.listFailedRuns',
   getTimelineEntry: 'marketAnalysis.getTimelineEntry',
   getAnalysisRun: 'marketAnalysis.getAnalysisRun',
   getSummary: 'marketAnalysis.getSummary',
