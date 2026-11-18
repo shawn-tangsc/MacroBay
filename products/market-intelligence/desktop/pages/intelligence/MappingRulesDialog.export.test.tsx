@@ -12,6 +12,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import type { MappingRulesRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+import type { CalendarEventListRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventListRead'
 import type {
   CodeTableRead, CodeTableReadRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
@@ -43,7 +44,15 @@ const text = {
   countryAll: mkDay.mappingCountryAll, countryFilter: mkDay.mappingCountryFilter,
   exportLabel: mkDay.mappingExport,
   resolveCopy: (key: string) => (mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
-  sheetCodes: mkDay.mappingSheetCodes, sheetUnmapped: mkDay.mappingSheetUnmapped
+  sheetCodes: mkDay.mappingSheetCodes, sheetUnmapped: mkDay.mappingSheetUnmapped,
+  tabEvents: mkDay.mappingTabEvents, eventColumns: mkDay.mappingEventColumns,
+  eventsEmpty: mkDay.mappingEventsEmpty, sheetEvents: mkDay.mappingSheetEvents,
+  eventTitleMissing: mkDay.mappingEventTitleMissing,
+  tierNames: mkDay.mappingTierNames,
+  exportNameZh: mkDay.mappingExportNameZh, exportNameEn: mkDay.mappingExportNameEn,
+  statusUnknown: mkDay.mappingStatusUnknown,
+  // 发布状态的白话名与日历行共用一份（这里用产品文案表里的同一条）。
+  eventStatus: { published: '已发布', scheduled: '待发布', missing: '未提供', backfilling: '待补值' }
 }
 const codeRow = (code: string, extra: Partial<CodeTableReadRow> = {}): CodeTableReadRow => ({
   code, kind: 'metric' as const,
@@ -74,7 +83,24 @@ const view: MappingRulesRead = {
     providerIds: ['0xrouter'], reason: 'no-code' as const,
     sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
   counts: { mapped: 0, unmapped: 1, unmappedRows: 8, eventIdentities: 99,
-    diagnostics: { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 1 } }
+    diagnostics: { 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 1 } }
+}
+
+/** 事件页签的夹具：一行 = 一场事件；没有期次、没有码。 */
+const events: CalendarEventListRead = {
+  state: 'available',
+  rows: [
+    { key: 'US|evt.fomc|2026-10-29|2026-10-29', eventType: 'central-bank-activity',
+      scheduledDate: '2026-10-29', scheduledAt: '2026-10-29T18:00:00.000Z',
+      countryCode: 'US', countryName: '美国', title: 'FOMC 会议', titleEn: null,
+      sourceProviderId: '0xrouter', status: 'published' },
+    // 日期精度 + 没有国家 + 源没给标题：三格都要有确定说法，不能留空、不能编。
+    { key: 'ZZ|["44735",75559]|2026-10-14|2026-10-14', eventType: 'financial-event',
+      scheduledDate: '2026-10-14', scheduledAt: null,
+      countryCode: null, countryName: null, title: null, titleEn: null,
+      sourceProviderId: '0xrouter', status: 'unknown' }
+  ],
+  total: 2
 }
 
 let root: Root | undefined
@@ -102,7 +128,7 @@ async function mount(shown: MappingRulesRead = view): Promise<void> {
   root = createRoot(host)
   await act(async () => {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
-      <MappingRulesDialog open onClose={() => undefined} text={text} view={shown} codes={codes} />
+      <MappingRulesDialog open onClose={() => undefined} text={text} view={shown} codes={codes} events={events} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
 }
@@ -167,15 +193,19 @@ it('exports both sheets in full even when the table is filtered', async () => {
   const file = join(dir, 'out.xlsx')
   writeFileSync(file, saved!.bytes)
   execFileSync('unzip', ['-o', '-q', file, '-d', join(dir, 'un')], { stdio: 'pipe' })
-  expect(readdirSync(join(dir, 'un', 'xl', 'worksheets'))).toEqual(['sheet1.xml', 'sheet2.xml'])
+  // 三个页签三张表：导出不能少一张（少一张就是悄悄丢数据）。
+  expect(readdirSync(join(dir, 'un', 'xl', 'worksheets'))).toEqual(['sheet1.xml', 'sheet2.xml', 'sheet3.xml'])
   const workbook = readFileSync(join(dir, 'un', 'xl', 'workbook.xml'), 'utf8')
   expect(workbook).toContain('name="码表"')
   expect(workbook).toContain('name="未映射"')
-  // 行数是**全量**：1 行表头 + 3 个码、1 + 1 个未映射 id。
+  expect(workbook).toContain('name="事件"')
+  // 行数是**全量**：1 行表头 + 3 个码、1 + 1 个未映射 id、1 + 2 个事件。
   const first = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet1.xml'), 'utf8')
   const second = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet2.xml'), 'utf8')
+  const third = readFileSync(join(dir, 'un', 'xl', 'worksheets', 'sheet3.xml'), 'utf8')
   expect((first.match(/<row /gu) ?? []).length).toBe(4)
   expect((second.match(/<row /gu) ?? []).length).toBe(2)
+  expect((third.match(/<row /gu) ?? []).length).toBe(3)
 })
 
 /**
@@ -276,4 +306,34 @@ it('shows tiers as stars with a spoken label, and both filters are multi-select'
   // 两个筛选项都是多选：antd 多选的可清除标签容器与单选不同，用属性区分。
   expect(document.body.querySelector('[data-country-filter]')?.className).toContain('ant-select-multiple')
   expect(document.body.querySelector('[data-tier-filter]')?.className).toContain('ant-select-multiple')
+})
+
+/**
+ * 第三个页签（用户 2026-11-18：「所有经济事件、央行活动，给我单独一个tab出来，这个不用映射」）。
+ *
+ * 判据三条：事件 tab 存在且带条数；一行一场、列是 时间/国家/标题/来源/状态；**没有原因与分级筛选**
+ * ——事件没有统计期、没有码，那两样筛选在这一页没有意义。
+ */
+it('lists events on their own tab, without the mapping-only filters', async () => {
+  await mount()
+  const tabs = [...document.body.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent ?? '')
+  expect(tabs.some((label) => label.includes('事件'))).toBe(true)
+  const eventsTab = [...document.body.querySelectorAll('[role="tab"]')]
+    .find((tab) => (tab.textContent ?? '').includes('事件')) as HTMLElement
+  await act(async () => { eventsTab.click() })
+  const section = document.body.querySelector('[data-mapping-section="events"]')!
+  const headers = [...section.querySelectorAll('.ant-table-thead th')].map((cell) => cell.textContent ?? '')
+  expect(headers).toEqual(['时间', '国家', '标题', '来源', '状态'])
+  const body = [...section.querySelectorAll('tbody tr.ant-table-row')]
+  expect(body).toHaveLength(2)
+  // 有时刻的那条按读者时区显示到分钟；日期精度那条**不显示假时刻**（只显示日期）。
+  expect(body[0]!.querySelector('[data-event-time]')?.textContent).toMatch(/\d{2}:\d{2}/u)
+  expect(body[1]!.querySelector('[data-event-time]')?.textContent).not.toMatch(/\d{2}:\d{2}/u)
+  // 拿不到的三格各有确定说法：国家 `—`、标题「源未提供标题」、状态「无法确认」。
+  expect(body[1]!.querySelector('[data-country-empty]')?.textContent).toBe('—')
+  expect(body[1]!.querySelector('[data-event-title-missing]')?.textContent).toBe('源未提供标题')
+  expect(body[1]!.querySelector('[data-event-status]')?.textContent).toBe('无法确认')
+  // 这一页没有原因筛选、没有分级筛选（它们属于「该归到码上的数据」那一页）。
+  expect(document.body.querySelector('[data-reason-filter]')).toBeNull()
+  expect(document.body.querySelector('[data-tier-filter]')).toBeNull()
 })

@@ -27,6 +27,14 @@ const events = vi.hoisted(() => ({
     ],
     counts: { total: 2, metric: 2, event: 0, withOfficialSource: 1, pendingOfficialSource: 1 }
   }),
+  /** 事件页签的读口：一行一场事件；这一条只验「点一下真的开」与三张表都在。 */
+  queryEventList: async () => ({
+    state: 'available' as const,
+    rows: [{ key: 'US|evt.fomc|2026-10-29|2026-10-29', eventType: 'central-bank-activity' as const,
+      scheduledDate: '2026-10-29', scheduledAt: '2026-10-29T18:00:00.000Z', countryCode: 'US', countryName: '美国',
+      title: 'FOMC 会议', titleEn: null, sourceProviderId: '0xrouter', status: 'published' }],
+    total: 1
+  }),
   queryMappingRules: async () => ({
     state: 'available' as const,
     mapped: [

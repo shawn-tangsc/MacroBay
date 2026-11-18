@@ -149,13 +149,13 @@ describe('映射规则表读口', () => {
  * 事件、无标准行、缺期次、无码各有去处，只作诊断计数；留它们在列表里，读者会照着去补
  * 已经做完的事——这正是今晚反复出现的「数看起来很大、其实没活可干」。
  */
-describe('未映射列表排除四类诊断原因', () => {
+describe('未映射列表只放指标类，事件单独一页', () => {
   const insertReason = (database: DatabaseSync, sourceKey: string, reason: string): void => {
     database.exec(`insert into mi_calendar_unmapped (provider_id, source_key, detected_at, raw_json, reason)
       values ('0xrouter', '${sourceKey}', '2026-11-18T00:00:00Z', '{"scheduledDate":"2026-11-16"}', '${reason}')`)
   }
 
-  it('keeps a genuinely unmapped id and counts the four diagnostic kinds separately', () => {
+  it('keeps the indicator kinds in the list and leaves events to their own tab', () => {
     const database = seed()
     // 三类：事件、无标准行、缺期次；另有一条真在等映射的（没有原因行）。
     insertReason(database, '["700001",1]', 'unknown-event-type')
@@ -175,12 +175,14 @@ describe('未映射列表排除四类诊断原因', () => {
     const read = readCalendarMappingRules(database)
     if (read.state !== 'available') throw new Error('unavailable')
     const listed = read.unmapped.map((row) => row.sourceId)
-    // **主列表现在是「所有没进日历的」**（用户 2026-11-18 最终口径）：四类全列出来，一条都不藏。
-    for (const shown of ['700001', '700002', '700003', '700004']) expect(listed).toContain(shown)
-    expect(read.counts.diagnostics['unknown-event-type']).toBe(1)
+    // **事件不进这一页**（用户 2026-11-18 第三页签）：它没有统计期、不参与映射，有自己的「事件」页。
+    expect(listed).not.toContain('700001')
+    // 其余指标类的没进日历，一条都不许藏。
+    for (const shown of ['700002', '700003', '700004']) expect(listed).toContain(shown)
     expect(read.counts.diagnostics['no-standard-row']).toBe(1)
     // `bad-period` 与 `period-unresolved` 归同一档：旧库写法不许再占一个数。
     expect(read.counts.diagnostics['period-unresolved']).toBe(2)
+    expect(read.unmapped.every((row) => row.reason !== 'unknown-event-type')).toBe(true)
     // 夹具里那条「没有原因行、也没有映射」的 `999999` 现场判成无码档，所以这里至少有 1。
     expect(read.counts.diagnostics['no-code']).toBeGreaterThanOrEqual(1)
     expect(read.counts.unmapped).toBe(read.unmapped.length)

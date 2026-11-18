@@ -13,10 +13,14 @@ import type { MappingRulesRead } from '../../../service/intelligence/macro-calen
 import type {
   CodeTableRead, CodeTableReadRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
+import type {
+  CalendarEventListRead, CalendarEventRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventListRead'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { formatShellDay } from '@platform/ui/time/shellTimeFormat'
 import { buildXlsx } from '@platform/files/export/xlsx'
 import { MetricNameText } from '../../shared/MetricNameText'
-import { codeTableExportRows, exportFileName, sampleText, unmappedExportRows } from './mappingRulesExport'
+import { codeTableExportRows, eventExportRows, exportFileName, sampleText, unmappedExportRows } from './mappingRulesExport'
 
 /**
  * 码表 / 未映射弹框（用户 2026-11-17：两个页签，**「已映射」整块拿掉**）。
@@ -72,6 +76,27 @@ export type MappingRulesText = Readonly<{
   resolveCopy: (key: string) => string
   sheetCodes: string
   sheetUnmapped: string
+  /**
+   * **第三个页签：事件**（用户 2026-11-18）。经济事件与央行活动**不参与映射**：它们没有统计期，
+   * 也不该出现在「未映射」里——那张表是「该归到码上的数据」。
+   */
+  tabEvents: string
+  eventColumns: Readonly<Record<'time' | 'country' | 'title' | 'provider' | 'status', string>>
+  eventsEmpty: string
+  /** 源没给标题时那一格写什么：不编一个名字，也不留空。 */
+  eventTitleMissing: string
+  sheetEvents: string
+  /** 分级的中文名（导出里与星级同一格）。 */
+  tierNames: Readonly<Record<'1' | '2' | '3' | 'other', string>>
+  /** 导出比界面多两列：中英名拆开。 */
+  exportNameZh: string
+  exportNameEn: string
+  /** 状态闭集之外的值：显示「无法确认」，不印枚举、也不留空。 */
+  statusUnknown: string
+  /**
+   * 发布状态的白话名（与日历行**同一份**文案表，由调用方传入）：两处各写一份，迟早给出两个说法。
+   */
+  eventStatus: Readonly<Record<string, string>>
 }>
 
 /**
@@ -98,12 +123,13 @@ function shortCode(value: string): string {
   return `${value.slice(0, 13)}…${tail}`
 }
 
-export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }: Readonly<{
+export function MappingRulesDialog({ open, onClose, text, view, codes, events, onRetry }: Readonly<{
   open: boolean
   onClose: () => void
   text: MappingRulesText
   view: MappingRulesRead | undefined
   codes: CodeTableRead | undefined
+  events: CalendarEventListRead | undefined
   onRetry?: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
@@ -115,9 +141,10 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
   const [countries, setCountries] = useState<readonly string[]>([])
   /** 分级筛选（**多选**）：空数组 = 全部。档位键 `1|2|3|other`。 */
   const [tiers, setTiers] = useState<readonly string[]>([])
-  const [tab, setTab] = useState<'codes' | 'unmapped'>('codes')
+  const [tab, setTab] = useState<'codes' | 'unmapped' | 'events'>('codes')
   const [codePage, setCodePage] = useState(1)
   const [unmappedPage, setUnmappedPage] = useState(1)
+  const [eventPage, setEventPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])
 
   const needle = query.trim().toLowerCase()
@@ -131,6 +158,13 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
     for (const row of codes.rows) seen.add(row.countryName ?? '—')
     return [...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))
   }, [codes])
+  /** 事件页签的国家选项：**从事件那一页的行派生**，不混进码表的国家名单（混了会筛出空结果）。 */
+  const eventCountryOptions = useMemo(() => {
+    if (events?.state !== 'available') return [] as { value: string; label: string }[]
+    const seen = new Set<string>()
+    for (const row of events.rows) seen.add(row.countryName ?? '—')
+    return [...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))
+  }, [events])
   /** 分级选项：只列**当前表里真实出现过**的档位，同样用星级写法。 */
   const tierOptions = useMemo(() => {
     if (codes?.state !== 'available') return [] as { value: string; label: string }[]
@@ -163,6 +197,16 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
       .filter((row) => hit([row.sourceId, row.sampleLabel, row.sampleLabelEn]))
       .filter((row) => reason === '' || row.reason === reason)
   }, [view, needle, reason])
+  /**
+   * 事件页签的行：**保留接口返回的顺序**（读口已按活动时间倒序），这里只做搜索与国家筛选。
+   * 不加原因、不加分级、不加「只看有数据的」——那三样对事件没有意义（事件没有期次、码、数值）。
+   */
+  const eventRows = useMemo(() => {
+    if (events?.state !== 'available') return []
+    return events.rows
+      .filter((row) => hit([row.title, row.titleEn, row.countryName, row.countryCode]))
+      .filter((row) => countries.length === 0 || countries.includes(row.countryName ?? '—'))
+  }, [events, needle, countries])
   const reasonOptions = useMemo(() => {
     if (view?.state !== 'available') return [] as { value: string; label: string }[]
     const seen = new Set(view.unmapped.map((row) => row.reason))
@@ -172,11 +216,15 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
 
   const codeCount = codes?.state === 'available' ? codes.counts.total : 0
   const unmappedCount = view?.state === 'available' ? view.counts.unmapped : 0
+  const eventCount = events?.state === 'available' ? events.total : 0
   const items: readonly ChoiceItem[] = [
     { value: 'codes', labelKey: 'tabCodes', labelParams: { count: String(codeCount) } },
-    { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(unmappedCount) } }
+    { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(unmappedCount) } },
+    { value: 'events', labelKey: 'tabEvents', labelParams: { count: String(eventCount) } }
   ]
-  const copy: Readonly<Record<string, string>> = { tabCodes: text.tabCodes, tabUnmapped: text.tabUnmapped }
+  const copy: Readonly<Record<string, string>> = {
+    tabCodes: text.tabCodes, tabUnmapped: text.tabUnmapped, tabEvents: text.tabEvents
+  }
 
   const officialCell = (row: CodeTableReadRow): React.ReactElement | string => {
     // 决定不建、已经退役的码不放链接：那不是「待补」，是「不打算补」。
@@ -281,6 +329,58 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
       ]} />}
   </>
 
+  /**
+   * **事件页签**：一行 = 一场事件，时间 · 国家 · 标题 · 来源 · 状态，只读。
+   *
+   * 三处口径写在这里：
+   * - **没有期次列**：事件没有统计期，缺期次不是缺陷——这一页不出现那个概念；
+   * - **日期精度的事件不显示时刻**：日期按 `UTC` 格式化成那个日历日（日期是日期，不是瞬时；
+   *   按读者时区换算会把 10-14 变成 10-13），有时刻的才按读者时区显示到分钟；
+   * - **状态**取日历行同一份白话表；表里没有的写「无法确认」，不印枚举、也不留空。
+   */
+  const eventTimeCell = (row: CalendarEventRow): string =>
+    row.scheduledAt === null
+      ? (formatShellDay(`${row.scheduledDate}T00:00:00.000Z`, 'UTC') ?? row.scheduledDate)
+      : formatTime(row.scheduledAt, 'minute')
+  const eventsPanel = events?.state !== 'available'
+    // 读不到就给重试（与其他两个页签同一态）：事件页读失败不能被画成「库里没有事件」。
+    ? <StateView state="error" reasonCode="unreadable"
+      action={{ labelKey: 'ui.state.action.retry', onSelect: () => onRetry?.() }} />
+    : eventRows.length === 0
+      ? <p className="mi-catalog__note">{text.eventsEmpty}</p>
+      : <Table<CalendarEventRow> size="small" rowKey="key" pagination={false}
+        dataSource={paged(eventRows, eventPage, pageSize)}
+        columns={[
+          {
+            title: text.eventColumns.time, dataIndex: 'scheduledDate', className: 'mi-catalog__cell-nowrap',
+            render: (_value: string, row) => <span data-event-time>{eventTimeCell(row)}</span>
+          },
+          {
+            title: text.eventColumns.country, className: 'mi-catalog__cell-nowrap',
+            render: (_value: unknown, row) => row.countryName === null
+              ? <span data-country-empty>—</span>
+              : <span data-country>{row.countryName}</span>
+          },
+          {
+            // 标题=源给的原文名：中文主行 + 英文次行（与码表名称同一套渲染，没有英文就只一行）。
+            title: text.eventColumns.title,
+            render: (_value: unknown, row) => row.title === null
+              ? <span data-event-title-missing>{text.eventTitleMissing}</span>
+              : <span className="mi-catalog__code-name" title={row.titleEn === null ? row.title : `${row.title} · ${row.titleEn}`}>
+                <MetricNameText zh={row.title} en={row.titleEn ?? ''} />
+              </span>
+          },
+          {
+            title: text.eventColumns.provider, dataIndex: 'sourceProviderId', className: 'mi-catalog__cell-nowrap'
+          },
+          {
+            title: text.eventColumns.status, dataIndex: 'status', className: 'mi-catalog__cell-nowrap',
+            render: (value: string) => <span data-event-status={value}>
+              {text.eventStatus[value] ?? text.statusUnknown}
+            </span>
+          }
+        ]} />
+
   const loading = view === undefined || codes === undefined
   const unreadable = view?.state !== 'available' || codes?.state !== 'available'
   const body = loading
@@ -289,22 +389,25 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
       ? <StateView state="error" reasonCode="unreadable"
         action={{ labelKey: 'ui.state.action.retry', onSelect: () => onRetry?.() }} />
       : <Tabs items={items} value={tab} onChange={(value) => {
-        const next = value === 'unmapped' ? 'unmapped' : 'codes'
+        const next = value === 'unmapped' ? 'unmapped' : value === 'events' ? 'events' : 'codes'
         setTab(next)
         // 切换页签回第 1 页：筛选词保留，页码各自独立，停在上一页签的页码会越界成空表。
         if (next === 'codes') setCodePage(1)
-        else setUnmappedPage(1)
+        else if (next === 'unmapped') setUnmappedPage(1)
+        else setEventPage(1)
       }} ariaLabelKey="tabsAria" resolveText={(key) => copy[key] ?? key}
         panels={{
           codes: <section data-mapping-section="codes">{codesPanel}</section>,
-          unmapped: <section data-mapping-section="unmapped">{unmappedPanel}</section>
+          unmapped: <section data-mapping-section="unmapped">{unmappedPanel}</section>,
+          events: <section data-mapping-section="events">{eventsPanel}</section>
         }} />
 
-  const activeTotal = tab === 'codes' ? codeRows.length : unmappedRows.length
-  const activePage = tab === 'codes' ? codePage : unmappedPage
+  const activeTotal = tab === 'codes' ? codeRows.length : tab === 'unmapped' ? unmappedRows.length : eventRows.length
+  const activePage = tab === 'codes' ? codePage : tab === 'unmapped' ? unmappedPage : eventPage
   const setActivePage = (next: number): void => {
     if (tab === 'codes') setCodePage(next)
-    else setUnmappedPage(next)
+    else if (tab === 'unmapped') setUnmappedPage(next)
+    else setEventPage(next)
   }
 
   return <Modal open={open} width="full" titleKey="mappingRulesTitle"
@@ -314,44 +417,56 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
       <div className="mi-catalog__filters">
         <Input allowClear value={query} placeholder={text.filter} aria-label={text.filter}
           onChange={(event) => { setQuery(event.target.value); setCodePage(1); setUnmappedPage(1) }} />
-        {/* 只在码表页签有意义：未映射那一页本来就是「没落的行」。 */}
+        {/* 只在未映射页签有意义：那一页本来就是「没落的指标」，按原因收窄就是为了挑出「没有对应的码」那批。 */}
         {tab === 'unmapped'
           ? <Select<string> allowClear className="mi-catalog__filter-select" value={reason === '' ? undefined : reason}
             placeholder={text.reasonFilter} aria-label={text.reasonFilter} data-reason-filter
             options={reasonOptions}
             onChange={(value) => { setReason(value ?? ''); setUnmappedPage(1) }} />
           : null}
-        {tab === 'unmapped' ? null : <span className="mi-catalog__only-data" data-only-with-data>
+        {/* 「只看有数据的」只对码表有意义：事件没有数据量这个概念。 */}
+        {tab === 'codes' ? <span className="mi-catalog__only-data" data-only-with-data>
           <Checkbox checked={onlyWithData}
             onChange={(event) => { setOnlyWithData(event.target.checked); setCodePage(1) }}>
             {text.onlyWithData}
           </Checkbox>
-        </span>}
+        </span> : null}
         {/* **两个筛选都多选**（用户 2026-11-18）：同一筛选内是「或」，两者之间是「且」。
-            清空（点 ×）就是全部，不需要一个「全部」选项占一格。 */}
-        <Select mode="multiple" allowClear size="small" className="mi-catalog__filter-select"
+            清空（点 ×）就是全部，不需要一个「全部」选项占一格。
+            事件页签**只留国家**：它没有分级，选项也改成从事件行派生（混用码表名单会筛出空结果）。 */}
+        {tab === 'unmapped' ? null : <Select mode="multiple" allowClear size="small" className="mi-catalog__filter-select"
           value={[...countries]} aria-label={text.countryFilterMulti} placeholder={text.countryFilterMulti}
-          options={[...countryOptions]} onChange={(value) => { setCountries(value); setCodePage(1) }}
-          data-country-filter maxTagCount="responsive" />
-        <Select mode="multiple" allowClear size="small" className="mi-catalog__filter-select"
+          options={tab === 'events' ? [...eventCountryOptions] : [...countryOptions]}
+          onChange={(value) => { setCountries(value); setCodePage(1); setEventPage(1) }}
+          data-country-filter maxTagCount="responsive" />}
+        {tab === 'codes' ? <Select mode="multiple" allowClear size="small" className="mi-catalog__filter-select"
           value={[...tiers]} aria-label={text.tierFilterMulti} placeholder={text.tierFilterMulti}
           options={tierOptions} onChange={(value) => { setTiers(value); setCodePage(1) }}
-          data-tier-filter maxTagCount="responsive" />
+          data-tier-filter maxTagCount="responsive" /> : null}
       </div>
       <div className="mi-catalog__table">{body}</div>
       <div className="mi-catalog__footer">
         <Button size="small" className="mi-catalog__export" data-catalog-export
-          disabled={view?.state !== 'available' || codes?.state !== 'available'
-            || (codeCount === 0 && unmappedCount === 0)}
+          // **三份里有一份读不到就不给导出**：导出是「全量」，悄悄少一张工作表比不让导更糟。
+          disabled={view?.state !== 'available' || codes?.state !== 'available' || events?.state !== 'available'
+            || (codeCount === 0 && unmappedCount === 0 && eventCount === 0)}
           onClick={() => {
-            // 导出的是**两张表的全量**，与筛选、页码、当前页签无关。
+            // 导出的是**三张表的全量**，与筛选、页码、当前页签无关。
             const sheets = [
               { name: text.sheetCodes, rows: codeTableExportRows(codes?.state === 'available' ? codes.rows : [], {
                 columns: text.codeColumns, status: text.codeStatus, officialPending: text.officialPending,
-                officialNone: text.officialNone, unknownCountry: '—'
+                officialNone: text.officialNone, unknownCountry: '—',
+                nameZh: text.exportNameZh, nameEn: text.exportNameEn,
+                tierStars: text.tierStars, tierNames: text.tierNames
               }) },
-              { name: text.sheetUnmapped, rows: unmappedExportRows(view?.state === 'available' ? view.unmapped : [],
-                { columns: text.unmappedColumns }) }
+              { name: text.sheetUnmapped, rows: unmappedExportRows(view?.state === 'available' ? view.unmapped : [], {
+                columns: text.unmappedColumns, reasons: text.unmappedReasons,
+                reasonUnknown: text.statusUnknown, formatTime: (instant) => formatTime(instant, 'second')
+              }) },
+              { name: text.sheetEvents, rows: eventExportRows(events?.state === 'available' ? events.rows : [], {
+                columns: text.eventColumns, statusLabels: text.eventStatus,
+                statusUnknown: text.statusUnknown, titleMissing: text.eventTitleMissing
+              }, eventTimeCell) }
             ]
             void window.platform?.app?.saveFile?.(exportFileName(text.title, new Date()), buildXlsx(sheets))
           }}>{text.exportLabel}</Button>

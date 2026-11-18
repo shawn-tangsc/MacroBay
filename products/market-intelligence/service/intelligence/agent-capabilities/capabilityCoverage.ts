@@ -62,6 +62,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.marketCalendar.queryMappingRules': excluded('internal-view'),
   // 码表读口（`d675ee1` 那张表的服务端）：只给渲染层的映射弹框核对用，agent 不读。
   'intelligence.macro.marketCalendar.queryCodeTable': excluded('internal-view'),
+  // 事件清单同理：只给渲染层「事件」页签看「库里有哪些事件」，事件不参与映射，agent 不读。
+  'intelligence.macro.marketCalendar.queryEventList': excluded('internal-view'),
   // 事件详情的「各来源写入」块同样是渲染层拼装（`useEventSourceWrites`），不回答 agent 问题。
   // 依据：实现里零写语句（`marketCalendarEventSourceWritesRead` 全是 SELECT）、消费方只有详情页那一个
   // hook、入参必须带指标码 + 期次（一次一条事件）——分析/简报/agent 都不读它。

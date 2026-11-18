@@ -103,6 +103,11 @@ export const marketCalendarPublicPolicy = Object.freeze({
      * 每行带官网页（待补带闭集理由，**不许空链接**）与「有多少个源内 id 认得它」（不下发 id 列表）。
      */
     queryCodeTable: 'intelligence.macro.marketCalendar.queryCodeTable',
+    /**
+     * **事件清单**（只读，渲染专用，2026-11-18）：经济事件与央行活动单独一页，**不参与映射**。
+     * 一行 = 一场事件；与经济指标分两个读口，事件没有统计期这件事才说得清。
+     */
+    queryEventList: 'intelligence.macro.marketCalendar.queryEventList',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)

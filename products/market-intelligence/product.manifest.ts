@@ -82,6 +82,8 @@ export const marketIntelligenceProductManifest = {
     { method: marketCalendarPublicPolicy.methods.queryMappingRules },
     // 标准码表整表：只读、渲染专用（弹框「码表」页签，244 行一次下发）。
     { method: marketCalendarPublicPolicy.methods.queryCodeTable },
+    // 事件清单：只读、渲染专用（弹框「事件」页签：一场事件一行，不参与映射）。
+    { method: marketCalendarPublicPolicy.methods.queryEventList },
     { method: marketCalendarPublicPolicy.methods.getCollectionFreshness },
     { method: marketCalendarPublicPolicy.methods.refreshNow },
     { method: macroMarketSnapshotPublicPolicy.method },

@@ -8,6 +8,9 @@ import type {
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventIndexRead'
 import type { MappingRulesRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 import type {
+  CalendarEventListRead, CalendarEventRow
+} from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventListRead'
+import type {
   EventSourceWritesRead, EventSourceWriteRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventSourceWritesRead'
 import type {
@@ -44,6 +47,11 @@ export type MarketCalendarClient = {
   queryEventSourceWrites: (input: Readonly<{ metricKey: string; scheduledDate: string }>) => Promise<EventSourceWritesRead>
   /** 码表（只读整表，渲染专用）：一个码一行，带分级 · 口径 · 官网页 · 状态 · 认得它的源内 id 数。 */
   queryCodeTable: () => Promise<CodeTableRead>
+  /**
+   * **事件清单**（只读、渲染专用）：一行 = 一场事件，不参与映射。
+   * 与经济指标分开取数——事件没有统计期，混进未映射表会让人以为它们该建码。
+   */
+  queryEventList: () => Promise<CalendarEventListRead>
   /** Bounded catch-up: `timeout` is its own answer and is never reported as a failure. */
   refreshNow: (input: Readonly<{ sourceIds?: readonly string[]; timeoutMs?: number }>) => Promise<MarketCalendarRefreshNowResult>
 }
@@ -68,6 +76,9 @@ export const marketCalendarClient: MarketCalendarClient = {
   },
   async queryCodeTable() {
     return codeTableReadOf(await invoke(marketCalendarPublicPolicy.methods.queryCodeTable, {}))
+  },
+  async queryEventList() {
+    return eventListReadOf(await invoke(marketCalendarPublicPolicy.methods.queryEventList, {}))
   },
   async queryEventSourceWrites(input) {
     const value = await invoke(marketCalendarPublicPolicy.methods.queryEventSourceWrites, {
@@ -300,4 +311,34 @@ export function codeTableReadOf(value: unknown): CodeTableRead {
   if (counts === null || typeof counts !== 'object') return unavailable
   if (typeof counts.total !== 'number' || typeof counts.metric !== 'number') return unavailable
   return { state: 'available', rows, counts: counts as unknown as Extract<CodeTableRead, { state: 'available' }>['counts'] }
+}
+
+/**
+ * 事件清单的形状守卫：**只放行真事件**。
+ *
+ * 两处必须挡住：`eventType` 必须是那两档事件（混进经济指标等于把「不需要映射」这句话作废），
+ * `scheduledDate` 必须是日期串（时间列没有它就是空白格，读者以为没排期）。
+ * 其它可空字段（国家、标题、时刻）**允许 `null`**——那是「源没给」，不是坏载荷。
+ */
+export function eventListReadOf(value: unknown): CalendarEventListRead {
+  const unavailable = { state: 'unavailable', reasonCode: 'query-unavailable' } as const
+  if (value === null || typeof value !== 'object') return unavailable
+  const record = value as Record<string, unknown>
+  if (record.state !== 'available' || !Array.isArray(record.rows)) return unavailable
+  const rows: CalendarEventRow[] = []
+  for (const entry of record.rows) {
+    if (entry === null || typeof entry !== 'object') return unavailable
+    const row = entry as Record<string, unknown>
+    if (typeof row.key !== 'string' || row.key === '') return unavailable
+    if (row.eventType !== 'central-bank-activity' && row.eventType !== 'financial-event') return unavailable
+    if (typeof row.scheduledDate !== 'string' || row.scheduledDate === '') return unavailable
+    if (typeof row.sourceProviderId !== 'string' || row.sourceProviderId === '') return unavailable
+    if (typeof row.status !== 'string' || row.status === '') return unavailable
+    for (const field of ['scheduledAt', 'countryCode', 'countryName', 'title', 'titleEn'] as const) {
+      if (row[field] !== null && typeof row[field] !== 'string') return unavailable
+    }
+    rows.push(row as unknown as CalendarEventRow)
+  }
+  if (typeof record.total !== 'number' || record.total !== rows.length) return unavailable
+  return { state: 'available', rows, total: rows.length }
 }

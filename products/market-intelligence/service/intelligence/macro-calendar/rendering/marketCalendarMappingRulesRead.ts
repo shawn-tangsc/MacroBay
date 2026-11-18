@@ -128,13 +128,16 @@ export type MappingRulesRead = Readonly<{
    */
   counts: Readonly<{
     mapped: number
-    /** **只算真正在等映射的**（事件/无标准行/缺期次/无码都排除，见 `diagnostics`）。 */
+    /**
+     * **只算指标类**（用户 2026-11-18 第三页签）：事件有自己的页签、不参与映射，
+     * 所以这个数与 `readCalendarEventList` 的条数**互不重叠**，相加才是「没进日历的全部」。
+     */
     unmapped: number
     unmappedRows: number
     eventIdentities: number
-    /** 只作诊断的四类计数：它们不进列表，但读者问「另外那些去哪了」时这里答得出来。 */
+    /** 只作诊断的三类计数：它们不进列表，但读者问「另外那些去哪了」时这里答得出来。 */
     diagnostics: Readonly<{
-      'unknown-event-type': number; 'no-standard-row': number; 'period-unresolved': number; 'no-code': number
+      'no-standard-row': number; 'period-unresolved': number; 'no-code': number
     }>
   }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
@@ -282,21 +285,18 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
      * 477 里绝大多数不是「该映射却没映射」：讲话/会议是事件、缺统计期的映射早就写了、无标准行的
      * 连一行都没有。它们各有去处，**只作计数**，不进列表——否则读者照着补映射，补的是已经做完的事。
      */
-    const reasonById = new Map<string, string>()
     const reasonRows = database.prepare(`select provider_id, source_key, reason, first_seen_at, raw_json
       from mi_calendar_unmapped`).all() as unknown as
       { provider_id: string; source_key: string; reason: string; first_seen_at: string | null; raw_json: string }[]
-    for (const row of reasonRows) {
-      const id = sourceIdOfSourceKey(row.source_key)
-      if (id !== undefined && !reasonById.has(id)) reasonById.set(id, row.reason)
-    }
-    const diagnostics = { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 0 }
+    const diagnostics = { 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 0 }
     /**
-     * **主列表 = 所有没进日历的东西**（用户 2026-11-18 最终口径）。
+     * **主列表 = 所有没进日历的指标类数据**（用户 2026-11-18 最终口径 + 第三页签）。
      *
-     * 之前按「有没有在等我们填」分主列表和折叠诊断区，读者看到的是 0 条，会误以为「全映射完了」。
-     * 这张表就是「没进来的一切」：事件、没进标准表、缺统计期、没有对应的码——全部列出来，
-     * 每条带原因，**新出现的排最前**。数据只从 `mi_calendar_unmapped` 取（唯一真源），不从别处反推。
+     * 最后一条口径把**事件摘出去了**：事件有自己的页签（`readCalendarEventList`），它没有统计期、
+     * 不参与映射，混在这里会让读者以为「这些讲话该建码」。所以本列表只留指标类：
+     * 没进标准表、缺统计期、没有对应的码——每条带原因，**新出现的排最前**。
+     * 数据只从 `mi_calendar_unmapped` 取（唯一真源），不从别处反推；
+     * 事件那一档不进列表、也不进诊断计数——它的条数在事件页签上，两个数分开才不重复。
      */
     const labelById = new Map<string, { zh: string | null; en: string | null }>()
     for (const entry of byId.values()) {
@@ -309,6 +309,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       const rawReason: string = row.reason
       const reason = rawReason as UnmappedReason
       const bucket = rawReason === 'bad-period' ? 'period-unresolved' : reason
+      // **事件不进这一页**：它没有统计期，也不需要映射，有自己的页签。
+      if (bucket === 'unknown-event-type') return []
       if (bucket in diagnostics) diagnostics[bucket as keyof typeof diagnostics] += 1
       const labels = labelById.get(id)
       return [Object.freeze({

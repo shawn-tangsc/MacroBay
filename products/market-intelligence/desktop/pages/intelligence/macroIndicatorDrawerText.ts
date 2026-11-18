@@ -208,6 +208,18 @@ export const macroIndicatorDrawerText = {
       mappingTierStars: { '1': '★★★', '2': '★★', '3': '★', other: '—' },
       mappingTierAria: { '1': '一级（三颗星）', '2': '二级（两颗星）', '3': '三级（一颗星）', other: '未分级' },
       mappingTierFilterMulti: '按分级筛选（可多选）', mappingCountryFilterMulti: '按国家筛选（可多选）',
+      /* 分级的中文名：导出里与星级同一格（`★★★ 一级`），界面只画星星，读屏名另有一套。 */
+      mappingTierNames: { '1': '一级', '2': '二级', '3': '三级', other: '未分级' },
+      /* 第三个页签：经济事件与央行活动——**不参与映射**，所以这一页没有原因筛选，也没有分级。 */
+      mappingTabEvents: '事件 ({count})',
+      mappingEventColumns: { time: '时间', country: '国家', title: '标题', provider: '来源', status: '状态' },
+      mappingEventsEmpty: '暂无事件',
+      mappingEventTitleMissing: '源未提供标题',
+      mappingSheetEvents: '事件',
+      /* 导出比界面多两列：中英名各一列（界面一格两行，导出拆开才筛选得动）。 */
+      mappingExportNameZh: '中文名', mappingExportNameEn: '英文名',
+      /* 状态闭集之外的值（源以后加了新状态）显示「无法确认」，不印枚举、也不留空。 */
+      mappingStatusUnknown: '无法确认',
       catalogTitle: '全部事件',
       catalogOpenAria: '打开全部事件表',
       catalogNameFilter: '按名称筛选（中英均可）',
@@ -380,6 +392,14 @@ export const macroIndicatorDrawerText = {
       mappingTierStars: { '1': '★★★', '2': '★★', '3': '★', other: '—' },
       mappingTierAria: { '1': 'Tier 1 (three stars)', '2': 'Tier 2 (two stars)', '3': 'Tier 3 (one star)', other: 'Untiered' },
       mappingTierFilterMulti: 'Filter by tier (multi)', mappingCountryFilterMulti: 'Filter by country (multi)',
+      mappingTierNames: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Untiered' },
+      mappingTabEvents: 'Events ({count})',
+      mappingEventColumns: { time: 'Time', country: 'Country', title: 'Title', provider: 'Source', status: 'Status' },
+      mappingEventsEmpty: 'No events',
+      mappingEventTitleMissing: 'No title from the source',
+      mappingSheetEvents: 'Events',
+      mappingExportNameZh: 'Chinese name', mappingExportNameEn: 'English name',
+      mappingStatusUnknown: 'Cannot confirm',
       catalogTitle: 'All events',
       catalogOpenAria: 'Open the full event table',
       catalogNameFilter: 'Filter by name (any language)',

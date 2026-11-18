@@ -239,6 +239,14 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
     tierStars: text.mkDay.mappingTierStars, tierAria: text.mkDay.mappingTierAria,
     tierFilterMulti: text.mkDay.mappingTierFilterMulti, countryFilterMulti: text.mkDay.mappingCountryFilterMulti,
     exportLabel: text.mkDay.mappingExport,
+    tabEvents: text.mkDay.mappingTabEvents, eventColumns: text.mkDay.mappingEventColumns,
+    eventsEmpty: text.mkDay.mappingEventsEmpty, sheetEvents: text.mkDay.mappingSheetEvents,
+    eventTitleMissing: text.mkDay.mappingEventTitleMissing,
+    tierNames: text.mkDay.mappingTierNames,
+    exportNameZh: text.mkDay.mappingExportNameZh, exportNameEn: text.mkDay.mappingExportNameEn,
+    statusUnknown: text.mkDay.mappingStatusUnknown,
+    // 发布状态的白话名**只从日历那份文案来**：弹框里再写一份，同一状态就会有两个说法。
+    eventStatus: calendarText.eventStatus,
     // 说明句由弹框自己按键取（它只出现在 ⓘ 里）；这里只交一个「键 → 文案」的查表函数。
     resolveCopy: (key) => (text.mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
     sheetCodes: text.mkDay.mappingSheetCodes, sheetUnmapped: text.mkDay.mappingSheetUnmapped
