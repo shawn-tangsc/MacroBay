@@ -63,8 +63,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ABS",
+      "url": "https://www.abs.gov.au/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "澳大利亚统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "AU.SEASONAL_ADJUSTMENT_CONSTRUCTION_PERMITS.SA.MOM"
@@ -205,8 +208,11 @@
     "measure": "QOQ",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ABS",
+      "url": "https://www.abs.gov.au/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "澳大利亚统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "AU.CONSTRUCTION_COMPLETION.NONE.QOQ"
@@ -563,8 +569,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ABS",
+      "url": "https://www.abs.gov.au/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "澳大利亚统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -584,8 +593,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ABS",
+      "url": "https://www.abs.gov.au/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "澳大利亚统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "AU.SEASONAL_ADJUSTMENT_PRIVATE_CONSTRUCTION_PERMITS.SA.MOM"
@@ -654,8 +666,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ABS",
+      "url": "https://www.abs.gov.au/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "澳大利亚统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "AU.LOANS_PRIVATE_BUSINESS.NONE.YOY"
@@ -1078,8 +1093,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "CA.CONSTRUCTION_PERMIT.NONE.MOM"
@@ -1148,8 +1166,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -1361,8 +1382,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -1550,8 +1574,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "CA.INDUSTRIAL_PRICE.NONE.YOY"
@@ -1812,8 +1839,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -1930,8 +1960,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -1976,8 +2009,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -2045,8 +2081,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "StatCan",
+      "url": "https://www.statcan.gc.ca/en/start",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "加拿大统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "CA.WHOLESALE_INVENTORY.NONE.MOM"
@@ -2476,8 +2515,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "BFS",
+      "url": "https://www.bfs.admin.ch/bfs/en/home.html",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "瑞士联邦统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -2691,8 +2733,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "CN.CONSUMER_PRICE_RESIDENTS.NONE.YOY"
@@ -2809,8 +2854,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -2974,8 +3022,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "CN.ADDED_VALUE_INDUSTRIES_DESIGNATED_SIZE.NONE.MOM"
@@ -2996,8 +3047,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "CN.INDUSTRIAL_ADDED_VALUE_DESIGNATED_SIZE.NONE.YOY"
@@ -3114,8 +3168,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -3231,8 +3288,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -3252,8 +3312,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -3370,8 +3433,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "国家统计局",
+      "url": "https://www.stats.gov.cn/english/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "中国国家统计局 · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -4214,8 +4280,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -4644,8 +4713,11 @@
     "measure": "LEVEL",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/web/main/data/database",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "Eurostat · 数据库（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -4953,8 +5025,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/web/main/data/database",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "Eurostat · 数据库（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5118,8 +5193,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/web/main/data/database",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "Eurostat · 数据库（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5139,8 +5217,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/web/main/data/database",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "Eurostat · 数据库（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5160,8 +5241,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/web/main/data/database",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "Eurostat · 数据库（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5230,8 +5314,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Eurostat",
+      "url": "https://ec.europa.eu/eurostat/web/main/data/database",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "Eurostat · 数据库（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5396,8 +5483,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "INSEE",
+      "url": "https://www.insee.fr/fr/statistiques",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "INSEE · 统计入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5417,8 +5507,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "INSEE",
+      "url": "https://www.insee.fr/fr/statistiques",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "INSEE · 统计入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5438,8 +5531,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "INSEE",
+      "url": "https://www.insee.fr/fr/statistiques",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "INSEE · 统计入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -5483,8 +5579,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "INSEE",
+      "url": "https://www.insee.fr/fr/statistiques",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "INSEE · 统计入口（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "FR.CONSUMER_PRICE.NONE.MOM"
@@ -5961,8 +6060,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "INSEE",
+      "url": "https://www.insee.fr/fr/statistiques",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "INSEE · 统计入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -6127,8 +6229,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "INSEE",
+      "url": "https://www.insee.fr/fr/statistiques",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "INSEE · 统计入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -6196,8 +6301,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "GB.TOTAL_BUSINESS_INVESTMENT.NONE.YOY"
@@ -6362,8 +6470,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -6383,8 +6494,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -6428,8 +6542,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "GB.CONSUMER_PRICE.NONE.YOY"
@@ -7147,8 +7264,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -7456,8 +7576,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "GB.RIGHTMOVE_AVERAGE_HOUSE_ASKING_PRICE.NONE.MOM"
@@ -7478,8 +7601,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "GB.RIGHTMOVE_AVERAGE_HOME_PRICE.NONE.YOY"
@@ -7524,8 +7650,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -7689,8 +7818,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ONS",
+      "url": "https://www.ons.gov.uk/economy",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ONS · 经济主题页（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -7975,8 +8107,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "政府统计处",
+      "url": "https://www.censtatd.gov.hk/en/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "香港政府统计处 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -8059,8 +8194,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ISTAT",
+      "url": "https://www.istat.it/en/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "ISTAT · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -8080,8 +8218,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ISTAT",
+      "url": "https://www.istat.it/en/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "ISTAT · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -8101,8 +8242,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ISTAT",
+      "url": "https://www.istat.it/en/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "ISTAT · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -8194,8 +8338,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ISTAT",
+      "url": "https://www.istat.it/en/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "ISTAT · 统计入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "IT.GDP.NONE.QOQ"
@@ -8675,8 +8822,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "JP.ALL_HOUSEHOLD_EXPENDITURES.NONE.MOM"
@@ -8865,8 +9015,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -8886,8 +9039,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9003,8 +9159,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "JP.BUSINESS_SERVICES_PRICE.NONE.YOY"
@@ -9025,8 +9184,11 @@
     "measure": "LEVEL",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9239,8 +9401,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9284,8 +9449,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9329,8 +9497,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9350,8 +9521,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9683,8 +9857,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9873,8 +10050,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -9918,8 +10098,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -10083,8 +10266,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -10250,8 +10436,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -10415,8 +10604,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -10436,8 +10628,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -10481,8 +10676,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "总务省统计局",
+      "url": "https://www.stat.go.jp/english/data/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -10887,8 +11085,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "KOSTAT",
+      "url": "https://kostat.go.kr/eng/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "韩国统计厅 · 数据入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -11004,8 +11205,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "KOSTAT",
+      "url": "https://kostat.go.kr/eng/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "韩国统计厅 · 数据入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -11049,8 +11253,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "KOSTAT",
+      "url": "https://kostat.go.kr/eng/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "韩国统计厅 · 数据入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -11247,8 +11454,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Stats NZ",
+      "url": "https://www.stats.govt.nz/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "新西兰统计局 · 数据入口（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "NZ.CONSTRUCTION_PERMIT.NONE.MOM"
@@ -11581,8 +11791,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Stats NZ",
+      "url": "https://www.stats.govt.nz/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "新西兰统计局 · 数据入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -11795,8 +12008,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Stats NZ",
+      "url": "https://www.stats.govt.nz/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "新西兰统计局 · 数据入口（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -12020,8 +12236,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "SingStat",
+      "url": "https://www.singstat.gov.sg/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "新加坡统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
     "status": "retired",
     "supersededBy": "SG.INDUSTRIAL_OUTPUT.NONE.YOY"

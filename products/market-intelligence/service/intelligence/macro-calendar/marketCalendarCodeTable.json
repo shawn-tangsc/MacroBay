@@ -63,8 +63,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -252,8 +255,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -321,8 +327,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -342,8 +351,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -363,8 +375,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -504,8 +519,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -525,8 +543,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -546,8 +567,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -567,8 +591,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -684,8 +711,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -777,8 +807,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
@@ -798,8 +831,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
     },
     "status": "active"
   },
