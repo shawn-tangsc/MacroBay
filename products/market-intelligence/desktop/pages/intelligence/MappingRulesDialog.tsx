@@ -12,6 +12,7 @@ import type { MappingRulesRead } from '../../../service/intelligence/macro-calen
 import type {
   CodeTableRead, CodeTableReadRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
+import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { buildXlsx } from '@platform/files/export/xlsx'
 import { MetricNameText } from '../../shared/MetricNameText'
 import { codeTableExportRows, exportFileName, sampleText, unmappedExportRows } from './mappingRulesExport'
@@ -40,14 +41,21 @@ export type MappingRulesText = Readonly<{
   /** 国家筛选的两个词：「全部国家」与那颗下拉的读屏名。 */
   countryAll: string
   countryFilter: string
-  /** 没有国家时写什么（与日历同一句「未知国家」，不另造一个词）。 */
-  unknownCountry: string
+  /**
+   * 事件类型码的国家说明（列头 ⓘ）：它们不是「国家未知」，而是「这一类没有单一主办国」，
+   * 国家由具体那场事件提供。所以国家列对这些行显示 `—`，不写「未知国家」。
+   */
+  countryNote: string
   codeStatus: Readonly<Record<'active' | 'not-built' | 'pending' | 'retired', string>>
   officialOpen: string
   officialPending: string
   officialNone: string
   codeEmpty: string
-  unmappedColumns: Readonly<Record<'sourceId' | 'rows' | 'sample', string>>
+  unmappedColumns: Readonly<Record<'sourceId' | 'rows' | 'sample' | 'firstSeen' | 'providers' | 'reason', string>>
+  /** 原因七档的白话文案（键与读口闭集同名）。 */
+  unmappedReasons: Readonly<Record<string, string>>
+  reasonFilter: string
+  reasonAll: string
   unmappedEmpty: string
   /** 「只看有数据的」：860 个码里只有约 570 个真落过行，打开时第一眼该看到有内容的。 */
   onlyWithData: string
@@ -93,8 +101,11 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
   codes: CodeTableRead | undefined
   onRetry?: () => void
 }>): React.ReactElement {
+  const formatTime = useShellTimeFormat()
   const [query, setQuery] = useState('')
   const [onlyWithData, setOnlyWithData] = useState(false)
+  /** 原因筛选：`''` = 全部。选项只列**当前这批行里真实出现过的原因**，不铺满七档。 */
+  const [reason, setReason] = useState('')
   /** 国家筛选：`''` = 全部国家（默认）。选项从**同一份码表数据**派生，不另查一次。 */
   const [country, setCountry] = useState('')
   const [tab, setTab] = useState<'codes' | 'unmapped'>('codes')
@@ -109,10 +120,11 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
   const countryOptions = useMemo(() => {
     if (codes?.state !== 'available') return [] as { value: string; label: string }[]
     const seen = new Set<string>()
-    for (const row of codes.rows) seen.add(row.countryName ?? text.unknownCountry)
+    // 事件类型码没有国家：筛选里用「—」这一档，不写成「未知国家」。
+    for (const row of codes.rows) seen.add(row.countryName ?? '—')
     return [{ value: '', label: text.countryAll },
       ...[...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))]
-  }, [codes, text.countryAll, text.unknownCountry])
+  }, [codes, text.countryAll])
   /**
    * 码表默认**按数据量降序**（用户 2026-11-18）：860 个码里近 290 个一行数据都没有，按码名排序时
    * 最上面全是空壳，读者第一眼看到的应当是「有内容的」。同数量按码名，顺序才稳定。
@@ -122,14 +134,23 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
     if (codes?.state !== 'available') return []
     const rows = codes.rows
       .filter((row) => hit([row.code, row.names.zhFull, row.names.enFull]))
-      .filter((row) => country === '' || (row.countryName ?? text.unknownCountry) === country)
+      .filter((row) => country === '' || (row.countryName ?? '—') === country)
       .filter((row) => !onlyWithData || row.releaseRowCount > 0)
     return [...rows].sort((left, right) =>
       right.releaseRowCount - left.releaseRowCount || left.code.localeCompare(right.code))
-  }, [codes, needle, country, onlyWithData, text.unknownCountry])
-  const unmappedRows = useMemo(() => (view?.state === 'available'
-    ? view.unmapped.filter((row) => hit([row.sourceId, row.sampleLabel, row.sampleLabelEn]))
-    : []), [view, needle])
+  }, [codes, needle, country, onlyWithData])
+  const unmappedRows = useMemo(() => {
+    if (view?.state !== 'available') return []
+    return view.unmapped
+      .filter((row) => hit([row.sourceId, row.sampleLabel, row.sampleLabelEn]))
+      .filter((row) => reason === '' || row.reason === reason)
+  }, [view, needle, reason])
+  const reasonOptions = useMemo(() => {
+    if (view?.state !== 'available') return [] as { value: string; label: string }[]
+    const seen = new Set(view.unmapped.map((row) => row.reason))
+    return [{ value: '', label: text.reasonAll },
+      ...[...seen].sort().map((value) => ({ value, label: text.unmappedReasons[value] ?? value }))]
+  }, [view, text.reasonAll, text.unmappedReasons])
 
   const codeCount = codes?.state === 'available' ? codes.counts.total : 0
   const unmappedCount = view?.state === 'available' ? view.counts.unmapped : 0
@@ -161,10 +182,15 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
           render: (value: string) => <span title={value} data-code>{shortCode(value)}</span>
         },
         {
-          // **国家在名称前面**（用户 2026-11-17）。名字由读口给（同一张国名表），渲染层不拼；
-          // 读口给 null 就写「未知国家」——空着会被读成「这一行没有国家这一项」。
-          title: text.codeColumns.country, width: CODE_TABLE_COLUMN_WIDTHS.country, className: 'mi-catalog__cell-nowrap',
-          render: (_value: unknown, row) => <span data-country>{row.countryName ?? text.unknownCountry}</span>
+          // **国家在名称前面**（用户 2026-11-17）。名字由读口给（同一张国名表），渲染层不拼。
+          // 事件类型码**没有单一主办国**（`evt.central-bank-speech` 不是「美国讲话」），
+          // 国家列写 `—`，并在列头 ⓘ 说明——不写「未知国家」，那会让人以为我们连国家都没拿到。
+          title: <span className="mi-catalog__head-with-help">{text.codeColumns.country}
+            {helpTrigger({ text: text.countryNote })}</span>,
+          width: CODE_TABLE_COLUMN_WIDTHS.country, className: 'mi-catalog__cell-nowrap',
+          render: (_value: unknown, row) => row.countryName === null
+            ? <span data-country-empty>—</span>
+            : <span data-country>{row.countryName}</span>
         },
         {
           title: text.codeColumns.name, dataIndex: 'names', width: CODE_TABLE_COLUMN_WIDTHS.name,
@@ -215,7 +241,18 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
         { title: text.unmappedColumns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel',
-          render: (_value: string | null, row) => sampleText(row) }
+          render: (_value: string | null, row) => sampleText(row) },
+        // **首次出现 + 来源**：判断「这是新东西，还是老东西又冒出来」靠这两列；
+        // 时间走平台格式化（读者时区），不在这里手拼。
+        { title: text.unmappedColumns.firstSeen, dataIndex: 'firstSeenAt', className: 'mi-catalog__cell-nowrap',
+          render: (value: string | null) => value === null ? '' : formatTime(value, 'second') },
+        { title: text.unmappedColumns.providers, dataIndex: 'providerIds', className: 'mi-catalog__cell-nowrap',
+          render: (value: readonly string[]) => value.join(' · ') },
+        {
+          // **原因写成白话**（`no-code` → 「没有对应的码」）：内部枚举不给读者看。
+          title: text.unmappedColumns.reason, dataIndex: 'reason', className: 'mi-catalog__cell-nowrap',
+          render: (value: string) => <span data-unmapped-reason={value}>{text.unmappedReasons[value] ?? value}</span>
+        }
       ]} />
 
   const loading = view === undefined || codes === undefined
@@ -252,6 +289,12 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
         <Input allowClear value={query} placeholder={text.filter} aria-label={text.filter}
           onChange={(event) => { setQuery(event.target.value); setCodePage(1); setUnmappedPage(1) }} />
         {/* 只在码表页签有意义：未映射那一页本来就是「没落的行」。 */}
+        {tab === 'unmapped'
+          ? <Select<string> allowClear className="mi-catalog__filter-select" value={reason === '' ? undefined : reason}
+            placeholder={text.reasonFilter} aria-label={text.reasonFilter} data-reason-filter
+            options={reasonOptions}
+            onChange={(value) => { setReason(value ?? ''); setUnmappedPage(1) }} />
+          : null}
         {tab === 'unmapped' ? null : <span className="mi-catalog__only-data" data-only-with-data>
           <Checkbox checked={onlyWithData}
             onChange={(event) => { setOnlyWithData(event.target.checked); setCodePage(1) }}>
@@ -272,7 +315,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
             const sheets = [
               { name: text.sheetCodes, rows: codeTableExportRows(codes?.state === 'available' ? codes.rows : [], {
                 columns: text.codeColumns, status: text.codeStatus, officialPending: text.officialPending,
-                officialNone: text.officialNone, unknownCountry: text.unknownCountry
+                officialNone: text.officialNone, unknownCountry: '—'
               }) },
               { name: text.sheetUnmapped, rows: unmappedExportRows(view?.state === 'available' ? view.unmapped : [],
                 { columns: text.unmappedColumns }) }

@@ -65,7 +65,8 @@ describe('the exported rows', () => {
 
   it('exports the unmapped section with the bilingual sample in one cell', () => {
     const rows = unmappedExportRows([
-      { sourceId: '214634', rowCount: 4, sampleLabel: '批发物价指数', sampleLabelEn: 'Wholesale prices' }
+      { sourceId: '214634', rowCount: 4, firstSeenAt: '2026-11-16T00:00:00.000Z', providerIds: ['0xrouter'],
+      reason: 'no-code', sampleLabel: '批发物价指数', sampleLabelEn: 'Wholesale prices' }
     ], { columns: { sourceId: 'id', rows: '行数', sample: '样本名' } })
     expect(rows[0]).toEqual(['id', '行数', '样本名'])
     expect(rows[1]![2]).toBe('批发物价指数 · Wholesale prices')

@@ -31,11 +31,13 @@ const text = {
   title: mkDay.mappingTitle, filter: mkDay.mappingFilter,
   tabCodes: mkDay.mappingTabCodes, tabUnmapped: mkDay.mappingTabUnmapped,
   tabsAria: mkDay.mappingTabsAria, unavailable: mkDay.mappingUnavailable,
-  codeColumns: mkDay.mappingCodeColumns, codeStatus: mkDay.mappingCodeStatus,
+  countryNote: mkDay.mappingCodeCountryNote, codeColumns: mkDay.mappingCodeColumns, codeStatus: mkDay.mappingCodeStatus,
   onlyWithData: mkDay.mappingOnlyWithData, unknownCountry: '未知国家',
   officialOpen: mkDay.mappingOfficialOpen, officialPending: mkDay.mappingOfficialPending,
   officialNone: mkDay.mappingOfficialNone, codeEmpty: mkDay.mappingCodeEmpty,
   unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
+  unmappedReasons: mkDay.mappingUnmappedReasons, reasonFilter: mkDay.mappingReasonFilter,
+  reasonAll: mkDay.mappingReasonAll,
   countryAll: mkDay.mappingCountryAll, countryFilter: mkDay.mappingCountryFilter,
   exportLabel: mkDay.mappingExport,
   resolveCopy: (key: string) => (mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
@@ -66,7 +68,9 @@ const codes: CodeTableRead = {
 const view: MappingRulesRead = {
   state: 'available',
   mapped: [],
-  unmapped: [{ sourceId: '10267', rowCount: 8, sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
+  unmapped: [{ sourceId: '10267', rowCount: 8, firstSeenAt: '2026-11-17T02:00:00.000Z',
+    providerIds: ['0xrouter'], reason: 'no-code' as const,
+    sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
   counts: { mapped: 0, unmapped: 1, unmappedRows: 8, eventIdentities: 99 } as never
 }
 
@@ -89,13 +93,13 @@ afterEach(async () => {
   root = undefined; host?.remove(); document.body.innerHTML = ''
 })
 
-async function mount(): Promise<void> {
+async function mount(shown: MappingRulesRead = view): Promise<void> {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
-      <MappingRulesDialog open onClose={() => undefined} text={text} view={view} codes={codes} />
+      <MappingRulesDialog open onClose={() => undefined} text={text} view={shown} codes={codes} />
     </ShellTimeZoneProvider></ShellLanguageProvider>)
   })
 }
@@ -129,7 +133,7 @@ it('keeps the code tail visible, and never leaves the official cell blank or a d
   expect(body[2]!.querySelector('[data-official], [data-official-pending]')).toBeNull()
   // 国家列在名称之前；读口给 null 时写「未知国家」，不空着。
   expect(body[0]!.querySelectorAll('td')[1]?.textContent).toContain('美国')
-  expect(body[1]!.querySelectorAll('td')[1]?.textContent).toContain('未知国家')
+  expect(body[1]!.querySelector('[data-country-empty]')?.textContent).toBe('—')
   // **源 id 数 0 显示 0**，不是空；**数据量 0 也写 0**（它是最后一列，紧挨源 id 数）。
   const cellAt = (row: Element, index: number): string => row.querySelectorAll('td')[index]?.textContent ?? ''
   expect(cellAt(body[1]!, 7)).toBe('0')
@@ -223,4 +227,32 @@ it('orders the code table by data volume and can hide codes that have no rows', 
   // 0 行的那条被收起来，剩下的都真有数据。
   expect(rows()).toHaveLength(2)
   expect(document.body.textContent).not.toContain('US.NOT_BUILT')
+})
+
+/**
+ * 未映射页签的两条要求（用户 2026-11-18）：
+ * **长期空是正常状态**——空状态要说明用途，不能只写「没有数据」，否则读者以为我们没做好；
+ * 有内容时每行要能判断「该建码还是该归事件」——所以带首次出现时间、来源、标题原文。
+ */
+it('explains the empty state and shows first-seen, sources and the raw title on a row', async () => {
+  await mount()
+  const unmappedTab = [...document.body.querySelectorAll('[role="tab"]')]
+    .find((tab) => (tab.textContent ?? '').includes('未映射')) as HTMLElement
+  await act(async () => { unmappedTab.click() })
+  const section = document.body.querySelector('[data-mapping-section="unmapped"]')!
+  // 行内：标题原文 + 来源 + 首次出现（时间由平台格式化，不手拼）。
+  expect(section.textContent).toContain('5-10 年通胀预期')
+  expect(section.textContent).toContain('0xrouter')
+  expect(section.textContent).toMatch(/\d{4}/u)
+
+  // 空状态：说清用途，不是一句「没有数据」。
+  await act(async () => root?.unmount())
+  host?.remove()
+  document.body.innerHTML = ''
+  await mount({ ...view, unmapped: [],
+    counts: { ...view.counts, unmapped: 0, unmappedRows: 0 } } as MappingRulesRead)
+  const emptyTab = [...document.body.querySelectorAll('[role="tab"]')]
+    .find((tab) => (tab.textContent ?? '').includes('未映射')) as HTMLElement
+  await act(async () => { emptyTab.click() })
+  expect(document.body.textContent).toContain('暂无未收录的新事件')
 })

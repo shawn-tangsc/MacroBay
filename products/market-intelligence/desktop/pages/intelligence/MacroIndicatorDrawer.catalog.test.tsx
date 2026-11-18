@@ -33,7 +33,8 @@ const events = vi.hoisted(() => ({
       { sourceIds: ['214790'], metricKey: 'US.CPI.NSA.YOY', periodRule: 'same-month', basis: 'BLS · 发布页', officialUrl: 'https://www.bls.gov/news.release/cpi.nr0.htm', names: { zh: 'CPI 年率', en: 'Consumer Price Index (CPI), YoY' }, tier: 1, rowCount: 12 },
       { sourceIds: [], metricKey: 'US.MICHIGAN.NONE.LEVEL', periodRule: null, basis: null, officialUrl: null, names: { zh: '密歇根现况', en: 'Michigan Current Conditions' }, tier: null, rowCount: 0 }
     ],
-    unmapped: [{ sourceId: '10113', rowCount: 8, sampleLabel: '密歇根现况' }],
+    unmapped: [{ sourceId: '10113', rowCount: 8, firstSeenAt: '2026-11-16T00:00:00.000Z',
+      providerIds: ['0xrouter'], reason: 'no-code' as const, sampleLabel: '密歇根现况' }],
     counts: { mapped: 85, unmapped: 249, unmappedRows: 833, eventIdentities: 99 }
   })
 }))

@@ -76,9 +76,25 @@ export type MappingRuleRow = Readonly<{
   childOrder?: number
 }>
 
+export type UnmappedReason = 'unknown-event-type' | 'no-standard-row' | 'period-unresolved'
+  | 'no-code' | 'missing-country' | 'bad-identity' | 'no-values'
+
 export type UnmappedSourceIdRow = Readonly<{
   sourceId: string
   rowCount: number
+  /**
+   * **首次出现时间**（该 id 在库里最早那一行的 `first_seen_at`，UTC）：读者要判断「这是不是新东西」，
+   * 靠的就是这个时间；只写「有 1 行」看不出新旧。
+   */
+  firstSeenAt: string | null
+  /** 出现过的来源（去重排序）：一个 id 可能被多个源写过，全列出来，不挑一个。 */
+  providerIds: readonly string[]
+  /**
+   * **它为什么没进日历**（闭集里的一个值，现场判定）：界面要把这个原因翻成白话显示，
+   * 读者才能判断「该建码、等源、还是它根本不是指标」。不写内部枚举给读者看。
+   */
+  reason: UnmappedReason
+
   /** 样本中文名（源原文）。 */
   sampleLabel: string | null
   /**
@@ -119,13 +135,21 @@ export type MappingRulesRead = Readonly<{
   }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
 
+/** 两个时刻取更早的那个；缺一个就用另一个，都缺是 `null`。 */
+function earliest(left: string | null, right: string | null): string | null {
+  if (left === null) return right
+  if (right === null) return left
+  return left < right ? left : right
+}
+
 /** `["214790",79090]` → `214790`（与事件读口同一个取法，只取第一段）。 */
 function sourceIdOfSourceKey(sourceKey: string): string | undefined {
   const match = /^\["([^"]+)"/u.exec(sourceKey)
   return match?.[1]
 }
 
-type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null; sampleLabelEn: string | null }>
+type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null
+  sampleLabelEn: string | null; firstSeenAt: string | null; providerIds: string[] }>
 
 /**
  * 指标码 → 发布机构页面。**只按「机构 + 页面类型」的模板填**，不做逐条手抄：
@@ -153,9 +177,11 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
   try {
     // 源内身份＝数组第一段（`["214790",79090]` → `214790`）；规范码不是这里的对象。
     const rows = database.prepare(`select metric_key, count(*) as n, min(source_label) as label,
-        min(source_label_en) as label_en
+        min(source_label_en) as label_en, min(source_provider_id) as provider,
+        min(first_seen_at) as first_seen_at
       from mi_calendar_events where metric_key glob '*[[]*' group by metric_key`)
-      .all() as unknown as { metric_key: string; n: number; label: string | null; label_en: string | null }[]
+      .all() as unknown as { metric_key: string; n: number; label: string | null; label_en: string | null
+        provider: string | null; first_seen_at: string | null }[]
     // 按**指标码**数行（不是按源内 id）：这是读者问的那个问题，见 `rowCount` 的说明。
     const rowsByMetricKey = new Map<string, number>()
     for (const row of database.prepare(`select metric_key, count(*) as n from mi_calendar_events
@@ -166,9 +192,14 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
     for (const row of rows) {
       const id = sourceInternalIdOf(row.metric_key).replace(/^id:/, '')
       const current = byId.get(id)
-      byId.set(id, { sourceId: id, rows: (current?.rows ?? 0) + Number(row.n),
+      const firstSeen = row.first_seen_at === null ? undefined : String(row.first_seen_at)
+      byId.set(id, {
+        sourceId: id, rows: (current?.rows ?? 0) + Number(row.n),
         sampleLabel: current?.sampleLabel ?? row.label,
-        sampleLabelEn: current?.sampleLabelEn ?? row.label_en })
+        sampleLabelEn: current?.sampleLabelEn ?? row.label_en,
+        firstSeenAt: earliest(firstSeen ?? null, current?.firstSeenAt ?? null),
+        providerIds: [...new Set([...(current?.providerIds ?? []), String(row.provider)])].sort()
+      })
     }
     /**
      * 「现在认得哪些 id」= 三张表合起来：旧表 85 条 + 0xrouter 自己的 32 条（子项码那批）
@@ -278,6 +309,7 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
     const rowCountById = new Map<string, number>()
     for (const entry of byId.values()) rowCountById.set(entry.sourceId, entry.rows)
     let unclassified = 0
+    const reasonFor = new Map<string, UnmappedReason>()
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
       .filter((entry) => !recognized.has(entry.sourceId))
       .filter((entry) => {
@@ -290,15 +322,16 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
             : recorded !== undefined && recorded in diagnostics ? recorded
               // 没有映射表认得它 = 没有码。有码的那批根本不会进这个列表（recognized 先过滤掉了）。
               : 'no-code'
-        if (bucket === 'no-code' || bucket === 'unknown-event-type') {
-          diagnostics[bucket] += 1
-          return false
-        }
+        // **列表只留「四类都判不出来」的**（用户 2026-11-18 的验收标准：页签空着才正常）。
+        // 四类各有去处，只进计数；它们的逐行入口在诊断计数里，不在这个列表。
         if (bucket in diagnostics) { diagnostics[bucket as keyof typeof diagnostics] += 1; return false }
         unclassified += 1
+        reasonFor.set(entry.sourceId, bucket as UnmappedReason)
         return true
       })
       .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows,
+        firstSeenAt: entry.firstSeenAt, providerIds: Object.freeze(entry.providerIds),
+        reason: reasonFor.get(entry.sourceId) ?? 'no-code',
         sampleLabel: entry.sampleLabel, sampleLabelEn: entry.sampleLabelEn }))
       .sort((left, right) => right.rowCount - left.rowCount || left.sourceId.localeCompare(right.sourceId))
     return Object.freeze({

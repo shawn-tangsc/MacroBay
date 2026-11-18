@@ -182,6 +182,7 @@ export const macroIndicatorDrawerText = {
       /* 页签下面那句，解释「未映射少了、已映射没涨」：数字从读口取，不写死。 */
       mappingTabCodes: '码表 ({count})',
       mappingOnlyWithData: '只看有数据的',
+      mappingCodeCountryNote: '事件类型的国家由具体事件决定',
       mappingCodeColumns: { code: '码', country: '国家', name: '名称', tier: '分级', measure: '口径', official: '官网页', status: '状态', sourceIds: '源 id 数', dataVolume: '数据量' },
       mappingCountryAll: '全部国家', mappingCountryFilter: '按国家筛选',
       mappingCodeStatus: { active: '生效', 'not-built': '不建', pending: '待补', retired: '已退役' },
@@ -190,12 +191,19 @@ export const macroIndicatorDrawerText = {
       mappingSheetCodes: '码表',
       mappingTabUnmapped: '未映射 ({count})',
       mappingTabsAria: '切换已映射与未映射',
-      mappingUnmappedEmpty: '没有匹配的 id',
+      mappingUnmappedEmpty: '暂无未收录的新事件',
       mappingUnavailable: '映射规则这次读不到',
       /* 子项的归属小字：`母指标名 · 子项`。母名查不到时这里只写「子项」。 */
       /* 导出文件里的三个工作表名（不是页签文案：页签带条数，工作表名不带）。 */
       mappingSheetUnmapped: '未映射',
-      mappingUnmappedColumns: { sourceId: '源内 id', rows: '行数', sample: '样本名字' },
+      mappingUnmappedColumns: { sourceId: '源内 id', rows: '行数', sample: '样本名字', firstSeen: '首次出现', providers: '来源', reason: '原因' },
+      /* 原因一律**白话**：内部枚举不给读者看。键与读口闭集同名，改一处两处一起改。 */
+      mappingUnmappedReasons: {
+        'no-code': '没有对应的码', 'period-unresolved': '源没给统计期', 'no-standard-row': '没进标准表',
+        'unknown-event-type': '事件，不是指标', 'missing-country': '源没给国家', 'bad-identity': '认不出是什么',
+        'no-values': '这次没带数值'
+      },
+      mappingReasonFilter: '按原因筛选', mappingReasonAll: '全部原因',
       catalogTitle: '全部事件',
       catalogOpenAria: '打开全部事件表',
       catalogNameFilter: '按名称筛选（中英均可）',
@@ -346,6 +354,7 @@ export const macroIndicatorDrawerText = {
       mappingExportAllNote: 'Exports every row of both sheets, regardless of the current filter',
       mappingTabCodes: 'Code table ({count})',
       mappingOnlyWithData: 'Only codes with data',
+      mappingCodeCountryNote: 'The country of an event-type code is decided by each event',
       mappingCodeColumns: { code: 'Code', country: 'Country', name: 'Name', tier: 'Tier', measure: 'Measure', official: 'Official page', status: 'Status', sourceIds: 'Source ids', dataVolume: 'Rows' },
       mappingCountryAll: 'All countries', mappingCountryFilter: 'Filter by country',
       mappingCodeStatus: { active: 'Active', 'not-built': 'Not built', pending: 'Pending', retired: 'Retired' },
@@ -354,10 +363,16 @@ export const macroIndicatorDrawerText = {
       mappingSheetCodes: 'Code table',
       mappingTabUnmapped: 'Unmapped ({count})',
       mappingTabsAria: 'Switch between mapped and unmapped',
-      mappingUnmappedEmpty: 'No matching ids',
+      mappingUnmappedEmpty: 'No new events to include yet',
       mappingUnavailable: 'Mapping rules are not readable right now',
       mappingSheetUnmapped: 'Unmapped',
-      mappingUnmappedColumns: { sourceId: 'Source id', rows: 'Rows', sample: 'Sample name' },
+      mappingUnmappedColumns: { sourceId: 'Source id', rows: 'Rows', sample: 'Sample name', firstSeen: 'First seen', providers: 'Sources', reason: 'Reason' },
+      mappingUnmappedReasons: {
+        'no-code': 'No matching code', 'period-unresolved': 'Source gave no period', 'no-standard-row': 'Not in the standard table',
+        'unknown-event-type': 'Event, not an indicator', 'missing-country': 'Source gave no country', 'bad-identity': 'Cannot identify',
+        'no-values': 'No values in this release'
+      },
+      mappingReasonFilter: 'Filter by reason', mappingReasonAll: 'All reasons',
       catalogTitle: 'All events',
       catalogOpenAria: 'Open the full event table',
       catalogNameFilter: 'Filter by name (any language)',
