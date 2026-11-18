@@ -69,6 +69,19 @@ describe('manual analysis failure notice', () => {
     }])
   })
 
+  it('gives the network-not-ready failure a retry, not a bare acknowledgement', () => {
+    const request = buildManualAnalysisFailureRequest({ ...failedRun, failureDetailCode: 'network-not-ready' })
+    // 读者能做的只有稍后重试，确认按钮什么也没告诉他。
+    expect(request?.actions).toHaveLength(1)
+    expect(request?.actions[0]?.kind).toBe('custom')
+    expect(request?.actions[0]?.labelRef).toEqual({
+      scope: 'product', productId: 'market-intelligence', key: expect.stringContaining('retry-analysis')
+    })
+    expect(request?.rendered?.['zh-CN']?.body).toContain('网络还没就绪，稍后重试')
+    expect(manualAnalysisFailureReasonCopy({ failureCode: 'analysis-provider-error', failureDetailCode: 'network-not-ready' })['en-US'])
+      .toContain('network was not ready')
+  })
+
   it('never lets a failed submission change the run outcome', async () => {
     const submit = vi.fn(async () => { throw new Error('notification store unavailable') })
     await expect(notifyManualAnalysisFailure(submit, failedRun)).resolves.toBeUndefined()

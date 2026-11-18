@@ -5,8 +5,10 @@ import type {
   SafeModelInvocationTrace,
   StructuredModelInvocationErrorCode,
   StructuredModelTaskRequest,
-  StructuredModelTaskResult
+  StructuredModelTaskResult,
+  TransportErrorKind
 } from './structuredModelInvocationTypes'
+import { classifyTransportError } from './transportErrorKind'
 
 const DEFAULT_TIMEOUT_MS = 45_000
 const DEFAULT_MAX_CONCURRENT = 4
@@ -107,7 +109,17 @@ export function createStructuredModelInvocationService(deps: {
             return failure(request.taskId, 'timeout', startedAt, resolved.model.providerId, resolved.model.modelId)
           }
           if (!completion.ok) {
-            return failure(request.taskId, completion.errorCode, startedAt, resolved.model.providerId, resolved.model.modelId)
+            return failure(
+              request.taskId,
+              completion.errorCode,
+              startedAt,
+              resolved.model.providerId,
+              resolved.model.modelId,
+              {
+                ...(completion.status === undefined ? {} : { httpStatus: completion.status }),
+                ...(completion.transportErrorKind === undefined ? {} : { transportErrorKind: completion.transportErrorKind })
+              }
+            )
           }
 
           let parsedJson: unknown
@@ -158,7 +170,8 @@ export function createStructuredModelInvocationService(deps: {
             'provider-error',
             startedAt,
             resolved.model.providerId,
-            resolved.model.modelId
+            resolved.model.modelId,
+            { transportErrorKind: classifyTransportError(error) }
           )
         } finally {
           clearTimeout(timeoutId)
@@ -176,11 +189,14 @@ function failure(
   errorCode: StructuredModelInvocationErrorCode,
   startedAt: number,
   providerId?: string,
-  modelId?: string
+  modelId?: string,
+  evidence?: Readonly<{ httpStatus?: number; transportErrorKind?: TransportErrorKind }>
 ): StructuredModelTaskResult<never> {
   return {
     ok: false,
     errorCode,
+    ...(evidence?.httpStatus === undefined ? {} : { httpStatus: evidence.httpStatus }),
+    ...(evidence?.transportErrorKind === undefined ? {} : { transportErrorKind: evidence.transportErrorKind }),
     trace: createTrace(taskId, startedAt, providerId, modelId, errorCode)
   }
 }

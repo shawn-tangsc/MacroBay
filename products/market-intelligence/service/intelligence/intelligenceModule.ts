@@ -302,13 +302,13 @@ export function getIntelligenceModule(
       hooks
     })
     /* 名字在这里解构出来：表面与启动链引用一个字没改。 */
-    const { archiveService, replayService, publicQueryService, marketAnalysisRuntime, sourcesService } = runtimes
+    const { archiveService, replayService, publicQueryService, marketAnalysisRuntime, sourcesService, modelNetworkReadiness } = runtimes
     const startup = createIntelligenceStartup({
       jobRuntime,
       dataDir,
       profileStore,
       sourcesService,
-      marketAnalysisRuntime,
+      marketAnalysisRuntime, modelNetworkReadiness,
       /* 惰性读：链接存储的构造在下面日报那段，晚于这里。 */
       briefingSessionLinks: () => dailyBriefSessionLinks,
       hooks

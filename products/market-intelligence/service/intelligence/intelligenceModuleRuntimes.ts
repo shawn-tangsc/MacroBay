@@ -9,6 +9,7 @@ import { createMarketIntelligencePublicQueryService } from './public-query/publi
 import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
 import { createMarketAnalysisSettingsService } from './application/marketAnalysisSettingsService'
 import { registerMarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
+import { createModelNetworkReadinessGate } from './analysis/modelNetworkReadiness'
 import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
 import { registerIntelligenceDataChangedEvents } from './jobs/registerIntelligenceDataChanged'
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
@@ -177,6 +178,13 @@ export function createIntelligenceRuntimes(input: {
     ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
     ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {})
   })
+  // 启动窗口的网络就绪门：启动引导阶段由 `createIntelligenceStartup` 调一次 `start()`，
+  // 启动窗口内排队的运行经编排器等它。**只覆盖启动窗口，不是网络抖动的通用兜底**。
+  const modelNetworkReadiness = createModelNetworkReadinessGate({
+    getProviderState: hooks?.getProviderState ?? (async () => ({ providers: [] })),
+    fetch: hooks?.platformFetch as unknown as typeof fetch,
+    ...(hooks?.log ? { log: hooks.log } : {})
+  })
   const marketAnalysisRuntime = registerMarketAnalysisRuntime({
     jobRuntime,
     // 开盘时刻按设置的读者时区换算（唯一提供者）。
@@ -201,6 +209,7 @@ export function createIntelligenceRuntimes(input: {
     // 库重建后不必重启分析运行时；库打不开时返回 undefined，严重度停在「还没判」。
     latestNewsSentiment: (itemId, asOf) => newsSentimentExposure.store?.getLatestSentiment(itemId, asOf),
     ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
+    networkReadiness: modelNetworkReadiness,
     dataDir
   })
   const sourcesService = createIntelligenceSourcesService({
@@ -216,5 +225,5 @@ export function createIntelligenceRuntimes(input: {
     requestGovernanceQueue,
     ...(hooks?.platformFetch ? { platformFetch: hooks.platformFetch as typeof fetch } : {})
   })
-  return { archiveService, replayService, publicQueryService, marketAnalysisRuntime, sourcesService }
+  return { archiveService, replayService, publicQueryService, marketAnalysisRuntime, sourcesService, modelNetworkReadiness }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { AnalysisRun, EvidenceSnapshot, EventGroup } from '../../../contracts/marketAnalysisContracts'
 import { createAnalysisOrchestrator, marketAnalysisInvocationPolicy } from './analysisOrchestrator'
+import { createModelNetworkReadinessGate } from './modelNetworkReadiness'
 import { analysisUpstreamRetryPolicy } from './analysisUpstreamRetry'
 import { buildAnalysisReferenceMap } from './analysisReferenceHandles'
 import { formatShellInstant } from '@platform/ui/time/shellTimeFormat'
@@ -256,22 +257,36 @@ describe('analysisOrchestrator', () => {
 
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'failed', errorCode: 'analysis-provider-error' })
     expect(invoke).toHaveBeenCalledOnce()
-    // A call that died in 2 ms never reached the provider: "connection failed", not "it failed".
-    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ failureDetailCode: 'connect-failed' }))
+    // 2 ms 只说明这一跳很快失败，说明不了是连接：没有状态码、也没有传输类别时不许再猜「连不上」。
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ failureDetailCode: 'provider-other' }))
   })
 
-  it('records why a provider call failed, from the code and the time it took', async () => {
+  it('records why a provider call failed, from the status or transport kind it carried', async () => {
     const cases = [
       // The gateway's fallback budget cutting a long attempt: the observed cut lands at 59–61 s.
       { errorCode: 'provider-error' as const, durationMs: 60_700, detail: 'upstream-aborted' },
-      { errorCode: 'provider-error' as const, durationMs: 1_200, detail: 'connect-failed' },
+      // Short duration alone is not evidence of a connection failure; the transport kind is.
+      { errorCode: 'provider-error' as const, durationMs: 1_200, detail: 'provider-other' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, transportErrorKind: 'dns' as const, detail: 'connect-failed' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, transportErrorKind: 'reset' as const, detail: 'connect-failed' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, transportErrorKind: 'timeout' as const, detail: 'gateway-timeout' },
+      // B：注入 500，失败但 detail 是 http-5xx——不是「连不上」。
+      { errorCode: 'provider-error' as const, durationMs: 1_200, httpStatus: 500, detail: 'http-5xx' },
+      { errorCode: 'provider-error' as const, durationMs: 60_700, httpStatus: 502, detail: 'http-5xx' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, httpStatus: 401, detail: 'http-4xx' },
       // An answer that was an error, not a silent death: neither duration rule may claim it.
       { errorCode: 'provider-error' as const, durationMs: 20_000, detail: 'provider-other' },
       { errorCode: 'rate-limited' as const, durationMs: 800, detail: 'http-429' },
       { errorCode: 'timeout' as const, durationMs: 240_000, detail: 'gateway-timeout' }
     ]
     for (const entry of cases) {
-      const invoke = vi.fn(async () => ({ ok: false as const, errorCode: entry.errorCode, trace: { taskId: 'mi-ar-1', durationMs: entry.durationMs } }))
+      const invoke = vi.fn(async () => ({
+        ok: false as const,
+        errorCode: entry.errorCode,
+        ...('httpStatus' in entry ? { httpStatus: entry.httpStatus } : {}),
+        ...('transportErrorKind' in entry ? { transportErrorKind: entry.transportErrorKind } : {}),
+        trace: { taskId: 'mi-ar-1', durationMs: entry.durationMs }
+      }))
       const updateRunStatus = vi.fn()
       const orchestrator = createAnalysisOrchestrator({ repository: createRepository({ updateRunStatus }), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
@@ -283,6 +298,100 @@ describe('analysisOrchestrator', () => {
       // No failed run leaves the detail blank or copies the coarse code back into it.
       expect(updateRunStatus.mock.calls[0]![0].failureDetailCode).not.toBe(updateRunStatus.mock.calls[0]![0].failureCode)
     }
+  })
+
+  it('A：启动后 2 秒排队的那次运行等启动探针，而不是自己落成 connect-failed', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    try {
+      const providerState = {
+        providers: [{
+          id: 'provider-1', name: 'provider', enabled: true, baseUrl: 'https://api.example.test',
+          apiKey: 'key', endpoints: [], customHeaders: [],
+          models: [{ id: 'model-1', name: 'model', capabilities: { chat: true } }]
+        }]
+      }
+      const probeAttemptsAt: number[] = []
+      const fetchMock = vi.fn(async () => {
+        probeAttemptsAt.push(Date.now())
+        // 前三次是传输层失败（启动后代理还没就绪）；约 +3.5 s 的第四次拿到 401——端点可达。
+        if (Date.now() < 3_500) {
+          const error = new Error('fetch failed') as Error & { cause?: { code: string } }
+          error.cause = { code: 'ENOTFOUND' }
+          throw error
+        }
+        return { status: 401, body: null } as unknown as Response
+      })
+      const gate = createModelNetworkReadinessGate({
+        getProviderState: async () => providerState as never,
+        fetch: fetchMock as never
+      })
+      gate.start()
+
+      // 启动后 2 秒运行才排队：此时探针已退避两次、网络还没通。
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(probeAttemptsAt.length).toBeGreaterThanOrEqual(2)
+
+      const invokedAt: number[] = []
+      const invoke = vi.fn(async () => {
+        invokedAt.push(Date.now())
+        // 网络没通之前真的去调，得到的是传输层错误——没有门时正是这条路落 `connect-failed`。
+        if (Date.now() < 3_500) {
+          return {
+            ok: false as const, errorCode: 'provider-error' as const,
+            transportErrorKind: 'dns' as const, trace: { taskId: 'mi-ar-1', durationMs: 1_200 }
+          }
+        }
+        return {
+          ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1',
+          trace: { taskId: 'mi-ar-1', durationMs: 2 }
+        }
+      })
+      const updateRunStatus = vi.fn()
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository({ updateRunStatus }),
+        structuredModelInvocation: { invoke } as never,
+        now: () => new Date(Date.now()).toISOString(),
+        timeZone: () => 'UTC', idFactory: idFactory(),
+        networkReadiness: gate
+      })
+      const running = orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+      // 探针在 ~3.5 s 拿到 401 后就绪；等到标记的运行这时才发起模型调用。
+      await vi.advanceTimersByTimeAsync(3_000)
+      const result = await running
+      // 判据：这一次既没失败，也绝不落 `connect-failed`。没有门时这里会是 ['connect-failed']。
+      const recordedDetails = updateRunStatus.mock.calls.map(
+        call => (call[0] as { failureDetailCode?: string }).failureDetailCode
+      )
+      expect(recordedDetails).not.toContain('connect-failed')
+      expect(result).toEqual({ status: 'succeeded' })
+      expect(invoke).toHaveBeenCalledOnce()
+      expect(invokedAt[0]).toBeGreaterThanOrEqual(3_500)
+      expect(gate.networkReadyAt()).toBeTypeOf('string')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails a startup-window run as network-not-ready when the probe budget runs out, without calling the model', async () => {
+    const invoke = vi.fn()
+    const updateRunStatus = vi.fn()
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ updateRunStatus }),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      networkReadiness: { wait: async () => 'not-ready' as const }
+    })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toEqual({ status: 'failed', errorCode: 'analysis-provider-error' })
+    expect(invoke).not.toHaveBeenCalled()
+    // 超时不许冒充 `connect-failed`：那是「断了」，这里是「还没就绪」。
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({
+      failureDetailCode: 'network-not-ready'
+    }))
   })
 
   it('answers a failure the reader asked for, and stays quiet for an automatic one', async () => {

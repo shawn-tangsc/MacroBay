@@ -125,6 +125,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   publicQueryService: MarketIntelligencePublicQueryService
   structuredModelInvocation: Pick<import('@platform/ai/invocation/structuredModelInvocation').StructuredModelInvocationService, 'invoke'>
   /**
+   * 启动窗口的网络就绪门：启动引导阶段探一次 provider 的 `/models`，启动窗口内排队的运行等
+   * 这一个标记。只在启动引导装配时注入；缺席（headless / 测试）就不等待。
+   * **只覆盖启动窗口**，不是网络抖动的通用兜底。
+   */
+  networkReadiness?: Readonly<{ wait: () => Promise<'ready' | 'not-ready'> }>
+  /**
    * Absent in headless wiring (and in most tests): the runtime then behaves as a fresh install with
    * no settings yet, which is the documented default rather than a wiring error.
    */
@@ -190,6 +196,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     idFactory: () => randomUUID(),
     ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
     ...createAnalysisNoticeDeps({ ...input, now, timeZone }),
+    ...(input.networkReadiness ? { networkReadiness: input.networkReadiness } : {}),
     ensureRunSession: runSession.ensureRunSession,
     appendRunSummary: runSession.appendRunSummary
   })

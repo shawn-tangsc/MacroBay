@@ -126,6 +126,12 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * 没有证据说"反了"，推送只会进中心，不叫醒手机。
    */
   readTriggerSignal?: (triggerKey: string) => Readonly<{ direction?: 'bullish' | 'bearish'; factIds?: readonly string[] }>
+  /**
+   * 启动窗口的就绪门：启动引导阶段探一次 provider 的 `/models`，启动窗口内排队的运行等这一个
+   * 标记，不各自探测。只有启动引导装配时注入；缺席（headless / 窄测试）就不等待。
+   * **只覆盖启动窗口**，不是网络抖动的通用兜底——门一旦结算（ready / 超时）就不再阻塞。
+   */
+  networkReadiness?: Readonly<{ wait: () => Promise<'ready' | 'not-ready'> }>
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
@@ -139,6 +145,14 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       ...(deps.ensureRunSession ? { ensure: deps.ensureRunSession } : {})
     })
     if (input.signal?.aborted) return cancel(runRecord.id)
+    // 启动引导探到网络通之前排队的运行在这里等。门已结算时立即返回，所以这段只覆盖启动窗口：
+    // 它不是网络抖动的通用兜底，超时也不能冒充 `connect-failed`——那会把「还没就绪」说成「断了」。
+    if (deps.networkReadiness) {
+      const readiness = await deps.networkReadiness.wait()
+      if (readiness === 'not-ready') {
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'network-not-ready')
+      }
+    }
     const signal = input.signal ?? new AbortController().signal
 
     // 冻结证据的构造（快照哈希、可用事实、变更摘要里的数、语言）在 `analysisFrozenEvidence` 一处。
@@ -230,7 +244,12 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         // The detail is what tells a cut call apart from a rate limit or a dead connection; the
         // coarse code alone made every provider fault read the same.
         const failureDetailCode = resolveAnalysisRunFailureDetail({
-          failureCode, providerFailure: { errorCode: invocation.errorCode, durationMs: invocation.trace.durationMs }
+          failureCode, providerFailure: {
+            errorCode: invocation.errorCode,
+            durationMs: invocation.trace.durationMs,
+            ...(invocation.httpStatus === undefined ? {} : { httpStatus: invocation.httpStatus }),
+            ...(invocation.transportErrorKind === undefined ? {} : { transportErrorKind: invocation.transportErrorKind })
+          }
         })
         // 断流重试：同一次运行内、先占后跑、每 UTC 日一次。取消就当场结束，认定这一次仍没成。
         if (failureDetailCode === 'upstream-aborted' && !retried && deps.repository.retry) {

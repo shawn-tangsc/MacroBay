@@ -19,7 +19,9 @@ import type { AnalysisKind } from '../../../contracts/analysisKinds'
  *    「同一 failureCode 最多 4 条」用的是平台的 `dailyLimit`，单位是**读者日**，不是滚动 24 小时。
  *
  * 动作只由「谁触发 + 失败码类别」决定，不由文案猜：连接类（`connect-failed` / `provider-error`）
- * 一律「检查模型连接」且不给重试——重试只会再失败一次；其余失败手动给「重试」、自动只给「查看时间轴」。
+ * 一律「检查模型连接」且不给重试——重试只会再失败一次；`network-not-ready` 单独一档：只给重试，
+ * 正文说「网络还没就绪」，不给「检查模型连接」（那不是配置问题）；其余失败手动给「重试」、
+ * 自动只给「查看时间轴」。
  */
 export type AnalysisFailureNoticeInput = Readonly<{
   /** `manual` = 读者点名要的那次（含按条解读）；其余都算自动。 */
@@ -34,10 +36,16 @@ export type AnalysisFailureNoticeInput = Readonly<{
   occurredAt: string
 }>
 
-export type AnalysisFailureClass = 'connection' | 'other'
+export type AnalysisFailureClass = 'connection' | 'network' | 'other'
 
-/** 连接类失败：读者要做的是查配置/网络，不是重试。 */
+/**
+ * 连接类失败：读者要做的是查配置/网络，不是重试。
+ *
+ * `network-not-ready` 必须排在连接类前面：它的粗码也是 `analysis-provider-error`，但事实是
+ * 「启动时网络还没就绪」，不是「连不上」。混进连接类会给读者一条「检查模型连接」的错误指引。
+ */
 export function classifyAnalysisFailure(input: Pick<AnalysisFailureNoticeInput, 'failureCode' | 'failureDetailCode'>): AnalysisFailureClass {
+  if (input.failureDetailCode === 'network-not-ready') return 'network'
   return input.failureDetailCode === 'connect-failed' || input.failureCode === 'analysis-provider-error' ? 'connection' : 'other'
 }
 
@@ -95,64 +103,63 @@ export function buildAnalysisFailureRequest(input: AnalysisFailureNoticeInput): 
   // 提交时把两种语言一次备好，读取端按读者当前语言挑——成品句和「存键」两种形状，平台都收。
   // 正文按 kind 说清是哪一类（R39 §7）：一条新闻的解读失败，不能说成「时间轴里能看到」。
   const news = input.analysisKind === 'news'
+  const body = failureBody(failureClass, news)
   const rendered = news ? {
     'zh-CN': {
       title: '新闻解读没能生成',
-      body: failureClass === 'connection'
-        ? '这次没有连上模型服务，所以没有得出这条新闻的解读。检查模型配置或网络后可以重试。'
-        : '这次新闻解读没有完成，可以在新闻抽屉里重试。',
+      body: body['zh-CN'],
       reason: '新闻解读失败了，而你在等它的结果。'
     },
     'en-US': {
       title: 'News reading did not run',
-      body: failureClass === 'connection'
-        ? 'The model service could not be reached, so no reading of this news item was produced. Check the model settings or your network, then try again.'
-        : 'This news reading did not finish; you can retry from the news drawer.',
+      body: body['en-US'],
       reason: 'A news reading failed while you were waiting for it.'
     }
   } as const : {
     'zh-CN': {
       title: '分析没能生成',
-      body: failureClass === 'connection'
-        ? '这次没有连上模型服务，所以没有得出解读。检查模型配置或网络后可以重试。'
-        : '这次分析没有完成，时间轴里能看到失败与重试。',
-      reason: '分析失败了，而你在等它的结果。'
+      body: body['zh-CN'],
+      reason: failureClass === 'network'
+        ? '启动时网络还没就绪，这次分析没有开始。'
+        : '分析失败了，而你在等它的结果。'
     },
     'en-US': {
       title: 'Analysis did not run',
-      body: failureClass === 'connection'
-        ? 'The model service could not be reached, so no reading was produced. Check the model settings or your network, then try again.'
-        : 'This analysis did not finish; the timeline shows the failure and the retry.',
-      reason: 'An analysis failed while you were waiting for it.'
+      body: body['en-US'],
+      reason: failureClass === 'network'
+        ? 'The network was not ready when this analysis started.'
+        : 'An analysis failed while you were waiting for it.'
     }
   } as const
   // 「期间还有 N 次」不写进模板：次数由平台的合并计数统一说，两个数会打架。
+  // 键带 detail：同一个粗码下「网络没就绪」和「连不上」是读者要做两件事的两种失败，
+  // 合并会让后发生的那条消失。
   const identity = input.kind === 'manual'
     ? `manual:${input.runId}`
-    : `${input.triggerKey}:${input.failureCode ?? 'unknown'}:${automaticFailureBucket(input.occurredAt)}`
+    : `${input.triggerKey}:${input.failureCode ?? 'unknown'}:${input.failureDetailCode ?? 'unknown'}:${automaticFailureBucket(input.occurredAt)}`
+  const retryAction = {
+    id: 'retry-analysis', kind: 'custom' as const,
+    labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_RETRY_ACTION_KEY }
+  }
+  const timelineAction = {
+    id: 'view-timeline', kind: 'open' as const, deeplink: deeplinkForTimeline(input.eventGroupId),
+    labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_TIMELINE_ACTION_KEY }
+  }
   const actions: NotificationSubmitRequest['actions'] = failureClass === 'connection'
+    // 连接类：读者要做的是查配置/网络。网络没就绪不是连接问题——给它「检查模型连接」是错误指引。
     ? [{
       id: 'check-model', kind: 'open', deeplink: checkModelDeeplink,
       labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_CHECK_MODEL_ACTION_KEY }
     }]
-    : news
+    // 启动窗口的网络没就绪：稍后会好，动作只有「重试」。
+    : failureClass === 'network'
+      ? [retryAction]
       // 新闻解读不进时间轴：动作只有「重试」，不给「查看时间轴」——那条 deeplink 里没有这条解读。
-      ? (input.kind === 'manual' ? [{
-        id: 'retry-analysis', kind: 'custom',
-        labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_RETRY_ACTION_KEY }
-      }] : [])
-      : input.kind === 'manual'
-      ? [{
-        id: 'retry-analysis', kind: 'custom',
-        labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_RETRY_ACTION_KEY }
-      }, {
-        id: 'view-timeline', kind: 'open', deeplink: deeplinkForTimeline(input.eventGroupId),
-        labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_TIMELINE_ACTION_KEY }
-      }]
-      : [{
-        id: 'view-timeline', kind: 'open', deeplink: deeplinkForTimeline(input.eventGroupId),
-        labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_TIMELINE_ACTION_KEY }
-      }]
+      : news
+        ? (input.kind === 'manual' ? [retryAction] : [])
+        : input.kind === 'manual'
+          ? [retryAction, timelineAction]
+          : [timelineAction]
   return {
     eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisFailed,
     producerId: RUN_MARKET_ANALYSIS_JOB,
@@ -161,6 +168,42 @@ export function buildAnalysisFailureRequest(input: AnalysisFailureNoticeInput): 
     actions,
     occurredAt: input.occurredAt
   }
+}
+
+/**
+ * 正文按失败类别说清读者能做什么。网络没就绪是「还没到」而不是「连不上」：
+ * 它只说稍后重试，不给检查模型连接的指引。
+ */
+function failureBody(
+  failureClass: AnalysisFailureClass,
+  news: boolean
+): Readonly<{ 'zh-CN': string; 'en-US': string }> {
+  if (failureClass === 'network') {
+    return {
+      'zh-CN': '网络还没就绪，稍后重试。',
+      'en-US': 'The network is not ready yet; try again shortly.'
+    }
+  }
+  if (failureClass === 'connection') {
+    return news
+      ? {
+        'zh-CN': '这次没有连上模型服务，所以没有得出这条新闻的解读。检查模型配置或网络后可以重试。',
+        'en-US': 'The model service could not be reached, so no reading of this news item was produced. Check the model settings or your network, then try again.'
+      }
+      : {
+        'zh-CN': '这次没有连上模型服务，所以没有得出解读。检查模型配置或网络后可以重试。',
+        'en-US': 'The model service could not be reached, so no reading was produced. Check the model settings or your network, then try again.'
+      }
+  }
+  return news
+    ? {
+      'zh-CN': '这次新闻解读没有完成，可以在新闻抽屉里重试。',
+      'en-US': 'This news reading did not finish; you can retry from the news drawer.'
+    }
+    : {
+      'zh-CN': '这次分析没有完成，时间轴里能看到失败与重试。',
+      'en-US': 'This analysis did not finish; the timeline shows the failure and the retry.'
+    }
 }
 
 /** 提交失败一律吞掉：运行已经记成失败了，通知发不出去不该再制造第二个失败。 */

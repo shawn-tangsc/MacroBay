@@ -77,3 +77,26 @@ it('④ 新闻解读：正文说清是新闻，动作只有重试，不给不存
   expect(connection.actions.map(action => action.labelRef && 'key' in action.labelRef ? action.labelRef.key : null)).toEqual([ANALYSIS_CHECK_MODEL_ACTION_KEY])
   expect(connection.rendered!['zh-CN']!.body).toContain('检查模型配置或网络后可以重试')
 })
+
+it('⑤ 网络没就绪单独一档：不给「检查模型连接」，动作只有重试', () => {
+  for (const kind of ['manual', 'automatic'] as const) {
+    const request = buildAnalysisFailureRequest({
+      ...base, kind, failureCode: 'analysis-provider-error', failureDetailCode: 'network-not-ready'
+    })
+    const labelKeys = request.actions.map(action => action.labelRef && 'key' in action.labelRef ? action.labelRef.key : null)
+    expect(labelKeys, kind).toEqual([ANALYSIS_RETRY_ACTION_KEY])
+    expect(labelKeys, kind).not.toContain(ANALYSIS_CHECK_MODEL_ACTION_KEY)
+    expect(request.rendered!['zh-CN']!.body).toBe('网络还没就绪，稍后重试。')
+    expect(request.rendered!['en-US']!.body).toContain('not ready yet')
+  }
+  // 同一个粗码、另一条失败原因不能被并成同一条：读者要做的事不一样。
+  const network = buildAnalysisFailureRequest({
+    ...base, kind: 'automatic', triggerKey: 'market-reaction.15m',
+    failureCode: 'analysis-provider-error', failureDetailCode: 'network-not-ready'
+  })
+  const connection = buildAnalysisFailureRequest({
+    ...base, kind: 'automatic', triggerKey: 'market-reaction.15m',
+    failureCode: 'analysis-provider-error', failureDetailCode: 'connect-failed'
+  })
+  expect(network.dedupeVars).not.toEqual(connection.dedupeVars)
+})

@@ -33,9 +33,16 @@ export function createIntelligenceStartup(input: {
   marketAnalysisRuntime: MarketAnalysisRuntime
   /** 惰性读：会话链接存储的构造在日报那一段，晚于本段执行。 */
   briefingSessionLinks: () => ReturnType<typeof createDailyBriefSessionLinkStore>
+  /** 启动窗口的网络就绪门。可选：headless / 窄测试没有它。 */
+  modelNetworkReadiness?: Readonly<{ start: () => void }>
   hooks: IntelligenceModulePlatformHooks
 }) {
   const { jobRuntime, dataDir, profileStore, sourcesService, marketAnalysisRuntime, briefingSessionLinks, hooks } = input
+  // 启动就绪门放在**启动引导阶段**，不是第一次模型调用的入口：网络是进程级的，先把它探通，
+  // 启动窗口内排队的运行才有同一个答案。**只覆盖启动窗口**——它跑完一次（成功或 20 秒超时）
+  // 就不再阻塞任何运行，不是网络抖动的通用兜底。探针与运行都不在这里 await：启动链的顺序
+  // 契约不变，探针在后台退避，运行自己等标记。
+  input.modelNetworkReadiness?.start()
   // The dashboard's first screen (sentiment, fear & greed, stablecoin capital) is fed by sources
   // that need no credential; a fresh install should not require toggling them on before the cards
   // can do anything. An existing profile wins, so a reader's "off" is never overridden.

@@ -1,7 +1,7 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
-import { ACKNOWLEDGE_ACTION_KEY, ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import { ACKNOWLEDGE_ACTION_KEY, ANALYSIS_NOTIFICATION_EVENT_IDS, ANALYSIS_RETRY_ACTION_KEY } from '../../../contracts/notificationEventKeys'
 import type { AnalysisKind } from '../../../contracts/analysisKinds'
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 
@@ -62,6 +62,11 @@ const REASON_COPY: Readonly<Record<string, ReasonCopy>> = Object.freeze({
   'gateway-timeout': {
     'zh-CN': '等了太久，这次调用超时了',
     'en-US': 'the call timed out waiting for an answer'
+  },
+  // 启动窗口的网络还没就绪：不是配置错、也不是连不上，读者只要稍后重试。
+  'network-not-ready': {
+    'zh-CN': '网络还没就绪，稍后重试',
+    'en-US': 'the network was not ready; try again shortly'
   },
   'provider-other': {
     'zh-CN': '模型服务返回了错误',
@@ -131,23 +136,34 @@ export function buildManualAnalysisFailureRequest(input: AnalysisManualFailure):
     }
   })
   if (rendered === undefined) return undefined
+  // The event declares `requiresUserAction`, so a notice without an action is rejected outright.
+  // 网络没就绪这一档给「重试」：读者能做的只有稍后再试，确认按钮什么也没告诉他。其余手动
+  // 失败仍是确认——run log 是不带入口的审计屏（user 2026-11-11），这条通知只报告事实。
+  const action = input.failureDetailCode === 'network-not-ready'
+    ? {
+        id: 'retry-analysis',
+        labelRef: Object.freeze({
+          scope: 'product' as const,
+          productId: 'market-intelligence',
+          key: ANALYSIS_RETRY_ACTION_KEY
+        }),
+        kind: 'custom' as const
+      }
+    : {
+        id: 'acknowledge',
+        labelRef: Object.freeze({
+          scope: 'product' as const,
+          productId: 'market-intelligence',
+          key: ACKNOWLEDGE_ACTION_KEY
+        }),
+        kind: 'acknowledge' as const
+      }
   return {
     eventTypeId: ANALYSIS_MANUAL_FAILURE_EVENT_ID,
     producerId: RUN_MARKET_ANALYSIS_JOB,
     dedupeVars: { builder: 'template', vars: { runId: input.runId } },
     rendered,
-    // The event declares `requiresUserAction`, so a notice without an action is rejected outright.
-    // The action is a plain acknowledgement, not a way into the run log: the run log is an audit
-    // screen with no entry points (user 2026-11-11), so this notice only reports the fact.
-    actions: [{
-      id: 'acknowledge',
-      labelRef: Object.freeze({
-        scope: 'product' as const,
-        productId: 'market-intelligence',
-        key: ACKNOWLEDGE_ACTION_KEY
-      }),
-      kind: 'acknowledge' as const
-    }],
+    actions: [action],
     occurredAt: input.occurredAt
   }
 }
