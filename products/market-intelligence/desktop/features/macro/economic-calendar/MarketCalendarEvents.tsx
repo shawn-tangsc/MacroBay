@@ -15,6 +15,7 @@ import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayM
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
 import { EventSourceWritesBlocks, fieldConflicts } from './EventSourceWritesBlocks'
 import { useEventSourceWrites } from './useEventSourceWrites'
+import { officialSourceStateFor } from '../../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 
 /**
  * 来源显示名：**feed id → 名字**，认不出用「未标来源」，都不是就退回旧的通用名。
@@ -58,6 +59,13 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
       : measureKeys.join(' · ')
   /** 事件标识：身份键优先，其次源自己的事件 id；两样都没有才写「源未给出」。 */
   const identityText = event.eventNameKey ?? event.seriesId ?? text.details.valueNotProvided
+  /**
+   * 官网（用户 2026-11-19）：按**这一条的指标码**去码表取，与映射规则表「官网页」同一份数据、
+   * 同一个解析函数（`officialSourceStateFor`）。三态不许混：
+   * 有地址 → 机构 + 可点外链；有码待核 → 「待核」不可点；**没有码** → 明说没有对应指标码。
+   * 没有码不是「待核」——待核是「有码还没核」，两者混了读者会以为我们欠他一个链接。
+   */
+  const official = officialSourceStateFor(event.eventNameKey)
   /**
    * 层级那一行的一句话：子项给母名，母项给分项列表（`、` 连接）。
    * 需要的名字不齐时返回 `undefined`——**整行不显示**，比画一个「所属指标：源未给出」更少误导：
@@ -120,6 +128,14 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
       <dl className="mi-economic-calendar__metadata">
         <div data-content-coverage><dt>{text.details.contentCoverage}</dt><dd>{coverageText}</dd></div>
         <div data-content-identity><dt>{text.details.contentIdentity}</dt><dd>{identityText}</dd></div>
+        <div data-content-official={official.kind}><dt>{text.details.contentOfficial}</dt><dd>
+          {official.kind === 'verified'
+            // 外链走系统浏览器，不在应用内打开；读屏名写全（机构 + 完整地址）。
+            ? <a href={official.url} target="_blank" rel="noreferrer" data-official-link
+              title={`${official.agency} · ${official.basis}`}
+              aria-label={`${official.agency} · ${official.url}`}>{`${official.agency} · ${official.url}`}</a>
+            : official.kind === 'pending' ? text.details.contentOfficialPending : text.details.contentOfficialNoCode}
+        </dd></div>
         {/* 指标层级（用户 2026-11-17）：子项说清「属于谁」，母项列出「由哪些分项组成」。
             名字由服务端从层级表取；两样都拿不到时**整行不画**，不留空标签。 */}
         {hierarchyText === undefined ? null : <div data-content-hierarchy>

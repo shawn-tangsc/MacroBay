@@ -426,3 +426,44 @@ it('drops the surprise sentence when the sources disagree on consensus', async (
     vi.resetModules()
   }
 })
+
+/**
+ * 官网（用户 2026-11-19）：详情抽屉里要能看到这一条的官网链接。
+ *
+ * 三态不许混：有地址 → 可点外链；有码待核 → 「待核」不可点；**没有码** → 明说没有对应指标码。
+ * 数据来自码表，与映射规则表「官网页」同一份、同一个解析函数。
+ */
+it('shows the official site for the row, and keeps 待核 apart from 没有指标码', async () => {
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const host = document.createElement('div'); const root = createRoot(host)
+  const base = { eventKey: '00000000-0000-4000-8000-0000000000c2', title: 'CPI', countryCode: 'US',
+    eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-09-10T00:00:00.000Z',
+    consensus: null, providerPrevious: null, providerActual: null,
+    source: 'Narwhal' as const, sourceObservedAt: '2026-09-10T01:00:00.000Z', coverage: 'observed-unverified' as const }
+  const officialRow = (): HTMLElement | null => host.querySelector('[data-content-official]')
+  try {
+    // ① 有码、有地址：可点外链，地址就是码表登记的那一个。
+    await act(async () => root.render(scoped(<MarketCalendarInspector
+      event={{ ...base, eventNameKey: 'US.CPI.NSA.YOY' }} text={text} />)))
+    const link = officialRow()!.querySelector('a[data-official-link]') as HTMLAnchorElement
+    expect(link.getAttribute('href')).toBe('https://www.bls.gov/news.release/')
+    expect(link.getAttribute('target')).toBe('_blank')
+    // ④ 读屏名写全：机构 + 完整地址。
+    expect(link.getAttribute('aria-label')).toBe('BLS · https://www.bls.gov/news.release/')
+    expect(officialRow()!.textContent).toContain('BLS · https://www.bls.gov/news.release/')
+
+    // ② 有码、地址待核：写「待核」，且**没有链接**。
+    await act(async () => root.render(scoped(<MarketCalendarInspector
+      event={{ ...base, eventNameKey: 'BR.OVERNIGHT.NONE.LEVEL' }} text={text} />)))
+    expect(officialRow()!.getAttribute('data-content-official')).toBe('pending')
+    expect(officialRow()!.textContent).toContain('待核')
+    expect(officialRow()!.querySelector('a')).toBeNull()
+
+    // ③ 没有指标码：明说没有码，**不写「待核」**（待核=有码还没核）。
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={base} text={text} />)))
+    expect(officialRow()!.getAttribute('data-content-official')).toBe('none')
+    expect(officialRow()!.textContent).toContain('没有对应指标码')
+    expect(officialRow()!.textContent).not.toContain('待核')
+  } finally { await act(async () => root.unmount()) }
+})

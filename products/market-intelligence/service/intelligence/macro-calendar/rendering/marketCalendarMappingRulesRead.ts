@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { localizedPairFor } from '../marketCalendarCodeNames'
 import { marketCalendarCodeTable } from '../marketCalendarCodeTable'
+import { marketCalendarCountryCodeTable } from '../marketCalendarCountryCodeTable'
 import { toAlpha2Country, zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
 import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
@@ -226,7 +227,8 @@ export function officialSourceStateFor(metricKey: string | undefined | null): Of
   if (metricKey === undefined || metricKey === null || metricKey === '') return { kind: 'none' }
   // 源内身份（`["214790",79090]`）不是码：它没有登记过官网页，按「没有对应指标码」处理。
   if (metricKey.startsWith('[')) return { kind: 'none' }
-  const row = marketCalendarCodeTable[metricKey]
+  // 两张表合起来才是码表全集（基础码 + 按国家建的第二批），与码表读口同一份合并顺序。
+  const row = marketCalendarCodeTable[metricKey] ?? marketCalendarCountryCodeTable[metricKey]
   if (row === undefined) return { kind: 'none' }
   const source = row.officialSource
   return 'pending' in source
