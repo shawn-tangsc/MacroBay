@@ -638,6 +638,32 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     expect(none.rows).toBe(data.rows)
   })
 
+  it('keeps the row ⓘ on the same line as the row name, never as its own line', async () => {
+    // 用户 2026-11-18：「icon 为啥要换行？放到标题前面或者后面去呀」。判据只认结构 + 样式规则：
+    // 名字与 ⓘ 同一个 nowrap 容器、图标 flex:none；不许靠 flex-end / margin-left:auto 推走。
+    const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
+    const at = css.indexOf('.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name {')
+    const rule = css.slice(at, css.indexOf('}', at))
+    expect(rule).toContain('display: inline-flex')
+    expect(rule).toContain('align-items: center')
+    expect(rule).toContain('flex-wrap: nowrap')
+    expect(rule).toContain('gap: 4px')
+    expect(rule).not.toContain('flex-end')
+    expect(rule).not.toContain('margin-left: auto')
+    const iconAt = css.indexOf('.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name > * {')
+    expect(css.slice(iconAt, css.indexOf('}', iconAt))).toContain('flex: none')
+
+    // 结构：图标在名字那一组里面，不是 th 的裸兄弟（裸兄弟才会被排到下一行）。
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
+    try {
+      for (const id of ['index', 'btc', 'eth', 'dxy'] as const) {
+        const th = page.host.querySelector(`[data-status-row="${id}"] th`)!
+        expect(th.querySelector('.mi-cross-asset__row-name button[aria-label]')).not.toBeNull()
+        expect(th.querySelector(':scope > button')).toBeNull()
+      }
+    } finally { await page.unmount() }
+  })
+
   it('pins the card width in CSS and never derives it from content', () => {
     const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
     const block = css.slice(css.indexOf('.mi-cross-asset {'), css.indexOf('}', css.indexOf('.mi-cross-asset {')))

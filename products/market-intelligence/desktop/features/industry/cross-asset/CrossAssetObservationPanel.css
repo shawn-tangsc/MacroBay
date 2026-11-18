@@ -155,7 +155,14 @@
 .mi-cross-asset__status-table thead th { color: var(--muted); font-size: 10px; font-weight: 500; text-align: right; border-bottom: 1px solid var(--mi-cross-asset-line); }
 .mi-cross-asset__status-table thead th:first-child { text-align: left; }
 .mi-cross-asset__status-table tbody th { text-align: left; font-weight: 600; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
-.mi-cross-asset__status-table tbody th span, .mi-cross-asset__status-table tbody th small { display: block; }
+/* 名字与那颗 ⓘ 是**一组**：inline-flex + nowrap，间距归容器（gap），图标 flex:none ——
+   原来是 `display: block`，图标作为行内元素被挤到第二行（用户 2026-11-18）。标签（代理/休市/合成/实时）
+   在这一组外面，窄列时它们自己换行，图标永远贴着名字。 */
+.mi-cross-asset__status-table tbody th > span:not(.mi-cross-asset__row-name),
+.mi-cross-asset__status-table tbody th small { display: block; }
+.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; white-space: nowrap; max-width: 100%; }
+/* 弹层触发器的直接子项是 Popover 的锚点 span（里面才是 button），所以 `flex: none` 下到直接子项。 */
+.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name > * { flex: none; }
 .mi-cross-asset__status-table tbody th small { color: var(--muted); font-size: 9.5px; font-weight: 400; }
 .mi-cross-asset__status-table tbody td { text-align: right; white-space: nowrap; font-size: 9.5px; }
 /* One hairline between numeric columns, header included: four windows of signed percentages need a
