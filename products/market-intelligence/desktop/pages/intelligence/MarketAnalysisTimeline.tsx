@@ -143,23 +143,34 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
           : undefined
   // Eight nodes at a time, and reaching the end of what is shown is what brings the next eight in —
   // instantly while the workspace still holds read nodes, and by reading on once it does not.
-  const [pages, setPages] = useState(1)
-  // 「成功 / 失败」两个页签共用一个已加载列表与同一个翻页位置：切 tab 不重读、也不把翻到的
-  // 位置退回去（用户 2026-11-18）。失败只装没有正文的行；其余（已发布 / 过期 / 已替代 /
-  // 正在解析）归成功——「正在解析」那条跑完就落在成功里，读者不用为它再切一次。
+  const [pagesSuccess, setPagesSuccess] = useState(1)
+  const [pagesFailed, setPagesFailed] = useState(1)
   const [tab, setTab] = useState<'success' | 'failed'>('success')
+  // 成功页 = 有正文的行（已发布 / 过期 / 已替代）＋「正在解析」。时间轴首屏仍会按旧规则补进
+  // 最多 20 条 failed 行——那是旧行为，**失败页不再用它们**（否则与新读口重复），所以这里滤掉。
   const successEntries = state.entries.filter((entry) => entry.status !== 'failed')
-  const failedEntries = state.entries.filter((entry) => entry.status === 'failed')
-  // 每个页签各自算「已经翻到几条」，否则一边翻到 40 条会把另一边也撑开。
-  const shownSuccess = analysisTimelinePaging(successEntries.length, pages)
-  const shownFailed = analysisTimelinePaging(failedEntries.length, pages)
+  // 失败页 = 「所有失败」，来自按运行分页的独立读口（`listFailedRuns`），与上面那条读各走各的游标。
+  const failedEntries = timeline.failedRuns.entries
+  // 两个页签各自算「已经翻到几条」：一边翻到 40 条不会把另一边也撑开，切回来也不退回首页。
+  const shownSuccess = analysisTimelinePaging(successEntries.length, pagesSuccess)
+  const shownFailed = analysisTimelinePaging(failedEntries.length, pagesFailed)
   const shown = tab === 'failed' ? shownFailed : shownSuccess
-  // 「失败」页没有下一页可翻：历史失败不在存储的时间轴表里，服务只在第一页补进还没发布的运行。
-  const canPull = shown.hasUnread || (tab === 'success' && Boolean(state.nextCursor))
+  const canPull = tab === 'failed'
+    ? shownFailed.hasUnread || Boolean(timeline.failedRuns.nextCursor)
+    : shownSuccess.hasUnread || Boolean(state.nextCursor)
   const revealMore = (): void => {
-    setPages(current => current + 1)
-    if (!shown.hasUnread && state.nextCursor) timeline.loadMore()
+    if (tab === 'failed') {
+      setPagesFailed(current => current + 1)
+      if (!shownFailed.hasUnread) timeline.loadMoreFailedRuns()
+      return
+    }
+    setPagesSuccess(current => current + 1)
+    if (!shownSuccess.hasUnread) timeline.loadMore()
   }
+  // 第一次打开失败页才去读（不给每次挂载都多一次 IPC）；读失败过则再点一次就是重试。
+  useEffect(() => {
+    if (tab === 'failed') timeline.ensureFailedRuns()
+  }, [tab])
   // The pull is a scroll, not a click: the sentinel at the end of the list is watched, and reading
   // the latest state through a ref keeps one observer alive across the pulls it triggers.
   const pullTarget = useRef<HTMLDivElement>(null)
@@ -318,9 +329,26 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
               success: successEntries.length === 0
                 ? <StateView reasonCode="not-yet" size="md" state="empty" />
                 : <>{successEntries.slice(0, shownSuccess.visible).map(renderEntry)}</>,
-              failed: failedEntries.length === 0
-                ? <StateView reasonCode="not-yet" size="md" state="empty" />
-                : <>{failedEntries.slice(0, shownFailed.visible).map(renderEntry)}</>
+              failed: timeline.failedRuns.loading && failedEntries.length === 0
+                ? <LoadingState label={text.loading} minHeight={160} />
+                : timeline.failedRuns.failed === true && failedEntries.length === 0
+                  // 读失败不是「没有失败」：给错误面与重试，别画成空。
+                  ? <StateView
+                    action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => timeline.ensureFailedRuns() }}
+                    productReason={{
+                      key: 'mi.analysisTimeline.failedRunsUnreadable',
+                      resolve: (key, _params) => key === 'mi.analysisTimeline.failedRunsUnreadable'
+                        ? resolveProductText('pages.intelligence.portal.data.drawerUnavailable')
+                        : ''
+                    }}
+                    reasonCode="unreadable"
+                    size="md"
+                    state="error"
+                  />
+                  : failedEntries.length === 0
+                    ? <StateView reasonCode="not-yet" size="md" state="empty" />
+                    : <>{failedEntries.slice(0, shownFailed.visible).map(renderEntry)}
+                      {timeline.failedRuns.loading ? <p role="status" className="mi-analysis-timeline__state">{text.loading}</p> : null}</>
             }}
           /> : null}
           {canPull ? <div className="mi-analysis-timeline__pull" ref={pullTarget}>

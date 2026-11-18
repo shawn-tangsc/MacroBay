@@ -623,7 +623,11 @@ describe('MarketAnalysisTimeline', () => {
       return undefined
     }) }, modelProviders: { list: vi.fn(async () => []) } })
     const onOpenSettings = vi.fn()
-    const timeline = { state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(), requestState: 'idle' }
+    const timeline = {
+      state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(), requestState: 'idle',
+      // 这一例只关心设置入口；失败页的手工替身给空列表即可。
+      failedRuns: { loading: false, entries: [] }, ensureFailedRuns: vi.fn(), loadMoreFailedRuns: vi.fn()
+    }
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -1118,7 +1122,9 @@ describe('时间轴读失败：错误态 + 重试，不是「暂无」', () => {
 /**
  * 成功 / 失败两个页签（用户 2026-11-18 直接要求）。
  *
- * 判据：① 只属于一个页签的行不许出现在另一个页签；② 标题那行不再出现；③ 切页签不重置已加载列表。
+ * 成功页读 `listTimeline`；失败页读**独立的** `listFailedRuns`（按运行分页，能看到全部失败）。
+ * 判据：① 两页各行其行，互不串门；② 标题那行不再出现；③ 切页签不重置已加载；④ 120 条失败
+ * 翻三页取完且无重复；⑤ 旧注入的失败行与新读口同一次运行**只出现一行**。
  */
 describe('成功 / 失败两个页签', () => {
   const publishedEntry = (index: number) => ({
@@ -1128,19 +1134,31 @@ describe('成功 / 失败两个页签', () => {
     safeTitle: '市场分析已生成', safeExcerpt: '已发布的结论正文', version: 1, triggerStatus: null,
     groupType: 'sentiment', groupSubject: '新闻标题'
   })
-  const failedEntry = {
-    id: 'run:mi-ar-fail', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-fail', runKey: 'mi-ar-fail',
+  /** 失败运行行：没有摘要，`safeTitle` 空（服务侧约定）。 */
+  const failedRun = (tag: string, occurredAt = '2026-11-18T00:54:00.000Z') => ({
+    id: `run:${tag}`, eventGroupId: 'mi-eg-1', analysisRunId: tag, runKey: tag,
     kind: 'analysis' as const, status: 'failed' as const, failureCode: 'analysis-provider-error',
-    occurredAt: '2026-11-18T00:54:00.000Z', summaryRef: null, safeTitle: '', safeExcerpt: null,
-    version: 1, triggerStatus: null, groupType: 'sentiment', groupSubject: '新闻标题'
-  }
+    occurredAt, summaryRef: null, safeTitle: '', safeExcerpt: null, version: 1, triggerStatus: null,
+    groupType: null, groupSubject: null
+  })
 
-  async function mount(items: readonly unknown[]): Promise<HTMLDivElement> {
-    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => {
-      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items, nextCursor: null }
+  type FailedPage = { items: unknown[]; nextCursor: string | null }
+
+  async function mount(input: Readonly<{
+    timeline?: readonly unknown[]
+    failedPages?: Readonly<Record<string, FailedPage>>
+  }>): Promise<HTMLDivElement> {
+    const failedPages = input.failedPages ?? {}
+    const invoke = vi.fn(async (_product: string, method: string, payload?: { cursor?: string }) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: input.timeline ?? [], nextCursor: null }
+      if (method === 'marketAnalysis.listFailedRuns') {
+        const cursor = payload?.cursor ?? ''
+        return { schemaVersion: 1, ...(failedPages[cursor] ?? { items: [], nextCursor: null }) }
+      }
       if (method === 'marketAnalysis.getLatestAttempt') return null
       return undefined
-    }) } })
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -1153,29 +1171,33 @@ describe('成功 / 失败两个页签', () => {
     Array.from(container.querySelectorAll('[role="tabpanel"]')).find((panel) => !panel.hasAttribute('hidden'))
   const tab = (container: HTMLElement, label: string): HTMLButtonElement | undefined =>
     Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((button) => button.textContent === label)
+  const openFailed = async (container: HTMLElement): Promise<void> => {
+    await act(async () => { tab(container, text.tabFailed)?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flushReads()
+  }
 
   it('只在失败页的行不出现在成功页，反之亦然', async () => {
-    const container = await mount([failedEntry, publishedEntry(1)])
-    const panels = Array.from(container.querySelectorAll('[role="tabpanel"]'))
-    expect(panels).toHaveLength(2)
-    const [successPanel, failedPanel] = panels as [Element, Element]
+    const container = await mount({
+      timeline: [publishedEntry(1)],
+      failedPages: { '': { items: [failedRun('mi-ar-fail')], nextCursor: null } }
+    })
+    const [successPanel, failedPanel] = Array.from(container.querySelectorAll('[role="tabpanel"]')) as [Element, Element]
 
     // 成功页：有那条已发布，没有失败行
     expect(successPanel.querySelector('[data-entry-status="failed"]')).toBeNull()
     expect(successPanel.textContent).toContain('已发布的结论正文')
-    // 失败页：有那条失败，没有已发布正文
+    // 默认停在成功页
+    expect(visiblePanel(container)).toBe(successPanel)
+
+    await openFailed(container)
+    expect(visiblePanel(container)).toBe(failedPanel)
+    // 失败页：那条失败在，已发布正文不在
     expect(failedPanel.querySelector('[data-entry-status="failed"]')).not.toBeNull()
     expect(failedPanel.textContent).not.toContain('已发布的结论正文')
-
-    // 默认停在成功页；点「失败」切过去，行数不变（就是那一条）
-    expect(visiblePanel(container)).toBe(successPanel)
-    await act(async () => { tab(container, text.tabFailed)?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
-    expect(visiblePanel(container)).toBe(failedPanel)
-    expect(failedPanel.querySelectorAll('.mi-analysis-timeline__entry')).toHaveLength(1)
   })
 
   it('标题那行不再出现，页签用「成功 / 失败」', async () => {
-    const container = await mount([publishedEntry(1)])
+    const container = await mount({ timeline: [publishedEntry(1)] })
     // 原来那行 <h2>{text.timeline}</h2> 没了（要删的就是这一行）
     expect(container.querySelector('.mi-analysis-timeline__list h2')).toBeNull()
     expect(container.textContent).not.toContain(text.timeline)
@@ -1186,16 +1208,58 @@ describe('成功 / 失败两个页签', () => {
   })
 
   it('切页签不重置已加载的列表', async () => {
-    const container = await mount(Array.from({ length: 10 }, (_, index) => publishedEntry(index)))
+    const container = await mount({ timeline: Array.from({ length: 10 }, (_, index) => publishedEntry(index)) })
     const count = (): number => container.querySelectorAll('.mi-analysis-timeline__entry').length
-    const before = count()
-    expect(before).toBeGreaterThan(0)
-    // 先翻到更多（加载更多），再切页签、切回来：条数不变，翻到的位置没退回去
-    const more = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.loadMore)
-    if (more !== undefined) await act(async () => { more.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const more = (): HTMLButtonElement | undefined =>
+      Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.loadMore)
+    if (more() !== undefined) await act(async () => { more()!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     const grown = count()
-    await act(async () => { tab(container, text.tabFailed)?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await openFailed(container)
     await act(async () => { tab(container, text.tabSuccess)?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(count()).toBe(grown)
+  })
+
+  it('120 条失败：翻三页取完，无重复', async () => {
+    const pageOne = Array.from({ length: 50 }, (_, index) => failedRun(`mi-ar-a${index}`, `2026-11-18T00:${String(index).padStart(2, '0')}:00.000Z`))
+    const pageTwo = Array.from({ length: 50 }, (_, index) => failedRun(`mi-ar-b${index}`, `2026-11-17T23:${String(index).padStart(2, '0')}:00.000Z`))
+    const pageThree = Array.from({ length: 20 }, (_, index) => failedRun(`mi-ar-c${index}`, `2026-11-17T22:${String(index).padStart(2, '0')}:00.000Z`))
+    const container = await mount({
+      timeline: [publishedEntry(1)],
+      failedPages: {
+        '': { items: pageOne, nextCursor: 'c1' },
+        c1: { items: pageTwo, nextCursor: 'c2' },
+        c2: { items: pageThree, nextCursor: null }
+      }
+    })
+    await openFailed(container)
+
+    // 首屏一页：读一次，只看到第一屏那几条（不是 120 条）
+    const failedPanel = (): Element => Array.from(container.querySelectorAll('[role="tabpanel"]'))[1]!
+    const rows = (): Element[] => Array.from(failedPanel().querySelectorAll('.mi-analysis-timeline__entry'))
+    expect(rows().length).toBeGreaterThan(0)
+    expect(rows().length).toBeLessThan(50)
+
+    // 一路「加载更多」翻到底：三轮之后 120 条全在，且键不重复
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const more = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.loadMore)
+      if (more === undefined) break
+      await act(async () => { more.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      await flushReads()
+    }
+    const keys = rows().map((row) => row.getAttribute('data-key') ?? row.textContent)
+    expect(rows()).toHaveLength(120)
+    expect(new Set(keys).size).toBe(120)
+  })
+
+  it('旧注入的失败行与新读口同一次运行 → 失败页只有一行', async () => {
+    // 旧行为：`listTimeline` 首屏仍会补进这条失败行；新读口也返回同一次运行。
+    const injected = failedRun('mi-ar-same')
+    const container = await mount({
+      timeline: [publishedEntry(1), injected],
+      failedPages: { '': { items: [failedRun('mi-ar-same')], nextCursor: null } }
+    })
+    await openFailed(container)
+    const failedPanel = Array.from(container.querySelectorAll('[role="tabpanel"]'))[1] as Element
+    expect(failedPanel.querySelectorAll('.mi-analysis-timeline__entry')).toHaveLength(1)
   })
 })

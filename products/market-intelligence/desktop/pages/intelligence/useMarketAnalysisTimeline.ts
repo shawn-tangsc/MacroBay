@@ -15,6 +15,7 @@ import {
   type MarketAnalysisTimelineEntry
 } from '../../shared/ipc/marketAnalysisTimelineClient'
 import type { MarketAnalysisTimelineReadFailure } from '../../shared/ipc/marketAnalysisTimelineReadFailure'
+import { listFailedRuns } from '../../shared/ipc/marketAnalysisFailedRunClient'
 import { requestNewsInterpretation, type NewsInterpretationRequestView } from '../../shared/ipc/newsInterpretationClient'
 
 export type AnalysisSelectionState = 'none' | 'loading' | 'ready' | 'unavailable'
@@ -59,6 +60,15 @@ type State = Readonly<{
 }>
 
 
+/** 失败页：按运行分页的全部失败（没有正文的行）。 */
+export type FailedRunsState = Readonly<{
+  loading: boolean
+  /** 这次读没成（与「确实没有失败」是两件事）。 */
+  failed?: boolean
+  entries: readonly MarketAnalysisTimelineEntry[]
+  nextCursor?: string | null
+}>
+
 export type UseMarketAnalysisTimelineResult = Readonly<{
   state: State
   attempt: MarketAnalysisAttempt | null
@@ -75,6 +85,15 @@ export type UseMarketAnalysisTimelineResult = Readonly<{
   /** Reads a node detail without changing the selection or the chat binding. */
   ensureDetail: (entry: MarketAnalysisTimelineEntry) => void
   loadMore: () => void
+  /**
+   * 失败页自己的列表与翻页（`marketAnalysis.listFailedRuns`）。与 `state.entries` **分开**：
+   * 时间轴首屏仍按旧规则补进最多 20 条失败行，两处若合并，读者会在失败页看到同一次运行两遍。
+   */
+  failedRuns: FailedRunsState
+  /** 第一次打开失败页时读首页（幂等；失败后调用即重试）。 */
+  ensureFailedRuns: () => void
+  /** 失败页翻下一页；`nextCursor` 为 null 时什么都不做。 */
+  loadMoreFailedRuns: () => void
   requestInitialAnalysis: () => Promise<void>
   requestRefreshAnalysis: () => Promise<void>
   /**
@@ -381,6 +400,51 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     })
   }
 
+  const [failedRuns, setFailedRuns] = useState<FailedRunsState>({ loading: false, entries: [] })
+  const failedStarted = useRef(false)
+  const failedReading = useRef(false)
+  /**
+   * 读一页失败运行。与时间轴那条读**各走各的游标**，也各存各的列表——合并两个来源就会让同一次
+   * 运行在失败页出现两行。
+   */
+  const readFailedRuns = async (cursor?: string): Promise<void> => {
+    if (failedReading.current) return
+    failedReading.current = true
+    setFailedRuns(current => ({ ...current, loading: true, failed: false }))
+    try {
+      const result = await withReadTimeout(listFailedRuns(cursor === undefined ? {} : { cursor }), policy.readTimeoutMs)
+      if (result?.state !== 'available') {
+        setFailedRuns(current => ({ ...current, loading: false, failed: true }))
+        return
+      }
+      setFailedRuns(current => {
+        const existing = cursor === undefined ? [] : current.entries
+        const seen = new Set(existing.map(entry => entry.runKey ?? entry.id))
+        // 翻页追加时按 `runKey` 去重：分页边界上重复拿到的同一次运行只留一行。
+        const appended = result.page.items.filter(entry => {
+          const key = entry.runKey ?? entry.id
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        return { loading: false, entries: [...existing, ...appended], nextCursor: result.page.nextCursor }
+      })
+    } finally {
+      failedReading.current = false
+    }
+  }
+  /** 幂等首读；已经读到过就不再读（读失败过则允许再调一次＝重试）。 */
+  const ensureFailedRuns = (): void => {
+    if (failedStarted.current && failedRuns.failed !== true) return
+    failedStarted.current = true
+    void readFailedRuns()
+  }
+  const loadMoreFailedRuns = (): void => {
+    const cursor = failedRuns.nextCursor
+    if (cursor === undefined || cursor === null) return
+    void readFailedRuns(cursor)
+  }
+
   const ensureDetail = (entry: MarketAnalysisTimelineEntry): void => {
     if (detailCache.current[entry.id] || detailRequests.current.has(entry.id)) return
     // 重试时**必须回到 loading**：失败后状态停在 `unavailable`，读者点了重试却看不到任何变化，
@@ -398,6 +462,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   return {
     state, attempt, requestState, requestFailure, selectionState, details, detailState, load, select, clearSelection, ensureDetail,
     loadMore: () => { void load(state.nextCursor ?? undefined) },
+    failedRuns, ensureFailedRuns, loadMoreFailedRuns,
     ...requests
   }
 }

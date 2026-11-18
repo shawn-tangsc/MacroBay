@@ -52,7 +52,11 @@ const timelineWithOneConclusion = (): UseMarketAnalysisTimelineResult => ({
     loading: false,
     failed: false,
     nextCursor: null
-  }
+  },
+  // 失败页现在读独立的 `listFailedRuns`；这个替身只关心发送入口，给空列表即可。
+  failedRuns: { loading: false, entries: [] },
+  ensureFailedRuns: () => undefined,
+  loadMoreFailedRuns: () => undefined
 }) as unknown as UseMarketAnalysisTimelineResult
 
 const renderDrawer = async (readiness: unknown): Promise<HTMLDivElement> => {
