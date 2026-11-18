@@ -95,7 +95,10 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   const unmappedShape = database.prepare(
     `select sql from sqlite_master where type = 'table' and name = '${unmappedTable}'`).get() as { sql: string } | undefined
   if (unmappedShape !== undefined && unmappedShape.sql.includes('detected_at)')) {
-    database.exec(`
+    // **一个事务**：重建里有 drop + rename，中途中断就会把表弄丢；失败整体回滚，旧表原样还在。
+    database.exec('begin')
+    try {
+      database.exec(`
       create table if not exists ${unmappedTable}__by_source (
         provider_id text not null, source_key text not null, detected_at text not null,
         raw_json text not null, reason text not null,
@@ -108,6 +111,11 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       drop table ${unmappedTable};
       alter table ${unmappedTable}__by_source rename to ${unmappedTable};
     `)
+      database.exec('commit')
+    } catch (error) {
+      database.exec('rollback')
+      throw error
+    }
   }
   // 老副本是在 status 列之前建的：`create table if not exists` 不会补列，得显式迁移一次，
   // 缺列时按 `unknown` 回填（**不按日期猜**：日期推状态正是这条要防的）。
