@@ -1,5 +1,6 @@
 import type { JobRuntime } from '@platform/jobs'
 import type { AnalysisRun, EventGroup } from '../../../contracts/marketAnalysisContracts'
+import type { NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import { resolveTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
@@ -31,6 +32,11 @@ export function createInitialMarketAnalysisRequest(deps: {
   now: () => string
   /** 遗留手动刷新落 news 线时的准入判据（有判定 = 能写第一段的偏向）。 */
   latestNewsSentiment?: (itemId: string, asOf: string) => NewsSentimentRecord | undefined
+  /**
+   * 新闻线的只读判读（与写端点同一个实现）。遗留刷新靠它回答「这条新闻是不是已经有一份读得了
+   * 的解读」，判定不许在这里复制一份：指纹怎么算、什么算可读，只有那一个实现知道。
+   */
+  readNewsInterpretation?: (itemId: string) => Promise<NewsInterpretationReadResult>
   /** The capability's switch. Absent (headless/test wiring) leaves the request ungated. */
   isEnabled?: () => Promise<boolean>
 }) {
@@ -85,6 +91,14 @@ export function createInitialMarketAnalysisRequest(deps: {
       })
       // 消息面里没有判定的条目今天写不出触发事实：fail-closed，不排一次注定失败的运行。
       if (!admission.ok) throw new Error('analysis-not-eligible')
+      // 一条新闻只允许一份解读（按行数验收）：与写端点同一份读判——同一条、同证据指纹且已有
+      // 可读摘要就复用，不再排一次冻结；指纹不同（新闻事实变了）才允许新建，旧的那份保留。
+      // 判定不在这里复制：指纹怎么算、什么算可读，只有 `readNewsInterpretation` 知道。
+      const read = deps.readNewsInterpretation ? await deps.readNewsInterpretation(item.itemId) : undefined
+      if (read?.state === 'in-flight') return { itemId: item.itemId, queued: true }
+      if (read?.state === 'available' && read.currentEvidenceFingerprint === read.evidenceFingerprint) {
+        return { itemId: item.itemId, queued: true }
+      }
       const outcome = await enqueue({
         analysisKind: 'news', eventGroupId: group.id, triggerKey: 'news.manual',
         analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now(), triggeredItemId: item.itemId

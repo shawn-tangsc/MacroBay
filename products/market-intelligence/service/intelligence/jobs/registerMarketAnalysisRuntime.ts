@@ -384,8 +384,27 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     )
   }
 
+  // 只读判读与写端点共用一套预计算与一份单飞账本（R37 §9），遗留手动刷新也读它：一条新闻只允许一份解读。
+  const newsInterpretation = createNewsInterpretationEndpoints({
+    publicQueryService: input.publicQueryService, pipeline: input.pipeline, repository,
+    ...(input.newsSentimentQuery ? { newsSentimentQuery: input.newsSentimentQuery } : {}),
+    ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
+    timeZone, now, isEnabled, hasModel: async () => isMarketAnalysisModelSet(await settingsService.getSettings()),
+    ensureGroup: async itemId => {
+      // 已有组复用；新建必须落库——不落库时冻结查不到组，会被误判成「证据建不出来」。
+      const existing = repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
+      if (existing) return existing
+      const resolved = await resolveChange({ changeId: itemId })
+      const group = resolved ? groups.create(resolved.change) : undefined
+      if (group) repository.appendEventGroup(group)
+      return group
+    },
+    enqueue: createAnalysisRunEnqueuer({ jobRuntime: input.jobRuntime, repository, now })
+  })
+
   const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled,
       ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
+      readNewsInterpretation: newsInterpretation.readNewsInterpretation,
       createGroup: async itemId => {
         const resolved = await resolveChange({ changeId: itemId })
         if (!resolved) throw new Error('analysis-not-eligible')
@@ -410,25 +429,6 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     querySignals: query => input.publicQueryService.queryModuleSignals(query),
     requestAnalysis: request => requestSignalAnalysis(request),
     log: async input => { await jobLog?.(input) }
-  })
-
-  // 只读判读与写端点共用同一套预计算与同一份单飞账本（R37 §9）；两者只在这里构造一次。
-  const newsInterpretation = createNewsInterpretationEndpoints({
-    publicQueryService: input.publicQueryService, pipeline: input.pipeline, repository,
-    ...(input.newsSentimentQuery ? { newsSentimentQuery: input.newsSentimentQuery } : {}),
-    ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
-    timeZone, now,
-    isEnabled, hasModel: async () => isMarketAnalysisModelSet(await settingsService.getSettings()),
-    ensureGroup: async itemId => {
-      // 已有组复用；新建必须落库——不落库时冻结查不到组，会被误判成「证据建不出来」。
-      const existing = repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
-      if (existing) return existing
-      const resolved = await resolveChange({ changeId: itemId })
-      const group = resolved ? groups.create(resolved.change) : undefined
-      if (group) repository.appendEventGroup(group)
-      return group
-    },
-    enqueue: createAnalysisRunEnqueuer({ jobRuntime: input.jobRuntime, repository, now })
   })
 
   return {
