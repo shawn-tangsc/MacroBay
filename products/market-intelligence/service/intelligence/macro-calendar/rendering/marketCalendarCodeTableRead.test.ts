@@ -14,12 +14,13 @@ import { readCalendarCodeTable } from './marketCalendarCodeTableRead'
 const database = new DatabaseSync(':memory:')
 
 describe('码表读口', () => {
-  it('整表下发：指标 224 / 事件 20；待补的行必须带闭集理由，有页的行必须有 URL', () => {
+  it('整表下发：指标 224 / 事件 1；待补的行必须带闭集理由，有页的行必须有 URL', () => {
     const read = readCalendarCodeTable(database)
     if (read.state !== 'available') throw new Error('unavailable')
-    // 码表 = 244 条既有码 + 603 条按国家新建的码（去重后 824）；不写死行数，
-    // 断「事件 20 条固定、指标占绝大多数」——否则每建一批码都要改一次数字。
-    expect(read.counts.event).toBe(20)
+    // 码表 = 244 条既有码 + 按国家新建的码；不写死行数，断「指标占绝大多数」。
+    // **事件只剩 1 条**（`evt.fomc`，有主办机构）；其余 `evt.*` 是事件**类型**、没有单一主办国，
+    // 2026-11-18 起移出码表、名字与身份由事件码表提供，所以这里不再断言「事件 20 条」。
+    expect(read.counts.event).toBe(1)
     expect(read.counts.metric).toBeGreaterThan(700)
     expect(read.counts.total).toBe(read.counts.metric + read.counts.event)
     // 已经按机构补了一批（Destatis 等），所以两个数都不写死，只断关系：

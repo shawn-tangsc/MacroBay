@@ -5,6 +5,7 @@ import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
+import { eventTypeNameByCode } from './marketCalendarCodeNames'
 
 /**
  * **码表是唯一真源，映射表跟着它走**（用户 2026-11-17）。
@@ -23,10 +24,26 @@ describe('标准码表', () => {
       ...Object.values(zeroXRouterIndicatorIdentities).map((entry) => entry.metricKey),
       ...Object.values(zeroXRouterSourceMetricMappings).map((entry) => entry.metricKey),
       ...Object.values(germanSourceMetricMappings).map((entry) => entry.metricKey),
-      ...Object.values(zeroXRouterEventIdentities).map((entry) => entry.metricKey)
     ]
     const missing = [...new Set(mappedCodes)].filter((code) => marketCalendarCodeTable[code] === undefined)
     expect(missing, `映射表用了码表里没有的码：${missing.slice(0, 5).join(', ')}`).toEqual([])
+    // **事件类型码不在码表里**（2026-11-18 Chief 定）：`evt.*` 是「一类」，不是「一场」，
+    // 没有单一主办国；它们的名字由事件码表提供，码表只放带国家的指标行。这里核对它们都有名字。
+    const eventCodes = [...new Set(Object.values(zeroXRouterEventIdentities).map((entry) => entry.metricKey))]
+    const nameless = eventCodes.filter((code) => eventTypeNameByCode[code] === undefined)
+    expect(nameless, `事件类型码没有名字：${nameless.slice(0, 5).join(', ')}`).toEqual([])
+  })
+
+  it('码表里的指标行必须有国家码（事件类型不要求：它们的国家由具体事件提供）', () => {
+    const bare = Object.values(marketCalendarCodeTable)
+      .filter((row) => row.kind === 'metric' && (row.countryCode === null || row.countryCode === ''))
+      .map((row) => row.code)
+    expect(bare, `指标行缺国家码：${bare.slice(0, 5).join(', ')}`).toEqual([])
+    const unknownEvent = Object.values(marketCalendarCodeTable)
+      .filter((row) => row.kind === 'event' && (row.countryCode === null || row.countryCode === ''))
+      .map((row) => row.code)
+    // 事件行如果在码表里，就必须是具体的、有主办机构的（`evt.fomc`），类型码不许留在码表里。
+    expect(unknownEvent, `码表里留了没有国家的事件类型码：${unknownEvent.slice(0, 5).join(', ')}`).toEqual([])
   })
 
   it('每行四个名称、测度与季调档非空、官网页不许静默为 null', () => {
