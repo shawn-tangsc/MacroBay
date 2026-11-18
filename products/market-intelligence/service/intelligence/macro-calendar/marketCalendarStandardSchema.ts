@@ -117,6 +117,25 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       throw error
     }
   }
+  /**
+   * **缺值原因三列**（Chief 2026-11-19）：`missing_reason` / `missing_basis` / `missing_review_at`。
+   *
+   * 为什么进列而不是塞 `values_json`：巡检要按 SQL 查「发布日已过 + 没值 + 没原因」，JSON 里查不动。
+   * 三条口径：`reason` 是闭集；有 `reason` 时 `value_state` 必须是 `missing`；有 `reason` 就必须同时有
+   * `basis` 与 `review_at`（**没有依据和复检日期的不许标**，否则等于把「不知道」写成「已解释」）。
+   *
+   * 迁移幂等：先查 `pragma_table_info`，缺哪列补哪列——`alter table add column` 重复执行会报错。
+   */
+  const missingColumns: readonly [string, string][] = [
+    ['missing_reason', 'text'],
+    ['missing_basis', 'text'],
+    ['missing_review_at', 'text']
+  ]
+  const existingColumns = new Set((database.prepare(`pragma table_info(${eventsTable})`)
+    .all() as { name: string }[]).map((column) => column.name))
+  for (const [name, type] of missingColumns) {
+    if (!existingColumns.has(name)) database.exec(`alter table ${eventsTable} add column ${name} ${type}`)
+  }
   // 老副本是在 status 列之前建的：`create table if not exists` 不会补列，得显式迁移一次，
   // 缺列时按 `unknown` 回填（**不按日期猜**：日期推状态正是这条要防的）。
   const columns = database.prepare(`pragma table_info(${eventsTable})`).all() as { name: string }[]
