@@ -381,8 +381,8 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
           },
           {
             title: text.eventColumns.status, dataIndex: 'status', className: 'mi-catalog__cell-nowrap',
-            render: (value: string) => <span data-event-status={value}>
-              {text.eventStatus[value] ?? text.statusUnknown}
+            render: (value: string | null) => <span data-event-status={value ?? 'unknown'}>
+              {value === null ? text.statusUnknown : (text.eventStatus[value] ?? text.statusUnknown)}
             </span>
           }
         ]} />

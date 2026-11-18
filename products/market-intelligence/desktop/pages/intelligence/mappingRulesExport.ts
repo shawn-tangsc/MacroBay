@@ -125,6 +125,7 @@ export function eventExportRows(rows: readonly CalendarEventRow[], text: Readonl
     row.countryName ?? '—',
     row.title === null ? text.titleMissing : sampleText({ sampleLabel: row.title, sampleLabelEn: row.titleEn }),
     row.sourceProviderId,
-    text.statusLabels[row.status] ?? text.statusUnknown
+    // 状态取不到（没有标准行）→「无法确认」，不空着、不猜一个。
+    row.status === null ? text.statusUnknown : (text.statusLabels[row.status] ?? text.statusUnknown)
   ])]
 }

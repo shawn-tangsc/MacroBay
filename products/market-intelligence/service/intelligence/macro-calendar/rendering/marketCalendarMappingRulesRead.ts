@@ -171,8 +171,13 @@ function rawFromUnmapped(rawJson: string): Readonly<{
   }
 }
 
-/** `["214790",79090]` → `214790`（与事件读口同一个取法，只取第一段）。 */
-function sourceIdOfSourceKey(sourceKey: string): string | undefined {
+/**
+ * `["214790",79090]` → `214790`（与事件读口同一个取法，只取第一段）。
+ *
+ * 导出给事件读口用：同一份 `source_key` 在两张表里解析出两个不同 id，就会一边按 A 分组、
+ * 一边按 B 分组，两处的「件」数当场对不上。
+ */
+export function sourceIdOfSourceKey(sourceKey: string): string | undefined {
   const match = /^\["([^"]+)"/u.exec(sourceKey)
   return match?.[1]
 }
