@@ -403,6 +403,39 @@ describe('unjudged items: no fake low, no starvation, and they come back', () =>
     expect(tried.slice(0, 3).some((itemId) => firstPass.has(itemId))).toBe(false)
   })
 
+  it('picks the same unjudged item again on the next pass — it is not excluded, only deprioritised', async () => {
+    // 产品钉住的前提：空态那两句「开启后 / 恢复后会判出来」只有在「未判定条目一直留在候选里、
+    // 下一轮仍被捡起」时才是真话。这条单独钉它（与饿死控制互补：那条保证**不饿死**，这条保证
+    // **不被排除**）。以后有人加一句「未判定不重试」，这里就红。
+    const tried: string[] = []
+    let modelDown = true
+    const invoke = vi.fn(async (request: { taskId: string }) => {
+      tried.push(request.taskId.split(':').pop()!)
+      if (modelDown) throw new Error('provider down')
+      return { ok: true as const, output: modelOutput(), providerId: 'p', modelId: 'm', trace: { taskId: 't', durationMs: 1 } }
+    }) as unknown as NewsSentimentInvoke
+    const store = createNewsSentimentSqliteStore(':memory:')
+    const { state, providerId, modelId } = readyProviders()
+    const service = createNewsSentimentScoringService({
+      pipeline: { listItems: () => [quiet(4)] } as never,
+      store,
+      settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
+      getProviderState: async () => state,
+      getModelDefaults: async () => ({ assistantModelId: '', agentModelId: '', fastModelId: `${providerId}:${modelId}`, translationModelId: '', imageModelId: '' }),
+      invoke,
+      now: () => '2026-10-24T13:00:00.000Z'
+    })
+
+    await service.scoreItems({ limit: 5 })
+    expect(store.getLatestSentiment('quiet-4', '2026-10-24T13:00:00.000Z')).toBeUndefined()
+    tried.length = 0
+
+    // 第二轮：模型仍然坏着，但这条**照样被选中**（模型又被请求了一次）。
+    const second = await service.scoreItems({ limit: 5 })
+    expect(tried).toContain('quiet-4')
+    expect(second.unjudged).toBe(1)
+  })
+
   it('writes the judgment as soon as the model answers, so an unjudged item is never lost', async () => {
     let modelDown = true
     const invoke = vi.fn(async () => {
