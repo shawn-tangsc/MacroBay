@@ -43,6 +43,11 @@ export function mergedReasonOf(group: readonly UnmappedGroupable[]): string {
   return withStandardRow[0]!.reason
 }
 
+/**
+ * **展示口径统一按「件」**（Chief 2026-11-18）：中英两条是**同一场发布**，不算两件——指标类和事件
+ * 都用这一条。真库当前：指标类 **168 件** + 事件 **207 件** = **375 件**；页签计数、列表、导出三处
+ * 都取同一个结果，不许一处按行数（事件 236 那种）、一处按件数。
+ */
 export function groupUnmappedByRelease<T extends UnmappedGroupable>(rows: readonly T[]): readonly (readonly T[])[] {
   const groups = new Map<string, T[]>()
   for (const row of rows) {
