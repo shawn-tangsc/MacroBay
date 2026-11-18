@@ -257,3 +257,42 @@ describe('台账零孤儿（可跑判据，不是一次性脚本）', () => {
     expect(countOrphanSourceIds(database)).toBe(0)
   })
 })
+
+describe('写入端守卫：值只能是展示串（2026-11-18）', () => {
+  const baseRow = (valuesJson: string) => ({
+    countryCode: 'US', metricKey: 'US.CONSUMER_PRICE.NONE.YOY', periodKey: '2026-09',
+    scheduledDate: '2026-10-15', scheduledAt: '2026-10-15T12:30:00.000Z', timePrecision: 'minute' as const,
+    valuesJson, sourceProviderId: 'narwhal', sourceEventId: 'e-1', parserVersion: 'v1',
+    observedAt: '2026-10-15T12:31:00.000Z', firstSeenAt: '2026-10-15T12:31:00.000Z',
+    identityKind: 'code' as const, status: 'published' as const
+  })
+
+  it('存的是「字符串化的 displayValue 对象」→ 解码成裸字符串再写（单处解释）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 用户 2026-11-18 定的口径：能解码就解码，**不再一律拒写**；读侧不另做第二套解释。
+    expect(() => upsertCalendarStandardRow(database, baseRow('{"previous":"{\\"displayValue\\":\\"4.7%\\"}"}')))
+      .not.toThrow()
+    const row = database.prepare(`select values_json as v from mi_calendar_events limit 1`)
+      .get() as { v: string }
+    expect(JSON.parse(row.v)).toEqual({ previous: '4.7%' })
+  })
+
+  it('解不开的对象串仍然拒写（不原样入库）', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // `{"x":1}` 不是 displayValue 形态：不猜、不解码，交给写入端断言拒掉。
+    expect(() => upsertCalendarStandardRow(database, baseRow('{"previous":"{\\"x\\":1}"}')))
+      .toThrow(/能解析成 JSON 对象/)
+    // 形状对、内容坏（displayValue 不是字符串）：抛内部码，同样不写。
+    expect(() => upsertCalendarStandardRow(database, baseRow('{"previous":"{\\"displayValue\\":123}"}')))
+      .toThrow(/value-encoding-invalid/)
+  })
+
+  it('展示串照常写入', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    expect(() => upsertCalendarStandardRow(database, baseRow('{"previous":"4.7%"}')))
+      .not.toThrow()
+  })
+})
