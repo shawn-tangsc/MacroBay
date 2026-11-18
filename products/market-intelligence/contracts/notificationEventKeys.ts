@@ -123,5 +123,11 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
    * 「出现这种情况，还要通知出来」）。
    */
   sourceSymbolRefused: 'market-intelligence.source.symbol-not-supported',
-  timezoneInvalid: 'market-intelligence.timezone.invalid'
+  timezoneInvalid: 'market-intelligence.timezone.invalid',
+  /**
+   * R42（用户 2026-11-18）：ETF / 稳定币的读数变了——只应用内（`center` + `popup`）。
+   * 判据是**数字**，不是「刷新返回 updated」：主备源切换那一轮数没变，不弹。
+   */
+  capitalFlowEtfUpdated: 'market-intelligence.capital-flow.etf-updated',
+  capitalFlowStablecoinUpdated: 'market-intelligence.capital-flow.stablecoin-updated'
 })

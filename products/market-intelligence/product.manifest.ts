@@ -12,39 +12,13 @@ import {
 } from '../../platform/notifications/contracts/platformNotificationEvents'
 
 import { marketIntelligenceNotificationCopy } from './desktop/shared/i18n/text/notifications'
+import { capitalFlowNotificationEvents } from './contracts/capitalFlowNotificationEvents'
+import { notificationEvent } from './contracts/notificationEventDeclaration'
 import { marketIntelligenceAgentApprovalFieldLabels } from './desktop/shared/i18n/text/agentApprovalFields'
 import { moduleSignalPolicy } from './contracts/moduleSignal'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
 
-
-/**
- * 声明一条通知事件：**键由 id 机械生成**（平台同一处 `notification.event.<id>.*`）。
- *
- * 不手写键的理由：事件改名时手写的键不会有人同步，目录解析出来就落空——
- * 同一个概念两个名字，接线时才发现。
- */
-function notificationEvent(
-  id: string,
-  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'reasonKey' | 'bodyKey' | 'bodyKeyByVariant'> & {
-    /** 这条事件有正文句（`…body`）。 */
-    body?: boolean
-    /** 同一事件两种正文时给变体名，键为 `…body.<variant>`。 */
-    bodyVariants?: readonly string[]
-  }
-): NotificationEventDeclaration {
-  const { body, bodyVariants, ...rest } = input
-  return {
-    id,
-    titleKey: notificationEventTitleKey(id),
-    reasonKey: notificationEventReasonKey(id),
-    ...(body ? { bodyKey: notificationEventBodyKey(id) } : {}),
-    ...(bodyVariants
-      ? { bodyKeyByVariant: Object.fromEntries(bodyVariants.map((variant) => [variant, notificationEventBodyKey(id, variant)])) }
-      : {}),
-    ...rest
-  }
-}
 
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
@@ -495,7 +469,9 @@ export const marketIntelligenceProductManifest = {
       dedupeKeyTemplate: 'timezone-invalid:{date}',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
-    })
+    }),
+    // R42：资金面读数变了 → 应用内提醒（声明与口径见 `contracts/capitalFlowNotificationEvents.ts`）。
+    ...capitalFlowNotificationEvents
   ],
   /**
    * 让渡给本产品的 producerId（契约 §14）：日报 job 的终态失败由本产品发

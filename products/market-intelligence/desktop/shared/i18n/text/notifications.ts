@@ -174,7 +174,16 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
 
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
     [BODY(IDS.timezoneInvalid)]: '去设置里改成有效的时区，日报会恢复自动生成。',
-    [REASON(IDS.timezoneInvalid)]: '设置里的时区读不出来。'
+    [REASON(IDS.timezoneInvalid)]: '设置里的时区读不出来。',
+
+    // R42：资金面读数变了。成品句由源头拼（改数那条要同时给旧值与新值），这里是回退句。
+    [TITLE(IDS.capitalFlowEtfUpdated)]: 'ETF 资金流 · {asset}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'arrived')]: '{day} {direction} {amount}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'revised')]: '{day} 从 {previousDirection} {previousAmount} 改为 {direction} {amount}',
+    [REASON(IDS.capitalFlowEtfUpdated)]: 'ETF 资金流的读数变了：新的一天，或你已经看过的那一天被修订。',
+    [TITLE(IDS.capitalFlowStablecoinUpdated)]: '稳定币总供给更新',
+    [BODY(IDS.capitalFlowStablecoinUpdated)]: '总供给 {amount}，一日{direction} {change}',
+    [REASON(IDS.capitalFlowStablecoinUpdated)]: '稳定币总供给的读数变了；同一天只提醒一次。'
   }),
   'en-US': Object.freeze({
     [TITLE(IDS.briefingFailed)]: 'The daily briefing did not generate',
@@ -284,6 +293,16 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
     [BODY(IDS.timezoneInvalid)]: 'Set a valid time zone in settings and the briefing will generate automatically again.',
-    [REASON(IDS.timezoneInvalid)]: 'The configured time zone cannot be read.'
+    [REASON(IDS.timezoneInvalid)]: 'The configured time zone cannot be read.',
+
+    // R42: the capital readings changed. The source composes the finished sentence (a revision must
+    // carry both the old and the new number); these lines are the fallback.
+    [TITLE(IDS.capitalFlowEtfUpdated)]: 'ETF flows · {asset}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'arrived')]: '{day} {direction} {amount}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'revised')]: '{day} changed from {previousDirection} {previousAmount} to {direction} {amount}',
+    [REASON(IDS.capitalFlowEtfUpdated)]: 'The ETF flow reading changed: a new day, or a day you had already seen was revised.',
+    [TITLE(IDS.capitalFlowStablecoinUpdated)]: 'Stablecoin supply updated',
+    [BODY(IDS.capitalFlowStablecoinUpdated)]: 'Total supply {amount}, one-day {direction} {change}',
+    [REASON(IDS.capitalFlowStablecoinUpdated)]: 'The stablecoin total supply changed; at most one notice a day.'
   })
 })

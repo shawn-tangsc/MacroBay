@@ -5,6 +5,7 @@ import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
 import { reportSettledEtfRevisions } from './etfSettledRevision'
 import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, etfWindowSourceIdFor, type EtfAsset, type EtfCurrentStateWindow, type EtfDailyFlow, type EtfFlowSourceId } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
+import type { EtfCapitalFlowUpdate } from '../signals/capitalFlowUpdateNotifier'
 
 export const etfCurrentStateRefreshAdmissionPolicy = Object.freeze({
   unavailableState: 'unavailable' as const,
@@ -44,6 +45,13 @@ export function createEtfCurrentStateRefreshService(deps: {
    * 钉的是「刷新把信号交了出去」，不会因为生产把通知关掉、或分析还没接上就变红。
    */
   handOffSignals?: (signals: readonly ModuleSignal[]) => Promise<void>
+  /**
+   * R42：这一轮**数字真的变了**的部分，交给通知层（用户 2026-11-18「应用内要弹框」）。
+   *
+   * 交出去的是已经判过的变化（新交易日 / 已定稿值被修订），**不是**「刷新返回了 updated」——
+   * 主备源切换那一轮数一模一样也会 updated，拿它直接弹就会误报。
+   */
+  handOffUpdates?: (updates: readonly EtfCapitalFlowUpdate[]) => Promise<void>
 }) {
   return {
     async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged'; reason?: never } | { state: 'unavailable'; reason?: 'fact.source-conflict' }>> {
@@ -89,9 +97,11 @@ export function createEtfCurrentStateRefreshService(deps: {
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
         // made "did it go out?" depend on scheduling — the one thing a refresh result should not
         // depend on. The outlet swallows a failed submit, so this cannot turn into a failed read.
+        if (replaced.state !== 'unavailable') {
+          const updates = collectCapitalFlowUpdates({ previous: priorWindow, previousAsOf: priorAsOf, current: built, asOf: fetchedAt })
+          if (updates.length > 0) await deps.handOffUpdates?.(updates)
+        }
         if (replaced.state === 'updated') {
-          // 定稿后仍变的交易日记一条（30 小时余量够不够，靠这条数据回答，不靠再猜一次）。
-          reportSettledEtfRevisions({ previous: priorWindow, previousAsOf: priorAsOf, current: built, asOf: fetchedAt })
           const signals = judgeSignals(built, fetchedAt)
           // 一条成立的信号都没有时不去打扰出口：安静的一天不是「发了 0 条」，是「没有事发生」。
           if (signals.length > 0) await deps.handOffSignals?.(signals)
@@ -229,4 +239,44 @@ function isCanonicalUtcMillis(value: unknown): value is string {
 
 function unavailable(): Readonly<{ state: 'unavailable' }> {
   return Object.freeze({ state: etfCurrentStateRefreshAdmissionPolicy.unavailableState })
+}
+
+/**
+ * 这一轮有哪些「读者会看到数字变了」的变化（R42 §1）。
+ *
+ * - **首轮建档不弹**：本地还没有上一份窗口时，一次会写进最多 30 个交易日 × 2 个资产，
+ *   按行弹就是几十条；那不是数据来了，是我们第一次建账；
+ * - **新交易日**：上一份窗口里没有这一天；
+ * - **改数**：只有「两次读取都已过结算窗口、值仍然不同」才算（判据复用
+ *   `reportSettledEtfRevisions`，它顺带把那条诊断也记了）。定稿前的补报与修订**不弹**——
+ *   那是采集过程，不是改结论；
+ * - 来源换了、修订标记变了、抓取时刻变了，值没变 → 不在这里出现。
+ */
+function collectCapitalFlowUpdates(input: Readonly<{
+  previous: EtfCurrentStateWindow | undefined
+  previousAsOf: string | undefined
+  current: EtfCurrentStateWindow
+  asOf: string
+}>): readonly EtfCapitalFlowUpdate[] {
+  if (!input.previous) return []
+  const revisions = reportSettledEtfRevisions({
+    previous: input.previous, previousAsOf: input.previousAsOf, current: input.current, asOf: input.asOf
+  })
+  const revised = new Set(revisions.map((revision) => `${revision.asset}:${revision.tradingDate}`))
+  const updates: EtfCapitalFlowUpdate[] = []
+  for (const asset of ['btc', 'eth'] as const) {
+    const before = new Map(input.previous[asset].map((row) => [row.tradingDate, row.netFlowUsd]))
+    const symbol = asset === 'btc' ? 'BTC' as const : 'ETH' as const
+    for (const row of input.current[asset]) {
+      const prior = before.get(row.tradingDate)
+      if (prior === undefined) {
+        updates.push(Object.freeze({ kind: 'arrived' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd }))
+        continue
+      }
+      if (revised.has(`${asset}:${row.tradingDate}`)) {
+        updates.push(Object.freeze({ kind: 'revised' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd, previousUsd: prior }))
+      }
+    }
+  }
+  return Object.freeze(updates)
 }

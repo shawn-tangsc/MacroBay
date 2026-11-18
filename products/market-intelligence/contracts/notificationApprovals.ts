@@ -5,7 +5,7 @@ export const SIGNED_BY = '情报模块产品经理' as const
 /** 签署日期。 */
 export const SIGNED_AT = '2026-11-18' as const
 /** 对 `canonicalApprovalText({ formatVersion: 1, signedBy: SIGNED_BY, signedAt: SIGNED_AT, events })` 的 sha256（UTF-8 字节）。 */
-export const SIGNATURE = 'sha256:a53909983c4ab8fa21e40789f2fbfbfddf3089e81f2dab876016669f98973e77' as const
+export const SIGNATURE = 'sha256:0f56604943e78440ae49feff9d22501c972e827916d207d2af8e1ff491ace71c' as const
 
 /**
  * 情报模块**签署过的批准值**（与「申请」分开的两份数据之一）。
@@ -75,5 +75,14 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
    * **只批中心**：不进桌面、不进手机、不穿免打扰。理由：手动失败读者就在应用里等，中心那条够用；
    * 自动失败是链路问题（连续 3 次或 2 小时零成功才发），凌晨把读者叫起来没有收益。
    */
-  'market-intelligence.analysis.failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
+  'market-intelligence.analysis.failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  /**
+   * R42：ETF 资金流有新数据点或被修订。用户 2026-11-18 要「应用内弹框」。
+   *
+   * **只批中心 + 提示弹框**：不进桌面、不进手机。桌面档是用来打断人的，数据更新没到这个程度；
+   * 免打扰不穿透；中心那条保留——读者错过弹框还能回看。
+   */
+  'market-intelligence.capital-flow.etf-updated': { approvedDisruptionLevels: ['center', 'popup'], approvedBypassQuietHours: false },
+  /** 同上，稳定币一天最多一条（键不带日期，24 小时窗口）。 */
+  'market-intelligence.capital-flow.stablecoin-updated': { approvedDisruptionLevels: ['center', 'popup'], approvedBypassQuietHours: false }
 })

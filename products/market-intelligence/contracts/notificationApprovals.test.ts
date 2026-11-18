@@ -79,7 +79,10 @@ describe('market-intelligence approvals', () => {
       'market-intelligence.news.item-arrived',
       'market-intelligence.analysis.conclusion',
       // 分析没跑成（2026-11-18）：只批中心——不进桌面、不进手机，提示那一格没有获批。
-      'market-intelligence.analysis.failed'
+      'market-intelligence.analysis.failed',
+      // R42（2026-11-18）：资金面读数变了，只批中心 + 提示弹框；toast 那一格没批。
+      'market-intelligence.capital-flow.etf-updated',
+      'market-intelligence.capital-flow.stablecoin-updated'
     ])
   })
 

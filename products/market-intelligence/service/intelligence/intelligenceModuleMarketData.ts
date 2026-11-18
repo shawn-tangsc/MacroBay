@@ -24,6 +24,8 @@ import { createOpenInterestRefreshService } from './open-interest/openInterestRe
 import { createSignalledOpenInterestRefresh } from './signals/openInterestSignalNotifier'
 import { queryOpenInterestHistoryAsync } from './public-query/openInterestHistoryQuery'
 import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
+import { notifyEtfCapitalFlowUpdates } from './signals/capitalFlowUpdateNotifier'
+import { notifyStablecoinCapitalUpdate } from './capital-conditions/stablecoinCapitalUpdateNotifier'
 import { createMacroMarketRuntime } from './macro-market/macroMarketRuntime'
 import { createMacroMarketLive } from './macro-market/macroMarketLive'
 import { macroMarketPolicy } from './macro-market/macroMarketPolicy'
@@ -250,7 +252,12 @@ export function createIntelligenceMarketData(input: {
     store: etfCurrentStateStore,
     now: () => new Date().toISOString(),
     // 交接点只交读数；开关、去重参数与事件 id 都在通知层（见 `etfOutflowSignalHandoff`）。
-    ...etfOutflowSignalHandoff(submitNotification)
+    ...etfOutflowSignalHandoff(submitNotification),
+    /**
+     * R42：数字真的变了才提醒（新交易日 / 已定稿值被修订）。判据在刷新服务里，
+     * 这里只负责把变化送进通知层——主备源切换那种「updated 但数没变」不会走到这里。
+     */
+    handOffUpdates: async (updates) => { await notifyEtfCapitalFlowUpdates(submitNotification, updates) }
   })
   const capitalConditionsRefresh = createCapitalConditionsRefreshService({
     isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
@@ -264,8 +271,30 @@ export function createIntelligenceMarketData(input: {
   const capitalConditionsAssetHistoryHttp = createCapitalConditionsHttpClient({
     platformFetch
   })
+  /**
+   * R42：稳定币总供给变了也提醒一条。判据用现有 `updated`（它的快照比较只比数值，来源与时刻不进比较）；
+   * **首轮建档不弹**：上一份快照还不存在时那一轮是建账，不是数据来了。
+   */
+  const capitalConditionsRefreshWithNotice = Object.freeze({
+    probe: () => capitalConditionsRefresh.probe(),
+    refresh: async () => {
+      const before = await capitalConditionsStore.read().catch(() => null)
+      const result = await capitalConditionsRefresh.refresh()
+      if (result.state === 'updated' && before?.snapshot) {
+        const after = await capitalConditionsStore.read().catch(() => null)
+        const snapshot = after?.snapshot
+        if (snapshot) {
+          await notifyStablecoinCapitalUpdate(submitNotification, {
+            totalSupplyUsd: snapshot.coreCurrentUsd,
+            change1dUsd: snapshot.change1dUsd
+          }, snapshot.verifiedAt)
+        }
+      }
+      return result
+    }
+  })
   const capitalConditions = createCapitalConditionsSourceIntegration({
-    refreshService: capitalConditionsRefresh,
+    refreshService: capitalConditionsRefreshWithNotice,
     readHealth: async () => {
       const health = await capitalConditionsStore.readHealth()
       return Object.freeze({
