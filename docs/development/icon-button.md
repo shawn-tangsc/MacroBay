@@ -54,6 +54,12 @@ window) — never per button.
 | `controls` | `string` | no | The `id` of the region the button expands. Maps to `aria-controls`; omitted when not passed. |
 | `pressed` | `boolean` | no | Set for a toggle (the current state is on/off). Maps to `aria-pressed`; omitted when not passed. The accessible name stays constant across both states — the state is not repeated in the name. **No visual change:** the icon or the panel it controls carries the look. |
 
+**The root class `.icon-button` belongs to this component.** A stylesheet outside
+`platform/ui/components/icon-button/` must not define it: at equal specificity the later-loaded sheet wins,
+and a stale `.icon-button { border: 1px solid … }` elsewhere silently turns every `plain` button into a
+bordered square (2026-11-18). `platform/ui/components/classOwnershipGuard.test.ts` fails when any platform
+component root class is redefined by the shell stylesheet.
+
 **Self-enclosing glyphs stay `plain`.** `Info`, `CircleHelp` and `HelpCircle` already draw a circle, so a bordered variant puts a second ring around the first one. Those call sites must write `variant="plain"` out loud — `platform/ui/components/icon-button/iconGlyphVariantGuard.test.ts` scans call sites and fails when the answer is missing.
 
 ### Sizes

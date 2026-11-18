@@ -8029,7 +8029,13 @@ h1 {
   color: var(--muted);
 }
 
-.icon-button,
+/*
+  `.icon-button` **不在这里**：它是平台组件 `IconButton` 的根类名（`platform/ui/components/icon-button`），
+  样式归那张表。壳层这份是组件出现之前的遗留写法——全仓没有任何标记用它（`className="icon-button"`
+  零命中），留着只会和平台组件同名打架：特异性都是 (0,1,0)，壳层后加载胜出，`plain` 档的「无边框」
+  被这条 1px 描边盖掉，每一颗图标按钮都变成带边框的方块（2026-11-18 用户两次说「那么大／好丑」）。
+  壳层自己的图标按钮用 `.ant-shell-icon-button`，与本类无关。
+*/
 .primary-button,
 .secondary-button {
   display: inline-flex;
@@ -8045,14 +8051,6 @@ h1 {
     color 140ms ease;
 }
 
-.icon-button {
-  width: 32px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted-strong);
-}
-
-.icon-button:hover,
 .secondary-button:hover {
   border-color: var(--border-strong);
   background: var(--surface-soft);

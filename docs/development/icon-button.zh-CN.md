@@ -52,6 +52,11 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `controls` | `string` | 否 | 被展开区域的 `id`。映射到 `aria-controls`；不传时不输出。 |
 | `pressed` | `boolean` | 否 | 开关类按钮的当前状态（按下/开启）。映射到 `aria-pressed`；不传时不输出。读屏名在两种状态下保持恒定——状态不在名字里重复。**外观不变**：按下态由图标本身或它控制的面板表达。 |
 
+**根类名 `.icon-button` 归这个组件。** `platform/ui/components/icon-button/` 之外的样式表不许再定义它：
+  特异性相同时后加载的那份胜出，别处一条遗留的 `.icon-button { border: 1px solid … }` 会把所有 `plain`
+  按钮变成带边框的方块（2026-11-18 就是这么发生的）。
+  `platform/ui/components/classOwnershipGuard.test.ts` 会在「壳层样式表重定义平台组件根类名」时变红。
+
 **自带圆圈的图形固定 `plain`。** `Info`、`CircleHelp`、`HelpCircle` 自己就画了一个圆，再有边框的档位就是两个圈。这类调用点必须显式写 `variant="plain"`——`platform/ui/components/icon-button/iconGlyphVariantGuard.test.ts` 扫调用点，答案缺了即红。
 
 ### 尺寸
