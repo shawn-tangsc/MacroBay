@@ -56,7 +56,7 @@ export type MappingRulesText = Readonly<{
   officialPending: string
   officialNone: string
   codeEmpty: string
-  unmappedColumns: Readonly<Record<'sourceId' | 'rows' | 'sample' | 'firstSeen' | 'providers' | 'reason', string>>
+  unmappedColumns: Readonly<Record<'sourceId' | 'country' | 'rows' | 'sample' | 'firstSeen' | 'providers' | 'reason', string>>
   /** 原因七档的白话文案（键与读口闭集同名）。 */
   unmappedReasons: Readonly<Record<string, string>>
   reasonFilter: string
@@ -347,6 +347,14 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
       dataSource={paged(unmappedRows, unmappedPage, pageSize)}
       columns={[
         { title: text.unmappedColumns.sourceId, dataIndex: 'sourceId', className: 'mi-catalog__cell-nowrap' },
+        {
+          /* 国家在「源内 id」之后、「样本名字」之前（用户 2026-11-19）：先看是哪国的事，再看叫什么。
+             取不到就 `—`：**不写「未知国家」**——那是上一版被否掉的写法，会把「没有」说成「不知道」。 */
+          title: text.unmappedColumns.country, dataIndex: 'countryName', className: 'mi-catalog__cell-nowrap',
+          render: (value: string | null | undefined) => value === null || value === undefined
+            ? <span data-unmapped-country-empty>—</span>
+            : <span data-unmapped-country>{value}</span>
+        },
         { title: text.unmappedColumns.rows, dataIndex: 'rowCount', className: 'mi-catalog__cell-nowrap' },
         { title: text.unmappedColumns.sample, dataIndex: 'sampleLabel',
           render: (_value: string | null, row) => sampleText(row) },

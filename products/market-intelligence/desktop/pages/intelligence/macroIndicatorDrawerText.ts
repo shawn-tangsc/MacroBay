@@ -203,7 +203,7 @@ export const macroIndicatorDrawerText = {
       /* 子项的归属小字：`母指标名 · 子项`。母名查不到时这里只写「子项」。 */
       /* 导出文件里的三个工作表名（不是页签文案：页签带条数，工作表名不带）。 */
       mappingSheetUnmapped: '未映射',
-      mappingUnmappedColumns: { sourceId: '源内 id', rows: '行数', sample: '样本名字', firstSeen: '首次出现', providers: '来源', reason: '原因' },
+      mappingUnmappedColumns: { sourceId: '源内 id', country: '国家', rows: '行数', sample: '样本名字', firstSeen: '首次出现', providers: '来源', reason: '原因' },
       /* 原因一律**白话**：内部枚举不给读者看。键与读口闭集同名，改一处两处一起改。 */
       mappingUnmappedReasons: {
         'no-code': '没有对应的码', 'period-unresolved': '源没给统计期', 'no-standard-row': '没进标准表',
@@ -397,7 +397,7 @@ export const macroIndicatorDrawerText = {
       mappingUnmappedEmpty: 'No new events to include yet',
       mappingUnavailable: 'Mapping rules are not readable right now',
       mappingSheetUnmapped: 'Unmapped',
-      mappingUnmappedColumns: { sourceId: 'Source id', rows: 'Rows', sample: 'Sample name', firstSeen: 'First seen', providers: 'Sources', reason: 'Reason' },
+      mappingUnmappedColumns: { sourceId: 'Source id', country: 'Country', rows: 'Rows', sample: 'Sample name', firstSeen: 'First seen', providers: 'Sources', reason: 'Reason' },
       mappingUnmappedReasons: {
         'no-code': 'No matching code', 'period-unresolved': 'Source gave no period', 'no-standard-row': 'Not in the standard table',
         'unknown-event-type': 'Event, not an indicator', 'missing-country': 'Source gave no country', 'bad-identity': 'Cannot identify',

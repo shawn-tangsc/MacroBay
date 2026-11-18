@@ -65,7 +65,7 @@ describe('未映射：抽屉、弹框、导出三处同一个数', () => {
     const tabCount = dialog.counts.unmapped
     // ③ 导出（表头 + 行；导出复用弹框读口的结果，不在导出里再 filter 一次）
     const exported = unmappedExportRows(dialog.unmapped, {
-      columns: { sourceId: 'id', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
+      columns: { sourceId: 'id', country: '国家', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
       reasons: {}, reasonUnknown: '无法确认', firstSeenUnknown: '无法确认',
       formatTime: (instant) => instant
     }).length - 1

@@ -86,17 +86,19 @@ export function sampleText(row: Readonly<{ sampleLabel: string | null; sampleLab
  * `formatTime` 格式化——导出与界面必须显示同一个时刻，不在这里另拼一套。
  */
 export function unmappedExportRows(rows: readonly UnmappedSourceIdRow[], text: Readonly<{
-  columns: Readonly<Record<'sourceId' | 'reason' | 'firstSeen' | 'providers' | 'sample' | 'rows', string>>
+  columns: Readonly<Record<'sourceId' | 'country' | 'reason' | 'firstSeen' | 'providers' | 'sample' | 'rows', string>>
   reasons: Readonly<Record<string, string>>
   reasonUnknown: string
   /** 没有首次出现时间时的说法：**不留空格**（空格会被读成「从来没有出现过」）。 */
   firstSeenUnknown: string
   formatTime: (instant: string) => string
 }>): readonly (readonly (string | number)[])[] {
-  const header = [text.columns.sourceId, text.columns.reason, text.columns.firstSeen,
+  const header = [text.columns.sourceId, text.columns.country, text.columns.reason, text.columns.firstSeen,
     text.columns.providers, text.columns.sample, text.columns.rows]
   return [header, ...rows.map((row) => [
     row.sourceId,
+    // 与界面同一规则：取不到写 `—`，不写「未知国家」。
+    row.countryName ?? '—',
     // `bad-period` 是只读遗留写法，与 `period-unresolved` 同档（读口同一口径），导出也要同一句话。
     text.reasons[String(row.reason) === 'bad-period' ? 'period-unresolved' : row.reason] ?? text.reasonUnknown,
     row.firstSeenAt === null ? text.firstSeenUnknown : text.formatTime(row.firstSeenAt),

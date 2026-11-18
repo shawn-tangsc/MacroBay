@@ -76,33 +76,37 @@ describe('the exported rows', () => {
   it('exports the unmapped rows with reason, first-seen, sources and the raw title', () => {
     const rows = unmappedExportRows([
       { sourceId: '214634', rowCount: 4, firstSeenAt: '2026-11-16T00:00:00.000Z', providerIds: ['0xrouter', 'narwhal'],
-        reason: 'no-code', sampleLabel: '批发物价指数', sampleLabelEn: 'Wholesale prices' }
+        reason: 'no-code', sampleLabel: '批发物价指数', sampleLabelEn: 'Wholesale prices',
+        countryCode: null, countryName: null }
     ], {
-      columns: { sourceId: '源内 id', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
+      columns: { sourceId: '源内 id', country: '国家', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
       reasons: { 'no-code': '没有对应的码', 'period-unresolved': '源没给统计期' },
       reasonUnknown: '无法确认',
       firstSeenUnknown: '无法确认',
       formatTime: (instant) => `T(${instant})`
     })
-    expect(rows[0]).toEqual(['源内 id', '原因', '首次出现', '来源', '标题原文', '行数'])
+    expect(rows[0]).toEqual(['源内 id', '国家', '原因', '首次出现', '来源', '标题原文', '行数'])
+    // 国家在源内 id 之后：有国名写中文名，取不到写 `—`（不写「未知国家」）。
+    expect(rows[1]![1]).toBe('—')
     // 原因写白话，不印枚举；时间走调用方给的同一套格式化，不在这里另拼。
-    expect(rows[1]![1]).toBe('没有对应的码')
-    expect(rows[1]![2]).toBe('T(2026-11-16T00:00:00.000Z)')
-    expect(rows[1]![3]).toBe('0xrouter · narwhal')
-    expect(rows[1]![4]).toBe('批发物价指数 · Wholesale prices')
-    expect(rows[1]![5]).toBe(4)
+    expect(rows[1]![2]).toBe('没有对应的码')
+    expect(rows[1]![3]).toBe('T(2026-11-16T00:00:00.000Z)')
+    expect(rows[1]![4]).toBe('0xrouter · narwhal')
+    expect(rows[1]![5]).toBe('批发物价指数 · Wholesale prices')
+    expect(rows[1]![6]).toBe(4)
   })
 
   it('writes a word, not a blank, when the first-seen time is missing', () => {
     const rows = unmappedExportRows([
       { sourceId: '999999', rowCount: 1, firstSeenAt: null, providerIds: ['0xrouter'],
-        reason: 'no-standard-row', sampleLabel: '残行', sampleLabelEn: null }
+        reason: 'no-standard-row', sampleLabel: '残行', sampleLabelEn: null,
+        countryCode: 'JP', countryName: '日本' }
     ], {
-      columns: { sourceId: '源内 id', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
+      columns: { sourceId: '源内 id', country: '国家', reason: '原因', firstSeen: '首次出现', providers: '来源', sample: '标题原文', rows: '行数' },
       reasons: { 'no-standard-row': '没进标准表' }, reasonUnknown: '无法确认', firstSeenUnknown: '无法确认',
       formatTime: (instant) => instant
     })
-    expect(rows[1]![2]).toBe('无法确认')
+    expect(rows[1]![3]).toBe('无法确认')
   })
 
   it('exports events with the same five columns as the tab', () => {

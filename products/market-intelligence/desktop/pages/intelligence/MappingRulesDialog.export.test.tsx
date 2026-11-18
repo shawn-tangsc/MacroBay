@@ -388,3 +388,36 @@ it('filters the code table by official page, alone and together with the country
   await pickFilterOption('[data-official-filter]', '已核')
   expect(visibleCodes()).toEqual(['US.CORE_PCE.NSA.YOY'])
 })
+
+/**
+ * 未映射页签的「国家」列（用户 2026-11-19）：在「源内 id」之后、「样本名字」之前。
+ *
+ * 读口给的是 `countryCode` / `countryName`；取不到就写 `—`，**不写「未知国家」**——
+ * 「不知道」和「没有」是两件事，这条列一旦写「未知国家」，读者会以为我们查过了。
+ */
+it('shows the unmapped country, writes a dash when unknown, and never says 未知国家', async () => {
+  const withCountry: MappingRulesRead = {
+    ...view,
+    unmapped: [
+      { sourceId: '213812', rowCount: 1, firstSeenAt: '2026-11-18T00:00:00.000Z', providerIds: ['0xrouter'],
+        reason: 'no-code', sampleLabel: '全国经济信心指数', sampleLabelEn: null,
+        countryCode: 'CA', countryName: '加拿大' },
+      { sourceId: '999001', rowCount: 1, firstSeenAt: '2026-11-17T00:00:00.000Z', providerIds: ['0xrouter'],
+        reason: 'no-standard-row', sampleLabel: '残行', sampleLabelEn: null,
+        countryCode: null, countryName: null }
+    ],
+    counts: { ...view.counts, unmapped: 2, unmappedRows: 2 }
+  }
+  await mount(withCountry)
+  const tab = [...document.body.querySelectorAll('[role="tab"]')]
+    .find((node) => (node.textContent ?? '').includes('未映射')) as HTMLElement
+  await act(async () => { tab.click() })
+  const section = document.body.querySelector('[data-mapping-section="unmapped"]')!
+  const headers = [...section.querySelectorAll('.ant-table-thead th')].map((cell) => cell.textContent ?? '')
+  // 列顺序：源内 id → 国家 → 行数 → 样本名字 → 首次出现 → 来源 → 原因。
+  expect(headers.slice(0, 5)).toEqual(['源内 id', '国家', '行数', '样本名字', '首次出现'])
+  expect(section.querySelector('[data-unmapped-country]')?.textContent).toBe('加拿大')
+  // 取不到 → `—`，而且整页不出现「未知国家」。
+  expect(section.querySelector('[data-unmapped-country-empty]')?.textContent).toBe('—')
+  expect(document.body.textContent).not.toContain('未知国家')
+})

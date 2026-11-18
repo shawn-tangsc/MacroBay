@@ -389,9 +389,16 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         const rawId = parsed.indicatorId
         const indicatorId = typeof rawId === 'string' || typeof rawId === 'number' ? String(rawId) : undefined
         if (indicatorId !== undefined && indicatorId !== '') {
-          const found = database.prepare(`select distinct country_code from mi_macro_calendar_market_event_observations
-            where indicator_id = ? and country_code is not null and country_code <> ''`).all(indicatorId) as
-            { country_code: string }[]
+          /**
+           * 观测表不存在时**只让这一格空着**（`null` → 界面 `—`），不能让整张未映射表变成「读不到」：
+           * 一次取值的边角失败，不该把主列表打成错误态。夹具/新库没有这张表就是这条路径。
+           */
+          let found: { country_code: string }[] = []
+          try {
+            found = database.prepare(`select distinct country_code from mi_macro_calendar_market_event_observations
+              where indicator_id = ? and country_code is not null and country_code <> ''`).all(indicatorId) as
+              { country_code: string }[]
+          } catch { found = [] }
           // **只有唯一国家才用**：两个以上说明源自己就不一致，宁可显示 `—` 也不挑一个。
           const unique = [...new Set(found.map((item) => toAlpha2Country(item.country_code)))]
           if (unique.length === 1) resolved = unique[0]!
