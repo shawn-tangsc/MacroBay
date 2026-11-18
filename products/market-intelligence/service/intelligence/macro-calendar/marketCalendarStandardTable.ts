@@ -1,8 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { ensureCalendarStandardTables as ensureCalendarStandardTablesImpl } from './marketCalendarStandardSchema'
 
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
 import { sourceIdOnWrite, sourceIdOverwritePayload, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
+import { normalizeValuesJsonForWrite } from './marketCalendarValueEncoding'
 import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketCalendarSameIdentityWrite'
 
 /**
@@ -173,138 +175,62 @@ export type CalendarStandardRow = Readonly<{
   firstPublishedPrevious?: string
 }>
 
-export function ensureCalendarStandardTables(database: DatabaseSync): void {
-  const { eventsTable, unmappedTable } = calendarStandardTablePolicy
-  database.exec(`
-    create table if not exists ${eventsTable} (
-      country_code text not null,
-      metric_key text not null,
-      period_key text not null,
-      scheduled_date text not null,
-      first_scheduled_date text not null,
-      scheduled_at text,
-      time_precision text not null check(time_precision in ('minute', 'date')),
-      status text not null default 'unknown' check(status in (${marketCalendarPublicPolicy.releaseStatuses.map((status) => `'${status}'`).join(', ')})),
-      identity_kind text not null default 'code' check(identity_kind in ('code', 'source')),
-      source_label text,
-      -- **源给的英文原文名**（迁移 18）：源对同一件事发了中文名、英文名两条，库里合并成一行后
-      -- 中文那条做显示名，英文那条不能丢——英文读者搜 New York Fed 还得命中。这一列只进
-      -- 搜索命中列，不覆盖显示名（与读取层英文全称槽位同一语义）。
-      source_label_en text,
-      series_id text,
-      importance text check(importance in ('high', 'medium', 'low')),
-      value_state text check(value_state in ('present', 'missing')),
-      row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
-      -- **这一行是什么**（经济数据 / 财经事件 / 央行活动）。写入时知道，以前没存，读侧只能靠
-      -- metric_key 前缀猜——423 行上游 ID 数组因此全被猜成「经济指标」（2026-11-16 查实）。
-      -- 空值＝还没回填（迁移 16 会补），读侧此时退回前缀规则。
-      event_type text check(event_type in ('economic-indicator', 'financial-event', 'central-bank-activity')),
-      -- **这一期发布过几次**（同身份跨来源合并后仍要保留这个数）：二读被当成初值是另一类错，
-      -- 合并了却不显示次数＝把「改过数据」藏起来。默认 1，合并迁移会按组写入真实次数。
-      release_count integer not null default 1,
-      -- **这一期的每一次排期**（JSON 数组，ISO 日期/时刻）：二读/三读被合并成一行后，
-      -- 读者仍要能点开看到「第 1 次 11-25、第 2 次 12-23」——只给次数等于把细节藏了。
-      release_dates_json text,
-      values_json text not null,
-      source_provider_id text not null,
-      source_event_id text not null,
-      parser_version text not null,
-      observed_at text not null,
-      first_seen_at text not null,
-      -- **数据自身的观测时刻**（源说这条值是什么时候的）与 observed_at（我们写入的时刻）分开：
-      -- 覆盖判定按这一列比。混用会让「用 11-12 的数据、在 11-16 写入」按写入时刻赢，
-      -- 把官方刚写的值盖成三天前的旧值。
-      data_observed_at text,
-      first_published_actual text,
-      first_published_previous text,
-      primary key(country_code, metric_key, period_key, first_scheduled_date)
-    );
-    -- **日历只读视图**：一个入口，条件写在这里，不靠每个调用点记得加。
-    -- 同表两种行时，「每处都记得 where」是不可靠的：漏一处，估算就混进日历，而且图上看不出来。
-    drop view if exists ${calendarStandardTablePolicy.releasesView};
-    -- **视图不是修数据的地方**：它只回答「哪些行是发布」，不做身份去重、不做折叠。
-    -- 曾经加过一条「同一期有值时折掉空行」的规则，结果藏掉了真实的行：密歇根 12-18 的终值
-    -- （与 12-04 初值同期、各自都是真发布）、官方时薪 11-06（日期冲突的一方，折掉等于把冲突
-    -- 藏起来）、消费者信贷的未来发布（日报「接下来」直接看不见）。今天藏空行，明天就会藏
-    -- 有值的第二次发布——所以规则撤掉，收口交给写入端（同一 provider + 同一 source_event_id）。
-    create view ${calendarStandardTablePolicy.releasesView} as
-      select * from ${eventsTable} where row_kind = 'release';
-    create index if not exists idx_calendar_events_month
-      on ${eventsTable}(country_code, scheduled_at);
-    create table if not exists ${calendarStandardTablePolicy.sourceIdsTable} (
-      provider_id text not null,
-      source_event_id text not null,
-      country_code text not null,
-      metric_key text not null,
-      period_key text not null,
-      first_scheduled_date text not null,
-      observed_at text not null,
-      primary key(provider_id, source_event_id)
-    );
-    create table if not exists ${unmappedTable} (
-      provider_id text not null,
-      source_key text not null,
-      detected_at text not null,
-      raw_json text not null,
-      reason text not null,
-      primary key(provider_id, source_key, detected_at)
-    );
-  `)
-  // 老副本是在 status 列之前建的：`create table if not exists` 不会补列，得显式迁移一次，
-  // 缺列时按 `unknown` 回填（**不按日期猜**：日期推状态正是这条要防的）。
-  const columns = database.prepare(`pragma table_info(${eventsTable})`).all() as { name: string }[]
-  if (!columns.some((column) => column.name === 'status')) {
-    database.exec(`alter table ${eventsTable} add column status text not null default 'unknown'`)
-  }
-  if (!columns.some((column) => column.name === 'identity_kind')) {
-    database.exec(`alter table ${eventsTable} add column identity_kind text not null default 'code'`)
-  }
-  if (!columns.some((column) => column.name === 'source_label')) {
-    database.exec(`alter table ${eventsTable} add column source_label text`)
-  }
-  // 迁移 18 的列：老副本没有它，`create table if not exists` 不会补。缺列就补，不猜内容。
-  if (!columns.some((column) => column.name === 'source_label_en')) {
-    database.exec(`alter table ${eventsTable} add column source_label_en text`)
-  }
-  if (!columns.some((column) => column.name === 'importance')) {
-    database.exec(`alter table ${eventsTable} add column importance text`)
-  }
-  if (!columns.some((column) => column.name === 'series_id')) {
-    database.exec(`alter table ${eventsTable} add column series_id text`)
-  }
-  if (!columns.some((column) => column.name === 'value_state')) {
-    database.exec(`alter table ${eventsTable} add column value_state text`)
-  }
-  if (!columns.some((column) => column.name === 'release_dates_json')) {
-    database.exec(`alter table ${eventsTable} add column release_dates_json text`)
-  }
-  if (!columns.some((column) => column.name === 'release_count')) {
-    database.exec(`alter table ${eventsTable} add column release_count integer not null default 1`)
-  }
-  if (!columns.some((column) => column.name === 'event_type')) {
-    database.exec(`alter table ${eventsTable} add column event_type text`)
-  }
-  if (!columns.some((column) => column.name === 'data_observed_at')) {
-    // 老行没有这一列：按写入时刻回填（它是我们唯一有的事实），之后的写入按真值比。
-    database.exec(`alter table ${eventsTable} add column data_observed_at text`)
-    database.exec(`update ${eventsTable} set data_observed_at = observed_at where data_observed_at is null`)
-  }
-  // 存量回填一次：老行的 value_state 是空的，空着会让视图把它们当「没值」折掉。
-  database.exec(`update ${eventsTable}
-    set value_state = case when values_json = '{}' then 'missing' else 'present' end
-    where value_state is null`)
-}
 
 /**
  * 写一行标准事件。**修订覆盖值，但冻结首发布两列**——`on conflict` 的 `do update` 里
  * 刻意不出现 `first_published_*`，也不写 `first_seen_at`。
  */
+/** 值非法就抛：抛在这里等于**整笔写入失败**，不会被悄悄存进去。 */
+function assertDisplayValues(valuesJson: string, metricKey: string): void {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(valuesJson)
+  } catch {
+    throw new Error(`标准行 values_json 不是合法 JSON（${metricKey}）`)
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return
+  for (const [field, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value !== 'string') {
+      throw new Error(`标准行 values.${field} 必须是展示串，不能是 ${typeof value}（${metricKey}）`)
+    }
+    const text = value.trim()
+    if (!text.startsWith('{') && !text.startsWith('[')) continue
+    try {
+      const inner: unknown = JSON.parse(text)
+      if (inner !== null && typeof inner === 'object') {
+        throw new Error(`标准行 values.${field} 是「能解析成 JSON 对象的字符串」（${metricKey}）——存展示串，不要存包装对象`)
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('能解析成 JSON 对象')) throw error
+    }
+  }
+}
+
 export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarStandardRow): Readonly<{
   countryCode: string; metricKey: string; periodKey: string; firstScheduledDate: string
   /** 这一笔真的把行上的发布 id 改掉了：交给批次收口处汇总打印，不在这里逐行打。 */
   sourceIdOverwrite?: SourceIdOverwritePayload
 }> {
   const { eventsTable } = calendarStandardTablePolicy
+  /**
+   * **值只能是展示串，不许是「能解析成 JSON 对象的字符串」**（用户 2026-11-18 定）。
+   *
+   * 事故形态：一次性补齐脚本把观测表 JSON 列（`{"displayValue":"4.7%"}`）整串搬进了 `values_json`，
+   * 日报里就出现了原始 JSON。**判据必须按「文本解析后是对象」**——`json_type(...)='object'` 永远是 0
+   * （存的是字符串），那种统计口径看起来对、却量不到真问题。
+   *
+   * 为什么放在这里：它是**唯一写入端**，离线脚本也得走它；放进各 parser 只挡采集，挡不住脚本。
+   */
+  /**
+   * **先解码、再断言**（用户 2026-11-18 定）：
+   * - 值字段是「字符串化的 `{displayValue}` 对象」→ 解码成裸字符串，单处解释、读侧不再兜底；
+   * - 解不开 → 抛 `value-encoding-invalid`，**这一笔不写**；
+   * - 其余形态（`{"x":1}`、数组这类对象串）仍由下面的 `assertDisplayValues` 拒写。
+   *
+   * 顺序不能反：先断言会把这些行直接拒掉，而它们正是要收敛的形态。
+   */
+  const valuesJson = normalizeValuesJsonForWrite(row.valuesJson)
+  assertDisplayValues(valuesJson, row.metricKey)
   /**
    * **国家码在写入端归一到 alpha-2**（2026-11-16，Chief 拍板）。
    *
@@ -395,7 +321,7 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       row.importance ?? null,
       // 没传就**从值本身推**：物化列不允许留空——空着会被视图当「没值」折掉。
       row.valueState ?? (row.valuesJson === '{}' ? 'missing' : 'present'),
-      row.valuesJson, row.sourceProviderId, sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
+      valuesJson, row.sourceProviderId, sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null,
       // 数据时刻不传就按写入时刻算：没有这一级的来源不许因为「不知道数据时刻」而永远覆盖不了。
       row.dataObservedAt ?? row.observedAt,
@@ -510,3 +436,6 @@ export function pruneOrphanSourceIds(database: DatabaseSync): number {
             and e.period_key = s.period_key and e.first_scheduled_date = s.first_scheduled_date))`).run()
   return Number(result.changes)
 }
+
+/** 建表与迁移在 `marketCalendarStandardSchema`（体积门禁），这里原样转发，调用点一个不改。 */
+export const ensureCalendarStandardTables = ensureCalendarStandardTablesImpl
