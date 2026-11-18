@@ -1302,3 +1302,52 @@ describe('页头的重跑按钮按组类别出现', () => {
     expect(refresh(container)?.textContent).toBe(text.refreshAnalysis)
   })
 })
+
+/**
+ * 同时有「正在解析」与「失败」时（Chief 点名要带的回归项）：
+ * 顺序照服务给的倒序（新的在上），状态各自正确——running 在成功页、failed 在失败页，两页都不串。
+ */
+describe('running 与 failed 同时存在时的顺序与状态', () => {
+  const base = {
+    eventGroupId: 'mi-eg-1', kind: 'analysis' as const, version: 1, triggerStatus: null,
+    groupType: 'macro', groupSubject: '美联储官员暗示放缓缩表'
+  }
+  const published = { ...base, id: 'mi-tl-old', analysisRunId: 'mi-ar-old', runKey: 'mi-ar-old', status: 'published' as const, failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-old', safeTitle: '标题', safeExcerpt: '已发布的结论正文' }
+  const failed = { ...base, id: 'run:mi-ar-fail', analysisRunId: 'mi-ar-fail', runKey: 'mi-ar-fail', status: 'failed' as const,
+    failureCode: 'analysis-provider-error', occurredAt: '2026-11-18T08:06:00.000Z', summaryRef: null, safeTitle: '', safeExcerpt: null }
+  const running = { ...base, id: 'run:mi-ar-live', analysisRunId: 'mi-ar-live', runKey: 'mi-ar-live', status: 'running' as const,
+    failureCode: null, occurredAt: '2026-11-18T09:10:00.000Z', summaryRef: null, safeTitle: '', safeExcerpt: null }
+
+  it('成功页：running 在 published 之前；失败页：只有那条 failed，且状态词各归各位', async () => {
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => {
+      // 服务侧按 occurredAt 倒序：running 09:10 → failed 08:06 → published 前一日 20:10
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [running, failed, published], nextCursor: null }
+      if (method === 'marketAnalysis.listFailedRuns') return { schemaVersion: 1, items: [failed], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    }) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+
+    const panels = Array.from(container.querySelectorAll('[role="tabpanel"]')) as [Element, Element]
+    const successRows = Array.from(panels[0].querySelectorAll('.mi-analysis-timeline__entry'))
+    expect(successRows).toHaveLength(2)
+    // 顺序：新的在上（running 09:10 在 published 20:10 之前）
+    expect(successRows[0]?.textContent).toContain(text.status.running)
+    expect(successRows[1]?.textContent).toContain(text.status.published)
+    // 失败行不进成功页
+    expect(panels[0].querySelector('[data-entry-status="failed"]')).toBeNull()
+
+    const failedTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((button) => button.textContent === text.tabFailed)
+    await act(async () => { failedTab?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flushReads()
+    const failedRows = Array.from(panels[1].querySelectorAll('.mi-analysis-timeline__entry'))
+    expect(failedRows).toHaveLength(1)
+    expect(failedRows[0]?.textContent).toContain(text.status.failed)
+    expect(failedRows[0]?.textContent).toContain(text.failureReasons['analysis-provider-error'])
+  })
+})
