@@ -38,7 +38,6 @@ import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBrief
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
 import { applyDailyBriefingSchedules } from './jobs/registerDailyBriefingJob'
-import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import type { BriefingPeriodsEditor } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
@@ -77,6 +76,13 @@ import type { GoldLiveRuntime } from './macro-market/goldLiveRuntime'
 import { macroMarketPolicy } from './macro-market/macroMarketPolicy'
 import { requestZeroXRouterCalendarJsonBody } from './application/zeroXRouterHttpTransport'
 import { INTELLIGENCE_PRODUCT_ID as PRODUCT_ID, type IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
+import {
+  currentReaderTimeZone,
+  getIntelligenceProductDataDir,
+  getModulePlatformHooks,
+  setModulePlatformHooks,
+  shellTimeZone
+} from './intelligenceModuleEnvironment'
 import { createIntelligenceStores } from './intelligenceModuleStores'
 import { createIntelligenceMarketData } from './intelligenceModuleMarketData'
 import { createIntelligenceNewsSentiment } from './intelligenceModuleNewsSentiment'
@@ -180,20 +186,6 @@ export type IntelligenceModule = {
 }
 
 let intelligenceModule: IntelligenceModule | null = null
-let modulePlatformHooks: IntelligenceModulePlatformHooks | undefined
-
-function shellTimeZone(): string {
-  return resolveBriefingTimeZone(modulePlatformHooks)
-}
-
-/** 供产品内其它装配点读取「读者时区」（同一提供者，不另起来源）。 */
-export function currentReaderTimeZone(): string {
-  return shellTimeZone()
-}
-
-function getProductDataDir(): string {
-  return join(app.getPath('userData'), 'products', PRODUCT_ID)
-}
 
 export function getIntelligenceModule(
   jobRuntime: JobRuntime,
@@ -206,16 +198,17 @@ export function getIntelligenceModule(
   // occasional crash at startup. The message names the field; without it the reader must diff
   // eighteen hooks by hand.
   if (intelligenceModule) {
-    const rebound = firstReboundSingletonHook(platformHooks, modulePlatformHooks)
+    const rebound = firstReboundSingletonHook(platformHooks, getModulePlatformHooks())
     if (rebound) throw new Error(`intelligence-module-hooks-already-bound: ${rebound}`)
     return intelligenceModule
   }
   if (!platformHooks) throw new Error('intelligence-module-hooks-required')
-  modulePlatformHooks = platformHooks
+  setModulePlatformHooks(platformHooks)
 
   {
-    const hooks = modulePlatformHooks
-    const dataDir = getProductDataDir()
+    // 局部入参已在上面的 `if (!platformHooks) throw` 之后收窄；状态里那份给 `shellTimeZone` 等只读口用。
+    const hooks = platformHooks
+    const dataDir = getIntelligenceProductDataDir()
     const getAppLanguage = hooks?.getAppLanguage ?? (async () => 'zh-CN' as const)
     const stores = createIntelligenceStores({
       dataDir,
@@ -552,7 +545,7 @@ export function getIntelligenceModule(
       ...(markAttemptCleaned ? { markAttemptCleaned: (input) => markAttemptCleaned(input) } : {}), ...(hooks?.log === undefined ? {} : { log: hooks.log }),
       ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}), ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {})
     })
-    modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
+    getModulePlatformHooks()?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
       startupReady,
       rescheduleBriefingForDisplayTimeZone,
@@ -624,11 +617,9 @@ export function resetIntelligenceModuleForTests(): void {
   intelligenceModule?.requestGovernanceQueue.close()
   intelligenceModule?.marketAnalysisRuntime.dispose()
   intelligenceModule = null
-  modulePlatformHooks = undefined
+  setModulePlatformHooks(undefined)
 }
 
-export function getIntelligenceProductDataDir(): string {
-  return getProductDataDir()
-}
 
 export { PRODUCT_ID as INTELLIGENCE_PRODUCT_ID, INTELLIGENCE_REPLAY_WINDOW_JOB }
+export { currentReaderTimeZone, getIntelligenceProductDataDir } from './intelligenceModuleEnvironment'
