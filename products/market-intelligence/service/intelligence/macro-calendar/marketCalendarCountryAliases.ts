@@ -10,7 +10,13 @@
 export const marketCalendarCountryAliases: Readonly<Record<string, string>> = Object.freeze({
   UK: 'GB', SIN: 'SG', INA: 'ID', PHI: 'PH', FRA: 'FR', ITA: 'IT', AUS: 'AU', GER: 'DE', USA: 'US',
   // `BEL`（比利时）是合法 alpha-3，但反查表里没有 `BE`——真库里它一直是三位写法。
-  BEL: 'BE'
+  BEL: 'BE',
+  /**
+   * 2026-11-19 采集中新出现的四个（用户看到日志里「未知国家码 19 种」后追下来的）：
+   * `SWI`/`NOR`/`MEX` 是常见缩写；**`SK` 是源拿 ISO 的斯洛伐克码表示首尔**——库里那两行的标题是
+   * 「英国央行行长贝利在首尔发表讲话」，所以 `SK → KR` 有数据依据，不是猜。
+   */
+  SWI: 'CH', NOR: 'NO', MEX: 'MX', SK: 'KR'
 })
 
 /** 允许留在库里的非 ISO alpha-2 例外（目前只有欧元区）。 */
