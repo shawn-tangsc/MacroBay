@@ -182,6 +182,18 @@ export type CalendarStandardRow = Readonly<{
  * 写一行标准事件。**修订覆盖值，但冻结首发布两列**——`on conflict` 的 `do update` 里
  * 刻意不出现 `first_published_*`，也不写 `first_seen_at`。
  */
+/** 取 `raw_json` 里某个字段的原文值（取不到返回 null，供 SQL 比较；不解析成业务类型）。 */
+function jsonField(rawJson: string, field: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(rawJson)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    const value = (parsed as Record<string, unknown>)[field]
+    return typeof value === 'string' || typeof value === 'number' ? String(value) : null
+  } catch {
+    return null
+  }
+}
+
 /** 值非法就抛：抛在这里等于**整笔写入失败**，不会被悄悄存进去。 */
 function assertDisplayValues(valuesJson: string, metricKey: string): void {
   let parsed: unknown
@@ -370,6 +382,22 @@ export function recordCalendarUnmapped(database: DatabaseSync, input: Readonly<{
   const { unmappedTable } = calendarStandardTablePolicy
   // **一个源 id 只一条**（Chief 2026-11-18）：第一次失败记 `first_seen_at`，之后再失败只把
   // `last_seen_at` 往前推、原因覆盖成当前那条——主表里不堆历史原因，`reason` 永远只有一个当前值。
+  /**
+   * **同一场发布只落一条**（Chief 2026-11-18）：源对同一场发布发中英文两条，`source_key` 末段不同，
+   * 但 `indicatorId` 与 `scheduledAt` 相同——那就是同一件事，中英只是标签。
+   * 判据：库里已有同 provider、同 `indicatorId`、同 `scheduledAt` 的记录 → 不再新增，
+   * 只把 `last_seen_at` 往前推（原因也不覆盖：先到那条是「第一次没进去」的事实）。
+   */
+  const sameRelease = database.prepare(`select rowid from ${unmappedTable}
+    where provider_id = ? and json_extract(raw_json, '$.scheduledAt') = ?
+      -- indicatorId 在 JSON 里是数字、传进来是字符串：按文本比，否则永远不相等（实测踩过）。
+      and cast(json_extract(raw_json, '$.indicatorId') as text) = ? limit 1`).get(
+    input.providerId, jsonField(input.rawJson, 'scheduledAt'), jsonField(input.rawJson, 'indicatorId'))
+  if (sameRelease !== undefined) {
+    database.prepare(`update ${unmappedTable} set last_seen_at = ? where rowid = ?`)
+      .run(input.detectedAt, (sameRelease as { rowid: number }).rowid)
+    return
+  }
   database.prepare(`insert into ${unmappedTable}
     (provider_id, source_key, detected_at, raw_json, reason, first_seen_at, last_seen_at)
     values (?, ?, ?, ?, ?, ?, ?)

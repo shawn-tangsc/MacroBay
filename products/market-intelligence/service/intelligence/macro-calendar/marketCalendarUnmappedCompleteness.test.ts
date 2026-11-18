@@ -76,3 +76,35 @@ describe('未映射表的完整性守卫：每个拦下数据的分支都要留�
     expect(rowsOf(database).map((row) => row.reason).sort()).toEqual([...reasons].sort())
   })
 })
+
+describe('写入端防复发：同一场发布只落一条（2026-11-18）', () => {
+  it('中英两条（同 indicatorId + 同 scheduledAt）→ 只有 1 条记录', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const raw = (name: string) => JSON.stringify({
+      name, indicatorId: 4127, scheduledAt: '2026-11-17T06:00:00.000Z', eventKind: 'economic-indicator'
+    })
+    recordCalendarUnmapped(database, {
+      providerId: '0xrouter', sourceKey: '["215404",79606]',
+      detectedAt: '2026-11-16T10:00:00.000Z', rawJson: raw('10月失业率'), reason: 'no-standard-row'
+    })
+    recordCalendarUnmapped(database, {
+      providerId: '0xrouter', sourceKey: '["215404",79607]',
+      detectedAt: '2026-11-16T10:05:00.000Z', rawJson: raw('unemployment rate(Oct)'), reason: 'period-unresolved'
+    })
+    expect(rowsOf(database)).toHaveLength(1)
+  })
+
+  it('不同排期时刻是两件事 → 仍是两条', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const raw = (at: string) => JSON.stringify({ name: '失业率', indicatorId: 4127, scheduledAt: at })
+    recordCalendarUnmapped(database, {
+      providerId: '0xrouter', sourceKey: 'a', detectedAt: '2026-11-16T10:00:00.000Z', rawJson: raw('2026-11-17T06:00:00.000Z'), reason: 'no-standard-row'
+    })
+    recordCalendarUnmapped(database, {
+      providerId: '0xrouter', sourceKey: 'b', detectedAt: '2026-11-16T10:01:00.000Z', rawJson: raw('2026-12-17T06:00:00.000Z'), reason: 'no-standard-row'
+    })
+    expect(rowsOf(database)).toHaveLength(2)
+  })
+})
