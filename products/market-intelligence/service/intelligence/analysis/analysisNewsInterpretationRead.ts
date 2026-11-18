@@ -4,6 +4,7 @@ import { buildEvidenceFingerprint } from './analysisHash'
 import { prepareMarketAnalysisSnapshot, type PreparationDependencies } from './analysisSnapshotPreparation'
 import { isNewsSeveritySource } from './analysisItemSeverity'
 import { isStalledAnalysisRun } from './analysisRunStaleness'
+import { interpretationAdmission } from './analysisNewsInterpretationAdmission'
 
 /**
  * 「AI 解读」的只读判读：这条新闻有没有已有解读、是哪份证据的。
@@ -34,8 +35,13 @@ export function createNewsInterpretationReader(
 
   return async function readNewsInterpretation(itemId: string): Promise<NewsInterpretationReadResult> {
     const item = deps.pipeline.listItems().find(candidate => candidate.itemId === itemId)
-    const currentEvidenceFingerprint = await currentFingerprint(itemId)
-    if (!item) return { itemId, state: 'none', currentEvidenceFingerprint }
+    // 菜单可用性也走同一处准入：没有判定/没有发布时间/来源不在表里时，不声称「此刻能解读」。
+    const admission = interpretationAdmission(item, {
+      ...(deps.latestNewsSentiment === undefined ? {} : { latestNewsSentiment: deps.latestNewsSentiment }),
+      now: deps.now
+    })
+    const currentEvidenceFingerprint = admission.ok ? await currentFingerprint(itemId) : null
+    if (!admission.ok || !item) return { itemId, state: 'none', currentEvidenceFingerprint }
     const group = deps.repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
     if (!group) return { itemId, state: 'none', currentEvidenceFingerprint }
     const runs = deps.repository.listRuns().filter(run => run.eventGroupId === group.id)

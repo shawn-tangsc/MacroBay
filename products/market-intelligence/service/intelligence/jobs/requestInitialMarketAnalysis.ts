@@ -6,6 +6,9 @@ import { resolveTriggerKey, type AnalysisTriggerSource } from '../analysis/analy
 import type { AnalysisSessionSlot } from '../analysis/analysisSchedulePolicy'
 import { FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB } from './marketAnalysisJobIds'
 import { createAnalysisRunEnqueuer } from './analysisRunEnqueue'
+import { interpretationAdmission } from '../analysis/analysisNewsInterpretationAdmission'
+import { interpretationKindForGroup } from '../analysis/analysisInterpretationKind'
+import type { NewsSentimentRecord } from '../schema/newsSentiment'
 
 // Product-owned manual retry policy: an observation timeout never ends the background job.
 export const initialMarketAnalysisRequestPolicy = Object.freeze({
@@ -26,6 +29,8 @@ export function createInitialMarketAnalysisRequest(deps: {
   /** 建组读当刻的情绪判定，所以允许异步；同步实现（测试与无判定装配）照样能用。 */
   createGroup: (itemId: string) => EventGroup | Promise<EventGroup>
   now: () => string
+  /** 遗留手动刷新落 news 线时的准入判据（有判定 = 能写第一段的偏向）。 */
+  latestNewsSentiment?: (itemId: string, asOf: string) => NewsSentimentRecord | undefined
   /** The capability's switch. Absent (headless/test wiring) leaves the request ungated. */
   isEnabled?: () => Promise<boolean>
 }) {
@@ -70,6 +75,23 @@ export function createInitialMarketAnalysisRequest(deps: {
       ? initialMarketAnalysisRequestPolicy.inFlightStatuses
       : initialMarketAnalysisRequestPolicy.blockingStatuses
     if (!manualCorrection && ((mode === 'initial' && group.currentSummaryId) || deps.repository.listRuns().some(run => run.eventGroupId === group.id && blockingStatuses.includes(run.status)))) throw new Error('analysis-already-available')
+    // R39 S1：组是消息面（sentiment）或带触发指针时，遗留的手动刷新在服务端分流到 news 线。
+    // 判定看组与快照，不看载荷猜；返回形状仍是 `{itemId, queued:true}`。自动来源不动。
+    const line = source === 'manual' ? interpretationKindForGroup(group, deps.repository) : 'market'
+    if (line === 'news') {
+      const admission = interpretationAdmission(item, {
+        ...(deps.latestNewsSentiment === undefined ? {} : { latestNewsSentiment: deps.latestNewsSentiment }),
+        now: deps.now
+      })
+      // 消息面里没有判定的条目今天写不出触发事实：fail-closed，不排一次注定失败的运行。
+      if (!admission.ok) throw new Error('analysis-not-eligible')
+      const outcome = await enqueue({
+        analysisKind: 'news', eventGroupId: group.id, triggerKey: 'news.manual',
+        analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now(), triggeredItemId: item.itemId
+      })
+      if (outcome.state === 'enqueued' || outcome.state === 'in-flight') return { itemId: item.itemId, queued: true }
+      throw new Error('analysis-initial-request-failed')
+    }
     // 入队与冻结观察是两条手动入口共用的那一段（§9.1）；旧命令对「在飞」返回 queued，语义不变。
     const outcome = await enqueue({
       analysisKind: 'market', eventGroupId: group.id, triggerKey, analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now()

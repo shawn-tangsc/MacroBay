@@ -30,7 +30,8 @@ function setup() {
     processingLabelsJson: JSON.stringify({ relevanceOutcome: 'full-intelligence', sentimentEligible: true })
   }]
   const group: EventGroup = {
-    id: 'mi-eg-original', schemaVersion: 1, status: 'open', groupType: 'sentiment', mergeKey: 'original',
+    // 这条用例测的是市场线的旧命令：组不是消息面（sentiment 组会分流到 news 线，见下面单独用例）。
+    id: 'mi-eg-original', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|original',
     firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-10-04T02:00:00.000Z',
     eventRefs: ['item-original'], triggerCount: 0, reviewCount: 0, currentSummaryId: null,
     supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
@@ -177,6 +178,60 @@ describe('createInitialMarketAnalysisRequest', () => {
     fixture.queuedRun()
     // A session-slot refresh is not a click; a skip there is the trigger budget talking.
     await expect(fixture.request(undefined, undefined, 'refresh', 'session-slot', 'asia')).rejects.toThrow('analysis-already-available')
+    expect(fixture.jobRuntime.listRuns()).toHaveLength(0)
+  })
+
+  it('routes a legacy manual refresh on a sentiment group to the news line', async () => {
+    const fixture = setup()
+    const messageItem: IntelligenceItem = {
+      ...fixture.items[0]!, itemId: 'item-message', sourceId: 'alternative-fear-greed', eventType: 'metric',
+      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+    }
+    fixture.items.push(messageItem)
+    fixture.repository.appendEventGroup({
+      ...fixture.group, id: 'mi-eg-message', groupType: 'sentiment', mergeKey: 'sentiment|item-message', eventRefs: ['item-message']
+    })
+    const enqueueSpy = vi.spyOn(fixture.jobRuntime, 'enqueueDefinition')
+
+    await expect(fixture.request('item-message', undefined, 'refresh', 'manual')).resolves.toEqual({ itemId: 'item-message', queued: true })
+    expect(enqueueSpy).toHaveBeenCalledWith(expect.objectContaining({
+      handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB,
+      payload: expect.objectContaining({
+        analysisKind: 'news', triggerKey: 'news.manual', triggeredItemId: 'item-message', eventGroupId: 'mi-eg-message'
+      })
+    }))
+  })
+
+  it('routes a legacy manual refresh for a judged news item on a sentiment group to the news line', async () => {
+    const fixture = setup()
+    const newsItem: IntelligenceItem = { ...fixture.items[0]!, itemId: 'item-judged', sourceId: 'coindesk-rss' }
+    fixture.items.push(newsItem)
+    fixture.repository.appendEventGroup({
+      ...fixture.group, id: 'mi-eg-judged', groupType: 'sentiment', mergeKey: 'sentiment|item-judged', eventRefs: ['item-judged']
+    })
+    const request = createInitialMarketAnalysisRequest({
+      repository: fixture.repository, jobRuntime: fixture.jobRuntime, listItems: () => fixture.items, now: () => asOf,
+      createGroup: fixture.createGroup,
+      latestNewsSentiment: () => ({
+        itemId: 'item-judged', sourceId: 'coindesk-rss', publishedAt: asOf, scoredAt: asOf,
+        polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'c', engine: 'model', caveats: []
+      }) as never
+    })
+    const enqueueSpy = vi.spyOn(fixture.jobRuntime, 'enqueueDefinition')
+    await expect(request('item-judged', undefined, 'refresh', 'manual')).resolves.toEqual({ itemId: 'item-judged', queued: true })
+    expect(enqueueSpy).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ analysisKind: 'news', triggerKey: 'news.manual', triggeredItemId: 'item-judged' })
+    }))
+  })
+
+  it('fails closed for a sentiment group whose item has no judgment', async () => {
+    const fixture = setup()
+    const newsItem: IntelligenceItem = { ...fixture.items[0]!, itemId: 'item-no-verdict', sourceId: 'coindesk-rss' }
+    fixture.items.push(newsItem)
+    fixture.repository.appendEventGroup({
+      ...fixture.group, id: 'mi-eg-no-verdict', groupType: 'sentiment', mergeKey: 'sentiment|item-no-verdict', eventRefs: ['item-no-verdict']
+    })
+    await expect(fixture.request('item-no-verdict', undefined, 'refresh', 'manual')).rejects.toThrow('analysis-not-eligible')
     expect(fixture.jobRuntime.listRuns()).toHaveLength(0)
   })
 

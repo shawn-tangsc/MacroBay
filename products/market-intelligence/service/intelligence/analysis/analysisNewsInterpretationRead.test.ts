@@ -59,7 +59,11 @@ function reader(overrides: Readonly<{ run?: AnalysisRun; summary?: AnalysisSumma
       getSummaryForRun: () => ('summary' in overrides ? overrides.summary : summary)
     } as never,
     timeZone: () => 'UTC',
-    now: () => asOf
+    now: () => asOf,
+    latestNewsSentiment: () => ({
+      itemId: 'item-1', sourceId: 'coindesk-rss', publishedAt: item.publishedAt, scoredAt: asOf,
+      polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'c', engine: 'model', caveats: []
+    }) as never
   })
 }
 

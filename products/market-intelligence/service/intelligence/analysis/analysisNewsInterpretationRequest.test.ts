@@ -76,7 +76,8 @@ function harness(overrides: Readonly<{
       listEventGroups: () => [group],
       listRuns: () => overrides.runs ?? [],
       getSnapshot: () => snapshot as never,
-      getSummaryForRun: () => ('summary' in overrides ? overrides.summary : summary) as never
+      getSummaryForRun: () => ('summary' in overrides ? overrides.summary : summary) as never,
+      listSnapshots: () => []
     } as never,
     latestNewsSentiment: () => ({ polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], scoredAt: '2026-11-16T09:07:50.718Z', itemId: 'item-1', sourceId: 'coindesk-rss', publishedAt: item.publishedAt, reasonCode: 'c', engine: 'model', caveats: [] }) as never,
     timeZone: () => 'UTC',
@@ -95,12 +96,16 @@ describe('按条解读：先判能不能跑', () => {
   it('splits not-eligible into three reasons', async () => {
     const { request } = harness()
     await expect(request('missing-item')).resolves.toEqual({ state: 'not-eligible', itemId: 'missing-item', reason: 'item-not-found' })
-    const other = harness({ items: [{ ...item, sourceId: 'alternative-fear-greed' }] })
+    // 来源不在注册表：这才是「不在覆盖范围」。注册表里的非四源条目走消息面准入（下面单独验）。
+    const other = harness({ items: [{ ...item, sourceId: 'not-in-registry' }] })
     await expect(other.request('item-1')).resolves.toEqual({ state: 'not-eligible', itemId: 'item-1', reason: 'source-not-covered' })
     // 没有发布时间就建不出触发事实（它要引发生时刻）：这一条仍是「不能单独解读」，且不排运行。
     const noTime = harness({ items: [{ ...item, publishedAt: '' }] })
     await expect(noTime.request('item-1')).resolves.toEqual({ state: 'not-eligible', itemId: 'item-1', reason: 'item-not-eligible' })
     expect(noTime.enqueue).not.toHaveBeenCalled()
+    // 消息面（注册表里的非四源）同样只要求发布时间，不要求判定。
+    const messageNoTime = harness({ items: [{ ...item, sourceId: 'alternative-fear-greed', publishedAt: '' }] })
+    await expect(messageNoTime.request('item-1')).resolves.toEqual({ state: 'not-eligible', itemId: 'item-1', reason: 'item-not-eligible' })
   })
 
   it('admits a low-trust item inside the judged sources when it has a judgment', async () => {

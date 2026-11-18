@@ -366,6 +366,10 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
         const payload = event.payload as Record<string, unknown>
         const eventRef = typeof payload.itemId === 'string' ? payload.itemId : typeof payload.aggregateId === 'string' ? payload.aggregateId : undefined
         if (!eventRef) return
+        // R39 S1：消息面（`domain='sentiment'`）不再自动分析——连 change job 都不排。
+        // 包括非四源、却被 generics 判成 high 的消息面条目（今天不可解读，见 03 文档 §3）。
+        const eventItem = input.pipeline.listItems().find(candidate => candidate.itemId === eventRef || candidate.clusterId === eventRef)
+        if (eventItem && resolveDomain(safeJson(eventItem.processingLabelsJson).dataDomain, eventItem.sourceId) === 'sentiment') return
         await input.jobRuntime.enqueueDefinition({
           id: `market-analysis:group:${event.eventId}`,
           owner: 'product',
@@ -381,6 +385,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   }
 
   const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled,
+      ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
       createGroup: async itemId => {
         const resolved = await resolveChange({ changeId: itemId })
         if (!resolved) throw new Error('analysis-not-eligible')
@@ -476,9 +481,9 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   async function groupChange(payload: unknown): Promise<Record<string, unknown> | void> {
     const resolved = await resolveChange(payload)
     if (!resolved) return
-    // R39：新闻解读没有自动触发。新作业不再产生（评分/采集两步都不再排），旧队列里的也在
-    // 建组之前止步——否则会白花一次市场分析，而且快照带着一条模型看不到的新闻指针。
-    if (resolved.newsItem) return
+    // R39 S1：消息面（`domain='sentiment'`）不自动产出。新作业在事件入口就不排；旧队列里的
+    // 也在这里、建组之前止步——包括非四源却被 generics 判成 high 的条目（今天不可解读）。
+    if (resolved.newsItem || resolved.change.domain === 'sentiment') return
     const change = resolved.change
     const existing = repository.findEventGroupByMergeKey(eventGroupMergeKey(change))
     const result = groups.addChange(existing, change)

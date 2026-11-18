@@ -60,7 +60,12 @@ function readerFor(repository: ReturnType<typeof createMarketAnalysisRepository>
     pipeline: { listItems: () => [item], listRevisions: () => [] } as never,
     repository,
     timeZone: () => 'UTC',
-    now: () => now
+    now: () => now,
+    // S1 准入：舆情条目要有判定，只读菜单才认「正在解读」。
+    latestNewsSentiment: () => ({
+      itemId, sourceId: 'coindesk-rss', publishedAt: queuedAt, scoredAt: queuedAt,
+      polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'c', engine: 'model', caveats: []
+    }) as never
   })
 }
 

@@ -6,7 +6,8 @@ import {
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
 import type { NewsSentimentRecord } from '../schema/newsSentiment'
 import type { EnqueueAnalysisRunInput, EnqueueAnalysisRunOutcome } from '../jobs/analysisRunEnqueue'
-import { isNewsSeveritySource } from './analysisItemSeverity'
+import { interpretationAdmission } from './analysisNewsInterpretationAdmission'
+import { interpretationKindForGroup } from './analysisInterpretationKind'
 import { createNewsInterpretationReader } from './analysisNewsInterpretationRead'
 import type { PreparationDependencies } from './analysisSnapshotPreparation'
 
@@ -43,10 +44,20 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
 
   async function requestNewsInterpretation(itemId: string): Promise<NewsInterpretationRequestResult> {
     const item = deps.pipeline.listItems().find(candidate => candidate.itemId === itemId)
-    if (!item) return { state: 'not-eligible', itemId, reason: NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.itemNotFound }
-    if (!isNewsSeveritySource(item.sourceId)) return { state: 'not-eligible', itemId, reason: NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.sourceNotCovered }
-    if (!hasCitablePublication(item)) return { state: 'not-eligible', itemId, reason: NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.itemNotEligible }
-    if (!deps.latestNewsSentiment?.(itemId, deps.now())) return { state: 'no-judgment', itemId }
+    // 准入只有一处（`interpretationAdmission`）：抽屉右键、只读菜单、遗留手动刷新共用。
+    const admission = interpretationAdmission(item, {
+      ...(deps.latestNewsSentiment === undefined ? {} : { latestNewsSentiment: deps.latestNewsSentiment }),
+      now: deps.now
+    })
+    if (!admission.ok) {
+      if (admission.reason === 'no-judgment') return { state: 'no-judgment', itemId }
+      return {
+        state: 'not-eligible', itemId,
+        reason: admission.reason === 'item-not-found' ? NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.itemNotFound
+          : admission.reason === 'source-not-covered' ? NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.sourceNotCovered
+            : NEWS_INTERPRETATION_NOT_ELIGIBLE_REASONS.itemNotEligible
+      }
+    }
     if (!await deps.isEnabled()) return { state: 'not-ready', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.notEnabled }
     if (!await deps.hasModel()) return { state: 'not-ready', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.providerNotReady }
 
@@ -54,6 +65,8 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     // 「这条新闻此刻能不能建出可引用的证据」，也才能在排运行之前 fail-closed。
     const group = await deps.ensureGroup(itemId)
     if (!group) return { state: 'failed', itemId, failureCode: NEWS_INTERPRETATION_FAILURE_CODES.eventGroupNotFound }
+    // 与卡片那条旧 IPC 共用同一份判定：sentiment 组（或带触发指针的组）走 news 线。
+    const line = interpretationKindForGroup(group, deps.repository)
     const read = await readNewsInterpretation(itemId)
     if (read.state === 'in-flight') return { state: 'in-flight', itemId, runId: read.runId }
     if (read.state === 'available' && read.currentEvidenceFingerprint === read.evidenceFingerprint) {
@@ -74,7 +87,7 @@ export function createNewsInterpretationEndpoints(deps: NewsInterpretationEndpoi
     const existing = Boolean(group.currentSummaryId) || deps.repository.listRuns()
       .some(run => run.eventGroupId === group.id && run.status === 'succeeded')
     const outcome = await deps.enqueue({
-      analysisKind: 'news',
+      analysisKind: line,
       eventGroupId: group.id,
       // 按条解读只有这一个触发键（R39 §6）：它进 gate-exempt（手动路径），不占自动额度；
       // 首跑/重跑的区别由 phase 表达，不再借用 manual.* 的键。
@@ -112,9 +125,5 @@ function failureFor(itemId: string, errorCode: string): NewsInterpretationReques
  * 没有时间戳的残片建不出触发事实，冻结那边本就会 fail-closed）。没有判定由下一步回 `no-judgment`，
  * 有判定却建不出证据引用由冻结回 `insufficient-facts`——两件事各有出口，不混进「不够格」。
  */
-function hasCitablePublication(item: IntelligenceItem): boolean {
-  return Boolean(item.publishedAt)
-}
-
 /** 判定是否已经写下来（端点只用它判 `no-judgment`；方向与强度由冻结路径与校验负责）。 */
 export type NewsJudgementReader = (itemId: string, asOf: string) => NewsSentimentRecord | undefined

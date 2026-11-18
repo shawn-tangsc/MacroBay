@@ -123,7 +123,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     const classifiedItem = item({
       itemId: 'item-request-first-analysis', sourceId: 'alternative-fear-greed',
       publishedAt: '2026-09-28T00:00:00.000Z', detectedAt: '2026-09-28T00:00:00.000Z', severityHint: 'info',
-      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+      processingLabelsJson: JSON.stringify({ dataDomain: 'macro', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
     })
     const enqueueDefinition = vi.fn(async (definition) => ({ id: definition.id }))
     const jobRuntime = {
@@ -400,7 +400,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     const classifiedItem = item({
       itemId: 'item-full-intelligence', sourceId: 'alternative-fear-greed',
       publishedAt: '2026-09-28T00:00:00.000Z', detectedAt: '2026-09-28T00:00:00.000Z', severityHint: 'info',
-      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+      processingLabelsJson: JSON.stringify({ dataDomain: 'macro', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
     })
     const pipeline = {
       listItems: () => [classifiedItem],

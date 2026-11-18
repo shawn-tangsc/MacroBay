@@ -99,6 +99,24 @@ describe('新闻条目不再进入自动分析触发路径（R39）', () => {
     expect(outcome.enqueued.filter(definition => definition.handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)).toEqual([])
   })
 
+  it('a non-news item classified as sentiment does not auto-analyze either', async () => {
+    // `github-releases` 这类 generics 条目被判成 sentiment/high：今天没有抽屉入口、也建不出
+    // 触发事实，自动路径同样一次都不该跑（03 文档 §3 的「不可达分支」）。
+    const genericItem: IntelligenceItem = {
+      ...newsItem, itemId: 'item-generic', sourceId: 'github-releases', eventType: 'release',
+      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+    }
+    const outcome = await withRuntime({ item: genericItem }, async ({ runtime, handlers, enqueued }) => {
+      await handlers.get(GROUP_MARKET_ANALYSIS_CHANGE_JOB)!({ changeId: genericItem.itemId, eventRef: genericItem.itemId }, context as never)
+      const groups = runtime.repository.listEventGroups()
+      return { groups, ledger: groups.flatMap(group => runtime.repository.listTriggerLedger(group.id)), runs: runtime.repository.listRuns(), enqueued }
+    })
+    expect(outcome.groups).toEqual([])
+    expect(outcome.ledger).toEqual([])
+    expect(outcome.runs).toEqual([])
+    expect(outcome.enqueued).toEqual([])
+  })
+
   it('中性、无标的的新闻同样零次运行（不再写「跳过」账本行）', async () => {
     const outcome = await withRuntime({ item: newsItem, verdict: neutralNoSymbol }, async ({ runtime, handlers, enqueued }) => {
       await handlers.get(GROUP_MARKET_ANALYSIS_CHANGE_JOB)!({ changeId: newsItem.itemId, eventRef: newsItem.itemId }, context as never)
@@ -131,9 +149,51 @@ describe('新闻条目不再进入自动分析触发路径（R39）', () => {
     expect(outcome.enqueued).toEqual([])
   })
 
+  it('does not enqueue a change job for a sentiment item at the event consumer', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'mi-analysis-sentiment-consumer-'))
+    const handlers = new Map<string, JobHandler>()
+    const enqueued: { handlerId?: string; payload?: unknown }[] = []
+    let consumer: ((event: unknown) => Promise<void>) | undefined
+    const jobRuntime = {
+      registerHandler: (id: string, handler: JobHandler) => { handlers.set(id, handler) },
+      enqueueDefinition: async (definition: { handlerId?: string; payload?: unknown }) => { enqueued.push(definition); return { id: 'next-stage' } },
+      listRuns: () => [], enqueueStartup: async (id: string) => ({ id })
+    } as unknown as JobRuntime
+    const items: IntelligenceItem[] = [
+      { ...newsItem, itemId: 'item-message', sourceId: 'alternative-fear-greed', eventType: 'metric' },
+      { ...newsItem, itemId: 'item-macro', eventType: 'metric', processingLabelsJson: JSON.stringify({ dataDomain: 'macro', relevanceOutcome: 'full-intelligence', sentimentEligible: true }) }
+    ]
+    const runtime = registerMarketAnalysisRuntime({
+      jobRuntime,
+      eventBusRuntime: {
+        registerConsumer: (_config: unknown, handler: (event: unknown) => Promise<void>) => { consumer = handler },
+        unregisterConsumer: () => undefined
+      } as never,
+      pipeline: { listItems: () => items, listRevisions: () => [] } as never,
+      publicQueryService: {} as never,
+      structuredModelInvocation: { invoke: async () => { throw new Error('入口阶段不得调用模型') } },
+      dataDir, now: () => asOf
+    })
+    try {
+      const baseline = enqueued.length
+      await consumer!({ eventId: 'e-sentiment', topic: 'intelligence.item.detected', payload: { itemId: 'item-message' } })
+      expect(enqueued).toHaveLength(baseline)
+      await consumer!({ eventId: 'e-macro', topic: 'intelligence.item.detected', payload: { itemId: 'item-macro' } })
+      expect(enqueued).toHaveLength(baseline + 1)
+      expect(enqueued.at(-1)).toEqual(expect.objectContaining({ handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB }))
+    } finally {
+      runtime.dispose()
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('数据类条目照旧看准入：没有情绪判定也能触发', async () => {
     const outcome = await withRuntime({
-      item: { ...newsItem, itemId: 'item-fear-greed', sourceId: 'alternative-fear-greed', eventType: 'metric' }
+      item: {
+        ...newsItem, itemId: 'item-fear-greed', sourceId: 'alternative-fear-greed', eventType: 'metric',
+        // 数据类条目的域是 macro；`sentiment` 域已从自动分析里摘掉（S1）。
+        processingLabelsJson: JSON.stringify({ dataDomain: 'macro', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+      }
     }, async ({ runtime, handlers, enqueued }) => {
       await handlers.get(GROUP_MARKET_ANALYSIS_CHANGE_JOB)!({
         changeId: 'item-fear-greed', eventRef: 'item-fear-greed'

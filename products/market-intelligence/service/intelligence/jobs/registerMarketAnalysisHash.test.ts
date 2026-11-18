@@ -16,7 +16,9 @@ const baseItem: IntelligenceItem = {
   itemId: 'hash-item', primaryRawRecordId: 'hash-raw', canonicalDedupeKey: 'hash-key',
   sourceId: 'official-source', eventType: 'announcement', title: '市场事件',
   sourceCategory: 'announcement', sourceTrust: 'high', publishedAt, detectedAt: publishedAt,
-  severityHint: 'critical', timelineStatus: 'evaluated', normalizerVersion: 'v1'
+  severityHint: 'critical', timelineStatus: 'evaluated', normalizerVersion: 'v1',
+  // S1：sentiment 域不再自动分析；这条用例测的是市场事件哈希，域给 macro。
+  processingLabelsJson: JSON.stringify({ dataDomain: 'macro', relevanceOutcome: 'full-intelligence' })
 }
 
 type Case = {
