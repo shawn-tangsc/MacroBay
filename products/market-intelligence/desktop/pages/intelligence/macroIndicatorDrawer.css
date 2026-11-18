@@ -413,6 +413,9 @@ button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline
    分级与口径合成一格两行——八列并成六列，858 宽才放得下。 */
 .mi-catalog__code-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-catalog__code-meta { display: flex; flex-direction: column; line-height: 1.3; }
+/* 分级星级：颜色取主题 token，不硬写颜色。「未分级」是弱化档（没有级别，不是第四档），用 muted 与三档拉开。 */
+.mi-catalog__tier-stars { color: var(--text-strong); }
+.mi-catalog__tier-stars[data-tier='other'] { color: var(--muted); }
 
 /*
  * 事件目录弹框：**给高度、内部纵向三段**（筛选固定 / 表格滚动 / 分页固定）。
