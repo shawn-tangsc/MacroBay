@@ -46,7 +46,12 @@ export type UnmappedCalendarMonthRead = Readonly<{
   superseded: number
   /** 没有标准行的条数（不进列表，只作诊断）：它们不在等映射，也没有行可挂映射。 */
   noStandardRow: number
-  /** 事件条数（不进列表，只作诊断）：讲话/纪要/央行活动不是指标，不该混在「未映射指标」里。 */
+  /**
+   * 事件条数（**不进未映射列表**，单独走事件页）：讲话/纪要/央行活动不是指标。
+   *
+   * 事件的行**不在这里返回**：事件读口只有一处，见 `readCalendarEventList`（`marketCalendarEventListRead`）。
+   * 一处事实一处定义——再写第二个事件读口，两个数迟早对不上。
+   */
   events: number
   /** 已认出码、缺统计期的条数（不进列表）：映射那一半已完成。 */
   periodUnresolved: number
@@ -103,6 +108,8 @@ export function listUnmappedCalendarObservationsForRendering(
     // **一条都不许藏**（用户 2026-11-18）：没进日历的东西全部列出来，原因用列区分；
     // 计数照旧统计，供诊断参考。
     if (row.reason === 'no-standard-row') noStandardRow += 1
+    // **事件单独一页**（用户 2026-11-18）：判据只看源自己的 `eventKind`（不是标题字面），
+    // 事件不参与映射，所以从「未映射」里分出去，进事件页只读展示。
     if (row.reason === 'unknown-event-type') events += 1
     if (row.reason === 'no-code') noCode += 1
     // `bad-period` 是这一档的旧库写法（重算跑过才会变成 `period-unresolved`），两写法同一计数。
@@ -113,7 +120,7 @@ export function listUnmappedCalendarObservationsForRendering(
     if (!scheduledDate.startsWith(input.month)) continue
     const scheduledAt = text(raw.scheduledAt)
     const eventKind = text(raw.eventKind)
-    entries.push(Object.freeze({
+    const entry = Object.freeze({
       key,
       providerId: row.provider_id,
       sourceKey: row.source_key,
@@ -128,7 +135,11 @@ export function listUnmappedCalendarObservationsForRendering(
       eventType: eventKind !== undefined && eventTypes.includes(eventKind)
         ? eventKind as MarketCalendarEvent['eventType'] : 'unknown' as const,
       detectedAt: row.detected_at
-    }))
+    })
+    // 事件不进映射列表（它们有自己的页），也不在这里返回行——事件读口只一处。
+    if (row.reason !== 'unknown-event-type') entries.push(entry)
   }
-  return Object.freeze({ entries: Object.freeze(entries), undated, superseded, noStandardRow, events, noCode, periodUnresolved })
+  return Object.freeze({
+    entries: Object.freeze(entries), undated, superseded, noStandardRow, events, noCode, periodUnresolved
+  })
 }
