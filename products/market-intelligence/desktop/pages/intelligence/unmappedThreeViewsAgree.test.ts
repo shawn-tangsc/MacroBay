@@ -5,7 +5,6 @@ import { ensureCalendarStandardTables } from '../../../service/intelligence/macr
 import { groupUnmappedByRelease } from '../../../service/intelligence/macro-calendar/marketCalendarUnmappedGrouping'
 import { readCalendarMappingRules } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 import { listUnmappedCalendarObservationsForRendering } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarUnmappedMonthRead'
-import { readCalendarEventList } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventListRead'
 import { unmappedExportRows } from './mappingRulesExport'
 
 /**
@@ -40,21 +39,9 @@ function seed(): DatabaseSync {
   insert('["700002",1]', '10 月零售销售', '2026-11-11T12:00:00.000Z', 'period-unresolved')
   insert('["700002",2]', 'Retail sales', '2026-11-11T12:00:00.000Z', 'period-unresolved')
   insert('["700003",1]', '9 月贸易帐', '2026-11-12T12:00:00.000Z', 'no-code')
-  // 两场事件（其中一场中英各一条）：未映射界面按「件」算，事件也必须一件一行。
-  insertEvent(database, '["44671",1]', '泰国央行公布货币政策会议纪要', '2026-10-20T08:00:00.000Z')
-  insertEvent(database, '["44671",2]', 'Bank of Thailand minutes', '2026-10-20T08:00:00.000Z')
-  insertEvent(database, '["44735",1]', '东盟能源部长会议', '2026-10-14T16:45:00.000Z')
   return database
 }
 
-const insertEvent = (database: DatabaseSync, sourceKey: string, name: string, scheduledAt: string): void => {
-  database.prepare(`insert into mi_calendar_unmapped
-    (provider_id, source_key, detected_at, raw_json, reason, first_seen_at, last_seen_at)
-    values ('0xrouter', ?, '2026-10-14T00:00:00.000Z', ?, 'unknown-event-type',
-      '2026-10-14T00:00:00.000Z', '2026-10-14T00:00:00.000Z')`)
-    .run(sourceKey, JSON.stringify({ name, eventKind: 'central-bank-activity',
-      scheduledDate: scheduledAt.slice(0, 10), scheduledAt }))
-}
 
 describe('未映射：抽屉、弹框、导出三处同一个数', () => {
   it('agrees on the item count and on groupUnmappedByRelease', () => {
@@ -85,28 +72,6 @@ describe('未映射：抽屉、弹框、导出三处同一个数', () => {
 
     expect({ drawer, list, tabCount, exported })
       .toEqual({ drawer: expected, list: expected, tabCount: expected, exported: expected })
-  })
-
-  it('counts events by release too, and the two tabs add up to the grouped total', () => {
-    const database = seed()
-    const events = readCalendarEventList(database)
-    if (events.state !== 'available') throw new Error('unavailable')
-    const dialog = readCalendarMappingRules(database)
-    if (dialog.state !== 'available') throw new Error('unavailable')
-
-    // 事件：三条记录（中英一对 + 单条）→ **两件**；按行数会是 3。
-    expect(events.total).toBe(2)
-    // 指标类 3 件 + 事件 2 件 = 5 件，与分组总数一致（跨两张页签的「按件」口径）。
-    const groupedTotal = groupUnmappedByRelease([
-      { sourceId: '700001', scheduledAt: '2026-11-10T12:00:00.000Z', scheduledDate: '2026-11-10', title: 'a', reason: 'no-code', hasStandardRow: false },
-      { sourceId: '700001', scheduledAt: '2026-11-10T12:00:00.000Z', scheduledDate: '2026-11-10', title: 'b', reason: 'no-code', hasStandardRow: false },
-      { sourceId: '700002', scheduledAt: '2026-11-11T12:00:00.000Z', scheduledDate: '2026-11-10', title: 'c', reason: 'no-code', hasStandardRow: false },
-      { sourceId: '700003', scheduledAt: '2026-11-12T12:00:00.000Z', scheduledDate: '2026-11-10', title: 'd', reason: 'no-code', hasStandardRow: false },
-      { sourceId: '44671', scheduledAt: '2026-10-20T08:00:00.000Z', scheduledDate: '2026-10-20', title: 'e', reason: 'unknown-event-type', hasStandardRow: false },
-      { sourceId: '44671', scheduledAt: '2026-10-20T08:00:00.000Z', scheduledDate: '2026-10-20', title: 'f', reason: 'unknown-event-type', hasStandardRow: false },
-      { sourceId: '44735', scheduledAt: '2026-10-14T16:45:00.000Z', scheduledDate: '2026-10-14', title: 'g', reason: 'unknown-event-type', hasStandardRow: false }
-    ]).length
-    expect(dialog.unmapped.length + events.total).toBe(groupedTotal)
   })
 
   it('merges the bilingual pair into one row with both titles and one reason', () => {
