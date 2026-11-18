@@ -8,6 +8,7 @@ import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
 import { germanSourceMetricMappings } from '../marketCalendarGermanSourceMappings'
 import { marketCalendarCountrySourceMappings } from '../marketCalendarCountrySourceMappings'
 import { subItemOrderOf, subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
+import { groupUnmappedByRelease, mergedReasonOf } from '../marketCalendarUnmappedGrouping'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
 
 /**
@@ -149,12 +150,25 @@ function earliest(left: string | null, right: string | null): string | null {
   return left < right ? left : right
 }
 
-/** 未映射行的 `raw_json` 里可能带源给的标题（`name`）：取它兜底，取不到就空着，不编。 */
-function titleFromRaw(rawJson: string): string | null {
+/**
+ * 未映射行 `raw_json` 里读三样：标题、`scheduledAt`、`scheduledDate`。
+ *
+ * 三者都只在这里解析一次：分组键要用 `scheduledAt`（空时退 `scheduledDate + 标题`），
+ * 展示要用标题——两处各解析一次，迟早出现「分组按一个日期、显示按另一个日期」。
+ * 取不到就是 `null`，不编。
+ */
+function rawFromUnmapped(rawJson: string): Readonly<{
+  name: string | null; scheduledAt: string | null; scheduledDate: string | null
+}> {
+  const pick = (value: unknown): string | null =>
+    typeof value === 'string' && value.trim() !== '' ? value.trim() : null
   try {
-    const parsed = JSON.parse(rawJson) as { name?: unknown }
-    return typeof parsed.name === 'string' && parsed.name.trim() !== '' ? parsed.name.trim() : null
-  } catch { return null }
+    const parsed = JSON.parse(rawJson) as { name?: unknown; scheduledAt?: unknown; scheduledDate?: unknown }
+    return { name: pick(parsed.name), scheduledAt: pick(parsed.scheduledAt),
+      scheduledDate: pick(parsed.scheduledDate) }
+  } catch {
+    return { name: null, scheduledAt: null, scheduledDate: null }
+  }
 }
 
 /** `["214790",79090]` → `214790`（与事件读口同一个取法，只取第一段）。 */
@@ -302,30 +316,83 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
     for (const entry of byId.values()) {
       labelById.set(entry.sourceId, { zh: entry.sampleLabel, en: entry.sampleLabelEn })
     }
-    const unmapped: UnmappedSourceIdRow[] = reasonRows.flatMap((row) => {
+    /** 这一条源 id 有没有标准行：决定合并后写哪个原因（有行 → 缺期次；没行 → 没进标准表）。 */
+    const hasStandardRow = database.prepare('select 1 from mi_calendar_events where source_event_id = ? limit 1')
+    type Entry = Readonly<{
+      sourceId: string
+      scheduledAt?: string
+      scheduledDate: string
+      title: string
+      reason: string
+      hasStandardRow: boolean
+      rowCount: number
+      firstSeenAt: string | null
+      providerIds: readonly string[]
+      sampleLabel: string | null
+      sampleLabelEn: string | null
+    }>
+    const entries: Entry[] = []
+    for (const row of reasonRows) {
       const id = sourceIdOfSourceKey(row.source_key)
-      if (id === undefined) return []
+      if (id === undefined) continue
       // 表里可能还有旧写法 `bad-period`：它与 `period-unresolved` 同档（日历读口同一口径）。
       const rawReason: string = row.reason
-      const reason = rawReason as UnmappedReason
-      const bucket = rawReason === 'bad-period' ? 'period-unresolved' : reason
+      const bucket = rawReason === 'bad-period' ? 'period-unresolved' : rawReason
       // **事件不进这一页**：它没有统计期，也不需要映射，有自己的页签。
-      if (bucket === 'unknown-event-type') return []
-      if (bucket in diagnostics) diagnostics[bucket as keyof typeof diagnostics] += 1
+      if (bucket === 'unknown-event-type') continue
       const labels = labelById.get(id)
-      return [Object.freeze({
+      const raw = rawFromUnmapped(row.raw_json)
+      entries.push({
         sourceId: id,
+        ...(raw.scheduledAt === null ? {} : { scheduledAt: raw.scheduledAt }),
+        scheduledDate: raw.scheduledDate ?? '',
+        title: raw.name ?? '',
+        reason: rawReason,
+        hasStandardRow: hasStandardRow.get(row.source_key) !== undefined,
         rowCount: byId.get(id)?.rows ?? 0,
         firstSeenAt: row.first_seen_at,
-        providerIds: Object.freeze([row.provider_id]),
-        reason,
-        sampleLabel: labels?.zh ?? titleFromRaw(row.raw_json),
+        providerIds: [row.provider_id],
+        sampleLabel: labels?.zh ?? raw.name,
         sampleLabelEn: labels?.en ?? null
-      })]
+      })
+    }
+    /**
+     * **一场发布一行**（Chief 2026-11-18）：源对同一场发布发中英两条，未映射表里就是两行。
+     * 合并逻辑**只有一份**（`marketCalendarUnmappedGrouping`），抽屉列表、这个弹框列表与页签计数、
+     * 导出三处都从 `groupUnmappedByRelease` 取——三处各写一次 filter/map 就是今晚「列表 168、
+     * 导出 325」的形状。
+     */
+    const unmapped: UnmappedSourceIdRow[] = groupUnmappedByRelease(entries).map((group) => {
+      const first = group[0]!
+      const merged = group.length > 1
+      // 名字中英并列：同一份标题在多条里重复时只留一次，不留「A · A」。
+      const labels = [...new Set(group.map((item) => item.sampleLabel).filter((value): value is string => value !== null))]
+      const labelsEn = [...new Set(group.map((item) => item.sampleLabelEn).filter((value): value is string => value !== null))]
+      return Object.freeze({
+        sourceId: first.sourceId,
+        // **按源内 id 数行，不按分组成员累加**：中英两条是同一个 id，累加会把它自己的行数算两遍。
+        rowCount: first.rowCount,
+        // 首次出现取**最早**那条：它才是「新东西还是老东西」的判据。
+        firstSeenAt: group.reduce<string | null>((earliest, item) =>
+          item.firstSeenAt === null ? earliest
+            : earliest === null || item.firstSeenAt < earliest ? item.firstSeenAt : earliest, null),
+        providerIds: Object.freeze([...new Set(group.flatMap((item) => item.providerIds))].sort()),
+        // **两条并成一条时按事实重定原因**（有标准行 → 缺期次；没行 → 没进标准表），
+        // 单条保留自己的真实原因——否则 `no-code`、`missing-country` 会被改写掉，反而丢信息。
+        reason: (merged ? mergedReasonOf(group) : first.reason) as UnmappedReason,
+        sampleLabel: labels.length === 0 ? null : labels.join(' · '),
+        sampleLabelEn: labelsEn.length === 0 ? null : labelsEn.join(' · ')
+      })
     })
       // **首次出现倒序**：新出现的排最前——「新事件」一眼就能看到；没有时间的沉到最后。
       .sort((left, right) => (right.firstSeenAt ?? '').localeCompare(left.firstSeenAt ?? '')
         || left.sourceId.localeCompare(right.sourceId))
+    // 诊断计数按**合并后的件数**算：页签、列表、导出是同一个单位，不然又会出现两套数。
+    for (const row of unmapped) {
+      // `bad-period` 是只读遗留写法，与 `period-unresolved` 同档（不改库，只在计数与展示上归一）。
+      const bucket = String(row.reason) === 'bad-period' ? 'period-unresolved' : row.reason
+      if (bucket in diagnostics) diagnostics[bucket as keyof typeof diagnostics] += 1
+    }
     return Object.freeze({
       state: 'available' as const,
       mapped: Object.freeze(mapped),
