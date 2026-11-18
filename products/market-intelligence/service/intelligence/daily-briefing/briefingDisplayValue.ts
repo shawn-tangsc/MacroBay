@@ -109,3 +109,72 @@ export function restoreBriefingDisplayValues(document: DailyBriefingDocument): D
     news: Object.freeze({ ...document.news, macro: Object.freeze(restored) })
   })
 }
+
+/**
+ * 命中的一条：哪个事件、哪个字段、能不能还原。诊断只写定位，不写值本身。
+ *
+ * `restored: false` 是「这段串解析出来是对象/数组，但不是单键 `displayValue`」——它在界面上
+ * **照原样显示**（不猜），所以必须继续出现在计数里，否则它就成了看不见的那一半。
+ */
+export type SerializedDisplayValueHit = Readonly<{
+  event: string
+  field: 'actual' | 'previous' | 'consensus'
+  restored: boolean
+}>
+
+/** 能解析成对象/数组的字符串才叫命中：存进去的是**文本**，按「值是不是对象」查会全绿（2026-11-18）。 */
+function parsedSerializedValue(value: unknown): unknown {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return undefined
+  try {
+    return JSON.parse(trimmed) as unknown
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 只读地找出「展示字段里冻结了序列化对象」的那几条——**必须在还原之前问**，还原之后它们就看不见了。
+ *
+ * 判据按字符串形状认，不按对象认（架构师 2026-11-18：`json_type(...)='object'` 永远是 0，bug 还在）。
+ */
+export function serializedDisplayValueHits(document: DailyBriefingDocument): readonly SerializedDisplayValueHit[] {
+  const macro = document.news?.macro
+  if (!Array.isArray(macro)) return []
+  const hits: SerializedDisplayValueHit[] = []
+  for (const item of macro) {
+    const record = item as unknown as Record<string, unknown>
+    for (const field of briefingDisplayTextFields) {
+      const value = record[field]
+      const parsed = parsedSerializedValue(value)
+      if (parsed === null || typeof parsed !== 'object') continue
+      hits.push(Object.freeze({
+        event: String(record.eventKey ?? record.eventId ?? record.id ?? 'unknown'),
+        field,
+        restored: toDisplayString(value) !== value
+      }))
+    }
+  }
+  return hits
+}
+
+/**
+ * 读口一次性入口：还原 + 一行诊断（只在真的还原了东西时才打，存量归零后它永远静默）。
+ *
+ * 产品经理 2026-11-18：短期在读口还原，但**必须同时计数**，否则读侧一静默还原，这个错就再也
+ * 看不见了。归零之后连 `toDisplayString` / `restoreBriefingDisplayValues` 一起删；落库前的
+ * `assertNoSerializedValueObjects` 留着——那是读者之前的最后一道闸。
+ */
+export function restoreAndReportBriefingDisplayValues(document: DailyBriefingDocument): DailyBriefingDocument {
+  const hits = serializedDisplayValueHits(document)
+  if (hits.length === 0) return document
+  console.log(`[daily-briefing.values] ${JSON.stringify({
+    date: document.edition?.date ?? null,
+    edition: document.edition?.generatedAt ?? null,
+    restored: hits.filter(hit => hit.restored).length,
+    kept: hits.filter(hit => !hit.restored).length,
+    fields: hits.slice(0, 10).map(hit => `${hit.event}:${hit.field}${hit.restored ? '' : ':kept'}`)
+  })}`)
+  return restoreBriefingDisplayValues(document)
+}
