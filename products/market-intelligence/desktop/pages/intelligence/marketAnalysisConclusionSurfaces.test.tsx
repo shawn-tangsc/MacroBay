@@ -664,3 +664,34 @@ describe('market analysis conclusion surfaces', () => {
     expect(container.querySelector('.mi-analysis-timeline__entry')?.className).toContain('is-selected')
   })
 })
+
+/**
+ * 「这个组还给不给市场分析的重跑入口」（用户 2026-11-18 定）：三处入口都按**组类别**决定
+ * 出现不出现。消息面组的分析结果落在新闻抽屉，主区这一屏不会因为重跑而改变；市场分析组照旧。
+ *
+ * 这里钉的是其中两处（页头在时间轴的用例里、卡片在卡片用例里）：
+ * - 结论详情的「重新生成」：sentiment 不渲染、macro 渲染且文案不变（4c / 4d）。
+ */
+describe('re-run entry points by group category', () => {
+  const regenerate = (container: HTMLElement): Element | undefined =>
+    Array.from(container.querySelectorAll('button')).find((button) => button.textContent === detailText.regenerateConclusion)
+
+  it('sentiment 组：详情里没有「重新生成」，结论本身照旧显示', async () => {
+    const sentiment = entry({ groupType: 'sentiment' })
+    const { container } = await mountSurface([sentiment], timeline =>
+      createElement(AnalysisDetailDrawer, { text: detailText, workspaceText, timeline, openEntry: sentiment as never, onOpenChange: vi.fn() }))
+    // 结论还在（只是动作不渲染）
+    expect(container.querySelector('.mi-analysis-conclusion__body')).not.toBeNull()
+    expect(regenerate(container)).toBeUndefined()
+  })
+
+  it('市场分析组：同一颗按钮在，文案与 sentiment 组判据里的那条完全一致', async () => {
+    const macro = entry({ groupType: 'macro' })
+    const { container } = await mountSurface([macro], timeline =>
+      createElement(AnalysisDetailDrawer, { text: detailText, workspaceText, timeline, openEntry: macro as never, onOpenChange: vi.fn() }))
+    const button = regenerate(container)
+    expect(button).toBeDefined()
+    // 4d：两组只有出现条件不同，文案来自同一个键
+    expect(button?.textContent).toBe(detailText.regenerateConclusion)
+  })
+})

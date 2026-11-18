@@ -125,8 +125,10 @@ export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonl
             size="sm"
             variant="plain" />}
         />
-        {onRegenerate === undefined ? null : <Button className="text-action" onClick={onRegenerate} size="small" type="text">{text.regenerateConclusion}</Button>}
       </p>}
+      {/* 「重新生成」原来误嵌在上面的语言说明条件里：没有语言说明时它根本不渲染——市场分析组
+          因此会白丢一个入口。它是这一屏自己的动作，与语言说明无关，移出来。 */}
+      {onRegenerate === undefined ? null : <Button className="text-action" onClick={onRegenerate} size="small" type="text">{text.regenerateConclusion}</Button>}
       {(detail.summary.directions ?? []).length > 0 ? <AnalysisDirectionsBlock directions={detail.summary.directions!} text={text.directions} /> : null}
       <div className="mi-analysis-conclusion__body">
         {localizedBlocks.map((block, index) => block.kind === 'text'

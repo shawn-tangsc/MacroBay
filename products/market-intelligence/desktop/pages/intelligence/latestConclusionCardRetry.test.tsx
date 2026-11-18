@@ -214,7 +214,7 @@ describe('the latest conclusion card when the newest attempt failed', () => {
     id: 'mi-tl-published', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-ok', kind: 'analysis' as const,
     status: 'published' as const, runKey: 'mi-ar-ok', failureCode: null,
     occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成',
-    safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType: 'sentiment', groupSubject: '新闻标题'
+    safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType: 'macro', groupSubject: 'CPI 年率'
   }
   const failedEntry = {
     ...publishedEntry,
@@ -367,5 +367,69 @@ describe('the latest conclusion card: the failure strip belongs to its own group
     expect(strip).not.toBeNull()
     expect(strip?.querySelector('time')?.textContent ?? '').not.toBe('')
     expect(strip?.querySelector('time')?.textContent).not.toBe(firstTime)
+  })
+})
+
+/**
+ * 消息面（sentiment）组的卡片不给重跑入口（用户 2026-11-18 定）。
+ *
+ * 依据：这类组以后的分析一律走新闻解读、结果落在新闻抽屉；卡片上点重跑产出的是抽屉里那三段，
+ * 卡片本身不会变——那就是「点了没反应的按钮」。所以按**组类别**决定动作出现不出现：
+ * 旧结论与**生成时刻**照旧保留（那是读者判断新旧的唯一依据），只是动作不渲染。
+ */
+describe('the latest conclusion card: no re-run action for news-driven groups', () => {
+  const published = (groupType: string) => ({
+    id: `mi-tl-${groupType}`, eventGroupId: `mi-eg-${groupType}`, analysisRunId: `mi-ar-ok-${groupType}`,
+    kind: 'analysis' as const, status: 'published' as const, runKey: `mi-ar-ok-${groupType}`, failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成',
+    safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType, groupSubject: '标题'
+  })
+  const failed = (groupType: string) => ({
+    ...published(groupType), id: `run:fail-${groupType}`, analysisRunId: `mi-ar-fail-${groupType}`,
+    runKey: `mi-ar-fail-${groupType}`, status: 'failed' as const, failureCode: 'analysis-provider-error',
+    materialisedAt: undefined, occurredAt: '2026-11-18T08:06:00.000Z',
+    summaryRef: null, safeTitle: '', safeExcerpt: null
+  })
+  const cardDetail = (groupType: string) => ({
+    summary: {
+      id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-ok', eventGroupId: `mi-eg-${groupType}`, version: 1,
+      eventAssessment: '市场情绪偏谨慎', knownFacts: [], transmissionHypotheses: [], marketReaction: [],
+      supportingEvidence: [], counterEvidence: [], scenarios: [], nextCatalysts: [], dataCaveats: [],
+      evidenceRefs: [], createdAt: '2026-11-17T20:10:00.000Z'
+    }
+  })
+  const cardText = { ...workspaceText, retryAnalysis: text.retryAnalysis, failureReasons: text.failureReasons }
+
+  async function mount(groupType: string): Promise<void> {
+    const entries = [failed(groupType), published(groupType)]
+    const timeline = {
+      state: { entries, loading: false, failed: false, nextCursor: null },
+      details: { [`mi-tl-${groupType}`]: cardDetail(groupType) },
+      detailState: {}, requestState: 'idle',
+      requestRefreshAnalysis: vi.fn(), ensureDetail: vi.fn()
+    } as unknown as UseMarketAnalysisTimelineResult
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText: cardText, timeline, onOpenDetail: vi.fn() } as never))))
+  }
+
+  it('sentiment 组：有结论与生成时刻，但没有重试动作', async () => {
+    await mount('sentiment')
+    // 结论与时刻都在（时刻是读者判断新旧的唯一依据）
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+    expect(host?.querySelector('.mi-analysis-conclusion-card header time')?.textContent ?? '').not.toBe('')
+    // 失败条还在（说明发生了什么），但那颗「重试」不渲染
+    const strip = host?.querySelector('[data-attempt-failure]')
+    expect(strip).not.toBeNull()
+    const retry = Array.from(strip?.querySelectorAll('button') ?? []).find((button) => button.textContent === text.retryAnalysis)
+    expect(retry).toBeUndefined()
+  })
+
+  it('市场分析组：重试还在，文案一字不变（两组只有出现条件不同）', async () => {
+    await mount('macro')
+    const strip = host?.querySelector('[data-attempt-failure]')
+    const retry = Array.from(strip?.querySelectorAll('button') ?? []).find((button) => button.textContent === text.retryAnalysis)
+    expect(retry).toBeDefined()
+    // 4d：同一颗按钮的文案与两组无关——存在时就是那条文案，不存在时一个字都不留
+    expect(retry?.textContent).toBe(text.retryAnalysis)
   })
 })

@@ -6,6 +6,7 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { AnalysisConclusionDetail, type AnalysisDetailText } from './AnalysisConclusionDetail'
+import { groupReanalysisOffered } from './analysisGroupReanalysisPolicy'
 import { ANALYSIS_STATUS_KEY, ANALYSIS_STATUS_TONE } from './analysisStatusPresentation'
 import { MiSideDrawer } from './MiSideDrawer'
 import type { UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
@@ -57,7 +58,10 @@ export function AnalysisDetailDrawer({ text, workspaceText, timeline, openEntry,
     /> : null}
     {detail ? <AnalysisConclusionDetail
       detail={detail}
-      onRegenerate={() => { void timeline.regenerateConclusion(openEntry.eventGroupId) }}
+      // 消息面组不给「重新生成」：它产出的是新闻抽屉里那三段，这一屏不会变。
+      {...(groupReanalysisOffered(openEntry.groupType)
+        ? { onRegenerate: () => { void timeline.regenerateConclusion(openEntry.eventGroupId) } }
+        : {})}
       text={text} /> : null}
   </MiSideDrawer>
 }

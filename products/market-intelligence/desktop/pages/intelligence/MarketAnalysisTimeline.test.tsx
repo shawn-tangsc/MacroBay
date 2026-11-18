@@ -990,7 +990,7 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     id: 'mi-tl-done', eventGroupId: 'mi-eg-done', analysisRunId: 'mi-ar-done', kind: 'analysis',
     status: 'published', runKey: 'mi-ar-done', failureCode: null, occurredAt: asOf,
     summaryRef: 'mi-as-done', safeTitle: '市场分析已生成', safeExcerpt: '市场情绪偏谨慎', version: 1,
-    triggerStatus: null, groupType: 'sentiment', groupSubject: '上一次那条结论'
+    triggerStatus: null, groupType: 'macro', groupSubject: '上一次那条结论'
   }
   // 服务侧对还没有发布的行：`safeTitle` 是空串、没有 summaryRef / safeExcerpt，
   // 状态词与「正在解析」由界面文案表给，不由服务端给。
@@ -998,7 +998,7 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     id: 'run:mi-ar-run', eventGroupId: 'mi-eg-run', analysisRunId: 'mi-ar-run', kind: 'analysis',
     status: 'running', runKey: 'mi-ar-run', failureCode: null, occurredAt: asOf,
     summaryRef: null, safeTitle: '', safeExcerpt: null, version: 1, triggerStatus: null,
-    groupType: 'sentiment', groupSubject: '美联储官员暗示放缓缩表'
+    groupType: 'macro', groupSubject: '美联储官员暗示放缓缩表'
   }
 
   /** 时间轴页面数据；其余 IPC（设置）给一个读不出来的空载荷，面板照常可见。 */
@@ -1261,5 +1261,44 @@ describe('成功 / 失败两个页签', () => {
     await openFailed(container)
     const failedPanel = Array.from(container.querySelectorAll('[role="tabpanel"]'))[1] as Element
     expect(failedPanel.querySelectorAll('.mi-analysis-timeline__entry')).toHaveLength(1)
+  })
+})
+
+/**
+ * 页头那颗重跑按钮也按组类别（用户 2026-11-18）：消息面组不给，市场分析组照旧。
+ */
+describe('页头的重跑按钮按组类别出现', () => {
+  const entryWithGroup = (groupType: string) => ({
+    id: `mi-tl-${groupType}`, eventGroupId: `mi-eg-${groupType}`, analysisRunId: `mi-ar-${groupType}`,
+    kind: 'analysis' as const, status: 'published' as const, runKey: `mi-ar-${groupType}`, failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-1', safeTitle: '标题', safeExcerpt: '结论',
+    version: 1, triggerStatus: null, groupType, groupSubject: '标题'
+  })
+
+  async function mountWithGroup(groupType: string): Promise<HTMLDivElement> {
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [entryWithGroup(groupType)], nextCursor: null }
+      if (method === 'marketAnalysis.listFailedRuns') return { schemaVersion: 1, items: [], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    }) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+    return container
+  }
+  const refresh = (container: HTMLElement): Element | undefined =>
+    Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.refreshAnalysis)
+
+  it('sentiment 组：页头没有「立即分析」', async () => {
+    const container = await mountWithGroup('sentiment')
+    expect(refresh(container)).toBeUndefined()
+  })
+
+  it('市场分析组：页头有「立即分析」，文案一字不变', async () => {
+    const container = await mountWithGroup('macro')
+    expect(refresh(container)?.textContent).toBe(text.refreshAnalysis)
   })
 })
