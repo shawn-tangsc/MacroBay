@@ -13,6 +13,26 @@ export type CapitalFlowSentenceLanguage = 'zh-CN' | 'en-US'
 
 export type NetFlowDirection = 'inflow' | 'outflow' | 'flat'
 
+/**
+ * 一个瞬时在**读者时区**里是哪一天（`YYYY-MM-DD`）：去重键要「读者日」，不是 UTC 日。
+ *
+ * 主进程拿得到读者时区（情报运行时依赖里的 `timeZone: () => string`，宿主用 `shellTimeZone.get()` 喂，
+ * 与舆情到货通知算正文时刻是同一条链路），所以这一格在产品侧算好塞进键，不去找平台。
+ */
+export function readerDayKey(instant: string, timeZone: string): string | undefined {
+  const parsed = Date.parse(instant)
+  if (!Number.isFinite(parsed)) return undefined
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(new Date(parsed))
+    const read = (type: Intl.DateTimeFormatPartTypes): string => parts.find((part) => part.type === type)?.value ?? ''
+    const year = read('year'); const month = read('month'); const day = read('day')
+    return year && month && day ? `${year}-${month}-${day}` : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** 符号翻成词：金额本身只印绝对值，方向由词表达（与资金面表同一个读法）。 */
 export function netFlowDirection(netUsd: number): NetFlowDirection {
   return netUsd > 0 ? 'inflow' : netUsd < 0 ? 'outflow' : 'flat'

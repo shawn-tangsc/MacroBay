@@ -98,7 +98,11 @@ describe('market-intelligence approvals', () => {
     // 只留手机。**例外必须逐条列出来**，不能让这条不变量退化成「想撤就撤」。
     const CENTER_WITHDRAWN = [
       'market-intelligence.sentiment.alert',
-      'market-intelligence.news.item-arrived'
+      'market-intelligence.news.item-arrived',
+      // 2026-11-18（R42）：用户「失败才进中心」——资金面读数更新只走弹框 + 桌面。
+      // 撤 center 的前提是 `occurrence` 去重（平台装配期就按这个判，撤错会直接拒）。
+      'market-intelligence.capital-flow.etf-updated',
+      'market-intelligence.capital-flow.stablecoin-updated'
     ] as const
     for (const id of ids) {
       if (!(CENTER_WITHDRAWN as readonly string[]).includes(id)) {

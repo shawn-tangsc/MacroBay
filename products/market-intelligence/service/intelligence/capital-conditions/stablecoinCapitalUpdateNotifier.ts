@@ -4,6 +4,7 @@ import { formatNotificationNumber } from '@platform/notifications/contracts/noti
 import {
   capitalFlowNotificationSentences,
   netFlowDirection,
+  readerDayKey,
   type CapitalFlowSentenceLanguage
 } from '../../../contracts/capitalFlowNotificationSentences'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
@@ -45,15 +46,19 @@ export function renderStablecoinCapitalUpdateSentence(update: StablecoinCapitalU
 
 export function buildStablecoinCapitalUpdateRequest(
   update: StablecoinCapitalUpdate,
-  occurredAt: string
+  occurredAt: string,
+  timeZone: string
 ): NotificationSubmitRequest | undefined {
   const rendered = renderStablecoinCapitalUpdateSentence(update)
   if (rendered === undefined) return undefined
   return {
     eventTypeId: EVENT_IDS.capitalFlowStablecoinUpdated,
     producerId: STABLECOIN_CAPITAL_PRODUCER_ID,
-    // 键里带 UTC 日：一天一条（用户 2026-11-18「不进中心」要求 occurrence 去重）。
-    dedupeVars: { builder: 'template', vars: { date: occurredAt.slice(0, 10) } },
+    // 键里带**读者日**：一天一条（用户 2026-11-18「不进中心」要求 occurrence 去重）。
+    dedupeVars: {
+      builder: 'template',
+      vars: { day: readerDayKey(occurredAt, timeZone) ?? occurredAt.slice(0, 10) }
+    },
     rendered,
     actions: [],
     occurredAt
@@ -63,10 +68,11 @@ export function buildStablecoinCapitalUpdateRequest(
 export async function notifyStablecoinCapitalUpdate(
   submit: ((request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>) | undefined,
   update: StablecoinCapitalUpdate,
-  occurredAt: string
+  occurredAt: string,
+  timeZone: string
 ): Promise<NotificationSubmitOutcome | null> {
   if (submit === undefined) return null
-  const request = buildStablecoinCapitalUpdateRequest(update, occurredAt)
+  const request = buildStablecoinCapitalUpdateRequest(update, occurredAt, timeZone)
   if (request === undefined) return null
   try {
     return await submit(request)

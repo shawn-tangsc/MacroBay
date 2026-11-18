@@ -237,6 +237,7 @@ export function getIntelligenceModule(
       pipeline,
       macroCalendarEvidenceArchive,
       platformFetch: hooks.platformFetch,
+      timeZone: shellTimeZone,
       ...(hooks?.submitNotification === undefined ? {} : { submitNotification: hooks.submitNotification }),
       ...(hooks.createPlatformWebSocket === undefined ? {} : { createPlatformWebSocket: hooks.createPlatformWebSocket })
     })

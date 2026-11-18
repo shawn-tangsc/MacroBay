@@ -4,6 +4,7 @@ import { formatNotificationNumber } from '@platform/notifications/contracts/noti
 import {
   capitalFlowNotificationSentences,
   netFlowDirection,
+  readerDayKey,
   type CapitalFlowSentenceLanguage
 } from '../../../contracts/capitalFlowNotificationSentences'
 import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
@@ -76,7 +77,8 @@ export function renderEtfCapitalFlowSentence(update: EtfCapitalFlowUpdate) {
 }
 
 export function buildEtfCapitalFlowUpdateRequest(
-  update: EtfCapitalFlowUpdate
+  update: EtfCapitalFlowUpdate,
+  timeZone: string
 ): NotificationSubmitRequest | undefined {
   const rendered = renderEtfCapitalFlowSentence(update)
   if (rendered === undefined) return undefined
@@ -85,8 +87,20 @@ export function buildEtfCapitalFlowUpdateRequest(
     producerId: ETF_CAPITAL_FLOW_PRODUCER_ID,
     dedupeVars: {
       builder: 'template',
-      // 键带种类：新的一天与「那天后来改了数」各弹一次；同一天同种类再来就被挡住。
-      vars: { asset: update.asset, tradingDate: update.tradingDate, kind: update.kind }
+      /**
+       * 键 = 资产 + 交易日 + 种类 + `{day}`：
+       * - `arrived` 的 `day` 取**交易日本身**（恒定），所以「新的一天」永久只报一次；
+       * - `revised` 的 `day` 取**读者日**（本轮采集在读者时区是哪天），所以同一天改多次只报第一次，
+       *   **隔天又被改还会再报**——只到 `revised` 会让这个交易日永远闭嘴（产品 2026-11-18 指出的）。
+       */
+      vars: {
+        asset: update.asset,
+        tradingDate: update.tradingDate,
+        kind: update.kind,
+        day: update.kind === 'arrived'
+          ? update.tradingDate
+          : readerDayKey(update.occurredAt, timeZone) ?? update.occurredAt.slice(0, 10)
+      }
     },
     rendered,
     actions: [],
@@ -101,12 +115,13 @@ export function buildEtfCapitalFlowUpdateRequest(
  */
 export async function notifyEtfCapitalFlowUpdates(
   submit: CapitalFlowNoticeSubmit | undefined,
-  updates: readonly EtfCapitalFlowUpdate[]
+  updates: readonly EtfCapitalFlowUpdate[],
+  timeZone: string
 ): Promise<readonly NotificationSubmitOutcome[]> {
   if (submit === undefined || updates.length === 0) return []
   const outcomes: NotificationSubmitOutcome[] = []
   for (const update of updates) {
-    const request = buildEtfCapitalFlowUpdateRequest(update)
+    const request = buildEtfCapitalFlowUpdateRequest(update, timeZone)
     if (request === undefined) continue
     try {
       outcomes.push(await submit(request))

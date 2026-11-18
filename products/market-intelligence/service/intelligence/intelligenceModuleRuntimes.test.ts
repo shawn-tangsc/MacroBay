@@ -55,7 +55,8 @@ function assemble(dataDir: string) {
     credentialStore: stores.credentialStore,
     pipeline: stores.pipeline,
     macroCalendarEvidenceArchive: stores.macroCalendarEvidenceArchive,
-    platformFetch: net.fetch as never
+    platformFetch: net.fetch as never,
+    timeZone: () => 'UTC'
   })
   const newsSentiment = createIntelligenceNewsSentiment({
     dataDir,

@@ -5,10 +5,11 @@ import { buildStablecoinCapitalUpdateRequest, notifyStablecoinCapitalUpdate } fr
 
 describe('the stablecoin capital update notice', () => {
   it('states the total supply and the one-day change, with the direction as a word', () => {
-    const request = buildStablecoinCapitalUpdateRequest({ totalSupplyUsd: 244_700_000_000, change1dUsd: 58_200_000 }, '2026-11-18T00:30:00.000Z')
+    const request = buildStablecoinCapitalUpdateRequest({ totalSupplyUsd: 244_700_000_000, change1dUsd: 58_200_000 }, '2026-11-18T00:30:00.000Z', 'Asia/Shanghai')
     expect(request).toMatchObject({
       eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.capitalFlowStablecoinUpdated,
-      dedupeVars: { builder: 'template', vars: { date: '2026-11-18' } },
+      // 键里是**读者日**：上海 08:30 收到的那条归 11-18。
+      dedupeVars: { builder: 'template', vars: { day: '2026-11-18' } },
       occurredAt: '2026-11-18T00:30:00.000Z'
     })
     expect(request!.rendered!['zh-CN']!.body).toContain('总供给')
@@ -20,7 +21,7 @@ describe('the stablecoin capital update notice', () => {
 
   it('swallows a failed submission and skips when there is no outlet', async () => {
     const submit = vi.fn().mockRejectedValue(new Error('offline'))
-    await expect(notifyStablecoinCapitalUpdate(submit, { totalSupplyUsd: 1, change1dUsd: 1 }, '2026-11-18T00:30:00.000Z')).resolves.toBeNull()
-    await expect(notifyStablecoinCapitalUpdate(undefined, { totalSupplyUsd: 1, change1dUsd: 1 }, '2026-11-18T00:30:00.000Z')).resolves.toBeNull()
+    await expect(notifyStablecoinCapitalUpdate(submit, { totalSupplyUsd: 1, change1dUsd: 1 }, '2026-11-18T00:30:00.000Z', 'UTC')).resolves.toBeNull()
+    await expect(notifyStablecoinCapitalUpdate(undefined, { totalSupplyUsd: 1, change1dUsd: 1 }, '2026-11-18T00:30:00.000Z', 'UTC')).resolves.toBeNull()
   })
 })

@@ -5,7 +5,7 @@ export const SIGNED_BY = '情报模块产品经理' as const
 /** 签署日期。 */
 export const SIGNED_AT = '2026-11-18' as const
 /** 对 `canonicalApprovalText({ formatVersion: 1, signedBy: SIGNED_BY, signedAt: SIGNED_AT, events })` 的 sha256（UTF-8 字节）。 */
-export const SIGNATURE = 'sha256:5d94be8d01068f1369da99d4f0ddd105582f2993a97840afe666c1ccd0171230' as const
+export const SIGNATURE = 'sha256:7ce964b29998ad2582431d08878a3719b5cbc9d6a3ccbe250bc07ee29d0fe04a' as const
 
 /**
  * 情报模块**签署过的批准值**（与「申请」分开的两份数据之一）。
@@ -79,11 +79,12 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
   /**
    * R42：ETF 资金流有新数据点或被修订。用户 2026-11-18 要「应用内弹框」。
    *
-   * **批中心 + 弹框 + 桌面**（2026-11-18 08:07 用户「我要桌面的」后产品重签）：弹框给正在看的人、
-   * 桌面给没在看的人，两边各一次不是重复。**不进手机**（用户同批确认「不进手机」）；
-   * 免打扰不穿透（时段内桌面与弹框都不出声，中心留一条）。
+   * **只批弹框 + 桌面**（2026-11-18 08:23 用户改口径「失败才进中心」后产品重签）：数据更新不进中心，
+   * 弹框给正在看的人、桌面给没在看的人，两边各一次不是重复。**不进手机**（用户同批确认）。
+   * 免打扰不穿透（时段内桌面与弹框都不出声；这条没有中心那一份，所以时段内读者什么也收不到）。
+   * 代价写在 PRD 里：错过这一次就没有别处能回看「什么时候变的、从多少改到多少」。
    */
-  'market-intelligence.capital-flow.etf-updated': { approvedDisruptionLevels: ['center', 'popup', 'desktop'], approvedBypassQuietHours: false },
+  'market-intelligence.capital-flow.etf-updated': { approvedDisruptionLevels: ['popup', 'desktop'], approvedBypassQuietHours: false },
   /** 同上，稳定币一天最多一条（键不带日期，24 小时窗口）。 */
-  'market-intelligence.capital-flow.stablecoin-updated': { approvedDisruptionLevels: ['center', 'popup', 'desktop'], approvedBypassQuietHours: false }
+  'market-intelligence.capital-flow.stablecoin-updated': { approvedDisruptionLevels: ['popup', 'desktop'], approvedBypassQuietHours: false }
 })

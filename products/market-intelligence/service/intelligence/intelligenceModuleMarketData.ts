@@ -64,12 +64,14 @@ export function createIntelligenceMarketData(input: {
   pipeline: IntelligencePipeline
   macroCalendarEvidenceArchive: MacroCalendarEvidenceArchive
   platformFetch: CapitalConditionsPlatformFetch
+  /** 读者时区：通知的去重键要「读者日」（`shellTimeZone.get()` 由宿主注入，与舆情那条同一条链路）。 */
+  timeZone: () => string
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   createPlatformWebSocket?: () => PlatformWebSocketConstructor
 }) {
   const {
     jobRuntime, dataDir, profileStore, credentialStore, pipeline, macroCalendarEvidenceArchive,
-    platformFetch, submitNotification, createPlatformWebSocket
+    platformFetch, timeZone, submitNotification, createPlatformWebSocket
   } = input
   const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
     storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))
@@ -257,7 +259,7 @@ export function createIntelligenceMarketData(input: {
      * R42：数字真的变了才提醒（新交易日 / 已定稿值被修订）。判据在刷新服务里，
      * 这里只负责把变化送进通知层——主备源切换那种「updated 但数没变」不会走到这里。
      */
-    handOffUpdates: async (updates) => { await notifyEtfCapitalFlowUpdates(submitNotification, updates) }
+    handOffUpdates: async (updates) => { await notifyEtfCapitalFlowUpdates(submitNotification, updates, timeZone()) }
   })
   const capitalConditionsRefresh = createCapitalConditionsRefreshService({
     isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
@@ -287,7 +289,7 @@ export function createIntelligenceMarketData(input: {
           await notifyStablecoinCapitalUpdate(submitNotification, {
             totalSupplyUsd: snapshot.coreCurrentUsd,
             change1dUsd: snapshot.change1dUsd
-          }, snapshot.verifiedAt)
+          }, snapshot.verifiedAt, timeZone())
         }
       }
       return result

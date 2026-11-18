@@ -72,6 +72,7 @@ async function marketData(input: { scheduledJobIds: readonly string[]; enabledSo
     credentialStore: stores.credentialStore,
     pipeline: stores.pipeline,
     macroCalendarEvidenceArchive: stores.macroCalendarEvidenceArchive,
+    timeZone: () => 'UTC',
     platformFetch: net.fetch as never
   })
   return { created, stores, profileStore }

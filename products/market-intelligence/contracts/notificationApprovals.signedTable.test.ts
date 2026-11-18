@@ -51,8 +51,8 @@ const SIGNED_TABLE: Readonly<Record<string, Readonly<{
   'market-intelligence.analysis.failed': { levels: ['center'], bypassQuietHours: false },
   // R42（2026-11-18 产品经理签署；同日 08:07 用户「我要桌面的」后重签）：资金面读数变了。
   // 批中心 + 弹框 + 桌面，**不进手机**、不穿免打扰；中心那条留着，读者错过弹框还能回看。
-  'market-intelligence.capital-flow.etf-updated': { levels: ['center', 'popup', 'desktop'], bypassQuietHours: false },
-  'market-intelligence.capital-flow.stablecoin-updated': { levels: ['center', 'popup', 'desktop'], bypassQuietHours: false }
+  'market-intelligence.capital-flow.etf-updated': { levels: ['popup', 'desktop'], bypassQuietHours: false },
+  'market-intelligence.capital-flow.stablecoin-updated': { levels: ['popup', 'desktop'], bypassQuietHours: false }
 })
 
 type ApprovalLike = Readonly<Record<string, Readonly<{
