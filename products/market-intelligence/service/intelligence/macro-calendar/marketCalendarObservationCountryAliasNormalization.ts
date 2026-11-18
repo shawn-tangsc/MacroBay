@@ -26,8 +26,10 @@ export type CountryAliasNormalizationReport = Readonly<{
 export function normalizeObservationCountryAliases(database: DatabaseSync,
   options?: Readonly<{ dryRun?: boolean }>): CountryAliasNormalizationReport {
   const table = 'mi_macro_calendar_market_event_observations'
+  // **不按长度筛**（2026-11-18 踩过一次）：`UK` 是两位的**非 ISO 别名**，用 `length <> 2` 会把它漏掉，
+  // 于是「跑完 168→0」变成只归了 103 行。判据统一为「归一遍，结果和原值不同就是待归」。
   const rows = database.prepare(`select distinct country_code c from ${table}
-    where country_code is not null and length(country_code) <> 2`).all() as { c: string }[]
+    where country_code is not null`).all() as { c: string }[]
   const plan: { from: string; to: string }[] = []
   for (const row of rows) {
     if (marketCalendarCountryCodeExceptions.includes(row.c)) continue
