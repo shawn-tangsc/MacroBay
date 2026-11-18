@@ -66,7 +66,7 @@
       "why": "标准码表的数据本体（244 行）：键与 code 字段各出现一次，四名里可能带码形串。数据从 .ts 搬进 JSON 后，这里是它唯一的家。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountryCodeTable.json": {
-      "count": 1364,
+      "count": 1318,
       "why": "按国家建出的码空间（642 行）的数据本体：一个码出现 2–3 次（键、code、父子引用）。维护方式是改脚本重跑，不手改这个文件。 2026-11-18：删掉 3 行「其实是事件」的假指标（`FI.CEO`/`NZ.ANDREW_TURNER`/`US.Q3`），计数 −6。 2026-11-19：+4 是四条退役码的 `supersededBy`——退役必须写清「并到哪个码」，那个码逐个出现在这里。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/au.ts": {

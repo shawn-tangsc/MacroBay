@@ -66,3 +66,11 @@ describe('码名四条守卫', () => {
     expect(missing, `名字不是来自码表 JSON：${missing.slice(0, 5).join(', ')}`).toEqual([])
   })
 })
+
+describe('同一个码只定义一处', () => {
+  it('⑤ 两张码表不许有重复码（谁再往两张表各写一份就红）', () => {
+    const inMain = new Set(Object.keys(marketCalendarCodeTable))
+    const dup = Object.keys(marketCalendarCountryCodeTable).filter((code) => inMain.has(code))
+    expect(dup, `两张表重复定义：${dup.slice(0, 5).join(', ')}`).toEqual([])
+  })
+})
