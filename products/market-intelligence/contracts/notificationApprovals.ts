@@ -85,6 +85,12 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
    * 代价写在 PRD 里：错过这一次就没有别处能回看「什么时候变的、从多少改到多少」。
    */
   'market-intelligence.capital-flow.etf-updated': { approvedDisruptionLevels: ['popup', 'desktop'], approvedBypassQuietHours: false },
-  /** 同上，稳定币一天最多一条（键不带日期，24 小时窗口）。 */
+  /**
+   * 同上，档位一致。
+   *
+   * 去重**不是** 24 小时窗口：`occurrence` + 键里带**读者日**（`capital-flow-stablecoin-update:{day}`），
+   * 所以是「读者日一天一条」——同一天再多变化只提醒第一条，第二天有新变化会再提醒。
+   * （撤 center 的前提就是 `occurrence`：`condition` 一律不许省中心，平台装配期会拒。）
+   */
   'market-intelligence.capital-flow.stablecoin-updated': { approvedDisruptionLevels: ['popup', 'desktop'], approvedBypassQuietHours: false }
 })
