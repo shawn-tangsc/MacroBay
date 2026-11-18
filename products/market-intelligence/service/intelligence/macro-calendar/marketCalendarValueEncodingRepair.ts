@@ -16,6 +16,19 @@ import { displayValueFromJson } from './marketCalendarValueEncoding'
  *    （不填空串、不猜）——空串会被读成「确实没有」，而事实是「这条值没编码对」；
  * 3. 整表在**同一事务**里备份到 `mi_calendar_events__value_encoding_v19`，单事务、行数对账、
  *    幂等（第二遍 0 变更）。回滚＝恢复备份表，值只动过 `values_json` 一列。
+ *
+ * **归属记录（2026-11-18，Chief 要求查清「谁改的」）**：
+ * - 08:46 真库量到 605 行双重编码；08:52 再量已是 **0 行**，而 `parser_version='materialize-mapped-v1'`
+ *   的行数仍是 635、`observed_at` 大多仍是 08:00（补库脚本首次运行的时刻）——说明是**原地只改
+ *   `values_json` 的定向 UPDATE**，不是任何运行时写入端（那些会改写 `parser_version` / `observed_at`）。
+ * - 可归因的一部分：`materialize-mapped-v1` 里有 **36 行** `observed_at=08:54:28`，而那个
+ *   `parser_version` 只有一次性补库脚本会用——即**有人先修好脚本、在 08:54 又跑了一次**。
+ * - 其余约 569 行的改动者**未查明**（不是启动迁移链：08:54 那轮链里每个写入端都会改 `parser_version`；
+ *   也不是本脚本：从未 `--apply`，库里没有 `value_encoding` 备份表）。
+ *
+ * 结论：数据已干净，清理来源**部分可归因、其余未查明**。本脚本保留为**幂等安全网**（dry-run 默认、
+ * `--apply` 才写、同事务备份可回滚）；以后再出现这类脏数据，跑它即可，但**执行者必须写一行迁移标记**，
+ * 别再出现一次无人认领的批量改写。
  */
 export const calendarValueEncodingRepairPolicy = Object.freeze({
   migrationVersion: 19,
