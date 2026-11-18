@@ -270,11 +270,11 @@ function collectCapitalFlowUpdates(input: Readonly<{
     for (const row of input.current[asset]) {
       const prior = before.get(row.tradingDate)
       if (prior === undefined) {
-        updates.push(Object.freeze({ kind: 'arrived' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd }))
+        updates.push(Object.freeze({ kind: 'arrived' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd, occurredAt: input.asOf }))
         continue
       }
       if (revised.has(`${asset}:${row.tradingDate}`)) {
-        updates.push(Object.freeze({ kind: 'revised' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd, previousUsd: prior }))
+        updates.push(Object.freeze({ kind: 'revised' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd, previousUsd: prior, occurredAt: input.asOf }))
       }
     }
   }

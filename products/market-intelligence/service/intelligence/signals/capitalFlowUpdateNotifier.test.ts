@@ -12,7 +12,7 @@ import {
  */
 describe('the ETF capital-flow update notice', () => {
   it('says which trading day arrived, with its direction and amount', () => {
-    const rendered = renderEtfCapitalFlowSentence({ kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 7_900_000 })
+    const rendered = renderEtfCapitalFlowSentence({ kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 7_900_000, occurredAt: '2026-11-17T00:03:53.833Z' })
     expect(rendered).toBeDefined()
     expect(rendered!['zh-CN']!.title).toContain('ETF 资金流')
     expect(rendered!['zh-CN']!.title).toContain('BTC')
@@ -26,7 +26,8 @@ describe('the ETF capital-flow update notice', () => {
 
   it('carries both the old and the new number when a settled day is revised', () => {
     const rendered = renderEtfCapitalFlowSentence({
-      kind: 'revised', asset: 'ETH', tradingDate: '2026-11-16', netFlowUsd: -8_400_000, previousUsd: -46_500_000
+      kind: 'revised', asset: 'ETH', tradingDate: '2026-11-16', netFlowUsd: -8_400_000, previousUsd: -46_500_000,
+      occurredAt: '2026-11-17T00:03:53.833Z'
     })
     expect(rendered!['zh-CN']!.title).toContain('改了')
     expect(rendered!['zh-CN']!.body).toContain('从')
@@ -38,26 +39,26 @@ describe('the ETF capital-flow update notice', () => {
   })
 
   it('refuses a half sentence: a revision with no previous value is not submitted', () => {
-    expect(renderEtfCapitalFlowSentence({ kind: 'revised', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1 })).toBeUndefined()
-    expect(buildEtfCapitalFlowUpdateRequest({ kind: 'revised', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1 })).toBeUndefined()
+    expect(renderEtfCapitalFlowSentence({ kind: 'revised', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1, occurredAt: '2026-11-17T00:03:53.833Z' })).toBeUndefined()
+    expect(buildEtfCapitalFlowUpdateRequest({ kind: 'revised', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1, occurredAt: '2026-11-17T00:03:53.833Z' })).toBeUndefined()
   })
 
   it('lets the platform build the dedupe key from asset and trading day', () => {
-    const request = buildEtfCapitalFlowUpdateRequest({ kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1 })
+    const request = buildEtfCapitalFlowUpdateRequest({ kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1, occurredAt: '2026-11-17T00:03:53.833Z' })
     expect(request).toMatchObject({
       eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.capitalFlowEtfUpdated,
       dedupeVars: { builder: 'template', vars: { asset: 'BTC', tradingDate: '2026-11-16' } },
-      occurredAt: '2026-11-16T00:00:00.000Z',
+      // 发生时间 = 本轮采集时刻，不是交易日零点（产品 2026-11-18 的要求）。
+      occurredAt: '2026-11-17T00:03:53.833Z',
       actions: []
     })
   })
 
   it('never turns a failed submission into a failed refresh', async () => {
     const submit = vi.fn().mockRejectedValue(new Error('offline'))
-    await expect(notifyEtfCapitalFlowUpdates(submit, [
-      { kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1 }
-    ])).resolves.toEqual([])
+    const update = { kind: 'arrived' as const, asset: 'BTC' as const, tradingDate: '2026-11-16', netFlowUsd: 1, occurredAt: '2026-11-17T00:03:53.833Z' }
+    await expect(notifyEtfCapitalFlowUpdates(submit, [update])).resolves.toEqual([])
     expect(submit).toHaveBeenCalledTimes(1)
-    await expect(notifyEtfCapitalFlowUpdates(undefined, [{ kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1 }])).resolves.toEqual([])
+    await expect(notifyEtfCapitalFlowUpdates(undefined, [update])).resolves.toEqual([])
   })
 })

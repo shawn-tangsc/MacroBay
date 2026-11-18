@@ -30,6 +30,11 @@ export type EtfCapitalFlowUpdate = Readonly<{
   netFlowUsd: number
   /** 改数时读者上次看到的那个值；`arrived` 没有它。 */
   previousUsd?: number
+  /**
+   * 这一轮采集的时刻（不是交易日零点）：中心里那一条的「发生时间」必须是读者**今天几点收到的**，
+   * 写成交易日零点会让往回翻的人对不上号（产品 2026-11-18 审出来的）。正文里已有交易日。
+   */
+  occurredAt: string
 }>
 
 export type CapitalFlowNoticeSubmit = (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
@@ -84,8 +89,8 @@ export function buildEtfCapitalFlowUpdateRequest(
     },
     rendered,
     actions: [],
-    // 这条通知描述的是那个交易日，不是提交这一下的时刻。
-    occurredAt: `${update.tradingDate}T00:00:00.000Z`
+    // 发生时间 = 这一轮采集的时刻；交易日已经在正文里（两者混用会让中心的时间线错位）。
+    occurredAt: update.occurredAt
   }
 }
 

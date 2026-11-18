@@ -38,7 +38,12 @@ describe('market-intelligence approvals', () => {
       'market-intelligence.source.symbol-not-supported',
       'market-intelligence.timezone.invalid',
       // 2026-11-18（R40）：非低重要性舆情**只发桌面**——桌面说「来了条要紧的」，手机那条另算。
-      'market-intelligence.news.item-arrived'
+      'market-intelligence.news.item-arrived',
+      // 2026-11-18 08:07（R42）：用户「我要桌面的」——资金面读数变了也进桌面。
+      // 这是给「桌面只留失败 / 需修正 / 系统状态」开的一个**用户点名**的例外，不是顺手放的：
+      // 产品同日重签，PRD §3 与验收 N42 都记了这条例外，撤掉它要先改 PRD。
+      'market-intelligence.capital-flow.etf-updated',
+      'market-intelligence.capital-flow.stablecoin-updated'
     ])
   })
 

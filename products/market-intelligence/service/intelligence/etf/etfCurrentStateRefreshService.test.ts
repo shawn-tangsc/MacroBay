@@ -188,8 +188,8 @@ describe('ETF current-state refresh service', () => {
     // 新来一天：BTC 与 ETH 各一条 arrived。
     await round('2026-09-03T12:00:00.000Z', [...five, '2026-09-01']).refresh()
     expect(notices).toEqual([
-      { kind: 'arrived', asset: 'BTC', tradingDate: '2026-09-01', netFlowUsd: 6 },
-      { kind: 'arrived', asset: 'ETH', tradingDate: '2026-09-01', netFlowUsd: -6 }
+      { kind: 'arrived', asset: 'BTC', tradingDate: '2026-09-01', netFlowUsd: 6, occurredAt: '2026-09-03T12:00:00.000Z' },
+      { kind: 'arrived', asset: 'ETH', tradingDate: '2026-09-01', netFlowUsd: -6, occurredAt: '2026-09-03T12:00:00.000Z' }
     ])
 
     // 同一份数据再刷一轮：不再弹。
@@ -247,8 +247,8 @@ describe('ETF current-state refresh service', () => {
     // 两次读取时这一天都已过结算窗口、值仍然不同 → 改数，必须带上旧值。
     await round('2026-09-04T20:00:00.000Z', 9).refresh()
     expect(notices).toEqual([
-      { kind: 'revised', asset: 'BTC', tradingDate: '2026-08-30', netFlowUsd: 9, previousUsd: 5 },
-      { kind: 'revised', asset: 'ETH', tradingDate: '2026-08-30', netFlowUsd: 9, previousUsd: 5 }
+      { kind: 'revised', asset: 'BTC', tradingDate: '2026-08-30', netFlowUsd: 9, previousUsd: 5, occurredAt: '2026-09-04T20:00:00.000Z' },
+      { kind: 'revised', asset: 'ETH', tradingDate: '2026-08-30', netFlowUsd: 9, previousUsd: 5, occurredAt: '2026-09-04T20:00:00.000Z' }
     ])
   })
 
