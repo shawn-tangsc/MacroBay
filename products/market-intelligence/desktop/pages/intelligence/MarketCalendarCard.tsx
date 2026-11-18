@@ -256,9 +256,9 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
     : state === 'error' ? 'unreadable' : undefined
   return <section className="mi-calendar-card" aria-label={text.title}>
     <header>
+      {/* 卡头只留标题（用户 2026-11-19）：右上角那颗「打开经济日历」与右侧栏的切换入口重复，
+          而每一行本来就有「在日历中打开该事件」。删掉它，卡头不再挂第二个入口。 */}
       <h2>{text.title}</h2>
-      <IconButton icon={CalendarDays} size="md" variant="plain" resolveText={resolveKey}
-        ariaLabelKey="pages.intelligence.portal.calendarCard.openCalendar" onSelect={() => onOpenCalendar(month)} />
     </header>
     {/* Only the list scrolls. The header is the card's identity — the reader keeps seeing what
         they are looking at while scanning further down the schedule — so it stays outside the

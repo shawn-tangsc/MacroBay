@@ -230,10 +230,13 @@ it('copies a row instead of navigating, and keeps the calendar action for the mo
   await act(async () => host.querySelector<HTMLButtonElement>('[data-calendar-row-action="copy"] button')!.click())
   expect(written).toEqual(['10-13 12:30 经济指标 消费者物价指数（CPI）'])
   expect(onOpenCalendar).not.toHaveBeenCalled()
-  // The header action is the shared icon button now; its accessible name is the product key's sentence.
+  /**
+   * 卡头那颗「打开经济日历」已删（用户 2026-11-19）：每行都有「在日历中打开该事件」，
+   * 右侧栏也有切换入口，卡头再挂一个是重复。这里断言它不再渲染——
+   * 哪天有人把它加回来，这条当场红。
+   */
   const openLabel = resolveProductTextKey('zh-CN', 'pages.intelligence.portal.calendarCard.openCalendar')
-  await act(async () => host.querySelector<HTMLButtonElement>(`button[aria-label="${openLabel}"]`)!.click())
-  expect(onOpenCalendar).toHaveBeenCalledWith('2026-10')
+  expect(host.querySelector(`button[aria-label="${openLabel}"]`)).toBeNull()
 })
 
 it('hands a selected row to the caller as the agent context, and a copy click does not select', async () => {
