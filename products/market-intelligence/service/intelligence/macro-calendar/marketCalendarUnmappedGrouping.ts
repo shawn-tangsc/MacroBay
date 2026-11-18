@@ -23,12 +23,24 @@ export function groupKeyOf(row: UnmappedGroupable): string {
 }
 
 /**
- * 合并后那一行的原因：**有标准行 → `period-unresolved`（码认出来了、缺统计期）；
- * 没有标准行 → `no-standard-row`**。同一事件的两条不许各说一套——所以不取「先到的那条」的原因，
- * 而是按事实重新定。
+ * 合并后那一行的原因（Chief 2026-11-18 定，按语义分组看，不取「先到那条」）：
+ *
+ * 1. 组内任意一条是事件 → `unknown-event-type`；
+ * 2. 否则**只要有一条在标准表里有行**，这件就已经有行——取**有行那些条里最靠前的阻塞原因**：
+ *    `no-code`（缺码要人拍）优先于 `period-unresolved`（缺期次没法修）；
+ * 3. 组内**所有条都没有标准行** → `no-standard-row`。
+ *
+ * 为什么不是「有行就算缺期次」：`no-standard-row` 的定义是「标准表里根本没有这一行」，
+ * 中英两条只要落了一条，再报「没进标准表」就是假的；而把 `no-code` 抹成「缺期次」，
+ * 会让「要不要建码」那批从筛选项里整批消失（真库 70 条，实测踩过）。
  */
 export function mergedReasonOf(group: readonly UnmappedGroupable[]): string {
-  return group.some((row) => row.hasStandardRow) ? 'period-unresolved' : 'no-standard-row'
+  if (group.some((row) => row.reason === 'unknown-event-type')) return 'unknown-event-type'
+  const withStandardRow = group.filter((row) => row.hasStandardRow)
+  if (withStandardRow.length === 0) return 'no-standard-row'
+  if (withStandardRow.some((row) => row.reason === 'no-code')) return 'no-code'
+  if (withStandardRow.some((row) => row.reason === 'period-unresolved')) return 'period-unresolved'
+  return withStandardRow[0]!.reason
 }
 
 export function groupUnmappedByRelease<T extends UnmappedGroupable>(rows: readonly T[]): readonly (readonly T[])[] {
