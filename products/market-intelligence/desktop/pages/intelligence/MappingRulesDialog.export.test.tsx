@@ -303,6 +303,14 @@ it('shows tiers as stars with a spoken label, and both filters are multi-select'
   const stars = document.body.querySelector('[data-tier]')!
   expect(stars.textContent).toBe('★★★')
   expect(stars.getAttribute('aria-label')).toBe('一级（三颗星）')
+  // 下拉里必须是「★★★ 一级」这种星级 + 文字：只写星星，读者按「一级」找会以为没有这一档。
+  // 选项在展开后渲染到 body 上的弹层里，所以先点开再找。
+  const tierFilter = document.body.querySelector('[data-tier-filter] .ant-select-selector') as HTMLElement
+  await act(async () => { tierFilter.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+  const optionTexts = [...document.querySelectorAll('.ant-select-item-option')].map((node) => node.textContent ?? '')
+  // 只断「星级 + 文字」这一条：下拉是虚拟列表，happy-dom 里只挂可见的那几项，
+  // 断「未分级也在」会红在一件与文案无关的事上（真机由用户看）。
+  expect(optionTexts).toContain('★★★ 一级')
   // 两个筛选项都是多选：antd 多选的可清除标签容器与单选不同，用属性区分。
   expect(document.body.querySelector('[data-country-filter]')?.className).toContain('ant-select-multiple')
   expect(document.body.querySelector('[data-tier-filter]')?.className).toContain('ant-select-multiple')

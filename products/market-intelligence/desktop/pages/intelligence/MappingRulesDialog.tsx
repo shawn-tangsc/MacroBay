@@ -165,15 +165,21 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
     for (const row of events.rows) seen.add(row.countryName ?? '—')
     return [...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))
   }, [events])
-  /** 分级选项：只列**当前表里真实出现过**的档位，同样用星级写法。 */
+  /**
+   * 分级选项：只列**当前表里真实出现过**的档位。
+   *
+   * 写法是「★★★ 一级」——**星级 + 文字**（用户 2026-11-18）：只写星星时，读者照着「一级」两个字
+   * 在选项里找，会以为「看不到一级的分类」。列里仍然只画星星（那一列旁边就是分级列头，不会误读），
+   * 下拉里必须能读出档名。与导出里同一写法，两处不会再出现两种叫法。
+   */
   const tierOptions = useMemo(() => {
     if (codes?.state !== 'available') return [] as { value: string; label: string }[]
     const seen = new Set<string>()
     for (const row of codes.rows) seen.add(row.tier === null ? 'other' : String(row.tier))
     const order = ['1', '2', '3', 'other'] as const
     return order.filter((key) => seen.has(key))
-      .map((key) => ({ value: key, label: text.tierStars[key] ?? key }))
-  }, [codes, text.tierStars])
+      .map((key) => ({ value: key, label: `${text.tierStars[key]} ${text.tierNames[key]}`.trim() }))
+  }, [codes, text.tierStars, text.tierNames])
   /**
    * 码表默认**按数据量降序**（用户 2026-11-18）：860 个码里近 290 个一行数据都没有，按码名排序时
    * 最上面全是空壳，读者第一眼看到的应当是「有内容的」。同数量按码名，顺序才稳定。
