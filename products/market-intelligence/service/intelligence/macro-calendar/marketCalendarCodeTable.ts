@@ -47,6 +47,8 @@ import rawCodeTable from './marketCalendarCodeTable.json'
 function asCodeTable(raw: Record<string, unknown>): Record<string, CodeTableRow> {
   const out: Record<string, CodeTableRow> = {}
   for (const [key, value] of Object.entries(raw)) {
+    // `__meta` 是版本头，不是一行码。
+    if (key === '__meta') continue
     const row = value as Partial<CodeTableRow> & { names?: Partial<CodeTableRow['names']> }
     const where = `代码表 ${key}`
     if (row.code !== key) throw new Error(`${where}：键与 code 不一致`)
@@ -61,6 +63,25 @@ function asCodeTable(raw: Record<string, unknown>): Record<string, CodeTableRow>
   }
   return out
 }
+
+
+/**
+ * 文件版本头（用户 2026-11-18 选 A）：**唯一真源在文件里**，不建库内副本、不做全删全导。
+ * 用途只有两个：审计、启动打一行日志；外加一条兜底——**改了内容忘了改版本号**时哈希会变。
+ */
+export type CodeTableMeta = Readonly<{ version: number; generatedAt: string; contentHash?: string }>
+
+export function codeTableMetaOf(raw: unknown): CodeTableMeta | undefined {
+  const meta = (raw as { __meta?: Partial<CodeTableMeta> }).__meta
+  if (meta === undefined || typeof meta.version !== 'number' || typeof meta.generatedAt !== 'string') return undefined
+  return Object.freeze({
+    version: meta.version, generatedAt: meta.generatedAt,
+    // 规范化行哈希（键序固定、行按码排序）：纯格式改动不改哈希，真变化一定改。
+    ...(typeof meta.contentHash === 'string' ? { contentHash: meta.contentHash } : {})
+  })
+}
+
+export const marketCalendarCodeTableMeta: CodeTableMeta | undefined = codeTableMetaOf(rawCodeTable)
 
 export const marketCalendarCodeTable: Readonly<Record<string, CodeTableRow>> = Object.freeze({
   ...asCodeTable(rawCodeTable as unknown as Record<string, unknown>)

@@ -1,4 +1,9 @@
 {
+  "__meta": {
+    "version": 1,
+    "generatedAt": "2026-11-18T00:33:34.000Z",
+    "contentHash": "79951a251b99cc64"
+  },
   "DE.ACTUAL_RETAIL_SALES.NONE.MOM": {
     "code": "DE.ACTUAL_RETAIL_SALES.NONE.MOM",
     "kind": "metric",
