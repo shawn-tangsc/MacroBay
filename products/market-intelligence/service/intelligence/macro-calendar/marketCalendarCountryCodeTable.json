@@ -558,8 +558,8 @@
     "kind": "metric",
     "countryCode": "AU",
     "names": {
-      "zhFull": "澳洲联储公布利率决议和货币政策声明",
-      "zhShort": "澳洲联储公布利率决议和货币政策声明",
+      "zhFull": "澳洲联储利率决议",
+      "zhShort": "澳洲联储利率",
       "enFull": "Reserve Bank of Australia cash rate",
       "enShort": "Reserve Bank of Australia cash rate"
     },
@@ -1061,8 +1061,8 @@
     "kind": "metric",
     "countryCode": "BR",
     "names": {
-      "zhFull": "巴西央行公布利率决议",
-      "zhShort": "巴西央行公布利率决议",
+      "zhFull": "巴西央行利率决议",
+      "zhShort": "巴西央行利率",
       "enFull": "Banco Central do Brasil Selic rate",
       "enShort": "Banco Central do Brasil Selic rate"
     },
@@ -7613,8 +7613,8 @@
     "kind": "metric",
     "countryCode": "ID",
     "names": {
-      "zhFull": "印尼央行公布利率决议",
-      "zhShort": "印尼央行公布利率决议",
+      "zhFull": "印尼央行利率决议",
+      "zhShort": "印尼央行利率",
       "enFull": "Bank Indonesia BI rate",
       "enShort": "Bank Indonesia BI rate"
     },
@@ -7634,8 +7634,8 @@
     "kind": "metric",
     "countryCode": "IN",
     "names": {
-      "zhFull": "印度央行公布利率决议",
-      "zhShort": "印度央行公布利率决议",
+      "zhFull": "印度央行利率决议",
+      "zhShort": "印度央行利率",
       "enFull": "Reserve Bank of India repo rate",
       "enShort": "Reserve Bank of India repo rate"
     },
@@ -10557,8 +10557,8 @@
     "kind": "metric",
     "countryCode": "KR",
     "names": {
-      "zhFull": "韩国央行公布利率决议",
-      "zhShort": "韩国央行公布利率决议",
+      "zhFull": "韩国央行利率决议",
+      "zhShort": "韩国央行利率",
       "enFull": "Bank of Korea base rate",
       "enShort": "Bank of Korea base rate"
     },
@@ -10794,8 +10794,8 @@
     "kind": "metric",
     "countryCode": "MX",
     "names": {
-      "zhFull": "墨西哥央行公布利率决议",
-      "zhShort": "墨西哥央行公布利率决议",
+      "zhFull": "墨西哥央行利率决议",
+      "zhShort": "墨西哥央行利率",
       "enFull": "Banco de Mexico target rate",
       "enShort": "Banco de Mexico target rate"
     },
@@ -10815,8 +10815,8 @@
     "kind": "metric",
     "countryCode": "MY",
     "names": {
-      "zhFull": "马来西亚央行公布利率决议",
-      "zhShort": "马来西亚央行公布利率决议",
+      "zhFull": "马来西亚央行利率决议",
+      "zhShort": "马来西亚央行利率",
       "enFull": "Bank Negara Malaysia overnight policy rate",
       "enShort": "Bank Negara Malaysia overnight policy rate"
     },
@@ -10863,8 +10863,8 @@
     "kind": "metric",
     "countryCode": "NO",
     "names": {
-      "zhFull": "挪威央行公布利率决议",
-      "zhShort": "挪威央行公布利率决议",
+      "zhFull": "挪威央行利率决议",
+      "zhShort": "挪威央行利率",
       "enFull": "Norges Bank policy rate",
       "enShort": "Norges Bank policy rate"
     },
@@ -11272,8 +11272,8 @@
     "kind": "metric",
     "countryCode": "NZ",
     "names": {
-      "zhFull": "新西兰联储公布利率决议",
-      "zhShort": "新西兰联储公布利率决议",
+      "zhFull": "新西兰联储利率决议",
+      "zhShort": "新西兰联储利率",
       "enFull": "Reserve Bank of New Zealand official cash rate",
       "enShort": "Reserve Bank of New Zealand official cash rate"
     },
@@ -11537,8 +11537,8 @@
     "kind": "metric",
     "countryCode": "PH",
     "names": {
-      "zhFull": "菲律宾央行公布利率决议",
-      "zhShort": "菲律宾央行公布利率决议",
+      "zhFull": "菲律宾央行利率决议",
+      "zhShort": "菲律宾央行利率",
       "enFull": "BSP reverse repo rate",
       "enShort": "BSP reverse repo rate"
     },
@@ -11558,8 +11558,8 @@
     "kind": "metric",
     "countryCode": "RU",
     "names": {
-      "zhFull": "俄罗斯央行公布利率决议",
-      "zhShort": "俄罗斯央行公布利率决议",
+      "zhFull": "俄罗斯央行利率决议",
+      "zhShort": "俄罗斯央行利率",
       "enFull": "Bank of Russia key rate",
       "enShort": "Bank of Russia key rate"
     },
@@ -11600,8 +11600,8 @@
     "kind": "metric",
     "countryCode": "SE",
     "names": {
-      "zhFull": "瑞典央行公布利率决议",
-      "zhShort": "瑞典央行公布利率决议",
+      "zhFull": "瑞典央行利率决议",
+      "zhShort": "瑞典央行利率",
       "enFull": "Riksbank policy rate",
       "enShort": "Riksbank policy rate"
     },
@@ -11934,8 +11934,8 @@
     "kind": "metric",
     "countryCode": "TH",
     "names": {
-      "zhFull": "泰国央行公布利率决议",
-      "zhShort": "泰国央行公布利率决议",
+      "zhFull": "泰国央行利率决议",
+      "zhShort": "泰国央行利率",
       "enFull": "Bank of Thailand 1-day repo rate",
       "enShort": "Bank of Thailand 1-day repo rate"
     },
@@ -11955,8 +11955,8 @@
     "kind": "metric",
     "countryCode": "TR",
     "names": {
-      "zhFull": "土耳其央行公布利率决议",
-      "zhShort": "土耳其央行公布利率决议",
+      "zhFull": "土耳其央行利率决议",
+      "zhShort": "土耳其央行利率",
       "enFull": "Central Bank of the Republic of Turkiye policy rate",
       "enShort": "Central Bank of the Republic of Turkiye policy rate"
     },
@@ -12250,8 +12250,8 @@
     "kind": "metric",
     "countryCode": "UA",
     "names": {
-      "zhFull": "乌克兰央行公布利率决议",
-      "zhShort": "乌克兰央行公布利率决议",
+      "zhFull": "乌克兰国家银行利率决议",
+      "zhShort": "乌克兰国家银行利率",
       "enFull": "National Bank of Ukraine key policy rate",
       "enShort": "National Bank of Ukraine key policy rate"
     },
@@ -14739,8 +14739,8 @@
     "kind": "metric",
     "countryCode": "ZA",
     "names": {
-      "zhFull": "南非央行公布利率决议",
-      "zhShort": "南非央行公布利率决议",
+      "zhFull": "南非央行利率决议",
+      "zhShort": "南非央行利率",
       "enFull": "South African Reserve Bank repo rate",
       "enShort": "South African Reserve Bank repo rate"
     },
