@@ -148,6 +148,10 @@
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ru.ts": {
       "count": 1,
       "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarPeriodDerivationWhitelist.json": {
+      "count": 3,
+      "why": "期次推算白名单（只有 3 个初请码允许按发布结构推周次）：写的是码本身，必须在这里；新增要改这份数据并发版过评审。"
     }
   }
 }

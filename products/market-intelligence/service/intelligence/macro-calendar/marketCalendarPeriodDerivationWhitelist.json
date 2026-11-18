@@ -1,0 +1,8 @@
+{
+  "note": "允许 periodDerivation=release-structure 的码。新增必须改这个文件并发版过评审——白名单不许写成代码常量。",
+  "codes": [
+    "US.JOBLESS_CLAIMS_4W_AVERAGE.SA.AVERAGE",
+    "US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT",
+    "US.JOBLESS_CLAIMS_INITIAL.SA.COUNT"
+  ]
+}

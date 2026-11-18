@@ -34,6 +34,18 @@ export type CodeTableRow = Readonly<{
   status: CodeStatus
   reason?: NotBuiltReason | PendingReason
   supersededBy?: string
+  /**
+   * **官方序列**（Chief 2026-11-19 评审第一条）：序列号、换算方式、频率**只存在码表里**，
+   * 不许再开第二张 per-code 表（同一个指标的口径已经散过三次）。空 = **待核**，不许填猜的。
+   * `units` 只放源侧换算（`pc1` 同比 / `pch` 环比 / `value` 直取）——**自算同比环比一律不许**。
+   */
+  officialSeries?: Readonly<{ seriesId?: string; units?: 'pc1' | 'pch' | 'value'; frequency: 'weekly' | 'monthly' | 'quarterly' }>
+  /**
+   * **期次从哪来**（架构师第 4 条）：`source` 源直接给、`title` 从标题解析、
+   * `release-structure` 按发布结构推（**仅周度 + 白名单码**，当前只有 3 个初请码）。
+   * 推导出来的期次必须在行上留痕，否则事后分不清「源给的」和「我们推的」。
+   */
+  periodDerivation?: 'source' | 'title' | 'release-structure'
 }>
 
 const OFFICIAL_SOURCE_PENDING = 'official-source-todo' as const

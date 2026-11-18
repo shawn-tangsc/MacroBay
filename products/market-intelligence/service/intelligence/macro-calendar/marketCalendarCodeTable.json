@@ -3309,7 +3309,11 @@
       "verifiedAt": "2026-11-17",
       "basis": "DOL · 周度申领报告"
     },
-    "status": "active"
+    "status": "active",
+    "periodDerivation": "release-structure",
+    "officialSeries": {
+      "frequency": "weekly"
+    }
   },
   "US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT": {
     "code": "US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT",
@@ -3333,7 +3337,11 @@
       "verifiedAt": "2026-11-17",
       "basis": "DOL · 周度申领报告"
     },
-    "status": "active"
+    "status": "active",
+    "periodDerivation": "release-structure",
+    "officialSeries": {
+      "frequency": "weekly"
+    }
   },
   "US.JOBLESS_CLAIMS_INITIAL.SA.COUNT": {
     "code": "US.JOBLESS_CLAIMS_INITIAL.SA.COUNT",
@@ -3357,7 +3365,11 @@
       "verifiedAt": "2026-11-17",
       "basis": "DOL · 周度申领报告"
     },
-    "status": "active"
+    "status": "active",
+    "periodDerivation": "release-structure",
+    "officialSeries": {
+      "frequency": "weekly"
+    }
   },
   "US.JOLTS_OPENINGS.SA.COUNT": {
     "code": "US.JOLTS_OPENINGS.SA.COUNT",
