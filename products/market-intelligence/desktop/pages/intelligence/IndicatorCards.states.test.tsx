@@ -226,6 +226,17 @@ describe('paging: the previous period is off limits when it has no data at all',
     expect(document.body.querySelector('[data-card="released"]')?.textContent).toContain('3.7')
   })
 
+  it('still lets the reader back in when the only content is a stated reason', async () => {
+    // 「无此数据」本身是可看的内容（告诉读者这一期为什么没有），与四格全空的「未提供」不同。
+    await renderCards({ facts: [
+      { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: at,
+        gap: { missing: { reason: 'structural-no-source', basis: '基期不存在' } } },
+      { metricKey: 'US.CPI.SA.MOM', state: 'missing-current', period: '2026-10', releasedAt: at }
+    ] })
+    const prev = document.body.querySelectorAll<HTMLButtonElement>('[data-card="upcoming"] .mk-nav button')[0]!
+    expect(prev.disabled).toBe(false)
+  })
+
   it('disables the arrow when the previous period has no value at all', async () => {
     await renderCards({ facts: [
       { metricKey: 'US.CPI.NSA.YOY', state: 'missing-current', period: '2026-10', releasedAt: at },

@@ -89,8 +89,12 @@ function Carousel(input: CardInput): React.ReactElement {
    *
    * 不按「整体有没有可翻的期次」判：那是另一件事，而且会多出「箭头不渲染」这第三种形态。
    */
-  const pastHasData = group.rows.some((row) =>
-    input.byKey.get(row.metricKey)?.state === 'provided')
+  const pastHasData = group.rows.some((row) => {
+    const fact = input.byKey.get(row.metricKey)
+    // **可展示** = 有值，或有缺值原因（会显示成「无此数据」/「未提供」）。
+    // 四格全是「待发布」或什么都没有时，这一页没有任何内容可看，箭头禁用。
+    return fact?.state === 'provided' || fact?.gap?.missing !== undefined
+  })
   const nextHasContent = group.rows.some((row) => input.byKey.get(row.metricKey)?.next !== undefined)
   const nav = (
     <span className="mk-nav">
