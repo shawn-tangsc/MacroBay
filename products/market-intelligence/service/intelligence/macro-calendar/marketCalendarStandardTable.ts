@@ -66,6 +66,8 @@ export const calendarStandardTablePolicy = Object.freeze({
    */
   identityKinds: Object.freeze(['code', 'source'] as const),
   /** 没映射上的原因闭集。新增值要同时更新这里的注释与用例。 */
+  // `bad-period` 是**只读遗留**（2026-11-18）：写入端已不再产生它，`period-unresolved` 取代了它。
+  // 保留它只为读旧库的行——否则旧库那 120 条会变成「不认识的原因」。**不许再有新代码写它**。
   unmappedReasons: Object.freeze(['unknown-measure', 'unknown-event-type', 'bad-period', 'bad-identity',
     'unknown-release-group', 'ambiguous-same-day',
     /**
