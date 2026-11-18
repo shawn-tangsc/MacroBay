@@ -56,6 +56,15 @@ export type MacroIndicatorCardRow = Readonly<{
   unit?: 'percent' | 'thousands'
 }>
 
+/**
+ * **这一格为什么没有数**（期次层）：还没到（待发布）/ 到了但没有值以及原因。
+ * 只挂在某一行发布上，不是整码属性——标成整码会让读者以为这个指标永远没有数。
+ */
+export type MacroIndicatorCardGap = Readonly<{
+  pending?: Readonly<{ period?: string; releaseAt: string }>
+  missing?: Readonly<{ reason: 'structural-no-source' | 'source-no-value'; basis?: string }>
+}>
+
 export type MacroIndicatorCardFact = Readonly<{
   metricKey: MacroIndicatorCardKey
   /**
@@ -119,6 +128,18 @@ export type MacroIndicatorCardFact = Readonly<{
   }>
   unit?: 'percent' | 'thousands'
   source?: 'narwhal' | '0xrouter' | 'fred'
+  /**
+   * **这一格为什么没有数**（Chief 2026-11-19 的产品 41 号文）：两种情况不许混。
+   *
+   * - `pending`：这一期还没发布、排期在未来 → 卡上写「待发布」；
+   * - `missing`：已经发布但没有值，原因取标准表的 `missing_reason` 闭集：
+   *   `structural-no-source` → 「无此数据」（这一期本来就没有来源，ⓘ 用 `basis` 那句）；
+   *   `source-no-value` → 「未提供」（来源这一项没给，ⓘ 固定一句）。
+   *
+   * **只出现在期次层**：它跟着某一行发布走，不是整码的属性——把「无此数据」标成整码，
+   * 读者会以为这个指标永远没有数。
+   */
+  gap?: MacroIndicatorCardGap
 }>
 
 /** 旧源的 `indicator_id` → 我们规范 key 的反查（同一张表，不另写一份）。 */

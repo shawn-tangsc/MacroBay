@@ -56,6 +56,7 @@ import { createCalendarReminderSettingsStore } from './intelligence/macro-calend
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { createMacroIndicatorReadService } from './intelligence/macro-calendar/macroIndicatorReadService'
+import { readMacroIndicatorCardGap } from './intelligence/macro-calendar/macroIndicatorCardGapRead'
 import { registerMacroIndicatorIpc } from './intelligence/macro-calendar/ipc/registerMacroIndicatorIpc'
 import { createFredObservationsFetcher, readFredIndicatorYoY, readFredObservationForPeriod } from './intelligence/macro-calendar/fredIndicatorYoY'
 import { readNextReleaseForMetric } from './intelligence/macro-calendar/marketCalendarStandardMonthRead'
@@ -494,7 +495,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     readOfficialYoY: (metricKey) => readFredIndicatorYoY(metricKey, fredObservations),
     nextReleaseFor: (metricKey, asOf) => readNextReleaseForMetric(standardCalendarDatabase, { metricKey, asOf }),
     readStandardActual: (metricKey, asOf) => readStandardActuals(standardCalendarDatabase, { metricKey, asOf }),
-    readMarketConsensus: (input) => readPolymarketConsensus({ ...input, fetchText: (url) => intelligenceModule.fetchText(url, 'policy-path-market') })
+    readMarketConsensus: (input) => readPolymarketConsensus({ ...input, fetchText: (url) => intelligenceModule.fetchText(url, 'policy-path-market') }),
+    // 「这一格为什么没有数」也只问标准表一处：待发布 / 无此数据 / 未提供（产品 41 号文）。
+    readCardGap: (metricKey, asOf) => readMacroIndicatorCardGap(standardCalendarDatabase, { metricKey, asOf })
   }))
   registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
     // Read-only: the run log joins a task to the analysis it produced, and never writes either side.

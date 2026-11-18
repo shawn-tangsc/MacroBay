@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
-import { Popover } from '@platform/ui/components/popover'
+import { Popover, helpTrigger } from '@platform/ui/components/popover'
 import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 
 import type { MacroIndicatorCardFact, MacroIndicatorCardKey } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
@@ -83,12 +83,21 @@ function Carousel(input: CardInput): React.ReactElement {
   const [page, setPage] = useState<'past' | 'next'>('next')
   const { group, text } = input
   const move = (next: 'past' | 'next'): void => setPage(next)
+  /**
+   * **上一期那张卡有没有数据**决定能不能翻过去（用户 2026-11-19）：
+   * 四行一个数都没有 → 箭头**禁用**（位置不跳，也不弹错误）；只要有一行有数 → 可点。
+   *
+   * 不按「整体有没有可翻的期次」判：那是另一件事，而且会多出「箭头不渲染」这第三种形态。
+   */
+  const pastHasData = group.rows.some((row) =>
+    input.byKey.get(row.metricKey)?.state === 'provided')
+  const nextHasContent = group.rows.some((row) => input.byKey.get(row.metricKey)?.next !== undefined)
   const nav = (
     <span className="mk-nav">
       <IconButton ariaLabelKey="mk.carousel.prev" icon={ChevronLeft} size="sm" variant="plain"
-        resolveText={input.resolveKey} onSelect={() => move('past')} />
+        resolveText={input.resolveKey} disabled={!pastHasData} onSelect={() => move('past')} />
       <IconButton ariaLabelKey="mk.carousel.next" icon={ChevronRight} size="sm" variant="plain"
-        resolveText={input.resolveKey} onSelect={() => move('next')} />
+        resolveText={input.resolveKey} disabled={!nextHasContent} onSelect={() => move('next')} />
     </span>
   )
   return (
@@ -96,8 +105,8 @@ function Carousel(input: CardInput): React.ReactElement {
       aria-label={group.title}
       onKeyDown={(event) => {
         // 只处理左右键；不拦其它键，输入框里的左右键仍归输入框。
-        if (event.key === 'ArrowLeft') { event.preventDefault(); move('past') }
-        if (event.key === 'ArrowRight') { event.preventDefault(); move('next') }
+        if (event.key === 'ArrowLeft') { event.preventDefault(); if (pastHasData) move('past') }
+        if (event.key === 'ArrowRight') { event.preventDefault(); if (nextHasContent) move('next') }
       }}>
       {/* 一刻只挂一页：屏幕阅读器不该把看不见的那页也读一遍。 */}
       {page === 'past'
@@ -153,12 +162,34 @@ function ReleasedRow(input: Readonly<{
   const value = unreadable || !loaded ? undefined : fact?.state === 'provided' ? fact.value : undefined
   const missing = loaded && !unreadable && value === undefined
   const chip = chipText(fact, row, text)
+  /**
+   * 四种「这一格没有数」**不许互相冒充**（产品 41 号文）：
+   * - 读失败 → 「读取失败」+ ⓘ 一句（不是「未提供」）；
+   * - 还没读完 → 什么都不写；
+   * - 待发布（排期在未来）→ 「待发布」，不挂 ⓘ；
+   * - 已发布但没有值 → 「无此数据」（ⓘ 用库里那句依据）/「未提供」（ⓘ 固定一句）。
+   */
+  const gap = fact?.gap
+  const cell: { text: string; note?: string; state?: string } =
+    unreadable ? { text: text.cardStates.readFailed, note: text.cardStates.readFailedNote, state: 'read-failed' }
+      : !loaded ? { text: '' }
+        : value !== undefined ? { text: formatValue(value, row.kind) }
+          : gap?.pending !== undefined ? { text: text.cardStates.scheduled, state: 'scheduled' }
+            : gap?.missing?.reason === 'structural-no-source'
+              ? { text: text.cardStates.noSuchData, state: 'no-such-data',
+                note: gap.missing.basis ?? text.cardStates.noSuchDataNote }
+              : gap?.missing?.reason === 'source-no-value'
+                ? { text: text.cardStates.notAvailable, state: 'source-no-value', note: text.cardStates.sourceNoValueNote }
+                : { text: text.cardStates.notAvailable }
   return (
     <div className="mk-vrow">
       <dt>{row.label}</dt>
-      <dd {...(missing ? { 'data-na': 'true' } : {})}>{value === undefined
-        ? (unreadable ? text.cardStates.unreadable : loaded ? text.cardStates.notAvailable : '')
-        : formatValue(value, row.kind)}</dd>
+      <dd {...(missing ? { 'data-na': 'true' } : {})}
+        {...(cell.state === undefined ? {} : { 'data-cell-state': cell.state })}>
+        {cell.note === undefined ? cell.text : <span className="mk-vrow__gap">
+          {cell.text}{helpTrigger({ text: cell.note })}
+        </span>}
+      </dd>
       <span className="mk-chipwrap">{chip === undefined ? null : <span className={`mk-chip mk-chip--${chip.tone}`}>{chip.label}</span>}</span>
     </div>
   )
@@ -208,7 +239,7 @@ function NextCard(input: CardInput): React.ReactElement {
               .replace('{date}', calendarDisplayDate(next.releaseAt, timeZone).slice(5))}
       </div>
       {unreadable
-        ? <div className="mk-card__empty">{text.cardStates.unreadable}</div>
+        ? <div className="mk-card__empty">{text.cardStates.readFailed}</div>
         : !loaded
           ? <div className="mk-card__empty"><LoadingState label={text.cardFace.loading} minHeight={0} /></div>
           : collapse
@@ -238,7 +269,7 @@ function NextCard(input: CardInput): React.ReactElement {
 function expectedValueText(fact: MacroIndicatorCardFact | undefined, row: IndicatorRow, text: MacroIndicatorDrawerText): string {
   const expected = fact?.next?.expected
   // 「读失败 / 盘在但成交量读不出」不属于「这一期没有盘」：两者画成同一句，读者分不出该不该等。
-  if (expected === undefined && fact?.next?.expectedState === 'unreadable') return text.cardStates.unreadable
+  if (expected === undefined && fact?.next?.expectedState === 'unreadable') return text.cardStates.readFailed
   if (expected === undefined) return text.cardFace.expectedMissing
   return expected.provenance === 'market-implied'
     ? text.cardFace.approx.replace('{value}', formatValue(expected.value, row.kind))

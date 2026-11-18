@@ -46,7 +46,14 @@ export const macroIndicatorDrawerText = {
     },
     cardStates: {
       notAvailable: '未提供',
+      /* 四种「没有数」不许互相冒充（产品 41 号文）：读失败 / 待发布 / 无此数据 / 未提供。 */
       unreadable: '暂时读不到',
+      readFailed: '读取失败',
+      scheduled: '待发布',
+      noSuchData: '无此数据',
+      readFailedNote: '这一路读数没有完成，重开一次会重试。',
+      noSuchDataNote: '这一期本来就没有来源。',
+      sourceNoValueNote: '来源未提供这一项。',
       /* 卡面只留字段和值：状态词说清「本期没有这个数」就够，原因进 ⓘ 浮层。 */
       missingCurrent: '{period} · 本期无此数',
       missingCurrentNoPeriod: '本期无此数',
@@ -269,6 +276,12 @@ export const macroIndicatorDrawerText = {
     cardStates: {
       notAvailable: 'Not available',
       unreadable: 'Not readable right now',
+      readFailed: 'Read failed',
+      scheduled: 'Not released yet',
+      noSuchData: 'No such data',
+      readFailedNote: 'This reading did not complete; reopen the drawer to retry.',
+      noSuchDataNote: 'This period has no source at all.',
+      sourceNoValueNote: 'The source did not provide this item.',
       missingCurrent: '{period} · no value for this period',
       missingCurrentNoPeriod: 'no value for this period',
       notRecorded: 'Not released this month',

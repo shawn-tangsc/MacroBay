@@ -1,6 +1,7 @@
 import {
   MACRO_INDICATOR_CARD_KEYS, legacyIndicatorIdsByMetricKey, narwhalMeasuresByMetricKey,
-  resolveMacroIndicatorFacts, type MacroIndicatorCardFact, type MacroIndicatorCardKey, type MacroIndicatorCardRow
+  resolveMacroIndicatorFacts, type MacroIndicatorCardFact, type MacroIndicatorCardGap, type MacroIndicatorCardKey,
+  type MacroIndicatorCardRow
 } from './macroIndicatorCardFacts'
 import { applyOfficialYoY, type FredYoYReading } from './fredIndicatorYoY'
 import type { MacroCalendarLegacyMetricRow, MacroCalendarRepository } from './macroCalendarRepository'
@@ -60,6 +61,11 @@ export type MacroIndicatorReadDependencies = Readonly<{
     releaseAt: string
     asOf: string
   }>) => Promise<MacroMarketConsensusReading>
+  /**
+   * 这一格**为什么没有数**（期次层）：还没到（待发布）/ 到了但没有值以及原因（无此数据、未提供）。
+   * 只从标准表取；不注入就没有这一档，卡上按原来的「未提供」走，不猜。
+   */
+  readCardGap?: (metricKey: string, asOf: string) => MacroIndicatorCardGap | undefined
 }>
 
 export type MacroIndicatorReadService = Readonly<{
@@ -87,8 +93,15 @@ export function createMacroIndicatorReadService(
       const withStandard = dependencies.readStandardActual === undefined
         ? withOfficial
         : withOfficial.map((fact) => applyStandardActual(fact, dependencies.readStandardActual!(fact.metricKey, asOf)))
-      if (dependencies.nextReleaseFor === undefined) return withStandard
-      return await Promise.all(withStandard.map((fact) => withNextRelease(fact, dependencies, asOf)))
+      const withNext = dependencies.nextReleaseFor === undefined
+        ? withStandard
+        : await Promise.all(withStandard.map((fact) => withNextRelease(fact, dependencies, asOf)))
+      if (dependencies.readCardGap === undefined) return withNext
+      // 期次层的「为什么没有数」：待发布 / 无此数据 / 未提供。**只挂在这一格上**，不改整码状态。
+      return withNext.map((fact) => {
+        const gap = dependencies.readCardGap!(fact.metricKey, asOf)
+        return gap === undefined ? fact : Object.freeze({ ...fact, gap })
+      })
     }
   }
 }

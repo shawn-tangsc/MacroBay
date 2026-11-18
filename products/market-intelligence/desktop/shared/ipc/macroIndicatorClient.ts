@@ -69,7 +69,35 @@ function readFact(value: unknown): MacroIndicatorCardFact | undefined {
     ...(value.source === 'narwhal' || value.source === '0xrouter' || value.source === 'fred' ? { source: value.source } : {}),
     ...(readConsensus(value.consensus) === undefined ? {} : { consensus: readConsensus(value.consensus)! }),
     ...readPreviousProvenance(value),
-    ...(readNext(value.next) === undefined ? {} : { next: readNext(value.next)! })
+    ...(readNext(value.next) === undefined ? {} : { next: readNext(value.next)! }),
+    ...(readGap(value.gap) === undefined ? {} : { gap: readGap(value.gap)! })
+  }
+}
+
+/**
+ * 「这一格为什么没有数」（产品 41 号文）：待发布 / 无此数据 / 未提供。
+ *
+ * 形状不对就整块丢掉——把 `structural-no-source` 读成 `source-no-value`（或反过来），
+ * 卡上就会把「这一期本来没有」说成「来源忘了给」。两个词在此是**闭集**，不认识的一律不给。
+ */
+function readGap(value: unknown): MacroIndicatorCardFact['gap'] | undefined {
+  if (!isObject(value)) return undefined
+  const pending = value.pending
+  const pendingOk = isObject(pending) && typeof pending.releaseAt === 'string'
+    && Number.isFinite(Date.parse(pending.releaseAt))
+  const missing = value.missing
+  const reason = isObject(missing) && (missing.reason === 'structural-no-source' || missing.reason === 'source-no-value')
+    ? missing.reason
+    : undefined
+  const basis = isObject(missing) && typeof missing.basis === 'string' && missing.basis !== '' ? missing.basis : undefined
+  if (!pendingOk && reason === undefined) return undefined
+  return {
+    ...(pendingOk
+      ? { pending: { releaseAt: (pending as { releaseAt: string }).releaseAt,
+        ...(typeof (pending as { period?: unknown }).period === 'string'
+          ? { period: (pending as { period: string }).period } : {}) } }
+      : {}),
+    ...(reason === undefined ? {} : { missing: { reason, ...(basis === undefined ? {} : { basis }) } })
   }
 }
 
