@@ -17,18 +17,23 @@ import { displayValueFromJson } from './marketCalendarValueEncoding'
  * 3. 整表在**同一事务**里备份到 `mi_calendar_events__value_encoding_v19`，单事务、行数对账、
  *    幂等（第二遍 0 变更）。回滚＝恢复备份表，值只动过 `values_json` 一列。
  *
- * **归属记录（2026-11-18，Chief 要求查清「谁改的」）**：
- * - 08:46 真库量到 605 行双重编码；08:52 再量已是 **0 行**，而 `parser_version='materialize-mapped-v1'`
- *   的行数仍是 635、`observed_at` 大多仍是 08:00（补库脚本首次运行的时刻）——说明是**原地只改
- *   `values_json` 的定向 UPDATE**，不是任何运行时写入端（那些会改写 `parser_version` / `observed_at`）。
- * - 可归因的一部分：`materialize-mapped-v1` 里有 **36 行** `observed_at=08:54:28`，而那个
- *   `parser_version` 只有一次性补库脚本会用——即**有人先修好脚本、在 08:54 又跑了一次**。
- * - 其余约 569 行的改动者**未查明**（不是启动迁移链：08:54 那轮链里每个写入端都会改 `parser_version`；
- *   也不是本脚本：从未 `--apply`，库里没有 `value_encoding` 备份表）。
+ * **归属记录（2026-11-18；Chief 更正过一次，以本段为准）**：
+ * - 08:46 真库量到 605 行双重编码；08:52 再量已是 0 行。
+ * - **动手的人先备份再改，回滚材料在**：改前副本 `/tmp/mc-pre-wash.sqlite`（实测 605 行含
+ *   `displayValue`）与 `/tmp/brief-pre-wash.sqlite`（1 行）；另有 `/tmp/mc-wash.sqlite`、
+ *   `/tmp/mc-wash2.sqlite`、`/tmp/brief-verify.sqlite` 是演练与核对副本。
+ *   库里没有备份**表**，是因为备份做成了**文件**——「没有备份」这个说法不成立。
+ * - **改动来源仍未认领**：不是本脚本（从未 `--apply`）；也不是启动迁移链（08:54 那轮里每个
+ *   运行时写入端都会改写 `parser_version`/`observed_at`，而那 635 行的两个字段没变，
+ *   说明是只改 `values_json` 的定向 UPDATE）。可归因的只有 36 行：`observed_at=08:54:28`
+ *   且 `parser_version='materialize-mapped-v1'`，即有人先修好补库脚本、在 08:54 重跑了一次。
+ * - **措辞纪律**：不许把「不知道谁改的」写成「已修复」。数据现在是对的、回滚材料在，
+ *   但这次批量改写没有执行者、没有迁移标记。
  *
- * 结论：数据已干净，清理来源**部分可归因、其余未查明**。本脚本保留为**幂等安全网**（dry-run 默认、
- * `--apply` 才写、同事务备份可回滚）；以后再出现这类脏数据，跑它即可，但**执行者必须写一行迁移标记**，
- * 别再出现一次无人认领的批量改写。
+ * 结论：**数据现在是对的，回滚材料在（`/tmp/mc-pre-wash.sqlite` 等），但改动来源仍未认领**——
+ * 36 行可归因（脚本重跑），其余约 569 行没有执行者、没有迁移标记。本脚本保留为**幂等安全网**
+ * （dry-run 默认、`--apply` 才写、同事务备份可回滚）；以后再出现这类脏数据，跑它即可，
+ * 但**执行者必须写一行迁移标记并认领**，别再出现一次无人认领的批量改写。
  */
 export const calendarValueEncodingRepairPolicy = Object.freeze({
   migrationVersion: 19,
