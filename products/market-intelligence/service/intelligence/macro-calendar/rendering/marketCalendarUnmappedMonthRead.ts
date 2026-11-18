@@ -86,8 +86,8 @@ export function listUnmappedCalendarObservationsForRendering(
   // 取最早那次的原因（那是「第一次没进去」的事实）。
   const seen = new Set<string>()
   const entries: UnmappedCalendarObservation[] = []
-  // **没有标准行的不进这个列表**（2026-11-18 Chief 定）：它们不在等映射，也没有行可挂映射；
-  // 混在「未映射」里会让这个数永远压不下去，读者会以为还有几百个指标没认出来。只计数，供诊断。
+  // **一条都不许藏**（用户 2026-11-18）：这个页签就是「所有没进日历的东西」，四类全列，
+  // 原因用列区分、可筛选；下面这几个计数只用于诊断参考（谁多谁少一眼看得出）。
   let noStandardRow = 0
   let events = 0
   let noCode = 0
@@ -100,16 +100,13 @@ export function listUnmappedCalendarObservationsForRendering(
     if (seen.has(key)) continue
     seen.add(key)
     if (promoted.get(row.source_key) !== undefined) { superseded += 1; continue }
-    if (row.reason === 'no-standard-row') { noStandardRow += 1; continue }
-    // 事件不是指标：留在页签里会让读者以为还有两百多个指标没认出来（2026-11-18 Chief 定）。
-    if (row.reason === 'unknown-event-type') { events += 1; continue }
-    // `no-code` / `period-unresolved` 也不进列表（Chief 2026-11-18）：前者的去处是「单国单次出现、
-    // 未建码」，后者是「码认出来了、源没给统计期」——两类都不是「我们还没做事」，放进页签只会让人以为
-    // 还有几百个指标没认。页签因此只放真正在等我们动手的。
-    if (row.reason === 'no-code') { noCode += 1; continue }
-    // `bad-period` 是这一档的旧库写法（重算跑过才会变成 `period-unresolved`）：两种情况同一去处，
-    // 否则库里的历史行会让页签仍然挂着 120 条。
-    if (row.reason === 'period-unresolved' || row.reason === 'bad-period') { periodUnresolved += 1; continue }
+    // **一条都不许藏**（用户 2026-11-18）：没进日历的东西全部列出来，原因用列区分；
+    // 计数照旧统计，供诊断参考。
+    if (row.reason === 'no-standard-row') noStandardRow += 1
+    if (row.reason === 'unknown-event-type') events += 1
+    if (row.reason === 'no-code') noCode += 1
+    // `bad-period` 是这一档的旧库写法（重算跑过才会变成 `period-unresolved`），两写法同一计数。
+    if (row.reason === 'period-unresolved' || row.reason === 'bad-period') periodUnresolved += 1
     const raw = parseRaw(row.raw_json)
     const scheduledDate = text(raw.scheduledDate)
     if (scheduledDate === undefined) { undated += 1; continue }
