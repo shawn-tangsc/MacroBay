@@ -64,8 +64,13 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
    * 同一个解析函数（`officialSourceStateFor`）。三态不许混：
    * 有地址 → 机构 + 可点外链；有码待核 → 「待核」不可点；**没有码** → 明说没有对应指标码。
    * 没有码不是「待核」——待核是「有码还没核」，两者混了读者会以为我们欠他一个链接。
+   *
+   * 码从哪来：**身份键优先**（`eventNameKey`，一条发布对应的那个指标），没有再退到
+   * 「覆盖指标」里的第一个码——一条事件覆盖多个指标时官网只能给一个，取第一个并说明它对应谁；
+   * 两样都没有才是真的没有码。
    */
-  const official = officialSourceStateFor(event.eventNameKey)
+  const officialMetricKey = event.eventNameKey ?? event.measureKeys?.[0]
+  const official = officialSourceStateFor(officialMetricKey)
   /**
    * 层级那一行的一句话：子项给母名，母项给分项列表（`、` 连接）。
    * 需要的名字不齐时返回 `undefined`——**整行不显示**，比画一个「所属指标：源未给出」更少误导：

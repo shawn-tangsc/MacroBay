@@ -460,6 +460,13 @@ it('shows the official site for the row, and keeps 待核 apart from 没有指�
     expect(officialRow()!.textContent).toContain('待核')
     expect(officialRow()!.querySelector('a')).toBeNull()
 
+    // ②b 没有身份键、但有「覆盖指标」：官网取第一个码，不能因为缺身份键就说「没有码」。
+    await act(async () => root.render(scoped(<MarketCalendarInspector
+      event={{ ...base, measureKeys: ['US.CPI.NSA.YOY', 'US.CORE_CPI.NSA.YOY'] }} text={text} />)))
+    expect(officialRow()!.getAttribute('data-content-official')).toBe('verified')
+    expect((officialRow()!.querySelector('a[data-official-link]') as HTMLAnchorElement).getAttribute('href'))
+      .toBe('https://www.bls.gov/news.release/')
+
     // ③ 没有指标码：明说没有码，**不写「待核」**（待核=有码还没核）。
     await act(async () => root.render(scoped(<MarketCalendarInspector event={base} text={text} />)))
     expect(officialRow()!.getAttribute('data-content-official')).toBe('none')
