@@ -35,7 +35,8 @@ import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registe
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { wireCalendarReadings } from './wiring/calendarReadings'
 import { wireZeroXRouterCalendarSchedule } from './wiring/zeroXRouterCalendarSchedule'
-import { scheduleHistoricalValueFill, syncOfficialStandardRowsAtStartup } from './wiring/calendarStandardRows'
+import { scheduleHistoricalValueFill } from './wiring/calendarStandardRows'
+import { createNarwhalStandardRowsWriter, startCalendarStandardRows } from './wiring/calendarStandardRowsNarwhal'
 import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
 import { newsInterpretationWiring, registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
@@ -69,15 +70,10 @@ import { createMacroEconomicCalendarQueryService } from './intelligence/macro-ca
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
 import { getPlatformFetch } from '@platform/network/platformFetch'
 import { allSources } from './intelligence/application/providerRegistry'
-import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
-import { ensureCalendarStandardTables, recordCalendarUnmapped } from './intelligence/macro-calendar/marketCalendarStandardTable'
-import { promoteSourceIdentities } from './intelligence/macro-calendar/marketCalendarSourcePromotion'
-import { recomputeUnmappedReasons } from './intelligence/macro-calendar/marketCalendarUnmappedReasonBackfill'
 import { syncOfficialStandardRows } from './intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { createStandardMonthPageReader } from './intelligence/macro-calendar/marketCalendarStandardMonthPage'
 import { eventTypeNameByCode, nameByMetricKey } from './intelligence/macro-calendar/marketCalendarCodeNames'
 import { narwhalSourcePolicy } from './intelligence/application/narwhalSourcePolicy'
-import { calendarStandardConservation } from './intelligence/macro-calendar/marketCalendarStandardConservation'
 import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
 import { createNarwhalCalendarBriefingRefresh }
   from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
@@ -349,14 +345,14 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(macroCalendarBackend.beaOfficialReleaseRefresh ? ['macro-calendar-bea' as const] : []),
     ...(macroCalendarBackend.blsEmploymentSchedule ? ['macro-calendar-bls' as const] : [])
   ] as const
-  // 启动同步官方发布进标准表，失败不阻断启动（详见 wiring/calendarStandardRows.ts，吞错语义不变）。
-  // 历史补值也挂这一点：`after` 是模块启动完成信号，`readLatest` 是惰性闭包（FRED fetcher 建在后面）。
-  syncOfficialStandardRowsAtStartup({
+  // 启动同步官方发布进标准表 + 历史补值（顺序契约与吞错语义见 wiring/calendarStandardRowsNarwhal.ts）：
+  // `after` 是模块启动完成信号，`readLatest` 是惰性闭包（FRED fetcher 建在后面）。
+  startCalendarStandardRows({
     database: macroCalendarBackend.storage.database,
     listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf,
     after: intelligenceModule.startupReady,
-    readLatest: (metricKey, periodKey) => readFredObservationForPeriod(metricKey, periodKey, fredObservations),
-    // 启动迁移的每一步都要能在 `app.log` 里查到：主进程的 `console.warn` 不写进那份日志。
+    readFredObservationForPeriod,
+    fredObservations: () => fredObservations,
     ...(deps.log === undefined ? {} : { log: deps.log })
   })
   // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
@@ -369,53 +365,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // **只停写、不删历史行**：`mi_macro_calendar_market_event_observations` 里的行原样留着，
     // 少写的只是「同一批采集顺便多写一份」。
     // 标准行按 measure 拆：一次发布里的每个 measure 各一行，身份各算各的。
-    appendStandardRows: (rows, unmapped, sourceTotals) => {
-      try {
-        const database = macroCalendarBackend.storage.database
-        ensureCalendarStandardTables(database)
-        const observedAt = new Date().toISOString()
-        // **启动/采集前先转正存量**：补映射之前写进去的 `source` 行，现在算得出身份的就地改码。
-        // 只报三个数、不上界面；dryRun 的入口给补完映射后先看数用。
-        const promotion = promoteSourceIdentities(database)
-        if (promotion.scanned > 0) {
-          console.warn(`[macro-calendar] 源内身份转正：扫描 ${promotion.scanned} / 转正 ${promotion.promoted} / 仍无身份 ${promotion.stillSource}`)
-        }
-        // **原因也要自己保持正确**（2026-11-18 用户定）：`missing-country` 是写入那一刻的原因，
-        // 国家后来补上、码后来建出来，那一行却还挂着旧原因，盘点读到的永远是假数。转正之后再重算，
-        // 顺序不能反：转正会删掉清单里的过期条目，先重算会把「已转正」算成缺码。幂等，跑前备份。
-        const reasons = recomputeUnmappedReasons(database)
-        if (reasons.deleted > 0 || reasons.updated > 0) {
-          const detail = Object.entries(reasons.counts).map(([reason, count]) => `${reason} ${count}`).join(' / ')
-          console.warn(`[macro-calendar] 未映射原因重算：扫描 ${reasons.scanned} / 删过期 ${reasons.deleted} / 改判 ${reasons.updated}（${detail}）`)
-        }
-        for (const item of unmapped) {
-          // `reason` **原样落库**：这里曾用三段白名单映射，任何新原因都会被悄悄改写成
-          // `unknown-event-type`（`no-values` 就会以「未知事件类型」的样子出现，指向错误的修法）。
-          recordCalendarUnmapped(database, { providerId: 'narwhal', sourceKey: item.sourceKey,
-            detectedAt: observedAt, rawJson: JSON.stringify({ name: item.name, measureKeys: item.measureKeys ?? [] }),
-            reason: item.reason })
-        }
-        const counts = dualWriteMeasureRows(database, {
-          providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3', observedAt, rows
-        }, { onError: (message) => console.warn(`[macro-calendar] 标准表写入失败：${message}`) })
-        // 算式只有一份实现（`calendarStandardConservation`，带能跑红的用例）：写在这里的
-        // 闭包里没人能测，而它已经错过两版（恒平、恒红）。
-        const conservation = calendarStandardConservation({ sourceTotals, rows, unmapped, failed: counts.failed })
-        const { releaseDiff, measureDiff } = conservation
-        console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 认领 ${conservation.creditedReleases}（落表∪未映射，按 id 去重）+ 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${conservation.landedMeasures} + 未映射 measure ${conservation.unmappedMeasures} + 事件型随行 ${conservation.excludedMeasures}（差 ${measureDiff}）`)
-        if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
-        if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)
-        if (counts.failed > 0) console.warn(`[macro-calendar] 标准行写入失败 ${counts.failed} 条（已计入守恒式）`)
-        // 三种「没有值」必须分开数：源标了已发布却没值（真缺口）、还没到发布日（排期先行）、
-        // 以及**按源内身份显示**的行。混成一个数就会报出一个假缺口——今天已经数错过两次。
-        const publishedNoValue = rows.filter((row) => row.status === 'published' && row.fromMeasure !== true).length
-        const scheduledAhead = rows.filter((row) => row.status === 'scheduled' && row.fromMeasure !== true).length
-        const sourceIdentityRows = rows.filter((row) => row.identityKind === 'source').length
-        console.warn(`[macro-calendar] 身份：标准码 ${rows.length - sourceIdentityRows} 行 / 源内 ${sourceIdentityRows} 行（源内不参与跨源合并）；无值：已发布 ${publishedNoValue} 行 / 排期 ${scheduledAhead} 行；工作清单 ${unmapped.length} 条`)
-      } catch (error) {
-        console.warn(`[macro-calendar] 标准行接线异常（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
-      }
-    },
+    appendStandardRows: createNarwhalStandardRowsWriter({ database: () => macroCalendarBackend.storage.database }),
     fetchImpl: getPlatformFetch(),
     getCredential: credentialRef => intelligenceModule.sourceCredentials.getByRef(credentialRef),
     // 采集前的门：读者关掉、或源还锁着（`visibility: 'pending'`），一个请求都不发。
