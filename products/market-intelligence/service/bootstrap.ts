@@ -309,7 +309,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     calendarReminderSettings,
     intelligenceModule,
     submitNotification: async (request) => getNotificationRuntime().submit(request),
-    timeZone: () => currentReaderTimeZone()
+    timeZone: () => currentReaderTimeZone(),
+    ...(deps.log === undefined ? {} : { log: deps.log })
   })
   const blsScheduleAndLatestValues = createBlsScheduleAndLatestValuesSyncWorkflow({
     schedule: macroCalendarBackend.blsEmploymentSchedule,

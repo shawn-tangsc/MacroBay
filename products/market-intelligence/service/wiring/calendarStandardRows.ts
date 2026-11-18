@@ -243,14 +243,12 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     const startedAt = Date.now()
     const normalized = normalizeCalendarStandardRows(input.database, { nowIso: new Date().toISOString() })
     const elapsedMs = Date.now() - startedAt
-    const changed = normalized.valueStateToPresent + normalized.valueStateToMissing + normalized.periodsResolved
-      + normalized.droppedRows
-    if (changed > 0) {
-      report(`[macro-calendar] 启动规范化：重算 ${normalized.valueStateToPresent + normalized.valueStateToMissing} 行`
-        + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
-        + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
-        + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、耗时 ${elapsedMs}ms`)
-    }
+    // **每次都打印**（用户 2026-11-19）：没有变更也要留一行，否则「没跑」和「跑了但没事可做」
+    // 在 app.log 里长得一模一样。
+    report(`[macro-calendar] 启动规范化：重算 ${normalized.valueStateToPresent + normalized.valueStateToMissing} 行`
+      + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
+      + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
+      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、耗时 ${elapsedMs}ms`)
   } catch (error) {
     report(`[macro-calendar] 启动规范化失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
   }

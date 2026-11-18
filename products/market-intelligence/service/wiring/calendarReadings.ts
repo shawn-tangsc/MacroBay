@@ -33,6 +33,8 @@ export function wireCalendarReadings(input: Readonly<{
   intelligenceModule: IntelligenceModule
   submitNotification: (request: NotificationSubmitRequest) => Promise<unknown>
   timeZone: () => string
+  /** 产品日志口（主进程 stdout 不进 `app.log`，要留痕必须走它）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
 }>): Readonly<{
   standardCalendarReader: ReturnType<typeof createStandardMonthPageReader>
   calendarReminder: ReturnType<typeof registerCalendarEventReminder>
@@ -91,7 +93,12 @@ export function wireCalendarReadings(input: Readonly<{
   // 只读、零网络、不改数据；启动时的那一次盘点在 `syncOfficialStandardRowsAtStartup` 里。
   registerCalendarIntegrityJob(input.jobRuntime, {
     database: input.database,
-    log: (line) => { console.log(JSON.stringify(line)) }
+    log: (line) => { console.log(JSON.stringify(line)) },
+    // 注册那一行要能在 `app.log` 里 grep 到（用户 2026-11-19）：两个口都写。
+    announce: (message) => {
+      input.log?.('info', 'macro-calendar.job-registered', { message })
+      console.warn(message)
+    }
   })
   // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
   // A command, not a query — it opens network requests and writes attempts — so it is injected

@@ -51,7 +51,14 @@ function fakeRuntime(): {
 describe('日历数据一致性巡检作业', () => {
   it('注册即排上：definition 与 handler 同一个 id，一天一次', () => {
     const { runtime, handlers, schedules } = fakeRuntime()
-    registerCalendarIntegrityJob(runtime, { database: setup(), today: () => '2026-11-19' })
+    const announced: string[] = []
+    registerCalendarIntegrityJob(runtime, {
+      database: setup(), today: () => '2026-11-19', announce: (message) => { announced.push(message) }
+    })
+    // 启动日志是唯一的「不靠 IPC」验证口：必须带 id 和频率。
+    expect(announced).toHaveLength(1)
+    expect(announced[0]).toContain(`id=${CALENDAR_INTEGRITY_JOB_ID}`)
+    expect(announced[0]).toContain('每日')
     expect(schedules.get(CALENDAR_INTEGRITY_JOB_ID)).toEqual(calendarIntegrityDefinition())
     expect(handlers.has(CALENDAR_INTEGRITY_JOB_ID)).toBe(true)
     expect((calendarIntegrityDefinition() as { trigger: { intervalMs: number } }).trigger.intervalMs)

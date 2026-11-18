@@ -45,6 +45,11 @@ export type CalendarIntegrityJobDeps = Readonly<{
   /** 判「发布日已过」的今天；测试可注入。 */
   today?: () => string
   log?: (line: Readonly<{ marker: string } & CalendarIntegrityJobReport>) => void
+  /**
+   * 注册成功的**一行启动日志**（用户 2026-11-19 要求）：不靠主进程 IPC，也能在 `app.log` 里
+   * 验证「巡检作业真的排上了」。只报一次，跑完的那次巡检不走这里。
+   */
+  announce?: (message: string) => void
 }>
 
 export function registerCalendarIntegrityJob(
@@ -72,5 +77,7 @@ export function registerCalendarIntegrityJob(
 
   jobRuntime.registerHandler(CALENDAR_INTEGRITY_JOB_ID, async () => { runOnce() })
   jobRuntime.setSchedule(calendarIntegrityDefinition() as never)
+  deps.announce?.(`[macro-calendar] 巡检作业已注册 id=${CALENDAR_INTEGRITY_JOB_ID}`
+    + ` 频率=每日（间隔 ${CALENDAR_INTEGRITY_INTERVAL_MS / 60_000} 分钟）`)
   return { runOnce }
 }
