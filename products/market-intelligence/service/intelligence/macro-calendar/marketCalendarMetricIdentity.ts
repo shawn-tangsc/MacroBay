@@ -323,6 +323,38 @@ function previousMonthKey(scheduledAt: string): string {
   return date.toISOString().slice(0, 7)
 }
 
+/**
+ * 周度期次：**标题里带「至MMDD / to MMDD」时用源给的截止日**，否则退回按发布日推的上一周末。
+ *
+ * 为什么要这条：日本那批周度标题自带 `（至0925）`，那是源给的统计区间端点；而
+ * `previousWeekEndingKey` 是拿**发布时刻**倒推的，两者可能差几天，周度指标会串周。
+ *
+ * 三条保守规则（错了就退回原算法，绝不猜）：
+ * - 年份按**发布年**，拼出来的日期晚于发布日 → 退一年；
+ * - 拼出来比发布日早超过 **200 天** → 认为不可靠，退回；
+ * - 解析不出 → 退回。
+ * 只在 `week_end` 这一条路径生效，**美国既有周度（初请/EIA/MBA）标题没有这种端点，期次不变**。
+ */
+function weekEndKeyFor(scheduledAt: string, title: string | undefined): string {
+  const fallback = previousWeekEndingKey(scheduledAt)
+  if (title === undefined) return fallback
+  const match = /[（(]\s*(?:至|to)\s*(\d{2})(\d{2})\s*[）)]/iu.exec(title)
+  if (match === null) return fallback
+  const month = Number(match[1])
+  const day = Number(match[2])
+  if (month < 1 || month > 12 || day < 1 || day > 31) return fallback
+  const published = new Date(scheduledAt)
+  const publishedDay = isoDate(new Date(Date.UTC(published.getUTCFullYear(), published.getUTCMonth(), published.getUTCDate())))
+  const asThisYear = `${published.getUTCFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const candidate = asThisYear > publishedDay ? `${published.getUTCFullYear() - 1}-${asThisYear.slice(5)}` : asThisYear
+  const candidateDate = new Date(`${candidate}T00:00:00.000Z`)
+  const publishedDate = new Date(`${publishedDay}T00:00:00.000Z`)
+  if (Number.isNaN(candidateDate.getTime())) return fallback
+  // 早于发布日 200 天以上视为不可靠（防「至0105」在年末发布时被判到一年以前）。
+  if (publishedDate.getTime() - candidateDate.getTime() > 200 * 24 * 3600 * 1000) return fallback
+  return candidate
+}
+
 /** 参照周 = 发布日之前**最近的那个周六**（当天是周六就是当天）。 */
 function previousWeekEndingKey(scheduledAt: string): string {
   const date = new Date(scheduledAt)
@@ -349,6 +381,8 @@ function previousQuarterKey(scheduledAt: string): string {
  */
 export function zeroXRouterCanonicalIdentity(row: Readonly<{
   countryCode: string | null; indicatorId: string | null; scheduledAt: string
+  /** 源标题（可选）：**只用于周度期次**——标题里带 `（至MMDD）`/`(to MMDD)` 时优先用它。 */
+  title?: string
 }>): MarketCalendarCanonicalIdentity | undefined {
   if (!row.countryCode || !row.indicatorId) return undefined
   // 两个来源的 id 命名空间分开：0xrouter 自己那张表是「按来源拆」的起点（迁移后新增）。
@@ -366,7 +400,7 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
     return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey: row.scheduledAt.slice(0, 10) }
   }
   const periodKey = entry.periodRule === 'month' ? previousMonthKey(row.scheduledAt)
-    : entry.periodRule === 'week_end' ? previousWeekEndingKey(row.scheduledAt)
+    : entry.periodRule === 'week_end' ? weekEndKeyFor(row.scheduledAt, row.title)
     : previousQuarterKey(row.scheduledAt)
   return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey }
 }
