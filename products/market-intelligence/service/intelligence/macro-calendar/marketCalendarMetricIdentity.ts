@@ -1,4 +1,6 @@
-import { marketCalendarCountryAliases } from './marketCalendarCountryAliases'
+import {
+  marketCalendarCountryAliases, marketCalendarCountryCodeExceptions
+} from './marketCalendarCountryAliases'
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
 import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySourceMappings'
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
@@ -277,6 +279,20 @@ export function toAlpha3Country(code: string): string {
  * 显示国家名用的名表以 alpha-2 为键——不归一的话，`USA` 那些行的国家名会是空的，
  * 而「空」看起来就像「这条没有国家」。
  */
+/**
+ * 是不是「**归不成两位**的码」——判定标准是**能不能归成两位**，不是长度是不是 2（Chief 2026-11-18）。
+ *
+ * 按长度判会把合法 ISO alpha-3（`JPN`/`CAN`/`CHN`）误判成未知码：它们能反查成 JP/CA/CN，
+ * 真库里正是要归一的那 47 行——误判的后果不是「没归一」，而是**被当未知码跳过、行直接丢了**。
+ *
+ * 放在这里（而不是别名文件里）是**为了断开循环 import**：别名文件只放数据表，不引用任何实现。
+ */
+export function isUnknownCountryCode(code: string): boolean {
+  if (marketCalendarCountryCodeExceptions.includes(code)) return false
+  const alpha2 = toAlpha2Country(code)
+  return alpha2 === code && !/^[A-Z]{2}$/.test(code)
+}
+
 export function toAlpha2Country(code: string): string {
   if (marketCalendarCountryAliases[code] !== undefined) return marketCalendarCountryAliases[code]!
   /**

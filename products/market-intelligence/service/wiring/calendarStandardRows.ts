@@ -5,6 +5,7 @@ import { syncOfficialStandardRows } from '../intelligence/macro-calendar/marketC
 import { ensureOfficialHistoryReplayed } from '../intelligence/macro-calendar/marketCalendarOfficialHistoryReplay'
 import { mergeMPeriodStandardRows } from '../intelligence/macro-calendar/marketCalendarPeriodKeyMerge'
 import { normalizeCalendarCountryCodes } from '../intelligence/macro-calendar/marketCalendarCountryNormalization'
+import { normalizeObservationCountryAliases } from '../intelligence/macro-calendar/marketCalendarObservationCountryAliasNormalization'
 import { promoteSourceIdentities } from '../intelligence/macro-calendar/marketCalendarSourcePromotion'
 import { recomputeUnmappedReasons } from '../intelligence/macro-calendar/marketCalendarUnmappedReasonBackfill'
 import { normalizeSourcePeriods, normalizeSourcePeriodsByShape } from '../intelligence/macro-calendar/marketCalendarSourcePeriodMigration'
@@ -172,6 +173,12 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       if (observationCountries.updated > 0) {
         report(`[macro-calendar] 观测国家补齐：补 ${observationCountries.updated} 条`
           + `（${observationCountries.indicatorIds} 个 indicatorId）、补不了 ${observationCountries.unresolvable} 条`)
+      }
+      // **观测表国家码归一（迁移 26）**：UK/JPN/FRA… 这些别名与三位写法归成两位（Chief 2026-11-18）。
+      // 幂等、跑前备份；`EMU` 不动。放在标准表国家归一之前：观测是上游，先把它洗干净。
+      const observationAliases = normalizeObservationCountryAliases(database)
+      if (observationAliases.renamed > 0) {
+        report(`[macro-calendar] 观测国家码归一：扫描 ${observationAliases.scanned} 行、改写 ${observationAliases.renamed} 行`)
       }
       // 国家码归一（迁移 15）：`USA` 这类历史写法并回 alpha-2，撞行合并、台账同归一，幂等、有备份。
       const normalizedCountries = normalizeCalendarCountryCodes(database)
