@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { getMacroCalendarReleaseValueMapping } from './macroCalendarReleaseValueMappingPolicy'
+import { displayValueFromJson } from './marketCalendarValueEncoding'
 import { normalizeCalendarPeriodKey, normalizeCalendarSourceEventId } from './marketCalendarPeriodKey'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { recordCalendarUnmapped } from './marketCalendarStandardTable'
@@ -54,13 +55,8 @@ export type OfficialHistoryReplayReport = Readonly<{
   monthlyDiff: Readonly<Record<string, readonly string[]>>
 }>
 
-const displayOf = (json: string | null): string | undefined => {
-  if (json === null || json === '') return undefined
-  try {
-    const parsed = JSON.parse(json) as { displayValue?: unknown }
-    return typeof parsed.displayValue === 'string' ? parsed.displayValue : undefined
-  } catch { return undefined }
-}
+// 值编码的解释只有一处（`marketCalendarValueEncoding`）：这里不再各写一份。
+const displayOf = (json: string | null): string | undefined => displayValueFromJson(json)
 
 /** 一条修订 → 标准行（指标行用发布映射取码；FOMC 这类没有指标码的走事件码，身份到分钟）。 */
 function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {

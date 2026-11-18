@@ -8,12 +8,17 @@
  *
  * 用法：`pnpm tsx scripts/calendar-materialize-mapped-identities.mts <库路径> [--apply]`
  * 幂等：已有同国家+同码+同期的行就现有值不动；补过的条目从 `mi_calendar_unmapped` 移除。
+ *
+ * **`parser_version` 是「一次性补库」的标记**：跑过就留着，用来事后认出这批行
+ * （2026-11-18 那次值编码收敛就按它筛选）。**不许重复跑**——重跑会拿观测表里的旧值
+ * 覆盖运行时已经写好的行。
  */
 import { DatabaseSync } from 'node:sqlite'
 
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarStandardTable'
 import { marketCalendarCountrySourceMappings } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarCountrySourceMappings'
 import { periodFromSourceTitle } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarSourcePeriodFromTitle'
+import { displayValueFromJson } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarValueEncoding'
 
 const [dbPath, ...flags] = process.argv.slice(2)
 if (dbPath === undefined) {
@@ -58,7 +63,14 @@ try {
     // **源标题解析不出期次就跳过**：不猜、不按发布日推。
     const parsed = periodFromSourceTitle(String(observationRow.display_name ?? ''), scheduledDate)
     if (parsed === null) { skippedNoPeriod += 1; continue }
-    const actual = observationRow.provider_actual_json
+    /**
+     * **三个值都走同一处解码**（用户 2026-11-18）：观测表那三列是 `{displayValue}` 的 JSON 文本，
+     * 直接塞进 `values_json` 会双重编码（日报读出来是一条 JSON 串）。解析不出就**该字段缺席**，
+     * 不拿原文顶、不填空串。
+     */
+    const actual = displayValueFromJson(observationRow.provider_actual_json)
+    const previous = displayValueFromJson(observationRow.provider_previous_json)
+    const consensus = displayValueFromJson(observationRow.consensus_json)
     if (apply) {
       upsertCalendarStandardRow(database, {
         countryCode: observationRow.country_code, metricKey: entry.metricKey,
@@ -66,16 +78,15 @@ try {
         scheduledDate: (observationRow.scheduled_date ?? scheduledAt.slice(0, 10)),
         scheduledAt, timePrecision: 'minute',
         valuesJson: JSON.stringify({
-          ...(observationRow.provider_previous_json === null ? {} : { previous: observationRow.provider_previous_json }),
-          ...(observationRow.consensus_json === null ? {} : { consensus: observationRow.consensus_json }),
-          ...(actual === null ? {} : { actual })
+          ...(previous === undefined ? {} : { previous }),
+          ...(consensus === undefined ? {} : { consensus }),
+          ...(actual === undefined ? {} : { actual })
         }),
         sourceProviderId: 'narwhal', sourceEventId: row.source_key,
         parserVersion: 'materialize-mapped-v1', observedAt: new Date().toISOString(),
         firstSeenAt: new Date().toISOString(),
         identityKind: 'code', sourceLabel: undefined as unknown as string,
-        status: actual === null ? 'scheduled' : 'published',
-        ...(actual === null ? {} : {})
+        status: actual === undefined ? 'scheduled' : 'published',
       })
       remove.run(row.rowid)
     }

@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { MACRO_INDICATOR_RETIRED_METRIC_KEYS } from './macroIndicatorCardGroups'
+import { displayValueFromJson } from './marketCalendarValueEncoding'
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, toAlpha2Country, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
@@ -80,13 +81,8 @@ type ObservationRow = Readonly<{
   last_seen_at: string | null
 }>
 
-const displayOf = (json: string | null): string | undefined => {
-  if (json === null || json === '') return undefined
-  try {
-    const parsed = JSON.parse(json) as { displayValue?: unknown }
-    return typeof parsed.displayValue === 'string' ? parsed.displayValue : undefined
-  } catch { return undefined }
-}
+// 值编码的解释只有一处（`marketCalendarValueEncoding`）：这里不再各写一份。
+const displayOf = (json: string | null): string | undefined => displayValueFromJson(json)
 
 /**
  * 工作清单按「同一发布、同一原因」只记一次。
