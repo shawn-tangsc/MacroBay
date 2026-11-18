@@ -8173,8 +8173,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "MOSPI",
+      "url": "https://www.mospi.gov.in/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "印度统计部 · 数据入口"
     },
     "status": "active"
   },
@@ -11343,8 +11346,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "DOSM",
+      "url": "https://www.dosm.gov.my/portal-main/",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "马来西亚统计局 · 数据入口"
     },
     "status": "active"
   },
@@ -11364,8 +11370,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Statistics Norway",
+      "url": "https://www.ssb.no/en",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "挪威统计局 · 数据入口"
     },
     "status": "active"
   },
@@ -11385,8 +11394,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Statistics Norway",
+      "url": "https://www.ssb.no/en",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "挪威统计局 · 数据入口"
     },
     "status": "active"
   },

@@ -879,8 +879,11 @@
     "measure": "CHANGE",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "ADP Research",
+      "url": "https://adpemploymentreport.com/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ADP · 全国就业报告"
     },
     "status": "active"
   },
@@ -948,8 +951,11 @@
     "measure": "CHANGE",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
     },
     "status": "active"
   },
@@ -969,8 +975,11 @@
     "measure": "CHANGE",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
     },
     "status": "active"
   },
@@ -990,8 +999,11 @@
     "measure": "CHANGE",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
     },
     "status": "active"
   },
@@ -1011,8 +1023,11 @@
     "measure": "CHANGE",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
     },
     "status": "active"
   },
