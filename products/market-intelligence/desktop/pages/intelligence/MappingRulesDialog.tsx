@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Pagination, Select, Table } from 'antd'
+import { Button, Checkbox, Input, Pagination, Select, Table } from 'antd'
 
 import { Modal } from '@platform/ui/components/modal'
 import { helpTrigger } from '@platform/ui/components/popover'
@@ -49,6 +49,8 @@ export type MappingRulesText = Readonly<{
   codeEmpty: string
   unmappedColumns: Readonly<Record<'sourceId' | 'rows' | 'sample', string>>
   unmappedEmpty: string
+  /** 「只看有数据的」：860 个码里只有约 570 个真落过行，打开时第一眼该看到有内容的。 */
+  onlyWithData: string
   exportLabel: string
   /**
    * ⓘ 里的说明句**在这里解析**，不由调用方把整句传进来：说明句只允许出现在浮层入口，
@@ -92,6 +94,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
   onRetry?: () => void
 }>): React.ReactElement {
   const [query, setQuery] = useState('')
+  const [onlyWithData, setOnlyWithData] = useState(false)
   /** 国家筛选：`''` = 全部国家（默认）。选项从**同一份码表数据**派生，不另查一次。 */
   const [country, setCountry] = useState('')
   const [tab, setTab] = useState<'codes' | 'unmapped'>('codes')
@@ -110,10 +113,20 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
     return [{ value: '', label: text.countryAll },
       ...[...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))]
   }, [codes, text.countryAll, text.unknownCountry])
-  const codeRows = useMemo(() => (codes?.state === 'available'
-    ? codes.rows.filter((row) => hit([row.code, row.names.zhFull, row.names.enFull]))
+  /**
+   * 码表默认**按数据量降序**（用户 2026-11-18）：860 个码里近 290 个一行数据都没有，按码名排序时
+   * 最上面全是空壳，读者第一眼看到的应当是「有内容的」。同数量按码名，顺序才稳定。
+   * 「只看有数据的」把 0 行的那批直接收起来——那批不是错，只是还没落过数据。
+   */
+  const codeRows = useMemo(() => {
+    if (codes?.state !== 'available') return []
+    const rows = codes.rows
+      .filter((row) => hit([row.code, row.names.zhFull, row.names.enFull]))
       .filter((row) => country === '' || (row.countryName ?? text.unknownCountry) === country)
-    : []), [codes, needle, country, text.unknownCountry])
+      .filter((row) => !onlyWithData || row.releaseRowCount > 0)
+    return [...rows].sort((left, right) =>
+      right.releaseRowCount - left.releaseRowCount || left.code.localeCompare(right.code))
+  }, [codes, needle, country, onlyWithData, text.unknownCountry])
   const unmappedRows = useMemo(() => (view?.state === 'available'
     ? view.unmapped.filter((row) => hit([row.sourceId, row.sampleLabel, row.sampleLabelEn]))
     : []), [view, needle])
@@ -238,6 +251,13 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
       <div className="mi-catalog__filters">
         <Input allowClear value={query} placeholder={text.filter} aria-label={text.filter}
           onChange={(event) => { setQuery(event.target.value); setCodePage(1); setUnmappedPage(1) }} />
+        {/* 只在码表页签有意义：未映射那一页本来就是「没落的行」。 */}
+        {tab === 'unmapped' ? null : <span className="mi-catalog__only-data" data-only-with-data>
+          <Checkbox checked={onlyWithData}
+            onChange={(event) => { setOnlyWithData(event.target.checked); setCodePage(1) }}>
+            {text.onlyWithData}
+          </Checkbox>
+        </span>}
         {/* 国家筛选取同一份码表数据；「全部国家」是默认，切回它不该还要再点一次清除。 */}
         <Select size="small" value={country} aria-label={text.countryFilter} options={[...countryOptions]}
           onChange={(value) => { setCountry(value); setCodePage(1) }} data-country-filter />

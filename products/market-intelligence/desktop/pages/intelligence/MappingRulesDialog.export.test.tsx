@@ -32,7 +32,7 @@ const text = {
   tabCodes: mkDay.mappingTabCodes, tabUnmapped: mkDay.mappingTabUnmapped,
   tabsAria: mkDay.mappingTabsAria, unavailable: mkDay.mappingUnavailable,
   codeColumns: mkDay.mappingCodeColumns, codeStatus: mkDay.mappingCodeStatus,
-  unknownCountry: '未知国家',
+  onlyWithData: mkDay.mappingOnlyWithData, unknownCountry: '未知国家',
   officialOpen: mkDay.mappingOfficialOpen, officialPending: mkDay.mappingOfficialPending,
   officialNone: mkDay.mappingOfficialNone, codeEmpty: mkDay.mappingCodeEmpty,
   unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
@@ -46,18 +46,19 @@ const codeRow = (code: string, extra: Partial<CodeTableReadRow> = {}): CodeTable
   names: { zhFull: '核心 PCE 年率', zhShort: '核心 PCE', enFull: 'Core PCE (YoY)', enShort: 'Core PCE' },
   countryCode: 'US', countryName: '美国',
   tier: 1 as const, measure: 'YOY', seasonality: 'NSA', status: 'active' as const, reason: null,
+  releaseRowCount: 12,
   officialSource: { agency: 'BEA', url: 'https://www.bea.gov/x', pageKind: 'release' as const,
     verifiedAt: '2026-11-17', basis: '发布目录' },
-  sourceIdCount: 2, releaseRowCount: 12, ...extra
+  sourceIdCount: 2, ...extra
 })
 const codes: CodeTableRead = {
   state: 'available',
   rows: [
     codeRow('US.CORE_PCE.NSA.YOY'),
     // 这条没有源认得、库里也没有发布行：两格都要写 0（不是空、不是「待补」）。
-    codeRow('US.NO_SOURCE.NONE.LEVEL', { status: 'pending', reason: 'official-source-todo', countryCode: null, countryName: null,
-      officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0, releaseRowCount: 0 }),
-    codeRow('US.NOT_BUILT.NONE.LEVEL', { status: 'not-built', reason: 'no-reader', countryCode: null, countryName: null,
+    codeRow('US.NO_SOURCE.NONE.LEVEL', { status: 'pending', reason: 'official-source-todo', countryCode: null, countryName: null, releaseRowCount: 5,
+      officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 }),
+    codeRow('US.NOT_BUILT.NONE.LEVEL', { status: 'not-built', reason: 'no-reader', countryCode: null, countryName: null, releaseRowCount: 0,
       officialSource: { pending: true, reason: 'official-source-todo' }, sourceIdCount: 0 })
   ],
   counts: { total: 3, metric: 3, event: 0, withOfficialSource: 1, pendingOfficialSource: 2 }
@@ -133,7 +134,7 @@ it('keeps the code tail visible, and never leaves the official cell blank or a d
   const cellAt = (row: Element, index: number): string => row.querySelectorAll('td')[index]?.textContent ?? ''
   expect(cellAt(body[1]!, 7)).toBe('0')
   expect(cellAt(body[0]!, 7)).toBe('2')
-  expect(cellAt(body[1]!, 8)).toBe('0')
+  expect(cellAt(body[1]!, 8)).toBe('5')
   expect(cellAt(body[0]!, 8)).toBe('12')
 })
 
@@ -202,4 +203,24 @@ it('shows nine columns with data volume next to source ids, sortable, and a coun
   const select = document.body.querySelector('[data-country-filter]')
   expect(select, '没有国家筛选取').not.toBeNull()
   expect(document.body.textContent).toContain('全部国家')
+})
+
+/**
+ * 码表默认按**数据量降序**，并且「只看有数据的」能把 0 行的码收起来（用户 2026-11-18）：
+ * 860 个码里近 290 个一行数据都没有，按码名排序时最上面全是空壳，第一眼看不到有内容的行。
+ */
+it('orders the code table by data volume and can hide codes that have no rows', async () => {
+  await mount()
+  const codesText = (): string[] => rows().map((row) => row.querySelectorAll('td')[0]?.textContent ?? '')
+  // 12 行的核心 PCE 在最上，0 行的不建码垫底。
+  expect(codesText()[0]).toContain('US.CORE_PCE')
+  expect(codesText().at(-1)).toContain('US.NOT_BUILT')
+
+  const toggle = document.body.querySelector('[data-only-with-data] input') as HTMLInputElement
+  expect(toggle, '没有「只看有数据的」开关').not.toBeNull()
+  await act(async () => { toggle.click() })
+  await act(async () => { await Promise.resolve() })
+  // 0 行的那条被收起来，剩下的都真有数据。
+  expect(rows()).toHaveLength(2)
+  expect(document.body.textContent).not.toContain('US.NOT_BUILT')
 })

@@ -226,6 +226,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
   const mappingCopyText = useMemo<MappingRulesText>(() => ({
     title: text.mkDay.mappingTitle, filter: text.mkDay.mappingFilter,
     tabCodes: text.mkDay.mappingTabCodes, tabUnmapped: text.mkDay.mappingTabUnmapped,
+    onlyWithData: text.mkDay.mappingOnlyWithData,
     tabsAria: text.mkDay.mappingTabsAria, unavailable: text.mkDay.mappingUnavailable,
     codeColumns: text.mkDay.mappingCodeColumns, codeStatus: text.mkDay.mappingCodeStatus,
     countryAll: text.mkDay.mappingCountryAll, countryFilter: text.mkDay.mappingCountryFilter,
