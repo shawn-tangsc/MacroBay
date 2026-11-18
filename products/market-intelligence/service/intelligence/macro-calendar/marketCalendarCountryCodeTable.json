@@ -560,8 +560,8 @@
     "names": {
       "zhFull": "澳洲联储公布利率决议和货币政策声明",
       "zhShort": "澳洲联储公布利率决议和货币政策声明",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Reserve Bank of Australia cash rate",
+      "enShort": "Reserve Bank of Australia cash rate"
     },
     "tier": null,
     "parentCode": null,
@@ -1063,8 +1063,8 @@
     "names": {
       "zhFull": "巴西央行公布利率决议",
       "zhShort": "巴西央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Banco Central do Brasil Selic rate",
+      "enShort": "Banco Central do Brasil Selic rate"
     },
     "tier": null,
     "parentCode": null,
@@ -1830,8 +1830,8 @@
     "names": {
       "zhFull": "隔夜目标利率",
       "zhShort": "隔夜目标利率",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Bank of Canada overnight rate",
+      "enShort": "Bank of Canada overnight rate"
     },
     "tier": null,
     "parentCode": null,
@@ -5016,8 +5016,8 @@
     "names": {
       "zhFull": "",
       "zhShort": "",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "ECB main refinancing rate",
+      "enShort": "ECB main refinancing rate"
     },
     "tier": null,
     "parentCode": null,
@@ -7255,8 +7255,8 @@
     "names": {
       "zhFull": "官方银行利率",
       "zhShort": "官方银行利率",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Bank of England Bank Rate",
+      "enShort": "Bank of England Bank Rate"
     },
     "tier": null,
     "parentCode": null,
@@ -8143,8 +8143,8 @@
     "names": {
       "zhFull": "印尼央行公布利率决议",
       "zhShort": "印尼央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Bank Indonesia BI rate",
+      "enShort": "Bank Indonesia BI rate"
     },
     "tier": null,
     "parentCode": null,
@@ -8164,8 +8164,8 @@
     "names": {
       "zhFull": "印度央行公布利率决议",
       "zhShort": "印度央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Reserve Bank of India repo rate",
+      "enShort": "Reserve Bank of India repo rate"
     },
     "tier": null,
     "parentCode": null,
@@ -11079,8 +11079,8 @@
     "names": {
       "zhFull": "韩国央行公布利率决议",
       "zhShort": "韩国央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Bank of Korea base rate",
+      "enShort": "Bank of Korea base rate"
     },
     "tier": null,
     "parentCode": null,
@@ -11316,8 +11316,8 @@
     "names": {
       "zhFull": "墨西哥央行公布利率决议",
       "zhShort": "墨西哥央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Banco de Mexico target rate",
+      "enShort": "Banco de Mexico target rate"
     },
     "tier": null,
     "parentCode": null,
@@ -11337,8 +11337,8 @@
     "names": {
       "zhFull": "马来西亚央行公布利率决议",
       "zhShort": "马来西亚央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Bank Negara Malaysia overnight policy rate",
+      "enShort": "Bank Negara Malaysia overnight policy rate"
     },
     "tier": null,
     "parentCode": null,
@@ -11385,8 +11385,8 @@
     "names": {
       "zhFull": "挪威央行公布利率决议",
       "zhShort": "挪威央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Norges Bank policy rate",
+      "enShort": "Norges Bank policy rate"
     },
     "tier": null,
     "parentCode": null,
@@ -11794,8 +11794,8 @@
     "names": {
       "zhFull": "新西兰联储公布利率决议",
       "zhShort": "新西兰联储公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Reserve Bank of New Zealand official cash rate",
+      "enShort": "Reserve Bank of New Zealand official cash rate"
     },
     "tier": null,
     "parentCode": null,
@@ -12059,8 +12059,8 @@
     "names": {
       "zhFull": "菲律宾央行公布利率决议",
       "zhShort": "菲律宾央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "BSP reverse repo rate",
+      "enShort": "BSP reverse repo rate"
     },
     "tier": null,
     "parentCode": null,
@@ -12080,8 +12080,8 @@
     "names": {
       "zhFull": "俄罗斯央行公布利率决议",
       "zhShort": "俄罗斯央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Bank of Russia key rate",
+      "enShort": "Bank of Russia key rate"
     },
     "tier": null,
     "parentCode": null,
@@ -12122,8 +12122,8 @@
     "names": {
       "zhFull": "瑞典央行公布利率决议",
       "zhShort": "瑞典央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Riksbank policy rate",
+      "enShort": "Riksbank policy rate"
     },
     "tier": null,
     "parentCode": null,
@@ -12456,8 +12456,8 @@
     "names": {
       "zhFull": "泰国央行公布利率决议",
       "zhShort": "泰国央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Bank of Thailand 1-day repo rate",
+      "enShort": "Bank of Thailand 1-day repo rate"
     },
     "tier": null,
     "parentCode": null,
@@ -12477,8 +12477,8 @@
     "names": {
       "zhFull": "土耳其央行公布利率决议",
       "zhShort": "土耳其央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "Central Bank of the Republic of Turkiye policy rate",
+      "enShort": "Central Bank of the Republic of Turkiye policy rate"
     },
     "tier": null,
     "parentCode": null,
@@ -12772,8 +12772,8 @@
     "names": {
       "zhFull": "乌克兰央行公布利率决议",
       "zhShort": "乌克兰央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "National Bank of Ukraine key policy rate",
+      "enShort": "National Bank of Ukraine key policy rate"
     },
     "tier": null,
     "parentCode": null,
@@ -15285,8 +15285,8 @@
     "names": {
       "zhFull": "南非央行公布利率决议",
       "zhShort": "南非央行公布利率决议",
-      "enFull": "European Central Bank refinancing rate",
-      "enShort": "European Central Bank refinancing rate"
+      "enFull": "South African Reserve Bank repo rate",
+      "enShort": "South African Reserve Bank repo rate"
     },
     "tier": null,
     "parentCode": null,
