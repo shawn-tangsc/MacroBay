@@ -182,6 +182,19 @@ export type CalendarStandardRow = Readonly<{
  * 写一行标准事件。**修订覆盖值，但冻结首发布两列**——`on conflict` 的 `do update` 里
  * 刻意不出现 `first_published_*`，也不写 `first_seen_at`。
  */
+/** `values_json` 里有没有**非空的 `actual`**（空串与 null 都算没有——那比缺失更糟）。 */
+function hasActualValue(valuesJson: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(valuesJson)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false
+    const actual = (parsed as Record<string, unknown>).actual
+    if (actual === null || actual === undefined) return false
+    return typeof actual !== 'string' || actual.trim() !== ''
+  } catch {
+    return false
+  }
+}
+
 /** 取 `raw_json` 里某个字段的原文值（取不到返回 null，供 SQL 比较；不解析成业务类型）。 */
 function jsonField(rawJson: string, field: string): string | null {
   try {
@@ -333,8 +346,10 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       labels.sourceLabel, labels.sourceLabelEn,
       row.seriesId ?? null,
       row.importance ?? null,
-      // 没传就**从值本身推**：物化列不允许留空——空着会被视图当「没值」折掉。
-      row.valueState ?? (row.valuesJson === '{}' ? 'missing' : 'present'),
+      // 没传就**从值本身推**（用户 2026-11-19 定严格口径）：**只有 `actual` 非空才算 present**，
+      // 只有 `previous`/`consensus` 一律 `missing`——旧写法「valuesJson 不是 {}」就 present
+      // 会把「只有前值」标成有值，全库 496 行就是这么错的。
+      row.valueState ?? (hasActualValue(row.valuesJson) ? 'present' : 'missing'),
       valuesJson, row.sourceProviderId, sourceEventId, row.parserVersion, row.observedAt, row.firstSeenAt,
       row.firstPublishedActual ?? null, row.firstPublishedPrevious ?? null,
       // 数据时刻不传就按写入时刻算：没有这一级的来源不许因为「不知道数据时刻」而永远覆盖不了。

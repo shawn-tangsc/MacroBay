@@ -38,3 +38,14 @@ describe('缺值原因：列与三条约束', () => {
 })
 
 const n0 = (row: { n: number }): number => row.n
+
+describe('第四条守卫：`present` ⇔ `actual` 非空（用户 2026-11-19 定）', () => {
+  it('库内不存在「present 但没有 actual」的行', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    // 空库天然为 0；真正的红证在真库上：改定义前有 496 行违例。
+    const rows = database.prepare(`select count(*) as n from mi_calendar_events
+      where value_state = 'present' and json_extract(values_json, '$.actual') is null`).get() as { n: number }
+    expect(rows.n).toBe(0)
+  })
+})

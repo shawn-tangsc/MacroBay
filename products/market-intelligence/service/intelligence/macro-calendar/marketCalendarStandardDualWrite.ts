@@ -127,9 +127,15 @@ export function dualWriteMeasureRows(
         ...(row.sourceLabel === undefined ? {} : { sourceLabel: row.sourceLabel }),
         ...(row.seriesId === undefined ? {} : { seriesId: row.seriesId }),
         ...(row.importance === undefined ? {} : { importance: row.importance }),
-        // **由这份值本身算**，不从调用方传：物化列一旦允许调用方随便传，就会漂。
-        valueState: writable.actual === undefined && writable.previous === undefined && writable.consensus === undefined
-          ? 'missing' as const : 'present' as const,
+        /**
+         * **只有拿到这一期的实际值才算「有值」**（用户 2026-11-19 定，Chief 复核）：
+         * 只有 `previous` 或 `consensus` 一律 `missing`。
+         *
+         * 旧定义是「三者有一个就算 present」，于是某期只有前值时读者看到的是「有值」，而界面上根本没数——
+         * 全库 496 行（占 present 的 19%）就是这么来的。**空串与 null 也算没值**（比缺失更糟：
+         * 看起来像「有值但是空的」）。
+         */
+        valueState: writable.actual === undefined ? 'missing' as const : 'present' as const,
         valuesJson: JSON.stringify({
           ...(writable.consensus === undefined ? {} : { consensus: writable.consensus }),
           ...(writable.previous === undefined ? {} : { previous: writable.previous }),
