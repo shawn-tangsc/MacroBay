@@ -1,3 +1,4 @@
+import { marketCalendarCountryAliases } from './marketCalendarCountryAliases'
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
 import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySourceMappings'
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
@@ -277,17 +278,14 @@ export function toAlpha3Country(code: string): string {
  * 而「空」看起来就像「这条没有国家」。
  */
 export function toAlpha2Country(code: string): string {
+  if (marketCalendarCountryAliases[code] !== undefined) return marketCalendarCountryAliases[code]!
   /**
    * 源给的三位写法里，有几个**不是 ISO alpha-3**，而是常见缩写或 IOC 码（`PHI` 是菲律宾的 IOC 码，
    * ISO 是 `PHL`）。库里实测到这几种：`FRA / ITA / AUS / PHI / SIN / INA`——补一张显式别名表，
    * 因为靠 alpha-3 反查永远命中不了它们，那 50 行就会一直是三位写法。
    */
-  const aliases: Record<string, string> = {
-    UK: 'GB', SIN: 'SG', INA: 'ID', PHI: 'PH', FRA: 'FR', ITA: 'IT', AUS: 'AU', GER: 'DE', USA: 'US',
-    // `BEL`（比利时）是合法 alpha-3，但反查表里没有 `BE` 这一条——真库里它一直是三位写法。
-    BEL: 'BE'
-  }
-  if (aliases[code] !== undefined) return aliases[code]!
+  // 别名表**只在这里定义一次**（`marketCalendarCountryAliases`），写入端与清理脚本共用。
+  if (marketCalendarCountryAliases[code] !== undefined) return marketCalendarCountryAliases[code]!
   for (const [alpha2, alpha3] of Object.entries(alpha3ByAlpha2)) {
     if (alpha3 === code) return alpha2
   }
