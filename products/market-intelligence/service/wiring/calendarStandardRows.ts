@@ -122,10 +122,16 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
         report(`[macro-calendar] 跨源合并：${crossSource.groups} 组里合并 ${crossSource.mergedGroups} 组、`
           + `删 ${crossSource.removedRows} 行；值冲突保留 ${crossSource.conflictedGroups} 组`)
       }
-      // 事件国家按机构归属（迁移 19）：威廉姆斯归 USA、拉加德/连恩归 EMU——按机构，不按开会地点。
+      // 事件国家按机构归属（每次启动都跑，不是一次性迁移）：威廉姆斯归 US、拉加德/连恩归 EMU——按机构，不按开会地点。
       const countryFixed = fixCalendarEventCountries(database)
-      if (countryFixed.updated > 0) {
-        report(`[macro-calendar] 事件国家修正：扫描 ${countryFixed.scanned} 条规则、改写 ${countryFixed.updated} 行`)
+      if (countryFixed.updated > 0 || countryFixed.merged > 0) {
+        report(`[macro-calendar] 事件国家修正：扫描 ${countryFixed.scanned} 行、改写 ${countryFixed.updated} 行、`
+          + `撞主键合并删 ${countryFixed.merged} 行`)
+      }
+      // 待补清单：改正后仍有身份同一期挂在两个国家下，说明规则表漏了，下次启动还会冒。
+      if (countryFixed.ambiguousIdentities.length > 0) {
+        report(`[macro-calendar] 事件国家待补：${countryFixed.ambiguousIdentities.length} 个身份仍挂在两个国家下`
+          + `（${countryFixed.ambiguousIdentities.slice(0, 5).join('、')}）`)
       }
       // FOMC 各次会议被标成「经济指标」（迁移 20）：身份不变，只把类别改回事件。
       const fomcFixed = fixFomcEventTypes(database)

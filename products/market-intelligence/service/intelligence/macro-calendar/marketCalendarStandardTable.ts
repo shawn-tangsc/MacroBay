@@ -183,7 +183,7 @@ export type CalendarStandardRow = Readonly<{
  * 刻意不出现 `first_published_*`，也不写 `first_seen_at`。
  */
 /** `values_json` 里有没有**非空的 `actual`**（空串与 null 都算没有——那比缺失更糟）。 */
-function hasActualValue(valuesJson: string): boolean {
+export function hasActualValue(valuesJson: string): boolean {
   try {
     const parsed: unknown = JSON.parse(valuesJson)
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return false
