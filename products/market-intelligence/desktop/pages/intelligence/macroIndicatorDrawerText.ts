@@ -204,8 +204,10 @@ export const macroIndicatorDrawerText = {
         'no-values': '这次没带数值'
       },
       mappingReasonFilter: '按原因筛选', mappingReasonAll: '全部原因',
-      mappingDiagnosticsTitle: '诊断：没进日历的东西',
-      mappingDiagnosticsNote: '这些不在上面的列表里——它们各有去处，点开能看具体是哪几条。',
+      /* 分级用星级：列里和筛选项同一套写法；读屏名写全（「一级（三颗星）」），不只念符号。 */
+      mappingTierStars: { '1': '★★★', '2': '★★', '3': '★', other: '—' },
+      mappingTierAria: { '1': '一级（三颗星）', '2': '二级（两颗星）', '3': '三级（一颗星）', other: '未分级' },
+      mappingTierFilterMulti: '按分级筛选（可多选）', mappingCountryFilterMulti: '按国家筛选（可多选）',
       catalogTitle: '全部事件',
       catalogOpenAria: '打开全部事件表',
       catalogNameFilter: '按名称筛选（中英均可）',
@@ -375,8 +377,9 @@ export const macroIndicatorDrawerText = {
         'no-values': 'No values in this release'
       },
       mappingReasonFilter: 'Filter by reason', mappingReasonAll: 'All reasons',
-      mappingDiagnosticsTitle: 'Diagnostics: what did not reach the calendar',
-      mappingDiagnosticsNote: 'Not in the list above — each has its own next step. Expand to see which rows.',
+      mappingTierStars: { '1': '★★★', '2': '★★', '3': '★', other: '—' },
+      mappingTierAria: { '1': 'Tier 1 (three stars)', '2': 'Tier 2 (two stars)', '3': 'Tier 3 (one star)', other: 'Untiered' },
+      mappingTierFilterMulti: 'Filter by tier (multi)', mappingCountryFilterMulti: 'Filter by country (multi)',
       catalogTitle: 'All events',
       catalogOpenAria: 'Open the full event table',
       catalogNameFilter: 'Filter by name (any language)',

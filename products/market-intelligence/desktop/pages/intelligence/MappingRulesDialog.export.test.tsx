@@ -38,7 +38,8 @@ const text = {
   unmappedColumns: mkDay.mappingUnmappedColumns, unmappedEmpty: mkDay.mappingUnmappedEmpty,
   unmappedReasons: mkDay.mappingUnmappedReasons, reasonFilter: mkDay.mappingReasonFilter,
   reasonAll: mkDay.mappingReasonAll,
-  diagnosticsTitle: mkDay.mappingDiagnosticsTitle, diagnosticsNote: mkDay.mappingDiagnosticsNote,
+  tierStars: mkDay.mappingTierStars, tierAria: mkDay.mappingTierAria,
+  tierFilterMulti: mkDay.mappingTierFilterMulti, countryFilterMulti: mkDay.mappingCountryFilterMulti,
   countryAll: mkDay.mappingCountryAll, countryFilter: mkDay.mappingCountryFilter,
   exportLabel: mkDay.mappingExport,
   resolveCopy: (key: string) => (mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
@@ -72,12 +73,8 @@ const view: MappingRulesRead = {
   unmapped: [{ sourceId: '10267', rowCount: 8, firstSeenAt: '2026-11-17T02:00:00.000Z',
     providerIds: ['0xrouter'], reason: 'no-code' as const,
     sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }],
-  diagnosticRows: { 'no-code': [{ sourceId: '10267', rowCount: 8, firstSeenAt: '2026-11-17T02:00:00.000Z',
-    providerIds: ['0xrouter'], reason: 'no-code' as const,
-    sampleLabel: '5-10 年通胀预期', sampleLabelEn: null }] },
   counts: { mapped: 0, unmapped: 1, unmappedRows: 8, eventIdentities: 99,
-    diagnostics: { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 1 },
-    unclassified: 0 }
+    diagnostics: { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 1 } }
 }
 
 let root: Root | undefined
@@ -212,7 +209,8 @@ it('shows nine columns with data volume next to source ids, sortable, and a coun
   // 国家下拉存在、默认「全部国家」，选项与数据同一份（美国 / 未知国家）。
   const select = document.body.querySelector('[data-country-filter]')
   expect(select, '没有国家筛选取').not.toBeNull()
-  expect(document.body.textContent).toContain('全部国家')
+  expect(document.body.textContent).toContain('按国家筛选（可多选）')
+  expect(document.body.textContent).toContain('按分级筛选（可多选）')
 })
 
 /**
@@ -261,8 +259,21 @@ it('explains the empty state and shows first-seen, sources and the raw title on 
     .find((tab) => (tab.textContent ?? '').includes('未映射')) as HTMLElement
   await act(async () => { emptyTab.click() })
   expect(document.body.textContent).toContain('暂无未收录的新事件')
-  // 主列表空着，但诊断区仍能查到那几条：折叠块里带 原因 · 标题 · 首次出现 · 来源。
-  expect(document.body.querySelector('[data-diagnostics]')).not.toBeNull()
-  expect(document.body.querySelectorAll('[data-diagnostic-row]')).toHaveLength(1)
-  expect(document.body.textContent).toContain('没有对应的码')
+  // **主列表就是「所有没进日历的」**（用户 2026-11-18 最终口径）：空态只在真的 0 条时出现。
+  // 这一例把 unmapped 清空，才该看到那句空态文案；非空时列表直接列。
+  expect(document.body.textContent).toContain('暂无未收录的新事件')
+})
+
+/**
+ * 分级用星级（用户 2026-11-18）：列里 `★★★/★★/★/—`，读屏名写全；两个筛选项都是多选。
+ * 同一筛选内部是「或」，两个筛选之间是「且」。
+ */
+it('shows tiers as stars with a spoken label, and both filters are multi-select', async () => {
+  await mount()
+  const stars = document.body.querySelector('[data-tier]')!
+  expect(stars.textContent).toBe('★★★')
+  expect(stars.getAttribute('aria-label')).toBe('一级（三颗星）')
+  // 两个筛选项都是多选：antd 多选的可清除标签容器与单选不同，用属性区分。
+  expect(document.body.querySelector('[data-country-filter]')?.className).toContain('ant-select-multiple')
+  expect(document.body.querySelector('[data-tier-filter]')?.className).toContain('ant-select-multiple')
 })

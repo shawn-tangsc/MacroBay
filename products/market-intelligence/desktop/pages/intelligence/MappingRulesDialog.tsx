@@ -39,8 +39,8 @@ export type MappingRulesText = Readonly<{
   tabsAria: string
   unavailable: string
   codeColumns: Readonly<Record<'code' | 'country' | 'name' | 'tier' | 'measure' | 'official' | 'status' | 'sourceIds' | 'dataVolume', string>>
-  /** 国家筛选的两个词：「全部国家」与那颗下拉的读屏名。 */
-  countryAll: string
+
+  /** 旧单选时代的两条文案，现在多选不再需要「全部」选项。 */
   countryFilter: string
   /**
    * 事件类型码的国家说明（列头 ⓘ）：它们不是「国家未知」，而是「这一类没有单一主办国」，
@@ -57,8 +57,10 @@ export type MappingRulesText = Readonly<{
   unmappedReasons: Readonly<Record<string, string>>
   reasonFilter: string
   reasonAll: string
-  diagnosticsTitle: string
-  diagnosticsNote: string
+  tierStars: Readonly<Record<'1' | '2' | '3' | 'other', string>>
+  tierAria: Readonly<Record<'1' | '2' | '3' | 'other', string>>
+  tierFilterMulti: string
+  countryFilterMulti: string
   unmappedEmpty: string
   /** 「只看有数据的」：860 个码里只有约 570 个真落过行，打开时第一眼该看到有内容的。 */
   onlyWithData: string
@@ -109,8 +111,10 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
   const [onlyWithData, setOnlyWithData] = useState(false)
   /** 原因筛选：`''` = 全部。选项只列**当前这批行里真实出现过的原因**，不铺满七档。 */
   const [reason, setReason] = useState('')
-  /** 国家筛选：`''` = 全部国家（默认）。选项从**同一份码表数据**派生，不另查一次。 */
-  const [country, setCountry] = useState('')
+  /** 国家筛选（**多选**）：空数组 = 全部。选项从同一份码表数据派生，不另查一次。 */
+  const [countries, setCountries] = useState<readonly string[]>([])
+  /** 分级筛选（**多选**）：空数组 = 全部。档位键 `1|2|3|other`。 */
+  const [tiers, setTiers] = useState<readonly string[]>([])
   const [tab, setTab] = useState<'codes' | 'unmapped'>('codes')
   const [codePage, setCodePage] = useState(1)
   const [unmappedPage, setUnmappedPage] = useState(1)
@@ -125,9 +129,17 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
     const seen = new Set<string>()
     // 事件类型码没有国家：筛选里用「—」这一档，不写成「未知国家」。
     for (const row of codes.rows) seen.add(row.countryName ?? '—')
-    return [{ value: '', label: text.countryAll },
-      ...[...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))]
-  }, [codes, text.countryAll])
+    return [...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))
+  }, [codes])
+  /** 分级选项：只列**当前表里真实出现过**的档位，同样用星级写法。 */
+  const tierOptions = useMemo(() => {
+    if (codes?.state !== 'available') return [] as { value: string; label: string }[]
+    const seen = new Set<string>()
+    for (const row of codes.rows) seen.add(row.tier === null ? 'other' : String(row.tier))
+    const order = ['1', '2', '3', 'other'] as const
+    return order.filter((key) => seen.has(key))
+      .map((key) => ({ value: key, label: text.tierStars[key] ?? key }))
+  }, [codes, text.tierStars])
   /**
    * 码表默认**按数据量降序**（用户 2026-11-18）：860 个码里近 290 个一行数据都没有，按码名排序时
    * 最上面全是空壳，读者第一眼看到的应当是「有内容的」。同数量按码名，顺序才稳定。
@@ -137,11 +149,14 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
     if (codes?.state !== 'available') return []
     const rows = codes.rows
       .filter((row) => hit([row.code, row.names.zhFull, row.names.enFull]))
-      .filter((row) => country === '' || (row.countryName ?? '—') === country)
+      // **同一筛选内部是「或」，两个筛选之间是「且」**（用户 2026-11-18）。
+      .filter((row) => countries.length === 0 || countries.includes(row.countryName ?? '—'))
+      .filter((row) => tiers.length === 0
+        || tiers.includes(row.tier === null ? 'other' : String(row.tier)))
       .filter((row) => !onlyWithData || row.releaseRowCount > 0)
     return [...rows].sort((left, right) =>
       right.releaseRowCount - left.releaseRowCount || left.code.localeCompare(right.code))
-  }, [codes, needle, country, onlyWithData])
+  }, [codes, needle, countries, tiers, onlyWithData])
   const unmappedRows = useMemo(() => {
     if (view?.state !== 'available') return []
     return view.unmapped
@@ -205,7 +220,13 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
         {
           // 分级与口径**分开两列**（用户 2026-11-17）：一格两件事，读者分不清哪个是级别。
           title: text.codeColumns.tier, width: CODE_TABLE_COLUMN_WIDTHS.tier, className: 'mi-catalog__cell-nowrap',
-          render: (_value: unknown, row) => <span data-tier>{row.tier === null ? '' : String(row.tier)}</span>
+          // 分级用**星级**（一级★★★ / 二级★★ / 三级★ / 未分级 —），读屏名写全，不只念符号。
+          render: (_value: unknown, row) => {
+            const key = row.tier === null ? 'other' : String(row.tier) as '1' | '2' | '3'
+            return <span data-tier={key} aria-label={text.tierAria[key]} className="mi-catalog__tier-stars">
+              {text.tierStars[key]}
+            </span>
+          }
         },
         {
           title: text.codeColumns.measure, width: CODE_TABLE_COLUMN_WIDTHS.measure,
@@ -236,36 +257,6 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
         }
       ]} />
 
-  /**
-   * **诊断区**（用户 2026-11-18）：主列表只放「新出现、码表里没有的」，正常情况下是空的；
-   * 那四类各有去处，但「没有对应的码」那 61 条任何时刻都得查得到——所以折叠在下面，
-   * **只读、不混进主列表**。
-   */
-  // 旧载荷可能没有这一段（诊断区是后加的）：缺了就当没有，不把整张表判成崩。
-  const diagnostics = view?.state === 'available' && view.diagnosticRows !== undefined
-    ? (Object.entries(view.diagnosticRows) as [string, readonly UnmappedSourceIdRow[]][])
-      .filter(([, list]) => list.length > 0)
-    : []
-  const diagnosticsPanel = diagnostics.length === 0 ? null : <section className="mi-catalog__diagnostics"
-    data-diagnostics>
-    <h3>{text.diagnosticsTitle}</h3>
-    <p className="mi-catalog__note">{text.diagnosticsNote}</p>
-    {diagnostics.map(([reason, list]) => <CollapsibleGroup key={reason}
-      titleText={text.unmappedReasons[reason] ?? reason} metaText={String(list.length)}
-      resolveText={(key) => key} maxBodyHeight={240}>
-      <ul className="mi-catalog__diagnostic-list">
-        {list.map((row) => <li key={`${reason}:${row.sourceId}`} data-diagnostic-row>
-          <span className="mi-catalog__cell-nowrap">{row.sourceId}</span>
-          <span className="mi-catalog__diagnostic-title">{sampleText(row)}</span>
-          <span className="mi-catalog__footer-label">
-            {row.firstSeenAt === null ? '' : formatTime(row.firstSeenAt, 'second')}
-            {row.providerIds.length === 0 ? '' : ` · ${row.providerIds.join(' · ')}`}
-          </span>
-        </li>)}
-      </ul>
-    </CollapsibleGroup>)}
-  </section>
-
   const unmappedPanel = <>
     {unmappedRows.length === 0
       ? <p className="mi-catalog__note">{text.unmappedEmpty}</p>
@@ -288,7 +279,6 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
           render: (value: string) => <span data-unmapped-reason={value}>{text.unmappedReasons[value] ?? value}</span>
         }
       ]} />}
-    {diagnosticsPanel}
   </>
 
   const loading = view === undefined || codes === undefined
@@ -337,9 +327,16 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, onRetry }
             {text.onlyWithData}
           </Checkbox>
         </span>}
-        {/* 国家筛选取同一份码表数据；「全部国家」是默认，切回它不该还要再点一次清除。 */}
-        <Select size="small" value={country} aria-label={text.countryFilter} options={[...countryOptions]}
-          onChange={(value) => { setCountry(value); setCodePage(1) }} data-country-filter />
+        {/* **两个筛选都多选**（用户 2026-11-18）：同一筛选内是「或」，两者之间是「且」。
+            清空（点 ×）就是全部，不需要一个「全部」选项占一格。 */}
+        <Select mode="multiple" allowClear size="small" className="mi-catalog__filter-select"
+          value={[...countries]} aria-label={text.countryFilterMulti} placeholder={text.countryFilterMulti}
+          options={[...countryOptions]} onChange={(value) => { setCountries(value); setCodePage(1) }}
+          data-country-filter maxTagCount="responsive" />
+        <Select mode="multiple" allowClear size="small" className="mi-catalog__filter-select"
+          value={[...tiers]} aria-label={text.tierFilterMulti} placeholder={text.tierFilterMulti}
+          options={tierOptions} onChange={(value) => { setTiers(value); setCodePage(1) }}
+          data-tier-filter maxTagCount="responsive" />
       </div>
       <div className="mi-catalog__table">{body}</div>
       <div className="mi-catalog__footer">

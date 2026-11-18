@@ -50,6 +50,13 @@ function seed(): DatabaseSync {
     status: 'published' as const, valuesJson: '{}', sourceProviderId: '0xrouter',
     sourceEventId: 'speech-2026-11-05', parserVersion: 'v1', observedAt: now, firstSeenAt: now
   })
+  // 未映射表是**唯一真源**（用户 2026-11-18）：主列表从这里取，所以夹具要有一条。
+  database.exec(`create table if not exists mi_calendar_unmapped
+    (provider_id text, source_key text, detected_at text, raw_json text, reason text,
+     first_seen_at text, last_seen_at text)`)
+  database.exec(`insert into mi_calendar_unmapped
+    (provider_id, source_key, detected_at, raw_json, reason, first_seen_at, last_seen_at)
+    values ('0xrouter', '["999999",79090]', '${now}', '{"name":"未识别指标"}', 'no-code', '${now}', '${now}')`)
   // 合并过的行带英文原文名（迁移 18 把英文那条并入 `source_label_en`）。
   database.prepare(`update mi_calendar_events set source_label_en = ?
     where source_label = '11月未识别指标'`).run('Unidentified indicator(Nov)')
@@ -123,10 +130,10 @@ describe('映射规则表读口', () => {
      * 夹具里那条没有任何映射、也没有观测的 `999999` 因此归 `no-code` 档，不进列表——
      * 「没有码」本身就说明它在等建码，不是「等映射」。
      */
-    expect(read.unmapped).toHaveLength(0)
-    expect(read.counts.unmapped).toBe(0)
+    // 夹具里那条没有映射的 `999999` 就在未映射表里——**没进日历的都必须出现在列表里**。
+    expect(read.unmapped.map((row) => row.sourceId)).toContain('999999')
+    expect(read.counts.unmapped).toBeGreaterThanOrEqual(1)
     expect(read.counts.diagnostics['no-code']).toBeGreaterThanOrEqual(1)
-    expect(read.counts.unclassified).toBe(0)
     // **已经认得出来的 id 不许再报「未映射」**：三张表里任何一张认得都算。报错了读者会去补已经做完的事。
     for (const mappedId of ['214790', '213844', '8637']) {
       expect(read.unmapped.some((row) => row.sourceId === mappedId), mappedId).toBe(false)
@@ -168,9 +175,8 @@ describe('未映射列表排除四类诊断原因', () => {
     const read = readCalendarMappingRules(database)
     if (read.state !== 'available') throw new Error('unavailable')
     const listed = read.unmapped.map((row) => row.sourceId)
-    // 四类诊断一条都不进列表（`999999` 也被现场判成 `no-code`，同样不进）。
-    expect(listed).toHaveLength(0)
-    for (const hidden of ['999999', '700001', '700002', '700003', '700004']) expect(listed).not.toContain(hidden)
+    // **主列表现在是「所有没进日历的」**（用户 2026-11-18 最终口径）：四类全列出来，一条都不藏。
+    for (const shown of ['700001', '700002', '700003', '700004']) expect(listed).toContain(shown)
     expect(read.counts.diagnostics['unknown-event-type']).toBe(1)
     expect(read.counts.diagnostics['no-standard-row']).toBe(1)
     // `bad-period` 与 `period-unresolved` 归同一档：旧库写法不许再占一个数。
@@ -203,11 +209,12 @@ describe('现场判定分类', () => {
     })
     const read = readCalendarMappingRules(database)
     if (read.state !== 'available') throw new Error('unavailable')
+    // 这条 id 在未映射表里没有记录，所以它不在主列表里——**主列表的唯一真源是那张表**，
+    // 不从观测表反推（用户 2026-11-18 定的第 3 条）。它的「为什么没进来」由 completeness 守卫保证落表。
     expect(read.unmapped.map((row) => row.sourceId)).not.toContain('800001')
     // 事件归事件档；夹具里那条没有任何映射的 `999999` 归无码档。
-    expect(read.counts.diagnostics['unknown-event-type']).toBe(1)
+    // 计数只反映未映射表里记下的原因——这条 id 没落表，所以事件档是 0；`999999` 那条在的算无码档。
     expect(read.counts.diagnostics['no-code']).toBeGreaterThanOrEqual(1)
-    expect(read.counts.unclassified, JSON.stringify({ d: read.counts.diagnostics, l: read.unmapped.map(r=>r.sourceId) })).toBe(0)
     expect(read.counts.unmapped).toBe(read.unmapped.length)
   })
 })

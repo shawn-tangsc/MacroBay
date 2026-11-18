@@ -126,7 +126,6 @@ export type MappingRulesRead = Readonly<{
    *
    * 数据来自 `mi_calendar_unmapped`（唯一真源，一行一个 id），不再从观测表反推。
    */
-  diagnosticRows: Readonly<Partial<Record<UnmappedReason, readonly UnmappedSourceIdRow[]>>>
   counts: Readonly<{
     mapped: number
     /** **只算真正在等映射的**（事件/无标准行/缺期次/无码都排除，见 `diagnostics`）。 */
@@ -137,8 +136,6 @@ export type MappingRulesRead = Readonly<{
     diagnostics: Readonly<{
       'unknown-event-type': number; 'no-standard-row': number; 'period-unresolved': number; 'no-code': number
     }>
-    /** 现场判定四类都命不中的 id 数（列表里的就是这些）。 */
-    unclassified: number
   }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
 
@@ -147,6 +144,14 @@ function earliest(left: string | null, right: string | null): string | null {
   if (left === null) return right
   if (right === null) return left
   return left < right ? left : right
+}
+
+/** 未映射行的 `raw_json` 里可能带源给的标题（`name`）：取它兜底，取不到就空着，不编。 */
+function titleFromRaw(rawJson: string): string | null {
+  try {
+    const parsed = JSON.parse(rawJson) as { name?: unknown }
+    return typeof parsed.name === 'string' && parsed.name.trim() !== '' ? parsed.name.trim() : null
+  } catch { return null }
 }
 
 /** `["214790",79090]` → `214790`（与事件读口同一个取法，只取第一段）。 */
@@ -277,104 +282,58 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
      * 477 里绝大多数不是「该映射却没映射」：讲话/会议是事件、缺统计期的映射早就写了、无标准行的
      * 连一行都没有。它们各有去处，**只作计数**，不进列表——否则读者照着补映射，补的是已经做完的事。
      */
-    const DIAGNOSTIC_ONLY = new Set(['unknown-event-type', 'no-standard-row', 'period-unresolved',
-      'bad-period', 'no-code'])
     const reasonById = new Map<string, string>()
-    const reasonRows = database.prepare(`select provider_id, source_key, reason, first_seen_at
+    const reasonRows = database.prepare(`select provider_id, source_key, reason, first_seen_at, raw_json
       from mi_calendar_unmapped`).all() as unknown as
-      { provider_id: string; source_key: string; reason: string; first_seen_at: string | null }[]
+      { provider_id: string; source_key: string; reason: string; first_seen_at: string | null; raw_json: string }[]
     for (const row of reasonRows) {
       const id = sourceIdOfSourceKey(row.source_key)
       if (id !== undefined && !reasonById.has(id)) reasonById.set(id, row.reason)
     }
     const diagnostics = { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 0 }
     /**
-     * **现场判定分类，不依赖「有没有一行原因记录」**（用户 2026-11-18）。
+     * **主列表 = 所有没进日历的东西**（用户 2026-11-18 最终口径）。
      *
-     * 上一版只排除「未映射表里写着原因」的 id，于是 80 条「从来没被诊断过」的会永远挂在列表里——
-     * 那 80 条不是「在等映射」，是没人给它们分过类。现在按回填同一条规则现场判：
-     * ① 观测里 `eventKind` 是事件 → 事件档；② 没有对应码 → 无码档；③ 有码没期次 → 缺期次档；
-     * ④ 有码有期次、标准表没有行 → 无标准行档。**四类都命不中**的才留在列表里，并单列「未分类」计数——
-     * 不静默隐藏，也不默认列出来。
+     * 之前按「有没有在等我们填」分主列表和折叠诊断区，读者看到的是 0 条，会误以为「全映射完了」。
+     * 这张表就是「没进来的一切」：事件、没进标准表、缺统计期、没有对应的码——全部列出来，
+     * 每条带原因，**新出现的排最前**。数据只从 `mi_calendar_unmapped` 取（唯一真源），不从别处反推。
      */
-    const eventKindById = new Map<string, string>()
-    // 观测表可能还没建（例如只读夹具只建标准表）：缺表时按「没有观测」处理，不把整张表判成读不到。
-    const hasObservations = database.prepare(
-      `select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'`
-    ).get() !== undefined
-    const observationRows = hasObservations
-      ? database.prepare(`select source_event_id, event_kind
-        from mi_macro_calendar_market_event_observations`).all() as unknown as
-        { source_event_id: string; event_kind: string | null }[]
-      : []
-    for (const row of observationRows) {
-      const id = sourceIdOfSourceKey(row.source_event_id)
-      if (id === undefined || row.event_kind === null || eventKindById.has(id)) continue
-      eventKindById.set(id, row.event_kind)
+    const labelById = new Map<string, { zh: string | null; en: string | null }>()
+    for (const entry of byId.values()) {
+      labelById.set(entry.sourceId, { zh: entry.sampleLabel, en: entry.sampleLabelEn })
     }
-    const isEventKind = (kind: string | undefined): boolean =>
-      kind === 'central-bank-activity' || kind === 'financial-event' || kind === 'event'
-    const rowCountById = new Map<string, number>()
-    for (const entry of byId.values()) rowCountById.set(entry.sourceId, entry.rows)
-    let unclassified = 0
-    const reasonFor = new Map<string, UnmappedReason>()
-    const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
-      .filter((entry) => !recognized.has(entry.sourceId))
-      .filter((entry) => {
-        // 先看未映射表里已经记下的原因（回填的结论），再现场判。
-        // **判定顺序按 Chief 定的来**：先看是不是事件，再看有没有码——记录下来的原因放在后面，
-        // 免得「回填时判成 no-code、其实观测里写着它是事件」这种分岔留在数据里没人发现。
-        const recorded = reasonById.get(entry.sourceId)
-        const bucket = isEventKind(eventKindById.get(entry.sourceId)) ? 'unknown-event-type'
-          : recorded === 'bad-period' ? 'period-unresolved'
-            : recorded !== undefined && recorded in diagnostics ? recorded
-              // 没有映射表认得它 = 没有码。有码的那批根本不会进这个列表（recognized 先过滤掉了）。
-              : 'no-code'
-        // **列表只留「四类都判不出来」的**（用户 2026-11-18 的验收标准：页签空着才正常）。
-        // 四类各有去处，只进计数；它们的逐行入口在诊断计数里，不在这个列表。
-        if (bucket in diagnostics) { diagnostics[bucket as keyof typeof diagnostics] += 1; return false }
-        unclassified += 1
-        reasonFor.set(entry.sourceId, bucket as UnmappedReason)
-        return true
-      })
-      .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows,
-        firstSeenAt: entry.firstSeenAt, providerIds: Object.freeze(entry.providerIds),
-        reason: reasonFor.get(entry.sourceId) ?? 'no-code',
-        sampleLabel: entry.sampleLabel, sampleLabelEn: entry.sampleLabelEn }))
-      .sort((left, right) => right.rowCount - left.rowCount || left.sourceId.localeCompare(right.sourceId))
-    /**
-     * 诊断明细：只读 `mi_calendar_unmapped`（唯一真源），一行一个 id。
-     * 标题从事件行取（同一 id 可能有多行，取第一份有名字的）；取不到就空着，不编。
-     */
-    const diagnosticRows: Partial<Record<UnmappedReason, UnmappedSourceIdRow[]>> = {}
-    for (const row of reasonRows) {
+    const unmapped: UnmappedSourceIdRow[] = reasonRows.flatMap((row) => {
       const id = sourceIdOfSourceKey(row.source_key)
-      if (id === undefined) continue
-      const reason = row.reason as UnmappedReason
-      const aggregate = byId.get(id)
-      const entry = Object.freeze({
-        sourceId: id, rowCount: aggregate?.rows ?? 0,
-        firstSeenAt: row.first_seen_at ?? null, providerIds: Object.freeze([row.provider_id]),
-        reason, sampleLabel: aggregate?.sampleLabel ?? null, sampleLabelEn: aggregate?.sampleLabelEn ?? null
-      })
-      diagnosticRows[reason] = [...(diagnosticRows[reason] ?? []), entry]
-    }
-    for (const reason of Object.keys(diagnosticRows) as UnmappedReason[]) {
-      diagnosticRows[reason] = [...diagnosticRows[reason]!].sort((left, right) =>
-        (left.firstSeenAt ?? '').localeCompare(right.firstSeenAt ?? '') || left.sourceId.localeCompare(right.sourceId))
-    }
+      if (id === undefined) return []
+      // 表里可能还有旧写法 `bad-period`：它与 `period-unresolved` 同档（日历读口同一口径）。
+      const rawReason: string = row.reason
+      const reason = rawReason as UnmappedReason
+      const bucket = rawReason === 'bad-period' ? 'period-unresolved' : reason
+      if (bucket in diagnostics) diagnostics[bucket as keyof typeof diagnostics] += 1
+      const labels = labelById.get(id)
+      return [Object.freeze({
+        sourceId: id,
+        rowCount: byId.get(id)?.rows ?? 0,
+        firstSeenAt: row.first_seen_at,
+        providerIds: Object.freeze([row.provider_id]),
+        reason,
+        sampleLabel: labels?.zh ?? titleFromRaw(row.raw_json),
+        sampleLabelEn: labels?.en ?? null
+      })]
+    })
+      // **首次出现倒序**：新出现的排最前——「新事件」一眼就能看到；没有时间的沉到最后。
+      .sort((left, right) => (right.firstSeenAt ?? '').localeCompare(left.firstSeenAt ?? '')
+        || left.sourceId.localeCompare(right.sourceId))
     return Object.freeze({
       state: 'available' as const,
       mapped: Object.freeze(mapped),
       unmapped: Object.freeze(unmapped),
-      diagnosticRows: Object.freeze(diagnosticRows),
       counts: Object.freeze({ mapped: mapped.length, unmapped: unmapped.length,
         unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0),
         eventIdentities: Object.keys(zeroXRouterEventIdentities).length,
         /** 只作诊断：这四类各有去处，不进列表（加起来才是读者原先看到的 477）。 */
         diagnostics: Object.freeze(diagnostics),
-        /** 四类都命不中、也查不到原因记录的 id 数：不静默隐藏，也不默认列出来。 */
-        unclassified })
+        })
     })
   } catch {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }
