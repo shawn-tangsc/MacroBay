@@ -22,6 +22,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
+import { groupKeyOf } from './marketCalendarUnmappedGrouping'
 import { marketCalendarCodeTable } from './marketCalendarCodeTable'
 import { marketCalendarCountryCodeTable } from './marketCalendarCountryCodeTable'
 import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySourceMappings'
@@ -85,6 +86,48 @@ UnmappedReasonReport {
   const eventRow = database.prepare(`select country_code, identity_kind from ${eventsTable}
     where source_event_id = ? limit 1`)
 
+  /**
+   * **「已解决」按同一场发布判**（Chief 2026-11-18）：中英两条只有一条能落标准行，按 key 逐条比会
+   * 只清掉一半（109 件写进去、168 只降到 113）。判定改用「**这一场里任一条 locale 的 key 在标准表
+   * 有带码行**」，分组键与 `groupUnmappedByRelease` 同一份实现（`groupKeyOf`，不复制一份）。
+   *
+   * **没有源内 id 的行退回按自己的 `source_event_id` 精确比对**：不许借别人的行判已解决。
+   */
+  const sourceIdOf = (sourceKey: string): string => {
+    try {
+      const parsed: unknown = JSON.parse(sourceKey)
+      if (Array.isArray(parsed) && parsed.length > 0) return String(parsed[0])
+    } catch { /* 不是 JSON 就整串当 id */ }
+    return sourceKey
+  }
+  const releaseKeyOfRow = (sourceKey: string, rawJson: string): string => {
+    let scheduledAt = ''
+    try {
+      const parsed: unknown = JSON.parse(rawJson)
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const value = (parsed as Record<string, unknown>).scheduledAt
+        if (typeof value === 'string') scheduledAt = value
+      }
+    } catch { /* 坏 JSON 按空时刻处理，分组自然只跟自己一组 */ }
+    return groupKeyOf({ sourceId: sourceIdOf(sourceKey), scheduledAt, scheduledDate: '', title: '',
+      reason: '', hasStandardRow: false })
+  }
+  /**
+   * **从标准表这侧建索引**：带码的行自己带 `scheduled_at` 与 `source_event_id`，
+   * 用「源内 id 第一段 + 排期时刻」算出它属于哪一场发布——不依赖未映射那条 key 与库里存的
+   * `source_event_id` 逐字相等（写入端有「先到的赢」规则，存下来的 id 未必是我插入时那个）。
+   */
+  const keyHasCodeRow = new Map<string, boolean>()
+  const codeRows = database.prepare(`select source_event_id, scheduled_at from ${eventsTable}
+    where identity_kind = 'code'`).all() as { source_event_id: string; scheduled_at: string | null }[]
+  for (const row of codeRows) {
+    const key = groupKeyOf({
+      sourceId: sourceIdOf(row.source_event_id), scheduledAt: row.scheduled_at ?? '', scheduledDate: '',
+      title: '', reason: '', hasStandardRow: false
+    })
+    keyHasCodeRow.set(key, true)
+  }
+
   const deletions: number[] = []
   const updates: { rowid: number; reason: string }[] = []
   const counts: Record<string, number> = {}
@@ -108,9 +151,13 @@ UnmappedReasonReport {
       { country_code: string | null; identity_kind: string } | undefined
     const country = event?.country_code ?? null
 
+    // 无源内 id 的行（`source_key` 不是数组）不并件：只看自己这条 key 有没有带码行。
+    const resolvedByRelease = sourceIdOf(row.source_key) !== row.source_key
+      && keyHasCodeRow.get(releaseKeyOfRow(row.source_key, row.raw_json)) === true
+
     let reason: string
     if (eventKind !== '' && eventKind !== 'economic-indicator') reason = 'unknown-event-type'
-    else if (event?.identity_kind === 'code') reason = 'stale'
+    else if (resolvedByRelease || event?.identity_kind === 'code') reason = 'stale'
     // 没有标准行：当年因缺国家被跳过，之后没人写回来——它不在等映射（没有行可挂）。
     else if (event === undefined) reason = 'no-standard-row'
     else if (country === null) reason = 'no-code'

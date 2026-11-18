@@ -104,3 +104,50 @@ describe('名字规范化：区间括号（2026-11-18）', () => {
     expect(reasonsOf(database)).toEqual([{ reason: 'period-unresolved' }])
   })
 })
+
+describe('「已解决」按同一场发布判（2026-11-18）', () => {
+  it('同一场发布中英两条、只落了一条带码的行 → 两条都算已解决', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const raw = (name: string) => JSON.stringify({
+      name, indicatorId: 4127, scheduledAt: '2026-11-17T06:00:00.000Z', eventKind: 'economic-indicator'
+    })
+    // 源内 id 用真实的数组形状（分组键取第一段），否则两条不会被认成同一场发布。
+    recordCalendarUnmapped(database, { providerId: '0xrouter', sourceKey: '["4127",1]',
+      detectedAt: '2026-11-16T10:00:00.000Z', rawJson: raw('10月失业率'), reason: 'no-standard-row' })
+    // 第二条是「另一条 locale」：同 indicatorId + 同 scheduledAt，但 key 不同。
+    database.prepare(`insert or ignore into mi_calendar_unmapped
+      (provider_id, source_key, detected_at, raw_json, reason) values (?,?,?,?,?)`)
+      .run('0xrouter', '["4127",2]', '2026-11-16T10:01:00.000Z', raw('unemployment rate'), 'period-unresolved')
+    // 标准行的排期时刻必须与源给的一致——判定按「源内 id + 排期时刻」对齐同一场发布。
+    upsertCalendarStandardRow(database, standardRow({
+      sourceEventId: '["4127",1]', countryCode: 'GB', identityKind: 'code',
+      scheduledAt: '2026-11-17T06:00:00.000Z'
+    }))
+    recomputeUnmappedReasons(database)
+    expect(reasonsOf(database)).toEqual([])
+  })
+
+  it('没有 indicatorId → 仍按 source_event_id 精确判，不借别人的 key', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    recordCalendarUnmapped(database, { providerId: 'narwhal', sourceKey: 'r-9',
+      detectedAt: '2026-11-16T10:00:00.000Z', rawJson: JSON.stringify({ name: '没有 id 的一条' }), reason: 'no-standard-row' })
+    upsertCalendarStandardRow(database, standardRow({ sourceEventId: 'r-other', countryCode: 'GB', identityKind: 'code' }))
+    recomputeUnmappedReasons(database)
+    expect(reasonsOf(database)).toEqual([{ reason: 'no-standard-row' }])
+  })
+
+  it('同一时刻、不同 indicatorId → 互不影响，不因时刻相同被判已解决', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const raw = (id: number) => JSON.stringify({ name: 'x', indicatorId: id, scheduledAt: '2026-11-17T06:00:00.000Z' })
+    recordCalendarUnmapped(database, { providerId: '0xrouter', sourceKey: 'a-1',
+      detectedAt: '2026-11-16T10:00:00.000Z', rawJson: raw(1), reason: 'no-standard-row' })
+    recordCalendarUnmapped(database, { providerId: '0xrouter', sourceKey: 'b-1',
+      detectedAt: '2026-11-16T10:01:00.000Z', rawJson: raw(2), reason: 'no-standard-row' })
+    upsertCalendarStandardRow(database, standardRow({ sourceEventId: 'a-1', countryCode: 'GB', identityKind: 'code' }))
+    recomputeUnmappedReasons(database)
+    expect(reasonsOf(database)).toEqual([{ reason: 'no-standard-row' }])
+  })
+})
