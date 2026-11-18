@@ -56,15 +56,14 @@ describe('启动链：syncOfficialStandardRowsAtStartup', () => {
    * **启动零网络盘点**（用户 2026-11-19 定）：源不可用（等价「启动时网络不通」）时，
    * 应用照常起来、盘点照样跑、欠账数被记进日志，且不抛错。
    */
-  it('启动时源不可用：盘点仍跑并记录欠账数，不阻断启动', () => {
+  it('启动时源不可用：规范化与盘点都照跑并记录欠账数，不阻断启动', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
-    // 种一条 ①（标着有值、其实只有前值）当欠账样本。
+    // 种一条「期次解不出」的欠账样本：规范化**不该**动它，盘点必须如实记下这条。
     upsertCalendarStandardRow(database, {
-      ...sourceRow(), countryCode: 'US', metricKey: 'US.TEST.NONE.LEVEL', sourceEventId: 'x-audit',
-      valuesJson: '{"previous":"1.0"}', identityKind: 'code', periodKey: '2026-10',
+      ...sourceRow(), countryCode: 'US', metricKey: '["999999",1]', sourceEventId: '["999999",1]',
+      identityKind: 'source', periodKey: 'unknown:["999999",1]', scheduledDate: '2026-11-10',
     })
-    database.prepare("update mi_calendar_events set value_state = 'present'").run()
     const lines: string[] = []
     expect(() => syncOfficialStandardRowsAtStartup({
       database,
@@ -74,7 +73,7 @@ describe('启动链：syncOfficialStandardRowsAtStartup', () => {
     })).not.toThrow()
     const auditLine = lines.find((line) => line.includes('数据一致性盘点'))
     expect(auditLine).toBeDefined()
-    expect(auditLine).toContain('present无值 1')
+    expect(auditLine).toContain('期次未解 1')
     expect(auditLine).toContain('有缺口')
   })
 })

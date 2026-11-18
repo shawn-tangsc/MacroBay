@@ -20,6 +20,7 @@ import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
 import { auditCalendarIntegrity, calendarIntegrityGaps } from '../intelligence/macro-calendar/marketCalendarIntegrityAudit'
+import { normalizeCalendarStandardRows } from '../intelligence/macro-calendar/marketCalendarStartupNormalization'
 
 /**
  * **一次性历史补值**的接线（管欠账，管未来的是采集作业末尾那次扫描）。
@@ -229,6 +230,29 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     }
   } catch (error) {
     report(`[macro-calendar] 官方发布入标准表失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
+  }
+  /**
+   * **启动链幂等规范化**（用户 2026-11-19 批）：重算 `value_state` → 桶一 → 期次解析 → 桶二。
+   *
+   * 与盘点同样放在外层 `try` 之外：源不可用不该顺带把库里的存量整理也取消掉。
+   * 顺序是**先清后验**（规范化在前、盘点在后），所以它必须单独一次 try：
+   * 失败只记一行日志、写明原因，不阻断启动，也不能让后面的盘点跟着不跑。
+   * 在真库 2908 行上实测首轮 ~340ms（脏库 3517 行）/ 第二轮 17ms，远低于 2 秒预算。
+   */
+  try {
+    const startedAt = Date.now()
+    const normalized = normalizeCalendarStandardRows(input.database, { nowIso: new Date().toISOString() })
+    const elapsedMs = Date.now() - startedAt
+    const changed = normalized.valueStateToPresent + normalized.valueStateToMissing + normalized.periodsResolved
+      + normalized.droppedRows
+    if (changed > 0) {
+      report(`[macro-calendar] 启动规范化：重算 ${normalized.valueStateToPresent + normalized.valueStateToMissing} 行`
+        + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
+        + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
+        + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、耗时 ${elapsedMs}ms`)
+    }
+  } catch (error) {
+    report(`[macro-calendar] 启动规范化失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
   }
   /**
    * **启动零网络盘点**（用户 2026-11-19 定）：五项扫描只读，不和任何源打交道。
