@@ -1040,8 +1040,8 @@
     "kind": "metric",
     "countryCode": "BR",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "隔夜利率",
+      "zhShort": "隔夜利率",
       "enFull": "overnight rate",
       "enShort": "overnight rate"
     },
@@ -1155,8 +1155,8 @@
     "kind": "metric",
     "countryCode": "CA",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "就业人数变动（千人）",
+      "zhShort": "就业人数变动",
       "enFull": "Changes in employed population",
       "enShort": "Changes in employed population"
     },
@@ -1371,8 +1371,8 @@
     "kind": "metric",
     "countryCode": "CA",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "全国经济信心指数",
+      "zhShort": "经济信心",
       "enFull": "National Economic Confidence Index([P])",
       "enShort": "National Economic Confidence Index([P])"
     },
@@ -3157,8 +3157,8 @@
     "kind": "metric",
     "countryCode": "CN",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "五年期贷款市场报价利率",
+      "zhShort": "五年期 LPR",
       "enFull": "Five-Year Loan Prime Rate",
       "enShort": "Five-Year Loan Prime Rate"
     },
@@ -4269,8 +4269,8 @@
     "kind": "metric",
     "countryCode": "DE",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "季调后失业人数换算值（待核）",
+      "zhShort": "失业换算值",
       "enFull": "transmutation in seasonally adjusted une",
       "enShort": "transmutation in seasonally adjusted une"
     },
@@ -5014,8 +5014,8 @@
     "kind": "metric",
     "countryCode": "EMU",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "主要再融资利率",
+      "zhShort": "再融资利率",
       "enFull": "ECB main refinancing rate",
       "enShort": "ECB main refinancing rate"
     },
@@ -5568,8 +5568,8 @@
     "kind": "metric",
     "countryCode": "FR",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "消费者物价指数（月率）",
+      "zhShort": "CPI 月率",
       "enFull": "Consumer Price Index (MoM)",
       "enShort": "Consumer Price Index (MoM)"
     },
@@ -6290,8 +6290,8 @@
     "kind": "metric",
     "countryCode": "GB",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "企业投资总额初值（年率）",
+      "zhShort": "企业投资初值",
       "enFull": "Total business investment (YoY)",
       "enShort": "Total business investment (YoY)"
     },
@@ -6531,8 +6531,8 @@
     "kind": "metric",
     "countryCode": "GB",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "消费者物价指数（年率）",
+      "zhShort": "CPI 年率",
       "enFull": "Consumer Price Index (YoY)",
       "enShort": "Consumer Price Index (YoY)"
     },
@@ -7639,8 +7639,8 @@
     "kind": "metric",
     "countryCode": "GB",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "商业地产投资总额初值（待核）",
+      "zhShort": "商业地产初值",
       "enFull": "starting value value of total commercial",
       "enShort": "starting value value of total commercial"
     },
@@ -8120,8 +8120,8 @@
     "kind": "metric",
     "countryCode": "ID",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "印尼央行政策利率",
+      "zhShort": "政策利率",
       "enFull": "policy rate",
       "enShort": "policy rate"
     },
@@ -8330,8 +8330,8 @@
     "kind": "metric",
     "countryCode": "IT",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "国内生产总值（季率）",
+      "zhShort": "GDP 季率",
       "enFull": "GDP(QoQ)",
       "enShort": "GDP(QoQ)"
     },
@@ -8814,8 +8814,8 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "家庭消费支出（月率）",
+      "zhShort": "家庭消费",
       "enFull": "All household expenditures (MoM)",
       "enShort": "All household expenditures (MoM)"
     },
@@ -9393,8 +9393,8 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "上周买进外国债券",
+      "zhShort": "买进外国债券",
       "enFull": "Purchased foreign bonds last week",
       "enShort": "Purchased foreign bonds last week"
     },
@@ -9441,8 +9441,8 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "上周外资买进日本股票",
+      "zhShort": "外资买日股",
       "enFull": "Foreign investors bought Japan stocks la",
       "enShort": "Foreign investors bought Japan stocks la"
     },
@@ -9465,10 +9465,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周外资买进日股(十亿日元)(至1120)",
-      "zhShort": "上周外资买进日股(十亿日元)(至1120)",
-      "enFull": "Foreign investors bought Japan stocks last day (billion yen)(to 1120)",
-      "enShort": "Foreign investors bought Japan stocks last day (billion yen)(to 1120)"
+      "zhFull": "上周外资买进日股(十亿日元)",
+      "zhShort": "上周外资买进日股(十亿日元)",
+      "enFull": "Foreign investors bought Japan stocks last day (billion yen)",
+      "enShort": "Foreign investors bought Japan stocks last day (billion yen)"
     },
     "tier": null,
     "parentCode": null,
@@ -9489,10 +9489,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周外资买进日股(十亿日元)(至1030)",
-      "zhShort": "上周外资买进日股(十亿日元)(至1030)",
-      "enFull": "Foreign investors bought Japan stocks last day (billion yen)(to 1120) (Level)",
-      "enShort": "Foreign investors bought Japan stocks last day (billion yen)(to 1120) (Level)"
+      "zhFull": "上周外资买进日股(十亿日元)",
+      "zhShort": "上周外资买进日股(十亿日元)",
+      "enFull": "Foreign investors bought Japan stocks last day (billion yen) (Level)",
+      "enShort": "Foreign investors bought Japan stocks last day (billion yen) (Level)"
     },
     "tier": null,
     "parentCode": null,
@@ -9513,8 +9513,8 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "上周买进外国股票",
+      "zhShort": "买进外国股票",
       "enFull": "Purchased foreign stocks last week",
       "enShort": "Purchased foreign stocks last week"
     },
@@ -10018,10 +10018,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周买进外国债券(十亿日元)(至1120)",
-      "zhShort": "上周买进外国债券(十亿日元)(至1120)",
-      "enFull": "Purchased foreign bonds last week (billion yen)(to 1120)",
-      "enShort": "Purchased foreign bonds last week (billion yen)(to 1120)"
+      "zhFull": "上周买进外国债券(十亿日元)",
+      "zhShort": "上周买进外国债券(十亿日元)",
+      "enFull": "Purchased foreign bonds last week (billion yen)",
+      "enShort": "Purchased foreign bonds last week (billion yen)"
     },
     "tier": null,
     "parentCode": null,
@@ -10042,10 +10042,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周买进外国债券(十亿日元)(至1030)",
-      "zhShort": "上周买进外国债券(十亿日元)(至1030)",
-      "enFull": "Purchased foreign bonds last week (billion yen)(to 1120) (Level)",
-      "enShort": "Purchased foreign bonds last week (billion yen)(to 1120) (Level)"
+      "zhFull": "上周买进外国债券(十亿日元)",
+      "zhShort": "上周买进外国债券(十亿日元)",
+      "enFull": "Purchased foreign bonds last week (billion yen) (Level)",
+      "enShort": "Purchased foreign bonds last week (billion yen) (Level)"
     },
     "tier": null,
     "parentCode": null,
@@ -10066,10 +10066,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周买进外国股票(十亿日元)(至1120)",
-      "zhShort": "上周买进外国股票(十亿日元)(至1120)",
-      "enFull": "Purchased foreign stocks last week (billion yen)(to 1120)",
-      "enShort": "Purchased foreign stocks last week (billion yen)(to 1120)"
+      "zhFull": "上周买进外国股票(十亿日元)",
+      "zhShort": "上周买进外国股票(十亿日元)",
+      "enFull": "Purchased foreign stocks last week (billion yen)",
+      "enShort": "Purchased foreign stocks last week (billion yen)"
     },
     "tier": null,
     "parentCode": null,
@@ -10090,10 +10090,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周买进外国股票(十亿日元)(至1030)",
-      "zhShort": "上周买进外国股票(十亿日元)(至1030)",
-      "enFull": "Purchased foreign stocks last week (billion yen)(to 1120) (Level)",
-      "enShort": "Purchased foreign stocks last week (billion yen)(to 1120) (Level)"
+      "zhFull": "上周买进外国股票(十亿日元)",
+      "zhShort": "上周买进外国股票(十亿日元)",
+      "enFull": "Purchased foreign stocks last week (billion yen) (Level)",
+      "enShort": "Purchased foreign stocks last week (billion yen) (Level)"
     },
     "tier": null,
     "parentCode": null,
@@ -10596,8 +10596,8 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "无担保隔夜拆借利率",
+      "zhShort": "无担保隔夜利率",
       "enFull": "unsecured overnight lending rate",
       "enShort": "unsecured overnight lending rate"
     },
@@ -10620,8 +10620,8 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "上周外资买进日本国债",
+      "zhShort": "外资买日债",
       "enFull": "Last week, foreign investors bought day",
       "enShort": "Last week, foreign investors bought day"
     },
@@ -10644,10 +10644,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周外资买进日债(十亿日元)(至1120)",
-      "zhShort": "上周外资买进日债(十亿日元)(至1120)",
-      "enFull": "Last week, foreign investors bought day bonds (billion yen)(to 1120)",
-      "enShort": "Last week, foreign investors bought day bonds (billion yen)(to 1120)"
+      "zhFull": "上周外资买进日债(十亿日元)",
+      "zhShort": "上周外资买进日债(十亿日元)",
+      "enFull": "Last week, foreign investors bought day bonds (billion yen)",
+      "enShort": "Last week, foreign investors bought day bonds (billion yen)"
     },
     "tier": null,
     "parentCode": null,
@@ -10668,10 +10668,10 @@
     "kind": "metric",
     "countryCode": "JP",
     "names": {
-      "zhFull": "上周外资买进日债(十亿日元)(至1030)",
-      "zhShort": "上周外资买进日债(十亿日元)(至1030)",
-      "enFull": "Last week, foreign investors bought day bonds (billion yen)(to 1120) (Level)",
-      "enShort": "Last week, foreign investors bought day bonds (billion yen)(to 1120) (Level)"
+      "zhFull": "上周外资买进日债(十亿日元)",
+      "zhShort": "上周外资买进日债(十亿日元)",
+      "enFull": "Last week, foreign investors bought day bonds (billion yen) (Level)",
+      "enShort": "Last week, foreign investors bought day bonds (billion yen) (Level)"
     },
     "tier": null,
     "parentCode": null,
@@ -11293,8 +11293,8 @@
     "kind": "metric",
     "countryCode": "MX",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "隔夜目标利率",
+      "zhShort": "隔夜目标利率",
       "enFull": "Overnight Target interest rate",
       "enShort": "Overnight Target interest rate"
     },
@@ -11359,8 +11359,8 @@
     "kind": "metric",
     "countryCode": "NO",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "挪威央行关键政策利率",
+      "zhShort": "关键政策利率",
       "enFull": "key policy rate",
       "enShort": "key policy rate"
     },
@@ -12099,8 +12099,8 @@
     "kind": "metric",
     "countryCode": "SE",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "回购利率（待核）",
+      "zhShort": "回购利率",
       "enFull": "call back rate",
       "enShort": "call back rate"
     },
@@ -12237,8 +12237,8 @@
     "kind": "metric",
     "countryCode": "SG",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "工业产出（年率）",
+      "zhShort": "工业产出",
       "enFull": "Industrial Output (YoY)",
       "enShort": "Industrial Output (YoY)"
     },
@@ -14440,8 +14440,8 @@
     "kind": "metric",
     "countryCode": "US",
     "names": {
-      "zhFull": "",
-      "zhShort": "",
+      "zhFull": "个人消费支出价格指数",
+      "zhShort": "PCE 价格指数",
       "enFull": "Personal consumption expenditure price i",
       "enShort": "Personal consumption expenditure price i"
     },
