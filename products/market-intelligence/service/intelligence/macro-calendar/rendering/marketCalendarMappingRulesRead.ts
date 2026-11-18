@@ -114,6 +114,8 @@ export type MappingRulesRead = Readonly<{
     diagnostics: Readonly<{
       'unknown-event-type': number; 'no-standard-row': number; 'period-unresolved': number; 'no-code': number
     }>
+    /** 现场判定四类都命不中的 id 数（列表里的就是这些）。 */
+    unclassified: number
   }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
 
@@ -247,15 +249,54 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       if (id !== undefined && !reasonById.has(id)) reasonById.set(id, row.reason)
     }
     const diagnostics = { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 0 }
+    /**
+     * **现场判定分类，不依赖「有没有一行原因记录」**（用户 2026-11-18）。
+     *
+     * 上一版只排除「未映射表里写着原因」的 id，于是 80 条「从来没被诊断过」的会永远挂在列表里——
+     * 那 80 条不是「在等映射」，是没人给它们分过类。现在按回填同一条规则现场判：
+     * ① 观测里 `eventKind` 是事件 → 事件档；② 没有对应码 → 无码档；③ 有码没期次 → 缺期次档；
+     * ④ 有码有期次、标准表没有行 → 无标准行档。**四类都命不中**的才留在列表里，并单列「未分类」计数——
+     * 不静默隐藏，也不默认列出来。
+     */
+    const eventKindById = new Map<string, string>()
+    // 观测表可能还没建（例如只读夹具只建标准表）：缺表时按「没有观测」处理，不把整张表判成读不到。
+    const hasObservations = database.prepare(
+      `select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'`
+    ).get() !== undefined
+    const observationRows = hasObservations
+      ? database.prepare(`select source_event_id, event_kind
+        from mi_macro_calendar_market_event_observations`).all() as unknown as
+        { source_event_id: string; event_kind: string | null }[]
+      : []
+    for (const row of observationRows) {
+      const id = sourceIdOfSourceKey(row.source_event_id)
+      if (id === undefined || row.event_kind === null || eventKindById.has(id)) continue
+      eventKindById.set(id, row.event_kind)
+    }
+    const isEventKind = (kind: string | undefined): boolean =>
+      kind === 'central-bank-activity' || kind === 'financial-event' || kind === 'event'
+    const rowCountById = new Map<string, number>()
+    for (const entry of byId.values()) rowCountById.set(entry.sourceId, entry.rows)
+    let unclassified = 0
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
       .filter((entry) => !recognized.has(entry.sourceId))
       .filter((entry) => {
-        const reason = reasonById.get(entry.sourceId)
-        if (reason === undefined || !DIAGNOSTIC_ONLY.has(reason)) return true
-        // `bad-period` 是这一档的旧库写法，与 `period-unresolved` 同去处（日历线的只读遗留）。
-        const bucket = reason === 'bad-period' ? 'period-unresolved' : reason
-        if (bucket in diagnostics) diagnostics[bucket as keyof typeof diagnostics] += 1
-        return false
+        // 先看未映射表里已经记下的原因（回填的结论），再现场判。
+        // **判定顺序按 Chief 定的来**：先看是不是事件，再看有没有码——记录下来的原因放在后面，
+        // 免得「回填时判成 no-code、其实观测里写着它是事件」这种分岔留在数据里没人发现。
+        const recorded = reasonById.get(entry.sourceId)
+        const bucket = isEventKind(eventKindById.get(entry.sourceId)) ? 'unknown-event-type'
+          : recorded === 'bad-period' ? 'period-unresolved'
+            : recorded !== undefined && recorded in diagnostics ? recorded
+              // 没有映射表认得它 = 没有码。有码的那批根本不会进这个列表（recognized 先过滤掉了）。
+              : 'no-code'
+        if (bucket === 'no-code' || bucket === 'unknown-event-type') {
+          diagnostics[bucket] += 1
+          return false
+        }
+        if (bucket in diagnostics) { diagnostics[bucket as keyof typeof diagnostics] += 1; return false }
+        unclassified += 1
+        return true
       })
       .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows,
         sampleLabel: entry.sampleLabel, sampleLabelEn: entry.sampleLabelEn }))
@@ -268,7 +309,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0),
         eventIdentities: Object.keys(zeroXRouterEventIdentities).length,
         /** 只作诊断：这四类各有去处，不进列表（加起来才是读者原先看到的 477）。 */
-        diagnostics: Object.freeze(diagnostics) })
+        diagnostics: Object.freeze(diagnostics),
+        /** 四类都命不中、也查不到原因记录的 id 数：不静默隐藏，也不默认列出来。 */
+        unclassified })
     })
   } catch {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }

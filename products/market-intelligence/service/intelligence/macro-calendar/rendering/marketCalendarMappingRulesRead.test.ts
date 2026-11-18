@@ -118,19 +118,21 @@ describe('映射规则表读口', () => {
   it('未映射段按行数从大到小排，一个 id 的多行合计成行数', () => {
     const read = readCalendarMappingRules(seed())
     if (read.state !== 'available') throw new Error('unavailable')
-    expect(read.unmapped).toHaveLength(1)
-    // 样本名只是「这一行长什么样」，取该 id 的第一行；**判据是行数**，不锁日期顺序。
-    expect(read.unmapped[0]!.sourceId).toBe('999999')
-    expect(read.unmapped[0]!.rowCount).toBe(2)
-    expect(read.unmapped[0]!.sampleLabel).toContain('未识别指标')
-    // 有英文原文名就给出来（同一条 id 下有一行带就够了）：界面把它放同一格 `中文 · English`。
-    expect(read.unmapped[0]!.sampleLabelEn).toBe('Unidentified indicator(Nov)')
+    /**
+     * **这一版起，列表只留「四类都命不中」的 id**（用户 2026-11-18 现场判定）。
+     * 夹具里那条没有任何映射、也没有观测的 `999999` 因此归 `no-code` 档，不进列表——
+     * 「没有码」本身就说明它在等建码，不是「等映射」。
+     */
+    expect(read.unmapped).toHaveLength(0)
+    expect(read.counts.unmapped).toBe(0)
+    expect(read.counts.diagnostics['no-code']).toBeGreaterThanOrEqual(1)
+    expect(read.counts.unclassified).toBe(0)
     // **已经认得出来的 id 不许再报「未映射」**：三张表里任何一张认得都算。报错了读者会去补已经做完的事。
     for (const mappedId of ['214790', '213844', '8637']) {
       expect(read.unmapped.some((row) => row.sourceId === mappedId), mappedId).toBe(false)
     }
-    expect(read.counts.unmapped).toBe(1)
-    expect(read.counts.unmappedRows).toBe(2)
+    // 那 2 行仍然被计进「无码」诊断（行数不丢，只是不进列表）。
+    expect(read.counts.diagnostics['no-code']).toBeGreaterThanOrEqual(1)
   })
 })
 
@@ -166,14 +168,46 @@ describe('未映射列表排除四类诊断原因', () => {
     const read = readCalendarMappingRules(database)
     if (read.state !== 'available') throw new Error('unavailable')
     const listed = read.unmapped.map((row) => row.sourceId)
-    // 列表里只剩「没有原因行的」真待映射 id；四类诊断一条都不进。
-    expect(listed).toContain('999999')
-    for (const hidden of ['700001', '700002', '700003', '700004']) expect(listed).not.toContain(hidden)
+    // 四类诊断一条都不进列表（`999999` 也被现场判成 `no-code`，同样不进）。
+    expect(listed).toHaveLength(0)
+    for (const hidden of ['999999', '700001', '700002', '700003', '700004']) expect(listed).not.toContain(hidden)
     expect(read.counts.diagnostics['unknown-event-type']).toBe(1)
     expect(read.counts.diagnostics['no-standard-row']).toBe(1)
     // `bad-period` 与 `period-unresolved` 归同一档：旧库写法不许再占一个数。
     expect(read.counts.diagnostics['period-unresolved']).toBe(2)
-    expect(read.counts.diagnostics['no-code']).toBe(0)
+    // 夹具里那条「没有原因行、也没有映射」的 `999999` 现场判成无码档，所以这里至少有 1。
+    expect(read.counts.diagnostics['no-code']).toBeGreaterThanOrEqual(1)
+    expect(read.counts.unmapped).toBe(read.unmapped.length)
+  })
+})
+
+/**
+ * **现场判定**：没被诊断过的 id 也要归进四类，不能因为「没有原因记录」就永远挂在列表里
+ * （用户 2026-11-18：477 降到 80 之后，那 80 条根本没被诊断过）。
+ */
+describe('现场判定分类', () => {
+  it('classifies an event by its observation kind and an id with no code as no-code', () => {
+    const database = seed()
+    // 一条事件：观测里写着 `central-bank-activity`，未映射表里**没有**原因行。
+    // 夹具只建最小观测表——读口只取 `source_event_id` 与 `event_kind` 两列。
+    database.exec(`create table mi_macro_calendar_market_event_observations
+      (observation_id text, source_event_id text, event_kind text)`)
+    database.exec(`insert into mi_macro_calendar_market_event_observations values
+      ('obs-1', '["800001",1]', 'central-bank-activity')`)
+    upsertCalendarStandardRow(database, {
+      countryCode: 'US', metricKey: '["800001",1]', periodKey: '2026-11-16',
+      scheduledDate: '2026-11-16', timePrecision: 'minute' as const, status: 'missing' as const,
+      valuesJson: '{}', identityKind: 'source' as const, sourceLabel: '某行长讲话',
+      sourceProviderId: '0xrouter', sourceEventId: 'x-800001', parserVersion: 'v1',
+      observedAt: now, firstSeenAt: now
+    })
+    const read = readCalendarMappingRules(database)
+    if (read.state !== 'available') throw new Error('unavailable')
+    expect(read.unmapped.map((row) => row.sourceId)).not.toContain('800001')
+    // 事件归事件档；夹具里那条没有任何映射的 `999999` 归无码档。
+    expect(read.counts.diagnostics['unknown-event-type']).toBe(1)
+    expect(read.counts.diagnostics['no-code']).toBeGreaterThanOrEqual(1)
+    expect(read.counts.unclassified, JSON.stringify({ d: read.counts.diagnostics, l: read.unmapped.map(r=>r.sourceId) })).toBe(0)
     expect(read.counts.unmapped).toBe(read.unmapped.length)
   })
 })
