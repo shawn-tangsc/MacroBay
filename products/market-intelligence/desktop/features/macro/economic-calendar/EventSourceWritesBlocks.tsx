@@ -40,7 +40,14 @@ const SCALED = /[KkMmBb万亿]$/u
  * 那时把这个函数**改成读数值与单位**（同单位才比、`unknown` 不比），而不是在它外面再加一层 if——
  * 两层判断叠着，下一处改口径时必然只改到一层。
  */
-const comparable = (value: string): boolean => !SCALED.test(value.trim()) && !/,/u.test(value)
+const comparable = (value: string): boolean => {
+  const trimmed = value.trim()
+  // **存成了 JSON 串**（`{"displayValue":"4.7%"}`，`materialize-mapped-v1` 那 605 行）：不参与比较。
+  // 这不是「还原成展示值」——还原只允许在读口做一处，渲染层再兜一次就等于把 bug 藏起来；
+  // 这里只是**不比**：两个来源一个写 JSON、一个写 `4.7%`，比出来的「不一致」是假的。
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return false
+  return !SCALED.test(trimmed) && !/,/u.test(value)
+}
 
 function sameShown(left: string, right: string): boolean {
   if (!comparable(left) || !comparable(right)) return true

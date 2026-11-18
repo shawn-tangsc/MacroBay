@@ -161,3 +161,27 @@ it('skips the comparison when a value carries a scale suffix', async () => {
     expect(host.querySelector('[data-source-conflicts]')).toBeNull()
   } finally { await act(async () => root.unmount()) }
 })
+
+/**
+ * **存成 JSON 串的值不参与比较**（`materialize-mapped-v1` 写进去的那 605 行）。
+ *
+ * 展示层不还原它——还原只许在读口做一处；这里只做「不比」：一个来源是 `{"displayValue":"4.7%"}`、
+ * 另一个是 `4.7%`，按字符串比必然「不一致」，那个标记是假的。
+ */
+it('does not call a stringified JSON value a conflict', async () => {
+  const rows = [
+    { source: 'observation' as const, providerId: 'narwhal', observedAt: '2026-11-06T00:00:00.000Z',
+      status: 'published', consensus: '{"displayValue":"10"}', actual: null, previous: null,
+      identityKey: 'US.CONSUMER_CREDIT.SA.CHANGE', periodKey: '2026-09' },
+    { source: 'observation' as const, providerId: '0xrouter', observedAt: '2026-11-06T00:00:00.000Z',
+      status: 'published', consensus: '10', actual: null, previous: null,
+      identityKey: 'US.CONSUMER_CREDIT.SA.CHANGE', periodKey: '2026-09' }
+  ]
+  const host = document.createElement('div'); const root = createRoot(host)
+  try {
+    await act(async () => root.render(scoped(<EventSourceWritesBlocks rows={rows} text={text} />)))
+    expect(host.querySelector('[data-source-conflicts]')).toBeNull()
+    // 但那个串**照原样显示**：bug 仍然看得见，不被渲染层藏起来。
+    expect(host.textContent).toContain('{"displayValue":"10"}')
+  } finally { await act(async () => root.unmount()) }
+})
