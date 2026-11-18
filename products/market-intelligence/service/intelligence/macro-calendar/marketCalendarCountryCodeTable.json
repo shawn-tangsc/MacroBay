@@ -9410,7 +9410,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.PURCHASED_FOREIGN_BONDS_WEEK.NONE.AMOUNT"
   },
   "JP.FOREIGN_EXCHANGE_RESERVES.NONE.AMOUNT": {
     "code": "JP.FOREIGN_EXCHANGE_RESERVES.NONE.AMOUNT",
@@ -9458,7 +9459,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.FOREIGN_INVESTORS_BOUGHT_JAPAN_STOCKS_DAY.NONE.AMOUNT"
   },
   "JP.FOREIGN_INVESTORS_BOUGHT_JAPAN_STOCKS_DAY.NONE.AMOUNT": {
     "code": "JP.FOREIGN_INVESTORS_BOUGHT_JAPAN_STOCKS_DAY.NONE.AMOUNT",
@@ -9530,7 +9532,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.PURCHASED_FOREIGN_STOCKS_WEEK.NONE.AMOUNT"
   },
   "JP.GDP_DEFLATOR.NONE.YOY": {
     "code": "JP.GDP_DEFLATOR.NONE.YOY",
@@ -10637,7 +10640,8 @@
       "verifiedAt": "2026-11-18",
       "basis": "日本总务省统计局 · 数据入口（兜底）（同国兜底：该国已核机构页）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "JP.WEEK_FOREIGN_INVESTORS_BOUGHT_DAY_BONDS.NONE.AMOUNT"
   },
   "JP.WEEK_FOREIGN_INVESTORS_BOUGHT_DAY_BONDS.NONE.AMOUNT": {
     "code": "JP.WEEK_FOREIGN_INVESTORS_BOUGHT_DAY_BONDS.NONE.AMOUNT",

@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { narwhalCanonicalIdentityKey, toAlpha2Country } from './marketCalendarMetricIdentity'
 import { eventCodeBySourceType } from './marketCalendarEventCodeTable'
-import { nameByMetricKey } from './marketCalendarCodeNames'
+import { nameForMetricKey } from './marketCalendarCodeNames'
 
 /** 事件型身份的第二段：不是指标码，`evt.*` 映射还没接。 */
 const EVENT_KINDS: readonly string[] = ['central-bank-activity', 'financial-event']
@@ -73,7 +73,9 @@ export function dualWriteMeasureRows(
       // 源内身份的行没有标准码可查：它是「源里确实有这次发布」，不是缺映射。
       const isSourceIdentity = row.identityKind === 'source'
       const isEventCode = row.metricKey.startsWith('evt.')
-      if (!isSourceIdentity && !isEventCode && nameByMetricKey[row.metricKey] === undefined) {
+      // **与读侧同一把尺**（Chief 2026-11-19）：用 `nameForMetricKey`（含「族名+测度」兜底），
+      // 只看显式名表会把靠族名合成名字的码误判成 `unknown-measure`——今晚 78 行就是这么被挡回去的。
+      if (!isSourceIdentity && !isEventCode && nameForMetricKey(row.metricKey) === undefined) {
         reasons['unknown-measure'] += 1
         recordCalendarUnmapped(database, { providerId: input.providerId, sourceKey: row.sourceEventId,
           detectedAt: input.observedAt, rawJson: JSON.stringify({ metricKey: row.metricKey }), reason: 'unknown-measure' })
