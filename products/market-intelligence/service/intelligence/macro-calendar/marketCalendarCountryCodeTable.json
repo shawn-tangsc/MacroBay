@@ -12869,9 +12869,9 @@
     "countryCode": "US",
     "names": {
       "zhFull": "芝加哥联储全国活动指数",
-      "zhShort": "芝加哥联储全国活动指数",
-      "enFull": "Chicago Fed National activity index",
-      "enShort": "Chicago Fed National activity index"
+      "zhShort": "芝加哥联储活动指数",
+      "enFull": "Chicago Fed National Activity Index",
+      "enShort": "CFNAI"
     },
     "tier": null,
     "parentCode": null,

@@ -246,9 +246,27 @@ const MEASURE_WORDS = ['年率', '月率', '季率', '水平', '变化', '人数
  * 2. 族名 + 测度词（族名**必须 measure-free**，否则拒；测度必须在闭集里）；
  * 3. 都没有 → `undefined`（落 `unmapped`，只记日志，不猜）。
  */
+/**
+ * **码表 JSON 是名字的唯一来源**（Chief 2026-11-19）：每个码在码表里都有四列名，
+ * 而手写表 `nameByMetricKey` 只覆盖一部分——写入端只认手写表时，只登记在码表里的码
+ * 一律被判 `unknown-measure` 退回（今晚 78 行）。这里先查码表，查不到再退手写表/事件名/德国名表。
+ */
+import { marketCalendarCodeTable as codeTableForNames } from './marketCalendarCodeTable'
+import { marketCalendarCountryCodeTable as countryCodeTableForNames } from './marketCalendarCountryCodeTable'
+
+function namesFromCodeTable(metricKey: string): Readonly<{
+  zhFull: string; zhShort: string; enFull: string; enShort: string; locked?: boolean; code?: string
+}> | undefined {
+  const row = codeTableForNames[metricKey] ?? countryCodeTableForNames[metricKey]
+  return row === undefined ? undefined : row.names
+}
+
 export function nameForMetricKey(metricKey: string): Readonly<{
   zhFull: string; zhShort: string; enFull: string; enShort: string; locked?: boolean; code?: string
 }> | undefined {
+  // 码表 JSON 优先（唯一来源），手写表降级为补充：码表里没有的例外才落到手写表。
+  const fromTable = namesFromCodeTable(metricKey)
+  if (fromTable !== undefined) return fromTable
   const named = nameByMetricKey[metricKey]
   if (named !== undefined) return named
   const eventName = eventTypeNameByCode[metricKey]
