@@ -107,7 +107,9 @@ export function listUnmappedCalendarObservationsForRendering(
     // 未建码」，后者是「码认出来了、源没给统计期」——两类都不是「我们还没做事」，放进页签只会让人以为
     // 还有几百个指标没认。页签因此只放真正在等我们动手的。
     if (row.reason === 'no-code') { noCode += 1; continue }
-    if (row.reason === 'period-unresolved') { periodUnresolved += 1; continue }
+    // `bad-period` 是这一档的旧库写法（重算跑过才会变成 `period-unresolved`）：两种情况同一去处，
+    // 否则库里的历史行会让页签仍然挂着 120 条。
+    if (row.reason === 'period-unresolved' || row.reason === 'bad-period') { periodUnresolved += 1; continue }
     const raw = parseRaw(row.raw_json)
     const scheduledDate = text(raw.scheduledDate)
     if (scheduledDate === undefined) { undated += 1; continue }
