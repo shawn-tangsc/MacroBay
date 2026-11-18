@@ -1,9 +1,4 @@
 {
-  "__meta": {
-    "version": 1,
-    "generatedAt": "2026-11-18T00:33:34.000Z",
-    "contentHash": "db43b7facb884c86"
-  },
   "AU.AIG_CONSTRUCTION_PERFORMANCE.NONE.LEVEL": {
     "code": "AU.AIG_CONSTRUCTION_PERFORMANCE.NONE.LEVEL",
     "kind": "metric",

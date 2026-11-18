@@ -40,5 +40,5 @@ const asCountryRow = (key: string, value: unknown): CountryCodeRow => {
 export const marketCalendarCountryCodeTable: Readonly<Record<string, CountryCodeRow>> = Object.freeze(
   Object.fromEntries(Object.entries(rawCountryCodeTable as unknown as Record<string, unknown>)
     // `__meta` 是版本头（version / generatedAt / contentHash），不是一行码。
-    .filter(([key]) => key !== '__meta')
+
     .map(([key, value]) => [key, asCountryRow(key, value)])))

@@ -46,6 +46,8 @@ export type UnmappedCalendarMonthRead = Readonly<{
   superseded: number
   /** 没有标准行的条数（不进列表，只作诊断）：它们不在等映射，也没有行可挂映射。 */
   noStandardRow: number
+  /** 事件条数（不进列表，只作诊断）：讲话/纪要/央行活动不是指标，不该混在「未映射指标」里。 */
+  events: number
 }>
 
 type UnmappedRow = Readonly<{
@@ -83,6 +85,7 @@ export function listUnmappedCalendarObservationsForRendering(
   // **没有标准行的不进这个列表**（2026-11-18 Chief 定）：它们不在等映射，也没有行可挂映射；
   // 混在「未映射」里会让这个数永远压不下去，读者会以为还有几百个指标没认出来。只计数，供诊断。
   let noStandardRow = 0
+  let events = 0
   let undated = 0
   let superseded = 0
   const promoted = database.prepare('select 1 from mi_calendar_events where source_event_id = ? limit 1')
@@ -92,6 +95,8 @@ export function listUnmappedCalendarObservationsForRendering(
     seen.add(key)
     if (promoted.get(row.source_key) !== undefined) { superseded += 1; continue }
     if (row.reason === 'no-standard-row') { noStandardRow += 1; continue }
+    // 事件不是指标：留在页签里会让读者以为还有两百多个指标没认出来（2026-11-18 Chief 定）。
+    if (row.reason === 'unknown-event-type') { events += 1; continue }
     const raw = parseRaw(row.raw_json)
     const scheduledDate = text(raw.scheduledDate)
     if (scheduledDate === undefined) { undated += 1; continue }
@@ -115,5 +120,5 @@ export function listUnmappedCalendarObservationsForRendering(
       detectedAt: row.detected_at
     }))
   }
-  return Object.freeze({ entries: Object.freeze(entries), undated, superseded, noStandardRow })
+  return Object.freeze({ entries: Object.freeze(entries), undated, superseded, noStandardRow, events })
 }
