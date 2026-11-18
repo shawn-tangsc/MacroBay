@@ -6,6 +6,7 @@ import type { ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
  * 只收期次可定、测度一致的映射；目标码必须存在于码表（守卫在索引里断）。
  */
 export const mapping_NZ: Readonly<Record<string, Readonly<{ metricKey: string; periodRule: ZeroXRouterPeriodRule }>>> = Object.freeze({
+  '9064': { metricKey: 'NZ.POLICY_RATE.NONE.LEVEL', periodRule: 'month' },
   '213947': { metricKey: 'NZ.MANUFACTURING.NONE.LEVEL', periodRule: 'month' },
   '213948': { metricKey: 'NZ.FOOD_PRICE.NONE.MOM', periodRule: 'month' },
   '213949': { metricKey: 'NZ.FOOD_PRICE.NONE.YOY', periodRule: 'month' },

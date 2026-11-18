@@ -10,6 +10,9 @@ import { mapping_GB } from './marketCalendarCountrySourceMappings-byCountry/gb'
 import { mapping_HK } from './marketCalendarCountrySourceMappings-byCountry/hk'
 import { mapping_IT } from './marketCalendarCountrySourceMappings-byCountry/it'
 import { mapping_JP } from './marketCalendarCountrySourceMappings-byCountry/jp'
+import { mapping_PH } from './marketCalendarCountrySourceMappings-byCountry/ph'
+import { mapping_TH } from './marketCalendarCountrySourceMappings-byCountry/th'
+import { mapping_RU } from './marketCalendarCountrySourceMappings-byCountry/ru'
 import { mapping_KR } from './marketCalendarCountrySourceMappings-byCountry/kr'
 import { mapping_NZ } from './marketCalendarCountrySourceMappings-byCountry/nz'
 import { mapping_SG } from './marketCalendarCountrySourceMappings-byCountry/sg'
@@ -37,6 +40,9 @@ export const marketCalendarCountrySourceMappings: Readonly<Record<string,
   ...mapping_HK,
   ...mapping_IT,
   ...mapping_JP,
+  ...mapping_PH,
+  ...mapping_TH,
+  ...mapping_RU,
   ...mapping_KR,
   ...mapping_NZ,
   ...mapping_SG,

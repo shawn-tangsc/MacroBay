@@ -70,7 +70,7 @@
       "why": "按国家建出的码空间（642 行）的数据本体：一个码出现 2–3 次（键、code、父子引用）。维护方式是改脚本重跑，不手改这个文件。 2026-11-18：删掉 3 行「其实是事件」的假指标（`FI.CEO`/`NZ.ANDREW_TURNER`/`US.Q3`），计数 −6。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/au.ts": {
-      "count": 45,
+      "count": 46,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ca.ts": {
@@ -118,7 +118,7 @@
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/nz.ts": {
-      "count": 25,
+      "count": 26,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/sg.ts": {
@@ -136,6 +136,18 @@
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/vn.ts": {
       "count": 8,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ph.ts": {
+      "count": 1,
+      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/th.ts": {
+      "count": 1,
+      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ru.ts": {
+      "count": 1,
+      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
     }
   }
 }
