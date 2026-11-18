@@ -48,6 +48,10 @@ export type UnmappedCalendarMonthRead = Readonly<{
   noStandardRow: number
   /** 事件条数（不进列表，只作诊断）：讲话/纪要/央行活动不是指标，不该混在「未映射指标」里。 */
   events: number
+  /** 已认出码、缺统计期的条数（不进列表）：映射那一半已完成。 */
+  periodUnresolved: number
+  /** 没码且单国单次出现的条数（不进列表）：去处是「未建码」。 */
+  noCode: number
 }>
 
 type UnmappedRow = Readonly<{
@@ -86,6 +90,8 @@ export function listUnmappedCalendarObservationsForRendering(
   // 混在「未映射」里会让这个数永远压不下去，读者会以为还有几百个指标没认出来。只计数，供诊断。
   let noStandardRow = 0
   let events = 0
+  let noCode = 0
+  let periodUnresolved = 0
   let undated = 0
   let superseded = 0
   const promoted = database.prepare('select 1 from mi_calendar_events where source_event_id = ? limit 1')
@@ -97,6 +103,11 @@ export function listUnmappedCalendarObservationsForRendering(
     if (row.reason === 'no-standard-row') { noStandardRow += 1; continue }
     // 事件不是指标：留在页签里会让读者以为还有两百多个指标没认出来（2026-11-18 Chief 定）。
     if (row.reason === 'unknown-event-type') { events += 1; continue }
+    // `no-code` / `period-unresolved` 也不进列表（Chief 2026-11-18）：前者的去处是「单国单次出现、
+    // 未建码」，后者是「码认出来了、源没给统计期」——两类都不是「我们还没做事」，放进页签只会让人以为
+    // 还有几百个指标没认。页签因此只放真正在等我们动手的。
+    if (row.reason === 'no-code') { noCode += 1; continue }
+    if (row.reason === 'period-unresolved') { periodUnresolved += 1; continue }
     const raw = parseRaw(row.raw_json)
     const scheduledDate = text(raw.scheduledDate)
     if (scheduledDate === undefined) { undated += 1; continue }
@@ -120,5 +131,5 @@ export function listUnmappedCalendarObservationsForRendering(
       detectedAt: row.detected_at
     }))
   }
-  return Object.freeze({ entries: Object.freeze(entries), undated, superseded, noStandardRow, events })
+  return Object.freeze({ entries: Object.freeze(entries), undated, superseded, noStandardRow, events, noCode, periodUnresolved })
 }

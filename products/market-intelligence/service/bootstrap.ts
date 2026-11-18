@@ -72,8 +72,6 @@ import { allSources } from './intelligence/application/providerRegistry'
 import { dualWriteMeasureRows } from './intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from './intelligence/macro-calendar/marketCalendarStandardTable'
 import { promoteSourceIdentities } from './intelligence/macro-calendar/marketCalendarSourcePromotion'
-import { marketCalendarCodeTable, marketCalendarCodeTableMeta } from './intelligence/macro-calendar/marketCalendarCodeTable'
-import { marketCalendarCountryCodeTable } from './intelligence/macro-calendar/marketCalendarCountryCodeTable'
 import { recomputeUnmappedReasons } from './intelligence/macro-calendar/marketCalendarUnmappedReasonBackfill'
 import { syncOfficialStandardRows } from './intelligence/macro-calendar/marketCalendarOfficialSourceRows'
 import { createStandardMonthPageReader } from './intelligence/macro-calendar/marketCalendarStandardMonthPage'
@@ -351,14 +349,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(macroCalendarBackend.beaOfficialReleaseRefresh ? ['macro-calendar-bea' as const] : []),
     ...(macroCalendarBackend.blsEmploymentSchedule ? ['macro-calendar-bls' as const] : [])
   ] as const
-  // **码表只审计、不导入**（用户 2026-11-18 选 A）：文件是唯一真源，运行时只读内存表；
-  // 这一行让「这一版带的是哪张码表」在 app.log 里查得到，而库内不建副本、不搞同步。
-  deps.log?.('info', 'macro-calendar.code-table', {
-    version: marketCalendarCodeTableMeta?.version ?? null,
-    contentHash: marketCalendarCodeTableMeta?.contentHash ?? null,
-    rows: Object.keys({ ...marketCalendarCodeTable, ...marketCalendarCountryCodeTable }).length,
-    source: 'file'
-  })
   // 启动同步官方发布进标准表，失败不阻断启动（详见 wiring/calendarStandardRows.ts，吞错语义不变）。
   // 历史补值也挂这一点：`after` 是模块启动完成信号，`readLatest` 是惰性闭包（FRED fetcher 建在后面）。
   syncOfficialStandardRowsAtStartup({

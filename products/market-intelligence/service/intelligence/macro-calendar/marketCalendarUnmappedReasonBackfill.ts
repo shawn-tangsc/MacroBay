@@ -10,7 +10,8 @@
  * 2. 已转正（`identity_kind = 'code'）或源内 id 在按国家的映射表里且同国家 → 清单里的过期条目，删；
  * 3. 标准表里根本没有这一行（采集时缺国家被跳过）→ `no-standard-row`：不在等映射；
  * 4. 标题能唯一对上该国码表的一个码：测度定得出期次（`MOM`/`YOY`/`QOQ`）→ 缺的是映射条目，
- *    读者眼里仍是「没有码」→ `no-code`；测度定不出（`LEVEL`/`AMOUNT`/…) → `bad-period`；
+ *    读者眼里仍是「没有码」→ `no-code`；测度定不出（`LEVEL`/`AMOUNT`/…) → `period-unresolved`
+ *    （码认出来了，缺的是源没给统计期）；
  * 5. 其余 → `no-code`。
  *
  * 三条硬约束：
@@ -113,7 +114,9 @@ UnmappedReasonReport {
       else {
         const matches = [...new Set(byName.get(`${country}|${comparableName(name)}`) ?? [])]
         if (matches.length !== 1) reason = 'no-code'
-        else reason = PERIOD_RULES.has(matches[0]!.split('.')[3] ?? '') ? 'no-code' : 'bad-period'
+        // 码已经认出来了（名字唯一命中）、缺的只是统计期 → `period-unresolved`：
+        // 映射那一半做完了，缺的是源没给的那一半，不该算「未映射」。
+        else reason = PERIOD_RULES.has(matches[0]!.split('.')[3] ?? '') ? 'no-code' : 'period-unresolved'
       }
     }
     if (reason === 'stale') { deletions.push(row.rowid); counts['已过期（删）'] = (counts['已过期（删）'] ?? 0) + 1 }

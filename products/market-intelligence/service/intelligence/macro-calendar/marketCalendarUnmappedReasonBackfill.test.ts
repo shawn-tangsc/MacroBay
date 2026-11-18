@@ -48,7 +48,7 @@ describe('未映射原因重算：recomputeUnmappedReasons', () => {
     expect(reasonsOf(database)).toEqual([])
   })
 
-  it('测度是 LEVEL 的码 → bad-period（源没给统计期，不推算）', () => {
+  it('测度是 LEVEL 的码 → period-unresolved（码认出来了，源没给统计期，不推算）', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
     recordCalendarUnmapped(database, unmappedRow({
@@ -56,7 +56,7 @@ describe('未映射原因重算：recomputeUnmappedReasons', () => {
     }))
     upsertCalendarStandardRow(database, standardRow({ sourceEventId: '["999999",1]', countryCode: 'DE' }))
     recomputeUnmappedReasons(database)
-    expect(reasonsOf(database)).toEqual([{ reason: 'bad-period' }])
+    expect(reasonsOf(database)).toEqual([{ reason: 'period-unresolved' }])
   })
 
   it('对不上任何码 → no-code；幂等：第二次一条都不写', () => {

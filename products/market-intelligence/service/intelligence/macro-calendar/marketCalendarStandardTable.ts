@@ -91,7 +91,13 @@ export const calendarStandardTablePolicy = Object.freeze({
      * 把它写进标准表——**它不在等映射，也没有行可挂映射**。留在「未映射」里会让那个数永远压不下去，
      * 也看不出真正缺什么：849 条里 751 条是这种，其中 642 条映射其实早就写好了。
      */
-    'no-standard-row'] as const)
+    'no-standard-row',
+    /**
+     * **已映射、源未给统计期**（2026-11-18 Chief 定）：有码缺期次，定位不到某一天，显示不出来。
+     * 它不是「未映射」——映射那一半已经做完了，缺的是源没给的那一半，所以只作诊断、不进列表。
+     * 这条口径与 `bad-period` 分开：那个是「码都没定」，这个是「码定了、期次没给」。
+     */
+    'period-unresolved'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
 export type CalendarReleaseStatus = typeof calendarStandardTablePolicy.releaseStatuses[number]

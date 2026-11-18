@@ -13,7 +13,6 @@
  * 做的事：把国家码表里缺英文名的行，按**同族已有英文名**补上；补不出的保持空并计入
  * `name-incomplete`，不编造。
  */
-import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const DATA = 'products/market-intelligence/service/intelligence/macro-calendar/marketCalendarCountryCodeTable.json'
