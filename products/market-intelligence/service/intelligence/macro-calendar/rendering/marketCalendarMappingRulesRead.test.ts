@@ -220,3 +220,55 @@ describe('现场判定分类', () => {
     expect(read.counts.unmapped).toBe(read.unmapped.length)
   })
 })
+
+describe('未映射行的国家（用户 2026-11-19）', () => {
+  const seedUnmapped = (database: DatabaseSync, sourceKey: string, raw: Record<string, unknown>, reason = 'period-unresolved'): void => {
+    database.prepare(`insert into mi_calendar_unmapped
+      (provider_id, source_key, detected_at, raw_json, reason, first_seen_at, last_seen_at)
+      values ('0xrouter', ?, ?, ?, ?, ?, ?)`)
+      .run(sourceKey, now, JSON.stringify(raw), reason, now, now)
+  }
+  const observation = (database: DatabaseSync, indicatorId: string, countryCode: string): void => {
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (indicator_id, country_code) values (?, ?)`).run(indicatorId, countryCode)
+  }
+  const read = (): ReturnType<typeof readCalendarMappingRules> => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    database.exec('create table if not exists mi_macro_calendar_market_event_observations (indicator_id text, country_code text)')
+    // ① 码前缀可定
+    seedUnmapped(database, '["4259",1]', { name: '欧洲央行再融资利率', metricKey: 'EMU.ECB_REFINANCING_RATE.NONE.RATE', scheduledDate: '2026-11-01' })
+    // ② 无码，靠 indicatorId 唯一国家
+    seedUnmapped(database, '["4250",1]', { name: '一年期贷款市场报价利率', indicatorId: '4250', scheduledDate: '2026-11-02' })
+    observation(database, '4250', 'CHN')
+    // ③ 两路都不通
+    seedUnmapped(database, '["8888",1]', { name: '谁也不是的指标', indicatorId: '8888', scheduledDate: '2026-11-03' }, 'no-standard-row')
+    return readCalendarMappingRules(database)
+  }
+
+  it('码前缀 → 国家；码名走同一份国名表', () => {
+    const result = read()
+    if (result.state !== 'available') throw new Error('expected available')
+    const row = result.unmapped.find((item) => item.sourceId === '4259')!
+    expect(row.countryCode).toBe('EMU')
+    expect(row.countryName).toBe('欧元区')
+  })
+
+  it('无码时按 indicatorId 唯一国家判定（CHN → CN）', () => {
+    const result = read()
+    if (result.state !== 'available') throw new Error('expected available')
+    expect(result.unmapped.find((item) => item.sourceId === '4250')!.countryCode).toBe('CN')
+  })
+
+  it('两路都拿不到 → null（界面显示 —，不是「未知国家」）', () => {
+    const result = read()
+    if (result.state !== 'available') throw new Error('expected available')
+    const row = result.unmapped.find((item) => item.sourceId === '8888')!
+    expect(row.countryCode).toBeNull()
+    expect(row.countryName).toBeNull()
+  })
+
+  it('整个读口里不出现「未知国家」字面量', () => {
+    expect(JSON.stringify(read())).not.toContain('未知国家')
+  })
+})

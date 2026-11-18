@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { localizedPairFor } from '../marketCalendarCodeNames'
 import { marketCalendarCodeTable } from '../marketCalendarCodeTable'
-import { zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
+import { toAlpha2Country, zeroXRouterIndicatorIdentities, type ZeroXRouterPeriodRule } from '../marketCalendarMetricIdentity'
 import { tierOfMetricKey } from '../marketCalendarMetricTiers'
 import { zeroXRouterEventIdentities } from '../marketCalendarEventIdentities'
 import { germanSourceMetricMappings } from '../marketCalendarGermanSourceMappings'
@@ -10,6 +10,7 @@ import { marketCalendarCountrySourceMappings } from '../marketCalendarCountrySou
 import { subItemOrderOf, subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { groupUnmappedByRelease, mergedReasonOf } from '../marketCalendarUnmappedGrouping'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
+import { countryNameOf } from './marketCalendarEventListRead'
 
 /**
  * **仅渲染层，只读**：映射规则表（用户 2026-11-16 要看的那张表）。
@@ -103,6 +104,15 @@ export type UnmappedSourceIdRow = Readonly<{
    * 界面把两段放同一格 `中文 · English`，**没有英文就只显示中文**，不留半句。
    */
   sampleLabelEn: string | null
+  /**
+   * **这条未映射数据属于哪个国家**（用户 2026-11-19）。
+   *
+   * 取值顺序定死，不许猜：① 指标码已知 → 取码前缀；② 否则用 `indicatorId` 查观测表，
+   * **只有唯一国家**才用；③ 都拿不到 → `null`（界面显示 `—`，**禁止写「未知国家」**——
+   * 「不知道」和「没有」是两件事）。
+   */
+  countryCode?: string | null
+  countryName?: string | null
 }>
 
 export type MappingRulesRead = Readonly<{
@@ -195,6 +205,33 @@ export function officialPageFor(metricKey: string): Readonly<{ url: string; basi
   if (row === undefined) return null
   const source = row.officialSource
   return 'pending' in source ? null : { url: source.url, basis: source.basis }
+}
+
+/**
+ * **官网页的三态，唯一解析入口**（用户 2026-11-19：事件详情里也要看到官网）。
+ *
+ * 三种情况不许混：
+ * - `verified`：有机构页（机构 + 完整地址 + 依据）；
+ * - `pending`：**有码，但还没核到** → 界面写「待核」，不可点；
+ * - `none`：**这条根本没有对应指标码** → 界面说「没有对应指标码，没有官网」，不写「待核」。
+ *
+ * `officialPageFor` 只回答「有没有可点的地址」，会把后两种压成同一个 `null`；
+ * 详情抽屉要区分它们，所以共用这一份判定，不另写一套取址。
+ */
+export type OfficialPageState = Readonly<{ kind: 'verified'; agency: string; url: string; basis: string }>
+  | Readonly<{ kind: 'pending'; reason: string }>
+  | Readonly<{ kind: 'none' }>
+
+export function officialSourceStateFor(metricKey: string | undefined | null): OfficialPageState {
+  if (metricKey === undefined || metricKey === null || metricKey === '') return { kind: 'none' }
+  // 源内身份（`["214790",79090]`）不是码：它没有登记过官网页，按「没有对应指标码」处理。
+  if (metricKey.startsWith('[')) return { kind: 'none' }
+  const row = marketCalendarCodeTable[metricKey]
+  if (row === undefined) return { kind: 'none' }
+  const source = row.officialSource
+  return 'pending' in source
+    ? { kind: 'pending', reason: source.reason }
+    : { kind: 'verified', agency: source.agency, url: source.url, basis: source.basis }
 }
 
 export function mappingRuleNames(metricKey: string): Readonly<{ zh: string; en: string }> | null {
@@ -330,7 +367,37 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       providerIds: readonly string[]
       sampleLabel: string | null
       sampleLabelEn: string | null
+      countryCode: string | null
     }>
+    /**
+     * 未映射行的国家：码前缀 → `indicatorId` 唯一国家 → `null`（用户 2026-11-19 定死顺序）。
+     * 同一源 id 只算一次（一个 id 就是一份数据，中英两条不会分属两国）。
+     */
+    const countryById = new Map<string, string | null>()
+    const countryOfUnmapped = (sourceId: string, rawJson: string): string | null => {
+      const cached = countryById.get(sourceId)
+      if (cached !== undefined) return cached
+      let resolved: string | null = null
+      let parsed: { metricKey?: unknown; indicatorId?: unknown } = {}
+      try { parsed = JSON.parse(rawJson) as typeof parsed } catch { parsed = {} }
+      const metricKey = typeof parsed.metricKey === 'string' ? parsed.metricKey : ''
+      const prefix = /^([A-Z]{2,4})\./.exec(metricKey)?.[1]
+      if (prefix !== undefined && (/^[A-Z]{2}$/.test(prefix) || prefix === 'EMU')) resolved = prefix
+      if (resolved === null) {
+        const rawId = parsed.indicatorId
+        const indicatorId = typeof rawId === 'string' || typeof rawId === 'number' ? String(rawId) : undefined
+        if (indicatorId !== undefined && indicatorId !== '') {
+          const found = database.prepare(`select distinct country_code from mi_macro_calendar_market_event_observations
+            where indicator_id = ? and country_code is not null and country_code <> ''`).all(indicatorId) as
+            { country_code: string }[]
+          // **只有唯一国家才用**：两个以上说明源自己就不一致，宁可显示 `—` 也不挑一个。
+          const unique = [...new Set(found.map((item) => toAlpha2Country(item.country_code)))]
+          if (unique.length === 1) resolved = unique[0]!
+        }
+      }
+      countryById.set(sourceId, resolved)
+      return resolved
+    }
     const entries: Entry[] = []
     for (const row of reasonRows) {
       const id = sourceIdOfSourceKey(row.source_key)
@@ -353,7 +420,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         firstSeenAt: row.first_seen_at,
         providerIds: [row.provider_id],
         sampleLabel: labels?.zh ?? raw.name,
-        sampleLabelEn: labels?.en ?? null
+        sampleLabelEn: labels?.en ?? null,
+        countryCode: countryOfUnmapped(id, row.raw_json)
       })
     }
     /**
@@ -381,7 +449,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         // 单条保留自己的真实原因——否则 `no-code`、`missing-country` 会被改写掉，反而丢信息。
         reason: (merged ? mergedReasonOf(group) : first.reason) as UnmappedReason,
         sampleLabel: labels.length === 0 ? null : labels.join(' · '),
-        sampleLabelEn: labelsEn.length === 0 ? null : labelsEn.join(' · ')
+        sampleLabelEn: labelsEn.length === 0 ? null : labelsEn.join(' · '),
+        countryCode: first.countryCode,
+        countryName: countryNameOf(first.countryCode)
       })
     })
       // **首次出现倒序**：新出现的排最前——「新事件」一眼就能看到；没有时间的沉到最后。
