@@ -17,6 +17,7 @@ import {
 import type { NewsSentimentStore } from './newsSentimentStore'
 import type { NewsBodyTranslationRecord } from '../schema/newsSentiment'
 import { isRoutineNewsNotice } from './newsSentimentRules'
+import { isAdmittedNewsItem } from './newsSentimentAdmission'
 
 type TranslationReader = {
   resolveDisplayTexts: (input: {
@@ -81,6 +82,18 @@ export type NewsSentimentView = {
    * the card's age badge ("what you are looking at is already old").
    */
   latestKnownItemAt?: string
+  /**
+   * 窗口内有新闻、但**一条判定都没有**的条数（2026-11-18）。
+   *
+   * 只有它才能把「这段时间没有相关消息」与「有新条目、但都还没判」分开：两者在界面上都是空列表，
+   * 但一个是事实、另一个是我们没判出来。为 0 或没有该栏时，卡片只按原来那几种原因说话。
+   */
+  unjudgedInWindow?: number
+  /**
+   * 为什么没判出来：模型没开、模型不可用，还是不好说（例如评分轮次还没跑到）。只用于空态那句
+   * 「为什么空」，不参与任何判定。
+   */
+  unjudgedCause?: 'model-off' | 'model-unavailable'
 }
 
 export type NewsSentimentItemDetail = NewsSentimentItemView & {
@@ -103,6 +116,8 @@ export function createNewsSentimentQuery(deps: {
   }
   /** Optional: a source status that cannot be read must not fail the news read itself. */
   readSourceReadiness?: (asOf: string) => Promise<NewsSentimentSourceReadiness>
+  /** 模型现在能不能判：只给空态那句「为什么空」用。读不到就不说原因，不猜。 */
+  readJudgingState?: () => Promise<'ready' | 'model-off' | 'model-unavailable'>
   now: () => string
 }) {
   return {
@@ -145,6 +160,11 @@ export function createNewsSentimentQuery(deps: {
         if (visible.length === 0) {
           // An empty window still has to say whether anything ever arrived: without this the card
           // cannot tell "quiet period" from "the feed stopped hours ago".
+          //
+          // 2026-11-18 起还有第二种空：**有新闻、但都还没判定**（规则没命中就不写判定行）。
+          // 两者在界面上都是空列表，但一句「这段时间没有相关消息」在后者是假话。
+          const unjudgedInWindow = countUnjudgedInWindow({ itemsById, from, to: asOf, store: deps.store, scope: input.scope })
+          const judging = unjudgedInWindow > 0 ? await readJudgingState(deps.readJudgingState) : undefined
           return {
             state: 'empty',
             asOf,
@@ -154,7 +174,9 @@ export function createNewsSentimentQuery(deps: {
             availableSources,
             caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow],
             ...(readiness ? { readiness } : {}),
-            ...(latestKnownItemAt ? { latestKnownItemAt } : {})
+            ...(latestKnownItemAt ? { latestKnownItemAt } : {}),
+            ...(unjudgedInWindow > 0 ? { unjudgedInWindow } : {}),
+            ...(judging === 'model-off' || judging === 'model-unavailable' ? { unjudgedCause: judging } : {})
           }
         }
         const itemIds = visible.map((row) => row.itemId)
@@ -374,4 +396,47 @@ function parseRecord(value: string | undefined): Record<string, number> {
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000
+}
+
+/**
+ * 窗口内「有新闻、但一条判定都没有」的条数。
+ *
+ * 判据与评分用的是同一份准入（`isAdmittedNewsItem`）：一边加源、另一边还说「没有新闻」，
+ * 空态那句就会从「未判定」退回假的「这段时间没有相关消息」。
+ *
+ * 例行公告不算「等着判」：它们就算判了也会被例行过滤挡掉，把它们算进来等于把「安静的一天」说成
+ * 「我们没判」。这里只按标题判（`isRoutineNewsNotice` 的标题那一半），因为还没判定就没有方向可判。
+ *
+ * 只对全市场视角计数：按标的过滤时，未判定条目没有 symbols 可用，硬算会把别的标的算进来。
+ */
+function countUnjudgedInWindow(input: {
+  itemsById: ReadonlyMap<string, { itemId: string; sourceId: string; summary?: string; title: string; publishedAt?: string }>
+  from: string
+  to: string
+  store: Pick<NewsSentimentStore, 'getLatestSentiment'>
+  scope?: NewsSentimentQuery['scope']
+}): number {
+  if (input.scope !== undefined && input.scope !== 'market') return 0
+  let count = 0
+  for (const item of input.itemsById.values()) {
+    if (!isAdmittedNewsItem(item)) continue
+    const publishedAt = item.publishedAt
+    if (!publishedAt || publishedAt < input.from || publishedAt > input.to) continue
+    if (isRoutineNewsNotice({ title: item.title, polarity: 'neutral', strength: 1 })) continue
+    if (input.store.getLatestSentiment(item.itemId, input.to)) continue
+    count += 1
+  }
+  return count
+}
+
+/** 模型现在能不能判；读不到就**不说原因**（宁可只说「还没有判定」，也不猜一个原因）。 */
+async function readJudgingState(
+  read: (() => Promise<'ready' | 'model-off' | 'model-unavailable'>) | undefined
+): Promise<'ready' | 'model-off' | 'model-unavailable' | undefined> {
+  if (!read) return undefined
+  try {
+    return await read()
+  } catch {
+    return undefined
+  }
 }

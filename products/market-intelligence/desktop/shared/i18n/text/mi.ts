@@ -31,6 +31,11 @@ export const miText = {
   },
   newsSentiment: {
     unavailable: '舆情暂时不可用。',
+    // 2026-11-18：有新闻、但没判出来。三句分别对应「原因不明 / 模型没开 / 模型不可用」——
+    // 都不许退回「这段时间没有相关消息」，那是一句假话。
+    unjudged: '有新条目，但都还没有判定。',
+    unjudgedModelOff: '有新条目，但都还没有判定——模型判断没有开启，开启后会判出来。',
+    unjudgedModelUnavailable: '有新条目，但都还没有判定——模型暂时不可用，恢复后会判出来。',
     'sources-disabled': '数据源未开启',
     'collection-failed': '采集失败',
     'never-ran': '还没跑过',
@@ -66,6 +71,9 @@ export const miText = {
   },
   newsSentiment: {
     unavailable: 'News sentiment is unavailable.',
+    unjudged: 'New stories arrived, but none has a sentiment reading yet.',
+    unjudgedModelOff: 'New stories arrived, but none has a sentiment reading yet — model scoring is off; turn it on and they will be judged.',
+    unjudgedModelUnavailable: 'New stories arrived, but none has a sentiment reading yet — the model is unavailable right now; they will be judged when it is back.',
     'sources-disabled': 'Data sources are off',
     'collection-failed': 'Collection failed',
     'never-ran': "Hasn't run yet",

@@ -119,6 +119,46 @@ const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof New
       onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
   )
 
+describe('an empty card that actually has unjudged news', () => {
+  // 2026-11-18：规则没命中不再写判定行，于是「空列表」可能是「有新闻但没判」。卡片必须说这一句，
+  // 而不是「这段时间没有相关消息」——后者在这些时候是假话。
+  const readiness = { total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [] }
+  const unjudgedView = (cause?: 'model-off' | 'model-unavailable'): NewsSentimentView => ({
+    ...VIEW,
+    state: 'empty',
+    summary: undefined,
+    items: [],
+    asOf: '2026-10-24T13:00:00.000Z',
+    readiness,
+    unjudgedInWindow: 3,
+    ...(cause === undefined ? {} : { unjudgedCause: cause })
+  })
+
+  it('says "arrived but not judged", never "no related news in this period"', async () => {
+    const container = await mountCard(unjudgedView())
+    const state = container.querySelector('[data-news-sentiment-state="unjudged"]')
+    expect(state).not.toBeNull()
+    const mi = productText['zh-CN'].mi.newsSentiment
+    expect(state?.textContent).toContain(mi.unjudged)
+    expect(state?.textContent).not.toContain(mi.quiet)
+  })
+
+  it('names the cause when the model is off, and when it is unavailable', async () => {
+    const mi = productText['zh-CN'].mi.newsSentiment
+    const off = await mountCard(unjudgedView('model-off'))
+    expect(off.querySelector('[data-news-sentiment-state="unjudged"]')?.textContent).toContain(mi.unjudgedModelOff)
+
+    const unavailable = await mountCard(unjudgedView('model-unavailable'))
+    expect(unavailable.querySelector('[data-news-sentiment-state="unjudged"]')?.textContent).toContain(mi.unjudgedModelUnavailable)
+  })
+
+  it('stays a quiet window when nothing is waiting for a judgment', async () => {
+    const container = await mountCard({ ...VIEW, state: 'empty', summary: undefined, items: [], asOf: '2026-10-24T13:00:00.000Z', readiness })
+    expect(container.querySelector('[data-news-sentiment-state="unjudged"]')).toBeNull()
+    expect(container.querySelector('[data-news-sentiment-state="quiet"]')).not.toBeNull()
+  })
+})
+
 describe('icon triggers', () => {
   // The two icon-only triggers must carry both a screen-reader name and a visible hint: a name alone
   // tells a screen reader what the control is, but a sighted keyboard user still sees only a glyph.

@@ -167,6 +167,70 @@ describe('empty windows carry their cause', () => {
   })
 })
 
+describe('an empty window that actually has unjudged news', () => {
+  // 2026-11-18：规则没命中就不再写判定行，于是「窗口里没有行」可能意味着「有新闻但还没判」。
+  // 两者在界面上都是空列表，但「这段时间没有相关消息」在后者是假话。
+  const unjudgedItem = {
+    itemId: 'item-unjudged',
+    sourceId: 'coindesk-rss',
+    title: 'Bitcoin holds near $65,000 as volumes fade',
+    publishedAt: '2026-10-24T12:30:00.000Z'
+  }
+
+  it('reports how many stories are waiting for a judgment, and why when we know', async () => {
+    const view = await createNewsSentimentQuery({
+      store: createNewsSentimentSqliteStore(':memory:'),
+      pipeline: { listItems: () => [unjudgedItem] as never },
+      readJudgingState: async () => 'model-off',
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+
+    expect(view.state).toBe('empty')
+    expect(view.unjudgedInWindow).toBe(1)
+    expect(view.unjudgedCause).toBe('model-off')
+  })
+
+  it('says nothing about the cause when the model state cannot be read', async () => {
+    const view = await createNewsSentimentQuery({
+      store: createNewsSentimentSqliteStore(':memory:'),
+      pipeline: { listItems: () => [unjudgedItem] as never },
+      readJudgingState: async () => { throw new Error('settings down') },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+
+    expect(view.unjudgedInWindow).toBe(1)
+    expect(view.unjudgedCause).toBeUndefined()
+  })
+
+  it('does not count routine notices as stories waiting to be judged', async () => {
+    const view = await createNewsSentimentQuery({
+      store: createNewsSentimentSqliteStore(':memory:'),
+      pipeline: {
+        listItems: () => [{
+          ...unjudgedItem,
+          itemId: 'item-maintenance',
+          title: 'OKX to Perform Scheduled Maintenance on the RFQ System'
+        }] as never
+      },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+
+    expect(view.state).toBe('empty')
+    expect(view.unjudgedInWindow).toBeUndefined()
+  })
+
+  it('stays a plain quiet window when nothing arrived at all', async () => {
+    const view = await createNewsSentimentQuery({
+      store: createNewsSentimentSqliteStore(':memory:'),
+      pipeline: { listItems: () => [] as never },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+
+    expect(view.state).toBe('empty')
+    expect(view.unjudgedInWindow).toBeUndefined()
+  })
+})
+
 describe('seven-day window', () => {
   // Regression: '7d' is not a sentiment horizon, so the aggregate filtered every signal out and
   // reported "0 directional / score 0 / neutral" for a window full of directional items. The query

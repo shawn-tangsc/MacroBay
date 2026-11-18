@@ -123,9 +123,9 @@ async function harness(options: {
 }
 
 describe('newsSentimentScoringService', () => {
-  it('scores every admitted item and hands back no analysis-trigger candidates', async () => {
-    // 事故样本那一类：中性、无标的的新闻照样会被判断（那是对的），但不该因此触发一次分析。
-    const { service } = await harness({
+  it('judges what the rules can and leaves the rest unjudged, with no analysis-trigger candidates', async () => {
+    // 事故样本那一类：规则命中就判；没命中就保持「未判定」，**不写一条假的 neutral/1**。
+    const { service, store } = await harness({
       withModel: false,
       items: [
         item({ itemId: 'item-a' }),
@@ -139,7 +139,10 @@ describe('newsSentimentScoringService', () => {
     })
     const result = await service.scoreItems({})
 
-    expect(result).toMatchObject({ processed: 2, rules: 2 })
+    // item-a 命中 ETF 批准规则 → 判定；item-b 没有任何规则命中 → 未判定，不写行。
+    expect(result).toMatchObject({ processed: 1, rules: 1, unjudged: 1 })
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')?.engine).toBe('rules')
+    expect(store.getLatestSentiment('item-b', '2026-10-24T13:00:00.000Z')).toBeUndefined()
     // R39：新闻解读只由读者手动发起。评分结果不再携带触发候选——放回去就是自动分析的入口。
     expect(result).not.toHaveProperty('triggerCandidates')
   })
@@ -275,7 +278,9 @@ describe('newsSentimentScoringService budget, retry and fallback', () => {
   function makeService(invoke: NewsSentimentInvoke, count: number) {
     const store = createNewsSentimentSqliteStore(':memory:')
     const { state, providerId, modelId } = readyProviders()
-    const items = ids.slice(0, count).map((id, index) => item({ itemId: `item-${id}`, title: `News ${id}`, publishedAt: `2026-10-24T12:${String(index).padStart(2, '0')}:00.000Z` }))
+    // 标题命中 delisting 规则：这几条测的是「模型没给答案 → 规则兜底写行 + caveat」，
+    // 而 2026-11-18 起「规则没命中」不再写判定（见 `newsSentimentRules`），所以夹具必须是真命中的。
+    const items = ids.slice(0, count).map((id, index) => item({ itemId: `item-${id}`, title: `Binance Will Delist XYZ ${id}`, publishedAt: `2026-10-24T12:${String(index).padStart(2, '0')}:00.000Z` }))
     const service = createNewsSentimentScoringService({
       pipeline: { listItems: () => items },
       store,
@@ -350,6 +355,81 @@ describe('newsSentimentScoringService budget, retry and fallback', () => {
     // The pass ran out mid-item; the remaining judgments say why they have no model answer.
     const exhausted = ids.filter((id) => store.getLatestSentiment(`item-${id}`, '2026-10-24T13:00:00.000Z')?.caveats.includes('news-model-budget-exhausted'))
     expect(exhausted.length).toBeGreaterThan(0)
+  })
+})
+
+describe('unjudged items: no fake low, no starvation, and they come back', () => {
+  /** 一条规则一个都不命中的标题：未判定那一路的夹具。 */
+  const quiet = (index: number) => item({
+    itemId: `quiet-${index}`,
+    title: `Weekly recap ${index}: a quiet weekend in crypto markets`,
+    summary: 'Nothing moved much.',
+    publishedAt: `2026-10-24T12:${String(index % 60).padStart(2, '0')}:00.000Z`
+  })
+
+  it('keeps trying newer items after a round where the model failed and nothing matched a rule', async () => {
+    // 饿死场景：模型整轮失败 + 规则也不命中 ⇒ 这一轮一条行都不写。若不做处理，下一轮还是同样的
+    // 最新 20 条进候选，第 21 条以后永远排不到。进程内的「试过没判出来」集合把它们排到末尾。
+    const tried: string[] = []
+    const invoke = vi.fn(async (request: { taskId: string }) => {
+      tried.push(request.taskId.split(':').pop()!)
+      throw new Error('provider down')
+    }) as unknown as NewsSentimentInvoke
+    const items = Array.from({ length: 24 }, (_, index) => quiet(index))
+    const service = createNewsSentimentScoringService({
+      pipeline: { listItems: () => items } as never,
+      store: createNewsSentimentSqliteStore(':memory:'),
+      settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
+      getProviderState: async () => readyProviders().state,
+      getModelDefaults: async () => {
+        const { providerId, modelId } = readyProviders()
+        return { assistantModelId: '', agentModelId: '', fastModelId: `${providerId}:${modelId}`, translationModelId: '', imageModelId: '' }
+      },
+      invoke,
+      now: () => '2026-10-24T13:00:00.000Z'
+    })
+
+    const first = await service.scoreItems({ limit: 20 })
+    expect(first).toMatchObject({ processed: 0, unjudged: 20 })
+    const firstPass = new Set(tried)
+    tried.length = 0
+
+    const second = await service.scoreItems({ limit: 20 })
+    expect(second.processed).toBe(0)
+    // 上一轮试过的那批让位：这一轮**拿到模型调用的前三条**不再是上一轮那三条。没有这个让位，
+    // 每轮都会把有限的模型尝试耗在同样几条上，其余条目永远轮不到。
+    const newlyReached = tried.filter((itemId) => !firstPass.has(itemId))
+    expect(newlyReached.length).toBeGreaterThan(0)
+    expect(tried.slice(0, 3).some((itemId) => firstPass.has(itemId))).toBe(false)
+  })
+
+  it('writes the judgment as soon as the model answers, so an unjudged item is never lost', async () => {
+    let modelDown = true
+    const invoke = vi.fn(async () => {
+      if (modelDown) throw new Error('provider down')
+      return { ok: true as const, output: modelOutput(), providerId: 'p', modelId: 'm', trace: { taskId: 't', durationMs: 1 } }
+    }) as unknown as NewsSentimentInvoke
+    const items = [quiet(1)]
+    const store = createNewsSentimentSqliteStore(':memory:')
+    const { state, providerId, modelId } = readyProviders()
+    const service = createNewsSentimentScoringService({
+      pipeline: { listItems: () => items } as never,
+      store,
+      settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
+      getProviderState: async () => state,
+      getModelDefaults: async () => ({ assistantModelId: '', agentModelId: '', fastModelId: `${providerId}:${modelId}`, translationModelId: '', imageModelId: '' }),
+      invoke,
+      now: () => '2026-10-24T13:00:00.000Z'
+    })
+
+    const failedPass = await service.scoreItems({ limit: 5 })
+    expect(failedPass.unjudged).toBe(1)
+    expect(store.getLatestSentiment('quiet-1', '2026-10-24T13:00:00.000Z')).toBeUndefined()
+
+    modelDown = false
+    const recovered = await service.scoreItems({ limit: 5 })
+    expect(recovered).toMatchObject({ processed: 1, unjudged: 0 })
+    expect(store.getLatestSentiment('quiet-1', '2026-10-24T13:00:00.000Z')?.engine).toBe('model')
   })
 })
 
@@ -470,9 +550,24 @@ describe('one desktop notice per non-low story that just arrived (R40)', () => {
     expect(JSON.stringify(request.rendered)).not.toContain('View this')
   })
 
-  it('stays silent for the whole low tier: strength 1', async () => {
+  it('stays silent for a model-judged low tier: strength 1', async () => {
     const submitNotice = vi.fn(accepted)
     const { service } = await harness({
+      withModel: true,
+      submitNotice,
+      output: () => ({ ...modelOutput(), strength: 1 })
+    })
+
+    const result = await service.scoreItems({ itemIds: ['item-a'] })
+
+    expect(result).toMatchObject({ processed: 1, unjudged: 0 })
+    expect(submitNotice).not.toHaveBeenCalled()
+  })
+
+  it('stays silent when nothing could be judged at all, and writes no row', async () => {
+    // 规则没命中 + 没有模型 → 这条保持「未判定」：不写行、不弹桌面。写一条 neutral/1 就是「假低」。
+    const submitNotice = vi.fn(accepted)
+    const { service, store } = await harness({
       withModel: false,
       submitNotice,
       items: [item({ title: 'Weekly recap: a quiet weekend in crypto markets', summary: 'Nothing moved much.' })]
@@ -480,7 +575,8 @@ describe('one desktop notice per non-low story that just arrived (R40)', () => {
 
     const result = await service.scoreItems({ itemIds: ['item-a'] })
 
-    expect(result.processed).toBe(1)
+    expect(result).toMatchObject({ processed: 0, unjudged: 1 })
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')).toBeUndefined()
     expect(submitNotice).not.toHaveBeenCalled()
   })
 

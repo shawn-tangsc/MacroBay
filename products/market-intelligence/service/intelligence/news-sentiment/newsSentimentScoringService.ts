@@ -13,6 +13,7 @@ import {
 } from '../schema/newsSentiment'
 import { buildNewsSentimentMessages, parseNewsPolarityModelOutput } from './newsSentimentModel'
 import { scoreNewsWithRules } from './newsSentimentRules'
+import { isAdmittedNewsItem } from './newsSentimentAdmission'
 import { storyKeyOf, utcDayBucket, type StoryKeyCandidate } from './newsSentimentStoryKey'
 import { createNewsSentimentAlertOutlet } from './newsSentimentAlertOutlet'
 import { buildSentimentAlertRequest } from './newsSentimentAlertRequest'
@@ -40,6 +41,11 @@ export type NewsSentimentScoringResult = Readonly<{
   rules: number
   skipped: number
   failed: number
+  /**
+   * 这一轮**没有判出来**的条数：模型没给出答案、规则也没命中。它们**不写判定行**（2026-11-18 修：
+   * 没命中不等于判成中性/低），下一轮会被重新捡起。写进运行日志，读者与排查都看得到「有几条没判」。
+   */
+  unjudged: number
   /** Model calls spent by this run, retries included — the same allowance the pass is capped by. */
   modelCalls: number
   /**
@@ -54,9 +60,6 @@ export type NewsSentimentScoringResult = Readonly<{
 const MAX_ATTEMPTS_PER_ITEM = 2
 /** 154 §7.1：连续 3 条没拿到模型判断，本轮余下条目不再调用模型。 */
 const CONSECUTIVE_FAILURES_BEFORE_FALLBACK = 3
-
-const SOURCES = new Set<string>(NEWS_SENTIMENT_SOURCE_IDS)
-const OKX_TYPES = new Set<string>(OKX_SENTIMENT_ANN_TYPES)
 
 /**
  * 一条新闻 → 一条可复核的判断。模型可用时用模型，否则用规则；结果按版本落库，
@@ -110,6 +113,14 @@ export function createNewsSentimentScoringService(deps: {
         threshold: () => pushThresholdStore?.read().pushThreshold ?? 'medium'
       })
     : undefined
+  /**
+   * 同一进程内「试过、但没判出来」的条目（模型没给答案、规则也没命中）。
+   *
+   * 只用来**排序**：它们不写库，所以每一轮都会重新进候选；如果一直排在最前，模型整轮失败时
+   * 每一轮都只重试同样那 20 条，老条目永远排不到。排到末尾让轮次往前走。
+   * **进程内、不落库**：重启即清空，多试一次而已；落库会让「模型刚恢复」的第一次重判被挡住。
+   */
+  const attemptedUnjudged = new Set<string>()
   return {
     /** 页面对「强度门槛」的读写入口：与判定读的是同一份存储。没给路径时没有这一项。 */
     ...(pushThresholdStore === undefined ? {} : { pushThreshold: pushThresholdStore }),
@@ -142,7 +153,7 @@ export function createNewsSentimentScoringService(deps: {
         model.providerId && model.modelId ? `${model.providerId}:${model.modelId}` : undefined
       const useModel = settings.modelScoringEnabled && Boolean(modelRef)
 
-      const admitted = deps.pipeline.listItems().filter(isAdmittedItem)
+      const admitted = deps.pipeline.listItems().filter(isAdmittedNewsItem)
       const requestedIds = input.itemIds?.length ? new Set(input.itemIds) : undefined
       // One number for the whole pass: how many items it may judge is also how many model calls it
       // may spend, and a retry is spent from the same allowance. A second counter would drift from
@@ -153,8 +164,16 @@ export function createNewsSentimentScoringService(deps: {
         // 有没有旧判定在写之前就要知道：**第一次判定**才算「来了条新闻」，后补/重跑都不补发。
         .map((item) => ({ item, earlier: deps.store.getLatestSentiment(item.itemId, deps.now()) }))
         .filter((entry) => !isCurrent(entry.earlier, useModel, modelRef))
+        .sort((left, right) => {
+          // 饿死控制（2026-11-18）：一条试过但没判出来的条目如果一直排在最前，模型整轮失败时
+          // 每一轮都只重试同样那 20 条，老条目永远排不到。同一进程内把它们排到候选末尾，
+          // 让轮次继续往前走；进程重启即清空（多试一次，代价可接受）。
+          const leftStuck = attemptedUnjudged.has(left.item.itemId)
+          const rightStuck = attemptedUnjudged.has(right.item.itemId)
+          if (leftStuck !== rightStuck) return leftStuck ? 1 : -1
+          return (right.item.publishedAt ?? '').localeCompare(left.item.publishedAt ?? '')
+        })
         // The pass is capped; newest first so the visible window fills before older backlog.
-        .sort((left, right) => (right.item.publishedAt ?? '').localeCompare(left.item.publishedAt ?? ''))
         .slice(0, runBudget)
 
       let processed = 0
@@ -162,6 +181,7 @@ export function createNewsSentimentScoringService(deps: {
       let rulesCount = 0
       let skipped = 0
       let failed = 0
+      let unjudged = 0
       let modelCalls = 0
       // 154 §7.1: three judgments in a row without a model answer means this run stops paying for one.
       let consecutiveModelFailures = 0
@@ -243,7 +263,7 @@ export function createNewsSentimentScoringService(deps: {
         const body = hasBody ? document!.bodyText! : `${item.title}\n${item.summary ?? ''}`
         const bodyCaveats = hasBody ? [] : [NEWS_SENTIMENT_CAVEATS.bodyLimited]
 
-        let judgment: NewsSentimentJudgment
+        let judgment: NewsSentimentJudgment | undefined
         let engine: NewsSentimentRecord['engine']
         let modelRefUsed: string | undefined
         let promptVersion: string | undefined
@@ -297,7 +317,7 @@ export function createNewsSentimentScoringService(deps: {
             consecutiveModelFailures += 1
             judgment = scoreNewsWithRules({ title: item.title, summary: item.summary })
             engine = 'rules'
-            ruleId = judgment.reasonCode
+            ruleId = judgment?.reasonCode
             caveats.push(
               modelError === 'invalid'
                 ? NEWS_SENTIMENT_CAVEATS.modelInvalidOutput
@@ -311,9 +331,19 @@ export function createNewsSentimentScoringService(deps: {
         } else {
           judgment = scoreNewsWithRules({ title: item.title, summary: item.summary })
           engine = 'rules'
-          ruleId = judgment.reasonCode
+          ruleId = judgment?.reasonCode
           if (settings.modelScoringEnabled) caveats.push(NEWS_SENTIMENT_CAVEATS.modelUnavailable)
         }
+
+        // **规则没命中 = 没有判定**：不写库、不推通知、不产出触发，也不造归并键。这条保持「未判定」，
+        // 下一轮评分会重新捡起它（候选判据是「不是当前判定」，没有行就算不是当前）。
+        if (judgment === undefined) {
+          unjudged += 1
+          attemptedUnjudged.add(item.itemId)
+          continue
+        }
+        // 判出来了：从「卡住的」集合里移除，下一次不用再让位。
+        attemptedUnjudged.delete(item.itemId)
 
         // 归并键只从实体集与 UTC 日桶合成；规则兜底没有实体，因此没有键（没有键就不推）。
         const entities = judgment.entities ?? []
@@ -383,18 +413,9 @@ export function createNewsSentimentScoringService(deps: {
       skipped = Math.max(0, requestedCount - candidates.length)
       // R39：新闻解读只有读者手动触发。评分这一步不再产出分析触发的候选；
       // R40 的到达通知与它的判据（`arrivalIds` / `earlier === undefined`）不受影响。
-      return { processed, model: modelCount, rules: rulesCount, skipped, failed, modelCalls }
+      return { processed, model: modelCount, rules: rulesCount, skipped, failed, unjudged, modelCalls }
     }
   }
-}
-
-function isAdmittedItem(item: {
-  sourceId: string
-  summary?: string
-}): boolean {
-  if (!SOURCES.has(item.sourceId)) return false
-  if (item.sourceId !== 'okx-latest-announcements') return true
-  return typeof item.summary === 'string' && OKX_TYPES.has(item.summary.trim())
 }
 
 /**

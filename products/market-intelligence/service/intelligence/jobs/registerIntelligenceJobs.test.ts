@@ -127,7 +127,7 @@ describe('registerIntelligenceJobs', () => {
       enqueueDefinition
     } as unknown as JobRuntime
     const scoreItems = vi.fn(async (_input: Record<string, unknown>) => ({
-      processed: 1, model: 0, rules: 1, skipped: 0, failed: 0, modelCalls: 0, triggerCandidates: []
+      processed: 1, model: 0, rules: 1, skipped: 0, failed: 0, unjudged: 0, modelCalls: 0
     }))
     const enrichItems = vi.fn(async (_input: Record<string, unknown>) => ({ processed: 1, available: 1, tooShort: 0, failed: 0, skipped: 0 }))
     registerIntelligenceJobs(jobRuntime, {

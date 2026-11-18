@@ -179,7 +179,9 @@ export function registerIntelligenceJobs(
     })
     await context.log({
       level: 'info',
-      message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, skipped ${result.skipped}.`
+      // `unjudged` 必须出现在这里：这一轮「有几条没判出来」是可查的事实，不是一次静默跳过。
+      message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, `
+        + `unjudged ${result.unjudged}, skipped ${result.skipped}.`
     })
     // 新闻的严重度只能在这一步之后才成立（判定刚写下来）。重建是重算历史，不是新事件，不补触发。
     // R39：新闻判定落地后不再补分析触发——按条解读只有读者手动那一次。

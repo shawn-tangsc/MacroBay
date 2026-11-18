@@ -109,7 +109,9 @@ export function NewsSentimentCard(props: {
         itemCount: (view.items ?? []).length,
         windowStart,
         ...(view.readiness ? { readiness: view.readiness } : {}),
-        ...(view.latestKnownItemAt ? { latestKnownItemAt: view.latestKnownItemAt } : {})
+        ...(view.latestKnownItemAt ? { latestKnownItemAt: view.latestKnownItemAt } : {}),
+        ...(view.unjudgedInWindow === undefined ? {} : { unjudgedInWindow: view.unjudgedInWindow }),
+        ...(view.unjudgedCause === undefined ? {} : { unjudgedCause: view.unjudgedCause })
       })
     : undefined
   // Without a source status an empty window has no known cause. Saying "no related news" there would
@@ -274,6 +276,28 @@ export function NewsSentimentCard(props: {
  * 来源不可用那三种（未配置 / 未启用 / 读不到）**不走这里**：它们只在数据区盖一层遮罩，
  * 卡框、标题与头部工具照常（规范 §二 第 1 条）。
  */
+/** 「有新条目、但还没判定」那一档的句子。原因读得出来才说，读不出来就只说事实。 */
+function UnjudgedCause(props: {
+  cause?: 'model-off' | 'model-unavailable'
+  resolve: (key: string, params?: Record<string, string>) => string
+}): React.ReactElement {
+  const resolveStateText = useStateViewText()
+  const common = {
+    // 平台闭集只有 nothing-in-window：这里说的话由 `productReason` 给（「有新条目但还没判」）。
+    reasonCode: 'nothing-in-window' as const,
+    resolveText: resolveStateText,
+    size: 'md' as const,
+    state: 'empty' as const
+  }
+  if (props.cause === 'model-off') {
+    return <StateView {...common} productReason={{ key: 'mi.newsSentiment.unjudgedModelOff', resolve: (key, params) => props.resolve(key, params) }} />
+  }
+  if (props.cause === 'model-unavailable') {
+    return <StateView {...common} productReason={{ key: 'mi.newsSentiment.unjudgedModelUnavailable', resolve: (key, params) => props.resolve(key, params) }} />
+  }
+  return <StateView {...common} productReason={{ key: 'mi.newsSentiment.unjudged', resolve: (key) => props.resolve(key) }} />
+}
+
 function EmptyCause(props: {
   state: import('./newsSentimentEmptyState').NewsSentimentEmptyState
   resolve: (key: string, params?: Record<string, string>) => string
@@ -287,6 +311,10 @@ function EmptyCause(props: {
     <div className="mi-news-sentiment__state" data-news-sentiment-state={state.kind}>{node}</div>
   )
   switch (state.kind) {
+    case 'unjudged':
+      // 这不是「安静」：窗口里确实有新闻，只是还没判出来。原因说得出就说（模型没开 / 不可用），
+      // 说不出就只说事实——不猜。三句话各走一个**字面键**：原因句的守卫要求键是字面量。
+      return wrap(<UnjudgedCause cause={state.cause} resolve={props.resolve} />)
     case 'stale':
       return wrap(
         <StateView
