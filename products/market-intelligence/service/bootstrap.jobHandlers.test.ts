@@ -98,6 +98,9 @@ const EXPECTED_HANDLER_IDS: readonly string[] = [
   'market-intelligence.retain-market-history',
   'market-intelligence.runMarketAnalysis',
   'market-intelligence.scoreNewsSentiment',
+  // 分析线的收尸作业（`SWEEP_STALLED_ANALYSIS_RUNS_JOB`）：它确实在注册面上，
+  // 快照没登记就会红——补上是让快照与注册面一致，不是放宽断言。
+  'market-intelligence.sweepStalledAnalysisRuns',
   'market-intelligence.translateItems',
   'market-intelligence.verifyMarketAnalysisPredictions',
 ]
