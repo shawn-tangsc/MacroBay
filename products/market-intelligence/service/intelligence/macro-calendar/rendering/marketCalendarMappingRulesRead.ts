@@ -104,8 +104,24 @@ export type MappingRulesRead = Readonly<{
    * 一场讲话不是指标，不进 `mapped`；但它确实被认出来了，界面上要用这个数解释「为什么未映射少了、
    * 已映射没涨」。事件一条都不进本表的行。
    */
-  counts: Readonly<{ mapped: number; unmapped: number; unmappedRows: number; eventIdentities: number }>
+  counts: Readonly<{
+    mapped: number
+    /** **只算真正在等映射的**（事件/无标准行/缺期次/无码都排除，见 `diagnostics`）。 */
+    unmapped: number
+    unmappedRows: number
+    eventIdentities: number
+    /** 只作诊断的四类计数：它们不进列表，但读者问「另外那些去哪了」时这里答得出来。 */
+    diagnostics: Readonly<{
+      'unknown-event-type': number; 'no-standard-row': number; 'period-unresolved': number; 'no-code': number
+    }>
+  }>
 }> | Readonly<{ state: 'unavailable'; reasonCode: 'query-unavailable' }>
+
+/** `["214790",79090]` → `214790`（与事件读口同一个取法，只取第一段）。 */
+function sourceIdOfSourceKey(sourceKey: string): string | undefined {
+  const match = /^\["([^"]+)"/u.exec(sourceKey)
+  return match?.[1]
+}
 
 type Aggregate = Readonly<{ sourceId: string; rows: number; sampleLabel: string | null; sampleLabelEn: string | null }>
 
@@ -215,8 +231,32 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       })
     }).sort((left, right) => left.metricKey.localeCompare(right.metricKey))
     const recognized = new Set(allIdentityEntries.map(([sourceId]) => sourceId))
+    /**
+     * **未映射页签只放「真正在等映射的」**（用户 2026-11-18：477 条压不下去）。
+     *
+     * 477 里绝大多数不是「该映射却没映射」：讲话/会议是事件、缺统计期的映射早就写了、无标准行的
+     * 连一行都没有。它们各有去处，**只作计数**，不进列表——否则读者照着补映射，补的是已经做完的事。
+     */
+    const DIAGNOSTIC_ONLY = new Set(['unknown-event-type', 'no-standard-row', 'period-unresolved',
+      'bad-period', 'no-code'])
+    const reasonById = new Map<string, string>()
+    const reasonRows = database.prepare(`select source_key, reason from mi_calendar_unmapped`).all() as unknown as
+      { source_key: string; reason: string }[]
+    for (const row of reasonRows) {
+      const id = sourceIdOfSourceKey(row.source_key)
+      if (id !== undefined && !reasonById.has(id)) reasonById.set(id, row.reason)
+    }
+    const diagnostics = { 'unknown-event-type': 0, 'no-standard-row': 0, 'period-unresolved': 0, 'no-code': 0 }
     const unmapped: UnmappedSourceIdRow[] = [...byId.values()]
       .filter((entry) => !recognized.has(entry.sourceId))
+      .filter((entry) => {
+        const reason = reasonById.get(entry.sourceId)
+        if (reason === undefined || !DIAGNOSTIC_ONLY.has(reason)) return true
+        // `bad-period` 是这一档的旧库写法，与 `period-unresolved` 同去处（日历线的只读遗留）。
+        const bucket = reason === 'bad-period' ? 'period-unresolved' : reason
+        if (bucket in diagnostics) diagnostics[bucket as keyof typeof diagnostics] += 1
+        return false
+      })
       .map((entry) => Object.freeze({ sourceId: entry.sourceId, rowCount: entry.rows,
         sampleLabel: entry.sampleLabel, sampleLabelEn: entry.sampleLabelEn }))
       .sort((left, right) => right.rowCount - left.rowCount || left.sourceId.localeCompare(right.sourceId))
@@ -226,7 +266,9 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
       unmapped: Object.freeze(unmapped),
       counts: Object.freeze({ mapped: mapped.length, unmapped: unmapped.length,
         unmappedRows: unmapped.reduce((sum, entry) => sum + entry.rowCount, 0),
-        eventIdentities: Object.keys(zeroXRouterEventIdentities).length })
+        eventIdentities: Object.keys(zeroXRouterEventIdentities).length,
+        /** 只作诊断：这四类各有去处，不进列表（加起来才是读者原先看到的 477）。 */
+        diagnostics: Object.freeze(diagnostics) })
     })
   } catch {
     return { state: 'unavailable', reasonCode: 'query-unavailable' }

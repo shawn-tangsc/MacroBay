@@ -133,3 +133,47 @@ describe('映射规则表读口', () => {
     expect(read.counts.unmappedRows).toBe(2)
   })
 })
+
+/**
+ * **未映射页签只放「真正在等映射的」**（用户 2026-11-18：477 条压不下去）。
+ *
+ * 事件、无标准行、缺期次、无码各有去处，只作诊断计数；留它们在列表里，读者会照着去补
+ * 已经做完的事——这正是今晚反复出现的「数看起来很大、其实没活可干」。
+ */
+describe('未映射列表排除四类诊断原因', () => {
+  const insertReason = (database: DatabaseSync, sourceKey: string, reason: string): void => {
+    database.exec(`insert into mi_calendar_unmapped (provider_id, source_key, detected_at, raw_json, reason)
+      values ('0xrouter', '${sourceKey}', '2026-11-18T00:00:00Z', '{"scheduledDate":"2026-11-16"}', '${reason}')`)
+  }
+
+  it('keeps a genuinely unmapped id and counts the four diagnostic kinds separately', () => {
+    const database = seed()
+    // 三类：事件、无标准行、缺期次；另有一条真在等映射的（没有原因行）。
+    insertReason(database, '["700001",1]', 'unknown-event-type')
+    insertReason(database, '["700002",1]', 'no-standard-row')
+    insertReason(database, '["700003",1]', 'period-unresolved')
+    insertReason(database, '["700004",1]', 'bad-period')
+    for (const [id, date] of [['700001', '2026-11-16'], ['700002', '2026-11-16'],
+      ['700003', '2026-11-16'], ['700004', '2026-11-16']] as const) {
+      upsertCalendarStandardRow(database, {
+        countryCode: 'US', metricKey: `["${id}",1]`, periodKey: date,
+        scheduledDate: date, timePrecision: 'minute' as const, status: 'missing' as const,
+        valuesJson: '{}', identityKind: 'source' as const, sourceLabel: '事件或残行',
+        sourceProviderId: '0xrouter', sourceEventId: `x-${id}`, parserVersion: 'v1',
+        observedAt: now, firstSeenAt: now
+      })
+    }
+    const read = readCalendarMappingRules(database)
+    if (read.state !== 'available') throw new Error('unavailable')
+    const listed = read.unmapped.map((row) => row.sourceId)
+    // 列表里只剩「没有原因行的」真待映射 id；四类诊断一条都不进。
+    expect(listed).toContain('999999')
+    for (const hidden of ['700001', '700002', '700003', '700004']) expect(listed).not.toContain(hidden)
+    expect(read.counts.diagnostics['unknown-event-type']).toBe(1)
+    expect(read.counts.diagnostics['no-standard-row']).toBe(1)
+    // `bad-period` 与 `period-unresolved` 归同一档：旧库写法不许再占一个数。
+    expect(read.counts.diagnostics['period-unresolved']).toBe(2)
+    expect(read.counts.diagnostics['no-code']).toBe(0)
+    expect(read.counts.unmapped).toBe(read.unmapped.length)
+  })
+})
