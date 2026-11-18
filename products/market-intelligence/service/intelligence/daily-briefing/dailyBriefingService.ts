@@ -30,7 +30,7 @@ import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefB
 import { settleEditorialEdition } from './dailyBriefingPublish'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { prepareMarketForRun } from './dailyBriefProgressWaiting'
-import { createDailyBriefingReads, type DailyBriefingGetResult } from './dailyBriefingReads'
+import { createDailyBriefingReads, restoreBriefingDisplayValues, type DailyBriefingGetResult } from './dailyBriefingReads'
 import { notifyBriefingFailure, notifyDailyBriefing, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import type { DailyBriefReadiness } from './dailyBriefReadinessGate'
@@ -227,7 +227,7 @@ export function createDailyBriefingService(deps: Readonly<{
     const slotPeriodId = await briefingEditionSlotPeriodId(deps.store, rawInput)
     const input = slotPeriodId === rawInput.periodId ? rawInput : Object.freeze({ ...rawInput, periodId: slotPeriodId })
     const cached = force ? undefined : await deps.store.get(input.date, input.locale, input.periodId).catch(() => undefined)
-    if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
+    if (cached && isCurrent(cached.document)) return { state: 'available', document: restoreBriefingDisplayValues(cached.document) }
     // 读数的那一刻（运行时刻）≠ 统计截止（`input.asOf`）：窗口按截止，读的是此刻最新的库；取一次时钟整跑共用。
     const readAt = now()
     // 先开 attempt 行：一个跑不完的进程也要留下"试过但没成"的记录，而不是"从未发生"。

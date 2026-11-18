@@ -11,6 +11,7 @@ import {
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { DailyBriefingStoredEdition } from './dailyBriefingService'
 import { DAY_MS, HOUR_MS, safe, safeSync } from './dailyBriefingSafeRead'
+import { toDisplayText } from './briefingDisplayValue'
 
 /**
  * The localized layer: prior conclusions in the reader's language, and the calendar's titles.
@@ -82,10 +83,13 @@ export async function readCalendar(
         const linked = event.officialLink?.officialEventKey
         if (linked && events.has(linked)) {
           const official = events.get(linked)!
+          // 标准表那一行的值可能是值对象的 JSON 串（2026-11-18 事故）：补值也走同一个解释出口。
+          const consensus = displayTextOf(event.consensus)
+          const previous = displayTextOf(event.providerPrevious)
           events.set(linked, Object.freeze({
             ...official,
-            ...(official.consensus ? {} : event.consensus ? { consensus: event.consensus.displayValue } : {}),
-            ...(official.previous ? {} : event.providerPrevious ? { previous: event.providerPrevious.displayValue } : {}),
+            ...(official.consensus ? {} : consensus === undefined ? {} : { consensus }),
+            ...(official.previous ? {} : previous === undefined ? {} : { previous }),
             ...(official.countryCode ? {} : event.countryCode ? { countryCode: event.countryCode } : {}),
             ...(official.countryName ? {} : event.countryName ? { countryName: event.countryName } : {})
           }))
@@ -126,6 +130,14 @@ function readMarketCalendar(
   return Object.freeze({ ...first, events: Object.freeze(events), nextCursor: undefined })
 }
 
+/**
+ * 展示值对象 → 普通字符串。**唯一出口**：标准表里的 `displayValue` 本身可能是一段
+ * `{"displayValue":"4.7%"}` 的 JSON 串（2026-11-18 事故），这里解释一次，展示字段就只剩字符串。
+ */
+function displayTextOf(value: Readonly<{ displayValue: string }> | null | undefined): string | undefined {
+  return value === null || value === undefined ? undefined : toDisplayText(value.displayValue)
+}
+
 function officialEvent(
   event: Extract<Awaited<ReturnType<MarketIntelligencePublicQueryService['queryMacroEconomicCalendarMonth']>>, { state: 'available' }>['events'][number],
   _asOf: string
@@ -136,6 +148,11 @@ function officialEvent(
   const published = event.releaseTimeSource === 'convention-default' ? undefined : event.scheduledAt
   const scheduledAt = published ?? `${event.scheduledDate}T00:00:00.000Z`
   const surprise = assessMarketCalendarSurprise(event.actual, event.consensus)
+  // 值对象只在**这一处**解释成展示字符串（2026-11-18 事故：上一版直接把 `.displayValue` 原样带出，
+  // 而它本身可能是 `{"displayValue":"4.7%"}` 这种串；展示字段的类型在这里收口成 string）。
+  const actual = displayTextOf(event.actual)
+  const previous = displayTextOf(event.previous)
+  const consensus = displayTextOf(event.consensus)
   return Object.freeze({
     eventKey: event.eventKey,
     title: event.titleKey,
@@ -147,9 +164,9 @@ function officialEvent(
     ...(event.importance === undefined ? {} : { importance: event.importance }),
     lifecycleState: event.lifecycleState,
     category: 'economic-indicator' as const,
-    ...(event.actual ? { actual: event.actual.displayValue } : {}),
-    ...(event.previous ? { previous: event.previous.displayValue } : {}),
-    ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),
+    ...(actual === undefined ? {} : { actual }),
+    ...(previous === undefined ? {} : { previous }),
+    ...(consensus === undefined ? {} : { consensus }),
     surprise: surpriseView(surprise)
   })
 }
@@ -159,6 +176,9 @@ function marketEvent(
   _asOf: string
 ): DailyBriefingCalendarEvent {
   const surprise = assessMarketCalendarSurprise(event.providerActual, event.consensus)
+  const actual = displayTextOf(event.providerActual)
+  const previous = displayTextOf(event.providerPrevious)
+  const consensus = displayTextOf(event.consensus)
   return Object.freeze({
     eventKey: event.eventKey,
     title: event.title,
@@ -175,9 +195,11 @@ function marketEvent(
     // **一条都拦不住**——它拿到的永远是同一个类别（2026-11-06 读者看到的 7 条讲话就是这么漏出来的）。
     // 只按源给的类别走，别再自己归类。
     category: event.eventType,
-    ...(event.providerActual ? { actual: event.providerActual.displayValue } : {}),
-    ...(event.providerPrevious ? { previous: event.providerPrevious.displayValue } : {}),
-    ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),
+    // 值对象只在**这一处**解释成展示字符串（2026-11-18 事故：`providerPrevious.displayValue`
+    // 本身可能是 `{"displayValue":"4.7%"}` 这种串；展示字段的类型在这里收口成 string）。
+    ...(actual === undefined ? {} : { actual }),
+    ...(previous === undefined ? {} : { previous }),
+    ...(consensus === undefined ? {} : { consensus }),
     surprise: surpriseView(surprise)
   })
 }

@@ -5,6 +5,7 @@ import type { DailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJour
 import type { DailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { withGenerationTrace } from './dailyBriefingStoredAttempt'
 import { cutoffDate } from './dailyBriefingGenerationGuards'
+import { assertNoSerializedValueObjects } from './briefingDisplayValue'
 import type { DailyBriefingStore } from './dailyBriefingService'
 import type { DailyBriefingTodayFailureCode, DailyBriefingTodayResult } from './dailyBriefingService'
 
@@ -56,8 +57,12 @@ export async function publishDailyBriefingEdition(input: Readonly<{
     // The edition row and the attempt that wrote it are one write: a reader never sees one without
     // the other.
     if (store.publishEdition) {
+      // 落库前的出口断言（2026-11-18 事故）：展示字段里出现 `{"displayValue":…}` 这段串就拒绝发布，
+      // 宁可这一跑记失败，也不许读者在正文里看到 JSON。
+      assertNoSerializedValueObjects(traced)
       await store.publishEdition(edition, settled)
     } else {
+      assertNoSerializedValueObjects(traced)
       await store.put(edition)
       if (settled) await store.finishAttempt?.(settled).catch(() => undefined)
     }
