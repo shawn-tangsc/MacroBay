@@ -45,3 +45,22 @@ it('carries the published values and the date the provider reported', () => {
   const mapped = toCardEventFromProvider(provider({ providerActual: { displayValue: '0.3%' }, providerPrevious: { displayValue: '0.1%' }, consensus: { displayValue: '0.2%' } }))
   expect(mapped).toMatchObject({ scheduledDate: '2026-10-13', actual: { displayValue: '0.3%' }, previous: { displayValue: '0.1%' }, consensus: { displayValue: '0.2%' } })
 })
+
+/**
+ * 分级来自指标码（用户 2026-11-19）：指标行按码表取 `tier`，事件行与查不到的码是 `null`
+ * ——「不在分级表里」和「没读到」不是一回事，但投影层只给 `null`，界面按 `null` 处理。
+ */
+it('carries the metric tier onto the card event, and leaves event rows untiered', () => {
+  const indicator = toCardEventFromProvider({
+    eventKey: 'row-1', eventNameKey: 'US.CPI.NSA.YOY', title: 'CPI 年率',
+    eventType: 'economic-indicator', importance: 'medium',
+    scheduledAt: '2026-11-10T13:30:00.000Z', sourceObservedAt: '2026-11-10T13:30:00.000Z'
+  })
+  expect(indicator.tier).toBe(1)
+  const activity = toCardEventFromProvider({
+    eventKey: 'row-2', eventNameKey: 'evt.central-bank-speech', title: '央行讲话',
+    eventType: 'central-bank-activity', importance: 'high',
+    scheduledAt: '2026-11-10T13:30:00.000Z', sourceObservedAt: '2026-11-10T13:30:00.000Z'
+  })
+  expect(activity.tier).toBeNull()
+})

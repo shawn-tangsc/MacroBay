@@ -23,8 +23,8 @@ it('keeps the card copy complete and identical in both locales', () => {
 
 it('names every string the card and the column controls need', () => {
   expect(Object.keys(card('zh-CN')).sort()).toEqual([
-    'agentTitle', 'awaitingData', 'categories', 'clearConversation', 'closeAgent', 'collapseAgent', 'copyEvent', 'dxy', 'empty', 'eventContext', 'expandAgent', 'importanceHigh', 'loading', 'openCalendar', 'openEventInCalendar', 'reactionHint', 'refresh', 'releasedEmpty',
-    'staleNotice', 'surprise', 'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'unknownCountry', 'unscoredCount', 'upcomingSection'
+    'agentTitle', 'awaitingData', 'categories', 'clearConversation', 'closeAgent', 'collapseAgent', 'copyEvent', 'dxy', 'empty', 'eventContext', 'expandAgent', 'filterNote', 'importanceHigh', 'loading', 'openCalendar', 'openEventInCalendar', 'reactionHint', 'refresh', 'releasedEmpty',
+    'staleNotice', 'surprise', 'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'unknownCountry', 'upcomingSection'
   ])
   // `loading` and `staleNotice` arrived with the three waiting states; `unknownCountry` arrived with
   // the three-step country fallback (the card used to draw nothing when the name was missing).

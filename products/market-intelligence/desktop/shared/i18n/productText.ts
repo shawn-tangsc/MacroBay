@@ -211,7 +211,7 @@ mi: miText['zh-CN'],
               /* 「读不到」与「读到了但没有这条」必须分开（2026-11-14）。这句只在前者出现。 */
               factsUnreadable: '这段时间的日历没读到，本次不含日历事实' }, importanceHigh: '高重要性', timePending: '时间待定',
             /* 名单之外还有事件、只是来源没给重要性：不列入，但不能让读者以为名单就是全部。 */
-            unscoredCount: '另有 {count} 条未标级',
+            filterNote: '只显示一二级指标与高重要性事件',
             surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', unavailable: '无一致预期', notComparable: '预期差不可比' }
           },
           analysisTimeline: {
@@ -1761,7 +1761,7 @@ mi: miText['en-US'],
             collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy {name}', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence',
               factsUnreadable: 'The calendar for this span could not be read; this brief has no calendar facts' }, importanceHigh: 'High importance', timePending: 'Time TBD',
             /* Events beyond the list whose source gave no rating: not listed, but the list is not everything. */
-            unscoredCount: '{count} more without a rating',
+            filterNote: 'Only tier-1 and tier-2 indicators, and high-importance events',
             surprise: { beat: 'Above expectation', miss: 'Below expectation', inline: 'In line', unavailable: 'No consensus', notComparable: 'Surprise not comparable' }
           },
           analysisTimeline: {

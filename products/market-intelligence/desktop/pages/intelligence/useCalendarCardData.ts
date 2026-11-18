@@ -59,7 +59,7 @@ async function readEnabledCalendarSources(): Promise<Readonly<{ all: readonly st
 }
 
 /** No rows yet. `empty` is the projection's own word for "read, nothing in the window". */
-const emptyProjection: CalendarCardProjection = { today: [], upcoming: [], unscoredCount: 0, state: 'empty' }
+const emptyProjection: CalendarCardProjection = { today: [], upcoming: [], state: 'empty' }
 
 /**
  * What the card is doing, as three states.
@@ -150,7 +150,7 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
       const events: CalendarCardEvent[] = official.state === 'available' ? official.events.map(toCardEventFromOfficial) : []
       if (market !== null) {
         events.push(...market.events.map(event => ({
-          ...toCardEventFromProvider(event),
+          ...toCardEventFromProvider({ ...event, eventNameKey: event.eventNameKey }),
           ...(MARKET_FEED_BY_EVENT_TYPE[event.eventType] === undefined ? {} : { sourceIds: [MARKET_FEED_BY_EVENT_TYPE[event.eventType]!] })
         })))
       }

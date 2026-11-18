@@ -38,7 +38,7 @@ const row = (overrides: Partial<CalendarCardRow> = {}): CalendarCardRow => ({
   surprise: { direction: 'beat', value: 0.2, unit: 'pp', reason: null }, ...overrides
 })
 const projection = (today: readonly CalendarCardRow[], upcoming: readonly CalendarCardRow[] = []): CalendarCardProjection =>
-  ({ today, upcoming, unscoredCount: 0, state: today.length + upcoming.length > 0 ? 'available' : 'empty' })
+  ({ today, upcoming, state: today.length + upcoming.length > 0 ? 'available' : 'empty' })
 
 describe('the ±30 minute reaction around a release', () => {
   it('reads the move between the two ends of the window, per asset', () => {

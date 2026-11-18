@@ -1,5 +1,6 @@
 import { providerLifecycleState } from '../../shared/marketCalendarEventLifecycle'
 import type { CalendarCardEvent } from './projectUpcomingCalendarCard'
+import { tierOfMetricKey } from '../../../service/intelligence/macro-calendar/marketCalendarReleaseGroups'
 
 /**
  * Maps the two calendar routes onto the card's event shape.
@@ -15,6 +16,8 @@ import type { CalendarCardEvent } from './projectUpcomingCalendarCard'
 /** An official event, which owns its lifecycle; mapped only to the card's field names. */
 export function toCardEventFromOfficial(view: Readonly<{
   eventKey: string; titleKey: string; importance?: 'high' | 'medium' | 'low'
+  /** 指标码（有就给分级；官方腿的 `eventKey` 是发布行键，不是码）。 */
+  eventNameKey?: string
   /** 三个官方腿的 `sourceId`；卡片按来源启停过滤时用。 */
   providerIds?: readonly string[]
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
@@ -25,6 +28,8 @@ export function toCardEventFromOfficial(view: Readonly<{
 }>): CalendarCardEvent {
   return {
     eventKey: view.eventKey, titleKey: view.titleKey, importance: view.importance,
+    // 官方腿只有经济指标：分级按指标码取；码拿不到就是 null（不在分级表里，不是没读到）。
+    tier: tierOfMetricKey(view.eventNameKey ?? view.eventKey) ?? null,
     ...(view.providerIds === undefined ? {} : { sourceIds: view.providerIds }),
     // The official route only publishes economic indicators; the provider carries its own kind.
     category: 'economic-indicator',
@@ -37,6 +42,8 @@ export function toCardEventFromOfficial(view: Readonly<{
 /** A 0xRouter event, whose lifecycle this module derives. */
 export function toCardEventFromProvider(view: Readonly<{
   eventKey: string; title: string; importance?: 'high' | 'medium' | 'low'
+  /** 指标码：只有经济指标行有；事件行是 undefined，分级为 null。 */
+  eventNameKey?: string
   eventType: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   countryName?: string | null
   /** 源给的国家码原值；名字查不到时显示它，而不是留空。 */
@@ -48,6 +55,10 @@ export function toCardEventFromProvider(view: Readonly<{
 }>): CalendarCardEvent {
   return {
     eventKey: view.eventKey, titleKey: view.title, importance: view.importance,
+    // 指标行按码取分级；事件行（央行活动/金融事件）不在分级表里 → null。
+    tier: view.eventType === 'economic-indicator' && view.eventNameKey !== undefined
+      ? (tierOfMetricKey(view.eventNameKey) ?? null)
+      : null,
     ...(view.countryName ? { countryName: view.countryName } : {}),
     ...(view.countryCode === undefined || view.countryCode === null ? {} : { countryCode: view.countryCode }),
     category: view.eventType,

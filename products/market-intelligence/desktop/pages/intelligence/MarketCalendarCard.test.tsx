@@ -52,7 +52,7 @@ it('shows the country through the same three-step fallback as the day list', asy
     [{}, '未知国家']
   ] as const
   for (const [country, expected] of cases) {
-    const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row(country)], state: 'available', unscoredCount: 0 }}
+    const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row(country)], state: 'available'}}
       state="ready" sourcesState="available" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
     expect(host.querySelector('[data-country]')?.textContent, JSON.stringify(country)).toBe(expected)
     host.remove()
@@ -70,7 +70,7 @@ it('keeps the card’s unknown-country copy word-for-word with the day list’s'
 it('keeps the frame and the rows, and veils only the data area when no source is enabled', async () => {
   // 2026-11-11 终稿：不是「整块换掉卡」，而是卡框/标题/数据区照常在，上面盖一层遮罩。
   // 断「日期分组容器仍在 DOM 里（被遮罩盖住）」——这正是把整块替换改回去会红的那一条。
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available'}}
     sourcesState="disabled" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   const veil = host.querySelector('.mi-source-veil')
   expect(veil?.getAttribute('data-state')).toBe('disabled')
@@ -98,7 +98,7 @@ it('keeps the frame and the rows, and veils only the data area when no source is
 
 // 遮罩不是常驻样式：源都可用时这一窗照常滚，别把正常的滚动一起关掉。
 it('leaves the body scrolling when every source is usable', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available'}}
     sourcesState="available" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.querySelector('.mi-source-veil')).toBeNull()
   const body = host.querySelector('.mi-calendar-card__body')
@@ -119,7 +119,7 @@ it('locks the visible window while veiled, and keeps the veil in it', () => {
 })
 
 it('keeps the body and says "no source configured yet" behind the veil', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'empty', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'empty'}}
     sourcesState="missing" onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   const veil = host.querySelector('.mi-source-veil')
   expect(veil?.getAttribute('data-state')).toBe('missing')
@@ -133,13 +133,13 @@ it('keeps the body and says "no source configured yet" behind the veil', async (
 })
 
 it('puts the provider country next to the kind chip, so two same-named events stay apart', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: '9月未季调消费者物价指数(年率)', countryName: '美国' }), row({ eventKey: 'other', titleKey: '9月未季调消费者物价指数(年率)', countryName: '日本' })], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: '9月未季调消费者物价指数(年率)', countryName: '美国' }), row({ eventKey: 'other', titleKey: '9月未季调消费者物价指数(年率)', countryName: '日本' })], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect([...host.querySelectorAll('[data-country]')].map(node => node.textContent)).toEqual(['美国', '日本'])
 })
 
 it('never shows the raw event key, and shows a date when there is no clock time', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: 'core-cpi', at: null, date: '2026-10-14' })], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: 'core-cpi', at: null, date: '2026-10-14' })], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).not.toContain('core-cpi')
   expect(host.textContent).toContain('核心 CPI')
@@ -148,7 +148,7 @@ it('never shows the raw event key, and shows a date when there is no clock time'
 })
 
 it('shows both sections with the event name, time and importance', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '0.3%', previous: '0.1%' })], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '0.3%', previous: '0.1%' })], upcoming: [row()], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).toContain(text.title)
   expect(host.textContent).toContain(text.todaySection)
@@ -172,7 +172,7 @@ it('shows both sections with the event name, time and importance', async () => {
 
 it('replaces the three readings with the verdict when the surprise is statable', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '3.4%', previous: '3.4%', consensus: '3.1%',
-    surprise: { direction: 'beat', value: 0.2999999999999998, unit: 'pp', reason: null } })], upcoming: [], state: 'available', unscoredCount: 0 }}
+    surprise: { direction: 'beat', value: 0.2999999999999998, unit: 'pp', reason: null } })], upcoming: [], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   const firstRow = host.querySelector('.mi-calendar-card__row')!
@@ -186,7 +186,7 @@ it('replaces the three readings with the verdict when the surprise is statable',
 
 it('names the event and its values in the reader language, not the conclusion language', async () => {
   const english = calendarText('en-US')
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: 'cpi', actual: '1.2%', previous: '-0.7%', consensus: '0.9%', kind: 'released-changed' })], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: 'cpi', actual: '1.2%', previous: '-0.7%', consensus: '0.9%', kind: 'released-changed' })], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={english} />)
   expect(host.textContent).toContain(english.title)
   expect(host.textContent).toContain('CPI')
@@ -199,7 +199,7 @@ it('names the event and its values in the reader language, not the conclusion la
 })
 
 it('reports an empty window instead of rendering nothing', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'empty', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'empty'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).toContain(text.empty)
 })
@@ -207,7 +207,7 @@ it('reports an empty window instead of rendering nothing', async () => {
 it('reports a readable failure behind the veil and offers a retry', async () => {
   // 卡内读不到 = 遮罩一句「暂时读不到」+ 一颗「再试一次」（卡框还留着）；整页不可用才走 StateView。
   const onRefresh = vi.fn()
-  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [], state: 'empty', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [], state: 'empty'}}
     onOpenCalendar={() => undefined} onRefresh={onRefresh} text={text} />)
   const veil = host.querySelector('.mi-source-veil')
   expect(veil?.getAttribute('data-state')).toBe('unreadable')
@@ -224,7 +224,7 @@ it('copies a row instead of navigating, and keeps the calendar action for the mo
   // happy-dom exposes `clipboard` as a getter-only property, so it is defined rather than assigned.
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { written.push(value) } } })
   const onOpenCalendar = vi.fn()
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available'}}
     onOpenCalendar={onOpenCalendar} onRefresh={() => undefined} text={text} />)
   // Rows are text to copy, not links: there is no row callback any more.
   await act(async () => host.querySelector<HTMLButtonElement>('[data-calendar-row-action="copy"] button')!.click())
@@ -243,7 +243,7 @@ it('hands a selected row to the caller as the agent context, and a copy click do
   const onSelectEvent = vi.fn()
   const written: string[] = []
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { written.push(value) } } })
-  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available'}}
     onOpenCalendar={() => undefined} onSelectEvent={onSelectEvent} selectedEventKey="US.CPI.RELEASE.2026-M10" text={text} />)
   const line = host.querySelector<HTMLElement>('[data-calendar-card-row]')!
   expect(line.getAttribute('aria-pressed')).toBe('true')
@@ -259,7 +259,7 @@ it('hands a selected row to the caller as the agent context, and a copy click do
 it('opens the whole calendar at one row without disturbing the selection', async () => {
   const onOpenEventInCalendar = vi.fn()
   const onSelectEvent = vi.fn()
-  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available'}}
     onOpenCalendar={() => undefined} onOpenEventInCalendar={onOpenEventInCalendar} onSelectEvent={onSelectEvent} text={text} />)
 
   // A row click selects the event as the agent's context; the calendar jump is a separate control.
@@ -269,14 +269,14 @@ it('opens the whole calendar at one row without disturbing the selection', async
 })
 
 it('offers no calendar jump when the card has no such action to hand over', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.querySelector('[data-calendar-row-action="open-event"]')).toBeNull()
 })
 
 it('is keyboard selectable, because a row that selects must be reachable without a mouse', async () => {
   const onSelectEvent = vi.fn()
-  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [], upcoming: [row()], state: 'available'}}
     onOpenCalendar={() => undefined} onSelectEvent={onSelectEvent} text={text} />)
   const line = host.querySelector<HTMLElement>('[data-calendar-card-row]')!
   await act(async () => { line.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' })) })
@@ -285,7 +285,7 @@ it('is keyboard selectable, because a row that selects must be reachable without
 
 it('says which row is waiting for its value, and only that row', async () => {
   // 读者 2026-10-16：已到发布时刻、值没到，要能看出是**哪一个**在等。标记落在那条事件自己的行上。
-  const host = await render(<MarketCalendarCard projection={{ today: [], state: 'available', unscoredCount: 0, upcoming: [
+  const host = await render(<MarketCalendarCard projection={{ today: [], state: 'available', upcoming: [
     row({ titleKey: 'core-cpi', awaitingData: true }),
     row({ eventKey: 'other', titleKey: 'cpi' })
   ] }}
@@ -307,7 +307,7 @@ it('says which row is waiting for its value, and only that row', async () => {
  * 「+0.31%」的地方，这里也是同一串字符。
  */
 it('shows the ±30 minute reaction of the four lines on a released row', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', actual: '0.3%', previous: '0.1%', reaction: { index: -0.12, btc: -0.18, eth: -0.21, dxy: 0.14 } })], upcoming: [], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', actual: '0.3%', previous: '0.1%', reaction: { index: -0.12, btc: -0.18, eth: -0.21, dxy: 0.14 } })], upcoming: [], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   const line = host.querySelector('[data-calendar-card-reaction]')
   // The reaction starts on the content column and may run to the card's right edge.
@@ -333,7 +333,7 @@ it('shows the ±30 minute reaction of the four lines on a released row', async (
 })
 
 it('prints only the lines that answered, and nothing at all when none did', async () => {
-  const partial = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', reaction: { index: 0.31, btc: null, eth: 0.28, dxy: 0 } })], upcoming: [], state: 'available', unscoredCount: 0 }}
+  const partial = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', reaction: { index: 0.31, btc: null, eth: 0.28, dxy: 0 } })], upcoming: [], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   const line = partial.querySelector('[data-calendar-card-reaction]')
   expect(line?.textContent).toContain('+0.31%')
@@ -342,11 +342,11 @@ it('prints only the lines that answered, and nothing at all when none did', asyn
   // 那一条没答出来的线连名字都不印：印个名字配「—」只会让读者以为它是 0。
   expect(line?.textContent).not.toContain('BTC')
 
-  const none = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed' })], upcoming: [], state: 'available', unscoredCount: 0 }}
+  const none = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed' })], upcoming: [], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(none.querySelector('[data-calendar-card-reaction]')).toBeNull()
   // 还没发布的行没有反应可看。
-  const upcoming = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ reaction: { index: 0.31, btc: 0.22, eth: 0.28, dxy: 0.05 } })], state: 'available', unscoredCount: 0 }}
+  const upcoming = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ reaction: { index: 0.31, btc: 0.22, eth: 0.28, dxy: 0.05 } })], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(upcoming.querySelector('[data-calendar-card-reaction]')).toBeNull()
 })
@@ -355,7 +355,7 @@ it('states a beat with its presentation unit, in the reader language', async () 
   const released = (language: 'zh-CN' | 'en-US') => render(<MarketCalendarCard onRefresh={() => undefined} projection={{ today: [row({
     kind: 'released-changed', actual: '3.4%', consensus: '3.1%',
     surprise: { direction: 'beat', value: 0.2999999999999998, unit: 'pp', reason: null }
-  })], upcoming: [], state: 'available', unscoredCount: 0 }} onOpenCalendar={() => undefined} text={calendarText(language)} />, language)
+  })], upcoming: [], state: 'available'}} onOpenCalendar={() => undefined} text={calendarText(language)} />, language)
 
   const chinese = await released('zh-CN')
   const chip = chinese.querySelector('[data-calendar-surprise="beat"]')
@@ -372,7 +372,7 @@ it('does not repeat "no consensus" as a badge; the readings already say it', asy
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '3.4%', consensus: null,
     surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' }
-  })], upcoming: [], state: 'available', unscoredCount: 0 }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  })], upcoming: [], state: 'available'}} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   expect(host.querySelector('[data-calendar-surprise]')).toBeNull()
   expect(host.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 3.4%')
@@ -383,7 +383,7 @@ it('says the difference is not comparable when both values exist but cannot be c
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '250K', consensus: '240K',
     surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'non-numeric' }
-  })], upcoming: [], state: 'available', unscoredCount: 0 }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  })], upcoming: [], state: 'available'}} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   // Here the readings exist but no difference can be stated, so the badge explains why.
   expect(host.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 250K')
@@ -396,7 +396,7 @@ it('calls an in-line release in line without adding a zero difference', async ()
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '3.1%', consensus: '3.1%',
     surprise: { direction: 'inline', value: 0, unit: 'pp', reason: null }
-  })], upcoming: [], state: 'available', unscoredCount: 0 }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  })], upcoming: [], state: 'available'}} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   const chip = host.querySelector('[data-calendar-surprise="inline"]')
   expect(chip?.textContent).toBe(text.surprise.inline)
@@ -409,7 +409,7 @@ it('copies the surprise with the row, and gives an upcoming row no surprise at a
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '165', consensus: '150',
     surprise: { direction: 'beat', value: 10.000000000000002, unit: 'relative-percent', reason: null }
-  })], upcoming: [row({ eventKey: 'upcoming' })], state: 'available', unscoredCount: 0 }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  })], upcoming: [row({ eventKey: 'upcoming' })], state: 'available'}} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   await act(async () => host.querySelector<HTMLButtonElement>('[data-calendar-row-action="copy"] button')!.click())
   expect(written[0]).toContain('超预期 +10%')
@@ -421,7 +421,7 @@ it('copies the surprise with the row, and gives an upcoming row no surprise at a
 })
 
 it('scrolls only the rows: the header stays outside the scroll region', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed' })], upcoming: [row({ eventKey: 'later' })], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed' })], upcoming: [row({ eventKey: 'later' })], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   const body = host.querySelector('.mi-calendar-card__body')
@@ -470,7 +470,7 @@ it('keeps the category tag inside the 84px rail instead of letting the card clip
 // An empty released section must say which window it is empty for. Blank space reads as "the
 // feature is broken"; «no released events in the last 3 days» is a fact the reader can act on.
 it('says its own window when nothing was released, instead of leaving the section blank', async () => {
-  const projection = { today: [], upcoming: [row()], unscoredCount: 0, state: 'available' as const }
+  const projection = { today: [], upcoming: [row()], state: 'available' as const }
   const props = { projection, onOpenCalendar: () => undefined, onRefresh: () => undefined }
   const zh = await render(<MarketCalendarCard {...props} text={text} />)
   expect(zh.textContent).toContain('最近 3 天内没有已公布的事件')
@@ -482,13 +482,13 @@ it('says its own window when nothing was released, instead of leaving the sectio
 
 it('drops that line as soon as one release is listed', async () => {
   const released = row({ eventKey: 'released', kind: 'released-changed', actual: '1.2%', previous: '1.0%' })
-  const host = await render(<MarketCalendarCard projection={{ today: [released], upcoming: [], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard projection={{ today: [released], upcoming: [], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).not.toContain('没有已公布的事件')
 })
 
 it('opens on loading, never on the failure state, before the first read answers', async () => {
-  const host = await render(<MarketCalendarCard state="loading" projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard state="loading" projection={{ today: [], upcoming: [row()], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).toContain(text.loading)
   expect(host.querySelector('.state-view--error')).toBeNull()
@@ -499,7 +499,7 @@ it('opens on loading, never on the failure state, before the first read answers'
 
 it('shows the unreadable veil with a retry only after the read actually failed', async () => {
   const onRefresh = vi.fn()
-  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [row()], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard state="error" projection={{ today: [], upcoming: [row()], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={onRefresh} text={text} />)
   const veil = host.querySelector('.mi-source-veil')
   expect(veil?.getAttribute('data-state')).toBe('unreadable')
@@ -513,7 +513,7 @@ it('shows the unreadable veil with a retry only after the read actually failed',
 })
 
 it('keeps the previous rows and says they are previous when a refresh failed', async () => {
-  const host = await render(<MarketCalendarCard state="ready" stale projection={{ today: [row()], upcoming: [], state: 'available', unscoredCount: 0 }}
+  const host = await render(<MarketCalendarCard state="ready" stale projection={{ today: [row()], upcoming: [], state: 'available'}}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.querySelector('[data-calendar-card-stale]')?.textContent).toBe(text.staleNotice)
   // The rows stay: a failed refresh is not a reason to blank a card that already has readings.
@@ -522,23 +522,18 @@ it('keeps the previous rows and says they are previous when a refresh failed', a
 })
 
 /**
- * 名单之外还有事件、只是来源没给重要性：**一行小字，不进条数**，为 0 时整行不画。
- * 这条是「筛掉的东西不许看起来像不存在」在卡片上的判据。
+ * 筛选口径写在标题旁的 ⓘ 里（用户 2026-11-19）：名单筛的是「一二级指标 + 高重要性事件」。
+ * 原来那句「另有 N 条未标级」在这个规则下分母不成立，**整句删掉**——不留一个算不对的数。
  */
-it('says how many events the list left out because the source gave no rating', async () => {
+it('explains the filter in the ⓘ by the title instead of a leftover count', async () => {
   const host = await render(<MarketCalendarCard state="ready"
-    projection={{ today: [], upcoming: [row()], unscoredCount: 3, state: 'available' }}
+    projection={{ today: [], upcoming: [row()], state: 'available' }}
     onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
-  const line = host.querySelector('[data-calendar-card-unscored]')
-  expect(line?.textContent).toBe('另有 3 条未标级')
-  // 它是一行说明，不是事件条：名单仍然只有 1 条。
-  expect(host.querySelectorAll('[data-calendar-card-row]')).toHaveLength(1)
-})
-
-it('draws no unscored line when every event in the window carries a rating', async () => {
-  const host = await render(<MarketCalendarCard state="ready"
-    projection={{ today: [], upcoming: [row()], unscoredCount: 0, state: 'available' }}
-    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  // 那句旧文案不再出现（连同它的容器）。
   expect(host.querySelector('[data-calendar-card-unscored]')).toBeNull()
-  expect(host.textContent).not.toContain('另有 0 条')
+  expect(host.textContent).not.toContain('未标级')
+  // ⓘ 挂在标题上：说明这份名单筛的是什么。
+  const header = host.querySelector('header')!
+  expect(header.querySelector('button')).not.toBeNull()
+  expect(text.filterNote).toContain('一二级指标')
 })
