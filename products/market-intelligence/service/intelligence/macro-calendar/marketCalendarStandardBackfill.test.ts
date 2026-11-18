@@ -132,7 +132,7 @@ describe('从观测表回填标准表', () => {
       values ('broken', 'narwhal', null, 'broken row', 'USA', 'economic-indicator', '2026-10-15', '2026-10-15T12:30:00.000Z',
         null, null, null, 'high', '[]', '2026-11-14T00:00:00.000Z')`).run()
     const report = backfillStandardRowsFromObservations(database)
-    expect(report.unmapped).toEqual({ 'bad-identity': 1, 'unknown-measure': 0 })
+    expect(report.unmapped).toEqual({ 'bad-identity': 1, 'unknown-measure': 0, 'period-unresolved': 0 })
     expect(standardRows(database)).toHaveLength(0)
     // 再跑一次不新增第二条工作清单行（同一发布、同一原因只记一次）
     backfillStandardRowsFromObservations(database)
@@ -163,7 +163,7 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
       (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
        scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
        importance, measure_keys_json, last_seen_at)
-      values ('["77",1]', '0xrouter', null, 'CPI yoy', 'USA', ?, 'economic-indicator',
+      values ('["77",1]', '0xrouter', null, 'CPI yoy (Sep)', 'USA', ?, 'economic-indicator',
         '2026-10-15', '2026-10-15T12:30:00.000Z', null, null, '3.5', 'high', null, '2026-11-14T00:00:00.000Z')`)
       .run(mapped[0])
     const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
@@ -246,7 +246,7 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
     expect(row.period_key).toBe('2026-09')
   })
 
-  it('标题没有期次后缀 → 明确缺失的 unknown:<国家>~<码>~<发布日>，不拿发布时刻顶', () => {
+  it('标题没有期次后缀 → fail-closed：不写 unknown 空壳行，落未映射 period-unresolved', () => {
     const database = openOldDatabase()
     ensureCalendarStandardTables(database)
     const mapped = Object.entries(zeroXRouterIndicatorIdentities)
@@ -258,12 +258,38 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
       values ('["900",1]', '0xrouter', null, 'Some index without period', 'USA', ?, 'economic-indicator',
         '2026-11-16', '2026-11-16T13:30:00.000Z', null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
       .run(mapped[0])
-    backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    // **fail-closed**（用户 2026-11-19）：有码但期次算不出来时，不写 `unknown:` 空壳行——
+    // 写进去每轮采集都会被启动规范化再清一遍，读者也会看到「有这一期却不知道是哪一期」。
+    expect(report.indicator).toBe(0)
+    expect(report.unmapped['period-unresolved']).toBe(1)
+    expect(database.prepare('select count(*) as c from mi_calendar_events').get()).toEqual({ c: 0 })
+    const unmapped = database.prepare(`select reason, raw_json from mi_calendar_unmapped where source_key = '["900",1]'`)
+      .all() as Array<{ reason: string; raw_json: string }>
+    expect(unmapped.map((row) => row.reason)).toEqual(['period-unresolved'])
+    expect(JSON.parse(unmapped[0]!.raw_json)).toMatchObject({ metricKey: mapped[1].metricKey, scheduledDate: '2026-11-16' })
+  })
+})
+
+describe('周度码的期次按规则算（用户 2026-11-19）', () => {
+  it('周度码没有标题期次 → 用发布日推的周六，不再写 unknown 空壳行', () => {
+    const mapped = Object.entries(zeroXRouterIndicatorIdentities)
+      .find(([, entry]) => entry.periodRule === 'week_end')!
+    const database = openDatabase()
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["77-week",1]', '0xrouter', null, 'Baker Hughes oil rigs', 'USA', ?, 'economic-indicator',
+        '2026-11-06', '2026-11-06T18:00:00.000Z', null, null, '455', 'high', null, '2026-11-14T00:00:00.000Z')`)
+      .run(mapped[0])
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    expect(report.indicator).toBe(1)
+    expect(report.unmapped['period-unresolved']).toBe(0)
     const row = database.prepare('select period_key from mi_calendar_events').get() as { period_key: string }
-    expect(row.period_key.startsWith('unknown:US~')).toBe(true)
-    // 分隔符不许用 `|`：那是身份串的分隔符，混进去会把身份拆错。
-    expect(row.period_key.includes('|')).toBe(false)
-    expect(row.period_key).not.toContain('T13:30')
+    // 2026-11-06 是周四，`week_end` 取发布日之前最近的周六 = 2026-10-31。
+    expect(row.period_key).toBe('2026-10-31')
+    expect(row.period_key.startsWith('unknown:')).toBe(false)
   })
 })
 
@@ -281,7 +307,7 @@ describe('重放用当前映射，不用观测行当年的口径', () => {
         JSON.parse(narwhalSourceEventIdForIdentity({ countryCode: 'USA', metricKey: 'US.PCE.NSA.YOY', periodKey: '2026-09' }))]))
     const report = backfillStandardRowsFromObservations(database)
     expect(report.indicator).toBe(1)
-    expect(report.unmapped).toEqual({ 'bad-identity': 0, 'unknown-measure': 0 })
+    expect(report.unmapped).toEqual({ 'bad-identity': 0, 'unknown-measure': 0, 'period-unresolved': 0 })
     const rows = standardRows(database)
     expect(rows.map((row) => row.metric_key)).toEqual(['US.PCE.SA.YOY'])
     // 旧码一格都不许进表

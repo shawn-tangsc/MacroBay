@@ -50,7 +50,7 @@ export type StandardBackfillReport = Readonly<{
   indicator: number
   event: number
   source: number
-  unmapped: Readonly<{ 'bad-identity': number; 'unknown-measure': number }>
+  unmapped: Readonly<{ 'bad-identity': number; 'unknown-measure': number; 'period-unresolved': number }>
   skipped: number
   /** 同一个身份已经由**别的来源**写过（新源优先）：这些行不覆盖、不新增。 */
   skippedExisting: number
@@ -172,7 +172,7 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
       const periodKey = identity.metricKey.startsWith('evt.')
         ? String(row.scheduled_at ?? '').slice(0, 10)
         : periodFromSourceTitle(String(row.display_name ?? ''), scheduledDate)?.periodKey
-          ?? `unknown:${countryCode}~${identity.metricKey}~${scheduledDate}`
+          ?? periodFromRuleKey(identity.periodKey) ?? ''
       return `${countryCode}|${identity.metricKey}|${periodKey}`
     },
     identityRequired: false,
@@ -184,6 +184,15 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
     importanceIsFact: true
   }
 }
+
+/**
+ * 身份规则算出来的期次里，哪些**可以直接当真期次**：
+ * - 日期（周度 `week_end` 推出的周六、事件日期）→ 可以；
+ * - 季度（`previousQuarterKey`）→ 可以；
+ * - 月度 **不可以**：那是「发布日的上一月」，真期次在源标题里（`(Sep)`），这条 2026-11-17 判过。
+ */
+const periodFromRuleKey = (periodKey: string): string | undefined =>
+  /^\d{4}-\d{2}-\d{2}$/.test(periodKey) || /^\d{4}-Q[1-4]$/.test(periodKey) ? periodKey : undefined
 
 const hasMeasures = (json: string | null): boolean =>
   json !== null && json !== '' && json !== '[]' && json !== 'null'
@@ -205,7 +214,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   const exists = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'").get()
   if (exists === undefined) {
     return { observations: 0, releases: 0, indicator: 0, event: 0, source: 0,
-      unmapped: { 'bad-identity': 0, 'unknown-measure': 0 }, skipped: 0, skippedExisting: 0,
+      unmapped: { 'bad-identity': 0, 'unknown-measure': 0, 'period-unresolved': 0 }, skipped: 0, skippedExisting: 0,
       unmappedMissingCountry: 0, written: 0 }
   }
   // 同一个发布可能有多条观测（每个 measure 一条，按采集批次重复出现）：按**最新一条**取，
@@ -228,6 +237,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   let skipped = 0
   let skippedExisting = 0
   let unmappedMissingCountry = 0
+  let unmappedMissingPeriod = 0
   const standardRows: Record<string, unknown>[] = []
   for (const row of latest.values()) {
     // 身份解码按来源：新源从 `market_fact_key` 里解，旧源从 `indicator_id` 查身份表再算期间。
@@ -289,6 +299,24 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
     const scheduledDate = String(row.scheduled_date ?? '')
     const scheduledAt = row.scheduled_at === null ? undefined : String(row.scheduled_at)
     const sourceName = String(row.display_name ?? '')
+    /**
+     * **fail-closed：有码、但没有期次，不写 `unknown:` 空壳行**（用户 2026-11-19）。
+     *
+     * 写进去的每一轮都会被启动规范化当成「期次没解开」再清一次，而读者看到的是「有这一期，
+     * 却不知道是哪一期」。改成落未映射、原因 `period-unresolved`（闭集里已有：已映射、
+     * 源未给统计期），下次采集就有据可查，也不会再长。
+     */
+    if (identity !== undefined && metricKey !== '' && periodKey === '') {
+      unmappedMissingPeriod += 1
+      if (write) {
+        recordUnmappedOnce(database, {
+          providerId, sourceKey: String(row.source_event_id), detectedAt: observedAt,
+          reason: 'period-unresolved',
+          rawJson: JSON.stringify({ metricKey, name: sourceName, scheduledDate })
+        })
+      }
+      continue
+    }
     // **分流只有这一处**：实时写入与回填问同一个函数。
     const route = routeStandardRelease({ hasPeriod: periodKey.length > 0,
       hasValues: profile.hasValues(row), sourceName })
@@ -368,6 +396,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       observedAt, rows: standardRows as never }).written
   }
   return { observations: rows.length, releases: latest.size, indicator, event, source,
-    unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey },
+    unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey,
+      'period-unresolved': unmappedMissingPeriod },
     skipped, skippedExisting, unmappedMissingCountry, written }
 }
