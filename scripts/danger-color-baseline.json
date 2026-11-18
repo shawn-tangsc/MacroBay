@@ -43,6 +43,7 @@
   "products/market-intelligence/desktop/pages/intelligence/intelligence.css :: .mi-analysis-error__dismiss": 1,
   "products/market-intelligence/desktop/pages/intelligence/intelligence.css :: .mi-analysis-error__dismiss:hover": 1,
   "products/market-intelligence/desktop/pages/intelligence/intelligence.css :: .mi-analysis-error__icon": 1,
+  "products/market-intelligence/desktop/pages/intelligence/intelligence.css :: .mi-analysis-timeline__entry .mi-analysis-timeline__failure": 1,
   "products/market-intelligence/desktop/pages/intelligence/intelligence.css :: .mi-calendar-card__row-surprise[data-calendar-surprise='miss']": 1,
   "products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css :: .mi-analysis-timeline__mask-body p[role=\"alert\"]": 1,
   "products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css :: .mi-analysis-timeline__settings-error": 1,

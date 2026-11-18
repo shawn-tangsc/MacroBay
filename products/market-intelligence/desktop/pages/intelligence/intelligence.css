@@ -100,7 +100,14 @@
    它只回答「有东西在跑」，静止态就是它该有的样子；把不可点的行画得能点才是假的。 */
 .mi-analysis-timeline__entry--static { cursor: default; }
 .mi-analysis-timeline__entry--static:hover { border-color: transparent; border-bottom-color: var(--border); background: transparent; }
-/* 失败原因一句话：行里的 small 默认是 muted，这一条要红——红在这个应用里只表示出错/读不到。 */
+/* 失败原因一句话：行里的 small 默认是 muted，这一条要红——红在这个应用里只表示出错/读不到。
+ *
+ * 为什么这里只能 `var(--danger)`（已在状态色基线登记）：同一行左边已经有 `tone="bad"` 的状态药丸
+ * 说「解析失败」，这一句要回答的是「为什么」，它是这一行唯一的内容。换成 `--muted` 会和旁边的
+ * 时间、分组说明混成一片，"这一次没跑成" 就读不出来了；也正因为它是失败态本身，才配用红色，
+ * 不是拿颜色去区分失败原因（换原因仍走文字）。
+ * 代价写在这里：深色下 `--danger` 对正文是 3.25–3.94，低于 4.5 门槛，所以只用在**一句话的失败
+ * 说明**上，不做正文色，也不往后加同类用法。 */
 .mi-analysis-timeline__entry .mi-analysis-timeline__failure { color: var(--danger); }
 /* 「立即分析」在有运行解析时禁用：原因句挂在按钮下方，不留一个没有解释的灰块。 */
 .mi-analysis-timeline__reanalyse { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
