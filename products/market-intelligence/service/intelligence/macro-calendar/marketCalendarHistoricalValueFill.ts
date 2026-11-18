@@ -57,8 +57,16 @@ export async function fillHistoricalReleaseValues(database: DatabaseSync, input:
     where scheduled_date <= ? and row_kind = 'release' and status in (${openStatuses.map(() => '?').join(', ')})`)
     .all(input.today, ...openStatuses) as unknown as { country_code: string; metric_key: string; period_key: string
       first_scheduled_date: string; values_json: string }[]
-  const update = database.prepare(`update ${calendarStandardTablePolicy.eventsTable}
+  /**
+   * **状态与 `value_state` 都由「这次到底拿到值没有」决定**（Chief 2026-11-19）：
+   * 拿到非空 `actual` 才写 `present` + 推进 `published`；拿到**空值**（FRED `pc1` 在 2026-10 就是空）
+   * 只写 `missing`，**不推进状态**——否则读者看到「已发布 + 无值」，而事实是「源没给这一期」。
+   */
+  const updateWithValue = database.prepare(`update ${calendarStandardTablePolicy.eventsTable}
     set status = 'published', value_state = 'present', values_json = ?, observed_at = ?
+    where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
+  const updateWithoutValue = database.prepare(`update ${calendarStandardTablePolicy.eventsTable}
+    set value_state = 'missing', values_json = ?, observed_at = ?
     where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
   const skips = emptySkips()
   const maximumReads = input.maximumReads ?? 40
@@ -81,9 +89,13 @@ export async function fillHistoricalReleaseValues(database: DatabaseSync, input:
     if (reading === undefined) { skips['no-observation'] += 1; continue }
     // 期次严格相等：`2026-10` 只认 `2026-10`（季度码取前 7 位比较）。
     if (!reading.period.startsWith(row.period_key.slice(0, 7))) { skips['period-mismatch'] += 1; continue }
-    update.run(JSON.stringify({ actual: reading.value }), new Date(input.nowMs).toISOString(),
+    const valuesJson = JSON.stringify({ actual: reading.value })
+    const hasValue = typeof reading.value === 'string' && reading.value.trim() !== ''
+    const update = hasValue ? updateWithValue : updateWithoutValue
+    if (!hasValue) skips['empty-value'] = (skips['empty-value'] ?? 0) + 1
+    update.run(valuesJson, new Date(input.nowMs).toISOString(),
       row.country_code, row.metric_key, row.period_key, row.first_scheduled_date)
-    filled += 1
+    if (hasValue) filled += 1
   }
   return { scanned: rows.length, filled, skipped: skips }
 }
