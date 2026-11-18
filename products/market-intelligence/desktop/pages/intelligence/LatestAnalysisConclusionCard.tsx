@@ -60,7 +60,7 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   enableAnalysisLabel?: string
   analysisOffHint?: string
 }>): React.ReactElement | null {
-  const { state, details, detailState } = timeline
+  const { state, details, detailState, requestState } = timeline
   const formatTime = useShellTimeFormat()
   const resolveProductText = useProductTextKey()
   const analysisSettings = useMarketAnalysisSettings()
@@ -68,11 +68,25 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   const [openWhenReady, setOpenWhenReady] = useState(false)
   const latest = selectLatestPublishedEntry(state.entries)
   // 外层这张卡只显示**已发布**的结论，于是「刚才那次失败了」在卡上原本一个字都没有：读者看到
-  // 20:10 的成功结论，以为它就是最新状态。条目按时间倒序，取第一条 `failed` 与已发布那条比时刻。
-  const latestFailure = state.entries.find((entry) => entry.status === 'failed')
-  const failureIsNewer = latestFailure !== undefined && (latest === undefined || latestFailure.occurredAt > latest.occurredAt)
-  // 有运行在跑时不给「重试」：点了只会被服务端单飞拦（那正是「能点但没用」）。跑完它自己会换态。
-  const runInFlight = state.entries.some((entry) => entry.status === 'running')
+  // 20:10 的成功结论，以为它就是最新状态。但失败必须是**这张卡所属那一组**的：真库里就出现过
+  // 卡上是 A 组的成功结论、下面却挂 B 组 08:06 那次失败（别组失败串到这张卡上）。
+  // 所以先按事件组过滤，再和组内最近一次成功比时刻。
+  // 锚点组：卡片上展示的那条结论所在组；一条已发布都没有时，退到最新那条失败所在组——
+  // 那正是「这一屏为什么是空的」的答案，否则读者只会看到「暂无」，不知道刚刚跑挂了。
+  const cardGroupId = latest?.eventGroupId ?? state.entries.find((entry) => entry.status === 'failed')?.eventGroupId
+  const latestFailure = cardGroupId === undefined
+    ? undefined
+    : state.entries.find((entry) => entry.status === 'failed' && entry.eventGroupId === cardGroupId)
+  // 该组有运行在跑（排队/运行中由服务侧统一映射成 `running`，跑挂的行会被收尸，不会永远挂着）时
+  // 不显示失败条：读者要的是「这次重试还在跑」，不是「上一次失败了」。
+  const groupInFlight = cardGroupId !== undefined
+    && state.entries.some((entry) => entry.status === 'running' && entry.eventGroupId === cardGroupId)
+  // 点了「重新分析」到运行真正出现在列表之前，这段时间也要立刻收掉那条报错（用户 2026-11-18：
+  // 「点了重新分析这条报错就不该有」）；这次再失败才会有新的失败行，报错自然重现。
+  const retryRequested = requestState === 'loading' || requestState === 'queued'
+  const failureIsNewer = latestFailure !== undefined
+    && (latest === undefined || latestFailure.occurredAt > latest.occurredAt)
+    && !groupInFlight && !retryRequested
   const failureReason = latestFailure?.failureCode === undefined || latestFailure.failureCode === null
     ? undefined
     : workspaceText.failureReasons?.[latestFailure.failureCode]
@@ -145,7 +159,7 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
         {workspaceText.latestConclusionAttemptFailed ?? ''}（<time>{formatTime(latestFailure.occurredAt, 'minute')}</time>）
       </span>
       {failureReason ? <span className="mi-analysis-conclusion-card__attempt-failure-reason">{failureReason}</span> : null}
-      {runInFlight || workspaceText.retryAnalysis === undefined || workspaceText.latestConclusionAttemptFailed === undefined
+      {groupInFlight || retryRequested || workspaceText.retryAnalysis === undefined || workspaceText.latestConclusionAttemptFailed === undefined
         ? null
         : <Button size="small" onClick={() => void timeline.requestRefreshAnalysis()}>{workspaceText.retryAnalysis}</Button>}
     </div> : null}

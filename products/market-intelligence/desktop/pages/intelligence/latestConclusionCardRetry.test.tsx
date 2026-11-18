@@ -285,3 +285,87 @@ describe('the latest conclusion card when the newest attempt failed', () => {
     expect(host?.textContent).not.toContain(workspaceText.latestConclusionEmpty)
   })
 })
+
+/**
+ * 失败条只属于**这张卡那一组**，而且进行中不许显示（用户 2026-11-18 直接要求）。
+ *
+ * 真库里的错法：卡片显示 A 组的成功结论，下面却挂着 B 组 08:06 那次失败——别组失败串到这张卡。
+ * 三条判据：① 别组失败不出现；② 本组有运行在跑时那条消失（点了「重新分析」立刻收掉）；
+ * ③ 这次重试再失败，失败条重新出现且时刻是新的。
+ */
+describe('the latest conclusion card: the failure strip belongs to its own group', () => {
+  const groupA = 'mi-eg-A'
+  const groupB = 'mi-eg-B'
+  const published = (occurredAt: string, group = groupA) => ({
+    id: `mi-tl-${group}`, eventGroupId: group, analysisRunId: `mi-ar-ok-${group}`, kind: 'analysis' as const,
+    status: 'published' as const, runKey: `mi-ar-ok-${group}`, failureCode: null, occurredAt,
+    summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1,
+    triggerStatus: null, groupType: 'sentiment', groupSubject: '标题'
+  })
+  const failed = (occurredAt: string, group = groupA, id = `mi-ar-fail-${group}`) => ({
+    ...published(occurredAt, group), id: `run:${id}`, analysisRunId: id, runKey: id, status: 'failed' as const,
+    failureCode: 'analysis-provider-error', summaryRef: null, safeTitle: '', safeExcerpt: null
+  })
+  const running = (group = groupA) => ({
+    ...published('2026-11-18T09:10:00.000Z', group), id: `run:${group}-live`, analysisRunId: `${group}-live`,
+    runKey: `${group}-live`, status: 'running' as const, summaryRef: null, safeTitle: '', safeExcerpt: null
+  })
+  const cardDetail = {
+    summary: {
+      id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-ok', eventGroupId: groupA, version: 1,
+      eventAssessment: '市场情绪偏谨慎', knownFacts: [], transmissionHypotheses: [], marketReaction: [],
+      supportingEvidence: [], counterEvidence: [], scenarios: [], nextCatalysts: [], dataCaveats: [],
+      evidenceRefs: [], createdAt: '2026-11-17T20:10:00.000Z'
+    }
+  }
+  const cardText = { ...workspaceText, retryAnalysis: text.retryAnalysis, failureReasons: text.failureReasons }
+
+  function timelineWith(entries: readonly unknown[], extra: Record<string, unknown> = {}): UseMarketAnalysisTimelineResult {
+    return {
+      state: { entries, loading: false, failed: false, nextCursor: null },
+      details: { [`mi-tl-${groupA}`]: cardDetail },
+      detailState: {},
+      requestState: 'idle',
+      requestRefreshAnalysis: vi.fn(),
+      ensureDetail: vi.fn(),
+      ...extra
+    } as unknown as UseMarketAnalysisTimelineResult
+  }
+
+  async function mount(timeline: UseMarketAnalysisTimelineResult): Promise<void> {
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText: cardText, timeline, onOpenDetail: vi.fn() } as never))))
+  }
+
+  it('别组的失败不出现（本组成功 20:10 + 别组失败 08:06 更晚）', async () => {
+    await mount(timelineWith([failed('2026-11-18T08:06:00.000Z', groupB), published('2026-11-17T20:10:00.000Z')]))
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+  })
+
+  it('本组失败 → 点重试、该组有运行在跑 → 失败条立刻消失', async () => {
+    const timeline = timelineWith([failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')])
+    await mount(timeline)
+    expect(host?.querySelector('[data-attempt-failure]')).not.toBeNull()
+
+    // 点了重试：请求在飞（`queued`）时那条报错就该收掉
+    await mount(timelineWith([failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')], { requestState: 'queued' }))
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+
+    // 运行真的出现在列表里（该组 running）时也不显示
+    await mount(timelineWith([running(), failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')]))
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+  })
+
+  it('这次重试再失败 → 失败条重新出现，时刻是新的', async () => {
+    await mount(timelineWith([failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')]))
+    const firstTime = host?.querySelector('[data-attempt-failure] time')?.textContent
+    expect(firstTime ?? '').not.toBe('')
+
+    await mount(timelineWith([failed('2026-11-18T09:12:00.000Z', groupA, 'mi-ar-fail-retry'), published('2026-11-17T20:10:00.000Z')]))
+    const strip = host?.querySelector('[data-attempt-failure]')
+    expect(strip).not.toBeNull()
+    expect(strip?.querySelector('time')?.textContent ?? '').not.toBe('')
+    expect(strip?.querySelector('time')?.textContent).not.toBe(firstTime)
+  })
+})
