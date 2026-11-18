@@ -14,27 +14,27 @@ describe('the ETF capital-flow update notice', () => {
   it('says which trading day arrived, with its direction and amount', () => {
     const rendered = renderEtfCapitalFlowSentence({ kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 7_900_000 })
     expect(rendered).toBeDefined()
-    expect(rendered!['zh-CN'].title).toContain('ETF 资金流')
-    expect(rendered!['zh-CN'].title).toContain('BTC')
-    expect(rendered!['zh-CN'].body).toContain('2026-11-16')
+    expect(rendered!['zh-CN']!.title).toContain('ETF 资金流')
+    expect(rendered!['zh-CN']!.title).toContain('BTC')
+    expect(rendered!['zh-CN']!.body).toContain('2026-11-16')
     // 金额走平台的统一格式化（与信号通知同一个实现）：中文是「万美元」，英文才是 `$7.9M`。
-    expect(rendered!['zh-CN'].body).toContain('净流入')
-    expect(rendered!['zh-CN'].body).toContain('790 万美元')
-    expect(rendered!['en-US'].body).toContain('inflow')
-    expect(rendered!['en-US'].body).toContain('$7.9M')
+    expect(rendered!['zh-CN']!.body).toContain('净流入')
+    expect(rendered!['zh-CN']!.body).toContain('790 万美元')
+    expect(rendered!['en-US']!.body).toContain('inflow')
+    expect(rendered!['en-US']!.body).toContain('$7.9M')
   })
 
   it('carries both the old and the new number when a settled day is revised', () => {
     const rendered = renderEtfCapitalFlowSentence({
       kind: 'revised', asset: 'ETH', tradingDate: '2026-11-16', netFlowUsd: -8_400_000, previousUsd: -46_500_000
     })
-    expect(rendered!['zh-CN'].title).toContain('改了')
-    expect(rendered!['zh-CN'].body).toContain('从')
+    expect(rendered!['zh-CN']!.title).toContain('改了')
+    expect(rendered!['zh-CN']!.body).toContain('从')
     // 符号由「净流出」这个词表达，数字只印绝对值——与资金面表同一个读法。
-    expect(rendered!['zh-CN'].body).toContain('净流出 4650 万美元')
-    expect(rendered!['zh-CN'].body).toContain('净流出 840 万美元')
-    expect(rendered!['en-US'].body).toContain('$46.5M')
-    expect(rendered!['en-US'].body).toContain('$8.4M')
+    expect(rendered!['zh-CN']!.body).toContain('净流出 4650 万美元')
+    expect(rendered!['zh-CN']!.body).toContain('净流出 840 万美元')
+    expect(rendered!['en-US']!.body).toContain('$46.5M')
+    expect(rendered!['en-US']!.body).toContain('$8.4M')
   })
 
   it('refuses a half sentence: a revision with no previous value is not submitted', () => {

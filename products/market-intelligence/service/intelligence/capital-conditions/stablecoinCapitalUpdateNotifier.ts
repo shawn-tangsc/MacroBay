@@ -52,8 +52,8 @@ export function buildStablecoinCapitalUpdateRequest(
   return {
     eventTypeId: EVENT_IDS.capitalFlowStablecoinUpdated,
     producerId: STABLECOIN_CAPITAL_PRODUCER_ID,
-    // 键里没有自定义参数：声明里的模板本身就是 `capital-flow-stablecoin-update:total-supply`。
-    dedupeVars: { builder: 'template', vars: {} },
+    // 模板是 `capital-flow-stablecoin-update:{scope}`：固定段是数据不是日期，展开后仍是产品给的那个键。
+    dedupeVars: { builder: 'template', vars: { scope: 'total-supply' } },
     rendered,
     actions: [],
     occurredAt

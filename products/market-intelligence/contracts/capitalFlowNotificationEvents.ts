@@ -32,7 +32,9 @@ export const capitalFlowNotificationEvents: readonly NotificationEventDeclaratio
     requiresUserAction: false,
     requestedDisruptionLevels: ['popup'],
     // 稳定币没有「交易日」这个粒度，键不带日期：一天再多变化也只提醒第一条。
-    dedupeKeyTemplate: 'capital-flow-stablecoin-update:total-supply',
+    // 模板必须含占位符（平台校验），所以把固定段写成 `{scope}`，提交侧只传 `total-supply`——
+    // 展开后的键仍是 `capital-flow-stablecoin-update:total-supply`，与产品给的批准值一致。
+    dedupeKeyTemplate: 'capital-flow-stablecoin-update:{scope}',
     dedupeUnit: 'condition',
     conditionWindowMs: 86_400_000,
     requestedBypassQuietHours: false
