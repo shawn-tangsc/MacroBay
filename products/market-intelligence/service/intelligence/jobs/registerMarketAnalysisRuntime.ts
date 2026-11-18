@@ -26,6 +26,7 @@ import {
   type ItemTriggerSeverity, type NewsSentimentVerdict
 } from '../analysis/analysisItemSeverity'
 import { createEventGroupService, eventGroupMergeKey, type AnalysisChange } from '../analysis/eventGroupService'
+import { createAnalysisChangeResolver } from './analysisRuntimeChangeResolver'
 import { analysisReleaseCoalescingPolicy } from '../analysis/analysisReleaseCoalescing'
 import { createEvidenceSnapshotService } from '../analysis/evidenceSnapshotService'
 import { hashMarketAnalysisJson } from '../analysis/analysisHash'
@@ -165,6 +166,12 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   })
   const repository = createMarketAnalysisRepository({ filePath: `${input.dataDir}/market-analysis.sqlite` })
   const groups = createEventGroupService({ now, idFactory: () => `mi-eg-${randomUUID()}` })
+  // 一条情报 → 一次变化：解析抽在 `analysisRuntimeChangeResolver`（体积门禁）。
+  const resolveChange = createAnalysisChangeResolver({
+    pipeline: input.pipeline,
+    ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
+    now
+  })
   const snapshots = createEvidenceSnapshotService({ now, idFactory: () => `mi-es-${randomUUID()}` })
   const runs = createAnalysisRunService({ repository, now, idFactory: () => `mi-ar-${randomUUID()}` })
   // 覆盖查询的接线（这次发布是不是已经有分析在管）：groupChange 是函数声明，可能在下面的装配
@@ -635,46 +642,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     }
   }
 
-  async function resolveChange(payload: unknown): Promise<{ change: AnalysisChange; newsItem: boolean } | undefined> {
-    const itemId = readString(payload, 'changeId') ?? readString(payload, 'eventRef')
-    const item = itemId ? input.pipeline.listItems().find(candidate => candidate.itemId === itemId || candidate.clusterId === itemId) : undefined
-    if (!item) return
-    const labels = safeJson(item.processingLabelsJson)
-    const previousRevision = input.pipeline.listRevisions()
-      .filter(revision => revision.itemId === item.itemId)
-      .sort((left, right) => left.detectedAt.localeCompare(right.detectedAt))
-      .at(-2)
-    const domain = resolveDomain(labels.dataDomain, item.sourceId)
-    const verdict = isNewsSeveritySource(item.sourceId) ? readLatestNewsSentiment(input.latestNewsSentiment, item.itemId, now()) : undefined
-    // 新闻还没判定时这里不决定、也不写账本行——理由见 `decideItemTriggerSeverity`。
-    const decision = decideItemTriggerSeverity(item, verdict)
-    if (decision.decision === 'await-verdict') return
-    const severity = decision.severity
-    // 主触发：只有新闻类来源才写指针（R37 §1.1）。别用 itemTriggerKeys 判——那两个键里还有一个是
-    // 日历发布，按它判会把日历触发的运行也写成「被一条新闻触发」。
-    // R39：新闻条目不再产触发指针——按条解读只由读者手动发起。这里仍要把「这是新闻」报给
-    // `groupChange`，让旧队列里的自动新闻作业在**建组之前**止步（不写组、不写账本、不排冻结）。
-    const newsItem = isNewsSeveritySource(item.sourceId)
-    return { change: {
-      changeId: item.itemId,
-      domain,
-      eventRef: item.itemId,
-      subject: item.title,
-      severity,
-      changedFields: ['item'],
-      previousHash: previousRevision ? hashMarketAnalysisJson({ itemId: item.itemId, title: previousRevision.title ?? null, summary: previousRevision.summary ?? null, publishedAt: previousRevision.publishedAt ?? null }) : null,
-      nextHash: hashMarketAnalysisJson({ itemId: item.itemId, title: item.title, summary: item.summary ?? null, publishedAt: item.publishedAt ?? null }),
-      observedAt: item.detectedAt,
-      publishedAt: item.publishedAt ?? null,
-      confirmed: item.sourceTrust === 'high' && Boolean(item.publishedAt),
-      sourceCount: 1,
-      marketMove15mPct: null,
-      fundingDeltaPctPoints: null,
-      sourceKind: item.sourceTrust === 'high' ? 'official' : 'proxy',
-      comparability: 'comparable',
-      groupType: domain === 'macro' ? 'macro' : domain === 'capital' ? 'capital' : domain === 'funding' ? 'funding' : domain === 'cross-asset' ? 'cross-asset' : 'sentiment'
-    }, newsItem }
-  }
+
 }
 
 /**

@@ -2,8 +2,8 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { AnalysisRun, AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
 import { analysisKindOf, type AnalysisKind } from '../../../contracts/analysisKinds'
-import { marketAnalysisTimelineLimits } from '../../../contracts/marketAnalysisTimelineLimits'
 import { fromRun, type StoredRow } from './marketAnalysisRepositoryRows'
+import { createAnalysisFailedRunRepository } from './marketAnalysisFailedRunRepository'
 
 /**
  * 读侧唯一的类别过滤入口（R39 §5）。
@@ -59,22 +59,10 @@ function summaryFromRow(row: StoredRow): AnalysisSummary {
   return { ...payload, analysisKind: analysisKindOf({ ...payload, analysis_kind: row.analysis_kind }) }
 }
 
-/** 失败运行分页的游标：最后一行 `(queued_at, id)` 的 base64url 编码，无状态、可重放。 */
-function encodeRunCursor(run: Readonly<{ queuedAt: string; id: string }>): string {
-  return Buffer.from(JSON.stringify([run.queuedAt, run.id]), 'utf8').toString('base64url')
-}
-
-function decodeRunCursor(cursor: string): Readonly<{ queuedAt: string; id: string }> {
-  try {
-    const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown
-    if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') throw new Error('bad cursor')
-    return { queuedAt: parsed[0], id: parsed[1] }
-  } catch {
-    throw new Error('analysis-invalid-cursor')
-  }
-}
-
 export function createAnalysisRecordReader(database: DatabaseSync): AnalysisRecordReader {
+  // 失败运行分页的实现抽在 `marketAnalysisFailedRunRepository`；类别谓词仍只在这里定义，
+  // 作为函数传进去——全仓只有这一处写 `analysis_kind` 过滤。
+  const failedRuns = createAnalysisFailedRunRepository(database, kindWhere)
   function recordForRun(runId: string): AnalysisRecord | undefined {
     const runRow = database.prepare('select * from mi_analysis_runs where id = ?').get(runId) as StoredRow | undefined
     if (!runRow) return undefined
@@ -119,28 +107,7 @@ export function createAnalysisRecordReader(database: DatabaseSync): AnalysisReco
       return row ? recordForRun(String(row.id)) : undefined
     },
 
-    listFailedRuns(input) {
-      // 页大小与时间轴同一档（50），不新增上限；渲染侧一页只认 70，50 条一定收得下。
-      const limit = Number.isSafeInteger(input.limit)
-        ? Math.max(1, Math.min(marketAnalysisTimelineLimits.pageItems, input.limit!))
-        : marketAnalysisTimelineLimits.pageItems
-      const [kindClause, kindParameters] = kindWhere('mi_analysis_runs', input.analysisKind)
-      const position = input.cursor ? decodeRunCursor(input.cursor) : undefined
-      const filters = [kindClause, "status in ('failed','invalid-output','cancelled')"]
-      const parameters: (string | number)[] = [...kindParameters]
-      if (position) {
-        filters.push('(queued_at < ? or (queued_at = ? and id < ?))')
-        parameters.push(position.queuedAt, position.queuedAt, position.id)
-      }
-      parameters.push(limit + 1)
-      const rows = database.prepare(`select * from mi_analysis_runs where ${filters.join(' and ')} order by queued_at desc, id desc limit ?`).all(...parameters) as StoredRow[]
-      const items = rows.slice(0, limit).map(fromRun)
-      const last = items.at(-1)
-      return {
-        items,
-        nextCursor: rows.length > limit && last ? encodeRunCursor({ queuedAt: last.queuedAt, id: last.id }) : null
-      }
-    },
+    listFailedRuns: failedRuns.list,
 
     latestAttempt(input) {
       const [kindClause, kindParameters] = kindWhere('mi_analysis_runs', input.analysisKind)

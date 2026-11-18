@@ -77,6 +77,18 @@ it('pages 120 failed runs 50/50/20 with a replayable cursor, no duplicates, and 
   }
 })
 
+it('rejects an undecodable cursor instead of silently starting over', () => {
+  // 静默回到第一页会让「加载更多」无限循环；解不开的游标必须是边界错误。
+  const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+  try {
+    expect(() => repository.listFailedRuns({ cursor: 'not-a-cursor' })).toThrow('analysis-invalid-cursor')
+    expect(() => repository.listFailedRuns({ cursor: Buffer.from('{"not":"a-run-cursor"}').toString('base64url') }))
+      .toThrow('analysis-invalid-cursor')
+  } finally {
+    repository.close()
+  }
+})
+
 it('maps runs to failed timeline entries the renderer sanitizer accepts, hiding unknown codes', () => {
   const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
   try {
