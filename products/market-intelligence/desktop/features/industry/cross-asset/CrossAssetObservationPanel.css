@@ -56,6 +56,14 @@
 .mi-cross-asset__heading-actions { margin-left: auto; display: inline-flex; align-items: center; gap: var(--mi-cross-asset-gap-small); }
 .mi-cross-asset__heading-actions .ant-switch { margin: 0; }
 .mi-cross-asset__chart-actions, .mi-cross-asset__quote-heading, .mi-cross-asset__status { display: flex; align-items: center; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
+/*
+ * 左栏的高度由同一行里更高的那一列决定，而表只按内容排：余量全堆在表底下，看起来像一块空白
+ * （用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」）。
+ * 做法：左栏改成列向 flex，表 `flex: 1` 吃掉余量，`table-layout: fixed` 会把多出来的高度
+ * **平均分到每一行**；单元格垂直居中，读数落在行的中线上。窄屏单列时没有固定高度，行为不变。
+ */
+.mi-cross-asset__quote { display: flex; flex-direction: column; }
+.mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }
 .mi-cross-asset__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-cross-asset-gap); }
 .mi-cross-asset__body > * { min-width: 0; box-sizing: border-box; }
 .mi-cross-asset__quote > strong { display: inline-block; font-size: 24px; margin: 10px 6px 2px 0; }
@@ -142,7 +150,7 @@
    asset column because the rows must line up with their header: letting content size the columns
    made the hint under each name set the width, so the four numeric columns drifted out from under
    their own headings. Numbers never wrap; the name and its hint may. */
-.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; flex: 1 1 auto; }
 /* Six columns since the ladder became 15m/1h/4h/24h. Every share is explicit: with equal remaining
    width the four windows came out around 42px and the two-decimal percentages ran together into
    what read as one long number (`+0.09%0.06%0.27%0.43%`), so the name and the level give the four

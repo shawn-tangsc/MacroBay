@@ -666,6 +666,21 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     } finally { await page.unmount() }
   })
 
+  it('lets the status table grow into the column and share the slack across its rows', () => {
+    // 用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」。
+    // happy-dom 没有布局，只钉结构规则：左栏是列向 flex、表吃余量、单元格垂直居中。
+    const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
+    const quoteAt = css.indexOf('.mi-cross-asset__quote {')
+    const quoteRule = css.slice(quoteAt, css.indexOf('}', quoteAt))
+    expect(quoteRule).toContain('display: flex')
+    expect(quoteRule).toContain('flex-direction: column')
+    // 并进既有那条表规则（`flex` 与 `table-layout` 同一处，且表规则里仍然不许出现 display）。
+    const tableRule = css.match(/\.mi-cross-asset__status-table\s*\{([^}]*)\}/)
+    expect(tableRule?.[1] ?? '').toContain('flex: 1 1 auto')
+    expect(tableRule?.[1] ?? '').not.toMatch(/display\s*:/)
+    expect(css).toContain('.mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }')
+  })
+
   it('pins the card width in CSS and never derives it from content', () => {
     const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
     const block = css.slice(css.indexOf('.mi-cross-asset {'), css.indexOf('}', css.indexOf('.mi-cross-asset {')))
