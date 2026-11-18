@@ -83,9 +83,32 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       detected_at text not null,
       raw_json text not null,
       reason text not null,
-      primary key(provider_id, source_key, detected_at)
+      -- **主键是「一个源 id 一条」**（Chief 2026-11-18）：detected_at 只是第一次失败的时刻，
+      -- 放进主键会让每次采集都新增一行，同一个 id 积累出几十条重复（旧形状就是这样）。
+      first_seen_at text,
+      last_seen_at text,
+      primary key(provider_id, source_key)
     );
   `)
+  // 老副本的未映射表主键带着 `detected_at`：重建一次，**保留最早那次**（"第一次失败的事实"）。
+  // 幂等：形状已经对了就不再重建。这一步不猜任何数据，只做去重。
+  const unmappedShape = database.prepare(
+    `select sql from sqlite_master where type = 'table' and name = '${unmappedTable}'`).get() as { sql: string } | undefined
+  if (unmappedShape !== undefined && unmappedShape.sql.includes('detected_at)')) {
+    database.exec(`
+      create table if not exists ${unmappedTable}__by_source (
+        provider_id text not null, source_key text not null, detected_at text not null,
+        raw_json text not null, reason text not null,
+        first_seen_at text, last_seen_at text, primary key(provider_id, source_key)
+      );
+      insert or ignore into ${unmappedTable}__by_source
+        select provider_id, source_key, min(detected_at), raw_json, reason,
+               min(detected_at), max(detected_at)
+        from ${unmappedTable} group by provider_id, source_key;
+      drop table ${unmappedTable};
+      alter table ${unmappedTable}__by_source rename to ${unmappedTable};
+    `)
+  }
   // 老副本是在 status 列之前建的：`create table if not exists` 不会补列，得显式迁移一次，
   // 缺列时按 `unknown` 回填（**不按日期猜**：日期推状态正是这条要防的）。
   const columns = database.prepare(`pragma table_info(${eventsTable})`).all() as { name: string }[]

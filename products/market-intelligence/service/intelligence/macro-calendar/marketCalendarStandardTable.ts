@@ -368,9 +368,15 @@ export function recordCalendarUnmapped(database: DatabaseSync, input: Readonly<{
   providerId: string; sourceKey: string; detectedAt: string; rawJson: string; reason: CalendarUnmappedReason
 }>): void {
   const { unmappedTable } = calendarStandardTablePolicy
-  database.prepare(`insert or ignore into ${unmappedTable}
-    (provider_id, source_key, detected_at, raw_json, reason) values (?, ?, ?, ?, ?)`)
-    .run(input.providerId, input.sourceKey, input.detectedAt, input.rawJson, input.reason)
+  // **一个源 id 只一条**（Chief 2026-11-18）：第一次失败记 `first_seen_at`，之后再失败只把
+  // `last_seen_at` 往前推、原因覆盖成当前那条——主表里不堆历史原因，`reason` 永远只有一个当前值。
+  database.prepare(`insert into ${unmappedTable}
+    (provider_id, source_key, detected_at, raw_json, reason, first_seen_at, last_seen_at)
+    values (?, ?, ?, ?, ?, ?, ?)
+    on conflict(provider_id, source_key) do update set
+      last_seen_at = excluded.last_seen_at, reason = excluded.reason`)
+    .run(input.providerId, input.sourceKey, input.detectedAt, input.rawJson, input.reason,
+      input.detectedAt, input.detectedAt)
 }
 
 /**
