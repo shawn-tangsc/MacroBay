@@ -310,7 +310,12 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
               dismissLabelKey="pages.intelligence.portal.analysisTimeline.dismissError"
               onDismiss={attemptError.dismiss}
             /> : null}
-            {/* The label stays a label; the queued sentence below is the only place it is said. */}
+            {/* The label stays a label; the queued sentence below is the only place it is said.
+                **这一颗不按组类别门控，不是漏了**：它只在这一分支出现，而这里 `state.entries` 为空，
+                拿不到任何组；同时 `getLatestAttempt` 在主进程只返回**市场线**的运行
+                （`marketAnalysisIpc.ts`，`analysisKind: 'market'`），消息面的运行永远不会成为这里的
+                「重新分析」。所以它不构成「点了没反应」的入口。哪天 `getLatestAttempt` 对外暴露组类型，
+                再把它接进 `groupReanalysisOffered`（同一判据，别另写一个）。 */}
             <Button loading={requestState === 'loading'} disabled={requestState === 'loading' || requestState === 'queued'} onClick={() => void timeline.requestInitialAnalysis()}>{actionLabel}</Button>
             {requestState === 'queued' ? <p role="status" className="mi-analysis-timeline__state">{text.initialAnalysisQueued}</p> : null}
             {requestState === 'unavailable' ? <p role="alert" className="mi-analysis-timeline__state">{text.initialAnalysisUnavailable}</p> : null}
