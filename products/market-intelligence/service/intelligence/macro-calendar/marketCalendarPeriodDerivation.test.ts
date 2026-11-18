@@ -26,3 +26,21 @@ describe('期次推算守卫', () => {
     expect(outside, `白名单外的码用了 release-structure：${outside.join(', ')}`).toEqual([])
   })
 })
+
+describe('officialSeries.units 闭集（2026-11-19）', () => {
+  it('④ units 只能是 pc1 | pch | value | chg 之一', () => {
+    const allowed = new Set(['pc1', 'pch', 'value', 'chg'])
+    const bad = rows.filter((row) => row.officialSeries?.units !== undefined
+      && !allowed.has(row.officialSeries.units)).map((row) => `${row.code}:${String(row.officialSeries?.units)}`)
+    expect(bad, `units 越界：${bad.join(', ')}`).toEqual([])
+  })
+
+  it('⑤ 非农用源侧 `chg`（水平序列 + 变动单位），失业率用 `value`', () => {
+    const all = [...Object.values(marketCalendarCodeTable), ...Object.values(marketCalendarCountryCodeTable)]
+    const byCode = new Map(all.map((row) => [row.code, row]))
+    expect(byCode.get('US.NONFARM.SA.CHANGE')?.officialSeries)
+      .toEqual({ seriesId: 'PAYEMS', units: 'chg', frequency: 'monthly' })
+    expect(byCode.get('US.UNEMPLOYMENT.SA.RATE')?.officialSeries)
+      .toEqual({ seriesId: 'UNRATE', units: 'value', frequency: 'monthly' })
+  })
+})

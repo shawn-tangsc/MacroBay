@@ -3978,7 +3978,12 @@
       "verifiedAt": "2026-11-17",
       "basis": "BLS · 发布页（news.release 目录）"
     },
-    "status": "active"
+    "status": "active",
+    "officialSeries": {
+      "seriesId": "PAYEMS",
+      "units": "chg",
+      "frequency": "monthly"
+    }
   },
   "US.PARTICIPATION_RATE.SA.RATE": {
     "code": "US.PARTICIPATION_RATE.SA.RATE",
@@ -5037,7 +5042,12 @@
       "verifiedAt": "2026-11-17",
       "basis": "BLS · 发布页（news.release 目录）"
     },
-    "status": "active"
+    "status": "active",
+    "officialSeries": {
+      "seriesId": "UNRATE",
+      "units": "value",
+      "frequency": "monthly"
+    }
   },
   "US.UNIT_LABOR_COSTS.SA.QOQ": {
     "code": "US.UNIT_LABOR_COSTS.SA.QOQ",

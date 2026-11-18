@@ -37,9 +37,11 @@ export type CodeTableRow = Readonly<{
   /**
    * **官方序列**（Chief 2026-11-19 评审第一条）：序列号、换算方式、频率**只存在码表里**，
    * 不许再开第二张 per-code 表（同一个指标的口径已经散过三次）。空 = **待核**，不许填猜的。
-   * `units` 只放源侧换算（`pc1` 同比 / `pch` 环比 / `value` 直取）——**自算同比环比一律不许**。
+   * `units` 只放源侧换算（`pc1` 同比 / `pch` 环比 / `value` 直取 / `chg` 变动）——**自算一律不许**。
+   * `chg` 的来由：`PAYEMS` 是**就业人数水平**，我们要的是**变动**；用源侧 `units=chg`，
+   * 而不是自己拿相邻两期相减（那是自算，红线）。
    */
-  officialSeries?: Readonly<{ seriesId?: string; units?: 'pc1' | 'pch' | 'value'; frequency: 'weekly' | 'monthly' | 'quarterly' }>
+  officialSeries?: Readonly<{ seriesId?: string; units?: 'pc1' | 'pch' | 'value' | 'chg'; frequency: 'weekly' | 'monthly' | 'quarterly' }>
   /**
    * **期次从哪来**（架构师第 4 条）：`source` 源直接给、`title` 从标题解析、
    * `release-structure` 按发布结构推（**仅周度 + 白名单码**，当前只有 3 个初请码）。
