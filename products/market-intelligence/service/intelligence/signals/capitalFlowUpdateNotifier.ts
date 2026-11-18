@@ -85,7 +85,8 @@ export function buildEtfCapitalFlowUpdateRequest(
     producerId: ETF_CAPITAL_FLOW_PRODUCER_ID,
     dedupeVars: {
       builder: 'template',
-      vars: { asset: update.asset, tradingDate: update.tradingDate }
+      // 键带种类：新的一天与「那天后来改了数」各弹一次；同一天同种类再来就被挡住。
+      vars: { asset: update.asset, tradingDate: update.tradingDate, kind: update.kind }
     },
     rendered,
     actions: [],

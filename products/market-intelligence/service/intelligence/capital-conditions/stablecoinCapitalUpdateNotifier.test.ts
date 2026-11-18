@@ -8,7 +8,7 @@ describe('the stablecoin capital update notice', () => {
     const request = buildStablecoinCapitalUpdateRequest({ totalSupplyUsd: 244_700_000_000, change1dUsd: 58_200_000 }, '2026-11-18T00:30:00.000Z')
     expect(request).toMatchObject({
       eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.capitalFlowStablecoinUpdated,
-      dedupeVars: { builder: 'template', vars: { scope: 'total-supply' } },
+      dedupeVars: { builder: 'template', vars: { date: '2026-11-18' } },
       occurredAt: '2026-11-18T00:30:00.000Z'
     })
     expect(request!.rendered!['zh-CN']!.body).toContain('总供给')

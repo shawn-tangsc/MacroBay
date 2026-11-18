@@ -52,8 +52,8 @@ export function buildStablecoinCapitalUpdateRequest(
   return {
     eventTypeId: EVENT_IDS.capitalFlowStablecoinUpdated,
     producerId: STABLECOIN_CAPITAL_PRODUCER_ID,
-    // 模板是 `capital-flow-stablecoin-update:{scope}`：固定段是数据不是日期，展开后仍是产品给的那个键。
-    dedupeVars: { builder: 'template', vars: { scope: 'total-supply' } },
+    // 键里带 UTC 日：一天一条（用户 2026-11-18「不进中心」要求 occurrence 去重）。
+    dedupeVars: { builder: 'template', vars: { date: occurredAt.slice(0, 10) } },
     rendered,
     actions: [],
     occurredAt

@@ -47,7 +47,7 @@ describe('the ETF capital-flow update notice', () => {
     const request = buildEtfCapitalFlowUpdateRequest({ kind: 'arrived', asset: 'BTC', tradingDate: '2026-11-16', netFlowUsd: 1, occurredAt: '2026-11-17T00:03:53.833Z' })
     expect(request).toMatchObject({
       eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.capitalFlowEtfUpdated,
-      dedupeVars: { builder: 'template', vars: { asset: 'BTC', tradingDate: '2026-11-16' } },
+      dedupeVars: { builder: 'template', vars: { asset: 'BTC', tradingDate: '2026-11-16', kind: 'arrived' } },
       // 发生时间 = 本轮采集时刻，不是交易日零点（产品 2026-11-18 的要求）。
       occurredAt: '2026-11-17T00:03:53.833Z',
       actions: []
