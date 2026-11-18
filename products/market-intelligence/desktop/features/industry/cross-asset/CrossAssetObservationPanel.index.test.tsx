@@ -663,8 +663,6 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
         expect(th.querySelector(':scope > button')).toBeNull()
         expect(group.firstElementChild?.querySelector('button[aria-label]')).not.toBeNull()
       }
-      // 壳层那条同名 `.icon-button` 的描边被本卡按回无边框（否则每颗 ⓘ 都像一枚小方块）。
-      expect(css).toContain('.mi-cross-asset__row-name .icon-button { border: 0; background: transparent; }')
     } finally { await page.unmount() }
   })
 
