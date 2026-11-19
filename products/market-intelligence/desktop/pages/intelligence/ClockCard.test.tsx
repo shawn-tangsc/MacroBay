@@ -134,26 +134,7 @@ it('names the policy slot as a probability, never as the rate itself', async () 
  * （旋转只归 `loadingState`）；② 减少动态效果时不播，但亮斑**静态仍在位**；③ 亮斑被外层
  * 断口裁剪包着，不会从缺口漏过去。
  */
-it('drives the ring highlight with a dash offset, never by rotating the element', () => {
-  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
-  const sweep = /\.mi-clock__sweep\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
-  expect(sweep).not.toContain('transform')
-  expect(css).toContain('@keyframes mi-clock-ring-sweep')
-  // 值必须带单位（CSS 解析器与 SVG 属性不同），见下面那条专门的守卫。
-  expect(css).toMatch(/from \{ stroke-dashoffset: 212px; \}/)
-  expect(css).toMatch(/to \{ stroke-dashoffset: -636px; \}/)
-  // 只在「不要求减少动态」时播；减少动态时没有任何动画声明作用于它。
-  expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\)[\s\S]*?animation: mi-clock-ring-sweep 8s linear infinite/)
-})
 
-it('keeps the sweep inside the gap clip and static when motion is reduced', async () => {
-  const { host } = await render()
-  const sweep = host.querySelector('.mi-clock__sweep')!
-  expect(sweep.getAttribute('stroke-dasharray')).toBe('283 565')
-  expect(sweep.getAttribute('stroke-dashoffset')).toBe('212')
-  // 外层必须还在断口裁剪里，否则高光会从 8 点缺口漏出去。
-  expect(sweep.closest('g[clip-path]')).not.toBeNull()
-})
 
 it('renders the expectation label in full, never truncated with an ellipsis', async () => {
   const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
@@ -177,22 +158,6 @@ it('renders the expectation label in full, never truncated with an ellipsis', as
  *
  * 这条同时是**防回归**：谁照规格把 0 → −848 搬回来，亮斑就会偏到 3 点方向，这里立刻红。
  */
-it('starts the sweep at twelve o’clock, which is why the offset is a quarter lap', async () => {
-  const { host } = await render()
-  const sweep = host.querySelector('.mi-clock__sweep')!
-  const cx = Number(sweep.getAttribute('cx'))
-  const cy = Number(sweep.getAttribute('cy'))
-  const r = Number(sweep.getAttribute('r'))
-  const dash = Number(sweep.getAttribute('stroke-dashoffset'))
-  const circumference = 2 * Math.PI * r
-  // circle 的路径从 3 点方向起画；dashoffset 把图案沿路径往回推。
-  const startAngle = -dash / circumference * 2 * Math.PI
-  const startX = cx + r * Math.cos(startAngle)
-  const startY = cy + r * Math.sin(startAngle)
-  // 212 是 848.23/4 的取整值：落点允许 1px 内的圆整误差（视觉上仍在 12 点）。
-  expect(Math.abs(startX - cx)).toBeLessThan(1)
-  expect(Math.abs(startY - (cy - r))).toBeLessThan(1)
-})
 
 /**
  * **CSS 里的 `stroke-dashoffset` 必须带单位**（Chief 2026-11-20 找到的真根因）。
@@ -203,14 +168,6 @@ it('starts the sweep at twelve o’clock, which is why the offset is a quarter l
  *
  * 原来那条用例断的是**属性**上的 212，所以「用例绿、行为没生效」——这条专门断 CSS 声明本身。
  */
-it('writes the keyframe offsets with a unit, or the whole animation is dropped', () => {
-  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
-  const block = /@keyframes mi-clock-ring-sweep \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
-  expect(block, '没找到环流高光的 keyframes').not.toBe('')
-  const offsets = [...block.matchAll(/stroke-dashoffset:\s*([^;]+);/gu)].map((match) => match[1]!.trim())
-  expect(offsets.length).toBeGreaterThan(0)
-  for (const value of offsets) expect(value).toMatch(/^-?\d+(?:\.\d+)?px$/u)
-})
 
 /**
  * 几何断言（Chief 2026-11-20 抓到的真凶）：亮斑画在 r=135，而包住它的裁剪遮罩曾经只覆盖
@@ -218,23 +175,27 @@ it('writes the keyframe offsets with a unit, or the whole animation is dropped',
  *
  * 重新生成的环带遮罩必须覆盖 `orbitRadius ± 1.5`；把半径改回 102.5 这类值，这条当场红。
  */
-it('covers the whole stroke with the ring clip band, not just the centre line', async () => {
+
+/**
+ * 装饰性流光（用户 2026-11-20 纠正方向：**不是新加一条，是把原来那条转回来**）。
+ *
+ * - 转的是 `.mi-clock__orbit` 里那扇渐变光，`mi-clock-spin 8s linear infinite`；
+ * - 11-15 那次为了过「旋转只许加载态」把它删了、还加了 `display: none`——所以它是被藏起来的；
+ * - 现在恢复旋转，并且**减少动态效果下只是不转、不许隐藏**（不是 `display: none`）。
+ */
+it('turns the existing orbit glow again, and keeps it visible when motion is reduced', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  expect(css).toMatch(/\.mi-clock__orbit\s*\{[^}]*animation:\s*mi-clock-spin 8s linear infinite/u)
+  expect(css).toContain('@keyframes mi-clock-spin { to { transform: rotate(360deg); } }')
+  const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/u.exec(css)?.[1] ?? ''
+  expect(reduced).toContain('.mi-clock__orbit { animation: none; }')
+  // 关键：减少动态**不许**把它藏起来（旧实现那句 display:none 就是让人以为坏了的根因）。
+  expect(css).not.toMatch(/\.mi-clock__orbit\s*\{[^}]*display:\s*none/u)
+})
+
+it('renders the orbit glow that spins', async () => {
   const { host } = await render()
-  const sweep = host.querySelector('.mi-clock__sweep')!
-  const r = Number(sweep.getAttribute('r'))
-  const halfStroke = Number(sweep.getAttribute('stroke-width')) / 2
-  const radiiOf = (id: string): number[] => [...(host.querySelector(id)?.querySelectorAll('path') ?? [])]
-    .flatMap((path) => [...(path.getAttribute('d') ?? '').matchAll(/A([\d.]+) [\d.]+/gu)].map((match) => Number(match[1])))
-  const clipRadii = radiiOf('#miClockRingClip')
-  expect(clipRadii.length).toBeGreaterThan(0)
-  /**
-   * 判据是**遮罩覆盖整条描边**，不是「文件里出现过 133.5」：
-   * 对带内每个半径，`orbitRadius − r` 必须落在 ±(strokeWidth/2) 之内——描边有多粗，带子就得盖多宽。
-   * 把环带改回旧遮罩那圈（102.5/105.5），`|135 − 102.5| = 32.5 > 1.5`，这条立刻红。
-   */
-  for (const radius of clipRadii) expect(Math.abs(r - radius)).toBeLessThanOrEqual(halfStroke + 1e-6)
-  // 反向：旧的内圈遮罩确实盖不住这条描边（它就是当初把高光整条裁掉的那份）。
-  const oldRadii = radiiOf('#miClockFlowClip')
-  expect(oldRadii.length).toBeGreaterThan(0)
-  expect(oldRadii.every((radius) => Math.abs(r - radius) > halfStroke)).toBe(true)
+  const orbit = host.querySelector('.mi-clock__orbit')
+  expect(orbit).not.toBeNull()
+  expect(orbit!.querySelector('path')).not.toBeNull()
 })
