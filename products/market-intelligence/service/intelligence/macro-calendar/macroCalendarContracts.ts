@@ -76,6 +76,11 @@ export type MacroCalendarWriteFailure = Readonly<{
   /** 这一批失败了几行（`DualWriteCounts.failed`）。 */
   failedRows: number
   firstErrorCode: MacroCalendarWriteFailureCode
+  /**
+   * **同一码连续失败了几批**（Chief 2026-11-19：同码连续失败只记首次 + 次数）。
+   * 首次失败不带这个键；从第二次起是 2、3…，`at` 保持**这一串失败的第一批**时刻。
+   */
+  streakBatches?: number
 }>
 
 export type MacroCalendarProviderHealthRevision = {

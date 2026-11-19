@@ -32,7 +32,19 @@ export function createMacroCalendarProviderHealthStore(storage: MacroCalendarPro
   return {
     getCurrent(providerId) { return current.get(providerId) },
     appendMaterialChange(next) {
-      const normalized = normalize(next)
+      /**
+       * **同码连续失败只记首次 + 次数**（Chief 2026-11-19）：`at` 保持这一串失败的第一批时刻，
+       * `streakBatches` 累加；签名只看「码 + 首次时刻」，所以一轮一轮重写不会把历史刷满。
+       * 换码才是一次新的失败事件。
+       */
+      const prior = current.get(next.providerId)
+      const incoming = next.lastWriteFailure
+      const merged = prior?.lastWriteFailure !== undefined && incoming !== undefined
+        && prior.lastWriteFailure.firstErrorCode === incoming.firstErrorCode
+        ? { ...next, lastWriteFailure: { ...incoming, at: prior.lastWriteFailure.at,
+            streakBatches: (prior.lastWriteFailure.streakBatches ?? 1) + 1 } }
+        : next
+      const normalized = normalize(merged)
       const previous = current.get(next.providerId)
       current.set(next.providerId, normalized)
       if (previous && materialSignature(previous) === materialSignature(normalized)) { persist(); return }
@@ -78,7 +90,7 @@ function normalize(value: MacroCalendarProviderHealthRevision): MacroCalendarPro
   return { ...value, checkpoint: { ...value.checkpoint, successfulEventKeys: keys }, safeSummary: value.safeSummary?.slice(0, macroCalendarHealthHistoryPolicy.providerHealthSafeSummaryMaxChars) }
 }
 function materialSignature(value: MacroCalendarProviderHealthRevision): string {
-  return JSON.stringify({ status: value.status, consecutiveFailures: value.consecutiveFailures, parserVersion: value.checkpoint.parserVersion, scheduleHorizonEnd: value.checkpoint.scheduleHorizonEnd, successfulEventKeys: value.checkpoint.successfulEventKeys, lastWriteFailure: value.lastWriteFailure ?? null })
+  return JSON.stringify({ status: value.status, consecutiveFailures: value.consecutiveFailures, parserVersion: value.checkpoint.parserVersion, scheduleHorizonEnd: value.checkpoint.scheduleHorizonEnd, successfulEventKeys: value.checkpoint.successfulEventKeys, lastWriteFailure: value.lastWriteFailure === undefined ? null : { at: value.lastWriteFailure.at, firstErrorCode: value.lastWriteFailure.firstErrorCode } })
 }
 function emptySnapshot(): MacroCalendarProviderHealthSnapshot { return { currentByProviderId: {}, historyByProviderId: {}, earliestRetainedAtByProviderId: {} } }
 function normalizeSnapshot(value: MacroCalendarProviderHealthSnapshot): MacroCalendarProviderHealthSnapshot { return value && typeof value === 'object' ? { currentByProviderId: value.currentByProviderId ?? {}, historyByProviderId: value.historyByProviderId ?? {}, earliestRetainedAtByProviderId: value.earliestRetainedAtByProviderId ?? {} } : emptySnapshot() }

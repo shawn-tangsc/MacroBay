@@ -43,3 +43,23 @@ describe('标准表写入失败的两块地基', () => {
       .toBe('standard-write-failed')
   })
 })
+
+describe('连续失败只记首次 + 次数（Chief 2026-11-19）', () => {
+  it('同码连跑 3 轮 → 历史只多 1 条，streakBatches=3，at 仍是第一批', async () => {
+    const store = createMacroCalendarProviderHealthStore()
+    const base2 = { providerId: 'macro-calendar-fed' as const, status: 'healthy' as const, consecutiveFailures: 0, checkpoint: {} }
+    for (let round = 1; round <= 3; round += 1) {
+      store.appendMaterialChange({ ...base2, updatedAt: `2026-11-19T0${round}:00:00.000Z`,
+        lastWriteFailure: { at: `2026-11-19T0${round}:00:00.000Z`, failedRows: 2, firstErrorCode: 'standard-write-failed' } })
+    }
+    expect(store.getCurrent('macro-calendar-fed')!.lastWriteFailure).toMatchObject({
+      at: '2026-11-19T01:00:00.000Z', streakBatches: 3, firstErrorCode: 'standard-write-failed'
+    })
+    // 换码 = 新事件：时刻跟着新那批走，streak 重新从 1 起（不带键）。
+    store.appendMaterialChange({ ...base2, updatedAt: '2026-11-19T04:00:00.000Z',
+      lastWriteFailure: { at: '2026-11-19T04:00:00.000Z', failedRows: 1, firstErrorCode: 'value-shape-rejected' } })
+    expect(store.getCurrent('macro-calendar-fed')!.lastWriteFailure).toEqual({
+      at: '2026-11-19T04:00:00.000Z', failedRows: 1, firstErrorCode: 'value-shape-rejected'
+    })
+  })
+})
