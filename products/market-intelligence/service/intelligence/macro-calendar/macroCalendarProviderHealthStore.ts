@@ -78,7 +78,7 @@ function normalize(value: MacroCalendarProviderHealthRevision): MacroCalendarPro
   return { ...value, checkpoint: { ...value.checkpoint, successfulEventKeys: keys }, safeSummary: value.safeSummary?.slice(0, macroCalendarHealthHistoryPolicy.providerHealthSafeSummaryMaxChars) }
 }
 function materialSignature(value: MacroCalendarProviderHealthRevision): string {
-  return JSON.stringify({ status: value.status, consecutiveFailures: value.consecutiveFailures, parserVersion: value.checkpoint.parserVersion, scheduleHorizonEnd: value.checkpoint.scheduleHorizonEnd, successfulEventKeys: value.checkpoint.successfulEventKeys })
+  return JSON.stringify({ status: value.status, consecutiveFailures: value.consecutiveFailures, parserVersion: value.checkpoint.parserVersion, scheduleHorizonEnd: value.checkpoint.scheduleHorizonEnd, successfulEventKeys: value.checkpoint.successfulEventKeys, lastWriteFailure: value.lastWriteFailure ?? null })
 }
 function emptySnapshot(): MacroCalendarProviderHealthSnapshot { return { currentByProviderId: {}, historyByProviderId: {}, earliestRetainedAtByProviderId: {} } }
 function normalizeSnapshot(value: MacroCalendarProviderHealthSnapshot): MacroCalendarProviderHealthSnapshot { return value && typeof value === 'object' ? { currentByProviderId: value.currentByProviderId ?? {}, historyByProviderId: value.historyByProviderId ?? {}, earliestRetainedAtByProviderId: value.earliestRetainedAtByProviderId ?? {} } : emptySnapshot() }

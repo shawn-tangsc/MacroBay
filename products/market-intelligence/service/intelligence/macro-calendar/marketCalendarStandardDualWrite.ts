@@ -8,7 +8,8 @@ import { nameForMetricKey } from './marketCalendarCodeNames'
 const EVENT_KINDS: readonly string[] = ['central-bank-activity', 'financial-event']
 import { calendarStandardTablePolicy, findCalendarStandardRowBySource, promoteCalendarStandardRowToCode,
   recordCalendarSourceId, recordCalendarUnmapped, upsertCalendarStandardRow,
-  type CalendarIdentityKind, type CalendarReleaseStatus, type CalendarUnmappedReason } from './marketCalendarStandardTable'
+  CalendarValueShapeError, type CalendarIdentityKind, type CalendarReleaseStatus,
+  type CalendarUnmappedReason } from './marketCalendarStandardTable'
 import { logSourceIdOverwriteSummary, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
 
 /**
@@ -32,6 +33,11 @@ export type DualWriteCounts = Readonly<{
    * 但**必须数出来**——今天能合，明天换个期次就可能露出来。
    */
   mergedSameDay: number
+  /**
+   * 这一批**第一次**写入失败的码（闭集）：没有失败就不带这个键，不写 `null`。
+   * 只作上报用——**不改来源健康状态**（写入失败不是来源失败）。
+   */
+  firstErrorCode?: 'standard-write-failed' | 'value-shape-rejected'
 }>
 
 /**
@@ -66,6 +72,7 @@ export function dualWriteMeasureRows(
   let written = 0
   let failed = 0
   let mergedSameDay = 0
+  let firstErrorCode: 'standard-write-failed' | 'value-shape-rejected' | undefined
   // 「真的把行上的发布 id 改掉了」的次数：**每轮汇总一行**，不逐行打（启动日志一分钟 1190 条就是逐行打出来的）。
   const sourceIdOverwrites: SourceIdOverwritePayload[] = []
   for (const row of input.rows) {
@@ -156,11 +163,15 @@ export function dualWriteMeasureRows(
       written += 1
     } catch (error) {
       failed += 1
+      // 第一个失败码就是上报的那个：行不合格与库写不进去要分开（架构师 2026-11-19）。
+      if (firstErrorCode === undefined) {
+        firstErrorCode = error instanceof CalendarValueShapeError ? 'value-shape-rejected' : 'standard-write-failed'
+      }
       options?.onError?.((error as Error)?.message ?? 'unknown')
     }
   }
   logSourceIdOverwriteSummary(sourceIdOverwrites)
-  return { written, unmapped: reasons, failed, mergedSameDay }
+  return { written, unmapped: reasons, failed, mergedSameDay, ...(firstErrorCode === undefined ? {} : { firstErrorCode }) }
 }
 
 /** 观测行的最小形状（draft 与已落库行都能满足）。 */

@@ -104,6 +104,14 @@ export const calendarStandardTablePolicy = Object.freeze({
     'period-unresolved'] as const)
 })
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
+
+/**
+ * **值形状被拒**（不是写库故障）：`values_json` 不是展示串。
+ * 单独一个类，是为了让写入侧能把「行不合格」与「库写不进去」分成两个闭集码上报。
+ */
+export class CalendarValueShapeError extends Error {
+  constructor(message: string) { super(message); this.name = 'CalendarValueShapeError' }
+}
 export type CalendarReleaseStatus = typeof calendarStandardTablePolicy.releaseStatuses[number]
 export type CalendarIdentityKind = typeof calendarStandardTablePolicy.identityKinds[number]
 
@@ -213,12 +221,12 @@ function assertDisplayValues(valuesJson: string, metricKey: string): void {
   try {
     parsed = JSON.parse(valuesJson)
   } catch {
-    throw new Error(`标准行 values_json 不是合法 JSON（${metricKey}）`)
+    throw new CalendarValueShapeError(`标准行 values_json 不是合法 JSON（${metricKey}）`)
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return
   for (const [field, value] of Object.entries(parsed as Record<string, unknown>)) {
     if (typeof value !== 'string') {
-      throw new Error(`标准行 values.${field} 必须是展示串，不能是 ${typeof value}（${metricKey}）`)
+      throw new CalendarValueShapeError(`标准行 values.${field} 必须是展示串，不能是 ${typeof value}（${metricKey}）`)
     }
     const text = value.trim()
     if (!text.startsWith('{') && !text.startsWith('[')) continue
