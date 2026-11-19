@@ -55,6 +55,9 @@ no auto-update channel. See [Packaging](../development/packaging.md).
 - **Windows / Linux**: the Electron code is expected to run, but end-to-end behavior has not been
   validated. Treat these platforms as experimental and report concrete failures.
 
+Installed-app acceptance — who installed which build, and how far it got — is recorded in
+[Install verification](../development/install-verification.md). No entry there means unverified.
+
 ## Model compatibility
 
 The agent runtime expects a Claude Code-compatible model route. The model service can expose
@@ -93,6 +96,21 @@ hiding it.
 - A missing source produces an explicit gap; it is not silently replaced.
 - The agent selection page has no entry point right now: **Intelligence** lands directly on the
   dashboard.
+
+### News, interpretation, and notifications
+
+- A per-story AI interpretation is started only by the reader; the result stays in that story's
+  detail and never appears in the latest-conclusion card, the analysis timeline, or the daily
+  briefing.
+- A story has at most one interpretation: once one exists the menu says "View AI interpretation"
+  instead of starting a second one.
+- News strength has five levels: 1 unrelated to crypto, 2 inside crypto but a single asset with no
+  spillover, 3 moves overall risk appetite or a whole asset class, 4 moves BTC/ETH flows or supply
+  directly, 5 a shock that may change the trend. The scale applies to new stories only — **earlier
+  judgements are not re-scored**.
+- The desktop notification threshold is Medium (the middle of three levels), and nothing is sent
+  during quiet hours. **"Not judged yet" is not "low"**: an unjudged story does not show up in the
+  news list, does not raise a desktop notification, and cannot be interpreted.
 
 ### The stored event-bus file
 
