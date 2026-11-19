@@ -166,3 +166,29 @@ it('renders the expectation label in full, never truncated with an ellipsis', as
   const unitRule = /\.mi-clock__unit\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
   expect(unitRule).not.toContain('text-overflow')
 })
+
+/**
+ * 相位核对（Chief 2026-11-20 问：为什么是 212 → −636，而不是 0 → −848）。
+ *
+ * **实测依据**：这条高光画在 `<circle>` 上，而 circle 的路径起点是**几何 3 点方向的 (cx+r, cy)**，
+ * 不是 12 点。所以要把亮斑摆到 12 点，必须先把图案往回推 90°，即 848/4 ≈ **212**。
+ * `dashoffset` 为 212 时，亮斑起点 = 3 点方向逆时针（回推）90° = 12 点：`(cx, cy − r)`。
+ *
+ * 这条同时是**防回归**：谁照规格把 0 → −848 搬回来，亮斑就会偏到 3 点方向，这里立刻红。
+ */
+it('starts the sweep at twelve o’clock, which is why the offset is a quarter lap', async () => {
+  const { host } = await render()
+  const sweep = host.querySelector('.mi-clock__sweep')!
+  const cx = Number(sweep.getAttribute('cx'))
+  const cy = Number(sweep.getAttribute('cy'))
+  const r = Number(sweep.getAttribute('r'))
+  const dash = Number(sweep.getAttribute('stroke-dashoffset'))
+  const circumference = 2 * Math.PI * r
+  // circle 的路径从 3 点方向起画；dashoffset 把图案沿路径往回推。
+  const startAngle = -dash / circumference * 2 * Math.PI
+  const startX = cx + r * Math.cos(startAngle)
+  const startY = cy + r * Math.sin(startAngle)
+  // 212 是 848.23/4 的取整值：落点允许 1px 内的圆整误差（视觉上仍在 12 点）。
+  expect(Math.abs(startX - cx)).toBeLessThan(1)
+  expect(Math.abs(startY - (cy - r))).toBeLessThan(1)
+})
