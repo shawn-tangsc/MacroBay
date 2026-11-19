@@ -151,6 +151,49 @@ export function migrateLegacyWriteFailures(input: Readonly<{
   return migrated
 }
 
+/**
+ * **启动补种**（用户 2026-11-19，第 5 步）：某写入方**有行但没有记录**时，用
+ * `lastSuccessAt = max(observed_at)` 补一条。规矩：
+ * - **缺才补、只插入不覆盖**：已有的真实记录（如 `macro-calendar-bls` 那条）一个字不动；
+ * - 放在启动链里，每个用户的老库下次启动自动补齐——一次性脚本只补一台机器，等于又造一个
+ *   「只有我这里是好的」。
+ */
+export function seedStandardWriteRecords(input: Readonly<{
+  writeLayer: CalendarStandardWriteLayer
+  rows: readonly Readonly<{ writerId: string; lastSuccessAt: string | null }>[]
+}>): number {
+  let seeded = 0
+  for (const row of input.rows) {
+    const writerId = row.writerId as CalendarStandardWriterId
+    if (calendarStandardWriterVisibility[writerId] === undefined) continue
+    if (input.writeLayer.get(writerId) !== undefined) continue
+    if (row.lastSuccessAt === null || row.lastSuccessAt === '') continue
+    input.writeLayer.recordAttempt({ writerId, at: row.lastSuccessAt, outcome: { state: 'succeeded' } })
+    seeded += 1
+  }
+  return seeded
+}
+
+/**
+ * **写入记录守卫 / 盘点第六项**（用户 2026-11-19）：两类问题分开报——
+ * - `unknownWriterIds`：表里出现的写入方**不在** `CalendarStandardWriterId` 里（挡 `as` 绕过类型）；
+ * - `missingRecords`：表里有行、写入层却没记录（「行存在 ⇒ 一定发生过写入 ⇒ 必须有记录」）。
+ */
+export function auditStandardWriteRecords(input: Readonly<{
+  writeLayer: Pick<CalendarStandardWriteLayer, 'get'>
+  rows: readonly Readonly<{ writerId: string; rowCount: number }>[]
+}>): Readonly<{ unknownWriterIds: readonly string[]; missingRecords: readonly string[] }> {
+  const unknownWriterIds: string[] = []
+  const missingRecords: string[] = []
+  for (const row of input.rows) {
+    if (row.rowCount <= 0) continue
+    const writerId = row.writerId as CalendarStandardWriterId
+    if (calendarStandardWriterVisibility[writerId] === undefined) { unknownWriterIds.push(row.writerId); continue }
+    if (input.writeLayer.get(writerId) === undefined) missingRecords.push(row.writerId)
+  }
+  return { unknownWriterIds, missingRecords }
+}
+
 export function createCalendarStandardWriteLayer(
   storage: CalendarStandardWriteStorage = createInMemoryCalendarStandardWriteStorage()
 ): CalendarStandardWriteLayer {

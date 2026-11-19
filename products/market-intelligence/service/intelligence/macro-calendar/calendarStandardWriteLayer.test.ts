@@ -96,3 +96,28 @@ describe('第 3 步：从上一版文件迁移写失败', () => {
     expect(layer.get('不认识的写入方' as never)).toBeUndefined()
   })
 })
+
+describe('第 5 步：启动补种与守卫', () => {
+  it('补种只补缺的、不覆盖已有记录；未登记写入方与「有行没记录」分两类报', async () => {
+    const { auditStandardWriteRecords, seedStandardWriteRecords } = await import('./calendarStandardWriteLayer')
+    const layer = createCalendarStandardWriteLayer()
+    // 已有一条真实记录（模拟 bls）：补种不许动它。
+    layer.recordAttempt({ writerId: 'macro-calendar-bls', at: '2026-11-18T01:00:00.000Z', outcome: { state: 'succeeded' } })
+    const rows = [
+      { writerId: 'macro-calendar-bls', rowCount: 31, lastSuccessAt: '2026-11-19T09:00:00.000Z' },
+      { writerId: '0xrouter', rowCount: 1332, lastSuccessAt: '2026-11-19T08:00:00.000Z' },
+      { writerId: '不在枚举里的写入方', rowCount: 3, lastSuccessAt: '2026-11-19T08:00:00.000Z' }
+    ]
+    expect(seedStandardWriteRecords({ writeLayer: layer, rows })).toBe(1)
+    expect(layer.get('macro-calendar-bls')!.lastSuccessAt).toBe('2026-11-18T01:00:00.000Z')
+    expect(layer.get('0xrouter')!.lastSuccessAt).toBe('2026-11-19T08:00:00.000Z')
+    expect(auditStandardWriteRecords({ writeLayer: layer, rows })).toEqual({
+      unknownWriterIds: ['不在枚举里的写入方'], missingRecords: []
+    })
+    // 删掉 0xrouter 的记录 → 「行存在必须有记录」红；再补种 → 绿。
+    const fresh = createCalendarStandardWriteLayer()
+    expect(auditStandardWriteRecords({ writeLayer: fresh, rows }).missingRecords).toEqual(['macro-calendar-bls', '0xrouter'])
+    seedStandardWriteRecords({ writeLayer: fresh, rows })
+    expect(auditStandardWriteRecords({ writeLayer: fresh, rows }).missingRecords).toEqual([])
+  })
+})

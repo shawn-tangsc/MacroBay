@@ -12,8 +12,9 @@ import { createMacroCalendarProviderHealthJsonStorage, createMacroCalendarProvid
 import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore, type MacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 import { createMacroCalendarReleaseTimeOverrideCache, createMacroCalendarReleaseTimeOverrideJsonStorage, createMacroCalendarReleaseTimeOverrideStore } from './macroCalendarReleaseTimeOverrideStore'
 import { createMacroCalendarRepository } from './macroCalendarRepository'
-import { calendarStandardWriterVisibility, createCalendarStandardWriteLayer,
-  createJsonFileCalendarStandardWriteStorage, migrateLegacyWriteFailures } from './calendarStandardWriteLayer'
+import { auditStandardWriteRecords, calendarStandardWriterVisibility, createCalendarStandardWriteLayer,
+  createJsonFileCalendarStandardWriteStorage, migrateLegacyWriteFailures, seedStandardWriteRecords }
+  from './calendarStandardWriteLayer'
 import { createMacroCalendarSqlite } from './macroCalendarSqlite'
 import { createMacroCalendarScheduleCollectionWorkflow } from './macroCalendarScheduleCollectionWorkflow'
 import { createMacroCalendarScheduleHealthService } from './macroCalendarScheduleHealthService'
@@ -124,6 +125,24 @@ export function createMacroCalendarScheduleBackend(input: {
         return result
       }
     }
+    /**
+     * **第 5 步：启动补种 + 写入记录守卫**（用户 2026-11-19）。
+     * 只读事件表拿「每个写入方的行数与最近写入时刻」，**不改事件表任何一行**；
+     * 缺记录才补，已有记录（bls 那条真实记录）不覆盖。
+     */
+    try {
+      const writerRows = storage.database.prepare(`select source_provider_id as writerId,
+          count(*) as rowCount, max(observed_at) as lastSuccessAt
+        from mi_calendar_events group by source_provider_id`).all() as Array<
+        { writerId: string; rowCount: number; lastSuccessAt: string | null }>
+      const seeded = seedStandardWriteRecords({ writeLayer, rows: writerRows })
+      const audit = auditStandardWriteRecords({ writeLayer, rows: writerRows })
+      if (seeded > 0 || audit.unknownWriterIds.length > 0 || audit.missingRecords.length > 0) {
+        input.log?.('warn', 'macro-calendar.standard-write-records', {
+          seeded, unknownWriterIds: audit.unknownWriterIds, missingRecords: audit.missingRecords
+        })
+      }
+    } catch { /* 补种不影响启动：读不到就下次再来，日志由上层采集失败体现。 */ }
     const health = createMacroCalendarScheduleHealthService({ workflow, health: healthStore,
       ...(input.log === undefined ? {} : { log: input.log }) })
     const manualBlsIcs = createManualBlsIcsImportService({ evidence, repository, now: () => new Date().toISOString() })
