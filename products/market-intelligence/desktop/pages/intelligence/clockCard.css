@@ -56,8 +56,13 @@
   .mi-clock__sweep { animation: mi-clock-ring-sweep 8s linear infinite; }
 }
 @keyframes mi-clock-ring-sweep {
-  from { stroke-dashoffset: 212; }
-  to { stroke-dashoffset: -636; }
+  /*
+   * **必须带单位**：CSS 的 `stroke-dashoffset` 只接受 `<length>`/`<percentage>`，非零裸数字是
+   * 非法值、整条声明被丢弃 → 整组 keyframes 变空 → 动画完全不生效（元素只停在 SVG 属性那个 212 上，
+   * 看起来就是一动不动）。属性里写数字合法（用户单位），CSS 里不合法：两个解析器，别混。
+   */
+  from { stroke-dashoffset: 212px; }
+  to { stroke-dashoffset: -636px; }
 }
 
 .mi-clock__core { position: absolute; left: 168px; top: 165px; transform: translate(-50%, -50%); width: 160px; padding: 2px 4px; background: var(--surface); border-radius: 50%; text-align: center; display: grid; gap: 1px; justify-items: center; z-index: 2; }

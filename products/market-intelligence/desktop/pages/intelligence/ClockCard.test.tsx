@@ -139,8 +139,9 @@ it('drives the ring highlight with a dash offset, never by rotating the element'
   const sweep = /\.mi-clock__sweep\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
   expect(sweep).not.toContain('transform')
   expect(css).toContain('@keyframes mi-clock-ring-sweep')
-  expect(css).toMatch(/from \{ stroke-dashoffset: 212; \}/)
-  expect(css).toMatch(/to \{ stroke-dashoffset: -636; \}/)
+  // 值必须带单位（CSS 解析器与 SVG 属性不同），见下面那条专门的守卫。
+  expect(css).toMatch(/from \{ stroke-dashoffset: 212px; \}/)
+  expect(css).toMatch(/to \{ stroke-dashoffset: -636px; \}/)
   // 只在「不要求减少动态」时播；减少动态时没有任何动画声明作用于它。
   expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\)[\s\S]*?animation: mi-clock-ring-sweep 8s linear infinite/)
 })
@@ -191,4 +192,22 @@ it('starts the sweep at twelve o’clock, which is why the offset is a quarter l
   // 212 是 848.23/4 的取整值：落点允许 1px 内的圆整误差（视觉上仍在 12 点）。
   expect(Math.abs(startX - cx)).toBeLessThan(1)
   expect(Math.abs(startY - (cy - r))).toBeLessThan(1)
+})
+
+/**
+ * **CSS 里的 `stroke-dashoffset` 必须带单位**（Chief 2026-11-20 找到的真根因）。
+ *
+ * CSS 只接受 `<length>` / `<percentage>`，非零裸数字是非法值、整条声明被丢弃 → 整组 keyframes 变空
+ * → 动画完全不生效（元素只停在 SVG **属性**给的 212 上，看起来一动不动）。
+ * 属性里写数字合法（用户单位），CSS 里不合法：两个解析器，别混。
+ *
+ * 原来那条用例断的是**属性**上的 212，所以「用例绿、行为没生效」——这条专门断 CSS 声明本身。
+ */
+it('writes the keyframe offsets with a unit, or the whole animation is dropped', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const block = /@keyframes mi-clock-ring-sweep \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
+  expect(block, '没找到环流高光的 keyframes').not.toBe('')
+  const offsets = [...block.matchAll(/stroke-dashoffset:\s*([^;]+);/gu)].map((match) => match[1]!.trim())
+  expect(offsets.length).toBeGreaterThan(0)
+  for (const value of offsets) expect(value).toMatch(/^-?\d+(?:\.\d+)?px$/u)
 })
