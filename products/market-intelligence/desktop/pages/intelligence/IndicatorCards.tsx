@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 
 import type { MacroIndicatorCardFact, MacroIndicatorCardKey } from '../../../service/intelligence/macro-calendar/macroIndicatorCardFacts'
 import { calendarDisplayDate, calendarDisplayTime } from '../../features/macro/economic-calendar/economicCalendarDayModel'
+import { cellNoteFor, type CellNoteState } from './indicatorCellNotes'
 import type { EconomicCalendarText } from '../../features/macro/economic-calendar/economicCalendarText'
 import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 import { releaseCountdownFor } from './releaseCountdown'
@@ -174,24 +175,25 @@ function ReleasedRow(input: Readonly<{
    * - 已发布但没有值 → 「无此数据」（ⓘ 用库里那句依据）/「未提供」（ⓘ 固定一句）。
    */
   const gap = fact?.gap
-  const cell: { text: string; note?: string; state?: string } =
-    unreadable ? { text: text.cardStates.readFailed, note: text.cardStates.readFailedNote, state: 'read-failed' }
+  // 说明句的**取值**住在 `indicatorCellNotes`（句子仍然只经 ⓘ 出现；见那里的注释）。
+  const cell: { text: string; noteState?: CellNoteState; noteBasis?: string; state?: string } =
+    unreadable ? { text: text.cardStates.readFailed, state: 'read-failed', noteState: 'read-failed' }
       : !loaded ? { text: '' }
         : value !== undefined ? { text: formatValue(value, row.kind) }
           : gap?.pending !== undefined ? { text: text.cardStates.scheduled, state: 'scheduled' }
             : gap?.missing?.reason === 'structural-no-source'
-              ? { text: text.cardStates.noSuchData, state: 'no-such-data',
-                note: gap.missing.basis ?? text.cardStates.noSuchDataNote }
+              ? { text: text.cardStates.noSuchData, state: 'no-such-data', noteState: 'no-such-data',
+                ...(gap.missing.basis === undefined ? {} : { noteBasis: gap.missing.basis }) }
               : gap?.missing?.reason === 'source-no-value'
-                ? { text: text.cardStates.notAvailable, state: 'source-no-value', note: text.cardStates.sourceNoValueNote }
+                ? { text: text.cardStates.notAvailable, state: 'source-no-value', noteState: 'source-no-value' }
                 : { text: text.cardStates.notAvailable }
   return (
     <div className="mk-vrow">
       <dt>{row.label}</dt>
       <dd {...(missing ? { 'data-na': 'true' } : {})}
         {...(cell.state === undefined ? {} : { 'data-cell-state': cell.state })}>
-        {cell.note === undefined ? cell.text : <span className="mk-vrow__gap">
-          {cell.text}{helpTrigger({ text: cell.note })}
+        {cell.noteState === undefined ? cell.text : <span className="mk-vrow__gap">
+          {cell.text}{helpTrigger({ text: cellNoteFor(cell.noteState, text, cell.noteBasis) })}
         </span>}
       </dd>
       <span className="mk-chipwrap">{chip === undefined ? null : <span className={`mk-chip mk-chip--${chip.tone}`}>{chip.label}</span>}</span>

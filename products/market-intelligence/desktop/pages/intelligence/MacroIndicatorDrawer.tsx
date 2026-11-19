@@ -8,6 +8,7 @@ import { helpTrigger } from '@platform/ui/components/popover'
 import { ExpectationChart, type ExpectationPoint } from './ExpectationChart'
 import { MiniReleaseCalendar } from './MiniReleaseCalendar'
 import { MappingRulesPanel } from './MappingRulesPanel'
+import { mappingRulesTextFrom } from './mappingRulesCopy'
 import { EventDetailLayer } from './EventDetailLayer'
 import type { MappingRulesText } from './MappingRulesDialog'
 import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
@@ -221,41 +222,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
    */
   const [catalogOpen, setCatalogOpen] = useState(false)
   /** 事件目录弹框的文案：只建一次，**键 → 文案的真表查找**也在这一份上做。 */
-  /** 映射规则弹框的文案：只建一次，键 → 文案的真表查找也在这一份上做。 */
-  /** 码表 / 未映射弹框的文案：只建一次，键 → 文案的真表查找也在这一份上做。 */
-  const mappingCopyText = useMemo<MappingRulesText>(() => ({
-    title: text.mkDay.mappingTitle, filter: text.mkDay.mappingFilter,
-    tabCodes: text.mkDay.mappingTabCodes, tabUnmapped: text.mkDay.mappingTabUnmapped,
-    onlyWithData: text.mkDay.mappingOnlyWithData,
-    tabsAria: text.mkDay.mappingTabsAria, unavailable: text.mkDay.mappingUnavailable,
-    codeColumns: text.mkDay.mappingCodeColumns, codeStatus: text.mkDay.mappingCodeStatus,
-    countryAll: text.mkDay.mappingCountryAll, countryFilter: text.mkDay.mappingCountryFilter,
-    countryNote: text.mkDay.mappingCodeCountryNote,
-    officialOpen: text.mkDay.mappingOfficialOpen, officialPending: text.mkDay.mappingOfficialPending,
-    officialNone: text.mkDay.mappingOfficialNone, codeEmpty: text.mkDay.mappingCodeEmpty,
-    unmappedColumns: text.mkDay.mappingUnmappedColumns, unmappedEmpty: text.mkDay.mappingUnmappedEmpty,
-    unmappedReasons: text.mkDay.mappingUnmappedReasons, reasonFilter: text.mkDay.mappingReasonFilter,
-    reasonAll: text.mkDay.mappingReasonAll,
-    tierStars: text.mkDay.mappingTierStars, tierAria: text.mkDay.mappingTierAria,
-    tierFilterMulti: text.mkDay.mappingTierFilterMulti, countryFilterMulti: text.mkDay.mappingCountryFilterMulti,
-    officialFilterMulti: text.mkDay.mappingOfficialFilterMulti,
-    officialStates: {
-      checked: text.mkDay.mappingOfficialChecked, pending: text.mkDay.mappingOfficialPending,
-      none: text.mkDay.mappingOfficialNone
-    },
-    exportLabel: text.mkDay.mappingExport,
-    tabEvents: text.mkDay.mappingTabEvents, eventColumns: text.mkDay.mappingEventColumns,
-    eventsEmpty: text.mkDay.mappingEventsEmpty, sheetEvents: text.mkDay.mappingSheetEvents,
-    eventTitleMissing: text.mkDay.mappingEventTitleMissing,
-    tierNames: text.mkDay.mappingTierNames,
-    exportNameZh: text.mkDay.mappingExportNameZh, exportNameEn: text.mkDay.mappingExportNameEn,
-    statusUnknown: text.mkDay.mappingStatusUnknown,
-    // 发布状态的白话名**只从日历那份文案来**：弹框里再写一份，同一状态就会有两个说法。
-    eventStatus: calendarText.eventStatus,
-    // 说明句由弹框自己按键取（它只出现在 ⓘ 里）；这里只交一个「键 → 文案」的查表函数。
-    resolveCopy: (key) => (text.mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key,
-    sheetCodes: text.mkDay.mappingSheetCodes, sheetUnmapped: text.mkDay.mappingSheetUnmapped
-  }), [text])
+  /** 映射规则弹框的文案：只建一次，键 → 文案的真表查找也在这一份上做（投影在 `mappingRulesCopy`）。 */
+  const mappingCopyText = useMemo(() => mappingRulesTextFrom(text.mkDay, calendarText.eventStatus), [text, calendarText])
   /** 图标按钮的读屏名：**真表查找**（键 → 文案），不在解析器里写比较。 */
   const catalogCopy = useMemo<Readonly<Record<string, string>>>(
     () => ({ 'intelligence.calendar.mappingRules.open': text.mkDay.mappingOpenAria }), [text])
