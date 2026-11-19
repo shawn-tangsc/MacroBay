@@ -61,7 +61,7 @@ export const marketCalendarMetricDisplayNames: Readonly<Record<string, string>> 
  * 不猜。码用 ISO 3166-1 alpha-2（存储层口径，`US` / `DE` 这种）；身份层用 alpha-3，由
  * `toAlpha3Country` 归一，两者各管一段。
  */
-export const marketCalendarCountryNames: Readonly<Record<string, Readonly<{ zh: string; en: string }>>> = Object.freeze({
+const marketCalendarCountryFullNames: Readonly<Record<string, Readonly<{ zh: string; en: string }>>> = Object.freeze({
   US: { zh: '美国', en: 'United States' },
   CA: { zh: '加拿大', en: 'Canada' },
   DE: { zh: '德国', en: 'Germany' },
@@ -93,6 +93,17 @@ export const marketCalendarCountryNames: Readonly<Record<string, Readonly<{ zh: 
   SE: { zh: '瑞典', en: 'Sweden' },
   UA: { zh: '乌克兰', en: 'Ukraine' }
 })
+
+/**
+ * **国家显示名（用户 2026-11-20）**：中文保持两字；**英文显示两位代码**（`US` / `GB`…）——
+ * `United States` 这种在事件列表窄列里会被裁成 `United...`。完整英文名不丢：`enFull` 供
+ * 悬停 title 与 `aria-label` 使用（视觉短、读屏仍念全名）。
+ * 显示口径只在这张表里定一次，别在界面另建第二张。
+ */
+export const marketCalendarCountryNames: Readonly<Record<string, Readonly<{ zh: string; en: string; enFull: string }>>>
+  = Object.freeze(Object.fromEntries(Object.entries(marketCalendarCountryFullNames).map(([code, names]) => [
+    code, Object.freeze({ zh: names.zh, en: code, enFull: names.en })
+  ])))
 
 /** 源类型显示名：源给的类型串 → 中文名。都是类型，不含个体。 */
 export const marketCalendarEventTypeDisplayNames: Readonly<Record<string, string>> = Object.freeze({
