@@ -42,10 +42,6 @@ export function BusinessCardFrequencyRow(props: Readonly<{
     scheduleAvailable: props.cadenceUnavailable !== true,
     ...(props.cadence === undefined ? {} : { cadence: props.cadence })
   })
-  /* 第①行的取值放在数组**外面**算：`popoverLimitsGuard` 数 `lines={[…]}` 的顶层逗号时不看括号，
-     写成 `frequencyReadoutLine(a, b, c)` 会把两个参数逗号数成项，四条被读成六条。
-     先算成变量，数组里就是实的四项。 */
-  const firstLine = frequencyReadoutLine(view, props.timeZone, t)
   return <div className="business-card__preset" {...props.dataRow} data-preset-builtin={builtin ? 'true' : undefined}>
     <span className="business-card__preset-label-group">
       <span className="business-card__preset-label">{t('settings.intelligenceSources.collectionPolicy.frequency')}</span>
@@ -60,7 +56,9 @@ export function BusinessCardFrequencyRow(props: Readonly<{
              ③「下次」是推算 ④ 手动/读不到两条边界。任何状态都不得长出第 5 条。
              两页共用这一份，逐字相同。 */
           lines={[
-            firstLine,
+            /* 带参数的函数调用直接写在数组里：守卫已经把函数括号深度算进去，四项就是四项
+               （`0944ab3` 之前它会把参数逗号数成项，这里曾为此提前算成变量）。 */
+            frequencyReadoutLine(view, props.timeZone, t),
             { labelKey: 'settings.intelligenceSources.collectionPolicy.presetIntervalsNote' },
             { labelKey: 'settings.intelligenceSources.collectionPolicy.nextIsEstimateNote' },
             { labelKey: 'settings.intelligenceSources.collectionPolicy.readoutEdgesNote' }
