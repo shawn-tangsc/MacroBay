@@ -232,7 +232,9 @@
 .mi-economic-calendar__day[data-month='outside'] .mi-economic-calendar__date { color: color-mix(in srgb, var(--mi-economic-muted) 48%, transparent); }
 .mi-economic-calendar__date { color: var(--mi-economic-muted); height: var(--mi-calendar-row-height); font-variant-numeric: tabular-nums; font-size: var(--mi-calendar-date-size); text-align: left; }
 .mi-economic-calendar__events { display: grid; align-content: start; min-width: 0; }
-.mi-economic-calendar__event { position: relative; display: grid; grid-template-columns: var(--mi-calendar-time-width) var(--mi-calendar-country-width) minmax(0, 1fr); align-items: center; height: var(--mi-calendar-row-height); min-width: 0; width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--mi-economic-text); cursor: pointer; font: inherit; padding: 0; text-align: left; }
+.mi-economic-calendar__event { position: relative; display: grid; grid-template-columns: var(--mi-calendar-time-width) var(--mi-calendar-country-width) minmax(0, 1fr) auto; align-items: center; gap: 0 6px; height: var(--mi-calendar-row-height); min-width: 0; width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--mi-economic-text); cursor: pointer; font: inherit; padding: 0; text-align: left; }
+/* 行尾类别文字：与名字同号（meta 档）、次级色；只占横向、不撑高行。 */
+.mi-economic-calendar__event-kindname { justify-self: end; color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); font-style: normal; white-space: nowrap; }
 /* 没有动作的行（`div`）不是控件：去指针、去悬停反馈。行高与栅格照旧。 */
 div.mi-economic-calendar__event { cursor: default; }
 div.mi-economic-calendar__event:hover { background: transparent; }

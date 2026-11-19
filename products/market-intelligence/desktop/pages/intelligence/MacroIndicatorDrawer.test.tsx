@@ -302,9 +302,9 @@ describe('key-indicator drawer', () => {
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
     expect(list).not.toBeNull()
     expect(list!.textContent).toContain('新增就业')
-    // 分组按**重点**（用户 2026-11-19）：一级指标置顶，其余折起来；不再按事件类型套两层。
+    // 分组按**重点**（用户 2026-11-19）：一级指标置顶；其余标了高重要性的自成一組、不折叠。
     expect(list!.textContent).toContain('一级指标 · ')
-    expect(list!.textContent).toContain('其余 2 条')
+    expect(list!.textContent).toContain('高重要性事件 · ')
   })
 
   /**
@@ -853,7 +853,7 @@ it('groups by importance: tier 1, tier 2, high-importance events, then the folde
     dayEvent('e-tier2', '第三季度GDP(年化季率)', '2026-11-13T01:30:00.000Z', { measureKeys: ['US.GDP.SA.ANNUALIZED_QOQ'] }),
     dayEvent('e-tier0', '10月零售销售(月率)', '2026-11-13T01:45:00.000Z'),
     dayEvent('e-speech', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity', importance: 'high' }),
-    dayEvent('e-stock', '上周EIA原油库存变化', '2026-11-13T03:00:00.000Z', { eventType: 'financial-event' })
+    dayEvent('e-stock', '上周EIA原油库存变化', '2026-11-13T03:00:00.000Z', { eventType: 'financial-event', importance: 'low' })
   ]
   await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => mixed })
   const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!

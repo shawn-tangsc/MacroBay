@@ -106,10 +106,13 @@ export function dayGroups(allDay: readonly MarketCalendarEvent[], date: string, 
   const first = sorted.filter(event => event.eventType === 'economic-indicator' && dayTierOf(event) === '1')
   const second = sorted.filter(event => event.eventType === 'economic-indicator' && dayTierOf(event) === '2')
   /**
-   * **高重要性事件单独一段、不折叠**（用户 2026-11-19）：央行活动与金融事件里 `importance='high'`
-   * 的要像一二级指标一样直接摆出来——那天 5 条讲话全被埋进「其余 69 条」里，正是这次要修的。
+   * **高重要性 = 所有来源标了 `high` 的行，不论类别**（用户 2026-11-19 两次纠正）。
+   *
+   * 第一版只收央行活动与金融事件，结果当天 5 条高重要性经济指标 + 9 条没有 `event_type` 的行
+   * 全被扔进「其余」——用户看到的就是「那么多高重要性的还是收起来了」。
+   * 与一二级重叠时**只出现一次**（优先级：一级 > 二级 > 高重要性 > 其余），所以这里要先排除前两组。
    */
-  const highEvents = sorted.filter(event => event.eventType !== 'economic-indicator'
+  const highEvents = sorted.filter(event => !first.includes(event) && !second.includes(event)
     && event.importance === 'high')
   const rest = sorted.filter(event => !first.includes(event) && !second.includes(event)
     && !highEvents.includes(event))

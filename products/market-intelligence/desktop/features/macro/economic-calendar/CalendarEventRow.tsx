@@ -62,14 +62,25 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   const repeatLabel = releaseCount !== undefined && releaseCount > 1 && repeatCountLabel !== undefined
     ? repeatCountLabel.replace('{count}', String(releaseCount)) : undefined
   const kind = calendarItemType(item)
-  const KindGlyph = calendarKindGlyphs[kind]
+  /**
+   * 行尾的**类别文字**（用户 2026-11-19：「怎么没给我区分出来，是央行活动还是经济指标，还是经济事件」）。
+   * 只认事件自己的类型字段：市场行没有 `eventType` 时写 `—`——**不自造「未分类」、也不留空**。
+   * 官方腿只有经济指标，这类行永远是「经济指标」。
+   */
+  const kindLabel = item.source === 'market'
+    ? (item.event.eventType === undefined
+      ? '—'
+      : text.market.kinds[item.event.eventType] ?? '—')
+    : text.market.kinds['economic-indicator']
+  // 源没给类型时**不画字形**（`eventType` 为空的行确实存在）：缺一个图标不该让整行渲染崩掉。
+  const KindGlyph = kind === undefined ? null : calendarKindGlyphs[kind]
   const important = isHighImportanceCalendarItem(item)
   // The kind and the importance ride in the description so the marks have names: the accessible label
   // and the hover text both say them, rather than leaving the reader to decode two glyphs.
   const importanceNote = important ? ` · ${text.details.importance} ${text.importance.high}` : ''
   // 「已发布却没值」：时刻已过、来源没给实际值，且这是**指标**行。事件型永远不加。
   const missingValue = missingValueLabel !== undefined && status === 'awaiting-data' && kind === 'economic-indicator'
-  const description = `${time} ${text.market.kinds[kind]} ${country ? `${country} ` : ''}${title}${missingValue ? ` · ${missingValueLabel}` : ''} · ${text.eventStatus[status]}${importanceNote}`
+  const description = `${time} ${kind === undefined ? '' : `${text.market.kinds[kind]} `}${country ? `${country} ` : ''}${title}${missingValue ? ` · ${missingValueLabel}` : ''} · ${text.eventStatus[status]}${importanceNote}`
   // The description is runtime data (time, title, status), not a sentence from the text table, so it
   // goes through `dataText`. The hint is the same line on hover and on focus; the accessible name is
   // that same line — it used to repeat the time, because the template added it a second time.
@@ -92,20 +103,20 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   return <Tooltip dataText={description} resolveText={resolveText}>
     {onSelect === undefined
       ? <div {...shared}>
-        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} />
+        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
       </div>
       : <button {...shared} data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
         type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
-        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} />
+        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
       </button>}
   </Tooltip>
 }
 
 /** 行内内容：按钮态与非交互态必须一模一样，所以只有一份。 */
-function RowContent({ time, kind, important, country, title, KindGlyph, repeatLabel, releaseCount }: {
-  time: string; kind: MarketCalendarEvent['eventType']; important: boolean
-  country: string | undefined; title: string; KindGlyph: LucideIcon
-  repeatLabel: string | undefined; releaseCount: number | undefined
+function RowContent({ time, kind, important, country, title, KindGlyph, repeatLabel, releaseCount, kindLabel }: {
+  time: string; kind: MarketCalendarEvent['eventType'] | undefined; important: boolean
+  country: string | undefined; title: string; KindGlyph: LucideIcon | null
+  repeatLabel: string | undefined; releaseCount: number | undefined; kindLabel: string
 }) {
   return <>
       <span className="mi-economic-calendar__event-time">{time}</span>
@@ -122,10 +133,12 @@ function RowContent({ time, kind, important, country, title, KindGlyph, repeatLa
       {/* The marks sit inside the title: the kind glyph leads the run so it lines up down the column,
           and the importance dot follows it directly ahead of the name. */}
       <span className="mi-economic-calendar__event-title">
-        <span aria-hidden="true" className="mi-economic-calendar__event-kind" data-event-kind={kind}><KindGlyph size={11} /></span>
+        {KindGlyph === null ? null : <span aria-hidden="true" className="mi-economic-calendar__event-kind" data-event-kind={kind}><KindGlyph size={11} /></span>}
         {important ? <span aria-hidden="true" className="mi-economic-calendar__event-marker" data-importance-marker="high" /> : null}
         {title}
         {repeatLabel === undefined ? null : <em className="mi-economic-calendar__event-repeat" data-release-count={releaseCount}>{repeatLabel}</em>}
       </span>
+      {/* 类别文字在**行尾右侧**：小字、次级色，靠栅格最后那一列对齐——不占行高、只加宽。 */}
+      <em className="mi-economic-calendar__event-kindname" data-calendar-kind-label>{kindLabel}</em>
   </>
 }

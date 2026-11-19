@@ -70,3 +70,37 @@ it('lists high-importance events in their own open group, not inside the folded 
   expect(result[1]!.collapsedByDefault).toBe(true)
   expect(result[1]!.items).toHaveLength(1)
 })
+
+/**
+ * 高重要性组**只看重要性、不看类别**（用户 2026-11-19 第二次纠正）：
+ * 当天 21 条 high 里有 5 条经济指标、9 条没有 `event_type`，第一版只收央行/金融事件，那些全被埋了。
+ *
+ * 这条同时钉住**守恒**：一级 + 二级 + 高重要性 + 其余 = 当天全部行，一行不多一行不少。
+ */
+it('puts every high-importance row in its own group, and keeps the four groups additive', () => {
+  const tier1 = event({ eventKey: 't1', eventNameKey: 'US.CPI.NSA.YOY' })
+  const tier2 = event({ eventKey: 't2', eventNameKey: 'DE.CPI.NSA.YOY' })
+  // 高重要性但没有类型（event_type 为空的行）：以前会掉进「其余」。
+  const untypedHigh = event({ eventKey: 'h1', eventType: undefined as never, importance: 'high' })
+  // 高重要性经济指标：以前也会掉进「其余」（第一版只收央行/金融事件）。
+  const indicatorHigh = event({ eventKey: 'h2', eventType: 'economic-indicator', eventNameKey: undefined,
+    importance: 'high' })
+  // 与一级重叠的高重要性指标：只能出现一次（一级优先）。
+  const both = event({ eventKey: 'b1', eventNameKey: 'US.UNEMPLOYMENT.SA.RATE', importance: 'high' })
+  const speechHigh = event({ eventKey: 'h3', eventType: 'central-bank-activity', importance: 'high' })
+  const medium = event({ eventKey: 'm1', eventType: 'central-bank-activity', importance: 'medium' })
+
+  const result = groups([tier1, tier2, untypedHigh, indicatorHigh, both, speechHigh, medium])
+  const byKey = Object.fromEntries(result.map((group) => [group.key, group.items.map((item) => item.key)]))
+  expect(byKey['tier-1']).toEqual(['t1', 'b1'])
+  expect(byKey['tier-2']).toEqual(['t2'])
+  // 三条 high（无类型的、指标、央行活动）都在高重要性组；与一级重叠的那条不重复出现。
+  expect(byKey['high-events']).toEqual(['h1', 'h2', 'h3'])
+  expect(byKey['rest']).toEqual(['m1'])
+
+  // **守恒**：四段相加 = 当天全部行。
+  const total = result.reduce((sum, group) => sum + group.items.length, 0)
+  expect(total).toBe(7)
+  const keys = result.flatMap((group) => group.items.map((item) => item.key))
+  expect(new Set(keys).size).toBe(keys.length)
+})

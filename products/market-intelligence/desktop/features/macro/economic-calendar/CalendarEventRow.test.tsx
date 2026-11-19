@@ -49,7 +49,8 @@ it('uses only localized time and full accessible topic for both event sources', 
   try {
     await act(async () => root.render(<CalendarEventRow item={event} text={text} statusNow="2026-09-10T00:00:00.000Z" onSelect={() => {}} />))
     // 国家这一格现在永远有内容（用户 2026-11-16：没有国家数据时显示「未知国家」），所以整行文本里有它。
-    expect(host.textContent).toBe('08:30未知国家Derived full topic')
+    // 行尾多了一个类别文字（用户 2026-11-19）：这一行的类型是经济指标。
+    expect(host.textContent).toBe('08:30未知国家Derived full topic经济指标')
     expect(host.querySelector('button')?.getAttribute('aria-label')).toContain('Derived full topic · 时间待定')
     expect(host.querySelector('button')?.hasAttribute('title')).toBe(false)
     expect(host.querySelector('button')?.getAttribute('data-event-status')).toBe('time-pending')
@@ -74,7 +75,9 @@ it('shows the provider country before the title, and never a country for an offi
     // （2026-11-16 之前它确实是标题里的行内片段，理由是省下窄月格的宽度；那条判断已被用户推翻。）
     const row = host.querySelector('button')!
     const cells = Array.from(row.children) as HTMLElement[]
-    expect(cells).toHaveLength(3)
+    // 时间 / 国家 / 名字 / 类别（第四格是行尾的类别文字，紧跟在行的右侧）。
+    expect(cells).toHaveLength(4)
+    expect(cells[3]!.getAttribute('data-calendar-kind-label')).not.toBeNull()
     expect(cells[1]).toBe(chip)
     expect(chip!.className).toContain('mi-economic-calendar__event-country')
     const title = host.querySelector('.mi-economic-calendar__event-title')!
@@ -286,3 +289,41 @@ it('marks a period that was released more than once, and stays silent when it wa
     expect(host.querySelector('[data-release-count]')).toBeNull()
   } finally { await act(async () => root.unmount()) }
 }, MOUNT_TIMEOUT_MS)
+
+/**
+ * 行尾类别文字（用户 2026-11-19）：「怎么没给我区分出来，是央行活动还是经济指标，还是经济事件」。
+ *
+ * 三种类别都要有文字（不能只用颜色/图标）；**没有类型的行写 `—`**——不自造「未分类」、也不留空。
+ */
+it('writes the category in words at the row tail, and a dash when the source gave no type', async () => {
+  const { CalendarEventRow } = await import('./CalendarEventRow')
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  // 夹具按真实契约补齐（`CalendarDayItem` 的市场行）：缺字段不是「类型为空」，是夹具不完整。
+  const item = (eventType?: 'economic-indicator' | 'central-bank-activity' | 'financial-event'): CalendarDayItem => ({
+    key: 'k', source: 'market', date: '2026-10-14', time: '09:30',
+    event: {
+      eventKey: 'e', title: '事件', countryCode: 'US', importance: 'medium',
+      ...(eventType === undefined ? {} : { eventType }),
+      scheduledAt: '2026-10-14T01:30:00.000Z', sourceObservedAt: '2026-10-14T01:30:00.000Z',
+      coverage: 'observed-unverified', consensus: null, providerPrevious: null, providerActual: null,
+      source: 'Narwhal'
+    }
+  } as CalendarDayItem)
+  const host = document.createElement('div')
+  const root = createRoot(host)
+  document.body.append(host)
+  const label = async (eventType?: 'economic-indicator' | 'central-bank-activity' | 'financial-event'): Promise<string> => {
+    await act(async () => { root.render(<CalendarEventRow item={item(eventType)} text={text} statusNow="2026-10-14T02:00:00.000Z" />) })
+    return host.querySelector('[data-calendar-kind-label]')?.textContent ?? ''
+  }
+  try {
+    expect(await label('economic-indicator')).toBe('经济指标')
+    expect(await label('central-bank-activity')).toBe('央行活动')
+    expect(await label('financial-event')).toBe('财经事件')
+    // 源没给类型：写 `—`，不自造「未分类」；行也照常渲染（缺字形不该把整行打崩）。
+    expect(await label(undefined)).toBe('—')
+  } finally {
+    await act(async () => root.unmount())
+    host.remove()
+  }
+})
