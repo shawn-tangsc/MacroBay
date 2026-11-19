@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -31,6 +31,10 @@ export function writeVerifiedPayload(input: Readonly<{
   temporarySequence: number
 }>): WriteVerifiedPayloadResult {
   if (payloadHash(input.body) !== input.expectedHash) return { state: 'failed', reason: 'hash-mismatch' }
+  /* **目录由写入点自己建**（用户 2026-11-20）：原语返回 `failed` 时调用方的规则是「整条记录不落库」，
+     所以目录缺失的后果不是「慢一点」，而是**静默丢数据**；而迁移是第二个调用方，漏建一次就是
+     7654 条全变「未迁移」。前置条件归写入点自己负责，不让两个调用方各写一遍。 */
+  try { mkdirSync(input.directory, { recursive: true }) } catch { return { state: 'failed', reason: 'verify-failed' } }
   const fileRef = `${input.expectedHash}.bin`
   const path = join(input.directory, fileRef)
   const existed = existsSync(path)
