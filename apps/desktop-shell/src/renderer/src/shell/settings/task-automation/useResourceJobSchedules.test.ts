@@ -29,9 +29,9 @@ describe('useResourceJobSchedules', () => {
   })
 
   it('loads the read-only schedule projection and resolves product display names', async () => {
-    platform.listSchedules.mockResolvedValue([job({ id: 'job-1', productId: 'market-intelligence' })])
+    platform.listSchedules.mockResolvedValue([job({ id: 'job-1', productId: 'sample-product' })])
     platform.getProductSummaries.mockResolvedValue([
-      { id: 'market-intelligence', name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' } }
+      { id: 'sample-product', name: { 'zh-CN': '样例产品', 'en-US': 'Sample Product' } }
     ])
     installPlatform()
 
@@ -40,13 +40,13 @@ describe('useResourceJobSchedules', () => {
     await vi.waitFor(() => expect(capture.current?.loading).toBe(false))
     expect(platform.listSchedules).toHaveBeenCalledTimes(1)
     expect(capture.current?.items).toHaveLength(1)
-    expect(capture.current?.productNames).toEqual({ 'market-intelligence': '情报模块' })
+    expect(capture.current?.productNames).toEqual({ 'sample-product': '样例产品' })
     expect(capture.current?.error).toBe(false)
     expect(capture.current?.errorReason).toBeNull()
   })
 
   it('still lists the schedules when product display names are unavailable', async () => {
-    platform.listSchedules.mockResolvedValue([job({ id: 'job-1', productId: 'market-intelligence' })])
+    platform.listSchedules.mockResolvedValue([job({ id: 'job-1', productId: 'sample-product' })])
     platform.getProductSummaries.mockRejectedValue(new Error('product-summaries-unavailable'))
     installPlatform()
 

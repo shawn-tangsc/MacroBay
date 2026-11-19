@@ -42,10 +42,10 @@ describe('TaskAutomationResourceJobsSection filters', () => {
       errorReason: null,
       items: [
         job({ id: 'a', title: 'Alpha collect', productId: null, owner: 'platform' }),
-        job({ id: 'b', title: 'Beta collect', productId: 'market-intelligence' }),
-        job({ id: 'c', title: 'Beta digest', productId: 'market-intelligence' })
+        job({ id: 'b', title: 'Beta collect', productId: 'sample-product' }),
+        job({ id: 'c', title: 'Beta digest', productId: 'sample-product' })
       ],
-      productNames: { 'market-intelligence': 'Market Intelligence' } as Record<string, string>,
+      productNames: { 'sample-product': 'Sample Product' } as Record<string, string>,
       reload: vi.fn()
     }
     const container = document.createElement('div')
@@ -166,7 +166,7 @@ describe('TaskAutomationResourceJobsSection pagination', () => {
 
     await chooseOption(
       second.querySelector(`.${TASK_AUTOMATION_CONTROL_CLASSES.source}`) as HTMLElement,
-      'Market Intelligence'
+      'Sample Product'
     )
 
     for (const container of [first, second]) {
@@ -288,7 +288,7 @@ function jobs18(): JobScheduleView[] {
   return Array.from({ length: 18 }, (_, index) => job({
     id: `job-${index + 1}`,
     title: index === 17 ? 'Nasdaq collector' : `Auto collect ${index + 1}`,
-    productId: 'market-intelligence',
+    productId: 'sample-product',
     owner: index % 2 === 0 ? 'product' : 'platform'
   }))
 }
@@ -299,7 +299,7 @@ function controllerWith(items: JobScheduleView[]) {
     error: false,
     errorReason: null as ResourceJobSchedulesErrorReason | null,
     items,
-    productNames: { 'market-intelligence': 'Market Intelligence' } as Record<string, string>,
+    productNames: { 'sample-product': 'Sample Product' } as Record<string, string>,
     reload: vi.fn()
   }
 }
@@ -356,7 +356,7 @@ function job(overrides: Partial<JobScheduleView>): JobScheduleView {
     id: 'job-1',
     title: 'Job',
     owner: 'product',
-    productId: 'market-intelligence',
+    productId: 'sample-product',
     trigger: { kind: 'manual' },
     registered: true,
     nextRunAt: null,

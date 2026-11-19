@@ -8,16 +8,16 @@ import { resolveResourceJobSourceName } from './resourceJobSourceLabel'
 describe('resourceJobFilters', () => {
   it('derives the source options from the projection instead of a hard-coded product list', () => {
     const options = buildResourceJobSourceOptions([
-      job({ id: 'job-1', owner: 'product', productId: 'market-intelligence' }),
+      job({ id: 'job-1', owner: 'product', productId: 'sample-product-a' }),
       job({ id: 'job-2', owner: 'platform', productId: null }),
       job({ id: 'job-3', owner: 'product', productId: 'sample-product' }),
-      job({ id: 'job-4', owner: 'product', productId: 'market-intelligence' })
+      job({ id: 'job-4', owner: 'product', productId: 'sample-product-a' })
     ])
 
     expect(options).toEqual([
       { value: 'all', kind: 'all', productId: null },
       { value: 'platform', kind: 'platform', productId: null },
-      { value: 'product:market-intelligence', kind: 'product', productId: 'market-intelligence' },
+      { value: 'product:sample-product-a', kind: 'product', productId: 'sample-product-a' },
       { value: 'product:sample-product', kind: 'product', productId: 'sample-product' }
     ])
   })
@@ -25,8 +25,8 @@ describe('resourceJobFilters', () => {
   it('combines the name, source, and registration filters with AND', () => {
     const items = [
       job({ id: 'a', title: 'Alpha collect', owner: 'platform', productId: null, registered: true }),
-      job({ id: 'b', title: 'Beta collect', owner: 'product', productId: 'market-intelligence', registered: true }),
-      job({ id: 'c', title: 'Beta digest', owner: 'product', productId: 'market-intelligence', registered: false }),
+      job({ id: 'b', title: 'Beta collect', owner: 'product', productId: 'sample-product-a', registered: true }),
+      job({ id: 'c', title: 'Beta digest', owner: 'product', productId: 'sample-product-a', registered: false }),
       job({ id: 'd', title: 'Gamma collect', owner: 'product', productId: 'sample-product', registered: true })
     ]
 
@@ -34,11 +34,11 @@ describe('resourceJobFilters', () => {
       .toEqual(['a', 'b', 'c', 'd'])
     expect(filterResourceJobs(items, { nameQuery: 'BETA', source: 'all', registration: 'all' }).map((item) => item.id))
       .toEqual(['b', 'c'])
-    expect(filterResourceJobs(items, { nameQuery: '', source: 'product:market-intelligence', registration: 'all' }).map((item) => item.id))
+    expect(filterResourceJobs(items, { nameQuery: '', source: 'product:sample-product-a', registration: 'all' }).map((item) => item.id))
       .toEqual(['b', 'c'])
     expect(filterResourceJobs(items, { nameQuery: '', source: 'all', registration: 'unregistered' }).map((item) => item.id))
       .toEqual(['c'])
-    expect(filterResourceJobs(items, { nameQuery: 'beta', source: 'product:market-intelligence', registration: 'registered' }).map((item) => item.id))
+    expect(filterResourceJobs(items, { nameQuery: 'beta', source: 'product:sample-product-a', registration: 'registered' }).map((item) => item.id))
       .toEqual(['b'])
     expect(filterResourceJobs(items, { nameQuery: 'beta', source: 'product:sample-product', registration: 'all' }))
       .toEqual([])
@@ -51,18 +51,18 @@ describe('resourceJobFilters', () => {
 
   it('keeps the full product name as both the option label and its hover title', () => {
     const options = buildResourceJobSourceOptions([
-      job({ id: 'job-1', owner: 'product', productId: 'market-intelligence' }),
+      job({ id: 'job-1', owner: 'product', productId: 'sample-product-a' }),
       job({ id: 'job-2', owner: 'product', productId: 'sample-product' })
     ])
 
     expect(buildResourceJobSourceSelectOptions(
       options,
       { allSources: '全部来源', platform: '平台', product: '产品' },
-      { 'market-intelligence': 'Market Intelligence', 'sample-product': 'Sample Product' }
+      { 'sample-product-a': 'Sample Product A', 'sample-product': 'Sample Product' }
     )).toEqual([
       { value: 'all', label: '全部来源', title: '全部来源' },
       { value: 'platform', label: '平台', title: '平台' },
-      { value: 'product:market-intelligence', label: 'Market Intelligence', title: 'Market Intelligence' },
+      { value: 'product:sample-product-a', label: 'Sample Product A', title: 'Sample Product A' },
       { value: 'product:sample-product', label: 'Sample Product', title: 'Sample Product' }
     ])
   })

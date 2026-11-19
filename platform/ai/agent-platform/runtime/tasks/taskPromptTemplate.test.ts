@@ -7,12 +7,12 @@ describe('taskPromptTemplate', () => {
   const context = {
     now: '2026-01-02T03:04:05.000Z',
     timezone: 'Asia/Shanghai',
-    taskName: 'Morning briefing'
+    taskName: 'Morning digest'
   }
 
   it('renders the supported task variables in the supplied timezone', () => {
     expect(renderTaskPromptTemplate('{date}|{time}|{datetime}|{timezone}|{task_name}', context)).toBe(
-      '2026-01-02|11:04|2026-01-02 11:04|Asia/Shanghai|Morning briefing'
+      '2026-01-02|11:04|2026-01-02 11:04|Asia/Shanghai|Morning digest'
     )
   })
 
@@ -21,7 +21,7 @@ describe('taskPromptTemplate', () => {
   })
 
   it('does not interpret nested or expression-like placeholders', () => {
-    expect(renderTaskPromptTemplate('{date.toString()} {task_name}', context)).toBe('{date.toString()} Morning briefing')
+    expect(renderTaskPromptTemplate('{date.toString()} {task_name}', context)).toBe('{date.toString()} Morning digest')
   })
 
   it('is available through the platform task runtime entry point', () => {
