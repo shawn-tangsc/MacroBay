@@ -106,7 +106,8 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   lastWriteFailure?: Readonly<{ at: string; firstErrorCode: 'standard-write-failed' | 'value-shape-rejected' }>
 }>): Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
   sources: readonly { descriptorId: string; lastCollectedAt: string | null
-    latestAttempt?: { attemptedAt: string; state: string } }[] }> {
+    latestAttempt?: { attemptedAt: string; state: string } }[]
+  writeFailure?: Readonly<{ at: string; code: 'standard-write-failed' | 'value-shape-rejected' }> }> {
   // 作业记录不再参与判定（判定的唯一依据是 `lastWrittenAt`）。
   /**
    * **过期只看「作业有没有跑成」，不看「这次有没有写进新行」**（Chief 2026-11-14 定）。

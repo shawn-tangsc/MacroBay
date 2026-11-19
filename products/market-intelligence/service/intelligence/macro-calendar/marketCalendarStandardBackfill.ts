@@ -6,6 +6,7 @@ import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, toAlpha2Country, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
+import { recordCalendarWriteFailure, type MacroCalendarProviderHealthStore } from './macroCalendarProviderHealthStore'
 import { routeStandardRelease } from './marketCalendarStandardRowRouting'
 import { ensureCalendarStandardTables, recordCalendarUnmapped, type CalendarUnmappedReason }
   from './marketCalendarStandardTable'
@@ -194,6 +195,26 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
 const periodFromRuleKey = (periodKey: string): string | undefined =>
   /^\d{4}-\d{2}-\d{2}$/.test(periodKey) || /^\d{4}-Q[1-4]$/.test(periodKey) ? periodKey : undefined
 
+/**
+ * 写库失败 → 健康记录 + 一行日志（用户 2026-11-19）。**两个写入点都走这一处**：
+ * 逐字复制到第二个调用点，迟早出现「一处漏码、一处漏 streak」。
+ */
+export function reportWriteFailure(
+  health: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'> | undefined,
+  log: ((level: 'warn', event: string, fields?: Record<string, unknown>) => void) | undefined,
+  providerId: string,
+  counts: Readonly<{ failed: number; firstErrorCode?: 'standard-write-failed' | 'value-shape-rejected' }>,
+  at: string
+): boolean {
+  if (counts.failed === 0 || counts.firstErrorCode === undefined) return false
+  const recorded = health === undefined ? false
+    : recordCalendarWriteFailure(health, providerId as never,
+      { at, failedRows: counts.failed, firstErrorCode: counts.firstErrorCode })
+  log?.('warn', 'macro-calendar.standard.write-failed',
+    { providerId, failedRows: counts.failed, firstErrorCode: counts.firstErrorCode, recorded })
+  return recorded
+}
+
 const hasMeasures = (json: string | null): boolean =>
   json !== null && json !== '' && json !== '[]' && json !== 'null'
 
@@ -206,6 +227,12 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   observedAt?: string
   /** `false` = dry-run：只报数，不写库（也不建表）。 */
   write?: boolean
+  /**
+   * 来源健康记录（用户 2026-11-19）：**只用来记「写库失败」**，不改 `status`。
+   * 不传就不记（离线脚本、用例不需要）。
+   */
+  health?: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>
+  log?: (level: 'warn', event: string, fields?: Record<string, unknown>) => void
 }>): StandardBackfillReport {
   const providerId = input?.providerId ?? narwhalSourcePolicy.providerId
   const profile = backfillSourceProfiles[providerId]
@@ -392,8 +419,10 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   }
   let written = 0
   if (write && standardRows.length > 0) {
-    written = dualWriteMeasureRows(database, { providerId, parserVersion: 'backfill-from-observations-v1',
-      observedAt, rows: standardRows as never }).written
+    const counts = dualWriteMeasureRows(database, { providerId, parserVersion: 'backfill-from-observations-v1',
+      observedAt, rows: standardRows as never })
+    written = counts.written
+    reportWriteFailure(input?.health, input?.log, providerId, counts, observedAt)
   }
   return { observations: rows.length, releases: latest.size, indicator, event, source,
     unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey,

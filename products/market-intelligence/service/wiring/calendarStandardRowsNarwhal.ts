@@ -93,6 +93,8 @@ export function startCalendarStandardRows(input: Readonly<{
   /** 惰性：`fredObservations` 在 `after` 兑现前的启动段里还没建好，取值必须推迟到 `readLatest` 里。 */
   fredObservations: () => Parameters<typeof readFredObservationForPeriod>[2]
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  /** 来源健康记录：写库失败记在它上面（不改 `status`）。 */
+  health?: Parameters<typeof syncOfficialStandardRowsAtStartup>[0]['health']
 }>): void {
   syncOfficialStandardRowsAtStartup({
     database: input.database,
@@ -100,6 +102,7 @@ export function startCalendarStandardRows(input: Readonly<{
     after: input.after,
     readLatest: (metricKey, periodKey) =>
       input.readFredObservationForPeriod(metricKey, periodKey, input.fredObservations()),
-    ...(input.log === undefined ? {} : { log: input.log })
+    ...(input.log === undefined ? {} : { log: input.log }),
+    ...(input.health === undefined ? {} : { health: input.health })
   })
 }

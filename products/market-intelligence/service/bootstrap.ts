@@ -299,7 +299,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
     readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })
-  const zeroXRouterSchedule = wireZeroXRouterCalendarSchedule({ jobRuntime: deps.jobRuntime, database: macroCalendarBackend.storage.database, refreshAutomatic: (feeds) => marketCalendar.refreshAutomatic(feeds), readReadiness: intelligenceModule.calendarManualDependencies.readReadiness, readEnabledFeeds: createEnabledZeroXRouterFeeds({ listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles() }), ...(deps.log === undefined ? {} : { log: deps.log }) })
+  const zeroXRouterSchedule = wireZeroXRouterCalendarSchedule({ jobRuntime: deps.jobRuntime, database: macroCalendarBackend.storage.database, refreshAutomatic: (feeds) => marketCalendar.refreshAutomatic(feeds), readReadiness: intelligenceModule.calendarManualDependencies.readReadiness, readEnabledFeeds: createEnabledZeroXRouterFeeds({ listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles() }), ...(deps.log === undefined ? {} : { log: deps.log }), health: macroCalendarBackend.healthStore })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
   // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
@@ -355,7 +355,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     after: intelligenceModule.startupReady,
     readFredObservationForPeriod,
     fredObservations: () => fredObservations,
-    ...(deps.log === undefined ? {} : { log: deps.log })
+    ...(deps.log === undefined ? {} : { log: deps.log }),
+    health: macroCalendarBackend.healthStore
   })
   // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
   let narwhalCalendarAssembly: ReturnType<typeof createNarwhalCalendarAssembly> | undefined
