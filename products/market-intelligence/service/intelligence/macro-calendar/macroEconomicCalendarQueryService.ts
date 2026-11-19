@@ -4,6 +4,7 @@ import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/ec
 import { formatBlsCalendarValue } from './bls-employment-refresh/blsCalendarDisplayValue'
 import { macroCalendarConsensusFallback } from './macroCalendarPolicy'
 import { resolveDisplayedReleaseTime } from './macroCalendarConventionTime'
+import { projectReaderVisibleEvents } from './macroCalendarReaderProjection'
 
 export type MacroEconomicCalendarQueryService = {
   queryMonth: (input: unknown) => MacroEconomicCalendarMonthResult
@@ -89,10 +90,11 @@ export function createMacroEconomicCalendarQueryService(deps: {
       if (!bounds) return monthUnavailable('query-input-invalid')
       try {
         const limit = input.maxEvents ?? macroEconomicCalendarQueryPolicy.monthResultLimit
-        const events = coalesceBlsCalendarRows(canonicalizeBlsValueFamilies(deps.repository.listEffectiveMonthAsOf({ ...bounds, asOf: input.asOf, limit })))
-          .filter((revision, _index, all) => isEligible(revision, input.asOf, all))
-          .slice(0, limit)
-          .map((revision) => toEvent(revision, input.asOf))
+        const events = projectReaderVisibleEvents(
+          coalesceBlsCalendarRows(canonicalizeBlsValueFamilies(deps.repository.listEffectiveMonthAsOf({ ...bounds, asOf: input.asOf, limit })))
+            .filter((revision, _index, all) => isEligible(revision, input.asOf, all))
+            .slice(0, limit)
+            .map((revision) => toEvent(revision, input.asOf)))
         return { state: 'available', asOf: input.asOf, events }
       } catch {
         return monthUnavailable('calendar-query-unavailable')
