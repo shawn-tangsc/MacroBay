@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { EventBusRuntime } from '@platform/message-bus'
@@ -29,6 +30,7 @@ import {
 import { createIntelligenceTranslationJsonStorage } from './store/intelligenceTranslationStorage'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createRawRecordJsonStorage, readRawRecordSnapshotSync } from './store/rawRecordStorage'
+import { resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
 
 /**
  * `intelligenceModule` 的本地存储与采集底座（拆分 M2，2026-11-15，**只搬不改**）。
@@ -54,9 +56,26 @@ export function createIntelligenceStores(input: {
     createProfileJsonStorage(join(dataDir, 'intelligence-source-profiles.json'))
   )
   const rawRecordStorage = createRawRecordJsonStorage(join(dataDir, 'intelligence-raw-records.json'))
+  /* 原文外置（用户 2026-11-20）：**生产必须接上**——「可选注入」只对测试有意义，
+     不接就是静默回退到内联，JSON 照旧涨而没有任何报错。所以这里既注入，也把启用状态打一行盘点。 */
+  const payloadDirectory = resolvePayloadDirectory('generic-intelligence', dataDir)
+  /* 原语只写不建目录：目录不存在时写入会失败（`verify-failed`），整条记录随之不落库。
+     所以在这里建一次，失败也要留痕——那是「外置没生效」的类型，不是默认。 */
+  if (payloadDirectory !== undefined) {
+    try { mkdirSync(payloadDirectory, { recursive: true }) } catch (error) {
+      console.log(JSON.stringify({ marker: 'RAW_RECORD_PAYLOAD_DIRECTORY_FAILED',
+        directory: payloadDirectory, message: error instanceof Error ? error.message : String(error) }))
+    }
+  }
+  console.log(JSON.stringify({
+    marker: 'RAW_RECORD_PAYLOAD_EXTERNALIZATION',
+    enabled: payloadDirectory !== undefined,
+    directory: payloadDirectory ?? null
+  }))
   const rawRecordStore = createRawRecordStore({
     storage: rawRecordStorage,
-    snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json'))
+    snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json')),
+    ...(payloadDirectory === undefined ? {} : { payloadDirectory, writeVerifiedPayload })
   })
   const macroCalendarEvidenceArchive = createMacroCalendarEvidenceArchive({
     rawRecords: rawRecordStore,
