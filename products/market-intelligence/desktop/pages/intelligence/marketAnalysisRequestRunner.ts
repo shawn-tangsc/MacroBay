@@ -26,10 +26,11 @@ export type AnalysisRequestRunner = Readonly<{
  * 一个拒绝原因 → 界面状态。分开列，不做（原因 ∪ 状态）的隐式映射：
  * 「服务还没起来」与「还没有可用的模型」对读者是两件事，句子不一样。
  */
-function stateForRefusal(reason: 'not-eligible' | 'not-ready' | 'provider-not-ready' | 'failed' | 'already-available'): AnalysisRequestState {
+function stateForRefusal(reason: 'not-eligible' | 'not-ready' | 'provider-not-ready' | 'insufficient-evidence' | 'failed' | 'already-available'): AnalysisRequestState {
   if (reason === 'not-eligible') return 'unavailable'
   if (reason === 'not-ready') return 'not-ready'
   if (reason === 'provider-not-ready') return 'provider-not-ready'
+  if (reason === 'insufficient-evidence') return 'insufficient-evidence'
   if (reason === 'already-available') return 'already-available'
   return 'failed'
 }

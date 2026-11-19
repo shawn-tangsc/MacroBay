@@ -127,6 +127,14 @@ describe('createInitialMarketAnalysisRequest', () => {
     expect(fixture.repository.listEventGroups()).toHaveLength(1)
   })
 
+  it('surfaces a missing trigger evidence code instead of the generic queued refusal', async () => {
+    // 2026-11-20：新闻线冻结回的是 `analysis-missing-evidence:news-trigger-evidence-missing`，
+    // 它不在闭集里，界面只能显示「重新分析未成功」。现在这条码有明确出口。
+    const fixture = setup()
+    fixture.freeze.mockRejectedValueOnce(new Error('analysis-missing-evidence:news-trigger-evidence-missing'))
+    await expect(fixture.request(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-missing-evidence')
+  })
+
   it('surfaces the freeze refusal reason instead of folding it into a generic code', async () => {
     const fixture = setup()
     fixture.freeze.mockRejectedValueOnce(new Error('analysis-insufficient-data: fewer than two market readings'))
@@ -198,7 +206,9 @@ describe('createInitialMarketAnalysisRequest', () => {
     expect(fixture.jobRuntime.listRuns()).toHaveLength(0)
   })
 
-  it('routes a legacy manual refresh on a sentiment group to the news line', async () => {
+  it('keeps a manual refresh on a sentiment group on the market line', async () => {
+    // 2026-11-20：市场分析页的「立即分析」被改道到新闻解读线，而那条新闻的原始记录已不在
+    // 保留期，冻结第一步就失败。手动入口的意图是「按当前数据做一次市场分析」，不再改道。
     const fixture = setup()
     const messageItem: IntelligenceItem = {
       ...fixture.items[0]!, itemId: 'item-message', sourceId: 'alternative-fear-greed', eventType: 'metric',
@@ -213,43 +223,10 @@ describe('createInitialMarketAnalysisRequest', () => {
     await expect(fixture.request('item-message', undefined, 'refresh', 'manual')).resolves.toEqual({ itemId: 'item-message', queued: true })
     expect(enqueueSpy).toHaveBeenCalledWith(expect.objectContaining({
       handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB,
-      payload: expect.objectContaining({
-        analysisKind: 'news', triggerKey: 'news.manual', triggeredItemId: 'item-message', eventGroupId: 'mi-eg-message'
-      })
+      payload: expect.objectContaining({ analysisKind: 'market', triggerKey: 'manual.refresh', eventGroupId: 'mi-eg-message' })
     }))
-  })
-
-  it('routes a legacy manual refresh for a judged news item on a sentiment group to the news line', async () => {
-    const fixture = setup()
-    const newsItem: IntelligenceItem = { ...fixture.items[0]!, itemId: 'item-judged', sourceId: 'coindesk-rss' }
-    fixture.items.push(newsItem)
-    fixture.repository.appendEventGroup({
-      ...fixture.group, id: 'mi-eg-judged', groupType: 'sentiment', mergeKey: 'sentiment|item-judged', eventRefs: ['item-judged']
-    })
-    const request = createInitialMarketAnalysisRequest({
-      repository: fixture.repository, jobRuntime: fixture.jobRuntime, listItems: () => fixture.items, now: () => asOf,
-      createGroup: fixture.createGroup, hasModel: async () => true,
-      latestNewsSentiment: () => ({
-        itemId: 'item-judged', sourceId: 'coindesk-rss', publishedAt: asOf, scoredAt: asOf,
-        polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'c', engine: 'model', caveats: []
-      }) as never
-    })
-    const enqueueSpy = vi.spyOn(fixture.jobRuntime, 'enqueueDefinition')
-    await expect(request('item-judged', undefined, 'refresh', 'manual')).resolves.toEqual({ itemId: 'item-judged', queued: true })
-    expect(enqueueSpy).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({ analysisKind: 'news', triggerKey: 'news.manual', triggeredItemId: 'item-judged' })
-    }))
-  })
-
-  it('fails closed for a sentiment group whose item has no judgment', async () => {
-    const fixture = setup()
-    const newsItem: IntelligenceItem = { ...fixture.items[0]!, itemId: 'item-no-verdict', sourceId: 'coindesk-rss' }
-    fixture.items.push(newsItem)
-    fixture.repository.appendEventGroup({
-      ...fixture.group, id: 'mi-eg-no-verdict', groupType: 'sentiment', mergeKey: 'sentiment|item-no-verdict', eventRefs: ['item-no-verdict']
-    })
-    await expect(fixture.request('item-no-verdict', undefined, 'refresh', 'manual')).rejects.toThrow('analysis-not-eligible')
-    expect(fixture.jobRuntime.listRuns()).toHaveLength(0)
+    // 市场线不带触发指针：那条新闻的原始记录没了，也不该再被它卡住。
+    expect((enqueueSpy.mock.calls[0]?.[0] as { payload?: Record<string, unknown> } | undefined)?.payload ?? {}).not.toHaveProperty('triggeredItemId')
   })
 
   it('still resolves a manual first-analysis request only after its freeze completes', async () => {

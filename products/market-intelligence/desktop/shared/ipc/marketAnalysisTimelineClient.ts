@@ -1,3 +1,4 @@
+import { describeRequestRefusal } from './marketAnalysisRequestRefusal'
 import type { AnalysisConclusion, AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
 import {
   MARKET_ANALYSIS_IPC_METHODS
@@ -159,7 +160,7 @@ export type MarketAnalysisTimelineClient = Readonly<{
    * 既有入口：`retryRunId` 重跑失败的那次；`mode: 'refresh'` 为同一事件组再分析一次；
    * `eventGroupId` 让「重新生成」指着读者正在看的那一组，而不是「最近一条」。
    */
-  requestInitialAnalysis: (retryRunId?: string, mode?: 'initial' | 'refresh', eventGroupId?: string) => Promise<{ state: 'queued'; itemId: string } | { state: 'unavailable'; reason: 'not-eligible' | 'not-ready' | 'provider-not-ready' | 'failed' | 'already-available' }>
+  requestInitialAnalysis: (retryRunId?: string, mode?: 'initial' | 'refresh', eventGroupId?: string) => Promise<{ state: 'queued'; itemId: string } | { state: 'unavailable'; reason: 'not-eligible' | 'not-ready' | 'provider-not-ready' | 'insufficient-evidence' | 'failed' | 'already-available' }>
   getLatestAttempt: () => Promise<MarketAnalysisAttempt | null>
   getDetail: (entry: MarketAnalysisTimelineEntry) => Promise<{ state: 'available'; detail: MarketAnalysisTimelineDetail } | { state: 'unavailable' }>
 }>
@@ -214,17 +215,8 @@ export const marketAnalysisTimelineClient: MarketAnalysisTimelineClient = {
       if (!isExactRecord(result, ['itemId', 'queued']) || typeof result.itemId !== 'string' || result.queued !== true) return { state: 'unavailable', reason: 'failed' }
       return { state: 'queued', itemId: result.itemId }
     } catch (error) {
-      // The main process' refusals are answers, not failures: it says this when a usable analysis
-      // already exists, including the run it just completed. Collapsing that into 'failed' is what put
-      // "重新分析未发布" on screen for a re-analysis that had succeeded.
-      const message = error instanceof Error ? error.message : String(error)
-      if (message.includes('analysis-already-available')) return { state: 'unavailable', reason: 'already-available' }
-      // The main process answers this before its runtime is wired, which is exactly what a click
-      // during a restart hits. Naming it keeps the panel from blaming the model configuration.
-      if (message.includes('analysis-initial-request-unavailable')) return { state: 'unavailable', reason: 'not-ready' }
-      // 没有可用模型：一次冻结都没排。它既不是「服务还没起来」，也不是「排不上队」。
-      if (message.includes('analysis-provider-not-ready')) return { state: 'unavailable', reason: 'provider-not-ready' }
-      return { state: 'unavailable', reason: message === 'analysis-not-eligible' ? 'not-eligible' : 'failed' }
+      // 归因与原始错误的留痕都在 `describeRequestRefusal`：它会把名字/消息写进 app.log。
+      return { state: 'unavailable', reason: describeRequestRefusal(error, window.location?.pathname ?? '') }
     }
   },
   async getDetail(entry) {

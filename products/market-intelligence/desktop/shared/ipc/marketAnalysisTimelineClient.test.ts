@@ -223,6 +223,8 @@ describe('marketAnalysisTimelineClient', () => {
       ['analysis-already-available', 'already-available'],
       // 没有可用模型：一次冻结都没排。它不是「服务还没起来」，也不能落成「排不上队」。
       ['analysis-provider-not-ready', 'provider-not-ready'],
+      // 证据引不出来（原始记录已不在保留期）：重试不会自己好。
+      ['analysis-missing-evidence:news-trigger-evidence-missing', 'insufficient-evidence'],
       ['something-else-entirely', 'failed']
     ]
     for (const [error, reason] of cases) {

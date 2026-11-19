@@ -412,8 +412,6 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   })
 
   const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled, ...(modelWiring ? modelWiring.request : { hasModel: async () => false }),
-      ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
-      readNewsInterpretation: newsInterpretation.readNewsInterpretation,
       createGroup: async itemId => {
         const resolved = await resolveChange({ changeId: itemId })
         if (!resolved) throw new Error('analysis-not-eligible')

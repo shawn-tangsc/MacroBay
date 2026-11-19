@@ -52,6 +52,8 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   analysisServiceNotReady: string
   /** 请求被拒是因为没有可用的模型：一次冻结都没排，读者要去看模型设置。 */
   analysisProviderNotReady: string
+  /** 请求被拒是因为引不出可核对的证据（原始记录可能已不在保留期）：换最新一条，不是重试。 */
+  analysisInsufficientEvidence: string
   retryAnalysis: string
   /** Label of the control that puts an error banner away. */
   dismissError: string
@@ -291,6 +293,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
           {state.entries.length > 0 && requestState === 'not-ready' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisServiceNotReady}</p> : null}
           {/* 没有模型时一屏可能一条记录都没有：这句不能挂在「已有记录」的条件上，否则读者点了没反应。 */}
           {requestState === 'provider-not-ready' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisProviderNotReady}</p> : null}
+          {requestState === 'insufficient-evidence' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisInsufficientEvidence}</p> : null}
           {state.entries.length > 0 && requestState === 'still-running' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisStillRunning}</p> : null}
           {refreshError.visible ? <AnalysisRequestErrorBanner
             // A run that finished without publishing is not a request that failed: the click was
