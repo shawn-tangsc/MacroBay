@@ -305,7 +305,6 @@ if (import.meta.env.DEV) {
       path: location.pathname,
       hostFound: host !== null,
       exists: el !== undefined && el !== null,
-      dashSamples: [cs?.strokeDashoffset],
       animationName: cs?.animationName,
       animationDuration: cs?.animationDuration,
       animationPlayState: cs?.animationPlayState,
@@ -314,14 +313,20 @@ if (import.meta.env.DEV) {
       reduceNoPreference: matchMedia('(prefers-reduced-motion: no-preference)').matches,
       reduce: matchMedia('(prefers-reduced-motion: reduce)').matches
     }))
-    // 再采一次：两次 dashoffset 不同即证明动画在跑（唯一不靠肉眼的机器证据）。
-    setTimeout(() => {
-      const el2 = document.querySelector('.mi-clock__sweep')
-      const cs2 = el2 instanceof SVGElement ? getComputedStyle(el2) : undefined
-      console.warn('[mi-clock-diag]', JSON.stringify({
-        path: location.pathname, after: 'after+500ms', dashSamples: [cs?.strokeDashoffset, cs2?.strokeDashoffset],
-        moving: cs?.strokeDashoffset !== cs2?.strokeDashoffset
-      }))
-    }, 500)
+    /**
+     * 再采一次：**必须跨帧**。同一帧连取两次永远相同，`moving` 会假阴性（Chief 2026-11-20 实测到过）。
+     * 用 `requestAnimationFrame` 拿到下一帧再比。
+     */
+    requestAnimationFrame(() => {
+      const first = getComputedStyle(el instanceof SVGElement ? el : document.body).strokeDashoffset
+      requestAnimationFrame(() => {
+        const el2 = document.querySelector('.mi-clock__sweep')
+        const second = el2 instanceof SVGElement ? getComputedStyle(el2).strokeDashoffset : undefined
+        console.warn('[mi-clock-diag]', JSON.stringify({
+          path: location.pathname, after: 'cross-frame', dashSamples: [first, second],
+          moving: first !== second
+        }))
+      })
+    })
   }, 1500)
 }

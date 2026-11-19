@@ -218,18 +218,23 @@ it('writes the keyframe offsets with a unit, or the whole animation is dropped',
  *
  * 重新生成的环带遮罩必须覆盖 `orbitRadius ± 1.5`；把半径改回 102.5 这类值，这条当场红。
  */
-it('clips the sweep inside a band that actually covers the orbit radius', async () => {
+it('covers the whole stroke with the ring clip band, not just the centre line', async () => {
   const { host } = await render()
   const sweep = host.querySelector('.mi-clock__sweep')!
   const r = Number(sweep.getAttribute('r'))
-  const clip = host.querySelector('#miClockRingClip')!
-  const radii = [...clip.querySelectorAll('path')]
-    .flatMap((path) => [...(path.getAttribute('d') ?? '').matchAll(/A([\d.]+) [\d.]+/gu)].map((m) => Number(m[1])))
-  expect(radii.length).toBeGreaterThan(0)
-  for (const radius of radii) expect(r).toBeGreaterThanOrEqual(radius - 1.5001)
-  for (const radius of radii) expect(r).toBeLessThanOrEqual(radius + 1.5001)
-  // 反向：内圈那份旧遮罩（102.5~105.5）确实盖不住 135——这正是当初它被裁没的原因。
-  const oldRadii = [...host.querySelector('#miClockFlowClip')!.querySelectorAll('path')]
-    .flatMap((path) => [...(path.getAttribute('d') ?? '').matchAll(/A([\d.]+) [\d.]+/gu)].map((m) => Number(m[1])))
-  expect(oldRadii.every((radius) => r > radius + 1.5)).toBe(true)
+  const halfStroke = Number(sweep.getAttribute('stroke-width')) / 2
+  const radiiOf = (id: string): number[] => [...(host.querySelector(id)?.querySelectorAll('path') ?? [])]
+    .flatMap((path) => [...(path.getAttribute('d') ?? '').matchAll(/A([\d.]+) [\d.]+/gu)].map((match) => Number(match[1])))
+  const clipRadii = radiiOf('#miClockRingClip')
+  expect(clipRadii.length).toBeGreaterThan(0)
+  /**
+   * 判据是**遮罩覆盖整条描边**，不是「文件里出现过 133.5」：
+   * 对带内每个半径，`orbitRadius − r` 必须落在 ±(strokeWidth/2) 之内——描边有多粗，带子就得盖多宽。
+   * 把环带改回旧遮罩那圈（102.5/105.5），`|135 − 102.5| = 32.5 > 1.5`，这条立刻红。
+   */
+  for (const radius of clipRadii) expect(Math.abs(r - radius)).toBeLessThanOrEqual(halfStroke + 1e-6)
+  // 反向：旧的内圈遮罩确实盖不住这条描边（它就是当初把高光整条裁掉的那份）。
+  const oldRadii = radiiOf('#miClockFlowClip')
+  expect(oldRadii.length).toBeGreaterThan(0)
+  expect(oldRadii.every((radius) => Math.abs(r - radius) > halfStroke)).toBe(true)
 })
