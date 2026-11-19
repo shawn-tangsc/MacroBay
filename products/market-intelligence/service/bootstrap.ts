@@ -299,6 +299,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
     readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })
+  // 写入层端口（用户 2026-11-19）：配置线按懒读方式取，回填/迁移落完立刻生效。
+  intelligenceModule.bindCalendarStandardWriteLayer(() => macroCalendarBackend.writeLayer)
   const zeroXRouterSchedule = wireZeroXRouterCalendarSchedule({ jobRuntime: deps.jobRuntime, database: macroCalendarBackend.storage.database, refreshAutomatic: (feeds) => marketCalendar.refreshAutomatic(feeds), readReadiness: intelligenceModule.calendarManualDependencies.readReadiness, readEnabledFeeds: createEnabledZeroXRouterFeeds({ listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles() }), ...(deps.log === undefined ? {} : { log: deps.log }), writeLayer: macroCalendarBackend.writeLayer })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.

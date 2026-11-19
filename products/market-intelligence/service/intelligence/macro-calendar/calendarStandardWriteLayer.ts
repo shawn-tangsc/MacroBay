@@ -127,6 +127,30 @@ export function latestCurrentWriteFailure(layer: Pick<CalendarStandardWriteLayer
     ...(top.record.lastSuccessAt === undefined ? {} : { lastSuccessAt: top.record.lastSuccessAt }) }
 }
 
+/**
+ * **迁移上一版文件里的写失败**（用户 2026-11-19，第 3 步）：旧健康文件把写失败记在 revision 上，
+ * 现在写入层才是唯一存处。规则：
+ * - **幂等**：写入层已有这个写入方的失败记录就不再搬（重跑 0 变更）；
+ * - **只搬不删**：搬完不回写 revision（第 4 步才删字段）；
+ * - 只认认识的写入方 id，别的原样忽略（不编一个写入方出来）。
+ */
+export function migrateLegacyWriteFailures(input: Readonly<{
+  legacy: readonly Readonly<{ writerId: string; at: string; failedRows: number
+    firstErrorCode: MacroCalendarWriteFailureCode; streakBatches?: number }>[]
+  writeLayer: CalendarStandardWriteLayer
+}>): number {
+  let migrated = 0
+  for (const entry of input.legacy) {
+    const writerId = entry.writerId as CalendarStandardWriterId
+    if (calendarStandardWriterVisibility[writerId] === undefined) continue
+    if (input.writeLayer.get(writerId)?.lastFailure !== undefined) continue
+    input.writeLayer.recordAttempt({ writerId, at: entry.at,
+      outcome: { state: 'failed', failedRows: entry.failedRows, firstErrorCode: entry.firstErrorCode } })
+    migrated += 1
+  }
+  return migrated
+}
+
 export function createCalendarStandardWriteLayer(
   storage: CalendarStandardWriteStorage = createInMemoryCalendarStandardWriteStorage()
 ): CalendarStandardWriteLayer {

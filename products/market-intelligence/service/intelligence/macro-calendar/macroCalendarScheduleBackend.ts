@@ -10,8 +10,8 @@ import { createMacroCalendarProviderHealthJsonStorage, createMacroCalendarProvid
 import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore, type MacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 import { createMacroCalendarReleaseTimeOverrideCache, createMacroCalendarReleaseTimeOverrideJsonStorage, createMacroCalendarReleaseTimeOverrideStore } from './macroCalendarReleaseTimeOverrideStore'
 import { createMacroCalendarRepository } from './macroCalendarRepository'
-import { createCalendarStandardWriteLayer,
-  createJsonFileCalendarStandardWriteStorage } from './calendarStandardWriteLayer'
+import { calendarStandardWriterVisibility, createCalendarStandardWriteLayer,
+  createJsonFileCalendarStandardWriteStorage, migrateLegacyWriteFailures } from './calendarStandardWriteLayer'
 import { createMacroCalendarSqlite } from './macroCalendarSqlite'
 import { createMacroCalendarScheduleCollectionWorkflow } from './macroCalendarScheduleCollectionWorkflow'
 import { createMacroCalendarScheduleHealthService } from './macroCalendarScheduleHealthService'
@@ -53,6 +53,20 @@ export function createMacroCalendarScheduleBackend(input: {
    */
   const writeLayer = createCalendarStandardWriteLayer(
     createJsonFileCalendarStandardWriteStorage(join(input.dataDir, 'macro-calendar-standard-write.json')))
+  /**
+   * **第 3 步：把上一版文件里的写失败搬进写入层**（用户 2026-11-19）：旧文件把失败记在
+   * 健康 revision 上，现在写入层才是唯一存处；幂等（已有失败记录就不搬），搬完不回写 revision。
+   */
+  // 健康记录只覆盖采集类 provider（fed/bls/bea/0xrouter）；narwhal、replay 从来不在那份文件里。
+  const healthWriterIds = ['macro-calendar-fed', 'macro-calendar-bls', 'macro-calendar-bea', '0xrouter'] as const
+  migrateLegacyWriteFailures({
+    writeLayer,
+    legacy: healthWriterIds.flatMap((writerId) => {
+      const failure = healthStore.getCurrent(writerId)?.lastWriteFailure
+      return failure === undefined ? [] : [{ writerId: String(writerId), at: failure.at,
+        failedRows: failure.failedRows, firstErrorCode: failure.firstErrorCode }]
+    })
+  })
   // The reader's own release times: durable in their own file, and mirrored into the synchronous
   // view a calendar query reads (see `macroCalendarReleaseTimeOverrideStore`).
   const releaseTimeOverrideStore = createMacroCalendarReleaseTimeOverrideStore(

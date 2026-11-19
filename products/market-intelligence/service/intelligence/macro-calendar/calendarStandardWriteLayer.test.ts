@@ -76,3 +76,23 @@ describe('最近一次当前写失败（freshness 用）', () => {
     expect(latestCurrentWriteFailure(layer)).toMatchObject({ writerId: '0xrouter', code: 'value-shape-rejected' })
   })
 })
+
+describe('第 3 步：从上一版文件迁移写失败', () => {
+  it('搬一次进写入层；重跑 0 变更；不认识的写入方忽略', async () => {
+    const { migrateLegacyWriteFailures } = await import('./calendarStandardWriteLayer')
+    const layer = createCalendarStandardWriteLayer()
+    const legacy = [
+      { writerId: 'macro-calendar-bea', at: '2026-11-18T10:00:00.000Z', failedRows: 4,
+        firstErrorCode: 'standard-write-failed' as const },
+      { writerId: '不认识的写入方', at: '2026-11-18T10:00:00.000Z', failedRows: 1,
+        firstErrorCode: 'standard-write-failed' as const }
+    ]
+    expect(migrateLegacyWriteFailures({ writeLayer: layer, legacy })).toBe(1)
+    expect(layer.get('macro-calendar-bea')!.lastFailure).toMatchObject({
+      at: '2026-11-18T10:00:00.000Z', failedRows: 4
+    })
+    // 幂等：重跑不再搬。
+    expect(migrateLegacyWriteFailures({ writeLayer: layer, legacy })).toBe(0)
+    expect(layer.get('不认识的写入方' as never)).toBeUndefined()
+  })
+})
