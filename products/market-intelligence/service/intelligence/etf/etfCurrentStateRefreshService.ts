@@ -263,6 +263,15 @@ function collectCapitalFlowUpdates(input: Readonly<{
     previous: input.previous, previousAsOf: input.previousAsOf, current: input.current, asOf: input.asOf
   })
   const revised = new Set(revisions.map((revision) => `${revision.asset}:${revision.tradingDate}`))
+  /**
+   * 「新数据点」的门：**只认比上一次的最新交易日更新的那一天**。
+   *
+   * 上一份窗口会比 30 天短（某个源那一轮没读到、只剩主源那 20 来天），下一轮补回来时，
+   * 那些**旧日子会重新出现**——它们不是新数据，是覆盖回填。2026-11-19 早上就是这么刷了一屏
+   * 「ETF 资金流 · ETH 2026-10-19 …」：窗口 22 行 → 30 行。用户原话「那么多天前的，难道也变化了？
+   * 我要变化的才发」。所以 `tradingDate <= 上一份的 windowEnd` 的一律不弹。
+   */
+  const previousEnd = input.previous.windowEnd
   const updates: EtfCapitalFlowUpdate[] = []
   for (const asset of ['btc', 'eth'] as const) {
     const before = new Map(input.previous[asset].map((row) => [row.tradingDate, row.netFlowUsd]))
@@ -270,6 +279,8 @@ function collectCapitalFlowUpdates(input: Readonly<{
     for (const row of input.current[asset]) {
       const prior = before.get(row.tradingDate)
       if (prior === undefined) {
+        // 回填历史不弹：只有比上一次最新交易日还新的一天，才是「有新数据」。
+        if (row.tradingDate <= previousEnd) continue
         updates.push(Object.freeze({ kind: 'arrived' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd, occurredAt: input.asOf }))
         continue
       }

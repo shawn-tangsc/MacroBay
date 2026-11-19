@@ -86,3 +86,22 @@ describe('the revised notice is keyed by the reader day', () => {
       .toMatchObject({ vars: { day: '2026-11-17' } })
   })
 })
+
+describe('revisions the reader cannot see', () => {
+  it('does not send "changed from 5.3亿 to 5.3亿"', () => {
+    // 真现场：526.6M → 530.0M，舍入后两句一模一样。数据照常落库，但不该当成新闻弹给读者。
+    const rendered = buildEtfCapitalFlowUpdateRequest({
+      kind: 'revised', asset: 'BTC', tradingDate: '2026-10-19',
+      netFlowUsd: 530_000_000, previousUsd: 526_600_000, occurredAt: '2026-11-19T00:05:22.789Z'
+    }, 'UTC')
+    expect(rendered).toBeUndefined()
+  })
+
+  it('still sends a revision the reader can see', () => {
+    const rendered = buildEtfCapitalFlowUpdateRequest({
+      kind: 'revised', asset: 'BTC', tradingDate: '2026-10-19',
+      netFlowUsd: 700_000_000, previousUsd: 530_000_000, occurredAt: '2026-11-19T00:05:22.789Z'
+    }, 'UTC')
+    expect(rendered).toBeDefined()
+  })
+})

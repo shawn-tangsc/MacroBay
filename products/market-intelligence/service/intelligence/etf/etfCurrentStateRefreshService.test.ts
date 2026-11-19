@@ -252,6 +252,36 @@ describe('ETF current-state refresh service', () => {
     ])
   })
 
+  it('stays silent when an older window comes back fuller: that is backfill, not new data', async () => {
+    // 2026-11-19 早上的现场：某一轮只剩主源那 20 来天（窗口 22 行），下一轮备源补回来变 30 行，
+    // 于是 10-08..10-19 这些**旧日子**重新出现，被当成「新数据」刷了一屏。用户原话：
+    // 「那么多天前的，难道也变化了？我要变化的才发」。
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const notices: unknown[] = []
+    const days = ['2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24']
+    const fuller = ['2026-10-08', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-16', ...days]
+    // 值按日期定（不按下标）：两份清单里重叠的那几天必须同值，否则测的就变成「改数」了。
+    const flowRows = (list: readonly string[]) => (asset: 'BTC' | 'ETH') => list.map((tradingDate) => ({
+      asset, date: Date.parse(`${tradingDate}T00:00:00.000Z`), change: Number(tradingDate.slice(-2)),
+      changeUsd: Number(tradingDate.slice(-2)), source: '0xrouter'
+    }))
+    const round = (fetchedAt: string, list: readonly string[]) => createEtfCurrentStateRefreshService({
+      resolveFactSource: resolvedSource,
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow: async () => ({ state: 'available' as const, btc: flowRows(list)('BTC'), eth: flowRows(list)('ETH') }),
+      store,
+      now: () => fetchedAt,
+      handOffUpdates: async (updates) => { notices.push(...updates) }
+    })
+
+    await round('2026-10-27T12:00:00.000Z', days).refresh()
+    notices.length = 0
+    // 窗口从 5 天涨到 10 天，但最新交易日还是 10-24：一条都不许弹。
+    await round('2026-10-27T18:00:00.000Z', fuller).refresh()
+    expect(notices).toEqual([])
+  })
+
   it('stops when the fact has no source, and refuses on a conflict', async () => {
     const requestWindow = vi.fn()
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })

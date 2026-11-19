@@ -64,6 +64,9 @@ export function renderEtfCapitalFlowSentence(update: EtfCapitalFlowUpdate) {
     if (update.previousUsd === undefined) return undefined
     const previousAmount = amount(update.previousUsd, language)
     if (previousAmount === null) return undefined
+    // 舍入后读者看不出差别就不发：真出现过「从 净流入 5.3 亿 改为 净流入 5.3 亿」这种句子，
+    // 那是把一次亚显示精度的修订当成新闻，比不发更糟。数据本身仍照常落库。
+    if (previousAmount === currentAmount && sheet.direction[netFlowDirection(update.previousUsd)] === direction) return undefined
     const title = fillTemplate(sheet.etfRevisedTitle, { asset: update.asset })
     const body = fillTemplate(sheet.etfRevisedBody, {
       day: update.tradingDate,
