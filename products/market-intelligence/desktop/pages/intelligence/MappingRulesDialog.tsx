@@ -21,6 +21,8 @@ import { formatShellDay } from '@platform/ui/time/shellTimeFormat'
 import { buildXlsx } from '@platform/files/export/xlsx'
 import { MetricNameText } from '../../shared/MetricNameText'
 import { codeTableExportRows, eventExportRows, exportFileName, sampleText, unmappedExportRows } from './mappingRulesExport'
+import { countryOptionsFrom, filterCodeRows, has, filterEventRows, filterUnmappedRows, officialOptionsFrom, reasonOptionsFrom, tierOptionsFrom } from './mappingRulesFilters'
+import { eventTimeCell, officialCell, shortCode } from './mappingRulesCells'
 
 /**
  * 码表 / 未映射弹框（用户 2026-11-17：两个页签，**「已映射」整块拿掉**）。
@@ -120,14 +122,6 @@ export const CODE_TABLE_COLUMN_WIDTHS = {
 } as const
 
 const PAGE_SIZES = [20, 50, 100] as const
-const has = (value: string | null | undefined): value is string => typeof value === 'string' && value !== ''
-
-/** 码列**中段省略**，但末段留着——末段正是区分码的关键（`.YOY` 被切掉，两个码就分不出来）。 */
-function shortCode(value: string): string {
-  if (value.length <= 22) return value
-  const tail = value.slice(-4)
-  return `${value.slice(0, 13)}…${tail}`
-}
 
 export function MappingRulesDialog({ open, onClose, text, view, codes, events, onRetry }: Readonly<{
   open: boolean
@@ -156,96 +150,17 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])
 
   const needle = query.trim().toLowerCase()
-  const hit = (values: readonly (string | null | undefined)[]): boolean =>
-    needle === '' || values.some((value) => has(value) && value.toLowerCase().includes(needle))
-
-  const countryOptions = useMemo(() => {
-    if (codes?.state !== 'available') return [] as { value: string; label: string }[]
-    const seen = new Set<string>()
-    // 事件类型码没有国家：筛选里用「—」这一档，不写成「未知国家」。
-    for (const row of codes.rows) seen.add(row.countryName ?? '—')
-    return [...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))
-  }, [codes])
-  /** 事件页签的国家选项：**从事件那一页的行派生**，不混进码表的国家名单（混了会筛出空结果）。 */
-  const eventCountryOptions = useMemo(() => {
-    if (events?.state !== 'available') return [] as { value: string; label: string }[]
-    const seen = new Set<string>()
-    for (const row of events.rows) seen.add(row.countryName ?? '—')
-    return [...seen].sort((left, right) => left.localeCompare(right)).map((name) => ({ value: name, label: name }))
-  }, [events])
-  /**
-   * 官网页三档，**只有这一处判定**：列里的显示与筛选选项都走它。
-   *
-   * `not-built`/`retired` 是「决定不补」，不是「待补」——它们与「还没核到」必须分开，
-   * 否则读者会把「不打算建页」当成「等我们补」。
-   */
-  const officialStateOf = (row: CodeTableReadRow): 'checked' | 'pending' | 'none' =>
-    row.status === 'not-built' || row.status === 'retired' ? 'none'
-      : 'pending' in row.officialSource ? 'pending' : 'checked'
-  /** 官网页选项：只列当前表里真实出现过的档，与列同义。 */
-  const officialOptions = useMemo(() => {
-    if (codes?.state !== 'available') return [] as { value: string; label: string }[]
-    const seen = new Set<string>()
-    for (const row of codes.rows) seen.add(officialStateOf(row))
-    const order = ['checked', 'pending', 'none'] as const
-    return order.filter((key) => seen.has(key))
-      .map((key) => ({ value: key, label: text.officialStates[key] }))
-  }, [codes, text.officialStates])
-  /**
-   * 分级选项：只列**当前表里真实出现过**的档位。
-   *
-   * 写法是「★★★ 一级」——**星级 + 文字**（用户 2026-11-18）：只写星星时，读者照着「一级」两个字
-   * 在选项里找，会以为「看不到一级的分类」。列里仍然只画星星（那一列旁边就是分级列头，不会误读），
-   * 下拉里必须能读出档名。与导出里同一写法，两处不会再出现两种叫法。
-   */
-  const tierOptions = useMemo(() => {
-    if (codes?.state !== 'available') return [] as { value: string; label: string }[]
-    const seen = new Set<string>()
-    for (const row of codes.rows) seen.add(row.tier === null ? 'other' : String(row.tier))
-    const order = ['1', '2', '3', 'other'] as const
-    return order.filter((key) => seen.has(key))
-      .map((key) => ({ value: key, label: `${text.tierStars[key]} ${text.tierNames[key]}`.trim() }))
-  }, [codes, text.tierStars, text.tierNames])
-  /**
-   * 码表默认**按数据量降序**（用户 2026-11-18）：860 个码里近 290 个一行数据都没有，按码名排序时
-   * 最上面全是空壳，读者第一眼看到的应当是「有内容的」。同数量按码名，顺序才稳定。
-   * 「只看有数据的」把 0 行的那批直接收起来——那批不是错，只是还没落过数据。
-   */
-  const codeRows = useMemo(() => {
-    if (codes?.state !== 'available') return []
-    const rows = codes.rows
-      .filter((row) => hit([row.code, row.names.zhFull, row.names.enFull]))
-      // **同一筛选内部是「或」，两个筛选之间是「且」**（用户 2026-11-18）。
-      .filter((row) => countries.length === 0 || countries.includes(row.countryName ?? '—'))
-      .filter((row) => tiers.length === 0
-        || tiers.includes(row.tier === null ? 'other' : String(row.tier)))
-      .filter((row) => officials.length === 0 || officials.includes(officialStateOf(row)))
-      .filter((row) => !onlyWithData || row.releaseRowCount > 0)
-    return [...rows].sort((left, right) =>
-      right.releaseRowCount - left.releaseRowCount || left.code.localeCompare(right.code))
-  }, [codes, needle, countries, tiers, officials, onlyWithData])
-  const unmappedRows = useMemo(() => {
-    if (view?.state !== 'available') return []
-    return view.unmapped
-      .filter((row) => hit([row.sourceId, row.sampleLabel, row.sampleLabelEn]))
-      .filter((row) => reason === '' || row.reason === reason)
-  }, [view, needle, reason])
-  /**
-   * 事件页签的行：**保留接口返回的顺序**（读口已按活动时间倒序），这里只做搜索与国家筛选。
-   * 不加原因、不加分级、不加「只看有数据的」——那三样对事件没有意义（事件没有期次、码、数值）。
-   */
-  const eventRows = useMemo(() => {
-    if (events?.state !== 'available') return []
-    return events.rows
-      .filter((row) => hit([row.title, row.titleEn, row.countryName, row.countryCode]))
-      .filter((row) => countries.length === 0 || countries.includes(row.countryName ?? '—'))
-  }, [events, needle, countries])
-  const reasonOptions = useMemo(() => {
-    if (view?.state !== 'available') return [] as { value: string; label: string }[]
-    const seen = new Set(view.unmapped.map((row) => row.reason))
-    return [{ value: '', label: text.reasonAll },
-      ...[...seen].sort().map((value) => ({ value, label: text.unmappedReasons[value] ?? value }))]
-  }, [view, text.reasonAll, text.unmappedReasons])
+  const countryOptions = useMemo(() => countryOptionsFrom(codes?.state === 'available' ? codes.rows : []), [codes])
+  // 事件页签的国家选项从事件那一页派生，不混进码表的国家名单（混了会筛出空结果）。
+  const eventCountryOptions = useMemo(() => countryOptionsFrom(events?.state === 'available' ? events.rows : []), [events])
+  const officialOptions = useMemo(() => officialOptionsFrom(codes, text.officialStates), [codes, text.officialStates])
+  const tierOptions = useMemo(() => tierOptionsFrom(codes, text.tierStars, text.tierNames), [codes, text.tierStars, text.tierNames])
+  const codeRows = useMemo(() => filterCodeRows(codes, { needle, countries, tiers, officials, onlyWithData }),
+    [codes, needle, countries, tiers, officials, onlyWithData])
+  const unmappedRows = useMemo(() => filterUnmappedRows(view, { needle, reason }), [view, needle, reason])
+  const eventRows = useMemo(() => filterEventRows(events, { needle, countries }), [events, needle, countries])
+  const reasonOptions = useMemo(() => reasonOptionsFrom(view, text.reasonAll, text.unmappedReasons),
+    [view, text.reasonAll, text.unmappedReasons])
 
   const codeCount = codes?.state === 'available' ? codes.counts.total : 0
   const unmappedCount = view?.state === 'available' ? view.counts.unmapped : 0
@@ -257,20 +172,6 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
   ]
   const copy: Readonly<Record<string, string>> = {
     tabCodes: text.tabCodes, tabUnmapped: text.tabUnmapped, tabEvents: text.tabEvents
-  }
-
-  const officialCell = (row: CodeTableReadRow): React.ReactElement | string => {
-    // 三档判定与筛选**共用 `officialStateOf`**：两处各写一遍，就会出现「列里待核、按已核能筛到」。
-    const state = officialStateOf(row)
-    // 决定不建、已经退役的码不放链接：那不是「待补」，是「不打算补」。
-    if (state === 'none') return text.officialNone
-    if ('pending' in row.officialSource) {
-      // `待核` 是纯文字，理由放 title：**不渲染成链接**，否则读者会以为点得开。
-      return <span data-official-pending title={row.officialSource.reason}>{text.officialPending}</span>
-    }
-    return <a href={row.officialSource.url} target="_blank" rel="noreferrer" data-official
-      title={`${row.officialSource.agency} · ${row.officialSource.basis}`}
-      className="mi-catalog__url">{text.officialOpen}</a>
   }
 
   const codesPanel = codeRows.length === 0
@@ -317,7 +218,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
         },
         {
           title: text.codeColumns.official, width: CODE_TABLE_COLUMN_WIDTHS.official,
-          render: (_value: unknown, row) => officialCell(row)
+          render: (_value: unknown, row) => officialCell(row, text)
         },
         {
           title: text.codeColumns.status, dataIndex: 'status', width: CODE_TABLE_COLUMN_WIDTHS.status, className: 'mi-catalog__cell-nowrap',
@@ -381,10 +282,6 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
    *   按读者时区换算会把 10-14 变成 10-13），有时刻的才按读者时区显示到分钟；
    * - **状态**取日历行同一份白话表；表里没有的写「无法确认」，不印枚举、也不留空。
    */
-  const eventTimeCell = (row: CalendarEventRow): string =>
-    row.scheduledAt === null
-      ? (formatShellDay(`${row.scheduledDate}T00:00:00.000Z`, 'UTC') ?? row.scheduledDate)
-      : formatTime(row.scheduledAt, 'minute')
   const eventsPanel = events?.state !== 'available'
     // 读不到就给重试（与其他两个页签同一态）：事件页读失败不能被画成「库里没有事件」。
     ? <StateView state="error" reasonCode="unreadable"
@@ -396,7 +293,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
         columns={[
           {
             title: text.eventColumns.time, dataIndex: 'scheduledDate', className: 'mi-catalog__cell-nowrap',
-            render: (_value: string, row) => <span data-event-time>{eventTimeCell(row)}</span>
+            render: (_value: string, row) => <span data-event-time>{eventTimeCell(row, formatTime)}</span>
           },
           {
             title: text.eventColumns.country, className: 'mi-catalog__cell-nowrap',
@@ -515,7 +412,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
               { name: text.sheetEvents, rows: eventExportRows(events?.state === 'available' ? events.rows : [], {
                 columns: text.eventColumns, statusLabels: text.eventStatus,
                 statusUnknown: text.statusUnknown, titleMissing: text.eventTitleMissing
-              }, eventTimeCell) }
+              }, (row) => eventTimeCell(row, formatTime)) }
             ]
             void window.platform?.app?.saveFile?.(exportFileName(text.title, new Date()), buildXlsx(sheets))
           }}>{text.exportLabel}</Button>
