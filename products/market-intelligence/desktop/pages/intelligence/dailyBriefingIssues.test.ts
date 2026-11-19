@@ -197,6 +197,19 @@ describe('daily briefing issues', () => {
     const catchUpIssue = catchUp.find((entry) => entry.id === 'data:calendar:calendar-catch-up-failed')!
     expect(catchUpIssue.title).toContain('补采')
     expect(catchUpIssue.advice).toBe(zhText.limits.advice.checkSource)
+
+    // `#32`（用户 2026-11-19）：采到了但没写进库——来源是好的，建议必须指向写入，不许再劝人查网络。
+    const writeFailed = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-write-failed' } } }),
+      text: zhText,
+      formatTime
+    })
+    const writeIssue = writeFailed.find((entry) => entry.id === 'data:calendar:calendar-write-failed')!
+    expect(writeIssue.severity).toBe('warning')
+    expect(writeIssue.title).toContain('写入本地库')
+    expect(writeIssue.advice).toBe(zhText.limits.advice.calendarWriteFailed)
+    expect(writeIssue.advice).not.toBe(zhText.limits.advice.checkSource)
+    expect(writeIssue.advice).not.toBe(zhText.limits.advice.checkCalendar)
   })
 
   it('explains the fear-and-greed baseline and how long ago it was last published', () => {

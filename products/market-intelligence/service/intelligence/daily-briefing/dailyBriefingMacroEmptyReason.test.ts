@@ -27,6 +27,37 @@ describe('the macro column says which kind of "we cannot see it" this is', () =>
     })).toBe('past-24h-no-high-impact-release')
   })
 
+  // `#32`（用户 2026-11-19）：采到了、但写不进库，既不是「没采到」也不是「过期」——它有自己的句子，
+  // 建议也不许指向网络。判据比时刻：失败晚于最后一次成功写入才算数。
+  it('says the write failed when the write failure is newer than the last success', () => {
+    const writeFailure = { at: '2026-11-05T06:45:00.000Z', code: 'standard-write-failed' }
+    expect(briefingMacroEmptyReason({ ...base, lastCollectedAt: '2026-11-03T13:27:00.000Z', writeFailure }))
+      .toBe('calendar-write-failed')
+    // 码是两个值，句子同一句：对读者这两处的动作一样（查写入），不分成两套措辞。
+    expect(briefingMacroEmptyReason({ ...base, lastCollectedAt: '2026-11-03T13:27:00.000Z', writeFailure: { ...writeFailure, code: 'value-shape-rejected' } }))
+      .toBe('calendar-write-failed')
+  })
+
+  it('keeps the old verdict for an old, unknown-code, or irrelevant write failure', () => {
+    // 三重 fail-safe：失败早于最后一次成功 → 后来写成功了，按原逻辑；
+    expect(briefingMacroEmptyReason({
+      ...base, lastCollectedAt: '2026-11-03T13:27:00.000Z',
+      writeFailure: { at: '2026-11-02T00:00:00.000Z', code: 'standard-write-failed' }
+    })).toBe('calendar-stale')
+    // 码不在闭集（契约会整份作废，这里是函数自身的兜底）→ 原逻辑；
+    expect(briefingMacroEmptyReason({
+      ...base, lastCollectedAt: '2026-11-03T13:27:00.000Z',
+      writeFailure: { at: '2026-11-05T06:45:00.000Z', code: 'something-else' as never }
+    })).toBe('calendar-stale')
+    // 数据本身还新鲜：窗口空就是空，写入失败不改变这一句（用户 2026-11-16 的口径仍成立）。
+    expect(briefingMacroEmptyReason({
+      ...base, lastCollectedAt: '2026-11-05T06:50:00.000Z',
+      writeFailure: { at: '2026-11-05T06:55:00.000Z', code: 'standard-write-failed' }
+    })).toBe('past-24h-no-high-impact-release')
+    // 没有任何写失败字段：完全等于改动前。
+    expect(briefingMacroEmptyReason({ ...base, lastCollectedAt: '2026-11-03T13:27:00.000Z' })).toBe('calendar-stale')
+  })
+
   it('a later success outranks an earlier failure', () => {
     // "失败后又有成功"不许判成失败：比较两次时刻的先后，不是只看最近一次的状态。
     expect(briefingMacroEmptyReason({ ...base, lastCollectedAt: '2026-11-05T06:50:00.000Z', lastAttemptAt: '2026-11-05T06:30:00.000Z', lastAttemptFailed: true }))

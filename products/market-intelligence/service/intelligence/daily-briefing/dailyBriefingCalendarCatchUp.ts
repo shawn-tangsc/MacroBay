@@ -2,11 +2,12 @@ import {
   isMarketCalendarFreshness,
   isMarketCalendarRefreshNowResult,
   type MarketCalendarCollectionFreshness,
-  type MarketCalendarFreshness
+  type MarketCalendarFreshness,
+  type MarketCalendarWriteFailureView
 } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarFeedRegistry } from '../macro-calendar/calendarFeedRegistry'
 import { sourceJobIds } from '../application/sourceJobRegistration'
-import { BRIEFING_CALENDAR_STALE_AFTER_MS } from './dailyBriefingMacroEmptyReason'
+import { BRIEFING_CALENDAR_STALE_AFTER_MS, isCurrentWriteFailure } from './dailyBriefingMacroEmptyReason'
 
 /**
  * The calendar catch-up a run performs before it judges freshness (acceptance `A0.8`, plan B).
@@ -75,8 +76,11 @@ export type BriefingCalendarCatchUp = Readonly<{
   state: 'skipped' | 'no-registered-jobs' | 'collected' | 'unchanged' | 'failed' | 'timeout' | 'unknown'
   /** Only meaningful on `timeout`: how long we actually waited. */
   timeoutMs?: number
-  /** Only on `skipped`: 为什么没补。`already-caught-up-this-period` = 本期内已经补过一次（策略跳过，不是失败）。 */
-  reasonCode?: 'already-caught-up-this-period'
+  /**
+   * Only on `skipped`: 为什么没补。`already-caught-up-this-period` = 本期内已经补过一次（策略跳过，
+   * 不是失败）；`write-failed` = 采到了但写不进库，再采一次也不会写进去（写入侧的问题）。
+   */
+  reasonCode?: 'already-caught-up-this-period' | 'write-failed'
   failureCode?: string
 }>
 
@@ -93,6 +97,8 @@ export type BriefingCalendarFreshnessReading = Readonly<{
   /** The latest attempt across the feeds, whatever its verdict; `lastAttemptFailed` pairs with it. */
   lastAttemptAt?: string
   lastAttemptFailed?: boolean
+  /** 写入侧的最近一次失败；契约里的可选键，缺席 = 没失败（或缺席即老数据）。 */
+  writeFailure?: MarketCalendarWriteFailureView
   catchUp?: BriefingCalendarCatchUp
 }>
 
@@ -131,6 +137,21 @@ export async function ensureCalendarFreshForRun(
   if (isFreshAt(first.lastCollectedAt, deps.dataAsOf)) {
     // Fresh already: skip the request. A catch-up nobody needed is a spent credit.
     return Object.freeze({ ...readingFrom(first), catchUp: Object.freeze({ state: 'skipped' as const }) })
+  }
+  // 采到了但没写进库（`#32`，用户 2026-11-19）：再发一次补采，采集会成功、写入仍会失败，白花一次。
+  // 三重 fail-safe 全在 `isCurrentWriteFailure` 里（字段缺失 / 码不在闭集 / 失败早于最后一次成功），
+  // 任何一条不成立就继续走老路——宁可不跳，也不许把正常补采挡掉。
+  if (isCurrentWriteFailure(first.writeFailure, first.lastCollectedAt ?? undefined)) {
+    console.log(`[macro-calendar.catch-up] ${JSON.stringify({
+      asOf: deps.dataAsOf,
+      verdict: 'skipped',
+      reasonCode: 'write-failed',
+      firstErrorCode: first.writeFailure!.code
+    })}`)
+    return Object.freeze({
+      ...readingFrom(first),
+      catchUp: Object.freeze({ state: 'skipped' as const, reasonCode: 'write-failed' as const })
+    })
   }
   // Stale but no command: the reading is still true, so report it and let the reason codes say
   // "stale". Nothing was attempted, and that is not a failure.
@@ -216,6 +237,7 @@ function readingFrom(freshness: Extract<MarketCalendarFreshness, { state: 'avail
   return {
     state: 'available' as const,
     ...(freshness.lastCollectedAt ? { lastCollectedAt: freshness.lastCollectedAt } : {}),
+    ...(freshness.writeFailure ? { writeFailure: freshness.writeFailure } : {}),
     ...(attempt ? { lastAttemptAt: attempt.attemptedAt, lastAttemptFailed: attempt.state === 'failed' } : {})
   }
 }

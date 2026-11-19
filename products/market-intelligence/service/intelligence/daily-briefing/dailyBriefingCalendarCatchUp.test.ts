@@ -15,11 +15,16 @@ const twoHoursAgo = '2026-11-05T05:00:00.000Z'
 /** The real shape of the 2026-11-05 edition: last success 42 hours before the cutoff. */
 const staleAt = '2026-11-03T13:27:00.000Z'
 
-function freshness(lastCollectedAt: string | null, attempt?: { attemptedAt: string; state: 'succeeded' | 'failed' }) {
+function freshness(
+  lastCollectedAt: string | null,
+  attempt?: { attemptedAt: string; state: 'succeeded' | 'failed' },
+  writeFailure?: { at: string; code: 'standard-write-failed' | 'value-shape-rejected' }
+) {
   return {
     state: 'available' as const,
     asOf: dataAsOf,
     lastCollectedAt,
+    ...(writeFailure ? { writeFailure } : {}),
     sources: (['macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events', 'macro-calendar-narwhal-central-bank-activities'] as const)
       .map((descriptorId) => ({ descriptorId, lastCollectedAt, ...(attempt ? { latestAttempt: attempt } : {}) }))
   }
@@ -90,6 +95,77 @@ describe('ensureCalendarFreshForRun', () => {
     })
 
     expect(reading).toMatchObject({ state: 'available', lastCollectedAt: twoHoursAgo, catchUp: { state: 'skipped' } })
+    expect(refreshNow).not.toHaveBeenCalled()
+  })
+
+  // `#32`（用户 2026-11-19）：写库失败时**不再发补采**——采集会成功、写入仍会失败，白花一次请求。
+  // 判据断的是 `refreshNow` 的调用次数（0），不是返回值；跳过必须留痕，且带失败码。
+  it('skips the catch-up when the write itself failed, and logs the code', async () => {
+    const refreshNow = vi.fn()
+    const logged: string[] = []
+    const original = console.log
+    console.log = (line: string) => { logged.push(String(line)) }
+    try {
+      const reading = await ensureCalendarFreshForRun({
+        dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
+        readFreshness: async () => freshness(staleAt, undefined, {
+          at: '2026-11-05T06:45:00.000Z', code: 'standard-write-failed'
+        })
+      })
+
+      expect(reading.catchUp).toEqual({ state: 'skipped', reasonCode: 'write-failed' })
+      expect(refreshNow).toHaveBeenCalledTimes(0)
+      expect(logged).toHaveLength(1)
+      expect(logged[0]).toContain('[macro-calendar.catch-up]')
+      expect(logged[0]).toContain('"reasonCode":"write-failed"')
+      expect(logged[0]).toContain('"firstErrorCode":"standard-write-failed"')
+      expect(logged[0]).not.toContain('http')
+    } finally {
+      console.log = original
+    }
+  })
+
+  // 三重 fail-safe 里最容易写错的一条：失败早于最后一次成功写入 = 数据后来写进去了，照常补。
+  it('still catches up when the write failure predates the last success', async () => {
+    const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: [marketCalendarPublicPolicy.collectionFeeds[0]!] }))
+    const reads = [
+      freshness(staleAt, undefined, { at: '2026-11-02T00:00:00.000Z', code: 'standard-write-failed' }),
+      freshness(dataAsOf)
+    ]
+    let call = 0
+    const reading = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
+      readFreshness: async () => reads[call++]!
+    })
+
+    expect(refreshNow).toHaveBeenCalledTimes(1)
+    expect(reading.catchUp).toEqual({ state: 'collected' })
+  })
+
+  // 老数据没有这个键：行为必须与改动前完全一致（字段缺失不挡补采）。
+  it('still catches up when the reading carries no write failure at all', async () => {
+    const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: [marketCalendarPublicPolicy.collectionFeeds[0]!] }))
+    const reads = [freshness(staleAt), freshness(dataAsOf)]
+    let call = 0
+    await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
+      readFreshness: async () => reads[call++]!
+    })
+    expect(refreshNow).toHaveBeenCalledTimes(1)
+  })
+
+  // 整份作废（多键 / 码越界 / 时间不合法）走的是既有的「读不到」：既不补，也不说成写库失败。
+  it('reads a malformed freshness answer as unavailable, never as a write failure', async () => {
+    const refreshNow = vi.fn()
+    const reading = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
+      readFreshness: async () => ({
+        ...freshness(staleAt),
+        writeFailure: { at: '2026-11-05T06:45:00.000Z', code: 'standard-write-failed', extra: 1 }
+      })
+    })
+
+    expect(reading).toEqual({ state: 'unavailable' })
     expect(refreshNow).not.toHaveBeenCalled()
   })
 

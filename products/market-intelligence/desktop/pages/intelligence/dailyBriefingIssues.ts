@@ -319,7 +319,10 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
     const code = document.news.notes.macroEmpty ?? 'calendar-unavailable'
     // 只有「来源未启用」才建议去启用；其它原因都说明来源开着，建议检查来源而不是开关
     // （用户 2026-11-16：把读者引去改一个本来没问题的配置，比不说更糟）。
-    const advice = code === 'calendar-source-disabled' ? text.limits.advice.checkCalendar : text.limits.advice.checkSource
+    // 「写不进库」也必须给对动作（`#32`）：来源是好的，让人去查网络等于把他引到错的地方。
+    const advice = code === 'calendar-source-disabled' ? text.limits.advice.checkCalendar
+      : code === 'calendar-write-failed' ? text.limits.advice.calendarWriteFailed
+        : text.limits.advice.checkSource
     add({ id: `data:calendar:${code}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: macroEmpty.sentence, advice })
   }
   // 「接下来 7 日」那一段只由它自己的 note 说明，与上面那栏不是同一件事，照旧单独报。

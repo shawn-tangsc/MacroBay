@@ -66,7 +66,7 @@ export const dailyBriefingText = {
     /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
     macroUnreadable: '暂时读不到：',
     macroWebValue: '（网页）',
-    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-failed': '这次补采没有成功', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
+    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-write-failed': '日历数据已经采到，但没能写入本地库', 'calendar-catch-up-failed': '这次补采没有成功', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
     /**
      * 「未来 7 天」这一栏的两段话（产品 2026-11-14 定，因为来源根本没给重要性）：
      * 主句说**我们判不出**（不是「没有」——「没有」是替来源下断言），
@@ -276,6 +276,7 @@ export const dailyBriefingText = {
         widenWindow: '把统计窗口调到 24 小时以上，或等下一期。',
         fillConsensus: '在宏观日历来源里补齐预期值；缺失时结论不计算预期差。',
         checkCalendar: '在「配置情报源」里启用宏观日历，或等日历采集恢复。',
+        calendarWriteFailed: '检查本地存储空间与写入错误；来源本身是正常的，不必检查网络与凭据。',
         macroQuiet: '无需处理；记在这里是为了说明这一栏确实为空。',
         checkNews: '在「配置情报源」里启用新闻来源，或等舆情采集恢复。',
         backfill: '无需操作；若同一指标反复回补，检查常规采集是否按时完成。',
@@ -516,7 +517,7 @@ export const dailyBriefingText = {
     /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
     macroUnreadable: 'Not readable right now: ',
     macroWebValue: ' (web)',
-    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-failed': 'This catch-up attempt did not succeed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
+    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-write-failed': 'The calendar data was collected but could not be written to the local store', 'calendar-catch-up-failed': 'This catch-up attempt did not succeed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
     nextImportanceUnknown: { sentence: 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', scheduleTitle: 'Tier-1 indicator schedule' },
     pastWindow: {
       header: 'Past 24 hours · {count} releases',
@@ -698,6 +699,7 @@ export const dailyBriefingText = {
         widenWindow: 'Set the statistics window to 24 hours or more, or wait for the next edition.',
         fillConsensus: 'Fill in the expected value in the macro calendar source; without it the conclusion cannot compute a surprise.',
         checkCalendar: 'Enable the macro calendar under intelligence sources, or wait for calendar collection to recover.',
+        calendarWriteFailed: 'Check local storage space and write errors; the source itself is fine, so network and credentials are not the problem.',
         macroQuiet: 'Nothing to do; recorded so an empty section is not mistaken for a gap.',
         checkNews: 'Enable news sources under intelligence sources, or wait for sentiment collection to recover.',
         backfill: 'No action needed; if the same metric keeps backfilling, check that routine collection runs on time.',

@@ -1,12 +1,14 @@
 /**
  * 宏观事件那一栏「为什么是空的」（`02` `A0.8` / `A0.10`）。
  *
- * 四档互斥，前三个都归「读不到」，只有第四档才是「确实没有」：
+ * 五档互斥，前三个都归「读不到」，只有最后一档才是「确实没有」：
  *
  * 1. `calendar-not-collected` —— 从来没有成功采集过；
  * 2. `calendar-collect-failed` —— 最近一次采集失败**晚于**最后一次成功（"失败后又有成功"要判对）；
- * 3. `calendar-stale` —— 最后一次成功距**这一版实际采用的数据截止 `dataAsOf`** 超过两小时；
- * 4. `past-24h-no-high-impact-release` —— 数据是新的，窗口内确实没有高影响发布。
+ * 3. `calendar-write-failed` —— **采到了，但没写进库**（`writeFailure` 晚于最后一次成功写入）：
+ *    来源是好的，不能建议查网络与凭据，也不该为它再发一次补采（用户 2026-11-19 / `#32`）；
+ * 4. `calendar-stale` —— 最后一次成功距**这一版实际采用的数据截止 `dataAsOf`** 超过两小时；
+ * 5. `past-24h-no-high-impact-release` —— 数据是新的，窗口内确实没有高影响发布。
  *
  * **基准是 `dataAsOf`，不是期次截止**：补跑时两者不同，用截止去算会让那一版"一边显示事件、
  * 一边说读不到"。判据看的是补采并等规范化完成之后的状态，所以这个函数只回答"按这两份读数
@@ -15,6 +17,7 @@
 export type BriefingMacroEmptyReason =
   | 'calendar-not-collected'
   | 'calendar-collect-failed'
+  | 'calendar-write-failed'
   | 'calendar-stale'
   | 'past-24h-no-high-impact-release'
 
@@ -27,6 +30,11 @@ export function briefingMacroEmptyReason(input: Readonly<{
   lastCollectedAt?: string
   lastAttemptAt?: string
   lastAttemptFailed?: boolean
+  /**
+   * 写入侧的最近一次失败（契约里的可选键，形状已校验）。**判据比的是时刻**：失败晚于最后一次
+   * 成功写入才算「这次写失败了」；早于它说明后来写成功了，那一档不许再冒出来。
+   */
+  writeFailure?: Readonly<{ at: string; code: string }>
   /** 这一版实际采用的数据截止（补跑时是运行时刻）。 */
   dataAsOf: string
 }>): BriefingMacroEmptyReason | 'calendar-unavailable' | 'calendar-source-disabled' {
@@ -40,8 +48,31 @@ export function briefingMacroEmptyReason(input: Readonly<{
   if (Number.isFinite(age) && age <= BRIEFING_CALENDAR_STALE_AFTER_MS) return 'past-24h-no-high-impact-release'
   // 只有读数不新鲜时，才轮到「最近一次失败」或「过期」：
   // 失败晚于成功才算"最近一次失败"：只看"最近一次是不是失败"会把"失败后又有成功"判错。
+  // 采到了但没写进库：**来源没问题**，句子和建议都必须指向写入侧（用户 2026-11-19 / `#32`）。
+  // 放在「采集失败」之前：写入失败时采集往往是成功的，先判采集会把库的问题说成源的问题。
+  if (isCurrentWriteFailure(input.writeFailure, input.lastCollectedAt)) return 'calendar-write-failed'
   const failedAfterSuccess = input.lastAttemptFailed === true && input.lastAttemptAt !== undefined
     && Date.parse(input.lastAttemptAt) > Date.parse(input.lastCollectedAt)
   if (failedAfterSuccess) return 'calendar-collect-failed'
   return 'calendar-stale'
+}
+
+/** 写入失败的闭集：与契约 `MarketCalendarWriteFailureView.code` 同一组值，不在这里另造词。 */
+export const BRIEFING_WRITE_FAILURE_CODES = Object.freeze(['standard-write-failed', 'value-shape-rejected'] as const)
+
+/**
+ * 「这次写失败还算数吗」——**一处实现，补采层与原因码层共用**。
+ *
+ * 三重 fail-safe 都在这里：字段缺失（`undefined`）、码不在闭集、失败时刻不晚于最后一次成功写入，
+ * 一律返回 false，调用方就按改动前的逻辑走。少了任何一条，正常补采都可能被新逻辑挡掉。
+ */
+export function isCurrentWriteFailure(
+  failure: Readonly<{ at: string; code: string }> | undefined,
+  lastCollectedAt: string | undefined
+): failure is Readonly<{ at: string; code: 'standard-write-failed' | 'value-shape-rejected' }> {
+  if (failure === undefined || lastCollectedAt === undefined) return false
+  if (!(BRIEFING_WRITE_FAILURE_CODES as readonly string[]).includes(failure.code)) return false
+  const at = Date.parse(failure.at)
+  const success = Date.parse(lastCollectedAt)
+  return Number.isFinite(at) && Number.isFinite(success) && at > success
 }
