@@ -52,13 +52,18 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
    * 后两种是「没有」的两种来路，混成一句读者就分不清是源没给还是本来没有。
    */
   const measureKeys = event.measureKeys
+  /**
+   * **我们这边没有这两项，不等于源没给**（界面设计 2026-11-19）：`measure_keys_json` 只对部分来源写，
+   * 真库里 5240 条观测行有 **5034 条这一列是空的**（0xrouter 根本不提供）。
+   * 所以拿不到时写「未提供」——不能拿「源未给出」把我们的缺口说成源的问题。
+   */
   const coverageText = measureKeys === undefined
-    ? text.details.valueNotProvided
+    ? text.details.contentNotCaptured
     : measureKeys.length === 0
       ? text.details.contentCoverageNone
       : measureKeys.join(' · ')
   /** 事件标识：身份键优先，其次源自己的事件 id；两样都没有才写「源未给出」。 */
-  const identityText = event.eventNameKey ?? event.seriesId ?? text.details.valueNotProvided
+  const identityText = event.eventNameKey ?? event.seriesId ?? text.details.contentNotCaptured
   /**
    * 官网（用户 2026-11-19）：按**这一条的指标码**去码表取，与映射规则表「官网页」同一份数据、
    * 同一个解析函数（`officialSourceStateFor`）。三态不许混：

@@ -228,7 +228,8 @@ it('lists every schedule of a period that was released more than once', async ()
  * 如实显示，不许拿别的事件凑。这里钉三件事：
  * - 带了覆盖指标 → 列出来；
  * - 带了但是空数组 → 这条事件本来就不覆盖指标（讲话/会议）；
- * - 字段根本没带 → 源这一条没给（「源未给出」）。
+ * - 字段根本没带 → 写「未提供」。「没带」有两种来路（源没给 / 我们没采到），我们分不出来，
+ *   所以不能拿「源未给出」把缺口说成源的问题（界面设计 2026-11-19）。
  * 后两种都是「没有」，但来路不同；混成一句，读者分不清是源没给还是本来没有。
  */
 it('names the indicators covered, and keeps the two ways of covering none apart', async () => {
@@ -249,17 +250,17 @@ it('names the indicators covered, and keeps the two ways of covering none apart'
     expect(coverage()).toContain('US.CORE_CPI.NSA.YOY')
     expect(identity()).toBe('事件标识US.CPI.NSA.YOY')
 
-    // 源给了身份、但这条事件不覆盖指标（讲话类）→ 说「不覆盖」，不说「源未给出」。
+    // 源给了身份、但这条事件不覆盖指标（讲话类）→ 说「不覆盖」，不说「未提供」。
     await act(async () => root.render(scoped(<MarketCalendarInspector
       event={{ ...base, eventType: 'central-bank-activity', measureKeys: [], seriesId: 'usa-speech' }} text={text} />)))
     expect(coverage()).toContain('这条事件不覆盖指标')
     expect(identity()).toBe('事件标识usa-speech')
 
-    // 字段根本没带 → 源未给出；identity 也退到 seriesId，再没有才说源未给出。
+    // 字段根本没带 → 「未提供」（分不清是源没给还是我们没采到）；identity 退到 seriesId，再没有才这样写。
     await act(async () => root.render(scoped(<MarketCalendarInspector event={base} text={text} />)))
-    expect(coverage()).toContain('源未给出')
+    expect(coverage()).toContain('未提供')
     expect(coverage()).not.toContain('不覆盖指标')
-    expect(identity()).toContain('源未给出')
+    expect(identity()).toContain('未提供')
   } finally { await act(async () => root.unmount()) }
 })
 
