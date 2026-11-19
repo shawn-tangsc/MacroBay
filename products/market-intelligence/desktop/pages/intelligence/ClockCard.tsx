@@ -51,8 +51,10 @@ export type ClockCardText = Readonly<{
   names: Readonly<Record<string, string>>
   /** 主位第一行的全名（原型：中央写全名，环上那块写缩写）。 */
   centerNames: Readonly<Record<string, string>>
-  /** 主位第二行：预期那一行。 */
+  /** 主位：预期那一行（现在放在数值**上方**，否则读者会把数值当成实际值）。 */
   expectation: string
+  /** 政策利率那一格：值来自盘口主推档概率，名字必须带「维持不变概率」。 */
+  policyProbabilityName: string
   /** 预期拿不到时的那一行（绝不拿示例值顶）。 */
   expectationMissing: string
   /** 前值那一行的前缀。 */
@@ -151,11 +153,13 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
 
       {center === undefined ? null : <div className="mi-clock__core">
         <span className="mi-clock__row1">
-          <span className="mi-clock__name">{text.centerNames[center.nameKey] ?? text.names[center.nameKey] ?? center.nameKey}</span>
+          <span className="mi-clock__name">{plaqueName(center.metricKey, center.nameKey, text, true)}</span>
           <span className="mi-clock__badge">{text.daysUntil.replace('{days}', String(center.daysUntil))}</span>
         </span>
-        <p className="mi-clock__value">{center.expected ?? text.expectationMissing}</p>
+        {/* 标签在数值**上方**（用户 2026-11-20 报「预期（市场共识）」像空的）：写在下面时，
+            读者会把大号数值当成实际值、把下面那行当成一个没有值的标签。 */}
         {center.expected === undefined ? null : <p className="mi-clock__unit">{text.expectation}</p>}
+        <p className="mi-clock__value">{center.expected ?? text.expectationMissing}</p>
         {center.previous === undefined ? null : <span className="mi-clock__tier">
           {text.previous} <b>{center.previous}</b>
         </span>}
@@ -170,7 +174,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         data-clock-metric={plaque.metricKey}
         {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
         style={{ left: plaque.x, top: plaque.y, '--o': plaque.opacity } as React.CSSProperties}>
-        <span>{text.names[plaque.nameKey] ?? plaque.nameKey}</span>
+        <span>{plaqueName(plaque.metricKey, plaque.nameKey, text)}</span>
         {plaque.value === undefined ? null : <b>{plaque.value}</b>}
       </div>)}
 
@@ -218,4 +222,16 @@ function unplacedLines(model: ClockCardModel, text: ClockCardText, policyState?:
       .replace('{reason}', text.unplaced[entry.reason]))
   const policy = policyState === undefined ? [] : [policyState === 'disabled' ? text.policyDisabled : text.policyUnreadable]
   return [...policy, ...(crowdedLine === undefined ? [] : [crowdedLine]), ...lines]
+}
+
+/**
+ * 牌上的名字：政策利率那一格的值是**盘口主推档的概率**，不是利率水平——
+ * 名字必须带「维持不变概率」，否则 90.9% 会被读成利率（用户 2026-11-20 报的就是这个）。
+ */
+function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, center = false): string {
+  if (metricKey === 'US.TARGET_RATE.DECISION') return text.policyProbabilityName
+  const name = (center ? text.centerNames[nameKey as keyof typeof text.centerNames] : undefined)
+    ?? text.names[nameKey as keyof typeof text.names]
+    ?? nameKey
+  return name
 }

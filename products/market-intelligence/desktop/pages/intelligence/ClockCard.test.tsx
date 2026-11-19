@@ -96,3 +96,31 @@ it('leaves a line for a metric it cannot place instead of dropping it silently',
   expect(info.getAttribute('data-clock-unplaced')).toBe('1')
   expect(info.getAttribute('title')).toContain('CPI 年率 未上环：没有下一期日程')
 })
+
+/**
+ * 用户 2026-11-20 报的两处「看着像数据错了」：
+ * ① 大号数值其实是**市场共识**，标签原来写在数值下面，读者把它当成实际值、把标签当成空值；
+ * ② 政策利率那一格的值是**盘口主推档概率**，名字却只写「政策利率」，90.9% 会被读成利率水平。
+ */
+it('puts the expectation label above the number, so the number is not read as the actual', async () => {
+  const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+    lastRelease: { date: '2026-11-06', value: '+165K' },
+    nextRelease: { date: '2026-11-25', expected: '+88K' }, periodDays: 28 }]
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: withExpected }) })
+  const core = host.querySelector('.mi-clock__core')!
+  const unit = core.querySelector('.mi-clock__unit')
+  const value = core.querySelector('.mi-clock__value')
+  expect(unit, '主位必须有「预期（市场共识）」这行').not.toBeNull()
+  expect(value?.textContent).toBe('+88K')
+  // 顺序：标签在前、数值在后（读屏与视觉一致）。
+  expect(unit!.compareDocumentPosition(value!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+it('names the policy slot as a probability, never as the rate itself', async () => {
+  const policy = [{ metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate',
+    nextRelease: { date: '2026-11-25', expected: '90.9%' }, periodDays: 28 }]
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: policy }) })
+  // 中央主位与环上的牌都用同一个名字：说清「这是维持不变的概率」。
+  expect(host.textContent).toContain('维持不变概率')
+  expect(host.querySelector('.mi-clock__core')?.textContent).not.toBe('政策利率90.9%')
+})

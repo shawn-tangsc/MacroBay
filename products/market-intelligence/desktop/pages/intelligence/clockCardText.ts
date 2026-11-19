@@ -7,6 +7,8 @@ export const clockCardText = {
     /* 主位第一行的全名（原型：中央写「非农新增就业」，环上那块写「新增就业」）。 */
     centerNames: { nonfarmPayrolls: '非农新增就业' },
     expectation: '预期（市场共识）',
+    /* 政策利率那一格显示的是**盘口主推档的概率**，不是利率水平：名字必须说清楚，否则读者把 90.9% 当成利率。 */
+    policyProbabilityName: '政策利率 · 维持不变概率',
     expectationMissing: '预期未提供',
     previous: '前值',
     daysUntil: '{days} 天后',
@@ -35,6 +37,7 @@ export const clockCardText = {
     names: { cpiYoy: 'CPI YoY', nonfarmPayrolls: 'Payrolls', policyRate: 'Policy rate' },
     centerNames: { nonfarmPayrolls: 'Nonfarm payrolls' },
     expectation: 'Expected (market consensus)',
+    policyProbabilityName: 'Policy rate · hold probability',
     expectationMissing: 'Expectation unavailable',
     previous: 'Previous',
     daysUntil: 'In {days} days',
