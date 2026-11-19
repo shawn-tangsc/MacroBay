@@ -119,18 +119,27 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
    */
   const rootRef = useRef<HTMLElement>(null)
   useEffect(() => {
-    const el = rootRef.current?.querySelector('.mi-clock__sweep')
-    const cs = el === null || el === undefined ? undefined : getComputedStyle(el)
-    console.info('[mi-clock-diag]', JSON.stringify({
-      exists: el !== null && el !== undefined,
-      animationName: cs?.animationName,
-      animationDuration: cs?.animationDuration,
-      animationPlayState: cs?.animationPlayState,
-      dashoffset: cs?.strokeDashoffset,
-      dashoffsetAttr: el?.getAttribute('stroke-dashoffset'),
-      reduceNoPreference: window.matchMedia('(prefers-reduced-motion: no-preference)').matches,
-      reduce: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    }))
+    const report = (after: string): void => {
+      const el = rootRef.current?.querySelector('.mi-clock__sweep')
+      const cs = el === null || el === undefined ? undefined : getComputedStyle(el)
+      // `console.warn`：渲染层只有 warn/error 进 app.log，info 会被过滤掉（Chief 2026-11-20）。
+      console.warn('[mi-clock-diag]', JSON.stringify({
+        after,
+        path: window.location.pathname,
+        exists: el !== null && el !== undefined,
+        animationName: cs?.animationName,
+        animationDuration: cs?.animationDuration,
+        animationPlayState: cs?.animationPlayState,
+        dashoffset: cs?.strokeDashoffset,
+        dashoffsetAttr: el?.getAttribute('stroke-dashoffset'),
+        reduceNoPreference: window.matchMedia('(prefers-reduced-motion: no-preference)').matches,
+        reduce: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      }))
+    }
+    report('mount')
+    // HMR 后组件不一定重挂：1 秒后再打一次，确保这条日志一定会出现（第二行才是准的）。
+    const timer = window.setTimeout(() => report('after-1s'), 1000)
+    return () => window.clearTimeout(timer)
   }, [])
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
   // 用户 2026-11-15：**不再缩放**。卡保持 336×330、`transform` 为单位矩阵，
