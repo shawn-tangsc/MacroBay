@@ -1659,7 +1659,8 @@
       "verifiedAt": "2026-11-17",
       "basis": "BEA · 发布页（news 目录）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "US.CORE_PCE.YOY"
   },
   "US.CORE_PCE.SA.MOM": {
     "code": "US.CORE_PCE.SA.MOM",
@@ -4031,7 +4032,8 @@
       "verifiedAt": "2026-11-17",
       "basis": "BEA · 发布页（news 目录）"
     },
-    "status": "active"
+    "status": "retired",
+    "supersededBy": "US.PCE.YOY"
   },
   "US.PCE.SA.MOM": {
     "code": "US.PCE.SA.MOM",
