@@ -209,3 +209,18 @@ describe('审计身份（用户 2026-11-20）', () => {
     expect('firstScheduledDate' in speech).toBe(false)
   })
 })
+
+describe('国家全名（读屏用）', () => {
+  it('有国家的事件带 countryNameFull；没有国家的事件不带这个键（不是空串）', () => {
+    const database = seed()
+    const events = standardRowsToMarketEvents(readStandardCalendarMonth(database, { month: '2026-11' }), context)
+    const cpi = events.find((event) => event.eventNameKey === 'US.CPI.NSA.YOY')!
+    // 中文界面：显示值与全名都是「美国」；英文界面显示 `US`、全名 `United States`（同一张表两种粒度）。
+    expect(cpi.countryNameFull).toBe('美国')
+    // 没有国家：投影不带这个键——组件据此不写 title / aria-label。
+    const noCountry = standardRowsToMarketEvents(
+      readStandardCalendarMonth(database, { month: '2026-11' }).map((row) => ({ ...row, countryCode: '' })), context)
+    expect(noCountry.length).toBeGreaterThan(0)
+    expect(noCountry.every((event) => !('countryNameFull' in event))).toBe(true)
+  })
+})
