@@ -113,6 +113,12 @@ export function latestCurrentWriteFailure(layer: Pick<CalendarStandardWriteLayer
   const candidates = Object.entries(layer.all())
     .flatMap(([writerId, record]) => record?.lastFailure === undefined ? []
       : [{ writerId: writerId as CalendarStandardWriterId, record, failure: record.lastFailure }])
+    /**
+     * **只从 `reader` 类写入方里挑**（用户 2026-11-19）：`macro-calendar-official-replay` 是 `internal`
+     * （只写历史、不改变当前这期），它的失败一旦成为最新那条，日报就会说「采到了没写进去」并跳过补采——
+     * 那是我们定过不许发生的事。可见性表就在本文件，**用它，不另写 if 列表**。
+     */
+    .filter((entry) => calendarStandardWriterVisibility[entry.writerId] === 'reader')
     .filter((entry) => isCurrentWriteFailure({ at: entry.failure.at, lastSuccessAt: entry.record.lastSuccessAt }))
     .sort((left, right) => compareIsoTime(right.failure.at, left.failure.at))
   const top = candidates[0]

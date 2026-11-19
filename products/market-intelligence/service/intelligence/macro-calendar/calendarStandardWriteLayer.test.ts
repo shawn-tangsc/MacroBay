@@ -63,4 +63,16 @@ describe('最近一次当前写失败（freshness 用）', () => {
     layer.recordAttempt({ writerId: '0xrouter', at: at(3), outcome: { state: 'succeeded' } })
     expect(latestCurrentWriteFailure(layer)).toBeUndefined()
   })
+
+  it('replay（internal）失败不进 freshness；同样一条换成 0xrouter 才进', async () => {
+    const { latestCurrentWriteFailure } = await import('./calendarStandardWriteLayer')
+    const layer = createCalendarStandardWriteLayer()
+    layer.recordAttempt({ writerId: 'macro-calendar-official-replay', at: at(1),
+      outcome: { state: 'failed', failedRows: 3, firstErrorCode: 'standard-write-failed' } })
+    // 回放只让历史少一段，不改变当前这期——它的失败不许被读者看见。
+    expect(latestCurrentWriteFailure(layer)).toBeUndefined()
+    layer.recordAttempt({ writerId: '0xrouter', at: at(2),
+      outcome: { state: 'failed', failedRows: 1, firstErrorCode: 'value-shape-rejected' } })
+    expect(latestCurrentWriteFailure(layer)).toMatchObject({ writerId: '0xrouter', code: 'value-shape-rejected' })
+  })
 })
