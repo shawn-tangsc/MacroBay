@@ -37,7 +37,7 @@ function setup() {
     supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
   }
   repository.appendEventGroup(group)
-  const deps = { repository, jobRuntime, listItems: () => items, now: () => asOf,
+  const deps = { repository, jobRuntime, listItems: () => items, now: () => asOf, hasModel: async () => true,
     createGroup: (itemId: string) => {
       const created = { ...group, id: `mi-eg-${itemId}`, mergeKey: itemId, eventRefs: [itemId] }
       repository.appendEventGroup(created)
@@ -228,7 +228,7 @@ describe('createInitialMarketAnalysisRequest', () => {
     })
     const request = createInitialMarketAnalysisRequest({
       repository: fixture.repository, jobRuntime: fixture.jobRuntime, listItems: () => fixture.items, now: () => asOf,
-      createGroup: fixture.createGroup,
+      createGroup: fixture.createGroup, hasModel: async () => true,
       latestNewsSentiment: () => ({
         itemId: 'item-judged', sourceId: 'coindesk-rss', publishedAt: asOf, scoredAt: asOf,
         polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'c', engine: 'model', caveats: []

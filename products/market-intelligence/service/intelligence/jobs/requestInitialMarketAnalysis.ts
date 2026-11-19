@@ -41,9 +41,13 @@ export function createInitialMarketAnalysisRequest(deps: {
   isEnabled?: () => Promise<boolean>
   /**
    * 读者选好的模型还在不在。排冻结之前就问：没有模型时排上去也只会失败，
-   * 而失败原因会晚一步才出现，读者看到的是「点了没反应」。缺席（headless/窄测试）不设这道门。
+   * 而失败原因会晚一步才出现，读者看到的是「点了没反应」。
+   *
+   * **必填，没有默认值**：漏传时这道门会整道消失，退回「照常入队然后 401」的旧行为。
+   * 真的没有模型服务时传 `async () => false`（语义是「没有可用模型」，请求落
+   * `analysis-provider-not-ready`），而不是靠可选参数跳过检查。
    */
-  hasModel?: () => Promise<boolean>
+  hasModel: () => Promise<boolean>
 }) {
   const enqueue = createAnalysisRunEnqueuer({ jobRuntime: deps.jobRuntime, repository: deps.repository, now: deps.now })
   return async (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource, slot?: AnalysisSessionSlot): Promise<{ itemId: string; queued: true }> => {
@@ -53,7 +57,7 @@ export function createInitialMarketAnalysisRequest(deps: {
     if (deps.isEnabled && !await deps.isEnabled()) throw new Error('analysis-not-enabled')
     // 模型没选好就不排冻结：这个码和按条解读端点共用，界面照着说「还没有可用的模型」，
     // 而不是把「排不上队」当成网络或容量问题（用户 2026-11-20 点重试那次就是这样被吞的）。
-    if (deps.hasModel && !await deps.hasModel()) throw new Error(MARKET_ANALYSIS_ERROR_CODES.providerNotReady)
+    if (!await deps.hasModel()) throw new Error(MARKET_ANALYSIS_ERROR_CODES.providerNotReady)
     // `source` is required and has no default: a caller that forgets it must not silently
     // inherit the manual exemption from the gate.
     const triggerKey = resolveTriggerKey(source, mode, slot)

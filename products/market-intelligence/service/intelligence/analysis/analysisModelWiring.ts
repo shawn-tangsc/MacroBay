@@ -10,11 +10,12 @@ export type AnalysisModelRef = Readonly<{ providerId: string; modelId: string }>
  * - 重启对账在补排运行**入队时**就带上它；
  * - 手动请求在**排冻结之前**问一次有没有模型，没有就当场拒绝（不再排一次注定失败的运行）。
  *
- * 没有真实设置服务（headless / 测试）时不建这份接线：没有读者可问，保留「跟平台默认模型」，
- * 这是文档写明的缺省而不是放行。产品装配一定传 SettingsService。
+ * 没有真实设置服务（headless / 测试）时这份接线整块不存在。**但缺席必须看得见**：三道门
+ * （编排器解析、补排入队、手动请求）会一起消失，分析退回「猜平台默认供应商」的旧行为。
+ * 所以这里不是静默返回 undefined，而是留一条 `MI_ANALYSIS_MODEL_WIRING_MISSING`。
  */
 export function createAnalysisModelWiring(
-  settingsService: MarketAnalysisSettingsService,
+  settingsService: MarketAnalysisSettingsService | undefined,
   recordRunModel: (id: string, model: AnalysisModelRef) => boolean
 ): Readonly<{
   orchestrator: Readonly<{
@@ -23,7 +24,11 @@ export function createAnalysisModelWiring(
   }>
   housekeeping: Readonly<{ resolveModel: () => Promise<AnalysisModelRef | null> }>
   request: Readonly<{ hasModel: () => Promise<boolean> }>
-}> {
+}> | undefined {
+  if (!settingsService) {
+    console.warn(JSON.stringify({ marker: 'MI_ANALYSIS_MODEL_WIRING_MISSING', reason: 'settings-service-absent' }))
+    return undefined
+  }
   const resolveModel = async (): Promise<AnalysisModelRef | null> => {
     const settings = await settingsService.getSettings()
     return isMarketAnalysisModelSet(settings)

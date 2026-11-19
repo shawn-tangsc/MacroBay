@@ -128,7 +128,7 @@ function setup() {
 
   const request = createInitialMarketAnalysisRequest({
     repository, jobRuntime, listItems: () => [item], now: () => asOf,
-    createGroup: () => group, latestNewsSentiment: () => judgment,
+    createGroup: () => group, latestNewsSentiment: () => judgment, hasModel: async () => true,
     readNewsInterpretation: endpoints.readNewsInterpretation
   })
   return { repository, jobRuntime, request, endpoints, endpointEnqueue, written }

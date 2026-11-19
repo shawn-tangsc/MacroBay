@@ -293,6 +293,30 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     }
   })
 
+  it('refuses a manual request with provider-not-ready when the model wiring is missing, and says so', async () => {
+    // 三道门（编排器解析 / 补排入队 / 手动请求）靠同一份接线。缺装配时不许静默退回旧行为：
+    // 既要留下标记，也要让请求落「还没有可用的模型」，而不是照常入队然后 401。
+    const directory = await mkdtemp(`${tmpdir()}/mi-analysis-request-no-wiring-`)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const enqueueDefinition = vi.fn(async (definition: { id: string }) => ({ id: definition.id }))
+    try {
+      const jobRuntime = { registerHandler: vi.fn(), enqueueDefinition, listRuns: () => [], waitForRunTerminal: async () => ({ state: 'terminal', run: { status: 'completed' } }) } as never
+      const runtime = registerMarketAnalysisRuntime({
+        jobRuntime,
+        pipeline: { listItems: () => [], listRevisions: () => [] } as never,
+        publicQueryService: {} as never, structuredModelInvocation: { invoke: vi.fn() } as never,
+        dataDir: directory, now: () => '2026-09-28T00:01:00.000Z'
+      })
+      expect(warn.mock.calls.map(args => String(args[0])).join('\n')).toContain('MI_ANALYSIS_MODEL_WIRING_MISSING')
+      await expect(runtime.requestInitialAnalysis(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-provider-not-ready')
+      expect(enqueueDefinition).not.toHaveBeenCalled()
+      runtime.dispose()
+    } finally {
+      warn.mockRestore()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('reuses an existing event group for a stored item instead of inserting a duplicate', async () => {
     const directory = await mkdtemp(`${tmpdir()}/mi-analysis-request-existing-`)
     const classifiedItem = item({

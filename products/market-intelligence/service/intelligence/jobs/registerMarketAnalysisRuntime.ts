@@ -173,10 +173,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     now
   })
   const repository = createMarketAnalysisRepository({ filePath: `${input.dataDir}/market-analysis.sqlite` })
-  // 只有产品装配（有真实读者设置）才接「读者选的模型」；headless 保留跟平台默认模型的旧行为。
-  const modelWiring = input.settingsService
-    ? createAnalysisModelWiring(input.settingsService, repository.recordRunModel)
-    : undefined
+  // 缺 settingsService 不是常态：三道门会一起消失，接线模块会留下 MI_ANALYSIS_MODEL_WIRING_MISSING。
+  const modelWiring = createAnalysisModelWiring(input.settingsService, repository.recordRunModel)
   const groups = createEventGroupService({ now, idFactory: () => `mi-eg-${randomUUID()}` })
   // 一条情报 → 一次变化：解析抽在 `analysisRuntimeChangeResolver`（体积门禁）。
   const resolveChange = createAnalysisChangeResolver({
@@ -413,7 +411,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     enqueue: createAnalysisRunEnqueuer({ jobRuntime: input.jobRuntime, repository, now })
   })
 
-  const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled, ...(modelWiring ? modelWiring.request : {}),
+  const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled, ...(modelWiring ? modelWiring.request : { hasModel: async () => false }),
       ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
       readNewsInterpretation: newsInterpretation.readNewsInterpretation,
       createGroup: async itemId => {
