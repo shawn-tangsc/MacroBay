@@ -191,3 +191,21 @@ describe('指标层级随事件一起下发', () => {
     expect('hierarchy' in cpi).toBe(false)
   })
 })
+
+describe('审计身份（用户 2026-11-20）', () => {
+  it('码身份的事件带上 periodKey / firstScheduledDate（从写入身份搬出来，不重算）', () => {
+    const database = seed()
+    const events = standardRowsToMarketEvents(readStandardCalendarMonth(database, { month: '2026-11' }), context)
+    const cpi = events.find((event) => event.eventNameKey === 'US.CPI.NSA.YOY')!
+    expect(cpi.periodKey).toBe('2026-10')
+    expect(cpi.firstScheduledDate).toBe('2026-11-10')
+  })
+
+  it('无身份的行（讲活/源内身份）不带这两个键——不是空串', () => {
+    const database = seed()
+    const events = standardRowsToMarketEvents(readStandardCalendarMonth(database, { month: '2026-11' }), context)
+    const speech = events.find((event) => event.eventType === 'central-bank-activity')!
+    expect('periodKey' in speech).toBe(false)
+    expect('firstScheduledDate' in speech).toBe(false)
+  })
+})

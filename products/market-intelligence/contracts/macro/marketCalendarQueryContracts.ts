@@ -109,6 +109,11 @@ export const marketCalendarPublicPolicy = Object.freeze({
      */
     queryEventSourceWrites: 'intelligence.macro.marketCalendar.queryEventSourceWrites',
     /**
+     * **数值修订审计**（只读，渲染专用，2026-11-20）：某一格历次被谁在什么时候改成了什么。
+     * 只给事件详情并列行用；三态（有记录 / 没记录 / 读不到）由读口给，界面不再自己判。
+     */
+    queryValueRevisions: 'intelligence.macro.marketCalendar.queryValueRevisions',
+    /**
      * **标准码表整表**（只读，渲染专用，2026-11-17）：弹框「码表」页签用。244 行一次下发，
      * 每行带官网页（待补带闭集理由，**不许空链接**）与「有多少个源内 id 认得它」（不下发 id 列表）。
      */
@@ -192,6 +197,15 @@ export type MarketCalendarEvent = Readonly<{
    * 投影不重算。没有身份的行（讲话、旧源未登记的行）不带这个字段。
    */
   eventNameKey?: string
+  /**
+   * 写入时定下的期次与首发布日（用户 2026-11-20）：详情抽屉要用它们去查来源审计表
+   * （四元组 = countryCode + metricKey + periodKey + firstScheduledDate）。
+   * **从写入时定下的身份里搬出来，投影不重算**；没有身份的行（讲话、旧源未登记）不带这两个字段。
+   * 为什么不让界面按 scheduledAt 反推：真库 `(metric_key, scheduled_date)` 有 52 组/108 行重复，
+   * 反推会挑错行，把「有记录」显示成「未记录」。
+   */
+  periodKey?: string
+  firstScheduledDate?: string
   /** 新源给的事件类型标识（`usa-policy-rate-decision` 这类）。行上没有就不带字段，不填空串。 */
   seriesId?: string
   /**
@@ -376,6 +390,7 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
     'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], [
     // `importance` 可选：源没说就没有这个字段（缺省 ≠ 某个更低的重要度）。
     'importance', 'officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId', 'measureKeys',
+    'periodKey', 'firstScheduledDate',
       // 切到标准表后适配器**每行都写**这四个（时间精度、生命周期、行类型、来源真值）。
       // 白名单里没有它们时，`marketExact` 判 false → 整页非法 → 读者看到「读不到」，
       // 而行级断言全绿（那一层不跑页面校验）。

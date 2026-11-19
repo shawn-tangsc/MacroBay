@@ -92,6 +92,10 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     ...(countryNameOf(row.countryCode, context.locale) === undefined
       ? {} : { countryName: countryNameOf(row.countryCode, context.locale)! }),
     ...(row.identityKind === 'code' ? { eventNameKey: row.metricKey } : {}),
+    // 审计表查询用的身份（用户 2026-11-20）：**从写入时定下的身份搬出来**，不重算；没有就不带。
+    // 只有**指标码**才有审计身份；讲话/事件行（`evt.*`）没有「哪一期」这回事，不带这两个键。
+    ...(row.identityKind === 'code' && !row.metricKey.startsWith('evt.')
+      ? { periodKey: row.periodKey, firstScheduledDate: row.firstScheduledDate } : {}),
     eventType: eventTypeOf(row),
     // 读行里那一列：官方行本来就是 high。行上没有值（源没提供）就先不出这个字段——
     // 契约把 `importance` 改成可缺省之后，读者看到的就是「未提供」；在此之前调用方会看到 undefined。
