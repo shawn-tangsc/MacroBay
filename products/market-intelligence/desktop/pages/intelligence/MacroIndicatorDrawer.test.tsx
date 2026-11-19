@@ -110,6 +110,10 @@ describe('key-indicator drawer', () => {
     const tieredMeasures = ['US.CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE', 'US.CORE_PCE.NSA.YOY', 'US.CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE']
     const busyDay = [1, 2, 3, 4, 5].map((index) => dayEvent(`busy-${index}`, `事件 ${index}`,
       `2026-11-13T${String(9 + index).padStart(2, '0')}:00:00.000Z`, { measureKeys: [tieredMeasures[index - 1]!] }))
+    // 格子能放几条由**量到的高度**决定（用户 2026-11-19）：喂一个真实抽屉那么高的网格，
+    // 六行均分后每格约 100px → 放得下三条。
+    // 480 / 6 行 ≈ 80px 一格：扣掉日期号那一行正好放得下三条。
+    stubLayout(490, 480)
     await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => busyDay })
     const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button.mk-minical__day'))
       .find(value => value.querySelector('em')?.textContent === '13')!

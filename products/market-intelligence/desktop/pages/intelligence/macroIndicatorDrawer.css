@@ -289,11 +289,19 @@
 .mk-minical__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; }
 .mk-minical__wk { margin-top: 4px; flex: none; }
 .mk-minical__wk span { font-size: var(--font-meta); color: var(--muted); text-align: left; padding: 1px 6px; }
-/* 行高写死成同一个值：容器高度不确定时 1fr 会退化成按内容分配，六行就不等了。 */
-.mk-minical__grid { flex: none; grid-template-rows: repeat(6, 63.8px); margin-top: 1px; min-height: 0; }
+/*
+ * **行高由容器高度均分**（用户 2026-11-19：撑满可视区，窗口越高格子越高）。
+ *
+ * 这块是 flex 列里的 `flex: 1 1 auto`，六行用 `minmax(0, 1fr)` 均分：高度确定时六行等高等，
+ * 窗口变高每格跟着变高。原来写死 63.8px——窗口再高也只有这么高，底下留一块底色。
+ */
+.mk-minical__grid { flex: 1 1 auto; grid-template-rows: repeat(6, minmax(0, 1fr)); margin-top: 1px; min-height: 0; }
 .mk-minical__day { position: relative; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 6px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mk-mcell__row { display: flex; align-items: center; gap: 3px; min-width: 0; font-size: var(--font-meta); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mk-mcell__row .mk-mdot { margin-left: 0; }
+/* 格内国名：次级色、紧挨名字；**只有国名会截**（名字截了就读不出是哪件事）。 */
+.mk-mcell__country { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-style: normal; }
 /* 格子的角标：右上角、绝对定位，**不占行高**——格子高度与事件行数都不因它变（用户报的「跟事件名挤在一起」）。
    日期号在左上、角标在右上，两端各自 `min-width: 0`，互相不挤。 */
 .mk-mcell__more { position: absolute; right: 4px; top: 2px; font-size: var(--font-meta); line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; }

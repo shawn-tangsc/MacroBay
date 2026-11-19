@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { ChevronLeft, ChevronRight, ListTree, RefreshCw } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -8,6 +8,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { filterVisibleByTier } from '../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
 import { calendarDisplayDate } from '../../features/macro/economic-calendar/economicCalendarDayModel'
+import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
 import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
 
 /**
@@ -20,7 +21,24 @@ import type { MacroIndicatorDrawerText } from './macroIndicatorDrawerText'
  * 平台 `Choice`/`Toggle` 只能表达一个可选项、塞不下行内的名字与圆点，换它会丢掉「这天有什么」。
  * 可访问名就是格的可见内容（日期数字 + 事件名），选中态用 `aria-pressed` 表达。
  */
+/**
+ * 格子放不下时最多放几条的**兜底值**：真实条数按格子高度算（`visibleRowsFor`），
+ * 只有拿不到高度（首帧、无布局环境）才用它。
+ */
 const CELL_ITEM_LIMIT = 3
+/** 一行事件的估高（`--font-meta` + 1px 行距）；只用来把格子高度换算成能放几行。 */
+const CELL_ROW_HEIGHT = 16
+/** 格子里日期号那一行占的高度（含内距）。 */
+const CELL_HEADER_HEIGHT = 22
+
+/**
+ * 一个格子能放几条：用网格自身高度除以周数得到单格高度，再扣掉日期号那一行。
+ * 拿不到高度时退回兜底值；最少 1 条，免得矮窗口把名字全藏掉。
+ */
+export function visibleRowsFor(gridHeight: number, weekCount: number): number {
+  if (!Number.isFinite(gridHeight) || gridHeight <= 0 || weekCount <= 0) return CELL_ITEM_LIMIT
+  return Math.max(1, Math.floor((gridHeight / weekCount - CELL_HEADER_HEIGHT) / CELL_ROW_HEIGHT))
+}
 
 export function MiniReleaseCalendar({ text, month, today, selectedDay, events, timeZone, now, state, refreshing, onSelectDay, onMonthChange, onRefresh, onConfigure, onOpenCatalog, catalogAriaOf, unmappedCountByDay }: Readonly<{
   text: MacroIndicatorDrawerText
@@ -55,6 +73,29 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
 }>): React.ReactElement {
   const currentMonth = today.slice(0, 7)
   const weeks = useMemo(() => buildWeeks(month, groupByDay(events, timeZone, now)), [month, events, timeZone, now])
+  /**
+   * **每格放几条由格子高度决定**（用户 2026-11-19）：窗口越高、格子越高，就多放一条；
+   * 放不下的折进右上角 `+N`。不用固定 px 阈值拍脑袋——量的是网格自己的高度除以周数。
+   */
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [visibleRows, setVisibleRows] = useState(CELL_ITEM_LIMIT)
+  useEffect(() => {
+    const grid = gridRef.current
+    if (grid === null || typeof ResizeObserver !== 'function') return undefined
+    /**
+     * 没有真实布局时（首帧、测试环境）量到的高度不可信：**低于一格的底线就当没量到**，
+     * 保持兜底值——否则会把格子算成只放得下 1 条，名字都看不见。
+     */
+    const measure = (): void => {
+      if (grid.clientHeight >= CELL_HEADER_HEIGHT + CELL_ROW_HEIGHT) {
+        setVisibleRows(visibleRowsFor(grid.clientHeight, weeks.length))
+      }
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [weeks.length])
   const noReleases = state === 'ready' && events.length === 0
   const [year, monthNumber] = month.split('-')
   const step = (delta: number) => onMonthChange(shiftMonth(month, delta))
@@ -85,7 +126,7 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
     </div>
     {refreshing ? <div className="mk-minical__busy"><LoadingState layout="inline" size="sm" label={text.minicalTools.refreshing} /></div> : <>
       <div className="mk-minical__wk">{text.weekday.map(day => <span key={day}>{day}</span>)}</div>
-      <div className="mk-minical__grid">
+      <div className="mk-minical__grid" ref={gridRef}>
         {weeks.map((week, rowIndex) => week.map(cell => {
           const isToday = cell.dateKey === today
           const unmappedCount = unmappedCountByDay?.get(cell.dateKey) ?? 0
@@ -99,7 +140,7 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
           // **格子里只写一级、二级指标与决议类事件的名字**，其余（未标级的讲话、库存这类）全部
           // 折进右上角那个数字——判据是 `filterVisibleByTier` 一处实现，不在这里另写一套。
           const tiered = filterVisibleByTier(cell.items.map(item => ({ metricKey: item.metricKey, item })),
-            { maximumVisible: CELL_ITEM_LIMIT })
+            { maximumVisible: visibleRows })
           const shown = tiered.visible
           // 未映射的名字不进格子（格子里只放有分级的名字），但**条数要算**。
           const hidden = tiered.hiddenTotal + unmappedCount
@@ -108,7 +149,10 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
             onClick={() => onSelectDay(cell.dateKey)}>
             <em>{cell.day}</em>
             {shown.map(item => <span className="mk-mcell__row" key={`${item.name}-${item.at}`}>
-              <i className={`mk-mdot mk-mdot--${item.state}`} />{item.name}
+              <i className={`mk-mdot mk-mdot--${item.state}`} />
+              {/* 国家在名字前、次级色紧挨名字；只有国名会被截，事件名不截。 */}
+              <em className="mk-mcell__country" data-mcell-country>{item.country}</em>
+              {item.name}
               {/* 格内用紧凑记号（`×2`）：整句「本期 2 次」在当日列表那一行里，格子里塞句子会挤掉名字。 */}
               {item.releaseCount !== undefined && item.releaseCount > 1
                 ? <em className="mk-mcell__repeat" data-release-count={item.releaseCount}>{`×${item.releaseCount}`}</em>
@@ -127,7 +171,9 @@ export function MiniReleaseCalendar({ text, month, today, selectedDay, events, t
   </section>
 }
 
-type Item = Readonly<{ name: string; at: string; state: 'done' | 'todo'; metricKey: string; releaseCount?: number }>
+type Item = Readonly<{ name: string; at: string; state: 'done' | 'todo'; metricKey: string; releaseCount?: number
+  /** 短国名（与右列、卡片同一份解析）；没有国家就是 `—`。 */
+  country: string }>
 type Cell = Readonly<{ dateKey: string; day: number; current: boolean; items: readonly Item[] }>
 
 /** 事件按**读者时区**的日期分组，同一天内按时刻升序。 */
@@ -142,6 +188,11 @@ function groupByDay(events: readonly MarketCalendarEvent[], timeZone: string, no
     items.push({
       name: event.title, at: event.scheduledAt, state: at <= nowMs ? 'done' : 'todo',
       metricKey: event.eventNameKey ?? event.measureKeys?.[0] ?? '',
+      /**
+       * 格子里也要看得到国家（用户 2026-11-19：「没国家我哪里知道谁是谁」）。
+       * 走**同一份** `calendarCountryLabel`，只把兜底词换成 `—`——格子里不写「未知国家」。
+       */
+      country: calendarCountryLabel(event, { market: { unknownCountry: '—' } }),
       // 合并后同一期可能发过不止一次：次数跟着条目走，格子里才不会被当成一次。
       ...(event.releaseCount === undefined ? {} : { releaseCount: event.releaseCount })
     })

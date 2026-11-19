@@ -47,12 +47,17 @@ describe('the mini release calendar scrolls itself, never the drawer', () => {
     expect(Number(floor)).toBeGreaterThanOrEqual(63.8 + 24 + 17 + 18 + 2 - 1)
   })
 
-  it('keeps the six week rows fixed, which is why the block has to scroll', () => {
-    // 行高写死成同一个值才六行等高等；改成 1fr 会在容器高度不确定时按内容分配，
-    // 那天有多条事件的行会变高——那时「这一块自己滚」也就不成立了。
+  it('lets the six week rows share the container height, which is why the block scrolls', () => {
+    /**
+     * 用户 2026-11-19：日历要撑满可视区，窗口越高格子越高。
+     *
+     * 所以六行是 `minmax(0, 1fr)` 均分容器高度，不再是写死的 63.8px；
+     * 等高等仍成立（同一容器里六行同一份 `1fr`），而「这一块自己滚」的前提也不变——
+     * `.mk-minical` 仍是 `flex: 1 1 auto` 的可滚容器。
+     */
     const grid = rulesOf('.mk-minical__grid')
-    expect(grid).toContain('grid-template-rows: repeat(6, 63.8px)')
-    expect(grid).toContain('flex: none')
+    expect(grid).toContain('grid-template-rows: repeat(6, minmax(0, 1fr))')
+    expect(grid).toContain('flex: 1 1 auto')
   })
 
   it('leaves the column unclipped, so the readout panel can still paint outside it', () => {
