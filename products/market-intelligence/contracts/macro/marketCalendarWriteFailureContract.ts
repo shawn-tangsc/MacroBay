@@ -12,12 +12,19 @@ import { marketExact, marketInstant } from './marketCalendarQueryContracts'
 export type MarketCalendarWriteFailureView = Readonly<{
   at: string
   code: 'standard-write-failed' | 'value-shape-rejected'
+  /**
+   * 同一个写入方**最近一次写完落地**的时刻（UTC ISO）。判断「这次失败是不是当前的」要用它:
+   * 失败晚于它才算当前失败。缺席=从没成功过（按当前失败算，方向只能是显示）。
+   * 判断本身只有一处实现：写入层的 `isCurrentWriteFailure`，读方直接调，不许自己比时间。
+   */
+  lastSuccessAt?: string
 }>
 
 /** 形状守卫：多一个键、码越界、时间不合法，整份不认（调用方按「没带这个键」处理）。 */
 export function isMarketCalendarWriteFailureView(value: unknown): value is MarketCalendarWriteFailureView {
-  if (!marketExact(value, ['at', 'code'])) return false
-  const failure = value as { at: unknown; code: unknown }
+  if (!marketExact(value, ['at', 'code'], ['lastSuccessAt'])) return false
+  const failure = value as { at: unknown; code: unknown; lastSuccessAt?: unknown }
   if (!marketInstant(failure.at)) return false
+  if (failure.lastSuccessAt !== undefined && !marketInstant(failure.lastSuccessAt)) return false
   return failure.code === 'standard-write-failed' || failure.code === 'value-shape-rejected'
 }

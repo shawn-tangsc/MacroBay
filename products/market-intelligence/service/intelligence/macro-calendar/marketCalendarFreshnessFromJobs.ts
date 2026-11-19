@@ -103,11 +103,13 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
    * 标准表写入失败（用户 2026-11-19）：**没有就不带**，带就必须是合法闭集值。
    * 它与采集失败分开——写库失败时采集时间不会前进，简报若只看它就会判成「数据过期」再补采一次。
    */
-  lastWriteFailure?: Readonly<{ at: string; firstErrorCode: 'standard-write-failed' | 'value-shape-rejected' }>
+  lastWriteFailure?: Readonly<{ at: string; firstErrorCode: 'standard-write-failed' | 'value-shape-rejected'
+    lastSuccessAt?: string }>
 }>): Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
   sources: readonly { descriptorId: string; lastCollectedAt: string | null
     latestAttempt?: { attemptedAt: string; state: string } }[]
-  writeFailure?: Readonly<{ at: string; code: 'standard-write-failed' | 'value-shape-rejected' }> }> {
+  writeFailure?: Readonly<{ at: string; code: 'standard-write-failed' | 'value-shape-rejected'
+    lastSuccessAt?: string }> }> {
   // 作业记录不再参与判定（判定的唯一依据是 `lastWrittenAt`）。
   /**
    * **过期只看「作业有没有跑成」，不看「这次有没有写进新行」**（Chief 2026-11-14 定）。
@@ -127,7 +129,9 @@ export function readCalendarFreshnessFromJobRuns(input: Readonly<{
   return {
     state: 'available', asOf: input.asOf, lastCollectedAt,
     ...(input.lastWriteFailure === undefined ? {}
-      : { writeFailure: { at: input.lastWriteFailure.at, code: input.lastWriteFailure.firstErrorCode } }),
+      : { writeFailure: { at: input.lastWriteFailure.at, code: input.lastWriteFailure.firstErrorCode,
+          ...(input.lastWriteFailure.lastSuccessAt === undefined ? {}
+            : { lastSuccessAt: input.lastWriteFailure.lastSuccessAt }) } }),
     // 报的是**采集描述符**（当下在采的三条），不是 `feedByKind` 里旧源的 feed id——
     // 后者会让整份读数被契约校验判成不可用，或者把一条停跑的源算进「最差」。
     sources: marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
