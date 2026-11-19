@@ -161,6 +161,8 @@ export const macroIndicatorDrawerText = {
       notToday: '今天没有发布 · 下面是最近一个有发布的日子',
       sequence: '{name} · {index}/{total}',
       /* 「经济指标」组内的第二层：一级/二级/三级用指标码分级，没有码的（讲话、源内身份行）是「未分级」。 */
+      restGroup: '其余 {count} 条',
+      highEventGroup: '高重要性事件 · {count} 条',
       tierGroup: '{tier} · {count} 条',
       tiers: { '1': '一级指标', '2': '二级指标', '3': '三级指标', other: '未分级' },
       /* 两个 tab（界面设计 2026-11-16）：条数进标签，**0 也显示 `(0)`**——tab 条是框架，
@@ -365,6 +367,8 @@ export const macroIndicatorDrawerText = {
       none: 'No events that move rate expectations today',
       notToday: 'Nothing released today · showing the most recent day with a release',
       sequence: '{name} · {index}/{total}',
+      restGroup: '{count} more',
+      highEventGroup: 'High-importance events · {count}',
       tierGroup: '{tier} · {count} events',
       tiers: { '1': 'Tier 1', '2': 'Tier 2', '3': 'Tier 3', other: 'Untiered' },
       tabStandard: 'Standard ({count})',

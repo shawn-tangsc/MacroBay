@@ -55,19 +55,29 @@ export function defaultDayFor(month: string, eventDays: ReadonlySet<string>, tod
 }
 
 /**
- * 右列两层结构（用户 2026-11-15 定，三次改口后收敛）：
+ * 右列**一层**分组（用户 2026-11-19：两层嵌套看不出重点）。
  *
- * 1. **第一层按事件类型**：经济指标 → 财经事件 → 央行活动，三组都在，不许并成一个「其他指标」；
- * 2. **第二层只对经济指标**：组内再按分级分（一级/二级/未分级），标题带条数；
- * 3. 央行活动、财经事件各自一组，不再拆分级——它们本来没有指标码。
+ * 组头就是重点：
+ * 1. `一级指标`（置顶）、2. `二级指标`；
+ * 3. `其余 N 条`：三级、未分级，以及央行活动/金融事件（它们没有分级）——**默认折叠**，点开再看。
  *
- * 分级只决定格子里露不露名字、进不进数字（`filterVisibleByTier`），在这里只用来分子组。
+ * 为什么事件也进「其余」：分级与重要性两套口径混在同一屏会变成第三套分类；
+ * 用户要的是「重点一眼看到」，不是把每种类型都排一次序。事件在「接下来要看的」里按高重要性单独列。
  */
+export type DayGroup = Readonly<{
+  /** 组键（同时也是 `data-calendar-group` 的值）：`tier-1` / `tier-2` / `high-events` / `rest`。 */
+  key: 'tier-1' | 'tier-2' | 'high-events' | 'rest'
+  title: string
+  items: readonly CalendarDayItem[]
+  /** 「其余」默认收起：一屏先看到重点。 */
+  collapsedByDefault?: boolean
+}>
+
 export function dayGroups(allDay: readonly MarketCalendarEvent[], date: string, timeZone: string, sequence: string,
-  typeTitle: (eventType: MarketCalendarEvent['eventType'], count: number) => string,
-  tierTitle: (tier: DayTier, count: number) => string
-): readonly Readonly<{ eventType: MarketCalendarEvent['eventType']; title: string; items: readonly CalendarDayItem[]
-  subgroups?: readonly Readonly<{ title: string; items: readonly CalendarDayItem[] }>[] }>[] {
+  restTitle: (count: number) => string,
+  tierTitle: (tier: DayTier, count: number) => string,
+  highEventTitle: (count: number) => string = (count) => String(count)
+): readonly DayGroup[] {
   // 当天事件**全部列出**（用户 2026-11-14）；同刻同名多条按序号标「第 i/N 条」。
   const totals = new Map<string, number>()
   for (const event of allDay) {
@@ -88,20 +98,31 @@ export function dayGroups(allDay: readonly MarketCalendarEvent[], date: string, 
   }
   const byTime = (left: MarketCalendarEvent, right: MarketCalendarEvent): number =>
     Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt)
-  return (['economic-indicator', 'financial-event', 'central-bank-activity'] as const)
-    .map(eventType => {
-      const bucket = allDay.filter(event => event.eventType === eventType).sort(byTime)
-      if (eventType !== 'economic-indicator') {
-        return { eventType, title: typeTitle(eventType, bucket.length), items: bucket.map(toItem) }
-      }
-      // 只有指标组有分级：讲话/商品报告/articles 没有指标码，在各自的类型组里不拆。
-      const subgroups = DayTierOrder
-        .map(tier => ({ tier, events: bucket.filter(event => dayTierOf(event) === tier) }))
-        .filter(group => group.events.length > 0)
-        .map(group => ({ title: tierTitle(group.tier, group.events.length), items: group.events.map(toItem) }))
-      return { eventType, title: typeTitle(eventType, bucket.length), items: [], subgroups }
-    })
-    .filter(group => group.items.length > 0 || (group.subgroups?.length ?? 0) > 0)
+  const sorted = [...allDay].sort(byTime)
+  /**
+   * 分档只看**指标码的分级**；事件行（央行活动、金融事件）没有码，一律进「其余」。
+   * 三级与「未分级」合并成同一组：三级今天 0 个，分开一组只会多一个空标题。
+   */
+  const first = sorted.filter(event => event.eventType === 'economic-indicator' && dayTierOf(event) === '1')
+  const second = sorted.filter(event => event.eventType === 'economic-indicator' && dayTierOf(event) === '2')
+  /**
+   * **高重要性事件单独一段、不折叠**（用户 2026-11-19）：央行活动与金融事件里 `importance='high'`
+   * 的要像一二级指标一样直接摆出来——那天 5 条讲话全被埋进「其余 69 条」里，正是这次要修的。
+   */
+  const highEvents = sorted.filter(event => event.eventType !== 'economic-indicator'
+    && event.importance === 'high')
+  const rest = sorted.filter(event => !first.includes(event) && !second.includes(event)
+    && !highEvents.includes(event))
+  const groups: DayGroup[] = []
+  if (first.length > 0) groups.push({ key: 'tier-1', title: tierTitle('1', first.length), items: first.map(toItem) })
+  if (second.length > 0) groups.push({ key: 'tier-2', title: tierTitle('2', second.length), items: second.map(toItem) })
+  if (highEvents.length > 0) {
+    groups.push({ key: 'high-events', title: highEventTitle(highEvents.length), items: highEvents.map(toItem) })
+  }
+  if (rest.length > 0) {
+    groups.push({ key: 'rest', title: restTitle(rest.length), items: rest.map(toItem), collapsedByDefault: true })
+  }
+  return groups
 }
 
 /** 右列分组用的分级：1/2/3 来自指标码，其余（讲话、源内身份行）归 `other`。 */

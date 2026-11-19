@@ -34,8 +34,8 @@ const firstRowOf = (event: Record<string, unknown>): CalendarDayItem => {
   const mapped = marketEventOf(event)
   expect(mapped, 'marketEventOf 把这一行丢了，后面的国家断言就没有意义').toHaveLength(1)
   const groups = dayGroups(mapped, '2026-11-12', 'Asia/Shanghai', '{name} · {index}/{total}',
-    (type, count) => `${type} ${count}`, (tier, count) => `${tier} ${count}`)
-  const item = groups.flatMap((group) => group.items.length > 0 ? group.items : (group.subgroups ?? []).flatMap((sub) => sub.items))[0]
+    (count) => `其余 ${count}`, (tier, count) => `${tier} ${count}`)
+  const item = groups.flatMap((group) => group.items)[0]
   expect(item, '这一天没有任何一行').toBeDefined()
   return item!
 }

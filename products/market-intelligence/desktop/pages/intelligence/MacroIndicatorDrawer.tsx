@@ -169,11 +169,12 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
    * 这里只把文案函数交过去。**tab 的条数也从这一份算**，不另数一遍。
    */
   const dayGroupsList = useMemo(() => dayGroups(dayEvents, selectedDay, timeZone, text.mkDay.sequence,
-    (eventType, count) => calendarText.unifiedDay.groupCount
-      .replace('{type}', calendarText.market.kinds[eventType]).replace('{count}', String(count)),
+    // 「其余 N 条」：三级、未分级与无分级的事件都在这一组，默认折叠。
+    (count) => text.mkDay.restGroup.replace('{count}', String(count)),
     (tier, count) => text.mkDay.tierGroup
-      .replace('{tier}', text.mkDay.tiers[tier]).replace('{count}', String(count))),
-  [dayEvents, selectedDay, timeZone, calendarText, text])
+      .replace('{tier}', text.mkDay.tiers[tier]).replace('{count}', String(count)),
+    (count) => text.mkDay.highEventGroup.replace('{count}', String(count))),
+  [dayEvents, selectedDay, timeZone, text])
   /**
    * 未映射观测（进不了标准表的那批）：**只在日历里显示**，经渲染专用 IPC 读（契约 §10）。
    * 读不到时 `state: 'unavailable'`——列表据此说「读不到」，不报 0 条。
@@ -203,8 +204,7 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
    */
   const [dayTab, setDayTab] = useState<'standard' | 'unmapped'>('standard')
   /** tab 上的数字是**当天那个 tab 的条数**；两个来源各自算，不混。 */
-  const standardCount = useMemo(() => dayGroupsList.reduce((total, group) =>
-    total + group.items.length + (group.subgroups ?? []).reduce((sum, subgroup) => sum + subgroup.items.length, 0), 0),
+  const standardCount = useMemo(() => dayGroupsList.reduce((total, group) => total + group.items.length, 0),
   [dayGroupsList])
   /** tab 文案走抽屉自己的那张表（`mkDay.*`），不在这里拼字。 */
   const drawerCopy = (key: string): string => (text.mkDay as unknown as Readonly<Record<string, string>>)[key] ?? key

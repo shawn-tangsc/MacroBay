@@ -1,4 +1,5 @@
 import { Tabs } from '@platform/ui/components/tabs'
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
 import type { ReactNode } from 'react'
 import type { ChoiceItem } from '@platform/ui/components/choice/choiceItem'
 import type { MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
@@ -30,7 +31,11 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
    */
   summary?: string
   groups: readonly Readonly<{
-    eventType: keyof EconomicCalendarText['market']['kinds']
+    /** 组键（新结构按重点分组时用它做 `data-calendar-group`，不再按事件类型）；缺省用标题。 */
+    key?: string
+    /** 「其余」默认收起（用户 2026-11-19）：一屏先看到一级/二级。 */
+    collapsedByDefault?: boolean
+    eventType?: keyof EconomicCalendarText['market']['kinds']
     /** 覆盖默认的「类型 · N 条」标题（抽屉在组内再分了子组时，总数要从外面给）。 */
     title?: string
     items: readonly CalendarDayItem[]
@@ -93,14 +98,26 @@ export function CalendarDayEventList({ label, title, summary, groups, emptyText,
       onSelect={onSelect} />
   </div>
   const standardBody = <>
-    <div role="list">{groups.map(group => <section data-calendar-group={group.title ?? group.eventType} key={group.title ?? group.eventType}>
-      {hideGroupHeadings ? null : <h3>{group.title ?? text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>}
-      {group.subgroups === undefined
-        ? group.items.map(renderRow)
-        : group.subgroups.map(subgroup => <section data-calendar-subgroup={subgroup.title} key={subgroup.title}>
-            {hideGroupHeadings ? null : <h4>{subgroup.title}</h4>}
-            {subgroup.items.map(renderRow)}
-          </section>)}
+    <div role="list">{groups.map(group => <section data-calendar-group={group.key ?? group.title ?? group.eventType} key={group.key ?? group.title ?? group.eventType}>
+      {group.collapsedByDefault === true && hideGroupHeadings !== true
+        // 「其余」默认收起（用户 2026-11-19）：一屏先看到一级/二级；展开走平台折叠组件，
+        // 头行显示组名与条数，不自绘箭头。
+        ? <CollapsibleGroup titleText={group.title ?? ''} metaText={String(group.items.length)}
+          resolveText={(key) => key}>
+          <div role="list">{group.items.map(renderRow)}</div>
+        </CollapsibleGroup>
+        : null}
+      {group.collapsedByDefault === true && hideGroupHeadings !== true ? null : <>
+        {hideGroupHeadings ? null : <h3>{group.title ?? (group.eventType === undefined
+          ? String(group.items.length)
+          : text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length)))}</h3>}
+        {group.subgroups === undefined
+          ? group.items.map(renderRow)
+          : group.subgroups.map(subgroup => <section data-calendar-subgroup={subgroup.title} key={subgroup.title}>
+              {hideGroupHeadings ? null : <h4>{subgroup.title}</h4>}
+              {subgroup.items.map(renderRow)}
+            </section>)}
+      </>}
     </section>)}</div>
     {/* A quiet day is a reading, not a missing block: the sources answered and the answer is
         zero. It carries no action because nothing the reader can press would produce events, and a
