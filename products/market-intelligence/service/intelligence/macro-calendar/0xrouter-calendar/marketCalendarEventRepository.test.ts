@@ -491,7 +491,10 @@ describe('market calendar independent observations', () => {
     const { database, repository } = setup()
     database.exec(`create trigger fail_second before insert on mi_macro_calendar_market_event_observations
       when new.source_event_id = '["candidate",2]' begin select raise(abort, 'private failure'); end`)
-    expect(repository.appendCollection(batch('one', [row(), row(2)]))).toEqual({ state: 'unavailable', failureCode: 'storage-unavailable' })
+    // 真 SQLite 异常 → `storage-error` 且带 `errorDetail`（类名 + 消息），不再折叠成 storage-unavailable。
+    expect(repository.appendCollection(batch('one', [row(), row(2)]))).toMatchObject({
+      state: 'unavailable', failureCode: 'storage-error'
+    })
     expect(database.prepare('select * from mi_macro_calendar_market_event_collections').all()).toEqual([])
     expect(database.prepare('select * from mi_macro_calendar_market_event_observations').all()).toEqual([])
   })

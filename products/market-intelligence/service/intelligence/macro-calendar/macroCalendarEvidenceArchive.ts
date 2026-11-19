@@ -69,6 +69,8 @@ export type MacroCalendarEvidenceArchiveAppendInput = Omit<
 
 export type MacroCalendarEvidenceArchive = Readonly<{
   reserve: (maximumBytes: number) => MacroCalendarEvidenceReservation | undefined
+  /** 上一次 `reserve` 被拒的原因：上层据此报 `metadata-quota-exceeded` 等独立码，不再折叠兜底。 */
+  lastReserveRejection: () => EvidenceReserveRejection | undefined
   release: (reservation: MacroCalendarEvidenceReservation) => boolean
   append: (
     reservation: MacroCalendarEvidenceReservation,
@@ -87,9 +89,13 @@ export type MacroCalendarEvidenceArchive = Readonly<{
 
 type ReservationState = { maximumBytes: number; maximumMetadataBytes: number }
 
+export type EvidenceReserveRejection = 'owner-quota' | 'global-quota' | 'archive-capacity' | 'metadata-unreadable'
+
 export function createMacroCalendarEvidenceArchive(input: Readonly<{
   rawRecords: RawRecordStore
   archiveDirectory: string
+  /** 产品日志口：配额拒绝必须留痕（console 不进 `app.log`，等于没有）。 */
+  log?: (level: 'warn', event: string, fields?: Record<string, unknown>) => void
 }>): MacroCalendarEvidenceArchive {
   mkdirSync(input.archiveDirectory, { recursive: true })
   const reservations = new WeakMap<object, ReservationState>()
@@ -129,6 +135,9 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
    * 两条判据：**本 owner 的已用量 + 本条 ≤ 本 owner 配额**，且**整库 ≤ 全局软上限**。
    * 超了各打一行结构化日志（哪一条越界、owner、已用、申请），不静默拒绝。
    */
+  /** 上一次 `reserve` 被拒的原因（用户 2026-11-20）：让上层能把「为什么」报出去，不再折叠成兜底码。 */
+  let lastRejection: EvidenceReserveRejection | undefined
+
   function hasMetadataCapacity(additionalBytes: number): boolean {
     try {
       const ownerQuota = rawRecordMetadataQuotaPolicy.perOwnerBytes[macroCalendarEvidenceArchivePolicy.processingOwner]
@@ -137,26 +146,41 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
         Number.MAX_SAFE_INTEGER).reduce((sum, record) => sum + Buffer.byteLength(JSON.stringify(record)), 0)
       const globalUsed = input.rawRecords.inspectSnapshot().serializedBytes
       if (ownerUsed + reservedMetadataBytes + additionalBytes > ownerQuota) {
-        console.warn(`[macro-calendar] 证据元数据超出本 source 配额：owner=${macroCalendarEvidenceArchivePolicy.processingOwner}`
-          + ` used=${ownerUsed} reserved=${reservedMetadataBytes} ask=${additionalBytes} quota=${ownerQuota}`)
+        lastRejection = 'owner-quota'
+        const fields = { owner: macroCalendarEvidenceArchivePolicy.processingOwner, used: ownerUsed,
+          reserved: reservedMetadataBytes, ask: additionalBytes, quota: ownerQuota }
+        input.log?.('warn', 'macro-calendar.evidence.metadata-quota-exceeded', fields)
+        console.warn(`[macro-calendar] 证据元数据超出本 source 配额：${JSON.stringify(fields)}`)
         return false
       }
       if (globalUsed + reservedMetadataBytes + additionalBytes > rawRecordMetadataQuotaPolicy.globalBytes) {
-        console.warn(`[macro-calendar] 证据元数据超出全局软上限：used=${globalUsed} reserved=${reservedMetadataBytes}`
-          + ` ask=${additionalBytes} cap=${rawRecordMetadataQuotaPolicy.globalBytes}`)
+        lastRejection = 'global-quota'
+        const fields = { used: globalUsed, reserved: reservedMetadataBytes, ask: additionalBytes,
+          cap: rawRecordMetadataQuotaPolicy.globalBytes }
+        input.log?.('warn', 'macro-calendar.evidence.metadata-quota-exceeded', fields)
+        console.warn(`[macro-calendar] 证据元数据超出全局软上限：${JSON.stringify(fields)}`)
         return false
       }
       return true
     } catch {
+      lastRejection = 'metadata-unreadable'
+      input.log?.('warn', 'macro-calendar.evidence.metadata-unreadable', {})
       return false
     }
   }
 
   return Object.freeze({
     reserve(maximumBytes) {
+      lastRejection = undefined
       if (!Number.isSafeInteger(maximumBytes) || maximumBytes <= 0 ||
         !hasMetadataCapacity(macroCalendarEvidenceArchivePolicy.maximumRecordMetadataBytes) ||
-        committedBytes + reservedBytes + maximumBytes > macroCalendarEvidenceArchivePolicy.maximumArchiveBytes) return undefined
+        committedBytes + reservedBytes + maximumBytes > macroCalendarEvidenceArchivePolicy.maximumArchiveBytes) {
+        lastRejection = 'archive-capacity'
+        input.log?.('warn', 'macro-calendar.evidence.archive-capacity-exceeded',
+          { committed: committedBytes, reserved: reservedBytes, ask: maximumBytes,
+            cap: macroCalendarEvidenceArchivePolicy.maximumArchiveBytes })
+        return undefined
+      }
       const reservation = Object.freeze({})
       reservations.set(reservation, {
         maximumBytes,
@@ -167,6 +191,7 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
       reservedMetadataBytes += macroCalendarEvidenceArchivePolicy.maximumRecordMetadataBytes
       return reservation
     },
+    lastReserveRejection: () => lastRejection,
     release(reservation) {
       return Boolean(consume(reservation))
     },

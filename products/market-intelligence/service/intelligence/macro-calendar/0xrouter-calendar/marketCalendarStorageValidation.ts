@@ -96,7 +96,12 @@ export type MarketCollectionContext = Readonly<{
 export type MarketCapacity = Readonly<{ marketBytes: number; walBytes: number; freeBytes: number; archiveAvailable: boolean }>
 export type MarketRow = Record<string, string | number | null>
 export type MarketFailureCode = 'invalid-input' | 'collection-conflict' | 'storage-unavailable' |
-  'storage-pressure' | 'context-unavailable' | 'invalid-cursor' | 'cancelled' | 'deadline-exceeded' | 'row-too-large'
+  'storage-pressure' | 'context-unavailable' | 'invalid-cursor' | 'cancelled' | 'deadline-exceeded' | 'row-too-large' |
+  /**
+   * **不认识的异常**（用户 2026-11-20）：以前一律折叠成 `storage-unavailable`，把真实原因埋掉
+   * （今天埋了九小时）。现在单列一码，调用方必须把 `errorDetail`（类名 + 消息）打进日志。
+   */
+  'storage-error'
 export class MarketStorageFailure extends Error {
   constructor(readonly failureCode: MarketFailureCode) { super(failureCode) }
 }

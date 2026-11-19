@@ -168,7 +168,8 @@ export function createMarketCalendarStorageQueries(database: DatabaseSync, curso
       return { state: 'succeeded', rows: result, highWater, ...(nextCursor ? { nextCursor } : {}) }
     } catch (error) {
       if (transaction) database.exec('rollback')
-      return { state: 'unavailable', failureCode: error instanceof MarketStorageFailure ? error.failureCode : 'storage-unavailable' }
+      return { state: 'unavailable', failureCode: error instanceof MarketStorageFailure ? error.failureCode : 'storage-error',
+        ...(error instanceof MarketStorageFailure ? {} : { errorDetail: `${(error as Error)?.name ?? 'Error'}: ${(error as Error)?.message ?? String(error)}`.slice(0, 300) }) }
     }
   }
   return {

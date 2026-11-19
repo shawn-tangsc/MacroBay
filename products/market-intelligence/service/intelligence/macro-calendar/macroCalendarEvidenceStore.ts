@@ -44,6 +44,8 @@ export type MacroCalendarEvidenceReference = {
 
 export type MacroCalendarEvidenceStore = {
   reserve: (maximumBytes: number) => MacroCalendarEvidenceReservation | undefined
+  /** 上一次 reserve 被拒的原因（配额/容量/元数据读不到）；上层据此报独立码。 */
+  lastReserveRejection: () => string | undefined
   release: (reservation: MacroCalendarEvidenceReservation) => boolean
   append: (input: MacroCalendarEvidenceAppendInput, reservation: MacroCalendarEvidenceReservation) => MacroCalendarEvidenceReference | undefined
   appendManualBlsIcs: (input: MacroCalendarManualBlsIcsAppendInput, reservation: MacroCalendarEvidenceReservation) => MacroCalendarEvidenceReference | undefined
@@ -74,6 +76,9 @@ export function createMacroCalendarEvidenceStore(archive: MacroCalendarEvidenceA
   return {
     reserve(maximumBytes) {
       return archive.reserve(maximumBytes)
+    },
+    lastReserveRejection() {
+      return archive.lastReserveRejection()
     },
     release(reservation) {
       return archive.release(reservation)

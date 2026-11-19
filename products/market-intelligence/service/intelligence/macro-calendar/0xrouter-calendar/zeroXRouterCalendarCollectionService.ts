@@ -59,7 +59,7 @@ export function createZeroXRouterCalendarCollectionService(deps: Readonly<{
 
   async function consume(input: CalendarAcceptedResponse): Promise<CalendarCollectionOutcome> {
     let reservation: ReturnType<MacroCalendarEvidenceStore['reserve']>
-    let failureCode: 'archive-unavailable' | 'parse-unavailable' | 'storage-unavailable' = 'archive-unavailable'
+    let failureCode: 'archive-unavailable' | 'parse-unavailable' | 'storage-unavailable' | 'metadata-quota-exceeded' = 'archive-unavailable'
     try {
       const descriptor = zeroXRouterCalendarEvidenceDescriptors.find(item => item.descriptorId === input.descriptorId)
       if (!descriptor || !instant(input.detectedAt)) return { state: 'unavailable', failureCode }

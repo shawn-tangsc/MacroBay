@@ -214,7 +214,10 @@ export function createMarketCalendarEventRepository(options: {
       } catch (error) {
         if (transaction) database.exec('rollback')
         return { state: 'unavailable' as const,
-          failureCode: error instanceof MarketStorageFailure ? error.failureCode : 'storage-unavailable' as const }
+          // **不认识的异常不再折叠成兜底码**（用户 2026-11-20）：记 `storage-error` 并带类名/消息，
+          // 否则「写库失败」四个字会埋掉真实原因（今天埋了九小时）。
+          failureCode: error instanceof MarketStorageFailure ? error.failureCode : 'storage-error' as const,
+          ...(error instanceof MarketStorageFailure ? {} : { errorDetail: `${(error as Error)?.name ?? 'Error'}: ${(error as Error)?.message ?? String(error)}`.slice(0, 300) }) }
       }
     }
   }
