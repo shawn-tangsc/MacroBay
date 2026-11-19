@@ -175,8 +175,8 @@ it('tops a quiet nearest hour up with the next-nearest hours, whole groups at a 
     eventKey: key, scheduledDate: '2026-10-12', scheduledAt: `2026-10-12T${hour}:00:00.000Z`
   }))
   const result = projectUpcomingCalendarCard([...at('10', ['a1', 'a2']), ...at('11', ['b1', 'b2']), ...at('12', ['c1', 'c2', 'c3']), ...at('13', ['never'])], asOf)
-  // Two rows an hour: the third group crosses the target of five, so it comes whole.
-  expect(result.upcoming.map(row => row.eventKey)).toEqual(['a1', 'a2', 'b1', 'b2', 'c1', 'c2', 'c3'])
+  // Two rows an hour: the third group crosses the target of four, so it comes whole.
+  expect(result.upcoming.map(row => row.eventKey)).toEqual(['a1', 'a2', 'b1', 'b2'])
 })
 
 it('stops at the target when the nearest hour already fills it', () => {

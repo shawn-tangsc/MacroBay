@@ -10,7 +10,8 @@ export const calendarUpcomingPolicy = Object.freeze({
   /** How many days ahead count as "what to watch". */
   upcomingWindowDays: 7,
   /** Rows shown for the upcoming section. */
-  maximumUpcomingRows: 5,
+  /** 上半部最多 4 行（用户 2026-11-19）：这块要收薄，给下面的当日列表留出屏幕。 */
+  maximumUpcomingRows: 4,
   /**
    * How long an event whose time has passed stays listed while its value is still missing. A
    * print can be late; dropping the row at the scheduled instant removed it from the reader's view

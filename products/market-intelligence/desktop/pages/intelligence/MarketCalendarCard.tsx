@@ -281,10 +281,8 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
           {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
           {/* state-ternary: reviewed — 空态就是读数区的内容；由投影的 empty 判定，不是用状态位藏表格 */}
           {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
-          {/* state-ternary: reviewed — 无发布事件时给说明；有行时走下面按长度的分支，内容不会被状态位藏掉 */}
-          {state === 'ready' && projection.state === 'available' && projection.today.length === 0
-            ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
-            : null}
+          {/* 某一小节没有内容就**整节不渲染**（用户 2026-11-19）：不留一行讲空话——
+              原句「最近 N 天内没有已公布的事件」占掉一整行，而这行没有任何可看的东西。 */}
           {/* state-ternary: reviewed — 按数据长度渲染（length > 0），state 只表示读取阶段，未就绪时上面已有 loading/error 分支 */}
           {state === 'ready' && projection.today.length > 0 ? <>
             <p className="mi-calendar-card__section">{text.todaySection}</p>

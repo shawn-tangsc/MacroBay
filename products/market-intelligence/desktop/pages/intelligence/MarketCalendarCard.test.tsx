@@ -469,15 +469,21 @@ it('keeps the category tag inside the 84px rail instead of letting the card clip
 
 // An empty released section must say which window it is empty for. Blank space reads as "the
 // feature is broken"; «no released events in the last 3 days» is a fact the reader can act on.
-it('says its own window when nothing was released, instead of leaving the section blank', async () => {
+it('renders no empty section sentence when nothing was released', async () => {
+  // 用户 2026-11-19：某小节没有内容就整节不渲染，不留一行讲空话。
+  const projection = { today: [], upcoming: [row()], state: 'available' as const }
+  const props = { projection, onOpenCalendar: () => undefined, onRefresh: () => undefined, text }
+  const host = await render(<MarketCalendarCard state="ready" {...props} />)
+  expect(host.textContent).not.toContain('没有已公布的事件')
+  // 有内容的那一节照常渲染。
+  expect(host.querySelector('[data-calendar-card-row]')).not.toBeNull()
+})
+
+it('keeps the section silent in English too when nothing was released', async () => {
   const projection = { today: [], upcoming: [row()], state: 'available' as const }
   const props = { projection, onOpenCalendar: () => undefined, onRefresh: () => undefined }
-  const zh = await render(<MarketCalendarCard {...props} text={text} />)
-  expect(zh.textContent).toContain('最近 3 天内没有已公布的事件')
-  // 这里原来有一次空的 `await act(async () => {})`：它不等待任何条件，只让 React 刷一次微任务。
-  // 渲染本身已经在 `act` 里做完了，那次空转只是噪音，删掉后两条断言照旧。
-  const en = await render(<MarketCalendarCard {...props} text={calendarText('en-US')} />, 'en-US')
-  expect(en.textContent).toContain('No released events in the last 3 days.')
+  const en = await render(<MarketCalendarCard state="ready" {...props} text={calendarText('en-US')} />, 'en-US')
+  expect(en.textContent).not.toContain('No released events in the last 3 days.')
 })
 
 it('drops that line as soon as one release is listed', async () => {
