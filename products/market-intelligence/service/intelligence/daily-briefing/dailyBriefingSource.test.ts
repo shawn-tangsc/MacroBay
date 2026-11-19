@@ -405,7 +405,7 @@ describe('daily briefing source', () => {
 
   it('keeps the kind the calendar source itself gave, so the category filter can act', async () => {
     // 用户 2026-11-06 报：重新生成后 24h 宏观事件里还有 5 条讲话 + 1 条利率决议 + 1 条发布会。
-    // 病根在这一层：以前每条日历事件都被写成 `economic-indicator`，上面"隐藏央行活动与财经事件"的
+    // 病根在这一层：以前每条日历事件都被写成 `economic-indicator`，上面"隐藏央行活动与金融事件"的
     // 过滤拿到的永远是同一个类别，一条都拦不住。这条用例钉住"源说是哪类就是哪类"。
     const cutoff = '2026-11-06T00:00:00.000Z'
     const base = deps()

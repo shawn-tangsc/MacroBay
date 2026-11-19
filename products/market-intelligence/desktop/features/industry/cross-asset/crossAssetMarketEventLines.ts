@@ -16,7 +16,7 @@ import type { CrossAssetEventLineSource } from './crossAssetEventLines'
  * - **Data releases only.** A central-bank speech, a summit or a monthly report is high importance to
  *   the calendar and cannot explain a step in these curves; drawing them fills the plot with lines that
  *   say "something happened" without saying what. The calendar page already groups them apart
- *   (经济指标 / 财经事件 / 央行活动), and this is that same distinction.
+ *   (经济指标 / 金融事件 / 央行活动), and this is that same distinction.
  * - **The United States only.** The official route this chart already draws is US-only by its own
  *   contract, so the chart keeps one calendar rather than mixing a UK print into a US-hours move.
  * - **High importance only**, which is the reader's own rule for these lines (design §7.2).

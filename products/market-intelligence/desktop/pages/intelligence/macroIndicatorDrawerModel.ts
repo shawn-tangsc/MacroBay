@@ -144,7 +144,7 @@ export function dayTierOf(event: MarketCalendarEvent): DayTier {
  *
  * - 核心层：四个必标 `metric_key` 的发布 + FOMC 决议/纪要——和曲线标注完全同一把尺子；
  * - 次要层：其余经济指标，折成一行「其他 N 条」，就地展开；
- * - 不进层：央行讲话/报告/资产负债表、商品库存、财经事件——不进列表，也不进「其他」的计数。
+ * - 不进层：央行讲话/报告/资产负债表、商品库存、金融事件——不进列表，也不进「其他」的计数。
  */
 export type DayLayers = Readonly<{ core: readonly MarketCalendarEvent[]; other: readonly MarketCalendarEvent[] }>
 

@@ -234,7 +234,7 @@ it('marks a high-importance row before its name, on the calendar cell and the da
   } finally { await act(async () => root.unmount()) }
 }, MOUNT_TIMEOUT_MS)
 it('leads every row with a glyph for its kind, on the calendar cell and the day list alike', async () => {
-  // The cell has no room for 经济指标/央行活动/财经事件 and the day list's headings scroll away, so a
+  // The cell has no room for 经济指标/央行活动/金融事件 and the day list's headings scroll away, so a
   // row that mixes kinds has to say its own kind. Both surfaces draw this same row.
   const { CalendarEventRow } = await import('./CalendarEventRow')
   const text = productText['zh-CN'].pages.intelligence.portal.calendar
@@ -319,7 +319,7 @@ it('writes the category in words at the row tail, and a dash when the source gav
   try {
     expect(await label('economic-indicator')).toBe('经济指标')
     expect(await label('central-bank-activity')).toBe('央行活动')
-    expect(await label('financial-event')).toBe('财经事件')
+    expect(await label('financial-event')).toBe('金融事件')
     // 源没给类型：写 `—`，不自造「未分类」；行也照常渲染（缺字形不该把整行打崩）。
     expect(await label(undefined)).toBe('—')
   } finally {

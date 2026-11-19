@@ -35,7 +35,7 @@ const ZH: IntelligenceNotificationText = Object.freeze({
   'pages.intelligence.notification.calendar.surfacesCenterNote': '不管这里勾了几个，都会记录到通知中心。',
   'pages.intelligence.notification.calendar.before': '开始前',
   'pages.intelligence.notification.calendar.beforeRow': '提前提醒',
-  'pages.intelligence.notification.calendar.beforeNote': '提醒的是重要经济指标、央行活动、财经事件；提前量按事件本身的时间算，时区只影响显示。',
+  'pages.intelligence.notification.calendar.beforeNote': '提醒的是重要经济指标、央行活动、金融事件；提前量按事件本身的时间算，时区只影响显示。',
   'pages.intelligence.notification.calendar.lead': '提前多久',
   'pages.intelligence.notification.calendar.importance': '哪些重要性',
   'pages.intelligence.notification.calendar.summary': '打开后：提前 {lead}，只推「{importance}」重要性。',

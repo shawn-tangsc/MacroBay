@@ -86,13 +86,13 @@ export const dailyBriefingText = {
        * `过去 24 小时 · 3 条`。构成明细单独一个键、只进 ⓘ，不再拼成一句长句塞正文。
        */
       header: '过去 24 小时 · {count} 条',
-      composition: '经济指标 {indicators} · 央行与讲话 {centralBank} · 财经事件 {financial}',
+      composition: '经济指标 {indicators} · 央行与讲话 {centralBank} · 金融事件 {financial}',
       /**
        * **只给「导出文本 / 分享海报」用**（那一面是一句话的成文，不是界面正文）。
        * 界面正文只用上面 `header` + `composition`（构成进 ⓘ）——两处**不许混用**：
        * 正文里出现这句长句就是违规（用户 2026-11-14 第三次重申）。
        */
-      counts: '过去 24 小时：共 {total} 条发布（经济指标 {indicators} · 央行与讲话 {centralBank} · 财经事件 {financial}）',
+      counts: '过去 24 小时：共 {total} 条发布（经济指标 {indicators} · 央行与讲话 {centralBank} · 金融事件 {financial}）',
       others: '另有 {count} 条',
       emptyCollected: '这段时间没有已收录的发布',
       noRelease: '过去 24 小时没有宏观发布',

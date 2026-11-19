@@ -15,7 +15,7 @@ import type { NarwhalParsedRelease } from './narwhalCalendarParser'
  * - **事件型发布**（讲话、资产负债表、能源报告这类没有数值格的）：身份 =
  *   `(国家, 类型, 时刻)`，同样入库；显示侧的配对规则另定。
  *
- * 一次调用写三类身份（经济指标 / 财经事件 / 央行活动），`collection` 只记一条。
+ * 一次调用写三类身份（经济指标 / 金融事件 / 央行活动），`collection` 只记一条。
  */
 
 export type NarwhalCalendarLocale = 'zh' | 'en'
@@ -27,7 +27,7 @@ const feedByKind = Object.freeze({
 } as const)
 type NarwhalEventKind = keyof typeof feedByKind
 
-/** 事件型的分型：讲话/央行沟通归央行活动，其余（资产负债表、能源报告等）归财经事件。 */
+/** 事件型的分型：讲话/央行沟通归央行活动，其余（资产负债表、能源报告等）归金融事件。 */
 function eventKindOf(topic: string | undefined): NarwhalEventKind {
   return topic === 'policy_communication' ? 'central-bank-activity' : 'financial-event'
 }

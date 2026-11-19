@@ -331,7 +331,7 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
   })
 
-  // 用户 2026-11-06：「所有央行活动和财经事件，暂时都不要显示在 24h 宏观事件里面」。
+  // 用户 2026-11-06：「所有央行活动和金融事件，暂时都不要显示在 24h 宏观事件里面」。
   // 按**类别**判，不按"有没有值"判——以后补上数值也不许自己冒出来；经济数据照常显示。
   it('keeps central-bank and financial events out of the 24h macro block, and economic data in', () => {
     const base = (eventKey: string, category: 'economic-indicator' | 'financial-event' | 'central-bank-activity') => ({

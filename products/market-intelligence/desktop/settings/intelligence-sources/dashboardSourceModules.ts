@@ -118,7 +118,7 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     /* 换源完成：三条 Narwhal 顶替三条 0xRouter。
        **cellKey 保留旧字面量**（`0xRouter …` 那三个），读者已存的格级开关才不会静默重置。 */
     ['Narwhal 经济数据', 'macro-calendar-narwhal-economic-data', false, '0xRouter 经济数据'],
-    ['Narwhal 财经事件', 'macro-calendar-narwhal-financial-events', false, '0xRouter 财经事件'],
+    ['Narwhal 金融事件', 'macro-calendar-narwhal-financial-events', false, '0xRouter 金融事件'],
     ['Narwhal 央行活动', 'macro-calendar-narwhal-central-bank-activities', false, '0xRouter 央行活动'],
     /* 0xRouter 三路：**读者可配置的补充源**（用户 2026-11-15）。默认关——没配置就不注册定时任务。
        cellKey 用自己的前缀：旧的 `0xRouter …` 那三个键已经被 Narwhal 三行占用（保留是为了读者存过的格级开关）。 */

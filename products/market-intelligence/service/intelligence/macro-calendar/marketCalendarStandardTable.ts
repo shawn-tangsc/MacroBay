@@ -168,7 +168,7 @@ export type CalendarStandardRow = Readonly<{
    */
   rowKind?: 'release' | 'estimate'
   /**
-   * **这一行是什么**（经济数据 / 财经事件 / 央行活动），写入侧的已知事实。
+   * **这一行是什么**（经济数据 / 金融事件 / 央行活动），写入侧的已知事实。
    * 不传就不写（历史行由迁移 16 回填），读侧在空值时才退回 `metric_key` 前缀规则。
    */
   eventType?: 'economic-indicator' | 'financial-event' | 'central-bank-activity'

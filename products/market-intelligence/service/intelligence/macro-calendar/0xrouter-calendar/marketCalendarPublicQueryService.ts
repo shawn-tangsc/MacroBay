@@ -69,7 +69,7 @@ function rowsShowsThisRow(position: { covered: Map<string, string[]>
     if (!identityKey) { position.unmappedNarwhal += 1; return false }
     const [countryCode, metricKey] = identityKey.split('|') as [string, string]
     if (eventKinds.includes(metricKey)) {
-      // 事件型：时刻记进窗口表，旧源的讲话/财经事件按 60 分钟（或日期级唯一候选）让位。
+      // 事件型：时刻记进窗口表，旧源的讲话/金融事件按 60 分钟（或日期级唯一候选）让位。
       const bucket = `${countryCode}|${metricKey}`
       const instants = position.eventInstants.get(bucket)
       if (instants === undefined) position.eventInstants.set(bucket, [scheduledAt])
@@ -90,7 +90,7 @@ function rowsShowsThisRow(position: { covered: Map<string, string[]>
     scheduledAt
   })
   if (identity !== undefined) return !coveredWithinADay(position.covered, identity, day)
-  // 没有指标身份的行：讲话、财经事件。同国家 + 同类型 + 时刻差 ≤ 60 分钟算同一件事；
+  // 没有指标身份的行：讲话、金融事件。同国家 + 同类型 + 时刻差 ≤ 60 分钟算同一件事；
   // 旧源只有日期时放宽到同一 UTC 日，但只在**当天该国家该类型只有一条候选**时才配。
   const kind = String(row.event_kind)
   if (!eventKinds.includes(kind)) return true

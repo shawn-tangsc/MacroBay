@@ -31,7 +31,7 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       importance text check(importance in ('high', 'medium', 'low')),
       value_state text check(value_state in ('present', 'missing')),
       row_kind text not null default 'release' check(row_kind in ('release', 'estimate')),
-      -- **这一行是什么**（经济数据 / 财经事件 / 央行活动）。写入时知道，以前没存，读侧只能靠
+      -- **这一行是什么**（经济数据 / 金融事件 / 央行活动）。写入时知道，以前没存，读侧只能靠
       -- metric_key 前缀猜——423 行上游 ID 数组因此全被猜成「经济指标」（2026-11-16 查实）。
       -- 空值＝还没回填（迁移 16 会补），读侧此时退回前缀规则。
       event_type text check(event_type in ('economic-indicator', 'financial-event', 'central-bank-activity')),
