@@ -133,6 +133,8 @@ export type ProjectionState = {
   knownSourceIds?: ReadonlySet<string>
   /** 源 id → 标准表写库失败（与 `healthById` 平行，不参与五态派生）。 */
   writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
+  /** 源 id → 「还没写过」/「读不到」两态（与失败态互斥）。 */
+  writeFailureStateById?: Readonly<Record<string, 'never-written' | 'unreadable'>>
 }
 
 export type SourceView = SourceDefinition & {
@@ -155,6 +157,13 @@ export type SourceView = SourceDefinition & {
    * 读者会去查网络与凭据，而真相是我们的库写不进去（用户 2026-11-19 定）。
    */
   writeFailure?: MarketCalendarWriteFailureView
+  /**
+   * 写库这一列另两态的**并列**陈述（用户 2026-11-19）：
+   * `never-written` = 该写入方还没有任何写入记录（**空态**，不是「没失败」）；
+   * `unreadable` = 读写入层失败（**错误态 + 重试**）。
+   * 「有记录、没失败」不出现这个字段——这一列只有「失败」与「没失败」，没有「健康」评价。
+   */
+  writeFailureState?: 'never-written' | 'unreadable'
 }
 
 /** ProviderView 的目录标记：由它的源聚合，仍是同一份派生，组件不再二次判断。 */
@@ -231,6 +240,7 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     ...(health === undefined ? {} : { health })
   })
   const writeFailure = state.writeFailureById?.[source.sourceId]
+  const writeFailureState = state.writeFailureStateById?.[source.sourceId]
   /* 采集节奏归谁：**目录和注册表两条都要读**。
      - 目录声明 `collectionOwner: 'product'` → 产品自己的作业采；
      - 注册表的 `collection` 是运行时事实：`'job'` = 产品作业采（0xRouter 那三条日历 feed）、
@@ -251,6 +261,7 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     enabled,
     healthState,
     ...(writeFailure === undefined ? {} : { writeFailure }),
+    ...(writeFailureState === undefined ? {} : { writeFailureState }),
     healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),
     ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {})
   }
@@ -294,6 +305,7 @@ export function sourceConfigSurface(input: {
   credentialStatusById?: Readonly<Record<string, SourceConfigFact['credentialStatus']>>
   /** 源 id → 标准表写库失败；不给就不出现这个字段（见 `SourceView.writeFailure`）。 */
   writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
+  writeFailureStateById?: Readonly<Record<string, 'never-written' | 'unreadable'>>
   panelId?: PanelId
   sourceId?: string
 }): SourceConfigSurface {
@@ -343,7 +355,8 @@ export function sourceConfigSurface(input: {
       healthById: input.healthById,
       jobRegisteredById: input.jobRegisteredById,
       knownSourceIds: new Set(Object.keys(input.profileById)),
-      ...(input.writeFailureById === undefined ? {} : { writeFailureById: input.writeFailureById })
+      ...(input.writeFailureById === undefined ? {} : { writeFailureById: input.writeFailureById }),
+      ...(input.writeFailureStateById === undefined ? {} : { writeFailureStateById: input.writeFailureStateById })
     }
   }
 }
