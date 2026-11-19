@@ -1,3 +1,6 @@
+import type { MarketCalendarWriteFailureView } from '../../../contracts/macro/marketCalendarWriteFailureContract'
+import { isCurrentWriteFailure } from '../macro-calendar/calendarStandardWriteLayer'
+
 /**
  * 宏观事件那一栏「为什么是空的」（`02` `A0.8` / `A0.10`）。
  *
@@ -31,10 +34,11 @@ export function briefingMacroEmptyReason(input: Readonly<{
   lastAttemptAt?: string
   lastAttemptFailed?: boolean
   /**
-   * 写入侧的最近一次失败（契约里的可选键，形状已校验）。**判据比的是时刻**：失败晚于最后一次
-   * 成功写入才算「这次写失败了」；早于它说明后来写成功了，那一档不许再冒出来。
+   * 写入侧的最近一次失败（契约里的可选键，形状已校验）。**判据只调写入层那一个函数**：
+   * 失败晚于最后一次成功写入才算「这次写失败了」；早于它说明后来写成功了，那一档不许再冒出来。
+   * 这里不比较时间——比法只有一处，配置线与用例都读同一个函数。
    */
-  writeFailure?: Readonly<{ at: string; code: string }>
+  writeFailure?: MarketCalendarWriteFailureView
   /** 这一版实际采用的数据截止（补跑时是运行时刻）。 */
   dataAsOf: string
 }>): BriefingMacroEmptyReason | 'calendar-unavailable' | 'calendar-source-disabled' {
@@ -50,29 +54,12 @@ export function briefingMacroEmptyReason(input: Readonly<{
   // 失败晚于成功才算"最近一次失败"：只看"最近一次是不是失败"会把"失败后又有成功"判错。
   // 采到了但没写进库：**来源没问题**，句子和建议都必须指向写入侧（用户 2026-11-19 / `#32`）。
   // 放在「采集失败」之前：写入失败时采集往往是成功的，先判采集会把库的问题说成源的问题。
-  if (isCurrentWriteFailure(input.writeFailure, input.lastCollectedAt)) return 'calendar-write-failed'
+  if (input.writeFailure !== undefined
+    && isCurrentWriteFailure({ at: input.writeFailure.at, lastSuccessAt: input.writeFailure.lastSuccessAt })) {
+    return 'calendar-write-failed'
+  }
   const failedAfterSuccess = input.lastAttemptFailed === true && input.lastAttemptAt !== undefined
     && Date.parse(input.lastAttemptAt) > Date.parse(input.lastCollectedAt)
   if (failedAfterSuccess) return 'calendar-collect-failed'
   return 'calendar-stale'
-}
-
-/** 写入失败的闭集：与契约 `MarketCalendarWriteFailureView.code` 同一组值，不在这里另造词。 */
-export const BRIEFING_WRITE_FAILURE_CODES = Object.freeze(['standard-write-failed', 'value-shape-rejected'] as const)
-
-/**
- * 「这次写失败还算数吗」——**一处实现，补采层与原因码层共用**。
- *
- * 三重 fail-safe 都在这里：字段缺失（`undefined`）、码不在闭集、失败时刻不晚于最后一次成功写入，
- * 一律返回 false，调用方就按改动前的逻辑走。少了任何一条，正常补采都可能被新逻辑挡掉。
- */
-export function isCurrentWriteFailure(
-  failure: Readonly<{ at: string; code: string }> | undefined,
-  lastCollectedAt: string | undefined
-): failure is Readonly<{ at: string; code: 'standard-write-failed' | 'value-shape-rejected' }> {
-  if (failure === undefined || lastCollectedAt === undefined) return false
-  if (!(BRIEFING_WRITE_FAILURE_CODES as readonly string[]).includes(failure.code)) return false
-  const at = Date.parse(failure.at)
-  const success = Date.parse(lastCollectedAt)
-  return Number.isFinite(at) && Number.isFinite(success) && at > success
 }

@@ -7,7 +7,8 @@ import {
 } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { calendarFeedRegistry } from '../macro-calendar/calendarFeedRegistry'
 import { sourceJobIds } from '../application/sourceJobRegistration'
-import { BRIEFING_CALENDAR_STALE_AFTER_MS, isCurrentWriteFailure } from './dailyBriefingMacroEmptyReason'
+import { BRIEFING_CALENDAR_STALE_AFTER_MS } from './dailyBriefingMacroEmptyReason'
+import { isCurrentWriteFailure } from '../macro-calendar/calendarStandardWriteLayer'
 
 /**
  * The calendar catch-up a run performs before it judges freshness (acceptance `A0.8`, plan B).
@@ -139,9 +140,10 @@ export async function ensureCalendarFreshForRun(
     return Object.freeze({ ...readingFrom(first), catchUp: Object.freeze({ state: 'skipped' as const }) })
   }
   // 采到了但没写进库（`#32`，用户 2026-11-19）：再发一次补采，采集会成功、写入仍会失败，白花一次。
-  // 三重 fail-safe 全在 `isCurrentWriteFailure` 里（字段缺失 / 码不在闭集 / 失败早于最后一次成功），
-  // 任何一条不成立就继续走老路——宁可不跳，也不许把正常补采挡掉。
-  if (isCurrentWriteFailure(first.writeFailure, first.lastCollectedAt ?? undefined)) {
+  // 判断**只调写入层那一个函数**（比较对象是「最后一次成功写入」，不是「最后一次成功采集」）：
+  // 字段缺失 / 失败早于最后一次成功 → 它返回 false，继续走老路，正常补采不会被挡。
+  if (first.writeFailure !== undefined
+    && isCurrentWriteFailure({ at: first.writeFailure.at, lastSuccessAt: first.writeFailure.lastSuccessAt })) {
     console.log(`[macro-calendar.catch-up] ${JSON.stringify({
       asOf: deps.dataAsOf,
       verdict: 'skipped',

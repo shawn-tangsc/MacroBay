@@ -18,7 +18,7 @@ const staleAt = '2026-11-03T13:27:00.000Z'
 function freshness(
   lastCollectedAt: string | null,
   attempt?: { attemptedAt: string; state: 'succeeded' | 'failed' },
-  writeFailure?: { at: string; code: 'standard-write-failed' | 'value-shape-rejected' }
+  writeFailure?: { at: string; code: 'standard-write-failed' | 'value-shape-rejected'; lastSuccessAt?: string }
 ) {
   return {
     state: 'available' as const,
@@ -109,7 +109,7 @@ describe('ensureCalendarFreshForRun', () => {
       const reading = await ensureCalendarFreshForRun({
         dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
         readFreshness: async () => freshness(staleAt, undefined, {
-          at: '2026-11-05T06:45:00.000Z', code: 'standard-write-failed'
+          at: '2026-11-05T06:45:00.000Z', code: 'standard-write-failed', lastSuccessAt: '2026-11-05T06:00:00.000Z'
         })
       })
 
@@ -129,7 +129,7 @@ describe('ensureCalendarFreshForRun', () => {
   it('still catches up when the write failure predates the last success', async () => {
     const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: [marketCalendarPublicPolicy.collectionFeeds[0]!] }))
     const reads = [
-      freshness(staleAt, undefined, { at: '2026-11-02T00:00:00.000Z', code: 'standard-write-failed' }),
+      freshness(staleAt, undefined, { at: '2026-11-02T00:00:00.000Z', code: 'standard-write-failed', lastSuccessAt: '2026-11-03T00:00:00.000Z' }),
       freshness(dataAsOf)
     ]
     let call = 0
@@ -140,6 +140,18 @@ describe('ensureCalendarFreshForRun', () => {
 
     expect(refreshNow).toHaveBeenCalledTimes(1)
     expect(reading.catchUp).toEqual({ state: 'collected' })
+  })
+
+  // 第四重 fail-safe（用户 2026-11-19 定）：`lastSuccessAt` 缺席 = 从没成功过，这次失败就是当前的，
+  // 方向只能是「显示」。夹具造的是「采集成功过、写入从没成功」那一格，不是「从没采集过」。
+  it('treats a write failure with no recorded success as current and skips the catch-up', async () => {
+    const refreshNow = vi.fn()
+    const reading = await ensureCalendarFreshForRun({
+      dataAsOf, enabled: true, refreshNow, registeredScheduleIds: () => [...liveCalendarJobIds],
+      readFreshness: async () => freshness(staleAt, undefined, { at: '2026-11-05T06:45:00.000Z', code: 'standard-write-failed' })
+    })
+    expect(reading.catchUp).toEqual({ state: 'skipped', reasonCode: 'write-failed' })
+    expect(refreshNow).toHaveBeenCalledTimes(0)
   })
 
   // 老数据没有这个键：行为必须与改动前完全一致（字段缺失不挡补采）。
