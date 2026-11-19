@@ -321,15 +321,9 @@ export type MarketCalendarRefreshNowResult =
   | Readonly<{ state: 'unchanged' }>
   | Readonly<{ state: 'failed'; failureCode: string }>
   | Readonly<{ state: 'timeout'; timeoutMs: number }>
-/**
- * **标准表写入失败**（用户 2026-11-19 / 架构师契约）：与采集失败分开。
- * 键名定死为 `writeFailure: { at, code }`，`code` 闭集两个值；没有失败就不带这个键。
- * 简报线用 `at` 比「最后一次成功写入」判先后（失败早于最后一次成功 → 数据已恢复，按老路走）。
- */
-export type MarketCalendarWriteFailureView = Readonly<{
-  at: string
-  code: 'standard-write-failed' | 'value-shape-rejected'
-}>
+/* 写入失败键的形状与校验拆在独立模块（体积门禁）；re-export，调用方路径不变。 */
+import { isMarketCalendarWriteFailureView, type MarketCalendarWriteFailureView } from './marketCalendarWriteFailureContract'
+export { isMarketCalendarWriteFailureView, type MarketCalendarWriteFailureView } from './marketCalendarWriteFailureContract'
 
 export type MarketCalendarFreshness =
   | Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
@@ -468,12 +462,7 @@ export function isMarketCalendarFreshness(value: unknown): value is MarketCalend
   if (!marketExact(value, ['state', 'asOf', 'lastCollectedAt', 'sources'], ['writeFailure'])
     || value.state !== 'available') return false
   if (!marketInstant(value.asOf)) return false
-  if (value.writeFailure !== undefined) {
-    if (!marketExact(value.writeFailure, ['at', 'code'])) return false
-    const failure = value.writeFailure
-    if (!marketInstant(failure.at)) return false
-    if (failure.code !== 'standard-write-failed' && failure.code !== 'value-shape-rejected') return false
-  }
+  if (value.writeFailure !== undefined && !isMarketCalendarWriteFailureView(value.writeFailure)) return false
   if (value.lastCollectedAt !== null && !marketInstant(value.lastCollectedAt)) return false
   if (!safeArray(value.sources, sourceFreshness)) return false
   /**
