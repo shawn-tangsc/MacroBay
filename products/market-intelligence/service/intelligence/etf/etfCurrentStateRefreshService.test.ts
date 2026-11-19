@@ -557,6 +557,80 @@ describe('ETF current-state refresh service', () => {
     })
   })
 
+  // 2026-11-19 真现场：源某一轮只回 22 天，下一轮又涨回 30 天，卡片上的窗口行数来回跳。
+  // complete 却没有带来任何新交易日、还比上一份短 → 整轮不写，旧窗口原样，这一轮记成「没更新」。
+  it('keeps the stored window when a complete answer is shorter and brings no new trading day', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const eightDays = ['2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31']
+    const sixDays = ['2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29', '2026-08-30', '2026-08-31']
+    const requestWindow = vi.fn()
+      .mockResolvedValueOnce({
+        state: 'available' as const,
+        btc: windowRows('BTC', eightDays),
+        eth: windowRows('ETH', eightDays)
+      })
+      .mockResolvedValueOnce({
+        state: 'available' as const,
+        btc: windowRows('BTC', sixDays),
+        eth: windowRows('ETH', sixDays)
+      })
+    // 同一天里的两轮：真实现场就是 11-19 08:16 那一轮比上一轮少了一截。
+    const now = vi.fn()
+      .mockReturnValueOnce('2026-09-01T08:00:00.000Z')
+      .mockReturnValueOnce('2026-09-01T12:00:00.000Z')
+    const service = createEtfCurrentStateRefreshService({
+      resolveFactSource: resolvedSource,
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow,
+      store,
+      now
+    })
+
+    await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
+    // 「没更新」不是「更新了但内容一样」：这一轮根本没写。
+    await expect(service.refresh()).resolves.toEqual({ state: 'unchanged' })
+    const after = await store.readAvailable({ asOf: '2026-09-01T12:00:00.000Z' })
+    expect(after.state).toBe('available')
+    // 旧窗口原样：丢掉的 08-27 还在，最后一天仍是 08-31。
+    expect((after as { window: { windowEnd: string } }).window.windowEnd).toBe('2026-08-31')
+    expect((after as { window: { btc: readonly unknown[] } }).window.btc).toHaveLength(8)
+  })
+
+  // 反过来：partial 那一轮照旧按行补，缺的日子来自上一份，**来源与「第一次进库」都还是旧行的**——
+  // 补进来的旧日子不许被重新盖章成「这一轮才到」。
+  it('keeps the previous source and first-seen time on the days a partial answer fills from the old window', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const requestWindow = vi.fn()
+      .mockResolvedValueOnce({ state: 'available' as const, btc: rows('BTC'), eth: rows('ETH') })
+      .mockResolvedValueOnce({
+        state: 'partial' as const,
+        btc: windowRows('BTC', ['2026-09-01']),
+        eth: windowRows('ETH', ['2026-09-01'])
+      })
+    const now = vi.fn()
+      .mockReturnValueOnce('2026-09-01T12:00:00.000Z')
+      .mockReturnValueOnce('2026-09-02T12:00:00.000Z')
+    const service = createEtfCurrentStateRefreshService({
+      resolveFactSource: resolvedSource,
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow,
+      store,
+      now
+    })
+
+    await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
+    await expect(service.refresh()).resolves.toEqual({ state: 'updated' })
+    const after = await store.readAvailable({ asOf: '2026-09-02T12:00:00.000Z' })
+    const btc = (after as { window: { btc: readonly { tradingDate: string; source: string; firstSeenAt?: string }[] } }).window.btc
+    expect(btc).toHaveLength(6)
+    const oldest = btc.find((row) => row.tradingDate === '2026-08-27')
+    expect(oldest?.source).toBe('cryptoetf-etf-flows')
+    // 旧日子保留它第一次进库的那一刻，不拿这一轮的时间冒充。
+    expect(oldest?.firstSeenAt).toBe('2026-09-01T12:00:00.000Z')
+  })
+
   it('replaces a rolling complete window when BTC has no update marker and ETH has one', async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
     const requestWindow = vi.fn()

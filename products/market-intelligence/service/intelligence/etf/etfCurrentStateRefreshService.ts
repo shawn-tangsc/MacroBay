@@ -105,6 +105,22 @@ export function createEtfCurrentStateRefreshService(deps: {
         if (etfWindowHasSourceRegression({ previous: priorWindow, current: built, resolvedSource: sourceId })) {
           return unavailable()
         }
+        /**
+         * **complete 却比上一份短 → 整轮不写，保留旧窗口**（2026-11-19 真现场：11-19 08:16 那轮
+         * 只剩 22 天，下一轮又涨回 30 天，卡片上的窗口行数来回跳）。
+         *
+         * 判据是「这一轮没有带来任何新日子，却少掉了旧窗口已经有的日子」：源把历史交短了，
+         * 那不是新读数，是它这一轮少答了。整轮不写、记成 `unchanged`，下一轮再试。
+         *
+         * **不从上一份抄缺失的行**：`partial` 那条路已经用 `mergeRows` 按行补过（行级来源与
+         * 进库时刻都留着）；在 `complete` 上再抄一次，就是第二套拼窗口，两处各算一遍。
+         *
+         * 只在这一轮**确实带来新交易日**时才放行：否则源长期只回 20 来天，窗口会永远停在旧行上，
+         * 那等于用「不缩水」换「不再更新」。
+         */
+        if (requested.state === 'available' && etfWindowWouldShrink({ previous: priorWindow, current: built })) {
+          return Object.freeze({ state: 'unchanged' as const })
+        }
         // `replace` is async: the write's own verdict decides whether this round produced news.
         const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
@@ -311,6 +327,28 @@ function collectCapitalFlowUpdates(input: Readonly<{
  * 只在**这一轮解析出来的是主源**时判：那种情况下同一天的数本该由主源给；它却变成了备源的，
  * 说明主源这一轮没读到（读到了就会覆盖回来），而不是读者换了源。
  */
+/**
+ * 这一轮是不是「没有新日子、却比上一份短」。
+ *
+ * 两个条件缺一不可：① 当前窗口的每一天都在上一份里出现过（没有新交易日进来）；
+ * ② 行数确实少了。少掉的日子按定义仍在上一份的 30 行视野内——它们刚刚还在窗口里。
+ */
+function etfWindowWouldShrink(input: Readonly<{
+  previous: EtfCurrentStateWindow | undefined
+  current: EtfCurrentStateWindow
+}>): boolean {
+  if (!input.previous) return false
+  let sawShorter = false
+  for (const asset of ['btc', 'eth'] as const) {
+    const previousDates = new Set(input.previous[asset].map((row) => row.tradingDate))
+    const currentDates = input.current[asset].map((row) => row.tradingDate)
+    // 出现一个上一份没有的日子，说明这一轮带回了新东西，不能拦。
+    if (currentDates.some((date) => !previousDates.has(date))) return false
+    if (currentDates.length < previousDates.size) sawShorter = true
+  }
+  return sawShorter
+}
+
 function etfWindowHasSourceRegression(input: Readonly<{
   previous: EtfCurrentStateWindow | undefined
   current: EtfCurrentStateWindow
