@@ -74,13 +74,15 @@ export function createIntelligenceRuntimes(input: {
   structuredModelInvocation: ReturnType<typeof createStructuredModelInvocationService>
   credentialStore: IntelligenceCredentialStore
   requestGovernanceQueue: ReturnType<typeof createSourceRequestGovernanceQueue>
+  /** 标准表写库失败的四态读口（写入层）；没绑定就不出现写失败字段。 */
+  readStandardWriteFailures?: () => import('./application/calendarStandardWriteReader').SourceWriteFailureView
   hooks: IntelligenceModulePlatformHooks
 }) {
   const {
     jobRuntime, dataDir, timeZone, getAppLanguage, pipeline, rawRecordStore, translationService,
     capitalConditions, capitalConditionsQuery, fundingRateHistoryStore, perpetualPositioningStore,
     etfCurrentStateRefresh, fundingRateHistoryRefresh, openInterestWithSignals, newsSentiment, profileStore, workerRuntime,
-    credentialStore, requestGovernanceQueue, structuredModelInvocation, hooks
+    credentialStore, requestGovernanceQueue, structuredModelInvocation, hooks, readStandardWriteFailures
   } = input
   const {
     newsSentimentExposure, assembleNewsSentiment, newsSentimentFilePath, newsSentimentStore,

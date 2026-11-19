@@ -87,6 +87,8 @@ import { createIntelligenceStores } from './intelligenceModuleStores'
 import { createIntelligenceMarketData } from './intelligenceModuleMarketData'
 import { createIntelligenceNewsSentiment } from './intelligenceModuleNewsSentiment'
 import { createIntelligenceRuntimes } from './intelligenceModuleRuntimes'
+import { readStandardWriteFailures } from './application/calendarStandardWriteReader'
+import type { CalendarStandardWriteLayer } from './macro-calendar/calendarStandardWriteLayer'
 import { createIntelligenceStartup } from './intelligenceModuleStartup'
 
 /* 产品 id、启动 bundle 标记、原始记录补跑策略、平台 hooks 类型 → `intelligenceModuleContracts.ts`（M1）。
@@ -94,6 +96,12 @@ import { createIntelligenceStartup } from './intelligenceModuleStartup'
 export type { IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
+/**
+ * 标准表写失败的读口（用户 2026-11-19）：装配根在日历后端建好之后把写入层交进来。
+ * late-bound，与 `setPolicyPathQuery` / `bindBriefingCalendarRefresh` 同形——晚绑不缓存，
+ * 每取一次视图现读，回填/迁移落完立刻生效。
+ */
+let calendarStandardWriteLayer: (() => Pick<CalendarStandardWriteLayer, 'get'>) | undefined
 export type IntelligenceModule = {
   /** 模块启动链的完成信号（默认源迁移 → 会话归位 → 补跑 → 恢复）；一次性工作挂这里，别用微任务。 */
   startupReady: Promise<void>
@@ -181,6 +189,8 @@ export type IntelligenceModule = {
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   setPolicyPathQuery: (query: PolicyPathQueryService) => void
   bindBriefingCalendarRefresh: (refresh: BriefingCalendarRefresh) => void
+  /** 绑定写入层读口；`sourcesService` 取视图时现读，不缓存。 */
+  bindCalendarStandardWriteLayer: (read: () => Pick<CalendarStandardWriteLayer, 'get'>) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
 }
@@ -292,6 +302,9 @@ export function getIntelligenceModule(
       credentialStore,
       requestGovernanceQueue,
       structuredModelInvocation,
+      ...(calendarStandardWriteLayer === undefined ? {} : {
+        readStandardWriteFailures: () => readStandardWriteFailures(calendarStandardWriteLayer!())
+      }),
       hooks
     })
     /* 名字在这里解构出来：表面与启动链引用一个字没改。 */
@@ -607,7 +620,9 @@ export function getIntelligenceModule(
           }
         })
       },
-      bindBriefingCalendarRefresh: briefingCalendar.bind
+      bindBriefingCalendarRefresh: briefingCalendar.bind,
+      /* 写入层读口：装配根在日历后端建好之后绑；绑之前视图里不出现写失败字段。 */
+      bindCalendarStandardWriteLayer: (read) => { calendarStandardWriteLayer = read }
     }
   }
   return intelligenceModule
