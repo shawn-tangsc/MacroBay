@@ -1,7 +1,6 @@
 import { readJsonFileRecoveringSync, writeJsonFileAtomicallySync } from '@platform/storage/jsonFileStorage'
 
-import type { MacroCalendarProviderHealthRevision, MacroCalendarProviderId,
-  MacroCalendarWriteFailureCode } from './macroCalendarContracts'
+import type { MacroCalendarProviderHealthRevision, MacroCalendarProviderId } from './macroCalendarContracts'
 import { macroCalendarHealthHistoryPolicy } from './macroCalendarPolicy'
 import { compareIsoTime, isValidIsoTime, isVisibleAsOf } from '../public-query/asOfVisibility'
 
@@ -22,27 +21,6 @@ export type MacroCalendarProviderHealthStorage = {
   write: (snapshot: MacroCalendarProviderHealthSnapshot) => void
 }
 
-/**
- * **把一次批写入失败落到健康记录上**（用户 2026-11-19）：两个写入点（官方行同步、历史回填）
- * 都调它——不许各写一份「怎么落 `lastWriteFailure`」，否则迟早一处漏码、一处漏 `streakBatches`。
- *
- * 规矩：
- * - **不改 `status`**（写库失败不是来源失败）；
- * - **没有既有健康记录就不编一条**（`status` 从哪来？）：返回 `false`，由采集侧该建的时候建；
- * - `streakBatches` 的合并、历史去重都在 `appendMaterialChange` 里，一处负责。
- */
-export function recordCalendarWriteFailure(
-  health: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>,
-  providerId: MacroCalendarProviderId,
-  input: Readonly<{ at: string; failedRows: number; firstErrorCode: MacroCalendarWriteFailureCode }>
-): boolean {
-  const current = health.getCurrent(providerId)
-  if (current === undefined) return false
-  health.appendMaterialChange({ ...current, updatedAt: input.at,
-    lastWriteFailure: { at: input.at, failedRows: input.failedRows, firstErrorCode: input.firstErrorCode } })
-  return true
-}
-
 export function createMacroCalendarProviderHealthStore(storage: MacroCalendarProviderHealthStorage = createInMemoryMacroCalendarProviderHealthStorage()): MacroCalendarProviderHealthStore {
   const initial = storage.read()
   const current = new Map<MacroCalendarProviderId, MacroCalendarProviderHealthRevision>(Object.entries(initial.currentByProviderId) as Array<[MacroCalendarProviderId, MacroCalendarProviderHealthRevision]>)
@@ -54,19 +32,8 @@ export function createMacroCalendarProviderHealthStore(storage: MacroCalendarPro
   return {
     getCurrent(providerId) { return current.get(providerId) },
     appendMaterialChange(next) {
-      /**
-       * **同码连续失败只记首次 + 次数**（Chief 2026-11-19）：`at` 保持这一串失败的第一批时刻，
-       * `streakBatches` 累加；签名只看「码 + 首次时刻」，所以一轮一轮重写不会把历史刷满。
-       * 换码才是一次新的失败事件。
-       */
-      const prior = current.get(next.providerId)
-      const incoming = next.lastWriteFailure
-      const merged = prior?.lastWriteFailure !== undefined && incoming !== undefined
-        && prior.lastWriteFailure.firstErrorCode === incoming.firstErrorCode
-        ? { ...next, lastWriteFailure: { ...incoming, at: prior.lastWriteFailure.at,
-            streakBatches: (prior.lastWriteFailure.streakBatches ?? 1) + 1 } }
-        : next
-      const normalized = normalize(merged)
+      // 写入结果不在这条历史里（用户 2026-11-19：写入层独立成层，历史只记采集状态）。
+      const normalized = normalize(next)
       const previous = current.get(next.providerId)
       current.set(next.providerId, normalized)
       if (previous && materialSignature(previous) === materialSignature(normalized)) { persist(); return }
@@ -112,7 +79,7 @@ function normalize(value: MacroCalendarProviderHealthRevision): MacroCalendarPro
   return { ...value, checkpoint: { ...value.checkpoint, successfulEventKeys: keys }, safeSummary: value.safeSummary?.slice(0, macroCalendarHealthHistoryPolicy.providerHealthSafeSummaryMaxChars) }
 }
 function materialSignature(value: MacroCalendarProviderHealthRevision): string {
-  return JSON.stringify({ status: value.status, consecutiveFailures: value.consecutiveFailures, parserVersion: value.checkpoint.parserVersion, scheduleHorizonEnd: value.checkpoint.scheduleHorizonEnd, successfulEventKeys: value.checkpoint.successfulEventKeys, lastWriteFailure: value.lastWriteFailure === undefined ? null : { at: value.lastWriteFailure.at, firstErrorCode: value.lastWriteFailure.firstErrorCode } })
+  return JSON.stringify({ status: value.status, consecutiveFailures: value.consecutiveFailures, parserVersion: value.checkpoint.parserVersion, scheduleHorizonEnd: value.checkpoint.scheduleHorizonEnd, successfulEventKeys: value.checkpoint.successfulEventKeys })
 }
 function emptySnapshot(): MacroCalendarProviderHealthSnapshot { return { currentByProviderId: {}, historyByProviderId: {}, earliestRetainedAtByProviderId: {} } }
 function normalizeSnapshot(value: MacroCalendarProviderHealthSnapshot): MacroCalendarProviderHealthSnapshot { return value && typeof value === 'object' ? { currentByProviderId: value.currentByProviderId ?? {}, historyByProviderId: value.historyByProviderId ?? {}, earliestRetainedAtByProviderId: value.earliestRetainedAtByProviderId ?? {} } : emptySnapshot() }

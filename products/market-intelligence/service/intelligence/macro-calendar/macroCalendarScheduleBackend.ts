@@ -1,5 +1,7 @@
 import { join } from 'node:path'
 
+import { readJsonFileRecoveringSync } from '@platform/storage/jsonFileStorage'
+
 import type { RawRecordStore } from '../application/rawRecordStore'
 import type { DashboardSourceConnectionResult, MacroCalendarSettingsProviderId } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { createMacroCalendarCollectionService } from './macroCalendarCollectionService'
@@ -58,13 +60,20 @@ export function createMacroCalendarScheduleBackend(input: {
    * 健康 revision 上，现在写入层才是唯一存处；幂等（已有失败记录就不搬），搬完不回写 revision。
    */
   // 健康记录只覆盖采集类 provider（fed/bls/bea/0xrouter）；narwhal、replay 从来不在那份文件里。
+  // **直接读旧文件的原始键**：字段已从类型上删除（第 4 步），迁移要读的是上一版磁盘格式，
+  // 不能依赖一个已经不存在的类型字段。
   const healthWriterIds = ['macro-calendar-fed', 'macro-calendar-bls', 'macro-calendar-bea', '0xrouter'] as const
+  const legacySnapshot = readJsonFileRecoveringSync(
+    join(input.dataDir, 'macro-calendar-provider-health.json')) as
+    { currentByProviderId?: Record<string, { lastWriteFailure?: { at?: string; failedRows?: number
+      firstErrorCode?: 'standard-write-failed' | 'value-shape-rejected' } }> } | undefined
   migrateLegacyWriteFailures({
     writeLayer,
     legacy: healthWriterIds.flatMap((writerId) => {
-      const failure = healthStore.getCurrent(writerId)?.lastWriteFailure
-      return failure === undefined ? [] : [{ writerId: String(writerId), at: failure.at,
-        failedRows: failure.failedRows, firstErrorCode: failure.firstErrorCode }]
+      const failure = legacySnapshot?.currentByProviderId?.[writerId]?.lastWriteFailure
+      if (failure?.at === undefined || failure.failedRows === undefined || failure.firstErrorCode === undefined) return []
+      return [{ writerId: String(writerId), at: failure.at, failedRows: failure.failedRows,
+        firstErrorCode: failure.firstErrorCode }]
     })
   })
   // The reader's own release times: durable in their own file, and mirrored into the synchronous

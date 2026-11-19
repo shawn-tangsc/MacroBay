@@ -1,7 +1,6 @@
 import type { MacroCalendarCollectionInput } from './macroCalendarCollectionService'
 import { macroCalendarScheduleCollectionWorkflowPolicy, type MacroCalendarScheduleCollectionWorkflow } from './macroCalendarScheduleCollectionWorkflow'
-import type { MacroCalendarProviderHealthRevision, MacroCalendarProviderId,
-  MacroCalendarWriteFailure } from './macroCalendarContracts'
+import type { MacroCalendarProviderHealthRevision, MacroCalendarProviderId } from './macroCalendarContracts'
 import type { MacroCalendarProviderHealthStore } from './macroCalendarProviderHealthStore'
 import { getMacroCalendarOfficialSourceDescriptor } from './macroCalendarOfficialSourceRegistry'
 
@@ -75,16 +74,6 @@ export function createMacroCalendarScheduleHealthService(deps: {
           + JSON.stringify(outcome).slice(0, 400))
         return { ...identity, state: 'failed', failureCode: 'workflow-result-invalid' }
       }
-      /**
-       * **写入失败与来源状态并列**（架构师 2026-11-19）：工作流把 `writeFailure` 放在 outcome 里，
-       * 这里**只抄不改**——`status` 仍只反映采集。形状不认就丢掉，不猜。
-       */
-      const writeFailure = readWriteFailure(outcome)
-      if (writeFailure !== undefined) {
-        next = { revision: { ...next.revision, lastWriteFailure: writeFailure } }
-        log('macro-calendar.standard.write-failed', { descriptorId: descriptor.descriptorId,
-          at: writeFailure.at, failedRows: writeFailure.failedRows, firstErrorCode: writeFailure.firstErrorCode })
-      }
       if (next.revision.status === 'failed') {
         log('macro-calendar.schedule.collect-failed', { descriptorId: descriptor.descriptorId,
           detectedAt: input.detectedAt, failureCode: String((outcome as { failureCode?: unknown }).failureCode ?? 'unknown') })
@@ -113,18 +102,6 @@ function healthRevision(
   if (isProviderDisabled(outcome)) return { revision: { ...base, status: 'paused' as const, consecutiveFailures: priorFailures } }
   if (isFailed(outcome)) return { revision: { ...base, status: 'failed' as const, lastFailureAt: detectedAt, consecutiveFailures: priorFailures + 1 } }
   return undefined
-}
-
-/** outcome 里的写入失败：三格形状与闭集都对才认，否则当作没有（不编）。 */
-function readWriteFailure(value: unknown): MacroCalendarWriteFailure | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const failure = (value as { writeFailure?: unknown }).writeFailure
-  if (typeof failure !== 'object' || failure === null) return undefined
-  const { at, failedRows, firstErrorCode } = failure as Record<string, unknown>
-  if (typeof at !== 'string' || !isCanonicalUtcMillis(at)) return undefined
-  if (typeof failedRows !== 'number' || !Number.isInteger(failedRows) || failedRows < 0) return undefined
-  if (firstErrorCode !== 'standard-write-failed' && firstErrorCode !== 'value-shape-rejected') return undefined
-  return { at, failedRows, firstErrorCode }
 }
 
 function isPersisted(value: Record<string, unknown>): boolean {

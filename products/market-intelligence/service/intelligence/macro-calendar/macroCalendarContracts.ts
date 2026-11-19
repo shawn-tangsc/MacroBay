@@ -74,19 +74,6 @@ export type MacroCalendarRevision = {
  */
 export type MacroCalendarWriteFailureCode = 'standard-write-failed' | 'value-shape-rejected'
 
-/** 最近一次写入失败：与 `status` 并列，**不改 `status`**。 */
-export type MacroCalendarWriteFailure = Readonly<{
-  /** UTC ISO；这次写入失败的时刻。 */
-  at: string
-  /** 这一批失败了几行（`DualWriteCounts.failed`）。 */
-  failedRows: number
-  firstErrorCode: MacroCalendarWriteFailureCode
-  /**
-   * **同一码连续失败了几批**（Chief 2026-11-19：同码连续失败只记首次 + 次数）。
-   * 首次失败不带这个键；从第二次起是 2、3…，`at` 保持**这一串失败的第一批**时刻。
-   */
-  streakBatches?: number
-}>
 
 export type MacroCalendarProviderHealthRevision = {
   providerId: MacroCalendarProviderId
@@ -97,9 +84,4 @@ export type MacroCalendarProviderHealthRevision = {
   consecutiveFailures: number
   checkpoint: { parserVersion?: string; scheduleHorizonEnd?: string; successfulEventKeys?: string[] }
   safeSummary?: string
-  /**
-   * 最近一次标准表写入失败（用户 2026-11-19 定）：**没有就不写**，不编默认值。
-   * 它进 `materialSignature`，失败状态变化会单独记一条历史。
-   */
-  lastWriteFailure?: MacroCalendarWriteFailure
 }
