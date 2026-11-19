@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Calendar } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -111,10 +112,30 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
     })
   const center = model.center
   const centerPlaqueId = center === undefined ? undefined : `${center.metricKey}:future`
+  /**
+   * **临时诊断**（Chief 2026-11-20）：环流高光「有样式但不动」要一次运行时真相，别再靠猜。
+   * 挂载后跑一次，把动画有没有挂上、被哪条规则挡掉、计算值与属性值分别是什么，写成一行进 app.log。
+   * 只加这一段 + 一个 ref，不改结构、不改样式；查清后由 Chief 说一声删掉。
+   */
+  const rootRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = rootRef.current?.querySelector('.mi-clock__sweep')
+    const cs = el === null || el === undefined ? undefined : getComputedStyle(el)
+    console.info('[mi-clock-diag]', JSON.stringify({
+      exists: el !== null && el !== undefined,
+      animationName: cs?.animationName,
+      animationDuration: cs?.animationDuration,
+      animationPlayState: cs?.animationPlayState,
+      dashoffset: cs?.strokeDashoffset,
+      dashoffsetAttr: el?.getAttribute('stroke-dashoffset'),
+      reduceNoPreference: window.matchMedia('(prefers-reduced-motion: no-preference)').matches,
+      reduce: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    }))
+  }, [])
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
   // 用户 2026-11-15：**不再缩放**。卡保持 336×330、`transform` 为单位矩阵，
   // 只由外层容器决定它放在哪、旁边是谁；内部尺寸与 537 项计算值一项不动。
-  return <section className="mi-clock" aria-label={text.ariaLabel}>
+  return <section className="mi-clock" aria-label={text.ariaLabel} ref={rootRef}>
       <svg className="mi-clock__svg" viewBox={`0 0 ${clockCardGeometry.svgWidth} ${clockCardGeometry.svgHeight}`} aria-hidden="true">
         <defs>
           <filter id="miClockFlowGlow" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="2.5" /></filter>
