@@ -12,6 +12,7 @@ import { createMacroCalendarProviderHealthJsonStorage, createMacroCalendarProvid
 import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore, type MacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 import { createMacroCalendarReleaseTimeOverrideCache, createMacroCalendarReleaseTimeOverrideJsonStorage, createMacroCalendarReleaseTimeOverrideStore } from './macroCalendarReleaseTimeOverrideStore'
 import { createMacroCalendarRepository } from './macroCalendarRepository'
+import { inspectCalendarValueRevisions } from './marketCalendarValueRevisionAudit'
 import { auditStandardWriteRecords, calendarStandardWriterVisibility, createCalendarStandardWriteLayer,
   createJsonFileCalendarStandardWriteStorage, migrateLegacyWriteFailures, seedStandardWriteRecords }
   from './calendarStandardWriteLayer'
@@ -142,6 +143,13 @@ export function createMacroCalendarScheduleBackend(input: {
           seeded, unknownWriterIds: audit.unknownWriterIds, missingRecords: audit.missingRecords
         })
       }
+      /**
+       * **盘点第 7 项**（用户 2026-11-20）：值修订表随每次改值增长，必须可见——
+       * 条数 + 最近一条 `observed_at`。否则半年后没人知道它多大、什么时候开始不写。
+       */
+      const revisions = inspectCalendarValueRevisions(storage.database)
+      input.log?.('info', 'macro-calendar.value-revisions-inventory',
+        { rows: revisions.rows, latestObservedAt: revisions.latestObservedAt })
     } catch { /* 补种不影响启动：读不到就下次再来，日志由上层采集失败体现。 */ }
     const health = createMacroCalendarScheduleHealthService({ workflow, health: healthStore,
       ...(input.log === undefined ? {} : { log: input.log }) })

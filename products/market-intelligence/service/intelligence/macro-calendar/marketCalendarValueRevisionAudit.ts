@@ -67,31 +67,70 @@ export function readCalendarValueRevisions(
   database: DatabaseSync,
   key: Readonly<{ countryCode: string; metricKey: string; periodKey: string; firstScheduledDate: string }>
 ): Readonly<{
-  state: 'recorded' | 'not-recorded'
+  state: 'recorded' | 'not-recorded' | 'unreadable'
+  /** 按字段分组的并列条目（同 field 的多次变更按时间倒序）。 */
+  byField: Readonly<Partial<Record<CalendarValueField, readonly Readonly<{ valueBefore: string | null
+    valueAfter: string | null; decision: CalendarMergeDecision; providerId: string; observedAt: string }>[]>>>
   revisions: readonly Readonly<{ field: string; valueBefore: string | null; valueAfter: string | null
     decision: CalendarMergeDecision; providerId: string; observedAt: string }>[]
   updatedAt: string | null
   latestWriteProviderId: string | null
+  /** `state='unreadable'` 时的原因（读库失败 ≠ 没有记录）。 */
+  reason?: string
 }> {
-  const exists = database.prepare(`select 1 from sqlite_master where type='table' and name=?`)
-    .get(calendarValueRevisionPolicy.table)
-  // 历史期次没有审计记录就是「未记录」——**不许拿标准表 `updated_at` 冒充写入时刻**。
-  if (exists === undefined) return { state: 'not-recorded', revisions: [], updatedAt: null, latestWriteProviderId: null }
-  const rows = database.prepare(`select field, value_before, value_after, decision, provider_id, observed_at
-    from ${calendarValueRevisionPolicy.table}
-    where country_code=? and metric_key=? and period_key=? and first_scheduled_date=?
-    order by observed_at desc`).all(key.countryCode, key.metricKey, key.periodKey, key.firstScheduledDate) as
-    Array<{ field: string; value_before: string | null; value_after: string | null
-      decision: CalendarMergeDecision; provider_id: string; observed_at: string }>
-  if (rows.length === 0) return { state: 'not-recorded', revisions: [], updatedAt: null, latestWriteProviderId: null }
+  /**
+   * **「没有审计记录」与「读不到」必须分开**（用户 2026-11-20）：前者是历史期次（显示「未记录」），
+   * 后者是错误态（带重试），两者都返回空数组就是把读失败画成「没有」。
+   */
+  let rows: Array<{ field: string; value_before: string | null; value_after: string | null
+    decision: CalendarMergeDecision; provider_id: string; observed_at: string }>
+  try {
+    const exists = database.prepare(`select 1 from sqlite_master where type='table' and name=?`)
+      .get(calendarValueRevisionPolicy.table)
+    if (exists === undefined) {
+      return { state: 'not-recorded', byField: {}, revisions: [], updatedAt: null, latestWriteProviderId: null }
+    }
+    rows = database.prepare(`select field, value_before, value_after, decision, provider_id, observed_at
+      from ${calendarValueRevisionPolicy.table}
+      where country_code=? and metric_key=? and period_key=? and first_scheduled_date=?
+      order by observed_at desc`).all(key.countryCode, key.metricKey, key.periodKey, key.firstScheduledDate) as typeof rows
+  } catch (error) {
+    return { state: 'unreadable', byField: {}, revisions: [], updatedAt: null, latestWriteProviderId: null,
+      reason: (error as Error)?.message ?? 'unknown' }
+  }
+  if (rows.length === 0) {
+    return { state: 'not-recorded', byField: {}, revisions: [], updatedAt: null, latestWriteProviderId: null }
+  }
+  const byField: Partial<Record<CalendarValueField, Array<{ valueBefore: string | null; valueAfter: string | null
+    decision: CalendarMergeDecision; providerId: string; observedAt: string }>>> = {}
+  for (const row of rows) {
+    const entry = { valueBefore: row.value_before, valueAfter: row.value_after, decision: row.decision,
+      providerId: row.provider_id, observedAt: row.observed_at }
+    ;(byField[row.field as CalendarValueField] ??= []).push(entry)
+  }
   const latestWrite = rows.find((row) => row.decision === 'write')
   return {
     state: 'recorded',
+    byField,
     revisions: rows.map((row) => ({ field: row.field, valueBefore: row.value_before, valueAfter: row.value_after,
       decision: row.decision, providerId: row.provider_id, observedAt: row.observed_at })),
     updatedAt: latestWrite?.observed_at ?? null,
     latestWriteProviderId: latestWrite?.provider_id ?? null
   }
+}
+
+/** 盘点第 7 项（用户 2026-11-20）：这张表随每次改值增长，**必须可见**——条数 + 最近一条时刻。 */
+export function inspectCalendarValueRevisions(database: DatabaseSync): Readonly<{
+  rows: number; latestObservedAt: string | null
+}> {
+  try {
+    const exists = database.prepare(`select 1 from sqlite_master where type='table' and name=?`)
+      .get(calendarValueRevisionPolicy.table)
+    if (exists === undefined) return { rows: 0, latestObservedAt: null }
+    const row = database.prepare(`select count(*) as n, max(observed_at) as latest
+      from ${calendarValueRevisionPolicy.table}`).get() as { n: number; latest: string | null }
+    return { rows: Number(row.n), latestObservedAt: row.latest }
+  } catch { return { rows: 0, latestObservedAt: null } }
 }
 
 /** 一致性守卫：每格最新一条 `write` 的 `value_after` 必须等于当前 `values_json` 该字段。 */
