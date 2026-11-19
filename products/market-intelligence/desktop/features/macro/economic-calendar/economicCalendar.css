@@ -61,13 +61,22 @@
   --mi-economic-dialog-list-height: min(360px, 50vh);
   --mi-economic-month-picker-width: 112px;
 }
-/* 抽屉右列比日历页窄得多：同一套行组件，行高档位按界面设计定（11px / 1.45 ≈ 15.9px）。
-   只覆盖这一档 token，不动日历页的 22px。 */
+/*
+ * 抽屉右列的行档：**与「接下来要看的」那张卡同一套视觉**（用户 2026-11-19：两处不要两套）。
+ *
+ * 对照（卡片 = `.mi-calendar-card__row`，在 `intelligence.css`）：
+ * - 字号：卡片 12px → 这里 `--mi-calendar-title-size: 12px`（原来 11px，比上面小一档）；
+ * - 行高：卡片 `padding: 7px 8px` + 12px 正文 ≈ 30px → 这里 `--mi-calendar-row-height: 30px`
+ *   （原来 15.9px，只有卡片一半，所以「上面大下面小」）；
+ * - 时间列：卡片 84px 是「时间 + 名称」两列的配额，右列更窄，取 44px 仍能放下 `21:30`；
+ * - 国家：卡片用次级色紧挨名字，这里沿用 `--mi-economic-muted`，且排在名称左邻。
+ * 只覆盖这几个 token，不动日历页那套（那边是 12px / 22px）。
+ */
 .mk-col-r {
-  --mi-calendar-row-height: 15.9px;
-  --mi-calendar-title-size: 11px;
-  --mi-calendar-time-size: 11px;
-  --mi-calendar-time-width: 36px;
+  --mi-calendar-row-height: 30px;
+  --mi-calendar-title-size: 12px;
+  --mi-calendar-time-size: 12px;
+  --mi-calendar-time-width: 44px;
 }
 
 .mi-economic-calendar {
@@ -242,7 +251,7 @@ div.mi-economic-calendar__event:hover { background: transparent; }
    cell. Inline, the ellipsis applies to "country + name" as one string. */
 /* 格子的宽度由第二列给（`--mi-calendar-country-width`），这里只负责「不把列撑开、超长省略」。
    它是网格的第二子元素、**永远渲染**（没有国家时是空串）——少了它，标题会掉进这一列。 */
-.mi-economic-calendar__event-country { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 2px; color: var(--mi-economic-muted); font-size: calc(var(--mi-calendar-title-size) - 1px); font-weight: 400; }
+.mi-economic-calendar__event-country { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 2px; color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); font-weight: 400; }
 .mi-economic-calendar__event:hover, .mi-economic-calendar__event[aria-pressed='true'] { border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 10%, var(--mi-economic-surface)); }
 .mi-economic-calendar__event-time { min-width: 0; overflow: hidden; color: var(--mi-economic-muted); font-variant-numeric: tabular-nums; font-size: var(--mi-calendar-time-size); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .mi-economic-calendar__source-tag.ant-tag { margin-inline-end: 0; border-color: var(--mi-economic-line); background: color-mix(in srgb, var(--mi-economic-lime) 8%, var(--mi-economic-surface)); color: var(--mi-economic-muted); font-size: 9px; line-height: 16px; }
