@@ -3,6 +3,7 @@ import {
   type CalendarOfficialFeedsAvailability
 } from './officialCalendarAvailability'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
+import type { MarketCalendarWriteFailureView } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import {
   agentRegistry,
@@ -130,6 +131,8 @@ export type ProjectionState = {
   jobRegisteredById?: Readonly<Record<string, boolean>>
   /** Sources that already have a profile, including disabled ones. */
   knownSourceIds?: ReadonlySet<string>
+  /** 源 id → 标准表写库失败（与 `healthById` 平行，不参与五态派生）。 */
+  writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
 }
 
 export type SourceView = SourceDefinition & {
@@ -144,6 +147,14 @@ export type SourceView = SourceDefinition & {
   healthState: SourceHealthState
   /** 目录标记档，与五态同一处派生（见 `sourceHealthMarker`）；消费者不再自己判。 */
   healthMarker: SourceHealthMarker
+  /**
+   * 标准表**写库**失败（`f817070` / 架构师契约）：形状取自 `MarketCalendarWriteFailureView`，
+   * **没有失败就不带这个键**。
+   *
+   * 与 `healthState` **并列**、绝不并进去：写库失败不是来源失败——把 `healthState` 拉成 `failed`，
+   * 读者会去查网络与凭据，而真相是我们的库写不进去（用户 2026-11-19 定）。
+   */
+  writeFailure?: MarketCalendarWriteFailureView
 }
 
 /** ProviderView 的目录标记：由它的源聚合，仍是同一份派生，组件不再二次判断。 */
@@ -219,6 +230,7 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     ...(source.unavailable === undefined ? {} : { unavailable: true }),
     ...(health === undefined ? {} : { health })
   })
+  const writeFailure = state.writeFailureById?.[source.sourceId]
   /* 采集节奏归谁：**目录和注册表两条都要读**。
      - 目录声明 `collectionOwner: 'product'` → 产品自己的作业采；
      - 注册表的 `collection` 是运行时事实：`'job'` = 产品作业采（0xRouter 那三条日历 feed）、
@@ -238,6 +250,7 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     ...(collectionOwner === 'product' ? { collectionOwner: 'product' as const } : {}),
     enabled,
     healthState,
+    ...(writeFailure === undefined ? {} : { writeFailure }),
     healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),
     ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {})
   }
@@ -279,6 +292,8 @@ export function sourceConfigSurface(input: {
   healthById: Readonly<Record<string, SourceHealthFact>>
   jobRegisteredById: Readonly<Record<string, boolean>>
   credentialStatusById?: Readonly<Record<string, SourceConfigFact['credentialStatus']>>
+  /** 源 id → 标准表写库失败；不给就不出现这个字段（见 `SourceView.writeFailure`）。 */
+  writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
   panelId?: PanelId
   sourceId?: string
 }): SourceConfigSurface {
@@ -327,7 +342,8 @@ export function sourceConfigSurface(input: {
       enabledById: Object.fromEntries(facts.map((fact) => [fact.sourceId, fact.enabled])),
       healthById: input.healthById,
       jobRegisteredById: input.jobRegisteredById,
-      knownSourceIds: new Set(Object.keys(input.profileById))
+      knownSourceIds: new Set(Object.keys(input.profileById)),
+      ...(input.writeFailureById === undefined ? {} : { writeFailureById: input.writeFailureById })
     }
   }
 }
