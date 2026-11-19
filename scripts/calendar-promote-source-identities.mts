@@ -12,9 +12,9 @@
  *
  * 退出码：0 正常（含「一条都不用转正」）；1 参数不对或库打不开。
  */
-import { DatabaseSync } from 'node:sqlite'
 
 import { markTempDirectoryVerified } from '../platform/storage/sqlite/tempDirectoryReadiness'
+import { openSqliteDatabase } from '../platform/storage/sqlite/openSqliteDatabase'
 import { ensureCalendarStandardTables } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarStandardTable'
 import { promoteSourceIdentities } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarSourcePromotion'
 
@@ -32,7 +32,7 @@ if (providerIndex !== -1 && provider === undefined) {
 }
 
 markTempDirectoryVerified()
-const database = new DatabaseSync(databasePath)
+const database = openSqliteDatabase(databasePath)
 ensureCalendarStandardTables(database)
 const counts = promoteSourceIdentities(database, { ...(provider === undefined ? {} : { provider }), dryRun })
 database.close()

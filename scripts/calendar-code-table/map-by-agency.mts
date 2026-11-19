@@ -18,7 +18,8 @@
  * 走正常链路完成。
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '../../platform/storage/sqlite/openSqliteDatabase'
+import { markTempDirectoryVerified } from '../../platform/storage/sqlite/tempDirectoryReadiness'
 
 import { countryByAgency } from './agency-country.mts'
 
@@ -72,8 +73,9 @@ for (const row of codes) {
   }
 }
 const byCode = new Map(codes.map((row) => [row.code, row]))
+markTempDirectoryVerified()
 
-const database = new DatabaseSync(databasePath, { readOnly: true })
+const database = openSqliteDatabase(databasePath, { readOnly: true })
 const unmapped = database.prepare(`select provider_id, source_key, raw_json from mi_calendar_unmapped
   where reason = 'missing-country'`).all() as { provider_id: string; source_key: string; raw_json: string }[]
 database.close()

@@ -12,8 +12,9 @@
  * - `parser_version` 是「一次性补库」的标记：**不许重跑那个补库脚本**，它会拿观测表旧值
  *   覆盖运行时已经写好的行。
  */
-import { DatabaseSync } from 'node:sqlite'
 
+import { openSqliteDatabase } from '../platform/storage/sqlite/openSqliteDatabase'
+import { markTempDirectoryVerified } from '../platform/storage/sqlite/tempDirectoryReadiness'
 import {
   countDoubleEncodedValueRows, repairMaterializedValueEncoding
 } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarValueEncodingRepair'
@@ -23,8 +24,9 @@ if (dbPath === undefined) {
   console.error('用法：calendar-repair-value-encoding.mts <库路径> [--apply]')
   process.exit(1)
 }
+markTempDirectoryVerified()
 const apply = flags.includes('--apply')
-const database = new DatabaseSync(dbPath)
+const database = openSqliteDatabase(dbPath)
 try {
   const report = repairMaterializedValueEncoding(database, { apply })
   console.log(JSON.stringify({

@@ -13,9 +13,10 @@
  * （2026-11-18 那次值编码收敛就按它筛选）。**不许重复跑**——重跑会拿观测表里的旧值
  * 覆盖运行时已经写好的行。
  */
-import { DatabaseSync } from 'node:sqlite'
 
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarStandardTable'
+import { openSqliteDatabase } from '../platform/storage/sqlite/openSqliteDatabase'
+import { markTempDirectoryVerified } from '../platform/storage/sqlite/tempDirectoryReadiness'
 import { marketCalendarCountrySourceMappings } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarCountrySourceMappings'
 import { periodFromSourceTitle } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarSourcePeriodFromTitle'
 import { displayValueFromJson } from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarValueEncoding'
@@ -33,8 +34,9 @@ const apply = flags.includes('--apply')
  * 曾经这里按「发布月的上一个月」推算，2026-11-18 被 Chief 当场停住——那正是消费信贷
  * （9 月数据 11 月发布）被记成 10 月的错误。发布节奏不是统计期，任何按发布日推算的写法一律不用。
  */
+markTempDirectoryVerified()
 
-const database = new DatabaseSync(dbPath, apply ? {} : { readOnly: true })
+const database = openSqliteDatabase(dbPath, apply ? {} : { readOnly: true })
 try {
   if (apply) ensureCalendarStandardTables(database)
   const unmapped = database.prepare(`select rowid, source_key from mi_calendar_unmapped

@@ -6,9 +6,9 @@
  * 「一条发布怎么落」不在这里判断——分流在 `marketCalendarStandardRowRouting`，回填与实时写入
  * 问的是同一个函数（第一版在这里各写一套，事件型整类静默消失）。
  */
-import { DatabaseSync } from 'node:sqlite'
 
 import { markTempDirectoryVerified } from '../platform/storage/sqlite/tempDirectoryReadiness'
+import { openSqliteDatabase } from '../platform/storage/sqlite/openSqliteDatabase'
 import { backfillStandardRowsFromObservations }
   from '../products/market-intelligence/service/intelligence/macro-calendar/marketCalendarStandardBackfill'
 
@@ -21,7 +21,7 @@ const apply = flags.includes('--apply')
 const providerFlag = flags[flags.indexOf('--provider') + 1]
 const providerId = providerFlag === '0xrouter' ? '0xrouter' as const : 'narwhal' as const
 markTempDirectoryVerified()
-const db = new DatabaseSync(dbPath, apply ? {} : { readOnly: true })
+const db = openSqliteDatabase(dbPath, apply ? {} : { readOnly: true })
 try {
   const report = backfillStandardRowsFromObservations(db, { providerId, write: apply })
   console.log(JSON.stringify({ mode: apply ? 'apply' : 'dry-run', ...report }, null, 0))
