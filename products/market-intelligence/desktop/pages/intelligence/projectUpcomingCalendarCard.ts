@@ -216,9 +216,16 @@ export function projectUpcomingCalendarCard(
    * 其余一律不列。旧规则「importance 为高就进」会把三级指标和未分级指标一起放进来，
    * 也会把高重要性的未分级指标放进来；新规则下这两条都不成立。
    */
-  const topImportance = events.filter(event => event.category === 'economic-indicator'
-    ? event.tier === 1 || event.tier === 2
-    : event.importance === 'high')
+  const topImportance = events.filter(event => {
+    if (event.category !== 'economic-indicator') return event.importance === 'high'
+    if (event.tier === 1 || event.tier === 2) return true
+    /**
+     * 指标行**没有分级可判**（`tier` 是 `undefined`：官方发布行没有指标码）时，退回来源重要性。
+     * 这与「未分级」（`null`：有码但没定级）不是一回事——后者按用户规则不列。
+     */
+    if (event.tier === undefined) return event.importance === 'high'
+    return false
+  })
   const candidates = topImportance
     .filter(event => event.lifecycleState === 'scheduled' && withinWindow(event, asOf, policy))
     .sort((left, right) => instantOf(left).localeCompare(instantOf(right)) || left.eventKey.localeCompare(right.eventKey))

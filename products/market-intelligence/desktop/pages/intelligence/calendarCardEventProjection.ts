@@ -28,8 +28,14 @@ export function toCardEventFromOfficial(view: Readonly<{
 }>): CalendarCardEvent {
   return {
     eventKey: view.eventKey, titleKey: view.titleKey, importance: view.importance,
-    // 官方腿只有经济指标：分级按指标码取；码拿不到就是 null（不在分级表里，不是没读到）。
-    tier: tierOfMetricKey(view.eventNameKey ?? view.eventKey) ?? null,
+    /**
+     * 官方腿只有经济指标：有指标码就按码表取分级（码在表里查不到 → `null`，即「未分级」）；
+     * **连码都没有**（官方发布行只有 `eventKey` 这种发布键）→ 留 `undefined`：
+     * 「判不出分级」不等于「未分级」，两者在筛选时要分开处理。
+     */
+    tier: view.eventNameKey === undefined
+      ? undefined
+      : (tierOfMetricKey(view.eventNameKey) ?? null),
     ...(view.providerIds === undefined ? {} : { sourceIds: view.providerIds }),
     // The official route only publishes economic indicators; the provider carries its own kind.
     category: 'economic-indicator',
