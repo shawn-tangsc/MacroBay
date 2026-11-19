@@ -1,4 +1,5 @@
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
+import type { ChannelConversationKind } from './channelContracts'
 
 /**
  * 一条出站消息从哪来。`notification` 是通知推送（通道方案 §2.2）：幂等键是通知记录 id，
@@ -141,6 +142,17 @@ export type ChannelImageDeliveryRequest = {
 /** 通道的图片能力：`supportsImage` 为假时投递层直接判 `delivery-image-unsupported`，一次网络都不发。 */
 export type ChannelImageTransport = {
   supportsImage: (channelId: string) => boolean
+  /**
+   * 可选：按**这条通道绑定的会话种类**再收窄一次能力。
+   *
+   * 为什么需要：`supportsImage(channelId)` 只看通道与连接，看不到目标会话是什么。QQ 的频道（guild）
+   * 没有素材上传接口——对一条通道是「能发图」，对一条**绑到频道会话**的通道却「不能」。
+   * 没有这一档，能力会画出一个必然失败的按钮，并把「按设计走文字」变成一次失败尝试。
+   *
+   * 不实现 = 所有会话种类都支持（其余适配器的行为一字不变）。拿不到目标会话时也不收窄：
+   * 判不出来就不改变现状。
+   */
+  supportsImageForConversationKind?: (kind: ChannelConversationKind) => boolean
   sendImage: (input: {
     channelId: string
     providerConversationKey: string

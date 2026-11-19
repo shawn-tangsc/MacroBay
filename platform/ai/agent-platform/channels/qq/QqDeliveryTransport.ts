@@ -5,6 +5,7 @@ import type {
   ChannelDeliveryTransportResult,
   ChannelImageTransport
 } from '../ChannelDeliveryContracts'
+import type { ChannelConversationKind } from '../channelContracts'
 import { QqApiClient } from './QqApiClient'
 import { decodeQqConversation, splitQqText } from './QqContracts'
 
@@ -48,6 +49,17 @@ export class QqDeliveryTransport implements ChannelDeliveryTransport, ChannelIma
     const client = this.clients.get(channelId)
     const lifetime = this.lifetimes.get(channelId)
     return Boolean(client && lifetime && !lifetime.signal.aborted && lifetime.isCurrent())
+  }
+
+  /**
+   * 再按**目标会话种类**收窄：单聊、群聊能发图，频道（guild）不能。
+   *
+   * 为什么需要这一档：`supportsImage(channelId)` 看不到目标会话，于是一条**绑到频道**的 QQ 通道
+   * 会被判成「能发图」——界面画出按钮、点了报 `delivery-image-unsupported`，而它本该直接走文字。
+   * 有了这一档，海报/图片投影就知道给这条通道发纯文字，界面也不画那个按钮。
+   */
+  supportsImageForConversationKind(kind: ChannelConversationKind): boolean {
+    return kind !== 'channel'
   }
 
   /**

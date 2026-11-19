@@ -43,6 +43,7 @@ import {
   readChannelConversationSession,
   touchChannelConversation
 } from '../../../ai/agent-platform/channels/channelConversationBindings'
+import { resolveDeliveryTarget } from '../../../ai/agent-platform/channels/channelDeliveryTargetResolution'
 import { getNotificationRuntime } from '../../../notifications/ipc/registerNotificationIpc'
 import { notifyChannelConnectionLost } from '../../../notifications/producers/channelConnectionLost'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../../../notifications/contracts/notificationContracts'
@@ -166,6 +167,13 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   // **同一个实例**同时充当文本与图片出口：只有一张路由表（方案 §2），不开第二张。
   const channelDeliveryRouter = new ChannelDeliveryTransportRouter({
     typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
+    // 图片能力还取决于「这条通道绑定的会话是什么种类」：绑定到 QQ 频道（guild）的通道发不了图，
+    // 该走文字。目标解析复用投递层那**唯一一份** `resolveDeliveryTarget`（不在这里写第二套过滤）；
+    // 没绑定/多绑定时它回 false，这里就回 null，能力按适配器声明走（不改变现状）。
+    targetKindForChannel: (channelId) => {
+      const target = resolveDeliveryTarget(channelManagementService, channelId)
+      return target.ok ? target.kind : null
+    },
     telegram: telegramDeliveryTransport,
     slack: slackDeliveryTransport,
     lark: larkDeliveryTransport,
