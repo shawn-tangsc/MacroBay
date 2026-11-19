@@ -1350,4 +1350,22 @@ describe('running 与 failed 同时存在时的顺序与状态', () => {
     expect(failedRows[0]?.textContent).toContain(text.status.failed)
     expect(failedRows[0]?.textContent).toContain(text.failureReasons['analysis-provider-error'])
   })
+  it('says no usable model when the request is refused for that reason', async () => {
+    // 2026-11-20 用户点「重新生成分析」被拒：旧句子是「重新分析请求未成功」，读者以为要重试。
+    // 真实原因是没有可用模型；这一档必须让读者看到该改哪里。
+    const timeline = {
+      state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(),
+      requestState: 'provider-not-ready',
+      failedRuns: { loading: false, entries: [] }, ensureFailedRuns: vi.fn(), loadMoreFailedRuns: vi.fn()
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(MarketAnalysisTimeline, { text, timeline: timeline as never } as never)))
+    await flushReads()
+
+    expect(document.body.textContent).toContain(text.analysisProviderNotReady)
+    expect(document.body.textContent).not.toContain(text.analysisRefreshFailed)
+  })
+
 })

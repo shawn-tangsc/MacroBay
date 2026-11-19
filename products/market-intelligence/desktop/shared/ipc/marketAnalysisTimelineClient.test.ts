@@ -221,6 +221,8 @@ describe('marketAnalysisTimelineClient', () => {
       ['analysis-initial-request-unavailable', 'not-ready'],
       ['analysis-not-eligible', 'not-eligible'],
       ['analysis-already-available', 'already-available'],
+      // 没有可用模型：一次冻结都没排。它不是「服务还没起来」，也不能落成「排不上队」。
+      ['analysis-provider-not-ready', 'provider-not-ready'],
       ['something-else-entirely', 'failed']
     ]
     for (const [error, reason] of cases) {

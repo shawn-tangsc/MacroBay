@@ -1,5 +1,5 @@
 import type { JobRuntime } from '@platform/jobs'
-import type { AnalysisRun, EventGroup } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_ERROR_CODES, type AnalysisRun, type EventGroup } from '../../../contracts/marketAnalysisContracts'
 import type { NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
@@ -39,6 +39,11 @@ export function createInitialMarketAnalysisRequest(deps: {
   readNewsInterpretation?: (itemId: string) => Promise<NewsInterpretationReadResult>
   /** The capability's switch. Absent (headless/test wiring) leaves the request ungated. */
   isEnabled?: () => Promise<boolean>
+  /**
+   * 读者选好的模型还在不在。排冻结之前就问：没有模型时排上去也只会失败，
+   * 而失败原因会晚一步才出现，读者看到的是「点了没反应」。缺席（headless/窄测试）不设这道门。
+   */
+  hasModel?: () => Promise<boolean>
 }) {
   const enqueue = createAnalysisRunEnqueuer({ jobRuntime: deps.jobRuntime, repository: deps.repository, now: deps.now })
   return async (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource, slot?: AnalysisSessionSlot): Promise<{ itemId: string; queued: true }> => {
@@ -46,6 +51,9 @@ export function createInitialMarketAnalysisRequest(deps: {
     // Asked before anything is written: a disabled capability must not create a group, a freeze job
     // or a run, so there is nothing left behind for a later run to trip over.
     if (deps.isEnabled && !await deps.isEnabled()) throw new Error('analysis-not-enabled')
+    // 模型没选好就不排冻结：这个码和按条解读端点共用，界面照着说「还没有可用的模型」，
+    // 而不是把「排不上队」当成网络或容量问题（用户 2026-11-20 点重试那次就是这样被吞的）。
+    if (deps.hasModel && !await deps.hasModel()) throw new Error(MARKET_ANALYSIS_ERROR_CODES.providerNotReady)
     // `source` is required and has no default: a caller that forgets it must not silently
     // inherit the manual exemption from the gate.
     const triggerKey = resolveTriggerKey(source, mode, slot)
@@ -104,15 +112,37 @@ export function createInitialMarketAnalysisRequest(deps: {
         analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now(), triggeredItemId: item.itemId
       })
       if (outcome.state === 'enqueued' || outcome.state === 'in-flight') return { itemId: item.itemId, queued: true }
-      throw new Error('analysis-initial-request-failed')
+      throw new Error(enqueueFailureCode(outcome.errorCode))
     }
     // 入队与冻结观察是两条手动入口共用的那一段（§9.1）；旧命令对「在飞」返回 queued，语义不变。
     const outcome = await enqueue({
       analysisKind: 'market', eventGroupId: group.id, triggerKey, analysisPhase: mode === 'refresh' ? 'correction' : 'initial', asOf: deps.now()
     })
     if (outcome.state === 'enqueued' || outcome.state === 'in-flight') return { itemId: item.itemId, queued: true }
-    throw new Error('analysis-initial-request-failed')
+    throw new Error(enqueueFailureCode(outcome.errorCode))
   }
+}
+
+/**
+ * 冻结失败的上游码 → 读者能行动的那几档。表外的码不直通（`lastError` 可能是任意内部文本），
+ * 但也不再静默折成一个通用码：先留一条结构化日志，界面那层的兜底句才说得出口。
+ *
+ * 这条替换的是「排不上就只说 `analysis-initial-request-failed`」——那句话把模型未就绪、
+ * 事实不够、组对不上全说成同一件事，读者无法行动。
+ */
+const ENQUEUE_FAILURE_CODES = [
+  MARKET_ANALYSIS_ERROR_CODES.providerNotReady,
+  'analysis-already-available',
+  'analysis-not-eligible',
+  'analysis-event-group-not-found',
+  'analysis-insufficient-data'
+] as const
+
+function enqueueFailureCode(errorCode: string): string {
+  const known = ENQUEUE_FAILURE_CODES.find(code => errorCode.includes(code))
+  if (known) return known
+  console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ENQUEUE_UNMAPPED', errorCode }))
+  return 'analysis-initial-request-failed'
 }
 
 function eligible(item: IntelligenceItem): boolean {

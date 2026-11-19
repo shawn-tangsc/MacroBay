@@ -116,6 +116,23 @@ describe('createInitialMarketAnalysisRequest', () => {
     expect(fixture.jobRuntime.listRuns().map(run => run.status).sort()).toEqual(['completed', 'failed'])
   })
 
+  it('refuses a request before creating a freeze when no model is selected', async () => {
+    // 用户 2026-11-20 点「重新生成分析」：入队那一步被拒，界面只说「这次没能排上分析」。
+    // 没有可用模型时必须在排冻结之前就回答，而且原因要说得出来。
+    const fixture = setup()
+    const request = createInitialMarketAnalysisRequest({ ...fixture, hasModel: async () => false })
+    await expect(request(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-provider-not-ready')
+    // 一次冻结都没排、也没建新组：这是一个「没开始」，不是「排不上」。
+    expect(fixture.jobRuntime.listRuns()).toHaveLength(0)
+    expect(fixture.repository.listEventGroups()).toHaveLength(1)
+  })
+
+  it('surfaces the freeze refusal reason instead of folding it into a generic code', async () => {
+    const fixture = setup()
+    fixture.freeze.mockRejectedValueOnce(new Error('analysis-insufficient-data: fewer than two market readings'))
+    await expect(fixture.request(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-insufficient-data')
+  })
+
   it('does not start a second run after the UI wait times out while the job continues', async () => {
     const fixture = setup()
     const gate = deferred()

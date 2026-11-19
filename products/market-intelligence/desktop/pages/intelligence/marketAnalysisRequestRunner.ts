@@ -22,6 +22,18 @@ export type AnalysisRequestRunner = Readonly<{
   regenerateConclusion: (eventGroupId: string) => Promise<void>
 }>
 
+/**
+ * 一个拒绝原因 → 界面状态。分开列，不做（原因 ∪ 状态）的隐式映射：
+ * 「服务还没起来」与「还没有可用的模型」对读者是两件事，句子不一样。
+ */
+function stateForRefusal(reason: 'not-eligible' | 'not-ready' | 'provider-not-ready' | 'failed' | 'already-available'): AnalysisRequestState {
+  if (reason === 'not-eligible') return 'unavailable'
+  if (reason === 'not-ready') return 'not-ready'
+  if (reason === 'provider-not-ready') return 'provider-not-ready'
+  if (reason === 'already-available') return 'already-available'
+  return 'failed'
+}
+
 export function createAnalysisRequestRunner(deps: Readonly<{
   policy: AnalysisTimelineRefreshPolicy
   load: (cursor?: string, readAttempt?: boolean) => Promise<{ entries: readonly MarketAnalysisTimelineEntry[]; attempt: MarketAnalysisAttempt | null } | undefined>
@@ -85,7 +97,7 @@ export function createAnalysisRequestRunner(deps: Readonly<{
     deps.setRequestFailure(undefined)
     const result = await deps.client.requestInitialAnalysis(deps.retryRunId())
     if (result.state !== 'queued') {
-      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
+      const next = stateForRefusal(result.reason)
       deps.setRequestState(next)
       if (next === 'failed') deps.setRequestFailure('request')
       return
@@ -114,7 +126,7 @@ export function createAnalysisRequestRunner(deps: Readonly<{
       return 'refused'
     }
     if (result.state !== 'queued') {
-      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
+      const next = stateForRefusal(result.reason)
       deps.setRequestState(next)
       if (next === 'failed') deps.setRequestFailure('request')
       return 'refused'

@@ -159,7 +159,7 @@ export type MarketAnalysisTimelineClient = Readonly<{
    * 既有入口：`retryRunId` 重跑失败的那次；`mode: 'refresh'` 为同一事件组再分析一次；
    * `eventGroupId` 让「重新生成」指着读者正在看的那一组，而不是「最近一条」。
    */
-  requestInitialAnalysis: (retryRunId?: string, mode?: 'initial' | 'refresh', eventGroupId?: string) => Promise<{ state: 'queued'; itemId: string } | { state: 'unavailable'; reason: 'not-eligible' | 'not-ready' | 'failed' | 'already-available' }>
+  requestInitialAnalysis: (retryRunId?: string, mode?: 'initial' | 'refresh', eventGroupId?: string) => Promise<{ state: 'queued'; itemId: string } | { state: 'unavailable'; reason: 'not-eligible' | 'not-ready' | 'provider-not-ready' | 'failed' | 'already-available' }>
   getLatestAttempt: () => Promise<MarketAnalysisAttempt | null>
   getDetail: (entry: MarketAnalysisTimelineEntry) => Promise<{ state: 'available'; detail: MarketAnalysisTimelineDetail } | { state: 'unavailable' }>
 }>
@@ -222,6 +222,8 @@ export const marketAnalysisTimelineClient: MarketAnalysisTimelineClient = {
       // The main process answers this before its runtime is wired, which is exactly what a click
       // during a restart hits. Naming it keeps the panel from blaming the model configuration.
       if (message.includes('analysis-initial-request-unavailable')) return { state: 'unavailable', reason: 'not-ready' }
+      // 没有可用模型：一次冻结都没排。它既不是「服务还没起来」，也不是「排不上队」。
+      if (message.includes('analysis-provider-not-ready')) return { state: 'unavailable', reason: 'provider-not-ready' }
       return { state: 'unavailable', reason: message === 'analysis-not-eligible' ? 'not-eligible' : 'failed' }
     }
   },

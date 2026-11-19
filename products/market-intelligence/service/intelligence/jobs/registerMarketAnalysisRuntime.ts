@@ -413,7 +413,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     enqueue: createAnalysisRunEnqueuer({ jobRuntime: input.jobRuntime, repository, now })
   })
 
-  const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled,
+  const requestInitialAnalysis = createInitialMarketAnalysisRequest({ repository, jobRuntime: input.jobRuntime, listItems: () => input.pipeline.listItems(), now, isEnabled: isEnabled, ...(modelWiring ? modelWiring.request : {}),
       ...(input.latestNewsSentiment ? { latestNewsSentiment: input.latestNewsSentiment } : {}),
       readNewsInterpretation: newsInterpretation.readNewsInterpretation,
       createGroup: async itemId => {
