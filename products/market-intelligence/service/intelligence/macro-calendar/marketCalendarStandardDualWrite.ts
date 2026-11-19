@@ -11,6 +11,8 @@ import { calendarStandardTablePolicy, findCalendarStandardRowBySource, promoteCa
   CalendarValueShapeError, type CalendarIdentityKind, type CalendarReleaseStatus,
   type CalendarUnmappedReason } from './marketCalendarStandardTable'
 import { logSourceIdOverwriteSummary, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
+import { hashIncomingValues, recordCalendarValueRevision, type CalendarMergeDecision,
+  type CalendarValueField } from './marketCalendarValueRevisionAudit'
 
 /**
  * 观测行 → 标准行的**双写**（S1：只写不读，读取路径一个字节不动）。
@@ -107,14 +109,34 @@ export function dualWriteMeasureRows(
        * （`status !== 'published'`）→ 当成占位，不写；**已发布行的 0 是合法值**（新增就业 0K、
        * 环比 0.0%），照常写入——否则真实的零增长永远显示成「未提供」。
        */
+      /**
+       * **旧值必须在 upsert 之前取**（用户 2026-11-20，Chief 钉死）：upsert 之后再从表里读，
+       * 拿到的就是刚写进去的新值，`value_before === value_after` 恒成立，按「值变了才写」的规则
+       * 一条审计都不会写，而系统看起来完全正常——最难发现的空转。
+       */
       const existingValues = existing === undefined ? {} : readValuesJson(database, existing)
+      /**
+       * **审计用的旧值按「目标身份」取，不是按源内发布 id**（用户 2026-11-20）：
+       * 不同来源写同一格时 `findCalendarStandardRowBySource` 找不到（sourceEventId 不同），
+       * 但库里那一格已经有值——按 id 取会把 before 记成 null，审计就说了假话。
+       */
+      const priorValues = readValuesJson(database, {
+        countryCode: toAlpha2Country(row.countryCode), metricKey: row.metricKey, periodKey: row.periodKey,
+        firstScheduledDate: existing?.firstScheduledDate ?? row.scheduledDate
+      })
+      /** 字段级判定：值与 decision 同一处产出，不许「算一次值、再猜一次为什么没写」。 */
+      const decisions = {
+        actual: decideMerge('actual', row.actual, existingValues.actual, row.status),
+        previous: decideMerge('previous', row.previous, existingValues.previous, undefined),
+        consensus: decideMerge('consensus', row.consensus, existingValues.consensus, undefined)
+      }
       const writable = {
         // 状态门只作用于 `actual`：只有「这一行还没发布却带了实际值」才是占位。
         // `previous` / `consensus` 在未发布行上是**已知真值**（上一期 0K、预期 0.0%），
         // 把它们也塞进状态门，会把「预期 0.0%」这种最常见的情况丢掉。
-        actual: writableActual(row.actual, row.status, existingValues.actual),
-        previous: writableValue(row.previous, existingValues.previous),
-        consensus: writableValue(row.consensus, existingValues.consensus)
+        actual: decisions.actual.value,
+        previous: decisions.previous.value,
+        consensus: decisions.consensus.value
       }
       // **原地转正**：原来用源内 id 撑着的那一行，现在有标准码了 → 改这一行的码，不新增行。
       if (existing !== undefined && existing.identityKind === 'source' && row.identityKind !== 'source'
@@ -157,6 +179,27 @@ export function dualWriteMeasureRows(
       // 但溯源清单要能查到每一次发布。**身份取 upsert 真正写进去的那一组**：中英两条会被认回到
       // 同一行（迁移 18），写这一笔带来的 id 会让台账指向一个不存在的身份。
       if (placed.sourceIdOverwrite !== undefined) sourceIdOverwrites.push(placed.sourceIdOverwrite)
+      /**
+       * **来源审计**（31 号文档 §3）：值真的变了或拒绝覆盖才写一行。**自己 catch 自己**——
+       * 审计写失败不许把已经成功的标准行写入变成失败；反过来也不写行就没有审计。
+       */
+      try {
+        const incomingHash = hashIncomingValues({ actual: row.actual, previous: row.previous, consensus: row.consensus })
+        for (const field of ['actual', 'previous', 'consensus'] as const) {
+          const decision = decisions[field]
+          if (decision.decision === 'keep:absent-in-source' && existingValues[field] === undefined) continue
+          recordCalendarValueRevision(database, {
+            countryCode: toAlpha2Country(row.countryCode), metricKey: placed.metricKey, periodKey: row.periodKey,
+            firstScheduledDate: placed.firstScheduledDate, field,
+            valueBefore: priorValues[field] ?? null,
+            valueAfter: decision.decision === 'write' ? (decision.value ?? null) : null,
+            decision: decision.decision, providerId: input.providerId, sourceEventId: row.sourceEventId,
+            parserVersion: input.parserVersion, observedAt: input.observedAt, incomingHash
+          })
+        }
+      } catch (error) {
+        options?.onError?.(`价值修订审计写入失败：${(error as Error)?.message ?? 'unknown'}`)
+      }
       recordCalendarSourceId(database, { providerId: input.providerId, sourceEventId: row.sourceEventId,
         countryCode: placed.countryCode, metricKey: placed.metricKey, periodKey: placed.periodKey,
         firstScheduledDate: placed.firstScheduledDate, observedAt: input.observedAt })
@@ -172,6 +215,22 @@ export function dualWriteMeasureRows(
   }
   logSourceIdOverwriteSummary(sourceIdOverwrites)
   return { written, unmapped: reasons, failed, mergedSameDay, ...(firstErrorCode === undefined ? {} : { firstErrorCode }) }
+}
+
+/**
+ * 一格的合并判定（值 + 为什么）。规则与原 `writableActual`/`writableValue` **逐条一致**：
+ * 源没给/空串 → `keep:absent-in-source`；实际值 0 且未发布 → `keep:placeholder-zero`；
+ * 0 且已有非空值 → `keep:zero-does-not-overwrite`；其余 → `write`。
+ */
+function decideMerge(field: CalendarValueField, incoming: string | undefined, existing: string | undefined,
+  status: CalendarReleaseStatus | undefined): Readonly<{ value?: string; decision: CalendarMergeDecision }> {
+  if (incoming === undefined || incoming.trim() === '') return { decision: 'keep:absent-in-source' }
+  if (field === 'actual' && isZeroValue(incoming) && status !== undefined
+    && status !== 'published' && status !== 'unknown') return { decision: 'keep:placeholder-zero' }
+  if (isZeroValue(incoming) && existing !== undefined && existing.trim() !== '') {
+    return { decision: 'keep:zero-does-not-overwrite' }
+  }
+  return { value: incoming, decision: 'write' }
 }
 
 /** 观测行的最小形状（draft 与已落库行都能满足）。 */
