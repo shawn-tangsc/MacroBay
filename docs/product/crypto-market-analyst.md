@@ -175,7 +175,7 @@ Each source is one row, and only these are adjustable:
 - **Run now** — collect once without waiting for the timer. The button is disabled while it runs, and the result stays on that row: the server's summary on success, the reason on failure.
 - **Source health** — four cells: whether it has a reading today, when it last succeeded, why it is not collecting, and whether it can run right now. All four come from one read, and the dot in the catalog uses the same judgement.
 
-**Not offered, and not affected by anything you set**: scope policy, raw archiving, retention mode, and replay after a parser upgrade. Nothing in this version reads them, so a switch would change nothing.
+**Not offered in this version**: scope policy, raw archiving, retention mode, and replay after a parser upgrade. The first three only ride along in the stored source profile — nothing reads them while collecting, so a switch would change nothing you could see. **Retention mode is different**: the archive stage reads it to decide how many days of raw records stay hot, so it does change what is kept — it just has no control here, and every source uses the balanced default.
 
 ## 5. Check that a source has data
 
