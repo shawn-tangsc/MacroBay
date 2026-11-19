@@ -143,6 +143,9 @@ function PastCard(input: CardInput): React.ReactElement {
         {loaded && lead?.period !== undefined && lead.releasedAt !== undefined
           ? text.cardFace.whenPublished.replace('{period}', lead.period).replace('{time}', stamp(lead.releasedAt, timeZone))
           : ''}
+        {/* state-ternary: reviewed —— 这一处**加**一颗 ⓘ、不藏内容；而且这三态无法由数据反推
+            （`missing-current` 与 `not-recorded` 都没有当期值，但前者是「已发布、当期缺」，后者是
+            「我们没记」），同值不同义，必须读契约里的 state（产品 41 号文的四态口径）。 */}
         {lead?.state === 'missing-current' ? <CardWhy resolveKey={resolveKey} /> : null}
       </div>
       <div className="mk-rows">
@@ -190,6 +193,8 @@ function ReleasedRow(input: Readonly<{
   return (
     <div className="mk-vrow">
       <dt>{row.label}</dt>
+      {/* state-ternary: reviewed —— 这里只摊开一个 HTML 属性（给样式与用例读的钩子），
+          不决定任何内容画不画：文字由 cell.text/cell.noteState 控制，与这个属性无关。 */}
       <dd {...(missing ? { 'data-na': 'true' } : {})}
         {...(cell.state === undefined ? {} : { 'data-cell-state': cell.state })}>
         {cell.noteState === undefined ? cell.text : <span className="mk-vrow__gap">
