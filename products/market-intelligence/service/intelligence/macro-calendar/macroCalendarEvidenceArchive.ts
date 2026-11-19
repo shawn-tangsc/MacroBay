@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -10,6 +9,8 @@ import {
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
+
+import { payloadHash, writeVerifiedPayload } from '../storage/contentAddressedPayloads'
 
 import type { RawRecordStore } from '../application/rawRecordStore'
 import type { AppendRawRecordInput, RawIntelligenceRecord } from '../schema/intelligenceRecord'
@@ -220,7 +221,10 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
         storageTier: macroCalendarEvidenceArchivePolicy.storageTier
       }
       if (!metadataFitsReservation(recordInput, reservationState.maximumMetadataBytes)) return undefined
-      if (!writeVerifiedBody(archivePath, appendInput.payloadBody, appendInput.payloadHash, ++temporarySequence)) return undefined
+      // 共用原语：内容寻址 + 写后读回校验（同 hash 已有文件时复用）。
+      const written = writeVerifiedPayload({ directory: input.archiveDirectory, body: appendInput.payloadBody,
+        expectedHash: appendInput.payloadHash, temporarySequence: ++temporarySequence })
+      if (written.state === 'failed') return undefined
       if (!existed) committedBytes += appendInput.payloadSizeBytes
       const record = input.rawRecords.appendRawRecord(recordInput)
       if (!record) {
@@ -281,9 +285,10 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
           return failMigration()
         }
         if (!existed) createdArchivePaths.push(archivePath)
-        if (!writeVerifiedBody(archivePath, body, record.payloadHash, ++temporarySequence)) {
-          return failMigration()
-        }
+        // **共用原语**（用户 2026-11-20）：内容寻址、读回校验、同 hash 复用都只此一份。
+        const written = writeVerifiedPayload({ directory: input.archiveDirectory, body,
+          expectedHash: record.payloadHash, temporarySequence: ++temporarySequence })
+        if (written.state === 'failed') return failMigration()
         if (!existed) committedBytes += bodyBytes
         pending.push({ record, body, bodyBytes, archiveFileRef, existed })
       }
@@ -323,22 +328,6 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
       return Object.freeze({ committedBytes, reservedBytes, activeReservations: activeReservations.size })
     }
   })
-
-  function writeVerifiedBody(path: string, body: string, expectedHash: string, sequence: number): boolean {
-    const temporaryPath = `${path}.${process.pid}.${sequence}.tmp`
-    try {
-      if (!existsSync(path)) {
-        writeFileSync(temporaryPath, body, { encoding: 'utf8', flag: 'wx' })
-        renameSync(temporaryPath, path)
-      }
-      const stored = readFileSync(path, 'utf8')
-      return hash(stored) === expectedHash && Buffer.byteLength(stored, 'utf8') === Buffer.byteLength(body, 'utf8')
-    } catch {
-      return false
-    } finally {
-      try { rmSync(temporaryPath, { force: true }) } catch { /* Keep the original result. */ }
-    }
-  }
 }
 
 function initialCommittedBytes(rawRecords: RawRecordStore, archiveDirectory: string): number {
@@ -358,14 +347,14 @@ function isAppendInput(value: MacroCalendarEvidenceArchiveAppendInput, maximumBy
   if (!value || typeof value !== 'object' || typeof value.payloadBody !== 'string' || value.payloadBody.length === 0 || value.payloadBody.includes('\0')) return false
   const bytes = Buffer.byteLength(value.payloadBody, 'utf8')
   return Number.isSafeInteger(value.payloadSizeBytes) && value.payloadSizeBytes === bytes && bytes <= maximumBytes &&
-    typeof value.payloadHash === 'string' && value.payloadHash === hash(value.payloadBody) &&
+    typeof value.payloadHash === 'string' && value.payloadHash === payloadHash(value.payloadBody) &&
     typeof value.sourceId === 'string' && value.sourceId.trim().length > 0 &&
     typeof value.sourceDedupeKey === 'string' && value.sourceDedupeKey.trim().length > 0
 }
 
 function matchesBody(record: RawIntelligenceRecord, body: string): boolean {
   const bytes = Buffer.byteLength(body, 'utf8')
-  return record.payloadHash === hash(body) && (record.payloadSizeBytes === undefined || record.payloadSizeBytes === bytes)
+  return record.payloadHash === payloadHash(body) && (record.payloadSizeBytes === undefined || record.payloadSizeBytes === bytes)
 }
 
 function metadataFitsReservation(input: AppendRawRecordInput, maximumBytes: number): boolean {
@@ -378,6 +367,3 @@ function metadataFitsReservation(input: AppendRawRecordInput, maximumBytes: numb
     macroCalendarEvidenceArchivePolicy.metadataEnvelopeOverheadBytes <= maximumBytes
 }
 
-function hash(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('hex')
-}
