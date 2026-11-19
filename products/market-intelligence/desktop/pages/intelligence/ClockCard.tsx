@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react'
 import { Calendar } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -18,6 +17,43 @@ import './clockCard.css'
  * 下面是**原型冻结的几何路径**（环 r135 / 刻度环 r104 / 8 点 7° 断口 / 12 点连续），
  * 搬过来是为了计算值一模一样；它们不含任何会随数据变的东西。
  */
+/**
+ * **环流高光的裁剪带**（Chief 2026-11-20 找出的真凶：亮斑画在 r=135，遮罩却只覆盖 r≈104，
+ * 所以整条被裁掉，屏幕上从来没出现过它）。
+ *
+ * 这里按**角度**生成两条路径，不手写字面量：旧 `flowClip` 的角度端点由它的端点反算得出
+ * （12 点 −90° 起，顺时针到 8 点断口 146.5°，断口宽 7°，再回到 12 点），
+ * 半径取 `orbitRadius ± 1.5`——3px 描边正好落在带子里。
+ */
+const RING_CLIP = Object.freeze({ startAngle: -90, gapStart: 146.5, gapEnd: 153.5, halfWidth: 1.5 })
+
+function ringPoint(angleDeg: number, radius: number): Readonly<{ x: number; y: number }> {
+  const radians = angleDeg * Math.PI / 180
+  return { x: clockCardCenter.svgX + radius * Math.cos(radians), y: clockCardCenter.svgY + radius * Math.sin(radians) }
+}
+
+/** 一段环带：外沿顺时针画到终点，再沿内沿逆时针画回来。 */
+function ringBand(innerRadius: number, outerRadius: number, fromAngle: number, toAngle: number): string {
+  const outerFrom = ringPoint(fromAngle, outerRadius)
+  const outerTo = ringPoint(toAngle, outerRadius)
+  const innerTo = ringPoint(toAngle, innerRadius)
+  const innerFrom = ringPoint(fromAngle, innerRadius)
+  const large = Math.abs(toAngle - fromAngle) > 180 ? 1 : 0
+  const round = (value: number): string => value.toFixed(2)
+  return `M${round(outerFrom.x)} ${round(outerFrom.y)} A${outerRadius} ${outerRadius} 0 ${large} 1 ${round(outerTo.x)} ${round(outerTo.y)}`
+    + ` L${round(innerTo.x)} ${round(innerTo.y)} A${innerRadius} ${innerRadius} 0 ${large} 0 ${round(innerFrom.x)} ${round(innerFrom.y)} Z`
+}
+
+/** 高光所在那一圈（r=135）的裁剪带：两段，中间留出 8 点那个 7° 断口。 */
+const RING_CLIP_PATHS = Object.freeze({
+  inner: clockCardGeometry.orbitRadius - RING_CLIP.halfWidth,
+  outer: clockCardGeometry.orbitRadius + RING_CLIP.halfWidth,
+  a: ringBand(clockCardGeometry.orbitRadius - RING_CLIP.halfWidth,
+    clockCardGeometry.orbitRadius + RING_CLIP.halfWidth, RING_CLIP.startAngle, RING_CLIP.gapStart),
+  b: ringBand(clockCardGeometry.orbitRadius - RING_CLIP.halfWidth,
+    clockCardGeometry.orbitRadius + RING_CLIP.halfWidth, RING_CLIP.gapEnd, RING_CLIP.startAngle + 360)
+})
+
 const GEOMETRY = {
   zoneFuture: 'M156.00 46.00 A107 107 0 1 1 66.77 212.06 L60.94 215.92 A114 114 0 1 0 156.00 39.00 Z',
   zonePast: 'M60.24 200.74 A107 107 0 0 1 156.00 46.00 L156.00 39.00 A114 114 0 0 0 53.98 203.87 Z',
@@ -112,39 +148,11 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
     })
   const center = model.center
   const centerPlaqueId = center === undefined ? undefined : `${center.metricKey}:future`
-  /**
-   * **临时诊断**（Chief 2026-11-20）：环流高光「有样式但不动」要一次运行时真相，别再靠猜。
-   * 挂载后跑一次，把动画有没有挂上、被哪条规则挡掉、计算值与属性值分别是什么，写成一行进 app.log。
-   * 只加这一段 + 一个 ref，不改结构、不改样式；查清后由 Chief 说一声删掉。
-   */
-  const rootRef = useRef<HTMLElement>(null)
-  useEffect(() => {
-    const report = (after: string): void => {
-      const el = rootRef.current?.querySelector('.mi-clock__sweep')
-      const cs = el === null || el === undefined ? undefined : getComputedStyle(el)
-      // `console.warn`：渲染层只有 warn/error 进 app.log，info 会被过滤掉（Chief 2026-11-20）。
-      console.warn('[mi-clock-diag]', JSON.stringify({
-        after,
-        path: window.location.pathname,
-        exists: el !== null && el !== undefined,
-        animationName: cs?.animationName,
-        animationDuration: cs?.animationDuration,
-        animationPlayState: cs?.animationPlayState,
-        dashoffset: cs?.strokeDashoffset,
-        dashoffsetAttr: el?.getAttribute('stroke-dashoffset'),
-        reduceNoPreference: window.matchMedia('(prefers-reduced-motion: no-preference)').matches,
-        reduce: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      }))
-    }
-    report('mount')
-    // HMR 后组件不一定重挂：1 秒后再打一次，确保这条日志一定会出现（第二行才是准的）。
-    const timer = window.setTimeout(() => report('after-1s'), 1000)
-    return () => window.clearTimeout(timer)
-  }, [])
+
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
   // 用户 2026-11-15：**不再缩放**。卡保持 336×330、`transform` 为单位矩阵，
   // 只由外层容器决定它放在哪、旁边是谁；内部尺寸与 537 项计算值一项不动。
-  return <section className="mi-clock" aria-label={text.ariaLabel} ref={rootRef}>
+  return <section className="mi-clock" aria-label={text.ariaLabel}>
       <svg className="mi-clock__svg" viewBox={`0 0 ${clockCardGeometry.svgWidth} ${clockCardGeometry.svgHeight}`} aria-hidden="true">
         <defs>
           <filter id="miClockFlowGlow" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="2.5" /></filter>
@@ -153,6 +161,10 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           </clipPath>
           <clipPath id="miClockFlowClip" clipPathUnits="userSpaceOnUse">
             <path d={GEOMETRY.flowClipA} fill="#fff" /><path d={GEOMETRY.flowClipB} fill="#fff" />
+          </clipPath>
+          {/* 高光那一圈（r=135）的遮罩：与旧 flowClip 同一组角度端点，只是半径对齐轨道。 */}
+          <clipPath id="miClockRingClip" clipPathUnits="userSpaceOnUse">
+            <path d={RING_CLIP_PATHS.a} fill="#fff" /><path d={RING_CLIP_PATHS.b} fill="#fff" />
           </clipPath>
           <linearGradient id="miClockFlowGrad" gradientUnits="userSpaceOnUse" x1="65.93" y1="153.00" x2="246.07" y2="153.00">
             <stop className="mi-clock__flowStart" offset="0" /><stop className="mi-clock__flowEnd" offset="1" />
@@ -170,8 +182,12 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         <g clipPath="url(#miClockGlowClip)"><g className="mi-clock__orbit">
           <path className="mi-clock__glow" d={GEOMETRY.flowFan} fill="url(#miClockFlowGrad)" />
         </g></g>
+        {/* 内圈那块静态渐变扇：仍用旧遮罩（半径 102.5~105.5），与高光无关。 */}
         <g clipPath="url(#miClockFlowClip)"><g className="mi-clock__orbit">
           <path d={GEOMETRY.flowFan} fill="url(#miClockFlowGrad)" clipPath="url(#miClockFlowClip)" />
+        </g></g>
+        {/* 环流高光：单独用同轨道的遮罩（r=135±1.5），否则会被内圈那份裁掉、在屏幕上根本看不见。 */}
+        <g clipPath="url(#miClockRingClip)"><g className="mi-clock__orbit">
           {/*
             **环流高光**（界面设计 2026-11-20，全仓唯一一条装饰动画）：
             沿轨道推进一段亮斑，头亮尾透明，8s 线性无限循环。
@@ -274,4 +290,38 @@ function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, cen
     ?? text.names[nameKey as keyof typeof text.names]
     ?? nameKey
   return name
+}
+
+// ---------------------------------------------------------------------------
+// 临时诊断（Chief 2026-11-20）：「环上有样式但一动不动」，要一次运行时真相。
+// 放在**模块级**：热更新会替换模块并重新执行这里，不依赖组件重挂（Fast Refresh 不重挂）。
+// 只用 console.warn 输出（渲染层只有 warn/error 进 app.log）。查完整段删掉。
+if (import.meta.env.DEV) {
+  setTimeout(() => {
+    const host = document.querySelector('.mi-clock')
+    const el = host?.querySelector('.mi-clock__sweep')
+    const cs = el instanceof SVGElement ? getComputedStyle(el) : undefined
+    console.warn('[mi-clock-diag]', JSON.stringify({
+      path: location.pathname,
+      hostFound: host !== null,
+      exists: el !== undefined && el !== null,
+      dashSamples: [cs?.strokeDashoffset],
+      animationName: cs?.animationName,
+      animationDuration: cs?.animationDuration,
+      animationPlayState: cs?.animationPlayState,
+      dashoffset: cs?.strokeDashoffset,
+      dashoffsetAttr: el?.getAttribute('stroke-dashoffset'),
+      reduceNoPreference: matchMedia('(prefers-reduced-motion: no-preference)').matches,
+      reduce: matchMedia('(prefers-reduced-motion: reduce)').matches
+    }))
+    // 再采一次：两次 dashoffset 不同即证明动画在跑（唯一不靠肉眼的机器证据）。
+    setTimeout(() => {
+      const el2 = document.querySelector('.mi-clock__sweep')
+      const cs2 = el2 instanceof SVGElement ? getComputedStyle(el2) : undefined
+      console.warn('[mi-clock-diag]', JSON.stringify({
+        path: location.pathname, after: 'after+500ms', dashSamples: [cs?.strokeDashoffset, cs2?.strokeDashoffset],
+        moving: cs?.strokeDashoffset !== cs2?.strokeDashoffset
+      }))
+    }, 500)
+  }, 1500)
 }

@@ -211,3 +211,25 @@ it('writes the keyframe offsets with a unit, or the whole animation is dropped',
   expect(offsets.length).toBeGreaterThan(0)
   for (const value of offsets) expect(value).toMatch(/^-?\d+(?:\.\d+)?px$/u)
 })
+
+/**
+ * 几何断言（Chief 2026-11-20 抓到的真凶）：亮斑画在 r=135，而包住它的裁剪遮罩曾经只覆盖
+ * 半径 102.5~105.5 —— **整条高光被裁掉，屏幕上从来没有出现过它**（动画不动只是表层）。
+ *
+ * 重新生成的环带遮罩必须覆盖 `orbitRadius ± 1.5`；把半径改回 102.5 这类值，这条当场红。
+ */
+it('clips the sweep inside a band that actually covers the orbit radius', async () => {
+  const { host } = await render()
+  const sweep = host.querySelector('.mi-clock__sweep')!
+  const r = Number(sweep.getAttribute('r'))
+  const clip = host.querySelector('#miClockRingClip')!
+  const radii = [...clip.querySelectorAll('path')]
+    .flatMap((path) => [...(path.getAttribute('d') ?? '').matchAll(/A([\d.]+) [\d.]+/gu)].map((m) => Number(m[1])))
+  expect(radii.length).toBeGreaterThan(0)
+  for (const radius of radii) expect(r).toBeGreaterThanOrEqual(radius - 1.5001)
+  for (const radius of radii) expect(r).toBeLessThanOrEqual(radius + 1.5001)
+  // 反向：内圈那份旧遮罩（102.5~105.5）确实盖不住 135——这正是当初它被裁没的原因。
+  const oldRadii = [...host.querySelector('#miClockFlowClip')!.querySelectorAll('path')]
+    .flatMap((path) => [...(path.getAttribute('d') ?? '').matchAll(/A([\d.]+) [\d.]+/gu)].map((m) => Number(m[1])))
+  expect(oldRadii.every((radius) => r > radius + 1.5)).toBe(true)
+})
