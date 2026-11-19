@@ -1,4 +1,14 @@
 // Product-owned public boundary for design 122. No storage/provider-native identities.
+/**
+ * **拿到实际值之后要升级成 `published` 的那几档**（迁移/启动归一用）。
+ *
+ * `scheduled` = 源还没标发布、`missing` = 过了发布时点却没有值：这两种在**有实际值**的那一刻
+ * 就不再成立，必须升成 `published`。语义写在契约里、调用点只读它——2026-11-19 的守卫红就是
+ * 有人在归一逻辑里又抄了一遍 `'missing' || 'scheduled'` 两个状态字面量。
+ */
+export const releaseStatusesPromotedByValue: readonly (typeof marketCalendarPublicPolicy.releaseStatuses)[number][] =
+  Object.freeze(['scheduled', 'missing'])
+
 export const marketCalendarPublicPolicy = Object.freeze({
   /**
    * 覆盖口径的**闭集**：只有这两档，一处定义。

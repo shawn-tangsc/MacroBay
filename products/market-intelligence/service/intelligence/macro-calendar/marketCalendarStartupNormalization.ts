@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { zeroXRouterCanonicalIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { calendarStandardTablePolicy, hasActualValue } from './marketCalendarStandardTable'
+import { releaseStatusesPromotedByValue } from '../../../contracts/macro/marketCalendarQueryContracts'
 
 /**
  * **启动链幂等规范化**（用户 2026-11-19 批）：把这几轮清库用的三步固定下来，每次启动先跑一遍。
@@ -122,7 +123,8 @@ export function normalizeCalendarStandardRows(
       const present = hasActualValue(String(row.values_json))
       const nextState = present ? 'present' : 'missing'
       const status = String(row.status)
-      const nextStatus = present && (status === 'missing' || status === 'scheduled') ? 'published' : status
+      // 「有实际值就升级成 published」的那几档写在契约里（`releaseStatusesPromotedByValue`），这里不抄字面量。
+      const nextStatus = present && releaseStatusesPromotedByValue.includes(status as never) ? 'published' : status
       const clearReason = present && row.missing_reason !== null ? 1 : 0
       if (nextState === row.value_state && nextStatus === status && clearReason === 0) continue
       if (nextState === 'present' && row.value_state !== 'present') report.valueStateToPresent += 1
