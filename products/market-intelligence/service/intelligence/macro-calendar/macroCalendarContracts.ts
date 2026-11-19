@@ -6,7 +6,12 @@ export type MacroCalendarEventFamily = 'fomc' | 'cpi' | 'core-cpi' | 'consumer-p
 export type MacroCalendarRevisionKind = 'schedule' | 'official-release' | 'schedule-correction' | 'official-revision' | 'cancellation'
 export type MacroCalendarLifecycleState = 'scheduled' | 'released' | 'cancelled'
 export type MacroCalendarCoverageState = 'available' | 'partial' | 'unavailable'
-export type MacroCalendarProviderId = 'macro-calendar-fed' | 'macro-calendar-bls' | 'macro-calendar-bea'
+/**
+ * 日历这条链上**真实存在**的 provider id（用户 2026-11-19）：
+ * 前三个是官方采集（Fed/BLS/BEA），`0xrouter` 是历史回填那条腿——它一直在写标准表与健康记录，
+ * 只是类型声明漏了它，于是调用点只能 `as never` 强转（等于类型在说谎）。补进来、强转删掉。
+ */
+export type MacroCalendarProviderId = 'macro-calendar-fed' | 'macro-calendar-bls' | 'macro-calendar-bea' | '0xrouter'
 
 export type MacroCalendarValue = {
   displayValue: string

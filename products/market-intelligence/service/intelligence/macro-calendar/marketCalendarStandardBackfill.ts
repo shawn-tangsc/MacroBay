@@ -7,6 +7,7 @@ import { narwhalCanonicalIdentityKey, toAlpha2Country, zeroXRouterCanonicalIdent
 import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { recordCalendarWriteFailure, type MacroCalendarProviderHealthStore } from './macroCalendarProviderHealthStore'
+import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import { routeStandardRelease } from './marketCalendarStandardRowRouting'
 import { ensureCalendarStandardTables, recordCalendarUnmapped, type CalendarUnmappedReason }
   from './marketCalendarStandardTable'
@@ -207,13 +208,22 @@ export function reportWriteFailure(
   at: string
 ): boolean {
   if (counts.failed === 0 || counts.firstErrorCode === undefined) return false
-  const recorded = health === undefined ? false
-    : recordCalendarWriteFailure(health, providerId as never,
+  /**
+   * **只有落在日历健康记录空间里的 provider 才记**：`fed/bls/bea/0xrouter`。
+   * 回填也可能用 `narwhal` 跑（它不在这套健康记录里），那种情况只打日志、不往别人的健康上写。
+   */
+  const healthProviderId = isCalendarHealthProviderId(providerId) ? providerId : undefined
+  const recorded = health === undefined || healthProviderId === undefined ? false
+    : recordCalendarWriteFailure(health, healthProviderId,
       { at, failedRows: counts.failed, firstErrorCode: counts.firstErrorCode })
   log?.('warn', 'macro-calendar.standard.write-failed',
     { providerId, failedRows: counts.failed, firstErrorCode: counts.firstErrorCode, recorded })
   return recorded
 }
+
+const isCalendarHealthProviderId = (value: string): value is MacroCalendarProviderId =>
+  value === 'macro-calendar-fed' || value === 'macro-calendar-bls'
+  || value === 'macro-calendar-bea' || value === '0xrouter'
 
 const hasMeasures = (json: string | null): boolean =>
   json !== null && json !== '' && json !== '[]' && json !== 'null'

@@ -277,8 +277,10 @@ function monthBounds(month: string): { monthStart: string; monthEndExclusive: st
 function isEligible(revision: MacroCalendarRevision, asOf: string, peers: readonly MacroCalendarRevision[] = []): boolean {
   return revision.detectedAt <= asOf &&
     ((revision.revisionKind === 'schedule' &&
-      ((revision.providerId !== 'macro-calendar-bls' && revision.providerId in macroEconomicCalendarQueryPolicy.eligibleSchedules &&
-        macroEconomicCalendarQueryPolicy.eligibleSchedules[revision.providerId] === revision.descriptorId) ||
+      ((revision.providerId !== 'macro-calendar-bls'
+        && revision.providerId in macroEconomicCalendarQueryPolicy.eligibleSchedules
+        && macroEconomicCalendarQueryPolicy.eligibleSchedules[
+          revision.providerId as keyof typeof macroEconomicCalendarQueryPolicy.eligibleSchedules] === revision.descriptorId) ||
         isAutomaticBlsSchedule(revision) || isManualBlsSchedule(revision))) ||
       (isBlsCalendarValue(revision) && revision.lifecycleState === 'released' &&
         revision.caveats.includes('bls-python-schedule')) ||
