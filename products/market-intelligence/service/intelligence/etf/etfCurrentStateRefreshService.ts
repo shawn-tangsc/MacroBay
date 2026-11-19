@@ -92,6 +92,19 @@ export function createEtfCurrentStateRefreshService(deps: {
         const firstSeen = priorFirstSeenAt(priorWindow)
         const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate, sourceId, firstSeen })
         if (!built) return unavailable()
+        /**
+         * **备源不许把主源已经给过的日子换掉**（2026-11-19 的真现场）。
+         *
+         * 主源某一轮没读到、备源读到了，合并结果就会把 20 多天整份换成备源的数；下一轮主源回来
+         * 又换回去。读者看到的是一排数字来回跳，通知里则是一屏「从 2.8 亿改为 4770 万」。
+         *
+         * 判据：这一轮解析出来的就是主源（`sourceId === cryptoetf`），而**上一份窗口里同一天是主源的数**
+         * 这一轮却落成了别的源 → 这一轮主源其实没读到，整轮不写（保留旧窗口，下一轮再试）。
+         * 若解析出来的本来就是备源（读者把主源关了），不存在这条冲突，照常写。
+         */
+        if (etfWindowHasSourceRegression({ previous: priorWindow, current: built, resolvedSource: sourceId })) {
+          return unavailable()
+        }
         // `replace` is async: the write's own verdict decides whether this round produced news.
         const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
@@ -290,4 +303,33 @@ function collectCapitalFlowUpdates(input: Readonly<{
     }
   }
   return Object.freeze(updates)
+}
+
+/**
+ * 这一轮有没有「主源的日子被换成别的源」——换源不算数据更新，也不该覆盖读者已经看过的数。
+ *
+ * 只在**这一轮解析出来的是主源**时判：那种情况下同一天的数本该由主源给；它却变成了备源的，
+ * 说明主源这一轮没读到（读到了就会覆盖回来），而不是读者换了源。
+ */
+function etfWindowHasSourceRegression(input: Readonly<{
+  previous: EtfCurrentStateWindow | undefined
+  current: EtfCurrentStateWindow
+  resolvedSource: EtfFlowSourceId
+}>): boolean {
+  const primary = etfCurrentStateWindowPolicy.sourceId
+  if (input.resolvedSource !== primary || !input.previous) return false
+  const previousRows = new Map<string, Readonly<{ source: EtfFlowSourceId; netFlowUsd: number }>>()
+  for (const asset of ['btc', 'eth'] as const) {
+    for (const row of input.previous[asset]) {
+      previousRows.set(`${asset}:${row.tradingDate}`, { source: row.source, netFlowUsd: row.netFlowUsd })
+    }
+  }
+  for (const asset of ['btc', 'eth'] as const) {
+    for (const row of input.current[asset]) {
+      const before = previousRows.get(`${asset}:${row.tradingDate}`)
+      // 值一样时换源是无害的（读者看到的数没变），只有**数也跟着变**才是那份回归。
+      if (before && before.source === primary && row.source !== primary && before.netFlowUsd !== row.netFlowUsd) return true
+    }
+  }
+  return false
 }

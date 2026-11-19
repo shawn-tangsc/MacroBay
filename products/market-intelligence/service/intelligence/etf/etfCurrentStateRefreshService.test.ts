@@ -282,6 +282,37 @@ describe('ETF current-state refresh service', () => {
     expect(notices).toEqual([])
   })
 
+  it('refuses to replace primary days with standby numbers when the primary missed its round', async () => {
+    // 2026-11-19 的真现场：主源某一轮没读到、只剩备源，窗口里 20 多天的数整份换成备源那一套；
+    // 下一轮主源回来又换回去。读者看到的是一排数字来回跳，通知里是「从 2.8 亿改为 4770 万」。
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const notices: unknown[] = []
+    const days = ['2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24']
+    const flowRows = (source: string, scale: number) => (asset: 'BTC' | 'ETH') => days.map((tradingDate) => ({
+      asset, date: Date.parse(`${tradingDate}T00:00:00.000Z`), change: 1,
+      changeUsd: Number(tradingDate.slice(-2)) * scale, source
+    }))
+    const round = (fetchedAt: string, source: string, scale: number, resolved = 'cryptoetf-etf-flows') => createEtfCurrentStateRefreshService({
+      resolveFactSource: async () => ({ kind: 'resolved' as const, sourceId: resolved }),
+      isEnabled: async () => true,
+      hasCredential: async () => true,
+      requestWindow: async () => ({ state: 'available' as const, btc: flowRows(source, scale)('BTC'), eth: flowRows(source, scale)('ETH') }),
+      store,
+      now: () => fetchedAt,
+      handOffUpdates: async (updates) => { notices.push(...updates) }
+    })
+
+    await round('2026-11-18T12:00:00.000Z', 'cryptoetf-etf-flows', 1).refresh()
+    notices.length = 0
+    // 主源没读到：同一天落成备源的数（值差 10 倍）——整轮别写。
+    await expect(round('2026-11-18T18:00:00.000Z', '0xrouter', 10).refresh()).resolves.toEqual({ state: 'unavailable' })
+    expect(notices).toEqual([])
+
+    // 读者自己把主源关了、解析出来的就是备源：那不是「主源漏了一轮」，照常写。
+    await expect(round('2026-11-19T06:00:00.000Z', '0xrouter', 10, '0xrouter-aggregate-provider').refresh())
+      .resolves.toEqual({ state: 'updated' })
+  })
+
   it('stops when the fact has no source, and refuses on a conflict', async () => {
     const requestWindow = vi.fn()
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
