@@ -57,7 +57,11 @@ export type AnalysisRunEnqueueInput = Readonly<{
 
 export type AnalysisRunService = Readonly<{
   enqueue: (input: AnalysisRunEnqueueInput) => { created: boolean; run: AnalysisRun }
-  recover: () => AnalysisRunRecovery
+  /**
+   * 重启对账。`model` 是启动时读者选的模型：恢复补排的运行带着它入队，调用层就不用退回
+   * 平台第一个可用供应商（冷启动失败就是从这条路径来的）。
+   */
+  recover: (input?: Readonly<{ model?: AnalysisRunModelRef | null }>) => AnalysisRunRecovery
   /**
    * 把卡住的运行判成失败（`analysis-run-interrupted` / `run-stalled`）。
    *
@@ -83,7 +87,12 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
     }
     return deps.repository.enqueueRun(run)
   }
-  const recover = (): AnalysisRunRecovery => {
+  /**
+   * 重启对账。`model` 是「这次启动时读者选的模型」：恢复补排的运行也要带着它，
+   * 否则调用时会退回平台第一个可用供应商——冷启动失败的根因。
+   */
+  const recover = (input: Readonly<{ model?: AnalysisRunModelRef | null }> = {}): AnalysisRunRecovery => {
+    const model = input.model ?? null
     const failed: string[] = []
     const stale: string[] = []
     const dispatch: AnalysisRunDispatch[] = []
@@ -142,7 +151,7 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
       }
       // 新闻组不补市场运行：它的组只为按条解读存在（R39）。
       if (!newsTriggeredGroup && !hasSuccessfulInitial && !initialPending && withinRestartWindow) {
-        const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
+        const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', model })
         if (result.created) {
           recordDecision({ eventGroupId: group.id, triggerKey: result.run.triggerKey, changeHash: latest.snapshotHash, decision: 'queued', reasonCode: 'restart-initial-compensated', snapshotHash: latest.snapshotHash, analysisRunId: result.run.id })
           dispatch.push({ analysisRunId: result.run.id, eventGroupId: group.id })
@@ -150,7 +159,7 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
       }
       const reviewPending = activeRuns.some(run => run.analysisPhase === 'review')
       if (!newsTriggeredGroup && group.reviewCount < 2 && !reviewPending && Number.isFinite(Date.parse(group.reviewDeadlineAt)) && Date.parse(deps.now()) <= Date.parse(group.reviewDeadlineAt) && hasSuccessfulInitial) {
-        const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'review', triggerKey: 'market-reaction.15m' })
+        const result = enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: latest.id, snapshotHash: latest.snapshotHash, analysisPhase: 'review', triggerKey: 'market-reaction.15m', model })
         if (result.created) {
           recordDecision({ eventGroupId: group.id, triggerKey: result.run.triggerKey, changeHash: latest.snapshotHash, decision: 'queued', reasonCode: 'restart-review-compensated', snapshotHash: latest.snapshotHash, analysisRunId: result.run.id })
           dispatch.push({ analysisRunId: result.run.id, eventGroupId: group.id })

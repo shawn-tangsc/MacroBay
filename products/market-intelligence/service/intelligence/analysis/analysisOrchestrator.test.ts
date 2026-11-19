@@ -394,6 +394,92 @@ describe('analysisOrchestrator', () => {
     }))
   })
 
+  it('resolves the reader model before the first call and writes it onto the run', async () => {
+    // 冷启动恢复补排的运行没有模型：调用前必须解析出设置里的选择并写回运行行，
+    // 否则调用层会退回平台第一个可用供应商（本机是 Silicon，401），失败行还留不下用的是谁。
+    const order: string[] = []
+    const invoke = vi.fn(async (request: { providerId?: string; modelId?: string }) => {
+      order.push(`invoke:${request.providerId ?? 'none'}:${request.modelId ?? 'none'}`)
+      return {
+        ok: true as const, output: validOutput(), providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017',
+        trace: { taskId: 'mi-ar-1', durationMs: 1 }
+      }
+    })
+    const recordRunModel = vi.fn((_id: string, model: { providerId: string; modelId: string }) => {
+      order.push(`record:${model.providerId}:${model.modelId}`)
+      return true
+    })
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository(),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      resolveAnalysisModel: async () => ({ providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' }),
+      recordRunModel
+    })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'succeeded' })
+    // 先写运行行、再发请求：失败时那一行也必须已经带着模型。
+    expect(order).toEqual(['record:tokenrhythm:deepseek-v4.1-flash-1017', 'invoke:tokenrhythm:deepseek-v4.1-flash-1017'])
+  })
+
+  it('spends no model call when the run has no model and none can be resolved', async () => {
+    const invoke = vi.fn()
+    const updateRunStatus = vi.fn()
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ updateRunStatus }),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      resolveAnalysisModel: async () => null
+    })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toEqual({ status: 'failed', errorCode: 'analysis-provider-not-ready' })
+    expect(invoke).not.toHaveBeenCalled()
+    // 「没选出模型」是一次请求都没发，不能记成任何 HTTP/传输失败。
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({
+      failureCode: 'analysis-provider-not-ready',
+      failureDetailCode: 'model-not-selected'
+    }))
+  })
+
+  it('cannot let an empty model through even when the network gate says ready', async () => {
+    // 探针拿 401 就算「网络通了」是故意的：它只证明端点答得出 HTTP，不证明这次有模型可调。
+    const invoke = vi.fn()
+    const updateRunStatus = vi.fn()
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ updateRunStatus }),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      networkReadiness: { wait: async () => 'ready' as const },
+      resolveAnalysisModel: async () => null
+    })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'failed', errorCode: 'analysis-provider-not-ready' })
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('retries model resolution once, then calls the resolved model', async () => {
+    const resolveAnalysisModel = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })
+    const invoke = vi.fn(async () => ({
+      ok: true as const, output: validOutput(), providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017',
+      trace: { taskId: 'mi-ar-1', durationMs: 1 }
+    }))
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository(),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      resolveAnalysisModel
+    })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'succeeded' })
+    // 有界：第一次为空时只再问一次，不无限等设置。
+    expect(resolveAnalysisModel).toHaveBeenCalledTimes(2)
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
   it('answers a failure the reader asked for, and stays quiet for an automatic one', async () => {
     const runWith = (triggerKey: string): AnalysisRun => ({
       id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',

@@ -248,6 +248,20 @@ describe('marketAnalysisRepository', () => {
     repository.close()
   })
 
+  it('records the model a run will call, and never overwrites the queued choice', () => {
+    // 启动恢复补排的运行入队时没有模型；调用前补写它，失败时那一行才留得下「用的是谁」。
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendSnapshot(snapshot('mi-es-A1', 'mi-eg-0001', 'A'))
+    repository.enqueueRun({ ...run('mi-ar-0001', 'mi-eg-0001', 'mi-es-A1', 'key-1'), modelProviderId: null, modelId: null })
+    expect(repository.recordRunModel('mi-ar-0001', { providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })).toBe(true)
+    expect(repository.getRun('mi-ar-0001')).toMatchObject({ modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })
+    // 运行行上的选择是入队那一刻的事实：后到的解析不覆盖它。
+    repository.recordRunModel('mi-ar-0001', { providerId: 'silicon', modelId: 'other-model' })
+    expect(repository.getRun('mi-ar-0001')).toMatchObject({ modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })
+    repository.close()
+  })
+
   it('does not move current pointer for failed, cancelled, or older runs', () => {
     const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
     repository.appendEventGroup(group())

@@ -40,6 +40,11 @@ export const analysisFailureDetailCodes = Object.freeze([
   'gateway-timeout',
   /** 启动就绪门在 20 秒预算内没探通；只覆盖启动窗口，不是网络抖动的通用兜底。 */
   'network-not-ready',
+  /**
+   * 调用前解析不出「这次用哪个模型」：一次模型请求都没发出去。
+   * 它与任何 HTTP 状态都无关——不能落进 `connect-failed`，也不能说成供应商拒绝。
+   */
+  'model-not-selected',
   'provider-other'
 ] as const)
 

@@ -21,12 +21,17 @@ import { ANALYSIS_SESSION_SLOTS_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RECOVE
 import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettingsStore } from '../application/marketAnalysisSettingsStore'
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
 
-/** A run queued without a model: the invocation keeps following the platform default. */
+/** 产品装配下开关打开就必然选好了模型：运行不许在「没有模型」时发调用。 */
 function createRuntimeSettingsService(enabled = true): MarketAnalysisSettingsService {
   const now = () => '2026-09-28T00:00:00.000Z'
   return createMarketAnalysisSettingsService({
     store: createMarketAnalysisSettingsStore(
-      createInMemoryMarketAnalysisSettingsStorage({ enabled, providerId: '', modelId: '', updatedAt: now() }),
+      createInMemoryMarketAnalysisSettingsStorage({
+        enabled,
+        providerId: enabled ? 'test-provider' : '',
+        modelId: enabled ? 'test-model' : '',
+        updatedAt: now()
+      }),
       now
     ),
     now

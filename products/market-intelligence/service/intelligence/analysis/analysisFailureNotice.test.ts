@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest'
 
 import {
-  ANALYSIS_CHECK_MODEL_ACTION_KEY, ANALYSIS_RETRY_ACTION_KEY, ANALYSIS_TIMELINE_ACTION_KEY
+  ANALYSIS_CHECK_MODEL_ACTION_KEY, ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY,
+  ANALYSIS_RETRY_ACTION_KEY, ANALYSIS_TIMELINE_ACTION_KEY
 } from '../../../contracts/notificationEventKeys'
 import { buildAnalysisFailureRequest, shouldReportAutomaticFailure } from './analysisFailureNotice'
 
@@ -99,4 +100,28 @@ it('⑤ 网络没就绪单独一档：不给「检查模型连接」，动作只
     failureCode: 'analysis-provider-error', failureDetailCode: 'connect-failed'
   })
   expect(network.dedupeVars).not.toEqual(connection.dedupeVars)
+})
+
+it('⑥ 供应商返回 4xx：不归为连接类，正文不说「没有连上」', () => {
+  // 请求到了服务端并拿到了 401/403：说成「连不上」等于让读者去查一个不存在的问题。
+  const request = buildAnalysisFailureRequest({
+    ...base, kind: 'manual', failureCode: 'analysis-provider-error', failureDetailCode: 'http-4xx'
+  })
+  expect(request.rendered!['zh-CN']!.body).toContain('拒绝了这次请求')
+  expect(request.rendered!['zh-CN']!.body).not.toContain('没有连上')
+  expect(request.rendered!['en-US']!.body).not.toContain('could not be reached')
+  expect(request.rendered!['zh-CN']!.reason).not.toContain('网络')
+  const labelKeys = request.actions.map(action => action.labelRef && 'key' in action.labelRef ? action.labelRef.key : null)
+  expect(labelKeys).toEqual([ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY])
+})
+
+it('⑦ 没选出模型单独一档：正文说模型，不给网络指引', () => {
+  const request = buildAnalysisFailureRequest({
+    ...base, kind: 'manual', failureCode: 'analysis-provider-not-ready', failureDetailCode: 'model-not-selected'
+  })
+  expect(request.rendered!['zh-CN']!.body).toContain('还没有可用的模型')
+  expect(request.rendered!['zh-CN']!.body).not.toContain('网络')
+  expect(request.rendered!['zh-CN']!.reason).not.toContain('网络')
+  const labelKeys = request.actions.map(action => action.labelRef && 'key' in action.labelRef ? action.labelRef.key : null)
+  expect(labelKeys).toEqual([ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY])
 })

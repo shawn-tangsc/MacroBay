@@ -1,6 +1,6 @@
 import type { JobContext, JobRuntime } from '@platform/jobs'
 
-import type { AnalysisRunService } from '../analysis/analysisRunService'
+import type { AnalysisRunModelRef, AnalysisRunService } from '../analysis/analysisRunService'
 import { RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 
 /**
@@ -14,6 +14,11 @@ export function createAnalysisRunHousekeeping(deps: Readonly<{
   isEnabled: () => Promise<boolean>
   runs: Pick<AnalysisRunService, 'recover' | 'sweepStalled'>
   jobRuntime: Pick<JobRuntime, 'listRuns'>
+  /**
+   * 这次启动读者选的模型；恢复补排的运行带着它入队。取不到就传 null——
+   * 调用层会在发出请求前再拦一次（解析不出来就落 `analysis-provider-not-ready`）。
+   */
+  resolveModel?: () => Promise<AnalysisRunModelRef | null>
 }>): Readonly<{
   recoverRuns: (payload: unknown, context: JobContext) => Promise<Readonly<{ dispatch: readonly { analysisRunId: string; eventGroupId: string }[] }> | void>
   sweepStalledRuns: (payload: unknown, context: JobContext) => Promise<Readonly<{ stalled: readonly string[] }> | void>
@@ -21,7 +26,9 @@ export function createAnalysisRunHousekeeping(deps: Readonly<{
   return {
     recoverRuns: async (_payload, context) => {
       if (!await deps.isEnabled()) return
-      const recovery = deps.runs.recover()
+      // 模型选择在读之前先取：恢复补排的运行必须带着它，不能留给调用层去猜默认供应商。
+      const model = deps.resolveModel ? await deps.resolveModel().catch(() => null) : null
+      const recovery = deps.runs.recover({ model })
       // The service can only write rows; this is the only place that can hand a recovered
       // run to the job runtime, and the freeze path is not available to it (recovery
       // analyses a snapshot that already exists, so there is nothing to freeze). A run
@@ -36,7 +43,7 @@ export function createAnalysisRunHousekeeping(deps: Readonly<{
       await context.log({
         level: 'info',
         message: `Recovered ${recovery.failed.length} market analysis run(s); expired ${recovery.stale.length}; dispatching ${dispatch.length}.`,
-        metadata: { failed: recovery.failed.length, stale: recovery.stale.length, dispatching: dispatch.length }
+        metadata: { failed: recovery.failed.length, stale: recovery.stale.length, dispatching: dispatch.length, modelSelected: model !== null }
       })
       return { dispatch }
     },

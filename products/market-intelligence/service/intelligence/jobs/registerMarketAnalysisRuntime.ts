@@ -17,10 +17,12 @@ import { countAnalysisRuns, lastAutoRunAt } from '../analysis/analysisRunCounter
 import { createAnalysisSignificanceGate, formatCalendarReadDiagnostic } from '../analysis/analysisSignificanceGate'
 import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotTick'
 import type { SessionSlotInstant } from '../analysis/analysisSlotCoverage'
-import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
+import type { AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
 import { queryMacroRoute } from '../public-query/macroRouteQuery'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
-import { createAnalysisTriggerPolicy, type TriggerHistoryEntry } from '../analysis/analysisTriggerPolicy'
+import { createAnalysisTriggerPolicy } from '../analysis/analysisTriggerPolicy'
+import { createAnalysisModelWiring } from '../analysis/analysisModelWiring'
+import { toTriggerHistory } from '../analysis/analysisTriggerHistory'
 import {
   decideItemTriggerSeverity, isNewsSeveritySource, readLatestNewsSentiment,
   type ItemTriggerSeverity, type NewsSentimentVerdict
@@ -171,6 +173,10 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     now
   })
   const repository = createMarketAnalysisRepository({ filePath: `${input.dataDir}/market-analysis.sqlite` })
+  // 只有产品装配（有真实读者设置）才接「读者选的模型」；headless 保留跟平台默认模型的旧行为。
+  const modelWiring = input.settingsService
+    ? createAnalysisModelWiring(input.settingsService, repository.recordRunModel)
+    : undefined
   const groups = createEventGroupService({ now, idFactory: () => `mi-eg-${randomUUID()}` })
   // 一条情报 → 一次变化：解析抽在 `analysisRuntimeChangeResolver`（体积门禁）。
   const resolveChange = createAnalysisChangeResolver({
@@ -197,6 +203,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     ...(input.getAppLanguage ? { getLanguage: input.getAppLanguage } : {}),
     ...createAnalysisNoticeDeps({ ...input, now, timeZone }),
     ...(input.networkReadiness ? { networkReadiness: input.networkReadiness } : {}),
+    ...(modelWiring ? modelWiring.orchestrator : {}),
     ensureRunSession: runSession.ensureRunSession,
     appendRunSummary: runSession.appendRunSummary
   })
@@ -323,7 +330,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       })
     },
     // `isEnabled` 定义在这个对象之后：这里只传取值函数，调用时才读它。
-    ...createAnalysisRunHousekeeping({ isEnabled: () => isEnabled(), runs, jobRuntime: input.jobRuntime })
+    ...createAnalysisRunHousekeeping({
+      isEnabled: () => isEnabled(), runs, jobRuntime: input.jobRuntime,
+      // 恢复补排的运行也要带着读者选的模型入队（冷启动竞态的根因就在这里）。
+      ...(modelWiring ? modelWiring.housekeeping : {})
+    })
   }, { startRecovery: false })
 
   /**
@@ -654,18 +665,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     }
   }
 
-
 }
 
-/**
- * Maps a ledger row to the history `analysisTriggerPolicy` reasons about.
- *
- * Only the keys this plan introduces map to `correction`: they must not feed the item path's
- * phase cooldown or move its review-window start. Every pre-existing key keeps today's mapping
- * exactly, including `manual.*` — those rows genuinely reach the ledger (recovery records
- * them), and re-phasing them would silently let item triggers fire earlier.
- */
-export function toTriggerHistory(value: { triggerKey: string; createdAt: string }): TriggerHistoryEntry {
-  if (isGateEligible(value.triggerKey)) return { phase: phaseForNewTriggerKey(value.triggerKey), triggeredAt: value.createdAt }
-  return { phase: value.triggerKey === 'market-reaction.15m' ? 'review' : 'initial', triggeredAt: value.createdAt }
-}
+// 纯映射抽到 `analysisTriggerHistory`（体积门禁）；保留这个出口，调用方与用例不用改。
+export { toTriggerHistory }

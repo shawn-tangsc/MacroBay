@@ -15,6 +15,10 @@ import { classifyTransportError } from '@platform/ai/invocation/transportErrorKi
  *
  * 判定是「端点可达」而不是「鉴权通过」：400/401/403/404/405 都算已就绪——它们都证明请求到达了
  * 服务端并拿到了 HTTP 响应；只有传输层失败（DNS / 拒绝 / 重置 / TLS / 超时）才继续退避。
+ *
+ * **这个信号不能被当成「能调用」。** 401 只说明端点答了，凭据/模型可能是坏的：本机冷启动那次
+ * 探针拿到的就是 401，随后同一时刻的分析调用也被同一个供应商以 401 拒绝。调用前有没有模型、
+ * 那个模型能不能用，由 `analysisOrchestrator` 在真正发请求前单独判，不靠这道门。
  */
 export const modelNetworkReadinessPolicy = Object.freeze({
   /** 第一次重试前等 500 ms，之后每次翻倍。 */
@@ -59,6 +63,8 @@ export function createModelNetworkReadinessGate(deps: {
   let state: ModelNetworkReadinessState = { status: 'idle' }
   let settlement: Promise<'ready' | 'not-ready'> | undefined
   let resolveSettlement: ((value: 'ready' | 'not-ready') => void) | undefined
+  /** 探的是哪个 provider：401 只说明「它答了」，不说「它能用」，日志里必须看得见是谁。 */
+  let probedProviderId: string | undefined
 
   function settle(next: Extract<ModelNetworkReadinessState, { status: 'ready' | 'not-ready' }>): void {
     state = next
@@ -67,11 +73,13 @@ export function createModelNetworkReadinessGate(deps: {
     if (next.status === 'ready') {
       deps.log?.('info', 'model-network-ready', {
         readyAt: next.readyAt ?? null,
-        httpStatus: next.httpStatus ?? null
+        httpStatus: next.httpStatus ?? null,
+        providerId: probedProviderId ?? null
       })
     } else {
       deps.log?.('warn', 'model-network-not-ready', {
-        lastTransportErrorKind: next.lastTransportErrorKind ?? 'unknown'
+        lastTransportErrorKind: next.lastTransportErrorKind ?? 'unknown',
+        providerId: probedProviderId ?? null
       })
     }
   }
@@ -94,6 +102,7 @@ export function createModelNetworkReadinessGate(deps: {
         const target = await resolveProbeTarget(deps.getProviderState, deps.log)
         // 没有可探的 provider：网络无从证明，判就绪；配置问题由 `model-not-ready` 那一档回答。
         if (!target) return finish({ status: 'ready' })
+        probedProviderId = target.providerId
         try {
           const response = await deps.fetch(buildModelsUrl(target.baseUrl), {
             method: 'GET',
@@ -145,6 +154,7 @@ export function createModelNetworkReadinessGate(deps: {
 }
 
 type ProbeTarget = Readonly<{
+  providerId: string
   baseUrl: string
   apiKey?: string
   customHeaders?: Record<string, string>
@@ -179,6 +189,7 @@ async function resolveProbeTarget(
     if (header.value) customHeaders[header.name] = header.value
   }
   return {
+    providerId: provider.id,
     baseUrl: provider.baseUrl,
     ...(provider.apiKey?.trim() ? { apiKey: provider.apiKey.trim() } : {}),
     ...(Object.keys(customHeaders).length > 0 ? { customHeaders } : {})

@@ -65,6 +65,21 @@ type InvocationResult = StructuredModelTaskResult<unknown>
 // finish, and every such run was published as `analysis-timeout`. Four minutes covers a thinking
 // model on this input size while still ending a genuinely hung connection; a real timeout still
 // surfaces, it just no longer arrives before the model could have answered.
+/**
+ * 冷启动时「这次运行该用哪个模型」的解析边界。
+ *
+ * 运行行入队时本该带着模型（`modelProviderId` / `modelId`），但启动恢复补排的运行是旧行，
+ * 没有这两个字段。调用前必须把它们解析出来；解析不到就**不发调用**——退回「第一个可用供应商」
+ * 会把读者没选的模型叫起来（本机冷启动就是这样落到 Silicon 的 401 上，界面再把它说成「检查连接」）。
+ *
+ * 第一次解析为空时等一小会儿再问一次就够了：模型选择读的是本地设置，不存在慢网络，
+ * `retryDelayMs` 不是网络兜底，只是覆盖「刚启动、第一次读还没回来」这一个窗口。
+ */
+export const analysisModelResolutionPolicy = Object.freeze({
+  attempts: 2,
+  retryDelayMs: 250
+})
+
 export const marketAnalysisInvocationPolicy = Object.freeze({
   modelTimeoutMs: 240_000,
   /**
@@ -132,7 +147,46 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * **只覆盖启动窗口**，不是网络抖动的通用兜底——门一旦结算（ready / 超时）就不再阻塞。
    */
   networkReadiness?: Readonly<{ wait: () => Promise<'ready' | 'not-ready'> }>
+  /**
+   * 运行行没带模型（启动恢复补排的旧行）时，调用前解析出「读者选的那个模型」。
+   *
+   * 只有产品装配时注入：缺席（headless / 窄测试）保留旧行为——按平台默认模型调用，因为没有
+   * 读者可问。注入了就**必须**解析出结果才允许调用；解析不出来落 `analysis-provider-not-ready`，
+   * 不许把读者没选的供应商叫起来。
+   */
+  resolveAnalysisModel?: () => Promise<Readonly<{ providerId: string; modelId: string }> | null>
+  /**
+   * 调用前把打算用的模型写回运行行：失败的那次也要留得下「用的是谁」。
+   * 返回是否真的写入了（并发/已终态时可能不写）。
+   */
+  recordRunModel?: (id: string, model: Readonly<{ providerId: string; modelId: string }>) => boolean
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
+  /**
+   * The model this run will call, resolved **before** the call: the run row's snapshot first, then
+   * (for runs queued without one) the reader's selection, with one bounded retry.
+   * `null` means "nothing usable": the caller must not invoke.
+   */
+  async function resolveModelForRun(
+    runRecord: AnalysisRun
+  ): Promise<Readonly<{ providerId: string; modelId: string }> | null> {
+    if (runRecord.modelProviderId && runRecord.modelId) {
+      return { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
+    }
+    if (!deps.resolveAnalysisModel) return null
+    for (let attempt = 1; attempt <= analysisModelResolutionPolicy.attempts; attempt += 1) {
+      try {
+        const resolved = await deps.resolveAnalysisModel()
+        if (resolved?.providerId && resolved.modelId) return resolved
+      } catch {
+        // 读设置失败与「还没选」一样都再问一次；两次都拿不到就判未就绪，不拿默认供应商顶上。
+      }
+      if (attempt < analysisModelResolutionPolicy.attempts) {
+        await new Promise<void>(resolve => setTimeout(resolve, analysisModelResolutionPolicy.retryDelayMs))
+      }
+    }
+    return null
+  }
+
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
     if (!runRecord || !deps.repository.claimRun(runRecord.id, deps.now())) return { status: 'failed', errorCode: 'analysis-run-not-available' }
@@ -145,15 +199,28 @@ export function createAnalysisOrchestrator(deps: Readonly<{
       ...(deps.ensureRunSession ? { ensure: deps.ensureRunSession } : {})
     })
     if (input.signal?.aborted) return cancel(runRecord.id)
+    const signal = input.signal ?? new AbortController().signal
     // 启动引导探到网络通之前排队的运行在这里等。门已结算时立即返回，所以这段只覆盖启动窗口：
     // 它不是网络抖动的通用兜底，超时也不能冒充 `connect-failed`——那会把「还没就绪」说成「断了」。
+    // 注意：门说 ready 只证明**端点答得出 HTTP 响应**，不证明**这次运行有模型可调**；下一段才是
+    // 「有没有模型」的判断，两者都不许省。
     if (deps.networkReadiness) {
       const readiness = await deps.networkReadiness.wait()
       if (readiness === 'not-ready') {
         return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'network-not-ready')
       }
     }
-    const signal = input.signal ?? new AbortController().signal
+    // 调用前必须有模型：运行行没带（启动恢复补排的旧行）就从设置里解析一次，解析不到就不发调用。
+    const runModel = await resolveModelForRun(runRecord)
+    if (!runModel) {
+      // 只有注入了解析器（产品装配）才把「解析不出来」当成失败；headless/窄测试没有读者可问，
+      // 继续按平台默认模型调用，这是文档写明的缺省而不是放行。
+      if (deps.resolveAnalysisModel) {
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerNotReady, 'model-not-selected')
+      }
+    } else if (runRecord.modelProviderId !== runModel.providerId || runRecord.modelId !== runModel.modelId) {
+      deps.recordRunModel?.(runRecord.id, runModel)
+    }
 
     // 冻结证据的构造（快照哈希、可用事实、变更摘要里的数、语言）在 `analysisFrozenEvidence` 一处。
     const frozen = await frozenEvidenceForRun({
@@ -170,11 +237,9 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const openInstant = brief ? slotInstantAtOrBefore(brief.slot, new Date(runRecord.queuedAt), deps.timeZone()) : null
     const session: AnalysisSessionInput | undefined = brief && openInstant ? { brief, openInstant } : undefined
     // The run carries the model it was queued for, so the analysis calls exactly the model the
-    // reader chose instead of whatever provider happens to be first in the store. Runs without a
-    // recorded model keep following the platform default.
-    const model = runRecord.modelProviderId && runRecord.modelId
-      ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
-      : {}
+    // reader chose instead of whatever provider happens to be first in the store. A run without a
+    // recorded model resolves it above and writes it back before the first call.
+    const model = runModel ? { providerId: runModel.providerId, modelId: runModel.modelId } : {}
     // 全仓唯一的选择点：按 run 行上的类别取线，不按触发键猜。`run.analysisKind` 从库里读，
     // 恢复、重放、别的入口都绕不过去。
     const line = lineFor(runRecord.analysisKind)
@@ -205,8 +270,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         callIndex: callsSpent,
         callKind,
         prompt: messages,
-        modelProviderId: runRecord.modelProviderId,
-        modelId: runRecord.modelId,
+        modelProviderId: runModel?.providerId ?? null,
+        modelId: runModel?.modelId ?? null,
         timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs
       })
       try {

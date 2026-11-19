@@ -1,7 +1,8 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 
 import {
-  ANALYSIS_CHECK_MODEL_ACTION_KEY, ANALYSIS_RETRY_ACTION_KEY, ANALYSIS_TIMELINE_ACTION_KEY,
+  ANALYSIS_CHECK_MODEL_ACTION_KEY, ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY,
+  ANALYSIS_RETRY_ACTION_KEY, ANALYSIS_TIMELINE_ACTION_KEY,
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS
 } from '../../../contracts/notificationEventKeys'
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
@@ -18,10 +19,14 @@ import type { AnalysisKind } from '../../../contracts/analysisKinds'
  *    合并计数给；**不同 failureCode 键不同，绝不合并**——读者要做的事不一样。
  *    「同一 failureCode 最多 4 条」用的是平台的 `dailyLimit`，单位是**读者日**，不是滚动 24 小时。
  *
- * 动作只由「谁触发 + 失败码类别」决定，不由文案猜：连接类（`connect-failed` / `provider-error`）
- * 一律「检查模型连接」且不给重试——重试只会再失败一次；`network-not-ready` 单独一档：只给重试，
- * 正文说「网络还没就绪」，不给「检查模型连接」（那不是配置问题）；其余失败手动给「重试」、
- * 自动只给「查看时间轴」。
+ * 动作只由「谁触发 + 失败事实」决定，不由文案猜：
+ * - `connect-failed`（传输层证明连接断）才叫连接类，给「检查模型连接」；
+ * - `network-not-ready` 单独一档：只给重试，正文说「网络还没就绪」；
+ * - `model-not-selected`（启动时没选出模型，一次请求都没发）单独一档：给「检查模型连接」级的设置入口，
+ *   但正文要说「还没有可用的模型」，不能说成网络问题；
+ * - `http-4xx`：供应商**答了**并拒绝这次请求，正文写「拒绝了这次请求」，不给「没连上」；
+ * - 其余 provider 事实（5xx / 429 / 超时 / 网关切断）：给重试，正文不指网络。
+ * 不按粗码一刀切：同一个 `analysis-provider-error` 下面，这几种失败要读者做的事不一样。
  */
 export type AnalysisFailureNoticeInput = Readonly<{
   /** `manual` = 读者点名要的那次（含按条解读）；其余都算自动。 */
@@ -36,17 +41,23 @@ export type AnalysisFailureNoticeInput = Readonly<{
   occurredAt: string
 }>
 
-export type AnalysisFailureClass = 'connection' | 'network' | 'other'
+export type AnalysisFailureClass = 'connection' | 'network' | 'not-ready' | 'provider-rejected' | 'provider' | 'other'
 
 /**
- * 连接类失败：读者要做的是查配置/网络，不是重试。
+ * 失败类别只看**事实**，不看粗码。
  *
- * `network-not-ready` 必须排在连接类前面：它的粗码也是 `analysis-provider-error`，但事实是
- * 「启动时网络还没就绪」，不是「连不上」。混进连接类会给读者一条「检查模型连接」的错误指引。
+ * `analysis-provider-error` 曾经整体算「连接类」，于是「供应商返回 4xx」也被写成
+ * 「没有连上模型服务」——请求明明到了服务端并拿到了回答。分类顺序按证据强弱：
+ * 启动门 → 没选出模型 → 传输层断开 → 供应商拒绝 → 供应商/网关错误 → 其余。
  */
 export function classifyAnalysisFailure(input: Pick<AnalysisFailureNoticeInput, 'failureCode' | 'failureDetailCode'>): AnalysisFailureClass {
-  if (input.failureDetailCode === 'network-not-ready') return 'network'
-  return input.failureDetailCode === 'connect-failed' || input.failureCode === 'analysis-provider-error' ? 'connection' : 'other'
+  const detail = input.failureDetailCode
+  if (detail === 'network-not-ready') return 'network'
+  if (detail === 'model-not-selected' || input.failureCode === 'analysis-provider-not-ready') return 'not-ready'
+  if (detail === 'connect-failed') return 'connection'
+  if (detail === 'http-4xx') return 'provider-rejected'
+  if (input.failureCode === 'analysis-provider-error' || input.failureCode === 'analysis-timeout') return 'provider'
+  return 'other'
 }
 
 /** 手动 = 读者按下的那条路径（`manual.*` 与按条解读的 `news.manual`）。 */
@@ -119,16 +130,12 @@ export function buildAnalysisFailureRequest(input: AnalysisFailureNoticeInput): 
     'zh-CN': {
       title: '分析没能生成',
       body: body['zh-CN'],
-      reason: failureClass === 'network'
-        ? '启动时网络还没就绪，这次分析没有开始。'
-        : '分析失败了，而你在等它的结果。'
+      reason: failureReason(failureClass)['zh-CN']
     },
     'en-US': {
       title: 'Analysis did not run',
       body: body['en-US'],
-      reason: failureClass === 'network'
-        ? 'The network was not ready when this analysis started.'
-        : 'An analysis failed while you were waiting for it.'
+      reason: failureReason(failureClass)['en-US']
     }
   } as const
   // 「期间还有 N 次」不写进模板：次数由平台的合并计数统一说，两个数会打架。
@@ -145,21 +152,32 @@ export function buildAnalysisFailureRequest(input: AnalysisFailureNoticeInput): 
     id: 'view-timeline', kind: 'open' as const, deeplink: deeplinkForTimeline(input.eventGroupId),
     labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_TIMELINE_ACTION_KEY }
   }
+  const checkModelAction = {
+    id: 'check-model', kind: 'open' as const, deeplink: checkModelDeeplink,
+    labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_CHECK_MODEL_ACTION_KEY }
+  }
+  // 「检查模型设置」：供应商答了但拒绝 / 没选出模型时要去的地方。与「检查连接」分开，
+  // 否则 401 和「没选模型」都会把读者送到网络设置上。
+  const checkModelSettingsAction = {
+    id: 'check-model-settings', kind: 'open' as const, deeplink: checkModelDeeplink,
+    labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY }
+  }
   const actions: NotificationSubmitRequest['actions'] = failureClass === 'connection'
-    // 连接类：读者要做的是查配置/网络。网络没就绪不是连接问题——给它「检查模型连接」是错误指引。
-    ? [{
-      id: 'check-model', kind: 'open', deeplink: checkModelDeeplink,
-      labelRef: { scope: 'product' as const, productId: 'market-intelligence', key: ANALYSIS_CHECK_MODEL_ACTION_KEY }
-    }]
+    // 传输层证明连接断：读者要做的是查配置/网络。
+    ? [checkModelAction]
     // 启动窗口的网络没就绪：稍后会好，动作只有「重试」。
     : failureClass === 'network'
       ? [retryAction]
-      // 新闻解读不进时间轴：动作只有「重试」，不给「查看时间轴」——那条 deeplink 里没有这条解读。
-      : news
-        ? (input.kind === 'manual' ? [retryAction] : [])
-        : input.kind === 'manual'
-          ? [retryAction, timelineAction]
-          : [timelineAction]
+      // 没选出模型 / 供应商明确拒绝：读者要做的是看模型配置，不是重试到天荒地老。
+      : failureClass === 'not-ready' || failureClass === 'provider-rejected'
+        ? [checkModelSettingsAction]
+        // 其余（供应商/网关错误）与「其他失败」同一条动作规则：
+        // 新闻解读不进时间轴——动作只有「重试」，不给「查看时间轴」（那条 deeplink 里没有这条解读）。
+        : news
+          ? (input.kind === 'manual' ? [retryAction] : [])
+          : input.kind === 'manual'
+            ? [retryAction, timelineAction]
+            : [timelineAction]
   return {
     eventTypeId: MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS.analysisFailed,
     producerId: RUN_MARKET_ANALYSIS_JOB,
@@ -171,8 +189,8 @@ export function buildAnalysisFailureRequest(input: AnalysisFailureNoticeInput): 
 }
 
 /**
- * 正文按失败类别说清读者能做什么。网络没就绪是「还没到」而不是「连不上」：
- * 它只说稍后重试，不给检查模型连接的指引。
+ * 正文按失败类别说清读者能做什么。三件事分开说：
+ * 网络没就绪（还没到）、没有可用模型（配置问题，一次都没发）、供应商答了但拒绝（不是网络）。
  */
 function failureBody(
   failureClass: AnalysisFailureClass,
@@ -183,6 +201,17 @@ function failureBody(
       'zh-CN': '网络还没就绪，稍后重试。',
       'en-US': 'The network is not ready yet; try again shortly.'
     }
+  }
+  if (failureClass === 'not-ready') {
+    return news
+      ? {
+        'zh-CN': '还没有可用的模型，这条新闻的解读没有开始。到设置里确认所选模型可用后再试。',
+        'en-US': 'No usable model was available, so this news reading did not start. Check that the selected model is available in settings, then try again.'
+      }
+      : {
+        'zh-CN': '还没有可用的模型，这次分析没有开始。到设置里确认所选模型可用后再试。',
+        'en-US': 'No usable model was available, so this analysis did not start. Check that the selected model is available in settings, then try again.'
+      }
   }
   if (failureClass === 'connection') {
     return news
@@ -195,6 +224,28 @@ function failureBody(
         'en-US': 'The model service could not be reached, so no reading was produced. Check the model settings or your network, then try again.'
       }
   }
+  if (failureClass === 'provider-rejected') {
+    return news
+      ? {
+        'zh-CN': '模型服务拒绝了这次请求，所以没有得出这条新闻的解读。检查模型配置后再试。',
+        'en-US': 'The model service rejected this request, so no reading of this news item was produced. Check the model settings, then try again.'
+      }
+      : {
+        'zh-CN': '模型服务拒绝了这次请求，所以没有得出解读。检查模型配置后再试。',
+        'en-US': 'The model service rejected this request, so no reading was produced. Check the model settings, then try again.'
+      }
+  }
+  if (failureClass === 'provider') {
+    return news
+      ? {
+        'zh-CN': '模型服务这次返回了错误，这次新闻解读没有完成，稍后可以重试。',
+        'en-US': 'The model service returned an error, so this news reading did not finish. Try again shortly.'
+      }
+      : {
+        'zh-CN': '模型服务这次返回了错误，分析没有完成，稍后可以重试。',
+        'en-US': 'The model service returned an error, so this analysis did not finish. Try again shortly.'
+      }
+  }
   return news
     ? {
       'zh-CN': '这次新闻解读没有完成，可以在新闻抽屉里重试。',
@@ -204,6 +255,44 @@ function failureBody(
       'zh-CN': '这次分析没有完成，时间轴里能看到失败与重试。',
       'en-US': 'This analysis did not finish; the timeline shows the failure and the retry.'
     }
+}
+
+/** 「为什么收到这条通知」：与正文同一套类别，不再整类写成「分析失败了」。 */
+function failureReason(failureClass: AnalysisFailureClass): Readonly<{ 'zh-CN': string; 'en-US': string }> {
+  if (failureClass === 'network') {
+    return {
+      'zh-CN': '启动时网络还没就绪，这次分析没有开始。',
+      'en-US': 'The network was not ready when this analysis started.'
+    }
+  }
+  if (failureClass === 'not-ready') {
+    return {
+      'zh-CN': '还没有可用的模型，这次分析没有开始。',
+      'en-US': 'No usable model was available, so this analysis did not start.'
+    }
+  }
+  if (failureClass === 'connection') {
+    return {
+      'zh-CN': '分析没能连上模型服务。',
+      'en-US': 'The analysis could not reach the model service.'
+    }
+  }
+  if (failureClass === 'provider-rejected') {
+    return {
+      'zh-CN': '模型服务拒绝了这次请求。',
+      'en-US': 'The model service rejected the request.'
+    }
+  }
+  if (failureClass === 'provider') {
+    return {
+      'zh-CN': '模型服务返回了错误。',
+      'en-US': 'The model service returned an error.'
+    }
+  }
+  return {
+    'zh-CN': '分析失败了，而你在等它的结果。',
+    'en-US': 'An analysis failed while you were waiting for it.'
+  }
 }
 
 /** 提交失败一律吞掉：运行已经记成失败了，通知发不出去不该再制造第二个失败。 */

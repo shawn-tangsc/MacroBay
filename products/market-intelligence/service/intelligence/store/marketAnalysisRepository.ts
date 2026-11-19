@@ -171,6 +171,15 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
       return Number(sqlite.database.prepare("update mi_analysis_runs set status='running', started_at=? where id=? and status='queued'").run(startedAt, id).changes) === 1
     },
     /**
+     * 调用前把「这次要用哪个模型」写回运行行。
+     *
+     * 启动恢复补排的旧运行入队时没有模型；失败时那一行同样要是空的，事后就再也说不清是谁被调了。
+     * 只填空缺，不覆盖已有选择：运行行上的模型是入队那一刻的事实。
+     */
+    recordRunModel(id: string, model: Readonly<{ providerId: string; modelId: string }>) {
+      return Number(sqlite.database.prepare('update mi_analysis_runs set model_provider_id=coalesce(model_provider_id,?), model_id=coalesce(model_id,?) where id=?').run(model.providerId, model.modelId, id).changes) === 1
+    },
+    /**
      * 写入一条成功记录。
      *
      * `timeline` 与 `recordGroupPointer` 是两条线的差别：市场线写时间轴并把摘要挂成组的当前结论；

@@ -47,10 +47,16 @@ export const ACKNOWLEDGE_ACTION_KEY = productNotificationActionKey('market-intel
  */
 export const OPEN_SENTIMENT_ACTION_KEY = productNotificationActionKey('market-intelligence', 'open-sentiment')
 
-/** 分析失败通知的三个动作标签（只在「分析没跑成」那条上用）。 */
+/** 分析失败通知的动作标签（只在「分析没跑成」那条上用）。 */
 export const ANALYSIS_RETRY_ACTION_KEY = productNotificationActionKey('market-intelligence', 'retry-analysis')
 export const ANALYSIS_TIMELINE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'view-timeline')
+/** 传输层没连上：检查的是「连接」。 */
 export const ANALYSIS_CHECK_MODEL_ACTION_KEY = productNotificationActionKey('market-intelligence', 'check-model')
+/**
+ * 供应商答了但拒绝（4xx）/ 启动时没选出模型：要检查的是**模型设置**，不是网络。
+ * 与上面那个键分开：「检查模型连接」用在 401 上，等于让读者去查一个没问题的地方。
+ */
+export const ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY = productNotificationActionKey('market-intelligence', 'check-model-settings')
 
 /**
  * 事件下的任意一段文案键：`notification.event.<id>.<path>`（如 `country.US`、`indicator.cpi`）。

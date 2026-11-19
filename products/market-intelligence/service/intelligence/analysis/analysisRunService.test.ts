@@ -122,6 +122,29 @@ describe('analysisRunService', () => {
     expect(created[0]).toMatchObject({ eventGroupId: group.id, snapshotId: latestSnapshot.id, snapshotHash: latestSnapshot.snapshotHash, analysisPhase: 'initial', status: 'queued' })
   })
 
+  it('carries the reader model into a recovery-enqueued run', () => {
+    // 冷启动竞态：恢复补排的运行入队时不带模型，调用层就会退回平台第一个可用供应商。
+    // 这条用例钉住「补排的运行也必须带着读者选的模型」。
+    const latestAt = '2026-09-27T00:10:00.000Z'
+    const group: EventGroup = { id: 'mi-eg-model', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|model', firstObservedAt: asOf, lastObservedAt: latestAt, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['event-1'], triggerCount: 1, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: latestAt }
+    const latestSnapshot = makeSnapshot('mi-es-model', group.id, latestAt, 'model-hash')
+    const created: AnalysisRun[] = []
+    const repository = {
+      listRuns: () => [], listEventGroups: () => [group], listSnapshots: () => [latestSnapshot],
+      updateRunStatus: vi.fn(() => true),
+      enqueueRun: vi.fn((run: AnalysisRun) => { created.push(run); return { created: true, run } }),
+      appendTriggerLedger: vi.fn()
+    }
+    const service = createAnalysisRunService({ repository: repository as never, now: () => '2026-09-27T00:20:00.000Z', idFactory: () => 'mi-ar-model' })
+
+    service.recover({ model: { providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' } })
+
+    expect(created).toHaveLength(1)
+    expect(created[0]).toMatchObject({
+      modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017'
+    })
+  })
+
   it('re-dispatches a queued run that points at the active snapshot and was never claimed', () => {
     // The observed orphan: the row exists, no `runMarketAnalysis` job ever did. Nothing in
     // the run lifecycle can move it, so recovery must hand it back to the caller.

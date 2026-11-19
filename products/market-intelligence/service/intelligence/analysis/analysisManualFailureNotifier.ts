@@ -72,6 +72,20 @@ const REASON_COPY: Readonly<Record<string, ReasonCopy>> = Object.freeze({
     'zh-CN': '模型服务返回了错误',
     'en-US': 'the model service returned an error'
   },
+  // 供应商答了但拒绝（4xx）：不是「连不上」，读者要查的是模型配置/密钥。
+  'http-4xx': {
+    'zh-CN': '模型服务拒绝了这次请求（检查模型配置）',
+    'en-US': 'the model service rejected the request (check the model settings)'
+  },
+  'http-5xx': {
+    'zh-CN': '模型服务返回了错误',
+    'en-US': 'the model service returned an error'
+  },
+  // 调用前就没选出模型：一次请求都没发出去，不能说成网络或供应商。
+  'model-not-selected': {
+    'zh-CN': '还没有可用的模型，这次没有开始',
+    'en-US': 'no usable model was available, so it did not start'
+  },
   'analysis-provider-not-ready': {
     'zh-CN': '模型服务还没准备好（检查模型配置）',
     'en-US': 'the model service is not ready; check the model settings'

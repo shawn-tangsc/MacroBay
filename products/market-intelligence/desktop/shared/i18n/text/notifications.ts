@@ -8,6 +8,7 @@ import { signalNotificationSentences } from '../../../../contracts/signalNotific
 import {
   ACKNOWLEDGE_ACTION_KEY,
   ANALYSIS_CHECK_MODEL_ACTION_KEY,
+  ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY,
   ANALYSIS_RETRY_ACTION_KEY,
   ANALYSIS_TIMELINE_ACTION_KEY,
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
@@ -61,6 +62,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [ANALYSIS_RETRY_ACTION_KEY]: '重试',
     [ANALYSIS_TIMELINE_ACTION_KEY]: '查看时间轴',
     [ANALYSIS_CHECK_MODEL_ACTION_KEY]: '检查模型连接',
+    [ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY]: '检查模型设置',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '{date} {time} {language}这一期没有生成出来。',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了，但解读没出来。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
@@ -193,6 +195,7 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [ANALYSIS_RETRY_ACTION_KEY]: 'Retry',
     [ANALYSIS_TIMELINE_ACTION_KEY]: 'View timeline',
     [ANALYSIS_CHECK_MODEL_ACTION_KEY]: 'Check model connection',
+    [ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY]: 'Check model settings',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'The {date} {time} {language} edition failed to generate.',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
