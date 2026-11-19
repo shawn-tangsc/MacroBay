@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { marketIntelligenceProductManifest } from '../../../products/market-intelligence/product.manifest'
 import {
   allowsCenterOmission,
   createNotificationEventCatalog,
   type NotificationEventDeclaration
 } from './notificationEventCatalog'
-import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from './platformNotificationEvents'
 
 /**
  * 「谁允许省略 center」的**装配期守卫**（方案 §4，2026-11-18）。
@@ -16,6 +14,9 @@ import { PLATFORM_NOTIFICATION_APPROVALS, PLATFORM_NOTIFICATION_EVENTS } from '.
  * 事后要回看的事实，权限、额度、连接类都在这些档里。
  *
  * 违反 → **装配期直接拒**：静默按 required 补上，会让一张写错的批准表永远发现不了。
+ *
+ * 这里只用**合成声明**（平台层不许 import 产品代码）；真实批准表里「哪几条可以不写中心」由产品侧
+ * 那份用例（`products/.../contracts/notificationCenterOmission.test.ts`）钉住。
  */
 const declaration = (patch: Partial<NotificationEventDeclaration>): NotificationEventDeclaration => ({
   id: 'platform.probe',
@@ -65,23 +66,24 @@ describe('who may omit center', () => {
     expect(() => catalogWith(declaration({ id: 'platform.probe.center' }), ['center', 'desktop'])).not.toThrow()
   })
 
-  it('keeps the real catalog honest, and prints the set that is allowed to omit center today', () => {
+  it('holds for every entry of a catalog that does omit center: none of them may be a failure', () => {
+    // 合成目录里放一条合格的（桌面-only）与一条含 center 的：判据只对「不写 center」的那些生效。
     const catalog = createNotificationEventCatalog({
-      sources: [
-        { productId: 'platform', events: PLATFORM_NOTIFICATION_EVENTS, approval: PLATFORM_NOTIFICATION_APPROVALS },
-        {
-          productId: 'market-intelligence',
-          events: marketIntelligenceProductManifest.notificationEvents,
-          approval: marketIntelligenceProductManifest.notificationApproval
+      sources: [{
+        productId: 'platform',
+        events: [
+          declaration({ id: 'platform.probe.desktop-only', requestedDisruptionLevels: ['desktop'] }),
+          declaration({ id: 'platform.probe.with-center', requestedDisruptionLevels: [] })
+        ],
+        approval: {
+          'platform.probe.desktop-only': { approvedDisruptionLevels: ['desktop'], approvedBypassQuietHours: false },
+          'platform.probe.with-center': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false }
         }
-      ]
+      }]
     })
 
     const omitted = catalog.list().filter((entry) => !entry.approvedDisruptionLevels.includes('center'))
-    // 今天只该有舆情那两条；新增一条 reminder 会自动获得资格，改成要读者动手就当场红。
-    // eslint-disable-next-line no-console
-    console.log('[center-omission] allowed set:', omitted.map((entry) => entry.id).sort())
-    expect(omitted.length).toBeGreaterThan(0)
+    expect(omitted.map((entry) => entry.id)).toEqual(['platform.probe.desktop-only'])
     for (const entry of omitted) {
       expect(
         allowsCenterOmission(entry),
