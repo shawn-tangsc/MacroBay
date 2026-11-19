@@ -75,7 +75,7 @@ export function createIntelligenceRuntimes(input: {
   credentialStore: IntelligenceCredentialStore
   requestGovernanceQueue: ReturnType<typeof createSourceRequestGovernanceQueue>
   /** 标准表写库失败的四态读口（写入层）；没绑定就不出现写失败字段。 */
-  readStandardWriteFailures?: () => import('./application/calendarStandardWriteReader').SourceWriteFailureView
+  readStandardWriteFailures?: () => import('./application/calendarStandardWriteReader').SourceWriteFailureView | undefined
   hooks: IntelligenceModulePlatformHooks
 }) {
   const {

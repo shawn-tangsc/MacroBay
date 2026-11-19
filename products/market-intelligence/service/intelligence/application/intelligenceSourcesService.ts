@@ -112,7 +112,7 @@ export function createIntelligenceSourcesService(deps: {
    * 标准表**写库失败**的四态（写入层读口，用户 2026-11-19）。装配层注入懒读闭包：
    * 端口没绑定时不出现任何写失败字段（不是「没失败」）；读取抛错时由读口自己降级成「读不到」。
    */
-  readStandardWriteFailures?: () => SourceWriteFailureView
+  readStandardWriteFailures?: () => SourceWriteFailureView | undefined
 }) {
   const orchestrator = createSourceRuntimeOrchestrator({
     jobRuntime: deps.jobRuntime,
