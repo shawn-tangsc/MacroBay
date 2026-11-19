@@ -1,7 +1,6 @@
 import type { IntelligenceRetentionMode } from '../schema/intelligenceSource'
 import type { RawRecordStore } from './rawRecordStore'
 import { isDefillamaStablecoinRetiredPath } from './sourceCatalog'
-import { archivePayload } from '@platform/jobs'
 
 export const HOT_RETENTION_DAYS: Record<IntelligenceRetentionMode, number> = {
   compact: 7,
@@ -25,41 +24,12 @@ export function createIntelligenceArchiveService(deps: {
       if (isDefillamaStablecoinRetiredPath(input.sourceId)) {
         return { archivedCount: 0, hotRetentionDays, translationRemoved: 0 }
       }
-      const cutoffMs = Date.now() - hotRetentionDays * 24 * 60 * 60 * 1000
-      let archivedCount = 0
-
-      for (const summary of deps.rawRecordStore.listSafeSummaries(500)) {
-        if (summary.sourceId !== input.sourceId) continue
-        const record = deps.rawRecordStore.getRawRecord(summary.rawRecordId)
-        if (!record || record.archiveStatus === 'archived') continue
-
-        const threshold = deps.inlineThresholdBytes ?? 4_096
-        const payloadSize = record.payloadBody?.length ?? record.payloadSizeBytes ?? 0
-        const shouldArchiveBySize = Boolean(record.payloadBody) && payloadSize > threshold
-        const shouldArchiveByAge = new Date(record.detectedAt).getTime() <= cutoffMs
-        if (!shouldArchiveBySize && !shouldArchiveByAge) continue
-        if (!record.payloadBody || record.payloadRefType === 'file') continue
-
-        const archiveRef = await archivePayload({
-          baseDir: `${deps.archiveBaseDir}/${input.sourceId}`,
-          payload: record.payloadBody,
-          inlineThresholdBytes: deps.inlineThresholdBytes ?? 4_096,
-          fileNamePrefix: record.rawRecordId
-        })
-
-        if (archiveRef.kind !== 'file') continue
-
-        deps.rawRecordStore.updateArchiveRef(record.rawRecordId, {
-          payloadRefType: 'file',
-          payloadFileRef: archiveRef.ref,
-          payloadCodec: 'plain',
-          payloadBody: undefined,
-          archiveStatus: 'archived',
-          storageTier: 'warm'
-        })
-        archivedCount += 1
-      }
-
+      /* **原文外置已退休**（用户 2026-11-20，方案 A）：raw record 的原文只由「写路径 + 内容寻址原语」
+         一个地方写。这里原先按 4096 字节阈值 + `listSafeSummaries(500)` 窗口挪原文，两个限制都在
+         静默失效（7654 条里 7249 条 ≤4096、每轮只看前 500 条），36MB 就是这么涨起来的；
+         而且它写的是 `源目录/记录id` 命名，与内容寻址是同一标记指向两个位置。
+         这个任务以后**只做译文压缩**，`archivedCount` 恒为 0（保留返回形状给既有调用方）。 */
+      const archivedCount = 0
       const translationRemoved = deps.compactTranslationRecords
         ? await deps.compactTranslationRecords(input.retentionMode)
         : 0

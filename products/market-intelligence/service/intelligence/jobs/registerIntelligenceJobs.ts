@@ -228,7 +228,9 @@ export function registerIntelligenceJobs(
       sourceId: input.sourceId,
       retentionMode: input.retentionMode ?? 'balanced'
     })
-    await context.log({ level: 'info', message: `Archived ${result.archivedCount} raw records.` })
+    /* 原文外置已退休（2026-11-20）：这个任务**只做译文压缩**，不再有「归档原始记录」这件事。
+       日志照实说，别让读日志的人以为原文还被这个任务搬过。 */
+    await context.log({ level: 'info', message: `Compacted ${result.translationRemoved} translation records; raw payload archiving is retired.` })
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_PARQUET_EXPORT_JOB, async (_payload, context) => {

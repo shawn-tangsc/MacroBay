@@ -13,7 +13,16 @@ describe('intelligenceArchiveService', () => {
     expect(resolveHotRetentionDays('balanced')).toBeLessThan(resolveHotRetentionDays('extended'))
   })
 
-  it('moves large raw payloads to file-backed archive refs while keeping metadata queryable', async () => {
+  /**
+   * **原文外置已退休**（用户 2026-11-20，方案 A）：raw record 的原文只由「写路径 + 内容寻址原语」写。
+   * 这条用例原先断的是「大 payload 会被挪成 file 引用」——那个行为已经有意删掉（它就是 36MB 的根因：
+   * 4096 阈值 + 500 条窗口让它几乎永远不触发，且写入的还是非内容寻址命名）。
+   *
+   * 现在断的是**反面**：跑这个任务之后，记录**一个字节都不该变**。
+   * 覆盖搬家：`rawRecordStore.writePath.test.ts`（写路径一律 file、不落 body）与
+   * `rawRecordPayloadLayout.test.ts`（目录由 owner 唯一决定）。
+   */
+  it('不再碰 raw record 的原文引用（原文外置已退休，只做译文压缩）', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'intel-archive-'))
     const rawRecordStore = createRawRecordStore()
     const largeBody = 'x'.repeat(8_192)
@@ -32,16 +41,11 @@ describe('intelligenceArchiveService', () => {
     const service = createIntelligenceArchiveService({ rawRecordStore, archiveBaseDir: baseDir })
     const result = await service.compactSource({ sourceId: 'coindesk-rss', retentionMode: 'compact' })
 
-    expect(result.archivedCount).toBe(1)
-    const updated = rawRecordStore.getRawRecord(record.rawRecordId)
-    expect(updated?.payloadRefType).toBe('file')
-    expect(updated?.payloadBody).toBeUndefined()
-    expect(updated?.archiveStatus).toBe('archived')
-    expect(updated?.storageTier).toBe('warm')
-
-    const archivedFile = join(baseDir, 'coindesk-rss', updated!.payloadFileRef!)
-    const archivedBytes = await readFile(archivedFile, 'utf8')
-    expect(archivedBytes).toBe(largeBody)
+    expect(result.archivedCount).toBe(0)
+    const unchanged = rawRecordStore.getRawRecord(record.rawRecordId)
+    expect(unchanged?.payloadRefType).toBe('inline')
+    expect(unchanged?.payloadBody).toBe(largeBody)
+    expect(unchanged?.payloadFileRef).toBeUndefined()
   })
 
   it('is idempotent when archive already applied', async () => {
