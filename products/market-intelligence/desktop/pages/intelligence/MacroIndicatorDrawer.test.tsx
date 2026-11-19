@@ -298,9 +298,9 @@ describe('key-indicator drawer', () => {
     const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')
     expect(list).not.toBeNull()
     expect(list!.textContent).toContain('新增就业')
-    // 分组标题按**事件类型**（用户 2026-11-15 改回来）：经济指标 / 财经事件 / 央行活动。
-    // 分级只决定格子里露不露名字、进不进数字，不是分组维度。
-    expect(list!.textContent).toContain('经济指标 · ')
+    // 分组按**重点**（用户 2026-11-19）：一级指标置顶，其余折起来；不再按事件类型套两层。
+    expect(list!.textContent).toContain('一级指标 · ')
+    expect(list!.textContent).toContain('其余 2 条')
   })
 
   /**
@@ -450,6 +450,16 @@ describe('the three simplified cards', () => {
     { metricKey: 'US.UNEMPLOYMENT.SA.RATE', state: 'provided', period: '2026-10', releasedAt: '2026-11-06T13:30:00.000Z', value: 4.1, unit: 'percent', source: 'narwhal' }
   ]
 
+  /**
+   * 上一期至少有一条真数的夹具：翻页规则改成「上一期整页没数就不给翻」之后，
+   * 要看已发布页的用例必须用这一份——否则箭头是禁用的，翻过去什么也看不到。
+   */
+  const releasedFacts: readonly MacroIndicatorCardFact[] = facts.map((fact) =>
+    fact.metricKey === 'US.CPI.NSA.YOY'
+      ? { ...fact, state: 'provided' as const, value: 3.7 }
+      : fact.metricKey === 'US.CORE_PCE.SA.YOY'
+        ? { ...fact, state: 'provided' as const, value: 3.1, period: '2026-09', releasedAt: '2026-10-30T12:30:00.000Z' }
+        : fact)
   /** 给三张卡装上「下一期」，日期由用例指定；PCE 故意不给，用来验证「没有就写暂无排期」。 */
   const withNextRelease = (list: readonly MacroIndicatorCardFact[], releaseAt: string): readonly MacroIndicatorCardFact[] =>
     list.map((fact) => fact.metricKey === 'US.CORE_PCE.SA.YOY'
@@ -476,12 +486,23 @@ describe('the three simplified cards', () => {
   }
 
   /** 用户 2026-11-14：默认打开**未来**那页；左箭头仍能翻回已发布页，数据是同一份。 */
-  it('opens on the future page by default and can go back to the released page', async () => {
+  it('opens on the future page by default and can go back when the released page has numbers', async () => {
     await renderCards(facts)
-    expect(carouselText(0)).toContain('下次发布')
-    await switchPage(0, 'released')
-    expect(carouselText(0)).toContain('发布')
-    expect(carouselText(0)).not.toContain('下次发布')
+    // 第 2 张（新增就业）上一期有真数：左箭头可用，能翻回已发布页。
+    expect(carouselText(1)).toContain('下次发布')
+    await switchPage(1, 'released')
+    expect(carouselText(1)).not.toContain('下次发布')
+    expect(carouselText(1)).toContain('165')
+  })
+
+  /**
+   * 上一期四格全空时**不给翻页**（用户 2026-11-19）：CPI 那两张都是 missing-current、没有值，
+   * 左箭头禁用，翻过去只会看到四个「未提供」——这正是用户说不要的那一屏。
+   */
+  it('disables the back arrow when the released page has no numbers at all', async () => {
+    await renderCards(facts)
+    const nav = document.body.querySelectorAll('[data-pair]')[0]!.querySelectorAll<HTMLButtonElement>('.mk-nav button')
+    expect(nav[0]!.disabled).toBe(true)
   })
 
   /** 倒计时 tag 三档都用强调色：7 天外不是灰，24 小时内才实底反白。 */
@@ -516,7 +537,7 @@ describe('the three simplified cards', () => {
 
   /** 取消整卡变灰，同时时间标签**无条件渲染**：旧了不代表坏了，但要让人看得出多久以前。 */
   it('keeps the card normal and still shows how long ago it was published', async () => {
-    await renderReleased(facts)
+    await renderReleased(releasedFacts)
     expect(document.body.querySelector('[data-dim="true"]')).toBeNull()
     expect(carouselText(0)).toMatch(/天前|刚发布|昨天发布|前天发布/)
   })
@@ -536,7 +557,7 @@ describe('the three simplified cards', () => {
   }
 
   it('says 未提供 for rows this period did not provide, instead of a blank', async () => {
-    await renderReleased(facts)
+    await renderReleased(releasedFacts)
     const cpi = carouselText(0)
     expect(cpi).toContain('未提供')
     // 卡面只有字段和值：缺的那几行写「未提供」，解释句进 ⓘ，不在正文里。
@@ -544,7 +565,7 @@ describe('the three simplified cards', () => {
   })
 
   it('shows the payrolls value and the expectation gap chip', async () => {
-    await renderReleased(facts)
+    await renderReleased(releasedFacts)
     const payrolls = carouselText(1)
     expect(payrolls).toContain('+165K')
     // 「较上期」这一行已从卡面去掉（用户 2026-11-14 定稿）；卡上给的是预期差。
@@ -591,25 +612,26 @@ describe('the three simplified cards', () => {
    */
 
   it('says 未提供 on every PCE row because this month has no release row', async () => {
-    await renderReleased(facts)
+    await renderReleased(releasedFacts)
     const pce = carouselText(2)
     expect(pce).toContain('未提供')
     expect(pce).not.toContain('+165K')
   })
 
   it('never shows a number on a card when the facts were not read at all', async () => {
-    const cards = await renderReleased()
+    // 没有 facts 时上一期没有内容、左箭头本来就禁用：看默认页即可。
+    const cards = await renderCards()
     expect(cards).toHaveLength(3)
-    // 主值那一格空着：既没有数，也没有「未提供」——那两个字是「来源没给」的意思。
-    expect(cardMainValues()).toHaveLength(12)
-    expect(cardMainValues().every((value) => value === '')).toBe(true)
+    // 一格数都不许出现（「未提供」两个字是「来源没给」的意思，也不能拿来顶）。
+    expect(cards.join('')).not.toMatch(/\d/u)
     expect(cards.join('')).not.toContain('示意数据')
   })
 
-  it('says 暂时读不到 when the read failed, never 未提供', async () => {
-    await renderReleased(undefined, true)
-    expect(cardMainValues()).toHaveLength(12)
-    expect(cardMainValues().every((value) => value === '暂时读不到')).toBe(true)
+  it('says 读取失败 when the read failed, never 未提供', async () => {
+    // 产品 41 号文：读失败写「读取失败」，与「未提供」分开。
+    const cards = await renderCards(undefined, true)
+    expect(cards.join('')).toContain('读取失败')
+    expect(cards.join('')).not.toContain('未提供')
   })
 })
 
@@ -821,38 +843,25 @@ it('pins the indicator drawer so an inner drawer cannot push it left', () => {
  * 子组条数之和 = 该组总数）；③ 央行活动、财经事件不再拆分级——它们本来没有指标码。
  * 把分级子组去掉 → 红；把类型组并成「其他指标」→ 也红。
  */
-it('groups by event type first, then by metric tier inside 经济指标 only', async () => {
+it('groups by importance: tier 1, tier 2, high-importance events, then the folded rest', async () => {
   const mixed = [
     dayEvent('e-tier1', '10月消费者物价指数(年率)', '2026-11-13T01:00:00.000Z', { measureKeys: ['US.CPI.NSA.YOY'] }),
     dayEvent('e-tier2', '第三季度GDP(年化季率)', '2026-11-13T01:30:00.000Z', { measureKeys: ['US.GDP.SA.ANNUALIZED_QOQ'] }),
     dayEvent('e-tier0', '10月零售销售(月率)', '2026-11-13T01:45:00.000Z'),
-    dayEvent('e-speech', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity' }),
+    dayEvent('e-speech', '央行讲话', '2026-11-13T02:00:00.000Z', { eventType: 'central-bank-activity', importance: 'high' }),
     dayEvent('e-stock', '上周EIA原油库存变化', '2026-11-13T03:00:00.000Z', { eventType: 'financial-event' })
   ]
   await renderDrawer({ now: '2026-11-13T10:00:00.000Z', readCalendarMonth: async () => mixed })
   const list = document.body.querySelector('.mk-col-r .mi-calendar-day-list')!
-  const groups = [...list.querySelectorAll('[data-calendar-group]')]
-  const typeHeadings = groups.map(group => group.querySelector('h3')?.textContent ?? '')
-  expect(typeHeadings.some(heading => heading.startsWith('经济指标 · '))).toBe(true)
-  expect(typeHeadings.some(heading => heading.startsWith('央行活动 · '))).toBe(true)
-  expect(typeHeadings.some(heading => heading.startsWith('财经事件 · '))).toBe(true)
-  expect(typeHeadings.some(heading => heading.includes('其他指标'))).toBe(false)
-
-  // 第二层：只有「经济指标」组内有分级子组，标题带条数，条数之和 = 该组总数。
-  const indicator = groups.find(group => (group.querySelector('h3')?.textContent ?? '').startsWith('经济指标'))!
-  const subgroups = [...indicator.children].filter(child => child.hasAttribute('data-calendar-subgroup'))
-  const subheadings = subgroups.map(group => group.querySelector('h4')?.textContent ?? '')
-  expect(subheadings).toEqual(['一级指标 · 1 条', '二级指标 · 1 条', '未分级 · 1 条'])
-  const counts = subgroups.map(group => group.querySelectorAll('[role="listitem"]').length)
-  expect(counts.reduce((sum, count) => sum + count, 0))
-    .toBe(indicator.querySelectorAll('[role="listitem"]').length)
-
-  // 另外两组不拆分级：组内没有小标题。
-  for (const group of groups.filter(entry => !(entry.querySelector('h3')?.textContent ?? '').startsWith('经济指标'))) {
-    expect(group.querySelector('h4'), 'a non-indicator group is not split by tier').toBeNull()
-  }
-  // 分级照旧只管露名字：一级那条在「一级指标」子组里仍然写着它的名字。
-  expect(list.textContent).toContain('消费者物价指数')
+  const headings = [...list.querySelectorAll('h3')].map(node => node.textContent ?? '')
+  // 四段：一级、二级置顶；高重要性事件单独一段、不折叠；其余折起来（标题在折叠头里，不是 h3）。
+  expect(headings.some(heading => heading.startsWith('一级指标 · '))).toBe(true)
+  expect(headings.some(heading => heading.startsWith('二级指标 · '))).toBe(true)
+  expect(list.textContent).toContain('高重要性事件')
+  expect(list.textContent).toContain('其余')
+  // 不再按事件类型分两层。
+  expect(list.textContent).not.toContain('经济指标 · ')
+  expect(list.textContent).not.toContain('央行活动 · ')
 })
 
 /**
