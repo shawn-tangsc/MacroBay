@@ -1,6 +1,7 @@
 import { readJsonFileRecoveringSync, writeJsonFileAtomicallySync } from '@platform/storage/jsonFileStorage'
 
-import type { MacroCalendarProviderHealthRevision, MacroCalendarProviderId } from './macroCalendarContracts'
+import type { MacroCalendarProviderHealthRevision, MacroCalendarProviderId,
+  MacroCalendarWriteFailureCode } from './macroCalendarContracts'
 import { macroCalendarHealthHistoryPolicy } from './macroCalendarPolicy'
 import { compareIsoTime, isValidIsoTime, isVisibleAsOf } from '../public-query/asOfVisibility'
 
@@ -19,6 +20,27 @@ export type MacroCalendarProviderHealthSnapshot = {
 export type MacroCalendarProviderHealthStorage = {
   read: () => MacroCalendarProviderHealthSnapshot
   write: (snapshot: MacroCalendarProviderHealthSnapshot) => void
+}
+
+/**
+ * **把一次批写入失败落到健康记录上**（用户 2026-11-19）：两个写入点（官方行同步、历史回填）
+ * 都调它——不许各写一份「怎么落 `lastWriteFailure`」，否则迟早一处漏码、一处漏 `streakBatches`。
+ *
+ * 规矩：
+ * - **不改 `status`**（写库失败不是来源失败）；
+ * - **没有既有健康记录就不编一条**（`status` 从哪来？）：返回 `false`，由采集侧该建的时候建；
+ * - `streakBatches` 的合并、历史去重都在 `appendMaterialChange` 里，一处负责。
+ */
+export function recordCalendarWriteFailure(
+  health: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>,
+  providerId: MacroCalendarProviderId,
+  input: Readonly<{ at: string; failedRows: number; firstErrorCode: MacroCalendarWriteFailureCode }>
+): boolean {
+  const current = health.getCurrent(providerId)
+  if (current === undefined) return false
+  health.appendMaterialChange({ ...current, updatedAt: input.at,
+    lastWriteFailure: { at: input.at, failedRows: input.failedRows, firstErrorCode: input.firstErrorCode } })
+  return true
 }
 
 export function createMacroCalendarProviderHealthStore(storage: MacroCalendarProviderHealthStorage = createInMemoryMacroCalendarProviderHealthStorage()): MacroCalendarProviderHealthStore {
