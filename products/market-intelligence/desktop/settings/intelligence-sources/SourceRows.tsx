@@ -126,6 +126,14 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
           </span>)}
         </span>}
     </div>
+    {/* 标准表**写库**失败（用户 2026-11-19）：与「没采到」是两件事，**只进 ⓘ**——行上不加警告色，
+        也不把来源标成故障（`healthState` 仍只说采集）。没有失败/还没写过/读不到三种情况不出这一颗。 */}
+    {props.source.writeFailure === undefined
+      ? null
+      : <SettingsInfo
+        ariaLabelKey="settings.intelligenceSources.writeFailureAria"
+        labelKeys={[`settings.intelligenceSources.writeFailure.${props.source.writeFailure.code}`]}
+        resolveText={resolveText} />}
     {props.credentialMissing === true
       ? <SettingsInfo
         ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
