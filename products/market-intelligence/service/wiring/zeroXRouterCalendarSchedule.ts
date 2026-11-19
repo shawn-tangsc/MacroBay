@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import type { JobRuntime } from '@platform/jobs'
 
-import type { MacroCalendarProviderHealthStore } from '../intelligence/macro-calendar/macroCalendarProviderHealthStore'
+import type { CalendarStandardWriteLayer } from '../intelligence/macro-calendar/calendarStandardWriteLayer'
 
 import {
   createZeroXRouterCalendarScheduler,
@@ -48,8 +48,8 @@ export function wireZeroXRouterCalendarSchedule(input: Readonly<{
   startImmediately?: boolean
   /** 观测表里这条腿的 provider id；生产是 0xrouter 采集写的那一个。 */
   observationProviderId?: StandardBackfillProviderId
-  /** 来源健康记录：写库失败要记在它上面（不改 `status`，用户 2026-11-19）。 */
-  health?: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>
+  /** 写入层：成功/失败都记一笔（用户 2026-11-19）。 */
+  writeLayer?: Pick<CalendarStandardWriteLayer, 'recordAttempt'>
 }>): ZeroXRouterCalendarSchedule {
   const scheduler = createZeroXRouterCalendarScheduler({
     jobRuntime: input.jobRuntime,
@@ -62,7 +62,7 @@ export function wireZeroXRouterCalendarSchedule(input: Readonly<{
       // 只转「这一次采集真的落了行」的那一条，其余按批函数自己的幂等重扫。
       const report = backfillStandardRowsFromObservations(input.database,
         { providerId: input.observationProviderId ?? '0xrouter',
-          ...(input.health === undefined ? {} : { health: input.health }),
+          ...(input.writeLayer === undefined ? {} : { writeLayer: input.writeLayer }),
           log: (level, event, fields) => { input.log?.(level, event, fields) } })
       input.log?.('info', 'macro-calendar.zero-xrouter-standard-rows', {
         releases: report.releases, written: report.written,

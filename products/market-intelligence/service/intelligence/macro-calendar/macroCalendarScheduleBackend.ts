@@ -10,6 +10,8 @@ import { createMacroCalendarProviderHealthJsonStorage, createMacroCalendarProvid
 import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore, type MacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 import { createMacroCalendarReleaseTimeOverrideCache, createMacroCalendarReleaseTimeOverrideJsonStorage, createMacroCalendarReleaseTimeOverrideStore } from './macroCalendarReleaseTimeOverrideStore'
 import { createMacroCalendarRepository } from './macroCalendarRepository'
+import { createCalendarStandardWriteLayer,
+  createJsonFileCalendarStandardWriteStorage } from './calendarStandardWriteLayer'
 import { createMacroCalendarSqlite } from './macroCalendarSqlite'
 import { createMacroCalendarScheduleCollectionWorkflow } from './macroCalendarScheduleCollectionWorkflow'
 import { createMacroCalendarScheduleHealthService } from './macroCalendarScheduleHealthService'
@@ -45,6 +47,12 @@ export function createMacroCalendarScheduleBackend(input: {
 }) {
   const profiles = input.profiles ?? createMacroCalendarProviderProfileStore(createMacroCalendarProviderProfileJsonStorage(join(input.dataDir, 'macro-calendar-provider-profiles.json')))
   const healthStore = createMacroCalendarProviderHealthStore(createMacroCalendarProviderHealthJsonStorage(join(input.dataDir, 'macro-calendar-provider-health.json')))
+  /**
+   * **写入层**（用户 2026-11-19 / 架构师裁决）：写库结果独立成层，与采集健康正交。
+   * 成功也建记录——「行存在 ⇒ 一定有写入记录」这条自证守卫的前提。
+   */
+  const writeLayer = createCalendarStandardWriteLayer(
+    createJsonFileCalendarStandardWriteStorage(join(input.dataDir, 'macro-calendar-standard-write.json')))
   // The reader's own release times: durable in their own file, and mirrored into the synchronous
   // view a calendar query reads (see `macroCalendarReleaseTimeOverrideStore`).
   const releaseTimeOverrideStore = createMacroCalendarReleaseTimeOverrideStore(
@@ -108,7 +116,7 @@ export function createMacroCalendarScheduleBackend(input: {
       return safeConnection(() => testProvider(providerId))
     }
     let disposed = false
-    return { profiles, healthStore, repository, storage, rawRecords: input.rawRecords, health, manualBlsIcs, fedFomcRefresh, beaOfficialReleaseRefresh, blsEmploymentSchedule, releaseTimeOverrideStore, releaseTimeOverrides, testProviderConnection, dispose: () => { if (disposed) return; disposed = true; storage.close() } }
+    return { profiles, healthStore, writeLayer, repository, storage, rawRecords: input.rawRecords, health, manualBlsIcs, fedFomcRefresh, beaOfficialReleaseRefresh, blsEmploymentSchedule, releaseTimeOverrideStore, releaseTimeOverrides, testProviderConnection, dispose: () => { if (disposed) return; disposed = true; storage.close() } }
   } catch (error) {
     storage.close()
     throw error

@@ -6,7 +6,7 @@ import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, toAlpha2Country, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
-import { recordCalendarWriteFailure, type MacroCalendarProviderHealthStore } from './macroCalendarProviderHealthStore'
+import type { CalendarStandardWriteLayer, CalendarStandardWriterId } from './calendarStandardWriteLayer'
 import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import { routeStandardRelease } from './marketCalendarStandardRowRouting'
 import { ensureCalendarStandardTables, recordCalendarUnmapped, type CalendarUnmappedReason }
@@ -201,24 +201,28 @@ const periodFromRuleKey = (periodKey: string): string | undefined =>
  * 逐字复制到第二个调用点，迟早出现「一处漏码、一处漏 streak」。
  */
 export function reportWriteFailure(
-  health: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'> | undefined,
+  writeLayer: Pick<CalendarStandardWriteLayer, 'recordAttempt'> | undefined,
   log: ((level: 'warn', event: string, fields?: Record<string, unknown>) => void) | undefined,
   providerId: string,
   counts: Readonly<{ failed: number; firstErrorCode?: 'standard-write-failed' | 'value-shape-rejected' }>,
   at: string
 ): boolean {
-  if (counts.failed === 0 || counts.firstErrorCode === undefined) return false
   /**
-   * **只有落在日历健康记录空间里的 provider 才记**：`fed/bls/bea/0xrouter`。
-   * 回填也可能用 `narwhal` 跑（它不在这套健康记录里），那种情况只打日志、不往别人的健康上写。
+   * **成功也记一笔**（用户 2026-11-19）：写入成功本身就是「这个写入方存在」的证据，
+   * 而且保证将来失败时有地方落——今天 3222/3321 行失败只打日志，根因就是只在失败时找记录。
    */
-  const healthProviderId = isCalendarHealthProviderId(providerId) ? providerId : undefined
-  const recorded = health === undefined || healthProviderId === undefined ? false
-    : recordCalendarWriteFailure(health, healthProviderId,
-      { at, failedRows: counts.failed, firstErrorCode: counts.firstErrorCode })
-  log?.('warn', 'macro-calendar.standard.write-failed',
-    { providerId, failedRows: counts.failed, firstErrorCode: counts.firstErrorCode, recorded })
-  return recorded
+  const writerId = isCalendarHealthProviderId(providerId) ? providerId : undefined
+  if (writerId === undefined) return false
+  const failed = counts.failed > 0 && counts.firstErrorCode !== undefined
+  writeLayer?.recordAttempt({ writerId, at,
+    outcome: failed
+      ? { state: 'failed', failedRows: counts.failed, firstErrorCode: counts.firstErrorCode! }
+      : { state: 'succeeded' } })
+  if (failed) {
+    log?.('warn', 'macro-calendar.standard.write-failed',
+      { providerId, failedRows: counts.failed, firstErrorCode: counts.firstErrorCode, recorded: writeLayer !== undefined })
+  }
+  return failed
 }
 
 const isCalendarHealthProviderId = (value: string): value is MacroCalendarProviderId =>
@@ -241,7 +245,8 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
    * 来源健康记录（用户 2026-11-19）：**只用来记「写库失败」**，不改 `status`。
    * 不传就不记（离线脚本、用例不需要）。
    */
-  health?: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>
+  /** 写入层（用户 2026-11-19）：成功与失败都记一笔，与采集健康正交。 */
+  writeLayer?: Pick<CalendarStandardWriteLayer, 'recordAttempt'>
   log?: (level: 'warn', event: string, fields?: Record<string, unknown>) => void
 }>): StandardBackfillReport {
   const providerId = input?.providerId ?? narwhalSourcePolicy.providerId
@@ -432,7 +437,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
     const counts = dualWriteMeasureRows(database, { providerId, parserVersion: 'backfill-from-observations-v1',
       observedAt, rows: standardRows as never })
     written = counts.written
-    reportWriteFailure(input?.health, input?.log, providerId, counts, observedAt)
+    reportWriteFailure(input?.writeLayer, input?.log, providerId, counts, observedAt)
   }
   return { observations: rows.length, releases: latest.size, indicator, event, source,
     unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey,

@@ -6,7 +6,7 @@ import { officialExpansionMetricKeys, officialMetricKeyOfEvent } from './marketC
 import { nameByMetricKey } from './marketCalendarCodeNames'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { reportWriteFailure } from './marketCalendarStandardBackfill'
-import type { MacroCalendarProviderHealthStore } from './macroCalendarProviderHealthStore'
+import type { CalendarStandardWriteLayer } from './calendarStandardWriteLayer'
 import type { CalendarReleaseStatus } from './marketCalendarStandardTable'
 
 /**
@@ -130,8 +130,8 @@ export function syncOfficialStandardRows(database: DatabaseSync, input: Readonly
   parserVersion: string
   limit?: number
   onError?: (message: string) => void
-  /** 来源健康记录：只用来记「写库失败」，不改 `status`（用户 2026-11-19）。 */
-  health?: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>
+  /** 写入层（用户 2026-11-19）：成功与失败都记一笔，与采集健康正交。 */
+  writeLayer?: Pick<CalendarStandardWriteLayer, 'recordAttempt'>
   log?: (level: 'warn', event: string, fields?: Record<string, unknown>) => void
 }>): Readonly<{ revisions: number; written: number; failed: number }> {
   let revisions = 0
@@ -149,11 +149,11 @@ export function syncOfficialStandardRows(database: DatabaseSync, input: Readonly
     failed += counts.failed
     // **两个写入点共用同一处**（`reportWriteFailure`）：provider 取这一批第一个 revision 的来源
     // （官方行按来源分批复写，一批里不会混源；真混了也只会记到第一个来源上，不编第二个）。
-    reportWriteFailure(input.health, input.log, String(rows[0]?.providerId ?? 'official-standard-rows'),
+    reportWriteFailure(input.writeLayer, input.log, String(rows[0]?.providerId ?? 'official-standard-rows'),
       counts, input.asOf)
     // **两个写入点共用同一处**（`reportWriteFailure`）：provider 取这一批第一个 revision 的来源
     // （官方行按来源分批复写，一批里不会混源；真混了也只会记到第一个来源上，不编第二个）。
-    reportWriteFailure(input.health, input.log, String(rows[0]?.providerId ?? 'official-standard-rows'),
+    reportWriteFailure(input.writeLayer, input.log, String(rows[0]?.providerId ?? 'official-standard-rows'),
       counts, input.asOf)
   }
   return { revisions, written, failed }

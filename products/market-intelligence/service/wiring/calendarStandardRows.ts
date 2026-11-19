@@ -21,7 +21,7 @@ import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
 import { auditCalendarIntegrity, calendarIntegrityGaps } from '../intelligence/macro-calendar/marketCalendarIntegrityAudit'
 import { normalizeCalendarStandardRows } from '../intelligence/macro-calendar/marketCalendarStartupNormalization'
-import type { MacroCalendarProviderHealthStore } from '../intelligence/macro-calendar/macroCalendarProviderHealthStore'
+import type { CalendarStandardWriteLayer } from '../intelligence/macro-calendar/calendarStandardWriteLayer'
 
 /**
  * **一次性历史补值**的接线（管欠账，管未来的是采集作业末尾那次扫描）。
@@ -82,8 +82,8 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
    * 于是「没日志」被误读成「没执行」。给了这个口子，每一步迁移都能在 `app.log` 里查到。
    */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
-  /** 来源健康记录：写库失败要记在它上面（不改 `status`，用户 2026-11-19）。 */
-  health?: Pick<MacroCalendarProviderHealthStore, 'getCurrent' | 'appendMaterialChange'>
+  /** 写入层：成功/失败都记一笔（用户 2026-11-19）。 */
+  writeLayer?: Pick<CalendarStandardWriteLayer, 'recordAttempt'>
 }>): void {
   // 一条消息走两个口：产品日志（可查）+ 控制台（开发时看）。两者都要，缺一个就有人读错现场。
   const report = (message: string): void => {
@@ -100,7 +100,7 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       listEffectiveMonthAsOf: input.listEffectiveMonthAsOf,
       months, asOf: now.toISOString(), parserVersion: 'official-standard-rows-v1',
       onError: (message: string) => report(`[macro-calendar] 官方标准行写入失败：${message}`),
-      ...(input.health === undefined ? {} : { health: input.health }),
+      ...(input.writeLayer === undefined ? {} : { writeLayer: input.writeLayer }),
       log: (level, event, fields) => { input.log?.(level, event, fields) }
     })
     report(`[macro-calendar] 官方发布入标准表：${months.join('/')} 读到 ${synced.revisions} 条、写入 ${synced.written} 条、失败 ${synced.failed} 条`)

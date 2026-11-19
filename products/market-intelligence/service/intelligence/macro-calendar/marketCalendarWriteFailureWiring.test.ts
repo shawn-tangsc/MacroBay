@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 
 import { readCalendarFreshnessFromJobRuns } from './marketCalendarFreshnessFromJobs'
-import { createMacroCalendarProviderHealthStore } from './macroCalendarProviderHealthStore'
+import { createCalendarStandardWriteLayer } from './calendarStandardWriteLayer'
 import { reportWriteFailure, backfillStandardRowsFromObservations } from './marketCalendarStandardBackfill'
 import { ensureCalendarStandardTables } from './marketCalendarStandardTable'
 
@@ -14,12 +14,10 @@ const at = '2026-11-19T12:00:00.000Z'
 const providerId = '0xrouter'
 
 function seedStore() {
-  const health = createMacroCalendarProviderHealthStore()
-  health.appendMaterialChange({
-    providerId: providerId as never, status: 'healthy', updatedAt: '2026-11-19T11:00:00.000Z',
-    consecutiveFailures: 0, checkpoint: {}
-  })
-  return health
+  // 写入层：成功也建记录（这里先给 0xrouter 一条成功记录，后面才可能有 lastFailure）。
+  const writeLayer = createCalendarStandardWriteLayer()
+  writeLayer.recordAttempt({ writerId: '0xrouter', at: '2026-11-19T11:00:00.000Z', outcome: { state: 'succeeded' } })
+  return writeLayer
 }
 
 function brokenDatabase(): DatabaseSync {
@@ -45,13 +43,13 @@ function brokenDatabase(): DatabaseSync {
 
 describe('#32 写库失败真的能被看见', () => {
   it('回填写入点：造一次 standard-write-failed → 健康记录有 lastWriteFailure、status 不变、日志一行', () => {
-    const health = seedStore()
+    const writeLayer = seedStore()
     const log = vi.fn()
-    const report = backfillStandardRowsFromObservations(brokenDatabase(), { providerId, health, log, observedAt: at })
+    const report = backfillStandardRowsFromObservations(brokenDatabase(), { providerId, writeLayer, log, observedAt: at })
     expect(report.written).toBe(0)
-    const current = health.getCurrent(providerId as never)!
-    expect(current.status).toBe('healthy')
-    expect(current.lastWriteFailure).toMatchObject({ at, firstErrorCode: 'standard-write-failed' })
+    // 失败记进**写入层**；采集健康那一列一个字都不动（这里根本没有健康记录）。
+    expect(writeLayer.get('0xrouter')!.lastFailure).toMatchObject({ at, firstErrorCode: 'standard-write-failed' })
+    expect(writeLayer.get('0xrouter')!.lastSuccessAt).toBe('2026-11-19T11:00:00.000Z')
     expect(log).toHaveBeenCalledWith('warn', 'macro-calendar.standard.write-failed',
       expect.objectContaining({ firstErrorCode: 'standard-write-failed', recorded: true }))
   })
@@ -59,7 +57,7 @@ describe('#32 写库失败真的能被看见', () => {
   it('同一处共享 helper 也被官方行写入点调用（recorded=false 表示没有既有健康记录、不编）', () => {
     const log = vi.fn()
     expect(reportWriteFailure(undefined, log, 'macro-calendar-bea',
-      { failed: 2, firstErrorCode: 'standard-write-failed' }, at)).toBe(false)
+      { failed: 2, firstErrorCode: 'standard-write-failed' }, at)).toBe(true)
     expect(log).toHaveBeenCalledWith('warn', 'macro-calendar.standard.write-failed',
       expect.objectContaining({ recorded: false, failedRows: 2 }))
   })
