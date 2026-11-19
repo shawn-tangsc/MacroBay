@@ -142,6 +142,16 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         </g></g>
         <g clipPath="url(#miClockFlowClip)"><g className="mi-clock__orbit">
           <path d={GEOMETRY.flowFan} fill="url(#miClockFlowGrad)" clipPath="url(#miClockFlowClip)" />
+          {/*
+            **环流高光**（界面设计 2026-11-20，全仓唯一一条装饰动画）：
+            沿轨道推进一段亮斑，头亮尾透明，8s 线性无限循环。
+            用 `stroke-dasharray` / `stroke-dashoffset` 推进描边，**不用 `transform: rotate`**——
+            旋转只归 `loadingState`（转圈＝正在加载），这里一动就会和加载信号撞。
+            `r=135` 周长 ≈ 848，亮斑取 1/3（283）；起点在 12 点，所以静置偏移 848/4 ≈ 212。
+          */}
+          <circle className="mi-clock__sweep" cx={clockCardCenter.svgX} cy={clockCardCenter.svgY}
+            r={clockCardGeometry.orbitRadius} fill="none" stroke="url(#miClockFlowGrad)"
+            strokeWidth="3" strokeDasharray="283 565" strokeDashoffset="212" />
         </g></g>
         {/* 12 点「现在点」：环连着，这是位置标记，不是断口收口。 */}
         <circle className="mi-clock__nowmark" cx={clockCardCenter.svgX} cy={42.5} r="3.5" />

@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, it } from 'vitest'
@@ -123,4 +125,44 @@ it('names the policy slot as a probability, never as the rate itself', async () 
   // 中央主位与环上的牌都用同一个名字：说清「这是维持不变的概率」。
   expect(host.textContent).toContain('维持不变概率')
   expect(host.querySelector('.mi-clock__core')?.textContent).not.toBe('政策利率90.9%')
+})
+
+/**
+ * 环流高光（界面设计 2026-11-20）：装饰性流动，**不是加载信号**。
+ *
+ * 三条硬约束在这里钉住：① 推进用 `stroke-dashoffset`，**不许出现 `transform: rotate`**
+ * （旋转只归 `loadingState`）；② 减少动态效果时不播，但亮斑**静态仍在位**；③ 亮斑被外层
+ * 断口裁剪包着，不会从缺口漏过去。
+ */
+it('drives the ring highlight with a dash offset, never by rotating the element', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const sweep = /\.mi-clock__sweep\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+  expect(sweep).not.toContain('transform')
+  expect(css).toContain('@keyframes mi-clock-ring-sweep')
+  expect(css).toMatch(/from \{ stroke-dashoffset: 212; \}/)
+  expect(css).toMatch(/to \{ stroke-dashoffset: -636; \}/)
+  // 只在「不要求减少动态」时播；减少动态时没有任何动画声明作用于它。
+  expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\)[\s\S]*?animation: mi-clock-ring-sweep 8s linear infinite/)
+})
+
+it('keeps the sweep inside the gap clip and static when motion is reduced', async () => {
+  const { host } = await render()
+  const sweep = host.querySelector('.mi-clock__sweep')!
+  expect(sweep.getAttribute('stroke-dasharray')).toBe('283 565')
+  expect(sweep.getAttribute('stroke-dashoffset')).toBe('212')
+  // 外层必须还在断口裁剪里，否则高光会从 8 点缺口漏出去。
+  expect(sweep.closest('g[clip-path]')).not.toBeNull()
+})
+
+it('renders the expectation label in full, never truncated with an ellipsis', async () => {
+  const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+    lastRelease: { date: '2026-11-06', value: '+165K' },
+    nextRelease: { date: '2026-11-25', expected: '+88K' }, periodDays: 28 }]
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: withExpected }) })
+  const unit = host.querySelector('.mi-clock__unit')!
+  expect(unit.textContent).toBe('预期（市场共识）')
+  // 放不下时缩小字档而不是省略号：这条格不许有省略/裁剪规则。
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const unitRule = /\.mi-clock__unit\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+  expect(unitRule).not.toContain('text-overflow')
 })
