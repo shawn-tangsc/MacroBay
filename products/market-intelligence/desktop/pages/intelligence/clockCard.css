@@ -34,8 +34,10 @@
 .mi-clock__svg circle[stroke='currentColor'], .mi-clock__svg line { fill: none; stroke: currentColor; }
 .mi-clock__orbit path { fill: url(#miClockFlowGrad); stroke: none; }
 .mi-clock__svg .mi-clock__now { fill: var(--accent); stroke: none; }
-.mi-clock__orbit { transform-origin: 156px 153px; animation: mi-clock-spin 8s linear infinite; }
-@keyframes mi-clock-spin { to { transform: rotate(360deg); } }
+/* 外圈那条流光**不再旋转**：`loadingStandard` 规定全仓只有 `loadingState.css` 拥有旋转动画
+   （转圈＝「正在加载」的信号，别处一转，读者就分不清这屏是在忙还是纯装饰）。渐变弧照旧画，
+   只是静止。 */
+.mi-clock__orbit { transform-origin: 156px 153px; }
 
 .mi-clock__core { position: absolute; left: 168px; top: 165px; transform: translate(-50%, -50%); width: 160px; padding: 2px 4px; background: var(--surface); border-radius: 50%; text-align: center; display: grid; gap: 1px; justify-items: center; z-index: 2; }
 .mi-clock__row1 { display: flex; align-items: baseline; gap: 5px; justify-content: center; }
@@ -76,7 +78,6 @@
 
 /* 减少动效：流光整段隐藏，只剩 12 点那个绿点；牌不再过渡（设计如此，不是没实现）。 */
 @media (prefers-reduced-motion: reduce) {
-  .mi-clock__orbit { animation: none; display: none; }
   .mi-clock__node { transition: none; }
 }
 

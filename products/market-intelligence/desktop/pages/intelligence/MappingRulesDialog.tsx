@@ -165,14 +165,23 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
   const codeCount = codes?.state === 'available' ? codes.counts.total : 0
   const unmappedCount = view?.state === 'available' ? view.counts.unmapped : 0
   const eventCount = events?.state === 'available' ? events.total : 0
+  // 标签传的是**键**（`mkDay.…` 是这张文案表里的真实路径），句子由下面的解析器取；
+  // 裸词（`tabCodes`）不是键，`choiceKeyGuard` 会红——那正是它要挡的「把已解析句子当键传」。
   const items: readonly ChoiceItem[] = [
-    { value: 'codes', labelKey: 'tabCodes', labelParams: { count: String(codeCount) } },
-    { value: 'unmapped', labelKey: 'tabUnmapped', labelParams: { count: String(unmappedCount) } },
-    { value: 'events', labelKey: 'tabEvents', labelParams: { count: String(eventCount) } }
+    { value: 'codes', labelKey: 'mkDay.mappingTabCodes', labelParams: { count: String(codeCount) } },
+    { value: 'unmapped', labelKey: 'mkDay.mappingTabUnmapped', labelParams: { count: String(unmappedCount) } },
+    { value: 'events', labelKey: 'mkDay.mappingTabEvents', labelParams: { count: String(eventCount) } }
   ]
+  /**
+   * 键 → 文案。键写的是它在**抽屉那张文案表**里的路径（`mkDay.mappingTabCodes`），这里映射到本弹框
+   * 的字段名——两边名字不同是既有的：弹框的契约收的是值（`tabCodes`），文案表收的是路径。
+   */
   const copy: Readonly<Record<string, string>> = {
-    tabCodes: text.tabCodes, tabUnmapped: text.tabUnmapped, tabEvents: text.tabEvents
+    'mkDay.mappingTabCodes': text.tabCodes,
+    'mkDay.mappingTabUnmapped': text.tabUnmapped,
+    'mkDay.mappingTabEvents': text.tabEvents
   }
+  const resolveCopyText = (key: string): string => copy[key] ?? key
 
   const codesPanel = codeRows.length === 0
     ? <p className="mi-catalog__note">{text.codeEmpty}</p>
@@ -335,7 +344,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
         if (next === 'codes') setCodePage(1)
         else if (next === 'unmapped') setUnmappedPage(1)
         else setEventPage(1)
-      }} ariaLabelKey="tabsAria" resolveText={(key) => copy[key] ?? key}
+      }} ariaLabelKey="tabsAria" resolveText={resolveCopyText}
         panels={{
           codes: <section data-mapping-section="codes">{codesPanel}</section>,
           unmapped: <section data-mapping-section="unmapped">{unmappedPanel}</section>,
