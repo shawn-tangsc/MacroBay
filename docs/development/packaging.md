@@ -18,6 +18,9 @@ and live outside this repository's public docs, so nothing here restates them a 
 - **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. The release workflow builds it on
   `windows-latest`, and the build also runs through on Windows 11 x64 hardware. No real install has
   been accepted yet (no Windows environment was available).
+
+Installed-app acceptance is tracked, build by build, in
+[Install verification](./install-verification.md); a platform without an entry there is unverified.
 - **Linux**: no packager configuration.
 
 ## CI verification and releases

@@ -41,6 +41,22 @@ Then open it again.
 
 Start it from the Start menu after the install finishes.
 
+## Check that it installed correctly
+
+Three steps, each one you can see for yourself:
+
+1. **The version inside the app.** Open **Settings → About**; the block near the top shows **Current version**, and it must equal the version you downloaded from the releases page. If it says "Unknown", the check did not read a version — do not treat that as a good install.
+2. **No failure page on first launch.** A healthy launch goes straight to the main window. If you get the "this page did not load" failure page, quit the app completely (`Command+Q` on macOS) and open it again; if it repeats, open an issue with the log file.
+3. **The data directory exists.** macOS: `~/Library/Application Support/MacroBay/`; Windows: `%APPDATA%\MacroBay\`. It contains `platform/agents.sqlite` and `logs/app.log` — the log file only exists once the app has really run.
+
+One optional extra step: configure a model API key, send one conversation and get one reply; that is the check that the bundled agent runtime works too.
+
+## An old copy, or the wrong chip
+
+- **Which macOS build you have**: select MacroBay in *Applications*, press `Command+I`, and read the *Kind* line — "Application (Apple silicon)" or "Application (Intel)". An Intel build on Apple silicon asks for Rosetta; it works but is slower, so prefer the matching download.
+- **The version does not match**: quit the app completely, then make sure you launched the copy in *Applications*, not the one still inside the mounted `.dmg`.
+- **Installing a new version replaces the old one**, no uninstall needed; app data lives in the data directory and is not touched by installing over it.
+
 ## Every update repeats both steps
 
 There is no auto-update: a new version means going back to the releases page, downloading it and installing again. Installing replaces the files, so the macOS quarantine flag and the Windows SmartScreen decision are new every time — **this is not a first-install-only step**.

@@ -14,6 +14,8 @@
   实际使用，0.4.1 起无真机安装记录；x64 只做到构建与文件架构校验，**尚未在 Intel 真机上验收**。
 - **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。发布 workflow 在 `windows-latest` 上构建
   它，构建也已在 Windows 11 x64 真机上跑通。安装后的运行态未做真机安装验收（缺 Windows 环境）。
+
+安装验收逐条记在[安装验收记录](./install-verification.zh-CN.md)，那里没有记录的平台就是没验收。
 - **Linux**：尚未配置打包。
 
 ## CI 校验与发布
