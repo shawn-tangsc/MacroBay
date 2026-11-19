@@ -22,6 +22,7 @@ import { readCalendarMappingRules } from '../rendering/marketCalendarMappingRule
 import { readEventSourceWrites } from '../rendering/marketCalendarEventSourceWritesRead'
 import { readCalendarCodeTable } from '../rendering/marketCalendarCodeTableRead'
 import { readCalendarEventList } from '../rendering/marketCalendarEventListRead'
+import { readCalendarValueRevisions } from '../marketCalendarValueRevisionAudit'
 import {
   isEmpty,
   isProviderInput,
@@ -169,6 +170,25 @@ export function registerMacroEconomicCalendarIpc(
     } catch {
       return { state: 'unavailable', reasonCode: 'query-unavailable' }
     }
+  })
+  /**
+   * **数值修订审计**（只读、渲染专用）：详情里的并列行。四元组缺一个就返回输入非法——
+   * 拿不完整身份去查，会拿到「可能是另一行」的记录，比不显示更糟。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryValueRevisions, async payload => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    const input = (payload ?? {}) as { countryCode?: unknown; metricKey?: unknown; periodKey?: unknown
+      firstScheduledDate?: unknown }
+    if (typeof input.countryCode !== 'string' || input.countryCode === ''
+      || typeof input.metricKey !== 'string' || input.metricKey === ''
+      || typeof input.periodKey !== 'string' || input.periodKey === ''
+      || typeof input.firstScheduledDate !== 'string' || input.firstScheduledDate === '') {
+      return { state: 'unavailable', reasonCode: 'query-input-invalid' }
+    }
+    return readCalendarValueRevisions(unmappedMonth.database, {
+      countryCode: input.countryCode, metricKey: input.metricKey,
+      periodKey: input.periodKey, firstScheduledDate: input.firstScheduledDate
+    })
   })
   // One read method, no payload: the caller asks "how old is the calendar", never "how old
   // is this source in this month". A read that fails answers `unavailable`, never "nothing".

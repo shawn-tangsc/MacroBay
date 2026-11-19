@@ -14,6 +14,7 @@ import { calendarCountryLabel } from './calendarCountryLabel'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
 import { EventSourceWritesBlocks, fieldConflicts } from './EventSourceWritesBlocks'
+import { EventValueRevisions } from './EventValueRevisions'
 import { useEventSourceWrites } from './useEventSourceWrites'
 import { officialSourceStateFor } from '../../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 
@@ -151,6 +152,8 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
         {hierarchyText === undefined ? null : <div data-content-hierarchy>
           <dt>{text.details.contentHierarchy}</dt><dd>{hierarchyText}</dd>
         </div>}
+        {/* 数值修订（用户 2026-11-20）：只在有身份时出现；没有身份整块不渲染。 */}
+        <div data-content-revisions><EventValueRevisions event={event} text={text} /></div>
       </dl>
     </section>
     {event.eventType === 'economic-indicator' ? <div className="mi-economic-calendar__values">

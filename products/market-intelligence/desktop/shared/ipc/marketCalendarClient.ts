@@ -16,6 +16,29 @@ import type {
 import type {
   CodeTableRead, CodeTableReadRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
+/**
+ * **数值修订审计的三态**（渲染层只认这四种）：
+ * - `recorded`：有记录，带按字段分组的并列条目与「更新于」；
+ * - `not-recorded`：历史期次**没有**审计记录（界面写「未记录」）；
+ * - `unreadable`：这次读不到（错误态 + 重试，**不许写成「未记录」**）；
+ * - `unavailable`：IPC 形状不合或端口未通（同样是错误态）。
+ */
+export type CalendarValueRevisionEntry = Readonly<{
+  field: string
+  valueBefore: string | null
+  valueAfter: string | null
+  decision: string
+  providerId: string
+  observedAt: string
+}>
+export type CalendarValueRevisionRead =
+  | Readonly<{ state: 'recorded'; revisions: readonly CalendarValueRevisionEntry[]
+    byField: Readonly<Record<string, readonly CalendarValueRevisionEntry[]>>
+    updatedAt: string | null; latestWriteProviderId: string | null }>
+  | Readonly<{ state: 'not-recorded' }>
+  | Readonly<{ state: 'unreadable' }>
+  | Readonly<{ state: 'unavailable'; reasonCode: 'query-input-invalid' | 'query-unavailable' }>
+
 export type MarketCalendarClient = {
   queryMonth: (input: MarketCalendarQuery) => Promise<MarketCalendarPage>
   refresh: (input: MarketCalendarScope) => Promise<MarketCalendarRefreshResult>
@@ -45,6 +68,12 @@ export type MarketCalendarClient = {
    * 入参必须带 `scheduledDate`：不带就会拿到这个指标所有月份，几十期混成一块。
    */
   queryEventSourceWrites: (input: Readonly<{ metricKey: string; scheduledDate: string }>) => Promise<EventSourceWritesRead>
+  /**
+   * **数值修订审计**（只读，渲染专用）：某一格历次被谁在什么时候改成什么。
+   * 三态由读口给（有记录 / 没记录 / 读不到），界面只负责分开展示。
+   */
+  queryValueRevisions: (input: Readonly<{ countryCode: string; metricKey: string
+    periodKey: string; firstScheduledDate: string }>) => Promise<CalendarValueRevisionRead>
   /** 码表（只读整表，渲染专用）：一个码一行，带分级 · 口径 · 官网页 · 状态 · 认得它的源内 id 数。 */
   queryCodeTable: () => Promise<CodeTableRead>
   /**
@@ -85,7 +114,13 @@ export const marketCalendarClient: MarketCalendarClient = {
       metricKey: input.metricKey, scheduledDate: input.scheduledDate
     })
     return eventSourceWritesReadOf(value)
+  },  async queryValueRevisions(input) {
+    return valueRevisionsReadOf(await invoke(marketCalendarPublicPolicy.methods.queryValueRevisions, {
+      countryCode: input.countryCode, metricKey: input.metricKey,
+      periodKey: input.periodKey, firstScheduledDate: input.firstScheduledDate
+    }))
   },
+
   async queryEvents(input) {
     return eventIndexReadOf(await invoke(marketCalendarPublicPolicy.methods.queryEvents, input))
   },
@@ -341,4 +376,29 @@ export function eventListReadOf(value: unknown): CalendarEventListRead {
   }
   if (typeof record.total !== 'number' || record.total !== rows.length) return unavailable
   return { state: 'available', rows, total: rows.length }
+}
+
+/**
+ * 数值修订审计的形状守卫：**三态不许压成两态**。
+ *
+ * `recorded` 要带 `revisions`；`not-recorded` 是「历史期次没有记录」；`unreadable` 是「这次读不到」——
+ * 后两者若都返回空数组，读者就分不清是没记录还是读失败。形状不合一律判读不到（留错误态）。
+ */
+export function valueRevisionsReadOf(value: unknown): CalendarValueRevisionRead {
+  if (value === null || typeof value !== 'object') return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  const record = value as Record<string, unknown>
+  if (record.state === 'unreadable') return { state: 'unreadable' }
+  if (record.state === 'not-recorded') return { state: 'not-recorded' }
+  if (record.state !== 'recorded' || !Array.isArray(record.revisions)) {
+    return { state: 'unavailable', reasonCode: 'query-unavailable' }
+  }
+  const byField = record.byField !== null && typeof record.byField === 'object'
+    ? record.byField as Record<string, readonly CalendarValueRevisionEntry[]> : {}
+  return {
+    state: 'recorded',
+    revisions: record.revisions as readonly CalendarValueRevisionEntry[],
+    byField,
+    updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : null,
+    latestWriteProviderId: typeof record.latestWriteProviderId === 'string' ? record.latestWriteProviderId : null
+  }
 }

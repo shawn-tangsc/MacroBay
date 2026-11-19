@@ -33,7 +33,9 @@ function calendarClient<Parts extends Pick<MarketCalendarClient, 'queryMonth' | 
     // 码表读口同理：读不到就明说，不给空表（空表会被读成「一个码都没有」）。
     queryCodeTable: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const })),
     // 事件清单同理：读不到就明说，不给空数组（空数组会被读成「库里没有事件」）。
-    queryEventList: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const }))
+    queryEventList: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const })),
+    // 数值修订审计：读不到就给错误态，不给「未记录」——那是两件事。
+    queryValueRevisions: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const }))
   }
 }
 it('reads locally, refreshes only on demand and ignores completed requests from a superseded scope', async () => {

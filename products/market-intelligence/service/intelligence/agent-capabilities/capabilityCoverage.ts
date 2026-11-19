@@ -68,6 +68,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // 依据：实现里零写语句（`marketCalendarEventSourceWritesRead` 全是 SELECT）、消费方只有详情页那一个
   // hook、入参必须带指标码 + 期次（一次一条事件）——分析/简报/agent 都不读它。
   'intelligence.macro.marketCalendar.queryEventSourceWrites': excluded('internal-view'),
+  // 数值修订审计：只回答「这一格被谁改过」，是渲染层的并列行，agent 不读。
+  'intelligence.macro.marketCalendar.queryValueRevisions': excluded('internal-view'),
   'intelligence.macro.marketCalendar.queryMonth': exposed('query_macro_calendar'),
   // The freshness read is what the briefing consumes; an agent asking "how old is the
   // calendar" is the same read, so it rides the existing calendar query capability.
