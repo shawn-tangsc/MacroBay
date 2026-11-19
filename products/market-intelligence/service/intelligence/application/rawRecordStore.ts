@@ -39,6 +39,16 @@ type RawRecordArchiveRefPatch = Pick<
 export function createRawRecordStore(deps?: {
   snapshot?: RawRecordSnapshot
   storage?: RawRecordStorage
+  /**
+   * 原文外置（用户 2026-11-20）：**写路径在 store 里，调用方一个不改**。
+   *
+   * 给了 `payloadDirectory` + `writeVerifiedPayload` 时，`appendRawRecord` 收到的 inline body
+   * 一律落文件、只存引用（`payloadBody` 不落库）；**不设大小阈值**——两种模式并存就是两条路径。
+   * 原语失败时**整条不落库**并返回 undefined：留一条永远读不出原文的记录，等于把「没有」画成「有」。
+   */
+  payloadDirectory?: string
+  writeVerifiedPayload?: (input: Readonly<{ directory: string; body: string; expectedHash: string; temporarySequence: number }>) =>
+    Readonly<{ state: 'written' | 'reused'; fileRef: string }> | Readonly<{ state: 'failed'; reason: string }>
 }): RawRecordStore {
   const snapshot = deps?.snapshot ?? createEmptyRawRecordSnapshot()
   const records = new Map<string, RawIntelligenceRecord>()
@@ -89,6 +99,29 @@ export function createRawRecordStore(deps?: {
         return undefined
       }
 
+      /* 原文外置：inline body 一律落文件（不设阈值）。失败则整条不落库——不留「有记录、原文读不到」的行。 */
+      let payloadRefType = input.payloadRefType
+      let payloadBody = input.payloadBody
+      let payloadFileRef = input.payloadFileRef
+      if (payloadRefType === 'inline' && payloadBody !== undefined
+        && deps?.payloadDirectory !== undefined && deps.writeVerifiedPayload !== undefined) {
+        const written = deps.writeVerifiedPayload({
+          directory: deps.payloadDirectory,
+          body: payloadBody,
+          expectedHash: input.payloadHash,
+          temporarySequence: sequence + 1
+        })
+        if (written.state === 'failed') {
+          console.warn(JSON.stringify({
+            marker: 'RAW_RECORD_PAYLOAD_WRITE_FAILED', sourceId: input.sourceId,
+            reason: written.reason, payloadHash: input.payloadHash.slice(0, 8)
+          }))
+          return undefined
+        }
+        payloadRefType = 'file'
+        payloadFileRef = written.fileRef
+        payloadBody = undefined
+      }
       const record: RawIntelligenceRecord = {
         rawRecordId: `raw-${++sequence}`,
         sourceId: input.sourceId,
@@ -99,9 +132,9 @@ export function createRawRecordStore(deps?: {
         publishedAt: input.publishedAt,
         detectedAt: input.detectedAt ?? new Date().toISOString(),
         payloadFormat: input.payloadFormat,
-        payloadRefType: input.payloadRefType,
-        payloadBody: input.payloadBody,
-        payloadFileRef: input.payloadFileRef,
+        payloadRefType,
+        ...(payloadBody === undefined ? {} : { payloadBody }),
+        ...(payloadFileRef === undefined ? {} : { payloadFileRef }),
         payloadCodec: input.payloadCodec,
         payloadSizeBytes: input.payloadSizeBytes,
         payloadHash: input.payloadHash,
