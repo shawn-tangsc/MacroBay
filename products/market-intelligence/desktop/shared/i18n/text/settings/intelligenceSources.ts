@@ -529,6 +529,17 @@ export const intelligenceSourcesText = {
   /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
   cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
   /**
+   * **标准表写库失败**（用户 2026-11-19）：与「没采到」是两件事，必须两句话。
+   *
+   * 采集成功、值也拿到了，只是没写进标准表——读者要做的事完全不同（不是去查网络和凭据）。
+   * 键按 `firstErrorCode` 的闭集映射，不拼句子；界面上进状态与 ⓘ，**行上不加警告色**。
+   */
+  writeFailure: {
+    'standard-write-failed': '采到了，但没写进标准表（写入失败）',
+    'value-shape-rejected': '采到了，但值的形状被拒，没写进标准表',
+  },
+  writeFailureAria: '这一行的值是旧的：最近一次采集成功，但没写进标准表。原因：{reason}',
+  /**
    * 「核心指标」那组配置的文案（用户 2026-11-14）。
    *
    * 每格三样：**现状**（只读：期次 / 来源 / 值 / 成交量 / 观测时刻）+ 来源顺序 + 两个显示开关。
@@ -1185,6 +1196,15 @@ export const intelligenceSourcesText = {
   },
   openSourceConfig: 'Open the settings for {name}',
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
+  /**
+   * A standard-table write failure is **not** a collection failure: the source answered, the value
+   * arrived, it just never reached the standard table. Two different sentences, two different actions.
+   */
+  writeFailure: {
+    'standard-write-failed': 'Collected, but writing to the standard table failed',
+    'value-shape-rejected': 'Collected, but the value shape was rejected before writing',
+  },
+  writeFailureAria: 'This row is showing an older value: the last collection succeeded but was never written to the standard table. Reason: {reason}',
   coreIndicators: {
     title: 'Core indicators',
     metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },
