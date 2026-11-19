@@ -36,6 +36,10 @@ describe('写入层', () => {
     expect(isCurrentWriteFailure({ at: at(2), lastSuccessAt: at(1) })).toBe(true)
     expect(isCurrentWriteFailure({ at: at(1), lastSuccessAt: at(2) })).toBe(false)
     expect(isCurrentWriteFailure({ at: at(2), lastSuccessAt: at(2) })).toBe(false)
+    // **同一时刻、不同格式**：`'Z'` 与 `'.'` 逐字符比会判反，这条用例就是防它被改回 `>`。
+    expect(isCurrentWriteFailure({
+      at: '2026-11-19T08:00:00Z', lastSuccessAt: '2026-11-19T08:00:00.000Z'
+    })).toBe(false)
   })
 
   it('可见性：replay 是 internal，其余写入方是 reader（新增写入方不选边会编译报错）', () => {

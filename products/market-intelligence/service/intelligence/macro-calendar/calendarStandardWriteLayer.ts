@@ -1,6 +1,7 @@
 import { readJsonFileRecoveringSync, writeJsonFileAtomicallySync } from '@platform/storage/jsonFileStorage'
 
 import type { MacroCalendarProviderId, MacroCalendarWriteFailureCode } from './macroCalendarContracts'
+import { compareIsoTime } from '../public-query/asOfVisibility'
 
 /**
  * **标准表写入层**（用户 2026-11-19，架构师裁决「写入结果独立成一层」）。
@@ -65,7 +66,13 @@ export type StandardWriteRecord = Readonly<{
  */
 export function isCurrentWriteFailure(input: Readonly<{ at: string; lastSuccessAt?: string }>): boolean {
   if (input.lastSuccessAt === undefined || input.lastSuccessAt === '') return true
-  return input.at > input.lastSuccessAt
+  /**
+   * **不许拿字符串直接比**（用户 2026-11-19 实测反例）：`'…T08:00:00Z' > '…T08:00:00.000Z'`
+   * 为 true（`'Z'`=90 > `'.'`=46，逐字符比），同一时刻会被判成「失败更晚」，已恢复的源永远说
+   * 「采到了没写进去」。各写入方时刻格式不统一（有的带毫秒），这不是理论问题。
+   * 用仓库既有的 `compareIsoTime`（16 处在用）。
+   */
+  return compareIsoTime(input.at, input.lastSuccessAt) > 0
 }
 
 /** 档案：写入方 → 最近一次写入结果（不含历史，历史是 #33 审计表的事）。 */
