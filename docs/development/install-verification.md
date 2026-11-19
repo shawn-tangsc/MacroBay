@@ -37,13 +37,26 @@ get?** Wording in the README, [Status and limitations](../reference/status-and-l
   arm64 does not include it; the arm64 release job installs fresh on an arm64 runner.
 - **Not done: nothing was installed, nothing was launched.** Team rule: only a person starts the app.
 
-## Gaps this check exposed
+## Where this artifact must not be used
 
-1. The arm64 release job asserts that its runner is arm64, but it does **not** assert that the bundled
-   CLI inside the `.dmg` is arm64 — only the x64 job has that assertion. A local build can therefore
-   carry the wrong CLI architecture and still look fine.
-2. No Apple silicon real install since 0.4.1.
-3. Windows install/runtime: no environment, so no acceptance.
+The `.dmg` produced by this run is **not a release artifact** and must not be uploaded or used as the
+basis for a release: its `node_modules` still carried the Intel CLI variant seeded for the 2026-11-09
+Intel check, so the bundle contains an `x86_64` `claude` next to the arm64 one. A clean install on an
+arm64 machine (which the arm64 release job does) does not include it.
+
+## Gap closed by this change
+
+The arm64 release job used to assert only that its runner is arm64, never that the bundled CLI inside
+the `.dmg` is arm64 — only the x64 job had that assertion. `scripts/release/assert-bundled-agent-cli.mjs`
+now reads the Mach-O header of **every** `claude-agent-sdk-darwin-…/claude` in the bundle and fails if
+any of them is not the target architecture (a universal binary counts for both). Both mac jobs call it,
+so the two architectures are checked by one implementation. Measured on the artifact above: with the
+leftover x64 CLI present the assertion exits 1 and names the file; with it removed, exit 0.
+
+## Remaining gaps
+
+1. No Apple silicon real install since 0.4.1.
+2. Windows install/runtime: no environment, so no acceptance.
 
 ## Adding an entry
 
