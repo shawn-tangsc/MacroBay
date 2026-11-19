@@ -32,6 +32,12 @@ const countryNameOf = (code: string, locale: 'zh' | 'en'): string | undefined =>
   return names === undefined ? undefined : (locale === 'en' ? names.en : names.zh)
 }
 
+/** 完整国名（`enFull` / 中文全名）——给 `title` 与 `aria-label`，与显示值同一张表。 */
+const countryNameFullOf = (code: string, locale: 'zh' | 'en'): string | undefined => {
+  const names = marketCalendarCountryNames[toAlpha2Country(code)]
+  return names === undefined ? undefined : (locale === 'en' ? names.enFull : names.zh)
+}
+
 const eventTypeOf = (row: StandardMonthRow): MarketCalendarEvent['eventType'] => {
   // **先读写入侧存下来的事实**（迁移 16 之后每一行都有）；只有空值才退回前缀规则。
   // 以前只靠前缀，423 行上游 ID 数组（`["212058",70663]`）全被猜成经济指标。
@@ -91,6 +97,9 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
     countryCode: row.countryCode,
     ...(countryNameOf(row.countryCode, context.locale) === undefined
       ? {} : { countryName: countryNameOf(row.countryCode, context.locale)! }),
+    // 完整国名（给读屏/悬停）：没有国家时不带这个键。
+    ...(countryNameFullOf(row.countryCode, context.locale) === undefined
+      ? {} : { countryNameFull: countryNameFullOf(row.countryCode, context.locale)! }),
     ...(row.identityKind === 'code' ? { eventNameKey: row.metricKey } : {}),
     // 审计表查询用的身份（用户 2026-11-20）：**从写入时定下的身份搬出来**，不重算；没有就不带。
     // 只有**指标码**才有审计身份；讲话/事件行（`evt.*`）没有「哪一期」这回事，不带这两个键。

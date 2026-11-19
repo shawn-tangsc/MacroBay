@@ -55,6 +55,11 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // （用户 2026-11-16 定了两次：先「名字是什么就显示什么」，再「没有国家数据时显示未知国家」）。
   const country = item.source === 'market' ? calendarCountryLabel(item.event, text) : undefined
   /**
+   * 完整国名只给 `title` / `aria-label`（用户 2026-11-20）：英文显示 `US`、读屏念 `United States`。
+   * 没有国家时**两个属性都不写**（保持 `—`，不出现 `undefined`）。
+   */
+  const countryFull = item.source === 'market' ? item.event.countryNameFull : undefined
+  /**
    * 「本期 N 次」：合并之后同一期可能来自多次发布（GDP 二读/三读）。**只在 >1 时出**——
    * 1 次是常态，挂上去就是噪声；不显示 = 「这一期就发过一次」，这是事实而不是缺少。
    */
@@ -103,19 +108,22 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   return <Tooltip dataText={description} resolveText={resolveText}>
     {onSelect === undefined
       ? <div {...shared}>
-        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
+        <RowContent time={time} kind={kind} important={important} country={country} countryFull={countryFull} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
       </div>
       : <button {...shared} data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
         type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
-        <RowContent time={time} kind={kind} important={important} country={country} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
+        <RowContent time={time} kind={kind} important={important} country={country} countryFull={countryFull} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
       </button>}
   </Tooltip>
 }
 
 /** 行内内容：按钮态与非交互态必须一模一样，所以只有一份。 */
-function RowContent({ time, kind, important, country, title, KindGlyph, repeatLabel, releaseCount, kindLabel }: {
+function RowContent({ time, kind, important, country, countryFull, title, KindGlyph, repeatLabel, releaseCount, kindLabel }: {
   time: string; kind: MarketCalendarEvent['eventType'] | undefined; important: boolean
-  country: string | undefined; title: string; KindGlyph: LucideIcon | null
+  country: string | undefined
+  /** 完整国名（给 title / aria-label）：没有国家时是 undefined，两个属性都不写。 */
+  countryFull: string | undefined
+  title: string; KindGlyph: LucideIcon | null
   repeatLabel: string | undefined; releaseCount: number | undefined; kindLabel: string
 }) {
   return <>
@@ -129,7 +137,8 @@ function RowContent({ time, kind, important, country, title, KindGlyph, repeatLa
         而用户要的正是「事件前面必须显示国家」。所以那一版判断在 2026-11-16 被推翻：宁可少几像素
         标题宽度，也不让国家列时有时无。
       */}
-      <span className="mi-economic-calendar__event-country" data-event-country={country ?? undefined}>{country}</span>
+      <span className="mi-economic-calendar__event-country" data-event-country={country ?? undefined}
+        {...(countryFull === undefined ? {} : { title: countryFull, 'aria-label': countryFull })}>{country}</span>
       {/* The marks sit inside the title: the kind glyph leads the run so it lines up down the column,
           and the importance dot follows it directly ahead of the name. */}
       <span className="mi-economic-calendar__event-title">

@@ -279,7 +279,8 @@ export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEv
   return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'scheduledAt', 'consensus',
     'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], [
     // `importance` 可选：源没说就没有这个字段（缺省 ≠ 某个更低的重要度）。
-    'importance', 'officialLink', 'countryName', 'observationKey', 'eventNameKey', 'seriesId', 'measureKeys',
+    'importance', 'officialLink', 'countryName', 'countryNameFull', 'observationKey', 'eventNameKey', 'seriesId',
+    'measureKeys',
     'periodKey', 'firstScheduledDate',
       // 切到标准表后适配器**每行都写**这四个（时间精度、生命周期、行类型、来源真值）。
       // 白名单里没有它们时，`marketExact` 判 false → 整页非法 → 读者看到「读不到」，

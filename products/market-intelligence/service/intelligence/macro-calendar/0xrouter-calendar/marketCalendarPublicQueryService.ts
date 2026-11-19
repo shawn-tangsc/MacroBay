@@ -119,6 +119,13 @@ function resolvedCountryName(code: unknown, locale: unknown): string | undefined
   return names === undefined ? undefined : (locale === 'en' ? names.en : names.zh)
 }
 
+/** 完整国名：英文 `United States`、中文「美国」。给 `title` / `aria-label`，与显示值同一张表。 */
+function countryNameFull(code: string | null): string | undefined {
+  if (code === null) return undefined
+  const names = marketCalendarCountryNames[code === 'EMU' ? 'EU' : code]
+  return names === undefined ? undefined : names.enFull
+}
+
 /** 事件类型：这两个的配对走「同类型 + 时刻窗」，不走指标身份。 */
 const eventKinds: readonly string[] = ['central-bank-activity', 'financial-event']
 
@@ -185,7 +192,11 @@ export function createMarketCalendarPublicQueryService(deps: {
       // 有码没名就按码补本地化名字（新源只给码）；没码就不显示，不猜。
       ...(row.country_name !== null ? { countryName: String(row.country_name) }
         : resolvedCountryName(row.country_code, row.locale) === undefined ? {}
-          : { countryName: resolvedCountryName(row.country_code, row.locale)! }), eventType: row.event_kind, importance: row.importance,
+          : { countryName: resolvedCountryName(row.country_code, row.locale)! }),
+      // 完整国名（给读屏/悬停）：与显示值同一份数据表，**没有国家时不带这个键**。
+      ...(countryNameFull(row.country_code === null ? null : String(row.country_code)) === undefined ? {}
+        : { countryNameFull: countryNameFull(row.country_code === null ? null : String(row.country_code))! }),
+      eventType: row.event_kind, importance: row.importance,
       scheduledAt: row.scheduled_at, consensus: value(row.consensus_json), providerPrevious: value(row.provider_previous_json),
       providerActual: value(row.provider_actual_json), source: row.provider_id === marketCalendarLegacyProviderId ? '0xRouter' : marketCalendarSourceName,
       sourceObservedAt: String(row.last_observed_at), coverage: 'observed-unverified',

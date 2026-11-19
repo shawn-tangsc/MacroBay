@@ -18,7 +18,14 @@ export type MarketCalendarOfficialLink = Readonly<{
   officialPrevious: Readonly<{ displayValue: string }> | null
 }>
 export type MarketCalendarEvent = Readonly<{
-  eventKey: string; title: string; countryCode: string | null; countryName?: string
+  eventKey: string; title: string; countryCode: string | null
+  /** 给眼睛看的国家名（英文下是两位代码 `US`；中文是「美国」）。 */
+  countryName?: string
+  /**
+   * **给读屏/悬停看的完整国家名**（用户 2026-11-20）：英文 `United States`、中文「美国」。
+   * 与 `countryName` 是同一份数据的两种粒度（出处仍是显示名表），**没有国家时这个键不出现**（不是空串）。
+   */
+  countryNameFull?: string
   /**
    * Stable identity of the underlying observation.
    *
