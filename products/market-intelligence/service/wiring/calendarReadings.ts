@@ -12,6 +12,8 @@ import { zeroXRouterCalendarSchedulerFeeds, zeroXRouterCalendarSchedulerPolicy }
 import { createNarwhalCalendarBriefingRefresh } from '../intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
 import { registerCalendarEventReminder } from '../intelligence/macro-calendar/registerCalendarEventReminder'
 import { registerCalendarIntegrityJob } from '../intelligence/macro-calendar/marketCalendarIntegrityJob'
+import { latestCurrentWriteFailure, type CalendarStandardWriteLayer }
+  from '../intelligence/macro-calendar/calendarStandardWriteLayer'
 
 import type { CalendarReminderSettingsStore } from '../intelligence/macro-calendar/calendarEventReminderSettingsStore'
 
@@ -35,6 +37,8 @@ export function wireCalendarReadings(input: Readonly<{
   timeZone: () => string
   /** 产品日志口（主进程 stdout 不进 `app.log`，要留痕必须走它）。 */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  /** 写入层（用户 2026-11-19）：freshness 的 `writeFailure` 从它取值，不再从健康 revision。 */
+  writeLayer?: Pick<CalendarStandardWriteLayer, 'all'>
 }>): Readonly<{
   standardCalendarReader: ReturnType<typeof createStandardMonthPageReader>
   calendarReminder: ReturnType<typeof registerCalendarEventReminder>
@@ -80,11 +84,18 @@ export function wireCalendarReadings(input: Readonly<{
   input.intelligenceModule.publicQueryService.setMarketCalendarQuery({
     queryMonth: standardCalendarReader.queryMonth,
     // **判定只有一个数**：标准表 `max(observed_at)`；作业记录不参与（用户 2026-11-16 定死）。
-    readCollectionFreshness: async () => readCalendarFreshnessFromJobRuns({
-      lastWrittenAt: readCalendarLastWrittenAt(),
-      latestAttempts: readLatestAttempts(),
-      asOf: new Date().toISOString()
-    })
+    readCollectionFreshness: async () => {
+      const writeFailure = input.writeLayer === undefined ? undefined : latestCurrentWriteFailure(input.writeLayer)
+      return readCalendarFreshnessFromJobRuns({
+        lastWrittenAt: readCalendarLastWrittenAt(),
+        latestAttempts: readLatestAttempts(),
+        asOf: new Date().toISOString(),
+        ...(writeFailure === undefined ? {} : {
+          lastWriteFailure: { at: writeFailure.at, firstErrorCode: writeFailure.code,
+            ...(writeFailure.lastSuccessAt === undefined ? {} : { lastSuccessAt: writeFailure.lastSuccessAt }) }
+        })
+      })
+    }
   })
   // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
   const calendarReminder = registerCalendarEventReminder({ jobRuntime: input.jobRuntime, settings: input.calendarReminderSettings,

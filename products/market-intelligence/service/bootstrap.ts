@@ -311,7 +311,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     intelligenceModule,
     submitNotification: async (request) => getNotificationRuntime().submit(request),
     timeZone: () => currentReaderTimeZone(),
-    ...(deps.log === undefined ? {} : { log: deps.log })
+    ...(deps.log === undefined ? {} : { log: deps.log }),
+    writeLayer: macroCalendarBackend.writeLayer
   })
   const blsScheduleAndLatestValues = createBlsScheduleAndLatestValuesSyncWorkflow({
     schedule: macroCalendarBackend.blsEmploymentSchedule,

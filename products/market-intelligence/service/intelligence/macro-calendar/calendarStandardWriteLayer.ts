@@ -99,6 +99,28 @@ export type CalendarStandardWriteLayer = {
   }>) => void
 }
 
+/**
+ * **最近的、当前仍生效的写失败**（用户 2026-11-19）：给 freshness / 设置页用。
+ * 只认「失败晚于该写入方最后一次成功」的（`isCurrentWriteFailure`）；没有就返回 undefined。
+ * 多个写入方同时失败时取 `at` 最新的那个——读者一次只需要看到一句真话。
+ */
+export function latestCurrentWriteFailure(layer: Pick<CalendarStandardWriteLayer, 'all'>): Readonly<{
+  writerId: CalendarStandardWriterId
+  at: string
+  code: MacroCalendarWriteFailureCode
+  lastSuccessAt?: string
+}> | undefined {
+  const candidates = Object.entries(layer.all())
+    .flatMap(([writerId, record]) => record?.lastFailure === undefined ? []
+      : [{ writerId: writerId as CalendarStandardWriterId, record, failure: record.lastFailure }])
+    .filter((entry) => isCurrentWriteFailure({ at: entry.failure.at, lastSuccessAt: entry.record.lastSuccessAt }))
+    .sort((left, right) => compareIsoTime(right.failure.at, left.failure.at))
+  const top = candidates[0]
+  if (top === undefined) return undefined
+  return { writerId: top.writerId, at: top.failure.at, code: top.failure.firstErrorCode,
+    ...(top.record.lastSuccessAt === undefined ? {} : { lastSuccessAt: top.record.lastSuccessAt }) }
+}
+
 export function createCalendarStandardWriteLayer(
   storage: CalendarStandardWriteStorage = createInMemoryCalendarStandardWriteStorage()
 ): CalendarStandardWriteLayer {

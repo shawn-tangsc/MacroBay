@@ -48,3 +48,19 @@ describe('写入层', () => {
     expect(calendarStandardWriterVisibility.narwhal).toBe('reader')
   })
 })
+
+describe('最近一次当前写失败（freshness 用）', () => {
+  it('只认「失败晚于该写入方最后一次成功」的，多写入方时取 at 最新的那个', async () => {
+    const { latestCurrentWriteFailure } = await import('./calendarStandardWriteLayer')
+    const layer = createCalendarStandardWriteLayer()
+    layer.recordAttempt({ writerId: '0xrouter', at: at(1), outcome: { state: 'succeeded' } })
+    layer.recordAttempt({ writerId: '0xrouter', at: at(2),
+      outcome: { state: 'failed', failedRows: 1, firstErrorCode: 'standard-write-failed' } })
+    expect(latestCurrentWriteFailure(layer)).toMatchObject({
+      writerId: '0xrouter', at: at(2), code: 'standard-write-failed', lastSuccessAt: at(1)
+    })
+    // 之后成功一次 → 那次失败不再「当前」，就不再报。
+    layer.recordAttempt({ writerId: '0xrouter', at: at(3), outcome: { state: 'succeeded' } })
+    expect(latestCurrentWriteFailure(layer)).toBeUndefined()
+  })
+})
