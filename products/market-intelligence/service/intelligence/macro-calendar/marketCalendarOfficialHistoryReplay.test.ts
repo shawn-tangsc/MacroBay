@@ -84,17 +84,45 @@ describe('官方历史回放（S1）', () => {
   })
 })
 
-describe('启动时幂等回放（迁移标记）', () => {
-  it('第一次跑回放并写标记，第二次直接跳过（不重放、不改行）', async () => {
+describe('启动时幂等回放（判据是差集，不是迁移标记）', () => {
+  it('第一次跑回放；差集为空就跳过，不再写迁移标记', async () => {
     const { ensureOfficialHistoryReplayed, officialHistoryReplayPolicy } = await import('./marketCalendarOfficialHistoryReplay')
     const database = revisionsDatabase()
     ensureCalendarStandardTables(database)
     database.exec('create table if not exists mi_macro_calendar_migrations (version integer primary key)')
+    // 老库留下的标记：现在只被清掉，不再决定跑不跑。
+    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)')
+      .run(officialHistoryReplayPolicy.migrationVersion)
     expect(ensureOfficialHistoryReplayed(database)).toBe(true)
     const afterFirst = (database.prepare('select count(*) c from mi_calendar_events').get() as { c: number }).c
     expect(database.prepare('select 1 from mi_macro_calendar_migrations where version = ?')
-      .get(officialHistoryReplayPolicy.migrationVersion)).toBeDefined()
+      .get(officialHistoryReplayPolicy.migrationVersion)).toBeUndefined()
     expect(ensureOfficialHistoryReplayed(database)).toBe(false)
     expect((database.prepare('select count(*) c from mi_calendar_events').get() as { c: number }).c).toBe(afterFirst)
+  })
+
+  it('回放过之后新到的一条历史修订照样回放（旧代码被标记挡住）', async () => {
+    const { ensureOfficialHistoryReplayed } = await import('./marketCalendarOfficialHistoryReplay')
+    const database = revisionsDatabase()
+    ensureCalendarStandardTables(database)
+    database.exec('create table if not exists mi_macro_calendar_migrations (version integer primary key)')
+    expect(ensureOfficialHistoryReplayed(database)).toBe(true)
+    // 窗口外的历史修订晚到：官方同步只写月份窗口，这种只能靠回放落表。
+    database.prepare(`insert into mi_macro_calendar_revisions
+      (revision_id, event_key, release_group_key, event_family, event_name_key, country_code, importance, period_key,
+       lifecycle_state, revision_kind, scheduled_date, scheduled_at, published_at, detected_at, detected_at_ms,
+       recorded_at, actual_json, previous_json, consensus_json, provider_id, descriptor_id, source_url, raw_record_id,
+       evidence_hash, evidence_refs_json, snapshot_hash, replaces_revision_id, parser_version, caveats_json, schema_version)
+      select 'r4', 'US.CPI.RELEASE.2026-M09', release_group_key, event_family, event_name_key, country_code, importance,
+        '2026-M09', lifecycle_state, revision_kind, '2026-10-14', scheduled_at, published_at, detected_at, detected_at_ms,
+        recorded_at, actual_json, previous_json, consensus_json, provider_id, descriptor_id, source_url, raw_record_id,
+        'h4', evidence_refs_json, 's4', replaces_revision_id, parser_version, caveats_json, schema_version
+      from mi_macro_calendar_revisions where revision_id = 'r1'`).run()
+    expect(ensureOfficialHistoryReplayed(database)).toBe(true)
+    const rows = database.prepare("select count(*) c from mi_calendar_events where source_event_id = 'US.CPI.RELEASE.2026-09'")
+      .get() as { c: number }
+    expect(rows.c).toBe(1)
+    // 补上之后再跑：差集为空，不再回放。
+    expect(ensureOfficialHistoryReplayed(database)).toBe(false)
   })
 })

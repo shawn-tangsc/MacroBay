@@ -24,12 +24,13 @@ export const officialHistoryReplayPolicy = Object.freeze({
   parserVersion: 'official-history-replay-v1',
   providerId: 'macro-calendar-official-replay',
   /**
-   * 迁移标记（`mi_macro_calendar_migrations.version`）。**启动时幂等回放一次**：
-   * 有这一行就跳过，不必每次开应用都重放。
+   * 迁移标记（`mi_macro_calendar_migrations.version`）**只用于清理老库里的那一行**，
+   * 不再当判据（2026-11-21）：回放是缺口型，不是一次性迁移。
    *
-   * 为什么不在外部脚本里直接写线上库：用户的实例开着、连接在跑，另一个进程往同一个库写，
-   * 即使 WAL 能扛，也会出现「应用缓存里的行数与库里不一致」这种看不见的偏差；
-   * 而手工跑完，应用下次启动也不会知道该再确认一次。做成启动迁移，用户什么都不用做。
+   * 为什么：写入端还会继续产生这种形状——启动时的官方同步只按**月份窗口**写标准表
+   * （`syncOfficialStandardRows`），窗口外的历史修订只能由回放落表；而修订本身是持续到达的
+   * （补排、改期、晚到的旧期）。标记在、缺口在，两边看起来都正常：真库实测有 6 条修订
+   * 既不在一行上、也不在台账里，永远不会被回放。
    */
   migrationVersion: 12
 })
@@ -139,6 +140,51 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
 }
 
 /**
+ * 标准表里「这条发布已经落下来了」的 id 集合：行上的当前 id + 台账里记过的 id。
+ *
+ * 为什么必须带上台账：一行只能存一个 id，同一次发布被别的来源后写覆盖后，原 id 只留在台账里。
+ * 只认行上的 id，同一件事会被差集报成「丢了一条」。
+ *
+ * **两边都归一后再比**（2026-11-21）：官方同步写的是来源原样的 `…2026-M10`，回放写的是
+ * `…2026-10`，同一个发布两种写法。只归一一边，同一件事会被差集报成「丢了一条」——
+ * 那正是「标记在、缺口在」里被当成新缺口的那批。
+ */
+function knownSourceIds(database: DatabaseSync): Set<string> {
+  const known = new Set<string>()
+  const add = (value: string): void => { known.add(normalizeCalendarSourceEventId(value)) }
+  for (const row of database.prepare('select source_event_id from mi_calendar_events').all() as unknown as
+    { source_event_id: string }[]) add(row.source_event_id)
+  const ledgerTable = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_calendar_event_source_ids'").get()
+  if (ledgerTable !== undefined) {
+    for (const row of database.prepare('select source_event_id from mi_calendar_event_source_ids').all() as unknown as
+      { source_event_id: string }[]) add(row.source_event_id)
+  }
+  return known
+}
+
+/** 修订表里「能落表、但标准表还没有」的发布——启动闸用的就是这个差集，不是版本标记。 */
+export function pendingOfficialHistoryRevisions(database: DatabaseSync): readonly string[] {
+  const table = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_revisions'").get()
+  if (table === undefined) return []
+  const revisions = database.prepare(`select event_key, event_family, event_name_key, scheduled_date, scheduled_at,
+      lifecycle_state, actual_json, previous_json, consensus_json
+    from mi_macro_calendar_revisions
+    order by event_key, detected_at_ms asc, recorded_at asc`).all() as unknown as RevisionRow[]
+  const latest = new Map<string, RevisionRow>()
+  for (const revision of revisions) latest.set(revision.event_key, revision)
+  const known = knownSourceIds(database)
+  const pending: string[] = []
+  for (const revision of latest.values()) {
+    // 映射不出码的按设计进 `unmapped`、不进标准表——**不算缺口**，否则回放每次启动都会重跑。
+    const row = rowsFor(revision)
+    if (row === undefined) continue
+    if (known.has(normalizeCalendarSourceEventId(String(row.sourceEventId)))) continue
+    pending.push(revision.event_key)
+  }
+  return pending
+}
+
+/**
  * 逐月 `O(M) \ S(M)`：修订表该月的 `event_key` 减去标准表里同 `source_event_id` 的行。
  *
  * **按发布去重**（`event_key` 一次发布一个），不按标准表行数——标准表把一次发布展开成多个测度行，
@@ -149,18 +195,7 @@ export function measureMonthlyDiff(database: DatabaseSync): Readonly<Record<stri
   // 修订表里还是来源原样的 `…2026-M10`。只归一一边，同一件事会被差集报成「丢了一条」。
   const revisions = database.prepare(`select event_key as event_key, substr(scheduled_date, 1, 7) as month
     from mi_macro_calendar_revisions`).all() as unknown as { event_key: string; month: string }[]
-  // 两条来源都算「这条发布落下来了」：行上的当前 id，**以及台账里记过的 id**。
-  // 为什么必须带上台账：一行只能存一个 id，同一次发布被别的来源后写覆盖后，原 id 只留在台账里
-  // （国家归一合并那 31 行时就是这种形状——把带 replay id 的那行并掉了，行上的 id 已经不是它）。
-  // 只认行上的 id，同一件事会被差集报成「丢了一条」。
-  const known = new Set<string>()
-  for (const row of database.prepare('select source_event_id from mi_calendar_events').all() as unknown as
-    { source_event_id: string }[]) known.add(row.source_event_id)
-  const ledgerTable = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_calendar_event_source_ids'").get()
-  if (ledgerTable !== undefined) {
-    for (const row of database.prepare('select source_event_id from mi_calendar_event_source_ids').all() as unknown as
-      { source_event_id: string }[]) known.add(row.source_event_id)
-  }
+  const known = knownSourceIds(database)
   const result: Record<string, string[]> = {}
   for (const row of revisions) {
     if (known.has(normalizeCalendarSourceEventId(row.event_key))) continue
@@ -170,22 +205,31 @@ export function measureMonthlyDiff(database: DatabaseSync): Readonly<Record<stri
 }
 
 /**
- * 启动时调用：已回放过就跳过，否则回放一次并写迁移标记（**同一事务**，失败不留半标记）。
+ * 启动时调用：**判据是差集**——还有「能落表、但表里没有」的发布就回放一次。
+ *
+ * 不做成版本标记（团队规范「Backfills: Gap Or Marker, Never Both」）：官方同步只写月份窗口内的
+ * 修订，窗口外的历史修订只能靠回放；而修订是持续到达的（补排、改期、晚到的旧期）。真库实测
+ * 有 6 条修订既不在行上、也不在台账里——标记挡着永远不会补。改成差集后：没有缺口就只做一次
+ * 轻量比对，有缺口就补，补完下一轮自然为 0。
+ *
  * 返回是否真的跑了回放。
  */
 export function ensureOfficialHistoryReplayed(database: DatabaseSync, input?: Readonly<{ write?: boolean }>): boolean {
   const write = input?.write ?? true
+  let pending: readonly string[]
   try {
-    const marker = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?')
-      .get(officialHistoryReplayPolicy.migrationVersion)
-    if (marker !== undefined) return false
+    // 老库里的标记行同笔清掉：留着会让下一个人以为这条还受版本闸控制。
+    if (database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_migrations'").get() !== undefined) {
+      database.prepare('delete from mi_macro_calendar_migrations where version = ?')
+        .run(officialHistoryReplayPolicy.migrationVersion)
+    }
+    pending = pendingOfficialHistoryRevisions(database)
   } catch { return false }
+  if (pending.length === 0) return false
   if (!write) return true
   database.exec('begin')
   try {
     replayOfficialHistoryIntoStandardTable(database)
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)')
-      .run(officialHistoryReplayPolicy.migrationVersion)
     database.exec('commit')
     return true
   } catch (error) {
