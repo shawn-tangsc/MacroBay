@@ -5,21 +5,25 @@ import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
 import { fredSeriesFor } from './fredIndicatorYoY'
 
 /**
- * **一次性历史补值**（管欠账，管未来的是补值扫描）。
+ * **历史补值**（管欠账，管未来的是补值扫描）。
  *
  * 为什么需要单独一笔：回填把「过期且已超 24 小时窗口」的行落成了 `missing` 终态，扫描只扫非终态——
  * 所以 CPI 11-10 那四行**永远不会被扫描问到**。但那不是「这一期没有值」，是我们没去要过。
  *
- * 四条规矩（Chief 2026-11-16）：
+ * 四条规矩（Chief 2026-11-16，第 4 条 2026-11-21 改）：
  * 1. **只动「该期间确有一期官方观测」的行**；拿不到就维持 `missing`，**不许跳回 `backfilling`**（界面会闪）；
  * 2. **期次严格相等**：9 月的值不能填 10 月；
- * 3. **幂等**：迁移标记 + 只补空值，跑两遍第二遍 `updated: 0`；
- * 4. **不改未来的正常过期行为**：只从「迁移版本」这一个入口跑一次，**不进扫描节拍**。
+ * 3. **幂等**：只补空值，跑两遍第二遍 `updated: 0`；
+ * 4. **不进扫描节拍**（仍是这条），但**启动判据改成差集，不再用迁移标记**：扫描只扫非终态，
+ *    而每期发布过期后都会落成 `missing` 终态——这个形状**每天新来**，标记挡着就永远补不上
+ *    （团队规范「Backfills: Gap Or Marker, Never Both」）。每次启动算一次「还有多少行该补」，
+ *    为 0 就跳过；有缺口就补，读完仍拿不到的行下轮再试（读不到与「源没给」在这里是两种状态，
+ *    不许把前者写成后者）。
  */
 export const historicalValueFillPolicy = Object.freeze({
   migrationVersion: 13,
   /** 只有登记过官方序列的码才去要值；没登记的直接跳过，不猜。 */
-  skipReasons: Object.freeze(['no-series', 'no-observation', 'period-mismatch', 'already-has-value'] as const)
+  skipReasons: Object.freeze(['no-series', 'no-observation', 'period-mismatch'] as const)
 })
 
 export type HistoricalValueFillReport = Readonly<{
@@ -31,11 +35,20 @@ export type HistoricalValueFillReport = Readonly<{
 const emptySkips = (): Record<string, number> =>
   Object.fromEntries(historicalValueFillPolicy.skipReasons.map((reason) => [reason, 0]))
 
-const hasActual = (valuesJson: string): boolean => {
-  try {
-    const values = JSON.parse(valuesJson) as { actual?: unknown }
-    return typeof values.actual === 'string' && values.actual.trim() !== ''
-  } catch { return false }
+/** 该补值的候选行：**fill 与启动闸共用这一处判据**，两处各写一份迟早会漂。 */
+function openReleaseRowsAwaitingValue(database: DatabaseSync, today: string): readonly Readonly<{
+  country_code: string; metric_key: string; period_key: string; first_scheduled_date: string; values_json: string
+}>[] {
+  // 状态集合**从契约的闭集派生**，不在这里再抄一份：`published` 与 `cancelled` 之外都是欠账候选。
+  const openStatuses = marketCalendarPublicPolicy.releaseStatuses
+    .filter((status) => status !== 'published' && status !== 'cancelled')
+  return database.prepare(`select country_code, metric_key, period_key, first_scheduled_date, values_json
+    from ${calendarStandardTablePolicy.eventsTable}
+    where scheduled_date <= ? and row_kind = 'release' and status in (${openStatuses.map(() => '?').join(', ')})
+      and (json_extract(values_json, '$.actual') is null
+        or trim(cast(json_extract(values_json, '$.actual') as text)) = '')`)
+    .all(today, ...openStatuses) as unknown as { country_code: string; metric_key: string; period_key: string
+      first_scheduled_date: string; values_json: string }[]
 }
 
 export async function fillHistoricalReleaseValues(database: DatabaseSync, input: Readonly<{
@@ -49,14 +62,7 @@ export async function fillHistoricalReleaseValues(database: DatabaseSync, input:
   readLatest: (metricKey: string, periodKey: string) => Promise<Readonly<{ period: string; value: string }> | undefined>
   maximumReads?: number
 }>): Promise<HistoricalValueFillReport> {
-  // 状态集合**从契约的闭集派生**，不在这里再抄一份：`published` 与 `cancelled` 之外都是欠账候选。
-  const openStatuses = marketCalendarPublicPolicy.releaseStatuses
-    .filter((status) => status !== 'published' && status !== 'cancelled')
-  const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date, values_json
-    from ${calendarStandardTablePolicy.eventsTable}
-    where scheduled_date <= ? and row_kind = 'release' and status in (${openStatuses.map(() => '?').join(', ')})`)
-    .all(input.today, ...openStatuses) as unknown as { country_code: string; metric_key: string; period_key: string
-      first_scheduled_date: string; values_json: string }[]
+  const rows = openReleaseRowsAwaitingValue(database, input.today)
   /**
    * **状态与 `value_state` 都由「这次到底拿到值没有」决定**（Chief 2026-11-19）：
    * 拿到非空 `actual` 才写 `present` + 推进 `published`；拿到**空值**（FRED `pc1` 在 2026-10 就是空）
@@ -74,7 +80,6 @@ export async function fillHistoricalReleaseValues(database: DatabaseSync, input:
   let reads = 0
   let filled = 0
   for (const row of rows) {
-    if (hasActual(row.values_json)) { skips['already-has-value'] += 1; continue }
     if (fredSeriesFor(row.metric_key) === undefined) { skips['no-series'] += 1; continue }
     // 去重键带期次（只按期次前 7 位）：同一指标的相邻两期是**两件事**，按指标去重会让第二期
     // 永远拿到第一期的读数；而 `2026-10` 与 `2026-M10` 这种同一期的两种写法共用一次请求。
@@ -108,12 +113,17 @@ export function ensureHistoricalValuesFilled(database: DatabaseSync, input: Read
 }>): Promise<boolean> {
   return (async () => {
     try {
-      const marker = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?')
-        .get(historicalValueFillPolicy.migrationVersion)
-      if (marker !== undefined) return false
+      // 老库里的标记行同笔清掉：留着会让下一个人以为这条还受版本闸控制。
+      // 迁移表可能不存在（启动链里有先例），清理是附带动作，缺表不是错误。
+      if (database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_migrations'").get() !== undefined) {
+        database.prepare('delete from mi_macro_calendar_migrations where version = ?')
+          .run(historicalValueFillPolicy.migrationVersion)
+      }
+      // **判据是当前缺口**：还有「已过排期、没发布/没取消、`values_json` 里没有 actual」的行才跑。
+      // 为 0 就直接返回——不扫描、不读官方序列。每期发布过期后都会落成 `missing` 终态，
+      // 所以这个形状每天新来，标记挡着就永远补不上（团队规范「Backfills: Gap Or Marker」）。
+      if (openReleaseRowsAwaitingValue(database, input.today).length === 0) return false
       const report = await fillHistoricalReleaseValues(database, input)
-      database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)')
-        .run(historicalValueFillPolicy.migrationVersion)
       console.warn(`[macro-calendar] 历史补值：扫描 ${report.scanned} 行、补上 ${report.filled} 行、跳过 ${JSON.stringify(report.skipped)}`)
       return true
     } catch (error) {

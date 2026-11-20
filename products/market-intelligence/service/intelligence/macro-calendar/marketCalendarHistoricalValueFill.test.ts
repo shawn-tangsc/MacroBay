@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
-import { fillHistoricalReleaseValues } from './marketCalendarHistoricalValueFill'
+import { ensureHistoricalValuesFilled, fillHistoricalReleaseValues } from './marketCalendarHistoricalValueFill'
 
 const now = '2026-11-16T03:00:00.000Z'
 const row = (metricKey: string, periodKey: string, scheduledDate: string) => ({
@@ -53,5 +53,27 @@ describe('一次性历史补值（管欠账）', () => {
     expect(second.filled).toBe(0)
     // 补上的那行已经是 `published`，不在候选集合里；剩下两行仍补不到。
     expect(second.scanned).toBe(2)
+  })
+
+  it('补过一次之后新过期的一期照样补：判据是当前缺口，不是版本标记', async () => {
+    const database = setup()
+    database.exec('create table if not exists mi_macro_calendar_migrations (version integer primary key)')
+    const first = await ensureHistoricalValuesFilled(database, { today: '2026-11-16', nowMs: Date.parse(now),
+      readLatest: async (metricKey) => metricKey === 'US.CPI.NSA.YOY' ? { period: '2026-10', value: '3.7' } : undefined })
+    expect(first).toBe(true)
+    /**
+     * 下一期发布过 24 小时窗口、落成 `missing` 终态——扫描只扫非终态，这一行**永远不会再被问到**，
+     * 正是「标记在、缺口在」里补不上的那一批。
+     */
+    upsertCalendarStandardRow(database, row('US.CPI.NSA.YOY', '2026-11', '2026-12-10'))
+    const second = await ensureHistoricalValuesFilled(database, { today: '2026-12-11', nowMs: Date.parse(now),
+      readLatest: async (metricKey) => metricKey === 'US.CPI.NSA.YOY' ? { period: '2026-11', value: '3.9' } : undefined })
+    expect(second).toBe(true)
+    const filled = database.prepare("select status, values_json from mi_calendar_events where metric_key='US.CPI.NSA.YOY' and period_key='2026-11'")
+      .get() as { status: string; values_json: string }
+    expect(filled.status).toBe('published')
+    expect(JSON.parse(filled.values_json)).toEqual({ actual: '3.9' })
+    // 老标记行同笔清掉，不再留着误导下一个读者。
+    expect(database.prepare('select count(*) as n from mi_macro_calendar_migrations where version = 13').get()).toEqual({ n: 0 })
   })
 })
