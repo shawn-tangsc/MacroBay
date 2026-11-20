@@ -104,3 +104,18 @@ So **wrong-colour-for-meaning and non-foreground danger have no gate**; keep bot
 - Print the same fact twice on one row.
 - Put explanatory prose in the body — scope notes, implementation detail, reassurance ("only affects…", "will not affect…").
 - Offer **Retry on an unrecoverable failure** (an official source returning 403, data written by another version) — a retry that must fail is a fake control. Say "unavailable", give the reason, and say nobody knows when it will recover.
+
+## 6. Animation
+
+**Rotation belongs to loading — with exactly one named exception.** By default only `loadingState.css` may rotate (a spinner means "in progress"). The single exception is the clock card's decorative sweep, and it must be **registered by name**, never waved through as a category:
+
+| | |
+|---|---|
+| Exception | `.mi-clock__orbit` in `products/market-intelligence/desktop/pages/intelligence/clockCard.css` (that selector only) |
+| Form | The gradient fan rotates itself: `animation: mi-clock-spin 8s linear infinite`, `@keyframes { to { transform: rotate(360deg) } }`, `transform-origin: 156px 153px` |
+| Why it cannot be confused with loading | While loading, the whole block is replaced by `loadingState`, so the two are never on screen together; and it is not a progress indicator — it is there whether or not anything is happening |
+| Reduced motion | `animation: none`, and the light **must stay visible** (frozen in place). **`display: none` is forbidden** — on 2026-11-15 it was hidden without telling anyone, the user read it as broken, and it cost two hours |
+
+**Check:** `loadingStandard` reads the rule as "any `rotate` animation outside this one named exception fails". Add a rotation anywhere else and the guard must fail; delete this exception and the clock card's sweep test must fail.
+
+**Tell the user about visual changes.** Before stopping, hiding or replacing anything the user can see, say in the group which element, what it becomes, and why. A silent visual change is the same class of problem as silently deleting a feature: the user thinks it broke and nobody knows why.
