@@ -23,17 +23,20 @@ describe('启动链：syncOfficialStandardRowsAtStartup', () => {
   it('启动扫描记下跨源值冲突：两条互指，重跑不翻倍', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
-    const seed = (providerId: string, firstScheduledDate: string, actual: string): void => {
+    // 冲突的相等性看**数值列**（N3）：只给展示串的行算「不可比」，不算冲突。
+    const seed = (providerId: string, firstScheduledDate: string, value: number): void => {
       upsertCalendarStandardRow(database, {
         countryCode: 'US', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09',
         scheduledDate: '2026-10-03', firstScheduledDate, timePrecision: 'date',
-        valuesJson: JSON.stringify({ actual }), valueState: 'present',
+        valuesJson: JSON.stringify({ actual: value.toFixed(1) }), valueState: 'present',
+        numericJson: JSON.stringify({ v: 1, state: 'available', unit: 'percent',
+          values: { actual: value }, decimals: { actual: 1 }, parserVersion: 'calendar-numeric-v1' }),
         sourceProviderId: providerId, sourceEventId: `${providerId}-${firstScheduledDate}`,
         parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z'
       })
     }
-    seed('narwhal', '2026-10-03', '4.1')
-    seed('0xrouter', '2026-10-04', '4.2')
+    seed('narwhal', '2026-10-03', 4.1)
+    seed('0xrouter', '2026-10-04', 4.2)
     const run = (): void => syncOfficialStandardRowsAtStartup({
       database, listEffectiveMonthAsOf: noRevisions, now: () => new Date('2026-11-18T00:00:00.000Z')
     })

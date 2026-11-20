@@ -119,13 +119,20 @@ describe('跨源数值冲突：两条互指、同源不互指、待判清单只�
 })
 
 describe('扫描标准表里的真实冲突形状', () => {
-  const seed = (database: DatabaseSync, providerId: string, firstScheduledDate: string, actual: string) => {
+  /** 数值列（N3）：冲突判定按数值比，展示串只作证据。`numericJson` 省略＝这一行没有数值（旧行）。 */
+  const numeric = (value: number, decimals = 1, unit = 'percent') => JSON.stringify({
+    v: 1, state: 'available', unit, values: { actual: value }, decimals: { actual: decimals },
+    parserVersion: 'calendar-numeric-v1'
+  })
+  const seed = (database: DatabaseSync, providerId: string, firstScheduledDate: string, actual: string,
+    numericJson?: string) => {
     upsertCalendarStandardRow(database, {
       countryCode: 'USA', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09',
       scheduledDate: '2026-10-03', firstScheduledDate, timePrecision: 'date',
       valuesJson: JSON.stringify({ actual }), valueState: 'present',
       sourceProviderId: providerId, sourceEventId: `${providerId}-${firstScheduledDate}`,
-      parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z'
+      parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z',
+      ...(numericJson === undefined ? {} : { numericJson })
     })
   }
 
@@ -133,10 +140,12 @@ describe('扫描标准表里的真实冲突形状', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
     ensureCalendarValueRevisionTable(database)
-    seed(database, 'narwhal', '2026-10-03', '4.1')
-    seed(database, '0xrouter', '2026-10-04', '4.2')
-    expect(markCrossSourceConflicts(database)).toEqual({ groups: 1, recorded: 2 })
-    expect(markCrossSourceConflicts(database)).toEqual({ groups: 1, recorded: 0 })
+    seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
+    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0 })
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 1, recorded: 0, incomparable: 0, sameValueDifferentText: 0 })
     expect(listCrossSourceConflicts(database)).toHaveLength(1)
   })
 
@@ -144,9 +153,104 @@ describe('扫描标准表里的真实冲突形状', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
     ensureCalendarValueRevisionTable(database)
-    seed(database, 'narwhal', '2026-10-03', '4.1')
-    seed(database, 'narwhal', '2026-10-09', '4.2')
-    expect(markCrossSourceConflicts(database)).toEqual({ groups: 0, recorded: 0 })
+    seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
+    seed(database, 'narwhal', '2026-10-09', '4.2', numeric(4.2))
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 0 })
     expect(listCrossSourceConflicts(database)).toEqual([])
+  })
+})
+
+/**
+ * N3 接进冲突审计（Chief 2026-11-21 拍板）：**相等性看数值列，展示串留作证据**。
+ *
+ * 三条要求逐条钉住：
+ * ① 冲突记录里两个原始展示串都在（`value_before` 就是展示串）；
+ * ② 任一边不是 `available`（未记录/缺/解析不了）→ **不算冲突**，单独计数，别混进「冲突 0 条」；
+ * ③ 同值不同写法（`4.1` vs `4.10`）以前被记成冲突，那是**假阳性**——条数会变少，不是口径松动。
+ */
+describe('冲突相等性按数值列判（N3 接入）', () => {
+  const numeric = (value: number, decimals = 1, unit = 'percent') => JSON.stringify({
+    v: 1, state: 'available', unit, values: { actual: value }, decimals: { actual: decimals },
+    parserVersion: 'calendar-numeric-v1'
+  })
+  const seed = (database: DatabaseSync, providerId: string, firstScheduledDate: string, actual: string,
+    numericJson?: string) => {
+    upsertCalendarStandardRow(database, {
+      countryCode: 'USA', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09',
+      scheduledDate: '2026-10-03', firstScheduledDate, timePrecision: 'date',
+      valuesJson: JSON.stringify({ actual }), valueState: 'present',
+      sourceProviderId: providerId, sourceEventId: `${providerId}-${firstScheduledDate}`,
+      parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z',
+      ...(numericJson === undefined ? {} : { numericJson })
+    })
+  }
+  const open = () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    ensureCalendarValueRevisionTable(database)
+    return database
+  }
+
+  it('4.1 与 4.10 是同一个数：不记冲突，计入「同值不同写法」', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1, 1))
+    seed(database, '0xrouter', '2026-10-04', '4.10', numeric(4.1, 2))
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1 })
+    expect(listCrossSourceConflicts(database)).toEqual([])
+    // 再扫一次：幂等，不因为「没记」而反复计数（计数是这一轮的事实，不是累积值）。
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1 })
+  })
+
+  it('真不同（4.1 vs 4.2）照旧记冲突，记录的 value_before 就是两个原始展示串', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
+    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0 })
+    const recorded = database.prepare(`select provider_id, value_before from mi_calendar_value_revisions
+      where decision = 'conflict:cross-source' order by provider_id`).all() as
+      Array<{ provider_id: string; value_before: string }>
+    expect(recorded).toEqual([
+      { provider_id: '0xrouter', value_before: '4.2' },
+      { provider_id: 'narwhal', value_before: '4.1' }
+    ])
+  })
+
+  it('一边没有数值列（旧行）→ 不算冲突，单独计数，不进「冲突组」', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1')   // numeric_json 缺 → unparsed
+    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 0, recorded: 0, incomparable: 1, sameValueDifferentText: 0 })
+    expect(listCrossSourceConflicts(database)).toEqual([])
+  })
+
+  it('单位不同 → 不可比，不算冲突（也不拿「都推不出」当同单位）', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1, 1, 'percent'))
+    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2, 1, 'thousands'))
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 0, recorded: 0, incomparable: 1, sameValueDifferentText: 0 })
+    expect(listCrossSourceConflicts(database)).toEqual([])
+  })
+
+  it('三家两条行：数值相同的两条合成一侧，记录里仍带各自的展示串', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
+    seed(database, 'macro-calendar-bls', '2026-10-03', '4.10', numeric(4.1, 2))
+    seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
+    const result = markCrossSourceConflicts(database)
+    expect(result).toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0 })
+    const recorded = database.prepare(`select provider_id, value_before, conflict_with_provider_id
+      from mi_calendar_value_revisions where decision = 'conflict:cross-source' order by provider_id`).all() as
+      Array<{ provider_id: string; value_before: string; conflict_with_provider_id: string }>
+    // 代表取该数值里最新的一条（bls 那条 4.10 与 narwhal 4.1 同一侧），对面一定是另一个数值。
+    expect(recorded).toEqual([
+      { provider_id: '0xrouter', value_before: '4.2', conflict_with_provider_id: 'macro-calendar-bls' },
+      { provider_id: 'macro-calendar-bls', value_before: '4.10', conflict_with_provider_id: '0xrouter' }
+    ])
   })
 })

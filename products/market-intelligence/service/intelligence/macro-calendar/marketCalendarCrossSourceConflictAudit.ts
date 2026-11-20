@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
+import { compareCalendarNumeric, readCalendarNumeric } from './marketCalendarNumericReading'
 import {
   calendarValueRevisionPolicy, crossSourceConflictDecision, ensureCalendarValueRevisionTable,
   hashIncomingValues, recordCalendarValueRevision, type CalendarValueField
@@ -153,13 +154,32 @@ export function crossSourceConflictCounts(database: DatabaseSync): readonly Read
 }
 
 /**
- * 扫描标准表里的真实冲突形状并落记录（幂等）：**同一期、两家以上、值不同**。
+ * 扫描标准表里的真实冲突形状并落记录（幂等）：**同一期、两家以上、数值不同**。
+ *
+ * 相等性看**数值列**（N3，Chief 2026-11-21 拍板）：以前按展示串比，`4.1` 与 `4.10` 这种同值不同
+ * 写法会被记成冲突——那是**假阳性**。现在按数值判同（容差按较粗的小数位），展示串只留作证据
+ * （`value_before` 仍是源给的原始串，给人看的那一份不折算）。
+ *
+ * 三条边界：
+ * 1. **任一边不是 `available` 就不算冲突**：未记录（加列前的旧行）/ 源没给 / 解析不出，都只记
+ *    「不可比」计数，**不写冲突记录**——拿不到数值时「两家不一致」这句话本身无从谈起；
+ * 2. **同值不同写法**单独计数（这一轮消掉了多少假阳性），不进冲突组，也不静默；
+ * 3. 同一数值的多条行只留**最新一条**当代表写入记录（其余行本身还在标准表里，证据不丢）；
+ *    同源两行仍然不互指（`recordCrossSourceConflict` 的既有规矩）。
  *
  * 只扫 `row_kind='release'` 且 `values_json` 合法（数组身份那批非法 JSON 不参与，
  * 别为了多记一条冲突让整张表的扫描报错——那是 #24 的事）。
- * 返回 `groups` ＝「身份 × 字段」的冲突对数，`recorded` ＝ 这次真正写进去的行数。
  */
-export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{ groups: number; recorded: number }> {
+export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{
+  /** 「身份 × 字段」里**可比且确实不同**的组数。 */
+  groups: number
+  /** 这次真正写进去的记录行数（一组两家＝2 行互指）。 */
+  recorded: number
+  /** 展示串不同、但数值列不可比（未记录/没给/解析不出/单位不明）的组数：不算冲突，但要说出来。 */
+  incomparable: number
+  /** 数值相同、只有写法不同（`4.1` vs `4.10`）的组数：假阳性，已不再记冲突。 */
+  sameValueDifferentText: number
+}> {
   const table = calendarStandardTablePolicy.eventsTable
   ensureCalendarValueRevisionTable(database)
   const groups = database.prepare(`select country_code, metric_key, period_key,
@@ -172,17 +192,19 @@ export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{ gro
     }>
   let conflictGroups = 0
   let recorded = 0
+  let incomparable = 0
+  let sameValueDifferentText = 0
   const rowsOf = database.prepare(`select source_provider_id, source_event_id, first_scheduled_date,
-      values_json, observed_at, data_observed_at
+      values_json, numeric_json, observed_at, data_observed_at
     from ${table} where country_code = ? and metric_key = ? and period_key = ?
     order by first_scheduled_date asc`)
   for (const group of groups) {
     const rows = rowsOf.all(group.country_code, group.metric_key, group.period_key) as Array<{
       source_provider_id: string; source_event_id: string; first_scheduled_date: string
-      values_json: string; observed_at: string; data_observed_at: string | null
+      values_json: string; numeric_json: string | null; observed_at: string; data_observed_at: string | null
     }>
     for (const field of ['actual', 'previous', 'consensus'] as const) {
-      const sides = rows.flatMap((row): CrossSourceConflictSide[] => {
+      const sides = rows.flatMap((row): Array<CrossSourceConflictSide & { numericJson: string | null }> => {
         let parsed: Record<string, unknown>
         try { parsed = JSON.parse(row.values_json) as Record<string, unknown> } catch { return [] }
         const value = parsed[field]
@@ -190,16 +212,45 @@ export function markCrossSourceConflicts(database: DatabaseSync): Readonly<{ gro
         return [{
           providerId: row.source_provider_id, sourceEventId: row.source_event_id,
           firstScheduledDate: row.first_scheduled_date, field, value,
-          observedAt: row.data_observed_at ?? row.observed_at
+          observedAt: row.data_observed_at ?? row.observed_at, numericJson: row.numeric_json
         }]
       })
       if (new Set(sides.map((side) => side.providerId)).size < 2) continue
+      // 展示串一样就没什么可判的：既不记冲突，也不进「不可比」（那一格本来就是同一句话）。
       if (new Set(sides.map((side) => side.value.trim())).size < 2) continue
+      /**
+       * 能不能按数值判同：**每一边**都要 `available`、单位明确且彼此相同。缺一边就是「不可比」，
+       * 记一个计数后跳过——不拿展示串兜底去判，这正是这一笔要修掉的假阳性来源。
+       */
+      const units = sides.map((side) => {
+        const reading = readCalendarNumeric(side.numericJson)
+        return reading.state === 'available' ? reading.unit : undefined
+      })
+      const comparable = units.every((unit) => unit !== undefined && unit !== 'unknown')
+        && new Set(units).size === 1
+      if (!comparable) { incomparable += 1; continue }
+      // 按数值归类：同类＝在这一期的精度下判同（容差取较粗的小数位）。
+      const classes: Array<{ representative: (typeof sides)[number]; members: typeof sides }> = []
+      for (const side of sides) {
+        const existing = classes.find((entry) => {
+          const comparison = compareCalendarNumeric(entry.representative.numericJson, side.numericJson, field)
+          return comparison.comparable && comparison.same
+        })
+        if (existing === undefined) {
+          classes.push({ representative: side, members: [side] })
+          continue
+        }
+        existing.members = [...existing.members, side]
+        // 代表取该数值里**最新**的一条：记录里带的是它的展示串（别的写法仍在标准表那些行上）。
+        if (side.observedAt > existing.representative.observedAt) existing.representative = side
+      }
+      if (classes.length < 2) { sameValueDifferentText += 1; continue }
       conflictGroups += 1
       recorded += recordCrossSourceConflict(database, {
-        countryCode: group.country_code, metricKey: group.metric_key, periodKey: group.period_key, sides
+        countryCode: group.country_code, metricKey: group.metric_key, periodKey: group.period_key,
+        sides: classes.map((entry) => entry.representative)
       })
     }
   }
-  return { groups: conflictGroups, recorded }
+  return { groups: conflictGroups, recorded, incomparable, sameValueDifferentText }
 }
