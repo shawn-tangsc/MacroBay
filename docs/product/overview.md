@@ -37,11 +37,17 @@ traced to its source instead of ending at a chart label.
 
 ### Macro calendar
 
-The calendar lists scheduled releases and market events. It keeps the schedule identity, the
-observation boundary, and later revisions separate, so an updated official value does not rewrite
-what was known earlier.
+The calendar no longer takes a page of its own: it is a drawer opened from the calendar icon on the
+dashboard, titled **Key indicators · expectations**. The upper half is the policy path and three core
+indicators — the implied odds of a rate move at the next meeting, and the expected CPI YoY, payrolls and
+core PCE YoY — each card carrying its next release date and how many days away it is. Below that is the
+release calendar for the current month, with published, scheduled and today kept apart, a jump back to
+this month, and a way into the configuration. The right column holds what to watch and the events of the
+day, split into the standard table, items not in it, tier-two indicators, high-importance events and the
+rest; the footer names where the schedule and consensus values come from.
 
-![Macro calendar](../assets/screenshots/calendar-en.png)
+The calendar keeps the schedule identity, the observation boundary, and later revisions separate, so an
+updated official value does not rewrite what was known earlier.
 
 ### Analyst agent
 
