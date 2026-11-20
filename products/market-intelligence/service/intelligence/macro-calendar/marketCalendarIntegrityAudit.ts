@@ -83,7 +83,14 @@ export function auditCalendarIntegrity(
         and not ${hasActualSql}
         and coalesce(missing_reason, '') = ''`, ...codes, options.today),
     unresolvedPeriodRows: count(`select count(*) as n from ${table} where period_key like 'unknown:%'`),
-    // 类型名不是身份（0.4.5 #15）：写入口已经不再这么写，存量行只报不改（改身份要动主键与台账）。
+    /**
+     * 类型名不是身份（0.4.5 #15）：写入口已经不再这么写（源内身份行用源自己的 `releaseId`）。
+     *
+     * **存量行保留、只报不改**（Chief 2026-11-21 定）：身份必须来自源侧事实，而这 3 行的
+     * `series_id` 是空的、源身份令牌本身就是用类型名拼的——改它等于我们**编一个身份**。
+     * 保留它们是诚实的：行的 `source_label` 仍给出真实名称，读者看得见；等源给出真实 id 再迁。
+     * 别把它当脏数据清掉：清掉就是删掉源确实发布过的事实。
+     */
     typeNameIdentities: count(`select count(*) as n from ${table}
       where metric_key in ('economic-indicator', 'financial-event', 'central-bank-activity')`),
     // 数组身份还没有稳定 id 的行（0.4.5 #14）：名字登记表按稳定 id 查，这一列不归零就永远查不到。

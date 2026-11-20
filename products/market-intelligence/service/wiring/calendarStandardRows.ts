@@ -313,6 +313,9 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       + `missing有值 ${counts.missingWithActual}、同期重复 ${counts.duplicateGroups}组/${counts.duplicateRows}行、`
       + `一二级过期欠账 ${counts.tierOverdueWithoutValueOrReason}、期次未解 ${counts.unresolvedPeriodRows}、`
       + `类型名当身份 ${counts.typeNameIdentities}`
+      // >0 时把「为什么保留」一起打出来：不迁是决定，不是忘了。
+      + (counts.typeNameIdentities > 0
+        ? '（保留不迁：源侧没有稳定 id，改身份等于编一个；等源给出真实 id 再迁）' : '')
       + (gaps.length > 0 ? ` ← 有缺口：${gaps.join('、')}` : ''))
   } catch (error) {
     report(`[macro-calendar] 数据一致性盘点失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
