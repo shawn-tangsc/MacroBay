@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { ensureCalendarStandardTables as ensureCalendarStandardTablesImpl } from './marketCalendarStandardSchema'
+import { calendarStandardTablePolicy } from './marketCalendarStandardPolicy'
 
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
@@ -34,75 +35,12 @@ import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketC
  * +136K）。所以这两列 `insert` 时写、`update` 时**不碰**——修订覆盖 `values_json`，冻结首发布值。
  * 不另开一张快照表：同一行能回答的问题，不该跨表 join，更不该再养一张「语义脆」的表。
  */
-export const calendarStandardTablePolicy = Object.freeze({
-  eventsTable: 'mi_calendar_events',
-  /** 日历的唯一读入口（只含 `row_kind = 'release'`）。 */
-  releasesView: 'mi_calendar_releases',
-  unmappedTable: 'mi_calendar_unmapped',
-  /**
-   * 「源内发布 id ↔ 标准行」的映射。**一行只能存一个 `source_event_id`**：源把同一身份同一天
-   * 重发两次时，后写的会把前一个 id 覆盖掉，按 id 溯源的清单就会凭空少一条（实测 257 → 252）。
-   * 这张表把每次发布都记下来，于是「清单里有、表里没有」能真的为 0，而不是靠一句解释。
-   */
-  sourceIdsTable: 'mi_calendar_event_source_ids',
-  /**
-   * 发布状态闭集，**从源拿**：读侧要分「已发布/排期/取消」不许按日期推——
-   * 日期比会在发布当天中午前后判错（源还是 scheduled，日期已过）。
-   */
-  /**
-   * 五态闭集（产品口径 2026-11-16）：`scheduled` 只用于「还没到发布日」；过期无值在 24h 窗口内是
-   * `backfilling`（界面「待补值」），窗口外是 `missing`（「未提供」）。旧行的 `unknown` 保留读兼容，
-   * 读侧按 `missing` 处理，不单开第六态。
-   */
-  /** 闭集**引用契约那一份**，这里不写字面量（守卫见 `marketCalendarReleaseStatusUnionGuard`）。 */
-  releaseStatuses: marketCalendarPublicPolicy.releaseStatuses,
-  /**
-   * 身份种类。`code` = 标准码（可跨源合并）；`source` = **源内标识**（映射不上时用它，
-   * 日历照常显示、但**不参与跨源合并**——没有共同身份，硬合就是猜）。
-   *
-   * 不进主键：两种身份的命名空间天然不重叠（标准码是 `US.*`/`evt.*`，源内标识是源的
-   * `release_id`），所以主键 `(国家, metric_key, period, 首发布日)` 已经唯一。**不为它重建表**——
-   * 重建要动主键和已有行，正是最容易藏数据的一步。
-   */
-  identityKinds: Object.freeze(['code', 'source'] as const),
-  /** 没映射上的原因闭集。新增值要同时更新这里的注释与用例。 */
-  // `bad-period` 是**只读遗留**（2026-11-18）：写入端已不再产生它，`period-unresolved` 取代了它。
-  // 保留它只为读旧库的行——否则旧库那 120 条会变成「不认识的原因」。**不许再有新代码写它**。
-  unmappedReasons: Object.freeze(['unknown-measure', 'unknown-event-type', 'bad-period', 'bad-identity',
-    'unknown-release-group', 'ambiguous-same-day',
-    /**
-     * 有期间、但这次发布**一个 measure 都没有**（实测 11+12 月美国 21 条）。它写不出指标行
-     * （没有 measure 就没有 `metric_key`），也不属于「映射不上」——所以要单独一个原因：
-     * 前者要问源为什么发空发布，后者要补映射，修法不同。这条路径以前三无（表里没有、
-     * `unmapped` 没有、日志也不说），发布层守恒式一上线就把它量出来了。
-     */
-    'no-values',
-    /**
-     * **身份缺国家**（2026-11-16 用户口径）：观测本身没带国家码，算不出「哪个国家的这次发布」。
-     * 它和 `bad-identity` 是两件事：那个是「身份本身坏了」（拼不出三段），这个是「少了其中一段」。
-     * 以前这类行**静默跳过**（既不进表、也不进未映射），1484 条就这么消失了——用户一句话点出：
-     * 不落表可以，但**必须落在未映射的库里**，否则「筛掉了」被读成「没有」。
-     */
-    'missing-country',
-    /**
-     * **有国家、也有标题，但码表里找不到对应的码**（2026-11-18 Chief 定）：身份的三段算得出来，
-     * 只是那一段（族/测度）还没有码。它和 `bad-identity` 的区别是「没建码」不是「拼不出来」，
-     * 和 `bad-period` 的区别是「连码都没有」不是「有码缺期次」——三种修法不同，不能合成一个数。
-     */
-    'no-code',
-    /**
-     * **没有标准行**（2026-11-18 Chief 定）：这条源内身份当年因为缺国家被跳过，之后没有任何东西
-     * 把它写进标准表——**它不在等映射，也没有行可挂映射**。留在「未映射」里会让那个数永远压不下去，
-     * 也看不出真正缺什么：849 条里 751 条是这种，其中 642 条映射其实早就写好了。
-     */
-    'no-standard-row',
-    /**
-     * **已映射、源未给统计期**（2026-11-18 Chief 定）：有码缺期次，定位不到某一天，显示不出来。
-     * 它不是「未映射」——映射那一半已经做完了，缺的是源没给的那一半，所以只作诊断、不进列表。
-     * 这条口径与 `bad-period` 分开：那个是「码都没定」，这个是「码定了、期次没给」。
-     */
-    'period-unresolved'] as const)
-})
+/**
+ * **表名与闭集**：抽出到 `marketCalendarStandardPolicy`（2026-11-21，断 `表 ↔ 台账` 的循环依赖）。
+ * 这里原样转发，27 个既有调用点一个不改。
+ */
+export { calendarStandardTablePolicy } from './marketCalendarStandardPolicy'
+
 export type CalendarUnmappedReason = typeof calendarStandardTablePolicy.unmappedReasons[number]
 
 /**
@@ -128,6 +66,11 @@ export type CalendarStandardRow = Readonly<{
   timePrecision: 'minute' | 'date'
   /** 源给的发布状态（闭集）。缺省 `unknown`——不猜，也不按日期推。 */
   status?: CalendarReleaseStatus
+  /**
+   * **源内发布 id**（`release_id`）：判别「同一发布改了排期」与「同期的第二次真实发布」的唯一依据。
+   * 旧行为 `NULL`——那时无法判别，按「新日期新行」的老行为走，并计入本轮计数。
+   */
+  sourceReleaseId?: string
   /**
    * 重要性，**从源带过来**（观测表本来就有这一列；官方 revision 也带）。标准表原本缺这一列，
    * 读侧只好拿三档里的一个去顶，那等于编数据——筛选会失效，而没人看得出是假的。
@@ -309,13 +252,15 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, source_label_en, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
-     first_published_actual, first_published_previous, data_observed_at, event_type)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
       -- 13:30 抹掉了——读者会看到「只有日期」，而事实是有人给了时刻。
       -- 精度只从 date 升到 minute，不反向降；新值为空时不覆盖已有值。
+      -- 源内发布 id：只在旧值为空时补写（给旧行补上判别器），已有一律不覆盖。
+      source_release_id = coalesce(source_release_id, excluded.source_release_id),
       scheduled_at = coalesce(excluded.scheduled_at, scheduled_at),
       time_precision = case when excluded.time_precision = 'minute' then 'minute' else time_precision end,
       -- 值要**逐字段**合并，不是整块替换：先写 actual+previous，后到的源只带 previous 时，
@@ -363,7 +308,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       // 数据时刻不传就按写入时刻算：没有这一级的来源不许因为「不知道数据时刻」而永远覆盖不了。
       row.dataObservedAt ?? row.observedAt,
       // 写入侧知道「这是什么」就存下来；不知道（历史/旧调用方）留空，读侧才退前缀规则。
-      row.eventType ?? null)
+      row.eventType ?? null,
+      // 补写：旧行该列为 NULL 时填上（同一发布按原日期重发的那一次），已有一律不覆盖。
+      row.sourceReleaseId ?? null)
   // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
   // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
   return { countryCode, metricKey, periodKey, firstScheduledDate,
@@ -467,34 +414,8 @@ export function findCalendarStandardRowBySource(database: DatabaseSync, input: R
   }
 }
 
-/**
- * **台账零孤儿**：`mi_calendar_event_source_ids` 里指向已不存在标准行的行，删掉并返回条数（幂等）。
- *
- * 这张表存在的意义只有一个：**「清单里有、表里没有」必须能查出来、且必须为 0**。11-14 撤掉
- * 0xrouter 那 659 行时没撤台账，留下 916 条孤儿——一次 `/tmp` 脚本清掉了，但那不是判据。
- * 所以判定与修复都放在这里，配一条能跑红的用例（造一条孤儿 → 能查出来 → 清掉 → 再清返回 0）。
- *
- * 判定用「`source_event_id` 匹配 **或** 身份（国家+码+期间+首发布日）匹配」：源重发会覆盖
- * `source_event_id`，只按 id 比会把合法台账误判成孤儿。
- */
-export function countOrphanSourceIds(database: DatabaseSync): number {
-  const row = database.prepare(`select count(*) as c from ${calendarStandardTablePolicy.sourceIdsTable} s
-    where not exists (select 1 from ${calendarStandardTablePolicy.eventsTable} e
-      where e.source_event_id = s.source_event_id
-        or (e.country_code = s.country_code and e.metric_key = s.metric_key
-            and e.period_key = s.period_key and e.first_scheduled_date = s.first_scheduled_date))`).get() as
-    { c: number } | undefined
-  return row?.c ?? 0
-}
-
-export function pruneOrphanSourceIds(database: DatabaseSync): number {
-  const result = database.prepare(`delete from ${calendarStandardTablePolicy.sourceIdsTable} as s
-    where not exists (select 1 from ${calendarStandardTablePolicy.eventsTable} e
-      where e.source_event_id = s.source_event_id
-        or (e.country_code = s.country_code and e.metric_key = s.metric_key
-            and e.period_key = s.period_key and e.first_scheduled_date = s.first_scheduled_date))`).run()
-  return Number(result.changes)
-}
+/** 台账孤儿判定与清理：抽出到 `marketCalendarStandardRowLedger`（体积门禁，2026-11-21）。 */
+export { countOrphanSourceIds, pruneOrphanSourceIds } from './marketCalendarStandardRowLedger'
 
 /** 建表与迁移在 `marketCalendarStandardSchema`（体积门禁），这里原样转发，调用点一个不改。 */
 export const ensureCalendarStandardTables = ensureCalendarStandardTablesImpl

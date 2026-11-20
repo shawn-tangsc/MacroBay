@@ -44,6 +44,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       values_json text not null,
       source_provider_id text not null,
       source_event_id text not null,
+      -- **源内发布 id**（架构师 2026-11-21 批 (b)）：判别「同一发布改了排期」与「同期的第二次真实发布」
+      -- 的唯一依据。可空：旧行为 NULL。
+      source_release_id text,
       parser_version text not null,
       observed_at text not null,
       first_seen_at text not null,
@@ -169,6 +172,15 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   }
   if (!columns.some((column) => column.name === 'event_type')) {
     database.exec(`alter table ${eventsTable} add column event_type text`)
+  }
+  if (!columns.some((column) => column.name === 'source_release_id')) {
+    /**
+     * **与迁移 16/18 同款**（Chief 2026-11-21 拍）：`pragma_table_info` 查过再 `add column`，
+     * 重复执行无害、幂等；追加的是**可空列**，旧行留 `NULL`（＝「旧行、无法判别改排期」，不是缺数据），
+     * 不重写、不回填、不 drop。**不另加 `mi_macro_calendar_migrations` marker**：那是「数据迁移只跑一次」
+     * 的标记，加列本身幂等，再造一个版本号就成了两套语义。
+     */
+    database.exec(`alter table ${eventsTable} add column source_release_id text`)
   }
   if (!columns.some((column) => column.name === 'data_observed_at')) {
     // 老行没有这一列：按写入时刻回填（它是我们唯一有的事实），之后的写入按真值比。

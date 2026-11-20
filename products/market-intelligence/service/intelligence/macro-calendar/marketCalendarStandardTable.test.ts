@@ -296,3 +296,25 @@ describe('写入端守卫：值只能是展示串（2026-11-18）', () => {
       .not.toThrow()
   })
 })
+
+/**
+ * **同一排期内的重复发布：合并成一行**（方案 §7 第 8 条，Chief 2026-11-21 判）。
+ *
+ * 「较晚者赢」只覆盖**同一排期**（源把同一条又发了一次），不跨初值/终值两条排期——
+ * 后者是既有契约（下一段 describe 已钉「不同排期 → 两行」）。
+ */
+describe('同一排期重复发布：字段级合并', () => {
+  it('先写只有 previous、后写带 actual：一行，actual 不丢', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    upsertCalendarStandardRow(database, { ...base, valuesJson: JSON.stringify({ previous: '46.7' }) })
+    upsertCalendarStandardRow(database, { ...base, valuesJson: JSON.stringify({ previous: '46.7', actual: '51' }),
+      observedAt: '2026-11-06T14:00:00.000Z', dataObservedAt: '2026-11-06T14:00:00.000Z' })
+    const rows = database.prepare('select values_json, data_observed_at from mi_calendar_events').all() as
+      Record<string, unknown>[]
+    // 跳过整行写入（`INSERT OR IGNORE`）会留下「只有 previous」的那一版——这就是缺陷，不是优化。
+    expect(rows).toHaveLength(1)
+    expect(JSON.parse(String(rows[0]!.values_json))).toEqual({ previous: '46.7', actual: '51' })
+    expect(rows[0]!.data_observed_at).toBe('2026-11-06T14:00:00.000Z')
+  })
+})

@@ -1,9 +1,11 @@
 import { narwhalEventSourceEventId, narwhalMeasureMetricKeys, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { narwhalStandardSourceEventId } from '../marketCalendarSourceEventId'
 import { eventCodeBySourceType } from '../marketCalendarEventCodeTable'
 import type { CalendarIdentityKind, CalendarReleaseStatus, CalendarUnmappedReason } from '../marketCalendarStandardTable'
 import { narwhalPrimaryMetricBySeriesId } from './narwhalSeriesPrimaryMetric'
 import { marketCalendarCountrySourceMappings } from '../marketCalendarCountrySourceMappings'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
+import { draftsOf, eventKindOf, feedByKind, type NarwhalCalendarLocale, type NarwhalEventKind } from './narwhalCalendarDrafts'
 
 /**
  * Narwhal 的一次采集 → 日历观测批次（`appendCollection` 的输入）。
@@ -17,38 +19,6 @@ import type { NarwhalParsedRelease } from './narwhalCalendarParser'
  *
  * 一次调用写三类身份（经济指标 / 金融事件 / 央行活动），`collection` 只记一条。
  */
-
-export type NarwhalCalendarLocale = 'zh' | 'en'
-
-const feedByKind = Object.freeze({
-  'economic-indicator': 'macro-calendar-narwhal-economic-data',
-  'financial-event': 'macro-calendar-narwhal-financial-events',
-  'central-bank-activity': 'macro-calendar-narwhal-central-bank-activities'
-} as const)
-type NarwhalEventKind = keyof typeof feedByKind
-
-/** 事件型的分型：讲话/央行沟通归央行活动，其余（资产负债表、能源报告等）归金融事件。 */
-function eventKindOf(topic: string | undefined): NarwhalEventKind {
-  return topic === 'policy_communication' ? 'central-bank-activity' : 'financial-event'
-}
-
-/**
- * 存储层认的国家码是两位（`US` / `DE`），身份口径是三位（ISO alpha-3）。写入时按存储归一，
- * 身份串里保留三位——两处各用各的口径，读取侧再归一，不然同一个国家会出现两个 key。
- */
-const storageCountryCode: Readonly<Record<string, string>> = Object.freeze({
-  USA: 'US', CAN: 'CA', DEU: 'DE', GBR: 'GB', JPN: 'JP', CHN: 'CN', EUR: 'EU'
-})
-
-function storageCodeOf(country: string): string | undefined {
-  return storageCountryCode[country]
-}
-
-/** 有值发布的主测度：优先 `measure === concept`，否则取第一个登记过的测度。 */
-function primaryMappedValue(release: NarwhalParsedRelease) {
-  const mapped = release.values.filter((value) => narwhalMeasureMetricKeys[value.measure] !== undefined)
-  return mapped.find((value) => value.measure === value.concept) ?? mapped[0]
-}
 
 export type NarwhalCalendarBatch = Readonly<{
   collectionId: string
@@ -78,18 +48,19 @@ export function narwhalObservationBatches(
   for (const release of releases) {
     const month = release.eventDate.slice(0, 7)
     if (!/^\d{4}-\d{2}$/.test(month) || !release.at.startsWith(month)) continue
-    const valued = primaryMappedValue(release)
     // 「有没有数值格」决定它是不是事件型；**有值但测度没登记不是事件**，那是有值但算不出身份。
     const kind: NarwhalEventKind = release.values.length === 0 ? eventKindOf(release.topic) : 'economic-indicator'
     const bucket = grouped.get(`${month}|${kind}`) ?? { month, kind, drafts: [] }
     // 同一次发布被来源拆成两条 release（非农、失业率、JOLTS…）时，两条算出**同一个身份**，
     // 一个批次里同一个身份只能有一行——留信息最全的那条（有 actual 的优先），其余计为跳过。
-    const draft = draftOf(release, kind, options.locale)
-    const factKey = String(draft.marketFactKey)
-    const existing = bucket.drafts.findIndex((item) => String(item.marketFactKey) === factKey)
-    if (existing < 0) bucket.drafts.push(draft)
-    else if (draft.providerActual !== undefined && bucket.drafts[existing]!.providerActual === undefined) {
-      bucket.drafts[existing] = draft
+    // 一个 release 现在可能产出**多条** draft（按 measure 拆，见 `draftsOf`），逐条走同一套去重。
+    for (const draft of draftsOf(release, kind, options.locale)) {
+      const factKey = String(draft.marketFactKey)
+      const existing = bucket.drafts.findIndex((item) => String(item.marketFactKey) === factKey)
+      if (existing < 0) bucket.drafts.push(draft)
+      else if (draft.providerActual !== undefined && bucket.drafts[existing]!.providerActual === undefined) {
+        bucket.drafts[existing] = draft
+      }
     }
     grouped.set(`${month}|${kind}`, bucket)
   }
@@ -106,59 +77,6 @@ export function narwhalObservationBatches(
       diagnostics: { inputRows: bucket.drafts.length, skippedRows: 0, reasons: emptyReasons }
     }
   }))
-}
-
-function draftOf(release: NarwhalParsedRelease, kind: NarwhalEventKind, locale: NarwhalCalendarLocale): Record<string, unknown> {
-  const descriptorId = feedByKind[kind]
-  const sourceEventId = sourceEventIdOf(release, kind)
-  const valued = kind === 'economic-indicator' ? primaryMappedValue(release) : undefined
-  const measureKeys = [...new Set(release.values.map((value) => narwhalMeasureMetricKeys[value.measure])
-    .filter((key): key is string => key !== undefined))]
-  return {
-    providerId: 'narwhal',
-    descriptorId,
-    kind,
-    locale,
-    sourceEventId,
-    marketFactKey: JSON.stringify(['narwhal', descriptorId, locale, sourceEventId]),
-    identityState: 'unverified',
-    localeMerge: 'disabled',
-    officialLink: 'disabled',
-    displayName: release.name,
-    ...(storageCodeOf(release.country) === undefined ? {} : { countryCode: storageCodeOf(release.country)! }),
-    importance: 'medium',
-    scheduledDate: release.eventDate,
-    scheduledAt: release.at,
-    ...(measureKeys.length === 0 ? {} : { measureKeys: measureKeys.join(',') }),
-    ...(valued === undefined ? {} : {
-      consensus: displayValueOf(valued.consensus),
-      providerPrevious: displayValueOf(valued.previous),
-      providerActual: displayValueOf(valued.actual)
-    })
-  }
-}
-
-/** 有值：规范身份；没有 `period` 或指标不在表里：来源自己的 `release_id`（读回来即 unmapped）。 */
-function sourceEventIdOf(release: NarwhalParsedRelease, kind: NarwhalEventKind): string {
-  if (kind === 'economic-indicator') {
-    const valued = primaryMappedValue(release)
-    const metricKey = valued === undefined ? undefined : narwhalMeasureMetricKeys[valued.measure]
-    if (metricKey !== undefined && release.period !== undefined && release.period.length > 0) {
-      return narwhalSourceEventIdForIdentity({ countryCode: release.country, metricKey, periodKey: release.period })
-    }
-  }
-  // 指标型但**没有可映射的测度**（排期先到、或源压根没给 measure）：
-  // 源名登记过事件码 → 事件身份 `(国家, 事件码, 时刻)`，采集时就把身份带上；
-  // 连事件码都没有 → 源内身份，中段用 `release_id`，**绝不写裸 id**——裸 id 解不出身份，
-  // 重放时只能记 `bad-identity`，同一批发布就永远补不回日历（实测三条：生产力与成本、
-  // 达拉斯联储服务业调查、政策利率决议）。
-  const fallbackCode = eventCodeBySourceType[release.name]
-  if (fallbackCode !== undefined) return narwhalEventSourceEventId(release.country, fallbackCode, release.at)
-  if (kind !== 'economic-indicator') {
-    // 事件型身份 = (国家, 类型, 时刻)。时刻取来源给的发布时刻，分钟级。
-    return narwhalEventSourceEventId(release.country, kind, release.at)
-  }
-  return narwhalEventSourceEventId(release.country, release.releaseId, release.at)
 }
 
 /** 源的状态串 → 闭集。认不出的**不猜**，落 `unknown`。 */
@@ -178,10 +96,6 @@ function releaseStatusOf(raw: string): CalendarReleaseStatus {
  */
 function publishedNeedsActual(raw: CalendarReleaseStatus, actual: string | undefined): CalendarReleaseStatus {
   return raw === 'published' && (actual === undefined || actual.trim() === '') ? 'backfilling' : raw
-}
-
-function displayValueOf(raw: string | undefined): Record<string, string> | undefined {
-  return raw === undefined || raw.length === 0 ? undefined : { displayValue: raw }
 }
 
 /**
@@ -217,6 +131,11 @@ export type NarwhalStandardRowInput = Readonly<{
   status: CalendarReleaseStatus
   /** 这一行是由**源的某个 measure** 生成的（测度层对账只数它们）。 */
   fromMeasure?: true
+  /**
+   * **源内发布 id**（`release_id`）：判别「同一发布改了排期」与「同期的第二次真实发布」的唯一依据
+   * （架构师 2026-11-21 批 (b)）。事件行与源内身份行不带——它们本来就不按码认行。
+   */
+  sourceReleaseId?: string
   /** 源标了已发布、却一个值都没给：值区显示「未提供」（读侧按 status + 无值判）。 */
   valueState?: 'missing'
   previous?: string
@@ -270,6 +189,19 @@ function countryMappedMetricKey(releaseId: string, country: string): string | un
   return entry.metricKey.startsWith(`${country}.`) ? entry.metricKey : undefined
 }
 
+/**
+ * **指标行用四段身份**（方案 §2.4）：`国家|指标码|期|首次排期日`，与观测层那个三段串**不是同一个**。
+ *
+ * 为什么不复用 `release.releaseId`（uuid）：一次发布拆 N 行共用一个 uuid 时，台账主键
+ * `(provider_id, source_event_id)` 只能认领一行，其余永远「台账里没有」；四段身份让
+ * 「行键 = 身份」，台账 1:1。事件行与源内身份行没有码，仍用 `(国家, 类型, 时刻)` / `releaseId`。
+ */
+function codeRowIdentity(release: NarwhalParsedRelease, metricKey: string, periodKey: string): string {
+  return narwhalStandardSourceEventId({
+    countryCode: release.country, metricKey, periodKey, firstScheduledDate: release.eventDate
+  })
+}
+
   const rows: NarwhalStandardRowInput[] = []
   const unmapped: { sourceKey: string; name: string
     reason: CalendarUnmappedReason; measureKeys?: string[] }[] = []
@@ -309,9 +241,11 @@ function countryMappedMetricKey(releaseId: string, country: string): string | un
         anyMapped = true
         rows.push({
           kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, value.actual), fromMeasure: true,
+          sourceReleaseId: release.releaseId,
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey, periodKey: period,
-          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+          scheduledDate: release.eventDate, scheduledAt: release.at,
+          sourceEventId: codeRowIdentity(release, metricKey, period),
           ...(value.previous === undefined ? {} : { previous: value.previous }),
           ...(value.consensus === undefined ? {} : { consensus: value.consensus }),
           ...(value.actual === undefined ? {} : { actual: value.actual })
@@ -326,10 +260,12 @@ function countryMappedMetricKey(releaseId: string, country: string): string | un
       if (primaryMetric !== undefined) {
         rows.push({
           kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+          sourceReleaseId: release.releaseId,
           ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey: primaryMetric, periodKey: period,
-          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
+          scheduledDate: release.eventDate, scheduledAt: release.at,
+          sourceEventId: codeRowIdentity(release, primaryMetric, period)
         })
         continue
       }
@@ -337,10 +273,12 @@ function countryMappedMetricKey(releaseId: string, country: string): string | un
       if (countryMetric !== undefined) {
         rows.push({
           kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+          sourceReleaseId: release.releaseId,
           ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey: countryMetric, periodKey: period,
-          scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId
+          scheduledDate: release.eventDate, scheduledAt: release.at,
+          sourceEventId: codeRowIdentity(release, countryMetric, period)
         })
         continue
       }
@@ -387,10 +325,12 @@ function countryMappedMetricKey(releaseId: string, country: string): string | un
     if (countryMetric !== undefined) {
       rows.push({
         kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+        sourceReleaseId: release.releaseId,
         ...(status === 'published' ? { valueState: 'missing' as const } : {}),
         ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
         countryCode: release.country, metricKey: countryMetric, periodKey: period,
-        scheduledDate: release.eventDate, scheduledAt: release.at, sourceEventId: release.releaseId,
+        scheduledDate: release.eventDate, scheduledAt: release.at,
+        sourceEventId: codeRowIdentity(release, countryMetric, period),
         ...(release.values.length === 1 ? values : {})
       })
       continue

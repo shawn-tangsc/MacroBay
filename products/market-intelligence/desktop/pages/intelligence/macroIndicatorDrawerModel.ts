@@ -3,6 +3,7 @@ import { calendarDisplayDate } from '../../features/macro/economic-calendar/econ
 import { filterVisibleByTier } from '../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
 import { tierOfMetricKey } from '../../../service/intelligence/macro-calendar/marketCalendarReleaseGroups'
 import { matchedRelevantConcept, POLICY_PATH_EVENT_RELEVANT_SERIES_IDS } from '../../../contracts/policyPath'
+import { readEventMetricKeys } from '../../../contracts/macro/calendarEventMetricKeys'
 import type { MarketCalendarEvent } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { CalendarDayItem } from '../../features/macro/economic-calendar/economicCalendarDayModel'
 
@@ -30,7 +31,11 @@ export function nextReleaseOf(events: readonly Readonly<{ scheduledAt: string; m
   const nowMs = Date.parse(nowInstant)
   const next = events
     .filter((event) => Date.parse(event.scheduledAt) > nowMs)
-    .filter((event) => (event.measureKeys ?? []).some((key) => keys.includes(key)))
+    // 键列表走**唯一入口**：旧行的 `measureKeys` 是「覆盖哪些指标」，新行是「是哪个指标」。
+    // 这里只取排期日期，不读值。
+    .filter((event) => readEventMetricKeys({
+      ...(event.measureKeys === undefined ? {} : { measureKeys: event.measureKeys })
+    }).keys.some((key) => keys.includes(key)))
     .sort((left, right) => Date.parse(left.scheduledAt) - Date.parse(right.scheduledAt))[0]
   if (next === undefined) return undefined
   const day = calendarDisplayDate(next.scheduledAt, timeZone)

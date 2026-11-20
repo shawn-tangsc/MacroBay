@@ -63,7 +63,8 @@ export function createNarwhalStandardRowsWriter(
       // 闭包里没人能测，而它已经错过两版（恒平、恒红）。
       const conservation = calendarStandardConservation({ sourceTotals, rows, unmapped, failed: counts.failed })
       const { releaseDiff, measureDiff } = conservation
-      console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 认领 ${conservation.creditedReleases}（落表∪未映射，按 id 去重）+ 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${conservation.landedMeasures} + 未映射 measure ${conservation.unmappedMeasures} + 事件型随行 ${conservation.excludedMeasures}（差 ${measureDiff}）`)
+      // 「旧行无法判别」进本轮同一行汇总：只写进返回值的话，问「这轮撞了几笔旧行」还得翻日志。
+      console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 认领 ${conservation.creditedReleases}（落表∪未映射，按 id 去重）+ 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${conservation.landedMeasures} + 未映射 measure ${conservation.unmappedMeasures} + 事件型随行 ${conservation.excludedMeasures}（差 ${measureDiff}）；旧行无法判别 ${counts.legacyUnjudged} 笔`)
       if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
       if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)
       if (counts.failed > 0) console.warn(`[macro-calendar] 标准行写入失败 ${counts.failed} 条（已计入守恒式）`)

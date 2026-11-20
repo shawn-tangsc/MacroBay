@@ -159,8 +159,8 @@
       "why": "新源自己的采集/装配：provider id 是它的数据"
     },
     "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarObservationBatches.ts": {
-      "count": 7,
-      "why": "新源自己的采集/装配：provider id 是它的数据"
+      "count": 2,
+      "why": "新源自己的采集/装配：provider id 是它的数据（草稿层已抽到 narwhalCalendarDrafts.ts，故 7→2）"
     },
     "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarScheduler.ts": {
       "count": 2,
@@ -197,6 +197,10 @@
     "service/intelligence/macro-calendar/macroCalendarScheduleBackend.ts": {
       "count": 1,
       "why": "健康记录覆盖的采集类 provider 清单（fed/bls/bea/0xrouter）里那一个 id；清单本身就是数据，不是按源走不同逻辑"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarDrafts.ts": {
+      "count": 5,
+      "why": "新源自己的草稿层（从 narwhalCalendarObservationBatches 抽出）：provider id 是它的数据"
     }
   }
 }
