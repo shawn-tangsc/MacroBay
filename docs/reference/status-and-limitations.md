@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.4.3`. This page describes what is usable today and what is intentionally not
+MacroBay is at `0.4.4`. This page describes what is usable today and what is intentionally not
 supported yet.
 
 ## Usable from source
@@ -130,7 +130,7 @@ file is never repaired, renamed or overwritten automatically.
 
 ## API and configuration stability
 
-The `0.4.3` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.4.4` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 
