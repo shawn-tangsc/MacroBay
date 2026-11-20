@@ -102,6 +102,7 @@ time. See [Status and limitations](reference/status-and-limitations.md).
 - [First run](./getting-started/first-run.md)
 - [Product overview](./product/overview.md)
 - [Analysis workflow](./product/analysis-workflow.md)
+- [Macro calendar](./product/calendar.md)
 - [Traceability](./product/traceability.md)
 - [Crypto Market Analyst](./product/crypto-market-analyst.md)
 - [For professionals](./product/for-professionals.md)
