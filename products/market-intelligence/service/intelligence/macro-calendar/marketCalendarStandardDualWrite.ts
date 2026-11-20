@@ -61,6 +61,11 @@ export function dualWriteMeasureRows(
       scheduledAt?: string
       sourceEventId: string
       timePrecision?: 'minute' | 'date'
+      /**
+       * **数据自身的观测时刻**：来源说了这条值是什么时候看到的（官方 revision 的 `detected_at`、
+       * 观测行的 `last_seen_at`）。覆盖门按它比，不按写入时刻；不传才退化成 `observedAt`。
+       */
+      dataObservedAt?: string
       rowKind?: 'release' | 'estimate'
       identityKind?: CalendarIdentityKind
       /** `source` 身份行要带源原文名（标准码去名表查，源内 id 查不到）。 */
@@ -202,6 +207,7 @@ export function dualWriteMeasureRows(
         }),
         sourceProviderId: input.providerId, sourceEventId: row.sourceEventId,
         parserVersion: input.parserVersion, observedAt: input.observedAt, firstSeenAt: input.observedAt,
+        ...(row.dataObservedAt === undefined ? {} : { dataObservedAt: row.dataObservedAt }),
         ...(row.actual === undefined ? {} : { firstPublishedActual: row.actual }),
         ...(row.previous === undefined ? {} : { firstPublishedPrevious: row.previous })
       })

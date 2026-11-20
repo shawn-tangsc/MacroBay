@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { MacroCalendarRevision } from './macroCalendarContracts'
 import { ensureCalendarStandardTables } from './marketCalendarStandardTable'
+import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { officialLifecycleToReleaseStatus, officialRevisionsToSourceRows, writeOfficialSourceRows }
   from './marketCalendarOfficialSourceRows'
 
@@ -65,6 +66,53 @@ describe('官方发布先进标准表（source 身份）', () => {
     expect(JSON.parse(stored.values_json).actual).toBe('3.73768')
     expect(stored.values_json).not.toContain('3.717')
     expect(stored.value_state).toBe('present')
+  })
+
+  /**
+   * 覆盖门按「数据自身的观测时刻」判，不按我们的写入时刻（Chief 2026-11-21）。
+   * 官方链的写入时刻总是「现在」，若拿它去比，一份三天前的官方数据今天写进来也会赢过
+   * 0xrouter 刚拿到的新值——读者看到的是旧数，而且看不出「旧盖了新」。
+   */
+  it('官方数据比市场旧：不覆盖市场新值，也不推进数据时刻', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    dualWriteMeasureRows(database, {
+      providerId: '0xrouter', parserVersion: 'v1', observedAt: '2026-11-10T16:00:00.000Z',
+      rows: [{ countryCode: 'USA', metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10',
+        scheduledDate: '2026-11-10', sourceEventId: 'market-cpi', actual: '4.2', status: 'published' }]
+    })
+    writeOfficialSourceRows(database, {
+      // 写入时刻比市场晚两小时，但 revision 自报的观测时刻更早 → 数据更旧。
+      observedAt: '2026-11-10T18:00:00.000Z', parserVersion: 'v1',
+      revisions: [revision({ detectedAt: '2026-11-10T13:30:00.000Z', actual: { displayValue: '3.7' } })]
+    })
+    const stored = database.prepare(`select values_json, data_observed_at from mi_calendar_events
+      where metric_key = 'US.CPI.NSA.YOY'`).get() as { values_json: string; data_observed_at: string }
+    expect(JSON.parse(stored.values_json).actual).toBe('4.2')
+    expect(stored.data_observed_at).toBe('2026-11-10T16:00:00.000Z')
+  })
+
+  it('官方数据更新：照常覆盖并推进数据时刻', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    dualWriteMeasureRows(database, {
+      providerId: '0xrouter', parserVersion: 'v1', observedAt: '2026-11-10T13:00:00.000Z',
+      rows: [{ countryCode: 'USA', metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10',
+        scheduledDate: '2026-11-10', sourceEventId: 'market-cpi', actual: '4.2', status: 'published' }]
+    })
+    writeOfficialSourceRows(database, {
+      observedAt: '2026-11-10T18:00:00.000Z', parserVersion: 'v1',
+      revisions: [revision({ detectedAt: '2026-11-10T17:00:00.000Z', actual: { displayValue: '3.7' } })]
+    })
+    const stored = database.prepare(`select values_json, data_observed_at from mi_calendar_events
+      where metric_key = 'US.CPI.NSA.YOY'`).get() as { values_json: string; data_observed_at: string }
+    expect(JSON.parse(stored.values_json).actual).toBe('3.7')
+    expect(stored.data_observed_at).toBe('2026-11-10T17:00:00.000Z')
+  })
+
+  it('官方行带 revision 自己的 measured 时刻，不拿写入时刻顶替', () => {
+    const [row] = officialRevisionsToSourceRows([revision()])
+    expect(row!.dataObservedAt).toBe('2026-11-10T13:30:00.000Z')
   })
 
   it('写进表后日历可见（视图含 release 行），且按源分批', () => {

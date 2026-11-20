@@ -72,6 +72,12 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
     ...(revision.scheduledAt === undefined ? {} : { scheduledAt: revision.scheduledAt }),
     timePrecision: revision.scheduledAt === undefined ? 'date' as const : 'minute' as const,
     sourceEventId: revision.eventKey,
+    /**
+     * **数据自身的观测时刻**（Chief 2026-11-21）：官方链的写入时刻永远是「现在」，
+     * 不带上这一列，覆盖门就退化成「谁晚写谁赢」——一份三天前的官方数据今天写进来会盖掉
+     * 市场刚拿到的新值。用 revision 自报的 `detected_at`，它是这条数据被看到的时间。
+     */
+    dataObservedAt: revision.detectedAt,
     ...(revision.previous === undefined ? {} : { previous: revision.previous.displayValue }),
     ...(revision.consensus === undefined ? {} : { consensus: revision.consensus.displayValue }),
     ...(revision.actual === undefined ? {} : { actual: revision.actual.displayValue })
