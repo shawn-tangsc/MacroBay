@@ -1660,7 +1660,7 @@
       "basis": "BEA · 发布页（news 目录）"
     },
     "status": "retired",
-    "supersededBy": "US.CORE_PCE.YOY"
+    "supersededBy": "US.CORE_PCE.SA.YOY"
   },
   "US.CORE_PCE.SA.MOM": {
     "code": "US.CORE_PCE.SA.MOM",
@@ -4033,7 +4033,7 @@
       "basis": "BEA · 发布页（news 目录）"
     },
     "status": "retired",
-    "supersededBy": "US.PCE.YOY"
+    "supersededBy": "US.PCE.SA.YOY"
   },
   "US.PCE.SA.MOM": {
     "code": "US.PCE.SA.MOM",

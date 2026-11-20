@@ -23,8 +23,10 @@ describe('国家名表', () => {
 
   it('库里实际出现的码都在表里（US / DE），认不出的码不猜', () => {
     // 真库当前只有 US、DE 两种码；新码出现时宁可先不显示国家名，也不许编一个。
-    expect(marketCalendarCountryNames.US).toEqual({ zh: '美国', en: 'United States' })
-    expect(marketCalendarCountryNames.DE).toEqual({ zh: '德国', en: 'Germany' })
+    // 三列各有分工（`marketCalendarDisplayNameTables`）：`zh` 中文名、**`en` 是短名（就是国家码）**、
+    // `enFull` 才是英文全名。用错地方（拿 `en` 当全名显示）要改使用点，不是改这里的期望。
+    expect(marketCalendarCountryNames.US).toEqual({ zh: '美国', en: 'US', enFull: 'United States' })
+    expect(marketCalendarCountryNames.DE).toEqual({ zh: '德国', en: 'DE', enFull: 'Germany' })
     expect(marketCalendarCountryNames.ZZ).toBeUndefined()
   })
 })

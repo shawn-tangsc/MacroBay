@@ -63,7 +63,10 @@ describe('macroCalendarEvidenceStore', () => {
     const record = rawRecords.getRawRecord(appended!.rawRecordId)!
 
     expect(appended).toMatchObject({ providerId: 'macro-calendar-fed', descriptorId: statement.descriptorId, sourceUrl: statement.sourceUrl, detectedAt: '2026-08-03T13:54:17.000Z', parserVersion: 'fed-fomc-statement-v1', inserted: true, deduped: false })
-    expect(record).toMatchObject({ processingOwner: 'macro-calendar', sourceId: statement.descriptorId, sourceUrl: statement.sourceUrl, payloadRefType: 'file', payloadBody: undefined, payloadSizeBytes: Buffer.byteLength(body, 'utf8'), payloadHash: createHash('sha256').update(body, 'utf8').digest('hex') })
+    expect(record).toMatchObject({ processingOwner: 'macro-calendar', sourceId: statement.descriptorId, sourceUrl: statement.sourceUrl, payloadRefType: 'file', payloadSizeBytes: Buffer.byteLength(body, 'utf8'), payloadHash: createHash('sha256').update(body, 'utf8').digest('hex') })
+    // **外置开时记录根本没有这个键**（不是「值是 undefined」）：把 undefined 当键去比永远不过，
+    // 也说不清是「没写」还是「写了空」。原文仍由 `readBody` 从文件取回（下一行）。
+    expect('payloadBody' in record).toBe(false)
     expect(evidence.readBody(record)).toBe(body)
     expect(rawRecords.listUnprocessed()).toEqual([])
     expect(rawRecords.listSafeSummaries()).toEqual([])
@@ -114,11 +117,12 @@ describe('macroCalendarEvidenceStore', () => {
     expect(record).toMatchObject({
       processingOwner: 'macro-calendar', sourceId: manualBlsIcs.descriptorId,
       sourceUrl: manualBlsIcs.sourceUrl, payloadFormat: 'text', payloadRefType: 'file',
-      payloadBody: undefined, payloadSizeBytes: Buffer.byteLength(body, 'utf8'),
+      payloadSizeBytes: Buffer.byteLength(body, 'utf8'),
       payloadHash: createHash('sha256').update(body, 'utf8').digest('hex'),
       payloadMetaJson: '{"provenance":"manual-ics-upload","calendar":"bls-release-schedule"}',
       runId: 'manual-run-1', parserVersion: manualBlsIcs.parserId
     })
+    expect('payloadBody' in record!).toBe(false)
     expect(evidence.readBody(record!)).toBe(body)
   })
 

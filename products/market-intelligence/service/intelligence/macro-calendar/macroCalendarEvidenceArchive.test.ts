@@ -95,9 +95,10 @@ describe('macro calendar evidence archive', () => {
     const result = archive.append(reservation, input(body))
 
     expect(result).toMatchObject({ inserted: true, deduped: false })
+    // 外置开时「没有这个键」，不是「值是 undefined」。
+    expect(result?.record === undefined ? false : 'payloadBody' in result.record).toBe(false)
     expect(result?.record).toMatchObject({
       payloadRefType: 'file',
-      payloadBody: undefined,
       payloadSizeBytes: Buffer.byteLength(body),
       processingOwner: 'macro-calendar',
       archiveStatus: 'archived',
@@ -198,6 +199,7 @@ describe('macro calendar evidence archive', () => {
     const updateArchiveRefs = vi.spyOn(rawRecords, 'updateArchiveRefs')
 
     expect(archive.migrateInlineBodies()).toEqual({ state: 'unavailable', migratedCount: 0, dedupedCount: 0 })
+    // 迁移整笔失败（后一条正文与归档文件不匹配）→ 这一行**仍是内联**，正文原样留着。
     expect(rawRecords.getRawRecord(recovered.rawRecordId)?.payloadBody).toBe(recoveredBody)
     expect(rawRecords.getRawRecord(retained.rawRecordId)?.payloadBody).toBe(retainedBody)
     expect(updateArchiveRefs).not.toHaveBeenCalled()

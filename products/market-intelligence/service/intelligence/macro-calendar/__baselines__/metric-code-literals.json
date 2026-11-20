@@ -62,8 +62,8 @@
       "why": "德国来源的「源内 id → 码」表：与 0xrouter 那张同性质，按来源分开存。之前漏登记是因为守卫只认单引号 US 前缀码，现在认全了。"
     },
     "service/intelligence/macro-calendar/marketCalendarCodeTable.json": {
-      "count": 460,
-      "why": "标准码表的数据本体（244 行）：键与 code 字段各出现一次，四名里可能带码形串。数据从 .ts 搬进 JSON 后，这里是它唯一的家。"
+      "count": 462,
+      "why": "标准码表的数据本体（244 行）：键与 code 字段各出现一次，四名里可能带码形串。数据从 .ts 搬进 JSON 后，这里是它唯一的家；2026-11-20 +2：两条退役的 NSA 码 `supersededBy` 原来指向不存在的 `US.CORE_PCE.YOY`/`US.PCE.YOY`，改成真实存在的 active 码 `US.CORE_PCE.SA.YOY`/`US.PCE.SA.YOY`——这两个码是表里已有的字面量，数量涨 2 是因为「指向不存在的码」以前不计入（计数只数表里有的码）"
     },
     "service/intelligence/macro-calendar/marketCalendarCountryCodeTable.json": {
       "count": 1318,
