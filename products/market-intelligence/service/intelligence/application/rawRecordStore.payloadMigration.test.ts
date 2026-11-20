@@ -9,13 +9,17 @@ import type { RawIntelligenceRecord } from '../schema/intelligenceRecord'
  * 三条判据：搬完之后原文读得出（引用可解析）、跑第二遍 `0 变更`、**失败的那条原地不动**
  * （不产生「有记录、原文读不到」的行）。
  */
-function inlineRecord(id: string, body: string): RawIntelligenceRecord {
+function inlineRecord(
+  id: string,
+  body: string,
+  processingOwner: RawIntelligenceRecord['processingOwner'] = 'generic-intelligence'
+): RawIntelligenceRecord {
   return {
     rawRecordId: id,
     sourceId: 'binance-announcements',
     runId: `run-${id}`,
     parserVersion: 'binance-announcements-v1',
-    processingOwner: 'generic-intelligence',
+    processingOwner,
     processingState: 'received',
     storageTier: 'hot',
     archiveStatus: 'none',
@@ -86,6 +90,22 @@ describe('存量原文外置：启动时幂等迁移', () => {
     expect(failed.payloadBody).toBe('<p>boom</p>')
     expect(failed.payloadFileRef).toBeUndefined()
     expect(writes).toEqual([2])
+  })
+
+  it('leaves calendar evidence alone: its own archive owner moves that body and writes archiveStatus', () => {
+    /* 日历证据不是这条迁移的对象。这里先搬走，`macroCalendarEvidenceArchive.migrateInlineBodies()`
+       就再也看不到 inline 正文，`readBody` 直接读不到——证据被搬到一个没人认的地方。 */
+    const { store, writes, written } = harness({
+      records: [inlineRecord('raw-1', '<html>official calendar</html>', 'macro-calendar')]
+    })
+
+    const result = store.migrateInlinePayloads()
+    expect(result).toMatchObject({ state: 'unchanged', inlineToFile: 0, remainingInline: 1 })
+    expect(written).toEqual([])
+    expect(writes).toEqual([])
+    const kept = store.getRawRecord('raw-1')!
+    expect(kept.payloadRefType).toBe('inline')
+    expect(kept.payloadBody).toBe('<html>official calendar</html>')
   })
 
   it('reports "not wired" instead of "nothing to migrate" when no payload directory is configured', () => {

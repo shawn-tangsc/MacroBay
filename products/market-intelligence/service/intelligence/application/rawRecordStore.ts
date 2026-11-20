@@ -225,7 +225,12 @@ export function createRawRecordStore(deps?: {
       const directory = deps.payloadDirectory
       const write = deps.writeVerifiedPayload
       // 只有 inline / file 两种引用参与迁移；别的形状原样留着，不猜。
+      // 日历证据的正文**不属于这条迁移**：它有自己的归档 owner（`macro-calendar-evidence`），
+      // 由 `macroCalendarEvidenceArchive.migrateInlineBodies()` 负责搬家并写回 `archiveStatus`。
+      // 这里先搬走，归档那边就再也看不到 inline 正文、`readBody` 直接读不到——那不是「没搬」，
+      // 是把证据搬到了一个没人认的地方。
       const externalizable = [...records.values()]
+        .filter((record) => record.processingOwner !== 'macro-calendar')
         .filter((record) => record.payloadRefType === 'inline' || record.payloadRefType === 'file')
         .map((record) => ({
           rawRecordId: record.rawRecordId,
