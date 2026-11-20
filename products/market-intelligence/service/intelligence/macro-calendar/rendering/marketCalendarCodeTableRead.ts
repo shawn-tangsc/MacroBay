@@ -29,6 +29,8 @@ export type CodeTableReadRow = Readonly<{
   countryCode: string | null
   /** 国家名的**中文**写法，取自现有国名表——渲染层不许自己拼，否则同一国家会有两种写法。 */
   countryName: string | null
+  /** 完整国名（`United States`）：给 `title` / `aria-label`，英文下显示代码、读屏念全名。 */
+  countryNameFull?: string | null
   tier: CodeTableRow['tier']
   measure: string | null
   seasonality: string | null
@@ -69,7 +71,13 @@ function sourceIdCounts(): ReadonlyMap<string, number> {
   return counts
 }
 
-export function readCalendarCodeTable(database: DatabaseSync): CodeTableRead {
+/**
+ * @param locale 界面语言。**英文下一律显示两位代码**（`US`/`JP`/`CA`，用户 2026-11-21 定），
+ * 与事件列表那格一致；中文显示中文名。**完整国名不丢**，放在 `countryNameFull` 里供
+ * `title` / `aria-label` 使用——全产品只有一条规则：**英文看代码，全名只在悬停/读屏**。
+ * 谁也别为某一处单独改回全名，那会让两处又不一致。
+ */
+export function readCalendarCodeTable(database: DatabaseSync, locale: 'zh' | 'en' = 'zh'): CodeTableRead {
   try {
     const counts = sourceIdCounts()
     // 一个码一条发布算一行。
@@ -99,7 +107,13 @@ export function readCalendarCodeTable(database: DatabaseSync): CodeTableRead {
         // `EMU` 是我们唯一的非 ISO 例外（欧元区没有 alpha-2）：国名复用 `EU` 那一条，
       // 不在国名表里复制第二份（那份表有「一个名字只对应一个码」的守卫）。
       countryName: row.countryCode === null ? null
-        : (marketCalendarCountryNames[row.countryCode === 'EMU' ? 'EU' : row.countryCode]?.zh ?? null),
+        : (() => {
+          const names = marketCalendarCountryNames[row.countryCode === 'EMU' ? 'EU' : row.countryCode]
+          if (names === undefined) return null
+          return locale === 'en' ? names.en : names.zh
+        })(),
+        countryNameFull: row.countryCode === null ? null
+          : (marketCalendarCountryNames[row.countryCode === 'EMU' ? 'EU' : row.countryCode]?.enFull ?? null),
         tier: row.tier,
         // 事件行没有测度与季调档：给 null，不编一个「LEVEL」。
         measure: row.kind === 'metric' ? row.measure : null,

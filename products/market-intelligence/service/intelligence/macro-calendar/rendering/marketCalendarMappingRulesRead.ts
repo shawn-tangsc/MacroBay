@@ -11,7 +11,7 @@ import { marketCalendarCountrySourceMappings } from '../marketCalendarCountrySou
 import { subItemOrderOf, subItemParentByMetricKey, zeroXRouterSourceMetricMappings } from '../marketCalendarZeroXRouterSourceMappings'
 import { groupUnmappedByRelease, mergedReasonOf } from '../marketCalendarUnmappedGrouping'
 import { sourceInternalIdOf } from './marketCalendarEventIndexRead'
-import { countryNameOf } from './marketCalendarEventListRead'
+import { countryNameFullOf, countryNameOf } from './marketCalendarEventListRead'
 
 /**
  * **仅渲染层，只读**：映射规则表（用户 2026-11-16 要看的那张表）。
@@ -241,7 +241,10 @@ export function mappingRuleNames(metricKey: string): Readonly<{ zh: string; en: 
   return pair === undefined ? null : Object.freeze({ ...pair })
 }
 
-export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRead {
+/**
+ * @param locale 界面语言：未映射表的 `countryName` 与码表 Country 列同一口径（英文取全名）。
+ */
+export function readCalendarMappingRules(database: DatabaseSync, locale: 'zh' | 'en' = 'zh'): MappingRulesRead {
   try {
     // 源内身份＝数组第一段（`["214790",79090]` → `214790`）；规范码不是这里的对象。
     const rows = database.prepare(`select metric_key, count(*) as n, min(source_label) as label,
@@ -460,7 +463,8 @@ export function readCalendarMappingRules(database: DatabaseSync): MappingRulesRe
         sampleLabel: labels.length === 0 ? null : labels.join(' · '),
         sampleLabelEn: labelsEn.length === 0 ? null : labelsEn.join(' · '),
         countryCode: first.countryCode,
-        countryName: countryNameOf(first.countryCode)
+        countryName: countryNameOf(first.countryCode, locale),
+        countryNameFull: countryNameFullOf(first.countryCode, locale)
       })
     })
       // **首次出现倒序**：新出现的排最前——「新事件」一眼就能看到；没有时间的沉到最后。
