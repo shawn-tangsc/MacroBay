@@ -5,6 +5,7 @@ import { displayValueFromJson } from './marketCalendarValueEncoding'
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, toAlpha2Country, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
 import { derivePublishWindows, type PublishWindow } from './marketCalendarPublishWindow'
+import { calendarNumericJsonFor } from './marketCalendarNumericParse'
 import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import type { CalendarStandardWriteLayer, CalendarStandardWriterId } from './calendarStandardWriteLayer'
@@ -75,6 +76,11 @@ export type StandardBackfillReport = Readonly<{
   periodRuleConflicts: number
   /** 不一致的指标身份（去重，最多 10 个，给日志用）。 */
   periodRuleConflictIdentities: readonly string[]
+  /**
+   * **展示串在、但解析不出数值的条数**（`unparsed`，方案 §3.2）：这是**我们的问题**、要按轮计数。
+   * 与「来源未给出」分开——前者是解析没接住，后者是源就没给。
+   */
+  numericUnparsed: number
 }>
 
 type ObservationRow = Readonly<{
@@ -145,6 +151,11 @@ type BackfillSourceProfile = Readonly<{
    * 「这条不重要」。所以 Narwhal 造假的那一份不复制（保持 NULL＝未提供），官方源那份照抄。
    */
   importanceIsFact: boolean
+  /**
+   * **N1：这一源先在适配器里解析数值**（架构师方案 §6）。解析只发生在这里——写入口只收结构化结果；
+   * 没开的源（N2 再逐个接）走 `numericJson` 缺省，落 `unparsed`/`missing`，绝不回退去 parse 展示串。
+   */
+  parseNumeric?: boolean
 }>
 
 const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, BackfillSourceProfile>> = {
@@ -153,7 +164,9 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
     identityRequired: true,
     hasValues: (row) => hasMeasures(row.measure_keys_json),
     skipIdentitiesOwnedByOthers: false,
-    importanceIsFact: false
+    importanceIsFact: false,
+    // N1：narwhal 先接（单源内就能算）；旧源留给 N2。
+    parseNumeric: true
   },
   // 旧源：身份在 `indicator_id` 那张表里；多数行本来就没有共同身份
   // （讲话、会议、没登记过的小指标），那是「走源内身份」，不是坏数据。
@@ -264,7 +277,8 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   if (exists === undefined) {
     return { observations: 0, releases: 0, indicator: 0, event: 0, source: 0,
       unmapped: { 'bad-identity': 0, 'unknown-measure': 0, 'period-unresolved': 0 }, skipped: 0, skippedExisting: 0,
-      unmappedMissingCountry: 0, written: 0, periodRuleConflicts: 0, periodRuleConflictIdentities: [] }
+      unmappedMissingCountry: 0, written: 0, periodRuleConflicts: 0, periodRuleConflictIdentities: [],
+      numericUnparsed: 0 }
   }
   // 同一个发布可能有多条观测（每个 measure 一条，按采集批次重复出现）：按**最新一条**取，
   // 再用发布 id 去重——回填只关心「这次发布最后是什么样」。
@@ -290,6 +304,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   let skippedExisting = 0
   let unmappedMissingCountry = 0
   let unmappedMissingPeriod = 0
+  let numericUnparsed = 0
   let periodRuleConflicts = 0
   const periodRuleConflictIdentities = new Set<string>()
   const standardRows: Record<string, unknown>[] = []
@@ -410,10 +425,19 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
         { p: string } | undefined
       if (existing !== undefined && existing.p !== providerId) { skippedExisting += 1; continue }
     }
+    const numeric = profile.parseNumeric === true
+      ? calendarNumericJsonFor({
+        actual: displayOf(row.provider_actual_json),
+        previous: displayOf(row.provider_previous_json),
+        consensus: displayOf(row.consensus_json)
+      })
+      : undefined
+    if (numeric?.state === 'unparsed') numericUnparsed += 1
     const shared = {
       countryCode,
       scheduledDate,
       sourceEventId: String(row.source_event_id),
+      ...(numeric === undefined ? {} : { numericJson: numeric.json }),
       // **源的稳定指标 id**（0.4.5 #14）：数组身份第一段是「每次发布一个新 id」，不能用来登记名字；
       // 稳定的是观测表这一列。写进标准表后，显示名才能按它去登记表查。
       ...(row.indicator_id === null || String(row.indicator_id).trim() === ''
@@ -473,5 +497,6 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
     unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey,
       'period-unresolved': unmappedMissingPeriod },
     skipped, skippedExisting, unmappedMissingCountry, written,
-    periodRuleConflicts, periodRuleConflictIdentities: [...periodRuleConflictIdentities] }
+    periodRuleConflicts, periodRuleConflictIdentities: [...periodRuleConflictIdentities],
+    numericUnparsed }
 }

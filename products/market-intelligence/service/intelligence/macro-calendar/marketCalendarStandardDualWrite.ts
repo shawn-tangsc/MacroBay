@@ -79,6 +79,8 @@ export function dualWriteMeasureRows(
       status?: CalendarReleaseStatus
       /** 由值自己算出来：有 actual/previous/consensus 之一即 present。 */
       valueState?: 'present' | 'missing'
+      /** 源适配器解析好的 numeric_json（架构师方案 §2）；写入口只校验、不解析。 */
+      numericJson?: string
       previous?: string; consensus?: string; actual?: string }>[] }>,
   options?: Readonly<{ onError?: (message: string) => void }>
 ): DualWriteCounts {
@@ -190,6 +192,7 @@ export function dualWriteMeasureRows(
         ...(row.identityKind === undefined ? {} : { identityKind: row.identityKind }),
         ...(row.sourceLabel === undefined ? {} : { sourceLabel: row.sourceLabel }),
         ...(row.seriesId === undefined ? {} : { seriesId: row.seriesId }),
+        ...(row.numericJson === undefined ? {} : { numericJson: row.numericJson }),
         ...(row.importance === undefined ? {} : { importance: row.importance }),
         /**
          * **只有拿到这一期的实际值才算「有值」**（用户 2026-11-19 定，Chief 复核）：

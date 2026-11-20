@@ -4,6 +4,7 @@ import { calendarStandardTablePolicy } from './marketCalendarStandardPolicy'
 
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { toAlpha2Country } from './marketCalendarMetricIdentity'
+import { isCalendarNumericJson, numericJsonWithoutParse } from './marketCalendarNumericParse'
 import { sourceIdOnWrite, sourceIdOverwritePayload, type SourceIdOverwritePayload } from './marketCalendarSourceIdAudit'
 import { normalizeValuesJsonForWrite } from './marketCalendarValueEncoding'
 import { resolveSameSourceIdentityTarget, sourceLabelsForWrite } from './marketCalendarSameIdentityWrite'
@@ -99,6 +100,11 @@ export type CalendarStandardRow = Readonly<{
    */
   valueState?: 'present' | 'missing'
   valuesJson: string
+  /**
+   * **数值列**（架构师方案 §2）：源适配器已解析好的 `numeric_json` 文本。写入口**只校验形状、
+   * 不解析展示串**；不传就按「有没有展示串」落 `unparsed`/`missing`（不在这里算数值）。
+   */
+  numericJson?: string
   sourceProviderId: string
   sourceEventId: string
   parserVersion: string
@@ -208,6 +214,18 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
    * 顺序不能反：先断言会把这些行直接拒掉，而它们正是要收敛的形态。
    */
   const valuesJson = normalizeValuesJsonForWrite(row.valuesJson)
+  /**
+   * **数值列：只校验、不解析**（架构师方案 §2）。传进来的必须已经是合法形状；没传就按
+   * 「有没有展示串」落 `unparsed`（我们的问题，要计数）或 `missing`（源没给）——
+   * 即使展示串 `4.1%` 完全可解析，也不会在写入口被算成 4.1。
+   */
+  const numericJson = (() => {
+    if (row.numericJson === undefined) return numericJsonWithoutParse(valuesJson).json
+    let parsed: unknown
+    try { parsed = JSON.parse(row.numericJson) } catch { throw new Error('numeric-json-invalid: not json') }
+    if (!isCalendarNumericJson(parsed)) throw new Error('numeric-json-invalid: shape')
+    return JSON.stringify(parsed)
+  })()
   assertDisplayValues(valuesJson, row.metricKey)
   /**
    * **国家码在写入端归一到 alpha-2**（2026-11-16，Chief 拍板）。
@@ -252,8 +270,8 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, source_label_en, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
-     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id, numeric_json)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
@@ -287,6 +305,25 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       source_label = coalesce(excluded.source_label, source_label),
       source_label_en = coalesce(excluded.source_label_en, source_label_en),
       event_type = coalesce(excluded.event_type, event_type),
+      -- 数值列**逐字段合并**（与 values_json 同一语义：后到的只带 previous 时不许把 actual 抹掉）；
+      -- 有值的写进来就把状态拉回 available，没值的那次不清掉已有数值。
+      numeric_json = case
+        when excluded.numeric_json is null then numeric_json
+        when numeric_json is null then excluded.numeric_json
+        when json_patch(
+          coalesce(json_extract(numeric_json, '$.values'), '{}'),
+          coalesce(json_extract(excluded.numeric_json, '$.values'), '{}')) <> '{}'
+          then json_set(numeric_json,
+            '$.state', 'available',
+            '$.unit', coalesce(json_extract(excluded.numeric_json, '$.unit'), json_extract(numeric_json, '$.unit')),
+            '$.values', json_patch(
+              coalesce(json_extract(numeric_json, '$.values'), '{}'),
+              coalesce(json_extract(excluded.numeric_json, '$.values'), '{}')),
+            '$.decimals', json_patch(
+              coalesce(json_extract(numeric_json, '$.decimals'), '{}'),
+              coalesce(json_extract(excluded.numeric_json, '$.decimals'), '{}')),
+            '$.parserVersion', json_extract(numeric_json, '$.parserVersion'))
+        else numeric_json end,
       source_provider_id = excluded.source_provider_id,
       source_event_id = excluded.source_event_id,
       parser_version = excluded.parser_version,
@@ -310,7 +347,8 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       // 写入侧知道「这是什么」就存下来；不知道（历史/旧调用方）留空，读侧才退前缀规则。
       row.eventType ?? null,
       // 补写：旧行该列为 NULL 时填上（同一发布按原日期重发的那一次），已有一律不覆盖。
-      row.sourceReleaseId ?? null)
+      row.sourceReleaseId ?? null,
+      numericJson)
   // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
   // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
   return { countryCode, metricKey, periodKey, firstScheduledDate,
