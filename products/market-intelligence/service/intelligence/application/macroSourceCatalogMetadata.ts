@@ -314,6 +314,15 @@ export const BEA_MACRO_ADAPTER_CONFIG: MacroSourceAdapterConfig = {
   }
 }
 
+/**
+ * 一次取回的观察条数：一整年的交易日。
+ *
+ * 一天一条、一年约 252 个交易日，取 400 条给假期和修订留出余量，仍然是一次请求一天的额度。
+ * 原来的 5 条只够「最新一天 + 前一天」，国债因此只有一天——窗口不是页面上画不画的问题，
+ * 是请求里根本没有第二个点。
+ */
+export const FRED_RATES_WINDOW_OBSERVATIONS = 400
+
 export const FRED_MACRO_ADAPTER_CONFIG: MacroSourceAdapterConfig = {
   endpointUrl: 'https://api.stlouisfed.org/fred/series/observations',
   requestMode: 'fred-series',
@@ -323,7 +332,7 @@ export const FRED_MACRO_ADAPTER_CONFIG: MacroSourceAdapterConfig = {
   requestDefaults: {
     file_type: 'json',
     sort_order: 'desc',
-    limit: 5
+    limit: FRED_RATES_WINDOW_OBSERVATIONS
   }
 }
 

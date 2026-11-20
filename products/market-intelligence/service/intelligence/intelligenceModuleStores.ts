@@ -29,6 +29,8 @@ import {
 } from './store/intelligenceRuntimeStateHistoryStorage'
 import { createIntelligenceTranslationJsonStorage } from './store/intelligenceTranslationStorage'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
+import { createMacroMarketStore, macroMarketStoragePolicy } from './macro-market/macroMarketStore'
+import { createFredRatesHistorySink } from './macro-rates/fredRatesHistory'
 import { createRawRecordJsonStorage, readRawRecordSnapshotSync } from './store/rawRecordStorage'
 import { contentAddressedPayloadPolicy, resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
 
@@ -141,6 +143,11 @@ export function createIntelligenceStores(input: {
   const sourceIssues = createSourceIssueWiring({ defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS, timeZone,
     ...(submitNotification === undefined ? {} : { submit: submitNotification }),
     ...(log === undefined ? {} : { log }) })
+  /**
+   * 宏观市场历史表在这里建，不在下游的市场运行时里：日频国债收盘由 pipeline 的整窗出口写进来，
+   * 与 DXY / 金价共用同一张表、同一套读法，所以只能有一个写入口和一份连接。
+   */
+  const macroMarketStore = createMacroMarketStore(join(dataDir, macroMarketStoragePolicy.fileName))
   const pipeline = createIntelligencePipeline({
     profileStore,
     rawRecordStore,
@@ -155,7 +162,8 @@ export function createIntelligenceStores(input: {
     ),
     runtimeStateHistoryStorage,
     eventPublisher,
-    ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier })
+    ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier }),
+    onMetricWindow: createFredRatesHistorySink({ store: macroMarketStore })
   })
   sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
   sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
@@ -167,6 +175,7 @@ export function createIntelligenceStores(input: {
     translationStorage,
     credentialStore,
     fetchText,
-    pipeline
+    pipeline,
+    macroMarketStore
   }
 }

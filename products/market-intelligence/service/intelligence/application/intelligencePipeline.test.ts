@@ -31,6 +31,31 @@ describe('intelligencePipeline', () => {
     expect(pipeline.listRawRecordSummaries()).not.toEqual(expect.arrayContaining([expect.objectContaining({ rawRecordId: macro.rawRecordId })]))
   })
 
+  it("hands a parsed metric payload's whole window to the product history sink", async () => {
+    const rawRecordStore = createRawRecordStore()
+    const windows: { sourceId: string; payloadBody?: string; payloadMetaJson?: string }[] = []
+    const pipeline = createIntelligencePipeline({
+      rawRecordStore,
+      onMetricWindow: (input) => { windows.push(input) }
+    })
+    const payloadBody = JSON.stringify({
+      observations: [{ date: '2026-11-10', value: '4.73' }, { date: '2026-11-09', value: '4.56' }]
+    })
+    const payloadMetaJson = JSON.stringify({ seriesId: 'DGS2', metricKey: 'US_2Y_YIELD' })
+    rawRecordStore.appendRawRecord({
+      sourceId: 'fred-rates-liquidity', runId: 'run-fred', sourceDedupeKey: 'fred-window-1', payloadFormat: 'json',
+      payloadRefType: 'inline', payloadBody, payloadHash: 'fred-window-hash', parserVersion: 'metric-rest-api-v1',
+      payloadMetaJson
+    })
+
+    await pipeline.normalizeRawRecords({ sourceId: 'fred-rates-liquidity' })
+
+    // The window is handed over once, verbatim: the sink parses the provider's bytes, not a shape the
+    // pipeline flattened to the newest observation.
+    expect(windows).toHaveLength(1)
+    expect(windows[0]).toEqual({ sourceId: 'fred-rates-liquidity', payloadBody, payloadMetaJson })
+  })
+
   it('rejects retired DeFiLlama stablecoins before generic raw or health side effects', async () => {
     const rawRecordStore = createRawRecordStore()
     const pipeline = createIntelligencePipeline({ rawRecordStore })

@@ -17,6 +17,7 @@
  *    with room for the extra series at half the cadence.
  */
 import { macroMarketBackfillBars } from './macroMarketReturns'
+import { macroMarketBarSeries } from './macroMarketSeries'
 
 /** The requested bar interval, named once so the backfill size below can be derived from it. */
 const macroMarketIntervalMs = 15 * 60 * 1_000
@@ -58,15 +59,13 @@ export const macroMarketPolicy = Object.freeze({
    * second writer can touch that series.
    */
   halfCadenceSymbols: Object.freeze(['USD/CNH', 'USDT/USD'] as const),
-  series: Object.freeze({
-    dollarIndex: 'dxy-synthetic', gold: 'xau-usd', offshoreYuan: 'usd-cnh', stablecoinPeg: 'usdt-usd',
-    /**
-     * The licensed ICE index, written to this same store by the RealMarketAPI collector. It is listed
-     * here because this object is the store's one series registry — the wire contract is asserted
-     * against it — and because the fallback above is only a fallback while this series exists.
-     */
-    dollarIndexReal: 'dxy-real'
-  } as const),
+  /**
+   * The store's bar series, listed because the wire contract is asserted against this object — and
+   * because the fallback above is only a fallback while the real index exists. The names themselves
+   * live in `macroMarketSeries` beside the daily rate closes, which share the same store but not its
+   * retention: see that module for why the two families are kept apart.
+   */
+  series: macroMarketBarSeries,
   /** Credits: one per symbol per request, and the tick split has to stay under the minute limit. */
   /**
    * The job wakes every five minutes and the plan decides what to fetch: the basket on the quarter

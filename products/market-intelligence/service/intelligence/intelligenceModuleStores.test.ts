@@ -77,6 +77,7 @@ describe('intelligenceModule 存储段', () => {
       'fetchText',
       'macroCalendarEvidenceArchive',
       'macroCalendarEvidenceMigration',
+      'macroMarketStore',
       'pipeline',
       'profileStore',
       'rawRecordStore',

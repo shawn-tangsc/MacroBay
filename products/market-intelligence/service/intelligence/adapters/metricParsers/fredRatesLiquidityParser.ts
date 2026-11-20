@@ -24,15 +24,19 @@ const FRED_MISSING_VALUE = '.'
 /** `YYYY-MM-DD`, the only date shape FRED's `observations[].date` has. */
 const FRED_OBSERVATION_DATE = /^\d{4}-\d{2}-\d{2}$/
 
-export function parseFredRatesLiquidityPayload(
-  payload: unknown,
-  config: IntelligenceSourceConfig,
-  seriesId?: string
-): MetricIntelligenceEventDraft[] {
+export type FredObservationRow = Readonly<{ date: string; value: number }>
+
+/**
+ * Every usable observation in the payload, oldest first.
+ *
+ * The collector asks for a whole window, so this is where the window is read: the feed item keeps
+ * only the newest row (see below), while the history writer (`fredRatesHistory`) takes the rest.
+ * One reader for one wire shape — a second copy would be a second set of rules about what `.` means.
+ */
+export function readFredObservations(payload: unknown): FredObservationRow[] {
   const body = payload as FredPayload
-  const meta = seriesId ? SERIES_BY_PROVIDER_ID.get(seriesId) : undefined
-  const observations = (body.observations ?? [])
-    .map((row) => ({ date: (row.date ?? '').trim(), value: (row.value ?? '').trim() }))
+  return (body?.observations ?? [])
+    .map((row) => ({ date: (row?.date ?? '').trim(), value: (row?.value ?? '').trim() }))
     // A row without an observation date can never become a period, so it is not an observation.
     .filter((row) => FRED_OBSERVATION_DATE.test(row.date))
     .filter((row) => row.value !== '' && row.value !== FRED_MISSING_VALUE)
@@ -40,6 +44,16 @@ export function parseFredRatesLiquidityPayload(
     .map((row) => ({ date: row.date, value: Number(row.value) }))
     .filter((row) => Number.isFinite(row.value))
     .sort((left, right) => left.date.localeCompare(right.date))
+}
+
+export function parseFredRatesLiquidityPayload(
+  payload: unknown,
+  config: IntelligenceSourceConfig,
+  seriesId?: string
+): MetricIntelligenceEventDraft[] {
+  const body = payload as FredPayload
+  const meta = seriesId ? SERIES_BY_PROVIDER_ID.get(seriesId) : undefined
+  const observations = readFredObservations(payload)
 
   if (!observations.length) {
     throw new Error(`fred-rates-liquidity: no usable observations for ${seriesId ?? 'unknown-series'}`)

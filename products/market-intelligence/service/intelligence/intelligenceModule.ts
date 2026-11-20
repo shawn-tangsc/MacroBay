@@ -225,14 +225,14 @@ export function getIntelligenceModule(
     /* 名字在这里解构出来：下文近百处引用一个字没改。 */
     const {
       profileStore, rawRecordStore, macroCalendarEvidenceArchive, macroCalendarEvidenceMigration,
-      translationStorage, credentialStore, fetchText, pipeline
+      translationStorage, credentialStore, fetchText, pipeline, macroMarketStore
     } = stores
     const marketData = createIntelligenceMarketData({
       jobRuntime,
       dataDir,
       profileStore,
       credentialStore,
-      pipeline,
+      pipeline, macroMarketStore,
       macroCalendarEvidenceArchive,
       platformFetch: hooks.platformFetch,
       timeZone: shellTimeZone,

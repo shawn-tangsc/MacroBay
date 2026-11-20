@@ -54,6 +54,7 @@ function assemble(dataDir: string) {
     profileStore: stores.profileStore,
     credentialStore: stores.credentialStore,
     pipeline: stores.pipeline,
+    macroMarketStore: stores.macroMarketStore,
     macroCalendarEvidenceArchive: stores.macroCalendarEvidenceArchive,
     platformFetch: net.fetch as never,
     timeZone: () => 'UTC'

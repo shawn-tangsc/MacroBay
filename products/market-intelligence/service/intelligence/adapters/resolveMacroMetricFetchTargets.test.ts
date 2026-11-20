@@ -38,6 +38,15 @@ describe('resolveMacroMetricFetchTargets', () => {
     expect(body.seriesid).toEqual(['CUSR0000SA0', 'CUSR0000SA0L1E', 'CES0000000001', 'LNS14000000'])
   })
 
+  it('asks FRED for a whole trading year of closes, not the newest five rows', () => {
+    const targets = resolveMacroMetricFetchTargets(macroConfig('fred-rates-liquidity'))
+    const rates = targets.filter((target) => ['DGS2', 'DGS10', 'DFII10', 'T10YIE'].includes(target.seriesId ?? ''))
+    expect(rates).toHaveLength(4)
+    for (const target of rates) {
+      expect(new URL(target.url).searchParams.get('limit')).toBe('400')
+    }
+  })
+
   it('builds BEA requests with dataset/table/line parameters', () => {
     const targets = resolveMacroMetricFetchTargets(macroConfig('bea-economic-series'))
     expect(targets).toHaveLength(3)
