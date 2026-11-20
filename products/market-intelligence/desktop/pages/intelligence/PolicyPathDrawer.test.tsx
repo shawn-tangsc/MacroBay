@@ -53,9 +53,27 @@ const render = async (candidate: PolicyPathReading) => {
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(PolicyPathDrawer, { reading: candidate, text, onClose: () => {} })))
-  // 抽屉是 modal：内容 portal 到 body，所以查询根是 body，不是渲染容器。
+  // 渲染容器挂在 body 上，查询根用 body：壳换成侧抽屉或平台弹窗时，这套查询都不用改。
   return document.body
 }
+
+describe('policy path drawer shell', () => {
+  it('renders the product side drawer at the left edge, not the platform modal', async () => {
+    // 2026-11-20 用户报「利率详情抽屉从左边弹、没那么宽，被改坏了」：0.4.4 把这里换成了平台
+    // modal Drawer（右侧、占满、带遮罩）。产品里所有抽屉共用 `MiSideDrawer`：同宽、同左沿、
+    // 同滑入，正好补日历抽屉之外那块。改回平台 Drawer 时这条会红。
+    const rendered = await render(reading)
+    const shell = rendered.querySelector('aside.mi-analysis-drawer')
+    expect(shell).not.toBeNull()
+    expect(shell?.getAttribute('data-placement')).toBe('left')
+    // 平台 modal 的三件套都不该出现：ant 抽屉、遮罩、以及被锁住的页面背景。
+    expect(rendered.querySelector('.ant-drawer')).toBeNull()
+    expect(rendered.querySelector('.ant-drawer-mask')).toBeNull()
+    // 内容没有跟着换壳：标题与结算段都还在同一个壳里。
+    expect(shell?.textContent).toContain(text.title)
+    expect(shell?.querySelector('[data-settlement]')).not.toBeNull()
+  })
+})
 
 /** 红线第 4 条：抽屉里同样不许自己切日期、也不许把 ISO 切成 19 位再显示。 */
 it('builds no date or clock string of its own', () => {

@@ -153,4 +153,3 @@
 .mi-policy-drawer__source-links a:hover { color: var(--accent); }
 
 /* 平台 Drawer 的正文留白与原 `MiSideDrawer` 一致（16），本抽屉内生效。 */
-.mi-policy-path-drawer.ant-drawer .ant-drawer-body { padding: 16px; }
