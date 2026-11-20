@@ -29,9 +29,15 @@ export type CalendarIntegrityCounts = Readonly<{
   /** `metric_key` 槽位里是**事件类型名**（`financial-event` 这类）的行：它不是一个身份。 */
   typeNameIdentities: number
   /**
-   * **没登记显示名的源内身份个数**（数组身份第一段不在 `sourceIdentityDisplayNames` 里）。
+   * **数组身份行还没有稳定指标 id 的行数**（`series_id` 为空）。
    *
-   * 这些行在界面上只能回退源原文名——其中就有「transmutation…」这类源侧机翻残句。
+   * 数组身份第一段每次发布都换一个（真库 1943 行对应 1544 个第一段），不能用来登记名字；
+   * 稳定的是源自己的 `indicator_id`。这一列为 0 之前，名字登记表再全也查不到这些行。
+   */
+  sourceIdentitiesWithoutStableId: number
+  /**
+   * **有稳定 id、但没登记显示名的指标个数**（`series_id` 不在 `sourceIdentityDisplayNames` 里）。
+   *
    * 判据只问「这一条登记了没有」，不读名字用了哪些字（不许按措辞判内容）。
    * 数字就是改名表的待办清单长度：登记一个，这个数减一。
    */
@@ -80,10 +86,13 @@ export function auditCalendarIntegrity(
     // 类型名不是身份（0.4.5 #15）：写入口已经不再这么写，存量行只报不改（改身份要动主键与台账）。
     typeNameIdentities: count(`select count(*) as n from ${table}
       where metric_key in ('economic-indicator', 'financial-event', 'central-bank-activity')`),
-    // 源内身份没登记显示名的个数（0.4.5 #14）：只回答「登记了没有」，不评价名字好坏。
-    unregisteredSourceNames: count(`select count(distinct json_extract(metric_key, '$[0]')) as n from ${table}
-      where metric_key like '[%' and json_valid(metric_key)
-        ${registeredIdentityIds.length === 0 ? '' : `and json_extract(metric_key, '$[0]') not in (${registeredIdentityIds.map(() => '?').join(', ')})`}`,
+    // 数组身份还没有稳定 id 的行（0.4.5 #14）：名字登记表按稳定 id 查，这一列不归零就永远查不到。
+    sourceIdentitiesWithoutStableId: count(`select count(*) as n from ${table}
+      where metric_key like '[%' and (series_id is null or trim(series_id) = '')`),
+    // 有稳定 id、但没登记显示名的指标个数：只回答「登记了没有」，不评价名字好坏。
+    unregisteredSourceNames: count(`select count(distinct series_id) as n from ${table}
+      where metric_key like '[%' and series_id is not null and trim(series_id) <> ''
+        ${registeredIdentityIds.length === 0 ? '' : `and series_id not in (${registeredIdentityIds.map(() => '?').join(', ')})`}`,
       ...registeredIdentityIds)
   }
 }
@@ -99,6 +108,9 @@ export function calendarIntegrityGaps(counts: CalendarIntegrityCounts): readonly
   }
   if (counts.unresolvedPeriodRows > 0) gaps.push(`unresolved-period=${counts.unresolvedPeriodRows}`)
   if (counts.typeNameIdentities > 0) gaps.push(`type-name-identity=${counts.typeNameIdentities}`)
+  if (counts.sourceIdentitiesWithoutStableId > 0) {
+    gaps.push(`source-identities-without-stable-id=${counts.sourceIdentitiesWithoutStableId}`)
+  }
   if (counts.unregisteredSourceNames > 0) gaps.push(`unregistered-source-names=${counts.unregisteredSourceNames}`)
   return gaps
 }

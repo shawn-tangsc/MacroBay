@@ -34,16 +34,18 @@ function observe(database: DatabaseSync, input: Readonly<{
   measures?: string
   actual?: string
   lastSeenAt?: string
+  /** 源自己的稳定指标 id（数组身份行才有）：显示名登记表按它查。 */
+  indicatorId?: string
 }>): void {
   database.prepare(`insert into mi_macro_calendar_market_event_observations
-    (source_event_id, provider_id, market_fact_key, display_name, country_code, event_kind, scheduled_date,
-     scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
+    (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+     scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
      measure_keys_json, last_seen_at)
-    values (?, 'narwhal', ?, ?, 'USA', 'economic-indicator', ?, ?, null, null, ?, 'high', ?, ?)`)
+    values (?, 'narwhal', ?, ?, 'USA', ?, 'economic-indicator', ?, ?, null, null, ?, 'high', ?, ?)`)
     .run(`event-${input.metricKey}-${input.periodKey}`,
       JSON.stringify(['narwhal', 'macro-calendar-narwhal-economic-data', 'zh',
         JSON.parse(narwhalSourceEventIdForIdentity({ countryCode: 'USA', metricKey: input.metricKey, periodKey: input.periodKey }))]),
-      input.displayName, input.scheduledAt.slice(0, 10), input.scheduledAt,
+      input.displayName, input.indicatorId ?? null, input.scheduledAt.slice(0, 10), input.scheduledAt,
       input.actual === '' ? null
         : input.actual === undefined ? JSON.stringify({ displayValue: '1' }) : JSON.stringify({ displayValue: input.actual }),
       input.measures ?? '["x"]', input.lastSeenAt ?? '2026-11-14T00:00:00.000Z')
@@ -76,6 +78,18 @@ describe('从观测表回填标准表', () => {
     backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: '2026-11-16T00:00:00.000Z' })
     expect((database.prepare("select count(*) c from mi_calendar_unmapped where source_key = 'no-country-1'")
       .get() as { c: number }).c).toBe(1)
+  })
+
+  it('源内身份行带上源的稳定指标 id（series_id）：显示名登记表按它查，不按身份第一段', () => {
+    const database = openDatabase()
+    ensureCalendarStandardTables(database)
+    observe(database, { metricKey: 'US.UNMAPPED_INDICATOR.NONE.LEVEL', periodKey: '2026-10',
+      displayName: 'Something new', scheduledAt: '2026-10-17T15:00:00.000Z', measures: '[]', indicatorId: '9553' })
+    backfillStandardRowsFromObservations(database)
+    const row = database.prepare("select identity_kind, series_id from mi_calendar_events where metric_key = 'US.UNMAPPED_INDICATOR.NONE.LEVEL'")
+      .get() as { identity_kind: string; series_id: string | null }
+    expect(row.identity_kind).toBe('source')
+    expect(row.series_id).toBe('9553')
   })
 
   it('dry-run 一条都不写（库也可能是只读打开的）', () => {

@@ -20,6 +20,7 @@ import { fixFomcEventTypes } from '../intelligence/macro-calendar/marketCalendar
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
+import { fillStandardSeriesIds } from '../intelligence/macro-calendar/marketCalendarStandardSeriesIdFill'
 import { auditCalendarIntegrity, calendarIntegrityGaps } from '../intelligence/macro-calendar/marketCalendarIntegrityAudit'
 import { normalizeCalendarStandardRows } from '../intelligence/macro-calendar/marketCalendarStartupNormalization'
 import type { CalendarStandardWriteLayer } from '../intelligence/macro-calendar/calendarStandardWriteLayer'
@@ -224,6 +225,19 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
        * 接到启动链上：每次启动先转正、再重算，顺序不能反（转正会删掉清单里的过期条目，
        * 先重算会把「已转正」算成缺码）。
        */
+      /**
+       * **源内身份的稳定指标 id 补进标准表**（`series_id`）：显示名登记表按它查。
+       * 放在转正之前：转正要靠 `series_id` 重算身份，这里补不上，那一步就更算不出来。
+       * 判据是缺口（还有数组身份行没有 series_id 才跑），失败只记一行、不阻断启动。
+       */
+      try {
+        const seriesIds = fillStandardSeriesIds(database)
+        if (seriesIds.filled > 0) {
+          report(`[macro-calendar] 源内身份稳定 id：待补 ${seriesIds.pending} 行、补上 ${seriesIds.filled} 行`)
+        }
+      } catch (error) {
+        report(`[macro-calendar] 源内身份稳定 id 补齐失败（已忽略，下次启动重试）：${(error as Error)?.message ?? 'unknown'}`)
+      }
       const promotion = promoteSourceIdentities(database)
       if (promotion.scanned > 0) {
         report(`[macro-calendar] 源内身份转正：扫描 ${promotion.scanned} / 转正 ${promotion.promoted}`

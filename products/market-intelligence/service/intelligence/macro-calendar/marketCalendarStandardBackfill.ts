@@ -387,6 +387,10 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
       countryCode,
       scheduledDate,
       sourceEventId: String(row.source_event_id),
+      // **源的稳定指标 id**（0.4.5 #14）：数组身份第一段是「每次发布一个新 id」，不能用来登记名字；
+      // 稳定的是观测表这一列。写进标准表后，显示名才能按它去登记表查。
+      ...(row.indicator_id === null || String(row.indicator_id).trim() === ''
+        ? {} : { seriesId: String(row.indicator_id) }),
       // 观测表里本来就知道「这是什么」：原样写进标准表（类型闭集之外的写法就不写，读完退前缀）。
       ...(['economic-indicator', 'financial-event', 'central-bank-activity'].includes(String(row.event_kind))
         ? { eventType: String(row.event_kind) as 'economic-indicator' | 'financial-event' | 'central-bank-activity' }

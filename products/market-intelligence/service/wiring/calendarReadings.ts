@@ -38,13 +38,13 @@ import type { IntelligenceModule } from '../intelligence/intelligenceModule'
  * 复刻的规则一旦和线上分叉，用例仍然全绿（今晚已经出现过这种「代码对了没人守」）。
  */
 export function resolveStandardRowTitle(
-  row: Readonly<{ metricKey: string }>,
+  row: Readonly<{ metricKey: string; seriesId?: string }>,
   locale: 'zh' | 'en',
   tables: Readonly<{
     metric: typeof nameByMetricKey
     event: typeof eventTypeNameByCode
-    /** 源内身份的登记表（第三档，默认用唯一登记处）。 */
-    identity?: (metricKey: string) => Readonly<{ zh: string; en: string }> | undefined
+    /** 源内身份的登记表（第三档，默认用唯一登记处）；参数是**源的稳定指标 id**。 */
+    identity?: (seriesId: string | undefined) => Readonly<{ zh: string; en: string }> | undefined
   }> = { metric: nameByMetricKey, event: eventTypeNameByCode, identity: registeredSourceIdentityName }
 ): string | undefined {
   const metric = tables.metric[row.metricKey]
@@ -52,13 +52,14 @@ export function resolveStandardRowTitle(
   const event = tables.event[row.metricKey]
   if (event !== undefined) return locale === 'en' ? event.enShort : event.zhShort
   /**
-   * **第三档：登记过的源内身份**（`["9553",…]` 这类没有指标码的行）。
+   * **第三档：登记过的源内身份**（没有指标码的数组身份行）。
    *
-   * 这张表原来只有「事件清单」页在用，日历的月视图根本查不到它——同一行在两处两个名字。
-   * 判据只问「这一条登记了没有」：登记了用我们起的名；没登记返回 `undefined`，
-   * 由适配器回退源原文名（**绝不在这里拿源原文冒充「我们起的名字」**）。
+   * 键是**源的稳定指标 id**（`series_id`），不是身份第一段：第一段每次发布都换一个，
+   * 拿它查登记永远落空（真库 1943 行对应 1544 个第一段）。这张表原来还只有「事件清单」页在用，
+   * 日历月视图根本不查——同一行在两处两个名字。判据只问「这一条登记了没有」：登记了用我们
+   * 起的名；没登记返回 `undefined`，由适配器回退源原文名（**绝不拿源原文冒充「我们起的名字」**）。
    */
-  const identity = (tables.identity ?? registeredSourceIdentityName)(row.metricKey)
+  const identity = (tables.identity ?? registeredSourceIdentityName)(row.seriesId)
   if (identity !== undefined) return locale === 'en' ? identity.en : identity.zh
   return undefined
 }

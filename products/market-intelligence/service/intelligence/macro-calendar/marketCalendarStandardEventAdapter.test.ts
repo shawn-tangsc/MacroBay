@@ -248,10 +248,13 @@ describe('英文界面不出中文名（用户 2026-11-20）', () => {
 
 describe('标题回退链的第三档：登记过的源内身份（0.4.5 #14）', () => {
   it('登记过的身份按月视图语言给中英名；没登记返回 undefined，交给适配器回退源原文名', () => {
-    expect(resolveStandardRowTitle({ metricKey: '["9553",79090]' }, 'zh')).toBe('批发物价指数(年率)')
-    expect(resolveStandardRowTitle({ metricKey: '["9553",79090]' }, 'en')).toBe('Wholesale Price Index (YoY)')
+    const registered = { metricKey: '["9553",79090]', seriesId: '9553' }
+    expect(resolveStandardRowTitle(registered, 'zh')).toBe('批发物价指数(年率)')
+    expect(resolveStandardRowTitle(registered, 'en')).toBe('Wholesale Price Index (YoY)')
     // 没登记：**不许**在这里拿源原文冒充「我们起的名字」。
-    expect(resolveStandardRowTitle({ metricKey: '["45210",79716]' }, 'zh')).toBeUndefined()
-    expect(resolveStandardRowTitle({ metricKey: '["45210",79716]' }, 'en')).toBeUndefined()
+    expect(resolveStandardRowTitle({ metricKey: '["45210",79716]', seriesId: '45210' }, 'zh')).toBeUndefined()
+    expect(resolveStandardRowTitle({ metricKey: '["45210",79716]', seriesId: '45210' }, 'en')).toBeUndefined()
+    // 没有稳定 id：即便身份第一段碰巧是登记过的号，也不查（第一段不是身份）。
+    expect(resolveStandardRowTitle({ metricKey: '["9553",79090]' }, 'zh')).toBeUndefined()
   })
 })

@@ -118,7 +118,9 @@ describe('德国数组身份：只补显示名，不动身份', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)
     const german = row('["9553",79010]', '2026-10-14T07:00', '2026-10-14', {
-      countryCode: 'DE', identityKind: 'source', sourceLabel: 'transmutation in seasonally adjusted unemployment'
+      countryCode: 'DE', identityKind: 'source', sourceLabel: 'transmutation in seasonally adjusted unemployment',
+      // 登记表按**源的稳定指标 id**（`series_id`）查：身份第一段每期都换，不能当键。
+      seriesId: '9553'
     })
     upsertCalendarStandardRow(database, german)
     const read = readCalendarEventIndex(database, { today })
