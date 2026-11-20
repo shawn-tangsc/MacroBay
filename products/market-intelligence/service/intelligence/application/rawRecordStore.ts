@@ -7,7 +7,7 @@ import type {
   SafeRawRecordSummary
 } from '../schema/intelligenceRecord'
 import type { RawRecordSnapshot, RawRecordStorage } from '../store/rawRecordStorage'
-import { createEmptyRawRecordSnapshot } from '../store/rawRecordStorage'
+import { assertRawRecordSnapshotDoesNotShrink, createEmptyRawRecordSnapshot, type RawRecordWriteOptions } from '../store/rawRecordStorage'
 
 export type RawRecordStore = {
   appendRawRecord: (input: AppendRawRecordInput) => RawIntelligenceRecord | undefined
@@ -51,6 +51,11 @@ export function createRawRecordStore(deps?: {
     Readonly<{ state: 'written' | 'reused'; fileRef: string }> | Readonly<{ state: 'failed'; reason: string }>
 }): RawRecordStore {
   const snapshot = deps?.snapshot ?? createEmptyRawRecordSnapshot()
+  /**
+   * 读入条数 = 这一次写盘的下限。整份快照写盘时它保证「写出去的不比读进来的少」——除非调用方
+   * 显式说明是删除（见 `RawRecordWriteOptions`）。2026-11-19 的复位就是少了这道闸。
+   */
+  let loadedRecordCount = snapshot.records.length
   const records = new Map<string, RawIntelligenceRecord>()
   const dedupeIndex = new Map<string, string>()
   let sequence = snapshot.sequence
@@ -61,17 +66,25 @@ export function createRawRecordStore(deps?: {
     dedupeIndex.set(`${record.sourceId}:${record.sourceDedupeKey}`, record.rawRecordId)
   }
 
-  function persist(): void {
+  function persist(options?: RawRecordWriteOptions): void {
     if (!deps?.storage) return
-    const snapshot = {
+    const next = {
       records: [...records.values()],
       sequence
     }
+    // 单一判据：写出去的条数不得少于读入的条数（除显式删除）。写少了就抛，一个字节都不写。
+    assertRawRecordSnapshotDoesNotShrink({
+      loadedRecordCount,
+      nextRecordCount: next.records.length,
+      ...(options?.allowRecordDecrease === undefined ? {} : { allowRecordDecrease: options.allowRecordDecrease })
+    })
     if (deps.storage.writeAllSync) {
-      deps.storage.writeAllSync(snapshot)
-      return
+      deps.storage.writeAllSync(next, options)
+    } else {
+      void deps.storage.writeAll(next, options)
     }
-    void deps.storage.writeAll(snapshot)
+    // 写成功之后下限前移到这次写的条数：正常增长不会触发，之后的删除仍要显式说明。
+    loadedRecordCount = next.records.length
   }
 
   function updateArchiveRefs(updates: readonly Readonly<{
