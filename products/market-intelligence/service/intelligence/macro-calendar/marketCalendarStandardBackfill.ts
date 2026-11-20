@@ -65,6 +65,16 @@ export type StandardBackfillReport = Readonly<{
   unmappedMissingCountry: number
   /** 真正交给写入端的行数；dry-run 时恒为 0（没有写）。 */
   written: number
+  /**
+   * **源自报期次与声明规则不一致的次数**（按指标身份计，不丢行、不静默）。
+   *
+   * 期次以源自报为准（消费者信贷这类滞后两个月的序列，标题里写着 `(Sep)` 才是事实，
+   * 「发布的上一月」只是源没给期次时的兜底）。但**兜底与事实不一致要看得见**：
+   * 哪天某个源头真把期次标错，这里会涨，而不是等人翻日志。
+   */
+  periodRuleConflicts: number
+  /** 不一致的指标身份（去重，最多 10 个，给日志用）。 */
+  periodRuleConflictIdentities: readonly string[]
 }>
 
 type ObservationRow = Readonly<{
@@ -254,7 +264,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   if (exists === undefined) {
     return { observations: 0, releases: 0, indicator: 0, event: 0, source: 0,
       unmapped: { 'bad-identity': 0, 'unknown-measure': 0, 'period-unresolved': 0 }, skipped: 0, skippedExisting: 0,
-      unmappedMissingCountry: 0, written: 0 }
+      unmappedMissingCountry: 0, written: 0, periodRuleConflicts: 0, periodRuleConflictIdentities: [] }
   }
   // 同一个发布可能有多条观测（每个 measure 一条，按采集批次重复出现）：按**最新一条**取，
   // 再用发布 id 去重——回填只关心「这次发布最后是什么样」。
@@ -280,6 +290,8 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   let skippedExisting = 0
   let unmappedMissingCountry = 0
   let unmappedMissingPeriod = 0
+  let periodRuleConflicts = 0
+  const periodRuleConflictIdentities = new Set<string>()
   const standardRows: Record<string, unknown>[] = []
   for (const row of latest.values()) {
     // 身份解码按来源：新源从 `market_fact_key` 里解，旧源从 `indicator_id` 查身份表再算期间。
@@ -351,6 +363,10 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
      * 就是钉这个的）。源自报的期次是**源的事实**，规则只是兜底——冲突留给产品再判，这里先按源。
      */
     const titlePeriod = periodFromSourceTitle(sourceName, scheduledDate)?.periodKey
+    if (titlePeriod !== undefined && periodKey !== '' && titlePeriod !== periodKey) {
+      periodRuleConflicts += 1
+      if (periodRuleConflictIdentities.size < 10) periodRuleConflictIdentities.add(metricKey !== '' ? metricKey : sourceName)
+    }
     const resolvedPeriod = titlePeriod ?? periodKey
     /**
      * **fail-closed：有码、但没有期次，不写 `unknown:` 空壳行**（用户 2026-11-19）。
@@ -456,5 +472,6 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   return { observations: rows.length, releases: latest.size, indicator, event, source,
     unmapped: { 'bad-identity': badIdentity, 'unknown-measure': unmappedNoCurrentKey,
       'period-unresolved': unmappedMissingPeriod },
-    skipped, skippedExisting, unmappedMissingCountry, written }
+    skipped, skippedExisting, unmappedMissingCountry, written,
+    periodRuleConflicts, periodRuleConflictIdentities: [...periodRuleConflictIdentities] }
 }

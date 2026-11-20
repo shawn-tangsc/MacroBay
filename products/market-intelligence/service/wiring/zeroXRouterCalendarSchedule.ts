@@ -66,7 +66,11 @@ export function wireZeroXRouterCalendarSchedule(input: Readonly<{
           log: (level, event, fields) => { input.log?.(level, event, fields) } })
       input.log?.('info', 'macro-calendar.zero-xrouter-standard-rows', {
         releases: report.releases, written: report.written,
-        skippedExisting: report.skippedExisting, unmappedMissingCountry: report.unmappedMissingCountry
+        skippedExisting: report.skippedExisting, unmappedMissingCountry: report.unmappedMissingCountry,
+        // 源自报期次与兜底规则不一致的次数：不丢行，但必须看得见（否则标错的源头没人发现）。
+        periodRuleConflicts: report.periodRuleConflicts,
+        ...(report.periodRuleConflictIdentities.length === 0 ? {}
+          : { periodRuleConflictIdentities: report.periodRuleConflictIdentities })
       })
     }
   })

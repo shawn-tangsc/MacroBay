@@ -260,6 +260,35 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
     expect(row.period_key).toBe('2026-09')
   })
 
+  it('源给了期次就用源的：越窗也不许拿窗口覆盖（窗口只服务「只有发布时刻」的序列）', () => {
+    const database = openOldDatabase()
+    ensureCalendarStandardTables(database)
+    const mapped = Object.entries(zeroXRouterIndicatorIdentities)
+      .find(([, entry]) => entry.periodRule === 'current_month')!
+    const observe = (sourceEventId: string, date: string, title: string) => database.prepare(`insert into
+      mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values (?, '0xrouter', null, ?, 'USA', ?, 'economic-indicator',
+        ?, ?, null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
+      .run(sourceEventId, title, mapped[0], date, `${date}T13:30:00.000Z`)
+    // 窗口（15..17 日）之外的 12-01，源标题明确写 (Dec)——窗口说「上月终值」也没有用：源期次是事实。
+    observe('a', '2026-11-16', 'CB consumer confidence (Nov)')
+    observe('b', '2026-11-17', 'CB consumer confidence (Nov)')
+    observe('c', '2026-11-18', 'CB consumer confidence (Nov)')
+    observe('late', '2026-12-01', 'CB consumer confidence (Dec)')
+    const report = backfillStandardRowsFromObservations(database,
+      { providerId: '0xrouter', observedAt: '2026-12-02T00:00:00.000Z' })
+    const late = database.prepare("select period_key from mi_calendar_events where source_event_id = 'late'")
+      .get() as { period_key: string }
+    expect(late.period_key).toBe('2026-12')
+    // 规则对这条推成 2026-11（头 7 天＝上月终值），源写 12 月 → **不一致**，计一次并上屏；
+    // 但行照落（源期次是事实），不是「推不出来」、也不进未映射。
+    expect(report.periodRuleConflicts).toBe(1)
+    expect(report.periodRuleConflictIdentities).toContain(mapped[1].metricKey)
+  })
+
   it('越窗发布 → 期次缺、fail-closed：不写 unknown 空壳行，落未映射 period-unresolved', () => {
     const database = openOldDatabase()
     ensureCalendarStandardTables(database)

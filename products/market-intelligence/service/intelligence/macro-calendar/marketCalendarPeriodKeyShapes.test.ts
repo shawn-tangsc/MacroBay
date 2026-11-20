@@ -187,7 +187,10 @@ describe('判据 6：当月型的反向坑（下月头 7 天发布的终值回�
     // 建筑支出月率：规则反推 2026-10。
     insert('ok-1', 'Construction spending (Oct)')       // 源说 10 月 → 与规则一致
     insert('lagged-1', 'Construction spending (Sep)')   // 源说 9 月（滞后两个月发布）→ 仍按源
-    backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: now })
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: now })
+    // 不一致要**计数上屏**、不丢行：标题 (Sep) 与兜底规则（上一月 10 月）不同，记一次。
+    expect(report.periodRuleConflicts).toBe(1)
+    expect(report.periodRuleConflictIdentities).toEqual(['US.CONSTRUCTION_SPENDING.SA.MOM'])
     const rows = database.prepare("select source_event_id, period_key from mi_calendar_events where metric_key = 'US.CONSTRUCTION_SPENDING.SA.MOM' order by source_event_id")
       .all() as unknown as { source_event_id: string; period_key: string }[]
     // 源自报期次是事实；声明规则只是「没给期次时」的兜底，不许反过来覆盖源。
