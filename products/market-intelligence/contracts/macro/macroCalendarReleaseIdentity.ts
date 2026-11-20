@@ -37,6 +37,12 @@ export type RegisteredReleaseIdentity = Readonly<{
   keywords: readonly string[]
   /** 命中即**否决**该发布：核心/整体、月率/年率、失业率/初请这类必须分开的相邻发布。 */
   excluded: readonly string[]
+  /**
+   * **结构判据**（不靠措辞）：有它时这条发布只按事实认，`keywords` 必须为空。
+   * FOMC 就是这样——「利率决议」「政策会议纪要」「主席讲话」只差一个词，词表换个说法
+   * 就漏判或错并；区别在**事件类型**与**日期**（决议在会议最后一天，纪要在三周后）。
+   */
+  structural?: Readonly<{ kind: 'fomc-decision' }>
 }>
 
 /**
@@ -91,9 +97,12 @@ export const registeredReleaseIdentities: readonly RegisteredReleaseIdentity[] =
   {
     // provider 的央行活动今天不进竖线（`crossAssetMarketEventLinePolicy.eventType` 只收经济指标），
     // 但身份表是事实/触发侧共用的（设计 146），所以 FOMC 也在这里。
+    // **不靠措辞**：词表里的「讲话/纪要/speech/minutes」换个说法（「政策会议纪要」写成
+    // 「会议记录」）就漏判，写成「政策决定」又可能把纪要并成决议。改用结构判据见 `structural`。
     titleKey: 'fomc',
-    keywords: ['fomc', '美联储利率决议', '联邦基金利率', 'federal funds rate'],
-    excluded: ['讲话', '纪要', 'speech', 'minutes']
+    keywords: [],
+    excluded: [],
+    structural: { kind: 'fomc-decision' }
   }
 ])
 
@@ -111,9 +120,39 @@ export function providerReleaseTitleKey(title: string): string | undefined {
   const text = normalizedReleaseText(title)
   if (text.length === 0) return undefined
   const matched = registeredReleaseIdentities.filter(identity =>
+    // 结构判据的发布（FOMC）**不参与措辞匹配**：措辞再像也不认，见 `providerReleaseKeyFor`。
+    identity.structural === undefined &&
     identity.keywords.some(keyword => text.includes(normalizedReleaseText(keyword))) &&
     !identity.excluded.some(token => text.includes(normalizedReleaseText(token))))
   return matched.length === 1 ? matched[0]!.titleKey : undefined
+}
+
+/** 一条 provider 事件的结构事实（身份判据只读这些，不读展示文案）。 */
+export type ProviderReleaseEventFacts = Readonly<{
+  title: string
+  /** 日历的类别：`economic-indicator` / `financial-event` / `central-bank-activity`。 */
+  eventType?: string
+  /** 事件的**日期**（`YYYY-MM-DD`，读者时区里那一天）。 */
+  scheduledDate?: string
+}>
+
+/**
+ * 一条 provider 事件的已注册发布键：**先结构、后措辞**。
+ *
+ * - FOMC：只认「央行活动 + 日期等于某次官方决议日」。官方决议日由调用方给
+ *   （`US.FOMC.YYYY-MM-DD` 这类官方事件键里的日期）；**给不出来就不认**，不用标题兜底。
+ * - 其余八个发布：仍是命名映射（同国同时刻会把 8:30 ET 的 CPI/PPI/零售销售并成一条，
+ *   结构判据在这里是错的）。
+ */
+export function providerReleaseKeyFor(
+  event: ProviderReleaseEventFacts,
+  officialFomcDecisionDates: readonly string[] = []
+): string | undefined {
+  if (event.eventType === 'central-bank-activity') {
+    const date = event.scheduledDate
+    return date !== undefined && officialFomcDecisionDates.includes(date) ? 'fomc' : undefined
+  }
+  return providerReleaseTitleKey(event.title)
 }
 
 /**

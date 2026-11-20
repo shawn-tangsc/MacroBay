@@ -1,4 +1,4 @@
-import { providerReleaseTitleKey } from '../../../../contracts/macro/macroCalendarReleaseIdentity'
+import { providerReleaseKeyFor } from '../../../../contracts/macro/macroCalendarReleaseIdentity'
 import { providerLifecycleState } from '../../../shared/marketCalendarEventLifecycle'
 import type { CrossAssetEventLineSource } from './crossAssetEventLines'
 
@@ -73,8 +73,17 @@ export function officialEventKeysInWindow(
   return events.filter(event => event.atMs >= fromMs && event.atMs <= toMs).map(event => event.eventKey)
 }
 
+/** 官方决议日（`US.FOMC.YYYY-MM-DD`）：FOMC 的身份只按「类别 + 日期」认，不读标题措辞。 */
+export function fomcDecisionDatesOf(officialEventKeys: readonly string[]): readonly string[] {
+  return officialEventKeys.flatMap((key) => {
+    const match = /^US\.FOMC\.(\d{4}-\d{2}-\d{2})$/.exec(key)
+    return match === null ? [] : [match[1]!]
+  })
+}
+
 export function crossAssetMarketEventSources(values: readonly unknown[], officialEventKeys: readonly string[]): readonly CrossAssetEventLineSource[] {
   const official = new Set(officialEventKeys)
+  const fomcDecisionDates = fomcDecisionDatesOf(officialEventKeys)
   const sources: CrossAssetEventLineSource[] = []
   for (const value of values) {
     const event = readEvent(value)
@@ -87,7 +96,8 @@ export function crossAssetMarketEventSources(values: readonly unknown[], officia
     if (!Number.isFinite(atMs)) continue
     // 已注册的发布用**官方键**当身份（设计 145 §8 B 的命名映射），所以同一次发布从两条路线来时
     // 图上是一条线；映射缺失或歧义时带上 provider 自己的事件键——它不成身份，去重会退回按措辞。
-    const releaseKey = providerReleaseTitleKey(event.title)
+    const releaseKey = providerReleaseKeyFor({ title: event.title, eventType: event.eventType,
+      scheduledDate: event.scheduledAt.slice(0, 10) }, fomcDecisionDates)
     sources.push({
       eventKey: event.eventKey, titleKey: releaseKey ?? event.eventKey, title: event.title, countryCode: event.countryCode,
       importance: 'high', eventType: 'economic-indicator', lifecycleState: providerLifecycleState(event),

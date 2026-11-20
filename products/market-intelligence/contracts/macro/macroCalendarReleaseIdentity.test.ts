@@ -5,6 +5,7 @@ import {
   isRegisteredReleaseKey,
   normalizedReleaseText,
   providerReleaseIdentityPolicy,
+  providerReleaseKeyFor,
   providerReleaseTitleKey,
   registeredReleaseIdentities
 } from './macroCalendarReleaseIdentity'
@@ -37,7 +38,9 @@ describe('provider release identity', () => {
     expect(providerReleaseTitleKey('美国9月PCE物价指数年率')).toBe('pce')
     expect(providerReleaseTitleKey('美国9月核心PCE物价指数年率')).toBe('core-pce')
     expect(providerReleaseTitleKey('美国第二季度实际GDP环比年化')).toBe('gdp')
-    expect(providerReleaseTitleKey('美联储FOMC利率决议')).toBe('fomc')
+    // FOMC **不再按标题认**（Chief 2026-11-21）：决议、纪要、讲话的措辞只差一个词，
+    // 词表换个说法就漏判/错并；它改走「事件类型 + 日期」的结构判据，见下一组用例。
+    expect(providerReleaseTitleKey('美联储FOMC利率决议')).toBeUndefined()
 
     expect(providerReleaseTitleKey('US CPI YoY')).toBe('cpi')
     expect(providerReleaseTitleKey('US Core CPI YoY')).toBe('core-cpi')
@@ -63,6 +66,32 @@ describe('provider release identity', () => {
     expect(providerReleaseTitleKey('US Initial Jobless Claims')).toBeUndefined()
     expect(providerReleaseTitleKey('US Nominal GDP YoY')).toBeUndefined()
     expect(providerReleaseTitleKey('US GDP Deflator')).toBeUndefined()
+  })
+
+  /**
+   * FOMC 的结构判据：**央行活动 + 日期等于官方决议日**。标题不参与——
+   * 「美联储利率决议」「政策会议纪要」「鲍威尔的讲话」三种写法在这里没有区别，
+   * 区别在事件类型和日期。措辞换一种说法不会漏判，也不会把纪要并成决议。
+   */
+  it('FOMC resolves by event type and decision date, never by wording', () => {
+    const decisionDates = ['2026-12-09', '2027-01-27']
+    expect(providerReleaseKeyFor({ title: '美联储FOMC利率决议', eventType: 'central-bank-activity',
+      scheduledDate: '2026-12-09' }, decisionDates)).toBe('fomc')
+    // 同一个日期，标题完全不提 FOMC 也照样认。
+    expect(providerReleaseKeyFor({ title: '联邦基金目标利率决定', eventType: 'central-bank-activity',
+      scheduledDate: '2026-12-09' }, decisionDates)).toBe('fomc')
+    // 会议纪要：同样叫「会议纪要」，日期不是决议日 → 不是同一条发布。
+    expect(providerReleaseKeyFor({ title: '美联储政策会议纪要', eventType: 'central-bank-activity',
+      scheduledDate: '2026-12-30' }, decisionDates)).toBeUndefined()
+    // 讲话：央行活动、日期也不是决议日。
+    expect(providerReleaseKeyFor({ title: '美联储主席讲话', eventType: 'central-bank-activity',
+      scheduledDate: '2026-12-03' }, decisionDates)).toBeUndefined()
+    // 经济指标即使撞上同一天，也不是 FOMC 决议。
+    expect(providerReleaseKeyFor({ title: '美国9月CPI年率', eventType: 'economic-indicator',
+      scheduledDate: '2026-12-09' }, decisionDates)).toBe('cpi')
+    // 没有官方决议日可依时**不猜**：措辞再像也不认。
+    expect(providerReleaseKeyFor({ title: '美联储FOMC利率决议', eventType: 'central-bank-activity',
+      scheduledDate: '2026-12-09' }, [])).toBeUndefined()
   })
 
   it('keeps the core rows off the headline keys, so "核心" never lands on 整体', () => {
