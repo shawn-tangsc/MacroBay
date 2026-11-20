@@ -25,8 +25,8 @@ export it as an image, and look back at earlier editions; the generation time is
 The dashboard is not here to replace your charting software: it draws no intraday tape and gives no
 levels. It watches for changes that would move a call, uses AI to say what each change means, and sends
 a notification through the channels you enabled for anything you should not miss — Telegram, Slack,
-Discord, QQ or Lark, several at once if you want. Most built-in sources are free, so it does not begin
-with an institutional data bill.
+Discord, QQ or Lark, several at once if you want. The built-in sources are free or cheap, so the
+expensive institutional data subscriptions stay optional.
 
 The dashboard groups the market picture into panels:
 
