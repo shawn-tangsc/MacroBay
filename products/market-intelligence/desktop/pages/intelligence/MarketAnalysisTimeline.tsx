@@ -46,8 +46,6 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   analysisRefreshFailed: string
   /** The bounded wait ended while the run was still queued/running. */
   analysisStillRunning: string
-  /** 「立即分析」被禁用的原因：有运行正在解析。禁用不许只留一个灰块。 */
-  analysisInFlightReason: string
   analysisServiceNotReady: string
   /** 请求被拒是因为没有可用的模型：一次冻结都没排，读者要去看模型设置。 */
   analysisProviderNotReady: string
@@ -259,8 +257,6 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
             <Button aria-busy={analysisInFlight || undefined}
               disabled={analysisInFlight} onClick={() => void timeline.requestRefreshAnalysis()}
               icon={analysisInFlight ? <LoadingSpinner size="sm" /> : <RefreshCw aria-hidden="true" size={14} />}>{text.refreshAnalysis}</Button>
-            {/* 禁用必须说原因：灰块旁边没有一句「为什么」，读者只会反复点。原因句与禁用读同一个派生值。 */}
-            {analysisInFlight ? <small role="status" className="mi-analysis-timeline__reanalyse-reason">{text.analysisInFlightReason}</small> : null}
           </div> : null}
         </div>
       </header>

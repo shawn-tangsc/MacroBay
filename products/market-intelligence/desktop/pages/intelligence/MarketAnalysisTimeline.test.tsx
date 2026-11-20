@@ -1034,7 +1034,7 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     return container
   }
 
-  it('running 行显示「正在解析」且不可点，「立即分析」禁用并给出原因', async () => {
+  it('running 行显示「正在解析」且不可点；「立即分析」禁用但不再附一句原因', async () => {
     const container = await mount(page([runningRow]))
     const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
     // 空标题的 running 行必须活下来：sanitizer 若按「标题不可为空」判死，整屏会一条不剩。
@@ -1043,10 +1043,12 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     // 没有摘要可看，所以不可点：不是按钮，也不出 chevron。
     expect(container.querySelector('button.mi-analysis-timeline__entry')).toBeNull()
     expect(container.querySelector('.mi-analysis-timeline__chevron')).toBeNull()
-    // 禁用不能只留一个灰块：旁边必须有原因，且原因与禁用读同一个派生值。
+    // 禁用原因由可见状态承担（行上的「正在解析」+ 按钮转圈），不再写第二句「跑完再试」；
+    // 读屏仍要知道「正在忙」：aria-busy 保留。
     const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
     expect(action?.disabled).toBe(true)
-    expect(container.textContent).toContain(text.analysisInFlightReason)
+    expect(action?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector('.mi-analysis-timeline__reanalyse-reason')).toBeNull()
   })
 
   it('已发布行与 running 行同屏时，两条都显示', async () => {
@@ -1083,10 +1085,10 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     expect(rows).toHaveLength(1)
     expect(container.textContent).toContain(text.status.published)
     expect(container.textContent).not.toContain(text.status.running)
-    // 跑到终态 → 按钮恢复可点，原因句也一起消失。
+    // 跑到终态 → 按钮恢复可点，aria-busy 也撤掉。
     const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
     expect(action?.disabled).toBe(false)
-    expect(container.textContent).not.toContain(text.analysisInFlightReason)
+    expect(action?.getAttribute('aria-busy')).toBeNull()
   })
 })
 
