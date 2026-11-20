@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { MacroCalendarRevision } from './macroCalendarContracts'
 import { ensureCalendarStandardTables } from './marketCalendarStandardTable'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
-import { officialLifecycleToReleaseStatus, officialRevisionsToSourceRows, writeOfficialSourceRows }
+import { officialLifecycleToReleaseStatus, officialRevisionsToSourceRows, syncOfficialStandardRows, writeOfficialSourceRows }
   from './marketCalendarOfficialSourceRows'
 
 const revision = (over: Partial<MacroCalendarRevision> = {}): MacroCalendarRevision => ({
@@ -113,6 +113,23 @@ describe('官方发布先进标准表（source 身份）', () => {
   it('官方行带 revision 自己的 measured 时刻，不拿写入时刻顶替', () => {
     const [row] = officialRevisionsToSourceRows([revision()])
     expect(row!.dataObservedAt).toBe('2026-11-10T13:30:00.000Z')
+  })
+
+  /**
+   * 一次官方同步只记**一笔**写入尝试（Chief 2026-11-21 复核 #13 时发现的重复调用）：
+   * 同一个 `reportWriteFailure` 被复制了两遍，成功与失败都会记两次，写入层的「写过几次」
+   * 当场翻倍——它正是读者判断「这个写入方还在不在」的依据。
+   */
+  it('一次官方同步只记一笔写入尝试', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const attempts: string[] = []
+    syncOfficialStandardRows(database, {
+      listEffectiveMonthAsOf: () => [revision()],
+      months: ['2026-11'], asOf: '2026-11-10T13:31:00.000Z', parserVersion: 'v1',
+      writeLayer: { recordAttempt: (input) => { attempts.push(input.writerId) } }
+    })
+    expect(attempts).toHaveLength(1)
   })
 
   it('写进表后日历可见（视图含 release 行），且按源分批', () => {

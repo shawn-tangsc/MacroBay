@@ -157,10 +157,6 @@ export function syncOfficialStandardRows(database: DatabaseSync, input: Readonly
     // （官方行按来源分批复写，一批里不会混源；真混了也只会记到第一个来源上，不编第二个）。
     reportWriteFailure(input.writeLayer, input.log, String(rows[0]?.providerId ?? 'official-standard-rows'),
       counts, input.asOf)
-    // **两个写入点共用同一处**（`reportWriteFailure`）：provider 取这一批第一个 revision 的来源
-    // （官方行按来源分批复写，一批里不会混源；真混了也只会记到第一个来源上，不编第二个）。
-    reportWriteFailure(input.writeLayer, input.log, String(rows[0]?.providerId ?? 'official-standard-rows'),
-      counts, input.asOf)
   }
   return { revisions, written, failed }
 }
