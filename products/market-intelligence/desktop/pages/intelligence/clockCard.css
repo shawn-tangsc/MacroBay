@@ -77,8 +77,16 @@
 .mi-clock__node--past span, .mi-clock__node--past b { color: var(--text); }
 .mi-clock__node:hover, .mi-clock__node:focus-visible { z-index: 9; opacity: 1; }
 
-/* 政策块降级说明：与状态行同字号档（--font-meta），排在状态行上面一行；不参与缩放以外的布局。 */
+/* 溢出行（`还有 N 个发布不在环上`）：**必须绝对定位**。它是卡里的一行说明，不是文档流里的段落——
+   落回文档流就跑到卡左上角压住钟面（0.4.5 #40）。
+   行高不是 11px：行内那颗 ⓘ 是 `IconButton size="sm"`（22×22，尺寸只有 sm/md 两档），
+   所以这一行实际占 22px；字号仍是 --font-meta（11px）。 */
+.mi-clock__overflow { position: absolute; left: 12px; right: 12px; bottom: 16px; margin: 0; display: flex; gap: 4px; align-items: center; font-size: var(--font-meta); line-height: 1.2; color: var(--muted); z-index: 4; }
+/* 政策块降级说明：与状态行同字号档（--font-meta）。默认排在溢出行那一格上；**溢出行在时**整体上移，
+   两行不压在一起（16 + 行高 22 + 2）。用兄弟选择器而不是写死一个更大的 bottom：
+   没有溢出行时它回到 16，不会凭空悬空一层。 */
 .mi-clock__policy-note { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; gap: 8px; align-items: center; font-size: var(--font-meta); line-height: 1.2; color: var(--muted); z-index: 4; }
+.mi-clock__overflow ~ .mi-clock__policy-note { bottom: 40px; }
 .mi-clock__policy-action { border: 0; background: none; padding: 0; color: var(--accent); font-size: var(--font-meta); cursor: pointer; text-decoration: underline; }
 
 .mi-clock__foot { position: absolute; left: 12px; right: 12px; bottom: 1px; height: 14px; display: flex; align-items: center; gap: 8px; padding-top: 0; line-height: 1; font-size: var(--font-meta); color: var(--muted); z-index: 4; }

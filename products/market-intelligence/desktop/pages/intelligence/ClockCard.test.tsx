@@ -103,6 +103,38 @@ it('lists the releases that are not on the ring under the card, with a count', a
   expect(line.querySelector('button')).not.toBeNull()
 })
 
+/**
+ * 溢出行必须**贴在卡上**，不许落回文档流（0.4.5 #40）。
+ *
+ * 真事故：`.mi-clock__overflow` 全仓库只有类名、没有样式，`<p>` 回到普通文档流，
+ * 跑到卡片左上角压住钟面刻度。
+ *
+ * 行高不是 11px：行内那颗 ⓘ 是 `IconButton size="sm"`（22×22，尺寸只有 sm/md 两档），
+ * 所以这一行**实际占 22px**，11px 只是字号。政策降级行因此要上移到 40（16+22+2）才不压住它。
+ */
+it('anchors the overflow line inside the card with exactly one trigger', async () => {
+  const { host } = await render()
+  const line = host.querySelector<HTMLElement>('[data-clock-overflow]')!
+  expect(line.parentElement?.tagName).toBe('SECTION')
+  expect(line.parentElement?.className).toContain('mi-clock')
+  // 行内只有**一颗** ⓘ（底部那颗是另一件事：来源、撞牌、其他原因）。
+  expect(line.querySelectorAll('button')).toHaveLength(1)
+  // 行里只有那句计数：逐条清单在浮层里，不摊在卡面上。
+  expect(line.textContent).toBe('还有 1 个发布不在环上')
+})
+
+it('positions the overflow line absolutely and lifts the policy note clear of it', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const rule = /\.mi-clock__overflow\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(rule, '溢出行必须自己定位；没有这条规则它就落回文档流压住钟面').toContain('position: absolute')
+  expect(rule).toContain('bottom: 16px')
+  expect(rule).toContain('font-size: var(--font-meta)')
+  // 没有溢出行时政策说明留在 16；有溢出行时整体上移，两行不叠。
+  expect(/\.mi-clock__policy-note\s*\{([^}]*)\}/u.exec(css)?.[1] ?? '').toContain('bottom: 16px')
+  const lift = /\.mi-clock__overflow ~ \.mi-clock__policy-note\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(lift, '政策行上移量必须盖过溢出行那 22px 的实际行高').toContain('bottom: 40px')
+})
+
 it('leaves a line for a metric it cannot place instead of dropping it silently', async () => {
   const model = buildClockCardModel({ today, metrics: [
     { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy', lastRelease: { date: '2026-11-13', value: '1' }, periodDays: 30 }

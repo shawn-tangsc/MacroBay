@@ -221,10 +221,11 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           : <button type="button" className="mi-clock__policy-action" onClick={notice.onAction}>{notice.actionLabel}</button>}
       </div>}
 
-      {/* 状态行（用户 2026-11-15）：只留 ⓘ——「● 实时 · 详细 ↗」删掉；ⓘ 不能删，里面装着
-          「另有 N 项未上环」那条交代。容器保留（它是 ⓘ 的定位上下文），卡高仍 330。 */}
+      {/* 状态行（用户 2026-11-15）：只留 ⓘ——「● 实时 · 详细 ↗」删掉；ⓘ 不能删，
+          里面装着来源说明、撞牌让位与其他没上环的原因（`not-selected` 那条在上一行的溢出行里，
+          不重复搬到这里——两处各说一半，读者会以为漏了）。容器保留（它是 ⓘ 的定位上下文），卡高仍 330。 */}
       <div className="mi-clock__foot">
-        {/* 原型这一格就是 `<span title>`（不是浮层组件）：来源说明 + 没上环那几行的交代都放在这里。 */}
+        {/* 原型这一格就是 `<span title>`（不是浮层组件）：来源说明 + 撞牌/其他没上环原因的交代都放在这里。 */}
         <span className="mi-clock__info" tabIndex={0}
           title={[text.sourceNote, ...unplacedLines(model, text, policyState)].join('｜')}
           data-clock-unplaced={model.unplaced.length}>ⓘ</span>
