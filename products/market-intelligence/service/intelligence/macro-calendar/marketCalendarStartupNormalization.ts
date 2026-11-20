@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { zeroXRouterCanonicalIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { derivePublishWindows } from './marketCalendarPublishWindow'
 import { calendarStandardTablePolicy, hasActualValue } from './marketCalendarStandardTable'
 import { releaseStatusesPromotedByValue } from '../../../contracts/macro/marketCalendarQueryContracts'
 
@@ -169,6 +170,9 @@ export function normalizeCalendarStandardRows(
     }
 
     // ── 2. 期次解析（只用已有 periodRule） ──────────────────────────────────
+    // 发布窗口与回填共用同一套算法（从该源历史发布日现算）：期次反推必须两边一致，
+    // 否则回填写下 2026-10、这里又把它「解」成 2026-11，同一行每轮翻一次。
+    const publishWindows = derivePublishWindows(database)
     const unresolved = database.prepare(`select rowid as rowId, country_code, metric_key, period_key,
         scheduled_date, first_scheduled_date, coalesce(event_type, '') as event_type,
         source_label, source_label_en
@@ -186,7 +190,8 @@ export function normalizeCalendarStandardRows(
         const canonical = sourceId === undefined ? undefined : zeroXRouterCanonicalIdentity({
           countryCode: String(row.country_code), indicatorId: sourceId,
           scheduledAt: `${String(row.scheduled_date)}T00:00:00.000Z`,
-          title: String(row.source_label_en ?? row.source_label ?? '')
+          title: String(row.source_label_en ?? row.source_label ?? ''),
+          window: publishWindows.get(sourceId)
         })
         period = canonical?.periodKey ?? null
       } else {
@@ -195,7 +200,8 @@ export function normalizeCalendarStandardRows(
         const canonical = hit === undefined ? undefined : zeroXRouterCanonicalIdentity({
           countryCode: String(row.country_code), indicatorId: hit.id,
           scheduledAt: `${String(row.scheduled_date)}T00:00:00.000Z`,
-          title: String(row.source_label_en ?? row.source_label ?? '')
+          title: String(row.source_label_en ?? row.source_label ?? ''),
+          window: publishWindows.get(hit.id)
         })
         period = canonical?.periodKey ?? null
       }

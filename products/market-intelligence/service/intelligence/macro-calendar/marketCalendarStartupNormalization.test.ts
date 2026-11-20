@@ -155,3 +155,23 @@ describe('启动链幂等规范化', () => {
     expect(rule).toBe('merged-value-then-delete')
   })
 })
+
+describe('期次解析带发布窗口（PRD R38 §3.1 v4）', () => {
+  it('当月型序列下月头 7 天发布的终值：规范化也解成上一期，不是发布月', () => {
+    const database = setup()
+    // 该序列的历史发布日（15/16/17 日）→ 窗口 15..17；12-01 越窗且在头 7 天。
+    database.exec(`create table mi_macro_calendar_market_event_observations (
+      observation_id text primary key, provider_id text not null, source_event_id text not null,
+      indicator_id text, display_name text, scheduled_date text not null, last_seen_at text not null)`)
+    const observe = (id: string, date: string) => database.prepare(`insert into
+      mi_macro_calendar_market_event_observations
+      (observation_id, provider_id, source_event_id, indicator_id, display_name, scheduled_date, last_seen_at)
+      values (?, '0xrouter', ?, '214232', 'CB Consumer Confidence', ?, ?)`).run(id, `e-${id}`, date, `${date}T00:00:00.000Z`)
+    observe('o1', '2026-09-16'); observe('o2', '2026-10-16'); observe('o3', '2026-11-17')
+    seed(database, { metricKey: '["214232",1]', periodKey: 'unknown:["214232",1]',
+      firstScheduledDate: '2026-12-01', identityKind: 'source' })
+    run(database)
+    const [row] = rows(database)
+    expect(row!.period_key).toBe('2026-11')
+  })
+})

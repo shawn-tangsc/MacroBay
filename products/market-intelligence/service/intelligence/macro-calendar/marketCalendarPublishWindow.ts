@@ -43,15 +43,20 @@ export function classifyReleaseDay(releaseDate: string, window: PublishWindow): 
   return day <= 7 ? 'late-previous' : 'out-of-window'
 }
 
-/** 每个指标 id 的窗口：从观测表的历史发布日现算，不落库、不手写。 */
-export function derivePublishWindows(database: DatabaseSync, providerId: string): ReadonlyMap<string, PublishWindow> {
+/** 每个指标 id 的窗口：从观测表的历史发布日现算，不落库、不手写。
+ *
+ * **不按来源名筛**：`indicator_id` 是源自己的稳定指标 id，观测表里只有旧源那张表会写它
+ * （新源的身份在 `market_fact_key` 里），所以按「有 indicator_id」取就够——日历对来源保持不感知，
+ * 这里出现来源名会被源名守卫算作新增分支。
+ */
+export function derivePublishWindows(database: DatabaseSync): ReadonlyMap<string, PublishWindow> {
   const windows = new Map<string, PublishWindow>()
   const table = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_market_event_observations'").get()
   if (table === undefined) return windows
   const rows = database.prepare(`select indicator_id, scheduled_date
     from mi_macro_calendar_market_event_observations
-    where provider_id = ? and indicator_id is not null and trim(indicator_id) <> ''
-      and scheduled_date is not null`).all(providerId) as unknown as { indicator_id: string; scheduled_date: string }[]
+    where indicator_id is not null and trim(indicator_id) <> ''
+      and scheduled_date is not null`).all() as unknown as { indicator_id: string; scheduled_date: string }[]
   const byId = new Map<string, string[]>()
   for (const row of rows) {
     const dates = byId.get(row.indicator_id)

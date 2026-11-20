@@ -268,8 +268,8 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   const latest = new Map<string, ObservationRow>()
   for (const row of rows) latest.set(String(row.source_event_id), row)
   // 发布窗口从该来源的历史发布日现算（不手写）：只旧源那张表有可用的 indicator_id。
-  const publishWindows = providerId === legacyObservationProviderId
-    ? derivePublishWindows(database, providerId) : new Map<string, PublishWindow>()
+  // 窗口按 indicator_id（源自己的稳定 id）现算；没有 indicator_id 的来源拿不到窗口，按声明规则走。
+  const publishWindows = derivePublishWindows(database)
   const observedAt = input?.observedAt ?? new Date().toISOString()
   let indicator = 0
   let event = 0
