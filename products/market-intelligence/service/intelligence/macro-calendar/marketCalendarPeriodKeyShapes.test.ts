@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
 import { zeroXRouterCanonicalIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { derivePublishWindow } from './marketCalendarPublishWindow'
+import { backfillStandardRowsFromObservations } from './marketCalendarStandardBackfill'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 import { normalizeOfficialPeriodKey } from './marketCalendarOfficialSourceRows'
 import { normalizeCalendarStandardRows } from './marketCalendarStartupNormalization'
@@ -132,5 +134,66 @@ describe('期次键的五条可红判据', () => {
     expect(first?.periodKey).not.toBe(second?.periodKey)
     // 事件码身份本身也要是事件码（不是把讲话记成指标）。
     expect(zeroXRouterEventIdentities['44656']?.metricKey).toBe('evt.central-bank-speech')
+  })
+})
+
+describe('判据 6：当月型的反向坑（下月头 7 天发布的终值回退一期）', () => {
+  const window = { startDay: 15, endDay: 27, samples: 12 }
+
+  it('11-17 的闪值与 12-01 的 11 月终值落同一个期次键（落成 2026-12 即红）', () => {
+    const flash = zeroXRouterCanonicalIdentity({
+      countryCode: 'US', indicatorId: '214232', scheduledAt: '2026-11-17T14:00:00.000Z', window
+    })
+    const final = zeroXRouterCanonicalIdentity({
+      countryCode: 'US', indicatorId: '214232', scheduledAt: '2026-12-01T14:00:00.000Z', window
+    })
+    expect(flash?.periodKey).toBe('2026-11')
+    expect(final?.periodKey).toBe('2026-11')
+    expect(final?.periodKey).toBe(flash?.periodKey)
+    // 两条是两行（排期不同），但读作同一期——期次键只用来判「是不是同一期」，不是合并依据。
+  })
+
+  it('窗口从历史发布日现算：分位区间把「终值那天」排除在外', () => {
+    expect(derivePublishWindow(['2026-11-01', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20']))
+      .toEqual({ startDay: 17, endDay: 19, samples: 5 })
+  })
+
+  it('越窗但不在头 7 天 → 期次记缺（空），不默认按当月', () => {
+    const late = zeroXRouterCanonicalIdentity({
+      countryCode: 'US', indicatorId: '214232', scheduledAt: '2026-11-28T14:00:00.000Z',
+      window: { startDay: 15, endDay: 20, samples: 10 }
+    })
+    expect(late?.periodKey).toBe('')
+    expect(late?.metricKey).toBe('US.CONSUMER_CONFIDENCE.SA.LEVEL')
+  })
+
+  it('源自报期次优先：标题（Oct）用 10 月；滞后两月的序列（Sep）仍按源，不被声明规则覆盖', () => {
+    const database = new DatabaseSync(':memory:')
+    database.exec(`create table mi_macro_calendar_market_event_observations (
+      source_event_id text not null, provider_id text not null, market_fact_key text,
+      display_name text not null, country_code text, indicator_id text, event_kind text not null,
+      scheduled_date text not null, scheduled_at text not null,
+      consensus_json text, provider_previous_json text, provider_actual_json text,
+      importance text not null, measure_keys_json text, last_seen_at text)`)
+    ensureCalendarStandardTables(database)
+    const insert = (sourceEventId: string, title: string) => database.prepare(`insert into
+      mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values (?, '0xrouter', null, ?, 'USA', '9413', 'economic-indicator', '2026-11-17',
+        '2026-11-17T15:00:00.000Z', null, null, '{"displayValue":"1.2"}', 'high', '[]', '2026-11-18')`)
+      .run(sourceEventId, title)
+    // 建筑支出月率：规则反推 2026-10。
+    insert('ok-1', 'Construction spending (Oct)')       // 源说 10 月 → 与规则一致
+    insert('lagged-1', 'Construction spending (Sep)')   // 源说 9 月（滞后两个月发布）→ 仍按源
+    backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: now })
+    const rows = database.prepare("select source_event_id, period_key from mi_calendar_events where metric_key = 'US.CONSTRUCTION_SPENDING.SA.MOM' order by source_event_id")
+      .all() as unknown as { source_event_id: string; period_key: string }[]
+    // 源自报期次是事实；声明规则只是「没给期次时」的兜底，不许反过来覆盖源。
+    expect(rows).toEqual([
+      { source_event_id: 'lagged-1', period_key: '2026-09' },
+      { source_event_id: 'ok-1', period_key: '2026-10' }
+    ])
   })
 })

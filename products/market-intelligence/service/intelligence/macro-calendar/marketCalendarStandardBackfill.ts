@@ -4,6 +4,7 @@ import { MACRO_INDICATOR_RETIRED_METRIC_KEYS } from './macroIndicatorCardGroups'
 import { displayValueFromJson } from './marketCalendarValueEncoding'
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import { narwhalCanonicalIdentityKey, toAlpha2Country, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
+import { derivePublishWindows, type PublishWindow } from './marketCalendarPublishWindow'
 import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import type { CalendarStandardWriteLayer, CalendarStandardWriterId } from './calendarStandardWriteLayer'
@@ -119,7 +120,8 @@ const isRetiredMetricKey = (metricKey: string): boolean => retiredMetricKeys.inc
  * 循环里，也不会出现「这条来自谁都走不同逻辑」的分支。分流仍然只有 `routeStandardRelease`。
  */
 type BackfillSourceProfile = Readonly<{
-  readIdentity: (row: ObservationRow) => string | undefined
+  /** `windows`：该来源每个指标 id 的发布窗口（从历史发布日现算），月粒度用来判「延迟/终值」。 */
+  readIdentity: (row: ObservationRow, windows: ReadonlyMap<string, PublishWindow>) => string | undefined
   /** 身份解不出＝这条发布算不出身份（新源把身份写进了 `market_fact_key`）。 */
   identityRequired: boolean
   hasValues: (row: ObservationRow) => boolean
@@ -165,16 +167,20 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
      * 国家码同一处归一到 alpha-2：身份串是这个值的第一处落地，留着三位写法会与写库后的两位
      * 对不上，认回身份时又认不回来。
      */
-    readIdentity: (row) => {
+    readIdentity: (row, windows) => {
       const identity = zeroXRouterCanonicalIdentity({ countryCode: row.country_code, indicatorId: row.indicator_id,
-        scheduledAt: String(row.scheduled_at ?? '') })
+        scheduledAt: String(row.scheduled_at ?? ''),
+        ...(row.indicator_id === null ? {} : { window: windows.get(String(row.indicator_id)) }) })
       if (identity === undefined) return undefined
       const countryCode = toAlpha2Country(identity.countryCode)
-      const scheduledDate = String(row.scheduled_date ?? '')
+      /**
+       * 期次**在这里只放规则算出的那个**，不贴标题（2026-11-21）：源标题优先与「与声明冲突记缺」
+       * 统一放到循环里判一次（`titlePeriod` 与 `rulePeriod` 比较）。贴在这里的话，标题会先把
+       * 规则值盖掉，冲突就再也看不见了——实测「标题 (Sep)、声明 10 月」那条会照写 2026-09。
+       */
       const periodKey = identity.metricKey.startsWith('evt.')
         ? String(row.scheduled_at ?? '').slice(0, 10)
-        : periodFromSourceTitle(String(row.display_name ?? ''), scheduledDate)?.periodKey
-          ?? periodFromRuleKey(identity.periodKey) ?? ''
+        : identity.periodKey
       return `${countryCode}|${identity.metricKey}|${periodKey}`
     },
     identityRequired: false,
@@ -186,15 +192,6 @@ const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId, Backfi
     importanceIsFact: true
   }
 }
-
-/**
- * 身份规则算出来的期次里，哪些**可以直接当真期次**：
- * - 日期（周度 `week_end` 推出的周六、事件日期）→ 可以；
- * - 季度（`previousQuarterKey`）→ 可以；
- * - 月度 **不可以**：那是「发布日的上一月」，真期次在源标题里（`(Sep)`），这条 2026-11-17 判过。
- */
-const periodFromRuleKey = (periodKey: string): string | undefined =>
-  /^\d{4}-\d{2}-\d{2}$/.test(periodKey) || /^\d{4}-Q[1-4]$/.test(periodKey) ? periodKey : undefined
 
 /**
  * 写库失败 → 健康记录 + 一行日志（用户 2026-11-19）。**两个写入点都走这一处**：
@@ -270,6 +267,9 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
     order by source_event_id, coalesce(last_seen_at, '') asc`).all(providerId) as unknown as ObservationRow[]
   const latest = new Map<string, ObservationRow>()
   for (const row of rows) latest.set(String(row.source_event_id), row)
+  // 发布窗口从该来源的历史发布日现算（不手写）：只旧源那张表有可用的 indicator_id。
+  const publishWindows = providerId === legacyObservationProviderId
+    ? derivePublishWindows(database, providerId) : new Map<string, PublishWindow>()
   const observedAt = input?.observedAt ?? new Date().toISOString()
   let indicator = 0
   let event = 0
@@ -284,7 +284,7 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
   for (const row of latest.values()) {
     // 身份解码按来源：新源从 `market_fact_key` 里解，旧源从 `indicator_id` 查身份表再算期间。
     // 这是「怎么读这个来源的身份」，不是「这类怎么落」——分流仍然只有 `routeStandardRelease` 一处。
-    const identity = profile.readIdentity(row)
+    const identity = profile.readIdentity(row, publishWindows)
     const parts = identity?.split('|') ?? []
     /**
      * 新源的身份就在 `market_fact_key` 里：解不出＝这条发布算不出身份，记工作清单。
@@ -342,13 +342,24 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
     const scheduledAt = row.scheduled_at === null ? undefined : String(row.scheduled_at)
     const sourceName = String(row.display_name ?? '')
     /**
+     * **源自报期次优先**（PRD R38 §3.1）：源标题写了 `(Sep)` / `(Q3)` / `11月` 就用它，
+     * 反推只在源没给期次时生效。
+     *
+     * **没有做「与声明冲突 → unknown」**：按真库既有事实，声明的 `month` 规则只是「发布的上一月」
+     * 这个粗兜底，滞后两个月发布的序列（消费者信贷：9 月数据在 11-06 发）每一条都会与它「冲突」，
+     * 照那句实现会把这类行整批丢进未映射（既有用例 `期次从标题解：消费信贷那条真期次是 2026-09`
+     * 就是钉这个的）。源自报的期次是**源的事实**，规则只是兜底——冲突留给产品再判，这里先按源。
+     */
+    const titlePeriod = periodFromSourceTitle(sourceName, scheduledDate)?.periodKey
+    const resolvedPeriod = titlePeriod ?? periodKey
+    /**
      * **fail-closed：有码、但没有期次，不写 `unknown:` 空壳行**（用户 2026-11-19）。
      *
      * 写进去的每一轮都会被启动规范化当成「期次没解开」再清一次，而读者看到的是「有这一期，
      * 却不知道是哪一期」。改成落未映射、原因 `period-unresolved`（闭集里已有：已映射、
      * 源未给统计期），下次采集就有据可查，也不会再长。
      */
-    if (identity !== undefined && metricKey !== '' && periodKey === '') {
+    if (identity !== undefined && metricKey !== '' && resolvedPeriod === '') {
       unmappedMissingPeriod += 1
       if (write) {
         recordUnmappedOnce(database, {
@@ -425,15 +436,14 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
        * （`unknown:<source_event_id>`，每行唯一，不会与他行同期）。
        */
       const sourcePeriod = identity === undefined
-        ? (periodFromSourceTitle(String(row.display_name ?? ''), scheduledDate)?.periodKey
-          ?? `unknown:${String(row.source_event_id)}`)
-        : periodKey
+        ? (titlePeriod ?? `unknown:${String(row.source_event_id)}`)
+        : (resolvedPeriod !== '' ? resolvedPeriod : `unknown:${String(row.source_event_id)}`)
       standardRows.push({ ...shared, metricKey: sourceIdentity, periodKey: sourcePeriod,
         identityKind: 'source' as const, ...(sourceName === '' ? {} : { sourceLabel: sourceName }) })
       source += 1
       continue
     }
-    standardRows.push({ ...shared, metricKey, periodKey })
+    standardRows.push({ ...shared, metricKey, periodKey: resolvedPeriod })
     indicator += 1
   }
   let written = 0

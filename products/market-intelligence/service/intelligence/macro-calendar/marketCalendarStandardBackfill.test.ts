@@ -260,32 +260,40 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
     expect(row.period_key).toBe('2026-09')
   })
 
-  it('标题没有期次后缀 → fail-closed：不写 unknown 空壳行，落未映射 period-unresolved', () => {
+  it('越窗发布 → 期次缺、fail-closed：不写 unknown 空壳行，落未映射 period-unresolved', () => {
     const database = openOldDatabase()
     ensureCalendarStandardTables(database)
     const mapped = Object.entries(zeroXRouterIndicatorIdentities)
       .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
-    database.prepare(`insert into mi_macro_calendar_market_event_observations
+    // 先造一条 17 日发布的观测，让这条序列的窗口从历史发布日现算成 17 日附近。
+    const observe = (sourceEventId: string, scheduledDate: string) => database.prepare(`insert into
+      mi_macro_calendar_market_event_observations
       (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
        scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
        importance, measure_keys_json, last_seen_at)
-      values ('["900",1]', '0xrouter', null, 'Some index without period', 'USA', ?, 'economic-indicator',
-        '2026-11-16', '2026-11-16T13:30:00.000Z', null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
-      .run(mapped[0])
+      values (?, '0xrouter', null, 'Some index', 'USA', ?, 'economic-indicator',
+        ?, ?, null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
+      .run(sourceEventId, mapped[0], scheduledDate, `${scheduledDate}T13:30:00.000Z`)
+    observe('["900",1]', '2026-11-17')   // 窗口内 → 按声明规则（上一月）落表
+    observe('["900",3]', '2026-11-17')   // 同窗口样本（窗口按分位算，至少要 3 个）
+    observe('["900",4]', '2026-11-18')
+    observe('["900",2]', '2026-11-28')   // 越窗、不在头 7 天 → 期次缺
     const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
-    // **fail-closed**（用户 2026-11-19）：有码但期次算不出来时，不写 `unknown:` 空壳行——
-    // 写进去每轮采集都会被启动规范化再清一遍，读者也会看到「有这一期却不知道是哪一期」。
-    expect(report.indicator).toBe(0)
+    /**
+     * **fail-closed**（用户 2026-11-19）：期次算不出来时不写 `unknown:` 空壳行——写进去每轮采集
+     * 都会被启动规范化再清一次，读者也会看到「有这一期却不知道是哪一期」。
+     * 现在「算不出来」的判据是**越窗**（PRD R38 §3.1），不是「标题没写期次」：源没写就按声明的
+     * 规则反推，那条 17 日的照常落表。
+     */
+    expect(report.indicator).toBe(3)
     expect(report.unmapped['period-unresolved']).toBe(1)
-    expect(database.prepare('select count(*) as c from mi_calendar_events').get()).toEqual({ c: 0 })
-    const unmapped = database.prepare(`select reason, raw_json from mi_calendar_unmapped where source_key = '["900",1]'`)
-      .all() as Array<{ reason: string; raw_json: string }>
+    // 两条 17 日的发布落成同一行（同期 + 同首次排期），18 日那条另一行。
+    expect(database.prepare('select count(*) as c from mi_calendar_events').get()).toEqual({ c: 2 })
+    const unmapped = database.prepare(`select reason from mi_calendar_unmapped where source_key = '["900",2]'`)
+      .all() as Array<{ reason: string }>
     expect(unmapped.map((row) => row.reason)).toEqual(['period-unresolved'])
-    expect(JSON.parse(unmapped[0]!.raw_json)).toMatchObject({ metricKey: mapped[1].metricKey, scheduledDate: '2026-11-16' })
   })
-})
 
-describe('周度码的期次按规则算（用户 2026-11-19）', () => {
   it('周度码没有标题期次 → 用发布日推的周六，不再写 unknown 空壳行', () => {
     const mapped = Object.entries(zeroXRouterIndicatorIdentities)
       .find(([, entry]) => entry.periodRule === 'week_end')!

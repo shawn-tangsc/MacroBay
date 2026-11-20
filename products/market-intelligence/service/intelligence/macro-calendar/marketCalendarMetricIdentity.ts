@@ -4,6 +4,7 @@ import {
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
 import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySourceMappings'
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
+import { classifyReleaseDay, type PublishWindow } from './marketCalendarPublishWindow'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 
 /**
@@ -183,7 +184,7 @@ export type ZeroXRouterIdentityEntry = Readonly<{
   periodRuleReview?: PeriodRuleReview
 }>
 export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouterIdentityEntry>> = Object.freeze({
-  '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'current_month' },
   '9413': { metricKey: 'US.CONSTRUCTION_SPENDING.SA.MOM', periodRule: 'month' },
   '4013': { metricKey: 'US.ISM_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
   '9260': { metricKey: 'US.ISM_MANUFACTURING_PRODUCTION.SA.LEVEL', periodRule: 'month' },
@@ -210,7 +211,7 @@ export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouter
   '4022': { metricKey: 'US.TRADE_BALANCE.NONE.DIFF', periodRule: 'month' },
   '8791': { metricKey: 'US.EXPORTS.NONE.AMOUNT', periodRule: 'month' },
   '8792': { metricKey: 'US.IMPORTS.NONE.AMOUNT', periodRule: 'month' },
-  '10260': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '10260': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'current_month' },
   '10263': { metricKey: 'US.SP_COMPOSITE_PMI.SA.LEVEL', periodRule: 'month' },
   '9264': { metricKey: 'US.ISM_SERVICES_EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
   '9262': { metricKey: 'US.ISM_SERVICES_SUPPLIER_DELIVERIES.SA.LEVEL', periodRule: 'month' },
@@ -403,6 +404,11 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   countryCode: string | null; indicatorId: string | null; scheduledAt: string
   /** 源标题（可选）：**只用于周度期次**——标题里带 `（至MMDD）`/`(to MMDD)` 时优先用它。 */
   title?: string
+  /**
+   * 该序列的**发布窗口**（从历史发布日现算，见 `marketCalendarPublishWindow`）。月/当月规则用它判
+   * 「越窗但落在头 7 天」→ 上一期延迟/终值。不传就按声明规则直接算（老调用方行为不变）。
+   */
+  window?: PublishWindow
 }>): MarketCalendarCanonicalIdentity | undefined {
   if (!row.countryCode || !row.indicatorId) return undefined
   // 两个来源的 id 命名空间分开：0xrouter 自己那张表是「按来源拆」的起点（迁移后新增）。
@@ -419,10 +425,25 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   if (entry.periodRule === 'event_date') {
     return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey: row.scheduledAt.slice(0, 10) }
   }
+  /**
+   * 月/当月规则先过窗口：**越窗且落在发布月头 7 天 → 上一期的延迟/终值**；
+   * 其它越窗 → 返回 `undefined`（调用方记 `unknown`、待核），**不许默认按当月**。
+   * 这一步只对月粒度生效：季/周/事件各有自己的边界，混进来会把正常排期判成越窗。
+   */
+  if (entry.periodRule === 'month' || entry.periodRule === 'current_month') {
+    const verdict = row.window === undefined ? 'in-window'
+      : classifyReleaseDay(row.scheduledAt.slice(0, 10), row.window)
+    /**
+     * 越窗且不在头 7 天：**期次明确缺失**（`''`），身份照旧保留——调用方按已有的
+     * `period-unresolved` 规则记未映射并跳过，不写 `unknown:` 空壳行，也不许默认按当月。
+     */
+    if (verdict === 'out-of-window') return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey: '' }
+    const periodKey = verdict === 'late-previous' ? previousMonthKey(row.scheduledAt)
+      : entry.periodRule === 'current_month' ? row.scheduledAt.slice(0, 7) : previousMonthKey(row.scheduledAt)
+    return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey }
+  }
   // 逐条写全、不写「否则就当季度」：多一种规则时，漏写的那一支会静默变成别的形状。
-  const periodKey = entry.periodRule === 'month' ? previousMonthKey(row.scheduledAt)
-    : entry.periodRule === 'current_month' ? row.scheduledAt.slice(0, 7)
-    : entry.periodRule === 'week_end' ? weekEndKeyFor(row.scheduledAt, row.title)
+  const periodKey = entry.periodRule === 'week_end' ? weekEndKeyFor(row.scheduledAt, row.title)
     : entry.periodRule === 'quarter' ? previousQuarterKey(row.scheduledAt)
     : row.scheduledAt.slice(0, 10)
   return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey }
