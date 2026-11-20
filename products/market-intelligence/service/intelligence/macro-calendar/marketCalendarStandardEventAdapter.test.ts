@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import { standardRowToMarketEvent, standardRowsToMarketEvents } from './marketCalendarStandardEventAdapter'
+import { resolveStandardRowTitle } from '../../wiring/calendarReadings'
 import { eventTypeNameByCode, nameByMetricKey } from './marketCalendarCodeNames'
 import { readStandardCalendarMonth } from './marketCalendarStandardMonthRead'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow, type CalendarStandardRow }
@@ -226,16 +227,10 @@ describe('国家全名（读屏用）', () => {
 })
 
 describe('英文界面不出中文名（用户 2026-11-20）', () => {
-  // 与装配处 `calendarReadings` 同一套取名规则（名表按 locale 取，英文回退不出中文原文名）。
+  // **直接调线上那个函数**，不在测试里复刻规则——复刻的规则一旦与线上分叉，用例仍会全绿。
   const localized = (locale: 'zh' | 'en') => ({
     ...context, locale,
-    resolveTitle: (row: { metricKey: string }, at: 'zh' | 'en') => {
-      const metric = (nameByMetricKey as Record<string, { zhShort: string; enShort: string }>)[row.metricKey]
-      if (metric !== undefined) return at === 'en' ? metric.enShort : metric.zhShort
-      const event = (eventTypeNameByCode as Record<string, { zhShort: string; enShort: string }>)[row.metricKey]
-      if (event !== undefined) return at === 'en' ? event.enShort : event.zhShort
-      return undefined
-    }
+    resolveTitle: (row: { metricKey: string }, at: 'zh' | 'en') => resolveStandardRowTitle(row, at)
   } as never)
 
   it('locale=en 时每个标题都不含 CJK，且非空；locale=zh 与原来逐条一致', () => {
