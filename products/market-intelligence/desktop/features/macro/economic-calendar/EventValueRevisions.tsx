@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { marketCalendarClient, type CalendarValueRevisionRead } from '../../../shared/ipc/marketCalendarClient'
@@ -41,9 +42,18 @@ export function EventValueRevisions({ event, text }: Readonly<{
   }, [ready, event.eventKey, metricKey, event.countryCode, event.periodKey, event.firstScheduledDate, attempt])
   // ③ 没有身份：整块不渲染（不是「未记录」——那是把我们的缺口说成审计问题）。
   if (!ready) return null
-  const unreadable = read === undefined || read.state === 'unreadable' || read.state === 'unavailable'
-  if (read === undefined) return null
-  if (unreadable) {
+  /**
+   * **三态前置返回，`undefined` 只表示「还没读到」**（用户 2026-11-20 发版门禁 `async-initial-state`）：
+   * 原来 `read === undefined` 先被并进 `unreadable`、再被单独 `return null`——同一份「未加载」
+   * 既当读失败又当空，读者第一眼看到的是一块空白，分不清是我们没读到还是本来没有记录。
+   * 现在：还没回来 → 加载态；读失败 → 错误态 + 重试；读到 → 正常显示（含「未记录」）。
+   */
+  if (read === undefined) {
+    return <div data-value-revisions="loading">
+      <LoadingState label={text.details.revisionsLoading} minHeight={40} />
+    </div>
+  }
+  if (read.state === 'unreadable' || read.state === 'unavailable') {
     return <div data-value-revisions="unreadable">
       <StateView state="error" reasonCode="unreadable" size="sm"
         action={{ labelKey: 'ui.state.action.retry', onSelect: () => setAttempt((value) => value + 1) }} />

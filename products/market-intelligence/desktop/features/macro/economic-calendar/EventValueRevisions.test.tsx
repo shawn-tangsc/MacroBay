@@ -66,6 +66,23 @@ async function render(event: MarketCalendarEvent): Promise<void> {
 }
 
 describe('数值修订的四种显示', () => {
+  /**
+   * **还没读到 ≠ 读不到**（用户 2026-11-20 发版门禁 `async-initial-state`）。
+   *
+   * 原来 `read === undefined` 被同时当成「读失败」和「空」，首帧直接画一块空白。现在首帧是加载态，
+   * 三种态各有自己的标记与断言：`loading` / `unreadable` / `recorded`·`not-recorded`。
+   */
+  it('shows a loading state on the first frame, never the error or the empty state', async () => {
+    // 读口不回来：挂载后仍是「还没读到」。
+    answer.mockImplementation(() => new Promise(() => undefined))
+    await render(base)
+    const block = host!.querySelector('[data-value-revisions="loading"]')
+    expect(block, '首帧应当是加载态').not.toBeNull()
+    expect(block!.querySelector('.loading-state'), '加载态要用平台的 LoadingState').not.toBeNull()
+    expect(host!.querySelector('[data-value-revisions="unreadable"]')).toBeNull()
+    expect(host!.textContent).not.toContain('未记录')
+  })
+
   it('shows the parallel rows only when two providers wrote, and uses the port updatedAt', async () => {
     answer.mockResolvedValue(recorded(['0xrouter', 'narwhal']))
     await render(base)
