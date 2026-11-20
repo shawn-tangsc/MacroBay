@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { EventBusRuntime } from '@platform/message-bus'
@@ -30,7 +30,7 @@ import {
 import { createIntelligenceTranslationJsonStorage } from './store/intelligenceTranslationStorage'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createRawRecordJsonStorage, readRawRecordSnapshotSync } from './store/rawRecordStorage'
-import { resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
+import { contentAddressedPayloadPolicy, resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
 
 /**
  * `intelligenceModule` 的本地存储与采集底座（拆分 M2，2026-11-15，**只搬不改**）。
@@ -75,7 +75,24 @@ export function createIntelligenceStores(input: {
   const rawRecordStore = createRawRecordStore({
     storage: rawRecordStorage,
     snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json')),
-    ...(payloadDirectory === undefined ? {} : { payloadDirectory, writeVerifiedPayload })
+    ...(payloadDirectory === undefined ? {} : { payloadDirectory, writeVerifiedPayload }),
+    /* 保留期回收原文（缺陷③）：只在「内容寻址目录」里删，删前由 store 重新核对引用。 */
+    ...(payloadDirectory === undefined ? {} : {
+      deletePayload: (fileRef: string) => {
+        try {
+          const target = join(payloadDirectory, fileRef)
+          const bytes = statSync(target).size
+          unlinkSync(target)
+          return bytes
+        } catch {
+          return undefined
+        }
+      },
+      listPayloadFiles: () => {
+        try { return readdirSync(payloadDirectory).filter((name) => contentAddressedPayloadPolicy.filePattern.test(name)) }
+        catch { return undefined }
+      }
+    })
   })
   /* 存量原文外置（0.4.5 缺陷②）：升级前就 inline 的正文不会自己搬出去，启动时幂等跑一次。
      报数分三格（搬了多少 / 还剩多少 / 失败多少），第二遍必然 `inlineToFile: 0`。 */

@@ -26,8 +26,26 @@ export type RawRecordPayloadMigration =
     remainingInline: number
   }>
 
+/** 保留期一次跑的结果：**可对账**——删了多少条、多少原文文件、释放多少字节、剩下多少。 */
+export type RawRecordPruneResult = Readonly<{
+  cutoff: string
+  removedRecords: number
+  removedPayloadFiles: number
+  removedOrphanFiles: number
+  reclaimedPayloadBytes: number
+  remainingRecords: number
+}>
+
 export type RawRecordStore = {
   appendRawRecord: (input: AppendRawRecordInput) => RawIntelligenceRecord | undefined
+  /**
+   * 保留期：删掉「通用」记录里超过 `retentionDays` 的那些，并回收不再被引用的原文文件。
+   *
+   * 日历记录**不跟着轮转**（它们的原文在证据归档里、按自己的配额管）。删除是本模块唯一的
+   * 合法「写少」路径，所以这里显式走 `allowRecordDecrease: 'explicit-delete'`；幂等：
+   * 同一天跑第二遍 `removedRecords === 0` 且不再写盘。
+   */
+  pruneRawRecords: (input: Readonly<{ retentionDays: number; now?: string; includeOrphans?: boolean }>) => RawRecordPruneResult
   /**
    * 启动时幂等跑一次：把升级前就 inline 的正文搬进「内容寻址」目录、换成 file 引用。
    *
@@ -73,6 +91,10 @@ export function createRawRecordStore(deps?: {
   payloadDirectory?: string
   writeVerifiedPayload?: (input: Readonly<{ directory: string; body: string; expectedHash: string; temporarySequence: number }>) =>
     Readonly<{ state: 'written' | 'reused'; fileRef: string }> | Readonly<{ state: 'failed'; reason: string }>
+  /** 保留期删除原文文件（只有内容寻址目录里、且已无记录引用它时才调用）。返回释放的字节数。 */
+  deletePayload?: (fileRef: string) => number | undefined
+  /** 列出现有原文文件名（内容寻址名）；孤儿清理用。读不到就返回 undefined，按「不清理孤儿」处理。 */
+  listPayloadFiles?: () => readonly string[] | undefined
 }): RawRecordStore {
   const snapshot = deps?.snapshot ?? createEmptyRawRecordSnapshot()
   /**
@@ -130,6 +152,71 @@ export function createRawRecordStore(deps?: {
   }
 
   return {
+    pruneRawRecords(input) {
+      const nowMs = input.now === undefined ? Date.now() : Date.parse(input.now)
+      const cutoffMs = nowMs - input.retentionDays * 24 * 3_600_000
+      const cutoff = new Date(cutoffMs).toISOString()
+      const removable: RawIntelligenceRecord[] = []
+      for (const record of records.values()) {
+        // 只轮转通用采集；日历记录有自己的证据配额，不在这里删。
+        if (record.processingOwner !== 'generic-intelligence') continue
+        const detectedMs = Date.parse(record.detectedAt)
+        if (Number.isFinite(detectedMs) && detectedMs < cutoffMs) removable.push(record)
+      }
+
+      const removedIds = new Set(removable.map((record) => record.rawRecordId))
+      for (const record of removable) {
+        records.delete(record.rawRecordId)
+        dedupeIndex.delete(`${record.sourceId}:${record.sourceDedupeKey}`)
+      }
+
+      // 原文按「还有没有别的记录引用」决定去留：内容寻址会去重，删之前必须重新数一遍。
+      const stillReferenced = new Set(
+        [...records.values()].map((record) => record.payloadFileRef).filter((ref): ref is string => ref !== undefined)
+      )
+      let removedPayloadFiles = 0
+      let reclaimedPayloadBytes = 0
+      let removedOrphanFiles = 0
+      if (deps?.deletePayload !== undefined) {
+        for (const record of removable) {
+          const ref = record.payloadFileRef
+          if (ref === undefined || stillReferenced.has(ref)) continue
+          const freed = deps.deletePayload(ref)
+          if (freed === undefined) continue
+          removedPayloadFiles += 1
+          reclaimedPayloadBytes += freed
+        }
+        if (input.includeOrphans === true && deps.listPayloadFiles !== undefined) {
+          const files = deps.listPayloadFiles()
+          if (files !== undefined) {
+            const live = new Set([
+              ...stillReferenced,
+              ...[...records.values()].map((record) => record.payloadFileRef).filter((ref): ref is string => ref !== undefined)
+            ])
+            for (const fileRef of files) {
+              if (live.has(fileRef)) continue
+              const freed = deps.deletePayload(fileRef)
+              if (freed === undefined) continue
+              removedOrphanFiles += 1
+              reclaimedPayloadBytes += freed
+            }
+          }
+        }
+      }
+
+      if (removedIds.size > 0) {
+        // 唯一的合法「写少」：显式删除。写盘闸据此放行。
+        persist({ allowRecordDecrease: 'explicit-delete' })
+      }
+      return {
+        cutoff,
+        removedRecords: removedIds.size,
+        removedPayloadFiles,
+        removedOrphanFiles,
+        reclaimedPayloadBytes,
+        remainingRecords: records.size
+      } as const
+    },
     migrateInlinePayloads() {
       if (deps?.payloadDirectory === undefined || deps.writeVerifiedPayload === undefined) {
         // 「没接上」必须与「没有要搬的」分开：前者是配置错误，不许报成 0 条。
