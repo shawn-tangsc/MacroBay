@@ -25,6 +25,13 @@
 | Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
 | Card-level action | **on the card title row, right side**: one action (enable source / retry) whenever any source the card depends on is unconfigured or unreadable; the body only names the missing cell | a second copy of that action inside the card; two entries for one action on a screen | **human review** (criterion below) |
 
+**A disabled control's reason: first ask whether it is already visible (narrowed 2026-11-20; the user had the redundant sentence deleted).** Two tests:
+
+- **A reader can tell at a glance why it cannot be pressed → write no sentence.** Visible state may carry it: the spinner on the button, the "in progress" row in the list, and the control's own `aria-busy` are the evidence. Adding "a run is in progress. Try again when it finishes." says the same thing twice.
+- **Cannot be told from the interface → it must be written**, through `DisabledHint` (visible text plus `aria-describedby`): no permission, source not configured, quota exhausted.
+
+Check: a disabled control renders **either** a reason sentence **or** visible state that carries the reason (an in-progress row, a spinner, `aria-busy`); it is a defect only when neither exists. Counterexample: the `analysisInFlight` sentence was deleted — a spinning button and an in-progress row sit right beside it.
+
 **A card-level action lives only on the title row (2026-11-11).** If any source a card depends on is unconfigured or unreadable, the action (enable source / retry) sits on the **right of the card title row**; the body only names the missing cell and never repeats the action. **One action, one entry per screen.**
 Criterion: any source unconfigured → the title row has it; everything configured → no action; count of that action on the screen = 1.
 **Exception:** when **none** of the sources a card depends on is configured, the action moves into the content-area veil, centred; the title row carries no action and the card still holds exactly one entry. Criterion: with nothing configured the card has exactly one focusable element and no title-row action.
