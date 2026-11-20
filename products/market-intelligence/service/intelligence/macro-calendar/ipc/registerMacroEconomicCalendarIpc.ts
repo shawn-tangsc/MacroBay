@@ -33,6 +33,15 @@ import {
 
 const productId = 'market-intelligence'
 
+/**
+ * 入参里的界面语言。**只认 `zh` / `en`**，其余（没传、类型不对）一律回落 `zh`：
+ * 这是显示口径，不是业务字段，多余的值不该让整条读数失败。
+ */
+function localeOf(payload: unknown): 'zh' | 'en' {
+  const raw = (payload ?? {}) as { locale?: unknown }
+  return raw.locale === 'en' ? 'en' : 'zh'
+}
+
 export function registerMacroEconomicCalendarIpc(
   register: ProductIpcRegistrar,
   repository: Pick<MacroCalendarRepository, 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>,
@@ -138,9 +147,10 @@ export function registerMacroEconomicCalendarIpc(
     }
   })
   /** **映射规则表**（只读、渲染专用）：已映射 85 条 + 未映射 id（按行数排序）+ 三个计数。 */
-  register(productId, marketCalendarPublicPolicy.methods.queryMappingRules, async () => {
+  register(productId, marketCalendarPublicPolicy.methods.queryMappingRules, async payload => {
     if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
-    return readCalendarMappingRules(unmappedMonth.database)
+    // 语言由渲染层传（缺省 `zh`，向后兼容）：未映射那列的国家名与码表同一口径。
+    return readCalendarMappingRules(unmappedMonth.database, localeOf(payload))
   })
   /**
    * **事件清单**（只读、渲染专用）：弹框「事件」页签用——一场事件一行，**不参与映射**。
@@ -151,9 +161,10 @@ export function registerMacroEconomicCalendarIpc(
     return readCalendarEventList(unmappedMonth.database)
   })
   /** **标准码表整表**（只读、渲染专用）：弹框「码表」页签用，244 行一次下发。 */
-  register(productId, marketCalendarPublicPolicy.methods.queryCodeTable, async () => {
+  register(productId, marketCalendarPublicPolicy.methods.queryCodeTable, async payload => {
     if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
-    return readCalendarCodeTable(unmappedMonth.database)
+    // 英文下 Country 列给两位代码（全名在 `countryNameFull`）；不传就是中文，老载荷行为不变。
+    return readCalendarCodeTable(unmappedMonth.database, localeOf(payload))
   })
   /**
    * **按事件身份取各来源的写入/观测**（只读、渲染专用）：入参必须有期次。
