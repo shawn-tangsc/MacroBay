@@ -8,7 +8,7 @@ import type { MarketAnalysisTimelineDetail } from '../../shared/ipc/marketAnalys
 import { AnalysisConclusionDetail } from './AnalysisConclusionDetail'
 
 /**
- * 「正文为英语。」只在一件事成立时出现：**记录里知道生成语言，且与当前界面语言不同**。
+ * 「生成时是英语」只在一件事成立时出现：**记录里知道生成语言，且与当前界面语言不同**。
  *
  * 三条边界一起钉住：
  * - 旧记录（v1，没有字段）→ 不标注、不崩；
