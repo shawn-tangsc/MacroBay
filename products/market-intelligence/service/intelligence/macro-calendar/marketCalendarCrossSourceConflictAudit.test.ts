@@ -143,9 +143,9 @@ describe('扫描标准表里的真实冲突形状', () => {
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
     seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0 })
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 0, incomparable: 0, sameValueDifferentText: 0 })
+      .toEqual({ groups: 1, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
     expect(listCrossSourceConflicts(database)).toHaveLength(1)
   })
 
@@ -156,7 +156,7 @@ describe('扫描标准表里的真实冲突形状', () => {
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
     seed(database, 'narwhal', '2026-10-09', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 0 })
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
     expect(listCrossSourceConflicts(database)).toEqual([])
   })
 })
@@ -197,11 +197,11 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1, 1))
     seed(database, '0xrouter', '2026-10-04', '4.10', numeric(4.1, 2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1 })
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1, displayCompared: 0 })
     expect(listCrossSourceConflicts(database)).toEqual([])
     // 再扫一次：幂等，不因为「没记」而反复计数（计数是这一轮的事实，不是累积值）。
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1 })
+      .toEqual({ groups: 0, recorded: 0, incomparable: 0, sameValueDifferentText: 1, displayCompared: 0 })
   })
 
   it('真不同（4.1 vs 4.2）照旧记冲突，记录的 value_before 就是两个原始展示串', () => {
@@ -209,7 +209,8 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
     seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0 })
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
+    expect(listCrossSourceConflicts(database).map((conflict) => conflict.basis)).toEqual(['numeric'])
     const recorded = database.prepare(`select provider_id, value_before from mi_calendar_value_revisions
       where decision = 'conflict:cross-source' order by provider_id`).all() as
       Array<{ provider_id: string; value_before: string }>
@@ -219,21 +220,45 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
     ])
   })
 
-  it('一边没有数值列（旧行）→ 不算冲突，单独计数，不进「冲突组」', () => {
+  it('一边没有数值列（旧行）→ 按展示串原样比，记冲突并标注「按展示串·未经数值校验」', () => {
     const database = open()
     seed(database, 'narwhal', '2026-10-03', '4.1')   // numeric_json 缺 → unparsed
     seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 1, sameValueDifferentText: 0 })
-    expect(listCrossSourceConflicts(database)).toEqual([])
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 1 })
+    const rows = database.prepare(`select provider_id, parser_version from mi_calendar_value_revisions
+      where decision = 'conflict:cross-source' order by provider_id`).all() as
+      Array<{ provider_id: string; parser_version: string }>
+    // 标注落在记录的出处里：这两个值是**按展示串**判出来的，没经过数值校验。
+    expect(rows).toEqual([
+      { provider_id: '0xrouter', parser_version: 'cross-source-conflict-v2-display-unverified' },
+      { provider_id: 'narwhal', parser_version: 'cross-source-conflict-v2-display-unverified' }
+    ])
+    expect(listCrossSourceConflicts(database).map((conflict) => conflict.basis)).toEqual(['display-unverified'])
   })
 
-  it('单位不同 → 不可比，不算冲突（也不拿「都推不出」当同单位）', () => {
+  it('单位不同 → 数值不可比，退回展示串比较并标注（不拿「都推不出」当同单位）', () => {
     const database = open()
     seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1, 1, 'percent'))
     seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2, 1, 'thousands'))
     expect(markCrossSourceConflicts(database))
-      .toEqual({ groups: 0, recorded: 0, incomparable: 1, sameValueDifferentText: 0 })
+      .toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 1 })
+    expect(listCrossSourceConflicts(database)[0]?.basis).toBe('display-unverified')
+  })
+
+  it('一边这一格根本没值 → 不比、不记，进「不可比」计数（不是「两家一致」）', () => {
+    const database = open()
+    seed(database, 'narwhal', '2026-10-03', '4.1', numeric(4.1))
+    // 另一家这一期有行、但 actual 没给（空串＝没给，`recordCrossSourceConflict` 的老规矩）。
+    upsertCalendarStandardRow(database, {
+      countryCode: 'USA', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09',
+      scheduledDate: '2026-10-03', firstScheduledDate: '2026-10-04', timePrecision: 'date',
+      valuesJson: JSON.stringify({}), valueState: 'missing',
+      sourceProviderId: '0xrouter', sourceEventId: 'x-2026-10-04',
+      parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z'
+    })
+    expect(markCrossSourceConflicts(database))
+      .toEqual({ groups: 0, recorded: 0, incomparable: 1, sameValueDifferentText: 0, displayCompared: 0 })
     expect(listCrossSourceConflicts(database)).toEqual([])
   })
 
@@ -243,7 +268,7 @@ describe('冲突相等性按数值列判（N3 接入）', () => {
     seed(database, 'macro-calendar-bls', '2026-10-03', '4.10', numeric(4.1, 2))
     seed(database, '0xrouter', '2026-10-04', '4.2', numeric(4.2))
     const result = markCrossSourceConflicts(database)
-    expect(result).toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0 })
+    expect(result).toEqual({ groups: 1, recorded: 2, incomparable: 0, sameValueDifferentText: 0, displayCompared: 0 })
     const recorded = database.prepare(`select provider_id, value_before, conflict_with_provider_id
       from mi_calendar_value_revisions where decision = 'conflict:cross-source' order by provider_id`).all() as
       Array<{ provider_id: string; value_before: string; conflict_with_provider_id: string }>

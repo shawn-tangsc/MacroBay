@@ -284,11 +284,13 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
   try {
     const conflicts = markCrossSourceConflicts(input.database)
     if (conflicts.recorded > 0 || conflicts.incomparable > 0 || conflicts.sameValueDifferentText > 0) {
-      // **「冲突 0 条」必须能被区分**：不可比（数值未记录/单位不明）与同值不同写法各自计数，
-      // 不能被读成「两家完全一致」。不记冲突的那两类也要有一行，否则它们等于不存在。
-      report(`[macro-calendar] 跨源数值冲突：可比且不同 ${conflicts.groups} 组（身份×字段），`
-        + `本次新记 ${conflicts.recorded} 条；不可比 ${conflicts.incomparable} 组（数值未记录/单位不明）、`
-        + `同值不同写法 ${conflicts.sameValueDifferentText} 组（不记冲突）`)
+      // **「冲突 0 条」必须能被区分**：按展示串判的、同值不同写法的、某家这一格没给的，各自计数，
+      // 不能被读成「两家完全一致」。**按展示串判的那一类必须标注「未经数值校验」**——它只比了
+      // 源给的原始串，没按数算过，别让读的人以为它和数值判定同一可信度。
+      report(`[macro-calendar] 跨源数值冲突：记 ${conflicts.groups} 组（身份×字段）、本次新写 `
+        + `${conflicts.recorded} 条；其中按展示串比较 ${conflicts.displayCompared} 组（未经数值校验）、`
+        + `同值不同写法 ${conflicts.sameValueDifferentText} 组（不记冲突）、`
+        + `不可比 ${conflicts.incomparable} 组（某家这一格没给）`)
     }
   } catch (error) {
     report(`[macro-calendar] 跨源冲突扫描失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
