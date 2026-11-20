@@ -1,7 +1,10 @@
+import { createHash } from 'node:crypto'
+import { collectingCalendarFeedIds } from '../calendarFeedRegistry'
 import { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
+import type { MarketCollectionContext } from './marketCalendarStorageValidation'
 import { createZeroXRouterCalendarCollectionService } from './zeroXRouterCalendarCollectionService'
 import { createZeroXRouterCalendarRefreshService } from './zeroXRouterCalendarRefreshService'
-import { calendarRecord } from './zeroXRouterCalendarContracts'
+import { calendarRecord } from './marketCalendarStorageContracts'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { statfsSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -45,13 +48,27 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
    * 运行时的宿主）；自动与手动都走这里，读者看到的是「这次没刷新成功」同一件事。
    */
   notificationSubmit?: (request: import('@platform/notifications/contracts/notificationSubmitContracts').NotificationSubmitRequest) => Promise<import('@platform/notifications/contracts/notificationSubmitContracts').NotificationSubmitOutcome>
+  /**
+   * 「立刻跑一次日历采集」的实现：**由装配处注入**（今天就是排一次 tick 作业）。
+   *
+   * 这个运行时只表达「跑一次」这件事，不认识作业定义、不认识源 id：
+   * - `triggered` 必须在**真的排上之后**才返回（先拿句柄再返回，否则就是「点了没反应」还回成功）；
+   * - `running` 表示已有一轮在跑；`failed` 表示排不上（抛错也算 failed，不许吞）。
+   */
+  triggerCollection?: () => Promise<'triggered' | 'running' | 'failed'>
   /** 读者设置时区：去重键里的 `{date}` 按它算（读者看得见的日期跟他的日历走）。 */
   readerTimeZone?: () => string
 }) {
   let repository!: ReturnType<typeof createMarketCalendarEventRepository>
+  /**
+   * 不是这条采集路径产出的批次（今天只有 Narwhal）先把自己的上下文放这里，仓库照同一套
+   * 校验读它——写入口径只有一份，不因为换了来源就绕过身份/容量/证据校验。
+   */
+  const pendingContexts = new Map<string, MarketCollectionContext>()
   const collection = createZeroXRouterCalendarCollectionService({ ...deps,
     createRepository: resolveCollectionContext => {
-      repository = createMarketCalendarEventRepository({ database: deps.database, resolveCollectionContext,
+      repository = createMarketCalendarEventRepository({ database: deps.database,
+        resolveCollectionContext: (collectionId: string) => pendingContexts.get(collectionId) ?? resolveCollectionContext(collectionId),
         readCapacity: deps.readCapacity, cursorKey: deps.cursorKey, now: () => deps.now().toISOString(),
         monotonicNow: deps.monotonicNow, manualCapacityAdmission: true })
       return repository
@@ -135,24 +152,24 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
      * failed" lead to different sentences downstream. A `collected` batch has already been
      * stored by the code the page reads, so the caller may read the page right after it returns.
      */
+    /**
+     * 「立刻跑一次日历采集」：**不接收源 id**，触发一次采集即可。
+     *
+     * 收窄的理由：按源点名与「只有一个日历采集域、源在适配器后面」这个模型冲突——
+     * 换了白名单只是把「被拒绝」变成「接受后下游失败」，而日报本不该关心谁在采。
+     * 传 `sourceIds` 一律 `input-invalid`（**拒绝，不是忽略**）。
+     */
     async refreshNow(input: unknown): Promise<MarketCalendarRefreshNowResult> {
       const parsed = parseRefreshNowInput(input)
       if (!parsed) return { state: 'failed', failureCode: 'input-invalid' }
       if (stopped || !deps.evidenceReady) return { state: 'failed', failureCode: 'readiness-unavailable' }
-      const timedOut = Symbol('timeout')
-      let timer: ReturnType<typeof setTimeout> | undefined
-      const deadline = new Promise<typeof timedOut>((resolve) => {
-        timer = setTimeout(() => resolve(timedOut), parsed.timeoutMs)
-        timer.unref?.()
-      })
+      if (deps.triggerCollection === undefined) return { state: 'failed', failureCode: 'readiness-unavailable' }
       try {
-        const outcome = await Promise.race([refreshAutomatic(parsed.sourceIds), deadline])
-        if (outcome === timedOut) return { state: 'timeout', timeoutMs: parsed.timeoutMs }
-        return refreshNowOutcome(outcome)
+        const outcome = await deps.triggerCollection()
+        if (outcome === 'failed') return { state: 'failed', failureCode: 'response-unavailable' }
+        return { state: 'collected', sources: [...collectingCalendarFeedIds()] }
       } catch {
         return { state: 'failed', failureCode: 'response-unavailable' }
-      } finally {
-        if (timer) clearTimeout(timer)
       }
     },
     /**
@@ -162,14 +179,25 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
      */
     readCollectionFreshness(enabledSourceIds?: readonly string[]): MarketCalendarFreshness {
       try {
+        /**
+         * **默认按「真正在采的」三条解析，不按 `feedByKind`**（2026-11-16，今天第三次同类问题）。
+         * `feedByKind` 是「按类事件查映射」，里的 id 还是旧源的 feed id；拿它算新鲜度，
+         * 会把一条停跑两天的旧源当成「启用的来源」，取最差就永远是 59 小时前——
+         * 于是每版都判过期、每次都触发补采、每次都写「采集超时/失败」。
+         */
         const enabled = enabledSourceIds ?? marketCalendarPublicPolicy.descriptors
-        const sources = marketCalendarPublicPolicy.descriptors.map((descriptorId) => {
+        const highWater = attempts.listCollectionHighWater()
+        const allAttempts = attempts.listAttempts()
+        const sources = marketCalendarPublicPolicy.kinds.map((_, index) => {
+          // 一类事件只报一个来源：新来源有采集记录就报它，否则报切换前那个——
+          // 与读取侧同一条规则，否则「数据来自谁」和「新鲜度说的是谁」会各说各话。
+          const descriptorId = sourceFor(index, highWater) ?? marketCalendarPublicPolicy.descriptors[index]!
           const lastCollectedAt = readWorstEnabledCollection(
-            attempts.listCollectionHighWater().filter((row) => row.descriptorId === descriptorId), [descriptorId])
-          const latestAttempt = latestAttemptFor(attempts.listAttempts(), descriptorId)
+            highWater.filter((row) => row.descriptorId === descriptorId), [descriptorId])
+          const latestAttempt = latestAttemptFor(allAttempts, descriptorId)
           return { descriptorId, lastCollectedAt, ...(latestAttempt ? { latestAttempt } : {}) }
         })
-        return { state: 'available', asOf: deps.now().toISOString(), lastCollectedAt: readWorstEnabledCollection(attempts.listCollectionHighWater(), enabled),
+        return { state: 'available', asOf: deps.now().toISOString(), lastCollectedAt: readWorstEnabledCollection(highWater, enabled),
           sources }
       } catch {
         return { state: 'unavailable', failureCode: 'query-unavailable' }
@@ -177,9 +205,12 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
     },
     readRefreshAttempt(scope: MarketCalendarScope, eventType: MarketCalendarSource['eventType']): MarketCalendarRefreshAttempt | undefined {
       const index = marketCalendarPublicPolicy.kinds.indexOf(eventType)
-      const descriptorId = marketCalendarPublicPolicy.descriptors[index]
-      if (!descriptorId) return undefined
-      return latestAttemptFor(attempts.listAttempts().filter((row) => row.locale === scope.locale), descriptorId, scope.month)
+      if (index < 0) return undefined
+      const attemptsOfLocale = attempts.listAttempts().filter((row) => row.locale === scope.locale)
+      // **只认当下在采的那个描述符**（2026-11-16）：旧源的 feed id 已经停跑，先问它等于把
+      // 一条两天前的失败记录当成「这一类事件的最新尝试」。`feedByKind` 只管按类查映射。
+      const attempt = latestAttemptFor(attemptsOfLocale, marketCalendarPublicPolicy.descriptors[index]!, scope.month)
+      return attempt ?? undefined
     },
     refreshManual(input: unknown): Promise<RefreshResult> {
       if (stopped || !deps.evidenceReady) return unavailable('readiness-unavailable')
@@ -197,6 +228,23 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
       active = { key, promise }
       return promise
     },
+    /**
+     * 外部采集（Narwhal）把一页发布写进同一张观测表。
+     *
+     * 上下文在这里现造：来源、身份、月份都来自批次本身，`evidenceHash` 取批次内容的 sha256，
+     * `rawRecordId` 由集合 id 派生（可追到是哪一次采集写的）。
+     */
+    appendObservationBatch(batch: Readonly<{ collectionId: string; providerId: string; descriptorId: string
+      locale: string; month: string; parseResult: unknown }>): { state: string; failureCode?: string } {
+      const evidenceHash = createHash('sha256').update(JSON.stringify(batch.parseResult)).digest('hex')
+      pendingContexts.set(batch.collectionId, {
+        providerId: batch.providerId, descriptorId: batch.descriptorId, locale: batch.locale, month: batch.month,
+        detectedAt: deps.now().toISOString(),
+        evidence: { providerId: batch.providerId, descriptorId: batch.descriptorId,
+          rawRecordId: `batch-${batch.collectionId}`.slice(0, 120), evidenceHash }
+      })
+      try { return repository.appendCollection(batch) } finally { pendingContexts.delete(batch.collectionId) }
+    },
     dispose(): Promise<void> {
       stopped = true
       disposal ??= (active?.promise ?? Promise.resolve()).then(() => undefined, () => undefined)
@@ -206,27 +254,34 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
 }
 
 /**
- * `sourceIds` defaults to the three 0xRouter feeds (fed/bea have their own 6-hour official
- * schedule and are never caught up here). Only those three are accepted: a caller cannot
- * widen the set, and a bad shape fails closed.
+ * `sourceIds` 是**这台运行时实际能采的那几条**，也就是 0xRouter 的三个端点——按需补跑
+ * 直接喂给它的采集器，所以标识必须与采集器一致，不能拿新的 feed 身份去点名它。
+ *
+ * 采集端换到 Narwhal 之后（一次调用写三类），这份清单收成 `collectionFeeds` 那一条；
+ * 在那之前用新身份点名，只会得到 `input-invalid`。
  */
-function parseRefreshNowInput(input: unknown): { sourceIds: readonly string[]; timeoutMs: number } | undefined {
+/** 这一类事件这一期真正有采集记录的那个来源；两个都没有时返回 undefined。 */
+function sourceFor(index: number, highWater: readonly { descriptorId: string }[]): string | undefined {
+  for (const descriptorId of [marketCalendarPublicPolicy.descriptors[index]!]) {
+    if (highWater.some((row) => row.descriptorId === descriptorId)) return descriptorId
+  }
+  return undefined
+}
+
+/**
+ * 入参只接受 `{ timeoutMs? }`。**任何源 id 一律拒绝**——不是忽略：
+ * 静默忽略会让调用方以为「点名的源跑过了」，而实际跑的是整个采集域。
+ */
+function parseRefreshNowInput(input: unknown): { timeoutMs: number } | undefined {
+  if (input === undefined) return { timeoutMs: marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs }
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined
   const value = input as Record<string, unknown>
-  if (Object.keys(value).some((key) => key !== 'sourceIds' && key !== 'timeoutMs')) return undefined
+  if (Object.keys(value).some((key) => key !== 'timeoutMs')) return undefined
   const timeoutMs = value.timeoutMs ?? marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs
   if (typeof timeoutMs !== 'number' || !Number.isSafeInteger(timeoutMs) ||
     timeoutMs < marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs ||
     timeoutMs > marketCalendarPublicPolicy.refreshNow.maximumTimeoutMs) return undefined
-  const sourceIds = value.sourceIds ?? marketCalendarPublicPolicy.descriptors
-  if (!Array.isArray(sourceIds) || sourceIds.length === 0 || sourceIds.length > marketCalendarPublicPolicy.descriptors.length) return undefined
-  const seen = new Set<string>()
-  for (const sourceId of sourceIds) {
-    if (typeof sourceId !== 'string' || !(marketCalendarPublicPolicy.descriptors as readonly string[]).includes(sourceId)) return undefined
-    if (seen.has(sourceId)) return undefined
-    seen.add(sourceId)
-  }
-  return { sourceIds: [...seen], timeoutMs }
+  return { timeoutMs }
 }
 
 /** A batch that stored anything is `collected`; nothing stored is `unchanged`; a refusal keeps its code. */
@@ -247,10 +302,13 @@ function refreshNowOutcome(result: RefreshResult): MarketCalendarRefreshNowResul
 // upper bound through the existing market capacity seam, never called attribution.
 export function createStoredManualCalendar(deps: {
   storage: MacroCalendarSqlite; archive: MacroCalendarEvidenceArchive; evidenceReady: boolean
+  jobRuntime?: { enqueueManual: (definitionId: string) => Promise<unknown> }
   requestGovernanceQueue: CollectionDependencies['requestGovernanceQueue']
   getApiKey: CollectionDependencies['getApiKey']; requestJsonBody: CollectionDependencies['requestJsonBody']
   readReadiness: RefreshDependencies['readReadiness']
   readEnabledFeeds?: RefreshDependencies['readEnabledFeeds']
+  /** 「立刻跑一次日历采集」（装配处注入：排一次 tick 作业）。 */
+  triggerCollection?: () => Promise<'triggered' | 'running' | 'failed'>
   /**
    * 这条腿的通知出口。**挂在采集侧**：一件事发生了就说一次，分析跑不跑是读者的选择，不决定
    * 「发生了」要不要被说出来。缺省时采集行为与从前一字不差。
@@ -303,6 +361,8 @@ export function createStoredManualCalendar(deps: {
   }
   return Object.freeze({
     queryMonth: query.queryMonth,
+    /** 外部采集（Narwhal）的观测写入，原样转给同一个仓库。 */
+    appendObservationBatch: runtime.appendObservationBatch,
     /** Bounded catch-up, forwarded unchanged: the runtime already owns the verdicts. */
     refreshNow: runtime.refreshNow,
     /**

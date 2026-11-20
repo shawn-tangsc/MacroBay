@@ -8,6 +8,8 @@ import { createNotificationEventCatalog } from '../contracts/notificationEventCa
 import { createDefaultNotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 import type { DeliveryHooks } from './notificationRouting'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
+import type { ChannelPushHook } from '../delivery/channelPushPort'
 import { PUSH_BACKOFF_WINDOW_MS } from '../delivery/pushBackoffPolicy'
 import { createNotificationJsonStorage, createNotificationRuntime } from './notificationRuntime'
 
@@ -50,14 +52,14 @@ function request(id: string): NotificationSubmitRequest {
   }
 }
 
-function runtimeAt(file: string, now: string, push: NonNullable<DeliveryHooks['push']>) {
+function runtimeAt(file: string, now: string, push: ChannelPushHook) {
   return createNotificationRuntime({
     storage: createNotificationJsonStorage(file),
     catalog,
     diagnostics: () => undefined,
     getSettings: async () => createDefaultNotificationRuntimeSettings(),
     clock: { now: () => new Date(now), timeZone: () => 'Asia/Shanghai' },
-    resolvePushChannel: async () => ({ ok: true, channelId: CHANNEL, channelName: 'Telegram' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: CHANNEL, name: 'Telegram' }] }),
     deliveryHooks: { push }
   })
 }
@@ -75,17 +77,18 @@ describe('push backoff survives a restart', () => {
       pushBackoff: { [CHANNEL]: { channelId: CHANNEL, failures: 3, pausedUntil } }
     }), 'utf8')
 
-    const blockedPush = vi.fn(async () => ({ ok: true, messageId: 'm-1' })) as unknown as NonNullable<DeliveryHooks['push']>
+    const blockedPush = vi.fn(singleResultHook(async () => ({ ok: true, messageId: 'm-1' })))
     const blocked = runtimeAt(file, NOW, blockedPush)
     const blockedOutcome = await blocked.submit(request('one'))
     expect(blockedOutcome.kind).toBe('accepted')
     // 重启后仍然拦着：端口一次都没被调用，记录写的是「熔断退避」而不是「已发出」。
     expect(blockedPush).not.toHaveBeenCalled()
     expect((blockedOutcome as { delivery?: { push?: { state?: string; reason?: string } } }).delivery?.push)
-      .toMatchObject({ state: 'failed', reason: 'push-backoff' })
+      // 熔断窗口内：这条通道记 `queued`（没发），不是 `failed`——读者选择等，不是通道坏了。
+      .toMatchObject({ state: 'queued' })
 
     // 窗口过去之后（同一份文件、新的运行时）：立刻恢复发送，不拿过期时刻继续拦。
-    const resumedPush = vi.fn(async () => ({ ok: true, messageId: 'm-2' })) as unknown as NonNullable<DeliveryHooks['push']>
+    const resumedPush = vi.fn(singleResultHook(async () => ({ ok: true, messageId: 'm-2' })))
     const resumed = runtimeAt(file, new Date(Date.parse(pausedUntil) + 1_000).toISOString(), resumedPush)
     const resumedOutcome = await resumed.submit(request('two'))
     expect(resumedPush).toHaveBeenCalledTimes(1)

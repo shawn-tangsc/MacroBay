@@ -24,6 +24,16 @@
    * `#c48a2a` spelling was a typo.
    */
   --caution: #c48a1a;
+  /*
+   * `--info`: **direction, not quality.** Used where a number points up or down relative to an
+   * expectation (`预期差`) — "below" reads cool, "above" reads warm (`--caution`). It never means
+   * good or bad: a higher-than-expected CPI is bad for rates and good for nothing; employment is
+   * the other way round. Red/green would state a verdict the data does not carry.
+   * Dark theme value is the chip fill with deep text (6.5:1); light theme value is the ink for
+   * border+text (5.2:1) — as a light-theme fill with deep text it only reaches 3.6:1, so light
+   * chips outline instead of fill.
+   */
+  --info: #6ea0dd;
 
   /*
    * Metric type scale: readings only (a single number or a very short label),
@@ -98,6 +108,8 @@
   --border-subtle: #eef0f3;
   --success: #2f7d4f;
   --caution: #a2691a;
+  /* `--info`: cool = direction, never quality (see the dark block for the full note). */
+  --info: #3e77b8;
 
   /*
    * Light has no room above white: #ffffff against the container #eef1f4 is 1.13, the physical

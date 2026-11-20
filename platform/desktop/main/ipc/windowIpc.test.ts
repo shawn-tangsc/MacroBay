@@ -41,6 +41,9 @@ const EXPECTED_CHANNELS = [
   'platform:dialog-select-directory',
   'platform:dialog-select-files',
   'platform:app-read-text-file',
+  // 保存桥（`3dfec90`）：渲染层只传「建议文件名 + 字节」，路径由 main 的保存对话框决定。
+  // 位置按源码注册顺序（appReadTextFile → appSaveFile → appSaveClipboardImage），不许挪到末尾。
+  'platform:app-save-file',
   'platform:app-save-clipboard-image'
 ]
 
@@ -59,7 +62,7 @@ function record(): { channels: string[]; ipcMain: { handle: (channel: string, li
 }
 
 describe('window ipc surface', () => {
-  it('registers exactly the seventeen window/app/shell/dialog channels, in order', () => {
+  it('registers exactly the eighteen window/app/shell/dialog channels, in order', () => {
     const { channels, ipcMain } = record()
     registerWindowIpc(ipcMain as never, {
       getMainWindow: () => null,
@@ -106,6 +109,10 @@ describe('window ipc surface', () => {
       [
         'Clipboard image is empty or too large.',
         'Invalid clipboard image payload.',
+        // 保存桥的两句边界拒绝：payload 不是对象 / 字节为空或 >20MB。它们经 `throw` 抛给渲染层，
+        // 导出失败时会显示给读者，所以是可见文案，必须钉在这份清单里。
+        'Invalid save payload.',
+        'Save payload is empty or too large.',
         'Only http(s) URLs can be opened externally.',
         '选择工作区',
         '选择附件'

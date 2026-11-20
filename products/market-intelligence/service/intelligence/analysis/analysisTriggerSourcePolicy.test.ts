@@ -111,3 +111,10 @@ it('rejects an unnarrowed source at the type level', () => {
   // @ts-expect-error an unknown source must not compile
   expect(() => resolveTriggerKey('calendar', 'refresh')).toBeDefined()
 })
+
+it('treats the per-item news reading as its own exempt manual line', () => {
+  // R39 §6：读者手动点的那一次不占自动额度，失败通知/台账也不能把它算进日历线。
+  expect(isGateExempt('news.manual')).toBe(true)
+  expect(analysisRunLineOf('news.manual')).toBe('news')
+  expect(analysisRunLineOf('calendar.refresh')).toBe('calendar')
+})

@@ -2,9 +2,10 @@
 import { readFileSync } from 'node:fs'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
@@ -17,7 +18,7 @@ const reading: PolicyPathReading = {
   phase: { kind: 'normal' },
   targetRange: { lowerPercent: 3.75, upperPercent: 4 },
   lastDecision: { vote: { for: 10, against: 2 }, outcome: 'no-change' },
-  probability: { venue: 'polymarket', asOf: '2026-10-30T02:10:00.000Z', outcome: 'hike-25', value: 0.76, changeInPp24h: -1, points: 40 },
+  probability: { venue: 'polymarket', asOf: '2026-10-30T02:10:00.000Z', outcome: 'hike-25', value: 0.76, changeInPp24h: -1 },
   staleness: 'live'
 }
 
@@ -383,3 +384,57 @@ describe('policy path card markers', () => {
   })
 })
 
+describe('the card tail action is inline text, not a link button', () => {
+  it('renders one text action with an arrow, an accessible name, and no link styling', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const onOpen = vi.fn()
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
+    const reading = {
+      meetingDate: '2026-12-09', asOf: '2026-11-12T00:00:00.000Z', staleness: 'live',
+      distribution: [{ outcome: 'no-change', probability: 76.65 }], phase: { kind: 'pre-decision' }
+    }
+    await act(async () => root.render(createElement(ShellLanguageProvider, {
+      language: 'zh-CN',
+      children: createElement(ShellTimeZoneProvider, {
+        timeZone: 'UTC',
+        children: createElement(PolicyPathCard, { reading: reading as never, text, month: '12 月', onOpen })
+      })
+    })))
+    const action = container.querySelector<HTMLButtonElement>('.mi-policy-card__open')!
+    expect(action).not.toBeNull()
+    // 不再走 antd 的 link 档（colorLink 不在 token 里）。
+    expect(action.className).not.toContain('ant-btn-link')
+    expect(action.className).toContain('text-action')
+    // 名字说清打开的是什么；箭头是装饰，读屏不念。
+    expect(action.getAttribute('aria-label')).toBe(text.openDetailAria)
+    const arrow = action.querySelector('svg')!
+    expect(arrow.getAttribute('width')).toBe('12')
+    expect(arrow.getAttribute('aria-hidden')).toBe('true')
+    await act(async () => action.click())
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+    container.remove()
+  })
+})
+
+
+// 入口现在就是卡底那个「详情 ↗」。要点是可复现：点一次，回调必须发生一次。
+describe('detail entry', () => {
+  it('fires onOpen when 详情 is clicked', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const onOpen = vi.fn()
+    await act(async () => {
+      root!.render(<ShellLanguageProvider language="zh-CN"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+        <PolicyPathCard reading={reading} text={text} month="12 月" onOpen={onOpen} />
+      </ShellTimeZoneProvider></ShellLanguageProvider>)
+    })
+    const detail = Array.from(host.querySelectorAll('button')).find(button => (button.textContent ?? '').includes('详情'))!
+    expect(detail).toBeTruthy()
+    await act(async () => { detail.click() })
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+})

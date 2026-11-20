@@ -260,7 +260,7 @@ export function ModelServiceModelDetectionDialog({
             dataAttributes={{ 'data-detect-close': true }}
             icon={X}
             onSelect={onClose}
-            resolveText={(key) => (key === 'modelService.detectClose' ? labels.detectClose : '')}
+            resolveText={(key) => ({ 'modelService.detectClose': labels.detectClose } as Readonly<Record<string, string>>)[key] ?? ''}
             size="md"
           />
           {canStop ? (

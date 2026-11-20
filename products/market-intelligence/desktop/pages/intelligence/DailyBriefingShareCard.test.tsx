@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
-import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { citationSource, DailyBriefingShareCard, SOURCE_LABELS } from './DailyBriefingShareCard'
 import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
 
 const text = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -165,28 +165,37 @@ describe('the macro section draws events, and says why it is empty without imply
     assertClean(rendered)
   })
 
-  it('says the macro section could not be read, and why, when the calendar failed', async () => {
-    // 用户 2026-11-09（`MI-2-R89`，呈现分寸放宽后）：空栏不再只靠右列解释——正文用同一句
-    // 「暂时读不到：<原因>」说出来，与「数据缺口与限制」是同一个推导、同一句话。
-    // 「确实没有」那一档仍不印（见上一条）：区分「拿不到」和「没有」，不把前者写成后者。
-    // 期望句由同一张文案表推出（过期那条还要填上小时数），不是手抄一句话：文案一改，用例跟着改。
-    const cases: Array<{ notes: DailyBriefingDocument['news']['notes']; expected: string }> = [
-      { notes: { macroEmpty: 'calendar-stale', macroEmptyHours: 42 }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-stale'].replace('{hours}', '42')}` },
-      { notes: { macroEmpty: 'calendar-catch-up-timeout' }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-catch-up-timeout']}` },
-      { notes: { macroEmpty: 'calendar-unavailable' }, expected: `${text.macroUnreadable}${text.macroEmptyCodes['calendar-unavailable']}` }
+  it('prints nothing at all when the window really had no release, in both wordings', async () => {
+    // 用户 2026-11-16：这句不进正文（原话「不要这句，显示在留痕区域就好了」）。空窗就是整块不显示，
+    // 信息只在「数据缺口与限制」里留一条提示——所以两句都不许出现在卡片上。
+    for (const code of ['past-24h-no-release', 'past-24h-no-high-impact-release'] as const) {
+      const rendered = await render(emptyMacro({ macroEmpty: code }))
+      expect(rendered.querySelector('.mi-brief-poster__news-section'), code).toBeNull()
+      expect(rendered.querySelector('[data-macro-quiet]'), code).toBeNull()
+      expect(rendered.textContent, code).not.toContain(text.pastWindow.noRelease)
+      expect(rendered.textContent, code).not.toContain(text.pastWindow.noHighImpact)
+      assertClean(rendered)
+    }
+  })
+
+  it('draws no macro block at all when the calendar could not be read', async () => {
+    // 用户 2026-11-15：**读不到就整块不显示**——标题、占位句都不留，和「未来 7 天没有可关注
+    // 的就整块不出现」同一条规矩。为什么没有，读者去「问题清单」看（那一处仍是唯一出口）。
+    const cases: Array<DailyBriefingDocument['news']['notes']> = [
+      { macroEmpty: 'calendar-collect-failed' },
+      { macroEmpty: 'calendar-stale', macroEmptyHours: 42 },
+      { macroEmpty: 'calendar-catch-up-timeout' },
+      { macroEmpty: 'calendar-unavailable' },
+      { macroEmpty: 'calendar-not-collected' }
     ]
-    for (const { notes, expected } of cases) {
+    for (const notes of cases) {
+      const reason = notes.macroEmpty
       const rendered = await render(emptyMacro(notes))
-      expect(rendered.querySelector('.mi-brief-poster__macro-head')?.textContent).toBe(text.sections.macro)
-      const rows = rendered.querySelectorAll('.mi-brief-poster__macro')
-      expect(rows).toHaveLength(1)
-      const row = rendered.querySelector('.mi-brief-poster__macro-row-empty')
-      expect(row?.getAttribute('data-macro-empty')).toBe('unreadable')
-      expect(row?.textContent).toBe(expected)
-      // 仍然是一个判断，不是一句哭诉：说原因，但不出现「没数据/没拿到」这类把事说死的词。
-      for (const word of ['没数据', '没拿到', '未拿到', '未公布', '没有已发布的高影响事件']) {
-        expect(rendered.textContent, word).not.toContain(word)
-      }
+      expect(rendered.querySelector('.mi-brief-poster__news-section'), reason).toBeNull()
+      expect(rendered.querySelector('.mi-brief-poster__macro-head'), reason).toBeNull()
+      expect(rendered.querySelectorAll('.mi-brief-poster__macro'), reason).toHaveLength(0)
+      expect(rendered.querySelector('[data-macro-empty]'), reason).toBeNull()
+      assertClean(rendered)
     }
   })
 
@@ -619,7 +628,7 @@ describe('daily brief share card in English', () => {
       .toEqual(['Lower than expected', 'Higher than expected'])
     // The baseline is a footnote under the row, not a third card.
     expect(baseline.parentElement).not.toBe(grid)
-    expect(baseline.textContent).toBe('In line with consensus: The range holds.')
+    expect(baseline.textContent).toBe('In line with the expectation: The range holds.')
   })
 
   it('localizes the inline condition into a Chinese footnote instead of leaking the AI phrase', async () => {
@@ -671,7 +680,7 @@ describe('daily brief share card in English', () => {
     const rendered = await render(withFocus({ consensus: '3.2%', previous: '29' }))
     const meta = rendered.querySelector('.mi-brief-poster__next-meta')!.textContent
 
-    expect(meta).toBe('High impact · United States · Consensus 3.2% · Previous 29')
+    expect(meta).toBe('High impact · United States · Expectation 3.2% · Previous 29')
     expect(rendered.querySelector('.mi-brief-poster__next-values')).toBeNull()
     expect((rendered.querySelector('.mi-brief-poster')!.textContent?.match(/Previous 29/g) ?? [])).toHaveLength(1)
   })
@@ -813,5 +822,80 @@ describe('the sheet lists newest first (user 2026-11-06)', () => {
     expect(head?.textContent).toContain('10-31')
     expect(head?.textContent).toContain(text.macro.timeNotPublished)
     expect(head?.textContent).not.toContain('00:00')
+  })
+})
+
+describe('citation source labels', () => {
+  const text = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+  it('resolves every source id that can appear to a name, never to a raw id or the analysis fallback', () => {
+    // 切换后最容易出的两种错：新 id 没进表 → 落原始 id；旧 refId 前缀分支还在 → 新数据贴旧标签。
+    for (const sourceId of Object.keys(SOURCE_LABELS)) {
+      expect(citationSource({ refId: `query:${sourceId}`, sourceLabel: sourceId }, text)).toBe(SOURCE_LABELS[sourceId])
+    }
+    expect(citationSource({ refId: 'query:cryptoetf-etf-flows', sourceLabel: 'cryptoetf-etf-flows' }, text)).toBe('CryptoETF')
+    expect(citationSource({ refId: 'query:cryptoetf-etf-flows', sourceLabel: 'cryptoetf-etf-flows' }, text))
+      .not.toBe(text.citationSources.analysis)
+  })
+  it('no longer relabels anything just because its ref handle starts with the old provider', () => {
+    expect(citationSource({ refId: 'query:0xrouter-etf' }, text)).not.toBe('0xRouter')
+  })
+})
+
+/**
+ * 用户 2026-11-15：「这两块以前就是好的，无非是简报读日历换了数据源。」
+ * 所以判据不是「有没有解释句」，而是**这两块与原版逐字相同**。
+ *
+ * 下面把两块的全部可见正文拼起来与固定串比对：改回任何一处今晚的脚手架
+ * （计数行、`另有 N 条`、`无法判定`、`一级指标排期`）都会立刻红。
+ */
+describe('the two restored blocks read exactly as before', () => {
+  const restoredDoc = (): DailyBriefingDocument => {
+    const base = briefing()
+    return {
+      ...base,
+      news: {
+        ...base.news,
+        macro: [{ ...base.news.macro[0]!, why: '投入成本压力缓和，抬高贴现率压力。' }],
+        notes: {}
+      },
+      next: {
+        items: [],
+        focus: {
+          eventKey: 'US.PCE', title: '核心 PCE 年率', countryName: '美国',
+          at: '2026-11-25T13:30:00.000Z', importance: 'high' as const,
+          category: 'economic-indicator' as const, consensus: '3.2%', previous: '3.1%',
+          why: '通胀回落速度决定下一次降息窗口。'
+        }
+      }
+    }
+  }
+
+  it('keeps the four removed strings out and the value plus its sentence in', async () => {
+    const host = await render(restoredDoc())
+    const body = host.textContent ?? ''
+    for (const removed of ['过去 24 小时 ·', '另有 ', '无法判定', '一级指标排期']) {
+      expect(body, removed).not.toContain(removed)
+    }
+    expect(body).toContain(text.sections.macro)
+    expect(body).toContain('CPI')
+    expect(body).toContain('投入成本压力缓和，抬高贴现率压力。')
+    expect(body).toContain(text.sections.next)
+    expect(body).toContain(text.next.count.replace('{count}', '1'))
+    expect(body).toContain('通胀回落速度决定下一次降息窗口。')
+  })
+
+  it('renders nothing at all for either block when there is nothing to put in it', async () => {
+    const base = briefing()
+    const host = await render({ ...base, news: { ...base.news, macro: [], notes: {} }, next: { items: [], note: 'next-7d-importance-unknown' } })
+    expect(host.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+    expect(host.querySelector('.mi-brief-poster__next')).toBeNull()
+    const body = host.textContent ?? ''
+    expect(body).not.toContain(text.sections.macro)
+    expect(body).not.toContain(text.sections.next)
+    // 用户 2026-11-15：空就整块不出现，不写占位句。这一处 DOM 同时是导出海报的来源
+    // （`useBriefingShareActions` 对同一张 poster 调 `toPng`），所以这条断言覆盖屏幕与导出。
+    for (const placeholder of ['无法判定', '0 个', '暂无', '没有高影响事件']) {
+      expect(body, placeholder).not.toContain(placeholder)
+    }
   })
 })

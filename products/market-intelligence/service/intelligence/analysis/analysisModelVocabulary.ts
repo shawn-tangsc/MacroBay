@@ -106,6 +106,8 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarConsensusUnavailable]: '缺少市场预期值',
     [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarQueryNotWired]: '经济日历未接线',
     [MARKET_ANALYSIS_CONTEXT_CAVEATS.newsSentimentUnavailable]: '新闻舆情不可用',
+    /* 本月一条一级发布都没有：读成功了，但这一档缺整月——和「读不到」是两句话（2026-11-14）。 */
+    'tier1-absent-in-month': '本月没有一级指标发布',
     'observed-unverified': '来源身份未验证',
     'provider-title-is-display-name': '事件名取自提供方标题',
     'provider-surprise-not-comparable': '预期差不可计算',

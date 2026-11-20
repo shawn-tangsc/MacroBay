@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 
 import { createNotificationEventCatalog, type NotificationEventPolicy } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
 import { createDefaultNotificationStoreState } from '../store/notificationStore'
-import { resolvePushChannel } from '../delivery/pushChannelResolution'
+import { resolvePushChannels } from '../delivery/pushChannelResolution'
 
 /**
  * 判据 1 / 2 / 3（技术方案 §1、§5）：
@@ -65,45 +66,39 @@ function harness() {
     storage,
     catalog,
     diagnostics: () => undefined,
-    resolvePushChannel: async () => ({ ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'channel-a', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock,
-    deliveryHooks: { push: async (record) => { pushed.push(record.id); return { ok: true, messageId: record.id } } }
+    deliveryHooks: { push: singleResultHook(async (record) => { pushed.push(record.id); return { ok: true, messageId: record.id } }) }
   })
   return { runtime, state: () => state, pushed }
 }
 
-describe('resolvePushChannel', () => {
+describe('resolvePushChannels', () => {
   it('uses the only runtime-ready channel and hands its name back', () => {
-    expect(resolvePushChannel([
+    expect(resolvePushChannels([
       { id: 'a', name: 'A', state: 'runtime-ready' },
       { id: 'b', name: 'B', state: 'configuration-ready' }
-    ])).toEqual({ ok: true, channelId: 'a', channelName: 'A' })
+    ])).toEqual({ ok: true, channels: [{ id: 'a', name: 'A' }] })
   })
 
   it('judges by runtime-ready only, not by "requested + credential": those two are a second criterion', () => {
     // 读者勾了启用、凭据也在，但运行时没接通（configuration-ready）→ 不算可用通道。
-    expect(resolvePushChannel([{ id: 'a', name: 'A', state: 'configuration-ready' }]))
-      .toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: { 'configuration-ready': 1 } })
+    expect(resolvePushChannels([{ id: 'a', name: 'A', state: 'configuration-ready' }]))
+      .toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: { 'configuration-ready': 1 }, requestedCount: 0 })
   })
 
   it('fails closed with 0 channels and reports no conflict', () => {
-    const codes: string[] = []
-    const result = resolvePushChannel([], (code) => codes.push(code))
-    expect(result).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} })
-    expect(codes).toEqual([])
+    expect(resolvePushChannels([])).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 })
   })
 
-  it('fails closed with ≥2 channels, reports the real count and one diagnostic', () => {
-    const seen: number[] = []
-    const result = resolvePushChannel([
+  it('returns every runtime-ready channel instead of treating two as a conflict', () => {
+    // 多通道方案 §1b：同时启用多条是合法状态。把这里改回「≥2 条即失败」→ 必须红。
+    expect(resolvePushChannels([
       { id: 'a', name: 'A', state: 'runtime-ready' },
       { id: 'b', name: 'B', state: 'runtime-ready' },
       { id: 'c', name: 'C', state: 'runtime-ready' }
-    ], (_code, count) => seen.push(count))
-    expect(result).toEqual({ ok: false, reason: 'push-unavailable', enabledChannelCount: 3, multiple: true, states: { 'runtime-ready': 3 } })
-    // 数字必须来自同一次判定：写死 2 的实现在这里就红。
-    expect(seen).toEqual([3])
+    ])).toEqual({ ok: true, channels: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }] })
   })
 })
 
@@ -115,10 +110,10 @@ describe('the three read sites share one derivation', () => {
       storage: { read: async () => createDefaultNotificationStoreState(), write: async () => undefined },
       catalog,
       diagnostics: () => undefined,
-      resolvePushChannel: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} }),
+      resolvePushChannels: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 }),
       getSettings: async () => settings,
       clock,
-      deliveryHooks: { push: async (record) => { pushed.push(record.id); return { ok: true, messageId: record.id } } }
+      deliveryHooks: { push: singleResultHook(async (record) => { pushed.push(record.id); return { ok: true, messageId: record.id } }) }
     })
     // 提交本身成立（中心要留这条），**手机那一档**写成失败并给 `push-unavailable`；一条也不许发出去。
     const outcome = await bare.submit(request())

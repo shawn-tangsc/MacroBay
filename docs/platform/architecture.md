@@ -129,7 +129,7 @@ produced it.
 - Channel integrations are present in the platform code, with a channel settings page; no adapter is
   enabled for messaging in this release.
 - Packaged installers and auto-update are not included.
-- macOS is the verified development platform; Windows and Linux are experimental.
+- macOS is the primary development and build platform; Windows and Linux are experimental.
 
 See [Status and limitations](../reference/status-and-limitations.md).
 

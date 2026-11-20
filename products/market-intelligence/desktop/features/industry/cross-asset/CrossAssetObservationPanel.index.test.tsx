@@ -62,6 +62,10 @@ async function render(input: Readonly<{
   queryFailure?: 'query' | 'contract'
   /** BTC/ETH 实时报价那条腿的状态（默认两者都是 `missing`）。 */
   quotes?: Partial<Record<'btc' | 'eth', 'live' | 'stale' | 'missing'>>
+  /** 美元/黄金两条线读的宏观序列；不给＝这一版没有宏观库，图上没有这两条线。 */
+  macroSeries?: (seriesId: string, fromMs: number, toMs: number) => readonly { atMs: number; value: number }[]
+  /** 美元那条宏观读数（含服务侧挂的永久拒绝）；不给＝这一格没有宏观读数。 */
+  macroReading?: Readonly<{ atMs: number; sourceFailure?: 'symbol-not-supported' }>
 }>) {
   const host = document.createElement('div')
   document.body.append(host)
@@ -85,7 +89,8 @@ async function render(input: Readonly<{
           .filter(entry => entry.barOpenMs >= request.fromMs && entry.barOpenMs <= request.toMs && entry.barEndMs <= request.asOfMs)
     } as never,
     live: () => live,
-    indexFeed: () => ({ state: input.feed })
+    indexFeed: () => ({ state: input.feed }),
+    ...(input.macroSeries === undefined ? {} : { macroSeries: input.macroSeries })
     // The hook opens on the 24h range, and it hides a snapshot whose range is not the one it asked for.
   }).query({ range: input.range ?? '24h' })
   const client = {
@@ -106,6 +111,18 @@ async function render(input: Readonly<{
       cellStateLabels: { disabled: '数据未被启用', unreadable: '暂时读不到' }
     }),
     ...(input.sourceStatusStale === undefined ? {} : { sourceStatusStale: input.sourceStatusStale }),
+    ...(input.macroReading === undefined ? {} : {
+      // 美元那条读数：`sourceFailure` 由服务侧按采集器的品种级失败挂上来（这里只是夹具）。
+      macroSnapshot: {
+        state: 'available' as const, asOf: new Date(input.nowMs).toISOString(),
+        source: { enabled: true, hasCredential: true },
+        readings: [{
+          seriesId: 'dxy-real', level: 103.407, atMs: input.macroReading.atMs, returns: {},
+          ...(input.macroReading.sourceFailure === undefined ? {} : { sourceFailure: input.macroReading.sourceFailure })
+        }],
+        caveats: []
+      }
+    }),
     ...(input.onEnableData === undefined ? {} : { onEnableData: input.onEnableData })
   })))
   return { host, client, unmount: async () => { await act(async () => root.unmount()); host.remove() } }
@@ -179,9 +196,11 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       // The licensed index is the standard instrument: no proxy label, because it is not a proxy.
       expect(page.host.querySelector('[data-index-proxy="true"]')).toBeNull()
       // 合法指数这一腿在这个夹具里没有任何可画的点（289 个点全是空），所以图例照样列出、
-      // 名字后面标「未绘制」——不标会让读者以为线被藏了。
+      // 名字后面说「本段无数据」——但它不是控件：点它没有任何可见结果（界面设计 2026-11-16）。
+      expect([...page.host.querySelectorAll('.mi-cross-asset__legend > *')].map(item => item.textContent))
+        .toEqual([`${text.indexNames.real}${text.lineNoComparableData}`, 'BTC', 'ETH'])
       expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
-        .toEqual([`${text.indexNames.real}${text.lineNotDrawn}`, 'BTC', 'ETH'])
+        .toEqual(['BTC', 'ETH'])
       expect(page.host.querySelector('[data-market-state-tag="closed"]')).toBeNull()
       expect(page.host.querySelector('[data-asset-price="index"]')?.textContent).toBe('25017.00')
       expect(cell(page.host, '15m').textContent).toMatch(/[0-9]/)
@@ -426,21 +445,113 @@ describe('「无数据」那句按腿说（用户 2026-11-11）', () => {
   })
 })
 
-describe('图例里没画出来的线要有标记（用户 2026-11-11）', () => {
-  it('marks a line whose curve has no drawable point, and keeps the reason in the title ⓘ', async () => {
-    // 这个夹具里合法指数那一腿 289 个点全是空：线画不出来，但图例照样列出。
+describe('图例要回答这一段的数据怎么了（用户 2026-11-16）', () => {
+  it('says there is no data in this stretch instead of talking about the renderer, and keeps the reason in the title ⓘ', async () => {
+    // 这个夹具里合法指数那一腿 289 个点全是空：没有可比数据，图例照样列出。
     const page = await render({ nowMs: at('2026-07-15T15:00:00.000Z'), feed: 'ready', liveState: 'disabled', bySymbol: bothLegs(at('2026-07-15T15:00:00.000Z')) })
     try {
-      const undrawn = page.host.querySelector('[data-undrawn="index"]')
-      expect(undrawn).not.toBeNull()
-      expect(undrawn?.textContent).toBe(text.lineNotDrawn)
-      // 画得出来的线没有这个标记。
-      expect(page.host.querySelector('[data-undrawn="btc"]')).toBeNull()
+      const noData = page.host.querySelector('[data-no-comparable-data="index"]')
+      expect(noData).not.toBeNull()
+      // 它是图例里的一行文字，不是控件：不是 button、不在 button 里、不能聚焦、没有颜色点。
+      expect(noData?.closest('button')).toBeNull()
+      expect(noData?.tagName).toBe('SPAN')
+      expect(noData?.getAttribute('tabindex')).toBeNull()
+      expect(noData?.getAttribute('role')).toBeNull()
+      expect(noData?.querySelector('i')).toBeNull()
+      expect(noData?.textContent).toBe(`${text.indexNames.real}${text.lineNoComparableData}`)
+      expect(noData?.querySelector('small')?.textContent).toBe(text.lineNoComparableData)
+      // 有数据的线照旧是切换按钮，也没有这个标记。
+      expect(page.host.querySelector('[data-no-comparable-data="btc"]')).toBeNull()
+      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="btc"]')).not.toBeNull()
+      // 说的是数据，不是渲染：这句里不许出现「画 / 绘制 / 渲染」。
+      expect(text.lineNoComparableData).not.toMatch(/绘制|渲染|画/)
+      // 原因句同样说数据、不说实现：不出现「线要求 / 5 分钟 K 线」这类实现细节。
+      expect(text.lineNoComparableDataReason).not.toMatch(/K 线|要求|绘制|渲染|画/)
       // 原因在图标题那颗 ⓘ 的浮层里（点开才渲染），图例里不再铺解释。
-      expect(undrawn?.textContent).not.toContain(text.lineNotDrawnReason)
+      expect(noData?.textContent).not.toContain(text.lineNoComparableDataReason)
       const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
       await act(async () => hint.click())
-      expect(document.body.textContent).toContain(text.lineNotDrawnReason)
+      expect(document.body.textContent).toContain(text.lineNoComparableDataReason)
+    } finally { await page.unmount() }
+  })
+
+  it('covers the dollar line too: a weekend leaves every point empty, and the reason is still reachable', async () => {
+    // 用户 2026-11-16 截图：美元 DXY 后面跟着一句说渲染器的话。周末美元没有新收盘，整窗都是空点——
+    // 这不是读失败，是这一段没有可比数据。宏观两条线也得有同一句，不能只有三条资产腿有。
+    const nowMs = at('2026-07-19T12:00:00.000Z') // Sunday
+    const page = await render({
+      nowMs, feed: 'ready', bySymbol: bothLegs(nowMs),
+      // 只有一次收盘，落在窗口开始前 30 小时：够锚定窗口（上限 72 小时），但整窗没有新收盘
+      // （carry 上限 24 小时），所以每个点都是空的。
+      macroSeries: seriesId => seriesId === 'xau-usd' ? [] : [{ atMs: nowMs - 54 * 3_600_000, value: 102 }]
+    })
+    try {
+      const noData = page.host.querySelector('[data-no-comparable-data="dxy"]')
+      expect(noData).not.toBeNull()
+      // 这一条不是按钮：无数据的线点不出任何可见结果，留着就是假控件（界面设计 2026-11-16）。
+      expect(page.host.querySelector('.mi-cross-asset__legend button[data-asset="dxy"]')).toBeNull()
+      expect(noData?.closest('button')).toBeNull()
+      expect(noData?.getAttribute('tabindex')).toBeNull()
+      expect(noData?.querySelector('i')).toBeNull()
+      expect(noData?.textContent).toBe(`${text.assetLabels.dxy}${text.lineNoComparableData}`)
+      // 有数据的几条照旧是切换按钮，顺序不变。
+      expect([...page.host.querySelectorAll('.mi-cross-asset__legend button')].map(button => button.textContent))
+        .toEqual(['QQQ', 'BTC', 'ETH'])
+      // 黄金这一腿没有曲线，图例里根本没有它，所以也不会被标成「本段无数据」。
+      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="gold"]')).toBeNull()
+      const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
+      await act(async () => hint.click())
+      expect(document.body.textContent).toContain(text.lineNoComparableDataReason)
+    } finally { await page.unmount() }
+  })
+
+  it('covers the whole row and drops the line from the legend when the provider no longer carries the instrument', async () => {
+    // 真机 2026-11-16 + 用户当日口径：源不能用就像关格一样**整行挡住**，图上**直接不出现**这条线；
+    // 不要说明文字，原因只在图标题的 ⓘ 里（一行，合计仍 4 行）。
+    const nowMs = at('2026-07-19T12:00:00.000Z')
+    const refusedAt = at('2026-07-17T21:55:00.000Z')
+    const page = await render({
+      nowMs, feed: 'ready', bySymbol: bothLegs(nowMs),
+      macroSeries: seriesId => seriesId === 'xau-usd' ? [] : [{ atMs: nowMs - 54 * 3_600_000, value: 102 }],
+      macroReading: { atMs: refusedAt, sourceFailure: 'symbol-not-supported' }
+    })
+    try {
+      // 默认开：这一行根本不出现（用户 2026-11-16 第二版口径）。
+      expect(page.host.querySelector('[data-status-row="dxy"]')).toBeNull()
+      // 图例里这条线也不出现。
+      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
+      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
+      // 关掉开关：整行遮住，只剩一句状态，没有数字、窗口、日期句。
+      const toggle = page.host.querySelector<HTMLElement>('[role="switch"]')!
+      await act(async () => toggle.click())
+      const row = page.host.querySelector('[data-status-row="dxy"]')!
+      expect(row.getAttribute('data-source-state')).toBe('unreadable')
+      expect(row.textContent).toContain(text.sourceRefused)
+      expect(row.querySelector('[data-asset-price]')).toBeNull()
+      expect(row.querySelector('[data-asset-return]')).toBeNull()
+      expect(row.querySelector('button[aria-label]')).toBeNull()
+      // 原因只在 ⓘ 里说一次。
+      const hint = page.host.querySelector<HTMLButtonElement>('.mi-cross-asset__chart-toolbar button[aria-label]')!
+      await act(async () => hint.click())
+      expect(document.body.textContent).toContain('供应商当前套餐不提供这个品种，最近一次收盘 2026-07-17 21:55:00 GMT')
+      expect(document.body.textContent).not.toContain(text.lineNoComparableDataReason)
+    } finally { await page.unmount() }
+  })
+
+  it('does not lend this sentence to a read failure: an unreadable row leaves the legend instead', async () => {
+    // 「这一段没有可比数据」与「这次读不到」是两件事：读不到时这条线根本不进图例，状态由表里那一行说；
+    // 不许把读失败画成数据缺口（用户红线：缺什么、读不到什么，分开说）。
+    const nowMs = at('2026-07-19T12:00:00.000Z')
+    const page = await render({
+      nowMs, feed: 'ready', bySymbol: bothLegs(nowMs),
+      macroSeries: seriesId => seriesId === 'xau-usd' ? [] : [{ atMs: nowMs - 54 * 3_600_000, value: 102 }],
+      rowStates: { dxy: 'unreadable' }
+    })
+    try {
+      expect(page.host.querySelector('.mi-cross-asset__legend [data-asset="dxy"]')).toBeNull()
+      expect(page.host.querySelector('[data-no-comparable-data="dxy"]')).toBeNull()
+      // 行自己的状态照旧在表里：读不到说的是读失败，不是「没有数据」。
+      expect(page.host.querySelector('[data-status-row="dxy"]')?.textContent).toContain('暂时读不到')
     } finally { await page.unmount() }
   })
 })
@@ -525,6 +636,49 @@ describe('空态与有数据态同宽：靠结构，不靠像素', () => {
     expect(none.table).toBe(data.table)
     expect(none.head).toBe(data.head)
     expect(none.rows).toBe(data.rows)
+  })
+
+  it('keeps the row ⓘ on the same line as the row name, never as its own line', async () => {
+    // 用户 2026-11-18：「icon 为啥要换行？放到标题前面或者后面去呀」。判据只认结构 + 样式规则：
+    // 名字与 ⓘ 同一个 nowrap 容器、图标 flex:none；不许靠 flex-end / margin-left:auto 推走。
+    const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
+    const at = css.indexOf('.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name {')
+    const rule = css.slice(at, css.indexOf('}', at))
+    expect(rule).toContain('display: inline-flex')
+    expect(rule).toContain('align-items: center')
+    expect(rule).toContain('flex-wrap: nowrap')
+    expect(rule).toContain('gap: 4px')
+    expect(rule).not.toContain('flex-end')
+    expect(rule).not.toContain('margin-left: auto')
+    const iconAt = css.indexOf('.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name > * {')
+    expect(css.slice(iconAt, css.indexOf('}', iconAt))).toContain('flex: none')
+
+    // 结构：图标与名字同一组、不是裸兄弟，且**排在名字前面**（用户 2026-11-18：「放标题前面试试看」）。
+    const page = await render({ nowMs: overnightMs, feed: 'ready', bySymbol: bothLegs(overnightMs) })
+    try {
+      for (const id of ['index', 'btc', 'eth', 'dxy'] as const) {
+        const th = page.host.querySelector(`[data-status-row="${id}"] th`)!
+        const group = th.querySelector('.mi-cross-asset__row-name')!
+        expect(group.querySelector('button[aria-label]')).not.toBeNull()
+        expect(th.querySelector(':scope > button')).toBeNull()
+        expect(group.firstElementChild?.querySelector('button[aria-label]')).not.toBeNull()
+      }
+    } finally { await page.unmount() }
+  })
+
+  it('lets the status table grow into the column and share the slack across its rows', () => {
+    // 用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」。
+    // happy-dom 没有布局，只钉结构规则：左栏是列向 flex、表吃余量、单元格垂直居中。
+    const css = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.css'), 'utf8')
+    const quoteAt = css.indexOf('.mi-cross-asset__quote {')
+    const quoteRule = css.slice(quoteAt, css.indexOf('}', quoteAt))
+    expect(quoteRule).toContain('display: flex')
+    expect(quoteRule).toContain('flex-direction: column')
+    // 并进既有那条表规则（`flex` 与 `table-layout` 同一处，且表规则里仍然不许出现 display）。
+    const tableRule = css.match(/\.mi-cross-asset__status-table\s*\{([^}]*)\}/)
+    expect(tableRule?.[1] ?? '').toContain('flex: 1 1 auto')
+    expect(tableRule?.[1] ?? '').not.toMatch(/display\s*:/)
+    expect(css).toContain('.mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }')
   })
 
   it('pins the card width in CSS and never derives it from content', () => {

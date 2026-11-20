@@ -104,6 +104,14 @@ const operations = [
   }
 ]
 
+vi.mock('./useQuarantineCopies', () => ({
+  // 隔离副本是同一屏上的另一块只读数据；这一组用例只看缓存表，给它一份稳态空清单。
+  useQuarantineCopies: () => ({
+    state: { status: 'ready', data: { copies: [], unreadableDirectories: 0, truncated: false } },
+    reload: async () => undefined
+  })
+}))
+
 vi.mock('./useStorageCacheSettings', () => ({
   useStorageCacheSettings: () => ({
     state: mockFeed.state as AsyncState<unknown>,
@@ -113,6 +121,17 @@ vi.mock('./useStorageCacheSettings', () => ({
     compactCache
   })
 }))
+
+/**
+ * 缓存表那一块（不含隔离副本）。
+ *
+ * 同一屏上隔离副本是**另一条读取**：折叠区为了 `aria-controls` 指向真实节点会常驻渲染，
+ * 所以整页标记里必然带着它自己的空态/加载文字。这组用例判的是缓存表的生命周期，
+ * 断言必须只看缓存表那一段——否则「缓存表没画空态」会被另一块的文字顶红。
+ */
+function cacheArea(markup: string): string {
+  return markup.split('data-quarantine-copies')[0] ?? markup
+}
 
 describe('Storage and Cache settings UI', () => {
   beforeEach(() => {
@@ -153,8 +172,13 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).toContain(labels.clear)
     expect(markup).toContain(labels.compact)
     expect(markup).toContain(labels.historyTitle)
-    // History stays collapsed until the user opens it.
-    expect(markup).not.toContain('class="storage-cache-history"')
+    // 两个折叠头都走平台壳；操作记录默认收起——表在 DOM 里（壳的 `aria-controls` 要指向真实节点），
+    // 但包在 antd 的 inactive 内容里（`display:none`），所以读者看不到。
+    // 两个折叠头（隔离副本 + 操作记录）都默认收起 → 两处 `aria-expanded="false"`。
+    expect((markup.match(/aria-expanded="false"/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(markup).toContain('title="Operations"')
+    expect(markup).toMatch(/ant-collapse-content-inactive[^]*class="storage-cache-history"/)
+    expect(markup).toContain(`collapsible-group__meta">1<`)
     expect(markup).not.toContain('Unsupported')
   })
 
@@ -186,7 +210,7 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).toContain('data-state-icon="error"')
     expect(markup).toContain(resolveStateViewText('en-US', stateViewTextKeys('error', 'unreadable').reason))
     expect(markup).toContain(resolveStateViewText('en-US', STATE_VIEW_ACTION_KEYS.retry))
-    expect(markup).not.toContain('data-state="empty"')
+    expect(cacheArea(markup)).not.toContain('data-state="empty"')
     // 读失败不是「0 个缓存」：汇总行只在拿到数据后出现。
     expect(markup).not.toContain(platformText['en-US'].storageCache.metaSummary(0, '0 B', 0, 0))
   })
@@ -204,8 +228,8 @@ describe('Storage and Cache settings UI', () => {
     )
 
     expect(markup).toContain(labels.loading)
-    expect(markup).not.toContain('data-state="error"')
-    expect(markup).not.toContain('data-state="empty"')
+    expect(cacheArea(markup)).not.toContain('data-state="error"')
+    expect(cacheArea(markup)).not.toContain('data-state="empty"')
     expect(markup).not.toContain(labels.staleDataNotice)
     // 首读期间不许把「还没读到」画成「0 个缓存 · 总计 0 B」。
     expect(markup).not.toContain(labels.metaSummary(0, '0 B', 0, 0))
@@ -225,8 +249,8 @@ describe('Storage and Cache settings UI', () => {
 
     expect(markup).toContain('Derived analysis cache')
     expect(markup).toContain('storage-cache-table')
-    expect(markup).not.toContain(labels.loading)
-    expect(markup).not.toContain('data-state="error"')
+    expect(cacheArea(markup)).not.toContain(labels.loading)
+    expect(cacheArea(markup)).not.toContain('data-state="error"')
   })
 
   it('keeps the last rows when a refresh fails, and says they are stale', () => {

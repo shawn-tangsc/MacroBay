@@ -96,6 +96,37 @@ describe('dashboard feed status query', () => {
     expect(status[0]).toMatchObject({ sourceId: 'realmarketapi-market', enabled: false, hasCredential: false })
     expect(status[1]).toMatchObject({ sourceId: 'twelve-data-market', enabled: true, hasCredential: true })
   })
+
+  it('names the instrument a plan no longer carries, even though the tick itself succeeded', async () => {
+    // 真机 2026-11-16：黄金进了库、美元被拒，运行级是 stored，所以 failureCode 是空的；
+    // 品种级失败必须自己说出来，否则源状态永远只报"正常"。
+    const source = (await query({
+      profiles: keyed('realmarketapi-market'), credentials: { 'realmarketapi-market': true },
+      notes: {
+        'realmarketapi.lastOutcome': 'stored',
+        'realmarketapi.lastSymbolFailures': 'DXY:symbol-not-supported',
+        'realmarketapi.lastRunAtMs': '1700000000000'
+      }
+    }).status())[0]
+    expect(source.failureCode).toBeUndefined()
+    expect(source.symbolFailures).toEqual([{ symbol: 'DXY', failureCode: 'symbol-not-supported' }])
+  })
+
+  it('treats an empty symbol note as "none this tick", and drops entries it cannot name', async () => {
+    const cleared = (await query({
+      profiles: keyed('realmarketapi-market'), credentials: { 'realmarketapi-market': true },
+      notes: { 'realmarketapi.lastOutcome': 'stored', 'realmarketapi.lastSymbolFailures': '' }
+    }).status())[0]
+    // 空串是"这一轮没有品种失败"，不是"读不到备注"。
+    expect(cleared.symbolFailures).toBeUndefined()
+
+    const noisy = (await query({
+      profiles: keyed('realmarketapi-market'), credentials: { 'realmarketapi-market': true },
+      notes: { 'realmarketapi.lastOutcome': 'stored', 'realmarketapi.lastSymbolFailures': 'DXY:made-up,BAD SYMBOL:rate-limited,XAUUSD:rate-limited' }
+    }).status())[0]
+    // 只留下我们认得出的那一对：未知码与非请求码都不许过界。
+    expect(noisy.symbolFailures).toEqual([{ symbol: 'XAUUSD', failureCode: 'rate-limited' }])
+  })
 })
 
 

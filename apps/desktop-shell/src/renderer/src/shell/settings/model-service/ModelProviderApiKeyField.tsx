@@ -235,11 +235,7 @@ export function ModelProviderApiKeyField({
                 icon={copied ? Check : Copy}
                 onSelect={() => void copyKey()}
                 resolveText={(key) =>
-                  key === 'modelService.copied'
-                    ? labels.copied
-                    : key === 'modelService.copyApiKey'
-                      ? labels.copyApiKey
-                      : ''
+                  ({ 'modelService.copied': labels.copied, 'modelService.copyApiKey': labels.copyApiKey } as Readonly<Record<string, string>>)[key] ?? ''
                 }
                 size="sm"
                 tooltipKey={copied ? 'modelService.copied' : 'modelService.copyApiKey'}
@@ -256,7 +252,7 @@ export function ModelProviderApiKeyField({
               icon={plainVisible ? EyeOff : Eye}
               onSelect={() => void handleVisibleChange(!plainVisible)}
               pressed={plainVisible}
-              resolveText={(key) => (key === 'modelService.showApiKey' ? labels.showApiKey : '')}
+              resolveText={(key) => ({ 'modelService.showApiKey': labels.showApiKey } as Readonly<Record<string, string>>)[key] ?? ''}
               size="sm"
               dataAttributes={{ 'data-provider-api-key-eye': 'true' }}
             />

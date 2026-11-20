@@ -1,7 +1,13 @@
+import { Button } from 'antd'
 import { localizeAnalysisMagnitudeUnits, type MarketAnalysisReadableLocale, type MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
 import type { MarketAnalysisTimelineDetail } from '../../shared/ipc/marketAnalysisTimelineClient'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { Popover } from '@platform/ui/components/popover'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Info } from 'lucide-react'
+import { analysisConclusionLanguageNoteKey, conclusionLanguageNote } from './analysisConclusionLanguageNote'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { ANALYSIS_STATUS_KEY, ANALYSIS_STATUS_TONE } from './analysisStatusPresentation'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
@@ -65,6 +71,10 @@ export type AnalysisDetailText = Readonly<{
   readableNames: MarketAnalysisReadableNames
   /** Locale for number formatting; the conclusion prose is Chinese, so this defaults to it. */
   readableLocale?: MarketAnalysisReadableLocale
+  /** 正文语言与当前界面不同时的一句事实；`{language}` 由界面填入语言名。 */
+  conclusionLanguageNote: string
+  /** 那条提示旁的「重新生成」。 */
+  regenerateConclusion: string
 }>
 
 /**
@@ -73,11 +83,24 @@ export type AnalysisDetailText = Readonly<{
  * published conclusion, not a preview, so nothing here may shorten it.
  * Audit identifiers stay inside a collapsed details element.
  */
-export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: MarketAnalysisTimelineDetail; text: AnalysisDetailText }>): React.ReactElement {
+export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonly<{
+  detail: MarketAnalysisTimelineDetail
+  text: AnalysisDetailText
+  /** 「重新生成」：同一事件组再跑一次（由宿主接到既有入口上）。 */
+  onRegenerate?: () => void
+}>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const resolveProductText = useProductTextKey()
+  const uiLanguage = useShellLanguage()
   const summary = detail.summary
   const locale = text.readableLocale ?? 'zh-CN'
+  /**
+   * 正文的生成语言与当前界面语言不一致时，标一句**事实**。
+   *
+   * 旧记录没有这个字段：不标注、不猜、不写「语言未知」——那就是噪声。语言一致时也不标注。
+   */
+  const languageNote = conclusionLanguageNote(text, summary.proseLanguage, uiLanguage,
+    language => displayLanguageName(language, uiLanguage))
   // Two contract generations: a structured conclusion (current) or the legacy labelled paragraph,
   // read through the same projection the at-a-glance card uses.
   const { direction, blocks } = readConclusion(summary, conclusionReadableNames, locale)
@@ -89,6 +112,23 @@ export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: Ma
         <p className="mi-analysis-timeline__section-label">{text.conclusion}</p>
         {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}
       </header>
+      {/* 说明句收进 ⓘ（用户 2026-11-10：正文只放结论，说明统一收进 icon hover）；
+          行内只留读得懂的一句话动作「重新生成」。 */}
+      {languageNote === undefined ? null : <p className="mi-analysis-conclusion__language" role="note">
+        <Popover
+          content={<p>{languageNote}</p>}
+          trigger={(triggerProps) => <IconButton
+            {...triggerProps}
+            ariaLabelKey={analysisConclusionLanguageNoteKey}
+            icon={Info}
+            resolveText={resolveProductText}
+            size="sm"
+            variant="plain" />}
+        />
+      </p>}
+      {/* 「重新生成」原来误嵌在上面的语言说明条件里：没有语言说明时它根本不渲染——市场分析组
+          因此会白丢一个入口。它是这一屏自己的动作，与语言说明无关，移出来。 */}
+      {onRegenerate === undefined ? null : <Button className="text-action" onClick={onRegenerate} size="small" type="text">{text.regenerateConclusion}</Button>}
       {(detail.summary.directions ?? []).length > 0 ? <AnalysisDirectionsBlock directions={detail.summary.directions!} text={text.directions} /> : null}
       <div className="mi-analysis-conclusion__body">
         {localizedBlocks.map((block, index) => block.kind === 'text'
@@ -178,4 +218,17 @@ function describeStructural(change: NonNullable<MarketAnalysisTimelineDetail['ru
   if (change.evidenceRefsAdded > 0) parts.push(`${text.changeEvidenceAdded} ${change.evidenceRefsAdded}`)
   if (change.evidenceRefsRemoved > 0) parts.push(`${text.changeEvidenceRemoved} ${change.evidenceRefsRemoved}`)
   return parts
+}
+
+/**
+ * 生成语言的名字，按读者当前界面语言书写（「英语」/「English」）。
+ *
+ * 语言名是数据，不是文案：句子在文案表里，这里只填那一个词。取不到时退回语言码本身。
+ */
+function displayLanguageName(language: string, uiLanguage: string): string {
+  try {
+    return new Intl.DisplayNames([uiLanguage], { type: 'language' }).of(language.split('-')[0]!) ?? language
+  } catch {
+    return language
+  }
 }

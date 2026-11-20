@@ -52,7 +52,18 @@
 .mi-cross-asset__chart-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
 .mi-cross-asset [data-cross-asset-region="chart"] { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .mi-cross-asset__chart { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+/* 标题右角：一个勾 + 那张卡唯一的按钮；`margin-left:auto` 把它们一起推到最右。 */
+.mi-cross-asset__heading-actions { margin-left: auto; display: inline-flex; align-items: center; gap: var(--mi-cross-asset-gap-small); }
+.mi-cross-asset__heading-actions .ant-switch { margin: 0; }
 .mi-cross-asset__chart-actions, .mi-cross-asset__quote-heading, .mi-cross-asset__status { display: flex; align-items: center; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
+/*
+ * 左栏的高度由同一行里更高的那一列决定，而表只按内容排：余量全堆在表底下，看起来像一块空白
+ * （用户 2026-11-18：「这个表格可以高一点，把现在的高度撑满」「就是每一行」）。
+ * 做法：左栏改成列向 flex，表 `flex: 1` 吃掉余量，`table-layout: fixed` 会把多出来的高度
+ * **平均分到每一行**；单元格垂直居中，读数落在行的中线上。窄屏单列时没有固定高度，行为不变。
+ */
+.mi-cross-asset__quote { display: flex; flex-direction: column; }
+.mi-cross-asset__status-table tbody th, .mi-cross-asset__status-table tbody td { vertical-align: middle; }
 .mi-cross-asset__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-cross-asset-gap); }
 .mi-cross-asset__body > * { min-width: 0; box-sizing: border-box; }
 .mi-cross-asset__quote > strong { display: inline-block; font-size: 24px; margin: 10px 6px 2px 0; }
@@ -64,6 +75,16 @@
 .mi-cross-asset__legend { display: flex; gap: 12px; margin-block: 10px; }
 .mi-cross-asset__legend button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--mi-cross-asset-text); cursor: pointer; font: inherit; padding: 0; }
 .mi-cross-asset__legend button[aria-pressed="false"] { opacity: .4; }
+/*
+ * 本段没有可比数据的那一条：**不是控件**（这条线本来就没有画出来，点它没有任何可见结果），
+ * 所以没有颜色点、没有指针、没有按下态，也不能聚焦。名字与其它图例同级同色，后面小字说数据怎么了；
+ * 11 号 / --muted 属于行内小字档（ui-rules：行内小字 = --font-meta / --line-meta）。
+ */
+.mi-cross-asset__legend-no-data { display: inline-flex; align-items: center; gap: 6px; color: var(--mi-cross-asset-text); font: inherit; }
+.mi-cross-asset__legend-no-data small { color: var(--mi-cross-asset-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+/* 行名旁那颗 ⓘ 的浮层：一句一段（说明句 / 新鲜度句），不留额外边距。 */
+.mi-cross-asset__row-hint p { margin: 0; }
+.mi-cross-asset__row-hint p + p { margin-top: 4px; }
 .mi-cross-asset [data-asset="index"], .mi-cross-asset [data-asset-line="index"], .mi-cross-asset [data-forming-line="index"] { --asset-color: var(--mi-cross-asset-index); }
 .mi-cross-asset [data-asset="btc"], .mi-cross-asset [data-asset-line="btc"], .mi-cross-asset [data-forming-line="btc"] { --asset-color: var(--mi-cross-asset-btc); }
 .mi-cross-asset [data-asset="eth"], .mi-cross-asset [data-asset-line="eth"], .mi-cross-asset [data-forming-line="eth"] { --asset-color: var(--mi-cross-asset-eth); }
@@ -129,7 +150,7 @@
    asset column because the rows must line up with their header: letting content size the columns
    made the hint under each name set the width, so the four numeric columns drifted out from under
    their own headings. Numbers never wrap; the name and its hint may. */
-.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; flex: 1 1 auto; }
 /* Six columns since the ladder became 15m/1h/4h/24h. Every share is explicit: with equal remaining
    width the four windows came out around 42px and the two-decimal percentages ran together into
    what read as one long number (`+0.09%0.06%0.27%0.43%`), so the name and the level give the four
@@ -142,7 +163,14 @@
 .mi-cross-asset__status-table thead th { color: var(--muted); font-size: 10px; font-weight: 500; text-align: right; border-bottom: 1px solid var(--mi-cross-asset-line); }
 .mi-cross-asset__status-table thead th:first-child { text-align: left; }
 .mi-cross-asset__status-table tbody th { text-align: left; font-weight: 600; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
-.mi-cross-asset__status-table tbody th span, .mi-cross-asset__status-table tbody th small { display: block; }
+/* 名字与那颗 ⓘ 是**一组**：inline-flex + nowrap，间距归容器（gap），图标 flex:none ——
+   原来是 `display: block`，图标作为行内元素被挤到第二行（用户 2026-11-18）。标签（代理/休市/合成/实时）
+   在这一组外面，窄列时它们自己换行，图标永远贴着名字。 */
+.mi-cross-asset__status-table tbody th > span:not(.mi-cross-asset__row-name),
+.mi-cross-asset__status-table tbody th small { display: block; }
+.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; white-space: nowrap; max-width: 100%; }
+/* 弹层触发器的直接子项是 Popover 的锚点 span（里面才是 button），所以 `flex: none` 下到直接子项。 */
+.mi-cross-asset__status-table tbody th .mi-cross-asset__row-name > * { flex: none; }
 .mi-cross-asset__status-table tbody th small { color: var(--muted); font-size: 9.5px; font-weight: 400; }
 .mi-cross-asset__status-table tbody td { text-align: right; white-space: nowrap; font-size: 9.5px; }
 /* One hairline between numeric columns, header included: four windows of signed percentages need a

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Info } from 'lucide-react'
+import { Button } from 'antd'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { useSingleFlightSend } from '@platform/ui/async/useSingleFlightSend'
@@ -12,6 +13,7 @@ import type {
   IntelligenceTestReceipt
 } from '../../../contracts/intelligenceNotificationTest'
 import { sendIntelligenceTestNotification } from '../../shared/ipc/intelligenceNotificationTestClient'
+import { openChannelSettings } from '../../shared/navigation/productShellNavigation'
 
 /**
  * 通知配置项后面的「发一条…」测试按钮（需求 v4 §5、技术方案 §3、原型 `2026-11-08-notification-test-buttons-v1`）。
@@ -19,8 +21,9 @@ import { sendIntelligenceTestNotification } from '../../shared/ipc/intelligenceN
  * 三条写死的规矩：
  * 1. **0 条可用通道 → 整组不渲染**（不是禁用）。`push-unavailable` 是配置事实，不是可重试的瞬时失败；
  *    一个点了必然以配置原因失败的按钮，正是「没接线的入口」。判据在父层（`channelReady`），本组件只认这个布尔。
- * 2. **≥2 条通道仍然渲染**：按钮在不在只取决于「有没有可用通道」，不取决于「唯一不唯一」；点下去才拒绝，
- *    并把主进程数出来的条数原样写进句子（**不自己数**——渲染层读不到通道列表，两次数出来会互相矛盾）。
+ * 2. **多通道是合法状态**：按钮在不在只取决于「有没有可投递目标」，不取决于「唯一不唯一」；
+ *    点下去若一条就绪的都没有，说的是**配置事实**（「已启用的通道都没有连上」），不是投递失败，
+ *    也**不印条数**——渲染层读不到通道列表，数出来的条数会与主进程互相矛盾。
  * 3. **原因码只在失败折叠区**：主句、ⓘ 都不出现码；失败时给一个默认收起的 `<details>`，展开后恰好一处。
  *
  * 超时（10 秒）按失败处理，但**不编一个码**：超时不是主进程返回的结论，硬塞 `read-failed` 之类就是把
@@ -36,7 +39,7 @@ type Phase =
   | { kind: 'sending' }
   | { kind: 'sent'; channelName: string }
   | { kind: 'no-data' }
-  | { kind: 'failed'; reasonCode: string | null; channelCount: number | null }
+  | { kind: 'failed'; reasonCode: string | null; requestedCount: number | null }
   /** 冷却期内又点了一次：不发，只就地说明。 */
   | { kind: 'cooldown'; seconds: number }
 
@@ -73,7 +76,7 @@ export function TestNotificationButton(props: Readonly<{
       // 取数、拼句、去重键都在主进程，渲染层只交 kind。
       const result: IntelligenceTestReceipt | null = await Promise.race([sendIntelligenceTestNotification(props.kind), timeout])
       if (result === null) {
-        setPhase({ kind: 'failed', reasonCode: null, channelCount: null })
+        setPhase({ kind: 'failed', reasonCode: null, requestedCount: null })
         return false
       }
       if (result.state === 'sent') {
@@ -88,15 +91,17 @@ export function TestNotificationButton(props: Readonly<{
         setPhase({
           kind: 'failed',
           reasonCode: result.reasonCode,
-          channelCount:
-            result.reasonCode === 'push-unavailable' && typeof result.enabledChannelCount === 'number'
-              ? result.enabledChannelCount
+          /* 「有没有启用过」看回执的 `requestedCount`（读者请求启用的条数），
+             **不从状态直方图反推**：`configuration-ready` 同时装「刚建好」与「启用过没连上」。 */
+          requestedCount:
+            result.reasonCode === 'push-unavailable' && typeof result.requestedCount === 'number'
+              ? result.requestedCount
               : null
         })
         return false
       }
     } catch {
-      setPhase({ kind: 'failed', reasonCode: null, channelCount: null })
+      setPhase({ kind: 'failed', reasonCode: null, requestedCount: null })
       return false
     } finally {
       if (timerRef.current !== null) {
@@ -155,6 +160,28 @@ export function TestNotificationButton(props: Readonly<{
       className="intelligence-notification-test-note"
       data-test-result={phase.kind}
       role="status">{note}</span>}
+    {phase.kind === 'failed' && phase.reasonCode === 'push-unavailable'
+      ? <>
+        <Button className="text-action" onClick={openChannelSettings} size="small" type="text">
+          {text(channelActionKey(phase.requestedCount))}
+        </Button>
+        {(phase.requestedCount ?? 0) > 0
+          ? <Popover
+            labelKey="pages.intelligence.notification.test.channelsNotConnectedDetail"
+            /* 占位符走组件那一条 `labelParams`（`fillLabelParams` 是全仓唯一实现），
+               不再在调用点比键、拼句子。 */
+            labelParams={{ count: String(phase.requestedCount) }}
+            resolveText={props.resolveText}
+            trigger={(triggerProps) => <IconButton
+              {...triggerProps}
+              ariaLabelKey="pages.intelligence.notification.test.channelsNotConnectedDetailAria"
+              icon={Info}
+              resolveText={props.resolveText}
+              size="sm"
+              variant="plain" />} />
+          : null}
+      </>
+      : null}
     {phase.kind === 'failed' && phase.reasonCode !== null
       ? <details className="intelligence-notification-test-reason">
         <summary>{text('pages.intelligence.notification.test.reasonCode')}</summary>
@@ -162,6 +189,27 @@ export function TestNotificationButton(props: Readonly<{
       </details>
       : null}
   </span>
+}
+
+/**
+ * 「一条就绪都没有」那两支的**句子**只由回执的 `requestedCount` 决定：
+ * - `0`（读者一条都没请求启用）→ ①「还没有启用通道。」；
+ * - `> 0`（请求启用了，但没一条连上）→ ②「已启用的通道都没有连上。」。
+ *
+ * **不许**用状态直方图反推：`configuration-ready` 同时装着「刚建好、还没启用」和「启用过但没连上」，
+ * 反推会把刚建好的通道说成「启用过连不上」，读者会去找一个不存在的故障（频道线 2026-11-12 核过）。
+ */
+export function pushUnavailableSentenceKey(requestedCount: number | null): string {
+  return (requestedCount ?? 0) === 0
+    ? 'pages.intelligence.notification.test.noChannelEnabled'
+    : 'pages.intelligence.notification.test.channelsNotConnected'
+}
+
+/** 同一档判据决定动作：没启用 → 去启用；启用了没连上 → 查看通道状态。 */
+export function channelActionKey(requestedCount: number | null): string {
+  return (requestedCount ?? 0) === 0
+    ? 'pages.intelligence.notification.test.enableChannelAction'
+    : 'pages.intelligence.notification.test.channelStatusAction'
 }
 
 /** 四种结果的一句话。无数据与失败都不出现原因码；成功必须点名发到哪条通道。 */
@@ -174,9 +222,9 @@ function describePhase(phase: Phase, text: (key: string) => string, kind: TestNo
   }
   if (phase.kind === 'no-data') return text(`pages.intelligence.notification.test.noData.${kind}`)
   if (phase.kind === 'failed') {
-    if (phase.channelCount !== null && phase.channelCount >= 2) {
-      return text('pages.intelligence.notification.test.multipleChannels').replace('{count}', String(phase.channelCount))
-    }
+    // 「一条就绪的通道都没有」是**配置状态**，不是投递失败。两种处境分开说：
+    // 读者请求启用的条数为 0 → 还没启用；> 0 → 启用了但没一条连上。句子不印条数。
+    if (phase.reasonCode === 'push-unavailable') return text(pushUnavailableSentenceKey(phase.requestedCount))
     // 通道那一跳的三种结局各一句：用一个「失败」盖三种处境，读者只能猜。
     if (phase.reasonCode === 'channel-rejected') return text('pages.intelligence.notification.test.channelRejected')
     if (phase.reasonCode === 'unknown-after-send') return text('pages.intelligence.notification.test.unknownAfterSend')

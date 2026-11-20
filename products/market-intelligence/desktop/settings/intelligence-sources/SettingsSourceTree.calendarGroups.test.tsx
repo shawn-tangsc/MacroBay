@@ -59,9 +59,9 @@ function calendarView() {
         provider('bea', ['macro-calendar-bea'], 'official-calendar'),
         provider('bls', ['macro-calendar-bls'], 'official-calendar'),
         provider('0xrouter', [
-          'macro-calendar-0xrouter-economic-data',
-          'macro-calendar-0xrouter-financial-events',
-          'macro-calendar-0xrouter-central-bank-activities'
+          'macro-calendar-narwhal-economic-data',
+          'macro-calendar-narwhal-financial-events',
+          'macro-calendar-narwhal-central-bank-activities'
         ], 'market-calendar'),
         provider('coinmarketcal', ['macro-calendar-coinmarketcal'], 'market-calendar')
       ]
@@ -117,7 +117,7 @@ describe('the calendar filter groups by feed owner', () => {
 
   it('moves a feed between groups when its owner changes, so the grouping is not hard-coded', async () => {
     // 反向实测：把一条 `market` 的 feed 的 owner 临时改成 `official`，它必须出现在官方源下。
-    const feedId = 'macro-calendar-0xrouter-economic-data'
+    const feedId = 'macro-calendar-narwhal-economic-data'
     const entry = calendarFeedRegistry[feedId] as { owner: string }
     const original = entry.owner
     entry.owner = 'official'
@@ -147,8 +147,8 @@ describe('the calendar filter groups by feed owner', () => {
 describe('the dashboard filter groups by module', () => {
   const MODULE_SOURCES = ['binance-futures-positioning', 'realmarketapi-market', 'twelve-data-market', 'policy-path-market',
     'alternative-fear-greed', 'defillama-stablecoins', '0xrouter-aggregate-provider', 'macro-calendar-fed',
-    'macro-calendar-bea', 'macro-calendar-bls', 'macro-calendar-0xrouter-economic-data',
-    'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities',
+    'macro-calendar-bea', 'macro-calendar-bls', 'macro-calendar-narwhal-economic-data',
+    'macro-calendar-narwhal-financial-events', 'macro-calendar-narwhal-central-bank-activities',
     'fred-rates-liquidity', 'sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']
   const ANALYSIS_ONLY = ['binance-spot-market', 'okx-api-announcements', 'coingecko-market', 'defillama-tvl']
   const MAINTENANCE = ['federal-reserve-rss', 'cftc-rss', 'github-releases']

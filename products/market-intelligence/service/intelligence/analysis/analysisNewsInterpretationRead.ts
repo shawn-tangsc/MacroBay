@@ -1,0 +1,106 @@
+import type { AnalysisRun } from '../../../contracts/marketAnalysisContracts'
+import type { NewsInterpretationLastRun, NewsInterpretationReadResult } from '../../../contracts/marketAnalysisIpcContracts'
+import { buildEvidenceFingerprint } from './analysisHash'
+import { prepareMarketAnalysisSnapshot, type PreparationDependencies } from './analysisSnapshotPreparation'
+import { isNewsSeveritySource } from './analysisItemSeverity'
+import { isStalledAnalysisRun } from './analysisRunStaleness'
+import { interpretationAdmission } from './analysisNewsInterpretationAdmission'
+
+/**
+ * 「AI 解读」的只读判读：这条新闻有没有已有解读、是哪份证据的。
+ *
+ * 判断「查看 / 再次解读」只比一对证据指纹；`snapshotHash` 的输入含 `asOf`，读写两侧各算一次必然
+ * 不同，拿它判会永远显示「再次解读」。当前指纹走与冻结**同一条**预计算
+ * （`prepareMarketAnalysisSnapshot`），不许另写一份组装逻辑。
+ */
+export function createNewsInterpretationReader(
+  deps: PreparationDependencies & Readonly<{ now: () => string }>
+): (itemId: string) => Promise<NewsInterpretationReadResult> {
+  /** 此刻会冻结成的那份证据的指纹；建不出（没有判定、或建不出证据引用）就是 null。 */
+  async function currentFingerprint(itemId: string): Promise<string | null> {
+    const item = deps.pipeline.listItems().find(candidate => candidate.itemId === itemId)
+    if (!item) return null
+    const group = deps.repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
+    if (!group) return null
+    try {
+      const prepared = await prepareMarketAnalysisSnapshot({ ...deps }, {
+        eventGroupId: group.id, asOf: deps.now(),
+        ...(isNewsSeveritySource(item.sourceId) ? { triggeredItemId: itemId } : {})
+      })
+      return 'state' in prepared ? null : prepared.evidenceFingerprint
+    } catch {
+      return null
+    }
+  }
+
+  return async function readNewsInterpretation(itemId: string): Promise<NewsInterpretationReadResult> {
+    const item = deps.pipeline.listItems().find(candidate => candidate.itemId === itemId)
+    // 菜单可用性也走同一处准入：没有判定/没有发布时间/来源不在表里时，不声称「此刻能解读」。
+    const admission = interpretationAdmission(item, {
+      ...(deps.latestNewsSentiment === undefined ? {} : { latestNewsSentiment: deps.latestNewsSentiment }),
+      now: deps.now
+    })
+    const currentEvidenceFingerprint = admission.ok ? await currentFingerprint(itemId) : null
+    if (!admission.ok || !item) return { itemId, state: 'none', currentEvidenceFingerprint }
+    const group = deps.repository.listEventGroups().find(candidate => candidate.eventRefs.includes(itemId))
+    if (!group) return { itemId, state: 'none', currentEvidenceFingerprint }
+    const runs = deps.repository.listRuns().filter(run => run.eventGroupId === group.id)
+    // 卡住的运行不算「正在解读」：进程被挂起、调用没回来、作业掉了，这三种都会留下一条永远
+    // `running` 的行；把它当在飞，界面就永远显示「正在生成」。收尸由恢复与周期性清点负责，
+    // 这里只保证读者不会看到一个不会再动的进度。
+    const inFlight = runs.find(run => (run.status === 'queued' || run.status === 'running') && !isStalledAnalysisRun(run, deps.now()))
+    if (inFlight) return { itemId, state: 'in-flight', runId: inFlight.id, currentEvidenceFingerprint }
+    // 为这条新闻冻过快照的那些运行，按结束时刻从新到旧：同组别的条目的摘要不能算这条的解读。
+    const forItem = runs
+      .filter(run => run.snapshotId)
+      .map(run => ({ run, snapshot: deps.repository.getSnapshot(run.snapshotId) }))
+      .filter(entry => entry.snapshot?.trigger?.itemId === itemId)
+      .sort((left, right) => finishedAt(right.run).localeCompare(finishedAt(left.run)))
+    const answered = forItem.find(entry => entry.run.status === 'succeeded')
+    const lastRun = lastRunOf(forItem[0])
+    if (!answered?.snapshot) return { itemId, state: 'none', currentEvidenceFingerprint, ...(lastRun ? { lastRun } : {}) }
+    const snapshot = answered.snapshot
+    // 正文只有摘要 id 这一条路（`getSummary({id})`）；拿不到摘要就不许报 `available`——
+    // 摘要行会被保留策略删掉而同组的运行行留下，那种组合只回 runId 就是「成功但空节」。
+    const summary = deps.repository.getSummaryForRun(answered.run.id)
+    if (!summary) return { itemId, state: 'none', currentEvidenceFingerprint, ...(lastRun ? { lastRun } : {}) }
+    const triggerFact = snapshot.facts.find(fact => fact.factId === snapshot.trigger?.factId)
+    return {
+      itemId, state: 'available', runId: answered.run.id, summaryId: summary.id,
+      generatedAt: summary.createdAt ?? answered.run.completedAt ?? answered.run.queuedAt,
+      snapshotHash: snapshot.snapshotHash,
+      dataAsOf: snapshot.asOf,
+      evidenceScope: {
+        asOf: snapshot.asOf, dataCutoff: snapshot.dataCutoff,
+        factCount: snapshot.facts.length, evidenceRefCount: snapshot.evidenceRefs.length,
+        domains: [...new Set(snapshot.facts.map(fact => fact.domain))].sort()
+      },
+      evidenceFingerprint: buildEvidenceFingerprint({ facts: snapshot.facts, evidenceRefs: snapshot.evidenceRefs }),
+      currentEvidenceFingerprint,
+      ...(triggerFact?.subjectLabel ? { subjectLabel: triggerFact.subjectLabel } : {})
+    }
+  }
+}
+
+/** 结束时刻（没有结束时刻用排队时刻；两者都没有就排到最后）。 */
+function finishedAt(run: AnalysisRun): string {
+  return run.completedAt ?? run.queuedAt ?? ''
+}
+
+/** 这些终态意味着「点过了，但没有正文可读」。 */
+const UNPRODUCTIVE_RUN_STATUSES: ReadonlySet<AnalysisRun['status']> =
+  new Set<AnalysisRun['status']>(['failed', 'invalid-output', 'cancelled', 'stale', 'superseded'])
+
+/**
+ * 最近一次运行没产出时，把失败报给界面（读者据此看到失败态 + 重试，而不是停在「正在生成」）。
+ * 只报最近一次：更早的失败已被后一次尝试覆盖，报它会让读者以为点过一次失败就永远失败。
+ */
+function lastRunOf(entry: Readonly<{ run: AnalysisRun }> | undefined): NewsInterpretationLastRun | undefined {
+  if (!entry || !UNPRODUCTIVE_RUN_STATUSES.has(entry.run.status)) return undefined
+  return {
+    runId: entry.run.id,
+    status: entry.run.status as NewsInterpretationLastRun['status'],
+    failureCode: entry.run.failureCode ?? null,
+    finishedAt: entry.run.completedAt ?? null
+  }
+}

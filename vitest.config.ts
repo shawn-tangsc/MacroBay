@@ -42,7 +42,10 @@ export default {
         extends: true,
         test: {
           name: 'functional',
-          exclude: [...configDefaults.exclude, ...MEASUREMENT_TESTS]
+          // `outputs/` 是可独立运行、独立部署的产物（例如 `outputs/investment-hexagram`）：
+          // 它们自带 `node worker/worker.test.mjs` 这样的运行方式，会自己 `process.exit`，
+          // 不是本应用的测试。收进测试池只会让整套跑死在别人的收尾上。
+          exclude: [...configDefaults.exclude, ...MEASUREMENT_TESTS, 'outputs/**']
         }
       },
       {

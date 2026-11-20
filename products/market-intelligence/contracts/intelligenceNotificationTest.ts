@@ -23,7 +23,8 @@ export type IntelligenceTestNoDataReason =
 
 /**
  * 「发不出去」的四种原因：
- * - `push-unavailable`：此刻没有恰好一条 `runtime-ready` 通道（0 条或 ≥2 条），是配置事实，不是瞬时失败；
+ * - `push-unavailable`：此刻**一条 `runtime-ready` 通道都没有**（多通道已是合法状态，不再有「恰好一条」这一说），
+ *   是配置事实，不是瞬时失败；界面上它属于「已启用的通道都没连上」这一档，不是「消息没发出去」；
  * - `source-disabled`：这一行依赖的数据源没启用——去启用它，不是等一等；
  * - `timezone-unreadable`：读者时区读不到，窗口算不出来；**不拿 UTC 顶**（那会把 +08:00 印成 08:00）；
  * - `read-failed`：读不到，或提交被拒——「没拿到」和「确实没有」必须分开说。
@@ -49,8 +50,18 @@ export type IntelligenceTestReceipt =
   | Readonly<{
     state: 'unavailable'
     reasonCode: IntelligenceTestUnavailableReason
-    /** 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数（0 或 ≥2），由主进程数。 */
+    /**
+     * 只在 `push-unavailable` 上出现：当时实际 `runtime-ready` 的通道条数，恒为 0（本码的含义就是 0 条），
+     * 由主进程数。**它不是「启用了的通道条数」**——那件事看 `requestedCount`。
+     */
     enabledChannelCount?: number
+    /**
+     * 只在 `push-unavailable` 上出现：**读者请求启用的通道条数**（`requestedEnabled === true`），
+     * 与状态直方图并列、由主进程数。它回答「读者到底启用过没有」，不是从档位反推：
+     * `configuration-ready` 同时装着「刚建好、还没启用」和「启用过但没连上」两种，反推会假阳性。
+     * 界面上它只决定说哪一句（0 → 还没启用；>0 → 启用了但没连上），条数本身进 ⓘ，不印正文。
+     */
+    requestedCount?: number
   }>
 
 /**

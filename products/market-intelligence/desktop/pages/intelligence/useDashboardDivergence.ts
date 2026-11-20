@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { projectDashboardDivergence, type DashboardDivergenceViewState } from './dashboardDivergenceModel'
 import { trackQuietRevision } from './useDataChangeRevision'
+import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 /**
  * One query per mount. The reading is as-of a single instant by construction, so re-reading on
@@ -30,7 +31,7 @@ export function useDashboardDivergence(input: Readonly<{
     }
     // 读者的重试与首读先回到加载态；后台重读保留旧读数，不闪。
     if (!quiet) setState({ state: 'loading' })
-    void client.query({ asOf })
+    void withQueryDeadline(client.query({ asOf }))
       .then((result) => { if (active) setState(projectDashboardDivergence(result, asOf)) })
       .catch(() => {
         // 后台重读失败沿用上一次；屏上只有「加载中」时才说读不到。

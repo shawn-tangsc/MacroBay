@@ -1,6 +1,7 @@
 import type { BriefingMacroItem } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import { localDate } from './dailyBriefingWindow'
+import { briefingEventInWindow } from './dailyBriefingCalendarWindow'
 
 /**
  * 宏观那几行怎么选出来——与文档构造分开。它是一套自己的判断：哪些算候选（窗口内的高影响事件、
@@ -20,6 +21,8 @@ import { localDate } from './dailyBriefingWindow'
  *
  * 窗口里到底有几条、其中多少行真的摆出来，与候选列表读同一份判断——两个数不许各自数一遍。
  */
+export { briefingEventInWindow }
+
 export function highImpactEventsInWindow(packet: DailyBriefingFactPacket): readonly DailyBriefingCalendarEvent[] {
   if (packet.calendar.state !== 'available') return Object.freeze([])
   const endDay = localDate(packet.windowEnd, packet.timeZone)
@@ -32,33 +35,6 @@ export function highImpactEventsInWindow(packet: DailyBriefingFactPacket): reado
       event.releaseDate === endDay && event.lifecycleState === 'scheduled')))
 }
 
-/**
- * 一条日历事件属不属于 `[windowStart, windowEnd)` 这一栏——只判归属，不判分到哪一段。
- *
- * 有时刻就按瞬时判；**只公布日期**时按日期判（`scheduledAt` 只是排序位，不能当瞬时）：
- * 只按瞬时判，日期位落在窗口起点之前就会把昨天的事件整条丢掉——「把有事件说成没有事件」
- * 比多列一条更糟。
- */
-export function briefingEventInWindow(
-  event: Readonly<{ scheduledAt: string; releaseTimeNotPublished?: true; releaseDate?: string }>,
-  window: Readonly<{ start: string; end: string; timeZone: string }>
-): boolean {
-  if (event.releaseTimeNotPublished) {
-    const day = event.releaseDate
-    const startDay = localDate(window.start, window.timeZone)
-    const endDay = localDate(window.end, window.timeZone)
-    return day !== undefined && startDay !== undefined && endDay !== undefined && day >= startDay && day <= endDay
-  }
-  const at = Date.parse(event.scheduledAt)
-  return Number.isFinite(at) && at >= Date.parse(window.start) && at < Date.parse(window.end)
-}
-
-/**
- * 24 小时宏观栏暂时隐藏的两类事件（用户 2026-11-06：「所有央行活动和财经事件，暂时都不要显示」）。
- *
- * **按类别判，不按"有没有值"判**：以后这些事件补上数值也不许自己冒出来。类别来自日历源。
- * 临时口径——要恢复就清空这个数组，一行改回来；判断只在这一处，页面与导出都读同一份结论。
- */
 export const briefingHiddenMacroCategories: readonly DailyBriefingCalendarEvent['category'][] = [
   'central-bank-activity',
   'financial-event'
@@ -162,7 +138,7 @@ function toMacroItem(event: DailyBriefingCalendarEvent, webSourced = false): Bri
     title: event.title,
     ...(event.titleKey ? { titleKey: event.titleKey } : {}),
     scheduledAt: event.scheduledAt,
-    importance: event.importance,
+    ...(event.importance === undefined ? {} : { importance: event.importance }),
     ...(event.countryCode ? { countryCode: event.countryCode } : {}),
     ...(event.countryName ? { countryName: event.countryName } : {}),
     ...(event.actual === undefined ? {} : { actual: event.actual }),

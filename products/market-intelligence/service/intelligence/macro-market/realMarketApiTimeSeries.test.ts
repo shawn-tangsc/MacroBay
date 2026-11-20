@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { realMarketApiPolicy } from './realMarketApiPolicy'
 import { macroMarketBackfillBars } from './macroMarketReturns'
 import {
-  parseProviderInstant, parseRealMarketApiCandles, parseRealMarketApiPrice, realMarketApiCandleUrl, realMarketApiFailureCode,
-  realMarketApiPriceUrl
+  parseProviderInstant, parseRealMarketApiBars, parseRealMarketApiCandles, parseRealMarketApiPrice,
+  realMarketApiCandleUrl, realMarketApiFailureCode, realMarketApiPriceUrl
 } from './realMarketApiTimeSeries'
 import { realMarketApiCandleResponse, realMarketApiFixtureInstants, realMarketApiPriceResponse } from './realMarketApiResponseFixtures'
 
@@ -62,6 +62,23 @@ describe('the real dollar index parser', () => {
     expect(realMarketApiFailureCode(500)).toBe('response-invalid')
     // A rejection reported in the body still travels with its status.
     expect(parseRealMarketApiPrice({ message: 'unauthorized' }, 401)).toEqual({ state: 'unavailable', failureCode: 'credential-rejected' })
+  })
+
+  it('names a plan that does not carry the symbol instead of calling it a broken response', () => {
+    // 供应商对"这个品种不在套餐里"的回答（2026-11-16 实测）：HTTP 400 +
+    // errors[].errorCode = ERR_0008_SYMBOL_NOT_SUPPORTED。它是永久状态，重试不会好，
+    // 所以不能和"这次响应坏了"共用一个码——套餐到期就是靠这个码才说得出口。
+    const refusal = {
+      statusCode: 400, message: 'One or more validation errors occurred.',
+      errors: [{ propertyName: '', errorCode: 'ERR_0008_SYMBOL_NOT_SUPPORTED', errorMessage: 'Symbol is not supported' }],
+      traceId: '0HNPNPP10L4JN:00000001'
+    }
+    expect(parseRealMarketApiPrice(refusal, 400)).toEqual({ state: 'unavailable', failureCode: 'symbol-not-supported' })
+    expect(parseRealMarketApiCandles(refusal, 400)).toEqual({ state: 'unavailable', failureCode: 'symbol-not-supported' })
+    expect(parseRealMarketApiBars(refusal, 400)).toEqual({ state: 'unavailable', failureCode: 'symbol-not-supported' })
+    // 其它 400（不带这个码）仍然只是"这次响应读不出来"。
+    expect(parseRealMarketApiPrice({ statusCode: 400, message: 'bad request', errors: [] }, 400))
+      .toEqual({ state: 'unavailable', failureCode: 'response-invalid' })
   })
 
   it('reads the captured candle page in ascending order with no duplicate instant', () => {

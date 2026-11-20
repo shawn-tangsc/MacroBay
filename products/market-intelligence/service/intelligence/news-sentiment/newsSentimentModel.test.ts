@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildNewsSentimentMessages, parseNewsPolarityModelOutput } from './newsSentimentModel'
+import {
+  buildNewsSentimentMessages,
+  NEWS_SENTIMENT_STRENGTH_SCALE,
+  parseNewsPolarityModelOutput
+} from './newsSentimentModel'
 
 const BODY =
   'The U.S. risks losing digital asset business to faster-moving jurisdictions in Asia, the Middle East and Bermuda after the Senate failed to advance the Clarity Act.'
@@ -118,5 +122,50 @@ describe('newsSentimentModel', () => {
     const user = messages[1]?.content ?? ''
     expect(user).toContain('<article>')
     expect(user.length).toBeLessThan(7_000)
+  })
+})
+
+/**
+ * 强度五档的**措辞守卫**（用户 2026-11-18 批准的最终版）。
+ *
+ * 判据不是「提示词里出现了 strength 这个词」，而是**每一档的定义逐字都在构建出的提示词里**：
+ * 删掉一档、改掉一个词，这里就红。五档是推送门槛与触发判定共用的那把尺，悄悄少一档，
+ * 模型就会自己发明中间档，而记录上看不出来。
+ *
+ * **期望值逐字写在这里、不 import 提示词常量的文本**：从常量循环断言「常量在提示词里」是拿同一份
+ * 数据跟自己比，恒真——改词也不会红。文本身份由这张表保管，常量只管拼进提示词。
+ */
+const APPROVED_STRENGTH_SCALE = Object.freeze([
+  '1 = 与加密市场无关（例行公告、企业融资、业务无关行业）',
+  '2 = 加密行业内部相关，但只涉及单一资产/小众项目，无外溢',
+  '3 = 影响整体风险偏好或一类资产（大盘科技与半导体财报、美股大盘、美元/利率/美债、监管政策表态、主流金融机构动作）',
+  '4 = 直接影响 BTC/ETH 资金流或供需（ETF 大额申赎、稳定币供给剧变、交易所/托管风险、主流链安全事件、头部政策落地）',
+  '5 = 可能改变趋势的冲击（监管禁令/重大执法、头部交易所暴雷、脱锚、国家级采用或禁止、创纪录的 ETF 流入流出）'
+] as const)
+
+describe('strength scale is written into the prompt, all five levels', () => {
+  const system = (): string => buildNewsSentimentMessages({
+    sourceName: 'CoinDesk',
+    publishedAt: '2026-10-24T12:00:00.000Z',
+    title: 'Nvidia earnings beat lifts chip stocks',
+    body: 'Chip makers rallied after the results.'
+  })[0]!.content
+
+  it('carries all five approved definitions, verbatim', () => {
+    const prompt = system()
+    for (const line of APPROVED_STRENGTH_SCALE) {
+      expect(prompt).toContain(line)
+    }
+  })
+
+  it('exposes exactly five levels, numbered 1..5, from one constant', () => {
+    expect(NEWS_SENTIMENT_STRENGTH_SCALE.map((entry) => entry.level)).toEqual([1, 2, 3, 4, 5])
+    expect(NEWS_SENTIMENT_STRENGTH_SCALE).toHaveLength(APPROVED_STRENGTH_SCALE.length)
+  })
+
+  it('lets the model see the scale in the same call as the JSON contract, not a second prompt', () => {
+    const prompt = system()
+    expect(prompt).toContain('"strength":1-5')
+    expect(prompt).toContain('only these five levels')
   })
 })

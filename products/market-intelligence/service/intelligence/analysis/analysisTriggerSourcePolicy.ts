@@ -33,7 +33,7 @@ export const analysisTriggerSourcePolicy = Object.freeze({
    */
   /** `signal.<moduleId>.<ruleId>`, both kebab tokens: exactly two segments, no third. */
   signalTriggerKeyPattern: /^signal\.[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*$/,
-  gateExemptTriggerKeys: ['manual.refresh', 'manual.initial'] as readonly string[],
+  gateExemptTriggerKeys: ['manual.refresh', 'manual.initial', 'news.manual'] as readonly string[],
   itemTriggerKeys: ['macro.actual.first-confirmed', 'market-reaction.15m'] as readonly string[],
   correctionPhase: 'correction' as AnalysisPhase,
   defaultPhase: 'initial' as AnalysisPhase
@@ -104,9 +104,11 @@ export function phaseForNewTriggerKey(triggerKey: string): AnalysisPhase {
  * - `calendar` — everything else, including any future key. The default is the stricter line:
  *   a new source must be registered explicitly to get the event line's larger allowance.
  */
-export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled'
+export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled' | 'news'
 
 export function analysisRunLineOf(triggerKey: string): AnalysisRunLine {
+  // 按条解读是独立的线（R39 §6）：不写账本行、不占自动额度，但失败通知与台账要能和日历分开。
+  if (triggerKey === 'news.manual') return 'news'
   if (isScheduledSlotTriggerKey(triggerKey)) return 'scheduled'
   if (isSignalTriggerKey(triggerKey)) return 'event'
   return (analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(triggerKey) ? 'event' : 'calendar'

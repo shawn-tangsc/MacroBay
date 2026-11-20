@@ -45,7 +45,7 @@ function labels() {
   } as never
 }
 
-async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-key'; hasCredential?: boolean; pendingIndex?: number; invite?: boolean } = {}) {
+async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-key'; hasCredential?: boolean; pendingIndex?: number; invite?: boolean; notice?: string } = {}) {
   const invoke = vi.fn(async (_p: string, method: string) => method === 'intelligenceSources.getPageState'
     ? { detail: { credentialStatus: { hasCredential: extra.hasCredential === true } } }
     : undefined)
@@ -61,6 +61,7 @@ async function render(enabled: boolean[], extra: { credential?: 'none' | 'api-ke
       provider: {
         providerId: 'bls', displayName: 'Bureau of Labor Statistics (BLS)', category: 'macro',
         credential: extra.credential ?? 'none', healthMarker: 'none',
+        ...(extra.notice === undefined ? {} : { notice: extra.notice }),
         website: 'https://www.bls.gov',
         sources: enabled.map((value, index) => source(`s${index}`, value, extra.pendingIndex === index ? 'pending' : 'visible'))
       },

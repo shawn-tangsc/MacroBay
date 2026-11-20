@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { Button } from 'antd'
-import { CircleSlash, Info, RefreshCw, TriangleAlert } from 'lucide-react'
+import { CircleSlash, Info, TriangleAlert } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
+import { Popover, helpTrigger } from '@platform/ui/components/popover'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { InlineNotice } from '@platform/ui/components/inline-notice'
@@ -56,6 +56,8 @@ type Text = {
   observedAt: string
   etfFlow: string
   chartWindow: string
+  /** 窗口那句的说明：今天没读数时为什么图上没有今天（只进浮层，不进正文）。 */
+  chartWindowHelp: string
   infoAria: string
   chartScopeNoteMain: string
   chartScopeNoteEtf: string
@@ -187,19 +189,22 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   if (state.state === 'loading') return <section className="mi-capital-conditions" data-state="loading" aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
+      {/* 加载态不给动作（界面设计 2026-11-12）：读者在等的时候按刷新只会叠加并发请求。
+          失败会自己落进终态（hook 的两跳退避 400/1200ms 之后 → 结构保留 + 行内那颗刷新），
+          所以这里不需要一颗常驻的「刷新」。
+          已知缺口：**挂起的请求没有硬超时**（promise 不 settle 就一直转），要补得改 hook，另议。 */}
       <LoadingState label={text.loading} minHeight={140} />
-      <Button className="mi-capital-conditions__refresh" disabled
-        icon={<RefreshCw aria-hidden="true" size={13} />} loading onClick={onRefresh} size="small" type="link">{text.refresh}</Button>
     </div>
   </section>
 
   if (state.state === 'empty') return <section className="mi-capital-conditions" data-state="empty" aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
+      {/* 空态**不给动作**：`empty.not-yet` 在平台动作表里是 `forbidden`（`STATE_VIEW_ACTION_RULES`），
+          它说的是「确实还没有发生过」，给按钮就是假出口；要动作得先改那张平台表（跨线契约），
+          已报 Chief。原来那颗自绘的「刷新」也一并删掉——同一句话不许再挂第二颗。 */}
       <StateView state="empty" reasonCode="not-yet"
         productReason={{ key: 'pages.intelligence.portal.dashboard.capitalConditions.empty', resolve: () => text.empty }} />
-      <Button className="mi-capital-conditions__refresh" disabled={refreshing}
-        icon={<RefreshCw aria-hidden="true" size={13} />} loading={refreshing} onClick={onRefresh} size="small" type="link">{text.refresh}</Button>
     </div>
   </section>
 
@@ -243,7 +248,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           {/* 这张卡唯一的「补数据」入口（用户 2026-11-11：卡内不带按钮，收到标题行右侧）。
               有格没启用 →「启用数据」；都启用但有块读不到 →「再试一次」；都读到 → 整颗不出现。 */}
           {titleAction
-            ? <Button className="mi-capital-conditions__title-action" onClick={titleAction.run} size="small" type="link">{titleAction.label}</Button>
+            ? <Button className="mi-capital-conditions__title-action" onClick={titleAction.run} size="small" type="default">{titleAction.label}</Button>
             : null}
         </div>
         {/* state-ternary: reviewed — 这一处只决定「要不要把采集时刻传给详情弹窗」，不决定任何内容画不画；
@@ -342,6 +347,9 @@ function EtfFlow({ reading, flowHistory, text, onRetry, skeleton = false, cellOf
           trigger={(triggerProps) => <IconButton {...triggerProps} ariaLabelKey={key('infoAria')}
             icon={Info} size="sm" resolveText={resolveText} variant="plain" />} />
         <span className="mi-capital-conditions__chart-window">{text.chartWindow}</span>
+        {/* 窗口那句旁边的 ⓘ：读者看到「今天怎么没有」时，答案在这里，不进正文。
+            用平台 `helpTrigger`（读屏名归平台，与日历线那批同一个入口）。 */}
+        {helpTrigger({ text: text.chartWindowHelp })}
       </div>
       <button type="button" className="mi-capital-conditions__daily-button"
         aria-haspopup="dialog" onClick={() => setDialogOpen(true)}>{text.expandDaily}</button>

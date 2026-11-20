@@ -1,11 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { calendarRecord } from './zeroXRouterCalendarContracts'
+import { calendarRecord } from './marketCalendarStorageContracts'
 import { instant, marketCalendarEffectiveLogicalBytes, marketCalendarObservationStateFields, MarketStorageFailure,
   metadata, prepareMarketCollection, reject, zeroXRouterCalendarStoragePolicy as policy,
   type MarketCapacity, type MarketCollectionContext, type MarketRow } from './marketCalendarStorageValidation'
 import { createMarketCalendarStorageQueries, operationGuard, type MarketOperationControl } from './marketCalendarStorageQueries'
 import { captureMarketStorageSnapshot } from './marketCalendarStorageSnapshot'
-import { ensureMarketCalendarObservationState, marketCalendarRetentionPolicy } from './marketCalendarStorageReclaim'
+import { ensureMarketCalendarObservationState, ensureRevisionImportanceNullable, marketCalendarRetentionPolicy } from './marketCalendarStorageReclaim'
 
 // MC-V1 design 122: conservative shared-calendar charge, not market attribution.
 // Opted into only by the manual runtime; official writes remain unrestricted.
@@ -81,6 +81,9 @@ export function createMarketCalendarEventRepository(options: {
   // A library written before the write model changed has no `last_seen_at` column and no
   // last-seen ledger; this adds them and backfills from each row's own collection time.
   ensureMarketCalendarObservationState(database)
+  // 记录契约里 `importance` 已经可缺省，列还写着 `not null`——任何一条没带重要性的记录
+  // （官方日程的草稿就是）都会让整次刷新失败。迁移与判据见函数注释。
+  ensureRevisionImportanceNullable(database)
   /**
    * The one shared admission charge: allocated pages minus pages SQLite already returned to
    * its freelist. Never a second copy of the formula, and never a credit when the freelist
@@ -156,7 +159,9 @@ export function createMarketCalendarEventRepository(options: {
           capacity.freeBytes < policy.minimumFreeBytes + reserve) reject('storage-pressure')
         check()
         const inserted = insert('mi_macro_calendar_market_event_collections', { ...prepared.collection, recorded_at: recordedAt })
-        let statement: ReturnType<typeof prepareInsert> | undefined
+        // 列集合按行不同（`measure_keys_json` 只有带这一列的来源才写），而 prepared statement
+        // 是按第一行的列拼的——共用一份会把后面的行按位错绑。按列签名缓存，一行一套。
+        const statements = new Map<string, ReturnType<typeof prepareInsert>>()
         let previous: ReturnType<typeof database.prepare> | undefined
         let seen: ReturnType<typeof database.prepare> | undefined
         let skipped = 0
@@ -180,7 +185,12 @@ export function createMarketCalendarEventRepository(options: {
             seen.run(row.candidate_key, recordedAt)
             return
           }
-          statement ??= prepareInsert('mi_macro_calendar_market_event_observations', row)
+          const signature = Object.keys(row).join(',')
+          let statement = statements.get(signature)
+          if (statement === undefined) {
+            statement = prepareInsert('mi_macro_calendar_market_event_observations', row)
+            statements.set(signature, statement)
+          }
           statement.run(...Object.values(row))
         }, recordedAt)
         const allocated = Math.max(0, Number(database.prepare('pragma page_count').get()?.page_count) - pagesBefore) * pageSize
@@ -204,7 +214,10 @@ export function createMarketCalendarEventRepository(options: {
       } catch (error) {
         if (transaction) database.exec('rollback')
         return { state: 'unavailable' as const,
-          failureCode: error instanceof MarketStorageFailure ? error.failureCode : 'storage-unavailable' as const }
+          // **不认识的异常不再折叠成兜底码**（用户 2026-11-20）：记 `storage-error` 并带类名/消息，
+          // 否则「写库失败」四个字会埋掉真实原因（今天埋了九小时）。
+          failureCode: error instanceof MarketStorageFailure ? error.failureCode : 'storage-error' as const,
+          ...(error instanceof MarketStorageFailure ? {} : { errorDetail: `${(error as Error)?.name ?? 'Error'}: ${(error as Error)?.message ?? String(error)}`.slice(0, 300) }) }
       }
     }
   }

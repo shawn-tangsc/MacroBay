@@ -17,6 +17,8 @@ export type StorageIpcPorts = Readonly<{
     compactCache: (input: unknown) => unknown
     listOperations: (query?: unknown) => unknown
   }>
+  /** 隔离副本（`.corrupt-*`）的只读清单；扫描口径在 `@platform/storage/quarantine`。 */
+  quarantine: Readonly<{ listCopies: () => unknown }>
   externalApps: Readonly<{
     listInstalledAppViews: () => unknown
     launchWorkspace: (input: ReturnType<typeof validateLaunchExternalAppRequest>) => unknown
@@ -26,7 +28,7 @@ export type StorageIpcPorts = Readonly<{
 }>
 
 export function registerStorageIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: StorageIpcPorts): void {
-  const { cacheGovernance, externalApps, summarizeProducts } = ports
+  const { cacheGovernance, externalApps, quarantine, summarizeProducts } = ports
 
   ipcMain.handle(IpcChannels.productSummaries, () => summarizeProducts())
 
@@ -48,4 +50,6 @@ export function registerStorageIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: Stor
   ipcMain.handle(IpcChannels.storageListCacheOperations, (_event: IpcMainInvokeEvent, query?: unknown) =>
     cacheGovernance.listOperations(query)
   )
+  // 只读：扫数据根目录里的 `.corrupt-*`。读不到根目录时它 reject，渲染层据此画错误态 + 重试。
+  ipcMain.handle(IpcChannels.storageListQuarantineCopies, () => quarantine.listCopies())
 }

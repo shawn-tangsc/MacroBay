@@ -86,6 +86,9 @@ const api = {
     relaunch: () => ipcRenderer.invoke(IpcChannels.appRelaunch),
     saveClipboardImage: (data: Uint8Array, mimeType: string) =>
       ipcRenderer.invoke(IpcChannels.appSaveClipboardImage, { data, mimeType }),
+    /** 存一段字节到用户选的文件。**只给「建议名 + 字节」**，路径由 main 的对话框决定。 */
+    saveFile: (suggestedName: string, bytes: Uint8Array) =>
+      ipcRenderer.invoke(IpcChannels.appSaveFile, { suggestedName, bytes }),
     onQuotedToMain: (callback: (text: string) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, text: string) => callback(text)
       ipcRenderer.on(IpcChannels.appQuoteToMain, listener)
@@ -148,6 +151,21 @@ const api = {
     listRuntimeAudits: (input: ChannelIdPayload & { limit?: number; cursor?: unknown }) => ipcRenderer.invoke(IpcChannels.channelsListRuntimeAudits, input) as Promise<ChannelRuntimeAuditPage>,
     /** 真发一条测试消息：`{ channelId, text }` → `{ state: 'accepted' | 'unconfirmed' | 'failed', … }`。 */
     sendTestMessage: (input: ChannelIdPayload & { text: string }) => ipcRenderer.invoke(IpcChannels.channelsSendTestMessage, input) as Promise<ChannelTestMessageReceipt>,
+    /**
+     * 助手聊天里「发这张图到频道」：投影与动作。
+     * 投影为 `null` = 没有**可发图**的通道（渲染层据此不画按钮，不自己判）；
+     * 否则回列表，每条带 `supportsImage`——多通道方案 §4b 定稿 A：发到所有可发图的通道。
+     */
+    imageTarget: () => ipcRenderer.invoke(IpcChannels.channelsImageTarget) as Promise<{
+      channels: readonly { channelId: string; channelName: string; supportsImage: boolean }[]
+    } | null>,
+    sendMessageImage: (input: { messageId: string; fileName: string; withoutCaption?: boolean }) => ipcRenderer.invoke(IpcChannels.channelsSendMessageImage, input) as Promise<{
+      ok: boolean
+      state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+      code: string | null
+      channels: readonly { channelId: string; channelName?: string; state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'; code?: string }[]
+      detail?: string
+    }>,
     listPolicies: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input) as Promise<readonly ChannelPolicySafeView[]>,
     deletePolicy: (input: ChannelActionPayload & { policyId: string }) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
     listConversations: (input: ChannelIdPayload & { limit?: number }) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input) as Promise<readonly ChannelConversationSafeView[]>,
@@ -262,7 +280,8 @@ const api = {
     inspectCache: (cacheId: string) => ipcRenderer.invoke(IpcChannels.storageInspectCache, cacheId),
     clearCache: (input: unknown) => ipcRenderer.invoke(IpcChannels.storageClearCache, input),
     compactCache: (input: unknown) => ipcRenderer.invoke(IpcChannels.storageCompactCache, input),
-    listCacheOperations: (query?: unknown) => ipcRenderer.invoke(IpcChannels.storageListCacheOperations, query)
+    listCacheOperations: (query?: unknown) => ipcRenderer.invoke(IpcChannels.storageListCacheOperations, query),
+    listQuarantineCopies: () => ipcRenderer.invoke(IpcChannels.storageListQuarantineCopies)
   },
   /** 产品模块 IPC：platform 只做路由，语义由各 product 的 service/bootstrap 注册。 */
   products: {

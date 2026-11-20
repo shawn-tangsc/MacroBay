@@ -312,3 +312,30 @@ useEffect(() => {
   and `[data-loading-state]` is present. Every list, card and drawer that reads data gets one such
   case — it is the only check that catches “loading written as unavailable”, because that spelling is
   type-correct.
+
+## Parts inside message content
+
+A settled read and a line inside a message can describe the same situation. They may share the words;
+they must not share the type.
+
+- **`QueryOutcome` stays in the data layer.** Its type lives in `platform/contracts/queryOutcome.ts`,
+  and the only place that adapts a read into it is `platform/ui/async/asyncState.ts`. Message content
+  reuses the same words (`unreadable`, and later `record-corrupt`) but never wraps a part in
+  `QueryOutcome`: a part is not a query — `loading` does not apply (no bytes are fetched) and `empty`
+  does not apply (nothing is drawn when there is no attachment). The action table and
+  `stateViewCallSiteGuard` govern query codes only; the guard does not see message content, and that is
+  correct rather than a hole.
+- **New content in a message is a named part with an explicit render branch.** Falling through to the
+  generic fallback (`text.messages.nonTextContent`) counts as not done: the reader gets one placeholder
+  sentence and every distinct situation collapses into it. Joining `AgentMessagePart` is *not* the
+  requirement — `GenericMessagePart` is `{ type: string }`, so any `type` compiles and still lands on
+  that fallback.
+- **An attachment line does not enter `searchableText`.** It is not what the reader said, and search
+  must not match it. The same reason removes **resend** for a message whose parts are attachments only:
+  resending would either send an empty message or feed system copy back into the conversation as if the
+  reader had typed it.
+
+**How to verify**: one behaviour case per new part kind — render a message carrying it, assert that the
+specific sentence appears and the generic fallback does not, then delete the render branch and confirm
+the case goes red. A static comparison of part kinds against render branches is not worth writing until
+the kinds are a runtime constant list instead of a type union.

@@ -110,6 +110,10 @@
    scroll — a surface with a faint seam under it, which is the edge of the sheet's area rather than a
    second section. */
 .mi-daily-briefing-page__report-bar { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px; background: var(--mi-dashboard-surface); border-bottom: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 55%, transparent); }
+/* 工具栏 + 它下面那一行发布结果：两行都固定在卡顶（不跟着纸滚动）。工具栏自己的底线在两行之间，
+   所以结果行出现时把那条线交给结果行去画，避免中间多出一条把两行切成两块。 */
+.mi-daily-briefing-page__report-slot { flex: none; display: flex; flex-direction: column; }
+.mi-daily-briefing-page__report-slot > .mi-daily-briefing-page__report-bar:has(+ .mi-daily-briefing__push-result) { border-bottom: 0; }
 /* The sheet's own scroll area. Equal 12px insets on both sides: the sheet is centred inside the card,
    and an overlay scrollbar floats in the right-hand dark band instead of over the cream sheet — a dark
    bar on the paper reads as the page having been cut. */
@@ -358,7 +362,28 @@ details[open] > .mi-generation-trace__head::before, details[open] > .mi-briefing
 /* 发布频道：与「重新生成」同一组，按钮用平台默认样式，这里只负责它和那句成功回执怎么排。
    成功句自己会消失（3s / 6s），所以它占的是行内一格，不给它一块会留下空位的地方。 */
 .mi-daily-briefing__push-slot { display: inline-flex; align-items: center; gap: 8px; }
-.mi-daily-briefing__push-toast { color: var(--mi-dashboard-muted); font-size: 12px; line-height: 18px; }
+/* 发布结果条：工具栏下方、内容区顶部，与工具栏同级（不塞进工具栏——结果长度会变，塞进去会让
+   工具栏高度跳动、右侧按钮跟着位移）。外观复用 InlineNotice 那套：1px 边框 + 左侧 3px 色条 +
+   三档 token（info 中性 / caution 黄 / danger 红）；这里只多加关掉与明细展开。 */
+.mi-daily-briefing__push-result { flex: none; display: grid; gap: 6px; margin: 12px 12px 0; padding: 8px 12px; border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; background: var(--surface-soft); color: var(--text-strong); font-size: var(--font-body); line-height: var(--line-body); }
+.mi-daily-briefing__push-result--info { border-left-color: var(--muted-strong); }
+.mi-daily-briefing__push-result--caution { border-left-color: var(--caution); background: color-mix(in srgb, var(--caution) 12%, var(--surface)); }
+.mi-daily-briefing__push-result--danger { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--surface)); }
+.mi-daily-briefing__push-result-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mi-daily-briefing__push-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-daily-briefing__push-result-spacer { margin-left: auto; }
+.mi-daily-briefing__push-result-lines { display: grid; gap: 2px; padding-top: 2px; }
+.mi-daily-briefing__push-line { display: grid; grid-template-columns: 104px 152px 88px minmax(0, 1fr); gap: 8px; align-items: center; min-height: 28px; }
+.mi-daily-briefing__push-line-name { color: var(--text); }
+/* 结果是状态药丸（`StatusPill`）：档位色只落在圆点与描边上，字始终是正文色——`--danger` 当正文
+   前景在深色下只有 3.25–3.94（正文门槛 4.5），这里不再为某一种 outcome 造红色文字选择器。
+   第二列**固定 152px，不随文案长短走**（界面设计 2026-11-12 复核）：这是四列对齐表，一旦让内容
+   决定宽度，同一份明细里几行的「形态」列起点会跟着中英文长短左右跳。152 = 药丸盒子 19（内距 8×2
+   + 描边 1×2）+ 圆点 6 + 圆点与字的间距 5 + 最长那句（英文 20 个字符含标点，11px 下约 112）+ 余量 10。 */
+.mi-daily-briefing__push-line-form { color: var(--muted); }
+.mi-daily-briefing__push-line-reason { min-width: 0; color: var(--text); }
+.mi-daily-briefing__push-code { margin-top: 2px; color: var(--muted); font-size: var(--font-meta); }
+.mi-daily-briefing__push-code code { color: var(--text); }
 
 /* The two period dialogs: one row per choice, the verdict under them. The conflict sentence is a
    warning (the button is already disabled), not an error state — the reader has not done anything

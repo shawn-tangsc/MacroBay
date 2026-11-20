@@ -17,6 +17,7 @@ import type { SafeIntelligenceTranslationSettings } from '../../../service/intel
 import { newsSentimentClient } from '../../shared/ipc/newsSentimentClient'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
 import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
 import './ProcessingSettingsPanel.css'
 
@@ -54,6 +55,8 @@ export function ProcessingSettingsPanel({ initialSection }: { initialSection?: P
   const dataText = productText[language].pages.intelligence.portal.data
   const settingsText = productText[language].pages.intelligence.portal.newsSentiment.settingsModal
   const labels = sourcesText.translationPreferences
+  // 表解析器：键 → 句子；这几个动作用的都是文案表里真实存在的完整路径。
+  const resolveTextKey = useProductTextKey()
   // 只作初值、只跑一次：读者切到别的块之后，这里不再把他拽回去。
   useEffect(() => {
     if (initialSection === undefined) return undefined
@@ -186,12 +189,13 @@ export function ProcessingSettingsPanel({ initialSection }: { initialSection?: P
               trigger={(triggerProps) => (
                 <IconButton
                   {...triggerProps}
-                  ariaLabelKey="configDrawer.rowReason"
+                  ariaLabelKey="pages.intelligence.portal.dashboard.configDrawer.reasonAria"
+                  ariaLabelParams={{ reason: copy.values.sentimentUnknownReason }}
                   icon={Info}
                   onSelect={() => undefined}
-                  variant="plain"
-                  resolveText={(key: string) => (key === 'configDrawer.rowReason' ? copy.values.sentimentUnknownReason : '')}
-                  size="sm" />
+                  resolveText={resolveTextKey}
+                  size="sm"
+                  variant="plain" />
               )} />
             : null}
         </>}
@@ -230,15 +234,15 @@ export function ProcessingSettingsPanel({ initialSection }: { initialSection?: P
       {/* 两条只出一条：保存失败优先（红色），读不到是黄灯——读不到不是失败。 */}
       {sentiment.saveFailed
         ? <InlineNotice
-          action={{ labelKey: 'portal.data.retry', onSelect: () => void sentiment.retry() }}
-          resolveText={(key) => (key === 'portal.data.retry' ? dataText.retry : key)}
+          action={{ labelKey: 'pages.intelligence.portal.data.retry', onSelect: () => void sentiment.retry() }}
+          resolveText={resolveTextKey}
           tone="danger">
           {settingsText.failed}
         </InlineNotice>
         : sentiment.state === 'unreadable'
           ? <InlineNotice
-            action={{ labelKey: 'configDrawer.openModelService', onSelect: openModelSettings }}
-            resolveText={(key) => (key === 'configDrawer.openModelService' ? copy.openModelService : key)}
+            action={{ labelKey: 'pages.intelligence.portal.dashboard.configDrawer.openModelService', onSelect: openModelSettings }}
+            resolveText={resolveTextKey}
             tone="caution">
             {copy.unreadable}
           </InlineNotice>
@@ -263,6 +267,8 @@ function FieldRow(props: Readonly<{ label: string; rowKey: string; children: Rea
 
 /** 读不到：正文只留状态词，原因进 ⓘ（不画 0、不落成「规则判断」）。 */
 function Unreadable(props: Readonly<{ reason: string }>): React.ReactElement {
+  // 表解析器：不在调用点拿字面量比较（守卫第二条）。这颗的键由配置线注册后再换成真实路径。
+  const resolveText = useProductTextKey()
   return <>
     <span>读不到</span>
     <Popover
@@ -270,10 +276,11 @@ function Unreadable(props: Readonly<{ reason: string }>): React.ReactElement {
       trigger={(triggerProps) => (
         <IconButton
           {...triggerProps}
-          ariaLabelKey="configDrawer.rowReason"
+          ariaLabelKey="pages.intelligence.portal.dashboard.configDrawer.reasonAria"
+          ariaLabelParams={{ reason: props.reason }}
           icon={Info}
           onSelect={() => undefined}
-          resolveText={(key: string) => (key === 'configDrawer.rowReason' ? props.reason : '')}
+          resolveText={resolveText}
           size="sm"
           variant="plain" />
       )} />

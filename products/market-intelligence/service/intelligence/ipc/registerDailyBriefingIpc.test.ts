@@ -1,5 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import {
+  configureChannelPosterOutbox,
+  createChannelPosterOutbox,
+  MAX_CHANNEL_POSTER_BYTES
+} from '@platform/storage/channelPosterOutbox'
 import { DAILY_BRIEFING_IPC_METHODS, registerDailyBriefingIpc } from './registerDailyBriefingIpc'
 
 const service = {
@@ -282,5 +290,76 @@ describe('the period write seam shares the runtime store', () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('the poster payload is optional and never carries a path', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0])
+  const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
+  const dirs: string[] = []
+  afterEach(() => {
+    configureChannelPosterOutbox(null)
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+  function useOutbox(now = '2026-11-12T12:00:00.000Z') {
+    const dir = mkdtempSync(join(tmpdir(), 'briefing-poster-'))
+    dirs.push(dir)
+    const outbox = createChannelPosterOutbox({ directory: dir, now: () => now })
+    configureChannelPosterOutbox(outbox)
+    return { dir, outbox }
+  }
+  function handler(publishToPhone: (input: unknown) => Promise<unknown>) {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerDailyBriefingIpc(((_product: string, method: string, fn: (payload: unknown) => Promise<unknown>) => {
+      handlers.set(method, fn)
+    }) as never, { ...(service as unknown as Record<string, unknown>), publishToPhone } as never, undefined, undefined)
+    return handlers.get(DAILY_BRIEFING_IPC_METHODS.publishToPhone)!
+  }
+  const payload = (poster?: unknown) => ({
+    date: '2026-11-12', periodId: 'default', locale: 'zh-CN' as const, ...(poster === undefined ? {} : { poster })
+  })
+
+  it('stores the bytes and still calls the service with only the edition identity', async () => {
+    const { outbox } = useOutbox()
+    const publishToPhone = vi.fn(async () => ({ state: 'sent' }))
+    const send = handler(publishToPhone)
+
+    await expect(send(payload({ bytes: PNG, mime: 'image/png' }))).resolves.toEqual({ state: 'sent' })
+    // 服务那一跳只收三元组 + 「这次带了海报」这个意图：字节留在主进程暂存区，投递层不认识它。
+    expect(publishToPhone).toHaveBeenCalledWith({ date: '2026-11-12', periodId: 'default', locale: 'zh-CN', withPoster: true })
+    await expect(outbox.read({ date: '2026-11-12', periodId: 'default', locale: 'zh-CN' })).resolves.toMatchObject({ ok: true })
+  })
+
+  it('refuses an oversized poster before publishing anything', async () => {
+    useOutbox()
+    const publishToPhone = vi.fn(async () => ({ state: 'sent' }))
+    const oversized = new Uint8Array(MAX_CHANNEL_POSTER_BYTES + 1)
+    oversized.set(PNG.subarray(0, 8))
+    await expect(handler(publishToPhone)(payload({ bytes: oversized, mime: 'image/png' })))
+      .rejects.toThrow('delivery-image-too-large')
+    // 整条不发：不许「图省掉、文字照发」。
+    expect(publishToPhone).not.toHaveBeenCalled()
+  })
+
+  it('refuses a format the channel cannot send, without publishing', async () => {
+    useOutbox()
+    const publishToPhone = vi.fn(async () => ({ state: 'sent' }))
+    await expect(handler(publishToPhone)(payload({ bytes: WEBP, mime: 'image/webp' })))
+      .rejects.toThrow('delivery-image-unsupported')
+    expect(publishToPhone).not.toHaveBeenCalled()
+  })
+
+  it('refuses a poster that is a path or a non-byte payload', async () => {
+    useOutbox()
+    const publishToPhone = vi.fn(async () => ({ state: 'sent' }))
+    for (const poster of [
+      { path: '/tmp/poster.png', mime: 'image/png' },
+      { bytes: 'not-bytes', mime: 'image/png' },
+      { bytes: PNG },
+      {}
+    ]) {
+      await expect(handler(publishToPhone)(payload(poster))).rejects.toThrow('daily-briefing-invalid-request')
+    }
+    expect(publishToPhone).not.toHaveBeenCalled()
   })
 })

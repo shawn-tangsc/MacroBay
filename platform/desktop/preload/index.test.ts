@@ -176,6 +176,7 @@ describe('desktop preload platform api', () => {
       .mockResolvedValueOnce({ status: 'succeeded' })
       .mockResolvedValueOnce({ status: 'succeeded' })
       .mockResolvedValueOnce({ records: [], nextCursor: null })
+      .mockResolvedValueOnce({ copies: [], unreadableDirectories: 0, truncated: false })
 
     await import('./index')
     const api = exposeInMainWorld.mock.calls[0]?.[1] as {
@@ -185,6 +186,7 @@ describe('desktop preload platform api', () => {
         clearCache: (input: unknown) => Promise<unknown>
         compactCache: (input: unknown) => Promise<unknown>
         listCacheOperations: (query?: unknown) => Promise<unknown>
+        listQuarantineCopies: () => Promise<unknown>
       }
     }
 
@@ -214,6 +216,12 @@ describe('desktop preload platform api', () => {
       cacheId: 'market-intelligence.translation-records'
     })
     expect(invoke).toHaveBeenNthCalledWith(5, IpcChannels.storageListCacheOperations, { limit: 20 })
+
+    // 隔离副本清单：只读、无入参，通道单独一条（不借缓存的通道）。
+    await expect(api.storage.listQuarantineCopies()).resolves.toEqual({
+      copies: [], unreadableDirectories: 0, truncated: false
+    })
+    expect(invoke).toHaveBeenNthCalledWith(6, IpcChannels.storageListQuarantineCopies)
   })
 
   it('exposes the generic open-file-with-app shell method', async () => {

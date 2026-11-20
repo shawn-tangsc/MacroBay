@@ -1,5 +1,9 @@
+import { decisionEventMetricKeyForTitleKey, filterVisibleByTier, tierVisibilityPolicy }
+  from '../../../../service/intelligence/macro-calendar/marketCalendarTierVisibility'
+import { getMacroCalendarReleaseValueMapping }
+  from '../../../../service/intelligence/macro-calendar/macroCalendarReleaseValueMappingPolicy'
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import { economicCalendarPresentationPolicy, type EconomicCalendarEventView } from './economicCalendarModel'
+import type { EconomicCalendarEventView } from './economicCalendarModel'
 
 export type CalendarDayCoverage = 'complete' | 'loading' | 'incomplete'
 export type CalendarDayItem = { key: string; date: string; time?: string } & (
@@ -40,8 +44,12 @@ export function calendarDisplayDate(instant: string, timeZone: string): string {
 export function calendarDisplayTime(instant: string, timeZone: string): string {
   return formattersFor(timeZone).time.format(new Date(instant))
 }
+/**
+ * 判不出重要性**不算**最高一档（与 `projectUpcomingCalendarCard` 同一口径）：官方那条也读记录自己的值。
+ * 记录里没有这个字段，就只是「未提供」——行不戴高标记、无障碍名不说「高」。
+ */
 export function isHighImportanceCalendarItem(item: CalendarDayItem): boolean {
-  return item.source === 'official' || item.event.importance === EconomicCalendarUnifiedDayPolicy.visibleImportance
+  return item.event.importance === EconomicCalendarUnifiedDayPolicy.visibleImportance
 }
 
 /**
@@ -66,6 +74,22 @@ function compareCalendarGroupItems(a: CalendarDayItem, b: CalendarDayItem): numb
     EconomicCalendarUnifiedDayPolicy.sourceOrder.indexOf(a.source) - EconomicCalendarUnifiedDayPolicy.sourceOrder.indexOf(b.source) || a.key.localeCompare(b.key)
 }
 
+/**
+ * 这一条对应哪个指标码：没有码的行不参与分级（事件型与源内身份行都属这一类）。
+ *
+ * 旧路径的官方条目自己不带指标码，但它若吸收了市场行，就随那条市场行——同一次发布，市场行有码。
+ * 还没并到市场行时（官方排期先到），按官方发布映射取码：那张表是写标准表时用的同一张，
+ * 所以「CPI 这条发布是哪个指标」只有一处定义，不在这里再抄一遍。决议类发布落到事件码上
+ * （`evt.fomc`），它凭那张清单同样可以露名字；其余取不到码的官方条目就是未分级，进数字。
+ */
+function metricKeyOf(item: CalendarDayItem): string {
+  if (item.source === 'market') return item.event.eventNameKey ?? ''
+  const own = (item.event as { eventNameKey?: string }).eventNameKey
+  return own ?? item.linkedMarket?.eventNameKey
+    ?? getMacroCalendarReleaseValueMapping(item.event.titleKey)?.metricKey
+    ?? decisionEventMetricKeyForTitleKey(item.event.titleKey) ?? ''
+}
+
 export function unifiedCalendarDay(date: string, official: readonly EconomicCalendarEventView[],
   market: readonly MarketCalendarEvent[], coverage: CalendarDayCoverage, timeZone: string, linkedMarketKeys: ReadonlySet<string> = new Set()) {
   const linkedByOfficial = new Map<string, MarketCalendarEvent>()
@@ -85,13 +109,21 @@ export function unifiedCalendarDay(date: string, official: readonly EconomicCale
     const time = (a.event.scheduledAt ?? '').localeCompare(b.event.scheduledAt ?? '')
     return time || EconomicCalendarUnifiedDayPolicy.sourceOrder.indexOf(a.source) - EconomicCalendarUnifiedDayPolicy.sourceOrder.indexOf(b.source) || a.key.localeCompare(b.key)
   })
-  // The cell is the day's own first six rows — importance first, then the release time — because the
-  // list and the cell are one reading of one day. Which kind a row is does not enter into its rank:
-  // the glyph says what it is, and ranking by kind inside one importance level is what put a 22:30
-  // indicator above a 16:00 central-bank event of the same weight, so the cell read out of order.
-  const visible = items.slice(0, economicCalendarPresentationPolicy.dayEventLimit)
+  // The day list's order — importance first, then the release time — is also the order the cell keeps
+  // its rows in, because the list and the cell are one reading of one day. Which kind a row is does
+  // not enter into its rank: the glyph says what it is, and ranking by kind inside one importance
+  // level is what put a 22:30 indicator above a 16:00 central-bank event of the same weight.
+  //
+  // **格子里只写一级、二级的名字，最多两条**——判定在 `filterVisibleByTier` 一处实现，其余
+  // （未标级的 + 一二级里超出的）全部计入数字。没有例外：事件型（`evt.*`）与源内身份行都没有
+  // 分级，所以它们进数字，而不是"没有码就退回旧上限"——那条旧规则会让一整天的名字全摆出来。
+  const tiered = filterVisibleByTier(items.map((item) => ({ metricKey: metricKeyOf(item), item })),
+    { maximumVisible: tierVisibilityPolicy.maximumVisible })
+  const visible = tiered.visible
   const groups = EconomicCalendarUnifiedDayPolicy.eventTypeOrder.map(eventType => ({ eventType,
     items: items.filter(item => calendarItemType(item) === eventType).sort(compareCalendarGroupItems) })).filter(group => group.items.length > 0)
   return { items, visible, groups, coverage,
+    hiddenTiered: tiered.hiddenTiered, hiddenUntiered: tiered.hiddenUntiered,
+    hiddenTotal: tiered.hiddenTotal,
     remaining: coverage === 'complete' ? Math.max(0, items.length - visible.length) : undefined }
 }

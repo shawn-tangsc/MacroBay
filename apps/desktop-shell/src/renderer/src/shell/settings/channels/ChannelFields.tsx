@@ -132,7 +132,7 @@ export function ChannelFields(props: {
                   icon={visible ? EyeOff : Eye}
                   onSelect={() => setVisibleFields((current) => ({ ...current, [field]: !visible }))}
                   pressed={visible}
-                  resolveText={(key) => (key === 'settings.channels.tokenVisibility' ? labels.channelTokenVisibility : '')}
+                  resolveText={(key) => ({ 'settings.channels.tokenVisibility': labels.channelTokenVisibility } as Readonly<Record<string, string>>)[key] ?? ''}
                   size="sm"
                   tooltipKey="settings.channels.tokenVisibility"
                 />

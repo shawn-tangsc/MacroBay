@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { withQueryDeadline } from '../../../shared/ipc/queryDeadline'
 import type { createCrossAssetObservationClient } from '../../../shared/ipc/crossAssetObservationClient'
 import type { CrossAssetRange, CrossAssetSnapshot } from '../../../../contracts/crossAssetObservationContracts'
 
@@ -97,7 +98,7 @@ export function useCrossAssetObservation({ client, enabled = true }: { client: R
         queryBusy.current = true
         const requestedRange = rangeRef.current
         try {
-          const result = await client.query({ range: requestedRange })
+          const result = await withQueryDeadline(client.query({ range: requestedRange }))
           if (current(epoch) && requestedRange === rangeRef.current) {
             if ('schemaVersion' in result) {
               failures = 0

@@ -8,7 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createRawRecordStore } from '../application/rawRecordStore'
 import {
   createMacroCalendarEvidenceArchive,
-  macroCalendarEvidenceArchivePolicy
+  macroCalendarEvidenceArchivePolicy,
+  rawRecordMetadataQuotaPolicy
 } from './macroCalendarEvidenceArchive'
 
 const directories: string[] = []
@@ -94,9 +95,10 @@ describe('macro calendar evidence archive', () => {
     const result = archive.append(reservation, input(body))
 
     expect(result).toMatchObject({ inserted: true, deduped: false })
+    // 外置开时「没有这个键」，不是「值是 undefined」。
+    expect(result?.record === undefined ? false : 'payloadBody' in result.record).toBe(false)
     expect(result?.record).toMatchObject({
       payloadRefType: 'file',
-      payloadBody: undefined,
       payloadSizeBytes: Buffer.byteLength(body),
       processingOwner: 'macro-calendar',
       archiveStatus: 'archived',
@@ -197,6 +199,7 @@ describe('macro calendar evidence archive', () => {
     const updateArchiveRefs = vi.spyOn(rawRecords, 'updateArchiveRefs')
 
     expect(archive.migrateInlineBodies()).toEqual({ state: 'unavailable', migratedCount: 0, dedupedCount: 0 })
+    // 迁移整笔失败（后一条正文与归档文件不匹配）→ 这一行**仍是内联**，正文原样留着。
     expect(rawRecords.getRawRecord(recovered.rawRecordId)?.payloadBody).toBe(recoveredBody)
     expect(rawRecords.getRawRecord(retained.rawRecordId)?.payloadBody).toBe(retainedBody)
     expect(updateArchiveRefs).not.toHaveBeenCalled()
@@ -305,3 +308,37 @@ function input(body: string) {
     parserVersion: 'test-v1'
   }
 }
+
+/** 配额判据（2026-11-16 真库口径）：按 owner 计量 + 全局软上限，不是「人人 16MB」。 */
+describe('证据元数据按 owner 配额', () => {
+  const calendarQuota = rawRecordMetadataQuotaPolicy.perOwnerBytes['macro-calendar']!
+
+  it('别的 owner 占大头（整库 20MB）、日历自身很小 → 仍然放行（不再被连坐）', async () => {
+    const rawRecords = createRawRecordStore()
+    vi.spyOn(rawRecords, 'inspectSnapshot').mockReturnValue({
+      recordCount: 6078, serializedBytes: 20 * 1024 * 1024, macroCalendarInlineBodyBytes: 0 })
+    vi.spyOn(rawRecords, 'listByProcessingOwner').mockReturnValue(
+      [{ payloadMetaJson: 'x'.repeat(400 * 1024) } as never])
+    const archive = await createArchive(rawRecords)
+    expect(archive.reserve(1)).toBeTruthy()
+  })
+
+  it('本 owner 自己的证据超过配额 → 拒绝（这是它该拒绝的时候）', async () => {
+    const rawRecords = createRawRecordStore()
+    vi.spyOn(rawRecords, 'inspectSnapshot').mockReturnValue({
+      recordCount: 1, serializedBytes: 1024, macroCalendarInlineBodyBytes: 0 })
+    vi.spyOn(rawRecords, 'listByProcessingOwner').mockReturnValue(
+      [{ payloadMetaJson: 'x'.repeat(calendarQuota) } as never])
+    const archive = await createArchive(rawRecords)
+    expect(archive.reserve(1)).toBeUndefined()
+  })
+
+  it('整库超过全局软上限 → 拒绝（挡住 N 个 owner × 配额的总量失控）', async () => {
+    const rawRecords = createRawRecordStore()
+    vi.spyOn(rawRecords, 'inspectSnapshot').mockReturnValue({
+      recordCount: 1, serializedBytes: rawRecordMetadataQuotaPolicy.globalBytes, macroCalendarInlineBodyBytes: 0 })
+    vi.spyOn(rawRecords, 'listByProcessingOwner').mockReturnValue([])
+    const archive = await createArchive(rawRecords)
+    expect(archive.reserve(1)).toBeUndefined()
+  })
+})

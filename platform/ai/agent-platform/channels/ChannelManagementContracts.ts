@@ -40,6 +40,11 @@ export type ChannelManagementSafeView = {
   }
   createdAt: string
   updatedAt: string
+  /**
+   * 「曾被『只允许一条』规则自动停用、之后没再启用」的**只读证据**（原型 2026-11-13）。
+   * 两个时刻都来自审计表；没有证据时不带这个字段——判据在 `autoDisabledHint.ts`（纯函数）。
+   */
+  autoDisabled?: { autoDisabledAt: string | null; lastEnabledAt: string | null }
 }
 
 export type ChannelManagementAuditView = {

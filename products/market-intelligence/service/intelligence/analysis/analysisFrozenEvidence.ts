@@ -59,7 +59,8 @@ export async function frozenEvidenceForRun(input: Readonly<{
     frozenEvidence: {
       facts,
       evidenceRefs: withChange.evidenceRefs,
-      ...(changeValues === undefined ? {} : { changeValues })
+      ...(changeValues === undefined ? {} : { changeValues }),
+      ...(withChange.trigger ? { trigger: withChange.trigger } : {})
     },
     // 从冻结快照解出来，判的是这次真正持有的问题。
     triggerFocus: resolveTriggerFocus(withChange),

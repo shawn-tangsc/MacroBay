@@ -1,11 +1,17 @@
 import { StatusPill } from '@platform/ui/components/status-pill'
 
+import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import { SettingsInfo } from '../settingsInfo'
 import { healthStateBadge } from './sourceHealthTone'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes, sourceRowView } from './sourceSettingRows'
 import type { ProviderDetailLabels } from './ProviderDetail'
 import type { IntelligenceSourceProfile } from '../../../service/intelligence/schema/intelligenceSource'
 import type { SourceHealthState, SourceView } from '../../../service/intelligence/application/sourceProjection'
+
+/** 这条源是否由另一条 feed 的作业覆盖（Narwhal 三类的形状）。只读注册表字段。 */
+function coverageOwnerOf(sourceId: string): string | undefined {
+  return (calendarFeedRegistry as Readonly<Record<string, { coveredBy?: string }>>)[sourceId]?.coveredBy
+}
 
 /**
  * 菜单 1 的三行：**行长什么样住在这里，行的值/可见性/写入来自 `menus/sources.ts` 的声明**。
@@ -61,6 +67,11 @@ export type SourceEnabledRowProps = Readonly<{
   onTest?: () => void
   /** 最近一次行内测试的结果；没有测过就不传（不画空壳）。 */
   testState?: 'testing' | 'ok' | 'failed' | 'unsupported'
+  /**
+   * 这一行**自己的**动作节点（目前只有「BLS 官方日程」的导入 ICS）。
+   * 与「测试」同一组、排在它前面：两者都是「对这个源做一件事」，不该一个在行尾、一个漂在别处。
+   */
+  extraAction?: React.ReactNode
 }>
 
 /**
@@ -77,7 +88,12 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
   const metaParts = [
     ...new Set(props.tags),
     ...(source.requiresProxy && !props.proxyConfigured ? [labels.badges.proxy] : []),
-    ...(needsJob(source) ? [source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered] : [])
+    /* 被别的 feed 的作业覆盖时，这一行**没有自己的任务**：写「由同一次采集覆盖」，不写
+       「未注册自动任务」——后者会让读者以为这一类型漏采了（Narwhal 一次调用返回全部 releases，
+       三类是我们按 series 自己分的）。覆盖关系读注册表，不按名字或顺序猜。 */
+    ...(coverageOwnerOf(source.sourceId) !== undefined
+      ? [resolveText('settings.intelligenceSources.coveredBySameCollection')]
+      : needsJob(source) ? [source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered] : [])
   ]
   const proxyPart = labels.badges.proxy
   /* 这一行是**列表行**，不是设置行：复制列是 `div`、标签是 `strong`（原来就是这样）。
@@ -110,6 +126,14 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
           </span>)}
         </span>}
     </div>
+    {/* 标准表**写库**失败（用户 2026-11-19）：与「没采到」是两件事，**只进 ⓘ**——行上不加警告色，
+        也不把来源标成故障（`healthState` 仍只说采集）。没有失败/还没写过/读不到三种情况不出这一颗。 */}
+    {props.source.writeFailure === undefined
+      ? null
+      : <SettingsInfo
+        ariaLabelKey="settings.intelligenceSources.writeFailureAria"
+        labelKeys={[`settings.intelligenceSources.writeFailure.${props.source.writeFailure.code}`]}
+        resolveText={resolveText} />}
     {props.credentialMissing === true
       ? <SettingsInfo
         ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
@@ -123,6 +147,7 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
         行上唯一的动作是这颗源自己的「测试」（读者 2026-11-12：每个已接入的源都要能测），
         它排在状态文字左边，测完只追加一个短词，不顶掉「已应用 / 未应用」。 */}
     <span className="source-provider-detail__row-tail">
+      {props.extraAction ?? null}
       {props.onTest === undefined || labels.rowTest === undefined ? null : <button
         className="source-provider-detail__row-test"
         disabled={props.testState === 'testing'}

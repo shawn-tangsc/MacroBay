@@ -448,10 +448,12 @@ function normalizeState(value: unknown): NotificationState {
 }
 
 function normalizeChannels(value: unknown): NotificationChannel[] {
+  // 老记录没有这一项：它们是「center 必达」时代写的，按含 center 处理（否则会凭空从中心消失）。
   if (!Array.isArray(value)) return ['center']
   const allowed: NotificationChannel[] = ['center', 'toast', 'popup', 'desktop']
   const channels = value.filter((item): item is NotificationChannel => allowed.includes(item as NotificationChannel))
-  return channels.length > 0 ? [...new Set(channels)] : ['center']
+  // **空数组是合法的**：只有手机档（或批准表没写 center）的事件不在本机任何表面留条目。
+  return [...new Set(channels)]
 }
 
 

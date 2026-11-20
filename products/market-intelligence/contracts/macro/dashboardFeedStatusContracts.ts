@@ -15,7 +15,9 @@
 const dashboardFeedStatusFailureCodes = Object.freeze([
   'credential-missing', 'credential-rejected', 'credential-invalid', 'credential-not-configured',
   'plan-restricted', 'rate-limited', 'transport-unavailable', 'request-timeout',
-  'response-invalid', 'response-unavailable', 'authentication-failed', 'decryption-failed'
+  'response-invalid', 'response-unavailable', 'authentication-failed', 'decryption-failed',
+  /** 这个品种不在当前套餐的授权里：永久拒绝，重试不会好。 */
+  'symbol-not-supported'
 ] as const)
 
 /**
@@ -29,8 +31,8 @@ const dashboardFeedSourceIds = Object.freeze([
   'binance-futures-positioning', 'defillama-stablecoins', '0xrouter-aggregate-provider',
   'alternative-fear-greed', 'policy-path-market',
   'macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls',
-  'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
-  'macro-calendar-0xrouter-central-bank-activities'
+  'macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
+  'macro-calendar-narwhal-central-bank-activities'
 ] as const)
 
 export const dashboardFeedStatusPublicPolicy = Object.freeze({
@@ -46,6 +48,11 @@ export const dashboardFeedStatusPublicPolicy = Object.freeze({
     'realmarketapi-market': Object.freeze({
       outcome: 'realmarketapi.lastOutcome',
       failureCode: 'realmarketapi.lastFailureCode',
+      /**
+       * 品种级失败：`DXY:symbol-not-supported` 这样的 `代码:码` 列表，采集每轮重写、成功那轮写空。
+       * 运行级 `lastOutcome` 装不下"一只品种成功、另一只被拒"，这一条就是那个缺口的出口。
+       */
+      symbolFailures: 'realmarketapi.lastSymbolFailures',
       // Written only after points were actually appended, so it is a success time and not a run time.
       lastSuccessAtMs: 'realmarketapi.lastRunAtMs'
     }),
@@ -54,11 +61,14 @@ export const dashboardFeedStatusPublicPolicy = Object.freeze({
   }) as Readonly<Partial<Record<DashboardFeedSourceId, Readonly<{
     outcome?: string
     failureCode?: string
+    symbolFailures?: string
     lastSuccessAtMs?: string
   }>>>>,
   /** `unavailable:<code>` is the one outcome spelling that names a failure. */
   unavailableOutcomePrefix: 'unavailable:',
   maximumSources: 14,
+  /** One tick collects a handful of instruments; a long list would be data, not this source's shape. */
+  maximumSymbolFailures: 8,
   maximumSnapshotBytes: 8 * 1024
 } as const)
 
@@ -69,6 +79,10 @@ export type DashboardFeedFailureCode = typeof dashboardFeedStatusFailureCodes[nu
  * One source's readiness. `enabled` and `hasCredential` are the two switches the collector reads, so
  * a row can say 未配置 / 已配置未启用 instead of guessing from an empty store. `lastSuccessAtMs` and
  * `failureCode` are the last collection's own evidence, when the source keeps any.
+ *
+ * `symbolFailures` is the per-instrument half of that evidence: a tick that stored one instrument and
+ * was refused the other is a success at the run level and a failure for that one series. Without it
+ * the board could only say "缺数据" for a series whose plan had been revoked.
  */
 export type DashboardFeedSourceStatus = Readonly<{
   sourceId: DashboardFeedSourceId
@@ -76,6 +90,13 @@ export type DashboardFeedSourceStatus = Readonly<{
   hasCredential: boolean
   lastSuccessAtMs?: number
   failureCode?: DashboardFeedFailureCode
+  symbolFailures?: readonly DashboardFeedSourceSymbolFailure[]
+}>
+
+/** One instrument this source could not collect, and why. `symbol` is our own request symbol. */
+export type DashboardFeedSourceSymbolFailure = Readonly<{
+  symbol: string
+  failureCode: DashboardFeedFailureCode
 }>
 
 /**
@@ -129,19 +150,37 @@ export function parseDashboardFeedStatus(value: unknown): DashboardFeedStatusVie
 }
 
 function parseSource(value: unknown): DashboardFeedSourceStatus | undefined {
-  if (!exactFields(value, ['sourceId', 'enabled', 'hasCredential'], ['lastSuccessAtMs', 'failureCode'])) return undefined
+  if (!exactFields(value, ['sourceId', 'enabled', 'hasCredential'], ['lastSuccessAtMs', 'failureCode', 'symbolFailures'])) return undefined
   const sourceId = value.sourceId
   if (typeof sourceId !== 'string' || !(dashboardFeedSourceIds as readonly string[]).includes(sourceId)) return undefined
   if (typeof value.enabled !== 'boolean' || typeof value.hasCredential !== 'boolean') return undefined
   if (Object.hasOwn(value, 'lastSuccessAtMs') && !(Number.isSafeInteger(value.lastSuccessAtMs) && (value.lastSuccessAtMs as number) >= 0)) return undefined
   if (Object.hasOwn(value, 'failureCode') && !isFailureCode(value.failureCode)) return undefined
+  const symbolFailures = Object.hasOwn(value, 'symbolFailures') ? parseSymbolFailures(value.symbolFailures) : undefined
+  if (Object.hasOwn(value, 'symbolFailures') && symbolFailures === undefined) return undefined
   return Object.freeze({
     sourceId: sourceId as DashboardFeedSourceId,
     enabled: value.enabled,
     hasCredential: value.hasCredential,
     ...(value.lastSuccessAtMs === undefined ? {} : { lastSuccessAtMs: value.lastSuccessAtMs as number }),
-    ...(value.failureCode === undefined ? {} : { failureCode: value.failureCode as DashboardFeedFailureCode })
+    ...(value.failureCode === undefined ? {} : { failureCode: value.failureCode as DashboardFeedFailureCode }),
+    ...(symbolFailures === undefined ? {} : { symbolFailures })
   })
+}
+
+/** The provider side is not allowed to widen this: our own request symbols, our own closed code set. */
+function parseSymbolFailures(value: unknown): readonly DashboardFeedSourceSymbolFailure[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > dashboardFeedStatusPublicPolicy.maximumSymbolFailures) return undefined
+  const parsed: DashboardFeedSourceSymbolFailure[] = []
+  for (const entry of value) {
+    if (!exactFields(entry, ['symbol', 'failureCode'])) return undefined
+    const symbol = entry.symbol
+    if (typeof symbol !== 'string' || !/^[A-Z0-9]{1,12}$/.test(symbol)) return undefined
+    if (!isFailureCode(entry.failureCode)) return undefined
+    if (parsed.some(candidate => candidate.symbol === symbol)) return undefined
+    parsed.push(Object.freeze({ symbol, failureCode: entry.failureCode }))
+  }
+  return Object.freeze(parsed)
 }
 
 export function isFailureCode(value: unknown): value is DashboardFeedFailureCode {

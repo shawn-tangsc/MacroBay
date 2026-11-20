@@ -2,6 +2,7 @@ import { CalendarDays, CircleDashed, CircleSlash, Copy, RefreshCw, TriangleAlert
 import { Button, Tooltip } from 'antd'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { helpTrigger } from '@platform/ui/components/popover'
 
 import { openIntelligenceSourcesSettings } from '../../shared/navigation/productShellNavigation'
 import type { CalendarCardSourcesState } from './useCalendarCardData'
@@ -19,6 +20,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useSampleNow } from './SampleModeProvider'
 import { calendarCardReactionPolicy } from './calendarCardReaction'
 import type { MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
+import { calendarCountryLabel } from '../../features/macro/economic-calendar/calendarCountryLabel'
 import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingCalendarCard'
 
 /**
@@ -35,12 +37,19 @@ export type MarketCalendarCardText = Readonly<{
   loading: string
   /** Shown over rows kept from an earlier successful read, when the newest read failed. */
   staleNotice: string
+  /** 国家查不到时显示的那句（与 `market.unknownCountry` 同一个事实）。 */
+  unknownCountry: string
   /** Says its own window: an empty section must read as «nothing was released in N days», never as «no data». */
   releasedEmpty: string
   awaitingData: string
   /** 反应行的悬停说明；窗口长度不再作为一个可见标签占位。 */
   reactionHint: string
   openCalendar: string; importanceHigh: string; timePending: string; copyEvent: string; openEventInCalendar: string
+  /**
+   * 卡片标题旁 ⓘ 里的**筛选口径**（用户 2026-11-19）：只显示一二级指标与高重要性事件。
+   * 原来那句「另有 N 条未标级」在新规则下分母不成立，已删掉，改在这里说明筛的是什么。
+   */
+  filterNote: string
   /**
    * 预期差的四种语态。`unavailable` 是「没有一致预期」，`notComparable` 是「有预期但算不出量」；
    * 两者都不得出现任何数字当差值。
@@ -177,7 +186,9 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
           <span className="mi-calendar-card__row-title">
             {/* Where the event is, which the 0xRouter route publishes and the official one does not:
                 a list of indicators without countries is unreadable once two of them share a name. */}
-            {entry.countryName ? <em className="mi-calendar-card__row-country" data-country>{entry.countryName}</em> : null}
+            {/* 与当日列表**同一个函数**：名字 → 源给的国家码原样 → 「未知国家」。
+                以前这里只认名字、缺了就整格消失——同一件事两个判断，用户看到的就是「一块有一块没有」。 */}
+            <em className="mi-calendar-card__row-country" data-country>{calendarCountryLabel({ countryName: entry.countryName, countryCode: entry.countryCode }, { market: { unknownCountry: text.unknownCountry } })}</em>
             {readableAnalysisName(text.readableNames, 'eventName', entry.titleKey)}
           </span>
           {statesSurprise(entry) ? null : <span className="mi-calendar-card__row-value">{valuesOf(entry)}</span>}
@@ -246,9 +257,10 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
     : state === 'error' ? 'unreadable' : undefined
   return <section className="mi-calendar-card" aria-label={text.title}>
     <header>
-      <h2>{text.title}</h2>
-      <IconButton icon={CalendarDays} size="md" variant="plain" resolveText={resolveKey}
-        ariaLabelKey="pages.intelligence.portal.calendarCard.openCalendar" onSelect={() => onOpenCalendar(month)} />
+      {/* 卡头只留标题 + ⓘ（用户 2026-11-19）：右上角那颗「打开经济日历」与右侧栏的切换入口重复，
+          而每一行本来就有「在日历中打开该事件」。删掉它，卡头不再挂第二个入口。
+          ⓘ 说明**这份名单筛的是什么**：只显示一二级指标与高重要性事件。 */}
+      <h2>{text.title}{helpTrigger({ text: text.filterNote })}</h2>
     </header>
     {/* Only the list scrolls. The header is the card's identity — the reader keeps seeing what
         they are looking at while scanning further down the schedule — so it stays outside the
@@ -269,10 +281,8 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
           {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
           {/* state-ternary: reviewed — 空态就是读数区的内容；由投影的 empty 判定，不是用状态位藏表格 */}
           {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
-          {/* state-ternary: reviewed — 无发布事件时给说明；有行时走下面按长度的分支，内容不会被状态位藏掉 */}
-          {state === 'ready' && projection.state === 'available' && projection.today.length === 0
-            ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
-            : null}
+          {/* 某一小节没有内容就**整节不渲染**（用户 2026-11-19）：不留一行讲空话——
+              原句「最近 N 天内没有已公布的事件」占掉一整行，而这行没有任何可看的东西。 */}
           {/* state-ternary: reviewed — 按数据长度渲染（length > 0），state 只表示读取阶段，未就绪时上面已有 loading/error 分支 */}
           {state === 'ready' && projection.today.length > 0 ? <>
             <p className="mi-calendar-card__section">{text.todaySection}</p>
@@ -283,6 +293,7 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
             <p className="mi-calendar-card__section">{text.upcomingSection}</p>
             <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
           </> : null}
+
         </div>
         {veil === undefined ? null : <div className="mi-source-veil" data-state={veil}>
           <p className="mi-source-state" data-state={veil}>

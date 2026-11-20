@@ -152,7 +152,8 @@ describe('market calendar bounded snapshot queries', () => {
     expect(repository.appendCollection({ ...scope, collectionId: 'busy', parserVersion: 'v1', parseResult: {
       state: 'succeeded', drafts: [], diagnostics: { inputRows: 0, skippedRows: 0,
         reasons: { 'invalid-identity': 0, 'invalid-date': 0, 'invalid-row': 0 } }
-    } })).toEqual({ state: 'unavailable', failureCode: 'storage-unavailable' })
+    // 不认识的异常现在报 `storage-error` 并带类名/消息（用户 2026-11-20：不许再折叠成兜底码）。
+    } })).toMatchObject({ state: 'unavailable', failureCode: 'storage-error' })
     reader.exec('rollback')
     expect(queries(writer).listCollections({ ...scope, asOf })).toMatchObject({ state: 'succeeded', rows: [
       { collection_id: 'before' }, { collection_id: 'after' }

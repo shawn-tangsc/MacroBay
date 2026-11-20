@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ModuleSignalAnalysisRead } from '../../../../service/intelligence/analysis/signalAnalysisRead'
+import { queryReadDeadlineMs } from '../../../shared/ipc/queryDeadline'
 import { capitalConditionsReadRetryDelaysMs, useCapitalConditions } from './useCapitalConditions'
 
 const asOf = '2026-08-18T08:00:00.000Z'
@@ -194,6 +195,7 @@ async function renderHook(
   return {
     root: localRoot, container,
     state: () => container.querySelector('output')?.getAttribute('data-state') ?? '',
+    reason: () => container.querySelector('output')?.getAttribute('data-reason') ?? '',
     stale: () => container.querySelector('output')?.getAttribute('data-stale') ?? '',
     chip: () => container.querySelector('output')?.getAttribute('data-chip') ?? ''
   }
@@ -203,7 +205,10 @@ function Harness({ client, now, reloadKey, retryKey, signalClient }: { client: {
   const state = useCapitalConditions({ client: client as never, ...(signalClient ? { signalClient } : {}), now, ...(reloadKey === undefined ? {} : { reloadKey }), ...(retryKey === undefined ? {} : { retryKey }) })
   const stale = state.state === 'available' && state.stale ? 'true' : 'false'
   const chip = state.state === 'available' && state.etfSignal ? state.etfSignal.state : ''
-  return createElement('output', { 'data-state': state.state, 'data-stale': stale, 'data-chip': chip }, state.state === 'available' ? state.currentUsd : state.state)
+  return createElement('output', {
+    'data-state': state.state, 'data-stale': stale, 'data-chip': chip,
+    'data-reason': state.state === 'unavailable' ? state.reason : ''
+  }, state.state === 'available' ? state.currentUsd : state.state)
 }
 
 function available() {
@@ -249,5 +254,26 @@ describe('useCapitalConditions · ETF signal chip', () => {
     await flush()
 
     expect(page.chip()).toBe('hidden')
+  })
+})
+
+describe('a read that never settles does not leave the card spinning', () => {
+  it('keeps loading until the deadline, then lands a terminal timeout state — no real sleep', async () => {
+    vi.useFakeTimers()
+    try {
+      // 夹具：永不 resolve，模拟 IPC 挂起。
+      const querySnapshot = vi.fn(() => new Promise<never>(() => undefined))
+      const page = await renderHook({ querySnapshot }, () => new Date(asOf))
+      await act(async () => { await Promise.resolve() })
+      // deadline 之前：仍然是加载（不许提前误判成失败）。
+      await act(async () => { await vi.advanceTimersByTimeAsync(queryReadDeadlineMs - 1) })
+      expect(page.state()).toBe('loading')
+      // 到点：落终态，原因码是 timeout（可见文案与失败同一句，不新增句子）。
+      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+      expect(page.state()).toBe('unavailable')
+      expect(page.reason()).toBe('timeout')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import { createDailyBriefingSource, type DailyBriefingSourceDeps } from './dailyBriefingSource'
 
@@ -13,6 +14,48 @@ import { createDailyBriefingSource, type DailyBriefingSourceDeps } from './daily
  * 各采一次（拿 24h 的读数去当 4h 的报告，数不算错，口径错了）。这两条用例数的是**真实查询调用次数**，
  * 不是"看起来复用"。
  */
+// 用户 2026-11-16（Chief 定）：同一统计期内最多补采一次。判据落在「连续生成两版」上——
+// 第二版不再触发补采，且两版都不出现「这次补采没有成功」那句话。
+describe('at most one calendar catch-up per period', () => {
+  const catchUpDeps = (refreshNow: ReturnType<typeof vi.fn>) => {
+    const d = deps()
+    // 契约要求 `sources` 恰好是 `feedByKind` 的三条、同序；少一条整份读数就作废。
+    const staleAt = '2026-10-28T00:00:00.000Z'
+    ;(d.publicQuery as unknown as Record<string, unknown>).queryMarketCalendarFreshness = async () => ({
+      state: 'available' as const,
+      asOf,
+      lastCollectedAt: staleAt,
+      sources: marketCalendarPublicPolicy.feedByKind.map((descriptorId) => ({ descriptorId, lastCollectedAt: staleAt }))
+    })
+    return {
+      ...d,
+      calendarCommands: {
+        refreshNow,
+        registeredScheduleIds: () => ['market-intelligence.refreshMarketCalendar.automatic.economic-data']
+      }
+    } as never
+  }
+
+  it('does not trigger a second catch-up, and never prints the failed-catch-up sentence', async () => {
+    const refreshNow = vi.fn(async () => ({ state: 'collected' as const, sources: [marketCalendarPublicPolicy.collectionFeeds[0]!] }))
+    const source = createDailyBriefingSource(catchUpDeps(refreshNow))
+
+    // 同一期（periodId 相同）连续生成两版：两次 asOf 不同，采集缓存不会替它们合并。
+    const first = await source.readFacts({ asOf: '2026-10-30T00:30:00.000Z', windowHours: 24, periodId: 'period-1' })
+    const second = await source.readFacts({ asOf: '2026-10-30T00:40:00.000Z', windowHours: 24, periodId: 'period-1' })
+
+    expect(refreshNow).toHaveBeenCalledTimes(1)
+    expect(first.calendarFreshness?.catchUp?.state).not.toBe('skipped')
+    expect(second.calendarFreshness?.catchUp).toMatchObject({ state: 'skipped', reasonCode: 'already-caught-up-this-period' })
+
+    for (const facts of [first, second]) {
+      const packet = await source.renderPacket(facts, 'zh-CN', 'Asia/Shanghai')
+      const document = buildDailyBriefingDocument({ packet, date: '2026-10-30' })
+      expect(document.news.notes.macroEmpty).not.toBe('calendar-catch-up-failed')
+    }
+  })
+})
+
 describe('one collection per (cutoff, window)', () => {
   const counting = () => {
     const d = deps()
@@ -77,7 +120,7 @@ const officialEvent = {
 const marketEvent = {
   eventKey: 'MC.FOMC', title: 'FOMC rate decision', countryCode: 'US', eventType: 'central-bank-activity',
   importance: 'high', scheduledAt: '2026-11-02T18:00:00.000Z', consensus: { displayValue: '4.00%' },
-  providerPrevious: { displayValue: '4.25%' }, providerActual: null, source: '0xRouter',
+  providerPrevious: { displayValue: '4.25%' }, providerActual: null, source: 'Narwhal',
   sourceObservedAt: '2026-10-30T00:00:00.000Z', coverage: 'observed-unverified'
 }
 
@@ -148,7 +191,7 @@ function deps(overrides: {
           { sourceId: 'alternative-fear-greed', enabled: true },
           { sourceId: 'binance-futures-positioning', enabled: true },
           { sourceId: 'defillama-stablecoins', enabled: true },
-          { sourceId: '0xrouter-aggregate-provider', enabled: true },
+          { sourceId: 'cryptoetf-etf-flows', enabled: true },
           { sourceId: 'macro-calendar-fed', enabled: true }
         ]
       } as never
@@ -362,7 +405,7 @@ describe('daily briefing source', () => {
 
   it('keeps the kind the calendar source itself gave, so the category filter can act', async () => {
     // 用户 2026-11-06 报：重新生成后 24h 宏观事件里还有 5 条讲话 + 1 条利率决议 + 1 条发布会。
-    // 病根在这一层：以前每条日历事件都被写成 `economic-indicator`，上面"隐藏央行活动与财经事件"的
+    // 病根在这一层：以前每条日历事件都被写成 `economic-indicator`，上面"隐藏央行活动与金融事件"的
     // 过滤拿到的永远是同一个类别，一条都拦不住。这条用例钉住"源说是哪类就是哪类"。
     const cutoff = '2026-11-06T00:00:00.000Z'
     const base = deps()

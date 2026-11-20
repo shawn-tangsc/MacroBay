@@ -55,6 +55,18 @@ A new item immediately triggers body extraction and sentiment scoring. The app a
 
 SEC can go days without a new item. OKX is scored only for trading updates, API notices and deposit/withdrawal suspension notices, so seeing only CoinDesk and Binance in a period is normal.
 
+## Which headlines start a market analysis
+
+Not every scored headline starts an analysis. For the four scored news sources above, **the item's own judgment decides**:
+
+- no tradable symbol (neither BTC nor ETH) → no analysis, it stays a labeled row in the list and the board;
+- neutral, or strength 1 → no analysis on its own;
+- a clear direction with a symbol and strength 2 or more → one market-level analysis.
+
+News sources without sentiment scoring (CryptoPanic, CoinMarketCal, CFTC RSS and the like) are judged by whether the item qualifies as intelligence at all; there is no per-item direction or symbol to go by. Data rows (metrics, calendar) are judged the same way.
+
+The judgment is written by the scoring step that runs after collection, so it can land a few seconds later; that moment does not spend an analysis first — the decision waits for the judgment.
+
 ## Translation
 
 Translation targets the **current application language**:

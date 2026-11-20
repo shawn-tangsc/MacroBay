@@ -155,7 +155,8 @@ describe('the label the card prints comes from the decision kind, not from a boo
   // 这一条把宿主那一步（判定 kind → 那句话素材）与卡片那一步（把它打出来）接起来跑：
   // `source-disabled` 必须落到**源的显示名**，`not-enabled` 落到**格名**。
   // 谁把「看 kind」压回布尔（例如两种都返回格名），源名就消失，这条红。
-  const sourceNames: Record<string, string> = { '0xrouter-aggregate-provider': '0xRouter 聚合行情' }
+  // 资金面那一格现在的源是 `cryptoetf-etf-flows`（旧的聚合源已撤销），名字从 sourceNames 取。
+  const sourceNames: Record<string, string> = { 'cryptoetf-etf-flows': '0xRouter 聚合行情' }
   const labelFor = (cells: Record<string, boolean>, sources: Record<string, boolean>): string | undefined => cellOffLabel({
     decision: decideCellRead({ moduleId: 'capital', cellKey: 'etf', cells, selections: {}, sources }),
     cellLabel: 'ETF',
@@ -163,13 +164,13 @@ describe('the label the card prints comes from the decision kind, not from a boo
   })
 
   it('names the source when the source is off', () => {
-    const label = labelFor({}, { '0xrouter-aggregate-provider': false })
+    const label = labelFor({}, { 'cryptoetf-etf-flows': false })
     const markup = render(withNumbers, { etf: { sourceLabel: label ?? '', onOpenSources: openSources } })
     expect(markup).toContain('0xRouter 聚合行情')
   })
 
   it('names the cell when the cell itself is off', () => {
-    const label = labelFor({ 'capital:etf': false }, { '0xrouter-aggregate-provider': true })
+    const label = labelFor({ 'capital:etf': false }, { 'cryptoetf-etf-flows': true })
     const markup = render(withNumbers, { etf: { sourceLabel: label ?? '', onOpenSources: openSources } })
     const row = /<tr[^>]*data-status-row="cell-off"[^>]*>([\s\S]*?)<\/tr>/.exec(markup)?.[1] ?? ''
     expect(row).toContain(dataText.sourcesNotEnabled)

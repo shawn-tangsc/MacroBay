@@ -72,7 +72,7 @@ export function ModelServiceClearModelsControl({
       return isEmpty || disabled ? button : (
         <Tooltip
           labelKey="modelService.clearModels"
-          resolveText={(key) => (key === 'modelService.clearModels' ? labels.clearModels : '')}>
+          resolveText={(key) => ({ 'modelService.clearModels': labels.clearModels } as Readonly<Record<string, string>>)[key] ?? ''}>
           {button}
         </Tooltip>
       )

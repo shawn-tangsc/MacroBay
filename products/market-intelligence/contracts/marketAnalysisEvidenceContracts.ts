@@ -112,10 +112,24 @@ export type SnapshotChange = Readonly<{
   evidenceRefsRemoved: readonly string[]
 }>
 
+/**
+ * 这次运行被哪条新闻发起（R37 §2）。`factId` 与 `evidenceRefId` 指的快照里的那条事实与证据
+ * 引用都在同一个快照里，所以「引用的是不是这份快照里的东西」可验。
+ */
+export type SnapshotTrigger = Readonly<{
+  source: 'intelligence-item'
+  itemId: string
+  factId: string
+  evidenceRefId: string
+}>
+
 export type EvidenceSnapshot = Readonly<{
   id: string
-  /** 1 is a snapshot written before facts carried `sourceUrl`; new snapshots are written as 2. */
-  schemaVersion: 1 | 2
+  /**
+   * 1：事实还没有 `sourceUrl` 的时代；2：没有触发指针；3：可以带 `trigger`。读取端接受 1–3，
+   * 只拒未来版本——旧行因为新字段缺失被判成损坏，就是把「没有」说成「坏了」。
+   */
+  schemaVersion: 1 | 2 | 3
   eventGroupId: string
   asOf: string
   dataCutoff: string
@@ -135,6 +149,13 @@ export type EvidenceSnapshot = Readonly<{
    * hash migration that would invalidate persisted rows.
    */
   change?: SnapshotChange
+  /**
+   * 触发指针：与 `change` 是两件事。新闻事实永远不进变化记录（`computeSnapshotChange` 只比
+   * 非舆情事实），所以新闻触发的**首跑** `change` 必然为空；指针才能回答「这次为什么跑、要读哪条」。
+   *
+   * 可空、不进 `snapshotHash`、不进变化；缺列或空值就是「没有触发记录」，不是读失败。
+   */
+  trigger?: SnapshotTrigger
   createdAt: string
   policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
 }>

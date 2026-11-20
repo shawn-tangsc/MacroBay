@@ -131,7 +131,7 @@ function projectDollar(reading: MacroMarketSnapshotReading, synthetic: boolean, 
     const value = reading.returns[window]
     if (typeof value !== 'number' || !Number.isFinite(value)) continue
     projection.facts.push(fact(
-      'macro', 'usd-index', MACRO_MARKET_FACT_METRICS.dollarIndexReturn(window), value, '%',
+      'macro', 'usd-index', MACRO_MARKET_FACT_METRICS.dollarIndexReturn(window), value, 'percent',
       macroMarketPolicy.sourceId, instant(reading.atMs), projection.asOf, 'comparable', suffix
     ))
   }

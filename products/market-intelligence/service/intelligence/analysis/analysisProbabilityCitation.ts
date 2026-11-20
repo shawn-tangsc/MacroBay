@@ -39,7 +39,13 @@ export const analysisProbabilityDefects = Object.freeze({
    * 那是事实记录、不改写；新写入一律用这个名字。
    */
   notInSnapshot: 'policy-probability-not-in-snapshot',
-
+  /**
+   * 任意散文段落里的一个百分数在冻结快照里找不到出处。
+   *
+   * 与 `notInSnapshot` 分开：那条是「政策概率的正文写法」，这条是「所有会印数字的段落」的通用判据；
+   * 合成一个码会让「模型把概率写错」和「模型在情景里编了一个数」看起来是同一件事。
+   */
+  proseNumberNotInSnapshot: 'prose-number-not-in-snapshot'
 })
 
 export type AnalysisProbabilityDefect = (typeof analysisProbabilityDefects)[keyof typeof analysisProbabilityDefects]
@@ -91,6 +97,45 @@ export function policyProbabilityDefect(conclusion: AnalysisConclusion, snapshot
 }
 
 
+/**
+ * 所有会印数字的散文段落，一处收口。
+ *
+ * 判据只有一条：**正文里的百分数必须在冻结快照里有出处**。判的是数，不读句子——句子怎么写、
+ * 用哪个词都不影响；找不到出处就是编造，拒。
+ */
+export type ProseBearingOutput = Readonly<{
+  conclusion: AnalysisConclusion
+  scenarios: readonly Readonly<{ baseCase: string; conditions: readonly string[]; invalidation?: string | Readonly<{ statement: string }> }>[]
+  transmissionHypotheses: readonly Readonly<{ statement: string }>[]
+  nextCatalysts: readonly Readonly<{ statement: string }>[]
+  directions: readonly Readonly<{ rationale: string }>[]
+}>
+
+/** 通用的一条：所有散文段落里的每个百分数都要有快照出处（含变更摘要印过的数）。 */
+export function untracedProsePercentageDefect(output: ProseBearingOutput, snapshot: ProbabilityEvidence): AnalysisProbabilityDefect | undefined {
+  const allowed = [...snapshotNumbers(snapshot), ...(snapshot.changeValues ?? [])]
+  const prose = [
+    output.conclusion.summary, output.conclusion.change, output.conclusion.causalChain,
+    ...output.conclusion.conditions,
+    ...(output.conclusion.macro === null ? [] : [output.conclusion.macro]),
+    ...(output.conclusion.evidenceStrength === null ? [] : [output.conclusion.evidenceStrength]),
+    ...output.conclusion.dataGaps,
+    ...output.scenarios.flatMap(scenario => [
+      scenario.baseCase, ...scenario.conditions,
+      typeof scenario.invalidation === 'string' ? scenario.invalidation : scenario.invalidation?.statement ?? ''
+    ]),
+    ...output.transmissionHypotheses.map(hypothesis => hypothesis.statement),
+    ...output.nextCatalysts.map(catalyst => catalyst.statement),
+    ...output.directions.map(direction => direction.rationale),
+    // 新闻解读里的一句话同样是正文：它写的每个百分数也要有出处（R37 C 第 6 条）。
+    ...(output.conclusion.newsImpact?.verdict === 'no-transmission' ? [output.conclusion.newsImpact.reason] : [])
+  ].join('\n')
+  for (const value of percentagesIn(prose)) {
+    if (!tracedToSnapshot(value, allowed)) return analysisProbabilityDefects.proseNumberNotInSnapshot
+  }
+  return undefined
+}
+
 /** 快照里出现过的所有数字：数字型值直接取，字符串型值把里面的数（如 `4.00%–4.25%`）也取出来。 */
 function snapshotNumbers(snapshot: ProbabilityEvidence): readonly number[] {
   const numbers: number[] = []
@@ -101,9 +146,17 @@ function snapshotNumbers(snapshot: ProbabilityEvidence): readonly number[] {
   return numbers
 }
 
-/** 某个数在快照里有没有出处：等值，或等于它的整百分点（正文写约数是允许的）。 */
+/**
+ * 某个数在快照里有没有出处：等值，或等于它的整百分点（正文写约数是允许的）。
+ *
+ * 小数写成相邻整数（76.65 → 76/77）是**写法**不是编数，所以与概率那条同一口径；75 仍不算。
+ */
 function tracedToSnapshot(value: number, allowed: readonly number[]): boolean {
-  return allowed.some(candidate => Math.abs(candidate - value) < 0.05 || Math.abs(Math.round(candidate) - value) < 0.05)
+  return allowed.some(candidate =>
+    Math.abs(candidate - value) < 0.05 ||
+    Math.abs(Math.round(candidate) - value) < 0.05 ||
+    (Number.isInteger(value) && !Number.isInteger(candidate) &&
+      (value === Math.floor(candidate) || value === Math.ceil(candidate))))
 }
 
 /**

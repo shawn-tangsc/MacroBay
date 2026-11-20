@@ -121,3 +121,34 @@ describe('官方日历源的频率行是「内置频率」', () => {
     expect(row!.querySelector('.ant-select-selector')).not.toBeNull()
   })
 })
+
+/**
+ * 2026-11-13 读者复报：0xRouter 那三条市场日历 feed 仍然画着三档下拉。
+ * 它们在注册表里是 `collection: 'job'`（产品作业采）、目录里**没有条目**，
+ * 点下去 `saveProfile` 第一步 `requireDefinition` 就抛 `Unknown intelligence source`，
+ * 而这个屏不渲染 `errorCode`——读者看到的就是「选完弹回、什么都没发生」。
+ *
+ * 判据：`collection` 是 `job` / `none` 的源，一律「内置频率」、没有任何控件、不落 preset。
+ *
+ * 换源后这三条 Narwhal feed 是 `collection: 'job'`（产品作业采、一次写三类），**已解锁**（2026-11-13）。
+ * 所以它们的频率行必须出现、且是只读的「内置频率」：画一个能选的下拉就是当初要防的假控件
+ * （`saveProfile` 第一步 `requireDefinition` 就会抛，读者看到的是「选完弹回、什么都没发生」）。
+ */
+describe('Narwhal 的三条市场日历 feed：节奏归产品作业，只写内置频率', () => {
+  it('shows 内置频率 and no writable control on the three Narwhal feeds', async () => {
+    const host = await render('calendar')
+    for (const sourceId of [
+      'macro-calendar-narwhal-economic-data',
+      'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities'
+    ]) {
+      const row = presetRowOf(host, sourceId)
+      expect(row, sourceId).not.toBeNull()
+      expect(row!.getAttribute('data-preset-builtin'), sourceId).toBe('true')
+      expect(row!.textContent, sourceId).toContain(t.collectionPolicy.builtinCadence)
+      // 三档下拉、开关、输入框一个都不许有：这一行不可写，就不许长得像能写。
+      expect(row!.querySelectorAll('select, [role="combobox"], [role="switch"], input'), sourceId).toHaveLength(0)
+      expect(row!.hasAttribute('data-setting-key'), sourceId).toBe(false)
+    }
+  })
+})

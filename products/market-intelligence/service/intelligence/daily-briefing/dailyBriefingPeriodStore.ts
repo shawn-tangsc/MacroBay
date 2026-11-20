@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { createBriefingPeriodId } from '../../../contracts/dailyBriefing/periodId'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import {
@@ -81,7 +82,8 @@ export function createBriefingPeriodStore(deps: Readonly<{
    */
   editionLocales?: () => Promise<ReadonlyMap<string, ReadonlySet<DailyBriefingLocale>>>
 }>): BriefingPeriodStore {
-  const newId = deps.newId ?? (() => `period_${randomUUID()}`)
+  // 期次编号只有一处生成（`contracts/dailyBriefing/periodId`）：手动、定时、补录同一个格式。
+  const newId = deps.newId ?? (() => createBriefingPeriodId(() => randomUUID()))
 
   /**
    * Fill in the missing languages **in the file as it is now**, not in the list we read.

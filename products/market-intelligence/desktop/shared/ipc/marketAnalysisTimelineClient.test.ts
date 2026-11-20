@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { marketAnalysisTimelineClient } from './marketAnalysisTimelineClient'
+import { marketAnalysisTimelineClient, type MarketAnalysisTimelineDetail } from './marketAnalysisTimelineClient'
 
 const asOf = '2026-09-28T00:00:00.000Z'
 
@@ -82,14 +82,103 @@ describe('marketAnalysisTimelineClient', () => {
     expect(result.state === 'available' ? result.detail.summary.eventAssessment : undefined).toBeUndefined()
   })
 
+  it('keeps a schema-3 conclusion readable when it carries the per-news newsImpact field', async () => {
+    // R37 给按条解读的结论加了 newsImpact。详情抽屉不渲染它，但**它存在时不能把整份结论
+    // 判成不可读**——线上 2026-11-17 07:26 那次「读取失败」就是这一条：多一个可选字段，
+    // 时间轴详情和最新结论卡整块打不开。
+    const entry = {
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
+      occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '偏空。', direction: 'bearish' as const, version: 1
+    }
+    const summary = {
+      id: 'mi-as-1', schemaVersion: 3, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
+      conclusion: {
+        direction: 'bearish', summary: '偏空。', change: 'ETF 净流出。', causalChain: '资金流出 → 承压。',
+        conditions: ['持续流出。'], macro: null, evidenceStrength: null, dataGaps: [],
+        newsImpact: { verdict: 'evaluated', checks: [{ effect: 'supports', factId: 'mi-fact-1' }] }
+      },
+      knownFacts: [], transmissionHypotheses: [], marketReaction: [], supportingEvidence: [], counterEvidence: [], scenarios: [],
+      directions: [], nextCatalysts: [], dataCaveats: [], evidenceRefs: ['mi-ev-1'], createdAt: asOf
+    }
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method === 'marketAnalysis.getAnalysisRun') return {
+        id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
+        queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 1
+      }
+      if (method === 'marketAnalysis.getSummary') return summary
+      return []
+    })
+    vi.stubGlobal('window', { platform: { products: { invoke } } })
+
+    const result = await marketAnalysisTimelineClient.getDetail(entry)
+    expect(result.state).toBe('available')
+    expect(result.state === 'available' ? result.detail.summary.conclusion?.direction : undefined).toBe('bearish')
+  })
+
+  /**
+   * 「这条结论是用英文写的」这句事实只能来自记录本身：
+   * v2 摘要带 `proseLanguage`，v1 摘要没有它——读出来就是不标注，绝不当成当前语言，
+   * 也不许把一个怪值当成语言。
+   */
+  it('carries the generation language a v2 summary recorded, and leaves a v1 summary without one', async () => {
+    const entry = {
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const, groupType: null, groupSubject: null, triggerStatus: null,
+      occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '偏空。', direction: 'bearish' as const, version: 1
+    }
+    const base = {
+      id: 'mi-as-1', analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
+      conclusion: { direction: 'bearish', summary: '偏空。', change: 'ETF 净流出。', causalChain: '资金流出 → 承压。', conditions: ['持续流出。'], macro: null, evidenceStrength: null, dataGaps: [] },
+      knownFacts: [], transmissionHypotheses: [], marketReaction: [], supportingEvidence: [], counterEvidence: [], scenarios: [], directions: [],
+      nextCatalysts: [], dataCaveats: [], evidenceRefs: ['mi-ev-1'], createdAt: asOf
+    }
+    const run = {
+      id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
+      queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 1
+    }
+    const detailFor = async (summary: Record<string, unknown>): Promise<MarketAnalysisTimelineDetail | undefined> => {
+      const invoke = vi.fn(async (_productId: string, method: string) => {
+        if (method === 'marketAnalysis.getAnalysisRun') return run
+        if (method === 'marketAnalysis.getSummary') return summary
+        return []
+      })
+      vi.stubGlobal('window', { platform: { products: { invoke } } })
+      const result = await marketAnalysisTimelineClient.getDetail(entry)
+      return result.state === 'available' ? result.detail : undefined
+    }
+
+    // v2：语言读得出来。
+    const v2 = await detailFor({ ...base, schemaVersion: 2, proseLanguage: 'en-US' })
+    expect(v2?.summary.proseLanguage).toBe('en-US')
+    // v1：没有字段 → 不标注（undefined），详情照常可用。
+    const v1 = await detailFor({ ...base, schemaVersion: 1 })
+    expect(v1).toBeDefined()
+    expect(v1?.summary.proseLanguage).toBeUndefined()
+    // v3（失效条件结构化的那一版）：读取端同样要认，不能因为升版把旧版本之外的一律拒掉。
+    const v3 = await detailFor({ ...base, schemaVersion: 3, proseLanguage: 'zh-CN' })
+    expect(v3).toBeDefined()
+    // 脏值：不认，但也别把整条详情判成读不到。
+    const dirty = await detailFor({ ...base, schemaVersion: 2, proseLanguage: 'fr-FR' })
+    expect(dirty).toBeDefined()
+    expect(dirty?.summary.proseLanguage).toBeUndefined()
+  })
+
   it('fails closed when the product IPC is unavailable or extends the safe contract', async () => {
     vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => ({ schemaVersion: 1, items: [], nextCursor: null, extra: true })) } } })
-    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toEqual({ state: 'unavailable' })
+    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toEqual({ state: 'unavailable', reason: 'read-failed' })
   })
 
   it('distinguishes an empty published timeline from an unavailable product IPC', async () => {
-    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => { throw new Error('runtime unavailable') }) } } })
-    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toEqual({ state: 'unavailable' })
+    // 空页是「读到了，确实没有」；模块没起来是「读不到」——两者绝不许塌成同一个形状，
+    // 塌了界面就只能把「读不到」画成「暂无」（2026-11-17 用户截图那张卡片）。
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => ({ schemaVersion: 1, items: [], nextCursor: null })) } } })
+    await expect(marketAnalysisTimelineClient.listTimeline())
+      .resolves.toEqual({ state: 'available', page: { schemaVersion: 1, items: [], nextCursor: null } })
+    // 主进程在模块启动失败时抛的就是这个码。
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => { throw new Error('product-runtime-unavailable') }) } } })
+    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toMatchObject({ state: 'unavailable', reason: 'product-runtime-unavailable' })
+    // 其余读失败也说「读不到」，但不冒充「模块没起来」。
+    vi.stubGlobal('window', { platform: { products: { invoke: vi.fn(async () => { throw new Error('socket hang up') }) } } })
+    await expect(marketAnalysisTimelineClient.listTimeline()).resolves.toMatchObject({ state: 'unavailable', reason: 'read-failed' })
   })
 
   it('joins a selected timeline entry only to its matching safe run and summary detail', async () => {
@@ -100,7 +189,7 @@ describe('marketAnalysisTimelineClient', () => {
     const invoke = vi.fn(async (_productId: string, method: string) => {
       if (method === 'marketAnalysis.getAnalysisRun') return {
         id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
-        queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: '%', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 }
+        queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: 'percent', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 }
       }
       if (method === 'marketAnalysis.getSummary') return {
         id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
@@ -116,7 +205,7 @@ describe('marketAnalysisTimelineClient', () => {
 
     await expect(marketAnalysisTimelineClient.getDetail(entry)).resolves.toEqual(expect.objectContaining({
       state: 'available', detail: expect.objectContaining({
-        run: expect.objectContaining({ evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: '%', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 } }),
+        run: expect.objectContaining({ evidenceCount: 2, change: { summary: '~actual:3.2->3.4', facts: [{ domain: 'macro', subject: 'CPI', metric: 'actual', unit: 'percent', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: 0, caveatsRemoved: 0, evidenceRefsAdded: 0, evidenceRefsRemoved: 0 } }),
         summary: expect.objectContaining({ version: 1, evidenceCount: 2 }),
         predictions: [expect.objectContaining({ asset: 'BTC', status: 'pending' })]
       })
@@ -132,6 +221,10 @@ describe('marketAnalysisTimelineClient', () => {
       ['analysis-initial-request-unavailable', 'not-ready'],
       ['analysis-not-eligible', 'not-eligible'],
       ['analysis-already-available', 'already-available'],
+      // 没有可用模型：一次冻结都没排。它不是「服务还没起来」，也不能落成「排不上队」。
+      ['analysis-provider-not-ready', 'provider-not-ready'],
+      // 证据引不出来（原始记录已不在保留期）：重试不会自己好。
+      ['analysis-missing-evidence:news-trigger-evidence-missing', 'insufficient-evidence'],
       ['something-else-entirely', 'failed']
     ]
     for (const [error, reason] of cases) {

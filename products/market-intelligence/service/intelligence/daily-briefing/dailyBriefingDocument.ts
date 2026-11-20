@@ -18,7 +18,7 @@ import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts
 import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
 import { buildLeverageBlock, buildPolicyPathBlock } from './dailyBriefingDataBlocks'
 import { proseLanguageBreach } from './dailyBriefingProseLanguage'
-import { briefingMacroEmptyReason } from './dailyBriefingMacroEmptyReason'
+import { macroEmptyCode, macroEmptyHours, newsEmptyCode, nextEmptyCode } from './dailyBriefingEmptyCodes'
 import { toBriefingNewsItem } from './dailyBriefingNewsItem'
 import {
   highImpactEventsInWindow,
@@ -31,6 +31,7 @@ import {
 
 // 选取口径原本就在这个文件里、被外部 import：搬家不改调用方。
 export { maximumBriefingMacroItems, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocumentMacro'
+import { briefingFirstTierFamily } from './briefingFirstTierEvents'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 /**
@@ -252,28 +253,34 @@ type NextRelevanceInput = Readonly<{
  * Matching is on the provider's English key, not on display prose, so a translated title does not
  * change the ranking. The role is the event's transmission channel; the score orders the next list
  * and is the fallback focus when the editor does not choose one.
+ *
+ * **认不出的角色返回 `undefined`，不给兜底**（用户 2026-11-16）：曾经这里默认落
+ * `liquidity`（78 分），于是「英伟达全员会」拿到「美元流动性」的分数——把「我没认出来」
+ * 伪装成「我认出来了」。没有角色的行不占「接下来」的席位，不给分。
  */
-export function scoreBriefingNextRelevance(event: NextRelevanceInput): BriefingNextRelevance {
+export function scoreBriefingNextRelevance(event: NextRelevanceInput): BriefingNextRelevance | undefined {
   const text = `${event.eventKey} ${event.titleKey ?? ''} ${event.title}`.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
   const role = classifyNextEvent(text, event.countryCode)
+  if (role === undefined) return undefined
   const weights = nextRelevanceByRole[role]
   return Object.freeze({ role, score: weights.score, reasonCode: weights.reasonCode })
 }
 
-function classifyNextEvent(text: string, countryCode: string | undefined): BriefingNextRelevanceRole {
+function classifyNextEvent(text: string, countryCode: string | undefined): BriefingNextRelevanceRole | undefined {
   if (/(?:^| )etfs?(?: |$)|spot bitcoin|spot ether|spot crypto|grayscale|ishares/.test(text)) return 'etf'
   if (/stablecoin|usdt|usdc|tether|depeg|circle/.test(text)) return 'stablecoin'
   if (/exchange hack|hacked|exploit|insolven|bankrupt|withdrawal (?:halt|freeze)|outage|delist|binance|coinbase|kraken|okx|bybit/.test(text)) return 'exchange-risk'
   if (/(?:^| )sec(?: |$)|cftc|regulat|lawsuit|enforcement|crypto (?:bill|law)|legislation|(?:^| )ban(?: |$)/.test(text)) return 'regulation'
-  if (/(?:^| )fomc(?: |$)|federal reserve|(?:^| )fed(?: |$)|rate decision|interest rate|rate hike|rate cut|ecb|bank of japan|(?:^| )boj(?: |$)|bank of england|(?:^| )boe(?: |$)|美联储|利率|议息/.test(text)) return 'rate-policy'
+  if (/(?:^| )fomc(?: |$)|federal reserve|(?:^| )fed(?: |$)|rate decision|interest rate|rate hike|rate cut|ecb|bank of japan|(?:^| )boj(?: |$)|bank of england|(?:^| )boe(?: |$)|美联储|联储|利率|议息/.test(text)) return 'rate-policy'
   // PMI alone is not automatically Asian: US ISM PMI transmits through the dollar like any other
   // growth print. China (and the region's own policy/credit events) is the `asia-risk` role.
   if (countryCode === 'CN' || /(?:^| )china(?: |$)|(?:^| )cn(?: |$)|caixin|pboc|hong kong|taiwan|evergrande|中国|采购经理/.test(text)) return 'asia-risk'
   if (/(?:^| )cpi(?: |$)|(?:^| )pce(?: |$)|inflation|consumer price|producer price|(?:^| )ppi(?: |$)|hicp|通胀|物价/.test(text)) return 'inflation'
-  if (/non ?farm|payroll|unemployment|jobless|employment|average hourly|wage|(?:^| )adp(?: |$)|jolts|非农|就业|失业|时薪/.test(text)) return 'labor'
+  if (/non ?farm|payroll|unemployment|jobless|employment|average hourly|wage|(?:^| )adp(?: |$)|(?:^| )nfp(?: |$)|jolts|非农|就业|失业|时薪/.test(text)) return 'labor'
   if (/treasury (?:auction|refunding)|(?:^| )(?:note|bond) auction(?: |$)|auction|debt ceiling|(?:^| )repo(?: |$)|balance sheet|(?:^| )qt(?: |$)|(?:^| )qe(?: |$)|(?:^| )tga(?: |$)|liquidity|流动性|拍卖/.test(text)) return 'liquidity'
   if (/(?:^| )opec|crude|(?:^| )oil(?: |$)|natural gas|commodit|欧佩克|石油|原油/.test(text)) return 'commodity'
-  return 'liquidity'
+  // 认不出来就是认不出来：不给角色、不给分（见 `scoreBriefingNextRelevance` 的注释）。
+  return undefined
 }
 
 /**
@@ -298,7 +305,12 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
   const today = localDate(packet.windowEnd, packet.timeZone)
   const horizon = addDays(today, 7)
   const candidates = packet.calendar.events
-    .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
+    // 一级事件按**身份**进候选，不按重要性：narwhal 那批行重要性是空的，而它们恰是 CPI/非农/
+    // 纪要这类最该出现的事件；重要性缺失是我们没有这个字段，不是「它不重要」。
+    .filter((event) => event.lifecycleState === 'scheduled'
+      && (event.importance === 'high' || briefingFirstTierFamily({
+        eventKey: event.eventKey, title: event.title, titleKey: event.titleKey, metricKey: event.metricKey
+      }) !== undefined))
     // 英文版次只列**有英文名**的事件（`02` `A0.9`）：源里只有中文名的（如央行讲话那条源）不列，
     // 不许把中文名塞进英文版。少列几条是允许的，不报缺口——那是源的能力限制，不是这次读失败。
     .filter((event) => packet.locale !== 'en-US' || hasEnglishName(event))
@@ -313,22 +325,27 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
       const day = localDate(event.scheduledAt, packet.timeZone)
       return Number.isFinite(at) && at > Date.parse(packet.windowEnd) && day <= horizon
     })
-    .map((event) => Object.freeze({
-      eventKey: event.eventKey,
-      title: event.title,
-      ...(event.titleKey ? { titleKey: event.titleKey } : {}),
-      at: event.scheduledAt,
-      ...(event.releaseTimeNotPublished && event.releaseDate
-        ? { releaseTimeNotPublished: true as const, releaseDate: event.releaseDate }
-        : {}),
-      importance: event.importance,
-      category: event.category,
-      ...(event.countryCode ? { countryCode: event.countryCode } : {}),
-      ...(event.countryName ? { countryName: event.countryName } : {}),
-      ...(event.consensus ? { consensus: event.consensus } : {}),
-      ...(event.previous ? { previous: event.previous } : {}),
-      relevance: scoreBriefingNextRelevance(event)
-    }))
+    .flatMap((event): readonly BriefingNextItem[] => {
+      // 没有角色的事件不占席位：候选是给编辑模型读的，放进去等于让它替一个猜测排序。
+      const relevance = scoreBriefingNextRelevance(event)
+      if (relevance === undefined) return []
+      return [Object.freeze({
+        eventKey: event.eventKey,
+        title: event.title,
+        ...(event.titleKey ? { titleKey: event.titleKey } : {}),
+        at: event.scheduledAt,
+        ...(event.releaseTimeNotPublished && event.releaseDate
+          ? { releaseTimeNotPublished: true as const, releaseDate: event.releaseDate }
+          : {}),
+        importance: event.importance,
+        category: event.category,
+        ...(event.countryCode ? { countryCode: event.countryCode } : {}),
+        ...(event.countryName ? { countryName: event.countryName } : {}),
+        ...(event.consensus ? { consensus: event.consensus } : {}),
+        ...(event.previous ? { previous: event.previous } : {}),
+        relevance
+      })]
+    })
     .sort(compareBriefingNextRelevance)
   return Object.freeze(candidates)
 }
@@ -527,65 +544,6 @@ function localDate(instant: string, timeZone: string): string {
 function addDays(date: string, days: number): string {
   const parsed = Date.parse(`${date}T00:00:00.000Z`)
   return Number.isFinite(parsed) ? new Date(parsed + days * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10) : date
-}
-
-function newsEmptyCode(packet: DailyBriefingFactPacket): string {
-  if (packet.news.state === 'source-disabled') return 'news-source-disabled'
-  if (packet.news.state === 'unavailable') return 'news-unavailable'
-  return 'no-directional-news'
-}
-
-/**
- * Why the macro section is empty, in the six reason codes of `A0.8` — plus the catch-up timeout.
- *
- * The one rule this function exists to enforce: **only a fresh reading of an empty window may say
- * "there was nothing"**. Everything else — switched off, unreadable, never collected, stale, the last
- * collection failed, the catch-up ran out of time, or a packet that carries no freshness reading at
- * all — says "not readable" with its own reason. Folding any of those into "nothing" is the exact
- * defect the reader reported on 2026-11-05.
- *
- * The baseline is the packet's own `asOf`, which *is* `dataAsOf` (`A0.10`): on a backfill the two
- * differ, and measuring against the period's nominal cutoff would make the section show events while
- * claiming it could not read them.
- */
-function macroEmptyCode(packet: DailyBriefingFactPacket): string {
-  if (packet.calendar.state === 'source-disabled') return 'calendar-source-disabled'
-  const freshness = packet.calendarFreshness
-  // No reading at all (an older caller or a fixture): the section must not claim "nothing happened".
-  if (!freshness) return 'calendar-unavailable'
-  // A catch-up that ran out of time is its own sentence: it did not fail, it did not finish.
-  if (freshness.catchUp?.state === 'timeout') return 'calendar-catch-up-timeout'
-  // A catch-up that failed is a collection failure, which is also not "nothing".
-  if (freshness.catchUp?.state === 'failed') return 'calendar-collect-failed'
-  const reason = briefingMacroEmptyReason({
-    state: packet.calendar.state === 'unavailable' ? 'unavailable'
-      : freshness.state === 'source-disabled' ? 'source-disabled'
-        : freshness.state === 'not-wired' || freshness.state === 'unavailable' ? 'unavailable'
-          : 'available',
-    ...(freshness.lastCollectedAt ? { lastCollectedAt: freshness.lastCollectedAt } : {}),
-    ...(freshness.lastAttemptAt ? { lastAttemptAt: freshness.lastAttemptAt } : {}),
-    ...(freshness.lastAttemptFailed === undefined ? {} : { lastAttemptFailed: freshness.lastAttemptFailed }),
-    dataAsOf: packet.asOf
-  })
-  // 注意：这一档的「没有」现在**只在窗口里真的一条高影响事件都没有**时才成立——因为候选不再按
-  // 「有没有实际值」过滤（`A0.12`），有事件但没值的事件会进列表，空态根本不会走到这里。
-  // 反过来也要说清（`02` v2.125 ①）：**已取消的事件仍然算「有事件」**——它照常显示、带取消标记、
-  // 值那一格不渲染；"取消了"不等于"发生过却没有数据"，更不等于"没有发生"。
-  return reason
-}
-
-/** How many hours the calendar was behind this edition's own data cutoff, for the stale sentence. */
-function macroEmptyHours(packet: DailyBriefingFactPacket): number | undefined {
-  const last = packet.calendarFreshness?.lastCollectedAt
-  if (!last) return undefined
-  const hours = (Date.parse(packet.asOf) - Date.parse(last)) / 3_600_000
-  return Number.isFinite(hours) && hours > 0 ? Math.round(hours) : undefined
-}
-
-function nextEmptyCode(packet: DailyBriefingFactPacket): string {
-  if (packet.calendar.state === 'source-disabled') return 'calendar-source-disabled'
-  if (packet.calendar.state === 'unavailable') return 'calendar-unavailable'
-  return 'next-7d-no-high-impact-event'
 }
 
 function normalizeTitle(value: string): string {

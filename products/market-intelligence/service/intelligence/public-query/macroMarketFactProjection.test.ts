@@ -64,7 +64,7 @@ describe('projectMacroMarket', () => {
     })
     for (const window of ['15m', '1h', '24h', '7d'] as const) {
       expect(metric(facts, MACRO_MARKET_FACT_METRICS.dollarIndexReturn(window)), window).toMatchObject({
-        value: expect.any(Number), unit: '%', sourceId: 'twelve-data-market'
+        value: expect.any(Number), unit: 'percent', sourceId: 'twelve-data-market'
       })
     }
     // A real reading never carries the caveat that says the level is ours.

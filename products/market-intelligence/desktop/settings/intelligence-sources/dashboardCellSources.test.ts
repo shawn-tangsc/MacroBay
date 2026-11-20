@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { getSource } from '../../../service/intelligence/application/providerRegistry'
-import { DASHBOARD_SOURCE_MODULES } from './dashboardSourceModules'
+import { allSources, getSource } from '../../../service/intelligence/application/providerRegistry'
+import { resolveFactSource } from '../../../contracts/factSources'
+import { DASHBOARD_SOURCE_MODULES, modulesForBusiness } from './dashboardSourceModules'
 
 /**
  * 看板每个格声明的源，必须在来源注册表里、并且**供给看板**（`panels` 含 `'dashboard'`）。
@@ -13,7 +14,10 @@ import { DASHBOARD_SOURCE_MODULES } from './dashboardSourceModules'
 describe('every dashboard cell names a source the registry feeds to the dashboard panel', () => {
   it('resolves every cell source, and each one supplies the dashboard panel', () => {
     const offenders: string[] = []
-    for (const module of DASHBOARD_SOURCE_MODULES) {
+    /* 只看**看板业务**的模块：`macro-calendar` / `news` 属于日历与舆情业务，
+       它们的格挂的是只供日历/舆情面板的源（看板面板本来就不含它们），拿它们来比 dashboard 面板会误报。
+       这一条要守的是「看板格不许挂只供别处的源」，所以范围就是看板的五个模块。 */
+    for (const module of modulesForBusiness('dashboard')) {
       for (const cell of module.cells) {
         const source = getSource(cell.sourceId)
         if (source === undefined) {
@@ -28,5 +32,33 @@ describe('every dashboard cell names a source the registry feeds to the dashboar
     // 先钉数量（零个）再比内容：这一条要能在「新挂一个只供日历的源」时红。
     expect(offenders).toHaveLength(0)
     expect(offenders).toEqual([])
+  })
+})
+
+describe('the ETF cell asks for a fact instead of naming a supplier', () => {
+  const capitalCell = DASHBOARD_SOURCE_MODULES
+    .find((module) => module.id === 'capital')!
+    .cells.find((cell) => cell.cellKey === 'etf')!
+
+  it('keeps the reader-facing key fixed and declares the fact', () => {
+    // 键是读者设置的主键：换源不许换格，否则读者对 capital:etf 的开关会失效。
+    expect(capitalCell.cellKey).toBe('etf')
+    expect(capitalCell.fact).toBe('etf-net-flow')
+  })
+
+  it('names both the primary and the standby source for the same fact', () => {
+    // 2026-11-17：旧源加回来作备源。格子表里主源 + 备源各一行（备源是 `fallback`，默认关），
+    // 两行声明的是**同一个事实**——谁真的在供由刷新链按优先级解析，界面不写死供应商。
+    const etfRows = DASHBOARD_SOURCE_MODULES.find((module) => module.id === 'capital')!.cells
+      .filter((cell) => cell.sourceId === 'cryptoetf-etf-flows' || cell.sourceId === '0xrouter-aggregate-provider')
+    expect(etfRows.map((row) => row.sourceId)).toEqual(['cryptoetf-etf-flows', '0xrouter-aggregate-provider'])
+    expect(etfRows.map((row) => row.fallback === true)).toEqual([false, true])
+    // 两个源都声明了这个事实（注册表一处）：解析器因此会看到两个候选，优先级在刷新链里判。
+    const declared = allSources().filter((source) => source.provides?.includes(capitalCell.fact!) === true)
+    expect(declared.map((source) => source.sourceId).sort()).toEqual(['0xrouter-aggregate-provider', 'cryptoetf-etf-flows'])
+    const fromRegistry = allSources().map((source) => ({
+      sourceId: source.sourceId, provides: source.provides, enabled: true, jobRegistered: true, readiness: source.readiness
+    }))
+    expect(resolveFactSource({ factId: capitalCell.fact!, sources: fromRegistry }).kind).toBe('conflict')
   })
 })

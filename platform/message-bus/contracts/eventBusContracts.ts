@@ -92,13 +92,37 @@ export type EventBusDiagnosticsQuery = {
   limit?: number
 }
 
+/**
+ * 存储文件本身的完整性结论（与「有没有事件」是两件事）。
+ *
+ * 排障时只看这两项就能分开两种「事件总线不正常」：
+ * - `integrity` 不是 `ok` / `unverified-legacy`（`corrupt`、`future-version`）+ `blocked: true`
+ *   ⇒ **文件本身被读坏了/是更新的版本写的，写被闸门拒绝**；
+ * - `integrity` 正常 + `blocked: false` ⇒ 闸门没拦，是**新功能自己的写失败**（看日志与错误码）。
+ */
+export type EventBusStoreDiagnosticIntegrity = 'empty' | 'ok' | 'unverified-legacy' | 'corrupt' | 'future-version'
+
 export type EventBusDiagnosticsPage = {
   recentEvents: PlatformEventEnvelope[]
   failedDeliveries: PlatformEventDelivery[]
   deadLetterDeliveries: PlatformEventDelivery[]
   blockedDeliveries: PlatformEventDelivery[]
   checkpoints: PlatformEventCheckpoint[]
+  /** 存储文件的完整性结论；`empty` 只表示主文件不存在（首次安装）。 */
+  integrity: EventBusStoreDiagnosticIntegrity
+  /** 是否处于阻断态（写被拒绝）；**不代表**「没有事件」。 */
+  blocked: boolean
 }
+
+/** 写侧闸门拒绝写的原因：坏文件 / 更新的版本 / 校验和不符。 */
+export type EventBusWriteBlockedReason = 'corrupt' | 'future-version' | 'checksum-mismatch'
+
+/** 显式归档一份阻断态主文件的结果（人/诊断动作触发，启动时绝不自动做）。 */
+export type EventBusArchiveResult = Readonly<{
+  archivedPath: string
+  markerPath: string
+  reason: EventBusWriteBlockedReason
+}>
 
 export type EventBusRuntime = {
   publish: <TPayload>(input: PublishEventInput<TPayload>) => Promise<PlatformEventEnvelope<TPayload>>
@@ -113,6 +137,11 @@ export type EventBusRuntime = {
    * 启动时 hydration 之后自动跑一次，平台保留期任务每日再跑一次；`pending` 投递及其事件永不裁。
    */
   pruneRetained: (options?: { now?: string }) => Promise<{ removedEvents: number; removedDeliveries: number }>
+  /**
+   * **显式**归档阻断态的主文件（`<file>.corrupt-<ISO>` + marker），归档后主文件缺失 → 下一次读
+   * 是 `empty`。只能由人/诊断动作触发——启动时自动改名等于替读者决定了「数据不要了」。
+   */
+  archiveCorruptStore: () => Promise<EventBusArchiveResult | undefined>
 }
 
 export const DEFAULT_EVENT_CONSUMER_RETRY_POLICY: EventConsumerRetryPolicy = {

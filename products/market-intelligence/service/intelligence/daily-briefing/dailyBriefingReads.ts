@@ -1,4 +1,7 @@
 import type { BriefingGenerationTrace, DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import { restoreAndReportBriefingDisplayValues } from './briefingDisplayValue'
+// 服务的 `getToday` 缓存分支也要用同一个还原口：从这里转出，避免服务文件体积基线再涨一行。
+export { restoreAndReportBriefingDisplayValues } from './briefingDisplayValue'
 import type {
   DailyBriefingAttemptsResult,
   DailyBriefingStorageState,
@@ -36,7 +39,9 @@ export function createDailyBriefingReads(deps: Readonly<{ store: DailyBriefingSt
     async get(input) {
       const periodId = input.periodId ?? 'default'
       const row = await deps.store.get(input.date, input.locale, periodId).catch(() => undefined)
-      if (row) return { state: 'available', document: row.document }
+      // 存量版次的展示字段可能冻结了 `{"displayValue":"4.7%"}` 这类串（2026-11-18 事故）：
+      // 读口还原一次，界面/导出/推送三条读路径同时生效；不写库、不迁移。
+      if (row) return { state: 'available', document: restoreAndReportBriefingDisplayValues(row.document) }
       // 没有版次：这一期今天跑过、而且最后一次失败了，就把那次的码与步骤交出去。从没跑过的期仍是
       // `missing`——"没内容"和"跑失败了"对读者是两件事，不能都折成一句"没有"。
       const attempts = await deps.store.listAttempts?.(input.date, input.locale, periodId).catch(() => undefined)

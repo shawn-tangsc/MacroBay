@@ -39,7 +39,7 @@ function event(overrides: Partial<MarketCalendarEvent> = {}): MarketCalendarEven
     consensus: { displayValue: '2' },
     providerPrevious: { displayValue: '2' },
     providerActual: { displayValue: '3' },
-    source: '0xRouter',
+    source: 'Narwhal',
     sourceObservedAt: asOf,
     coverage: 'observed-unverified',
     ...overrides

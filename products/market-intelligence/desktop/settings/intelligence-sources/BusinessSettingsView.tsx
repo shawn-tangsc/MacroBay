@@ -1,9 +1,17 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Info } from 'lucide-react'
 
 import { Select, Switch } from 'antd'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover } from '@platform/ui/components/popover'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+
 import { SettingsInfo } from '../settingsInfo'
+import { BusinessCardFrequencyRow } from './BusinessCardFrequencyRow'
+import { cellRow } from './cellRow'
 import { ProcessingEntryRow } from '../../pages/intelligence/ProcessingEntryRow'
+import { FrequencyReadout, frequencyReadoutLine, frequencyReadoutText } from './FrequencyReadout'
+import { frequencyReadoutView, type SourceCadenceReadout } from './sourceCadence'
 import { SOURCE_ROW_TEMPLATES, sourceRowAttributes } from './sourceSettingRows'
 import { calendarFeedRegistry } from '../../../service/intelligence/macro-calendar/calendarFeedRegistry'
 import {
@@ -14,6 +22,10 @@ import {
   type DashboardCell,
   type DashboardSourceModule
 } from './dashboardSourceModules'
+import {
+  MACRO_INDICATOR_GROUP_METRIC_KEYS,
+  MACRO_INDICATOR_GROUPS
+} from '../../../service/intelligence/macro-calendar/macroIndicatorCardGroups'
 
 /**
  * 「业务设置」这一屏：左列三项（看板 / 日历 / 舆情）+ 内容区**只有卡片 / 源名**，没有源详情。
@@ -31,7 +43,11 @@ import {
  * 互斥用**每格自己的启停**表达（`cells[cellId]`）：开 B 时同组其它源写 false，不开第二个存储。
  * `selection` 那层留给「选源模型」，这里不写 null——null 在存储里是删键 = 回落默认主源。
  */
-export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment'
+/**
+ * 四个业务分流。第四项（`coreIndicators`）不是模块卡：它按**指标**列取值源与开关
+ * （`(metric_key, provider_id)` 那一层），与卡片齿轮的「预期来源」是两件事。
+ */
+export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment' | 'coreIndicators'
 
 /**
  * 屏内定位（`focus.sourcesData`）：切到哪个业务、滚到哪张模块卡、标出哪一格。
@@ -39,7 +55,11 @@ export type BusinessKey = 'dashboard' | 'calendar' | 'sentiment'
  */
 export type BusinessFocus = Readonly<{ business?: BusinessKey; moduleKey?: string; cellId?: string }>
 
-const BUSINESS_KEYS: readonly BusinessKey[] = ['dashboard', 'calendar', 'sentiment']
+/**
+ * 顺序即左侧导航顺序。第四项排在最后：它按指标列源，形态和前三项（按模块卡）不同，
+ * 放最后读者不会把它当成「又一组模块」。
+ */
+const BUSINESS_KEYS: readonly BusinessKey[] = ['dashboard', 'calendar', 'sentiment', 'coreIndicators']
 
 /** 采集预设三档；值来自 schema（`manual | balanced | frequent`），这里只引用不再定义语义。 */
 const PRESET_VALUES = ['manual', 'balanced', 'frequent'] as const
@@ -80,6 +100,41 @@ const OFFICIAL_COVERAGE: Readonly<Record<string, string>> = {
   'macro-calendar-bls': 'CPI / 就业'
 }
 
+/**
+ * 聚合源里再按**提供方**分一层（2026-11-15 读者截图：「这几个怎么没有显示他们对应的源」）。
+ *
+ * 日历那张「聚合源」卡原本是一排没有归属的行，Narwhal 与 0xRouter 的源混在一起，
+ * 读者只能从源名猜是谁给的。提供方不在组件里写：`providerId` / `providerDisplayName` 读
+ * `calendarFeedRegistry`，显示名优先用投影给的（`providerNamesBySource`，与源详情同一份）。
+ * 两级都取不到时**标题留空**——宁可少一个卡头，也不把 provider id 印给读者。
+ */
+export type ProviderGroup = Readonly<{ key: string; label: string; cells: readonly DashboardCell[] }>
+
+export function providerGroupsOf(
+  cells: readonly DashboardCell[],
+  providerNamesBySource?: Readonly<Record<string, string>>
+): readonly ProviderGroup[] {
+  const feeds = calendarFeedRegistry as Readonly<Record<string, { providerId?: string; providerDisplayName?: string }>>
+  const order: string[] = []
+  const byProvider = new Map<string, DashboardCell[]>()
+  for (const cell of cells) {
+    const providerId = feeds[cell.sourceId]?.providerId ?? cell.sourceId
+    const bucket = byProvider.get(providerId)
+    if (bucket === undefined) {
+      byProvider.set(providerId, [cell])
+      order.push(providerId)
+    } else {
+      bucket.push(cell)
+    }
+  }
+  return order.map((providerId) => {
+    const group = byProvider.get(providerId)!
+    const first = group[0]!
+    const label = providerNamesBySource?.[first.sourceId] ?? feeds[first.sourceId]?.providerDisplayName ?? ''
+    return { key: `provider:${providerId}`, label, cells: group }
+  })
+}
+
 /** 日历按 feed 的 `owner` 分官方 / 聚合；舆情只有一张。判据来自注册表，不在组件里写源 id。 */
 export function otherBusinessGroups(
   business: BusinessKey,
@@ -104,12 +159,26 @@ export function BusinessSettingsView(props: {
   onBusinessChange: (business: BusinessKey) => void
   /** 源 id → 读者看到的名字（来自产品文案，不在组件里写源名）。 */
   sourceNames: Readonly<Record<string, string>>
+  /** 名字取不到时的第二层：源 → 它所属 provider 的显示名。
+   *
+   * **任何情况下不许把源 id 印给读者**（2026-11-13 读者看到 `macro-calendar-narwhal-…` 挤在卡片里）。
+   * 两层都取不到就不渲染这一项，而不是退到 id。
+   */
+  providerNamesBySource?: Readonly<Record<string, string>>
   resolveText: (key: string) => string
 }): React.ReactElement {
-  const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
+  const nameOf = (sourceId: string): string | undefined =>
+    props.sourceNames[sourceId] ?? props.providerNamesBySource?.[sourceId]
   const labelOf = (key: string): string => props.resolveText(`settings.intelligenceSources.businessTabs.${key}`)
   const subtitleOf = (business: BusinessKey): string => {
     // 数字来自数据层：模块数读模块清单，源数读去重后的源集合——删掉一个源，这里跟着变。
+    /* 三种量词，各说各的：模块 / 源 / 项指标。第四项配的是指标，写成「N 个源」会让读者以为这里能接数据源。 */
+    /* 核心指标那一项报**两个数**（组数 · 指标数），两个都从分组表派生，不写死 3 / 12。 */
+    if (business === 'coreIndicators') {
+      return props.resolveText('settings.intelligenceSources.businessSubtitle.coreIndicators')
+        .replace('{groups}', String(MACRO_INDICATOR_GROUPS.length))
+        .replace('{indicators}', String(MACRO_INDICATOR_GROUP_METRIC_KEYS.length))
+    }
     const template = business === 'dashboard'
       ? props.resolveText('settings.intelligenceSources.businessSubtitle.modules')
       : props.resolveText('settings.intelligenceSources.businessSubtitle.sources')
@@ -143,9 +212,13 @@ export function BusinessSettingsView(props: {
 }
 
 /** 右内容区：卡片 / 平铺源名。没有源级详情。 */
+export { BusinessCardFrequencyRow, cellRow }
+
 export function BusinessSettingsContent(props: {
   business: BusinessKey
   sourceNames: Readonly<Record<string, string>>
+  /** 见 `BusinessSettingsView`：名字取不到时的第二层，绝不退到源 id。 */
+  providerNamesBySource?: Readonly<Record<string, string>>
   resolveText: (key: string) => string
   /**
    * 格级启停：**注入接口**，真实存储在存储线那边。只回显式写过的格；
@@ -176,20 +249,34 @@ export function BusinessSettingsContent(props: {
    * 具体周期不在组件里写死：没有真实排期读口就不编数字。
    */
   builtinCadence?: ReadonlySet<string>
+  /**
+   * 「当前间隔 / 下次采集」的读数（按源索引，来自 `listSchedules()` 的只读投影）。
+   *
+   * 只给可调的那一行用；`cadenceAvailable === false` 表示这一批排期没读到——那时不画读数，
+   * 原因进同一颗 ⓘ（读不到 ≠ 0 ≠ 没有排期）。
+   */
+  cadence?: Readonly<Record<string, SourceCadenceReadout>>
+  cadenceAvailable?: boolean
 }): React.ReactElement {
-  const nameOf = (sourceId: string): string => props.sourceNames[sourceId] ?? sourceId
+  const nameOf = (sourceId: string): string | undefined =>
+    props.sourceNames[sourceId] ?? props.providerNamesBySource?.[sourceId]
   const titleKey = `settings.intelligenceSources.businessTabs.${props.business}`
+  /* 频率读数里的「下次」按读者设置时区显示；格式化只在这里取一次。 */
+  const timeZone = useShellTimeZone()
   const renderCell = (
     moduleId: string,
     cell: DashboardCell,
     siblings: readonly string[],
     labelOverride?: string
-  ): React.ReactElement => {
+  ): React.ReactElement | null => {
     const cellId = cellIdOf(moduleId, cell)
+    const label = labelOverride ?? nameOf(cell.sourceId)
+    /* 两层名字都取不到 → 这一项不渲染。宁可少一行，也不把源 id 印给读者。 */
+    if (label === undefined) return null
     return cellRow({
       cellId,
       enabled: cellEnabledOrDefault(props.isCellEnabled?.(cellId), cell.fallback === true),
-      label: labelOverride ?? nameOf(cell.sourceId),
+      label,
       resolveText: props.resolveText,
       siblings,
       sourceId: cell.sourceId,
@@ -203,6 +290,9 @@ export function BusinessSettingsContent(props: {
           onPresetChange: (next: string) => props.onPresetChange!(cell.sourceId, next)
         }),
       ...(props.builtinCadence?.has(cell.sourceId) === true ? { builtinCadence: true } : {}),
+      ...(props.cadence?.[cell.sourceId] === undefined ? {} : { cadence: props.cadence[cell.sourceId] }),
+      ...(props.cadenceAvailable === false ? { cadenceUnavailable: true } : {}),
+      timeZone,
     })
   }
   return <div className="intelligence-detail-scroll">
@@ -276,21 +366,43 @@ export function BusinessSettingsContent(props: {
                     /* 主题卡按自己的名字认，不用 cellId：同一主题下以后可能不止一个源。 */
                     data-business-topic-card={OFFICIAL_COVERAGE[cell.sourceId] ?? cell.sourceId}
                     key={cell.cellKey}>
-                    <div className="business-topic__title">{OFFICIAL_COVERAGE[cell.sourceId] ?? nameOf(cell.sourceId)}</div>
+                    <div className="business-topic__title">{OFFICIAL_COVERAGE[cell.sourceId] ?? nameOf(cell.sourceId) ?? ''}</div>
                     <div className="business-cell__items">
                       {renderCell(modulesForBusiness(props.business)[0]?.id ?? props.business, cell, [])}
                     </div>
                   </div>)}
                 </div>
-                : <div
-                  className="business-cell__items"
-                  style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
-                  {group.cells.map((cell) => renderCell(
-                    modulesForBusiness(props.business)[0]?.id ?? props.business,
-                    cell,
-                    []
-                  ))}
-                </div>}
+                : props.business === 'calendar'
+                  /* 聚合源再按提供方分一层（2026-11-15）：一张「0xRouter」卡里三行、一张「Narwhal」卡里三行，
+                     读者才知道这三条是哪家的源。标题取投影里的提供方显示名，取不到就只画卡不画标题。 */
+                  ? <div className="business-topic-grid">
+                    {providerGroupsOf(group.cells, props.providerNamesBySource).map((provider) => <div
+                      className="business-topic"
+                      data-business-provider-card={provider.key}
+                      key={provider.key}>
+                      {provider.label === ''
+                        ? null
+                        : <div className="business-topic__title">{provider.label}</div>}
+                      {/* 提供方卡比「聚合源」那张窄，所以卡里的行**竖排**（不传 `--cell-items`，
+                          它默认 1 列）：三条源各占一行，名字与开关都不会被挤扁。 */}
+                      <div className="business-cell__items">
+                        {provider.cells.map((cell) => renderCell(
+                          modulesForBusiness(props.business)[0]?.id ?? props.business,
+                          cell,
+                          []
+                        ))}
+                      </div>
+                    </div>)}
+                  </div>
+                  : <div
+                    className="business-cell__items"
+                    style={{ ['--cell-items' as string]: Math.min(group.cells.length, 3) }}>
+                    {group.cells.map((cell) => renderCell(
+                      modulesForBusiness(props.business)[0]?.id ?? props.business,
+                      cell,
+                      []
+                    ))}
+                  </div>}
             </div>)}
           </div>
           {/* 舆情卡内部、四个源之后的一行收尾（用户 2026-11-11 改判：不再是网格里的小卡）：
@@ -312,131 +424,10 @@ export function BusinessSettingsContent(props: {
  * **互斥**：同组（同一格）里开一个、其余自动关——一次事件内把同组其它源写 false，
  * 不在界面留「两个源同时开着」的中间态。全关 = 这一格不用。
  */
-function cellRow(args: {
-  cellId: string
-  enabled: boolean
-  label: string
-  sourceId: string
-  siblings: readonly string[]
-  /** 源自己的采集开关；`false` = 源没开（这一项不可编辑，红辉光，点击去配置它）。 */
-  sourceEnabled?: boolean
-  onCellToggle?: (cellId: string, enabled: boolean) => void
-  onOpenSourceConfig?: (sourceId: string) => void
-  /** 这个源当前的采集预设；给了才画第二行（未启用/待接入/无采集的源不给）。 */
-  preset?: string
-  onPresetChange?: (next: string) => void
-  /** 节奏由产品内置：第二行只写「内置频率」这个值，不画任何启停/采集控件。 */
-  builtinCadence?: boolean
-  resolveText: (key: string) => string
-}): React.ReactElement {
-  const { cellId, enabled, label, siblings, onCellToggle, sourceId } = args
-  const sourceOff = args.sourceEnabled === false
-  const toggleKey = enabled
-    ? 'settings.intelligenceSources.cellEnabled.disable'
-    : 'settings.intelligenceSources.cellEnabled.enable'
-  const onSelect = (next: boolean): void => {
-    if (onCellToggle === undefined) return
-    if (next) {
-      // 同一格只留一个源：先关同组其它源，再开这一个（顺序固定，避免出现同时开着的中间态）。
-      for (const sibling of siblings) onCellToggle(sibling, false)
-      onCellToggle(cellId, true)
-      return
-    }
-    onCellToggle(cellId, false)
-  }
-  const openConfig = (): void => {
-    if (!sourceOff || args.onOpenSourceConfig === undefined) return
-    args.onOpenSourceConfig(sourceId)
-  }
-  return <div
-    aria-label={sourceOff ? args.resolveText('settings.intelligenceSources.openSourceConfig').replace('{name}', label) : undefined}
-    className="business-card__row"
-    data-business-row={sourceId}
-    data-cell-enabled={enabled ? 'true' : 'false'}
-    data-cell-id={cellId}
-    data-source-disabled={sourceOff ? 'true' : undefined}
-    key={cellId}
-    onClick={sourceOff ? openConfig : undefined}
-    onKeyDown={sourceOff
-      ? (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        openConfig()
-      }
-      : undefined}
-    role={sourceOff ? 'button' : undefined}
-    tabIndex={sourceOff ? 0 : undefined}>
-    <div className="business-card__line">
-    {sourceOff || args.onOpenSourceConfig === undefined
-      /* 源没开：整行是按钮（这一行只能去配置），名字不再单独做按钮——按钮套按钮是嵌套交互。
-         源开着：名字是**真按钮**（原生 button，键盘可达），行本身不是按钮。 */
-      ? <span className="business-card__label">{label}</span>
-      : <button
-        aria-label={args.resolveText('settings.intelligenceSources.openSourceConfig').replace('{name}', label)}
-        className="business-card__label business-card__label--action"
-        onClick={(event) => {
-          // 名字是这一行唯一的交互目标；行本身没有点击，这里不必反向阻止，但也不许冒泡给卡片。
-          event.stopPropagation()
-          args.onOpenSourceConfig!(sourceId)
-        }}
-        type="button">{label}</button>}
-    {onCellToggle === undefined
-      ? null
-      : <span
-        className="business-card__toggle"
-        /* 开关只切换，不许冒泡成「点整行跳转」（红辉光那一行整行可点）。 */
-        onClick={(event) => event.stopPropagation()}>
-        <Switch
-          aria-disabled={sourceOff ? true : undefined}
-          aria-label={args.resolveText(toggleKey).replace('{cell}', label)}
-          checked={enabled}
-          disabled={sourceOff}
-          onChange={onSelect}
-          size="small" />
-      </span>}
-    </div>
-    {/* 第二行：频率（产品 2026-11-12 定：与「开不开」同一屏决定「采多勤」）。
-        **源没开就不画**——那一行整行是跳配置的按钮，行里不能再嵌一个下拉（嵌套交互）；
-        不是「没值所以禁用」（禁用等于承诺以后能开）。 */}
-    {sourceOff
-      ? null
-      : args.builtinCadence === true
-        /* 不可调也要**占住这一行**（用户 2026-11-12：否则并排的卡片高高低低）：
-           标签「频率」+ 值「内置频率」+ 一颗 ⓘ 说明为什么内置。**没有 select / 开关 / 勾选框**，
-           「不可操作」靠没有控件外观表达，不靠颜色、不加锁图标。 */
-        ? <div className="business-card__preset" data-preset-row={sourceId} data-preset-builtin="true">
-          <span className="business-card__preset-label-group">
-            <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
-            <SettingsInfo
-              ariaLabelKey="settings.intelligenceSources.collectionPolicy.builtinCadenceNoteAria"
-              labelKeys={['settings.intelligenceSources.collectionPolicy.builtinCadenceNote']}
-              resolveText={args.resolveText} />
-          </span>
-          {/* 只写事实：具体周期由产品排期决定，没有真实读口就不编数字（不写「内置 · 5 分钟」）。 */}
-          <span className="business-card__preset-value">{args.resolveText('settings.intelligenceSources.collectionPolicy.builtinCadence')}</span>
-        </div>
-        : args.preset === undefined || args.onPresetChange === undefined
-      ? null
-      : <div className="business-card__preset" data-preset-row={sourceId} {...sourceRowAttributes(SOURCE_ROW_TEMPLATES.collectionPreset, sourceId)}>
-        <span className="business-card__preset-label-group">
-          <span className="business-card__preset-label">{args.resolveText('settings.intelligenceSources.collectionPolicy.frequency')}</span>
-          {args.preset === 'manual'
-            ? <SettingsInfo
-              ariaLabelKey="settings.intelligenceSources.collectionPolicy.manualPresetNoteAria"
-              labelKeys={['settings.intelligenceSources.collectionPolicy.manualPresetNote']}
-              resolveText={args.resolveText} />
-            : null}
-        </span>
-        <Select
-          aria-label={args.resolveText('settings.intelligenceSources.collectionPolicy.collectionPreset')}
-          className="business-card__preset-select"
-          onChange={args.onPresetChange}
-          options={PRESET_VALUES.map((value) => ({
-            value,
-            label: args.resolveText(`settings.intelligenceSources.collectionPolicy.presets.${value}`)
-          }))}
-          size="small"
-          value={args.preset} />
-      </div>}
-  </div>
-}
+/**
+ * 一条源项行（看板与核心指标**共用这一份**）。
+ *
+ * 导出它是因为「照抄页面」的正确做法是抄**渲染函数**，不是抄 class 名：
+ * 两边各写一遍时，整行可点、源没开就不画频率行、开关与名字的交互这三件必然长歪
+ * （2026-11-14 用户第三次说「直接复用组件那么难吗」）。
+ */

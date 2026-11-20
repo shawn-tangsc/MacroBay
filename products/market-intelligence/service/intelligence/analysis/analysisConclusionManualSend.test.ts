@@ -13,7 +13,7 @@ const asOf = '2026-11-08T03:00:00.000Z'
 const clickAt = '2026-11-08T12:44:00.000Z'
 
 const run = (overrides: Partial<AnalysisRun> = {}): AnalysisRun => ({
-  id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+  id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
   analysisPhase: 'initial', triggerKey: 'signal.open-interest.oi-liquidation-proxy', idempotencyKey: 'key',
   status: 'succeeded', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null,
   policyVersion: 'policy', promptVersion: 'market-analysis-v1', skillVersion: 'market-analysis-v1',
@@ -76,6 +76,40 @@ describe('sending one conclusion to the channel', () => {
     expect(request.narrowedDisruptionLevels).toBeUndefined()
     // 正文与自动推送同一条规则：一句结论 + 证据条数（推手机才带）。
     expect((request.rendered as Record<string, { body: string }>)['zh-CN']!.body).toBe('多头被清，价格跌到位后买盘回来了。 · 证据 2 条')
+  })
+
+  it('hands every per-channel result back to the reader, not just the aggregate state', async () => {
+    // 多通道：一条消息发到所有通道，每条各记一份结果；界面上的「几条收到」数的是这些行。
+    const outcome: NotificationSubmitOutcome = {
+      kind: 'accepted', recordId: 'n-1', levels: ['center', 'channel'], suppressedLevels: [],
+      delivery: { push: { state: 'failed', at: clickAt, channels: [
+        { channelId: 'c-1', channelName: 'Telegram', state: 'sent-accepted', at: clickAt },
+        { channelId: 'c-2', channelName: '飞书', state: 'failed', reason: 'channel-rejected', at: clickAt }
+      ] } }
+    }
+    const { send } = harness({ outcome })
+    const receipt = await send({ analysisRunId: 'mi-ar-1' })
+    expect(receipt).toEqual({
+      kind: 'accepted', recordId: 'n-1', levels: ['center', 'channel'],
+      delivery: {
+        pushState: 'failed',
+        channels: [
+          { channelName: 'Telegram', state: 'sent-accepted' },
+          { channelName: '飞书', state: 'failed', reason: 'channel-rejected' }
+        ]
+      }
+    })
+  })
+
+  it('hands the suppressed surfaces back too, so "not attempted" is never read as "did not arrive"', async () => {
+    const outcome: NotificationSubmitOutcome = {
+      kind: 'accepted', recordId: 'n-1', levels: ['center'], suppressedLevels: [{ level: 'push', reason: 'quiet-hours' }]
+    }
+    const { send } = harness({ outcome })
+    await expect(send({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({
+      kind: 'accepted', recordId: 'n-1', levels: ['center'],
+      delivery: { suppressed: [{ level: 'push', reason: 'quiet-hours' }] }
+    })
   })
 
   it('makes a new dedupe key from the click time, so the real key is never occupied', async () => {

@@ -1,9 +1,26 @@
+import { resolveCountryCode } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { createHash } from 'node:crypto'
 import { zeroXRouterCalendarTransportPolicy } from '../../application/zeroXRouterSourcePolicy'
 import {
   calendarRecord, zeroXRouterCalendarParserPolicy,
   type ZeroXRouterCalendarDraft
-} from './zeroXRouterCalendarContracts'
+} from './marketCalendarStorageContracts'
+
+/**
+ * 一张事件身份表：每个 descriptor 对应哪一类事件。**采集来源换了，这张表的含义不变**——
+ * 它回答的是「这条观测属于哪一类」，不回答「谁去采」，所以两个来源的身份都在这里，
+ * 各占自己那三个位置。
+ */
+export const marketCalendarDescriptorKinds = Object.freeze({
+  'macro-calendar-0xrouter-economic-data': 'economic-indicator',
+  'macro-calendar-0xrouter-financial-events': 'financial-event',
+  'macro-calendar-0xrouter-central-bank-activities': 'central-bank-activity',
+  'macro-calendar-narwhal-economic-data': 'economic-indicator',
+  'macro-calendar-narwhal-financial-events': 'financial-event',
+  'macro-calendar-narwhal-central-bank-activities': 'central-bank-activity'
+})
+/** 库里有观测的采集来源。切换期两个都在：旧来源的行留着，新来源从切换点开始写。 */
+export const marketCalendarStorageProviders = Object.freeze(['0xrouter', 'narwhal'] as const)
 
 // Product repository policy, from Accepted design 119/120. Changes require product
 // acceptance. No retention deletion, identity promotion or runtime mapping learning.
@@ -18,14 +35,12 @@ export const zeroXRouterCalendarStoragePolicy = Object.freeze({
   indexReserveMultiplier: 2, transactionReservePages: 16, walFrameHeaderBytes: 24,
   metadataCharacters: 128, hashPattern: /^[a-f0-9]{64}$/,
   canonicalInstantPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
-  descriptorKinds: Object.freeze({
-    'macro-calendar-0xrouter-economic-data': 'economic-indicator',
-    'macro-calendar-0xrouter-financial-events': 'financial-event',
-    'macro-calendar-0xrouter-central-bank-activities': 'central-bank-activity'
-  }),
+  descriptorKinds: marketCalendarDescriptorKinds,
   draftFields: Object.freeze(['providerId', 'descriptorId', 'kind', 'locale', 'sourceEventId', 'marketFactKey',
-    'identityState', 'localeMerge', 'officialLink', 'displayName', 'countryCode', 'countryName', 'importance',
-    'scheduledDate', 'scheduledAt', 'indicatorId', 'consensus', 'providerPrevious', 'providerActual', 'providerImpact']),
+    'identityState', 'localeMerge', 'officialLink', 'displayName', 'countryCode', 'placeholderCountryCode', 'countryName', 'importance',
+    'scheduledDate', 'scheduledAt', 'indicatorId', 'consensus', 'providerPrevious', 'providerActual', 'providerImpact',
+    // 这条发布覆盖的指标 key 列表（与 `indicatorId` 是两件事：一个是主 measure，一个是全体）。
+    'measureKeys']),
   valueFields: Object.freeze(['consensus', 'providerPrevious', 'providerActual'] as const),
   skipReasons: Object.freeze(['invalid-identity', 'invalid-date', 'invalid-row'] as const),
   caveats: Object.freeze(['identity-unverified', 'locale-merge-disabled', 'official-link-disabled'])
@@ -81,7 +96,12 @@ export type MarketCollectionContext = Readonly<{
 export type MarketCapacity = Readonly<{ marketBytes: number; walBytes: number; freeBytes: number; archiveAvailable: boolean }>
 export type MarketRow = Record<string, string | number | null>
 export type MarketFailureCode = 'invalid-input' | 'collection-conflict' | 'storage-unavailable' |
-  'storage-pressure' | 'context-unavailable' | 'invalid-cursor' | 'cancelled' | 'deadline-exceeded' | 'row-too-large'
+  'storage-pressure' | 'context-unavailable' | 'invalid-cursor' | 'cancelled' | 'deadline-exceeded' | 'row-too-large' |
+  /**
+   * **不认识的异常**（用户 2026-11-20）：以前一律折叠成 `storage-unavailable`，把真实原因埋掉
+   * （今天埋了九小时）。现在单列一码，调用方必须把 `errorDetail`（类名 + 消息）打进日志。
+   */
+  'storage-error'
 export class MarketStorageFailure extends Error {
   constructor(readonly failureCode: MarketFailureCode) { super(failureCode) }
 }
@@ -114,8 +134,8 @@ export function metadata(value: unknown): value is string {
     isCanonicalCalendarIdentity(value)
 }
 export function marketScope(input: Record<string, unknown>) {
-  if (input.providerId !== '0xrouter' || typeof input.descriptorId !== 'string' ||
-    !Object.hasOwn(zeroXRouterCalendarTransportPolicy.descriptorPaths, input.descriptorId) ||
+  if (!marketCalendarStorageProviders.includes(input.providerId as never) || typeof input.descriptorId !== 'string' ||
+    !Object.hasOwn(marketCalendarDescriptorKinds, input.descriptorId) ||
     !zeroXRouterCalendarTransportPolicy.locales.some((locale) => locale === input.locale) ||
     typeof input.month !== 'string' || !zeroXRouterCalendarTransportPolicy.monthPattern.test(input.month)) reject('invalid-input')
   const start = new Date(`${input.month}-01T00:00:00.000Z`)
@@ -135,8 +155,12 @@ function normalizedDraft(value: unknown, scope: ReturnType<typeof marketScope>):
     draft.identityState !== 'unverified' || draft.localeMerge !== 'disabled' || draft.officialLink !== 'disabled' ||
     !instant(draft.scheduledAt) || draft.scheduledDate !== draft.scheduledAt.slice(0, 10) ||
     !isCanonicalCalendarText(draft.displayName) ||
-    !Object.values(zeroXRouterCalendarParserPolicy.importance).includes(draft.importance as never) ||
-    (draft.countryCode !== undefined && !Object.values(zeroXRouterCalendarParserPolicy.countryCodes).includes(draft.countryCode as never))) reject('invalid-input')
+    (draft.importance !== undefined && !Object.values(zeroXRouterCalendarParserPolicy.importance).includes(draft.importance as never)) ||
+    // 国家码按**形状**校验，不按白名单值：解析阶段已经把「认得出来的」归一（US/DE/JP/EMU/GB/CA），
+    // 认不出的按原样保留（2–3 位大写字母），它的存在就是为了能进库、能被看见、能被补映射。
+    // 这里再按白名单拒一次，等于把「不丢未知码」这句在下一层又推翻——2026-11-17 整批 storage-unavailable 就是这个。
+    // **只有「形状都不像」才判整批非法**；占位码（`ZZ`）与没给国家都是「这一行没有国家」，行保留。
+    (draft.countryCode !== undefined && resolveCountryCode(draft.countryCode).state === 'invalid')) reject('invalid-input')
   for (const key of ['countryName', 'indicatorId'] as const) {
     if (draft[key] !== undefined && !(key === 'indicatorId' ? isCanonicalCalendarIdentity(draft[key]) : isCanonicalCalendarText(draft[key]))) reject('invalid-input')
   }
@@ -145,7 +169,7 @@ function normalizedDraft(value: unknown, scope: ReturnType<typeof marketScope>):
   if (!Array.isArray(identity) || identity.length !== 2 || !isCanonicalCalendarIdentity(identity[0]) ||
     typeof identity[1] !== 'number' || !Number.isSafeInteger(identity[1]) || identity[1] <= 0 ||
     JSON.stringify(identity) !== draft.sourceEventId ||
-    JSON.stringify(['0xrouter', scope.descriptor_id, scope.locale, draft.sourceEventId]) !== draft.marketFactKey) reject('invalid-input')
+    JSON.stringify([scope.provider_id, scope.descriptor_id, scope.locale, draft.sourceEventId]) !== draft.marketFactKey) reject('invalid-input')
   for (const key of policy.valueFields) {
     if (draft[key] === undefined) continue
     const value = calendarRecord(draft[key])
@@ -219,13 +243,17 @@ function buildObservation(value: unknown, scope: ReturnType<typeof marketScope>,
   if (candidates.has(draft.marketFactKey)) reject('invalid-input')
   candidates.add(draft.marketFactKey)
   const business = { event_kind: draft.kind, display_name: draft.displayName, indicator_id: draft.indicatorId ?? null,
-    country_code: draft.countryCode ?? null, country_name: draft.countryName ?? null, importance: draft.importance,
+    country_code: draft.countryCode ?? null, country_name: draft.countryName ?? null, importance: draft.importance ?? null,
     scheduled_date: draft.scheduledDate, scheduled_at: draft.scheduledAt,
     consensus_json: jsonValue(draft.consensus), provider_previous_json: jsonValue(draft.providerPrevious),
     provider_actual_json: jsonValue(draft.providerActual), provider_impact_json: jsonValue(draft.providerImpact ? { label: draft.providerImpact.label, ...(draft.providerImpact.code ? { code: draft.providerImpact.code } : {}) } : undefined), provider_time_status: null }
   const observation: MarketRow = { observation_id: JSON.stringify([batch.collectionId, draft.marketFactKey]), collection_id: batch.collectionId as string,
     provider_id: draft.providerId, descriptor_id: draft.descriptorId, locale: draft.locale, source_event_id: draft.sourceEventId,
     identity_state: draft.identityState, market_fact_key: draft.marketFactKey, ...business,
+    // 只有带这一列的来源（今天只有 Narwhal）才写这个键：旧来源的行保持原样，
+    // 免得给每行多塞一个 `null` 把已有的行大小预算顶出去。
+    ...(draft.measureKeys === undefined ? {}
+      : { measure_keys_json: JSON.stringify(String(draft.measureKeys).split(',').filter((key) => key.length > 0)) }),
     business_snapshot_hash: createHash('sha256').update(JSON.stringify(business)).digest('hex'), caveats_json: JSON.stringify(policy.caveats), schema_version: policy.schemaVersion, candidate_key: draft.marketFactKey }
   return observation
 }

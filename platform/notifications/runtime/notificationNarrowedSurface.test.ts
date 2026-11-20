@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings, NotificationSubmitRequest } from '../contracts/notificationContracts'
@@ -7,7 +8,7 @@ import { createNotificationRuntime, type NotificationStorage } from './notificat
 
 
 /**
- * `narrowedDisruptionLevels` 的四条语义（架构师 a 方案）：只能收窄、`center` 不可排除、
+ * `narrowedDisruptionLevels` 的语义（架构师 a 方案 + 2026-11-18 修订）：只能收窄、`center` 也可被收窄、
  * 合并不许升级、缺省同今天。事件用 `analysis.conclusion` 本身——它是这次要补通的那条。
  */
 const settings: NotificationRuntimeSettings = {
@@ -48,10 +49,10 @@ function harnessWith(catalogOverride?: ReturnType<typeof createNotificationEvent
       }]
     }),
     diagnostics: () => undefined,
-    resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock,
-    deliveryHooks: { push: async (record) => ({ ok: true, messageId: record.id }) }
+    deliveryHooks: { push: singleResultHook(async (record) => ({ ok: true, messageId: record.id })) }
   })
   return { runtime, state: () => state }
 }
@@ -77,10 +78,10 @@ function harnessWithDiagnostics() {
       }]
     }),
     diagnostics: (entry) => entries.push(entry),
-    resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock,
-    deliveryHooks: { push: async (record) => ({ ok: true, messageId: record.id }) }
+    deliveryHooks: { push: singleResultHook(async (record) => ({ ok: true, messageId: record.id })) }
   })
   return { runtime, state: () => state, entries }
 }
@@ -103,10 +104,22 @@ describe('narrowedDisruptionLevels', () => {
     expect(state().records[0].delivery.push).toBeUndefined()
   })
 
-  it('cannot exclude the centre: asking for channel alone still keeps it', async () => {
+  it('lets the centre be narrowed away like any other approved level', async () => {
+    // 新语义（2026-11-18）：center 是批准档之一，不是必达记录。只收窄到 channel = 只排手机，
+    // 本机不留条目（channels 空数组是合法的），记录照旧在。
     const { runtime, state } = harness()
     await runtime.submit(request({ narrowedDisruptionLevels: ['channel'] }))
-    expect(state().records[0].channels).toContain('center')
+    expect(state().records[0].appliedLevels).toEqual(['channel'])
+    expect(state().records[0].channels).toEqual([])
+    expect(state().records[0].delivery.push).toMatchObject({ state: expect.any(String) })
+  })
+
+  it('narrows a centre-bearing approval down to desktop only', async () => {
+    // 批准 ['center','desktop']、收窄 ['desktop'] → 只剩 desktop（center 可被收窄）。
+    const { runtime, state } = harness()
+    await runtime.submit(request({ narrowedDisruptionLevels: ['desktop'] }))
+    expect(state().records[0].appliedLevels).toEqual(['desktop'])
+    expect(state().records[0].channels).toEqual(['desktop'])
   })
 
   it('refuses a narrowed level the approval table never approved, instead of silently intersecting', async () => {

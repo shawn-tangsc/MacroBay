@@ -113,6 +113,11 @@ const APPLICABILITY_BY_SOURCE_ID: Record<string, ApplicabilitySeed> = {
     applicabilityMode: 'market-domain',
     focusMarkets: ['digital-assets']
   },
+  'cryptoetf-etf-flows': {
+    sourceKind: 'data-aggregator',
+    applicabilityMode: 'market-domain',
+    focusMarkets: ['digital-assets']
+  },
   '0xrouter-aggregate-provider': {
     sourceKind: 'data-aggregator',
     applicabilityMode: 'market-domain',

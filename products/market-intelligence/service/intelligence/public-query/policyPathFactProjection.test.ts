@@ -34,7 +34,6 @@ const reading: PolicyPathReading = {
     value: 0.706,
     changeInPp24h: 2,
     quote: { bid: 0.7, ask: 0.72 },
-    points: 40
   },
   staleness: 'live'
 }
@@ -119,7 +118,7 @@ describe('policy path analysis facts', () => {
     const { probability, ...withoutProbability } = reading
     const result = await context({
       ...withoutProbability,
-      probability: { venue: probability!.venue, asOf: probability!.asOf, outcome: probability!.outcome, value: probability!.value, points: probability!.points }
+      probability: { venue: probability!.venue, asOf: probability!.asOf, outcome: probability!.outcome, value: probability!.value }
     })
     const facts = policyFacts(result)
 

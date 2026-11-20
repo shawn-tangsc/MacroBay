@@ -29,7 +29,7 @@ function marketEvent(patch: Partial<MarketCalendarEvent> = {}): MarketCalendarEv
     consensus: null,
     providerPrevious: null,
     providerActual: null,
-    source: '0xRouter',
+    source: 'Narwhal',
     sourceObservedAt: '2026-11-06T13:31:00.000Z',
     coverage: 'observed-unverified',
     ...patch

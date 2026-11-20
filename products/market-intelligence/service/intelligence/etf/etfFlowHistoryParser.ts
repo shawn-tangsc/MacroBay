@@ -2,6 +2,11 @@ export type EtfFlowHistoryRow = Readonly<{
   date: number
   changeUsd: number
   updateTime?: string
+  /**
+   * 这一行是谁给的（主源 CryptoETF / 备源 0xRouter）。合并两源时由装配处标上；
+   * 单个源自己返回的行不带它，写库时退回「本轮解析出来的那个源」。
+   */
+  source?: string
 }>
 
 export type EtfFlowHistoryParseResult =

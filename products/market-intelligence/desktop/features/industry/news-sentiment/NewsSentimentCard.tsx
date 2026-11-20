@@ -54,6 +54,12 @@ function veilAction(
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
 
+/**
+ * 一次露出多少条舆情（用户 2026-11-15 定 15）：首屏与每次「加载更多」用同一个步长。
+ * 筛完不足 15 就显示实际条数——不补空位。
+ */
+export const NEWS_SENTIMENT_VISIBLE_STEP = 15
+
 export function NewsSentimentCard(props: {
   text: NewsSentimentText
   view?: NewsSentimentView
@@ -75,7 +81,12 @@ export function NewsSentimentCard(props: {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
   const available = view?.state === 'available'
-  const [visibleCount, setVisibleCount] = useState(8)
+  /**
+   * 列表默认露出多少条、每次「滚到底」再放多少条（用户 2026-11-15：默认 15）。
+   * 这是**初始可见条数**，不是上限：总数照旧能翻到底。
+   * 步长取同一个 15——和首屏一致，读者滚一次看到的是「再来一屏」，不是零碎的 8。
+   */
+  const [visibleCount, setVisibleCount] = useState(NEWS_SENTIMENT_VISIBLE_STEP)
   const includeNeutral = props.includeNeutral ?? true
   const filteredItems = (view?.items ?? []).filter((item) => passesNeutralFilter(item, includeNeutral))
   const drivers = available
@@ -83,7 +94,7 @@ export function NewsSentimentCard(props: {
         (a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.strength * b.confidence - a.strength * a.confidence
       )
     : []
-  useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
+  useEffect(() => { setVisibleCount(NEWS_SENTIMENT_VISIBLE_STEP) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
   const visibleDrivers = drivers.slice(0, visibleCount)
   // "Nothing read yet" is not "nothing there": only a read that came back may end in empty or error.
   const hasRows = Boolean(view && (view.items?.length ?? 0) > 0)
@@ -98,7 +109,9 @@ export function NewsSentimentCard(props: {
         itemCount: (view.items ?? []).length,
         windowStart,
         ...(view.readiness ? { readiness: view.readiness } : {}),
-        ...(view.latestKnownItemAt ? { latestKnownItemAt: view.latestKnownItemAt } : {})
+        ...(view.latestKnownItemAt ? { latestKnownItemAt: view.latestKnownItemAt } : {}),
+        ...(view.unjudgedInWindow === undefined ? {} : { unjudgedInWindow: view.unjudgedInWindow }),
+        ...(view.unjudgedCause === undefined ? {} : { unjudgedCause: view.unjudgedCause })
       })
     : undefined
   // Without a source status an empty window has no known cause. Saying "no related news" there would
@@ -223,7 +236,7 @@ export function NewsSentimentCard(props: {
             onScroll={(event) => {
               const node = event.currentTarget
               if (node.scrollTop + node.clientHeight >= node.scrollHeight - 24 && visibleCount < drivers.length) {
-                setVisibleCount((count) => Math.min(count + 8, drivers.length))
+                setVisibleCount((count) => Math.min(count + NEWS_SENTIMENT_VISIBLE_STEP, drivers.length))
               }
             }}
           >
@@ -263,6 +276,28 @@ export function NewsSentimentCard(props: {
  * 来源不可用那三种（未配置 / 未启用 / 读不到）**不走这里**：它们只在数据区盖一层遮罩，
  * 卡框、标题与头部工具照常（规范 §二 第 1 条）。
  */
+/** 「有新条目、但还没判定」那一档的句子。原因读得出来才说，读不出来就只说事实。 */
+function UnjudgedCause(props: {
+  cause?: 'model-off' | 'model-unavailable'
+  resolve: (key: string, params?: Record<string, string>) => string
+}): React.ReactElement {
+  const resolveStateText = useStateViewText()
+  const common = {
+    // 平台闭集只有 nothing-in-window：这里说的话由 `productReason` 给（「有新条目但还没判」）。
+    reasonCode: 'nothing-in-window' as const,
+    resolveText: resolveStateText,
+    size: 'md' as const,
+    state: 'empty' as const
+  }
+  if (props.cause === 'model-off') {
+    return <StateView {...common} productReason={{ key: 'mi.newsSentiment.unjudgedModelOff', resolve: (key, params) => props.resolve(key, params) }} />
+  }
+  if (props.cause === 'model-unavailable') {
+    return <StateView {...common} productReason={{ key: 'mi.newsSentiment.unjudgedModelUnavailable', resolve: (key, params) => props.resolve(key, params) }} />
+  }
+  return <StateView {...common} productReason={{ key: 'mi.newsSentiment.unjudged', resolve: (key) => props.resolve(key) }} />
+}
+
 function EmptyCause(props: {
   state: import('./newsSentimentEmptyState').NewsSentimentEmptyState
   resolve: (key: string, params?: Record<string, string>) => string
@@ -276,6 +311,10 @@ function EmptyCause(props: {
     <div className="mi-news-sentiment__state" data-news-sentiment-state={state.kind}>{node}</div>
   )
   switch (state.kind) {
+    case 'unjudged':
+      // 这不是「安静」：窗口里确实有新闻，只是还没判出来。原因说得出就说（模型没开 / 不可用），
+      // 说不出就只说事实——不猜。三句话各走一个**字面键**：原因句的守卫要求键是字面量。
+      return wrap(<UnjudgedCause cause={state.cause} resolve={props.resolve} />)
     case 'stale':
       return wrap(
         <StateView

@@ -29,7 +29,13 @@ const EXEMPT_LOG_ONLY: Readonly<Record<string, string>> = {
   'lark-rate-limited': '同上',
   'slack-network-unavailable': '同上，Slack 未接入',
   'slack-provider-rejected': '同上',
-  'slack-rate-limited': '同上'
+  'slack-rate-limited': '同上',
+  // 图片出站（方案 §2）：本轮不加可见文案，原因码只留在尝试行/审计；推送层归到既有的 channel-rejected。
+  'delivery-image-too-large': '图片超限：终态，读者没有可执行动作',
+  'delivery-image-unsupported': '这一版/这个通道发不了这类图：终态，理由留在尝试行',
+  'delivery-image-unavailable': '图取不到（missing / read-failed）：读者动作在来源侧（重新生成）',
+  'delivery-image-source-not-allowed': '来源不是「这条助手消息自己带着这张图」：调用方缺陷，不给读者看',
+  'delivery-caption-too-long': 'caption 超限：生产者应改发两条，读者无需动作'
 }
 
 const CODE_PATTERN = /(?:code|stableErrorCode|runtimeReason)\s*:\s*'([a-z][a-z0-9-]*)'/gu
@@ -43,7 +49,14 @@ const DELIVERY_EXEMPT: Readonly<Record<string, string>> = {
   'delivery-empty-output': '渲染出空正文的内部状态，属于实现缺陷，不是读者可理解的原因',
   'delivery-owner-invalid': '投递租约内部状态，读者无法据此做任何事',
   'delivery-retry-not-permitted': '重试是否允许的内部判定，读者看到的是最终结果',
-  'delivery-transport-unknown': '传输层未知态；具体原因由 provider/network 码给出'
+  'delivery-transport-unknown': '传输层未知态；具体原因由 provider/network 码给出',
+  // 图片出站（方案 §2）：读者没有「改一下重试」的动作，本轮不加可见文案；
+  // 原因码留在尝试行（审计），推送层把它们归到既有的 channel-rejected。
+  'delivery-image-too-large': '图片超出通道上限：终态，读者没有可执行的动作；原因留在尝试行',
+  'delivery-image-unsupported': '这一版/这个通道发不了这类图（格式、能力、caption）：终态，理由留在尝试行',
+  'delivery-image-unavailable': '图取不到（missing / read-failed）：读者动作是「重新生成那张图」，由来源侧提示',
+  'delivery-image-source-not-allowed': '来源不是「这条助手消息自己带着这张图」：投递口拒绝，属于调用方缺陷',
+  'delivery-caption-too-long': 'caption 超限：生产者应改发两条，读者无需动作；原因留在尝试行'
 }
 
 export function deliveryCodesIn(source: string): string[] {

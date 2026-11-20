@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from '../../../pages/intelligence/readMarketCalendarMonth'
 import { useEffect, useState } from 'react'
 import { Button } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
@@ -20,17 +21,19 @@ import { useCrossAssetObservation } from './useCrossAssetObservation'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows, type CrossAssetStatusId } from './crossAssetStatusRegistry'
 import { crossAssetWindows } from './crossAssetWindowReturns'
-import { chartLinesHiddenBy, CrossAssetReturnChart } from './CrossAssetReturnChart'
+import { chartLinesHiddenBy, CrossAssetReturnChart, linesWithoutComparableData, type CrossAssetChartLineId } from './CrossAssetReturnChart'
 import { CircleSlash, TriangleAlert } from 'lucide-react'
 
 import { CellStateCard, type CellStateKind } from '../../../pages/intelligence/DashboardCellState'
+// 「偏旧」的阈值只认仓里那一处定义：另开一个数，两处迟早漂成两种说法（界面设计 2026-11-16）。
+import { dashboardPositioningPresentationPolicy } from '../../../pages/intelligence/dashboardOpenInterestModel'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
 import { CrossAssetStatusHeading } from './CrossAssetStatusHeading'
 import { CrossAssetQuoteLegStatus } from './CrossAssetQuoteLegStatus'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
 import {
-  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, PlannedStatusRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
+  AssetStatusRow, IndexObservation, IndexStatusRow, LoadingStatusRow, MacroStatusRow, PlannedStatusRow, RowHint, RowName, SourceUnavailableRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
   type MacroDriverId, type RowMetrics, type Text
 } from './crossAssetStatusRows'
 import { crossAssetTextKeys, crossAssetWindowLabelKeys } from './crossAssetTextKeys'
@@ -96,7 +99,7 @@ function RatesStatusRow({ id, reading, rates, text }: {
   // 这一格不是控件：撤掉浮层与焦点停靠，说明改由可访问名承载（同一件事不占一个键盘站）。
   const dailyDescription = dailyFacts.map(line => resolveText(line.labelKey)).join(text.hintListSep)
   return <tr data-status-row={id} data-connected="true" data-observation-date={reading.period}>
-    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
+    <th scope="row"><RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} />} /></th>
     <td data-asset-price={id}>{reading.actual.toFixed(2)}%</td>
     <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
       aria-label={dailyDescription}
@@ -107,30 +110,7 @@ function RatesStatusRow({ id, reading, rates, text }: {
     </td>
   </tr>
 }
-function MacroStatusRow({ id, reading, text, formatTime }: {
-  id: 'dxy' | 'gold'; reading?: MacroMarketSnapshotReading; text: Text
-  formatTime: (value: string, precision: 'second') => string
-}): React.ReactElement {
-  // The live tick rides beside the collected level and never replaces it: the four window cells below
-  // still come from stored points, and the freshness tag marks the 最新 cell as an unclosed value.
-  const live = reading?.live
-  const resolveText = useProductTextKey()
-  return <tr data-status-row={id} data-connected="true">
-    <th scope="row"><span>{text.assetLabels[id]}
-      {/* The synthetic label rides with the level: a level this product computed is never shown as
-          if it were the licensed index, and the caveat sentence is one hover away. */}
-      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
-        aria-label={text.syntheticCaveat}
-        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex}>{text.syntheticTag}</em> : null}
-      {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
-          after the price reads as if it qualified the number itself. */}
-      {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
-    </span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
-    <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
-    <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
-  </tr>
-}
-export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
+export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, rates, ratesState, calendar = macroEconomicCalendarClient, readCalendarMonth, onSelectEvent, text, hideStatusRows, rowStates, rowStateLabels, cellStateLabels, sourceStatusStale, crossAssetReadingEnabled = true, onEnableData }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
   /**
    * 两路读的**结算状态**：没有它，面板分不出「还没读完」与「读完了确实没有」，市场状态表就会先写
@@ -179,7 +159,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * came through the provider alone (initial claims, retail sales, PPI) drew nothing at all even
    * though the calendar listed it. Optional, and its failure costs only the provider's lines.
    */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /**
    * Opening the event's drawer and recording it is the page's business, not the chart's.
    *
@@ -199,7 +179,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * The hook owns the fetch, the month bookkeeping and the failure path; this component only draws
    * what it returns and hands a picked line back up.
    */
-  const eventLines = useCrossAssetEventLines({ calendar, readMarketEvents, eventTitles: text.eventTitles, windowStart: snapshot?.windowStart, windowEnd: snapshot?.analysisEnd, asOf: snapshot?.asOf })
+  const eventLines = useCrossAssetEventLines({ calendar, readCalendarMonth, eventTitles: text.eventTitles, windowStart: snapshot?.windowStart, windowEnd: snapshot?.analysisEnd, asOf: snapshot?.asOf })
   /**
    * The same event read from two months would be one line either way; the first event names the line's
    * month, because a minute cannot belong to two. With no page listening the callback is absent and
@@ -212,7 +192,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   }
   // An unavailable snapshot contributes nothing: the macro rows fall back to 未接入 rather than to
   // a level the dashboard cannot vouch for.
+  // 默认**隐藏**（用户 2026-11-16 定）：开关关了才把这类行显示出来。
+  const [hideUnavailable, setHideUnavailable] = useState(true)
   const readings = macroSnapshot && macroSnapshot.state !== 'unavailable' ? macroSnapshot.readings : []
+  /** 快照自己的时刻：判「偏旧」的时钟只取这一处，不读宿主时间（同一屏两次渲染不会给出两种答案）。 */
+  const snapshotAsOfMs = macroSnapshot !== undefined && macroSnapshot.state !== 'unavailable'
+    ? Date.parse(macroSnapshot.asOf)
+    : undefined
   const rateReadings = rates && rates.state !== 'unavailable' ? rates.readings : []
   const rateBySeries = new Map(rateReadings.map(reading => [reading.seriesId, reading]))
   const statusRows = resolveCrossAssetStatusRows(readings, rateReadings, {
@@ -225,7 +211,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
    * 调用点不拼句子；共用一份 `labelParams` 的旧写法已随契约取消——同一页两套气泡不行。
    * 没有快照时只留一行「暂不可用」，与原来那句同一个键。
    */
-  const historyHint: { lines: readonly HintLine[] } = snapshot ? {
+  const historyPopover: { lines: readonly HintLine[] } = snapshot ? {
     lines: [
       { labelKey: crossAssetTextKeys.hintAnalysis, params: { time: formatTime(snapshot.analysisEnd, 'second') } },
       {
@@ -246,12 +232,36 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       }
     ]
   } : { lines: [{ labelKey: crossAssetTextKeys.unavailable }] }
-  /** 图上画不出来的线（本窗内曲线全是空点）：图例标「未绘制」，原因进图标题的 ⓘ。 */
-  const undrawnChartLines = snapshot === undefined ? [] : (['index', 'btc', 'eth'] as const)
-    .filter(asset => (snapshot.curves[asset] ?? []).every(point => point.returnPercent === null))
-  const historyHintLines: readonly HintLine[] = undrawnChartLines.length === 0
-    ? historyHint.lines
-    : [...historyHint.lines, { labelKey: 'pages.intelligence.portal.dashboard.crossAsset.lineNotDrawnReason' }]
+  /**
+   * 本段没有可比数据的线（本窗内曲线全是空点）：图例在名字后面说「本段无数据」，原因进图标题的 ⓘ。
+   * 判据与图例同源（`linesWithoutComparableData`），所以「哪条线没有数据」只有一个说法；
+   * 美元/黄金也算——休市或源停更时它们的整窗都是空点，读者看到的正是「美元 DXY 本段无数据」（用户 2026-11-16）。
+   * 读失败不走这一支：通道没读到、格没启用、源没启用时线根本不进图例。
+   */
+  const noComparableChartLines = snapshot === undefined ? [] : linesWithoutComparableData(snapshot)
+  /**
+   * 被供应商**永久**拒绝的腿（读数自带 `sourceFailure`，判据在服务侧）：图例尾注要说「套餐不提供」，
+   * ⓘ 里给最近收盘最新的一条、其余合并成一句。整块 ⓘ 仍只有 4 行（界面设计 2026-11-16）：
+   * 三条固定说明 + 这里一行，所以"被拒"优先于"没有可比数据"，两者不叠加。
+   */
+  const planRefusedLines: readonly Readonly<{ line: CrossAssetChartLineId; name: string; atMs: number }>[] =
+    (['dxy', 'gold'] as const).flatMap(line => {
+      const reading = crossAssetMacroReading(readings, line)
+      return reading?.sourceFailure === undefined ? [] : [{ line, name: text.assetLabels[line], atMs: reading.atMs }]
+    }).sort((left, right) => right.atMs - left.atMs)
+  const refusalHint: HintLine | undefined = planRefusedLines.length === 0 ? undefined : {
+    labelKey: planRefusedLines.length > 1 ? crossAssetTextKeys.planNotServedReasonMore : crossAssetTextKeys.planNotServedReason,
+    params: {
+      name: planRefusedLines[0]!.name,
+      time: formatTime(new Date(planRefusedLines[0]!.atMs).toISOString(), 'second'),
+      count: String(planRefusedLines.length - 1)
+    }
+  }
+  const historyPopoverLines: readonly HintLine[] = refusalHint !== undefined
+    ? [...historyPopover.lines, refusalHint]
+    : noComparableChartLines.length === 0
+      ? historyPopover.lines
+      : [...historyPopover.lines, { labelKey: crossAssetTextKeys.noComparableDataReason }]
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
@@ -272,13 +282,22 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         </td>
       </tr>
     }
+    // 供应商不再提供这个品种：整行盖住（行组件模块里的那一个），原因只在图标题的 ⓘ 里。
+    if (row.id === 'dxy' || row.id === 'gold') {
+      const reading = crossAssetMacroReading(readings, row.id)
+      if (reading?.sourceFailure !== undefined) {
+        return <SourceUnavailableRow key={row.id} id={row.id} label={text.assetLabels[row.id]}
+          windows={crossAssetWindows.length} statusText={resolveProductText(crossAssetTextKeys.sourceRefused)} />
+      }
+    }
     return row.state === 'loading'
     ? <LoadingStatusRow key={row.id} id={row.id} text={text} />
     : row.state === 'planned'
       ? <PlannedStatusRow key={row.id} id={row.id} text={text} />
       : row.id === 'dxy' || row.id === 'gold'
         ? <MacroStatusRow key={row.id} id={row.id} text={text} formatTime={formatTime}
-            reading={crossAssetMacroReading(readings, row.id)} />
+            reading={crossAssetMacroReading(readings, row.id)}
+            {...(snapshotAsOfMs === undefined ? {} : { asOfMs: snapshotAsOfMs })} />
         : row.id === 'us10y' || row.id === 'realRate'
           ? <RatesStatusRow key={row.id} id={row.id} text={text} rates={rateBySeries}
               reading={rateBySeries.get(crossAssetRatesSeriesIds[row.id])!} />
@@ -288,9 +307,12 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
   }
   const dailyRowIds = ['us10y', 'realRate']
   // 关掉的格整行不画：不是 0，也不是「未接入」那种占位。
-  const visibleRows = hideStatusRows === undefined || hideStatusRows.length === 0
+  /** 被供应商永久拒绝的行：勾上「不显示来源不可用的行」时它们整行不出现。 */
+  const unavailableRowIds = (['dxy', 'gold'] as const).filter(id => crossAssetMacroReading(readings, id)?.sourceFailure !== undefined)
+  const visibleRows = (hideStatusRows === undefined || hideStatusRows.length === 0
     ? statusRows
-    : statusRows.filter(row => !hideStatusRows.includes(row.id))
+    : statusRows.filter(row => !hideStatusRows.includes(row.id)))
+    .filter(row => !(hideUnavailable && unavailableRowIds.includes(row.id as 'dxy' | 'gold')))
   // 跨资产图：三条线都不可用才整图不画（至少一条可用就照画）。
   const rowStateOf = (id: CrossAssetStatusId): CellStateKind | undefined => cellStateLabels === undefined ? undefined : rowStates?.[id]
   /** 有没有源没配好（未配置 / 未启用）：决定标题那颗是「启用数据」还是「再试一次」。 */
@@ -329,7 +351,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       {/* The left slot keeps its historical class name; its content is the cross-asset status block:
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
-        <CrossAssetStatusHeading text={text} resolveProductText={resolveProductText} {...(titleAction === undefined ? {} : { action: titleAction })} />
+        <CrossAssetStatusHeading text={text} resolveProductText={resolveProductText}
+          {...(titleAction === undefined ? {} : { action: titleAction })}
+          toggle={{
+            label: resolveProductText(crossAssetTextKeys.hideUnavailableRows),
+            checked: hideUnavailable,
+            onChange: setHideUnavailable
+          }} />
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
@@ -386,7 +414,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
       </div>
       {crossAssetReadingEnabled && !allChartLinesUnusable ? <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <FocusPopover
-          lines={historyHintLines}
+          lines={historyPopoverLines}
           resolveText={resolveProductText}
           trigger={(triggerProps) => (
             // The same IconButton as the status block's help: two explanations beside two titles
@@ -421,7 +449,9 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, macroState, 
         {snapshot && view.stale ? <p data-cross-asset-stale>{text.staleRead}</p> : null}
         {(() => {
           return snapshot ? <CrossAssetReturnChart curves={snapshot.curves} macroCurves={snapshot.macroCurves} forming={snapshot.forming}
-          hiddenLines={chartLinesHiddenBy([...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {})])}
+          hiddenLines={chartLinesHiddenBy([
+            ...(hideStatusRows ?? []), ...Object.keys(rowStates ?? {}), ...planRefusedLines.map(entry => entry.line)
+          ])}
           events={eventLines.lines} eventsCollapsed={eventLines.collapsed} onSelectEvent={selectEvent}
           text={{ ...text, assets: { ...text.assets, index: indexRowName(snapshot, text) },
             // The macro lines carry the very names the 市场状态 rows beside them carry: one instrument,

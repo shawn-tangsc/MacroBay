@@ -10,6 +10,7 @@ import type { IntelligenceSentimentAggregate } from '../schema/intelligenceSenti
 import type { IntelligenceSourceDefinition } from '../schema/intelligenceSource'
 import { MARKET_INTELLIGENCE_QUERY_CAVEATS } from './queryContracts'
 import { createMarketIntelligencePublicQueryService } from './publicQueryService'
+import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { resolveRuntimeStatesAsOf } from '../store/intelligenceRuntimeStateHistory'
 
 const AS_OF = '2026-07-08T10:30:00.000Z'
@@ -634,11 +635,11 @@ describe('publicQueryService hindsight regressions', () => {
 
   it('forwards the calendar freshness reader and degrades a failing one to unavailable', async () => {
     const service = createMarketIntelligencePublicQueryService({ pipeline: createMockPipeline({ items: [] }), listSourceDefinitions: () => [] })
-    const freshness = { state: 'available' as const, asOf: AS_OF, lastCollectedAt: null, sources: [
-      { descriptorId: 'macro-calendar-0xrouter-economic-data', lastCollectedAt: null },
-      { descriptorId: 'macro-calendar-0xrouter-financial-events', lastCollectedAt: null },
-      { descriptorId: 'macro-calendar-0xrouter-central-bank-activities', lastCollectedAt: null }
-    ] }
+    // `sources` 必须**恰好按当前 `feedByKind` 对齐**（换源之后是三个 Narwhal feed）：
+    // 拿旧源 id 当夹具，读侧校验会判形状不合格，于是这条用例红成「读不到」——那是夹具过期，
+    // 不是「读失败 → 可用但陈旧」的语义问题。
+    const freshness = { state: 'available' as const, asOf: AS_OF, lastCollectedAt: null,
+      sources: marketCalendarPublicPolicy.feedByKind.map((descriptorId) => ({ descriptorId, lastCollectedAt: null })) }
     service.setMarketCalendarQuery({ queryMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' }), readCollectionFreshness: async () => freshness })
     await expect(service.queryMarketCalendarFreshness()).resolves.toBe(freshness)
 

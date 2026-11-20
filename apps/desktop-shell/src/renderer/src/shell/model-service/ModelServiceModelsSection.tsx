@@ -155,6 +155,12 @@ export function ModelServiceModelsSection({
     .filter((group) => group.models.length > 0)
 
   const filterLabel = filtersOpen ? labels.hideModelFilters : labels.showModelFilters
+  /** 这一屏图标按钮的读屏名：键 → 句子只有这一张表，调用点不再用比较式硬编码。 */
+  const iconTextKeys: Readonly<Record<string, string>> = {
+    'modelService.filterModels': filterLabel,
+    'modelService.searchModels': labels.modelSearch,
+    'modelService.fetchModelList': syncHint ?? labels.fetchModelList
+  }
 
   return (
     <section className="model-service-section model-service-models" data-model-service-models>
@@ -169,7 +175,7 @@ export function ModelServiceModelsSection({
             expanded={filtersOpen}
             icon={Filter}
             onSelect={() => setFiltersOpen((current) => !current)}
-            resolveText={(key) => (key === 'modelService.filterModels' ? filterLabel : '')}
+            resolveText={(key) => iconTextKeys[key] ?? ''}
             size="sm"
             tooltipKey="modelService.filterModels"
             dataAttributes={{ 'data-models-filter-toggle': 'true' }}
@@ -179,7 +185,7 @@ export function ModelServiceModelsSection({
             icon={Search}
             onSelect={() => setSearchOpen((current) => !current)}
             pressed={searchOpen}
-            resolveText={(key) => (key === 'modelService.searchModels' ? labels.modelSearch : '')}
+            resolveText={(key) => iconTextKeys[key] ?? ''}
             size="sm"
             tooltipKey="modelService.searchModels"
             dataAttributes={{ 'data-models-search-toggle': 'true' }}
@@ -196,26 +202,33 @@ export function ModelServiceModelsSection({
             * 普通动作按档位：antd `Button` 默认档（不再挂 `model-service-pill`——胶囊在本界面没有第二处）。
             * 禁用态不配提示：禁用控件接不到焦点，提示就成鼠标专属。
             */}
-          {(() => {
-            const syncButton = (
+          {/*
+            * 禁用态与可点态**分成两段 JSX**：浮层只包可点的那一颗。
+            * 守卫判的是「Tooltip 的子元素里有没有 disabled」——共用 `syncButton` 变量会让它看见
+            * `disabled={syncDisabled}`，哪怕那个分支运行时并不套浮层；拆开写既过守卫，也照原样：
+            * 禁用时不给提示（禁用控件接不到焦点，提示等于落空），原因仍在该控件的可访问名里。
+            */}
+          {syncDisabled ? (
+            <Button
+              aria-label={syncHint ?? labels.fetchModelList}
+              data-models-sync
+              disabled
+              icon={<RefreshCw size={13} aria-hidden="true" />}>
+              {labels.fetchModelList}
+            </Button>
+          ) : (
+            <Tooltip
+              labelKey="modelService.fetchModelList"
+              resolveText={(key) => iconTextKeys[key] ?? ''}>
               <Button
                 aria-label={syncHint ?? labels.fetchModelList}
                 data-models-sync
-                disabled={syncDisabled}
                 icon={<RefreshCw size={13} aria-hidden="true" />}
                 onClick={onSyncModels}>
                 {labels.fetchModelList}
               </Button>
-            )
-            // 禁用态不配提示（接不到焦点）：这时不套浮层，而不是套一个空壳。
-            return syncDisabled ? syncButton : (
-              <Tooltip
-                labelKey="modelService.fetchModelList"
-                resolveText={(key) => (key === 'modelService.fetchModelList' ? (syncHint ?? labels.fetchModelList) : '')}>
-                {syncButton}
-              </Tooltip>
-            )
-          })()}
+            </Tooltip>
+          )}
           <ModelServiceClearModelsControl
             labels={labels}
             modelCount={modelCount + staleModelCount}
@@ -229,7 +242,7 @@ export function ModelServiceModelsSection({
             disabled={!canAddModel}
             icon={Plus}
             onSelect={onAddModel}
-            resolveText={(key) => (key === 'modelService.addModel' ? (addHint ?? labels.addModel) : '')}
+            resolveText={(key) => ({ 'modelService.addModel': addHint ?? labels.addModel } as Readonly<Record<string, string>>)[key] ?? ''}
             size="sm"
           />
         </span>

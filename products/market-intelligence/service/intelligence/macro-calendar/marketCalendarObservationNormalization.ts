@@ -26,11 +26,35 @@ import type {
  */
 export type MacroCalendarProviderObservation =
   Omit<MacroEconomicCalendarEventView, 'countryCode' | 'importance'> &
-  Readonly<{ countryCode: string | null; importance: 'high' | 'medium' | 'low' }>
+  Readonly<{
+    countryCode: string | null
+    // 市场行没有源给的「重要性」：观测表里那个 `medium` 是占位。分析侧若按重要性排序/筛选，
+    // 必须把这类行当「未分级」排除，别把占位当成我们判断过的值。
+    /**
+     * 可缺省（Chief 2026-11-14）：源没给就不写，**不拿 `medium` 占位**。
+     * 缺省 = 「未分级/无法判定」，与 `'low'` 不是一回事；按重要性筛选/排序的消费点必须处理缺席。
+     */
+    importance?: 'high' | 'medium' | 'low'
+    /**
+     * **指标码**（`US.CPI.NSA.YOY`）：分析侧要算「同一发布组最多几条」就必须有它，
+     * 没有码就查不到组，配额只能退回「按事件」——那等于没限流。
+     * 只加字段、不改判定：来源仍是页面事件已经算好的 `eventNameKey`。
+     */
+    eventNameKey?: string
+    /** `estimate` 是估算（GDP 即时预测那类），分析侧按身份取最新时靠它分辨。 */
+    rowKind?: 'release' | 'estimate'
+  }>
 
 export type MacroCalendarProviderObservationSet = Readonly<{
   observations: readonly MacroCalendarProviderObservation[]
   caveats: readonly string[]
+  /**
+   * 这一侧到底读没读到（可选，缺省按旧行为当可读）。
+   *
+   * 空数组有两种意思：读成功但这个月确实没有发布，或者根本读不到。分析侧要把它们分别说成
+   * 「空」和「不可用」，所以读成功但为空时必须带 `available`。
+   */
+  readState?: 'available' | 'unavailable'
 }>
 
 export const marketCalendarObservationPolicy = Object.freeze({
@@ -93,10 +117,10 @@ const eventFamilyByEventType: Readonly<Record<MarketCalendarEvent['eventType'], 
   'central-bank-activity': 'central-bank-activity'
 })
 
-/** Reuses the contract's own kind/descriptor alignment instead of restating it. */
+/** Reuses the contract's own kind/feed alignment instead of restating it. */
 const providerIdByEventType: Readonly<Record<MarketCalendarEvent['eventType'], string>> = Object.freeze(
   Object.fromEntries(marketCalendarPublicPolicy.kinds.map(
-    (kind, index) => [kind, marketCalendarPublicPolicy.descriptors[index]!]
+    (kind, index) => [kind, marketCalendarPublicPolicy.feedByKind[index]!]
   )) as Record<MarketCalendarEvent['eventType'], string>
 )
 
@@ -139,13 +163,16 @@ export function normalizeMarketCalendarEvent(event: MarketCalendarEvent): MacroC
   const eventKey = marketCalendarObservationEventKey(observationKey)
   return {
     eventKey,
+    ...(event.eventNameKey === undefined ? {} : { eventNameKey: event.eventNameKey }),
+    ...(event.rowKind === undefined ? {} : { rowKind: event.rowKind }),
     // No official release grouping is admitted for an unverified observation, so the
     // observation is its own group, exactly as the official Fed FOMC branch does.
     releaseGroupKey: eventKey,
     eventFamily: eventFamilyByEventType[event.eventType],
     titleKey: event.title,
     countryCode: event.countryCode,
-    importance: event.importance,
+    // 源没给就不带这个字段（契约已允许缺省）：不要拿一档默认值顶上去。
+    ...(event.importance === undefined ? {} : { importance: event.importance }),
     periodKey: periodKeyFor(event.scheduledAt),
     lifecycleState: actual ? 'released' : 'scheduled',
     coverage: marketCalendarObservationPolicy.coverage,

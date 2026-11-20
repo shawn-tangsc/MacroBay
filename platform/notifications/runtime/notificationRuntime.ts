@@ -31,7 +31,7 @@ import type { NotificationEventCatalog } from '../contracts/notificationEventCat
 import type { NotificationProducerOwnership } from '../contracts/notificationProducerOwnership'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import type { NotificationCopyLanguage } from '../../i18n/notificationCopy'
-import { toNotificationCenterItem } from './notificationCenterItem'
+import { projectNotificationCenterItem } from './notificationCenterProjection'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
@@ -52,7 +52,7 @@ import {
   type NotificationDeliveryContent
 } from '../runtime/notificationRouting'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
-import { NO_PUSH_CHANNEL, type PushChannelResolution } from '../delivery/pushChannelResolution'
+import { NO_PUSH_CHANNELS, type PushChannelsResolution } from '../delivery/pushChannelResolution'
 import { composeRedeliverSurface } from './notificationRedeliverSurface'
 import { composeSelfTestSurface } from './notificationSelfTestSurface'
 import { reportNarrowingWidened } from './notificationNarrowingTrace'
@@ -105,7 +105,7 @@ export type NotificationRuntimeDependencies = {
     conversationLabel: string | null
   } | null
   /** 目标通道的**唯一派生**（技术方案 §1），主推送/升级/重投共用；缺省＝一条都没有，绝不回退读旧字段。 */
-  resolvePushChannel?: () => Promise<PushChannelResolution>
+  resolvePushChannels?: () => Promise<PushChannelsResolution>
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
@@ -386,7 +386,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   const reportProviderCredential = (input: ProviderCredentialSignal) => reportProviderCredentialFlip(input, { load, persistWithDiagnostics, notifyChanged, submit: submitEvent, now: nowIso })
 
   // 两个面（设置面 / 投递面）的装配搬到 `notificationRuntimeSurfaces.ts`：这里只留接线一条。
-  const { settingsSurface, delivery } = composeNotificationRuntimeSurfaces(deps, {
+  const { settingsSurface, delivery, posterRecord } = composeNotificationRuntimeSurfaces(deps, {
     load,
     exclusive,
     persistWithDiagnostics,
@@ -394,26 +394,24 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     now: nowIso
   })
 
-  /**
-   * 一条记录给渲染层的样子：句子在这里解析（读的那一刻），键与参数留在这边。
-   *
-   * `category` 从**事件目录**取而不是存在记录上：目录是类型标签唯一来源（契约 v2.34），
-   * 记录只存 id。目录里没有这条事件（旧记录、已撤事件）就没有标签——界面不编一个。
-   * `language` 可由调用方一次取好传进来：列表要解析一整页，不该每条读一次设置。
-   */
+  /** 一条记录给渲染层的样子（`category` 取事件目录；没有就无标签）。实现见 `notificationCenterProjection`。 */
   async function centerItem(
     record: NotificationRecord,
     content?: NotificationDeliveryContent
   ): Promise<NotificationCenterItem> {
-    // 投递路径上正文刚解析过，直接传进来——不解析第二遍，否则同一屏可能出现两种说法。
-    const resolved = content ?? await delivery.resolveContent(record)
-    return toNotificationCenterItem(record, resolved, deps.catalog?.get(record.eventTypeId)?.category)
+    return projectNotificationCenterItem({
+      record,
+      // 投递路径上正文刚解析过，直接传进来——不解析第二遍，否则同一屏可能出现两种说法。
+      content: content ?? await delivery.resolveContent(record),
+      category: deps.catalog?.get(record.eventTypeId)?.category,
+      language: () => deps.getLanguage?.() ?? Promise.resolve('zh-CN' as const)
+    })
   }
 
   return {
     submit,
     /** 推送目标（唯一派生）：产品侧要读「发到哪条、几条可用」，别再造第二份三档判定。 */
-    resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
+    resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS),
 
     /**
      * 渲染层看到的那一份（落地约束 v1.2 §1）：应用内投递与列表共用**同一个**投影。
@@ -422,12 +420,13 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     toCenterItem: (record: NotificationRecord, content?: NotificationDeliveryContent): Promise<NotificationCenterItem> =>
       centerItem(record, content),
 
-    ...composeSelfTestSurface({ resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL),
+    ...composeSelfTestSurface({ resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS),
       submitRequest: (request) => submitEvent(request), now: nowIso }),
     ...settingsSurface,
+    ...posterRecord,
     reportProviderCredential,
 
-    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics, resolvePushChannel: deps.resolvePushChannel ?? (async () => NO_PUSH_CHANNEL) }),
+    ...composeRedeliverSurface({ getSettings: deps.getSettings, resolveContent: (record) => delivery.resolveContent(record), pushHook: deps.deliveryHooks?.push, now: nowIso, load, exclusive, persistWithDiagnostics, notifyChanged, diagnostics: deps.diagnostics, resolvePushChannels: deps.resolvePushChannels ?? (async () => NO_PUSH_CHANNELS) }),
 
     async initialize(): Promise<void> {
       await load()

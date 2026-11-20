@@ -1,7 +1,3 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
-
-import type { JsonFileStorage } from '../../storage/jsonFileStorage'
 import type {
   EventBusDiagnosticsPage,
   EventBusDiagnosticsQuery,
@@ -10,57 +6,32 @@ import type {
   PlatformEventEnvelope,
   PlatformEventDelivery,
   PlatformEventHandler,
-  PublishEventInput
+  PublishEventInput,
+  EventBusStoreDiagnosticIntegrity
 } from '../contracts/eventBusContracts'
 import { validatePublishEventInput } from '../contracts/eventBusValidation'
 import { createEventBusRegistry } from './eventBusRegistry'
 import { pruneEventBusState } from '../store/eventBusRetention'
+import { createEventBusStore, type EventBusStore, type EventBusStoreState } from '../store/eventBusStore'
 import {
-  createDefaultEventBusStoreState,
-  createEventBusStore,
-  normalizeEventBusStoreState,
-  type EventBusStore,
-  type EventBusStoreState
-} from '../store/eventBusStore'
+  createEventBusJsonStorage,
+  eventBusJsonStoragePolicy,
+  EventBusWriteBlockedError,
+  type EventBusStorage,
+  type EventBusStorageReadResult,
+  type EventBusWriteBlockedReason
+} from '../store/eventBusJsonStorage'
+
+// 适配器搬去 `store/eventBusJsonStorage.ts`：落盘点只有一个文件，`writeFile` / `rename` 只在那里。
+// 这两行再导出是为了不让既有调用点（IPC 注册、用例、模块出口）跟着改。
+export { createEventBusJsonStorage, eventBusJsonStoragePolicy, EventBusWriteBlockedError }
+export type { EventBusStorage, EventBusStorageReadResult }
 import type { EventConsumerRetryPolicy } from '../contracts/eventBusContracts'
 import { eventBusPersistentIdentityPolicy, synchronizeEventBusIdCounters } from '../contracts/eventBusContracts'
-
-export type EventBusStorage = JsonFileStorage<EventBusStoreState>
-
-export const eventBusJsonStoragePolicy = {
-  temporaryFileSuffix: '.next',
-  writeOrdering: 'requested-order',
-  backgroundFailureDiagnostic: 'Event bus background operation failed.'
-} as const
 
 export const eventBusDurablePublishPolicy = {
   deliveryScheduling: 'background-after-persist'
 } as const
-
-export function createEventBusJsonStorage(filePath: string): EventBusStorage {
-  let writeTail = Promise.resolve()
-
-  return {
-    async read() {
-      try {
-        return normalizeEventBusStoreState(JSON.parse(await readFile(filePath, 'utf8')))
-      } catch (error) {
-        if (isMissingFileError(error) || isInvalidJsonError(error)) return createDefaultEventBusStoreState()
-        throw error
-      }
-    },
-    async write(value) {
-      const requestedWrite = writeTail.then(async () => {
-        await mkdir(dirname(filePath), { recursive: true })
-        const temporaryPath = `${filePath}${eventBusJsonStoragePolicy.temporaryFileSuffix}`
-        await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
-        await rename(temporaryPath, filePath)
-      })
-      writeTail = requestedWrite.catch(() => undefined)
-      await requestedWrite
-    }
-  }
-}
 
 export type EventBusRuntimeDependencies = {
   store?: EventBusStore
@@ -75,6 +46,21 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
   let backgroundOperationTail = Promise.resolve()
   let dispatchInFlight: Promise<void> | null = null
   const runtimePublishedEventIds = new Set<string>()
+  /**
+   * 闸门状态：读到 `corrupt` / `future-version` 之后进入**阻断态**——半个字节都不写、不派发、
+   * 不裁剪。内存保持空，但「空」与「读不到」分开记账：诊断（第三笔）读这里，不读文件内容。
+   */
+  let blocked: Readonly<{
+    reason: EventBusWriteBlockedReason
+    /** 写进日志的那一档（比 `reason` 细一档：`invalid-json` / `shape` / `checksum-mismatch` / `future-version`）。 */
+    logReason: string
+    integrity: 'corrupt' | 'future-version'
+  }> | undefined
+  /**
+   * 文件本身的完整性结论，诊断原样读它。初始值：有存储的文件但还没读 → `empty`
+   * （主文件不存在与「读坏了」不是一件事）；纯内存运行时（没有存储）→ `ok`。
+   */
+  let integrity: EventBusStoreDiagnosticIntegrity = deps.storage ? 'empty' : 'ok'
 
   /**
    * 按保留期裁剪当前状态；删到东西才落盘（没删就不写，避免启动时做一次无意义的整份写回）。
@@ -83,6 +69,8 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
   async function pruneRetainedState(
     options?: { now?: string }
   ): Promise<{ removedEvents: number; removedDeliveries: number }> {
+    // 阻断态下裁剪**一个字节都不写**（防御性，与「任何 persist 都不写」同一道闸的第二次应用）。
+    if (blocked) return { removedEvents: 0, removedDeliveries: 0 }
     const result = pruneEventBusState(store.getState(), options)
     if (result.removedEvents === 0 && result.removedDeliveries === 0) {
       return { removedEvents: 0, removedDeliveries: 0 }
@@ -99,7 +87,26 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
     }
     if (!hydrationInFlight) {
       hydrationInFlight = (async () => {
-        store.replaceState(await deps.storage!.read())
+        const outcome = await deps.storage!.read()
+        if (outcome.integrity === 'corrupt' || outcome.integrity === 'future-version') {
+          // 读到了、但读不懂：进入阻断态。**不**把内存换成「空」去当默认值，也不写回。
+          const logReason = outcome.integrity === 'future-version' ? 'future-version' : outcome.problem
+          blocked = {
+            reason: outcome.integrity === 'future-version'
+              ? 'future-version'
+              : outcome.problem === 'checksum-mismatch' ? 'checksum-mismatch' : 'corrupt',
+            logReason,
+            integrity: outcome.integrity
+          }
+          integrity = outcome.integrity
+          // 一行日志，够排障用：不带文件内容、不带事件体。与诊断里的 `integrity`/`blocked` 是同一份事实。
+          console.warn(`event-bus-store-blocked reason=${logReason}`)
+          hydrated = true
+          return
+        }
+        blocked = undefined
+        integrity = outcome.integrity
+        store.replaceState(outcome.state)
         synchronizeEventBusIdCounters(store.getState().events, store.getState().deliveries)
         hydrated = true
         // 启动即裁一次：老文件不必等到第一次每日任务才缩小。
@@ -116,6 +123,8 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
   async function persist(): Promise<void> {
     if (!deps.storage) return
     await deps.storage.write(store.getState())
+    // 写成功了：文件现在是本版本写出的 v1（旧文件也在这一次写里升级完毕）。
+    integrity = 'ok'
   }
 
   function queueBackgroundOperation(operation: () => Promise<void>): void {
@@ -173,6 +182,22 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
       return pruneRetainedState(options)
     },
 
+    /**
+     * 显式归档阻断态的主文件（读者/诊断动作）。启动时**绝不**自动做：自动改名等于替读者决定
+     * 「数据不要了」。归档成功后主文件缺失，下一次读是 `empty`，写重新被允许。
+     */
+    async archiveCorruptStore() {
+      await ensureHydrated()
+      if (!blocked || !deps.storage?.archiveCorruptStore) return undefined
+      const archived = await deps.storage.archiveCorruptStore()
+      if (archived !== undefined) {
+        blocked = undefined
+        // 归档后主文件不存在 = 首次安装那一态；写重新被允许。
+        integrity = 'empty'
+      }
+      return archived
+    },
+
     async getDiagnostics(query: EventBusDiagnosticsQuery = {}): Promise<EventBusDiagnosticsPage> {
       await ensureHydrated()
       const recentEvents = store.listRecentEvents({ topic: query.topic, limit: query.limit })
@@ -198,7 +223,11 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
         failedDeliveries,
         deadLetterDeliveries,
         blockedDeliveries,
-        checkpoints: checkpoints as EventBusDiagnosticsPage['checkpoints']
+        checkpoints: checkpoints as EventBusDiagnosticsPage['checkpoints'],
+        // 「文件坏了所以写被拒」与「新功能自己写失败」在日志里长得像，诊断里必须一眼分开：
+        // `events: 0` + `integrity: 'corrupt'` + `blocked: true` 是两回事。
+        integrity,
+        blocked: blocked !== undefined
       }
     }
   }
@@ -215,13 +244,22 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
       }
     }
 
+    // 先记快照：写失败要把这一笔**从内存撤回**，否则「查询得到、重启后没有」——
+    // 更糟的是后续一次成功写会把它带出去（幽灵事件）。
+    const snapshot = store.getState()
     const event = store.appendEvent(normalized, now)
     runtimePublishedEventIds.add(event.eventId)
     const consumerIds = registry.findByTopic(event.topic).map((consumer) => consumer.consumerId)
     if (consumerIds.length > 0) {
       store.appendDeliveries(event, consumerIds)
     }
-    await persist()
+    try {
+      await persist()
+    } catch (error) {
+      store.replaceState(snapshot)
+      runtimePublishedEventIds.delete(event.eventId)
+      throw error
+    }
     return event
   }
 
@@ -230,6 +268,8 @@ export function createEventBusRuntime(deps: EventBusRuntimeDependencies = {}): E
     activeRegistry: ReturnType<typeof createEventBusRegistry>,
     persistState: () => Promise<void>
   ): Promise<void> {
+    // 阻断态下派发停：每一轮都要 persist，继续跑只会在日志里刷失败。
+    if (blocked) return
     if (dispatchInFlight) {
       await dispatchInFlight
     }

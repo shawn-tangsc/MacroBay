@@ -8,7 +8,6 @@ import type {
 } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
-import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 
 const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const enText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -43,34 +42,32 @@ function document(overrides: Partial<DailyBriefingDocument> = {}): DailyBriefing
   }
 }
 
-it('records "really nothing" as an info trace entry while the body stays silent', () => {
-  // 用户 2026-11-09：正文一个字不印（现状不动），但留痕区要能看出「不是漏了，是确实没有」。
+it('records a quiet window once, as an info row, in the wording the window actually had', () => {
+  // 用户 2026-11-16：正文不印这句（一空就整块不显示），信息留在「数据缺口与限制」：一条**提示**，
+  // 不是告警，也不带「去检查来源」这类动作——它说的是「这段时间确实没有」，不是「读不到」。
   const base = document()
-  const doc = document({
-    edition: { ...base.edition, windowHours: 24 },
-    news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } }
+  const issuesFor = (code: 'past-24h-no-release' | 'past-24h-no-high-impact-release') => briefingIssues({
+    document: document({
+      edition: { ...base.edition, windowHours: 24 },
+      news: { items: [], macro: [], notes: { macroEmpty: code } }
+    }),
+    text: zhText,
+    formatTime
   })
-  const issues = briefingIssues({ document: doc, text: zhText, formatTime })
-  const quiet = issues.find((issue) => issue.template === 'macro-quiet')!
-  expect(quiet).toMatchObject({
-    severity: 'info',
-    category: 'data',
-    title: '近 24 小时内没有高影响事件',
-    advice: '无需处理；记在这里是为了说明这一栏确实为空。'
-  })
-  // 分组行有名字，不是一个只有严重度的空标签。
-  const group = groupBriefingIssues(issues, zhText).find((item) => item.template === 'macro-quiet')!
-  expect(group.label).toBe('确实没有高影响事件')
-  // 英文同一句，不是中文模板套英文界面。
-  const enQuiet = briefingIssues({ document: doc, text: enText, formatTime }).find((issue) => issue.template === 'macro-quiet')!
-  expect(enQuiet.title).toBe('No high-impact event in the past 24 hours')
-  expect(enQuiet.advice).toBe('Nothing to do; recorded so an empty section is not mistaken for a gap.')
 
-  // 正文那句仍然一个字不印——这条守卫没改。
-  expect(briefingMacroEmptyCopy(doc, {
-    macroEmptyCodes: zhText.macroEmptyCodes,
-    macroUnreadable: zhText.macroUnreadable
-  })).toBeNull()
+  const cases = [
+    ['past-24h-no-release', zhText.pastWindow.noRelease],
+    ['past-24h-no-high-impact-release', zhText.pastWindow.noHighImpact]
+  ] as const
+  for (const [code, sentence] of cases) {
+    const issues = issuesFor(code)
+    const quiet = issues.filter((issue) => issue.template === 'macro-quiet')
+    expect(quiet, code).toHaveLength(1)
+    expect(quiet[0]!.severity, code).toBe('info')
+    expect(quiet[0]!.title, code).toBe(sentence)
+    // 一句解释就够：同一件事不再冒出一条日历告警（那会让「确实没有」看起来像「读不到」）。
+    expect(issues.some((issue) => issue.id.startsWith('data:calendar')), code).toBe(false)
+  }
 })
 
 function pulse(overrides: Partial<BriefingPulseRow> = {}): BriefingPulseRow {
@@ -158,7 +155,10 @@ describe('daily briefing issues', () => {
       text: zhText,
       formatTime
     })
-    expect(timeout.find((entry) => entry.id === 'data:calendar:calendar-catch-up-timeout')?.title).toContain('90')
+    // 读者只需知道「这次没在限定时间内完成」：90/20 秒是内部预算，写进句子就会随预算改动变成假话。
+    const timeoutTitle = timeout.find((entry) => entry.id === 'data:calendar:calendar-catch-up-timeout')?.title ?? ''
+    expect(timeoutTitle).toContain('限定时间内完成')
+    expect(timeoutTitle).not.toMatch(/\d/)
 
     const nothing = briefingIssues({
       document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-high-impact-release' } } }),
@@ -166,6 +166,50 @@ describe('daily briefing issues', () => {
       formatTime
     })
     expect(nothing.some((entry) => entry.id.startsWith('data:calendar'))).toBe(false)
+  })
+
+  // 用户 2026-11-16：来源已经启用时，建议里不许再说「去启用宏观日历」——那是把人引去改一个
+  // 本来就没问题的配置。启用与否由原因码本身决定：只有 `calendar-source-disabled` 才是没启用。
+  it('never tells the reader to enable a calendar that is already enabled', () => {
+    const enabled = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-collect-failed' } } }),
+      text: zhText,
+      formatTime
+    })
+    const failed = enabled.find((entry) => entry.id === 'data:calendar:calendar-collect-failed')!
+    expect(failed.advice).toBe(zhText.limits.advice.checkSource)
+    expect(failed.advice).not.toBe(zhText.limits.advice.checkCalendar)
+
+    const disabled = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-source-disabled' } } }),
+      text: zhText,
+      formatTime
+    })
+    const off = disabled.find((entry) => entry.id === 'data:calendar:calendar-source-disabled')!
+    expect(off.advice).toBe(zhText.limits.advice.checkCalendar)
+
+    // 补采失败要有自己的原因与建议：说「这次补采没成功」，不指向开关。
+    const catchUp = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-catch-up-failed' } } }),
+      text: zhText,
+      formatTime
+    })
+    const catchUpIssue = catchUp.find((entry) => entry.id === 'data:calendar:calendar-catch-up-failed')!
+    expect(catchUpIssue.title).toContain('补采')
+    expect(catchUpIssue.advice).toBe(zhText.limits.advice.checkSource)
+
+    // `#32`（用户 2026-11-19）：采到了但没写进库——来源是好的，建议必须指向写入，不许再劝人查网络。
+    const writeFailed = briefingIssues({
+      document: document({ news: { items: [], macro: [], notes: { macroEmpty: 'calendar-write-failed' } } }),
+      text: zhText,
+      formatTime
+    })
+    const writeIssue = writeFailed.find((entry) => entry.id === 'data:calendar:calendar-write-failed')!
+    expect(writeIssue.severity).toBe('warning')
+    expect(writeIssue.title).toContain('写入本地库')
+    expect(writeIssue.advice).toBe(zhText.limits.advice.calendarWriteFailed)
+    expect(writeIssue.advice).not.toBe(zhText.limits.advice.checkSource)
+    expect(writeIssue.advice).not.toBe(zhText.limits.advice.checkCalendar)
   })
 
   it('explains the fear-and-greed baseline and how long ago it was last published', () => {
@@ -197,8 +241,10 @@ describe('daily briefing issues', () => {
     }).find((entry) => entry.id === 'data:etf-btc:unavailable')!
     // The clock comes from this edition's own cutoff, not from the current settings.
     expect(noHistory.title).toBe('美国比特币现货基金：00:30 前无可用历史，最近交易日数据尚未返回')
-    expect(noHistory.source).toBe('0xRouter ETF')
-    expect(noHistory.advice).toContain('开盘后')
+    expect(noHistory.source).toBe('CryptoETF')
+    // T+1 之后「开盘后再生成」是错的推荐动作；这句只说 T+1 与次日上午。
+    expect(noHistory.advice).toContain('T+1')
+    expect(noHistory.advice).not.toContain('开盘后')
 
     // No readable cutoff: the sentence says only that the trading day has not arrived, and prints no time.
     const noTime = briefingIssues({

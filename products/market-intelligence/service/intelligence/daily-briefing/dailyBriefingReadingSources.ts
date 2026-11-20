@@ -1,9 +1,23 @@
+import type { MarketFactId } from '../../../contracts/factSources'
+
+import { allSources } from '../application/providerRegistry'
+
+/** The fact whose provider the briefing asks for instead of naming an id. */
+export const ETF_FACT_ID: MarketFactId = 'etf-net-flow'
+
+/**
+ * Sources that declare a fact, read from the registry each call. The provider is configuration,
+ * not a constant: adding a second source is one declaration, not an edit here.
+ */
+export function declaredSourceIdsForFact(factId: MarketFactId): readonly string[] {
+  return allSources().filter((source) => source.provides?.includes(factId) === true).map((source) => source.sourceId)
+}
+
 /** The source switches the daily briefing reads, in one place for the source and the read tools. */
 export const DAILY_BRIEFING_SOURCE_IDS = Object.freeze({
   fearGreed: 'alternative-fear-greed',
   funding: 'binance-futures-positioning',
   stablecoin: 'defillama-stablecoins',
-  etf: '0xrouter-aggregate-provider',
   /**
    * The macro rows the deterministic core-fact ensure may read. The dollar has two writers (the
    * licensed index and this product's basket), so either switch is enough for `dxy`; gold and the
@@ -36,7 +50,7 @@ export function dailyBriefingEnabledFromProfiles(
     fearGreed: enabled(DAILY_BRIEFING_SOURCE_IDS.fearGreed),
     funding: enabled(DAILY_BRIEFING_SOURCE_IDS.funding),
     stablecoin: enabled(DAILY_BRIEFING_SOURCE_IDS.stablecoin),
-    etf: enabled(DAILY_BRIEFING_SOURCE_IDS.etf),
+    etf: declaredSourceIdsForFact(ETF_FACT_ID).some(enabled),
     calendar: profiles.some((profile) => profile.sourceId.startsWith('macro-calendar-') && profile.enabled === true)
   })
 }

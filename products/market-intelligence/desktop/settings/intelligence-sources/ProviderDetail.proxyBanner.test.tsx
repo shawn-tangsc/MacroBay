@@ -253,7 +253,7 @@ function calendarPanelProvider(): ProviderView {
     healthMarker: 'none',
     sources: [
       calendar('macro-calendar-0xrouter-economic-data', '0xRouter 经济数据'),
-      calendar('macro-calendar-0xrouter-financial-events', '0xRouter 财经事件'),
+      calendar('macro-calendar-0xrouter-financial-events', '0xRouter 金融事件'),
       calendar('macro-calendar-0xrouter-central-bank-activities', '0xRouter 央行活动')
     ]
   }

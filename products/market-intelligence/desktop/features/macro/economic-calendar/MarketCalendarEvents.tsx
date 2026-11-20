@@ -10,8 +10,25 @@ import {
 } from '../../../../contracts/macro/marketCalendarSurprise'
 import { formatReadableAnalysisValue } from '../../../../contracts/marketAnalysisReadableText'
 import type { EconomicCalendarText } from './economicCalendarText'
+import { calendarCountryLabel } from './calendarCountryLabel'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
+import { EventSourceWritesBlocks, fieldConflicts } from './EventSourceWritesBlocks'
+import { EventValueRevisions } from './EventValueRevisions'
+import { useEventSourceWrites } from './useEventSourceWrites'
+import { officialSourceStateFor } from '../../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
+
+/**
+ * 来源显示名：**feed id → 名字**，认不出用「未标来源」，都不是就退回旧的通用名。
+ *
+ * 顺序按定稿：`sourceFeedId`（行上的真值）优先，旧 `source` 兜底。绝不把 feed id 原串印给读者，
+ * 也不把「不知道来源」写成「没有这条发布」。
+ */
+export function sourceLabel(text: { market: { source: string
+  sourceByFeed?: Readonly<Record<string, string>>; sourceUnknown?: string } }, source: string): string {
+  if (source === 'unspecified') return text.market.sourceUnknown ?? text.market.source
+  return text.market.sourceByFeed?.[source] ?? text.market.source
+}
 
 export function MarketCalendarInspector({ event, source, text }: { event: MarketCalendarEvent; source?: MarketCalendarSource; text: EconomicCalendarText }) {
   const timeZone = useShellTimeZone()
@@ -26,25 +43,129 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
   // the older reading: that is the rule this used to enforce by rendering nothing at all.
   const sourceAgrees = source !== undefined && source.eventType === event.eventType &&
     source.sourceObservedAt === event.sourceObservedAt
+  /**
+   * 「事件内容」那一段能说的两件事，都只从**这条记录自己的字段**取（用户 2026-11-13 #7）。
+   *
+   * 覆盖指标分三档，不许合并成一句话：
+   * - 记录里带了 `measureKeys` → 列出来；
+   * - 带了但是空数组 → 这条事件本来就不覆盖指标（讲话、会议），写「这条事件不覆盖指标」；
+   * - 字段根本没带 → 源这一条没给，写「源未给出」。
+   * 后两种是「没有」的两种来路，混成一句读者就分不清是源没给还是本来没有。
+   */
+  const measureKeys = event.measureKeys
+  /**
+   * **我们这边没有这两项，不等于源没给**（界面设计 2026-11-19）：`measure_keys_json` 只对部分来源写，
+   * 真库里 5240 条观测行有 **5034 条这一列是空的**（0xrouter 根本不提供）。
+   * 所以拿不到时写「未提供」——不能拿「源未给出」把我们的缺口说成源的问题。
+   */
+  const coverageText = measureKeys === undefined
+    ? text.details.contentNotCaptured
+    : measureKeys.length === 0
+      ? text.details.contentCoverageNone
+      : measureKeys.join(' · ')
+  /** 事件标识：身份键优先，其次源自己的事件 id；两样都没有才写「源未给出」。 */
+  const identityText = event.eventNameKey ?? event.seriesId ?? text.details.contentNotCaptured
+  /**
+   * 官网（用户 2026-11-19）：按**这一条的指标码**去码表取，与映射规则表「官网页」同一份数据、
+   * 同一个解析函数（`officialSourceStateFor`）。三态不许混：
+   * 有地址 → 机构 + 可点外链；有码待核 → 「待核」不可点；**没有码** → 明说没有对应指标码。
+   * 没有码不是「待核」——待核是「有码还没核」，两者混了读者会以为我们欠他一个链接。
+   *
+   * 码从哪来：**身份键优先**（`eventNameKey`，一条发布对应的那个指标），没有再退到
+   * 「覆盖指标」里的第一个码——一条事件覆盖多个指标时官网只能给一个，取第一个并说明它对应谁；
+   * 两样都没有才是真的没有码。
+   */
+  const officialMetricKey = event.eventNameKey ?? event.measureKeys?.[0]
+  const official = officialSourceStateFor(officialMetricKey)
+  /**
+   * 层级那一行的一句话：子项给母名，母项给分项列表（`、` 连接）。
+   * 需要的名字不齐时返回 `undefined`——**整行不显示**，比画一个「所属指标：源未给出」更少误导：
+   * 这一行本来就是补充信息，没有就不占位。
+   */
+  const hierarchy = event.hierarchy
+  const hierarchyText = hierarchy === undefined
+    ? undefined
+    : hierarchy.kind === 'child'
+      ? hierarchy.parentName === undefined ? undefined
+        : text.details.hierarchyOwned.replace('{name}', hierarchy.parentName)
+      : hierarchy.childNames === undefined || hierarchy.childNames.length === 0 ? undefined
+        : text.details.hierarchyChildren.replace('{names}',
+          hierarchy.childNames.join(text.details.hierarchySeparator))
+  /**
+   * 各来源记录（#47）：只有同时拿到**指标身份**和**期次**才读——没有期次会读回这个指标的
+   * 所有月份，几十期混成一块。日期取 `scheduledAt` 的日期部分（存的就是源给的发布日）。
+   */
+  const sourceWrites = useEventSourceWrites(event.eventNameKey === undefined ? undefined : {
+    metricKey: event.eventNameKey, scheduledDate: event.scheduledAt.slice(0, 10)
+  })
+  /**
+   * 预期是否唯一（#40 产品口径）：**两个来源的预期不同时，差异句整句不出现**——同一个实际值落在
+   * 两个预期之间时，「高于/低于」的符号会翻转。判据是「预期是否唯一」，不是「这一次碰巧同向」。
+   */
+  const consensusNotUnique = sourceWrites?.state === 'available'
+    && fieldConflicts(sourceWrites.rows).some((conflict) => conflict.field === 'consensus')
   const shownSource: MarketCalendarSource = sourceAgrees
     ? source
     : { eventType: event.eventType, status: 'success', sourceObservedAt: event.sourceObservedAt }
   return <aside className="mi-economic-calendar__inspector mi-market-calendar__inspector" aria-live="polite">
-    <p>{text.market.source} · {text.market.kinds[event.eventType]}</p><h2>{event.title}</h2>
+    <p>{sourceLabel(text, event.source)} · {text.market.kinds[event.eventType]}</p><h2>{event.title}</h2>
     <p><MarketCalendarSourceStatus source={shownSource} text={text} variant="full" /></p>
     <dl className="mi-economic-calendar__metadata">
-      <div><dt>{text.details.time}</dt><dd>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</dd></div>
+      {/* 合并后同一期可能发过多次（GDP 二读/三读）：**每一次排期都列出来**，只写合并后的那一个，
+          读者会把二读当初值。序号是事实（第几次），时间也是事实，两者之间不写阶段名。 */}
+      <div><dt>{text.details.time}</dt><dd>
+        {event.releaseDates !== undefined && event.releaseDates.length > 1
+          ? <span data-release-dates>{event.releaseDates.map((date, index) => <span key={date} data-release-date>
+            {text.details.releaseOrdinal.replace('{index}', String(index + 1))} · {date}{index === event.releaseDates!.length - 1 ? '' : '　'}
+          </span>)}</span>
+          : <>{calendarDisplayDate(event.scheduledAt, timeZone)} {calendarDisplayTime(event.scheduledAt, timeZone)} {timeZoneLabel}</>}
+      </dd></div>
       <div><dt>{text.market.observed}</dt><dd>{formatTime(event.sourceObservedAt, 'second')}</dd></div>
-      <div><dt>{text.details.source}</dt><dd data-market-country>{event.countryName ?? event.countryCode ?? text.market.unknownCountry} · {text.market.source}</dd></div>
-      <div data-market-importance><dt>{text.details.importance}</dt><dd>{text.market.importance[event.importance]}</dd></div>
+      <div><dt>{text.details.source}</dt><dd data-market-country>{calendarCountryLabel(event, text)} · {sourceLabel(text, event.source)}</dd></div>
+      {/* 源没给重要性就是「未提供」：不许挑一档顶上去（读者会以为那是源的判断）。 */}
+      <div data-market-importance><dt>{text.details.importance}</dt><dd>{event.importance === undefined
+        ? text.market.missingValue
+        : text.market.importance[event.importance as 'high' | 'medium' | 'low']}</dd></div>
     </dl>
+    {/* 各来源记录（#47）：一个来源一块，narwhal 与 0xrouter 各写什么并排看，不拼成一条。 */}
+    {sourceWrites?.state === 'available'
+      ? <EventSourceWritesBlocks rows={sourceWrites.rows} text={text} />
+      : null}
+    {/* 事件内容（用户 2026-11-13 #7；边界由 Chief 2026-11-16 划）：只用记录里已有的字段，
+        取不到就如实说，不拿别的事件凑。数据里还没有一句话式的事件描述，所以这一段现在能给的是
+        「它覆盖哪些指标」与「它是哪一条」；描述从哪来要产品定，落到库里之后在这里加一行。 */}
+    <section className="mi-calendar-content" data-calendar-content>
+      <h3>{text.details.content}</h3>
+      <dl className="mi-economic-calendar__metadata">
+        <div data-content-coverage><dt>{text.details.contentCoverage}</dt><dd>{coverageText}</dd></div>
+        <div data-content-identity><dt>{text.details.contentIdentity}</dt><dd>{identityText}</dd></div>
+        <div data-content-official={official.kind}><dt>{text.details.contentOfficial}</dt><dd>
+          {official.kind === 'verified'
+            // 外链走系统浏览器，不在应用内打开；读屏名写全（机构 + 完整地址）。
+            ? <a href={official.url} target="_blank" rel="noreferrer" data-official-link
+              title={`${official.agency} · ${official.basis}`}
+              aria-label={`${official.agency} · ${official.url}`}>{`${official.agency} · ${official.url}`}</a>
+            : official.kind === 'pending' ? text.details.contentOfficialPending : text.details.contentOfficialNoCode}
+        </dd></div>
+        {/* 指标层级（用户 2026-11-17）：子项说清「属于谁」，母项列出「由哪些分项组成」。
+            名字由服务端从层级表取；两样都拿不到时**整行不画**，不留空标签。 */}
+        {hierarchyText === undefined ? null : <div data-content-hierarchy>
+          <dt>{text.details.contentHierarchy}</dt><dd>{hierarchyText}</dd>
+        </div>}
+        {/* 数值修订（用户 2026-11-20）：只在有身份时出现；没有身份整块不渲染。 */}
+        <div data-content-revisions><EventValueRevisions event={event} text={text} /></div>
+      </dl>
+    </section>
     {event.eventType === 'economic-indicator' ? <div className="mi-economic-calendar__values">
       {(['consensus', 'providerActual', 'providerPrevious'] as const).map(key => <div key={key} data-market-value={key}>
         <span>{text.market[key]}</span><strong>{event[key]?.displayValue ?? text.market.missingValue}</strong>
       </div>)}
       {/* 预期差读契约同一函数：三种语态与看板卡片逐字一致，缺少预期时不出现任何数字。 */}
-      {event.providerActual ? <div data-market-value="surprise" data-surprise={toCalendarSurpriseView(surprise)}>
-        <span>{text.market.surprise}</span><strong>{surpriseText(surprise, text, language)}</strong>
+      {event.providerActual ? <div data-market-value="surprise" data-surprise={toCalendarSurpriseView(surprise)}
+        data-multi-consensus={consensusNotUnique ? 'true' : undefined}>
+        <span>{text.market.surprise}</span><strong>{consensusNotUnique
+          ? text.details.sourceWritesUncomparable
+          : surpriseText(surprise, text, language)}</strong>
       </div> : null}
     </div> : null}
     {event.officialLink ? <div data-linked-official-values>

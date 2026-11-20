@@ -176,12 +176,13 @@ describe('MarketAnalysisTimeline', () => {
     await flushReads()
 
     // Nothing applied yet: no error surface, and no empty state pretending the list is empty.
-    expect(container.textContent).not.toContain(text.unavailable)
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
     expect(container.querySelector('.mi-analysis-timeline__list')?.textContent ?? '').not.toContain(text.empty)
 
-    // The budget runs out, and only now does the failure become visible.
+    // The budget runs out, and only now does the failure become visible — 判据是统一错误面本身，
+    // 不是某一句话：那句「读不到」的措辞会随产品口径改，而「有没有出口」不会。
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)); await Promise.resolve() })
-    expect(container.textContent).toContain(text.unavailable)
+    expect(container.querySelector('[data-state="error"]')).not.toBeNull()
     expect(container.textContent).not.toContain('private failure')
   })
 
@@ -622,7 +623,11 @@ describe('MarketAnalysisTimeline', () => {
       return undefined
     }) }, modelProviders: { list: vi.fn(async () => []) } })
     const onOpenSettings = vi.fn()
-    const timeline = { state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(), requestState: 'idle' }
+    const timeline = {
+      state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(), requestState: 'idle',
+      // 这一例只关心设置入口；失败页的手工替身给空列表即可。
+      failedRuns: { loading: false, entries: [] }, ensureFailedRuns: vi.fn(), loadMoreFailedRuns: vi.fn()
+    }
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -980,6 +985,94 @@ describe('market analysis timeline client refusals', () => {
   })
 })
 
+describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-11-17）', () => {
+  const publishedRow = {
+    id: 'mi-tl-done', eventGroupId: 'mi-eg-done', analysisRunId: 'mi-ar-done', kind: 'analysis',
+    status: 'published', runKey: 'mi-ar-done', failureCode: null, occurredAt: asOf,
+    summaryRef: 'mi-as-done', safeTitle: '市场分析已生成', safeExcerpt: '市场情绪偏谨慎', version: 1,
+    triggerStatus: null, groupType: 'macro', groupSubject: '上一次那条结论'
+  }
+  // 服务侧对还没有发布的行：`safeTitle` 是空串、没有 summaryRef / safeExcerpt，
+  // 状态词与「正在解析」由界面文案表给，不由服务端给。
+  const runningRow = {
+    id: 'run:mi-ar-run', eventGroupId: 'mi-eg-run', analysisRunId: 'mi-ar-run', kind: 'analysis',
+    status: 'running', runKey: 'mi-ar-run', failureCode: null, occurredAt: asOf,
+    summaryRef: null, safeTitle: '', safeExcerpt: null, version: 1, triggerStatus: null,
+    groupType: 'macro', groupSubject: '美联储官员暗示放缓缩表'
+  }
+
+  /** 时间轴页面数据；其余 IPC（设置）给一个读不出来的空载荷，面板照常可见。 */
+  const page = (items: readonly unknown[]) => (method: string): unknown =>
+    method === 'marketAnalysis.listTimeline'
+      ? { schemaVersion: 1, items, nextCursor: null }
+      : { schemaVersion: 1, items: [], nextCursor: null }
+
+  async function mount(stub: (method: string) => unknown): Promise<HTMLDivElement> {
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => stub(method)) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+    return container
+  }
+
+  it('running 行显示「正在解析」且不可点，「立即分析」禁用并给出原因', async () => {
+    const container = await mount(page([runningRow]))
+    const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
+    // 空标题的 running 行必须活下来：sanitizer 若按「标题不可为空」判死，整屏会一条不剩。
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.textContent).toContain(text.status.running)
+    // 没有摘要可看，所以不可点：不是按钮，也不出 chevron。
+    expect(container.querySelector('button.mi-analysis-timeline__entry')).toBeNull()
+    expect(container.querySelector('.mi-analysis-timeline__chevron')).toBeNull()
+    // 禁用不能只留一个灰块：旁边必须有原因，且原因与禁用读同一个派生值。
+    const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
+    expect(action?.disabled).toBe(true)
+    expect(container.textContent).toContain(text.analysisInFlightReason)
+  })
+
+  it('已发布行与 running 行同屏时，两条都显示', async () => {
+    const container = await mount(page([publishedRow, runningRow]))
+    const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
+    expect(rows).toHaveLength(2)
+    expect(container.textContent).toContain(text.status.published)
+    expect(container.textContent).toContain(text.status.running)
+  })
+
+  it('同一条运行：runKey 不变 → 那一行变「已发布」，条数不变、按钮恢复可点', async () => {
+    let items: readonly unknown[] = [runningRow]
+    let reload: (() => Promise<void>) | undefined
+    function WithReload(): React.ReactElement {
+      const timeline = useMarketAnalysisTimeline({ text })
+      reload = async () => { await timeline.load() }
+      return createElement(MarketAnalysisTimeline, { text, timeline })
+    }
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => page(items)(method)) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(WithReload)))
+    await flushReads()
+    expect(container.querySelectorAll('.mi-analysis-timeline__entry')).toHaveLength(1)
+    expect(container.textContent).toContain(text.status.running)
+
+    // 同一次运行发布：`id` 换成真实时间轴行 id，`runKey` 不变——列表靠它认行，所以不是删一行加一行。
+    items = [{ ...publishedRow, id: 'mi-tl-after-run', analysisRunId: 'mi-ar-run', runKey: 'mi-ar-run' }]
+    await act(async () => { await reload?.() })
+    await flushReads()
+
+    const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
+    expect(rows).toHaveLength(1)
+    expect(container.textContent).toContain(text.status.published)
+    expect(container.textContent).not.toContain(text.status.running)
+    // 跑到终态 → 按钮恢复可点，原因句也一起消失。
+    const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
+    expect(action?.disabled).toBe(false)
+    expect(container.textContent).not.toContain(text.analysisInFlightReason)
+  })
+})
+
 /** Product calls other than the panel's own settings read, which every mount performs. */
 function productCalls(invoke: { mock: { calls: unknown[][] } }): unknown[][] {
   return invoke.mock.calls.filter(([, method]) => method !== 'marketAnalysis.getSettings')
@@ -989,3 +1082,308 @@ function productCalls(invoke: { mock: { calls: unknown[][] } }): unknown[][] {
 function labelled(button: Element, text: string): boolean {
   return (button.textContent ?? '').replace(/\s+/gu, '') === text.replace(/\s+/gu, '')
 }
+
+/**
+ * 时间轴自己读不到时，不许落成「暂无已发布的消息分析」（2026-11-17，模块启动失败那次）。
+ * 那一句在说「你没有分析」，而事实是「这次读不到」——两件事，两种面。
+ */
+describe('时间轴读失败：错误态 + 重试，不是「暂无」', () => {
+  it('listTimeline 抛 product-runtime-unavailable → 统一错误面与重试，且不出现「暂无」', async () => {
+    vi.useFakeTimers()
+    let listReads = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') { listReads += 1; throw new Error('product-runtime-unavailable') }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    // 有界重试跑完（10 次 / 30s 预算）才落失败态。
+    await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
+
+    expect(container.textContent).not.toContain(text.empty)
+    const stateView = container.querySelector('[data-state="error"]')
+    expect(stateView).not.toBeNull()
+    // 不再是那句没有出口的裸 <p role="alert">。
+    expect(container.querySelector('p[role="alert"]')).toBeNull()
+    const retry = stateView?.querySelector<HTMLButtonElement>('button.state-view__action')
+    expect(retry).not.toBeNull()
+    const before = listReads
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(listReads).toBeGreaterThan(before)
+    vi.useRealTimers()
+  })
+})
+
+/**
+ * 成功 / 失败两个页签（用户 2026-11-18 直接要求）。
+ *
+ * 成功页读 `listTimeline`；失败页读**独立的** `listFailedRuns`（按运行分页，能看到全部失败）。
+ * 判据：① 两页各行其行，互不串门；② 标题那行不再出现；③ 切页签不重置已加载；④ 120 条失败
+ * 翻三页取完且无重复；⑤ 旧注入的失败行与新读口同一次运行**只出现一行**。
+ */
+describe('成功 / 失败两个页签', () => {
+  const publishedEntry = (index: number) => ({
+    id: `mi-tl-${index}`, eventGroupId: 'mi-eg-1', analysisRunId: `mi-ar-${index}`, kind: 'analysis' as const,
+    status: 'published' as const, runKey: `mi-ar-${index}`, failureCode: null,
+    occurredAt: `2026-11-17T20:${String(index).padStart(2, '0')}:00.000Z`, summaryRef: `mi-as-${index}`,
+    safeTitle: '市场分析已生成', safeExcerpt: '已发布的结论正文', version: 1, triggerStatus: null,
+    groupType: 'sentiment', groupSubject: '新闻标题'
+  })
+  /** 失败运行行：没有摘要，`safeTitle` 空（服务侧约定）。 */
+  const failedRun = (tag: string, occurredAt = '2026-11-18T00:54:00.000Z') => ({
+    id: `run:${tag}`, eventGroupId: 'mi-eg-1', analysisRunId: tag, runKey: tag,
+    kind: 'analysis' as const, status: 'failed' as const, failureCode: 'analysis-provider-error',
+    occurredAt, summaryRef: null, safeTitle: '', safeExcerpt: null, version: 1, triggerStatus: null,
+    groupType: null, groupSubject: null
+  })
+
+  type FailedPage = { items: unknown[]; nextCursor: string | null }
+
+  async function mount(input: Readonly<{
+    timeline?: readonly unknown[]
+    failedPages?: Readonly<Record<string, FailedPage>>
+  }>): Promise<HTMLDivElement> {
+    const failedPages = input.failedPages ?? {}
+    const invoke = vi.fn(async (_product: string, method: string, payload?: { cursor?: string }) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: input.timeline ?? [], nextCursor: null }
+      if (method === 'marketAnalysis.listFailedRuns') {
+        const cursor = payload?.cursor ?? ''
+        return { schemaVersion: 1, ...(failedPages[cursor] ?? { items: [], nextCursor: null }) }
+      }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+    return container
+  }
+
+  const visiblePanel = (container: HTMLElement): Element | undefined =>
+    Array.from(container.querySelectorAll('[role="tabpanel"]')).find((panel) => !panel.hasAttribute('hidden'))
+  const tab = (container: HTMLElement, label: string): HTMLButtonElement | undefined =>
+    Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((button) => button.textContent === label)
+  const openFailed = async (container: HTMLElement): Promise<void> => {
+    await act(async () => { tab(container, text.tabFailed)?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flushReads()
+  }
+
+  it('只在失败页的行不出现在成功页，反之亦然', async () => {
+    const container = await mount({
+      timeline: [publishedEntry(1)],
+      failedPages: { '': { items: [failedRun('mi-ar-fail')], nextCursor: null } }
+    })
+    const [successPanel, failedPanel] = Array.from(container.querySelectorAll('[role="tabpanel"]')) as [Element, Element]
+
+    // 成功页：有那条已发布，没有失败行
+    expect(successPanel.querySelector('[data-entry-status="failed"]')).toBeNull()
+    expect(successPanel.textContent).toContain('已发布的结论正文')
+    // 默认停在成功页
+    expect(visiblePanel(container)).toBe(successPanel)
+
+    await openFailed(container)
+    expect(visiblePanel(container)).toBe(failedPanel)
+    // 失败页：那条失败在，已发布正文不在
+    expect(failedPanel.querySelector('[data-entry-status="failed"]')).not.toBeNull()
+    expect(failedPanel.textContent).not.toContain('已发布的结论正文')
+  })
+
+  it('标题那行不再出现，页签用「成功 / 失败」', async () => {
+    const container = await mount({ timeline: [publishedEntry(1)] })
+    // 原来那行 <h2>{text.timeline}</h2> 没了（要删的就是这一行）
+    expect(container.querySelector('.mi-analysis-timeline__list h2')).toBeNull()
+    expect(container.textContent).not.toContain(text.timeline)
+    // 页签标签与可访问名
+    expect(tab(container, text.tabSuccess)).toBeDefined()
+    expect(tab(container, text.tabFailed)).toBeDefined()
+    expect(container.querySelector('[role="tablist"]')?.getAttribute('aria-label')).toBe(text.tabsAria)
+  })
+
+  it('切页签不重置已加载的列表', async () => {
+    const container = await mount({ timeline: Array.from({ length: 10 }, (_, index) => publishedEntry(index)) })
+    const count = (): number => container.querySelectorAll('.mi-analysis-timeline__entry').length
+    const more = (): HTMLButtonElement | undefined =>
+      Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.loadMore)
+    if (more() !== undefined) await act(async () => { more()!.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const grown = count()
+    await openFailed(container)
+    await act(async () => { tab(container, text.tabSuccess)?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(count()).toBe(grown)
+  })
+
+  it('120 条失败：翻三页取完，无重复', async () => {
+    const pageOne = Array.from({ length: 50 }, (_, index) => failedRun(`mi-ar-a${index}`, `2026-11-18T00:${String(index).padStart(2, '0')}:00.000Z`))
+    const pageTwo = Array.from({ length: 50 }, (_, index) => failedRun(`mi-ar-b${index}`, `2026-11-17T23:${String(index).padStart(2, '0')}:00.000Z`))
+    const pageThree = Array.from({ length: 20 }, (_, index) => failedRun(`mi-ar-c${index}`, `2026-11-17T22:${String(index).padStart(2, '0')}:00.000Z`))
+    const container = await mount({
+      timeline: [publishedEntry(1)],
+      failedPages: {
+        '': { items: pageOne, nextCursor: 'c1' },
+        c1: { items: pageTwo, nextCursor: 'c2' },
+        c2: { items: pageThree, nextCursor: null }
+      }
+    })
+    await openFailed(container)
+
+    // 首屏一页：读一次，只看到第一屏那几条（不是 120 条）
+    const failedPanel = (): Element => Array.from(container.querySelectorAll('[role="tabpanel"]'))[1]!
+    const rows = (): Element[] => Array.from(failedPanel().querySelectorAll('.mi-analysis-timeline__entry'))
+    expect(rows().length).toBeGreaterThan(0)
+    expect(rows().length).toBeLessThan(50)
+
+    // 一路「加载更多」翻到底：三轮之后 120 条全在，且键不重复
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const more = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.loadMore)
+      if (more === undefined) break
+      await act(async () => { more.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      await flushReads()
+    }
+    const keys = rows().map((row) => row.getAttribute('data-key') ?? row.textContent)
+    expect(rows()).toHaveLength(120)
+    expect(new Set(keys).size).toBe(120)
+  })
+
+  it('旧注入的失败行与新读口同一次运行 → 失败页只有一行', async () => {
+    // 旧行为：`listTimeline` 首屏仍会补进这条失败行；新读口也返回同一次运行。
+    const injected = failedRun('mi-ar-same')
+    const container = await mount({
+      timeline: [publishedEntry(1), injected],
+      failedPages: { '': { items: [failedRun('mi-ar-same')], nextCursor: null } }
+    })
+    await openFailed(container)
+    const failedPanel = Array.from(container.querySelectorAll('[role="tabpanel"]'))[1] as Element
+    expect(failedPanel.querySelectorAll('.mi-analysis-timeline__entry')).toHaveLength(1)
+  })
+})
+
+/**
+ * 页头那颗重跑按钮也按组类别（用户 2026-11-18）：消息面组不给，市场分析组照旧。
+ */
+describe('页头的重跑按钮按组类别出现', () => {
+  const entryWithGroup = (groupType: string) => ({
+    id: `mi-tl-${groupType}`, eventGroupId: `mi-eg-${groupType}`, analysisRunId: `mi-ar-${groupType}`,
+    kind: 'analysis' as const, status: 'published' as const, runKey: `mi-ar-${groupType}`, failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-1', safeTitle: '标题', safeExcerpt: '结论',
+    version: 1, triggerStatus: null, groupType, groupSubject: '标题'
+  })
+
+  async function mountWithGroup(groupType: string): Promise<HTMLDivElement> {
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [entryWithGroup(groupType)], nextCursor: null }
+      if (method === 'marketAnalysis.listFailedRuns') return { schemaVersion: 1, items: [], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    }) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+    return container
+  }
+  const refresh = (container: HTMLElement): Element | undefined =>
+    Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.refreshAnalysis)
+
+  it('sentiment 组：页头没有「立即分析」', async () => {
+    const container = await mountWithGroup('sentiment')
+    expect(refresh(container)).toBeUndefined()
+  })
+
+  it('市场分析组：页头有「立即分析」，文案一字不变', async () => {
+    const container = await mountWithGroup('macro')
+    expect(refresh(container)?.textContent).toBe(text.refreshAnalysis)
+  })
+})
+
+/**
+ * 同时有「正在解析」与「失败」时（Chief 点名要带的回归项）：
+ * 顺序照服务给的倒序（新的在上），状态各自正确——running 在成功页、failed 在失败页，两页都不串。
+ */
+describe('running 与 failed 同时存在时的顺序与状态', () => {
+  const base = {
+    eventGroupId: 'mi-eg-1', kind: 'analysis' as const, version: 1, triggerStatus: null,
+    groupType: 'macro', groupSubject: '美联储官员暗示放缓缩表'
+  }
+  const published = { ...base, id: 'mi-tl-old', analysisRunId: 'mi-ar-old', runKey: 'mi-ar-old', status: 'published' as const, failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-old', safeTitle: '标题', safeExcerpt: '已发布的结论正文' }
+  const failed = { ...base, id: 'run:mi-ar-fail', analysisRunId: 'mi-ar-fail', runKey: 'mi-ar-fail', status: 'failed' as const,
+    failureCode: 'analysis-provider-error', occurredAt: '2026-11-18T08:06:00.000Z', summaryRef: null, safeTitle: '', safeExcerpt: null }
+  const running = { ...base, id: 'run:mi-ar-live', analysisRunId: 'mi-ar-live', runKey: 'mi-ar-live', status: 'running' as const,
+    failureCode: null, occurredAt: '2026-11-18T09:10:00.000Z', summaryRef: null, safeTitle: '', safeExcerpt: null }
+
+  it('成功页：running 在 published 之前；失败页：只有那条 failed，且状态词各归各位', async () => {
+    vi.stubGlobal('platform', { products: { invoke: vi.fn(async (_product: string, method: string) => {
+      // 服务侧按 occurredAt 倒序：running 09:10 → failed 08:06 → published 前一日 20:10
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [running, failed, published], nextCursor: null }
+      if (method === 'marketAnalysis.listFailedRuns') return { schemaVersion: 1, items: [failed], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    }) } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    await flushReads()
+
+    const panels = Array.from(container.querySelectorAll('[role="tabpanel"]')) as [Element, Element]
+    const successRows = Array.from(panels[0].querySelectorAll('.mi-analysis-timeline__entry'))
+    expect(successRows).toHaveLength(2)
+    // 顺序：新的在上（running 09:10 在 published 20:10 之前）
+    expect(successRows[0]?.textContent).toContain(text.status.running)
+    expect(successRows[1]?.textContent).toContain(text.status.published)
+    // 失败行不进成功页
+    expect(panels[0].querySelector('[data-entry-status="failed"]')).toBeNull()
+
+    const failedTab = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((button) => button.textContent === text.tabFailed)
+    await act(async () => { failedTab?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flushReads()
+    const failedRows = Array.from(panels[1].querySelectorAll('.mi-analysis-timeline__entry'))
+    expect(failedRows).toHaveLength(1)
+    expect(failedRows[0]?.textContent).toContain(text.status.failed)
+    expect(failedRows[0]?.textContent).toContain(text.failureReasons['analysis-provider-error'])
+  })
+  it('says the original record is out of retention instead of telling the reader to retry', async () => {
+    // 2026-11-20：真实拒因是新闻证据引不出来（原始记录已不在保留期），旧句子是
+    // 「重新分析请求未成功」——读者会一直点一个永远不会成功的按钮。
+    const timeline = {
+      state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(),
+      requestState: 'insufficient-evidence',
+      failedRuns: { loading: false, entries: [] }, ensureFailedRuns: vi.fn(), loadMoreFailedRuns: vi.fn()
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(MarketAnalysisTimeline, { text, timeline: timeline as never } as never)))
+    await flushReads()
+
+    expect(document.body.textContent).toContain(text.analysisInsufficientEvidence)
+    expect(document.body.textContent).not.toContain(text.analysisRefreshFailed)
+  })
+
+  it('says no usable model when the request is refused for that reason', async () => {
+    // 2026-11-20 用户点「重新生成分析」被拒：旧句子是「重新分析请求未成功」，读者以为要重试。
+    // 真实原因是没有可用模型；这一档必须让读者看到该改哪里。
+    const timeline = {
+      state: { entries: [], loading: false, error: null }, select: vi.fn(), reload: vi.fn(),
+      requestState: 'provider-not-ready',
+      failedRuns: { loading: false, entries: [] }, ensureFailedRuns: vi.fn(), loadMoreFailedRuns: vi.fn()
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(MarketAnalysisTimeline, { text, timeline: timeline as never } as never)))
+    await flushReads()
+
+    expect(document.body.textContent).toContain(text.analysisProviderNotReady)
+    expect(document.body.textContent).not.toContain(text.analysisRefreshFailed)
+  })
+
+})

@@ -21,13 +21,16 @@
 | On / off | antd `Switch` | hand-written `role="switch"` | **human review** |
 | Drawer / modal header action | the header's `actions` slot (12px from close, one action) | stretching the title row with product CSS | **human review** (component test only) |
 | Buttons | primary / secondary / icon / inline text / destructive — one tier per action | a hand-drawn pill, a 28px icon button, red only on hover | **human review** |
-| Inline text action | `.text-action` | a bordered box inside a sentence | **human review** |
+| Inline text action (a "retry / shorten the lede / show details" inside a sentence, a notice bar, or a status line) | `<Button type="text" size="small" className="text-action">` | `type="link"` (antd `colorLink` is not a token — it introduces a second interaction colour); a hand-written `<button>`; per-call-site antd default overrides (`height` / `padding` / `font-size`) | **human review**: `type="link"` may only go down (baseline 2026-11-12: **12 sites in 8 files**, to be cleared); once it reaches 0, any new one is rejected |
 | Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
 | Card-level action | **on the card title row, right side**: one action (enable source / retry) whenever any source the card depends on is unconfigured or unreadable; the body only names the missing cell | a second copy of that action inside the card; two entries for one action on a screen | **human review** (criterion below) |
 
 **A card-level action lives only on the title row (2026-11-11).** If any source a card depends on is unconfigured or unreadable, the action (enable source / retry) sits on the **right of the card title row**; the body only names the missing cell and never repeats the action. **One action, one entry per screen.**
 Criterion: any source unconfigured → the title row has it; everything configured → no action; count of that action on the screen = 1.
 **Exception:** when **none** of the sources a card depends on is configured, the action moves into the content-area veil, centred; the title row carries no action and the card still holds exactly one entry. Criterion: with nothing configured the card has exactly one focusable element and no title-row action.
+
+**The inline-text-action rule forbids writing the appearance yourself, not using the class (2026-11-12, UI design final).** `.text-action` (`platform/ui/styles/textAction.css`) is designed to sit on an antd `Button`: it supplies `--accent`, the underline, the `2px` focus ring and the disabled state (`--muted`, no underline). A call site adds no size or colour of its own. The three rules in `dailyBriefing.css` that override antd defaults are the counterexample.
+**Register the exception:** links that are not actions (a file download `<a download>`, an external `<a href>`) stay anchors and are out of scope; if one appears, record it as "the component cannot express this" with the reason.
 
 ## 2. Type and weight
 
@@ -77,6 +80,7 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | `--danger` | destructive and failure text | decoration, emphasis |
 | `--warning` | caution that is not a failure | errors |
 | `--success` | confirmed / healthy | "no data" |
+| `--info` | **Direction**: "below expectation" border/ink; on the light theme it outlines rather than fills | Any good/bad verdict — a high CPI is not "good" |
 | `--mi-dashboard-*` | dashboard semantic colours | borrowing across modules |
 
 Three gates, each with one hole:
@@ -100,3 +104,18 @@ So **wrong-colour-for-meaning and non-foreground danger have no gate**; keep bot
 - Print the same fact twice on one row.
 - Put explanatory prose in the body — scope notes, implementation detail, reassurance ("only affects…", "will not affect…").
 - Offer **Retry on an unrecoverable failure** (an official source returning 403, data written by another version) — a retry that must fail is a fake control. Say "unavailable", give the reason, and say nobody knows when it will recover.
+
+## 6. Animation
+
+**Rotation belongs to loading — with exactly one named exception.** By default only `loadingState.css` may rotate (a spinner means "in progress"). The single exception is the clock card's decorative sweep, and it must be **registered by name**, never waved through as a category:
+
+| | |
+|---|---|
+| Exception | `.mi-clock__orbit` in `products/market-intelligence/desktop/pages/intelligence/clockCard.css` (that selector only) |
+| Form | The gradient fan rotates itself: `animation: mi-clock-spin 8s linear infinite`, `@keyframes { to { transform: rotate(360deg) } }`, `transform-origin: 156px 153px` |
+| Why it cannot be confused with loading | While loading, the whole block is replaced by `loadingState`, so the two are never on screen together; and it is not a progress indicator — it is there whether or not anything is happening |
+| Reduced motion | `animation: none`, and the light **must stay visible** (frozen in place). **`display: none` is forbidden** — on 2026-11-15 it was hidden without telling anyone, the user read it as broken, and it cost two hours |
+
+**Check:** `loadingStandard` reads the rule as "any `rotate` animation outside this one named exception fails". Add a rotation anywhere else and the guard must fail; delete this exception and the clock card's sweep test must fail.
+
+**Tell the user about visual changes.** Before stopping, hiding or replacing anything the user can see, say in the group which element, what it becomes, and why. A silent visual change is the same class of problem as silently deleting a feature: the user thinks it broke and nobody knows why.

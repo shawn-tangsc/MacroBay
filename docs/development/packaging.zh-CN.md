@@ -10,10 +10,12 @@
 ## 当前支持范围
 
 - **macOS（arm64 + x64）**：`pnpm dist:mac` 产出 arm64 的 `.dmg`；`pnpm dist:mac:x64` 产出 x64 的
-  `.dmg`（必须在 Intel 机器上跑，或先装 x64 的 agent CLI 再交叉构建）。arm64 已验证从挂载到看板正常
-  渲染；x64 只做到构建与文件架构校验，**尚未在 Intel 真机上验收**。
+  `.dmg`（必须在 Intel 机器上跑，或先装 x64 的 agent CLI 再交叉构建）。arm64 构建通过；0.4.0 有用户
+  实际使用，0.4.1 起无真机安装记录；x64 只做到构建与文件架构校验，**尚未在 Intel 真机上验收**。
 - **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。发布 workflow 在 `windows-latest` 上构建
-  它，构建也已在 Windows 11 x64 真机上跑通。安装后的运行态尚未验收。
+  它，构建也已在 Windows 11 x64 真机上跑通。安装后的运行态未做真机安装验收（缺 Windows 环境）。
+
+安装验收逐条记在[安装验收记录](./install-verification.zh-CN.md)，那里没有记录的平台就是没验收。
 - **Linux**：尚未配置打包。
 
 ## CI 校验与发布

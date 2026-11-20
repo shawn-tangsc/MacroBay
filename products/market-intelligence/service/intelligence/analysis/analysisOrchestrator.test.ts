@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { AnalysisRun, EvidenceSnapshot, EventGroup } from '../../../contracts/marketAnalysisContracts'
 import { createAnalysisOrchestrator, marketAnalysisInvocationPolicy } from './analysisOrchestrator'
+import { createModelNetworkReadinessGate } from './modelNetworkReadiness'
 import { analysisUpstreamRetryPolicy } from './analysisUpstreamRetry'
+import { buildAnalysisReferenceMap } from './analysisReferenceHandles'
+import { formatShellInstant } from '@platform/ui/time/shellTimeFormat'
 
 const asOf = '2026-09-28T00:00:00.000Z'
 
@@ -89,14 +92,14 @@ describe('analysisOrchestrator', () => {
       return { ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', providerId: 'provider-1', modelId: 'model-1', durationMs: 4 } }
     })
     const repository = createRepository({ commitSuccessfulAnalysis, chatMessagesWritten: () => chatMessagesWritten })
-    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(), getLanguage: async () => 'en-US' })
 
     const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
 
     expect(result.status).toBe('succeeded')
     expect(chatMessagesWritten).toBe(0)
     expect(commitSuccessfulAnalysis).toHaveBeenCalledOnce()
-    expect(commitSuccessfulAnalysis.mock.calls[0]?.[0]).toMatchObject({ runId: 'mi-ar-1', summary: { id: 'mi-as-1', eventGroupId: 'mi-eg-1' } })
+    expect(commitSuccessfulAnalysis.mock.calls[0]?.[0]).toMatchObject({ runId: 'mi-ar-1', summary: { id: 'mi-as-1', eventGroupId: 'mi-eg-1', schemaVersion: 3, proseLanguage: 'en-US' } })
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ACCEPTANCE', package: 'MI-A05', event: 'isolated-run', status: 'pass', details: { chatMessagesWritten, modelCalls: invoke.mock.calls.length, publishedSummary: commitSuccessfulAnalysis.mock.calls.length, oldSummaryPreserved: true } }))
   })
 
@@ -121,7 +124,7 @@ describe('analysisOrchestrator', () => {
     const repository = createRepository({
       getSnapshot: () => ({
         snapshotHash: 'snapshot-hash',
-        facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.4', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
+        facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.4', unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
         evidenceRefs: [{ evidenceRefId: 'evidence-1', sourceId: 'official', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: 'hash' }],
         change: { sequence: 2, previousSnapshotHash: 'h1', facts: [{ factId: 'fact-1', domain: 'macro', metric: 'actual', kind: 'changed', previousValue: '3.2', value: '3.4' }], missingDomainsAdded: [], missingDomainsRemoved: [], caveatsAdded: [], caveatsRemoved: [], evidenceRefsAdded: [], evidenceRefsRemoved: [] }
       })
@@ -208,6 +211,19 @@ describe('analysisOrchestrator', () => {
     expect(messages.at(-1)!.content).toContain('顶层必须恰好是')
   })
 
+  it('records the repair call as its own call kind, so a post-mortem can tell the answers apart', async () => {
+    // 线上那次事故的存档里三次调用全是 `initial`：修复调用没有被标出来，事后看不出哪一行是首答。
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: true as const, output: { conclusion: 'not a contract' }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const begin = vi.fn((_input: { callKind: string }) => ({ id: `io-${begin.mock.calls.length}`, createdAt: asOf }))
+    const repository = createRepository({ analysisIo: { begin, complete: vi.fn() } })
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'succeeded' })
+    expect(begin.mock.calls.map(([input]) => input.callKind)).toEqual(['initial', 'repair'])
+  })
+
   it('tells the model which direction horizon is missing, not to fix its citations', async () => {
     const incomplete = validOutput()
     incomplete.directions = incomplete.directions.filter(entry => entry.horizon !== 'long')
@@ -241,22 +257,36 @@ describe('analysisOrchestrator', () => {
 
     await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'failed', errorCode: 'analysis-provider-error' })
     expect(invoke).toHaveBeenCalledOnce()
-    // A call that died in 2 ms never reached the provider: "connection failed", not "it failed".
-    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ failureDetailCode: 'connect-failed' }))
+    // 2 ms 只说明这一跳很快失败，说明不了是连接：没有状态码、也没有传输类别时不许再猜「连不上」。
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ failureDetailCode: 'provider-other' }))
   })
 
-  it('records why a provider call failed, from the code and the time it took', async () => {
+  it('records why a provider call failed, from the status or transport kind it carried', async () => {
     const cases = [
       // The gateway's fallback budget cutting a long attempt: the observed cut lands at 59–61 s.
       { errorCode: 'provider-error' as const, durationMs: 60_700, detail: 'upstream-aborted' },
-      { errorCode: 'provider-error' as const, durationMs: 1_200, detail: 'connect-failed' },
+      // Short duration alone is not evidence of a connection failure; the transport kind is.
+      { errorCode: 'provider-error' as const, durationMs: 1_200, detail: 'provider-other' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, transportErrorKind: 'dns' as const, detail: 'connect-failed' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, transportErrorKind: 'reset' as const, detail: 'connect-failed' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, transportErrorKind: 'timeout' as const, detail: 'gateway-timeout' },
+      // B：注入 500，失败但 detail 是 http-5xx——不是「连不上」。
+      { errorCode: 'provider-error' as const, durationMs: 1_200, httpStatus: 500, detail: 'http-5xx' },
+      { errorCode: 'provider-error' as const, durationMs: 60_700, httpStatus: 502, detail: 'http-5xx' },
+      { errorCode: 'provider-error' as const, durationMs: 1_200, httpStatus: 401, detail: 'http-4xx' },
       // An answer that was an error, not a silent death: neither duration rule may claim it.
       { errorCode: 'provider-error' as const, durationMs: 20_000, detail: 'provider-other' },
       { errorCode: 'rate-limited' as const, durationMs: 800, detail: 'http-429' },
       { errorCode: 'timeout' as const, durationMs: 240_000, detail: 'gateway-timeout' }
     ]
     for (const entry of cases) {
-      const invoke = vi.fn(async () => ({ ok: false as const, errorCode: entry.errorCode, trace: { taskId: 'mi-ar-1', durationMs: entry.durationMs } }))
+      const invoke = vi.fn(async () => ({
+        ok: false as const,
+        errorCode: entry.errorCode,
+        ...('httpStatus' in entry ? { httpStatus: entry.httpStatus } : {}),
+        ...('transportErrorKind' in entry ? { transportErrorKind: entry.transportErrorKind } : {}),
+        trace: { taskId: 'mi-ar-1', durationMs: entry.durationMs }
+      }))
       const updateRunStatus = vi.fn()
       const orchestrator = createAnalysisOrchestrator({ repository: createRepository({ updateRunStatus }), structuredModelInvocation: { invoke } as never, now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory() })
 
@@ -270,9 +300,189 @@ describe('analysisOrchestrator', () => {
     }
   })
 
+  it('A：启动后 2 秒排队的那次运行等启动探针，而不是自己落成 connect-failed', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    try {
+      const providerState = {
+        providers: [{
+          id: 'provider-1', name: 'provider', enabled: true, baseUrl: 'https://api.example.test',
+          apiKey: 'key', endpoints: [], customHeaders: [],
+          models: [{ id: 'model-1', name: 'model', capabilities: { chat: true } }]
+        }]
+      }
+      const probeAttemptsAt: number[] = []
+      const fetchMock = vi.fn(async () => {
+        probeAttemptsAt.push(Date.now())
+        // 前三次是传输层失败（启动后代理还没就绪）；约 +3.5 s 的第四次拿到 401——端点可达。
+        if (Date.now() < 3_500) {
+          const error = new Error('fetch failed') as Error & { cause?: { code: string } }
+          error.cause = { code: 'ENOTFOUND' }
+          throw error
+        }
+        return { status: 401, body: null } as unknown as Response
+      })
+      const gate = createModelNetworkReadinessGate({
+        getProviderState: async () => providerState as never,
+        fetch: fetchMock as never
+      })
+      gate.start()
+
+      // 启动后 2 秒运行才排队：此时探针已退避两次、网络还没通。
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(probeAttemptsAt.length).toBeGreaterThanOrEqual(2)
+
+      const invokedAt: number[] = []
+      const invoke = vi.fn(async () => {
+        invokedAt.push(Date.now())
+        // 网络没通之前真的去调，得到的是传输层错误——没有门时正是这条路落 `connect-failed`。
+        if (Date.now() < 3_500) {
+          return {
+            ok: false as const, errorCode: 'provider-error' as const,
+            transportErrorKind: 'dns' as const, trace: { taskId: 'mi-ar-1', durationMs: 1_200 }
+          }
+        }
+        return {
+          ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1',
+          trace: { taskId: 'mi-ar-1', durationMs: 2 }
+        }
+      })
+      const updateRunStatus = vi.fn()
+      const orchestrator = createAnalysisOrchestrator({
+        repository: createRepository({ updateRunStatus }),
+        structuredModelInvocation: { invoke } as never,
+        now: () => new Date(Date.now()).toISOString(),
+        timeZone: () => 'UTC', idFactory: idFactory(),
+        networkReadiness: gate
+      })
+      const running = orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+      // 探针在 ~3.5 s 拿到 401 后就绪；等到标记的运行这时才发起模型调用。
+      await vi.advanceTimersByTimeAsync(3_000)
+      const result = await running
+      // 判据：这一次既没失败，也绝不落 `connect-failed`。没有门时这里会是 ['connect-failed']。
+      const recordedDetails = updateRunStatus.mock.calls.map(
+        call => (call[0] as { failureDetailCode?: string }).failureDetailCode
+      )
+      expect(recordedDetails).not.toContain('connect-failed')
+      expect(result).toEqual({ status: 'succeeded' })
+      expect(invoke).toHaveBeenCalledOnce()
+      expect(invokedAt[0]).toBeGreaterThanOrEqual(3_500)
+      expect(gate.networkReadyAt()).toBeTypeOf('string')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails a startup-window run as network-not-ready when the probe budget runs out, without calling the model', async () => {
+    const invoke = vi.fn()
+    const updateRunStatus = vi.fn()
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ updateRunStatus }),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      networkReadiness: { wait: async () => 'not-ready' as const }
+    })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toEqual({ status: 'failed', errorCode: 'analysis-provider-error' })
+    expect(invoke).not.toHaveBeenCalled()
+    // 超时不许冒充 `connect-failed`：那是「断了」，这里是「还没就绪」。
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({
+      failureDetailCode: 'network-not-ready'
+    }))
+  })
+
+  it('resolves the reader model before the first call and writes it onto the run', async () => {
+    // 冷启动恢复补排的运行没有模型：调用前必须解析出设置里的选择并写回运行行，
+    // 否则调用层会退回平台第一个可用供应商（本机是 Silicon，401），失败行还留不下用的是谁。
+    const order: string[] = []
+    const invoke = vi.fn(async (request: { providerId?: string; modelId?: string }) => {
+      order.push(`invoke:${request.providerId ?? 'none'}:${request.modelId ?? 'none'}`)
+      return {
+        ok: true as const, output: validOutput(), providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017',
+        trace: { taskId: 'mi-ar-1', durationMs: 1 }
+      }
+    })
+    const recordRunModel = vi.fn((_id: string, model: { providerId: string; modelId: string }) => {
+      order.push(`record:${model.providerId}:${model.modelId}`)
+      return true
+    })
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository(),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      resolveAnalysisModel: async () => ({ providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' }),
+      recordRunModel
+    })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'succeeded' })
+    // 先写运行行、再发请求：失败时那一行也必须已经带着模型。
+    expect(order).toEqual(['record:tokenrhythm:deepseek-v4.1-flash-1017', 'invoke:tokenrhythm:deepseek-v4.1-flash-1017'])
+  })
+
+  it('spends no model call when the run has no model and none can be resolved', async () => {
+    const invoke = vi.fn()
+    const updateRunStatus = vi.fn()
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ updateRunStatus }),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      resolveAnalysisModel: async () => null
+    })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toEqual({ status: 'failed', errorCode: 'analysis-provider-not-ready' })
+    expect(invoke).not.toHaveBeenCalled()
+    // 「没选出模型」是一次请求都没发，不能记成任何 HTTP/传输失败。
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({
+      failureCode: 'analysis-provider-not-ready',
+      failureDetailCode: 'model-not-selected'
+    }))
+  })
+
+  it('cannot let an empty model through even when the network gate says ready', async () => {
+    // 探针拿 401 就算「网络通了」是故意的：它只证明端点答得出 HTTP，不证明这次有模型可调。
+    const invoke = vi.fn()
+    const updateRunStatus = vi.fn()
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ updateRunStatus }),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      networkReadiness: { wait: async () => 'ready' as const },
+      resolveAnalysisModel: async () => null
+    })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'failed', errorCode: 'analysis-provider-not-ready' })
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('retries model resolution once, then calls the resolved model', async () => {
+    const resolveAnalysisModel = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })
+    const invoke = vi.fn(async () => ({
+      ok: true as const, output: validOutput(), providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017',
+      trace: { taskId: 'mi-ar-1', durationMs: 1 }
+    }))
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository(),
+      structuredModelInvocation: { invoke } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      resolveAnalysisModel
+    })
+
+    expect(await orchestrator.run({ analysisRunId: 'mi-ar-1' })).toEqual({ status: 'succeeded' })
+    // 有界：第一次为空时只再问一次，不无限等设置。
+    expect(resolveAnalysisModel).toHaveBeenCalledTimes(2)
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
   it('answers a failure the reader asked for, and stays quiet for an automatic one', async () => {
     const runWith = (triggerKey: string): AnalysisRun => ({
-      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
       modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
       skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
@@ -297,7 +507,7 @@ describe('analysisOrchestrator', () => {
       expect(notifyManualFailure, triggerKey).toHaveBeenCalledTimes(expectedCalls)
       if (expectedCalls === 1) {
         expect(notifyManualFailure).toHaveBeenCalledWith({
-          runId: 'mi-ar-1', failureCode: 'analysis-provider-error', failureDetailCode: 'upstream-aborted', occurredAt: asOf
+          runId: 'mi-ar-1', analysisKind: 'market', failureCode: 'analysis-provider-error', failureDetailCode: 'upstream-aborted', occurredAt: asOf
         })
       }
     }
@@ -330,7 +540,7 @@ describe('analysisOrchestrator', () => {
     const snapshot = {
       snapshotHash: 'snapshot-hash',
       facts: [
-        { factId: 'fact-1', domain: 'macro' as const, subject: 'CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'evidence-1' },
+        { factId: 'fact-1', domain: 'macro' as const, subject: 'CPI', metric: 'actual', value: '3.2', unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'evidence-1' },
         news
       ],
       evidenceRefs: [{ evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-news' }]
@@ -449,7 +659,7 @@ describe('analysisOrchestrator', () => {
 
   describe('the analysis-conclusion push (N12)', () => {
     const runFixture = (triggerKey: string) => ({
-      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey, idempotencyKey: 'key', status: 'queued', attempt: 1, retryOfRunId: null,
       modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
       skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
@@ -565,7 +775,7 @@ describe('analysisOrchestrator', () => {
   it('calls the model recorded on the run, and leaves the choice open for a run without one', async () => {
     const invoke = vi.fn(async (_request: unknown) => ({ ok: true as const, output: validOutput(), providerId: 'provider-9', modelId: 'model-9', trace: { taskId: 'mi-ar-1', durationMs: 1 } }))
     const run = {
-      id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+      id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
       analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: 'key', status: 'queued', attempt: 1,
       retryOfRunId: null, modelProviderId: 'provider-9', modelId: 'model-9', policyVersion: 'policy', promptVersion: 'market-analysis-v1',
       skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
@@ -594,10 +804,166 @@ describe('analysisOrchestrator', () => {
     expect(commitSuccessfulAnalysis).not.toHaveBeenCalled()
   })
 })
+describe('news line through the orchestrator (R39 C)', () => {
+  it('validates its own contract, stores three paragraphs and writes no market side effects', async () => {
+    const newsFact = fixtureFact('triggered-news:item-1', 'news:item-1', 'news-sentiment', 'sentiment', 'BTC')
+    // 正文里的两个百分数必须能在快照里找到出处：值直接用正文要引的数。
+    const macroFact = { ...fixtureFact('fact-1', 'evidence-1', 'actual', 'macro', 'CPI'), value: 3.2 }
+    const capitalFact = { ...fixtureFact('fact-2', 'evidence-2', 'etf-net-flow-usd', 'capital', 'BTC'), value: -2.92 }
+    const newsSnapshot = {
+      ...fixtureSnapshot(),
+      facts: [newsFact, macroFact, capitalFact],
+      evidenceRefs: [{ evidenceRefId: 'news:item-1' }, { evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-2' }],
+      trigger: { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1' }
+    } as unknown as EvidenceSnapshot
+    const handles = buildAnalysisReferenceMap(newsSnapshot)
+    const f = (factId: string): string => handles.factHandleById.get(factId)!
+    const e = (evidenceRefId: string): string => handles.evidenceHandleById.get(evidenceRefId)!
+    const at = (factId: string): string => formatShellInstant(
+      newsSnapshot.facts.find(fact => fact.factId === factId)!.observedAt ?? '',
+      { timeZone: 'UTC', locale: 'zh-CN', precision: 'minute' }
+    )
+    const output = {
+      what: { evidenceRef: e('news:item-1'), actor: '据报道，', action: '某公司宣布裁员。', whyRelated: '这会压低风险偏好，对 BTC 偏空。', stance: 'bearish' },
+      reading: {
+        checks: [
+          { evidenceRef: e('evidence-1'), effect: 'supports', statement: `CPI 3.2%，截至 ${at('fact-1')}。` },
+          { evidenceRef: e('evidence-2'), effect: 'supports', statement: `ETF 净流出 -2.92%，截至 ${at('fact-2')}。` }
+        ],
+        contradiction: false, verdict: 'supports'
+      },
+      outlook: {
+        direction: 'bearish',
+        mechanism: '短期偏空。新闻压低风险偏好，若 ETF 净流入转正则这个判断作废。',
+        watchFor: [{ refKind: 'fact', ref: f('fact-1') }],
+        invalidation: { refKind: 'fact', factRef: f('fact-2') }
+      },
+      gaps: []
+    }
+    const commitSuccessfulAnalysis = vi.fn()
+    const appendRunSummary = vi.fn(async () => undefined)
+    const notifyAnalysisConclusion = vi.fn(async () => undefined)
+    const newsRun = {
+      ...fixtureRunShape(),
+      analysisKind: 'news' as const, triggerKey: 'news.manual',
+      promptVersion: 'news-analysis-v2', skillVersion: 'news-analysis-v1', outputSchemaVersion: 1
+    }
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({
+        getRun: () => newsRun, getSnapshot: () => newsSnapshot, listSnapshots: () => [newsSnapshot],
+        latestSummaryVersion: () => 0, commitSuccessfulAnalysis
+      }),
+      structuredModelInvocation: {
+        invoke: vi.fn(async () => ({ ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory(),
+      appendRunSummary, notifyAnalysisConclusion
+    })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    const committed = commitSuccessfulAnalysis.mock.calls[0]![0] as Record<string, unknown>
+    const summary = committed.summary as Record<string, unknown>
+    const conclusion = summary.conclusion as Record<string, unknown>
+    // 三段都落到界面读的那三个字段上，且非空。
+    expect(conclusion.summary).toContain('某公司宣布裁员')
+    expect(conclusion.change).toContain('ETF 净流出')
+    expect(conclusion.causalChain).toContain('短期偏空')
+    // 结构化记录整块存着，供校验/审计。
+    expect(summary.newsInterpretation).toMatchObject({ analysisKind: 'news', schemaVersion: 1, itemId: 'item-1' })
+    // 新闻线不该回潮的副作用：预测、时间轴、组指针、会话摘要、推送。
+    expect(committed).toMatchObject({ predictions: [], recordGroupPointer: false })
+    expect(committed.timeline).toBeUndefined()
+    expect(appendRunSummary).not.toHaveBeenCalled()
+    expect(notifyAnalysisConclusion).not.toHaveBeenCalled()
+  })
+
+  it('shows the reader what is missing and refuses to give a direction when the model reports gaps', async () => {
+    const newsFact = fixtureFact('triggered-news:item-1', 'news:item-1', 'news-sentiment', 'sentiment', 'BTC')
+    const macroFact = { ...fixtureFact('fact-1', 'evidence-1', 'actual', 'macro', 'CPI'), value: 3.2 }
+    const capitalFact = { ...fixtureFact('fact-2', 'evidence-2', 'etf-net-flow-usd', 'capital', 'BTC'), value: -2.92 }
+    const newsSnapshot = {
+      ...fixtureSnapshot(),
+      facts: [newsFact, macroFact, capitalFact],
+      evidenceRefs: [{ evidenceRefId: 'news:item-1' }, { evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-2' }],
+      trigger: { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1' }
+    } as unknown as EvidenceSnapshot
+    const handles = buildAnalysisReferenceMap(newsSnapshot)
+    const f = (factId: string): string => handles.factHandleById.get(factId)!
+    const e = (evidenceRefId: string): string => handles.evidenceHandleById.get(evidenceRefId)!
+    const output = {
+      what: { evidenceRef: e('news:item-1'), actor: '据报道，', action: '某公司宣布裁员。', whyRelated: '风险偏好承压，偏向偏空。', stance: 'bearish' },
+      reading: {
+        checks: [
+          { evidenceRef: e('evidence-1'), effect: 'supports', statement: 'CPI 3.2%。' },
+          { evidenceRef: e('evidence-2'), effect: 'supports', statement: 'ETF 净流出 -2.92%。' }
+        ],
+        contradiction: false, verdict: 'supports'
+      },
+      // 判不了：金额缺、只能等后续披露。方向必须写 undecided，读者正文不出现方向。
+      outlook: {
+        direction: 'undecided',
+        mechanism: '内部记录：短期偏空，但金额缺失，无法判断。',
+        watchFor: [{ refKind: 'fact', ref: f('fact-1') }],
+        invalidation: { refKind: 'fact', factRef: f('fact-2') }
+      },
+      gaps: [{ item: 'amount', state: 'not-yet', note: '原文没给金额，等后续披露才能判断。' }]
+    }
+    const commitSuccessfulAnalysis = vi.fn()
+    const newsRun = {
+      ...fixtureRunShape(),
+      analysisKind: 'news' as const, triggerKey: 'news.manual',
+      promptVersion: 'news-analysis-v2', skillVersion: 'news-analysis-v1', outputSchemaVersion: 1
+    }
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({
+        getRun: () => newsRun, getSnapshot: () => newsSnapshot, listSnapshots: () => [newsSnapshot],
+        latestSummaryVersion: () => 0, commitSuccessfulAnalysis
+      }),
+      structuredModelInvocation: {
+        invoke: vi.fn(async () => ({ ok: true as const, output, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      } as never,
+      now: () => asOf, timeZone: () => 'UTC', idFactory: idFactory()
+    })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    const summary = (commitSuccessfulAnalysis.mock.calls[0]![0] as Record<string, unknown>).summary as Record<string, unknown>
+    const conclusion = summary.conclusion as Record<string, unknown>
+    // 第二段说缺哪一项，第三段说无法判断 + 何时能判断。
+    expect(conclusion.change).toBe('金额尚未公布。')
+    expect(conclusion.causalChain).toContain('无法判断')
+    expect(conclusion.causalChain).toContain('等后续披露才能判断')
+    // 判不了却给方向是需求稿禁止的：机制里那句「短期偏空」不许漏到读者正文。
+    expect(conclusion.causalChain).not.toContain('偏空')
+    expect(conclusion.causalChain).not.toContain('短期')
+    expect(conclusion.direction).toBe('undecided')
+  })
+})
+
+function fixtureFact(factId: string, evidenceRefId: string, metric: string, domain: string, subject: string) {
+  return { factId, evidenceRefId, metric, domain, subject, value: 1, unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const }
+}
+
+function fixtureSnapshot() {
+  return {
+    id: 'mi-es-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotHash: 'snapshot-hash', profileId: 'crypto-market-analysis-v1',
+    facts: [fixtureFact('fact-1', 'evidence-1', 'actual', 'macro', 'CPI')],
+    missingDomains: [], caveats: [], evidenceRefs: [{ evidenceRefId: 'evidence-1' }], sourceHealth: [], createdAt: asOf, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
+  } as unknown as import('../../../contracts/marketAnalysisContracts').EvidenceSnapshot
+}
+
+function fixtureRunShape(): Record<string, unknown> {
+  return {
+    id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+    analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: 'key', status: 'queued', attempt: 1,
+    retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
+    skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
+    failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null
+  }
+}
 
 function createRepository(overrides: Record<string, unknown> = {}) {
   const run: AnalysisRun = {
-    id: 'mi-ar-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
+    id: 'mi-ar-1', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'snapshot-hash',
     analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: 'key', status: 'queued', attempt: 1,
     retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'policy', promptVersion: 'market-analysis-v1',
     skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null,
@@ -605,7 +971,7 @@ function createRepository(overrides: Record<string, unknown> = {}) {
   }
   const snapshot: EvidenceSnapshot = {
     id: 'mi-es-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotHash: 'snapshot-hash', profileId: 'crypto-market-analysis-v1',
-    facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
+    facts: [{ factId: 'fact-1', domain: 'macro', subject: 'CPI', metric: 'actual', value: '3.2', unit: 'percent', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: 'evidence-1' }],
     missingDomains: [], caveats: [], evidenceRefs: [{ evidenceRefId: 'evidence-1', sourceId: 'official', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: 'hash' }], sourceHealth: [], createdAt: asOf, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1'
   }
   const group: EventGroup = { id: 'mi-eg-1', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|official', firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-28T02:00:00.000Z', eventRefs: ['event-1'], triggerCount: 1, reviewCount: 0, currentSummaryId: 'mi-as-old', supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf }
@@ -638,7 +1004,7 @@ function validOutput() {
     marketReaction: [{ statement: 'BTC 短期反应待确认。', factIds: ['fact-1'], evidenceRefIds: ['evidence-1'] }],
     supportingEvidence: [{ statement: '官方发布可核验。', evidenceRefId: 'evidence-1' }],
     counterEvidence: [],
-    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['价格数据保持可比'], invalidation: '出现相反事实', status: 'pending' }],
+    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['价格数据保持可比'], invalidation: { kind: 'fact', factId: 'fact-1', relation: 'below', statement: '出现相反事实' }, status: 'pending' }],
     directions: [
       { horizon: 'short', direction: 'bullish', rationale: '短期资金流转正。', confidence: 'medium', evidenceRefIds: ['evidence-1'] },
       { horizon: 'medium', direction: 'range', rationale: '中期缺少方向性资金。', confidence: 'low', evidenceRefIds: ['evidence-1'] },

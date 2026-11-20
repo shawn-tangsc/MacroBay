@@ -1,8 +1,10 @@
+import { marketAnalysisTimelineLimits } from '../../../contracts/marketAnalysisTimelineLimits'
 import type { AnalysisRun, AnalysisSummary, Prediction, TimelineEntry } from '../../../contracts/marketAnalysisContracts'
 import { analysisWorkspacePolicy, type AnalysisFollowUpInput } from '../../../contracts/analysisWorkspaceContracts'
 import { projectTriggerStatus, type TriggerStatus, type TriggerStatusRow } from './triggerStatusProjection'
 import { withSnapshotChange } from './snapshotChange'
 import type { EvidenceSnapshot } from '../../../contracts/marketAnalysisContracts'
+import type { AnalysisRecordReader } from '../store/analysisRecordReader'
 
 type ComparableSnapshot = Pick<EvidenceSnapshot, 'id' | 'eventGroupId' | 'createdAt' | 'snapshotHash' | 'facts' | 'missingDomains' | 'caveats' | 'evidenceRefs' | 'change'>
 
@@ -21,6 +23,13 @@ type Repository = Readonly<{
   getSummaryForRun: (analysisRunId: string) => AnalysisSummary | undefined
   listPredictions: (summaryId: string) => readonly Prediction[]
   listTriggerLedger?: (eventGroupId: string) => readonly TriggerStatusRow[]
+  /**
+   * 只有已发布运行会写时间轴行；排队/运行中/失败的运行靠它补进来。
+   *
+   * 走读侧 reader（R39 §5.3）：它在这里过滤 `analysisKind:'market'`，新闻解读的运行绝不
+   * 出现在市场时间轴上。绕开它直接读 run 表，就是那条已知泄漏点。
+   */
+  records?: Pick<AnalysisRecordReader, 'listRuns'>
 }>
 
 /**
@@ -53,7 +62,25 @@ export type RendererChangeView = Readonly<{
   evidenceRefsRemoved: number
 }>
 
-export type RendererTimelineEntry = Readonly<Pick<TimelineEntry, 'id' | 'eventGroupId' | 'analysisRunId' | 'kind' | 'status' | 'occurredAt' | 'summaryRef' | 'safeTitle' | 'safeExcerpt' | 'direction' | 'version'> & {
+/**
+ * 一次运行在时间轴上的状态：发布过的行是前三种；**还没发布**的运行补成 `running` / `failed`。
+ *
+ * 用 `running` 而不是 `pending`：`pending` 在文案表里已经是预测条目的「待验证」，同一个 token
+ * 两种含义，时间轴、最新结论卡、结论详情、详情抽屉四个页面必然分叉。`running` 本来就在运行
+ * 状态词表里，一处一词。
+ */
+export type RendererTimelineStatus = TimelineEntry['status'] | 'running' | 'failed'
+
+export type RendererTimelineEntry = Readonly<Omit<Pick<TimelineEntry, 'id' | 'eventGroupId' | 'analysisRunId' | 'kind' | 'status' | 'occurredAt' | 'summaryRef' | 'safeTitle' | 'safeExcerpt' | 'direction' | 'version'>, 'status'> & {
+  status: RendererTimelineStatus
+  /**
+   * 同一次运行稳定不变的键：`running` → `published` / `failed` 之间不变，界面靠它就地把那
+   * 一行换状态、行数不变（`id` 会从 `run:<runId>` 变成真实时间轴行 id）。没有运行的旧行用
+   * `entry:<id>`。
+   */
+  runKey: string
+  /** `failed` 行上运行自己的失败码；界面遇到未知码兜一句「解析失败」，不把码印给读者。 */
+  failureCode: string | null
   /** Why the newest automatic decision for this group happened, or why it did not. */
   triggerStatus: TriggerStatus | null
   /**
@@ -93,7 +120,16 @@ export function createAnalysisTimelineService(deps: Readonly<{
       groups.set(eventGroupId, resolved)
       return resolved
     }
-    return { schemaVersion: 1, items: page.items.map(entry => toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry), groupFor(entry.eventGroupId))), nextCursor: page.nextCursor }
+    const items = page.items.map(entry => toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry), groupFor(entry.eventGroupId)))
+    // 翻页不注入：正在跑的运行永远属于最新那一屏，往历史页里塞反而会让游标对不上。
+    if (input.cursor) return { schemaVersion: 1, items, nextCursor: page.nextCursor }
+    const represented = new Set(items.flatMap(item => item.analysisRunId ? [item.analysisRunId] : []))
+    return {
+      schemaVersion: 1,
+      items: [...unpublishedRunEntries(deps, groupFor, input.eventGroupId, represented), ...items]
+        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt) || right.id.localeCompare(left.id)),
+      nextCursor: page.nextCursor
+    }
   }
 
   function getTimelineEntry(id: string): RendererTimelineEntry {
@@ -133,6 +169,65 @@ export function createAnalysisTimelineService(deps: Readonly<{
   }
 
   return { listTimeline, getTimelineEntry, getAnalysisRun, getSummary, listPredictions, startFollowUp }
+}
+
+/**
+ * 时间轴条目只来自已发布的摘要，所以「正在解析」在这里本来是空的——读者只能靠猜。
+ *
+ * 这条把还没发布的运行补进来：排队/运行中是 `running`，跑挂了（失败、输出不合法、取消）是
+ * `failed`。它和发布行是同一次运行，`runKey` 相同——列表据此把两态认成同一行，发布那一刻
+ * 就地变状态，条数不变。
+ *
+ * `safeTitle` 留空：状态词由界面文案表给，服务端不在这里印中文（发布行那句是历史遗留）。
+ * `stale` / `superseded` 不补：那是记账状态，不是读者在看的那件事。
+ */
+const pendingRunStatuses: ReadonlySet<string> = new Set(['queued', 'running'])
+const failedRunStatuses: ReadonlySet<string> = new Set(['failed', 'invalid-output', 'cancelled'])
+const maximumUnpublishedEntries = marketAnalysisTimelineLimits.unpublishedItems
+
+function unpublishedRunEntries(
+  deps: { repository: Repository },
+  groupFor: (eventGroupId: string) => { groupType: string | null; groupSubject: string | null },
+  eventGroupId: string | undefined,
+  represented: ReadonlySet<string>
+): RendererTimelineEntry[] {
+  const runs = deps.repository.records?.listRuns({ analysisKind: 'market', ...(eventGroupId === undefined ? {} : { eventGroupId }) }) ?? []
+  return runs
+    .filter(run => (pendingRunStatuses.has(run.status) || failedRunStatuses.has(run.status)) &&
+      !represented.has(run.id))
+    .sort((left, right) => right.queuedAt.localeCompare(left.queuedAt))
+    .slice(0, maximumUnpublishedEntries)
+    .map(run => {
+      const group = groupFor(run.eventGroupId)
+      return {
+        id: `run:${run.id}`,
+        eventGroupId: run.eventGroupId,
+        analysisRunId: run.id,
+        kind: run.analysisPhase === 'review' ? 'review' : 'analysis',
+        status: pendingRunStatuses.has(run.status) ? 'running' : 'failed',
+        runKey: run.id,
+        failureCode: failedRunStatuses.has(run.status) ? run.failureCode ?? null : null,
+        // 排队那一刻就要出现在时间轴上：读者是按下按钮之后立刻去找它的。
+        occurredAt: run.startedAt ?? run.queuedAt,
+        summaryRef: null,
+        safeTitle: '',
+        safeExcerpt: null,
+        direction: null,
+        version: 1,
+        triggerStatus: null,
+        groupType: group.groupType,
+        // 组没有主体名时退回触发那条新闻的标题：读者要知道这是哪条新闻在解析。
+        groupSubject: group.groupSubject ?? triggerSubjectLabel(deps, run)
+      } satisfies RendererTimelineEntry
+    })
+}
+
+function triggerSubjectLabel(deps: { repository: Repository }, run: AnalysisRun): string | null {
+  const snapshot = deps.repository.getSnapshot?.(run.snapshotId) as
+    Readonly<{ trigger?: { factId: string }; facts?: readonly Readonly<{ factId: string; subjectLabel?: string }>[] }> | undefined
+  if (!snapshot?.trigger) return null
+  const fact = snapshot.facts?.find(candidate => candidate.factId === snapshot.trigger!.factId)
+  return fact?.subjectLabel?.trim() || null
 }
 
 // The published conclusion lives in the immutable summary. Timeline nodes keep a
@@ -204,6 +299,9 @@ function toTimelineEntry(entry: TimelineEntry, summary?: { eventAssessment?: str
   // Entry-level rather than page-level: `listTimeline` may span several event groups.
   return {
     ...safe,
+    // 同一次运行在「正在解析 → 已发布」之间用同一个键，行不换身份。
+    runKey: entry.analysisRunId ?? `entry:${entry.id}`,
+    failureCode: null,
     safeExcerpt: summary?.conclusion?.summary ?? summary?.eventAssessment ?? safe.safeExcerpt,
     direction: (summary?.conclusion?.direction as TimelineEntry['direction']) ?? safe.direction ?? null,
     triggerStatus,

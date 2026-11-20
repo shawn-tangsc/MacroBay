@@ -1,0 +1,202 @@
+{
+  "note": "源名字面量基线：现存处全部登记、目标清零；新增一处必须在这里写清理由。i18n 只统计值位置（键位置的源 id 允许）。双向棘轮：涨了要登记，减了也必须同笔把数字改小——只挡涨的棘轮会养出永远减不下去的数。",
+  "files": {
+    "contracts/capitalConditionsQueryContracts.ts": {
+      "count": 3,
+      "why": "资金面契约里的 provider 标识（与日历无关的既有定义）"
+    },
+    "contracts/capitalConditionsQueryTypes.ts": {
+      "count": 1,
+      "why": "资金面契约里的 provider 标识（与日历无关的既有定义）"
+    },
+    "contracts/macro/dashboardFeedStatusContracts.ts": {
+      "count": 3,
+      "why": "看板源状态清单：列的就是 feed id"
+    },
+    "contracts/macro/marketCalendarQueryContracts.ts": {
+      "count": 20,
+      "why": "契约里的 provider id 常量与来源标签定义处；2026-11-20 从 27 收到 20——0xRouter 三路 feed id 与 collectionFeeds 对齐那几处已收拢进注册表/常量，这里只留契约自己必须写的那一份"
+    },
+    "desktop/pages/intelligence/IndicatorCards.tsx": {
+      "count": 1,
+      "why": "卡片页把「本期」的出处标出来（FRED / 数据商），显示层按事实自带的 provider 选显示名，不参与取数；原 2 处随「上一期」那行去掉降到 1"
+    },
+    "desktop/pages/intelligence/useCalendarCardData.ts": {
+      "count": 3,
+      "why": "事件类型→feed 映射：三类事件反查自己的源"
+    },
+    "desktop/pages/intelligence/useCalendarMonthReleases.ts": {
+      "count": 2,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/settings/intelligence-sources/BusinessSettingsView.tsx": {
+      "count": 1,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/settings/intelligence-sources/SourcesSettingsPane.tsx": {
+      "count": 1,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "desktop/settings/intelligence-sources/dashboardSourceModules.ts": {
+      "count": 6,
+      "why": "业务设置里每张卡的源 id 清单：格与源一一对应，也是数据不是分支。3→6 是同一个原因（0xRouter 三路日历源重新可配置）；它们与 Narwhal 那三行并列，cellKey 用的是自己的前缀，避免覆盖读者已存的格级开关。"
+    },
+    "desktop/shared/ipc/macroIndicatorClient.ts": {
+      "count": 2,
+      "why": "IPC 客户端校验 `source` 字段的取值集合"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarPublicQueryService.ts": {
+      "count": 15,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarRefreshNotifier.ts": {
+      "count": 1,
+      "why": "按源分支的既有实现（新增必须在此写清为什么该留；目标是清零）"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageContracts.ts": {
+      "count": 6,
+      "why": "存储契约搬出旧源目录后仍在用；里面出现的源名是旧源协议字段，删旧源时随之清理"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageValidation.ts": {
+      "count": 8,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarCollectionService.ts": {
+      "count": 3,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler.ts": {
+      "count": 3,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCentralBankActivitiesParser.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterEconomicDataParser.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterFinancialEventsParser.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry.ts": {
+      "count": 5,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/0xrouter-calendar/zeroXRouterProviderIndicatorLinkRegistry.ts": {
+      "count": 1,
+      "why": "旧源自己的采集器与存储层：这里按源断言是本职，退役时同笔删"
+    },
+    "service/intelligence/macro-calendar/calendarFeedRegistry.ts": {
+      "count": 32,
+      "why": "日历 feed 登记表本身：每条 feed 的 id 就是这张表的数据，不是分支。2026-11-15 由 17 涨到 32，是新增 0xRouter 三路源（用户要求「只有配置了的才注册定时任务」）——这三条是数据表自身的一部分，不是抄件；将来删源时同笔降回。"
+    },
+    "service/intelligence/macro-calendar/coreIndicatorValueSources.ts": {
+      "count": 3,
+      "why": "「指标 → 取值源」的唯一派生点：providerId 联合 + 每层总闸的 sourceId 映射（narwhal / fred-rates-liquidity / bls）。只声明「哪个源供这个指标、它的总闸是哪个源」，不参与取数、排序、筛选"
+    },
+    "service/intelligence/macro-calendar/enabledCalendarFeeds.ts": {
+      "count": 1,
+      "why": "注册表配套：自动采集清单列的是 feed id"
+    },
+    "service/intelligence/macro-calendar/macroCalendarOfficialSourceRegistry.ts": {
+      "count": 13,
+      "why": "官方源描述符表：每行自带 provider/descriptor id"
+    },
+    "service/intelligence/macro-calendar/macroCalendarRepository.ts": {
+      "count": 1,
+      "why": "仓储按 provider 列写入，那一列就是源 id"
+    },
+    "service/intelligence/macro-calendar/macroCalendarStorageSnapshotEvidence.ts": {
+      "count": 2,
+      "why": "存储证据快照按 provider 分组统计"
+    },
+    "service/intelligence/macro-calendar/macroIndicatorCardFacts.ts": {
+      "count": 9,
+      "why": "卡片取值链：narwhal 优先、旧源回退——按源选值，允许"
+    },
+    "service/intelligence/macro-calendar/macroIndicatorReadService.ts": {
+      "count": 5,
+      "why": "5 处不是「按源写分支」，而是**数据模型上的源标记**：`toNarwhalRow` / `toLegacyRow` 各自给构造出的行盖一个源标签（各 1 处），`applyStandardActual` 给回填行按 providerId 贴同一个标签（比较 1 处 + 两个取值 2 处）。三条读法完全相同、没有 per-source 逻辑。约束：删旧源的那一笔必须把 `toLegacyRow`（只服务旧源）与它的调用点一起删、把这个数字改回 2——守卫双向棘轮 + 下方 sites 锚点会逼着改，不许留着变成永远不减的数。",
+      "sites": [
+        {
+          "at": "provider: 'narwhal',",
+          "count": 1,
+          "what": "`toNarwhalRow` 给新源行盖标记（唯一一处）"
+        },
+        {
+          "at": "provider: '0xrouter',",
+          "count": 1,
+          "what": "`toLegacyRow` 给旧源行盖标记；旧源退役时本处与 helper 同笔删"
+        },
+        {
+          "at": "row.providerId === 'narwhal' ? 'narwhal' : '0xrouter'",
+          "count": 3,
+          "what": "`applyStandardActual` 按行自带的 providerId 贴回同一个标记：比较 1 处 + 两个取值 2 处；旧源退役后收成一处常量"
+        }
+      ]
+    },
+    "service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts": {
+      "count": 2,
+      "why": "provider id 常量定义处（单一来源）"
+    },
+    "service/intelligence/macro-calendar/marketCalendarSourceFeedIds.ts": {
+      "count": 10,
+      "why": "来源 → feed id 的**唯一映射表**：官方三条、narwhal 三类、0xRouter 三类（2026-11-16 接回采集后新增 4 处：三路 feed id + provider 判定）"
+    },
+    "service/intelligence/macro-calendar/marketCalendarStandardBackfill.ts": {
+      "count": 2,
+      "why": "回填要读两种来源的观测表：旧源的 provider id 是那张表里的真值，只出现一次，用来选身份解码器（`indicator_id` 表 vs `market_fact_key`），不参与读侧分支；份额保持 1，新增即红；2026-11-20 新增的一处是 `legacyObservationProviderId = '0xrouter'`（「旧观测表那批数据由谁写的」这个常量，补库时按 provider 选 profile）"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly.ts": {
+      "count": 1,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarIngest.ts": {
+      "count": 2,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarObservationBatches.ts": {
+      "count": 7,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalCalendarScheduler.ts": {
+      "count": 2,
+      "why": "新源自己的采集/装配：provider id 是它的数据"
+    },
+    "desktop/pages/intelligence/macroIndicatorCardCopy.tsx": {
+      "count": 1,
+      "why": "卡片页脚按事实自带的 provider 选显示名（Narwhal 用日历既有文案、FRED 用品牌名、旧源不赋名）。这是显示层唯一一处按源选名，不参与任何取数/排序/筛选判断；目标仍是清零。2026-11-16 抽屉拆分成 `macroIndicatorCardCopy.tsx` 后，这一处随之搬家——计数不变，只是文件变了。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarEventTypeBackfill.ts": {
+      "count": 1,
+      "why": "迁移 16 只用它判定「哪个来源的 importance 是事实」（0xrouter 的照抄、narwhal 的 medium 是占位值不复制）；不是一个按源分支的读法，回填后这条判断就该消失——属于可命名的整合数据"
+    },
+    "service/intelligence/macro-calendar/rendering/marketCalendarEventSourceWritesRead.ts": {
+      "count": 2,
+      "why": "#47 的详情读口：两块各是一条来源记录，来源 id 是这一块的身份，必须在查询里写出来（这里只读，不做来源分支判断）。"
+    },
+    "desktop/features/macro/economic-calendar/calendarTwoSourceValue.ts": {
+      "count": 2,
+      "why": "同一期两个来源并列显示的取值/标签：两块的来源名就是这两块的身份，组件只负责显示这两块；换成查表也只是把同一事实挪远一层。"
+    },
+    "contracts/macro/marketCalendarEventContracts.ts": {
+      "count": 7,
+      "why": "事件来源的联合类型：`source` 的旧值 `'Narwhal' | '0xRouter'`（历史行兼容，读侧按 feed id 优先、旧值兜底）与说明注释；不是按源分支的读数逻辑，是这个字段的类型定义处"
+    },
+    "service/intelligence/macro-calendar/calendarStandardWriteLayer.ts": {
+      "count": 3,
+      "why": "写入方身份：`CalendarStandardWriter` 联合里有 `'narwhal'`，以及 `writerOf` 映射按写入方归类（reader/collector）；回答的是「谁写进了标准表」，不参与读数分支"
+    },
+    "service/intelligence/macro-calendar/macroCalendarContracts.ts": {
+      "count": 2,
+      "why": "`MacroCalendarProviderId` 这个 provider 联合本身含 `'0xrouter'`（历史回填那条腿）——它就是provider id 的定义处，不是分支"
+    },
+    "service/intelligence/macro-calendar/macroCalendarScheduleBackend.ts": {
+      "count": 1,
+      "why": "健康记录覆盖的采集类 provider 清单（fed/bls/bea/0xrouter）里那一个 id；清单本身就是数据，不是按源走不同逻辑"
+    }
+  }
+}

@@ -10,7 +10,7 @@ export type EconomicCalendarSourceKey = 'federalReserve' | 'bea' | 'blsManualIcs
 
 export type EconomicCalendarEventView = Pick<
   EconomicCalendarPublicEvent,
-  'eventKey' | 'eventFamily' | 'titleKey' | 'periodKey' | 'lifecycleState' | 'coverage' | 'scheduledDate' |
+  'eventKey' | 'eventFamily' | 'titleKey' | 'importance' | 'periodKey' | 'lifecycleState' | 'coverage' | 'scheduledDate' |
   'scheduledAt' | 'releaseTimeSource' | 'publishedAt' | 'detectedAt' | 'createdAt' | 'actualDetectedAt' | 'actual' | 'previous' | 'caveats'
 > & {
   category: EconomicCalendarCategory
@@ -42,7 +42,6 @@ export type EconomicCalendarProjection = {
 }
 
 export const economicCalendarPresentationPolicy = {
-  dayEventLimit: 6,
   calendarWeeks: 6,
   weekdaysPerWeek: 7,
   undatedTimeSortValue: '99:99:99.999Z',
@@ -257,6 +256,8 @@ function toEventView(event: EconomicCalendarPublicEvent): EconomicCalendarEventV
     if (!category || !sources || !isDate(event.scheduledDate)) return undefined
     return {
       eventKey: event.eventKey, eventFamily: event.eventFamily, titleKey: event.titleKey, periodKey: event.periodKey,
+      // 官方记录自己带的重要性；记录里没有就不出这个字段，详情那行写「未提供」，不假定某一档。
+      ...(event.importance === undefined ? {} : { importance: event.importance }),
       lifecycleState: event.lifecycleState, coverage: event.coverage, scheduledDate: event.scheduledDate,
       ...(event.scheduledAt ? { scheduledAt: event.scheduledAt } : {}),
       releaseTimeSource: isReleaseTimeSource(event.releaseTimeSource) ? event.releaseTimeSource : 'official',

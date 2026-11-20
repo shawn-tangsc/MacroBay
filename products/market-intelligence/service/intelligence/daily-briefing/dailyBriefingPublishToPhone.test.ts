@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import {
+  configurePosterPublish,
+  type PosterPublishOutcome
+} from '@platform/ai/agent-platform/channels/channelPosterPublishRegistry'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
@@ -49,16 +54,21 @@ function runtimeWithPush(options: { channels?: 'one' | 'none' } = {}) {
     }),
     diagnostics: () => undefined,
     // 目标通道由唯一派生入口给出（技术方案 §1）：夹具给「恰好一条 runtime-ready」，与生产同形。
-    resolvePushChannel: async () => (options.channels === 'none'
-      ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: { 'runtime-ready': 0 } }
-      : { ok: true as const, channelId: 'telegram', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => (options.channels === 'none'
+      ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: { 'runtime-ready': 0 }, requestedCount: 0 }
+      : { ok: true as const, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => settings,
     clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
     productIds: ['market-intelligence'],
     deliveryHooks: {
-      push: async () => {
+      // 扇出：一次调用点名 N 条通道，逐条回执（多通道方案 §2）。
+      push: async (_record, _content, targets) => {
         pushes += 1
-        return { ok: true, messageId: `m-${pushes}` }
+        return targets.map((target) => ({
+          channelId: target.channelId,
+          channelName: target.channelName,
+          result: { ok: true, messageId: `m-${pushes}` }
+        }))
       }
     }
   })
@@ -103,7 +113,7 @@ describe('publish to phone: write the record first, then push it', () => {
     })
   })
 
-  it('pressing again keeps one row and pushes again', async () => {
+  it('pressing again keeps one row and does not resend an already delivered channel', async () => {
     const runtime = runtimeWithPush()
     const deps = { readEdition: async () => ({ document: { lede: { text: '今天的主导事件是…' } } }), submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }
     await publishBriefingToPhone(deps, input)
@@ -112,7 +122,8 @@ describe('publish to phone: write the record first, then push it', () => {
 
     expect(again).toMatchObject({ kind: 'accepted' })
     expect(runtime.records()).toHaveLength(1)
-    expect(runtime.pushes()).toBe(2)
+    // 通道已经是 delivered 终态：不再重发（多通道方案 §3：「重推只对没到终态的通道发起」）。
+    expect(runtime.pushes()).toBe(1)
     // 只动投递；次数与创建时间不动。
     expect(runtime.records()[0]).toMatchObject({
       id: first?.id,
@@ -151,5 +162,62 @@ describe('publish to phone: write the record first, then push it', () => {
 
     expect(outcome).toEqual({ kind: 'rejected', reason: 'runtime-unavailable' })
     expect(runtime.pushes()).toBe(0)
+  })
+})
+
+describe('poster route: chosen only when a poster was staged for this edition', () => {
+  const input = { date: DATE, locale: 'zh-CN' as const, periodId: 'default' }
+  const readEdition = async () => ({ document: { lede: { text: '今天的主导事件是…' } } })
+  afterEach(() => { configurePosterPublish(null) })
+
+  it('publishes the poster set instead of the text fan-out when a poster exists', async () => {
+    const runtime = runtimeWithPush()
+    const calls: unknown[] = []
+    configurePosterPublish(async (value) => {
+      calls.push(value)
+      return {
+        kind: 'published',
+        delivery: { state: 'failed', at: NOW, channels: [
+          { channelId: 'channel-a', kind: 'image', state: 'sent-accepted', at: NOW },
+          { channelId: 'channel-b', kind: 'text', state: 'failed', reason: 'channel-rejected', at: NOW }
+        ] },
+        channels: []
+      } satisfies PosterPublishOutcome
+    })
+
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, { ...input, withPoster: true })
+
+    // 走的是海报那一路（导读原样交给它），**没有再走一遍纯文字扇出**。
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ edition: input, caption: '今天的主导事件是…' })
+    expect(runtime.pushes()).toBe(0)
+    expect(outcome.kind).toBe('accepted')
+    // 记录仍是那一条（额度按记录算）。
+    expect(runtime.records()).toHaveLength(1)
+  })
+
+  it('sends text only when this request carried no poster, even if one is staged for the edition', async () => {
+    // 路由看**本次意图**，不看暂存区里有什么：读者点「只发文字」时不许把旧海报发出去。
+    const runtime = runtimeWithPush()
+    const called: { mode?: string }[] = []
+    configurePosterPublish(async (value) => {
+      called.push(value as { mode?: string })
+      return { kind: 'published', delivery: { state: 'sent-accepted', at: NOW }, channels: [] }
+    })
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, input)
+    expect(called).toEqual([expect.objectContaining({ mode: 'text' })])
+    // 纯文字那一路不再走通知的文本扇出（那是另一条键，而且这里要的是 `:poster-text`）。
+    expect(runtime.pushes()).toBe(0)
+    expect(outcome.kind).toBe('accepted')
+  })
+
+  it('refuses the whole publish instead of quietly sending text-only when the poster was refused', async () => {
+    const runtime = runtimeWithPush()
+    configurePosterPublish(async () => ({ kind: 'refused', code: 'delivery-caption-too-long' }))
+    const outcome = await publishBriefingToPhone({ readEdition, submit: runtime.submit, redeliver: runtime.redeliver, now: () => NOW }, { ...input, withPoster: true })
+    // 整条不发：既不发图，也不偷偷降级成纯文字（那是读者自己选的另一个动作）。
+    expect(outcome).toEqual({ kind: 'rejected', reason: 'poster-refused' })
+    expect(runtime.pushes()).toBe(0)
+    expect(runtime.records()).toHaveLength(1)
   })
 })

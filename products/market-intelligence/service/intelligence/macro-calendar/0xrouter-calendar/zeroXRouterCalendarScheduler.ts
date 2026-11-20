@@ -15,7 +15,16 @@ export const zeroXRouterCalendarSchedulerPolicy = Object.freeze({
   intervalMs: 30 * 60 * 1_000,
   /** One automatic batch is six serial transport requests; this must outlast them. */
   jobTimeoutMs: 4 * 60 * 1_000,
-  jobRetryPolicy: { maxAttempts: 1, backoff: 'none' as const, baseDelayMs: 0, maxDelayMs: 0 },
+  /**
+   * **一次**重试，30 秒后（2026-11-19 用户定）。
+   *
+   * 源端瞬断（同一 feed 前后两次都成功、同一分钟另两路都成功）本该被一次重试吃掉，不必等到下个
+   * 10 分钟周期。只加一次、不加第二次：源若正在限流，第二次重试会把「偶发失败」放大成「连续失败」。
+   *
+   * 两件写清楚，别当 bug 报：① 失败通知会**晚 30 秒以上**——重试期间这次运行还没有结论；
+   * ② 重试不会多写数据行（观测表按业务值去重），只会给成功的 scope 多一条采集记录与一条证据。
+   */
+  jobRetryPolicy: { maxAttempts: 2, backoff: 'fixed' as const, baseDelayMs: 30_000, maxDelayMs: 30_000 },
   /** Result states that mean the batch produced nothing usable. */
   unsuccessfulStates: ['unavailable'] as const
 })
@@ -37,6 +46,10 @@ export const zeroXRouterCalendarSchedulerFeeds = Object.freeze([
 ] as const)
 
 type CalendarFeed = typeof zeroXRouterCalendarSchedulerFeeds[number]
+
+/** 三路各自的作业定义 id（新鲜度读取器要按「当前在跑的作业」算，不能写死别的源）。 */
+export const zeroXRouterCalendarSchedulerDefinitionIds: readonly string[] = Object.freeze(
+  zeroXRouterCalendarSchedulerFeeds.map((feed) => `${zeroXRouterCalendarSchedulerPolicy.definitionId}.${feed.key}`))
 
 export type ZeroXRouterCalendarAutomaticRefresh = Readonly<{
   refreshAutomatic: (enabledFeeds?: readonly string[]) => Promise<{ state: string; failureCode?: string; items: readonly unknown[] }>

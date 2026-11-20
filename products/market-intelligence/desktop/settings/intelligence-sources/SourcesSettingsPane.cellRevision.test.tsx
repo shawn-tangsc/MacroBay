@@ -32,7 +32,7 @@ const settle = async (): Promise<void> => {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)) })
 }
 
-async function render(options: Readonly<{ origin?: string }> = {}): Promise<{ reads: () => number }> {
+async function render(options: Readonly<{ origin?: string; gate?: Promise<void> }> = {}): Promise<{ reads: () => number }> {
   const counter = { reads: 0 }
   const host = document.createElement('div')
   document.body.append(host)
@@ -45,6 +45,9 @@ async function render(options: Readonly<{ origin?: string }> = {}): Promise<{ re
           read: async () => {
             counter.reads += 1
             // 让读**留在飞行中**：连发的信号必须合并成一次补读，而不是各读一遍。
+            // `gate` 让「在飞」可判定：卡住它，三条信号就一定落在同一个窗口里，
+            // 不靠那 5ms 定时器跑得快不快（那正是 2026-11-11 那例 flaky 的形状）。
+            if (options.gate !== undefined) await options.gate
             await new Promise((resolve) => setTimeout(resolve, 5))
             return { 'quotes:btc': false }
           },
@@ -92,13 +95,17 @@ describe('设置页格开关表跟随来源域信号重读', () => {
   })
 
   it('coalesces a burst of signals into one extra read (no polling per click)', async () => {
-    const state = await render({ origin: 'settings-instance' })
+    // 把挂载那一轮读卡在飞行中：三条信号落在同一窗口里，合并成一次才是可判定的行为。
+    let open!: () => void
+    const gate = new Promise<void>((resolve) => { open = resolve })
+    const state = await render({ origin: 'settings-instance', gate })
     await act(async () => {
       notifySettingsRevision('sources', 'a')
       notifySettingsRevision('sources', 'b')
       notifySettingsRevision('sources', 'c')
     })
     // 三条信号、读一轮在飞 → 只补一次（等到 +1 成立）。
+    await act(async () => { open() })
     await vi.waitFor(() => { expect(state.reads()).toBe(2) })
     // 补读跑完之后不许再冒出第三次（这一条断言「没有多读」，不是成功条件，所以用 settle）。
     await settle()

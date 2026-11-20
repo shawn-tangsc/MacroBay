@@ -22,12 +22,13 @@ import { createNewsPushLedgerStore, newsPushLedgerPolicy } from '../news-sentime
 import { createNewsPushOutletService } from '../news-sentiment/newsPushOutletService'
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 import { INTELLIGENCE_IPC_METHODS } from '../../../contracts/intelligenceIpcMethods'
-import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { parseIntelligenceTestRequest } from '../../../contracts/intelligenceNotificationTest'
 import { sendIntelligenceTestNotification } from '../sendIntelligenceTestNotification'
 import type { CalendarEventReminderWiring } from '../macro-calendar/registerCalendarEventReminder'
 import type { IntelligenceNotificationTestWiring } from './notificationTestWiring'
 import { getCellEnabledStore, registerCellEnabledIpc } from './registerCellEnabledIpc'
+import { getCoreIndicatorSourcePrefsStore, registerCoreIndicatorSourcePrefsIpc } from './registerCoreIndicatorSourcePrefsIpc'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -106,15 +107,17 @@ export function registerIntelligenceIpc(
    */
   notificationTest?: IntelligenceNotificationTestWiring & Readonly<{ now?: () => string }>,
   /**
-   * 点击前的通道可用性：平台唯一那一份派生（`resolvePushChannel`），由装配处注射。
+   * 点击前的通道可用性：平台唯一那一份派生（`resolvePushChannels`），由装配处注射。
    * 这里只**去掉通道名**再交出去——渲染层拿不到名字，就不会拿它去拼「已发到 X」。
    */
-  readPushChannel?: () => Promise<PushChannelResolution>
+  readPushChannel?: () => Promise<PushChannelsResolution>
 ): void {
   /* 格级启用：一份存储 + 两个动作（读显式写过的格子 / 写一个格子）。
      之前这里只 import 了 `registerCellEnabledIpc` 却没调用它——渲染层拿到的是「方法不存在」，
      真机日志里就是 `Unknown product IPC method "market-intelligence.intelligence.readCellEnabled"`。 */
   registerCellEnabledIpc(register, getCellEnabledStore())
+  /* 「指标 × 源」第二层配置：与格级开关同一个装配点，两个存储互不相干。 */
+  registerCoreIndicatorSourcePrefsIpc(register, getCoreIndicatorSourcePrefsStore())
 
   if (notificationTest && calendarReminder) {
     // 注册器这一侧的 `read` 只声明成 `unknown`（它给设置页读整份视图）；测试样例要的是**类型化**的
@@ -151,9 +154,10 @@ export function registerIntelligenceIpc(
   if (readPushChannel !== undefined) {
     register(PRODUCT_ID, INTELLIGENCE_IPC_METHODS.getAnalysisConclusionSendChannel, async () => {
       const resolved = await readPushChannel()
+      // 多通道是合法状态：`multiple` 只为旧读法留到第 3 笔，恒为 false（不再有「配置冲突」这回事）。
       return resolved.ok
         ? { state: 'ready' as const }
-        : { state: 'unavailable' as const, enabledChannelCount: resolved.enabledChannelCount, multiple: resolved.multiple }
+        : { state: 'unavailable' as const, enabledChannelCount: resolved.enabledChannelCount, multiple: false }
     })
   }
 

@@ -1,9 +1,12 @@
+import type { AnalysisKind } from './analysisKinds'
+import type { NewsInterpretationRecord } from './newsInterpretationContracts'
 import type {
   AgentFact,
   AgentEvidenceRef,
   SourceHealthFlag,
   SnapshotFactChange,
   SnapshotChange,
+  SnapshotTrigger,
   EvidenceSnapshot,
 } from './marketAnalysisEvidenceContracts'
 
@@ -14,17 +17,18 @@ export type {
   SourceHealthFlag,
   SnapshotFactChange,
   SnapshotChange,
+  SnapshotTrigger,
   EvidenceSnapshot,
 } from './marketAnalysisEvidenceContracts'
 
 export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
   /**
-   * Bumped from 1 when the policy-path facts started carrying `sourceUrl`: new snapshots are
-   * written as 2, while a stored 1 is still a valid snapshot (the field is optional).
+   * 3：快照可以带触发指针 `trigger`（R37）。旧版本照旧有效——字段可选，读取端接受 1–3；
+   * 1 是 policy-path 事实还没有 `sourceUrl` 的时代。
    */
-  schemaVersion: 2,
+  schemaVersion: 3,
   dataAccessProfileId: 'crypto-market-analysis-v1',
-  outputSchemaVersion: 2,
+  outputSchemaVersion: 3,
   maximumModelFieldCharacters: 2_000,
   maximumModelOutputBytes: 256 * 1024,
   maximumCollectionItems: 160,
@@ -169,7 +173,9 @@ export const MARKET_ANALYSIS_ERROR_CODES = Object.freeze({
   archiveUnavailable: 'analysis-archive-unavailable',
   predictionUnsupportedCondition: 'analysis-prediction-unsupported-condition',
   insufficientData: 'analysis-insufficient-data',
-  notAvailable: 'analysis-not-available'
+  notAvailable: 'analysis-not-available',
+  /** 运行没跑完就没了：进程停了、调用没回来、作业掉了。不是模型也不是数据的错，读者可再试一次。 */
+  runInterrupted: 'analysis-run-interrupted'
 })
 
 /**
@@ -347,6 +353,11 @@ export type AnalysisRetryResult = 'succeeded' | 'failed' | 'cancelled'
 export type AnalysisRun = Readonly<{
   id: string
   schemaVersion: 1
+  /**
+   * 这条运行属于哪条解析线（R39）。写入必填；旧行由存储层读成 `market`，
+   * 新写入缺这一项会被 `validateRun` 拒绝——默认值只给历史数据兜底。
+   */
+  analysisKind: AnalysisKind
   eventGroupId: string
   snapshotId: string
   snapshotHash: string
@@ -361,7 +372,7 @@ export type AnalysisRun = Readonly<{
   policyVersion: string
   promptVersion: string
   skillVersion: string
-  outputSchemaVersion: 1 | 2
+  outputSchemaVersion: 1 | 2 | 3
   jobRunId: string | null
   traceId: string | null
   failureCode: string | null
@@ -390,6 +401,35 @@ export type AnalysisRun = Readonly<{
  * fields are prose in the language the run was asked to answer in. Keeping the structure here means
  * the validator and every surface read fields, never natural-language tokens.
  */
+/** 一条新闻对一个标的的市场含义：印证还是否证，用哪两个读数、什么情况下不成立。 */
+export type AnalysisNewsImpactEffect = 'supports' | 'contradicts'
+
+/**
+ * 触发型分析的必答块（R37 §3）。只有快照带 `trigger` 时必填。
+ *
+ * 三支互斥：查得到 → `evaluated`；查过但没有传导 → `no-transmission`；缺关键信息 → `cannot-determine`。
+ * 缺口用闭集枚举表达，界面按「缺哪一项 × 三种状态」拼句，校验不读句子。
+ */
+export type AnalysisNewsImpact =
+  | Readonly<{
+    verdict: 'evaluated'
+    /** 至少两条、都是市场域事实（不是舆情事实），用来印证或否证这条新闻。 */
+    checks: readonly Readonly<{ factId: string; effect: AnalysisNewsImpactEffect }>[]
+    /** 必须等于「checks 里同时出现 supports 与 contradicts」。 */
+    contradiction: boolean
+    invalidation: AnalysisInvalidation
+  }>
+  | Readonly<{
+    verdict: 'no-transmission'
+    /** 查过哪些事实（≥2），证明是「查过没有传导」而不是懒得写。 */
+    checkedFactIds: readonly string[]
+    reason: string
+  }>
+  | Readonly<{
+    verdict: 'cannot-determine'
+    missing: Readonly<{ item: 'amount' | 'symbol' | 'time' | 'market-data'; state: 'not-yet' | 'source-empty' | 'unreadable' }>
+  }>
+
 export type AnalysisConclusion = Readonly<{
   direction: AnalysisConclusionDirection
   /** The one-sentence verdict: mechanism and its effect on the asset. */
@@ -406,12 +446,30 @@ export type AnalysisConclusion = Readonly<{
   evidenceStrength: string | null
   /** Gaps in the evidence and how each one limits confidence. */
   dataGaps: readonly string[]
+  /**
+   * 触发型分析的新闻含义（R37）。**只读历史**：R39 之后市场线不再写这个字段，也不再按它拒收；
+   * 旧摘要照旧读得出来。新闻线在 C 笔换成 `NewsInterpretation` 契约之前仍可能写它。
+   */
+  newsImpact?: AnalysisNewsImpact
 }>
 
 export type AnalysisSummary = Readonly<{
   id: string
-  schemaVersion: 1
+  /** 1 = 没有语言字段；2 = 带 `proseLanguage`；3 = 失效条件换成引用快照的结构。 */
+  schemaVersion: 1 | 2 | 3
+  /**
+   * 这份正文属于哪条解析线（R39）。
+   *
+   * 类型上可空是因为 R39 之前发布的记录里没有这个字段；**新写入必须带**，
+   * `commitSuccessfulAnalysis` 缺它即失败。读侧由存储层按旧行归 `market`。
+   */
+  analysisKind?: AnalysisKind
   analysisRunId: string
+  /**
+   * 这份正文是用哪种语言写的（生成时的界面语言）。旧记录没有这个字段：读出来是不认识、
+   * 不标注，绝不是「当前语言」或「未知」。
+   */
+  proseLanguage?: 'zh-CN' | 'en-US'
   eventGroupId: string
   version: number
   /**
@@ -421,6 +479,13 @@ export type AnalysisSummary = Readonly<{
   eventAssessment?: string
   /** Structured conclusion written by current runs. */
   conclusion?: AnalysisConclusion
+  /**
+   * 新闻线的结构化记录（R39 C）。
+   *
+   * 抽屉不读它——界面只渲染 `conclusion` 的三段正文；它随记录整块存，供校验、审计与将来
+   * 换渲染。市场分析的摘要没有这个字段。
+   */
+  newsInterpretation?: NewsInterpretationRecord
   knownFacts: readonly FactClaim[]
   transmissionHypotheses: readonly Hypothesis[]
   marketReaction: readonly ReactionClaim[]
@@ -440,12 +505,32 @@ export type Hypothesis = Readonly<{ statement: string; evidenceRefIds: readonly 
 export type ReactionClaim = Readonly<{ statement: string; factIds: readonly string[]; evidenceRefIds: readonly string[] }>
 export type EvidenceClaim = Readonly<{ statement: string; evidenceRefId: string }>
 export type Catalyst = Readonly<{ statement: string; evidenceRefIds: readonly string[] }>
+/**
+ * 失效条件：**引用快照里已经存在的东西**，不是一句可以随便写价位的自由文本。
+ *
+ * - `fact`：引用快照里的某条事实（`factId` 是快照里的 id），失效方向只有跌破/涨破两种；
+ * - `instant`：快照里的一个时刻（事实的观测时刻或快照的 as-of）。
+ *
+ * `statement` 只是给读者看的那句话，**校验不读它**——读句子等于用词表猜事实，换一种说法就绕过。
+ */
+export type AnalysisInvalidation =
+  | Readonly<{ kind: 'fact'; factId: string; relation: 'below' | 'above'; statement: string }>
+  | Readonly<{ kind: 'instant'; at: string; statement: string }>
+
+/** v1/v2 已存储的摘要里这一栏是字符串：读出来照旧显示，不回写成「未知」。 */
+export type StoredInvalidation = AnalysisInvalidation | string
+
+export function invalidationText(invalidation: StoredInvalidation): string {
+  return typeof invalidation === 'string' ? invalidation : invalidation.statement
+}
+
 export type Scenario = Readonly<{
   asset: 'BTC' | 'ETH'
   horizon: AnalysisScenarioHorizon
   baseCase: string
   conditions: readonly string[]
-  invalidation: string
+  /** 新生成的一律是结构（`AnalysisInvalidation`）；字符串只出现在旧记录里，见 `StoredInvalidation`。 */
+  invalidation: StoredInvalidation
   status: 'pending'
 }>
 

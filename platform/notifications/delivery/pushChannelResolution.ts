@@ -1,15 +1,13 @@
 /**
- * 「这条推送发给哪条通道」的**唯一派生入口**（技术方案 §1）。
+ * 「这条推送发给哪些通道」的**唯一派生入口**（多通道方案 §5-1）。
  *
  * 判据只有一条：通道投影里的 `state === 'runtime-ready'`（那是「适配器可用 + 凭据在 + 已请求启用 +
- * 运行时接通」合成的唯一一档）。**不许**在调用处自己拼「`requestedEnabled` && `credential.status`」——
- * 那就是第二套判据，两处迟早一个说可用、一个说不可用。
+ * 运行时接通」合成的唯一一档）。**不许**在调用处自己拼「`requestedEnabled` && `credential.status`」
+ * ——那就是第二套判据，两处迟早一个说可用、一个说不可用。
  *
- * 三档，闭集：
- * - 恰好 1 条 → 用它，并把**名字**一起交出去（成功句「已发到 {通道名}（测试）」要有来源）；
- * - 0 条 → `push-unavailable`（配置事实，不是瞬时失败）；
- * - ≥2 条 → 同样 `push-unavailable`，另记一条 `push-multiple-enabled` 诊断。**不发明第七个 reason 码**：
- *   真实推送此刻就是推不出去，界面上多一个码只会让读者以为「有办法重试」。
+ * 两档，闭集：有 `runtime-ready` → 全部返回（按投影顺序）；一条都没有 → `push-unavailable`。
+ * 用户 2026-11-12 拍板：多条同时启用是**合法状态**，所以这里不产生任何「配置冲突」诊断；
+ * 失败只剩「一条都没有」这一档，`states` 直方图说明有通道但卡在哪一档（那是「没有」，不是「拿不到」）。
  *
  * 只读数传进来的那一份；不缓存、不再查一次——判定那一刻的数字与调用方拿到的是同一次的结果。
  */
@@ -17,47 +15,51 @@ export type PushChannelCandidate = {
   id: string
   name: string
   state: string
+  /**
+   * 读者是否**请求启用过**这条（库里 `requested_enabled`）。它与管理档是两个维度：
+   * `configuration-ready` 同时装着「刚建好、没启用」与「启用过、围栏保留意图」。
+   * 缺省当 false（老调用点没有这个字段时不能凭空算成「请求过」）。
+   */
+  requestedEnabled?: boolean
 }
 
-export type PushChannelDiagnosticCode = 'push-multiple-enabled'
+export type PushChannelTarget = { id: string; name: string }
 
-export type PushChannelResolution =
-  | { ok: true; channelId: string; channelName: string }
+export type PushChannelsResolution =
+  | { ok: true; channels: readonly PushChannelTarget[] }
   | {
     ok: false
     reason: 'push-unavailable'
-    /** **实际处于 `runtime-ready` 的条数**（0 或 ≥2）。界面要印「你启用了 N 条通道…」，必须同一次数出来。 */
+    /** 实际可用的条数：这里恒为 0（0 条 = 没有，不是拿不到）。 */
     enabledChannelCount: number
-    /** ≥2 时为真：调用方据此记一条 `push-multiple-enabled`，0 条时不记（那不是配置冲突）。 */
-    multiple: boolean
     /**
-     * **所有**通道按状态的直方图（`{ 'runtime-ready': 1, 'credential-missing': 2 }`）。
-     *
-     * 为什么必要：0 条 `runtime-ready` 有两种完全不同的处境——「一台通道都没配」与「配了但状态不对」，
-     * 以前两者都长成 `push-unavailable`，日志里分不开。直方图**只有状态词与条数**，不含通道名与凭据。
+     * 全通道按管理档的直方图。它回答「卡在哪一档」，**不回答**「读者请求启用过没有」——
+     * `configuration-ready` 同时装着两种处境（刚建好 / 启用过但没连上）。
      */
     states: Readonly<Record<string, number>>
+    /**
+     * **读者请求启用过的条数**（`requestedEnabled === true`）。
+     * 与 `states` 并列而不是从档位反推：反推会把「刚建好、还没启用」算成「请求过」。
+     * 界面据此说清「一条都没启用」与「启用了 N 条但都没连上」。
+     */
+    requestedCount: number
   }
 
-export function resolvePushChannel(
-  channels: readonly PushChannelCandidate[],
-  report?: (code: PushChannelDiagnosticCode, count: number) => void
-): PushChannelResolution {
+export function resolvePushChannels(channels: readonly PushChannelCandidate[]): PushChannelsResolution {
   const ready = channels.filter((channel) => channel.state === 'runtime-ready')
-  const only = ready.length === 1 ? ready[0] : undefined
-  if (only !== undefined) return { ok: true, channelId: only.id, channelName: only.name }
-  const multiple = ready.length >= 2
-  if (multiple) report?.('push-multiple-enabled', ready.length)
+  if (ready.length > 0) return { ok: true, channels: ready.map((channel) => ({ id: channel.id, name: channel.name })) }
   const states: Record<string, number> = {}
   for (const channel of channels) states[channel.state] = (states[channel.state] ?? 0) + 1
-  return { ok: false, reason: 'push-unavailable', enabledChannelCount: ready.length, multiple, states }
+  // 只数真正的开启意图，不看档位：`configuration-ready` 的两种处境靠 `requestedEnabled` 分开。
+  const requestedCount = channels.filter((channel) => channel.requestedEnabled === true).length
+  return { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states, requestedCount }
 }
 
-/** 没有可派生目标时的稳定值：三处调用点的 fail-closed 形态只写一次。 */
-export const NO_PUSH_CHANNEL: PushChannelResolution = {
+/** 没有派生入口时的稳定值：三处调用点的 fail-closed 形态只写一次（0 条 = 没有，不是拿不到）。 */
+export const NO_PUSH_CHANNELS: PushChannelsResolution = {
   ok: false,
   reason: 'push-unavailable',
   enabledChannelCount: 0,
-  multiple: false,
-  states: {}
+  states: {},
+  requestedCount: 0
 }

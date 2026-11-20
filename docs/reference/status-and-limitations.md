@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.4.3`. This page describes what is usable today and what is intentionally not
+MacroBay is at `0.4.4`. This page describes what is usable today and what is intentionally not
 supported yet.
 
 ## Usable from source
@@ -43,16 +43,20 @@ the app → Open** (a double-click is refused), or run
 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`. The Windows installer is unsigned too:
 SmartScreen shows *Windows protected your PC* and the user picks **More info → Run anyway**. Both
 prompts return after **every downloaded update**, not just the first install. Windows packaging is
-configured and its installer builds both in CI and on Windows 11 x64 hardware, but the installed app is
-not accepted yet; Linux packaging is not configured. There is no auto-update channel. See
-[Packaging](../development/packaging.md).
+configured and its installer builds both in CI and on Windows 11 x64 hardware, but no real install has
+been accepted yet (no Windows environment was available); Linux packaging is not configured. There is
+no auto-update channel. See [Packaging](../development/packaging.md).
 
 ## Platform support
 
-- **macOS**: arm64 is developed and verified; the x64 installer ships with each release but has not
-  been verified on Intel hardware.
+- **macOS**: the arm64 installer builds and ships with each release; it was installed and used by a
+  user on an Apple silicon machine during 0.4.0, but has not been re-verified by a real install since
+  0.4.1. The x64 installer ships with each release but has not been verified on Intel hardware.
 - **Windows / Linux**: the Electron code is expected to run, but end-to-end behavior has not been
   validated. Treat these platforms as experimental and report concrete failures.
+
+Installed-app acceptance — who installed which build, and how far it got — is recorded in
+[Install verification](../development/install-verification.md). No entry there means unverified.
 
 ## Model compatibility
 
@@ -93,9 +97,40 @@ hiding it.
 - The agent selection page has no entry point right now: **Intelligence** lands directly on the
   dashboard.
 
+### News, interpretation, and notifications
+
+- A per-story AI interpretation is started only by the reader; the result stays in that story's
+  detail and never appears in the latest-conclusion card, the analysis timeline, or the daily
+  briefing.
+- A story has at most one interpretation: once one exists the menu says "View AI interpretation"
+  instead of starting a second one.
+- News strength has five levels: 1 unrelated to crypto, 2 inside crypto but a single asset with no
+  spillover, 3 moves overall risk appetite or a whole asset class, 4 moves BTC/ETH flows or supply
+  directly, 5 a shock that may change the trend. The scale applies to new stories only — **earlier
+  judgements are not re-scored**.
+- The desktop notification threshold is Medium (the middle of three levels), and nothing is sent
+  during quiet hours. **"Not judged yet" is not "low"**: an unjudged story does not show up in the
+  news list, does not raise a desktop notification, and cannot be interpreted.
+
+### The stored event-bus file
+
+The app keeps its event-bus records in one file in the app data folder. If that file is damaged, or
+was written by a newer version of the app, **the app stops writing to it instead of replacing it**:
+publishing fails with a clear error, whatever is already in the file stays exactly as it is, and the
+file is never repaired, renamed or overwritten automatically.
+
+- Existing records in that file are not lost. The file is left untouched until someone deals with it.
+- Events published while this is in effect are **not recorded**; the caller gets an error instead of
+  a false "saved", so nothing silently disappears.
+- The only way forward is to move that file aside by hand and start again; the app will not do it on
+  its own, because that would be deciding to throw the data away for you.
+- To tell "the file itself was refused" apart from "a new feature could not write", start with the
+  event-bus diagnostics: `integrity` and `blocked` say which of the two it is. Only then decide
+  whether to roll back or repair.
+
 ## API and configuration stability
 
-The `0.4.3` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.4.4` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 

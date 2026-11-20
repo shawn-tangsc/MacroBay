@@ -34,7 +34,16 @@ describe('market-intelligence approvals', () => {
       'market-intelligence.calendar.refresh-failed',
       'market-intelligence.source.consecutive-failed',
       'market-intelligence.source.stale',
-      'market-intelligence.timezone.invalid'
+      // a318e5a（2026-11-16）加了这条的批准与声明，却没同步这张期望表——HEAD 上它一直是红的。
+      'market-intelligence.source.symbol-not-supported',
+      'market-intelligence.timezone.invalid',
+      // 2026-11-18（R40）：非低重要性舆情**只发桌面**——桌面说「来了条要紧的」，手机那条另算。
+      'market-intelligence.news.item-arrived',
+      // 2026-11-18 08:07（R42）：用户「我要桌面的」——资金面读数变了也进桌面。
+      // 这是给「桌面只留失败 / 需修正 / 系统状态」开的一个**用户点名**的例外，不是顺手放的：
+      // 产品同日重签，PRD §3 与验收 N42 都记了这条例外，撤掉它要先改 PRD。
+      'market-intelligence.capital-flow.etf-updated',
+      'market-intelligence.capital-flow.stablecoin-updated'
     ])
   })
 
@@ -48,7 +57,7 @@ describe('market-intelligence approvals', () => {
 
   it('keeps the phone leg to the six events the user approved for it', () => {
     // N2 日报完成、N3 信号、N5 宏观事件、N11 事件开始前、N10 舆情、分析结论。
-    // N10 与结论只批 center + channel——桌面与提示两档明确不加。
+    // N10 只批手机（2026-11-18 撤掉 center），结论批 center + channel——两档的差别是产品决定。
     expect(ids.filter((id) => levelsOf(id).includes('channel'))).toEqual([
       'market-intelligence.briefing.ready',
       'market-intelligence.signal.triggered',
@@ -59,7 +68,7 @@ describe('market-intelligence approvals', () => {
     ])
   })
 
-  it('leaves four events without a toast, on purpose', () => {
+  it('leaves these events without a toast, on purpose', () => {
     // 提示默认开：关掉桌面时它是唯一的本机提醒。不批提示的三条都有理由，不是漏配：
     // - 日报完成：**桌面批准、提示不批**——11-04 用户原话「不弹提示」，11-06 只要求桌面通知，
     //   两格不是一回事，留着提示就是替他多要一次打扰（别顺手补回来）；
@@ -71,14 +80,36 @@ describe('market-intelligence approvals', () => {
       'market-intelligence.briefing.ready',
       'market-intelligence.calendar.refresh-failed',
       'market-intelligence.sentiment.alert',
-      'market-intelligence.analysis.conclusion'
+      // 非低重要性舆情（2026-11-18）：只批桌面。提示是另一种打扰，桌面已经说了一次。
+      'market-intelligence.news.item-arrived',
+      'market-intelligence.analysis.conclusion',
+      // 分析没跑成（2026-11-18）：只批中心——不进桌面、不进手机，提示那一格没有获批。
+      'market-intelligence.analysis.failed',
+      // R42（2026-11-18）：资金面读数变了，只批中心 + 提示弹框；toast 那一格没批。
+      'market-intelligence.capital-flow.etf-updated',
+      'market-intelligence.capital-flow.stablecoin-updated'
     ])
   })
 
-  it('always keeps center and never approves a quiet-hours bypass', () => {
+  it('never approves a quiet-hours bypass, and keeps center everywhere it was not withdrawn on purpose', () => {
     // 「谁能穿透免打扰」在平台侧是自检那条；产品事件一条都不穿透（多放一条就是替读者多批一次打扰）。
+    //
+    // center 不是天然必答项：2026-11-18 用户定「舆情不进中心」（R40 §3），`sentiment.alert` 因此
+    // 只留手机。**例外必须逐条列出来**，不能让这条不变量退化成「想撤就撤」。
+    const CENTER_WITHDRAWN = [
+      'market-intelligence.sentiment.alert',
+      'market-intelligence.news.item-arrived',
+      // 2026-11-18（R42）：用户「失败才进中心」——资金面读数更新只走弹框 + 桌面。
+      // 撤 center 的前提是 `occurrence` 去重（平台装配期就按这个判，撤错会直接拒）。
+      'market-intelligence.capital-flow.etf-updated',
+      'market-intelligence.capital-flow.stablecoin-updated'
+    ] as const
     for (const id of ids) {
-      expect(levelsOf(id), `${id} 必须含 center`).toContain('center')
+      if (!(CENTER_WITHDRAWN as readonly string[]).includes(id)) {
+        expect(levelsOf(id), `${id} 必须含 center`).toContain('center')
+      } else {
+        expect(levelsOf(id), `${id} 撤了 center 就不许再留`).not.toContain('center')
+      }
       expect(approvals[id]!.approvedBypassQuietHours, `${id} 不应批准穿透免打扰`).toBe(false)
     }
   })

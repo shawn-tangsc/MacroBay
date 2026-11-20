@@ -4,6 +4,7 @@ import type { IntelligenceFearGreedClient } from '../../features/industry/fear-g
 import { isCanonicalFearGreedSnapshotTime } from '../../../contracts/intelligenceQueryContracts'
 import { projectDashboardFearGreedSnapshot, type DashboardFearGreedState } from './dashboardFearGreedModel'
 import { trackQuietRevision } from './useDataChangeRevision'
+import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 type Input = {
   client: Pick<IntelligenceFearGreedClient, 'querySnapshot'>
@@ -36,7 +37,8 @@ export function useDashboardFearGreed({ client, now, disabled = false, revision 
       setState({ state: 'unavailable' })
       return () => { active = false }
     }
-    void mountInput.client.querySnapshot({ asOf }).then((result) => {
+    // 同一 deadline：一次读挂起不 settle 时不许永远转（落既有的 unavailable 终态）。
+    void withQueryDeadline(mountInput.client.querySnapshot({ asOf })).then((result) => {
       if (active) setState(projectDashboardFearGreedSnapshot(result, asOf))
     }).catch(() => {
       // 后台重读失败沿用上一次；屏上只有「加载中」时才说读不到。

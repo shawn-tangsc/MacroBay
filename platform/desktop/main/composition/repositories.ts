@@ -5,6 +5,7 @@ import { ChannelInboundRepository, ChannelDeliveryRepository, ChannelAdapterAcce
 import { createElectronChannelCredentialVault } from '../../../secrets/channels'
 import { createAssistantImageMessageService } from '../../../ai/assistant-platform/images/assistantImageMessageService'
 import { createGeneratedImageStorage } from '../../../storage/generatedImageStorage'
+import { configureChannelPosterOutbox, createChannelPosterOutbox } from '../../../storage/channelPosterOutbox'
 import { registerGeneratedImageScheme } from '../generatedImageProtocol'
 import { createAgentPlatformServices } from '../../../ai/agent-platform/services'
 import { createAgentPlatformDatabase } from '../../../ai/agent-platform/db/createAgentPlatformDatabase'
@@ -17,7 +18,6 @@ import { createLarkChannelSmoke } from '../../../ai/agent-platform/channels/lark
 import { createQqChannelSmoke } from '../../../ai/agent-platform/channels/qq/qqChannelSmoke'
 import { createSlackChannelSmoke } from '../../../ai/agent-platform/channels/slack/slackChannelSmoke'
 import { createTelegramChannelSmoke } from '../../../ai/agent-platform/channels/telegram/telegramChannelSmoke'
-import { reconcileSingleEnabledChannel } from '../../../ai/agent-platform/channels/singleEnabledChannel'
 import { describeActiveProxy, resolveActiveProxy } from '../../../network/activeProxyState'
 import { getPlatformFetch } from '../../../network/platformFetch'
 import { createAgentPlatformRepositories } from '../../../ai/agent-platform/repositories/createAgentPlatformRepositories'
@@ -58,6 +58,15 @@ const assistantRepositories = createAssistantPlatformRepositories(assistantDatab
  */
 const generatedImagesDirectory = join(userDataPath, 'generated-images')
 const generatedImageStorage = createGeneratedImageStorage({ directory: generatedImagesDirectory })
+/**
+ * 日报海报的暂存区（`userData/channel-outbox/`）：与生成图**分目录**——来源不同，不能靠目录混用。
+ * 这里建一次并登记到进程内单例，产品侧的 `publishToPhone` 取同一个实例（两处各建就会有两套记录）。
+ */
+const channelPosterOutbox = createChannelPosterOutbox({
+  directory: join(userDataPath, 'channel-outbox'),
+  now: () => new Date().toISOString()
+})
+configureChannelPosterOutbox(channelPosterOutbox)
 const assistantImageMessages = createAssistantImageMessageService({
   repositories: assistantRepositories,
   storage: generatedImageStorage
@@ -88,8 +97,6 @@ const channelManagementService = new ChannelManagementService({
   registry: channelAdapterRegistry,
   acceptance: channelAcceptance,
   handoff: new ChannelSecureHandoff(),
-  // 单频道不变量：启动时把历史遗留的「多条启用」收口成一条（保留最近启用的那条）。
-  singleEnabledChannel: (now) => reconcileSingleEnabledChannel(agentDatabase, now),
   // 用户点「启用」时现场自检：握手 + 一次接收往返（够证明 token、网络与代理都通），
   // 通过才在这条通道上启用；平台的七项真机验收照旧决定「对外是否声明支持」。
   // 实现在 `telegramChannelSmoke`：它有独立用例，免得「长轮询套短超时」这种必失败写法再躲进来。
@@ -247,6 +254,7 @@ const agentServices = createAgentPlatformServices(agentStore, {
     assistantRepositories,
     generatedImagesDirectory,
     generatedImageStorage,
+    channelPosterOutbox,
     assistantImageMessages,
     channelInboundRepository,
     channelDeliveryRepository,

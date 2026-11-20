@@ -1,9 +1,13 @@
-import type { ChannelDeliveryTransport, ChannelDeliveryTransportResult } from '../ChannelDeliveryContracts'
+import type {
+  ChannelDeliveryTransport,
+  ChannelDeliveryTransportResult,
+  ChannelImageTransport
+} from '../ChannelDeliveryContracts'
 import { TelegramApiClient } from './TelegramApiClient'
 import { splitTelegramText } from './TelegramContracts'
 
 /** Runtime-owned clients avoid exposing a token/reference to the delivery ledger or its DTOs. */
-export class TelegramDeliveryTransport implements ChannelDeliveryTransport {
+export class TelegramDeliveryTransport implements ChannelDeliveryTransport, ChannelImageTransport {
   private readonly clients = new Map<string, TelegramApiClient>()
   private readonly lifetimeByChannel = new Map<string, { isCurrent: () => boolean; signal: AbortSignal }>()
 
@@ -46,6 +50,49 @@ export class TelegramDeliveryTransport implements ChannelDeliveryTransport {
   }
 
   supportsIdempotency(): boolean { return false }
+
+  /** 这一条通道现在能不能发图：与文本同一份运行时所有权（客户端在、代际没被围栏）。 */
+  supportsImage(channelId: string): boolean {
+    const client = this.clients.get(channelId)
+    const lifetime = this.lifetimeByChannel.get(channelId)
+    return Boolean(client && lifetime && !lifetime.signal.aborted && lifetime.isCurrent())
+  }
+
+  /**
+   * 发图 + caption（`sendPhoto`）。caption 的 Markdown 回落与文本同一套：
+   * 上游回 `parse entities` 就整条以纯文本重发一次，**仍是同一条消息**（不拆两条）。
+   */
+  async sendImage(input: {
+    channelId: string
+    providerConversationKey: string
+    image: { mime: string; bytes: Uint8Array }
+    caption: string
+    idempotencyKey: string
+  }): Promise<ChannelDeliveryTransportResult> {
+    const client = this.clients.get(input.channelId)
+    const lifetime = this.lifetimeByChannel.get(input.channelId)
+    if (!client || !lifetime || lifetime.signal.aborted || !lifetime.isCurrent()) {
+      return { kind: 'failed', code: 'delivery-host-unavailable' }
+    }
+    const chatId = telegramChatId(input.providerConversationKey)
+    if (!chatId) return { kind: 'failed', code: 'delivery-target-invalid' }
+
+    let response = await client.sendPhoto({
+      chatId, bytes: input.image.bytes, mime: input.image.mime, caption: input.caption, plain: false, signal: lifetime.signal
+    })
+    if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
+    if (!response.ok && response.parseRejected) {
+      response = await client.sendPhoto({
+        chatId, bytes: input.image.bytes, mime: input.image.mime, caption: input.caption, plain: true, signal: lifetime.signal
+      })
+      if (lifetime.signal.aborted || !lifetime.isCurrent()) return { kind: 'failed', code: 'delivery-host-unavailable' }
+    }
+    if (!response.ok) return mapFailure(response.code, response.providerDetail)
+    return {
+      kind: 'delivered',
+      ...(response.value.messageId === null ? {} : { detail: JSON.stringify({ telegramMessageId: response.value.messageId }) })
+    }
+  }
 
   async typing(input: { channelId: string; providerConversationKey: string }): Promise<void> {
     const lifetime = this.lifetimeByChannel.get(input.channelId)

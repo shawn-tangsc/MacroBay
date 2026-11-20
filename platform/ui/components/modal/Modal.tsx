@@ -26,17 +26,17 @@ import './modal.css'
  *   调用方不收数字；
  * - `titleParams`：运行时数据的标题走键 + 参数，参数是**已格式化好的字符串**，与抽屉同一条实现。
  *
- * 宽度四档（架构师 2026-11-02 定，`compact` 到 `maximum`）：名字不复用 `StateSize` 的密度词，
+ * 宽度五档（架构师 2026-11-02 定 `compact` 到 `maximum`，2026-11-17 加 `full`）：名字不复用 `StateSize` 的密度词，
  * 也不复用 `Drawer` 的宽度词——两套数值不同，同名不同值比两套词更难查。像素表只在下面一处；
  * 调用点不传数字。`antd` 自己的 `max-width: calc(100vw - 32px)` 负责窄窗口，不另写一个 92vw。
  */
 
-/** 四档宽度，仅此四档。像素只在下面这张表里出现一次。 */
-export const MODAL_WIDTHS = ['compact', 'standard', 'expanded', 'maximum'] as const
+/** 五档宽度，仅此五档。像素只在下面这张表里出现一次。 */
+export const MODAL_WIDTHS = ['compact', 'standard', 'expanded', 'maximum', 'full'] as const
 
 export type ModalWidth = (typeof MODAL_WIDTHS)[number]
 
-const WIDTH_PX: Record<ModalWidth, number> = { compact: 420, standard: 520, expanded: 720, maximum: 860 }
+const WIDTH_PX: Record<ModalWidth, number> = { compact: 420, standard: 520, expanded: 720, maximum: 860, full: 1280 }
 
 /** 两种形态，仅此两种。`center` 不是「更好看」，而是另一种语义：任务在屏幕正中。 */
 export const MODAL_ALIGNS = ['top', 'center'] as const

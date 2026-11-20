@@ -1,4 +1,4 @@
-import type { AnalysisConclusion, SnapshotChange } from '../../../contracts/marketAnalysisContracts'
+import type { AnalysisConclusion, SnapshotChange, SnapshotTrigger } from '../../../contracts/marketAnalysisContracts'
 import type { ValidatedAnalysisModelOutput } from './analysisOutputValidator'
 
 /**
@@ -38,10 +38,25 @@ type FocusFact = Readonly<{ factId: string; evidenceRefId?: string | null; subje
 
 type FocusSnapshot = Readonly<{
   change?: SnapshotChange
+  /** 触发指针（R37）：有它就先按它算焦点，没有才回落到与上一份快照的变化记录。 */
+  trigger?: SnapshotTrigger
   facts: readonly FocusFact[]
 }>
 
 export function resolveTriggerFocus(snapshot: FocusSnapshot): TriggerFocus {
+  // 触发指针优先（R37 §2.6）：新闻事实永远不进变化记录，只读 `change.facts` 的话，新闻触发的
+  // 首跑必然判成「不适用」——规则在最该管的那一次里从来没生效过。指针存在时焦点只有一条。
+  if (snapshot.trigger) {
+    const fact = snapshot.facts.find(candidate => candidate.factId === snapshot.trigger!.factId)
+    // 指针指不到事实只可能是快照缺了那条事实：沿用「被截断」这一档，别装作没有触发项。
+    const evidenceRefId = fact?.evidenceRefId ?? ''
+    if (!fact || !evidenceRefId) return { mode: 'not-applicable:truncated', triggers: [] }
+    const subject = fact.subject
+    return {
+      mode: typeof subject === 'string' && subject.length > 0 ? 'strict' : 'reference-only',
+      triggers: [{ factId: fact.factId, evidenceRefId, ...(subject ? { subject } : {}) }]
+    }
+  }
   const changes = snapshot.change?.facts ?? []
   if (changes.length === 0) return { mode: 'not-applicable:no-change', triggers: [] }
   const frozen = new Map(snapshot.facts.map(fact => [fact.factId, fact]))

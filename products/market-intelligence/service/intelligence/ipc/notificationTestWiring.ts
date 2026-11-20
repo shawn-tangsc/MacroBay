@@ -3,7 +3,7 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
-import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '@platform/notifications/delivery/pushChannelResolution'
 
 /**
  * 三枚「发一条…」按钮要的平台侧接缝：通道解析、提交入口、数据源状态、读者时区。
@@ -15,7 +15,7 @@ export type IntelligenceNotificationTestWiring = Readonly<{
   readEnabledCalendarFeeds: () => Promise<readonly string[]>
   getTimeZone: () => string
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
-  resolvePushChannel: () => Promise<PushChannelResolution>
+  resolvePushChannels: () => Promise<PushChannelsResolution>
   submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
 }>
 
@@ -30,7 +30,7 @@ export function createNotificationTestWiring(input: Readonly<{
     getTimeZone: input.readTimeZone,
     getAppLanguage: input.getAppLanguage,
     // 通道与提交都走运行时**同一份**实现：产品侧不写第二套「恰好一条通道」的判定。
-    resolvePushChannel: () => getNotificationRuntime().resolvePushChannel(),
+    resolvePushChannels: () => getNotificationRuntime().resolvePushChannels(),
     submit: (request) => getNotificationRuntime().submit(request)
   }
 }

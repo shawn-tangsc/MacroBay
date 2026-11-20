@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Select } from 'antd'
 import { MoreVertical } from 'lucide-react'
 
@@ -13,12 +13,18 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
+import { productText } from '../../../shared/i18n/productText'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 import { NewsSentimentDrawerList } from './NewsSentimentDrawerList'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
+import { newsInterpretationMenuItem } from './newsSentimentInterpretationMenu'
+import { NewsSentimentInterpretation } from './NewsSentimentInterpretation'
+import { useNewsInterpretationView } from './useNewsInterpretationView'
 import { labelText, sentimentIcon } from './newsSentimentPresentation'
 import type { NewsSentimentFilters } from './useNewsSentiment'
 import { filterNewsSentimentRows } from './newsSentimentFilters'
@@ -107,6 +113,25 @@ export function NewsSentimentDrawer(props: {
     client: props.client
   })
 
+  const interpretationSectionRef = useRef<HTMLDivElement | null>(null)
+  const interpretation = useNewsInterpretationView({
+    activeItemId: activeId,
+    drawerOpen: props.open,
+    contextMenuItemId: contextMenu?.itemId,
+    contextMenuOpen: contextMenu !== undefined
+  })
+  // 这个入口故意不叫 `submit`：通知生产者门禁把任何 `*.submit(` 都当成「提交通知」的调用点，
+  // 而这里排的是一次 AI 解读、不是通知。起个准确的名字，比往 `KNOWN_UNRESOLVED` 里加一行便宜。
+  const requestInterpretation = interpretation.submit
+
+  // 点完立刻可见：把那一节滚进可视区（等它挂载出来再滚）。
+  useEffect(() => {
+    if (interpretation.submittingItemId === undefined) return
+    const element = interpretationSectionRef.current
+    if (element === null) return
+    if (typeof element.scrollIntoView === 'function') element.scrollIntoView({ block: 'nearest' })
+  }, [interpretation.submittingItemId])
+
   const activeTranslationState = activeId ? translationStates[activeId] ?? active?.bodyTranslationState ?? 'missing' : 'missing'
   const activeTranslatedBody = activeId ? translatedBodies[activeId] ?? detail?.translatedBodyExcerpt : undefined
   const hasTranslatedBody = Boolean(activeTranslatedBody) || activeTranslationState === 'translated'
@@ -122,9 +147,15 @@ export function NewsSentimentDrawer(props: {
 
   // One item, named by whether this row already has a translation. Platform `MenuItem` takes a key,
   // so the sentence still comes from this feature's text resolver.
+  // 菜单第一项常驻（AI 解读），翻译项自己按开关出现：菜单不再被翻译开关绑住。
   const menuItems: MenuItem[] = useMemo(
-    () => drawerTranslateMenuItem({ contextMenuItemId: contextMenu?.itemId, translationStates, rows }),
-    [contextMenu, rows, translationStates]
+    () => [
+      newsInterpretationMenuItem(interpretation.menuView, interpretation.menuLoading),
+      ...(translationEnabled
+        ? drawerTranslateMenuItem({ contextMenuItemId: contextMenu?.itemId, translationStates, rows })
+        : [])
+    ],
+    [contextMenu?.itemId, interpretation.menuLoading, interpretation.menuView, rows, translationEnabled, translationStates]
   )
 
   const sourceOptions = useMemo(
@@ -163,7 +194,7 @@ export function NewsSentimentDrawer(props: {
             <span aria-hidden="true" className="mi-news-drawer__queue-percent">
               {Math.round((progress.done / Math.max(1, progress.total)) * 100)}%
             </span>
-            <Button className="mi-news-drawer__queue-cancel" onClick={cancelTranslation} size="small" type="link">{text.settingsModal.cancelTranslate}</Button>
+            <Button className="mi-news-drawer__queue-cancel text-action" onClick={cancelTranslation} size="small" type="text">{text.settingsModal.cancelTranslate}</Button>
           </div>
         ) : null}
         <header className="mi-news-drawer__toolbar">
@@ -384,6 +415,15 @@ export function NewsSentimentDrawer(props: {
                     detail?.bodyExcerpt ?? text.drawer.detail.noBody
                   )}
                 </div>
+                <div ref={interpretationSectionRef}>
+                <NewsSentimentInterpretation
+                  failure={interpretation.failureFor(activeId)}
+                  onReadResult={interpretation.reloadActive}
+                  onRetryRead={interpretation.reloadActive}
+                  onRetrySubmit={() => { if (activeId !== undefined) requestInterpretation(activeId) }}
+                  submitting={interpretation.submittingItemId === activeId}
+                  view={interpretation.activeView} />
+                </div>
                 <footer>
                   {detail?.promptVersion ? <span>{text.drawer.detail.prompt}: {detail.promptVersion}</span> : null}
                   {active.url ? <a href={active.url} rel="noreferrer" target="_blank">{text.drawer.detail.openOriginal} ↗</a> : null}
@@ -399,16 +439,30 @@ export function NewsSentimentDrawer(props: {
             says which row and which item. */}
         <ContextMenu
           anchor={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
-          ariaLabelKey="news.sentiment.more"
-          items={translationEnabled && contextMenu ? menuItems : []}
+          ariaLabelKey="pages.intelligence.portal.newsSentiment.drawer.moreActions"
+          items={contextMenu ? menuItems : []}
           onClose={() => setContextMenu(undefined)}
           onSelect={(key) => {
-            if (key !== 'translate' || !contextMenu) return
+            if (!contextMenu) return
+            if (key === 'interpretation') {
+              // 「查看」只把该条选到右栏，**不发请求**；「AI 解读 / 再次解读」才触发。
+              if (interpretation.menuView?.state === 'available'
+                && interpretation.menuView.evidenceFingerprint !== undefined
+                && interpretation.menuView.evidenceFingerprint === interpretation.menuView.currentEvidenceFingerprint) {
+                setSelectedId(contextMenu.itemId)
+                return
+              }
+              // 读者右键的可能是未选中的一条：先选中它，右栏跟着切过去——否则看起来「没反应」。
+              setSelectedId(contextMenu.itemId)
+              requestInterpretation(contextMenu.itemId)
+              return
+            }
+            if (key !== 'translate') return
             const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
             void translateItem(contextMenu.itemId, translated)
           }}
-          open={translationEnabled && contextMenu !== undefined}
-          resolveText={resolveIconText}
+          open={contextMenu !== undefined && menuItems.length > 0}
+          resolveText={resolveProductText}
         />
       </div>
     </Drawer>

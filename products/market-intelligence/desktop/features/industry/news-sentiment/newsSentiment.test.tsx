@@ -11,6 +11,7 @@ import { NewsSentimentDrawer } from './NewsSentimentDrawer'
 import { NewsSentimentFeature } from './NewsSentimentFeature'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
+import { NEWS_INTERPRETATION_POLL_MS, NEWS_INTERPRETATION_WAIT_MS } from './useNewsInterpretationView'
 
 const text = productText['zh-CN'].pages.intelligence.portal.newsSentiment
 
@@ -117,6 +118,46 @@ const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof New
       onWidenWindow={() => undefined}
       onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
   )
+
+describe('an empty card that actually has unjudged news', () => {
+  // 2026-11-18：规则没命中不再写判定行，于是「空列表」可能是「有新闻但没判」。卡片必须说这一句，
+  // 而不是「这段时间没有相关消息」——后者在这些时候是假话。
+  const readiness = { total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [] }
+  const unjudgedView = (cause?: 'model-off' | 'model-unavailable'): NewsSentimentView => ({
+    ...VIEW,
+    state: 'empty',
+    summary: undefined,
+    items: [],
+    asOf: '2026-10-24T13:00:00.000Z',
+    readiness,
+    unjudgedInWindow: 3,
+    ...(cause === undefined ? {} : { unjudgedCause: cause })
+  })
+
+  it('says "arrived but not judged", never "no related news in this period"', async () => {
+    const container = await mountCard(unjudgedView())
+    const state = container.querySelector('[data-news-sentiment-state="unjudged"]')
+    expect(state).not.toBeNull()
+    const mi = productText['zh-CN'].mi.newsSentiment
+    expect(state?.textContent).toContain(mi.unjudged)
+    expect(state?.textContent).not.toContain(mi.quiet)
+  })
+
+  it('names the cause when the model is off, and when it is unavailable', async () => {
+    const mi = productText['zh-CN'].mi.newsSentiment
+    const off = await mountCard(unjudgedView('model-off'))
+    expect(off.querySelector('[data-news-sentiment-state="unjudged"]')?.textContent).toContain(mi.unjudgedModelOff)
+
+    const unavailable = await mountCard(unjudgedView('model-unavailable'))
+    expect(unavailable.querySelector('[data-news-sentiment-state="unjudged"]')?.textContent).toContain(mi.unjudgedModelUnavailable)
+  })
+
+  it('stays a quiet window when nothing is waiting for a judgment', async () => {
+    const container = await mountCard({ ...VIEW, state: 'empty', summary: undefined, items: [], asOf: '2026-10-24T13:00:00.000Z', readiness })
+    expect(container.querySelector('[data-news-sentiment-state="unjudged"]')).toBeNull()
+    expect(container.querySelector('[data-news-sentiment-state="quiet"]')).not.toBeNull()
+  })
+})
 
 describe('icon triggers', () => {
   // The two icon-only triggers must carry both a screen-reader name and a visible hint: a name alone
@@ -870,4 +911,444 @@ describe('settings entry', () => {
     expect(onOpenSettings).toHaveBeenCalledWith({ business: 'sentiment' })
   })
 
+})
+
+/**
+ * 用户 2026-11-15：舆情列表默认 15 条。
+ * 15 是**初始可见条数**，不是上限——滚到底还要能继续加载（第 16 条要出得来）。
+ */
+it('shows fifteen rows first and keeps loading past them on scroll', async () => {
+  const many: NewsSentimentView = {
+    ...VIEW,
+    items: Array.from({ length: 20 }, (_, index) => ({
+      ...VIEW.items[0]!,
+      itemId: `bulk-${index}`,
+      title: `标题 ${index}`,
+      displayTitle: `标题 ${index}`,
+      publishedAt: new Date(Date.parse('2026-10-24T12:00:00.000Z') - index * 60_000).toISOString()
+    }))
+  }
+  const container = await mountCard(many)
+  const rows = () => container.querySelectorAll('.mi-news-sentiment__drivers button')
+  expect(rows()).toHaveLength(15)
+
+  // 滚到底 → 再放 15 条（不足就取剩余）：第 16 条出现在列表里。
+  const list = container.querySelector<HTMLElement>('.mi-news-sentiment__drivers')!
+  Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 1000 })
+  Object.defineProperty(list, 'clientHeight', { configurable: true, value: 400 })
+  Object.defineProperty(list, 'scrollTop', { configurable: true, value: 600 })
+  await act(async () => { list.dispatchEvent(new Event('scroll', { bubbles: true })) })
+  expect(rows().length).toBeGreaterThanOrEqual(16)
+  expect(rows()).toHaveLength(20)
+})
+
+describe('AI 解读入口（只读接口驱动，菜单不被翻译开关绑住）', () => {
+  const READ_METHOD = 'marketAnalysis.readNewsInterpretation'
+  const baseRead = {
+    itemId: 'item-a',
+    state: 'available' as const,
+    runId: 'run-1',
+    summaryId: 'summary-1',
+    generatedAt: '2026-10-24T12:30:00.000Z',
+    snapshotHash: 'snap-1',
+    dataAsOf: '2026-10-24T12:00:00.000Z',
+    evidenceFingerprint: 'fp-1',
+    currentEvidenceFingerprint: 'fp-1',
+    subjectLabel: 'A headline',
+    evidenceScope: {
+      asOf: '2026-10-24T12:00:00.000Z',
+      dataCutoff: '2026-10-24T11:00:00.000Z',
+      factCount: 300,
+      evidenceRefCount: 155,
+      domains: ['market', 'funds']
+    }
+  }
+  const SUMMARY = {
+    id: 'summary-1',
+    analysisRunId: 'run-1',
+    conclusion: {
+      summary: '这条新闻压制了风险偏好，BTC 首当其冲。',
+      change: '过去两小时资金费率回落。',
+      causalChain: '监管消息 → 风险偏好下降 → 永续合约承压。'
+    }
+  }
+  const stubRead = (result: unknown): void => {
+    ;(window as unknown as { platform: unknown }).platform = {
+      products: {
+        invoke: vi.fn(async (_product: string, method: string) => {
+          if (method === READ_METHOD) return result
+          if (method === 'marketAnalysis.getSummary') return SUMMARY
+          return undefined
+        })
+      }
+    }
+  }
+  // 抽屉渲染在 document.body 的 portal 里，行不在宿主容器内。
+  const openRowMenu = async (): Promise<void> => {
+    const row = document.body.querySelector<HTMLButtonElement>('.mi-news-drawer__row-open')
+    expect(row).not.toBeNull()
+    await act(async () => { row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 12, clientY: 12 })) })
+    await act(async () => {})
+    await act(async () => {})
+  }
+  const menuLabels = (): string[] =>
+    [...document.body.querySelectorAll('.ant-menu-item')].map((node) => node.textContent ?? '')
+
+  it('keeps the menu (and the AI item) when translation is off', async () => {
+    stubRead(baseRead)
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    expect(menuLabels()).toContain('查看 AI 解读')
+    expect(menuLabels()).not.toContain('翻译此条')
+  })
+
+  it('says "AI 解读" when there is no interpretation yet', async () => {
+    stubRead({ ...baseRead, state: 'none', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    expect(menuLabels()).toContain('AI 解读')
+  })
+
+  it('says "再次解读" when the evidence fingerprint changed', async () => {
+    stubRead({ ...baseRead, currentEvidenceFingerprint: 'fp-2' })
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    expect(menuLabels()).toContain('再次解读')
+  })
+
+  it('greys out the running row without attaching a reason', async () => {
+    stubRead({ ...baseRead, state: 'in-flight', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await openRowMenu()
+    const item = [...document.body.querySelectorAll('.ant-menu-item')].find((node) => node.textContent === 'AI 解读')
+    expect(item).toBeDefined()
+    expect(item?.className).toContain('disabled')
+  })
+
+  it('draws the section from the read result, and nothing for none', async () => {
+    stubRead(baseRead)
+    await mountDrawer({ translationEnabled: false })
+    // 读状态 → 取摘要正文是两跳，都要落地。
+    await act(async () => {})
+    await act(async () => {})
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section).not.toBeNull()
+    expect(section.querySelector('[data-ai-interpretation-meta]')?.textContent).toContain('155')
+    expect(section.querySelector('[data-ai-interpretation-meta]')?.textContent).not.toContain('300')
+    expect(section.querySelector('details')?.textContent).toContain('300')
+    // available 时正文必须真的渲染出来（不是只有元信息）。
+    expect(section.textContent).toContain('这条新闻压制了风险偏好，BTC 首当其冲。')
+    expect(section.textContent).toContain('监管消息 → 风险偏好下降 → 永续合约承压。')
+  })
+
+  it('draws no section when there is nothing to show', async () => {
+    stubRead({ ...baseRead, state: 'none', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    expect(document.body.querySelector('[data-ai-interpretation]')).toBeNull()
+  })
+
+  it('shows the pending and the unreadable states honestly', async () => {
+    stubRead({ ...baseRead, state: 'in-flight', evidenceFingerprint: undefined })
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+  })
+
+  it('treats a read failure as unreadable with one retry, never as "none"', async () => {
+    ;(window as unknown as { platform: unknown }).platform = {
+      products: { invoke: vi.fn(async () => { throw new Error('boom') }) }
+    }
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section?.getAttribute('data-state')).toBe('failed')
+    expect(section?.querySelector('button.text-action')).not.toBeNull()
+  })
+})
+
+describe('AI 解读：点击触发（写端点）只把结果落到右栏', () => {
+  const READ = 'marketAnalysis.readNewsInterpretation'
+  const REQUEST = 'marketAnalysis.requestNewsInterpretation'
+  const SUMMARY = 'marketAnalysis.getSummary'
+  const readNone = {
+    itemId: 'item-a', state: 'none' as const,
+    currentEvidenceFingerprint: 'fp-1'
+  }
+  const readAvailable = {
+    itemId: 'item-a', state: 'available' as const, runId: 'run-1', summaryId: 'summary-1',
+    generatedAt: '2026-10-24T12:30:00.000Z', snapshotHash: 'snap-1', dataAsOf: '2026-10-24T12:00:00.000Z',
+    evidenceFingerprint: 'fp-1', currentEvidenceFingerprint: 'fp-1',
+    evidenceScope: { asOf: '2026-10-24T12:00:00.000Z', dataCutoff: '2026-10-24T11:00:00.000Z', factCount: 300, evidenceRefCount: 155, domains: ['market'] }
+  }
+  const summaryBody = { id: 'summary-1', analysisRunId: 'run-1', conclusion: { summary: '正文一句话。', change: '变了。', causalChain: '链。' } }
+
+  const stub = (handlers: Readonly<{ read?: unknown; request?: unknown; summary?: unknown }>): { invoke: ReturnType<typeof vi.fn> } => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === READ) return handlers.read
+      if (method === REQUEST) return handlers.request
+      if (method === SUMMARY) return handlers.summary
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    return { invoke }
+  }
+  const clickMenuItem = async (label: string): Promise<void> => {
+    const item = [...document.body.querySelectorAll<HTMLElement>('.ant-menu-item')]
+      .find((node) => node.textContent === label)
+    expect(item).not.toBeUndefined()
+    await act(async () => { item?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+  }
+  const openMenu = async (): Promise<void> => {
+    const row = document.body.querySelector<HTMLButtonElement>('.mi-news-drawer__row-open')
+    await act(async () => { row?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 8, clientY: 8 })) })
+    await act(async () => {})
+    await act(async () => {})
+  }
+
+  it('queued keeps the section in its submitting state (not an empty section)', async () => {
+    const { invoke } = stub({ read: readNone, request: { state: 'queued', itemId: 'item-a' } })
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    await clickMenuItem('AI 解读')
+    expect(invoke.mock.calls.some((call) => call[1] === REQUEST)).toBe(true)
+    expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+  })
+
+  it('a failed request shows one reason and a retry that really re-requests', async () => {
+    const { invoke } = stub({
+      read: readNone,
+      request: { state: 'failed', itemId: 'item-a', failureCode: 'analysis-initial-request-failed' }
+    })
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    await clickMenuItem('AI 解读')
+
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section?.getAttribute('data-state')).toBe('failed')
+    expect(section.textContent?.trim()).not.toBe('')
+    const retry = section.querySelector('button.text-action')
+    expect(retry).not.toBeNull()
+    const before = invoke.mock.calls.filter((call) => call[1] === REQUEST).length
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST).length).toBe(before + 1)
+  })
+
+  it('an asynchronously failed run lands in the failed state, never stays "generating"', async () => {
+    // 现场：运行排上后失败、没有摘要 → 只读接口回 none + lastRun。界面必须显示失败 + 再试一次。
+    const lastRunRead = {
+      itemId: 'item-a', state: 'none' as const, currentEvidenceFingerprint: 'fp-1',
+      lastRun: { runId: 'run-9', status: 'invalid-output', failureCode: 'missing-trigger-focus', finishedAt: '2026-11-16T13:28:22.000Z' }
+    }
+    const { invoke } = stub({ read: lastRunRead })
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    await act(async () => {})
+
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    expect(section?.getAttribute('data-state')).toBe('failed')
+    expect(section?.textContent?.trim()).not.toBe('')
+    const retry = section.querySelector('button.text-action') as HTMLButtonElement
+    expect(retry).not.toBeNull()
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+    // 「再试一次」= 重新排一次解读（失败不算已有解读）。
+    await act(async () => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(1)
+  })
+
+  it('a read failure retry only re-reads: it never queues an analysis', async () => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === READ) throw new Error('boom')
+      if (method === SUMMARY) return summaryBody
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    await mountDrawer({ translationEnabled: false })
+    await act(async () => {})
+    const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+    const retry = section.querySelector('button.text-action') as HTMLButtonElement
+    expect(retry).not.toBeNull()
+    const readsBefore = invoke.mock.calls.filter((call) => call[1] === READ).length
+    await act(async () => { retry.click() })
+    await act(async () => {})
+    expect(invoke.mock.calls.filter((call) => call[1] === READ).length).toBe(readsBefore + 1)
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+  })
+
+  it('triggering on a non-selected row selects it first, so the section is about that row', async () => {
+    const invoke = vi.fn(async (_product: string, method: string, payload: { itemId?: string }) => {
+      if (method === READ) return { ...readNone, itemId: payload?.itemId ?? 'item-a' }
+      if (method === REQUEST) return { state: 'queued', itemId: payload?.itemId ?? 'item-a' }
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+    await mountDrawer({ translationEnabled: false })
+    // 右键第二行（默认选中的是第一行）。
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
+    expect(rows.length).toBeGreaterThan(1)
+    const secondTitle = rows[1]?.querySelector('.mi-news-drawer__title')?.textContent ?? ''
+    await act(async () => { rows[1]?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 8, clientY: 8 })) })
+    await act(async () => {})
+    await act(async () => {})
+    const item = [...document.body.querySelectorAll<HTMLElement>('.ant-menu-item')].find((node) => node.textContent === 'AI 解读')
+    await act(async () => { item?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+
+    // 右栏切到第二行，那一节是提交中（不是“没反应”）。
+    const detailTitle = document.body.querySelector('.mi-news-drawer__detail h3')?.textContent ?? ''
+    expect(secondTitle.length).toBeGreaterThan(0)
+    expect(detailTitle).toBe(secondTitle)
+    expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+  })
+
+  it('a queued request converges: the submitting state ends in a real result', async () => {
+    let requested = false
+    let readsAfterRequest = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === READ) {
+        // 点之前一直是 none；排上之后：第一次 in-flight，催一次读 → available（带正文）。
+        if (!requested) return readNone
+        readsAfterRequest += 1
+        if (readsAfterRequest === 1) return { ...readAvailable, state: 'in-flight', summaryId: undefined, evidenceFingerprint: undefined }
+        return readAvailable
+      }
+      if (method === REQUEST) { requested = true; return { state: 'queued', itemId: 'item-a' } }
+      if (method === SUMMARY) return summaryBody
+      return undefined
+    })
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    await clickMenuItem('AI 解读')
+    // 提交中，但不是一个只能等死的壳：有「读取结果」。
+    let pending = document.body.querySelector('[data-ai-interpretation]')
+    expect(pending?.getAttribute('data-state')).toBe('pending')
+    const readNow = [...(pending?.querySelectorAll('button.text-action') ?? [])]
+      .find((button) => button.textContent === '读取结果') as HTMLButtonElement | undefined
+    expect(readNow).toBeDefined()
+    await act(async () => { readNow?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
+    await act(async () => {})
+
+    pending = document.body.querySelector('[data-ai-interpretation]')
+    expect(pending?.getAttribute('data-state')).toBe('ready')
+    expect(pending?.textContent).toContain('正文一句话。')
+  })
+
+  it('gives up at the wait budget when the run stays in flight, instead of spinning forever', async () => {
+    // 现场（2026-11-17）：运行挂死，只读接口一直回 in-flight。界面不许无限等——到上限必须落到失败态。
+    vi.useFakeTimers()
+    try {
+      const { invoke } = stub({ read: { itemId: 'item-a', state: 'in-flight', currentEvidenceFingerprint: 'fp-1' } })
+      await mountDrawer({ translationEnabled: false })
+      await act(async () => {})
+      expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+
+      await act(async () => { vi.advanceTimersByTime(NEWS_INTERPRETATION_WAIT_MS + NEWS_INTERPRETATION_POLL_MS) })
+      await act(async () => {})
+
+      const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+      expect(section?.getAttribute('data-state')).toBe('failed')
+      expect(section.textContent).toContain('这次没跑完，可再试一次')
+      const retry = section.querySelector('button.text-action') as HTMLButtonElement
+      expect(retry).not.toBeNull()
+      // 只是等超时，没排过任何运行；重试才真的发请求。
+      expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+      await act(async () => { retry.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+      await act(async () => {})
+      expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives up at the wait budget after a queued run that never lands', async () => {
+    vi.useFakeTimers()
+    try {
+      let requested = false
+      const invoke = vi.fn(async (_product: string, method: string) => {
+        if (method === READ) {
+          return requested
+            ? { itemId: 'item-a', state: 'in-flight', currentEvidenceFingerprint: 'fp-1' }
+            : readNone
+        }
+        if (method === REQUEST) { requested = true; return { state: 'queued', itemId: 'item-a' } }
+        return undefined
+      })
+      ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+      await mountDrawer({ translationEnabled: false })
+      await openMenu()
+      await clickMenuItem('AI 解读')
+      expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+
+      await act(async () => { vi.advanceTimersByTime(NEWS_INTERPRETATION_WAIT_MS + NEWS_INTERPRETATION_POLL_MS) })
+      await act(async () => {})
+
+      const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+      expect(section?.getAttribute('data-state')).toBe('failed')
+      expect(section.textContent).toContain('这次没跑完，可再试一次')
+      expect(section.querySelector('button.text-action')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('converges on its own when a run that was already in flight finishes inside the budget', async () => {
+    // 打开抽屉时运行已在跑（不是本屏发起）：界面必须自己轮询到结果，
+    // 不许干等到时限再报「没跑完」——那样一次正常的一分多钟会被误判成失败。
+    vi.useFakeTimers()
+    try {
+      let reads = 0
+      const invoke = vi.fn(async (_product: string, method: string) => {
+        if (method === READ) {
+          reads += 1
+          if (reads <= 2) return { itemId: 'item-a', state: 'in-flight', currentEvidenceFingerprint: 'fp-1' }
+          return readAvailable
+        }
+        if (method === 'marketAnalysis.getSummary') return summaryBody
+        return undefined
+      })
+      ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
+
+      await mountDrawer({ translationEnabled: false })
+      await act(async () => {})
+      expect(document.body.querySelector('[data-ai-interpretation]')?.getAttribute('data-state')).toBe('pending')
+
+      // 一次只推进一个轮询周期：每次重读后要让 React 先落地，否则同一段假时间里
+      // 只会有第一次定时器触发（状态更新是异步的）。
+      for (let poll = 0; poll < 4; poll += 1) {
+        await act(async () => { vi.advanceTimersByTime(NEWS_INTERPRETATION_POLL_MS) })
+        await act(async () => {})
+      }
+
+      const section = document.body.querySelector('[data-ai-interpretation]') as HTMLElement
+      expect(section?.getAttribute('data-state')).toBe('ready')
+      expect(section.textContent).toContain('正文一句话。')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('already-available does not queue a second run and renders the real body', async () => {
+    const { invoke } = stub({
+      read: readAvailable,
+      request: {
+        state: 'already-available', itemId: 'item-a', runId: 'run-1', summaryId: 'summary-1',
+        generatedAt: '2026-10-24T12:30:00.000Z', snapshotHash: 'snap-1', dataAsOf: '2026-10-24T12:00:00.000Z',
+        evidenceScope: readAvailable.evidenceScope, evidenceFingerprint: 'fp-1'
+      },
+      summary: summaryBody
+    })
+    await mountDrawer({ translationEnabled: false })
+    await openMenu()
+    // 读接口说 available 且指纹一致 → 菜单是「查看」，点了不发请求。
+    await clickMenuItem('查看 AI 解读')
+    expect(invoke.mock.calls.filter((call) => call[1] === REQUEST)).toHaveLength(0)
+    expect(document.body.querySelector('[data-ai-interpretation]')?.textContent).toContain('正文一句话。')
+  })
 })

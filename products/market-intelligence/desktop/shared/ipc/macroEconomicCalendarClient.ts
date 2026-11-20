@@ -4,6 +4,7 @@ import {
   type SetMacroEconomicCalendarReleaseTimeInput,
   type MacroEconomicCalendarReleaseTimeResult,
   type MacroEconomicCalendarEventView,
+  type MacroEconomicCalendarImportance,
   type ManualBlsIcsImportResult,
   type ManualBlsIcsInput,
   type ManualBlsIcsPreview,
@@ -195,11 +196,11 @@ function sanitizeEvent(value: unknown, asOf: string): MacroEconomicCalendarEvent
     'coverage', 'scheduledDate', 'scheduledAt', 'releaseTimeSource', 'conventionScheduledAt', 'officialReleaseDate', 'publishedAt', 'detectedAt', 'createdAt', 'actualDetectedAt', 'actual', 'previous', 'consensus',
     'consensusState', 'surprise', 'providerIds', 'caveats'
   ]) || !hasRequiredFields(value, [
-    'eventKey', 'releaseGroupKey', 'eventFamily', 'titleKey', 'countryCode', 'importance', 'periodKey', 'lifecycleState',
+    'eventKey', 'releaseGroupKey', 'eventFamily', 'titleKey', 'countryCode', 'periodKey', 'lifecycleState',
     'coverage', 'scheduledDate', 'detectedAt', 'consensus', 'consensusState', 'surprise', 'providerIds', 'caveats'
   ])) return undefined
   if (!isBoundedText(value.eventKey) || !isBoundedText(value.releaseGroupKey) || !isBoundedText(value.eventFamily) || !isBoundedText(value.titleKey) ||
-    !isBoundedText(value.periodKey) || value.countryCode !== 'US' || value.importance !== 'high' || !isLifecycleState(value.lifecycleState) ||
+    !isBoundedText(value.periodKey) || value.countryCode !== 'US' || !isOptionalImportance(value.importance) || !isLifecycleState(value.lifecycleState) ||
     !isCoverage(value.coverage) || !isDate(value.scheduledDate) || !isCanonicalUtcMillis(value.detectedAt) || value.detectedAt > asOf ||
     !isOptionalCanonicalUtcMillis(value.scheduledAt) || !isReleaseTimeSource(value.releaseTimeSource) ||
     !isOptionalCanonicalUtcMillis(value.conventionScheduledAt) || !isOptionalDateProperty(value, 'officialReleaseDate') || !isOptionalCanonicalUtcMillis(value.publishedAt) || !isOptionalCanonicalUtcMillis(value.createdAt) || !isOptionalCanonicalUtcMillis(value.actualDetectedAt) ||
@@ -208,7 +209,7 @@ function sanitizeEvent(value: unknown, asOf: string): MacroEconomicCalendarEvent
     !macroEconomicCalendarConsensusPolicy.isSurprise(value.surprise) || !isProviderIds(value.providerIds) || !isCaveats(value.caveats)) return undefined
   return {
     eventKey: value.eventKey, releaseGroupKey: value.releaseGroupKey, eventFamily: value.eventFamily, titleKey: value.titleKey,
-    countryCode: 'US', importance: 'high', periodKey: value.periodKey, lifecycleState: value.lifecycleState,
+    countryCode: 'US', ...(value.importance === undefined ? {} : { importance: value.importance as MacroEconomicCalendarImportance }), periodKey: value.periodKey, lifecycleState: value.lifecycleState,
     coverage: value.coverage, scheduledDate: value.scheduledDate, ...(value.scheduledAt ? { scheduledAt: value.scheduledAt } : {}),
     releaseTimeSource: value.releaseTimeSource as MacroEconomicCalendarEventView['releaseTimeSource'],
     ...(value.conventionScheduledAt ? { conventionScheduledAt: value.conventionScheduledAt as string } : {}),
@@ -312,6 +313,11 @@ function isOptionalDateProperty(value: Record<string, unknown>, field: string): 
   if (!Object.hasOwn(value, field)) return true
   const descriptor = Object.getOwnPropertyDescriptor(value, field)
   return Boolean(descriptor && Object.hasOwn(descriptor, 'value') && isDate(descriptor.value))
+}
+
+/** 三档之一或没有这个字段；别的值一律当作形状不合规，不猜。 */
+function isOptionalImportance(value: unknown): boolean {
+  return value === undefined || value === 'high' || value === 'medium' || value === 'low'
 }
 
 function isLifecycleState(value: unknown): value is MacroEconomicCalendarEventView['lifecycleState'] {

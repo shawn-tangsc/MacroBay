@@ -1,0 +1,13 @@
+/*
+ * 「各来源记录」的布局：一个来源一块，块内一行一次写入/观测。
+ *
+ * 紧凑、可对照（读者要的是「两家差在哪」），所以同一块的三个数排在同一行、时间在最前；
+ * 值只用正文色与 `--muted` 两级，不给「这一家更可信」之类的颜色暗示——谁对谁错不归颜色管。
+ */
+.mi-source-writes { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.mi-source-writes__block { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+.mi-source-writes__head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px; }
+.mi-source-writes__meta { font-size: var(--font-meta); color: var(--muted); }
+.mi-source-writes__rows { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mi-source-writes__rows li { display: flex; flex-wrap: wrap; gap: 12px; font-size: var(--font-body); }
+.mi-source-writes__time { font-size: var(--font-meta); color: var(--muted); }

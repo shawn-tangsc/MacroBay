@@ -492,6 +492,36 @@ describe('the row never squeezes what a reader must see', () => {
   })
 })
 
+/**
+ * 发布结果条的明细是一张**四列对齐表**（名字 / 结果 / 形态 / 原因），结果那列是状态药丸。
+ *
+ * 宽度必须写死：一旦让内容决定（`auto` / `max-content`），同一份明细里几行的「形态」列起点会跟着
+ * 中英文长短左右跳——英文 `sent, no receipt yet` 比中文「等回执」长一倍多。这不是字号问题，是对齐。
+ * 这条守卫钉两件事：第二列是写死的像素；那个数至少装得下最长那句（药丸内距 + 圆点 + 间距 + 文本）。
+ */
+describe('publish result detail columns', () => {
+  const NAME = 104
+  const OUTCOME = 152
+  const FORM = 88
+  /** 药丸盒子：内距 8×2 + 描边 1×2；圆点 6；圆点与字的间距 5。 */
+  const PILL_CHROME = 8 * 2 + 1 * 2
+  const DOT = 6
+  const DOT_GAP = 5
+  /** 最长那句（英文 20 个字符含标点）在 11px 下的宽度。 */
+  const LONGEST_EN_LABEL = 112
+
+  it('fixes the outcome column instead of letting the label size it', () => {
+    const row = rule('.mi-daily-briefing__push-line {')
+    expect(row).toContain(`grid-template-columns: ${NAME}px ${OUTCOME}px ${FORM}px minmax(0, 1fr)`)
+    expect(row).not.toContain(' auto')
+    expect(row).not.toContain('max-content')
+  })
+
+  it('leaves room for the longest label in the widest language', () => {
+    expect(OUTCOME).toBeGreaterThanOrEqual(PILL_CHROME + DOT + DOT_GAP + LONGEST_EN_LABEL)
+  })
+})
+
 /** The declarations of one rule, keyed by its selector. */
 function rule(selector: string): string {
   const start = css.indexOf(selector)

@@ -143,6 +143,9 @@ export function DashboardSourcesPanel(props: {
       writeSelection: (cellId, sourceId) => cellEnabledClient.writeSelection(cellId, sourceId)
     }}
     filter={sourceFilter}
+    /* 写失败要看得见：抽屉这一面同样是写入口（选档位、翻开关），失败一样会弹回原值。 */
+    onRetrySave={settings.retryFailedSave}
+    saveFailure={settings.saveFailure}
     /* 抽屉五块：全部 / 看板 / 日历 / 舆情 / 其他（第四块是兜底）（用户 2026-11-10：先砍掉「全部」「高级」，
        随后要求把「全部」恢复到 tab 最前；「高级」仍不要）。默认筛选仍是**看板**。设置页仍是原来的六项。 */
     onFilterChange={setSourceFilter}

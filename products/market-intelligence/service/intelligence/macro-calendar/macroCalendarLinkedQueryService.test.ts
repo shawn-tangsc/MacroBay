@@ -13,7 +13,7 @@ const official: MacroEconomicCalendarEventView = { eventKey: 'US.CPI.RELEASE.202
   consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: [] }
 const marketEvent = (index: number): MarketCalendarEvent => ({ eventKey: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
   title: 'Derived CPI', countryCode: 'US', eventType: 'economic-indicator', importance: 'high',
-  scheduledAt: '2026-09-11T12:30:00.000Z', source: '0xRouter', sourceObservedAt: query.asOf, coverage: 'observed-unverified',
+  scheduledAt: '2026-09-11T12:30:00.000Z', source: 'Narwhal', sourceObservedAt: query.asOf, coverage: 'observed-unverified',
   consensus: { displayValue: '0' }, providerActual: null, providerPrevious: { displayValue: '2.1' } })
 function page(events: MarketCalendarEvent[], nextCursor?: string): MarketCalendarPage {
   return { state: 'available', ...query, events, ...(nextCursor ? { nextCursor } : {}), sources: [
@@ -65,7 +65,7 @@ describe('linked calendar query composition', () => {
     const event = { eventKey: '00000000-0000-4000-8000-000000000001', title: 'Derived event', countryCode: 'US' as const,
       eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-09-11T12:30:00.000Z',
       consensus: { displayValue: '0' }, providerPrevious: null, providerActual: null,
-      source: '0xRouter' as const, sourceObservedAt: query.asOf, coverage: 'observed-unverified' as const }
+      source: 'Narwhal' as const, sourceObservedAt: query.asOf, coverage: 'observed-unverified' as const }
     const service = createMacroCalendarLinkedQueryService({
       official: { queryMonth: input => { calls.push(input); return { state: 'available', asOf: query.asOf, events: [] } } },
       market: { queryMonth: input => { calls.push(input); return { state: 'available', ...query, events: [event], sources: [

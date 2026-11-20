@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import { createDefaultNotificationRuntimeSettings } from '../contracts/notificationContracts'
@@ -54,10 +55,10 @@ function harness(input: { now: string; settings?: NotificationRuntimeSettings })
     desktopSupported: () => true,
     deliveryHooks: {
       desktop: async () => { desktop.push('desktop'); return { ok: true } },
-      push: async () => { push.push('push'); return { ok: true, messageId: 'm1' } },
+      push: singleResultHook(async () => { push.push('push'); return { ok: true, messageId: 'm1' } }),
       toast: () => { toast.push('toast') }
     },
-    resolvePushChannel: async () => ({ ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'channel-a', name: 'Telegram · test' }] }),
     getLanguage: async () => 'zh-CN'
   })
   return { runtime, state: () => state, desktop, push, toast }
@@ -125,7 +126,7 @@ describe('quiet hours: one decision, shared by the planner and the delivery rout
     ]))
     // 回执：这一档根本没试过 → 说「没测」，不说「没到」。
     const surface = composeSelfTestSurface({
-      resolvePushChannel: async () => ({ ok: true, channelId: 'channel-a', channelName: 'Telegram · test' }),
+      resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'channel-a', name: 'Telegram · test' }] }),
       submitRequest: (request) => runtime.submit(request),
       // 与上面那次提交错开一秒：自检每次点击都是新键，同键会被合并（那属于另一条用例）。
       now: () => '2026-11-08T04:00:01.000Z'

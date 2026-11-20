@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { createElectronSecretVault } from '../../../secrets'
 import { redactText } from '../../../secrets/redaction/redactText'
 import { createAppLog } from '../../../observability/logging/appLog'
+import { registerBootMarkSink } from '../../window/bootMarks'
 import { createSettingsStore } from '../../../settings/store/settingsStore'
 import { createJsonFileStorage } from '../../../storage/jsonFileStorage'
 import { createDefaultAppSettings } from '../../../settings/schema/appSettings'
@@ -50,6 +51,8 @@ const appLog = createAppLog({
   directory: join(userDataPath, 'logs'),
   redact: (text) => redactText(text).text
 })
+// 启动时间线打点（`window/bootMarks.ts`）与其它启动事件同一个日志、同一个时钟。
+registerBootMarkSink((mark, at) => appLog.log('info', 'boot.mark', { mark, at }))
 const settingsStore = createSettingsStore(
   createJsonFileStorage(join(userDataPath, 'platform', 'settings.json'), createDefaultAppSettings()),
   {

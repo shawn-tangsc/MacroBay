@@ -4,7 +4,7 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
-import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '@platform/notifications/delivery/pushChannelResolution'
 
 import { parseIntelligenceTestRequest } from '../../contracts/intelligenceNotificationTest'
 import {
@@ -22,7 +22,7 @@ import { sendIntelligenceTestNotification, type IntelligenceTestDeps } from './s
  */
 
 const NOW = '2026-11-08T05:00:00.000Z'
-const ONE_CHANNEL: PushChannelResolution = { ok: true, channelId: 'slack', channelName: 'Slack' }
+const ONE_CHANNEL: PushChannelsResolution = { ok: true, channels: [{ id: 'slack', name: 'Slack' }] }
 // 提交被接受 + **通道那一跳真的被受理**：回执要的是这两件事同时成立。
 const ACCEPTED: NotificationSubmitOutcome = {
   kind: 'accepted',
@@ -31,12 +31,12 @@ const ACCEPTED: NotificationSubmitOutcome = {
   suppressedLevels: [],
   delivery: { push: { state: 'sent-accepted', at: NOW } }
 }
-const NO_PUSH_CHANNEL: PushChannelResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} }
-const TWO_PUSH_CHANNELS: PushChannelResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 2, multiple: true, states: {} }
+const NO_PUSH_CHANNEL: PushChannelsResolution = { ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 }
+const TWO_CHANNELS: PushChannelsResolution = { ok: true, channels: [{ id: 'slack', name: 'Slack' }, { id: 'telegram', name: 'Telegram' }] }
 
 function deps(over: Partial<IntelligenceTestDeps> = {}): IntelligenceTestDeps {
   return {
-    resolvePushChannel: async () => ONE_CHANNEL,
+    resolvePushChannels: async () => ONE_CHANNEL,
     submit: async () => ACCEPTED,
     now: () => NOW,
     ...over
@@ -64,18 +64,27 @@ describe('sendIntelligenceTestNotification — 通道先判', () => {
   it('zero ready channels reports the count, and no sample is submitted', async () => {
     const submit = vi.fn()
     const result = await sendIntelligenceTestNotification('sentiment', deps({
-      resolvePushChannel: async () => NO_PUSH_CHANNEL,
+      resolvePushChannels: async () => NO_PUSH_CHANNEL,
       submit
     }))
-    expect(result).toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 0 })
+    // 严格比对（不换 toMatchObject）：回执**多一个字段**必须红——`requestedCount` 是自检回执
+    // 后来加的「读者请求启用的通道条数」，漏同步就该被这条抓住。
+    expect(result).toEqual({
+      state: 'unavailable',
+      reasonCode: 'push-unavailable',
+      enabledChannelCount: 0,
+      requestedCount: 0
+    })
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it('two ready channels also refuses, and the count is the one the platform counted', async () => {
+  it('two ready channels are a legal state now: it sends, and names the first channel', async () => {
+    // 多通道方案 §1b：同时启用两条不再是「配置冲突」。收据只点名一条（第 3 笔改逐条措辞），
+    // 但**不再是 push-unavailable**——那是把读者合法的配置说成发不出去。
     const result = await sendIntelligenceTestNotification('calendar-upcoming', deps({
-      resolvePushChannel: async () => TWO_PUSH_CHANNELS
+      resolvePushChannels: async () => TWO_CHANNELS
     }))
-    expect(result).toEqual({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: 2 })
+    expect(result).toMatchObject({ state: 'sent', channelId: 'slack' })
   })
 })
 

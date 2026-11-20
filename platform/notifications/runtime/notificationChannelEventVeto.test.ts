@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
@@ -50,12 +51,12 @@ function harness(channelEvents: Readonly<Record<string, boolean>> | undefined) {
     read: async () => JSON.parse(JSON.stringify(state)),
     write: async (next) => { state = JSON.parse(JSON.stringify(next)) }
   }
-  const push = vi.fn(async () => ({ ok: true as const, messageId: 'm-1' }))
+  const push = vi.fn(singleResultHook(async () => ({ ok: true as const, messageId: 'm-1' })))
   const runtime = createNotificationRuntime({
     storage,
     catalog: catalog(),
     diagnostics: () => undefined,
-    resolvePushChannel: async () => ({ ok: true, channelId: 'telegram', channelName: 'Telegram · test' }),
+    resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'telegram', name: 'Telegram · test' }] }),
     getSettings: async () => ({ ...baseSettings, ...(channelEvents === undefined ? {} : { channelEvents }) }),
     clock: { now: () => new Date('2026-11-08T00:00:00.000Z'), timeZone: () => 'UTC' },
     deliveryHooks: { push }

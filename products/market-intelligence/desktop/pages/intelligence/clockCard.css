@@ -1,0 +1,100 @@
+/*
+ * 宏观时钟卡的样式：**原型逐条搬**（`FINAL-时钟卡-实现依据.html` 的 <style> 段），
+ * 只做三件允许的事：加 `.mi-clock` 作用域前缀、色值换成同值 token、补无障碍属性所需的规则。
+ * 任何改变计算值的改写都不许进这里——判据是 getComputedStyle 逐项相等。
+ *
+ * 两区颜色只此一处：换过去区只改 --mi-clock-time-past；换未来区改 --mi-clock-time-future + 牌底那一档。
+ * 牌底不能由带子色按比例混出（带子压得够暗，混出来到不了 1.5 档），必须同色相单独提亮一档。
+ */
+.mi-clock {
+  --mi-clock-time-past: #875d81;
+  --mi-clock-node-past-bg: color-mix(in srgb, var(--mi-clock-time-past) 22%, var(--surface));
+  --mi-clock-node-past-bd: color-mix(in srgb, var(--mi-clock-time-past) 45%, var(--surface));
+  --mi-clock-time-future: #222f4a;
+  --mi-clock-node-future-bg: #293958;
+  --mi-clock-node-future-bd: color-mix(in srgb, var(--mi-clock-node-future-bg) 78%, #9aa3b2);
+  /* 卡右上角那颗日历图标：叠在卡上，不参与布局。基线：图标矩形 (305,9)–(327,31)，
+     即距卡外缘 9px（含 1px 边框）→ 内缩 8px。 */
+  --mi-clock-action-inset: 8px;
+}
+[data-theme='light'] .mi-clock {
+  --mi-clock-time-past: #a880a2;
+  --mi-clock-time-future: #d3daeb;
+  --mi-clock-node-past-bg: #e997dd;
+  --mi-clock-node-future-bg: #97b3e9;
+}
+
+.mi-clock__viewport { position: relative; width: 100%; min-width: 0; }
+/* 层叠上下文只在这张卡内部成立：牌是 `position:absolute` + `z-index:4/9`，卡若不自建上下文，
+   牌的层级会跳到外层，和「分析详情」那种 `z-index:3` 的就地抽屉比大小——牌就压到抽屉上面去了
+   （用户 2026-11-15 的截图）。`isolation: isolate` 只建上下文、不改任何尺寸与颜色，符合「卡内部不动」。 */
+.mi-clock { isolation: isolate; position: relative; width: 336px; height: 330px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.mi-clock__svg { position: absolute; left: 12px; top: 12px; width: 312px; height: 306px; pointer-events: none; color: var(--muted); }
+.mi-clock__svg .mi-clock__ring { fill: none; stroke: var(--border-strong); }
+.mi-clock__svg circle[stroke='currentColor'], .mi-clock__svg line { fill: none; stroke: currentColor; }
+.mi-clock__orbit path { fill: url(#miClockFlowGrad); stroke: none; }
+.mi-clock__svg .mi-clock__now { fill: var(--accent); stroke: none; }
+/* 外圈那条流光**不再旋转**：`loadingStandard` 规定全仓只有 `loadingState.css` 拥有旋转动画
+   （转圈＝「正在加载」的信号，别处一转，读者就分不清这屏是在忙还是纯装饰）。
+   现在换成**环流高光**：沿环推进一段描边（`stroke-dashoffset`），元素本身不旋转。 */
+.mi-clock__orbit { transform-origin: 156px 153px; animation: mi-clock-spin 8s linear infinite; }
+/*
+ * 装饰性流光（原实现，2026-11-20 恢复）：环内那扇渐变光**整圈自转**，8 秒一圈。
+ *
+ * 与加载态的转圈怎么区分：加载态是**整块区域被 `loadingState` 替换**，两者不会同屏；
+ * 这里的卡在没有加载时也一直在，读者看到的是构图里的一道光，不是「正在读取」。
+ * 这条旋转在 `loadingStandard` 里是一处**具名例外**（只允许本文件 `.mi-clock__orbit`），
+ * 谁在别处加 `rotate(360deg)`，那条守卫照样红。
+ */
+@keyframes mi-clock-spin { to { transform: rotate(360deg); } }
+/* 减少动态效果：不转，但**必须留在画面上**——不是 `display: none`（那会让人以为它坏了）。 */
+@media (prefers-reduced-motion: reduce) {
+  .mi-clock__orbit { animation: none; }
+}
+
+
+
+.mi-clock__core { position: absolute; left: 168px; top: 165px; transform: translate(-50%, -50%); width: 160px; padding: 2px 4px; background: var(--surface); border-radius: 50%; text-align: center; display: grid; gap: 1px; justify-items: center; z-index: 2; }
+.mi-clock__row1 { display: flex; align-items: baseline; gap: 5px; justify-content: center; }
+.mi-clock__name { font-size: var(--font-body); font-weight: 600; color: var(--muted-strong); }
+.mi-clock__badge { font-size: var(--font-meta); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 999px; padding: 0 5px; }
+.mi-clock__value { margin: 0; font-size: var(--font-metric-md); line-height: 1.05; font-weight: 650; font-variant-numeric: tabular-nums; }
+.mi-clock__unit { margin: 0; font-size: var(--font-meta); color: var(--muted); }
+.mi-clock__tier { font-size: var(--font-meta); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mi-clock__tier b { color: var(--text); font-weight: 600; }
+
+/* 指标牌：位置与透明度由数据算（left/top/--o 行内给），这里只定形状。 */
+.mi-clock__node { position: absolute; width: auto; min-width: 62px; min-height: 37px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px 4px; line-height: 1.35;
+  border: 1px solid var(--mi-clock-node-future-bd); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 1px 2px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 7%);
+  font-size: var(--font-meta); color: var(--muted); cursor: pointer; z-index: 4; transform: translate(-50%, -50%);
+  opacity: var(--o, 1); transition: opacity 300ms ease-out; } /* 只过渡 opacity，z-index 必须瞬间跳变 */
+/* 层级不是写死数字：与中央主位同一个指标的那颗沉到最下（中央已完整显示它），其余在上。 */
+.mi-clock__node[data-center] { z-index: 3; }
+.mi-clock__node span { color: var(--text); white-space: nowrap; }
+.mi-clock__node b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.mi-clock__node--past { background: var(--mi-clock-node-past-bg); border-color: var(--mi-clock-node-past-bd); }
+.mi-clock__node:not(.mi-clock__node--past) { background: var(--mi-clock-node-future-bg); }
+.mi-clock__node--past span, .mi-clock__node--past b { color: var(--text); }
+.mi-clock__node:hover, .mi-clock__node:focus-visible { z-index: 9; opacity: 1; }
+
+/* 政策块降级说明：与状态行同字号档（--font-meta），排在状态行上面一行；不参与缩放以外的布局。 */
+.mi-clock__policy-note { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; gap: 8px; align-items: center; font-size: var(--font-meta); line-height: 1.2; color: var(--muted); z-index: 4; }
+.mi-clock__policy-action { border: 0; background: none; padding: 0; color: var(--accent); font-size: var(--font-meta); cursor: pointer; text-decoration: underline; }
+
+.mi-clock__foot { position: absolute; left: 12px; right: 12px; bottom: 1px; height: 14px; display: flex; align-items: center; gap: 8px; padding-top: 0; line-height: 1; font-size: var(--font-meta); color: var(--muted); z-index: 4; }
+.mi-clock__info { margin-left: auto; color: var(--muted); font-size: var(--font-meta); cursor: help; }
+.mi-clock__zone-future { fill: var(--mi-clock-time-future); opacity: 1; }
+.mi-clock__zone-past { fill: var(--mi-clock-time-past); }
+.mi-clock__zoneend { fill: color-mix(in srgb, var(--muted) 55%, var(--surface)); stroke: none; }
+.mi-clock__nowmark { fill: var(--accent); stroke: none; }
+.mi-clock__flowStart { stop-color: var(--accent); stop-opacity: 0; }
+.mi-clock__flowEnd { stop-color: color-mix(in srgb, var(--accent) 72%, #fff); stop-opacity: 1; }
+.mi-clock__glow { filter: url(#miClockFlowGlow); opacity: 0.38; }
+
+/* 减少动效：流光整段隐藏，只剩 12 点那个绿点；牌不再过渡（设计如此，不是没实现）。 */
+@media (prefers-reduced-motion: reduce) {
+  .mi-clock__node { transition: none; }
+}
+
+/* 叠在卡右上角：绝对定位，不参与布局——卡 336×330、圆心、四块牌、主位的计算值一个都不变。 */
+.mi-clock__action { position: absolute; top: var(--mi-clock-action-inset); right: var(--mi-clock-action-inset); z-index: 5; }

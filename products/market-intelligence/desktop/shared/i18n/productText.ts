@@ -13,6 +13,7 @@
 import { miText } from './text/mi'
 import { registeredEventNames } from '../../../contracts/indicatorNames'
 import { dailyBriefingText } from './text/pages/dailyBriefing'
+import { analysisNewsInterpretationResultText } from './text/pages/analysisNewsInterpretationResult'
 import { releaseTimeWords } from './text/releaseTimeWords'
 import { macroCalendarText } from './text/settings/macroCalendar'
 import { intelligenceSourcesText } from './text/settings/intelligenceSources'
@@ -114,7 +115,7 @@ mi: miText['zh-CN'],
             send: '发送', sending: '分析中', resize: '调整日历与舆情高度', failed: '发送未完成，请检查会话记录和模型配置后再试。', modelRequired: '请在通用 Agent 设置中为数字货币市场解读员选择可用模型。',
             roles: { user: '你', assistant: '市场解读员', system: '系统' }, messageStates: { pending: '处理中', error: '运行失败', paused: '已暂停' },
             closeDetail: '关闭详情', detailUnavailable: '该节点的分析详情暂不可用。', readTrace: '最近一次读取', conclusionBlocks: { change: '本次变化', 'causal-chain': '因果链', condition: '判断前提', macro: '宏观侧', evidence: '证据强弱', 'data-gap': '数据缺口' }, changeFacts: '发生变化的字段', changeStructural: '结构性变化', changeDomainAdded: '新增缺失域', changeDomainRemoved: '恢复缺失域', changeCaveatAdded: '新增数据限制', changeCaveatRemoved: '解除数据限制', changeEvidenceAdded: '新增证据', changeEvidenceRemoved: '移除证据', changeObservationsAdded: '新增观测', changeObservationsRemoved: '退出窗口',
-            changeSummary: '本次数据变化', noChange: '本次无新变化（与上一次读取一致）。', latestConclusion: '最新 AI 结论', latestConclusionHint: '点击下方时间轴节点可在左侧查看该节点的完整结论，不影响当前绑定。', latestConclusionEmpty: '暂无已发布的 AI 结论。可在下方时间轴生成首次分析。', latestConclusionLoading: '正在读取最新 AI 结论…', latestConclusionUnavailable: '最新结论详情暂不可用，请稍后重试。', openDetail: '查看完整结论',
+            changeSummary: '本次数据变化', noChange: '本次无新变化（与上一次读取一致）。', latestConclusion: '最新 AI 结论', latestConclusionHint: '点击下方时间轴节点可在左侧查看该节点的完整结论，不影响当前绑定。', latestConclusionEmpty: '暂无已发布的 AI 结论。可在下方时间轴生成首次分析。', latestConclusionAttemptFailed: '最近一次解析失败', latestConclusionLoading: '正在读取最新 AI 结论…', latestConclusionUnavailable: '最新结论详情暂不可用，请稍后重试。', openDetail: '查看完整结论',
             conclusionDirection: { label: '方向', bullish: '偏多', bearish: '偏空', range: '震荡', undecided: '暂不判断', mixed: '信号冲突' },
             directions: { title: '操作方向建议', horizons: { short: '短期（0-24 小时）', medium: '中期（1-7 天）', long: '长期（1-4 周）' }, unknownHorizon: '其他周期', confidence: { label: '置信度', low: '低', medium: '中', high: '高' } },
             /**
@@ -170,6 +171,7 @@ mi: miText['zh-CN'],
                 'news-sentiment-unavailable': '新闻舆情不可用',
                 'macro-calendar-unavailable': '经济日历不可用', 'macro-calendar-empty': '经济日历为空',
                 'macro-calendar-consensus-unavailable': '缺少市场预期值', 'macro-calendar-query-not-wired': '经济日历未接线',
+                'tier1-absent-in-month': '本月没有一级指标发布',
                 'observed-unverified': '来源身份未验证', 'provider-title-is-display-name': '事件名取自提供方标题',
                 'provider-surprise-not-comparable': '预期差不可计算', 'provider-observation-identity-missing': '日历观测缺少稳定身份',
                 'provider-observation-page-unavailable': '日历观测不可用', 'provider-observation-pages-truncated': '日历观测分页已截断',
@@ -192,6 +194,8 @@ mi: miText['zh-CN'],
           },
           calendarCard: {
             title: '接下来要看的', todaySection: '最近已公布（有变化）', upcomingSection: '待发布',
+            /* 与 `market.unknownCountry` 是同一个事实的两处文案；两处必须逐字相同（守卫在 `MarketCalendarCard.test.tsx`）。 */
+            unknownCountry: '未知国家',
             empty: '未来 7 天无高重要性事件', unavailable: '日历数据暂不可用', refresh: '刷新',
             loading: '正在读取日历…', staleNotice: '最新一次读取没有完成，下面是上一次的读数。',
             releasedEmpty: '最近 {days} 天内没有已公布的事件',
@@ -203,18 +207,22 @@ mi: miText['zh-CN'],
             categories: { 'economic-indicator': '经济指标', 'financial-event': '金融事件', 'central-bank-activity': '央行活动' },
             openCalendar: '打开经济日历', switchToAgent: '切换到市场解读 Agent', switchToCalendar: '切换到日历卡片',
             openEventInCalendar: '在日历中打开该事件：{name}',
-            collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制 {name}', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }, importanceHigh: '高重要性', timePending: '时间待定',
+            collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制 {name}', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用',
+              /* 「读不到」与「读到了但没有这条」必须分开（2026-11-14）。这句只在前者出现。 */
+              factsUnreadable: '这段时间的日历没读到，本次不含日历事实' }, importanceHigh: '高重要性', timePending: '时间待定',
+            /* 名单之外还有事件、只是来源没给重要性：不列入，但不能让读者以为名单就是全部。 */
+            filterNote: '只显示一二级指标与高重要性事件',
             surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', unavailable: '无一致预期', notComparable: '预期差不可比' }
           },
           analysisTimeline: {
             retryAnalysis: '重试分析', attemptFailed: '上次分析未发布',
-            failureReasons: { 'analysis-invalid-output-schema': '模型输出格式不符合要求，请重试。', 'analysis-invalid-json': '模型返回的不是合法 JSON（可能被截断），本次未发布，请重试。', 'analysis-missing-evidence': '分析输出与冻结证据不一致，已拒绝发布，请重试；若持续失败请检查情报来源。', 'analysis-provider-not-ready': '模型未就绪，请检查模型服务配置。', 'analysis-provider-error': '模型调用失败，请检查连接后重试。', 'analysis-timeout': '模型调用超时，请重试。', 'analysis-cancelled': '分析被中断（应用关闭或任务取消），请重试。' },
+            failureReasons: { 'analysis-invalid-output-schema': '模型输出格式不符合要求，请重试。', 'analysis-invalid-json': '模型返回的不是合法 JSON（可能被截断），本次未发布，请重试。', 'analysis-missing-evidence': '分析输出与冻结证据不一致，已拒绝发布，请重试；若持续失败请检查情报来源。', 'analysis-provider-not-ready': '还没有可用的模型，这次分析没有开始。请确认所选模型可用。', 'analysis-provider-error': '模型服务返回错误，这次分析没有完成，请稍后重试。', 'analysis-timeout': '模型调用超时，请重试。', 'analysis-cancelled': '分析被中断（应用关闭或任务取消），请重试。' },
             /**
              * 牌子上的「分析到哪一步」。状态只有六句，`skipped` / `failed` / `stopped` 各自再带原因：
              * 前两个的原因来自两张不同的码表（账本的 signal-* / 运行的 analysis-*），第三个是中性
              * 停下的三句。码本身不上屏，查不到才落「原因没记录」。
              */
-            triggerStatus: { label: '最近一次判定', since: '起', slotOpen: '开盘 ', slotDelayed: '延迟补跑', reasons: { 'significance-confirmed': '数据变化显著，已开始分析', 'significance-below-threshold': '数据无显著变化，本次未分析', 'provider-surprise-confirmed': 'provider 日历的发布显著偏离市场预期（非官方值），已开始分析', 'semantic-no-op': '数据与上次相同，本次未分析', 'interval-active': '距上次分析不足 30 分钟，已合并', 'same-release-coalesced': '同一次发布的其它指标已经分析过，这次不再重复', 'same-release-abandoned': '同一次发布的分析没成，补位次数已经用完，这条不再单独分析', 'hour-budget-exhausted': '本小时分析次数已达上限', 'day-budget-exhausted': '今天分析次数已达上限', 'global-day-budget-exhausted': '今天各类自动分析的总次数已达上限', 'schedule-reserve-exhausted': '今日盘口分析额度已用尽', 'session-slot-asia': '亚洲盘开盘分析（08:00）', 'session-slot-europe': '欧洲盘开盘分析（16:00）', 'session-slot-us': '美洲盘开盘分析（24:00）', 'invalid-significance-input': '判定输入异常，本次未分析', 'manual-request': '你在界面上手动触发', 'severity-confirmed': '这条情报达到高重要性门槛，已开始分析', 'medium-score-confirmed': '这条情报达到中等级别门槛，已开始分析', 'market-reaction-confirmed': '已确认出现可比行情反应，已开始复盘', 'restart-initial-compensated': '进程重启后补跑缺失的首次分析', 'restart-review-compensated': '进程重启后补跑缺失的复盘', 'signal-high-triggered': '规则触发，已开始分析', 'signal-medium-triggered': '规则触发，已开始分析', 'signal-cooldown-active': '同一规则刚分析过，这次不重复', 'signal-low-marker-only': '这类情况只在看板标注，不单独分析', 'signal-calendar-owned': '宏观日历已经在处理，不重复分析', 'signal-freeze-unavailable': '分析没排上队，这次没有执行' } },
+            triggerStatus: { label: '最近一次判定', since: '起', slotOpen: '开盘 ', slotDelayed: '延迟补跑', reasons: { 'calendar-unavailable': '日历读不到，先分析一次（本次不含日历事实）', 'significance-confirmed': '数据变化显著，已开始分析', 'significance-below-threshold': '数据无显著变化，本次未分析', 'provider-surprise-confirmed': 'provider 日历的发布显著偏离市场预期（非官方值），已开始分析', 'semantic-no-op': '数据与上次相同，本次未分析', 'interval-active': '距上次分析不足 30 分钟，已合并', 'same-release-coalesced': '同一次发布的其它指标已经分析过，这次不再重复', 'same-release-abandoned': '同一次发布的分析没成，补位次数已经用完，这条不再单独分析', 'hour-budget-exhausted': '本小时分析次数已达上限', 'day-budget-exhausted': '今天分析次数已达上限', 'global-day-budget-exhausted': '今天各类自动分析的总次数已达上限', 'schedule-reserve-exhausted': '今日盘口分析额度已用尽', 'session-slot-asia': '亚洲盘开盘分析（08:00）', 'session-slot-europe': '欧洲盘开盘分析（16:00）', 'session-slot-us': '美洲盘开盘分析（24:00）', 'invalid-significance-input': '判定输入异常，本次未分析', 'manual-request': '你在界面上手动触发', 'severity-confirmed': '已触发一次市场层面的分析', 'medium-score-confirmed': '这条情报达到中等级别门槛，已开始分析', 'market-reaction-confirmed': '已确认出现可比行情反应，已开始复盘', 'restart-initial-compensated': '进程重启后补跑缺失的首次分析', 'restart-review-compensated': '进程重启后补跑缺失的复盘', 'signal-high-triggered': '规则触发，已开始分析', 'signal-medium-triggered': '规则触发，已开始分析', 'signal-cooldown-active': '同一规则刚分析过，这次不重复', 'signal-low-marker-only': '这类情况只在看板标注，不单独分析', 'signal-calendar-owned': '宏观日历已经在处理，不重复分析', 'signal-freeze-unavailable': '分析没排上队，这次没有执行' } },
             loadMore: '加载更多', selectEntry: '选择一个时间轴节点查看详情。',
             // 时间轴跨事件组：同一屏出现多个事件时，每行标出它属于哪条事件、在说什么，
             // 否则相隔几十秒的两条结论（一条消息面、一条宏观）看起来像重复发布。
@@ -225,9 +233,9 @@ mi: miText['zh-CN'],
             refusalModelUnconfigured: '没有可用的默认助手模型，请先在设置里选择分析模型。', refusalModelUnavailable: '所选模型当前不可用，请换一个模型。',
             refusalFailed: '保存失败，请重试。', saving: '保存中…', save: '保存', cancel: '取消',
             entry: '消息分析 / 时间轴', description: '查看已发布的分析摘要、预测与证据覆盖',
-            workspaceLabel: '— MARKET ANALYSIS', title: 'AI 情报分析', back: '返回 Agent', loading: '正在加载消息分析…', unavailable: '分析详情暂不可用。', empty: '暂无已发布的消息分析。', requestInitialAnalysis: '生成首次分析', refreshAnalysis: '立即分析', initialAnalysisQueued: '首次分析已入队，完成后会自动更新。', initialAnalysisUnavailable: '当前没有符合条件的已发布情报可分析。', initialAnalysisFailed: '首次分析任务启动失败，请刷新后重试。', analysisRefreshAlreadyAvailable: '已有最新分析，无需重新分析。', analysisStillRunning: '分析仍在运行：已停止等待，完成后会自动出现在列表里。', analysisRefreshFailed: '重新分析请求未成功，请稍后重试。', analysisServiceNotReady: '分析服务正在启动，请稍后重试。', timeline: '分析时间轴', detail: '分析详情', dismissError: '关闭提示',
-            eventGroup: '事件组', analysisRun: '分析运行', summaryVersion: '摘要版本', evidenceCount: '证据数量', asOf: '分析时点', dataCutoff: '数据限制', conclusion: 'AI 结论', confirmedFacts: '已确认事实', transmission: '传导判断', marketReaction: '市场反应', noMarketReaction: '当前没有可比行情证据，暂不判断市场方向。', supportingEvidence: '支撑证据', counterEvidence: '反向证据', catalysts: '后续关注', auditInfo: '查看审计信息', prediction: '预测', noPrediction: '该摘要暂无预测。', conditions: '条件', invalidation: '失效条件', verificationDue: '验证截止', agentUnavailable: '追问 Agent 将在下一阶段启用。',
-            status: { published: '已发布', stale: '已过期', superseded: '已替代', pending: '待验证', confirmed: '已确认', 'partially-confirmed': '部分确认', invalidated: '已失效', expired: '已到期', 'insufficient-data': '数据不足' }
+            workspaceLabel: '— MARKET ANALYSIS', title: 'AI 情报分析', back: '返回 Agent', loading: '正在加载消息分析…', unavailable: '分析详情暂不可用。', empty: '暂无已发布的消息分析。', requestInitialAnalysis: '生成首次分析', refreshAnalysis: '立即分析', analysisInFlightReason: '正在解析，完成后再试。', initialAnalysisQueued: '首次分析已入队，完成后会自动更新。', initialAnalysisUnavailable: '当前没有符合条件的已发布情报可分析。', initialAnalysisFailed: '首次分析任务启动失败，请刷新后重试。', analysisRefreshAlreadyAvailable: '已有最新分析，无需重新分析。', analysisStillRunning: '分析仍在运行：已停止等待，完成后会自动出现在列表里。', analysisRefreshFailed: '重新分析请求未成功，请稍后重试。', analysisServiceNotReady: '分析服务正在启动，请稍后重试。', analysisProviderNotReady: '还没有可用的模型，请到设置里选择模型后再试。', analysisInsufficientEvidence: '这条内容的原始记录已不在保留期，无法基于它分析；请用最新一条重新分析。', timeline: '分析时间轴', tabSuccess: '成功', tabFailed: '失败', tabsAria: '分析记录', detail: '分析详情', dismissError: '关闭提示',
+            eventGroup: '事件组', analysisRun: '分析运行', summaryVersion: '摘要版本', evidenceCount: '证据数量', asOf: '分析时点', dataCutoff: '数据限制', conclusion: 'AI 结论', confirmedFacts: '已确认事实', transmission: '传导判断', marketReaction: '市场反应', noMarketReaction: '当前没有可比行情证据，暂不判断市场方向。', supportingEvidence: '支撑证据', counterEvidence: '反向证据', catalysts: '后续关注', auditInfo: '查看审计信息', prediction: '预测', noPrediction: '该摘要暂无预测。', conditions: '条件', invalidation: '失效条件', verificationDue: '验证截止', agentUnavailable: '追问 Agent 将在下一阶段启用。', conclusionLanguageNote: '这条结论是按{language}写的。', conclusionLanguageLabel: '语言说明', regenerateConclusion: '重新生成',
+            status: { published: '已发布', stale: '已过期', superseded: '已替代', running: '正在解析', failed: '解析失败', pending: '待验证', confirmed: '已确认', 'partially-confirmed': '部分确认', invalidated: '已失效', expired: '已到期', 'insufficient-data': '数据不足' }
           },
           newsSentiment: {
             title: '重点舆情',
@@ -259,7 +267,11 @@ mi: miText['zh-CN'],
               translationStatus: { waiting: '等待翻译', queue: '正在翻译 {done}/{total}', translating: '翻译中', translated: '已翻译', failed: '翻译失败', contextMenu: '右键更多操作', translateOne: '翻译此条', retranslateOne: '重新翻译' },
               clearFilters: '清除筛选',
               loadMore: '加载更多',
-              settings: '设置'
+              settings: '设置',
+              // 右键菜单的「AI 解读」四态（动作名，不是节标题）。
+              menuInterpretation: 'AI 解读',
+              menuInterpretationView: '查看 AI 解读',
+              menuInterpretationAgain: '再次解读'
             },
             availability: {
               missing: '还没有配置来源',
@@ -327,6 +339,10 @@ mi: miText['zh-CN'],
               screenCrashed: '这一块没能显示出来，可以重试。',
               sourceUnavailable: '取不到（原因见详情）',
               unreadable: '读不到',
+              /** 抽屉行末那颗 ⓘ 的读屏名：说明正文是数据里带来的原因，名字带上它才听得到。 */
+              reasonAria: '原因：{reason}',
+              /** 预览控件上那颗 ⓘ 的读屏名（这一行有说明）。 */
+              infoAria: '这一项的说明',
               discard: {
                 title: '有改动没保存，要丢掉吗？',
                 body: '关掉之后没保存的改动都不保留。',
@@ -459,9 +475,19 @@ mi: miText['zh-CN'],
               /* 窗口不可用时的那句（与「本次还没落库」分开：后者已由服务端回退到上一根桶，不会到这里）。 */
               windowNoPair: '库里没有这一窗口的收盘对',
               quoteLegReasons: { missing: '这笔资产在实时 trade 流里一条成交都没收到（流可能没连上）。', stale: '最后一笔成交已超过 15 秒，实时报价按过期处理。' },
-              /* 图上没画出来的那条线：图例照样列出，名字后面标一句，否则读者以为线被藏了。 */
-              lineNotDrawn: '未绘制',
-              lineNotDrawnReason: '线要求本窗内每个点都有连续的 5 分钟 K 线；这一段没凑齐，所以这条线没画。',
+              /* 本段没有可比数据的那条线：图例照样列出，名字后面说一句**这一段的数据怎么了**，原因进图标题的 ⓘ。
+                 说的是数据，不是渲染——读者关心的是这条线的数据，不是「画没画」。 */
+              lineNoComparableData: '本段无数据',
+              lineNoComparableDataReason: '这一段没有凑齐连续的收盘数据，所以没有可比曲线。',
+              /* 读数比阈值旧时挂在行名旁边的那句（与 LiveBadge 同槽）；{time} 走统一格式化，调用点不手拼日期。 */
+              staleAsOf: '偏旧 · 截至 {time}',
+              /* 供应商永久不提供这个品种：整行遮住只留这一句（用户 2026-11-16：说清楚，来源未提供）。 */
+              sourceRefused: '来源未提供',
+              /* 表标题右上的勾：勾上就不显示这类行，取消就照旧显示（读者自己选，不替他决定）。 */
+              hideUnavailableRows: '不显示来源不可用的行',
+              /* 原因收进 ⓘ：先给最近收盘最新的一条，其余合并成一句；整块仍受 4 行上限约束。 */
+              planNotServedReason: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}。',
+              planNotServedReasonMore: '{name}：供应商当前套餐不提供这个品种，最近一次收盘 {time}；另有 {count} 个品种同样不提供。',
               staleRead: '这次刷新没读出来，下面是上一次的读数。',
               // 界面设计 2026-11-09 的条件①：这句要说清「重启之后才生效」与「怎么重启」，不能只写「版本不一致」。
               contractMismatch: '界面与主进程的版本不一致，当前数据无法读取。重启之后才会生效：点下面的「重启应用」，或完全退出观潮再打开——只刷新页面不够。',
@@ -534,6 +560,8 @@ mi: miText['zh-CN'],
                   'index-proxy': '纳指取的是代币化代理', 'dxy-synthetic': '美元为合成指数', 'gold-synthetic': '黄金为合成报价'
                 }
               },
+              /* 行名旁那颗 ⓘ 的可访问名：这一行的说明句只在它的浮层里。 */
+              rowHint: '{name}：这一行的说明',
               statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', us10y: '名义资金成本', realRate: '与 BTC 关系最直接', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
               btcIndex: 'BTC − 纳斯达克 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: '样本', coverage: '历史覆盖',
               states: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', limited: '资源受限', unavailable: '不可用', missing: '无数据' },
@@ -559,7 +587,7 @@ mi: miText['zh-CN'],
               presets: { manual: '手动', balanced: '均衡', frequent: '高频' },
               marketCalendar: {
                 title: '市场日历', description: '由产品定时任务采集；在与官方日程建立关联前，事件标记为未验证。', refresh: '立即刷新', refreshing: '正在刷新市场日历…', succeeded: '市场日历已刷新。', failed: '市场日历刷新失败。',
-                feeds: { 'macro-calendar-0xrouter-economic-data': '经济数据', 'macro-calendar-0xrouter-financial-events': '金融事件', 'macro-calendar-0xrouter-central-bank-activities': '央行活动' },
+                feeds: { 'macro-calendar-narwhal-economic-data': '经济数据', 'macro-calendar-narwhal-financial-events': '金融事件', 'macro-calendar-narwhal-central-bank-activities': '央行活动' },
                 owner: '市场 · 未验证'
               },
               groups: { 'macro-calendar': '宏观日历', 'macro-regulation': '宏观与监管', 'crypto-market': '加密市场', 'aggregate-data-provider': '聚合数据供应商' },
@@ -790,10 +818,12 @@ mi: miText['zh-CN'],
             },
             policyPath: {
               title: '利率路径',
+              /* 卡尾那颗「详情 ↗」的可访问名：它属于导航，名字要说清打开的是哪张卡的详情。 */
+              openDetailAria: '打开利率路径的详情',
               /* 两条硬依赖各自点名（2026-11-12）：缺哪一格说哪一格，缺源说源，不合并。 */
-              probabilityCellOff: '政策路径概率未启用',
+              probabilityCellOff: '利率未启用',
               fedCellOff: '美联储日程未启用',
-              bothCellsOff: '政策路径未启用：需要「政策路径概率」与「美联储日程」两格都打开',
+              bothCellsOff: '政策路径未启用：需要「利率」与「美联储日程」两格都打开',
               dependencySourceOff: '{source} 没有启用',
               range: '政策区间',
               meeting: '下次会议',
@@ -804,6 +834,10 @@ mi: miText['zh-CN'],
               longerRun: '长期',
               outcomes: { 'no-change': '维持利率', 'hike-25': '加息 25bp', 'hike-50-plus': '加息 50bp 以上', 'cut-25': '降息 25bp', 'cut-50-plus': '降息 50bp 以上' },
               basisNote: '盘口取 Polymarket 当前主档（上面写着的那一档）的买卖中间价；五档按合计归一化（合计通常略高于 1，多出的是场所抽水）。24h 是同一档前后的百分点差。这是交易者当下愿意成交的价格，不是模型预测，也不代表实际结果。',
+              /* 共识来源必须能一眼看出是盘口反推，不是商业源问卷（用户 2026-11-14 定的顺序：有盘用盘口）。
+                 这两句只加在卡片；日历行的「预期」那格要不要用，等产品经理定。 */
+              marketExpectation: '市场预期 · Polymarket',
+              marketExpectationVolume: '成交量 {volume}',
               probabilityLabel: '加息概率',
               lastVote: '上次',
               sepMedian: 'SEP 中位',
@@ -876,9 +910,11 @@ mi: miText['zh-CN'],
               stablecoin: '稳定币', stablecoinScope: '（USDT + USDC）', asset: '资产', totalSupply: '总供给',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: '最新', windowDays: '{days} 日', coverage: '仅 {days} 天', streakColumn: '连续',
-              streak: '{flow} · {count} 日', streakSingle: '{flow} · 1 日',
+              rowAsOf: '截至 {day}',
+              streak: '{flow} · {count} 个交易日', streakSingle: '{flow} · 1 个交易日',
               shortFlowDirections: { inflow: '净流入', outflow: '净流出', zero: '持平' },
-              observedAt: '观测时间', etfFlow: '市场资金流', chartWindow: '最近 7 个交易日 · 单位：百万美元',
+              observedAt: '观测时间', etfFlow: '市场资金流', chartWindow: '最近 7 天 · 单位：百万美元',
+              chartWindowHelp: '今天还没有读数时，图上不显示今天，窗口往前退一天，仍然是 7 天。',
               fundsColumn: '稳定币净流入', fundsScope: '全部美元稳定币', btc: 'BTC ETF', eth: 'ETH ETF', etfScope: '美国现货 ETF',
               infoAria: '本卡口径说明',
               chartScopeNoteMain: '稳定币净流入 = 全部美元稳定币总供给的逐日变化（不含当天）；',
@@ -934,7 +970,8 @@ mi: miText['zh-CN'],
               sourceUnknown: '暂时读不到',
               sourceStale: '来源状态：上一次成功的读数 · {time}'
             },
-            dailyBriefing: dailyBriefingText['zh-CN']
+            dailyBriefing: dailyBriefingText['zh-CN'],
+            newsInterpretationResult: analysisNewsInterpretationResultText['zh-CN']
           },
           calendar: {
             /* 架构师定的停用说明（逐字，改字要先过情报模块产品经理）。{date} 来自源注册表的
@@ -944,24 +981,42 @@ mi: miText['zh-CN'],
                官方腿读不到但市场侧有行 → 说明行。「没有」与「拿不到」必须分得开。 */
             officialUnavailableShort: 'BLS 官方日程无法自动获取',
             officialUnavailableNote: '官方站点拒绝了当前网络（403），自动同步已停止。列表里的 BLS 事件来自 {date} 成功同步的内容；要拿到新的官方日程，请从官方站点导出 ICS 后手动导入。',
+            /**
+             * 月历格子里那个数字：**显示上限之外的条目总数**。
+             *
+             * 三层文案，各有各的用处，别合并：
+             * - 格子里只有数字+量词（对「里面有什么」不作承诺，因为它同时含「一二级超限」与「未分级」两种）；
+             * - 悬停一句话说清「另有 N 条未显示」；
+             * - 读屏必须能分开两个数，否则读者听到的「其中几条重要」永远对不上。
+             */
+            cellOverflow: {
+              chip: '+{count} 条',
+              title: '另有 {count} 条未显示',
+              aria: {
+                both: '这一天共 {total} 条，此处显示 {shown} 条，另有 {hidden} 条未显示：其中 {tiered} 条一级或二级、{untiered} 条未分级',
+                tieredOnly: '这一天共 {total} 条，此处显示 {shown} 条，另有 {hidden} 条未显示，均为一级或二级（超出显示上限）',
+                untieredOnly: '这一天共 {total} 条，此处显示 {shown} 条，另有 {hidden} 条未显示，均为未分级'
+              }
+            },
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '读取范围：{months}（UTC 月，含网格相邻月）；官方每月最多 200 条' },
-            calendarSettings: '配置日历',
             calendarPanel: { title: '日历源', configure: '在数据源中配置', loading: '正在加载日历源…', unavailable: '当前面板没有可配置的日历源。', pending: '待接入', enabled: '已启用', disabled: '未启用' },
-            market: { marketReadFailure: { 'input-invalid': '这次读取的请求没有通过校验，刷新一次会重新发起。', 'read-threw': '这次读取没有完成，可以重试。', 'too-large': '这段窗口的事件太多，这次没有读完，可以重试。', 'cursor-loop': '读取没有继续向前，已停下，可以重试。' }, refreshOutcome: { succeeded: '刷新成功', failed: '刷新失败', unattempted: '本次尚未刷新' }, refreshTrigger: { manual: '手动', automatic: '自动' }, attemptFailure: { 'input-invalid': '请求无效', 'credential-not-configured': '未配置凭据', 'response-unavailable': '来源未响应', 'archive-unavailable': '证据归档不可用', 'parse-unavailable': '解析受限', 'storage-unavailable': '存储不可用', 'storage-pressure': '存储受限' }, collectedAt: '数据采集于', retainedData: '显示上次数据', automaticRefresh: '每 {interval} 分钟自动更新', officialActual: '官方公布值', officialPrevious: '官方前值', sourceAdvanced: '该来源此后已更新；以下数值与时间属于上方那条观测。', linkedTimeOfficial: '日历时间：官方', linkedTimeProvider: '日历时间：0xRouter', linkedTimePending: '日历时间：待定', missingValue: '暂无', importance: { high: '高', medium: '中', low: '低' }, locale: 'zh' as const, refresh: '刷新市场日历', loading: '正在读取市场事件…', pending: '正在刷新市场日历…', completed: '市场日历已更新', partial: '部分来源失败，保留已有数据', unavailable: '刷新未完成，已有数据可能过期', queryUnavailable: '市场事件读取受限', settings: '管理 0xRouter 来源', unknownCountry: '未标明国家', consensus: '市场预期', surprise: '预期差', surpriseBeat: '超预期', surpriseMiss: '低于预期', surpriseInline: '符合预期', surpriseUnavailable: '无一致预期', surpriseNotComparable: '预期差不可比', providerPrevious: '前值（0xRouter）', providerActual: '公布值（0xRouter）', comparison: '暂不可比较', source: '0xRouter', observed: '来源观测时间', lastGivenAt: '来源最后一次给出这条于', time: '发布时间', more: '更多市场事件', kinds: { 'economic-indicator': '经济指标', 'financial-event': '财经事件', 'central-bank-activity': '央行活动' }, statuses: { success: '已采集', 'success-empty': '本次无事件', 'all-skipped': '解析受限', partial: '部分事件可用', unavailable: '尚无可用批次', 'no-locale-rows': '来源未提供英文条目' } },
-            eventStatus: { label: '发布进度', 'data-received': '数据已获取', upcoming: '未到发布时间', 'awaiting-data': '待发布', 'storage-limited': '存储受限', 'time-pending': '时间待定', 'elapsed-unconfirmed': '计划时间已过', cancelled: '已取消' },
+            market: { marketReadFailure: { 'input-invalid': '这次读取的请求没有通过校验，刷新一次会重新发起。', 'read-threw': '这次读取没有完成，可以重试。', 'too-large': '这段窗口的事件太多，这次没有读完，可以重试。', 'cursor-loop': '读取没有继续向前，已停下，可以重试。' }, refreshOutcome: { succeeded: '刷新成功', failed: '刷新失败', unattempted: '本次尚未刷新' }, refreshTrigger: { manual: '手动', automatic: '自动' }, attemptFailure: { 'input-invalid': '请求无效', 'credential-not-configured': '未配置凭据', 'response-unavailable': '来源未响应', 'archive-unavailable': '证据归档不可用', 'parse-unavailable': '解析受限', 'storage-unavailable': '存储不可用', 'storage-pressure': '存储受限' }, collectedAt: '数据采集于', retainedData: '显示上次数据', automaticRefresh: '每 {interval} 分钟自动更新', officialActual: '官方公布值', officialPrevious: '官方前值', sourceAdvanced: '该来源此后已更新；以下数值与时间属于上方那条观测。', linkedTimeOfficial: '日历时间：官方', linkedTimeProvider: '日历时间：Narwhal', linkedTimePending: '日历时间：待定', missingValue: '暂无', importance: { high: '高', medium: '中', low: '低' }, locale: 'zh' as const, refresh: '刷新市场日历', loading: '正在读取市场事件…', pending: '正在刷新市场日历…', completed: '市场日历已更新', partial: '部分来源失败，保留已有数据', unavailable: '刷新未完成，已有数据可能过期', queryUnavailable: '市场事件读取受限', settings: '管理市场日历来源', unknownCountry: '未知国家', consensus: '市场预期', surprise: '预期差', surpriseBeat: '超预期', surpriseMiss: '低于预期', surpriseInline: '符合预期', surpriseUnavailable: '无一致预期', surpriseNotComparable: '预期差不可比', providerPrevious: '前值（Narwhal）', providerActual: '公布值（Narwhal）', comparison: '暂不可比较',
+              /* 按真实来源显示：旧的两档枚举把官方行说成「Narwhal」。键是 feed id，不是 provider——
+                 三个 Narwhal feed 显示**同一个源名**（它们是同一次采集的三类，不是三个来源）。
+                 `source` 保留为兜底：行上还没有真值时，宁可显示旧的固定名，也不显示 id。 */
+              source: 'Narwhal',
+              sourceUnknown: '未标来源', sourceByFeed: { 'macro-calendar-bls': 'BLS', 'macro-calendar-bea': 'BEA', 'macro-calendar-fed': '美联储', 'macro-calendar-narwhal-economic-data': 'Narwhal', 'macro-calendar-narwhal-financial-events': 'Narwhal', 'macro-calendar-narwhal-central-bank-activities': 'Narwhal' }, observed: '来源观测时间', lastGivenAt: '来源最后一次给出这条于', time: '发布时间', more: '更多市场事件', kinds: { 'economic-indicator': '经济指标', 'financial-event': '金融事件', 'central-bank-activity': '央行活动' }, statuses: { success: '已采集', 'success-empty': '本次无事件', 'all-skipped': '解析受限', partial: '部分事件可用', unavailable: '尚无可用批次', 'no-locale-rows': '来源未提供英文条目' }, collectorStopped: '已停止出数（最后 {at}）', collectorStoppedNoTime: '已停止出数' },
+            eventStatus: { label: '发布进度', 'data-received': '数据已获取', upcoming: '待发布', 'awaiting-data': '待补值', backfilling: '待补值', missing: '未提供', 'storage-limited': '存储受限', 'time-pending': '时间待定', 'elapsed-unconfirmed': '计划时间已过', cancelled: '已取消' },
             workspaceLabel: '— MACRO / ECONOMIC CALENDAR',
             title: '经济日历',
             info: '日历说明',
             month: '当前月份',
-            monthNavigation: { previous: '上个月', next: '下个月', current: '回到本月', picker: '选择月份' },
-            status: { loading: '正在加载经济日历…', empty: '本月没有任何事件。', noSourceEnabled: '日历来源都没有启用' },
+            status: { loading: '正在加载经济日历…', empty: '本月没有任何事件。', beforeDataStart: '这个月早于数据起点，还没有这段数据。', noSourceEnabled: '日历来源都没有启用' },
             /* 来源没有读者当前语言的内容：这是「没有这种语言」，不是「本月没有事件」。
                它画在月区的说明行里，不进空态（产品 2026-11-09：空态只属于「都读到了、都为空」）。 */
-            noLocaleRowsNote: '这几类日历来源只提供中文条目；本月没有可显示的英文内容。',
+           
             emptyState: { title: '尚未导入或采集官方日程', manageAction: '管理宏观日历' },
             failures: { 'calendar-query-unavailable': '经济日历暂时不可用。', 'query-input-invalid': '经济日历查询无效。', 'event-not-found': '未找到该事件详情。' },
-            backToDashboard: '返回数字货币看板',
-                        weekdays: ['日', '一', '二', '三', '四', '五', '六'],
             importance: { high: '高' },
             states: { scheduled: '待公布', released: '已发布', cancelled: '已取消' },
             categories: { inflation: '通胀', employment: '就业', growth: '增长', 'monetary-policy': '货币政策', consumption: '消费' },
@@ -973,7 +1028,15 @@ mi: miText['zh-CN'],
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': '非农', unemployment: '失业率',
               'average-hourly-earnings': '时薪', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: '宏观'
             },
-            details: { title: '事件详情', category: '类别', period: '统计周期', source: '来源', time: '发布时间', importance: '重要性', state: '状态', actual: '实际值', previous: '前值', valueNotYet: '尚未公布', valueNotProvided: '源未给出', consensusMissing: '预期值未提供', consensusUnreadable: '暂时读不到', consensusUnreadableReason: '已有观测，但预期字段为空（数据缺口）。', consensusReadFailedReason: '这次没有读到市场观测（读取失败），不是没有预期。', consensusFromMarket: '预期来自市场源', scheduledDateOnly: '官方未公布具体时间', timeNotPublished: releaseTimeWords['zh-CN'], timeNotPublishedReason: '这一场官方没有公布发布时间，所以这里不显示具体时刻。不是我们没读到。', editedTime: '已编辑',
+            details: { title: '事件详情', category: '类别', period: '统计周期', source: '来源', time: '发布时间', importance: '重要性', state: '状态', actual: '实际值', previous: '前值', valueNotYet: '尚未公布', valueNotProvided: '源未给出', consensusMissing: '预期值未提供', consensusUnreadable: '暂时读不到', consensusUnreadableReason: '已有观测，但预期字段为空（数据缺口）。', consensusReadFailedReason: '这次没有读到市场观测（读取失败），不是没有预期。', consensusFromMarket: '预期来自市场源', content: '事件内容', contentCoverage: '覆盖指标', contentCoverageNone: '这条事件不覆盖指标', contentIdentity: '事件标识', contentOfficial: '官网', contentOfficialPending: '待核', contentOfficialNoCode: '这条没有对应指标码，没有官网', contentNotCaptured: '未提供', revisions: '数值修订', revisionsLoading: '正在读取修订…', revisionsNotRecorded: '未记录', revisionsUpdatedAt: '更新于', revisionsSource: '来源', 
+              contentHierarchy: '指标层级', hierarchyOwned: '所属指标：{name}',
+              sourceWritesTitle: '各来源记录', sourceWritesRevision: '写入记录',
+              sourceWritesObservation: '当前观测',
+              sourceWritesConsensusConflict: '预期多源不一致', sourceWritesActualConflict: '实际值多源不一致',
+              sourceWritesPreviousConflict: '前值多源不一致', sourceWritesUncomparable: '多源预期不一致，暂不比较',
+              hierarchyChildren: '分项：{names}', hierarchySeparator: '、', scheduledDateOnly: '官方未公布具体时间', timeNotPublished: releaseTimeWords['zh-CN'], timeNotPublishedReason: '这一场官方没有公布发布时间，所以这里不显示具体时刻。不是我们没读到。', editedTime: '已编辑',
+              /* 同一期发过多次时，详情里逐条列：序号是事实，阶段名（初值/终值）是推断，不写。 */
+              releaseOrdinal: '第 {index} 次',
               editTime: { label: '发布时间（可编辑）', save: '保存', cancel: '取消', restore: '恢复官方/惯例', saved: '已保存你的时间。', rejected: '保存失败：时间或日期不合法。', ambiguous: '该时刻在本地时区出现两次（夏令时切换），请换一个时间。', hint: '编辑会保存你的日期与时间，并覆盖官方与惯例值。' } },
             sources: { federalReserve: 'Federal Reserve Board (Fed)', bea: '美国经济分析局（BEA）', blsManualIcs: '美国劳工统计局（BLS，手动 ICS）', blsAutomaticSchedule: '美国劳工统计局（BLS，自动年度日程）' },
             sourceMarkers: { federalReserve: 'Fed', bea: 'BEA', blsManualIcs: 'BLS', blsAutomaticSchedule: 'BLS' },
@@ -1001,11 +1064,6 @@ mi: miText['zh-CN'],
               blocked: '暂时不能刷新：官方站点拒绝了当前网络。恢复时间未知。',
               reasonCodeAria: '原因码',
               updated: '已刷新对应完整 BLS 发布组的数据。', unchanged: '对应完整 BLS 发布组的数据已是最新。', unavailable: '对应完整 BLS 发布组的官方数据暂不可用，未保存任何值。'
-            },
-            blsScheduleSync: {
-              schedule: { updated: 'BLS 日程已更新', unchanged: 'BLS 日程已是最新', unavailable: 'BLS 日程暂不可用' },
-              cpi: { updated: 'CPI 值已更新', current: 'CPI 值已是最新', 'not-required': 'CPI 暂无需补抓', unavailable: 'CPI 值暂不可用' },
-              employment: { updated: '就业值已更新', current: '就业值已是最新', 'not-required': '就业暂无需补抓', unavailable: '就业值暂不可用' }
             },
             recordTimes: {
               // 两行只写字段名与值：说明（「不是发布时间」之类）归 ⓘ，不进正文。
@@ -1609,7 +1667,7 @@ mi: miText['en-US'],
             send: 'Send', sending: 'Analyzing', resize: 'Resize calendar and sentiment', failed: 'Send did not complete. Check the conversation and model configuration before retrying.', modelRequired: 'Select an available model for the crypto analyst in the shared Agent settings.',
             roles: { user: 'You', assistant: 'Market analyst', system: 'System' }, messageStates: { pending: 'Processing', error: 'Run failed', paused: 'Paused' },
             closeDetail: 'Close details', detailUnavailable: 'Details for this entry are unavailable.', readTrace: 'Last read', conclusionBlocks: { change: 'What changed', 'causal-chain': 'Causal chain', condition: 'Premises', macro: 'Macro', evidence: 'Evidence strength', 'data-gap': 'Data gaps' }, changeFacts: 'Fields that changed', changeStructural: 'Structural changes', changeDomainAdded: 'Missing domains added', changeDomainRemoved: 'Missing domains resolved', changeCaveatAdded: 'Data caveats added', changeCaveatRemoved: 'Data caveats cleared', changeEvidenceAdded: 'Evidence added', changeEvidenceRemoved: 'Evidence removed', changeObservationsAdded: 'Observations added', changeObservationsRemoved: 'Left the window',
-            changeSummary: 'What changed', noChange: 'No new change since the previous read.', latestConclusion: 'Latest AI conclusion', latestConclusionHint: 'Select a timeline entry below to read that entry in full on the left; the current binding is unchanged.', latestConclusionEmpty: 'No published AI conclusion yet. Start the first analysis from the timeline below.', latestConclusionLoading: 'Reading the latest AI conclusion…', latestConclusionUnavailable: 'The latest conclusion is unavailable. Try again later.', openDetail: 'Read in full',
+            changeSummary: 'What changed', noChange: 'No new change since the previous read.', latestConclusion: 'Latest AI conclusion', latestConclusionHint: 'Select a timeline entry below to read that entry in full on the left; the current binding is unchanged.', latestConclusionEmpty: 'No published AI conclusion yet. Start the first analysis from the timeline below.', latestConclusionAttemptFailed: 'The latest analysis attempt failed', latestConclusionLoading: 'Reading the latest AI conclusion…', latestConclusionUnavailable: 'The latest conclusion is unavailable. Try again later.', openDetail: 'Read in full',
             conclusionDirection: { label: 'Direction', bullish: 'Bullish', bearish: 'Bearish', range: 'Range-bound', undecided: 'No call yet', mixed: 'Conflicting signals' },
             directions: { title: 'Operation direction', horizons: { short: 'Short term (0-24h)', medium: 'Medium term (1-7d)', long: 'Long term (1-4w)' }, unknownHorizon: 'Other horizon', confidence: { label: 'Confidence', low: 'low', medium: 'medium', high: 'high' } },
             /**
@@ -1639,7 +1697,7 @@ mi: miText['en-US'],
                 'policy-sep-median-current-year': 'SEP current-year median', 'policy-sep-median-path': 'SEP median path',
                 'policy-last-decision-vote': 'Last decision vote',
                 'event-name': 'Event', 'lifecycle-state': 'Lifecycle', 'scheduled-date': 'Scheduled date', 'scheduled-at': 'Scheduled time',
-                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', surprise: 'Surprise (actual − consensus)', 'event-excerpt': 'Event excerpt', 'news-sentiment': 'News sentiment'
+                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Expectation', surprise: 'Surprise (actual − expectation)', 'event-excerpt': 'Event excerpt', 'news-sentiment': 'News sentiment'
               },
               subject: {
                 stablecoins: 'Stablecoins', BTC: 'BTC', ETH: 'ETH', market: 'Market', all: 'All', 'btc-vs-eth': 'BTC vs ETH',
@@ -1664,6 +1722,7 @@ mi: miText['en-US'],
                 'news-sentiment-unavailable': 'News sentiment unavailable',
                 'macro-calendar-unavailable': 'Economic calendar unavailable', 'macro-calendar-empty': 'Economic calendar empty',
                 'macro-calendar-consensus-unavailable': 'Market consensus missing', 'macro-calendar-query-not-wired': 'Economic calendar not wired',
+                'tier1-absent-in-month': 'No tier-one release this month',
                 'observed-unverified': 'Source identity unverified', 'provider-title-is-display-name': 'Event name is the provider title',
                 'provider-surprise-not-comparable': 'Surprise not computable', 'provider-observation-identity-missing': 'Calendar observation has no stable identity',
                 'provider-observation-page-unavailable': 'Calendar observation page unavailable', 'provider-observation-pages-truncated': 'Calendar observation pages truncated',
@@ -1686,6 +1745,7 @@ mi: miText['en-US'],
           },
           calendarCard: {
             title: 'What to watch', todaySection: 'Recently released, value moved', upcomingSection: 'Upcoming',
+            unknownCountry: 'Unknown',
             empty: 'No high-importance events in the next 7 days', unavailable: 'Calendar data is unavailable', refresh: 'Refresh',
             loading: 'Reading the calendar…', staleNotice: 'The latest read did not finish; these are the previous readings.',
             releasedEmpty: 'No released events in the last {days} days.',
@@ -1698,13 +1758,16 @@ mi: miText['en-US'],
             categories: { 'economic-indicator': 'Indicator', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' },
             openCalendar: 'Open the economic calendar', switchToAgent: 'Switch to the market agent', switchToCalendar: 'Switch to the calendar card',
             openEventInCalendar: 'Open {name} in the calendar',
-            collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy {name}', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence' }, importanceHigh: 'High importance', timePending: 'Time TBD',
+            collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy {name}', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence',
+              factsUnreadable: 'The calendar for this span could not be read; this brief has no calendar facts' }, importanceHigh: 'High importance', timePending: 'Time TBD',
+            /* Events beyond the list whose source gave no rating: not listed, but the list is not everything. */
+            filterNote: 'Only tier-1 and tier-2 indicators, and high-importance events',
             surprise: { beat: 'Above expectation', miss: 'Below expectation', inline: 'In line', unavailable: 'No consensus', notComparable: 'Surprise not comparable' }
           },
           analysisTimeline: {
             retryAnalysis: 'Retry analysis', attemptFailed: 'Last analysis was not published',
-            failureReasons: { 'analysis-invalid-output-schema': 'Model output did not match the required format. Retry.', 'analysis-invalid-json': 'The model reply was not valid JSON (it may have been cut off), so it was not published. Retry.', 'analysis-missing-evidence': 'The analysis output did not match the frozen evidence, so it was not published. Retry; if it keeps failing, check sources.', 'analysis-provider-not-ready': 'Model is not ready. Check model settings.', 'analysis-provider-error': 'Model invocation failed. Check the connection and retry.', 'analysis-timeout': 'Model invocation timed out. Retry.', 'analysis-cancelled': 'The analysis was interrupted (app closed or task cancelled). Retry.' },
-            triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'same-release-coalesced': 'Another indicator from the same release was already analysed; this one did not run again', 'same-release-abandoned': 'The analysis for this release did not succeed and its one retry is used up; this indicator was not analysed separately', 'hour-budget-exhausted': 'Hourly analysis limit reached', 'day-budget-exhausted': 'Daily analysis limit reached', 'global-day-budget-exhausted': 'Overall daily analysis limit reached', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'High-importance intelligence; analysis started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart', 'signal-high-triggered': 'A rule fired; analysis started', 'signal-medium-triggered': 'A rule fired; analysis started', 'signal-cooldown-active': 'The same rule was just analysed; skipped this time', 'signal-low-marker-only': 'Marked on the panel only; no separate analysis', 'signal-calendar-owned': 'The macro calendar already covers this; not analysed twice', 'signal-freeze-unavailable': 'The analysis could not be queued; it did not run' } },
+            failureReasons: { 'analysis-invalid-output-schema': 'Model output did not match the required format. Retry.', 'analysis-invalid-json': 'The model reply was not valid JSON (it may have been cut off), so it was not published. Retry.', 'analysis-missing-evidence': 'The analysis output did not match the frozen evidence, so it was not published. Retry; if it keeps failing, check sources.', 'analysis-provider-not-ready': 'No usable model was available, so this analysis did not start. Check that the selected model is available.', 'analysis-provider-error': 'The model service returned an error, so this analysis did not finish. Try again shortly.', 'analysis-timeout': 'Model invocation timed out. Retry.', 'analysis-cancelled': 'The analysis was interrupted (app closed or task cancelled). Retry.' },
+            triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'calendar-unavailable': 'The calendar could not be read; running this analysis without calendar facts', 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'same-release-coalesced': 'Another indicator from the same release was already analysed; this one did not run again', 'same-release-abandoned': 'The analysis for this release did not succeed and its one retry is used up; this indicator was not analysed separately', 'hour-budget-exhausted': 'Hourly analysis limit reached (one run counts as one line, failures included; a run may use up to 9 model calls)', 'day-budget-exhausted': 'Daily analysis limit reached (one run counts as one line, failures included; a run may use up to 9 model calls)', 'global-day-budget-exhausted': 'Overall daily analysis limit reached (one run counts as one line, failures included)', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'A market-level analysis was started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart', 'signal-high-triggered': 'A rule fired; analysis started', 'signal-medium-triggered': 'A rule fired; analysis started', 'signal-cooldown-active': 'The same rule was just analysed; skipped this time', 'signal-low-marker-only': 'Marked on the panel only; no separate analysis', 'signal-calendar-owned': 'The macro calendar already covers this; not analysed twice', 'signal-freeze-unavailable': 'The analysis could not be queued; it did not run' } },
 loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             // The list spans event groups: on one screen each row says which event it belongs to,
             // so two conclusions seconds apart do not read as the same one posted twice.
@@ -1715,9 +1778,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             refusalModelUnconfigured: 'No usable default assistant model. Choose an analysis model first.', refusalModelUnavailable: 'That model cannot be called right now. Pick another one.',
             refusalFailed: 'Could not save. Retry.', saving: 'Saving…', save: 'Save', cancel: 'Cancel',
             entry: 'Message analysis / timeline', description: 'Review published summaries, predictions, and evidence coverage',
-            workspaceLabel: '— MARKET ANALYSIS', title: 'AI intelligence analysis', back: 'Back to Agents', loading: 'Loading message analysis…', unavailable: 'Analysis detail is unavailable.', empty: 'No published message analysis yet.', requestInitialAnalysis: 'Generate first analysis', refreshAnalysis: 'Analyze now', initialAnalysisQueued: 'First analysis queued; this panel updates when it finishes.', initialAnalysisUnavailable: 'No eligible published intelligence is available for analysis.', initialAnalysisFailed: 'The first-analysis job failed to start. Refresh and try again.', analysisRefreshAlreadyAvailable: 'The latest analysis is already available.', analysisStillRunning: 'The analysis is still running. Stopped waiting; it will appear here when it finishes.', analysisRefreshFailed: 'The re-analysis request did not go through. Try again.', analysisServiceNotReady: 'The analysis service is still starting up. Try again shortly.', timeline: 'Analysis timeline', detail: 'Analysis detail', dismissError: 'Dismiss message',
-            eventGroup: 'Event group', analysisRun: 'Analysis run', summaryVersion: 'Summary version', evidenceCount: 'Evidence count', asOf: 'As of', dataCutoff: 'Data limits', conclusion: 'AI conclusion', confirmedFacts: 'Confirmed facts', transmission: 'Transmission view', marketReaction: 'Market reaction', noMarketReaction: 'No comparable market evidence is available; direction is not judged.', supportingEvidence: 'Supporting evidence', counterEvidence: 'Counter-evidence', catalysts: 'Next catalysts', auditInfo: 'View audit information', prediction: 'Predictions', noPrediction: 'This summary has no predictions.', conditions: 'Conditions', invalidation: 'Invalidation', verificationDue: 'Verification due', agentUnavailable: 'The follow-up Agent will be enabled in the next phase.',
-            status: { published: 'Published', stale: 'Stale', superseded: 'Superseded', pending: 'Pending', confirmed: 'Confirmed', 'partially-confirmed': 'Partially confirmed', invalidated: 'Invalidated', expired: 'Expired', 'insufficient-data': 'Insufficient data' }
+            workspaceLabel: '— MARKET ANALYSIS', title: 'AI intelligence analysis', back: 'Back to Agents', loading: 'Loading message analysis…', unavailable: 'Analysis detail is unavailable.', empty: 'No published message analysis yet.', requestInitialAnalysis: 'Generate first analysis', refreshAnalysis: 'Analyze now', analysisInFlightReason: 'A run is in progress. Try again when it finishes.', initialAnalysisQueued: 'First analysis queued; this panel updates when it finishes.', initialAnalysisUnavailable: 'No eligible published intelligence is available for analysis.', initialAnalysisFailed: 'The first-analysis job failed to start. Refresh and try again.', analysisRefreshAlreadyAvailable: 'The latest analysis is already available.', analysisStillRunning: 'The analysis is still running. Stopped waiting; it will appear here when it finishes.', analysisRefreshFailed: 'The re-analysis request did not go through. Try again.', analysisServiceNotReady: 'The analysis service is still starting up. Try again shortly.', analysisProviderNotReady: 'No usable model is available. Choose a model in settings, then try again.', analysisInsufficientEvidence: 'The original record for this item is no longer in the retention window, so it cannot be analysed; start a new analysis from the latest item.', timeline: 'Analysis timeline', tabSuccess: 'Succeeded', tabFailed: 'Failed', tabsAria: 'Analysis records', detail: 'Analysis detail', dismissError: 'Dismiss message',
+            eventGroup: 'Event group', analysisRun: 'Analysis run', summaryVersion: 'Summary version', evidenceCount: 'Evidence count', asOf: 'As of', dataCutoff: 'Data limits', conclusion: 'AI conclusion', confirmedFacts: 'Confirmed facts', transmission: 'Transmission view', marketReaction: 'Market reaction', noMarketReaction: 'No comparable market evidence is available; direction is not judged.', supportingEvidence: 'Supporting evidence', counterEvidence: 'Counter-evidence', catalysts: 'Next catalysts', auditInfo: 'View audit information', prediction: 'Predictions', noPrediction: 'This summary has no predictions.', conditions: 'Conditions', invalidation: 'Invalidation', verificationDue: 'Verification due', agentUnavailable: 'The follow-up Agent will be enabled in the next phase.', conclusionLanguageNote: 'This conclusion was written in {language}.', conclusionLanguageLabel: 'Language note', regenerateConclusion: 'Regenerate',
+            status: { published: 'Published', stale: 'Stale', superseded: 'Superseded', running: 'Analyzing now', failed: 'Analysis failed', pending: 'Pending', confirmed: 'Confirmed', 'partially-confirmed': 'Partially confirmed', invalidated: 'Invalidated', expired: 'Expired', 'insufficient-data': 'Insufficient data' }
           },
           newsSentiment: {
             title: 'Key sentiment',
@@ -1747,7 +1810,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               translationStatus: { waiting: 'Waiting', queue: 'Translating {done}/{total}', translating: 'Translating', translated: 'Translated', failed: 'Failed', contextMenu: 'Right-click for actions', translateOne: 'Translate this item', retranslateOne: 'Retranslate' },
               clearFilters: 'Clear filters',
               loadMore: 'Load more',
-              settings: 'Settings'
+              settings: 'Settings',
+              menuInterpretation: 'AI interpretation',
+              menuInterpretationView: 'View AI interpretation',
+              menuInterpretationAgain: 'Interpret again'
             },
             availability: {
               missing: 'No sources configured yet',
@@ -1814,6 +1880,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               screenCrashed: 'This part could not be shown. Try again.',
               sourceUnavailable: 'Not available (see details)',
               unreadable: 'Could not read',
+              /** Screen-reader name for the ⓘ at the end of a row: the reason comes from the data. */
+              reasonAria: 'Reason: {reason}',
+              /** Screen-reader name for the ⓘ on a preview control (this row has an explanation). */
+              infoAria: 'About this setting',
               discard: {
                 title: 'You have unsaved changes. Discard them?',
                 body: 'Closing now keeps none of the unsaved edits.',
@@ -1936,8 +2006,15 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               quoteLeg: { missing: 'Live quote not connected', stale: 'Live quote out of date' },
               windowNoPair: 'No close pair for this window in the store',
               quoteLegReasons: { missing: 'No trade for this asset arrived on the live trade stream (the stream may not be connected).', stale: 'The last trade is more than 15 seconds old, so the live quote counts as out of date.' },
-              lineNotDrawn: 'not drawn',
-              lineNotDrawnReason: 'A line needs five-minute bars at every point in this window; this stretch is not complete, so the line is not drawn.',
+              // What happened to the data, not what the renderer did with it.
+              lineNoComparableData: 'no data in this stretch',
+              lineNoComparableDataReason: 'This stretch has no complete run of closes, so there is no comparable curve.',
+              // Sits beside the row name, in the same slot as the live badge; `{time}` is formatted once.
+              staleAsOf: 'Out of date · as of {time}',
+              sourceRefused: 'source not provided',
+              hideUnavailableRows: 'Hide rows whose source is unavailable',
+              planNotServedReason: '{name}: the provider does not offer this instrument on the current plan; last close {time}.',
+              planNotServedReasonMore: '{name}: the provider does not offer this instrument on the current plan; last close {time}; {count} more are also unavailable.',
               staleRead: 'The refresh failed; the readings below are from the last successful read.',
               // Condition ①: say that a restart is what makes it take effect, and how to restart.
               contractMismatch: 'The interface and the main process are running different versions, so this data cannot be read. A restart is what makes it take effect: press “Restart the app” below, or quit the app completely and open it again; reloading the page is not enough.',
@@ -2003,6 +2080,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   'index-proxy': 'the index leg is the tokenised proxy', 'dxy-synthetic': 'the dollar is a synthetic index', 'gold-synthetic': 'gold is a synthetic quote'
                 }
               },
+              rowHint: '{name}: about this row',
               statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', us10y: 'Nominal cost of money', realRate: 'The most direct link to BTC', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
               btcIndex: 'BTC − Nasdaq 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: 'Samples', coverage: 'History coverage',
               states: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', limited: 'Resource limited', unavailable: 'Unavailable', missing: 'No data' },
@@ -2028,7 +2106,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               presets: { manual: 'Manual', balanced: 'Balanced', frequent: 'Frequent' },
               marketCalendar: {
                 title: 'Market calendar', description: 'Collected by a product job; events stay unverified until an official link exists.', refresh: 'Refresh now', refreshing: 'Refreshing the market calendar…', succeeded: 'Market calendar refreshed.', failed: 'Market calendar refresh failed.',
-                feeds: { 'macro-calendar-0xrouter-economic-data': 'Economic data', 'macro-calendar-0xrouter-financial-events': 'Financial events', 'macro-calendar-0xrouter-central-bank-activities': 'Central bank activities' },
+                feeds: { 'macro-calendar-narwhal-economic-data': 'Economic data', 'macro-calendar-narwhal-financial-events': 'Financial events', 'macro-calendar-narwhal-central-bank-activities': 'Central bank activities' },
                 owner: 'Market · unverified'
               },
               groups: { 'macro-calendar': 'Macro calendar', 'macro-regulation': 'Macro and regulation', 'crypto-market': 'Crypto market', 'aggregate-data-provider': 'Aggregate data providers' },
@@ -2240,9 +2318,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             policyPath: {
               title: 'Policy path',
-              probabilityCellOff: 'Policy path probability is switched off',
+              openDetailAria: 'Open policy path details',
+              probabilityCellOff: 'Rates are switched off',
               fedCellOff: 'Fed calendar is switched off',
-              bothCellsOff: 'Policy path is off: both “policy path probability” and “Fed calendar” must be on',
+              bothCellsOff: 'Policy path is off: both “rates” and “Fed calendar” must be on',
               dependencySourceOff: '{source} is switched off',
               range: 'Target range',
               meeting: 'Next meeting',
@@ -2253,6 +2332,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               longerRun: 'longer run',
               outcomes: { 'no-change': 'Hold', 'hike-25': 'hike 25bp', 'hike-50-plus': 'hike 50bp+', 'cut-25': 'cut 25bp', 'cut-50-plus': 'cut 50bp+' },
               basisNote: 'The odds are the mid of the bucket named above on Polymarket; the five buckets are normalised by their sum (usually slightly above 1, the venue margin), and 24h is that bucket before and after. It is what traders will transact at now, not a model forecast, and not the outcome.',
+              marketExpectation: 'Market expectation · Polymarket',
+              marketExpectationVolume: 'Volume {volume}',
               probabilityLabel: 'Hike odds',
               lastVote: 'Last',
               sepMedian: 'SEP median',
@@ -2322,9 +2403,11 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               stablecoin: 'Stablecoins', stablecoinScope: ' (USDT + USDC)', asset: 'Asset', totalSupply: 'Total supply',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: 'Latest', windowDays: '{days}-day', coverage: '({days} days only)', streakColumn: 'Streak',
-              streak: '{flow} · {count}d', streakSingle: '{flow} · 1d',
+              rowAsOf: 'As of {day}',
+              streak: '{flow} · {count} trading days', streakSingle: '{flow} · 1 trading day',
               shortFlowDirections: { inflow: 'Inflow', outflow: 'Outflow', zero: 'Flat' },
-              observedAt: 'Observed at', etfFlow: 'Market flows', chartWindow: 'Last 7 sessions · USD millions',
+              observedAt: 'Observed at', etfFlow: 'Market flows', chartWindow: 'Last 7 days · USD millions',
+              chartWindowHelp: 'When today has no reading yet, today is not drawn: the window moves back one day and still covers 7 days.',
               fundsColumn: 'Stablecoin net inflow', fundsScope: 'All USD stablecoins', btc: 'BTC ETF', eth: 'ETH ETF', etfScope: 'US spot ETF',
               infoAria: 'How to read this card',
               chartScopeNoteMain: 'Stablecoin net inflow of all USD stablecoins, no today.',
@@ -2375,28 +2458,36 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sourceStale: 'Source status: last successful reading · {time}'
             },
             // One row per feed in Source status. `{tag}` is the panel's own synthetic/proxy label.
-            dailyBriefing: dailyBriefingText['en-US']
+            dailyBriefing: dailyBriefingText['en-US'],
+            newsInterpretationResult: analysisNewsInterpretationResultText['en-US']
           },
           calendar: {
             blsUnavailableNotice: 'BLS official calendar: this network cannot fetch it automatically (the official site returns 403) and automatic sync has stopped; the BLS events in the database come from the last successful sync ({date}), and their release times are unknown.',
             officialUnavailableShort: 'The BLS official schedule cannot be fetched',
             officialUnavailableNote: 'The site refuses this network (403), so automatic syncing has stopped. The BLS events listed come from the content synced on {date}; to get the current schedule, export the ICS from the official site and import it.',
+            cellOverflow: {
+              chip: '+{count} more',
+              title: '{count} more not shown',
+              aria: {
+                both: '{total} events this day, {shown} shown here, {hidden} more not shown: {tiered} of them tier one or two, {untiered} untiered',
+                tieredOnly: '{total} events this day, {shown} shown here, {hidden} more not shown, all tier one or two (over the display limit)',
+                untieredOnly: '{total} events this day, {shown} shown here, {hidden} more not shown, all untiered'
+              }
+            },
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Reading {months} (UTC months, including the grid\'s neighbouring months); up to 200 official events per month' },
-            calendarSettings: 'Configure calendar',
             calendarPanel: { title: 'Calendar sources', configure: 'Configure in data sources', loading: 'Loading calendar sources…', unavailable: 'No calendar sources are available for this panel.', pending: 'Pending', enabled: 'Enabled', disabled: 'Disabled' },
-            market: { marketReadFailure: { 'input-invalid': 'This read was rejected as invalid; refreshing sends it again.', 'read-threw': 'This read did not finish; you can retry.', 'too-large': 'This window holds more events than one read can finish; you can retry.', 'cursor-loop': 'The read stopped making progress and was cut off; you can retry.' }, refreshOutcome: { succeeded: 'Refresh succeeded', failed: 'Refresh failed', unattempted: 'Not refreshed this session' }, refreshTrigger: { manual: 'Manual', automatic: 'Automatic' }, attemptFailure: { 'input-invalid': 'Invalid request', 'credential-not-configured': 'No credential configured', 'response-unavailable': 'Source did not respond', 'archive-unavailable': 'Evidence archive unavailable', 'parse-unavailable': 'Parsing limited', 'storage-unavailable': 'Storage unavailable', 'storage-pressure': 'Storage limited' }, collectedAt: 'Data collected', retainedData: 'Showing previous data', automaticRefresh: 'Updates automatically every {interval} min', officialActual: 'Official actual', officialPrevious: 'Official previous', sourceAdvanced: 'This source has updated since; the figures and time below belong to the observation above.', linkedTimeOfficial: 'Calendar time: official', linkedTimeProvider: 'Calendar time: 0xRouter', linkedTimePending: 'Calendar time: pending', missingValue: 'Unavailable', importance: { high: 'High', medium: 'Medium', low: 'Low' }, locale: 'en' as const, refresh: 'Refresh market calendar', loading: 'Loading market events…', pending: 'Refreshing market calendar…', completed: 'Market calendar updated', partial: 'Some sources failed; existing data retained', unavailable: 'Refresh incomplete; existing data may be stale', queryUnavailable: 'Market events unavailable', settings: 'Manage 0xRouter source', unknownCountry: 'Country not specified', consensus: 'Market consensus', surprise: 'Surprise', surpriseBeat: 'Above expectation', surpriseMiss: 'Below expectation', surpriseInline: 'In line', surpriseUnavailable: 'No consensus', surpriseNotComparable: 'Surprise not comparable', providerPrevious: 'Previous (0xRouter)', providerActual: 'Actual (0xRouter)', comparison: 'Not comparable yet', source: '0xRouter', observed: 'Source observed', lastGivenAt: 'The source last published this at', time: 'Published', more: 'More market events', kinds: { 'economic-indicator': 'Economic indicators', 'financial-event': 'Financial events', 'central-bank-activity': 'Central bank activities' }, statuses: { success: 'Collected', 'success-empty': 'No events this time', 'all-skipped': 'Parsing limited', partial: 'Partially available', unavailable: 'No available collection', 'no-locale-rows': 'The source provides no English items' } },
-            eventStatus: { label: 'Release status', 'data-received': 'Data received', upcoming: 'Not yet scheduled time', 'awaiting-data': 'Not yet published', 'storage-limited': 'Storage limited', 'time-pending': 'Time pending', 'elapsed-unconfirmed': 'Scheduled time elapsed', cancelled: 'Cancelled' },
+            market: { marketReadFailure: { 'input-invalid': 'This read was rejected as invalid; refreshing sends it again.', 'read-threw': 'This read did not finish; you can retry.', 'too-large': 'This window holds more events than one read can finish; you can retry.', 'cursor-loop': 'The read stopped making progress and was cut off; you can retry.' }, refreshOutcome: { succeeded: 'Refresh succeeded', failed: 'Refresh failed', unattempted: 'Not refreshed this session' }, refreshTrigger: { manual: 'Manual', automatic: 'Automatic' }, attemptFailure: { 'input-invalid': 'Invalid request', 'credential-not-configured': 'No credential configured', 'response-unavailable': 'Source did not respond', 'archive-unavailable': 'Evidence archive unavailable', 'parse-unavailable': 'Parsing limited', 'storage-unavailable': 'Storage unavailable', 'storage-pressure': 'Storage limited' }, collectedAt: 'Data collected', retainedData: 'Showing previous data', automaticRefresh: 'Updates automatically every {interval} min', officialActual: 'Official actual', officialPrevious: 'Official previous', sourceAdvanced: 'This source has updated since; the figures and time below belong to the observation above.', linkedTimeOfficial: 'Calendar time: official', linkedTimeProvider: 'Calendar time: Narwhal', linkedTimePending: 'Calendar time: pending', missingValue: 'Unavailable', importance: { high: 'High', medium: 'Medium', low: 'Low' }, locale: 'en' as const, refresh: 'Refresh market calendar', loading: 'Loading market events…', pending: 'Refreshing market calendar…', completed: 'Market calendar updated', partial: 'Some sources failed; existing data retained', unavailable: 'Refresh incomplete; existing data may be stale', queryUnavailable: 'Market events unavailable', settings: 'Manage market calendar source', unknownCountry: 'Unknown', consensus: 'Market consensus', surprise: 'Surprise', surpriseBeat: 'Above expectation', surpriseMiss: 'Below expectation', surpriseInline: 'In line', surpriseUnavailable: 'No consensus', surpriseNotComparable: 'Surprise not comparable', providerPrevious: 'Previous (Narwhal)', providerActual: 'Actual (Narwhal)', comparison: 'Not comparable yet',
+              source: 'Narwhal',
+              sourceUnknown: 'Source not specified', sourceByFeed: { 'macro-calendar-bls': 'BLS', 'macro-calendar-bea': 'BEA', 'macro-calendar-fed': 'Federal Reserve', 'macro-calendar-narwhal-economic-data': 'Narwhal', 'macro-calendar-narwhal-financial-events': 'Narwhal', 'macro-calendar-narwhal-central-bank-activities': 'Narwhal' }, observed: 'Source observed', lastGivenAt: 'The source last published this at', time: 'Published', more: 'More market events', kinds: { 'economic-indicator': 'Economic indicators', 'financial-event': 'Financial events', 'central-bank-activity': 'Central bank activities' }, statuses: { success: 'Collected', 'success-empty': 'No events this time', 'all-skipped': 'Parsing limited', partial: 'Partially available', unavailable: 'No available collection', 'no-locale-rows': 'The source provides no English items' }, collectorStopped: 'No new batches since {at}', collectorStoppedNoTime: 'No new batches' },
+            eventStatus: { label: 'Release status', 'data-received': 'Data received', upcoming: 'Scheduled', 'awaiting-data': 'Awaiting value', backfilling: 'Awaiting value', missing: 'Not provided', 'storage-limited': 'Storage limited', 'time-pending': 'Time pending', 'elapsed-unconfirmed': 'Scheduled time elapsed', cancelled: 'Cancelled' },
             workspaceLabel: '— MACRO / ECONOMIC CALENDAR',
             title: 'Economic calendar',
             info: 'Calendar details',
             month: 'Current month',
-            monthNavigation: { previous: 'Previous month', next: 'Next month', current: 'Back to current month', picker: 'Choose month' },
-            status: { loading: 'Loading economic calendar…', empty: 'No events this month.', noSourceEnabled: 'No calendar source is enabled' },
-            noLocaleRowsNote: 'These calendar sources provide Chinese items only; there is no English content to show this month.',
+            status: { loading: 'Loading economic calendar…', empty: 'No events this month.', beforeDataStart: 'This month is before the data start, so nothing has been collected for it yet.', noSourceEnabled: 'No calendar source is enabled' },
+           
             emptyState: { title: 'No official schedule is imported or collected', manageAction: 'Manage Macro Calendar' },
             failures: { 'calendar-query-unavailable': 'Economic calendar is unavailable.', 'query-input-invalid': 'Economic calendar query is invalid.', 'event-not-found': 'Event detail was not found.' },
-            backToDashboard: 'Back to crypto dashboard',
-                        weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
             importance: { high: 'High' },
             states: { scheduled: 'Scheduled', released: 'Released', cancelled: 'Cancelled' },
             categories: { inflation: 'Inflation', employment: 'Employment', growth: 'Growth', 'monetary-policy': 'Monetary policy', consumption: 'Consumption' },
@@ -2406,7 +2497,14 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'NFP', unemployment: 'Unemployment',
               'average-hourly-earnings': 'Wages', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: 'Macro'
             },
-            details: { title: 'Event detail', category: 'Category', period: 'Period', source: 'Source', time: 'Release time', importance: 'Importance', state: 'State', actual: 'Actual', previous: 'Previous', valueNotYet: 'Not released yet', valueNotProvided: 'Not provided by the source', consensusMissing: 'No consensus provided', consensusUnreadable: 'Temporarily unreadable', consensusUnreadableReason: 'An observation exists, but its expectation field is empty (data gap).', consensusReadFailedReason: 'The market observation could not be read this time — this is not the same as having no expectation.', consensusFromMarket: 'Expectation comes from the market source', scheduledDateOnly: 'Official time not published', timeNotPublished: releaseTimeWords['en-US'], timeNotPublishedReason: 'The official schedule does not publish a release time for this event, so no time is shown here. This is not a read failure on our side.', editedTime: 'Edited',
+            details: { title: 'Event detail', category: 'Category', period: 'Period', source: 'Source', time: 'Release time', importance: 'Importance', state: 'State', actual: 'Actual', previous: 'Previous', valueNotYet: 'Not released yet', valueNotProvided: 'Not provided by the source', consensusMissing: 'No consensus provided', consensusUnreadable: 'Temporarily unreadable', consensusUnreadableReason: 'An observation exists, but its expectation field is empty (data gap).', consensusReadFailedReason: 'The market observation could not be read this time — this is not the same as having no expectation.', consensusFromMarket: 'Expectation comes from the market source', content: 'Event content', contentCoverage: 'Indicators covered', contentCoverageNone: 'This event covers no indicator', contentIdentity: 'Event identifier', contentOfficial: 'Official site', contentOfficialPending: 'Unverified', contentOfficialNoCode: 'No indicator code for this row, so there is no official site', contentNotCaptured: 'Not provided', revisions: 'Value revisions', revisionsLoading: 'Reading revisions…', revisionsNotRecorded: 'Not recorded', revisionsUpdatedAt: 'Updated', revisionsSource: 'Source', 
+              contentHierarchy: 'Indicator level', hierarchyOwned: 'Belongs to: {name}',
+              sourceWritesTitle: 'Records by source', sourceWritesRevision: 'Write record',
+              sourceWritesObservation: 'Current observation',
+              sourceWritesConsensusConflict: 'Sources disagree on consensus', sourceWritesActualConflict: 'Sources disagree on actual',
+              sourceWritesPreviousConflict: 'Sources disagree on previous', sourceWritesUncomparable: 'Sources disagree on consensus; not compared',
+              hierarchyChildren: 'Components: {names}', hierarchySeparator: ', ', scheduledDateOnly: 'Official time not published', timeNotPublished: releaseTimeWords['en-US'], timeNotPublishedReason: 'The official schedule does not publish a release time for this event, so no time is shown here. This is not a read failure on our side.', editedTime: 'Edited',
+              releaseOrdinal: 'Release {index}',
               editTime: { label: 'Release time (editable)', save: 'Save', cancel: 'Cancel', restore: 'Restore published/convention', saved: 'Your time has been saved.', rejected: 'Not saved: the time or date is not valid.', ambiguous: 'That instant occurs twice in this timezone (daylight saving). Pick another.', hint: 'An edit stores your date and time and overrides the published and convention values.' } },
             sources: { federalReserve: 'Federal Reserve Board (Fed)', bea: 'Bureau of Economic Analysis (BEA)', blsManualIcs: 'Bureau of Labor Statistics (BLS, manual ICS)', blsAutomaticSchedule: 'Bureau of Labor Statistics (BLS, automatic annual schedule)' },
             sourceMarkers: { federalReserve: 'Fed', bea: 'BEA', blsManualIcs: 'BLS', blsAutomaticSchedule: 'BLS' },
@@ -2432,11 +2530,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               blocked: 'Refreshing is unavailable: the official site rejects this network; the recovery time is unknown.',
               reasonCodeAria: 'Reason code',
               updated: 'BLS data for the matching complete release family was refreshed.', unchanged: 'BLS data for the matching complete release family is already current.', unavailable: 'Official BLS data is unavailable for the matching complete release family. No values were saved.'
-            },
-            blsScheduleSync: {
-              schedule: { updated: 'BLS schedule updated', unchanged: 'BLS schedule is current', unavailable: 'BLS schedule unavailable' },
-              cpi: { updated: 'CPI values updated', current: 'CPI values are current', 'not-required': 'CPI catch-up not required', unavailable: 'CPI values unavailable' },
-              employment: { updated: 'Employment values updated', current: 'Employment values are current', 'not-required': 'Employment catch-up not required', unavailable: 'Employment values unavailable' }
             },
             recordTimes: {
               createdAt: 'Created',

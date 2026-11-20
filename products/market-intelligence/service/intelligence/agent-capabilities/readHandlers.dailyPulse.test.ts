@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
+import { declaredSourceIdsForFact } from '../daily-briefing/dailyBriefingReadingSources'
 import { handleGetDailyPulse } from './readHandlers'
 
 /** The composition root builds the module once; the handler reads the instance from its deps. */
@@ -33,11 +34,17 @@ const capital = {
   conclusion: 'partial' as const
 }
 
+/**
+ * ETF 那一档的开关**由注册表决定**：哪个源声明了 `etf-net-flow`，就开那个源。
+ * 这里不再写死 `0xrouter-aggregate-provider`——那个源 2026-11-14 已撤销，
+ * 写死旧 id 会让 ETF 两行变成 `source-disabled`，把「六条读数都读到」变成「部分读到」。
+ */
+const etfSourceIds = declaredSourceIdsForFact('etf-net-flow')
 const profiles = [
   { sourceId: 'alternative-fear-greed', enabled: true },
   { sourceId: 'binance-futures-positioning', enabled: true },
   { sourceId: 'defillama-stablecoins', enabled: true },
-  { sourceId: '0xrouter-aggregate-provider', enabled: true },
+  ...etfSourceIds.map((sourceId) => ({ sourceId, enabled: true })),
   { sourceId: 'macro-calendar-fed', enabled: true }
 ]
 
@@ -92,7 +99,7 @@ describe('handleGetDailyPulse', () => {
 
   it('marks a switched-off ETF source instead of inventing a reading', async () => {
     injectModule(moduleWith({
-      sourceProfileStore: { listProfiles: vi.fn(async () => profiles.filter((profile) => profile.sourceId !== '0xrouter-aggregate-provider')) }
+      sourceProfileStore: { listProfiles: vi.fn(async () => profiles.filter((profile) => !etfSourceIds.includes(profile.sourceId))) }
     }) as never)
 
     const result = (await handleGetDailyPulse({ asOf }, deps)) as Record<string, unknown>

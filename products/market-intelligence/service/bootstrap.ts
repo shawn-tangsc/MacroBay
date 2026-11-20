@@ -28,13 +28,18 @@ import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossA
 import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
 import { createNotificationTestWiring } from './intelligence/ipc/notificationTestWiring'
-import { createEnabledCalendarFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
+import { createEnabledCalendarFeeds, createEnabledZeroXRouterFeeds } from './intelligence/macro-calendar/enabledCalendarFeeds'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
+import { wireCalendarReadings } from './wiring/calendarReadings'
+import { wireZeroXRouterCalendarSchedule } from './wiring/zeroXRouterCalendarSchedule'
+import { scheduleHistoricalValueFill } from './wiring/calendarStandardRows'
+import { createNarwhalStandardRowsWriter, startCalendarStandardRows } from './wiring/calendarStandardRowsNarwhal'
+import { wireCrossAsset } from './wiring/crossAsset'
 import { registerTranslationRecordsCache } from './wiring/translation'
-import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
+import { newsInterpretationWiring, registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { ProductAgentPlatformDeps } from '@platform/desktop/main/productAgentPlatformWiring'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
@@ -50,6 +55,13 @@ import { landedFilterReader, registerCalendarEventReminder } from './intelligenc
 import { createCalendarReminderSettingsStore } from './intelligence/macro-calendar/calendarEventReminderSettingsStore'
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
+import { createMacroIndicatorReadService } from './intelligence/macro-calendar/macroIndicatorReadService'
+import { readMacroIndicatorCardGap } from './intelligence/macro-calendar/macroIndicatorCardGapRead'
+import { registerMacroIndicatorIpc } from './intelligence/macro-calendar/ipc/registerMacroIndicatorIpc'
+import { createFredObservationsFetcher, readFredIndicatorYoY, readFredObservationForPeriod } from './intelligence/macro-calendar/fredIndicatorYoY'
+import { readNextReleaseForMetric } from './intelligence/macro-calendar/marketCalendarStandardMonthRead'
+import { readStandardActuals } from './intelligence/macro-calendar/macroIndicatorStandardActuals'
+import { readPolymarketConsensus } from './intelligence/macro-calendar/polymarketConsensus'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
 import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
 import { createSyncAuditStoreIfAvailable } from './intelligence/audit/syncAuditStore'
@@ -57,7 +69,17 @@ import { withSyncAudit } from './intelligence/audit/syncAuditRecorder'
 import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRuntime'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
-import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
+import { getPlatformFetch } from '@platform/network/platformFetch'
+import { allSources } from './intelligence/application/providerRegistry'
+import { syncOfficialStandardRows } from './intelligence/macro-calendar/marketCalendarOfficialSourceRows'
+import { createStandardMonthPageReader } from './intelligence/macro-calendar/marketCalendarStandardMonthPage'
+import { eventTypeNameByCode, nameByMetricKey } from './intelligence/macro-calendar/marketCalendarCodeNames'
+import { narwhalSourcePolicy } from './intelligence/application/narwhalSourcePolicy'
+import { createNarwhalCalendarAssembly } from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarAssembly'
+import { createNarwhalCalendarBriefingRefresh }
+  from './intelligence/macro-calendar/narwhal-calendar/narwhalCalendarBriefingCatchUp'
+import { readStandardTableLastWrittenAt }
+  from './intelligence/macro-calendar/marketCalendarFreshnessFromJobs'
 import { requestMarketAnalysisForCalendarUpdate } from './intelligence/jobs/marketAnalysisCalendarUpdateTrigger'
 import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calendar/bea-official-release/beaOfficialReleaseJobRuntime'
 import { createMacroCalendarProviderSettingsService } from './intelligence/macro-calendar/macroCalendarProviderSettingsService'
@@ -160,7 +182,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   })
   const register: ProductIpcRegistrar = sampleMode.wrap(deps.register)
   sampleMode.registerIpc(register)
-  let syncMarketCalendarSchedule: (() => Promise<void>) | undefined
   // A product-owned job arms its own schedule from the switch; the module only forwards the event.
   const sourceEnableListeners = new Map<string, () => void>()
   const platformFetch = deps.platformFetch ?? (() => { throw new Error('market-intelligence-platform-fetch-required') })
@@ -181,7 +202,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     updateAgent: deps.updateAgent,
     isWebSearchProviderReady: deps.isWebSearchProviderReady,
     // 通知运行时是平台单例，等用的时候再取：装配完成在注册产品服务之后。
-    submitNotification: (request) => getNotificationRuntime().submit(request),
+    submitNotification: async (request) => getNotificationRuntime().submit(request),
     // 读者点「推送到手机」时走这条：平台只重投那一条已有记录，不新建、不改内容。
     redeliverPush: (input) => getNotificationRuntime().redeliverPush(input),
     // The gold price stream needs the proxy-aware platform socket, and the shell can only build that
@@ -189,7 +210,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(deps.getNetworkSettings
       ? { createPlatformWebSocket: () => createPlatformWebSocketFactory({ getNetworkSettings: deps.getNetworkSettings! }) }
       : {}),
-    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => syncMarketCalendarSchedule?.(),
+    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => { void narwhalCalendarAssembly?.syncSchedule() },
     // 读者一拨开关，产品自有作业就跟着排期/撤期（`sourceEnableListeners` 在下面装配时登记）。
     // 通用采集作业与宏观市场、DXY、Nasdaq 100 那几条不由这里管：它们的闸是服务里的同一处。
     onSourceEnabledChanged: (sourceId) => { sourceEnableListeners.get(sourceId)?.() }
@@ -215,7 +236,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     blsScheduleBridge: blsPythonRequestsBridge,
     evidenceArchive: intelligenceModule.macroCalendarEvidenceArchive,
     evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
-    profiles: calendarProfiles
+    profiles: calendarProfiles,
+    // 采集失败的现场必须进主进程日志：`console.warn` 走 stdout，打包后直接丢。
+    ...(deps.log === undefined ? {} : { log: deps.log })
   })
   const macroEconomicCalendarQueryService = createMacroEconomicCalendarQueryService({ repository: macroCalendarBackend.repository })
   intelligenceModule.publicQueryService.setMacroEconomicCalendarQuery(macroEconomicCalendarQueryService)
@@ -241,73 +264,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   intelligenceModule.setPolicyPathQuery(policyPathQueryService)
   policyPathRuntime.start()
   sourceEnableListeners.set('policy-path-market', () => { void policyPathRuntime.sync() })
-  const crossAssetConfiguration = createCrossAssetSourceConfiguration({ profileStore: intelligenceModule.crossAssetProfiles })
-  let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined
-  try { crossAssetStore = createCrossAssetStore(join(getIntelligenceProductDataDir(), crossAssetStoragePolicy.fileName)) }
-  catch { /* Preserve the unavailable feature database; other product capabilities remain usable. */ }
-  const crossAssetClient = createBinanceCrossAssetClient({ platformFetch: deps.platformFetch ?? (async () => { throw new Error('dependency-unavailable') }), requestGovernanceQueue: intelligenceModule.requestGovernanceQueue })
-  if (crossAssetStore) installBriefMarketBackfill(crossAssetStore, crossAssetClient)
-  // The real Nasdaq 100 index is collected by its own five-minute job into the same store the Binance
-  // proxy writes to: the row prefers the licensed index and falls back to the labelled proxy, and both
-  // legs have to be on disk for that choice to be made from data rather than from hope. One store, one
-  // connection — two writers of one SQLite file would be a second writer of one table.
-  const crossAssetIndexRuntime = crossAssetStore ? createCrossAssetIndexRuntime({
-    jobRuntime: deps.jobRuntime,
-    store: crossAssetStore,
-    resolveProfile: sourceId => intelligenceModule.crossAssetProfiles.resolveProfile(sourceId),
-    getCredential: credentialRef => intelligenceModule.sourceCredentials.getByRef(credentialRef),
-    onError: (error, sourceId) => {
-      // A code, a symbol and nothing else: the failure message names the source, never the URL the key
-      // travelled in.
-      console.log(JSON.stringify({ marker: 'MI_CROSS_ASSET_INDEX_ERROR', sourceId, symbolCode: crossAssetPolicy.index.symbol, message: String(error).slice(0, 200) }))
-    }
-  }) : undefined
-  const crossAssetRuntime = crossAssetStore ? createCrossAssetRuntime({
-    now: Date.now, store: crossAssetStore, client: crossAssetClient,
-    readEnabled: async () => {
-      const configuration = await crossAssetConfiguration.read()
-      if (configuration.state === 'unknown') throw new Error('configuration-unavailable')
-      return configuration.enabled
-    },
-    createStream: onState => {
-      if (!deps.getNetworkSettings) throw new Error('dependency-unavailable')
-      return createBinanceCrossAssetStream({ now: Date.now, onState,
-        platformWebSocket: createPlatformWebSocketFactory({ getNetworkSettings: deps.getNetworkSettings }) })
-    }
-  }) : undefined
-  const crossAssetQuery = crossAssetStore && crossAssetRuntime ? createCrossAssetSnapshotQuery({
-    now: Date.now, store: crossAssetStore, live: crossAssetRuntime.snapshot,
-    // The row's leg is chosen from what the licensed feed last managed to do, never from the clock: a
-    // closed session is a successful tick and keeps the real index on the row.
-    indexFeed: () => crossAssetIndexRuntime?.state() ?? { state: 'pending' },
-    // The dollar and gold lines: the very macro store the 市场状态 table's rows are read from, so a
-    // chart line and a table cell can never disagree about what the dollar did. Read on every query
-    // rather than cached with the analysis — it is another database on another cadence.
-    macroSeries: (seriesId, fromMs, toMs) => intelligenceModule.macroMarket.store.series(seriesId, fromMs, toMs)
-  }) : undefined
-  registerCrossAssetIpc(register, { now: Date.now, runtime: crossAssetRuntime, query: crossAssetQuery, configuration: crossAssetConfiguration })
-  // Both market stores answer one retention policy, by one daily job and one look at startup: a store
-  // that has been kept since the product shipped has months of folding to do, and waiting for the first
-  // midnight would leave the reader's disk exactly as it was for a day.
-  if (crossAssetStore) {
-    const newsStore = intelligenceModule.newsSentiment.store
-    registerMarketRetention({
-      jobRuntime: deps.jobRuntime,
-      macroStore: intelligenceModule.macroMarket.store,
-      crossAssetStore,
-      analysisRepository: intelligenceModule.marketAnalysisRuntime.repository,
-      ...(newsStore ? { newsStore } : {})
-    })
-  }
-  // One cross-asset source, two readers with two shapes: the analysis context reads through the
-  // public query method, which validates with the renderer's own parser, while the prediction
-  // verifier takes the raw synchronous query and parses the snapshot itself. Handing the async
-  // method to the verifier would make `parseCrossAssetSnapshot(Promise)` return undefined and
-  // silently produce no observations at all.
-  if (crossAssetQuery) {
-    intelligenceModule.publicQueryService.setCrossAssetQuery({ query: input => crossAssetQuery.query(input) })
-    intelligenceModule.marketAnalysisRuntime.setCrossAssetQuery(input => crossAssetQuery.query(input))
-  }
+  const {
+    crossAssetConfiguration, crossAssetStore, crossAssetRuntime, crossAssetIndexRuntime, crossAssetQuery
+  } = wireCrossAsset({ register, deps, intelligenceModule, productDataDir: getIntelligenceProductDataDir() })
   const blsEmploymentMvpRefresh = createBlsEmploymentMvpRefreshService({
     valuesBridge: blsPythonRequestsBridge,
     evidence: intelligenceModule.macroCalendarEvidenceReady
@@ -328,23 +287,35 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     archive: intelligenceModule.macroCalendarEvidenceArchive, evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
     requestGovernanceQueue: intelligenceModule.requestGovernanceQueue,
     readEnabledFeeds: readEnabledCalendarFeeds,
+    // 「立刻跑一次日历采集」＝排一次 tick 作业，**拿到句柄才算触发**（失败不吞，返回 failed）。
+    // 用 enqueueManual 而不是 enqueueDefinition：后者要在这里保留一份作业定义，那是第二个真相源。
+    triggerCollection: async () => {
+      try {
+        await deps.jobRuntime.enqueueManual('market-intelligence.refreshNarwhalCalendarTick.automatic')
+        return 'triggered' as const
+      } catch { return 'failed' as const }
+    },
+    jobRuntime: deps.jobRuntime,
     // 读取器在提醒模块里，bootstrap 只传引用（这份文件的体积基线只许变小，逻辑不往这里堆）。
     readLandedFilter: landedFilterReader(calendarReminderSettings),
     ...intelligenceModule.calendarManualDependencies })
+  // 写入层端口（用户 2026-11-19）：配置线按懒读方式取，回填/迁移落完立刻生效。
+  intelligenceModule.bindCalendarStandardWriteLayer(() => macroCalendarBackend.writeLayer)
+  const zeroXRouterSchedule = wireZeroXRouterCalendarSchedule({ jobRuntime: deps.jobRuntime, database: macroCalendarBackend.storage.database, refreshAutomatic: (feeds) => marketCalendar.refreshAutomatic(feeds), readReadiness: intelligenceModule.calendarManualDependencies.readReadiness, readEnabledFeeds: createEnabledZeroXRouterFeeds({ listProfiles: () => intelligenceModule.sourceProfileStore.listProfiles() }), ...(deps.log === undefined ? {} : { log: deps.log }), writeLayer: macroCalendarBackend.writeLayer })
   // The analysis macro route reads the 0xRouter observations through the same public page
   // service the calendar page uses, so both routes share one admission and one projection.
   // Freshness rides on the same binding: the age is computed once, in the calendar runtime.
-  intelligenceModule.publicQueryService.setMarketCalendarQuery({
-    queryMonth: marketCalendar.queryMonth,
-    readCollectionFreshness: () => marketCalendar.readCollectionFreshness()
+  // 日历读侧（标准表月查询 + 新鲜度 + 提醒 + 日报补跑）整段在 wiring/calendarReadings.ts。
+  const { standardCalendarReader, calendarReminder } = wireCalendarReadings({
+    database: macroCalendarBackend.storage.database,
+    jobRuntime: deps.jobRuntime,
+    calendarReminderSettings,
+    intelligenceModule,
+    submitNotification: async (request) => getNotificationRuntime().submit(request),
+    timeZone: () => currentReaderTimeZone(),
+    ...(deps.log === undefined ? {} : { log: deps.log }),
+    writeLayer: macroCalendarBackend.writeLayer
   })
-  // 「日历事件开始前」提醒：接线细节在独立模块里（bootstrap 的体积基线只许变小）。
-  const calendarReminder = registerCalendarEventReminder({ jobRuntime: deps.jobRuntime, settings: calendarReminderSettings,
-    queryMonth: marketCalendar.queryMonth, submit: (request) => getNotificationRuntime().submit(request), timeZone: () => currentReaderTimeZone() })
-  // The one calendar *command* the brief needs: a bounded catch-up before it judges freshness.
-  // A command, not a query — it opens network requests and writes attempts — so it is injected
-  // separately from the read surface above, and the brief never constructs a client of its own.
-  intelligenceModule.bindBriefingCalendarRefresh((input) => marketCalendar.refreshNow(input))
   const blsScheduleAndLatestValues = createBlsScheduleAndLatestValuesSyncWorkflow({
     schedule: macroCalendarBackend.blsEmploymentSchedule,
     repository: macroCalendarBackend.repository,
@@ -354,25 +325,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const macroCalendarJobs = createMacroCalendarScheduleJobRuntime({
     jobRuntime: deps.jobRuntime,
     profiles: calendarProfiles,
-    health: macroCalendarBackend.health
+    health: macroCalendarBackend.health,
+    ...(deps.log === undefined ? {} : { log: deps.log }),
+    releaseValues: { database: macroCalendarBackend.storage.database, readActual: async (metricKey, periodKey) => (await readFredObservationForPeriod(metricKey, periodKey, fredObservations))?.value }
   })
-  const marketCalendarScheduler = createZeroXRouterCalendarScheduler({
-    jobRuntime: deps.jobRuntime,
-    readReadiness: intelligenceModule.calendarManualDependencies.readReadiness,
-    readEnabledFeeds: readEnabledCalendarFeeds,
-    refreshAutomatic: (enabledFeeds) => marketCalendar.refreshAutomatic(enabledFeeds),
-    // A calendar update must be able to produce a new conclusion. The request is
-    // bounded by the existing trigger budget and cooldown, and it fires only when the
-    // refresh actually stored observations.
-    onRefreshCompleted: async (items) => {
-      await requestMarketAnalysisForCalendarUpdate(items, {
-        requestRefresh: () => intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis(undefined, undefined, 'refresh', 'calendar-refresh')
-      })
-    }
-  })
-  const beaOfficialReleaseJobs = macroCalendarBackend.beaOfficialReleaseRefresh
-    ? createBeaOfficialReleaseJobRuntime({ jobRuntime: deps.jobRuntime, profiles: calendarProfiles, refresh: macroCalendarBackend.beaOfficialReleaseRefresh })
-    : undefined
+  const beaOfficialReleaseJobs = macroCalendarBackend.beaOfficialReleaseRefresh ? createBeaOfficialReleaseJobRuntime({ jobRuntime: deps.jobRuntime, profiles: calendarProfiles, refresh: macroCalendarBackend.beaOfficialReleaseRefresh }) : undefined
   const blsScheduleAndValuesScheduler = createBlsScheduleAndValuesScheduler({
     jobRuntime: deps.jobRuntime,
     workflow: blsScheduleAndLatestValues,
@@ -393,8 +350,42 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(macroCalendarBackend.beaOfficialReleaseRefresh ? ['macro-calendar-bea' as const] : []),
     ...(macroCalendarBackend.blsEmploymentSchedule ? ['macro-calendar-bls' as const] : [])
   ] as const
-  syncMarketCalendarSchedule = () => marketCalendarScheduler.syncSchedule()
-  void marketCalendarScheduler.initialize()
+  // 启动同步官方发布进标准表 + 历史补值（顺序契约与吞错语义见 wiring/calendarStandardRowsNarwhal.ts）：
+  // `after` 是模块启动完成信号，`readLatest` 是惰性闭包（FRED fetcher 建在后面）。
+  startCalendarStandardRows({
+    database: macroCalendarBackend.storage.database,
+    listEffectiveMonthAsOf: macroCalendarBackend.repository.listEffectiveMonthAsOf,
+    after: intelligenceModule.startupReady,
+    readFredObservationForPeriod,
+    fredObservations: () => fredObservations,
+    ...(deps.log === undefined ? {} : { log: deps.log }),
+    writeLayer: macroCalendarBackend.writeLayer
+  })
+  // Narwhal 日历：装配零件只差三行（构造 / initialize / dispose），细节全在工厂里。
+  let narwhalCalendarAssembly: ReturnType<typeof createNarwhalCalendarAssembly> | undefined
+  narwhalCalendarAssembly = createNarwhalCalendarAssembly({
+    jobRuntime: deps.jobRuntime,
+    repository: macroCalendarBackend.repository,
+    // **观测表停写**（2026-11-14 定）：日历已改读标准表，三处可能的读方逐处核过——证据抽屉走
+    // 联动共识（新读取模型）、其余读方都在要删的旧源目录里、存储盘点只数行不读内容。
+    // **只停写、不删历史行**：`mi_macro_calendar_market_event_observations` 里的行原样留着，
+    // 少写的只是「同一批采集顺便多写一份」。
+    // 标准行按 measure 拆：一次发布里的每个 measure 各一行，身份各算各的。
+    appendStandardRows: createNarwhalStandardRowsWriter({ database: () => macroCalendarBackend.storage.database }),
+    fetchImpl: getPlatformFetch(),
+    getCredential: credentialRef => intelligenceModule.sourceCredentials.getByRef(credentialRef),
+    // 采集前的门：读者关掉、或源还锁着（`visibility: 'pending'`），一个请求都不发。
+    // 可见性读注册表（静态事实），开关读读者档案（运行时事实）；读不到就**不采**（fail-closed）。
+    readSourceGate: async () => {
+      const sourceId = 'macro-calendar-narwhal-economic-data'
+      const source = allSources().find((candidate) => candidate.sourceId === sourceId)
+      if (source === undefined) return { visibility: 'hidden', enabled: false }
+      const profile = (await calendarProfiles.list()).find((candidate) => candidate.providerId === source.providerId)
+      return { visibility: source.visibility, enabled: profile?.enabled === true }
+    },
+    now: Date.now
+  })
+  void narwhalCalendarAssembly.initialize()
   blsScheduleAndValuesScheduler.initialize()
   void autoEnrollCalendarProviders({ profiles: calendarProfiles, readyProviderIds: readyCalendarProviders })
     .then(() => {
@@ -429,11 +420,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     crossAssetIndexRuntime?.dispose()
     await crossAssetRuntime?.dispose()
     crossAssetStore?.close()
-    marketCalendarScheduler.dispose()
+    narwhalCalendarAssembly.dispose()
     blsScheduleAndValuesScheduler.dispose()
     await marketCalendar.dispose()
     await beaOfficialReleaseJobs?.dispose()
-    macroCalendarJobs.dispose()
+    macroCalendarJobs.dispose(); zeroXRouterSchedule.dispose()
     macroCalendarBackend.dispose()
     intelligenceModule.marketAnalysisRuntime.dispose()
     syncAudit?.close()
@@ -452,20 +443,21 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // 装配细节在 `ipc/notificationTestWiring.ts`：这个文件每涨一行都要有人问「为什么必须在这里」。
   registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule, calendarReminder, createNotificationTestWiring({
     readEnabledCalendarFeeds, readTimeZone: currentReaderTimeZone, getAppLanguage: deps.getAppLanguage
-  }), () => getNotificationRuntime().resolvePushChannel())
+  }), () => getNotificationRuntime().resolvePushChannels())
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
-  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
+  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule, { onProfilesChanged: async () => { await zeroXRouterSchedule.syncSchedule(); await narwhalCalendarAssembly.syncSchedule() } })
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())
   registerIntelligenceTranslationIpc(register, deps.jobRuntime, intelligenceModule)
   registerMarketAnalysisIpc(register, intelligenceModule.marketAnalysisRuntime.repository, {
     // The same two queries the analysis macro route reads, so an event's context matches it.
     queryMacroEconomicCalendarMonth: macroEconomicCalendarQueryService.queryMonth,
-    queryMarketCalendarMonth: marketCalendar.queryMonth
+    queryMarketCalendarMonth: standardCalendarReader.queryMonth
   }, {
     ...deps,
     // 时间线的「哪个开盘」也按设置的读者时区换算。
     timeZone: () => currentReaderTimeZone(),
     requestInitialAnalysis: intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis,
+    ...newsInterpretationWiring(intelligenceModule.marketAnalysisRuntime),
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })
@@ -498,15 +490,28 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
+  // FRED 的 key 只从模块那份凭据存储出（`fetchText` 负责加 `api_key`），这里不碰凭据本身。
+  const fredObservations = createFredObservationsFetcher((url, sourceId) => intelligenceModule.fetchText(url, sourceId))
+  // 排期只问标准表一处（编一个期次会去查一个不存在的盘）；盘口走预测市场那个源的出口，
+  // 它是 `authMode: none`，和 FRED 一样不在这里碰凭据。
+  const standardCalendarDatabase = macroCalendarBackend.storage.database
+  registerMacroIndicatorIpc(register, createMacroIndicatorReadService(macroCalendarBackend.repository, {
+    readOfficialYoY: (metricKey) => readFredIndicatorYoY(metricKey, fredObservations),
+    nextReleaseFor: (metricKey, asOf) => readNextReleaseForMetric(standardCalendarDatabase, { metricKey, asOf }),
+    readStandardActual: (metricKey, asOf) => readStandardActuals(standardCalendarDatabase, { metricKey, asOf }),
+    readMarketConsensus: (input) => readPolymarketConsensus({ ...input, fetchText: (url) => intelligenceModule.fetchText(url, 'policy-path-market') }),
+    // 「这一格为什么没有数」也只问标准表一处：待发布 / 无此数据 / 未提供（产品 41 号文）。
+    readCardGap: (metricKey, asOf) => readMacroIndicatorCardGap(standardCalendarDatabase, { metricKey, asOf })
+  }))
   registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit, {
     // Read-only: the run log joins a task to the analysis it produced, and never writes either side.
     listRuns: () => intelligenceModule.marketAnalysisRuntime.repository.listRuns()
   })
   registerMacroEconomicCalendarIpc(auditedRegister, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
-    releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
-    releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
-  }, blsEmploymentMvpRefresh, blsScheduleAndLatestValues, macroCalendarBackend.fedFomcRefresh, marketCalendar)
+    releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides, releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
+  }, blsEmploymentMvpRefresh, blsScheduleAndLatestValues, macroCalendarBackend.fedFomcRefresh, marketCalendar,
+    { database: macroCalendarBackend.storage.database })
   // The dashboard's 市场状态 block reads the collected macro series (synthetic dollar, gold) here.
   // Gold's 最新 cell additionally reads the live tick, which is reported beside the stored level and
   // is read by no window: the returns in this snapshot are computed from stored points alone.
@@ -603,8 +608,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     release: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.release(leaseId) : { state: 'unavailable' as const }),
     refresh: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.refresh(leaseId) : { state: 'unavailable' as const }),
     testInterface: async () => (crossAssetRuntime ? crossAssetRuntime.testInterface() : { state: 'unavailable' as const }),
-    cancelInterfaceTest: async () =>
-      crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const }),
+    cancelInterfaceTest: async () => (crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const })),
     readConfiguration: () => crossAssetConfiguration.read(),
     readLeaseState: async () => crossAssetRuntime?.leaseState() ?? 'unknown'
   }

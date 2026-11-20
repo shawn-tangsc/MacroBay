@@ -58,6 +58,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [busyId, setBusyId] = useState<string | null>(null)
   /** 现场检查没过时按频道就地显示原因（开关回弹，不把用户赶去别的页面）。 */
   const [enableFailures, setEnableFailures] = useState<Readonly<Record<string, string>>>({})
+  /** 同一次失败的**原因码**：提示里收进折叠，主句只用人话。 */
+  const [enableFailureCodes, setEnableFailureCodes] = useState<Readonly<Record<string, string>>>({})
   const [editor, setEditor] = useState<{ mode: 'create' } | { mode: 'edit'; channel: Channel } | null>(null)
   // 编辑弹层里「空列表」到底是不是「允许所有」，取决于这个频道有没有显式放行名单。
   const [policyPresence, setPolicyPresence] = useState<ChannelPolicyPresence>('unknown')
@@ -122,7 +124,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
 
   const actionDeps = { labels, setBusyId, setError, reload }
-  const enableDeps = { labels, setBusyId, setError, setEnableFailures, reload }
+  const enableDeps = { labels, setBusyId, setError, setEnableFailures, setEnableFailureCodes, reload }
   const testDeps = { labels, language, setTestBusyId, setTestReceipts }
 
   const toggle = (channel: Channel, next: boolean): void => {
@@ -399,6 +401,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                     onToggle={toggle}
                     testBusy={testBusyId === channel.id}
                     testReceipt={testReceipts[channel.id] ?? null}
+                    onEnableAutoDisabled={(target) => void enableChannelWithSelfCheck(target, enableDeps)}
+                    autoDisabledFailure={enableFailures[channel.id] === undefined
+                      ? null
+                      : {
+                        sentence: enableFailures[channel.id]!,
+                        code: enableFailureCodes[channel.id] ?? 'channel-enable-failed'
+                      }}
                   />
                 ))}
               </div>

@@ -17,6 +17,7 @@ import { createNewsSentimentEnrichmentService } from './newsSentimentEnrichmentS
 import { createNewsSentimentQuery } from './newsSentimentQuery'
 import { summarizeNewsSentimentReadiness } from './newsSentimentReadiness'
 import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './newsSentimentScoringService'
+import { resolveNewsSentimentModel } from './newsSentimentSettings'
 import type { createNewsSentimentSettingsStore } from './newsSentimentSettingsStore'
 import type { createIntelligenceTranslationJsonStorage } from '../store/intelligenceTranslationStorage'
 import type { createNewsSentimentSqliteStore } from './newsSentimentStore'
@@ -120,7 +121,17 @@ export function createNewsSentimentServices(
     ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
     ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
     invoke: structuredModelInvocation.invoke,
-    ...(hooks?.submitNotification ? { alertDelivery: { ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName), thresholdFilePath: join(dataDir, 'intelligence-news-push-threshold.json'), submit: hooks.submitNotification } } : {}),
+    ...(hooks?.submitNotification
+      ? {
+          notificationDelivery: {
+            ledgerPath: join(dataDir, newsPushLedgerPolicy.fileName),
+            thresholdFilePath: join(dataDir, 'intelligence-news-push-threshold.json'),
+            submit: hooks.submitNotification,
+            // 桌面提醒正文里的时刻按读者设置时区写（`IntelligenceModulePlatformHooks` 必填项）。
+            timeZone: hooks.getTimeZone
+          }
+        }
+      : {}),
     now
   })
   const bodyTranslation = createNewsSentimentBodyTranslationService({
@@ -145,6 +156,24 @@ export function createNewsSentimentServices(
     bodyTranslation,
     // The four sources' readiness, read from the one projection that already answers "what is
     // this source doing": the card needs it to name the cause of an empty window.
+    /**
+     * 空列表的第二种原因（2026-11-18）：有新闻、但都还没判定。要说出「为什么」就得知道模型状态：
+     * 没开启 / 不可用 / 就绪。与评分用的是同一份设置与同一个模型解析，不另立判断。
+     */
+    readJudgingState: async () => {
+      const settings = await newsSentimentSettingsStore.getSettings()
+      if (!settings.modelScoringEnabled) return 'model-off' as const
+      const [providerState, modelDefaults] = await Promise.all([
+        hooks?.getProviderState?.().catch(() => undefined) ?? Promise.resolve(undefined),
+        hooks?.getModelDefaults?.().catch(() => undefined) ?? Promise.resolve(undefined)
+      ])
+      const model = resolveNewsSentimentModel({
+        settings,
+        modelDefaults: modelDefaults ?? null,
+        providers: providerState?.providers ?? []
+      })
+      return model.providerId && model.modelId ? 'ready' as const : 'model-unavailable' as const
+    },
     readSourceReadiness: async (asOf) => {
       const profiles = await profileStore.listProfiles()
       const enabledSourceIds = new Set(profiles.filter((profile) => profile.enabled).map((profile) => profile.sourceId))

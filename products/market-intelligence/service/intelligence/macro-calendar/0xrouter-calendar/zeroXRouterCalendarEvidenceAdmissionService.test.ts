@@ -41,6 +41,7 @@ function createHarness(options: {
     evidence: {
       reserve: () => ({ reservationId: 'reservation-1', maximumBytes: 256 * 1024 }),
       release: () => true,
+    lastReserveRejection: () => undefined,
       append: (input, reservation) => append(input, reservation)
     },
     now: () => new Date('2026-09-06T01:02:03.000Z'),

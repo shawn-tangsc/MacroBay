@@ -12,13 +12,18 @@ describe('analysis status presentation', () => {
       stale: 'warn',
       superseded: 'muted',
       pending: 'info',
+      running: 'info',
+      failed: 'bad',
       confirmed: 'ok',
       'partially-confirmed': 'warn',
       invalidated: 'muted',
       expired: 'muted',
       'insufficient-data': 'warn'
     })
-    expect(Object.values(ANALYSIS_STATUS_TONE)).not.toContain('bad')
+    // 已经结束的结论档不许升成红：标红会让真正的错误不再显眼。
+    for (const ended of ['superseded', 'invalidated', 'expired'] as const) expect(ANALYSIS_STATUS_TONE[ended]).toBe('muted')
+    // 唯一的红是「这一次运行没跑成」——应用没把这件事做完，不是「一个已经结束的判断」。
+    expect(Object.entries(ANALYSIS_STATUS_TONE).filter(([, tone]) => tone === 'bad')).toEqual([['failed', 'bad']])
   })
 
   it('points every status at a sentence that exists in both languages', () => {

@@ -1,0 +1,27 @@
+/*
+ * 频率读数（2026-11-13 界面设计改口径）：**整条收进 ⓘ 的浮层**，正文只剩「频率 ⓘ + 下拉」。
+ *
+ * 为什么不写进 `intelligence-sources.css`：那个文件是前端组件线在改的，新形态只加新类。
+ * 为什么不再用省略号：原来那行在正文里 `nowrap + ellipsis`，窄卡上正好切在「约 17:…」，
+ * 把最有用的半句切掉了（用户 2026-11-13）。浮层里改成长宽都可用的普通段落：
+ * **换行、不截断**，读者点开就能读全。中间那个「·」取 `--border-strong`、左右各 4。
+ */
+.business-card__preset-help {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.business-card__preset-readout {
+  color: var(--muted);
+  font-size: var(--font-meta);
+  line-height: var(--line-meta);
+  /* 不截断：放不下就换行。 */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.business-card__preset-readout-sep {
+  margin: 0 4px;
+  color: var(--border-strong);
+}

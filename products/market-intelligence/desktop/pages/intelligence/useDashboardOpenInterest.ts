@@ -6,6 +6,7 @@ import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { chipAnalysisOf, projectDashboardPositioning, projectModuleSignalChip, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
 import { moduleSignalClient } from '../../shared/ipc/moduleSignalClient'
 import { trackQuietRevision } from './useDataChangeRevision'
+import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 /**
  * One read per window. Switching 7d/24h is a new query rather than a client-side reshape: the
@@ -57,7 +58,7 @@ export function useDashboardOpenInterest(input: Readonly<{
     // 牌子固定按 24 小时判（用户 2026-11-08 10:4x 定）：切页签不改「现在怎么样」。
     // 图上的点跟窗口，那是这一行下面那次历史查询的事。
     const signals = readSignals(mountInput.signalClient ?? moduleSignalClient, asOf)
-    void mountInput.client.query({ asOf, window })
+    void withQueryDeadline(mountInput.client.query({ asOf, window }))
       .then(async (result) => {
         if (!active) return
         const projected = projectDashboardPositioning(result, asOf, window, reload)

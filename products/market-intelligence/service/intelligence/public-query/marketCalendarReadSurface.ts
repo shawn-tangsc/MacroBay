@@ -36,10 +36,16 @@ export function createMarketCalendarReadSurface(initial?: MarketCalendarBinding)
       // ① 没有绑定，或绑定里没有这个读者：装配根从没把日历运行时交过来。
       if (!reader) return { state: 'unavailable' as const, failureCode: 'query-unavailable' as const }
       // ② 绑了但抛错、或返回合同不认的形状：与 ① 分开判，因为修法不同；读者看到的都是「读不到」。
+      const asOf = new Date().toISOString()
       try {
         const value = await reader()
         if (isMarketCalendarFreshness(value)) return value
-      } catch {}
+        // 形状不认：不是「没有数据」，是这条写入路径坏了——必须留下痕迹，否则事后只能靠猜。
+        console.warn(`[macro-calendar] freshness() 返回的形状合同不认（路径 readCollectionFreshness，asOf=${asOf}）`)
+      } catch (error) {
+        console.warn(`[macro-calendar] freshness() 读取失败（路径 readCollectionFreshness，asOf=${asOf}）：`
+          + `${error instanceof Error ? error.message : String(error)}`)
+      }
       return { state: 'unavailable' as const, failureCode: 'query-unavailable' as const }
     }
   }

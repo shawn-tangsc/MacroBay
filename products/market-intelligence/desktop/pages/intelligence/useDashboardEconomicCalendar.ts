@@ -7,6 +7,7 @@ import {
   type DashboardEconomicCalendarState
 } from './dashboardEconomicCalendarModel'
 import { trackQuietRevision, useDataChangeRevision } from './useDataChangeRevision'
+import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 type Input = {
   client: Pick<MacroEconomicCalendarClient, 'queryMonth'>
@@ -39,7 +40,7 @@ export function useDashboardEconomicCalendar({ client, now }: Input): DashboardE
 
     const month = asOf.slice(0, 7)
     void Promise.resolve()
-      .then(() => mountInput.client.queryMonth({ month, asOf }))
+      .then(() => withQueryDeadline(mountInput.client.queryMonth({ month, asOf })))
       .then(reply => {
         if (!active) return
         const next = selectDashboardEconomicCalendarMonth(reply, { month, asOf })

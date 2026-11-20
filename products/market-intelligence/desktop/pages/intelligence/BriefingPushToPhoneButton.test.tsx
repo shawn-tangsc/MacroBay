@@ -102,7 +102,7 @@ describe('the push button leaves the toolbar to the button alone', () => {
   })
 
   it('keeps the button usable after a send, so a second push is possible', async () => {
-    const { host, onPush } = await mount({ kind: 'sent', receipt: 'accepted' })
+    const { host, onPush } = await mount({ kind: 'result', delivery: 'sent-accepted', attempt: 'text' })
     expect(button(host).disabled).toBe(false)
     await act(async () => button(host).click())
     expect(onPush).toHaveBeenCalledTimes(1)

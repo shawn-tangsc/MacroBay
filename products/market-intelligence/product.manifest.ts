@@ -12,44 +12,18 @@ import {
 } from '../../platform/notifications/contracts/platformNotificationEvents'
 
 import { marketIntelligenceNotificationCopy } from './desktop/shared/i18n/text/notifications'
+import { capitalFlowNotificationEvents } from './contracts/capitalFlowNotificationEvents'
+import { notificationEvent } from './contracts/notificationEventDeclaration'
 import { marketIntelligenceAgentApprovalFieldLabels } from './desktop/shared/i18n/text/agentApprovalFields'
 import { moduleSignalPolicy } from './contracts/moduleSignal'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
 
 
-/**
- * 声明一条通知事件：**键由 id 机械生成**（平台同一处 `notification.event.<id>.*`）。
- *
- * 不手写键的理由：事件改名时手写的键不会有人同步，目录解析出来就落空——
- * 同一个概念两个名字，接线时才发现。
- */
-function notificationEvent(
-  id: string,
-  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'reasonKey' | 'bodyKey' | 'bodyKeyByVariant'> & {
-    /** 这条事件有正文句（`…body`）。 */
-    body?: boolean
-    /** 同一事件两种正文时给变体名，键为 `…body.<variant>`。 */
-    bodyVariants?: readonly string[]
-  }
-): NotificationEventDeclaration {
-  const { body, bodyVariants, ...rest } = input
-  return {
-    id,
-    titleKey: notificationEventTitleKey(id),
-    reasonKey: notificationEventReasonKey(id),
-    ...(body ? { bodyKey: notificationEventBodyKey(id) } : {}),
-    ...(bodyVariants
-      ? { bodyKeyByVariant: Object.fromEntries(bodyVariants.map((variant) => [variant, notificationEventBodyKey(id, variant)])) }
-      : {}),
-    ...rest
-  }
-}
-
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.4.3',
+  version: '0.4.4',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [
@@ -99,6 +73,19 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.crossAsset.query' },
     { method: marketCalendarPublicPolicy.methods.refresh },
     { method: marketCalendarPublicPolicy.methods.query },
+    // 未映射观测的月读：只读、无副作用，只在日历渲染里用（用户 2026-11-16 定）。
+    { method: marketCalendarPublicPolicy.methods.queryUnmappedMonth },
+    { method: marketCalendarPublicPolicy.methods.queryEventSourceWrites },
+    // 数值修订审计：只读、渲染专用（详情并列行）。
+    { method: marketCalendarPublicPolicy.methods.queryValueRevisions },
+    // 事件清单：只读、渲染专用（核对「每个事件去哪看官方发布」）。
+    { method: marketCalendarPublicPolicy.methods.queryEvents },
+    // 映射规则表：只读、渲染专用。
+    { method: marketCalendarPublicPolicy.methods.queryMappingRules },
+    // 标准码表整表：只读、渲染专用（弹框「码表」页签，244 行一次下发）。
+    { method: marketCalendarPublicPolicy.methods.queryCodeTable },
+    // 事件清单：只读、渲染专用（弹框「事件」页签：一场事件一行，不参与映射）。
+    { method: marketCalendarPublicPolicy.methods.queryEventList },
     { method: marketCalendarPublicPolicy.methods.getCollectionFreshness },
     { method: marketCalendarPublicPolicy.methods.refreshNow },
     { method: macroMarketSnapshotPublicPolicy.method },
@@ -116,6 +103,8 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.macro.economicCalendar.previewManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.queryMonth' },
     { method: 'intelligence.macro.policyPath.read' },
+    // 三张关键指标卡的读数（只读）：按指标身份取最新一次已发布的值。
+    { method: 'intelligence.macro.indicator.read' },
     { method: 'intelligence.syncRuns.list' },
     { method: 'intelligence.syncRuns.aggregates' },
     // The reader's own release time: every registered product method must be in this sealed
@@ -339,10 +328,22 @@ export const marketIntelligenceProductManifest = {
       // 只有「有来源」一种正文：缺来源名的条目不提交（三段必须齐，空段会被文案门禁拒成 copy-missing）。
       bodyVariants: ['withSource'],
       requiresUserAction: false,
-      // 信息类：只进中心与手机，桌面与提示都不申请。
+      // 信息类：只进手机（2026-11-18 用户定：舆情不进中心），桌面与提示都不申请。
       requestedDisruptionLevels: ['channel'],
       // 同一件事一条：键由 `storyKey` 构成（跨媒体归并键，同簇一个键），重复提交由平台合并计数。
       dedupeKeyTemplate: 'sentiment-alert:{storyKey}',
+      dedupeUnit: 'occurrence',
+      requestedBypassQuietHours: false
+    }),
+    notificationEvent('market-intelligence.news.item-arrived', {
+      category: 'reminder',
+      body: true,
+      requiresUserAction: false,
+      // 只申请桌面（2026-11-18 用户定：桌面说「来了条要紧的」，手机由 `sentiment.alert` 负责，
+      // 中心不掺和舆情）。批准表也只批这一档，两边同一个值。
+      requestedDisruptionLevels: ['desktop'],
+      // 一条新闻一条：键里只有 itemId，重复提交由平台合并（不会弹第二次）。
+      dedupeKeyTemplate: 'news-arrival:{itemId}',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
     }),
@@ -392,6 +393,23 @@ export const marketIntelligenceProductManifest = {
       conditionWindowMs: 86_400_000,
       requestedBypassQuietHours: false
     }),
+    /**
+     * 供应商把这个品种列为不受支持（套餐不含 / 品种下架）——永久状态。
+     *
+     * 与 `source.consecutive-failed` 分开：那条的正文与动作是「去设置查密钥或代理」，而这里查密钥
+     * 没用，必须续费、换品种或换源。用户 2026-11-16 原话「出现这种情况，还要通知出来」。
+     * 去重键沿用平台的 `sourceIssue(sourceId)`：同一来源一天一条，多只品种合并进同一条。
+     */
+    notificationEvent('market-intelligence.source.symbol-not-supported', {
+      category: 'needs-action',
+      body: true,
+      requiresUserAction: true,
+      requestedDisruptionLevels: ['desktop'],
+      dedupeKeyBuilder: 'sourceIssue',
+      dedupeUnit: 'condition',
+      conditionWindowMs: 86_400_000,
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.briefing.ready', {
       category: 'completed',
       body: true,
@@ -429,6 +447,24 @@ export const marketIntelligenceProductManifest = {
       // 不穿免打扰：这条说"结论出来了"，不是必须立刻打断读者的那种事。
       requestedBypassQuietHours: false
     }),
+    // 分析没跑成（2026-11-17 用户「失败了，怎么不报应用内通知出来」；2026-11-18 产品经理签署只 `center`）。
+    // 手动与自动共用一个事件：**手动每一次都报**（读者就在应用里等），自动只报链路级（连续 3 次或
+    // 2 小时零成功）——逐次报会把 15 分钟一次的东西刷成噪音。
+    // 去重键由提交侧拼进 `identity`：手动 `manual:{runId}`（一次一条，连点由单飞挡在入队前），
+    // 自动 `{triggerKey}:{failureCode}:{bucket30m}`（同一码 30 分钟一条，正文的次数由合并计数给）。
+    // 不同 `failureCode` 键不同 ⇒ 绝不合并：读者要做的事不一样。
+    notificationEvent('market-intelligence.analysis.failed', {
+      category: 'failure',
+      body: true,
+      requiresUserAction: true,
+      // `center` 是默认面，不写进申请；桌面/手机/提示一概不要。
+      requestedDisruptionLevels: [],
+      dedupeKeyTemplate: 'analysis-failed:{identity}',
+      dedupeUnit: 'occurrence',
+      // 同一 failureCode 最多 4 条；平台的上限单位是「读者日」，与「24 小时」的差别写在提交说明里。
+      dailyLimit: 4,
+      requestedBypassQuietHours: false
+    }),
     notificationEvent('market-intelligence.timezone.invalid', {
       category: 'needs-action',
       body: true,
@@ -437,7 +473,9 @@ export const marketIntelligenceProductManifest = {
       dedupeKeyTemplate: 'timezone-invalid:{date}',
       dedupeUnit: 'occurrence',
       requestedBypassQuietHours: false
-    })
+    }),
+    // R42：资金面读数变了 → 应用内提醒（声明与口径见 `contracts/capitalFlowNotificationEvents.ts`）。
+    ...capitalFlowNotificationEvents
   ],
   /**
    * 让渡给本产品的 producerId（契约 §14）：日报 job 的终态失败由本产品发

@@ -94,7 +94,7 @@ describe('analysis model prompt conclusion contract', () => {
   it('hands over the fact ids a market reaction may cite, and not the ones the validator refuses', () => {
     const base = {
       factId: 'mi-fact-eligible', domain: 'cross-asset' as const, subject: 'BTC', metric: 'price-return',
-      value: 1, unit: '%', sourceId: '0xrouter', sourceLabel: '0xrouter', observedAt: asOf, asOf,
+      value: 1, unit: 'percent', sourceId: '0xrouter', sourceLabel: '0xrouter', observedAt: asOf, asOf,
       confidence: 1, evidenceRefId: 'ev-1'
     }
     const messages = buildAnalysisMessages(snapshot({

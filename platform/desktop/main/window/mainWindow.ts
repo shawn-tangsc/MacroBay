@@ -1,5 +1,7 @@
 import { BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 
+import { markBoot } from '../../window/bootMarks'
+
 import { wireRendererProcessDiagnostics, type RendererProcessDiagnosticEvent } from '../../window/rendererProcessDiagnostics'
 import { wireRendererSendGuard } from '../../window/safeRendererSend'
 import { wireWindowChromeState } from '../../window/windowChrome'
@@ -73,6 +75,8 @@ export function createMainWindowHost(ports: MainWindowHostPorts): MainWindowHost
     const window = getMainWindow()
     if (!window) return
     await ports.loadRenderer(window)
+    // 纯观测：渲染器文档加载完成（首帧与数据就绪由渲染层自己打点）。
+    markBoot('renderer-loaded')
     const workspace = ports.getWorkspace()
     if (!workspace) return
     // workspace：重建的主窗同样要登记并在加载后挂载，否则它的 workspace IPC 会被 not-owner 拒绝

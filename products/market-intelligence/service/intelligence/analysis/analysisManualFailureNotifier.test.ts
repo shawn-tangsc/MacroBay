@@ -69,6 +69,19 @@ describe('manual analysis failure notice', () => {
     }])
   })
 
+  it('gives the network-not-ready failure a retry, not a bare acknowledgement', () => {
+    const request = buildManualAnalysisFailureRequest({ ...failedRun, failureDetailCode: 'network-not-ready' })
+    // 读者能做的只有稍后重试，确认按钮什么也没告诉他。
+    expect(request?.actions).toHaveLength(1)
+    expect(request?.actions[0]?.kind).toBe('custom')
+    expect(request?.actions[0]?.labelRef).toEqual({
+      scope: 'product', productId: 'market-intelligence', key: expect.stringContaining('retry-analysis')
+    })
+    expect(request?.rendered?.['zh-CN']?.body).toContain('网络还没就绪，稍后重试')
+    expect(manualAnalysisFailureReasonCopy({ failureCode: 'analysis-provider-error', failureDetailCode: 'network-not-ready' })['en-US'])
+      .toContain('network was not ready')
+  })
+
   it('never lets a failed submission change the run outcome', async () => {
     const submit = vi.fn(async () => { throw new Error('notification store unavailable') })
     await expect(notifyManualAnalysisFailure(submit, failedRun)).resolves.toBeUndefined()
@@ -76,4 +89,13 @@ describe('manual analysis failure notice', () => {
     // No submitter wired (headless): silence, not a crash.
     await expect(notifyManualAnalysisFailure(undefined, failedRun)).resolves.toBeUndefined()
   })
+})
+
+it('says a news reading failed, not a market analysis', () => {
+  const request = buildManualAnalysisFailureRequest({ ...failedRun, analysisKind: 'news' })
+  // 平台模板是「你刚才点的那次分析没成：{reason}」；新闻线把类别放进 reason，正文才分得清。
+  expect(request?.rendered?.['zh-CN']?.body).toContain('这是新闻解读')
+  expect(request?.rendered?.['en-US']?.body).toContain('this was a news reading')
+  // 市场线的正文不变。
+  expect(buildManualAnalysisFailureRequest(failedRun)?.rendered?.['zh-CN']?.body).not.toContain('这是新闻解读')
 })

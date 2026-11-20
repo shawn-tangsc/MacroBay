@@ -7,6 +7,7 @@
  * 同一条用例里还钉住三件容易混的东西：`signalSeverity` 不等于展示用的 `NotificationSeverity`；
  * 记录上的 `severity` 不再是写死的 `info`；非法档位（`critical`）当场拒收、不落记录。
  */
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -60,13 +61,12 @@ function harness(options: {
     ...(options.channelEvents === undefined ? {} : { channelEvents: options.channelEvents })
   }
   let sequence = 0
-  const resolvePushChannelFromSettings = async () => ({
+  const resolvePushChannelsFromSettings = async () => ({
     ok: true as const,
-    channelId: 'channel-a',
-    channelName: 'channel-a'
+    channels: [{ id: 'channel-a', name: 'channel-a' }]
   })
   const runtime = createNotificationRuntime({
-    resolvePushChannel: resolvePushChannelFromSettings,
+    resolvePushChannels: resolvePushChannelsFromSettings,
     diagnostics: () => undefined,
     storage: {
       read: async () => JSON.parse(JSON.stringify(state)),
@@ -77,10 +77,10 @@ function harness(options: {
     clock,
     getLanguage: async () => 'zh-CN',
     deliveryHooks: {
-      push: async (_record, content) => {
+      push: singleResultHook(async (_record, content) => {
         pushes.push({ title: content.title })
         return options.pushOk === false ? { ok: false, reason: 'channel-rejected' } : { ok: true, messageId: `m-${++sequence}` }
-      }
+      })
     }
   })
   return { runtime, pushes, settings, records: () => state.records }

@@ -50,7 +50,8 @@ export type SignificanceSignal = Readonly<{
   eventKey: string
   titleKey: string
   metric: string
-  importance: 'high' | 'medium' | 'low'
+  /** 可缺省：来源没给就没有值（缺省 ≠ 低重要度）。 */
+  importance?: 'high' | 'medium' | 'low'
   previousValue: string | null
   value: string | null
   /**

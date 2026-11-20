@@ -11,7 +11,7 @@ describe('analysisRunService', () => {
   it('uses the canonical idempotency key and returns an existing run without incrementing attempts', () => {
     const enqueueRun = vi.fn((run) => ({ created: true, run }))
     const service = createAnalysisRunService({ repository: { enqueueRun } as never, now: () => asOf, idFactory: () => 'mi-ar-1' })
-    const input = { eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
+    const input = { analysisKind: 'market' as const, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
     const result = service.enqueue(input)
     expect(result.run.idempotencyKey).toBe(buildAnalysisIdempotencyKey(input))
     expect(result.run.attempt).toBe(1)
@@ -21,7 +21,7 @@ describe('analysisRunService', () => {
   it('records the model the run was queued for, and leaves it empty when none was chosen', () => {
     const enqueueRun = vi.fn((run) => ({ created: true, run }))
     const service = createAnalysisRunService({ repository: { enqueueRun } as never, now: () => asOf, idFactory: () => 'mi-ar-1' })
-    const base = { eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
+    const base = { analysisKind: 'market' as const, eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1', snapshotHash: 'hash', analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
 
     expect(service.enqueue({ ...base, model: { providerId: 'provider-1', modelId: 'model-1' } }).run)
       .toMatchObject({ modelProviderId: 'provider-1', modelId: 'model-1' })
@@ -30,11 +30,11 @@ describe('analysisRunService', () => {
     expect(service.enqueue(base).run).toMatchObject({ modelProviderId: null, modelId: null })
   })
 
-  it('converts running runs to failed runtime-recovered on restart', () => {
+  it('converts running runs to an interrupted failure on restart', () => {
     const updateRunStatus = vi.fn(() => true)
     const service = createAnalysisRunService({ repository: { updateRunStatus, listRuns: () => [{ id: 'mi-ar-1', status: 'running' }] } as never, now: () => asOf, idFactory: () => 'mi-ar-2' })
     expect(service.recover()).toEqual({ failed: ['mi-ar-1'], stale: [], dispatch: [] })
-    expect(updateRunStatus).toHaveBeenCalledWith({ id: 'mi-ar-1', status: 'failed', failureCode: 'runtime-recovered', failureDetailCode: 'runtime-recovered', completedAt: asOf })
+    expect(updateRunStatus).toHaveBeenCalledWith({ id: 'mi-ar-1', status: 'failed', failureCode: 'analysis-run-interrupted', failureDetailCode: 'runtime-stopped', completedAt: asOf })
   })
 
   it('uses the repository unique index to return the same persisted run for an identical snapshot', () => {
@@ -44,7 +44,7 @@ describe('analysisRunService', () => {
     repository.appendEventGroup(eventGroup)
     repository.appendSnapshot(snapshot)
     const service = createAnalysisRunService({ repository, now: () => asOf, idFactory: () => `mi-ar-${Math.random()}` })
-    const input = { eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
+    const input = { analysisKind: 'market' as const, eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash, analysisPhase: 'initial' as const, triggerKey: 'macro.actual.first-confirmed' }
     const first = service.enqueue(input)
     const second = service.enqueue(input)
     expect(first.created).toBe(true)
@@ -72,7 +72,7 @@ describe('analysisRunService', () => {
     let index = 0
     const service = createAnalysisRunService({ repository, now: () => asOf, idFactory: () => `mi-ar-retry-${++index}` })
     const run = (snapshot: EvidenceSnapshot) => service.enqueue({
-      eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
+      analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash: snapshot.snapshotHash,
       analysisPhase: 'initial', triggerKey: 'schedule.asia.open'
     })
     expect(run(first).created).toBe(true)
@@ -122,6 +122,29 @@ describe('analysisRunService', () => {
     expect(created[0]).toMatchObject({ eventGroupId: group.id, snapshotId: latestSnapshot.id, snapshotHash: latestSnapshot.snapshotHash, analysisPhase: 'initial', status: 'queued' })
   })
 
+  it('carries the reader model into a recovery-enqueued run', () => {
+    // 冷启动竞态：恢复补排的运行入队时不带模型，调用层就会退回平台第一个可用供应商。
+    // 这条用例钉住「补排的运行也必须带着读者选的模型」。
+    const latestAt = '2026-09-27T00:10:00.000Z'
+    const group: EventGroup = { id: 'mi-eg-model', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|model', firstObservedAt: asOf, lastObservedAt: latestAt, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['event-1'], triggerCount: 1, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: latestAt }
+    const latestSnapshot = makeSnapshot('mi-es-model', group.id, latestAt, 'model-hash')
+    const created: AnalysisRun[] = []
+    const repository = {
+      listRuns: () => [], listEventGroups: () => [group], listSnapshots: () => [latestSnapshot],
+      updateRunStatus: vi.fn(() => true),
+      enqueueRun: vi.fn((run: AnalysisRun) => { created.push(run); return { created: true, run } }),
+      appendTriggerLedger: vi.fn()
+    }
+    const service = createAnalysisRunService({ repository: repository as never, now: () => '2026-09-27T00:20:00.000Z', idFactory: () => 'mi-ar-model' })
+
+    service.recover({ model: { providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' } })
+
+    expect(created).toHaveLength(1)
+    expect(created[0]).toMatchObject({
+      modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017'
+    })
+  })
+
   it('re-dispatches a queued run that points at the active snapshot and was never claimed', () => {
     // The observed orphan: the row exists, no `runMarketAnalysis` job ever did. Nothing in
     // the run lifecycle can move it, so recovery must hand it back to the caller.
@@ -135,6 +158,34 @@ describe('analysisRunService', () => {
     }
     const service = createAnalysisRunService({ repository: repository as never, now: () => '2026-09-27T00:20:00.000Z', idFactory: () => 'mi-ar-unused' })
     expect(service.recover()).toEqual({ failed: [], stale: [], dispatch: [{ analysisRunId: orphan.id, eventGroupId: group.id }] })
+    expect(repository.enqueueRun).not.toHaveBeenCalled()
+  })
+
+  it('retires a queued market run whose snapshot was frozen for a news item, and keeps news runs', () => {
+    // R39：升级前由自动新闻触发排下的市场运行，重启后不许再被派去跑——它读不到那条新闻。
+    const latestAt = '2026-09-27T00:10:00.000Z'
+    const group: EventGroup = { id: 'mi-eg-news-recovery', schemaVersion: 1, status: 'open', groupType: 'sentiment', mergeKey: 'sentiment|news|BTC|x', firstObservedAt: asOf, lastObservedAt: latestAt, reviewDeadlineAt: '2026-09-27T02:00:00.000Z', eventRefs: ['item-news'], triggerCount: 1, reviewCount: 0, currentSummaryId: null, supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: latestAt }
+    const newsSnapshot = {
+      ...makeSnapshot('mi-es-news', group.id, latestAt, 'news-hash'),
+      schemaVersion: 3 as const,
+      trigger: { source: 'intelligence-item' as const, itemId: 'item-news', factId: 'triggered-news:item-news', evidenceRefId: 'news:item-news' }
+    }
+    const legacyMarketRun: AnalysisRun = { ...makeRun('mi-ar-legacy-news', group.id, newsSnapshot.id, newsSnapshot.snapshotHash), status: 'queued' }
+    const manualNewsRun: AnalysisRun = { ...makeRun('mi-ar-news-run', group.id, newsSnapshot.id, newsSnapshot.snapshotHash), analysisKind: 'news', triggerKey: 'news.manual', status: 'queued' }
+    const updateRunStatus = vi.fn(() => true)
+    const repository = {
+      listRuns: () => [legacyMarketRun, manualNewsRun], listEventGroups: () => [group], listSnapshots: () => [newsSnapshot],
+      updateRunStatus, enqueueRun: vi.fn(), appendTriggerLedger: vi.fn()
+    }
+    const service = createAnalysisRunService({ repository: repository as never, now: () => '2026-09-27T00:20:00.000Z', idFactory: () => 'mi-ar-unused' })
+    expect(service.recover()).toEqual({
+      failed: [],
+      stale: ['mi-ar-legacy-news'],
+      dispatch: [{ analysisRunId: 'mi-ar-news-run', eventGroupId: group.id }]
+    })
+    expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ id: 'mi-ar-legacy-news', status: 'stale', failureCode: 'news-trigger-retired' }))
+    expect(updateRunStatus).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'mi-ar-news-run' }))
+    // 新闻组不补市场运行。
     expect(repository.enqueueRun).not.toHaveBeenCalled()
   })
 
@@ -160,5 +211,5 @@ function makeSnapshot(id: string, eventGroupId: string, createdAt: string, snaps
 }
 
 function makeRun(id: string, eventGroupId: string, snapshotId: string, snapshotHash: string): AnalysisRun {
-  return { id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: id, status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1', promptVersion: 'market-analysis-v1', skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null }
+  return { id, schemaVersion: 1, analysisKind: 'market', eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey: id, status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, validationMode: null, policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1', promptVersion: 'market-analysis-v1', skillVersion: 'market-analysis-v1', outputSchemaVersion: 1, jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, queuedAt: asOf, startedAt: null, completedAt: null }
 }

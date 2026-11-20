@@ -1,66 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CircleHelp } from 'lucide-react'
-import { toPng } from 'html-to-image'
 
-import { IconButton } from '@platform/ui/components/icon-button'
-import { Popover } from '@platform/ui/components/popover'
-import { LoadingState } from '@platform/ui/components/loading'
-import { StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
-import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import { DEFAULT_PERIOD_ID, briefingEditionPeriod, isDailyBriefingWindowHours, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
-import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
+import { DEFAULT_PERIOD_ID, briefingEditionPeriod, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { DAILY_BRIEFING_DOCUMENT_INVALID } from '../../shared/ipc/dailyBriefingFailureCodes'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
-import { openModelSettings, openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
-import { briefingTextForLocale, resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
-import { briefingEventTitles } from './briefingEventTitles'
-import { DailyBriefingHistoryRail, railClock } from './DailyBriefingHistoryRail'
-import { DailyBriefingDeleteOutcomeNote } from './DailyBriefingDeleteOutcomeNote'
+import type { DailyBriefingText } from './dailyBriefingText'
+import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
+import { briefingScreenEdition } from './briefingScreenEdition'
 import { useBriefingShareActions } from './useBriefingShareActions'
-import { runBriefingRegenerate } from './runBriefingRegenerate'
 import { useBriefingEditionDelete } from './useBriefingEditionDelete'
-import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingDocumentInvalidIssue } from './briefingDocumentInvalidIssue'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
-import { briefingExportFileName, posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
 import { DailyBriefingPageBar } from './DailyBriefingPageBar'
-import { DailyBriefingLiveSteps, runningElapsedMsFor, runningRowName } from './DailyBriefingLiveSteps'
+import { runningElapsedMsFor, runningRowName } from './DailyBriefingLiveSteps'
 import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { useBriefingSettingsFacts } from './useBriefingSettingsFacts'
 import { useBriefingReload } from './useBriefingReload'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
-import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
-import { DailyBriefingAttempts } from './DailyBriefingAttempts'
-import { DailyBriefingEmptyState } from './DailyBriefingEmptyState'
-import { DailyBriefingGeneratingView } from './DailyBriefingGeneratingStates'
 import { DailyBriefingEditionActions } from './DailyBriefingPageActions'
-import { briefingEditionSelection, nextEditionAfterDelete } from './briefingEditionSelection'
-import { briefingOnScreenSession } from './briefingOnScreenSession'
-import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
-import { DailyBriefingLanguageFallback } from './DailyBriefingLanguageFallback'
-import { posterProps } from './dailyBriefingPoster'
+import { briefingEditionSelection } from './briefingEditionSelection'
 import { briefingChangeArrows, briefingFearGreedBuckets, briefingPaymentDirections, briefingPolicyGaugeWords } from './dailyBriefingPaymentDirections'
-import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
-import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
 import './dailyBriefingShareCard.css'
-import {
-  editorialFailureText,
-  issueCountsText,
-  localDate,
-  briefingFailure,
-  briefingListFacts,
-  mergeEditionSummary,
-  summaryFromDocument,
-  withDeadline
-} from './dailyBriefingPageDerived'
+import { localDate, briefingFailure, briefingListFacts } from './dailyBriefingPageDerived'
 
 import type { DailyBriefingPageViewState as ViewState } from './dailyBriefingPageViewState'
 import { DailyBriefingAppendix } from './DailyBriefingAppendix'
@@ -70,13 +38,12 @@ import { DailyBriefingContent } from './DailyBriefingContent'
 import { useBriefingBackgroundRunReload } from './useBriefingBackgroundRunReload'
 import { isManualGenerationDateAllowed } from '../../../contracts/dailyBriefingGenerationWindow'
 import { useBriefingRunActions, type BriefingRunIntent } from './useBriefingRunActions'
-import { DailyBriefingNoEditionPanel } from './DailyBriefingNoEditionPanel'
 import { briefingPushText } from './dailyBriefingPushText'
 import { useBriefingManualRun } from './useBriefingManualRun'
 import { briefingManualRunReport, briefingManualRunningLabel } from './briefingManualRunOutcome'
 import { briefingPageChrome } from './briefingPageChrome'
+import { briefingPublishInputs } from './briefingPublishInputs'
 import { useBriefingPushToPhone } from './useBriefingPushToPhone'
-import type { BriefingEditionDeleteTarget } from './briefingEditionDeleteConfirm'
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -160,33 +127,17 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // **日期只有一个来源：读者本地日历的今天**（过 00:00 就换天，用户 2026-11-06 拍板）。
   // 以前这里还有一层"按排期时刻倒推当前属于哪一期"，于是凌晨 01:25 还把 11/05 当今天。
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
-  // A run this page started, or one it is loading for. The service's own answer joins below.
-  const readyDocument = briefingDocument(view)
-  /**
-   * **唯一一道身份闸门**：文档属于某一版，只有它的身份与选中项一致，它才算"屏幕上这一版"。
-   * 正文、右列留痕、删除目标、推送、导出、复制、分享卡全部只读 `screenDocument`——以前它们各读
-   * 裸的 `readyDocument`，于是停在 A 上手动生成时，右列还挂着 A 的留痕、导出导出的是 A。
-   *
-   * **语言不参与比对**：界面要英文而这一期只有中文（语言回退）仍然是同一版，照常显示。
-   */
-  const selected = Object.freeze({ date: pinnedDate ?? todayDate, periodId: pickedPeriodId, locale: pickedLocale ?? locale })
-  const selectedPeriodIdOnScreen = readyDocument === undefined ? undefined : briefingEditionPeriod(readyDocument.edition).periodId
-  const documentMatchesSelection = readyDocument !== undefined
-    && readyDocument.edition.date === selected.date
-    && (selected.periodId === undefined || selectedPeriodIdOnScreen === selected.periodId)
-  const screenDocument = documentMatchesSelection ? readyDocument : undefined
-  // 当前这一版的身份，交给删除的确认框点名。时刻取这一版自己的名义截止（读者时区），不是"现在"。
-  const deleteTarget = screenDocument === undefined ? undefined : (() => {
-    const period = briefingEditionPeriod(screenDocument.edition)
-    return { date: screenDocument.edition.date, clock: railClock(period.periodTime, timeZone), language: screenDocument.edition.locale, periodId: period.periodId }
-  })()
   const loading = isBriefingLoading(view)
-  const busyLocally = loading || regenerating
   // With the switch unavailable the stored choice must not decide anything: rendering and requests use
   // the interface language, while the stored preference itself is left untouched for when it returns.
   const effectiveLocale = pickedLocale ?? locale
   const effectiveLocaleRef = useRef(effectiveLocale)
   effectiveLocaleRef.current = effectiveLocale
+  // 「屏幕上这一版是谁」的唯一闸门，以及由它派生的删除目标、重跑那一款、事件名表：整块在
+  // `briefingScreenEdition` 里（2026-11-16 搬出，判据与注释一并搬走）。
+  const { readyDocument, selected, screenDocument, deleteTarget, onScreenPeriodId, onScreenSession, regenerateDay, screenRerun, editionEventTitles } = briefingScreenEdition({
+    view, editions, todayDate, pinnedDate, pickedPeriodId, effectiveLocale, locale, text, timeZone, pageEventTitles: eventTitles
+  })
   useEffect(() => {
     const ready = briefingDocument(view)
     if (ready) lastReadyRef.current = ready
@@ -201,7 +152,22 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   })
   // One question, every source: what this page started, what it is loading for, and what the service
   // says is running right now (a scheduled run, or one started in another window).
-  const generating = busyLocally || progress?.state === 'running'
+  //
+  // **服务说「没在跑」，本地就不许再坚持「生成中」**（用户 2026-11-14 报的卡住）：那次跑在库里
+  // 已经 `published`，界面却一直停在九步未开始。本页那次发起的 flail 只在本页拿不到进度时
+  // （`undefined`，尚未回读）才算数；一旦服务回了 `idle`，真相以服务为准。
+  const generating = loading || regenerating || progress?.state === 'running'
+  // **自愈**：本页记着「我在跑」，但服务连着两次都说「没在跑」→ 以服务为准，把旗子收掉。
+  // 为什么是两次：按下那一刻服务可能还没登记，一次 `idle` 就翻会把刚起的跑判成没起；
+  // 两次（间隔一次轮询）之后仍说没跑，那它确实没跑——界面不许长期停在「生成中」
+  // （用户 2026-11-14 报的卡住：库里已经 published，右侧九步还全是「未开始」）。
+  const idleReads = useRef(0)
+  useEffect(() => {
+    if (!regenerating) { idleReads.current = 0; return }
+    if (progress?.state !== 'idle') { idleReads.current = 0; return }
+    idleReads.current += 1
+    if (idleReads.current >= 2) { idleReads.current = 0; setRegenerating(false) }
+  }, [regenerating, progress?.state])
   const liveProgress = progress?.state === 'running' ? progress.progress : undefined
   const { markLocalSettled } = useBriefingBackgroundRunReload(progress?.state === 'running', () => setReloadKey((key) => key + 1))
   // "Could not read the progress" is its own case: it must not fall back to "not generated", and it
@@ -212,7 +178,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   // duration would turn a guess into a measurement.
   const runningStage = generating && !progressUnreadable && liveProgress ? runningRowName(liveProgress, text) : undefined
   const runningElapsedMs = runningStage === undefined || liveProgress === undefined ? undefined : runningElapsedMsFor(liveProgress)
-
 
   // 三项事实一次读出来（web search、时区、写不了的语言），外加"该重读了"这个计数：抽屉关了、窗口
   // 重新聚焦、别的窗口改了设置，都只是把计数 +1。
@@ -226,7 +191,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const { readEdition, openEdition } = useBriefingEditionReader({
     client, editions, todayDate, readyDocument, requestRef,
     cache: editionCacheRef, periodDate: periodDateRef,
-    setView, setPinnedDate, setRegenerateFailure
+    setView, setPinnedDate, setRegenerateFailure, setPickedLocale, setPickedPeriodId
   })
   openEditionRef.current = openEdition
 
@@ -245,24 +210,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const runningIssues: readonly BriefingRunIntent[] = runIntent === null ? [] : [runIntent]
   const viewingRunningIssue = runningIssues.some((intent) =>
     pickedPeriodId === intent.periodId && effectiveLocale === intent.locale)
-  /** 屏幕上这一版的身份：正文里写着的那一期，取不到才退回当前选中/默认期。 */
-  const onScreenPeriodId = screenDocument?.edition.periodId ?? pickedPeriodId ?? DEFAULT_PERIOD_ID
-  /** 屏幕上这一版的会话（E9）；判据与「为空就不渲染」都在 `briefingOnScreenSession` 里。 */
-  const onScreenSession = screenDocument && briefingOnScreenSession({ editions, edition: screenDocument.edition, text, locale, timeZone })
-  /**
-   * 重跑屏幕上这一版时，截止与窗口取它**自己**的（用户 2026-11-06）。
-   *
-   * 少了这两样，服务端只能回落到期配置列表第一项（初始化那第 1 期的 07:00），于是"点重新生成，
-   * 又变成 7 点"，还会在同一个截止上多插一版。没有正文可读时不给（那是"生成这一期"，不是重跑）。
-   */
-  /** 「重新生成」作用在哪一天：有正文就是这一版；**失败/缺版**的那天没有正文，日期取视图里的（`view.date`）。 */
-  const regenerateDay = screenDocument?.edition.date
-    ?? (view.status === 'no-edition' ? view.date : undefined)
-  const screenWindowHours = screenDocument?.edition.windowHours
-  const screenRerun = screenDocument === undefined ? undefined : {
-    periodTime: screenDocument.edition.windowEnd,
-    ...(isDailyBriefingWindowHours(screenWindowHours) ? { windowHours: screenWindowHours } : {})
-  }
   const { runBriefing } = useBriefingRunActions({
     client, locale, timeZone,
     setView, setRegenerating, setRegenerateFailure, setEditions, todayDate,
@@ -314,22 +261,29 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       regenerate: (input) => runBriefing({ ...input, trigger: 'manual' })
     })
 
-  // 事件名表跟着**这一版的语言**走（`02` `A0.9`）：界面中文 + 英文版次时，界面那张中文名表
-  // 会把「核心 CPI」印进英文正文。版次语言与页面语言不同就换表，不回落（回落就是把中文塞进去）。
-  const editionEventTitles = briefingEventTitles({
-    pageLocale: locale,
-    editionLocale: screenDocument?.edition.locale ?? effectiveLocale,
-    pageTitles: eventTitles
-  })
-
   const { exportState, copyState, exportImage, copy } = useBriefingShareActions({
     document: screenDocument,
     locale, text, eventTitles: editionEventTitles, shareRef
   })
 
-  const { failure, editorialBlocked } = briefingFailure({ view, regenerateFailure })
+  // **按事实判失败，不按本地标志**（用户 2026-11-14）：库里这一期这一语言发布过，就显示正文，
+  // 不管本地 `regenerateFailure` 说什么——那一版明明在，界面却写「生成失败」是同一种撒谎。
+  const publishedRow = editions.find((edition) => edition.date === selected.date
+    && edition.periodId === (pickedPeriodId ?? DEFAULT_PERIOD_ID))
+  const publishedHere = publishedRow?.periodDeleted !== true
+    && publishedRow?.languages?.find((entry) => entry.locale === effectiveLocale)?.state === 'published'
+  useEffect(() => {
+    // 有正文就清掉本地失败并重读一次；只在真的挂着失败时动手，避免自激。
+    if (publishedHere !== true || regenerateFailure === null) return
+    setRegenerateFailure(null)
+    setReloadKey((key) => key + 1)
+  }, [publishedHere, regenerateFailure])
+  const { failure, editorialBlocked } = briefingFailure({
+    view,
+    regenerateFailure: publishedHere === true ? null : regenerateFailure
+  })
   // A stored edition under a failure notice is content, not a blocked state.
-  const contentBlocked = editorialBlocked || (regenerateFailure !== null && view.status !== 'ready')
+  const contentBlocked = editorialBlocked || (publishedHere !== true && regenerateFailure !== null && view.status !== 'ready')
   /**
    * The reader's own publication, of the edition on screen.
    *
@@ -337,17 +291,18 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
    * notice by date, language and issue, and a wrong issue is refused rather than quietly sent as another
    * one. The words are interface chrome, so they follow the interface language, not the edition's.
    */
-  const pushToPhone = useBriefingPushToPhone({
+  // 发的是**选中那一版**；海报就是屏幕上这张纸；导读超长时去这一版的会话里把它写短。
+  // 映射在 `briefingPublishInputs` 里（页面只留接线），这里只交页面事实。
+  const pushToPhone = useBriefingPushToPhone(briefingPublishInputs({
     document: contentBlocked ? undefined : screenDocument,
     generating,
     localeMissing: view.status === 'locale-missing',
-    // 与正文同一口径：发的是**选中那一版**。按日期取首行会在一日多期时发错版（审计 #74 家族）。
     periodId: pickedPeriodId ?? screenDocument?.edition.periodId ?? DEFAULT_PERIOD_ID,
     text: briefingPushText[locale],
-    // The channel is configured somewhere else (that drawer, or the platform's own settings). Re-read
-    // when it may have changed, or the button keeps the verdict it formed at mount.
-    refreshKey: settingsReloadKey
-  })
+    refreshKey: settingsReloadKey,
+    posterRoot: () => shareRef.current,
+    ...(onScreenSession === undefined ? {} : { sessionId: onScreenSession.sessionId })
+  }))
   // A ready pane always knows its own date; an emptied one falls back to where the reader was,
   // so a delete never makes the rail jump to today.
   // 选中的是哪一版，由**选中项**决定（状态直取，见页面开头那道闸门）。
@@ -468,6 +423,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         />,
         text, view, mode, failure, regenerating, liveProgress, progressUnreadable, resolveProductText,
         editions, lastGeneratedAt, timeZone, todayDate, scheduledTime, editionText, editionLocale,
+        // 读者选中那一期的身份：空态按 (date, periodId, locale) 分辨「读不到这一版」与「没有这一版」。
+        selectedPeriodId: pickedPeriodId ?? DEFAULT_PERIOD_ID, selectedLocale: effectiveLocale,
         eventTitles: editionEventTitles, formatTime, contentBlocked, documentRejected, deleteOutcome, languageFallback, webSearchEnabled,
         // 设置面已经不在这一页（抽屉是唯一入口），所以这里永远是 false。
         settingsOpen: false,

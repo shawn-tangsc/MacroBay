@@ -121,7 +121,7 @@ export function ModelServiceApiAddressSection({
           dataAttributes={{ 'data-request-config-open': true }}
           icon={Settings2}
           onSelect={onOpenRequestConfig}
-          resolveText={(key) => (key === 'modelService.requestConfig' ? labels.requestConfig : '')}
+          resolveText={(key) => ({ 'modelService.requestConfig': labels.requestConfig } as Readonly<Record<string, string>>)[key] ?? ''}
           size="sm"
         />
       </div>

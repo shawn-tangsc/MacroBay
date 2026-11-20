@@ -1,0 +1,457 @@
+/*
+ * 关键指标 · 预期变化 抽屉。
+ *
+ * 尺寸逐项照 `2026-11-13-K11-b.html`：抽屉 1280（94vw 上限）、正文内边距 16、左列 828 + 右列 403 + 间距 16。
+ * 文件名与类名避开日历页的 `.mi-calendar-*`：两个抽屉同时存在时，同名类会互相改样式。
+ */
+
+/*
+ * 遮罩的兜底：antd 的遮罩样式靠 cssinjs 注入，元素带 `ant-drawer-mask-motion-appear` 时初始
+ * `opacity: 0`——动画不跑完（比如系统开了「减少动态效果」）就一直是 0，表现就是「元素在、
+ * 像素是透明的」。
+ *
+ * 这里**不再依赖 `:has()`**：实测那台机器上 `:has()` 版本没有生效，而 `!important` 只要命中
+ * 就一定赢。选择器只用根元素自己带的 `drawer--modal`（平台 Drawer 写在 rootClassName 里），
+ * 命中条件是确定的。代价：模态抽屉的遮罩淡入变成瞬间出现，可见性不再依赖动画。
+ */
+.ant-drawer.drawer--modal > .ant-drawer-mask {
+  background: rgba(0, 0, 0, 0.45);
+  /* antd 的遮罩初始 `opacity: 0`（进入动画的第一帧）；动画不跑就一直是 0。这里只钉终态。 */
+  opacity: 1 !important;
+  transition: none;
+}
+
+/* 平台 Drawer 的正文留白（设计稿 14/16），只在本抽屉范围内生效。 */
+/* `className` 落在内容面板上，不在 `.ant-drawer` 根上——所以这里不能写 `.mk-drawer.ant-drawer`。 */
+/*
+ * 正文同时是**容器查询的容器**：下面两列的收放问的是「这一格还剩多宽」，不是「窗口有多宽」。
+ * 抽屉是 `full` 档（1280，上限 94vw），同一扇窗里它可能是 1280，也可能是 962——窗口宽度
+ * 回答不了这个问题，写成窗口 `@media` 时抽屉里永远不会触发。量的是本格的 content box，
+ * 也就是两列真正能用的宽度。
+ *
+ * 代价与前提，下一个人要知道：
+ * - `container-type: inline-size` 只对**宽度来自外部**的盒子安全。哪天有人把它挪到
+ *   `inline-block` / `fit-content` / `max-content` 的盒子上，宽度会静默塌成 0（如何做都量到 0 的探针实测）；
+ * - 这个容器挂的是 antd 的 `.ant-drawer-body`。平台 `Drawer` 目前没有给正文单独起类的入口，
+ *   所以这里依赖 antd 的那个类名：它哪天被改名，容器就消失，收放**永久失效而用例仍然全绿**
+ *   （守卫读的是我们自己的样式表文本）。要根治得给平台 `Drawer` 加一个正文类（走 `classNames.body`），
+ *   那是共享组件线的文件，不在这条线里顺手改。
+ */
+.mk-drawer .ant-drawer-body { padding: 14px 16px; display: flex; min-height: 0; container-type: inline-size; container-name: mk-drawer; }
+.mk-drawer .ant-drawer-footer { padding: 6px 16px; }
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--font-meta);
+  cursor: pointer;
+  padding: 0 4px;
+  text-decoration: none;
+}
+
+.mk-foot-a { color: var(--muted); text-decoration: underline; }
+.mk-foot-a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The two columns: 828 fixed (the reading column the design locked), the rest for the day panel. */
+.mk-sec {
+  /* 事件详情抽屉的锚点：`CalendarInspector` 的定位层是 `position: absolute; inset: 0`，
+     最近的定位祖先就决定了它盖在哪。没有这一行，它会锚到抽屉之外的容器上——用户看到的
+     「抽屉弹到整窗」就是这么来的。加了之后它只盖这张抽屉的正文区，与经济日历页同形。 */
+  position: relative;
+  display: grid;
+  grid-template-columns: 828px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+}
+.mk-col-l { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mk-col-r { /* 里面是日历页那套当日列表 */
+  padding-top: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+  overflow-y: auto;
+}
+/* 右列自己那条 `border-left` 就是分隔线：当日列表在日历页里自带 `padding-left` 22 与
+   `border-left` 1（`economicCalendar.css`），而 `--mi-economic-line` 与列那条同色。两层叠起来，
+   320 的轨道给行内容只剩 280，两列模式下还看得到相距 16 的两条同色竖线。所以内层这一对**在基础
+   规则里就撤掉**，不是收成一列时才撤——两种模式都只留一条线、一份内距。 */
+.mk-col-r .mi-calendar-day-list { padding-left: 0; border-left: 0; }
+/* 右列只省掉**种类字形**（那个 ↗）：它在这一列是装饰。
+   **国家不省**——用户 2026-11-16 说了三次「事件前面要显示国家」，而这一列正是他看的那个列表：
+   以前这里把国家格一起 `display: none` 掉（11-13 为窄列写的），结果界面上一行都没有国家，而所有
+   断言都跑在不带 `.mk-col-r` 的独立渲染里、全绿。加格的提交必须连着这一层一起看。 */
+.mk-col-r .mi-economic-calendar__event-kind { display: none; }
+/* 右列里那种「说清一句」的小字：不是空态块，只是解释这一列为什么是现在这样。 */
+.mk-col-r__note { margin: 0 0 4px; font-size: var(--font-meta); color: var(--muted); }
+/* 次要层收成一行，就地展开：容器内的一个按钮，不跳页、不弹窗。 */
+.mk-col-r__more {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+  margin-top: 4px; padding: 0; border: 0; background: none; color: var(--muted);
+  font-size: var(--font-meta); cursor: pointer;
+}
+.mk-col-r__more:hover { color: var(--text); }
+.mk-col-r__more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mk-col-r__more svg { transition: transform .15s ease; }
+.mk-col-r__more svg[data-flip='true'] { transform: rotate(180deg); }
+
+/*
+ * 容器放不下两列时，当日事件列堆到读数列下面，而不是把它挤成一条缝。
+ *
+ * 阈值从这三个数来，别凭手感挪：读数列是设计锁死的 **828**，列间距 **16**，右列最少要 **320**
+ * ——这个 320 就是 `--mi-economic-inspector-width` 那一档，不是把行里的列宽加起来的和。
+ * 828 + 16 + 320 = 1164，所以 1163px 及以下收成一列；`full` 档自己的正文宽 1248，仍在两列。
+ *
+ * 收起来之后：整块改成按内容高（`height: auto`），由正文那一格自己滚，避免两列各自一条滚动条；
+ * 分隔线从左边挪到上边（当日列表内层那条线已经在基础规则里撤掉，见上）。
+ */
+@container mk-drawer (max-width: 1163px) {
+  .mk-sec { grid-template-columns: minmax(0, 1fr); height: auto; width: 100%; align-self: flex-start; }
+  .mk-col-r { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: 12px; }
+}
+
+.mk-sechead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; flex: none; }
+/* 标题与它的说明图标是一组：图标紧贴标题，读数排在它们之后，不插在中间。 */
+.mk-sec__title { display: inline-flex; align-items: center; gap: 6px; }
+.mk-sec__t { margin: 0; font-size: var(--font-body); line-height: var(--line-body); font-weight: 600; color: var(--text-strong); }
+.mk-sec__v { font-size: var(--font-metric-sm); line-height: 1.05; font-weight: 600; color: var(--text-strong); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+.mk-sec__u { margin-left: 2px; font-size: var(--font-meta); font-style: normal; font-weight: 400; color: var(--muted); }
+.mk-sec__d { font-size: var(--font-meta); color: var(--caution); font-variant-numeric: tabular-nums; }
+/* 持平 / 无历史可比：置灰，不给方向色——那是「没动」，不是「跌了」。 */
+.mk-sec__d[data-flat='true'] { color: var(--muted); }
+/* 读数缺席时这一格说的是「暂时读不到」，不是数字，所以不占读数那档字号。 */
+.mk-sec__v--absent { font-size: var(--font-meta); font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.mk-mocktag { font-size: var(--font-meta); color: var(--caution); border: 1px solid var(--caution); border-radius: 999px; padding: 0 6px; }
+.mk-sec__note { flex-basis: 100%; font-size: var(--font-meta); color: var(--muted); }
+
+/* Top row: the line, the event rail, the policy card. */
+.mk-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 34%, transparent);
+  padding: 8px 10px 6px;
+  flex: none;
+  /* 行高由卡片内容决定（原型同法）：卡按自然高度，图跟着填满这一行。 */
+  align-items: start;
+}
+/*
+ * 图这一格**不参与行高**：舞台绝对定位铺满这一格，行高只由右侧那张政策卡决定。
+ *
+ * 这断开的是一个尺寸反馈环：量卡高 → 写回成图高 → 图若在流里就会把行撑高 → 再量到更高的卡
+ * → 图更高。用户实测「刚进来没滚动条，一滚动图就变大」就是这个环。
+ */
+/*
+ * 这一格**不裁内容**：读数面板是它内部的绝对定位子元素，`overflow: hidden` 会把面板切掉
+ * （用户 2026-11-13 看到数值被切断就是这个）。尺寸环由「舞台 absolute、行高只由政策卡决定」断开，
+ * 不靠裁切——裁切在这条链里是多余的，代价是浮层永远显示不全。
+ */
+.mk-plot { position: relative; min-width: 0; align-self: stretch; overflow: visible; }
+/* 图自己裁切：「图上的东西不许画到图外」是结构保证，不靠宽度估算精确。
+   面板是图外面的绝对定位兄弟节点，不在 svg 里，所以不会被这一层裁掉。 */
+.mk-plot__svg { display: block; overflow: hidden; }
+/* 图的舞台：绝对铺满，既是面板的定位参照，又不占据任何行高。 */
+.mk-plot__stage { position: absolute; inset: 0; outline: none; }
+.mk-plot__stage:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.mk-plot__cross { pointer-events: none; }
+/*
+ * 读数面板：图自己的绝对定位子元素（不是全局浮层，不开 portal）。
+ * 每次移动只改 transform 与文字，宽度固定、内容不换行，所以不会把页面重新排版。
+ */
+.mk-tip {
+  /* z-index 要盖过图下面那排卡片与迷你日历（它们都在同一个层叠上下文里）。
+     任何祖先都不许再开层叠上下文，否则这个数只在图的内部有效。 */
+  position: absolute; left: 0; top: 0; z-index: 30;
+  /* 宽度由组件按「两侧放不放得下」算出来（168 → 降级 132），这里只给默认值。\n     降级时内容换行、高度随内容，**不出现滚动条**。 */
+  width: 168px; padding: 7px 9px; line-height: 1.35; overflow: visible;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+  font-size: var(--font-meta); color: var(--text);
+  /* 不做动画，`will-change: transform` 是多余的一层；它只会多一个层叠上下文。 */
+  pointer-events: none;
+}
+.mk-tip[data-active='false'] { visibility: hidden; }
+.mk-tip__time { display: block; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mk-tip__mix { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 6px 0 0; }
+.mk-tip__mix > div { display: contents; }
+.mk-tip__mix dt { color: var(--muted); white-space: nowrap; }
+.mk-tip__mix dd { margin: 0; text-align: right; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.mk-tip__sum, .mk-tip__delta {
+  display: flex; justify-content: space-between; gap: 10px; white-space: nowrap;
+  margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
+}
+.mk-tip__sum b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.mk-tip__delta b { color: var(--caution); font-variant-numeric: tabular-nums; }
+.mk-tip__delta b[data-flat='true'] { color: var(--muted); font-weight: 400; }
+.mk-plot__zero { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.mk-plot__line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; }
+.mk-plot__mark { fill: var(--surface); stroke: var(--caution); stroke-width: 1.5; }
+
+
+/* Cards: one skeleton, three sizes of value type. */
+/* 一个指标一行、一个轮播卡位（用户 2026-11-14 定稿：结构照轮播版，像素值照正常态版）。 */
+/* 三张指标卡一行平铺（每张一个轮播卡位）；左列 828 里三等分。 */
+.mk-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; align-items: stretch; flex: none; }
+.mk-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.mk-policy-slot { width: 300px; min-height: 192px; display: flex; min-width: 0; align-self: start; }
+/* 复用现有「利率路径」卡：卡自带的 10px 外边距在抽屉里会顶出列宽，这里清零并让它填满槽位。 */
+.mk-policy-slot > .mi-policy-card { margin: 0; flex: 1; min-width: 0; }
+.mk-card__h { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mk-card__h h3 { margin: 0; font-size: var(--font-section); font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-card__h em { font-size: var(--font-meta); color: var(--muted); font-style: normal; margin-left: auto; white-space: nowrap; }
+.mk-card__v { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mk-card__v b { font-size: var(--font-metric-sm); line-height: 1.05; font-weight: 600; color: var(--text-strong); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+/* 「未提供」不占读数那档字号：它不是数字，放大就会比真值还抢眼（界面设计定：body/500/muted）。 */
+.mk-card__na { font-size: var(--font-body); font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.mk-card__chg { margin: 0; font-size: var(--font-meta); color: var(--text); font-variant-numeric: tabular-nums; }
+.mk-card__na-line { margin: 0; font-size: var(--font-meta); color: var(--muted); }
+.mk-card--hero .mk-card__v b { font-size: var(--font-metric-md); }
+.mk-card__v span { font-size: var(--font-meta); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-card__v i { font-style: normal; font-size: var(--font-meta); color: var(--caution); white-space: nowrap; }
+.mk-card__bar { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: var(--surface-soft); }
+.mk-card__bar i { display: block; height: 100%; min-width: 10px; }
+.mk-card__bar i:nth-child(1) { background: var(--accent); }
+.mk-card__bar i:nth-child(2) { background: color-mix(in srgb, var(--accent) 50%, var(--surface)); }
+.mk-card__bar i:nth-child(3) { background: var(--border-strong); }
+.mk-card__mix { margin: 0; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-card__mix b { color: var(--text-strong); font-weight: 600; }
+.mk-card__facts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 0; }
+.mk-card__facts div { min-width: 0; }
+.mk-card__facts dt { font-size: var(--font-meta); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-card__facts dd { margin: 0; font-size: var(--font-body); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-card__exp { margin: 0; font-size: var(--font-meta); color: var(--muted); font-variant-numeric: tabular-nums; }
+.mk-card__st { margin: 0; font-size: var(--font-meta); color: var(--muted); }
+.mk-card__f { display: flex; justify-content: space-between; gap: 8px; font-size: var(--font-meta); color: var(--muted); margin-top: auto; border-top: 1px solid var(--border-subtle); padding-top: 6px; }
+
+/*
+ * The mini release calendar: fills whatever height is left under the cards.
+ *
+ * `overflow: auto` 是**这一块自己滚**的唯一开关。格子的行高写死成 `repeat(6, 63.8px)`
+ * （六行必须等高等，见下面 `.mk-minical__grid`），六行合计 387.8px；抽屉高度不够时这块会被
+ * flex 压到 186px 上下，而格子是 `flex: none` 缩不动——没有 `overflow` 时那 250px 就**溢出到
+ * 这一块之外**，被 antd 的 `.ant-drawer-body { overflow: auto }` 当成自己的内容，于是滚动条
+ * 长在整个抽屉上（用户 2026-11-16 报的就是这个）。
+ *
+ * 有 `overflow: auto` 之后，多出来的部分在这里面滚，`.mk-col-l` 与抽屉正文都不滚。
+ *
+ * **高度边界（实测，见 `macroIndicatorDrawerMinicalScroll.test.ts` 里那张表）**：
+ *   ≥743px：正文不滚，多出来的高度全给这一块，它自己滚；
+ *   <743px：正文允许滚——125px 地板 + 上面 578px（顶部行 330 + 卡片块 200 + 标题 ~48）
+ *            已经塞不进可视高度，此时宁可正文滚，也不把日历压成「看得见、摸不到」。
+ * 743 不是「≥660」：要同时做到「正文不滚」和「日历至少看得见一行」，窗口至少要
+ * 578 + 12（margin）+ 125（地板）+ 48（正文内距）≈ 763，实测 743 起正文不再滚。
+ */
+.mk-minical {
+  margin-top: 12px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  /* 地板 = 表头 24 + 星期行 ~17 + 一整行格子 63.8 + 内距 18 + 上下边线 2 ≈ 125。
+     没有这条地板时，矮窗口会把它压到 18px：盒子还在、一个日期也读不到，等于没有日历。 */
+  min-height: 125px;
+  overflow: auto;
+}
+.mk-minical__h { display: flex; align-items: center; gap: 8px; flex: none; min-height: 24px; }
+.mk-minical__tools { display: flex; align-items: center; gap: 2px; flex: none; margin-left: 2px; }
+.mk-iconbtn { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: var(--font-meta); }
+.mk-iconbtn:hover:not(:disabled) { background: var(--surface-soft); color: var(--text-strong); }
+.mk-iconbtn:disabled { opacity: .45; cursor: default; }
+.mk-iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mk-textbtn { height: 22px; min-width: 60px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: transparent; color: var(--muted); font-size: var(--font-meta); cursor: pointer; }
+.mk-textbtn:hover:not(:disabled) { background: var(--surface-soft); color: var(--text-strong); }
+.mk-textbtn:disabled { opacity: .45; cursor: default; }
+.mk-textbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mk-minical__busy { flex: 1; display: grid; place-items: center; min-height: 120px; }
+.mk-minical__note { margin: 4px 0 0; font-size: var(--font-meta); color: var(--muted); }
+.mk-minical__empty { flex: 1; display: grid; place-items: center; margin-top: 6px; border: 1px dashed var(--border-strong); border-radius: 8px; font-size: var(--font-meta); color: var(--muted); text-align: center; padding: 0 12px; }
+.mk-minical__h h3 { margin: 0; font-size: var(--font-section); font-weight: 600; color: var(--text-strong); }
+.mk-minical__lg { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: var(--font-meta); color: var(--muted); }
+.mk-minical__wk,
+.mk-minical__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; }
+.mk-minical__wk { margin-top: 4px; flex: none; }
+.mk-minical__wk span { font-size: var(--font-meta); color: var(--muted); text-align: left; padding: 1px 6px; }
+/*
+ * **行高由容器高度均分**（用户 2026-11-19：撑满可视区，窗口越高格子越高）。
+ *
+ * 这块是 flex 列里的 `flex: 1 1 auto`，六行用 `minmax(0, 1fr)` 均分：高度确定时六行等高等，
+ * 窗口变高每格跟着变高。原来写死 63.8px——窗口再高也只有这么高，底下留一块底色。
+ */
+.mk-minical__grid { flex: 1 1 auto; grid-template-rows: repeat(6, minmax(0, 1fr)); margin-top: 1px; min-height: 0; }
+.mk-minical__day { position: relative; overflow: hidden; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 6px 6px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mk-mcell__row { display: flex; align-items: center; gap: 3px; min-width: 0; font-size: var(--font-meta); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-mcell__row .mk-mdot { margin-left: 0; }
+/* 格内国名：次级色、紧挨名字；**只有国名会截**（名字截了就读不出是哪件事）。 */
+.mk-mcell__country { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-style: normal; }
+/* 格子的角标：右上角、绝对定位，**不占行高**——格子高度与事件行数都不因它变（用户报的「跟事件名挤在一起」）。
+   日期号在左上、角标在右上，两端各自 `min-width: 0`，互相不挤。 */
+.mk-mcell__more { position: absolute; right: 4px; top: 2px; font-size: var(--font-meta); line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mk-minical__day[data-state='nodata'] em { color: var(--muted); }
+.mk-minical__nodata { margin: 4px 0 0; font-size: var(--font-meta); color: var(--muted); }
+.mk-minical__day:first-child { border-left: 1px solid var(--border); }
+.mk-minical__day em { display: block; font-size: var(--font-meta); font-style: normal; color: var(--muted); }
+.mk-minical__day[data-state='outside'] { opacity: .45; }
+.mk-minical__day[data-state='today'] { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.mk-minical__day[data-state='today'] em { color: var(--text-strong); font-weight: 600; }
+
+/* 格子是原生按钮（一整格＝一个日期，格内还要列事件行，平台组件表达不了）：抹掉 UA 的边框、
+   底色、内边距与居中，留下与格线同一套边线和内边距。 */
+button.mk-minical__day {
+  appearance: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  padding: 6px; border-radius: 0; border-top: 0; border-left: 0;
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+button.mk-minical__day:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+button.mk-minical__day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* 选中态排在「今天」之后：同一天既被选中又是今天时，选中更需要被看见。 */
+.mk-minical__day[aria-pressed='true'] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.mk-minical__day[aria-pressed='true'] em { color: var(--text-strong); font-weight: 600; }
+
+.mk-mdot { display: inline-block; width: 4px; height: 4px; border-radius: 50%; flex: none; margin-left: 8px; }
+.mk-mdot:first-child { margin-left: 0; }
+.mk-mdot--done { background: var(--muted-strong); }
+.mk-mdot--todo { background: var(--caution); }
+.mk-mdot--today { width: 6px; height: 6px; background: transparent; border: 1px solid var(--accent); box-sizing: border-box; }
+
+/* The day panel: sticky heading, one block per type, one row per event. */
+
+/* ── 轮播卡位（照 2026-11-14 原型：卡宽 408、卡高 204、圆角 12、内距 10/12） ── */
+/* 宽度跟着三等分的格子走：一行平铺三张，不写死 408。 */
+.mk-carousel { width: 100%; max-width: 100%; outline: none; }
+.mk-carousel:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 14px; }
+.mk-nav { display: flex; gap: 2px; flex: none; }
+.mk-card__head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.mk-card__head h4 { margin: 0; font-size: var(--font-section); font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mk-dot { width: 7px; height: 7px; border-radius: 50%; box-sizing: border-box; flex: none; background: var(--accent); }
+.mk-card--next .mk-dot { background: transparent; border: 1px dashed var(--muted); }
+.mk-src { margin-left: auto; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; flex: none; }
+.mk-card { position: relative; box-sizing: border-box; height: 196px; border-radius: 12px; padding: 10px 12px 8px; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border-strong); }
+/* 下次发布页：虚线 + 压暗底（原型 `[data-side="next"]` 同一组值）。 */
+.mk-card--next { border: 1px dashed var(--border-strong); background: color-mix(in srgb, var(--surface) 86%, transparent); }
+/* 已发布页超过 3 天：整页降权（规则只作用在已发布页，未来页永不降权）。 */
+.mk-when { margin: 4px 0 6px; font-size: var(--font-meta); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-rows { margin-top: 6px; }
+.mk-vrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 3px 0; border-top: 1px solid var(--border-subtle); }
+.mk-vrow:first-child { border-top: 0; }
+.mk-vrow dt { margin: 0; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; }
+.mk-vrow dd { margin: 0; text-align: right; font-size: var(--font-body); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-strong); white-space: nowrap; }
+.mk-vrow dd[data-na='true'] { font-weight: 500; color: var(--muted); }
+.mk-chipwrap { justify-self: end; }
+.mk-chip { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; font-size: var(--font-meta); font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+.mk-chip--up { background: var(--caution); border: 1px solid var(--caution); color: var(--bg); font-weight: 600; }
+.mk-chip--down { background: var(--info); border: 1px solid var(--info); color: var(--bg); font-weight: 600; }
+.mk-chip--flat { background: transparent; border: 1px solid var(--border-strong); color: var(--muted); }
+:root[data-theme='light'] .mk-chip--up { background: transparent; color: var(--caution); border-color: var(--caution); }
+:root[data-theme='light'] .mk-chip--down { background: transparent; color: var(--info); border-color: var(--info); }
+.mk-card__foot { margin-top: auto; font-size: var(--font-meta); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-weight: 400; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
+/* 倒计时 tag 一律强调色（用户 2026-11-14）：7 天外也柠绿描边，不再用灰。 */
+.mk-tag[data-tier='far'] { border-color: var(--accent); color: var(--accent); font-weight: 400; }
+.mk-tag[data-tier='near'] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.mk-tag[data-tier='imminent'] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+/* 已发布页的时间标签：3 天内用深金（与右卡的柠绿区分“已发生 / 未发生”）。 */
+.mk-tag--past { border-color: var(--caution); color: var(--caution); font-weight: 600; }
+/* 选中态同时变大小与颜色：只靠颜色，色弱与读屏都分不出来。 */
+
+/* 整页只剩一句话（四行全无预期）：这句话在卡片里水平+垂直居中；
+   有内容的页不动——日期行仍在顶部，四行仍是网格。 */
+.mk-card__empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  text-align: center; color: var(--muted); font-size: var(--font-meta);
+}
+
+/*
+ * 事件详情的承载：挂在 `document.body` 上的一层，铺满整窗、压在指标抽屉之上。
+ * 抽屉本身（`CalendarInspector` → 平台 `Drawer` inline）只在层内左侧落位，所以它会从
+ * **整个应用的左缘**滑进来；层不接收指针，只有抽屉面板接收，背后的指标抽屉照旧可见。
+ */
+/*
+ * **弹层层级：一处定义，规则只有一条「后打开的在上面」**（用户 2026-11-17）。
+ *
+ * 弹框（antd Modal）用 antd 默认的 1000；事件详情是在弹框之后打开的，所以必须在它上面。
+ * 不要把数字写进组件：层级只有这组 token，改一次全改。
+ * `--mi-layer-modal` 与 antd 的默认值同值，写在这里是为了让「谁比谁高」能一眼比出来。
+ */
+:root {
+  --mi-layer-modal: 1000;
+  --mi-layer-detail: 1200;
+  --mi-layer-floating: 1300;
+}
+
+.mk-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--mi-layer-detail);
+  pointer-events: none;
+}
+
+/* 事件目录弹框：一条筛选项行 + 表格 + 分页。列宽由 antd 表格自己排，这里只管间距与那枚「源原文名」角标。 */
+.mi-catalog__filters { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.mi-catalog__filters > * { flex: 1 1 180px; min-width: 0; }
+/* 说明用的 ⓘ：不吃搜索框的宽度，与控件同高对齐。 */
+.mi-catalog__filters > .mi-catalog__filters-help { flex: 0 0 auto; align-self: center; display: flex; }
+/* 分级筛选是四个固定选项，不需要和搜索框平分整行宽度：给它一个够放下「未分级」的定宽。 */
+.mi-catalog__filters > .mi-catalog__filter-select { flex: 0 1 148px; }
+.mi-catalog__pager { display: flex; justify-content: flex-end; margin-top: 8px; }
+.mi-catalog__tag { margin-left: 6px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); color: var(--muted); font-size: var(--font-meta); font-style: normal; }
+/* 格内的「这一期发过几次」：紧凑记号，不占一行、不换行。 */
+.mk-mcell__repeat { margin-left: 2px; flex: none; font-style: normal; font-size: var(--font-meta); color: var(--caution); }
+/* 目录表的日期类格子不换行：以前「最近一次发布」被挤成两行，一列两行会让整表行高不齐。 */
+.mi-catalog__cell-nowrap { white-space: nowrap; }
+/* 码表：名称两行（中文主行 + 英文次行），超长尾部省略，全名在 title 上。
+   分级与口径合成一格两行——八列并成六列，858 宽才放得下。 */
+.mi-catalog__code-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-catalog__code-meta { display: flex; flex-direction: column; line-height: 1.3; }
+/* 分级星级：颜色取主题 token，不硬写颜色。「未分级」是弱化档（没有级别，不是第四档），用 muted 与三档拉开。 */
+.mi-catalog__tier-stars { color: var(--text-strong); }
+.mi-catalog__tier-stars[data-tier='other'] { color: var(--muted); }
+
+/*
+ * 事件目录弹框：**给高度、内部纵向三段**（筛选固定 / 表格滚动 / 分页固定）。
+ *
+ * 只放宽宽度不给高度时，antd 弹框按内容自适应，表格被压到只剩表头——用户看到的就是「几乎没行」。
+ * 高度取 `min(80vh, 760px)`：1280×800 下是 640，1440×900 下是 720；两者都放得下 10 行以上。
+ */
+.mi-catalog-dialog .ant-modal-body { max-height: none; }
+.mi-catalog__body { display: flex; flex-direction: column; height: min(80vh, 760px); min-height: 0; }
+.mi-catalog__filters { flex: none; }
+.mi-catalog__table { flex: 1; min-height: 0; overflow: auto; }
+/* 表头吸顶：滚动时列名不跟着跑掉（滚动容器是 `.mi-catalog__table`，不是整页）。 */
+.mi-catalog__table .ant-table-thead > tr > th { position: sticky; top: 0; z-index: 1; }
+.mi-catalog__pager { flex: none; }
+/* 官方查看：直接显示地址本身。列可以宽（表格滚动），超长在格子内省略、`title` 带全址。 */
+.mi-catalog__url { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-meta); }
+
+/*
+ * 映射规则弹框的宽度：**产品侧临时覆盖**。
+ *
+ * 平台 Modal 只有四档（420/520/720/860），这张表要塞下长指标码 + 整条 URL，860 怎么分都挤。
+ * 这里按 92vw / 上限 1400 临时放大；正解是平台加一档宽表宽度（已登记 #48，归前端组件线）。
+ */
+.ant-modal.mi-catalog-dialog { width: min(1400px, 92vw) !important; max-width: 92vw; }
+/* 底部固定栏：两段各自的分页 + 导出。分页不再跟着表格滚。 */
+.mi-catalog__footer { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: 8px; }
+.mi-catalog__footer-label { font-size: var(--font-meta); color: var(--muted); }
+.mi-catalog__section { margin: 8px 0 4px; font-size: var(--font-section); color: var(--text-strong); }
+.mi-catalog__note { margin: 4px 0 8px; font-size: var(--font-meta); color: var(--muted); }

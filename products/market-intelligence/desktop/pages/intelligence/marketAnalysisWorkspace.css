@@ -32,9 +32,23 @@
 .mi-analysis-conclusion-card time { color: var(--muted); font-size: 11px; }
 .mi-analysis-conclusion-card__conclusion { margin: 0; color: var(--text-strong); font-size: 13px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
 .mi-analysis-conclusion-card__hint, .mi-analysis-conclusion-card__state { margin: 0; color: var(--muted); font-size: 10px; }
+/* 「最近一次解析失败」：压在结论上面的一条可见交代。
+   下面那条已发布结论仍然显示，但它**不是最新一次**——不写这一条，读者会把 20:10 的成功当成现在。 */
+.mi-analysis-conclusion-card__attempt-failure {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 10px; padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--caution) 45%, var(--border));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--caution) 10%, var(--surface));
+  font-size: var(--font-meta); line-height: var(--line-meta);
+}
+.mi-analysis-conclusion-card__attempt-failure-label { color: var(--text-strong); }
+.mi-analysis-conclusion-card__attempt-failure-reason { color: var(--muted); }
 
 /* 方向标记：受控词表 + 语义色；无标记的结论保持中性，不做猜测着色。 */
 .mi-analysis-conclusion__direction { display: inline-flex; align-items: center; margin-right: 6px; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--mi-conclusion-direction) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--mi-conclusion-direction) 14%, transparent); color: var(--mi-conclusion-direction); font-size: 10px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; vertical-align: middle; }
+/* 正文语言与界面不同时的一句事实：muted、行内；「重新生成」是同一行里的文字动作。 */
+.mi-analysis-conclusion__language { margin: 6px 0 0; color: var(--muted); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-analysis-timeline__conclusion[data-direction="bullish"], .mi-analysis-conclusion-card__body[data-direction="bullish"] { border-left-color: var(--mi-conclusion-positive); }
 .mi-analysis-timeline__conclusion[data-direction="bearish"], .mi-analysis-conclusion-card__body[data-direction="bearish"] { border-left-color: var(--mi-conclusion-negative); }
 .mi-analysis-timeline__conclusion[data-direction="range"], .mi-analysis-timeline__conclusion[data-direction="mixed"], .mi-analysis-conclusion-card__body[data-direction="range"], .mi-analysis-conclusion-card__body[data-direction="mixed"] { border-left-color: var(--mi-conclusion-caution); }
@@ -45,12 +59,15 @@
 .mi-analysis-timeline__conclusion h3 { color: var(--text-strong); }
 
 /* 节点详情抽屉：非模态，无遮罩，覆盖在主看板之上但不覆盖 Agent 栏。 */
-.mi-analysis-drawer { position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
+.mi-analysis-drawer { position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
+.mi-analysis-drawer[data-placement="right"] { inset: 0 0 0 auto; width: min(1280px, 94vw); border-right: 0; border-left: 1px solid var(--border); box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); }
+.mi-analysis-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
 .mi-analysis-dashboard-layout { --mi-drawer-width: 520px; }
 .mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
 .mi-analysis-conclusion-card__body { display: grid; gap: 6px; padding-left: 10px; border-left: 2px solid transparent; }
 .mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
 .mi-analysis-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.mi-analysis-drawer__footer { display: flex; align-items: center; gap: 4px; padding: 6px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--font-meta); }
 .mi-analysis-drawer__meta time { color: var(--muted); font-size: 10.5px; }
 .mi-analysis-drawer__meta span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .mi-analysis-drawer__body { min-height: 0; overflow: auto; padding: 16px; }
@@ -284,7 +301,15 @@
 
 /* Below the policy card the calendar and the news split the remaining height evenly; the divider
    still drags the split, so it starts at half rather than at the old 52%. */
-.mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); flex: 1; min-height: 0; }
+/*
+ * 右栏顶部那块（政策的卡位）：卡保持 336×330、**外层居中**，不缩放——
+ * 缩放会让 537 项计算值全部作废（11px 字会变 11.8 发虚、1px 描边发毛）。
+ * 内距取 `min(12px, 剩余/2)`：宽屏时 12、窄到差不足 24px 时自动降到「刚好放下」，
+ * 于是卡与下面的舆情左右边界对齐（界面设计 2026-11-15 量的：1440 下栏 360.9、差 24.9）。
+ */
+[data-dashboard-policy-slot] { display: grid; justify-items: stretch; padding-inline: 0; }
+
+.mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, 1fr); gap: var(--mi-agent-gap); flex: 1; min-height: 0; }
 
 /*
  * 结论正文可点（界面设计 2026-11-11 签字）：整块淡底、指针，不加边框/阴影/缩放；

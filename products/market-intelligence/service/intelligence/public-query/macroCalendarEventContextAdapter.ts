@@ -14,6 +14,11 @@ import { assembleMacroCalendarEventContext, type MacroCalendarEventContextFact, 
 export type MacroCalendarEventContextReads = Readonly<{
   /** Facts for the event's month, as the analysis projection builds them (identities included). */
   readFacts: (query: MacroCalendarEventContextQuery) => Promise<readonly AgentFact[]>
+  /**
+   * 这个月到底读没读到。空 facts 有两种意思——这个事件没有事实，或这个月根本没读成；
+   * 适配层据它决定要不要回一份「读不到」，而不是把空列表当成「没有」。
+   */
+  readState: (query: MacroCalendarEventContextQuery) => Promise<'available' | 'unavailable'>
   /** Evidence refs for the month; filtered here to the selected event. */
   readEvidenceRefs: (query: MacroCalendarEventContextQuery) => Promise<readonly string[]>
   /** The instant the system was asked about, for the as-of visibility rule. */
@@ -33,7 +38,11 @@ export async function macroCalendarEventContextFromReads(
   reads: MacroCalendarEventContextReads,
   query: MacroCalendarEventContextQuery
 ): Promise<MacroCalendarEventContextResult> {
-  const [monthFacts, monthRefs] = await Promise.all([reads.readFacts(query), reads.readEvidenceRefs(query)])
+  const [state, monthFacts, monthRefs] = await Promise.all([reads.readState(query), reads.readFacts(query), reads.readEvidenceRefs(query)])
+  if (state === 'unavailable') {
+    // 「读不到」不是「没有事实」：回一份带专用 caveat 的不可用结果，调用方据此说「日历读不到」。
+    return assembleMacroCalendarEventContext({ facts: [], evidenceRefs: [], eventValuesPresent: false, unreadable: true })
+  }
   const visible = monthFacts.filter(fact => reads.isVisible(fact.observedAt ?? undefined, query.asOf))
   const mine = visible.filter(fact => isThisEvent(fact, query.eventKey))
   const facts: MacroCalendarEventContextFact[] = mine.map(fact => ({

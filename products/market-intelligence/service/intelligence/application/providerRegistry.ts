@@ -1,4 +1,9 @@
+import type { MarketFactId } from '../../../contracts/factSources'
+import { cryptoEtfProvider } from './cryptoEtfProvider'
+import { cryptoEtfSourcePolicy } from './cryptoEtfSourcePolicy'
 import { providerLinks } from './providerLinks'
+import { provider, src } from './sourceDefinitionBuilders'
+import { zeroXRouterCalendarSourceIds, zeroXRouterProvider } from './zeroXRouterProvider'
 
 export type AgentId = 'crypto' | 'stocks' | 'futures'
 export type PanelId = 'dashboard' | 'economic-calendar'
@@ -38,6 +43,13 @@ export type SourceDefinition = {
   purposes?: SourcePurpose[]
   /** 派生的显示位置，不单独声明：`dashboard → ['dashboard']`、`calendar → ['economic-calendar']`。 */
   panels: PanelId[]
+  /**
+   * 这个源**能供哪些事实**（架构师 2026-11-13 裁定：放这里，不放 sourceCatalog）。
+   * 解析器判据里有「这个源在不在采」，而那个事实与目标侧是同一份 `SourceView`
+   * （`SourceDefinition & { enabled, jobRegistered }`）；放 catalog 就得跨两张表拼，
+   * 拼出来的答案和调度器看的不是同一个对象。声明了不等于归你——还要开着、作业真注册着。
+   */
+  provides?: readonly MarketFactId[]
   /**
    * 供维护/备用：今天没有任何读者可见产出。
    *
@@ -97,6 +109,23 @@ export type ProviderDefinition = {
   displayName: string
   category: SourceCategory
   credential: 'none' | 'api-key'
+  /**
+   * Which of the provider's sources the credential box belongs to.
+   *
+   * Derived by default from the first source collected by an adapter, because that used to be the
+   * only kind that could hold a key. A source that must be testable while it is deliberately not
+   * collectable (`collection: 'none'`) has no such source, so the provider states its anchor here
+   * instead of the projection guessing — the guess returning nothing is what makes the key box
+   * disappear entirely.
+   */
+  credentialSourceId?: string
+  /**
+   * Show the credential-state line on this provider's detail page (未配置 / 已保存待验证 /
+   * 连接失败：原因 / 连接正常). A display fact about this provider, deliberately not a notice kind:
+   * the notice slot was doing double duty, so a provider that only verified its key also got its
+   * collection switch locked — which is wrong the moment the source really collects.
+   */
+  credentialStateLine?: true
   /** Public home page, opened in the system browser. */
   website?: string
   /** Signup / API-key guide. Replace with the operator's invite link. */
@@ -112,7 +141,10 @@ export type ProviderDefinition = {
 }
 
 /** 源详情页头上方的说明横幅类别；新增一种要同时加两语文案（渲染层映射）。 */
-export type ProviderNoticeKind = 'private-data-source'
+export type ProviderNoticeKind =
+  | 'private-data-source'
+  /* The source is registered and testable but deliberately collects nothing in this build. */
+  | 'verification-only'
 
 export type ActivationGroupDefinition = {
   groupId: string
@@ -132,45 +164,6 @@ export type PanelDefinition = {
   panelId: PanelId
   agentId: AgentId
   displayName: string
-}
-
-/** `src()` 的输入：`purposes` 必填（注册表作者不许漏），其余字段可省略走默认。 */
-/**
- * `src()` 的输入：`purposes` 必填，`panels` **不许传**（它由 `purposes` 派生，传进来只会被静默覆盖）。
- *
- * `panels` 从类型上 `Omit` 掉，所以「顺手写一个 panels」是**编译错误**，不是运行期被悄悄改写——
- * 面板归属只有一个声明处（`purposes`），这条让第二份声明连写都写不出来。
- */
-type SourceInput = Omit<SourceDefinition, 'providerId' | 'purposes' | 'panels'> & { purposes: SourcePurpose[] }
-
-/** `src()` 的输出：派生出 `panels`，`providerId` 由 `provider()` 补上。 */
-type SourceSeed = Omit<SourceInput, 'providerId'> & Pick<SourceDefinition, 'panels'>
-
-function src(input: Partial<Omit<SourceInput, 'purposes'>> & Pick<SourceInput, 'sourceId' | 'displayName' | 'purposes'>): SourceSeed {
-  return {
-    agents: ['crypto'],
-    visibility: 'visible',
-    collection: 'adapter',
-    kind: 'feed',
-    capabilities: { runNow: 'adapter', testConnection: false },
-    readiness: 'live',
-    ...input,
-    // 派生，不接收调用方的 panels：声明只看 `purposes` 一处。
-    panels: input.purposes.flatMap((purpose) => purpose === 'dashboard' ? ['dashboard' as const] : purpose === 'calendar' ? ['economic-calendar' as const] : [])
-  }
-}
-
-function provider(input: {
-  providerId: string
-  displayName: string
-  category: SourceCategory
-  credential: 'none' | 'api-key'
-  sources: SourceSeed[]
-}): ProviderDefinition {
-  return {
-    ...input,
-    sources: input.sources.map((source) => ({ ...source, providerId: input.providerId }))
-  }
 }
 
 /** 同时供给看板与经济日历的源：两个 purpose 一起声明。 */
@@ -309,6 +302,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       src({ purposes: ['analysis'], sourceId: 'defillama-tvl', summaryKey: 'settings.intelligenceSources.sourceSummary.defillama-tvl', displayName: 'DeFiLlama TVL', capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'defillama-tvl' })
     ]
   }),
+  cryptoEtfProvider,
   provider({
     providerId: 'alternative-me',
     displayName: 'Alternative.me',
@@ -347,16 +341,31 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       src({ purposes: [], sourceId: 'macro-calendar-coinmarketcal', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-coinmarketcal', displayName: 'CoinMarketCal events', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, kind: 'market-calendar' })
     ]
   }),
+  zeroXRouterProvider,
   provider({
-    providerId: '0xrouter',
-    displayName: '0xRouter',
+    providerId: 'narwhal',
+    displayName: 'Narwhal',
     category: 'aggregate',
     credential: 'api-key',
+    /* 加源规范：官网按钮只按数据画，没有地址就不出现（用户 2026-11-13 点出 Narwhal 缺这颗）。
+       注册页地址没有实测到，所以只填官网；填一个猜的注册页比少一颗按钮更糟。 */
+    website: 'https://narwhalapi.com',
+    /* **已解锁**（2026-11-13，读者报「我没打开它却在采」）：三条 feed 由产品作业采集、`readiness: 'live'`，
+       所以必须**可见**——读者看得见、关得掉，关掉采集就停；看不见却已经在采是最糟的形状。
+       默认给开（目录里逐源声明 `defaultEnabled`），否则解锁那一瞬间反而会停采。
+       **仍不进** `AUTOMATIC_CALENDAR_FEED_IDS`：采集由日历线自己的作业拥有，通用自动刷新名单里加一条
+       Narwhal 就会去刷一个不对应的调度器。
+       密钥挂在第一条 feed 上：三条派生不出「哪条能测」，猜不到 key 框就整个不见了。 */
+    /* **不需要代理**：2026-11-13 实测（上海电信出口 114.86.125.53、无代理），直连
+       `api.narwhalapi.com`（Cloudflare 104.21.74.143 / 172.67.203.142）带 key 打日历接口
+       1.83s 拿到 200 与真实 releases，不带 key 401。**这是实测，不是推断**——所以三条源都不写
+       `requiresProxy`，设置页也就不该出现那枚 VPN 标签。别凭印象加回去。
+       （顺带：读者配不配代理是另一件事，和源本身能不能直连不是一个判断。） */
+    credentialSourceId: 'macro-calendar-narwhal-economic-data',
     sources: [
-      src({ sourceId: '0xrouter-aggregate-provider', summaryKey: 'settings.intelligenceSources.sourceSummary.0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', purposes: ['dashboard', 'briefing'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
-      src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', purposes: ['dashboard', 'calendar', 'briefing'], collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-economic-data', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-economic-data', displayName: 'Narwhal economic data', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-financial-events', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-financial-events', displayName: 'Narwhal financial events', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: true } }),
+      src({ purposes: ['dashboard', 'calendar', 'briefing'], sourceId: 'macro-calendar-narwhal-central-bank-activities', summaryKey: 'settings.intelligenceSources.sourceSummary.macro-calendar-narwhal-central-bank-activities', displayName: 'Narwhal central bank activities', collection: 'job', kind: 'market-calendar', readiness: 'live', capabilities: { runNow: 'job', testConnection: true } })
     ]
   }),
   provider({
@@ -418,7 +427,7 @@ export const agentRegistry: readonly AgentDefinition[] = [
     activation: 'available',
     groups: [
       { groupId: 'fear-greed', agentId: 'crypto', tier: 'required', sourceIds: ['alternative-fear-greed'] },
-      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market'] },
+      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', cryptoEtfSourcePolicy.sourceId, '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market'] },
       { groupId: 'funding-rate', agentId: 'crypto', tier: 'required', sourceIds: ['binance-futures-positioning'] },
       {
         groupId: 'macro-calendar',
@@ -428,9 +437,10 @@ export const agentRegistry: readonly AgentDefinition[] = [
           'macro-calendar-fed',
           'macro-calendar-bea',
           'macro-calendar-bls',
-          'macro-calendar-0xrouter-economic-data',
-          'macro-calendar-0xrouter-financial-events',
-          'macro-calendar-0xrouter-central-bank-activities',
+          'macro-calendar-narwhal-economic-data',
+          'macro-calendar-narwhal-financial-events',
+          'macro-calendar-narwhal-central-bank-activities',
+          ...zeroXRouterCalendarSourceIds,
           'macro-calendar-coinmarketcal',
           'federal-reserve-rss',
           'fred-rates-liquidity',

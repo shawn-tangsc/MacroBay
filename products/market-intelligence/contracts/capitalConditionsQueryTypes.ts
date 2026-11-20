@@ -25,10 +25,12 @@ export type EtfPublicAssetSnapshot = Readonly<{
   rows: readonly EtfPublicFlow[]
 }>
 
+export type EtfPublicSourceId = '0xrouter' | 'cryptoetf-etf-flows'
+
 export type EtfPublicSnapshot = Readonly<{
   state: 'available'
   schemaVersion: 1
-  sourceId: '0xrouter'
+  sourceId: EtfPublicSourceId
   windowEnd: string
   verifiedAt: string
   btc: EtfPublicAssetSnapshot

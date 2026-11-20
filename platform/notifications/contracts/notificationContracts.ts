@@ -79,14 +79,39 @@ export type NotificationAction = {
   deeplink?: NotificationDeeplink
 }
 
+/** 一条投递路径的四档（契约 §8）。闭集：多通道聚合也不许出现第五档。 */
+export type NotificationDeliveryPathState = 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+
+/**
+ * 逐通道投递结果（多通道方案 §3）：一次通知在每条可用通道上各一行。
+ *
+ * 只有 `delivery.push` 写它；`channelName` 是给读者看的名字（读者见得着就写，见不着就不写），
+ * `state` 是那一条自己的四档，**互不覆盖**：一条失败不许把另一条的成功抹掉。
+ */
+export type PushChannelOutcome = {
+  channelId: string
+  channelName?: string
+  /**
+   * 这条通道上发的是什么形态（海报方案 §5）：`image` = 图 + 导读同一条消息，
+   * `text` = 纯导读文字（该通道支持不了图，属于**明示降级**）。其它场景不写。
+   */
+  kind?: 'image' | 'text'
+  state: NotificationDeliveryPathState
+  reason?: string
+  attemptId?: string
+  at: string
+}
+
 /** 每个投递表面各一条证据（契约 §8）：不是一个字段撑四个面。 */
 export type NotificationDeliveryState = {
   /**
    * 四档，映射写死（契约 §8 / 设计 N21）：没发出=`queued`、通道受理=`sent-accepted`、
    * 请求已发但没拿到回执=`sent-unconfirmed`、通道报错=`failed`+原因。
    * 界面文案只读这一档，不许拿投递端返回值猜。
+   *
+   * 多通道时这一档是**聚合**：`sent-accepted` 当且仅当所有目标通道都 delivered。
    */
-  state: 'queued' | 'sent-accepted' | 'sent-unconfirmed' | 'failed'
+  state: NotificationDeliveryPathState
   reason?: string
   messageId?: string
   at: string
@@ -100,6 +125,11 @@ export type NotificationDeliveryState = {
   highestSeverity?: NotificationSignalSeverity
   /** 最近一次重投的时刻（UTC）。 */
   lastPushedAt?: string
+  /**
+   * 逐通道结果（多通道方案 §3）。**可选**：老记录没有它，读侧按单值渲染，不回填、不报错。
+   * 有它时读者可见的总括数字一律从这些行数出来，不许从聚合 `state` 反推。
+   */
+  channels?: readonly PushChannelOutcome[]
 }
 
 /** 通道熔断状态：每个 channelId 一条，随通知 JSON 持久化、重启不丢窗口。 */
@@ -222,6 +252,14 @@ export type NotificationCenterItem = Omit<
    * 句子在主进程解析，渲染层拿到的就是这句话，不自己拼数。
    */
   occurrenceLabel?: string
+  /**
+   * 「手机这一档为什么没发出去」的唯一一句（多通道方案 §5-4）。**只在一种处境出现**：
+   * 一条可用通道都没有（`failed` + `push-unavailable`）。别的失败处境各有各的逐通道结果，
+   * 不在这里编一句通用话；逐通道的行等界面设计定稿后再画。
+   *
+   * 句子在主进程解析（与标题同一条口径），渲染层拿到的就是这句话。
+   */
+  deliveryHint?: string
 }
 
 export type NotificationRequest = {

@@ -5,6 +5,7 @@ import {
   type NotificationRuntimeSettings
 } from '../contracts/notificationContracts'
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
 
 /**
@@ -57,10 +58,9 @@ function createRuntime(options: {
     }
   }
   const runtime = createNotificationRuntime({
-    resolvePushChannel: async () =>
-      options.resolveChannel === null
-        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: {} }
-        : { ok: true as const, channelId: 'telegram', channelName: 'telegram' },
+    resolvePushChannels: async () => (options.resolveChannel === null
+        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, states: {}, requestedCount: 0 }
+        : { ok: true as const, channels: [{ id: 'telegram', name: 'telegram' }] }),
     diagnostics: () => undefined,
     storage,
     catalog,
@@ -70,7 +70,7 @@ function createRuntime(options: {
       ...options.settings
     }),
     clock,
-    deliveryHooks: options.push === undefined ? {} : { push: options.push }
+    deliveryHooks: options.push === undefined ? {} : { push: singleResultHook(options.push) }
   })
   return { runtime, state: () => state }
 }
@@ -115,10 +115,11 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
     expect(after.titleKey).toBe(created.titleKey)
     expect(after.delivery.push).toMatchObject({ state: 'sent-accepted', pushCount: 1, messageId: 'm-1' })
 
-    // 再点一次仍然真推一次（平台不做时间窗去重）
+    // 再点一次：这条通道已经是 delivered 终态，**不重发**（attempt 行本身就是记忆）。
+    // 记录也不许再加一次计数（计数是「真的推了几次」的证据）。
     await runtime.redeliverPush({ recordId: created.id, editionId: 'brief-2026-11-04-v2', locale: 'zh-CN' })
-    expect(pushes).toBe(2)
-    expect(state().records[0].delivery.push).toMatchObject({ pushCount: 2 })
+    expect(pushes).toBe(1)
+    expect(state().records[0].delivery.push).toMatchObject({ state: 'sent-accepted', pushCount: 1 })
   })
 
   it('records sent-unconfirmed when the channel accepted but gave no receipt', async () => {
@@ -190,15 +191,16 @@ describe('redeliverPush: 只重投一条已有记录的手机一面', () => {
       })
     ).resolves.toEqual({ kind: 'rejected', reason: 'channel-missing' })
 
+    // 熔断按**通道**算：窗口内那条记 `queued`、不发给它，其余通道照发（这里只有一条）。
     const paused = createRuntime({ push: async () => ({ ok: true }), pausedUntil: '2026-11-04T01:00:00.000Z' })
     await paused.runtime.submit({ ...submitRequest, deliver: false })
     const pausedRecord = paused.state().records[0]
-    await expect(
-      paused.runtime.redeliverPush({
-        recordId: pausedRecord.id,
-        editionId: 'brief-2026-11-04-v2',
-        locale: 'zh-CN'
-      })
-    ).resolves.toEqual({ kind: 'rejected', reason: 'push-paused' })
+    const receipt = await paused.runtime.redeliverPush({
+      recordId: pausedRecord.id,
+      editionId: 'brief-2026-11-04-v2',
+      locale: 'zh-CN'
+    })
+    expect(receipt.kind).toBe('accepted')
+    expect(paused.state().records[0].delivery.push).toMatchObject({ state: 'queued', channels: [{ state: 'queued', reason: 'push-backoff' }] })
   })
 })

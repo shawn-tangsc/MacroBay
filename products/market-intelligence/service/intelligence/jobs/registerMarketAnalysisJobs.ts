@@ -2,7 +2,7 @@ import type { JobContext, JobRuntime } from '@platform/jobs'
 import {
   ANALYSIS_SESSION_SLOTS_JOB,
   FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, GROUP_MARKET_ANALYSIS_CHANGE_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB,
-  RUN_MARKET_ANALYSIS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB
+  RUN_MARKET_ANALYSIS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB
 } from './marketAnalysisJobIds'
 import { analysisSlotTickPolicy } from '../analysis/analysisSlotTick'
 import { analysisTriggerPolicy } from '../analysis/analysisTriggerPolicy'
@@ -17,7 +17,12 @@ export const marketAnalysisJobPolicy = Object.freeze({
   // contract rejection, and the job keeps a further 120s for reading the snapshot and
   // committing the summary. `registerMarketAnalysisJobs.test.ts` fails if the two ever invert.
   runTimeoutMs: 600_000,
-  runRetryPolicy: { maxAttempts: 3, backoff: 'exponential' as const, baseDelayMs: 5_000, maxDelayMs: 60_000 }
+  runRetryPolicy: { maxAttempts: 3, backoff: 'exponential' as const, baseDelayMs: 5_000, maxDelayMs: 60_000 },
+  /**
+   * 收尸的节拍。运行作业自己的预算是 10 分钟，模型调用 240 秒一次；5 分钟一次清点既能在
+   * 读者放弃之前把陈尸判掉，也不会让作业表被它占满。
+   */
+  stalledSweepIntervalMs: 5 * 60_000
 })
 
 type StageResult = Readonly<Record<string, unknown>>
@@ -28,6 +33,8 @@ type Dependencies = Readonly<{
   runAnalysis: Stage
   verifyPredictions: Stage
   recoverRuns: Stage
+  /** 把卡住的运行判成失败：重启对账只在启动时跑一次，这类要在运行中周期性收。 */
+  sweepStalledRuns: Stage
   runSessionSlots: (context: JobContext) => Promise<void>
   /**
    * Stores the job run id on the analysis run it executes.
@@ -49,13 +56,16 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     // The attempt's ledger row id travels with the freeze work: the gate rewrites that row when it
     // refuses the attempt, so a refused attempt stops counting as a spent model call.
     const attemptLedgerId = typeof result.attemptLedgerId === 'string' ? result.attemptLedgerId : undefined
+    // 主触发条目跟着冻结工作走：它要在冻结时按条目身份补进快照（R37 §1），而冻结作业只收到这袋字段。
+    const triggeredItemId = typeof result.triggeredItemId === 'string' ? result.triggeredItemId : undefined
     await enqueue(jobRuntime, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, {
+      analysisKind: 'market',
       eventGroupId: result.eventGroupId, triggerKey: result.triggerKey, analysisPhase: result.analysisPhase, asOf: result.asOf,
-      ...(attemptLedgerId ? { attemptLedgerId } : {})
+      ...(attemptLedgerId ? { attemptLedgerId } : {}), ...(triggeredItemId ? { triggeredItemId } : {})
     }, `freeze:${String(result.eventGroupId)}`)
   })
   jobRuntime.registerHandler(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, async (payload, context) => {
-    assertPayload(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf'], ['attemptLedgerId'])
+    assertPayload(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf'], ['attemptLedgerId', 'triggeredItemId', 'analysisKind'])
     // The trigger line owns the attempt row; without its id a later refusal cannot be recorded
     // against that attempt, so the work is refused rather than run and counted unmarked. Enforced
     // at the payload boundary so no caller can enqueue this work without the id it needs.
@@ -102,6 +112,10 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
       deps.linkAnalysisRunToJob?.(entry.analysisRunId, jobRunId)
     }
   })
+  jobRuntime.registerHandler(SWEEP_STALLED_ANALYSIS_RUNS_JOB, async (payload, context) => {
+    assertPayload(payload, [])
+    await deps.sweepStalledRuns(payload, context)
+  })
   // The schedule is a clock, not a data question: an open must be served even when nothing moved.
   jobRuntime.registerHandler(ANALYSIS_SESSION_SLOTS_JOB, async (payload, context) => {
     assertPayload(payload, [])
@@ -125,6 +139,12 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     handlerId: ANALYSIS_SESSION_SLOTS_JOB, title: 'Serve the market analysis session slots',
     audience: 'user' as const,
     trigger: { kind: 'interval', intervalMs: analysisSlotTickPolicy.intervalMs, anchor: 'lastComplete' }, payload: {}
+  } as const
+  const stalledSweepDefinition = {
+    id: SWEEP_STALLED_ANALYSIS_RUNS_JOB, owner: 'product', productId: marketAnalysisJobPolicy.productId,
+    handlerId: SWEEP_STALLED_ANALYSIS_RUNS_JOB, title: 'Sweep stalled market analysis runs',
+    audience: 'user' as const,
+    trigger: { kind: 'interval', intervalMs: marketAnalysisJobPolicy.stalledSweepIntervalMs, anchor: 'lastComplete' }, payload: {}
   } as const
   const recoveryDefinition = {
     id: RECOVER_MARKET_ANALYSIS_RUNS_JOB, owner: 'product', productId: marketAnalysisJobPolicy.productId,
@@ -151,6 +171,7 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
         jobRuntime.removeSchedule(VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB)
         jobRuntime.removeSchedule(ANALYSIS_SESSION_SLOTS_JOB)
         jobRuntime.removeSchedule(RECOVER_MARKET_ANALYSIS_RUNS_JOB)
+        jobRuntime.removeSchedule(SWEEP_STALLED_ANALYSIS_RUNS_JOB)
       }
       armed = false
       return
@@ -165,7 +186,12 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     // and "catch up when the app opens" is the whole point of the schedule.
     void jobRuntime.enqueueDefinition({ ...sessionSlotDefinition, id: `${ANALYSIS_SESSION_SLOTS_JOB}:startup`, trigger: { kind: 'manual' } }).catch(() => undefined)
     jobRuntime.setSchedule(recoveryDefinition)
-    if (options.startRecovery !== false) void jobRuntime.enqueueStartup(RECOVER_MARKET_ANALYSIS_RUNS_JOB).catch(() => undefined)
+    jobRuntime.setSchedule(stalledSweepDefinition)
+    if (options.startRecovery !== false) {
+      void jobRuntime.enqueueStartup(RECOVER_MARKET_ANALYSIS_RUNS_JOB).catch(() => undefined)
+      // 第一轮清点不必等一个完整周期：上一次进程可能就是这样死掉的。
+      void jobRuntime.enqueueStartup(SWEEP_STALLED_ANALYSIS_RUNS_JOB).catch(() => undefined)
+    }
   }
 
   return Object.freeze({ applySchedules })

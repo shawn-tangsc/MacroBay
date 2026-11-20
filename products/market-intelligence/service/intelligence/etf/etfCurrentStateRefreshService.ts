@@ -1,11 +1,11 @@
-import { createHash } from 'node:crypto'
-
+import type { FactSourceResolution } from '../../../contracts/factSources'
 import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 import type { ModuleSignal } from '../../../contracts/moduleSignal'
 import { buildEtfOutflowSignal } from '../signals/etfOutflowSignal'
 import { reportSettledEtfRevisions } from './etfSettledRevision'
-import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, type EtfAsset, type EtfDailyFlow } from './etfCurrentStateWindow'
+import { buildEtfCurrentStateWindow, etfCurrentStateWindowPolicy, etfWindowRevision, etfWindowSource, etfWindowSourceIdFor, type EtfAsset, type EtfCurrentStateWindow, type EtfDailyFlow, type EtfFlowSourceId } from './etfCurrentStateWindow'
 import type { EtfFlowHistoryRow } from './etfFlowHistoryParser'
+import type { EtfCapitalFlowUpdate } from '../signals/capitalFlowUpdateNotifier'
 
 export const etfCurrentStateRefreshAdmissionPolicy = Object.freeze({
   unavailableState: 'unavailable' as const,
@@ -22,9 +22,19 @@ type EtfWindowRequestResult =
   | Readonly<{ state: 'unavailable' }>
 
 export function createEtfCurrentStateRefreshService(deps: {
-  isEnabled: () => Promise<boolean>
-  hasCredential: () => Promise<boolean>
-  requestWindow: () => Promise<EtfWindowRequestResult>
+  /**
+   * 每轮现算「谁在供 etf-net-flow」：声明了、读者开着、作业真的注册着、且就绪的那个源。
+   * 不许在启动时算一次缓存起来——排期是异步注册的，早于排期的那几轮会误判成 none。
+   */
+  resolveFactSource: () => Promise<FactSourceResolution>
+  /** 按**解析出来的那个源**问开关与凭据（备源有它自己的一把 key）。 */
+  isEnabled: (sourceId: string) => Promise<boolean>
+  hasCredential: (sourceId: string) => Promise<boolean>
+  /**
+   * 按**解析出来的那个源**取窗口（主源不可用时解析器会给出备源）。
+   * 参数是解析器给出的**注册表 id**：客户端按 id 选，行上的来源由装配处用窗口 id 盖。
+   */
+  requestWindow: (sourceId: string) => Promise<EtfWindowRequestResult>
   store: Pick<EtfCurrentStateStore, 'replace'> & Partial<Pick<EtfCurrentStateStore, 'read'>>
   now: () => string
   /**
@@ -35,22 +45,42 @@ export function createEtfCurrentStateRefreshService(deps: {
    * 钉的是「刷新把信号交了出去」，不会因为生产把通知关掉、或分析还没接上就变红。
    */
   handOffSignals?: (signals: readonly ModuleSignal[]) => Promise<void>
+  /**
+   * R42：这一轮**数字真的变了**的部分，交给通知层（用户 2026-11-18「应用内要弹框」）。
+   *
+   * 交出去的是已经判过的变化（新交易日 / 已定稿值被修订），**不是**「刷新返回了 updated」——
+   * 主备源切换那一轮数一模一样也会 updated，拿它直接弹就会误报。
+   */
+  handOffUpdates?: (updates: readonly EtfCapitalFlowUpdate[]) => Promise<void>
 }) {
   return {
-    async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged' | 'unavailable' }>> {
-      if (!await enabled(deps.isEnabled) || !await enabled(deps.hasCredential)) return unavailable()
+    async refresh(): Promise<Readonly<{ state: 'updated' | 'unchanged'; reason?: never } | { state: 'unavailable'; reason?: 'fact.source-conflict' }>> {
+      // 解析每轮现算。冲突 fail-closed：这一轮谁都不写，绝不挑第一个。
+      const resolution = await deps.resolveFactSource()
+      if (resolution.kind === 'conflict') return Object.freeze({ state: 'unavailable' as const, reason: 'fact.source-conflict' as const })
+      // 两个源都授权采（**主源 CryptoETF、备源 0xRouter**，优先级由装配处的解析器决定）；
+      // 解析出来不在允许集里（或没有）就停手，别拿错客户端静默去采。
+      if (resolution.kind !== 'resolved') return unavailable()
+      const resolvedSource = resolution.sourceId
+      // 解析器给的是注册表 id，窗口契约认的是窗口 id——翻译只走 `etfWindowSourceIdFor`。
+      // 少了这一步，备源被解析出来的那一轮整轮 fail-closed，而且哪一层都不报错（2026-11-17）。
+      const sourceId = etfWindowSourceIdFor(resolvedSource)
+      if (!sourceId) return unavailable()
+      if (!(etfCurrentStateWindowPolicy.allowedSourceIds as readonly string[]).includes(sourceId)) return unavailable()
+      // 开关与凭据按**注册表 id**问（profile 是按它存的）；`sourceId` 只用于行上的来源与窗口归属。
+      if (!await enabled(() => deps.isEnabled(resolvedSource)) || !await enabled(() => deps.hasCredential(resolvedSource))) return unavailable()
       const fetchedAt = deps.now()
       const currentUtcDate = etfCurrentStateRefreshAdmissionPolicy.currentUtcDate(fetchedAt)
       if (!currentUtcDate) return unavailable()
       try {
-        const requested = await deps.requestWindow()
+        const requested = await deps.requestWindow(resolvedSource)
         if (requested.state === 'unavailable') return unavailable()
         const previous = requested.state === 'partial' && deps.store.read ? await deps.store.read() : null
+        // 换源期不再拦混源：窗口契约从 2026-11-17 起允许行级来源（主源 + 备源互补），
+        // 每一行自己带 source，窗口归属由 `etfWindowSource` 回答，所以「补一支」不会再拼出假口径。
         const btc = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.btc, requested.btc) : requested.btc
         const eth = requested.state === 'partial' ? mergeRows(previous?.snapshot?.window.eth, requested.eth) : requested.eth
         if (!btc || !eth) return unavailable()
-        const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate })
-        if (!built) return unavailable()
         // 写之前先留一份旧窗口**和它被读到的时刻**：只有这两样一起，才知道「上次读到它时
         // 已经定稿了吗」——只看当前这一读，会把补报完成当成判后又变。
         const priorSnapshot = deps.store.read
@@ -58,14 +88,49 @@ export function createEtfCurrentStateRefreshService(deps: {
           : null
         const priorWindow = priorSnapshot?.snapshot?.window
         const priorAsOf = priorSnapshot?.snapshot?.verifiedAt
+        // 每一行的「第一次进库」从旧窗口继承；旧窗口还没有这一天，才是这一轮进来的（用户 2026-11-17）。
+        const firstSeen = priorFirstSeenAt(priorWindow)
+        const built = buildWindow({ btc, eth, fetchedAt, currentUtcDate, sourceId, firstSeen })
+        if (!built) return unavailable()
+        /**
+         * **备源不许把主源已经给过的日子换掉**（2026-11-19 的真现场）。
+         *
+         * 主源某一轮没读到、备源读到了，合并结果就会把 20 多天整份换成备源的数；下一轮主源回来
+         * 又换回去。读者看到的是一排数字来回跳，通知里则是一屏「从 2.8 亿改为 4770 万」。
+         *
+         * 判据：这一轮解析出来的就是主源（`sourceId === cryptoetf`），而**上一份窗口里同一天是主源的数**
+         * 这一轮却落成了别的源 → 这一轮主源其实没读到，整轮不写（保留旧窗口，下一轮再试）。
+         * 若解析出来的本来就是备源（读者把主源关了），不存在这条冲突，照常写。
+         */
+        if (etfWindowHasSourceRegression({ previous: priorWindow, current: built, resolvedSource: sourceId })) {
+          return unavailable()
+        }
+        /**
+         * **complete 却比上一份短 → 整轮不写，保留旧窗口**（2026-11-19 真现场：11-19 08:16 那轮
+         * 只剩 22 天，下一轮又涨回 30 天，卡片上的窗口行数来回跳）。
+         *
+         * 判据是「这一轮没有带来任何新日子，却少掉了旧窗口已经有的日子」：源把历史交短了，
+         * 那不是新读数，是它这一轮少答了。整轮不写、记成 `unchanged`，下一轮再试。
+         *
+         * **不从上一份抄缺失的行**：`partial` 那条路已经用 `mergeRows` 按行补过（行级来源与
+         * 进库时刻都留着）；在 `complete` 上再抄一次，就是第二套拼窗口，两处各算一遍。
+         *
+         * 只在这一轮**确实带来新交易日**时才放行：否则源长期只回 20 来天，窗口会永远停在旧行上，
+         * 那等于用「不缩水」换「不再更新」。
+         */
+        if (requested.state === 'available' && etfWindowWouldShrink({ previous: priorWindow, current: built })) {
+          return Object.freeze({ state: 'unchanged' as const })
+        }
         // `replace` is async: the write's own verdict decides whether this round produced news.
         const replaced = await deps.store.replace({ window: built, verifiedAt: fetchedAt })
         // Awaited: the notification is part of what this refresh did, and a fire-and-forget call
         // made "did it go out?" depend on scheduling — the one thing a refresh result should not
         // depend on. The outlet swallows a failed submit, so this cannot turn into a failed read.
+        if (replaced.state !== 'unavailable') {
+          const updates = collectCapitalFlowUpdates({ previous: priorWindow, previousAsOf: priorAsOf, current: built, asOf: fetchedAt })
+          if (updates.length > 0) await deps.handOffUpdates?.(updates)
+        }
         if (replaced.state === 'updated') {
-          // 定稿后仍变的交易日记一条（30 小时余量够不够，靠这条数据回答，不靠再猜一次）。
-          reportSettledEtfRevisions({ previous: priorWindow, previousAsOf: priorAsOf, current: built, asOf: fetchedAt })
           const signals = judgeSignals(built, fetchedAt)
           // 一条成立的信号都没有时不去打扰出口：安静的一天不是「发了 0 条」，是「没有事发生」。
           if (signals.length > 0) await deps.handOffSignals?.(signals)
@@ -99,14 +164,51 @@ async function enabled(read: () => Promise<boolean>): Promise<boolean> {
   try { return await read() } catch { return false }
 }
 
+/**
+ * 「这一天的读数几点第一次进库」：按 `资产:交易日` 建索引，从上一份窗口继承。
+ *
+ * `fetchedAt` 每轮刷新都变，回答不了这个问题——用户问「16 号怎么还没来」时要的是这一列。
+ */
+function priorFirstSeenAt(window: EtfCurrentStateWindow | undefined): Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }> {
+  const seen = new Map<string, string>()
+  const known = new Set<string>()
+  for (const flow of window ? [...window.btc, ...window.eth] : []) {
+    const key = `${flow.asset}:${flow.tradingDate}`
+    known.add(key)
+    if (flow.firstSeenAt) seen.set(key, flow.firstSeenAt)
+  }
+  return { seen, known }
+}
+
+/**
+ * 一行该写什么「第一次进库」：
+ * - 旧窗口记过 → 原样继承；
+ * - 旧窗口有这一天、但当时还没有这一列（升级前的行）→ **不写**，就是「不知道」，
+ *   不能拿这一轮的时间冒充它，否则每一行都会说自己今天才到；
+ * - 旧窗口没有这一天 → 这一轮。
+ */
+function firstSeenAtFor(
+  key: string,
+  firstSeen: Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }>,
+  fetchedAt: string
+): Readonly<{ firstSeenAt?: string }> {
+  const inherited = firstSeen.seen.get(key)
+  if (inherited !== undefined) return Object.freeze({ firstSeenAt: inherited })
+  if (firstSeen.known.has(key)) return Object.freeze({})
+  return Object.freeze({ firstSeenAt: fetchedAt })
+}
+
 function buildWindow(input: Readonly<{
   btc: readonly EtfFlowHistoryRow[]
   eth: readonly EtfFlowHistoryRow[]
   fetchedAt: string
   currentUtcDate: string
+  /** 这一窗的数据来自哪个源：行上如实写它，别把备源的数记成主源的。 */
+  sourceId: EtfFlowSourceId
+  firstSeen: Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }>
 }>) {
-  const btc = toFlows(input.btc, 'BTC', input.fetchedAt, input.currentUtcDate)
-  const eth = toFlows(input.eth, 'ETH', input.fetchedAt, input.currentUtcDate)
+  const btc = toFlows(input.btc, 'BTC', input.fetchedAt, input.currentUtcDate, input.sourceId, input.firstSeen)
+  const eth = toFlows(input.eth, 'ETH', input.fetchedAt, input.currentUtcDate, input.sourceId, input.firstSeen)
   if (!btc || !eth) return undefined
   const completeDates = btc.map((flow) => flow.tradingDate)
     .filter((date) => eth.some((flow) => flow.tradingDate === date))
@@ -120,11 +222,11 @@ function buildWindow(input: Readonly<{
     eth: eth.filter((flow) => completeDates.includes(flow.tradingDate))
   })
   if (built.state !== 'available') return undefined
-  const revision = revisionFor([...built.window.btc, ...built.window.eth])
+  const revision = etfWindowRevision([...built.window.btc, ...built.window.eth])
   return Object.freeze({ ...built.window, ...(revision ? { revision } : {}) })
 }
 
-function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string): readonly EtfDailyFlow[] | undefined {
+function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt: string, currentUtcDate: string, sourceId: EtfFlowSourceId, firstSeen: Readonly<{ seen: ReadonlyMap<string, string>; known: ReadonlySet<string> }>): readonly EtfDailyFlow[] | undefined {
   const dates = new Set<string>()
   const flows: EtfDailyFlow[] = []
   for (const row of rows) {
@@ -135,7 +237,9 @@ function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt:
     flows.push(Object.freeze({
       asset, tradingDate, netFlowUsd: row.changeUsd,
       observedAt: `${tradingDate}T00:00:00.000Z`, fetchedAt,
-      source: etfCurrentStateRefreshAdmissionPolicy.sourceId,
+      // 见过的日子保留它原来记下的时刻；新来的那一轮才是 fetchedAt。
+      ...firstSeenAtFor(`${asset}:${tradingDate}`, firstSeen, fetchedAt),
+      source: (row.source ?? sourceId) as EtfFlowSourceId,
       ...(row.updateTime ? { sourceRevision: row.updateTime } : {})
     }))
   }
@@ -145,17 +249,10 @@ function toFlows(rows: readonly EtfFlowHistoryRow[], asset: EtfAsset, fetchedAt:
 function mergeRows(previous: readonly EtfDailyFlow[] | undefined, incoming: readonly EtfFlowHistoryRow[] | undefined): readonly EtfFlowHistoryRow[] | undefined {
   if (!previous && !incoming) return undefined
   const byDate = new Map<number, EtfFlowHistoryRow>()
-  for (const row of previous ?? []) byDate.set(Date.parse(`${row.tradingDate}T00:00:00.000Z`), { date: Date.parse(`${row.tradingDate}T00:00:00.000Z`), changeUsd: row.netFlowUsd, ...(row.sourceRevision ? { updateTime: row.sourceRevision } : {}) })
+  // **带上原来那一行的来源**：partial 合并时旧行不该被重新盖上本轮解析出来的源。
+  for (const row of previous ?? []) byDate.set(Date.parse(`${row.tradingDate}T00:00:00.000Z`), { date: Date.parse(`${row.tradingDate}T00:00:00.000Z`), changeUsd: row.netFlowUsd, source: row.source, ...(row.sourceRevision ? { updateTime: row.sourceRevision } : {}) })
   for (const row of incoming ?? []) byDate.set(row.date, row)
   return [...byDate.values()].sort((left, right) => left.date - right.date)
-}
-
-function revisionFor(rows: readonly EtfDailyFlow[]): Readonly<{ providerCurrentStateId: string }> {
-  return Object.freeze({
-    providerCurrentStateId: createHash(etfCurrentStateRefreshAdmissionPolicy.updateMarkerDigestAlgorithm)
-      .update(rows.map((row) => `${row.asset}:${row.tradingDate}:${row.netFlowUsd}:${row.sourceRevision ?? ''}`).join('|'))
-      .digest('hex')
-  })
 }
 
 function utcTradingDate(value: number): string | undefined {
@@ -171,4 +268,106 @@ function isCanonicalUtcMillis(value: unknown): value is string {
 
 function unavailable(): Readonly<{ state: 'unavailable' }> {
   return Object.freeze({ state: etfCurrentStateRefreshAdmissionPolicy.unavailableState })
+}
+
+/**
+ * 这一轮有哪些「读者会看到数字变了」的变化（R42 §1）。
+ *
+ * - **首轮建档不弹**：本地还没有上一份窗口时，一次会写进最多 30 个交易日 × 2 个资产，
+ *   按行弹就是几十条；那不是数据来了，是我们第一次建账；
+ * - **新交易日**：上一份窗口里没有这一天；
+ * - **改数**：只有「两次读取都已过结算窗口、值仍然不同」才算（判据复用
+ *   `reportSettledEtfRevisions`，它顺带把那条诊断也记了）。定稿前的补报与修订**不弹**——
+ *   那是采集过程，不是改结论；
+ * - 来源换了、修订标记变了、抓取时刻变了，值没变 → 不在这里出现。
+ */
+function collectCapitalFlowUpdates(input: Readonly<{
+  previous: EtfCurrentStateWindow | undefined
+  previousAsOf: string | undefined
+  current: EtfCurrentStateWindow
+  asOf: string
+}>): readonly EtfCapitalFlowUpdate[] {
+  if (!input.previous) return []
+  const revisions = reportSettledEtfRevisions({
+    previous: input.previous, previousAsOf: input.previousAsOf, current: input.current, asOf: input.asOf
+  })
+  const revised = new Set(revisions.map((revision) => `${revision.asset}:${revision.tradingDate}`))
+  /**
+   * 「新数据点」的门：**只认比上一次的最新交易日更新的那一天**。
+   *
+   * 上一份窗口会比 30 天短（某个源那一轮没读到、只剩主源那 20 来天），下一轮补回来时，
+   * 那些**旧日子会重新出现**——它们不是新数据，是覆盖回填。2026-11-19 早上就是这么刷了一屏
+   * 「ETF 资金流 · ETH 2026-10-19 …」：窗口 22 行 → 30 行。用户原话「那么多天前的，难道也变化了？
+   * 我要变化的才发」。所以 `tradingDate <= 上一份的 windowEnd` 的一律不弹。
+   */
+  const previousEnd = input.previous.windowEnd
+  const updates: EtfCapitalFlowUpdate[] = []
+  for (const asset of ['btc', 'eth'] as const) {
+    const before = new Map(input.previous[asset].map((row) => [row.tradingDate, row.netFlowUsd]))
+    const symbol = asset === 'btc' ? 'BTC' as const : 'ETH' as const
+    for (const row of input.current[asset]) {
+      const prior = before.get(row.tradingDate)
+      if (prior === undefined) {
+        // 回填历史不弹：只有比上一次最新交易日还新的一天，才是「有新数据」。
+        if (row.tradingDate <= previousEnd) continue
+        updates.push(Object.freeze({ kind: 'arrived' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd, occurredAt: input.asOf }))
+        continue
+      }
+      if (revised.has(`${asset}:${row.tradingDate}`)) {
+        updates.push(Object.freeze({ kind: 'revised' as const, asset: symbol, tradingDate: row.tradingDate, netFlowUsd: row.netFlowUsd, previousUsd: prior, occurredAt: input.asOf }))
+      }
+    }
+  }
+  return Object.freeze(updates)
+}
+
+/**
+ * 这一轮有没有「主源的日子被换成别的源」——换源不算数据更新，也不该覆盖读者已经看过的数。
+ *
+ * 只在**这一轮解析出来的是主源**时判：那种情况下同一天的数本该由主源给；它却变成了备源的，
+ * 说明主源这一轮没读到（读到了就会覆盖回来），而不是读者换了源。
+ */
+/**
+ * 这一轮是不是「没有新日子、却比上一份短」。
+ *
+ * 两个条件缺一不可：① 当前窗口的每一天都在上一份里出现过（没有新交易日进来）；
+ * ② 行数确实少了。少掉的日子按定义仍在上一份的 30 行视野内——它们刚刚还在窗口里。
+ */
+function etfWindowWouldShrink(input: Readonly<{
+  previous: EtfCurrentStateWindow | undefined
+  current: EtfCurrentStateWindow
+}>): boolean {
+  if (!input.previous) return false
+  let sawShorter = false
+  for (const asset of ['btc', 'eth'] as const) {
+    const previousDates = new Set(input.previous[asset].map((row) => row.tradingDate))
+    const currentDates = input.current[asset].map((row) => row.tradingDate)
+    // 出现一个上一份没有的日子，说明这一轮带回了新东西，不能拦。
+    if (currentDates.some((date) => !previousDates.has(date))) return false
+    if (currentDates.length < previousDates.size) sawShorter = true
+  }
+  return sawShorter
+}
+
+function etfWindowHasSourceRegression(input: Readonly<{
+  previous: EtfCurrentStateWindow | undefined
+  current: EtfCurrentStateWindow
+  resolvedSource: EtfFlowSourceId
+}>): boolean {
+  const primary = etfCurrentStateWindowPolicy.sourceId
+  if (input.resolvedSource !== primary || !input.previous) return false
+  const previousRows = new Map<string, Readonly<{ source: EtfFlowSourceId; netFlowUsd: number }>>()
+  for (const asset of ['btc', 'eth'] as const) {
+    for (const row of input.previous[asset]) {
+      previousRows.set(`${asset}:${row.tradingDate}`, { source: row.source, netFlowUsd: row.netFlowUsd })
+    }
+  }
+  for (const asset of ['btc', 'eth'] as const) {
+    for (const row of input.current[asset]) {
+      const before = previousRows.get(`${asset}:${row.tradingDate}`)
+      // 值一样时换源是无害的（读者看到的数没变），只有**数也跟着变**才是那份回归。
+      if (before && before.source === primary && row.source !== primary && before.netFlowUsd !== row.netFlowUsd) return true
+    }
+  }
+  return false
 }

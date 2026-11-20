@@ -16,8 +16,22 @@ function harness() {
       items: input.cursor === 'opaque-next' ? [] : [timelineEntry], nextCursor: input.cursor ? null : 'opaque-next'
     })),
     getTimelineEntry: vi.fn(() => timelineEntry),
-    listRuns: vi.fn(() => [{ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', privateBody: 'never-display' }]),
-    getEventGroup: vi.fn((id: string) => id === 'mi-eg-1' ? { id, currentSummaryId: 'mi-as-1' } : undefined),
+    listFailedRuns: vi.fn(() => ({
+      items: [{
+        id: 'mi-ar-failed', schemaVersion: 1, analysisKind: 'market', eventGroupId: 'mi-eg-1', snapshotId: 'mi-es-1',
+        snapshotHash: 'snapshot-hash', analysisPhase: 'initial', triggerKey: 'manual.refresh', idempotencyKey: 'key',
+        status: 'failed', attempt: 1, retryOfRunId: null, modelProviderId: null, modelId: null, policyVersion: 'policy',
+        promptVersion: 'market-analysis-v2', skillVersion: 'market-analysis-v1', outputSchemaVersion: 3,
+        jobRunId: null, traceId: null, failureCode: 'analysis-timeout', failureDetailCode: 'timeout', validationMode: null,
+        queuedAt: '2026-09-28T00:00:00.000Z', startedAt: '2026-09-28T00:00:01.000Z', completedAt: '2026-09-28T00:01:00.000Z'
+      }],
+      nextCursor: null
+    })),
+    records: {
+      latestAttempt: vi.fn(() => ({ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', privateBody: 'never-display' })),
+      listRuns: vi.fn(() => [{ id: 'mi-ar-failed', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', snapshotId: 'mi-es-1', startedAt: null, privateBody: 'never-display' }])
+    },
+    getEventGroup: vi.fn((id: string) => id === 'mi-eg-1' ? { id, currentSummaryId: 'mi-as-1', eventRefs: ['item-1'] } : undefined),
     getRun: vi.fn(() => ({
       id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial' as const, status: 'succeeded' as const,
       failureCode: null, queuedAt: '2026-09-28T00:00:00.000Z', startedAt: '2026-09-28T00:00:01.000Z', completedAt: '2026-09-28T00:00:02.000Z'
@@ -35,12 +49,57 @@ function harness() {
       nextCatalyst: null, status: 'pending' as const, verificationDueAt: '2026-09-28T01:00:00.000Z', createdAt: '2026-09-28T00:00:02.000Z'
     }])
   }
+  const sessions = { requestInitialAnalysis: vi.fn(async () => ({ itemId: 'item-1', queued: true as const })) }
   registerMarketAnalysisIpc((productId, method, handler) => {
     expect(productId).toBe('market-intelligence')
     handlers.set(method, handler)
-  }, repository as never)
-  return { handlers, repository }
+  }, repository as never, {}, sessions)
+  return { handlers, repository, sessions }
 }
+
+describe('read-only news interpretation endpoint (R37)', () => {
+  const harnessWithReader = (readNewsInterpretation: (itemId: string) => Promise<unknown>) => {
+    const handlers = new Map<string, (payload: unknown) => unknown | Promise<unknown>>()
+    registerMarketAnalysisIpc((_productId, method, handler) => handlers.set(method, handler), {
+      getEventGroup: () => undefined, records: { latestAttempt: () => undefined }, getSnapshot: () => undefined, getSummary: () => undefined,
+      listTimeline: () => ({ items: [] }), getTimelineEntry: () => undefined, getRun: () => undefined,
+      getSummaryForRun: () => undefined, listPredictions: () => []
+    } as never, {}, { readNewsInterpretation: readNewsInterpretation as never })
+    return handlers
+  }
+
+  it('delegates the item id and returns whatever the reader says', async () => {
+    const read = vi.fn(async (itemId: string) => ({ itemId, state: 'available' as const, currentEvidenceFingerprint: 'fp-current' }))
+    const handlers = harnessWithReader(read)
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.readNewsInterpretation)?.({ itemId: 'item-1' }))
+      .resolves.toMatchObject({ state: 'available', currentEvidenceFingerprint: 'fp-current' })
+    expect(read).toHaveBeenCalledWith('item-1')
+  })
+
+  it('validates the write payload with its own reader and delegates the item id', async () => {
+    const handlers = new Map<string, (payload: unknown) => unknown | Promise<unknown>>()
+    const request = vi.fn(async (itemId: string) => ({ state: 'queued' as const, itemId }))
+    registerMarketAnalysisIpc((_productId, method, handler) => handlers.set(method, handler), {
+      getEventGroup: () => undefined, records: { latestAttempt: () => undefined }, getSnapshot: () => undefined, getSummary: () => undefined,
+      listTimeline: () => ({ items: [] }), getTimelineEntry: () => undefined, getRun: () => undefined,
+      getSummaryForRun: () => undefined, listPredictions: () => []
+    } as never, {}, { requestNewsInterpretation: request as never })
+    const handler = handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestNewsInterpretation)!
+    await expect(handler({ itemId: 'item-1' })).resolves.toEqual({ state: 'queued', itemId: 'item-1' })
+    expect(request).toHaveBeenCalledWith('item-1')
+    await expect(handler({ itemId: 'item-1', window: '1h' })).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler({})).rejects.toThrow('market-analysis-invalid-input')
+  })
+
+  it('refuses its own payload shape instead of reusing another command’s reader', async () => {
+    const handlers = harnessWithReader(async (itemId: string) => ({ itemId, state: 'none' as const, currentEvidenceFingerprint: null }))
+    const handler = handlers.get(MARKET_ANALYSIS_IPC_METHODS.readNewsInterpretation)!
+    await expect(handler({})).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler({ itemId: 'item-1', extra: true })).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler({ itemId: '' })).rejects.toThrow('market-analysis-invalid-input')
+    await expect(handler('item-1')).rejects.toThrow('market-analysis-invalid-input')
+  })
+})
 
 describe('marketAnalysisIpc', () => {
   it('returns the latest persisted attempt without private provider or snapshot content', () => {
@@ -49,11 +108,34 @@ describe('marketAnalysisIpc', () => {
       id: 'mi-ar-failed', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: '2026-09-28T00:00:00.000Z', evidenceCount: 1
     })
   })
+  it('re-runs the same event group through the existing entry when a conclusion is regenerated', async () => {
+    const { handlers, sessions } = harness()
+    // 「重新生成」不是新 IPC、也不覆盖旧记录：走同一个入口，只是把目标换成读者正在看的那一组。
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis)?.({ eventGroupId: 'mi-eg-1' }))
+      .resolves.toEqual({ itemId: 'item-1', queued: true })
+    expect(sessions.requestInitialAnalysis).toHaveBeenCalledWith('item-1', undefined, 'refresh', 'manual')
+    // 组不存在：拒绝，不去猜一个 item。
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis)?.({ eventGroupId: 'mi-eg-missing' }))
+      .rejects.toThrow('analysis-not-eligible')
+    // 和别的目标混着传：整条请求非法。
+    await expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.requestInitialAnalysis)?.({ eventGroupId: 'mi-eg-1', mode: 'refresh' }))
+      .rejects.toThrow('analysis-invalid-request')
+  })
+
   it('supports timeline pagination through the product IPC boundary', async () => {
     const { handlers, repository } = harness()
-    expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: 'mi-eg-1', limit: 1 })).toEqual({
-      schemaVersion: 1, items: [expect.objectContaining({ id: 'mi-tl-1' })], nextCursor: 'opaque-next'
-    })
+    const firstPage = handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: 'mi-eg-1', limit: 1 }) as { schemaVersion: number; items: readonly Record<string, unknown>[]; nextCursor: string | null }
+    expect(firstPage).toMatchObject({ schemaVersion: 1, nextCursor: 'opaque-next' })
+    // 已发布行 + 一次失败运行补出来的行（那次运行没有时间轴行，读者回看时要能看到它失败了）。
+    expect(firstPage.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'mi-tl-1', status: 'published', runKey: 'mi-ar-1', failureCode: null }),
+      expect.objectContaining({
+        id: 'run:mi-ar-failed', status: 'failed', analysisRunId: 'mi-ar-failed',
+        runKey: 'mi-ar-failed', failureCode: 'analysis-invalid-output-schema', safeTitle: ''
+      })
+    ]))
+    // 运行行上的其它字段不进渲染层。
+    expect(JSON.stringify(firstPage.items)).not.toContain('privateBody')
     expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: 'mi-eg-1', cursor: 'opaque-next', limit: 1 })).toMatchObject({ items: [], nextCursor: null })
     expect(repository.listTimeline).toHaveBeenNthCalledWith(2, { eventGroupId: 'mi-eg-1', cursor: 'opaque-next', limit: 1 })
   })
@@ -64,6 +146,24 @@ describe('marketAnalysisIpc', () => {
     expect(() => handlers.get(MARKET_ANALYSIS_IPC_METHODS.listTimeline)?.({ eventGroupId: '' })).toThrow('analysis-invalid-request')
     expect(() => handlers.get(MARKET_ANALYSIS_IPC_METHODS.getWorkspaceBinding)?.({ eventGroupId: 'missing' })).toThrow('analysis-not-available')
     expect(repository.listTimeline).not.toHaveBeenCalled()
+  })
+
+  it('serves the failed-run page through its own read endpoint and validates its input', () => {
+    const { handlers, repository } = harness()
+    expect(handlers.get(MARKET_ANALYSIS_IPC_METHODS.listFailedRuns)?.({ limit: 50 })).toEqual({
+      schemaVersion: 1,
+      items: [expect.objectContaining({
+        id: 'run:mi-ar-failed', analysisRunId: 'mi-ar-failed', status: 'failed', safeTitle: '',
+        summaryRef: null, runKey: 'mi-ar-failed', failureCode: 'analysis-timeout'
+      })],
+      nextCursor: null
+    })
+    expect(repository.listFailedRuns).toHaveBeenCalledWith({ limit: 50 })
+    // 边界错误与时间轴同一套：不认识的游标是 cursor 错误，页大小越界是 request 错误。
+    const handler = handlers.get(MARKET_ANALYSIS_IPC_METHODS.listFailedRuns)!
+    expect(() => handler({ limit: 0 })).toThrow('analysis-invalid-request')
+    expect(() => handler({ limit: 51 })).toThrow('analysis-invalid-request')
+    expect(() => handler({ cursor: 7 })).toThrow('analysis-invalid-cursor')
   })
 
   it('returns safe timeline, run, summary, prediction and workspace DTOs', async () => {

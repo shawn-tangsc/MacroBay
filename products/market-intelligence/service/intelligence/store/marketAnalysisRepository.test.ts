@@ -27,7 +27,7 @@ function group(id = 'mi-eg-0001'): EventGroup {
 }
 
 function snapshot(id: string, eventGroupId: string, value: string): EvidenceSnapshot {
-  const facts = [{ factId: `fact-${value}`, domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value, unit: '%', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: `ev-${value}` }]
+  const facts = [{ factId: `fact-${value}`, domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value, unit: 'percent', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: `ev-${value}` }]
   const evidenceRefs = [{ evidenceRefId: `ev-${value}`, sourceId: 'source-fed', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: createHash('sha256').update(`ev-${value}`).digest('hex') }]
   return {
     id, schemaVersion: 1, eventGroupId, asOf, dataCutoff: asOf, snapshotHash: buildAnalysisSnapshotHash({ profileId: 'crypto-market-analysis-v1', asOf, dataCutoff: asOf, facts, missingDomains: [], caveats: [], evidenceRefs }),
@@ -41,7 +41,7 @@ function snapshot(id: string, eventGroupId: string, value: string): EvidenceSnap
 
 function run(id: string, eventGroupId: string, snapshotId: string, idempotencyKey: string, snapshotHash = snapshot('mi-es-A1', eventGroupId, 'A').snapshotHash): AnalysisRun {
   return {
-    id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey,
+    id, schemaVersion: 1, analysisKind: 'market', eventGroupId, snapshotId, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed', idempotencyKey,
     status: 'queued', attempt: 1, retryOfRunId: null, modelProviderId: 'provider', modelId: 'model', policyVersion: 'policy.v1', promptVersion: 'prompt.v1', skillVersion: 'skill.v1', outputSchemaVersion: 1,
     jobRunId: null, traceId: null, failureCode: null, failureDetailCode: null, validationMode: null, queuedAt: asOf, startedAt: null, completedAt: null
   }
@@ -49,7 +49,7 @@ function run(id: string, eventGroupId: string, snapshotId: string, idempotencyKe
 
 function summary(id: string, analysisRunId: string, eventGroupId: string, version = 1): AnalysisSummary {
   return {
-    id, schemaVersion: 1, analysisRunId, eventGroupId, version, eventAssessment: '通胀数据高于预期',
+    id, schemaVersion: 1, analysisKind: 'market', analysisRunId, eventGroupId, version, eventAssessment: '通胀数据高于预期',
     knownFacts: [{ factId: 'fact-A', statement: 'actual=3.2', evidenceRefIds: ['ev-A'] }],
     transmissionHypotheses: [{ statement: '流动性预期收紧', evidenceRefIds: ['ev-A'] }],
     marketReaction: [{ statement: 'BTC 下跌', factIds: ['fact-A'], evidenceRefIds: ['ev-A'] }],
@@ -114,6 +114,23 @@ describe('marketAnalysisRepository', () => {
     repository.appendSnapshot(snapshot('mi-es-CH2', 'mi-eg-0001', 'B'))
     repository.appendSnapshot(snapshot('mi-es-CH3', 'mi-eg-0001', 'C'))
     expect(repository.listSnapshots('mi-eg-0001').map(item => item.id)).toEqual(['mi-es-CH1', 'mi-es-CH2', 'mi-es-CH3'])
+    repository.close()
+  })
+
+  it('stores the trigger pointer and reads it back; a snapshot without one stays valid', () => {
+    // R37：指针属于那一次运行，读时重算不出来（与 `change` 不同），所以必须落库；旧行没有这一列
+    // 或值为空就是「没有触发记录」，不是读失败。
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    const base = snapshot('mi-es-TR1', 'mi-eg-0001', 'A')
+    const trigger = { source: 'intelligence-item' as const, itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'ev-A' }
+    repository.appendSnapshot({ ...base, schemaVersion: 3, trigger })
+    repository.appendSnapshot({ ...snapshot('mi-es-TR2', 'mi-eg-0001', 'B'), schemaVersion: 2 })
+
+    expect(repository.getSnapshot('mi-es-TR1')?.trigger).toEqual(trigger)
+    expect(repository.getSnapshot('mi-es-TR2')?.trigger).toBeUndefined()
+    // 同一批事实，有无指针 → 同一个 hash：指纹是证据的指纹，指针只说「为什么跑」。
+    expect(repository.getSnapshot('mi-es-TR1')?.snapshotHash).toBe(base.snapshotHash)
     repository.close()
   })
 
@@ -228,6 +245,20 @@ describe('marketAnalysisRepository', () => {
     expect(repository.listTimeline({ eventGroupId: 'mi-eg-0001' }).items).toHaveLength(0)
     expect(repository.getRun('mi-ar-0001')?.status).toBe('running')
     expect(repository.getEventGroup('mi-eg-0001')?.currentSummaryId).toBeNull()
+    repository.close()
+  })
+
+  it('records the model a run will call, and never overwrites the queued choice', () => {
+    // 启动恢复补排的运行入队时没有模型；调用前补写它，失败时那一行才留得下「用的是谁」。
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendSnapshot(snapshot('mi-es-A1', 'mi-eg-0001', 'A'))
+    repository.enqueueRun({ ...run('mi-ar-0001', 'mi-eg-0001', 'mi-es-A1', 'key-1'), modelProviderId: null, modelId: null })
+    expect(repository.recordRunModel('mi-ar-0001', { providerId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })).toBe(true)
+    expect(repository.getRun('mi-ar-0001')).toMatchObject({ modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })
+    // 运行行上的选择是入队那一刻的事实：后到的解析不覆盖它。
+    repository.recordRunModel('mi-ar-0001', { providerId: 'silicon', modelId: 'other-model' })
+    expect(repository.getRun('mi-ar-0001')).toMatchObject({ modelProviderId: 'tokenrhythm', modelId: 'deepseek-v4.1-flash-1017' })
     repository.close()
   })
 

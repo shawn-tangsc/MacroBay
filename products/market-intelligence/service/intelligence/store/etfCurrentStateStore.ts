@@ -1,70 +1,22 @@
 import { dirname } from 'node:path'
-import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 import { mkdirSync } from 'node:fs'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
-import { etfCurrentStateWindowPolicy, isValidEtfCurrentStateWindow, type EtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
-import { etfPublicSnapshotPolicy } from '../../../contracts/intelligenceQueryContracts'
+import { etfCurrentStateWindowPolicy, etfWindowSource, type EtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
+import {
+  etfCurrentStateStorePolicy, isCanonicalUtcMillis, isCanonicalWindow, isSafeState, isValidEtfCurrentState,
+  migrateEtfCurrentState, windowFromHistoryEntry,
+  type EtfCurrentState, type EtfCurrentStateHistoryEntry, type EtfCurrentStateStorage, type EtfHistoryRow
+} from './etfCurrentStateSchema'
 
-export const etfCurrentStateStorePolicy = Object.freeze({
-  schemaVersion: 1,
-  maximumWindowBytes: 12 * 1024,
-  maximumStateBytes: 256 * 1024,
-  maximumAtomicDiskBytes: 512 * 1024,
-  maximumSnapshotAgeMs: etfPublicSnapshotPolicy.maximumAgeMs,
-  maximumCounter: Number.MAX_SAFE_INTEGER,
-  // A cutoff is answered from the rows the provider had observed by then, and the current window
-  // is replaced on every refresh, so keeping only that window loses the cutoff the moment a refresh
-  // lands after it. Each refresh archives its own row set by age: every refresh inside the dense
-  // span, one per hour past it. The physical horizon is the coverage plus one thinning bucket,
-  // because bucket thinning keeps a bucket's latest point. The archive stores only the material row
-  // fields, which keeps its entries several times smaller than the state budget.
-  historyCoverageMs: 30 * 60 * 60 * 1_000,
-  historyDenseMs: 2 * 60 * 60 * 1_000,
-  historyDenseMaximumEntries: 16,
-  maximumHistoryEntries: 48,
-  historyThinningMs: 60 * 60 * 1_000,
-  historyByteBudget: 256 * 1024 - 24 * 1024
-})
-
-export type EtfCurrentStateHealth = Readonly<{
-  lastAttemptAt: string
-  lastSuccessAt?: string
-  snapshotReplaceCount: number
-  snapshotNoWriteCount: number
-  rejectionCount: number
-}>
-
-/** One material flow row: trading date, net flow, and the instant the provider had it. */
-export type EtfHistoryRow = readonly [tradingDate: string, netFlowUsd: number, observedAt: string]
-
-/** The rows a refresh stored, kept so a cutoff can be answered after the window moved on. */
-export type EtfCurrentStateHistoryEntry = Readonly<{
-  at: string
-  btc: readonly EtfHistoryRow[]
-  eth: readonly EtfHistoryRow[]
-}>
-
-export type EtfCurrentState = Readonly<{
-  schemaVersion: typeof etfCurrentStateStorePolicy.schemaVersion
-  snapshot?: Readonly<{ window: EtfCurrentStateWindow; verifiedAt: string }>
-  history?: readonly EtfCurrentStateHistoryEntry[]
-  health: EtfCurrentStateHealth
-}>
-
-export type EtfCurrentStateStorage = {
-  read: () => Promise<EtfCurrentState | null>
-  write: (state: EtfCurrentState) => Promise<void>
-}
+// 公开面不变：形状、策略、迁移与校验仍从这个模块拿（调用方与用例零改动，实现搬去了 schema 那一份）。
+export {
+  etfCurrentStateStorePolicy, isValidEtfCurrentState, migrateEtfCurrentState,
+  type EtfCurrentState, type EtfCurrentStateHealth, type EtfCurrentStateHistoryEntry,
+  type EtfCurrentStateStorage, type EtfHistoryRow
+} from './etfCurrentStateSchema'
 
 export type EtfCurrentStateStore = ReturnType<typeof createEtfCurrentStateStore>
-
-export function isValidEtfCurrentState(state: unknown): state is EtfCurrentState {
-  if (!isPlainRecord(state) || !hasOnlyKeys(state, ['schemaVersion', 'snapshot', 'history', 'health']) || state.schemaVersion !== etfCurrentStateStorePolicy.schemaVersion || !isHealth(state.health)) return false
-  if (state.history !== undefined && !isHistory(state.history)) return false
-  if (state.snapshot === undefined) return true
-  if (!isPlainRecord(state.snapshot) || !hasOnlyKeys(state.snapshot, ['window', 'verifiedAt']) || !isCanonicalUtcMillis(state.snapshot.verifiedAt) || !isCanonicalWindow(state.snapshot.window as EtfCurrentStateWindow)) return false
-  return isSafeState(state as EtfCurrentState)
-}
 
 export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStorage }) {
   let cached: EtfCurrentState | undefined
@@ -74,8 +26,9 @@ export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStora
     if (cached) return cached
     try {
       const persisted = await deps.storage.read()
-      if (persisted !== null && !isValidEtfCurrentState(persisted)) throw new Error('ETF current state is invalid')
-      cached = persisted ?? emptyState()
+      const migrated = persisted === null ? undefined : migrateEtfCurrentState(persisted)
+      if (persisted !== null && !migrated) throw new Error('ETF current state is invalid')
+      cached = migrated ?? emptyState()
       return cached
     } catch {
       readFailed = true
@@ -179,25 +132,7 @@ function archivedAt(history: readonly EtfCurrentStateHistoryEntry[] | undefined,
 function historyEntry(window: EtfCurrentStateWindow, at: string): EtfCurrentStateHistoryEntry {
   const rows = (flows: readonly EtfDailyFlow[]): readonly EtfHistoryRow[] =>
     flows.map((flow) => Object.freeze([flow.tradingDate, flow.netFlowUsd, flow.observedAt] as const))
-  return Object.freeze({ at, btc: rows(window.btc), eth: rows(window.eth) })
-}
-
-function windowFromHistoryEntry(entry: EtfCurrentStateHistoryEntry): EtfCurrentStateWindow | undefined {
-  const flows = (rows: readonly EtfHistoryRow[], asset: 'BTC' | 'ETH'): readonly EtfDailyFlow[] =>
-    rows.map(([tradingDate, netFlowUsd, observedAt]) => Object.freeze({
-      asset, tradingDate, netFlowUsd, observedAt, fetchedAt: entry.at, source: etfCurrentStateWindowPolicy.sourceId
-    }))
-  const btc = flows(entry.btc, 'BTC')
-  const eth = flows(entry.eth, 'ETH')
-  const windowEnd = btc.at(-1)?.tradingDate
-  if (!windowEnd) return undefined
-  const window = Object.freeze({
-    btc: Object.freeze(btc),
-    eth: Object.freeze(eth),
-    windowEnd,
-    capitalConclusionDates: Object.freeze(btc.slice(-etfCurrentStateWindowPolicy.capitalConclusionRows).map((flow) => flow.tradingDate))
-  })
-  return isValidEtfCurrentStateWindow(window) ? window : undefined
+  return Object.freeze({ at, source: etfWindowSource(window), btc: rows(window.btc), eth: rows(window.eth) })
 }
 
 /**
@@ -314,8 +249,8 @@ export function createEtfCurrentStateSqliteStorage(filePath: string): EtfCurrent
         try {
           if ((row.window_json === null) !== (row.verified_at === null)) return null
           const history = row.history_json ? JSON.parse(row.history_json) : undefined
-          const state: EtfCurrentState = {
-            schemaVersion: row.schema_version as 1,
+          const raw = {
+            schemaVersion: row.schema_version,
             ...(row.window_json && row.verified_at ? { snapshot: { window: JSON.parse(row.window_json), verifiedAt: row.verified_at } } : {}),
             ...(history === undefined ? {} : { history }),
             health: {
@@ -326,7 +261,7 @@ export function createEtfCurrentStateSqliteStorage(filePath: string): EtfCurrent
               rejectionCount: row.rejection_count
             }
           }
-          return isValidEtfCurrentState(state) ? state : null
+          return migrateEtfCurrentState(raw) ?? null
         } catch { return null }
       }
       return null
@@ -371,15 +306,16 @@ type SqliteStateRow = {
   history_json: string | null
 }
 
-function isCanonicalWindow(window: EtfCurrentStateWindow): boolean {
-  return isValidEtfCurrentStateWindow(window) && isSafeRevisionIdentity(window.revision)
-}
-
 function sameWindow(left: EtfCurrentStateWindow, right: EtfCurrentStateWindow): boolean {
   return JSON.stringify(materialWindow(left)) === JSON.stringify(materialWindow(right))
 }
 
-type MaterialEtfDailyFlow = Omit<EtfDailyFlow, 'fetchedAt'>
+/**
+ * 材料行 = 提供方给的事实。`fetchedAt`（这一轮抓取的时刻）与 `firstSeenAt`（第一次进库的时刻）
+ * 都是记账，不是事实：它们一变就当成「数据变了」，会撞上「定稿后不许改」的闸门，
+ * 而 revision 又不覆盖它们——结果是永远写不进去。所以两者一起从比较里剥掉。
+ */
+type MaterialEtfDailyFlow = Omit<EtfDailyFlow, 'fetchedAt' | 'firstSeenAt'>
 type MaterialEtfCurrentStateWindow = Omit<EtfCurrentStateWindow, 'btc' | 'eth'> & Readonly<{
   btc: readonly MaterialEtfDailyFlow[]
   eth: readonly MaterialEtfDailyFlow[]
@@ -388,62 +324,13 @@ type MaterialEtfCurrentStateWindow = Omit<EtfCurrentStateWindow, 'btc' | 'eth'> 
 function materialWindow(window: EtfCurrentStateWindow): MaterialEtfCurrentStateWindow {
   return {
     ...window,
-    btc: window.btc.map(({ fetchedAt: _fetchedAt, ...flow }) => flow),
-    eth: window.eth.map(({ fetchedAt: _fetchedAt, ...flow }) => flow)
+    btc: window.btc.map(({ fetchedAt: _fetchedAt, firstSeenAt: _firstSeenAt, ...flow }) => flow),
+    eth: window.eth.map(({ fetchedAt: _fetchedAt, firstSeenAt: _firstSeenAt, ...flow }) => flow)
   }
 }
 
 function mayReplaceRevision(previous: EtfCurrentStateWindow, next: EtfCurrentStateWindow): boolean {
   return !!previous.revision && !!next.revision && previous.revision.providerCurrentStateId !== next.revision.providerCurrentStateId
-}
-
-function isSafeRevisionIdentity(value: EtfCurrentStateWindow['revision']): boolean {
-  return value === undefined || (Object.keys(value).length === 1 && typeof value.providerCurrentStateId === 'string' && value.providerCurrentStateId.length > 0 && value.providerCurrentStateId.length <= 256 && !/[\u0000-\u001f\u007f]/.test(value.providerCurrentStateId))
-}
-
-function isSafeState(state: EtfCurrentState): boolean {
-  const windowBytes = state.snapshot ? Buffer.byteLength(JSON.stringify(state.snapshot.window), 'utf8') : 0
-  const stateBytes = Buffer.byteLength(JSON.stringify(state), 'utf8')
-  return state.schemaVersion === etfCurrentStateStorePolicy.schemaVersion && windowBytes <= etfCurrentStateStorePolicy.maximumWindowBytes && stateBytes <= etfCurrentStateStorePolicy.maximumStateBytes && stateBytes * 2 <= etfCurrentStateStorePolicy.maximumAtomicDiskBytes
-}
-
-function isHealth(value: unknown): value is EtfCurrentStateHealth {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, ['lastAttemptAt', 'lastSuccessAt', 'snapshotReplaceCount', 'snapshotNoWriteCount', 'rejectionCount'])) return false
-  return isCanonicalUtcMillis(value.lastAttemptAt) && (value.lastSuccessAt === undefined || isCanonicalUtcMillis(value.lastSuccessAt)) &&
-    [value.snapshotReplaceCount, value.snapshotNoWriteCount, value.rejectionCount].every((count) => typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 && count <= etfCurrentStateStorePolicy.maximumCounter)
-}
-
-function isHistory(value: unknown): value is readonly EtfCurrentStateHistoryEntry[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > etfCurrentStateStorePolicy.maximumHistoryEntries) return false
-  let previous = ''
-  for (const entry of value) {
-    if (!isPlainRecord(entry) || !hasOnlyKeys(entry, ['at', 'btc', 'eth']) || !isCanonicalUtcMillis(entry.at) || entry.at <= previous) return false
-    if (!isHistoryRows(entry.btc) || !isHistoryRows(entry.eth)) return false
-    if (!windowFromHistoryEntry(entry as unknown as EtfCurrentStateHistoryEntry)) return false
-    previous = entry.at
-  }
-  return true
-}
-
-function isHistoryRows(value: unknown): value is readonly EtfHistoryRow[] {
-  return Array.isArray(value) && value.length >= etfCurrentStateWindowPolicy.minimumCompleteRows && value.length <= etfCurrentStateWindowPolicy.maximumRowsPerAsset &&
-    value.every((row) => Array.isArray(row) && row.length === 3 && isTradingDate(row[0]) &&
-      typeof row[1] === 'number' && Number.isFinite(row[1]) && Math.abs(row[1]) <= etfCurrentStateWindowPolicy.maximumAbsoluteUsdFlow &&
-      isCanonicalUtcMillis(row[2]))
-}
-
-function isTradingDate(value: unknown): value is string {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    Number.isFinite(Date.parse(`${value}T00:00:00.000Z`)) &&
-    new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype && Object.getOwnPropertySymbols(value).length === 0
-}
-
-function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
-  return Object.keys(value).every((key) => allowed.includes(key))
 }
 
 function emptyState(): EtfCurrentState {
@@ -455,10 +342,6 @@ function emptyState(): EtfCurrentState {
 
 function increment(value: number, shouldIncrement: boolean): number {
   return shouldIncrement ? Math.min(value + 1, etfCurrentStateStorePolicy.maximumCounter) : value
-}
-
-function isCanonicalUtcMillis(value: unknown): value is string {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value
 }
 
 function unavailable(): Readonly<{ state: 'unavailable' }> {

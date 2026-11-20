@@ -1,4 +1,6 @@
+import type { PushChannelOutcome } from '../contracts/notificationContracts'
 import type { NotificationRuntimeDependencies } from './notificationRuntime'
+import { readPosterChannels, recordPosterOutcomes } from './notificationPosterRecord'
 import { createNotificationDelivery } from './notificationRuntimeDelivery'
 import { composeNotificationSettingsSurface } from './notificationRuntimeSettings'
 
@@ -10,7 +12,7 @@ import { composeNotificationSettingsSurface } from './notificationRuntimeSetting
  *
  * 不变的两件事（以后改这里要一起看）：
  * - `pushWired` 由 `deliveryHooks.push` **是否存在**决定，不读任何配置值；
- * - `resolvePushChannel` 是**可选**端口：没装就不传，界面据此说「没有可用通道」，不猜。
+ * - `resolvePushChannels` 是**可选**端口：没装就不传，界面据此说「没有可用通道」，不猜。
  *
  * 类型上刻意只引用 `NotificationRuntimeDependencies` 与两个组合函数的参数，不新造一份端口清单：
  * 多一份清单，就多一处会与 runtime 漂开的地方。
@@ -26,14 +28,22 @@ export type NotificationRuntimeSurfaceInternals = Readonly<{
 export function composeNotificationRuntimeSurfaces(
   deps: NotificationRuntimeDependencies,
   internals: NotificationRuntimeSurfaceInternals
-): { settingsSurface: ReturnType<typeof composeNotificationSettingsSurface>; delivery: ReturnType<typeof createNotificationDelivery> } {
+): {
+  settingsSurface: ReturnType<typeof composeNotificationSettingsSurface>
+  delivery: ReturnType<typeof createNotificationDelivery>
+  /** 海报那一路的逐通道结果写回同一条记录（额度按记录算）。 */
+  posterRecord: {
+    recordPosterOutcomes: (input: { recordId: string; channels: readonly PushChannelOutcome[] }) => Promise<{ ok: boolean }>
+    readPosterChannels: (recordId: string) => Promise<readonly PushChannelOutcome[]>
+  }
+} {
   const settingsSurface = composeNotificationSettingsSurface(
     {
       catalog: deps.catalog,
       getSettings: deps.getSettings,
       updateSettings: deps.updateSettings,
       getPushTargets: deps.getPushTargets,
-      ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+      ...(deps.resolvePushChannels === undefined ? {} : { resolvePushChannels: deps.resolvePushChannels }),
       ...(deps.lastDelivery === undefined ? {} : { lastDelivery: deps.lastDelivery }),
       pushWired: () => deps.deliveryHooks?.push !== undefined
     },
@@ -50,8 +60,22 @@ export function composeNotificationRuntimeSurfaces(
     getLanguage: deps.getLanguage,
     copy: deps.copy,
     diagnostics: deps.diagnostics,
-    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+    ...(deps.resolvePushChannels === undefined ? {} : { resolvePushChannels: deps.resolvePushChannels }),
     now: internals.now
   })
-  return { settingsSurface, delivery }
+  const posterRecord = {
+    recordPosterOutcomes: async (input: { recordId: string; channels: readonly PushChannelOutcome[] }): Promise<{ ok: boolean }> => {
+      const result = await recordPosterOutcomes({
+        recordId: input.recordId,
+        channels: input.channels,
+        now: internals.now(),
+        load: internals.load,
+        persist: internals.persistWithDiagnostics as never,
+        notifyChanged: internals.notifyChanged
+      })
+      return { ok: result.ok }
+    },
+    readPosterChannels: (recordId: string) => readPosterChannels({ recordId, load: internals.load })
+  }
+  return { settingsSurface, delivery, posterRecord }
 }

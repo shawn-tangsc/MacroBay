@@ -8,6 +8,7 @@ import type { createNewsSentimentEnrichmentService } from '../news-sentiment/new
 import type { createNewsSentimentScoringService } from '../news-sentiment/newsSentimentScoringService'
 import { isDefillamaStablecoinRetiredPath } from '../application/sourceCatalog'
 import { isZeroXRouterSource } from '../application/zeroXRouterSourcePolicy'
+import { getSource } from '../application/providerRegistry'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
 import { enqueueIntelligencePipelineJobs } from './enqueueIntelligencePipelineJobs'
 import {
@@ -39,7 +40,7 @@ export function registerIntelligenceJobs(
       scoreItems: ReturnType<typeof createNewsSentimentScoringService>['scoreItems']
     }
     capitalConditions?: { refresh: () => Promise<unknown> }
-    etfFlowHistory?: { refresh: () => Promise<unknown> }
+    etfFlowHistory?: { refresh: () => Promise<Readonly<{ state: string; reason?: string }>> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
     openInterest?: { refresh: (input?: Readonly<{ log?: (entry: Readonly<{ level: 'warn'; message: string }>) => void | Promise<void> }>) => Promise<unknown> }
   }
@@ -53,8 +54,18 @@ export function registerIntelligenceJobs(
       await deps.capitalConditions?.refresh()
       return
     }
-    if (isZeroXRouterSource(input.sourceId)) {
-      await deps.etfFlowHistory?.refresh()
+    // 路由按「这个源声明了 etf-net-flow」走，不认具体 id：以后加源只改注册表声明。
+    // 旧锚的分支留着只为过渡期——它 collection 落成 none 后不会再有作业。
+    if (getSource(input.sourceId)?.provides?.includes('etf-net-flow') === true || isZeroXRouterSource(input.sourceId)) {
+      const refreshed = await deps.etfFlowHistory?.refresh()
+      // 这一轮到底写没写，运行记录里要自己说出来：`unavailable` 时库里的 `last_attempt_at` 不动，
+      // 界面上只剩「采集完成」，读者和我们都只能猜（2026-11-17 查了半天的那次）。
+      if (refreshed !== undefined) {
+        await context.log({
+          level: refreshed.state === 'unavailable' ? 'warn' : 'info',
+          message: `ETF window refresh: ${refreshed.state}${refreshed.reason ? ` (${refreshed.reason})` : ''}.`
+        })
+      }
       return
     }
     // One source, two series: the funding rate and the notional open interest it cannot be
@@ -65,6 +76,9 @@ export function registerIntelligenceJobs(
       await deps.openInterest?.refresh({ log: context.log })
       return
     }
+    // 这个源在这次采集**之前**库里有没有条目：没有就是「建档」那一轮（一次几百条也不该响一遍）。
+    // 条目是 normalize 才建的，所以此刻读到的还是上一轮的结果。
+    const sourceHadItems = deps.pipeline.listItems().some((item) => item.sourceId === input.sourceId)
     const result = await pipeline.collectSource({
       sourceId: input.sourceId,
       runId: input.runId ?? context.jobRunId
@@ -93,16 +107,18 @@ export function registerIntelligenceJobs(
       ...(reasonCode === undefined ? {} : { reasonCode })
     })
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
-      sourceId: input.sourceId
+      sourceId: input.sourceId,
+      ...(sourceHadItems ? {} : { firstCollection: true })
     })
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB, async (payload, context) => {
-    const input = payload as { sourceId?: string; limit?: number; newItemIds?: string[] }
+    const input = payload as { sourceId?: string; limit?: number; newItemIds?: string[]; firstCollection?: boolean }
     const result = await pipeline.normalizeRawRecords(input)
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
       sourceId: input.sourceId,
-      newItemIds: result.newItemIds
+      newItemIds: result.newItemIds,
+      ...(input.firstCollection ? { firstCollection: true } : {})
     })
     await context.log({ level: 'info', message: 'Normalized pending raw records.' })
   })
@@ -129,7 +145,7 @@ export function registerIntelligenceJobs(
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, async (payload, context) => {
-    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number }
+    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number; firstCollection?: boolean }
     if (!deps.newsSentiment) {
       await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
       return
@@ -143,22 +159,32 @@ export function registerIntelligenceJobs(
       await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], { rebuild: true })
     } else if (input.itemIds?.length) {
       await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {
-        newItemIds: input.itemIds
+        newItemIds: input.itemIds,
+        ...(input.firstCollection ? { firstCollection: true } : {})
       })
     }
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB, async (payload, context) => {
-    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number }
+    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number; firstCollection?: boolean }
     if (!deps.newsSentiment) {
       await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
       return
     }
-    const result = await deps.newsSentiment.scoreItems(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds, limit: input.limit })
+    const result = await deps.newsSentiment.scoreItems({
+      ...(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds, limit: input.limit }),
+      ...(input.rebuild ? { rebuild: true } : {}),
+      // 建档那一轮整轮不发（`firstCollection` 由采集侧按「这个源之前库内 0 条」给出）。
+      ...(input.firstCollection ? { suppressArrivalNotices: true } : {})
+    })
     await context.log({
       level: 'info',
-      message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, skipped ${result.skipped}.`
+      // `unjudged` 必须出现在这里：这一轮「有几条没判出来」是可查的事实，不是一次静默跳过。
+      message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, `
+        + `unjudged ${result.unjudged}, skipped ${result.skipped}.`
     })
+    // 新闻的严重度只能在这一步之后才成立（判定刚写下来）。重建是重算历史，不是新事件，不补触发。
+    // R39：新闻判定落地后不再补分析触发——按条解读只有读者手动那一次。
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB, async (payload, context) => {
@@ -202,7 +228,9 @@ export function registerIntelligenceJobs(
       sourceId: input.sourceId,
       retentionMode: input.retentionMode ?? 'balanced'
     })
-    await context.log({ level: 'info', message: `Archived ${result.archivedCount} raw records.` })
+    /* 原文外置已退休（2026-11-20）：这个任务**只做译文压缩**，不再有「归档原始记录」这件事。
+       日志照实说，别让读日志的人以为原文还被这个任务搬过。 */
+    await context.log({ level: 'info', message: `Compacted ${result.translationRemoved} translation records; raw payload archiving is retired.` })
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_PARQUET_EXPORT_JOB, async (_payload, context) => {
@@ -239,3 +267,5 @@ export function registerIntelligenceJobs(
     await context.log({ level: 'info', message: 'Reindexed intelligence records.' })
   })
 }
+
+

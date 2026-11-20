@@ -4,6 +4,7 @@ import { analysisTimelineRefreshPolicy, type AnalysisTimelineRefreshPolicy } fro
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
 import { isAlreadyAvailableError, withReadTimeout } from './marketAnalysisTimelineRead'
+import { createAnalysisRequestRunner } from './marketAnalysisRequestRunner'
 
 // Kept importable from here: callers and tests already name this module.
 export { isAlreadyAvailableError } from './marketAnalysisTimelineRead'
@@ -13,17 +14,14 @@ import {
   type MarketAnalysisTimelineDetail,
   type MarketAnalysisTimelineEntry
 } from '../../shared/ipc/marketAnalysisTimelineClient'
+import type { MarketAnalysisTimelineReadFailure } from '../../shared/ipc/marketAnalysisTimelineReadFailure'
+import { listFailedRuns } from '../../shared/ipc/marketAnalysisFailedRunClient'
+import { requestNewsInterpretation, type NewsInterpretationRequestView } from '../../shared/ipc/newsInterpretationClient'
 
 export type AnalysisSelectionState = 'none' | 'loading' | 'ready' | 'unavailable'
-export type AnalysisRequestState = 'idle' | 'loading' | 'queued' | 'still-running' | 'unavailable' | 'not-ready' | 'failed' | 'already-available'
-/**
- * Where a failed request failed.
- *
- * A refusal before a run exists ("the service said no") and a run that finished without
- * publishing are different failures, and rendering both as "the request did not go through"
- * told the reader nothing about the analysis they had just asked for.
- */
-export type AnalysisRequestFailure = 'request' | 'run'
+// 两个请求态类型住在请求状态机那一侧；这里再导出，既有调用点不用改 import。
+export type { AnalysisRequestFailure, AnalysisRequestState } from './marketAnalysisRequestState'
+import type { AnalysisRequestFailure as Failure, AnalysisRequestState as RequestState } from './marketAnalysisRequestState'
 
 /** Text slice the workspace surfaces need; owned by the product i18n registry. */
 export type AnalysisTimelineText = Readonly<{
@@ -44,6 +42,11 @@ type State = Readonly<{
   refreshing?: boolean
   failed?: boolean
   /**
+   * 上一次读**为什么**没成：`product-runtime-unavailable` 是情报模块本身没启动起来，其余是
+   * 「这次没读出来」。界面上两者都是「读不到」，但诊断与用例要能分开。
+   */
+  failure?: MarketAnalysisTimelineReadFailure
+  /**
    * Outcome of the most recent read, kept only so the empty state can say what
    * actually happened. The renderer console does not reach the host terminal, so
    * this is the only way to see the renderer's own view of a read.
@@ -57,12 +60,21 @@ type State = Readonly<{
 }>
 
 
+/** 失败页：按运行分页的全部失败（没有正文的行）。 */
+export type FailedRunsState = Readonly<{
+  loading: boolean
+  /** 这次读没成（与「确实没有失败」是两件事）。 */
+  failed?: boolean
+  entries: readonly MarketAnalysisTimelineEntry[]
+  nextCursor?: string | null
+}>
+
 export type UseMarketAnalysisTimelineResult = Readonly<{
   state: State
   attempt: MarketAnalysisAttempt | null
-  requestState: AnalysisRequestState
+  requestState: RequestState
   /** Set with `requestState === 'failed'`; absent for every other state. */
-  requestFailure?: AnalysisRequestFailure
+  requestFailure?: Failure
   selectionState: AnalysisSelectionState
   /** Detail cache so the latest-conclusion card and the drawer share one fetch per node. */
   details: Readonly<Record<string, MarketAnalysisTimelineDetail>>
@@ -73,8 +85,28 @@ export type UseMarketAnalysisTimelineResult = Readonly<{
   /** Reads a node detail without changing the selection or the chat binding. */
   ensureDetail: (entry: MarketAnalysisTimelineEntry) => void
   loadMore: () => void
+  /**
+   * 失败页自己的列表与翻页（`marketAnalysis.listFailedRuns`）。与 `state.entries` **分开**：
+   * 时间轴首屏仍按旧规则补进最多 20 条失败行，两处若合并，读者会在失败页看到同一次运行两遍。
+   */
+  failedRuns: FailedRunsState
+  /** 第一次打开失败页时读首页（幂等；失败后调用即重试）。 */
+  ensureFailedRuns: () => void
+  /** 失败页翻下一页；`nextCursor` 为 null 时什么都不做。 */
+  loadMoreFailedRuns: () => void
   requestInitialAnalysis: () => Promise<void>
   requestRefreshAnalysis: () => Promise<void>
+  /**
+   * 按条「AI 解读」：**和「立即分析」共用同一套请求状态**（`loading` → `queued` → 同一个有界
+   * 轮询），所以界面上只有一种「正在解析」，不会两个入口各转各的圈。返回业务结果，让调用方按
+   * 它自己的四态文案解释「没开始」的那几档——那几档不是失败，也不留一个永远转圈的按钮。
+   */
+  requestItemAnalysis: (itemId: string) => Promise<NewsInterpretationRequestView>
+  /**
+   * 「重新生成这一条」：同一事件组再分析一次，产生新记录（旧记录不动）。走既有入口，
+   * 只是把目标从「最近一条」换成读者正在看的那一组。
+   */
+  regenerateConclusion: (eventGroupId: string) => Promise<void>
 }>
 
 /**
@@ -104,8 +136,8 @@ export function useMarketAnalysisTimeline(input: Readonly<{
 }>): UseMarketAnalysisTimelineResult {
   const policy = input.policy ?? analysisTimelineRefreshPolicy
   const [state, setState] = useState<State>({ loading: true, entries: [] })
-  const [requestState, setRequestState] = useState<AnalysisRequestState>('idle')
-  const [requestFailure, setRequestFailure] = useState<AnalysisRequestFailure>()
+  const [requestState, setRequestState] = useState<RequestState>('idle')
+  const [requestFailure, setRequestFailure] = useState<Failure>()
   const [attempt, setAttempt] = useState<MarketAnalysisAttempt | null>(null)
   const generation = useRef(0)
   const selectionGeneration = useRef(0)
@@ -169,9 +201,10 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       : { ...current, loading: true, failed: false })
     try {
       const result = await withReadTimeout(marketAnalysisTimelineClient.listTimeline(cursor ? { cursor } : {}), policy.readTimeoutMs)
-      const trace = result?.state === 'available'
-        ? `${result.state}:${result.page.items.length}`
-        : result?.state ?? 'timeout'
+      const trace = result === undefined
+        ? 'timeout'
+        : result.state === 'available' ? `available:${result.page.items.length}` : `unavailable:${result.reason}`
+      const failure: MarketAnalysisTimelineReadFailure = result?.state === 'unavailable' ? result.reason : 'read-failed'
       setState(current => ({ ...current, lastRead: trace }))
       // A read that never settled or was unavailable is a visible failure, never a
       // permanent spinner; a background retry below heals a transient one.
@@ -193,7 +226,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
         // Either data was already on screen (keep it, mark it stale) or the budget is spent (this is
         // the first and final failure, so it may be shown).
         initialFailureSince.current = undefined
-        setState(current => ({ ...current, lastRead: `${trace}->unavailable`, failed: true }))
+        setState(current => ({ ...current, lastRead: `${trace}->unavailable`, failed: true, failure }))
         if (!cursor) settled.current = true
         return undefined
       }
@@ -318,104 +351,14 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     setState(current => ({ ...current, selected: undefined, detail: undefined, detailLoading: false }))
   }
 
-  type PollOutcome = 'published' | 'failed' | 'pending' | 'unreadable'
-  type PollResult = Readonly<{ outcome: PollOutcome }>
-
-  const pollForCompletion = async (baselineEntryId: string | undefined, pollAttempt = 0): Promise<PollResult> => {
-    setRequestState('queued')
-    const loaded = await load(undefined, true)
-    if (!loaded) {
-      // The read itself failed. Leaving the request `queued` kept the action disabled forever with
-      // no poll left to end it; the list already reports the read failure, so release the action.
-      setRequestState('idle')
-      return { outcome: 'unreadable' }
-    }
-    const published = loaded.entries[0]
-    if (published && published.id !== baselineEntryId) {
-      setRequestState('idle')
-      return { outcome: 'published' }
-    }
-    const latest = loaded.attempt
-    // `stale`/`superseded` never publish either: they are terminal for this reader's purposes,
-    // and leaving them out made the poll run to its limit and report a failure with no reason.
-    const terminalFailure = latest && ['failed', 'invalid-output', 'cancelled', 'stale', 'superseded'].includes(latest.status)
-    if (terminalFailure) {
-      setRequestState('failed')
-      setRequestFailure('run')
-      return { outcome: 'failed' }
-    }
-    if (latest?.status === 'succeeded') {
-      // A succeeded run whose node never appeared is a real "not published", unlike a run that
-      // is still working inside its budget.
-      setRequestState('failed')
-      setRequestFailure('run')
-      return { outcome: 'failed' }
-    }
-    if (pollAttempt >= policy.maxPollAttempts) {
-      const stillRunning = Boolean(latest && ['queued', 'running'].includes(latest.status))
-      if (stillRunning) {
-        // Stop watching without claiming a failure: the run is past the job budget but may still
-        // land, and the live poll will show it. The action is released and the panel says it is
-        // still running; `queued` here would leave the button disabled with no timer left.
-        setRequestState('still-running')
-        return { outcome: 'pending' }
-      }
-      setRequestState('failed')
-      setRequestFailure('run')
-      return { outcome: 'failed' }
-    }
-    await new Promise<void>(resolve => { pollTimer.current = setTimeout(resolve, policy.pollIntervalMs) })
-    return pollForCompletion(baselineEntryId, pollAttempt + 1)
-  }
-
-  const requestInitialAnalysis = async (): Promise<void> => {
-    setRequestState('loading')
-    setRequestFailure(undefined)
-    const result = await marketAnalysisTimelineClient.requestInitialAnalysis(attempt && ['failed', 'invalid-output', 'cancelled'].includes(attempt.status) ? attempt.id : undefined)
-    if (result.state !== 'queued') {
-      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
-      setRequestState(next)
-      if (next === 'failed') setRequestFailure('request')
-      return
-    }
-    await pollForCompletion(undefined)
-  }
-
-  /**
-   * One refresh request: queue the run and wait for it to publish or fail.
-   *
-   * A refusal (`already-available`, `not-ready`, an IPC error) is reported as `request`; a run
-   * that finished without publishing is reported as `run`, so the surface can say which happened.
-   */
-  const enqueueRefresh = async (baselineEntryId: string | undefined): Promise<PollResult | 'refused'> => {
-    setRequestState('loading')
-    setRequestFailure(undefined)
-    let result: Awaited<ReturnType<typeof marketAnalysisTimelineClient.requestInitialAnalysis>>
-    try {
-      result = await marketAnalysisTimelineClient.requestInitialAnalysis(undefined, 'refresh')
-    } catch (error) {
-      // The service refuses with `analysis-already-available` when a usable analysis already exists —
-      // including the run it just finished. That is not a failure to report as "not published".
-      const already = isAlreadyAvailableError(error)
-      setRequestState(already ? 'already-available' : 'failed')
-      if (!already) setRequestFailure('request')
-      return 'refused'
-    }
-    if (result.state !== 'queued') {
-      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
-      setRequestState(next)
-      if (next === 'failed') setRequestFailure('request')
-      return 'refused'
-    }
-    return pollForCompletion(baselineEntryId)
-  }
-
-  const requestRefreshAnalysis = async (): Promise<void> => {
-    // The retry after a contract rejection lives in the analysis orchestrator, not here: it must
-    // also cover scheduled runs and runs whose panel is closed, and it re-asks against the same
-    // frozen snapshot. The poll simply keeps waiting while that second answer is produced.
-    await enqueueRefresh(state.entries[0]?.id)
-  }
+  // 请求一次分析、等它发布的状态机：时间轴自己的按钮与按条「AI 解读」共用同一份（见 runner 模块）。
+  const requests = createAnalysisRequestRunner({
+    policy, load,
+    latestEntryId: () => state.entries[0]?.id,
+    retryRunId: () => attempt && ['failed', 'invalid-output', 'cancelled'].includes(attempt.status) ? attempt.id : undefined,
+    setRequestState, setRequestFailure, pollTimer,
+    client: marketAnalysisTimelineClient, requestNewsInterpretation
+  })
 
   const selectionState: AnalysisSelectionState = state.selected
     ? state.detailLoading ? 'loading' : state.detail ? 'ready' : 'unavailable'
@@ -457,6 +400,51 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     })
   }
 
+  const [failedRuns, setFailedRuns] = useState<FailedRunsState>({ loading: false, entries: [] })
+  const failedStarted = useRef(false)
+  const failedReading = useRef(false)
+  /**
+   * 读一页失败运行。与时间轴那条读**各走各的游标**，也各存各的列表——合并两个来源就会让同一次
+   * 运行在失败页出现两行。
+   */
+  const readFailedRuns = async (cursor?: string): Promise<void> => {
+    if (failedReading.current) return
+    failedReading.current = true
+    setFailedRuns(current => ({ ...current, loading: true, failed: false }))
+    try {
+      const result = await withReadTimeout(listFailedRuns(cursor === undefined ? {} : { cursor }), policy.readTimeoutMs)
+      if (result?.state !== 'available') {
+        setFailedRuns(current => ({ ...current, loading: false, failed: true }))
+        return
+      }
+      setFailedRuns(current => {
+        const existing = cursor === undefined ? [] : current.entries
+        const seen = new Set(existing.map(entry => entry.runKey ?? entry.id))
+        // 翻页追加时按 `runKey` 去重：分页边界上重复拿到的同一次运行只留一行。
+        const appended = result.page.items.filter(entry => {
+          const key = entry.runKey ?? entry.id
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        return { loading: false, entries: [...existing, ...appended], nextCursor: result.page.nextCursor }
+      })
+    } finally {
+      failedReading.current = false
+    }
+  }
+  /** 幂等首读；已经读到过就不再读（读失败过则允许再调一次＝重试）。 */
+  const ensureFailedRuns = (): void => {
+    if (failedStarted.current && failedRuns.failed !== true) return
+    failedStarted.current = true
+    void readFailedRuns()
+  }
+  const loadMoreFailedRuns = (): void => {
+    const cursor = failedRuns.nextCursor
+    if (cursor === undefined || cursor === null) return
+    void readFailedRuns(cursor)
+  }
+
   const ensureDetail = (entry: MarketAnalysisTimelineEntry): void => {
     if (detailCache.current[entry.id] || detailRequests.current.has(entry.id)) return
     // 重试时**必须回到 loading**：失败后状态停在 `unavailable`，读者点了重试却看不到任何变化，
@@ -474,7 +462,8 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   return {
     state, attempt, requestState, requestFailure, selectionState, details, detailState, load, select, clearSelection, ensureDetail,
     loadMore: () => { void load(state.nextCursor ?? undefined) },
-    requestInitialAnalysis, requestRefreshAnalysis
+    failedRuns, ensureFailedRuns, loadMoreFailedRuns,
+    ...requests
   }
 }
 

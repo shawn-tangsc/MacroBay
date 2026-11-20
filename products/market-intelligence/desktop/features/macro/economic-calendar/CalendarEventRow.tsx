@@ -6,6 +6,12 @@ import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarItemType, isHighImportanceCalendarItem, type CalendarDayItem } from './economicCalendarDayModel'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarEventStatus } from './calendarEventStatusModel'
+import { calendarCountryLabel } from './calendarCountryLabel'
+
+/* 这份样式表是这一族行与列表的**加载点**：以前由旧日历页 import，页面一删就没人加载，
+   抽屉里的时刻与标题会挤成一行（用户 2026-11-15 报的正是这个）。挂着的是最终会渲染的那片叶子
+   组件，页面层加不加都不影响它。守卫 `economicCalendarCssLoaded.test.ts` 盯着它不许变成「只被测试读」。 */
+import './economicCalendar.css'
 
 /**
  * One glyph per kind, so a cell that mixes kinds says which row is which at a glance. The day list
@@ -17,10 +23,22 @@ const calendarKindGlyphs: Record<MarketCalendarEvent['eventType'], LucideIcon> =
   'central-bank-activity': Landmark
 }
 
-export function CalendarEventRow({ item, text, statusNow, onSelect, marketSources = [], selected = false }: {
-  item: CalendarDayItem; text: EconomicCalendarText; statusNow: string; onSelect: (item: CalendarDayItem) => void
+export function CalendarEventRow({ item, text, statusNow, onSelect, marketSources = [], selected = false, missingValueLabel, repeatCountLabel }: {
+  item: CalendarDayItem; text: EconomicCalendarText; statusNow: string
+  /**
+   * `undefined` = 这一行**没有动作**：渲染成非交互的行，不画按钮、不可聚焦、没有悬停指针。
+   * 用它比传一个 `() => undefined` 好——后者长得像能点，点了什么也不发生（假控件）。
+   */
+  onSelect?: (item: CalendarDayItem) => void
   /** Source-level state for this page. Only the market route can carry a storage-limit verdict. */
   marketSources?: readonly MarketCalendarSource[]; selected?: boolean
+  /**
+   * 行尾「未提供」的文案。给了才显示，且**只给经济指标行**——事件型（讲话/会议/报告）本来就没有
+   * 「缺值」这个概念，标上会把「源说发布了却没给数」和「这类事件永远没有数」混成一团。
+   */
+  missingValueLabel?: string
+  /** 「本期 N 次」的模板（含 `{count}`）；不给就不显示——这一层不拼句子。 */
+  repeatCountLabel?: string
 }) {
   const title = item.source === 'market' ? item.event.title : text.events[item.event.labelKey]
   const time = item.time ?? text.unifiedDay.timePending
@@ -32,16 +50,42 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // that switches this hint to a key later must not also have to find a new resolver.
   const resolveText = useProductTextKey()
   // The 0xRouter route carries the country; the official route is US-only and says so in its own
-  // copy, so a country chip there would be noise. Read straight from the provider, which localises
-  // the name with the same request (a code like `US` would be a machine token to the reader).
-  const country = item.source === 'market' ? item.event.countryName : undefined
+  // copy, so a country chip there would be noise. 名字优先，查不到就**原样显示源给的国家码**
+  // （`calendarCountryLabel`）：名字 → 原始码 → 「未知国家」，三级只在那里判一次
+  // （用户 2026-11-16 定了两次：先「名字是什么就显示什么」，再「没有国家数据时显示未知国家」）。
+  const country = item.source === 'market' ? calendarCountryLabel(item.event, text) : undefined
+  /**
+   * 完整国名只给 `title` / `aria-label`（用户 2026-11-20）：英文显示 `US`、读屏念 `United States`。
+   * 没有国家时**两个属性都不写**（保持 `—`，不出现 `undefined`）。
+   */
+  const countryFull = item.source === 'market' ? item.event.countryNameFull : undefined
+  /**
+   * 「本期 N 次」：合并之后同一期可能来自多次发布（GDP 二读/三读）。**只在 >1 时出**——
+   * 1 次是常态，挂上去就是噪声；不显示 = 「这一期就发过一次」，这是事实而不是缺少。
+   */
+  const releaseCount = item.source === 'market' ? item.event.releaseCount : undefined
+  const repeatLabel = releaseCount !== undefined && releaseCount > 1 && repeatCountLabel !== undefined
+    ? repeatCountLabel.replace('{count}', String(releaseCount)) : undefined
   const kind = calendarItemType(item)
-  const KindGlyph = calendarKindGlyphs[kind]
+  /**
+   * 行尾的**类别文字**（用户 2026-11-19：「怎么没给我区分出来，是央行活动还是经济指标，还是经济事件」）。
+   * 只认事件自己的类型字段：市场行没有 `eventType` 时写 `—`——**不自造「未分类」、也不留空**。
+   * 官方腿只有经济指标，这类行永远是「经济指标」。
+   */
+  const kindLabel = item.source === 'market'
+    ? (item.event.eventType === undefined
+      ? '—'
+      : text.market.kinds[item.event.eventType] ?? '—')
+    : text.market.kinds['economic-indicator']
+  // 源没给类型时**不画字形**（`eventType` 为空的行确实存在）：缺一个图标不该让整行渲染崩掉。
+  const KindGlyph = kind === undefined ? null : calendarKindGlyphs[kind]
   const important = isHighImportanceCalendarItem(item)
   // The kind and the importance ride in the description so the marks have names: the accessible label
   // and the hover text both say them, rather than leaving the reader to decode two glyphs.
   const importanceNote = important ? ` · ${text.details.importance} ${text.importance.high}` : ''
-  const description = `${time} ${text.market.kinds[kind]} ${country ? `${country} ` : ''}${title} · ${text.eventStatus[status]}${importanceNote}`
+  // 「已发布却没值」：时刻已过、来源没给实际值，且这是**指标**行。事件型永远不加。
+  const missingValue = missingValueLabel !== undefined && status === 'awaiting-data' && kind === 'economic-indicator'
+  const description = `${time} ${kind === undefined ? '' : `${text.market.kinds[kind]} `}${country ? `${country} ` : ''}${title}${missingValue ? ` · ${missingValueLabel}` : ''} · ${text.eventStatus[status]}${importanceNote}`
   // The description is runtime data (time, title, status), not a sentence from the text table, so it
   // goes through `dataText`. The hint is the same line on hover and on focus; the accessible name is
   // that same line — it used to repeat the time, because the template added it a second time.
@@ -50,19 +94,60 @@ export function CalendarEventRow({ item, text, statusNow, onSelect, marketSource
   // 按钮又会把行内的时间、种类字形、标题一起包成一颗文字按钮——那正是用户否过的样子。所以这里保留
   // 原生 `<button>`：`aria-label` 给名字（同一句也做悬停提示）、原生按钮自带键盘可达、
   // `.mi-economic-calendar__event:hover` 给悬停反馈。用户 2026-11-09 判决：保留，别当漏换的裸按钮。
+  //
+  // 没有 `onSelect` 时没有动作可做，就**不能**画成按钮：同样的内容用 `div` 渲染，行高与栅格不变，
+  // 但不可聚焦、无悬停反馈、无障碍树里也不是控件。
+  const shared = {
+    className: 'mi-economic-calendar__event',
+    'data-market-event': item.source === 'market' ? item.event.eventKey : undefined,
+    'data-calendar-row': true,
+    'data-importance': important ? 'high' : item.source === 'market' ? item.event.importance : undefined,
+    'data-event-status': status
+  } as const
+  const titleText = missingValue ? `${title} · ${missingValueLabel}` : title
   return <Tooltip dataText={description} resolveText={resolveText}>
-    <button className="mi-economic-calendar__event" data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
-      data-market-event={item.source === 'market' ? item.event.eventKey : undefined} data-calendar-row data-importance={important ? 'high' : item.source === 'market' ? item.event.importance : undefined}
-      data-event-status={status} type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
-      <span className="mi-economic-calendar__event-time">{time}</span>
-      {/* The marks sit inside the title, not beside it: a third grid child collapsed the title to an
-          ellipsis once already. The kind glyph leads the run so it lines up down the column, and the
-          importance dot follows it directly ahead of the name. */}
-      <span className="mi-economic-calendar__event-title">
-        <span aria-hidden="true" className="mi-economic-calendar__event-kind" data-event-kind={kind}><KindGlyph size={11} /></span>
-        {important ? <span aria-hidden="true" className="mi-economic-calendar__event-marker" data-importance-marker="high" /> : null}
-        {country ? <span className="mi-economic-calendar__event-country" data-event-country>{country}</span> : null}{title}
-      </span>
-    </button>
+    {onSelect === undefined
+      ? <div {...shared}>
+        <RowContent time={time} kind={kind} important={important} country={country} countryFull={countryFull} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
+      </div>
+      : <button {...shared} data-event-key={item.source === 'official' ? item.event.eventKey : undefined}
+        type="button" aria-label={description} aria-pressed={selected} onClick={() => onSelect(item)}>
+        <RowContent time={time} kind={kind} important={important} country={country} countryFull={countryFull} title={titleText} KindGlyph={KindGlyph} repeatLabel={repeatLabel} releaseCount={releaseCount} kindLabel={kindLabel} />
+      </button>}
   </Tooltip>
+}
+
+/** 行内内容：按钮态与非交互态必须一模一样，所以只有一份。 */
+function RowContent({ time, kind, important, country, countryFull, title, KindGlyph, repeatLabel, releaseCount, kindLabel }: {
+  time: string; kind: MarketCalendarEvent['eventType'] | undefined; important: boolean
+  country: string | undefined
+  /** 完整国名（给 title / aria-label）：没有国家时是 undefined，两个属性都不写。 */
+  countryFull: string | undefined
+  title: string; KindGlyph: LucideIcon | null
+  repeatLabel: string | undefined; releaseCount: number | undefined; kindLabel: string
+}) {
+  return <>
+      <span className="mi-economic-calendar__event-time">{time}</span>
+      {/*
+        国家是**固定的第二列**（用户 2026-11-16 第二次要求「事件前面要显示国家」）：列宽由
+        `--mi-calendar-country-width` 给，这一格**永远渲染**——没有国家时是空串。少了这个元素，
+        标题会掉进这一列、整列错位；有了它，有没有国家的事件标题都从同一个 x 开始。
+
+        以前它是标题内的行内片段（当时为了省下窄月格里的宽度），代价是「查不到名字就整格消失」，
+        而用户要的正是「事件前面必须显示国家」。所以那一版判断在 2026-11-16 被推翻：宁可少几像素
+        标题宽度，也不让国家列时有时无。
+      */}
+      <span className="mi-economic-calendar__event-country" data-event-country={country ?? undefined}
+        {...(countryFull === undefined ? {} : { title: countryFull, 'aria-label': countryFull })}>{country}</span>
+      {/* The marks sit inside the title: the kind glyph leads the run so it lines up down the column,
+          and the importance dot follows it directly ahead of the name. */}
+      <span className="mi-economic-calendar__event-title">
+        {KindGlyph === null ? null : <span aria-hidden="true" className="mi-economic-calendar__event-kind" data-event-kind={kind}><KindGlyph size={11} /></span>}
+        {important ? <span aria-hidden="true" className="mi-economic-calendar__event-marker" data-importance-marker="high" /> : null}
+        {title}
+        {repeatLabel === undefined ? null : <em className="mi-economic-calendar__event-repeat" data-release-count={releaseCount}>{repeatLabel}</em>}
+      </span>
+      {/* 类别文字在**行尾右侧**：小字、次级色，靠栅格最后那一列对齐——不占行高、只加宽。 */}
+      <em className="mi-economic-calendar__event-kindname" data-calendar-kind-label>{kindLabel}</em>
+  </>
 }

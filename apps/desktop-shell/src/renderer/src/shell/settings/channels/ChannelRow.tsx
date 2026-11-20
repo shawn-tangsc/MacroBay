@@ -1,8 +1,11 @@
 import { Button, Switch } from 'antd'
 import { FileText, MessageSquare, Pencil, RotateCw, Trash2 } from 'lucide-react'
 
+import { shouldShowAutoDisabledHint } from '@platform/ai/agent-platform/channels/autoDisabledHint'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 import type { PlatformText } from '../../../i18n/platformText'
+import { SettingInfoPopover } from '../SettingInfoPopover'
 
 import type { Channel } from './channelSettingsPresentation'
 import type { ChannelConversationEntryState } from './useChannelConversationEntry'
@@ -42,6 +45,10 @@ export function ChannelRow(props: {
   onOpenConversation?: (channel: Channel) => void
   /** 读不到时点重试图标：重读这一条（不是「再点一次那个打不开的按钮」）。 */
   onRetryConversation?: (channel: Channel) => void
+  /** 行内「启用」：点的是这条通道自己的启用，与开关同一条路。 */
+  onEnableAutoDisabled?: (channel: Channel) => void
+  /** 那次启用失败：一句人话 + 原因码（码收在折叠里，不上主句）。 */
+  autoDisabledFailure?: { sentence: string; code: string } | null
 }): React.ReactElement {
   const { channel, labels } = props
   // 读屏名收的是**键**（点分路径）。键 → 句子只有这一张表，没有第二套 if 链；
@@ -53,7 +60,10 @@ export function ChannelRow(props: {
     'settings.channels.delete': labels.channelDelete,
     // 会话入口两种形态各一句：有会话说「查看这个频道的会话」，读不到说「点一下再试一次」。
     'settings.channels.openConversation': labels.channelOpenConversation,
-    'settings.channels.conversationUnreadable': labels.channelConversationUnreadable
+    'settings.channels.conversationUnreadable': labels.channelConversationUnreadable,
+    'settings.channels.autoDisabled.enable': labels.channelAutoDisabledEnable,
+    'settings.channels.autoDisabled.info': labels.channelAutoDisabledInfo,
+    'settings.channels.autoDisabled.infoAria': labels.channelAutoDisabledInfoAria
   }
   const resolveText = (key: string): string => rowActionText[key] ?? ''
   // 凭据读不出来 = 这条频道现在不能用：点变红，完整说法写在掩码那一位（同一件事只说一遍）。
@@ -170,6 +180,34 @@ export function ChannelRow(props: {
           size="small"
         />
       </span>
+      {/* 曾被「只允许一条」规则自动停用、且之后没再启用：**落在这条通道自己的行里**（原型 2026-11-13）。
+          没证据就整行什么都不渲染——不留空行、不灰着。判据是纯函数，只读投影，不改任何状态。 */}
+      {shouldShowAutoDisabledHint(channel.autoDisabled) ? (
+        <div className="channel-row-hint" data-channel-auto-disabled>
+          <InlineNotice
+            action={{ labelKey: 'settings.channels.autoDisabled.enable', onSelect: () => props.onEnableAutoDisabled?.(channel) }}
+            resolveText={resolveText}
+            tone="caution"
+          >
+            {labels.channelAutoDisabledNotice}
+          </InlineNotice>
+          <SettingInfoPopover
+            hintKey="settings.channels.autoDisabled.info"
+            infoLabelKey="settings.channels.autoDisabled.infoAria"
+            resolveText={resolveText}
+          />
+          {/* `<details>` 是块级内容：外层必须是 `<div>` 而不是 `<p>`（视觉不变，语义合规）。 */}
+          {props.autoDisabledFailure === null || props.autoDisabledFailure === undefined ? null : (
+            <div className="channel-row-error" data-auto-disabled-failure role="note">
+              {labels.channelAutoDisabledEnableFailed.replace('{reason}', props.autoDisabledFailure.sentence)}
+              <details>
+                <summary>{labels.channelAutoDisabledReasonCode}</summary>
+                <code>{props.autoDisabledFailure.code}</code>
+              </details>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }

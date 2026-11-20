@@ -2,6 +2,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createElement } from 'react'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
@@ -46,5 +48,48 @@ describe('the chart carries its own box', () => {
     const markup = renderToStaticMarkup(createElement(CapitalFlowChart, { rows, text }))
     expect(markup).toContain('class="mi-capital-conditions__chart"')
     expect(markup).toContain('class="mi-capital-conditions__chart-ticks"')
+  })
+})
+
+describe('a day without any reading', () => {
+  it('still holds its axis slot, and draws no bar for it', () => {
+    // 用户 2026-11-16：今天一个数据都没有，最新的 x 轴也应该是今天——空格子占位，但不画假柱子。
+    const withEmptyDay: FlowChartRow[] = [
+      { tradingDate: '2026-11-13', funds: -883_700_000, btc: 110_300_000, eth: -88_600_000 },
+      { tradingDate: '2026-11-14', funds: -200_000_000 },
+      { tradingDate: '2026-11-16' }
+    ]
+    const markup = renderToStaticMarkup(createElement(CapitalFlowChart, { rows: withEmptyDay, text }))
+    expect(markup).toContain('data-trading-date="2026-11-16"')
+    const empty = /<div class="mi-capital-conditions__chart-day" data-trading-date="2026-11-16"[\s\S]*?<\/div><\/div>/.exec(markup)?.[0] ?? ''
+    expect(empty).not.toContain('data-series')
+    // 只有稳定币那一天：画一根 funds 柱，不补 btc/eth。
+    const fundsOnly = /data-trading-date="2026-11-14"[\s\S]*?<\/div><\/div>/.exec(markup)?.[0] ?? ''
+    expect(fundsOnly).toContain('data-series="funds"')
+    expect(fundsOnly).not.toContain('data-series="btc"')
+  })
+
+  it('keeps the gap day on the axis: it has a date and a tooltip, but no bar', async () => {
+    // 夹具：前天有数、昨天缺数（用户 2026-11-16 的「昨天缺数、前天有数」）。
+    const rowsWithGap: FlowChartRow[] = [
+      { tradingDate: '2026-11-14', funds: -883_700_000, btc: 110_300_000, eth: -88_600_000 },
+      { tradingDate: '2026-11-15' },
+      { tradingDate: '2026-11-16', funds: -120_000_000 }
+    ]
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => root.render(createElement(CapitalFlowChart, { rows: rowsWithGap, text })))
+    const day = container.querySelector<HTMLElement>('[data-trading-date="2026-11-15"]')!
+    // 缺口那天：占着格子、没有柱子（不是 0，也不是被删掉）。
+    expect(day).not.toBeNull()
+    expect(day.querySelectorAll('[data-series]')).toHaveLength(0)
+    // 悬停它能读到它的日期与三条「—」——标签在，读数没有。
+    await act(async () => day.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
+    const tooltip = container.querySelector('[data-flow-tooltip]')!
+    expect(tooltip.textContent).toContain('2026-11-15')
+    expect((tooltip.textContent?.match(/—/g) ?? []).length).toBe(3)
+    await act(async () => root.unmount())
+    container.remove()
   })
 })

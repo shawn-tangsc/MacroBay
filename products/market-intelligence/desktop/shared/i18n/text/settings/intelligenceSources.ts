@@ -66,11 +66,16 @@ export const intelligenceSourcesText = {
       'provider-disabled': '这个数据源已停用',
       'parser-output-empty': '采集到了内容，但解析结果为空',
       'credential-missing': '还没有配置 API Key',
+      'credential-not-configured': '还没有配置凭据',
       'credential-invalid': 'API Key 被数据源拒绝',
       'rate-limited': '被数据源限流，稍后会自动重试',
       'request-timeout': '请求超时，稍后会自动重试',
       'transport-unavailable': '网络不可达，请检查代理设置',
       'response-unavailable': '数据源没有返回内容',
+      'response-shape-invalid': '数据源返回的结构和预期不一样',
+      'plan-restricted': '当前套餐不允许访问这个接口',
+      /* 额度用尽 ≠ 套餐不含：这是这个月没了、下个月会回来。**不写恢复时间**——我们不知道它何时恢复。 */
+      'credits-exhausted': '本月额度已用尽',
       'invalid-json': '数据源返回的内容不是合法 JSON',
       cancelled: '已取消',
       'handler-error': '任务执行报错'
@@ -167,7 +172,7 @@ export const intelligenceSourcesText = {
   /** 来源列表的条件行（C5）：胶囊说「值 · 还剩 N」，清空按钮一个词。 */
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
-    '0xrouter-aggregate-provider': 'BTC、ETH 现货 ETF 的净流入',
+    '0xrouter-aggregate-provider': '三项市场日历共用的接入凭据',
     'alternative-fear-greed': '恐惧与贪婪指数的当前读数',
     'bea-economic-series': '美国经济分析局的 GDP 与 PCE',
     'binance-announcements': '币安公告：上币、下架与规则变更',
@@ -180,6 +185,7 @@ export const intelligenceSourcesText = {
     'coindesk-rss': 'CoinDesk 的加密新闻标题与摘要',
     'coingecko-market': '加密总市值、成交额与 BTC 占比',
     'coinmarketcal': '加密事件条目，按币种与日期',
+    'cryptoetf-etf-flows': 'BTC、ETH 现货 ETF 的每日净流入',
     'cryptopanic': '加密新闻聚合，按币种归类',
     'defillama-stablecoins': '稳定币总供给及其近期变化',
     'defillama-tvl': '各链锁仓总值及其近期变化',
@@ -190,9 +196,12 @@ export const intelligenceSourcesText = {
     'github-releases': '维护备用，暂不向读者提供内容',
     'kraken-status': '维护备用，暂不向读者提供内容',
     'kraken-system-status': '维护备用，暂不向读者提供内容',
-    'macro-calendar-0xrouter-central-bank-activities': '央行会议与公开活动的日程',
-    'macro-calendar-0xrouter-economic-data': '经济指标的发布日程与公布值',
-    'macro-calendar-0xrouter-financial-events': '财经事件的发生日程与时间点',
+    'macro-calendar-0xrouter-economic-data': '市场来源的经济指标日程；可选补充源，启用后才会定时采集',
+    'macro-calendar-0xrouter-financial-events': '市场来源的金融事件日程；可选补充源，启用后才会定时采集',
+    'macro-calendar-0xrouter-central-bank-activities': '市场来源的央行活动日程；可选补充源，启用后才会定时采集',
+    'macro-calendar-narwhal-central-bank-activities': '央行会议与公开活动的日程',
+    'macro-calendar-narwhal-economic-data': '经济指标的发布日程与市场预期',
+    'macro-calendar-narwhal-financial-events': '金融事件的发生日程与时间点',
     'macro-calendar-bea': '美国经济分析局的官方发布日程',
     'macro-calendar-bls': '美国劳工统计局的官方发布日程',
     'macro-calendar-coinmarketcal': '加密活动与代币事件的日程',
@@ -210,6 +219,13 @@ export const intelligenceSourcesText = {
     'macro-calendar-fed': '美联储官方日程', 'federal-reserve-rss': '美联储新闻稿',
     'macro-calendar-bea': 'BEA 官方发布', 'bea-economic-series': 'BEA 经济数据',
     'macro-calendar-bls': 'BLS 官方日程', 'bls-economic-series': 'BLS 经济数据',
+    /* 采集与数据 → 日历那三张卡读的是这张表，缺了就直接印源 id（2026-11-13 读者看到的就是这个）。 */
+    'macro-calendar-0xrouter-economic-data': '市场日历 · 经济数据',
+    'macro-calendar-0xrouter-financial-events': '市场日历 · 金融事件',
+    'macro-calendar-0xrouter-central-bank-activities': '市场日历 · 央行活动',
+    'macro-calendar-narwhal-economic-data': 'Narwhal 经济数据',
+    'macro-calendar-narwhal-financial-events': 'Narwhal 金融事件',
+    'macro-calendar-narwhal-central-bank-activities': 'Narwhal 央行活动',
     'fred-rates-liquidity': '美债利率与流动性', fred: 'FRED（已弃用）',
     'treasury-fiscal-data': '财政部财政数据', 'sec-rss': 'SEC 监管公告', 'cftc-rss': 'CFTC 监管公告',
     'binance-announcements': '币安公告', 'binance-api-updates': '币安 API 更新',
@@ -220,10 +236,8 @@ export const intelligenceSourcesText = {
     'alternative-fear-greed': '恐惧与贪婪指数', 'coindesk-rss': 'CoinDesk 新闻',
     'ethereum-foundation-blog': '以太坊基金会博客', cryptopanic: 'CryptoPanic 新闻',
     coinmarketcal: 'CoinMarketCal 新闻（旧）', 'macro-calendar-coinmarketcal': 'CoinMarketCal 事件日历',
-    '0xrouter-aggregate-provider': '0xRouter 聚合行情',
-    'macro-calendar-0xrouter-economic-data': '0xRouter 经济数据',
-    'macro-calendar-0xrouter-financial-events': '0xRouter 财经事件',
-    'macro-calendar-0xrouter-central-bank-activities': '0xRouter 央行活动',
+    'cryptoetf-etf-flows': 'CryptoETF ETF 净流入',
+    '0xrouter-aggregate-provider': '0xRouter 接入凭据',
     'realmarketapi-market': 'RealMarketAPI 美元指数', 'twelve-data-market': 'Twelve Data 宏观行情',
     'policy-path-market': 'FOMC 决议市场',
     'coinbase-status': 'Coinbase 运行状态', 'kraken-status': 'Kraken 运行状态',
@@ -235,7 +249,7 @@ export const intelligenceSourcesText = {
     treasury: '美国财政部', sec: '美国证监会', cftc: '美国商品期货交易委员会',
     binance: '币安', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
     'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': '以太坊基金会',
-    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter',
+    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', narwhal: 'Narwhal', cryptoetf: 'CryptoETF',
     realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
     kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
   },
@@ -268,7 +282,9 @@ export const intelligenceSourcesText = {
   /* 源那一行行尾那颗展开按钮：两个字，不是说明。 */
   advancedToggle: '高级',
   credentialsRequired: '需要 API Key',
-  providerNotices: { privateDataSource: '私有数据源：注册账号后需向开发者申请 API Key。' },
+  providerNotices: {
+    privateDataSource: '私有数据源：注册账号后需向开发者申请 API Key。',
+  },
   website: '官网',
   signup: '注册 / 获取 Key',
   testConnection: '测试连接',
@@ -281,17 +297,21 @@ export const intelligenceSourcesText = {
   rowTestUnsupported: '不支持',
   jobRegistered: '已注册自动任务',
   jobNotRegistered: '未注册自动任务',
+  /* 被同一次采集覆盖的源：说清它没有自己的任务，而不是「没注册」（用户 2026-11-13、产品 §7.1b）。 */
+  coveredBySameCollection: '由同一次采集覆盖',
   connectionSucceeded: '连接已验证。',
   connectionFailed: '无法验证连接，请重试。',
   connectionUnsupported: '该来源由本地同步任务采集，不支持连接测试。',
-  apiKey: { label: 'API Key', save: '保存并验证', emptyHint: '输入 API Key 后保存。', savedHint: '已保存；输入新的 Key 可替换。', revealFailed: '无法读取完整 Key，请重启应用后重试。' },
+  apiKey: { label: 'API Key', reveal: '显示密钥', hide: '隐藏密钥', save: '保存并验证', emptyHint: '输入 API Key 后保存。', savedHint: '已保存；输入新的 Key 可替换。', revealFailed: '无法读取完整 Key，请重启应用后重试。' },
   calendarSources: {
     title: '宏观日历', official: '官方采集', market: '市场日历', pending: '待接入', hint: '在宏观日历中管理',
     feeds: {
       'macro-calendar-fed': 'Federal Reserve Board (Fed)',
       'macro-calendar-bea': '美国经济分析局（BEA）',
       'macro-calendar-bls': '美国劳工统计局（BLS）',
-      'macro-calendar-0xrouter-economic-data': '0xRouter 市场日历',
+      'macro-calendar-narwhal-economic-data': 'Narwhal 经济数据',
+      'macro-calendar-narwhal-financial-events': 'Narwhal 金融事件',
+      'macro-calendar-narwhal-central-bank-activities': 'Narwhal 央行活动',
       'macro-calendar-coinmarketcal': 'CoinMarketCal'
     }
   },
@@ -304,6 +324,8 @@ export const intelligenceSourcesText = {
   enabledAutoCollectQueued: '已启用，首次采集已自动排队。',
   loadFailed: '加载失败，请重试。',
   saveFailed: '保存失败，请重试。',
+  /** 写失败提示条上那颗动作：重跑刚才那次写，不是整页重读。 */
+  saveFailureRetry: '重试',
   runFailed: '立即运行失败，请重试。',
   runQueued: '采集任务已提交，正在等待结果…',
   runSucceeded: '采集成功。',
@@ -419,7 +441,31 @@ export const intelligenceSourcesText = {
       manual: '手动',
       balanced: '均衡',
       frequent: '高频'
-    }
+    },
+    /**
+     * 频率那一行只有一颗 ⓘ，浮层**固定 4 条**（界面设计 2026-11-13 v4）：
+     * ① 当前值（**只有这一条随状态变**，8 种状态各一条键，不拼字符串）
+     * ② 三档在各采集器上的实际间隔（数字式一行）
+     * ③ 「下次」是推算、不是承诺
+     * ④ 两条边界：手动没有下次；排期读不到就说读不到，不写 0、不写从未
+     * 需要第 5 条时先压 ②，不许动 `popoverLimitsGuard`。
+     */
+    durationMinutes: '{count} 分钟',
+    durationHours: '{count} 小时',
+    /* ① 的 8 种状态。状态句只用 `·` 接在间隔后面，不起新行。 */
+    readoutNextAt: '间隔 {interval} · 约 {time}',
+    readoutRunning: '间隔 {interval} · 正在采集',
+    readoutNotStarted: '间隔 {interval} · 尚未开始',
+    readoutNextUnreadable: '间隔 {interval} · 下次读不到',
+    readoutManual: '手动：不自动采集',
+    readoutDisabled: '未启用，不采集',
+    readoutUnscheduled: '未安排',
+    /* 整批排期读不到：第①条就是这一句，不许因为收进浮层就不说。 */
+    readoutScheduleUnreadable: '这次没读到采集排期，所以间隔和下次都没有显示。',
+    /* ② 压成数字式一行。 */
+    presetIntervalsNote: '网页 30 分钟 / RSS 15 分钟 / 接口 10 分钟 / 状态页 2 分钟 / 宏观指标 6 小时；频繁约为均衡的 1/3，最快是状态页每分钟一次。',
+    nextIsEstimateNote: '「下次」是推算的，会随任务队列前后浮动，不是承诺时刻；正在采集时不给倒计时。',
+    readoutEdgesNote: '手动档只在点按钮或事件驱动时采，没有下次；排期读不到就写读不到，不写 0、也不写从未。'
   },
   credentials: {
     title: '访问凭证',
@@ -465,10 +511,13 @@ export const intelligenceSourcesText = {
   automaticSyncStopped: '自动同步已停止',
   lastSuccessfulSync: '上次成功同步：{date}',
   /* 「业务设置」左列那三项（用户 2026-11-10：切到业务设置后左列只有这三项）。 */
-  businessTabs: { dashboard: '看板', calendar: '日历', sentiment: '舆情' },
+  /* 第四项（用户 2026-11-14 定，中间撤过一次又恢复）：它与「日历」「舆情」同级，但管的是**数据源**——
+     这四项指标各自用哪些源、开不开。和卡片上那个「预期来源」齿轮是两件事，别混成一处。 */
+  businessTabs: { dashboard: '看板', calendar: '日历', sentiment: '舆情', coreIndicators: '核心指标' },
   businessTabsAria: '业务设置',
   /* 左列三项的副标题：写**有用的事实**（模块数 / 源数），数字从数据层算。 */
-  businessSubtitle: { modules: '{count} 个模块', sources: '{count} 个源' },
+  /* 量词是「项指标」：这一项数的是指标，不是来源（写成「N 个源」会让读者以为这里能接数据源）。 */
+  businessSubtitle: { modules: '{count} 个模块', sources: '{count} 个源', indicators: '{count} 项指标', coreIndicators: '{groups} 类 · {indicators} 项指标' },
   /* 看板页签的分组名：能复用既有标题键的都用既有键（各模块在 dashboardSourceModules 里指过去），
      这里只放**没有现成标题键**的那几个。 */
   dashboardModuleTitles: {
@@ -479,11 +528,73 @@ export const intelligenceSourcesText = {
   openSourceConfig: '打开 {name} 的配置',
   /* 卡片行尾的格级开关：可访问名必须带格名，否则读屏只听到一个没有对象的「开关」。 */
   cellEnabled: { disable: '停用 {cell} 这一格', enable: '启用 {cell} 这一格' },
+  /**
+   * **标准表写库失败**（用户 2026-11-19）：与「没采到」是两件事，必须两句话。
+   *
+   * 采集成功、值也拿到了，只是没写进标准表——读者要做的事完全不同（不是去查网络和凭据）。
+   * 键按 `firstErrorCode` 的闭集映射，不拼句子；界面上进状态与 ⓘ，**行上不加警告色**。
+   */
+  writeFailure: {
+    'standard-write-failed': '采到了，但没写进标准表（写入失败）',
+    'value-shape-rejected': '采到了，但值的形状被拒，没写进标准表',
+  },
+  writeFailureAria: '这一行的值是旧的：最近一次采集成功，但没写进标准表。原因：{reason}',
+  /**
+   * 「核心指标」那组配置的文案（用户 2026-11-14）。
+   *
+   * 每格三样：**现状**（只读：期次 / 来源 / 值 / 成交量 / 观测时刻）+ 来源顺序 + 两个显示开关。
+   * **四种空态必须各有一句**——尤其「本期已发布 · 盘口已下架」：那是正常态（盘按期结算下架），
+   * 不单列读者会以为这个指标一直没盘。
+   */
+  coreIndicators: {
+    title: '核心指标',
+    metrics: { cpiYoy: 'CPI 年率', coreCpiYoy: '核心 CPI 年率', nonfarmPayrolls: '新增就业', corePceYoy: '核心 PCE 年率' },
+    /* 三组 + 十二项：**组名与指标名都从 `macroIndicatorCardGroups` 的顺序来**。
+       指标名不按「组名 + 行名」拼：拼出来是「CPI 核心年率」，而产品口径是「核心 CPI 年率」。 */
+    groups: { cpi: 'CPI', payrolls: '新增就业', pce: 'PCE' },
+    metricNames: {
+      cpiYoy: 'CPI 年率', cpiMom: 'CPI 月率', coreCpiYoy: '核心 CPI 年率', coreCpiMom: '核心 CPI 月率',
+      nonfarm: '非农', unemployment: '失业率', avgHourlyMom: '时薪月率', avgHourlyYoy: '时薪年率',
+      pceYoy: 'PCE 年率', pceMom: 'PCE 月率', corePceYoy: '核心 PCE 年率', corePceMom: '核心 PCE 月率'
+    },
+    sourceOrder: {
+      label: '来源顺序',
+      /* 默认链**只有两档**：盘口 → 数据商预期。手填不在这条链里——它只能被显式选「只用手填」，
+       否则一个手填值会静默顶掉将来才开的盘（2026-11-14 用户定）。 */
+    options: { defaultChain: '盘口 → 数据商预期', marketOnly: '只用盘口', surveyOnly: '只用数据商预期', manualOnly: '只用手填' }
+    },
+    /* 「数据商预期」= 数据源自己在发布前汇总的分析师预期中值；**不是我们去发问卷**（用户 2026-11-14）。
+       悬停里点明是哪家源给的，所以卡片上不必写「问卷」这种像我们动作的词。 */
+    sources: { market: '盘口反推', provider: '数据商预期', manual: '手填' },
+    /* 「核心指标」菜单里那一行源：类型标签 + 页脚两句。**只列取值源**——盘口是预期来源，
+       归卡片齿轮，不进这里（否则读者会以为它能供数，关了却发现数还在）。 */
+    valueSourceType: { official: '官方', provider: '数据商' },
+    valueSourceFrequencyReadonly: '频率只读',
+    /* 这里那颗开关**就是源自己的启停**（和「日历」页按源列的是同一个事实），不是这份菜单的私有配置——
+       所以要把共用后果写在页脚，别让读者以为「只对这个指标关了」。 */
+    valueSourceFootnote: '关闭某个源不会删除历史数据，只是不再采集；**同一个源在多个指标下共用这一颗开关**。',
+    valueSourceShared: '共用同一颗源开关',
+  /* 总闸关掉时那一行的小按钮：去哪里开这个源。 */
+  valueSourceOpenSource: '去数据源开启',
+    valueSourceEmpty: '这个指标还没有可用来源。',
+    /* 腿全被读者关掉：这是他自己的选择，不是「暂无数据」——两种状态不许长成一句话。 */
+    valueSourceAllClosed: '所有源已关闭（你可调整）',
+    providerExpectationTitle: '由数据源（{provider}）在发布前汇总的分析师预期中值',
+    showVolume: '显示成交量',
+    showAsOf: '显示观测时刻',
+    empty: {
+      noMarket: '本期无盘 · 已退到商业源',
+      marketSettled: '本期已发布 · 盘口已下架',
+      incomplete: '必需项不全，不显示',
+      unconfigured: '尚未选择来源'
+    }
+  },
   /* 需要 API Key 但还没配：开关不可用，旁边一颗 ⓘ 说这一句（正文不放整句）。 */
   credentialRequiredToEnable: '先配置 API Key',
   credentialRequiredToEnableAria: '为什么这个开关现在不能开',
   /* 待接入的源：整组启停不可操作，提示只说「还没接入」（短句，不是长说明）。 */
   providerPending: '这个源还没接入',
+  /** 只验证密钥的源：开关对它没有作用。只说「这个源不采集」，不写「本版」这种进度。 */
   providerPendingAria: '为什么这个开关现在不能开',
   /* 页头那颗**整组**启停（该来源下全部能力）：可访问名带来源名，别只念「开关」。 */
   toggleProviderEnable: '启用 {name} 的全部能力',
@@ -558,6 +669,13 @@ export const intelligenceSourcesText = {
       failed: '失败',
       paused: '已关闭'
     }
+  },
+  /* 只给「本版只验证密钥」的源用的一行：四态常显，刷新后回到「已保存待验证」。 */
+  credentialVerification: {
+    savedUnverified: '已保存，还没验证过；点「测试连接」',
+    failed: '连接失败：{reason}',
+    // 一句就够：后面那半句是在讲我们做到哪一步，不进界面（用户 2026-11-13）。
+    succeeded: '连接正常'
   },
   actions: {
     save: '保存'
@@ -653,11 +771,16 @@ export const intelligenceSourcesText = {
       'provider-disabled': 'This source is switched off',
       'parser-output-empty': 'Content arrived but the parser produced nothing',
       'credential-missing': 'No API key is configured yet',
+      'credential-not-configured': 'No credential is configured yet',
       'credential-invalid': 'The source rejected the API key',
       'rate-limited': 'Rate limited by the source; it will retry',
       'request-timeout': 'The request timed out; it will retry',
       'transport-unavailable': 'The network is unreachable; check the proxy setting',
       'response-unavailable': 'The source returned nothing',
+      'response-shape-invalid': 'The source answered in an unexpected shape',
+      'plan-restricted': 'This endpoint is not available on the current plan',
+      /* Exhausted quota is not a restricted plan: it is gone for this month. No recovery date is stated. */
+      'credits-exhausted': "This month's API quota is used up",
       'invalid-json': 'The source returned content that is not valid JSON',
       cancelled: 'Cancelled',
       'handler-error': 'The task failed'
@@ -749,8 +872,14 @@ export const intelligenceSourcesText = {
   /** Source-list conditions (C5): the chip says "value · N left"; the clear button is one word. */
   /** 每个源一句人话（分组副标题与详情页标题下一行）。键形 settings.intelligenceSources.sourceSummary.<sourceId>。 */
   sourceSummary: {
-    '0xrouter-aggregate-provider': 'Net flows into BTC and ETH spot ETFs',
+    'macro-calendar-0xrouter-economic-data': 'Market-sourced economic release schedule; optional supplement, collected only after you enable it',
+    'macro-calendar-0xrouter-financial-events': 'Market-sourced financial event schedule; optional supplement, collected only after you enable it',
+    'macro-calendar-0xrouter-central-bank-activities': 'Market-sourced central-bank activity schedule; optional supplement, collected only after you enable it',
+    '0xrouter-aggregate-provider': 'Shared credential for the three market calendars',
     'alternative-fear-greed': 'The current Fear & Greed reading',
+    'macro-calendar-narwhal-economic-data': 'Economic release schedule and market expectations',
+    'macro-calendar-narwhal-financial-events': 'When financial events happen',
+    'macro-calendar-narwhal-central-bank-activities': 'Central bank meetings and public events',
     'bea-economic-series': 'BEA figures for GDP and PCE',
     'binance-announcements': 'Binance announcements: listings, delistings and rule changes',
     'binance-api-updates': 'Maintenance only; nothing here is shown to readers yet',
@@ -762,6 +891,7 @@ export const intelligenceSourcesText = {
     'coindesk-rss': 'Crypto headlines and summaries from CoinDesk',
     'coingecko-market': 'Total crypto market cap, turnover and BTC share',
     'coinmarketcal': 'Crypto event entries, by coin and date',
+    'cryptoetf-etf-flows': 'Daily net flows into BTC and ETH spot ETFs',
     'cryptopanic': 'Aggregated crypto headlines, grouped by coin',
     'defillama-stablecoins': 'Total stablecoin supply and its recent change',
     'defillama-tvl': 'Total value locked per chain and its recent change',
@@ -772,9 +902,6 @@ export const intelligenceSourcesText = {
     'github-releases': 'Maintenance only; nothing here is shown to readers yet',
     'kraken-status': 'Maintenance only; nothing here is shown to readers yet',
     'kraken-system-status': 'Maintenance only; nothing here is shown to readers yet',
-    'macro-calendar-0xrouter-central-bank-activities': 'Central bank meetings and public appearances',
-    'macro-calendar-0xrouter-economic-data': 'Economic indicator schedule with released values',
-    'macro-calendar-0xrouter-financial-events': 'When financial events are scheduled to happen',
     'macro-calendar-bea': 'BEA official release schedule',
     'macro-calendar-bls': 'BLS official release schedule',
     'macro-calendar-coinmarketcal': 'Crypto events and token event dates',
@@ -789,9 +916,15 @@ export const intelligenceSourcesText = {
     'twelve-data-market': 'Dollar, gold and offshore yuan quotes',
   },
   sourceNames: {
+    'macro-calendar-0xrouter-economic-data': 'Market calendar · economic data',
+    'macro-calendar-0xrouter-financial-events': 'Market calendar · financial events',
+    'macro-calendar-0xrouter-central-bank-activities': 'Market calendar · central bank activities',
     'macro-calendar-fed': 'Federal Reserve official schedule', 'federal-reserve-rss': 'Federal Reserve press releases',
     'macro-calendar-bea': 'BEA official releases', 'bea-economic-series': 'BEA economic data',
     'macro-calendar-bls': 'BLS official schedule', 'bls-economic-series': 'BLS economic data',
+    'macro-calendar-narwhal-economic-data': 'Narwhal economic data',
+    'macro-calendar-narwhal-financial-events': 'Narwhal financial events',
+    'macro-calendar-narwhal-central-bank-activities': 'Narwhal central bank activities',
     'fred-rates-liquidity': 'Treasury rates and liquidity', fred: 'FRED (deprecated)',
     'treasury-fiscal-data': 'Treasury fiscal data', 'sec-rss': 'SEC regulatory notices', 'cftc-rss': 'CFTC regulatory notices',
     'binance-announcements': 'Binance announcements', 'binance-api-updates': 'Binance API updates',
@@ -802,10 +935,8 @@ export const intelligenceSourcesText = {
     'alternative-fear-greed': 'Fear and greed index', 'coindesk-rss': 'CoinDesk news',
     'ethereum-foundation-blog': 'Ethereum Foundation blog', cryptopanic: 'CryptoPanic news',
     coinmarketcal: 'CoinMarketCal news (legacy)', 'macro-calendar-coinmarketcal': 'CoinMarketCal event calendar',
-    '0xrouter-aggregate-provider': '0xRouter aggregate market data',
-    'macro-calendar-0xrouter-economic-data': '0xRouter economic data',
-    'macro-calendar-0xrouter-financial-events': '0xRouter financial events',
-    'macro-calendar-0xrouter-central-bank-activities': '0xRouter central bank activities',
+    'cryptoetf-etf-flows': 'CryptoETF ETF flows',
+    '0xrouter-aggregate-provider': '0xRouter credential anchor',
     'realmarketapi-market': 'RealMarketAPI dollar index', 'twelve-data-market': 'Twelve Data macro market data',
     'policy-path-market': 'FOMC decision market',
     'coinbase-status': 'Coinbase status', 'kraken-status': 'Kraken status',
@@ -817,7 +948,7 @@ export const intelligenceSourcesText = {
     treasury: 'US Treasury', sec: 'US SEC', cftc: 'US CFTC',
     binance: 'Binance', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
     'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': 'Ethereum Foundation',
-    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter',
+    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter', narwhal: 'Narwhal', cryptoetf: 'CryptoETF',
     realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
     kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
   },
@@ -842,7 +973,9 @@ export const intelligenceSourcesText = {
   toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
   advancedToggle: 'Advanced',
   credentialsRequired: 'API key required',
-  providerNotices: { privateDataSource: 'Private data source: after registering an account, request an API Key from the developer.' },
+  providerNotices: {
+    privateDataSource: 'Private data source: after registering an account, request an API Key from the developer.',
+  },
   website: 'Website',
   signup: 'Sign up / Get key',
   testConnection: 'Test connection',
@@ -853,17 +986,20 @@ export const intelligenceSourcesText = {
   rowTestUnsupported: 'Not testable',
   jobRegistered: 'Auto job registered',
   jobNotRegistered: 'No auto job',
+  coveredBySameCollection: 'Covered by the same collection run',
   connectionSucceeded: 'Connection verified.',
   connectionFailed: 'Connection could not be verified.',
   connectionUnsupported: 'This source is collected by a local sync job and has no connection test.',
-  apiKey: { label: 'API Key', save: 'Save and verify', emptyHint: 'Enter an API key and save it.', savedHint: 'Saved; enter a new key to replace it.', revealFailed: 'Could not read the full key. Restart the app and try again.' },
+  apiKey: { label: 'API Key', reveal: 'Show API key', hide: 'Hide API key', save: 'Save and verify', emptyHint: 'Enter an API key and save it.', savedHint: 'Saved; enter a new key to replace it.', revealFailed: 'Could not read the full key. Restart the app and try again.' },
   calendarSources: {
     title: 'Macro calendar', official: 'Official collection', market: 'Market calendar', pending: 'Pending connection', hint: 'Manage in the macro calendar',
     feeds: {
       'macro-calendar-fed': 'Federal Reserve Board (Fed)',
       'macro-calendar-bea': 'Bureau of Economic Analysis (BEA)',
       'macro-calendar-bls': 'Bureau of Labor Statistics (BLS)',
-      'macro-calendar-0xrouter-economic-data': '0xRouter market calendar',
+      'macro-calendar-narwhal-economic-data': 'Narwhal economic data',
+      'macro-calendar-narwhal-financial-events': 'Narwhal financial events',
+      'macro-calendar-narwhal-central-bank-activities': 'Narwhal central bank activities',
       'macro-calendar-coinmarketcal': 'CoinMarketCal'
     }
   },
@@ -876,6 +1012,8 @@ export const intelligenceSourcesText = {
   enabledAutoCollectQueued: 'Enabled. The first collection run was queued automatically.',
   loadFailed: 'Load failed. Try again.',
   saveFailed: 'Save failed. Try again.',
+  /** Action on the save-failure notice: re-runs that one write, not a whole reload. */
+  saveFailureRetry: 'Retry',
   runFailed: 'Run now failed. Try again.',
   runQueued: 'Collection queued. Waiting for result…',
   runSucceeded: 'Collection succeeded.',
@@ -987,7 +1125,27 @@ export const intelligenceSourcesText = {
       manual: 'Manual',
       balanced: 'Balanced',
       frequent: 'Frequent'
-    }
+    },
+    /**
+     * The frequency row has one ⓘ with a **fixed four-line** popover (design 2026-11-13 v4):
+     * (1) the current value — the only line that changes, one key per state, never assembled;
+     * (2) the real interval of each preset, pressed into one numeric line;
+     * (3) “next” is derived, not promised; (4) two edges: manual has no next run, and an
+     * unreadable schedule says so instead of showing 0 or “never”.
+     */
+    durationMinutes: '{count} minutes',
+    durationHours: '{count} hours',
+    readoutNextAt: 'Every {interval} · about {time}',
+    readoutRunning: 'Every {interval} · collecting now',
+    readoutNotStarted: 'Every {interval} · not started yet',
+    readoutNextUnreadable: 'Every {interval} · next run unreadable',
+    readoutManual: 'Manual: no automatic collection',
+    readoutDisabled: 'Disabled, not collected',
+    readoutUnscheduled: 'Not scheduled',
+    readoutScheduleUnreadable: 'The collection schedule could not be read this time, so neither the interval nor the next run is shown.',
+    presetIntervalsNote: 'Web pages 30 minutes / RSS 15 minutes / APIs 10 minutes / status pages 2 minutes / macro metrics 6 hours; Frequent is about 1/3 of Balanced, and the fastest is once a minute on status pages.',
+    nextIsEstimateNote: '“Next” is derived from the interval and drifts with the job queue; it is not a promised time, and no countdown is shown while a run is in progress.',
+    readoutEdgesNote: 'Manual only collects on demand or on an event, so it has no next run; when the schedule cannot be read it says so instead of showing 0 or “never”.'
   },
   credentials: {
     title: 'Credentials',
@@ -1029,15 +1187,55 @@ export const intelligenceSourcesText = {
     official: 'Official sources',
     aggregate: 'Aggregators'
   },
-  businessTabs: { dashboard: 'Dashboard', calendar: 'Calendar', sentiment: 'Sentiment' },
+  businessTabs: { dashboard: 'Dashboard', calendar: 'Calendar', sentiment: 'Sentiment', coreIndicators: 'Core indicators' },
   businessTabsAria: 'Business settings',
-  businessSubtitle: { modules: '{count} modules', sources: '{count} sources' },
+  businessSubtitle: { modules: '{count} modules', sources: '{count} sources', indicators: '{count} indicators', coreIndicators: '{groups} groups · {indicators} indicators' },
   dashboardModuleTitles: {
     policyPath: 'Policy path',
     marketState: 'Market state'
   },
   openSourceConfig: 'Open the settings for {name}',
   cellEnabled: { disable: 'Stop reading the {cell} cell', enable: 'Read the {cell} cell again' },
+  /**
+   * A standard-table write failure is **not** a collection failure: the source answered, the value
+   * arrived, it just never reached the standard table. Two different sentences, two different actions.
+   */
+  writeFailure: {
+    'standard-write-failed': 'Collected, but writing to the standard table failed',
+    'value-shape-rejected': 'Collected, but the value shape was rejected before writing',
+  },
+  writeFailureAria: 'This row is showing an older value: the last collection succeeded but was never written to the standard table. Reason: {reason}',
+  coreIndicators: {
+    title: 'Core indicators',
+    metrics: { cpiYoy: 'CPI (YoY)', coreCpiYoy: 'Core CPI (YoY)', nonfarmPayrolls: 'Nonfarm payrolls', corePceYoy: 'Core PCE (YoY)' },
+    groups: { cpi: 'CPI', payrolls: 'Payrolls', pce: 'PCE' },
+    metricNames: {
+      cpiYoy: 'CPI YoY', cpiMom: 'CPI MoM', coreCpiYoy: 'Core CPI YoY', coreCpiMom: 'Core CPI MoM',
+      nonfarm: 'Nonfarm', unemployment: 'Unemployment', avgHourlyMom: 'Avg hourly MoM', avgHourlyYoy: 'Avg hourly YoY',
+      pceYoy: 'PCE YoY', pceMom: 'PCE MoM', corePceYoy: 'Core PCE YoY', corePceMom: 'Core PCE MoM'
+    },
+    sourceOrder: {
+      label: 'Source order',
+      options: { defaultChain: 'Market → data provider', marketOnly: 'Market only', surveyOnly: 'Data provider only', manualOnly: 'Manual only' }
+    },
+    sources: { market: 'Market-implied', provider: 'Data provider expectation', manual: 'Manual' },
+    valueSourceType: { official: 'Official', provider: 'Data provider' },
+    valueSourceFrequencyReadonly: 'Frequency is read-only',
+    valueSourceFootnote: 'Turning a source off keeps its history; it only stops collecting; **one source shares this switch across indicators**.',
+    valueSourceShared: 'Same switch as the source itself',
+  valueSourceOpenSource: 'Turn it on in data sources',
+    valueSourceEmpty: 'No value source is available for this indicator yet.',
+    valueSourceAllClosed: 'All sources are off (you can change this)',
+    providerExpectationTitle: 'The analyst consensus the data source ({provider}) summarises before release',
+    showVolume: 'Show volume',
+    showAsOf: 'Show observation time',
+    empty: {
+      noMarket: 'No market this period · fell back to the survey',
+      marketSettled: 'Published · the market is settled and gone',
+      incomplete: 'Required fields missing; not shown',
+      unconfigured: 'No source chosen yet'
+    }
+  },
   credentialRequiredToEnable: 'Set the API key first',
   credentialRequiredToEnableAria: 'About why this switch cannot be turned on yet',
   providerPending: 'This source is not wired up yet',
@@ -1100,6 +1298,11 @@ export const intelligenceSourcesText = {
       failed: 'Failed',
       paused: 'Off'
     }
+  },
+  credentialVerification: {
+    savedUnverified: 'Saved, not verified yet; use Test connection',
+    failed: 'Connection failed: {reason}',
+    succeeded: 'Connection works'
   },
   actions: {
     save: 'Save'

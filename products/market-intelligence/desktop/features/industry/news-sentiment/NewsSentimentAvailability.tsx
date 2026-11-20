@@ -5,6 +5,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 
 import '../../../shared/styles/sourceAvailability.css'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { NewsSentimentText } from './NewsSentimentCard'
 
 /**
@@ -31,6 +32,8 @@ export function NewsSentimentAvailabilityVeil(props: Readonly<{
   onAction?: () => void
 }>): React.ReactElement {
   const Icon = ICONS[props.state]
+  // 表解析器：键 → 句子，不在调用点拿字面量比较（守卫第二条）。
+  const resolveText = useProductTextKey()
   return <div className="mi-source-veil" data-state={props.state}>
     <p className="mi-source-state" data-state={props.state}>
       <Icon aria-hidden="true" className="mi-source-state__icon" size={14} />
@@ -40,11 +43,11 @@ export function NewsSentimentAvailabilityVeil(props: Readonly<{
         trigger={(triggerProps) => (
           <IconButton
             {...triggerProps}
-            ariaLabelKey="news.sentiment.availability.reason"
+            ariaLabelKey="pages.intelligence.portal.newsSentiment.availability.reasonAria"
             icon={Info}
             onSelect={() => undefined}
             variant="plain"
-            resolveText={(key: string) => (key === 'news.sentiment.availability.reason' ? props.text.availability.reasonAria : '')}
+            resolveText={resolveText}
             size="sm" />
         )} />
     </p>

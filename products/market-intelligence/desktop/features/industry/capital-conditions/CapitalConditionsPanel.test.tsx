@@ -719,9 +719,23 @@ describe('CapitalConditionsPanel', () => {
     expect(notice?.querySelector('button')).toBeNull()
     expect([...container.querySelectorAll<HTMLButtonElement>('button')]).toHaveLength(1)
 
-    // `loading` already means a read is in flight, so the control must not start a second one.
+    // 加载态**不给动作**（界面设计 2026-11-12）：读者在等的时候按刷新只会叠加并发请求；
+    // 失败会自己落进终态（hook 的两跳退避之后），那时才由结构里那颗刷新承担重试。
     await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'loading' }, onRefresh: () => undefined, refreshing: true })))
-    expect(container.querySelector<HTMLButtonElement>('.mi-capital-conditions__refresh')!.disabled).toBe(true)
+    expect(container.querySelector('.mi-capital-conditions__refresh')).toBeNull()
+    expect(container.querySelectorAll('button')).toHaveLength(0)
+  })
+
+  it('the empty state shows no action at all, and never a self-drawn refresh', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'empty' }, onRefresh: () => undefined })))
+    // `empty.not-yet` 在平台动作表里是 forbidden：空态不给动作，调用点也不许自绘一颗。
+    expect(container.querySelector('.state-view')).not.toBeNull()
+    expect(container.querySelectorAll('button')).toHaveLength(0)
+    expect(container.querySelector('.mi-capital-conditions__refresh')).toBeNull()
   })
 })
 

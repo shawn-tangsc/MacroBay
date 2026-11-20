@@ -31,61 +31,14 @@ import { useProductTextKey } from '../../shared/i18n/productTextKey'
  * 说明横幅的类别 → 文案键（类别来自注册表 `ProviderDefinition.notice`，组件里不出现源名）。
  * 新增一种同类源：注册表标一个值 + 两语文案各一条，不动组件逻辑。
  */
-const PROVIDER_NOTICE_KEYS: Readonly<Record<NonNullable<ProviderView['notice']>, string>> = {
-  'private-data-source': 'settings.intelligenceSources.providerNotices.privateDataSource'
-}
+import { credentialVerificationLine, type ConnectionFeedback } from './connectionFailureSentence'
+import { providerSwitchBlock } from './providerSwitchBlock'
+import { offersConnectionTest, PROVIDER_NOTICE_KEYS, type ProviderDetailLabels } from './providerDetailContract'
 
-export type ProviderDetailLabels = {
-  sourceNames: Record<string, string>
-  providerNames: Record<string, string>
-  panelNames: Record<string, string>
-  badges: { pending: string; advanced: string; calendar: string; proxy: string }
-  status: { applied: string; notApplied: string }
-  toggleSource: Readonly<{ enable: string; disable: string }>
-  /** 页头那颗**整组**启停的可访问名（带来源名）。缺省时退回源开关那套说法。 */
-  toggleProvider?: Readonly<{ enable: string; disable: string }>
-  credentials: string
-  website: string
-  signup: string
-  testConnection: string
-  /** 行内连通性测试的三个短词；缺省时退回 `testConnection`（老调用点不受影响）。 */
-  rowTest?: string
-  rowTesting?: string
-  rowTestOk?: string
-  rowTestFailed?: string
-  rowTestUnsupported?: string
-  jobRegistered: string
-  jobNotRegistered: string
-  connectionSucceeded: string
-  connectionFailed: string
-  connectionUnsupported: string
-  apiKey: { label: string; save: string; emptyHint: string; savedHint: string; revealFailed: string }
-  /**
-   * 设置页只说**短句**（这里不显示内容，用全句会承诺「先显示上次同步的内容」而这儿没有内容）。
-   * 原因码、自动同步已停止、上次成功日期照原样给，由下面三个模板拼。
-   */
-  unavailableReasonCode: string
-  /** ⓘ 的名字（与正文那句分开：一个是名字，一个是句子）。 */
-  unavailableReasonCodeAria: string
-  automaticSyncStopped: string
-  lastSuccessfulSync: string
-  /**
-   * 健康四格已按用户 2026-11-12 删除；字段保留只为宿主契约兼容，界面不再读它。
-   */
-  health: unknown
-}
+export type { ProviderDetailLabels }
+export { offersConnectionTest }
 
-/**
- * The one rule for the probe button, so a test can hold it without rendering the pane.
- *
- * 凭据是不是 API Key 不再影响它：那颗按钮已经移到**源名旁**、全屏只有这一颗
- * （用户 2026-11-10：行内动作跟着源名走），凭据块里只剩「保存并验证连接」。
- */
-export function offersConnectionTest(provider: { credential: string; sources: ReadonlyArray<{ capabilities?: { testConnection?: boolean } }> }): boolean {
-  return provider.sources.some((source) => source.capabilities?.testConnection === true)
-}
-
-export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface, initialSourceId }: {
+export function ProviderDetail({ labels, provider, onChanged, policy, showSourceDetails, translation, supportsRunNowById, onRunNow, onToggleSource, onDraftChange, surface, initialSourceId, sourceRowAction }: {
   labels: ProviderDetailLabels
   provider: ProviderView
   /** 目录声明的「平台允许立即运行」（`supportsRunNow`），按源给；日历 feed 不在目录里就没有这一项。 */
@@ -111,6 +64,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   surface?: 'settings' | 'panel'
   /** Render source settings below the capability list. */
   showSourceDetails?: boolean
+  /**
+   * 某个**源项**自己的行内动作（挂在对应那一行的动作组里，和「测试」同组）。
+   *
+   * 判据按**源项 id**，不按 provider id：同一个 provider 下有两条源项时，动作只属于其中一条
+   * （用户 2026-11-15：「ICS 导入的是日程，不是数值」——所以它属于「BLS 官方日程」那一行）。
+   */
+  sourceRowAction?: (sourceId: string) => React.ReactNode
   /** 只作初值：挂载时把这一源所在行带进视野一次（不做受控、不写回状态；找不到就什么都不做）。 */
   initialSourceId?: string
   /**
@@ -165,7 +125,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   const [savingCredential, setSavingCredential] = useState(false)
   const [runningSourceId, setRunningSourceId] = useState<string>()
   const [testingConnection, setTestingConnection] = useState(false)
-  const [connectionFeedback, setConnectionFeedback] = useState<'succeeded' | 'failed' | 'unsupported'>()
+  const [connectionFeedback, setConnectionFeedback] = useState<ConnectionFeedback>()
   const resolveText = useProductTextKey()
   /** 唯一一处「这是哪个面」的判定：注册表渲染只发生在设置页那一侧。 */
   const isSettingsSurface = (surface ?? 'panel') === 'settings'
@@ -199,9 +159,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
 
 
 
-  const inviteProvider = provider.invite === true || /[?&](?:invite|via)=/.test(provider.signupUrl ?? '')
-  // A credential provider is discovered through its signup/key guide, not its home page.
-  const hideWebsite = inviteProvider || provider.credential === 'api-key'
+  /* 官网**只按数据藏**（界面设计 2026-11-13 裁）：没有地址才不画。
+     不再因为「需要密钥」或「带邀请参数」隐藏——api-key 源同样要有官网（CryptoETF 那一屏就是这样缺的）。
+     去重按地址：`website === signupUrl` 时只画「注册 / 获取 Key」，同一页不摆两颗按钮。 */
+  const showWebsite = provider.website !== undefined && provider.website !== provider.signupUrl
   const credentialSourceId = provider.credentialSourceId
     ?? provider.sources.find((source) => source.collection === 'adapter')?.sourceId
     ?? provider.sources[0]?.sourceId
@@ -211,6 +172,8 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
    */
   const credentialTarget = credentialSourceId ? { sourceId: credentialSourceId, kind: 'feed' as const } : undefined
   const testSource = provider.sources.find((source) => source.kind === 'official-calendar') ?? credentialTarget
+  const noticeKey = provider.notice === undefined ? undefined : PROVIDER_NOTICE_KEYS[provider.notice]
+  const verificationLine = credentialVerificationLine({ show: provider.credentialStateLine === true || provider.notice === 'verification-only', resolveText, hasCredential: credentialStatus?.hasCredential, feedback: connectionFeedback })
 
   /**
    * 行内连通性测试：每个已经接了的源一颗，结果按源记。
@@ -270,10 +233,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
     setConnectionFeedback(undefined)
     try {
       const result = await testSourceConnection(testSource)
-      setConnectionFeedback(result.ok ? 'succeeded' : result.unsupported ? 'unsupported' : 'failed')
+      const failed: ConnectionFeedback = { kind: 'failed', ...(result.failureCode ? { failureCode: result.failureCode } : {}) }
+      setConnectionFeedback(result.ok ? { kind: 'succeeded' } : result.unsupported ? { kind: 'unsupported' } : failed)
       setNetworkFailure(isNetworkConnectionFailure(result))
     } catch {
-      setConnectionFeedback('failed')
+      setConnectionFeedback({ kind: 'failed' })
       setNetworkFailure(false)
     } finally {
       setTestingConnection(false)
@@ -295,6 +259,9 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       setCredentialDraft(status?.maskedPreview ?? '')
       setCredentialPristine(true)
       setCredentialFeedback('saved')
+      /* 换了一把钥匙，上一把的测试结果就过期了：不清掉会让「连接失败：原因」挂在新钥匙上。
+         清回「已保存待验证」是准确的——这一版本来就不保留验证时间。 */
+      setConnectionFeedback(undefined)
     } catch {
       setCredentialFeedback('failed')
     } finally {
@@ -342,10 +309,11 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
   /** 可操作的能力全开 = on、全关 = off、**混合按 off**（点击后把这些可操作项全开）。 */
   const providerGroupEnabled = operableSources.length > 0 && operableSources.every((source) => source.enabled)
   const providerCredentialMissing = provider.credential === 'api-key' && credentialStatus?.hasCredential === false
-  /* 待接入 > 缺凭据 > 可操作：**整组一个可操作能力都没有**时才锁死并提示「还没接入」。 */
+  /* 待接入 > 缺凭据：整组一个可操作能力都没有时才锁死，并提示「还没接入」。 */
   const providerPending = operableSources.length === 0 && sources.length > 0
+  const switchBlock = providerSwitchBlock({ pending: providerPending, credentialMissing: providerCredentialMissing })
   const toggleProvider = async (next: boolean): Promise<void> => {
-    if (providerCredentialMissing || providerPending) return
+    if (switchBlock !== undefined) return
     // 只写**已接入**的能力；待接入的项不写、不会被打开、状态不变。
     for (const source of operableSources) if (source.enabled !== next) await toggle(source, next)
   }
@@ -357,10 +325,10 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         **且** `networkFailure`，不再是「未配或失败」。 */}
     {/* 说明横幅在页头卡上方、代理横幅之前（界面设计 2026-11-12 签字）：无动作、不可关闭；
         窄窗折行可以，截断不行。类别来自注册表，组件不认识具体源。 */}
-    {provider.notice === undefined ? null : <div
+    {noticeKey === undefined ? null : <div
       className={`mi-source-notice-banner${hasProxySource && proxyConfigured && networkFailure ? '' : ' mi-source-notice-banner--alone'}`}
       data-source-notice={provider.notice}>
-      <NoticeBanner title={resolveText(PROVIDER_NOTICE_KEYS[provider.notice])} />
+      <NoticeBanner title={resolveText(noticeKey)} />
     </div>}
     {hasProxySource && proxyConfigured && networkFailure ? <NetworkProxyBanner
       tone="failed"
@@ -379,7 +347,7 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
             同一行 inline、间距 8、与名字基线对齐，全是小号文字按钮。
             一行放不下时整组换到名字下方、左缘仍与名字对齐（flex-wrap 就是这个行为）。 */}
         <span className="source-provider-detail__name-actions">
-          {provider.website && !hideWebsite
+          {showWebsite
             ? <Button
               className="source-provider-detail__name-action"
               onClick={() => window.open(provider.website!, '_blank', 'noopener,noreferrer')}
@@ -403,31 +371,20 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         {/* 整组启停：这一行代表一个来源，开关管它下面**全部能力**（用户 2026-11-11，照模型服务供应商那排布）。
             全开 = on、全关 = off、**混合按 off 显示**（点击后全开）——否则读者看不出到底开没开。 */}
         <span className="source-provider-detail__group-toggle">
-          {providerPending || providerCredentialMissing
-            ? <SettingsInfo
-              ariaLabelKey={providerPending
-                ? 'settings.intelligenceSources.providerPendingAria'
-                : 'settings.intelligenceSources.credentialRequiredToEnableAria'}
-              labelKeys={[providerPending
-                ? 'settings.intelligenceSources.providerPending'
-                : 'settings.intelligenceSources.credentialRequiredToEnable']}
-              resolveText={resolveText} />
-            : null}
+          {switchBlock === undefined ? null : <SettingsInfo
+            ariaLabelKey={switchBlock.ariaKey} labelKeys={[switchBlock.labelKey]} resolveText={resolveText} />}
           <Switch
-            /* 页头这颗是**源采集开关的唯一编辑入口**（用户 2026-11-12 撤回「关格顺带停源」后回归）：
-               它写源自己的 `enabled`（整组写；待接入项不参与，缺凭据时禁用）。
-               下面能力行的开关仍然只读——行上显示的是「采集与数据」里有没有用它。 */
-            aria-disabled={providerPending || providerCredentialMissing ? true : undefined}
+            /* 页头这颗是源采集开关的唯一编辑入口；整组写，待接入项不参与，缺凭据时禁用。 */
+            aria-disabled={switchBlock === undefined ? undefined : true}
             aria-label={((providerGroupEnabled ? labels.toggleProvider?.disable : labels.toggleProvider?.enable)
               ?? (providerGroupEnabled ? labels.toggleSource.disable : labels.toggleSource.enable)).replace('{name}', providerName)}
             checked={providerGroupEnabled}
-            disabled={providerPending || providerCredentialMissing}
+            disabled={switchBlock !== undefined}
             onChange={(next) => void toggleProvider(next)}
             size="small" />
         </span>
       </div>
-      {/* 「需要 API Key」那行分组标题删掉了（用户 2026-11-10）：下面那行的标签 `API Key` 自己就说清了，
-          再来一个标题只是同一件事说两遍。 */}
+      {/* 「需要 API Key」那行分组标题删掉了：下面那行的标签自己就说清了。 */}
       {provider.credential === 'api-key' ? <>
         <div className="source-provider-detail__credential">
           <label>
@@ -456,11 +413,13 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
       </> : null}
       {/* 「官网 / 测试连接」那一排动作整行去掉：两颗都上到源名旁边（同一屏一个动作只有一处）。
           连接反馈仍要留在页头，它是这次点击的结果。 */}
-      {connectionFeedback ? <Alert
-        message={connectionFeedback === 'succeeded' ? labels.connectionSucceeded : connectionFeedback === 'unsupported' ? labels.connectionUnsupported : labels.connectionFailed}
-        showIcon
-        type={connectionFeedback === 'succeeded' ? 'success' : connectionFeedback === 'unsupported' ? 'warning' : 'error'}
-      /> : null}
+      {verificationLine !== undefined
+        ? <Alert message={verificationLine.message} showIcon type={verificationLine.tone} />
+        : connectionFeedback ? <Alert
+          message={connectionFeedback.kind === 'succeeded' ? labels.connectionSucceeded
+            : connectionFeedback.kind === 'unsupported' ? labels.connectionUnsupported : labels.connectionFailed}
+          showIcon type={connectionFeedback.kind === 'succeeded' ? 'success' : connectionFeedback.kind === 'unsupported' ? 'warning' : 'error'}
+        /> : null}
     </header>
     {/* 卡二 = 源项列表卡：所有能力行装进**一张卡**，行间只用细分隔线（外层已经有卡了，双层框会显脏）。 */}
     <div className="source-provider-detail__list source-provider-detail__card">
@@ -474,11 +433,12 @@ export function ProviderDetail({ labels, provider, onChanged, policy, showSource
         credentialMissing={provider.credential === 'api-key' && credentialStatus?.hasCredential === false}
         key={source.sourceId}
         labels={labels}
-        onTest={source.capabilities?.testConnection === true ? () => void rowTests.run(source) : undefined}
+        onTest={source.capabilities?.testConnection === true && verificationLine === undefined ? () => void rowTests.run(source) : undefined}
         proxyConfigured={proxyConfigured}
         resolveText={resolveText}
         source={source}
         {...(rowTests.stateOf(source.sourceId) ? { testState: rowTests.stateOf(source.sourceId) } : {})}
+        {...(sourceRowAction?.(source.sourceId) === undefined ? {} : { extraAction: sourceRowAction(source.sourceId) })}
       />)}
     </div>
     {showSourceDetails ? <div className="source-provider-detail__details">

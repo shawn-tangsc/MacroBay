@@ -8,6 +8,7 @@ import { toCardEventFromOfficial, toCardEventFromProvider } from './calendarCard
 import { attachReactions, reactionAnchors, type CalendarCardReaction } from './calendarCardReaction'
 import { projectUpcomingCalendarCard, type CalendarCardEvent, type CalendarCardProjection } from './projectUpcomingCalendarCard'
 import { useDataChangeRevision } from './useDataChangeRevision'
+import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 /**
  * Feeds the card from the calendar the page already has, read-only.
@@ -18,16 +19,22 @@ import { useDataChangeRevision } from './useDataChangeRevision'
  *
  * Any failure degrades to `unavailable` rather than to an empty window, so "we could not read
  * this" never looks like "nothing is scheduled".
+ *
+ * 例外只有一处，且方向相反：**有行**时一路读不到不降级（官方读不到、市源有行是「缺一半的读」，
+ * 不是错误页）。没有行时任一源没读到就不许判成「空」——两路都读到且都为空才是真的空。
  */
 
 /**
- * 0xRouter 一条事件属于哪个日历来源：`eventType` 与三个 descriptor 一一对应。
+ * 一条市场日历事件属于哪个日历来源：`eventType` 与三个 feed 身份一一对应。
  * 官方腿的事件自带 `providerIds`，不需要这张表。
+ *
+ * 位置仍是三个（三类事件都要能反查到源），但三条 feed 由同一次采集产出——它是映射，
+ * 不是采集清单；采集清单是 `marketCalendarPublicPolicy.collectionFeeds` 那一条。
  */
 const MARKET_FEED_BY_EVENT_TYPE: Readonly<Record<string, string>> = {
-  'economic-indicator': 'macro-calendar-0xrouter-economic-data',
-  'financial-event': 'macro-calendar-0xrouter-financial-events',
-  'central-bank-activity': 'macro-calendar-0xrouter-central-bank-activities'
+  'economic-indicator': 'macro-calendar-narwhal-economic-data',
+  'financial-event': 'macro-calendar-narwhal-financial-events',
+  'central-bank-activity': 'macro-calendar-narwhal-central-bank-activities'
 }
 
 /**
@@ -136,27 +143,30 @@ export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readRe
     const months = calendarCardMonths(asOf)
     void Promise.all(months.map(async month => {
       const [official, market] = await Promise.all([
-        macroEconomicCalendarClient.queryMonth({ month, asOf }),
+        withQueryDeadline(macroEconomicCalendarClient.queryMonth({ month, asOf })),
         // Paged: reading one page hid the provider's later days from the card.
-        readMarketCalendarMonth(marketCalendarClient, { month, locale, asOf })
+        withQueryDeadline(readMarketCalendarMonth(marketCalendarClient, { month, locale, asOf }))
       ])
       const events: CalendarCardEvent[] = official.state === 'available' ? official.events.map(toCardEventFromOfficial) : []
       if (market !== null) {
         events.push(...market.events.map(event => ({
-          ...toCardEventFromProvider(event),
+          ...toCardEventFromProvider({ ...event, eventNameKey: event.eventNameKey }),
           ...(MARKET_FEED_BY_EVENT_TYPE[event.eventType] === undefined ? {} : { sourceIds: [MARKET_FEED_BY_EVENT_TYPE[event.eventType]!] })
         })))
       }
       // A month that answered `unavailable` is a failed read, not an empty window. Losing the
       // provider route only costs its rows (it is the extra route); losing the official route for
       // every month means the card has nothing to stand on.
-      return { events, officialRead: official.state === 'available' }
+      return { events, officialRead: official.state === 'available', providerRead: market !== null }
     })).then(async pages => {
       if (!live) return
-      // Only when neither route produced anything at all is the read a failure. The official route
-      // answering `unavailable` while the provider route still lists a release is a degraded read
-      // with real rows, not an error screen.
-      if (!pages.some(page => page.officialRead || page.events.length > 0)) throw new Error('calendar read failed')
+      // 没有任何一行时，「读不到」不许画成「没有」：只要**任何一路**没读到，就不能声称这一窗没有事件
+      // ——没读到的那个源可能正有事件，说「没有」是替它编答案。两路都读到且都为空，才是真的空。
+      // 有行时不降级：官方路读不到、市源有行是「缺了一半的读」，不是错误页。
+      if (!pages.some(page => page.events.length > 0)
+        && !(pages.every(page => page.officialRead) && pages.every(page => page.providerRead))) {
+        throw new Error('calendar read incomplete')
+      }
       // 只画「来源当前启用」的事件：停掉一条来源，它的事件立刻消失，其余照画；部分可用不整卡降级。
       // 配置读不到（`known: false`）时不过滤——不能用「不知道」当「都关了」。
       const enabled = await sourcesRead

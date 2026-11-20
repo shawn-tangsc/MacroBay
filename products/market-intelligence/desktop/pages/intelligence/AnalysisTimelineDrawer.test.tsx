@@ -9,7 +9,7 @@ import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { AnalysisTimelineDrawer } from './AnalysisTimelineDrawer'
 import type { UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
-import { channelFactsOf, sendActionOffered } from './useAnalysisConclusionSendReadiness'
+import { sendActionOffered } from './useAnalysisConclusionSendReadiness'
 
 /**
  * 「发送到频道」摆不摆，以及它交出去的配置事实。
@@ -52,7 +52,11 @@ const timelineWithOneConclusion = (): UseMarketAnalysisTimelineResult => ({
     loading: false,
     failed: false,
     nextCursor: null
-  }
+  },
+  // 失败页现在读独立的 `listFailedRuns`；这个替身只关心发送入口，给空列表即可。
+  failedRuns: { loading: false, entries: [] },
+  ensureFailedRuns: () => undefined,
+  loadMoreFailedRuns: () => undefined
 }) as unknown as UseMarketAnalysisTimelineResult
 
 const renderDrawer = async (readiness: unknown): Promise<HTMLDivElement> => {
@@ -88,18 +92,13 @@ const sendButton = (): Element | null => document.body.querySelector('.mi-analys
 
 describe('whether the send action is offered', () => {
   it('renders nothing when no channel is ready', async () => {
-    await renderDrawer({ state: 'unavailable', enabledChannelCount: 0, multiple: false })
+    await renderDrawer({ state: 'unavailable' })
     expect(sendButton()).toBeNull()
     // ⓘ 是给这个动作解释用的，按钮不在就一起收起来。
     expect(document.body.querySelector('.mi-analysis-timeline-drawer')).not.toBeNull()
   })
 
-  it('keeps the action when several channels are ready, so the click can explain', async () => {
-    await renderDrawer({ state: 'unavailable', enabledChannelCount: 2, multiple: true })
-    expect(sendButton()).not.toBeNull()
-  })
-
-  it('offers the action when exactly one channel is ready', async () => {
+  it('offers the action when at least one channel is ready — several is a legal setup', async () => {
     await renderDrawer({ state: 'ready' })
     expect(sendButton()).not.toBeNull()
   })
@@ -111,13 +110,10 @@ describe('whether the send action is offered', () => {
 })
 
 describe('the rule on its own', () => {
-  it('offers nothing for zero channels, the action for several, and carries the count for guidance', () => {
-    expect(sendActionOffered({ state: 'unavailable', enabledChannelCount: 0, multiple: false })).toBe(false)
-    expect(sendActionOffered({ state: 'unavailable', enabledChannelCount: 2, multiple: true })).toBe(true)
+  it('offers the action exactly when a channel is ready, and never pretends to know when unread', () => {
+    // 多通道是合法配置：只有「一条可用的都没有」才不摆按钮；「读不到」也不摆。
+    expect(sendActionOffered({ state: 'ready' })).toBe(true)
+    expect(sendActionOffered({ state: 'unavailable' })).toBe(false)
     expect(sendActionOffered({ state: 'unknown' })).toBe(false)
-    expect(channelFactsOf({ state: 'unavailable', enabledChannelCount: 2, multiple: true }))
-      .toEqual({ enabledChannelCount: 2, multiple: true })
-    // 有一条可用时不需要「指路」的事实：成功句的通道名只认回执。
-    expect(channelFactsOf({ state: 'ready' })).toBeUndefined()
   })
 })

@@ -107,10 +107,12 @@ describe('daily briefing document guard at schema 13', () => {
 
   it('accepts the current schema row and refuses only a version past it', () => {
     // 文档落库后必须被自己读回来：守卫只拒绝「比现在更新」的版本。
-    // 16 起宏观/「接下来」两栏可带「官方没公布发布时刻」的日期与标记。
-    const current = { ...document(), schemaVersion: 16 as const, policyVersion: 'daily-briefing.v24' as const }
+    // 16 起宏观/「接下来」两栏可带「官方没公布发布时刻」的日期与标记；17 起结论可带「推翻条件」。
+    const current = { ...document(), schemaVersion: 17 as const, policyVersion: 'daily-briefing.v24' as const }
     expect(isDocument(current)).toBe(true)
-    expect(isDocument({ ...current, schemaVersion: 17 as unknown as 16 })).toBe(false)
+    // 读上一版写的行：没有「推翻条件」的 16 版照旧可读，不因升版把历史文档判成损坏。
+    expect(isDocument({ ...current, schemaVersion: 16 as unknown as 17 })).toBe(true)
+    expect(isDocument({ ...current, schemaVersion: 18 as unknown as 17 })).toBe(false)
   })
 
   it('carries the news-source list a schema-15 edition froze, and refuses an unknown state', () => {
@@ -140,5 +142,33 @@ describe('daily briefing document guard at schema 13', () => {
       ...current,
       edition: { ...current.edition, readAt: '2026-11-06T00:00:00.000Z', generatedAs: '2026-11-06T00:00:00.000Z', isBackfill: false, futureField: 1 }
     })).toBe(true)
+  })
+})
+
+// 用户 2026-11-15：`importance` 改成可缺省之后，校验器还在强制要求它——`String(undefined)` 是
+// `'undefined'`，于是**带宏观条目的中文版整份文档被判非法**，界面只剩「读取失败」；英文那版
+// `news.macro = []` 所以能看。校验器必须跟数据层一起放松，非法值仍然要拒。
+describe('an absent importance is legal, an invalid one is not', () => {
+  const withMacro = (macro: readonly Record<string, unknown>[]) => ({
+    ...document(),
+    news: { items: [], macro, notes: {} }
+  })
+
+  it('accepts a macro item whose importance is absent', () => {
+    const value = withMacro([{
+      eventKey: 'EV.NO.IMPORTANCE', title: '央行讲话', scheduledAt: '2026-10-29T12:30:00.000Z',
+      lifecycleState: 'scheduled', category: 'central-bank-activity',
+      surprise: { direction: 'consensus-unavailable' }
+    }])
+    expect(isDocument(value as never)).toBe(true)
+  })
+
+  it('still rejects a macro item with an invalid importance', () => {
+    const value = withMacro([{
+      eventKey: 'EV.BAD', title: '坏值', scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'bogus',
+      lifecycleState: 'scheduled', category: 'central-bank-activity',
+      surprise: { direction: 'consensus-unavailable' }
+    }])
+    expect(isDocument(value as never)).toBe(false)
   })
 })

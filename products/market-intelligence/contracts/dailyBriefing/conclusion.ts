@@ -88,6 +88,13 @@ export type BriefingConclusion = Readonly<{
   change?: string
   conditions: readonly string[]
   invalidations: readonly Readonly<{ asset: 'BTC' | 'ETH'; horizonEnd: string; text: string }>[]
+  /**
+   * 读者看到的「推翻条件」一句话（产品 2026-11-16 定）：合成版的 `whatWouldChange` 就落在这里。
+   *
+   * 它**不是** `invalidations`：那一条按资产与期限列，是分析自己的失效条件；合成只给一句话，
+   * 没有资产与期限可填，硬套就是编字段。旧版没有这个字段——读出来就没有这一行，不写「未知」。
+   */
+  refutation?: string
   counterEvidence: readonly BriefingCounterEvidence[]
   topSignal: BriefingTopSignal | null
   evidenceStrength?: string
@@ -102,6 +109,30 @@ export type BriefingConclusion = Readonly<{
   /** Present only when `synthesis` is `agent`. */
   synthesisDetail?: BriefingConclusionSynthesis
 }>
+
+/**
+ * 读者看的结论**只能有一个时点**（产品 2026-11-16 口径）。
+ *
+ * 合成版（`synthesis: 'agent'`）里，下面这些字段来自内嵌的**上一份市场分析结论**（它自己的
+ * 快照时点）：`evidenceStrength`、`change`、`topSignal`、`directions`、`dataGaps`、`caveats`。
+ * 它们与本期窗口的 lede/data 并排，读者会当成同一件事。所以合成版里不进读者可见的结论：
+ * 证据强度与变化是那份分析自己的话、最强信号与方向是那份分析的判断、缺口属于那份快照，
+ * caveat 也只保留能由本期数据事实给出的（当前合成路径不产出这类，故清空）。
+ *
+ * **依据区仍在**：`summaryId` / `publishedAt` / `synthesizedFrom` 指向那份分析记录，历史不丢；
+ * 这里只改「读者看到的这一份」，不回写、不删记录。
+ */
+export function readerFacingConclusion(conclusion: BriefingConclusion): BriefingConclusion {
+  if (conclusion.synthesis !== 'agent') return conclusion
+  const { evidenceStrength: _evidenceStrength, change: _change, ...rest } = conclusion
+  return Object.freeze({
+    ...rest,
+    topSignal: null,
+    directions: Object.freeze([]) as BriefingConclusion['directions'],
+    dataGaps: Object.freeze([]) as BriefingConclusion['dataGaps'],
+    caveats: Object.freeze([]) as BriefingConclusion['caveats']
+  })
+}
 
 export type BriefingNewsSummary = Readonly<{
   state: 'available' | 'empty' | 'unavailable' | 'source-disabled'

@@ -56,7 +56,7 @@ export function ModelServiceProviderMoreMenu({
         hasPopup="menu"
         icon={MoreHorizontal}
         onSelect={() => setOpen((current) => !current)}
-        resolveText={(key) => (key === 'modelService.providerMoreActions' ? labels.providerMoreActions : '')}
+        resolveText={(key) => ({ 'modelService.providerMoreActions': labels.providerMoreActions } as Readonly<Record<string, string>>)[key] ?? ''}
         size="sm"
         tooltipKey="modelService.providerMoreActions"
       />

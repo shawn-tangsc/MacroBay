@@ -10,12 +10,18 @@ import {
   type EvidenceClaim,
   type Catalyst,
   type Scenario,
+  type AnalysisInvalidation,
   type AgentFact,
-  type AnalysisConclusion
+  type AnalysisConclusion,
+  type SnapshotTrigger
 } from '../../../contracts/marketAnalysisContracts'
-import { isMarketReactionFact, marketAnalysisUnsafeOutputPolicy, marketAnalysisValidationPolicy } from './analysisConstants'
+import { isMarketReactionFact, marketAnalysisValidationPolicy } from './analysisConstants'
+import { containsUnsafeOutput, formatUnsafeOutputRedaction, isPlainRecord, redactUnsafeOutput, utf8Length, type AnalysisOutputRedaction } from './analysisOutputRedaction'
+export { formatUnsafeOutputRedaction } from './analysisOutputRedaction'
+export type { AnalysisOutputRedaction } from './analysisOutputRedaction'
 import { missingTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
-import { policyProbabilityDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
+
+import { policyProbabilityDefect, untracedProsePercentageDefect, type AnalysisProbabilityDefect } from './analysisProbabilityCitation'
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 import {
   divergenceDefectOf,
@@ -24,7 +30,7 @@ import {
 } from './analysisDivergenceConsistency'
 
 export type FrozenAnalysisEvidence = Readonly<{
-  facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'comparability' | 'freshness' | 'value' | 'observedAt'>[]
+  facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'domain' | 'subject' | 'comparability' | 'freshness' | 'value' | 'observedAt'>[]
   evidenceRefs: readonly Pick<EvidenceClaim, 'evidenceRefId'>[]
   /**
    * 变更摘要里**印给模型看过**的百分数（第二个集合，架构师 2026-11-11）。
@@ -33,6 +39,8 @@ export type FrozenAnalysisEvidence = Readonly<{
    * 不并进 `facts`——合成事实会多出不存在的 factId，并让同一个 metric 前后出现两条。
    */
   changeValues?: readonly number[]
+  /** 触发指针（R37）：只有舆情触发的运行才有；新闻解读的必答校验读它。 */
+  trigger?: SnapshotTrigger
 }>
 
 /** 背离立场块的形状与判定在 `analysisDivergenceConsistency`（体积门禁要求抽离）；类型从这里照旧导出。 */
@@ -55,8 +63,6 @@ export type ValidatedAnalysisModelOutput = Readonly<{
 }>
 
 /** A value that matched a prohibited pattern, named so the failure is diagnosable. */
-export type AnalysisOutputRedaction = Readonly<{ path: string; pattern: string }>
-
 /**
  * Which rule rejected an output.
  *
@@ -88,11 +94,21 @@ export const analysisValidationRules = Object.freeze({
    */
   policyProbabilityCitation: 'policy-probability-citation',
   /**
+   * 任意散文段落里的一个百分数在冻结快照里找不到出处（情景、传导假设、催化剂、方向理由都算）。
+   * 判据是数，不读句子：不因措辞拒，也不因「看起来像估算」放行。
+   */
+  proseNumberCitation: 'prose-number-citation',
+  /**
    * The conclusion never returned to the change that triggered the run: it cites something else and
    * talks about the background. Coarse code stays `analysis-missing-evidence`, which is already in
    * the repairable set, so the model gets its one rewrite; the detail names this rule.
    */
   triggerFocus: 'missing-trigger-focus',
+  /**
+   * 失效条件引用了一个快照里不存在的 id 或时刻（例如「跌破支撑」这种没有事实出处的价位）。
+   * 判据是数据：factId 在快照事实里、at 在快照的时刻里；不读那句话怎么写。
+   */
+  invalidationReference: 'invalidation-not-in-snapshot',
   /**
    * 分析的背离结论与快照里已有的事实相反（`02` 系统设计 §校验规则）。
    *
@@ -117,9 +133,9 @@ export type AnalysisShapeDefect = `shape:${string}`
 
 export type AnalysisOutputValidationResult =
   | Readonly<{ ok: true; value: ValidatedAnalysisModelOutput; redactions: readonly AnalysisOutputRedaction[] }>
-  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule | AnalysisShapeDefect; detail?: AnalysisProbabilityDefect }>
+  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule | AnalysisShapeDefect; detail?: AnalysisProbabilityDefect | string }>
 
-function missingEvidence(rule: AnalysisValidationRule, detail?: AnalysisProbabilityDefect): AnalysisOutputValidationResult {
+function missingEvidence(rule: AnalysisValidationRule, detail?: AnalysisProbabilityDefect | string): AnalysisOutputValidationResult {
   return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule, ...(detail ? { detail } : {}) }
 }
 
@@ -169,6 +185,7 @@ const outputSections: readonly (readonly [string, (value: unknown) => boolean])[
  */
 function isConclusion(value: unknown): value is AnalysisConclusion {
   if (!isPlainRecord(value)) return false
+  // R39 C：`newsImpact` 从**新市场输出契约**里移除（类型上只读历史），模型多写就是自造字段。
   if (!hasExactKeys(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'])) return false
   return isDirectionKey(value.direction)
     && isBoundedText(value.summary)
@@ -205,6 +222,13 @@ function topLevelShapeDefect(value: unknown): AnalysisShapeDefect | undefined {
   return `shape:top-level:${details.join(',') || 'unknown'}`
 }
 
+/**
+ * `newsTriggerRules`：触发型必答块是否参与校验（R39 §2「校验按线取」）。
+ *
+ * 市场线传 `false`——它不看触发指针，也不该被「没回答那条新闻」拒收；新闻线传 `true`
+ * （默认值，保持既有调用方行为）。`missingTriggerFocus` 不在此列：它是「回答了 change 吗」，
+ * 市场线仍然要过。
+ */
 export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence, focus?: TriggerFocus): AnalysisOutputValidationResult {
   if (utf8Length(input) > marketAnalysisValidationPolicy.maximumOutputBytes) return invalidSchema('shape:too-large')
 
@@ -257,16 +281,17 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   // 重点舆情是本次分析必须权衡的输入：至少一条实质性论证要引用它，否则「带上了」只是 prompt 里的
   // 一句话。只认论证区（事实、支撑/反向证据、方向、催化剂、传导假设），不认顶层 evidenceRefs 清单。
   const sentimentRefs = new Set(snapshot.facts.filter(fact => fact.metric === 'news-sentiment' && fact.evidenceRefId).map(fact => fact.evidenceRefId!))
-  if (sentimentRefs.size > 0) {
-    const citedEvidence = new Set([
-      ...output.knownFacts.flatMap(claim => claim.evidenceRefIds),
-      ...output.transmissionHypotheses.flatMap(claim => claim.evidenceRefIds),
-      ...output.supportingEvidence.map(claim => claim.evidenceRefId),
-      ...output.counterEvidence.map(claim => claim.evidenceRefId),
-      ...output.directions.flatMap(entry => entry.evidenceRefIds),
-      ...output.nextCatalysts.flatMap(claim => claim.evidenceRefIds)
-    ])
-    if (![...sentimentRefs].some(ref => citedEvidence.has(ref))) return missingEvidence(analysisValidationRules.sentimentNotWeighed)
+  // 论证区引用（事实、传导、支撑/反向、方向、催化剂）：不是顶层 evidenceRefs 清单——那份是登记。
+  const citedEvidence = new Set([
+    ...output.knownFacts.flatMap(claim => claim.evidenceRefIds),
+    ...output.transmissionHypotheses.flatMap(claim => claim.evidenceRefIds),
+    ...output.supportingEvidence.map(claim => claim.evidenceRefId),
+    ...output.counterEvidence.map(claim => claim.evidenceRefId),
+    ...output.directions.flatMap(entry => entry.evidenceRefIds),
+    ...output.nextCatalysts.flatMap(claim => claim.evidenceRefIds)
+  ])
+  if (sentimentRefs.size > 0 && ![...sentimentRefs].some(ref => citedEvidence.has(ref))) {
+    return missingEvidence(analysisValidationRules.sentimentNotWeighed)
   }
   // 背离立场（`02` 系统设计 §背离一致性）：只判**说出来的**那些对——不写就是没意见。
   // 与证据相反即拒；pairId 认不出来是引用缺陷（不许就地编一对）。
@@ -275,6 +300,13 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   if (divergenceDefect === 'contradiction') return missingEvidence(analysisValidationRules.divergenceContradiction)
   const probabilityDefect = policyProbabilityDefect(output.conclusion, snapshot)
   if (probabilityDefect) return missingEvidence(analysisValidationRules.policyProbabilityCitation, probabilityDefect)
+  // 同一条判据扩到**所有会印数字的段落**：只验 conclusion 时，情景与方向理由里的编造数没人管。
+  const proseNumberDefect = untracedProsePercentageDefect(output, snapshot)
+  if (proseNumberDefect) return missingEvidence(analysisValidationRules.proseNumberCitation, proseNumberDefect)
+  // 失效条件只许引用快照里真的有的东西：一条事实 id，或事实/快照上的一个时刻。
+  if (!scenarioInvalidationsReferToSnapshot(output.scenarios, snapshot)) {
+    return missingEvidence(analysisValidationRules.invalidationReference)
+  }
   // Only when the caller could resolve a trigger source; a snapshot with no change record never
   // ran this rule and must not be judged by it.
   if (focus && missingTriggerFocus(output, focus)) return missingEvidence(analysisValidationRules.triggerFocus)
@@ -301,9 +333,13 @@ function invalidSchema(rule?: AnalysisValidationRule | AnalysisShapeDefect): Ana
   return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema, ...(rule ? { rule } : {}) }
 }
 
-function hasExactKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
-  if (!isPlainRecord(value) || Object.keys(value).length !== keys.length) return false
-  return keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+function hasExactKeys(value: unknown, keys: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
+  if (!isPlainRecord(value)) return false
+  const present = Object.keys(value)
+  // 必填键一个不能少、可选键一个不能多：多出的键就是模型自造的字段，落库后没人读得懂。
+  if (present.length < keys.length || present.length > keys.length + optional.length) return false
+  if (!keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))) return false
+  return present.every((key) => keys.includes(key) || optional.includes(key))
 }
 
 function isFactClaims(value: unknown): value is FactClaim[] {
@@ -332,7 +368,48 @@ function isScenarios(value: unknown): value is Scenario[] {
     isScenarioHorizon(item.horizon) &&
     isBoundedText(item.baseCase) &&
     isBoundedTextCollection(item.conditions) && item.conditions.length > 0 &&
-    isBoundedText(item.invalidation) && item.status === marketAnalysisValidationPolicy.modelPredictionStatus)
+    isInvalidation(item.invalidation) && item.status === marketAnalysisValidationPolicy.modelPredictionStatus)
+}
+
+/**
+ * 失效条件的新结构：引用一条快照事实（factId + 方向）或快照里的一个时刻（at）。
+ *
+ * 句子（statement）必须有，但**不参与校验**；旧记录里的字符串在这一层不认——那是存储兼容，
+ * 新生成的输出必须给结构，否则「跌破支撑」这种快照里没有的价位就又会进来。
+ */
+function isInvalidation(value: unknown): value is AnalysisInvalidation {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  if (record.kind === 'fact') {
+    return hasExactKeys(record, ['kind', 'factId', 'relation', 'statement']) &&
+      isBoundedText(record.factId) && (record.relation === 'below' || record.relation === 'above') && isBoundedText(record.statement)
+  }
+  if (record.kind === 'instant') {
+    return hasExactKeys(record, ['kind', 'at', 'statement']) && isCanonicalInstant(record.at) && isBoundedText(record.statement)
+  }
+  return false
+}
+
+/**
+ * 失效条件只能引用**快照里真的有**的东西：一条事实 id，或事实/快照上的一个时刻。
+ * 只比数据，不读句子。
+ */
+function scenarioInvalidationsReferToSnapshot(scenarios: readonly Scenario[], snapshot: FrozenAnalysisEvidence): boolean {
+  const factIds = new Set(snapshot.facts.map(fact => fact.factId))
+  const instants = new Set<string>()
+  for (const fact of snapshot.facts) {
+    if (typeof fact.observedAt === 'string') instants.add(fact.observedAt)
+  }
+  return scenarios.every(scenario => {
+    const invalidation = scenario.invalidation
+    if (typeof invalidation === 'string') return false
+    return invalidation.kind === 'fact' ? factIds.has(invalidation.factId) : instants.has(invalidation.at)
+  })
+}
+
+/** 严格 ISO 时刻（UTC、毫秒）：与快照里存的形状一致，写错一位就是没出处。 */
+function isCanonicalInstant(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
 }
 
 /**
@@ -415,62 +492,4 @@ function isBoundedTextCollection(value: unknown): value is string[] {
 
 function isBoundedText(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= marketAnalysisValidationPolicy.maximumFieldCharacters
-}
-
-/**
- * Removes prohibited patterns from every string in the payload, in place.
- *
- * The walker visits keys as well as values, so a pattern cannot survive by hiding in
- * a field name, and it reports each removal with its JSON path.
- */
-function redactUnsafeOutput(value: unknown): { value: unknown; redactions: readonly AnalysisOutputRedaction[] } {
-  const redactions: AnalysisOutputRedaction[] = []
-  const walk = (item: unknown, path: string): unknown => {
-    if (typeof item === 'string') {
-      let next = item
-      for (const pattern of marketAnalysisUnsafeOutputPolicy.prohibitedPatterns) {
-        if (!pattern.test(next)) continue
-        next = next.replace(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`), marketAnalysisUnsafeOutputPolicy.redactionToken)
-        redactions.push({ path, pattern: pattern.source })
-      }
-      return next
-    }
-    if (Array.isArray(item)) return item.map((entry, index) => walk(entry, `${path}[${index}]`))
-    if (isPlainRecord(item)) {
-      const result: Record<string, unknown> = {}
-      for (const [key, entry] of Object.entries(item)) {
-        const safeKey = typeof key === 'string' ? walk(key, `${path}.${key}#key`) as string : key
-        result[safeKey] = walk(entry, `${path}.${key}`)
-      }
-      return result
-    }
-    return item
-  }
-  return { value: walk(value, ''), redactions }
-}
-
-function containsUnsafeOutput(value: unknown): boolean {
-  if (typeof value === 'string') return marketAnalysisUnsafeOutputPolicy.prohibitedPatterns.some((pattern) => pattern.test(value))
-  if (Array.isArray(value)) return value.some(containsUnsafeOutput)
-  if (isPlainRecord(value)) return Object.entries(value).some(([key, item]) => containsUnsafeOutput(key) || containsUnsafeOutput(item))
-  return typeof value === 'number' && !isMarketAnalysisFiniteNumber(value)
-}
-
-function utf8Length(value: string): number {
-  return new TextEncoder().encode(value).byteLength
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === Object.prototype
-}
-
-/**
- * One-line record of what was removed from a model output.
- *
- * Without it a removed URL is invisible: the run succeeds and nobody can tell that
- * part of the conclusion was rewritten.
- */
-export function formatUnsafeOutputRedaction(runId: string, redactions: readonly AnalysisOutputRedaction[]): string {
-  const fields = [...new Set(redactions.map(redaction => redaction.path))]
-  return JSON.stringify({ marker: 'MI_ANALYSIS_REDACTION', runId, count: redactions.length, fields })
 }

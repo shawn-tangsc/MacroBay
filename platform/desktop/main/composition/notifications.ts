@@ -12,7 +12,7 @@ import type {
 } from '@platform/notifications/contracts/notificationContracts'
 import { configureNotificationRuntime } from '@platform/notifications/ipc/registerNotificationIpc'
 import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
-import { resolvePushChannel, type PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import { resolvePushChannels, type PushChannelsResolution } from '@platform/notifications/delivery/pushChannelResolution'
 import { createNotificationProducerOwnership } from '@platform/notifications/contracts/notificationProducerOwnership'
 import type { DeliveryHooks } from '@platform/notifications/runtime/notificationRouting'
 
@@ -38,7 +38,7 @@ export type NotificationCompositionPorts = Readonly<{
   /** 诊断出口（runtime §2）：**必传**，装配层接到 AppLog、测试给 recorder；缺了运行时一律编译不过。 */
   diagnostics: NotificationDiagnosticsSink
   /** 目标通道的唯一派生；App 组合根按通道投影注入，低层组合根由调用方给。 */
-  resolvePushChannel?: () => Promise<PushChannelResolution>
+  resolvePushChannels?: () => Promise<PushChannelsResolution>
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
   /** 通道侧「最近一次真实投递」（通道页/通知屏给读者核对用）；缺省时界面只说「没有记录」。 */
@@ -100,7 +100,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     ...(ports.push === undefined ? {} : { push: ports.push }),
     ...(ports.getPushTargets === undefined ? {} : { getPushTargets: ports.getPushTargets }),
     ...(ports.lastDelivery === undefined ? {} : { lastDelivery: ports.lastDelivery }),
-    ...(ports.resolvePushChannel === undefined ? {} : { resolvePushChannel: ports.resolvePushChannel }),
+    ...(ports.resolvePushChannels === undefined ? {} : { resolvePushChannels: ports.resolvePushChannels }),
   })
 }
 
@@ -110,7 +110,7 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
  *
  * 适配器放这里而不是 app.ts：`app.ts` 是「只减不增」的基线文件，每加一行都要先抽离。
  */
-export type AppNotificationCompositionPorts = Omit<NotificationCompositionPorts, 'diagnostics' | 'resolvePushChannel'> & {
+export type AppNotificationCompositionPorts = Omit<NotificationCompositionPorts, 'diagnostics' | 'resolvePushChannels'> & {
   /** 通道侧的只读投影 + 投递入口；只有 app 组合根有这两样。 */
   channels: ChannelPushPortDeps['channels']
   deliver: ChannelPushPortDeps['deliver']
@@ -151,19 +151,16 @@ export function withSurfaceSaveDiagnostics(input: {
 
 export function composeNotificationRuntimeForApp(ports: AppNotificationCompositionPorts): void {
   /**
-   * 目标通道的唯一派生（技术方案 §1）：三处（主推送 / 严重度升级 / 手动重投）都读这一个函数，
-   * 因此「读者启用了两条」这件事在三条路上同时成立，不会主路径拒绝、升级路径照发。
+   * 目标通道的唯一派生（多通道方案 §5-1）：三处（主推送 / 严重度升级 / 手动重投）都读这一个函数。
+   * 多通道是合法状态，这里只是把「现在能用哪些」如实交出去，不再产生任何「配置冲突」诊断。
    */
-  const pushTarget = async () => resolvePushChannel(ports.channels.list(), (code, count) => {
-    ports.log.log('warn', code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${code}`, { count })
-  })
+  const pushTarget = async () => resolvePushChannels(ports.channels.list())
   const push = createChannelPushPort({
     channels: ports.channels,
     deliver: ports.deliver,
-    resolvePushChannel: pushTarget,
     // 至多一个「看原文」；多出来的取第一个照发，但留一行痕——静默取第一个等于让写错的人永远不知道。
     diagnostics: (code, detail) => {
-      ports.log.log('warn', code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${code}`, { ...detail })
+      ports.log.log('warn', `notification.${code}`, { ...detail })
     }
   })
   composeNotificationRuntime({
@@ -171,7 +168,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
     timeZone: ports.timeZone,
     manifests: ports.manifests,
     push,
-    resolvePushChannel: pushTarget,
+    resolvePushChannels: pushTarget,
     getPushTargets: async () => ports.channels.listDeliveryTargets().channels,
     // 读者核对的事实：这条通道最近一次真实投递的结局（不是「有没有配好」）。
     lastDelivery: (channelId: string) => ports.channels.lastDelivery?.(channelId) ?? null,
@@ -197,7 +194,7 @@ export function composeNotificationRuntimeForApp(ports: AppNotificationCompositi
         (entry.code === 'delegated' || entry.code === 'unclaimed-producer'
           ? 'info'
           : entry.code === 'persist-failed' ? 'error' : 'warn')
-      const event = entry.code === 'push-multiple-enabled' ? 'notification.push-multiple-enabled' : `notification.${entry.code}`
+      const event = `notification.${entry.code}`
       // 字段透传走**唯一一份清单**（`diagnosticLogFields`）：手写一份白名单会吞掉下一个字段，
       // 线上那次 `submit-failed` 没有 `reason` 就是这么来的。清单只含闭集码、id、条数与时刻。
       ports.log.log(level, event, diagnosticLogFields(entry))

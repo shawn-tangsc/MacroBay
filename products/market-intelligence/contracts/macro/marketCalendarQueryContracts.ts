@@ -1,5 +1,21 @@
 // Product-owned public boundary for design 122. No storage/provider-native identities.
+/**
+ * **拿到实际值之后要升级成 `published` 的那几档**（迁移/启动归一用）。
+ *
+ * `scheduled` = 源还没标发布、`missing` = 过了发布时点却没有值：这两种在**有实际值**的那一刻
+ * 就不再成立，必须升成 `published`。语义写在契约里、调用点只读它——2026-11-19 的守卫红就是
+ * 有人在归一逻辑里又抄了一遍 `'missing' || 'scheduled'` 两个状态字面量。
+ */
+export const releaseStatusesPromotedByValue: readonly (typeof marketCalendarPublicPolicy.releaseStatuses)[number][] =
+  Object.freeze(['scheduled', 'missing'])
+
 export const marketCalendarPublicPolicy = Object.freeze({
+  /**
+   * 覆盖口径的**闭集**：只有这两档，一处定义。
+   * 加一档 = 改这里 + 补齐所有消费侧的显式分支；`coverageClosedSet.test.ts` 会盯着
+   * 「档位与消费点是否同步」，避免新档位在抽屉里悄悄变成「整行不收」。
+   */
+  coverage: ['available', 'observed-unverified'] as const,
   maximumEvents: 100, pageBytes: 256 * 1024, eventBytes: 8 * 1024, textCharacters: 512, textBytes: 1024,
   /** Bound on the stable observation identity a projection may carry. */
   maximumObservationKeyChars: 256,
@@ -7,7 +23,9 @@ export const marketCalendarPublicPolicy = Object.freeze({
   instantPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
   opaquePattern: /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
   kinds: ['economic-indicator', 'financial-event', 'central-bank-activity'],
-  importance: ['high', 'medium', 'low'], countryCodePattern: /^[A-Z]{2,3}$/, forbiddenCountryCodes: ['ZZ'],
+  importance: ['high', 'medium', 'low'],
+  /** 发布状态闭集（六值）：**唯一定义在这里**，别处只许引用，不许再写一遍字面量。 */
+  releaseStatuses: ['scheduled', 'published', 'cancelled', 'unknown', 'backfilling', 'missing'], countryCodePattern: /^[A-Z]{2,3}$/, forbiddenCountryCodes: ['ZZ'],
   /**
    * `no-locale-rows`：这条来源**根本不发布该语言**（今天：`financial-events` /
    * `central-bank-activities` 的 en 请求永远返回空数组）。它与 `success-empty`
@@ -21,59 +39,165 @@ export const marketCalendarPublicPolicy = Object.freeze({
   attemptFailures: ['input-invalid', 'credential-not-configured', 'response-unavailable',
     'archive-unavailable', 'parse-unavailable', 'storage-unavailable', 'storage-pressure'],
   attemptTriggers: ['manual', 'automatic'],
-  descriptors: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'],
-  /** Bounded catch-up for the daily briefing: same three feeds, one shared deadline. */
+  /**
+   * 事件类型 → 该类型事件的来源身份，**按位置与 `kinds` 对齐**。
+   *
+   * 位置必须是三个：读回时靠它把每一行观测反查回它的事件类型（经济指标 / 金融事件 /
+   * 央行活动），压成一条会让另两类事件反查不到源。三条都指向同一次采集产出的那三类身份，
+   * 所以它是「映射」，不是「采集清单」——采集清单见 `collectionFeeds`。
+   */
+  feedByKind: ['macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
+    'macro-calendar-narwhal-central-bank-activities'],
+  /**
+   * 真正被采集、被调用方清单列出的来源：**一条**。
+   *
+   * 一次 `economics/calendar` 调用返回全部 releases，三类事件由我们按 series 自己分；
+   * 另两条 feed 带 `coveredBy` 指向它。调用方（简报补跑、按需刷新）只列这一条，列三条就是
+   * 同一个端点请求三次。
+   */
+  /**
+   * **当前真正在采的 feed**（补跑命令下发 `sources` 用它校验）。
+   *
+   * 2026-11-16：补采命令已从 narwhal 换到 0xrouter 三路，这份清单必须同笔对齐——否则
+   * `isMarketCalendarRefreshNowResult` 拿返回值去比对旧名单，每次真实补采都被判成 `unknown`，
+   * 界面写「补采结果未知」，比失败更难查。
+   */
+  collectionFeeds: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+    'macro-calendar-0xrouter-central-bank-activities'],
+  /**
+   * 一条事件可以来自哪些**源 feed**。`source` 原来只有 `'Narwhal' | '0xRouter'` 两档，
+   * 表达不了「官方 BLS 发的」，于是官方行被标成旧源。现在以 feed id 为真值，
+   * 两个旧值保留只为兼容还没迁移的旧行，**新写入不许再用旧值**。
+   */
+  sourceFeeds: [
+    'macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
+    'macro-calendar-narwhal-central-bank-activities',
+    // 0xRouter 三路 2026-11-16 接回采集后进标准表：它们**也是真来源**，读侧必须能指名道姓，
+    // 否则新进来的每一行都落 `unspecified`（界面把来源画成「未知」）。
+    'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+    'macro-calendar-0xrouter-central-bank-activities',
+    'macro-calendar-bls', 'macro-calendar-bea',
+    'macro-calendar-fed'
+  ],
+  /**
+   * 来源认不出时的值。**不许退回旧源**（`0xRouter` 删掉之后那会是个不存在的来源），
+   * 也不许把这条发布藏起来——「不知道来源」不等于「没有这次发布」。
+   */
+  unspecifiedSource: 'unspecified',
+  /**
+   * 0xRouter 的三个事件身份：**只描述旧来源自己能采什么**（它的采集器、它的尝试台账、
+   * 以及按需补跑时能点名的那三个端点）。它不是当前读取来源，也不是按事件类型的映射表
+   * ——映射表是 `feedByKind`，采集清单是 `collectionFeeds`。
+   */
+  descriptors: ['macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
+    'macro-calendar-0xrouter-central-bank-activities'],
+  /** Bounded catch-up for the daily briefing: one collection, one shared deadline. */
   refreshNow: { defaultTimeoutMs: 90_000, minimumTimeoutMs: 1_000, maximumTimeoutMs: 120_000 },
   methods: { refresh: 'intelligence.macro.marketCalendar.refreshManual', query: 'intelligence.macro.marketCalendar.queryMonth',
+    /**
+     * **只读**：某月「进不了标准表」的观测（渲染专用，用户 2026-11-16 定）。
+     * 与 `queryMonth` 同一族、同一个前缀——另开一个前缀会让「日历的读」散成两族。
+     */
+    queryUnmappedMonth: 'intelligence.macro.marketCalendar.queryUnmappedMonth',
+    /** 事件清单（一行一个事件身份，渲染专用只读口）：核对「每个事件去哪看官方发布」。 */
+    queryEvents: 'intelligence.macro.marketCalendar.queryEvents',
+    /** 映射规则表（只读，渲染专用）：现有规则 + 库里未映射的源内 id。 */
+    queryMappingRules: 'intelligence.macro.marketCalendar.queryMappingRules',
+    /**
+     * **按事件身份取各来源写了什么**（只读，渲染专用）：`#47` 详情分块与 `#40` 冲突共用。
+     * 双源读取——修订表给「谁在什么时候写过什么」（只有官方来源），标准表给「每个来源当前的值」。
+     */
+    queryEventSourceWrites: 'intelligence.macro.marketCalendar.queryEventSourceWrites',
+    /**
+     * **数值修订审计**（只读，渲染专用，2026-11-20）：某一格历次被谁在什么时候改成了什么。
+     * 只给事件详情并列行用；三态（有记录 / 没记录 / 读不到）由读口给，界面不再自己判。
+     */
+    queryValueRevisions: 'intelligence.macro.marketCalendar.queryValueRevisions',
+    /**
+     * **标准码表整表**（只读，渲染专用，2026-11-17）：弹框「码表」页签用。244 行一次下发，
+     * 每行带官网页（待补带闭集理由，**不许空链接**）与「有多少个源内 id 认得它」（不下发 id 列表）。
+     */
+    queryCodeTable: 'intelligence.macro.marketCalendar.queryCodeTable',
+    /**
+     * **事件清单**（只读，渲染专用，2026-11-18）：经济事件与央行活动单独一页，**不参与映射**。
+     * 一行 = 一场事件；与经济指标分两个读口，事件没有统计期这件事才说得清。
+     */
+    queryEventList: 'intelligence.macro.marketCalendar.queryEventList',
     getCollectionFreshness: 'intelligence.macro.marketCalendar.getCollectionFreshness',
     refreshNow: 'intelligence.macro.marketCalendar.refreshNow' }
 } as const)
+/**
+ * **「可存国家码」的唯一谓词**（用户 2026-11-17）：形状 + 禁用码，写入侧与读取侧都调它。
+ *
+ * 之前形状正则有**三份**（合同常量、storage validation、storage contracts），读写两侧还各有一套：
+ * 一旦上游给出 `ZZ`，数据能写进标准表、读侧却整页判非法 → 读者看到「读不到」。
+ * 一个规则一个谓词，这类分叉就不可能发生——grep 表只需要证明调用点。
+ */
+export type CountryCodeVerdict =
+  /** 可以落地（已归一或原样保留）。 */
+  | Readonly<{ state: 'code'; code: string }>
+  /**
+   * **没有国家，但这一行保留**。`reason` 分两种，不能共用：
+   * - `absent`：源就没给国家；
+   * - `placeholder`：源给了占位码（如 `ZZ`）——**必须能被数出来**，否则它从「丢行」变成
+   *   「静默归为无国家」，仍然不可见（用户 2026-11-17）。
+   */
+  | Readonly<{ state: 'none'; reason: 'absent' | 'placeholder' }>
+  /** 形状都不像：这是畸形输入，按调用方的策略整批判非法。 */
+  | Readonly<{ state: 'invalid' }>
+
+/**
+ * **三态**，不是布尔（用户 2026-11-17）：用 `false` 同时表示「这一行没有国家」和「这批数据非法」，
+ * 就是三路采集同时挂掉的复现条件——一行没有国家只是这一行降级，不该让整批失败。
+ */
+export function resolveCountryCode(value: unknown): CountryCodeVerdict {
+  if (value === undefined || value === null) return { state: 'none', reason: 'absent' }
+  if (typeof value !== 'string') return { state: 'invalid' }
+  const trimmed = value.trim()
+  if (trimmed === '') return { state: 'none', reason: 'absent' }
+  if (!marketCalendarPublicPolicy.countryCodePattern.test(trimmed)) return { state: 'invalid' }
+  // 占位码（如 `ZZ`）：按「无国家」处理，**行保留**，并计入未知码日志——不是非法输入。
+  if ((marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(trimmed)) {
+    return { state: 'none', reason: 'placeholder' }
+  }
+  return { state: 'code', code: trimmed }
+}
+
+/** 便捷判断：只问「能不能落地」，用于读取侧校验（`none` 与 `invalid` 都不可落地）。 */
+export function isStorableCountryCode(value: unknown): value is string {
+  return resolveCountryCode(value).state === 'code'
+}
+
 export type MarketCalendarScope = Readonly<{ month: string; locale: 'zh' | 'en' }>
 export type MarketCalendarQuery = MarketCalendarScope & Readonly<{ asOf: string; cursor?: string }>
 export type MarketCalendarValue = Readonly<{ displayValue: string }> | null
-// Query-only link, never a promotion of the provider observation's revision identity.
-export type MarketCalendarOfficialLink = Readonly<{
-  officialEventKey: string; officialPeriodKey: string; officialScheduledDate: string
-  officialScheduledAt: string | null; officialDetectedAt: string
-  timeDisplaySource: 'official-scheduled' | 'provider-scheduled' | 'date-only'
-  displayScheduledAt: string | null
-  officialActual: Readonly<{ displayValue: string }> | null
-  officialPrevious: Readonly<{ displayValue: string }> | null
-}>
-export type MarketCalendarEvent = Readonly<{
-  eventKey: string; title: string; countryCode: string | null; countryName?: string
-  /**
-   * Stable identity of the underlying observation.
-   *
-   * `eventKey` is an HMAC of the per-batch `observation_id`, so it changes on every
-   * collection and cannot identify the same event across refreshes. This key comes
-   * from the stored `market_fact_key`, which is verified stable across batches, so a
-   * consumer that needs to track an event over time (the analysis facts) can rely on
-   * it. Optional on the wire: a service that does not supply it keeps working.
-   */
-  observationKey?: string
-  /** 已注册指标的稳定标识（`cpi`、`nonfarm-payrolls`…）；0xRouter 的自由文本事件没有它。 */
-  eventNameKey?: string
-  eventType: typeof marketCalendarPublicPolicy.kinds[number]; importance: typeof marketCalendarPublicPolicy.importance[number]
-  scheduledAt: string; consensus: MarketCalendarValue; providerPrevious: MarketCalendarValue; providerActual: MarketCalendarValue
-  source: '0xRouter'; sourceObservedAt: string; coverage: 'observed-unverified'
-  officialLink?: MarketCalendarOfficialLink
-}>
-/**
- * The most recent refresh attempt for one source, whichever path ran it.
- *
- * `failureCode` and `trigger` are optional so a service that only knows "failed at T"
- * keeps working. They exist because an automatic run that was refused by the shared
- * calendar ceiling is invisible otherwise: the page can show stale data and look like
- * the source simply has not published yet.
- */
+// 类型块抽到独立模块（体积门禁），这里同时 re-export 与本地引入——本地用它们做形状与守卫。
+export type { MarketCalendarEvent, MarketCalendarOfficialLink } from './marketCalendarEventContracts'
+import type { MarketCalendarEvent, MarketCalendarOfficialLink } from './marketCalendarEventContracts'
+
 export type MarketCalendarRefreshAttempt = Readonly<{ state: 'succeeded' | 'failed'; attemptedAt: string
   failureCode?: typeof marketCalendarPublicPolicy.attemptFailures[number]
   trigger?: typeof marketCalendarPublicPolicy.attemptTriggers[number] }>
 export type MarketCalendarSource = Readonly<{ eventType: MarketCalendarEvent['eventType']; status: typeof marketCalendarPublicPolicy.statuses[number]; sourceObservedAt: string | null;
-  latestAttempt?: MarketCalendarRefreshAttempt }>
+  latestAttempt?: MarketCalendarRefreshAttempt
+  /**
+   * 这一类事件背后的源，**最近一次成功采集批次**的时刻。
+   *
+   * 与 `sourceObservedAt` 是两个问题：后者是「来源最后一次给出这一条」（翻到几年前那个月当然很旧），
+   * 前者是「我们这边最近一次成功采到东西」。只有后者能回答「这条源是不是停了」——2026-11-16
+   * Narwhal 自 11-13T13:20Z 起零产出，界面却一路正常，就是没人回答过这个问题。
+   */
+  lastBatchAt?: string
+  /** 连续错过 N 个自己的采集周期（判据在 `marketCalendarFeedLiveness`）。从未成功过的源不判。 */
+  collectorSilent?: boolean }>
 export type MarketCalendarPage = Readonly<{ state: 'available'; month: string; locale: 'zh' | 'en'; asOf: string;
-  events: readonly MarketCalendarEvent[]; sources: readonly MarketCalendarSource[]; nextCursor?: string }> |
+  events: readonly MarketCalendarEvent[]; sources: readonly MarketCalendarSource[];
+  /**
+   * 库里最早一天有数据的日期（`YYYY-MM-DD`）。**空月要说清是「没有事件」还是「早于数据起点」**
+   * ——两者对读者是两件事：一个是那天确实没发布，一个是我们还没有那段数据。
+   * 没有数据时是 `null`（事实）；字段缺席＝这条写入路径没带上（当成「不知道」，不许当成起点）。
+   */
+  dataStartDate?: string | null; nextCursor?: string }> |
   Readonly<{ state: 'unavailable'; failureCode: 'input-invalid' | 'query-unavailable' }>
 export type MarketCalendarRefreshResult = Readonly<{ state: 'completed' | 'partial' | 'unavailable';
   sources: readonly MarketCalendarSource[]; failureCode?: typeof marketCalendarPublicPolicy.refreshFailures[number] }>
@@ -101,9 +225,15 @@ export type MarketCalendarRefreshNowResult =
   | Readonly<{ state: 'unchanged' }>
   | Readonly<{ state: 'failed'; failureCode: string }>
   | Readonly<{ state: 'timeout'; timeoutMs: number }>
+/* 写入失败键的形状与校验拆在独立模块（体积门禁）；re-export，调用方路径不变。 */
+import { isMarketCalendarWriteFailureView, type MarketCalendarWriteFailureView } from './marketCalendarWriteFailureContract'
+export { isMarketCalendarWriteFailureView, type MarketCalendarWriteFailureView } from './marketCalendarWriteFailureContract'
+
 export type MarketCalendarFreshness =
   | Readonly<{ state: 'available'; asOf: string; lastCollectedAt: string | null
-    sources: readonly MarketCalendarCollectionFreshness[] }>
+    sources: readonly MarketCalendarCollectionFreshness[]
+    /** 可选：只有真的有写入失败时才带（键集严格，带就必须合法）。 */
+    writeFailure?: MarketCalendarWriteFailureView }>
   | Readonly<{ state: 'unavailable'; failureCode: 'query-unavailable' }>
 
 export function marketExact(value: unknown, required: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
@@ -146,14 +276,36 @@ export function isMarketCalendarOfficialLink(value: unknown, providerScheduledAt
   return value.timeDisplaySource === 'date-only' && value.displayScheduledAt === null && providerScheduledAt === undefined
 }
 export function isMarketCalendarEvent(value: unknown): value is MarketCalendarEvent {
-  return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'importance', 'scheduledAt', 'consensus',
-    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], ['officialLink', 'countryName', 'observationKey']) &&
+  return marketExact(value, ['eventKey', 'title', 'countryCode', 'eventType', 'scheduledAt', 'consensus',
+    'providerPrevious', 'providerActual', 'source', 'sourceObservedAt', 'coverage'], [
+    // `importance` 可选：源没说就没有这个字段（缺省 ≠ 某个更低的重要度）。
+    'importance', 'officialLink', 'countryName', 'countryNameFull', 'observationKey', 'eventNameKey', 'seriesId',
+    'measureKeys',
+    'periodKey', 'firstScheduledDate',
+      // 切到标准表后适配器**每行都写**这四个（时间精度、生命周期、行类型、来源真值）。
+      // 白名单里没有它们时，`marketExact` 判 false → 整页非法 → 读者看到「读不到」，
+      // 而行级断言全绿（那一层不跑页面校验）。
+      'timePrecision', 'releaseStatus', 'rowKind', 'sourceFeedId']) &&
+    (!Object.hasOwn(value, 'timePrecision') || value.timePrecision === 'minute' || value.timePrecision === 'date') &&
+    (!Object.hasOwn(value, 'releaseStatus') || (marketCalendarPublicPolicy.releaseStatuses as readonly string[]).includes(String(value.releaseStatus))) &&
+    (!Object.hasOwn(value, 'rowKind') || value.rowKind === 'release' || value.rowKind === 'estimate') &&
+    (!Object.hasOwn(value, 'sourceFeedId') ||
+      (marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds.includes(String(value.sourceFeedId)) ||
+      value.sourceFeedId === marketCalendarPublicPolicy.unspecifiedSource) &&
+    (!Object.hasOwn(value, 'measureKeys') || (Array.isArray(value.measureKeys) && value.measureKeys.length > 0 &&
+      value.measureKeys.every((key) => typeof key === 'string' && key.length > 0 &&
+        key.length <= marketCalendarPublicPolicy.maximumObservationKeyChars && !key.includes('|')))) &&
+    (!Object.hasOwn(value, 'eventNameKey') || (typeof value.eventNameKey === 'string' && value.eventNameKey.length > 0 && value.eventNameKey.length <= marketCalendarPublicPolicy.maximumObservationKeyChars && !value.eventNameKey.includes('|'))) &&
+    (!Object.hasOwn(value, 'seriesId') || (typeof value.seriesId === 'string' && value.seriesId.length > 0 && value.seriesId.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&
     (!Object.hasOwn(value, 'observationKey') || (typeof value.observationKey === 'string' && value.observationKey.length > 0 && value.observationKey.length <= marketCalendarPublicPolicy.maximumObservationKeyChars)) &&
     typeof value.eventKey === 'string' && marketCalendarPublicPolicy.opaquePattern.test(value.eventKey) && text(value.title) &&
-    (value.countryCode === null || typeof value.countryCode === 'string' && marketCalendarPublicPolicy.countryCodePattern.test(value.countryCode) && !(marketCalendarPublicPolicy.forbiddenCountryCodes as readonly string[]).includes(value.countryCode)) &&
+    (value.countryCode === null || isStorableCountryCode(value.countryCode)) &&
     (!Object.hasOwn(value, 'countryName') || text(value.countryName)) &&
-    marketCalendarPublicPolicy.kinds.includes(value.eventType as never) && marketCalendarPublicPolicy.importance.includes(value.importance as never) &&
-    marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && value.source === '0xRouter' && value.coverage === 'observed-unverified' &&
+    marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
+    (!Object.hasOwn(value, 'importance') || marketCalendarPublicPolicy.importance.includes(value.importance as never)) &&
+    marketInstant(value.scheduledAt) && marketInstant(value.sourceObservedAt) && ((marketCalendarPublicPolicy as { sourceFeeds: readonly string[] }).sourceFeeds as readonly unknown[])
+      .concat(['Narwhal', '0xRouter', marketCalendarPublicPolicy.unspecifiedSource]).includes(value.source) &&
+    (marketCalendarPublicPolicy.coverage as readonly unknown[]).includes(value.coverage) &&
     [value.consensus, value.providerPrevious, value.providerActual].every(display) &&
     (value.eventType === 'economic-indicator' || [value.consensus, value.providerPrevious, value.providerActual].every(item => item === null)) &&
     (!Object.hasOwn(value, 'officialLink') || value.eventType === 'economic-indicator' &&
@@ -169,9 +321,11 @@ function refreshAttempt(value: unknown): value is MarketCalendarRefreshAttempt {
     (!Object.hasOwn(value, 'trigger') || marketCalendarPublicPolicy.attemptTriggers.includes(value.trigger as never))
 }
 function source(value: unknown): value is MarketCalendarSource {
-  return marketExact(value, ['eventType', 'status', 'sourceObservedAt'], ['latestAttempt']) && marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
+  return marketExact(value, ['eventType', 'status', 'sourceObservedAt'], ['latestAttempt', 'lastBatchAt', 'collectorSilent']) && marketCalendarPublicPolicy.kinds.includes(value.eventType as never) &&
     marketCalendarPublicPolicy.statuses.includes(value.status as never) &&
     (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt)) &&
+    (!Object.hasOwn(value, 'lastBatchAt') || marketInstant(value.lastBatchAt)) &&
+    (!Object.hasOwn(value, 'collectorSilent') || typeof value.collectorSilent === 'boolean') &&
     (value.status === 'unavailable' ? value.sourceObservedAt === null : marketInstant(value.sourceObservedAt))
 }
 function safeArray<T>(value: unknown, item: (value: unknown) => value is T): value is readonly T[] {
@@ -191,7 +345,8 @@ function safeArray<T>(value: unknown, item: (value: unknown) => value is T): val
 }
 export function isMarketCalendarPage(value: unknown, query: MarketCalendarQuery): value is MarketCalendarPage {
   if (marketExact(value, ['state', 'failureCode']) && value.state === 'unavailable') return value.failureCode === 'input-invalid' || value.failureCode === 'query-unavailable'
-  return marketExact(value, ['state', 'month', 'locale', 'asOf', 'events', 'sources'], ['nextCursor']) && value.state === 'available' &&
+  return marketExact(value, ['state', 'month', 'locale', 'asOf', 'events', 'sources'], ['nextCursor', 'dataStartDate']) && value.state === 'available' &&
+    (!Object.hasOwn(value, 'dataStartDate') || value.dataStartDate === null || typeof value.dataStartDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.dataStartDate)) &&
     value.month === query.month && value.locale === query.locale && value.asOf === query.asOf &&
     safeArray(value.events, isMarketCalendarEvent) && value.events.length <= marketCalendarPublicPolicy.maximumEvents && value.events.every(item =>
       isMarketCalendarEvent(item) && item.sourceObservedAt <= query.asOf && item.scheduledAt.startsWith(query.month + '-')) &&
@@ -210,17 +365,26 @@ export function isMarketCalendarRefreshResult(value: unknown): value is MarketCa
 
 export function isMarketCalendarFreshness(value: unknown): value is MarketCalendarFreshness {
   if (marketExact(value, ['state', 'failureCode']) && value.state === 'unavailable') return value.failureCode === 'query-unavailable'
-  if (!marketExact(value, ['state', 'asOf', 'lastCollectedAt', 'sources']) || value.state !== 'available') return false
+  if (!marketExact(value, ['state', 'asOf', 'lastCollectedAt', 'sources'], ['writeFailure'])
+    || value.state !== 'available') return false
   if (!marketInstant(value.asOf)) return false
+  if (value.writeFailure !== undefined && !isMarketCalendarWriteFailureView(value.writeFailure)) return false
   if (value.lastCollectedAt !== null && !marketInstant(value.lastCollectedAt)) return false
   if (!safeArray(value.sources, sourceFreshness)) return false
+  /**
+   * 新鲜度报的是**采集描述符**（当下在采的那三条）。校验同时接受切换前那三个 feed id：
+   * 读侧已改成报描述符，但**旧测试夹具与在途版本**仍可能给旧 id——校验的职责是「id 认识、
+   * 数量对齐」，不是替读侧决定用哪套。两边都只允许「已知 id」，长度必须是三类事件那三条。
+   */
+  const knownSourceIds = [...marketCalendarPublicPolicy.descriptors, ...marketCalendarPublicPolicy.feedByKind]
   return value.sources.length === marketCalendarPublicPolicy.descriptors.length &&
-    value.sources.every((item, index) => item.descriptorId === marketCalendarPublicPolicy.descriptors[index]) &&
+    value.sources.every((item) => (knownSourceIds as readonly string[]).includes(item.descriptorId)) &&
     value.sources.every(item => item.lastCollectedAt === null || item.lastCollectedAt <= (value.asOf as string))
 }
 function sourceFreshness(value: unknown): value is MarketCalendarCollectionFreshness {
   return marketExact(value, ['descriptorId', 'lastCollectedAt'], ['latestAttempt']) &&
-    marketCalendarPublicPolicy.descriptors.includes(value.descriptorId as never) &&
+    typeof value.descriptorId === 'string' &&
+      ([...marketCalendarPublicPolicy.descriptors, ...marketCalendarPublicPolicy.feedByKind] as readonly string[]).includes(value.descriptorId) &&
     (value.lastCollectedAt === null || marketInstant(value.lastCollectedAt)) &&
     (!Object.hasOwn(value, 'latestAttempt') || refreshAttempt(value.latestAttempt))
 }
@@ -229,7 +393,7 @@ export function isMarketCalendarRefreshNowResult(value: unknown): value is Marke
   if (marketExact(value, ['state']) && value.state === 'unchanged') return true
   if (marketExact(value, ['state', 'sources']) && value.state === 'collected') {
     return Array.isArray(value.sources) && value.sources.length > 0 &&
-      value.sources.every(item => typeof item === 'string' && marketCalendarPublicPolicy.descriptors.includes(item as never))
+      value.sources.every(item => typeof item === 'string' && (marketCalendarPublicPolicy.collectionFeeds as readonly string[]).includes(item))
   }
   if (marketExact(value, ['state', 'timeoutMs']) && value.state === 'timeout') {
     return value.timeoutMs === marketCalendarPublicPolicy.refreshNow.defaultTimeoutMs ||

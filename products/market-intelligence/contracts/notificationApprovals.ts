@@ -3,9 +3,9 @@ import type { NotificationEventPolicyEntry } from '@platform/notifications/contr
 /** 签署人（情报模块产品经理）。改档位只能由签署人改，签名哈希守卫会拦。 */
 export const SIGNED_BY = '情报模块产品经理' as const
 /** 签署日期。 */
-export const SIGNED_AT = '2026-11-11' as const
+export const SIGNED_AT = '2026-11-18' as const
 /** 对 `canonicalApprovalText({ formatVersion: 1, signedBy: SIGNED_BY, signedAt: SIGNED_AT, events })` 的 sha256（UTF-8 字节）。 */
-export const SIGNATURE = 'sha256:dc204543e378a7f8d3285e820d1a9ef1be73e455b56e3dcb91ea521723840c9c' as const
+export const SIGNATURE = 'sha256:7ce964b29998ad2582431d08878a3719b5cbc9d6a3ccbe250bc07ee29d0fe04a' as const
 
 /**
  * 情报模块**签署过的批准值**（与「申请」分开的两份数据之一）。
@@ -47,7 +47,50 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_APPROVALS: Readonly<
   'market-intelligence.calendar.refresh-failed': { approvedDisruptionLevels: ['center', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.consecutive-failed': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.source.stale': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
+  /**
+   * 品种被供应商永久拒绝（套餐不含 / 品种下架）。用户 2026-11-16 原话「出现这种情况，还要通知出来」：
+   * 批准 `center` + `toast` + `desktop`，与同组的另两条来源事件同档；不批免打扰穿透——它是
+   * 24 小时一条的常驻状况，不是必须叫醒人的事。
+   */
+  'market-intelligence.source.symbol-not-supported': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
   'market-intelligence.timezone.invalid': { approvedDisruptionLevels: ['center', 'toast', 'desktop'], approvedBypassQuietHours: false },
-  'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
-  'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false }
+  /**
+   * 舆情到强度门槛（N10）。
+   *
+   * **2026-11-18 用户改口径**：舆情**不进中心**（R40 需求 §3），所以撤掉 `center`，只留 `channel`。
+   * 桌面由另一条事件负责（`news.item-arrived`，只桌面），两条各自只干一件事。
+   */
+  'market-intelligence.sentiment.alert': { approvedDisruptionLevels: ['channel'], approvedBypassQuietHours: false },
+  /**
+   * 一条非低重要性的舆情刚入库（R40，用户 2026-11-18）。
+   *
+   * **只批桌面**：不进中心、不进手机、不穿免打扰。桌面会打断人，读者设了免打扰就是不想被打断，
+   * 这条最该尊重；手机上那条由 `sentiment.alert` 负责，两条各只说一件事。
+   */
+  'market-intelligence.news.item-arrived': { approvedDisruptionLevels: ['desktop'], approvedBypassQuietHours: false },
+  'market-intelligence.analysis.conclusion': { approvedDisruptionLevels: ['center', 'channel'], approvedBypassQuietHours: false },
+  /**
+   * 分析没跑成（2026-11-18 产品经理签署）。
+   *
+   * **只批中心**：不进桌面、不进手机、不穿免打扰。理由：手动失败读者就在应用里等，中心那条够用；
+   * 自动失败是链路问题（连续 3 次或 2 小时零成功才发），凌晨把读者叫起来没有收益。
+   */
+  'market-intelligence.analysis.failed': { approvedDisruptionLevels: ['center'], approvedBypassQuietHours: false },
+  /**
+   * R42：ETF 资金流有新数据点或被修订。用户 2026-11-18 要「应用内弹框」。
+   *
+   * **只批弹框 + 桌面**（2026-11-18 08:23 用户改口径「失败才进中心」后产品重签）：数据更新不进中心，
+   * 弹框给正在看的人、桌面给没在看的人，两边各一次不是重复。**不进手机**（用户同批确认）。
+   * 免打扰不穿透（时段内桌面与弹框都不出声；这条没有中心那一份，所以时段内读者什么也收不到）。
+   * 代价写在 PRD 里：错过这一次就没有别处能回看「什么时候变的、从多少改到多少」。
+   */
+  'market-intelligence.capital-flow.etf-updated': { approvedDisruptionLevels: ['popup', 'desktop'], approvedBypassQuietHours: false },
+  /**
+   * 同上，档位一致。
+   *
+   * 去重**不是** 24 小时窗口：`occurrence` + 键里带**读者日**（`capital-flow-stablecoin-update:{day}`），
+   * 所以是「读者日一天一条」——同一天再多变化只提醒第一条，第二天有新变化会再提醒。
+   * （撤 center 的前提就是 `occurrence`：`condition` 一律不许省中心，平台装配期会拒。）
+   */
+  'market-intelligence.capital-flow.stablecoin-updated': { approvedDisruptionLevels: ['popup', 'desktop'], approvedBypassQuietHours: false }
 })

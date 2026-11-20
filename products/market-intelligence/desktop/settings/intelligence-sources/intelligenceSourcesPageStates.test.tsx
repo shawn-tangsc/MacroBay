@@ -36,6 +36,7 @@ function sourcesState(overrides: Record<string, unknown>) {
     testingCredentials: false,
     replaying: false,
     errorCode: null,
+    saveFailure: null,
     notice: null,
     reload,
     selectSource: vi.fn(),
@@ -50,6 +51,7 @@ function sourcesState(overrides: Record<string, unknown>) {
     profiles: [],
     definitions: [],
     updateSourceProfile: vi.fn(),
+    retryFailedSave: vi.fn(),
     ...overrides
   }
 }
@@ -212,10 +214,46 @@ describe('sources settings page states', () => {
     const dom = await render()
 
     expect(dom.textContent).toContain(zhText.otherSideChanged)
-    await act(async () => { button(dom, zhText.reloadOtherSide).click() })
+    // 这条提示里的两个动作是**句内文字**：antd 文本档 + 平台 `.text-action`（颜色取 `--accent`）。
+    // 链接档走 `colorLink`，不在 token 里，一页上会出现第二个交互色。
+    const reloadAction = button(dom, zhText.reloadOtherSide)
+    const keepAction = button(dom, zhText.keepEditing)
+    expect(reloadAction.className).toContain('text-action')
+    expect(keepAction.className).toContain('text-action')
+    expect(reloadAction.className).not.toContain('ant-btn-link')
+    expect(keepAction.className).not.toContain('ant-btn-link')
+    await act(async () => { reloadAction.click() })
     expect(reloadOtherSide).toHaveBeenCalledTimes(1)
-    await act(async () => { button(dom, zhText.keepEditing).click() })
+    await act(async () => { keepAction.click() })
     expect(dismissOtherSide).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * 写失败要看得见（读者 2026-11-13：「选完弹回、什么都没发生」）。
+   *
+   * 判据：提示条真的画出来（danger 档、`role="alert"`）、写着人话、右边那颗「重试」是真的动作——
+   * 不是一句只能读的灰字，也不是一颗点了没反应的假按钮。
+   */
+  it('says the last write failed and retries that write', async () => {
+    const retryFailedSave = vi.fn()
+    vi.mocked(useIntelligenceSourcesSettings).mockReturnValue(
+      sourcesState({
+        loading: false,
+        settingsView: settingsViewOneProvider(),
+        saveFailure: zhText.saveFailed,
+        retryFailedSave
+      }) as never
+    )
+    const dom = await render()
+
+    const notice = dom.querySelector<HTMLElement>('[data-inline-notice="danger"]')
+    expect(notice, '写失败提示条').not.toBeNull()
+    expect(notice!.getAttribute('role')).toBe('alert')
+    expect(notice!.textContent).toContain(zhText.saveFailed)
+
+    const retry = button(dom, zhText.saveFailureRetry)
+    await act(async () => { retry.click() })
+    expect(retryFailedSave).toHaveBeenCalledTimes(1)
   })
 
   it('draws the page once the read is done', async () => {

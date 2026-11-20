@@ -16,6 +16,8 @@
   color: var(--text, #e8e9ec);
 }
 .mi-policy-card__head { display: flex; align-items: center; gap: 8px; }
+/* The drawer entry rides at the far right of the header, after every status chip. */
+.mi-policy-card__entry { margin-left: auto; display: inline-flex; align-items: center; }
 .mi-policy-card__head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--muted, #8b8d94); }
 .mi-policy-card__chip {
   margin-left: auto;
@@ -51,18 +53,15 @@
 /* The state word and the venue are one reading on the left; the footer's `space-between` then only
    has two children, so the venue cannot end up floating in the middle of the row. */
 .mi-policy-card__provenance { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+/* 卡尾「详情 ↗」：颜色、下划线、2px 焦点环都归 `.text-action`（平台那一份），
+   这里只补它在这张卡里需要的布局与档位——不重写外观，否则就有了第二套文字动作样式。 */
 .mi-policy-card__open {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  border: 0;
-  background: none;
-  color: var(--text, #e8e9ec);
-  font-size: 10.5px;
-  cursor: pointer;
-  padding: 0;
+  font-size: var(--font-body);
+  line-height: var(--line-body);
 }
-.mi-policy-card__open:focus-visible { outline: 2px solid var(--accent, #b7cf52); outline-offset: 2px; }
 
 /* State is colour, not layout: a dot on the freshness word carries live/late/stale/absent. */
 .mi-policy-card__status { display: inline-flex; align-items: center; gap: 5px; }

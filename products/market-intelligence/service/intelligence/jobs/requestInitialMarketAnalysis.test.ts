@@ -30,13 +30,14 @@ function setup() {
     processingLabelsJson: JSON.stringify({ relevanceOutcome: 'full-intelligence', sentimentEligible: true })
   }]
   const group: EventGroup = {
-    id: 'mi-eg-original', schemaVersion: 1, status: 'open', groupType: 'sentiment', mergeKey: 'original',
+    // 这条用例测的是市场线的旧命令：组不是消息面（sentiment 组会分流到 news 线，见下面单独用例）。
+    id: 'mi-eg-original', schemaVersion: 1, status: 'open', groupType: 'macro', mergeKey: 'macro|original',
     firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-10-04T02:00:00.000Z',
     eventRefs: ['item-original'], triggerCount: 0, reviewCount: 0, currentSummaryId: null,
     supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
   }
   repository.appendEventGroup(group)
-  const deps = { repository, jobRuntime, listItems: () => items, now: () => asOf,
+  const deps = { repository, jobRuntime, listItems: () => items, now: () => asOf, hasModel: async () => true,
     createGroup: (itemId: string) => {
       const created = { ...group, id: `mi-eg-${itemId}`, mergeKey: itemId, eventRefs: [itemId] }
       repository.appendEventGroup(created)
@@ -52,7 +53,7 @@ function setup() {
     const snapshotHash = buildAnalysisSnapshotHash(snapshot)
     repository.appendSnapshot({ ...snapshot, snapshotHash })
     const { run } = createAnalysisRunService({ repository, now: () => asOf, idFactory: () => 'mi-ar-original' })
-      .enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
+      .enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
     repository.updateRunStatus({ id: run.id, status: 'failed', failureCode: 'analysis-provider-error' })
     return run.id
   }
@@ -67,7 +68,7 @@ function setup() {
     const snapshotHash = buildAnalysisSnapshotHash(snapshot)
     repository.appendSnapshot({ ...snapshot, snapshotHash })
     return createAnalysisRunService({ repository, now: () => asOf, idFactory: () => 'mi-ar-inflight' })
-      .enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'correction', triggerKey: 'manual.refresh' }).run.id
+      .enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'correction', triggerKey: 'manual.refresh' }).run.id
   }
 }
 
@@ -113,6 +114,31 @@ describe('createInitialMarketAnalysisRequest', () => {
     await expect(fixture.request(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-initial-request-failed')
     await expect(fixture.request(undefined, undefined, 'initial', 'manual')).resolves.toEqual({ itemId: 'item-original', queued: true })
     expect(fixture.jobRuntime.listRuns().map(run => run.status).sort()).toEqual(['completed', 'failed'])
+  })
+
+  it('refuses a request before creating a freeze when no model is selected', async () => {
+    // 用户 2026-11-20 点「重新生成分析」：入队那一步被拒，界面只说「这次没能排上分析」。
+    // 没有可用模型时必须在排冻结之前就回答，而且原因要说得出来。
+    const fixture = setup()
+    const request = createInitialMarketAnalysisRequest({ ...fixture, hasModel: async () => false })
+    await expect(request(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-provider-not-ready')
+    // 一次冻结都没排、也没建新组：这是一个「没开始」，不是「排不上」。
+    expect(fixture.jobRuntime.listRuns()).toHaveLength(0)
+    expect(fixture.repository.listEventGroups()).toHaveLength(1)
+  })
+
+  it('surfaces a missing trigger evidence code instead of the generic queued refusal', async () => {
+    // 2026-11-20：新闻线冻结回的是 `analysis-missing-evidence:news-trigger-evidence-missing`，
+    // 它不在闭集里，界面只能显示「重新分析未成功」。现在这条码有明确出口。
+    const fixture = setup()
+    fixture.freeze.mockRejectedValueOnce(new Error('analysis-missing-evidence:news-trigger-evidence-missing'))
+    await expect(fixture.request(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-missing-evidence')
+  })
+
+  it('surfaces the freeze refusal reason instead of folding it into a generic code', async () => {
+    const fixture = setup()
+    fixture.freeze.mockRejectedValueOnce(new Error('analysis-insufficient-data: fewer than two market readings'))
+    await expect(fixture.request(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-insufficient-data')
   })
 
   it('does not start a second run after the UI wait times out while the job continues', async () => {
@@ -178,6 +204,29 @@ describe('createInitialMarketAnalysisRequest', () => {
     // A session-slot refresh is not a click; a skip there is the trigger budget talking.
     await expect(fixture.request(undefined, undefined, 'refresh', 'session-slot', 'asia')).rejects.toThrow('analysis-already-available')
     expect(fixture.jobRuntime.listRuns()).toHaveLength(0)
+  })
+
+  it('keeps a manual refresh on a sentiment group on the market line', async () => {
+    // 2026-11-20：市场分析页的「立即分析」被改道到新闻解读线，而那条新闻的原始记录已不在
+    // 保留期，冻结第一步就失败。手动入口的意图是「按当前数据做一次市场分析」，不再改道。
+    const fixture = setup()
+    const messageItem: IntelligenceItem = {
+      ...fixture.items[0]!, itemId: 'item-message', sourceId: 'alternative-fear-greed', eventType: 'metric',
+      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+    }
+    fixture.items.push(messageItem)
+    fixture.repository.appendEventGroup({
+      ...fixture.group, id: 'mi-eg-message', groupType: 'sentiment', mergeKey: 'sentiment|item-message', eventRefs: ['item-message']
+    })
+    const enqueueSpy = vi.spyOn(fixture.jobRuntime, 'enqueueDefinition')
+
+    await expect(fixture.request('item-message', undefined, 'refresh', 'manual')).resolves.toEqual({ itemId: 'item-message', queued: true })
+    expect(enqueueSpy).toHaveBeenCalledWith(expect.objectContaining({
+      handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB,
+      payload: expect.objectContaining({ analysisKind: 'market', triggerKey: 'manual.refresh', eventGroupId: 'mi-eg-message' })
+    }))
+    // 市场线不带触发指针：那条新闻的原始记录没了，也不该再被它卡住。
+    expect((enqueueSpy.mock.calls[0]?.[0] as { payload?: Record<string, unknown> } | undefined)?.payload ?? {}).not.toHaveProperty('triggeredItemId')
   })
 
   it('still resolves a manual first-analysis request only after its freeze completes', async () => {

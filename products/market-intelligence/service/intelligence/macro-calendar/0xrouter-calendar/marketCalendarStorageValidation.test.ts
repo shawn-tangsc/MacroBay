@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
-import { calendarText, calendarIdentity, zeroXRouterCalendarParserPolicy } from './zeroXRouterCalendarContracts'
+import { calendarText, calendarIdentity, zeroXRouterCalendarParserPolicy } from './marketCalendarStorageContracts'
 import { parseZeroXRouterEconomicData } from './zeroXRouterEconomicDataParser'
 import { parseZeroXRouterFinancialEvents } from './zeroXRouterFinancialEventsParser'
 import { parseZeroXRouterCentralBankActivities } from './zeroXRouterCentralBankActivitiesParser'
@@ -150,7 +150,9 @@ describe('market storage source and value validation', () => {
     const parsed = batch.parseResult
     const draft = parsed.drafts[0]!
     for (const bad of [{ ...draft, collectionId: 'another' }, { ...draft, sourceEventId: '["candidate",0]' },
-      { ...draft, countryCode: '' }, { ...draft, scheduledDate: '2026-01-01' }, { ...draft, officialLink: 'enabled' }]) {
+      // **空国家不是非法输入**（用户 2026-11-17）：那一行按「没有国家」保留，不能让整批判非法——
+      // 三路采集同时挂掉就是这条判反了。要锁「畸形输入整批拒」，用的是形状都不像的值。
+      { ...draft, countryCode: 'USA!' }, { ...draft, scheduledDate: '2026-01-01' }, { ...draft, officialLink: 'enabled' }]) {
       expect(() => prepareMarketCollection({ ...batch, parseResult: { ...parsed, drafts: [bad] } }, context)).toThrow('invalid-input')
     }
     expect(() => prepareMarketCollection({ ...batch, parseResult: { ...parsed, drafts: [draft, draft],

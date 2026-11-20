@@ -10,7 +10,8 @@ import { sourceRequiresCredential } from '../schema/intelligenceSource'
 import { getSource } from './providerRegistry'
 import { isMacroSourceId } from './macroSourceCatalogMetadata'
 import { isDefillamaStablecoinRetiredPath } from './sourceCatalog'
-import { isZeroXRouterSource, zeroXRouterEtfRefreshSchedulePolicy } from './zeroXRouterSourcePolicy'
+import { cryptoEtfRefreshSchedulePolicy } from './cryptoEtfRefreshSchedule'
+import { isZeroXRouterSource } from './zeroXRouterSourcePolicy'
 import { dashboardSourceSurfacePolicy, type SafeSourceScheduleRule } from '../schema/intelligenceSourcesContracts'
 
 export type ResolveRuntimeConfigInput = {
@@ -56,6 +57,8 @@ const MACRO_POLLING_INTERVAL_SEC: Record<IntelligenceCollectionPreset, number | 
  * 现在这条只排除真正没产出的源。源清单仍只来自注册表，没有 id 白名单。
  */
 export function isDefaultEnabledDefinition(definition: IntelligenceSourceDefinition): boolean {
+  /* 显式声明优先：密钥已在库里、数据已回填的源不能因为「需要密钥」就被默认关掉（会突然停采）。 */
+  if (definition.defaultEnabled === true) return true
   if (sourceRequiresCredential(definition.authMode)) return false
   if ((definition.readiness ?? 'live') !== 'live') return false
   // `maintenanceOnly` 只声明在 `providerRegistry`（catalog 没有这个字段），按 id 反查一次。
@@ -120,9 +123,12 @@ export function genericRuntimeCollects(definition: IntelligenceSourceDefinition)
 export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): IntelligenceSourceConfig {
   const profile = input.profile ?? createDefaultSourceProfile(input.definition)
   const hasCredential = input.hasCredential ?? Boolean(profile.credentialRef)
-  const usesFixedEtfRefreshSchedule = isZeroXRouterSource(input.definition.sourceId) && profile.enabled && hasCredential
+  /* Both ids, while the switch is in flight: the old schedule must not drift to the preset interval
+     in the intermediate state. The old branch goes away with its collection flag. */
+  const usesFixedEtfRefreshSchedule = (input.definition.sourceId === cryptoEtfRefreshSchedulePolicy.sourceId
+    || isZeroXRouterSource(input.definition.sourceId)) && profile.enabled && hasCredential
   const collectionPreset = usesFixedEtfRefreshSchedule
-    ? zeroXRouterEtfRefreshSchedulePolicy.collectionPreset
+    ? cryptoEtfRefreshSchedulePolicy.collectionPreset
     : profile.collectionPreset ?? input.definition.defaultCollectionPreset
   // 通用运行时只采「不是 none、也不是产品自有」的源；ready 与否另有一条（`blocksProductionCollection`）。
   const enabled = blocksProductionCollection(input.definition) || !genericRuntimeCollects(input.definition)
@@ -136,7 +142,7 @@ export function resolveRuntimeConfig(input: ResolveRuntimeConfigInput): Intellig
     : isMacroSourceId(input.definition.sourceId)
       ? MACRO_POLLING_INTERVAL_SEC[collectionPreset]
       : usesFixedEtfRefreshSchedule
-        ? zeroXRouterEtfRefreshSchedulePolicy.intervalSeconds
+        ? cryptoEtfRefreshSchedulePolicy.intervalSeconds
         : POLLING_INTERVAL_SEC[input.definition.adapterType][collectionPreset]
 
   const desiredRuntimeState = !enabled ? 'paused' : isStream ? 'live' : 'polling'

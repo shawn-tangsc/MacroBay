@@ -308,7 +308,9 @@ describe('the completion notice carries the edition’s own lede', () => {
     // 2026-11-08 用户报「日报那条没推到」。在 HEAD 上复跑这条路径：真正的原因不是这条通知
     // 没排手机，而是运行时拿不到派生入口（`61dfc2d`），于是每条推送都写 `push-unavailable`。
     // 这条用例钉的是「日报完成会真的调用通道」——把那根线再剪断一次，它必须红。
-    const push = vi.fn(async () => ({ ok: true, messageId: 'm-1' }))
+    // 扇出口径：一次调用点名本次可用通道，逐条回执（多通道方案 §2）。
+    const push = vi.fn(async (_record: unknown, _content: unknown, targets: readonly { channelId: string; channelName: string }[]) =>
+      targets.map((target) => ({ channelId: target.channelId, channelName: target.channelName, result: { ok: true, messageId: 'm-1' } })))
     let state: StoreState = { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
     const runtime = createNotificationRuntime({
       storage: {
@@ -325,7 +327,7 @@ describe('the completion notice carries the edition’s own lede', () => {
       getSettings: async () => ({ ...settings, desktopEnabled: true }),
       clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
       productIds: ['market-intelligence'],
-      resolvePushChannel: async () => ({ ok: true, channelId: 'channel-a', channelName: 'Telegram' }),
+      resolvePushChannels: async () => ({ ok: true, channels: [{ id: 'channel-a', name: 'Telegram' }] }),
       deliveryHooks: { push }
     })
     const outcome = await runtime.submit(

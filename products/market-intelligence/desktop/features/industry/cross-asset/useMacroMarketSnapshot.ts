@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { withQueryDeadline } from '../../../shared/ipc/queryDeadline'
 
 import type { MacroMarketSnapshotView } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshotClient } from '../../../shared/ipc/macroMarketSnapshotClient'
@@ -52,21 +53,31 @@ export function useMacroMarketSnapshot({ client, disabled = false, dollarSourceI
     }
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
+    /** 首答之前的连续失败数：读口挂了 10 秒期限，但轮询本身不该无限「加载中」。 */
+    let failures = 0
     const poll = async (): Promise<void> => {
       let nextDelay: number = macroMarketViewPolicy.settledQueryMs
       try {
-        const result = await client.query(dollarSourceId === undefined ? {} : { dollarSourceId })
+        const result = await withQueryDeadline(client.query(dollarSourceId === undefined ? {} : { dollarSourceId }))
         if (!active) return
         snapshotRef.current = result
+        failures = 0
         setSnapshot(result)
         setState(result.state === 'unavailable' ? 'unavailable' : 'ready')
         nextDelay = hasLiveReading(result) ? macroMarketViewPolicy.liveQueryMs : macroMarketViewPolicy.settledQueryMs
       } catch {
         if (!active) return
-        // A failed poll is not a failed read. Before the first answer the table keeps waiting
-        // (loading); afterwards it keeps the rows it has and the next poll may fill them again.
-        setState(snapshotRef.current === undefined ? 'loading' : 'ready')
+        // A failed poll is not a failed read. Before the first answer the table waits — but **不无限**：
+        // 每轮读都有 10 秒期限，连续 3 轮都没有答案就落 `unavailable`（可重试、不是「没有数据」）；
+        // 有数据之后保持旧行。轮询继续，恢复时自己会变成 ready。
+        if (snapshotRef.current !== undefined) {
+          setState('ready')
+        } else {
+          failures += 1
+          setState(failures >= 3 ? 'unavailable' : 'loading')
+        }
       }
+      if (active && snapshotRef.current !== undefined) failures = 0
       if (active) timer = setTimeout(() => { void poll() }, nextDelay)
     }
     void poll()

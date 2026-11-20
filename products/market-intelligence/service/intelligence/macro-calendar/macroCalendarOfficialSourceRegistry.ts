@@ -1,3 +1,11 @@
+/**
+ * **这份注册表存的是「我们的采集地址」，不是给读者看的官网。**
+ *
+ * 读者点「官网」看到的那一列**只从 `marketCalendarCodeTable` 拿**（用户 2026-11-17 定的规矩：
+ * 官网只有一个来源）。这里登记的是我们去哪里抓数据（发布日历、数值 API、RSS），按**源**配置；
+ * 两者混成一个，就会出现「采集用的接口地址被当成读者该看的页面」——那既打不开也解释不通。
+ */
+
 import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import { zeroXRouterCalendarEvidenceAdmissionPolicy } from '../application/zeroXRouterSourcePolicy'
 

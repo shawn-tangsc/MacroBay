@@ -24,7 +24,8 @@ export type CalendarUpcomingTestCandidate =
       eventKey: string
       title: string
       scheduledAt: string
-      importance: CalendarReminderImportance
+      /** 源没给重要性时没有这个字段（样例只是把事件带出去，不在这里判档）。 */
+      importance?: CalendarReminderImportance
       /** 实际剩余分钟（取整，最小 1）——来自候选选择，不另算一份。 */
       remainingMinutes: number
     }>
@@ -37,7 +38,7 @@ export type CalendarUpcomingTestCandidate =
       eventKey: string
       title: string
       scheduledAt: string
-      importance: CalendarReminderImportance
+      importance?: CalendarReminderImportance
       minutesUntil: number
     }>
   /** 真的没有未来事件（读完整个窗口都没有）。这一档不能和「源没启用 / 读不到」共用一句话。 */
@@ -74,7 +75,8 @@ export type CalendarLandedTestEvent = Readonly<{
   eventKey: string
   title: string
   scheduledAt?: string
-  importance: CalendarReminderImportance
+  /** 可缺省：来源没给重要性就没有值（缺省 ≠ 低重要度）。 */
+  importance?: CalendarReminderImportance
   actual?: Readonly<{ displayValue: string }> | null
 }>
 
@@ -84,7 +86,7 @@ export type CalendarLandedTestCandidate =
       eventKey: string
       title: string
       scheduledAt: string
-      importance: CalendarReminderImportance
+      importance?: CalendarReminderImportance
       /** 实际值原文，与事件详情里显示的是同一个字段。 */
       actual: string
     }>

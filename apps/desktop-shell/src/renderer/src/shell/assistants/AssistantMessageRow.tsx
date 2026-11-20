@@ -225,6 +225,8 @@ export function AssistantMessageRow({
                 labels={labels}
                 images={imageParts}
                 createdAt={Date.parse(message.createdAt) || Date.now()}
+                messageId={message.id}
+                caption={message.text}
               />
             ) : null}
             {showsTextBody ? (

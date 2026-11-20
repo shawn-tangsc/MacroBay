@@ -110,6 +110,7 @@ import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachab
 import { createShellTimeZoneProvider } from './shellTimeZone'
 import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
+import { listQuarantineCopies } from '../../storage/quarantine/quarantineCopies'
 import { composeUpdateCheck } from './composition/updateCheck'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
@@ -422,9 +423,11 @@ const channelsAndJobs = createChannelsAndJobs({
   core: platformCore,
   agentBroadcasts,
   agentRuntimeService,
+  generatedImageStorage,
   repositories: {
     agentDatabase,
     agentRepositories,
+    assistantRepositories,
     agentServices,
     agentStore,
     channelInboundRepository,
@@ -446,7 +449,7 @@ const {
   channelInboundService,
   channelInboundExecutionRunner,
   channelDeliveryMaintenance,
-  deliverTaskResultToChannels, channelDeliveryService,
+  deliverTaskResultToChannels, channelDeliveryService, channelImageSend,
   taskAutomationMaintenance,
   telegramRuntimeManager,
   slackRuntimeManager,
@@ -703,6 +706,8 @@ function registerIpcHandlers(
   composeStorageIpc(ipcMain, {
     cacheGovernance: cacheGovernanceIpcHandlers,
     externalApps: externalAppsService,
+    // 隔离副本散落在各存储文件旁边，没有索引：只读扫一遍数据根目录（读者点刷新时重扫）。
+    quarantine: { listCopies: () => listQuarantineCopies(app.getPath('userData')) },
     summarizeProducts: () => summarizeProductManifests(productManifests)
   })
 
@@ -717,7 +722,7 @@ function registerIpcHandlers(
   })
   // 渠道管理 / 入站两个服务共 25 个 handler 搬到 ipc/channelIpc.ts；
   // 退出链（dispose 五步、维护定时器、adapter dispose、fenceAllForQuit）仍留在本文件。
-  registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })
+  registerChannelIpc(ipcMain, { channelManagementService, channelInboundService, channelImages: channelImageSend })
 
   // 模型服务 19 个 handler（含检测事件推送）在 ipc/modelIpc.ts；端口与其状态读法在 composition/model.ts。
   composeModelIpc(ipcMain, {
@@ -1125,6 +1130,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       { ownerBootId: processBootId }
     )
   )
+
   await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()
   await channelManagementService.recover()
   await bootChannelRuntimes({
@@ -1149,9 +1155,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     now: () => new Date().toISOString()
   })
   await channelManagementService.resumeRequested()
-  taskAutomationMaintenance.recoverAfterRestart()
-  setDisposeTaskAutomationMaintenance(scheduleTaskAutomationMaintenance(taskAutomationMaintenance))
-  setDisposeJobRunRetention(scheduleJobRunRetention(jobRunStore))
   registerInUseModelPatrolHandler(jobRuntime, { patrol: inUseModelPatrol })
   await syncInUseModelPatrolSchedule(jobRuntime, {
     isReady: async () => {
@@ -1159,6 +1162,13 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
     }
   })
+  taskAutomationMaintenance.recoverAfterRestart()
+  syncProductToolsRuntimeFromState(await agentStore.getState())
+  mcpRuntimeService.syncFromState(await agentStore.getState())
+  agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
+  await mainWindowHost.loadAndMount() // 界面先上：会在界面体现状态的恢复（通道/任务/工具/巡检）都已完成。
+  setDisposeTaskAutomationMaintenance(scheduleTaskAutomationMaintenance(taskAutomationMaintenance))
+  setDisposeJobRunRetention(scheduleJobRunRetention(jobRunStore))
   const channelMaintenanceJobDeps = {
     deliveryCleanup: () => channelDeliveryMaintenance.runSlice(),
     deliveryRetry: () => channelDeliveryMaintenance.runRetrySlice(),
@@ -1174,15 +1184,11 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   }
   registerChannelMaintenanceJobHandlers(jobRuntime, channelMaintenanceJobDeps)
   setDisposeChannelMaintenanceJobs(scheduleChannelMaintenanceJobs(jobRuntime, channelMaintenanceJobDeps))
-  syncProductToolsRuntimeFromState(await agentStore.getState())
-  mcpRuntimeService.syncFromState(await agentStore.getState())
-  agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.start()
   agentRuntimeService.subscribe((snapshot) => {
     agentBroadcasts.runtimeStateChanged(snapshot)
   })
   buildAppMenu(getMainWindow)
-  await mainWindowHost.loadAndMount()
 
   // 自动检查：主界面出来之后才排，一次性、延迟 15 秒；闸门与静默都在服务里。
   updateCheck.startAutomaticCheck()

@@ -9,6 +9,7 @@ import { allSources, type AgentId, type PanelId } from './providerRegistry'
 import { projectJobRegistration } from './sourceJobRegistration'
 import { getIntelligenceAdapter } from '../adapters/adapterRegistry'
 import type { IntelligencePipeline } from './intelligencePipeline'
+import type { SourceWriteFailureView } from './calendarStandardWriteReader'
 import { readHealth, type SourceHealthView } from './sourceHealthReader'
 import { canonicalRuntimeFingerprint, sourceRuntimeEligibilityParityPolicy } from './runtimeFingerprint'
 import { isCollectionPresetValue, isExactProfile, isOptionalString, isOptionalStringArray } from './sourceProfileGuards'
@@ -78,6 +79,17 @@ const intelligenceSourcesSafeRequestBudgetPolicy = {
 
 export type IntelligenceSourcesService = ReturnType<typeof createIntelligenceSourcesService>
 
+/** 把四态摊成投影要的两张表：失败一张、`never-written`/`unreadable` 一张（后者互斥）。 */
+function writeFailureStateMap(view: SourceWriteFailureView): Readonly<Record<string, 'never-written' | 'unreadable'>> {
+  const states: Record<string, 'never-written' | 'unreadable'> = {}
+  for (const sourceId of Object.keys(view.unreadable)) states[sourceId] = 'unreadable'
+  for (const sourceId of Object.keys(view.neverWritten)) {
+    // 读不到优先：同一个源不会同时出现，但真出现时错误态更该说。
+    if (states[sourceId] === undefined) states[sourceId] = 'never-written'
+  }
+  return states
+}
+
 export function createIntelligenceSourcesService(deps: {
   profileStore: SourceProfileStore
   pipeline: IntelligencePipeline
@@ -96,6 +108,11 @@ export function createIntelligenceSourcesService(deps: {
   requestGovernanceQueue?: ReturnType<typeof createSourceRequestGovernanceQueue>
   /** Proxy-aware platform transport for credentialed-provider probes; defaults to the platform fetch. */
   platformFetch?: typeof fetch
+  /**
+   * 标准表**写库失败**的四态（写入层读口，用户 2026-11-19）。装配层注入懒读闭包：
+   * 端口没绑定时不出现任何写失败字段（不是「没失败」）；读取抛错时由读口自己降级成「读不到」。
+   */
+  readStandardWriteFailures?: () => SourceWriteFailureView | undefined
 }) {
   const orchestrator = createSourceRuntimeOrchestrator({
     jobRuntime: deps.jobRuntime,
@@ -256,6 +273,9 @@ export function createIntelligenceSourcesService(deps: {
         credentialStatusById[definition.sourceId] = await buildCredentialStatus(definition.sourceId, profile.credentialRef)
       }
     }
+    const writeFailureView = deps.readStandardWriteFailures === undefined
+      ? undefined
+      : (() => { try { return deps.readStandardWriteFailures() } catch { return undefined } })()
     return {
       rawDefinitions: catalogDefinitions,
       profileById,
@@ -264,6 +284,8 @@ export function createIntelligenceSourcesService(deps: {
         definitions: registrySources,
         profileById,
         healthById,
+        ...(writeFailureView === undefined ? {}
+          : { writeFailureById: writeFailureView.failures, writeFailureStateById: writeFailureStateMap(writeFailureView) }),
         jobRegisteredById: jobRegistration(),
         credentialStatusById,
         ...(filter.panelId === undefined ? {} : { panelId: filter.panelId }),

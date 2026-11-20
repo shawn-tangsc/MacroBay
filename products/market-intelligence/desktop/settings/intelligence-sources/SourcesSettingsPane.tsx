@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
+import { InlineNotice } from '@platform/ui/components/inline-notice'
 
 import { notifySettingsRevision, subscribeSettingsRevision } from '../../shared/events/settingsRevision'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -9,6 +10,11 @@ import { cellIdOf, modulesForBusiness } from './dashboardSourceModules'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
+import { useSourceCadence } from './useSourceCadence'
+import { BlsIcsImportAction } from './blsIcs/BlsIcsImportAction'
+import { CoreIndicatorsSourcesView } from './CoreIndicatorsSourcesView'
+import { coreIndicatorSourcePrefsClient } from '../../shared/ipc/coreIndicatorSourcePrefsClient'
+import { gateSourceIdByProviderId } from '../../../service/intelligence/macro-calendar/coreIndicatorValueSources'
 import { SourceConfigSurface, type SourceConfigSurfaceProps } from './SourceConfigSurface'
 
 // 样式跟着组件走，不跟着页面入口走：配置抽屉直接渲染本组件、不经过 settings 的 index.tsx，
@@ -37,6 +43,15 @@ export type SourcesSettingsPaneProps = {
    * 这里只提供位置——它在右栏里、紧挨被提示的那一版，位置与抽取前一致。
    */
   notice?: ReactNode
+  /**
+   * 最近一次**写失败**的人话（宿主从 `useIntelligenceSourcesSettings` 里拿）。
+   *
+   * 放在这里而不是只放页面提示条：写入口在「采集与数据」那一屏，那一支没有页面提示的位置，
+   * 而失败恰恰发生在那儿（选完档位弹回、开关弹回）。给了就画在右栏顶部，两个分支都看得见。
+   */
+  saveFailure?: string | null
+  /** 「重试」= 再跑一次那次写（不是整页重读，读者的改动还在那次动作里）。 */
+  onRetrySave?: () => void
   /** 右栏那份「事实 + 文案」组装件需要的全部入参（由调用方原样给）。 */
   surface: Omit<SourceConfigSurfaceProps, 'provider'> & { providerId?: string }
   /** 这一面显示哪几块筛选（抽屉传四块，设置页默认六项）。 */
@@ -115,6 +130,42 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
     for (const provider of group.providers) for (const source of provider.sources) sourceEnabledById.set(source.sourceId, source.enabled)
   }
   const isSourceEnabled = (sourceId: string): boolean | undefined => sourceEnabledById.get(sourceId)
+  /* 名字取不到时的第二层：源 → 它所属 provider 的显示名。**绝不退到源 id**（读者 2026-11-13 看到
+     `macro-calendar-narwhal-…` 挤在卡片里）。 */
+  const providerNamesBySource: Record<string, string> = {}
+  for (const group of props.view?.groups ?? []) {
+    for (const provider of group.providers) {
+      for (const source of provider.sources) providerNamesBySource[source.sourceId] = provider.displayName
+    }
+  }
+  /* 第二层配置（指标 × 源）：读一次，缺键 = 开；写失败要把开关拨回去，不能画成已生效。 */
+  const [coreDisabled, setCoreDisabled] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    let active = true
+    void coreIndicatorSourcePrefsClient.read()
+      .then((saved) => { if (active) setCoreDisabled(saved) })
+      .catch(() => { if (active) setCoreDisabled({}) })
+    return () => { active = false }
+  }, [])
+  const gateSourceOf = (providerId: string): string =>
+    gateSourceIdByProviderId[providerId as keyof typeof gateSourceIdByProviderId] ?? providerId
+  const toggleCoreSource = (preferenceKey: string, enabled: boolean): void => {
+    setCoreDisabled((current) => {
+      const next = { ...current }
+      if (enabled) delete next[preferenceKey]
+      else next[preferenceKey] = true
+      return next
+    })
+    void coreIndicatorSourcePrefsClient.write(preferenceKey, enabled).catch(() => {
+      setCoreDisabled((current) => {
+        const next = { ...current }
+        if (enabled) next[preferenceKey] = true
+        else delete next[preferenceKey]
+        return next
+      })
+    })
+  }
+  const cadence = useSourceCadence()
   /**
    * 「采集与数据」第二行的数据：**只有可配置的已启用源**才给预设值（不是把下拉画成禁用）。
    * 值来自 `surface.policy.profiles`（与详情同一份），写走同一个 `onChange`（按源单字段 patch），
@@ -159,8 +210,15 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
    * 本轮结束后补读一次（连点不会打出一串读）；写失败/读失败都沿用上一次，绝不把整屏画成「全关」。
    */
   const cellRevisionOrigin = props.surface.revisionOrigin ?? 'sources-cell'
+  /*
+    注入的读写口**放进 ref**：宿主每次渲染都传一个新的对象字面量，直接写进依赖会让这个 effect
+    在每次父级重渲染时重跑一遍（本屏现在还会因为频率读数那一次代理读而重渲染，于是「连发三条信号
+    只补一次读」当场变成三次）。读口本身是无状态闭包，认一次就够。
+  */
+  const cellEnabledIoRef = useRef(props.cellEnabledIo)
+  cellEnabledIoRef.current = props.cellEnabledIo
   useEffect(() => {
-    const io = props.cellEnabledIo
+    const io = cellEnabledIoRef.current
     if (io === undefined) return
     let active = true
     let inFlight = false
@@ -184,7 +242,7 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
       readState()
     })
     return () => { active = false; unsubscribe() }
-  }, [props.cellEnabledIo, cellRevisionOrigin])
+  }, [cellRevisionOrigin])
   /* 只回**显式写过**的格；缺键交给调用方按「主源默认开、备用行默认关」解释，
      否则界面上主备两个源会同时显示为开（用户 2026-11-11：同一格只有一个源在用）。 */
   const isCellEnabled = (cellId: string): boolean | undefined => cellEnabled[cellId]
@@ -233,7 +291,8 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           business={business}
           onBusinessChange={setBusiness}
           resolveText={resolveText}
-          sourceNames={sourceNames} />
+          sourceNames={sourceNames}
+          providerNamesBySource={providerNamesBySource} />
         : <SettingsSourceTree
           bare
           /* 「数据源」这屏**平铺不分组**、列全部可见源（灰的也在）；模块分组只留给「采集与数据」的卡片。 */
@@ -246,7 +305,34 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           view={props.view} />}
     </aside>
     <div className="settings-detail-pane intelligence-detail-pane">
-      {isBusiness
+      {props.saveFailure === undefined || props.saveFailure === null || props.onRetrySave === undefined
+        ? null
+        : <InlineNotice
+          action={{ labelKey: 'settings.intelligenceSources.saveFailureRetry', onSelect: props.onRetrySave }}
+          resolveText={resolveText}
+          tone="danger">{props.saveFailure}</InlineNotice>}
+      {isBusiness && business === 'coreIndicators'
+        ? <CoreIndicatorsSourcesView
+          resolveText={resolveText}
+          sourceNameOf={(providerId) => providerNamesBySource[gateSourceOf(providerId)]}
+          sourceEnabled={(providerId) => isSourceEnabled(gateSourceOf(providerId))}
+          disabled={coreDisabled}
+          onToggle={toggleCoreSource}
+          /* 频率那一格与其它业务页同一套：档位读 profile、间隔读排期投影，
+             只有真的没有独立排期的源才写「内置频率」。键都按 provider 背后的源查。 */
+          presetOf={(providerId) => presetValues[gateSourceOf(providerId)]}
+          cadenceOf={(providerId) => cadence.bySource[gateSourceOf(providerId)]}
+          cadenceAvailable={cadence.available}
+          builtinCadenceOf={(providerId) => builtinCadence.has(gateSourceOf(providerId))}
+          {...(props.onOpenSourceConfig === undefined
+            ? {}
+            : { onOpenSource: (providerId: string) => props.onOpenSourceConfig?.(gateSourceOf(providerId)) })} />
+        : null}
+      {/* 两个视图**互斥**：核心指标那一屏由 `CoreIndicatorsSourcesView` 全权渲染。
+          让 `BusinessSettingsContent` 也画一次，它会只给出一个组标题 + 一张空网格
+          （`coreIndicators` 这一项没有模块卡），读者看到的是「底部一块空框」（2026-11-14 截图）。
+          不用「空数据就不画组标题」兜底：那会把「这组真的没有内容」和「这组不该出现」混成一个。 */}
+      {isBusiness && business !== 'coreIndicators'
         ? <BusinessSettingsContent
           business={business}
           {...(onCellToggle === undefined ? {} : { onCellToggle })}
@@ -257,13 +343,26 @@ export function SourcesSettingsPane(props: SourcesSettingsPaneProps): ReactEleme
           {...(onPresetChange === undefined ? {} : { onPresetChange })}
           presets={presetValues}
           {...(builtinCadence.size === 0 ? {} : { builtinCadence })}
+          /* 频率读数：一次全量读、随 `sources` 域信号重读（不轮询、不在渲染里读）。
+             整批没读到时传 false，界面不画读数、原因进同一颗 ⓘ。 */
+          cadence={cadence.bySource}
+          cadenceAvailable={cadence.available}
           resolveText={resolveText}
-          sourceNames={sourceNames} />
-        : <>
+          sourceNames={sourceNames}
+          providerNamesBySource={providerNamesBySource} />
+        : business === 'coreIndicators' ? null : <>
           {props.notice}
           {provider === undefined
             ? null
-            : <div className="intelligence-detail-scroll"><SourceConfigSurface {...surface} provider={provider} /></div>}
+            : <div className="intelligence-detail-scroll"><SourceConfigSurface
+              {...surface}
+              provider={provider}
+              /* 「导入 BLS ICS」只属于**BLS 官方日程**这一条源项（用户 2026-11-15：
+                 ICS 导入的是日程，不是数值，所以不挂在「BLS 经济数据」那行，也不在卡片标题行）。
+                 按源项 id 分支只在这一处调用点；ProviderDetail 只管「有没有这个插槽」。 */
+              sourceRowAction={(sourceId) => sourceId === 'macro-calendar-bls'
+                ? <BlsIcsImportAction resolveText={resolveText} />
+                : null} /></div>}
         </>}
     </div>
   </>

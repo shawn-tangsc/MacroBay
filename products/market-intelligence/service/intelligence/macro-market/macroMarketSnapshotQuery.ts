@@ -1,8 +1,11 @@
 import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroMarketSnapshotContracts'
+import type { MacroMarketSourceFailure } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import { goldLivePriceOf } from './goldLivePolicy'
 import { macroMarketPolicy } from './macroMarketPolicy'
 import { macroMarketReturn, macroMarketWindows, type MacroMarketWindow } from './macroMarketReturns'
+import { realMarketApiPolicy } from './realMarketApiPolicy'
 import type { MacroMarketStore } from './macroMarketStore'
+import { isPermanentRefusal } from './sourceRefusalNotifier'
 
 export type MacroMarketReading = Readonly<{
   seriesId: string
@@ -18,6 +21,11 @@ export type MacroMarketReading = Readonly<{
    * never move a percentage.
    */
   live?: MacroMarketLiveReading
+  /**
+   * 供应商**永久**拒绝了这个品种：这条水平是它最后一次给的值，重试不会更新。
+   * 与"这次没读到"分成两个字段，卡片才说得清要不要读者动手（换套餐/换源）。
+   */
+  sourceFailure?: MacroMarketSourceFailure
 }>
 
 export type MacroMarketLiveReading = Readonly<{
@@ -61,6 +69,31 @@ export function createMacroMarketSnapshotQuery(deps: Readonly<{
   /** Optional so every existing caller keeps working: no stream, no live field. */
   live?: () => MacroMarketLiveSource
 }>) {
+  /**
+   * 这一次快照里被永久拒掉的序列。每个快照读一次 note，逐条读数共用同一份——同一份答案问四遍
+   * 既浪费也不保证一致（两次读之间 note 可能被下一轮采集重写）。
+   */
+  let refusedThisSnapshot: ReadonlySet<string> = new Set()
+  /**
+   * 这一轮采集里被供应商**永久**拒掉的品种 → 它们各自的序列。
+   *
+   * 采集器每轮把 `DXY:symbol-not-supported` 这样的列表写回 note（成功那轮写空串），这里只认
+   * 永久那一类：临时失败由来源状态与时间说明，不进读数（进了一格会一会儿说"读不到"一会儿说
+   * "不提供"，读者没法判断要不要动手）。
+   */
+  function refusedSeries(): ReadonlySet<string> {
+    const raw = deps.store.readNote(realMarketApiPolicy.notes.lastSymbolFailures)
+    if (raw === undefined || raw.trim() === '') return new Set()
+    const series = new Set<string>()
+    for (const entry of raw.split(',')) {
+      const [symbol, code] = entry.trim().split(':')
+      if (symbol === undefined || code === undefined || !isPermanentRefusal(code)) continue
+      const instrument = realMarketApiPolicy.symbols.find(candidate => candidate.symbolCode === symbol)
+      if (instrument) series.add(realMarketApiPolicy.series[instrument.series])
+    }
+    return series
+  }
+
   function readReading(seriesId: string, synthetic?: true): MacroMarketReading | undefined {
     const latest = deps.store.latest(seriesId)
     if (!latest) return undefined
@@ -72,9 +105,11 @@ export function createMacroMarketSnapshotQuery(deps: Readonly<{
     // Read per request, never cached: the tick moves every second while the levels move every
     // fifteen minutes, and a cached live value would be exactly the stale figure the badge warns of.
     const liveReading = seriesId === macroMarketPolicy.series.gold ? readLive(deps.live?.()) : undefined
+    const refused = refusedThisSnapshot.has(seriesId)
     return Object.freeze({
       seriesId, level: latest.value, atMs: latest.atMs, returns: Object.freeze(returns),
-      ...(synthetic ? { synthetic: true as const } : {}), ...(liveReading ? { live: liveReading } : {})
+      ...(synthetic ? { synthetic: true as const } : {}), ...(liveReading ? { live: liveReading } : {}),
+      ...(refused ? { sourceFailure: 'symbol-not-supported' as const } : {})
     })
   }
 
@@ -109,6 +144,7 @@ export function createMacroMarketSnapshotQuery(deps: Readonly<{
 
   function snapshot(input?: { dollarSourceId?: string }): MacroMarketSnapshot {
     const nowMs = (deps.now ?? Date.now)()
+    refusedThisSnapshot = refusedSeries()
     const readings: MacroMarketReading[] = []
     const dollar = dollarReading(input?.dollarSourceId)
     if (dollar) readings.push(dollar)

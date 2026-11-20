@@ -118,13 +118,18 @@ function fakeExecutor(results: Partial<Record<string, DailyBriefBackfillResult>>
   })
 }
 
-function build(executor = fakeExecutor(), enabled: (sourceId: string) => boolean | undefined = () => true) {
+function build(
+  executor = fakeExecutor(),
+  enabled: (sourceId: string) => boolean | undefined = () => true,
+  resolveFactSource?: () => Promise<{ kind: 'resolved'; sourceId: string } | { kind: 'none' } | { kind: 'conflict'; sourceIds: readonly string[] }>
+) {
   const cache = createInMemoryDailyBriefFactEnsureCache()
   const events: Readonly<Record<string, unknown>>[] = []
   const service = createDailyBriefFactEnsure({
     backfillFor: () => executor,
     cache,
     isSourceEnabled: async (sourceId) => enabled(sourceId),
+    ...(resolveFactSource ? { resolveFactSource } : {}),
     now: () => now,
     onEvent: (event) => { events.push(event) }
   })
@@ -132,6 +137,23 @@ function build(executor = fakeExecutor(), enabled: (sourceId: string) => boolean
 }
 
 describe('daily brief core fact ensure', () => {
+  it('marks the ETF gap source-disabled when no source declares the fact', async () => {
+    const { service, executor } = build(undefined, () => true, async () => ({ kind: 'none' as const }))
+    const result = await service.ensure({ document: onlyGaps(document(), ['etf-btc']), cutoff: asOf })
+
+    expect(executor).not.toHaveBeenCalled()
+    expect(result.statuses.find((status) => status.metric === 'etf-net-flow-btc')?.gapCode).toBe('source-disabled')
+  })
+
+  it('fails the ETF gap closed on a fact-source conflict instead of picking one', async () => {
+    const { service, executor } = build(undefined, () => true, async () => ({ kind: 'conflict' as const, sourceIds: ['a', 'b'] }))
+    const result = await service.ensure({ document: onlyGaps(document(), ['etf-btc']), cutoff: asOf })
+
+    expect(executor).not.toHaveBeenCalled()
+    expect(result.statuses.find((status) => status.metric === 'etf-net-flow-btc')?.gapCode).toBe('source-conflict')
+  })
+
+
   it('does not call a reader when the core rows are already available', async () => {
     const { service, executor } = build()
     const result = await service.ensure({ document: onlyGaps(document(), []), cutoff: asOf })

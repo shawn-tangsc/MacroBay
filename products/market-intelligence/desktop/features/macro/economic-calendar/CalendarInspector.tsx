@@ -40,7 +40,7 @@ const SHOWING_KEY = 'ui.panel.showing' as const
 /** 播报去抖：连点三条只播最后一条。 */
 const ANNOUNCE_DEBOUNCE_MS = 400
 
-export function CalendarInspector({ open, contentId, when, onClose, returnFocusTo, children }: {
+export function CalendarInspector({ open, contentId, when, onClose, returnFocusTo, push, children }: {
   open: boolean
   contentId?: string
   when?: string
@@ -50,6 +50,8 @@ export function CalendarInspector({ open, contentId, when, onClose, returnFocusT
    * 在看板是卡上的行，抽屉不猜。不给就只关闭（`inline` 本来也不抢焦点）。
    */
   returnFocusTo?: (contentId: string) => HTMLElement | null
+  /** 不推开相邻抽屉（antd 默认推 180px）。嵌套在别人的 React 树里时必须传 `false`。 */
+  push?: boolean | { distance?: number }
   children: ReactNode
 }): ReactElement | null {
   const resolveText = useProductTextKey()
@@ -104,6 +106,7 @@ export function CalendarInspector({ open, contentId, when, onClose, returnFocusT
         resolveText={resolveText}
         side={CalendarDetailPanelPolicy.side}
         size={CalendarDetailPanelPolicy.size}
+        {...(push === undefined ? {} : { push })}
         titleKey={DETAIL_TITLE_KEY}>
         {/* 只给读屏：视觉上不占位，也不该被发现「这里多了一行」。 */}
         <span aria-live="polite" className="drawer__sr-only" role="status">{announcement}</span>

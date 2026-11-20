@@ -1,30 +1,16 @@
 import { Button } from 'antd'
-import { hostScreenDirty } from './drawerScreenDirty'
 
-import { ConfirmProvider, useConfirm } from '@platform/ui/components/confirm'
 import { LoadingState } from '@platform/ui/components/loading'
-import { ErrorBoundary } from '@platform/ui/components/error-boundary'
-import { ConfigDrawerPanel } from './ConfigDrawerPanel'
 import type { BusinessFocus } from '../../settings/intelligence-sources/BusinessSettingsView'
-import type { ProcessingSection } from './ProcessingSettingsPanel'
-import type { BriefingSection } from './DailyBriefingSettingsPanel'
-import type { NotificationSection } from '../../settings/intelligence-notification/NotificationDrawerScreen'
-import { openModelSettings, openPreferencesSettings } from '../../shared/navigation/productShellNavigation'
-import { ConfigSettingsDrawer } from '../../settings/config-drawer/ConfigSettingsDrawer'
 import type { ConfigDrawerMenu } from '../../settings/config-drawer/drawerPreviewRows'
-import { DashboardSourcesPanel } from './DashboardSourcesPanel'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
-import { NotificationSettingsPanel } from '../../settings/intelligence-notification/NotificationSettingsPanel'
-import { AnalysisSettingsPanel } from './AnalysisSettingsPanel'
 import { DailyBriefingSettingsPanel, type BriefingScreenState } from './DailyBriefingSettingsPanel'
 import { ProcessingSettingsPanel } from './ProcessingSettingsPanel'
-import { RunLogDrawerPanel } from './RunLogDrawerPanel'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
-import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { Info } from 'lucide-react'
 
-import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
+import type { MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
 import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
 import { DivergencePanel } from '../../features/industry/divergence/DivergencePanel'
 import { PositioningPanel } from '../../features/industry/positioning/PositioningPanel'
@@ -35,13 +21,22 @@ import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../con
 import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 import type { DashboardCapitalCellAvailability, DashboardCapitalCellOff } from '../../features/industry/capital-conditions/CapitalConditionsPanel'
 
-import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
-import { dashboardRealSourcePolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
-import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
-import type { DashboardPositioningViewState } from './dashboardOpenInterestModel'
+import type { DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
+import type { DashboardFearGreedState } from './dashboardFearGreedModel'
 import { projectPositioningCells } from './dashboardPositioningSourceState'
 import { useDashboardFeedStatus } from './useDashboardFeedStatus'
-import { cellLabel, cellSourceChoices, dashboardCellId, decideCellRead, isCellEnabled, resolveDashboardReadGates, selectedDollarSourceId, useDashboardCellEnabled, type CellEnabledIo, type CellReadDecision, type SourceEnabledMap } from './dashboardCellEnabled'
+import {
+  cellLabel,
+  cellSourceChoices,
+  dashboardCellId,
+  decideCellRead,
+  resolveDashboardReadGates,
+  selectedDollarSourceId,
+  useDashboardCellEnabled,
+  type CellEnabledIo,
+  type CellReadDecision,
+  type SourceEnabledMap
+} from './dashboardCellEnabled'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
@@ -63,32 +58,16 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
 
-import { PolicyPathSlot } from './PolicyPathSlot'
+import { MacroIndicatorDrawer, type CalendarDrawerRequest } from './MacroIndicatorDrawer'
+import { useCurveReleaseEvents } from './useCurveReleaseEvents'
+import { DashboardMacroRow } from './DashboardMacroRow'
 import { SentimentPanel } from '../../features/industry/market-sentiment/SentimentPanel'
-import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
+import { useMacroIndicatorFacts } from './useMacroIndicatorFacts'
 import { cellOffFor } from './dashboardCellOff'
 import { QUOTES_ROW_CELL_KEYS, quoteRowPresentation } from './dashboardQuotesRows'
 import { useDataChangeRevision } from './useDataChangeRevision'
-
-/**
- * 把平台 `useConfirm` 变成抽屉要的 `confirmDiscard`：必须在 provider 之内取，所以单独一层。
- * 弹窗本身（居中在抽屉之上、「继续编辑」默认聚焦、Esc=继续编辑、「丢掉改动」静止即红）由平台
- * `Confirm` 负责，这里只转交文案与动作。
- */
-function DrawerDiscardConfirm({ children }: Readonly<{
-  children: (confirmDiscard: NonNullable<React.ComponentProps<typeof ConfigSettingsDrawer>['confirmDiscard']>) => ReactNode
-}>): React.ReactElement {
-  const confirm = useConfirm()
-  return <>{children((input) => confirm({
-    title: input.title,
-    description: input.body,
-    confirmLabel: input.confirmLabel,
-    cancelLabel: input.cancelLabel,
-    tone: 'danger',
-    onConfirm: input.onDiscard
-  }))}</>
-}
+import { DashboardSettingsDrawer } from './DashboardSettingsDrawer'
 
 type CryptoDashboardText = {
   workspaceLabel: string
@@ -119,9 +98,16 @@ type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEn
    * 不带就跟以前一样落在采集与数据的第一屏。
    */
   onManageSource: (focus?: BusinessFocus) => void
-  onOpenCalendar: () => void }
+  /**
+   * 看板里「打开日历」的入口（右栏那张发布日历的图标、日历卡的图标、「在日历中打开」）：
+   * 旧日历页已删，现在打开的是日历抽屉。抽屉状态在本组件里，所以页面层只递一个**请求**——
+   * 序号加一 = 请打开，`month`/`eventKey` 是这一次要落到的位置；不去共享内部开关。
+   */
+  openIndicatorDrawerRequest?: CalendarDrawerRequest
+  /** 「接下来要看的」那块（layout 用同一次 cardData 构造后注入），透传给抽屉。 */
+  calendarBlock?: React.ReactNode }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, divergenceClient, capitalConditionsClient, now, onConfigureSources, onManageSource, openIndicatorDrawerRequest, calendarBlock, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readCalendarMonth, onSelectChartEvent, initialSettingsMenu, initialSourceFilter, initialBusinessPosition, initialDrawerSection, openSettingsRequest, cellEnabledIo, onOpenProcessingSettings }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -129,7 +115,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    */
   calendarEventTitles?: Record<string, string>
   /** The 0xRouter month's events, injected by the page: the chart's lines read both calendars. */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<import('./readMarketCalendarMonth').MarketCalendarMonthRead | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
   /**
@@ -310,7 +296,32 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const policyCellsRead = policyProbability.kind === 'read' && policyFed.kind === 'read'
   const policyPathRead = usePolicyPathReading(readsReady && policyCellsRead, dataRevision)
   const policyPath = policyPathRead.result
+  // 三张简化卡的读数走自己的只读接口（按指标身份取最新已发布）；抽屉只管渲染，不再取第二遍。
+  const cardFactsRead = useMacroIndicatorFacts(readsReady, dataRevision)
+  const cardFactsView = cardFactsRead.result
+  /**
+   * 时钟卡：日期与周期 P 来自日程（同一个按月读），值来自**与抽屉同一次**卡片读数，
+   * 政策块来自政策读数。角度/透明度/撞牌都在 `clockCardModel` 里算，这里不重算。
+   */
+  const clockFacts = cardFactsView?.state === 'available' ? cardFactsView.facts : []
   const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
+  // 关键指标 · 预期变化：曲线、政策卡与三张简化卡都读真数据。
+  const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
+  // 页面层请求打开日历抽屉：请求序号一变就开，不去共享内部开关。定位由抽屉按序号自己落一次。
+  useEffect(() => {
+    if ((openIndicatorDrawerRequest?.seq ?? 0) > 0) setIndicatorDrawerOpen(true)
+  }, [openIndicatorDrawerRequest])
+  // 抽屉的「现在」在**每次打开时**取一次：每渲染都取会让按月的读跟着重读同一份快照。
+  const drawerNow = useMemo(() => now().toISOString(), [now, indicatorDrawerOpen])
+  // 曲线事件标注的输入：只用页面原有的那个日历读（按月、按 asOf），不新开取数通道。
+  const curveReleaseEvents = useCurveReleaseEvents({
+    // 时钟卡要看日程（上一期/下一期/周期 P），这份按月读不再只服务抽屉。
+    enabled: true,
+    ...(readCalendarMonth ? { readCalendarMonth } : {}),
+    // 用曲线那次读数的快照时刻，不另取「现在」：两处各取各的，标注就对不上它标的跳变。
+    ...(policyPath?.state === 'available' ? { asOf: policyPath.asOf, reading: policyPath.reading } : {}),
+    locale
+  })
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
   // make it re-query the calendar on every render of this dashboard.
@@ -367,62 +378,39 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         </div>
       </header>
 
-      {/* TODO(0.4.3-settings-drawer): 数据接入后删除。静态版式抽屉，只画结构。
-          两层边界：这一层保「抽屉外壳自己崩了不影响背后这一页」；每一屏另有一层
-          `ConfigDrawerPanel`，屏幕内的崩溃只在抽屉正文里显示，不落到主列顶端。 */}
-      <ErrorBoundary scope="drawer">
-        {/* 局部一层 ConfirmProvider：这一块被单独渲染（页面用例、抽屉用例）时也拿得到确认框；
-            应用里它嵌在 AppShell 的 provider 之内，文案与主题照样跟着走。 */}
-        <ConfirmProvider>
-          <DrawerDiscardConfirm>
-            {(confirmDiscard) => <ConfigSettingsDrawer
-              confirmDiscard={confirmDiscard}
-          /* 计数变化就重新挂载：每次都落到请求的那一屏（连点同一个入口也算一次）。 */
-          key={`settings-drawer-${openSettingsRequest ?? 0}`}
-          initialMenu={initialSettingsMenu}
-          isScreenDirty={() => hostScreenDirty(drawerScreen.dirty, sourcesDraftDirty)}
-          onClose={() => setSettingsDrawerOpen(false)}
-          open={settingsDrawerOpen}
-          analysisPanel={<ConfigDrawerPanel screen="analysis"><AnalysisSettingsPanel onState={setDrawerScreen} /></ConfigDrawerPanel>}
-          screenDirty={drawerScreen.dirty}
-          onScreenSave={drawerScreen.save}
-          screenSaving={drawerScreen.saving}
-          {...(drawerScreen.failure === undefined ? {} : { screenSaveFailure: drawerScreen.failure })}
-          briefingPanel={<ConfigDrawerPanel screen="briefing"><DailyBriefingSettingsPanel
-              {...(initialDrawerSection?.menu === 'briefing'
-                ? { initialSection: initialDrawerSection.section as BriefingSection }
-                : {})}
-              onState={setDrawerScreen} /></ConfigDrawerPanel>}
-          processingPanel={<ConfigDrawerPanel screen="processing"><ProcessingSettingsPanel
-              {...(initialDrawerSection?.menu === 'processing'
-                ? { initialSection: initialDrawerSection.section as ProcessingSection }
-                : {})} /></ConfigDrawerPanel>}
-          runLogPanel={<ConfigDrawerPanel screen="run-log"><RunLogDrawerPanel /></ConfigDrawerPanel>}
-          notificationsPanel={<ConfigDrawerPanel screen="notifications"><NotificationSettingsPanel
-              {...(initialDrawerSection?.menu === 'notifications'
-                ? { initialSection: initialDrawerSection.section as NotificationSection }
-                : {})} /></ConfigDrawerPanel>}
-              /* 两屏都收抽屉给的定位/导航：点源名只在抽屉内换菜单，不走页面级「打开抽屉」。 */
-              sourcesPanel={(nav) => <ConfigDrawerPanel screen="sources"><DashboardSourcesPanel
-                pane="sources"
-                {...(nav.focusSourceId === undefined ? {} : { initialSourceId: nav.focusSourceId })}
-                initialFilter={initialSourceFilter}
-                onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>}
-              sourcesDataPanel={(nav) => <ConfigDrawerPanel screen="sourcesData"><DashboardSourcesPanel
-                pane="business"
-                {...(initialBusinessPosition === undefined ? {} : { initialBusinessPosition })}
-                onOpenSourceConfig={nav.openSource}
-                {...(onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings })}
-                onDraftChange={setSourcesDraftDirty} /></ConfigDrawerPanel>} />}
-          </DrawerDiscardConfirm>
-        </ConfirmProvider>
-      </ErrorBoundary>
+      {/* 设置抽屉：外壳、两层边界、丢弃确认都在 `DashboardSettingsDrawer` 里（2026-11-16 抽出）。 */}
+      <DashboardSettingsDrawer
+        open={settingsDrawerOpen}
+        requestKey={openSettingsRequest ?? 0}
+        initialMenu={initialSettingsMenu}
+        {...(initialDrawerSection === undefined ? {} : { initialDrawerSection })}
+        initialSourceFilter={initialSourceFilter}
+        {...(initialBusinessPosition === undefined ? {} : { initialBusinessPosition })}
+        {...(onOpenProcessingSettings === undefined ? {} : { onOpenProcessingSettings })}
+        sourcesDraftDirty={sourcesDraftDirty}
+        screen={drawerScreen}
+        onScreenState={setDrawerScreen}
+        onClose={() => setSettingsDrawerOpen(false)}
+        onDraftChange={setSourcesDraftDirty} />
 
-      {/* Named mount point: the analysis workspace portals its latest-conclusion
-          card in here, directly under the macro release strip, so the card reads
-          as part of this dashboard without the dashboard knowing timeline data. */}
-      <div ref={conclusionSlot} data-dashboard-conclusion-slot />
-
+      {/* 左栏顶部一排两块（用户 2026-11-15）：钟表 336 固定 + 利率数学期望占满剩余。
+          间距只有 8，这一排不带左右内距；AI 结论已搬到右栏（下面那个 portal）。 */}
+      <DashboardMacroRow
+        pending={!readsReady}
+        locale={locale}
+        text={text}
+        now={now}
+        events={curveReleaseEvents}
+        facts={clockFacts}
+        {...(policyPath?.state === 'available' ? { reading: policyPath.reading } : {})}
+        policyUnavailable={policyPath?.state === 'unavailable'}
+        reloadPolicy={policyPathRead.reload}
+        probability={policyProbability}
+        fed={policyFed}
+        onConfigureSources={onConfigureSources}
+        onManageSource={onManageSource}
+        onOpenDrawer={() => setIndicatorDrawerOpen(true)}
+        resolveKey={resolveProductKey} />
       {crossAssetClient ? <CrossAssetObservationPanel
         client={crossAssetClient}
         rowStates={rowStates}
@@ -439,7 +427,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // The panel reads the same calendar this dashboard already reads, rather than reaching for a
         // second client of its own: one month query per window, one source of truth for the events.
         calendar={client}
-        readMarketEvents={readMarketEvents}
+        readCalendarMonth={readCalendarMonth}
         // …and it hands a picked line up rather than opening anything itself: the page owns both the
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
@@ -450,22 +438,24 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {/* 没配置源的模块**不藏**（用户 2026-11-11）：格级关掉时这一格仍在，显示「来源没有启用」+ 去启用；
           读数没读出来显示读不到 + 再试一次；只有真的读完才画读数。 */}
       {readsReady ? (() => {
-        // 三支（读到 / 读不到 / 没启用）**同一个落点**：右栏日历卡上方那块 `policySlot`。
-        // 只有读到那支走 portal 会让另外两支落进主栏——用户 2026-11-11 截图报的正是这个。
-        const card = <PolicyPathSlot
-          text={text.policyPath}
-          locale={locale}
-          decisions={{ probability: policyProbability, fed: policyFed }}
-          read={policyPathRead}
-          onConfigureSources={onConfigureSources}
-          onFocusCell={(cellKey) => onManageSource({ business: 'dashboard', moduleKey: 'policy-path', cellId: dashboardCellId('policy-path', cellKey) })}
-          onOpenDetail={() => setPolicyDrawerOpen(true)}
-          resolveKey={resolveProductKey} />
-        // 独立渲染（测试单挂、没有右栏）时才落页面流，这条回退保留。
-        return policySlot ? createPortal(card, policySlot) : card
+        // 右栏顶部现在装 AI 结论（原来钟表卡在这里）：同一栏、占满整栏。
+        const conclusionMount = <div ref={conclusionSlot} data-dashboard-conclusion-slot />
+        return policySlot ? createPortal(conclusionMount, policySlot) : conclusionMount
       })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
+      {/* 关键指标抽屉：曲线与政策卡读同一份真实读数；三张简化卡读装配层的事实。右侧滑出，与左侧分析详情不是同一层。 */}
+      {<MacroIndicatorDrawer open={indicatorDrawerOpen} locale={locale} policyText={text.policyPath}
+        {...(calendarBlock === undefined ? {} : { calendarBlock })}
+        {...(policyPath?.state === 'available' ? { policyReading: policyPath.reading } : {})}
+        onRetryPolicy={policyPathRead.reload}
+        releaseEvents={curveReleaseEvents}
+        {...(cardFactsView?.state === 'available' ? { cardFacts: cardFactsView.facts } : {})}
+        {...(cardFactsView?.state === 'unavailable' ? { cardFactsUnreadable: true } : {})}
+        now={drawerNow} openTarget={openIndicatorDrawerRequest}
+        {...(readCalendarMonth ? { readCalendarMonth } : {})}
+        onOpenPolicyDetail={() => { setIndicatorDrawerOpen(false); setPolicyDrawerOpen(true) }} onConfigure={onConfigureSources}
+        onClose={() => setIndicatorDrawerOpen(false)} />}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">

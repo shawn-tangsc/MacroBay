@@ -1,3 +1,9 @@
+import { marketCalendarPublicPolicy } from './marketCalendarQueryContracts'
+
+/** 重要性的三档：与市场日历共用一处定义，日历这边不另写一份。 */
+export const macroEconomicCalendarImportance = marketCalendarPublicPolicy.importance
+export type MacroEconomicCalendarImportance = typeof macroEconomicCalendarImportance[number]
+
 export const MACRO_ECONOMIC_CALENDAR_IPC_METHODS = {
   queryMonth: 'intelligence.macro.economicCalendar.queryMonth',
   getEventDetail: 'intelligence.macro.economicCalendar.getEventDetail',
@@ -156,7 +162,11 @@ export type MacroEconomicCalendarEventView = {
   eventFamily: string
   titleKey: string
   countryCode: 'US'
-  importance: 'high'
+  /**
+   * 重要度：**可缺省**。官方记录自己带这一列，读侧照抄，不在渲染层假定某一档——
+   * 记录里没有就不出这个字段，详情显示「未提供」（用户 2026-11-15：宁可少说，不许多说）。
+   */
+  importance?: MacroEconomicCalendarImportance
   periodKey: string
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
   coverage: 'available' | 'partial' | 'unavailable'

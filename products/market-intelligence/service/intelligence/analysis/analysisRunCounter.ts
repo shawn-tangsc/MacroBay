@@ -40,6 +40,8 @@ export type RunCounterLedgerRow = Readonly<{ id: string; triggerKey: string; rea
 export type RunCounterRepository = Readonly<{
   listEventGroups?: () => readonly Readonly<{ id: string }>[]
   listTriggerLedger?: (eventGroupId: string) => readonly RunCounterLedgerRow[]
+  /** 实际调用次数从 IO 记录读：每次模型调用一行（含失败的调用）。 */
+  analysisIo?: Readonly<{ countCreatedSince: (isoInclusive: string) => number }>
 }>
 
 export const analysisRunCounterPolicy = Object.freeze({
@@ -85,6 +87,20 @@ export function countAnalysisRuns(repository: RunCounterRepository, now: string,
     calendarRunsThisHour: countLine(hourRows, 'calendar'),
     scheduledRunsToday: countLine(rows, 'scheduled')
   }
+}
+
+/**
+ * 「今天实际花了多少次模型调用」——**可查的数，不是估算**。
+ *
+ * 配额按运行记（一次运行一行，失败也计），但那不等于调用次数：一次运行可能用两次尝试、job 还可能
+ * 重试。这里从 IO 记录数今天的调用行，回答的是另一个问题；两个数各有出处，不互相代替。
+ */
+export type AnalysisModelCallsToday = Readonly<{ day: string; calls: number }>
+
+export function countModelCallsToday(repository: RunCounterRepository, now: string): AnalysisModelCallsToday {
+  const day = now.slice(0, 10)
+  const calls = repository.analysisIo?.countCreatedSince(`${day}T00:00:00.000Z`) ?? 0
+  return Object.freeze({ day, calls })
 }
 
 /** The most recent delivered automatic run in one group: the coalescing window's baseline. */

@@ -1,6 +1,6 @@
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../contracts/notificationContracts'
 import type { TestNoticeReceipt } from '../contracts/notificationSelfTest'
-import type { PushChannelResolution } from '../delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '../delivery/pushChannelResolution'
 
 /**
  * 平台「链接自检」那颗按钮的主进程实现（设置页的「发送测试通知」）。
@@ -15,7 +15,7 @@ import type { PushChannelResolution } from '../delivery/pushChannelResolution'
  * 去重键带**点击时刻**：读者连点两次要收到两条，否则他会以为通道坏了——而他要验的正是这个。
  */
 export type SelfTestSurfaceInput = {
-  resolvePushChannel: () => Promise<PushChannelResolution>
+  resolvePushChannels: () => Promise<PushChannelsResolution>
   /** 交给运行时的**同一个**提交入口；名字以 `submit` 开头，生产者门禁才看得见这件事由谁发。 */
   submitRequest: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   /** 每次点击留一行可查记录（`notification.*`）：只带闭集码与条数。 */
@@ -30,9 +30,18 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
         input.report?.({ receipt })
         return receipt
       }
-      const channel = await input.resolvePushChannel()
-      if (!channel.ok) {
-        return finish({ state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: channel.enabledChannelCount })
+      const resolution = await input.resolvePushChannels()
+      if (!resolution.ok) {
+        return finish({
+          state: 'unavailable',
+          reasonCode: 'push-unavailable',
+          enabledChannelCount: resolution.enabledChannelCount,
+          // 裁决那一刻已经算好的直方图原样交出去：界面据此区分「一条都没配」与「配了但没连上」，
+          // 不再自己去查一遍通道表（那是第二份判定，迟早在两处说不一样的话）。
+          states: resolution.states,
+          // 读者请求启用过几条：与直方图同一次判定的产物，界面不再回查通道表。
+          requestedCount: resolution.requestedCount
+        })
       }
       const at = input.now()
       // 每次点击都是新键（`seq` 用点击时刻），所以连点是多条测试记录，且不占任何真实键。
@@ -57,7 +66,22 @@ export function composeSelfTestSurface(input: SelfTestSurfaceInput) {
       // 有表面**根本没被尝试**（免打扰 / 开关关着）：那一下测不到它，回「已发到」就是假事实。
       // 回执只说「没测」，原因码留在折叠区——「没测」和「没到」是两件事。
       if (outcome.suppressedLevels.length > 0) return finish({ state: 'unavailable', reasonCode: 'suppressed' })
-      return finish({ state: 'sent', channelId: channel.channelId, channelName: channel.channelName })
+      // 逐通道结果来自这一次投递自己的证据（`delivery.push.channels`），不从通道投影反推：
+      // 投影只说「能用」，说不出「这一次到底发没发出去」。
+      const channels = (outcome.delivery?.push?.channels ?? []).map((channel) => ({
+        channelId: channel.channelId,
+        ...(channel.channelName === undefined ? {} : { channelName: channel.channelName }),
+        state: channel.state,
+        ...(channel.reason === undefined ? {} : { reason: channel.reason })
+      }))
+      // 顶层那对字段是**单通道**的旧读法（界面第 3 笔改成逐条）；多通道时取第一条，逐条的都在 `channels`。
+      const first = channels[0] ?? { channelId: resolution.channels[0]!.id, channelName: resolution.channels[0]!.name }
+      return finish({
+        state: 'sent',
+        channelId: first.channelId,
+        channelName: 'channelName' in first && first.channelName !== undefined ? first.channelName : resolution.channels[0]!.name,
+        ...(channels.length === 0 ? {} : { channels })
+      })
     }
   }
 }

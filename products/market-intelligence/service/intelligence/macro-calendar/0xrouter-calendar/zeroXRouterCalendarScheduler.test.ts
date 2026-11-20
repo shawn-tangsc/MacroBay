@@ -231,3 +231,102 @@ describe('zeroXRouter calendar scheduler', () => {
     scheduler.dispose()
   })
 })
+
+/**
+ * 用户口径（2026-11-15）：**只有配置/启用的源才注册定时任务，没配置的一条都不许留。**
+ *
+ * 这三条不测「handler 里会不会自己过滤」——那是常驻任务 + 内部过滤的做法，正是这条要求反的。
+ * 测的是 schedule 注册表本身：启用了才有定义，关掉就消失，全关则一条不剩。
+ */
+describe('per-feed schedule registration follows the enabled feeds', () => {
+  const twoFeeds = zeroXRouterCalendarSchedulerFeeds.slice(0, 2).map((feed) => feed.sourceId)
+
+  function reconcileHarness(enabled: () => readonly string[]) {
+    const scheduled = new Map<string, JobDefinition>()
+    const jobRuntime = {
+      registerHandler: () => undefined,
+      setSchedule: (definition: JobDefinition) => { scheduled.set(definition.id, definition) },
+      removeSchedule: (definitionId: string) => { scheduled.delete(definitionId) },
+      enqueueDefinition: async () => ({})
+    } as unknown as Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueDefinition'>
+    const scheduler = createZeroXRouterCalendarScheduler({
+      jobRuntime,
+      readReadiness: () => ({ enabled: true, hasCredential: true }),
+      readEnabledFeeds: enabled,
+      refreshAutomatic: async () => ({ state: 'completed', items: [] })
+    })
+    return { scheduler, ids: () => [...scheduled.keys()].sort(), definitionOf: (id: string) => scheduled.get(id) }
+  }
+
+  const definitionIdFor = (sourceId: string): string => {
+    const feed = zeroXRouterCalendarSchedulerFeeds.find((candidate) => candidate.sourceId === sourceId)!
+    return `${zeroXRouterCalendarSchedulerPolicy.definitionId}.${feed.key}`
+  }
+
+  it('启用两路 → 恰好两条定义；其余源一条都不注册', async () => {
+    const { scheduler, ids } = reconcileHarness(() => twoFeeds)
+    await scheduler.initialize()
+    expect(ids()).toEqual(twoFeeds.map(definitionIdFor).sort())
+    scheduler.dispose()
+  })
+
+  it('关掉一路 → 那一条消失、另一条还在', async () => {
+    let enabled: readonly string[] = twoFeeds
+    const { scheduler, ids } = reconcileHarness(() => enabled)
+    await scheduler.initialize()
+    expect(ids()).toHaveLength(2)
+    enabled = [twoFeeds[0]!]
+    await scheduler.syncSchedule()
+    expect(ids()).toEqual([definitionIdFor(twoFeeds[0]!)])
+    scheduler.dispose()
+  })
+
+  it('三路全关 → 该组一条定义都不剩', async () => {
+    let enabled: readonly string[] = zeroXRouterCalendarSchedulerFeeds.map((feed) => feed.sourceId)
+    const { scheduler, ids } = reconcileHarness(() => enabled)
+    await scheduler.initialize()
+    expect(ids()).toHaveLength(3)
+    enabled = []
+    await scheduler.syncSchedule()
+    expect(ids()).toEqual([])
+    scheduler.dispose()
+  })
+
+  /**
+   * 2026-11-19 用户定：源端瞬断靠**一次**重试吃掉，不等到下个 10 分钟周期。
+   * 只加一次——源若在限流，第二次重试会把偶发失败放大成连续失败。
+   */
+  it('每路只带一次重试（30 秒后），且最坏时长短于周期——重试不会与下个 tick 并发', async () => {
+    const { scheduler, definitionOf } = reconcileHarness(() => twoFeeds)
+    await scheduler.initialize()
+    for (const sourceId of twoFeeds) {
+      const definition = definitionOf(definitionIdFor(sourceId))!
+      const retry = definition.retryPolicy!
+      const timeoutMs = definition.timeoutMs!
+      expect(retry).toEqual({
+        maxAttempts: 2, backoff: 'fixed', baseDelayMs: 30_000, maxDelayMs: 30_000
+      })
+      // 重试复用同一次运行、同一条定义：`concurrencyKey` 就是这一路自己的 handler id，
+      // 所以重试期间下个 tick 想跑也会被同一条 key 挡住（平台按 key 串行）。
+      expect(definition.concurrencyKey).toBe(definition.handlerId)
+      // 预算：两次尝试的超时 + 一次退避，必须仍小于 30 分钟的周期，否则重试会撞进下一个 tick。
+      expect(timeoutMs * retry.maxAttempts + retry.baseDelayMs)
+        .toBeLessThan(zeroXRouterCalendarSchedulerPolicy.intervalMs)
+    }
+    scheduler.dispose()
+  })
+
+  it('读启用状态失败 → 按「没配置」处理，不留任何定义（fail-closed）', async () => {
+    let broken = false
+    const { scheduler, ids } = reconcileHarness(() => {
+      if (broken) throw new Error('profile-store-unavailable')
+      return twoFeeds
+    })
+    await scheduler.initialize()
+    expect(ids()).toHaveLength(2)
+    broken = true
+    await scheduler.syncSchedule()
+    expect(ids()).toEqual([])
+    scheduler.dispose()
+  })
+})

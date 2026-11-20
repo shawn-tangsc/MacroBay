@@ -1,6 +1,6 @@
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import type { AnalysisIoStore } from '../store/marketAnalysisIoStore'
-import type { StructuredModelMessage, StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
+import type { StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
 import {
   MARKET_ANALYSIS_ERROR_CODES,
   type AnalysisRun,
@@ -10,25 +10,20 @@ import {
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
 import { resolveAnalysisRunFailureDetail } from './analysisFailureDetail'
-import { ensureAnalysisRunSession, appendAnalysisRunSessionSummary } from './analysisRunSessionEnsure'
+import { ensureAnalysisRunSession } from './analysisRunSessionEnsure'
 import { resolveTriggerFocus, type TriggerFocus } from './analysisTriggerFocus'
 import type { AnalysisManualFailure } from './analysisManualFailureNotifier'
 import { analysisRunLineOf, analysisTriggerSourcePolicy, isGateExempt } from './analysisTriggerSourcePolicy'
-import { analysisConclusionPushEligible } from './analysisConclusionPush'
 import { analysisRunOutcomesOf, decideAnalysisFailureNotice, type AnalysisFailureNoticeDecision } from './analysisFailureNotices'
 import { analysisUpstreamRetryPolicy, decideUpstreamRetry, waitForRetry } from './analysisUpstreamRetry'
-import {
-  formatUnsafeOutputRedaction,
-  validateAnalysisModelOutput,
-  type AnalysisOutputValidationResult,
-  type FrozenAnalysisEvidence,
-  type ValidatedAnalysisModelOutput
-} from './analysisOutputValidator'
-import { buildAnalysisMessages, type AnalysisSessionInput } from './analysisModelPrompt'
+import { formatUnsafeOutputRedaction } from './analysisOutputValidator'
+import type { AnalysisSessionInput } from './analysisModelPrompt'
+import { lineFor, type AnalysisLineContext, type AnalysisLineValidationResult } from './analysisLineRegistry'
 import { sessionBriefForTriggerKey } from './analysisSessionContext'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
 import type { SignificanceSignal } from './significanceChangeMatcher'
 import { frozenEvidenceForRun } from './analysisFrozenEvidence'
+import { repairableRejection, repairMessage } from './analysisModelRepair'
 
 type Repository = Readonly<{
   getRun: (id: string) => AnalysisRun | undefined
@@ -50,7 +45,11 @@ type Repository = Readonly<{
   triggerReasonOf?: (runId: string) => string | undefined
   claimRun: (id: string, startedAt: string) => boolean
   updateRunStatus: (input: { id: string; status: AnalysisRun['status']; completedAt?: string; failureCode?: string; failureDetailCode?: string }) => boolean
-  commitSuccessfulAnalysis: (input: { runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline: TimelineEntry }) => void
+  commitSuccessfulAnalysis: (input: {
+    runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline?: TimelineEntry; recordGroupPointer?: boolean
+  }) => void
+  /** 新闻线算记录版本用；市场线走组指针。 */
+  latestSummaryVersion?: (eventGroupId: string) => number
 }>
 
 type InvocationResult = StructuredModelTaskResult<unknown>
@@ -66,6 +65,21 @@ type InvocationResult = StructuredModelTaskResult<unknown>
 // finish, and every such run was published as `analysis-timeout`. Four minutes covers a thinking
 // model on this input size while still ending a genuinely hung connection; a real timeout still
 // surfaces, it just no longer arrives before the model could have answered.
+/**
+ * 冷启动时「这次运行该用哪个模型」的解析边界。
+ *
+ * 运行行入队时本该带着模型（`modelProviderId` / `modelId`），但启动恢复补排的运行是旧行，
+ * 没有这两个字段。调用前必须把它们解析出来；解析不到就**不发调用**——退回「第一个可用供应商」
+ * 会把读者没选的模型叫起来（本机冷启动就是这样落到 Silicon 的 401 上，界面再把它说成「检查连接」）。
+ *
+ * 第一次解析为空时等一小会儿再问一次就够了：模型选择读的是本地设置，不存在慢网络，
+ * `retryDelayMs` 不是网络兜底，只是覆盖「刚启动、第一次读还没回来」这一个窗口。
+ */
+export const analysisModelResolutionPolicy = Object.freeze({
+  attempts: 2,
+  retryDelayMs: 250
+})
+
 export const marketAnalysisInvocationPolicy = Object.freeze({
   modelTimeoutMs: 240_000,
   /**
@@ -78,91 +92,6 @@ export const marketAnalysisInvocationPolicy = Object.freeze({
    */
   maxModelAttempts: 2
 })
-
-/**
- * The rejections worth another sample.
- *
- * Not retried: unsafe output (a policy problem, not a formatting one), timeouts, provider errors,
- * and cancellation — each already says something the reader can act on, and another call would
- * only spend the same budget twice.
- */
-const repairableRejection: ReadonlySet<string> = new Set([
-  MARKET_ANALYSIS_ERROR_CODES.invalidJson,
-  MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema,
-  MARKET_ANALYSIS_ERROR_CODES.missingEvidence
-])
-
-/**
- * One concrete instruction per defect.
- *
- * The error code alone is too coarse to repair: `missing evidence` covers a missing
- * `directions` horizon, an ineligible reaction fact and three different reference mistakes, and
- * telling all of them "you cited an unknown reference" sends the model to rewrite citations that
- * were never the problem. Shape rejections name the section or the missing top-level key; the
- * matching sentence says what that section must contain.
- *
- * Deliberately short: the system prompt already carries the full schema, so this only points at
- * the one thing the first attempt could not see.
- */
-const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
-  'invalid-json': '上一次回复不是合法 JSON（可能被截断）。请重新输出完整、闭合的 JSON；必要时压缩各数组的条数。',
-  'shape:top-level': '上一次输出的顶层字段与契约不一致：顶层必须恰好是 conclusion、knownFacts、transmissionHypotheses、marketReaction、supportingEvidence、counterEvidence、scenarios、directions、nextCatalysts、dataCaveats、evidenceRefs，加上**可选**的 divergences；其余不增不减。',
-  'shape:conclusion': 'conclusion 必须恰好包含 direction、summary、change、causalChain、conditions、macro、evidenceStrength、dataGaps；direction 只能取五个 key，macro 与 evidenceStrength 没有内容时写 null。',
-  'shape:directions': 'directions 必须恰好 short、medium、long 各一条；每条含 horizon、direction、rationale、confidence、evidenceRefIds，confidence 只能是 low、medium 或 high。',
-  'shape:scenarios': '每个 scenario 必须恰好包含 asset、horizon、baseCase、conditions、invalidation、status；asset 只能是 BTC 或 ETH，status 只能是 pending。',
-  'shape:knownFacts': '每条 knownFacts 必须恰好包含 factId、statement、evidenceRefIds，其中 evidenceRefIds 恰好是该事实自己的那一个 evidenceRef。',
-  'shape:transmissionHypotheses': '每条 transmissionHypotheses 必须恰好包含 statement 与 evidenceRefIds（非空）。',
-  'shape:marketReaction': '每条 marketReaction 必须包含 statement、factIds、evidenceRefIds；没有可比行情时写 []。',
-  'shape:supportingEvidence': '每条 supportingEvidence 必须恰好包含 statement 与 evidenceRefId。',
-  'shape:counterEvidence': '每条 counterEvidence 必须恰好包含 statement 与 evidenceRefId。',
-  'shape:nextCatalysts': '每条 nextCatalysts 必须恰好包含 statement 与 evidenceRefIds（非空）。',
-  'shape:dataCaveats': 'dataCaveats 必须是字符串数组；没有内容时写 []。',
-  'shape:evidenceRefs': 'evidenceRefs 必须是非空的字符串数组，只能写本次实际引用的证据句柄。',
-  'direction-horizons-incomplete': 'directions 必须恰好 short、medium、long 各一条，不得缺失、重复或多出。',
-  'direction-evidence-mismatch': 'directions 的 evidenceRefIds 只能引用输入证据里的原文句柄（例如 e7），不得改写或编造。',
-  'unknown-reference': 'factId 与 evidenceRefIds 只能写输入里给出的 f# / e# 原文句柄，不得改写、拼接或编造。',
-  'fact-evidence-mismatch': '每条 knownFact 只能引用它自己的那一个 evidenceRef；marketReaction 的 evidenceRefIds 必须恰好覆盖它 factIds 对应的证据集合，多一个也会被拒绝。',
-  'ineligible-market-reaction': 'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs；输入没有该字段或为空时写 []。',
-  'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。',
-  'policy-probability-citation': '结论里的政策概率取整到整百分点写（输入 X% 时写「约 round(X)%」或直接写取整后的整数），并在同一段写出该概率的截至时刻（例如「市场定价 X%，截至 YYYY-MM-DD HH:mm UTC」，X 用输入里那条事实的值，不要照抄示例数字）；更精确的值留在记录里，不在正文重复。「概率/定价」附近的百分数只能取自输入里的概率事实，不得换档或编造；正文里的数值必须带符号（写「-2.92%」，不要写「下跌 2.92%」），数字只写完整小数或四舍五入到整数、不许截断；输入没有 24 小时变化时写「24 小时变化尚未可得」，不得自己算。',
-  // The answer must return to the change that triggered the run, not to a better-writable topic.
-  'divergence-contradiction': '上一次 `divergences` 里的立场与输入事实相反：输入里 `divergence-<pairId>` 事实存在，说明这一对的背离成立，`stance` 只能是 diverging；反过来，事实值是 none（查过、没背离）时不能写 diverging。与证据相反会被整份拒绝——**不写不算相反**，没意见就不要写这一项。',
-  'shape:divergences': '`divergences` 是可选数组；写的话每项必须恰好包含 pairId 与 stance 两个键，pairId 取输入里 `divergence-<pairId>` 的原文，stance 只能是 diverging 或 not-diverging。',
-  'missing-trigger-focus': '上一次结论没有回答触发它的那条变化：请在 supportingEvidence / marketReaction / directions 里引用那条变化的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的写法，不要改写）。不要换一个更好写的话题。'
-})
-
-function repairInstruction(defect: Readonly<{ errorCode: string; rule?: string }>): string {
-  const rule = defect.rule ?? ''
-  if (rule.startsWith('shape:top-level')) return repairInstructions['shape:top-level']!
-  if (defect.errorCode === MARKET_ANALYSIS_ERROR_CODES.invalidJson) return repairInstructions['invalid-json']!
-  return repairInstructions[rule] ?? '上一次输出未通过校验。'
-}
-
-/**
- * The rejected answer, bounded, so the model can see what it has to correct.
- *
- * An `assistant` turn also keeps the conversation alternating for providers that reject two
- * consecutive `user` messages. It is truncated: a rejected 30KB answer would spend the context the
- * repair needs, and the defect sentence already names the failing part.
- */
-function rejectedAnswer(output: unknown): StructuredModelMessage | undefined {
-  try {
-    const text = JSON.stringify(output)
-    if (!text || text === '{}') return undefined
-    const limit = 4_000
-    return { role: 'assistant', content: text.length > limit ? `${text.slice(0, limit)}…` : text }
-  } catch {
-    return undefined
-  }
-}
-
-function repairMessage(defect: Readonly<{ errorCode: string; rule?: string }>, previous?: unknown): StructuredModelMessage[] {
-  const answer = previous === undefined ? undefined : rejectedAnswer(previous)
-  return [
-    ...(answer ? [answer] : []),
-    { role: 'user', content: `${repairInstruction(defect)}请重新输出同一个 JSON 对象：只输出 JSON，不加 Markdown；不增加、不删除字段；必要时压缩每个数组的条数，确保 JSON 完整闭合。事实与证据只能引用输入里给出的 factRef / evidenceRef 原文。` }
-  ]
-}
 
 export type AnalysisOrchestratorResult = Readonly<{
   status: 'succeeded' | 'failed' | 'invalid-output' | 'cancelled'
@@ -212,7 +141,52 @@ export function createAnalysisOrchestrator(deps: Readonly<{
    * 没有证据说"反了"，推送只会进中心，不叫醒手机。
    */
   readTriggerSignal?: (triggerKey: string) => Readonly<{ direction?: 'bullish' | 'bearish'; factIds?: readonly string[] }>
+  /**
+   * 启动窗口的就绪门：启动引导阶段探一次 provider 的 `/models`，启动窗口内排队的运行等这一个
+   * 标记，不各自探测。只有启动引导装配时注入；缺席（headless / 窄测试）就不等待。
+   * **只覆盖启动窗口**，不是网络抖动的通用兜底——门一旦结算（ready / 超时）就不再阻塞。
+   */
+  networkReadiness?: Readonly<{ wait: () => Promise<'ready' | 'not-ready'> }>
+  /**
+   * 运行行没带模型（启动恢复补排的旧行）时，调用前解析出「读者选的那个模型」。
+   *
+   * 只有产品装配时注入：缺席（headless / 窄测试）保留旧行为——按平台默认模型调用，因为没有
+   * 读者可问。注入了就**必须**解析出结果才允许调用；解析不出来落 `analysis-provider-not-ready`，
+   * 不许把读者没选的供应商叫起来。
+   */
+  resolveAnalysisModel?: () => Promise<Readonly<{ providerId: string; modelId: string }> | null>
+  /**
+   * 调用前把打算用的模型写回运行行：失败的那次也要留得下「用的是谁」。
+   * 返回是否真的写入了（并发/已终态时可能不写）。
+   */
+  recordRunModel?: (id: string, model: Readonly<{ providerId: string; modelId: string }>) => boolean
 }>): Readonly<{ run: (input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }) => Promise<AnalysisOrchestratorResult> }> {
+  /**
+   * The model this run will call, resolved **before** the call: the run row's snapshot first, then
+   * (for runs queued without one) the reader's selection, with one bounded retry.
+   * `null` means "nothing usable": the caller must not invoke.
+   */
+  async function resolveModelForRun(
+    runRecord: AnalysisRun
+  ): Promise<Readonly<{ providerId: string; modelId: string }> | null> {
+    if (runRecord.modelProviderId && runRecord.modelId) {
+      return { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
+    }
+    if (!deps.resolveAnalysisModel) return null
+    for (let attempt = 1; attempt <= analysisModelResolutionPolicy.attempts; attempt += 1) {
+      try {
+        const resolved = await deps.resolveAnalysisModel()
+        if (resolved?.providerId && resolved.modelId) return resolved
+      } catch {
+        // 读设置失败与「还没选」一样都再问一次；两次都拿不到就判未就绪，不拿默认供应商顶上。
+      }
+      if (attempt < analysisModelResolutionPolicy.attempts) {
+        await new Promise<void>(resolve => setTimeout(resolve, analysisModelResolutionPolicy.retryDelayMs))
+      }
+    }
+    return null
+  }
+
   async function run(input: { analysisRunId: string; signal?: AbortSignal; significanceSignals?: readonly unknown[] }): Promise<AnalysisOrchestratorResult> {
     const runRecord = deps.repository.getRun(input.analysisRunId)
     if (!runRecord || !deps.repository.claimRun(runRecord.id, deps.now())) return { status: 'failed', errorCode: 'analysis-run-not-available' }
@@ -226,6 +200,27 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     })
     if (input.signal?.aborted) return cancel(runRecord.id)
     const signal = input.signal ?? new AbortController().signal
+    // 启动引导探到网络通之前排队的运行在这里等。门已结算时立即返回，所以这段只覆盖启动窗口：
+    // 它不是网络抖动的通用兜底，超时也不能冒充 `connect-failed`——那会把「还没就绪」说成「断了」。
+    // 注意：门说 ready 只证明**端点答得出 HTTP 响应**，不证明**这次运行有模型可调**；下一段才是
+    // 「有没有模型」的判断，两者都不许省。
+    if (deps.networkReadiness) {
+      const readiness = await deps.networkReadiness.wait()
+      if (readiness === 'not-ready') {
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'network-not-ready')
+      }
+    }
+    // 调用前必须有模型：运行行没带（启动恢复补排的旧行）就从设置里解析一次，解析不到就不发调用。
+    const runModel = await resolveModelForRun(runRecord)
+    if (!runModel) {
+      // 只有注入了解析器（产品装配）才把「解析不出来」当成失败；headless/窄测试没有读者可问，
+      // 继续按平台默认模型调用，这是文档写明的缺省而不是放行。
+      if (deps.resolveAnalysisModel) {
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerNotReady, 'model-not-selected')
+      }
+    } else if (runRecord.modelProviderId !== runModel.providerId || runRecord.modelId !== runModel.modelId) {
+      deps.recordRunModel?.(runRecord.id, runModel)
+    }
 
     // 冻结证据的构造（快照哈希、可用事实、变更摘要里的数、语言）在 `analysisFrozenEvidence` 一处。
     const frozen = await frozenEvidenceForRun({
@@ -242,14 +237,19 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const openInstant = brief ? slotInstantAtOrBefore(brief.slot, new Date(runRecord.queuedAt), deps.timeZone()) : null
     const session: AnalysisSessionInput | undefined = brief && openInstant ? { brief, openInstant } : undefined
     // The run carries the model it was queued for, so the analysis calls exactly the model the
-    // reader chose instead of whatever provider happens to be first in the store. Runs without a
-    // recorded model keep following the platform default.
-    const model = runRecord.modelProviderId && runRecord.modelId
-      ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
-      : {}
-    let messages = buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
+    // reader chose instead of whatever provider happens to be first in the store. A run without a
+    // recorded model resolves it above and writes it back before the first call.
+    const model = runModel ? { providerId: runModel.providerId, modelId: runModel.modelId } : {}
+    // 全仓唯一的选择点：按 run 行上的类别取线，不按触发键猜。`run.analysisKind` 从库里读，
+    // 恢复、重放、别的入口都绕不过去。
+    const line = lineFor(runRecord.analysisKind)
+    const lineContext: AnalysisLineContext = {
+      timeZone: deps.timeZone(),
+      ...(proseLanguage === undefined ? {} : { proseLanguage })
+    }
+    let messages = line.buildMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, lineContext)
     let invocation: InvocationResult | undefined
-    let validated: AnalysisOutputValidationResult | undefined
+    let validated: AnalysisLineValidationResult | undefined
     // One immediate repair attempt, inside the same run and against the same frozen snapshot.
     // A model that answers outside the contract once is not a failed analysis: the previous
     // product required the reader to press "Analyze now" again (which is exactly what they did,
@@ -270,8 +270,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         callIndex: callsSpent,
         callKind,
         prompt: messages,
-        modelProviderId: runRecord.modelProviderId,
-        modelId: runRecord.modelId,
+        modelProviderId: runModel?.providerId ?? null,
+        modelId: runModel?.modelId ?? null,
         timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs
       })
       try {
@@ -309,7 +309,12 @@ export function createAnalysisOrchestrator(deps: Readonly<{
         // The detail is what tells a cut call apart from a rate limit or a dead connection; the
         // coarse code alone made every provider fault read the same.
         const failureDetailCode = resolveAnalysisRunFailureDetail({
-          failureCode, providerFailure: { errorCode: invocation.errorCode, durationMs: invocation.trace.durationMs }
+          failureCode, providerFailure: {
+            errorCode: invocation.errorCode,
+            durationMs: invocation.trace.durationMs,
+            ...(invocation.httpStatus === undefined ? {} : { httpStatus: invocation.httpStatus }),
+            ...(invocation.transportErrorKind === undefined ? {} : { transportErrorKind: invocation.transportErrorKind })
+          }
         })
         // 断流重试：同一次运行内、先占后跑、每 UTC 日一次。取消就当场结束，认定这一次仍没成。
         if (failureDetailCode === 'upstream-aborted' && !retried && deps.repository.retry) {
@@ -337,12 +342,16 @@ export function createAnalysisOrchestrator(deps: Readonly<{
           return fail(runRecord.id, 'failed', failureCode, failureDetailCode)
         }
         repaired = true
+        // 修复调用是**另一次调用**：存档里要和首答分开，否则事后只能看到三行「initial」，
+        // 看不出哪一行是首答、哪两行是被丢掉的重写。
+        nextCallKind = 'repair'
         messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
         continue
       }
-      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence, triggerFocus)
+      validated = line.validate(JSON.stringify(invocation.output), frozenEvidence, triggerFocus, lineContext)
       if (validated.ok) break
-      if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !repairableRejection.has(validated.errorCode)) break
+      if (repaired || callsSpent >= analysisUpstreamRetryPolicy.maximumCallsPerRun || !line.repairableRejections.has(validated.errorCode)) break
+      nextCallKind = 'repair'
       messages = [...messages, ...repairMessage(validated, invocation.output)]
     }
     if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError, 'provider-other')
@@ -365,64 +374,21 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     if (validated.redactions.length > 0) console.log(formatUnsafeOutputRedaction(runRecord.id, validated.redactions))
     if (signal.aborted) return cancel(runRecord.id)
 
-    const group = deps.repository.getEventGroup(runRecord.eventGroupId)
-    if (!group) return fail(runRecord.id, 'failed', 'analysis-event-group-not-found')
-    const currentVersion = group.currentSummaryId ? deps.repository.getSummary?.(group.currentSummaryId)?.version ?? 0 : 0
-    const summary = toSummary(runRecord, validated.value, currentVersion + 1, deps.now(), deps.idFactory)
-    const predictions = toPredictions(summary, validated.value, deps.now(), deps.idFactory)
-    const timeline: TimelineEntry = {
-      id: makeId('mi-tl-', deps.idFactory()), schemaVersion: 1, eventGroupId: runRecord.eventGroupId, analysisRunId: runRecord.id,
-      kind: runRecord.analysisPhase === 'review' ? 'review' : 'analysis', status: 'published', occurredAt: summary.createdAt,
-      summaryRef: summary.id,
-      safeTitle: '市场分析已生成',
-      safeExcerpt: summary.conclusion?.summary ?? summary.eventAssessment ?? null,
-      direction: summary.conclusion?.direction ?? null,
-      version: summary.version
-    }
     try {
-      deps.repository.commitSuccessfulAnalysis({ runId: runRecord.id, summary, predictions, timeline })
+      await line.persist(runRecord, validated.value, {
+        repository: deps.repository,
+        snapshot,
+        now: deps.now(),
+        idFactory: deps.idFactory,
+        ...(proseLanguage === undefined ? {} : { proseLanguage }),
+        ...(deps.appendRunSummary === undefined ? {} : { appendRunSummary: deps.appendRunSummary }),
+        ...(deps.notifyAnalysisConclusion === undefined ? {} : { notifyAnalysisConclusion: deps.notifyAnalysisConclusion }),
+        ...(deps.readTriggerSignal === undefined ? {} : { readTriggerSignal: deps.readTriggerSignal })
+      })
     } catch {
       return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.storageFailed)
     }
     if (retried) deps.repository.retry?.record(runRecord.id, 'succeeded')
-    // 摘要写进会话；原文仍在 mi_analysis_io，按 run id 读出，不复制到这来。失败不阻断发布，
-    // 留痕在 helper 里（读者打开只剩卡片时，事后只有那条 marker 能查得到）。
-    await appendAnalysisRunSessionSummary({
-      runId: runRecord.id,
-      summary: summary.conclusion?.summary ?? summary.eventAssessment ?? '',
-      ...(deps.appendRunSummary ? { append: deps.appendRunSummary } : {})
-    })
-    // N12：**达到门槛**的那次、写入记录之后，提交一次结论推送。判据是原因码，不是触发键——
-    // 键记的是阶段，消息面达门槛的运行也长着宏观的样子（`analysisConclusionPushEligible` 一处判）。
-    const triggerReasonCode = deps.repository.triggerReasonOf?.(runRecord.id)
-    if (deps.notifyAnalysisConclusion !== undefined && analysisConclusionPushEligible({
-      triggerKey: runRecord.triggerKey,
-      ...(triggerReasonCode === undefined ? {} : { reasonCode: triggerReasonCode })
-    })) {
-      try {
-        const trigger = deps.readTriggerSignal?.(runRecord.triggerKey) ?? {}
-        const citedFactIds = Object.freeze([...new Set([
-          ...validated.value.knownFacts.map((claim) => claim.factId),
-          ...validated.value.marketReaction.flatMap((claim) => claim.factIds)
-        ])])
-        await deps.notifyAnalysisConclusion({
-          runId: runRecord.id,
-          triggerKey: runRecord.triggerKey,
-          // 桶 = 原因码 + 事件：不同事件各算一次，同一条事件重复触发仍是一个桶。
-          bucket: `${triggerReasonCode ?? 'signal'}:${runRecord.eventGroupId}`,
-          cutoff: snapshot.asOf,
-          summary: validated.value.conclusion.summary,
-          conclusionDirection: validated.value.conclusion.direction,
-          citedFactIds,
-          ...(trigger.direction === undefined ? {} : { triggerDirection: trigger.direction }),
-          ...(trigger.factIds === undefined ? {} : { triggerFactIds: trigger.factIds }),
-          citedCount: validated.value.evidenceRefs.length,
-          occurredAt: deps.now()
-        })
-      } catch {
-        // 通知是记录的附加物：发不出去不许把一次成功的分析变成失败。
-      }
-    }
     // A success may end a failure episode; the decision is made once, from the same rows the notices
     // are judged from, so "recovered" and "still failing" can never both be true.
     await announceRunOutcome(runRecord.triggerKey)
@@ -456,7 +422,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // here; automatic failures are throttled by their own levels and must not wake the reader.
     const run = deps.repository.getRun(id)
     if (run && isGateExempt(run.triggerKey)) {
-      await deps.notifyManualFailure?.({ runId: id, failureCode: errorCode, failureDetailCode, occurredAt: completedAt })
+      await deps.notifyManualFailure?.({ runId: id, analysisKind: run.analysisKind, failureCode: errorCode, failureDetailCode, occurredAt: completedAt })
     } else if (run) {
       await announceRunOutcome(run.triggerKey)
     }
@@ -464,22 +430,6 @@ export function createAnalysisOrchestrator(deps: Readonly<{
   }
 
   return { run }
-}
-
-function toSummary(run: AnalysisRun, output: ValidatedAnalysisModelOutput, version: number, createdAt: string, idFactory: () => string): AnalysisSummary {
-  return { id: makeId('mi-as-', idFactory()), schemaVersion: 1, analysisRunId: run.id, eventGroupId: run.eventGroupId, version, ...output, createdAt }
-}
-
-function toPredictions(summary: AnalysisSummary, output: ValidatedAnalysisModelOutput, createdAt: string, idFactory: () => string): Prediction[] {
-  return output.scenarios.map((scenario) => {
-    const horizonMs = scenario.horizon === '0-15m' ? 15 * 60_000 : scenario.horizon === '15m-2h' ? 2 * 60 * 60_000 : scenario.horizon === '2h-24h' ? 24 * 60 * 60_000 : 3 * 24 * 60 * 60_000
-    const horizonEnd = new Date(Date.parse(createdAt) + horizonMs).toISOString()
-    return { id: makeId('mi-pr-', idFactory()), schemaVersion: 1, summaryId: summary.id, asset: scenario.asset, horizonStart: createdAt, horizonEnd, baseCase: scenario.baseCase, conditions: scenario.conditions, invalidation: scenario.invalidation, nextCatalyst: output.nextCatalysts[0]?.statement ?? null, status: 'pending', verificationDueAt: horizonEnd, createdAt }
-  })
-}
-
-function makeId(prefix: string, value: string): string {
-  return value.startsWith(prefix) ? value : `${prefix}${value}`
 }
 
 function mapInvocationError(errorCode: string): string {

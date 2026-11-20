@@ -241,3 +241,23 @@ useEffect(() => {
 3. **不留空位**：`capability-not-wired` 不传 `action` 时不渲染按钮，也不留空行；`permission` 必带一个「去系统设置」，且那个 handler 必须真的能打开系统设置——必填动作配空实现，只是把死按钮换了个位置。
 4. **灰度**：把 `disabled` 与 `permission` 截图去色，仍要能分开。
 5. **组件零文案**：在组件里 grep 句子，必须为零。
+
+## 消息内容里的 part
+
+一次落定的读取，和消息里的一行，可以描述同一种处境。**词可以共用，类型不许共用。**
+
+- **`QueryOutcome` 只留在数据层。** 类型在 `platform/contracts/queryOutcome.ts`，把一次读取适配成它
+  的唯一位置是 `platform/ui/async/asyncState.ts`。消息内容沿用同一套词（`unreadable`，将来还有
+  `record-corrupt`），但**不把 part 包成 `QueryOutcome`**：part 不是一次查询——`loading` 不成立
+  （本版不取字节），`empty` 不成立（没有附件就不画）。动作表与 `stateViewCallSiteGuard` 只约束查询层
+  的码；守卫看不见消息内容，**这是对的，不是漏洞**。
+- **消息里新增一种内容，必须是有名字的 part，并在渲染处显式分支。** 落到通用兜底
+  （`text.messages.nonTextContent`）等于没做：读者只会拿到一句占位，几种不同处境全被它吃掉。
+  **「进 `AgentMessagePart` 联合」不算要求**——`GenericMessagePart` 是 `{ type: string }`，写什么
+  都能编译通过，然后照样落到那个兜底。
+- **附件行不进 `searchableText`。** 它不是读者说的话，搜索也不该命中它。同一条理由让**纯附件消息
+  这一版不给「重发」**：重发要么发出一条空消息，要么把我们自己的系统文案当成读者输入回灌进会话。
+
+**怎么验**：新增一种 part 就配一条行为用例——造一条带它的消息，断言对应那句出现、且通用兜底句不
+出现；再把渲染分支删掉跑一次，这条必须红。至于「part 种类」与「渲染分支」做静态双向比对，在种类
+还是类型联合、没有运行时常量清单之前不值得写。

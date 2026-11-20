@@ -3,60 +3,23 @@ import { readFile } from 'node:fs/promises'
 
 import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 import { createManagedWorkerRuntime } from '@platform/jobs'
-import type { EventBusRuntime } from '@platform/message-bus'
-import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
-import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
-import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
-import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
+import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '@platform/notifications/contracts/notificationSubmitContracts'
 import type { DailyBriefingLocale } from '../../contracts/dailyBriefing'
-import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import { firstReboundSingletonHook } from './intelligenceModuleHooks'
-import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 import { app } from 'electron'
 
-import { createIntelligenceFetchText, executeIntelligenceFetchTarget } from './adapters/intelligenceHttpFetch'
 import { createIntelligenceArchiveService } from './application/intelligenceArchiveService'
 import { createIntelligencePipeline } from './application/intelligencePipeline'
-import { createSourceIssueWiring } from './application/sourceIssueWiring'
-import { createIntelligenceEventPublisher } from './application/intelligenceEventPublisher'
 import { createIntelligenceReplayService } from './application/intelligenceReplayService'
 import { createIntelligenceSourcesService } from './application/intelligenceSourcesService'
-import { DEFAULT_SOURCE_FRESHNESS_MS } from './application/macroSourceHealth'
 import { createMarketIntelligencePublicQueryService } from './public-query/publicQueryService'
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
-import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
-import { createMarketAnalysisSettingsService } from './application/marketAnalysisSettingsService'
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
-import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
-import { disableMaintenanceOnlyKeylessSources, migrateKeylessSourceDefaults } from './application/keylessSourceDefaultsMigration'
-import {
-  createIntelligenceCredentialJsonStorage,
-  createIntelligenceCredentialStore
-} from './store/intelligenceCredentialStore'
-import {
-  createIntelligencePipelineJsonStorage,
-  readIntelligencePipelineSnapshotSync
-} from './store/intelligencePipelineStateStorage'
-import {
-  createIntelligenceRuntimeStateJsonStorage,
-  readIntelligenceRuntimeStateSync
-} from './store/intelligenceRuntimeStateStorage'
-import {
-  createIntelligenceRuntimeStateHistoryJsonStorage,
-  readIntelligenceRuntimeStateHistorySync
-} from './store/intelligenceRuntimeStateHistoryStorage'
-import {
-  createIntelligenceTranslationJsonStorage
-} from './store/intelligenceTranslationStorage'
-import {
-  createNewsSentimentSettingsJsonStorage,
-  createNewsSentimentSettingsStore
-} from './news-sentiment/newsSentimentSettingsStore'
-import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './news-sentiment/newsSentimentStore'
-import { rebuildNewsSentimentStorage } from './news-sentiment/newsSentimentStoreRecovery'
-import { createNewsSentimentServices } from './news-sentiment/newsSentimentServices'
+import { createSourceProfileStore } from './application/sourceProfileStore'
+import { createNewsSentimentSettingsStore } from './news-sentiment/newsSentimentSettingsStore'
+import { createNewsSentimentSqliteStore } from './news-sentiment/newsSentimentStore'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService, newsPushLedgerPolicy } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
@@ -65,7 +28,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, createDailyBriefReadinessFor, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
-import { macroWebReadFromHooks, type WebSearchProductHooks } from './webSearchProductHooks'
+import { macroWebReadFromHooks } from './webSearchProductHooks'
 import { briefingNotificationPorts, createBriefingCalendarCommands, type BriefingCalendarRefresh } from './daily-briefing/briefingPorts'
 import { currentBriefMarketBackfill } from './daily-briefing/dailyBriefMarketBackfill'
 import { createDailyBriefingPeriodDeletion, type DailyBriefingPeriodDeletion } from './daily-briefing/dailyBriefingPeriodDeletion'
@@ -75,11 +38,10 @@ import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBrief
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
 import { applyDailyBriefingSchedules } from './jobs/registerDailyBriefingJob'
-import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { wireDailyBriefingJobs } from './daily-briefing/dailyBriefingJobs'
 import type { BriefingPeriodsEditor } from './daily-briefing/dailyBriefingPeriodsSource'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
-import { claimExistingBriefingSessions, createDailyBriefEditorSessionPort, findLatestBriefingSessionId } from './daily-briefing/dailyBriefEditorSessionPort'
+import { createDailyBriefEditorSessionPort, findLatestBriefingSessionId } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
 import { resolveBriefingRunAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
@@ -95,141 +57,49 @@ import {
   createDailyBriefingSettingsService,
   type DailyBriefingSettingsService
 } from './daily-briefing/dailyBriefingSettingsService'
-import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
-import { queryOpenInterestHistoryAsync } from './public-query/openInterestHistoryQuery'
-import { createSignalledOpenInterestRefresh } from './signals/openInterestSignalNotifier'
 import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
-import {
-  createRawRecordJsonStorage,
-  readRawRecordSnapshotSync
-} from './store/rawRecordStorage'
-import {
-  INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
-  INTELLIGENCE_REPLAY_WINDOW_JOB
-} from './jobs/intelligenceJobIds'
-import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
-import { registerIntelligenceDataChangedEvents } from './jobs/registerIntelligenceDataChanged'
+import { INTELLIGENCE_REPLAY_WINDOW_JOB } from './jobs/intelligenceJobIds'
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
-import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
-import { statSync } from 'node:fs'
-import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
-import { createMacroCalendarEvidenceStore } from './macro-calendar/macroCalendarEvidenceStore'
-import { createCapitalConditionsHttpClient, type CapitalConditionsPlatformFetch } from './capital-conditions/capitalConditionsHttpClient'
-import { createCapitalConditionsRefreshService } from './capital-conditions/capitalConditionsRefreshService'
 import { createCapitalConditionsSourceIntegration } from './capital-conditions/capitalConditionsSourceIntegration'
-import { createCapitalConditionsStateJsonStorage, createCapitalConditionsCurrentStateStore } from './capital-conditions/stablecoinCapitalCurrentStateStore'
-import { createCapitalConditionsSnapshotQueryService } from './capital-conditions/capitalConditionsSnapshotQuery'
 import { createSourceRequestGovernanceQueue } from './application/sourceRequestGovernance'
-import { createEtfCurrentStateSqliteStorage, createEtfCurrentStateStore } from './store/etfCurrentStateStore'
-import { createEtfCurrentStateRefreshService } from './etf/etfCurrentStateRefreshService'
-import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
+import { cryptoEtfSourcePolicy } from './application/cryptoEtfSourcePolicy'
+import { resolveFactSource } from '../../contracts/factSources'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
-import { createFundingRateHistorySqliteStore } from './store/fundingRateHistoryStore'
-import { createPerpetualPositioningSqliteStore } from './store/perpetualPositioningStore'
-import { createBinanceOpenInterestClient } from './open-interest/binanceOpenInterestClient'
-import { createOpenInterestRefreshService } from './open-interest/openInterestRefreshService'
-import { createFundingRateHistoryRefreshService } from './funding-rate/fundingRateHistoryRefreshService'
-import { createBinanceFundingRateHistoryClient } from './funding-rate/binanceFundingRateHistoryClient'
 import { createZeroXRouterCalendarEvidenceAdmissionService } from './macro-calendar/0xrouter-calendar/zeroXRouterCalendarEvidenceAdmissionService'
-import { createMacroMarketRuntime, type MacroMarketRuntime } from './macro-market/macroMarketRuntime'
-import { createMacroMarketLive } from './macro-market/macroMarketLive'
-import { createDashboardFeedStatusQuery, type DashboardFeedStatusQuery } from './macro-market/dashboardFeedStatusQuery'
+import type { MacroMarketRuntime } from './macro-market/macroMarketRuntime'
+import type { DashboardFeedStatusQuery } from './macro-market/dashboardFeedStatusQuery'
 import type { GoldLiveRuntime } from './macro-market/goldLiveRuntime'
 import { macroMarketPolicy } from './macro-market/macroMarketPolicy'
 import { requestZeroXRouterCalendarJsonBody } from './application/zeroXRouterHttpTransport'
+import { INTELLIGENCE_PRODUCT_ID as PRODUCT_ID, type IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
+import {
+  currentReaderTimeZone,
+  getIntelligenceProductDataDir,
+  getModulePlatformHooks,
+  setModulePlatformHooks,
+  shellTimeZone
+} from './intelligenceModuleEnvironment'
+import { createIntelligenceStores } from './intelligenceModuleStores'
+import { createIntelligenceMarketData } from './intelligenceModuleMarketData'
+import { createIntelligenceNewsSentiment } from './intelligenceModuleNewsSentiment'
+import { createIntelligenceRuntimes } from './intelligenceModuleRuntimes'
+import { createCalendarStandardWritePort, type CalendarStandardWriteLayerReader } from './intelligenceModuleCalendarWritePort'
+import { createIntelligenceStartup } from './intelligenceModuleStartup'
 
-const PRODUCT_ID = 'market-intelligence'
-
-/**
- * One line at main-process startup naming the bundle that is actually running.
- *
- * The reader and I spent a long stretch comparing a fixed build against a window that had loaded an
- * older one: a renderer reload looks like a restart in the terminal, and the main process quietly
- * keeps the code it started with. Printing the bundle's own modification time (and the start time)
- * makes "which build is live" a fact rather than a deduction.
- */
-function logMainStartupBundle(): void {
-  try {
-    const bundle = statSync(__filename)
-    console.log(JSON.stringify({
-      marker: 'MI_MAIN_STARTUP', productId: PRODUCT_ID,
-      bundleBuiltAt: new Date(bundle.mtimeMs).toISOString(), bundleBytes: bundle.size,
-      startedAt: new Date().toISOString(), pid: process.pid
-    }))
-  } catch {
-    // A marker that cannot be read must never stop the product from starting.
-  }
-}
-logMainStartupBundle()
-
-const intelligenceRawRecordStartupRecoveryPolicy = {
-  completionObservationTimeoutMs: 30_000,
-  definition() {
-    return {
-      id: 'market-intelligence.startup-recover-pending-raw-records',
-      owner: 'product' as const,
-      productId: PRODUCT_ID,
-      handlerId: INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB,
-      title: 'Recover pending intelligence raw records',
-      trigger: { kind: 'startup' as const },
-      payload: {}
-    }
-  },
-  async completeBeforeSourceRuntime(jobRuntime: Pick<JobRuntime, 'enqueueDefinition' | 'waitForRunTerminal'>): Promise<void> {
-    try {
-      const run = await jobRuntime.enqueueDefinition(this.definition())
-      await jobRuntime.waitForRunTerminal(run.id, {
-        timeoutMs: this.completionObservationTimeoutMs
-      })
-    } catch {
-      // Source runtime recovery remains available when pending raw recovery cannot start or observe completion.
-    }
-  }
-} as const
-
-export type IntelligenceModulePlatformHooks = WebSearchProductHooks & {
-  getProviderState?: () => Promise<ProviderState>; /** 平台落盘日志（app.log）：补跑等后台事实走它，console 只在终端里。 */ log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
-  getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
-  /** 模型服务页「默认模型」只读投影；翻译偏好跟随其中的默认翻译模型。 */
-  getModelDefaults?: () => Promise<ModelDefaultsSettings>
-  eventBusRuntime?: EventBusRuntime
-  /** Required: the first call must inject it, and every consumer reads this one. */
-  platformFetch: CapitalConditionsPlatformFetch
-  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. Required: a missing one used to become UTC silently. */
-  getTimeZone: () => string
-  /** The reader changed their display zone: the brief schedule follows it without a settings save. */
-  onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
-  /**
-   * The platform's proxy-aware socket constructor, injected lazily. It is a thunk rather than a
-   * constructor because the desktop shell can only build it once network settings are readable —
-   * binding it eagerly would hand the product a constructor that fails on its first connect.
-   */
-  createPlatformWebSocket?: () => PlatformWebSocketConstructor
-  /** Any source switch, so a product-owned job can arm or drop its own schedule. */
-  onSourceEnabledChanged?: (sourceId: string) => void | Promise<void>
-  /** Reconcile the automatic calendar job registry after a feed switch. */
-  onCalendarEnabledChanged?: () => void | Promise<void>
-  createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
-  /** 自动会话的幂等窄查（按 agentId + originRef）：同一期只复用一条会话。 */
-  findAgentSessionByAutomationRef?: (agentId: string, originRef: string) => Promise<AgentSessionEntity | null>
-  sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
-  cancelAgentSession?: (sessionId: string) => Promise<void> | void
-  appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
-  updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
-  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
-  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
-  /** 平台通知运行时的提交入口（契约 §3.2）；未注入时来源事件不发通知，采集照常。 */
-  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
-  /** 平台「把一条已有记录再推一次手机」的入口（契约 §16.3.4）；只给读者点击的发布按钮用。 */
-  redeliverPush?: import('./daily-briefing/dailyBriefingPublishToPhone').BriefingRedeliver
-}
+/* 产品 id、启动 bundle 标记、原始记录补跑策略、平台 hooks 类型 → `intelligenceModuleContracts.ts`（M1）。
+   hooks 类型从原路径**再导出**：`newsSentimentServices.ts` 等调用的 import 路径一个字没变。 */
+export type { IntelligenceModulePlatformHooks } from './intelligenceModuleContracts'
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
+/** 标准表写失败的 late-bound 读口；细节见 `intelligenceModuleCalendarWritePort`。 */
+const calendarWritePort = createCalendarStandardWritePort()
 export type IntelligenceModule = {
+  /** 模块启动链的完成信号（默认源迁移 → 会话归位 → 补跑 → 恢复）；一次性工作挂这里，别用微任务。 */
+  startupReady: Promise<void>
   /** Re-anchor the brief schedule after the reader changes their display zone (no settings save). */
   rescheduleBriefingForDisplayTimeZone: (timeZone: string) => Promise<void>
   pipeline: ReturnType<typeof createIntelligencePipeline>
@@ -295,6 +165,13 @@ export type IntelligenceModule = {
   }
   marketAnalysisRuntime: MarketAnalysisRuntime
   /** The credentialed macro-market series (synthetic dollar, gold, offshore yuan, stablecoin peg). */
+  /**
+   * 带凭据的取文通道（key 由模块内部的 profile/credential 存储解析，**永远不出模块**）。
+   *
+   * 暴露它是因为「读官方序列」这类只读取数需要一个凭据出口，而另建一套读凭据的路迟早与这份漂开。
+   * 只加这一个方法：pipeline 里已有的 `fetchText` 用法不动。
+   */
+  fetchText: (url: string, sourceId: string) => Promise<string>
   macroMarket: MacroMarketRuntime
   /** Whether that source can spend a credit right now: the reader enabled it and a key is stored. */
   macroMarketReadiness: () => Promise<{ enabled: boolean; hasCredential: boolean }>
@@ -303,27 +180,17 @@ export type IntelligenceModule = {
    * cross-asset rows actually read. Read-only, and the credential leaves as a boolean.
    */
   dashboardFeedStatus: Pick<DashboardFeedStatusQuery, 'status'>
+  /** 通知提交口（平台注入）：装配层用它给「品种被永久拒绝」这类事件发一次提醒（用户 2026-11-16）。 */
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   setPolicyPathQuery: (query: PolicyPathQueryService) => void
   bindBriefingCalendarRefresh: (refresh: BriefingCalendarRefresh) => void
+  /** 绑定写入层读口；`sourcesService` 取视图时现读，不缓存。 */
+  bindCalendarStandardWriteLayer: (read: CalendarStandardWriteLayerReader) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
 }
 
 let intelligenceModule: IntelligenceModule | null = null
-let modulePlatformHooks: IntelligenceModulePlatformHooks | undefined
-
-function shellTimeZone(): string {
-  return resolveBriefingTimeZone(modulePlatformHooks)
-}
-
-/** 供产品内其它装配点读取「读者时区」（同一提供者，不另起来源）。 */
-export function currentReaderTimeZone(): string {
-  return shellTimeZone()
-}
-
-function getProductDataDir(): string {
-  return join(app.getPath('userData'), 'products', PRODUCT_ID)
-}
 
 export function getIntelligenceModule(
   jobRuntime: JobRuntime,
@@ -336,181 +203,49 @@ export function getIntelligenceModule(
   // occasional crash at startup. The message names the field; without it the reader must diff
   // eighteen hooks by hand.
   if (intelligenceModule) {
-    const rebound = firstReboundSingletonHook(platformHooks, modulePlatformHooks)
+    const rebound = firstReboundSingletonHook(platformHooks, getModulePlatformHooks())
     if (rebound) throw new Error(`intelligence-module-hooks-already-bound: ${rebound}`)
     return intelligenceModule
   }
   if (!platformHooks) throw new Error('intelligence-module-hooks-required')
-  modulePlatformHooks = platformHooks
+  setModulePlatformHooks(platformHooks)
 
   {
-    const hooks = modulePlatformHooks
-    const dataDir = getProductDataDir()
+    // 局部入参已在上面的 `if (!platformHooks) throw` 之后收窄；状态里那份给 `shellTimeZone` 等只读口用。
+    const hooks = platformHooks
+    const dataDir = getIntelligenceProductDataDir()
     const getAppLanguage = hooks?.getAppLanguage ?? (async () => 'zh-CN' as const)
-    const profileStore = createSourceProfileStore(
-      createProfileJsonStorage(join(dataDir, 'intelligence-source-profiles.json'))
-    )
-    const rawRecordStorage = createRawRecordJsonStorage(join(dataDir, 'intelligence-raw-records.json'))
-    const rawRecordStore = createRawRecordStore({
-      storage: rawRecordStorage,
-      snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json'))
+    const stores = createIntelligenceStores({
+      dataDir,
+      getAppLanguage,
+      timeZone: shellTimeZone,
+      ...(hooks?.eventBusRuntime === undefined ? {} : { eventBusRuntime: hooks.eventBusRuntime }), ...(hooks?.submitNotification === undefined ? {} : { submitNotification: hooks.submitNotification }),
+      ...(hooks?.log === undefined ? {} : { log: hooks.log })
     })
-    const macroCalendarEvidenceArchive = createMacroCalendarEvidenceArchive({
-      rawRecords: rawRecordStore,
-      archiveDirectory: join(dataDir, 'macro-calendar-evidence')
-    })
-    const macroCalendarEvidenceMigration = macroCalendarEvidenceArchive.migrateInlineBodies()
-    const pipelineStateStorage = createIntelligencePipelineJsonStorage(
-      join(dataDir, 'intelligence-pipeline-state.json')
-    )
-    const runtimeStateStorage = createIntelligenceRuntimeStateJsonStorage(
-      join(dataDir, 'intelligence-runtime-state.json')
-    )
-    const runtimeStateHistoryStorage = createIntelligenceRuntimeStateHistoryJsonStorage(
-      join(dataDir, 'intelligence-runtime-state-history.json')
-    )
-    const translationStorage = createIntelligenceTranslationJsonStorage({
-      settingsPath: join(dataDir, 'intelligence-translation-settings.json'),
-      recordsPath: join(dataDir, 'intelligence-translation-records.json'),
-      appLanguage: getAppLanguage
-    })
-    const credentialStore = createIntelligenceCredentialStore(
-      createIntelligenceCredentialJsonStorage(join(dataDir, 'intelligence-credentials.json'))
-    )
-    const fetchText = createIntelligenceFetchText({ profileStore, credentialStore })
-    const fetchMetricTarget = (target: Parameters<typeof executeIntelligenceFetchTarget>[0], sourceId: string) =>
-      executeIntelligenceFetchTarget(target, sourceId, { profileStore, credentialStore })
-    const eventPublisher = hooks?.eventBusRuntime
-      ? createIntelligenceEventPublisher(hooks.eventBusRuntime)
-      : undefined
-    const sourceIssues = createSourceIssueWiring({ defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS, timeZone: shellTimeZone,
-      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }),
-      ...(hooks?.log === undefined ? {} : { log: hooks.log }) })
-    const pipeline = createIntelligencePipeline({
-      profileStore,
-      rawRecordStore,
-      fetchText,
-      fetchMetricTarget,
-      snapshot: readIntelligencePipelineSnapshotSync(join(dataDir, 'intelligence-pipeline-state.json')),
-      stateStorage: pipelineStateStorage,
-      runtimeStateSnapshot: readIntelligenceRuntimeStateSync(join(dataDir, 'intelligence-runtime-state.json')),
-      runtimeStateStorage,
-      runtimeStateHistorySnapshot: readIntelligenceRuntimeStateHistorySync(
-        join(dataDir, 'intelligence-runtime-state-history.json')
-      ),
-      runtimeStateHistoryStorage,
-      eventPublisher,
-      ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier })
-    })
-    sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
-    const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
-      storage: createCapitalConditionsStateJsonStorage(join(dataDir, 'capital-conditions-state.json'))
-    })
-    const etfCurrentStateStore = createEtfCurrentStateStore({
-      storage: createEtfCurrentStateSqliteStorage(join(dataDir, 'etf-current-state.sqlite'))
-    })
-    const requestGovernanceQueue = createSourceRequestGovernanceQueue({ now: () => Date.now() })
-    const fundingRateHistoryStore = createFundingRateHistorySqliteStore(join(dataDir, 'funding-rate-history.sqlite'))
-    const fundingRateHistoryClient = createBinanceFundingRateHistoryClient({ platformFetch: hooks.platformFetch as typeof fetch })
-    const fundingRateHistoryRefresh = createFundingRateHistoryRefreshService({
-      isEnabled: async () => (await profileStore.resolveProfile('binance-futures-positioning')).enabled,
-      requestHistory: fundingRateHistoryClient.requestHistory,
-      store: fundingRateHistoryStore,
-      now: () => new Date().toISOString()
-    })
-    // The positioning series is the second half of the same source: a funding rate without the
-    // open interest behind it cannot tell deleveraging from crowding.
-    const perpetualPositioningStore = createPerpetualPositioningSqliteStore(join(dataDir, 'perpetual-positioning.sqlite'))
-    const openInterestClient = createBinanceOpenInterestClient({ platformFetch: hooks.platformFetch as typeof fetch })
-    const openInterestRefresh = createOpenInterestRefreshService({
-      isEnabled: async () => (await profileStore.resolveProfile('binance-futures-positioning')).enabled,
-      client: openInterestClient,
-      store: perpetualPositioningStore,
-      now: () => new Date().toISOString()
-    })
-    const openInterestWithSignals = createSignalledOpenInterestRefresh({ refresh: openInterestRefresh.refresh,
-      readHistory: input => queryOpenInterestHistoryAsync({ ...input, store: perpetualPositioningStore }),
-      ...(hooks?.submitNotification === undefined ? {} : { submit: hooks.submitNotification }) })
-    const etfFlowHistoryClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
-    // The macro-market series (dollar, gold, offshore yuan, stablecoin peg) come from a credentialed
-    // REST provider, read through the same profile/credential pair every other source uses. The real
-    // licensed dollar index is collected by the same runtime into the same store, so the log line
-    // takes the failing source id from the collector rather than naming one of the two sources.
-    const macroMarket = createMacroMarketRuntime({
+    /* 名字在这里解构出来：下文近百处引用一个字没改。 */
+    const {
+      profileStore, rawRecordStore, macroCalendarEvidenceArchive, macroCalendarEvidenceMigration,
+      translationStorage, credentialStore, fetchText, pipeline
+    } = stores
+    const marketData = createIntelligenceMarketData({
       jobRuntime,
-      resolveProfile: sourceId => profileStore.resolveProfile(sourceId),
-      getCredential: credentialRef => credentialStore.getByRef(credentialRef as never),
-      dataDirectory: getIntelligenceProductDataDir(),
-      onError: (error, sourceId) => { console.log(JSON.stringify({ marker: 'MI_MACRO_MARKET_ERROR', sourceId, message: String(error).slice(0, 200) })) }
+      dataDir,
+      profileStore,
+      credentialStore,
+      pipeline,
+      macroCalendarEvidenceArchive,
+      platformFetch: hooks.platformFetch,
+      timeZone: shellTimeZone,
+      ...(hooks?.submitNotification === undefined ? {} : { submitNotification: hooks.submitNotification }),
+      ...(hooks.createPlatformWebSocket === undefined ? {} : { createPlatformWebSocket: hooks.createPlatformWebSocket })
     })
-    // The gold stream shares that source's switch and credential but never its store: it is built only
-    // when the desktop shell could hand over the platform socket, so a headless run has no stream.
-    const macroMarketLive = createMacroMarketLive({
-      source: {
-        resolveProfile: sourceId => profileStore.resolveProfile(sourceId),
-        getCredential: credentialRef => credentialStore.getByRef(credentialRef as never)
-      },
-      ...(hooks.createPlatformWebSocket ? { createWebSocket: hooks.createPlatformWebSocket } : {}),
-      onError: error => { console.log(JSON.stringify({ marker: 'MI_MACRO_MARKET_LIVE_ERROR', sourceId: macroMarketPolicy.sourceId, message: String(error).slice(0, 200) })) }
-    })
-    const zeroXRouterCredential = async () => {
-      const profile = await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)
-      return profile.credentialRef ? credentialStore.getByRef(profile.credentialRef) : null
-    }
-    // One reader for the strip's macro and cross-asset feed lines: the same profile store and
-    // credential store the collectors read, the macro store's own outcome notes, and the pipeline's
-    // health for the generic FRED collector. The key itself never leaves the credential store.
-    const dashboardFeedStatus = createDashboardFeedStatusQuery({
-      resolveProfile: sourceId => profileStore.resolveProfile(sourceId),
-      hasCredential: async credentialRef => (await credentialStore.getSafeView(credentialRef as never)).hasCredential === true,
-      readNote: key => macroMarket.store.readNote(key),
-      readHealth: sourceId => pipeline.getHealth(sourceId)
-    })
-    const zeroXRouterCalendarEvidenceAdmission = createZeroXRouterCalendarEvidenceAdmissionService({
-      requestGovernanceQueue,
-      getApiKey: async () => (await zeroXRouterCredential())?.apiKey,
-      evidence: createMacroCalendarEvidenceStore(macroCalendarEvidenceArchive)
-    })
-    const etfCurrentStateRefresh = createEtfCurrentStateRefreshService({
-      isEnabled: async () => (await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)).enabled,
-      hasCredential: async () => Boolean((await zeroXRouterCredential())?.apiKey),
-      requestWindow: async () => {
-        const credential = await zeroXRouterCredential()
-        return credential?.apiKey ? etfFlowHistoryClient.requestWindow(credential.apiKey) : Object.freeze({ state: 'unavailable' as const })
-      },
-      store: etfCurrentStateStore,
-      now: () => new Date().toISOString(),
-      // 交接点只交读数；开关、去重参数与事件 id 都在通知层（见 `etfOutflowSignalHandoff`）。
-      ...etfOutflowSignalHandoff(hooks?.submitNotification)
-    })
-    const capitalConditionsRefresh = createCapitalConditionsRefreshService({
-      isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
-      http: createCapitalConditionsHttpClient({ platformFetch: hooks.platformFetch }),
-      store: capitalConditionsStore,
-      now: () => new Date().toISOString()
-    })
-    // The historical reader shares the platform fetch and the source switch with the live refresh,
-    // but reads each core asset's own endpoint; the aggregate `stablecoincharts/all` series is never
-    // used to answer the core metric. The client streams and caps each per-asset response (~22-24 MB).
-    const capitalConditionsAssetHistoryHttp = createCapitalConditionsHttpClient({
-      platformFetch: hooks.platformFetch
-    })
-    const capitalConditions = createCapitalConditionsSourceIntegration({
-      refreshService: capitalConditionsRefresh,
-      readHealth: async () => {
-        const health = await capitalConditionsStore.readHealth()
-        return Object.freeze({
-          status: health.status,
-          ...(health.lastSuccessAt ? { lastSuccessAt: health.lastSuccessAt } : {}),
-          consecutiveFailures: health.consecutiveFailures
-        })
-      }
-    })
-    const capitalConditionsQuery = createCapitalConditionsSnapshotQueryService({
-      store: capitalConditionsStore,
-      etfStore: etfCurrentStateStore,
-      isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled
-    })
+    /* 名字在这里解构出来：下文引用一个字没改。 */
+    const {
+      requestGovernanceQueue, fundingRateHistoryStore, perpetualPositioningStore, fundingRateHistoryRefresh,
+      openInterestWithSignals, macroMarket, macroMarketLive, zeroXRouterCredential, cryptoEtfCredential,
+      dashboardFeedStatus, zeroXRouterCalendarEvidenceAdmission, resolveEtfFactSource, etfCurrentStateRefresh,
+      capitalConditions, capitalConditionsQuery, cryptoEtfFlowClient, capitalConditionsAssetHistoryHttp
+    } = marketData
     const workerRuntime = createManagedWorkerRuntime()
     const structuredModelInvocation = createStructuredModelInvocationService({
       getProviderState:
@@ -520,7 +255,6 @@ export function getIntelligenceModule(
         }),
       fetch: hooks.platformFetch as unknown as typeof fetch
     })
-    let newsSentimentStore: ReturnType<typeof createNewsSentimentSqliteStore> | undefined
     const translationService = createIntelligenceTranslationService({
       storage: translationStorage,
       pipeline,
@@ -530,238 +264,55 @@ export function getIntelligenceModule(
       getProviderState: hooks?.getProviderState,
       getModelDefaults: hooks?.getModelDefaults
     })
-    const newsSentimentSettingsStore = createNewsSentimentSettingsStore(
-      createNewsSentimentSettingsJsonStorage(join(dataDir, 'intelligence-news-sentiment-settings.json'))
-    )
-    const newsSentimentFilePath = join(dataDir, newsSentimentStoragePolicy.fileName)
-    try {
-      newsSentimentStore = createNewsSentimentSqliteStore(newsSentimentFilePath)
-    } catch {
-      // A broken database must not take the rest of the product down; news sentiment stays unavailable.
-      newsSentimentStore = undefined
-    }
-    const assembleNewsSentiment = (store: ReturnType<typeof createNewsSentimentSqliteStore>) =>
-      createNewsSentimentServices(store, {
-        pipeline,
-        settingsStore: newsSentimentSettingsStore,
-        translationService,
-        translationSettingsStorage: translationStorage,
-        invoke: structuredModelInvocation.invoke,
-        getAppLanguage,
-        profileStore,
-        hooks,
-        dataDir
-      })
-    const newsSentimentPieces = newsSentimentStore ? assembleNewsSentiment(newsSentimentStore) : undefined
-    const newsSentimentEnrichment = newsSentimentPieces?.enrichment
-    const newsSentimentScoring = newsSentimentPieces?.scoring
-    const newsSentimentBodyTranslation = newsSentimentPieces?.bodyTranslation
-    const newsSentimentQuery = newsSentimentPieces?.query
-    const readNewsSentimentSettings = async (): Promise<NewsSentimentSettingsView> => {
-      const settings = await newsSentimentSettingsStore.getSettings()
-      const [providerState, modelDefaults] = await Promise.all([
-        hooks?.getProviderState?.().catch(() => undefined) ?? Promise.resolve(undefined),
-        hooks?.getModelDefaults?.().catch(() => undefined) ?? Promise.resolve(undefined)
-      ])
-      const resolution = resolveNewsSentimentModel({
-        settings,
-        modelDefaults: modelDefaults ?? null,
-        providers: providerState?.providers ?? []
-      })
-      const fastResolution = modelDefaults?.fastModelId
-        ? resolveConfiguredModel({
-            value: modelDefaults.fastModelId,
-            providers: providerState?.providers ?? [],
-            isModelAcceptable: (_provider, model) => model.capabilities.chat === true
-          })
-        : undefined
-      return {
-        settings,
-        resolution,
-        ...(fastResolution?.ok
-          ? { defaultFastModel: { providerId: fastResolution.ref.providerId, modelId: fastResolution.ref.modelId, name: `${fastResolution.providerName} · ${fastResolution.modelName}` } }
-          : {})
-      }
-    }
-    const newsSentimentSettings = {
-      get: readNewsSentimentSettings,
-      save: async (patch: Partial<NewsSentimentSettings>) => {
-        await newsSentimentSettingsStore.save(patch)
-        return readNewsSentimentSettings()
-      }
-    }
-    // 一份可更新的出口：读者重建把库换成新的以后，IPC / Agent 读到的是同一份新服务。
-    const newsSentimentExposure: IntelligenceModule['newsSentiment'] = {
-      settingsStore: newsSentimentSettingsStore,
-      ...(newsSentimentStore ? { store: newsSentimentStore } : {}),
-      ...(newsSentimentEnrichment ? { enrichment: newsSentimentEnrichment } : {}),
-      ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {}),
-      ...(newsSentimentQuery ? { query: newsSentimentQuery } : {}),
-      ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
-      settings: newsSentimentSettings,
-      rebuildStorage: () => {
-        throw new Error('news-sentiment-storage-unavailable')
-      }
-    }
-    const archiveService = createIntelligenceArchiveService({
+    const newsSentiment = createIntelligenceNewsSentiment({
+      dataDir,
+      pipeline,
+      translationService,
+      translationStorage,
+      structuredModelInvocation,
+      getAppLanguage,
+      profileStore,
+      hooks
+    })
+    /* 表面读它；重建与作业依赖都在 M5 那个工厂里消费整份。 */
+    const { newsSentimentExposure } = newsSentiment
+    const runtimes = createIntelligenceRuntimes({
+      jobRuntime,
+      dataDir,
+      timeZone: shellTimeZone,
+      getAppLanguage,
+      pipeline,
       rawRecordStore,
-      archiveBaseDir: join(dataDir, 'intelligence-archive'),
-      compactTranslationRecords: async (retentionMode) => {
-        const result = await translationService.compactDerivedRecords({ retentionMode })
-        return result.removedCount
-      }
-    })
-    const replayService = createIntelligenceReplayService({
-      pipeline,
-      enqueueJob: async (jobId, payload) => {
-        await jobRuntime.enqueueDefinition({
-          id: `${jobId}:${String(payload.sourceId ?? 'global')}:${Date.now()}`,
-          owner: 'product',
-          productId: PRODUCT_ID,
-          handlerId: jobId,
-          title: `Intelligence ${jobId.split('.').pop()}`,
-          trigger: { kind: 'manual' },
-          payload
-        })
-      }
-    })
-
-    // Passed by reference on purpose: a rebuild swaps the services, and the registered handlers
-    // must see the new ones without being re-registered (a second registration throws).
-    const intelligenceJobDeps: Parameters<typeof registerIntelligenceJobs>[1] = {
-      pipeline,
-      archiveService,
-      replayService,
       translationService,
       capitalConditions,
-      etfFlowHistory: etfCurrentStateRefresh,
-      fundingRateHistory: fundingRateHistoryRefresh,
-      openInterest: openInterestWithSignals,
-      ...(newsSentimentEnrichment && newsSentimentScoring
-        ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
-        : {})
-    }
-    registerIntelligenceJobs(jobRuntime, intelligenceJobDeps)
-    /* 采集写了库 → 发一条 `intelligence.dataChanged`（形状见合同，映射在 `jobs/dataChangedJobMap.ts`）。 */
-    registerIntelligenceDataChangedEvents(PRODUCT_ID)
-    // Judgments are event-driven: normalize only sends the items it just created. A cleared
-    // database, a partial write failure, or a settings change leaves older admitted items with no
-    // current row and no event to bring them back. One idempotent pass per start reconciles them
-    // from title and summary; the score service skips anything already current and caps the pass.
-    if (newsSentimentStore) {
-      void enqueueIntelligencePipelineJobs(
-        jobRuntime,
-        [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
-        { limit: 500 }
-      ).catch(() => undefined)
-    }
-    const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore, perpetualPositioningStore })
-    // The divergence card asks whether the day's news was priced; that needs the same scored
-    // headlines the news page and the analysis read, not the sentiment aggregate (which only
-    // exists for market-wide scopes).
-    const syncNewsSentimentPublicQuery = (): void => {
-      const query = newsSentimentExposure.query
-      publicQueryService.setNewsSentimentQuery(query ? { query: (input) => query.query(input) } : undefined)
-    }
-    syncNewsSentimentPublicQuery()
-    // 读者主动重建：库正常 → 清空重抓；库打不开 → 先隔离现场、再建新库，并把新服务接回所有出口。
-    newsSentimentExposure.rebuildStorage = () => {
-      const existing = newsSentimentExposure.store
-      if (existing) {
-        existing.clearAll()
-        return {}
-      }
-      const rebuilt = rebuildNewsSentimentStorage(newsSentimentFilePath)
-      const pieces = assembleNewsSentiment(rebuilt.store)
-      newsSentimentExposure.store = rebuilt.store
-      newsSentimentExposure.enrichment = pieces.enrichment
-      newsSentimentExposure.scoring = pieces.scoring
-      newsSentimentExposure.bodyTranslation = pieces.bodyTranslation
-      newsSentimentExposure.query = pieces.query
-      intelligenceJobDeps.newsSentiment = {
-        enrichItems: pieces.enrichment.enrichItems,
-        scoreItems: pieces.scoring.scoreItems
-      }
-      syncNewsSentimentPublicQuery()
-      return rebuilt.quarantinedCopy ? { quarantinedCopy: rebuilt.quarantinedCopy } : {}
-    }
-    // The analysis switches own the model as well as the on/off state: a background job may only
-    // spend a request on a model the reader enabled it with.
-    const marketAnalysisSettingsService = createMarketAnalysisSettingsService({
-      store: createMarketAnalysisSettingsStore(
-        createMarketAnalysisSettingsJsonStorage(join(dataDir, 'intelligence-analysis-settings.json'))
-      ),
-      now: () => new Date().toISOString(),
-      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
-      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {})
-    })
-    const marketAnalysisRuntime = registerMarketAnalysisRuntime({
-      jobRuntime,
-      // 开盘时刻按设置的读者时区换算（唯一提供者）。
-      timeZone: shellTimeZone,
-      eventBusRuntime: hooks?.eventBusRuntime,
-      pipeline,
-      publicQueryService,
-      structuredModelInvocation,
-      settingsService: marketAnalysisSettingsService,
-      getAppLanguage,
-      // 重点舆情进分析：与「Key sentiment」卡读的是同一个查询，窗口由分析运行时决定。
-      // 动态读出口：库重建后不必重启分析运行时。库打不开时抛错，分析把这一域记成
-      // `news-sentiment-unavailable`（与原先「没有读取器」同一条缺口，不是「没有舆情」）。
-      newsSentimentQuery: {
-        query: async (input) => {
-          const query = newsSentimentExposure.query
-          if (!query) throw new Error('news-sentiment-storage-unavailable')
-          return query.query(input)
-        }
-      },
-      ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {}),
-      dataDir
-    })
-    const sourcesService = createIntelligenceSourcesService({
+      capitalConditionsQuery,
+      fundingRateHistoryStore,
+      perpetualPositioningStore,
+      etfCurrentStateRefresh,
+      fundingRateHistoryRefresh,
+      openInterestWithSignals,
+      newsSentiment,
       profileStore,
-      pipeline,
-      jobRuntime,
       workerRuntime,
-      replayService,
-      capitalConditions,
       credentialStore,
-      onCalendarEnabledChanged: hooks?.onCalendarEnabledChanged,
-      onSourceEnabledChanged: hooks?.onSourceEnabledChanged,
       requestGovernanceQueue,
-      ...(hooks?.platformFetch ? { platformFetch: hooks.platformFetch as typeof fetch } : {})
+      structuredModelInvocation,
+      readStandardWriteFailures: calendarWritePort.readFailures,
+      hooks
     })
-    // The dashboard's first screen (sentiment, fear & greed, stablecoin capital) is fed by sources
-    // that need no credential; a fresh install should not require toggling them on before the cards
-    // can do anything. An existing profile wins, so a reader's "off" is never overridden.
-    // 一次性迁移：老安装里「免钥匙 + live」的源曾被旧默认写成关，这里打开一次（标记写在
-    // `intelligence-source-migration-markers.json`，之后读者再关就是关）。口径见
-    // `isDefaultEnabledDefinition`：免钥匙 + 已就绪即默认启用，维护备用（还没用上）的除外。
-    const migrationMarkers = join(dataDir, 'intelligence-source-migration-markers.json')
-    const ensureDefaultSources = migrateKeylessSourceDefaults({ markerPath: migrationMarkers, store: profileStore })
-      // 第二条：把维护备用那批关回去（第一条先把它们一起打开了，顺序不能反）。
-      .then(() => disableMaintenanceOnlyKeylessSources({ markerPath: migrationMarkers, store: profileStore }))
-      .catch(() => undefined)
-    // 历史日报编辑会话的身份归位：只改身份字段（消息与内容不动），幂等，失败不阻断启动但要留痕。
-    const earlierBriefingSessionMigration = ensureDefaultSources
-      .then(() => claimExistingBriefingSessions({
-        links: dailyBriefSessionLinks,
-        agentId: 'daily-brief-editor',
-        ...(hooks.findAgentSessionByAutomationRef ? { findAgentSessionByAutomationRef: hooks.findAgentSessionByAutomationRef } : {}),
-        ...(hooks.updateAgentSession ? { updateAgentSession: hooks.updateAgentSession } : {})
-      }))
-      .then((result) => {
-        if (result.updated > 0) hooks.log?.('info', 'daily-brief-session-migration', { updated: result.updated, skipped: result.skipped })
-      })
-      .catch((error: unknown) => {
-        hooks.log?.('warn', 'daily-brief-session-migration-failed', { message: error instanceof Error ? error.message : String(error) })
-      })
-    const startupReady = earlierBriefingSessionMigration
-      .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
-      .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
-      .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
-      .then(() => undefined, () => undefined)
-    void startupReady
+    /* 名字在这里解构出来：表面与启动链引用一个字没改。 */
+    const { archiveService, replayService, publicQueryService, marketAnalysisRuntime, sourcesService, modelNetworkReadiness } = runtimes
+    const startup = createIntelligenceStartup({
+      jobRuntime,
+      dataDir,
+      profileStore,
+      sourcesService,
+      marketAnalysisRuntime, modelNetworkReadiness,
+      /* 惰性读：链接存储的构造在下面日报那段，晚于这里。 */
+      briefingSessionLinks: () => dailyBriefSessionLinks,
+      hooks
+    })
+    const { startupReady } = startup
     // Best-effort seed: `readSettings` already falls back to defaults when the file is absent, so
     // a failed write during shutdown must not surface as an unhandled rejection.
     void (async () => {
@@ -782,8 +333,7 @@ export function getIntelligenceModule(
         createDailyBriefingAiSettingsJsonStorage(join(dataDir, 'daily-briefing-settings.json')),
         () => new Date().toISOString()
       ),
-      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
-      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
+      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}), ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
       onModelSaved: async (settings) => {
         if (!hooks?.updateAgent) return
         const model = settings.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : 'unconfigured:default-chat-model'
@@ -864,13 +414,27 @@ export function getIntelligenceModule(
       const created = Object.freeze({
         etfHistory: createEtfHistoryAsOf({
           requestWindow: async () => {
-            // The same two gates the refresh applies: a switched-off source is not read around, and
-            // a missing key is a missing interface rather than a failed request.
-            const profile = await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)
+            // 同样的两道闸：源关着不绕过去读；没有密钥是「没有接口」，不是「这次读失败」。
+            // 2026-11-13 用户拍板：日报回溯改读 CryptoETF（免费档只保留 30 天；今天切，受影响
+            // 的历史日报为 0 份）。旧源保留不动，但这里不再是它的读取点。
+            const profile = await profileStore.resolveProfile(cryptoEtfSourcePolicy.sourceId)
             if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
-            const credential = await zeroXRouterCredential()
+            const credential = await cryptoEtfCredential()
             if (!credential?.apiKey) return Object.freeze({ state: 'not-configured' as const })
-            return etfFlowHistoryClient.requestWindow(credential.apiKey)
+            const window = await cryptoEtfFlowClient.readSettledWindow(credential.apiKey)
+            const rowsOf = (reading: { days?: readonly { tradingDate: string; netFlowUsd: number }[] } | undefined) =>
+              reading?.days?.map(day => ({ date: Date.parse(`${day.tradingDate}T00:00:00.000Z`), changeUsd: day.netFlowUsd }))
+            if (window.state === 'available') {
+              return Object.freeze({ state: 'available' as const, btc: rowsOf(window.btc), eth: rowsOf(window.eth) })
+            }
+            if (window.state === 'partial') {
+              return Object.freeze({
+                state: 'partial' as const,
+                ...(window.btc === undefined ? {} : { btc: rowsOf(window.btc) }),
+                ...(window.eth === undefined ? {} : { eth: rowsOf(window.eth) })
+              })
+            }
+            return Object.freeze({ state: 'unavailable' as const })
           }
         }),
         stablecoinHistory: createStablecoinHistoryAsOf({
@@ -921,9 +485,10 @@ export function getIntelligenceModule(
       backfillFor: backfillFactory,
       cache: createDailyBriefFactEnsureJsonCache(join(dataDir, 'daily-brief-fact-ensure.json')),
       isSourceEnabled,
+      resolveFactSource: resolveEtfFactSource,
       now: () => new Date().toISOString(),
     })
-    const briefingCalendar = createBriefingCalendarCommands()
+    const briefingCalendar = createBriefingCalendarCommands(() => jobRuntime.listSchedules().map((definition) => definition.id))
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
@@ -984,11 +549,11 @@ export function getIntelligenceModule(
       periods: briefingPeriodsSource,
       links: dailyBriefSessionLinks,
       ...(markAttemptCleaned ? { markAttemptCleaned: (input) => markAttemptCleaned(input) } : {}), ...(hooks?.log === undefined ? {} : { log: hooks.log }),
-      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}),
-      ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {})
+      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}), ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {})
     })
-    modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
+    getModulePlatformHooks()?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
+      startupReady,
       rescheduleBriefingForDisplayTimeZone,
       pipeline,
       workerRuntime,
@@ -1018,7 +583,8 @@ export function getIntelligenceModule(
         requestJsonBody: requestZeroXRouterCalendarJsonBody
       },
       marketAnalysisRuntime,
-      macroMarket,
+      fetchText,
+    macroMarket,
       // One reader for the source's own switch and credential, built from the same profile and
       // credential stores the collector reads, so the dashboard cannot disagree with the collector.
       macroMarketReadiness: async () => {
@@ -1047,7 +613,9 @@ export function getIntelligenceModule(
           }
         })
       },
-      bindBriefingCalendarRefresh: briefingCalendar.bind
+      bindBriefingCalendarRefresh: briefingCalendar.bind,
+      /* 写入层读口：装配根在日历后端建好之后绑；绑之前视图里不出现写失败字段。 */
+      bindCalendarStandardWriteLayer: calendarWritePort.bind
     }
   }
   return intelligenceModule
@@ -1057,11 +625,9 @@ export function resetIntelligenceModuleForTests(): void {
   intelligenceModule?.requestGovernanceQueue.close()
   intelligenceModule?.marketAnalysisRuntime.dispose()
   intelligenceModule = null
-  modulePlatformHooks = undefined
+  setModulePlatformHooks(undefined)
 }
 
-export function getIntelligenceProductDataDir(): string {
-  return getProductDataDir()
-}
 
 export { PRODUCT_ID as INTELLIGENCE_PRODUCT_ID, INTELLIGENCE_REPLAY_WINDOW_JOB }
+export { currentReaderTimeZone, getIntelligenceProductDataDir } from './intelligenceModuleEnvironment'

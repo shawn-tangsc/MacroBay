@@ -8,12 +8,12 @@ type Locale = 'zh' | 'en'
 type AdmissionInput = Readonly<{ descriptorId: string; locale: Locale }>
 type AdmissionResult =
   | Readonly<{ state: 'persisted'; descriptorId: string; locale: Locale; acceptedBytes: number; evidenceHash: string }>
-  | Readonly<{ state: 'unavailable'; failureCode: 'descriptor-not-found' | 'locale-not-supported' | 'window-not-accepted' | 'credential-not-configured' | 'response-envelope' | 'transport-unavailable' | 'archive-unavailable' }>
+  | Readonly<{ state: 'unavailable'; failureCode: 'descriptor-not-found' | 'locale-not-supported' | 'window-not-accepted' | 'credential-not-configured' | 'response-envelope' | 'transport-unavailable' | 'archive-unavailable' | 'metadata-quota-exceeded' }>
 
 export function createZeroXRouterCalendarEvidenceAdmissionService(deps: Readonly<{
   requestGovernanceQueue: ReturnType<typeof createSourceRequestGovernanceQueue>
   getApiKey: () => Promise<string | undefined>
-  evidence: Pick<MacroCalendarEvidenceStore, 'reserve' | 'release' | 'append'>
+  evidence: Pick<MacroCalendarEvidenceStore, 'reserve' | 'release' | 'append' | 'lastReserveRejection'>
   now?: () => Date
   createRunId?: () => string
   requestJsonBody?: (input: Readonly<{ url: string; apiKey: string }>) => Promise<ZeroXRouterBodyTransportResult>
@@ -31,7 +31,13 @@ export function createZeroXRouterCalendarEvidenceAdmissionService(deps: Readonly
       if (!isSafeZeroXRouterApiKey(apiKey)) return { state: 'unavailable', failureCode: 'credential-not-configured' }
       const observedAt = (deps.now ?? (() => new Date()))()
       const reservation = deps.evidence.reserve(zeroXRouterHttpTransportPolicy.responseAcceptedMaxBytes)
-      if (!reservation) return { state: 'unavailable', failureCode: 'archive-unavailable' }
+      if (!reservation) {
+        // **为什么被拒要说清楚**（用户 2026-11-20）：配额超了记独立码，其余才是 archive-unavailable。
+        const rejection = deps.evidence.lastReserveRejection()
+        return { state: 'unavailable',
+          failureCode: rejection === 'owner-quota' || rejection === 'global-quota'
+            ? 'metadata-quota-exceeded' as const : 'archive-unavailable' as const }
+      }
       try {
         let transport: ZeroXRouterBodyTransportResult
         try {

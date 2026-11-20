@@ -11,6 +11,8 @@
  * - 一个源被多个模块用就**在每个模块下各出现一次**（读者按模块找源）。
  * - 反查（源 → 模块）由 `modulesUsingSource` 算，组件里不许再存第二份映射。
  */
+import type { MarketFactId } from '../../../contracts/factSources'
+
 export type DashboardCell = Readonly<{
   /** 格名（读数格叫法，取自冻结文档 §1/§3）；`''` = 这一行不写格名、只列源名。 */
   label: string
@@ -19,7 +21,13 @@ export type DashboardCell = Readonly<{
    * 全局 `cellId = <moduleId>:<cellKey>`，卡片渲染、看板判断、以后存储迁移都读这一处。
    */
   cellKey: string
+  /** 默认供数源（标签、默认值、没有解析结果时的去处）；真正用哪个源由 `fact` 解析决定。 */
   sourceId: string
+  /**
+   * 这一格要的是哪个**事实**。声明了它，供数源就由 `resolveFactSource` 现算——换源只改注册表，
+   * 不改这里；`cellKey` 仍是格的身份，换源不会让读者对 `capital:etf` 的开关失效。
+   */
+  fact?: MarketFactId
   /** 这一行是主源的备用回落（格名写成「美元（备用）」这种）。 */
   fallback?: boolean
 }>
@@ -52,28 +60,34 @@ const CELL_SLUGS: Readonly<Record<string, string>> = {
   BTC: 'btc',
   ETH: 'eth',
   '美债 10 年期': 'ust10y',
-  政策路径概率: 'probability',
+  /* 这张卡管的是 FOMC 决议市场 + 美联储日程，**叫「利率」**（用户 2026-11-14 纠正：
+     他把「核心指标」理解成另一组卡，那组放 CPI/非农/PCE 的共识配置，另有原型）。
+     格键仍是 `probability`——格键是读者的存储键，不跟着显示名漂。 */
+  利率: 'probability',
   美联储日程: 'fed',
   恐惧与贪婪: 'index',
   稳定币: 'stablecoin',
   ETF: 'etf',
+  'ETF（备用）': 'etf-fallback',
   永续持仓名义额: 'oi',
   资金费率: 'funding',
 }
 
-/** `[格名, 源 id, 是不是备用行]` → 模块；`sourceIds` 由 cells 派生，两处不会不一致。 */
+/** `[格名, 源 id, 是不是备用行, 显式键, 事实]` → 模块；`sourceIds` 由 cells 派生，两处不会不一致。 */
 function moduleOf(
   id: string,
   labelKey: string,
-  rows: ReadonlyArray<readonly [string, string, boolean?, string?]>
+  rows: ReadonlyArray<readonly [string, string, boolean?, string?, MarketFactId?]>
 ): DashboardSourceModule {
-  const cells: DashboardCell[] = rows.map(([label, sourceId, fallback, explicitKey]) => ({
+  const cells: DashboardCell[] = rows.map(([label, sourceId, fallback, explicitKey, fact]) => ({
     label,
     /* 键的优先级：显式给的最优先（同一格名出现两次时必须显式区分，例如背离卡的两条「资金腿」），
-       其次是 `CELL_SLUGS` 的表，最后退回格名本身；没有格名的行（今天已不存在）退回源 id。 */
+       其次是 `CELL_SLUGS` 的表，最后退回格名本身；没有格名的行（今天已不存在）退回源 id。
+       **`cellKey` 永不跟来源走**：它是读者设置的主键，换源只换解析结果。 */
     cellKey: explicitKey ?? (label === '' ? sourceId : (CELL_SLUGS[label] ?? label)),
     sourceId,
-    ...(fallback === true ? { fallback: true } : {})
+    ...(fallback === true ? { fallback: true } : {}),
+    ...(fact === undefined ? {} : { fact })
   }))
   return { id, labelKey, cells, sourceIds: [...new Set(cells.map((cell) => cell.sourceId))] }
 }
@@ -83,13 +97,15 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
   /* 政策路径这一格有**两条硬依赖**：会议日来自美联储日历、赔率来自 Polymarket。同模块两个格，
      各自可开关、各自报状态（架构师 2026-11-12 定：一格多依赖不做，照 capital/positioning 的双格）。 */
   moduleOf('policy-path', `${TITLES}.policyPath`, [
-    ['政策路径概率', 'policy-path-market'],
+    ['利率', 'policy-path-market'],
     ['美联储日程', 'macro-calendar-fed']
   ]),
   moduleOf('fear-greed', 'pages.intelligence.portal.dashboard.fearGreed.title', [['恐惧与贪婪', 'alternative-fear-greed']]),
   moduleOf('capital', 'pages.intelligence.portal.analysisWorkspace.readableNames.domain.capital', [
     ['稳定币', 'defillama-stablecoins'],
-    ['ETF', '0xrouter-aggregate-provider']
+    ['ETF', 'cryptoetf-etf-flows', false, undefined, 'etf-net-flow'],
+    /* 备源（用户 2026-11-17：旧源加回来、互相补充）：主源不可用时顶上的那一行，与「美元（备用）」同形态。 */
+    ['ETF（备用）', '0xrouter-aggregate-provider', true]
   ]),
   moduleOf('positioning', 'pages.intelligence.portal.dashboard.positioning.title', [
     ['永续持仓名义额', 'binance-futures-positioning'],
@@ -99,9 +115,16 @@ export const DASHBOARD_SOURCE_MODULES: readonly DashboardSourceModule[] = [
     ['Fed 官方日程', 'macro-calendar-fed'],
     ['BEA 官方发布', 'macro-calendar-bea'],
     ['BLS 官方日程', 'macro-calendar-bls'],
-    ['0xRouter 经济数据', 'macro-calendar-0xrouter-economic-data'],
-    ['0xRouter 财经事件', 'macro-calendar-0xrouter-financial-events'],
-    ['0xRouter 央行活动', 'macro-calendar-0xrouter-central-bank-activities']
+    /* 换源完成：三条 Narwhal 顶替三条 0xRouter。
+       **cellKey 保留旧字面量**（`0xRouter …` 那三个），读者已存的格级开关才不会静默重置。 */
+    ['Narwhal 经济数据', 'macro-calendar-narwhal-economic-data', false, '0xRouter 经济数据'],
+    ['Narwhal 金融事件', 'macro-calendar-narwhal-financial-events', false, '0xRouter 金融事件'],
+    ['Narwhal 央行活动', 'macro-calendar-narwhal-central-bank-activities', false, '0xRouter 央行活动'],
+    /* 0xRouter 三路：**读者可配置的补充源**（用户 2026-11-15）。默认关——没配置就不注册定时任务。
+       cellKey 用自己的前缀：旧的 `0xRouter …` 那三个键已经被 Narwhal 三行占用（保留是为了读者存过的格级开关）。 */
+    ['市场日历 · 经济数据', 'macro-calendar-0xrouter-economic-data', false, '0xrouter-economic-data'],
+    ['市场日历 · 金融事件', 'macro-calendar-0xrouter-financial-events', false, '0xrouter-financial-events'],
+    ['市场日历 · 央行活动', 'macro-calendar-0xrouter-central-bank-activities', false, '0xrouter-central-bank-activities']
   ]),
   moduleOf('quotes', `${TITLES}.marketState`, [
     ['BTC', 'binance-futures-positioning'],
@@ -173,7 +196,9 @@ export function cellEnabledOrDefault(value: boolean | undefined, fallback: boole
 export const BUSINESS_MODULE_IDS = {
   dashboard: ['policy-path', 'fear-greed', 'capital', 'positioning', 'quotes'],
   calendar: ['macro-calendar'],
-  sentiment: ['news']
+  sentiment: ['news'],
+  /* 第四项不是模块卡（按指标列源），所以没有模块；空数组让 `modulesForBusiness` 返回空而不是崩。 */
+  coreIndicators: []
 } as const
 
 export function modulesForBusiness(business: keyof typeof BUSINESS_MODULE_IDS): readonly DashboardSourceModule[] {

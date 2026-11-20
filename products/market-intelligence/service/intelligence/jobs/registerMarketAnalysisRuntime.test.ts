@@ -8,6 +8,7 @@ import type { JobHandler } from '@platform/jobs'
 import { createEventBusRuntime } from '@platform/message-bus'
 
 import type { IntelligenceItem } from '../schema/intelligenceRecord'
+import { buildEvidenceFingerprint } from '../analysis/analysisHash'
 import { INTELLIGENCE_EVENT_TOPICS } from '../schema/intelligenceEvents'
 import {
   buildMarketAnalysisVerificationObservations,
@@ -15,17 +16,22 @@ import {
   registerMarketAnalysisRuntime,
   resolveMarketAnalysisSeverity
 } from './registerMarketAnalysisRuntime'
-import { ANALYSIS_SESSION_SLOTS_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, RUN_MARKET_ANALYSIS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB } from './marketAnalysisJobIds'
+import { ANALYSIS_SESSION_SLOTS_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, RUN_MARKET_ANALYSIS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB } from './marketAnalysisJobIds'
 
 import { createInMemoryMarketAnalysisSettingsStorage, createMarketAnalysisSettingsStore } from '../application/marketAnalysisSettingsStore'
 import { createMarketAnalysisSettingsService, type MarketAnalysisSettingsService } from '../application/marketAnalysisSettingsService'
 
-/** A run queued without a model: the invocation keeps following the platform default. */
+/** 产品装配下开关打开就必然选好了模型：运行不许在「没有模型」时发调用。 */
 function createRuntimeSettingsService(enabled = true): MarketAnalysisSettingsService {
   const now = () => '2026-09-28T00:00:00.000Z'
   return createMarketAnalysisSettingsService({
     store: createMarketAnalysisSettingsStore(
-      createInMemoryMarketAnalysisSettingsStorage({ enabled, providerId: '', modelId: '', updatedAt: now() }),
+      createInMemoryMarketAnalysisSettingsStorage({
+        enabled,
+        providerId: enabled ? 'test-provider' : '',
+        modelId: enabled ? 'test-model' : '',
+        updatedAt: now()
+      }),
       now
     ),
     now
@@ -122,7 +128,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     const classifiedItem = item({
       itemId: 'item-request-first-analysis', sourceId: 'alternative-fear-greed',
       publishedAt: '2026-09-28T00:00:00.000Z', detectedAt: '2026-09-28T00:00:00.000Z', severityHint: 'info',
-      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+      processingLabelsJson: JSON.stringify({ dataDomain: 'macro', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
     })
     const enqueueDefinition = vi.fn(async (definition) => ({ id: definition.id }))
     const jobRuntime = {
@@ -269,7 +275,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
       const snapshotHash = hash(snapshot)
       runtime.repository.appendSnapshot({ ...snapshot, snapshotHash })
       createRuns({ repository: runtime.repository, now: () => asOf, idFactory: () => 'mi-ar-orphan' })
-        .enqueue({ eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
+        .enqueue({ analysisKind: 'market', eventGroupId: eventGroup.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
       const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
       const dispatched = () => enqueueDefinition.mock.calls.map(([definition]) => definition).filter(definition => definition.handlerId === RUN_MARKET_ANALYSIS_JOB)
       await handlers.get(RECOVER_MARKET_ANALYSIS_RUNS_JOB)!({}, context)
@@ -283,6 +289,30 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
       expect(dispatched()).toHaveLength(1)
     } finally {
       runtime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses a manual request with provider-not-ready when the model wiring is missing, and says so', async () => {
+    // 三道门（编排器解析 / 补排入队 / 手动请求）靠同一份接线。缺装配时不许静默退回旧行为：
+    // 既要留下标记，也要让请求落「还没有可用的模型」，而不是照常入队然后 401。
+    const directory = await mkdtemp(`${tmpdir()}/mi-analysis-request-no-wiring-`)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const enqueueDefinition = vi.fn(async (definition: { id: string }) => ({ id: definition.id }))
+    try {
+      const jobRuntime = { registerHandler: vi.fn(), enqueueDefinition, listRuns: () => [], waitForRunTerminal: async () => ({ state: 'terminal', run: { status: 'completed' } }) } as never
+      const runtime = registerMarketAnalysisRuntime({
+        jobRuntime,
+        pipeline: { listItems: () => [], listRevisions: () => [] } as never,
+        publicQueryService: {} as never, structuredModelInvocation: { invoke: vi.fn() } as never,
+        dataDir: directory, now: () => '2026-09-28T00:01:00.000Z'
+      })
+      expect(warn.mock.calls.map(args => String(args[0])).join('\n')).toContain('MI_ANALYSIS_MODEL_WIRING_MISSING')
+      await expect(runtime.requestInitialAnalysis(undefined, undefined, 'initial', 'manual')).rejects.toThrow('analysis-provider-not-ready')
+      expect(enqueueDefinition).not.toHaveBeenCalled()
+      runtime.dispose()
+    } finally {
+      warn.mockRestore()
       await rm(directory, { recursive: true, force: true })
     }
   })
@@ -313,7 +343,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
       const { createAnalysisRunService } = await import('../analysis/analysisRunService')
       const snapshotHash = buildAnalysisSnapshotHash(snapshot)
       runtime.repository.appendSnapshot({ ...snapshot, snapshotHash })
-      createAnalysisRunService({ repository: runtime.repository, now: () => snapshot.asOf, idFactory: () => 'mi-ar-retry' }).enqueue({ eventGroupId: 'mi-eg-existing', snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
+      createAnalysisRunService({ repository: runtime.repository, now: () => snapshot.asOf, idFactory: () => 'mi-ar-retry' }).enqueue({ analysisKind: 'market', eventGroupId: 'mi-eg-existing', snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'manual.initial' })
       // The queued run is the answer, not a refusal: one freeze job for the group, still.
       const freezesSoFar = enqueueDefinition.mock.calls.filter(([definition]) => definition.handlerId === 'market-intelligence.freezeMarketAnalysisSnapshot').length
       await expect(runtime.requestInitialAnalysis(undefined, undefined, 'initial', 'manual')).resolves.toEqual({ itemId: classifiedItem.itemId, queued: true })
@@ -373,20 +403,20 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     try {
       // Off means off: nothing is armed and no work is created, so a stored "off" cannot spend a
       // request on the next tick. (The startup sync reads the stored settings, so wait for it.)
-      await vi.waitFor(() => expect(removed).toHaveLength(3))
+      await vi.waitFor(() => expect(removed).toHaveLength(4))
       expect(scheduled).toEqual([])
       // A stored "off" also clears anything an earlier process left armed.
-      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB])
+      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB])
       await expect(runtime.requestInitialAnalysis(classifiedItem.itemId, undefined, 'initial', 'manual'))
         .rejects.toThrow('analysis-not-enabled')
       expect(enqueueDefinition).not.toHaveBeenCalled()
 
       await runtime.updateSettings({ enabled: true, providerId: 'provider-1', modelId: 'model-1' })
-      expect(scheduled).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB])
+      expect(scheduled).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB])
 
       removed.length = 0
       await runtime.updateSettings({ enabled: false })
-      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB])
+      expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB, SWEEP_STALLED_ANALYSIS_RUNS_JOB])
     } finally {
       runtime.dispose()
       await rm(directory, { recursive: true, force: true })
@@ -399,7 +429,7 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     const classifiedItem = item({
       itemId: 'item-full-intelligence', sourceId: 'alternative-fear-greed',
       publishedAt: '2026-09-28T00:00:00.000Z', detectedAt: '2026-09-28T00:00:00.000Z', severityHint: 'info',
-      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+      processingLabelsJson: JSON.stringify({ dataDomain: 'macro', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
     })
     const pipeline = {
       listItems: () => [classifiedItem],
@@ -492,7 +522,7 @@ function validModelOutput(factId: string, evidenceRefId: string) {
     marketReaction: [],
     supportingEvidence: [{ statement: '数据来自已记录的情绪指标。', evidenceRefId }],
     counterEvidence: [],
-    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['后续数据保持可比'], invalidation: '出现相反事实', status: 'pending' }],
+    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持观察', conditions: ['后续数据保持可比'], invalidation: { kind: 'fact', factId, relation: 'below', statement: '出现相反事实' }, status: 'pending' }],
     directions: [
       { horizon: 'short', direction: 'bullish', rationale: '短期资金流转正。', confidence: 'medium', evidenceRefIds: [evidenceRefId] },
       { horizon: 'medium', direction: 'range', rationale: '中期缺少方向性资金。', confidence: 'low', evidenceRefIds: [evidenceRefId] },
@@ -544,6 +574,82 @@ function crossAssetSnapshot(asOf: string, range: '1h' | '24h' | '7d', btcReturn:
     relativeReturns: { btcMinusIndex: { state: 'available' as const, value: 0.5 }, ethMinusBtc: { state: 'available' as const, value: -1 } },
   }
 }
+
+describe('news interpretation end to end (R37 acceptance)', () => {
+  it('a queued per-item reading freezes a snapshot whose trigger points at that item', async () => {
+    // 线上那次：运行成功、快照里没有那条新闻、指针 NULL，读者拿到一篇市场综述。这条用例钉的就是
+    // 那一段：写端点 → 冻结载荷 → 快照 trigger + triggered-news 事实。
+    const directory = await mkdtemp(`${tmpdir()}/mi-analysis-news-e2e-`)
+    const asOf = '2026-11-16T12:08:39.563Z'
+    const publishedAt = '2026-11-16T11:40:00.000Z'
+    const handlers = new Map<string, JobHandler>()
+    const enqueueDefinition = vi.fn(async (definition: { id: string; handlerId?: string; payload?: unknown }) => {
+      // 真的跑一次冻结，而不是假装排上了：这是「快照里有没有指针」的唯一判据。
+      if (definition.handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB) {
+        await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+          definition.payload,
+          { jobRunId: 'e2e-freeze', signal: new AbortController().signal, log: async () => undefined, progress: async () => undefined }
+        )
+      }
+      return { id: definition.id }
+    })
+    const jobRuntime = {
+      registerHandler: (id: string, handler: JobHandler) => { handlers.set(id, handler) },
+      enqueueDefinition,
+      waitForRunTerminal: async () => ({ state: 'terminal', run: { status: 'completed', result: { analysisRunId: 'mi-ar-e2e' } } }),
+      listRuns: () => [], enqueueStartup: vi.fn(async (id: string) => ({ id }))
+    } as never
+    const newsItem = item({
+      itemId: 'news-e2e-1', sourceId: 'coindesk-rss',
+      title: 'Singapore, Germany test cross-border payments to reduce settlement risk',
+      summary: 'The two central banks trialled tokenised settlement.', publishedAt, detectedAt: publishedAt,
+      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+    })
+    const evidence = () => {
+      const ref = {
+        evidenceRefId: 'news:news-e2e-1', itemId: 'news-e2e-1', sourceId: 'coindesk-rss',
+        occurredAt: publishedAt, publishedAt, detectedAt: publishedAt, computedAt: null,
+        visibleAt: publishedAt, excerptHash: 'c'.repeat(64)
+      }
+      return { state: 'available', evidenceRefs: [ref], data: { evidenceRef: ref, title: newsItem.title, excerpt: 'body', sourceUrl: newsItem.url } }
+    }
+    const now = () => asOf
+    const settings = createMarketAnalysisSettingsService({
+      store: createMarketAnalysisSettingsStore(
+        createInMemoryMarketAnalysisSettingsStorage({ enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }),
+        () => asOf
+      ),
+      now: () => asOf
+    })
+    const runtime = registerMarketAnalysisRuntime({
+      jobRuntime,
+      pipeline: { listItems: () => [newsItem], listRevisions: () => [] } as never,
+      publicQueryService: { getEvidenceExcerpt: async () => evidence() } as never,
+      latestNewsSentiment: () => ({
+        itemId: 'news-e2e-1', sourceId: 'coindesk-rss', publishedAt, scoredAt: '2026-11-16T11:45:00.000Z',
+        polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'cross-border-settlement',
+        evidenceQuote: 'cross-border payments settlement risk', engine: 'model', caveats: []
+      }) as never,
+      structuredModelInvocation: { invoke: vi.fn() } as never,
+      settingsService: settings, dataDir: directory, now
+    })
+    try {
+      const result = await runtime.requestNewsInterpretation('news-e2e-1')
+      expect(result).toMatchObject({ state: 'queued', itemId: 'news-e2e-1' })
+      const group = runtime.repository.listEventGroups().find(candidate => candidate.eventRefs.includes('news-e2e-1'))!
+      const snapshot = runtime.repository.listSnapshots(group.id).at(-1)!
+      // 判据一：指针非空且 itemId 等于入参。
+      expect(snapshot.trigger).toMatchObject({ source: 'intelligence-item', itemId: 'news-e2e-1' })
+      // 判据二：那条新闻以 triggered-news:<itemId> 进了 facts，模型读得到。
+      expect(snapshot.facts.some(fact => fact.factId === 'triggered-news:news-e2e-1' && fact.metric === 'news-sentiment')).toBe(true)
+      // 判据三：指针可解析，所以焦点不是「不适用」——结论才有机会被要求引用它。
+      expect(runtime.repository.listRuns().at(-1)?.validationMode).not.toBe('not-applicable:no-change')
+    } finally {
+      runtime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+})
 
 describe('market analysis runtime sentiment wiring', () => {
   it('freezes the sentiment it read as citable facts before dispatching the run', async () => {
@@ -612,6 +718,104 @@ describe('market analysis runtime sentiment wiring', () => {
       expect(enqueueDefinition).toHaveBeenCalledWith(expect.objectContaining({ handlerId: RUN_MARKET_ANALYSIS_JOB }))
     } finally {
       runtime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('pins the triggering news into the snapshot with a pointer, and fails closed when it cannot', async () => {
+    // R37 §1/§2.3：新闻触发的首跑，`change` 永远为空（新闻不进变化记录），只能靠指针回答「读哪条」。
+    const directory = await mkdtemp(`${tmpdir()}/mi-analysis-trigger-pointer-`)
+    const asOf = '2026-11-16T09:07:42.000Z'
+    const publishedAt = '2026-11-16T08:46:00.000Z'
+    const handlers = new Map<string, JobHandler>()
+    const jobRuntime = {
+      registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler),
+      enqueueDefinition: vi.fn(async (definition: { id: string }) => ({ id: definition.id })),
+      listRuns: () => [],
+      enqueueStartup: vi.fn(async (id: string) => ({ id }))
+    } as never
+    const triggerItem = item({
+      itemId: 'news-trigger-1', sourceId: 'coindesk-rss', title: 'JPMorgan and DBS complete cross-border payment trial',
+      summary: 'The banks said the pilot has no direct market impact.', publishedAt, detectedAt: publishedAt,
+      processingLabelsJson: JSON.stringify({ dataDomain: 'sentiment', relevanceOutcome: 'full-intelligence', sentimentEligible: true })
+    })
+    const verdict = {
+      itemId: 'news-trigger-1', sourceId: 'coindesk-rss', publishedAt, scoredAt: '2026-11-16T09:07:50.718Z',
+      polarity: 'bearish' as const, strength: 3, confidence: 80, symbols: ['BTC'] as const,
+      reasonCode: 'etf-outflow', evidenceQuote: 'cross-border payment pilot with no direct crypto impact',
+      engine: 'model' as const, caveats: []
+    }
+    const evidence = () => {
+      const ref = {
+        evidenceRefId: 'news:news-trigger-1', itemId: 'news-trigger-1', sourceId: 'coindesk-rss',
+        occurredAt: publishedAt, publishedAt, detectedAt: publishedAt, computedAt: null,
+        visibleAt: publishedAt, excerptHash: 'b'.repeat(64)
+      }
+      return { state: 'available', evidenceRefs: [ref], data: { evidenceRef: ref, title: triggerItem.title, excerpt: 'body', sourceUrl: triggerItem.url } }
+    }
+    const build = (query: unknown) => registerMarketAnalysisRuntime({
+      jobRuntime,
+      pipeline: { listItems: () => [triggerItem], listRevisions: () => [] } as never,
+      publicQueryService: { getEvidenceExcerpt: query } as never,
+      latestNewsSentiment: () => verdict as never,
+      structuredModelInvocation: { invoke: vi.fn() } as never,
+      settingsService: createRuntimeSettingsService(), dataDir: directory, now: () => asOf
+    })
+    const context = { jobRunId: 'trigger-pointer', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
+    const group = {
+      id: 'mi-eg-trigger', schemaVersion: 1 as const, status: 'open' as const, groupType: 'sentiment' as const,
+      mergeKey: 'sentiment|news-trigger-1', firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-11-16T11:07:42.000Z',
+      eventRefs: ['news-trigger-1'], triggerCount: 0, reviewCount: 0, currentSummaryId: null,
+      supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
+    }
+    const runtime = build(async () => evidence())
+    try {
+      runtime.repository.appendEventGroup(group)
+      await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1', analysisKind: 'news' }, context)
+      const [snapshot] = runtime.repository.listSnapshots(group.id)
+      expect(snapshot!.trigger).toEqual({ source: 'intelligence-item', itemId: 'news-trigger-1', factId: 'triggered-news:news-trigger-1', evidenceRefId: 'news:news-trigger-1' })
+      const fact = snapshot!.facts.find(candidate => candidate.factId === 'triggered-news:news-trigger-1')!
+      expect(fact).toMatchObject({ metric: 'news-sentiment', domain: 'sentiment', subject: 'BTC', evidenceRefId: 'news:news-trigger-1' })
+      expect(String(fact.value)).toContain(triggerItem.title)
+      expect(String(fact.value)).toContain(verdict.evidenceQuote)
+      // 触发事实不进变化记录：变化仍是「市场数据动了什么」。
+      expect(snapshot!.change?.facts.some(candidate => candidate.metric === 'news-sentiment') ?? false).toBe(false)
+      // 只读接口与写路径共用同一个预计算：只读侧算出的当前指纹 == 写路径刚冻下的那份证据的指纹。
+      // 「查看 / 再次解读」只比这一对；`snapshotHash` 的输入含 asOf，读写各算一次必然不同，不参与判断。
+      const read = await runtime.readNewsInterpretation('news-trigger-1')
+      // 冻结刚排上、运行还没跑完：如实说「在飞」，不假装已有解读。
+      expect(read).toMatchObject({ state: 'in-flight', runId: expect.any(String) })
+      expect(read.currentEvidenceFingerprint).toBe(buildEvidenceFingerprint({ facts: snapshot!.facts, evidenceRefs: snapshot!.evidenceRefs }))
+      // 没有解读的条目走 none，且当前指纹仍然给得出来（界面据此判断能不能点）。
+      await expect(runtime.readNewsInterpretation('not-a-real-item')).resolves.toMatchObject({ state: 'none', currentEvidenceFingerprint: null })
+    } finally {
+      runtime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+
+    // 没有触发条目 → 没有指针（日历/时段/手动这条路照旧）。
+    const plainRuntime = build(async () => evidence())
+    try {
+      plainRuntime.repository.appendEventGroup(group)
+      await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf }, context)
+      expect(plainRuntime.repository.listSnapshots(group.id)[0]!.trigger).toBeUndefined()
+    } finally {
+      plainRuntime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+
+    // 建不出证据引用 → 冻结直接失败，不跑模型、不留快照。
+    const failingRuntime = build(async () => { throw new Error('evidence-read-failed') })
+    try {
+      failingRuntime.repository.appendEventGroup(group)
+      await expect(handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf, triggeredItemId: 'news-trigger-1', analysisKind: 'news' }, context))
+        .rejects.toThrow('analysis-missing-evidence:news-trigger-evidence-missing')
+      expect(failingRuntime.repository.listSnapshots(group.id)).toEqual([])
+    } finally {
+      failingRuntime.dispose()
       await rm(directory, { recursive: true, force: true })
     }
   })

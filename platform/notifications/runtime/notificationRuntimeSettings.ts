@@ -10,6 +10,7 @@ import type {
   NotificationEventCatalogEntry
 } from '../contracts/notificationEventCatalog'
 import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
+import type { PushChannelsResolution } from '../delivery/pushChannelResolution'
 import {
   isSurfaceAvailable,
   resolveSurfaceSelection,
@@ -26,7 +27,7 @@ export type NotificationSettingsSurfaceInput = {
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
   /** 目标通道的唯一派生（与推送路由同一份判定，不另算一次）。 */
-  resolvePushChannel?: () => Promise<{ ok: true; channelId: string } | { ok: false }>
+  resolvePushChannels?: () => Promise<PushChannelsResolution>
   /** 通道侧「最近一次真实投递」：一次都没投过时回 null，界面据此说「还没有记录」而不是「未就绪」。 */
   lastDelivery?: (channelId: string) => {
     status: 'delivered' | 'failed' | 'unknown-after-send'
@@ -180,9 +181,12 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
           lastPushFailureReason = push.reason ?? null
         }
       }
-      const resolvePushChannel = input.resolvePushChannel
-      const channel = resolvePushChannel === undefined ? null : await resolvePushChannel()
-      const lastDelivery = channel?.ok === true ? (input.lastDelivery?.(channel.channelId) ?? null) : null
+      const resolvePushChannels = input.resolvePushChannels
+      const resolution = resolvePushChannels === undefined ? null : await resolvePushChannels()
+      // 「最近一次真实投递」只能报一条：只有**恰好一条**可用通道时才有唯一答案；
+      // 多条时这里是 `null`（说不出是哪条），逐通道的结局在记录里，等界面按 `channels` 展示。
+      const only = resolution?.ok === true && resolution.channels.length === 1 ? resolution.channels[0] : undefined
+      const lastDelivery = only === undefined ? null : (input.lastDelivery?.(only.id) ?? null)
       return {
         lastDelivery,
         toastEnabled: settings.toastEnabled,
@@ -215,7 +219,7 @@ export function composeNotificationSettingsSurface(
     getSettings: () => Promise<NotificationRuntimeSettings>
     updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
     getPushTargets?: () => Promise<readonly unknown[]>
-    resolvePushChannel?: () => Promise<{ ok: true; channelId: string } | { ok: false }>
+    resolvePushChannels?: () => Promise<PushChannelsResolution>
     lastDelivery?: (channelId: string) => {
       status: 'delivered' | 'failed' | 'unknown-after-send'
       at: string
@@ -233,7 +237,7 @@ export function composeNotificationSettingsSurface(
     getSettings: deps.getSettings,
     updateSettings: deps.updateSettings,
     getPushTargets: deps.getPushTargets,
-    ...(deps.resolvePushChannel === undefined ? {} : { resolvePushChannel: deps.resolvePushChannel }),
+    ...(deps.resolvePushChannels === undefined ? {} : { resolvePushChannels: deps.resolvePushChannels }),
     ...(deps.lastDelivery === undefined ? {} : { lastDelivery: deps.lastDelivery }),
     pushWired: deps.pushWired,
     ...internals

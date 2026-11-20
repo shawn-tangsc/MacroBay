@@ -73,8 +73,36 @@
   font-size: 11.5px;
 }
 
-/* 原因码只在这一个折叠区里，默认收起；展开后恰好一处。 */
-.mi-analysis-send__reason {
+/*
+ * ⓘ 浮层里的逐通道说明：一个通道一行「名字 · 人话原因」。
+ * 名字用正文色、原因用 muted，一眼能分清「哪条」与「怎么了」；不换色、不加重 ——
+ * 这是说明，不是状态徽标。
+ */
+.mi-analysis-send__channel-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mi-analysis-send__channel {
+  display: flex;
+  gap: 4px;
+  align-items: baseline;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.mi-analysis-send__channel-name {
+  color: var(--text-strong);
+}
+
+.mi-analysis-send__channel-name::after {
+  content: ' · ';
   color: var(--muted);
-  font-size: 11px;
+}
+
+.mi-analysis-send__channel-detail {
+  color: var(--muted);
 }

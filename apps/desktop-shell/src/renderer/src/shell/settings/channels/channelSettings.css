@@ -147,6 +147,7 @@
 
 .channel-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   min-height: 56px;
@@ -161,6 +162,27 @@
 
 .channel-row:hover {
   background: var(--surface-2);
+}
+
+/* 「曾被『只允许一条』规则自动停用」：行内容下方一整行（原型 2026-11-13）。
+   没有证据时这个块根本不渲染——不留空行、不灰着。 */
+.channel-row-hint {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+/* 失败那一句复用同一屏已有的 `.channel-row-error`（红只落在点/边框/图标上，前景保持次要色）；
+   这里只补「整行宽度」这条布局，不新造一个只差一个字的失败选择器，也不加第二处危险色前景。 */
+.channel-row-hint .channel-row-error {
+  flex-basis: 100%;
+}
+
+.channel-row-hint .inline-notice {
+  flex: 1;
 }
 
 .channel-row-dot {

@@ -260,7 +260,7 @@ export function DailyBriefingSettingsPanel({ onState, initialSection }: Readonly
       />}
       action={periodsFailed || periods === null
         ? null
-        : <Button data-briefing-period-add="true" onClick={() => setAdding(true)} type="link">{copy.add}</Button>}
+        : <Button className="text-action" data-briefing-period-add="true" onClick={() => setAdding(true)} size="small" type="text">{copy.add}</Button>}
 
     >
         <BriefingPeriodList

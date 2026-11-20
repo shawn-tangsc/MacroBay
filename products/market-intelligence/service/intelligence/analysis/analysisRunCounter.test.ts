@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { analysisRunCounterPolicy, countAnalysisRuns, lastAutoRunAt } from './analysisRunCounter'
+import { analysisRunCounterPolicy, countAnalysisRuns, countModelCallsToday, lastAutoRunAt } from './analysisRunCounter'
 
 const now = '2026-10-09T12:00:00.000Z'
 const row = (overrides: Record<string, unknown> = {}) => ({
@@ -29,6 +29,27 @@ it('counts delivered runs across every group, not per group', () => {
     calendarRunsToday: 2, calendarRunsThisHour: 1,
     scheduledRunsToday: 1
   })
+})
+
+it('counts a failed run and its retry as two lines: failures are never refunded', () => {
+  // 一次运行一行、失败也计：重试是**新的**一行，不是把上一行改成成功。
+  const counts = countAnalysisRuns(repository({
+    a: [row({ id: 'mi-ledger-first' }), row({ id: 'mi-ledger-retry', createdAt: '2026-10-09T12:30:00.000Z' })]
+  }), '2026-10-09T13:00:00.000Z')
+  expect(counts.dayRuns).toBe(2)
+  expect(counts.calendarRunsToday).toBe(2)
+})
+
+it('answers "how many model calls today" from the call record, not from the run count', () => {
+  const calls = countModelCallsToday({
+    analysisIo: { countCreatedSince: (iso: string) => {
+      expect(iso).toBe('2026-10-09T00:00:00.000Z')
+      return 7
+    } }
+  }, now)
+  expect(calls).toEqual({ day: '2026-10-09', calls: 7 })
+  // 没有 IO 记录（老库/未接）时如实报 0，不拿运行数冒充调用数。
+  expect(countModelCallsToday({}, now)).toEqual({ day: '2026-10-09', calls: 0 })
 })
 
 it('ignores skips, other days, and restart compensation', () => {

@@ -34,6 +34,9 @@ export const providerLinks: ProviderLinks = {
   cryptopanic: { website: 'https://cryptopanic.com/', signupUrl: 'https://cryptopanic.com/developers/api/' },
   '0xrouter': { website: 'https://0xrouter.app/', signupUrl: 'https://0xrouter.app/index.html?invite=tangscsh', invite: true, notice: 'private-data-source' },
   realmarketapi: { website: 'https://realmarketapi.com/', signupUrl: 'https://realmarketapi.com/?via=Macrobay', invite: true },
+  /* 注册入口必须是**拿 key 的那一页**，不是首页：首页进去还要再找一圈。
+     不带 `?via=` / `?invite=`——那两个参数会被界面当成邀请源。 */
+  cryptoetf: { website: 'https://cryptoetf.today/', signupUrl: 'https://cryptoetf.today/en/dashboard' },
   'policy-path': { website: 'https://polymarket.com/zh?tag=fed' },
   twelvedata: { website: 'https://twelvedata.com/', signupUrl: 'https://twelvedata.com/pricing' },
   coinbase: { website: 'https://www.coinbase.com/' },

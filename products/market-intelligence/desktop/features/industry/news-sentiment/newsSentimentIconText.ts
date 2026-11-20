@@ -11,7 +11,10 @@ export const NEWS_SENTIMENT_ICON_KEYS = [
   'news.sentiment.refresh',
   'news.sentiment.more',
   'news.sentiment.translate',
-  'news.sentiment.retranslate'
+  'news.sentiment.retranslate',
+  'news.sentiment.interpretation',
+  'news.sentiment.interpretationView',
+  'news.sentiment.interpretationAgain'
 ] as const
 
 export type NewsSentimentIconKey = (typeof NEWS_SENTIMENT_ICON_KEYS)[number]
@@ -28,7 +31,10 @@ export function createIconTextResolver(text: NewsSentimentText): (key: string) =
     'news.sentiment.refresh': text.refresh,
     'news.sentiment.more': text.drawer.moreActions,
     'news.sentiment.translate': text.drawer.translationStatus?.translateOne ?? text.drawer.detail.translateBody,
-    'news.sentiment.retranslate': text.drawer.translationStatus?.retranslateOne ?? text.drawer.detail.translateBody
+    'news.sentiment.retranslate': text.drawer.translationStatus?.retranslateOne ?? text.drawer.detail.translateBody,
+  'news.sentiment.interpretation': text.drawer.menuInterpretation ?? '',
+  'news.sentiment.interpretationView': text.drawer.menuInterpretationView ?? '',
+  'news.sentiment.interpretationAgain': text.drawer.menuInterpretationAgain ?? ''
   }
   return (key: string): string => (labels as Record<string, string | undefined>)[key] ?? ''
 }

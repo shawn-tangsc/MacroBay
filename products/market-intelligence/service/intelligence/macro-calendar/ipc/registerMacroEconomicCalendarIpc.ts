@@ -16,6 +16,13 @@ import { isMarketCalendarFreshness, isMarketCalendarPage, isMarketCalendarQuery,
 import { createMacroCalendarLinkedQueryService, type SafeMarketQuery } from '../macroCalendarLinkedQueryService'
 import { linkZeroXRouterEvent, zeroXRouterOfficialEventLinks } from '../0xrouter-calendar/zeroXRouterOfficialEventLinkRegistry'
 import { createMacroCalendarWriteActions } from '../macroCalendarWriteActions'
+import { listUnmappedCalendarObservationsForRendering } from '../rendering/marketCalendarUnmappedMonthRead'
+import { readCalendarEventIndex } from '../rendering/marketCalendarEventIndexRead'
+import { readCalendarMappingRules } from '../rendering/marketCalendarMappingRulesRead'
+import { readEventSourceWrites } from '../rendering/marketCalendarEventSourceWritesRead'
+import { readCalendarCodeTable } from '../rendering/marketCalendarCodeTableRead'
+import { readCalendarEventList } from '../rendering/marketCalendarEventListRead'
+import { readCalendarValueRevisions } from '../marketCalendarValueRevisionAudit'
 import {
   isEmpty,
   isProviderInput,
@@ -41,7 +48,9 @@ export function registerMacroEconomicCalendarIpc(
   blsEmploymentSchedule?: BlsScheduleAndValuesSyncWorkflow,
   fedFomcRefresh?: FedFomcManualRefreshService,
   market?: SafeMarketQuery & { refresh: (input: unknown) => unknown; readCollectionFreshness?: () => Promise<unknown>
-    refreshNow?: (input: unknown) => Promise<unknown> }
+    refreshNow?: (input: unknown) => Promise<unknown> },
+  /** 渲染专用只读口的数据库句柄（未映射月读 + 事件清单）。读口本身只在 `rendering/` 里。 */
+  unmappedMonth?: { database: Parameters<typeof listUnmappedCalendarObservationsForRendering>[0] }
 ): void {
   const releaseTimeOverrides = connection?.releaseTimeOverrides
   // Seed the synchronous view before the first query; until it lands, a row falls back to its
@@ -91,6 +100,95 @@ export function registerMacroEconomicCalendarIpc(
       }
     } catch {}
     return { state: 'unavailable', failureCode: 'query-unavailable' }
+  })
+  /**
+   * **未映射观测的月读**（渲染专用，用户 2026-11-16）：只读、无副作用。
+   * 「读不到」用 `state: 'unavailable'` 表达——**不许用空数组**，那会让读者把「没读到」当成「没有」。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryUnmappedMonth, async payload => {
+    try {
+      const month = (payload as { month?: unknown } | undefined)?.month
+      if (typeof month !== 'string' || month === '' || unmappedMonth === undefined) {
+        return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      }
+      const read = listUnmappedCalendarObservationsForRendering(unmappedMonth.database, { month })
+      return { state: 'available', items: read.entries, undated: read.undated, superseded: read.superseded }
+    } catch {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+  })
+  /**
+   * **事件清单**（渲染专用，用户 2026-11-16）：一行一个事件身份，按「最近一次发布」倒序分页。
+   * 空数组只表示「没有匹配」；读不到给 `unavailable`——两者不许混。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryEvents, async payload => {
+    try {
+      if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+      const query = (payload ?? {}) as { cursor?: unknown; pageSize?: unknown; nameQuery?: unknown; countryCode?: unknown }
+      const read = readCalendarEventIndex(unmappedMonth.database, {
+        today: new Date().toISOString().slice(0, 10),
+        ...(typeof query.cursor === 'string' ? { cursor: query.cursor } : {}),
+        ...(typeof query.pageSize === 'number' ? { pageSize: query.pageSize } : {}),
+        ...(typeof query.nameQuery === 'string' ? { nameQuery: query.nameQuery } : {}),
+        ...(typeof query.countryCode === 'string' ? { countryCode: query.countryCode } : {})
+      })
+      return read
+    } catch {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+  })
+  /** **映射规则表**（只读、渲染专用）：已映射 85 条 + 未映射 id（按行数排序）+ 三个计数。 */
+  register(productId, marketCalendarPublicPolicy.methods.queryMappingRules, async () => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    return readCalendarMappingRules(unmappedMonth.database)
+  })
+  /**
+   * **事件清单**（只读、渲染专用）：弹框「事件」页签用——一场事件一行，**不参与映射**。
+   * 与经济指标分开两个读口：事件没有统计期，混在一起会让「缺统计期」这个诊断失去意义。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryEventList, async () => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    return readCalendarEventList(unmappedMonth.database)
+  })
+  /** **标准码表整表**（只读、渲染专用）：弹框「码表」页签用，244 行一次下发。 */
+  register(productId, marketCalendarPublicPolicy.methods.queryCodeTable, async () => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    return readCalendarCodeTable(unmappedMonth.database)
+  })
+  /**
+   * **按事件身份取各来源的写入/观测**（只读、渲染专用）：入参必须有期次。
+   * 少了期次就返回输入非法，而不是「返回这个指标所有月份」——那会把几十期混成一块。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryEventSourceWrites, async payload => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    const input = (payload ?? {}) as { metricKey?: unknown; scheduledDate?: unknown }
+    try {
+      return readEventSourceWrites(unmappedMonth.database, {
+        metricKey: input.metricKey,
+        scheduledDate: input.scheduledDate
+      })
+    } catch {
+      return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    }
+  })
+  /**
+   * **数值修订审计**（只读、渲染专用）：详情里的并列行。四元组缺一个就返回输入非法——
+   * 拿不完整身份去查，会拿到「可能是另一行」的记录，比不显示更糟。
+   */
+  register(productId, marketCalendarPublicPolicy.methods.queryValueRevisions, async payload => {
+    if (unmappedMonth === undefined) return { state: 'unavailable', reasonCode: 'query-unavailable' }
+    const input = (payload ?? {}) as { countryCode?: unknown; metricKey?: unknown; periodKey?: unknown
+      firstScheduledDate?: unknown }
+    if (typeof input.countryCode !== 'string' || input.countryCode === ''
+      || typeof input.metricKey !== 'string' || input.metricKey === ''
+      || typeof input.periodKey !== 'string' || input.periodKey === ''
+      || typeof input.firstScheduledDate !== 'string' || input.firstScheduledDate === '') {
+      return { state: 'unavailable', reasonCode: 'query-input-invalid' }
+    }
+    return readCalendarValueRevisions(unmappedMonth.database, {
+      countryCode: input.countryCode, metricKey: input.metricKey,
+      periodKey: input.periodKey, firstScheduledDate: input.firstScheduledDate
+    })
   })
   // One read method, no payload: the caller asks "how old is the calendar", never "how old
   // is this source in this month". A read that fails answers `unavailable`, never "nothing".

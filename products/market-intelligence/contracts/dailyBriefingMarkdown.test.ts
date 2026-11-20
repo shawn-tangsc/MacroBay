@@ -145,6 +145,13 @@ describe('the copied text says when the release time was not published', () => {
 })
 
 describe('a web-sourced value says so in the copy too (v2.128)', () => {
+  it('prints the synthesized overturn sentence that the page shows', () => {
+    // 合成版的推翻条件是一条文档级 `refutation`；页面上看得到，导出的文字里也必须看得到。
+    const doc = document({ conclusion: { ...document().conclusion!, refutation: '若 ETF 转为净流入，则偏空判断失效。' } })
+    const markdown = dailyBriefingToMarkdown(doc, options)
+    expect(markdown).toContain('若 ETF 转为净流入，则偏空判断失效。')
+  })
+
   it('prints the same value label the card prints, suffix included', () => {
     const base = document()
     const web = dailyBriefingToMarkdown({
@@ -522,5 +529,65 @@ describe('the copied text carries the whole title', () => {
     // text is the full sentence, and it must not arrive pre-truncated.
     expect(markdown).toContain(long)
     expect(markdown).not.toContain(`${long.slice(0, 40)}…`)
+  })
+})
+
+describe('the copied text keeps a quiet window empty', () => {
+  it('prints neither quiet sentence and no news section, for either wording', () => {
+    // 用户 2026-11-16：这句只在「数据缺口与限制」里留痕；复制文本与卡片一致——一空就整块不显示。
+    for (const code of ['past-24h-no-release', 'past-24h-no-high-impact-release'] as const) {
+      const copied = dailyBriefingToMarkdown({
+        ...document(), news: { items: [], macro: [], notes: { macroEmpty: code } }
+      }, options as never)
+      expect(copied, code).not.toContain(labels.pastWindow.noRelease)
+      expect(copied, code).not.toContain(labels.pastWindow.noHighImpact)
+      expect(copied, code).not.toContain(`## ${labels.sections.news}`)
+      expect(copied, code).not.toContain(labels.macroUnreadable.trim())
+    }
+  })
+})
+
+describe('the copied text draws no macro block when the calendar could not be read', () => {
+  it('omits the whole news section for every unreadable reason', () => {
+    // 用户 2026-11-15：读不到就整块不显示，屏幕上、复制文本、导出图一致；原因留给问题清单。
+    for (const code of ['calendar-collect-failed', 'calendar-unavailable', 'calendar-stale', 'calendar-catch-up-timeout']) {
+      const doc = { ...document(), news: { items: [], macro: [], notes: { macroEmpty: code } } }
+      const text = dailyBriefingToMarkdown(doc, options as never)
+      expect(text, code).not.toContain(`## ${labels.sections.news}`)
+      expect(text, code).not.toContain(labels.macroUnreadable.trim())
+    }
+  })
+})
+
+describe('the copied text carries the same two blocks as the page', () => {
+  it('prints the window total, the unshown count and the schedule, never the placeholder', () => {
+    const base = document()
+    const withWindow = {
+      ...base,
+      news: { ...base.news, macro: [], notes: { ...base.news.notes, macroWindow: { total: 7, indicators: 1, centralBank: 5, financial: 1, hidden: 4 } } },
+      next: {
+        items: [],
+        note: 'next-7d-importance-unknown',
+        tier1Upcoming: [{ metricKey: 'US.CPI.NSA.YOY', title: 'CPI 年率', scheduledAt: '2026-12-10T00:00:00.000Z', releaseDate: '2026-12-10' }]
+      }
+    } as never
+    const text = dailyBriefingToMarkdown(withWindow, options as never)
+    expect(text).toContain('7')
+    expect(text).toContain('4')
+    // 用户 2026-11-15：判不了重要性也不印占位句，空态整块不解释；排期是我们自己的清单，照印。
+    expect(text).not.toContain('无法判定')
+    expect(text).toContain('一级指标排期')
+    expect(text).toContain('2026-12-10')
+  })
+
+  it('prints no next block at all, not even its heading, when no event qualifies', () => {
+    for (const note of ['next-7d-no-high-impact-event', 'next-7d-importance-unknown']) {
+      const empty = { ...document(), next: { items: [], note } } as never
+      const text = dailyBriefingToMarkdown(empty, options as never)
+      expect(text, note).not.toContain(`## ${labels.sections.next}`)
+      for (const placeholder of ['无法判定', '暂无', '0 个', '没有高影响事件']) {
+        expect(text, `${note}: ${placeholder}`).not.toContain(placeholder)
+      }
+    }
   })
 })

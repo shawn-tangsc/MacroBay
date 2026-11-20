@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../shared/i18n/productText'
-import { EconomicCalendar, macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
+import { macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
 import { intelligenceFearGreedClient } from '../../features/industry/fear-greed'
 import { intelligenceFundingRateHistoryClient, intelligenceOpenInterestClient } from '../../features/industry/positioning'
 import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
@@ -23,6 +23,7 @@ import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import { runSourceNowOnce, testSourceConnectionOnce, writeSourceEnabled } from '../../settings/intelligence-sources/sourceWrites'
 import type { SourceFilter } from '../../settings/intelligence-sources/SettingsSourceTree'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
+import type { CalendarDrawerRequest } from './macroIndicatorDrawerModel'
 import { createCalendarCardReactionReader } from './calendarCardReaction'
 
 import { SampleModeProvider, useSampleMode } from './SampleModeProvider'
@@ -125,7 +126,7 @@ function IntelligencePageBody(): React.ReactElement {
    * 但暂时没有入口**。所以 `'portal'` 这一档现在没有任何调用点能落到；它不是死代码，等用户想好
    * 多智能体的入口怎么给，再决定是恢复一个入口还是把这一屏下线。别当成无主代码清掉。
    */
-  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('dashboard')
+  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'briefing'>('dashboard')
   const sampleAvailable = sample.state.scenarioCount > 0
     && sample.state.unavailableReason !== 'no-scenario'
   const openCryptoPrimary = (): void => {
@@ -150,9 +151,22 @@ function IntelligencePageBody(): React.ReactElement {
       // 进入失败保持真实模式；开关仍为 off。
     }
   }
-  // The card asks for the calendar page and hands over what to look at; the page consumes it
-  // when it renders, so no shell navigation contract had to change.
-  const [calendarTarget, setCalendarTarget] = useState<{ month: string; eventKey?: string } | undefined>()
+  /**
+   * 打开日历抽屉的**唯一入口**（旧日历页已删，日历只剩这一扇抽屉）。
+   *
+   * 三个入口都走这里：看板那张日历卡的图标（它指着自己正在看的那个月）、行上的「在日历中打开」
+   * （再加一条 `eventKey`）、右栏发布日历的图标。抽屉挂在 `CryptoIntelligenceDashboard` 里，
+   * 页面层只递一个请求——序号加一 = 请它打开，`month` / `eventKey` 是这一次要落到的位置，
+   * 不再只是「打开一下」：读者点了 3 月那张卡却看到 11 月，就是这个参数被丢掉造成的。
+   */
+  const [calendarDrawerRequest, setCalendarDrawerRequest] = useState<CalendarDrawerRequest>({ seq: 0 })
+  const openCalendar = (month?: string, eventKey?: string): void => {
+    setCalendarDrawerRequest((previous) => ({
+      seq: previous.seq + 1,
+      ...(month === undefined ? {} : { month }),
+      ...(eventKey === undefined ? {} : { eventKey })
+    }))
+  }
   /**
    * The 0xRouter month, paged, in the reader's language.
    *
@@ -165,14 +179,8 @@ function IntelligencePageBody(): React.ReactElement {
     (month: string, asOf: string) => readMarketCalendarMonth(marketCalendarClient, { month, locale: language === 'en-US' ? 'en' : 'zh', asOf }),
     [language]
   )
-  /**
-   * The same month, narrowed to its events for the chart: the lines need what happened and when, not
-   * how the provider's own refresh went. The drawer gets the full read, because its body prints both.
-   */
-  const readMarketEvents = useCallback(
-    async (month: string, asOf: string) => (await readMarketMonth(month, asOf))?.events ?? null,
-    [readMarketMonth]
-  )
+  // 图表竖线、曲线标注与抽屉**读同一次月查询**：整页（事件 + 来源状态）一起给，消费方各取所需。
+  // 以前这里把它削成 `events` 再往下传，抽屉就永远拿不到「这条源已停止出数」。
 
   return (
     <div className="mi-sample-surface">
@@ -204,28 +212,19 @@ function IntelligencePageBody(): React.ReactElement {
           onConfigureWebSearch={openWebSearchSettings}
           onOpenSettings={() => openConfigDrawer('briefing')}
         />
-      ) : activeView === 'calendar' ? (
-        <EconomicCalendar
-          client={macroEconomicCalendarClient}
-          now={sampleNow}
-          onBack={() => setActiveView('dashboard')}
-          openTarget={calendarTarget}
-          text={text.calendar}
-          onOpenSettings={() => openConfigDrawer(sourcesDataRequestFor({ business: 'calendar' }))}
-        />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
           onOpenAnalysisSettings={() => openConfigDrawer({ menu: 'analysis' })}
           onOpenSettings={(focus) => openConfigDrawer(sourcesDataRequestFor(focus))}
-          onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
+          onOpenCalendar={openCalendar}
           text={text}
           locale={language}
           // The one event-title list the product keeps, read here because the page entry owns the
           // locale: the cross-asset panel names its lines with it instead of growing a second copy.
           calendarEventTitles={text.analysisWorkspace.readableNames.eventName}
           // The chart's event lines read both calendar routes; the provider's is injected here.
-          readMarketEvents={readMarketEvents}
+          readCalendarMonth={readMarketMonth}
           // 卡片上一行「±30 分」反应（原型 ④）：读法在 `calendarCardReaction.ts` 里，页面只给客户端。
           readCalendarReaction={readCalendarCardReaction}
           // The calendar's own detail surface, injected: the cross-asset feature never learns the
@@ -270,7 +269,7 @@ function IntelligencePageBody(): React.ReactElement {
           /* 「采集与数据」里点源名/红行：切到「数据源」屏，定位到那个源（滚动/描边/焦点归详情）。 */
           /* 舆情卡右边的入口卡 → 抽屉「内容处理」屏（菜单 7 项不变，同一条 openConfigDrawer 路）。 */
           onOpenProcessingSettings={() => openConfigDrawer({ menu: 'processing' })}
-          onOpenCalendar={() => setActiveView('calendar')}
+          openIndicatorDrawerRequest={calendarDrawerRequest}
           text={text.dashboard}
         />
         </MarketAnalysisDashboardLayout>

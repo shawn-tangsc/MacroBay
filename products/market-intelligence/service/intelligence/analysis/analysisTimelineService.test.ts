@@ -25,7 +25,7 @@ describe('analysisTimelineService', () => {
 
     const page = service.listTimeline({ eventGroupId: 'mi-eg-1', limit: 50 })
 
-    expect(page).toEqual({ schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: fullAssessment, direction: null, version: 1, triggerStatus: null, groupType: null, groupSubject: null }], nextCursor: 'opaque-cursor' })
+    expect(page).toEqual({ schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: fullAssessment, direction: null, version: 1, runKey: 'mi-ar-1', failureCode: null, triggerStatus: null, groupType: null, groupSubject: null }], nextCursor: 'opaque-cursor' })
     expect(() => JSON.parse(page.nextCursor!)).toThrow()
   })
 

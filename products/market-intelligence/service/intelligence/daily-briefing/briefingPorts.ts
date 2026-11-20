@@ -16,16 +16,26 @@ import type { BriefingDiagnosticLog } from './dailyBriefReadinessGate'
 /** 读者/排期触发的一次补跑：有超时上限，返回结果不重要，失败由调用方当「这次没补上」。 */
 export type BriefingCalendarRefresh = (input: { timeoutMs: number }) => Promise<unknown>
 
-export type BriefingCalendarCommands = { refreshNow?: BriefingCalendarRefresh }
+export type BriefingCalendarCommands = {
+  refreshNow?: BriefingCalendarRefresh
+  /**
+   * 运行时已注册的作业定义 id（`jobRuntime.listSchedules()` 的投影）。补跑清单「谁此刻在采」
+   * 只认它；与 `refreshNow` 同属「组合根交给日历的运行时事实」，所以挂同一个对象上，
+   * 装配根不必每加一个口径就往收口文件里多写两行。
+   */
+  registeredScheduleIds?: () => readonly string[]
+}
 
 /**
  * 补跑命令的持有者：**没绑时是 `undefined`**，与「绑了但调用失败」是两个分支，不能混成一个默认函数。
  */
-export function createBriefingCalendarCommands(): Readonly<{
+export function createBriefingCalendarCommands(
+  registeredScheduleIds?: () => readonly string[]
+): Readonly<{
   commands: BriefingCalendarCommands
   bind: (refresh: BriefingCalendarRefresh) => void
 }> {
-  const commands: BriefingCalendarCommands = {}
+  const commands: BriefingCalendarCommands = registeredScheduleIds === undefined ? {} : { registeredScheduleIds }
   return { commands, bind: (refresh) => { commands.refreshNow = refresh } }
 }
 

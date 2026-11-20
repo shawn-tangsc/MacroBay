@@ -24,7 +24,8 @@ export const BRIEFING_MACRO_VALUE_LIMIT = 5
 /** 回查的输入：一条窗口内的事件。只放判断需要的那几样，不把整条事件搬进来。 */
 export type BriefingMacroValueEvent = Readonly<{
   eventKey: string
-  importance: 'high' | 'medium' | 'low'
+  /** 可缺省＝来源没提供重要性；这种事件不判高影响，也就不进回查队列。 */
+  importance?: 'high' | 'medium' | 'low'
   scheduledAt: string
   /** 加密相关性（0–100），缺省按 0 排——绝不因为"不确定"就当成很相关。 */
   relevance?: number

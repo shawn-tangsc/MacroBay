@@ -170,7 +170,7 @@ export function ModelServiceRequestConfigEndpointFields({
         disabled={!canDelete}
         icon={Trash2}
         onSelect={() => removeChatEndpoint(protocol)}
-        resolveText={(key) => (key === 'modelService.endpointDelete' ? labels.endpointDelete : '')}
+        resolveText={(key) => ({ 'modelService.endpointDelete': labels.endpointDelete } as Readonly<Record<string, string>>)[key] ?? ''}
         size="sm"
         tone="danger"
       />

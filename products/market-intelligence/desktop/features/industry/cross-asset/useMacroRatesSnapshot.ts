@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { withQueryDeadline } from '../../../shared/ipc/queryDeadline'
 
 import type { MacroRatesSnapshotView } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import type { MacroRatesSnapshotClient } from '../../../shared/ipc/macroRatesSnapshotClient'
@@ -34,16 +35,26 @@ export function useMacroRatesSnapshot({ client, disabled = false }: { client?: M
     }
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
+    /** 首答之前的连续失败数：读口挂了 10 秒期限，但轮询本身不该无限「加载中」。 */
+    let failures = 0
     const poll = async (): Promise<void> => {
       try {
-        const result = await client.query()
+        const result = await withQueryDeadline(client.query())
         if (!active) return
         snapshotRef.current = result
+        failures = 0
         setSnapshot(result)
         setState(result.state === 'unavailable' ? 'unavailable' : 'ready')
       } catch {
         if (!active) return
-        setState(snapshotRef.current === undefined ? 'loading' : 'ready')
+        // 每轮读都有 10 秒期限，但轮询本身不该无限「加载中」：首答前连续 3 轮没有答案就落
+        // `unavailable`（可重试、不是「没有数据」）；有数据之后保持旧行。轮询继续，恢复时自己变 ready。
+        if (snapshotRef.current !== undefined) {
+          setState('ready')
+        } else {
+          failures += 1
+          setState(failures >= 3 ? 'unavailable' : 'loading')
+        }
       }
       // Always the daily cadence: nothing in this snapshot can change between two closes.
       if (active) timer = setTimeout(() => { void poll() }, macroRatesViewPolicy.settledQueryMs)

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
+import { marketAnalysisTimelineLimits } from '../../../contracts/marketAnalysisTimelineLimits'
 import type {
   AnalysisRun,
   AnalysisSummary,
@@ -27,20 +28,22 @@ import {
 import { linkRunJobRun as attachRunJobRun, linkTriggerLedgerRun as attachTriggerLedgerRun } from './marketAnalysisRunLinks'
 import { listLatestSignalLedgerStates } from './marketAnalysisSignalLedger'
 import { runsByIds } from './marketAnalysisRunsByIds'
-import { ensureRunColumns } from './marketAnalysisColumns'
+import { migrateAnalysisSchema } from './marketAnalysisMigration'
+import type { AnalysisFailedRunPage } from './marketAnalysisFailedRunRepository'
+import { createAnalysisRecordReader } from './analysisRecordReader'
 import { failureEpisodeFor } from './marketAnalysisFailureEpisode'
 import {
-  fromEventGroup, fromLedger, fromRun, fromSnapshot, fromTimeline, restateAsSkipped,
-  stableMergeKey, validateArchiveMetadata, validateEventGroup, validateRun, validateSnapshot,
-  validateSummaryReferences, type MarketAnalysisArchiveMetadata, type StoredRow
+  fromEventGroup, fromLedger, fromRun, fromSnapshot, fromTimeline, requireSummaryAnalysisKind,
+  restateAsSkipped, stableMergeKey, validateArchiveMetadata, validateEventGroup, validateRun,
+  validateSnapshot, validateSummaryReferences, type MarketAnalysisArchiveMetadata, type StoredRow
 } from './marketAnalysisRepositoryRows'
 
 /** 归档元数据的形状与「怎么校验它」在同一处：行换算模块拥有它，这里只转出去。 */
 export type { MarketAnalysisArchiveMetadata } from './marketAnalysisRepositoryRows'
 
 const MARKET_ANALYSIS_SCHEMA_VERSION = 3
-const DEFAULT_TIMELINE_PAGE_SIZE = 50
-const MAX_TIMELINE_PAGE_SIZE = 50
+const DEFAULT_TIMELINE_PAGE_SIZE = marketAnalysisTimelineLimits.pageItems
+const MAX_TIMELINE_PAGE_SIZE = marketAnalysisTimelineLimits.pageItems
 const CURSOR_TTL_MS = 15 * 60 * 1000
 
 /**
@@ -81,7 +84,7 @@ export function createMarketAnalysisRepository(input: RepositoryInput): MarketAn
 
 function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
   const cursors = new Map<string, Readonly<{ eventGroupId?: string; occurredAt: string; id: string; expiresAt: number }>>()
-  migrate(sqlite.database)
+  migrateAnalysisSchema(sqlite.database, MARKET_ANALYSIS_SCHEMA_VERSION)
   // One row per model call, in the analysis database but with its own table and its own cleanup:
   // a conclusion and the prompt that produced it age on different clocks, and a failed pass on one
   // must not be recorded as a failure of the other.
@@ -89,10 +92,13 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
   // The one transport retry a run may take, counted from the run rows themselves: the columns are
   // the record, so a crash between claim and call still spends the day's chance.
   const retry = createAnalysisRetryStore(sqlite.database)
+  // R39：全仓唯一的类别过滤入口。读侧在这里按 `analysis_kind` 分线，其它地方不许再写类别谓词。
+  const records = createAnalysisRecordReader(sqlite.database)
 
   return {
-    migrate() { migrate(sqlite.database) },
+    migrate() { migrateAnalysisSchema(sqlite.database, MARKET_ANALYSIS_SCHEMA_VERSION) },
     analysisIo,
+    records,
     retry,
     inspectSchema() {
       const tables = (sqlite.database.prepare("select name from sqlite_schema where type = 'table' and name like 'mi_analysis_%' order by name").all() as Row[]).map(row => String(row.name))
@@ -119,8 +125,8 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
       validateSnapshot(value)
       validateArchiveMetadata(archive)
       if (!exists(sqlite, 'mi_analysis_event_groups', value.eventGroupId)) throw new Error('analysis-event-group-not-found')
-      sqlite.database.prepare(`insert into mi_analysis_snapshots (id,schema_version,event_group_id,as_of,data_cutoff,snapshot_hash,profile_id,facts_json,missing_domains_json,caveats_json,evidence_refs_json,source_health_json,created_at,policy_version,archive_ref,archive_hash,archive_bytes,archive_schema_version,archive_status)
-        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(value.id, value.schemaVersion, value.eventGroupId, value.asOf, value.dataCutoff, value.snapshotHash, value.profileId, json(value.facts), json(value.missingDomains), json(value.caveats), json(value.evidenceRefs), json(value.sourceHealth), value.createdAt, value.policyVersion, archive?.archiveRef ?? null, archive?.archiveHash ?? null, archive?.archiveBytes ?? null, archive?.archiveSchemaVersion ?? null, archive?.archiveStatus ?? null)
+      sqlite.database.prepare(`insert into mi_analysis_snapshots (id,schema_version,event_group_id,as_of,data_cutoff,snapshot_hash,profile_id,facts_json,missing_domains_json,caveats_json,evidence_refs_json,source_health_json,trigger_json,created_at,policy_version,archive_ref,archive_hash,archive_bytes,archive_schema_version,archive_status)
+        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(value.id, value.schemaVersion, value.eventGroupId, value.asOf, value.dataCutoff, value.snapshotHash, value.profileId, json(value.facts), json(value.missingDomains), json(value.caveats), json(value.evidenceRefs), json(value.sourceHealth), value.trigger ? json(value.trigger) : null, value.createdAt, value.policyVersion, archive?.archiveRef ?? null, archive?.archiveHash ?? null, archive?.archiveBytes ?? null, archive?.archiveSchemaVersion ?? null, archive?.archiveStatus ?? null)
     },
     listSnapshots(eventGroupId: string) {
       return (sqlite.database.prepare('select * from mi_analysis_snapshots where event_group_id = ? order by rowid asc').all(eventGroupId) as Row[]).map(fromSnapshot)
@@ -135,12 +141,19 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
       if (existing) return { created: false, run: fromRun(existing) }
       const snapshot = sqlite.database.prepare('select event_group_id, snapshot_hash from mi_analysis_snapshots where id=?').get(value.snapshotId) as Row | undefined
       if (!exists(sqlite, 'mi_analysis_event_groups', value.eventGroupId) || !snapshot || snapshot.event_group_id !== value.eventGroupId || snapshot.snapshot_hash !== value.snapshotHash) throw new Error('analysis-reference-not-found')
-      sqlite.database.prepare(`insert into mi_analysis_runs (id,schema_version,event_group_id,snapshot_id,snapshot_hash,analysis_phase,trigger_key,idempotency_key,status,attempt,retry_of_run_id,model_provider_id,model_id,policy_version,prompt_version,skill_version,output_schema_version,job_run_id,trace_id,failure_code,failure_detail_code,validation_mode,queued_at,started_at,completed_at)
-        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(value.id, value.schemaVersion, value.eventGroupId, value.snapshotId, value.snapshotHash, value.analysisPhase, value.triggerKey, value.idempotencyKey, value.status, value.attempt, value.retryOfRunId, value.modelProviderId, value.modelId, value.policyVersion, value.promptVersion, value.skillVersion, value.outputSchemaVersion, value.jobRunId, value.traceId, value.failureCode, value.failureDetailCode, value.validationMode ?? null, value.queuedAt, value.startedAt, value.completedAt)
+      sqlite.database.prepare(`insert into mi_analysis_runs (id,schema_version,analysis_kind,event_group_id,snapshot_id,snapshot_hash,analysis_phase,trigger_key,idempotency_key,status,attempt,retry_of_run_id,model_provider_id,model_id,policy_version,prompt_version,skill_version,output_schema_version,job_run_id,trace_id,failure_code,failure_detail_code,validation_mode,queued_at,started_at,completed_at)
+        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(value.id, value.schemaVersion, value.analysisKind, value.eventGroupId, value.snapshotId, value.snapshotHash, value.analysisPhase, value.triggerKey, value.idempotencyKey, value.status, value.attempt, value.retryOfRunId, value.modelProviderId, value.modelId, value.policyVersion, value.promptVersion, value.skillVersion, value.outputSchemaVersion, value.jobRunId, value.traceId, value.failureCode, value.failureDetailCode, value.validationMode ?? null, value.queuedAt, value.startedAt, value.completedAt)
       return { created: true, run: value }
     },
     getRun(id: string) { const row = sqlite.database.prepare('select * from mi_analysis_runs where id = ?').get(id) as Row | undefined; return row ? fromRun(row) : undefined },
     listRuns() { return (sqlite.database.prepare('select * from mi_analysis_runs order by queued_at desc, id desc').all() as Row[]).map(fromRun) },
+    /**
+     * 失败运行分页。类别过滤仍在唯一的 reader 里（`records.listFailedRuns`），这里只暴露给
+     * 服务层与 IPC；市场失败页只认市场线，新闻解读的失败留在新闻抽屉。
+     */
+    listFailedRuns(input: Readonly<{ cursor?: string | null; limit?: number }>): AnalysisFailedRunPage {
+      return records.listFailedRuns({ analysisKind: 'market', ...input })
+    },
     getSnapshotArchive(id: string) {
       const row = sqlite.database.prepare('select archive_ref,archive_hash,archive_bytes,archive_schema_version,archive_status from mi_analysis_snapshots where id=?').get(id) as Row | undefined
       return row?.archive_ref ? { archiveRef: String(row.archive_ref), archiveHash: String(row.archive_hash), archiveBytes: Number(row.archive_bytes), archiveSchemaVersion: Number(row.archive_schema_version), archiveStatus: row.archive_status as MarketAnalysisArchiveMetadata['archiveStatus'] } : undefined
@@ -157,7 +170,22 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     claimRun(id: string, startedAt: string) {
       return Number(sqlite.database.prepare("update mi_analysis_runs set status='running', started_at=? where id=? and status='queued'").run(startedAt, id).changes) === 1
     },
-    commitSuccessfulAnalysis(value: Readonly<{ runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline: TimelineEntry; archive?: MarketAnalysisArchiveMetadata }>) {
+    /**
+     * 调用前把「这次要用哪个模型」写回运行行。
+     *
+     * 启动恢复补排的旧运行入队时没有模型；失败时那一行同样要是空的，事后就再也说不清是谁被调了。
+     * 只填空缺，不覆盖已有选择：运行行上的模型是入队那一刻的事实。
+     */
+    recordRunModel(id: string, model: Readonly<{ providerId: string; modelId: string }>) {
+      return Number(sqlite.database.prepare('update mi_analysis_runs set model_provider_id=coalesce(model_provider_id,?), model_id=coalesce(model_id,?) where id=?').run(model.providerId, model.modelId, id).changes) === 1
+    },
+    /**
+     * 写入一条成功记录。
+     *
+     * `timeline` 与 `recordGroupPointer` 是两条线的差别：市场线写时间轴并把摘要挂成组的当前结论；
+     * 新闻线两样都不写（组上没有市场摘要，新闻解读只活在抽屉里）。预测行由调用方给，新闻线传空。
+     */
+    commitSuccessfulAnalysis(value: Readonly<{ runId: string; summary: AnalysisSummary; predictions: readonly Prediction[]; timeline?: TimelineEntry; recordGroupPointer?: boolean; archive?: MarketAnalysisArchiveMetadata }>) {
       const database = sqlite.database
       database.exec('begin immediate')
       try {
@@ -167,22 +195,28 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
         const snapshotRow = database.prepare('select * from mi_analysis_snapshots where id = ?').get(run.snapshotId) as Row | undefined
         if (!snapshotRow || snapshotRow.snapshot_hash !== run.snapshotHash) throw new Error('analysis-snapshot-changed')
         if (value.summary.analysisRunId !== run.id || value.summary.eventGroupId !== run.eventGroupId) throw new Error('analysis-summary-reference-invalid')
+        // R39 写侧第二道关口：摘要缺类别即失败，且不许一条 news 运行写成 market 记录。
+        if (requireSummaryAnalysisKind(value.summary) !== run.analysisKind) throw new Error('analysis-summary-reference-invalid')
         const snapshot = fromSnapshot(snapshotRow)
         validateSummaryReferences(value.summary, snapshot)
         validateArchiveMetadata(value.archive)
-        database.prepare(`insert into mi_analysis_summaries (id,schema_version,analysis_run_id,event_group_id,version,payload_json,evidence_refs_json,created_at,archive_ref,archive_hash,archive_bytes,archive_schema_version,archive_status) values (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(value.summary.id, value.summary.schemaVersion, value.summary.analysisRunId, value.summary.eventGroupId, value.summary.version, json(value.summary), json(value.summary.evidenceRefs), value.summary.createdAt, value.archive?.archiveRef ?? null, value.archive?.archiveHash ?? null, value.archive?.archiveBytes ?? null, value.archive?.archiveSchemaVersion ?? null, value.archive?.archiveStatus ?? null)
+        database.prepare(`insert into mi_analysis_summaries (id,schema_version,analysis_kind,analysis_run_id,event_group_id,version,payload_json,evidence_refs_json,created_at,archive_ref,archive_hash,archive_bytes,archive_schema_version,archive_status) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(value.summary.id, value.summary.schemaVersion, run.analysisKind, value.summary.analysisRunId, value.summary.eventGroupId, value.summary.version, json(value.summary), json(value.summary.evidenceRefs), value.summary.createdAt, value.archive?.archiveRef ?? null, value.archive?.archiveHash ?? null, value.archive?.archiveBytes ?? null, value.archive?.archiveSchemaVersion ?? null, value.archive?.archiveStatus ?? null)
         for (const predictionValue of value.predictions) {
           if (predictionValue.summaryId !== value.summary.id || Date.parse(predictionValue.horizonEnd) <= Date.parse(predictionValue.horizonStart)) throw new Error('analysis-prediction-invalid')
           database.prepare(`insert into mi_analysis_predictions (id,schema_version,summary_id,asset,horizon_start,horizon_end,payload_json,status,verification_due_at,created_at) values (?,?,?,?,?,?,?,?,?,?)`).run(predictionValue.id, predictionValue.schemaVersion, predictionValue.summaryId, predictionValue.asset, predictionValue.horizonStart, predictionValue.horizonEnd, json(predictionValue), predictionValue.status, predictionValue.verificationDueAt, predictionValue.createdAt)
         }
-        if (value.timeline.eventGroupId !== run.eventGroupId || value.timeline.analysisRunId !== run.id || value.timeline.summaryRef !== value.summary.id) throw new Error('analysis-timeline-reference-invalid')
-        insertTimeline(database, value.timeline)
-        const current = database.prepare('select current_summary_id from mi_analysis_event_groups where id = ?').get(run.eventGroupId) as Row | undefined
-        const currentSummaryId = typeof current?.current_summary_id === 'string' ? current.current_summary_id : null
-        const currentSummary = currentSummaryId ? database.prepare('select version,created_at from mi_analysis_summaries where id = ?').get(currentSummaryId) as Row | undefined : undefined
-        const currentVersion = Number(currentSummary?.version ?? 0)
-        const currentCreatedAt = typeof currentSummary?.created_at === 'string' ? currentSummary.created_at : ''
-        if (value.summary.version > currentVersion && value.summary.createdAt > currentCreatedAt) database.prepare('update mi_analysis_event_groups set current_summary_id=?, updated_at=?, revision=revision+1 where id=?').run(value.summary.id, value.summary.createdAt, run.eventGroupId)
+        if (value.timeline) {
+          if (value.timeline.eventGroupId !== run.eventGroupId || value.timeline.analysisRunId !== run.id || value.timeline.summaryRef !== value.summary.id) throw new Error('analysis-timeline-reference-invalid')
+          insertTimeline(database, value.timeline)
+        }
+        if (value.recordGroupPointer !== false) {
+          const current = database.prepare('select current_summary_id from mi_analysis_event_groups where id = ?').get(run.eventGroupId) as Row | undefined
+          const currentSummaryId = typeof current?.current_summary_id === 'string' ? current.current_summary_id : null
+          const currentSummary = currentSummaryId ? database.prepare('select version,created_at from mi_analysis_summaries where id = ?').get(currentSummaryId) as Row | undefined : undefined
+          const currentVersion = Number(currentSummary?.version ?? 0)
+          const currentCreatedAt = typeof currentSummary?.created_at === 'string' ? currentSummary.created_at : ''
+          if (value.summary.version > currentVersion && value.summary.createdAt > currentCreatedAt) database.prepare('update mi_analysis_event_groups set current_summary_id=?, updated_at=?, revision=revision+1 where id=?').run(value.summary.id, value.summary.createdAt, run.eventGroupId)
+        }
         database.prepare("update mi_analysis_runs set status='succeeded', completed_at=? where id=?").run(value.summary.createdAt, run.id)
         database.exec('commit')
       } catch (error) {
@@ -228,6 +262,13 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     },
     getSummary(id: string) { const row = sqlite.database.prepare('select payload_json from mi_analysis_summaries where id=?').get(id) as Row | undefined; return row ? JSON.parse(String(row.payload_json)) as AnalysisSummary : undefined },
     getSummaryForRun(analysisRunId: string) { const row = sqlite.database.prepare('select payload_json from mi_analysis_summaries where analysis_run_id=?').get(analysisRunId) as Row | undefined; return row ? JSON.parse(String(row.payload_json)) as AnalysisSummary : undefined },
+    /**
+     * 组里已写过的最大版本。
+     *
+     * 新闻线不挂组指针，没法从 `current_summary_id` 读版本；而 `(event_group_id, version)` 是唯一键，
+     * 第二次解读同一条新闻必须能接着往上编，否则那条记录写不进去。
+     */
+    latestSummaryVersion(eventGroupId: string) { const row = sqlite.database.prepare('select max(version) as version from mi_analysis_summaries where event_group_id=?').get(eventGroupId) as Row | undefined; return Number(row?.version ?? 0) },
     listPredictions(summaryId: string) { return (sqlite.database.prepare('select payload_json from mi_analysis_predictions where summary_id=? order by rowid asc').all(summaryId) as Row[]).map(row => JSON.parse(String(row.payload_json)) as Prediction) },
     /**
      * The verdicts, oldest first, optionally inside a window.
@@ -388,6 +429,26 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     },
     /** The retention pass's ledger, in this file's own meta table: additive, so no migration is needed. */
     note(key: string, value: string) { writeAnalysisMetaNote(sqlite.database, key, value) },
+    /**
+     * 连续「读不到」的计数，按 UTC 日与侧存。
+     *
+     * 为什么不写进 trigger ledger：那是 append-only 的事实，计数器是会被清零的状态；对账本做
+     * 原地 UPDATE 是最坏的选项，而且闸门每次都要扫它。
+     */
+    readCalendarReadStreak(utcDay: string) {
+      const rows = sqlite.database.prepare('select side, count from mi_analysis_calendar_read_streak where utc_day=?').all(utcDay) as Row[]
+      const streak = { official: 0, provider: 0 }
+      for (const row of rows) {
+        if (row.side === 'official') streak.official = Number(row.count)
+        if (row.side === 'provider') streak.provider = Number(row.count)
+      }
+      return streak
+    },
+    writeCalendarReadStreak(input: Readonly<{ utcDay: string; side: 'official' | 'provider'; count: number; updatedAt: string }>) {
+      sqlite.database.prepare(`insert into mi_analysis_calendar_read_streak(utc_day,side,count,updated_at) values (?,?,?,?)
+        on conflict(utc_day,side) do update set count=excluded.count, updated_at=excluded.updated_at`)
+        .run(input.utcDay, input.side, input.count, input.updatedAt)
+    },
     readNote(key: string): string | undefined {
       const db = sqlite.database
       db.exec('create table if not exists mi_analysis_meta(key text primary key, value text not null)')
@@ -398,33 +459,7 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
   }
 }
 
-function migrate(database: MarketAnalysisSqlite['database']): void {
-  // A schema migration must be self-contained: the connection already carries the
-  // shared bounded wait from `openSqliteDatabase`, so a second opener cannot fail
-  // this transaction on a lock, and any failure rolls it back.
-  database.exec('begin')
-  try {
-    database.exec(`create table if not exists mi_analysis_migrations (version integer primary key); create table if not exists mi_analysis_event_groups (id text primary key, schema_version integer not null, status text not null, group_type text not null, merge_key text not null, first_observed_at text not null, last_observed_at text not null, review_deadline_at text not null, event_refs_json text not null, trigger_count integer not null, review_count integer not null, current_summary_id text, superseded_by_group_id text, revision integer not null, created_at text not null, updated_at text not null, unique(merge_key,status)); create table if not exists mi_analysis_snapshots (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), as_of text not null, data_cutoff text not null, snapshot_hash text not null, profile_id text not null, facts_json text not null, missing_domains_json text not null, caveats_json text not null, evidence_refs_json text not null, source_health_json text not null, created_at text not null, policy_version text not null, archive_ref text, archive_hash text, archive_bytes integer, archive_schema_version integer, archive_status text); create table if not exists mi_analysis_runs (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), snapshot_id text not null references mi_analysis_snapshots(id), snapshot_hash text not null, analysis_phase text not null, trigger_key text not null, idempotency_key text not null unique, status text not null, attempt integer not null, retry_of_run_id text, model_provider_id text, model_id text, policy_version text not null, prompt_version text not null, skill_version text not null, output_schema_version integer not null, job_run_id text, trace_id text, failure_code text, failure_detail_code text, validation_mode text, notification_episode_run_id text, retry_used_at text, retry_result text, queued_at text not null, started_at text, completed_at text); create table if not exists mi_analysis_summaries (id text primary key, schema_version integer not null, analysis_run_id text not null unique references mi_analysis_runs(id), event_group_id text not null references mi_analysis_event_groups(id), version integer not null, payload_json text not null, evidence_refs_json text not null, created_at text not null, archive_ref text, archive_hash text, archive_bytes integer, archive_schema_version integer, archive_status text, unique(event_group_id,version)); create table if not exists mi_analysis_predictions (id text primary key, schema_version integer not null, summary_id text not null references mi_analysis_summaries(id), asset text not null, horizon_start text not null, horizon_end text not null, payload_json text not null, status text not null, verification_due_at text not null, created_at text not null, check(horizon_end > horizon_start)); create table if not exists mi_analysis_prediction_verifications (id text primary key, prediction_id text not null references mi_analysis_predictions(id), status text not null, evaluated_at text not null, rule_version text not null, evidence_refs_json text not null, reason_code text not null, reason text not null, schema_version integer not null); create table if not exists mi_analysis_prediction_ledger (prediction_id text primary key, schema_version integer not null, asset text not null, horizon_start text not null, horizon_end text not null, predicate text, condition_count integer not null, status text not null, reason_code text not null, rule_version text not null, evidence_refs_json text not null, evidence_ref_count integer not null, prediction_created_at text not null, evaluated_at text not null, check(horizon_end > horizon_start)); create table if not exists mi_analysis_timeline (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), analysis_run_id text references mi_analysis_runs(id), kind text not null, status text not null, occurred_at text not null, summary_ref text references mi_analysis_summaries(id), safe_title text not null, safe_excerpt text, direction text, version integer not null); create table if not exists mi_analysis_trigger_ledger (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), trigger_key text not null, change_hash text not null, decision text not null, reason_code text not null, snapshot_hash text, analysis_run_id text references mi_analysis_runs(id), created_at text not null, evidence_json text, unique(event_group_id,trigger_key,change_hash)); create index if not exists idx_mi_analysis_snapshot_hash on mi_analysis_snapshots(snapshot_hash); create index if not exists idx_mi_analysis_snapshot_group_asof on mi_analysis_snapshots(event_group_id,as_of desc); create index if not exists idx_mi_analysis_run_group_queued on mi_analysis_runs(event_group_id,queued_at desc); create index if not exists idx_mi_analysis_run_status_queued on mi_analysis_runs(status,queued_at); create index if not exists idx_mi_analysis_summary_group_version on mi_analysis_summaries(event_group_id,version); create index if not exists idx_mi_analysis_prediction_due on mi_analysis_predictions(status,verification_due_at); create index if not exists idx_mi_analysis_verification_prediction on mi_analysis_prediction_verifications(prediction_id,evaluated_at desc); create index if not exists idx_mi_analysis_ledger_evaluated on mi_analysis_prediction_ledger(evaluated_at); create index if not exists idx_mi_analysis_timeline_group_occurred on mi_analysis_timeline(event_group_id,occurred_at desc,id desc); create index if not exists idx_mi_analysis_event_updated on mi_analysis_event_groups(updated_at desc); create index if not exists idx_mi_analysis_trigger_group_key_hash on mi_analysis_trigger_ledger(event_group_id,trigger_key,change_hash); create index if not exists idx_mi_analysis_trigger_change_hash on mi_analysis_trigger_ledger(change_hash); insert or ignore into mi_analysis_migrations(version) values (${MARKET_ANALYSIS_SCHEMA_VERSION});`)
-    // Additive migration for databases created before the timeline carried a direction: the
-    // column is what lets a language-neutral row render its own chip without parsing prose.
-    const timelineColumns = (database.prepare('pragma table_info(mi_analysis_timeline)').all() as Row[]).map(row => String(row.name))
-    if (!timelineColumns.includes('direction')) database.exec('alter table mi_analysis_timeline add column direction text')
-    // Same additive path for the trigger ledger's reading column: a new install gets it from the
-    // create statement above, an existing database gets it here, and both end up identical.
-    const ledgerColumns = (database.prepare('pragma table_info(mi_analysis_trigger_ledger)').all() as Row[]).map(row => String(row.name))
-    if (!ledgerColumns.includes('evidence_json')) database.exec('alter table mi_analysis_trigger_ledger add column evidence_json text')
-    // Columns added after the first release; extras are nullable and never backfilled.
-    ensureRunColumns(database)
-    // A new table, not a new column: the model's prompt and answer are one row per call, so they
-    // cannot ride on the snapshot's six archive columns (a repair or a retry would overwrite the
-    // first answer — the one a post-mortem needs). Purely additive, so old databases keep every row.
-    migrateAnalysisIo(database)
-    database.exec('commit')
-  } catch (error) {
-    try { database.exec('rollback') } catch { /* preserve original failure */ }
-    throw error
-  }
-}
+
 
 function insertTimeline(database: MarketAnalysisSqlite['database'], value: TimelineEntry): void {
   database.prepare('insert into mi_analysis_timeline (id,schema_version,event_group_id,analysis_run_id,kind,status,occurred_at,summary_ref,safe_title,safe_excerpt,direction,version) values (?,?,?,?,?,?,?,?,?,?,?,?)').run(value.id, value.schemaVersion, value.eventGroupId, value.analysisRunId, value.kind, value.status, value.occurredAt, value.summaryRef, value.safeTitle, value.safeExcerpt, value.direction ?? null, value.version)

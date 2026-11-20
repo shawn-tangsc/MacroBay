@@ -147,6 +147,14 @@ export type IntelligenceSourceDefinition = {
   supportedImpactScopes?: IntelligenceImpactScopeType[]
   readiness?: IntelligenceSourceReadiness
   readinessNote?: string
+  /**
+   * 这个源**首次接入即默认开启**，即使它需要 API Key。
+   *
+   * 默认规则是「免钥匙 + 已就绪才默认开」，因为需要密钥的源在没配密钥前开着也没用。
+   * 少数源例外：密钥已经在库里、数据也已经回填（Narwhal 就是这种），此时默认关会**突然停采**
+   * ——读者看到的是日历一天天变空，而原因只是我们改了个默认值。只许在注册表里逐源声明，不做 id 白名单。
+   */
+  defaultEnabled?: boolean
   sourceKind: IntelligenceSourceKind
   applicabilityMode: IntelligenceApplicabilityMode
   focusMarkets: IntelligenceFocusMarket[]

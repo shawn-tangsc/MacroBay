@@ -269,6 +269,14 @@ export type PlatformText = {
     channelLogsEmpty: string
     /** 启用开关的读屏名（开/关各一句，读屏要能说出拨动后的结果）。 */
     channelEnableSwitch: string
+    /** 「曾被『只允许一条』规则自动停用」那一行：句 + 行内启用 + ⓘ（原型 2026-11-13）。 */
+    channelAutoDisabledNotice: string
+    channelAutoDisabledEnable: string
+    channelAutoDisabledInfo: string
+    channelAutoDisabledInfoAria: string
+    /** 启用失败：`{reason}` 是一句人话原因；原因码另收在折叠里。 */
+    channelAutoDisabledEnableFailed: string
+    channelAutoDisabledReasonCode: string
     /** 行内的「发送测试消息」：真发一次，回执三态就地显示。 */
     channelTestSend: string
     /** 行内的「查看这个频道的会话」：跳到这条频道绑定的助手，再打开那条会话。 */
@@ -478,6 +486,19 @@ export type PlatformText = {
     imageGenerating: string
     imageDownload: string
     imagePreview: string
+    /** 图消息下方「发到频道」这一组：动作、进行中、成功与逐类失败。 */
+    imageSendToChannel: string
+    imageSending: string
+    imageSent: string
+    /** 只发图片那次成功：与普通成功分开说，别让读者以为说明也发出去了。 */
+    imageSentBare: string
+    imageSendBare: string
+    imageSendCaptionTooLong: string
+    imageSendTooLarge: string
+    imageSendUnsupported: string
+    imageSendHostUnavailable: string
+    imageSendUnconfirmed: string
+    imageSendFailed: string
     imagePromptRequired: string
     imageFailureInvalidCount: string
     imageFailureInvalidSize: string
@@ -1268,6 +1289,10 @@ export type PlatformText = {
     bell: string
     bellUnread: (count: string) => string
     centerTitle: string
+    /** 页脚 ⓘ 的三段：中心说明 / 页脚一行 / 为什么没有开关。 */
+    footerInfoCenter: string
+    footerInfoLine: string
+    footerInfoHint: string
     centerUnreadGroup: string
     centerEarlierGroup: string
     centerMarkAllRead: string
@@ -1548,6 +1573,17 @@ export type PlatformText = {
     historyColumnOperation: string
     historyColumnResult: string
     historyColumnTime: string
+    /** 隔离副本（`.corrupt-*`）清单：标题、说明、四列表头、两种情况下的附加说明。 */
+    quarantineTitle: string
+    quarantineWhat: string
+    quarantineWhatAria: string
+    quarantineEmpty: string
+    quarantineColumnFile: string
+    quarantineColumnLocation: string
+    quarantineColumnSize: string
+    quarantineColumnModified: string
+    quarantinePartial: (directories: number) => string
+    quarantineTruncated: (listed: number) => string
     historyDryRun: string
     operationClear: string
     operationCompact: string
@@ -1742,6 +1778,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenVisibleHint: '仅本机显示，关掉就恢复点号。',
       channelLogsEmpty: '这个频道还没有记录',
       channelEnableSwitch: '启用这个频道',
+      channelAutoDisabledNotice: '这条通道曾被「只允许一条」规则自动停用',
+      channelAutoDisabledEnable: '启用',
+      channelAutoDisabledInfo: '同一时刻只允许一条通道接收推送。规则自动停用了它；恢复要你自己确认，因为另一条正在收的通道会让位。',
+      channelAutoDisabledInfoAria: '这条提示的说明',
+      channelAutoDisabledEnableFailed: '没有启用成功：{reason}',
+      channelAutoDisabledReasonCode: '原因码',
       channelTestSend: '发送测试消息',
       channelOpenConversation: '查看这个频道的会话',
       channelOpenConversationFailed: '这条对话还没绑定会话，或会话列表暂时打不开。',
@@ -1948,6 +1990,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       imageGenerating: '图片生成中…',
       imageDownload: '下载',
       imagePreview: '预览图片',
+      imageSendToChannel: '发到频道',
+      imageSending: '正在发到 {channel}',
+      imageSent: '已发到 {channel}',
+      imageSentBare: '已发到 {channel}（只发了图片）',
+      imageSendBare: '只发图片',
+      imageSendCaptionTooLong: '说明太长（超过 1024 字），没有发出；可以只发图片',
+      imageSendTooLarge: '图片太大，没有发出',
+      imageSendUnsupported: '这个格式发不了（例如 WebP），没有发出',
+      imageSendHostUnavailable: '通道没连上，没有发出',
+      imageSendUnconfirmed: '已发出，但没有收到回执',
+      imageSendFailed: '没有发出',
       imagePromptRequired: '请输入图片描述',
       imageFailureInvalidCount: '数量需为 1–4',
       imageFailureInvalidSize: '尺寸只支持 256x256 / 512x512 / 1024x1024',
@@ -2668,6 +2721,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       bell: '通知',
       bellUnread: (count) => `${count} 条未读通知，打开通知中心`,
       centerTitle: '通知',
+      footerInfoCenter: '不能逐条关；读过的可以清掉，超过保留期的自动清理。',
+      footerInfoLine: '都会记进通知中心。该弹桌面的会弹到桌面，同一件事不会重复。',
+      footerInfoHint: '这些事件都由我们替你决定、不给开关。本机只打扰一次：桌面开着就弹桌面、不再在应用内重复；只有「桌面关着、这台机器不支持桌面通知、发送报错」这三种情况才改在应用内提示。系统里关掉通知这件事我们读不到，也不会因此重复弹一次。手机是另一回事——只有三条离开应用，跟这里的开关无关。',
       centerUnreadGroup: '未读',
       centerEarlierGroup: '已读',
       centerMarkAllRead: '全部标为已读',
@@ -2939,6 +2995,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       historyColumnOperation: '操作',
       historyColumnResult: '结果',
       historyColumnTime: '时间',
+      quarantineTitle: '隔离副本',
+      quarantineWhat: '读到损坏的存储文件时，应用会把原文按时间戳留一份副本，便于事后追查。副本不参与读取；删掉它不会影响正在使用的设置或数据，只会失去这份追查依据。',
+      quarantineWhatAria: '隔离副本说明',
+      quarantineEmpty: '当前没有隔离副本。读到损坏的存储文件时，原样副本会自动留在这里。',
+      quarantineColumnFile: '文件',
+      quarantineColumnLocation: '位置',
+      quarantineColumnSize: '大小',
+      quarantineColumnModified: '修改时间',
+      quarantinePartial: (directories) => `有 ${directories} 个目录没读到，列表可能不全。`,
+      quarantineTruncated: (listed) => `只列出了前 ${listed} 份，其余未扫描。`,
       historyDryRun: '预演',
       operationClear: '清理',
       operationCompact: '压缩',
@@ -3130,6 +3196,12 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelTokenVisibleHint: 'Shown on this machine only; turn the eye off and it is dots again.',
       channelLogsEmpty: 'This channel has no records yet',
       channelEnableSwitch: 'Enable this channel',
+      channelAutoDisabledNotice: 'This channel was switched off automatically by the "only one at a time" rule',
+      channelAutoDisabledEnable: 'Enable',
+      channelAutoDisabledInfo: 'Only one channel may receive pushes at a time. The rule switched this one off; turning it back on is your call, because the channel that is receiving now will give way.',
+      channelAutoDisabledInfoAria: 'About this notice',
+      channelAutoDisabledEnableFailed: 'Could not enable it: {reason}',
+      channelAutoDisabledReasonCode: 'Reason code',
       channelTestSend: 'Send test message',
       channelOpenConversation: "Open this channel's conversations",
       channelOpenConversationFailed: 'This conversation has no session yet, or the session list is unavailable right now.',
@@ -3324,6 +3396,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       imageGenerating: 'Generating image…',
       imageDownload: 'Download',
       imagePreview: 'Preview image',
+      imageSendToChannel: 'Send to channel',
+      imageSending: 'Sending to {channel}',
+      imageSent: 'Sent to {channel}',
+      imageSentBare: 'Sent to {channel} (image only)',
+      imageSendBare: 'Send image only',
+      imageSendCaptionTooLong: 'The description is longer than 1024 characters, so nothing was sent; you can send the image only',
+      imageSendTooLarge: 'The image is too large and was not sent',
+      imageSendUnsupported: 'This format cannot be sent (for example WebP); nothing was sent',
+      imageSendHostUnavailable: 'The channel is not connected; nothing was sent',
+      imageSendUnconfirmed: 'Sent, but no receipt came back',
+      imageSendFailed: 'Not sent',
       imagePromptRequired: 'Enter a prompt for the image',
       imageFailureInvalidCount: 'Count must be between 1 and 4',
       imageFailureInvalidSize: 'Size must be 256x256, 512x512 or 1024x1024',
@@ -4058,6 +4141,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       bell: 'Notifications',
       bellUnread: (count) => `${count} unread notifications, open the notification center`,
       centerTitle: 'Notifications',
+      footerInfoCenter: 'You cannot turn individual ones off; read ones can be cleared, and the rest age out of the retention window.',
+      footerInfoLine: 'Everything is recorded in the notification center. Whatever should show on the desktop does, and the same thing never repeats.',
+      footerInfoHint: 'We decide which of these events notify you; there is no switch for them. On this device a notification disturbs you once: if desktop alerts are on it shows on the desktop and does not repeat in the app; only when desktop is off, the system does not support desktop notifications, or sending fails does it fall back to the in-app hint. We cannot read whether notifications are turned off in the system, so we do not fall back a second time and do not repeat the alert. The phone is a separate channel — only three events leave the app, and none of them depend on these switches.',
       centerUnreadGroup: 'Unread',
       centerEarlierGroup: 'Earlier',
       centerMarkAllRead: 'Mark all as read',
@@ -4329,6 +4415,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       historyColumnOperation: 'Operation',
       historyColumnResult: 'Result',
       historyColumnTime: 'Time',
+      quarantineTitle: 'Quarantine copies',
+      quarantineWhat: 'When a stored file is found corrupt, the app keeps an untouched copy with a timestamp for later inspection. Copies are never read; deleting one does not affect settings or data in use — you only lose that evidence.',
+      quarantineWhatAria: 'About quarantine copies',
+      quarantineEmpty: 'No quarantine copies right now. When a stored file is found damaged, its untouched copy appears here.',
+      quarantineColumnFile: 'File',
+      quarantineColumnLocation: 'Location',
+      quarantineColumnSize: 'Size',
+      quarantineColumnModified: 'Modified',
+      quarantinePartial: (directories) => `${directories} folder(s) could not be read, so this list may be incomplete.`,
+      quarantineTruncated: (listed) => `Only the first ${listed} copies are listed; the rest were not scanned.`,
       historyDryRun: 'dry run',
       operationClear: 'Clear',
       operationCompact: 'Compact',

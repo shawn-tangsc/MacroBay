@@ -8,6 +8,10 @@ describe('calendar feed registry', () => {
       'macro-calendar-fed',
       'macro-calendar-bea',
       'macro-calendar-bls',
+      'macro-calendar-narwhal-economic-data',
+      'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities',
+      /* 0xRouter 三路在 2026-11-15 起重新可配置（读者启用才注册定时任务），排在聚合源之后、待接入之前。 */
       'macro-calendar-0xrouter-economic-data',
       'macro-calendar-0xrouter-financial-events',
       'macro-calendar-0xrouter-central-bank-activities',
@@ -23,13 +27,14 @@ describe('calendar feed registry', () => {
     })
   })
 
-  it('marks the 0xRouter feeds as product-scheduled market calendar', () => {
-    expect(calendarFeedRegistry['macro-calendar-0xrouter-economic-data']).toMatchObject({
-      providerId: '0xrouter',
+  it('marks the Narwhal feeds as product-scheduled market calendar', () => {
+    expect(calendarFeedRegistry['macro-calendar-narwhal-economic-data']).toMatchObject({
+      providerId: 'narwhal',
       owner: 'market',
       collection: 'job'
     })
   })
+
 
   it('marks CoinMarketCal as pending and not collectable', () => {
     expect(calendarFeedRegistry['macro-calendar-coinmarketcal']).toMatchObject({
@@ -45,7 +50,7 @@ describe('calendar feed registry', () => {
       canTestConnection: true,
       canSyncBlsSchedule: true
     })
-    expect(calendarFeedCapabilities('macro-calendar-0xrouter-financial-events')).toMatchObject({
+    expect(calendarFeedCapabilities('macro-calendar-narwhal-financial-events')).toMatchObject({
       canToggle: true,
       runNow: 'job',
       canTestConnection: true,

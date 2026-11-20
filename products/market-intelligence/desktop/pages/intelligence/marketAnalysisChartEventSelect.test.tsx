@@ -76,7 +76,6 @@ const dashboardProps = {
   now: () => new Date(asOf),
   onConfigureSources: () => undefined,
   onManageSource: () => undefined,
-  onOpenCalendar: () => undefined,
   // 源级启用表：读到了并且全部启用（真实宿主由 `dashboardFeedStatusClient` 给）。
   dashboardFeedStatusClient: { query: async () => ({ sources: allSourcesEnabled, state: 'available' as const }) } as never,
   crossAssetClient: {
@@ -102,9 +101,12 @@ async function renderSurface(extra: Partial<Omit<Parameters<typeof MarketAnalysi
   document.body.append(host)
   root = createRoot(host)
   // Mirrors index.tsx: the page's title vocabulary, its drawer and its one selected event.
-  const dashboard = monthEvents
-    ? { ...dashboardProps, client: { queryMonth: vi.fn(async () => monthPage(monthEvents)) } }
-    : dashboardProps
+  // 「接下来要看的」这块已从看板搬进抽屉（2026-11-15）：需要它时由这条参数把抽屉打开。
+  const drawerRequest = (extra as { openIndicatorDrawerRequest?: { seq: number } }).openIndicatorDrawerRequest
+  const dashboard = {
+    ...(monthEvents ? { ...dashboardProps, client: { queryMonth: vi.fn(async () => monthPage(monthEvents)) } } : dashboardProps),
+    ...(drawerRequest === undefined ? {} : { openIndicatorDrawerRequest: drawerRequest })
+  }
   await act(async () => root?.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC', children:
     createElement(MarketAnalysisDashboardLayout, {
       text: portal,
@@ -171,15 +173,15 @@ describe('a chart line selects a calendar event without opening the conversation
       eventKey: 'a1b2c3d4-0000-4000-8000-000000000001', title: '9月零售销售(月率)', countryCode: 'US',
       eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: releasedAt,
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
+      source: 'Narwhal' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
     }
-    const readMarketEvents = vi.fn(async () => [provider])
-    const host = await renderSurface({ readMarketEvents })
+    const readCalendarMonth = vi.fn(async () => ({ events: [provider], sources: [] }))
+    const host = await renderSurface({ readCalendarMonth })
 
     // Two lines now: the official CPI the calendar list holds, and the provider's release.
     const lines = [...host.querySelectorAll<HTMLElement>('[data-event-line]')]
     expect(lines.map(line => line.textContent)).toContain('9月零售销售(月率)')
-    expect(readMarketEvents).toHaveBeenCalled()
+    expect(readCalendarMonth).toHaveBeenCalled()
 
     const providerLine = lines.find(line => line.textContent === '9月零售销售(月率)')!
     await act(async () => providerLine.click())
@@ -203,8 +205,10 @@ describe('a chart line selects a calendar event without opening the conversation
       detectedAt, actual: { displayValue: '3.4%' }, previous: { displayValue: '3.1%' }, consensus: null,
       consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: []
     }
-    const host = await renderSurface({}, undefined, [cardEvent])
-    const row = host.querySelector<HTMLElement>('[data-calendar-card-row]')
+    // 卡片已搬进抽屉右列顶部：先让页面请求打开抽屉，行在抽屉里（portal 到 body）。
+    // 抽屉请求是 dashboard 的参数（不是 layout 的），这条助手按约定把它转给 dashboard——这里显式越过 layout 的参数类型。
+    const host = await renderSurface({ openIndicatorDrawerRequest: { seq: 1 } } as never, undefined, [cardEvent])
+    const row = document.body.querySelector<HTMLElement>('[data-drawer-calendar-block] [data-calendar-card-row]')
     expect(row, 'the released value is in the card\'s today section').not.toBeNull()
     // No consensus is not a verdict: the row keeps its readings and does not add a badge for it.
     expect(row?.querySelector('[data-calendar-surprise]')).toBeNull()
@@ -260,7 +264,8 @@ describe('the same release reads the same on the line and in its drawer', () => 
 
     await act(async () => line!.click())
     await flush()
-    const drawerTitle = host.querySelector('[data-calendar-detail-container] h2')
+    // 详情现在挂在 `document.body`（逃出带 transform 的抽屉祖先），所以不在渲染宿主里找。
+    const drawerTitle = document.body.querySelector('[data-calendar-detail-container] h2')
     // Both surfaces, one name — and it is the analysis side's, not the calendar's former wording.
     expect(drawerTitle?.textContent).toBe(registeredCoreCpi)
     expect(drawerTitle?.textContent).toBe(line?.textContent)
@@ -275,11 +280,11 @@ describe('the same release reads the same on the line and in its drawer', () => 
       eventKey: 'a1b2c3d4-0000-4000-8000-000000000001', title: providerTitle, countryCode: 'US',
       eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: releasedAt,
       consensus: { displayValue: '0.3%' }, providerPrevious: { displayValue: '1.2%' }, providerActual: { displayValue: '0.8%' },
-      source: '0xRouter' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
+      source: 'Narwhal' as const, sourceObservedAt: releasedAt, coverage: 'observed-unverified' as const
     }
     const officialOnly = pageClient({ state: 'unavailable', asOf: undefined, failureCode: 'event-not-found' })
     const host = await renderSurface({
-      readMarketEvents: vi.fn(async () => [provider]),
+      readCalendarMonth: vi.fn(async () => ({ events: [provider], sources: [] })),
       renderEventDetailDrawer: (selection: SelectedCalendarEvent, onClose: () => void) =>
         createElement(SelectedCalendarEventDrawer, { client: officialOnly as never, selection, now: () => new Date(asOf), text: portal.calendar, onClose,
           readMarketMonth: async () => ({ events: [provider], sources: [] }) })
@@ -291,7 +296,7 @@ describe('the same release reads the same on the line and in its drawer', () => 
     await act(async () => providerLine!.click())
     await flush()
     // 长尾事件不起中文名：两个面都用 provider 自己的 displayName。
-    expect(host.querySelector('[data-calendar-detail-container] h2')?.textContent).toBe(providerTitle)
+    expect(document.body.querySelector('[data-calendar-detail-container] h2')?.textContent).toBe(providerTitle)
     expect(providerLine?.textContent).toBe(providerTitle)
   })
 })

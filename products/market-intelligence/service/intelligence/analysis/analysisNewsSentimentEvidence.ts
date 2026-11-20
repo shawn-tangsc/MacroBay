@@ -6,7 +6,7 @@ import {
   type MarketAnalysisContextAvailable
 } from '../../../contracts/marketAnalysisContracts'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
-import type { NewsSentimentQuery } from '../schema/newsSentiment'
+import type { NewsPolarity, NewsSentimentQuery, NewsSentimentSymbol } from '../schema/newsSentiment'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import { appendAnalysisEventEvidence } from './analysisEventEvidence'
 import { slotInstantsWithin } from './analysisSlotCoverage'
@@ -197,13 +197,27 @@ export async function appendAnalysisNewsSentiment(
  * tells the model to translate input names into its own language; a Chinese label baked here
  * would leave an English conclusion quoting 「看空」.
  */
-function composeFactValue(item: NewsSentimentView['items'][number]): string {
+/** 合成一条舆情事实的值时最少要有的字段；窗口事实与触发项事实共用同一套写法。 */
+export type ComposableSentimentItem = Readonly<{
+  polarity: NewsPolarity
+  strength: number
+  confidence: number
+  symbols: readonly NewsSentimentSymbol[]
+  title: string
+  displayTitle?: string
+}>
+
+export function composeFactValue(item: ComposableSentimentItem, quote?: string): string {
   const title = item.displayTitle ?? item.title
-  return `${item.polarity} · strength ${item.strength}/5 · confidence ${Math.round(item.confidence)}%｜${title.slice(0, MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelFieldCharacters)}`
+  const head = `${item.polarity} · strength ${item.strength}/5 · confidence ${Math.round(item.confidence)}%｜${title.slice(0, MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelFieldCharacters)}`
+  // 源摘录只在有、且与标题不同时追加：规则引擎的摘录就是标题截断，重复两遍只是噪音。
+  const trimmed = quote?.trim() ?? ''
+  if (!trimmed || trimmed === title.trim()) return head
+  return `${head}｜${trimmed.slice(0, MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelFieldCharacters)}`
 }
 
 /** The asset a headline is about, or the market when it names none of the two we track. */
-function sentimentSubject(item: NewsSentimentView['items'][number]): string {
+export function sentimentSubject(item: Pick<ComposableSentimentItem, 'symbols'>): string {
   return item.symbols.find(symbol => symbol === 'BTC' || symbol === 'ETH') ?? 'market'
 }
 

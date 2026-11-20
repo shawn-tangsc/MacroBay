@@ -32,6 +32,7 @@ export function createMacroCalendarProviderHealthStore(storage: MacroCalendarPro
   return {
     getCurrent(providerId) { return current.get(providerId) },
     appendMaterialChange(next) {
+      // 写入结果不在这条历史里（用户 2026-11-19：写入层独立成层，历史只记采集状态）。
       const normalized = normalize(next)
       const previous = current.get(next.providerId)
       current.set(next.providerId, normalized)

@@ -45,7 +45,21 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { resetEventBusIdCountersForTests, type PlatformEventEnvelope } from '../contracts/eventBusContracts'
 import { createDefaultEventBusStoreState, createEventBusStore, type EventBusStoreState } from '../store/eventBusStore'
-import { createEventBusJsonStorage, createEventBusRuntime } from './eventBusRuntime'
+import {
+  createEventBusJsonStorage,
+  createEventBusRuntime,
+  type EventBusStorage,
+  type EventBusStorageReadResult
+} from './eventBusRuntime'
+
+/** 读一份存储状态（闸门之后 `read()` 带完整性结论）：被阻断时这里直接抛，免得用例把坏文件当空。 */
+async function readState(storage: EventBusStorage): Promise<EventBusStoreState> {
+  const outcome = await storage.read()
+  if (outcome.integrity === 'corrupt' || outcome.integrity === 'future-version') {
+    throw new Error(`store blocked: ${outcome.integrity}`)
+  }
+  return outcome.state
+}
 
 describe('event bus runtime', () => {
   it('persists events before dispatch and advances checkpoint on success', async () => {
@@ -165,7 +179,7 @@ describe('event bus runtime', () => {
       payload: { id: 'new' }
     })
 
-    const durableState = await storage.read()
+    const durableState = await readState(storage)
     expect(durableState.events.map((item) => item.eventId)).toContain(event.eventId)
     expect(durableState.deliveries).toEqual(expect.arrayContaining([
       expect.objectContaining({ eventId: event.eventId, consumerId: 'product-a.consumer', status: 'pending' })
@@ -231,7 +245,7 @@ describe('event bus runtime', () => {
       payload: { id: 'restart' }
     })
     await started.promise
-    expect(await storage.read()).toMatchObject({
+    expect(await readState(storage)).toMatchObject({
       events: [expect.objectContaining({ eventId: event.eventId })],
       deliveries: [expect.objectContaining({ eventId: event.eventId, status: 'pending' })]
     })
@@ -253,11 +267,11 @@ describe('event bus runtime', () => {
       schemaVersion: 1,
       payload: { id: 'post-restart' }
     })
-    const recovered = await storage.read()
+    const recovered = await readState(storage)
     expect(postRestartEvent.eventId).not.toBe(event.eventId)
     expect(new Set(recovered.deliveries.map((delivery) => delivery.deliveryId)).size).toBe(recovered.deliveries.length)
     await vi.waitFor(async () => {
-      expect((await storage.read()).deliveries.every((delivery) => delivery.status !== 'pending')).toBe(true)
+      expect((await readState(storage)).deliveries.every((delivery) => delivery.status !== 'pending')).toBe(true)
     })
     await rm(directory, { recursive: true, force: true })
   })
@@ -288,12 +302,12 @@ describe('event bus runtime', () => {
       payload: { id: 'second' }
     })
 
-    const durableState = await storage.read()
+    const durableState = await readState(storage)
     expect(second.eventId).not.toBe(first.eventId)
     expect(new Set(durableState.events.map((event) => event.eventId)).size).toBe(durableState.events.length)
     expect(new Set(durableState.deliveries.map((delivery) => delivery.deliveryId)).size).toBe(durableState.deliveries.length)
     await vi.waitFor(async () => {
-      expect((await storage.read()).deliveries.every((delivery) => delivery.status !== 'pending')).toBe(true)
+      expect((await readState(storage)).deliveries.every((delivery) => delivery.status !== 'pending')).toBe(true)
     })
     await rm(directory, { recursive: true, force: true })
   })
@@ -334,11 +348,11 @@ describe('event bus runtime', () => {
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ payload: { id: 'exact-target' } }), expect.anything())
     const recoveryStorage = createEventBusJsonStorage(filePath)
     await vi.waitFor(async () => {
-      expect((await recoveryStorage.read()).deliveries.find((delivery) => delivery.eventId === 'evt-unambiguous')).toMatchObject({
+      expect((await readState(recoveryStorage)).deliveries.find((delivery) => delivery.eventId === 'evt-unambiguous')).toMatchObject({
         status: 'completed', attemptCount: 1
       })
     })
-    const recovered = await recoveryStorage.read()
+    const recovered = await readState(recoveryStorage)
     expect(recovered.deliveries.find((delivery) => delivery.eventId === 'evt-1')).toMatchObject({
       status: 'blocked', lastError: 'legacy-event-identity-ambiguous', attemptCount: 0
     })
@@ -455,7 +469,7 @@ describe('event bus runtime', () => {
     expect(store.getCheckpoint('product-a.consumer')?.lastCompletedEventId).toBe(event.eventId)
   })
 
-  it('recovers default state from empty or truncated persisted JSON while retaining a complete state', async () => {
+  it('tells a missing store apart from a corrupt one, and still reads a complete legacy state', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'event-bus-runtime-'))
     const filePath = join(directory, 'event-bus.json')
     const storage = createEventBusJsonStorage(filePath)
@@ -465,16 +479,19 @@ describe('event bus runtime', () => {
       checkpoints: [{ consumerId: 'consumer-1' }]
     }
 
-    await expect(storage.read()).resolves.toEqual(createDefaultEventBusStoreState())
+    // 主文件不存在 = 首次安装：`empty`（带一份默认状态，写会重新开一份）。
+    await expect(storage.read()).resolves.toEqual({ integrity: 'empty', state: createDefaultEventBusStoreState() })
 
+    // 空文件与截断文件是**有内容但读不懂**，不是「从来没有过数据」——今天丢数据就是从这里进的。
     await writeFile(filePath, '', 'utf8')
-    await expect(storage.read()).resolves.toEqual(createDefaultEventBusStoreState())
+    await expect(storage.read()).resolves.toEqual({ integrity: 'corrupt', problem: 'invalid-json' })
 
     await writeFile(filePath, '{"events":', 'utf8')
-    await expect(storage.read()).resolves.toEqual(createDefaultEventBusStoreState())
+    await expect(storage.read()).resolves.toEqual({ integrity: 'corrupt', problem: 'invalid-json' })
 
+    // 闸门之前的完整旧文件（无 formatVersion / checksum）：读得出、行不变，标 legacy。
     await writeFile(filePath, JSON.stringify(expected), 'utf8')
-    await expect(storage.read()).resolves.toEqual(expected)
+    await expect(storage.read()).resolves.toEqual({ integrity: 'unverified-legacy', state: expected })
 
     await rm(directory, { recursive: true, force: true })
   })
@@ -491,8 +508,11 @@ describe('event bus runtime', () => {
 
     await mkdir(temporaryPath)
     await expect(storage.write(createPersistedState('next'))).rejects.toBeDefined()
-    await expect(storage.read()).resolves.toEqual(prior)
-    expect(JSON.parse(await readFile(filePath, 'utf8'))).toEqual(prior)
+    await expect(readState(storage)).resolves.toEqual(prior)
+    // 磁盘上是 v1 信封（formatVersion + checksum）+ 原样 payload；比较 payload 本身。
+    const persisted = JSON.parse(await readFile(filePath, 'utf8')) as Record<string, unknown>
+    expect(persisted.formatVersion).toBe(1)
+    expect(persisted).toMatchObject(prior)
 
     await rm(directory, { recursive: true, force: true })
   })
@@ -522,7 +542,7 @@ describe('event bus runtime', () => {
     releaseFirstRename?.()
 
     await expect(Promise.all([firstWrite, secondWrite])).resolves.toEqual([undefined, undefined])
-    await expect(storage.read()).resolves.toEqual(second)
+    await expect(readState(storage)).resolves.toEqual(second)
     await expect(access(temporaryPath)).rejects.toMatchObject({ code: 'ENOENT' })
 
     eventBusJsonFileControls.beforeRename = undefined
@@ -540,11 +560,11 @@ describe('event bus runtime', () => {
     await storage.write(prior)
     await mkdir(temporaryPath)
     await expect(storage.write(createPersistedState('failed'))).rejects.toBeDefined()
-    await expect(storage.read()).resolves.toEqual(prior)
+    await expect(readState(storage)).resolves.toEqual(prior)
     await rm(temporaryPath, { recursive: true, force: true })
 
     await expect(storage.write(later)).resolves.toBeUndefined()
-    await expect(storage.read()).resolves.toEqual(later)
+    await expect(readState(storage)).resolves.toEqual(later)
 
     await rm(directory, { recursive: true, force: true })
   })
@@ -554,7 +574,7 @@ describe('event bus runtime', () => {
     const handler = vi.fn(async (_event: PlatformEventEnvelope) => undefined)
     const runtime = createEventBusRuntime({
       storage: {
-        read: vi.fn(async () => {
+        read: vi.fn(async (): Promise<EventBusStorageReadResult> => {
           throw new Error('storage unavailable')
         }),
         write: vi.fn(async () => undefined)
@@ -580,7 +600,7 @@ describe('event bus runtime', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const runtime = createEventBusRuntime({
       storage: {
-        read: vi.fn(async () => createDefaultEventBusStoreState()),
+        read: vi.fn(async () => ({ integrity: 'empty' as const, state: createDefaultEventBusStoreState() })),
         write: vi.fn(async () => {
           throw new Error('disk unavailable')
         })
@@ -624,9 +644,9 @@ describe('event bus runtime', () => {
   })
 
   it('shares one in-flight hydration across concurrent consumer registration', async () => {
-    let resolveRead: ((state: EventBusStoreState) => void) | undefined
+    let resolveRead: ((outcome: EventBusStorageReadResult) => void) | undefined
     const read = vi.fn(
-      () => new Promise<EventBusStoreState>((resolve) => {
+      () => new Promise<EventBusStorageReadResult>((resolve) => {
         resolveRead = resolve
       })
     )
@@ -650,7 +670,7 @@ describe('event bus runtime', () => {
     await Promise.resolve()
     expect(read).toHaveBeenCalledTimes(1)
 
-    resolveRead?.(createDefaultEventBusStoreState())
+    resolveRead?.({ integrity: 'empty', state: createDefaultEventBusStoreState() })
     await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1))
   })
 })

@@ -29,6 +29,8 @@ import {
 } from '../../../ai/agent-platform/channels'
 import { discordUserAgent } from '../../../ai/agent-platform/channels/discord/discordUserAgent'
 import { resolveActiveProxy } from '../../../network/activeProxyState'
+import { createChannelImageWiring } from './channelImageWiring'
+import { configurePosterPublish } from '../../../ai/agent-platform/channels/channelPosterPublishRegistry'
 import { recordRuntimeLifecycle } from '../../../ai/agent-platform/channels/channelRuntimeLifecycle'
 import { recordRuntimeAudit } from '../../../ai/agent-platform/channels/channelRuntimeAuditRetention'
 import { pruneChannelRuntimeAudits } from '../../../ai/agent-platform/channels/channelRuntimeAuditPrune'
@@ -41,6 +43,7 @@ import {
   readChannelConversationSession,
   touchChannelConversation
 } from '../../../ai/agent-platform/channels/channelConversationBindings'
+import { resolveDeliveryTarget } from '../../../ai/agent-platform/channels/channelDeliveryTargetResolution'
 import { getNotificationRuntime } from '../../../notifications/ipc/registerNotificationIpc'
 import { notifyChannelConnectionLost } from '../../../notifications/producers/channelConnectionLost'
 import type { NotificationSubmitOutcome, NotificationSubmitRequest } from '../../../notifications/contracts/notificationContracts'
@@ -93,10 +96,13 @@ export type ChannelsAndJobsPorts = Readonly<{
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   /** 日志口（缺省是主进程唯一写入器）。同样是「留个口子好测」，不为别的。 */
   log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+  /** 生成图落盘（主进程唯一读入口用）；由 app.ts 注入同一实例。 */
+  generatedImageStorage: { read: (fileName: string) => Promise<{ bytes: Uint8Array; mime: string } | null> }
   repositories: Pick<
     ReturnType<typeof createRepositories>,
     | 'agentDatabase'
     | 'agentRepositories'
+    | 'assistantRepositories'
     | 'agentServices'
     | 'agentStore'
     | 'channelInboundRepository'
@@ -125,6 +131,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   const {
     agentDatabase,
     agentRepositories,
+    assistantRepositories,
     agentServices,
     agentStore,
     channelInboundRepository,
@@ -157,19 +164,43 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
   const qqDeliveryTransport = new QqDeliveryTransport()
   const discordDeliveryTransport = new DiscordDeliveryTransport()
   const wechatDeliveryTransport = new WechatDeliveryTransport()
+  // **同一个实例**同时充当文本与图片出口：只有一张路由表（方案 §2），不开第二张。
+  const channelDeliveryRouter = new ChannelDeliveryTransportRouter({
+    typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
+    // 图片能力还取决于「这条通道绑定的会话是什么种类」：绑定到 QQ 频道（guild）的通道发不了图，
+    // 该走文字。目标解析复用投递层那**唯一一份** `resolveDeliveryTarget`（不在这里写第二套过滤）；
+    // 没绑定/多绑定时它回 false，这里就回 null，能力按适配器声明走（不改变现状）。
+    targetKindForChannel: (channelId) => {
+      const target = resolveDeliveryTarget(channelManagementService, channelId)
+      return target.ok ? target.kind : null
+    },
+    telegram: telegramDeliveryTransport,
+    slack: slackDeliveryTransport,
+    lark: larkDeliveryTransport,
+    qq: qqDeliveryTransport,
+    discord: discordDeliveryTransport,
+    wechat: wechatDeliveryTransport
+  })
   const channelDeliveryService = new ChannelDeliveryService({
     repository: channelDeliveryRepository,
     cipher: channelCredentialVault.payloadCipher,
-    transport: new ChannelDeliveryTransportRouter({
-      typeForChannel: (channelId) => channelManagementRepository.channelType(channelId),
-      telegram: telegramDeliveryTransport,
-      slack: slackDeliveryTransport,
-      lark: larkDeliveryTransport,
-      qq: qqDeliveryTransport,
-      discord: discordDeliveryTransport,
-      wechat: wechatDeliveryTransport
-    })
+    transport: channelDeliveryRouter,
+    imageTransport: channelDeliveryRouter
   })
+  // 助手聊天里的图消息「发到频道」：投影 + 动作的装配单独一个分片（这个文件贴着 500 行上限）。
+  const channelImageWiring = createChannelImageWiring({
+    channels: channelManagementService,
+    router: channelDeliveryRouter,
+    delivery: channelDeliveryService,
+    readImage: (fileName) => ports.generatedImageStorage.read(fileName),
+    getMessage: (messageId) => assistantRepositories.messages.getById(messageId),
+    // 海报的逐通道结果写回同一条通知记录（额度按记录算）：运行时晚于这里构造，调用那一刻才取。
+    recordPosterOutcomes: async (input) => getNotificationRuntime().recordPosterOutcomes(input),
+    readPosterChannels: (recordId) => getNotificationRuntime().readPosterChannels(recordId)
+  })
+  const channelImageSend = channelImageWiring
+  // 同一份校验/投递也负责日报海报（按通道能力选形态，图 + 导读一条）。
+  configurePosterPublish(channelImageWiring.posterPublish)
   // 设置页「发一条测试消息」要走真投递：装在这儿而不是 app.ts（那是只减不增的基线文件）。
   channelManagementService.setDelivery(channelDeliveryService)
   // 运行审计的批量裁剪（0.4.3 B3）：库句柄在这里，保留期任务在别处注册——经槽传过去，
@@ -443,6 +474,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     channelInboundService,
     channelInboundExecutionRunner,
     channelDeliveryService,
+    channelImageSend,
     channelDeliveryMaintenance,
     deliverTaskResultToChannels,
     taskAutomationMaintenance,

@@ -1,6 +1,7 @@
 import {
   dashboardFeedStatusPublicPolicy, isFailureCode,
-  type DashboardFeedFailureCode, type DashboardFeedSourceId, type DashboardFeedSourceStatus
+  type DashboardFeedFailureCode, type DashboardFeedSourceId, type DashboardFeedSourceStatus,
+  type DashboardFeedSourceSymbolFailure
 } from '../../../contracts/macro/dashboardFeedStatusContracts'
 
 /**
@@ -32,26 +33,51 @@ export function createDashboardFeedStatusQuery(deps: Readonly<{
       hasCredential = profile.credentialRef ? await deps.hasCredential(profile.credentialRef) === true : false
     } catch { /* An unreadable profile is "not enabled, not keyed" rather than an exception. */ }
     const notes = dashboardFeedStatusPublicPolicy.notesBySource[sourceId] as
-      Readonly<{ outcome?: string; failureCode?: string; lastSuccessAtMs?: string }> | undefined
+      Readonly<{ outcome?: string; failureCode?: string; symbolFailures?: string; lastSuccessAtMs?: string }> | undefined
     /**
      * 备注读取与 profile 同形：**失败只影响这一源**。`readNote` 读的是宏行情库的 note，
      * 库损坏/锁住时它会抛错；以前没有保护，一处抛错让整个 `status()` reject，整张源状态表变
      * unavailable，七行被放成「暂时读不到」、所有读请求被门禁挡下（用户 2026-11-11 真机）。
      */
     let failureCode: ReturnType<typeof failureCodeOf>
+    let symbolFailures: ReturnType<typeof symbolFailuresOf>
     let lastSuccessAtMs: number | undefined
     try {
       failureCode = failureCodeOf(notes)
+      symbolFailures = symbolFailuresOf(notes)
       lastSuccessAtMs = lastSuccessAtMsOf(notes) ?? healthSuccessMs(sourceId)
     } catch {
       failureCode = undefined
+      symbolFailures = undefined
       lastSuccessAtMs = undefined
     }
     return Object.freeze({
       sourceId, enabled, hasCredential,
       ...(lastSuccessAtMs === undefined ? {} : { lastSuccessAtMs }),
-      ...(failureCode === undefined ? {} : { failureCode })
+      ...(failureCode === undefined ? {} : { failureCode }),
+      ...(symbolFailures === undefined ? {} : { symbolFailures })
     })
+  }
+
+  /**
+   * 品种级失败：`DXY:symbol-not-supported,USTEC:…` 这样的列表，采集每轮重写、成功那轮写空串。
+   *
+   * 它和运行级 `lastOutcome` 是两个问题：那一轮只要有**一只**品种进了库就是 `stored`，另一只被
+   * 永久拒绝时不留下任何痕迹。空串是"这一轮没有品种失败"的写法，不是缺失。
+   */
+  function symbolFailuresOf(notes: Readonly<{ symbolFailures?: string }> | undefined) {
+    if (!notes?.symbolFailures) return undefined
+    const raw = deps.readNote(notes.symbolFailures)
+    if (raw === undefined || raw.trim() === '') return undefined
+    const parsed: DashboardFeedSourceSymbolFailure[] = []
+    for (const entry of raw.split(',')) {
+      const [symbol, code] = entry.trim().split(':')
+      if (!symbol || !/^[A-Z0-9]{1,12}$/.test(symbol) || !isFailureCode(code)) continue
+      if (parsed.some(candidate => candidate.symbol === symbol)) continue
+      parsed.push(Object.freeze({ symbol, failureCode: code }))
+      if (parsed.length >= dashboardFeedStatusPublicPolicy.maximumSymbolFailures) break
+    }
+    return parsed.length === 0 ? undefined : Object.freeze(parsed)
   }
 
   /** The last tick's own verdict. Only `unavailable:<code>` names a failure; anything else is a success. */

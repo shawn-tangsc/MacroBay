@@ -10,10 +10,11 @@ let root: ReturnType<typeof createRoot> | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined })
 const now = () => new Date('2026-09-10T00:00:00.000Z')
 /**
- * The hook's port is `MarketCalendarClient` — four methods. These cases drive reading and the manual
- * refresh, so the freshness and catch-up ports are declared here once instead of being left out of the
- * fake: `unavailable` and `unchanged` are the port's own answers for "cannot tell" and "nothing to do",
- * so a case that starts depending on them would have to say so instead of reading `undefined`.
+ * The hook's port is `MarketCalendarClient`. These cases drive reading and the manual refresh, so the
+ * other ports are declared here once instead of being left out of the fake: `unavailable` and
+ * `unchanged` are the port's own answers for "cannot tell" and "nothing to do", so a case that starts
+ * depending on them would have to say so instead of reading `undefined`.
+ * 未映射月读同理：它给出「读不到」，**不是空数组**——将来哪个用例开始依赖它，也得自己说出来。
  */
 function calendarClient<Parts extends Pick<MarketCalendarClient, 'queryMonth' | 'refresh'>>(
   parts: Parts
@@ -21,7 +22,20 @@ function calendarClient<Parts extends Pick<MarketCalendarClient, 'queryMonth' | 
   return {
     ...parts,
     getCollectionFreshness: vi.fn(async (): Promise<MarketCalendarFreshness> => ({ state: 'unavailable', failureCode: 'query-unavailable' })),
-    refreshNow: vi.fn(async (): Promise<MarketCalendarRefreshNowResult> => ({ state: 'unchanged' }))
+    refreshNow: vi.fn(async (): Promise<MarketCalendarRefreshNowResult> => ({ state: 'unchanged' })),
+    queryUnmappedMonth: vi.fn(async () => ({ state: 'unavailable' as const })),
+    // 事件目录读口同理：它给的是自己的「读不到」，不是空数组（空数组只表示「没有匹配」）。
+    queryEvents: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const })),
+    // 映射规则读口同理：它给「读不到」，不是空表。
+    queryMappingRules: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const })),
+    // 各来源记录同理：读不到就明说，不给空数组（空数组会被读成「这一期只有一家在报」）。
+    queryEventSourceWrites: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const })),
+    // 码表读口同理：读不到就明说，不给空表（空表会被读成「一个码都没有」）。
+    queryCodeTable: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const })),
+    // 事件清单同理：读不到就明说，不给空数组（空数组会被读成「库里没有事件」）。
+    queryEventList: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const })),
+    // 数值修订审计：读不到就给错误态，不给「未记录」——那是两件事。
+    queryValueRevisions: vi.fn(async () => ({ state: 'unavailable' as const, reasonCode: 'query-unavailable' as const }))
   }
 }
 it('reads locally, refreshes only on demand and ignores completed requests from a superseded scope', async () => {
@@ -145,7 +159,7 @@ it('reads every month the grid draws and keeps a repeated observation once', asy
   const { useMarketCalendar } = await import('./useMarketCalendar')
   const event = { eventKey: 'shared-observation', title: 'Shared', countryCode: null, eventType: 'economic-indicator' as const,
     importance: 'high' as const, scheduledAt: '2026-09-01T10:00:00.000Z', consensus: null, providerActual: null, providerPrevious: null,
-    source: '0xRouter' as const, sourceObservedAt: '2026-08-01T00:00:00.000Z', coverage: 'observed-unverified' as const }
+    source: 'Narwhal' as const, sourceObservedAt: '2026-08-01T00:00:00.000Z', coverage: 'observed-unverified' as const }
   const client = calendarClient({ queryMonth: vi.fn(async ({ month }: { month: string }) => ({ state: 'available' as const, month, locale: 'zh' as const,
     asOf: now().toISOString(), events: month === '2026-09' || month === '2026-08' ? [event] : [], sources: [] })), refresh: vi.fn() })
   let state!: ReturnType<typeof useMarketCalendar>

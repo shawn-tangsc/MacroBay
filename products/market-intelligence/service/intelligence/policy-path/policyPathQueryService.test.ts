@@ -22,6 +22,8 @@ const service = (input: {
   series?: PolicyPathObservation[]
   /** Observations per meeting, when the decided meeting and the next one differ. */
   observations?: Record<string, PolicyPathObservation[]>
+  /** The row cap was hit: the reading must carry `seriesTruncated`. */
+  truncated?: boolean
   readTargetRange?: () => { lowerPercent: number; upperPercent: number } | undefined
 }) => createPolicyPathQueryService({
   calendar: {
@@ -47,7 +49,12 @@ const service = (input: {
     readLatestDecisionBefore: () => input.previousDecision as never,
     readLatestSep: () => input.facts as never
   },
-  observations: { list: (meetingDate: string) => input.observations?.[meetingDate] ?? input.series ?? [] },
+  observations: {
+    list: (meetingDate: string) => ({
+      observations: input.observations?.[meetingDate] ?? input.series ?? [],
+      truncated: input.truncated ?? false
+    })
+  },
   ...(input.readTargetRange ? { readTargetRange: input.readTargetRange } : {})
 })
 
@@ -67,6 +74,56 @@ describe('policy path query service', () => {
     expect(reading.probability).toMatchObject({ outcome: 'hike-25', changeInPp24h: -1, venue: 'polymarket' })
     expect(reading.probability?.range30d).toEqual({ min: 0.765, max: 0.775 })
     expect(reading.staleness).toBe('live')
+  })
+
+  it('ships the whole point-by-point series, not just a count', () => {
+    const reading = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: true },
+      series: [observation('2026-10-29T02:00:00.000Z', 0.6), observation('2026-10-30T02:00:00.000Z', 0.7)]
+    }).read({ asOf: '2026-10-30T02:10:00.000Z' })!
+
+    expect(reading.probability?.series?.map((point) => point.at))
+      .toEqual(['2026-10-29T02:00:00.000Z', '2026-10-30T02:00:00.000Z'])
+    // 每个点都带着那一刻的五桶概率，不是「有多少个点」。
+    expect(reading.probability?.series?.[1]?.values['hike-25']).toBeCloseTo(0.7, 10)
+    expect(reading.probability?.series?.length).toBe(2)
+  })
+
+  it('measures the 24-hour change from the reading a day earlier, not from the previous point', () => {
+    const reading = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: true },
+      series: [
+        observation('2026-10-29T02:00:00.000Z', 0.5),
+        observation('2026-10-30T01:50:00.000Z', 0.8),
+        observation('2026-10-30T02:00:00.000Z', 0.9)
+      ]
+    }).read({ asOf: '2026-10-30T02:10:00.000Z' })!
+
+    // 一天前最近一条是 10-29T02:00（0.5）：25×(0.9−0.5) = +10bp。
+    // 拿上一条（0.8）比只会得到 +2.5bp，那是「较上一刻」，不是「较上一日」。
+    expect(reading.probability?.expectationChange24hBp).toBe(10)
+  })
+
+  it('omits the 24-hour change when the series does not reach back a day', () => {
+    const reading = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: true },
+      series: [observation('2026-10-30T01:50:00.000Z', 0.8), observation('2026-10-30T02:00:00.000Z', 0.9)]
+    }).read({ asOf: '2026-10-30T02:10:00.000Z' })!
+
+    expect(reading.probability?.expectationChange24hBp).toBeUndefined()
+  })
+
+  it('says the series was truncated when the row cap was hit, and stays quiet when it was not', () => {
+    const base = {
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: true },
+      series: [observation('2026-10-29T02:00:00.000Z', 0.6), observation('2026-10-30T02:00:00.000Z', 0.7)]
+    }
+    expect(service({ ...base, truncated: true }).read({ asOf: '2026-10-30T02:10:00.000Z' })?.probability?.seriesTruncated).toBe(true)
+    expect(service(base).read({ asOf: '2026-10-30T02:10:00.000Z' })?.probability?.seriesTruncated).toBeUndefined()
   })
 
   it('marks a range that fell back to FRED as a FRED reading, not a statement one', () => {

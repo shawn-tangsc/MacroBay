@@ -36,6 +36,6 @@ export function DailyBriefingDeleteOutcomeNote({ outcome, text, onRetry }: Reado
     {outcome.remaining === null
       ? text.history.deleteUnknownRemaining
       : text.history.deletePartial.replace('{count}', String(outcome.remaining))}{' '}
-    <Button onClick={() => onRetry(outcome)} type="link">{text.history.deleteRetry}</Button>
+    <Button className="text-action" onClick={() => onRetry(outcome)} size="small" type="text">{text.history.deleteRetry}</Button>
   </p>
 }

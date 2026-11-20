@@ -2,12 +2,18 @@ import type { NotificationCopyTableSet } from '@platform/notifications/contracts
 
 import { indicatorNames } from '../../../../contracts/indicatorNames'
 import { macroEventNotificationSentences } from '../../../../contracts/macroEventNotificationSentences'
+import { newsArrivalTemplates } from '../../../../contracts/newsArrivalSentences'
 import { sentimentAlertTemplates } from '../../../../contracts/sentimentAlertSentences'
 import { signalNotificationSentences } from '../../../../contracts/signalNotificationSentences'
 import {
   ACKNOWLEDGE_ACTION_KEY,
+  ANALYSIS_CHECK_MODEL_ACTION_KEY,
+  ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY,
+  ANALYSIS_RETRY_ACTION_KEY,
+  ANALYSIS_TIMELINE_ACTION_KEY,
   MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
   OPEN_BRIEFING_ACTION_KEY,
+  OPEN_SENTIMENT_ACTION_KEY,
   notificationEventBodyKey,
   notificationEventNamedKey,
   notificationEventHeadlineKey,
@@ -30,8 +36,18 @@ export type MarketIntelligenceNotificationCopy = NotificationCopyTableSet
 const TITLE = notificationEventTitleKey
 
 /** 两种语言各一个别名：表里每一行都短，读起来像一句话而不是一条寻址。 */
-const zh = { signal: signalNotificationSentences['zh-CN'], macro: macroEventNotificationSentences['zh-CN'], alert: sentimentAlertTemplates['zh-CN'] }
-const en = { signal: signalNotificationSentences['en-US'], macro: macroEventNotificationSentences['en-US'], alert: sentimentAlertTemplates['en-US'] }
+const zh = {
+  signal: signalNotificationSentences['zh-CN'],
+  macro: macroEventNotificationSentences['zh-CN'],
+  alert: sentimentAlertTemplates['zh-CN'],
+  arrival: newsArrivalTemplates['zh-CN']
+}
+const en = {
+  signal: signalNotificationSentences['en-US'],
+  macro: macroEventNotificationSentences['en-US'],
+  alert: sentimentAlertTemplates['en-US'],
+  arrival: newsArrivalTemplates['en-US']
+}
 const BODY = notificationEventBodyKey
 const REASON = notificationEventReasonKey
 
@@ -40,7 +56,13 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.briefingFailed)]: '日报没生成出来',
     // 产品动作的标签（v2.58）：与正文同一条解析链路。句子与搬家前逐字相同。
     [OPEN_BRIEFING_ACTION_KEY]: '打开日报',
+    // R40：这一版**只到舆情页、不定位到某一条**，所以只能写「打开舆情」——写「查看这条」就是撒谎。
+    [OPEN_SENTIMENT_ACTION_KEY]: '打开舆情',
     [ACKNOWLEDGE_ACTION_KEY]: '知道了',
+    [ANALYSIS_RETRY_ACTION_KEY]: '重试',
+    [ANALYSIS_TIMELINE_ACTION_KEY]: '查看时间轴',
+    [ANALYSIS_CHECK_MODEL_ACTION_KEY]: '检查模型连接',
+    [ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY]: '检查模型设置',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '{date} {time} {language}这一期没有生成出来。',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '{date} {time} {language}这一期数据齐了，但解读没出来。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
@@ -126,6 +148,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceStale)]: '这个源在它的静默窗口内没有带来新条目。去设置里检查它的开关和连接。',
     [REASON(IDS.sourceStale)]: '最后一条新内容出现在这个窗口之前，之后的采集都没有带来新条目。',
 
+    [TITLE(IDS.sourceSymbolRefused)]: '{sourceName} 不再提供 {symbols}',
+    [BODY(IDS.sourceSymbolRefused)]: '供应商把这个品种列为「不受支持」，这部分数据会一直是空白；重试不会恢复，换套餐或换源后自动恢复。',
+    [REASON(IDS.sourceSymbolRefused)]: '供应商以「品种不受支持」拒绝请求；这是永久状态，不是这一次没读到。',
+
     [TITLE(IDS.briefingReady)]: '日报已完成',
     [BODY(IDS.briefingReady)]: '{date} {time} {language}这一期已经生成。',
     [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
@@ -134,18 +160,42 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: '分析结论',
     [BODY(IDS.analysisConclusion)]: '这次分析的结论已经出来了。',
     [REASON(IDS.analysisConclusion)]: '你订阅了信号触发的分析结论提醒。',
+    [TITLE(IDS.analysisFailed)]: '分析没能生成',
+    // 连接类单独一句：不许写成「解读失败/读不懂」——读者会以为是我们读不懂新闻，实际是没连上。
+    [notificationEventVariantKey(IDS.analysisFailed, 'connection')]: '这次没有连上模型服务，所以没有得出解读。检查模型配置或网络后可以重试。',
+    [BODY(IDS.analysisFailed)]: '这次分析没有完成，时间轴里能看到失败与重试。',
+    [REASON(IDS.analysisFailed)]: '分析失败了，而你在等它的结果。',
+    // R40：非低重要性舆情进桌面。正文与标题由源头拼成品（来源 · 标题 / 偏向 · 时间），
+    // 这张表是给「没有成品句」的读取路径与历史记录用的回退句。
+    [TITLE(IDS.newsItemArrived)]: zh.arrival.title,
+    [BODY(IDS.newsItemArrived)]: zh.arrival.body,
+    [REASON(IDS.newsItemArrived)]: zh.arrival.reason,
     // 分析额度那条正文里的线名：句子属于产品自己的分析线，平台文案表里不再寄存（v2.59）。
     'notification.analysis-line.market-intelligence.event': '行情变动分析',
     'notification.analysis-line.market-intelligence.calendar': '日历事件分析',
 
     [TITLE(IDS.timezoneInvalid)]: '时区无效，自动生成已暂停',
     [BODY(IDS.timezoneInvalid)]: '去设置里改成有效的时区，日报会恢复自动生成。',
-    [REASON(IDS.timezoneInvalid)]: '设置里的时区读不出来。'
+    [REASON(IDS.timezoneInvalid)]: '设置里的时区读不出来。',
+
+    // R42：资金面读数变了。成品句由源头拼（改数那条要同时给旧值与新值），这里是回退句。
+    [TITLE(IDS.capitalFlowEtfUpdated)]: 'ETF 资金流 · {asset}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'arrived')]: '{day} {direction} {amount}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'revised')]: '{day} 从 {previousDirection} {previousAmount} 改为 {direction} {amount}',
+    [REASON(IDS.capitalFlowEtfUpdated)]: 'ETF 资金流的读数变了：新的一天，或你已经看过的那一天被修订。',
+    [TITLE(IDS.capitalFlowStablecoinUpdated)]: '稳定币总供给更新',
+    [BODY(IDS.capitalFlowStablecoinUpdated)]: '总供给 {amount}，一日{direction} {change}',
+    [REASON(IDS.capitalFlowStablecoinUpdated)]: '稳定币总供给的读数变了；同一天只提醒一次。'
   }),
   'en-US': Object.freeze({
     [TITLE(IDS.briefingFailed)]: 'The daily briefing did not generate',
     [OPEN_BRIEFING_ACTION_KEY]: 'Open briefing',
+    [OPEN_SENTIMENT_ACTION_KEY]: 'Open news',
     [ACKNOWLEDGE_ACTION_KEY]: 'Got it',
+    [ANALYSIS_RETRY_ACTION_KEY]: 'Retry',
+    [ANALYSIS_TIMELINE_ACTION_KEY]: 'View timeline',
+    [ANALYSIS_CHECK_MODEL_ACTION_KEY]: 'Check model connection',
+    [ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY]: 'Check model settings',
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'The {date} {time} {language} edition failed to generate.',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The {date} {time} {language} edition has its data ready but no interpretation.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
@@ -219,6 +269,10 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [BODY(IDS.sourceStale)]: 'This source brought no new items for longer than its silence window. Check its switch and connection in settings.',
     [REASON(IDS.sourceStale)]: 'The last new item arrived before this window; collections since then brought nothing new.',
 
+    [TITLE(IDS.sourceSymbolRefused)]: '{sourceName} no longer carries {symbols}',
+    [BODY(IDS.sourceSymbolRefused)]: 'The provider lists this instrument as unsupported, so this data stays blank; retrying will not help, but a different plan or source restores it.',
+    [REASON(IDS.sourceSymbolRefused)]: 'The provider refused the request as an unsupported instrument — a permanent state, not a one-off read failure.',
+
     [TITLE(IDS.briefingReady)]: 'Daily brief is ready',
     [BODY(IDS.briefingReady)]: 'The {date} {time} {language} edition is ready.',
     [REASON(IDS.briefingReady)]: 'You subscribed to briefing-ready notices.',
@@ -226,6 +280,15 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [TITLE(IDS.analysisConclusion)]: 'Analysis conclusion',
     [BODY(IDS.analysisConclusion)]: 'The conclusion from this analysis is ready.',
     [REASON(IDS.analysisConclusion)]: 'You subscribed to signal-triggered analysis conclusions.',
+    [TITLE(IDS.analysisFailed)]: 'Analysis did not run',
+    [notificationEventVariantKey(IDS.analysisFailed, 'connection')]: 'The model service could not be reached, so no reading was produced. Check the model settings or your network, then try again.',
+    [BODY(IDS.analysisFailed)]: 'This analysis did not finish; the timeline shows the failure and the retry.',
+    [REASON(IDS.analysisFailed)]: 'An analysis failed while you were waiting for it.',
+    // R40: a non-low-importance story reaches the desktop. Title and body are built at the source;
+    // these are the fallback sentences used when a record is read without rendered copy.
+    [TITLE(IDS.newsItemArrived)]: en.arrival.title,
+    [BODY(IDS.newsItemArrived)]: en.arrival.body,
+    [REASON(IDS.newsItemArrived)]: en.arrival.reason,
     // Line names used inside the analysis-quota sentence: they belong to this product's analysis lines,
     // so the platform copy table no longer carries them (v2.59).
     'notification.analysis-line.market-intelligence.event': 'market-move analysis',
@@ -233,6 +296,16 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
 
     [TITLE(IDS.timezoneInvalid)]: 'Invalid time zone, automatic generation paused',
     [BODY(IDS.timezoneInvalid)]: 'Set a valid time zone in settings and the briefing will generate automatically again.',
-    [REASON(IDS.timezoneInvalid)]: 'The configured time zone cannot be read.'
+    [REASON(IDS.timezoneInvalid)]: 'The configured time zone cannot be read.',
+
+    // R42: the capital readings changed. The source composes the finished sentence (a revision must
+    // carry both the old and the new number); these lines are the fallback.
+    [TITLE(IDS.capitalFlowEtfUpdated)]: 'ETF flows · {asset}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'arrived')]: '{day} {direction} {amount}',
+    [notificationEventVariantKey(IDS.capitalFlowEtfUpdated, 'revised')]: '{day} changed from {previousDirection} {previousAmount} to {direction} {amount}',
+    [REASON(IDS.capitalFlowEtfUpdated)]: 'The ETF flow reading changed: a new day, or a day you had already seen was revised.',
+    [TITLE(IDS.capitalFlowStablecoinUpdated)]: 'Stablecoin supply updated',
+    [BODY(IDS.capitalFlowStablecoinUpdated)]: 'Total supply {amount}, one-day {direction} {change}',
+    [REASON(IDS.capitalFlowStablecoinUpdated)]: 'The stablecoin total supply changed; at most one notice a day.'
   })
 })

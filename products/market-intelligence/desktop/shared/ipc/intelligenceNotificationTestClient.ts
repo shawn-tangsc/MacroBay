@@ -34,9 +34,14 @@ export function readTestNotificationReceipt(value: unknown): IntelligenceTestRec
     return { state: 'no-data', reasonCode: value.reasonCode }
   }
   if (value.state === 'unavailable' && isKnownRelayCode(value.reasonCode, UNAVAILABLE_REASONS)) {
-    return typeof value.enabledChannelCount === 'number'
-      ? { state: 'unavailable', reasonCode: value.reasonCode, enabledChannelCount: value.enabledChannelCount }
-      : { state: 'unavailable', reasonCode: value.reasonCode }
+    // 只转登记过的字段（不整包透传）：`requestedCount` 是「读者请求启用的通道条数」，
+    // 界面靠它分清「还没启用」与「启用了没连上」；不认识的字段仍然丢掉。
+    return {
+      state: 'unavailable',
+      reasonCode: value.reasonCode,
+      ...(typeof value.enabledChannelCount === 'number' ? { enabledChannelCount: value.enabledChannelCount } : {}),
+      ...(typeof value.requestedCount === 'number' ? { requestedCount: value.requestedCount } : {})
+    }
   }
   throw new Error('test-notification-unreadable')
 }

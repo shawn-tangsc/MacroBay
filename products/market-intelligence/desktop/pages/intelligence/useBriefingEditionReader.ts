@@ -14,6 +14,13 @@ import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenera
  * never generates, and it reports what it found — an edition, no edition in this language, a failed
  * attempt — so the caller can say which one it is instead of guessing from a boolean.
  */
+/** 诊断去重：同一次身份 / 同一种状态只报到一次（每 1.5 秒一条会把日志淹掉）。 */
+const reportedReads = new Set<string>()
+const reportedResults = new Set<string>()
+
+/** 诊断去重：同一组入口条件只报一次。 */
+const entryLogged = new Set<string>()
+
 export function useBriefingEditionReader(input: Readonly<{
   client: Pick<DailyBriefingClient, 'get'>
   editions: readonly DailyBriefingEditionSummary[]
@@ -25,6 +32,10 @@ export function useBriefingEditionReader(input: Readonly<{
   setView: (next: DailyBriefingPageViewState | ((current: DailyBriefingPageViewState) => DailyBriefingPageViewState)) => void
   setPinnedDate: (date: string) => void
   setRegenerateFailure: (failure: null) => void
+  /** 点行时**选中期次与语言必须跟着走**（用户 2026-11-15）：只改日期会让身份闸门把读到的文档判成
+   *  「不是这一期」，于是正文变空、落到「没有这一版」。语言徽标那条路一直是写了这两样的。 */
+  setPickedLocale: (locale: 'zh-CN' | 'en-US') => void
+  setPickedPeriodId: (periodId: string) => void
 }>): Readonly<{
   readEdition: (date: string, target: 'zh-CN' | 'en-US', options?: Readonly<{ fresh?: boolean; periodId?: string }>) => Promise<Readonly<{
     kind: 'available' | 'missing' | 'failed' | 'unknown'
@@ -34,7 +45,7 @@ export function useBriefingEditionReader(input: Readonly<{
   }>>
   openEdition: (date: string, target: 'zh-CN' | 'en-US', rowHint?: DailyBriefingEditionSummary, periodId?: string) => void
 }> {
-  const { client, editions, todayDate, readyDocument, requestRef, cache, periodDate, setView, setPinnedDate, setRegenerateFailure } = input
+  const { client, editions, todayDate, readyDocument, requestRef, cache, periodDate, setView, setPinnedDate, setRegenerateFailure, setPickedLocale, setPickedPeriodId } = input
   const readEdition = async (date: string, target: 'zh-CN' | 'en-US', options: Readonly<{ fresh?: boolean; periodId?: string }> = {}): Promise<Readonly<{
     kind: 'available' | 'missing' | 'failed' | 'unknown'
     failureCode?: string
@@ -46,7 +57,31 @@ export function useBriefingEditionReader(input: Readonly<{
       setView({ status: 'ready', document: cached, kind: date === (periodDate.current ?? todayDate) ? 'today' : 'history' })
       return { kind: 'available' }
     }
-    const result = await client.get({ date, locale: target, ...(options.periodId ? { periodId: options.periodId } : {}) }).catch(() => undefined)
+    // 请求与返回各打一行（用户 2026-11-14：所有版本一起读不到，而链路上一个字都没有）：
+    // **按哪个三元组请的、回来的是什么状态、有没有失败码**。同一组身份只打一次，避免刷屏。
+    const from = options.fresh === true ? 'reload' : 'openEdition'
+    const diagnosticKey = `${date}|${options.periodId ?? 'default'}|${target}|${from}`
+    if (!reportedReads.has(diagnosticKey)) {
+      reportedReads.add(diagnosticKey)
+      console.warn(`[daily-briefing] reading edition ${JSON.stringify({ date, periodId: options.periodId ?? 'default', locale: target, fresh: options.fresh === true })}`)
+    }
+    const result = await client.get({ date, locale: target, ...(options.periodId ? { periodId: options.periodId } : {}) })
+      .catch((error: unknown) => {
+        console.warn(`[daily-briefing] edition read threw ${JSON.stringify({
+          date, periodId: options.periodId ?? 'default', locale: target,
+          error: error instanceof Error ? error.message.slice(0, 160) : String(error).slice(0, 160)
+        })}`)
+        return undefined
+      })
+    if (!reportedResults.has(`${diagnosticKey}|${result?.state ?? 'threw'}`)) {
+      reportedResults.add(`${diagnosticKey}|${result?.state ?? 'threw'}`)
+      console.warn(`[daily-briefing] edition read answered ${JSON.stringify({
+        date, periodId: options.periodId ?? 'default', locale: target,
+        from,
+        state: result?.state ?? 'threw',
+        failureCode: (result as { failureCode?: string } | undefined)?.failureCode ?? null
+      })}`)
+    }
     if (result?.state === 'available') {
       cache.current.set(key, result.document)
       setView({ status: 'ready', document: result.document, kind: date === (periodDate.current ?? todayDate) ? 'today' : 'history' })
@@ -70,15 +105,43 @@ export function useBriefingEditionReader(input: Readonly<{
     if (readyDocument && readyDocument.edition.date === date && readyDocument.edition.locale === target
       && (periodId === undefined || documentPeriod === wantedPeriod)) return
     setPinnedDate(date)
+    // 选中项**必须**跟着点行走：日期、期次、语言三样一起定，否则身份闸门会把刚读到的文档
+    // 判成「不是这一期」，正文清空、压成「没有这一版」（用户 2026-11-15 的最后一跳）。
+    setPickedLocale(target)
+    setPickedPeriodId(row?.periodId ?? periodId ?? 'default')
     const request = ++requestRef.current
     setRegenerateFailure(null)
+    // 入口一行诊断（用户 2026-11-14 第五次「还是读不出来」）：一次说清**有没有那一行、行级状态、
+    // 尝试次数、语言级状态**，以及最后走了哪一支。否则只能靠猜。
+    const languageStateAtEntry = row?.languages?.find((entry) => entry.locale === target)?.state
+    const entryKey = `${date}|${target}|${periodId ?? ''}|${row?.periodId ?? ''}|${row?.state ?? 'none'}|${String(row?.attemptCount ?? 'unset')}|${languageStateAtEntry ?? 'unset'}`
+    if (!entryLogged.has(entryKey)) {
+      entryLogged.add(entryKey)
+      console.warn(`[daily-briefing] openEdition ${JSON.stringify({
+        date, target, periodIdArg: periodId ?? null, rowFound: row !== undefined,
+        rowPeriodId: row?.periodId ?? null, rowState: row?.state ?? null,
+        attemptCount: row?.attemptCount ?? null, langState: languageStateAtEntry ?? null
+      })}`)
+    }
     if (!row) {
+      console.warn(`[daily-briefing] openEdition branch ${JSON.stringify({ date, target, branch: 'no-row' })}`)
       setView({ status: 'locale-missing', locale: target, date, ...(date !== todayDate ? { historical: true } : {}) })
       return
     }
-    if (row.state === 'missing') {
-      setView({ status: 'no-edition', date, failed: Boolean(row.attemptCount) })
-      if (!row.attemptCount) return
+    // 「这一版有没有」只认语言级（架构师 2026-11-14）：行级 `state` 取的是 primary 语言那份文档，
+    // 与「这一语言发布过没有」可以不一致；用行级去拦，有正文时也会一次读取都不发。
+    // **语言级 `published` 时，任何早退都不成立**（架构师 2026-11-14）：判「这一版有没有」只看
+    // 这一语言发布过没有；行级 `state` 与 `attemptCount` 都不能否决一次读取。
+    const languageState = row.languages?.find((entry) => entry.locale === target)?.state
+    const langPublished = languageState === 'published'
+    if (row.state === 'missing' && !langPublished) {
+      setView({ status: 'no-edition', date, failed: row.attemptCount !== undefined && row.attemptCount > 0 })
+      // 可选字段不能当 0 用：缺席＝不知道试过几次；缺席或 0 次都代表「这一天没有这一版的正文」，
+      // 不必再读一次（读也只会拿回缺失）。
+      if (row.attemptCount === undefined || row.attemptCount === 0) {
+        console.warn(`[daily-briefing] openEdition branch ${JSON.stringify({ date, target, branch: 'missing-and-zero', periodId: row.periodId })}`)
+        return
+      }
     }
     setView((current) => current.status === 'no-edition' && current.date === date ? current : { status: 'loading' })
     void readEdition(date, target, { ...(periodId ? { periodId } : {}) })

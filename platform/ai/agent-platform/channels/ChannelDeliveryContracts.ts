@@ -1,4 +1,5 @@
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
+import type { ChannelConversationKind } from './channelContracts'
 
 /**
  * 一条出站消息从哪来。`notification` 是通知推送（通道方案 §2.2）：幂等键是通知记录 id，
@@ -61,6 +62,16 @@ export type ChannelDeliveryFailureCode =
   | 'delivery-provider-rejected'
   /** 会话键里补不出平台认的目标（例如 Telegram 的 chat id）：这是目标解析问题，不是网络。 */
   | 'delivery-target-invalid'
+  /** 图片超出通道上限：**发之前**就判出来，一次网络请求都不发。 */
+  | 'delivery-image-too-large'
+  /** 这个通道（或这一版）发不了这张图：没有图片能力、格式不认（按字节签名判）、或说明文字超长。 */
+  | 'delivery-image-unsupported'
+  /** 图取不到：detail 分 `missing`（文件不在了）与 `read-failed`（在但读不出来）——「没有」与「拿不到」分开。 */
+  | 'delivery-image-unavailable'
+  /** 这张图不许对外发：来源不是「这条助手消息自己带着它」（编辑原图走同一条投递口时会被拒）。 */
+  | 'delivery-image-source-not-allowed'
+  /** caption 超过通道上限：整条不发（不许截断后假装发全，也不许运行期自动拆成两条）。 */
+  | 'delivery-caption-too-long'
 
 export type ChannelDeliveryTransport = {
   send: (input: {
@@ -109,4 +120,78 @@ export type ChannelDeliveryAuditView = {
   attemptId: string | null
   code: string
   createdAt: string
+}
+
+/**
+ * 出站图片的输入（P2：仅应用生成的图；哪几个平台能发由适配器有没有实现 `sendImage` 决定）。
+ *
+ * `image.mime` 是**嗅探结果**，不是存储声明的那个：声明 png、实际 webp 的图存在，
+ * 判定只看字节签名（见 `channelImageDelivery.sniffImageMime`）。
+ */
+export type ChannelImageDeliveryRequest = {
+  channelId: string
+  agentId: string
+  conversationId: string
+  source: ChannelDeliverySource
+  sourceId: string
+  image: { mime: string; bytes: Uint8Array }
+  caption: string
+  retryUnknown?: boolean
+}
+
+/** 通道的图片能力：`supportsImage` 为假时投递层直接判 `delivery-image-unsupported`，一次网络都不发。 */
+export type ChannelImageTransport = {
+  supportsImage: (channelId: string) => boolean
+  /**
+   * 可选：按**这条通道绑定的会话种类**再收窄一次能力。
+   *
+   * 为什么需要：`supportsImage(channelId)` 只看通道与连接，看不到目标会话是什么。QQ 的频道（guild）
+   * 没有素材上传接口——对一条通道是「能发图」，对一条**绑到频道会话**的通道却「不能」。
+   * 没有这一档，能力会画出一个必然失败的按钮，并把「按设计走文字」变成一次失败尝试。
+   *
+   * 不实现 = 所有会话种类都支持（其余适配器的行为一字不变）。拿不到目标会话时也不收窄：
+   * 判不出来就不改变现状。
+   */
+  supportsImageForConversationKind?: (kind: ChannelConversationKind) => boolean
+  sendImage: (input: {
+    channelId: string
+    providerConversationKey: string
+    image: { mime: string; bytes: Uint8Array }
+    caption: string
+    idempotencyKey: string
+  }) => Promise<ChannelDeliveryTransportResult>
+}
+
+/**
+ * 图片投递的 `sourceId`：**固定后缀**，只由「产物种类」决定。
+ *
+ * 文字用 `<recordId>`（现状不动），图片用 `<recordId>:image`。`claim` 的去重键是
+ * `(channel, conversation, source, sha256(sourceId))`：两者共用一个 id 时，第二次 claim 会命中
+ * 第一次那条已送达的记录、直接返回成功，而图根本没发出去。
+ */
+export function channelImageSourceId(recordId: string): string {
+  return `${recordId}:image`
+}
+
+/**
+ * 「只发图片」用的第三个固定键：`<recordId>:image:bare`。
+ *
+ * 与「图片带说明」**不是同一条尝试**：caption 超长导致整条失败时，那条 failed 行原样留在审计里；
+ * 「只发图片」是一次新的、可独立回退的投递，点第二次返回同一个终态、不重发。
+ */
+/**
+ * 日报海报（图 + 导读一条消息）的 `sourceId` 后缀（海报方案 §5）。
+ * 与图片的 `:image` 是**不同产物形态**，所以另用一个后缀；同样不加通道维度（通道在唯一键第一列）。
+ */
+export function channelPosterSourceId(recordId: string): string {
+  return `${recordId}:poster`
+}
+
+/** 不支持图片的通道收纯导读文字：同一动作、**另一条产物形态**，所以另用一个后缀。 */
+export function channelPosterTextSourceId(recordId: string): string {
+  return `${recordId}:poster-text`
+}
+
+export function channelImageBareSourceId(recordId: string): string {
+  return `${recordId}:image:bare`
 }

@@ -40,6 +40,25 @@ export const OPEN_BRIEFING_ACTION_KEY = productNotificationActionKey('market-int
 export const ACKNOWLEDGE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'acknowledge')
 
 /**
+ * 「打开舆情」：新抓到舆情那条通知的唯一动作。
+ *
+ * 这一版**只到舆情页、不定位到具体某条**（壳层的通知跳转今天只认产品页与设置分区，产品实体
+ * 定位能力还没落）。所以标签只能写「打开舆情」——写「查看这条」而点完不定位，就是撒谎。
+ */
+export const OPEN_SENTIMENT_ACTION_KEY = productNotificationActionKey('market-intelligence', 'open-sentiment')
+
+/** 分析失败通知的动作标签（只在「分析没跑成」那条上用）。 */
+export const ANALYSIS_RETRY_ACTION_KEY = productNotificationActionKey('market-intelligence', 'retry-analysis')
+export const ANALYSIS_TIMELINE_ACTION_KEY = productNotificationActionKey('market-intelligence', 'view-timeline')
+/** 传输层没连上：检查的是「连接」。 */
+export const ANALYSIS_CHECK_MODEL_ACTION_KEY = productNotificationActionKey('market-intelligence', 'check-model')
+/**
+ * 供应商答了但拒绝（4xx）/ 启动时没选出模型：要检查的是**模型设置**，不是网络。
+ * 与上面那个键分开：「检查模型连接」用在 401 上，等于让读者去查一个没问题的地方。
+ */
+export const ANALYSIS_CHECK_MODEL_SETTINGS_ACTION_KEY = productNotificationActionKey('market-intelligence', 'check-model-settings')
+
+/**
  * 事件下的任意一段文案键：`notification.event.<id>.<path>`（如 `country.US`、`indicator.cpi`）。
  *
  * 与其余几个生成函数同源：手写全串会在事件改名时静默失效，而这类键数量多、最容易手写。
@@ -86,9 +105,35 @@ export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   /** 市场日历（0xRouter 那条腿）一次刷新没成功。手动与自动同一条，读者要的是「这次没刷成」。 */
   calendarRefreshFailed: 'market-intelligence.calendar.refresh-failed',
   sentimentAlert: 'market-intelligence.sentiment.alert',
+  /**
+   * 一条非低重要性的舆情刚入库（R40，用户 2026-11-18）：**只发桌面，不进中心、不进手机**。
+   * 手机那条仍由 `sentiment.alert`（阈值）负责，两条各自只干一件事。
+   */
+  newsItemArrived: 'market-intelligence.news.item-arrived',
   /** N12：信号唤起的那次分析出结论了（只在这一条路径发）。 */
   analysisConclusion: 'market-intelligence.analysis.conclusion',
+  /**
+   * 分析没跑成（2026-11-17 用户「失败了，怎么不报应用内通知出来」）。
+   *
+   * 手动与自动共用一个事件、**只有 `center` 一档**：手动失败读者在等，自动失败只报链路级
+   * （连续 3 次或 2 小时零成功），两种都不该弹桌面或手机。去重键由提交侧拼：
+   * 手动 `analysis-failed:manual:{runId}`、自动 `analysis-failed:{triggerKey}:{failureCode}:{bucket30m}`，
+   * 见 `product.manifest.ts` 的同名声明。
+   */
+  analysisFailed: 'market-intelligence.analysis.failed',
   sourceConsecutiveFailed: 'market-intelligence.source.consecutive-failed',
   sourceStale: 'market-intelligence.source.stale',
-  timezoneInvalid: 'market-intelligence.timezone.invalid'
+  /**
+   * 供应商把这个品种列为「不受支持」（套餐不含 / 品种下架）：永久状态，重试不会恢复。
+   * 与 `consecutive-failed` 分开，因为动作不同——续费或换源，不是查密钥（用户 2026-11-16
+   * 「出现这种情况，还要通知出来」）。
+   */
+  sourceSymbolRefused: 'market-intelligence.source.symbol-not-supported',
+  timezoneInvalid: 'market-intelligence.timezone.invalid',
+  /**
+   * R42（用户 2026-11-18）：ETF / 稳定币的读数变了——只应用内（`center` + `popup`）。
+   * 判据是**数字**，不是「刷新返回 updated」：主备源切换那一轮数没变，不弹。
+   */
+  capitalFlowEtfUpdated: 'market-intelligence.capital-flow.etf-updated',
+  capitalFlowStablecoinUpdated: 'market-intelligence.capital-flow.stablecoin-updated'
 })

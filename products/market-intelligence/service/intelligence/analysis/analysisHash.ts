@@ -70,6 +70,22 @@ export function buildAnalysisSnapshotHash(input: AnalysisSnapshotHashInput): str
   })
 }
 
+/**
+ * 证据指纹：只由事实与证据引用决定，**不含** `asOf` / `dataCutoff` / `caveats`。
+ *
+ * 它回答的是「模型读到的还是那一批东西吗」，`snapshotHash` 回答的是「是不是同一份冻结记录」。
+ * 两个时刻不同的两次快照，证据相同就该有同一个指纹——复用判定与界面「查看/再次解读」都靠它。
+ */
+export function buildEvidenceFingerprint(input: Readonly<{
+  facts: readonly unknown[]
+  evidenceRefs: readonly unknown[]
+}>): string {
+  return hashMarketAnalysisJson({
+    facts: [...input.facts].sort(compareByIdentityKeys(['domain', 'factId'])),
+    evidenceRefs: [...input.evidenceRefs].sort(compareByIdentity('evidenceRefId'))
+  })
+}
+
 function canonicalize(value: unknown): unknown {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
   if (typeof value === 'number') {

@@ -9,7 +9,9 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { stoppedOutcome } from './dailyBriefAgentRunner'
 import { dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
+import { briefingFirstTierFamily, mergeFirstTierNext } from './briefingFirstTierEvents'
 import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
+import { applyBackfillFacts, type BackfillOutcome } from './dailyBriefBackfillFacts'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
   dailyBriefBackfillPolicy,
@@ -102,31 +104,6 @@ export class DailyBriefTurnAbortedError extends Error {
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new DailyBriefTurnAbortedError()
-}
-
-function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly BackfillOutcome[]): DailyBriefingDocument {
-  const metrics: Record<string, { id: string; format: BriefingValueFormat; group: 'market' | 'funds' }> = {
-    'core-stablecoin-supply-usd': { id: 'stablecoin', format: 'usd', group: 'funds' },
-    'etf-net-flow-btc': { id: 'etf-btc', format: 'usd', group: 'funds' },
-    'etf-net-flow-eth': { id: 'etf-eth', format: 'usd', group: 'funds' },
-    'funding-rate-percent-btc': { id: 'funding-btc', format: 'percent', group: 'funds' },
-    'funding-rate-percent-eth': { id: 'funding-eth', format: 'percent', group: 'funds' },
-    'dxy-level': { id: 'dxy', format: 'level', group: 'market' },
-    'gold-level-usd': { id: 'gold', format: 'level', group: 'market' },
-    'us10y-yield-percent': { id: 'us10y', format: 'percent', group: 'market' },
-    'us10y-real-yield-percent': { id: 'us10y-real', format: 'percent', group: 'market' }
-  }
-  const byId = new Map(outcomes.flatMap((outcome) => outcome.result?.state === 'available' && metrics[outcome.result.metric] ? [[metrics[outcome.result.metric]!.id, outcome.result] as const] : []))
-  if (byId.size === 0) return document
-  const patch = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
-    const fact = byId.get(row.id)
-    if (!fact) return row
-    return Object.freeze({ ...row, state: 'available' as const, value: Object.freeze({ number: fact.value, format: metrics[fact.metric]!.format }), observedAt: fact.observedAt, change: null }) as T
-  }
-  return Object.freeze({
-    ...document,
-    data: Object.freeze({ ...document.data, market: Object.freeze(document.data.market.map(patch)), funds: Object.freeze(document.data.funds.map(patch)) })
-  })
 }
 
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
@@ -250,15 +227,6 @@ function backfillProtocol(gaps: readonly DailyBriefDataGap[], document: DailyBri
     'The tool answers with a value plus observedAt/sourceUrl/method, or a named GAP. Never estimate a GAP, never change an official actual, and only ask about ids listed above.'
   ].join('\n')
 }
-
-type BackfillOutcome = Readonly<{
-  source: string
-  metric: string
-  asOf: string
-  result?: DailyBriefBackfillResult
-  gapCode?: string
-  detail?: string
-}>
 
 async function runBackfillRound(
   selection: unknown,
@@ -418,10 +386,19 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const orderedNext = [...selectedNext].sort(compareBriefingNextRelevance)
   // Deterministic floor: when the editor hid every other event, the next most relevant one stays
   // visible. `maximumNextItems` excludes the focus, so the rendered list is focus + 3 = 4.
-  const nextItems = (orderedNext.length > 0
+  // 一级事件**必须出现**（用户/Chief 2026-11-16）：模型可以少列，但不许把 FOMC 纪要、CPI、非农
+  // 这类筛没。一级事件排在前面，其余保持编辑的选择顺序，总条数仍受同一个上限约束。
+  const firstTierNext = relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey
+    && briefingFirstTierFamily({ eventKey: item.eventKey, title: item.title, titleKey: item.titleKey }) !== undefined)
+  const selectedForItems = orderedNext.length > 0
     ? orderedNext
-    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey).slice(0, 1))
-    .slice(0, dailyBriefingPolicy.maximumNextItems)
+    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey).slice(0, 1)
+  const nextItems = mergeFirstTierNext({
+    ...(focus?.eventKey ? { focusEventKey: focus.eventKey } : {}),
+    selected: selectedForItems,
+    mustKeep: firstTierNext,
+    limit: dailyBriefingPolicy.maximumNextItems
+  })
   const selectedNews = newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items
   const selectedMacro = macroIds ? macroCandidates.filter((item) => macroIds.has(`macro:${item.eventKey}`)) : macroCandidates
   // Selection decides visibility. The system never unions a release the editor did not select: a

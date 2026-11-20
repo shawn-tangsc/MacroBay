@@ -7,7 +7,7 @@
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17
 export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20' | 'daily-briefing.v21' | 'daily-briefing.v22' | 'daily-briefing.v23' | 'daily-briefing.v24' | 'daily-briefing.v25'
 
 /** The four readings, and whether each source could answer at generation time. */
@@ -312,7 +312,8 @@ export type BriefingMacroItem = Readonly<{
   title: string
   titleKey?: string
   scheduledAt: string
-  importance: 'high' | 'medium' | 'low'
+  /** 来源给的重要性；**可缺省**＝「来源没提供」（用户 2026-11-14），不许用 medium 顶。 */
+  importance?: 'high' | 'medium' | 'low'
   countryCode?: string
   countryName?: string
   actual?: string
@@ -410,7 +411,7 @@ export type BriefingNextItem = Readonly<{
   title: string
   titleKey?: string
   at: string
-  importance: 'high' | 'medium' | 'low'
+  importance?: 'high' | 'medium' | 'low'
   category: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
   countryCode?: string
   countryName?: string

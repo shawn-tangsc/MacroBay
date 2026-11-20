@@ -20,6 +20,19 @@ export type DiscordApiResult<T> =
   }
 
 /**
+ * 一条出站消息发出去之后的三种处境（文本与图片共用）：发出去了、上游拒了、不知道收没收下。
+ * 429 与 5xx 各自还要再细分到投递层的码，所以在投递层统一映射，这里只报事实。
+ */
+export type DiscordSendOutcome = 'delivered' | 'rejected' | 'rate-limited' | 'unknown'
+
+/**
+ * HTTP 状态 → 处境的唯一分类（文本与图片共用一处，不分两套）：429 限流、5xx 不知道结果、其余 4xx 被拒。
+ */
+function sendOutcomeOf(response: Response): DiscordSendOutcome {
+  return response.ok ? 'delivered' : response.status === 429 ? 'rate-limited' : response.status >= 500 ? 'unknown' : 'rejected'
+}
+
+/**
  * Discord REST 的唯一入口（注入平台 `fetch`，代理与出网策略都在平台那一侧）。
  *
  * 协议依据（Discord Developers › Docs）：
@@ -37,7 +50,7 @@ export class DiscordApiClient {
     userAgent: string
   }) {}
 
-  async sendText(conversation: DiscordProviderConversation, content: string, signal?: AbortSignal): Promise<'delivered' | 'rejected' | 'rate-limited' | 'unknown'> {
+  async sendText(conversation: DiscordProviderConversation, content: string, signal?: AbortSignal): Promise<DiscordSendOutcome> {
     if (signal?.aborted) return 'unknown'
     const token = await this.deps.token()
     if (!token || signal?.aborted) return 'rejected'
@@ -52,7 +65,41 @@ export class DiscordApiClient {
         },
         body: JSON.stringify({ content })
       })
-      return response.ok ? 'delivered' : response.status === 429 ? 'rate-limited' : response.status >= 500 ? 'unknown' : 'rejected'
+      return sendOutcomeOf(response)
+    } catch { return 'unknown' }
+  }
+
+  /**
+   * 发一张图 + caption：**一次 multipart 请求**（`POST /channels/{id}/messages`），不是先传后发两步。
+   *
+   * `files[0]` 放字节、`payload_json` 放 `content`（caption）与 `attachments` 的 id 映射——Discord
+   * 只把「payload 里点了名的那一份」挂到消息上，只给 `files[n]` 不点 id 会落成一条没有附件的消息。
+   * 线程不是额外字段：Discord 的线程自带一个频道 id，`decodeDiscordConversation` 解出来的
+   * `thread` 就是那个 id，所以同一路径已经把消息发进线程，不硬造 `thread_ts`。
+   *
+   * 大小与格式**不在这里判**：上限与字节签名由投递层 `validateChannelImageDelivery` 统一判定。
+   */
+  async sendImage(
+    conversation: DiscordProviderConversation,
+    input: { mime: string; bytes: Uint8Array; caption: string },
+    signal?: AbortSignal
+  ): Promise<DiscordSendOutcome> {
+    if (signal?.aborted) return 'unknown'
+    const token = await this.deps.token()
+    if (!token || signal?.aborted) return 'rejected'
+    // 文件名只由嗅探出的 mime 决定（Discord 按 content-type 与扩展名认图），字节不落盘。
+    const filename = `image.${input.mime === 'image/png' ? 'png' : 'jpg'}`
+    const form = new FormData()
+    form.set('payload_json', JSON.stringify({
+      ...(input.caption.trim() ? { content: input.caption } : {}),
+      attachments: [{ id: 0, filename }]
+    }))
+    form.set('files[0]', new Blob([input.bytes], { type: input.mime }), filename)
+    try {
+      const response = await this.deps.getPlatformFetch()(`${discordApiBase}/channels/${conversation.id}/messages`, {
+        method: 'POST', signal, headers: { authorization: `Bot ${token}`, 'user-agent': this.deps.userAgent }, body: form
+      })
+      return sendOutcomeOf(response)
     } catch { return 'unknown' }
   }
 

@@ -1,9 +1,12 @@
+import type { DatabaseSync } from 'node:sqlite'
+
 import type { JobRunRecord, JobRuntime } from '@platform/jobs'
 
 import { macroCalendarTransportPolicy } from './macroCalendarPolicy'
 import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import type { MacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 import type { MacroCalendarScheduleHealthService } from './macroCalendarScheduleHealthService'
+import { backfillExpiredReleaseValues } from './marketCalendarReleaseValueBackfill'
 
 type MacroCalendarManualRunResult =
   | { state: 'queued' }
@@ -34,6 +37,9 @@ export const macroCalendarScheduleJobPolicy = {
   manualCompletionObservationMarginMs: macroCalendarManualCompletionObservationMarginMs,
   manualCompletionBudgetMs: macroCalendarManualCompletionBudgetMs,
   manualCompletionPollIntervalMs: 100,
+  /** 补值扫描：轮次上限 + 整体时间预算（作业上限 2 分钟，扫描不许吃掉采集的份额）。 */
+  releaseValueBackfillMaximumReads: 20,
+  releaseValueBackfillBudgetMs: 30 * 1_000,
   jobRetryPolicy: { maxAttempts: 1, backoff: 'none', baseDelayMs: 0, maxDelayMs: 0 }
 } as const
 
@@ -53,28 +59,93 @@ const jobRecordFields = {
   logs: true
 } satisfies Record<keyof JobRunRecord, true>
 
+/**
+ * 发布后补值扫描：**同 handler 末尾、失败只 warn、限次数 + 整体时间预算**。
+ *
+ * 三条都不许松：
+ * 1. 作业成败仍由采集那部分决定——这里任何错都只 `warn` 一行，不向外抛；
+ * 2. 预算用完时**抛错中止**，不返回 `undefined`——返回 undefined 会被扫描判成
+ *    「这一期没值」，把行写成 `missing` 终态，等于用预算耗尽伪造「来源没给」；
+ * 3. 次数上限交给扫描自己的 `maximumReads`（20 次），剩下的留给下一轮。
+ */
+async function runReleaseValueBackfill(
+  deps: Readonly<{ database: DatabaseSync; readActual: (metricKey: string, periodKey: string) => Promise<string | undefined> }>,
+  signal: AbortSignal,
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
+): Promise<void> {
+  try {
+    if (signal.aborted) {
+      log?.('warn', 'macro-calendar.release-value-backfill-skipped', { reason: 'job-aborted' })
+      return
+    }
+    const deadlineMs = Date.now() + macroCalendarScheduleJobPolicy.releaseValueBackfillBudgetMs
+    const report = await backfillExpiredReleaseValues(deps.database, {
+      today: new Date().toISOString().slice(0, 10),
+      nowMs: Date.now(),
+      maximumReads: macroCalendarScheduleJobPolicy.releaseValueBackfillMaximumReads,
+      readActual: async (metricKey, periodKey) => {
+        if (Date.now() > deadlineMs) throw new Error('backfill-time-budget-exceeded')
+        return deps.readActual(metricKey, periodKey)
+      }
+    })
+    log?.('info', 'macro-calendar.release-value-backfill', { ...report })
+  } catch (error) {
+    // 预算耗尽或来源异常：这一轮没补到的行原样留着，下一轮再来（不写终态）。
+    log?.('warn', 'macro-calendar.release-value-backfill-failed', {
+      message: error instanceof Error ? error.message : 'unknown'
+    })
+  }
+}
+
 export function createMacroCalendarScheduleJobRuntime(deps: {
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule' | 'enqueueStartup' | 'enqueueDefinition' | 'getRun'>
   profiles: Pick<MacroCalendarProviderProfileStore, 'list'>
   health: Pick<MacroCalendarScheduleHealthService, 'collectAndUpdateHealth'>
+  /**
+   * 发布后补值扫描的取数口（惰性给：`readActual` 在真正取数时才碰 FRED 的凭据）。
+   * 不传就不扫——测试与没有标准表的场合不需要它。
+   */
+  releaseValues?: Readonly<{
+    database: DatabaseSync
+    readActual: (metricKey: string, periodKey: string) => Promise<string | undefined>
+  }>
+  /** 主进程日志出口（`console.warn` 进不了 `app.log`，今晚已经踩过一次）。 */
+  log?: (level: 'info' | 'warn' | 'error', event: string, fields?: Record<string, unknown>) => void
 }): MacroCalendarScheduleJobRuntime {
   let disposed = false
   deps.jobRuntime.registerHandler(macroCalendarScheduleJobPolicy.handlerId, async (payload, context) => {
+    /**
+     * **诊断一行，不改判定**：18 次失败每次只用 88–243ms，而真发一次请求要 321–1476ms——
+     * 说明采集在联网之前就判了失败。真库副本上「传一个已 abort 的 signal」能精确复现同样的形状
+     * （两个源都 failed、3ms、`network-request-failed`），所以最可能是作业交过来的 signal 已经中止。
+     * 这里只记录它进来时的状态与原因（超时 / 取消 / 关机），下一次运行就能定死是哪一种。
+     */
+    deps.log?.('warn', 'macro-calendar.schedule.handler-signal', { runId: context.jobRunId,
+      aborted: context.signal.aborted, reason: String((context.signal as { reason?: unknown }).reason ?? 'none'),
+      payloadKeys: isPlainRecord(payload) ? Object.keys(payload) : [] })
     const descriptors = await selectDescriptors(deps.profiles, payload)
     if (!descriptors) throw new Error(safeJobFailureMessage)
 
-    let failed = false
+    // `lastError` 是**唯一被持久化的现场**：只写一句通用文案，等于事后没有任何线索。
+    // 所以把「哪个 descriptor、什么 failureCode」带进错误消息里。
+    const failures: string[] = []
     for (const descriptorId of descriptors) {
       try {
         const result = await deps.health.collectAndUpdateHealth({
           descriptorId, runId: context.jobRunId, detectedAt: new Date().toISOString(), signal: context.signal
         })
-        if (!isSuccessfulHealth(result, descriptorId)) failed = true
-      } catch {
-        failed = true
+        if (!isSuccessfulHealth(result, descriptorId)) failures.push(`${descriptorId}/${failureCodeOf(result)}`)
+      } catch (error) {
+        failures.push(`${descriptorId}/${error instanceof Error ? error.message : 'threw'}`)
       }
     }
-    if (failed) throw new Error(safeJobFailureMessage)
+    // 补值扫描排在**采集与健康记录之后**：一轮采集失败时不动它——采集失败多半是网络或源不可用，
+    // 这时去问 FRED，读失败会被扫描当成「这一期没值」，把行写成 `missing` 终态，
+    // 等于用一次断网伪造「来源没给」。留下来给下一轮。
+    if (deps.releaseValues && failures.length === 0) {
+      await runReleaseValueBackfill(deps.releaseValues, context.signal, deps.log)
+    }
+    if (failures.length > 0) throw new Error(`${safeJobFailureMessage} ${failures.join(', ')}`)
   })
 
   return {
@@ -212,6 +283,10 @@ async function selectDescriptors(
   if (isExactPayload(payload, ['providerId'])) return enabledDescriptorFor(profiles, payload.providerId).then((descriptor) => descriptor ? [descriptor] : undefined)
   if (!isExactPayload(payload, [])) return undefined
   return enabledDescriptors(profiles)
+}
+
+function failureCodeOf(value: unknown): string {
+  return isPlainRecord(value) && typeof value.failureCode === 'string' ? value.failureCode : 'unknown'
 }
 
 function isSuccessfulHealth(value: unknown, descriptorId: string): boolean {

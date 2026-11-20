@@ -12,6 +12,22 @@ export type CalendarFeedDefinition = {
   dashboardSection: 'macro-calendar'
   supportsBlsScheduleSync?: boolean
   schedule?: Readonly<{ kind: 'provider' | 'job'; intervalSeconds: number }>
+  /**
+   * 这条 feed 的采集由哪一条 feed 的作业覆盖。
+   *
+   * Narwhal 一次接口调用返回全部 releases，三类是我们按 series 自己分的，所以只有一条作业。
+   * 覆盖关系落注册表，状态渲染只读它；被覆盖的那条**不加开关**（那层 UI 今天不存在），
+   * 只在状态列写「由同一次采集覆盖」。
+   */
+  coveredBy?: CalendarFeedId
+  /**
+   * **读者启用后才采集**（不是默认在跑）。
+   *
+   * 为什么要有这个字段：`collection: 'job'` 说的是「启用了就按作业采」，不等于「此刻正在采」。
+   * 补跑清单、健康状态这类「运行时事实」必须能区分两者——0xRouter 三路是补充源，
+   * 没配置就不该注册定时任务（用户 2026-11-15），也不该被日报补跑当成在采的源。
+   */
+  optIn?: true
 }
 
 export type CalendarFeedCapabilities = {
@@ -25,6 +41,11 @@ const calendarFeedOrder = [
   'macro-calendar-fed',
   'macro-calendar-bea',
   'macro-calendar-bls',
+  'macro-calendar-narwhal-economic-data',
+  'macro-calendar-narwhal-financial-events',
+  'macro-calendar-narwhal-central-bank-activities',
+  /* 0xRouter 三路：**读者可配置、默认关**（用户 2026-11-15：「只有配置了的，才注册定时获取的任务」）。
+     采集由 `zeroXRouterCalendarScheduler` 拥有，启用才注册作业；进表身份另由来源权重口径决定。 */
   'macro-calendar-0xrouter-economic-data',
   'macro-calendar-0xrouter-financial-events',
   'macro-calendar-0xrouter-central-bank-activities',
@@ -68,38 +89,79 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     supportsBlsScheduleSync: true,
     schedule: { kind: 'provider', intervalSeconds: 6 * 60 * 60 }
   },
-  'macro-calendar-0xrouter-economic-data': {
-    feedId: 'macro-calendar-0xrouter-economic-data',
-    providerId: '0xrouter',
-    providerDisplayName: '0xRouter',
-    displayName: '0xRouter Economic Data',
+  /* Narwhal 三条：**采集器已落**——作业挂在第一条（30 分钟一次），另两条由它一次写三类
+     （`coveredBy` 指向第一条）。所以这三条是 `collection: 'job'`，不是「登记了但不采」；
+     旧注释写的 `collection: 'none'` 已与数据相反，2026-11-13 更正。
+     不写 `job` 是因为它还没有采集器与解析器：写成 `job` 会让「立即采集」成为一个点了没反应、
+     或者按旧源实现去采的入口。等采集器落地的那一笔，把 `collection`/`schedule` 与
+     `AUTOMATIC_CALENDAR_FEED_IDS`、`zeroXRouterFeedKeys`、日历卡那三行一起改，才是真换源。 */
+  'macro-calendar-narwhal-economic-data': {
+    feedId: 'macro-calendar-narwhal-economic-data',
+    providerId: 'narwhal',
+    providerDisplayName: 'Narwhal',
+    displayName: 'Narwhal economic data',
     description: 'Market-sourced economic calendar; events stay unverified until an official link exists.',
     owner: 'market',
     collection: 'job',
     dashboardSection: 'macro-calendar',
-    schedule: { kind: 'job', intervalSeconds: 10 * 60 }
+    /** 一次采集写三类，作业挂在这一条上。 */
+    schedule: { kind: 'job', intervalSeconds: 30 * 60 }
+  },
+  'macro-calendar-0xrouter-economic-data': {
+    feedId: 'macro-calendar-0xrouter-economic-data',
+    optIn: true,
+    providerId: '0xrouter',
+    providerDisplayName: '0xRouter',
+    displayName: '市场日历 · 经济数据',
+    description: '市场来源的经济数据日历；读者启用后才会注册定时采集。',
+    owner: 'market',
+    collection: 'job',
+    dashboardSection: 'macro-calendar',
+    schedule: { kind: 'job', intervalSeconds: 30 * 60 }
   },
   'macro-calendar-0xrouter-financial-events': {
     feedId: 'macro-calendar-0xrouter-financial-events',
+    optIn: true,
     providerId: '0xrouter',
     providerDisplayName: '0xRouter',
-    displayName: '0xRouter Financial Events',
-    description: 'Market-sourced financial events; events stay unverified until an official link exists.',
+    displayName: '市场日历 · 金融事件',
+    description: '市场来源的金融事件日历；读者启用后才会注册定时采集。',
     owner: 'market',
     collection: 'job',
     dashboardSection: 'macro-calendar',
-    schedule: { kind: 'job', intervalSeconds: 10 * 60 }
   },
   'macro-calendar-0xrouter-central-bank-activities': {
     feedId: 'macro-calendar-0xrouter-central-bank-activities',
+    optIn: true,
     providerId: '0xrouter',
     providerDisplayName: '0xRouter',
-    displayName: '0xRouter Central Bank Activities',
-    description: 'Market-sourced central bank activities; events stay unverified until an official link exists.',
+    displayName: '市场日历 · 央行活动',
+    description: '市场来源的央行活动日历；读者启用后才会注册定时采集。',
     owner: 'market',
     collection: 'job',
     dashboardSection: 'macro-calendar',
-    schedule: { kind: 'job', intervalSeconds: 10 * 60 }
+  },
+  'macro-calendar-narwhal-financial-events': {
+    feedId: 'macro-calendar-narwhal-financial-events',
+    providerId: 'narwhal',
+    providerDisplayName: 'Narwhal',
+    displayName: 'Narwhal Financial Events',
+    description: 'Market-sourced financial events; events stay unverified until an official link exists.',
+    owner: 'market',
+    collection: 'job',
+    coveredBy: 'macro-calendar-narwhal-economic-data',
+    dashboardSection: 'macro-calendar'
+  },
+  'macro-calendar-narwhal-central-bank-activities': {
+    feedId: 'macro-calendar-narwhal-central-bank-activities',
+    providerId: 'narwhal',
+    providerDisplayName: 'Narwhal',
+    displayName: 'Narwhal Central Bank Activities',
+    description: 'Market-sourced central bank activities; events stay unverified until an official link exists.',
+    owner: 'market',
+    collection: 'job',
+    coveredBy: 'macro-calendar-narwhal-economic-data',
+    dashboardSection: 'macro-calendar'
   },
   'macro-calendar-coinmarketcal': {
     feedId: 'macro-calendar-coinmarketcal',
@@ -111,6 +173,14 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     collection: 'none',
     dashboardSection: 'macro-calendar',
   }
+}
+
+/**
+ * **真正在采的那些 feed id**（`collection !== 'none'`）：`refreshNow` 的返回里列的就是它们。
+ * 一个出处——白名单曾经另写一份（旧源那三条），结果日报传新源 id 被直接判 `input-invalid`。
+ */
+export function collectingCalendarFeedIds(): readonly string[] {
+  return Object.values(calendarFeedRegistry).filter((feed) => feed.collection !== 'none').map((feed) => feed.feedId)
 }
 
 export function listCalendarFeeds(): readonly CalendarFeedDefinition[] {

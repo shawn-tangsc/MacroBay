@@ -2,6 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import type {
+  NotificationSubmitOutcome,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationSubmitContracts'
 import { createInMemoryProfileStorage, createSourceProfileStore } from '../application/sourceProfileStore'
 import { createInMemoryIntelligenceCredentialStorage, createIntelligenceCredentialStore } from '../store/intelligenceCredentialStore'
 import { createMacroMarketRuntime, type MacroMarketRuntime } from './macroMarketRuntime'
@@ -40,16 +44,28 @@ const instrumentBody = (url: string): unknown => {
  * credential store, wired to the runtime exactly as the app wires them, with only the transport faked.
  * A test that stubbed the credential away would not have caught what actually went wrong in the app.
  */
-async function compose(routes: Routes = {}, options: Readonly<{ saveCredential?: boolean; enabled?: boolean; onError?: (error: unknown, sourceId: string) => void }> = {}) {
+async function compose(routes: Routes = {}, options: Readonly<{
+  saveCredential?: boolean
+  enabled?: boolean
+  onError?: (error: unknown, sourceId: string) => void
+  submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  /** 让供应商只对美元指数回「品种不受支持」，黄金照常回答：真机上套餐到期就是这个形状。 */
+  dollarRefusal?: unknown
+}> = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'real-dxy-runtime-')); directories.push(directory)
   const handlers = new Map<string, (payload: unknown, context: never) => Promise<void>>()
   const urls: string[] = []
   const fetchImpl = (async (url: string) => {
     urls.push(String(url))
-    const route = String(url).includes('/api/v1/candle') ? routes.candle : routes.price
+    const target = String(url)
+    const isDollarPrice = !target.includes('/api/v1/candle') && new URL(target).searchParams.get('symbolCode') === 'DXY'
+    if (options.dollarRefusal !== undefined && isDollarPrice) {
+      return { status: 400, text: async () => JSON.stringify(options.dollarRefusal) }
+    }
+    const route = target.includes('/api/v1/candle') ? routes.candle : routes.price
     return {
       status: route?.status ?? 200,
-      text: async () => JSON.stringify(route?.body ?? instrumentBody(String(url)))
+      text: async () => JSON.stringify(route?.body ?? instrumentBody(target))
     }
   }) as unknown as typeof fetch
   const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
@@ -65,7 +81,8 @@ async function compose(routes: Routes = {}, options: Readonly<{ saveCredential?:
     dataDirectory: directory,
     fetchImpl,
     now: () => at(0),
-    ...(options.onError ? { onError: options.onError } : {})
+    ...(options.onError ? { onError: options.onError } : {}),
+    ...(options.submitNotification ? { submitNotification: options.submitNotification } : {})
   })
   const saveCredential = options.saveCredential !== false
   if (saveCredential) await credentialStore.save({ credentialRef: CREDENTIAL_REF, sourceId: realMarketApiPolicy.sourceId, apiKey: KEY })
@@ -174,6 +191,48 @@ describe('the real dollar index end to end', () => {
     // The failure is filed under this source and carries a code, never the URL the key travelled in.
     expect(errors).toEqual([{ message: 'Error: realmarketapi-market credential-rejected', sourceId: realMarketApiPolicy.sourceId }])
     expect(JSON.stringify(errors)).not.toContain(KEY.slice(0, 8))
+    macro.store.close()
+  })
+
+  it('notifies once when the provider refuses the dollar as an unsupported instrument', async () => {
+    // 真机 2026-11-16：套餐掉到 FREE，美元被拒、黄金照常 —— 运行级是成功，只有品种级失败。
+    // 这种状况必须主动说一次，不能只在卡面上留一句「本段无数据」（用户：「还要通知出来」）。
+    const submits: NotificationSubmitRequest[] = []
+    const { macro, tick } = await compose({}, {
+      dollarRefusal: {
+        statusCode: 400, message: 'One or more validation errors occurred.',
+        errors: [{ propertyName: '', errorCode: 'ERR_0008_SYMBOL_NOT_SUPPORTED', errorMessage: 'Symbol is not supported' }]
+      },
+      submitNotification: async (request) => { submits.push(request); return { state: 'accepted' } as never }
+    })
+
+    await tick()
+
+    // 数据行为不变：黄金入库、美元不存。
+    expect(macro.store.count(series)).toBe(0)
+    expect(macro.store.count(goldSeries)).toBeGreaterThan(0)
+    // 通知一条，事件、去重键与正文参数都按声明来；不出现 URL 与密钥。
+    expect(submits).toHaveLength(1)
+    expect(submits[0]).toMatchObject({
+      eventTypeId: 'market-intelligence.source.symbol-not-supported',
+      producerId: realMarketApiPolicy.sourceId,
+      dedupeVars: { builder: 'sourceIssue', sourceId: realMarketApiPolicy.sourceId },
+      bodyParams: { sourceName: 'RealMarketAPI', symbols: 'DXY' },
+      actions: []
+    })
+    expect(JSON.stringify(submits)).not.toContain(KEY.slice(0, 8))
+    macro.store.close()
+  })
+
+  it('says nothing when both instruments answer', async () => {
+    const submits: NotificationSubmitRequest[] = []
+    const { macro, tick } = await compose({}, {
+      submitNotification: async (request) => { submits.push(request); return { state: 'accepted' } as never }
+    })
+
+    await tick()
+
+    expect(submits).toHaveLength(0)
     macro.store.close()
   })
 })

@@ -27,10 +27,6 @@ export type NotificationSettingsText = {
   sendTest: string
   /** 冷却期内的就地提示：刚发过就别再发（秒数由主进程之外的守卫算）。 */
   sendCooldown: (seconds: number) => string
-  /** 页脚那一行（唯一一行常驻说明）。 */
-  footerLine: string
-  /** 页脚 ⓘ 第一段：中心关不掉、读过可清、超保留期自动清理。 */
-  centerDesc: string
   /** 页脚 ⓘ 第二段：内置规则、本机只打扰一次、系统层面不二次兜底、手机是另一个维度。 */
   footerHint: string
   /**
@@ -63,8 +59,6 @@ const zh: NotificationSettingsText = {
   sendTestRow: '发送测试通知',
   sendTest: '发送测试',
   sendCooldown: (seconds) => `刚发过，${seconds} 秒后再试`,
-  footerLine: '都会记进通知中心。该弹桌面的会弹到桌面，同一件事不会重复。',
-  centerDesc: '不能逐条关；读过的可以清掉，超过保留期的自动清理。',
   footerHint:
     '这些事件都由我们替你决定、不给开关。本机只打扰一次：桌面开着就弹桌面、不再在应用内重复；只有「桌面关着、这台机器不支持桌面通知、发送报错」这三种情况才改在应用内提示。系统里关掉通知这件事我们读不到，也不会因此重复弹一次。手机是另一回事——只有三条离开应用，跟这里的开关无关。',
   testSentToChannel: (channel) => `已发到 ${channel}（测试）`,
@@ -90,9 +84,6 @@ const en: NotificationSettingsText = {
   sendTestRow: 'Send a test notification',
   sendTest: 'Send test',
   sendCooldown: (seconds) => `Just sent — try again in ${seconds}s`,
-  footerLine: 'Everything is recorded in the notification center. Whatever should show on the desktop does, and the same thing never repeats.',
-  centerDesc:
-    'You cannot turn individual ones off; read ones can be cleared, and the rest age out of the retention window.',
   footerHint:
     'We decide which of these events notify you; there is no switch for them. On this device a notification disturbs you once: if desktop alerts are on it shows on the desktop and does not repeat in the app; only when desktop is off, the system does not support desktop notifications, or sending fails does it fall back to the in-app hint. We cannot read whether notifications are turned off in the system, so we do not fall back a second time and do not repeat the alert. The phone is a separate channel — only three events leave the app, and none of them depend on these switches.',
   testSentToChannel: (channel) => `Sent to ${channel} (test)`,

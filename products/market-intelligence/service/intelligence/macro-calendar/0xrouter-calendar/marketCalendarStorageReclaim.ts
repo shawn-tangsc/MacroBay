@@ -19,6 +19,11 @@ import { marketCalendarObservationStateFields,
  */
 export const marketCalendarRetentionPolicy = Object.freeze({
   marketObservationRetentionMs: 90 * 24 * 60 * 60 * 1000,
+  /**
+   * **永不过期**的 cutoff（1970 之前）：观测表从一个「按保留期滚动删除的缓存」变成
+   * 「历史证据」。它仍参与去重（同一身份多份样本合一），但不再按时间删行。
+   */
+  frozenObservationCutoff: '0001-01-01T00:00:00.000Z',
   /** Rows one run may delete or update before it stops and reports `limited: true`. */
   defaultMaximumRowsPerRun: 40_000,
   /** Rows one run may read while deciding; reaching it reports `limited: true` instead of unbounded work. */
@@ -70,7 +75,11 @@ export function reclaimMarketCalendarStorage(database: DatabaseSync,
   const budget = options.maximumRowsPerRun ?? marketCalendarRetentionPolicy.defaultMaximumRowsPerRun
   const limit = Number.isSafeInteger(budget) && budget > 0 ? budget : marketCalendarRetentionPolicy.defaultMaximumRowsPerRun
   const before = readMarketCalendarBilling(database)
-  const cutoff = new Date(now - marketCalendarRetentionPolicy.marketObservationRetentionMs).toISOString()
+  // **观测表冻结成历史证据**（2026-11-14 定 A 方案）：停「过期删除」、保留「去重」。
+  // 原因：`macroCalendarRepository.readLatestReleaseForMetric` 仍在读它的旧源历史兜底，
+  // 清掉历史会让那条兜底悄悄换答案；而同一身份多份样本仍要合一，否则读取会看到重复。
+  // 所以 cutoff 压到「永不过期」——过期 0 行，去重照旧。
+  const cutoff = marketCalendarRetentionPolicy.frozenObservationCutoff
   database.exec(`create index if not exists ${marketCalendarRetentionPolicy.maintenanceIndex}
     on mi_macro_calendar_market_event_observations(candidate_key, last_seen_at desc)`)
   database.exec('begin immediate')
@@ -176,6 +185,56 @@ function apply(database: DatabaseSync, plan: Plan, limit: number): void {
  * Backfill uses each observation's own collection time, which is the truth we already
  * stored; nothing is inferred from the clock at migration time.
  */
+/**
+ * **`mi_macro_calendar_revisions.importance` 从 `not null` 放宽成可空**（单事务、幂等、append-only）。
+ *
+ * 为什么现在必须改：记录契约里这一格已经变成「可缺省」（源没说就不写），而写入端是
+ * `revision.importance ?? null`。列还是 `not null` 时，**任何一条没有重要性的记录都会把整次刷新
+ * 判成失败**——官方日程那两个源（fed / bea）的草稿本来就不带重要性，于是连续失败 15 次，
+ * 日志只有一句「run failed」。实测错误原文：
+ * `NOT NULL constraint failed: mi_macro_calendar_revisions.importance`。
+ *
+ * 三条边界：
+ * 1. **不丢行**：旧表整表拷进新表（列名逐个列，不靠 `select *` 的顺序），123 行原样保留；
+ * 2. **幂等**：仍在 `not null` 才迁移；已经是可空就直接返回 false；
+ * 3. **不许哨兵值**：不写 `''`/`'unknown'`/`'medium'`，没有值就是 NULL。
+ */
+export function ensureRevisionImportanceNullable(database: DatabaseSync): boolean {
+  const columns = database.prepare('pragma table_info(mi_macro_calendar_revisions)').all() as unknown as
+    { name: string; notnull: number }[]
+  const importance = columns.find((column) => column.name === 'importance')
+  if (importance === undefined || importance.notnull === 0) return false
+  const table = 'mi_macro_calendar_revisions'
+  const rebuild = `${table}__nullable_importance`
+  const names = columns.map((column) => column.name)
+  const ddl = database.prepare('select sql from sqlite_master where type = ? and name = ?')
+    .get('table', table) as { sql: string } | undefined
+  if (ddl === undefined) return false
+  // 只把这一列的 `not null` 去掉，其余定义原样保留（主键、唯一约束都在 DDL 里）。
+  const rebuiltDdl = ddl.sql
+    .replace(/^CREATE TABLE\s+\S+/, `CREATE TABLE ${rebuild}`)
+    .replace(/\bimportance\s+text\s+not\s+null\b/i, 'importance text')
+  if (!/importance text(?![^,)]*not null)/i.test(rebuiltDdl)) return false
+  database.exec('begin')
+  try {
+    database.exec(rebuiltDdl)
+    database.exec(`insert into ${rebuild} (${names.join(', ')}) select ${names.join(', ')} from ${table}`)
+    const before = database.prepare(`select count(*) as c from ${table}`).get() as { c: number }
+    const copied = database.prepare(`select count(*) as c from ${rebuild}`).get() as { c: number }
+    if (before.c !== copied.c) throw new Error('revision row count changed during migration')
+    database.exec(`drop table ${table}`)
+    database.exec(`alter table ${rebuild} rename to ${table}`)
+    // 索引随旧表一起没了：按原样重建（表名一样，SQL 直接复用）。
+    database.exec('create index if not exists idx_mi_calendar_event_visible on mi_macro_calendar_revisions(event_key, detected_at_ms desc, recorded_at desc)')
+    database.exec('create index if not exists idx_mi_calendar_month on mi_macro_calendar_revisions(scheduled_date, detected_at_ms desc)')
+    database.exec('commit')
+    return true
+  } catch (error) {
+    database.exec('rollback')
+    throw error
+  }
+}
+
 export function ensureMarketCalendarObservationState(database: DatabaseSync): boolean {
   const fields = database.prepare('pragma table_info(mi_macro_calendar_market_event_observations)')
     .all() as unknown as { name: string }[]
@@ -186,6 +245,12 @@ export function ensureMarketCalendarObservationState(database: DatabaseSync): bo
       set last_seen_at = (select c.detected_at from mi_macro_calendar_market_event_collections as c
         where c.collection_id = o.collection_id)
       where o.last_seen_at is null`)
+  }
+  // 发布覆盖的指标列表（`measure_keys_json`）：一行 = 一次发布，身份只记主 measure 的 key，
+  // 其余 measure 的 key 只能记在这里。**只加列，不改旧列**；旧行这一列是 null，读侧按「没带」
+  // 处理，不猜、不用主 key 顶替。
+  if (!fields.some((field) => field.name === 'measure_keys_json')) {
+    database.exec('alter table mi_macro_calendar_market_event_observations add column measure_keys_json text')
   }
   database.exec(`create table if not exists ${marketCalendarRetentionPolicy.ledgerTable} (
     candidate_key text primary key, last_seen_at text not null)`)

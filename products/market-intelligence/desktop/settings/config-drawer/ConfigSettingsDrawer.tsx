@@ -370,7 +370,7 @@ export function ConfigSettingsDrawer({
           {group.rows.map((row) => <div className="config-drawer__row" key={row.key}>
             <span className="config-drawer__label">{rowLabel(row.labelKey)}</span>
             <span className="config-drawer__value">{EMPTY_VALUE}</span>
-            <PreviewControlView control={row.control} info={row.info === true} />
+            <PreviewControlView control={row.control} info={row.info === true} resolveText={resolveText} />
           </div>)}
         </div>)}
         </ConfigDrawerContentCard>
@@ -416,7 +416,17 @@ function NotificationsScreen({ view, resolveText }: {
               <Popover
                 content={<span>{row.reason}</span>}
                 trigger={(triggerProps) => (
-                  <IconButton {...triggerProps} ariaLabelKey="configDrawer.rowReason" icon={Info} onSelect={() => undefined} resolveText={(key: string) => (key === 'configDrawer.rowReason' ? row.reason ?? '' : '')} size="sm" variant="plain" />
+                  <IconButton
+                    {...triggerProps}
+                    ariaLabelKey="configDrawer.reasonAria"
+                    /* 原因本身是数据，不是文案：名字走 `ariaLabelParams`，由 `fillLabelParams`
+                       一次性填进已声明的模板，不在调用点比键拼句子。 */
+                    ariaLabelParams={{ reason: row.reason ?? '' }}
+                    icon={Info}
+                    onSelect={() => undefined}
+                    resolveText={resolveText}
+                    size="sm"
+                    variant="plain" />
                 )} />
             )}
           </span>
@@ -435,7 +445,11 @@ function NotificationsScreen({ view, resolveText }: {
 }
 
 /** 控件只画外观：不带行为、不带值。 */
-function PreviewControlView({ control, info }: { control: PreviewControl; info: boolean }): React.ReactElement | null {
+function PreviewControlView({ control, info, resolveText }: {
+  control: PreviewControl
+  info: boolean
+  resolveText: (key: string) => string
+}): React.ReactElement | null {
   const glyph = control === 'switch'
     ? <span aria-hidden="true" className="config-drawer__switch" />
     : control === 'select' || control === 'multiSelect'
@@ -445,6 +459,6 @@ function PreviewControlView({ control, info }: { control: PreviewControl; info: 
         : null
   return <>
     {glyph}
-    {info ? <IconButton ariaLabelKey="configDrawer.info" icon={Info} onSelect={() => undefined} resolveText={(key) => key} size="sm" variant="plain" /> : null}
+    {info ? <IconButton ariaLabelKey="configDrawer.infoAria" icon={Info} onSelect={() => undefined} resolveText={resolveText} size="sm" variant="plain" /> : null}
   </>
 }

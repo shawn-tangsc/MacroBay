@@ -3,6 +3,7 @@ import {
   type CalendarOfficialFeedsAvailability
 } from './officialCalendarAvailability'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
+import type { MarketCalendarWriteFailureView } from '../../../contracts/macro/marketCalendarQueryContracts'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import {
   agentRegistry,
@@ -130,6 +131,10 @@ export type ProjectionState = {
   jobRegisteredById?: Readonly<Record<string, boolean>>
   /** Sources that already have a profile, including disabled ones. */
   knownSourceIds?: ReadonlySet<string>
+  /** 源 id → 标准表写库失败（与 `healthById` 平行，不参与五态派生）。 */
+  writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
+  /** 源 id → 「还没写过」/「读不到」两态（与失败态互斥）。 */
+  writeFailureStateById?: Readonly<Record<string, 'never-written' | 'unreadable'>>
 }
 
 export type SourceView = SourceDefinition & {
@@ -144,6 +149,21 @@ export type SourceView = SourceDefinition & {
   healthState: SourceHealthState
   /** 目录标记档，与五态同一处派生（见 `sourceHealthMarker`）；消费者不再自己判。 */
   healthMarker: SourceHealthMarker
+  /**
+   * 标准表**写库**失败（`f817070` / 架构师契约）：形状取自 `MarketCalendarWriteFailureView`，
+   * **没有失败就不带这个键**。
+   *
+   * 与 `healthState` **并列**、绝不并进去：写库失败不是来源失败——把 `healthState` 拉成 `failed`，
+   * 读者会去查网络与凭据，而真相是我们的库写不进去（用户 2026-11-19 定）。
+   */
+  writeFailure?: MarketCalendarWriteFailureView
+  /**
+   * 写库这一列另两态的**并列**陈述（用户 2026-11-19）：
+   * `never-written` = 该写入方还没有任何写入记录（**空态**，不是「没失败」）；
+   * `unreadable` = 读写入层失败（**错误态 + 重试**）。
+   * 「有记录、没失败」不出现这个字段——这一列只有「失败」与「没失败」，没有「健康」评价。
+   */
+  writeFailureState?: 'never-written' | 'unreadable'
 }
 
 /** ProviderView 的目录标记：由它的源聚合，仍是同一份派生，组件不再二次判断。 */
@@ -164,6 +184,13 @@ export type ProviderView = {
   invite?: boolean
   /** 页头说明横幅的类别（见 `ProviderDefinition.notice`）。 */
   notice?: ProviderDefinition['notice']
+  /**
+   * 密钥块里那条四态常显行（未配置 / 已保存待验证 / 连接失败：原因 / 连接正常）。
+   *
+   * 与横幅分开：以前由 `notice: 'verification-only'` 兼任，副作用是「只验证密钥」的源连采集开关
+   * 也被锁住——源一旦真能采集就错了。现在它是独立字段，注册表说显示就显示，和开关无关。
+   */
+  credentialStateLine?: ProviderDefinition['credentialStateLine']
   sources: SourceView[]
   /** 目录标记档（provider 级，源里最差的一档）。 */
   healthMarker: SourceHealthMarker
@@ -212,19 +239,29 @@ function toView(source: SourceDefinition, state: ProjectionState): SourceView {
     ...(source.unavailable === undefined ? {} : { unavailable: true }),
     ...(health === undefined ? {} : { health })
   })
-  /* 采集节奏归谁：目录里声明了 `collectionOwner: 'product'` 的源归产品；
-     官方日历源（`kind: 'official-calendar'`）**没有目录条目**（它们是 registry-only 的 feed），
-     但节奏同样由产品自己的日历作业决定（`macroCalendarScheduleBackend`），没有任何读取点读
-     profile 的 `collectionPreset`。所以这里按 kind 判成 product——否则界面会画一个「改完不生效」
-     的下拉（用户 2026-11-12 真机：「这个采集频率怎么还动不了」）。 */
+  const writeFailure = state.writeFailureById?.[source.sourceId]
+  const writeFailureState = state.writeFailureStateById?.[source.sourceId]
+  /* 采集节奏归谁：**目录和注册表两条都要读**。
+     - 目录声明 `collectionOwner: 'product'` → 产品自己的作业采；
+     - 注册表的 `collection` 是运行时事实：`'job'` = 产品作业采（0xRouter 那三条日历 feed）、
+       `'none'` = 通用适配器不采。这两种都没有任何读取点读 profile 的 `collectionPreset`；
+     - 官方日历源（`kind: 'official-calendar'`）**没有目录条目**（registry-only 的 feed），
+       节奏由产品自己的日历作业决定（`macroCalendarScheduleBackend`）。
+     只信目录会漏掉 registry-only 的 feed——界面就画出一个「选完弹回、什么都没发生」的下拉
+     （读者 2026-11-12 与 2026-11-13 两次复报）。 */
   const catalogOwner = getIntelligenceSourceDefinition(source.sourceId)?.collectionOwner
-  const collectionOwner = catalogOwner
-    ?? (source.kind === 'official-calendar' ? 'product' : undefined)
+  const productOwnedCollection = catalogOwner === 'product'
+    || source.collection === 'job'
+    || source.collection === 'none'
+    || source.kind === 'official-calendar'
+  const collectionOwner = productOwnedCollection ? 'product' as const : catalogOwner
   return {
     ...source,
     ...(collectionOwner === 'product' ? { collectionOwner: 'product' as const } : {}),
     enabled,
     healthState,
+    ...(writeFailure === undefined ? {} : { writeFailure }),
+    ...(writeFailureState === undefined ? {} : { writeFailureState }),
     healthMarker: sourceHealthMarker({ enabled, ...(source.unavailable === undefined ? {} : { unavailable: true }), state: healthState }),
     ...(state.jobRegisteredById?.[source.sourceId] !== undefined ? { jobRegistered: state.jobRegisteredById[source.sourceId] } : {})
   }
@@ -266,6 +303,9 @@ export function sourceConfigSurface(input: {
   healthById: Readonly<Record<string, SourceHealthFact>>
   jobRegisteredById: Readonly<Record<string, boolean>>
   credentialStatusById?: Readonly<Record<string, SourceConfigFact['credentialStatus']>>
+  /** 源 id → 标准表写库失败；不给就不出现这个字段（见 `SourceView.writeFailure`）。 */
+  writeFailureById?: Readonly<Record<string, MarketCalendarWriteFailureView>>
+  writeFailureStateById?: Readonly<Record<string, 'never-written' | 'unreadable'>>
   panelId?: PanelId
   sourceId?: string
 }): SourceConfigSurface {
@@ -314,7 +354,9 @@ export function sourceConfigSurface(input: {
       enabledById: Object.fromEntries(facts.map((fact) => [fact.sourceId, fact.enabled])),
       healthById: input.healthById,
       jobRegisteredById: input.jobRegisteredById,
-      knownSourceIds: new Set(Object.keys(input.profileById))
+      knownSourceIds: new Set(Object.keys(input.profileById)),
+      ...(input.writeFailureById === undefined ? {} : { writeFailureById: input.writeFailureById }),
+      ...(input.writeFailureStateById === undefined ? {} : { writeFailureStateById: input.writeFailureStateById })
     }
   }
 }
@@ -328,7 +370,12 @@ function groupByProvider(sources: SourceView[]): ProviderView[] {
     if (existing) {
       existing.sources.push(source)
     } else {
-      const credentialSource = provider.sources.find((candidate) => candidate.collection === 'adapter')
+      /* An explicitly named anchor wins; otherwise keep the old derivation (the first source an
+       adapter collects), so every provider that does not state one behaves exactly as before. */
+    const credentialSource = (provider.credentialSourceId === undefined
+      ? undefined
+      : provider.sources.find((candidate) => candidate.sourceId === provider.credentialSourceId))
+      ?? provider.sources.find((candidate) => candidate.collection === 'adapter')
       providers.set(provider.providerId, {
         providerId: provider.providerId,
         displayName: provider.displayName,
@@ -339,6 +386,7 @@ function groupByProvider(sources: SourceView[]): ProviderView[] {
         ...(provider.signupUrl ? { signupUrl: provider.signupUrl } : {}),
         ...(provider.invite ? { invite: true } : {}),
         ...(provider.notice ? { notice: provider.notice } : {}),
+        ...(provider.credentialStateLine === undefined ? {} : { credentialStateLine: provider.credentialStateLine }),
         sources: [source]
       })
     }

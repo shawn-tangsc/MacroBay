@@ -18,6 +18,10 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
+
+/* 详情抽屉自己也要有加载点：任何表面（日历抽屉、事件详情）渲染这段正文时样式都在。
+   与 `CalendarEventRow.tsx` 那一处是同一份表，CSS 全局，重复 import 由打包器去重。 */
+import './economicCalendar.css'
 import { calendarDisplayDate } from './economicCalendarDayModel'
 import {
   economicCalendarCaveats,
@@ -162,7 +166,10 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
           拿到非空现值那刻的**来源观测时刻**。缺就不画，不拿别的时刻顶上。 */}
       {event.createdAt ? <Meta label={text.recordTimes.createdAt} value={formatTime(event.createdAt, 'second')} /> : null}
       {event.actualDetectedAt ? <Meta label={text.recordTimes.actualDetectedAt} value={formatTime(event.actualDetectedAt, 'second')} /> : null}
-      <Meta label={text.details.importance} value={text.importance.high} />
+      {/* 重要性只照记录自己带的值渲染；记录里没有就写「未提供」——不假定「高」，也不假定任何一档。 */}
+      <Meta label={text.details.importance} value={event.importance === undefined
+        ? text.market.missingValue
+        : text.market.importance[event.importance]} />
       <Meta label={text.details.state} value={text.states[event.lifecycleState]} />
     </dl>
     <div className="mi-economic-calendar__values">
@@ -178,10 +185,16 @@ export function EconomicCalendarEventDetail({ event, officialConsensus, linkedCo
         return <>
           <div data-consensus={consensus.state === 'value' ? consensus.source : consensus.state}>
             <span>{text.market.consensus}</span>
-            <strong>{shown}</strong>
-            {consensus.state === 'value' && consensus.source === 'market'
-              ? <em className="mi-economic-calendar__consensus-source">{text.details.consensusFromMarket}</em>
-              : null}
+            {/* 值 + 标记**同一个右侧子项**（界面设计 2026-11-16）：以前那枚 <em> 是这一行的第三个子项，
+                被 `space-between` 推到行右端，看起来像「行尾可点的动作」，而且那个类名全仓没有 CSS。
+                标记紧贴值、用 `·` 连、间距 4；不进 Tab 序、不加 role，读屏照常能念到。 */}
+            <span className="mi-calendar-value">
+              <strong>{shown}</strong>
+              {consensus.state === 'value' && consensus.source === 'market'
+                ? <span className="mi-calendar-value__marker" data-value-marker="consensus-from-market">
+                  {`· ${text.details.consensusFromMarket}`}</span>
+                : null}
+            </span>
           </div>
           {consensus.state === 'unreadable'
             ? <p className="mi-economic-calendar__comparison-rule" data-consensus-gap>{linkedConsensusFailure === true

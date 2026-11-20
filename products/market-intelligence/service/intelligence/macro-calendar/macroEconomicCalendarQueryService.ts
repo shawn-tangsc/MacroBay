@@ -4,6 +4,7 @@ import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/ec
 import { formatBlsCalendarValue } from './bls-employment-refresh/blsCalendarDisplayValue'
 import { macroCalendarConsensusFallback } from './macroCalendarPolicy'
 import { resolveDisplayedReleaseTime } from './macroCalendarConventionTime'
+import { projectReaderVisibleEvents } from './macroCalendarReaderProjection'
 
 export type MacroEconomicCalendarQueryService = {
   queryMonth: (input: unknown) => MacroEconomicCalendarMonthResult
@@ -89,10 +90,11 @@ export function createMacroEconomicCalendarQueryService(deps: {
       if (!bounds) return monthUnavailable('query-input-invalid')
       try {
         const limit = input.maxEvents ?? macroEconomicCalendarQueryPolicy.monthResultLimit
-        const events = coalesceBlsCalendarRows(canonicalizeBlsValueFamilies(deps.repository.listEffectiveMonthAsOf({ ...bounds, asOf: input.asOf, limit })))
-          .filter((revision, _index, all) => isEligible(revision, input.asOf, all))
-          .slice(0, limit)
-          .map((revision) => toEvent(revision, input.asOf))
+        const events = projectReaderVisibleEvents(
+          coalesceBlsCalendarRows(canonicalizeBlsValueFamilies(deps.repository.listEffectiveMonthAsOf({ ...bounds, asOf: input.asOf, limit })))
+            .filter((revision, _index, all) => isEligible(revision, input.asOf, all))
+            .slice(0, limit)
+            .map((revision) => toEvent(revision, input.asOf)))
         return { state: 'available', asOf: input.asOf, events }
       } catch {
         return monthUnavailable('calendar-query-unavailable')
@@ -275,8 +277,10 @@ function monthBounds(month: string): { monthStart: string; monthEndExclusive: st
 function isEligible(revision: MacroCalendarRevision, asOf: string, peers: readonly MacroCalendarRevision[] = []): boolean {
   return revision.detectedAt <= asOf &&
     ((revision.revisionKind === 'schedule' &&
-      ((revision.providerId !== 'macro-calendar-bls' && revision.providerId in macroEconomicCalendarQueryPolicy.eligibleSchedules &&
-        macroEconomicCalendarQueryPolicy.eligibleSchedules[revision.providerId] === revision.descriptorId) ||
+      ((revision.providerId !== 'macro-calendar-bls'
+        && revision.providerId in macroEconomicCalendarQueryPolicy.eligibleSchedules
+        && macroEconomicCalendarQueryPolicy.eligibleSchedules[
+          revision.providerId as keyof typeof macroEconomicCalendarQueryPolicy.eligibleSchedules] === revision.descriptorId) ||
         isAutomaticBlsSchedule(revision) || isManualBlsSchedule(revision))) ||
       (isBlsCalendarValue(revision) && revision.lifecycleState === 'released' &&
         revision.caveats.includes('bls-python-schedule')) ||
@@ -317,7 +321,7 @@ function toPublicEvent(revision: MacroCalendarRevision, asOf: string, overrides:
   })
   return {
     eventKey: revision.eventKey, releaseGroupKey: revision.releaseGroupKey, eventFamily: revision.eventFamily,
-    titleKey: revision.eventNameKey, countryCode: revision.countryCode, importance: revision.importance,
+    titleKey: revision.eventNameKey, countryCode: revision.countryCode, ...(revision.importance === undefined ? {} : { importance: revision.importance }),
     periodKey: revision.periodKey, lifecycleState: revision.lifecycleState, coverage: 'available',
     // An edit carries its own date: if the reader moved the release to another day, the row says so.
     scheduledDate: edited?.scheduledDate ?? revision.scheduledDate,

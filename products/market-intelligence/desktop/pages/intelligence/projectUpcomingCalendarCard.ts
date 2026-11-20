@@ -30,7 +30,15 @@ export type CalendarCardEvent = Readonly<{
   titleKey: string
   /** The 0xRouter route's country for this event, already localised; absent on the official route. */
   countryName?: string
-  importance: CalendarCardImportance
+  /** 国家码原值（名字查不到时的第二档）。 */
+  countryCode?: string
+  /** 可缺省：来源没给就没有值（缺省 ≠ 低重要度）。 */
+  importance?: CalendarCardImportance
+  /**
+   * **指标分级**（用户 2026-11-19）：`1|2|3|null`，按码表分档。
+   * 事件行与源内身份行是 `null`——它们本来就不在分级表里，不是「没读到」。
+   */
+  tier?: 1 | 2 | 3 | null
   lifecycleState: 'scheduled' | 'released' | 'cancelled'
   category: CalendarCardCategory
   scheduledDate: string
@@ -46,11 +54,14 @@ export type CalendarCardRow = Readonly<{
   titleKey: string
   /** The 0xRouter route's country, already localised; absent on the official route. */
   countryName?: string
+  /** 国家码原值（名字查不到时的第二档）。 */
+  countryCode?: string
   month: string
   /** `scheduledDate`, so a date-only event can still show when it is. */
   date: string
   at: string | null
-  importance: CalendarCardImportance
+  /** 可缺省：来源没给就没有值（缺省 ≠ 低重要度）。 */
+  importance?: CalendarCardImportance
   category: CalendarCardCategory
   kind: 'upcoming' | 'released-changed'
   /** 计划时刻已过、值还没到：卡片在这一行上说明它在等，而不是让读者以为什么都没发生。 */
@@ -83,7 +94,15 @@ export type CalendarCardSurprise = Readonly<{
   unit: 'pp' | 'relative-percent' | null
   reason: MarketCalendarSurpriseReason | null
 }>
-export type CalendarCardProjection = Readonly<{ today: readonly CalendarCardRow[]; upcoming: readonly CalendarCardRow[]; state: CalendarCardState }>
+export type CalendarCardProjection = Readonly<{
+  today: readonly CalendarCardRow[]
+  upcoming: readonly CalendarCardRow[]
+  /**
+   * ~~未有评分的事件数~~ **已删**（用户 2026-11-19）：新规则筛的是「一二级指标 + 高重要性事件」，
+   * 「另有 N 条未标级」的分母已不成立；口径改在卡片标题旁的 ⓘ 里说明，不再给一个算不对的数。
+   */
+  state: CalendarCardState
+}>
 
 /** The instant an event happens at, for ordering and for the window test. */
 function instantOf(event: CalendarCardEvent): string {
@@ -145,6 +164,7 @@ function toRow(event: CalendarCardEvent, kind: CalendarCardRow['kind'], asOf: st
   return {
     eventKey: event.eventKey, titleKey: event.titleKey,
     ...(event.countryName ? { countryName: event.countryName } : {}),
+    ...(event.countryCode ? { countryCode: event.countryCode } : {}),
     month: instantOf(event).slice(0, 7),
     date: event.scheduledDate, at: event.scheduledAt ?? null, importance: event.importance, category: event.category, kind,
     actual: event.actual?.displayValue ?? null,
@@ -188,7 +208,24 @@ export function projectUpcomingCalendarCard(
   asOf: string,
   policy: typeof calendarUpcomingPolicy = calendarUpcomingPolicy
 ): CalendarCardProjection {
-  const topImportance = events.filter(event => policy.visibleImportance.includes(event.importance))
+  /**
+   * **两类各按自己的判据筛**（用户 2026-11-19）：
+   * - **指标行**：只看分级（一级/二级），**不看来源给的重要性**——美国那几项一二级指标
+   *   即使来源没标重要性也照样要出现；
+   * - **事件行**（央行活动、金融事件）：只看 `importance === 'high'`（它们不在分级表里）。
+   * 其余一律不列。旧规则「importance 为高就进」会把三级指标和未分级指标一起放进来，
+   * 也会把高重要性的未分级指标放进来；新规则下这两条都不成立。
+   */
+  const topImportance = events.filter(event => {
+    if (event.category !== 'economic-indicator') return event.importance === 'high'
+    if (event.tier === 1 || event.tier === 2) return true
+    /**
+     * 指标行**没有分级可判**（`tier` 是 `undefined`：官方发布行没有指标码）时，退回来源重要性。
+     * 这与「未分级」（`null`：有码但没定级）不是一回事——后者按用户规则不列。
+     */
+    if (event.tier === undefined) return event.importance === 'high'
+    return false
+  })
   const candidates = topImportance
     .filter(event => event.lifecycleState === 'scheduled' && withinWindow(event, asOf, policy))
     .sort((left, right) => instantOf(left).localeCompare(instantOf(right)) || left.eventKey.localeCompare(right.eventKey))
@@ -199,5 +236,8 @@ export function projectUpcomingCalendarCard(
     .sort((left, right) => instantOf(right).localeCompare(instantOf(left)) || left.eventKey.localeCompare(right.eventKey))
     .slice(0, policy.maximumTodayRows)
     .map(event => toRow(event, 'released-changed', asOf))
-  return { today, upcoming, state: today.length > 0 || upcoming.length > 0 ? 'available' : 'empty' }
+  return {
+    today, upcoming,
+    state: today.length > 0 || upcoming.length > 0 ? 'available' : 'empty'
+  }
 }

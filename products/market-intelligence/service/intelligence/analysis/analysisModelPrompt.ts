@@ -18,8 +18,32 @@ export type AnalysisSessionInput = Readonly<{
   openInstant: string
 }>
 
+/**
+ * 按线追加的提示词内容（R39 §2）。
+ *
+ * 市场线一个都不传：触发段、`newsImpact` 字段与 trigger 注入只由新闻线组装，所以市场线
+ * 即使拿到带 `snapshot.trigger` 的快照，产出的提示词里也没有这一段——这不是「恰好没走到」，
+ * 而是市场线根本不读它。守卫见 `analysisModelPrompt.triggerIsolation.test.ts`。
+ */
+export type AnalysisPromptTrigger = Readonly<{
+  factId: string
+  evidenceRefId?: string | null
+  subject?: string
+  /** 那条事实的完整原文：阅读投影会截断标题与摘录。 */
+  fact: string
+}>
+
+export type AnalysisPromptExtras = Readonly<{
+  /** 追加在共享规则之后的系统规则（新闻线的触发段）。 */
+  systemRules?: readonly string[]
+  /** 替换「本次运行由 change 段触发」那句：触发型运行要说明 change 不是原因。 */
+  changeRule?: string
+  /** 用户消息里的 trigger 段；句柄由这里统一映射。 */
+  trigger?: AnalysisPromptTrigger
+}>
+
 export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSignals: readonly SignificanceSignal[] = [],
-  session?: AnalysisSessionInput, proseLanguage?: AppLanguage): StructuredModelMessage[] {
+  session?: AnalysisSessionInput, proseLanguage?: AppLanguage, extras: AnalysisPromptExtras = {}): StructuredModelMessage[] {
   const language = proseLanguage ?? 'zh-CN'
   const directionKeys = marketAnalysisValidationPolicy.analysisDirectionKeys
   const references = buildAnalysisReferenceMap({ facts: snapshot.facts ?? [], evidenceRefs: snapshot.evidenceRefs ?? [] })
@@ -68,12 +92,19 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     + directionKeys.join('、') + '；界面会按读者语言取标签，正文里不要再写任何方向标记或段落标签。',
     'conclusion.causalChain 必须按「起因事件 → 中间变量（美元、实际利率、流动性、杠杆或资金流）→ 对该资产的作用方向 → 因此本判断成立的条件」的顺序写清机制。因果链必须用现有证据说明当前最可能的机制与作用方向；不得只写「若…可能…」这类条件句而不给出机制本身，也不得把条件式假设当作唯一解释。',
     'conclusion.summary 必须先写结论（机制与作用方向的判断），conclusion.change 再写本次数据变化；只给方向、没有结论句的输出会被直接拒绝发布。',
-    // The run was triggered by a specific change; citing something else and narrating the backdrop
-    // is the failure mode this rule exists for. Stated in the first answer, not only on retry.
+    // 舆情触发的运行：这次不再是市场综述。四个问题缺一不可，且必答块只在有触发指针时出现。
+    // 按线追加的系统规则（新闻线的触发段）。市场线不传，所以这里为空。
+    ...(extras.systemRules ?? []),
+    // A run triggered by one news item still carries the snapshot's change record. Without this
+    // branch the prompt told the model twice what woke it — and the change rule (with its "改讲
+    // 背景就作废" threat) won, which is how a news run came back as a stablecoin commentary.
     ...((snapshot.change?.facts ?? []).length > 0 ? [
-      '本次运行由输入 change 段里的变化触发：结论必须回到那条变化本身——在 supportingEvidence / marketReaction / directions 里引用它的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的原文，不要改写）。只引用不提、或改讲宏观背景，都会被判为「没回答触发的事件」并作废。'
+      extras.changeRule ?? '本次运行由输入 change 段里的变化触发：结论必须回到那条变化本身——在 supportingEvidence / marketReaction / directions 里引用它的证据，并在 conclusion.change 或 conclusion.causalChain 里写出该事实的名字（照输入里的原文，不要改写）。只引用不提、或改讲宏观背景，都会被判为「没回答触发的事件」并作废。'
     ] : []),
-    'conclusion.change 必须引用输入 change 段里的具体字段与数值；当 change 为 no-change 时，必须写明没有新变化，不得编造。event-excerpt 是历史消息，不代表当前市场值。没有可比行情时 marketReaction 为 []。',
+    'conclusion.change 必须引用输入 change 段里的具体字段与数值；当 change 为 no-change、没有可比的变化时，用一句读者能懂的话说明市场读数这段时间没有新的变动（例如「市场读数没有新的变动，方向判断沿用上一次」），不得编造。event-excerpt 是历史消息，不代表当前市场值。没有可比行情时 marketReaction 为 []。',
+    // 线上原句：「本次数据没有新变化，变化段为空；信息增量来自……」——读者看到的是输入长什么样，
+    // 不是判断。过程话与结构话一律不写。
+    '正文不许交代「输入长什么样」：「变化段为空」「该段为空」「信息增量来自…」「输入里没有…」「快照里没有…」「字段」「段落」这类话一律不写。某一块确实没有内容时，写它对读者意味着什么（数据没动、方向不变），不要描述段落结构。',
     'conclusion.conditions 每条写一个成立条件；conclusion.dataGaps 每条写一个数据缺口并说明它如何影响置信度。macro 与 evidenceStrength 没有内容时写 null。当已有证据指向相反方向时，必须在 evidenceStrength 里明确哪一侧证据更强、为什么，不得用「信号冲突」或「置信度有限」笼统收尾。',
     'directions 必须为三个周期各给一条，一条一个周期：'
     + marketAnalysisValidationPolicy.directionHorizons.map(horizon => `${horizon}=${marketAnalysisValidationPolicy.directionWindows[horizon]}`).join('、')
@@ -108,6 +139,17 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     // Named explicitly so a reaction can never be built by guessing which readable label means
     // "comparable and fresh"; the validator reads the same predicate.
     marketReactionFactRefs: eligibleReactionRefs,
+    // The trigger, named with the handles the model actually receives. The rule used to describe it
+    // as `triggered-news:<itemId>` — an identifier that never appears in the payload (facts carry
+    // `f##` aliases), so the one fact the answer had to be about was the one it could not find.
+    // `fact` is the value in full: the 72-character reading projection cuts the headline mid-word
+    // and drops the source excerpt, which are the only input to "what is this news".
+    ...(extras.trigger ? { trigger: {
+      factRef: references.factHandleById.get(extras.trigger.factId) ?? null,
+      evidenceRef: extras.trigger.evidenceRefId ? references.evidenceHandleById.get(extras.trigger.evidenceRefId) ?? null : null,
+      ...(extras.trigger.subject ? { subject: readableAnalysisName(analysisModelVocabulary, 'subject', extras.trigger.subject) } : {}),
+      fact: extras.trigger.fact
+    } } : {}),
     // The frozen (or predecessor-derived) movement since the previous snapshot.
     // `no-change` is a first-class value so the model can state it instead of guessing.
     change: changeSummary(snapshot, language),

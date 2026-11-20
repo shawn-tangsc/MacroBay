@@ -1,29 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { selectVisibleFlowRows, type FlowChartRow } from './capitalFlowRows'
+import { recentFlowDates } from './capitalFlowRows'
 
-const rows: FlowChartRow[] = Array.from({ length: 30 }, (_, index) => ({
-  tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`,
-  funds: index,
-  btc: index,
-  eth: index
-}))
-
-describe('selectVisibleFlowRows', () => {
-  it('keeps the last window, in order', () => {
-    const visible = selectVisibleFlowRows(rows, 7)
-    expect(visible).toHaveLength(7)
-    expect(visible[0]?.tradingDate).toBe('2026-08-24')
-    expect(visible.at(-1)?.tradingDate).toBe('2026-08-30')
+describe('recentFlowDates', () => {
+  it('walks calendar days backwards from the as-of day, so the axis ends today', () => {
+    // 用户 2026-11-16：「不管这一天有没有数据，轴上都要推进到这一天」。
+    expect(recentFlowDates('2026-11-16T11:00:00.000Z', 7)).toEqual([
+      '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16'
+    ])
   })
 
-  it('returns the very same array when there is nothing to cut', () => {
-    const three = rows.slice(0, 3)
-    expect(selectVisibleFlowRows(three, 7)).toBe(three)
+  it('crosses month and year boundaries without skipping a day', () => {
+    expect(recentFlowDates('2026-01-02T00:00:00.000Z', 3)).toEqual(['2025-12-31', '2026-01-01', '2026-01-02'])
   })
 
-  it('handles an empty window and a zero-sized one', () => {
-    expect(selectVisibleFlowRows([], 7)).toHaveLength(0)
-    expect(selectVisibleFlowRows(rows, 0)).toHaveLength(0)
+  it('returns nothing for a non-positive count', () => {
+    expect(recentFlowDates('2026-11-16T00:00:00.000Z', 0)).toEqual([])
   })
 })

@@ -1,17 +1,20 @@
+import { channelResultWords } from './channelResultText'
+
 /**
  * 「发送到频道」的说法，一张表。
  *
- * 为什么是一张表而不是散在组件里：投递结果的最终口径还在架构师手上
- * （「已发到 / 已交给但没确认 / 没发到 / 只在应用内」与「被压下：免打扰、上限、冷却…」），
- * 所以状态（`analysisConclusionSendState`）先把事实分对，句子只从这里取；口径定了只改这里。
+ * 为什么是一张表而不是散在组件里：状态（`analysisConclusionSendState`）先把事实分对，
+ * 句子只从这里取；说法要改就改这里，组件与判定不动。
  *
- * 三条写进句子的规矩：
+ * 四条写进句子的规矩：
+ * - **多通道是合法配置**（一条消息发到所有已启用通道）：总括句只说**几条收到、几条没到**，
+ *   正文**不出现通道名**，也不写「已推送」「已发送」；
  * - **只表示通道受理**，不写「送达」——我们只知道通道接了这次请求；
- * - **没拿到回执照实说**，不并进成功句里；
+ * - **没拿到回执另成一档**：既不说收到、也不说没到，中性占位；
  * - **被压下的那一档不叫「没发到手机」**：设备在免打扰时段不等于通道坏了，下一步是关勿扰或明天再试。
  *
- * 通道名由调用方填（`resolvePushChannel` 给的显示名）；拿不到名字时用 `channelUnknown`，
- * 不印花括号、也不编一个品牌名。
+ * 通道名只出现在 ⓘ 的逐行说明里（回执里的名字）；拿不到名字时用 `channelUnknown`，
+ * 不印花括号、也不编一个品牌名。原因码不上屏，只翻成人话。
  */
 export type AnalysisConclusionSendText = Readonly<{
   button: string
@@ -20,10 +23,7 @@ export type AnalysisConclusionSendText = Readonly<{
   /** 标题旁那颗 ⓘ 的读屏名与展开内容（一行）。 */
   infoLabel: string
   infoHint: string
-  /** `{channel}` 与 `{time}` 由调用方填。 */
-  sentAccepted: string
-  sentUnconfirmed: string
-  /** 记录在、中心有条，手机那一档没排上（没给原因）。 */
+  /** 记录在、中心有条，手机那一档没排上（没给原因）。`{time}` 由调用方填。 */
   appOnly: string
   /**
    * 被压下：设备在免打扰时段。**免打扰是「筛掉」不是「顺延」**——平台摘掉手机档之后没有任何补发路径，
@@ -45,15 +45,36 @@ export type AnalysisConclusionSendText = Readonly<{
 
   /** 通道 0 条：指路去启用一条。 */
   pushUnavailableNone: string
-  /** 通道多条：指路停用到只剩一条。 */
-  pushUnavailableMultiple: string
-  /** 手机档排上了但通道报错。 */
-  notSent: string
   /** 提交层面的其他失败（含请求没到）。 */
   failed: string
   channelUnknown: string
-  /** 折叠项的名字；原因码本身由调用方给。 */
-  reasonLabel: string
+
+  /**
+   * 多通道的总括句：**正文只有数字，没有通道名**。
+   * `{n}` 是这次的目标通道数；`{ok}` / `{failed}` 是收到的与没到的条数。
+   */
+  deliveredAll: string
+  deliveredPartial: string
+  noneReceived: string
+  /**
+   * 「发出去但没收到回执」这一档的中性占位（产品还在定稿）：既不说收到、也不说没到。
+   * 它**不是**失败态，呈现上不用失败色。
+   */
+  unconfirmed: string
+
+  /** ⓘ 的读屏名：浮层里是逐通道那一行「名字 · 人话原因」。 */
+  channelsLabel: string
+  /** 逐通道三种状态的人话（收到 / 没收到 / 发出去了没回执）。 */
+  channelReceived: string
+  channelNotReceived: string
+  channelUnconfirmed: string
+  /** 通道报了一个这台设备不认识的原因：如实说没认出来，不编一个理由。 */
+  channelReasonUnknown: string
+  /**
+   * 平台原因码 → 人话。**码本身不上屏**；认不出的码走 `channelReasonUnknown`。
+   * 值域跟着平台 `ChannelPushReason` 走，少一个只影响那一句，不影响判定。
+   */
+  channelReasons: Readonly<Record<string, string>>
 }>
 
 const zh: AnalysisConclusionSendText = {
@@ -61,8 +82,16 @@ const zh: AnalysisConclusionSendText = {
   sending: '正在发送',
   infoLabel: '发送说明',
   infoHint: '只发最新那条结论，走的是你自动收到推送的同一条通道。',
-  sentAccepted: '已发到 {channel} · {time}',
-  sentUnconfirmed: '已交给 {channel}，没拿到回执 · {time}',
+  deliveredAll: '{n} 条通道都收到了',
+  deliveredPartial: '{ok} 条通道收到，{failed} 条没到',
+  noneReceived: '没有任何通道收到（共 {n} 条）',
+  unconfirmed: '已送出去，还没收到回执',
+  channelsLabel: '这次每条通道的结果',
+  channelReceived: channelResultWords['zh-CN'].received,
+  channelNotReceived: channelResultWords['zh-CN'].notReceived,
+  channelUnconfirmed: channelResultWords['zh-CN'].unconfirmed,
+  channelReasonUnknown: channelResultWords['zh-CN'].reasonUnknown,
+  channelReasons: channelResultWords['zh-CN'].reasons,
   appOnly: '只留在应用内，没到手机 · {time}',
   quietHours: '这次没发到手机：现在是免打扰时段，不会自动补发。要现在验通道，关掉免打扰再点一次。',
   dailyLimit: '今天的上限到了（每天 4 条），明天再发',
@@ -72,11 +101,8 @@ const zh: AnalysisConclusionSendText = {
   suppressedUnknown: '这次没发到手机：这台设备还不认识平台给的原因',
   surfaceOff: '你关掉了这条通知的手机档，这次只留在应用内',
   pushUnavailableNone: '没发到手机：还没有可用的通道，去「频道」启用一条',
-  pushUnavailableMultiple: '没发到手机：启用了不止一条通道，去「频道」停用到只剩一条',
-  notSent: '没发到手机',
   failed: '没发出去',
-  channelUnknown: '推送通道',
-  reasonLabel: '原因码'
+  channelUnknown: '推送通道'
 }
 
 const en: AnalysisConclusionSendText = {
@@ -84,8 +110,16 @@ const en: AnalysisConclusionSendText = {
   sending: 'Sending',
   infoLabel: 'About sending',
   infoHint: 'Sends only the newest conclusion, over the same channel your automatic pushes use.',
-  sentAccepted: 'Sent to {channel} · {time}',
-  sentUnconfirmed: 'Handed to {channel}, no receipt yet · {time}',
+  deliveredAll: 'All {n} channels received it',
+  deliveredPartial: '{ok} of {n} channels received it; {failed} did not',
+  noneReceived: 'No channel received it (0 of {n})',
+  unconfirmed: 'Sent, no receipt yet',
+  channelsLabel: 'What each channel reported',
+  channelReceived: channelResultWords['en-US'].received,
+  channelNotReceived: channelResultWords['en-US'].notReceived,
+  channelUnconfirmed: channelResultWords['en-US'].unconfirmed,
+  channelReasonUnknown: channelResultWords['en-US'].reasonUnknown,
+  channelReasons: channelResultWords['en-US'].reasons,
   appOnly: 'Stayed in the app, not sent to your phone · {time}',
   quietHours: 'Not sent to your phone this time: it is quiet hours now, and nothing is resent later. To test the channel, turn quiet hours off and send again.',
   dailyLimit: 'Today’s limit is reached (4 a day) — try again tomorrow',
@@ -95,13 +129,22 @@ const en: AnalysisConclusionSendText = {
   suppressedUnknown: 'Not sent to your phone: the platform reported a reason this build does not recognize',
   surfaceOff: 'You turned off the phone leg for this notification, so it stayed in the app',
   pushUnavailableNone: 'Not sent to your phone: no usable channel yet — enable one under Channels',
-  pushUnavailableMultiple: 'Not sent to your phone: more than one channel is enabled — turn all but one off under Channels',
-  notSent: 'Not sent to your phone',
   failed: 'Not sent',
-  channelUnknown: 'push channel',
-  reasonLabel: 'Reason code'
+  channelUnknown: channelResultWords['en-US'].unknownChannel
 }
 
 export function analysisConclusionSendText(language: 'zh-CN' | 'en-US'): AnalysisConclusionSendText {
   return language === 'zh-CN' ? zh : en
+}
+
+/**
+ * ⓘ 的读屏名：**键与短名在同一处**，组件只收键。
+ *
+ * 以前这条名字是一串已经解析好的字，`ariaLabelKey` 只好借 `ui.help.trigger` 当哨兵——
+ * 键和句子对不上，换个解析器，读屏就会把「帮助」念成这颗按钮的名字。
+ */
+export const ANALYSIS_SEND_CHANNELS_LABEL_KEY = 'analysisSend.channelsLabel'
+
+export function resolveAnalysisSendText(text: AnalysisConclusionSendText, key: string): string {
+  return key === ANALYSIS_SEND_CHANNELS_LABEL_KEY ? text.channelsLabel : ''
 }

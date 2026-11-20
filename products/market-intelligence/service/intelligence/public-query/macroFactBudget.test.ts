@@ -5,7 +5,7 @@ import { applyMacroFactCap } from './macroFactBudget'
 
 function fact(index: number, sourceId = 'macro-calendar-bls-values', domain: AgentFact['domain'] = 'macro'): AgentFact {
   return {
-    factId: `fact-${sourceId}-${index}`, domain, subject: 'cpi', metric: 'actual', value: index, unit: '%',
+    factId: `fact-${sourceId}-${index}`, domain, subject: 'cpi', metric: 'actual', value: index, unit: 'percent',
     sourceId, sourceLabel: sourceId, observedAt: `2026-09-${String((index % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
     asOf: '2026-09-30T00:00:00.000Z', freshness: 'fresh', confidence: 1, comparability: 'comparable', evidenceRefId: null
   }

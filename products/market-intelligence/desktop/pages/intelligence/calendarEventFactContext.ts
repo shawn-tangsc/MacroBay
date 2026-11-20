@@ -10,12 +10,20 @@ import type { MacroCalendarEventContextResult } from '../../../service/intellige
 
 export type CalendarEventFactContextText = Readonly<{
   factsHeading: string; factsUnavailable: string; factsPartial: string; factsEvidence: string
+  /**
+   * 「这段时间的日历没读到」——与 `factsUnavailable`（读到了，但没有这条事件的数据）不是一句。
+   * 文案键由产品文案表提供；未提供时退回旧句，但那时两种意思还混在一起。
+   */
+  factsUnreadable?: string
 }>
 
 export function formatCalendarEventFactContext(
   result: MacroCalendarEventContextResult,
   text: CalendarEventFactContextText
 ): string {
+  if (result.coverage === 'unavailable' && result.caveats.includes('calendar-unreadable') && text.factsUnreadable) {
+    return `[${text.factsHeading}: ${text.factsUnreadable}]`
+  }
   if (result.coverage === 'unavailable' || result.facts.length === 0) {
     return `[${text.factsHeading}: ${text.factsUnavailable}]`
   }

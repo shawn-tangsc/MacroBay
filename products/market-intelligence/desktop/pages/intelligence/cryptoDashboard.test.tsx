@@ -78,9 +78,11 @@ describe('the old source drawer has no entry left', () => {
     expect(page).not.toContain('setSourceDrawerOpen(true)')
     expect(page).not.toContain("openConfigDrawer('sourcesData', 'dashboard')")
     expect(page).not.toContain("openConfigDrawer('sourcesData', 'calendar')")
-    expect(page.match(/sourcesDataRequestFor\(/g)?.length ?? 0).toBeGreaterThanOrEqual(6)
-    // 日历那一颗显式说业务：不传就退回「看板」第一屏。
-    expect(page).toContain("sourcesDataRequestFor({ business: 'calendar' })")
+    expect(page.match(/sourcesDataRequestFor\(/g)?.length ?? 0).toBeGreaterThanOrEqual(5)
+    /* 旧日历页整页删掉（2026-11-15），它那一颗「配置日历」跟着没了：日历现在只剩抽屉，
+       抽屉的配置入口不传业务位置。这条原来断言页面里写着 `business: 'calendar'`，改成了
+       「这处已经不存在」——留着它就会逼下一个人为一句过时的断言把页面加回来。 */
+    expect(page).not.toContain("sourcesDataRequestFor({ business: 'calendar' })")
     // 位置来自调用方时原样转交（舆情 / 行尾「管理这个来源」）。
     expect(page.match(/sourcesDataRequestFor\(focus\)/g)?.length ?? 0).toBe(2)
   })
@@ -105,8 +107,7 @@ describe('crypto intelligence dashboard', () => {
       client: dashboardClient(), fearGreedClient: fearGreedClient({
         state: 'available', asOf, score, bucket, observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: () => undefined,
-      onOpenCalendar: () => undefined, text: text.dashboard
+      onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard
     })))
     await flush()
     return {
@@ -145,7 +146,6 @@ describe('crypto intelligence dashboard', () => {
       createElement(CryptoIntelligenceDashboard, {
         onConfigureSources: () => undefined,
         onManageSource: () => undefined,
-        onOpenCalendar: () => undefined,
                 client: dashboardClient(),
         fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
         now: () => new Date(asOf),
@@ -171,7 +171,6 @@ describe('crypto intelligence dashboard', () => {
       createElement(CryptoIntelligenceDashboard, {
         onConfigureSources: () => undefined,
         onManageSource: () => undefined,
-        onOpenCalendar: () => undefined,
         client: dashboardClient(),
         fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
         now: () => new Date(asOf),
@@ -213,8 +212,8 @@ describe('crypto intelligence dashboard', () => {
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
       cellEnabledIo: { read: pendingRead, readSelection: pendingSelection },
       dashboardFeedStatusClient: allSourcesEnabled,
-      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
-      text: text.dashboard
+      onConfigureSources: () => undefined, onManageSource: () => undefined,
+      text: productText['zh-CN'].pages.intelligence.portal.dashboard
     })))
     await flush()
 
@@ -236,8 +235,8 @@ describe('crypto intelligence dashboard', () => {
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(result), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
-      text: text.dashboard
+      onConfigureSources: () => undefined, onManageSource: () => undefined,
+      text: productText['zh-CN'].pages.intelligence.portal.dashboard
     })))
     await flush()
 
@@ -265,7 +264,7 @@ describe('crypto intelligence dashboard', () => {
         btc: [{ observedAt: '2026-08-04T10:00:00.000Z', ratePercent: 0.01234 }],
         eth: [{ observedAt: '2026-08-04T11:00:00.000Z', ratePercent: -0.0031 }]
       }), openInterestClient: openInterestClient(), now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+      onManageSource: () => undefined, text: text.dashboard
     })))
     await flush()
 
@@ -357,8 +356,7 @@ describe('crypto intelligence dashboard', () => {
       client: dashboardClient(), fearGreedClient: fearGreedClient(),
       openInterestClient: openInterestClient(),
       fundingRateClient: { querySnapshot: () => Promise.resolve({ state: 'empty' }) }, now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: () => undefined,
-      onOpenCalendar: () => undefined, text: text.dashboard
+      onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard
     } as never)))
     await flush()
 
@@ -379,7 +377,7 @@ describe('crypto intelligence dashboard', () => {
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
       openInterestClient: openInterestClient(),
-      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+      onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard
     })))
     await flush()
 
@@ -411,7 +409,7 @@ describe('crypto intelligence dashboard', () => {
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
-      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard, cellEnabledIo
+      onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard, cellEnabledIo
     })))
     await flush()
 
@@ -690,7 +688,7 @@ describe('crypto intelligence dashboard', () => {
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       capitalConditionsClient: capitalConditionsClient(), now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: productText['en-US'].pages.intelligence.portal.dashboard
+      onManageSource: () => undefined, text: productText['en-US'].pages.intelligence.portal.dashboard
     } as never)))
     await flush()
     const row = container.querySelector<HTMLElement>('.mi-crypto-dashboard__capital-positioning-row')!
@@ -765,7 +763,7 @@ describe('crypto intelligence dashboard', () => {
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
+      onManageSource: () => undefined, text: text.dashboard,
       briefingEnabled: false
     })))
     await flush()
@@ -781,7 +779,7 @@ describe('crypto intelligence dashboard', () => {
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
+      onManageSource: () => undefined, text: text.dashboard,
       onOpenBriefing
     })))
     await flush()
@@ -813,7 +811,7 @@ describe('crypto intelligence dashboard', () => {
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+      onManageSource: () => undefined, text: text.dashboard
     })))
     await flush()
 
@@ -846,7 +844,7 @@ describe('crypto intelligence dashboard', () => {
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+      onManageSource: () => undefined, text: text.dashboard
     })))
     await flush()
 
@@ -961,7 +959,7 @@ describe('host wiring: cells switched off and sources judged', () => {
   const allEnabled = [
     { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
     { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-    { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+    { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true }
   ]
 
   async function settle(container: HTMLElement, selector: string): Promise<void> {
@@ -979,7 +977,7 @@ describe('host wiring: cells switched off and sources judged', () => {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: allEnabled }) },
-      onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
+      onConfigureSources: () => undefined, onManageSource: () => undefined,
       text: dashboardText, cellEnabledIo: { read: async () => cells },
       ...extra
     } as never)))
@@ -1027,7 +1025,7 @@ describe('host wiring: cells switched off and sources judged', () => {
         { sourceId: 'binance-futures-positioning' as const, enabled: false, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true }
       ] }) }
     })
     await settle(container, '.mi-positioning-panel')
@@ -1053,7 +1051,7 @@ describe('host wiring: cells switched off and sources judged', () => {
         { sourceId: 'binance-futures-positioning' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true },
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true }
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true }
       ] }) }
     })
     await settle(container, '.mi-positioning-panel')
@@ -1075,7 +1073,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     const sourceOff = await renderCells({}, {
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: false, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: false, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) }
     })
@@ -1090,7 +1088,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     const cellOff = await renderCells({ 'capital:etf': false }, {
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) }
     })
@@ -1162,11 +1160,15 @@ describe('host wiring: cells switched off and sources judged', () => {
   })
 
   /** 政策路径：两条硬依赖，逐支点名（2026-11-12 架构师批的双格形状）。 */
-  const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-policy-card')!
+  /**
+   * 政策那一块的说明与动作，**由钟表卡接管**（旧 `PolicyPathSlot` 已删，2026-11-15）：
+   * 句子仍由宿主按原来那三支判断算出，只是渲染在钟表卡的政策行里；动作仍是同一条设置入口。
+   */
+  const policyCard = (container: HTMLElement): HTMLElement => container.querySelector('.mi-clock')!
   const policySentence = (container: HTMLElement): string =>
-    policyCard(container).querySelector('.mi-source-state')?.textContent?.trim() ?? ''
+    policyCard(container).querySelector('.mi-clock__policy-note > span')?.textContent?.trim() ?? ''
   const policyAction = (container: HTMLElement): HTMLButtonElement =>
-    policyCard(container).querySelector<HTMLButtonElement>('.mi-source-veil button')!
+    policyCard(container).querySelector<HTMLButtonElement>('.mi-clock__policy-action')!
 
   /** 两格的源都启用：这样「另一格」的判定才是 read，单格关掉才看得出点名。 */
   const policySourcesOn = { query: async () => ({ state: 'available' as const, sources: [
@@ -1179,7 +1181,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     // 第 1 支：两格都去读。这次没读到（页面用例里 `policyPathClient` 没接）→ 只说「读不到 + 再试一次」，
     // 不许说成「未启用」——那是把「拿不到」和「没有」混成一句。
     const container = await renderCells({}, { dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     const sentence = policySentence(container)
     expect(sentence).not.toBe(dashboardText.policyPath.probabilityCellOff)
     expect(sentence).not.toBe(dashboardText.policyPath.fedCellOff)
@@ -1191,7 +1193,7 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('policy path: only the probability cell off names that cell, not the calendar', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'policy-path:probability': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     expect(policySentence(container)).toBe(dashboardText.policyPath.probabilityCellOff)
     expect(policySentence(container)).not.toContain(dashboardText.policyPath.fedCellOff)
     await act(async () => policyAction(container).click())
@@ -1201,7 +1203,7 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('policy path: only the Fed calendar off names the calendar, and never blames the odds', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'policy-path:fed': false }, { onManageSource, dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     expect(policySentence(container)).toBe(dashboardText.policyPath.fedCellOff)
     expect(policySentence(container)).not.toContain(dashboardText.policyPath.probabilityCellOff)
     await act(async () => policyAction(container).click())
@@ -1211,10 +1213,10 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('policy path: both cells off is one sentence naming both, with one configure action', async () => {
     const onConfigureSources = vi.fn()
     const container = await renderCells({ 'policy-path:probability': false, 'policy-path:fed': false }, { onConfigureSources, dashboardFeedStatusClient: policySourcesOn })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     expect(policySentence(container)).toBe(dashboardText.policyPath.bothCellsOff)
     // 不许拆成两条缺项
-    expect(policyCard(container).querySelectorAll('.mi-source-state')).toHaveLength(1)
+    expect(policyCard(container).querySelectorAll('.mi-clock__policy-note')).toHaveLength(1)
     await act(async () => policyAction(container).click())
     expect(onConfigureSources).toHaveBeenCalledTimes(1)
   })
@@ -1227,7 +1229,7 @@ describe('host wiring: cells switched off and sources judged', () => {
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) }
     })
-    await settle(container, '.mi-policy-card')
+    await settle(container, '.mi-clock__policy-note, .mi-clock')
     const sentence = policySentence(container)
     // 指向源（FOMC 决议市场），不是「这一格没启用」。
     expect(sentence).toContain('FOMC 决议市场')
@@ -1312,10 +1314,10 @@ describe('host wiring: capital cells, one row at a time', () => {
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) },
-      onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
+      onConfigureSources: () => undefined, onManageSource,
       text: dashboardText, cellEnabledIo: { read: async () => cells }
     } as never)))
     for (let round = 0; round < 20; round += 1) {
@@ -1441,10 +1443,10 @@ describe('host wiring: each capital cell focuses its own cell', () => {
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true },
-        { sourceId: '0xrouter-aggregate-provider' as const, enabled: true, hasCredential: true },
+        { sourceId: 'cryptoetf-etf-flows' as const, enabled: true, hasCredential: true },
         { sourceId: 'alternative-fear-greed' as const, enabled: true, hasCredential: true }
       ] }) },
-      onConfigureSources: () => undefined, onManageSource, onOpenCalendar: () => undefined,
+      onConfigureSources: () => undefined, onManageSource,
       text: productText['zh-CN'].pages.intelligence.portal.dashboard,
       cellEnabledIo: { read: async () => ({ 'capital:stablecoin': false }) }
     } as never)))
@@ -1459,4 +1461,86 @@ describe('host wiring: each capital cell focuses its own cell', () => {
     // 只证「点了有反应」；落点是哪个 cellId 见上面的 TODO(focus)。
     expect(onManageSource).toHaveBeenCalledTimes(1)
   })
+})
+
+/**
+ * 用户 2026-11-15：旧日历页整页删掉之后，「右栏那张发布日历右上角的图标」仍然要能进日历
+ * ——现在进的是日历抽屉。这条走完整条链路：页面层改序号 → 看板收到请求 → 抽屉打开 → 月历有数据。
+ * 旧页面对应的那条断言（跳 `activeView === 'calendar'`）已删，不是静默丢，是被这条接管。
+ */
+describe('the calendar entry opens the drawer, not a page', () => {
+  it('opens the drawer and shows the release calendar once the page asks for it', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const drawerRoot = createRoot(container)
+    await act(async () => drawerRoot.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient({
+        state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
+      }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      now: () => new Date(asOf),
+      onConfigureSources: () => undefined, onManageSource: () => undefined,
+      openIndicatorDrawerRequest: { seq: 0 },
+      calendarEventTitles: { cpi: 'CPI' },
+      readCalendarMonth: async () => ({ events: [{
+        eventKey: 'evt-cpi', title: 'CPI', countryCode: 'US', countryName: '美国', measureKeys: ['US.CPI.NSA.YOY'],
+        eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-08-10T12:30:00.000Z',
+        source: 'Narwhal', sourceObservedAt: '2026-08-04T09:00:00.000Z', coverage: 'observed-unverified'
+      }] as never, sources: [] }),
+      text: productText['zh-CN'].pages.intelligence.portal.dashboard
+    })))
+    await flush()
+    expect(document.body.querySelector('.mk-minical')).toBeNull()
+
+    // 页面层点那颗图标 = 递一个新的请求（序号加一；`openCalendar` 就是这么接的）。
+    await act(async () => drawerRoot.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient({
+        state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
+      }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      now: () => new Date(asOf),
+      onConfigureSources: () => undefined, onManageSource: () => undefined,
+      openIndicatorDrawerRequest: { seq: 1 },
+      calendarEventTitles: { cpi: 'CPI' },
+      readCalendarMonth: async () => ({ events: [{
+        eventKey: 'evt-cpi', title: 'CPI', countryCode: 'US', countryName: '美国', measureKeys: ['US.CPI.NSA.YOY'],
+        eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-08-10T12:30:00.000Z',
+        source: 'Narwhal', sourceObservedAt: '2026-08-04T09:00:00.000Z', coverage: 'observed-unverified'
+      }] as never, sources: [] }),
+      text: productText['zh-CN'].pages.intelligence.portal.dashboard
+    })))
+    await flush()
+    // 抽屉以 portal 挂到 body（modal 档），不在看板容器里。
+    const mini = document.body.querySelector('.mk-minical')
+    expect(mini).not.toBeNull()
+    // 月历确实有数据：那颗 10 号的格子里出现这条发布。
+    expect(mini?.textContent).toContain('CPI')
+    await act(async () => drawerRoot.unmount())
+    container.remove()
+  })
+})
+
+/**
+ * 用户 2026-11-15：这一块要从看板搬进抽屉右列顶部。
+ * 这条断的是**dashboard 有没有把它转手**——只断抽屉本身会漏掉「收到了却没传」这一跳
+ * （2026-11-15 就漏过一次：layout 注入 → dashboard 收到 → 抽屉里永远是 undefined）。
+ */
+it('hands the injected calendar block down to the drawer, not just to its own props', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => root.render(createElement(CryptoIntelligenceDashboard, {
+    client: dashboardClient(), fearGreedClient: fearGreedClient({
+      state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
+    }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+    now: () => new Date(asOf),
+    onConfigureSources: () => undefined, onManageSource: () => undefined,
+    openIndicatorDrawerRequest: { seq: 1 },
+    calendarBlock: createElement('div', { 'data-test-calendar-block': '' }, '接下来要看的'),
+    calendarEventTitles: { cpi: 'CPI' },
+    readCalendarMonth: async () => ({ events: [] as never, sources: [] }),
+    text: productText['zh-CN'].pages.intelligence.portal.dashboard
+  })))
+  await flush()
+  expect(document.body.querySelector('[data-drawer-calendar-block] [data-test-calendar-block]')).not.toBeNull()
+  await act(async () => root.unmount())
+  container.remove()
 })

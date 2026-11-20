@@ -8,7 +8,6 @@ import { withWindowHours } from './dailyBriefingWindowText'
 import { shortenEventTitle } from './dailyBriefingEventTitle'
 import { fallbackLabel, keyMeta, policyOutcomeLabel, rowLabel, toneFor } from './briefingPosterRowCopy'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
-import { briefingMacroEmptyCopy } from './briefingMacroEmptyCopy'
 import { editorialNotice } from './dailyBriefingEditorialNotice'
 import { briefingMacroValueLabel } from '../../../contracts/dailyBriefingMacroValueText'
 import { BriefingDataArea } from './BriefingDataArea'
@@ -59,19 +58,10 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const visibleMacro = newestFirst(doc.news.macro
     .filter((item) => item.visibility !== 'hidden')
     .map((item) => ({ item, at: item.scheduledAt, id: item.eventKey }))).map((entry) => entry.item)
-  // 宏观那一栏空着时**为什么**空：与右列「数据缺口与限制」共用同一个推导、同一句话
-  // （`briefingMacroEmptyCopy`）。**读不到**（源失败/未启用/过期/采集失败…）要在正文说
-  // 「暂时读不到：<原因>」（用户 2026-11-09 放宽呈现分寸后定，`MI-2-R89`）；**确实没有**
-  // （窗口里真的没有高影响事件）该函数返回 `null`，正文照旧一个字都不印——那一档的空态形态
-  // 仍按 2026-11-06 定稿与 `MI-2-R81` 待裁，这里不选边。
-  const macroEmpty = briefingMacroEmptyCopy(doc, {
-    macroEmptyCodes: text.macroEmptyCodes,
-    macroUnreadable: text.macroUnreadable
-  })
-  // 正文不再印"窗口里共几条、几条没拿到"（用户 2026-11-06：这类话会让人觉得简报不可信）。
-  // 「几条真摆出来了 / 几条没列」只在本栏有截断时说（`02` v2.125）：条数 = 本栏展示行数，
-  // 候选总数不许当成事件条数——那是把"有限"说成"全部"。
-  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0 || macroEmpty !== null
+  /* 这一屏不写「共几条 / 另有 N 条 / 无法判定 / 一级指标排期」（用户 2026-11-15 要求还原 11-05 版）：
+     空窗、判不了重要性、**读不到**三种都**整块不显示**——「不把筛没了说成没有」靠不显示兑现，
+     不靠一句解释（用户 2026-11-16：那句「没有宏观发布」不进正文，信息只留「数据缺口与限制」）。 */
+  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
   const hasData = chosen.length > 0
   // What the forecast stands on: the synthesis's own premises and falsifiers, plus the one line that
   // says whether the earlier read held. The audit-only detail also carries the forward view, the
@@ -141,7 +131,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
-      {visibleMacro.length > 0 || macroEmpty ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
       {/* 无解析的行**结构上**就是一段（`02` v2.133 B 案）：根节点标 `data-macro-parse`，
           `absent` 的行里根本不生成解析容器（不是隐藏、不是留空），用例靠选择器区分，不靠肉眼。 */}
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey} data-macro-parse={item.why ? 'present' : 'absent'}>
@@ -155,18 +145,12 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
             if (value === undefined) return null
             return <small>{value}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}{item.consensus ? ` · ${text.macro.consensus} ${item.consensus}` : ''}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}</small>
           })()}
+          {/* 11-05 那一版就有这句解读（用户 2026-11-15 要求还原）：指标行写「为什么重要」。 */}
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
       {/* 不再有"共 N 条（另 M 条未列出）"（用户 2026-11-06）：AI 判定有用的全部显示，
           所以这句话在正文与导出里都不该存在——它描述的截断已经不存在了。 */}
-      {/* 一行，正文段落样式：不是错误、不给图标、不给重试。**它是一个网格行**（`__macro` 那套
-          两列），里面那格才跨两列：海报的网格是逐行的，把这句放成行的兄弟，`grid-column` 不会
-          生效，「跨两列」就悄悄做不到。用 `<p>` 而不是 `<span>`：`__macro > span` 那条是给日期
-          列的字号与不换行，套在这句上会把它压成 10.5px 单行。 */}
-      {visibleMacro.length === 0 && macroEmpty ? <div className="mi-brief-poster__macro mi-brief-poster__macro-row-empty" data-macro-empty={macroEmpty.unreadable ? 'unreadable' : 'empty'}>
-        <p className="mi-brief-poster__macro-empty">{macroEmpty.sentence}</p>
-      </div> : null}
 
     </section> : null}
 
@@ -233,7 +217,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           <time>{releaseStamp(item, item.at, text.macro.timeNotPublished, formatTime, 'next')}</time>
           <div>
             <b>{nextCountry(item, text) ? `${nextCountry(item, text)} · ` : ''}{nextTitle(item, eventTitles, locale)}</b>
-            <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>
+            {item.importance === undefined
+              ? null
+              : <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>}
           </div>
           <span>{[item.consensus ? `${text.next.expected} ${item.consensus}` : '', item.previous ? `${text.next.previous} ${item.previous}` : ''].filter(Boolean).join(' · ')}</span>
         </div>)}
@@ -319,10 +305,10 @@ function daysUntil(at: string, from: string): number {
 
 
 
-const SOURCE_LABELS: Readonly<Record<string, string>> = {
+export const SOURCE_LABELS: Readonly<Record<string, string>> = {
   'defillama-stablecoins': 'DefiLlama Stablecoins',
   'binance-futures-positioning': 'Binance Futures',
-  '0xrouter-aggregate-provider': '0xRouter ETF',
+  'cryptoetf-etf-flows': 'CryptoETF',
   'alternative-fear-greed': 'Alternative.me',
   'coindesk-rss': 'CoinDesk RSS'
 }
@@ -342,10 +328,11 @@ function groupCitations(citations: readonly Citation[], text: DailyBriefingText)
   return [...groups.entries()].map(([key, value]) => Object.freeze({ key, indexes: Object.freeze([...value.indexes]), ...(value.statement ? { statement: value.statement } : {}), source: value.source, ...(value.observedAt ? { observedAt: value.observedAt } : {}) }))
 }
 
-function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>, text: DailyBriefingText): string {
+export function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>, text: DailyBriefingText): string {
   if (entry.sourceLabel) return SOURCE_LABELS[entry.sourceLabel] ?? entry.sourceLabel
   if (entry.refId.startsWith('query:defillama-stablecoins')) return 'DefiLlama Stablecoins'
-  if (entry.refId.startsWith('query:0xrouter')) return '0xRouter'
+  /* 0xRouter 那条分支删了（2026-11-13 切换）：refId 若还带旧前缀，这条会把新数据贴成旧标签；
+     若前缀换了，它又匹配不上、掉到「分析」。标签统一走 `sourceLabel` → SOURCE_LABELS。 */
   if (entry.refId.startsWith('macro-calendar')) return text.citationSources.macroCalendar
   if (entry.refId.startsWith('news')) return text.citationSources.news
   return text.citationSources.analysis
@@ -357,7 +344,7 @@ type WatchEntry = Readonly<{ key: string; kind: WatchKind; label: string; implic
 function nextMeta(item: DailyBriefingDocument['next']['items'][number], text: DailyBriefingText): string {
   const country = nextCountry(item, text)
   return [
-    text.next.importance[item.importance],
+    ...(item.importance === undefined ? [] : [text.next.importance[item.importance]]),
     country,
     item.consensus ? `${text.next.expected} ${item.consensus}` : '',
     item.previous ? `${text.next.previous} ${item.previous}` : ''

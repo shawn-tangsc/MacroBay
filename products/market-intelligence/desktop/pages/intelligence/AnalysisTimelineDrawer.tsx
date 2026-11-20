@@ -11,9 +11,13 @@ import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysi
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { AnalysisConclusionSendButton } from './AnalysisConclusionSendButton'
 import { AnalysisConclusionSendStatus } from './AnalysisConclusionSendStatus'
-import { analysisConclusionSendText } from './analysisConclusionSendText'
+import {
+  ANALYSIS_SEND_CHANNELS_LABEL_KEY,
+  analysisConclusionSendText,
+  resolveAnalysisSendText
+} from './analysisConclusionSendText'
 import { useAnalysisConclusionSend } from './useAnalysisConclusionSend'
-import { channelFactsOf, sendActionOffered, useAnalysisConclusionSendReadiness } from './useAnalysisConclusionSendReadiness'
+import { sendActionOffered, useAnalysisConclusionSendReadiness } from './useAnalysisConclusionSendReadiness'
 import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
 import { TimelinePanel } from './TimelinePanel'
 import type { UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
@@ -49,7 +53,7 @@ export function AnalysisTimelineDrawer(props: {
   // 最新那条带分析运行的条目：时间轴按时间倒序，第一条带 run id 的就是「最新那条结论」。
   // 条件写「有运行」而不是「有通知记录」——手动跑出来的结论从来没有通知记录，照样可以发。
   const latest = props.timeline.state.entries.find((entry) => entry.analysisRunId !== null)
-  // 点击前先问「现在能不能发」：0 条通道不摆按钮，多条照摆（点了才拒绝）。读不到也不摆。
+  // 点击前先问「现在能不能发」：0 条通道不摆按钮，≥1 条照摆（多通道是合法配置）。读不到也不摆。
   const readiness = useAnalysisConclusionSendReadiness({ open: props.open })
   // 回执不带投递结果时**先不摆按钮**（藏在 `SEND_ACTION_READY` 这个类型事实后面）；
   // 藏的只是按钮与它的 ⓘ，抽屉照常可用。
@@ -57,8 +61,6 @@ export function AnalysisTimelineDrawer(props: {
   const { phase, send } = useAnalysisConclusionSend({
     text: sendText,
     analysisRunId: latest?.analysisRunId ?? undefined,
-    // 只用于「没发到手机」那句的指路（0 条 / 多条）；成功句的通道名只认回执。
-    channel: channelFactsOf(readiness),
     // 时刻按读者时区格式化（平台那一份），不拿本机时间凑。
     formatNow: () => formatTime(new Date().toISOString(), 'minute')
   })
@@ -94,7 +96,10 @@ export function AnalysisTimelineDrawer(props: {
     />}
     titleKey="pages.intelligence.portal.analysisDrawer.title">
     {/* 结果只在标题下方这一行说：不弹 toast，也不拿按钮的状态冒充回执。 */}
-    {phase.kind === 'result' ? <AnalysisConclusionSendStatus reasonLabel={sendText.reasonLabel} status={phase.status} /> : null}
+    {phase.kind === 'result' ? <AnalysisConclusionSendStatus
+      ariaLabelKey={ANALYSIS_SEND_CHANNELS_LABEL_KEY}
+      resolveText={(key) => resolveAnalysisSendText(sendText, key)}
+      status={phase.status} /> : null}
     <TimelinePanel
       onOpenChange={props.onOpenChange}
       onOpenSettings={props.onOpenSettings}

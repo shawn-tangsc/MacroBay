@@ -24,7 +24,8 @@ import {
   withEditorialReasons
 } from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
-import { validateConclusionSynthesis, briefingConclusionBasis } from './dailyBriefingConclusionValidation'
+import { validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
+import { mergeEditorialConclusion } from './dailyBriefingConclusionMerge'
 import { failAll, type DailyBriefingValidationFailureEntry, type DailyBriefingValidationFailureResult } from './dailyBriefingValidationFailures'
 import { editorialProse } from './dailyBriefingValidationProse'
 import { validatedNextFocus } from './dailyBriefingNextFocusValidation'
@@ -344,6 +345,12 @@ export function applyDailyBriefingEditorial(
       ? Object.freeze({ ...document.next.focus, why: editorial.nextFocus.why, watch: editorial.nextFocus.watch })
       : document.next.focus
     : document.next.focus
+  const mergedConclusion = mergeEditorialConclusion({
+    ...(document.conclusion ? { conclusion: document.conclusion } : {}),
+    ...(editorial.conclusionSynthesis ? { synthesis: editorial.conclusionSynthesis } : {}),
+    ...(editorial.conclusionTranslation ? { translation: editorial.conclusionTranslation } : {}),
+    priorConclusions
+  })
   return Object.freeze({
     ...document,
     ...(editorial.nextFocus ? { next: Object.freeze({ ...document.next, items: Object.freeze(nextItems), ...(focus ? { focus } : {}) }) } : {}),
@@ -377,31 +384,7 @@ export function applyDailyBriefingEditorial(
         ...(editorial.invalidationNote ? { invalidationNote: editorial.invalidationNote } : {})
       })
     } : {}),
-    ...(editorial.conclusionSynthesis && document.conclusion && priorConclusions.length > 0 ? {
-      conclusion: Object.freeze({
-        ...document.conclusion,
-        direction: editorial.conclusionSynthesis.direction,
-        summary: editorial.conclusionSynthesis.summary,
-        // The published basis must belong to this forecast. The earlier analysis conclusion's
-        // conditions, invalidations and counter evidence are for a different call and a different
-        // horizon, so they are replaced by the synthesis's own premises and falsifiers — or, when a
-        // legacy recap carries no forward view, dropped instead of rendered as if they still held.
-        ...briefingConclusionBasis(editorial.conclusionSynthesis),
-        synthesis: 'agent' as const,
-        synthesizedFrom: Object.freeze(priorConclusions.map((conclusion) => conclusion.id)),
-        synthesisDetail: Object.freeze({
-          ...editorial.conclusionSynthesis,
-          conditions: Object.freeze([...editorial.conclusionSynthesis.conditions]),
-          counterEvidence: Object.freeze([...editorial.conclusionSynthesis.counterEvidence]),
-          watch: Object.freeze([...editorial.conclusionSynthesis.watch]),
-          confirmed: Object.freeze([...editorial.conclusionSynthesis.confirmed]),
-          refuted: Object.freeze([...editorial.conclusionSynthesis.refuted]),
-          evidenceRefs: Object.freeze([...editorial.conclusionSynthesis.evidenceRefs])
-        })
-      })
-    } : editorial.conclusionTranslation && document.conclusion ? {
-      conclusion: Object.freeze({ ...document.conclusion, translation: editorial.conclusionTranslation })
-    } : {}),
+    ...(mergedConclusion ? { conclusion: mergedConclusion } : {}),
     citations: Object.freeze(citations),
     provenance: Object.freeze({
       ...document.provenance,

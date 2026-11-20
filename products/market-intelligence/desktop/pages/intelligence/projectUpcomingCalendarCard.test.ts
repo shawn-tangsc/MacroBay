@@ -6,7 +6,8 @@ const asOf = '2026-10-11T09:00:00.000Z'
 
 function event(overrides: Partial<CalendarCardEvent> = {}): CalendarCardEvent {
   return {
-    eventKey: 'US.CPI.RELEASE.2026-M10', titleKey: 'cpi', importance: 'high', lifecycleState: 'scheduled', category: 'economic-indicator',
+    eventKey: 'US.CPI.RELEASE.2026-M10', titleKey: 'cpi', importance: 'high', tier: 1,
+    lifecycleState: 'scheduled', category: 'economic-indicator',
     scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T12:30:00.000Z', detectedAt: '2026-10-11T06:00:00.000Z', ...overrides
   }
 }
@@ -68,16 +69,31 @@ it('sorts by instant and then by key, so the order is stable', () => {
   expect(result.upcoming.map(row => row.eventKey)).toEqual(['a', 'b', 'z-later'])
 })
 
-it('lists high importance only, never a lower tier, released or cancelled event', () => {
-  // The card is the short list of what is worth watching: medium and low events are noise in it.
-  // Distinct instants, because the section is ordered by time: 12th, 13th, 14th.
-  const high = event({ eventKey: 'high', importance: 'high', scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T00:00:00.000Z' })
-  const medium = event({ eventKey: 'medium', importance: 'medium', scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T00:00:00.000Z' })
-  const low = event({ eventKey: 'low', importance: 'low', scheduledDate: '2026-10-14', scheduledAt: '2026-10-14T00:00:00.000Z' })
+it('lists only high-importance event rows, never a medium or low one, released or cancelled', () => {
+  // 事件行（央行活动/金融事件）只看重要性；指标行看分级——两条不同的判据，各自有用例。
+  const high = event({ eventKey: 'high', category: 'central-bank-activity', tier: null, importance: 'high',
+    scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T00:00:00.000Z' })
+  const medium = event({ eventKey: 'medium', category: 'central-bank-activity', tier: null, importance: 'medium',
+    scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T00:00:00.000Z' })
+  const low = event({ eventKey: 'low', category: 'financial-event', tier: null, importance: 'low',
+    scheduledDate: '2026-10-14', scheduledAt: '2026-10-14T00:00:00.000Z' })
   const released = event({ eventKey: 'released', lifecycleState: 'released' })
   const cancelled = event({ eventKey: 'cancelled', lifecycleState: 'cancelled' })
   expect(projectUpcomingCalendarCard([high, medium, low, released, cancelled], asOf).upcoming.map(row => row.eventKey))
     .toEqual(['high'])
+})
+
+/**
+ * 来源没给重要性（`undefined`）时**不算最高一档**：把「判不出」列进这张「值得关注」的短名单，
+ * 等于把推测冒充成重要——库里那 172 条数据商行会立刻占满它。
+ * 去掉 `importance !== undefined` 这个判据（改成 `undefined || …`）这条即红。
+ */
+it('does not list an event row whose importance the source did not give', () => {
+  const unknown = event({ eventKey: 'unknown', category: 'central-bank-activity', tier: null,
+    importance: undefined, scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T00:00:00.000Z' })
+  const high = event({ eventKey: 'high', category: 'central-bank-activity', tier: null,
+    importance: 'high', scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T00:00:00.000Z' })
+  expect(projectUpcomingCalendarCard([unknown, high], asOf).upcoming.map(row => row.eventKey)).toEqual(['high'])
 })
 
 it('lists recently released values that actually moved', () => {
@@ -159,8 +175,8 @@ it('tops a quiet nearest hour up with the next-nearest hours, whole groups at a 
     eventKey: key, scheduledDate: '2026-10-12', scheduledAt: `2026-10-12T${hour}:00:00.000Z`
   }))
   const result = projectUpcomingCalendarCard([...at('10', ['a1', 'a2']), ...at('11', ['b1', 'b2']), ...at('12', ['c1', 'c2', 'c3']), ...at('13', ['never'])], asOf)
-  // Two rows an hour: the third group crosses the target of five, so it comes whole.
-  expect(result.upcoming.map(row => row.eventKey)).toEqual(['a1', 'a2', 'b1', 'b2', 'c1', 'c2', 'c3'])
+  // Two rows an hour: the third group crosses the target of four, so it comes whole.
+  expect(result.upcoming.map(row => row.eventKey)).toEqual(['a1', 'a2', 'b1', 'b2'])
 })
 
 it('stops at the target when the nearest hour already fills it', () => {
@@ -173,7 +189,46 @@ it('stops at the target when the nearest hour already fills it', () => {
 
 it('stays empty and quiet for no events at all', () => {
   expect(projectUpcomingCalendarCard([], asOf)).toEqual({ today: [], upcoming: [], state: 'empty' })
-  expect(projectUpcomingCalendarCard([event({ importance: 'low' })], asOf).state).toBe('empty')
+  // 事件行评为 low：已判定、不列入；名单空就是空态（不再有「另有 N 条」把卡撑起来）。
+  expect(projectUpcomingCalendarCard([event({ category: 'central-bank-activity', tier: null, importance: 'low' })], asOf))
+    .toMatchObject({ state: 'empty' })
+})
+
+/**
+ * 「接下来要看的」新的筛选规则（用户 2026-11-19）：
+ * - **指标行**只显示一级/二级，**不看来源给的重要性**；
+ * - **事件行**（央行活动、金融事件）只显示 `importance === 'high'`；
+ * - 其余一律不列。原来的「另有 N 条未标级」在这套规则下分母不成立，已删。
+ */
+it('shows a tier-1 or tier-2 indicator even when the source gave no importance', () => {
+  const first = event({ eventKey: 't1', tier: 1, importance: undefined,
+    scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T12:00:00.000Z' })
+  const second = event({ eventKey: 't2', tier: 2, importance: 'medium',
+    scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T12:00:00.000Z' })
+  const result = projectUpcomingCalendarCard([first, second], asOf)
+  expect(result.upcoming.map(row => row.eventKey)).toEqual(['t1', 't2'])
+})
+
+it('drops tier-3 and untiered indicators, however important the source calls them', () => {
+  const third = event({ eventKey: 't3', tier: 3, importance: 'high',
+    scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T12:00:00.000Z' })
+  const untiered = event({ eventKey: 'tn', tier: null, importance: 'high',
+    scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T12:00:00.000Z' })
+  const result = projectUpcomingCalendarCard([third, untiered], asOf)
+  expect(result.upcoming).toEqual([])
+  // 名单空了就是空态：不再靠「另有 N 条未标级」把卡片撑成 available。
+  expect(result.state).toBe('empty')
+})
+
+it('keeps a high-importance central-bank activity, and drops medium or low ones', () => {
+  const high = event({ eventKey: 'cb-high', category: 'central-bank-activity', importance: 'high', tier: null,
+    scheduledDate: '2026-10-12', scheduledAt: '2026-10-12T12:00:00.000Z' })
+  const medium = event({ eventKey: 'cb-medium', category: 'central-bank-activity', importance: 'medium', tier: null,
+    scheduledDate: '2026-10-13', scheduledAt: '2026-10-13T12:00:00.000Z' })
+  const low = event({ eventKey: 'fin-low', category: 'financial-event', importance: 'low', tier: null,
+    scheduledDate: '2026-10-14', scheduledAt: '2026-10-14T12:00:00.000Z' })
+  const result = projectUpcomingCalendarCard([medium, low, high], asOf)
+  expect(result.upcoming.map(row => row.eventKey)).toEqual(['cb-high'])
 })
 
 it('marks the row that is past its time without a value, and only that row', () => {
@@ -190,7 +245,7 @@ it('marks the row that is past its time without a value, and only that row', () 
 })
 
 it('never says an event that publishes no value is waiting for one', () => {
-  // 财经事件与央行活动在计划时刻「发生」，不公布数值；它们的行没有「等待实际值」这个状态。
+  // 金融事件与央行活动在计划时刻「发生」，不公布数值；它们的行没有「等待实际值」这个状态。
   const indicator = event({ eventKey: 'indicator', category: 'economic-indicator',
     scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T07:30:00.000Z' })
   const financial = event({ eventKey: 'financial', category: 'financial-event',

@@ -122,14 +122,14 @@ async function createHarness(input: Readonly<{ withMetricEvents?: boolean }> = {
       const snapshotHash = buildAnalysisSnapshotHash(snapshot)
       runtime.repository.appendSnapshot({ ...snapshot, snapshotHash })
       const enqueuedRun = createAnalysisRunService({ repository: runtime.repository, now: () => clock.now, idFactory: () => `mi-ar-${itemId}` })
-        .enqueue({ eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
+        .enqueue({ analysisKind: 'market', eventGroupId: group.id, snapshotId: snapshot.id, snapshotHash, analysisPhase: 'initial', triggerKey: 'macro.actual.first-confirmed' })
       runtime.repository.linkTriggerLedgerRun({ id: row.id, analysisRunId: enqueuedRun.run.id, snapshotHash })
       if (status === 'succeeded') {
         runtime.repository.claimRun(enqueuedRun.run.id, clock.now)
         runtime.repository.commitSuccessfulAnalysis({
           runId: enqueuedRun.run.id,
           summary: {
-            id: `mi-as-${itemId}`, schemaVersion: 1, analysisRunId: enqueuedRun.run.id, eventGroupId: group.id, version: 1,
+            id: `mi-as-${itemId}`, schemaVersion: 1, analysisKind: 'market', analysisRunId: enqueuedRun.run.id, eventGroupId: group.id, version: 1,
             conclusion: {
               direction: 'range', summary: '结论', change: '变化', causalChain: '机制', conditions: [],
               macro: null, evidenceStrength: null, dataGaps: []

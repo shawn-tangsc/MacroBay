@@ -6,6 +6,8 @@
 [Releases 页面](https://github.com/shawn-tangsc/MacroBay/releases)。本文说明如何从源码构建；要把构建结果变成可分发的 `.dmg` 或 Windows
 安装器，见[打包](../development/packaging.zh-CN.md)。
 
+已经下载了安装包？看[下载与安装](./download-and-install.zh-CN.md)。
+
 ## 环境要求
 
 - **Node.js 22 或更高版本**
@@ -13,7 +15,8 @@
 - 能运行 Electron 的桌面会话
 - 一个模型供应商账号和 API Key，用于第一次真实对话
 
-当前版本主要在 macOS 上开发和验证。Windows、Linux 尚未做完整端到端验证，请按实验性支持对待。
+macOS 是主要开发和构建平台；0.4.0 有人实际安装使用过，之后没有再做真机安装验收。Windows、Linux
+尚未做完整端到端验证，请按实验性支持对待。
 
 ## 安装依赖
 

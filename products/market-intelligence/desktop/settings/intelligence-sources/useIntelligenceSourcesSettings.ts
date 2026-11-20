@@ -26,6 +26,11 @@ type HookState = {
   testingCredentials: boolean
   replaying: boolean
   errorCode: string | null
+  /**
+   * 写失败的人话（按源保存 / 启用开关）。与 `errorCode` 分开：那个还装着读失败、运行失败，
+   * 这条只解释「你刚改的那一下没存上」，并且带一个能重跑那次写的重试。
+   */
+  saveFailure: string | null
   notice: string | null
   /** 另一处保存了这一域的设置，而本页有未保存的草稿：只提示，不覆盖。 */
   otherSideChanged: boolean
@@ -54,6 +59,7 @@ export function useIntelligenceSourcesSettings(labels: {
     testingCredentials: false,
     replaying: false,
     errorCode: null,
+    saveFailure: null,
     notice: null,
     otherSideChanged: false
   })
@@ -63,6 +69,14 @@ export function useIntelligenceSourcesSettings(labels: {
   const revisionOriginRef = useRef(createSettingsOrigin('sources'))
   /** 本页有没有未保存的输入（凭据框）。由详情组件回报。 */
   const draftDirtyRef = useRef(false)
+  /**
+   * 最近一次**没写成功**的保存动作（按源 patch / 启用开关）。
+   *
+   * 写失败时界面会回滚成旧值——如果不把「这是失败、不是我没点」说出来，读者对着一个弹回的
+   * 下拉只能猜（2026-11-13 真机：「选完什么都不发生」）。重试就是**再跑一次那次写**，
+   * 不是整页重读：读者改的值还在这次动作里。
+   */
+  const failedWriteRef = useRef<(() => void) | null>(null)
 
   const load = useCallback(async (sourceId?: string) => {
     const [pageState, profiles, settingsView] = await Promise.all([
@@ -70,6 +84,7 @@ export function useIntelligenceSourcesSettings(labels: {
       intelligenceSourcesClient.listProfiles(),
       intelligenceSourcesClient.getSettingsView()
     ])
+    failedWriteRef.current = null
     setState((current) => ({
       ...current,
       definitions: pageState.definitions,
@@ -80,7 +95,8 @@ export function useIntelligenceSourcesSettings(labels: {
       draftProfile: pageState.detail?.profile,
       loading: false,
       saving: false,
-      errorCode: null
+      errorCode: null,
+      saveFailure: null
     }))
   }, [])
 
@@ -163,6 +179,7 @@ export function useIntelligenceSourcesSettings(labels: {
         await load(state.selectedSourceId)
         return true
       } catch {
+        failedWriteRef.current = () => { void toggleSourceEnabled(source, enabled) }
         setState((current) => ({
           ...current,
           profiles: previous === undefined ? current.profiles : upsertProfile(current.profiles, previous),
@@ -170,7 +187,8 @@ export function useIntelligenceSourcesSettings(labels: {
             ? previous
             : current.draftProfile,
           saving: false,
-          errorCode: labels.saveFailed
+          errorCode: labels.saveFailed,
+          saveFailure: labels.saveFailed
         }))
         return false
       }
@@ -186,35 +204,39 @@ export function useIntelligenceSourcesSettings(labels: {
    */
   const updateSourceProfile = useCallback(
     (sourceId: string, patch: Partial<IntelligenceSourceProfile>) => {
-      let previous: IntelligenceSourceProfile | undefined
-      let next: IntelligenceSourceProfile | undefined
-      setState((current) => {
-        const base = current.profiles.find((profile) => profile.sourceId === sourceId)
-          ?? (current.draftProfile?.sourceId === sourceId ? current.draftProfile : undefined)
-        if (!base) return current
-        previous = base
-        next = { ...base, ...patch }
-        return {
-          ...current,
-          profiles: upsertProfile(current.profiles, next),
-          draftProfile: current.draftProfile?.sourceId === sourceId ? next : current.draftProfile,
-          saving: true,
-          errorCode: null
-        }
-      })
-      if (!previous || !next) return
+      /*
+        基准**在 setState 之外取**：以前是「在 updater 里顺手记下 previous/next，出来再用」，
+        那条路依赖 React 在 `setState` 里同步跑 updater（eager state）——一旦有别的更新在队列里，
+        updater 延后执行，`previous` 还是 undefined，函数当场 return：**乐观值画上去了、写一次都没发**。
+        读者看到的就是「改了没反应」（2026-11-13 真机复报）。读当前 state 是确定性的。
+      */
+      const base = state.profiles.find((profile) => profile.sourceId === sourceId)
+        ?? (state.draftProfile?.sourceId === sourceId ? state.draftProfile : undefined)
+      if (base === undefined) return
+      const previous = base
+      const next: IntelligenceSourceProfile = { ...base, ...patch }
+
+      setState((current) => ({
+        ...current,
+        profiles: upsertProfile(current.profiles, next),
+        draftProfile: current.draftProfile?.sourceId === sourceId ? next : current.draftProfile,
+        saving: true,
+        errorCode: null
+      }))
 
       pendingSaveCountRef.current += 1
       saveQueueRef.current = saveQueueRef.current
         .then(async () => {
           const detail = await withTimeout(
-            intelligenceSourcesClient.saveProfile(toSaveProfileInput(next!)),
+            intelligenceSourcesClient.saveProfile(toSaveProfileInput(next)),
             15_000
           )
+          failedWriteRef.current = null
           setState((current) => ({
             ...current,
             profiles: upsertProfile(current.profiles, detail.profile),
             errorCode: null,
+            saveFailure: null,
             ...(current.selectedSourceId === detail.profile.sourceId
               ? { detail, draftProfile: detail.profile, notice: labels.saved }
               : {})
@@ -222,11 +244,13 @@ export function useIntelligenceSourcesSettings(labels: {
           notifySettingsRevision('sources', revisionOriginRef.current)
         })
         .catch(() => {
+          failedWriteRef.current = () => updateSourceProfile(sourceId, patch)
           setState((current) => ({
             ...current,
-            profiles: previous ? upsertProfile(current.profiles, previous) : current.profiles,
-            draftProfile: current.draftProfile?.sourceId === previous?.sourceId ? previous : current.draftProfile,
-            errorCode: labels.saveFailed
+            profiles: upsertProfile(current.profiles, previous),
+            draftProfile: current.draftProfile?.sourceId === previous.sourceId ? previous : current.draftProfile,
+            errorCode: labels.saveFailed,
+            saveFailure: labels.saveFailed
           }))
         })
         .finally(() => {
@@ -236,7 +260,7 @@ export function useIntelligenceSourcesSettings(labels: {
           }
         })
     },
-    [labels.saved, labels.saveFailed]
+    [labels.saved, labels.saveFailed, state.draftProfile, state.profiles]
   )
 
   /**
@@ -324,6 +348,17 @@ export function useIntelligenceSourcesSettings(labels: {
     return !health?.lastSuccessAt
   }, [state.detail?.health, state.draftProfile?.collectionPreset, state.draftProfile?.enabled])
 
+  /**
+   * 重试「刚才没写成功的那一次」。没有失败动作（或已经重试过）时什么都不做——
+   * 不假装成功，也不再发一次写。
+   */
+  const retryFailedSave = useCallback(() => {
+    const retry = failedWriteRef.current
+    failedWriteRef.current = null
+    if (retry === null) return
+    retry()
+  }, [])
+
   return {
     ...state,
     needsManualRunPrompt,
@@ -331,6 +366,7 @@ export function useIntelligenceSourcesSettings(labels: {
     selectSource,
     toggleSourceEnabled,
     updateSourceProfile,
+    retryFailedSave,
     runNow,
     testCredentials,
     replayWindow,

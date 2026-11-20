@@ -1,5 +1,5 @@
 import { Button, Switch } from 'antd'
-import { ChevronRight, RotateCw } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import type { ErrorReasonCode } from '@platform/contracts/queryOutcome'
@@ -9,6 +9,10 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { Segmented } from '@platform/ui/components/segmented'
 import { useToast } from '@platform/ui/components/toast'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { CollapsibleGroup } from '@platform/ui/components/collapsible-group'
+
+import { SettingInfoPopover } from '../SettingInfoPopover'
+import { QuarantineCopyList } from './QuarantineCopyList'
 import { StorageCacheDetailDrawer } from './StorageCacheDetailDrawer'
 import { StorageCacheOperationList } from './StorageCacheOperationList'
 import { StorageCacheTable } from './StorageCacheTable'
@@ -16,6 +20,7 @@ import {
   formatBytes,
   getStorageCacheLabels
 } from './storageCacheDisplay'
+import { useQuarantineCopies } from './useQuarantineCopies'
 import { useStorageCacheSettings } from './useStorageCacheSettings'
 import {
   buildStorageCacheSummary,
@@ -81,6 +86,8 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   const labels = getStorageCacheLabels(language)
   const toast = useToast()
   const { state, reload, inspectCache, clearCache, compactCache } = useStorageCacheSettings()
+  // 隔离副本单独一条读取：缓存巡检失败不该把这一块的结论也变成「读不到」，反之亦然。
+  const quarantine = useQuarantineCopies()
   // `data` 只在 `ready` 上，所以下面每一处用到行数据的地方都先证明它——这正是类型要的。
   const snapshot = state.status === 'ready' ? state.data : null
   const caches = snapshot?.caches ?? []
@@ -88,7 +95,6 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   const [dryRun, setDryRun] = useState(false)
   const [activeFilter, setActiveFilter] = useState<StorageCacheFilterKey>('all')
   const [detailCacheId, setDetailCacheId] = useState<string | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
 
   const filters = useMemo(() => listStorageCacheFilters(language), [language])
   // 分段器只收键：文案的唯一定义仍在 platformText，页面只负责把键解析回来。
@@ -197,7 +203,8 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
             <Button
               className="ant-secondary-button"
               icon={<RotateCw size={14} />}
-              onClick={() => void reload()}>
+              // 页头那颗刷新同时重读隔离副本：它就在同一屏上，只刷一半会让两块各说一次「最新」。
+              onClick={() => { void reload(); void quarantine.reload() }}>
               {labels.refresh}
             </Button>
           </div>
@@ -281,28 +288,134 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
           </section>
         )}
 
+        {/*
+         * 隔离副本：磁盘上有、界面以前完全看不见的那一类文件。**只读**——列出文件名、相对位置、
+         * 大小与修改时间；说明（它们是什么、能不能删、删了会怎样）在标题旁的 ⓘ 里。
+         * 三态分开：读不到 = 错误态 + 重试；扫完了没有 = 空态；有目录没读到 = 列表照出 + 一句「可能不全」。
+         */}
+        {/*
+         * 隔离副本：磁盘上有、界面以前完全看不见的那一类文件。**只读**——列出文件名、相对位置、
+         * 大小与修改时间；说明（它们是什么、能不能删、删了会怎样）在展开区顶部的 ⓘ 里。
+         * 折叠头走平台 `CollapsibleGroup`（同屏只许一套折叠实现）；三态分开：读不到 = 错误态 + 重试；
+         * 扫完了没有 = 空态（说的是「健康」不是「等数据」）；有目录没读到 = 列表照出 + 一句「可能不全」。
+         */}
+        <section className="storage-cache-panel" data-quarantine-copies="true">
+          <CollapsibleGroup
+            resolveText={(key) => (key === labels.quarantineTitle ? labels.quarantineTitle : '')}
+            titleText={labels.quarantineTitle}
+            {...(quarantine.state.status === 'ready'
+              ? { metaText: String(quarantine.state.data.copies.length) }
+              : {})}
+          >
+            <div className="storage-cache-quarantine-about">
+              {/*
+               * 说明句只进 ⓘ：折叠头的头行整行是按钮，平台契约禁止在里面放可聚焦元素（嵌套按钮），
+               * 所以它跟着展开区一起来——收起时没有「被推到行尾」这件事。
+               */}
+              <SettingInfoPopover
+                hintKey={labels.quarantineWhat}
+                infoLabelKey={labels.quarantineWhatAria}
+                resolveText={(key) => {
+                  if (key === labels.quarantineWhat) return labels.quarantineWhat
+                  if (key === labels.quarantineWhatAria) return labels.quarantineWhatAria
+                  return ''
+                }}
+              />
+            </div>
+            {quarantine.state.status === 'loading' ? (
+              <div className="storage-cache-placeholder">
+                <LoadingState label={labels.loading} />
+              </div>
+            ) : quarantine.state.status === 'error' ? (
+              <div className="storage-cache-placeholder">
+                <StateView
+                  state="error"
+                  reasonCode={regionErrorReasonCode(quarantine.state.reasonCode)}
+                  size="md"
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void quarantine.reload() }}
+                />
+              </div>
+            ) : (
+              <>
+                {quarantine.state.data.copies.length === 0
+                  && quarantine.state.data.unreadableDirectories === 0
+                  && quarantine.state.data.truncated === false
+                  ? <StateView
+                    state="empty"
+                    reasonCode="not-yet"
+                    size="sm"
+                    // 0 份副本是**健康状态**，不是「等数据进来」：用自己的句子说清它会自己出现。
+                    // 键带产品前缀、句子来自文案表（§17：键 + 文案表，不把句子当键喂回去）。
+                    productReason={{
+                      key: 'storage.quarantine-empty',
+                      resolve: () => labels.quarantineEmpty
+                    }}
+                  />
+                  : quarantine.state.data.copies.length === 0
+                    ? null
+                    : <QuarantineCopyList language={language} labels={labels} scan={quarantine.state.data} />}
+
+                {quarantine.state.data.unreadableDirectories > 0 ? (
+                  <p className="storage-cache-muted">
+                    {labels.quarantinePartial(quarantine.state.data.unreadableDirectories)}
+                    {' '}
+                    {/* 句内动作：文本档按钮，不再是句子里塞一个描边盒子。 */}
+                    <Button
+                      className="text-action"
+                      onClick={() => void quarantine.reload()}
+                      size="small"
+                      type="text">
+                      {labels.refresh}
+                    </Button>
+                  </p>
+                ) : null}
+                {quarantine.state.data.truncated ? (
+                  <p className="storage-cache-muted">
+                    {labels.quarantineTruncated(quarantine.state.data.copies.length)}
+                  </p>
+                ) : null}
+              </>
+            )}
+          </CollapsibleGroup>
+        </section>
+
+        {/*
+         * 操作记录：与隔离副本同一个折叠壳（同一屏只许一套折叠实现）。
+         * 展开区常驻渲染是壳的契约（`aria-controls` 必须指向真实节点），收起态由 antd 隐藏。
+         */}
         <section className="storage-cache-panel storage-cache-history-panel">
-          <button
-            type="button"
-            className="storage-cache-history-toggle"
-            aria-expanded={historyOpen}
-            onClick={() => setHistoryOpen((current) => !current)}>
-            <ChevronRight
-              size={14}
-              className={historyOpen ? 'storage-cache-chevron open' : 'storage-cache-chevron'}
-            />
-            <span>{labels.historyTitle}</span>
-            <small>{operations.length}</small>
-          </button>
-          {historyOpen ? (
-            <StorageCacheOperationList
-              language={language}
-              labels={labels}
-              records={operations}
-              caches={caches}
-              showCacheName
-            />
-          ) : null}
+          <CollapsibleGroup
+            resolveText={(key) => (key === labels.historyTitle ? labels.historyTitle : '')}
+            titleText={labels.historyTitle}
+            metaText={String(operations.length)}
+          >
+            {/*
+             * 展开区常驻渲染，所以这里也要按读取生命周期给三态：读还没回来时既不是「没有记录」
+             * （`StorageCacheOperationList` 会因为拿到空数组画空态），也不是错误。
+             */}
+            {state.status === 'ready' ? (
+              <StorageCacheOperationList
+                language={language}
+                labels={labels}
+                records={state.data.operations}
+                caches={caches}
+                showCacheName
+              />
+            ) : state.status === 'loading' ? (
+              <div className="storage-cache-placeholder">
+                <LoadingState label={labels.loading} />
+              </div>
+            ) : (
+              <div className="storage-cache-placeholder">
+                <StateView
+                  state="error"
+                  reasonCode={regionErrorReasonCode(state.reasonCode)}
+                  size="md"
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reload() }}
+                />
+              </div>
+            )}
+          </CollapsibleGroup>
         </section>
       </div>
 

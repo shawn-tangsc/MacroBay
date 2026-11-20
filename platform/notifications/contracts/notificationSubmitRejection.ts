@@ -57,11 +57,16 @@ export type NotificationSubmitRejectionReason =
          */
         | 'minimum-gap-active'
         /**
-         * `narrowedDisruptionLevels` 里出现**批准表没有批**的档位。
+         * `narrowedDisruptionLevels` 让这次提交的档位**不是这张批准表允许的样子**。两种情形：
          *
-         * 收窄只能**变少**，不能**变出**。「传了却发不出去」如果按「与批准求交」静默处理，
-         * 生产者会以为那一档发出去了——那正是今晚一直在清的静默失败。所以当场拒收，
-         * 与 `assertRequestedWithinApproved` 对「申请了未批准的档位」的处理保持一致。
+         *  1. 收窄里出现**批准表没有批**的档位。收窄只能**变少**，不能**变出**。「传了却发不出去」
+         *     如果按「与批准求交」静默处理，生产者会以为那一档发出去了——那正是今晚一直在清的静默失败。
+         *  2. 收窄把 `center` 撤掉，而这条事件**不允许省略 center**（失败 / 要读者动手 / 持续状况）。
+         *     装配期守卫只挡「批准表本身不写 center」，收窄是另一条能产生投递的路；两处判的是
+         *     **同一份** `allowsCenterOmission`，否则规矩只在一条路上生效。
+         *
+         * 两种都当场拒收，与 `assertRequestedWithinApproved` 对「申请了未批准的档位」的处理保持一致；
+         * 拒收理由里点名事件 id。
          */
         | 'surface-not-approved'
         /**

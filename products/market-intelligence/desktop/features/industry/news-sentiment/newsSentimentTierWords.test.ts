@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import { OPEN_SENTIMENT_ACTION_KEY } from '../../../../contracts/notificationEventKeys'
+import { newsArrivalTemplates } from '../../../../contracts/newsArrivalSentences'
 import { sentimentAlertTemplates } from '../../../../contracts/sentimentAlertSentences'
+import { marketIntelligenceNotificationCopy } from '../../../shared/i18n/text/notifications'
 import { intelligenceNotificationText } from '../../../settings/intelligence-notification/text'
 import { productText } from '../../../shared/i18n/productText'
 
@@ -34,6 +37,33 @@ describe('news sentiment tier words', () => {
         const settingsTierWord = (settingsWord ?? '').split(/[\s（(]/)[0] ?? ''
         expect(settingsTierWord.toLowerCase()).toBe(alertWord.toLowerCase())
       }
+    })
+  }
+})
+
+/**
+ * 桌面提醒（R40）与卡片用**同一套方向词**：读者在通知里读到「偏多」，进应用看到的也是「偏多」，
+ * 两处换个说法就是两件事。英文那边一处是句子中间、一处是列表小字，所以只比词、不比大小写。
+ */
+describe('news arrival notice words', () => {
+  const CARD_LABEL = { bullish: 'bullish', bearish: 'bearish', neutral: 'neutral', mixed: 'mixed' } as const
+  const POLARITIES = ['bullish', 'bearish', 'neutral', 'mixed'] as const
+
+  for (const language of ['zh-CN', 'en-US'] as const) {
+    it(`uses the card's direction words in the desktop notice — ${language}`, () => {
+      const card = productText[language].pages.intelligence.portal.newsSentiment.labels
+      const notice = newsArrivalTemplates[language].polarity
+      for (const polarity of POLARITIES) {
+        expect(notice[polarity].toLowerCase()).toBe(card[CARD_LABEL[polarity]].toLowerCase())
+      }
+    })
+
+    it(`labels the notice action by what it really does — ${language}`, () => {
+      // 这一版只打开舆情页、不定位：标签只能是「打开舆情」。定位能力落地后才改「查看这条」。
+      const label = marketIntelligenceNotificationCopy[language][OPEN_SENTIMENT_ACTION_KEY]
+      expect(label).toBe(language === 'zh-CN' ? '打开舆情' : 'Open news')
+      expect(label).not.toContain('查看这条')
+      expect(label).not.toContain('View this')
     })
   }
 })

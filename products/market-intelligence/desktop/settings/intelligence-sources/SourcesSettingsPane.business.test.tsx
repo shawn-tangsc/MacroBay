@@ -287,3 +287,52 @@ describe('卡片行：源名做标签 / 同一格的候选源互斥', () => {
     expect(host.querySelector('[data-cell-id="quotes:usd-fallback"]')?.getAttribute('data-cell-enabled')).toBe('false')
   })
 })
+
+/**
+ * 核心指标那一屏**独占**右栏（用户 2026-11-14 截图：底部多出一块空框）。
+ *
+ * 两个视图同时渲染时，`BusinessSettingsContent` 对 `coreIndicators` 没有模块可列，
+ * 只画出「一个组标题 + 一张空网格」。判据：这一屏里只有指标卡，没有业务内容的根节点。
+ */
+describe('核心指标：两个视图互斥', () => {
+  it('renders only the indicator cards, with no empty business group underneath', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(createElement(ShellLanguageProvider, {
+        language: 'zh-CN',
+        children: createElement(SourcesSettingsPane, {
+          filter: 'dashboard',
+          initialBusinessPosition: { business: 'coreIndicators' },
+          onFilterChange: vi.fn(),
+          onSelectProvider: vi.fn(),
+          pane: 'business',
+          surface: {
+            text: t,
+            onDraftChange: vi.fn(),
+            onRunNow: async () => undefined,
+            onToggleSource: async () => true,
+            policy: { labels: t.collectionPolicy, onChange: vi.fn(), profiles: {} },
+            showSourceDetails: true
+          } as never,
+          treeLabels: {
+            title: t.title,
+            categories: t.sourceCategories,
+            providerNames: t.providerNames,
+            unavailableCountOne: t.unavailableCountOne,
+            unavailableCountOther: t.unavailableCountOther
+          } as never,
+          view
+        })
+      }))
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    // 指标卡在。
+    expect(host.querySelector('[data-core-indicator-sources="true"]')).not.toBeNull()
+    // 业务内容那一支整个不在（那一支的组卡带 `data-business-card`），所以不会再有组标题 + 空网格。
+    expect(host.querySelector('[data-business-content]')).toBeNull()
+    expect(host.querySelector('[data-business-card]')).toBeNull()
+  })
+})

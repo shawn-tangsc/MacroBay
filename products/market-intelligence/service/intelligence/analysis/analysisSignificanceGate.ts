@@ -1,10 +1,83 @@
 import { normalizeMacroRouteMonths, type MacroRoute } from '../public-query/macroRouteQuery'
 import { analysisBudgetPolicy, decideBudget, type DailyQuota } from './analysisBudgetPolicy'
 import { countAnalysisRuns, lastAutoRunAt, type AnalysisRunCounts } from './analysisRunCounter'
-import { evaluateSignificance, type SignificanceDecision } from './analysisSignificancePolicy'
+import { analysisSignificancePolicy, evaluateSignificance, type SignificanceDecision } from './analysisSignificancePolicy'
 import { analysisRunLineOf, isGateEligible } from './analysisTriggerSourcePolicy'
 import { projectPreviousBaseline, type PreviousSignificanceBaseline } from './previousSignificanceBaseline'
-import type { SignificanceSignal } from './significanceChangeMatcher'
+import type { SignificanceBaseline, SignificanceSignal } from './significanceChangeMatcher'
+
+/**
+ * 日历读不到时，闸门不许把「不知道」判成「没有变化」。
+ *
+ * 只改一种判定：本来会因「变化低于阈值」被跳过的，改判为放行（fail-open）。预算、间隔、
+ * 时段这些拒绝理由一律不透支——读不到日历不代表可以多花一次额度。放行时 `reasonCode` 留空，
+ * 因为「读不到所以先分析一次」还没有自己的文案码；加码要同时加两处文案，不在这一笔里造。
+ */
+type ReadStreak = Readonly<{ official: number; provider: number }>
+
+/**
+ * 连续读不到的次数，按侧计。
+ *
+ * 读不到时放行是「宁可多分析一次」的兜底；但如果它一直读不到，这兜底会每个周期都放行一次，
+ * 直到把当天额度耗光——一次配置错误就能吃掉整天的分析机会。所以同侧连续两次不可读之后，
+ * 兜底关闭；只要有一次读到就清零。它只关这一个口子，预算/间隔/时段三道闸门一律不动。
+ */
+function nextReadStreaks(route: MacroRoute, streak: ReadStreak): ReadStreak {
+  const step = (side: MacroRoute['official'] | MacroRoute['provider'], previous: number): number => {
+    if (side.state === 'available') return 0
+    // `not-wired` 不是「读不到」：那个 build 本来就没有这条日历，不计入连续次数。
+    if (side.reasonCode === 'not-wired') return previous
+    return previous + 1
+  }
+  return Object.freeze({
+    official: step(route.official, streak.official),
+    provider: step(route.provider, streak.provider)
+  })
+}
+
+function evaluateCalendarSignificance(
+  input: Parameters<typeof evaluateSignificance>[0],
+  route: MacroRoute,
+  streak: ReadStreak
+): Readonly<{ decision: SignificanceDecision; streaks: ReadStreak }> {
+  const decision = evaluateSignificance(input)
+  const streaks = nextReadStreaks(route, streak)
+  // 只有当前仍不可读、且还没超过两次的那一侧，才允许把「低于阈值」改判为放行。
+  const unreadable = [['official', route.official, streaks.official], ['provider', route.provider, streaks.provider]] as const
+  const failOpenAllowed = unreadable.some(([, side, count]) =>
+    side.state === 'unavailable' && side.reasonCode !== 'not-wired' && count <= 2)
+  if (!failOpenAllowed) return { decision, streaks }
+  if (decision.decision !== 'skipped' || decision.reasonCode !== analysisSignificancePolicy.reasonCodes.belowThreshold) {
+    return { decision, streaks }
+  }
+  return {
+    decision: Object.freeze({
+      ...decision, decision: 'queued' as const,
+      reasonCode: analysisSignificancePolicy.reasonCodes.calendarUnavailable, signals: Object.freeze([])
+    }),
+    streaks
+  }
+}
+
+/**
+ * 一行诊断，专门回答「这次为什么要/不要按读不到处理」。
+ *
+ * `not-wired` 不触发 fail-open，所以它不发任何信号；但正因为它不发信号，必须留下能被查到的
+ * 记录——否则接线哪天被改坏，看起来和「这个 build 本来就没接」一模一样。
+ */
+export function formatCalendarReadDiagnostic(route: MacroRoute): string {
+  return JSON.stringify({
+    kind: 'analysis-calendar-read',
+    official: { state: route.official.state, reasonCode: route.official.reasonCode ?? null },
+    provider: { state: route.provider.state, reasonCode: route.provider.reasonCode ?? null },
+    asOf: route.asOf, months: route.months
+  })
+}
+
+/** 把两侧状态摊平成策略层认识的基线；策略层只认数据，不认状态。 */
+function flattenBaseline(route: MacroRoute): SignificanceBaseline {
+  return { official: route.official.facts, provider: route.provider.facts, months: route.months, asOf: route.asOf }
+}
 
 /**
  * The gate itself: the one place that decides whether a data-driven analysis may spend a model
@@ -32,6 +105,14 @@ export type SignificanceGateDependencies = Readonly<{
    * the day for a model call that never happened.
    */
   updateDecision: (rowId: string, decision: 'skipped', reasonCode: string) => void
+  /**
+   * 连续「读不到」的计数，按 UTC 日与侧持久化（跨重启不清零）。
+   *
+   * 缺省时退回进程内存，只用于测试或没装持久层的老装配；生产装配必须提供，否则一次重启
+   * 会白送两次放宽，正是「一次配置错误烧光额度」的形状。
+   */
+  readCalendarReadStreak?: (utcDay: string) => Readonly<{ official: number; provider: number }>
+  writeCalendarReadStreak?: (input: Readonly<{ utcDay: string; side: 'official' | 'provider'; count: number; updatedAt: string }>) => void
   /**
    * 当日额度用尽时告诉读者一次（P3）。只在 `day-budget-exhausted` 这一种拒绝上调用：
    * 小时窗口、合并区间、时段的保留位都不是「今天的次数用完了」。缺省表示未装配通知运行时。
@@ -70,6 +151,27 @@ export type SignificanceGateOutcome = Readonly<{
 }>
 
 export function createAnalysisSignificanceGate(dependencies: SignificanceGateDependencies) {
+  const utcDayOf = (now: string): string => now.slice(0, 10)
+  /** 当天窗口的计数：有持久层就读它，没有就用进程内存。 */
+  function calendarReadStreak(now: string): ReadStreak {
+    return dependencies.readCalendarReadStreak?.(utcDayOf(now)) ?? memoryStreak
+  }
+  /** 只写有变化的侧；跨天由主键 `utc_day` 自然分开，不需要显式清零。 */
+  function persistCalendarReadStreak(now: string, next: ReadStreak): void {
+    if (!dependencies.writeCalendarReadStreak) {
+      memoryStreak.official = next.official
+      memoryStreak.provider = next.provider
+      return
+    }
+    const utcDay = utcDayOf(now)
+    for (const side of ['official', 'provider'] as const) {
+      if (next[side] !== memoryStreak[side] || next[side] !== calendarReadStreak(now)[side]) {
+        dependencies.writeCalendarReadStreak({ utcDay, side, count: next[side], updatedAt: now })
+      }
+    }
+    memoryStreak.official = next.official
+    memoryStreak.provider = next.provider
+  }
   /**
    * 「今天的次数用完了」只在每日额度这一种拒绝上通知一次；同一天的重复提交由平台按 UTC 日键合并，
    * 所以这里不必自己数次数（那是去重键的职责，写两处迟早会不一致）。
@@ -89,6 +191,14 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
     if (scope === undefined) return
     await dependencies.notifyQuotaExhausted?.({ used: quota.used, limit: quota.limit, occurredAt: dependencies.now(), scope })
   }
+  // 没有持久层时用的兜底：只在进程内有效，生产装配由 repository 提供。
+  // 装配漏掉持久层时这里只 warn 一次（不是每 tick）：静默退回内存会让「重启不清零」悄悄失效，
+  // 而所有用例仍然绿——那正是要防的形状。
+  const persistenceWired = dependencies.readCalendarReadStreak !== undefined && dependencies.writeCalendarReadStreak !== undefined
+  if (!persistenceWired) {
+    console.warn('[analysis] calendar-read streak falls back to process memory: persistence is not wired')
+  }
+  const memoryStreak = { official: 0, provider: 0 }
   return {
     async evaluate(input: SignificanceGateInput): Promise<SignificanceGateOutcome> {
       const line = analysisRunLineOf(input.triggerKey)
@@ -118,15 +228,17 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
       const previous: PreviousSignificanceBaseline | null = projectPreviousBaseline(input.previousSnapshot as never)
       const now = dependencies.now()
       const route = await dependencies.queryMacroRoute({ asOf: input.asOf, months: normalizeMacroRouteMonths(input.asOf, previous?.asOf ?? null) })
-      const decision: SignificanceDecision = evaluateSignificance({
+      const evaluated = evaluateCalendarSignificance({
         triggerKey: input.triggerKey,
         now,
         lastAutoRunAt: dependencies.lastAutoRunAt(input.eventGroupId, now),
         previousAsOf: previous?.asOf ?? null,
-        current: route,
+        current: flattenBaseline(route),
         previous: previous?.values ?? null,
         ...dependencies.countRuns(now)
-      })
+      }, route, calendarReadStreak(now))
+      persistCalendarReadStreak(now, evaluated.streaks)
+      const decision = evaluated.decision
       if (decision.reasonCode !== null) {
         // A refused attempt that arrived with its own ledger row rewrites that row; anything else
         // (the calendar line, the session slots) records a decision of its own as it always has.

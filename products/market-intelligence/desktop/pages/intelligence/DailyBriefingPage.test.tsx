@@ -192,7 +192,9 @@ function generationTraceFixture(state: 'success' | 'failed', failed?: string, fa
 const editions: readonly DailyBriefingEditionSummary[] = Array.from({ length: 14 }, (_, index) => {
   const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10)
   return date === '2026-10-28'
-    ? { date, periodId: 'default', locale: 'zh-CN', availableLocales: [], state: 'missing' }
+    // `attemptCount: 0` 是**明确的「一次都没试过」**：这类日子不需要去读（架构师 2026-11-14：
+    // 可选字段缺席＝不知道试过几次，不等于 0；不写这个数就会多发一次读取）。
+    ? { date, periodId: 'default', locale: 'zh-CN', availableLocales: [], state: 'missing', attemptCount: 0 }
     : { date, periodId: 'default', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated', generatedAt: `${date}T00:30:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, readingsAvailable: 4 }
 })
 
@@ -252,14 +254,51 @@ function dialogButton(label: string): HTMLButtonElement {
 }
 
 /**
+ * 等一个**状态真的出现**，不等「冲几轮微任务」。
+ *
+ * 背景：删除那条链是 confirm → deletePeriod → onSettled → 重读列表 → 状态更新 → 重渲染，至少五跳。
+ * 以前用「冲 6 轮 `Promise.resolve()`」等于猜它今天正好用几拍走完；机器被抢时拍数对不上，用例就翻。
+ * 这里只问条件成没成立，成立就走。
+ *
+ * 本文件用的是 fake timers：`setTimeout` 不会自己走，所以每轮 `advanceTimersByTime(0)` 把 0ms
+ * 定时器（确认框关闭后的焦点归还、antd 的收尾）确定地推进一步，而不是等真实时间。
+ *
+ * 超时**必须**把「等的是什么、当时是什么值」一起报出来：下次红的时候要一眼看出卡在哪，
+ * 而不是只看到一句 timed out。轮数只作上限，正常情况下第一两轮就返回。
+ */
+async function waitUntil(
+  what: string,
+  condition: () => boolean,
+  snapshot: () => string,
+  turns = 200
+): Promise<void> {
+  for (let turn = 0; turn < turns; turn += 1) {
+    if (condition()) return
+    await act(async () => {
+      vi.advanceTimersByTime(0)
+      await Promise.resolve()
+    })
+  }
+  if (condition()) return
+  throw new Error(`timed out after ${turns} turns waiting for ${what}; last state: ${snapshot()}`)
+}
+
+/**
  * 像读者一样先展开那一天再读它的行（`A5.3`：默认只展开今天）。
  * 展开天头会顺带把右侧切到那天最近的一版（`A9.14`）——那是产品行为，不是测试的副作用。
  */
 const expandDay = async (dom: HTMLElement, date: string): Promise<void> => {
-  const head = dom.querySelector<HTMLButtonElement>(`.mi-daily-briefing__rail-day[data-day="${date}"] .mi-daily-briefing__rail-day-head`)
+  const dayHead = (): HTMLButtonElement | null => dom.querySelector<HTMLButtonElement>(
+    `.mi-daily-briefing__rail-day[data-day="${date}"] .mi-daily-briefing__rail-day-head`
+  )
+  const head = dayHead()
   if (head !== null && head.getAttribute('aria-expanded') === 'false') {
     await act(async () => { head.click(); await Promise.resolve() })
-    for (let round = 0; round < 4; round += 1) await act(async () => { await Promise.resolve() })
+    await waitUntil(
+      `day ${date} to expand`,
+      () => dayHead()?.getAttribute('aria-expanded') === 'true',
+      () => `aria-expanded=${dayHead()?.getAttribute('aria-expanded') ?? 'missing'}`
+    )
   }
 }
 
@@ -434,10 +473,23 @@ describe('daily briefing page', () => {
     act(() => { row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })) })
     const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]!
     act(() => { item.click() })
-    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    await waitUntil(
+      'the delete confirmation to appear',
+      () => document.querySelector<HTMLElement>('[role="dialog"]') !== null,
+      () => `dialogs=${document.querySelectorAll('[role="dialog"]').length}`
+    )
     const confirm = dialogButton(text.history.deleteEditionConfirm)
     await act(async () => { confirm.click() })
-    for (let round = 0; round < 6; round += 1) await act(async () => { await Promise.resolve() })
+    // 删除跑完的信号是**页面把列表又读了一次、而且今天那一版仍是选中项**——等这个状态，
+    // 不数微任务拍数。断言留在后面：「没有多叫 getToday」「载荷带入口」真回归时是一次
+    // 干脆的断言失败，而不是等满轮数再超时。
+    await waitUntil(
+      'the page to reload the list after the delete',
+      () => client.list.mock.calls.length >= 2
+        && dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current') === 'true',
+      () => `list=${client.list.mock.calls.length} getToday=${client.getToday.mock.calls.length}`
+        + ` todaySelected=${dom.querySelector('[data-date="2026-10-30"]')?.getAttribute('aria-current') ?? 'none'}`
+    )
 
     // 入口写进载荷：操作记录要能回答"从哪删的"（用户 2026-11-06）。
     expect(deletePeriod).toHaveBeenCalledWith({ date: '2026-10-29', periodId: 'default', locale: 'zh-CN', entry: 'row-menu' })
@@ -1378,7 +1430,7 @@ describe('daily briefing page', () => {
     act(() => consensusGroup.click())
     // The drawer's body is portalled, so it is looked up on the document, not inside the page div.
     const drawer = document.querySelector<HTMLElement>('[data-issue-drawer]')!
-    expect(drawer.textContent).toContain('CPI: consensus not collected')
+    expect(drawer.textContent).toContain('CPI: expectation not collected')
     // The close control belongs to the shared drawer, so its label is the platform's, not this page's.
     expect(document.querySelector('.mi-issue-drawer .ant-drawer-header')).not.toBeNull()
     expect(drawer.textContent).toContain(englishText.limits.roles.advice)
@@ -1944,7 +1996,9 @@ it('sends the moment and language the reader picked in the dialog, all the way t
   expect(request.locale).toBe('en-US')
   // 读者时区是 Asia/Shanghai：他选的 08:00 就是这一刻，不是排期里的 07:00。
   expect(request.generation.asOf).toBe('2026-10-30T00:00:00.000Z')
-  expect(request.periodId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/)
+  // 手动这一路的期次编号与定时/补录同一个格式（用户 2026-11-14：以前是裸 UUID，
+  // 详情按那一期查不到，界面写成「这一期没有生成」）。
+  expect(request.periodId).toMatch(/^period_[0-9a-f]{8}-[0-9a-f]{4}-/)
 })
 
 it('asks before replacing an edition that already holds the same cutoff and language, even at another window', async () => {
@@ -2168,12 +2222,11 @@ it('keeps the stored edition under a one-line failure mark when a retry fails af
   expect(dom.querySelector<HTMLButtonElement>('[data-toolbar-action="regenerate"]')!.disabled).toBe(false)
 })
 
-it('names a calendar that could not be read in the paper and in the audit column, with a re-read on that row', async () => {
+it('keeps an unreadable calendar out of the paper, and in the audit column with a re-read', async () => {
   /*
-   * 口径已变（`8beefb1`，简报线 2026-11-09 02:42）：v2.124 的「正文一个字都不说、只在右列说」
-   * 被推翻了——正文现在用**一句话**说清为什么这一栏是空的，且这句话与右列**同一句**。
-   * 这里按新事实改断言，不是把红的改绿：正文出现的是「暂时读不到：<原因>」，不是「没数据」；
-   * 右列那条缺口与「只重读、不起 run」的判据原样保留。
+   * 口径（用户 2026-11-15）：**读不到就整块不显示**——正文里不留标题、不留「暂时读不到」占位句，
+   * 和「未来 7 天没有可关注的就整块不出现」同一条规矩。为什么没有，只留在右列问题清单，
+   * 那一条连同「只重读、不起 run」的判据原样保留。
    */
   const doc = briefingDocument()
   const client = fakeClient({
@@ -2183,14 +2236,13 @@ it('names a calendar that could not be read in the paper and in the audit column
     }))
   })
   const dom = await renderPage(client)
-  // 正文：这一栏保留标题，并在栏内说出原因——不是三句「没有」中的任何一句。
-  expect(dom.querySelector('.mi-daily-briefing-page__paper .mi-brief-poster__macro-head')).not.toBeNull()
-  const emptyLine = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper [data-macro-empty="unreadable"]')
-  expect(emptyLine).not.toBeNull()
-  expect(emptyLine!.textContent).toContain(text.macroUnreadable)
-  expect(emptyLine!.textContent).toContain(text.macroEmptyCodes['calendar-stale']!.replace('{hours}', '42'))
+  const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+  // 正文：整块不出现——标题、空态行、占位句都没有。
+  expect(paper.querySelector('.mi-brief-poster__macro-head')).toBeNull()
+  expect(paper.querySelector('[data-macro-empty]')).toBeNull()
+  expect(paper.textContent).not.toContain(text.macroUnreadable)
   for (const word of ['没数据', '没拿到', '未拿到', '未公布']) {
-    expect(dom.querySelector('.mi-daily-briefing-page__paper')!.textContent).not.toContain(word)
+    expect(paper.textContent).not.toContain(word)
   }
   // 右列：恰好一条日历缺口，且带重试。
   const retry = dom.querySelector<HTMLElement>('[data-issue-retry="true"]')
@@ -2201,6 +2253,42 @@ it('names a calendar that could not be read in the paper and in the audit column
   // 只重新读：读被再问一次，没有起 run、没有写版次。
   expect((client.getToday as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBeGreaterThan(before)
   expect(client.regenerate).not.toHaveBeenCalled()
+})
+
+it('keeps a quiet window out of the paper, and leaves one info row with no re-read', async () => {
+  /*
+   * 用户 2026-11-16：「过去 24 小时没有宏观发布」不要出现在正文，显示在留痕区域就好。
+   * 留痕里是**提示**（不是警告），也不挂「重新读取」——它说的是这段时间确实没有，不是读不到。
+   */
+  const doc = briefingDocument()
+  const client = fakeClient({
+    getToday: vi.fn(async () => ({
+      state: 'available' as const,
+      document: { ...doc, news: { items: [], macro: [], notes: { macroEmpty: 'past-24h-no-release' as const } } }
+    }))
+  })
+  const dom = await renderPage(client)
+  const paper = dom.querySelector<HTMLElement>('.mi-daily-briefing-page__paper')!
+  expect(paper.querySelector('.mi-brief-poster__news-section')).toBeNull()
+  expect(paper.textContent).not.toContain(text.pastWindow.noRelease)
+  expect(paper.textContent).not.toContain(text.pastWindow.noHighImpact)
+
+  const aside = dom.querySelector<HTMLElement>('[data-briefing-issues]')!
+  const gapSummary = aside.querySelector<HTMLElement>('[data-briefing-gaps] summary')!
+  if (!aside.querySelector<HTMLDetailsElement>('[data-briefing-gaps]')!.open) act(() => gapSummary.click())
+  const quiet = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
+    .filter((button) => button.querySelector('.mi-daily-briefing-page__group-label')?.textContent === text.limits.groupLabels['macro-quiet'])
+  expect(quiet).toHaveLength(1)
+  expect(quiet[0]!.getAttribute('data-group-severity')).toBe('info')
+  expect(quiet[0]!.textContent).toContain(text.limits.severity.info)
+  expect(quiet[0]!.textContent).toContain(text.limits.groupCount.replace('{count}', '1'))
+  // 「确实没有」没有可重试的动作：重试挂在读不到那一条上。
+  expect(aside.querySelector('[data-issue-retry]')).toBeNull()
+
+  act(() => quiet[0]!.click())
+  const drawer = document.querySelector<HTMLElement>('[data-issue-drawer]')!
+  expect(drawer.textContent).toContain(text.pastWindow.noRelease)
+  expect(drawer.textContent).toContain(text.limits.advice.macroQuiet)
 })
 
 it('takes today from the reader’s calendar, not from the schedule or the list', async () => {

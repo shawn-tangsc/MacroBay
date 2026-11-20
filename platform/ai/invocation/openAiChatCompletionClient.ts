@@ -1,5 +1,6 @@
 import { buildChatCompletionsUrl } from '../providers/providerEndpoints'
-import type { StructuredModelMessage } from './structuredModelInvocationTypes'
+import type { StructuredModelMessage, TransportErrorKind } from './structuredModelInvocationTypes'
+import { classifyTransportError } from './transportErrorKind'
 
 export type ChatCompletionRequest = {
   baseUrl: string
@@ -15,7 +16,14 @@ export type ChatCompletionRequest = {
 
 export type ChatCompletionResult =
   | { ok: true; content: string }
-  | { ok: false; errorCode: 'rate-limited' | 'provider-error'; status?: number }
+  | {
+      ok: false
+      errorCode: 'rate-limited' | 'provider-error'
+      /** 收到响应时带的状态码；没收到响应时没有它，改由 `transportErrorKind` 说明。 */
+      status?: number
+      /** 没收到响应时底层错误的归类（DNS / 拒绝 / 重置 / TLS / 超时 / 中止 / 未知）。 */
+      transportErrorKind?: TransportErrorKind
+    }
 
 export async function requestOpenAiCompatibleChatCompletion(
   input: ChatCompletionRequest
@@ -56,7 +64,8 @@ export async function requestOpenAiCompatibleChatCompletion(
     if (isAbortError(error)) {
       throw error
     }
-    return { ok: false, errorCode: 'provider-error' }
+    // 没收到任何响应：把底层错误归进闭集，交给上层按事实判 `connect-failed` / `gateway-timeout`。
+    return { ok: false, errorCode: 'provider-error', transportErrorKind: classifyTransportError(error) }
   }
 }
 

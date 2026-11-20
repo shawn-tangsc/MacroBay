@@ -66,8 +66,40 @@ export const dailyBriefingText = {
     /** 「读不到」那句的前缀：正文与限制清单共用，原因句在后。 */
     macroUnreadable: '暂时读不到：',
     macroWebValue: '（网页）',
-    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-catch-up-timeout': '补采没有在 90 秒内完成' },
-    nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用' },
+    macroEmptyCodes: { 'calendar-unavailable': '日历自动同步已停止，简报里的日历内容来自上次成功同步', 'calendar-source-disabled': '日历来源未启用', 'calendar-stale': '日历数据已过期（最后成功采集在 {hours} 小时前）', 'calendar-not-collected': '日历还没有成功采集过', 'calendar-collect-failed': '最近一次日历采集失败', 'calendar-write-failed': '日历数据已经采到，但没能写入本地库', 'calendar-catch-up-failed': '这次补采没有成功', 'calendar-catch-up-timeout': '补采没有在限定时间内完成', 'calendar-catch-up-unknown': '补采结果未知（已排上）' },
+    /**
+     * 「未来 7 天」这一栏的两段话（产品 2026-11-14 定，因为来源根本没给重要性）：
+     * 主句说**我们判不出**（不是「没有」——「没有」是替来源下断言），
+     * 小标题给我们自己的一级指标排期（真排期、有日期、有依据）。
+     *
+     * 硬约束：**不许把一级排期写成「高影响事件」**——前者是我们的一级清单，后者是来源的判断。
+     */
+    nextImportanceUnknown: { sentence: '未来 7 天：高影响事件无法判定（来源未提供重要性）', scheduleTitle: '一级指标排期' },
+    /**
+     * 过去 24 小时那段（产品 2026-11-14 定）：**先报总数与构成**，再说明细。
+     * 总数取自读完之后的全部行，明细按类型配比 2/1/1、合计最多 3；`others` = 总数 − 明细，永远这么算。
+     * 一条都没有时只说「没有已收录的发布」，「已收录」三个字不能省。
+     */
+    pastWindow: {
+      /**
+       * 表头只写**短句**（用户 2026-11-14 第三次重申：正文只留字段名与值，解释进 ⓘ）：
+       * `过去 24 小时 · 3 条`。构成明细单独一个键、只进 ⓘ，不再拼成一句长句塞正文。
+       */
+      header: '过去 24 小时 · {count} 条',
+      composition: '经济指标 {indicators} · 央行与讲话 {centralBank} · 金融事件 {financial}',
+      /**
+       * **只给「导出文本 / 分享海报」用**（那一面是一句话的成文，不是界面正文）。
+       * 界面正文只用上面 `header` + `composition`（构成进 ⓘ）——两处**不许混用**：
+       * 正文里出现这句长句就是违规（用户 2026-11-14 第三次重申）。
+       */
+      counts: '过去 24 小时：共 {total} 条发布（经济指标 {indicators} · 央行与讲话 {centralBank} · 金融事件 {financial}）',
+      others: '另有 {count} 条',
+      emptyCollected: '这段时间没有已收录的发布',
+      noRelease: '过去 24 小时没有宏观发布',
+      noHighImpact: '过去 24 小时没有高影响宏观发布'
+    },
+    /** 行级小标签：来源没给重要性时写「未提供」，不挑一档顶上去。 */
+    importanceUnprovided: '未提供',
     macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', cancelled: '已取消', timeNotPublished: releaseTimeWords['zh-CN'], surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
     /** 这一栏截断时才说（`02` v2.125）：条数是真摆出来的行数，不是候选总数。 */
     conclusion: { invalidation: '什么会推翻它', conditions: '判断前提', counter: '证伪条件', outlook: '前瞻', watch: '观察点', whatWouldChange: '什么会推翻', regimeChanged: '判断有变', basisHeld: '依据成立', basisOverturned: '依据被推翻', basisPartlyHeld: '依据部分成立', gaps: '数据缺口', caveats: '数据限制' },
@@ -118,7 +150,6 @@ export const dailyBriefingText = {
         label: '第 {index} 期',
         meta: '每天 {time} 生成 · 截至 {time} 的最近 {hours} 小时 · 主语言 {language}',
         add: '添加一期',
-        addReason: '这个版本还不支持一天多期，位置先留着。',
         // 升级后第一屏就是这里：0 条时它要自己说明"为什么空"，而不是让人去找一个已经不在设置页里的入口。
         empty: '还没有设置任何一期',
         emptyHint: '每一期各有自己的生成时间、统计窗口和语言；加一期之后，它会在到点时自动生成。',
@@ -141,8 +172,8 @@ export const dailyBriefingText = {
         autoRetry: '重试读取排期注册状态',
         language: '生成语言',
         languageFollow: '{language}（跟随界面语言）',
-        languageFallback: '{language}（跟随界面语言，暂不支持你的语言）',
-        languageUnsupported: '你的界面语言是{language}，这一版日报还不能用这种语言写，现在用英语代替。',
+        languageFallback: '{language}（按界面语言显示）',
+        languageUnsupported: '你的界面语言是{language}，这份日报用英语呈现。',
         cost: '这一期会写作 {count} 次（主语言 1 次 + 附加语言 {extra} 次），慢一倍。',
         costLabel: '成本说明'
       },
@@ -191,8 +222,10 @@ export const dailyBriefingText = {
         'news-disabled': '新闻来源未启用', 'news-unavailable': '新闻舆情不可用',
         'news-source-silent': '新闻源很久没有新条目', 'news-source-failed': '新闻源采集失败',
         'calendar-disabled': '日历来源未启用', 'calendar-unavailable': '日历不可用',
+        // 空窗两档（A 窗口里没有发布 / B 有发布但被重要性筛掉）共用这一个短标签：说的是「这一栏为空」，
+        // 不替读者判断是哪一档——具体那句在标题里。
+        'macro-quiet': '宏观栏为空',
         'macro-consensus': '预期值未收录', 'macro-actual': '实际值未收录', 'macro-previous': '前值未收录', 'macro-value-conflict': '来源数值冲突',
-        'macro-quiet': '确实没有高影响事件',
         'backfill-done': '核心数据回补', 'backfill-generic': '核心数据回补',
         'ai-fallback': '模型回落', 'ai-websearch': 'WebSearch 未授权', 'ai-failure': 'AI 编辑未完成',
         'source-failure': '情报源采集失败', 'system-failure': '生成或存储未完成',
@@ -203,7 +236,7 @@ export const dailyBriefingText = {
       roles: { source: '来源', time: '时间', advice: '建议' },
       listSeparator: '、',
       sources: {
-        stablecoin: 'DefiLlama 稳定币', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
+        stablecoin: 'DefiLlama 稳定币', etf: 'CryptoETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
         market: '行情数据', macro: '宏观行情', rates: '宏观利率', calendar: '宏观日历', news: '新闻来源',
         analysis: '分析结论', webSearch: 'WebSearch 证据', editorial: '日报 AI 编辑', backfill: '历史接口回补',
         settings: '日报生成设置', collector: '情报源', system: '生成服务'
@@ -223,7 +256,6 @@ export const dailyBriefingText = {
       macro: { consensusMissing: '{event}：预期值未收录', actualMissing: '{event}：实际值未收录', previousMissing: '{event}：前值未收录', valueConflict: '同一事件两个来源数值冲突：这一格不显示数值' },
       calendarDisabled: '宏观日历来源未启用，事件与未来日程未显示',
       calendarUnavailable: '宏观日历暂不可用',
-      macroQuiet: '近 {hours} 小时内没有高影响事件',
       newsDisabled: '新闻来源未启用，舆情未显示',
       newsUnavailable: '新闻舆情暂不可用',
       /** 源静默：活着、只是很久没有新条目。与「连续失败」是两句话，永不共用。 */
@@ -239,11 +271,12 @@ export const dailyBriefingText = {
         checkSource: '检查来源网络与凭据，等一次成功采集后再生成；沿用上次数据时按陈旧值阅读。',
         waitCollection: '等一次采集完成后再生成。',
         restoreCapital: '先恢复稳定币与资金面数据，ETF 会随之恢复。',
-        etfAfterOpen: '{time} 前 ETF 还没有可用历史；开盘后再生成，或确认 0xRouter ETF 来源已启用。', etfAfterOpenNoTime: 'ETF 还没有可用历史；开盘后再生成，或确认 0xRouter ETF 来源已启用。',
+        etfAfterOpen: '{time} 前 ETF 还没有可用数据。ETF 净流入按 T+1 发布，上一个交易日的数在次日上午才有。', etfAfterOpenNoTime: 'ETF 还没有可用数据；净流入按 T+1 发布，上一个交易日的数在次日上午才有。', etfSourceDisabled: 'ETF 净流入的来源没有启用。',
         waitNextRelease: '等下一次发布或上一交易日数据后再比较；本期不显示变化。',
         widenWindow: '把统计窗口调到 24 小时以上，或等下一期。',
         fillConsensus: '在宏观日历来源里补齐预期值；缺失时结论不计算预期差。',
         checkCalendar: '在「配置情报源」里启用宏观日历，或等日历采集恢复。',
+        calendarWriteFailed: '检查本地存储空间与写入错误；来源本身是正常的，不必检查网络与凭据。',
         macroQuiet: '无需处理；记在这里是为了说明这一栏确实为空。',
         checkNews: '在「配置情报源」里启用新闻来源，或等舆情采集恢复。',
         backfill: '无需操作；若同一指标反复回补，检查常规采集是否按时完成。',
@@ -411,6 +444,18 @@ export const dailyBriefingText = {
       sectionFailed: { generation: '生成设置未保存', ai: 'AI 编辑未保存' },
       saveFailed: '保存失败：{sections}',
     },
+    // 发布结果条三颗图标按钮的读屏名：名字只回答「这是什么」，句子由解析器给。
+    // 读屏名与可见文案同一张表、同一套点分键——调用点传完整路径，不内联手写解析。
+    push: {
+      stripInfoLabel: '结果说明',
+      actionInfoLabel: '动作说明',
+      closeStrip: '关闭结果条',
+      // 逐通道的三档结果：状态词只给药丸取键，颜色落在圆点与描边上，字永远用正文色
+      // （`--danger` 当正文前景在深色下只有 3.25–3.94，正文门槛 4.5）。
+      rowReceived: '收到',
+      rowNotReceived: '没到',
+      rowPending: '等回执'
+    },
     generationSettings: {
       open: '生成设置', title: '日报生成设置',
       generationTime: '生成时间',
@@ -472,11 +517,21 @@ export const dailyBriefingText = {
     /** Prefix for "could not read it"; the reason sentence follows. Shared by body and limits. */
     macroUnreadable: 'Not readable right now: ',
     macroWebValue: ' (web)',
-    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-catch-up-timeout': 'The catch-up did not finish within 90 seconds' },
-    nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled' },
-    macro: { actual: 'Actual', consensus: 'Consensus', previous: 'Previous', noConsensus: 'No consensus', cancelled: 'Cancelled', timeNotPublished: releaseTimeWords['en-US'], surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No consensus' } },
+    macroEmptyCodes: { 'calendar-unavailable': 'Calendar auto-sync has stopped; calendar content in this brief comes from the last successful sync', 'calendar-source-disabled': 'Calendar sources are disabled', 'calendar-stale': 'The calendar data is stale (last successful collection {hours} hours ago)', 'calendar-not-collected': 'The calendar has never been collected successfully', 'calendar-collect-failed': 'The last calendar collection failed', 'calendar-write-failed': 'The calendar data was collected but could not be written to the local store', 'calendar-catch-up-failed': 'This catch-up attempt did not succeed', 'calendar-catch-up-timeout': 'The catch-up did not finish in time', 'calendar-catch-up-unknown': 'The catch-up result is unknown (it was queued)' },
+    nextImportanceUnknown: { sentence: 'Next 7 days: high-impact events cannot be determined (the source provides no importance)', scheduleTitle: 'Tier-1 indicator schedule' },
+    pastWindow: {
+      header: 'Past 24 hours · {count} releases',
+      composition: 'Economic indicators {indicators} · Central banks & speeches {centralBank} · Financial events {financial}',
+      counts: 'Past 24 hours: {total} releases (economic indicators {indicators} · central banks & speeches {centralBank} · financial events {financial})',
+      others: '{count} more',
+      emptyCollected: 'No releases collected for this window',
+      noRelease: 'No macroeconomic releases in the past 24 hours',
+      noHighImpact: 'No high-impact macro release in the past 24 hours'
+    },
+    importanceUnprovided: 'Not provided',
+    macro: { actual: 'Actual', consensus: 'Expectation', previous: 'Previous', noConsensus: 'No expectation', cancelled: 'Cancelled', timeNotPublished: releaseTimeWords['en-US'], surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No expectation' } },
     conclusion: { invalidation: 'What would invalidate it', conditions: 'Premises', counter: 'Falsifiers', outlook: 'Outlook', watch: 'Watch', whatWouldChange: 'What would overturn it', regimeChanged: 'View changed', basisHeld: 'Basis held', basisOverturned: 'Basis overturned', basisPartlyHeld: 'Basis partly held', gaps: 'Data gaps', caveats: 'Data limits' },
-    next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' }, focus: 'Focus', count: '{count} high-impact events · ranked by crypto relevance', importance: { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }, expected: 'Consensus', previous: 'Previous', noExpected: 'Consensus not available', soon: 'In {days} days', why: 'Why it matters', watchHigher: 'Higher than expected', watchLower: 'Lower than expected', watchInline: 'In line with consensus', watchOther: 'Other scenario' },
+    next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' }, focus: 'Focus', count: '{count} high-impact events · ranked by crypto relevance', importance: { high: 'High impact', medium: 'Medium impact', low: 'Low impact' }, expected: 'Expectation', previous: 'Previous', noExpected: 'Expectation not available', soon: 'In {days} days', why: 'Why it matters', watchHigher: 'Higher than expected', watchLower: 'Lower than expected', watchInline: 'In line with the expectation', watchOther: 'Other scenario' },
     citations: 'Evidence',
     translated: 'Translated',
     polarity: { bearish: 'Bearish', bullish: 'Bullish', mixed: 'Mixed', neutral: 'Neutral' },
@@ -521,7 +576,6 @@ export const dailyBriefingText = {
         label: 'Edition {index}',
         meta: 'Runs daily at {time} · last {hours} hours to {time} · primary language {language}',
         add: 'Add an edition',
-        addReason: 'This version does not support more than one edition a day yet — the spot is reserved.',
         // The first screen after an upgrade: with no period it must explain itself, not point at an
         // entry that no longer exists in settings.
         empty: 'No period is set up yet',
@@ -544,8 +598,8 @@ export const dailyBriefingText = {
         autoRetry: 'Read the schedule registration again',
         language: 'Edition language',
         languageFollow: '{language} (follows the interface)',
-        languageFallback: '{language} (follows the interface; your language is not supported yet)',
-        languageUnsupported: 'Your interface is {language}, but this version cannot write the brief in that language yet, so it uses English instead.',
+        languageFallback: '{language} (shown in the interface language)',
+        languageUnsupported: 'Your interface is {language}; this brief is shown in English.',
         cost: 'This edition will be written {count} times (1 primary + {extra} extra), roughly twice as slow.',
         costLabel: 'What this costs'
       },
@@ -589,13 +643,13 @@ export const dailyBriefingText = {
       drawerClose: 'Close details',
       groupLabels: {
         'row-disabled': 'Source disabled', 'row-unavailable': 'Data unavailable', 'row-stale': 'Stale data', 'row-no-value': 'No usable value',
-        'etf-no-history': 'No history before 08:00', 'capital-gate': 'Blocked by the capital snapshot',
+        'etf-no-history': 'No usable history', 'capital-gate': 'Blocked by the capital snapshot',
         'no-baseline': 'Change baseline missing', 'no-baseline-last-release': 'Change baseline missing', 'insufficient-window': 'Comparison window too short',
         'news-disabled': 'News sources disabled', 'news-unavailable': 'News sentiment unavailable',
         'news-source-silent': 'A news source has gone quiet', 'news-source-failed': 'A news source keeps failing',
         'calendar-disabled': 'Calendar sources disabled', 'calendar-unavailable': 'Calendar unavailable',
-        'macro-consensus': 'Consensus not collected', 'macro-actual': 'Actual not collected', 'macro-previous': 'Previous not collected', 'macro-value-conflict': 'Sources disagree',
-        'macro-quiet': 'No high-impact event, confirmed',
+        'macro-quiet': 'Macro section empty',
+        'macro-consensus': 'Expectation not collected', 'macro-actual': 'Actual not collected', 'macro-previous': 'Previous not collected', 'macro-value-conflict': 'Sources disagree',
         'backfill-done': 'Core data backfill', 'backfill-generic': 'Core data backfill',
         'ai-fallback': 'Model fallback', 'ai-websearch': 'WebSearch not authorized', 'ai-failure': 'AI editing incomplete',
         'source-failure': 'Source collection failed', 'system-failure': 'Generation or storage incomplete',
@@ -606,7 +660,7 @@ export const dailyBriefingText = {
       roles: { source: 'Source', time: 'Time', advice: 'Advice' },
       listSeparator: ', ',
       sources: {
-        stablecoin: 'DefiLlama stablecoins', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance futures',
+        stablecoin: 'DefiLlama stablecoins', etf: 'CryptoETF', fearGreed: 'Alternative.me', funding: 'Binance futures',
         market: 'Market snapshot', macro: 'Macro market', rates: 'Macro rates', calendar: 'Macro calendar', news: 'News sources',
         analysis: 'Analysis conclusion', webSearch: 'WebSearch evidence', editorial: 'Brief AI editor', backfill: 'Historical interface backfill',
         settings: 'Brief generation settings', collector: 'Intelligence sources', system: 'Generation service'
@@ -623,10 +677,9 @@ export const dailyBriefingText = {
         capitalGate: '{row}: unavailable with the stablecoin/capital snapshot'
       },
       interval: { minutes: '{count} min', hours: '{count} hours', days: '{count} days' },
-      macro: { consensusMissing: '{event}: consensus not collected', actualMissing: '{event}: actual not collected', previousMissing: '{event}: previous not collected', valueConflict: 'Two sources disagree on this event, so its value is not shown' },
+      macro: { consensusMissing: '{event}: expectation not collected', actualMissing: '{event}: actual not collected', previousMissing: '{event}: previous not collected', valueConflict: 'Two sources disagree on this event, so its value is not shown' },
       calendarDisabled: 'Macro calendar sources are disabled, so events and the upcoming schedule are hidden',
       calendarUnavailable: 'The macro calendar is unavailable',
-      macroQuiet: 'No high-impact event in the past {hours} hours',
       newsDisabled: 'News sources are disabled, so sentiment is hidden',
       newsUnavailable: 'News sentiment is unavailable',
       newsSourceSilent: '{source}: no new item for {hours} hours (last one at {time})',
@@ -641,11 +694,12 @@ export const dailyBriefingText = {
         checkSource: 'Check the source network and credentials, then wait for a successful collection; read retained data as stale.',
         waitCollection: 'Wait for one collection, then generate again.',
         restoreCapital: 'Restore the stablecoin/capital snapshot first; the ETF rows recover with it.',
-        etfAfterOpen: 'ETF has no usable history before {time}; generate after the open, or confirm the 0xRouter ETF source is enabled.', etfAfterOpenNoTime: 'ETF has no usable history yet; generate after the open, or confirm the 0xRouter ETF source is enabled.',
+        etfAfterOpen: 'ETF has no usable data before {time}. Net flows are published T+1: the previous session\'s figure arrives the next morning.', etfAfterOpenNoTime: 'ETF has no usable data; net flows are published T+1: the previous session\'s figure arrives the next morning.', etfSourceDisabled: 'The ETF net-flow source is not enabled.',
         waitNextRelease: 'Compare after the next release or trading day; this edition shows no change.',
         widenWindow: 'Set the statistics window to 24 hours or more, or wait for the next edition.',
-        fillConsensus: 'Fill in the consensus value in the macro calendar source; without it the conclusion cannot compute a surprise.',
+        fillConsensus: 'Fill in the expected value in the macro calendar source; without it the conclusion cannot compute a surprise.',
         checkCalendar: 'Enable the macro calendar under intelligence sources, or wait for calendar collection to recover.',
+        calendarWriteFailed: 'Check local storage space and write errors; the source itself is fine, so network and credentials are not the problem.',
         macroQuiet: 'Nothing to do; recorded so an empty section is not mistaken for a gap.',
         checkNews: 'Enable news sources under intelligence sources, or wait for sentiment collection to recover.',
         backfill: 'No action needed; if the same metric keeps backfilling, check that routine collection runs on time.',
@@ -703,7 +757,7 @@ export const dailyBriefingText = {
       stageHelp: {
         source: 'Reads the as-of snapshot at the edition cutoff: window, sources and disabled/missing state; never values after the cutoff.',
         candidates: 'Collects 24h macro/news, 7-day events, data rows, leverage and rate path; dedupes, scores relevance/materiality and applies caps.',
-        selection: 'Hands the full candidate set to the AI to pick shown/items, focus and hidden reasons; missing consensus is not a hidden reason.',
+        selection: 'Hands the full candidate set to the AI to pick shown/items, focus and hidden reasons; missing expectation is not a hidden reason.',
         'field-backfill': 'Runs the AI’s field/backfill requests and checks asOf ≤ cutoff; local store first, history API only when missing, failures become gaps.',
         writing: 'Writes lede/items/hidden/importance/nextFocus from the selected facts, numbers only from facts, as JSON.',
         validation: 'Checks schema, unknown facts/numbers, hidden coverage, language, citations, missing why and truncation.',
@@ -802,6 +856,19 @@ export const dailyBriefingText = {
       sections: { generation: 'Generation', ai: 'AI editing' },
       sectionFailed: { generation: 'Generation settings were not saved', ai: 'AI editing was not saved' },
       saveFailed: 'Save failed: {sections}',
+    },
+    // Screen-reader names for the publish result strip's three icon buttons. The name says what
+    // the control is; the sentence comes from the resolver. Same table and same dotted keys as the
+    // visible copy — call sites pass the full path and never resolve by hand.
+    push: {
+      stripInfoLabel: 'About this result',
+      actionInfoLabel: 'About this action',
+      closeStrip: 'Close the result strip',
+      // Per-channel outcomes: the pill takes the tone on its dot and border; the word stays in
+      // body colour (danger as a foreground is 3.25–3.94 in dark mode, under the 4.5 threshold).
+      rowReceived: 'received',
+      rowNotReceived: 'did not receive',
+      rowPending: 'awaiting receipt'
     },
     generationSettings: {
       open: 'Generation settings', title: 'Brief generation settings',

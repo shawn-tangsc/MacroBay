@@ -1,7 +1,8 @@
 import type { NotificationSubmitRequest } from '@platform/notifications/contracts/notificationContracts'
 import { renderPlatformEventCopy } from '@platform/notifications/producers/platformEventCopy'
 
-import { ACKNOWLEDGE_ACTION_KEY, ANALYSIS_NOTIFICATION_EVENT_IDS } from '../../../contracts/notificationEventKeys'
+import { ACKNOWLEDGE_ACTION_KEY, ANALYSIS_NOTIFICATION_EVENT_IDS, ANALYSIS_RETRY_ACTION_KEY } from '../../../contracts/notificationEventKeys'
+import type { AnalysisKind } from '../../../contracts/analysisKinds'
 import { RUN_MARKET_ANALYSIS_JOB } from '../jobs/marketAnalysisJobIds'
 
 /**
@@ -27,6 +28,8 @@ export const ANALYSIS_MANUAL_FAILURE_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.
  * (The old shape took the language and froze one sentence into the record.)
  */
 export type AnalysisManualFailure = Readonly<{
+  /** 哪条线：平台那条 0′ 通知的正文要能看出这是新闻解读（R39 §7）。缺省按市场分析。 */
+  analysisKind?: AnalysisKind
   runId: string
   failureCode: string
   /** Absent when the failure had no finer cause than its coarse code. */
@@ -60,9 +63,28 @@ const REASON_COPY: Readonly<Record<string, ReasonCopy>> = Object.freeze({
     'zh-CN': '等了太久，这次调用超时了',
     'en-US': 'the call timed out waiting for an answer'
   },
+  // 启动窗口的网络还没就绪：不是配置错、也不是连不上，读者只要稍后重试。
+  'network-not-ready': {
+    'zh-CN': '网络还没就绪，稍后重试',
+    'en-US': 'the network was not ready; try again shortly'
+  },
   'provider-other': {
     'zh-CN': '模型服务返回了错误',
     'en-US': 'the model service returned an error'
+  },
+  // 供应商答了但拒绝（4xx）：不是「连不上」，读者要查的是模型配置/密钥。
+  'http-4xx': {
+    'zh-CN': '模型服务拒绝了这次请求（检查模型配置）',
+    'en-US': 'the model service rejected the request (check the model settings)'
+  },
+  'http-5xx': {
+    'zh-CN': '模型服务返回了错误',
+    'en-US': 'the model service returned an error'
+  },
+  // 调用前就没选出模型：一次请求都没发出去，不能说成网络或供应商。
+  'model-not-selected': {
+    'zh-CN': '还没有可用的模型，这次没有开始',
+    'en-US': 'no usable model was available, so it did not start'
   },
   'analysis-provider-not-ready': {
     'zh-CN': '模型服务还没准备好（检查模型配置）',
@@ -117,28 +139,45 @@ export function buildManualAnalysisFailureRequest(input: AnalysisManualFailure):
   // Both sentences are composed here, from the product's own cause table; the platform's copy
   // table only owns the sentence around them. Undefined means the copy is not there, and a
   // half-composed notice is worse than silence.
+  // 平台模板是「你刚才点的那次分析没成：{reason}」；新闻线把「这是新闻解读」放进 reason，
+  // 正文才看得出被解读的是一条新闻，而不是一次市场分析。
+  const news = input.analysisKind === 'news'
   const rendered = renderPlatformEventCopy({
     eventTypeId: ANALYSIS_MANUAL_FAILURE_EVENT_ID,
-    paramsByLanguage: { 'zh-CN': { reason: reason['zh-CN'] }, 'en-US': { reason: reason['en-US'] } }
+    paramsByLanguage: {
+      'zh-CN': { reason: news ? `这是新闻解读，${reason['zh-CN']}` : reason['zh-CN'] },
+      'en-US': { reason: news ? `this was a news reading, ${reason['en-US']}` : reason['en-US'] }
+    }
   })
   if (rendered === undefined) return undefined
+  // The event declares `requiresUserAction`, so a notice without an action is rejected outright.
+  // 网络没就绪这一档给「重试」：读者能做的只有稍后再试，确认按钮什么也没告诉他。其余手动
+  // 失败仍是确认——run log 是不带入口的审计屏（user 2026-11-11），这条通知只报告事实。
+  const action = input.failureDetailCode === 'network-not-ready'
+    ? {
+        id: 'retry-analysis',
+        labelRef: Object.freeze({
+          scope: 'product' as const,
+          productId: 'market-intelligence',
+          key: ANALYSIS_RETRY_ACTION_KEY
+        }),
+        kind: 'custom' as const
+      }
+    : {
+        id: 'acknowledge',
+        labelRef: Object.freeze({
+          scope: 'product' as const,
+          productId: 'market-intelligence',
+          key: ACKNOWLEDGE_ACTION_KEY
+        }),
+        kind: 'acknowledge' as const
+      }
   return {
     eventTypeId: ANALYSIS_MANUAL_FAILURE_EVENT_ID,
     producerId: RUN_MARKET_ANALYSIS_JOB,
     dedupeVars: { builder: 'template', vars: { runId: input.runId } },
     rendered,
-    // The event declares `requiresUserAction`, so a notice without an action is rejected outright.
-    // The action is a plain acknowledgement, not a way into the run log: the run log is an audit
-    // screen with no entry points (user 2026-11-11), so this notice only reports the fact.
-    actions: [{
-      id: 'acknowledge',
-      labelRef: Object.freeze({
-        scope: 'product' as const,
-        productId: 'market-intelligence',
-        key: ACKNOWLEDGE_ACTION_KEY
-      }),
-      kind: 'acknowledge' as const
-    }],
+    actions: [action],
     occurredAt: input.occurredAt
   }
 }

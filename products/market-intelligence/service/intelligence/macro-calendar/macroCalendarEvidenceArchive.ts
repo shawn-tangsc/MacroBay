@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -11,12 +10,44 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 
+import { payloadHash, writeVerifiedPayload } from '../storage/contentAddressedPayloads'
+
 import type { RawRecordStore } from '../application/rawRecordStore'
 import type { AppendRawRecordInput, RawIntelligenceRecord } from '../schema/intelligenceRecord'
 
+/**
+ * **每个 owner 各自的元数据配额**（不是「人人 16MB」）。
+ *
+ * 原来的判据是「整库 serializedBytes ≤ 16MB」。实测（2026-11-16）：库里 19.51MB，其中
+ * `generic-intelligence` 占 **19.13MB / 5583 条**、`macro-calendar` 只占 **0.39MB / 495 条**——
+ * 共享预算被别的源吃满，把日历饿死，于是每次采集在「预留」这一步就判 `evidence-persist-failed`，
+ * 而且耗时只有 88–243ms（还没发请求就失败）。
+ *
+ * 所以：**按 owner 计量 + 一条全局软上限**。既不连坐（日历自己的 0.39MB 离 4MB 差得远），
+ * 也不让总库失控（全局超软上限就拒绝并打一行结构化日志）。
+ *
+ * 数字的依据：
+ * - `macro-calendar` 4MB：现值 0.39MB 的约 10 倍，够未来几个月的证据行；载荷本体已经归档成文件，
+ *   进这份 JSON 的只有元数据；
+ * - `generic-intelligence` 12MB：**现值 19.13MB 已经越界**，所以它必须自己的保留期降下来
+ *   （实测 ≤7 天可腾出 14.5MB），这条归情报采集线；
+ * - 全局软上限 32MB：现值 19.51MB，留出日历余量，又能挡住「N 个 owner × 各自配额」的总量失控。
+ * 调这三个数的人必须看到上面这段理由——不要只改数字。
+ */
+export const rawRecordMetadataQuotaPolicy = Object.freeze({
+  perOwnerBytes: Object.freeze({
+    'macro-calendar': 4 * 1024 * 1024,
+    'generic-intelligence': 12 * 1024 * 1024
+  } as Readonly<Record<string, number>>),
+  /** 没登记的 owner：给一个保守的小额度，同样受全局软上限约束。 */
+  defaultOwnerBytes: 2 * 1024 * 1024,
+  globalBytes: 32 * 1024 * 1024
+} as const)
+
 export const macroCalendarEvidenceArchivePolicy = Object.freeze({
   maximumArchiveBytes: 900 * 1024 * 1024,
-  maximumMetadataBytes: 16 * 1024 * 1024,
+  /** 全局软上限（旧字段保留为别名：判据已改为按 owner + 全局两条，见 `rawRecordMetadataQuotaPolicy`）。 */
+  maximumMetadataBytes: rawRecordMetadataQuotaPolicy.globalBytes,
   maximumRecordMetadataBytes: 32 * 1024,
   metadataEnvelopeOverheadBytes: 64,
   processingOwner: 'macro-calendar',
@@ -39,6 +70,8 @@ export type MacroCalendarEvidenceArchiveAppendInput = Omit<
 
 export type MacroCalendarEvidenceArchive = Readonly<{
   reserve: (maximumBytes: number) => MacroCalendarEvidenceReservation | undefined
+  /** 上一次 `reserve` 被拒的原因：上层据此报 `metadata-quota-exceeded` 等独立码，不再折叠兜底。 */
+  lastReserveRejection: () => EvidenceReserveRejection | undefined
   release: (reservation: MacroCalendarEvidenceReservation) => boolean
   append: (
     reservation: MacroCalendarEvidenceReservation,
@@ -57,9 +90,13 @@ export type MacroCalendarEvidenceArchive = Readonly<{
 
 type ReservationState = { maximumBytes: number; maximumMetadataBytes: number }
 
+export type EvidenceReserveRejection = 'owner-quota' | 'global-quota' | 'archive-capacity' | 'metadata-unreadable'
+
 export function createMacroCalendarEvidenceArchive(input: Readonly<{
   rawRecords: RawRecordStore
   archiveDirectory: string
+  /** 产品日志口：配额拒绝必须留痕（console 不进 `app.log`，等于没有）。 */
+  log?: (level: 'warn', event: string, fields?: Record<string, unknown>) => void
 }>): MacroCalendarEvidenceArchive {
   mkdirSync(input.archiveDirectory, { recursive: true })
   const reservations = new WeakMap<object, ReservationState>()
@@ -95,20 +132,56 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
     }
   }
 
+  /**
+   * 两条判据：**本 owner 的已用量 + 本条 ≤ 本 owner 配额**，且**整库 ≤ 全局软上限**。
+   * 超了各打一行结构化日志（哪一条越界、owner、已用、申请），不静默拒绝。
+   */
+  /** 上一次 `reserve` 被拒的原因（用户 2026-11-20）：让上层能把「为什么」报出去，不再折叠成兜底码。 */
+  let lastRejection: EvidenceReserveRejection | undefined
+
   function hasMetadataCapacity(additionalBytes: number): boolean {
     try {
-      return input.rawRecords.inspectSnapshot().serializedBytes + reservedMetadataBytes + additionalBytes <=
-        macroCalendarEvidenceArchivePolicy.maximumMetadataBytes
+      const ownerQuota = rawRecordMetadataQuotaPolicy.perOwnerBytes[macroCalendarEvidenceArchivePolicy.processingOwner]
+        ?? rawRecordMetadataQuotaPolicy.defaultOwnerBytes
+      const ownerUsed = input.rawRecords.listByProcessingOwner(macroCalendarEvidenceArchivePolicy.processingOwner,
+        Number.MAX_SAFE_INTEGER).reduce((sum, record) => sum + Buffer.byteLength(JSON.stringify(record)), 0)
+      const globalUsed = input.rawRecords.inspectSnapshot().serializedBytes
+      if (ownerUsed + reservedMetadataBytes + additionalBytes > ownerQuota) {
+        lastRejection = 'owner-quota'
+        const fields = { owner: macroCalendarEvidenceArchivePolicy.processingOwner, used: ownerUsed,
+          reserved: reservedMetadataBytes, ask: additionalBytes, quota: ownerQuota }
+        input.log?.('warn', 'macro-calendar.evidence.metadata-quota-exceeded', fields)
+        console.warn(`[macro-calendar] 证据元数据超出本 source 配额：${JSON.stringify(fields)}`)
+        return false
+      }
+      if (globalUsed + reservedMetadataBytes + additionalBytes > rawRecordMetadataQuotaPolicy.globalBytes) {
+        lastRejection = 'global-quota'
+        const fields = { used: globalUsed, reserved: reservedMetadataBytes, ask: additionalBytes,
+          cap: rawRecordMetadataQuotaPolicy.globalBytes }
+        input.log?.('warn', 'macro-calendar.evidence.metadata-quota-exceeded', fields)
+        console.warn(`[macro-calendar] 证据元数据超出全局软上限：${JSON.stringify(fields)}`)
+        return false
+      }
+      return true
     } catch {
+      lastRejection = 'metadata-unreadable'
+      input.log?.('warn', 'macro-calendar.evidence.metadata-unreadable', {})
       return false
     }
   }
 
   return Object.freeze({
     reserve(maximumBytes) {
+      lastRejection = undefined
       if (!Number.isSafeInteger(maximumBytes) || maximumBytes <= 0 ||
         !hasMetadataCapacity(macroCalendarEvidenceArchivePolicy.maximumRecordMetadataBytes) ||
-        committedBytes + reservedBytes + maximumBytes > macroCalendarEvidenceArchivePolicy.maximumArchiveBytes) return undefined
+        committedBytes + reservedBytes + maximumBytes > macroCalendarEvidenceArchivePolicy.maximumArchiveBytes) {
+        lastRejection = 'archive-capacity'
+        input.log?.('warn', 'macro-calendar.evidence.archive-capacity-exceeded',
+          { committed: committedBytes, reserved: reservedBytes, ask: maximumBytes,
+            cap: macroCalendarEvidenceArchivePolicy.maximumArchiveBytes })
+        return undefined
+      }
       const reservation = Object.freeze({})
       reservations.set(reservation, {
         maximumBytes,
@@ -119,6 +192,7 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
       reservedMetadataBytes += macroCalendarEvidenceArchivePolicy.maximumRecordMetadataBytes
       return reservation
     },
+    lastReserveRejection: () => lastRejection,
     release(reservation) {
       return Boolean(consume(reservation))
     },
@@ -147,7 +221,10 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
         storageTier: macroCalendarEvidenceArchivePolicy.storageTier
       }
       if (!metadataFitsReservation(recordInput, reservationState.maximumMetadataBytes)) return undefined
-      if (!writeVerifiedBody(archivePath, appendInput.payloadBody, appendInput.payloadHash, ++temporarySequence)) return undefined
+      // 共用原语：内容寻址 + 写后读回校验（同 hash 已有文件时复用）。
+      const written = writeVerifiedPayload({ directory: input.archiveDirectory, body: appendInput.payloadBody,
+        expectedHash: appendInput.payloadHash, temporarySequence: ++temporarySequence })
+      if (written.state === 'failed') return undefined
       if (!existed) committedBytes += appendInput.payloadSizeBytes
       const record = input.rawRecords.appendRawRecord(recordInput)
       if (!record) {
@@ -208,9 +285,10 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
           return failMigration()
         }
         if (!existed) createdArchivePaths.push(archivePath)
-        if (!writeVerifiedBody(archivePath, body, record.payloadHash, ++temporarySequence)) {
-          return failMigration()
-        }
+        // **共用原语**（用户 2026-11-20）：内容寻址、读回校验、同 hash 复用都只此一份。
+        const written = writeVerifiedPayload({ directory: input.archiveDirectory, body,
+          expectedHash: record.payloadHash, temporarySequence: ++temporarySequence })
+        if (written.state === 'failed') return failMigration()
         if (!existed) committedBytes += bodyBytes
         pending.push({ record, body, bodyBytes, archiveFileRef, existed })
       }
@@ -250,22 +328,6 @@ export function createMacroCalendarEvidenceArchive(input: Readonly<{
       return Object.freeze({ committedBytes, reservedBytes, activeReservations: activeReservations.size })
     }
   })
-
-  function writeVerifiedBody(path: string, body: string, expectedHash: string, sequence: number): boolean {
-    const temporaryPath = `${path}.${process.pid}.${sequence}.tmp`
-    try {
-      if (!existsSync(path)) {
-        writeFileSync(temporaryPath, body, { encoding: 'utf8', flag: 'wx' })
-        renameSync(temporaryPath, path)
-      }
-      const stored = readFileSync(path, 'utf8')
-      return hash(stored) === expectedHash && Buffer.byteLength(stored, 'utf8') === Buffer.byteLength(body, 'utf8')
-    } catch {
-      return false
-    } finally {
-      try { rmSync(temporaryPath, { force: true }) } catch { /* Keep the original result. */ }
-    }
-  }
 }
 
 function initialCommittedBytes(rawRecords: RawRecordStore, archiveDirectory: string): number {
@@ -285,14 +347,14 @@ function isAppendInput(value: MacroCalendarEvidenceArchiveAppendInput, maximumBy
   if (!value || typeof value !== 'object' || typeof value.payloadBody !== 'string' || value.payloadBody.length === 0 || value.payloadBody.includes('\0')) return false
   const bytes = Buffer.byteLength(value.payloadBody, 'utf8')
   return Number.isSafeInteger(value.payloadSizeBytes) && value.payloadSizeBytes === bytes && bytes <= maximumBytes &&
-    typeof value.payloadHash === 'string' && value.payloadHash === hash(value.payloadBody) &&
+    typeof value.payloadHash === 'string' && value.payloadHash === payloadHash(value.payloadBody) &&
     typeof value.sourceId === 'string' && value.sourceId.trim().length > 0 &&
     typeof value.sourceDedupeKey === 'string' && value.sourceDedupeKey.trim().length > 0
 }
 
 function matchesBody(record: RawIntelligenceRecord, body: string): boolean {
   const bytes = Buffer.byteLength(body, 'utf8')
-  return record.payloadHash === hash(body) && (record.payloadSizeBytes === undefined || record.payloadSizeBytes === bytes)
+  return record.payloadHash === payloadHash(body) && (record.payloadSizeBytes === undefined || record.payloadSizeBytes === bytes)
 }
 
 function metadataFitsReservation(input: AppendRawRecordInput, maximumBytes: number): boolean {
@@ -305,6 +367,3 @@ function metadataFitsReservation(input: AppendRawRecordInput, maximumBytes: numb
     macroCalendarEvidenceArchivePolicy.metadataEnvelopeOverheadBytes <= maximumBytes
 }
 
-function hash(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('hex')
-}

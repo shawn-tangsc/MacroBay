@@ -2,7 +2,7 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
-import type { PushChannelResolution } from '@platform/notifications/delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '@platform/notifications/delivery/pushChannelResolution'
 
 import type {
   IntelligenceTestKind,
@@ -30,7 +30,7 @@ export type IntelligenceTestDeps = Readonly<{
   /** 只影响样例句子的语言（`zh-CN` / `en-US`）；缺省中文。 */
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 平台唯一派生入口：恰好一条 → 用它并交出名字；0 或 ≥2 条 → `push-unavailable` + 真实条数。 */
-  resolvePushChannel: () => Promise<PushChannelResolution>
+  resolvePushChannels: () => Promise<PushChannelsResolution>
   /** 运行时**同一个**提交入口（和日报「发布到频道」同一个钩子）。 */
   submit: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
   now?: () => string
@@ -92,10 +92,10 @@ export async function sendIntelligenceTestNotification(
   kind: IntelligenceTestKind,
   deps: IntelligenceTestDeps
 ): Promise<IntelligenceTestReceipt> {
-  // 通道先判：0 条或 ≥2 条都在这条路径上结束，不会先拼一条样例再说发不出去。
-  const channel = await deps.resolvePushChannel()
-  if (!channel.ok) {
-    return { state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: channel.enabledChannelCount }
+  // 通道先判：一条可用通道都没有就在这条路径上结束，不会先拼一条样例再说发不出去。
+  const resolution = await deps.resolvePushChannels()
+  if (!resolution.ok) {
+    return { state: 'unavailable', reasonCode: 'push-unavailable', enabledChannelCount: resolution.enabledChannelCount, requestedCount: resolution.requestedCount }
   }
 
   const now = (deps.now ?? (() => new Date().toISOString()))()
@@ -109,7 +109,12 @@ export async function sendIntelligenceTestNotification(
 
   // 提交被接受 ≠ 手机响了。回执只认**通道那一跳的真实证据**（`delivery.push`，与记录同源）：
   const push = outcome.delivery?.push?.state
-  if (push === 'sent-accepted') return { state: 'sent', channelId: channel.channelId, channelName: channel.channelName }
+  if (push === 'sent-accepted') {
+    // 多通道时收据只点名**一条**（产品的这句话在第 3 笔改；数据里逐条的都在 `channels[]`）。
+    const first = outcome.delivery?.push?.channels?.find((channel) => channel.state === 'sent-accepted')
+    const channelId = first?.channelId ?? resolution.channels[0]!.id
+    return { state: 'sent', channelId, channelName: first?.channelName ?? resolution.channels[0]!.name }
+  }
   if (push === 'sent-unconfirmed') return { state: 'unavailable', reasonCode: 'unknown-after-send' }
   if (push === 'failed') return { state: 'unavailable', reasonCode: 'channel-rejected' }
   // 没有 push 条目：通道这一档根本没被尝试（免打扰/开关/未批准都在上游就挡掉了）。

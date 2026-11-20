@@ -7,7 +7,17 @@
 import { isActiveNotification } from '../store/notificationStore'
 import type { NotificationRecord, NotificationUnreadState } from '../contracts/notificationContracts'
 
-/** 未读数与版本的唯一算法：角标、清空、事件三处读同一个结果。 */
+/**
+ * **中心条目的唯一判据**（方案 §3-5，2026-11-18）：这条记录批准档里有 `center`。
+ *
+ * 老记录没有 `appliedLevels` —— 它们是「center 必达」时代写的，**按含 center 处理**，
+ * 否则升级后历史通知会从中心凭空消失（那是删读者的东西）。
+ */
+export function isCenterRecord(record: NotificationRecord): boolean {
+  return (record.appliedLevels ?? ['center']).includes('center')
+}
+
+/** 未读数与版本的唯一算法：角标、清空、事件三处读同一个结果（只数中心条目）。 */
 export function unreadStateOf(
   records: readonly NotificationRecord[],
   now: string,
@@ -16,6 +26,7 @@ export function unreadStateOf(
 ): NotificationUnreadState {
   const unread = records.filter(
     (record) =>
+      isCenterRecord(record) &&
       record.state === 'unread' &&
       isActiveNotification(record, now) &&
       (!productId || record.productId === productId)

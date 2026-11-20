@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { singleResultHook } from '../delivery/pushHookTestSupport'
 
 import { createNotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import { createDefaultNotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationDiagnosticsEntry, NotificationSubmitRequest } from '../contracts/notificationContracts'
-import type { PushChannelResolution } from '../delivery/pushChannelResolution'
+import type { PushChannelsResolution } from '../delivery/pushChannelResolution'
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
 
 /**
@@ -35,7 +36,7 @@ function request(): NotificationSubmitRequest {
 }
 
 function harness(input: {
-  resolution?: () => Promise<PushChannelResolution>
+  resolution?: () => Promise<PushChannelsResolution>
   withHook?: boolean
 }) {
   const diagnostics: NotificationDiagnosticsEntry[] = []
@@ -48,8 +49,8 @@ function harness(input: {
     storage,
     catalog,
     diagnostics: (entry) => diagnostics.push(entry),
-    ...(input.resolution === undefined ? {} : { resolvePushChannel: input.resolution }),
-    ...(input.withHook === false ? {} : { deliveryHooks: { push: async () => ({ ok: true, messageId: 'm-1' }) } }),
+    ...(input.resolution === undefined ? {} : { resolvePushChannels: input.resolution }),
+    ...(input.withHook === false ? {} : { deliveryHooks: { push: singleResultHook(async () => ({ ok: true, messageId: 'm-1' })) } }),
     getSettings: async () => createDefaultNotificationRuntimeSettings(),
     clock: { now: () => new Date('2026-11-08T12:00:00.000Z'), timeZone: () => 'Asia/Shanghai' },
     getLanguage: async () => 'zh-CN'
@@ -66,7 +67,7 @@ describe('push diagnostics say which of the four situations it is', () => {
 
   it('names an empty channel list, separately from a channel that is merely not ready', async () => {
     const { runtime, diagnostics } = harness({
-      resolution: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, multiple: false, states: {} })
+      resolution: async () => ({ ok: false, reason: 'push-unavailable', enabledChannelCount: 0, states: {}, requestedCount: 0 })
     })
     await runtime.submit(request())
     expect(diagnostics.map((entry) => entry.code)).toContain('push-target-none')
@@ -78,8 +79,8 @@ describe('push diagnostics say which of the four situations it is', () => {
         ok: false,
         reason: 'push-unavailable',
         enabledChannelCount: 0,
-        multiple: false,
-        states: { 'credential-missing': 1, 'runtime-ready': 0 }
+        states: { 'credential-missing': 1, 'runtime-ready': 0 },
+        requestedCount: 0
       })
     })
     await runtime.submit(request())
@@ -93,7 +94,7 @@ describe('push diagnostics say which of the four situations it is', () => {
   it('names a missing push hook (assembly forgot the outbound port)', async () => {
     const { runtime, diagnostics } = harness({
       withHook: false,
-      resolution: async () => ({ ok: true, channelId: 'channel-a', channelName: 'Telegram · test' })
+      resolution: async () => ({ ok: true, channels: [{ id: 'channel-a', name: 'Telegram · test' }] })
     })
     await runtime.submit(request())
     expect(diagnostics.map((entry) => entry.code)).toContain('push-hook-missing')

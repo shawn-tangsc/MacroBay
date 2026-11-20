@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Settings2 } from 'lucide-react'
 
 import { useConfirm } from '@platform/ui/components/confirm'
-import { useToast } from '@platform/ui/components/toast'
 import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { BriefingGenerationProgress } from '../../../contracts/dailyBriefing'
 import { BriefingManualRunDialog, type BriefingManualRunDraft, type BriefingManualRunProblem } from './BriefingManualRunDialog'
 import type { BriefingManualRunOutcome } from './useBriefingManualRun'
 import { BriefingPushToPhoneButton } from './BriefingPushToPhoneButton'
+import { BriefingPushResultStrip } from './BriefingPushResultStrip'
 import { openBriefingSessionWithShell } from './openBriefingSession'
 import type { BriefingPushText } from './dailyBriefingPushText'
 import type { BriefingPushToPhone } from './useBriefingPushToPhone'
@@ -148,28 +148,6 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   const confirm = useConfirm()
   // 「这次没打开」只对当前这一版说一句；再点是**真的再读一次**（与行尾当时同一条规矩）。
   const [sessionNotOpened, setSessionNotOpened] = useState(false)
-  // 发布回执与失败都走平台 toast（用户 2026-11-05：那行字丑、还常驻，别挂在工具栏里）。
-  // 每发生一次只提示一次：状态对象本身是"这一次"的身份，重渲染不重发。
-  const toast = useToast()
-  const toasted = useRef<typeof push.state | undefined>(undefined)
-  useEffect(() => {
-    const state = push.state
-    if (state.kind !== 'sent' && state.kind !== 'failed') return
-    if (toasted.current === state) return
-    toasted.current = state
-    if (state.kind === 'sent') {
-      const sentence = push.sentence ?? pushText.sentAccepted
-      toast.success({ titleKey: 'briefing.push.sent', resolveText: () => sentence })
-      return
-    }
-    const failure = `${pushText.failedTitle}：${pushText.failed[state.reason]}`
-    toast.danger({
-      titleKey: 'briefing.push.failed',
-      // 同一个解析器也解动作标签，所以按 key 分流：否则动作按钮上会印一遍整句失败话。
-      resolveText: (key) => (key === 'briefing.push.retry' ? pushText.retry : failure),
-      action: { labelKey: 'briefing.push.retry', onSelect: push.onRetry }
-    })
-  })
   // 没有可读版次时五颗一起禁用。**原因不在这条栏里另写一句**：正文的空态已经说明这一版为什么
   // 没有内容，栏上再写一遍就是同一件事两个出处，还会把吸顶栏撑高。
   const blocked = !exportable
@@ -195,7 +173,8 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
   </Button>
   // 工具栏**不参与滚动**：它是卡的第一行，滚动的是卡里只包纸的那一层。既然它不动，就不需要
   // `sticky`、不需要判定"是否吸住"，也不需要滚动时换一套外观——静止与滚动时它看起来一样。
-  return <div className="mi-daily-briefing-page__report-bar" data-action-group="edition">
+  return <div className="mi-daily-briefing-page__report-slot">
+  <div className="mi-daily-briefing-page__report-bar" data-action-group="edition">
       {/* 「打开会话」在「重新生成」左边：读者刚看完这一版，下一件事是回它的编辑会话。
           与其余动作同一个 `Button` + 同一个类，不另造样式；没有会话时整颗不出现。 */}
       {openSession === undefined ? null : <Button className="mi-briefing-tool__btn" data-toolbar-action="open-session"
@@ -234,5 +213,15 @@ export function DailyBriefingEditionActions({ text, resolveText, exportable, exp
       {/* 第五颗：**删除这一版**。危险色、不填充，排在最后；没有可读版次时与整组一起禁用——
           动作行不解释自己（界面规范 §5.1），原因由正文的空态说明。 */}
       {deleteButton}
+  </div>
+  {/* 发布结果条（界面设计 2026-11-12 定稿）：工具栏下方、内容区顶部，**不是工具栏的一部分**。
+      常驻到下一次发布（下一次替换同一条），可手动关闭，明细可展开。 */}
+  {push.result === undefined ? null : <BriefingPushResultStrip
+    result={push.result}
+    text={pushText}
+    resolveText={resolveText}
+    onAction={push.onAction}
+    onClose={push.onClose}
+  />}
   </div>
 }

@@ -12,6 +12,7 @@ import {
 } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_INTELLIGENCE_QUERY_CAVEATS } from '../../../contracts/intelligenceQueryContracts'
 import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
+import { MARKET_ANALYSIS_CONTEXT_CAVEATS } from '../../../contracts/marketAnalysisContracts'
 import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
@@ -32,6 +33,9 @@ import {
   type MarketCalendarEvent,
   type MarketCalendarPage
 } from '../../../contracts/macro/marketCalendarQueryContracts'
+import {
+  macroCalendarOfficialSourceRegistry,
+} from '../macro-calendar/macroCalendarOfficialSourceRegistry'
 import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import type { CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import type { FearGreedSnapshotResult, FundingRateHistoryResult, MarketIntelligenceQueryResult, MarketIntelligenceQueryType, SourceCoverageAsOf } from '../../../contracts/intelligenceQueryContracts'
@@ -117,7 +121,7 @@ function marketEvent(overrides: Partial<MarketCalendarEvent> = {}): MarketCalend
     eventKey: '11111111-2222-3333-4444-555555555555', observationKey: MARKET_OBSERVATION_KEY,
     title: '美国核心CPI年率', countryCode: 'US', eventType: 'economic-indicator', importance: 'high',
     scheduledAt: '2026-09-10T12:30:00.000Z', consensus: { displayValue: '3.1' }, providerPrevious: { displayValue: '3.0' },
-    providerActual: { displayValue: '3.2' }, source: '0xRouter', sourceObservedAt: '2026-09-10T12:31:00.000Z',
+    providerActual: { displayValue: '3.2' }, source: 'Narwhal', sourceObservedAt: '2026-09-10T12:31:00.000Z',
     coverage: 'observed-unverified', ...overrides
   }
 }
@@ -248,9 +252,9 @@ describe('market analysis data-access matrix', () => {
       expect.objectContaining({ sourceId: '0xrouter', admission: 'connected-but-not-agent-tool', agentToolAvailable: false }),
       // Full admission with the official calendar: the unverified identity is carried as a
       // caveat, not as a lower admission, and these sources may trigger analysis.
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-economic-data', admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified'] }),
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-financial-events', admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified'] }),
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified'] }),
+      ...marketCalendarPublicPolicy.feedByKind.map((feedId) => expect.objectContaining({
+        sourceId: feedId, admission: 'production-ready', autoTriggerAllowed: true, caveats: ['observed-unverified']
+      })),
       expect.objectContaining({ sourceId: 'bea-economic-series', admission: 'planned', autoTriggerAllowed: false }),
       // FRED is connected and read by the dashboard's daily rate rows, but its granularity is a
       // trading-day close: the caveat rides with the source so no conclusion reads it as intraday.
@@ -275,6 +279,28 @@ describe('market analysis data-access matrix', () => {
       })
     ]))
     expect(access.some(item => item.admission === 'temporarily-paused')).toBe(false)
+  })
+
+  it('names the calendar feeds the public contract owns, so the matrix is not a fourth copy', () => {
+    // 这三条以前是手抄的 id；契约里删掉/改名的那天，矩阵还留着旧名，读者看到的是「矩阵写着某源、
+    // 数据来自另一处」。现在矩阵取自公开契约的 `feedByKind`（事实里的 sourceId 也取自它）。
+    const evidenceIds = [...marketCalendarPublicPolicy.feedByKind]
+    const access = listMarketAnalysisSourceAccess()
+    const macroRows = access.filter((row) => row.domains.includes('macro'))
+    for (const descriptorId of evidenceIds) {
+      expect(macroRows).toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceId: descriptorId, admission: 'production-ready' })
+      ]))
+    }
+    // 反向：矩阵里的日历 id 必须能在某份注册表里查到（官方日历或证据链），不许出现只在矩阵里活着的名字。
+    const registered = new Set<string>([
+      ...evidenceIds,
+      ...macroCalendarOfficialSourceRegistry.map((descriptor) => descriptor.descriptorId)
+    ])
+    const listedCalendarIds = access
+      .map((row) => row.sourceId)
+      .filter((sourceId) => sourceId.startsWith('macro-calendar-'))
+    expect(listedCalendarIds.every((sourceId) => registered.has(sourceId))).toBe(true)
   })
 
   it('keeps the analysis caveat vocabulary and the rates wire contract naming one caveat', () => {
@@ -403,7 +429,7 @@ describe('market analysis data-access matrix', () => {
     expect(JSON.parse(harness).sources).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceId: 'twelve-data-market', admission: 'production-ready', agentToolAvailable: true, caveats: expect.arrayContaining(['synthetic-dollar-index']) }),
       expect.objectContaining({ sourceId: 'fred-rates-liquidity', agentToolAvailable: true, caveats: ['official-daily-close'] }),
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-economic-data', admission: 'production-ready', autoTriggerAllowed: true })
+      expect.objectContaining({ sourceId: marketCalendarPublicPolicy.feedByKind[0], admission: 'production-ready', autoTriggerAllowed: true })
     ]))
     expect(harness).not.toMatch(/https?:\/\/|\/Users\/|api[_-]?key|token|prompt|raw|error/i)
   })
@@ -513,48 +539,26 @@ describe('market analysis data-access matrix', () => {
     expect(JSON.stringify(result)).not.toMatch(/https?:\/\/|\/Users\/|api[_-]?key|token|raw|provider error/i)
   })
 
-  it('projects as-of-visible economic calendar events into macro facts and evidence', async () => {
+  it('projects the month\'s calendar events into macro facts with the page identity and source', async () => {
+    // 切换后分析只读一个入口（标准表的月查询）：as-of 可见性现在是页面契约保证的（`isMarketCalendarEvent`
+    // 校验 `sourceObservedAt <= asOf`），这里验的是「页面事件 → 事实 + 证据」这一跳。
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
-      queryMacroEconomicCalendarMonth: async () => ({
-        state: 'available', asOf: AS_OF, events: [
-          {
-            eventKey: 'US.CPI.2026-09-25', releaseGroupKey: 'US.BLS.CPI.2026-09', eventFamily: 'consumer-price-index',
-            titleKey: 'cpi', countryCode: 'US', importance: 'high', periodKey: '2026-08', lifecycleState: 'released',
-            coverage: 'available', scheduledDate: '2026-09-25', scheduledAt: '2026-09-25T08:30:00.000Z', releaseTimeSource: 'official',
-            officialReleaseDate: '2026-09-25', publishedAt: AS_OF, detectedAt: AS_OF,
-            actual: { displayValue: '3.2%', numericValue: 3.2, unit: 'percent-yoy' },
-            previous: { displayValue: '3.1%', numericValue: 3.1, unit: 'percent-yoy' },
-            consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable',
-            providerIds: ['macro-calendar-bls'], caveats: []
-          },
-          {
-            eventKey: 'US.FOMC.2026-09-30', releaseGroupKey: 'US.FOMC.2026-09-30', eventFamily: 'fomc',
-            titleKey: 'fomc', countryCode: 'US', importance: 'high', periodKey: '2026-09-30', lifecycleState: 'scheduled',
-            coverage: 'available', scheduledDate: '2026-09-30', scheduledAt: '2026-09-30T18:00:00.000Z', releaseTimeSource: 'official',
-            detectedAt: '2026-09-26T00:00:00.000Z', consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable',
-            providerIds: ['macro-calendar-fed'], caveats: []
-          },
-          {
-            eventKey: 'US.NFP.2026-09-30', releaseGroupKey: 'US.BLS.NFP.2026-09', eventFamily: 'employment-situation',
-            titleKey: 'nonfarm-payrolls', countryCode: 'US', importance: 'high', periodKey: '2026-09', lifecycleState: 'scheduled',
-            coverage: 'available', scheduledDate: '2026-09-30', scheduledAt: '2026-09-30T12:30:00.000Z', releaseTimeSource: 'official',
-            detectedAt: '2026-09-26T00:00:00.001Z', consensus: null, consensusState: 'unavailable', surprise: 'consensus-unavailable',
-            providerIds: ['macro-calendar-bls'], caveats: []
-          }
-        ]
-      })
+      queryMarketCalendarMonth: () => marketPage([
+        marketEvent({
+          observationKey: 'US.CPI.NSA.YOY|2026-08|2026-09-25', eventNameKey: 'US.CPI.NSA.YOY',
+          title: '美国核心CPI年率', scheduledAt: '2026-09-25T08:30:00.000Z', sourceObservedAt: AS_OF
+        })
+      ])
     }))
 
     expect(result.state).toBe('available')
     if (result.state !== 'available') return
     const macroFacts = result.facts.filter(fact => fact.domain === 'macro')
-    expect(macroFacts.map(fact => fact.value)).toEqual(expect.arrayContaining(['cpi', 'released', '3.2%', '3.1%']))
-    expect(macroFacts.map(fact => fact.value)).not.toContain('fomc')
-    expect(macroFacts.map(fact => fact.value)).not.toContain('nonfarm-payrolls')
+    expect(macroFacts.map(fact => fact.value)).toEqual(expect.arrayContaining(['美国核心CPI年率', 'released', '3.2', '3.1']))
     expect(result.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'available', factCount: macroFacts.length })
     expect(macroFacts.every(fact => fact.evidenceRefId && result.evidenceRefs.some(ref => ref.evidenceRefId === fact.evidenceRefId))).toBe(true)
     expect(result.evidenceRefs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceId: 'macro-calendar-bls', itemId: 'US.CPI.2026-09-25', detectedAt: AS_OF, visibleAt: AS_OF })
+      expect.objectContaining({ sourceId: marketCalendarPublicPolicy.feedByKind[0], detectedAt: AS_OF, visibleAt: AS_OF })
     ]))
   })
 
@@ -569,7 +573,7 @@ describe('market analysis data-access matrix', () => {
     expect(dollar).toMatchObject({
       domain: 'macro', sourceId: 'twelve-data-market', value: 102.24, unit: 'index-point', observedAt: AS_OF
     })
-    expect(result.facts.some(fact => fact.metric === 'dollar-index-return-24h' && fact.unit === '%')).toBe(true)
+    expect(result.facts.some(fact => fact.metric === 'dollar-index-return-24h' && fact.unit === 'percent')).toBe(true)
     expect(result.facts.some(fact => fact.metric === 'gold-price-usd-oz' && fact.unit === 'USD/oz')).toBe(true)
     expect(result.caveats).not.toContain('synthetic-dollar-index')
 
@@ -607,10 +611,10 @@ describe('market analysis data-access matrix', () => {
     expect(result.state).toBe('available')
     if (result.state !== 'available') return
     const tenYear = result.facts.find(fact => fact.metric === 'us-10y-yield')
-    expect(tenYear).toMatchObject({ domain: 'macro', sourceId: 'fred-rates-liquidity', value: 4.15, unit: '%' })
+    expect(tenYear).toMatchObject({ domain: 'macro', sourceId: 'fred-rates-liquidity', value: 4.15, unit: 'percent' })
     // "截至 YYYY-MM-DD": the trading day is readable from the fact, not only from the snapshot.
     expect(tenYear?.observedAt).toBe('2026-09-24T00:00:00.000Z')
-    expect(result.facts.find(fact => fact.metric === 'us-10y-real-yield')?.unit).toBe('%')
+    expect(result.facts.find(fact => fact.metric === 'us-10y-real-yield')?.unit).toBe('percent')
     // A yield difference is basis points, never a percent.
     expect(result.facts.find(fact => fact.metric === 'us-10y-2y-term-spread')).toMatchObject({ unit: 'bp' })
     expect(result.caveats).toContain('official-daily-close')
@@ -649,9 +653,9 @@ describe('market analysis data-access matrix', () => {
     expect(result.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'available' })
   })
 
-  it('reports a truthful macro gap when the economic calendar is unavailable', async () => {
+  it('reports the month as unreadable when the calendar page cannot be read, never as "no events"', async () => {
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
-      queryMacroEconomicCalendarMonth: async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' })
+      queryMarketCalendarMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' })
     }))
 
     expect(result.state).toBe('available')
@@ -659,9 +663,11 @@ describe('market analysis data-access matrix', () => {
     expect(result.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'unavailable', freshness: 'unavailable', factCount: 0 })
     expect(result.missingDomains).toContain('macro')
     expect(result.caveats).toContain('macro-calendar-unavailable')
+    // 「读不到」不许被写成「这个月没有事件」。
+    expect(result.caveats).not.toContain('macro-calendar-empty')
   })
 
-  it('projects the 0xRouter market route as macro facts with a named unverified identity', async () => {
+  it('projects the Narwhal market route as macro facts with a named unverified identity', async () => {
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
       queryMacroEconomicCalendarMonth: async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' }),
       queryMarketCalendarMonth: () => marketPage([marketEvent()])
@@ -672,14 +678,12 @@ describe('market analysis data-access matrix', () => {
     const macroFacts = result.facts.filter(fact => fact.domain === 'macro')
     expect(macroFacts.map(fact => fact.value)).toEqual(expect.arrayContaining(['美国核心CPI年率', 'released', '3.2', '3.0']))
     expect(macroFacts.map(fact => fact.value)).not.toContain('US')
-    expect(macroFacts.every(fact => fact.sourceId === 'macro-calendar-0xrouter-economic-data')).toBe(true)
+    expect(macroFacts.every(fact => fact.sourceId === 'macro-calendar-narwhal-economic-data')).toBe(true)
     expect(result.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'available', factCount: macroFacts.length })
-    // The official route was down, so the gap stays named even though the month is usable.
-    expect(result.caveats).toContain('macro-calendar-unavailable')
     expect(result.caveats).toContain('observed-unverified')
     expect(result.missingDomains).not.toContain('macro')
     expect(result.evidenceRefs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sourceId: 'macro-calendar-0xrouter-economic-data', detectedAt: '2026-09-10T12:31:00.000Z' })
+      expect.objectContaining({ sourceId: 'macro-calendar-narwhal-economic-data', detectedAt: '2026-09-10T12:31:00.000Z' })
     ]))
   })
 
@@ -719,19 +723,23 @@ describe('market analysis data-access matrix', () => {
     expect(result.caveats).toContain('max-items-truncated')
   })
 
-  it('keeps the official month available when the 0xRouter market route is unusable', async () => {
-    const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
-      queryMacroEconomicCalendarMonth: async () => ({
-        state: 'available', asOf: AS_OF, events: [officialEvent()]
-      }),
+  it('tells "read fine, nothing this month" apart from "could not read"', async () => {
+    // Chief 点名要保留的那条：某类来源 success-empty 才能说「没有」；整页 unavailable 必须说「读不到」。
+    const empty = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
+      queryMarketCalendarMonth: () => marketPage([])
+    }))
+    expect(empty.state).toBe('available')
+    if (empty.state !== 'available') return
+    expect(empty.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'empty' })
+    expect(empty.caveats).toContain('macro-calendar-empty')
+
+    const unreadable = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
       queryMarketCalendarMonth: () => ({ state: 'unavailable', failureCode: 'query-unavailable' })
     }))
-
-    expect(result.state).toBe('available')
-    if (result.state !== 'available') return
-    expect(result.facts.filter(fact => fact.domain === 'macro').map(fact => fact.value)).toContain('cpi')
-    expect(result.caveats).toContain('provider-observation-page-unavailable')
-    expect(result.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'available' })
+    expect(unreadable.state).toBe('available')
+    if (unreadable.state !== 'available') return
+    expect(unreadable.domainAccess.find(domain => domain.domain === 'macro')).toMatchObject({ queryState: 'unavailable' })
+    expect(unreadable.caveats).not.toContain('macro-calendar-empty')
   })
 
   it('names the unwired macro routes instead of inventing an empty month', async () => {
@@ -865,3 +873,18 @@ function crossAssetSnapshotFor(range: '1h' | '24h' | '7d'): CrossAssetSnapshot {
     closedReturns: { btc: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, eth: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric }, index: { '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric } }
   }
 }
+
+it('reports the macro domain as unavailable when the calendar cannot be read, never as "nothing happened"', async () => {
+  const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF }, contextQueryService({
+    queryMacroEconomicCalendarMonth: async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' }),
+    // 读失败：既不是「读到了但为空」，也不是「没有事件」。
+    queryMarketCalendarMonth: () => { throw new Error('calendar-view-unavailable') }
+  }))
+
+  expect(result.state).toBe('available')
+  if (result.state !== 'available') return
+  const macro = result.domainAccess.find(domain => domain.domain === 'macro')
+  expect(macro?.queryState).toBe('unavailable')
+  expect(macro?.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
+  expect(macro?.caveats).not.toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty)
+})

@@ -61,6 +61,35 @@ describe('dashboard feed status boundary', () => {
     expect(parseDashboardFeedStatus(null)).toBeUndefined()
   })
 
+  it('carries the per-instrument half of a failure, and nothing wider than our own symbols', () => {
+    // 一只品种进了库、另一只被拒：运行级是成功，品种级是失败。这一条如实穿过边界。
+    const parsed = parseDashboardFeedStatus({
+      state: 'available',
+      sources: [entry({ symbolFailures: [{ symbol: 'DXY', failureCode: 'symbol-not-supported' }] })]
+    })
+    expect(parsed).toEqual({
+      state: 'available',
+      sources: [{
+        sourceId: 'realmarketapi-market', enabled: true, hasCredential: false,
+        symbolFailures: [{ symbol: 'DXY', failureCode: 'symbol-not-supported' }]
+      }]
+    })
+    // 品种名按我们自己的请求码收窄（大写字母数字），码只用闭集；空数组、重复、未知码、非数组一律拒绝。
+    for (const bad of [
+      [{ symbol: 'dxy', failureCode: 'symbol-not-supported' }],
+      [{ symbol: 'DXY:extra', failureCode: 'symbol-not-supported' }],
+      [{ symbol: 'DXY', failureCode: 'made-up' }],
+      [{ symbol: 'DXY', failureCode: 'symbol-not-supported' }, { symbol: 'DXY', failureCode: 'rate-limited' }],
+      [],
+      'DXY:symbol-not-supported',
+      Array.from({ length: dashboardFeedStatusPublicPolicy.maximumSymbolFailures + 1 }, (_, index) => ({
+        symbol: `S${index}`, failureCode: 'symbol-not-supported'
+      }))
+    ]) {
+      expect(parseDashboardFeedStatus({ state: 'available', sources: [entry({ symbolFailures: bad })] })).toBeUndefined()
+    }
+  })
+
   it('serves exactly the sources the dashboard\'s cells can name', () => {
     // 与 dashboardSourceModules 的格一一对得上：扩源时这张表跟着改，测试钉住「没有漏也没有多」。
     expect(dashboardFeedStatusPublicPolicy.sourceIds).toEqual([
@@ -68,8 +97,8 @@ describe('dashboard feed status boundary', () => {
       'binance-futures-positioning', 'defillama-stablecoins', '0xrouter-aggregate-provider',
       'alternative-fear-greed', 'policy-path-market',
       'macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls',
-      'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
-      'macro-calendar-0xrouter-central-bank-activities'
+      'macro-calendar-narwhal-economic-data', 'macro-calendar-narwhal-financial-events',
+      'macro-calendar-narwhal-central-bank-activities'
     ])
     expect(dashboardFeedStatusPublicPolicy.maximumSources).toBe(dashboardFeedStatusPublicPolicy.sourceIds.length)
   })

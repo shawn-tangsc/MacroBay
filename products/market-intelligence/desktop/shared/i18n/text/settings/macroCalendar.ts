@@ -23,7 +23,7 @@ export const macroCalendarText = {
   pendingFeeds: { title: '待接入', hint: '尚未接入，不可配置。', coinMarketCal: 'CoinMarketCal' },
   marketCalendar: {
     title: '市场日历', description: '由产品定时任务采集；在与官方日程建立关联前，事件标记为未验证。', refresh: '立即刷新', refreshing: '正在刷新市场日历…', succeeded: '市场日历已刷新。', failed: '市场日历刷新失败。', owner: '市场 · 未验证',
-    feeds: { 'macro-calendar-0xrouter-economic-data': '经济数据', 'macro-calendar-0xrouter-financial-events': '金融事件', 'macro-calendar-0xrouter-central-bank-activities': '央行活动' }
+    feeds: { 'macro-calendar-narwhal-economic-data': '经济数据', 'macro-calendar-narwhal-financial-events': '金融事件', 'macro-calendar-narwhal-central-bank-activities': '央行活动' }
   },
   health: { 'never-run': '尚未运行', healthy: '正常', degraded: '需关注', failed: '失败' }
 },
@@ -50,7 +50,7 @@ export const macroCalendarText = {
   pendingFeeds: { title: 'Pending connection', hint: 'Not connected yet and not configurable.', coinMarketCal: 'CoinMarketCal' },
   marketCalendar: {
     title: 'Market calendar', description: 'Collected by a product job; events stay unverified until an official link exists.', refresh: 'Refresh now', refreshing: 'Refreshing the market calendar…', succeeded: 'Market calendar refreshed.', failed: 'Market calendar refresh failed.', owner: 'Market · unverified',
-    feeds: { 'macro-calendar-0xrouter-economic-data': 'Economic data', 'macro-calendar-0xrouter-financial-events': 'Financial events', 'macro-calendar-0xrouter-central-bank-activities': 'Central bank activities' }
+    feeds: { 'macro-calendar-narwhal-economic-data': 'Economic data', 'macro-calendar-narwhal-financial-events': 'Financial events', 'macro-calendar-narwhal-central-bank-activities': 'Central bank activities' }
   },
   health: { 'never-run': 'Never run', healthy: 'Healthy', degraded: 'Needs attention', failed: 'Failed' }
 }

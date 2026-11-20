@@ -55,7 +55,10 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   empty: Readonly<{ news: string; next: string; conclusion: string }>
   newsEmptyCodes: Readonly<Record<string, string>>
   macroEmptyCodes: Readonly<Record<string, string>>
-  nextEmptyCodes: Readonly<Record<string, string>>
+  /** 过去 24 小时的总数与构成、另有几条、以及「这段时间没有已收录的发布」（用户 2026-11-14）。 */
+  pastWindow: Readonly<{ counts: string; others: string; emptyCollected: string }>
+  /** 未来 7 天判不了重要性时的排期小标题。 */
+  nextImportanceUnknown: Readonly<{ scheduleTitle: string }>
   macro: Readonly<{ actual: string; consensus: string; previous: string; noConsensus: string; surprise: Readonly<Record<string, string>>; timeNotPublished: string }>
   /** 网页取到的值的来源后缀（`02` v2.128）：正文/导出/复制三处同一份。 */
   macroWebValue: string
@@ -108,10 +111,26 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
 
   const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')
   const visibleMacro = document.news.macro.filter((item) => item.visibility !== 'hidden')
-  if (visibleNews.length > 0 || visibleMacro.length > 0) {
+  const macroWindow = document.news.notes.macroWindow
+  // 「这段窗口真的没有」不印在复制文本里（用户 2026-11-16：信息留在「数据缺口与限制」）。
+  if (visibleNews.length > 0 || visibleMacro.length > 0 || (macroWindow !== undefined && macroWindow.total === 0)) {
     lines.push('', `## ${labels.sections.news}`)
     for (const item of visibleNews) lines.push('', newsLine(item, options))
+    // 总数与构成先于明细：明细只摆三条，这个数说的是那段时间到底有多少事（产品 2026-11-14）。
+    if (macroWindow !== undefined && macroWindow.total > 0) {
+      lines.push('', labels.pastWindow.counts
+        .replace('{total}', String(macroWindow.total))
+        .replace('{indicators}', String(macroWindow.indicators))
+        .replace('{centralBank}', String(macroWindow.centralBank))
+        .replace('{financial}', String(macroWindow.financial)))
+    }
     for (const item of visibleMacro) lines.push('', macroLine(item, options))
+    if (macroWindow !== undefined && macroWindow.hidden > 0) {
+      lines.push('', labels.pastWindow.others.replace('{count}', String(macroWindow.hidden)))
+    }
+    if (visibleMacro.length === 0 && macroWindow !== undefined && macroWindow.total === 0) {
+      lines.push('', labels.pastWindow.emptyCollected)
+    }
   }
 
   const rows = briefingDataRows(document)
@@ -154,6 +173,9 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     for (const invalidation of conclusion.invalidations) {
       lines.push(`- ${labels.conclusion.invalidation}: ${escapeMarkdown(invalidation.text)}`)
     }
+    // 合成版的推翻条件是一句话（文档级 `refutation`），不是按资产/期限列的 `invalidations`；
+    // 页面上看得到的那一行，导出的文字里也必须看得到（2026-11-04 同一类缺陷）。
+    if (conclusion.refutation) lines.push(`- ${labels.conclusion.invalidation}: ${escapeMarkdown(conclusion.refutation)}`)
     if (conclusion.conditions.length > 0) lines.push(`- ${labels.conclusion.conditions}: ${conclusion.conditions.map(escapeMarkdown).join(' · ')}`)
     for (const claim of conclusion.counterEvidence) {
       lines.push(`- ${labels.conclusion.counter}: ${escapeMarkdown(claim.statement)} ${claim.citations.map((index) => `[${index}]`).join('')}`.trimEnd())
@@ -161,9 +183,18 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   }
 
   const nextItems = [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
-  if (nextItems.length > 0) {
+  const tier1Upcoming = document.next.tier1Upcoming ?? []
+  // 用户 2026-11-15：没有可关注的事件时**整块不出现**——不写占位句，不写「无法判定」，不写「0 个」。
+  // 这一栏的空态与正文同一条口径：空就整块消失，不替读者解释为什么空。
+  if (nextItems.length > 0 || tier1Upcoming.length > 0) {
     lines.push('', `## ${labels.sections.next}`)
     for (const item of nextItems) lines.push(nextLine(item, options))
+    if (tier1Upcoming.length > 0) {
+      lines.push('', `### ${labels.nextImportanceUnknown.scheduleTitle}`)
+      for (const release of tier1Upcoming) {
+        lines.push(`- ${release.releaseDate} **${options.eventTitle ? options.eventTitle({ title: release.title, titleKey: release.metricKey } as never) : release.title}**`)
+      }
+    }
   }
 
   lines.push('', '---')
@@ -349,11 +380,6 @@ function releaseStamp(
 function emptyNews(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
   const code = document.news.notes.newsEmpty
   return code ? labels.newsEmptyCodes[code] ?? labels.empty.news : labels.empty.news
-}
-
-function nextEmpty(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
-  const code = document.next.note
-  return code ? labels.nextEmptyCodes[code] ?? labels.empty.next : labels.empty.next
 }
 
 function rowLabel(labelKey: string, labels: DailyBriefingMarkdownLabels): string {

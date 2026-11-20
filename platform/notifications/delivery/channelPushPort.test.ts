@@ -69,8 +69,10 @@ function conversation(patch: Partial<ChannelConversationSafeView> = {}): Channel
   return { id: 'conversation-1', kind: 'direct', hasBoundSession: true, targetEnabled: true, sessionTitle: null, createdAt: '2026-11-01T00:00:00.000Z', ...patch }
 }
 
+const DEFAULT_TARGETS = [{ channelId: 'channel-a', channelName: 'Telegram' }] as const
+
 function harness(options: {
-  channelId?: string | null
+  targets?: readonly { channelId: string; channelName: string }[]
   channels?: readonly ChannelManagementSafeView[]
   target?: ChannelDeliveryTargetView | undefined
   conversations?: readonly ChannelConversationSafeView[]
@@ -90,13 +92,13 @@ function harness(options: {
       if (options.throws) throw new Error('transport exploded')
       return options.result ?? { status: 'delivered', attemptId: 'attempt-1', errorCode: null }
     },
-    resolvePushChannel: async () =>
-      options.channelId === null
-        ? { ok: false as const, reason: 'push-unavailable' as const, enabledChannelCount: 0, multiple: false, states: {} }
-        : { ok: true as const, channelId: options.channelId ?? 'channel-a', channelName: 'Telegram · test' },
     ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics })
   }
-  return { push: createChannelPushPort(deps), requests }
+  // 端口现在**只发被点名的目标**（谁可用由 runtime 解析）：测试里把默认目标直接交给它，
+  // 这样下面每条用例仍然只关心「这一条通道发没发出去」。
+  const port = createChannelPushPort(deps)
+  const targets = options.targets ?? DEFAULT_TARGETS
+  return { push: (record: NotificationRecord, content: NotificationDeliveryContent) => port(record, content, targets), requests }
 }
 
 describe('channelPushPort', () => {
@@ -104,7 +106,7 @@ describe('channelPushPort', () => {
     const { push, requests } = harness({})
     const result = await push(RECORD, CONTENT)
 
-    expect(result).toEqual({ ok: true, messageId: 'attempt-1' })
+    expect(result).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: true, messageId: 'attempt-1' } }])
     expect(requests).toHaveLength(1)
     expect(requests[0]).toMatchObject({
       channelId: 'channel-a',
@@ -138,24 +140,24 @@ describe('channelPushPort', () => {
     }
   })
 
-  it('reports push-unavailable when no channel is selected', async () => {
-    const { push, requests } = harness({ channelId: null })
-    expect(await push(RECORD, CONTENT)).toEqual({ ok: false, reason: 'push-unavailable' })
+  it('sends nothing when the runtime names no target (the empty case is judged by the runtime)', async () => {
+    const { push, requests } = harness({ targets: [] })
+    expect(await push(RECORD, CONTENT)).toEqual([])
     expect(requests).toHaveLength(0)
   })
 
   it('reports channel-rejected when the selected channel no longer exists', async () => {
     const { push, requests } = harness({ channels: [] })
-    expect(await push(RECORD, CONTENT)).toEqual({ ok: false, reason: 'channel-rejected' })
+    expect(await push(RECORD, CONTENT)).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason: 'channel-rejected' } }])
     expect(requests).toHaveLength(0)
   })
 
   it('maps the two unbound shapes to delivery-no-target-bound and the rest to channel-rejected', async () => {
     const unbound = harness({ target: targetView({ deliverable: false, reason: 'no-enabled-target', target: { kind: 'unbound' } }) })
-    expect(await unbound.push(RECORD, CONTENT)).toEqual({ ok: false, reason: 'delivery-no-target-bound' })
+    expect(await unbound.push(RECORD, CONTENT)).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason: 'delivery-no-target-bound' } }])
 
     const notEnabled = harness({ target: targetView({ deliverable: false, reason: 'not-enabled', target: { kind: 'unbound' } }) })
-    expect(await notEnabled.push(RECORD, CONTENT)).toEqual({ ok: false, reason: 'channel-rejected' })
+    expect(await notEnabled.push(RECORD, CONTENT)).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason: 'channel-rejected' } }])
 
     expect(unbound.requests).toHaveLength(0)
     expect(notEnabled.requests).toHaveLength(0)
@@ -168,7 +170,7 @@ describe('channelPushPort', () => {
         conversation({ id: 'stale-2', hasBoundSession: false })
       ]
     })
-    expect(await push(RECORD, CONTENT)).toEqual({ ok: false, reason: 'delivery-no-target-bound' })
+    expect(await push(RECORD, CONTENT)).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason: 'delivery-no-target-bound' } }])
     expect(requests).toHaveLength(0)
   })
 
@@ -176,7 +178,7 @@ describe('channelPushPort', () => {
     const { push, requests } = harness({
       conversations: [conversation({ id: 'conversation-1' }), conversation({ id: 'conversation-2' })]
     })
-    expect(await push(RECORD, CONTENT)).toEqual({ ok: false, reason: 'delivery-ambiguous-target' })
+    expect(await push(RECORD, CONTENT)).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason: 'delivery-ambiguous-target' } }])
     expect(requests).toHaveLength(0)
   })
 
@@ -191,18 +193,18 @@ describe('channelPushPort', () => {
     ]
     for (const [errorCode, reason] of cases) {
       const { push } = harness({ result: { status: 'skipped', attemptId: null, errorCode } })
-      expect(await push(RECORD, CONTENT)).toEqual({ ok: false, reason })
+      expect(await push(RECORD, CONTENT)).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason } }])
     }
   })
 
   it('keeps unknown-after-send as its own reason instead of calling it a failure', async () => {
     const { push } = harness({ result: { status: 'unknown-after-send', attemptId: 'attempt-2', errorCode: 'delivery-transport-unknown' } })
-    expect(await push(RECORD, CONTENT)).toEqual({ ok: false, reason: 'unknown-after-send' })
+    expect(await push(RECORD, CONTENT)).toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason: 'unknown-after-send' } }])
   })
 
   it('never lets a transport error escape into the submit path', async () => {
     const { push, requests } = harness({ throws: true })
-    await expect(push(RECORD, CONTENT)).resolves.toEqual({ ok: false, reason: 'channel-rejected' })
+    await expect(push(RECORD, CONTENT)).resolves.toEqual([{ channelId: 'channel-a', channelName: 'Telegram', result: { ok: false, reason: 'channel-rejected' } }])
     expect(requests).toHaveLength(1)
   })
 

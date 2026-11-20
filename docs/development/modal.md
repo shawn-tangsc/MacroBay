@@ -6,7 +6,7 @@ A modal dialog with a form or long content renders `Modal` from
 `@platform/ui/components/modal`. Confirmation dialogs (one sentence, a dangerous button) are
 `confirmAction`, not this component.
 
-Width is a closed set, not a number: `compact` 420 / `standard` 520 / `expanded` 720 / `maximum` 860.
+Width is a closed set, not a number: `compact` 420 / `standard` 520 / `expanded` 720 / `maximum` 860 / `full` 1280.
 The names are deliberately neither the `StateSize` density words nor the `Drawer` width words, because
 both would make a wrong assignment compile. The call-site inventory is in
 `docs-private/05-desktop/ui-audit/modal-call-site-requirements-2026-11-02.md`.
@@ -20,7 +20,7 @@ sentence: see [Closing a container that holds unsaved input](unsaved-changes.md)
 | --- | --- |
 | `Modal` | One dialog: title or screen-reader name, a footer slot, children. |
 | `ModalProps` | The props type. |
-| `MODAL_WIDTHS` | The closed set: `['compact', 'standard', 'expanded', 'maximum']`. |
+| `MODAL_WIDTHS` | The closed set: `['compact', 'standard', 'expanded', 'maximum', 'full']`. |
 | `ModalWidth` | The same four words. |
 | `MODAL_CLOSE_KEY` | `ui.modal.close` — the platform name of the close control. |
 
@@ -37,7 +37,7 @@ second one.
 | Prop | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `open` | `boolean` | yes | Whether the dialog is shown. |
-| `width` | `ModalWidth` | yes | `compact` 420, `standard` 520, `expanded` 720, `maximum` 860. No default: every call site answers once. |
+| `width` | `ModalWidth` | yes | `compact` 420, `standard` 520, `expanded` 720, `maximum` 860, `full` 1280. No default: every call site answers once. |
 | `onClose` | `() => void` | yes | Shared by the mask, Escape and the close control. |
 | `titleKey` | `string` | one of the two | The visible title, **as a key**. A literal sentence is not accepted. |
 | `titleParams` | `Readonly<Record<string, string>>` | no | Values for the title's `{name}` placeholders. Formatted strings only (`3 items`, `10–2`); a missing value stays visible as `{name}`. |

@@ -59,7 +59,8 @@ export function analysisPromptSchemaExample(): Record<string, unknown> {
       conditions: ['<一个成立条件>'],
       macro: '<宏观侧的一句话；没有就写 null>',
       evidenceStrength: '<哪一侧证据更强、为什么；没有就写 null>',
-      dataGaps: ['<一个数据缺口，以及它如何影响置信度>']
+      dataGaps: ['<一个数据缺口，以及它如何影响置信度>'],
+      // R39 C：`newsImpact` 从新市场输出契约里移除；新闻线用自己的契约与提示词。
     },
     knownFacts: [{ factId: '输入事实的 factRef 原文', statement: '<该事实描述>', evidenceRefIds: ['该事实的 evidenceRef 原文'] }],
     transmissionHypotheses: [{ statement: '<条件式传导假设，不能声称因果已确认>', evidenceRefIds: ['输入中的 evidenceRef 原文'] }],
@@ -71,7 +72,15 @@ export function analysisPromptSchemaExample(): Record<string, unknown> {
       horizon: policy.scenarioHorizons.join(' 或 '),
       baseCase: '<条件式情景>',
       conditions: ['<非空成立条件>'],
-      invalidation: '<失效条件>',
+      // 失效条件引用**快照里已有**的东西：一条事实的 factRef（与上面 factId 同一套句柄），或
+      // 快照里的一个时刻；`statement` 是给读者看的那句话，不参与校验。
+      invalidation: {
+        kind: 'fact 或 instant',
+        factId: '<输入事实的 factRef，kind=fact 时必填>',
+        relation: 'below 或 above（kind=fact 时必填）',
+        at: '<快照里的 ISO 时刻，kind=instant 时必填>',
+        statement: '<读者能读到的一句失效条件>'
+      },
       status: 'pending'
     }],
     directions: [{

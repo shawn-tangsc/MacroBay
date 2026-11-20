@@ -22,7 +22,7 @@ function group(id = 'mi-eg-retry', mergeKey = 'US.CPI|retry'): EventGroup {
 }
 
 function snapshot(id: string, eventGroupId: string): EvidenceSnapshot {
-  const facts = [{ factId: 'fact-A', domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'ev-A' }]
+  const facts = [{ factId: 'fact-A', domain: 'macro' as const, subject: 'US CPI', metric: 'actual', value: '3.2', unit: 'percent', sourceId: 'source-fed', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'ev-A' }]
   const evidenceRefs = [{ evidenceRefId: 'ev-A', sourceId: 'source-fed', sourceLabel: '官方', itemId: null, occurredAt: asOf, publishedAt: asOf, detectedAt: asOf, computedAt: null, visibleAt: asOf, excerptHash: createHash('sha256').update('ev-A').digest('hex') }]
   return {
     id, schemaVersion: 1, eventGroupId, asOf, dataCutoff: asOf,
@@ -34,7 +34,7 @@ function snapshot(id: string, eventGroupId: string): EvidenceSnapshot {
 
 function run(id: string, eventGroupId: string, snapshotId: string, triggerKey = 'signal.open-interest.oi-liquidation-proxy'): AnalysisRun {
   return {
-    id, schemaVersion: 1, eventGroupId, snapshotId, snapshotHash: snapshot('mi-es-retry', eventGroupId).snapshotHash,
+    id, schemaVersion: 1, analysisKind: 'market', eventGroupId, snapshotId, snapshotHash: snapshot('mi-es-retry', eventGroupId).snapshotHash,
     analysisPhase: 'initial', triggerKey, idempotencyKey: `key-${id}`, status: 'queued', attempt: 1,
     retryOfRunId: null, modelProviderId: 'provider', modelId: 'model', policyVersion: 'policy.v1',
     promptVersion: 'prompt.v1', skillVersion: 'skill.v1', outputSchemaVersion: 1, jobRunId: null, traceId: null,

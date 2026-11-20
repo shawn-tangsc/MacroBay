@@ -27,7 +27,8 @@ describe('analysisOutputValidator', () => {
       ...snapshot.facts[0]!, factId: 'mi-fact-macro-surprise', domain: 'macro' as const,
       subject: 'consumer-price-index', metric: 'surprise', value: 0.3, unit: 'pp'
     }
-    snapshot.facts = [surprise]
+    // 这条用例的失效条件引用 `mi-fact-btc-return`（`validOutput`），所以保留原事实再加这条。
+    snapshot.facts = [...snapshot.facts, surprise]
     const output = {
       ...validOutput(),
       knownFacts: [{ factId: surprise.factId, statement: 'CPI 年率超预期 +0.3 个百分点。', evidenceRefIds: ['mi-ev-market-move'] }],
@@ -185,6 +186,38 @@ describe('analysisOutputValidator', () => {
     output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 10-30 15:00 UTC；SEP 中位 4.1%（09-16 那场）。'
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+  })
+
+  /**
+   * 同一判据扩到**所有会印数字的段落**：以前只验 conclusion，情景/传导/催化剂/方向理由里的
+   * 百分数没人管。这里在方向理由里放一个快照没有的数——必须拒，而不是删掉重写。
+   */
+  /**
+   * 失效条件必须引用**快照里真有**的东西：模型可以写任意句子，但「跌破支撑」这种没有事实/时刻
+   * 出处的价位必须拒——判的是数据，不读那句话。
+   */
+  it('rejects an invalidation that points at a fact the snapshot does not carry', () => {
+    const output = validOutput()
+    output.scenarios[0]!.invalidation = { kind: 'fact', factId: 'mi-fact-missing', relation: 'below', statement: '跌破支撑就失效。' }
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'invalidation-not-in-snapshot'
+    })
+  })
+
+  it('accepts an invalidation that names a fact the snapshot carries', () => {
+    const output = validOutput()
+    output.scenarios[0]!.invalidation = { kind: 'fact', factId: 'mi-fact-btc-return', relation: 'below', statement: 'BTC 十五分钟收益转负。' }
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toMatchObject({ ok: true })
+  })
+
+  it('rejects a percentage in a direction rationale the snapshot does not carry', () => {
+    const output = validOutput()
+    output.directions[0]!.rationale = '短期资金费率 12.34% 仍在高位，方向偏空。'
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence,
+      rule: 'prose-number-citation', detail: 'prose-number-not-in-snapshot'
+    })
   })
 
   it('rejects a policy probability without its as-of', () => {
@@ -348,7 +381,8 @@ describe('analysisOutputValidator', () => {
 
   it('does not require a probability when the snapshot carries none', () => {
     const output = validOutput()
-    output.conclusion.macro = '政策与市场定价：目标区间 4.00%–4.25%，下次会议 2026-12-09。'
+    // 不提概率也不提任何数：这条只验「快照里没有概率时，不要求正文必须提到概率」。
+    output.conclusion.macro = '政策与市场定价：下次会议 2026-12-09，区间不变。'
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toMatchObject({ ok: true })
   })
@@ -415,7 +449,7 @@ function frozenSnapshot(): TestSnapshot {
   // The fixture is wider than the validator's read-only view (it carries source/unit/confidence for
   // the prompt tests), so it is built as data and narrowed once here instead of casting at each use.
   return {
-    facts: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', metric: 'price-return', comparability: 'comparable', freshness: 'fresh', domain: 'cross-asset', subject: 'BTC', value: 1, unit: '%', sourceId: 'source', sourceLabel: 'source', observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z', confidence: 1 }],
+    facts: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', metric: 'price-return', comparability: 'comparable', freshness: 'fresh', domain: 'cross-asset', subject: 'BTC', value: 1, unit: 'percent', sourceId: 'source', sourceLabel: 'source', observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z', confidence: 1 }],
     evidenceRefs: [{ evidenceRefId: 'mi-ev-market-move' }]
   } as unknown as TestSnapshot
 }
@@ -423,7 +457,7 @@ function frozenSnapshot(): TestSnapshot {
 function policyExtraFact(metric: string, value: string | number): import('../../../contracts/marketAnalysisContracts').AgentFact {
   return {
     factId: `mi-fact-${metric}`, evidenceRefId: 'mi-ev-policy', metric, domain: 'macro', subject: 'us',
-    value, unit: '%', sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
+    value, unit: 'percent', sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
     observedAt: '2026-10-30T15:00:00.000Z', asOf: '2026-10-30T15:00:00.000Z',
     freshness: 'fresh', confidence: 1, comparability: 'comparable', sourceUrl: 'https://polymarket.com/'
   }
@@ -432,7 +466,7 @@ function policyExtraFact(metric: string, value: string | number): import('../../
 function policyProbabilityFact(value = 71, observedAt = '2026-10-30T15:00:00.000Z'): import('../../../contracts/marketAnalysisContracts').AgentFact {
   return {
     factId: `mi-fact-macro-policy-implied-probability-${value}-${observedAt}`, evidenceRefId: 'mi-ev-policy',
-    metric: 'policy-implied-probability', domain: 'macro', subject: 'hike-25', value, unit: '%',
+    metric: 'policy-implied-probability', domain: 'macro', subject: 'hike-25', value, unit: 'percent',
     sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
     observedAt, asOf: observedAt,
     freshness: 'fresh', confidence: 1, comparability: 'comparable',
@@ -457,7 +491,7 @@ function validOutput() {
     marketReaction: [{ statement: 'BTC 价格出现短期变化。', factIds: ['mi-fact-btc-return'], evidenceRefIds: ['mi-ev-market-move'] }],
     supportingEvidence: [{ statement: '市场反应事实可见。', evidenceRefId: 'mi-ev-market-move' }],
     counterEvidence: [{ statement: '当前证据不足以确认因果关系。', evidenceRefId: 'mi-ev-market-move' }],
-    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持条件式观察。', conditions: ['后续价格数据保持可比。'], invalidation: '出现相反且可比的新事实。', status: 'pending' }],
+    scenarios: [{ asset: 'BTC', horizon: '0-15m', baseCase: '维持条件式观察。', conditions: ['后续价格数据保持可比。'], invalidation: { kind: 'fact', factId: 'mi-fact-btc-return', relation: 'below', statement: '出现相反且可比的新事实。' }, status: 'pending' }],
     directions: [
     { horizon: 'short', direction: 'bullish', rationale: '短期资金流转正。', confidence: 'medium', evidenceRefIds: ['mi-ev-market-move'] },
     { horizon: 'medium', direction: 'range', rationale: '中期缺少方向性资金。', confidence: 'low', evidenceRefIds: ['mi-ev-market-move'] },

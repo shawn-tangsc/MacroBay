@@ -5,7 +5,7 @@
 带表单或长内容的模态弹窗渲染 `@platform/ui/components/modal` 的 `Modal`。确认框（一句话 + 一个
 危险按钮）归 `confirmAction`，不是这个组件。
 
-宽度是闭集，不是数字：`compact` 420 / `standard` 520 / `expanded` 720 / `maximum` 860。
+宽度是闭集，不是数字：`compact` 420 / `standard` 520 / `expanded` 720 / `maximum` 860 / `full` 1280。
 名字故意既不用 `StateSize` 的密度词、也不用 `Drawer` 的宽度词——那两套都会让写错的赋值编译通过。
 调用点盘点在 `docs-private/05-desktop/ui-audit/modal-call-site-requirements-2026-11-02.md`。
 
@@ -17,8 +17,8 @@
 | --- | --- |
 | `Modal` | 一只弹窗：标题或读屏名、页脚槽、正文。 |
 | `ModalProps` | props 类型。 |
-| `MODAL_WIDTHS` | 闭集：`['compact', 'standard', 'expanded', 'maximum']`。 |
-| `ModalWidth` | 同样四个词。 |
+| `MODAL_WIDTHS` | 闭集：`['compact', 'standard', 'expanded', 'maximum', 'full']`。 |
+| `ModalWidth` | 同样五个词。 |
 | `MODAL_CLOSE_KEY` | `ui.modal.close`：关闭键的平台读屏名。 |
 
 ```tsx
@@ -33,7 +33,7 @@ Esc、焦点回位都由它提供，组件不写第二套。
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
 | `open` | `boolean` | 是 | 是否显示。 |
-| `width` | `ModalWidth` | 是 | `compact` 420、`standard` 520、`expanded` 720、`maximum` 860。不给默认值：每次调用回答一次。 |
+| `width` | `ModalWidth` | 是 | `compact` 420、`standard` 520、`expanded` 720、`maximum` 860、`full` 1280。不给默认值：每次调用回答一次。 |
 | `onClose` | `() => void` | 是 | 遮罩点击、Esc 与关闭键共用。 |
 | `titleKey` | `string` | 二选一 | 可见标题，**收键**。不收句子。 |
 | `titleParams` | `Readonly<Record<string, string>>` | 否 | 填标题模板 `{name}` 的值，**只收已格式化好的字符串**（`3 条`、`10–2`）；缺参数原样保留 `{name}`。 |

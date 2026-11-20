@@ -123,7 +123,15 @@ export const realMarketApiPolicy = Object.freeze({
    */
   apiKeyPattern: /^[0-9A-Za-z]{32,80}$/,
   failureCodes: Object.freeze([
-    'credential-missing', 'credential-rejected', 'plan-restricted', 'rate-limited', 'transport-unavailable', 'response-invalid'
+    'credential-missing', 'credential-rejected', 'plan-restricted', 'rate-limited', 'transport-unavailable', 'response-invalid',
+    /**
+     * 这个品种不在当前套餐的授权里（供应商回 400 + `ERR_0008_SYMBOL_NOT_SUPPORTED`）。
+     *
+     * 它是**永久**的：重试一百次也还是同一个答案，和"这次响应坏了"不是一件事。压进
+     * `response-invalid` 的后果是真实的（用户 2026-11-16）：套餐到期后美元指数每天被拒 288 次，
+     * 而卡片上只看得到"本段没有数据"，谁也不知道源已经被拒了。
+     */
+    'symbol-not-supported'
   ] as const)
 })
 

@@ -9,6 +9,13 @@ import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { crossAssetTextKeys } from './crossAssetTextKeys'
 import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
+import { Popover as FocusPopover } from '@platform/ui/components/popover'
+import { Info } from 'lucide-react'
+import { TriangleAlert } from 'lucide-react'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
+// 「偏旧」的阈值只认仓里那一处定义：另开一个数，两处迟早漂成两种说法（界面设计 2026-11-16）。
+import { dashboardPositioningPresentationPolicy } from '../../../pages/intelligence/dashboardOpenInterestModel'
 
 /**
  * 市场状态表里三行行情（纳指 / BTC / ETH）与它们共用的单元格、空行、末次收盘说明。
@@ -16,6 +23,37 @@ import { LoadingState } from '@platform/ui/components/loading'
  * 从 `CrossAssetObservationPanel` 抽出来，只为一件事：那个文件被体积门禁挡在 500 行线上。
  * 抽的是**渲染**，不是新行为——同一个 Props、同一批键、同样的 `data-*` 标记，行为一模一样。
  */
+/**
+ * 行名旁那颗 ⓘ：这一行的**说明句**（原来印在名字下面那行灰字）。
+ *
+ * 一律用平台浮层：同一张表里同类入口不许两种形状——美元/黄金这类行除了说明句，还可能带
+ * 「偏旧 · 截至 …」，多行就得是浮层；只有一句的行也走同一个（用户 2026-11-16：正文不留说明文字）。
+ */
+export function RowHint({ id, name, lines }: { id: string; name: string; lines: readonly string[] }): React.ReactElement | null {
+  const resolveText = useProductTextKey()
+  if (lines.length === 0) return null
+  return <FocusPopover content={<div className="mi-cross-asset__row-hint" data-row-hint={id}>
+    {lines.map((line, index) => <p key={index}>{line}</p>)}
+  </div>}
+    trigger={(triggerProps) => (
+      <IconButton ariaLabelKey={crossAssetTextKeys.rowHint} ariaLabelParams={{ name }} expanded={triggerProps.expanded} icon={Info}
+        onBlur={triggerProps.onBlur} onFocus={triggerProps.onFocus} onMouseEnter={triggerProps.onMouseEnter}
+        onMouseLeave={triggerProps.onMouseLeave} onSelect={triggerProps.onSelect}
+        resolveText={resolveText} size="sm" variant="plain" />
+    )} />
+}
+
+/**
+ * 行名 + 那颗 ⓘ：**同一个 inline-flex 容器**，`nowrap`、`gap` 归容器、图标 `flex:none`。
+ *
+ * 原来 span 是 `display: block`，图标作为行内元素被挤到第二行（用户 2026-11-18：「icon 为啥要换行？
+ * 放到标题前面或者后面去呀」）。名字短的是「名字 ⓘ」，长名字（纳斯达克 100）也只把这一组所在的行
+ * 撑住，标签（代理/休市/实时）留在这个容器外面，窄列时它们自己换行，但图标永远贴着名字。
+ */
+export function RowName({ name, hint }: { name: string; hint?: React.ReactNode }): React.ReactElement {
+  return <span className="mi-cross-asset__row-name">{hint}{name}</span>
+}
+
 export function indexRowName(snapshot: CrossAssetSnapshot | undefined, text: Text): string {
   return snapshot?.indexSource === 'real' ? text.indexNames.real : text.indexNames.proxy
 }
@@ -82,7 +120,7 @@ export function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMe
  */
 export function LoadingStatusRow({ id, text }: { id: MacroDriverId; text: Text }): React.ReactElement {
   return <tr data-status-row={id} data-connected="false" data-status-loading="true">
-    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
+    <th scope="row"><RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} />} /></th>
     <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><LoadingState layout="inline" size="sm" label={text.loading} /></td>
   </tr>
 }
@@ -90,7 +128,7 @@ export function LoadingStatusRow({ id, text }: { id: MacroDriverId; text: Text }
 /** No figure and no value cell at all: the row states the gap instead of filling it. */
 export function PlannedStatusRow({ id, text }: { id: MacroDriverId; text: Text }): React.ReactElement {
   return <tr data-status-row={id} data-connected="false">
-    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
+    <th scope="row"><RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} />} /></th>
     <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><span>{text.notConnected}</span><small>{text.notConnectedHint}</small></td>
   </tr>
 }
@@ -107,7 +145,7 @@ export function PlannedStatusRow({ id, text }: { id: MacroDriverId; text: Text }
 
 export function AssetStatusRow({ id, snapshot, text }: { id: CrossAssetId; snapshot?: CrossAssetSnapshot; text: Text }): React.ReactElement {
   return <tr data-status-row={id} data-connected="true">
-    <th scope="row"><span>{text.assets[id]}</span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
+    <th scope="row"><RowName name={text.assets[id]} hint={<RowHint id={id} name={text.assets[id]} lines={text.statusReads[id] ? [text.statusReads[id]] : []} />} /></th>
     <td data-asset-price={id}>{priceOf(snapshot, id)}</td>
     <WindowCells id={id} metrics={assetMetrics(snapshot, id)} text={text} />
   </tr>
@@ -132,7 +170,7 @@ export function IndexStatusRow({ snapshot, text, formatTime }: {
   if (source === 'unavailable') {
     return <tr data-status-row="index" data-connected="false" data-index-source="unavailable" data-market-state="unavailable"
       data-index-name={indexRowName(snapshot, text)}>
-      <th scope="row"><span>{indexRowName(snapshot, text)}</span><small>{text.statusReads.index}</small></th>
+      <th scope="row"><RowName name={indexRowName(snapshot, text)} hint={<RowHint id="index" name={indexRowName(snapshot, text)} lines={[text.statusReads.index]} />} /></th>
       <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><span>{text.notConnected}</span><small>{text.notConnectedHint}</small></td>
     </tr>
   }
@@ -146,12 +184,13 @@ export function IndexStatusRow({ snapshot, text, formatTime }: {
   const value = live ?? lastClosed?.close
   return <tr data-status-row="index" data-connected="true" data-index-source={source} data-market-state={marketState}
     data-index-name={indexRowName(snapshot, text)}>
-    <th scope="row"><span>{indexRowName(snapshot, text)}
+    <th scope="row">
+      <RowName name={indexRowName(snapshot, text)} hint={<RowHint id="index" name={indexRowName(snapshot, text)} lines={[text.statusReads.index]} />} />
       {proxy ? <em className="mi-cross-asset__synthetic" data-index-proxy="true" data-caveat="tokenized-index-proxy"
         aria-label={text.proxyCaveat}>{text.proxyTag}</em> : null}
       {marketState === 'closed' ? <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
         aria-label={text.marketClosedHint}>{text.marketClosed}</em> : null}
-    </span>{text.statusReads.index ? <small>{text.statusReads.index}</small> : null}</th>
+    </th>
     <td data-asset-price="index" data-last-closed-at={lastClosed?.at}>{value === undefined ? text.notConnected : livePriceText(value)}</td>
     <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />
   </tr>
@@ -162,4 +201,70 @@ export function IndexObservation({ snapshot, text, formatTime }: {
 }): React.ReactElement | null {
   const at = snapshot.lastClosed?.index?.at
   return at ? <>{` · ${text.lastClosedBar} `}<time>{formatTime(at, 'second')}</time></> : null
+}
+
+/**
+ * 美元 / 黄金这两行：水平、四个窗口，以及行名旁那句「偏旧 · 截至 …」。
+ *
+ * 从面板抽出来的理由与这个文件原本存在的理由相同：面板顶到 500 行硬线。渲染一字未改。
+ */
+export function MacroStatusRow({ id, reading, text, formatTime, asOfMs }: {
+  id: 'dxy' | 'gold'; reading?: MacroMarketSnapshotReading; text: Text
+  formatTime: (value: string, precision: 'second') => string
+  /** 快照自己的 asOf：判「这条读数比阈值旧」的时钟，不读宿主时间（否则同一屏两次渲染会不一致）。 */
+  asOfMs?: number
+}): React.ReactElement {
+  // The live tick rides beside the collected level and never replaces it: the four window cells below
+  // still come from stored points, and the freshness tag marks the 最新 cell as an unclosed value.
+  const live = reading?.live
+  const resolveText = useProductTextKey()
+  /**
+   * 「偏旧」只认仓里那一处阈值（`staleAfterMs`），不另开一个数：两个数早晚会漂成两种说法。
+   * 被供应商永久拒绝时换整句——「套餐不提供」是原因，不是另一种新鲜度（界面设计 2026-11-16）。
+   */
+  const stale = reading !== undefined && asOfMs !== undefined &&
+    asOfMs - reading.atMs > dashboardPositioningPresentationPolicy.staleAfterMs
+  const age = stale && reading !== undefined
+    ? fillLabelParams(
+        resolveText(crossAssetTextKeys.staleAsOf),
+        { time: formatTime(new Date(reading.atMs).toISOString(), 'second') }
+      )
+    : undefined
+  return <tr data-status-row={id} data-connected="true">
+    <th scope="row">
+      {/* 名字 + ⓘ 是一组、不换行；标签（合成/实时）跟在后面，窄列时它们各自换行，图标不离开名字。 */}
+      <RowName name={text.assetLabels[id]} hint={<RowHint id={id} name={text.assetLabels[id]}
+        lines={[...(text.statusReads[id] ? [text.statusReads[id]] : []), ...(age === undefined ? [] : [age])]} />} />
+      {/* The synthetic label rides with the level: a level this product computed is never shown as
+          if it were the licensed index, and the caveat sentence is one hover away. */}
+      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
+        aria-label={text.syntheticCaveat}
+        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex}>{text.syntheticTag}</em> : null}
+      {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
+          after the price reads as if it qualified the number itself. */}
+      {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
+    </th>
+    <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
+    <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
+  </tr>
+}
+
+/**
+ * 供应商不再提供这个品种：**整行盖住**，只留一句状态。
+ *
+ * 与「格关了 / 读不到」同一套遮罩样式（用户 2026-11-16：源不能用就像关格一样挡住，不要说明文字）。
+ * 抽到行组件模块只为控面板体积，渲染一字未改。
+ */
+export function SourceUnavailableRow({ id, label, windows, statusText }: Readonly<{
+  id: MacroDriverId; label: string; windows: number; statusText: string
+}>): React.ReactElement {
+  return <tr aria-disabled="true" data-source-state="unreadable" data-status-row={id}>
+    <th scope="row"><span>{label}</span></th>
+    <td className="mi-cross-asset__state-cell" colSpan={1 + windows}>
+      <span className="mi-source-state" data-state="unreadable">
+        <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
+        {statusText}
+      </span>
+    </td>
+  </tr>
 }

@@ -97,4 +97,41 @@ describe('the dollar row on the market-status table', () => {
     expect(row?.querySelectorAll('[data-asset-price], [data-asset-return]')).toHaveLength(0)
     expect(tag(host)).toBeNull()
   })
+
+  it('keeps the row description in the ⓘ, and adds the age sentence there only once stale', async () => {
+    // 正文不再印说明文字：行名旁只有一颗 ⓘ，浮层里第一段是这一行的说明句。
+    const fresh = await render(snapshotOf([realReading()]))
+    const freshTrigger = fresh.querySelector<HTMLButtonElement>('[data-status-row="dxy"] button[aria-label]')!
+    await act(async () => freshTrigger.click())
+    expect(document.body.textContent).toContain(text.statusReads.dxy)
+    // 新鲜时浮层里没有那句日期。
+    expect(document.body.textContent).not.toContain('偏旧 · 截至')
+  })
+
+  it('moves the age sentence into the same ⓘ once the reading passes the one stale threshold', async () => {
+    const stale = await render(snapshotOf([realReading(asOfMs - 31 * 60_000)]))
+    const trigger = stale.querySelector<HTMLButtonElement>('[data-status-row="dxy"] button[aria-label]')!
+    await act(async () => trigger.click())
+    expect(document.body.textContent).toContain('偏旧 · 截至 2026-09-14 11:29:00 GMT')
+  })
+
+  it('hides rows whose source is unavailable by default, and the switch brings the covered row back', async () => {
+    // 用户 2026-11-16 第二版：**默认开**（不显示这类行），开关关掉才显示；显示时整行遮住、只剩一句状态。
+    const refused = { ...realReading(asOfMs - 48 * 60 * 60_000), sourceFailure: 'symbol-not-supported' as const }
+    const host = await render(snapshotOf([refused]))
+    expect(dollarRow(host)).toBeNull()
+
+    const toggle = host.querySelector<HTMLElement>('[role="switch"]')!
+    expect(toggle.getAttribute('aria-label')).toBe(text.hideUnavailableRows)
+    await act(async () => toggle.click())
+    const row = dollarRow(host)
+    expect(row?.getAttribute('data-source-state')).toBe('unreadable')
+    expect(row?.textContent).toContain(text.sourceRefused)
+    expect(row?.querySelector('[data-asset-price]')).toBeNull()
+    expect(row?.querySelectorAll('[data-asset-return]')).toHaveLength(0)
+    expect(row?.querySelector('button[aria-label]')).toBeNull()
+
+    await act(async () => toggle.click())
+    expect(dollarRow(host)).toBeNull()
+  })
 })

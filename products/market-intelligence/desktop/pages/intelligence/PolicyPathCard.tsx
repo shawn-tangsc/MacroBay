@@ -33,7 +33,10 @@ import { conclusionView, judgedView, percentOf, settledFor } from './policyPathS
 export type PolicyPathCardText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
   lastVote: string; unchanged: string
-  detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
+  detail: string
+  /** 卡尾「详情 ↗」的可访问名：它属于导航，名字要说清打开的是哪张卡。 */
+  openDetailAria: string
+  sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
   /** `{month} 月{outcome}` in Chinese; the month and the bucket are separate so English can order them its way. */
   outcomeLead: string
   /** Explains the for-against pair on hover: "10–2" alone is not self-evident. */
@@ -108,7 +111,7 @@ const STALENESS_KEY = {
  * 这一支底下**没有**「压着的数据」：读数本身就不在（宿主里只有遮罩，没有可 `inert` 的内容）。
  * 遮罩高度由共享表的 `min-height` 撑住，卡不塌；颜色走主题 token，调用点不写颜色。
  */
-export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sentence, action }: Readonly<{
+export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sentence, action}: Readonly<{
   text: PolicyPathCardText
   state: 'missing' | 'disabled' | 'unreadable'
   /**
@@ -136,7 +139,8 @@ export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sente
   // 卡上不带 `data-staleness`：那个属性说的是「读到了」的卡有多新（live/delayed/stale），
   // 这三态不是新鲜度；状态只在遮罩与状态句上用 `data-state` 说一次。
   return <section className="mi-policy-card" aria-label={text.title}>
-    <header className="mi-policy-card__head"><h2>{text.title}</h2></header>
+    <header className="mi-policy-card__head"><h2>{text.title}</h2>
+    </header>
     <div className="mi-source-veil-host" data-veiled="true">
       <div className="mi-source-veil" data-state={state}>
         <p className="mi-source-state" data-state={state}>
@@ -150,11 +154,15 @@ export function PolicyPathUnavailable({ text, state, onConfigure, onRetry, sente
   </section>
 }
 
-export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
+export function PolicyPathCard({ reading, text, month, onOpen}: Readonly<{
   reading: PolicyPathReading
   text: PolicyPathCardText
   month: string
   onOpen?: () => void
+  /** 关键指标抽屉的入口；宿主不挂这个抽屉时不给，卡上就不出现入口。 */
+  onOpenIndicators?: () => void
+  /** 入口的可访问名（「打开关键指标 · 预期变化抽屉」），由宿主从抽屉的文案表取。 */
+  openIndicatorsLabel?: string
 }>): React.ReactElement {
   const probability = reading.probability
   const change = probability?.changeInPp24h
@@ -260,6 +268,8 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
       {phase.kind === 'normal' || phase.kind === 'verdict'
         ? reading.hasProjectionMaterials ? <span className="mi-policy-card__chip">{text.projection}</span> : null
         : null}
+      {/* 关键指标抽屉的入口：卡头右上角，**不是**整卡可点——卡本身是读数，点任意处等于把
+          「看数值」变成「打开另一个页面」。入口只做一件事，名字也说清它打开的是哪个抽屉。 */}
     </header>
 
     {/* One skeleton for every state: a missing value becomes a dash, so the card never changes
@@ -332,7 +342,8 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
               {probability ? <span className="mi-policy-card__status">· {probability.venue}</span> : null}
             </>}
       </span>
-      {onOpen ? <Button type="link" className="mi-policy-card__open" onClick={onOpen}>
+      {onOpen ? <Button type="text" size="small" className="text-action mi-policy-card__open" onClick={onOpen}
+        aria-label={text.openDetailAria}>
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
       </Button> : null}
     </footer>

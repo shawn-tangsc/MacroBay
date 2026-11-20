@@ -20,7 +20,7 @@ export const ANALYSIS_REPEATED_FAILURE_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_ID
 export const ANALYSIS_ATTEMPT_ABANDONED_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.attemptAbandoned
 export const ANALYSIS_RECOVERED_EVENT_ID = ANALYSIS_NOTIFICATION_EVENT_IDS.recovered
 
-export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled'
+export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled' | 'news'
 /**
  * Success, failure, or neutral.
  *

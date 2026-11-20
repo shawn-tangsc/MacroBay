@@ -1,0 +1,20 @@
+/*
+ * 名称格里的次要信息（英文名、归属小字）：唯一实现，调用点不写字号与颜色。
+ *
+ * 为什么小一号灰字：这两样都是**帮助确认**的信息，读者要的主语是中文名。单开一列会把真正有用的
+ * 宽度挤掉（用户 2026-11-17：那一列已经够挤）。
+ *
+ * 字号走 `--font-meta` 档、颜色走 `--muted` token——不硬写 px 与色值（`docs/ui-rules.md`）。
+ */
+.mi-name__en {
+  margin-left: 6px;
+  font-size: var(--font-meta);
+  color: var(--muted);
+}
+
+/* 归属小字：`费城联储制造业指数 · 子项`，跟在名字后面，与英文名之间留一点距离。 */
+.mi-name__owner {
+  margin-left: 6px;
+  font-size: var(--font-meta);
+  color: var(--muted);
+}

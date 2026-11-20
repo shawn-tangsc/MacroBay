@@ -183,10 +183,15 @@ export function createRealMarketApiCollector(deps: Readonly<{
     // the cadence is armed by what actually arrived, and the failure is left where it can be read.
     deps.store.note(realMarketApiPolicy.notes.lastRunAtMs, String(atMs))
     deps.store.note(realMarketApiPolicy.notes.lastPlan, backfilled ? 'backfill' : 'latest')
-    if (failures.length > 0) {
-      deps.store.note(realMarketApiPolicy.notes.lastFailureCode, failures[0]!.failureCode)
-      deps.store.note(realMarketApiPolicy.notes.lastSymbolFailures, failures.map(entry => `${entry.symbolCode}:${entry.failureCode}`).join(','))
-    }
+    /**
+     * 品种级失败**每轮都写**，成功那轮写空串把它清掉。
+     *
+     * 只写不擦的历史后果是真实的：套餐失效那次留下的 `DXY:…` 会一直被当成"现在的状态"，读者
+     * 看到的是一个早就该恢复的失败。这一条也是"哪一路被拒"唯一能说出口的地方——运行级
+     * `lastOutcome` 只有 stored/idle/…，另一只品种成功时它永远是成功（用户 2026-11-16）。
+     */
+    deps.store.note(realMarketApiPolicy.notes.lastSymbolFailures, failures.map(entry => `${entry.symbolCode}:${entry.failureCode}`).join(','))
+    if (failures.length > 0) deps.store.note(realMarketApiPolicy.notes.lastFailureCode, failures[0]!.failureCode)
     return {
       state: appended.state === 'stored' ? 'stored' : 'unchanged', plan: backfilled ? 'backfill' : 'latest',
       added: appended.added, credits, series,

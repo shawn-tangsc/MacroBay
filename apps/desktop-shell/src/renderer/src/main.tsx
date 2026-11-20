@@ -11,6 +11,7 @@ import '@platform/ui/styles/textAction.css'
 import { installAntdStaticRender } from '@platform/ui/antd/antdStaticRender'
 
 import { AppShell } from './shell/AppShell'
+import { markRendererBoot } from './shell/bootMarks'
 import { markRendererPlatform } from './shell/window/windowPlatform'
 import './styles.css'
 
@@ -25,4 +26,13 @@ createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <AppShell />
   </React.StrictMode>
+)
+
+// 纯观测：两帧之后才算「第一帧已经画到屏幕上」（单帧还在布局之前）。删掉不影响渲染。
+// 同一时机移除内联首屏占位：它只负责「别让窗口一片空」，第一帧画出来就该退场。
+requestAnimationFrame(() =>
+  requestAnimationFrame(() => {
+    markRendererBoot('first-frame')
+    document.getElementById('boot-splash')?.remove()
+  })
 )

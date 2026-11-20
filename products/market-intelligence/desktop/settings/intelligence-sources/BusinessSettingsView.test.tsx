@@ -19,14 +19,18 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-async function renderContent(business: BusinessKey): Promise<{ host: HTMLElement }> {
+async function renderContent(
+  business: BusinessKey,
+  overrides: Readonly<{ sourceNames?: Record<string, string>; providerNamesBySource?: Record<string, string> }> = {}
+): Promise<{ host: HTMLElement }> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(BusinessSettingsContent, {
     business,
     resolveText,
-    sourceNames: t.sourceNames
+    sourceNames: overrides.sourceNames ?? t.sourceNames,
+    ...(overrides.providerNamesBySource === undefined ? {} : { providerNamesBySource: overrides.providerNamesBySource })
   })))
   return { host }
 }
@@ -49,8 +53,9 @@ describe('业务设置的左列', () => {
   it('uses the source-tree row structure: avatar + title + subtitle + chevron', async () => {
     const { host } = await render('dashboard')
     const rows = [...host.querySelectorAll('.business-settings__nav .intelligence-provider-row')]
-    expect(rows).toHaveLength(3)
-    expect(rows.map((row) => row.querySelector('strong')?.textContent)).toEqual(['看板', '日历', '舆情'])
+    // 四个业务分流：看板 / 日历 / 舆情 / 核心指标。
+    expect(rows).toHaveLength(4)
+    expect(rows.map((row) => row.querySelector('strong')?.textContent)).toEqual(['看板', '日历', '舆情', '核心指标'])
     for (const row of rows) {
       // 与来源树同一套类：头像位、主文字、副标题、右侧 chevron。
       expect(row.querySelector('.intelligence-source-avatar')).not.toBeNull()
@@ -62,25 +67,63 @@ describe('业务设置的左列', () => {
     expect(rows[0]?.getAttribute('aria-current')).toBe('true')
   })
 
+/**
+   * 2026-11-13 读者截图：设置里「聚合源」那三格直接把源 id 印出来（`macro-calendar-narwhal-e…`），
+   * 一串挤在一行互相压住。判据写死：**这一屏渲染出来的任何文本里都不许出现源 id**。
+   * 名字两层都取不到时，宁可少渲染这一项，也不许退到 id。
+   */
+  it('never renders a source id as a name, in any of the three fallbacks', async () => {
+    const hasIdFragment = (host: HTMLElement): boolean => (host.textContent ?? '').includes('macro-calendar-')
+
+    // ① 正常：文案表里有名字
+    expect(hasIdFragment((await renderContent('calendar')).host)).toBe(false)
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    // ② 源名缺失 → 退到 provider 名，仍不许出现 id
+    const fallback = await renderContent('calendar', {
+      sourceNames: {},
+      providerNamesBySource: {
+        'macro-calendar-narwhal-economic-data': 'Narwhal',
+        'macro-calendar-narwhal-financial-events': 'Narwhal',
+        'macro-calendar-narwhal-central-bank-activities': 'Narwhal'
+      }
+    })
+    expect(hasIdFragment(fallback.host)).toBe(false)
+    expect(fallback.host.textContent).toContain('Narwhal')
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    // ③ 两层都没有 → 这一项不渲染（行数变少），也不许印 id
+    const dropped = await renderContent('calendar', { sourceNames: {}, providerNamesBySource: {} })
+    expect(hasIdFragment(dropped.host)).toBe(false)
+    expect(dropped.host.querySelectorAll('.business-card__row').length).toBeLessThan(6)
+  })
+
   it('writes real counts from the data layer, not hard-coded strings', async () => {
     const { host } = await render('dashboard')
     const subtitles = [...host.querySelectorAll('.business-settings__nav .intelligence-provider-main small')].map((node) => node.textContent)
     expect(subtitles).toEqual([
       `${modulesForBusiness('dashboard').length} 个模块`, // 7
-      `${modulesForBusiness('calendar').flatMap((module) => module.sourceIds).length} 个源`, // 6
-      `${modulesForBusiness('sentiment').flatMap((module) => module.sourceIds).length} 个源` // 4
+      /* 9 = Fed / BEA / BLS + Narwhal 三条 + 0xRouter 三条（2026-11-15 起读者可配置的补充源）。 */
+      `${modulesForBusiness('calendar').flatMap((module) => module.sourceIds).length} 个源`,
+      `${modulesForBusiness('sentiment').flatMap((module) => module.sourceIds).length} 个源`, // 4
+      '3 类 · 12 项指标' // 组数与指标数两个数都从分组表派生，不写死
     ])
   })
 
   it('recounts when a source leaves the mapping', async () => {
-    // 反向：源数是从数据层算的——把经济日历少挂一个源，副标题立刻从 6 变 5。
+    // 反向：源数是从数据层算的——把经济日历少挂一个源，副标题立刻跟着减一。
     const module = modulesForBusiness('calendar')[0]!
     const original = module.cells
     try {
       ;(module as unknown as { cells: typeof original }).cells = original.slice(1)
       const { host } = await render('dashboard')
       const subtitles = [...host.querySelectorAll('.business-settings__nav .intelligence-provider-main small')].map((node) => node.textContent)
-      expect(subtitles[1]).toBe('5 个源')
+      const remaining = modulesForBusiness('calendar')[0]!.cells.length
+      expect(subtitles[1]).toBe(`${remaining} 个源`)
     } finally {
       ;(module as unknown as { cells: typeof original }).cells = original
     }
@@ -88,11 +131,34 @@ describe('业务设置的左列', () => {
 
   it('splits calendar into 官方源 / 聚合源 cards and keeps sentiment as one card', async () => {
     const calendar = await renderContent('calendar')
-    expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(6)
+    /* 9 行 = Fed / BEA / BLS + Narwhal 三条 + **0xRouter 三条**。
+       2026-11-15 用户改口：0xRouter 三条日历源恢复为读者可配置的补充源（只有配置了才注册定时任务）。 */
+    expect(calendar.host.querySelectorAll('.business-card__row')).toHaveLength(9)
     // 日历也走两层卡片：第二层两张数据卡片，标题按注册表的 owner 分。
     const cards = [...calendar.host.querySelectorAll<HTMLElement>('[data-business-cell-card]')]
     expect(cards.map((card) => card.getAttribute('data-business-cell-card'))).toEqual(['official', 'aggregate'])
     expect(cards.map((card) => card.querySelector('.business-cell__title')?.textContent)).toEqual(['官方源', '聚合源'])
+    /* 聚合源里再按**提供方**分一层（2026-11-15 读者截图：「这几个怎么没有显示他们对应的源」）：
+       三条 Narwhal 落在一张标题为 Narwhal 的卡里，三条 0xRouter 落在一张标题为 0xRouter 的卡里。
+       标题读投影的提供方显示名；这里没给 `providerNamesBySource`，退回注册表的 `providerDisplayName`。 */
+    const providerCards = [...cards[1]!.querySelectorAll<HTMLElement>('[data-business-provider-card]')]
+    expect(providerCards.map((card) => card.getAttribute('data-business-provider-card')))
+      .toEqual(['provider:narwhal', 'provider:0xrouter'])
+    expect(providerCards.map((card) => card.querySelector('.business-topic__title')?.textContent))
+      .toEqual(['Narwhal', '0xRouter'])
+    expect(providerCards.map((card) => card.querySelectorAll('.business-card__row').length)).toEqual([3, 3])
+    /* 每条源都落在**自己提供方**那张卡里：0xRouter 卡里的三行必须真是 0xRouter 的三条 feed。 */
+    expect([...providerCards[1]!.querySelectorAll<HTMLElement>('.business-card__row')]
+      .map((row) => row.getAttribute('data-business-row')))
+      .toEqual([
+        'macro-calendar-0xrouter-economic-data',
+        'macro-calendar-0xrouter-financial-events',
+        'macro-calendar-0xrouter-central-bank-activities'
+      ])
+    /* 0xRouter 那条**维护用**的接入凭据源不进日历面板：它不供日历，也不许把哪张卡头挤掉。
+       它要是被画进来，卡里就会出现这个名字或这个 id。 */
+    expect(calendar.host.textContent).not.toContain('0xRouter 接入凭据')
+    expect(calendar.host.textContent).not.toContain('0xrouter-aggregate-provider')
     // 官方源卡下面还有一层「管什么」的卡，每张里面才是源名 + 开关（用户 2026-11-11）。
     const topics = [...cards[0]!.querySelectorAll<HTMLElement>('[data-business-topic-card]')]
     expect(topics.map((topic) => topic.getAttribute('data-business-topic-card'))).toEqual(['利率决议', 'GDP / PCE', 'CPI / 就业'])
@@ -117,6 +183,21 @@ describe('业务设置的左列', () => {
     expect(sentimentCards[0]!.querySelector('.business-cell__title')).toBeNull()
     // 「舆情评分」不是源，不添行。
     expect(sentiment.host.textContent).not.toContain('舆情评分')
+  })
+
+  it('titles the aggregate cards with the provider name from the projection, never with an id', async () => {
+    /* 投影给了提供方显示名就用它（与源详情同一份），注册表只是第二层；
+       两层都没有就只画卡不画标题——**任何情况下不把 provider id 印给读者**。 */
+    const named = await renderContent('calendar', {
+      providerNamesBySource: {
+        'macro-calendar-0xrouter-economic-data': '聚合数据供应商（0xRouter）',
+        'macro-calendar-narwhal-economic-data': 'Narwhal'
+      }
+    })
+    const titles = [...named.host.querySelectorAll<HTMLElement>('[data-business-provider-card] .business-topic__title')]
+      .map((node) => node.textContent)
+    expect(titles).toEqual(['Narwhal', '聚合数据供应商（0xRouter）'])
+    expect(named.host.textContent).not.toContain('provider:')
   })
 })
 

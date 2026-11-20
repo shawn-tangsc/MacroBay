@@ -178,7 +178,7 @@ describe('desktop main IPC surface', () => {
     // 服务本身在 repositories 片里构造；app.ts 只剩实例名（channelManagementService）。
     expect(repositoriesSource).toContain('ChannelManagementService')
     // 25 个渠道 handler 已搬到 ipc/channelIpc.ts：断言看模块，退出链接线仍看 app.ts。
-    expect(appSource).toContain('registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })')
+    expect(appSource).toContain('registerChannelIpc(ipcMain, { channelManagementService, channelInboundService, channelImages: channelImageSend })')
     expect(channelIpcSource).toContain('IpcChannels.channelsCatalog')
     expect(channelIpcSource).toContain('IpcChannels.channelsCredentialSubmit')
     expect(channelIpcSource).toContain('IpcChannels.channelsPolicyCreate')
@@ -690,11 +690,17 @@ describe('desktop main IPC surface', () => {
     expect(appSource.indexOf('await app.whenReady()')).toBeLessThan(
       appSource.indexOf('registerGeneratedImageProtocol(generatedImagesDirectory)')
     )
-    // 没有为读图新增任何通道：既有精确面断言逐字未变。
+    // 读图仍然只有协议一条路（下面两条断言盯的是既有事实）；新增的两条是**动作与投影**，
+    // 不传字节、不传路径：`imageTarget` 只回通道名与能力，`sendMessageImage` 只回成败与原因码。
     expect(Object.keys(IpcChannels).filter((name) => /image/i.test(name))).toEqual([
       'appSaveClipboardImage',
+      'channelsImageTarget',
+      'channelsSendMessageImage',
       'modelProvidersGenerateImage'
     ])
+    expect(preloadSource).not.toContain('readGeneratedImage')
+    expect(channelIpcSource).toContain('IpcChannels.channelsSendMessageImage')
+    expect(channelIpcSource).not.toContain('readFile')
     // Clipboard pixels are an attachment write path, not a generated-image read path.
     expect(windowIpcSource).toContain('IpcChannels.appSaveClipboardImage')
     expect(windowIpcSource).toContain("app.getPath('temp')")

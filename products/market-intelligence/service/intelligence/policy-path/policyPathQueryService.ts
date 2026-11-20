@@ -1,8 +1,8 @@
 import {
-  changeInPp, decisionInstant, distributionAtOrBefore, leadingOutcome, outcomeFromRangeChange, phaseAt, repricingMarkers,
-  settlementConclusion, stalenessOf, thinSeries, valueAtOrBefore,
+  changeInBp, changeInPp, decisionInstant, distributionAtOrBefore, expectationBp, leadingOutcome, outcomeFromRangeChange,
+  phaseAt, repricingMarkers, settlementConclusion, stalenessOf, valueAtOrBefore,
   type PolicyPathMarker, type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathPhase,
-  type PolicyPathSettlement, type PolicyPathStaleness
+  type PolicyPathSeriesPoint, type PolicyPathSettlement, type PolicyPathStaleness
 } from '../../../contracts/policyPath'
 import type { MacroEconomicCalendarQueryService } from '../macro-calendar/macroEconomicCalendarQueryService'
 import type { PolicyPathFactStore, PolicyPathFacts } from './policyPathFactStore'
@@ -64,7 +64,22 @@ export type PolicyPathReading = Readonly<{
     changeInPp24h?: number
     range30d?: Readonly<{ min: number; max: number }>
     quote?: Readonly<{ bid: number; ask: number }>
-    points: number
+    /**
+     * 期望的 24 小时变化，相对 24 小时前最近一条观测，单位 bp；序列够不到那么早时缺席。
+     *
+     * 绝对值不在这里单列：它就是序列最后一点的高度，渲染层用同一个 `expectationBp` 从序列算出，
+     * 两处各存一份反而会有一天对不上。
+     */
+    expectationChange24hBp?: number
+    /**
+     * 逐点序列：每个时刻的五桶概率，按时间升序，**未分箱**。
+     *
+     * 分箱只能在渲染层做——只有那里知道图有多宽；在这里先分箱，后端箱宽和前端图宽就对不上。
+     * 可缺席：缺席时曲线走「没有可用序列」那一支，不画平线。
+     */
+    series?: readonly PolicyPathSeriesPoint[]
+    /** 序列被保护性行数上限截断过：界面必须说出来，不能假装这就是全部历史。 */
+    seriesTruncated?: true
   }>
   staleness: PolicyPathStaleness
 }>
@@ -87,11 +102,18 @@ export type PolicyPathContextRead =
 
 export const policyPathQueryPolicy = {
   venue: 'polymarket',
-  /** 30 days at the 10-minute collection cadence, before thinning. */
-  seriesLookback: 4320,
-  /** The window the range is quoted over, independent of how many points arrived. */
-  rangeDays: 30,
-  chartPoints: 120
+  /**
+   * 30 days — one number, two uses: how far back the stored series is read, and the window the
+   * trailing range is quoted over. Written twice, a collector that changes cadence would widen one
+   * and not the other.
+   */
+  windowDays: 30,
+  /**
+   * A protective row cap, not the window. It only exists so a runaway collector cannot hand the
+   * renderer an unbounded payload; when it is hit the reading says so (`seriesTruncated`), because a
+   * silent cut is how a reader comes to believe the history is only as long as the cap.
+   */
+  rowCap: 4320
 } as const
 
 export function createPolicyPathQueryService(deps: {
@@ -123,7 +145,14 @@ export function createPolicyPathQueryService(deps: {
       // Replays ask for a past instant; only points at or before it may be used, or the reading would
       // describe the future it was asked about.
       const asOfMs = Date.parse(asOf)
-      const series = deps.observations.list(meetingDate, policyPathQueryPolicy.seriesLookback)
+      const seriesStart = Number.isFinite(asOfMs)
+        ? new Date(asOfMs - policyPathQueryPolicy.windowDays * 86_400_000).toISOString()
+        : undefined
+      const listed = deps.observations.list(meetingDate, {
+        ...(seriesStart === undefined ? {} : { from: seriesStart }),
+        limit: policyPathQueryPolicy.rowCap
+      })
+      const series = listed.observations
         .filter((row) => !Number.isFinite(asOfMs) || Date.parse(row.at) <= asOfMs)
       const range = targetRangeOf(decided?.targetRange, deps.readTargetRange)
       const markers = markersOf(series)
@@ -135,7 +164,10 @@ export function createPolicyPathQueryService(deps: {
       // The decided meeting's own series is not the next meeting's: after the decision the collector
       // starts on the next meeting, and the strip still needs the price from before this one.
       const decidedSeries = settledPhase && decided && decided.meetingDate !== meetingDate
-        ? deps.observations.list(decided.meetingDate, policyPathQueryPolicy.seriesLookback)
+        ? deps.observations.list(decided.meetingDate, {
+          ...(seriesStart === undefined ? {} : { from: seriesStart }),
+          limit: policyPathQueryPolicy.rowCap
+        }).observations
           .filter((row) => !Number.isFinite(asOfMs) || Date.parse(row.at) <= asOfMs)
         : series
       const previousDecision = settledPhase && decided?.targetRange
@@ -186,7 +218,7 @@ export function createPolicyPathQueryService(deps: {
             ...(lastActionOf(decided, deps.facts) === undefined ? {} : { outcome: lastActionOf(decided, deps.facts)! })
           } }
           : {}),
-        ...(series.length ? { probability: probabilityOf(series, asOf, deps.marketLinks?.read(meetingDate)?.url) } : {}),
+        ...(series.length ? { probability: probabilityOf(series, asOf, deps.marketLinks?.read(meetingDate)?.url, listed.truncated) } : {}),
         staleness: series.length ? stalenessOf(series[series.length - 1]!.at, asOf) : 'unavailable'
       }
     }
@@ -338,14 +370,22 @@ function sepOf(
   }
 }
 
-function probabilityOf(series: readonly PolicyPathObservation[], asOf: string, marketUrl?: string): NonNullable<PolicyPathReading['probability']> {
+function probabilityOf(
+  series: readonly PolicyPathObservation[],
+  asOf: string,
+  marketUrl: string | undefined,
+  truncated: boolean
+): NonNullable<PolicyPathReading['probability']> {
   const latest = series[series.length - 1]!
   const { outcome, probability } = leadingOutcome(latest.values)
-  const thinned = thinSeries(series, policyPathQueryPolicy.chartPoints)
+  const latestExpectation = expectationBp(latest.values)
+  // The 24-hour baseline is the nearest observation at or before "a day ago" — not midnight, and not
+  // the previous stored point: those are different questions and would move when the cadence moves.
+  const dayAgo = distributionAtOrBefore(series, 24 * 60)
   const previous = valueAtOrBefore(series, outcome, 24 * 60)
   // Thirty days is a time window, not a count: a paused collector would otherwise compare against
   // points older than a month and widen the range without saying so.
-  const windowStart = Date.parse(asOf) - policyPathQueryPolicy.rangeDays * 86_400_000
+  const windowStart = Date.parse(asOf) - policyPathQueryPolicy.windowDays * 86_400_000
   const window = series
     .filter((row) => !Number.isFinite(windowStart) || Date.parse(row.at) >= windowStart)
     .map((row) => row.values[outcome])
@@ -360,6 +400,10 @@ function probabilityOf(series: readonly PolicyPathObservation[], asOf: string, m
     ...(previous === undefined ? {} : { changeInPp24h: changeInPp(probability, previous) }),
     ...(window.length ? { range30d: { min: Math.min(...window), max: Math.max(...window) } } : {}),
     ...(latest.quote ? { quote: latest.quote } : {}),
-    points: thinned.length
+    ...(dayAgo ? { expectationChange24hBp: changeInBp(latestExpectation, expectationBp(dayAgo)) } : {}),
+    // Quotes are not part of the drawn series: the chart needs the instant and the five buckets, and
+    // shipping bid/ask for every point would be payload the renderer never reads.
+    series: series.map((observation): PolicyPathSeriesPoint => ({ at: observation.at, values: observation.values })),
+    ...(truncated ? { seriesTruncated: true as const } : {})
   }
 }

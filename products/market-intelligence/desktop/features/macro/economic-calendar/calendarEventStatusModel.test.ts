@@ -1,4 +1,7 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
+import { marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { CalendarEventStatusPolicy } from './calendarEventStatusModel'
 import type { CalendarDayItem } from './economicCalendarDayModel'
 import { calendarEventStatus } from './calendarEventStatusModel'
 
@@ -15,6 +18,13 @@ it('projects actual, future, missing-value and cancelled states without inferrin
   expect(statusOf(market({ scheduledAt: '2026-09-11T05:00:00.000Z', providerActual: { displayValue: '0' } }), now)).toBe('upcoming')
   expect(statusOf(official({ lifecycleState: 'cancelled' }), now)).toBe('cancelled')
 })
+it('生命周期读源给的 releaseStatus：市场路径的行也能显示「已取消」', () => {
+  // 切到标准表后所有行都走市场那条路径；按 `source === 'official'` 分支推会让「已取消」永远不出现。
+  expect(statusOf(market({ releaseStatus: 'cancelled' }), now)).toBe('cancelled')
+  expect(statusOf(market({ releaseStatus: 'published', providerActual: { displayValue: '3' } }), now)).toBe('data-received')
+  expect(statusOf(market({ releaseStatus: 'scheduled' }), now)).toBe('awaiting-data')
+})
+
 it('respects date-only evidence and does not treat elapsed speeches as missing economic data', async () => {
   expect(statusOf(official({ lifecycleState: 'released', actual: { displayValue: '0' } }), now)).toBe('data-received')
   expect(statusOf(official(), now)).toBe('time-pending')
@@ -51,4 +61,53 @@ it('separates "the source has not published yet" from "our collection was refuse
     .toBe('data-received')
   // The official route is not subject to the shared market-calendar ceiling.
   expect(statusOf(official({ scheduledDate: '2026-09-10' }), now, pressure)).toBe('awaiting-data')
+})
+
+/**
+ * 五态口径（界面设计 2026-11-16）：发布后的两种新状态由**源给**，不由渲染层按时间推；
+ * 过期后任何一处都不许出现「待发布」——这正是用户 11-10 CPI 那幕。
+ */
+describe('post-release states', () => {
+  // 发布状态由**契约**定义，测试里也从它派生：契约扩枚举时这里跟着变，不另写一份字面量联合。
+  type ReleaseStatus = NonNullable<Extract<CalendarDayItem, { source: 'market' }>['event']['releaseStatus']>
+  const item = (releaseStatus: ReleaseStatus, actual?: { displayValue: string }): CalendarDayItem => ({
+    key: `market-${releaseStatus}`, date: '2026-11-10', time: '21:30', source: 'market',
+    event: {
+      eventKey: `evt-${releaseStatus}`, title: 'CPI', eventType: 'economic-indicator', importance: 'high',
+      scheduledAt: '2026-11-10T13:30:00.000Z', releaseStatus,
+      ...(actual === undefined ? {} : { providerActual: actual }),
+      consensus: null, providerPrevious: null, source: 'Narwhal',
+      sourceObservedAt: '2026-11-10T13:20:00.000Z', coverage: 'observed-unverified'
+    }
+    // 夹具只关心状态判定需要的字段，其余按既有夹具惯例强转；类型来源仍是契约。
+  }) as unknown as CalendarDayItem
+
+  it('passes backfilling and missing through from the source', () => {
+    expect(calendarEventStatus(item('backfilling'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('backfilling')
+    expect(calendarEventStatus(item('missing'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('missing')
+  })
+
+  it('keeps an overdue row out of 待发布', () => {
+    expect(calendarEventStatus(item('scheduled'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')).toBe('awaiting-data')
+  })
+
+  /**
+   * 渲染侧与契约的对应关系**写死成一条断言**：契约的六档里，界面直接显示其中三档
+   * （`backfilling` / `missing` / `cancelled`），另外三档是源那侧的词、由界面判定改写成
+   * `awaiting-data`（过期没值）或 `data-received`（有值）。契约再加一档时，这条会红——
+   * 逼人决定「这一档界面怎么显示」，而不是让它悄悄掉进某个默认分支。
+   */
+  it('accounts for every contract release status', () => {
+    const displayed = ['backfilling', 'missing', 'cancelled']
+    const rewritten = { scheduled: 'awaiting-data', published: 'data-received', unknown: 'awaiting-data' }
+    const contract = [...marketCalendarPublicPolicy.releaseStatuses]
+    expect([...displayed, ...Object.keys(rewritten)].sort()).toEqual([...contract].sort())
+    expect(CalendarEventStatusPolicy.states).toContain('awaiting-data')
+    expect(CalendarEventStatusPolicy.states).toContain('data-received')
+  })
+
+  it('never calls an overdue release 待发布: overdue without a value is 待补值', () => {
+    const status = calendarEventStatus(item('scheduled'), '2026-11-11T00:00:00.000Z', 'Asia/Shanghai')
+    expect(status).toBe('awaiting-data')
+  })
 })

@@ -4,7 +4,7 @@ import { dashboardCapitalConditionsPresentationPolicy } from './capitalCondition
 import { flowAccessibleName, type FlowAccessibleText } from './capitalFlowAccessibleName'
 import { formatFlowUsd } from './capitalFlowFormat'
 import { pickFlowLabelIndexes, placeFlowLabels, type FlowLabelAnchor, type FlowLabelBox } from './capitalFlowLabels'
-import { shortFlowDate, type FlowChartRow } from './capitalFlowRows'
+import { FLOW_SERIES, shortFlowDate, type FlowChartRow } from './capitalFlowRows'
 
 import './capitalFlowChart.css'
 
@@ -40,7 +40,11 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
   const [hoveredFlow, setHoveredFlow] = useState<HoveredFlow | null>(null)
   const [labelBoxes, setLabelBoxes] = useState<readonly FlowLabelBox[]>([])
 
-  const maximumMagnitude = Math.max(0, ...rows.flatMap((row) => [Math.abs(row.funds), Math.abs(row.btc), Math.abs(row.eth)]))
+  // 只按**存在的**值取最大量纲：缺的那条不参与，也不当成 0。
+  const maximumMagnitude = Math.max(0, ...rows.flatMap((row) => FLOW_SERIES.flatMap((series) => {
+    const value = row[series]
+    return value === undefined ? [] : [Math.abs(value)]
+  })))
   const axisMagnitude = maximumMagnitude === 0 ? undefined : formatFlowUsd(maximumMagnitude, { signed: false })
   const tickIndexes = rows.length === 0 ? [] : [...new Set([0, Math.floor((rows.length - 1) / 2), rows.length - 1])]
   const labelIndexes = pickFlowLabelIndexes(rows)
@@ -55,6 +59,7 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
       for (const index of labelIndexes) {
         const bar = chart.querySelector<HTMLElement>(`[data-flow-bar="${index}"]`)
         const label = labelRefs.current[index]
+        // 这一天没有稳定币那条线（只有 ETF）→ 没有柱子可贴，标签自然不画。
         if (!bar || !label) continue
         const barRect = bar.getBoundingClientRect()
         const direction = directionOf(rows[index]?.funds ?? 0)
@@ -98,12 +103,18 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
       {rows.map((row, index) => <div className="mi-capital-conditions__chart-day" data-trading-date={row.tradingDate} key={row.tradingDate}
         onMouseEnter={(event) => updateHover(row, event)} onMouseMove={(event) => updateHover(row, event)}>
         <div className="mi-capital-conditions__chart-half" data-flow-half="inflow">
-          {dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] >= 0).map((series) =>
-            <Bar key={series} dayIndex={index} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}
+          {dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => {
+            const value = row[series]
+            return value !== undefined && value >= 0
+          }).map((series) =>
+            <Bar key={series} dayIndex={index} series={series} value={row[series] as number} maximumMagnitude={maximumMagnitude} />)}
         </div>
         <div className="mi-capital-conditions__chart-half" data-flow-half="outflow">
-          {dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] < 0).map((series) =>
-            <Bar key={series} dayIndex={index} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}
+          {dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => {
+            const value = row[series]
+            return value !== undefined && value < 0
+          }).map((series) =>
+            <Bar key={series} dayIndex={index} series={series} value={row[series] as number} maximumMagnitude={maximumMagnitude} />)}
         </div>
       </div>)}
       <div className="mi-capital-conditions__chart-labels">
@@ -121,9 +132,9 @@ export function CapitalFlowChart({ rows, text }: Readonly<{ rows: readonly FlowC
       </div>
       {hoveredFlow ? <div className="mi-capital-conditions__chart-tooltip" data-flow-tooltip style={{ left: hoveredFlow.tooltipLeft, top: hoveredFlow.tooltipTop }}>
         <strong>{hoveredFlow.row.tradingDate}</strong>
-        <span><i data-series="funds" />{text.fundsColumn}<b>{formatFlowUsd(hoveredFlow.row.funds)}</b></span>
-        <span><i data-series="btc" />{text.btc}<b>{formatFlowUsd(hoveredFlow.row.btc)}</b></span>
-        <span><i data-series="eth" />{text.eth}<b>{formatFlowUsd(hoveredFlow.row.eth)}</b></span>
+        <span><i data-series="funds" />{text.fundsColumn}<b>{hoveredFlow.row.funds === undefined ? '—' : formatFlowUsd(hoveredFlow.row.funds)}</b></span>
+        <span><i data-series="btc" />{text.btc}<b>{hoveredFlow.row.btc === undefined ? '—' : formatFlowUsd(hoveredFlow.row.btc)}</b></span>
+        <span><i data-series="eth" />{text.eth}<b>{hoveredFlow.row.eth === undefined ? '—' : formatFlowUsd(hoveredFlow.row.eth)}</b></span>
       </div> : null}
     </div>
     <div className="mi-capital-conditions__chart-ticks" aria-hidden="true">

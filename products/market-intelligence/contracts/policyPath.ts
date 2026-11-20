@@ -6,6 +6,8 @@
  * all day and a value without an as-of is unfalsifiable.
  */
 
+import { metricConceptOf } from './metricKeyConcept'
+
 export const POLICY_PATH_OUTCOMES = ['no-change', 'hike-25', 'hike-50-plus', 'cut-25', 'cut-50-plus'] as const
 export type PolicyPathOutcome = typeof POLICY_PATH_OUTCOMES[number]
 
@@ -50,6 +52,55 @@ export function normalizeOutcomes(raw: Partial<Record<PolicyPathOutcome, number>
 export function changeInPp(current: number, previous: number): number {
   return Math.round((current - previous) * 1000) / 10
 }
+
+/** Basis-point change, one decimal: the chart's own unit, rounded like the pp figure above. */
+export function changeInBp(current: number, previous: number): number {
+  return Math.round((current - previous) * 10) / 10
+}
+
+/**
+ * What one bucket is worth in basis points — the single definition of the expectation.
+ *
+ * A bucket *is* a magnitude, so 25 and its negative carry no ambiguity. The two open-ended buckets
+ * take their lower bound (+50 / −50): the midpoint would guess at what the venue never told us, and
+ * a historical average would import past moves into today's quote. The lower bound is the only
+ * choice that is decidable from one observation alone. The cost is a known, documented bias — both
+ * open-ended buckets are understated — so this number must never be compared with another venue's
+ * expectation, and changing it means recomputing every stored point, never mixing old and new.
+ */
+export const POLICY_PATH_BUCKET_BP: Readonly<Record<PolicyPathOutcome, number>> = Object.freeze({
+  'hike-25': 25,
+  'hike-50-plus': 50,
+  'no-change': 0,
+  'cut-25': -25,
+  'cut-50-plus': -50
+})
+
+/**
+ * The market's weighted expectation at one instant, in basis points.
+ *
+ * The input must already be a normalised distribution: the collector normalises once on write, and
+ * dividing by the sum again here would re-edit a value that is already aligned. Every bucket takes
+ * part — the card folds small shares into "other" for display only, never for this sum.
+ */
+export function expectationBp(values: PolicyPathDistribution): number {
+  let total = 0
+  for (const outcome of POLICY_PATH_OUTCOMES) {
+    const share = values[outcome]
+    if (!Number.isFinite(share)) return Number.NaN
+    total += share * POLICY_PATH_BUCKET_BP[outcome]
+  }
+  return total
+}
+
+/**
+ * One point of the drawn series: the absolute instant and the five buckets observed then.
+ *
+ * The axis is deliberately not part of this shape. The stored points are absolute times, and the
+ * renderer derives both the axis and its bins, so changing the axis later is a pure drawing change —
+ * no migration, and the vertical value never depends on which axis is in force.
+ */
+export type PolicyPathSeriesPoint = Readonly<{ at: string; values: PolicyPathDistribution }>
 
 /** The most likely bucket, and how likely it is. */
 export function leadingOutcome(values: PolicyPathDistribution): { outcome: PolicyPathOutcome; probability: number } {
@@ -140,90 +191,8 @@ export function repricingMarkers(input: Readonly<{ change24hPp?: number; change6
  * settlement against what was priced, and for three days after it is a verdict. Deriving the shape
  * from the clock keeps it from disagreeing with the reader's calendar.
  */
-export type PolicyPathPhase =
-  | Readonly<{ kind: 'normal' }>
-  | Readonly<{ kind: 'pre-meeting'; daysLeft: number }>
-  | Readonly<{ kind: 'settlement'; minutesSinceDecision: number }>
-  | Readonly<{ kind: 'verdict'; daysSinceDecision: number }>
-
-export const POLICY_PATH_PHASE_POLICY = Object.freeze({
-  /** The block upgrades to the meeting view only inside this many days. */
-  preMeetingDays: 14,
-  /** The settlement strip stays up for a full day: readers look back the next morning. */
-  settlementHours: 24,
-  /** How long the verdict stays on the card before the next meeting's normal shape returns. */
-  verdictDays: 3
-} as const)
-
-const MINUTE_MS = 60_000
-const DAY_MS = 86_400_000
-
-/**
- * New York's wall clock at an instant, expressed as the offset from UTC in milliseconds.
- *
- * This is looked up from the time zone database rather than assumed: 14:00 in New York is 18:00Z in
- * summer and 19:00Z in winter, and a fixed number would put a whole season's decisions an hour off.
- */
-const newYorkClock = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/New_York',
-  hourCycle: 'h23',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit'
-})
-
-function newYorkOffsetMs(instantMs: number): number {
-  const parts = Object.fromEntries(newYorkClock.formatToParts(new Date(instantMs)).map((part) => [part.type, part.value]))
-  const wallClock = Date.UTC(
-    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
-    Number(parts.hour), Number(parts.minute), Number(parts.second)
-  )
-  return wallClock - instantMs
-}
-
-/** The decision instant: 14:00 on the meeting day in New York, converted to UTC exactly once. */
-export function decisionInstant(meetingDate: string): string | undefined {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(meetingDate)
-  if (!match) return undefined
-  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
-  const wallClock = Date.UTC(year, month - 1, day, 14, 0, 0)
-  // Date.UTC normalises 02-30 and 13-01 into the next month; a meeting date that does not survive
-  // the round trip is not a date.
-  const calendarDay = new Date(wallClock)
-  if (calendarDay.getUTCFullYear() !== year || calendarDay.getUTCMonth() !== month - 1 || calendarDay.getUTCDate() !== day) return undefined
-  // Two passes: the first guess lands on the right side of a DST change, the second settles the
-  // offset that is actually in force at the converted instant.
-  const firstGuess = wallClock - newYorkOffsetMs(wallClock)
-  return new Date(wallClock - newYorkOffsetMs(firstGuess)).toISOString()
-}
-
-/**
- * Which shape the block takes at `now`. The boundaries belong to the later shape: exactly T0 is a
- * settlement, exactly T0+24h is a verdict, and exactly T0+3d is normal again.
- */
-export function phaseAt(decisionAt: string, now: string): PolicyPathPhase {
-  const decision = Date.parse(decisionAt)
-  const current = Date.parse(now)
-  if (!Number.isFinite(decision) || !Number.isFinite(current)) return { kind: 'normal' }
-  const elapsed = current - decision
-  if (elapsed < 0) {
-    return -elapsed <= POLICY_PATH_PHASE_POLICY.preMeetingDays * DAY_MS
-      ? { kind: 'pre-meeting', daysLeft: Math.ceil(-elapsed / DAY_MS) }
-      : { kind: 'normal' }
-  }
-  if (elapsed < POLICY_PATH_PHASE_POLICY.settlementHours * 60 * MINUTE_MS) {
-    return { kind: 'settlement', minutesSinceDecision: Math.floor(elapsed / MINUTE_MS) }
-  }
-  if (elapsed < POLICY_PATH_PHASE_POLICY.verdictDays * DAY_MS) {
-    return { kind: 'verdict', daysSinceDecision: Math.floor(elapsed / DAY_MS) }
-  }
-  return { kind: 'normal' }
-}
-
-/** The band order the settlement conclusion reads: later entries are the tighter policy. */
+// 阶段判定（会议前 / 落定期 / 常态）搬进 `policyPathPhase.ts`；这里原样转出，调用点不变。
+export { POLICY_PATH_PHASE_POLICY, decisionInstant, phaseAt, type PolicyPathPhase } from './policyPathPhase'
 export const POLICY_PATH_OUTCOME_ORDER: readonly PolicyPathOutcome[] = Object.freeze([
   'cut-50-plus', 'cut-25', 'no-change', 'hike-25', 'hike-50-plus'
 ] as const)
@@ -327,6 +296,170 @@ export function distributionAtOrBefore(
     else break
   }
   return candidate
+}
+
+/**
+ * 事件标注：那一刻曲线真的动了多少，以及标不标。
+ *
+ * 三条规则（用户 2026-11-13 定，别放宽）：
+ * 1. 窗口内**任何**已发生的事件都可标，不限指标名单——央行讲话与会议往往才是大动作的来源；
+ * 2. 只有 |推动量| ≥ 0.5bp 才标；半个点以下读者看不出曲线动过，标了就是噪音；
+ * 3. 同一个 ±15 分钟窗口里有多条事件 → **不归因、不标**（宁可少一个圈，不把一次跳变算给两件事）；
+ *    一张图最多 5 条，按 |推动量| 取前 5。
+ *
+ * 推动量 = E(事件后最近一条) − E(事件前最近一条)，两侧都必须落在窗口内；缺一侧就不标。
+ * 单位与方向都走期望口径：概率差的正负可以跟期望差相反，图上一律用期望。
+ */
+/**
+ * 允许标注的**概念**清单——判据只有这一张表，按指标身份，不按名字、不按 importance、不按国家。
+ *
+ * 事件标注解释的是「这条曲线为什么跳」，所以只有**影响美联储路径**的指标才配得上：
+ * `importance: high` 是对市场的普遍影响（EIA 原油库存也是 high），两者不是一回事。
+ * 这份表是产品口径（`15-事件身份口径.md` §十七），要扩只能扩这里；清单之外的指标无论推动量多大都不标。
+ *
+ * 按**概念**列，不按码列（M4）：季调/未季调是同一个指标的两个变体，影响程度一样、该不该标也一样。
+ * 以前码一变一变体就得回来补一行，漏了就漏标；现在概念把变体全盖住，换码不用动这里。
+ */
+export const POLICY_PATH_EVENT_RELEVANT_CONCEPTS = Object.freeze([
+  'US.CPI.YOY', 'US.CORE_CPI.YOY', 'US.NONFARM.CHANGE', 'US.CORE_PCE.YOY'
+] as const)
+
+/**
+ * 央行那档：用 `series_id`（发布类型，语言无关）认，不按标题判。
+ *
+ * 只认两个：**决议**是一次会议的代表，**纪要**有单独时刻可以单独标。
+ * 声明 / 发布会 / 点阵图与决议同一时刻，是同一件事的附件，不单独标；票委讲话识别得出但并不值得标。
+ */
+export const POLICY_PATH_EVENT_RELEVANT_SERIES_IDS = Object.freeze([
+  'usa-policy-rate-decision', 'usa-monetary-policy-minutes'
+] as const)
+
+/**
+ * 同一次发布只允许标一条：同一时刻的多条 measure 按这张表取优先级最高的一条。
+ *
+ * 不归组的话，CPI 整体年率 / 核心年率 / 月率会在「同窗多条不归因」那步互相挤掉，
+ * 结果是曲线明明跳了却一条解释都没有。顺序是产品口径：非农 > 失业率 > 时薪；
+ * CPI 整体年率 > 核心年率 > 月率；核心 PCE > 整体 PCE。以后扩清单按同一份文档插进来。
+ */
+export const POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS = Object.freeze([
+  'US.NONFARM.CHANGE',
+  'US.CPI.YOY',
+  'US.CORE_CPI.YOY',
+  'US.CORE_PCE.YOY'
+] as const)
+
+export type PolicyPathEventCandidate = Readonly<{
+  at: string
+  label: string
+  /**
+   * 主 measure 的身份：**只用来取显示名，不参与资格判断**。
+   *
+   * 一次发布一行，这一格只装「这条事件叫什么」；它不等于这次发布覆盖的全部指标。
+   */
+  eventNameKey?: string
+  /**
+   * 这次发布覆盖的全部 `metric_key`——**资格只看这个列表**。
+   *
+   * 为什么需要它：一次发布包含多个 measure（CPI 年率/核心年率/月率），写入端一行只存得下一个主
+   * measure 的身份。只看 `eventNameKey`，四个必标 key 会在写入时就丢掉，标注永远命中不了。
+   */
+  measureKeys?: readonly string[]
+  /** 发布类型（央行事件）：`usa-policy-rate-decision` / `usa-monetary-policy-minutes`。 */
+  seriesId?: string
+}>
+
+/**
+ * 这次发布覆盖了哪个必标**概念**（按优先级取第一个）；一个都没有就是 `undefined`。
+ *
+ * 只认 `measureKeys`，**不看 `eventNameKey`、不看名字**——`eventNameKey` 是主 measure 的显示名，
+ * 一次发布覆盖多个指标时它只代表其中一个，拿它判资格会把另外几个必标指标整条漏掉。
+ *
+ * 比较前把每个 measure 归一到概念：这样同一概念的季调/未季调两条行都命中，
+ * 不需要在这张清单里为每个变体各留一个兼容位（那正是「换码漏一处」的入口）。
+ */
+export function matchedRelevantConcept(event: PolicyPathEventCandidate): string | undefined {
+  const keys = event.measureKeys ?? []
+  return (POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS as readonly string[])
+    .find((concept) => keys.some((key) => metricConceptOf(key) === concept))
+}
+
+export const POLICY_PATH_EVENT_POLICY = Object.freeze({
+  /** 归因窗口：事件前后各 15 分钟。 */
+  windowMinutes: 15,
+  /** 低于这个推动量不标。 */
+  minimumMoveBp: 0.5,
+  /** 一张图最多几个标注。 */
+  maximumMarks: 5
+} as const)
+
+export type PolicyPathExpectationEvent = Readonly<{
+  at: string
+  label: string
+  /** 期望的推动量（bp），带符号。 */
+  changeBp: number
+  /** 标注处曲线的高度：事件前最近一条的期望（bp）。 */
+  bp: number
+}>
+
+export function expectationEventMoves(
+  series: readonly PolicyPathObservation[],
+  events: readonly PolicyPathEventCandidate[]
+): readonly PolicyPathExpectationEvent[] {
+  const oldest = series[0]
+  const newest = series[series.length - 1]
+  if (!oldest || !newest) return []
+  const windowMs = POLICY_PATH_EVENT_POLICY.windowMinutes * 60_000
+  // 第一步：清单之外一律不标（判据只有指标身份 / 发布类型，不看名字、不看 importance）。
+  // 没有身份的行（例如今天 0xRouter 的行没有 series_id）即使名字百分百像 FOMC 决议，也不标。
+  const relevant = events.filter((event) =>
+    matchedRelevantConcept(event) !== undefined
+    || (event.seriesId !== undefined && (POLICY_PATH_EVENT_RELEVANT_SERIES_IDS as readonly string[]).includes(event.seriesId)))
+  // 第二步：同一时刻（同一次发布）只留优先级最高的一条。
+  const rankOf = (event: PolicyPathEventCandidate): number => {
+    if (event.seriesId === 'usa-policy-rate-decision') return -1
+    const concept = matchedRelevantConcept(event)
+    return concept === undefined ? Number.MAX_SAFE_INTEGER
+      : (POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS as readonly string[]).indexOf(concept)
+  }
+  const byInstant = new Map<string, PolicyPathEventCandidate>()
+  for (const event of relevant) {
+    const previous = byInstant.get(event.at)
+    if (!previous) {
+      byInstant.set(event.at, event)
+      continue
+    }
+    if (rankOf(event) < rankOf(previous)) byInstant.set(event.at, event)
+  }
+  const candidates: Array<PolicyPathExpectationEvent & Readonly<{ atMs: number }>> = []
+  for (const event of byInstant.values()) {
+    const atMs = Date.parse(event.at)
+    if (!Number.isFinite(atMs)) continue
+    let before: PolicyPathObservation | undefined
+    let after: PolicyPathObservation | undefined
+    for (const observation of series) {
+      const observedAt = Date.parse(observation.at)
+      if (!Number.isFinite(observedAt)) continue
+      if (observedAt <= atMs) {
+        if (atMs - observedAt <= windowMs) before = observation
+      } else if (observedAt - atMs <= windowMs) {
+        // 有序序列里第一条落在窗口后的就是「事件后最近一条」。
+        after = observation
+        break
+      }
+    }
+    if (!before || !after) continue
+    const changeBp = changeInBp(expectationBp(after.values), expectationBp(before.values))
+    if (Math.abs(changeBp) < POLICY_PATH_EVENT_POLICY.minimumMoveBp) continue
+    candidates.push({ at: event.at, atMs, label: event.label, changeBp, bp: expectationBp(before.values) })
+  }
+  // 竞争归因：两条事件的窗口重叠（相隔不到 2 个窗口）就都不标。
+  const attributed = candidates.filter((candidate) => candidates.every((other) =>
+    other === candidate || Math.abs(other.atMs - candidate.atMs) >= 2 * windowMs))
+  return attributed
+    .sort((left, right) => Math.abs(right.changeBp) - Math.abs(left.changeBp))
+    .slice(0, POLICY_PATH_EVENT_POLICY.maximumMarks)
+    .sort((left, right) => left.atMs - right.atMs)
+    .map(({ atMs: _atMs, ...mark }) => mark)
 }
 
 /** The value that was in force `minutes` before the newest observation, if the series reaches back. */

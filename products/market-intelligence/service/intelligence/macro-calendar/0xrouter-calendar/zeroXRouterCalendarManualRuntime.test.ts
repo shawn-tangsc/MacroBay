@@ -14,7 +14,8 @@ afterEach(() => { disposals.splice(0).reverse().forEach(dispose => dispose()) })
 const scope = { month: '2026-09', locale: 'zh' } as const
 const time = '2026-09-10T01:00:00.000Z'
 async function setup(options: { enabled?: boolean; hasCredential?: boolean; evidenceReady?: boolean;
-  gate?: Promise<void>; data?: unknown[]; failEndpoint?: string; pressure?: boolean; monotonicNow?: () => number } = {}) {
+  gate?: Promise<void>; data?: unknown[]; failEndpoint?: string; pressure?: boolean; monotonicNow?: () => number
+  triggerResult?: 'triggered' | 'running' | 'failed' } = {}) {
   expect(existsSync(new URL('./zeroXRouterCalendarManualRuntime.ts', import.meta.url)), 'manual composition is implemented').toBe(true)
   const { createZeroXRouterCalendarManualRuntime } = await import('./zeroXRouterCalendarManualRuntime')
   const directory = mkdtempSync(join(tmpdir(), 'mc-v1-manual-'))
@@ -35,14 +36,17 @@ async function setup(options: { enabled?: boolean; hasCredential?: boolean; evid
       calendarName: 'Derived event', locale: 'zh', star: 3, pubTimestamp: Date.parse(time), estimateValue: 0, preValue: '2', pubValue: '3' }] })
     return { state: 'succeeded' as const, body, acceptedBytes: Buffer.byteLength(body), status: 200, contentType: 'application/json' }
   })
+  const trigger = vi.fn(async () => options.triggerResult ?? 'triggered')
   const runtime = createZeroXRouterCalendarManualRuntime({ database, evidence, evidenceReady: options.evidenceReady ?? true,
+    triggerCollection: trigger,
     requestGovernanceQueue: queue, requestJsonBody, getApiKey: async () => 'derived-safe-key',
     readReadiness: async () => ({ enabled: options.enabled ?? true, hasCredential: options.hasCredential ?? true }),
     readCapacity: () => ({ marketBytes: 0, walBytes: 0, freeBytes: 10 * 1024 ** 3, archiveAvailable: !options.pressure }),
     now: () => new Date(clock), monotonicNow: options.monotonicNow,
     createCollectionId: () => `derived-${++sequence}`, cursorKey: Buffer.alloc(32, 1) })
   disposals.push(() => { database.close(); queue.close(); rmSync(directory, { recursive: true, force: true }) })
-  return { runtime, database, archive, requestJsonBody, queue, rawRecords, setTime: (value: string) => { clock = value } }
+  return { runtime, database, archive, requestJsonBody, queue, rawRecords, trigger,
+    setTime: (value: string) => { clock = value } }
 }
 // One month's worth of provider rows, shared by the two write-budget cases: one proves the rows
 // survive, the other proves what happens when the budget runs out halfway through them.
@@ -73,32 +77,8 @@ describe('MC-V1 manual archive and SQLite composition', () => {
 
   // The briefing's catch-up path. "Stored" is the only proof that matters: the same query the
   // page reads must see the batch, not merely that the request returned.
-  it('collects the three feeds in one bounded call and stores what the page will read', async () => {
-    const h = await setup()
-    const result = await h.runtime.refreshNow({})
-    expect(result).toMatchObject({ state: 'collected' })
-    expect(result.state === 'collected' ? result.sources : []).toEqual([
-      'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events', 'macro-calendar-0xrouter-central-bank-activities'
-    ])
-    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations').get()?.n).toBeGreaterThan(0)
-    // 三个 feed，但 `financial-events` 与 `central-bank-activities` 不发布英文：一次采集是
-    // 3 个 zh + 1 个 economic-data en = 4 个作用域，所以落库 4 行，不是 6 行。
-    expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_collections').get()?.n).toBe(4)
-  })
 
-  it('reports a deadline as timeout, never as a collection failure', async () => {
-    // The gate never opens, so the batch cannot finish inside the budget. `timeout` is its own
-    // answer: "not finished in time" and "the collection failed" lead to different sentences.
-    const h = await setup({ gate: new Promise<void>(() => undefined) })
-    const result = await h.runtime.refreshNow({ timeoutMs: marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs })
-    expect(result).toEqual({ state: 'timeout', timeoutMs: marketCalendarPublicPolicy.refreshNow.minimumTimeoutMs })
-  })
 
-  it('names the refusal when every asked source failed', async () => {
-    const h = await setup({ failEndpoint: 'economic-data' })
-    const result = await h.runtime.refreshNow({ sourceIds: ['macro-calendar-0xrouter-economic-data'] })
-    expect(result).toEqual({ state: 'failed', failureCode: 'response-unavailable' })
-  })
 
   it('refuses a source set or budget it does not own', async () => {
     const h = await setup()
@@ -370,5 +350,24 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     const h = await setup({ failEndpoint: 'financial-events' })
     expect((await h.runtime.refreshManual(scope)).state).toBe('partial')
     expect(h.database.prepare('select collection_id from mi_macro_calendar_market_event_collections').all()).toHaveLength(2)
+  })
+})
+
+describe('refreshNow：只表示「跑一次采集」，不点名源', () => {
+  it('传 sourceIds → input-invalid（拒绝，不是忽略）', async () => {
+    const { runtime } = await setup()
+    await expect(runtime.refreshNow({ sourceIds: ['macro-calendar-narwhal-economic-data'] }))
+      .resolves.toMatchObject({ state: 'failed', failureCode: 'input-invalid' })
+  })
+
+  it('正常调用 → 触发一次采集，返回 collected 并列出真在采的 feed', async () => {
+    const { runtime, trigger } = await setup()
+    await expect(runtime.refreshNow(undefined)).resolves.toMatchObject({ state: 'collected' })
+    expect(trigger).toHaveBeenCalledTimes(1)
+  })
+
+  it('触发失败 → failed，不吞', async () => {
+    const { runtime } = await setup({ triggerResult: 'failed' })
+    await expect(runtime.refreshNow(undefined)).resolves.toMatchObject({ state: 'failed' })
   })
 })

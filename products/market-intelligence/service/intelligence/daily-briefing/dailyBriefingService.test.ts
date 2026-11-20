@@ -346,6 +346,25 @@ describe('daily briefing service', () => {
     expect(await service.getProgress({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).toEqual({ state: 'idle' })
   })
 
+  // 用户 2026-11-16：一版生成只打一行结构化诊断，字段正好四个、不带任何敏感信息。
+  it('prints exactly one macro diagnostic line per generated edition', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const store = memoryStore()
+      const source = fakeSource()
+      const service = createDailyBriefingService({ source, store, now: () => asOf })
+      await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+      const lines = log.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[daily-briefing.macro] '))
+      expect(lines).toHaveLength(1)
+      const payload = JSON.parse(lines[0]!.slice('[daily-briefing.macro] '.length))
+      expect(Object.keys(payload).sort()).toEqual(['ageMinutes', 'asOf', 'macroEmpty', 'windowHours'])
+      expect(payload.windowHours).toBe(24)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   it('generates today once, stores it and prunes the retention window', async () => {
     const store = memoryStore()
     const source = fakeSource()
@@ -746,6 +765,31 @@ describe('daily briefing service', () => {
       generationTrace: { state: 'failed', stages: expect.arrayContaining([expect.objectContaining({ id: 'candidates', state: 'failed' })]) }
     })
     expect(store.rows.size).toBe(0)
+  })
+
+  /**
+   * 超限这一档只在**日志**里带数量（Chief 2026-11-15）：界面上它只是一句「候选数据超出上限」，
+   * 不额外做界面；但真触发时要能证明「确实超了、超在哪一类」，否则和「读不到」分不开。
+   */
+  it('logs which pool overflowed and by how much, without touching the edition', async () => {
+    const store = memoryStore()
+    const source = fakeSource(() => ({
+      ...emptyPacket(),
+      news: { state: 'available', items: Array.from({ length: 201 }, (_, index) => newsCandidate(index)) },
+      calendar: { state: 'available', events: Array.from({ length: 3 }, (_, index) => macroCandidate(index)) }
+    }))
+    const logged: Array<Readonly<{ level: string; event: string; fields?: Record<string, unknown> }>> = []
+    const service = createDailyBriefingService({
+      source, store, now: () => asOf,
+      log: (level, event, fields) => { logged.push({ level, event, ...(fields === undefined ? {} : { fields }) }) }
+    })
+
+    await expect(service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' }))
+      .resolves.toMatchObject({ state: 'unavailable', failureCode: 'candidate-overflow' })
+    const entry = logged.find((item) => item.event === 'briefing.candidate-overflow')
+    expect(entry?.fields).toMatchObject({
+      failureCode: 'candidate-overflow', newsCandidates: 201, newsLimit: 200, macroCandidates: 3, macroLimit: 200
+    })
   })
 
   it('accepts exactly the 200-candidate budget', async () => {

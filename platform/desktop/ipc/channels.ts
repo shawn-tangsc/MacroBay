@@ -21,6 +21,13 @@ export const IpcChannels = {
   dialogSelectFiles: 'platform:dialog-select-files',
   appReadTextFile: 'platform:app-read-text-file',
   appSaveClipboardImage: 'platform:app-save-clipboard-image',
+  /**
+   * 把一段字节存成用户选的文件的唯一入口（导出 xlsx 走它）。
+   *
+   * **渲染层只给「建议文件名 + 字节」，不给路径**——路径由 main 的保存对话框让用户选。
+   * 开了「传路径给我、我帮你写」这个口子，任何页面都能往任意位置写文件。
+   */
+  appSaveFile: 'platform:app-save-file',
   // 重启应用：只在「界面与主进程版本不一致」这类必须整包重启的原因下使用（`needs-restart`）。
   appRelaunch: 'platform:app-relaunch',
   settingsGet: 'platform:settings-get',
@@ -81,6 +88,9 @@ export const IpcChannels = {
    * **没有「已送达」**——我们能证明的只是通道接受了。
    */
   channelsSendTestMessage: 'platform:channels-send-test-message',
+  /** 助手聊天里的图消息「发到频道」：投影（有没有可用通道）+ 一条发送动作。 */
+  channelsImageTarget: 'platform:channels-image-target',
+  channelsSendMessageImage: 'platform:channels-send-message-image',
   channelsListPolicies: 'platform:channels-list-policies',
   channelsDeletePolicy: 'platform:channels-delete-policy',
   channelsListConversations: 'platform:channels-list-conversations',
@@ -245,6 +255,7 @@ export const IpcChannels = {
   storageClearCache: 'platform:storage-clear-cache',
   storageCompactCache: 'platform:storage-compact-cache',
   storageListCacheOperations: 'platform:storage-list-cache-operations',
+  storageListQuarantineCopies: 'platform:storage-list-quarantine-copies',
   notificationsList: 'platform:notifications-list',
   notificationsGetUnreadState: 'platform:notifications-get-unread-state',
   notificationsMarkRead: 'platform:notifications-mark-read',

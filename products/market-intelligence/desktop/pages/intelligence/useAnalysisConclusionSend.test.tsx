@@ -11,8 +11,8 @@ import { useAnalysisConclusionSend } from './useAnalysisConclusionSend'
 /**
  * 状态机：回执 → 说明行那一句，以及「发一次只发一次」。
  *
- * 这里把 IPC 换成桩，所以断言的是**判定与句子**，不是网络：三档后果各一条
- * （上限 / 免打扰 / 通道不通），外加「请求根本没到」与「连点只发一次」。
+ * 这里把 IPC 换成桩，所以断言的是**判定与句子**，不是网络：三条多通道计数（全成 / 部分 / 一条没到）、
+ * 免打扰、上限、通道不通，外加「请求根本没到」与「连点只发一次」。
  */
 const text = analysisConclusionSendText('zh-CN')
 
@@ -32,10 +32,11 @@ afterEach(() => {
 
 function Probe(props: { send: (runId: string) => Promise<AnalysisConclusionSendReceipt>; analysisRunId?: string }): React.ReactElement {
   const { phase, send } = useAnalysisConclusionSend({ text, analysisRunId: props.analysisRunId ?? 'mi-ar-1', send: props.send, formatNow: () => '12:44' })
+  const channels = phase.kind === 'result' ? phase.status.channels ?? [] : []
   return <div>
     <button data-action="send" onClick={() => void send()} type="button">go</button>
     <button data-action="send-again" onClick={() => { void send(); void send() }} type="button">twice</button>
-    <span data-phase={phase.kind} data-message={phase.kind === 'result' ? phase.status.message : ''} data-code={phase.kind === 'result' ? phase.status.reasonCode ?? '' : ''} />
+    <span data-phase={phase.kind} data-message={phase.kind === 'result' ? phase.status.message : ''} data-channels={channels.map((row) => `${row.name}|${row.detail}`).join(';')} />
   </div>
 }
 
@@ -47,26 +48,40 @@ const click = async (selector: string): Promise<void> => {
 }
 
 describe('the send state machine', () => {
-  it('says the channel took it, with the channel name and the time', async () => {
-    act(() => root.render(<Probe send={async () => ({ kind: 'accepted', delivery: { push: { state: 'sent-accepted' } } })} />))
+  it('reports how many channels received it, without naming any of them in the body', async () => {
+    act(() => root.render(<Probe send={async () => ({ kind: 'accepted', delivery: { push: {
+      state: 'sent-accepted',
+      channels: [
+        { channelName: 'Telegram · 观潮', state: 'sent-accepted' },
+        { channelName: '飞书 · 团队', state: 'sent-accepted' }
+      ]
+    } } })} />))
     await click('[data-action="send"]')
     expect(phaseNode().dataset.phase).toBe('result')
-    expect(phaseNode().dataset.message).toBe('已发到 推送通道 · 12:44')
-    expect(phaseNode().dataset.code).toBe('')
+    expect(phaseNode().dataset.message).toBe('2 条通道都收到了')
+    // 通道名只进 ⓘ 的逐行说明，不出现正文。
+    expect(phaseNode().dataset.message).not.toContain('Telegram')
+    expect(phaseNode().dataset.channels).toBe('Telegram · 观潮|收到了;飞书 · 团队|收到了')
   })
 
-  it('names the channel the receipt says this submit went to', async () => {
-    act(() => root.render(<Probe send={async () => ({ kind: 'accepted', delivery: { push: { state: 'sent-accepted', channelName: 'Telegram · 观潮' } } })} />))
+  it('counts a partial result and keeps the failed reason in human words', async () => {
+    act(() => root.render(<Probe send={async () => ({ kind: 'accepted', delivery: { push: {
+      state: 'failed',
+      channels: [
+        { channelName: 'Telegram', state: 'sent-accepted' },
+        { channelName: '飞书', state: 'failed', reason: 'channel-rejected' }
+      ]
+    } } })} />))
     await click('[data-action="send"]')
-    expect(phaseNode().dataset.message).toBe('已发到 Telegram · 观潮 · 12:44')
+    expect(phaseNode().dataset.message).toBe('1 条通道收到，1 条没到')
+    expect(phaseNode().dataset.channels).toBe('Telegram|收到了;飞书|通道没接这次请求')
   })
 
   it('says the day cap is reached, not that sending failed', async () => {
     act(() => root.render(<Probe send={async () => ({ kind: 'rejected', reason: 'daily-limit-reached' })} />))
     await click('[data-action="send"]')
     expect(phaseNode().dataset.message).toContain('今天的上限到了')
-    // 这不是失败，也没有码要读者看。
-    expect(phaseNode().dataset.code).toBe('')
+    expect(phaseNode().dataset.channels).toBe('')
   })
 
   it('says quiet hours filtered the phone leg and that nothing is resent later', async () => {
@@ -80,14 +95,14 @@ describe('the send state machine', () => {
     act(() => root.render(<Probe send={async () => ({ kind: 'accepted', delivery: { push: { state: 'failed', reason: 'push-unavailable' } } })} />))
     await click('[data-action="send"]')
     expect(phaseNode().dataset.message).toBe('没发到手机：还没有可用的通道，去「频道」启用一条')
-    expect(phaseNode().dataset.code).toBe('push-unavailable')
   })
 
   it('reports a request that never got there, with a code, instead of pretending', async () => {
     act(() => root.render(<Probe send={async () => { throw new Error('invoke-failed') }} />))
     await click('[data-action="send"]')
     expect(phaseNode().dataset.message).toBe('没发出去')
-    expect(phaseNode().dataset.code).toBe('invoke-failed')
+    // 原因码不上屏：这一行只说结果，码留在主进程的诊断里。
+    expect(phaseNode().dataset.message).not.toContain('invoke-failed')
   })
 
   it('sends once even when two clicks land in the same frame', async () => {

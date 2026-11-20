@@ -7,6 +7,7 @@ import { DEFAULT_MIN_WINDOW_HEIGHT, DEFAULT_MIN_WINDOW_WIDTH } from '../../ui/wi
 import { resolveWindowBackgroundColor } from '../../ui/theme/windowTheme'
 import { APP_DISPLAY_NAME } from '../appIdentity'
 import { resolveWindowChromeOptions } from './windowChrome'
+import { markBoot } from './bootMarks'
 
 /**
  * Owner: platform/desktop/window。权威：技术设计 §4（安全、快照与 IPC）与 P1-04。
@@ -229,9 +230,12 @@ export async function createMainWindow(options: MainWindowOptions = {}): Promise
   })
 
   security.applyWindowOpenHandler(mainWindow.webContents)
+  // 纯观测：BrowserWindow 建好、以及它第一次可见的时刻（之后才是渲染器加载）。
+  markBoot('window-created')
 
   await mainWindow.loadURL('about:blank')
   mainWindow.show()
+  markBoot('window-shown')
 
   return mainWindow
 }

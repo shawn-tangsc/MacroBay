@@ -2512,47 +2512,35 @@ h1 {
 
 .storage-cache-muted {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--font-body);
   font-weight: 400;
+  line-height: var(--line-body);
 }
 
-.storage-cache-chevron {
-  color: var(--muted);
-  transition: transform 0.15s ease;
+.storage-cache-history-panel .storage-cache-muted {
+  margin: 0;
+  padding: 0 16px 12px;
 }
 
-.storage-cache-chevron.open {
-  transform: rotate(90deg);
-}
-
-.storage-cache-history-toggle {
+/*
+ * 隔离副本展开区顶部那一行：只放说明的 ⓘ。
+ * 折叠头走平台 `CollapsibleGroup`（整行是按钮、禁止嵌套可聚焦元素），所以 ⓘ 跟着展开区来。
+ */
+.storage-cache-quarantine-about {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px 16px;
-  background: transparent;
-  color: var(--text-strong);
-  font-size: 12.5px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
+  /* 左缘与表格第一列同一条线（单元格 `padding: 9px 16px`）：签字条件，ⓘ 不许比表头左 4px。 */
+  padding: 0 16px 8px;
 }
 
-.storage-cache-history-toggle small {
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.storage-cache-history-panel > .storage-cache-muted {
-  margin: 0;
-  padding: 0 16px 14px;
-}
-
+/*
+ * 表格正文：两张表共用这一档（隔离副本 / 操作记录）——12 档（`ui-rules` §2 Body 12 / 1.5 / 400）。
+ * 只取字号：表头的 11.5 与单元格内距不动，行高仍按浏览器默认行距走，所以行高不变、字略小。
+ */
 .storage-cache-history {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: var(--font-body);
 }
 
 .storage-cache-history th {
@@ -8041,7 +8029,13 @@ h1 {
   color: var(--muted);
 }
 
-.icon-button,
+/*
+  `.icon-button` **不在这里**：它是平台组件 `IconButton` 的根类名（`platform/ui/components/icon-button`），
+  样式归那张表。壳层这份是组件出现之前的遗留写法——全仓没有任何标记用它（`className="icon-button"`
+  零命中），留着只会和平台组件同名打架：特异性都是 (0,1,0)，壳层后加载胜出，`plain` 档的「无边框」
+  被这条 1px 描边盖掉，每一颗图标按钮都变成带边框的方块（2026-11-18 用户两次说「那么大／好丑」）。
+  壳层自己的图标按钮用 `.ant-shell-icon-button`，与本类无关。
+*/
 .primary-button,
 .secondary-button {
   display: inline-flex;
@@ -8057,14 +8051,6 @@ h1 {
     color 140ms ease;
 }
 
-.icon-button {
-  width: 32px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted-strong);
-}
-
-.icon-button:hover,
 .secondary-button:hover {
   border-color: var(--border-strong);
   background: var(--surface-soft);

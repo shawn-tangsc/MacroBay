@@ -34,6 +34,7 @@ import {NotificationCenterDrawer} from './notifications/NotificationCenterDrawer
 import {NotificationBanner} from './notifications/NotificationBanner'
 import {useNotificationNavigation} from './notifications/notificationDeeplinkWiring'
 import {AppShellPreferencesPane} from './AppShellPreferencesPane'
+import { markRendererBoot } from './bootMarks'
 import {AppShellSettingsLayout} from './AppShellSettingsLayout'
 import {useProxySelfTest} from './useProxySelfTest'
 import {AppShellView, type AppInfo, type AssistantOpenRequest, type ProductSummary} from './AppShellView'
@@ -322,10 +323,16 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   useEffect(() => {
     let cancelled = false
+    // 纯观测：三个首屏请求全部落定（成功或失败）时记一个时刻，用于量「首帧→数据就绪」。
+    let settled = 0
+    const markSettled = (): void => {
+      settled += 1
+      if (settled === 3) markRendererBoot('data-ready')
+    }
     void Promise.all([
-      window.platform.app.getInfo().then((value) => { if (!cancelled) setAppInfo(value) }),
-      window.platform.app.getProductSummaries().then((value) => { if (!cancelled) setProducts(value) }),
-      window.platform.settings.get().then((value) => { if (!cancelled) setSettings(value as AppSettings) })
+      window.platform.app.getInfo().then((value) => { if (!cancelled) setAppInfo(value) }).finally(markSettled),
+      window.platform.app.getProductSummaries().then((value) => { if (!cancelled) setProducts(value) }).finally(markSettled),
+      window.platform.settings.get().then((value) => { if (!cancelled) setSettings(value as AppSettings) }).finally(markSettled)
     ]).catch(() => undefined)
     return () => { cancelled = true }
   }, [])

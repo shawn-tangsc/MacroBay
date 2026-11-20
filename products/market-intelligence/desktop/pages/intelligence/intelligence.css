@@ -96,6 +96,22 @@
 .mi-analysis-timeline__entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mi-analysis-timeline__chevron { position: absolute; top: 50%; right: 10px; color: var(--muted); transform: translateY(-50%); pointer-events: none; }
 .mi-analysis-timeline__entry:hover .mi-analysis-timeline__chevron, .mi-analysis-timeline__entry.is-selected .mi-analysis-timeline__chevron { color: var(--accent); }
+/* 正在解析 / 解析失败的行：没有摘要可看，所以不可点——没有手型、没有悬停高亮、也没有 chevron。
+   它只回答「有东西在跑」，静止态就是它该有的样子；把不可点的行画得能点才是假的。 */
+.mi-analysis-timeline__entry--static { cursor: default; }
+.mi-analysis-timeline__entry--static:hover { border-color: transparent; border-bottom-color: var(--border); background: transparent; }
+/* 失败原因一句话：行里的 small 默认是 muted，这一条要红——红在这个应用里只表示出错/读不到。
+ *
+ * 为什么这里只能 `var(--danger)`（已在状态色基线登记）：同一行左边已经有 `tone="bad"` 的状态药丸
+ * 说「解析失败」，这一句要回答的是「为什么」，它是这一行唯一的内容。换成 `--muted` 会和旁边的
+ * 时间、分组说明混成一片，"这一次没跑成" 就读不出来了；也正因为它是失败态本身，才配用红色，
+ * 不是拿颜色去区分失败原因（换原因仍走文字）。
+ * 代价写在这里：深色下 `--danger` 对正文是 3.25–3.94，低于 4.5 门槛，所以只用在**一句话的失败
+ * 说明**上，不做正文色，也不往后加同类用法。 */
+.mi-analysis-timeline__entry .mi-analysis-timeline__failure { color: var(--danger); }
+/* 「立即分析」在有运行解析时禁用：原因句挂在按钮下方，不留一个没有解释的灰块。 */
+.mi-analysis-timeline__reanalyse { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.mi-analysis-timeline__reanalyse-reason { color: var(--muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* A failed request is an error, not a status: red against the otherwise muted list, announced to
    assistive technology, and dismissible so it does not sit on the panel after it was read. */
 .mi-analysis-error { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 5px; background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }

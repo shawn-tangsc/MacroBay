@@ -132,3 +132,304 @@ describe('the latest conclusion card when the detail cannot be read', () => {
     expect(ensureDetail.mock.calls.at(-1)?.[0]).toMatchObject({ id: 'mi-tl-1' })
   })
 })
+
+/**
+ * 「读不到」不许画成「没有」（2026-11-17，用户截图「暂无已发布的 AI 结论」，而库里 20:10 有一条）。
+ *
+ * 根因链：情报模块启动失败 → IPC 置 unavailable → `listTimeline` 抛 `product-runtime-unavailable`
+ * → 卡片在 `!latest && !state.loading` 上直接印了「暂无」。那一句是在说「你没有结论」，而事实是
+ * 「这次读不到」。两条判据：① 读失败要落错误态 + 重试，且不许出现「暂无」；② 只有读成功且确实为空
+ * 才是「暂无」。
+ */
+describe('the latest conclusion card when the timeline itself cannot be read', () => {
+  /** 每次 `listTimeline` 都抛模块不可用；其余 IPC 给一个读不出来的空载荷。 */
+  function stubUnavailableRuntime(): { reads: () => number } {
+    let listReads = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') {
+        listReads += 1
+        throw new Error('product-runtime-unavailable')
+      }
+      if (method === 'marketAnalysis.getLatestAttempt') return null
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    return { reads: () => listReads }
+  }
+
+  it('模块不可用 → 错误态 + 重试，绝不出现「暂无已发布」', async () => {
+    vi.useFakeTimers()
+    const stub = stubUnavailableRuntime()
+    const holder: { current?: UseMarketAnalysisTimelineResult } = {}
+    function Probe(): React.ReactElement {
+      const timeline = useMarketAnalysisTimeline({ text })
+      holder.current = timeline
+      return createElement(LatestAnalysisConclusionCard, { text, workspaceText, timeline, onOpenDetail: vi.fn() } as never)
+    }
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null, createElement(Probe))))
+    // 有界重试跑完才落失败态（10 次 / 30s 预算）。
+    await act(async () => { await vi.advanceTimersByTimeAsync(40_000) })
+
+    expect(holder.current?.state.failed).toBe(true)
+    // 原因要真的带出来：模块没起来，不是「读到了但没有」。
+    expect(holder.current?.state.failure).toBe('product-runtime-unavailable')
+    // ① 不许说「暂无」——那句话在说读者没有结论。
+    expect(host?.textContent).not.toContain(workspaceText.latestConclusionEmpty)
+    // ② 错误态走统一状态面，并且有出口。
+    const stateView = host?.querySelector('[data-state="error"]')
+    expect(stateView).not.toBeNull()
+    const retry = stateView?.querySelector<HTMLButtonElement>('button.state-view__action')
+    expect(retry).not.toBeNull()
+    // ③ 那个出口真的再读一次，不是装饰。
+    const before = stub.reads()
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(stub.reads()).toBeGreaterThan(before)
+    vi.useRealTimers()
+  })
+
+  it('读成功且确实没有已发布条目 → 才是「暂无」', async () => {
+    const timeline = {
+      state: { entries: [], loading: false, failed: false, nextCursor: null },
+      details: {},
+      detailState: {},
+      load: vi.fn()
+    } as unknown as UseMarketAnalysisTimelineResult
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText, timeline, onOpenDetail: vi.fn() } as never))))
+    expect(host?.textContent).toContain(workspaceText.latestConclusionEmpty)
+    expect(host?.querySelector('[data-state="error"]')).toBeNull()
+  })
+})
+
+/**
+ * 外层卡也要说「刚才失败了」（用户 2026-11-18：「出现这种情况了，外面那层也要显示出来」）。
+ *
+ * 时间轴里有 00:54 的解析失败，卡上却还是 20:10 的成功结论、一个字不提——读者会把上次成功当成
+ * 现在。判据：① 有比已发布更新的失败时，卡上同时出现「那条已发布结论」与「最近一次解析失败（时刻）·
+ * 重试」；② 只有已发布时不许出现失败条；③ 时刻走统一格式化（`<time>`），句子用失败码对应的人话。
+ */
+describe('the latest conclusion card when the newest attempt failed', () => {
+  const publishedEntry = {
+    id: 'mi-tl-published', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-ok', kind: 'analysis' as const,
+    status: 'published' as const, runKey: 'mi-ar-ok', failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成',
+    safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType: 'macro', groupSubject: 'CPI 年率'
+  }
+  const failedEntry = {
+    ...publishedEntry,
+    id: 'run:mi-ar-fail', analysisRunId: 'mi-ar-fail', runKey: 'mi-ar-fail', status: 'failed' as const,
+    failureCode: 'analysis-provider-error', occurredAt: '2026-11-18T00:54:00.000Z',
+    summaryRef: null, safeTitle: '', safeExcerpt: null
+  }
+  const cardDetail = {
+    summary: {
+      id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-ok', eventGroupId: 'mi-eg-1', version: 1,
+      eventAssessment: '市场情绪偏谨慎', knownFacts: [], transmissionHypotheses: [], marketReaction: [],
+      supportingEvidence: [], counterEvidence: [], scenarios: [], nextCatalysts: [], dataCaveats: [],
+      evidenceRefs: [], createdAt: asOf
+    }
+  }
+  const cardWorkspaceText = {
+    ...workspaceText,
+    retryAnalysis: text.retryAnalysis,
+    failureReasons: text.failureReasons
+  }
+
+  function timelineWith(entries: readonly unknown[], extra: Record<string, unknown> = {}) {
+    return {
+      state: { entries, loading: false, failed: false, nextCursor: null },
+      details: { 'mi-tl-published': cardDetail },
+      detailState: {},
+      requestRefreshAnalysis: vi.fn(),
+      ensureDetail: vi.fn(),
+      ...extra
+    } as unknown as UseMarketAnalysisTimelineResult
+  }
+
+  async function mount(timeline: UseMarketAnalysisTimelineResult): Promise<void> {
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText: cardWorkspaceText, timeline, onOpenDetail: vi.fn() } as never))))
+  }
+
+  it('已发布 20:10 + 失败 00:54 → 结论与失败条同时在，重试真的重排一次', async () => {
+    const timeline = timelineWith([failedEntry, publishedEntry])
+    await mount(timeline)
+
+    // ① 上次成功的那条仍然在（不许把已发布内容撤掉）
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+    // ② 失败条可见：抬头 + 时刻 + 人话原因
+    const strip = host?.querySelector('[data-attempt-failure]')
+    expect(strip).not.toBeNull()
+    expect(strip?.textContent).toContain(cardWorkspaceText.latestConclusionAttemptFailed)
+    expect(strip?.querySelector('time')?.textContent ?? '').not.toBe('')
+    expect(strip?.textContent).toContain(text.failureReasons['analysis-provider-error'])
+    // 不印码
+    expect(strip?.textContent).not.toContain('analysis-provider-error')
+    // ③ 重试走「再分析一次」，不是刷新页面
+    const retry = Array.from(strip?.querySelectorAll('button') ?? []).find((button) => button.textContent === text.retryAnalysis)
+    expect(retry).toBeDefined()
+    await act(async () => { retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect((timeline as unknown as { requestRefreshAnalysis: ReturnType<typeof vi.fn> }).requestRefreshAnalysis).toHaveBeenCalledTimes(1)
+  })
+
+  it('只有已发布时，不许出现失败条', async () => {
+    await mount(timelineWith([publishedEntry]))
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+  })
+
+  it('只有失败、没有已发布时：说失败，不说「暂无」', async () => {
+    await mount(timelineWith([failedEntry], { details: {} }))
+    expect(host?.querySelector('[data-attempt-failure]')).not.toBeNull()
+    expect(host?.textContent).not.toContain(workspaceText.latestConclusionEmpty)
+  })
+})
+
+/**
+ * 失败条只属于**这张卡那一组**，而且进行中不许显示（用户 2026-11-18 直接要求）。
+ *
+ * 真库里的错法：卡片显示 A 组的成功结论，下面却挂着 B 组 08:06 那次失败——别组失败串到这张卡。
+ * 三条判据：① 别组失败不出现；② 本组有运行在跑时那条消失（点了「重新分析」立刻收掉）；
+ * ③ 这次重试再失败，失败条重新出现且时刻是新的。
+ */
+describe('the latest conclusion card: the failure strip belongs to its own group', () => {
+  const groupA = 'mi-eg-A'
+  const groupB = 'mi-eg-B'
+  const published = (occurredAt: string, group = groupA) => ({
+    id: `mi-tl-${group}`, eventGroupId: group, analysisRunId: `mi-ar-ok-${group}`, kind: 'analysis' as const,
+    status: 'published' as const, runKey: `mi-ar-ok-${group}`, failureCode: null, occurredAt,
+    summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1,
+    triggerStatus: null, groupType: 'sentiment', groupSubject: '标题'
+  })
+  const failed = (occurredAt: string, group = groupA, id = `mi-ar-fail-${group}`) => ({
+    ...published(occurredAt, group), id: `run:${id}`, analysisRunId: id, runKey: id, status: 'failed' as const,
+    failureCode: 'analysis-provider-error', summaryRef: null, safeTitle: '', safeExcerpt: null
+  })
+  const running = (group = groupA) => ({
+    ...published('2026-11-18T09:10:00.000Z', group), id: `run:${group}-live`, analysisRunId: `${group}-live`,
+    runKey: `${group}-live`, status: 'running' as const, summaryRef: null, safeTitle: '', safeExcerpt: null
+  })
+  const cardDetail = {
+    summary: {
+      id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-ok', eventGroupId: groupA, version: 1,
+      eventAssessment: '市场情绪偏谨慎', knownFacts: [], transmissionHypotheses: [], marketReaction: [],
+      supportingEvidence: [], counterEvidence: [], scenarios: [], nextCatalysts: [], dataCaveats: [],
+      evidenceRefs: [], createdAt: '2026-11-17T20:10:00.000Z'
+    }
+  }
+  const cardText = { ...workspaceText, retryAnalysis: text.retryAnalysis, failureReasons: text.failureReasons }
+
+  function timelineWith(entries: readonly unknown[], extra: Record<string, unknown> = {}): UseMarketAnalysisTimelineResult {
+    return {
+      state: { entries, loading: false, failed: false, nextCursor: null },
+      details: { [`mi-tl-${groupA}`]: cardDetail },
+      detailState: {},
+      requestState: 'idle',
+      requestRefreshAnalysis: vi.fn(),
+      ensureDetail: vi.fn(),
+      ...extra
+    } as unknown as UseMarketAnalysisTimelineResult
+  }
+
+  async function mount(timeline: UseMarketAnalysisTimelineResult): Promise<void> {
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText: cardText, timeline, onOpenDetail: vi.fn() } as never))))
+  }
+
+  it('别组的失败不出现（本组成功 20:10 + 别组失败 08:06 更晚）', async () => {
+    await mount(timelineWith([failed('2026-11-18T08:06:00.000Z', groupB), published('2026-11-17T20:10:00.000Z')]))
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+  })
+
+  it('本组失败 → 点重试、该组有运行在跑 → 失败条立刻消失', async () => {
+    const timeline = timelineWith([failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')])
+    await mount(timeline)
+    expect(host?.querySelector('[data-attempt-failure]')).not.toBeNull()
+
+    // 点了重试：请求在飞（`queued`）时那条报错就该收掉
+    await mount(timelineWith([failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')], { requestState: 'queued' }))
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+
+    // 运行真的出现在列表里（该组 running）时也不显示
+    await mount(timelineWith([running(), failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')]))
+    expect(host?.querySelector('[data-attempt-failure]')).toBeNull()
+  })
+
+  it('这次重试再失败 → 失败条重新出现，时刻是新的', async () => {
+    await mount(timelineWith([failed('2026-11-18T08:06:00.000Z'), published('2026-11-17T20:10:00.000Z')]))
+    const firstTime = host?.querySelector('[data-attempt-failure] time')?.textContent
+    expect(firstTime ?? '').not.toBe('')
+
+    await mount(timelineWith([failed('2026-11-18T09:12:00.000Z', groupA, 'mi-ar-fail-retry'), published('2026-11-17T20:10:00.000Z')]))
+    const strip = host?.querySelector('[data-attempt-failure]')
+    expect(strip).not.toBeNull()
+    expect(strip?.querySelector('time')?.textContent ?? '').not.toBe('')
+    expect(strip?.querySelector('time')?.textContent).not.toBe(firstTime)
+  })
+})
+
+/**
+ * 消息面（sentiment）组的卡片不给重跑入口（用户 2026-11-18 定）。
+ *
+ * 依据：这类组以后的分析一律走新闻解读、结果落在新闻抽屉；卡片上点重跑产出的是抽屉里那三段，
+ * 卡片本身不会变——那就是「点了没反应的按钮」。所以按**组类别**决定动作出现不出现：
+ * 旧结论与**生成时刻**照旧保留（那是读者判断新旧的唯一依据），只是动作不渲染。
+ */
+describe('the latest conclusion card: no re-run action for news-driven groups', () => {
+  const published = (groupType: string) => ({
+    id: `mi-tl-${groupType}`, eventGroupId: `mi-eg-${groupType}`, analysisRunId: `mi-ar-ok-${groupType}`,
+    kind: 'analysis' as const, status: 'published' as const, runKey: `mi-ar-ok-${groupType}`, failureCode: null,
+    occurredAt: '2026-11-17T20:10:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成',
+    safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType, groupSubject: '标题'
+  })
+  const failed = (groupType: string) => ({
+    ...published(groupType), id: `run:fail-${groupType}`, analysisRunId: `mi-ar-fail-${groupType}`,
+    runKey: `mi-ar-fail-${groupType}`, status: 'failed' as const, failureCode: 'analysis-provider-error',
+    materialisedAt: undefined, occurredAt: '2026-11-18T08:06:00.000Z',
+    summaryRef: null, safeTitle: '', safeExcerpt: null
+  })
+  const cardDetail = (groupType: string) => ({
+    summary: {
+      id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-ok', eventGroupId: `mi-eg-${groupType}`, version: 1,
+      eventAssessment: '市场情绪偏谨慎', knownFacts: [], transmissionHypotheses: [], marketReaction: [],
+      supportingEvidence: [], counterEvidence: [], scenarios: [], nextCatalysts: [], dataCaveats: [],
+      evidenceRefs: [], createdAt: '2026-11-17T20:10:00.000Z'
+    }
+  })
+  const cardText = { ...workspaceText, retryAnalysis: text.retryAnalysis, failureReasons: text.failureReasons }
+
+  async function mount(groupType: string): Promise<void> {
+    const entries = [failed(groupType), published(groupType)]
+    const timeline = {
+      state: { entries, loading: false, failed: false, nextCursor: null },
+      details: { [`mi-tl-${groupType}`]: cardDetail(groupType) },
+      detailState: {}, requestState: 'idle',
+      requestRefreshAnalysis: vi.fn(), ensureDetail: vi.fn()
+    } as unknown as UseMarketAnalysisTimelineResult
+    await act(async () => root?.render(createElement(ShellTimeZoneProvider, null,
+      createElement(LatestAnalysisConclusionCard, { text, workspaceText: cardText, timeline, onOpenDetail: vi.fn() } as never))))
+  }
+
+  it('sentiment 组：有结论与生成时刻，但没有重试动作', async () => {
+    await mount('sentiment')
+    // 结论与时刻都在（时刻是读者判断新旧的唯一依据）
+    expect(host?.textContent).toContain('市场情绪偏谨慎')
+    expect(host?.querySelector('.mi-analysis-conclusion-card header time')?.textContent ?? '').not.toBe('')
+    // 失败条还在（说明发生了什么），但那颗「重试」不渲染
+    const strip = host?.querySelector('[data-attempt-failure]')
+    expect(strip).not.toBeNull()
+    const retry = Array.from(strip?.querySelectorAll('button') ?? []).find((button) => button.textContent === text.retryAnalysis)
+    expect(retry).toBeUndefined()
+  })
+
+  it('市场分析组：重试还在，文案一字不变（两组只有出现条件不同）', async () => {
+    await mount('macro')
+    const strip = host?.querySelector('[data-attempt-failure]')
+    const retry = Array.from(strip?.querySelectorAll('button') ?? []).find((button) => button.textContent === text.retryAnalysis)
+    expect(retry).toBeDefined()
+    // 4d：同一颗按钮的文案与两组无关——存在时就是那条文案，不存在时一个字都不留
+    expect(retry?.textContent).toBe(text.retryAnalysis)
+  })
+})

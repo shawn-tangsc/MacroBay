@@ -47,7 +47,17 @@ function pairsFromSource(text: string): string[] {
     const rest = text.slice(start)
     const next = rest.indexOf('\nexport ')
     const body = next < 0 ? rest : rest.slice(0, next)
-    for (const match of body.matchAll(/'([a-z][a-z-]*)'/g)) {
+    /**
+     * **先剥注释再取码**：注释里提到一个词，不等于那个码存在。
+     *
+     * 2026-11-19 真撞到：在联合体上方补一段说明，把「档位取 forbidden」写成带引号的 `'forbidden'`，
+     * 这条守卫当场报「码表漂了」——它把注释当成了联合成员。同一天 `check-tab-role.mts:96` 也记着
+     * 一次一模一样的误报。守卫看不见写法，就只能把「说明」判成「代码」。
+     */
+    const withoutComments = body
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+    for (const match of withoutComments.matchAll(/'([a-z][a-z-]*)'/g)) {
       pairs.push(`${state}/${match[1]}`)
     }
   }

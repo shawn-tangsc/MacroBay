@@ -11,7 +11,7 @@ import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMark
 import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
-import { buildDailyBriefingDocument, selectMacroFloorItem } from './dailyBriefingDocument'
+import { buildDailyBriefingDocument, scoreBriefingNextRelevance, selectMacroFloorItem } from './dailyBriefingDocument'
 import { briefingMacroCategoryVisible } from './dailyBriefingDocumentMacro'
 import { selectMacroAnalysisCandidates } from './dailyBriefingDocumentMacro'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
@@ -166,7 +166,7 @@ const policyPath = (
   daysUntilMeeting: 40,
   hasProjectionMaterials: true,
   phase: { kind: 'normal' },
-  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, points: 12, ...(overrides.distribution ? { distribution: overrides.distribution } : {}) },
+  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, ...(overrides.distribution ? { distribution: overrides.distribution } : {}) },
   staleness: 'live'
 })
 
@@ -331,7 +331,7 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
   })
 
-  // 用户 2026-11-06：「所有央行活动和财经事件，暂时都不要显示在 24h 宏观事件里面」。
+  // 用户 2026-11-06：「所有央行活动和金融事件，暂时都不要显示在 24h 宏观事件里面」。
   // 按**类别**判，不按"有没有值"判——以后补上数值也不许自己冒出来；经济数据照常显示。
   it('keeps central-bank and financial events out of the 24h macro block, and economic data in', () => {
     const base = (eventKey: string, category: 'economic-indicator' | 'financial-event' | 'central-bank-activity') => ({
@@ -472,7 +472,7 @@ describe('daily briefing document', () => {
 
     // 14 起宏观事件带自己的 `lifecycleState`，15 起新闻源静默/失败进文档（`02` v2.167），
     // 16 起宏观/接下来两栏可带「官方没公布发布时刻」的日期与标记。
-    expect(document.schemaVersion).toBe(16)
+    expect(document.schemaVersion).toBe(17)
     // The id is a name, not the clock: this version's single fixed period.
     expect(document.edition.periodId).toBe('default')
     // The nominal cutoff, not the (later) actual generation moment; ISO milliseconds like generatedAt.
@@ -682,6 +682,57 @@ describe('daily briefing document', () => {
     expect(document.data.market.find((row) => row.id === 'eth')).toMatchObject({ state: 'stale', value: { number: -1.21, format: 'percent' }, valueBasis: 'curve' })
   })
 
+  // 用户 2026-11-16：认不出角色的事件**不占「接下来」的席位、也不给分**。
+  // 旧实现把「没认出来」兜底成流动性 78 分——等于把猜测伪装成判断。
+  it('drops an event it cannot classify instead of scoring it as liquidity', () => {
+    const unknown = {
+      eventKey: 'NVDA.ALL_HANDS', title: '英伟达临时CEO召开全体员工会议',
+      scheduledAt: '2026-11-02T17:00:00.000Z', importance: 'high' as const,
+      lifecycleState: 'scheduled' as const, category: 'financial-event' as const,
+      countryCode: 'US', countryName: 'United States', surprise: { direction: 'consensus-unavailable' as const }
+    }
+    expect(scoreBriefingNextRelevance(unknown)).toBeUndefined()
+
+    const document = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [unknown] } }),
+      date: '2026-10-30'
+    })
+    expect(document.next.focus).toBeUndefined()
+    expect(document.next.items).toEqual([])
+    // 也不许换一个方式把它塞进候选：候选是给模型读的，同样不该有它。
+    expect((document.next.candidates ?? []).map((item) => item.eventKey)).not.toContain('NVDA.ALL_HANDS')
+  })
+
+  // 一级事件按身份进候选，不按 `importance`（Chief 2026-11-16）：narwhal 那批行重要性是空的，
+  // 它们恰好是 CPI、非农这类最该出现的事件；重要性是我们缺的字段，不是判断它们不重要的理由。
+  it('keeps a first-tier event in the candidates even when its importance is unknown', () => {
+    const event = {
+      eventKey: 'US.CPI.NSA.YOY.2026-10', title: '10月未季调消费者物价指数(年率)', titleKey: 'US.CPI.NSA.YOY',
+      metricKey: 'US.CPI.NSA.YOY',
+      scheduledAt: '2026-11-02T13:30:00.000Z', lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const, surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [event] } }),
+      date: '2026-10-30'
+    })
+    expect(document.next.candidates?.map((item) => item.eventKey)).toContain('US.CPI.NSA.YOY.2026-10')
+  })
+
+  // 0xrouter 那条纪要的身份是指标码为数组，没有 `metricKey`；只能按源原文名认出来。
+  it('keeps a first-tier event that has no metric key, matched by its source title', () => {
+    const minutes = {
+      eventKey: '9151f5c8-0000-4000-8000-000000000001', title: '美联储公布货币政策会议纪要',
+      scheduledAt: '2026-11-02T19:00:00.000Z', lifecycleState: 'scheduled' as const,
+      category: 'economic-indicator' as const, surprise: { direction: 'consensus-unavailable' as const }
+    }
+    const document = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [minutes] } }),
+      date: '2026-10-30'
+    })
+    expect(document.next.candidates?.map((item) => item.title)).toContain('美联储公布货币政策会议纪要')
+  })
+
   it('keeps all same-release candidates for the agent to choose', () => {
     const event = (eventKey: string, titleKey: string) => ({
       eventKey, title: titleKey, titleKey, scheduledAt: '2026-11-06T12:30:00.000Z', importance: 'high' as const,
@@ -863,17 +914,91 @@ describe('daily briefing document', () => {
     expect(unread.news.notes.macroEmpty).toBe('calendar-unavailable')
   })
 
-  it('allows "nothing happened" only when the reading is fresh and the window is empty', () => {
+  // 2026-11-14：补跑改成排作业后返回 `{state:'completed'}`，契约里没有这一种。它不能被写成
+  // 「最近一次日历采集失败」——读者会以为源坏了；也不能写成「没有事件」。它有自己的那句话。
+  // 用户 2026-11-16（架构复核）：补跑失败 ≠ 采集历史失败。我们触发的那次补采没成功，
+  // 不能写成「最近一次日历采集失败」——那是把一件我们做过的事说成源的长期状态。
+  it('gives a failed catch-up its own reason, not "the last collection failed"', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({
         calendar: { state: 'available', events: [] },
-        calendarFreshness: { state: 'available', lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' } }
+        calendarFreshness: {
+          state: 'available',
+          lastCollectedAt: '2026-10-28T06:27:00.000Z',
+          catchUp: { state: 'failed', failureCode: 'queue-closed' }
+        }
       }),
       date: '2026-10-30'
     })
 
-    expect(document.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
-    expect(document.news.notes.macroEmptyHours).toBeUndefined()
+    expect(document.news.notes.macroEmpty).toBe('calendar-catch-up-failed')
+    expect(document.news.notes.macroEmpty).not.toBe('calendar-collect-failed')
+  })
+
+  it('gives a catch-up whose outcome is unknown its own reason, not a failed collection', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: {
+          state: 'available',
+          lastCollectedAt: '2026-10-28T06:27:00.000Z',
+          catchUp: { state: 'unknown', failureCode: 'catch-up-verdict-invalid' }
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.notes.macroEmpty).toBe('calendar-catch-up-unknown')
+    expect(document.news.notes.macroEmpty).not.toBe('calendar-collect-failed')
+    expect(document.news.notes.macroEmpty).not.toBe('past-24h-no-high-impact-release')
+  })
+
+  // 用户 2026-11-16（第三次同类）：读数可用且新鲜时，不许因为某一路失败就把空栏写成
+  // 「最近一次日历采集失败」。这不是「没有」被写成「读不到」，而是「空窗」被写成「故障」。
+  it('never blames a collection failure when the reading is usable and fresh', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: { state: 'available', events: [] },
+        calendarFreshness: {
+          state: 'available',
+          lastCollectedAt: '2026-10-30T00:00:00.000Z',
+          catchUp: { state: 'failed', failureCode: 'some-other-feed-failed' }
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    // 夹具：asOf 00:30，最后一次成功 00:00 —— 读数新鲜、窗口里一条事件都没有，所以是 A 不是 B。
+    expect(document.news.notes.macroEmpty).toBe('past-24h-no-release')
+    expect(document.news.notes.macroEmpty).not.toBe('calendar-collect-failed')
+  })
+
+  it('separates "no release at all" from "releases filtered by importance"', () => {
+    const fresh = { state: 'available' as const, lastCollectedAt: '2026-10-30T00:00:00.000Z', catchUp: { state: 'skipped' as const } }
+    const nothing = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events: [] }, calendarFreshness: fresh }),
+      date: '2026-10-30'
+    })
+    // 窗口里一条事件都没有 → A；说「没有高影响」等于暗示「有低影响被筛掉了」。
+    expect(nothing.news.notes.macroEmpty).toBe('past-24h-no-release')
+    expect(nothing.news.notes.macroEmptyHours).toBeUndefined()
+
+    const filtered = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: {
+          state: 'available',
+          events: [{
+            eventKey: 'US.LOW', title: 'low-impact release', scheduledAt: '2026-10-29T12:00:00.000Z',
+            importance: 'medium', lifecycleState: 'released', category: 'economic-indicator',
+            surprise: { direction: 'consensus-unavailable' }
+          }]
+        },
+        calendarFreshness: fresh
+      }),
+      date: '2026-10-30'
+    })
+    // 有发布、但都被重要性筛掉 → B。
+    expect(filtered.news.notes.macroEmpty).toBe('past-24h-no-high-impact-release')
   })
 
   it('records when the run read the world, and that the window did not move with it', () => {

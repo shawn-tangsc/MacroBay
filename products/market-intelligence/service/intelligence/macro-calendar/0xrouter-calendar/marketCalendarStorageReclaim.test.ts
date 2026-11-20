@@ -191,13 +191,15 @@ describe('retention converges without touching authoritative data', () => {
 
       const first = reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T12:00:00.000Z') })
 
-      expect(first.expiredRows).toBeGreaterThan(0)
+      // **观测表冻结成历史证据**：过期删除恒 0（去重仍在，它只合并同一身份的多份样本）。
+      expect(first.expiredRows).toBe(0)
       expect(first.limited).toBe(false)
       expect(first.logicalBytesAfter).toBeLessThanOrEqual(first.logicalBytesBefore)
       // Expired samples are gone; the newest sample of every event and every official row stay.
       const after = Number(database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations').get()?.n)
-      expect(after).toBeLessThan(before)
-      expect(database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations where collection_id like ?').get('old-%')?.n).toBe(0)
+      // 历史行不再随时间消失：旧批次仍可读，行数不因过期减少（去重只合并同一身份的重复样本）。
+      expect(after).toBeLessThanOrEqual(before)
+      expect(Number(database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations where collection_id like ?').get('old-%')?.n)).toBeGreaterThan(0)
       expect(database.prepare('select revision_id from mi_macro_calendar_revisions').all()).toEqual([{ revision_id: 'official-cpi' }])
       // The audit trail is a directory outside the database and is byte-identical afterwards.
       expect(createHash('sha256').update(readFileSync(join(archive, `${'b'.repeat(64)}.bin`))).digest('hex')).toBe(archiveHash)
@@ -222,70 +224,27 @@ describe('retention converges without touching authoritative data', () => {
         const withChange = { ...changed, drafts: changed.drafts.map((draft) => cpiNames.includes(draft.displayName) ? { ...draft, providerActual: { displayValue: `${index}%` } } : draft) }
         expect(repository.appendCollection({ ...batch(`bound-${index}`), parseResult: withChange })).toMatchObject({ state: 'succeeded' })
       }
-      const bounded = reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T12:00:00.000Z'), maximumRowsPerRun: 1 })
-      expect(bounded.limited).toBe(true)
-      expect(bounded.expiredRows).toBe(1)
-      let passes = 1
-      while (reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T12:00:00.000Z'), maximumRowsPerRun: 1 }).expiredRows > 0) passes++
-      expect(passes).toBeGreaterThan(1)
-      expect(reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T12:00:00.000Z') }).expiredRows).toBe(0)
+      // 过期删除不再发生：跑几次都是 0，且行数只可能因去重下降、不会因时间下降。
+      const firstPass = reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T12:00:00.000Z'), maximumRowsPerRun: 1 })
+      expect(firstPass.expiredRows).toBe(0)
+      const secondPass = reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T13:00:00.000Z'), maximumRowsPerRun: 1 })
+      expect(secondPass.expiredRows).toBe(0)
+      const finalPass = reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T14:00:00.000Z') })
+      expect(finalPass.expiredRows).toBe(0)
+      expect(finalPass.limited).toBe(false)
     } finally { database.close() }
   }, 120_000)
 })
 
 describe('reading current state and accepting a batch after cleanup', () => {
-  it('reads one row per event, follows the cursor, and accepts the real 0xRouter batch after reclaiming', () => {
-    const database = new DatabaseSync(':memory:')
-    try {
-      let current = '2026-01-01T00:00:00.000Z'
-      const repository = repositoryOn(database, () => current)
-      for (let index = 0; index < 4; index++) {
-        current = `2026-01-0${index + 1}T00:00:00.000Z`
-        expect(repository.appendCollection(batch(`cycle-${index}`))).toMatchObject({ state: 'succeeded' })
-      }
-      // Four identical cycles stored one row per event, and the current-state read returns each
-      // identity exactly once, following its own cursor.
-      expect(Number(database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations').get()?.n)).toBe(parsedFixture().drafts.length)
-      const seen: string[] = []
-      let cursor: string | undefined
-      // One identity per page, so the walk needs one step per event identity.
-      for (let page = 0; page < parsedFixture().drafts.length + 2; page++) {
-        const result = repository.listObservationStates({ providerId: '0xrouter', descriptorId, locale: 'zh', month,
-          asOf: '2026-10-14T16:00:00.000Z', limit: 1, ...(cursor ? { cursor } : {}) })
-        expect(result.state).toBe('succeeded')
-        if (result.state !== 'succeeded') break
-        seen.push(...result.rows.map((row) => String(row.candidate_key)))
-        cursor = result.nextCursor
-        if (!cursor) break
-      }
-      expect(new Set(seen).size).toBe(parsedFixture().drafts.length)
-      expect(seen).toHaveLength(parsedFixture().drafts.length)
-
-      // After the cleanup, the same real response body still stores both September CPI actuals.
-      reclaimMarketCalendarStorage(database, { now: () => Date.parse('2026-10-14T12:00:00.000Z') })
-      current = '2026-10-14T15:34:00.000Z'
-      expect(repository.appendCollection(batch(randomUUID()))).toMatchObject({ state: 'succeeded' })
-      const cpi = database.prepare(`select source_event_id, provider_actual_json from mi_macro_calendar_market_event_observations
-        where collection_id in (select collection_id from mi_macro_calendar_market_event_collections where detected_at = ?)
-          and display_name in (?, ?)`).all('2026-10-14T15:34:00.000Z', ...cpiNames)
-      expect(cpi).toHaveLength(2)
-      const query = createMarketCalendarPublicQueryService({ repository })
-      try {
-        const events: string[] = []
-        let next: string | undefined
-        for (let page = 0; page < 10; page++) {
-          const result = query.queryMonth({ month, locale: 'zh', asOf: '2026-10-14T16:00:00.000Z', ...(next ? { cursor: next } : {}) })
-          expect(result.state).toBe('available')
-          if (result.state !== 'available') break
-          events.push(...result.events.filter((event) => cpiNames.includes(event.title)).map((event) => JSON.stringify(event.providerActual)))
-          next = result.nextCursor
-          if (!next) break
-        }
-        expect(events.sort()).toEqual(['{"displayValue":"2.6%"}', '{"displayValue":"3.7%"}'])
-      } finally { query.dispose() }
-    } finally { database.close() }
-  }, 120_000)
-
+  /**
+   * **已退役（2026-11-14）**：原来的「回收之后读一行每事件」守的是**过期删除**之后的读取，
+   * 而过期删除已经停掉（观测表冻结成历史证据），旧读取路径本身也在删旧源这一笔里退役。
+   * 它守的两条判据由标准表接管：
+   * 1. 「同一次发布的多测度各自成行」→ `marketCalendarStandardDualWrite.test.ts`；
+   * 2. 「同一期多发布日各自成行」→ `marketCalendarStandardTable.test.ts`。
+   * 删除而不是改写：留着只会守一条已经不存在的路径。
+   */
   it('declares the retention window and the permanently retained classes in one place', () => {
     expect(marketCalendarRetentionPolicy.marketObservationRetentionMs).toBe(90 * 24 * 60 * 60 * 1000)
     expect(marketCalendarRetentionPolicy.defaultMaximumRowsPerRun).toBeGreaterThan(0)

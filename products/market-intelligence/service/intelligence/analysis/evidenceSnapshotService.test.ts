@@ -16,8 +16,20 @@ describe('evidenceSnapshotService', () => {
     const right = service.freeze({ eventGroupId: 'mi-eg-1', context: context([fact('a'), fact('z')]) })
     expect(left.facts.map(item => item.factId)).toEqual(['a', 'z'])
     expect(left.snapshotHash).toBe(right.snapshotHash)
-    // New snapshots are written with the schema that carries an optional `sourceUrl`.
-    expect(left.schemaVersion).toBe(2)
+    // New snapshots are written with the schema that can carry the trigger pointer (R37).
+    expect(left.schemaVersion).toBe(3)
+  })
+
+  it('keeps the hash identical with and without the trigger pointer', () => {
+    // 指纹是「这份证据」的指纹；指针回答「为什么跑」。把指针算进 hash 会让同一批事实有第二个指纹。
+    const service = createEvidenceSnapshotService({ now: () => asOf, idFactory: () => 'mi-es-1' })
+    const plain = service.freeze({ eventGroupId: 'mi-eg-1', context: context([fact('a')]) })
+    const pointed = service.freeze({
+      eventGroupId: 'mi-eg-1', context: context([fact('a')]),
+      trigger: { source: 'intelligence-item', itemId: 'item-1', factId: 'triggered-news:item-1', evidenceRefId: 'news:item-1' }
+    })
+    expect(pointed.snapshotHash).toBe(plain.snapshotHash)
+    expect(pointed.trigger).toBeDefined()
   })
 
   it('freezes the snapshot so later source mutation cannot change it', () => {

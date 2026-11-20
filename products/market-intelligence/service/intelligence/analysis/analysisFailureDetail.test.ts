@@ -27,8 +27,30 @@ describe('provider failure detail', () => {
     expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 54_000 })).toBe('provider-other')
   })
 
-  it('names an attempt that never got an answer', () => {
-    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200 })).toBe('connect-failed')
+  it('names an error answer by the status it carried, whatever the elapsed time', () => {
+    // 状态码是事实：一个 500 无论在 1.2 秒还是 60 秒回来，都是「服务端给了错误回答」，
+    // 不是「连不上」。原来那条按耗时猜的规则在这两个数上都会猜反。
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, httpStatus: 500 })).toBe('http-5xx')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, httpStatus: 503 })).toBe('http-5xx')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, httpStatus: 400 })).toBe('http-4xx')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, httpStatus: 401 })).toBe('http-4xx')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, httpStatus: 429 })).toBe('http-429')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 60_700, httpStatus: 502 })).toBe('http-5xx')
+  })
+
+  it('names a connection failure only when the transport kind says so', () => {
+    for (const transportErrorKind of ['dns', 'refused', 'reset', 'tls'] as const) {
+      expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, transportErrorKind })).toBe('connect-failed')
+    }
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, transportErrorKind: 'timeout' })).toBe('gateway-timeout')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, transportErrorKind: 'unknown' })).toBe('provider-other')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200, transportErrorKind: 'aborted' })).toBe('provider-other')
+  })
+
+  it('no longer infers a connection failure from a short duration', () => {
+    // `connectFailureMaxMs` 退役：耗时短只说明这一跳很快失败，说明不了是不是连接。
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 1_200 })).toBe('provider-other')
+    expect(classifyProviderFailureDetail({ errorCode: 'provider-error', durationMs: 200 })).toBe('provider-other')
   })
 
   it('treats an error answer that took a while as one the provider returned', () => {

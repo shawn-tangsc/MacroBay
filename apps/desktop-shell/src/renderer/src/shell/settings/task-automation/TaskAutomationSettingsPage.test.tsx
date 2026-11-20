@@ -233,10 +233,10 @@ describe('TaskAutomationSettingsPage', () => {
     hooks.schedules.mockReturnValue(schedules({
       items: [
         job({
-          id: 'market-intelligence.source.crypto-news',
+          id: 'sample-product.source.sample-feed',
           title: 'Crypto news collection',
           owner: 'product',
-          productId: 'market-intelligence',
+          productId: 'sample-product',
           trigger: { kind: 'interval', intervalMs: 900_000, anchor: 'lastComplete' },
           nextRunAt: '2026-07-17T09:15:00.000Z',
           lastRunAt: '2026-07-17T09:00:05.000Z',
@@ -251,13 +251,13 @@ describe('TaskAutomationSettingsPage', () => {
           nextRunAt: '2026-07-18T03:00:00.000Z'
         })
       ],
-      productNames: { 'market-intelligence': 'Market Intelligence' }
+      productNames: { 'sample-product': 'Sample Product' }
     }))
 
     const markup = renderPage()
 
     expect(markup).toContain('Crypto news collection')
-    expect(markup).toContain('Market Intelligence')
+    expect(markup).toContain('Sample Product')
     expect(markup).toContain('Platform retention')
     expect(markup).toContain('已注册')
     expect(markup).toContain('失败')
@@ -274,11 +274,11 @@ describe('TaskAutomationSettingsPage', () => {
         id: 'product.auto-collect',
         title: 'Auto collect',
         owner: 'product',
-        productId: 'market-intelligence',
+        productId: 'sample-product',
         trigger: { kind: 'interval', intervalMs: 60_000, anchor: 'lastComplete' },
         registered: false
       })],
-      productNames: { 'market-intelligence': 'Market Intelligence' }
+      productNames: { 'sample-product': 'Sample Product' }
     }))
 
     const markup = renderPage()

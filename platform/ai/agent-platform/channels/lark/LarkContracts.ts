@@ -32,9 +32,12 @@ export function larkApiBaseFor(domain: LarkDomain): string {
 
 export const larkApiBase = larkApiBaseFor('lark')
 
+/** 飞书一侧的失败分类（限流 / 上游拒绝 / 网络不可用）；到投递层的映射只写一处。 */
+export type LarkApiFailure = 'lark-rate-limited' | 'lark-provider-rejected' | 'lark-network-unavailable'
+
 export type LarkApiResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: 'lark-rate-limited' | 'lark-provider-rejected' | 'lark-network-unavailable' }
+  | { ok: false; code: LarkApiFailure }
 
 export type LarkProviderConversation = { chatId: string; threadId: string | null }
 

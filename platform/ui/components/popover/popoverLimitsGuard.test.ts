@@ -41,7 +41,13 @@ export function componentCaps(source: string): { width: number; height: number }
 /**
  * 数一个 `lines={[ … ]}` 字面量里有几项。
  *
- * 按括号深度数顶层逗号：项本身是 `{ labelKey: … }` 对象，对象里的逗号不能算。
+ * 按**括号深度**数顶层逗号：`[]`、`{}`、`()` 三种都要算。少算 `()` 就会把函数实参的逗号当成项
+ * （2026-11-19 的误报：`[frequencyReadoutLine(view, tz, t), ②, ③, ④]` 四项被读成六项）。
+ *
+ * 为什么不用「数 `{ labelKey:` 出现几次」：那假设了每一项都是对象字面量。函数调用、变量、
+ * 展开语法都是合法项，按形状数会少算——正是这次要修的那类。
+ *
+ * 字符串与注释里的括号、逗号一律不算：`f('a,b')` 是一个项，不是两个。
  * 返回 `null` 表示这份文件里的 `lines` 不是字面量数组（来自常量或 map），源码判不了条数。
  */
 export function literalLineItems(source: string): number | null {
@@ -49,18 +55,49 @@ export function literalLineItems(source: string): number | null {
   if (start === -1) return null
   let square = 0
   let brace = 0
+  let paren = 0
   let items = 1
+  let quote: string | undefined
   for (let index = source.indexOf('[', start); index < source.length; index += 1) {
     const char = source[index]
+    if (quote !== undefined) {
+      if (char === '\\') { index += 1; continue }
+      if (char === quote) quote = undefined
+      continue
+    }
+    if (char === "'" || char === '"' || char === '`') { quote = char; continue }
+    if (char === '/' && source[index + 1] === '/') {
+      const newline = source.indexOf('\n', index)
+      if (newline === -1) break
+      index = newline
+      continue
+    }
+    if (char === '/' && source[index + 1] === '*') {
+      const end = source.indexOf('*/', index + 2)
+      if (end === -1) break
+      index = end + 1
+      continue
+    }
     if (char === '[') square += 1
     else if (char === ']') {
       square -= 1
       if (square === 0) return items
     } else if (char === '{') brace += 1
     else if (char === '}') brace -= 1
-    else if (char === ',' && square === 1 && brace === 0) items += 1
+    else if (char === '(') paren += 1
+    else if (char === ')') paren -= 1
+    else if (char === ',' && square === 1 && brace === 0 && paren === 0) items += 1
   }
   throw new Error('unterminated lines={[ … ]} literal')
+}
+
+/** 超限且不在债表里的调用点（`file ×项数`）。抽成纯函数，反向用例可以喂合成数据。 */
+export function overCapSites(
+  sites: ReadonlyArray<Readonly<{ file: string; overCap: number }>>,
+  debt: ReadonlySet<string>
+): string[] {
+  return sites.filter((entry) => entry.overCap > MAX_LINE_ITEMS && !debt.has(entry.file))
+    .map((entry) => `${entry.file} ×${entry.overCap}`)
 }
 
 function readDebt(): ReadonlySet<string> {
@@ -103,6 +140,36 @@ const SITES = SCANNED_ROOTS.flatMap((root) => {
   .map((entry) => ({ file: relative(ROOT, entry.file).replace(/\\/gu, '/'), overCap: literalLineItems(entry.source) }))
   .filter((entry): entry is { file: string; overCap: number } => entry.overCap !== null && entry.overCap > MAX_LINE_ITEMS)
 
+/**
+ * 计数缺陷的回归（2026-11-19）：`lines={[frequencyReadoutLine(view, props.timeZone, t), …]}` 这种
+ * **带参数的函数调用**当一项时，只按 `[`/`{}` 深度数会把函数实参的逗号也算成项——四项被读成六项，
+ * 于是合法调用点被误报超限。配置线当时为了过门禁先把第①行算成变量（做得对），但下一个人再写同样的
+ * 形状又会被误报，迟早有人图省事登记进债表。
+ *
+ * 判据：① 四项、其中一项是两参调用 → 绿；② 五项 → 红；③ 真超限且不在债表里的文件 → 红。
+ */
+describe('顶层项计数把函数实参的逗号排除在外', () => {
+  it('counts a call-shaped item as one item, and still flags a real fifth', () => {
+    const fourWithCall = "<Popover lines={[frequencyReadoutLine(view, props.timeZone, t), { labelKey: 'b' }, { labelKey: 'c' }, { labelKey: 'd' }]} />"
+    const fiveWithCall = "<Popover lines={[frequencyReadoutLine(view, props.timeZone, t), { labelKey: 'b' }, { labelKey: 'c' }, { labelKey: 'd' }, { labelKey: 'e' }]} />"
+
+    // ① 四项（其中一项是两参调用）→ 四，不是六。
+    expect(literalLineItems(fourWithCall)).toBe(4)
+    expect(overCapSites([{ file: 'a.tsx', overCap: 4 }], new Set())).toEqual([])
+    // ② 五项 → 红。
+    expect(literalLineItems(fiveWithCall)).toBe(5)
+    expect(overCapSites([{ file: 'a.tsx', overCap: 5 }], new Set())).toEqual(['a.tsx ×5'])
+    // ③ 真超限、又不在债表里 → 红；在债表里则放行（债表由迁它的那一笔删行）。
+    expect(overCapSites([{ file: 'b.tsx', overCap: 6 }], new Set())).toEqual(['b.tsx ×6'])
+    expect(overCapSites([{ file: 'b.tsx', overCap: 6 }], new Set(['b.tsx']))).toEqual([])
+  })
+
+  it('ignores commas and brackets inside strings and comments', () => {
+    const tricky = "<Popover lines={[f('a,b'), { labelKey: 'c(d)' }, /* x, y */ { labelKey: 'e' }]} />"
+    expect(literalLineItems(tricky)).toBe(3)
+  })
+})
+
 describe('Popover limits', () => {
   it('keeps the bubble inside the contract box: at most 360 wide and 320 tall', () => {
     const caps = componentCaps(readFileSync(COMPONENT, 'utf8'))
@@ -115,7 +182,7 @@ describe('Popover limits', () => {
   })
 
   it('keeps every literal lines array at four items or fewer, and nothing else', () => {
-    expect(SITES.filter((entry) => !DEBT.has(entry.file)).map((entry) => `${entry.file} ×${entry.overCap}`)).toEqual([])
+    expect(overCapSites(SITES, DEBT)).toEqual([])
   })
 
   it('shrinks the list: a site folded back to four items must have its line deleted', () => {

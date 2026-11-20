@@ -1,0 +1,5186 @@
+{
+  "DE.ACTUAL_RETAIL_SALES.NONE.MOM": {
+    "code": "DE.ACTUAL_RETAIL_SALES.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "实际零售销售（月率）",
+      "zhShort": "实际零售销售",
+      "enFull": "Actual Retail Sales (MoM)",
+      "enShort": "German Retail Sales MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Wholesale-Trade-Retail-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 批发零售主题页"
+    },
+    "status": "active"
+  },
+  "DE.ACTUAL_RETAIL_SALES.NONE.YOY": {
+    "code": "DE.ACTUAL_RETAIL_SALES.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "实际零售销售（年率）",
+      "zhShort": "实际零售销售",
+      "enFull": "Actual Retail Sales (YoY)",
+      "enShort": "German Retail Sales YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Wholesale-Trade-Retail-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 批发零售主题页"
+    },
+    "status": "active"
+  },
+  "DE.ADJUSTED_TRADE_BALANCE.SA.LEVEL": {
+    "code": "DE.ADJUSTED_TRADE_BALANCE.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后贸易帐（十亿欧元）",
+      "zhShort": "季调后贸易帐",
+      "enFull": "Seasonally Adjusted Trade Balance (billion EUR)",
+      "enShort": "German Trade Balance SA"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.CPI.NSA.MOM": {
+    "code": "DE.CPI.NSA.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "消费者物价指数（月率）",
+      "zhShort": "消费者物价指数",
+      "enFull": "Consumer Price Index (MoM)",
+      "enShort": "German CPI MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.CPI.NSA.YOY": {
+    "code": "DE.CPI.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "消费者物价指数（年率）",
+      "zhShort": "消费者物价指数",
+      "enFull": "Consumer Price Index (YoY)",
+      "enShort": "German CPI YoY"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.EXPORTS_PRICE.NONE.MOM": {
+    "code": "DE.EXPORTS_PRICE.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "出口物价指数（月率）",
+      "zhShort": "出口物价指数",
+      "enFull": "Export Price Index (MoM)",
+      "enShort": "German Export Prices MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Foreign-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 对外贸易主题页（进出口与贸易帐）"
+    },
+    "status": "active"
+  },
+  "DE.EXPORTS_PRICE.NONE.YOY": {
+    "code": "DE.EXPORTS_PRICE.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "出口物价指数（年率）",
+      "zhShort": "出口物价指数",
+      "enFull": "Export Price Index (YoY)",
+      "enShort": "German Export Prices YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Foreign-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 对外贸易主题页（进出口与贸易帐）"
+    },
+    "status": "active"
+  },
+  "DE.EXPORTS.SA.MOM": {
+    "code": "DE.EXPORTS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后出口（月率）",
+      "zhShort": "季调后出口",
+      "enFull": "Seasonally Adjusted Exports (MoM)",
+      "enShort": "German Exports MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Foreign-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 对外贸易主题页（进出口与贸易帐）"
+    },
+    "status": "active"
+  },
+  "DE.GDP.NSA.YOY": {
+    "code": "DE.GDP.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "未季调国内生产总值（年率）",
+      "zhShort": "未季调GDP",
+      "enFull": "Unadjusted GDP (YoY)",
+      "enShort": "German GDP YoY NSA"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/National-Accounts-Domestic-Product/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 国民核算主题页（GDP 各口径）"
+    },
+    "status": "active"
+  },
+  "DE.GDP.SA.QOQ": {
+    "code": "DE.GDP.SA.QOQ",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后国内生产总值（季率）",
+      "zhShort": "季调后GDP",
+      "enFull": "Seasonally Adjusted GDP (QoQ)",
+      "enShort": "German GDP QoQ SA"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/National-Accounts-Domestic-Product/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 国民核算主题页（GDP 各口径）"
+    },
+    "status": "active"
+  },
+  "DE.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL": {
+    "code": "DE.GFK_CONSUMER_CONFIDENCE.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "GfK消费者信心指数",
+      "zhShort": "GfK消费者信心",
+      "enFull": "GfK Consumer Confidence Index",
+      "enShort": "German GfK Confidence"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.HICP.NSA.MOM": {
+    "code": "DE.HICP.NSA.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "调和消费者物价指数（月率）",
+      "zhShort": "调和消费者物价指数",
+      "enFull": "Harmonised Index of Consumer Prices (MoM)",
+      "enShort": "German HICP MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.HICP.NSA.YOY": {
+    "code": "DE.HICP.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "调和消费者物价指数（年率）",
+      "zhShort": "调和消费者物价指数",
+      "enFull": "Harmonised Index of Consumer Prices (YoY)",
+      "enShort": "German HICP YoY"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.IFO_BUSINESS_CLIMATE.NONE.LEVEL": {
+    "code": "DE.IFO_BUSINESS_CLIMATE.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "IFO商业景气指数",
+      "zhShort": "IFO商业景气",
+      "enFull": "Ifo Business Climate Index",
+      "enShort": "German Ifo Climate"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.IFO_BUSINESS_EXPECTATIONS.NONE.LEVEL": {
+    "code": "DE.IFO_BUSINESS_EXPECTATIONS.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "IFO商业预期指数",
+      "zhShort": "IFO商业预期",
+      "enFull": "Ifo Business Expectations Index",
+      "enShort": "German Ifo Expectations"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.IFO_BUSINESS_STATUS.NONE.LEVEL": {
+    "code": "DE.IFO_BUSINESS_STATUS.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "IFO商业现况指数",
+      "zhShort": "IFO商业现况",
+      "enFull": "Ifo Business Situation Index",
+      "enShort": "German Ifo Situation"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.IMPORTS_PRICE.NONE.MOM": {
+    "code": "DE.IMPORTS_PRICE.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "进口物价指数（月率）",
+      "zhShort": "进口物价指数",
+      "enFull": "Import Price Index (MoM)",
+      "enShort": "German Import Prices MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Foreign-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 对外贸易主题页（进出口与贸易帐）"
+    },
+    "status": "active"
+  },
+  "DE.IMPORTS_PRICE.NONE.YOY": {
+    "code": "DE.IMPORTS_PRICE.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "进口物价指数（年率）",
+      "zhShort": "进口物价指数",
+      "enFull": "Import Price Index (YoY)",
+      "enShort": "German Import Prices YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Foreign-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 对外贸易主题页（进出口与贸易帐）"
+    },
+    "status": "active"
+  },
+  "DE.IMPORTS.SA.MOM": {
+    "code": "DE.IMPORTS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后进口（月率）",
+      "zhShort": "季调后进口",
+      "enFull": "Seasonally Adjusted Imports (MoM)",
+      "enShort": "German Imports MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Foreign-Trade/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 对外贸易主题页（进出口与贸易帐）"
+    },
+    "status": "active"
+  },
+  "DE.INDUSTRIAL_OUTPUT.SA.MOM": {
+    "code": "DE.INDUSTRIAL_OUTPUT.SA.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后工业产出（月率）",
+      "zhShort": "季调后工业产出",
+      "enFull": "Seasonally Adjusted Industrial Output (MoM)",
+      "enShort": "German Industrial Output MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Short-Term-Indicators/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 短期指标主题页（工业生产、制造业订单）"
+    },
+    "status": "active"
+  },
+  "DE.MANUFACTURING_ORDERS.SA.MOM": {
+    "code": "DE.MANUFACTURING_ORDERS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后制造业订单（月率）",
+      "zhShort": "季调后制造业订单",
+      "enFull": "Seasonally Adjusted Manufacturing Orders (MoM)",
+      "enShort": "German Factory Orders MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Short-Term-Indicators/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 短期指标主题页（工业生产、制造业订单）"
+    },
+    "status": "active"
+  },
+  "DE.MARKIT_BME_COMPOSITE_PURCHASING.NONE.LEVEL": {
+    "code": "DE.MARKIT_BME_COMPOSITE_PURCHASING.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "综合采购经理人指数",
+      "zhShort": "综合PMI",
+      "enFull": "Composite Purchasing Managers Index",
+      "enShort": "German Composite PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.MARKIT_BME_CONSTRUCTION_PURCHASING.NONE.LEVEL": {
+    "code": "DE.MARKIT_BME_CONSTRUCTION_PURCHASING.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "建筑业采购经理人指数",
+      "zhShort": "建筑业PMI",
+      "enFull": "Construction Purchasing Managers Index",
+      "enShort": "German Construction PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.MARKIT_BME_MANUFACTURING_PMI.NONE.LEVEL": {
+    "code": "DE.MARKIT_BME_MANUFACTURING_PMI.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "制造业采购经理人指数",
+      "zhShort": "制造业PMI",
+      "enFull": "Manufacturing Purchasing Managers Index",
+      "enShort": "German Manufacturing PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.MARKIT_BME_SERVICES_PURCHASING.NONE.LEVEL": {
+    "code": "DE.MARKIT_BME_SERVICES_PURCHASING.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "服务业采购经理人指数",
+      "zhShort": "服务业PMI",
+      "enFull": "Services Purchasing Managers Index",
+      "enShort": "German Services PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.PRODUCER_PRICE.NONE.MOM": {
+    "code": "DE.PRODUCER_PRICE.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "生产者物价指数（月率）",
+      "zhShort": "生产者物价指数",
+      "enFull": "Producer Price Index (MoM)",
+      "enShort": "German PPI MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.PRODUCER_PRICE.NONE.YOY": {
+    "code": "DE.PRODUCER_PRICE.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "生产者物价指数（年率）",
+      "zhShort": "生产者物价指数",
+      "enFull": "Producer Price Index (YoY)",
+      "enShort": "German PPI YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.TOTAL_NUMBER_OF_UNEMPLOYED.NONE.LEVEL": {
+    "code": "DE.TOTAL_NUMBER_OF_UNEMPLOYED.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "未季调失业人数（万人）",
+      "zhShort": "未季调失业人数",
+      "enFull": "Unadjusted Number of Unemployed (10k people)",
+      "enShort": "German Unemployed NSA"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Labour/Labour-Market/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 劳动力市场主题页（失业口径）"
+    },
+    "status": "active"
+  },
+  "DE.TOTAL_NUMBER_OF_UNEMPLOYED.SA.LEVEL": {
+    "code": "DE.TOTAL_NUMBER_OF_UNEMPLOYED.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后失业人数（万人）",
+      "zhShort": "季调后失业人数",
+      "enFull": "Seasonally Adjusted Number of Unemployed (10k people)",
+      "enShort": "German Unemployed SA"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Labour/Labour-Market/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 劳动力市场主题页（失业口径）"
+    },
+    "status": "active"
+  },
+  "DE.UNADJUSTED_MANUFACTURING_ORDERS.NONE.YOY": {
+    "code": "DE.UNADJUSTED_MANUFACTURING_ORDERS.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "未季调制造业订单（年率）",
+      "zhShort": "未季调制造业订单",
+      "enFull": "Unadjusted Manufacturing Orders (YoY)",
+      "enShort": "German Factory Orders NSA YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.UNEMPLOYMENT.SA.RATE": {
+    "code": "DE.UNEMPLOYMENT.SA.RATE",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "季调后失业率（官方）",
+      "zhShort": "季调后失业率",
+      "enFull": "Seasonally Adjusted Unemployment Rate (Official)",
+      "enShort": "German Unemployment Rate SA"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Labour/Labour-Market/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 劳动力市场主题页（失业口径）"
+    },
+    "status": "active"
+  },
+  "DE.WHOLESALE_PRICE.NONE.MOM": {
+    "code": "DE.WHOLESALE_PRICE.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "批发物价指数（月率）",
+      "zhShort": "批发物价指数",
+      "enFull": "Wholesale Price Index (MoM)",
+      "enShort": "German Wholesale Prices MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.WHOLESALE_PRICE.NONE.YOY": {
+    "code": "DE.WHOLESALE_PRICE.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "批发物价指数（年率）",
+      "zhShort": "批发物价指数",
+      "enFull": "Wholesale Price Index (YoY)",
+      "enShort": "German Wholesale Prices YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）"
+    },
+    "status": "active"
+  },
+  "DE.ZEW_ECONOMIC_SENTIMENT.NONE.LEVEL": {
+    "code": "DE.ZEW_ECONOMIC_SENTIMENT.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "ZEW经济景气指数",
+      "zhShort": "ZEW经济景气",
+      "enFull": "ZEW Economic Sentiment Index",
+      "enShort": "German ZEW Sentiment"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "DE.ZEW_ECONOMIC_STATUS.NONE.LEVEL": {
+    "code": "DE.ZEW_ECONOMIC_STATUS.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "DE",
+    "names": {
+      "zhFull": "ZEW经济现况指数",
+      "zhShort": "ZEW经济现况",
+      "enFull": "ZEW Economic Situation Index",
+      "enShort": "German ZEW Situation"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Destatis",
+      "url": "https://www.destatis.de/EN/Themes/Economy/Prices/_node.html",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "Destatis · 价格主题页（统计局英文站，含 CPI/HICP/PPI/批发物价发布）（同国兜底：该国已核机构页）"
+    },
+    "status": "active"
+  },
+  "evt.fomc": {
+    "code": "evt.fomc",
+    "kind": "event",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "美联储议息会议",
+      "zhShort": "议息会议",
+      "enFull": "FOMC Rate Decision",
+      "enShort": "FOMC"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Federal Reserve",
+      "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "pageKind": "meeting",
+      "verifiedAt": "2026-11-17",
+      "basis": "联邦储备 FOMC 日历页，列出全年会议日期（不是某一场的决议原文）"
+    },
+    "status": "active"
+  },
+  "US.ADP.SA.CHANGE": {
+    "code": "US.ADP.SA.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ADP 就业人数变动",
+      "zhShort": "ADP 就业",
+      "enFull": "ADP Employment Change",
+      "enShort": "ADP Employment"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "ADP Research",
+      "url": "https://adpemploymentreport.com/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-18",
+      "basis": "ADP · 全国就业报告"
+    },
+    "status": "active"
+  },
+  "US.AHE.NSA.YOY": {
+    "code": "US.AHE.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "平均每小时工资年率",
+      "zhShort": "平均时薪 年率",
+      "enFull": "Average Hourly Earnings YoY",
+      "enShort": "Avg Hourly Earnings YoY"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.AHE.SA.MOM": {
+    "code": "US.AHE.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "平均每小时工资月率",
+      "zhShort": "平均时薪（月率）",
+      "enFull": "Average Hourly Earnings, MoM",
+      "enShort": "Avg Hourly Earnings"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.API_CRUDE_STOCKS.NONE.CHANGE": {
+    "code": "US.API_CRUDE_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "API 原油库存",
+      "zhShort": "API 原油库存",
+      "enFull": "API Crude Oil Inventories",
+      "enShort": "API Crude Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
+    },
+    "status": "active"
+  },
+  "US.API_CUSHING_STOCKS.NONE.CHANGE": {
+    "code": "US.API_CUSHING_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "API 库欣原油库存",
+      "zhShort": "API 库欣库存",
+      "enFull": "API Cushing Crude Inventories",
+      "enShort": "API Cushing Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
+    },
+    "status": "active"
+  },
+  "US.API_DISTILLATE_STOCKS.NONE.CHANGE": {
+    "code": "US.API_DISTILLATE_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "API 精炼油库存",
+      "zhShort": "API 精炼油库存",
+      "enFull": "API Distillate Inventories",
+      "enShort": "API Distillate Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
+    },
+    "status": "active"
+  },
+  "US.API_GASOLINE_STOCKS.NONE.CHANGE": {
+    "code": "US.API_GASOLINE_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "API 汽油库存",
+      "zhShort": "API 汽油库存",
+      "enFull": "API Gasoline Inventories",
+      "enShort": "API Gasoline Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "美国石油协会",
+      "url": "https://www.api.org/statistics",
+      "pageKind": "data-api",
+      "verifiedAt": "2026-11-18",
+      "basis": "API · 统计页"
+    },
+    "status": "active"
+  },
+  "US.AVERAGE_WEEKLY_HOURS.SA.LEVEL": {
+    "code": "US.AVERAGE_WEEKLY_HOURS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "平均每周工时",
+      "zhShort": "周工时",
+      "enFull": "Average Weekly Hours",
+      "enShort": "Avg Weekly Hours"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.BAKER_HUGHES_GAS_RIGS.NONE.COUNT": {
+    "code": "US.BAKER_HUGHES_GAS_RIGS.NONE.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "贝克休斯天然气钻井数",
+      "zhShort": "天然气钻井数",
+      "enFull": "Baker Hughes Gas Rig Count",
+      "enShort": "Gas Rigs"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.BAKER_HUGHES_OIL_RIGS.NONE.COUNT": {
+    "code": "US.BAKER_HUGHES_OIL_RIGS.NONE.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "贝克休斯石油钻井数",
+      "zhShort": "石油钻井数",
+      "enFull": "Baker Hughes Oil Rig Count",
+      "enShort": "Oil Rigs"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.BAKER_HUGHES_TOTAL_RIGS.NONE.COUNT": {
+    "code": "US.BAKER_HUGHES_TOTAL_RIGS.NONE.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "贝克休斯总钻井数",
+      "zhShort": "总钻井数",
+      "enFull": "Baker Hughes Total Rig Count",
+      "enShort": "Total Rigs"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.BUILDING_PERMITS.NONE.COUNT": {
+    "code": "US.BUILDING_PERMITS.NONE.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "营建许可",
+      "zhShort": "营建许可",
+      "enFull": "Building Permits",
+      "enShort": "Building Permits"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.BUILDING_PERMITS.NONE.MOM": {
+    "code": "US.BUILDING_PERMITS.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "营建许可月率",
+      "zhShort": "营建许可 月率",
+      "enFull": "Building Permits MoM",
+      "enShort": "Building Permits MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.BUSINESS_INVENTORIES.SA.MOM": {
+    "code": "US.BUSINESS_INVENTORIES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "企业库存",
+      "zhShort": "企业库存",
+      "enFull": "Business Inventories",
+      "enShort": "Business Inventories"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE": {
+    "code": "US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "制造业产能利用率",
+      "zhShort": "制造业产能利用率",
+      "enFull": "Manufacturing Capacity Utilization",
+      "enShort": "Mfg Capacity Utilization"
+    },
+    "tier": null,
+    "parentCode": "US.CAPACITY_UTILIZATION.SA.RATE",
+    "childOrder": 9,
+    "measure": "RATE",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CAPACITY_UTILIZATION.SA.RATE": {
+    "code": "US.CAPACITY_UTILIZATION.SA.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "产能利用率",
+      "zhShort": "产能利用率",
+      "enFull": "Capacity Utilization",
+      "enShort": "Capacity Utilization"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CASE_SHILLER_20.SA.YOY": {
+    "code": "US.CASE_SHILLER_20.SA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "标普/凯斯席勒 20 城房价指数年率（季调）",
+      "zhShort": "凯斯席勒 20 城年率",
+      "enFull": "S&P CoreLogic Case-Shiller 20-City Home Price Index YoY (SA)",
+      "enShort": "Case-Shiller 20-City YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CASE_SHILLER_COMPOSITE.NSA.YOY": {
+    "code": "US.CASE_SHILLER_COMPOSITE.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "标普/凯斯席勒房价指数年率",
+      "zhShort": "凯斯席勒房价 年率",
+      "enFull": "S&P CoreLogic Case-Shiller Home Price Index YoY",
+      "enShort": "Case-Shiller YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CASE_SHILLER_COMPOSITE.SA.MOM": {
+    "code": "US.CASE_SHILLER_COMPOSITE.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "标普/凯斯席勒房价指数月率",
+      "zhShort": "凯斯席勒房价 月率",
+      "enFull": "S&P CoreLogic Case-Shiller Home Price Index MoM",
+      "enShort": "Case-Shiller MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CHALLENGER_JOB_CUTS.NONE.COUNT": {
+    "code": "US.CHALLENGER_JOB_CUTS.NONE.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "挑战者企业裁员",
+      "zhShort": "挑战者裁员",
+      "enFull": "Challenger Job Cuts",
+      "enShort": "Challenger Cuts"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CHALLENGER_JOB_CUTS.NONE.MOM": {
+    "code": "US.CHALLENGER_JOB_CUTS.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "挑战者企业裁员月率",
+      "zhShort": "挑战者裁员 月率",
+      "enFull": "Challenger Job Cuts MoM",
+      "enShort": "Challenger Cuts MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CHALLENGER_JOB_CUTS.NONE.YOY": {
+    "code": "US.CHALLENGER_JOB_CUTS.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "挑战者企业裁员年率",
+      "zhShort": "挑战者裁员 年率",
+      "enFull": "Challenger Job Cuts YoY",
+      "enShort": "Challenger Cuts YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CHICAGO_FED_NATIONAL_ACTIVITY.NONE.LEVEL": {
+    "code": "US.CHICAGO_FED_NATIONAL_ACTIVITY.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "芝加哥联储全国活动指数",
+      "zhShort": "芝加哥联储活动指数",
+      "enFull": "Chicago Fed National Activity Index",
+      "enShort": "CFNAI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Chicago",
+      "url": "https://www.chicagofed.org/research/data/cfnai/current-data",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "芝加哥联储 · 全国活动指数当前数据页（200）"
+    },
+    "status": "active"
+  },
+  "US.CHICAGO_PMI.SA.LEVEL": {
+    "code": "US.CHICAGO_PMI.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "芝加哥采购经理人指数",
+      "zhShort": "芝加哥 PMI",
+      "enFull": "Chicago Business Barometer",
+      "enShort": "Chicago PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CONFERENCE_BOARD_CONFIDENCE.NONE.LEVEL": {
+    "code": "US.CONFERENCE_BOARD_CONFIDENCE.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "咨商会消费者信心指数",
+      "zhShort": "咨商会信心",
+      "enFull": "Conference Board Consumer Confidence",
+      "enShort": "CB Confidence"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CONSTRUCTION_SPENDING.SA.MOM": {
+    "code": "US.CONSTRUCTION_SPENDING.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "营建支出月率",
+      "zhShort": "营建支出",
+      "enFull": "Construction Spending, MoM",
+      "enShort": "Construction Spending"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL": {
+    "code": "US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "谘商会消费者现况指数",
+      "zhShort": "消费者现况",
+      "enFull": "Conference Board Consumer Present Situation",
+      "enShort": "CB Present Situation"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/consumer-confidence",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "谘商会 · 消费者信心主题页"
+    },
+    "status": "active"
+  },
+  "US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL": {
+    "code": "US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "谘商会消费者预期指数",
+      "zhShort": "消费者预期",
+      "enFull": "Conference Board Consumer Expectations",
+      "enShort": "CB Expectations"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/consumer-confidence",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "谘商会 · 消费者信心主题页"
+    },
+    "status": "active"
+  },
+  "US.CONSUMER_CONFIDENCE.SA.LEVEL": {
+    "code": "US.CONSUMER_CONFIDENCE.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "消费者信心指数",
+      "zhShort": "消费者信心",
+      "enFull": "Consumer Confidence Index",
+      "enShort": "Consumer Confidence"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "The Conference Board",
+      "url": "https://www.conference-board.org/topics/consumer-confidence",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "谘商会 · 消费者信心主题页"
+    },
+    "status": "active"
+  },
+  "US.CONSUMER_CREDIT.SA.CHANGE": {
+    "code": "US.CONSUMER_CREDIT.SA.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "消费信贷变动",
+      "zhShort": "消费信贷",
+      "enFull": "Consumer Credit Change",
+      "enShort": "Consumer Credit"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CORE_CAPEX_ORDERS.SA.MOM": {
+    "code": "US.CORE_CAPEX_ORDERS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心资本品订单（除飞机·非国防）",
+      "zhShort": "核心资本品订单",
+      "enFull": "Core Capital Goods Orders",
+      "enShort": "Core Capex Orders"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.CORE_CPI.NSA.YOY": {
+    "code": "US.CORE_CPI.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心消费者物价指数年率",
+      "zhShort": "核心 CPI 年率",
+      "enFull": "Core Consumer Price Index, YoY",
+      "enShort": "Core CPI YoY"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CORE_CPI.SA.LEVEL": {
+    "code": "US.CORE_CPI.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心消费者物价指数",
+      "zhShort": "核心 CPI",
+      "enFull": "Core Consumer Price Index",
+      "enShort": "Core CPI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CORE_CPI.SA.MOM": {
+    "code": "US.CORE_CPI.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心消费者物价指数月率",
+      "zhShort": "核心 CPI 月率",
+      "enFull": "Core Consumer Price Index, MoM",
+      "enShort": "Core CPI MoM"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CORE_PCE.NSA.YOY": {
+    "code": "US.CORE_PCE.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心个人消费支出物价指数年率",
+      "zhShort": "核心 PCE 年率",
+      "enFull": "Core PCE Price Index, YoY",
+      "enShort": "Core PCE YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "retired",
+    "supersededBy": "US.CORE_PCE.SA.YOY"
+  },
+  "US.CORE_PCE.SA.MOM": {
+    "code": "US.CORE_PCE.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心个人消费支出物价指数月率",
+      "zhShort": "核心 PCE 月率",
+      "enFull": "Core PCE Price Index MoM",
+      "enShort": "Core PCE MoM"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.CORE_PCE.SA.YOY": {
+    "code": "US.CORE_PCE.SA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心个人消费支出物价指数年率（季调）",
+      "zhShort": "核心 PCE 年率（季调）",
+      "enFull": "Core PCE Price Index, YoY (SA)",
+      "enShort": "Core PCE YoY (SA)"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.CORE_PPI.NSA.YOY": {
+    "code": "US.CORE_PPI.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心生产者物价指数年率",
+      "zhShort": "核心 PPI 年率",
+      "enFull": "Core Producer Price Index, YoY",
+      "enShort": "Core PPI YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CORE_PPI.SA.MOM": {
+    "code": "US.CORE_PPI.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "核心生产者物价指数月率",
+      "zhShort": "核心 PPI 月率",
+      "enFull": "Core Producer Price Index, MoM",
+      "enShort": "Core PPI MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CORPORATE_PROFITS.SA.QOQ": {
+    "code": "US.CORPORATE_PROFITS.SA.QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "企业利润",
+      "zhShort": "企业利润",
+      "enFull": "Corporate Profits",
+      "enShort": "Corp Profits"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.CPI_CLEVELAND.NONE.MOM": {
+    "code": "US.CPI_CLEVELAND.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "克利夫兰联储 CPI 即时预测",
+      "zhShort": "克利夫兰 CPI 预测",
+      "enFull": "Cleveland Fed CPI Nowcast",
+      "enShort": "Cleveland CPI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.CPI.NSA.LEVEL": {
+    "code": "US.CPI.NSA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "消费者物价指数",
+      "zhShort": "CPI",
+      "enFull": "Consumer Price Index",
+      "enShort": "CPI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CPI.NSA.YOY": {
+    "code": "US.CPI.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "消费者物价指数（CPI）年率",
+      "zhShort": "CPI 年率",
+      "enFull": "Consumer Price Index (CPI), YoY",
+      "enShort": "CPI YoY"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CPI.SA.MOM": {
+    "code": "US.CPI.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "消费者物价指数月率",
+      "zhShort": "CPI 月率",
+      "enFull": "Consumer Price Index MoM",
+      "enShort": "CPI MoM"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.CURRENT_ACCOUNT.NONE.DIFF": {
+    "code": "US.CURRENT_ACCOUNT.NONE.DIFF",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "经常帐",
+      "zhShort": "经常帐",
+      "enFull": "Current Account Balance",
+      "enShort": "Current Account"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "DIFF",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL": {
+    "code": "US.DALLAS_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储制造业就业指数",
+      "zhShort": "达拉斯联储制造业就业",
+      "enFull": "Dallas Fed Manufacturing Employment",
+      "enShort": "Dallas Fed Mfg Employment"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL": {
+    "code": "US.DALLAS_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储制造业新订单指数",
+      "zhShort": "达拉斯联储制造业新订单",
+      "enFull": "Dallas Fed Manufacturing New Orders",
+      "enShort": "Dallas Fed Mfg New Orders"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL": {
+    "code": "US.DALLAS_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储制造业原材料支付价格指数",
+      "zhShort": "达拉斯联储制造业原材料支付价格",
+      "enFull": "Dallas Fed Manufacturing Prices Paid for Raw Materials",
+      "enShort": "Dallas Fed Mfg Prices Paid"
+    },
+    "tier": null,
+    "parentCode": "US.DALLAS_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 6,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL": {
+    "code": "US.DALLAS_FED_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储制造业制成品价格指数",
+      "zhShort": "达拉斯联储制造业制成品价格",
+      "enFull": "Dallas Fed Manufacturing Prices Received",
+      "enShort": "Dallas Fed Mfg Prices Received"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_MANUFACTURING.PRODUCTION.SA.LEVEL": {
+    "code": "US.DALLAS_FED_MANUFACTURING.PRODUCTION.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储制造业产出指数",
+      "zhShort": "达拉斯联储制造业产出",
+      "enFull": "Dallas Fed Manufacturing Production",
+      "enShort": "Dallas Fed Mfg Production"
+    },
+    "tier": null,
+    "parentCode": "US.DALLAS_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 8,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_MANUFACTURING.SA.LEVEL": {
+    "code": "US.DALLAS_FED_MANUFACTURING.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储制造业活动指数",
+      "zhShort": "达拉斯联储制造业",
+      "enFull": "Dallas Fed Manufacturing Index",
+      "enShort": "Dallas Fed Mfg"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL": {
+    "code": "US.DALLAS_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储制造业装船指数",
+      "zhShort": "达拉斯联储制造业装船",
+      "enFull": "Dallas Fed Manufacturing Shipments",
+      "enShort": "Dallas Fed Mfg Shipments"
+    },
+    "tier": null,
+    "parentCode": "US.DALLAS_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 0,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_SERVICES_REVENUES.SA.LEVEL": {
+    "code": "US.DALLAS_FED_SERVICES_REVENUES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储服务业收入指数",
+      "zhShort": "达拉斯联储服务业收入",
+      "enFull": "Dallas Fed Services Revenue Index",
+      "enShort": "Dallas Fed Svcs Revenue"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DALLAS_FED_SERVICES.SA.LEVEL": {
+    "code": "US.DALLAS_FED_SERVICES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "达拉斯联储服务业活动指数",
+      "zhShort": "达拉斯联储服务业",
+      "enFull": "Dallas Fed Services Index",
+      "enShort": "Dallas Fed Svcs"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Dallas",
+      "url": "https://www.dallasfed.org/research/surveys/tmos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "达拉斯联储 · 德州制造业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.DURABLE_GOODS_EX_DEFENSE.SA.MOM": {
+    "code": "US.DURABLE_GOODS_EX_DEFENSE.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "耐用品订单（除国防）",
+      "zhShort": "耐用品订单除国防",
+      "enFull": "Durable Goods Orders ex Defense",
+      "enShort": "Durables ex Defense"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.DURABLE_GOODS_EX_TRANSPORT.SA.MOM": {
+    "code": "US.DURABLE_GOODS_EX_TRANSPORT.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "耐用品订单（除运输）",
+      "zhShort": "耐用品订单除运输",
+      "enFull": "Durable Goods Orders ex Transportation",
+      "enShort": "Durables ex Transport"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.DURABLE_GOODS_ORDERS.SA.MOM": {
+    "code": "US.DURABLE_GOODS_ORDERS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "耐用品订单",
+      "zhShort": "耐用品订单",
+      "enFull": "Durable Goods Orders",
+      "enShort": "Durables"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.ECI.SA.QOQ": {
+    "code": "US.ECI.SA.QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "就业成本指数（季调季率）",
+      "zhShort": "就业成本指数",
+      "enFull": "Employment Cost Index (SA, QoQ)",
+      "enShort": "ECI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EIA_CRUDE_STOCKS.NONE.CHANGE": {
+    "code": "US.EIA_CRUDE_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "EIA 原油库存",
+      "zhShort": "EIA 原油库存",
+      "enFull": "EIA Crude Oil Inventories",
+      "enShort": "EIA Crude Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "EIA",
+      "url": "https://www.eia.gov/petroleum/supply/weekly/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "EIA · 周度石油状况报告"
+    },
+    "status": "active"
+  },
+  "US.EIA_CUSHING_STOCKS.NONE.CHANGE": {
+    "code": "US.EIA_CUSHING_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "EIA 库欣原油库存",
+      "zhShort": "EIA 库欣库存",
+      "enFull": "EIA Cushing Crude Inventories",
+      "enShort": "EIA Cushing Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "EIA",
+      "url": "https://www.eia.gov/petroleum/supply/weekly/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "EIA · 周度石油状况报告"
+    },
+    "status": "active"
+  },
+  "US.EIA_DISTILLATE_STOCKS.NONE.CHANGE": {
+    "code": "US.EIA_DISTILLATE_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "EIA 精炼油库存",
+      "zhShort": "EIA 精炼油库存",
+      "enFull": "EIA Distillate Inventories",
+      "enShort": "EIA Distillate Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "EIA",
+      "url": "https://www.eia.gov/petroleum/supply/weekly/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "EIA · 周度石油状况报告"
+    },
+    "status": "active"
+  },
+  "US.EIA_GASOLINE_STOCKS.NONE.CHANGE": {
+    "code": "US.EIA_GASOLINE_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "EIA 汽油库存",
+      "zhShort": "EIA 汽油库存",
+      "enFull": "EIA Gasoline Inventories",
+      "enShort": "EIA Gasoline Stocks"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "EIA",
+      "url": "https://www.eia.gov/petroleum/supply/weekly/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "EIA · 周度石油状况报告"
+    },
+    "status": "active"
+  },
+  "US.EIA_NATURAL_GAS_STOCKS.NONE.CHANGE": {
+    "code": "US.EIA_NATURAL_GAS_STOCKS.NONE.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "EIA 天然气库存",
+      "zhShort": "EIA 天然气库存",
+      "enFull": "EIA Natural Gas Storage",
+      "enShort": "EIA Nat Gas"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "EIA",
+      "url": "https://www.eia.gov/petroleum/supply/weekly/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "EIA · 周度石油状况报告"
+    },
+    "status": "active"
+  },
+  "US.EIA_REFINERY_UTILIZATION.NONE.RATE": {
+    "code": "US.EIA_REFINERY_UTILIZATION.NONE.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "EIA 精炼厂设备利用率",
+      "zhShort": "炼厂开工率",
+      "enFull": "EIA Refinery Utilization",
+      "enShort": "Refinery Utilization"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "EIA",
+      "url": "https://www.eia.gov/petroleum/supply/weekly/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "EIA · 周度石油状况报告"
+    },
+    "status": "active"
+  },
+  "US.EMPIRE_STATE_MANUFACTURING.EMPLOYMENT.SA.LEVEL": {
+    "code": "US.EMPIRE_STATE_MANUFACTURING.EMPLOYMENT.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "纽约联储制造业就业指数",
+      "zhShort": "纽约联储制造业就业",
+      "enFull": "Empire State Manufacturing Employment",
+      "enShort": "Empire State Mfg Employment"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EMPIRE_STATE_MANUFACTURING.NEW_ORDERS.SA.LEVEL": {
+    "code": "US.EMPIRE_STATE_MANUFACTURING.NEW_ORDERS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "纽约联储制造业新订单指数",
+      "zhShort": "纽约联储制造业新订单",
+      "enFull": "Empire State Manufacturing New Orders",
+      "enShort": "Empire State Mfg New Orders"
+    },
+    "tier": null,
+    "parentCode": "US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL",
+    "childOrder": 1,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EMPIRE_STATE_MANUFACTURING.PRICES_PAID.SA.LEVEL": {
+    "code": "US.EMPIRE_STATE_MANUFACTURING.PRICES_PAID.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "纽约联储制造业物价支付指数",
+      "zhShort": "纽约联储制造业物价支付",
+      "enFull": "Empire State Manufacturing Prices Paid",
+      "enShort": "Empire State Mfg Prices Paid"
+    },
+    "tier": null,
+    "parentCode": "US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL",
+    "childOrder": 6,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EMPIRE_STATE_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL": {
+    "code": "US.EMPIRE_STATE_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "纽约联储制造业物价获得指数",
+      "zhShort": "纽约联储制造业物价获得",
+      "enFull": "Empire State Manufacturing Prices Received",
+      "enShort": "Empire State Mfg Prices Received"
+    },
+    "tier": null,
+    "parentCode": "US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL",
+    "childOrder": 7,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL": {
+    "code": "US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "纽约联储制造业指数",
+      "zhShort": "纽约联储制造业",
+      "enFull": "Empire State Manufacturing Index",
+      "enShort": "Empire State"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EXISTING_HOME_SALES.SA.COUNT": {
+    "code": "US.EXISTING_HOME_SALES.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "成屋销售总数（年化）",
+      "zhShort": "成屋销售",
+      "enFull": "Existing Home Sales, Annualized",
+      "enShort": "Existing Home Sales"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EXISTING_HOME_SALES.SA.MOM": {
+    "code": "US.EXISTING_HOME_SALES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "成屋销售月率",
+      "zhShort": "成屋销售 月率",
+      "enFull": "Existing Home Sales MoM",
+      "enShort": "Existing Home Sales MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.EXPORT_PRICES.NSA.YOY": {
+    "code": "US.EXPORT_PRICES.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "出口价格年率",
+      "zhShort": "出口价格 年率",
+      "enFull": "Export Prices YoY",
+      "enShort": "Export Prices YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.EXPORT_PRICES.SA.MOM": {
+    "code": "US.EXPORT_PRICES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "出口价格月率",
+      "zhShort": "出口价格 月率",
+      "enFull": "Export Prices MoM",
+      "enShort": "Export Prices MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.EXPORTS.NONE.AMOUNT": {
+    "code": "US.EXPORTS.NONE.AMOUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "出口额",
+      "zhShort": "出口",
+      "enFull": "Exports",
+      "enShort": "Exports"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "AMOUNT",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.FACTORY_ORDERS_EX_TRANSPORT.SA.MOM": {
+    "code": "US.FACTORY_ORDERS_EX_TRANSPORT.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "工厂订单（除运输）月率",
+      "zhShort": "工厂订单除运输",
+      "enFull": "Factory Orders ex Transportation, MoM",
+      "enShort": "Factory Orders ex Transport"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.FACTORY_ORDERS.SA.MOM": {
+    "code": "US.FACTORY_ORDERS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "工厂订单",
+      "zhShort": "工厂订单",
+      "enFull": "Factory Orders",
+      "enShort": "Factory Orders"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.FEDERAL_BUDGET.NONE.DIFF": {
+    "code": "US.FEDERAL_BUDGET.NONE.DIFF",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "联邦预算收支",
+      "zhShort": "联邦预算",
+      "enFull": "Federal Budget Balance",
+      "enShort": "Federal Budget"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "DIFF",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "财政部",
+      "url": "https://fiscaldata.treasury.gov/datasets/monthly-treasury-statement/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "财政部 · 月度报表"
+    },
+    "status": "active"
+  },
+  "US.FHFA_HOUSE_PRICE.NSA.YOY": {
+    "code": "US.FHFA_HOUSE_PRICE.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "FHFA 房价指数年率",
+      "zhShort": "FHFA 房价 年率",
+      "enFull": "FHFA House Price Index YoY",
+      "enShort": "FHFA HPI YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.FHFA_HOUSE_PRICE.SA.LEVEL": {
+    "code": "US.FHFA_HOUSE_PRICE.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "FHFA 房价指数",
+      "zhShort": "FHFA 房价",
+      "enFull": "FHFA House Price Index",
+      "enShort": "FHFA HPI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.FHFA_HOUSE_PRICE.SA.MOM": {
+    "code": "US.FHFA_HOUSE_PRICE.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "FHFA 房价指数月率",
+      "zhShort": "FHFA 房价 月率",
+      "enFull": "FHFA House Price Index MoM",
+      "enShort": "FHFA HPI MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.FINAL_SALES.SA.ANNUALIZED_QOQ": {
+    "code": "US.FINAL_SALES.SA.ANNUALIZED_QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "最终销售（年化季率）",
+      "zhShort": "最终销售",
+      "enFull": "Final Sales of Domestic Product (Annualized QoQ)",
+      "enShort": "Final Sales"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "ANNUALIZED_QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.GDP_DEFLATOR.SA.QOQ": {
+    "code": "US.GDP_DEFLATOR.SA.QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "GDP 平减指数（季调季率）",
+      "zhShort": "GDP 平减指数",
+      "enFull": "GDP Price Index (SA, QoQ)",
+      "enShort": "GDP Deflator"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.GDP_NOWCAST.SA.ANNUALIZED_QOQ": {
+    "code": "US.GDP_NOWCAST.SA.ANNUALIZED_QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "GDP 即时预测（年化季率）",
+      "zhShort": "GDP 即时预测",
+      "enFull": "GDP Nowcast, Annualized QoQ",
+      "enShort": "GDP Nowcast"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "ANNUALIZED_QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.GDP.SA.ANNUALIZED_QOQ": {
+    "code": "US.GDP.SA.ANNUALIZED_QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "国内生产总值（年化季率）",
+      "zhShort": "GDP 年化季率",
+      "enFull": "Gross Domestic Product, Annualized QoQ",
+      "enShort": "GDP Ann. QoQ"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "ANNUALIZED_QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.GOVERNMENT_PAYROLLS.SA.CHANGE": {
+    "code": "US.GOVERNMENT_PAYROLLS.SA.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "政府部门就业人数变动",
+      "zhShort": "政府就业",
+      "enFull": "Government Payrolls Change",
+      "enShort": "Government Payrolls"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.GSCPI.NONE.LEVEL": {
+    "code": "US.GSCPI.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "全球供应链压力指数",
+      "zhShort": "供应链压力指数",
+      "enFull": "Global Supply Chain Pressure Index",
+      "enShort": "GSCPI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.HOUSING_STARTS.SA.COUNT": {
+    "code": "US.HOUSING_STARTS.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "新屋开工",
+      "zhShort": "新屋开工",
+      "enFull": "Housing Starts",
+      "enShort": "Housing Starts"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.HOUSING_STARTS.SA.MOM": {
+    "code": "US.HOUSING_STARTS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "新屋开工月率",
+      "zhShort": "新屋开工 月率",
+      "enFull": "Housing Starts MoM",
+      "enShort": "Housing Starts MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.IMPORT_PRICES.NSA.YOY": {
+    "code": "US.IMPORT_PRICES.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "进口价格年率",
+      "zhShort": "进口价格 年率",
+      "enFull": "Import Prices YoY",
+      "enShort": "Import Prices YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.IMPORT_PRICES.SA.MOM": {
+    "code": "US.IMPORT_PRICES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "进口价格月率",
+      "zhShort": "进口价格 月率",
+      "enFull": "Import Prices MoM",
+      "enShort": "Import Prices MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.IMPORTS.NONE.AMOUNT": {
+    "code": "US.IMPORTS.NONE.AMOUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "进口额",
+      "zhShort": "进口",
+      "enFull": "Imports",
+      "enShort": "Imports"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "AMOUNT",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.INDUSTRIAL_PRODUCTION.NSA.YOY": {
+    "code": "US.INDUSTRIAL_PRODUCTION.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "工业产出年率",
+      "zhShort": "工业产出 年率",
+      "enFull": "Industrial Production YoY",
+      "enShort": "Industrial Production YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.INDUSTRIAL_PRODUCTION.SA.MOM": {
+    "code": "US.INDUSTRIAL_PRODUCTION.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "工业产出月率",
+      "zhShort": "工业产出 月率",
+      "enFull": "Industrial Production MoM",
+      "enShort": "Industrial Production MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.INFLATION_EXPECTATIONS.NONE.LEVEL": {
+    "code": "US.INFLATION_EXPECTATIONS.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "通胀预期",
+      "zhShort": "通胀预期",
+      "enFull": "Inflation Expectations",
+      "enShort": "Inflation Expectations"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_MANUFACTURING_EMPLOYMENT.SA.LEVEL": {
+    "code": "US.ISM_MANUFACTURING_EMPLOYMENT.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 制造业就业指数",
+      "zhShort": "ISM 制造业就业",
+      "enFull": "ISM Manufacturing Employment Index",
+      "enShort": "ISM Mfg Employment"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_MANUFACTURING_INVENTORIES.SA.LEVEL": {
+    "code": "US.ISM_MANUFACTURING_INVENTORIES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 制造业库存指数",
+      "zhShort": "ISM 制造业库存",
+      "enFull": "ISM Manufacturing Inventories",
+      "enShort": "ISM Mfg Inventories"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_MANUFACTURING_NEW_ORDERS.SA.LEVEL": {
+    "code": "US.ISM_MANUFACTURING_NEW_ORDERS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 制造业新订单指数",
+      "zhShort": "ISM 制造业新订单",
+      "enFull": "ISM Manufacturing New Orders",
+      "enShort": "ISM Mfg New Orders"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_MANUFACTURING_PRICES.SA.LEVEL": {
+    "code": "US.ISM_MANUFACTURING_PRICES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 制造业物价支付指数",
+      "zhShort": "ISM 制造业物价",
+      "enFull": "ISM Manufacturing Prices Paid",
+      "enShort": "ISM Mfg Prices"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_MANUFACTURING_PRODUCTION.SA.LEVEL": {
+    "code": "US.ISM_MANUFACTURING_PRODUCTION.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 制造业产出指数",
+      "zhShort": "ISM 制造业产出",
+      "enFull": "ISM Manufacturing Production",
+      "enShort": "ISM Mfg Production"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_MANUFACTURING.SA.LEVEL": {
+    "code": "US.ISM_MANUFACTURING.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 制造业采购经理人指数",
+      "zhShort": "ISM 制造业 PMI",
+      "enFull": "ISM Manufacturing PMI",
+      "enShort": "ISM Mfg PMI"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_SERVICES_BUSINESS_ACTIVITY.SA.LEVEL": {
+    "code": "US.ISM_SERVICES_BUSINESS_ACTIVITY.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 服务业商业活动指数",
+      "zhShort": "ISM 服务业活动",
+      "enFull": "ISM Services Business Activity Index",
+      "enShort": "ISM Svcs Activity"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_SERVICES_EMPLOYMENT.SA.LEVEL": {
+    "code": "US.ISM_SERVICES_EMPLOYMENT.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 服务业就业指数",
+      "zhShort": "ISM 服务业就业",
+      "enFull": "ISM Services Employment",
+      "enShort": "ISM Svcs Employment"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_SERVICES_INVENTORIES.SA.LEVEL": {
+    "code": "US.ISM_SERVICES_INVENTORIES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 服务业库存指数",
+      "zhShort": "ISM 服务业库存",
+      "enFull": "ISM Services Inventories",
+      "enShort": "ISM Svcs Inventories"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_SERVICES_NEW_ORDERS.SA.LEVEL": {
+    "code": "US.ISM_SERVICES_NEW_ORDERS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 服务业新订单指数",
+      "zhShort": "ISM 服务业新订单",
+      "enFull": "ISM Services New Orders",
+      "enShort": "ISM Svcs New Orders"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_SERVICES_PRICES.SA.LEVEL": {
+    "code": "US.ISM_SERVICES_PRICES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 服务业物价指数",
+      "zhShort": "ISM 服务业物价",
+      "enFull": "ISM Services Prices",
+      "enShort": "ISM Svcs Prices"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_SERVICES_SUPPLIER_DELIVERIES.SA.LEVEL": {
+    "code": "US.ISM_SERVICES_SUPPLIER_DELIVERIES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 服务业供应商交付指数",
+      "zhShort": "ISM 服务业交付",
+      "enFull": "ISM Services Supplier Deliveries",
+      "enShort": "ISM Svcs Deliveries"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.ISM_SERVICES.SA.LEVEL": {
+    "code": "US.ISM_SERVICES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "ISM 服务业采购经理人指数",
+      "zhShort": "ISM 服务业 PMI",
+      "enFull": "ISM Services PMI",
+      "enShort": "ISM Svcs PMI"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.JOBLESS_CLAIMS_4W_AVERAGE.SA.AVERAGE": {
+    "code": "US.JOBLESS_CLAIMS_4W_AVERAGE.SA.AVERAGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "初请失业金人数四周均值",
+      "zhShort": "初请四周均值",
+      "enFull": "Initial Jobless Claims 4-Week Average",
+      "enShort": "Claims 4W Avg"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "AVERAGE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "DOL",
+      "url": "https://www.dol.gov/ui/data.pdf",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "DOL · 周度申领报告"
+    },
+    "status": "active",
+    "periodDerivation": "release-structure",
+    "officialSeries": {
+      "frequency": "weekly"
+    }
+  },
+  "US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT": {
+    "code": "US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "续请失业金人数",
+      "zhShort": "续请失业金",
+      "enFull": "Continuing Jobless Claims",
+      "enShort": "Continuing Claims"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "DOL",
+      "url": "https://www.dol.gov/ui/data.pdf",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "DOL · 周度申领报告"
+    },
+    "status": "active",
+    "periodDerivation": "release-structure",
+    "officialSeries": {
+      "frequency": "weekly"
+    }
+  },
+  "US.JOBLESS_CLAIMS_INITIAL.SA.COUNT": {
+    "code": "US.JOBLESS_CLAIMS_INITIAL.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "初请失业金人数",
+      "zhShort": "初请失业金",
+      "enFull": "Initial Jobless Claims",
+      "enShort": "Initial Claims"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "DOL",
+      "url": "https://www.dol.gov/ui/data.pdf",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "DOL · 周度申领报告"
+    },
+    "status": "active",
+    "periodDerivation": "release-structure",
+    "officialSeries": {
+      "frequency": "weekly"
+    }
+  },
+  "US.JOLTS_OPENINGS.SA.COUNT": {
+    "code": "US.JOLTS_OPENINGS.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "JOLTS 职位空缺",
+      "zhShort": "职位空缺",
+      "enFull": "JOLTS Job Openings",
+      "enShort": "Job Openings"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.JOLTS_QUITS.SA.COUNT": {
+    "code": "US.JOLTS_QUITS.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "JOLTS 离职人数",
+      "zhShort": "离职人数",
+      "enFull": "JOLTS Quits",
+      "enShort": "Quits"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.KANSAS_FED_COMPOSITE.SA.LEVEL": {
+    "code": "US.KANSAS_FED_COMPOSITE.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "堪萨斯联储综合指数",
+      "zhShort": "堪萨斯联储综合",
+      "enFull": "Kansas City Fed Composite Index",
+      "enShort": "KC Fed Composite"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Kansas City",
+      "url": "https://www.kansascityfed.org/surveys/manufacturing-survey/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "堪萨斯城联储 · 制造业调查页（301 → 落地页 200）"
+    },
+    "status": "active"
+  },
+  "US.KANSAS_FED_MANUFACTURING.PRODUCTION.SA.LEVEL": {
+    "code": "US.KANSAS_FED_MANUFACTURING.PRODUCTION.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "堪萨斯联储制造业产出指数",
+      "zhShort": "堪萨斯联储制造业产出",
+      "enFull": "Kansas City Fed Manufacturing Production",
+      "enShort": "KC Fed Mfg Production"
+    },
+    "tier": null,
+    "parentCode": "US.KANSAS_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 8,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Kansas City",
+      "url": "https://www.kansascityfed.org/surveys/manufacturing-survey/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "堪萨斯城联储 · 制造业调查页（301 → 落地页 200）"
+    },
+    "status": "active"
+  },
+  "US.KANSAS_FED_MANUFACTURING.SA.LEVEL": {
+    "code": "US.KANSAS_FED_MANUFACTURING.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "堪萨斯联储制造业指数",
+      "zhShort": "堪萨斯联储制造业",
+      "enFull": "Kansas City Fed Manufacturing Index",
+      "enShort": "KC Fed Mfg"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Kansas City",
+      "url": "https://www.kansascityfed.org/surveys/manufacturing-survey/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "堪萨斯城联储 · 制造业调查页（301 → 落地页 200）"
+    },
+    "status": "active"
+  },
+  "US.LEI_EMPLOYMENT_TRENDS.NONE.LEVEL": {
+    "code": "US.LEI_EMPLOYMENT_TRENDS.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "领先指标·就业趋势指数",
+      "zhShort": "就业趋势",
+      "enFull": "Leading Indicators Employment Trends",
+      "enShort": "LEI Employment Trends"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.LEI.SA.MOM": {
+    "code": "US.LEI.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "经济领先指标",
+      "zhShort": "领先指标",
+      "enFull": "Leading Economic Index",
+      "enShort": "LEI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.LOGISTICS_MANAGERS_INDEX.NONE.LEVEL": {
+    "code": "US.LOGISTICS_MANAGERS_INDEX.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "物流经理指数",
+      "zhShort": "物流经理指数",
+      "enFull": "Logistics Managers Index",
+      "enShort": "LMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MANUFACTURING_PAYROLLS.SA.CHANGE": {
+    "code": "US.MANUFACTURING_PAYROLLS.SA.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "制造业就业人数",
+      "zhShort": "制造业就业",
+      "enFull": "Manufacturing Payrolls",
+      "enShort": "Mfg Payrolls"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MANUFACTURING_PRODUCTION.NSA.YOY": {
+    "code": "US.MANUFACTURING_PRODUCTION.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "制造业产出年率",
+      "zhShort": "制造业产出 年率",
+      "enFull": "Manufacturing Production YoY",
+      "enShort": "Mfg Production YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MANUFACTURING_PRODUCTION.SA.MOM": {
+    "code": "US.MANUFACTURING_PRODUCTION.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "制造业产出月率",
+      "zhShort": "制造业产出 月率",
+      "enFull": "Manufacturing Production MoM",
+      "enShort": "Mfg Production MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MBA_APPLICATIONS.NONE.LEVEL": {
+    "code": "US.MBA_APPLICATIONS.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "MBA 抵押贷款申请活动指数",
+      "zhShort": "MBA 申请指数",
+      "enFull": "MBA Mortgage Applications",
+      "enShort": "MBA Applications"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MBA_PURCHASE_INDEX.NONE.LEVEL": {
+    "code": "US.MBA_PURCHASE_INDEX.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "MBA 抵押贷款购买指数",
+      "zhShort": "MBA 购买指数",
+      "enFull": "MBA Mortgage Purchase Index",
+      "enShort": "MBA Purchase"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MBA_RATE_30Y.NONE.RATE": {
+    "code": "US.MBA_RATE_30Y.NONE.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "MBA 30 年期抵押贷款利率",
+      "zhShort": "MBA 30 年利率",
+      "enFull": "MBA 30-Year Mortgage Rate",
+      "enShort": "MBA 30Y Rate"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MBA_REFINANCE_INDEX.NONE.LEVEL": {
+    "code": "US.MBA_REFINANCE_INDEX.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "MBA 抵押贷款再融资指数",
+      "zhShort": "MBA 再融资指数",
+      "enFull": "MBA Mortgage Refinance Index",
+      "enShort": "MBA Refinance"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MICHIGAN_CURRENT.NONE.LEVEL": {
+    "code": "US.MICHIGAN_CURRENT.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "密歇根大学现况指数",
+      "zhShort": "密歇根现况",
+      "enFull": "Michigan Current Conditions",
+      "enShort": "Michigan Current"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "University of Michigan Surveys of Consumers",
+      "url": "http://www.sca.isr.umich.edu/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "密歇根大学消费者调查 · 官网首页（含现况/预期/信心与通胀预期）"
+    },
+    "status": "active"
+  },
+  "US.MICHIGAN_EXPECTATIONS.NONE.LEVEL": {
+    "code": "US.MICHIGAN_EXPECTATIONS.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "密歇根大学预期指数",
+      "zhShort": "密歇根预期",
+      "enFull": "Michigan Consumer Expectations",
+      "enShort": "Michigan Expectations"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "University of Michigan Surveys of Consumers",
+      "url": "http://www.sca.isr.umich.edu/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "密歇根大学消费者调查 · 官网首页（含现况/预期/信心与通胀预期）"
+    },
+    "status": "active"
+  },
+  "US.MICHIGAN_INFLATION_1Y.NONE.LEVEL": {
+    "code": "US.MICHIGAN_INFLATION_1Y.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "密歇根大学 1 年通胀预期",
+      "zhShort": "1 年通胀预期",
+      "enFull": "Michigan 1-Year Inflation Expectations",
+      "enShort": "Michigan 1Y Inflation"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "University of Michigan Surveys of Consumers",
+      "url": "http://www.sca.isr.umich.edu/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "密歇根大学消费者调查 · 官网首页（含现况/预期/信心与通胀预期）"
+    },
+    "status": "active"
+  },
+  "US.MICHIGAN_INFLATION_5Y.NONE.LEVEL": {
+    "code": "US.MICHIGAN_INFLATION_5Y.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "密歇根大学 5-10 年通胀预期",
+      "zhShort": "5-10 年通胀预期",
+      "enFull": "Michigan 5-10 Year Inflation Expectations",
+      "enShort": "Michigan 5-10Y Inflation"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "University of Michigan Surveys of Consumers",
+      "url": "http://www.sca.isr.umich.edu/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "密歇根大学消费者调查 · 官网首页（含现况/预期/信心与通胀预期）"
+    },
+    "status": "active"
+  },
+  "US.MICHIGAN_SENTIMENT.NONE.LEVEL": {
+    "code": "US.MICHIGAN_SENTIMENT.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "密歇根大学消费者信心指数",
+      "zhShort": "密歇根信心",
+      "enFull": "Michigan Consumer Sentiment",
+      "enShort": "Michigan Sentiment"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "University of Michigan Surveys of Consumers",
+      "url": "http://www.sca.isr.umich.edu/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "密歇根大学消费者调查 · 官网首页（含现况/预期/信心与通胀预期）"
+    },
+    "status": "active"
+  },
+  "US.MORTGAGE_RATE_15Y.NONE.RATE": {
+    "code": "US.MORTGAGE_RATE_15Y.NONE.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "15 年期固定抵押贷款利率",
+      "zhShort": "15 年房贷利率",
+      "enFull": "15-Year Fixed Mortgage Rate",
+      "enShort": "15Y Mortgage Rate"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.MORTGAGE_RATE_30Y.NONE.RATE": {
+    "code": "US.MORTGAGE_RATE_30Y.NONE.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "30 年期固定抵押贷款利率",
+      "zhShort": "30 年房贷利率",
+      "enFull": "30-Year Fixed Mortgage Rate",
+      "enShort": "30Y Mortgage Rate"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.NAHB_HOUSING_MARKET.NONE.LEVEL": {
+    "code": "US.NAHB_HOUSING_MARKET.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "NAHB 住房市场指数",
+      "zhShort": "NAHB 住房指数",
+      "enFull": "NAHB Housing Market Index",
+      "enShort": "NAHB HMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "National Association of Home Builders",
+      "url": "https://www.nahb.org/news-and-economics/housing-economics/indices/housing-market-index",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "NAHB · 住房市场指数主题页（200，机构自有域名）"
+    },
+    "status": "active"
+  },
+  "US.NEW_HOME_SALES.SA.COUNT": {
+    "code": "US.NEW_HOME_SALES.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "新屋销售",
+      "zhShort": "新屋销售",
+      "enFull": "New Home Sales",
+      "enShort": "New Home Sales"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.NEW_HOME_SALES.SA.MOM": {
+    "code": "US.NEW_HOME_SALES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "新屋销售月率",
+      "zhShort": "新屋销售 月率",
+      "enFull": "New Home Sales MoM",
+      "enShort": "New Home Sales MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.NFIB_OPTIMISM.NONE.LEVEL": {
+    "code": "US.NFIB_OPTIMISM.NONE.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "NFIB 小型企业信心指数",
+      "zhShort": "NFIB 小企业信心",
+      "enFull": "NFIB Small Business Optimism Index",
+      "enShort": "NFIB Optimism"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.NONFARM.SA.CHANGE": {
+    "code": "US.NONFARM.SA.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "非农业就业人数变动",
+      "zhShort": "新增就业",
+      "enFull": "Nonfarm Payrolls Change",
+      "enShort": "Nonfarm Payrolls"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active",
+    "officialSeries": {
+      "seriesId": "PAYEMS",
+      "units": "chg",
+      "frequency": "monthly"
+    }
+  },
+  "US.PARTICIPATION_RATE.SA.RATE": {
+    "code": "US.PARTICIPATION_RATE.SA.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "劳动力参与率",
+      "zhShort": "参与率",
+      "enFull": "Labor Force Participation Rate",
+      "enShort": "Participation Rate"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.PCE.NSA.YOY": {
+    "code": "US.PCE.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "个人消费支出物价指数年率",
+      "zhShort": "PCE 年率",
+      "enFull": "PCE Price Index YoY",
+      "enShort": "PCE YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "retired",
+    "supersededBy": "US.PCE.SA.YOY"
+  },
+  "US.PCE.SA.MOM": {
+    "code": "US.PCE.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "个人消费支出物价指数月率",
+      "zhShort": "PCE 月率",
+      "enFull": "PCE Price Index MoM",
+      "enShort": "PCE MoM"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.PCE.SA.YOY": {
+    "code": "US.PCE.SA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "个人消费支出物价指数年率（季调）",
+      "zhShort": "PCE 年率（季调）",
+      "enFull": "PCE Price Index YoY (SA)",
+      "enShort": "PCE YoY (SA)"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.PENDING_HOME_SALES.NSA.YOY": {
+    "code": "US.PENDING_HOME_SALES.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "待售房屋销售年率",
+      "zhShort": "待售房屋 年率",
+      "enFull": "Pending Home Sales YoY",
+      "enShort": "Pending Sales YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.PENDING_HOME_SALES.SA.MOM": {
+    "code": "US.PENDING_HOME_SALES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "待售房屋销售月率",
+      "zhShort": "待售房屋 月率",
+      "enFull": "Pending Home Sales MoM",
+      "enShort": "Pending Sales MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.PERSONAL_INCOME.SA.MOM": {
+    "code": "US.PERSONAL_INCOME.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "个人收入",
+      "zhShort": "个人收入",
+      "enFull": "Personal Income",
+      "enShort": "Personal Income"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.PERSONAL_SPENDING.SA.MOM": {
+    "code": "US.PERSONAL_SPENDING.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "个人支出",
+      "zhShort": "个人支出",
+      "enFull": "Personal Spending",
+      "enShort": "Personal Spending"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_BUSINESS_CONDITIONS.SA.LEVEL": {
+    "code": "US.PHILLY_FED_BUSINESS_CONDITIONS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储商业景气指数",
+      "zhShort": "费城联储景气",
+      "enFull": "Philadelphia Fed Business Outlook",
+      "enShort": "Philly Fed Outlook"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_CAPEX.SA.LEVEL": {
+    "code": "US.PHILLY_FED_CAPEX.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储资本支出指数",
+      "zhShort": "费城联储资本支出",
+      "enFull": "Philadelphia Fed Capex Index",
+      "enShort": "Philly Fed Capex"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_EMPLOYMENT.SA.LEVEL": {
+    "code": "US.PHILLY_FED_EMPLOYMENT.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储就业指数",
+      "zhShort": "费城联储就业",
+      "enFull": "Philadelphia Fed Employment",
+      "enShort": "Philly Fed Employment"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL": {
+    "code": "US.PHILLY_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储制造业就业指数",
+      "zhShort": "费城联储制造业就业",
+      "enFull": "Philadelphia Fed Manufacturing Employment",
+      "enShort": "Philly Fed Mfg Employment"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL": {
+    "code": "US.PHILLY_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储制造业新订单指数",
+      "zhShort": "费城联储制造业新订单",
+      "enFull": "Philadelphia Fed Manufacturing New Orders",
+      "enShort": "Philly Fed Mfg New Orders"
+    },
+    "tier": null,
+    "parentCode": "US.PHILLY_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 1,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL": {
+    "code": "US.PHILLY_FED_MANUFACTURING.PRICES_PAID.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储制造业物价支付指数",
+      "zhShort": "费城联储制造业物价支付",
+      "enFull": "Philadelphia Fed Manufacturing Prices Paid",
+      "enShort": "Philly Fed Mfg Prices Paid"
+    },
+    "tier": null,
+    "parentCode": "US.PHILLY_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 6,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL": {
+    "code": "US.PHILLY_FED_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储制造业物价获得指数",
+      "zhShort": "费城联储制造业物价获得",
+      "enFull": "Philadelphia Fed Manufacturing Prices Received",
+      "enShort": "Philly Fed Mfg Prices Received"
+    },
+    "tier": null,
+    "parentCode": "US.PHILLY_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 7,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_MANUFACTURING.SA.LEVEL": {
+    "code": "US.PHILLY_FED_MANUFACTURING.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储制造业指数",
+      "zhShort": "费城联储制造业",
+      "enFull": "Philadelphia Fed Manufacturing Index",
+      "enShort": "Philly Fed Mfg"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL": {
+    "code": "US.PHILLY_FED_MANUFACTURING.SHIPMENTS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储制造业装船指数",
+      "zhShort": "费城联储制造业装船",
+      "enFull": "Philadelphia Fed Manufacturing Shipments",
+      "enShort": "Philly Fed Mfg Shipments"
+    },
+    "tier": null,
+    "parentCode": "US.PHILLY_FED_MANUFACTURING.SA.LEVEL",
+    "childOrder": 0,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_NEW_ORDERS.SA.LEVEL": {
+    "code": "US.PHILLY_FED_NEW_ORDERS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储新订单指数",
+      "zhShort": "费城联储新订单",
+      "enFull": "Philadelphia Fed New Orders",
+      "enShort": "Philly Fed New Orders"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PHILLY_FED_PRICES_PAID.SA.LEVEL": {
+    "code": "US.PHILLY_FED_PRICES_PAID.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "费城联储物价支付指数",
+      "zhShort": "费城联储物价",
+      "enFull": "Philadelphia Fed Prices Paid",
+      "enShort": "Philly Fed Prices"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "Federal Reserve Bank of Philadelphia",
+      "url": "https://www.philadelphiafed.org/surveys-and-data/regional-economic-analysis/mbos",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "费城联储 · 制造业商业展望调查页（200）"
+    },
+    "status": "active"
+  },
+  "US.PPI_EX_FOOD_ENERGY_TRADE.NSA.YOY": {
+    "code": "US.PPI_EX_FOOD_ENERGY_TRADE.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "生产者物价指数（除食品能源贸易）年率",
+      "zhShort": "PPI 除食品能源贸易 年率",
+      "enFull": "PPI ex Food, Energy and Trade YoY",
+      "enShort": "PPI ex FE&T YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.PPI_EX_FOOD_ENERGY_TRADE.SA.MOM": {
+    "code": "US.PPI_EX_FOOD_ENERGY_TRADE.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "生产者物价指数（除食品能源贸易）月率",
+      "zhShort": "PPI 除食品能源贸易 月率",
+      "enFull": "PPI ex Food, Energy and Trade MoM",
+      "enShort": "PPI ex FE&T MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.PPI_FINAL_DEMAND.NSA.YOY": {
+    "code": "US.PPI_FINAL_DEMAND.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "生产者物价指数·最终需求年率",
+      "zhShort": "PPI 最终需求 年率",
+      "enFull": "PPI Final Demand YoY",
+      "enShort": "PPI Final Demand YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.PPI_FINAL_DEMAND.SA.MOM": {
+    "code": "US.PPI_FINAL_DEMAND.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "生产者物价指数·最终需求月率",
+      "zhShort": "PPI 最终需求 月率",
+      "enFull": "PPI Final Demand MoM",
+      "enShort": "PPI Final Demand MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.PPI.NSA.YOY": {
+    "code": "US.PPI.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "生产者物价指数年率",
+      "zhShort": "PPI 年率",
+      "enFull": "Producer Price Index YoY",
+      "enShort": "PPI YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.PPI.SA.LEVEL": {
+    "code": "US.PPI.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "生产者物价指数",
+      "zhShort": "PPI",
+      "enFull": "Producer Price Index",
+      "enShort": "PPI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.PPI.SA.MOM": {
+    "code": "US.PPI.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "生产者物价指数月率",
+      "zhShort": "PPI 月率",
+      "enFull": "Producer Price Index MoM",
+      "enShort": "PPI MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.PRIVATE_PAYROLLS.SA.CHANGE": {
+    "code": "US.PRIVATE_PAYROLLS.SA.CHANGE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "私营部门就业人数",
+      "zhShort": "私营就业",
+      "enFull": "Private Payrolls",
+      "enShort": "Private Payrolls"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "CHANGE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.PRODUCTIVITY.SA.QOQ": {
+    "code": "US.PRODUCTIVITY.SA.QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "非农业生产力",
+      "zhShort": "生产力",
+      "enFull": "Nonfarm Business Productivity",
+      "enShort": "Productivity"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.REAL_AHE.NONE.MOM": {
+    "code": "US.REAL_AHE.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "实际平均每小时工资月率",
+      "zhShort": "实际时薪 月率",
+      "enFull": "Real Average Hourly Earnings MoM",
+      "enShort": "Real Avg Hourly Earnings MoM"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.REAL_AHE.NONE.YOY": {
+    "code": "US.REAL_AHE.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "实际平均每小时工资年率",
+      "zhShort": "实际时薪 年率",
+      "enFull": "Real Average Hourly Earnings YoY",
+      "enShort": "Real Avg Hourly Earnings YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.REDBOOK_RETAIL_SALES.NONE.YOY": {
+    "code": "US.REDBOOK_RETAIL_SALES.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "红皮书商业零售销售年率",
+      "zhShort": "红皮书零售",
+      "enFull": "Redbook Retail Sales, YoY",
+      "enShort": "Redbook"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.RETAIL_INVENTORIES_EX_AUTOS.SA.MOM": {
+    "code": "US.RETAIL_INVENTORIES_EX_AUTOS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "零售库存（除汽车）",
+      "zhShort": "零售库存除汽车",
+      "enFull": "Retail Inventories ex Autos",
+      "enShort": "Retail Inventories ex Autos"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.RETAIL_SALES_CONTROL_GROUP.SA.MOM": {
+    "code": "US.RETAIL_SALES_CONTROL_GROUP.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "零售销售·核心对照组",
+      "zhShort": "零售核心对照组",
+      "enFull": "Retail Sales Control Group",
+      "enShort": "Retail Control Group"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.RETAIL_SALES_EX_AUTOS.SA.MOM": {
+    "code": "US.RETAIL_SALES_EX_AUTOS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "零售销售（除汽车）",
+      "zhShort": "零售除汽车",
+      "enFull": "Retail Sales ex Autos",
+      "enShort": "Retail ex Autos"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.RETAIL_SALES_EX_GAS_AUTOS.SA.MOM": {
+    "code": "US.RETAIL_SALES_EX_GAS_AUTOS.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "零售销售（除汽车与汽油）",
+      "zhShort": "零售除汽车汽油",
+      "enFull": "Retail Sales ex Gas and Autos",
+      "enShort": "Retail ex Gas & Autos"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.RETAIL_SALES.NSA.YOY": {
+    "code": "US.RETAIL_SALES.NSA.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "零售销售年率",
+      "zhShort": "零售 年率",
+      "enFull": "Retail Sales YoY",
+      "enShort": "Retail Sales YoY"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NSA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.RETAIL_SALES.SA.MOM": {
+    "code": "US.RETAIL_SALES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "零售销售月率",
+      "zhShort": "零售 月率",
+      "enFull": "Retail Sales MoM",
+      "enShort": "Retail Sales MoM"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.RICHMOND_FED_MANUFACTURING.SA.LEVEL": {
+    "code": "US.RICHMOND_FED_MANUFACTURING.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "里奇蒙联储制造业指数",
+      "zhShort": "里奇蒙联储制造业",
+      "enFull": "Richmond Fed Manufacturing Index",
+      "enShort": "Richmond Fed Mfg"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.RICHMOND_FED_SERVICES.SA.LEVEL": {
+    "code": "US.RICHMOND_FED_SERVICES.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "里奇蒙联储服务业指数",
+      "zhShort": "里奇蒙联储服务业",
+      "enFull": "Richmond Fed Services Index",
+      "enShort": "Richmond Fed Svcs"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.RICHMOND_FED_SHIPMENTS.SA.LEVEL": {
+    "code": "US.RICHMOND_FED_SHIPMENTS.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "里奇蒙联储出货指数",
+      "zhShort": "里奇蒙联储出货",
+      "enFull": "Richmond Fed Shipments",
+      "enShort": "Richmond Shipments"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.SP_COMPOSITE_PMI.SA.LEVEL": {
+    "code": "US.SP_COMPOSITE_PMI.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "标普全球综合 PMI",
+      "zhShort": "综合 PMI",
+      "enFull": "S&P Global Composite PMI",
+      "enShort": "Composite PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.SP_MANUFACTURING_PMI.SA.LEVEL": {
+    "code": "US.SP_MANUFACTURING_PMI.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "标普全球制造业 PMI",
+      "zhShort": "制造业 PMI",
+      "enFull": "S&P Global Manufacturing PMI",
+      "enShort": "Mfg PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.SP_SERVICES_PMI.SA.LEVEL": {
+    "code": "US.SP_SERVICES_PMI.SA.LEVEL",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "标普全球服务业 PMI",
+      "zhShort": "服务业 PMI",
+      "enFull": "S&P Global Services PMI",
+      "enShort": "Services PMI"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "LEVEL",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.TRADE_BALANCE.NONE.DIFF": {
+    "code": "US.TRADE_BALANCE.NONE.DIFF",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "贸易帐",
+      "zhShort": "贸易帐",
+      "enFull": "Trade Balance",
+      "enShort": "Trade Balance"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "DIFF",
+    "seasonality": "NONE",
+    "officialSource": {
+      "agency": "BEA",
+      "url": "https://www.bea.gov/news",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BEA · 发布页（news 目录）"
+    },
+    "status": "active"
+  },
+  "US.UNEMPLOYMENT_U6.SA.RATE": {
+    "code": "US.UNEMPLOYMENT_U6.SA.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "U6 失业率",
+      "zhShort": "U6 失业率",
+      "enFull": "U-6 Unemployment Rate",
+      "enShort": "U-6 Unemployment"
+    },
+    "tier": 2,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active"
+  },
+  "US.UNEMPLOYMENT.SA.RATE": {
+    "code": "US.UNEMPLOYMENT.SA.RATE",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "失业率",
+      "zhShort": "失业率",
+      "enFull": "Unemployment Rate",
+      "enShort": "Unemployment Rate"
+    },
+    "tier": 1,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "RATE",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "BLS",
+      "url": "https://www.bls.gov/news.release/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "BLS · 发布页（news.release 目录）"
+    },
+    "status": "active",
+    "officialSeries": {
+      "seriesId": "UNRATE",
+      "units": "value",
+      "frequency": "monthly"
+    }
+  },
+  "US.UNIT_LABOR_COSTS.SA.QOQ": {
+    "code": "US.UNIT_LABOR_COSTS.SA.QOQ",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "单位劳动力成本",
+      "zhShort": "单位劳动力成本",
+      "enFull": "Unit Labor Costs",
+      "enShort": "Unit Labor Costs"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "QOQ",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.USED_CAR_PRICES.NONE.MOM": {
+    "code": "US.USED_CAR_PRICES.NONE.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "二手车价格月率",
+      "zhShort": "二手车价格",
+      "enFull": "Used Car Prices, MoM",
+      "enShort": "Used Car Prices"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.USED_CAR_PRICES.NONE.YOY": {
+    "code": "US.USED_CAR_PRICES.NONE.YOY",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "二手车价格年率",
+      "zhShort": "二手车价格 年率",
+      "enFull": "Used Car Prices YoY",
+      "enShort": "Used Car Prices YoY"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "YOY",
+    "seasonality": "NONE",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.VEHICLE_SALES.SA.COUNT": {
+    "code": "US.VEHICLE_SALES.SA.COUNT",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "汽车销量（年化）",
+      "zhShort": "汽车销量",
+      "enFull": "Vehicle Sales, Annualized",
+      "enShort": "Vehicle Sales"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "COUNT",
+    "seasonality": "SA",
+    "officialSource": {
+      "pending": true,
+      "reason": "official-source-todo"
+    },
+    "status": "active"
+  },
+  "US.WHOLESALE_INVENTORIES.SA.MOM": {
+    "code": "US.WHOLESALE_INVENTORIES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "批发库存月率",
+      "zhShort": "批发库存",
+      "enFull": "Wholesale Inventories, MoM",
+      "enShort": "Wholesale Inventories"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  },
+  "US.WHOLESALE_SALES.SA.MOM": {
+    "code": "US.WHOLESALE_SALES.SA.MOM",
+    "kind": "metric",
+    "countryCode": "US",
+    "names": {
+      "zhFull": "批发销售",
+      "zhShort": "批发销售",
+      "enFull": "Wholesale Sales",
+      "enShort": "Wholesale Sales"
+    },
+    "tier": null,
+    "parentCode": null,
+    "childOrder": null,
+    "measure": "MOM",
+    "seasonality": "SA",
+    "officialSource": {
+      "agency": "普查局",
+      "url": "https://www.census.gov/economic-indicators/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-17",
+      "basis": "普查局 · 经济指标页"
+    },
+    "status": "active"
+  }
+}

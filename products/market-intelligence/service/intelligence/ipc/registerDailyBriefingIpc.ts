@@ -1,4 +1,5 @@
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
+import { getChannelPosterOutbox } from '@platform/storage/channelPosterOutbox'
 
 import { isDailyBriefingEditionDate, isDailyBriefingLocale, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingService } from '../daily-briefing/dailyBriefingService'
@@ -48,8 +49,26 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
   // Read-only and cheap: the answer is the live snapshot of the run in progress, never a new read
   // of the store, and it says `idle` as soon as that run settles.
   // 读者按下「推送到手机」：先写/更新当天记录（只记不发），再按同一个键重投——见服务里那段说明。
-  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.publishToPhone, async (payload) =>
-    service.publishToPhone(readPushQuery(payload)))
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.publishToPhone, async (payload) => {
+    const query = readPushQuery(payload)
+    // 海报字节可选：**主进程自己**判体积/嗅探/落盘并写来源记录（调用方永远给不出路径）。
+    // 没有 `poster` 时这一跳不执行，既有「只发文字」行为一字不变。
+    if (query.poster !== undefined) {
+      const outbox = getChannelPosterOutbox()
+      if (outbox === null) throw new Error('channel-poster-store-unavailable')
+      const stored = await outbox.store({
+        edition: { date: query.date, periodId: query.periodId, locale: query.locale },
+        bytes: query.poster.bytes,
+        mime: query.poster.mime
+      })
+      // 体积超限/格式不收：整条不发（不偷偷降级成纯文字——那是另一种失败）。
+      if (!stored.ok) throw new Error(stored.code)
+    }
+    // 路由按**本次请求的意图**：带了海报才走海报那一路；不带就发纯文字（哪怕暂存区里还有旧海报）。
+    return query.poster === undefined
+      ? service.publishToPhone({ date: query.date, periodId: query.periodId, locale: query.locale })
+      : service.publishToPhone({ date: query.date, periodId: query.periodId, locale: query.locale, withPoster: true })
+  })
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getProgress, async (payload) =>
     service.getProgress(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.get, async (payload) =>
@@ -81,13 +100,25 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
  * 推送没有"从哪点的"这件事。曾经把两者并成一条，于是每次推送都被要求带 `entry`、被判非法
  * （`daily-briefing-invalid-request`），请求根本到不了通道那一步（用户 2026-11-07 报"发布频道发不出去"）。
  */
-function readPushQuery(payload: unknown): Readonly<{ date: string; periodId: string; locale: DailyBriefingLocale }> {
+function readPushQuery(payload: unknown): Readonly<{
+  date: string
+  periodId: string
+  locale: DailyBriefingLocale
+  /** 可选海报：**只有字节与声明 mime**，不接受任何路径/文件名（方案 §1）。 */
+  poster?: Readonly<{ bytes: Uint8Array; mime: string }>
+}> {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
-  const { date, periodId, locale } = payload
+  const { date, periodId, locale, poster } = payload
   if (typeof date !== 'string' || !isDailyBriefingEditionDate(date)) throw new Error('daily-briefing-invalid-request')
   if (typeof periodId !== 'string' || periodId.trim().length === 0 || periodId.length > 64) throw new Error('daily-briefing-invalid-request')
   if (!isDailyBriefingLocale(locale)) throw new Error('daily-briefing-invalid-request')
-  return { date, periodId, locale }
+  if (poster === undefined) return { date, periodId, locale }
+  if (!isRecord(poster)) throw new Error('daily-briefing-invalid-request')
+  const { bytes, mime } = poster
+  // 结构化克隆过 IPC 的字节仍是 `Uint8Array`；其他形状一律拒，别把字符串当字节往下传。
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) throw new Error('daily-briefing-invalid-request')
+  if (typeof mime !== 'string' || mime.length === 0 || mime.length > 64) throw new Error('daily-briefing-invalid-request')
+  return { date, periodId, locale, poster: { bytes, mime } }
 }
 
 /** Every field is required and validated: a missing one would delete another issue's edition. */

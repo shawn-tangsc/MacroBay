@@ -118,7 +118,7 @@ MacroBay/
 
 - 渠道集成代码仍在平台里，渠道设置页也在；但本版本没有启用任何用于收发的适配器。
 - 不包含打包安装程序和自动更新。
-- macOS 是已验证的开发平台；Windows、Linux 仍是实验性支持。
+- macOS 是主要开发和构建平台；Windows、Linux 仍是实验性支持。
 
 参见[状态与限制](../reference/status-and-limitations.zh-CN.md)。
 

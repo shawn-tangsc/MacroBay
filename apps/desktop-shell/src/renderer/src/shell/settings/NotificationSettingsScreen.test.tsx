@@ -8,6 +8,7 @@ import { StateView } from '@platform/ui/components/state'
 
 import { NotificationSettingsScreen } from './NotificationSettingsScreen'
 import { notificationSettingsText } from './notifications/notificationSettingsText'
+import { platformText } from '../../i18n/platformText'
 import type { NotificationSettingsClient } from './notifications/useNotificationSettingsData'
 
 let root: Root | undefined
@@ -21,6 +22,8 @@ afterEach(async () => {
 })
 
 const text = notificationSettingsText['zh-CN']
+// 页脚那句已收进平台文案表（同一条键）：断言直接取那一处。
+const footerLine = platformText['zh-CN'].notifications.footerInfoLine
 
 function client(overrides: Partial<NotificationSettingsClient> = {}): NotificationSettingsClient {
   return {
@@ -100,7 +103,7 @@ describe('notification settings is two switches, one test button and a footer', 
     expect(container.querySelectorAll('button[role="switch"]')).toHaveLength(2)
     expect(container.querySelector('[data-send-test]')).not.toBeNull()
     // 页脚那句是**说明**：不在正文里，收在右边那颗 ⓘ（点开才读得到，原文一字不改）。
-    expect(container.querySelector('.notification-footer')?.textContent).not.toContain(text.footerLine)
+    expect(container.querySelector('.notification-footer')?.textContent).not.toContain(footerLine)
     const footerInfo = container.querySelector<HTMLButtonElement>(
       `.notification-footer button[aria-label="${text.footerHintLabel}"]`
     )
@@ -110,7 +113,7 @@ describe('notification settings is two switches, one test button and a footer', 
       await Promise.resolve()
     })
     // 点开之后原句出现（浮层挂在 body 上），且一字不改。
-    await vi.waitFor(() => expect(document.body.textContent).toContain(text.footerLine))
+    await vi.waitFor(() => expect(document.body.textContent).toContain(footerLine))
 
     // 订阅层 v2.20 撤销后，这些对象一个都不该留在屏上。
     expect(container.textContent).not.toContain('固定开启')
@@ -253,7 +256,17 @@ describe('notification settings is two switches, one test button and a footer', 
 
   it('says only 「没发出去」 in the sentence and puts the reason code in a collapsed area', async () => {
     const container = await mount(
-      client({ sendTest: async () => ({ state: 'unavailable' as const, reasonCode: 'push-unavailable', enabledChannelCount: 0 }) })
+      // 这一条的意图是 ①（一条都没启用）：把 requestedCount 显式写成 0，别靠「字段缺了」碰巧走这条。
+      // 注：本屏现在只渲染 `text.testUnavailable`，不读 enabledChannelCount / requestedCount
+      // （全仓渲染层 grep 0）；等 ② 的分叉真的落进这一屏，再补一条 >0 的桩验那句。
+      client({
+        sendTest: async () => ({
+          state: 'unavailable' as const,
+          reasonCode: 'push-unavailable',
+          enabledChannelCount: 0,
+          requestedCount: 0
+        })
+      })
     )
     const button = container.querySelector('[data-send-test]') as HTMLElement
     await act(async () => {

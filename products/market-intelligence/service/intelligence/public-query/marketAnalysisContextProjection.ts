@@ -17,16 +17,12 @@ import {
   type MarketAnalysisCrossAssetInstrument,
   type MarketAnalysisDomainAccess,
   type MarketAnalysisQueryState,
-  type SourceHealthFlag
 } from '../../../contracts/marketAnalysisContracts'
 import type {
   AgentSafeEvidenceRef,
   CapitalConditionsSnapshotResult,
   FearGreedSnapshotResult,
   FundingRateHistoryResult,
-  MarketIntelligenceQueryResult,
-  SourceCoverageAsOf,
-  SourceHealthData
 } from './queryContracts'
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
 import { assessMarketCalendarSurprise } from '../../../contracts/macro/marketCalendarSurprise'
@@ -39,7 +35,7 @@ import type {
 import type { AgentEvidenceRef } from '../../../contracts/marketAnalysisContracts'
 import type { CrossAssetRange, CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { crossAssetAnalysisWindowPolicy } from '../cross-asset/crossAssetAnalysisWindows'
-import type { MarketIntelligencePublicQueryService as PublicQueryService } from './publicQueryService'
+import { hashSafeEvidenceIdentity } from './marketAnalysisContextSupport'
 import { observation, type MarketAnalysisDomainObservation } from './domainObservationMerge'
 
 export { observation }
@@ -174,7 +170,7 @@ export function projectFunding(result: FundingRateHistoryResult | undefined, pos
     return
   }
   const points = [...result.btc.map(point => ['BTC', point] as const), ...result.eth.map(point => ['ETH', point] as const)]
-  for (const [index, [asset, point]] of points.entries()) facts.push(fact('funding', asset, 'funding-rate-percent', point.ratePercent, '%', 'binance-futures-positioning', point.observedAt, asOf, 'comparable', `point-${index}`))
+  for (const [index, [asset, point]] of points.entries()) facts.push(fact('funding', asset, 'funding-rate-percent', point.ratePercent, 'percent', 'binance-futures-positioning', point.observedAt, asOf, 'comparable', `point-${index}`))
   projectPositioning(positioning, result, asOf, facts)
   const state = points.length ? 'available' : 'empty'
   const freshness = points.length ? 'fresh' : 'missing'
@@ -228,7 +224,7 @@ export function projectCrossAsset(
       const comparable = completeCoverage(snapshot, assetKey(asset))
       // The window belongs to the metric name: a fact carries no free-text label, so "价格收益 +0.4%"
       // without one left the model unable to tell 15 minutes from three days — it said so.
-      facts.push(fact('cross-asset', asset, `price-return-${window.horizon}`, value, '%', sourceId, snapshot.analysisEnd, asOf,
+      facts.push(fact('cross-asset', asset, `price-return-${window.horizon}`, value, 'percent', sourceId, snapshot.analysisEnd, asOf,
         comparable ? 'comparable' : 'not-comparable', `${window.range}-${window.horizon}`))
       if (!comparable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.notComparable)
     }
@@ -253,7 +249,7 @@ export function projectCrossAsset(
     const value = closedReturn(snapshot, 'index')
     if (value === undefined) continue
     const comparable = completeCoverage(snapshot, 'index')
-    facts.push(fact('cross-asset', instrument.symbol, `price-return-${window.horizon}`, value, '%', instrument.sourceId,
+    facts.push(fact('cross-asset', instrument.symbol, `price-return-${window.horizon}`, value, 'percent', instrument.sourceId,
       snapshot.analysisEnd, asOf, comparable ? 'comparable' : 'not-comparable', `${window.range}-${window.horizon}`))
     if (!comparable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.notComparable)
     caveats.add(instrument.limitation)
@@ -266,7 +262,7 @@ export function projectCrossAsset(
     // Exactly the verifier's arithmetic: BTC's window return minus ETH's, so a prediction written
     // against this fact is checkable by the same yardstick.
     const comparable = completeCoverage(relativeSnapshot, 'btc') && completeCoverage(relativeSnapshot, 'eth')
-    facts.push(fact('cross-asset', 'btc-vs-eth', `relative-return-${relative.horizon}`, btc - eth, '%', sourceId, relativeSnapshot.analysisEnd, asOf,
+    facts.push(fact('cross-asset', 'btc-vs-eth', `relative-return-${relative.horizon}`, btc - eth, 'percent', sourceId, relativeSnapshot.analysisEnd, asOf,
       comparable ? 'comparable' : 'not-comparable', `${relative.range}-${relative.horizon}`))
     if (!comparable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.notComparable)
   }
@@ -329,14 +325,19 @@ export function projectMacroCalendar(
 ): void {
   const official = input.official
   const officialEvents = official && official.state === 'available' && official.asOf === asOf ? official.events : undefined
+  const providerEvents = input.provider?.observations ?? []
   for (const caveat of input.provider?.caveats ?? []) caveats.add(caveat)
-  if (!officialEvents) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
-  const events: readonly MacroCalendarProviderObservation[] = [...(officialEvents ?? []), ...(input.provider?.observations ?? [])]
+  // 官方日历查询缺失不再等于「日历不可用」：标准表把官方与市场写在一起，官方行经同一个月查询
+  // 进来。只有两路都没有事件时才报这条缺口，否则每次分析都会挂一条假的「不可用」。
+  if (!officialEvents && providerEvents.length === 0) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
+  const events: readonly MacroCalendarProviderObservation[] = [...(officialEvents ?? []), ...providerEvents]
   if (events.length === 0) {
-    observations.macro = officialEvents
+    // 读成功但为空 = 空；一次都没读成 = 不可用。两者不许合并。
+    const readable = officialEvents !== undefined || input.provider?.readState === 'available'
+    observations.macro = readable
       ? observation('empty', 'missing', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty])
       : observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable])
-    caveats.add(officialEvents ? MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty : MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
+    caveats.add(readable ? MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty : MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarUnavailable)
     return
   }
   let factCount = 0
@@ -398,15 +399,6 @@ export function projectMacroCalendar(
   observations.macro = observation('available', 'fresh', factCount, factCount, [])
 }
 
-export async function safeQuery<T>(query: () => Promise<T>): Promise<T | undefined> {
-  try { return await query() } catch { return undefined }
-}
-
-export async function safeSourceHealth(service: Pick<PublicQueryService, 'getSourceHealth'>, asOf: string): Promise<MarketIntelligenceQueryResult<SourceHealthData> | undefined> {
-  const result = await safeQuery(() => service.getSourceHealth({ asOf }))
-  return isEnvelope(result) && isSourceHealthData(result.data) ? result as MarketIntelligenceQueryResult<SourceHealthData> : undefined
-}
-
 export function fact(domain: AnalysisDomain, subject: string, metric: string, value: string | number | null, unit: string | null, sourceId: string, observedAt: string | null, asOf: string, comparability: AgentFact['comparability'], identitySuffix = '', options: Readonly<{ identityFromEventOnly?: boolean; subjectLabel?: string; sourceUrl?: string }> = {}): AgentFact {
   // `identityFromEventOnly` is for observations whose collection instant changes on every
   // refresh (the 0xRouter macro route): with the instant in the identity, re-collecting the
@@ -425,35 +417,6 @@ export function fact(domain: AnalysisDomain, subject: string, metric: string, va
     ...(options.subjectLabel ? { subjectLabel: options.subjectLabel } : {}),
     ...(options.sourceUrl ? { sourceUrl: options.sourceUrl } : {})
   }
-}
-
-function hashSafeEvidenceIdentity(value: unknown): string {
-  let serialized = ''
-  try { serialized = JSON.stringify(value) } catch { serialized = 'unavailable' }
-  let hash = 2166136261
-  for (let index = 0; index < serialized.length; index += 1) hash = Math.imul(hash ^ serialized.charCodeAt(index), 16777619)
-  return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
-export function compareObservedAt(left: AgentFact, right: AgentFact): number {
-  return (right.observedAt ?? '').localeCompare(left.observedAt ?? '')
-}
-
-export function isEnvelope(value: unknown): value is MarketIntelligenceQueryResult<unknown> {
-  try { return !!value && typeof value === 'object' && 'data' in value && 'evidenceRefs' in value } catch { return false }
-}
-
-export function isSourceHealthData(value: unknown): value is SourceHealthData {
-  try { return !!value && typeof value === 'object' && Array.isArray((value as { sources?: unknown }).sources) } catch { return false }
-}
-
-export function toSourceHealthFlag(source: SourceCoverageAsOf, asOf: string): SourceHealthFlag {
-  const status = source.productionState === 'failed' ? 'failed' : source.productionState === 'stale' ? 'degraded' : source.productionState === 'disabled' || source.productionState === 'fixture-only' || source.productionState === 'planned' ? 'paused' : source.productionState === 'fresh' ? 'healthy' : 'degraded'
-  return { sourceId: source.sourceId, status, asOf }
-}
-
-export function utf8JsonBytes(value: unknown): number {
-  try { return new TextEncoder().encode(JSON.stringify(value)).byteLength } catch { return Number.POSITIVE_INFINITY }
 }
 
 /** True while a calendar fact's subject is only the *kind* of calendar item it came from. */

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMarketCalendarEventRepository, ManualCalendarCapacityPolicy } from './marketCalendarEventRepository'
 import { parseZeroXRouterEconomicData } from './zeroXRouterEconomicDataParser'
 import { prepareMarketCollection, zeroXRouterCalendarStoragePolicy as policy } from './marketCalendarStorageValidation'
-import type { ZeroXRouterCalendarDescriptor } from './zeroXRouterCalendarContracts'
+import type { ZeroXRouterCalendarDescriptor } from './marketCalendarStorageContracts'
 
 const databases: DatabaseSync[] = []
 const descriptorId = 'macro-calendar-0xrouter-economic-data' as const
@@ -119,23 +119,31 @@ describe('market calendar independent observations', () => {
       expect(logicalBytes).toBeLessThan(ManualCalendarCapacityPolicy.sharedLogicalBytes)
       const service = createMarketCalendarPublicQueryService({ repository })
       const query = { month: scope.month, locale: 'zh', asOf: detectedAt }
+      /**
+       * **读延迟不在默认批里断言**（Chief 2026-11-19）：并行跑时这台机器被 256MiB 的库自己拖慢，
+       * 一次读就可能撞 `deadline-exceeded`（产品按 `policy.deadlineMs` fail-closed，那是设计）。
+       * 原来这里 `ctx.skip()` 会让整条用例「有时跳过」——跳过不是通过，是隐藏。
+       *
+       * 现在的口径：**读到失败就记一次并带上次数与原因**，最后要求「至少有一次读成功且结果非空」；
+       * 延迟预算只在 `MI_CALENDAR_BENCH=1` 时断言（下面那段）。
+       */
+      const failedReads: string[] = []
+      let succeededReads = 0
       for (let i = 0; i < 20; i++) {
         const start = performance.now()
         const page = service.queryMonth(query)
         readings.push(performance.now() - start)
         if (page.state === 'unavailable') {
-          // The read budget is one second (`policy.deadlineMs`), sized on an idle machine. This
-          // case fills a 256 MiB library and the whole suite runs beside it, so one page read can
-          // lose that race. That is the product failing closed instead of hanging a page, not a
-          // defect — but it is also not something this machine can measure here. Skip with the
-          // reason rather than assert a number the environment cannot promise; every other
-          // failure code still fails the case.
-          const direct = repository.listCollections({ ...scope, asOf: detectedAt, limit: 10 })
-          if (direct.state === 'unavailable' && direct.failureCode === 'deadline-exceeded') ctx.skip()
-          throw new Error(`page read failed: ${page.failureCode}`)
+          failedReads.push(String(page.failureCode))
+          continue
         }
         expect(page.events.length).toBeGreaterThan(0)
+        succeededReads += 1
       }
+      // 别的失败码仍要红；只有「读预算」这一类允许在负载下发生（并如实计数）。
+      const unexpected = failedReads.filter((code) => code !== 'deadline-exceeded')
+      expect({ unexpected, succeeded: succeededReads > 0 })
+        .toEqual({ unexpected: [], succeeded: true })
       service.dispose()
       const countBefore = database.prepare('select count(*) as n from mi_macro_calendar_market_event_collections').get()?.n
       // A bounded temporary allocation leaves free pages without removing any observation.
@@ -483,7 +491,10 @@ describe('market calendar independent observations', () => {
     const { database, repository } = setup()
     database.exec(`create trigger fail_second before insert on mi_macro_calendar_market_event_observations
       when new.source_event_id = '["candidate",2]' begin select raise(abort, 'private failure'); end`)
-    expect(repository.appendCollection(batch('one', [row(), row(2)]))).toEqual({ state: 'unavailable', failureCode: 'storage-unavailable' })
+    // 真 SQLite 异常 → `storage-error` 且带 `errorDetail`（类名 + 消息），不再折叠成 storage-unavailable。
+    expect(repository.appendCollection(batch('one', [row(), row(2)]))).toMatchObject({
+      state: 'unavailable', failureCode: 'storage-error'
+    })
     expect(database.prepare('select * from mi_macro_calendar_market_event_collections').all()).toEqual([])
     expect(database.prepare('select * from mi_macro_calendar_market_event_observations').all()).toEqual([])
   })
@@ -499,7 +510,9 @@ describe('market calendar independent observations', () => {
     (input: any) => { input.parseResult.drafts[0].locale = 'en' },
     (input: any) => { input.parseResult.drafts[0].kind = 'financial-event' },
     (input: any) => { input.parseResult.drafts[0].marketFactKey = 'forged' },
-    (input: any) => { input.parseResult.drafts[0].countryCode = 'ZZ' },
+    // 形状像国家码的未知码现在**允许**进库（2026-11-17：`ZZ` 那种保留下来，不再静默丢）；
+    // 这里改成形状就不对的写法，锁的仍然是「畸形输入整批拒、不留半条」。
+    (input: any) => { input.parseResult.drafts[0].countryCode = 'zz' },
     (input: any) => { input.parseResult.drafts[0].consensus.numericValue = 0 },
     (input: any) => { input.parseResult.drafts[0].scheduledAt = 'invalid' }
   ])('rejects mismatched or unsafe input atomically %#', (mutate) => {

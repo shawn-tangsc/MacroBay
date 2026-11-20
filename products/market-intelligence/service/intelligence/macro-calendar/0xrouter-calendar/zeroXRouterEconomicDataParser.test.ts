@@ -95,9 +95,11 @@ describe('0xRouter economic data parser', () => {
   })
 
   it('isolates locale-local candidate identities and drops unknown fields/countries', () => {
+    // **认不出的国家码不再丢**（用户 2026-11-17）：2–3 位大写字母原样带下来，先能进标准表、能显示，
+    // 等映射补上再归一；丢掉一个码等于把整行变成「未知国家」，而丢掉是静默的（1869 行就是这么没的）。
     const zh = draft({ ...row, countryCode: 'ZZZ' })
     const en = parseZeroXRouterEconomicData(envelope([{ ...row, locale: 'en' }]), 'en')
-    expect(zh).not.toHaveProperty('countryCode')
+    expect(zh).toHaveProperty('countryCode', 'ZZZ')
     expect(en.state).toBe('succeeded')
     if (en.state === 'succeeded') expect(en.drafts[0]!.marketFactKey).not.toBe(zh.marketFactKey)
     const result = parseZeroXRouterEconomicData(envelope([{ ...row, rawBody: 'discard', unit: 'percent', periodKey: '2026-08', officialLink: 'admitted' }]), 'zh')

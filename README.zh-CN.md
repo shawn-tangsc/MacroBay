@@ -68,12 +68,13 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 安装包**未做代码签名，也未做公证**，所以第一次打开需要两步：
 
 1. **macOS**：把 App 拖进「应用程序」，然后**右键（或按住 Control 点按）App → 打开**，在弹窗里
-   确认「打开」。直接双击会被 Gatekeeper 拦下。如果仍然打不开，在终端执行
-   `xattr -dr com.apple.quarantine /Applications/MacroBay.app`，再打开一次。
+   确认「打开」。直接双击会被 Gatekeeper 拦下。**如果菜单里没有「打开」这一项**（macOS 15 及以后
+   已移除），打开**系统设置 → 隐私与安全性**，在页面下方点「仍要打开」。
 2. **Windows**：运行安装程序。SmartScreen 会提示「Windows 已保护你的电脑」，点
    **更多信息 → 仍要运行**。
 
-每次下载新版本都要重走这两步，直到发布签名版本。
+每次下载新版本都要重走这两步，直到发布签名版本。两种方式都打不开时，兜底做法在
+[下载与安装](docs/getting-started/download-and-install.zh-CN.md)。
 
 Intel 版是 `MacroBay-x64.dmg`：**已构建、已随版本发布，但还没有在 Intel 真机上验收**。上面 Apple
 Silicon 的下载链接不变；`latest-mac.yml` 只由 arm64 那条构建产出。
@@ -205,10 +206,10 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.4.3`）。macOS 是已验证平台。面板仍需你自己的供应商凭据；读不到的数据
-会如实报成缺口。macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
-运行态尚未验证，Linux 尚未配置打包。详见
-[状态与限制](./docs/reference/status-and-limitations.zh-CN.md)。
+MacroBay 目前是 **alpha**（`0.4.4`）。macOS 是主要开发和构建平台；0.4.0 有人实际安装使用过，之后
+没有再做真机安装验收。面板仍需你自己的供应商凭据；读不到的数据会如实报成缺口。macOS 安装包可从
+源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的运行态尚未验证，
+Linux 尚未配置打包。详见[状态与限制](./docs/reference/status-and-limitations.zh-CN.md)。
 
 ## 路线图
 

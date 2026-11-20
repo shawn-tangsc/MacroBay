@@ -56,7 +56,7 @@ export const briefingIssueTemplateCodes: Readonly<Record<BriefingIssueTemplate, 
   'evidence-gap': 'data-gap', 'evidence-caveat': 'data-caveat', 'evidence-no-citation': 'uncited-counter-evidence',
   'evidence-conflict': 'source-conflict', 'evidence-none': 'no-citations',
   'timing-late': 'late-generation',
-  // A quiet window is not a gap: its own code so it can never merge with an unreadable calendar.
+  // 空窗不是缺口：它有自己的码，永远不许和「读不到」合并成同一条。
   'macro-quiet': 'macro-quiet'
 }
 
@@ -292,16 +292,18 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
       advice: text.limits.advice.checkSource
     })
   }
-  // 宏观那栏为什么空：**与正文共用同一个推导**（`briefingMacroEmptyCopy`），所以读者在两处
-  // 读到的是同一句话。以前这里把六档原因码压成两句，过期/从未采集/采集失败全被静默吞掉。
+  // 宏观那栏为什么空：两档「确实没有」记一条**提示**，其余原因记**警告**。句子来自同一个映射
+  // （`briefingMacroEmptyCopy`），A/B 分档只有一处判断，问题清单不会各说各的。
   const macroEmpty = briefingMacroEmptyCopy(document, {
     macroEmptyCodes: text.macroEmptyCodes,
-    macroUnreadable: text.macroUnreadable
+    macroUnreadable: text.macroUnreadable,
+    pastWindowNoRelease: text.pastWindow.noRelease,
+    pastWindowNoHighImpact: text.pastWindow.noHighImpact
   })
-  // 「确实没有高影响事件」：正文不印（`briefingMacroEmptyCopy` 仍返回 null），这里只记一条
-  // info 留痕，让查账的人看出不是漏了。没有动作、不是告警，也不与「读不到」共用一个码。
-  if (document.news.notes.macroEmpty === 'past-24h-no-high-impact-release') {
-    const hours = document.edition.windowHours ?? 24
+  // 窗口里确实没有：正文不印（用户 2026-11-16），信息只留在这里。它是**提示**不是警告——「确实
+  // 没有」不需要处理，但必须留痕，否则读者会以为这一栏是漏了；补上它也不会让「数据缺口」虚增，
+  // 因为它带自己的码与模板。建议仍是「无需处理」，不改任何来源配置。
+  if (macroEmpty !== null && !macroEmpty.unreadable) {
     add({
       id: 'data:macro:quiet',
       severity: 'info',
@@ -309,20 +311,26 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
       template: 'macro-quiet',
       source: text.limits.sources.calendar,
       at,
-      title: text.limits.macroQuiet.replace('{hours}', String(hours)),
+      title: macroEmpty.sentence,
       advice: text.limits.advice.macroQuiet
     })
   }
   if (macroEmpty?.unreadable) {
     const code = document.news.notes.macroEmpty ?? 'calendar-unavailable'
-    add({ id: `data:calendar:${code}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: macroEmpty.sentence, advice: text.limits.advice.checkCalendar })
+    // 只有「来源未启用」才建议去启用；其它原因都说明来源开着，建议检查来源而不是开关
+    // （用户 2026-11-16：把读者引去改一个本来没问题的配置，比不说更糟）。
+    // 「写不进库」也必须给对动作（`#32`）：来源是好的，让人去查网络等于把他引到错的地方。
+    const advice = code === 'calendar-source-disabled' ? text.limits.advice.checkCalendar
+      : code === 'calendar-write-failed' ? text.limits.advice.calendarWriteFailed
+        : text.limits.advice.checkSource
+    add({ id: `data:calendar:${code}`, severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: macroEmpty.sentence, advice })
   }
   // 「接下来 7 日」那一段只由它自己的 note 说明，与上面那栏不是同一件事，照旧单独报。
   const nextNote = document.next.note
   if (document.news.notes.macroEmpty === undefined && nextNote === 'calendar-source-disabled') {
     add({ id: 'data:calendar:disabled', severity: 'warning', category: 'data', template: 'calendar-disabled', source: text.limits.sources.calendar, at, title: text.limits.calendarDisabled, advice: text.limits.advice.checkCalendar })
   } else if (document.news.notes.macroEmpty === undefined && nextNote === 'calendar-unavailable') {
-    add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkCalendar })
+    add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkSource })
   }
 }
 

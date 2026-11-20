@@ -36,6 +36,20 @@ export type EmptyReasonCode =
  * 「拿不到」有两种：`unreadable` 是读失败、知道重试；`notification-unknown` 是连「读失败还是本来就为空」
  * 都判不出来（读接口既没回成功，也没给可判定的错误）。后者必须如实说「原因还没查清」，并写明
  * 「这不代表没有通知」——不许退成 `empty`（那是在说没有），也不许推到 `permission`（权限查不到≠没给）。
+ *
+ * **`error.*` 只用于「损坏阻断了读取」。** 损坏的东西**本身就是要展示的对象**时，它是内容，不是错误态
+ * （例：存储页隔离副本清单里那一行坏文件——读者来这一屏就是想看坏在哪）。判据一句话：**读者来这一屏，
+ * 是想看坏东西，还是想读好东西？** 前者画成内容，后者才画成错误。把后者写成 `empty` 就是「读不到 = 没有」，
+ * 那是本规范第一条要治的病。
+ *
+ * **`error.record-corrupt` 现在不存在，形状先钉死**（架构师 2026-11-19 判：契约按现场长，不按预想长）：
+ * 今天没有任何一处处于「坏记录阻断读取」——附件那条桥还没接，存储页的坏记录是内容不是错误。它出现时
+ * 按下面的形状加，**不许实现方自己编码**：
+ *
+ * - 档位取 `forbidden`：重读读到的是同一条坏记录，给动作只会让人反复点；
+ * - 不进 `STATE_VIEW_ACTION_CHOICES`：白名单里连 `retry` 都不许出现。
+ *
+ * 先例：`disabled.capability-not-wired` 同样在 `forbidden` 档、也不在那张白名单里。
  */
 export type ErrorReasonCode =
   | 'unreadable'
@@ -57,6 +71,11 @@ export type PermissionReasonCode = 'not-granted'
  *
  * `permission` 不在这里：它不是查询结果，而是「这次查询根本不允许发生」——由界面在发起查询前判定，
  * 所以留在 `StateView` 的六态里，不进数据层。
+ *
+ * **只有一处合法入口**：数据读取层 → `platform/ui/async/asyncState.ts` 的适配处（今天全仓的非测试引用
+ * 也只有定义和它两处）。消息内容里出现同一个处境（「附件看不到内容」「附件信息读不出」）**可以沿用这套词，
+ * 但不许包成 `QueryOutcome`**——它不是一次查询：`loading` 不成立（这一版不取字节，不许造假加载态）、
+ * `empty` 不成立（没有附件就不画任何形状）、`disabled`/`permission` 也不成立。
  */
 export type QueryOutcome<T> =
   | { state: 'ok'; data: T }
@@ -75,6 +94,10 @@ export type QueryOutcomeState = Exclude<QueryOutcome<unknown>['state'], 'ok'>
  * 文档动作列与本表逐条相等；调用点标 `required` 缺动作、标 `forbidden` 带动作都红。
  *
  * `none-installed` 的动作是**三选一**，不是一个固定键：三个站点各自是一种恢复方式。
+ *
+ * **只约束 `QueryOutcome` 的码。** 消息内容里的同名处境不受这张表管，**也不许为了让它受管而把消息内容
+ * 包成 `QueryOutcome`**（那就是把内容变成查询终态的入口）。所以 `stateViewCallSiteGuard` 看不见消息里
+ * 的附件行是对的，不是漏检——那里本来就没有 `StateView`，也没有 `QueryOutcome`。
  */
 /**
  * 一个码对动作的要求。

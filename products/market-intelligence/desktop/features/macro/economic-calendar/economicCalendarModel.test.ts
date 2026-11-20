@@ -24,7 +24,6 @@ describe('macro economic calendar query projection', () => {
     expect(economicCalendarEventCategory('employment-situation')).toBe('employment')
     expect(economicCalendarEventLabelKey(event({ eventFamily: 'employment-situation', titleKey: 'nonfarm-payrolls' }))).toBe('nonfarm-payrolls')
     expect(economicCalendarEventLabelKey(event({ eventKey: 'US.CPI.RELEASE.new-uid', titleKey: 'cpi' }))).toBe('cpi')
-    expect(economicCalendarPresentationPolicy.dayEventLimit).toBe(6)
   })
 
   /**

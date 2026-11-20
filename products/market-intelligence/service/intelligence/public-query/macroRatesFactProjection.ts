@@ -88,10 +88,10 @@ export function projectMacroRates(
   // The four series the block reads, in its order: the 10-year headline, its real counterpart, and
   // the two legs of the extras. A series the store cannot answer contributes nothing at all.
   for (const [seriesId, metric, unit, suffix] of [
-    [macroRatesSnapshotPublicPolicy.series.us10y, MACRO_RATES_FACT_METRICS.us10y, '%', 'level'],
-    [macroRatesSnapshotPublicPolicy.series.realRate, MACRO_RATES_FACT_METRICS.realRate, '%', 'level'],
-    [macroRatesSnapshotPublicPolicy.series.us2y, MACRO_RATES_FACT_METRICS.us2y, '%', 'level'],
-    [macroRatesSnapshotPublicPolicy.series.breakevenInflation, MACRO_RATES_FACT_METRICS.breakevenInflation, '%', 'level']
+    [macroRatesSnapshotPublicPolicy.series.us10y, MACRO_RATES_FACT_METRICS.us10y, 'percent', 'level'],
+    [macroRatesSnapshotPublicPolicy.series.realRate, MACRO_RATES_FACT_METRICS.realRate, 'percent', 'level'],
+    [macroRatesSnapshotPublicPolicy.series.us2y, MACRO_RATES_FACT_METRICS.us2y, 'percent', 'level'],
+    [macroRatesSnapshotPublicPolicy.series.breakevenInflation, MACRO_RATES_FACT_METRICS.breakevenInflation, 'percent', 'level']
   ] as const) {
     const reading = bySeries.get(seriesId)
     if (reading) add(metric, reading.actual, unit, reading, suffix)

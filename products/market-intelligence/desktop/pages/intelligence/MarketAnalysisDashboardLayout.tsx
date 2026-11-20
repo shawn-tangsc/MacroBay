@@ -1,3 +1,4 @@
+import type { MarketCalendarMonthRead } from './readMarketCalendarMonth'
 import { cloneElement, useCallback, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Segmented } from '@platform/ui/components/segmented'
@@ -30,6 +31,12 @@ import './marketAnalysisWorkspace.css'
 export type MarketAnalysisDashboardInjection = Readonly<{
   conclusionSlot?: (node: HTMLDivElement | null) => void
   /**
+   * 「接下来要看的」那一块：**同一个元素**，由这里用自己那份 `cardData` 构造，
+   * 交给 dashboard 再传进抽屉——抽屉右列顶部渲染它，事件列表在它下面。
+   * 不复制写法、也不让抽屉再读一遍日历。
+   */
+  calendarBlock?: ReactNode
+  /**
    * The runs bar, rendered by the dashboard as the footer of its scroll column: it belongs under
    * the readers' cards, not floating over them. Handed down as a node because its data (the
    * timeline) lives here while its place in the layout belongs to the dashboard.
@@ -42,7 +49,7 @@ export type MarketAnalysisDashboardInjection = Readonly<{
   /** The calendar's event-title vocabulary, read once by the page entry and rendered by the panel. */
   calendarEventTitles?: Record<string, string>
   /** The 0xRouter month's events, read once here because the page owns the locale and the client. */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void
 }>
@@ -70,7 +77,7 @@ const workspaceSwitchKeys = Object.freeze({
   agent: 'pages.intelligence.portal.analysisWorkspace.title'
 })
 
-export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
+export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSettings, onOpenAnalysisSettings, onOpenCalendar = () => undefined, calendarEventTitles, readCalendarMonth, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void; onOpenAnalysisSettings?: () => void
   /** 舆情那颗设置入口：打开配置抽屉、落在「采集与数据」的**舆情组**（未传时舆情仍用本地弹框）。 */
   onOpenSettings?: (focus: Readonly<{ business: 'sentiment' }>) => void
   /**
@@ -90,7 +97,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
    * provider route's paging or its language: the chart's event lines read both calendars through it.
    * The event drawer takes the same reader's full answer, sources included, from the page directly.
    */
-  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  readCalendarMonth?: (month: string, asOf: string) => Promise<MarketCalendarMonthRead | null>
   /**
    * The page's own event-detail surface, injected rather than imported: the cross-asset feature must
    * never learn the calendar's text contract, and the page is the one layer that may know both.
@@ -163,6 +170,38 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
     }))
   }
 
+  const calendarCardNode = <MarketCalendarCard
+          projection={cardData.projection}
+          state={cardData.state}
+          sourcesState={cardData.sourcesState}
+          stale={cardData.stale}
+          text={{
+            ...text.calendarCard,
+            // The card carries its own short category labels: the calendar page's longer ones do
+            // not fit the 84px rail and were clipped at the card edge in English.
+            categories: text.calendarCard.categories,
+            assets: text.dashboard.crossAsset.assets,
+            // Calendar chrome names fields in the reader's language; only published conclusion prose
+            // stays in the model's output language.
+            readableNames: text.analysisWorkspace.readableNames
+          }}
+          onOpenCalendar={(month) => onOpenCalendar(month)}
+          onOpenEventInCalendar={(eventKey, month) => onOpenCalendar(month, eventKey)}
+          onSelectEvent={(eventKey, label, month) => {
+            // Last selection wins: a calendar row clears the timeline node and cancels any
+            // in-flight node detail read, so the panel and the next message carry one context.
+            timeline.clearSelection()
+            setOpenEntry(undefined)
+            // A row click asks "what was that print": open the same left, unmasked drawer the chart
+            // line opens. Recording the Agent context is additive and must not replace the detail.
+            openEventDetailThenRecord({ eventKey, label, month }, setEventDetail, recorded => setSelectedContext({
+              key: `calendar-event:${recorded.eventKey}`, label: recorded.label, eventKey: recorded.eventKey, month: recorded.month
+            }))
+          }}
+          selectedEventKey={selectedContext?.key.startsWith('calendar-event:') ? selectedContext.key.slice('calendar-event:'.length) : undefined}
+          onRefresh={cardData.reload}
+        />
+
   return <div className="mi-analysis-dashboard-layout" data-compact-view={view}>
     <div className="mi-analysis-dashboard-layout__switch"><Segmented value={view} onChange={value => setView(value as 'dashboard' | 'agent')}
       ariaLabelKey={workspaceSwitchKeys.label} resolveText={resolveWorkspaceText}
@@ -172,7 +211,13 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         {conclusionHost ? createPortal(<LatestAnalysisConclusionCard
           text={detailText}
           // 读不到时用 productText 里既有那口径句（与抽屉同一句），不另写一版。
-          workspaceText={{ ...workspaceText, conclusionUnreadable: resolveWorkspaceText('pages.intelligence.portal.data.drawerUnavailable') }}
+          workspaceText={{
+            ...workspaceText,
+            conclusionUnreadable: resolveWorkspaceText('pages.intelligence.portal.data.drawerUnavailable'),
+            // 重试按钮的字与失败码的人话都复用时间轴那一份：两处各写一句，改一处就会分叉。
+            retryAnalysis: timelineText.retryAnalysis,
+            failureReasons: timelineText.failureReasons
+          }}
           timeline={timeline}
           onOpenDetail={entry => { setOpenEntry(entry); timeline.ensureDetail(entry) }}
           onOpenTimeline={() => setTimelineOpen(true)}
@@ -188,11 +233,12 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
             event-title vocabulary and the chart's click travel the same way: the page reads the
             list once, the panel renders it and hands the picked line back up. */}
         {cloneElement(children as React.ReactElement<MarketAnalysisDashboardInjection>, {
+          calendarBlock: calendarCardNode,
           conclusionSlot,
           policySlot: policyHost,
           onSelectChartEvent: selectChartEvent,
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
-          ...(readMarketEvents ? { readMarketEvents } : {})
+          ...(readCalendarMonth ? { readCalendarMonth } : {})
         })}
         {onOpenAnalysisSettings === undefined
           ? <MarketAnalysisSettingsDialog
@@ -226,37 +272,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenSe
         language={locale ?? 'zh-CN'}
         floatingText={{ open: text.calendarCard.expandAgent, close: text.calendarCard.closeAgent, title: text.calendarCard.agentTitle, clear: text.calendarCard.clearConversation }}
         railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
-        card={<MarketCalendarCard
-          projection={cardData.projection}
-          state={cardData.state}
-          sourcesState={cardData.sourcesState}
-          stale={cardData.stale}
-          text={{
-            ...text.calendarCard,
-            // The card carries its own short category labels: the calendar page's longer ones do
-            // not fit the 84px rail and were clipped at the card edge in English.
-            categories: text.calendarCard.categories,
-            assets: text.dashboard.crossAsset.assets,
-            // Calendar chrome names fields in the reader's language; only published conclusion prose
-            // stays in the model's output language.
-            readableNames: text.analysisWorkspace.readableNames
-          }}
-          onOpenCalendar={(month) => onOpenCalendar(month)}
-          onOpenEventInCalendar={(eventKey, month) => onOpenCalendar(month, eventKey)}
-          onSelectEvent={(eventKey, label, month) => {
-            // Last selection wins: a calendar row clears the timeline node and cancels any
-            // in-flight node detail read, so the panel and the next message carry one context.
-            timeline.clearSelection()
-            setOpenEntry(undefined)
-            // A row click asks "what was that print": open the same left, unmasked drawer the chart
-            // line opens. Recording the Agent context is additive and must not replace the detail.
-            openEventDetailThenRecord({ eventKey, label, month }, setEventDetail, recorded => setSelectedContext({
-              key: `calendar-event:${recorded.eventKey}`, label: recorded.label, eventKey: recorded.eventKey, month: recorded.month
-            }))
-          }}
-          selectedEventKey={selectedContext?.key.startsWith('calendar-event:') ? selectedContext.key.slice('calendar-event:'.length) : undefined}
-          onRefresh={cardData.reload}
-        />}
         text={text}
         timeline={timeline}
         selectionState={selectionState}

@@ -5,8 +5,10 @@ import type {
   SafeModelInvocationTrace,
   StructuredModelInvocationErrorCode,
   StructuredModelTaskRequest,
-  StructuredModelTaskResult
+  StructuredModelTaskResult,
+  TransportErrorKind
 } from './structuredModelInvocationTypes'
+import { classifyTransportError } from './transportErrorKind'
 
 const DEFAULT_TIMEOUT_MS = 45_000
 const DEFAULT_MAX_CONCURRENT = 4
@@ -74,15 +76,22 @@ export function createStructuredModelInvocationService(deps: {
         // timeout; an abort from the caller (window closed, job cancelled, app shutting down) is
         // reported as `cancelled`, and the two used to arrive as one code.
         let timedOut = false
+        // The budget must release the caller **even if the transport ignores the abort**. Electron's
+        // `net.fetch` was observed holding a promise open for eight hours after the signal fired:
+        // the timeout existed, the call was abandoned, and the analysis run stayed `running` for
+        // good. So the deadline is also raced against the call; the abort is only a best effort.
+        let expire = (): void => undefined
+        const deadline = new Promise<'deadline'>(resolve => { expire = () => resolve('deadline') })
         const timeoutId = setTimeout(() => {
           timedOut = true
           abortController.abort()
+          expire()
         }, timeoutMs)
         const onExternalAbort = () => abortController.abort()
         externalAbort?.addEventListener('abort', onExternalAbort, { once: true })
 
         try {
-          const completion = await requestOpenAiCompatibleChatCompletion({
+          const call = requestOpenAiCompatibleChatCompletion({
             baseUrl: resolved.model.baseUrl,
             apiKey: resolved.model.apiKey,
             modelId: resolved.model.modelId,
@@ -91,9 +100,26 @@ export function createStructuredModelInvocationService(deps: {
             fetch: deps.fetch,
             abortSignal: abortController.signal
           })
+          // An abandoned call may still reject later; that must not surface as an unhandled
+          // rejection, and its answer no longer belongs to anyone.
+          call.catch(() => undefined)
+          const completion = await Promise.race([call, deadline])
 
+          if (completion === 'deadline') {
+            return failure(request.taskId, 'timeout', startedAt, resolved.model.providerId, resolved.model.modelId)
+          }
           if (!completion.ok) {
-            return failure(request.taskId, completion.errorCode, startedAt, resolved.model.providerId, resolved.model.modelId)
+            return failure(
+              request.taskId,
+              completion.errorCode,
+              startedAt,
+              resolved.model.providerId,
+              resolved.model.modelId,
+              {
+                ...(completion.status === undefined ? {} : { httpStatus: completion.status }),
+                ...(completion.transportErrorKind === undefined ? {} : { transportErrorKind: completion.transportErrorKind })
+              }
+            )
           }
 
           let parsedJson: unknown
@@ -144,7 +170,8 @@ export function createStructuredModelInvocationService(deps: {
             'provider-error',
             startedAt,
             resolved.model.providerId,
-            resolved.model.modelId
+            resolved.model.modelId,
+            { transportErrorKind: classifyTransportError(error) }
           )
         } finally {
           clearTimeout(timeoutId)
@@ -162,11 +189,14 @@ function failure(
   errorCode: StructuredModelInvocationErrorCode,
   startedAt: number,
   providerId?: string,
-  modelId?: string
+  modelId?: string,
+  evidence?: Readonly<{ httpStatus?: number; transportErrorKind?: TransportErrorKind }>
 ): StructuredModelTaskResult<never> {
   return {
     ok: false,
     errorCode,
+    ...(evidence?.httpStatus === undefined ? {} : { httpStatus: evidence.httpStatus }),
+    ...(evidence?.transportErrorKind === undefined ? {} : { transportErrorKind: evidence.transportErrorKind }),
     trace: createTrace(taskId, startedAt, providerId, modelId, errorCode)
   }
 }

@@ -133,13 +133,14 @@ describe('业务设置：只有卡片，没有源详情头', () => {
 })
 
 describe('筛选页签在业务设置下常显', () => {
-  it('no longer draws a tab bar above the three business rows', async () => {
-    // 用户 2026-11-11：左列换成三项之后，那条页签不许不见——页签在上、三项在下，各自占位。
+  it('no longer draws a tab bar above the business rows', async () => {
+    // 用户 2026-11-11：左列换成业务行之后，那条页签不许回来——页签在上、业务行在下，各自占位。
     const container = await renderPanel('business')
     // 抽屉按菜单项分屏之后**没有页签条**：视图由 `pane` 决定。
     expect(container.querySelectorAll('.intelligence-catalog-filters')).toHaveLength(0)
-    // 三项列表在看板卡上方、与页签是两层。
-    expect(container.querySelectorAll('.business-settings__nav .intelligence-provider-row')).toHaveLength(3)
+    /* 业务行现在是**四**条（看板 / 日历 / 舆情 / 核心指标，最后一项 2026-11-14 加）。
+       判据仍是「行在、页签不在」，只是条数跟着业务分流走。 */
+    expect(container.querySelectorAll('.business-settings__nav .intelligence-provider-row')).toHaveLength(4)
   })
 })
 

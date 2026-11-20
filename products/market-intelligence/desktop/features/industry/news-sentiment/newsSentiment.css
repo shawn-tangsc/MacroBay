@@ -139,6 +139,7 @@
   font-size: 11.5px; line-height: 1.48; color: var(--text, #e7efe5);
 }
 .mi-news-drawer__symbols i, .mi-news-drawer__badges i { font-style: normal; border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 3px; font-size: 9px; margin-left: 3px; }
+.mi-news-drawer__detail > .mi-ai-interpretation { margin-top: 8px; }
 .mi-news-drawer__detail { border-left: 1px solid var(--border, #2a352b); padding-left: 12px; overflow: auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .mi-news-drawer__detail h3 { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text, #e7efe5); }
 .mi-news-drawer__original { margin: 0; font-size: 10px; color: var(--muted, #93a196); }

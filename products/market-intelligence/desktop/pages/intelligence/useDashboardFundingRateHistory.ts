@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { isCanonicalFundingRateHistoryTime } from '../../../contracts/intelligenceQueryContracts'
 import { projectDashboardFundingRateHistory, type DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
 import { trackQuietRevision } from './useDataChangeRevision'
+import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 /**
  * `disabled` = 读者把持仓那两格关掉了：一次请求都不发，停在等待态；卡片由上层整张跳过。
@@ -23,7 +24,7 @@ export function useDashboardFundingRateHistory(input: { client: { query: (input:
     const asOf = readClock(mountInput.now)
     if (!asOf) { setState({ state: 'unavailable' }); return () => { active = false } }
     if (typeof mountInput.client.query !== 'function') { setState({ state: 'unavailable' }); return () => { active = false } }
-    void mountInput.client.query({ asOf }).then((result) => { if (active) setState(projectDashboardFundingRateHistory(result, asOf)) }).catch(() => {
+    void withQueryDeadline(mountInput.client.query({ asOf })).then((result) => { if (active) setState(projectDashboardFundingRateHistory(result, asOf)) }).catch(() => {
       // 后台重读失败沿用上一次；屏上只有「加载中」时才说读不到。
       if (active) setState(current => quiet && current.state !== 'loading' ? current : { state: 'unavailable' })
     })
