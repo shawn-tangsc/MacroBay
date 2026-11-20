@@ -52,6 +52,10 @@ this month, and a way into the configuration. The right column holds what to wat
 day, split into the standard table, items not in it, tier-two indicators, high-importance events and the
 rest; the footer names where the schedule and consensus values come from.
 
+Behind the calendar are 841 economic indicator codes (195 of them U.S.) and 524 collected release
+events; the 48 that are not yet mapped into the standard table are listed as such instead of being
+passed off as aligned.
+
 The calendar keeps the schedule identity, the observation boundary, and later revisions separate, so an
 updated official value does not rewrite what was known earlier.
 

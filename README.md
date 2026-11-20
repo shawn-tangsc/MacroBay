@@ -46,9 +46,10 @@ use. It does two other things — it watches for the **changes that would move a
 say what the change means: which reading moved, by how much, what it is tied to, and what would prove
 the call wrong. Then it pushes a notification to your phone, with the source and the cutoff.
 
-**The built-in sources are free, or close to it.** Exchange announcements, chain and venue status,
-stablecoin supply and ETF flows, sentiment, macro releases — the public endpoints are good enough, so
-you do not also need the expensive institutional data and alert subscriptions.
+**841 economic indicator codes and 524 collected release events are built in** — the official schedules
+of the U.S. Bureau of Labor Statistics, BEA, the Fed, Japan and Canada, with prior values and consensus
+aligned in one table. The data comes from public endpoints that are good enough on their own, so you do
+not also need the expensive institutional data and alert subscriptions.
 
 ### The daily briefing
 
