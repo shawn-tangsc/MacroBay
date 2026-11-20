@@ -81,7 +81,8 @@ readable from the calendar itself:
 
 ## Where the data comes from, and how large it is
 
-- **841 economic indicator codes** (195 of them U.S.) and **524 collected release events** are built in,
+- **841 codes in the calendar code table** (284 of them U.S.: 283 metrics and 1 event) and **524 collected
+  release events** are built in,
   covering the official schedules of the U.S. Bureau of Labor Statistics, BEA and the Fed, plus Japan,
   Canada and other markets, together with market-side consensus.
 - **The 48 items not yet mapped into the standard table are listed separately** rather than mixed into it
