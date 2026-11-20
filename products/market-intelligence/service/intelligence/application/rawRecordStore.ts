@@ -8,9 +8,33 @@ import type {
 } from '../schema/intelligenceRecord'
 import type { RawRecordSnapshot, RawRecordStorage } from '../store/rawRecordStorage'
 import { assertRawRecordSnapshotDoesNotShrink, createEmptyRawRecordSnapshot, type RawRecordWriteOptions } from '../store/rawRecordStorage'
+import { externalizeInlinePayloads } from './rawRecordPayloadExternalization'
+
+/** 存量原文外置的一次盘点：三格分开报，`remainingInline` 是「还剩多少条还是内联」。 */
+export type RawRecordPayloadMigration =
+  | Readonly<{ state: 'unavailable'; reason: 'no-payload-directory' }>
+  | Readonly<{
+    state: 'migrated' | 'unchanged'
+    /** `inline → file` 的条数。 */
+    inlineToFile: number
+    /** 老布局引用 → 内容寻址。本机预期 0（老实现一条都没外置过）。 */
+    relocatedFromOldLayout: number
+    /** hash 不符 / 读不到 / 写失败：原地不动，不产生「有记录无原文」。 */
+    untouched: number
+    alreadyContentAddressed: number
+    /** 跑完之后还剩多少条 inline（归零即停；不为零说明有 untouched）。 */
+    remainingInline: number
+  }>
 
 export type RawRecordStore = {
   appendRawRecord: (input: AppendRawRecordInput) => RawIntelligenceRecord | undefined
+  /**
+   * 启动时幂等跑一次：把升级前就 inline 的正文搬进「内容寻址」目录、换成 file 引用。
+   *
+   * 按缺口判据，不用版本标记：非零就迁、归零即停，跑第二遍 `inlineToFile === 0`。
+   * 失败的那条**原地不动**（`untouched`），绝不写一半——「有记录、原文读不到」比不迁更糟。
+   */
+  migrateInlinePayloads: () => RawRecordPayloadMigration
   getRawRecord: (rawRecordId: string) => RawIntelligenceRecord | undefined
   findBySourceDedupeKey: (sourceId: string, sourceDedupeKey: string) => RawIntelligenceRecord | undefined
   markParsed: (rawRecordId: string) => RawIntelligenceRecord | undefined
@@ -106,6 +130,57 @@ export function createRawRecordStore(deps?: {
   }
 
   return {
+    migrateInlinePayloads() {
+      if (deps?.payloadDirectory === undefined || deps.writeVerifiedPayload === undefined) {
+        // 「没接上」必须与「没有要搬的」分开：前者是配置错误，不许报成 0 条。
+        return { state: 'unavailable', reason: 'no-payload-directory' } as const
+      }
+      const directory = deps.payloadDirectory
+      const write = deps.writeVerifiedPayload
+      // 只有 inline / file 两种引用参与迁移；别的形状原样留着，不猜。
+      const externalizable = [...records.values()]
+        .filter((record) => record.payloadRefType === 'inline' || record.payloadRefType === 'file')
+        .map((record) => ({
+          rawRecordId: record.rawRecordId,
+          payloadRefType: record.payloadRefType as 'inline' | 'file',
+          ...(record.payloadBody === undefined ? {} : { payloadBody: record.payloadBody }),
+          payloadHash: record.payloadHash,
+          ...(record.payloadFileRef === undefined ? {} : { payloadFileRef: record.payloadFileRef })
+        }))
+      const result = externalizeInlinePayloads({
+        records: externalizable,
+        deps: {
+          writeVerifiedPayload: ({ body, expectedHash }) => {
+            const written = write({ directory, body, expectedHash, temporarySequence: sequence + 1 })
+            return written.state === 'failed' ? undefined : written.fileRef
+          }
+        }
+      })
+      const changed = result.inlineToFile + result.relocatedFromOldLayout
+      if (changed > 0) {
+        // 迁移只换「原文放哪」，条数一条不变 ⇒ 写盘闸（不许比读入少）自然放行。
+        for (const entry of result.records) {
+          const current = records.get(entry.rawRecordId)
+          if (current === undefined) continue
+          const { payloadBody: _previousBody, ...withoutBody } = current
+          records.set(entry.rawRecordId, {
+            ...withoutBody,
+            payloadRefType: entry.payloadRefType,
+            ...(entry.payloadBody === undefined ? {} : { payloadBody: entry.payloadBody }),
+            ...(entry.payloadFileRef === undefined ? {} : { payloadFileRef: entry.payloadFileRef })
+          })
+        }
+        persist()
+      }
+      return {
+        state: changed > 0 ? 'migrated' : 'unchanged',
+        inlineToFile: result.inlineToFile,
+        relocatedFromOldLayout: result.relocatedFromOldLayout,
+        untouched: result.untouched,
+        alreadyContentAddressed: result.alreadyContentAddressed,
+        remainingInline: [...records.values()].filter((record) => record.payloadRefType === 'inline').length
+      } as const
+    },
     appendRawRecord(input) {
       const dedupeKey = `${input.sourceId}:${input.sourceDedupeKey}`
       if (dedupeIndex.has(dedupeKey)) {

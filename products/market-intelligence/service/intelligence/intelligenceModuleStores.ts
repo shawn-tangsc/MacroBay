@@ -77,6 +77,22 @@ export function createIntelligenceStores(input: {
     snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json')),
     ...(payloadDirectory === undefined ? {} : { payloadDirectory, writeVerifiedPayload })
   })
+  /* 存量原文外置（0.4.5 缺陷②）：升级前就 inline 的正文不会自己搬出去，启动时幂等跑一次。
+     报数分三格（搬了多少 / 还剩多少 / 失败多少），第二遍必然 `inlineToFile: 0`。 */
+  const rawRecordPayloadMigration = rawRecordStore.migrateInlinePayloads()
+  console.log(JSON.stringify({
+    marker: 'RAW_RECORD_PAYLOAD_MIGRATION',
+    state: rawRecordPayloadMigration.state,
+    ...(rawRecordPayloadMigration.state === 'unavailable'
+      ? { reason: rawRecordPayloadMigration.reason }
+      : {
+          inlineToFile: rawRecordPayloadMigration.inlineToFile,
+          relocatedFromOldLayout: rawRecordPayloadMigration.relocatedFromOldLayout,
+          untouched: rawRecordPayloadMigration.untouched,
+          alreadyContentAddressed: rawRecordPayloadMigration.alreadyContentAddressed,
+          remainingInline: rawRecordPayloadMigration.remainingInline
+        })
+  }))
   const macroCalendarEvidenceArchive = createMacroCalendarEvidenceArchive({
     rawRecords: rawRecordStore,
     archiveDirectory: join(dataDir, 'macro-calendar-evidence')
