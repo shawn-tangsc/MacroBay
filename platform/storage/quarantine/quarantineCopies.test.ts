@@ -41,9 +41,15 @@ describe('quarantine copy scan', () => {
     expect(scan.truncated).toBe(false)
   })
 
-  it('separates "nothing to list" from "could not read": a missing root throws, an unreadable folder is counted', async () => {
+  it('separates "nothing to list" from "could not read": a missing root throws', async () => {
     await expect(listQuarantineCopies(join(tmpdir(), 'quarantine-scan-does-not-exist'))).rejects.toThrow()
+  })
 
+  // Windows 上 `chmod(0o000)` 不会让目录对本进程不可读：它是 POSIX 权限位，Windows 走 ACL，
+  // 所以「读不到的目录」这个夹具在那里根本造不出来（CI 上真红过：目录照样列出、计数是 0）。
+  // 行为本身由 `walk` 的 `catch` 覆盖，`platform/storage` 的其余读错误用例在 Windows 上照跑；
+  // 这里只跳过这一条**夹具造不出来**的用例，不跳过行为。
+  it.skipIf(process.platform === 'win32')('counts an unreadable folder separately instead of calling it empty', async () => {
     const directory = await root()
     await mkdir(join(directory, 'locked'), { recursive: true })
     await writeFile(join(directory, 'kept.json.corrupt-1762345678903'), '{}')
