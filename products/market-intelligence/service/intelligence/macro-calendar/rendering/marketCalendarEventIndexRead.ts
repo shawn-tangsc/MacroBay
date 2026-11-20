@@ -1,8 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import { calendarNamesFor, englishSearchName, namePairFromSourceIdentity, type CalendarNamePair } from '../marketCalendarCodeNames'
-import { sourceIdentityDisplayNames } from '../macroCalendarSourceIdentityNames'
+import { calendarNamesFor, englishSearchName, namePairFromSourceIdentity, registeredSourceIdentityName,
+  sourceInternalIdOf, type CalendarNamePair } from '../marketCalendarCodeNames'
 import { hierarchyForMetricKey } from '../marketCalendarZeroXRouterSourceMappings'
 
 /**
@@ -86,7 +86,7 @@ const cursorKey = (cursor: string): readonly [string, string] => {
 function namesOf(metricKey: string, sourceLabel: string | null, sourceLabelEn: string | null = null) {
   // 回退链：**码名表 → 源内身份名表 → 源原文名**（用户 2026-11-16 定）。
   const names = calendarNamesFor(metricKey)
-  const identity = sourceIdentityDisplayNames[sourceInternalIdOf(metricKey).replace(/^id:/, '')]
+  const identity = registeredSourceIdentityName(metricKey)
   const fallback = sourceLabel === null || sourceLabel.trim() === '' ? undefined : sourceLabel.trim()
   const display = names ?? (identity === undefined ? undefined : namePairFromSourceIdentity(identity.zh, identity.en))
   // **英文原文名单独存一列**（迁移 18 把库里中英两条合并成一行）：名表/身份名表已经给了英文就不覆盖，
@@ -211,14 +211,8 @@ export function readCalendarEventIndex(database: DatabaseSync, input: Readonly<{
   }
 }
 
-/**
- * 源内身份：数组形 `["214790",79090]` 的第一段就是指标身份（同一条发布的多个 measure 共用它）。
- * 非数组形（规范码）原样返回。**这是「源自己说的身份」，不是我们猜的映射。**
- */
-export function sourceInternalIdOf(metricKey: string): string {
-  const match = /^\["(\d+)"/.exec(metricKey)
-  return match === null ? metricKey : `id:${match[1]}`
-}
+// 解析只留一份（`marketCalendarCodeNames`）；这里 re-export 保持既有调用方路径不变。
+export { sourceInternalIdOf }
 
 const hasCjk = (value: string): boolean => /[\u4e00-\u9fff]/.test(value)
 

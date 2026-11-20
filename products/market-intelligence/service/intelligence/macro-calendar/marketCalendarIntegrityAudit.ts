@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { marketCalendarCodeTable } from './marketCalendarCodeTable'
 import { marketCalendarCountryCodeTable } from './marketCalendarCountryCodeTable'
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
+import { sourceIdentityDisplayNames } from './macroCalendarSourceIdentityNames'
 
 /**
  * **日历数据一致性盘点**（用户 2026-11-19 定）：五项扫描做成一条可复用的只读检查。
@@ -27,6 +28,14 @@ export type CalendarIntegrityCounts = Readonly<{
   unresolvedPeriodRows: number
   /** `metric_key` 槽位里是**事件类型名**（`financial-event` 这类）的行：它不是一个身份。 */
   typeNameIdentities: number
+  /**
+   * **没登记显示名的源内身份个数**（数组身份第一段不在 `sourceIdentityDisplayNames` 里）。
+   *
+   * 这些行在界面上只能回退源原文名——其中就有「transmutation…」这类源侧机翻残句。
+   * 判据只问「这一条登记了没有」，不读名字用了哪些字（不许按措辞判内容）。
+   * 数字就是改名表的待办清单长度：登记一个，这个数减一。
+   */
+  unregisteredSourceNames: number
 }>
 
 const activeTierCodes = (): readonly string[] => {
@@ -46,6 +55,7 @@ export function auditCalendarIntegrity(
   const count = (sql: string, ...params: readonly string[]): number =>
     Number((database.prepare(sql).get(...(params as never[])) as { n: number }).n)
 
+  const registeredIdentityIds = Object.keys(sourceIdentityDisplayNames)
   const codes = activeTierCodes()
   const codePlaceholders = codes.map(() => '?').join(', ')
 
@@ -69,7 +79,12 @@ export function auditCalendarIntegrity(
     unresolvedPeriodRows: count(`select count(*) as n from ${table} where period_key like 'unknown:%'`),
     // 类型名不是身份（0.4.5 #15）：写入口已经不再这么写，存量行只报不改（改身份要动主键与台账）。
     typeNameIdentities: count(`select count(*) as n from ${table}
-      where metric_key in ('economic-indicator', 'financial-event', 'central-bank-activity')`)
+      where metric_key in ('economic-indicator', 'financial-event', 'central-bank-activity')`),
+    // 源内身份没登记显示名的个数（0.4.5 #14）：只回答「登记了没有」，不评价名字好坏。
+    unregisteredSourceNames: count(`select count(distinct json_extract(metric_key, '$[0]')) as n from ${table}
+      where metric_key like '[%' and json_valid(metric_key)
+        ${registeredIdentityIds.length === 0 ? '' : `and json_extract(metric_key, '$[0]') not in (${registeredIdentityIds.map(() => '?').join(', ')})`}`,
+      ...registeredIdentityIds)
   }
 }
 
@@ -84,5 +99,6 @@ export function calendarIntegrityGaps(counts: CalendarIntegrityCounts): readonly
   }
   if (counts.unresolvedPeriodRows > 0) gaps.push(`unresolved-period=${counts.unresolvedPeriodRows}`)
   if (counts.typeNameIdentities > 0) gaps.push(`type-name-identity=${counts.typeNameIdentities}`)
+  if (counts.unregisteredSourceNames > 0) gaps.push(`unregistered-source-names=${counts.unregisteredSourceNames}`)
   return gaps
 }

@@ -1,4 +1,5 @@
 import { germanMetricNames } from './marketCalendarGermanSourceMappings'
+import { sourceIdentityDisplayNames } from './macroCalendarSourceIdentityNames'
 
 /**
  * 码名：**族名（measure-free）+ 测度词** 拼出来，已上线的 38 条用 `manualName` 冻结。
@@ -348,3 +349,24 @@ export const eventTypeNameByCode: Readonly<Record<string, Readonly<{
   'evt.petroleum-inventories': { zhFull: '石油库存报告', zhShort: '石油库存', enFull: 'Petroleum Inventories', enShort: 'Petroleum Stocks' },
   'evt.policy-rate-decision': { zhFull: '利率决议', zhShort: '利率决议', enFull: 'Fed Rate Decision', enShort: 'Rate Decision' },
 })
+
+/**
+ * 源内身份：数组形 `["214790",79090]` 的第一段就是指标身份（同一条发布的多个 measure 共用它）。
+ * 非数组形（规范码）原样返回。**这是「源自己说的身份」，不是我们猜的映射。**
+ *
+ * 只此一份实现（原来在 `rendering/marketCalendarEventIndexRead.ts`，两处各解析一次迟早会漂）。
+ */
+export function sourceInternalIdOf(metricKey: string): string {
+  const match = /^\["(\d+)"/.exec(metricKey)
+  return match === null ? metricKey : `id:${match[1]}`
+}
+
+/**
+ * **登记过的源内身份显示名**（唯一登记处 `sourceIdentityDisplayNames`）。
+ *
+ * 没登记返回 `undefined`——调用方按「我们还没给这一条起名」处理：**不许拿源原文冒充我们起的名字**。
+ * 这条判据只问「这一条登记了没有」，不读名字里用了哪些字（团队规范：不许按措辞判内容）。
+ */
+export function registeredSourceIdentityName(metricKey: string): Readonly<{ zh: string; en: string }> | undefined {
+  return sourceIdentityDisplayNames[sourceInternalIdOf(metricKey).replace(/^id:/, '')]
+}

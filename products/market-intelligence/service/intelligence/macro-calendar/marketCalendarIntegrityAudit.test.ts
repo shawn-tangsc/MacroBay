@@ -57,7 +57,8 @@ describe('日历数据一致性盘点', () => {
     const counts = audit(database)
     expect(counts).toEqual({
       presentWithoutActual: 0, missingWithActual: 0, duplicateGroups: 0, duplicateRows: 0,
-      tierOverdueWithoutValueOrReason: 0, unresolvedPeriodRows: 0, typeNameIdentities: 0
+      tierOverdueWithoutValueOrReason: 0, unresolvedPeriodRows: 0, typeNameIdentities: 0,
+      unregisteredSourceNames: 0
     })
     expect(calendarIntegrityGaps(counts)).toEqual([])
   })
@@ -83,6 +84,28 @@ describe('日历数据一致性盘点', () => {
     const row = database.prepare("select metric_key, identity_kind from mi_calendar_events where metric_key = 'financial-event'")
       .get() as { metric_key: string; identity_kind: string }
     expect(row).toEqual({ metric_key: 'financial-event', identity_kind: 'source' })
+  })
+
+  /**
+   * 0.4.5 #14：源侧会给出机翻残句（`transmutation…`）。判据不是「名字里有什么字」，
+   * 而是「这一条源内身份登记了没有」——没登记的计数上屏，登记了的算有名字。
+   */
+  it('源内身份没登记显示名 → 按身份去重计数并进缺口；登记过的、非法 JSON 的不算', () => {
+    const database = setup()
+    // 同一个未登记身份的两行 → 只算 1 个身份（计数是「待起名的身份数」）。
+    seed(database, { metricKey: '["45210",79716]', identityKind: 'source', periodKey: '2026-07' })
+    seed(database, { metricKey: '["45210",79717]', identityKind: 'source', periodKey: '2026-08' })
+    const counts = audit(database)
+    expect(counts.unregisteredSourceNames).toBe(1)
+    expect(calendarIntegrityGaps(counts)).toContain('unregistered-source-names=1')
+    // 名字表里登记过的身份不算缺口（`9553` 在 `sourceIdentityDisplayNames` 里）。
+    const registered = setup()
+    seed(registered, { metricKey: '["9553",79716]', identityKind: 'source' })
+    expect(audit(registered).unregisteredSourceNames).toBe(0)
+    // 非法 JSON 的数组身份不参与（按 JSON 解析不了，谈不上登记）。
+    const invalid = setup()
+    seed(invalid, { metricKey: '["45210", 79716', identityKind: 'source' })
+    expect(audit(invalid).unregisteredSourceNames).toBe(0)
   })
 
   it('“0” 是真值，不算 ① 也不该被当成没值', () => {
