@@ -8,15 +8,27 @@ weeks, the lower half is the release calendar for the current month, and the rig
 watch next and the events of the day. Close it and you are back on the page you came from; the dashboard
 keeps its state.
 
+![Calendar drawer: title, rate expectation, policy path, three core indicator cards and the release calendar for the month](../assets/screenshots/calendar-drawer-en.png)
+
 ## Upper half: policy path and three core indicators
 
 - **Policy path**: the implied odds of a rate move at the next meeting, with the meeting date, the
   current policy range, the SEP median and the result of the previous meeting. The card names its data
   source (polymarket); the bottom right opens the detail.
-- **Three core indicator cards**: CPI YoY, payrolls, core PCE YoY. Each card carries the next release
-  date, how many days away it is, and the expected YoY / MoM / core YoY / core MoM values; the foot of
-  the card shows when those expectations were observed and their volume.
+- **Three core indicator cards**: CPI YoY, payrolls, core PCE YoY. This is the "core indicators" layer the
+  calendar sets aside on purpose — it does not spread hundreds of series across the page, it picks the
+  three the market prices directly and puts them next to the policy path. Each card carries the next
+  release date, how many days away it is, and the expected YoY / MoM / core YoY / core MoM values; the
+  foot of the card shows when those expectations were observed and their volume.
 - The countdown is a plain difference in calendar days to the release date, not a vague "due this week".
+
+**Details** opens the policy path's own panel: the current distribution across five buckets (cut 50+ down
+to hike 50+), each with its share now, a day ago and a week ago; the SEP median path, year by year out to
+the long run; how the previous meeting split its vote; and the quote and basis — bid/ask, venue, target
+range and the as-of time, with a note at the bottom on where these odds come from and why the five buckets
+are normalised by their own sum, which usually runs slightly above 1.
+
+![Policy path detail: current distribution, SEP median path, last decision and the quote basis](../assets/screenshots/calendar-rate-path-en.png)
 
 ## Lower half: the release calendar for the month
 
@@ -52,6 +64,20 @@ different states**, never merged into one empty dash.
   not disappear; the detail keeps a revision record of who changed it and when.
 - **The website link is drawn from data**: an event gets one only when it has a matching indicator code;
   otherwise it says "to be checked" rather than pointing at a guessed address.
+
+## Mapping rules: 841 codes, 524 events
+
+Which indicators can appear at all, and which code each one maps to, come from a mapping table that is
+readable from the calendar itself:
+
+- Three tabs: **Code table (841)**, **Unmapped (48)**, **Events (524)**.
+- Filter by id, code or name, or tick "only codes with data"; then filter by country, tier or official page.
+- Every row gives the code, country, name, tier, measure (for example YOY · NONE, MOM · NONE), the official
+  page (an **Open** link when there is one), status, the number of source ids and the data volume.
+- The table exports to Excel, so checking how many legs a single indicator is fed by does not require
+  asking us.
+
+![Mapping rules: code table, unmapped and events tabs, filters by country, tier and official page, and per-row tier, measure, official page and data volume](../assets/screenshots/calendar-mapping-en.png)
 
 ## Where the data comes from, and how large it is
 
