@@ -8,7 +8,7 @@ import type { MarketAnalysisTimelineDetail } from '../../shared/ipc/marketAnalys
 import { AnalysisConclusionDetail } from './AnalysisConclusionDetail'
 
 /**
- * 「这条结论是按英文写的」只在一件事成立时出现：**记录里知道生成语言，且与当前界面语言不同**。
+ * 「正文为英语。」只在一件事成立时出现：**记录里知道生成语言，且与当前界面语言不同**。
  *
  * 三条边界一起钉住：
  * - 旧记录（v1，没有字段）→ 不标注、不崩；
@@ -71,8 +71,11 @@ describe('the conclusion language note', () => {
     expect(header.querySelector('button')).toBe(info)
     const title = header.querySelector('.mi-analysis-timeline__section-label')!
     expect(info.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // 标题在窄屏会省略（CSS ellipsis）：全名必须拿得到，否则「AI CON…」就没有出处。
+    expect(title.getAttribute('title')).toBe(text.conclusion)
     // 说明句只在浮层里，不进标题行正文；原来那个块级段落也不留空壳。
-    expect(header.textContent).not.toContain('这条结论是按英语写的。')
+    const note = text.conclusionLanguageNote.replace('{language}', '英语')
+    expect(header.textContent).not.toContain(note)
     expect(host.querySelector('.mi-analysis-conclusion__language')).toBeNull()
     // 「重新生成」仍是这一屏自己的动作，没有被卷进 header。
     const regenerate = [...host.querySelectorAll('button')].find(button => button.textContent === text.regenerateConclusion)!

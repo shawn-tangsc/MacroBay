@@ -1,5 +1,5 @@
 /**
- * 「这条结论是按另一种语言写的」那颗 ⓘ 的读屏名。
+ * 「正文为另一种语言」那颗 ⓘ 的读屏名。
  *
  * 键要在产品文案表里真有（`pages.intelligence.portal.analysisTimeline.detail.…`）；读屏名只收键，
  * 句子由解析器给，不许把整句说明塞进 aria-label。

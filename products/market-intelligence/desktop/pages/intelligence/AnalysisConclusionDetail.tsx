@@ -121,7 +121,7 @@ export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonl
             size="sm"
             variant="plain" />}
         />}
-        <p className="mi-analysis-timeline__section-label">{text.conclusion}</p>
+        <p className="mi-analysis-timeline__section-label" title={text.conclusion}>{text.conclusion}</p>
         {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}
       </header>
       {/* 「重新生成」原来误嵌在上面的语言说明条件里：没有语言说明时它根本不渲染——市场分析组

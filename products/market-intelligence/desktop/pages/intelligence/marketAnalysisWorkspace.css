@@ -149,7 +149,7 @@
 .mi-analysis-conclusion__head { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin-bottom: 6px; }
 /* 整行不许换行：ⓘ 与方向徽标固定不缩，标题让出空间后自己省略（用户 2026-11-20）。 */
 .mi-analysis-conclusion__head > span { flex: none; }
-.mi-analysis-conclusion__head .mi-analysis-timeline__section-label { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-analysis-conclusion__head .mi-analysis-timeline__section-label { margin: 0; flex: 1 1 auto; min-width: 4ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-analysis-conclusion__body { display: grid; gap: 10px; }
 .mi-analysis-conclusion__text { margin: 0; color: var(--text-strong); font-size: 13px; line-height: 1.75; }
 /* One row per horizon: the operation directions, above the prose they summarise. */
