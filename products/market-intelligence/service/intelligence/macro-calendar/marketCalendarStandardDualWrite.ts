@@ -1,7 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { narwhalCanonicalIdentityKey, toAlpha2Country } from './marketCalendarMetricIdentity'
-import { narwhalStandardSourceEventId } from './marketCalendarSourceEventId'
 import { eventCodeBySourceType } from './marketCalendarEventCodeTable'
 import { nameForMetricKey } from './marketCalendarCodeNames'
 
@@ -110,12 +109,11 @@ export function dualWriteMeasureRows(
        * 旧行（`source_release_id` 为 NULL）**无法判别**：按老行为（新日期新行），并计数，
        * 不许静默——这套修法唯一的退化口就是它。
        */
-      const frozen = resolveFrozenScheduledDate(database, input.providerId, row)
+      const frozen = resolveFrozenRow(database, input.providerId, row)
       if (frozen !== undefined) {
-        row = { ...row, sourceEventId: narwhalStandardSourceEventId({
-          countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
-          firstScheduledDate: frozen
-        }) }
+        // **复用旧行自己的 id**：这里不重算编码——本函数是 provider 无关的，重算会把 narwhal 的
+        // 编码形状套到别家（下一个传 release id 的来源会写出 narwhal 形状的 id，台账当场全成孤儿）。
+        row = { ...row, sourceEventId: frozen.sourceEventId }
       } else if (legacyUnjudgedBy(database, row)) {
         legacyUnjudged += 1
       }
@@ -177,7 +175,9 @@ export function dualWriteMeasureRows(
         countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
         scheduledDate: row.scheduledDate,
         ...(row.scheduledAt === undefined ? {} : { scheduledAt: row.scheduledAt }),
-        ...(frozen === undefined && existing === undefined ? {} : { firstScheduledDate: frozen ?? existing!.firstScheduledDate }),
+        ...(frozen === undefined && existing === undefined
+          ? {}
+          : { firstScheduledDate: frozen?.firstScheduledDate ?? existing!.firstScheduledDate }),
         ...(row.sourceReleaseId === undefined ? {} : { sourceReleaseId: row.sourceReleaseId }),
         timePrecision: row.timePrecision ?? (row.scheduledAt === undefined || row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute'),
         ...(row.rowKind === undefined ? {} : { rowKind: row.rowKind }),
@@ -326,21 +326,30 @@ const emptyReasons = (): Record<CalendarUnmappedReason, number> =>
     'unknown-release-group': 0, 'ambiguous-same-day': 0, 'no-values': 0, 'missing-country': 0, 'no-code': 0, 'no-standard-row': 0, 'period-unresolved': 0 })
 
 /**
- * 同一发布已有一行时返回它**冻结的** `first_scheduled_date`（架构师 2026-11-21 批 (b)）。
+ * 同一发布已有一行时返回**它自己的 `source_event_id` 与冻结的 `first_scheduled_date`**
+ * （架构师 2026-11-21 批 (b)）。
  *
- * 判别器只有源内 `release_id`：身份是四段、含排期日，日期一变 id 就变，只按 id 找不到旧行。
+ * 判别器只有源内 `release_id`：身份含排期日，日期一变 id 就变，只按 id 找不到旧行。
+ * 查询条件带上 `(provider, release_id, metric_key, period_key)`：**多 measure 的发布里
+ * 每个指标位各有一行，只按 release_id 取 `limit 1` 是碰巧对**——带上 `metric_key` 才是确定行为。
+ *
+ * 返回旧行的 id 而不是重算编码：本函数 provider 无关，重算会把某一家的编码形状套给别家。
  * 找不到 → `undefined`，调用方按老行为（新日期新行）。
  */
-function resolveFrozenScheduledDate(
+function resolveFrozenRow(
   database: DatabaseSync,
   providerId: string,
-  row: Readonly<{ sourceReleaseId?: string; identityKind?: string; metricKey: string }>
-): string | undefined {
+  row: Readonly<{ sourceReleaseId?: string; identityKind?: string; metricKey: string; periodKey: string }>
+): Readonly<{ sourceEventId: string; firstScheduledDate: string }> | undefined {
   if (row.sourceReleaseId === undefined || row.identityKind === 'source' || row.metricKey.startsWith('evt.')) return undefined
-  const prior = database.prepare(`select first_scheduled_date from ${calendarStandardTablePolicy.eventsTable}
-    where source_provider_id = ? and source_release_id = ? limit 1`).get(providerId, row.sourceReleaseId) as
-    { first_scheduled_date: string } | undefined
-  return prior === undefined ? undefined : String(prior.first_scheduled_date)
+  const prior = database.prepare(`select source_event_id, first_scheduled_date
+    from ${calendarStandardTablePolicy.eventsTable}
+    where source_provider_id = ? and source_release_id = ? and metric_key = ? and period_key = ? limit 1`)
+    .get(providerId, row.sourceReleaseId, row.metricKey, row.periodKey) as
+    { source_event_id: string; first_scheduled_date: string } | undefined
+  return prior === undefined ? undefined : {
+    sourceEventId: String(prior.source_event_id), firstScheduledDate: String(prior.first_scheduled_date)
+  }
 }
 
 /**

@@ -110,3 +110,64 @@ describe('同一发布改排期：冻结首排期、更新显示排期', () => {
     expect(JSON.parse(String(after[0]!.values_json)).actual).toBe('51')
   })
 })
+/**
+ * **旧库升级路径**（Chief 2026-11-21）：造一个**没有 `source_release_id` 列**的标准表，
+ * 跑 `ensureCalendarStandardTables`，验两件事——列被补上、旧行仍读得出。
+ *
+ * 与上一条「读上一版写的行」**不是同一件事**：那条表上已经有列（验的是 NULL 语义），
+ * 这条验的是「旧库启动时补列」这一步本身。别把它们合成一条。
+ */
+describe('旧库启动补列', () => {
+  /** `4734a31` 之前的建表形状（少 `source_release_id`；其余列与非空约束保持原样）。 */
+  const OLD_SCHEMA = `
+    create table mi_calendar_events (
+      country_code text not null,
+      metric_key text not null,
+      period_key text not null,
+      scheduled_date text not null,
+      first_scheduled_date text not null,
+      scheduled_at text,
+      time_precision text not null,
+      status text not null default 'unknown',
+      identity_kind text not null default 'code',
+      row_kind text not null default 'release',
+      release_count integer not null default 1,
+      values_json text not null,
+      source_provider_id text not null,
+      source_event_id text not null,
+      parser_version text not null,
+      observed_at text not null,
+      first_seen_at text not null,
+      primary key(country_code, metric_key, period_key, first_scheduled_date)
+    );`
+
+  it('旧表 → ensure 后：补上列（NULL），旧行仍读得出值，第二次 ensure 幂等', () => {
+    const database = new DatabaseSync(':memory:')
+    database.exec(OLD_SCHEMA)
+    database.prepare(`insert into mi_calendar_events
+      (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, time_precision,
+       values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at)
+      values ('US', ?, ?, '2026-11-06', '2026-11-06', 'minute', '{"actual":"51"}', 'narwhal', 'old-id',
+              'backfill-from-observations-v1', '2026-11-13T09:00:00.000Z', '2026-11-13T09:00:00.000Z')`)
+      .run(METRIC, PERIOD)
+    database.exec('drop view if exists mi_calendar_releases')
+
+    expect(database.prepare('pragma table_info(mi_calendar_events)').all()
+      .map((column) => String((column as { name: unknown }).name))).not.toContain('source_release_id')
+
+    ensureCalendarStandardTables(database)
+
+    // ① 列被追加
+    expect(database.prepare('pragma table_info(mi_calendar_events)').all()
+      .map((column) => String((column as { name: unknown }).name))).toContain('source_release_id')
+    // ② 旧行读得出：该列 NULL 是「旧行」，不是「缺数据」
+    const after = database.prepare('select values_json, source_release_id from mi_calendar_events').all() as
+      Record<string, unknown>[]
+    expect(after).toHaveLength(1)
+    expect(after[0]!.source_release_id).toBeNull()
+    expect(JSON.parse(String(after[0]!.values_json)).actual).toBe('51')
+    // ③ 幂等：再跑一次不报错、行数不变
+    expect(() => ensureCalendarStandardTables(database)).not.toThrow()
+    expect(database.prepare('select count(*) c from mi_calendar_events').get()).toEqual({ c: 1 })
+  })
+})

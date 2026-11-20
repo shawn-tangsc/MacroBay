@@ -174,7 +174,12 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
     database.exec(`alter table ${eventsTable} add column event_type text`)
   }
   if (!columns.some((column) => column.name === 'source_release_id')) {
-    // 追加可空列：旧行留 NULL（无法判别「改排期」），不重写、不回填。
+    /**
+     * **与迁移 16/18 同款**（Chief 2026-11-21 拍）：`pragma_table_info` 查过再 `add column`，
+     * 重复执行无害、幂等；追加的是**可空列**，旧行留 `NULL`（＝「旧行、无法判别改排期」，不是缺数据），
+     * 不重写、不回填、不 drop。**不另加 `mi_macro_calendar_migrations` marker**：那是「数据迁移只跑一次」
+     * 的标记，加列本身幂等，再造一个版本号就成了两套语义。
+     */
     database.exec(`alter table ${eventsTable} add column source_release_id text`)
   }
   if (!columns.some((column) => column.name === 'data_observed_at')) {
