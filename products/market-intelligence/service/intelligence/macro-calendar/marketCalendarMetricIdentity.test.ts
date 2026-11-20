@@ -4,12 +4,12 @@ import {
   canonicalIdentityKey,
   keepRowsNotCoveredByNarwhal,
   narwhalCanonicalIdentityKey,
-  narwhalMeasureMetricKeys,
   narwhalSourceEventIdForIdentity,
   zeroXRouterCanonicalIdentity,
   zeroXRouterIndicatorIdentities,
   type ZeroXRouterPeriodRule
 } from './marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from './marketCalendarNarwhalMeasureKeys'
 
 /**
  * 身份表的数据守卫：**一张表只许一种理解**。

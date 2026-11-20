@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { eventTypeNameByCode, nameByMetricKey, nameForMetricKey, registeredSourceIdentityName,
   sourceInternalIdOf } from './marketCalendarCodeNames'
-import { narwhalMeasureMetricKeys, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from './marketCalendarNarwhalMeasureKeys'
 
 /** 38 条已上线码名的**冻结期望值**：抄自 20 号表的现名，改一个字节这里就该红。 */
 const EXPECTED_LOCKED_NAMES: Readonly<Record<string, readonly [string, string, string, string]>> = Object.freeze({

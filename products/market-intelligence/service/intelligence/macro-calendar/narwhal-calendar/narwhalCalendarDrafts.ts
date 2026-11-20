@@ -1,6 +1,7 @@
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 import { eventCodeBySourceType } from '../marketCalendarEventCodeTable'
-import { narwhalEventSourceEventId, narwhalMeasureMetricKeys, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { narwhalEventSourceEventId, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from '../marketCalendarNarwhalMeasureKeys'
 
 /**
  * Narwhal 的**草稿层**：一次采集的每条发布 → 观测表的一行/多行（`measure_keys_json` 只带一个码）。
