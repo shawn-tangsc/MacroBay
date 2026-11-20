@@ -172,9 +172,18 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
  * 声明没写清的先按 `month`（统计月），在映射清单里标待核，不许猜。
  */
 export type ZeroXRouterPeriodRule = 'month' | 'current_month' | 'week_end' | 'quarter' | 'event_date'
-export type ZeroXRouterIdentityEntry = Readonly<{ metricKey: string; periodRule: ZeroXRouterPeriodRule }>
+/**
+ * 「这一条的期次规则产品还在点名」——先按 §3.1 的现规则（统计月）处理，但**标记出来**，
+ * 让后面的人一眼看出这是悬着的，不是我们忘了。产品给了口径就改成 `current_month` 并删标记。
+ */
+export type PeriodRuleReview = 'pending-product'
+export type ZeroXRouterIdentityEntry = Readonly<{
+  metricKey: string
+  periodRule: ZeroXRouterPeriodRule
+  periodRuleReview?: PeriodRuleReview
+}>
 export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouterIdentityEntry>> = Object.freeze({
-  '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month' },
+  '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
   '9413': { metricKey: 'US.CONSTRUCTION_SPENDING.SA.MOM', periodRule: 'month' },
   '4013': { metricKey: 'US.ISM_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
   '9260': { metricKey: 'US.ISM_MANUFACTURING_PRODUCTION.SA.LEVEL', periodRule: 'month' },
@@ -201,7 +210,7 @@ export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouter
   '4022': { metricKey: 'US.TRADE_BALANCE.NONE.DIFF', periodRule: 'month' },
   '8791': { metricKey: 'US.EXPORTS.NONE.AMOUNT', periodRule: 'month' },
   '8792': { metricKey: 'US.IMPORTS.NONE.AMOUNT', periodRule: 'month' },
-  '10260': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month' },
+  '10260': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
   '10263': { metricKey: 'US.SP_COMPOSITE_PMI.SA.LEVEL', periodRule: 'month' },
   '9264': { metricKey: 'US.ISM_SERVICES_EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
   '9262': { metricKey: 'US.ISM_SERVICES_SUPPLIER_DELIVERIES.SA.LEVEL', periodRule: 'month' },

@@ -1,5 +1,5 @@
 import { localizedPairFor } from './marketCalendarCodeNames'
-import type { ZeroXRouterPeriodRule } from './marketCalendarMetricIdentity'
+import type { ZeroXRouterIdentityEntry } from './marketCalendarMetricIdentity'
 
 /**
  * **0xrouter 自己的「源内 id → 指标码」表**（用户 2026-11-17 定，按来源拆）。
@@ -19,10 +19,7 @@ import type { ZeroXRouterPeriodRule } from './marketCalendarMetricIdentity'
  *
  * `EMPLOYMENT` 在词表里但本表没有用到：纽约联储就业类 id 还在未映射名单里，**不建空条目**。
  */
-export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
-  metricKey: string
-  periodRule: ZeroXRouterPeriodRule
-}>>> = Object.freeze({
+export const zeroXRouterSourceMetricMappings: Readonly<Record<string, ZeroXRouterIdentityEntry>> = Object.freeze({
   // ① 纽约联储制造业（母：213922 / 214790）
   '213922': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL', periodRule: 'current_month' },
   '214790': { metricKey: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL', periodRule: 'current_month' },
@@ -64,7 +61,7 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '213980': { metricKey: 'US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE', periodRule: 'month' },
   '214830': { metricKey: 'US.CAPACITY_UTILIZATION.MANUFACTURING.SA.RATE', periodRule: 'month' },
   // ⑥ 谘商会消费者信心（母：214232 / 214991）
-  '214232': { metricKey: 'US.CONSUMER_CONFIDENCE.SA.LEVEL', periodRule: 'month' },
+  '214232': { metricKey: 'US.CONSUMER_CONFIDENCE.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
   // NAR 成屋签约（码已有：月率/年率两条，指数水平那条落月率码上）
   '214062': { metricKey: 'US.PENDING_HOME_SALES.SA.MOM', periodRule: 'month' },
   '214063': { metricKey: 'US.PENDING_HOME_SALES.SA.MOM', periodRule: 'month' },
@@ -81,10 +78,10 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   // 标普全球 PMI 三族（初值落同一码：初值/终值是同一码的两次发布）
   '214147': { metricKey: 'US.SP_COMPOSITE_PMI.SA.LEVEL', periodRule: 'month' },
   '214976': { metricKey: 'US.SP_COMPOSITE_PMI.SA.LEVEL', periodRule: 'month' },
-  '214148': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month' },
-  '214977': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month' },
-  '214149': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month' },
-  '214978': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month' },
+  '214148': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '214977': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '214149': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '214978': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
   // 库存、NAHB、企业获利、达拉斯原材料支付价格（都是既有码）
   '213944': { metricKey: 'US.BUSINESS_INVENTORIES.SA.MOM', periodRule: 'month' },
   '214831': { metricKey: 'US.BUSINESS_INVENTORIES.SA.MOM', periodRule: 'month' },
@@ -100,10 +97,10 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '213942': { metricKey: 'US.RETAIL_SALES_EX_AUTOS.SA.MOM', periodRule: 'month' },
   '214824': { metricKey: 'US.RETAIL_SALES_EX_AUTOS.SA.MOM', periodRule: 'month' },
   // 谘商会消费者预期/现况（母族已有子项体系，两个词都在闭集里）
-  '214233': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month' },
-  '214992': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month' },
-  '214234': { metricKey: 'US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL', periodRule: 'month' },
-  '214993': { metricKey: 'US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL', periodRule: 'month' },
+  '214233': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '214992': { metricKey: 'US.CONSUMER_CONFIDENCE.EXPECTATIONS.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '214234': { metricKey: 'US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
+  '214993': { metricKey: 'US.CONSUMER_CONFIDENCE.CURRENT.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
   // 就业成本指数（新码；不是 `UNIT_LABOR_COSTS`，那个已有且是另一个指标）
   '214345': { metricKey: 'US.ECI.SA.QOQ', periodRule: 'quarter' },
   // 月份变体：**同族 + 同测度**，季调档按「该族该测度只有唯一码」才落（SA/NSA 并存时跳过）
@@ -144,7 +141,7 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '214207': { metricKey: 'US.DALLAS_FED_MANUFACTURING.EMPLOYMENT.SA.LEVEL', periodRule: 'current_month' },
   '214209': { metricKey: 'US.DALLAS_FED_MANUFACTURING.NEW_ORDERS.SA.LEVEL', periodRule: 'current_month' },
   '214204': { metricKey: 'US.DALLAS_FED_MANUFACTURING.PRICES_RECEIVED.SA.LEVEL', periodRule: 'current_month' },
-  '214350': { metricKey: 'US.CHICAGO_PMI.SA.LEVEL', periodRule: 'month' },
+  '214350': { metricKey: 'US.CHICAGO_PMI.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' },
   // 里奇蒙德一族（三个独立母码，不新开子项体系）：码本来就存在，只补映射。
   '212683': { metricKey: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL', periodRule: 'current_month' },
   '214237': { metricKey: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL', periodRule: 'current_month' },
@@ -162,7 +159,7 @@ export const zeroXRouterSourceMetricMappings: Readonly<Record<string, Readonly<{
   '213976': { metricKey: 'US.IMPORT_PRICES.NSA.YOY', periodRule: 'month' },
   '214820': { metricKey: 'US.IMPORT_PRICES.SA.MOM', periodRule: 'month' },
   '214821': { metricKey: 'US.IMPORT_PRICES.NSA.YOY', periodRule: 'month' },
-  '214991': { metricKey: 'US.CONSUMER_CONFIDENCE.SA.LEVEL', periodRule: 'month' }
+  '214991': { metricKey: 'US.CONSUMER_CONFIDENCE.SA.LEVEL', periodRule: 'month', periodRuleReview: 'pending-product' }
 })
 
 /** 明知对不上、故意不给码的 id（跨来源误配）：留着是为了下次不再重判一遍。 */

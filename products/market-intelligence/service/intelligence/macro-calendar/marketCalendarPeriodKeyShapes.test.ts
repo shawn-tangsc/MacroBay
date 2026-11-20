@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
 import { zeroXRouterCanonicalIdentity, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 import { normalizeOfficialPeriodKey } from './marketCalendarOfficialSourceRows'
 import { normalizeCalendarStandardRows } from './marketCalendarStartupNormalization'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
@@ -78,6 +79,22 @@ describe('期次键的五条可红判据', () => {
     expect(inFamilies.length).toBeGreaterThan(0)
     expect(inFamilies.filter((entry) => entry.periodRule !== 'current_month')
       .map((entry) => entry.metricKey)).toEqual([])
+  })
+
+  it('「产品点名中」的三类：要么按统计月且带标记，要么已改当月且无标记——不许悄悄悬着', () => {
+    // CB 消费者信心、芝加哥 PMI、S&P Global 两类 PMI：产品还在点名，先按统计月处理但必须留痕。
+    // 这条不是断言「值是 month」，而是断言「悬着的必须可见」：改成 current_month 的那天，
+    // 标记必须同时删掉；留着标记不改、或改了不删标记，都会红。
+    const pendingFamilies = ['US.CONSUMER_CONFIDENCE.', 'US.CHICAGO_PMI.',
+      'US.SP_MANUFACTURING_PMI.', 'US.SP_SERVICES_PMI.']
+    const entries = [...Object.values(zeroXRouterIndicatorIdentities),
+      ...Object.values(zeroXRouterSourceMetricMappings)]
+      .filter((entry) => pendingFamilies.some((family) => entry.metricKey.startsWith(family)))
+    expect(entries.length).toBeGreaterThan(0)
+    const inconsistent = entries.filter((entry) => entry.periodRule === 'month'
+      ? entry.periodRuleReview !== 'pending-product'
+      : entry.periodRule !== 'current_month' || entry.periodRuleReview !== undefined)
+    expect(inconsistent.map((entry) => entry.metricKey)).toEqual([])
   })
 
   it('判据 4：凑不出期次的行记 unknown，且 unknown 与任何行都不同行（不参与合并）', () => {
