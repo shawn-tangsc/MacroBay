@@ -143,6 +143,46 @@ describe('the market history retention pass', () => {
     expect(notes.get('analysis-io.retention.lastDeleted')).toBe('0')
   })
 
+  it('absorbs the raw record store into the same pass and hands it the pass clock', async () => {
+    // 复用这一跑而不是新开一条：保留天数是代码里的常量，不是读者能开关的能力，
+    // 再开一条定义只多一条失败路径与一份重试策略（Chief 2026-11-21 定）。
+    const prune = vi.fn(() => ({
+      cutoff: new Date(atMs - 7 * 24 * 3_600_000).toISOString(),
+      removedRecords: 0, removedPayloadFiles: 0, removedOrphanFiles: 48,
+      reclaimedPayloadBytes: 251_658, remainingRecords: 740
+    }))
+    const registered = new Map<string, () => Promise<unknown>>()
+    const barStore = { retention: () => ({ thinned: 0, deleted: 0, oldestKeptAtMs: null }), note: () => undefined }
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(atMs))
+    try {
+      registerMarketRetention({
+        jobRuntime: {
+          registerHandler: (id: string, handler: () => Promise<unknown>) => { registered.set(id, handler) },
+          setSchedule: () => undefined,
+          enqueueDefinition: async () => ({ id: 'run-1' })
+        } as never,
+        macroStore: barStore,
+        crossAssetStore: barStore,
+        analysisRepository: {
+          retention: () => ({ deleted: 0, ledgerDeleted: 0, triggerLedgerDeleted: 0, oldestKeptAtMs: null }),
+          note: () => undefined,
+          analysisIo: { retention: () => ({ deleted: 0, oldestKeptAtMs: null }) }
+        } as never,
+        rawRecordStore: { pruneRawRecords: prune }
+      })
+      await registered.get(MARKET_HISTORY_RETENTION_JOB_ID)!()
+    } finally {
+      vi.useRealTimers()
+    }
+    // 同一颗钟：这一跑的 `atMs` 减 7 天，不是清理自己再读一次。
+    expect(prune).toHaveBeenCalledWith({
+      retentionDays: 7,
+      now: new Date(atMs).toISOString(),
+      includeOrphans: true
+    })
+  })
+
   it('registers one daily job and looks at startup as well', () => {
     const registered = new Map<string, unknown>()
     const schedules: unknown[] = []
