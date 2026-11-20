@@ -61,127 +61,116 @@ describe('the two halves move at different speeds', () => {
   })
 })
 
-// 真库 2026-11-15 的四条：CPI 与新增就业各有上次发布，新增就业还有下一期。
+/**
+ * 真库 2026-11-15 的三条。**只有 CPI 有盘口预期**，按用户 2026-11-21 的口径，
+ * 环上那一个就是它（非农虽然更近，但没有盘口，不进候选池）。
+ */
 const measured: readonly ClockScheduleMetric[] = [
   { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
     lastRelease: { date: '2026-11-10', value: '3.74%' },
-    nextRelease: { date: '2026-12-10' }, periodDays: 30 },
+    nextRelease: { date: '2026-12-10', expected: '3.2%', expectedFromMarket: true }, periodDays: 30 },
   { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
     lastRelease: { date: '2026-11-06', value: '+165K' },
     nextRelease: { date: '2026-12-04' }, periodDays: 28 },
-  { metricKey: 'US.TARGET_RATE.HIKE_25', nameKey: 'policyRate',
+  { metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate',
     nextRelease: { date: '2026-12-09' }, periodDays: 42 }
 ]
 
 describe('the model built from real schedule dates', () => {
-  it('places today’s four plaques with the angles the data gives', () => {
+  it('puts one indicator plaque (the market-implied one) plus the policy plaque', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
     const byId = new Map(model.plaques.map((plaque) => [plaque.id, plaque]))
-    const past = byId.get('US.CPI.NSA.YOY:past')!
-    expect(past.angle).toBe(300)
-    expect(Number(past.x.toFixed(2))).toBe(51.09)
-    expect(Number(past.y.toFixed(2))).toBe(97.5)
-    expect(past.opacity).toBe(1)
-    expect(Number(byId.get('US.NONFARM.SA.CHANGE:past')!.angle.toFixed(4))).toBe(244.2857)
-    expect(byId.get('US.NONFARM.SA.CHANGE:future')!.angle).toBe(152)
-    expect(Number(byId.get('US.NONFARM.SA.CHANGE:future')!.opacity.toFixed(4))).toBe(0.7006)
-    expect(byId.get('US.TARGET_RATE.HIKE_25:future')!.angle).toBe(192)
-    expect(byId.get('US.TARGET_RATE.HIKE_25:future')!.opacity).toBeCloseTo(0.82, 10)
+    // 环上只放一个指标：CPI（有盘口）——过去一块 + 未来一块；非农不进环。
+    expect(byId.has('US.NONFARM.SA.CHANGE:future')).toBe(false)
+    expect(byId.has('US.NONFARM.SA.CHANGE:past')).toBe(false)
+    expect(byId.get('US.CPI.NSA.YOY:past')!.angle).toBe(300)
+    expect(Number(byId.get('US.CPI.NSA.YOY:past')!.x.toFixed(2))).toBe(51.09)
+    expect(Number(byId.get('US.CPI.NSA.YOY:past')!.y.toFixed(2))).toBe(97.5)
+    expect(byId.get('US.CPI.NSA.YOY:future')!.angle).toBe(200)
+    /**
+     * 这次夹具里 CPI 未来牌（25 天、200°）与政策牌（24 天、192°）相撞：
+     * **环上那一个指标优先**，让位的是政策牌（否则「主位与环上同一个」就断了）。
+     * 真库今天不是这形状：核心 PCE 4 天（32°）、政策会议 18 天（144°），两块不撞。
+     */
+    expect(byId.has('US.TARGET_RATE.DECISION:future')).toBe(false)
+    expect(model.unplaced).toEqual(expect.arrayContaining([
+      expect.objectContaining({ metricKey: 'US.TARGET_RATE.DECISION', reason: 'crowded' })
+    ]))
   })
 
-  /** 用户 2026-11-12 定：两条各判各的，同一指标可以同时占两个位置，不许互相顶掉。 */
-  it('lets one metric hold a past plaque and a future plaque at the same time', () => {
+  /** 用户 2026-11-12 定：过去牌与未来牌各判各的，同一指标可以同时占两个位置。 */
+  it('lets the selected metric hold a past plaque and a future plaque at the same time', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
-    expect(model.plaques.filter((plaque) => plaque.metricKey === 'US.NONFARM.SA.CHANGE')).toHaveLength(2)
+    expect(model.plaques.filter((plaque) => plaque.metricKey === 'US.CPI.NSA.YOY')).toHaveLength(2)
   })
 
-  /** 保留期 P/3 是规则：非农 11-06 发布、P=28 → 9.33 天后撤掉过去牌（11-16 满 10 天）。 */
+  /** 保留期 P/3 是规则：CPI 11-10 发布、P=30 → 10 天后撤掉过去牌（11-21 满 11 天）。 */
   it('retires the past plaque once the retention window has passed, without calling it a gap', () => {
-    const model = buildClockCardModel({ today: '2026-11-16', metrics: measured })
-    expect(model.plaques.some((plaque) => plaque.id === 'US.NONFARM.SA.CHANGE:past')).toBe(false)
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: measured })
+    expect(model.plaques.some((plaque) => plaque.id === 'US.CPI.NSA.YOY:past')).toBe(false)
     // 撤掉是规则到点，不是「挂不上去」：不许因此冒出一条交代。
-    expect(model.unplaced.some((entry) => entry.metricKey === 'US.NONFARM.SA.CHANGE')).toBe(false)
+    expect(model.unplaced.some((entry) => entry.metricKey === 'US.CPI.NSA.YOY')).toBe(false)
     // 未来牌不受影响：下一期还在。
-    expect(model.plaques.some((plaque) => plaque.id === 'US.NONFARM.SA.CHANGE:future')).toBe(true)
+    expect(model.plaques.some((plaque) => plaque.id === 'US.CPI.NSA.YOY:future')).toBe(true)
   })
 
-  /** 主位 = 所有下一期里最近的那一个，与它在不在过去区无关。 */
-  it('picks the nearest upcoming release for the centre', () => {
+  /** 主位 = **环上那一个**（用户 2026-11-21：名字与倒计时必须一致），不是「所有下一期里最近」。 */
+  it('gives the centre the same metric as the ring', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
-    expect(model.center?.metricKey).toBe('US.NONFARM.SA.CHANGE')
-    expect(model.center?.daysUntil).toBe(19)
+    expect(model.center?.metricKey).toBe('US.CPI.NSA.YOY')
+    expect(model.center?.daysUntil).toBe(25)
+    expect(model.center?.expected).toBe('3.2%')
   })
 
-  /** 12-04 这期库里没有共识值：牌与主位都不带值，绝不拿示例值顶上。 */
-  it('carries no expectation when the source has none, so the card can say 未提供', () => {
-    const model = buildClockCardModel({
-      today: '2026-11-15',
-      metrics: [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
-        lastRelease: { date: '2026-11-06', value: '+165K' }, nextRelease: { date: '2026-12-04' }, periodDays: 28 }]
-    })
-    expect(model.plaques.find((plaque) => plaque.zone === 'future')?.value).toBeUndefined()
-    expect(model.center?.expected).toBeUndefined()
-    expect(model.center?.previous).toBe('+165K')
+  /** 其余指标进溢出清单：带日期与天数，供卡片下沿那行「还有 N 个发布不在环上」列全。 */
+  it('lists the indicators that are not on the ring with their date and days', () => {
+    const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
+    const overflow = model.unplaced.filter((entry) => entry.reason === 'not-selected')
+    expect(overflow.map((entry) => entry.metricKey)).toContain('US.NONFARM.SA.CHANGE')
+    const payrolls = overflow.find((entry) => entry.metricKey === 'US.NONFARM.SA.CHANGE')!
+    expect(payrolls.date).toBe('2026-12-04')
+    expect(payrolls.daysUntil).toBe(19)
   })
 
   /**
-   * 取不到 P / P 不合理 / 没有下一期 → 该指标不上环，但必须留一行交代，不许悄悄消失。
+   * 一个都没有盘口时不硬挂（用户 2026-11-21）：环上不出指标牌、主位留空，
+   * 不许拿没有盘口的指标顶上去假装有预期。
    */
-  it('leaves a line for every metric it cannot place', () => {
-    const model = buildClockCardModel({
-      today: '2026-11-15',
-      metrics: [
-        { metricKey: 'no-period', nameKey: 'noPeriod', lastRelease: { date: '2026-11-13', value: '1' }, nextRelease: { date: '2026-12-01' } },
-        { metricKey: 'bad-period', nameKey: 'badPeriod', lastRelease: { date: '2026-11-13', value: '1' }, nextRelease: { date: '2026-12-01' }, periodDays: 900 },
-        { metricKey: 'no-next', nameKey: 'noNext', lastRelease: { date: '2026-11-13', value: '1' }, periodDays: 30 }
-      ]
-    })
-    expect(model.unplaced).toEqual(expect.arrayContaining([
-      { metricKey: 'no-period', nameKey: 'noPeriod', reason: 'no-period' },
-      { metricKey: 'bad-period', nameKey: 'badPeriod', reason: 'period-out-of-range' },
-      { metricKey: 'no-next', nameKey: 'noNext', reason: 'no-next-release' }
-    ]))
-    // 周期坏掉的那条仍可以有未来牌（未来区只按 30 天投影算），只是过去区没有。
-    expect(model.plaques.some((plaque) => plaque.metricKey === 'bad-period' && plaque.zone === 'future')).toBe(true)
+  it('rings nothing when no candidate has a market-implied expectation', () => {
+    const model = buildClockCardModel({ today: '2026-11-15', metrics: measured.map((metric) => ({
+      ...metric, nextRelease: metric.nextRelease === undefined ? undefined : { date: metric.nextRelease.date }
+    })) })
+    expect(model.center).toBeUndefined()
+    expect(model.plaques.every((plaque) => plaque.metricKey === 'US.TARGET_RATE.DECISION')).toBe(true)
   })
 })
 
+
 /**
- * 撞牌规则（Chief 2026-11-15 定，界面设计签字待回）：同一区内矩形相交时**保留离现在更近的那块**，
- * 让位的进交代行并写「名字 + 还有几天」；角度不许迁就（角度就是时间），主位不受影响。
+ * 环上只放一个指标之后，指标之间不再互相撞牌（撞牌只剩「指标牌 vs 政策牌」这一种情形）。
+ * 政策牌照旧单独挂：它不是一级指标，不参与「那一个」的挑选，也不会抢主位。
  */
-describe('two plaques that overlap', () => {
-  const crowded: readonly ClockScheduleMetric[] = [
-    { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy', nextRelease: { date: '2026-12-10' } },
-    { metricKey: 'US.TARGET_RATE.HIKE_25', nameKey: 'policyRate', nextRelease: { date: '2026-12-09' } }
+describe('the policy plaque and the single indicator plaque', () => {
+  const policyOnly: readonly ClockScheduleMetric[] = [
+    { metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate', nextRelease: { date: '2026-12-09' } }
   ]
 
-  it('keeps only the nearer one on the ring and hands the other a line with its days', () => {
-    const model = buildClockCardModel({ today: '2026-11-15', metrics: crowded })
-    expect(model.plaques).toHaveLength(1)
-    expect(model.plaques[0]!.metricKey).toBe('US.TARGET_RATE.HIKE_25')
-    expect(model.unplaced).toEqual([expect.objectContaining({
-      metricKey: 'US.CPI.NSA.YOY', reason: 'crowded', daysUntil: 25
-    })])
+  it('keeps the policy plaque even when no indicator has a market-implied expectation', () => {
+    const model = buildClockCardModel({ today: '2026-11-15', metrics: policyOnly })
+    expect(model.plaques.map((plaque) => plaque.metricKey)).toEqual(['US.TARGET_RATE.DECISION'])
+    // 没有一级指标候选时主位为空——不拿政策牌冒充「那一个指标」。
+    expect(model.center).toBeUndefined()
   })
 
-  it('renders the same order twice for the same day, never A today and B tomorrow', () => {
-    const first = buildClockCardModel({ today: '2026-11-15', metrics: crowded })
-    const second = buildClockCardModel({ today: '2026-11-15', metrics: [...crowded].reverse() })
-    expect(first.plaques.map((plaque) => plaque.metricKey)).toEqual(second.plaques.map((plaque) => plaque.metricKey))
-  })
-
-  it('does not touch the centre: a plaque that lost its place can still be the centre', () => {
-    const model = buildClockCardModel({ today: '2026-11-15', metrics: crowded })
-    // 政策利率更近 → 上环；CPI 让位，但主位仍是全场最近的下一期（政策利率）。
-    expect(model.center?.metricKey).toBe('US.TARGET_RATE.HIKE_25')
-    // 反过来：若让位的是主位那条，主位照常显示——用同一天两块相撞的对称构造验证。
-    const model2 = buildClockCardModel({ today: '2026-11-15', metrics: [
-      { metricKey: 'A', nameKey: 'a', nextRelease: { date: '2026-12-01' } },
-      { metricKey: 'B', nameKey: 'b', nextRelease: { date: '2026-12-02' } }
+  it('rings the market-implied indicator and the policy plaque, and nothing else', () => {
+    const model = buildClockCardModel({ today: '2026-11-15', metrics: [
+      { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy',
+        nextRelease: { date: '2026-11-25', expected: '3.2%', expectedFromMarket: true } },
+      { metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate', nextRelease: { date: '2026-12-09' } }
     ] })
-    expect(model2.plaques).toHaveLength(1)
-    expect(model2.center?.metricKey).toBe('A')
+    expect(model.plaques.map((plaque) => plaque.metricKey).sort())
+      .toEqual(['US.CORE_PCE.YOY', 'US.TARGET_RATE.DECISION'])
+    expect(model.center?.metricKey).toBe('US.CORE_PCE.YOY')
   })
 })
 
@@ -203,12 +192,12 @@ describe('the overlap check spans the two halves', () => {
 })
 
 it('catches a past plaque and a future plaque meeting at the 8 o’clock gap', () => {
-  const model = buildClockCardModel({ today: '2026-11-15', metrics: [
-    // 过去区：P=33、10 天前发布 → 250.9°，落在 8 点断口一侧。
-    { metricKey: 'PAST.AT.EIGHT', nameKey: 'cpiYoy', lastRelease: { date: '2026-11-05', value: '1' }, periodDays: 33 },
-    // 未来区：30 天 → 240°，正好在断口的另一侧。
-    { metricKey: 'FUTURE.AT.EIGHT', nameKey: 'policyRate', nextRelease: { date: '2026-12-15' } }
-  ] })
-  // 两块跨着 8 点断口相接（250.9° 与 240°），不分区才判得出：只许留一块。
+  // 同一个指标（环上那一个，必须有盘口才会上环）的过去牌与未来牌跨着 8 点断口相接：
+  // 过去 P=33、10 天前发布 → 250.9°；未来 30 天 → 240°。不分区才判得出，只许留一块。
+  const model = buildClockCardModel({ today: '2026-11-15', metrics: [{
+    metricKey: 'RING.METRIC', nameKey: 'cpiYoy',
+    lastRelease: { date: '2026-11-05', value: '1' }, periodDays: 33,
+    nextRelease: { date: '2026-12-15', expected: '1.0%', expectedFromMarket: true }
+  }] })
   expect(model.plaques).toHaveLength(1)
 })

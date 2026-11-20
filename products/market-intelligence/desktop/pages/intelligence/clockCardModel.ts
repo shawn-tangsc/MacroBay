@@ -58,9 +58,13 @@ export type ClockScheduleMetric = Readonly<{
   /** 上一次发布：日期取日程，值取这一期已公布的结果；这一期没有值就不给 `value`。 */
   lastRelease?: Readonly<{ date: string; value?: string }>
   /** 下一期发布：只给出日期与预期值；没有预期值（比如盘未开）就不给 `expected`。 */
-  nextRelease?: Readonly<{ date: string; expected?: string }>
+  nextRelease?: Readonly<{ date: string; expected?: string
+    /** 预期来自盘口（`market-implied`）：环上只从这类候选里挑一个。 */
+    expectedFromMarket?: true }>
   /** 同一指标相邻两次发布的间隔（天）；从日程算，不许写死。 */
   periodDays?: number
+  /** 政策利率那一格：主推档（`hike-25` 等），牌名按它生成——档位会变，名字不能写死。 */
+  policyOutcome?: string
 }>
 
 export type ClockPlaque = Readonly<{
@@ -81,6 +85,8 @@ export type ClockPlaque = Readonly<{
   daysUntil?: number
   /** 过去牌距上次发布的天数（同样参与撞牌判定：更近的那块留下）。 */
   daysAgo?: number
+  /** 政策牌：主推档，牌名按它生成（写死档位名会出错）。 */
+  policyOutcome?: string
 }>
 
 export type ClockCenterMetric = Readonly<{
@@ -91,6 +97,8 @@ export type ClockCenterMetric = Readonly<{
   expected?: string
   /** 前值（上一次的公布值），没有就不给。 */
   previous?: string
+  /** 政策主位：主推档，名字按它生成。 */
+  policyOutcome?: string
 }>
 
 /**
@@ -100,13 +108,46 @@ export type ClockCenterMetric = Readonly<{
  * - `no-next-release`：没有下一期日程（未来区无处可挂）。
  */
 export type ClockUnplacedReason = 'no-period' | 'period-out-of-range' | 'no-next-release' | 'crowded'
+/** 环上只放一个指标（用户 2026-11-21）：其余一级指标不是「放不下」，是**没被选中**——原因要分开写。 */
 export type ClockUnplaced = Readonly<{
   metricKey: string
   nameKey: string
-  reason: ClockUnplacedReason
+  reason: ClockUnplacedReason | 'not-selected'
   /** 被撞牌让位时的「还有几天」：交代行要写出来，读者才知道挪走的是哪一条。 */
   daysUntil?: number
+  /** 这一项的发布日期（`not-selected` 的溢出清单要写「哪天、几天后」）。 */
+  date?: string
 }>
+
+/**
+ * **环上那一个指标的选法**（用户 2026-11-21，唯一口径）：
+ * 1. 候选池 = 一级指标里**下一期有盘口预期**（`expectedFromMarket`）的；
+ * 2. 多于一个 → 下一期发布最近的；
+ * 3. 同一发布日 → 代表优先级：PCE→核心 PCE 年率、CPI→CPI 年率、就业→非农；
+ * 4. 一个都没有盘口 → 不硬挂（`undefined`），由卡面走「暂无预期」，不许拿没有盘口的顶上去。
+ */
+export const clockRingRepresentativeConcepts = Object.freeze([
+  'US.CORE_PCE.YOY', 'US.CPI.YOY', 'US.NONFARM.CHANGE'
+] as const)
+
+/** 政策利率不是一级指标，不参与「那一个」的挑选。 */
+const POLICY_METRIC_KEY = 'US.TARGET_RATE.DECISION'
+
+export function selectRingMetric(metrics: readonly ClockScheduleMetric[]): ClockScheduleMetric | undefined {
+  const candidates = metrics.filter((metric) => metric.metricKey !== POLICY_METRIC_KEY
+    && metric.nextRelease !== undefined && metric.nextRelease.expectedFromMarket === true)
+  if (candidates.length === 0) return undefined
+  const rank = (metric: ClockScheduleMetric): number => {
+    const index = (clockRingRepresentativeConcepts as readonly string[]).indexOf(metric.metricKey)
+    return index === -1 ? clockRingRepresentativeConcepts.length : index
+  }
+  const sorted = [...candidates].sort((left, right) => {
+    const leftDays = clockDayGap('1970-01-01', left.nextRelease!.date)
+    const rightDays = clockDayGap('1970-01-01', right.nextRelease!.date)
+    return leftDays - rightDays || rank(left) - rank(right) || left.metricKey.localeCompare(right.metricKey)
+  })
+  return sorted[0]
+}
 
 export type ClockCardModel = Readonly<{
   plaques: readonly ClockPlaque[]
@@ -180,8 +221,30 @@ export function buildClockCardModel(input: Readonly<{
   const plaques: ClockPlaque[] = []
   const unplaced: ClockUnplaced[] = []
   let center: ClockCenterMetric | undefined
+  /**
+   * **环上只放一个指标**（用户 2026-11-21）：候选=有盘口预期的一级指标，取最近的一个；
+   * 其余全部进溢出清单。政策利率不是一级指标，照旧单独一块牌。
+   */
+  const selected = selectRingMetric(input.metrics)
 
   for (const metric of input.metrics) {
+    const isPolicy = metric.metricKey === POLICY_METRIC_KEY
+    const isSelected = selected !== undefined && selected.metricKey === metric.metricKey
+    // 没被选中的一级指标：**不是放不下**，是没选中；日期与天数也带上，溢出清单要能说清漏的是哪一条。
+    if (!isPolicy && !isSelected) {
+      // 没有下一期日程的，原因照旧如实写（「没有下一期」不是「没被选中」）。
+      if (metric.nextRelease === undefined) {
+        unplaced.push({ metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'no-next-release' })
+        continue
+      }
+      const daysUntil = clockDayGap(input.today, metric.nextRelease.date)
+      unplaced.push({
+        metricKey: metric.metricKey, nameKey: metric.nameKey, reason: 'not-selected',
+        date: metric.nextRelease.date,
+        ...(Number.isNaN(daysUntil) ? {} : { daysUntil })
+      })
+      continue
+    }
     const pastDays = metric.lastRelease === undefined ? undefined : clockDayGap(metric.lastRelease.date, input.today)
     const periodUsable = clockPeriodIsUsable(metric.periodDays)
     // 过去区：有上次发布、周期可信、且还在保留期 P/3 内才挂。
@@ -196,7 +259,8 @@ export function buildClockCardModel(input: Readonly<{
         plaques.push({
           id: `${metric.metricKey}:past`, metricKey: metric.metricKey, nameKey: metric.nameKey, zone: 'past',
           angle, x: point.x, y: point.y, opacity: 1, daysAgo: pastDays,
-          ...(metric.lastRelease.value === undefined ? {} : { value: metric.lastRelease.value })
+          ...(metric.lastRelease.value === undefined ? {} : { value: metric.lastRelease.value }),
+          ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
         })
       }
     }
@@ -216,22 +280,35 @@ export function buildClockCardModel(input: Readonly<{
     plaques.push({
       id: `${metric.metricKey}:future`, metricKey: metric.metricKey, nameKey: metric.nameKey, zone: 'future',
       angle, x: point.x, y: point.y, opacity: round4(clockFutureOpacity(daysUntil)), daysUntil,
-      ...(metric.nextRelease.expected === undefined ? {} : { value: metric.nextRelease.expected })
+      ...(metric.nextRelease.expected === undefined ? {} : { value: metric.nextRelease.expected }),
+      ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
     })
-    // 主位是所有下一期里最近的那一个，与它在不在过去区无关。
-    if (center === undefined || daysUntil < center.daysUntil) {
+    /**
+     * 主位 = **环上那一个**（用户 2026-11-21：名字与倒计时必须一致）。
+     * 政策利率不抢主位：它不是一级指标，主位留空时卡面走「暂无预期」。
+     */
+    if (isSelected && center === undefined) {
       center = {
         metricKey: metric.metricKey, nameKey: metric.nameKey, daysUntil,
         ...(metric.nextRelease.expected === undefined ? {} : { expected: metric.nextRelease.expected }),
-        ...(metric.lastRelease?.value === undefined ? {} : { previous: metric.lastRelease.value })
+        ...(metric.lastRelease?.value === undefined ? {} : { previous: metric.lastRelease.value }),
+        ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
       }
     }
   }
 
-  // 撞牌：同一区内部比矩形，保留离「现在」更近的；让位的进交代行。主位不受影响（已算完）。
-  // 同一个区内按「离现在更近」排序（未来看天数、过去看距上次发布天数），天数相同按 metricKey 稳定序。
+  // 撞牌：同一区内部比矩形，保留离「现在」更近的；让位的进交代行。
   const ordered = [...plaques].sort((left, right) => {
     if (left.zone !== right.zone) return left.zone === 'future' ? -1 : 1
+    /**
+     * 未来区里**环上那一个指标优先**：它和政策牌撞上时，让位的是政策牌。
+     * 否则会出现「选中了 PCE，环上却只有政策牌」——主位与环上同一个这条就断了。
+     */
+    if (left.zone === 'future') {
+      const leftRing = selected !== undefined && left.metricKey === selected.metricKey
+      const rightRing = selected !== undefined && right.metricKey === selected.metricKey
+      if (leftRing !== rightRing) return leftRing ? -1 : 1
+    }
     const leftDays = left.zone === 'future' ? left.daysUntil ?? Number.POSITIVE_INFINITY : left.daysAgo ?? Number.POSITIVE_INFINITY
     const rightDays = right.zone === 'future' ? right.daysUntil ?? Number.POSITIVE_INFINITY : right.daysAgo ?? Number.POSITIVE_INFINITY
     return leftDays - rightDays || left.metricKey.localeCompare(right.metricKey)

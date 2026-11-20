@@ -1,6 +1,7 @@
 import { Calendar } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { helpTrigger } from '@platform/ui/components/popover'
 
 import type { ClockCardModel, ClockPlaque } from './clockCardModel'
 import { clockCardCenter, clockCardGeometry } from './clockCardModel'
@@ -53,8 +54,12 @@ export type ClockCardText = Readonly<{
   centerNames: Readonly<Record<string, string>>
   /** 主位：预期那一行（现在放在数值**上方**，否则读者会把数值当成实际值）。 */
   expectation: string
-  /** 政策利率那一格：值来自盘口主推档概率，名字必须带「维持不变概率」。 */
-  policyProbabilityName: string
+  /**
+   * 政策利率那一格：值来自盘口**主推档**的概率，标签必须按主推档生成
+   * （写死「维持不变」在 2026-11-20 那天就是错的：主推档其实是加息 25bp）。
+   */
+  policyOutcomeLabel: string
+  policyOutcomeNames: Readonly<Record<string, string>>
   /** 预期拿不到时的那一行（绝不拿示例值顶）。 */
   expectationMissing: string
   /** 前值那一行的前缀。 */
@@ -83,6 +88,10 @@ export type ClockCardText = Readonly<{
   crowdedLead: string
   /** 超过 3 项时的尾巴：`另有 {count} 项`。 */
   crowdedMore: string
+  /** 环上只放一个指标后，其余发布在这行里（`{count}` 个），点 ⓘ 列全。 */
+  overflowLine: string
+  /** 溢出逐条：`{name} · {date} · {days} 天后`。 */
+  overflowItem: string
 }>
 
 export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCalendar, resolveText, policyState, onOpenPolicySources, policyNotice }: Readonly<{
@@ -110,6 +119,16 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         ? { actionLabel: text.openSources, onAction: onOpenPolicySources } : {})
     })
   const center = model.center
+  /**
+   * 没上环的发布清单（`not-selected`）：逐条写「名字 · 日期 · 几天后」。
+   * 环上只放一个指标后，这里是**其余全部**——不在一行里堆 12 个名字，放进 ⓘ 里列全。
+   */
+  const overflowItems = model.unplaced
+    .filter((entry) => entry.reason === 'not-selected')
+    .map((entry) => text.overflowItem
+      .replace('{name}', text.names[entry.nameKey] ?? entry.nameKey)
+      .replace('{date}', entry.date ?? '—')
+      .replace('{days}', String(entry.daysUntil ?? 0)))
   const centerPlaqueId = center === undefined ? undefined : `${center.metricKey}:future`
 
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
@@ -156,7 +175,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
 
       {center === undefined ? null : <div className="mi-clock__core">
         <span className="mi-clock__row1">
-          <span className="mi-clock__name">{plaqueName(center.metricKey, center.nameKey, text, true)}</span>
+          <span className="mi-clock__name">{plaqueName(center.metricKey, center.nameKey, text, center.policyOutcome, true)}</span>
           <span className="mi-clock__badge">{text.daysUntil.replace('{days}', String(center.daysUntil))}</span>
         </span>
         {/* 标签在数值**上方**（用户 2026-11-20 报「预期（市场共识）」像空的）：写在下面时，
@@ -177,7 +196,7 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         data-clock-metric={plaque.metricKey}
         {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
         style={{ left: plaque.x, top: plaque.y, '--o': plaque.opacity } as React.CSSProperties}>
-        <span>{plaqueName(plaque.metricKey, plaque.nameKey, text)}</span>
+        <span>{plaqueName(plaque.metricKey, plaque.nameKey, text, plaque.policyOutcome)}</span>
         {plaque.value === undefined ? null : <b>{plaque.value}</b>}
       </div>)}
 
@@ -185,6 +204,13 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       <div className="mi-clock__action">
         <IconButton ariaLabelKey={actionLabelKey} icon={Calendar} size="sm" variant="overlay" resolveText={resolveText} onSelect={onOpenCalendar} />
       </div>
+
+      {/* 环上只放一个指标（用户 2026-11-21）：其余发布在这行里，点 ⓘ 列全（名字 · 日期 · 几天后）。
+          计数为 0 时整行不渲染——不写「还有 0 个」。 */}
+      {overflowItems.length === 0 ? null : <p className="mi-clock__overflow" data-clock-overflow>
+        <span>{text.overflowLine.replace('{count}', String(overflowItems.length))}</span>
+        {helpTrigger({ text: overflowItems.join('；') })}
+      </p>}
 
       {/* 政策块的降级说明：**看得见**的一行（不是只藏在 ⓘ 里），未启用时还带一条去设置的路。
           只在政策那一块表达：主位与另外三块牌照常画。 */}
@@ -219,10 +245,12 @@ function unplacedLines(model: ClockCardModel, text: ClockCardText, policyState?:
   const crowdedLine = crowded.length === 0 ? undefined : text.crowdedLead
     .replace('{count}', String(crowded.length))
     .replace('{items}', [...shown, ...(rest > 0 ? [text.crowdedMore.replace('{count}', String(rest))] : [])].join('、'))
-  const lines = model.unplaced.filter((entry) => entry.reason !== 'crowded').map((entry) =>
-    text.unplacedLine
+  // `not-selected`（环上只放一个、其余没被选中）由卡片下沿那行单独表达，不混进 ⓘ。
+  const lines = model.unplaced
+    .filter((entry) => entry.reason !== 'crowded' && entry.reason !== 'not-selected')
+    .map((entry) => text.unplacedLine
       .replace('{name}', text.names[entry.nameKey] ?? entry.nameKey)
-      .replace('{reason}', text.unplaced[entry.reason]))
+      .replace('{reason}', text.unplaced[entry.reason as keyof typeof text.unplaced]))
   const policy = policyState === undefined ? [] : [policyState === 'disabled' ? text.policyDisabled : text.policyUnreadable]
   return [...policy, ...(crowdedLine === undefined ? [] : [crowdedLine]), ...lines]
 }
@@ -231,8 +259,12 @@ function unplacedLines(model: ClockCardModel, text: ClockCardText, policyState?:
  * 牌上的名字：政策利率那一格的值是**盘口主推档的概率**，不是利率水平——
  * 名字必须带「维持不变概率」，否则 90.9% 会被读成利率（用户 2026-11-20 报的就是这个）。
  */
-function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, center = false): string {
-  if (metricKey === 'US.TARGET_RATE.DECISION') return text.policyProbabilityName
+function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, policyOutcome?: string, center = false): string {
+  if (metricKey === 'US.TARGET_RATE.DECISION') {
+    // 主推档名字按 outcome 取；取不到就写「政策利率」——不编一个档位。
+    const outcomeName = text.policyOutcomeNames[policyOutcome ?? '']
+    return outcomeName === undefined ? '政策利率' : text.policyOutcomeLabel.replace('{outcome}', outcomeName)
+  }
   const name = (center ? text.centerNames[nameKey as keyof typeof text.centerNames] : undefined)
     ?? text.names[nameKey as keyof typeof text.names]
     ?? nameKey
