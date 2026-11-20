@@ -79,7 +79,8 @@ export function MacroIndicatorDrawer({ locale, open = true, onClose, openTarget,
    */
   policyReading?: PolicyPathReading
   policyText: PolicyPathCardText
-  onOpenPolicyDetail?: () => void
+  /** 打开政策详情；把手势的触发元素一起递上去，政策抽屉关闭后焦点回到它。 */
+  onOpenPolicyDetail?: (trigger: HTMLElement) => void
   /**
    * 曲线窗口内已发生的发布/事件（有名字、有时刻），用来在曲线上标注「这一刻动了多少」。
    *

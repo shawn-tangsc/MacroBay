@@ -5,6 +5,10 @@
  * block is not a token: the other theme silently falls back to whatever the
  * property inherits, which is how a text hierarchy disappears without an error.
  *
+ * The exception is layering (z-index): stacking is theme-independent, so each
+ * `--layer-*` token is defined **once**, in `:root` only — never copied into the
+ * light block. A second copy is the same number in two places waiting to drift.
+ *
  * Consumers must reference these names and never write `var(--token, #hex)`.
  * The default belongs here, not at the call site: five copies of the same
  * fallback is five different colours waiting to drift apart.
@@ -101,6 +105,24 @@
   --surface-2: var(--surface-soft);
   /* `--warning` is the pre-2026-11 name of `--caution`; kept as an alias, not a second yellow. */
   --warning: var(--caution);
+
+  /*
+   * Layering. Theme-independent: defined once, here.
+   *
+   * The one sequence, in ascending order — antd modal/drawer **1000** (inline from rc-dialog,
+   * not a token we can own) → agent floating control **1100** (`--mi-agent-floating-z`) →
+   * `--layer-modal-top` **1150** → context menu **1200** → over-drawer Modal **1500** →
+   * toast **1600**.
+   *
+   * 1150 is "stack on top of a modal without closing it" (the policy drawer over the indicator
+   * drawer). It must stay above 1000 and **below the context menu 1200**: a menu opened inside
+   * that layer still has to cover it. 1500 is a different case (a modal above the menu) and is
+   * not merged in.
+   *
+   * Known consequence, not a defect: the event-detail layer is 1200 (same as the menu), so
+   * opening a detail from inside the policy drawer puts the detail above it — later-opened wins.
+   */
+  --layer-modal-top: 1150;
 }
 
 :root[data-theme="light"] {

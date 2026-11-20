@@ -56,6 +56,7 @@ import { Popover } from '@platform/ui/components/popover'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
+import { usePolicyDrawerOverlay } from './usePolicyDrawerOverlay'
 import { createPortal } from 'react-dom'
 
 import { MacroIndicatorDrawer, type CalendarDrawerRequest } from './MacroIndicatorDrawer'
@@ -304,7 +305,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
    * 政策块来自政策读数。角度/透明度/撞牌都在 `clockCardModel` 里算，这里不重算。
    */
   const clockFacts = cardFactsView?.state === 'available' ? cardFactsView.facts : []
-  const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
+  const policyDrawer = usePolicyDrawerOverlay()
   // 关键指标 · 预期变化：曲线、政策卡与三张简化卡都读真数据。
   const [indicatorDrawerOpen, setIndicatorDrawerOpen] = useState(false)
   // 页面层请求打开日历抽屉：请求序号一变就开，不去共享内部开关。定位由抽屉按序号自己落一次。
@@ -442,8 +443,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         const conclusionMount = <div ref={conclusionSlot} data-dashboard-conclusion-slot />
         return policySlot ? createPortal(conclusionMount, policySlot) : conclusionMount
       })() : null}
-      {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
-        text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
+      {policyDrawer.open && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading} text={text.policyPath} onClose={policyDrawer.close} returnFocusTo={policyDrawer.trigger} /> : null}
       {/* 关键指标抽屉：曲线与政策卡读同一份真实读数；三张简化卡读装配层的事实。右侧滑出，与左侧分析详情不是同一层。 */}
       {<MacroIndicatorDrawer open={indicatorDrawerOpen} locale={locale} policyText={text.policyPath}
         {...(calendarBlock === undefined ? {} : { calendarBlock })}
@@ -454,7 +454,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         {...(cardFactsView?.state === 'unavailable' ? { cardFactsUnreadable: true } : {})}
         now={drawerNow} openTarget={openIndicatorDrawerRequest}
         {...(readCalendarMonth ? { readCalendarMonth } : {})}
-        onOpenPolicyDetail={() => { setIndicatorDrawerOpen(false); setPolicyDrawerOpen(true) }} onConfigure={onConfigureSources}
+        onOpenPolicyDetail={policyDrawer.openFrom} onConfigure={onConfigureSources}
         onClose={() => setIndicatorDrawerOpen(false)} />}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}

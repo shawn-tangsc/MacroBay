@@ -75,6 +75,28 @@ describe('policy path drawer shell', () => {
   })
 })
 
+describe('policy path drawer stacking', () => {
+  it('mounts as a body-level overlay above the platform modal layer', async () => {
+    // 真样式表注入后量**计算值**，不是只断言渲染了：政策层（--layer-modal-top）必须高于
+    // 平台 drawer 的 1000（antd 默认，rc-dialog 内联写入，我们量不到它的样式表，所以拿 1000 比）。
+    const read = (path: string) => readFileSync(`platform/ui/tokens/${path}`, 'utf8')
+    const style = document.createElement('style')
+    style.textContent = `${read('tokens.css')}\n${readFileSync('products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css', 'utf8')}`
+    document.head.append(style)
+    try {
+      const rendered = await render(reading)
+      const shell = rendered.querySelector('aside.mi-analysis-drawer--overlay')
+      expect(shell).not.toBeNull()
+      // portal：不在渲染容器里，挂在 body 上（DOM 顺序在日历抽屉之后，Tab 不会倒）。
+      expect(host!.contains(shell)).toBe(false)
+      const z = Number(getComputedStyle(shell as Element).zIndex)
+      expect(z).toBeGreaterThan(1000)
+    } finally {
+      style.remove()
+    }
+  })
+})
+
 /** 红线第 4 条：抽屉里同样不许自己切日期、也不许把 ISO 切成 19 位再显示。 */
 it('builds no date or clock string of its own', () => {
   const drawer = readFileSync('products/market-intelligence/desktop/pages/intelligence/PolicyPathDrawer.tsx', 'utf8')
