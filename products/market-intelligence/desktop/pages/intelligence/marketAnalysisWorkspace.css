@@ -48,7 +48,6 @@
 /* 方向标记：受控词表 + 语义色；无标记的结论保持中性，不做猜测着色。 */
 .mi-analysis-conclusion__direction { display: inline-flex; align-items: center; margin-right: 6px; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--mi-conclusion-direction) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--mi-conclusion-direction) 14%, transparent); color: var(--mi-conclusion-direction); font-size: 10px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; vertical-align: middle; }
 /* 正文语言与界面不同时的一句事实：muted、行内；「重新生成」是同一行里的文字动作。 */
-.mi-analysis-conclusion__language { margin: 6px 0 0; color: var(--muted); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-analysis-timeline__conclusion[data-direction="bullish"], .mi-analysis-conclusion-card__body[data-direction="bullish"] { border-left-color: var(--mi-conclusion-positive); }
 .mi-analysis-timeline__conclusion[data-direction="bearish"], .mi-analysis-conclusion-card__body[data-direction="bearish"] { border-left-color: var(--mi-conclusion-negative); }
 .mi-analysis-timeline__conclusion[data-direction="range"], .mi-analysis-timeline__conclusion[data-direction="mixed"], .mi-analysis-conclusion-card__body[data-direction="range"], .mi-analysis-conclusion-card__body[data-direction="mixed"] { border-left-color: var(--mi-conclusion-caution); }
@@ -147,8 +146,10 @@
 .mi-analysis-change__row[data-change-kind='removed'] .mi-analysis-change__value strong { color: var(--mi-conclusion-negative); }
 
 /* Conclusion layout: a readable stack of labelled parts instead of one dense block. */
-.mi-analysis-conclusion__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.mi-analysis-conclusion__head .mi-analysis-timeline__section-label { margin: 0; }
+.mi-analysis-conclusion__head { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+/* 整行不许换行：ⓘ 与方向徽标固定不缩，标题让出空间后自己省略（用户 2026-11-20）。 */
+.mi-analysis-conclusion__head > span { flex: none; }
+.mi-analysis-conclusion__head .mi-analysis-timeline__section-label { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-analysis-conclusion__body { display: grid; gap: 10px; }
 .mi-analysis-conclusion__text { margin: 0; color: var(--text-strong); font-size: 13px; line-height: 1.75; }
 /* One row per horizon: the operation directions, above the prose they summarise. */

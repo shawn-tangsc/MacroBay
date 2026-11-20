@@ -54,19 +54,29 @@ function render(input: MarketAnalysisTimelineDetail, onRegenerate?: () => void):
 }
 
 describe('the conclusion language note', () => {
-  it('keeps the language note in the icon, not in the body, and offers regenerate', () => {
-    // 正文说明句门禁：说明句只许进 ⓘ。行内只剩「重新生成」，那句话在 hover/点击展开的浮层里。
+  it('keeps the note in the icon and puts that icon inside the header, before the title', () => {
+    // 用户 2026-11-20：ⓘ 掉到标题下面一行了。判据是 DOM 位置，不是截图。
     const onRegenerate = vi.fn()
     render(detail({ schemaVersion: 2, proseLanguage: 'en-US' }), onRegenerate)
-    const row = host.querySelector('.mi-analysis-conclusion__language')!
-    expect(row.textContent).not.toContain('这条结论是按英语写的。')
-    // ⓘ 的读屏名是短名，不是整句说明。
-    const info = row.querySelector('button[aria-label]') as HTMLButtonElement
+    const header = host.querySelector('header.mi-analysis-conclusion__head')!
+    expect(header).not.toBeNull()
+    const info = header.querySelector('button[aria-label]') as HTMLButtonElement
     expect(info.getAttribute('aria-label')).toBe('语言说明')
-    // 「重新生成」是这一屏自己的动作，不在那条语言说明里（曾经误嵌在里面：没有语言说明时整个
-    // 动作都不渲染，市场分析组因此白丢一个入口）。
-    expect(row.textContent).not.toContain(text.regenerateConclusion)
+    // ⓘ 必须在 header 里（不是外面那个块级段落），并且是 header 子树里的第一个按钮、排在标题前面。
+    // 注意：Popover 规定触发器包在 `span.platform-popover__anchor` 里（浮层定位锚点），所以 DOM 上
+    // 它的父元素是那个 span、span 才是 firstElementChild；按字面「parentElement === header」得改
+    // 平台 Popover，这里用等价判据。
+    expect(info.closest('header.mi-analysis-conclusion__head')).toBe(header)
+    expect(header.firstElementChild?.contains(info)).toBe(true)
+    expect(header.querySelector('button')).toBe(info)
+    const title = header.querySelector('.mi-analysis-timeline__section-label')!
+    expect(info.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // 说明句只在浮层里，不进标题行正文；原来那个块级段落也不留空壳。
+    expect(header.textContent).not.toContain('这条结论是按英语写的。')
+    expect(host.querySelector('.mi-analysis-conclusion__language')).toBeNull()
+    // 「重新生成」仍是这一屏自己的动作，没有被卷进 header。
     const regenerate = [...host.querySelectorAll('button')].find(button => button.textContent === text.regenerateConclusion)!
+    expect(header.contains(regenerate)).toBe(false)
     act(() => { regenerate.click() })
     expect(onRegenerate).toHaveBeenCalledTimes(1)
   })
@@ -75,12 +85,12 @@ describe('the conclusion language note', () => {
     // 旧记录没有语言字段：不标注、不猜。但「重新生成」与语言无关，它必须还在——这条动作曾因为
     // 被嵌进语言说明的条件里而一起消失。
     render(detail({ schemaVersion: 1 }), vi.fn())
-    expect(host.querySelector('.mi-analysis-conclusion__language')).toBeNull()
+    expect(host.querySelector('header.mi-analysis-conclusion__head button[aria-label]')).toBeNull()
     expect([...host.querySelectorAll('button')].some(button => button.textContent === text.regenerateConclusion)).toBe(true)
   })
 
   it('says nothing when the recorded language is the one being read', () => {
     render(detail({ schemaVersion: 2, proseLanguage: 'zh-CN' }), vi.fn())
-    expect(host.querySelector('.mi-analysis-conclusion__language')).toBeNull()
+    expect(host.querySelector('header.mi-analysis-conclusion__head button[aria-label]')).toBeNull()
   })
 })
