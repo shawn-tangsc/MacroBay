@@ -131,6 +131,11 @@ export type NarwhalStandardRowInput = Readonly<{
   status: CalendarReleaseStatus
   /** 这一行是由**源的某个 measure** 生成的（测度层对账只数它们）。 */
   fromMeasure?: true
+  /**
+   * **源内发布 id**（`release_id`）：判别「同一发布改了排期」与「同期的第二次真实发布」的唯一依据
+   * （架构师 2026-11-21 批 (b)）。事件行与源内身份行不带——它们本来就不按码认行。
+   */
+  sourceReleaseId?: string
   /** 源标了已发布、却一个值都没给：值区显示「未提供」（读侧按 status + 无值判）。 */
   valueState?: 'missing'
   previous?: string
@@ -236,6 +241,7 @@ function codeRowIdentity(release: NarwhalParsedRelease, metricKey: string, perio
         anyMapped = true
         rows.push({
           kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, value.actual), fromMeasure: true,
+          sourceReleaseId: release.releaseId,
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey, periodKey: period,
           scheduledDate: release.eventDate, scheduledAt: release.at,
@@ -254,6 +260,7 @@ function codeRowIdentity(release: NarwhalParsedRelease, metricKey: string, perio
       if (primaryMetric !== undefined) {
         rows.push({
           kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+          sourceReleaseId: release.releaseId,
           ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey: primaryMetric, periodKey: period,
@@ -266,6 +273,7 @@ function codeRowIdentity(release: NarwhalParsedRelease, metricKey: string, perio
       if (countryMetric !== undefined) {
         rows.push({
           kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+          sourceReleaseId: release.releaseId,
           ...(status === 'published' ? { valueState: 'missing' as const } : {}),
           ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
           countryCode: release.country, metricKey: countryMetric, periodKey: period,
@@ -317,6 +325,7 @@ function codeRowIdentity(release: NarwhalParsedRelease, metricKey: string, perio
     if (countryMetric !== undefined) {
       rows.push({
         kind: 'indicator', identityKind: 'code', status: publishedNeedsActual(status, undefined),
+        sourceReleaseId: release.releaseId,
         ...(status === 'published' ? { valueState: 'missing' as const } : {}),
         ...(isEstimate ? { rowKind: 'estimate' as const } : {}),
         countryCode: release.country, metricKey: countryMetric, periodKey: period,

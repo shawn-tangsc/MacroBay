@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { narwhalCanonicalIdentityKey, toAlpha2Country } from './marketCalendarMetricIdentity'
+import { narwhalStandardSourceEventId } from './marketCalendarSourceEventId'
 import { eventCodeBySourceType } from './marketCalendarEventCodeTable'
 import { nameForMetricKey } from './marketCalendarCodeNames'
 
@@ -36,6 +37,11 @@ export type DualWriteCounts = Readonly<{
    */
   mergedSameDay: number
   /**
+   * **无法判别的旧行**（`source_release_id` 为 NULL）：这次写入撞上了「同身份、不同排期、旧行没有判别器」，
+   * 只能按老行为（新日期新行）。**必须计数、不许静默**——它是这套修法唯一的退化口。
+   */
+  legacyUnjudged: number
+  /**
    * 这一批**第一次**写入失败的码（闭集）：没有失败就不带这个键，不写 `null`。
    * 只作上报用——**不改来源健康状态**（写入失败不是来源失败）。
    */
@@ -64,6 +70,8 @@ export function dualWriteMeasureRows(
       seriesId?: string
       /** 源给的重要性；没有就不写（读侧显示「未分级」）。 */
       importance?: 'high' | 'medium' | 'low'
+      /** 源内发布 id：判别「同一发布改排期」与「同期第二次真实发布」（架构师 2026-11-21 批 (b)）。 */
+      sourceReleaseId?: string
       status?: CalendarReleaseStatus
       /** 由值自己算出来：有 actual/previous/consensus 之一即 present。 */
       valueState?: 'present' | 'missing'
@@ -74,11 +82,13 @@ export function dualWriteMeasureRows(
   let written = 0
   let failed = 0
   let mergedSameDay = 0
+  let legacyUnjudged = 0
   let firstErrorCode: 'standard-write-failed' | 'value-shape-rejected' | undefined
   // 「真的把行上的发布 id 改掉了」的次数：**每轮汇总一行**，不逐行打（启动日志一分钟 1190 条就是逐行打出来的）。
   const sourceIdOverwrites: SourceIdOverwritePayload[] = []
-  for (const row of input.rows) {
+  for (const incoming of input.rows) {
     try {
+      let row = incoming
       // 源内身份的行没有标准码可查：它是「源里确实有这次发布」，不是缺映射。
       const isSourceIdentity = row.identityKind === 'source'
       const isEventCode = row.metricKey.startsWith('evt.')
@@ -89,6 +99,25 @@ export function dualWriteMeasureRows(
         recordCalendarUnmapped(database, { providerId: input.providerId, sourceKey: row.sourceEventId,
           detectedAt: input.observedAt, rawJson: JSON.stringify({ metricKey: row.metricKey }), reason: 'unknown-measure' })
         continue
+      }
+      /**
+       * **同一发布改了排期 → 仍是同一行**（架构师 2026-11-21 批 (b)，方案 §2.4）。
+       *
+       * 判别器只有源内 `release_id`：身份改成四段后，日期变了 id 就变，只按 id 找不到旧行。
+       * 找到同一 `release_id` 的行 → **沿用它的 `first_scheduled_date`（冻结）**，
+       * 身份按冻结的日期重算；显示用的 `scheduled_date` 照常更新成最新排期（两个日期各管一件事）。
+       *
+       * 旧行（`source_release_id` 为 NULL）**无法判别**：按老行为（新日期新行），并计数，
+       * 不许静默——这套修法唯一的退化口就是它。
+       */
+      const frozen = resolveFrozenScheduledDate(database, input.providerId, row)
+      if (frozen !== undefined) {
+        row = { ...row, sourceEventId: narwhalStandardSourceEventId({
+          countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
+          firstScheduledDate: frozen
+        }) }
+      } else if (legacyUnjudgedBy(database, row)) {
+        legacyUnjudged += 1
       }
       const existing = findCalendarStandardRowBySource(database, {
         sourceProviderId: input.providerId, sourceEventId: row.sourceEventId
@@ -148,7 +177,8 @@ export function dualWriteMeasureRows(
         countryCode: row.countryCode, metricKey: row.metricKey, periodKey: row.periodKey,
         scheduledDate: row.scheduledDate,
         ...(row.scheduledAt === undefined ? {} : { scheduledAt: row.scheduledAt }),
-        ...(existing === undefined ? {} : { firstScheduledDate: existing.firstScheduledDate }),
+        ...(frozen === undefined && existing === undefined ? {} : { firstScheduledDate: frozen ?? existing!.firstScheduledDate }),
+        ...(row.sourceReleaseId === undefined ? {} : { sourceReleaseId: row.sourceReleaseId }),
         timePrecision: row.timePrecision ?? (row.scheduledAt === undefined || row.scheduledAt.endsWith('T00:00:00.000Z') ? 'date' : 'minute'),
         ...(row.rowKind === undefined ? {} : { rowKind: row.rowKind }),
         ...(row.status === undefined ? {} : { status: row.status }),
@@ -214,7 +244,12 @@ export function dualWriteMeasureRows(
     }
   }
   logSourceIdOverwriteSummary(sourceIdOverwrites)
-  return { written, unmapped: reasons, failed, mergedSameDay, ...(firstErrorCode === undefined ? {} : { firstErrorCode }) }
+  // 无法判别的旧行：一轮一行，不静默（它是「改排期冻结」唯一的退化口）。
+  if (legacyUnjudged > 0) {
+    console.warn(`[macro-calendar] 旧行无判别器 ${legacyUnjudged} 笔：同身份不同排期但 source_release_id 为 NULL，按老行为新建行`)
+  }
+  return { written, unmapped: reasons, failed, mergedSameDay, legacyUnjudged,
+    ...(firstErrorCode === undefined ? {} : { firstErrorCode }) }
 }
 
 /**
@@ -289,3 +324,38 @@ function isZeroValue(value: string): boolean {
 const emptyReasons = (): Record<CalendarUnmappedReason, number> =>
   ({ 'unknown-measure': 0, 'unknown-event-type': 0, 'bad-period': 0, 'bad-identity': 0,
     'unknown-release-group': 0, 'ambiguous-same-day': 0, 'no-values': 0, 'missing-country': 0, 'no-code': 0, 'no-standard-row': 0, 'period-unresolved': 0 })
+
+/**
+ * 同一发布已有一行时返回它**冻结的** `first_scheduled_date`（架构师 2026-11-21 批 (b)）。
+ *
+ * 判别器只有源内 `release_id`：身份是四段、含排期日，日期一变 id 就变，只按 id 找不到旧行。
+ * 找不到 → `undefined`，调用方按老行为（新日期新行）。
+ */
+function resolveFrozenScheduledDate(
+  database: DatabaseSync,
+  providerId: string,
+  row: Readonly<{ sourceReleaseId?: string; identityKind?: string; metricKey: string }>
+): string | undefined {
+  if (row.sourceReleaseId === undefined || row.identityKind === 'source' || row.metricKey.startsWith('evt.')) return undefined
+  const prior = database.prepare(`select first_scheduled_date from ${calendarStandardTablePolicy.eventsTable}
+    where source_provider_id = ? and source_release_id = ? limit 1`).get(providerId, row.sourceReleaseId) as
+    { first_scheduled_date: string } | undefined
+  return prior === undefined ? undefined : String(prior.first_scheduled_date)
+}
+
+/**
+ * 这一笔是不是「撞上了没有判别器的旧行」：同身份（国家+码+期）已有行、`source_release_id` 为 NULL、
+ * 且排期与本次不同。是 → 只能按老行为新建行，**计数上报**（这套修法唯一的退化口）。
+ */
+function legacyUnjudgedBy(
+  database: DatabaseSync,
+  row: Readonly<{ countryCode: string; metricKey: string; periodKey: string; scheduledDate: string
+    sourceReleaseId?: string; identityKind?: string }>
+): boolean {
+  if (row.sourceReleaseId === undefined || row.identityKind === 'source' || row.metricKey.startsWith('evt.')) return false
+  const legacy = database.prepare(`select 1 from ${calendarStandardTablePolicy.eventsTable}
+    where source_provider_id is not null and country_code = ? and metric_key = ? and period_key = ?
+      and source_release_id is null and first_scheduled_date <> ? limit 1`)
+    .get(toAlpha2Country(row.countryCode), row.metricKey, row.periodKey, row.scheduledDate)
+  return legacy !== undefined
+}

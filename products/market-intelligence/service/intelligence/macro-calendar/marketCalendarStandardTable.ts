@@ -129,6 +129,11 @@ export type CalendarStandardRow = Readonly<{
   /** 源给的发布状态（闭集）。缺省 `unknown`——不猜，也不按日期推。 */
   status?: CalendarReleaseStatus
   /**
+   * **源内发布 id**（`release_id`）：判别「同一发布改了排期」与「同期的第二次真实发布」的唯一依据。
+   * 旧行为 `NULL`——那时无法判别，按「新日期新行」的老行为走，并计入本轮计数。
+   */
+  sourceReleaseId?: string
+  /**
    * 重要性，**从源带过来**（观测表本来就有这一列；官方 revision 也带）。标准表原本缺这一列，
    * 读侧只好拿三档里的一个去顶，那等于编数据——筛选会失效，而没人看得出是假的。
    * 缺省不填；读侧拿不到就是「未分级」，不许拿 `medium` 顶。
@@ -309,13 +314,15 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
   database.prepare(`insert into ${eventsTable}
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, scheduled_at, time_precision, row_kind,
      status, identity_kind, source_label, source_label_en, series_id, importance, value_state, values_json, source_provider_id, source_event_id, parser_version, observed_at, first_seen_at,
-     first_published_actual, first_published_previous, data_observed_at, event_type)
-    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     first_published_actual, first_published_previous, data_observed_at, event_type, source_release_id)
+    values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(country_code, metric_key, period_key, first_scheduled_date) do update set
       scheduled_date = excluded.scheduled_date,
       -- 时刻取精度是 minute 的那一方：官方只有日期（scheduled_at 为空），若它后写就把市场那条
       -- 13:30 抹掉了——读者会看到「只有日期」，而事实是有人给了时刻。
       -- 精度只从 date 升到 minute，不反向降；新值为空时不覆盖已有值。
+      -- 源内发布 id：只在旧值为空时补写（给旧行补上判别器），已有一律不覆盖。
+      source_release_id = coalesce(source_release_id, excluded.source_release_id),
       scheduled_at = coalesce(excluded.scheduled_at, scheduled_at),
       time_precision = case when excluded.time_precision = 'minute' then 'minute' else time_precision end,
       -- 值要**逐字段**合并，不是整块替换：先写 actual+previous，后到的源只带 previous 时，
@@ -363,7 +370,9 @@ export function upsertCalendarStandardRow(database: DatabaseSync, row: CalendarS
       // 数据时刻不传就按写入时刻算：没有这一级的来源不许因为「不知道数据时刻」而永远覆盖不了。
       row.dataObservedAt ?? row.observedAt,
       // 写入侧知道「这是什么」就存下来；不知道（历史/旧调用方）留空，读侧才退前缀规则。
-      row.eventType ?? null)
+      row.eventType ?? null,
+      // 补写：旧行该列为 NULL 时填上（同一发布按原日期重发的那一次），已有一律不覆盖。
+      row.sourceReleaseId ?? null)
   // 真正写进去的身份（可能是认回的那一行，不是这一笔带来的 id）：调用方记台账要用它，
   // 否则台账会指向一行不存在的身份，`孤儿` 判据当场变红。
   return { countryCode, metricKey, periodKey, firstScheduledDate,
@@ -467,34 +476,8 @@ export function findCalendarStandardRowBySource(database: DatabaseSync, input: R
   }
 }
 
-/**
- * **台账零孤儿**：`mi_calendar_event_source_ids` 里指向已不存在标准行的行，删掉并返回条数（幂等）。
- *
- * 这张表存在的意义只有一个：**「清单里有、表里没有」必须能查出来、且必须为 0**。11-14 撤掉
- * 0xrouter 那 659 行时没撤台账，留下 916 条孤儿——一次 `/tmp` 脚本清掉了，但那不是判据。
- * 所以判定与修复都放在这里，配一条能跑红的用例（造一条孤儿 → 能查出来 → 清掉 → 再清返回 0）。
- *
- * 判定用「`source_event_id` 匹配 **或** 身份（国家+码+期间+首发布日）匹配」：源重发会覆盖
- * `source_event_id`，只按 id 比会把合法台账误判成孤儿。
- */
-export function countOrphanSourceIds(database: DatabaseSync): number {
-  const row = database.prepare(`select count(*) as c from ${calendarStandardTablePolicy.sourceIdsTable} s
-    where not exists (select 1 from ${calendarStandardTablePolicy.eventsTable} e
-      where e.source_event_id = s.source_event_id
-        or (e.country_code = s.country_code and e.metric_key = s.metric_key
-            and e.period_key = s.period_key and e.first_scheduled_date = s.first_scheduled_date))`).get() as
-    { c: number } | undefined
-  return row?.c ?? 0
-}
-
-export function pruneOrphanSourceIds(database: DatabaseSync): number {
-  const result = database.prepare(`delete from ${calendarStandardTablePolicy.sourceIdsTable} as s
-    where not exists (select 1 from ${calendarStandardTablePolicy.eventsTable} e
-      where e.source_event_id = s.source_event_id
-        or (e.country_code = s.country_code and e.metric_key = s.metric_key
-            and e.period_key = s.period_key and e.first_scheduled_date = s.first_scheduled_date))`).run()
-  return Number(result.changes)
-}
+/** 台账孤儿判定与清理：抽出到 `marketCalendarStandardRowLedger`（体积门禁，2026-11-21）。 */
+export { countOrphanSourceIds, pruneOrphanSourceIds } from './marketCalendarStandardRowLedger'
 
 /** 建表与迁移在 `marketCalendarStandardSchema`（体积门禁），这里原样转发，调用点一个不改。 */
 export const ensureCalendarStandardTables = ensureCalendarStandardTablesImpl
