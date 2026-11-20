@@ -160,7 +160,18 @@ export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object
  * 期次取法。**事件型用 `event_date`**（用户 2026-11-17 定：事件身份 = 类型 + 日期）：
  * 一场活动一个身份。同月按 `month` 合并，会把一个月里的两场讲话并成一条、日期也并掉。
  */
-export type ZeroXRouterPeriodRule = 'month' | 'week_end' | 'quarter' | 'event_date'
+/**
+ * 期次规则（PRD R38 §3.1，2026-11-21 产品定）。
+ *
+ * 五种形状对应五条规则：`month`→`YYYY-MM`（上月）、`current_month`→`YYYY-MM`（**当月**，
+ * 调查/景气类）、`quarter`→`YYYY-Qn`（上季）、`week_end`→`YYYY-MM-DD`（上一个截止日，
+ * 标题「（至MMDD）」优先）、`event_date`→`YYYY-MM-DD`（当天，不合并）。
+ *
+ * **`current_month` 是单独声明，不是 `month` 的默认**：纽约联储制造业、费城联储、密歇根
+ * 这类在发布月里发的是**当月值**，按「上月」会错记成上一期（11-17 发的 11 月值落成 2026-10）。
+ * 声明没写清的先按 `month`（统计月），在映射清单里标待核，不许猜。
+ */
+export type ZeroXRouterPeriodRule = 'month' | 'current_month' | 'week_end' | 'quarter' | 'event_date'
 export type ZeroXRouterIdentityEntry = Readonly<{ metricKey: string; periodRule: ZeroXRouterPeriodRule }>
 export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouterIdentityEntry>> = Object.freeze({
   '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month' },
@@ -222,11 +233,11 @@ export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouter
   '9273': { metricKey: 'US.MANUFACTURING_PAYROLLS.SA.CHANGE', periodRule: 'month' },
   '9920': { metricKey: 'US.UNEMPLOYMENT_U6.SA.RATE', periodRule: 'month' },
   '9274': { metricKey: 'US.AHE.NSA.YOY', periodRule: 'month' },
-  '9940': { metricKey: 'US.MICHIGAN_SENTIMENT.NONE.LEVEL', periodRule: 'month' },
-  '10264': { metricKey: 'US.MICHIGAN_INFLATION_1Y.NONE.LEVEL', periodRule: 'month' },
-  '10267': { metricKey: 'US.MICHIGAN_INFLATION_5Y.NONE.LEVEL', periodRule: 'month' },
-  '10114': { metricKey: 'US.MICHIGAN_EXPECTATIONS.NONE.LEVEL', periodRule: 'month' },
-  '10111': { metricKey: 'US.MICHIGAN_CURRENT.NONE.LEVEL', periodRule: 'month' },
+  '9940': { metricKey: 'US.MICHIGAN_SENTIMENT.NONE.LEVEL', periodRule: 'current_month' },
+  '10264': { metricKey: 'US.MICHIGAN_INFLATION_1Y.NONE.LEVEL', periodRule: 'current_month' },
+  '10267': { metricKey: 'US.MICHIGAN_INFLATION_5Y.NONE.LEVEL', periodRule: 'current_month' },
+  '10114': { metricKey: 'US.MICHIGAN_EXPECTATIONS.NONE.LEVEL', periodRule: 'current_month' },
+  '10111': { metricKey: 'US.MICHIGAN_CURRENT.NONE.LEVEL', periodRule: 'current_month' },
   '9851': { metricKey: 'US.BAKER_HUGHES_OIL_RIGS.NONE.COUNT', periodRule: 'week_end' },
   '9853': { metricKey: 'US.BAKER_HUGHES_GAS_RIGS.NONE.COUNT', periodRule: 'week_end' },
   '9852': { metricKey: 'US.BAKER_HUGHES_TOTAL_RIGS.NONE.COUNT', periodRule: 'week_end' },
@@ -399,9 +410,12 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   if (entry.periodRule === 'event_date') {
     return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey: row.scheduledAt.slice(0, 10) }
   }
+  // 逐条写全、不写「否则就当季度」：多一种规则时，漏写的那一支会静默变成别的形状。
   const periodKey = entry.periodRule === 'month' ? previousMonthKey(row.scheduledAt)
+    : entry.periodRule === 'current_month' ? row.scheduledAt.slice(0, 7)
     : entry.periodRule === 'week_end' ? weekEndKeyFor(row.scheduledAt, row.title)
-    : previousQuarterKey(row.scheduledAt)
+    : entry.periodRule === 'quarter' ? previousQuarterKey(row.scheduledAt)
+    : row.scheduledAt.slice(0, 10)
   return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey }
 }
 
