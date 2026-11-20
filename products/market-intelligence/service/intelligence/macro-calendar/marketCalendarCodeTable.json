@@ -3314,7 +3314,8 @@
     "periodDerivation": "release-structure",
     "officialSeries": {
       "frequency": "weekly"
-    }
+    },
+    "annualization": "flow"
   },
   "US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT": {
     "code": "US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT",
@@ -3342,7 +3343,8 @@
     "periodDerivation": "release-structure",
     "officialSeries": {
       "frequency": "weekly"
-    }
+    },
+    "annualization": "flow"
   },
   "US.JOBLESS_CLAIMS_INITIAL.SA.COUNT": {
     "code": "US.JOBLESS_CLAIMS_INITIAL.SA.COUNT",
@@ -3370,7 +3372,8 @@
     "periodDerivation": "release-structure",
     "officialSeries": {
       "frequency": "weekly"
-    }
+    },
+    "annualization": "flow"
   },
   "US.JOLTS_OPENINGS.SA.COUNT": {
     "code": "US.JOLTS_OPENINGS.SA.COUNT",
@@ -3984,7 +3987,8 @@
       "seriesId": "PAYEMS",
       "units": "chg",
       "frequency": "monthly"
-    }
+    },
+    "annualization": "flow"
   },
   "US.PARTICIPATION_RATE.SA.RATE": {
     "code": "US.PARTICIPATION_RATE.SA.RATE",

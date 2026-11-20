@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { codeTableReasonSets, marketCalendarCodeTable } from './marketCalendarCodeTable'
+import { codeTableReasonSets, marketCalendarCodeTable, validateCodeTableRows } from './marketCalendarCodeTable'
 import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
@@ -95,5 +95,64 @@ describe('标准码表', () => {
     expect(events.every((row) => row.kind === 'event' && row.tier === null)).toBe(true)
     // 指标行反过来不许标成 event；`kind` 与码前缀必须是同一件事，不能各说各的。
     expect(rows.filter((row) => row.kind === 'metric').every((row) => !row.code.startsWith('evt.'))).toBe(true)
+  })
+})
+
+/**
+ * 年度化的**载入校验**（方案 §3.4，Chief 2026-11-21 明确要求做成反例用例）：
+ * 只对带 `officialSeries.frequency` 的**流量**码标 `annualization:'flow'`；比率类不许标。
+ *
+ * 三条判据都不靠注释：
+ * ① 标了 `flow` 就必须有频率——没有频率的年化系数是编出来的；
+ * ② 率类（百分比量纲）不许标 `flow`——利率年度化是错口径，**载入即红**；
+ * ③ 表里真正标上的必须只有那 4 个流量码，失业率一个都不许有。
+ */
+describe('年度化标记与载入校验', () => {
+  const flowCodes = rows.filter((row) => row.annualization === 'flow').map((row) => row.code)
+
+  it('标了 flow 的只有 4 个带频率的流量码；比率那个不在其中', () => {
+    expect([...flowCodes].sort()).toEqual([
+      'US.JOBLESS_CLAIMS_4W_AVERAGE.SA.AVERAGE',
+      'US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT',
+      'US.JOBLESS_CLAIMS_INITIAL.SA.COUNT',
+      'US.NONFARM.SA.CHANGE'
+    ])
+    // 反例：失业率有频率、有序列号，但它是比率——标了就是错口径。
+    expect(marketCalendarCodeTable['US.UNEMPLOYMENT.SA.RATE']!.annualization).toBeUndefined()
+    // 每个 flow 码都有频率（没有频率的流量码是不可年度化的）。
+    for (const code of flowCodes) {
+      expect(marketCalendarCodeTable[code]!.officialSeries?.frequency).toBeDefined()
+    }
+  })
+
+  it('给率类标 flow → 载入即抛（点名是哪个码、为什么）', () => {
+    const broken = {
+      'US.UNEMPLOYMENT.SA.RATE': {
+        ...marketCalendarCodeTable['US.UNEMPLOYMENT.SA.RATE'],
+        annualization: 'flow'
+      }
+    }
+    expect(() => validateCodeTableRows(broken))
+      .toThrow(/US\.UNEMPLOYMENT\.SA\.RATE：率类（measure=RATE）是百分比量纲，不许标 annualization:'flow'/)
+  })
+
+  it('标了 flow 却没有频率 → 载入即抛', () => {
+    const broken = {
+      'US.CPI.NSA.YOY': {
+        ...marketCalendarCodeTable['US.CPI.NSA.YOY'],
+        annualization: 'flow'
+      }
+    }
+    expect(() => validateCodeTableRows(broken)).toThrow(/US\.CPI\.NSA\.YOY/)
+  })
+
+  it('不认识的 annualization 取值 → 载入即抛（闭集只有一个值）', () => {
+    const broken = {
+      'US.JOBLESS_CLAIMS_INITIAL.SA.COUNT': {
+        ...marketCalendarCodeTable['US.JOBLESS_CLAIMS_INITIAL.SA.COUNT'],
+        annualization: 'rate'
+      }
+    }
+    expect(() => validateCodeTableRows(broken)).toThrow(/annualization/)
   })
 })

@@ -1,5 +1,5 @@
 import type { CalendarNumericUnit } from './marketCalendarNumericParse'
-import { marketCalendarCodeTable } from './marketCalendarCodeTable'
+import { codeTablePercentMeasures, marketCalendarCodeTable } from './marketCalendarCodeTable'
 
 /**
  * **单位闭集映射表**（架构师方案 `macro-calendar-numeric-values-plan.md` §1/§2 的 N2 那一半）。
@@ -45,14 +45,15 @@ export function calendarNumericUnitFromSource(unit: string | null | undefined): 
   return key === '' ? undefined : calendarNumericUnitAliases[key]
 }
 
-/** 量纲由 measure 决定的那一档（率类＝百分比）；其余档位不出现＝不可由 measure 推。 */
-export const calendarNumericUnitByMeasure: Readonly<Record<string, CalendarNumericUnit>> = Object.freeze({
-  MOM: 'percent',
-  QOQ: 'percent',
-  YOY: 'percent',
-  ANNUALIZED_QOQ: 'percent',
-  RATE: 'percent'
-})
+/**
+ * 量纲由 measure 决定的那一档（率类＝百分比）；其余档位不出现＝不可由 measure 推。
+ *
+ * **从码表的 `codeTablePercentMeasures` 派生**，不在这里再抄一份：同一条「哪几档是百分比」
+ * 还要给年度化载入校验用（率类不许标 `annualization:'flow'`），两份必然漂移。
+ */
+export const calendarNumericUnitByMeasure: Readonly<Record<string, CalendarNumericUnit>> = Object.freeze(
+  Object.fromEntries(codeTablePercentMeasures.map((measure) => [measure, 'percent' as CalendarNumericUnit]))
+)
 
 /** 该指标码能不能给出单位提示（展示串里没写单位时用）。码表里没有的码、没登记量纲的码 → 不猜。 */
 export function calendarNumericUnitHintForMetricKey(metricKey: string | null | undefined): CalendarNumericUnit | undefined {

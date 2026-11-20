@@ -48,9 +48,30 @@ export type CodeTableRow = Readonly<{
    * 推导出来的期次必须在行上留痕，否则事后分不清「源给的」和「我们推的」。
    */
   periodDerivation?: 'source' | 'title' | 'release-structure'
+  /**
+   * **可年度化**（方案 `macro-calendar-numeric-values-plan.md` §3.4）：只给流量型码标 `'flow'`。
+   * 不给＝不可年度化（读侧返 `not-flow`，**不猜**）。
+   *
+   * 载入校验（`validateCodeTableRows`）三条，任一不合就炸：
+   * ① `'flow'` 必须有 `officialSeries.frequency`（没有频率的系数是编出来的）；
+   * ② 率类（百分比量纲，见 `codeTablePercentMeasures`）不许标——**利率年度化是错口径**；
+   * ③ 取值只有 `'flow'` 一个，别的写法载入即红。
+   */
+  annualization?: 'flow'
 }>
 
 const OFFICIAL_SOURCE_PENDING = 'official-source-todo' as const
+
+/**
+ * **百分比量纲的 measure 闭集**：月率/季率/年率/年化季率/各种「率」。
+ *
+ * 这一份同时服务两处，**不许再抄第二份**：
+ * ① 单位闭集映射（`marketCalendarNumericUnits` 把这几档映射成 `percent`）；
+ * ② 年度化载入校验（这几档是**率**，不许标 `annualization:'flow'`——利率年度化是错口径）。
+ */
+export const codeTablePercentMeasures: readonly string[] = Object.freeze([
+  'MOM', 'QOQ', 'YOY', 'ANNUALIZED_QOQ', 'RATE'
+])
 
 import rawCodeTable from './marketCalendarCodeTable.json'
 
@@ -58,7 +79,7 @@ import rawCodeTable from './marketCalendarCodeTable.json'
  * **数据文件（JSON）在读时校验一次**：`tsc` 不执行代码，形状对不对只能在这里炸，并且点名是哪个码、
  * 哪个字段——不校验的话，一个 `undefined` 会一路走到界面上变成一个空白格。
  */
-function asCodeTable(raw: Record<string, unknown>): Record<string, CodeTableRow> {
+export function validateCodeTableRows(raw: Record<string, unknown>): Record<string, CodeTableRow> {
   const out: Record<string, CodeTableRow> = {}
   for (const [key, value] of Object.entries(raw)) {
     const row = value as Partial<CodeTableRow> & { names?: Partial<CodeTableRow['names']> }
@@ -71,6 +92,25 @@ function asCodeTable(raw: Record<string, unknown>): Record<string, CodeTableRow>
     if (row.status !== 'active' && row.status !== 'not-built' && row.status !== 'pending' && row.status !== 'retired') {
       throw new Error(`${where}：status 非法`)
     }
+    if (row.officialSeries !== undefined) {
+      const frequency = (row.officialSeries as { frequency?: unknown }).frequency
+      if (frequency !== 'weekly' && frequency !== 'monthly' && frequency !== 'quarterly') {
+        throw new Error(`${where}：officialSeries.frequency 非法（${String(frequency)}）`)
+      }
+    }
+    /**
+     * 年度化标记的载入校验（方案 §3.4）：**只许流量码标 flow**，且必须有频率、量纲不是百分比。
+     * 这里不是「建议」——标错的后果是利率被乘 12 当成流量，读侧算出来的数字看着还挺像。
+     */
+    if (row.annualization !== undefined) {
+      if (row.annualization !== 'flow') throw new Error(`${where}：annualization 非法（${String(row.annualization)}），闭集只有 'flow'`)
+      if (row.officialSeries === undefined) {
+        throw new Error(`${where}：标了 annualization:'flow' 但没有 officialSeries.frequency——没有频率就没有年化系数`)
+      }
+      if (codeTablePercentMeasures.includes(String(row.measure))) {
+        throw new Error(`${where}：率类（measure=${String(row.measure)}）是百分比量纲，不许标 annualization:'flow'——利率年度化是错口径`)
+      }
+    }
     out[key] = value as CodeTableRow
   }
   return out
@@ -78,5 +118,5 @@ function asCodeTable(raw: Record<string, unknown>): Record<string, CodeTableRow>
 
 
 export const marketCalendarCodeTable: Readonly<Record<string, CodeTableRow>> = Object.freeze({
-  ...asCodeTable(rawCodeTable as unknown as Record<string, unknown>)
+  ...validateCodeTableRows(rawCodeTable as unknown as Record<string, unknown>)
 })
