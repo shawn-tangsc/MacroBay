@@ -117,6 +117,7 @@ time. See [Status and limitations](reference/status-and-limitations.md).
 - [Development setup](./development/setup.md)
 - [Testing](./development/testing.md)
 - [Packaging and release](./development/packaging.md)
+- [Release note body limits](./development/release-notes.md)
 - [Adding a product](./development/adding-a-product.md)
 
 ### Components and UI standards

@@ -104,6 +104,7 @@ Windows x64 安装器可构建、可发布，未做真机安装验收（缺 Wind
 - [开发环境](./development/setup.zh-CN.md)
 - [测试](./development/testing.zh-CN.md)
 - [打包与发布](./development/packaging.zh-CN.md)
+- [发布说明正文的格式约束](./development/release-notes.zh-CN.md)
 - [新增产品](./development/adding-a-product.zh-CN.md)
 
 ### 组件与界面规范
