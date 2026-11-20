@@ -64,8 +64,12 @@
 .mi-analysis-drawer { --mi-drawer-width: 520px; position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
 
 /* 叠在平台 modal 之上（政策抽屉盖在关键指标抽屉上）：挂 body + `--layer-modal-top`。
-   不加遮罩、不设焦点陷阱——下面那层仍可点、仍可见（用户 2026-11-20）。 */
-.mi-analysis-drawer--overlay { position: fixed; z-index: var(--layer-modal-top); }
+   不加遮罩、不设焦点陷阱——下面那层仍可点、仍可见（用户 2026-11-20）。
+   `no-drag` 不是可选项：拖拽区按几何矩形算，不看 z-index 和 DOM。这层铺满窗高，标题栏正好压进
+   顶部 42px 的拖拽带，没有 `no-drag` 时关闭键「看得见、点不动」——按下被当成拖窗口
+   （用户 2026-11-21：「这个抽屉怎么关不掉」）。平台对 portal 到 body 的 antd 抽屉已写同款规则
+   （apps/desktop-shell styles.css 的 `.ant-drawer-*`），这里是我们自己画的壳，得自己声明。 */
+.mi-analysis-drawer--overlay { position: fixed; z-index: var(--layer-modal-top); -webkit-app-region: no-drag; }
 .mi-analysis-drawer[data-placement="right"] { inset: 0 0 0 auto; width: min(1280px, 94vw); border-right: 0; border-left: 1px solid var(--border); box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); }
 .mi-analysis-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
 .mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
