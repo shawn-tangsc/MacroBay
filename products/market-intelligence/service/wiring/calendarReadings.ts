@@ -49,12 +49,16 @@ export function wireCalendarReadings(input: Readonly<{
   // 「其余 → 0xRouter」的死分支——旧源删掉之后它会把认不出的 provider 说成一个不存在的来源。
   const standardCalendarReader = createStandardMonthPageReader({
     database: input.database,
-    resolveTitle: (row) => {
+    /**
+     * **按 locale 取名**（用户 2026-11-20）：原来这里写死 `zhShort`，界面切英文后数据侧仍给中文。
+     * 码表每条都有 `enShort`，取它即可；回退链交给适配器（英文不出中文原文名）。
+     */
+    resolveTitle: (row, locale) => {
       const metric = nameByMetricKey[row.metricKey]
-      if (metric !== undefined) return metric.zhShort
+      if (metric !== undefined) return locale === 'en' ? metric.enShort : metric.zhShort
       const event = eventTypeNameByCode[row.metricKey]
-      if (event !== undefined) return event.zhShort
-      return row.sourceLabel
+      if (event !== undefined) return locale === 'en' ? event.enShort : event.zhShort
+      return undefined
     },
   })
   /**

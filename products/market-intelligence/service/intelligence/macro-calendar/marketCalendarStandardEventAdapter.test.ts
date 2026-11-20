@@ -224,3 +224,29 @@ describe('国家全名（读屏用）', () => {
     expect(noCountry.every((event) => !('countryNameFull' in event))).toBe(true)
   })
 })
+
+describe('英文界面不出中文名（用户 2026-11-20）', () => {
+  // 与装配处 `calendarReadings` 同一套取名规则（名表按 locale 取，英文回退不出中文原文名）。
+  const localized = (locale: 'zh' | 'en') => ({
+    ...context, locale,
+    resolveTitle: (row: { metricKey: string }, at: 'zh' | 'en') => {
+      const metric = (nameByMetricKey as Record<string, { zhShort: string; enShort: string }>)[row.metricKey]
+      if (metric !== undefined) return at === 'en' ? metric.enShort : metric.zhShort
+      const event = (eventTypeNameByCode as Record<string, { zhShort: string; enShort: string }>)[row.metricKey]
+      if (event !== undefined) return at === 'en' ? event.enShort : event.zhShort
+      return undefined
+    }
+  } as never)
+
+  it('locale=en 时每个标题都不含 CJK，且非空；locale=zh 与原来逐条一致', () => {
+    const database = seed()
+    const rows = readStandardCalendarMonth(database, { month: '2026-11' })
+    const en = standardRowsToMarketEvents(rows, localized('en'))
+    const zh = standardRowsToMarketEvents(rows, localized('zh'))
+    expect(en.length).toBeGreaterThan(0)
+    expect(en.every((event) => event.title.trim().length > 0)).toBe(true)
+    expect(en.filter((event) => /[\u4e00-\u9fff]/.test(event.title)).map((event) => event.title)).toEqual([])
+    // 中文侧与改动前一致：指标码走中文短名。
+    expect(zh.find((event) => event.eventNameKey === 'US.CPI.NSA.YOY')!.title).toBe('CPI 年率')
+  })
+})

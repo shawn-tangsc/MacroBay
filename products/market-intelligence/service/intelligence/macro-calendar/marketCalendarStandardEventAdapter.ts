@@ -72,7 +72,8 @@ export function eventKeyForIdentity(row: StandardMonthRow): string {
 
 export type StandardEventContext = Readonly<{
   locale: 'zh' | 'en'
-  resolveTitle: (row: StandardMonthRow) => string | undefined
+  /** **必须带 locale**：同一个 reader 同时服务中英两种查询，闭包一个 locale 就一定错一边。 */
+  resolveTitle: (row: StandardMonthRow, locale: 'zh' | 'en') => string | undefined
   /** 认不出来源时**只能用 `specifiedSource` 之外的兜底值**；不传就落 `unspecified`。 */
   resolveSource?: (row: StandardMonthRow) => MarketCalendarEvent['source']
 }>
@@ -86,7 +87,14 @@ export function standardRowToMarketEvent(row: StandardMonthRow, context: Standar
    * 早先这里 `return undefined`（悄悄少一行），读者看到的就是「这段时间没有这条发布」——
    * 正是「把读不到画成没有」，只是发生在名字这一格。宁可显示一串码，也不吞掉这条发布。
    */
-  const title = context.resolveTitle(row) ?? row.sourceLabel ?? row.metricKey
+  /**
+   * 名称回退链：名表（按 locale） → 源原文名 → **码本身**。
+   * **英文界面的回退链里不许出现中文原文名**：`sourceLabel` 多半是中文，英文只有
+   * `sourceLabelEn` 或码可以用——宁可显示一串码，也不把中文名混进英文界面。
+   * 最后一档是码本身：这一行在源里确实存在，没有名字是「我们还没起名」，不是「它不存在」。
+   */
+  const title = context.resolveTitle(row, context.locale)
+    ?? (context.locale === 'en' ? (row.sourceLabelEn ?? row.metricKey) : (row.sourceLabel ?? row.metricKey))
   const value = (key: string) => (row.values[key] === undefined ? null : { displayValue: row.values[key]! })
   return {
     // `eventKey` 由稳定身份派生（UUID 形状、跨查询不变）；`observationKey` 是同一身份的明文串，
