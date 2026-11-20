@@ -25,6 +25,8 @@ export type CalendarIntegrityCounts = Readonly<{
   duplicateRows: number
   tierOverdueWithoutValueOrReason: number
   unresolvedPeriodRows: number
+  /** `metric_key` 槽位里是**事件类型名**（`financial-event` 这类）的行：它不是一个身份。 */
+  typeNameIdentities: number
 }>
 
 const activeTierCodes = (): readonly string[] => {
@@ -64,7 +66,10 @@ export function auditCalendarIntegrity(
         and first_scheduled_date < ?
         and not ${hasActualSql}
         and coalesce(missing_reason, '') = ''`, ...codes, options.today),
-    unresolvedPeriodRows: count(`select count(*) as n from ${table} where period_key like 'unknown:%'`)
+    unresolvedPeriodRows: count(`select count(*) as n from ${table} where period_key like 'unknown:%'`),
+    // 类型名不是身份（0.4.5 #15）：写入口已经不再这么写，存量行只报不改（改身份要动主键与台账）。
+    typeNameIdentities: count(`select count(*) as n from ${table}
+      where metric_key in ('economic-indicator', 'financial-event', 'central-bank-activity')`)
   }
 }
 
@@ -78,5 +83,6 @@ export function calendarIntegrityGaps(counts: CalendarIntegrityCounts): readonly
     gaps.push(`tier-overdue=${counts.tierOverdueWithoutValueOrReason}`)
   }
   if (counts.unresolvedPeriodRows > 0) gaps.push(`unresolved-period=${counts.unresolvedPeriodRows}`)
+  if (counts.typeNameIdentities > 0) gaps.push(`type-name-identity=${counts.typeNameIdentities}`)
   return gaps
 }

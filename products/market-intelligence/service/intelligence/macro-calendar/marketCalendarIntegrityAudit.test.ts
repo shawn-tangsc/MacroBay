@@ -31,6 +31,7 @@ type Seed = Readonly<{
   valuesJson?: string
   status?: string
   missingReason?: string
+  identityKind?: 'code' | 'source'
 }>
 
 let seq = 0
@@ -40,10 +41,10 @@ function seed(database: DatabaseSync, over: Seed = {}): void {
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, time_precision,
      status, identity_kind, value_state, values_json, source_provider_id, source_event_id,
      parser_version, observed_at, first_seen_at, missing_reason, release_count)
-    values ('US', ?, ?, ?, ?, 'date', ?, 'code', ?, ?, 'test', ?, 'v1', ?, ?, ?, 1)`)
+    values ('US', ?, ?, ?, ?, 'date', ?, ?, ?, ?, 'test', ?, 'v1', ?, ?, ?, 1)`)
     .run(over.metricKey ?? tierOneCode, over.periodKey ?? `2026-0${(seq % 9) + 1}`,
       over.firstScheduledDate ?? '2026-11-01', over.firstScheduledDate ?? '2026-11-01',
-      over.status ?? 'published', over.valueState ?? 'missing', over.valuesJson ?? '{}',
+      over.status ?? 'published', over.identityKind ?? 'code', over.valueState ?? 'missing', over.valuesJson ?? '{}',
       `x-${seq}`, now, now, over.missingReason ?? null)
 }
 
@@ -56,7 +57,7 @@ describe('日历数据一致性盘点', () => {
     const counts = audit(database)
     expect(counts).toEqual({
       presentWithoutActual: 0, missingWithActual: 0, duplicateGroups: 0, duplicateRows: 0,
-      tierOverdueWithoutValueOrReason: 0, unresolvedPeriodRows: 0
+      tierOverdueWithoutValueOrReason: 0, unresolvedPeriodRows: 0, typeNameIdentities: 0
     })
     expect(calendarIntegrityGaps(counts)).toEqual([])
   })
@@ -66,6 +67,22 @@ describe('日历数据一致性盘点', () => {
     seed(database, { valueState: 'present', valuesJson: '{"previous":"6.57"}' })
     expect(audit(database).presentWithoutActual).toBe(1)
     expect(calendarIntegrityGaps(audit(database))).toContain('present-without-actual=1')
+  })
+
+  /**
+   * 0.4.5 #15：身份槽位里写进了**类型名**（`financial-event`）。写入口已经不再这么写，
+   * 但存量行必须在盘点里可见——它不是一条发布，地址/名字/分级都只能退到名字串层。
+   * 盘点**只报不改**：改身份要动主键与台账，属于另一件事。
+   */
+  it('类型名被当成身份 → typeNameIdentities 计数并进缺口，行不动', () => {
+    const database = setup()
+    seed(database, { metricKey: 'financial-event', identityKind: 'source', valuesJson: '{}' })
+    const counts = audit(database)
+    expect(counts.typeNameIdentities).toBe(1)
+    expect(calendarIntegrityGaps(counts)).toContain('type-name-identity=1')
+    const row = database.prepare("select metric_key, identity_kind from mi_calendar_events where metric_key = 'financial-event'")
+      .get() as { metric_key: string; identity_kind: string }
+    expect(row).toEqual({ metric_key: 'financial-event', identity_kind: 'source' })
   })
 
   it('“0” 是真值，不算 ① 也不该被当成没值', () => {
