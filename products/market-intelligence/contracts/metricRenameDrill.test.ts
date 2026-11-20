@@ -64,6 +64,9 @@ describe('守卫 D：换码后消费者一处都不用改', () => {
       'service/intelligence/macro-calendar/marketCalendarCodeNames.ts',
       'service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts',
       'service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts',
+      // 同一张表搬了家、不是新开一张：Narwhal 的 measure → 码 那 132 条 2026-11-21 从
+      // `marketCalendarMetricIdentity.ts` 抽成纯数据模块（文件体积门禁），全仓只有这一份。
+      'service/intelligence/macro-calendar/marketCalendarNarwhalMeasureKeys.ts',
       'service/intelligence/macro-calendar/marketCalendarReleaseGroups.ts',
       'service/intelligence/macro-calendar/macroCalendarReleaseValueMappingPolicy.ts',
       'service/intelligence/macro-calendar/fredIndicatorYoY.ts',
