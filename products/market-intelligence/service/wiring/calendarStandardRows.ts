@@ -132,9 +132,12 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       }
       // 事件国家按机构归属（每次启动都跑，不是一次性迁移）：威廉姆斯归 US、拉加德/连恩归 EMU——按机构，不按开会地点。
       const countryFixed = fixCalendarEventCountries(database)
-      if (countryFixed.updated > 0 || countryFixed.merged > 0) {
+      if (countryFixed.updated > 0 || countryFixed.merged > 0 || countryFixed.invalidIdentities > 0) {
         report(`[macro-calendar] 事件国家修正：扫描 ${countryFixed.scanned} 行、改写 ${countryFixed.updated} 行、`
-          + `撞主键合并删 ${countryFixed.merged} 行`)
+          + `撞主键合并删 ${countryFixed.merged} 行`
+          + (countryFixed.invalidIdentities > 0
+            ? `、数组身份非法 JSON ${countryFixed.invalidIdentities} 条（未按身份处理，也不删）`
+            : ''))
       }
       // 待补清单：改正后仍有身份同一期挂在两个国家下，说明规则表漏了，下次启动还会冒。
       if (countryFixed.ambiguousIdentities.length > 0) {

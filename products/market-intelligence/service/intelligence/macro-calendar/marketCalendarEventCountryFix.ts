@@ -50,6 +50,11 @@ export type EventCountryFixReport = Readonly<{
   /** 撞主键后按合并规则删掉的重复行数（整行进审计表）。 */
   merged: number
   /**
+   * 数组身份里**不是合法 JSON** 的行数（读不出来就不按身份处理，但必须计数）。
+   * 今天实测 0：`["214790",79090]` 这种写法是合法 JSON（第二段是数字，不需要引号）。
+   */
+  invalidIdentities: number
+  /**
    * 同一身份、同一期仍挂在两个以上国家下的身份（待补清单）。
    * 改正后应为空；不为空说明又冒出一批身份/国家错配，规则表要补。
    */
@@ -86,18 +91,26 @@ export function fixCalendarEventCountries(database: DatabaseSync): EventCountryF
   const { backupTable, mergeAuditTable } = calendarEventCountryFixPolicy
   database.exec(mergeAuditSchema.replace('%TABLE%', mergeAuditTable))
 
-  const report = { scanned: 0, updated: 0, merged: 0 }
+  const report = { scanned: 0, updated: 0, merged: 0, invalidIdentities: 0 }
   database.exec('begin')
   try {
     // 首次执行前的整表快照；之后每次启动都不再覆盖，保住「规则上线前」的原样。
     database.exec(`create table if not exists ${backupTable} as select * from ${table}`)
-    // 数组身份的 id 取第一段：源给的写法是 `["214790",79090]`——**数值没有引号，不是合法 JSON**，
-    // 所以这里按位置截取（`json_extract` 在这批行上会直接报 malformed JSON）。
+    /**
+     * 数组身份的 id 取第一段。**旧注释写错了**：`["214790",79090]` 里第二段是数字但整串
+     * 是**合法 JSON**（实测真库 1943 行 `json_valid = 1`，`json_extract` 正常），
+     * 当初按位置截取是多余的。现在先 `json_valid` 再取 `$[0]`：真的非法时才跳过，
+     * 并且**计数**（`invalidIdentities`）——不许静默当成「没有这条身份」。
+     */
+    const invalidIdentities = Number((database.prepare(`select count(*) as n from ${table}
+      where metric_key like '[%' and not json_valid(metric_key)`).get() as { n: number }).n)
+    report.invalidIdentities = invalidIdentities
     const findCandidates = database.prepare(`select rowid as row_id, metric_key, period_key,
         first_scheduled_date, values_json
       from ${table}
       where metric_key like '[%'
-        and substr(metric_key, 3, instr(substr(metric_key, 3), '"') - 1) = ?
+        and json_valid(metric_key)
+        and json_extract(metric_key, '$[0]') = ?
         and country_code <> ?`)
     const findTwin = database.prepare(`select rowid as row_id, values_json from ${table}
       where country_code = ? and metric_key = ? and period_key = ? and first_scheduled_date = ?`)
