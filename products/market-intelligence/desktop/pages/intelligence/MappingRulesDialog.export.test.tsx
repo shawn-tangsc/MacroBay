@@ -421,3 +421,24 @@ it('shows the unmapped country, writes a dash when unknown, and never says 未�
   expect(section.querySelector('[data-unmapped-country-empty]')?.textContent).toBe('—')
   expect(document.body.textContent).not.toContain('未知国家')
 })
+
+/**
+ * 英文界面下名称列不许再出现中文（用户 2026-11-20：「英文主题还是有中文写死」）。
+ * 组件层已按语言分叉，这条在**真实弹框**里再钉一次，防止调用点漏传 `locale`。
+ */
+it('renders the code table name column without Chinese when the interface is English', async () => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root!.render(<ShellLanguageProvider language="en-US"><ShellTimeZoneProvider timeZone="Asia/Shanghai">
+      <MappingRulesDialog open onClose={() => undefined} text={text} view={view} codes={codes} events={events} />
+    </ShellTimeZoneProvider></ShellLanguageProvider>)
+  })
+  const section = document.body.querySelector('[data-mapping-section="codes"]')!
+  const firstRow = section.querySelector('tbody tr.ant-table-row')!
+  const nameCell = firstRow.querySelectorAll('td')[2]!
+  // 夹具的英文名是 "Core PCE (YoY)"：英文界面只显示它，中文「核心 PCE 年率」不许出现。
+  expect(nameCell.textContent).toContain('Core PCE (YoY)')
+  expect(nameCell.textContent).not.toMatch(/[\u3400-\u9fff]/u)
+})
