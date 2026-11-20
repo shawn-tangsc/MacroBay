@@ -432,3 +432,62 @@ describe('状态门只作用于 actual（架构师 2026-11-15 复核）', () => 
     expect(read(database)).toEqual({ actual: '0' })
   })
 })
+
+/**
+ * N2：**旧源（0xrouter）也接同一套解析**（方案 §6 第二笔）。
+ *
+ * 以前只有 narwhal 接：旧源回放出来的行 `numeric_json` 是「有展示串却没有数值」→ `unparsed`，
+ * 于是同一张表里一半有数、一半没数，跨源比较永远只有一边可用。
+ */
+describe('旧源接入数值列（N2）', () => {
+  function openOldDatabase(): DatabaseSync {
+    const database = new DatabaseSync(':memory:')
+    database.exec(`create table mi_macro_calendar_market_event_observations (
+      source_event_id text not null, provider_id text not null, market_fact_key text,
+      display_name text not null, country_code text, indicator_id text, event_kind text not null,
+      scheduled_date text not null, scheduled_at text not null,
+      consensus_json text, provider_previous_json text, provider_actual_json text,
+      importance text not null, measure_keys_json text, last_seen_at text)`)
+    return database
+  }
+
+  const cpiYoy = () => Object.entries(zeroXRouterIndicatorIdentities)
+    .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
+
+  function observeOld(database: DatabaseSync, input: Readonly<{ actual: string; previous?: string }>): void {
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["78",1]', '0xrouter', null, 'CPI yoy (Sep)', 'USA', ?, 'economic-indicator',
+        '2026-10-15', '2026-10-15T12:30:00.000Z', null, ?, ?, 'high', null, '2026-11-14T00:00:00.000Z')`)
+      .run(cpiYoy()[0],
+        input.previous === undefined ? null : JSON.stringify({ displayValue: input.previous }),
+        JSON.stringify({ displayValue: input.actual }))
+  }
+
+  const stored = (database: DatabaseSync) => JSON.parse(String(
+    (database.prepare('select numeric_json from mi_calendar_events').get() as { numeric_json: string }).numeric_json))
+
+  it('旧源的展示串在适配器里解析成数值列；「3.5」没有百分号也按年率的量纲落 percent', () => {
+    const database = openOldDatabase()
+    observeOld(database, { actual: '3.5', previous: '3.4' })
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    expect(report.numericUnparsed).toBe(0)
+    expect(stored(database)).toMatchObject({
+      state: 'available', unit: 'percent', values: { actual: 3.5, previous: 3.4 }, decimals: { actual: 1, previous: 1 }
+    })
+    // 展示串一个字节不动（分工：展示读展示串、计算只读数值列）。
+    expect(JSON.parse(String((database.prepare('select values_json from mi_calendar_events').get() as
+      { values_json: string }).values_json))).toEqual({ actual: '3.5', previous: '3.4' })
+  })
+
+  it('解析不出的展示串：落 unparsed、按轮计数，绝不写 0，也不在写入口里现算', () => {
+    const database = openOldDatabase()
+    observeOld(database, { actual: '--' })
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    expect(report.numericUnparsed).toBe(1)
+    expect(stored(database)).toMatchObject({ state: 'unparsed' })
+    expect(stored(database).values).toBeUndefined()
+  })
+})

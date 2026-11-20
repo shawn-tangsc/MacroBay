@@ -8,7 +8,12 @@
  * 1. **只有这个文件认识展示串的写法**：别的层（写入口、读侧）一律不 parse；
  * 2. **不做单位换算**：源给 `1234 thousand` 就是 `1234` + `thousands`，不折成 1234000；
  * 3. **解不出就是解不出**：`"--"` 这类占位落 `unparsed`，**绝不写 0**（0 是真值，两者必须分开）。
+ *
+ * 依赖方向：这里只依赖单位闭集映射（`marketCalendarNumericUnits`），**它是单向的**——单位模块只以
+ * `import type` 取本文件的 `CalendarNumericUnit`，运行时没有环。
  */
+import { calendarNumericUnitFromSource } from './marketCalendarNumericUnits'
+
 export type CalendarNumericUnit =
   | 'percent' | 'thousands' | 'millions' | 'billions' | 'count' | 'index' | 'ratio' | 'usd' | 'bps' | 'unknown'
 
@@ -71,21 +76,93 @@ export function parseCalendarDisplayNumber(
   return { value, decimals: match[3]?.length ?? 0, unit: unit ?? hints?.unit ?? 'unknown' }
 }
 
+/**
+ * 源侧的一个值：官方源（BLS/BEA/Fed）与观测表里存的是整个值对象，**可能自带数值与单位**。
+ * 源给了数就用源的数（那是事实），没有才解析展示串——反过来会把源给的高精度值换成展示串的四舍五入值。
+ */
+export type CalendarNumericSourceValue = Readonly<{
+  displayValue?: string
+  numericValue?: number
+  unit?: string
+}>
+
+/** 数值本身的小数位（源只给数值、没给展示串时用）。指数写法不猜位数，按 0 处理。 */
+function decimalsOfNumber(value: number): number {
+  const text = String(value)
+  if (text.includes('e') || text.includes('E')) return 0
+  const dot = text.indexOf('.')
+  return dot === -1 ? 0 : text.length - dot - 1
+}
+
+/**
+ * 一行三个值字段（**源值对象**）→ `numeric_json`。
+ *
+ * 每个字段的取法固定：源的 `numericValue` → 解析展示串 → `unparsed`（计数，不写 0）。
+ * 单位按「源声明 → 展示串写法 → 量纲提示（`hints`）」的顺序取，不做换算。
+ *
+ * `unparsedFields` 是**字段级**计数：一个字段解不出来就要看得见，即使别的字段解出来了
+ * （否则「previous 是 `--`」这种半截数据会静默消失）。
+ */
+export function calendarNumericJsonFromSourceValues(
+  fields: Readonly<Partial<Record<CalendarNumericField, CalendarNumericSourceValue>>>,
+  hints?: Readonly<{ unit?: CalendarNumericUnit }>
+): Readonly<{ json: string; state: CalendarNumericState; unparsedFields: number }> {
+  const values: Partial<Record<CalendarNumericField, number>> = {}
+  const decimals: Partial<Record<CalendarNumericField, number>> = {}
+  const parseHints = hints?.unit === undefined ? undefined : { unit: hints.unit }
+  let unit: CalendarNumericUnit | undefined
+  let present = false
+  let unparsedFields = 0
+  for (const field of calendarNumericFields) {
+    const source = fields[field]
+    if (source === undefined) continue
+    const display = typeof source.displayValue === 'string' ? source.displayValue.trim() : ''
+    const numericValue = typeof source.numericValue === 'number' && Number.isFinite(source.numericValue)
+      ? source.numericValue : undefined
+    if (display === '' && numericValue === undefined) continue
+    present = true
+    const declared = calendarNumericUnitFromSource(source.unit)
+    const parsed = display === '' ? undefined : parseCalendarDisplayNumber(display, parseHints)
+    const parsedValue = parsed !== undefined && !('reason' in parsed) ? parsed : undefined
+    if (numericValue !== undefined) {
+      values[field] = numericValue
+      // 小数位首先取展示串（源自己格式化出来的位数），源没给展示串才取数值本身。
+      decimals[field] = parsedValue?.decimals ?? decimalsOfNumber(numericValue)
+      unit ??= declared ?? (parsedValue !== undefined && parsedValue.unit !== 'unknown' ? parsedValue.unit : undefined) ?? hints?.unit
+      continue
+    }
+    if (parsedValue === undefined) { unparsedFields += 1; continue }
+    values[field] = parsedValue.value
+    decimals[field] = parsedValue.decimals
+    unit ??= declared ?? parsedValue.unit
+  }
+  const state: CalendarNumericState = Object.keys(values).length > 0 ? 'available' : present ? 'unparsed' : 'missing'
+  const json: CalendarNumericJson = {
+    v: 1,
+    state,
+    ...(unit === undefined ? {} : { unit }),
+    ...(state === 'available' ? { values, decimals } : {}),
+    parserVersion: CALENDAR_NUMERIC_PARSER_VERSION
+  }
+  return { json: JSON.stringify(json), state, unparsedFields }
+}
+
 /** 一行三个值字段 → `numeric_json` 文本。`available` 只要求**至少一个**字段解出来。 */
 export function calendarNumericJsonFor(
   fields: Readonly<Partial<Record<CalendarNumericField, string>>>,
   hints?: Readonly<{ unit?: CalendarNumericUnit }>
-): Readonly<{ json: string; state: CalendarNumericState }> {
+): Readonly<{ json: string; state: CalendarNumericState; unparsedFields: number }> {
   const values: Partial<Record<CalendarNumericField, number>> = {}
   const decimals: Partial<Record<CalendarNumericField, number>> = {}
   let unit: CalendarNumericUnit | undefined
   let present = false
+  let unparsedFields = 0
   for (const field of calendarNumericFields) {
     const text = fields[field]
     if (text === undefined || text.trim() === '') continue
     present = true
     const parsed = parseCalendarDisplayNumber(text, hints)
-    if ('reason' in parsed) continue
+    if ('reason' in parsed) { unparsedFields += 1; continue }
     values[field] = parsed.value
     decimals[field] = parsed.decimals
     unit ??= parsed.unit
@@ -98,7 +175,7 @@ export function calendarNumericJsonFor(
     ...(state === 'available' ? { values, decimals } : {}),
     parserVersion: CALENDAR_NUMERIC_PARSER_VERSION
   }
-  return { json: JSON.stringify(json), state }
+  return { json: JSON.stringify(json), state, unparsedFields }
 }
 
 /**

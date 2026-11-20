@@ -1,10 +1,14 @@
 import type { DatabaseSync } from 'node:sqlite'
 
-import type { MacroCalendarRevision } from './macroCalendarContracts'
+import type { MacroCalendarRevision, MacroCalendarValue } from './macroCalendarContracts'
 import { macroCalendarReleaseValueMappings } from './macroCalendarReleaseValueMappingPolicy'
 import { officialExpansionMetricKeys, officialMetricKeyOfEvent } from './marketCalendarOfficialExpansionPolicy'
 import { nameByMetricKey } from './marketCalendarCodeNames'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
+import {
+  calendarNumericJsonFromSourceValues, type CalendarNumericSourceValue, type CalendarNumericState
+} from './marketCalendarNumericParse'
+import { calendarNumericUnitHintForMetricKey } from './marketCalendarNumericUnits'
 import { reportWriteFailure } from './marketCalendarStandardBackfill'
 import type { CalendarStandardWriteLayer } from './calendarStandardWriteLayer'
 import type { CalendarReleaseStatus } from './marketCalendarStandardTable'
@@ -49,6 +53,34 @@ export function officialMetricKeyFor(eventKey: string): string | undefined {
   return nameByMetricKey[mapping.metricKey] === undefined ? undefined : mapping.metricKey
 }
 
+/**
+ * 官方 revision 的三个值 → `numeric_json`（N2，2026-11-21）。
+ *
+ * **源给的 `numericValue` 优先**：官方值对象本来就带数值与单位，以前只把展示串拷进标准表，
+ * 源给的高精度数被扔掉了（展示串是同一个数格式化出来的）。源只给展示串时才解析，并按该码的
+ * **量纲**补单位——官方 CPI 的展示串是 `3.7`，没有百分号。
+ */
+function numericJsonForRevision(
+  revision: MacroCalendarRevision,
+  metricKey: string | undefined
+): Readonly<{ json: string; state: CalendarNumericState; unparsedFields: number }> {
+  const fields: Partial<Record<'actual' | 'previous' | 'consensus', CalendarNumericSourceValue>> = {}
+  const values: ReadonlyArray<readonly ['actual' | 'previous' | 'consensus', MacroCalendarValue | undefined]> = [
+    ['actual', revision.actual], ['previous', revision.previous], ['consensus', revision.consensus]
+  ]
+  for (const [field, value] of values) {
+    if (value === undefined) continue
+    fields[field] = {
+      displayValue: value.displayValue,
+      ...(value.numericValue === undefined ? {} : { numericValue: value.numericValue }),
+      ...(value.unit === undefined ? {} : { unit: value.unit })
+    }
+  }
+  const hint = calendarNumericUnitHintForMetricKey(metricKey)
+  const built = calendarNumericJsonFromSourceValues(fields, hint === undefined ? undefined : { unit: hint })
+  return { json: built.json, state: built.state, unparsedFields: built.unparsedFields }
+}
+
 export function officialLifecycleToReleaseStatus(state: MacroCalendarRevision['lifecycleState']): CalendarReleaseStatus {
   return state === 'released' ? 'published' : state === 'scheduled' ? 'scheduled' : state === 'cancelled' ? 'cancelled' : 'unknown'
 }
@@ -58,6 +90,7 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
   const rows = revisions.flatMap((revision) => {
     const metricKey = officialMetricKeyFor(revision.eventKey)
     const period = metricKey === undefined ? revision.periodKey : normalizeOfficialPeriodKey(revision.periodKey)
+    const numeric = numericJsonForRevision(revision, metricKey)
     const row = {
     kind: 'event' as const,
     identityKind: metricKey === undefined ? 'source' as const : 'code' as const,
@@ -72,6 +105,10 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
     ...(revision.scheduledAt === undefined ? {} : { scheduledAt: revision.scheduledAt }),
     timePrecision: revision.scheduledAt === undefined ? 'date' as const : 'minute' as const,
     sourceEventId: revision.eventKey,
+    // 数值列：源给的数优先（见 `numericJsonForRevision`）；展示串一个字节不动。
+    numericJson: numeric.json,
+    // 「这一行几个值解析不出」：写入汇总按值计，**dualWrite 只取它认识的字段**，这个计数不进库。
+    numericUnparsedFields: numeric.unparsedFields,
     /**
      * **数据自身的观测时刻**（Chief 2026-11-21）：官方链的写入时刻永远是「现在」，
      * 不带上这一列，覆盖门就退化成「谁晚写谁赢」——一份三天前的官方数据今天写进来会盖掉
@@ -86,8 +123,14 @@ export function officialRevisionsToSourceRows(revisions: readonly MacroCalendarR
     // **按发布组展开**：一次发布给一组身份共享日期。只有自己这一行带值，兄弟行值空。
     const siblings = officialExpansionMetricKeys(metricKey)
       .filter((code) => code !== metricKey)
-      .map((code) => ({ ...row, metricKey: code, periodKey: period, scheduledAt: row.scheduledAt,
-        previous: undefined, consensus: undefined, actual: undefined }))
+      .map((code) => {
+        const hint = calendarNumericUnitHintForMetricKey(code)
+        return { ...row, metricKey: code, periodKey: period, scheduledAt: row.scheduledAt,
+          previous: undefined, consensus: undefined, actual: undefined,
+          // 兄弟行没有值：数值列落 `missing`（源没给），不许复制主行的数与单位。
+          numericJson: calendarNumericJsonFromSourceValues({}, hint === undefined ? undefined : { unit: hint }).json,
+          numericUnparsedFields: 0 }
+      })
     return [row, ...siblings]
   })
   return rows
@@ -102,7 +145,7 @@ export function writeOfficialSourceRows(database: DatabaseSync, input: Readonly<
   observedAt: string
   parserVersion: string
   onError?: (message: string) => void
-}>): Readonly<{ written: number; failed: number }> {
+}>): Readonly<{ written: number; failed: number; numericUnparsed: number }> {
   const byProvider = new Map<string, ReturnType<typeof officialRevisionsToSourceRows>>()
   for (const revision of input.revisions) {
     const rows = byProvider.get(revision.providerId) ?? []
@@ -111,6 +154,7 @@ export function writeOfficialSourceRows(database: DatabaseSync, input: Readonly<
   }
   let written = 0
   let failed = 0
+  let numericUnparsed = 0
   for (const [providerId, rows] of byProvider) {
     if (rows.length === 0) continue
     const counts = dualWriteMeasureRows(database, {
@@ -118,8 +162,11 @@ export function writeOfficialSourceRows(database: DatabaseSync, input: Readonly<
     }, input.onError === undefined ? undefined : { onError: input.onError })
     written += counts.written
     failed += counts.failed
+    // 「展示串在、解析不出」按轮计数（方案 §3.2）：这是我们的问题，不能混进「源没给值」。
+    // 按**值**计：一行三个值分别计，半截行也看得见（行上那个计数由行构造时给出）。
+    numericUnparsed += rows.reduce((sum, row) => sum + (row.numericUnparsedFields ?? 0), 0)
   }
-  return { written, failed }
+  return { written, failed, numericUnparsed }
 }
 
 /**
@@ -139,10 +186,11 @@ export function syncOfficialStandardRows(database: DatabaseSync, input: Readonly
   /** 写入层（用户 2026-11-19）：成功与失败都记一笔，与采集健康正交。 */
   writeLayer?: Pick<CalendarStandardWriteLayer, 'recordAttempt'>
   log?: (level: 'warn', event: string, fields?: Record<string, unknown>) => void
-}>): Readonly<{ revisions: number; written: number; failed: number }> {
+}>): Readonly<{ revisions: number; written: number; failed: number; numericUnparsed: number }> {
   let revisions = 0
   let written = 0
   let failed = 0
+  let numericUnparsed = 0
   for (const month of input.months) {
     const monthStart = `${month}-01T00:00:00.000Z`
     const monthEndExclusive = `${nextMonthKey(month)}-01T00:00:00.000Z`
@@ -153,12 +201,13 @@ export function syncOfficialStandardRows(database: DatabaseSync, input: Readonly
       parserVersion: input.parserVersion, ...(input.onError === undefined ? {} : { onError: input.onError }) })
     written += counts.written
     failed += counts.failed
+    numericUnparsed += counts.numericUnparsed
     // **两个写入点共用同一处**（`reportWriteFailure`）：provider 取这一批第一个 revision 的来源
     // （官方行按来源分批复写，一批里不会混源；真混了也只会记到第一个来源上，不编第二个）。
     reportWriteFailure(input.writeLayer, input.log, String(rows[0]?.providerId ?? 'official-standard-rows'),
       counts, input.asOf)
   }
-  return { revisions, written, failed }
+  return { revisions, written, failed, numericUnparsed }
 }
 
 function nextMonthKey(month: string): string {

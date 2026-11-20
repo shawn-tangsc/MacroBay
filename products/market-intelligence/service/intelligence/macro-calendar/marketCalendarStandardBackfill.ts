@@ -1,13 +1,14 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { MACRO_INDICATOR_RETIRED_METRIC_KEYS } from './macroIndicatorCardGroups'
-import { displayValueFromJson } from './marketCalendarValueEncoding'
+import { displayValueFromJson, valueObjectFromJson } from './marketCalendarValueEncoding'
 import { narwhalSourcePolicy } from '../application/narwhalSourcePolicy'
 import {
   backfillSourceProfiles, type ObservationRow, type StandardBackfillProviderId
 } from './marketCalendarBackfillSourceProfiles'
 import { derivePublishWindows } from './marketCalendarPublishWindow'
-import { calendarNumericJsonFor } from './marketCalendarNumericParse'
+import { calendarNumericJsonFromSourceValues } from './marketCalendarNumericParse'
+import { calendarNumericUnitHintForMetricKey } from './marketCalendarNumericUnits'
 import { periodFromSourceTitle } from './marketCalendarSourcePeriodFromTitle'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import type { CalendarStandardWriteLayer, CalendarStandardWriterId } from './calendarStandardWriteLayer'
@@ -76,8 +77,8 @@ export type StandardBackfillReport = Readonly<{
   /** 不一致的指标身份（去重，最多 10 个，给日志用）。 */
   periodRuleConflictIdentities: readonly string[]
   /**
-   * **展示串在、但解析不出数值的条数**（`unparsed`，方案 §3.2）：这是**我们的问题**、要按轮计数。
-   * 与「来源未给出」分开——前者是解析没接住，后者是源就没给。
+   * **展示串在、但解析不出的值的个数**（`unparsed`，方案 §3.2）：这是**我们的问题**、要按轮计数。
+   * 一行三个值分别计（半截行也看得见）；与「来源未给出」分开——前者是解析没接住，后者是源就没给。
    */
   numericUnparsed: number
 }>
@@ -320,14 +321,22 @@ export function backfillStandardRowsFromObservations(database: DatabaseSync, inp
         { p: string } | undefined
       if (existing !== undefined && existing.p !== providerId) { skippedExisting += 1; continue }
     }
+    /**
+     * **N2：数值在适配器里解，写入口不解析。**
+     *
+     * 观测表那三列存的是整个值对象，可能自带 `numericValue`——源给了数就用源的数（事实），
+     * 没有才解析展示串。单位按该码的**量纲**补：旧源周度/月度序列的展示串常常没有百分号。
+     */
+    const numericHint = calendarNumericUnitHintForMetricKey(metricKey)
     const numeric = profile.parseNumeric === true
-      ? calendarNumericJsonFor({
-        actual: displayOf(row.provider_actual_json),
-        previous: displayOf(row.provider_previous_json),
-        consensus: displayOf(row.consensus_json)
-      })
+      ? calendarNumericJsonFromSourceValues({
+        actual: valueObjectFromJson(row.provider_actual_json),
+        previous: valueObjectFromJson(row.provider_previous_json),
+        consensus: valueObjectFromJson(row.consensus_json)
+      }, numericHint === undefined ? undefined : { unit: numericHint })
       : undefined
-    if (numeric?.state === 'unparsed') numericUnparsed += 1
+    // 按**值**计：一行三个值分别计，半截行（actual 解不出、previous 解出了）也看得见。
+    if (numeric !== undefined) numericUnparsed += numeric.unparsedFields
     const shared = {
       countryCode,
       scheduledDate,

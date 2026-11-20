@@ -116,6 +116,9 @@ export const backfillSourceProfiles: Readonly<Record<StandardBackfillProviderId,
     // 新口径：**来源同权**。这里原来是「新源写过的不覆盖」——那是来源优先级的旧实现，
     // 与用户定的「谁拿到非空值谁写、后到的覆盖」直接冲突，所以对所有来源一律 false。
     skipIdentitiesOwnedByOthers: false,
-    importanceIsFact: true
+    importanceIsFact: true,
+    // N2：旧源也接同一个解析（方案 §6 第二笔）。以前只有 narwhal 接，于是同一张表里
+    // 一半有数、一半是「有展示串却没有数值」——跨源比较永远只有一边可用。
+    parseNumeric: true
   }
 }

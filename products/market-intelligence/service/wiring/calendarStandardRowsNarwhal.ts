@@ -5,6 +5,7 @@ import { calendarStandardConservation } from '../intelligence/macro-calendar/mar
 import { dualWriteMeasureRows } from '../intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { readFredObservationForPeriod } from '../intelligence/macro-calendar/fredIndicatorYoY'
 import { calendarNumericJsonFor } from '../intelligence/macro-calendar/marketCalendarNumericParse'
+import { calendarNumericUnitHintForMetricKey } from '../intelligence/macro-calendar/marketCalendarNumericUnits'
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from '../intelligence/macro-calendar/marketCalendarStandardTable'
 import { promoteSourceIdentities } from '../intelligence/macro-calendar/marketCalendarSourcePromotion'
 import { recomputeUnmappedReasons } from '../intelligence/macro-calendar/marketCalendarUnmappedReasonBackfill'
@@ -64,10 +65,13 @@ export function createNarwhalStandardRowsWriter(
        */
       let numericUnparsed = 0
       const rowsWithNumeric = rows.map((row) => {
+        // 单位按该码的量纲补（同一张闭集表，N2）：Narwhal 给的展示串常常没有百分号。
+        const hint = calendarNumericUnitHintForMetricKey(row.metricKey)
         const numeric = calendarNumericJsonFor({
           actual: row.actual, previous: row.previous, consensus: row.consensus
-        })
-        if (numeric.state === 'unparsed') numericUnparsed += 1
+        }, hint === undefined ? undefined : { unit: hint })
+        // 按**值**计（一行三个值分别计）：半截行也看得见。
+        numericUnparsed += numeric.unparsedFields
         return { ...row, numericJson: numeric.json }
       })
       const counts = dualWriteMeasureRows(database, {

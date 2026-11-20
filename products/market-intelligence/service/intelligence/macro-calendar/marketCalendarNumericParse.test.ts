@@ -2,8 +2,8 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import {
-  calendarNumericJsonFor, calendarNumericStateOf, isCalendarNumericJson, numericJsonWithoutParse,
-  parseCalendarDisplayNumber
+  calendarNumericJsonFor, calendarNumericJsonFromSourceValues, calendarNumericStateOf, isCalendarNumericJson,
+  numericJsonWithoutParse, parseCalendarDisplayNumber
 } from './marketCalendarNumericParse'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from './marketCalendarStandardTable'
 
@@ -57,6 +57,64 @@ describe('解析展示串（只认识方案里那四种写法）', () => {
     expect(JSON.parse(unparsed.json).values).toBeUndefined()
     const missing = calendarNumericJsonFor({})
     expect(missing.state).toBe('missing')
+  })
+})
+
+/**
+ * N2：官方源（BLS/BEA/Fed）的值对象**本来就有 `numericValue` + `unit`**，那是源的事实，不是我们要猜的
+ * 东西——所以先取它，没有才解析展示串。这条顺序反了（先解析）会把源给的高精度数换成展示串的
+ * 四舍五入值，而展示串本来就是从同一个数格式化出来的。
+ */
+describe('源自报的数值优先（N2）', () => {
+  it('源给了 numericValue 就用它，不再解析展示串；单位按闭集映射', () => {
+    const built = calendarNumericJsonFromSourceValues({
+      actual: { displayValue: '3.2%', numericValue: 3.2, unit: 'percent-yoy' }
+    })
+    expect(built.state).toBe('available')
+    expect(built.unparsedFields).toBe(0)
+    expect(JSON.parse(built.json)).toMatchObject({
+      v: 1, state: 'available', unit: 'percent', values: { actual: 3.2 }, decimals: { actual: 1 }
+    })
+    // 高精度不被展示串换掉：3.73768 就是 3.73768，不是 '3.7' 解出来的 3.7。
+    const precise = calendarNumericJsonFromSourceValues({ actual: { displayValue: '3.7', numericValue: 3.73768 } })
+    expect(JSON.parse(precise.json).values.actual).toBe(3.73768)
+  })
+
+  it('没给 numericValue 才解析展示串；源声明的单位优先于写法推断', () => {
+    // 官方 CPI 的展示串是 '3.7'，没有 % —— 靠量纲提示才是百分比。
+    const hinted = calendarNumericJsonFromSourceValues({ actual: { displayValue: '3.7' } }, { unit: 'percent' })
+    expect(JSON.parse(hinted.json)).toMatchObject({ unit: 'percent', values: { actual: 3.7 } })
+    // 源自己声明 thousands、展示串写 165K：声明优先，值仍是 165（不换算）。
+    const declared = calendarNumericJsonFromSourceValues({ actual: { displayValue: '165K', unit: 'thousands' } })
+    expect(JSON.parse(declared.json)).toMatchObject({ unit: 'thousands', values: { actual: 165 } })
+    // 声明了不认识的词汇 → 退回写法推断，不从词汇里编一个单位。
+    const vocabulary = calendarNumericJsonFromSourceValues({ actual: { displayValue: '165K', unit: 'people' } })
+    expect(JSON.parse(vocabulary.json).unit).toBe('thousands')
+    // 什么都没有 → 单位落闭集里的 unknown，不是缺字段。
+    const bare = calendarNumericJsonFromSourceValues({ actual: { displayValue: '1,234' } })
+    expect(JSON.parse(bare.json).unit).toBe('unknown')
+  })
+
+  it('展示串是垃圾、源也没给数 → unparsed 且按字段计数，绝不写 0', () => {
+    const built = calendarNumericJsonFromSourceValues({ actual: { displayValue: '--' }, previous: { displayValue: 'n/a' } })
+    expect(built.state).toBe('unparsed')
+    expect(built.unparsedFields).toBe(2)
+    expect(JSON.parse(built.json).values).toBeUndefined()
+    // 一个字段解出来、另一个解不出：state 是 available，但**解不出的字段照样计数**，不静默。
+    const partial = calendarNumericJsonFromSourceValues({ actual: { displayValue: '4.1%' }, previous: { displayValue: '--' } })
+    expect(partial.state).toBe('available')
+    expect(partial.unparsedFields).toBe(1)
+    expect(JSON.parse(partial.json).values).toEqual({ actual: 4.1 })
+    const nothing = calendarNumericJsonFromSourceValues({})
+    expect(nothing.state).toBe('missing')
+    expect(nothing.unparsedFields).toBe(0)
+  })
+
+  it('源只给数值、没给展示串：小数位取数值本身，不当成 0 位', () => {
+    const built = calendarNumericJsonFromSourceValues({ actual: { numericValue: 4.1 } })
+    expect(JSON.parse(built.json)).toMatchObject({ state: 'available', values: { actual: 4.1 }, decimals: { actual: 1 } })
+    const integer = calendarNumericJsonFromSourceValues({ actual: { numericValue: 165 } })
+    expect(JSON.parse(integer.json).decimals).toEqual({ actual: 0 })
   })
 })
 

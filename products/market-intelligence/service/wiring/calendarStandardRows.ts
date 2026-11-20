@@ -105,7 +105,7 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       ...(input.writeLayer === undefined ? {} : { writeLayer: input.writeLayer }),
       log: (level, event, fields) => { input.log?.(level, event, fields) }
     })
-    report(`[macro-calendar] 官方发布入标准表：${months.join('/')} 读到 ${synced.revisions} 条、写入 ${synced.written} 条、失败 ${synced.failed} 条`)
+    report(`[macro-calendar] 官方发布入标准表：${months.join('/')} 读到 ${synced.revisions} 条、写入 ${synced.written} 条、失败 ${synced.failed} 条、数值解析不出 ${synced.numericUnparsed} 条`)
     // **官方历史回放（S1）挂在这里**：同一个启动点、同一套「失败不阻断启动」的语义。
     // 带版本标记（迁移 12），跑过一次就跳过；bootstrap 一行都不用新增。
     try {

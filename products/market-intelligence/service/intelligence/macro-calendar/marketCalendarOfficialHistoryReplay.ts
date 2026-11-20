@@ -1,7 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import { getMacroCalendarReleaseValueMapping } from './macroCalendarReleaseValueMappingPolicy'
-import { displayValueFromJson } from './marketCalendarValueEncoding'
+import { displayValueFromJson, valueObjectFromJson } from './marketCalendarValueEncoding'
+import { calendarNumericJsonFromSourceValues } from './marketCalendarNumericParse'
+import { calendarNumericUnitHintForMetricKey } from './marketCalendarNumericUnits'
 import { normalizeCalendarPeriodKey, normalizeCalendarSourceEventId } from './marketCalendarPeriodKey'
 import { dualWriteMeasureRows } from './marketCalendarStandardDualWrite'
 import { recordCalendarUnmapped } from './marketCalendarStandardTable'
@@ -52,6 +54,8 @@ export type OfficialHistoryReplayReport = Readonly<{
   written: number
   /** 映射不出指标码、也不在事件清单里的行：进工作清单，带原因。 */
   unmapped: number
+  /** 展示串在、解析不出数值的条数（`unparsed`，方案 §3.2）：我们的问题，按轮计数。 */
+  numericUnparsed: number
   /** 每月 `O(M) \\ S(M)`：修订表该月事件 key 减去标准表已写的同 key。 */
   monthlyDiff: Readonly<Record<string, readonly string[]>>
 }>
@@ -59,9 +63,22 @@ export type OfficialHistoryReplayReport = Readonly<{
 // 值编码的解释只有一处（`marketCalendarValueEncoding`）：这里不再各写一份。
 const displayOf = (json: string | null): string | undefined => displayValueFromJson(json)
 
-/** 一条修订 → 标准行（指标行用发布映射取码；FOMC 这类没有指标码的走事件码，身份到分钟）。 */
-function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {
+/**
+ * 一条修订 → 标准行（指标行用发布映射取码；FOMC 这类没有指标码的走事件码，身份到分钟）。
+ *
+ * 返回行时一并给出 `numericUnparsed`：这一行**展示串在、解析不出**的值的个数（方案 §3.2 的
+ * 「我们的问题」，与「源没给值」分开）；一行三个值分别计。数值优先取修订里源的 `numericValue`，没有才解析展示串，
+ * 单位按该码的量纲补（`3.7` 这种没有百分号的展示串靠它）。
+ */
+function rowsFor(revision: RevisionRow): Readonly<{ row: Record<string, unknown>; numericUnparsed: number }> | undefined {
   const mapping = getMacroCalendarReleaseValueMapping(revision.event_name_key)
+  const hint = mapping === undefined ? undefined : calendarNumericUnitHintForMetricKey(mapping.metricKey)
+  const numeric = calendarNumericJsonFromSourceValues({
+    actual: valueObjectFromJson(revision.actual_json),
+    previous: valueObjectFromJson(revision.previous_json),
+    consensus: valueObjectFromJson(revision.consensus_json)
+  }, hint === undefined ? undefined : { unit: hint })
+  const scored = { numericUnparsed: numeric.unparsedFields }
   const minute = revision.scheduled_at === null ? undefined : revision.scheduled_at.slice(0, 16)
   const scheduledDate = revision.scheduled_date
   if (scheduledDate === '') return undefined
@@ -75,6 +92,8 @@ function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {
     scheduledDate,
     // 来源 id 与期次同归一：`2026-M10` 是 BLS 内部的参考期写法，标准表只留 `2026-10` 这一种。
     sourceEventId: normalizeCalendarSourceEventId(revision.event_key),
+    // 数值列：源给的数优先、没有才解析展示串（`numeric` 见上）。
+    numericJson: numeric.json,
     ...(revision.scheduled_at === null ? {} : { scheduledAt: revision.scheduled_at }),
     timePrecision: revision.scheduled_at === null ? 'date' as const : 'minute' as const,
     status: revision.lifecycle_state === 'released' ? 'published' as const : 'scheduled' as const,
@@ -88,7 +107,7 @@ function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {
     const rawPeriod = revision.event_key.split('.').at(-1) ?? ''
     if (rawPeriod === '') return undefined
     const periodKey = normalizeCalendarPeriodKey(rawPeriod)
-    return { ...shared, metricKey: mapping.metricKey, periodKey }
+    return { row: { ...shared, metricKey: mapping.metricKey, periodKey }, ...scored }
   }
   if (revision.event_family === 'fomc') {
     /**
@@ -96,8 +115,8 @@ function rowsFor(revision: RevisionRow): Record<string, unknown> | undefined {
      * `US.FOMC.<首发布日>` + `identity_kind='source'`（来源自己给的名字 `fomc`）。
      * 按 `evt.fomc` + 分钟写，同一场会议会出现两行（主键不同、去重也合不到一起）。
      */
-    return { ...shared, metricKey: `US.FOMC.${scheduledDate}`, periodKey: scheduledDate,
-      identityKind: 'source' as const, sourceLabel: revision.event_name_key }
+    return { row: { ...shared, metricKey: `US.FOMC.${scheduledDate}`, periodKey: scheduledDate,
+      identityKind: 'source' as const, sourceLabel: revision.event_name_key }, ...scored }
   }
   return undefined
 }
@@ -107,7 +126,7 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
 }>): OfficialHistoryReplayReport {
   const write = input?.write ?? true
   const table = database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_revisions'").get()
-  if (table === undefined) return { revisions: 0, written: 0, unmapped: 0, monthlyDiff: {} }
+  if (table === undefined) return { revisions: 0, written: 0, unmapped: 0, numericUnparsed: 0, monthlyDiff: {} }
   // 生效行：同一 `event_key` 取最新一条（修订表是 append-only，`event_key` 是身份）。
   const revisions = database.prepare(`select event_key, event_family, event_name_key, scheduled_date, scheduled_at,
       lifecycle_state, actual_json, previous_json, consensus_json
@@ -118,6 +137,7 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
   const observedAt = new Date().toISOString()
   const rows: Record<string, unknown>[] = []
   let unmapped = 0
+  let numericUnparsed = 0
   for (const revision of latest.values()) {
     const mapped = rowsFor(revision)
     if (mapped === undefined) {
@@ -130,13 +150,15 @@ export function replayOfficialHistoryIntoStandardTable(database: DatabaseSync, i
       }
       continue
     }
-    rows.push(mapped)
+    numericUnparsed += mapped.numericUnparsed
+    rows.push(mapped.row)
   }
   const written = write && rows.length > 0
     ? dualWriteMeasureRows(database, { providerId: officialHistoryReplayPolicy.providerId,
       parserVersion: officialHistoryReplayPolicy.parserVersion, observedAt, rows: rows as never }).written
     : 0
-  return { revisions: latest.size, written, unmapped, monthlyDiff: write ? measureMonthlyDiff(database) : {} }
+  return { revisions: latest.size, written, unmapped, numericUnparsed,
+    monthlyDiff: write ? measureMonthlyDiff(database) : {} }
 }
 
 /**
@@ -176,9 +198,9 @@ export function pendingOfficialHistoryRevisions(database: DatabaseSync): readonl
   const pending: string[] = []
   for (const revision of latest.values()) {
     // 映射不出码的按设计进 `unmapped`、不进标准表——**不算缺口**，否则回放每次启动都会重跑。
-    const row = rowsFor(revision)
-    if (row === undefined) continue
-    if (known.has(normalizeCalendarSourceEventId(String(row.sourceEventId)))) continue
+    const built = rowsFor(revision)
+    if (built === undefined) continue
+    if (known.has(normalizeCalendarSourceEventId(String(built.row.sourceEventId)))) continue
     pending.push(revision.event_key)
   }
   return pending
