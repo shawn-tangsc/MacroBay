@@ -11,7 +11,6 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { analysisTimelinePaging, analysisTimelinePagingPolicy } from './analysisTimelinePaging'
-import { groupReanalysisOffered } from './analysisGroupReanalysisPolicy'
 import { groupCaptionFor, timelineSpansGroups } from './analysisTimelineGrouping'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
 import { conclusionSummaryText, conclusionWithoutDirection, readConclusionDirection } from './analysisConclusionBlocks'
@@ -160,9 +159,6 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
   const shownSuccess = analysisTimelinePaging(successEntries.length, pagesSuccess)
   const shownFailed = analysisTimelinePaging(failedEntries.length, pagesFailed)
   const shown = tab === 'failed' ? shownFailed : shownSuccess
-  // 页头那一颗重跑的是「最新那条所属的组」：取第一条**带组类型**的条目，别让注入的失败行（组类型可能为空）
-  // 把判断带到「未知」上去。
-  const headerGroupType = state.entries.find((entry) => entry.groupType !== null)?.groupType
   const canPull = tab === 'failed'
     ? shownFailed.hasUnread || Boolean(timeline.failedRuns.nextCursor)
     : shownSuccess.hasUnread || Boolean(state.nextCursor)
@@ -256,9 +252,10 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
           {/* The one analysis action sits at the far right, where a separate refresh button used to
               be: the list refreshes itself (live poll, focus), so a second control that only re-read
               it was an action that could not change anything a reader cares about. */}
-          {/* 页头这一下重跑的是**最新那条所属的组**：消息面组的重跑产出落在新闻抽屉，这里不给。
-              市场分析组照旧（文案、行为一字未改）。 */}
-          {state.entries.length > 0 && groupReanalysisOffered(headerGroupType) ? <div className="mi-analysis-timeline__reanalyse">
+          {/* 页头这一下重跑的是**最新那条所属的组**。2026-11-20 去掉了「消息面组不给」那层：
+              手动入口现在永远走市场线（`requestInitialMarketAnalysis` 不再分流去新闻解读），
+              点它产出的就是市场分析，藏掉反而是把一个已经安全的入口藏起来。 */}
+          {state.entries.length > 0 ? <div className="mi-analysis-timeline__reanalyse">
             <Button aria-busy={analysisInFlight || undefined}
               disabled={analysisInFlight} onClick={() => void timeline.requestRefreshAnalysis()}
               icon={analysisInFlight ? <LoadingSpinner size="sm" /> : <RefreshCw aria-hidden="true" size={14} />}>{text.refreshAnalysis}</Button>
@@ -321,8 +318,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect, onOpe
                 **这一颗不按组类别门控，不是漏了**：它只在这一分支出现，而这里 `state.entries` 为空，
                 拿不到任何组；同时 `getLatestAttempt` 在主进程只返回**市场线**的运行
                 （`marketAnalysisIpc.ts`，`analysisKind: 'market'`），消息面的运行永远不会成为这里的
-                「重新分析」。所以它不构成「点了没反应」的入口。哪天 `getLatestAttempt` 对外暴露组类型，
-                再把它接进 `groupReanalysisOffered`（同一判据，别另写一个）。 */}
+                「重新分析」。所以它不构成「点了没反应」的入口。 */}
             <Button loading={requestState === 'loading'} disabled={requestState === 'loading' || requestState === 'queued'} onClick={() => void timeline.requestInitialAnalysis()}>{actionLabel}</Button>
             {requestState === 'queued' ? <p role="status" className="mi-analysis-timeline__state">{text.initialAnalysisQueued}</p> : null}
             {requestState === 'unavailable' ? <p role="alert" className="mi-analysis-timeline__state">{text.initialAnalysisUnavailable}</p> : null}

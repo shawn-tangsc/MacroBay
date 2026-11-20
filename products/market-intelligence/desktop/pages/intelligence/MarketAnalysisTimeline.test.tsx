@@ -250,6 +250,23 @@ describe('MarketAnalysisTimeline', () => {
     expect(queuedButton?.querySelector('.loading-spinner')).not.toBeNull()
   })
 
+  it('offers the header refresh on a sentiment group too, because the click now runs a market analysis', async () => {
+    // 2026-11-20：手动入口已改成永远走市场线（不再分流到新闻解读），
+    // 「消息面组的重跑产出落在新闻抽屉」这个前提不再成立，按组类别藏按钮等于藏一个安全入口。
+    const invoke = vi.fn(async (_product: string, method: string) => method === 'marketAnalysis.listTimeline'
+      ? { schemaVersion: 1, items: [{ id: 'mi-tl-sent', eventGroupId: 'mi-eg-sent', analysisRunId: 'mi-ar-sent', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-sent', safeTitle: '解读已生成', safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType: 'sentiment', groupSubject: 'Binance 公告' }], nextCursor: null }
+      : { itemId: 'item-1', queued: true })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    expect(refresh).toBeDefined()
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(invoke).toHaveBeenCalledWith('market-intelligence', 'marketAnalysis.requestInitialAnalysis', { mode: 'refresh' })
+  })
+
   it('replaces the queued refresh state when the new correction timeline node is published', async () => {
     let timelineReads = 0
     let attemptReads = 0
@@ -1267,7 +1284,7 @@ describe('成功 / 失败两个页签', () => {
 /**
  * 页头那颗重跑按钮也按组类别（用户 2026-11-18）：消息面组不给，市场分析组照旧。
  */
-describe('页头的重跑按钮按组类别出现', () => {
+describe('页头的重跑按钮不再按组类别隐藏', () => {
   const entryWithGroup = (groupType: string) => ({
     id: `mi-tl-${groupType}`, eventGroupId: `mi-eg-${groupType}`, analysisRunId: `mi-ar-${groupType}`,
     kind: 'analysis' as const, status: 'published' as const, runKey: `mi-ar-${groupType}`, failureCode: null,
@@ -1292,9 +1309,10 @@ describe('页头的重跑按钮按组类别出现', () => {
   const refresh = (container: HTMLElement): Element | undefined =>
     Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.refreshAnalysis)
 
-  it('sentiment 组：页头没有「立即分析」', async () => {
+  it('sentiment 组：页头也有「立即分析」', async () => {
+    // 2026-11-20：手动入口已改成永远走市场线，这个组类型不再意味着「产出落在新闻抽屉」。
     const container = await mountWithGroup('sentiment')
-    expect(refresh(container)).toBeUndefined()
+    expect(refresh(container)?.textContent).toBe(text.refreshAnalysis)
   })
 
   it('市场分析组：页头有「立即分析」，文案一字不变', async () => {

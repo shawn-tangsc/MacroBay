@@ -371,13 +371,13 @@ describe('the latest conclusion card: the failure strip belongs to its own group
 })
 
 /**
- * 消息面（sentiment）组的卡片不给重跑入口（用户 2026-11-18 定）。
+ * 消息面（sentiment）组同样给重跑入口（2026-11-20 改）。
  *
- * 依据：这类组以后的分析一律走新闻解读、结果落在新闻抽屉；卡片上点重跑产出的是抽屉里那三段，
- * 卡片本身不会变——那就是「点了没反应的按钮」。所以按**组类别**决定动作出现不出现：
- * 旧结论与**生成时刻**照旧保留（那是读者判断新旧的唯一依据），只是动作不渲染。
+ * 原来按组类别藏按钮的依据是「这类组的重跑产出落在新闻抽屉、卡片不会变」。但手动入口已经改成
+ * **永远走市场线**（`requestInitialMarketAnalysis` 不再分流去新闻解读），点它产出的就是市场分析；
+ * 前提不成立，按钮就不该再藏。旧结论与生成时刻照旧保留（那是读者判断新旧的唯一依据）。
  */
-describe('the latest conclusion card: no re-run action for news-driven groups', () => {
+describe('the latest conclusion card: the re-run action no longer depends on the group type', () => {
   const published = (groupType: string) => ({
     id: `mi-tl-${groupType}`, eventGroupId: `mi-eg-${groupType}`, analysisRunId: `mi-ar-ok-${groupType}`,
     kind: 'analysis' as const, status: 'published' as const, runKey: `mi-ar-ok-${groupType}`, failureCode: null,
@@ -412,16 +412,17 @@ describe('the latest conclusion card: no re-run action for news-driven groups', 
       createElement(LatestAnalysisConclusionCard, { text, workspaceText: cardText, timeline, onOpenDetail: vi.fn() } as never))))
   }
 
-  it('sentiment 组：有结论与生成时刻，但没有重试动作', async () => {
+  it('sentiment 组：有结论与生成时刻，也有重试动作', async () => {
     await mount('sentiment')
     // 结论与时刻都在（时刻是读者判断新旧的唯一依据）
     expect(host?.textContent).toContain('市场情绪偏谨慎')
     expect(host?.querySelector('.mi-analysis-conclusion-card header time')?.textContent ?? '').not.toBe('')
-    // 失败条还在（说明发生了什么），但那颗「重试」不渲染
+    // 失败条还在（说明发生了什么），「重试」现在也要在：点它产出的是市场分析，不是抽屉里的解读
     const strip = host?.querySelector('[data-attempt-failure]')
     expect(strip).not.toBeNull()
     const retry = Array.from(strip?.querySelectorAll('button') ?? []).find((button) => button.textContent === text.retryAnalysis)
-    expect(retry).toBeUndefined()
+    expect(retry).toBeDefined()
+    expect(retry?.textContent).toBe(text.retryAnalysis)
   })
 
   it('市场分析组：重试还在，文案一字不变（两组只有出现条件不同）', async () => {
