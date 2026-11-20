@@ -7,6 +7,7 @@
  */
 
 import { metricConceptOf } from './metricKeyConcept'
+import { readEventMetricKeys } from './macro/calendarEventMetricKeys'
 
 export const POLICY_PATH_OUTCOMES = ['no-change', 'hike-25', 'hike-50-plus', 'cut-25', 'cut-50-plus'] as const
 export type PolicyPathOutcome = typeof POLICY_PATH_OUTCOMES[number]
@@ -378,7 +379,9 @@ export type PolicyPathEventCandidate = Readonly<{
  * 不需要在这张清单里为每个变体各留一个兼容位（那正是「换码漏一处」的入口）。
  */
 export function matchedRelevantConcept(event: PolicyPathEventCandidate): string | undefined {
-  const keys = event.measureKeys ?? []
+  // 键列表走**唯一入口** `readEventMetricKeys`（新行 1 个码 / 旧行多指标名）。
+  // 这里只用 `keys` 判资格，不读值；值仍然来自 policy path 序列。
+  const keys = readEventMetricKeys({ ...(event.measureKeys === undefined ? {} : { measureKeys: event.measureKeys }) }).keys
   return (POLICY_PATH_EVENT_METRIC_PRIORITY_CONCEPTS as readonly string[])
     .find((concept) => keys.some((key) => metricConceptOf(key) === concept))
 }
