@@ -33,34 +33,6 @@
       "count": 189,
       "why": "码名表：每个指标码的四列名必须写在这里（中文全名/简称、英文全名/简称）。新增德国与子项码时同笔 +11，删码要同笔减。"
     },
-    "service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts": {
-      "count": 39,
-      "why": "日历行展示名：按码给人读的名字"
-    },
-    "service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts": {
-      "count": 217,
-      "why": "Narwhal measure ↔ 码、旧源 indicator id ↔ 码（源侧字典，外部标识必须逐一列出）"
-    },
-    "service/intelligence/macro-calendar/marketCalendarOfficialExpansionPolicy.ts": {
-      "count": 2,
-      "why": "官方扩表策略：按码说明哪些字段可扩"
-    },
-    "service/intelligence/macro-calendar/marketCalendarReleaseGroups.ts": {
-      "count": 268,
-      "why": "指标→组/分级/主测度的数据表本身：它就是那张事实表，不是抄件"
-    },
-    "service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts": {
-      "count": 52,
-      "why": "Narwhal 系列 → 主测度码：外部系列名的落地位置"
-    },
-    "service/intelligence/macro-calendar/marketCalendarZeroXRouterSourceMappings.ts": {
-      "count": 139,
-      "why": "0xrouter 的「源内 id → 指标码」表：id 与码都是字面量，这张表的存在就是「按来源分开的码空间」。本批补映射 +83，删映射要同笔减。"
-    },
-    "service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts": {
-      "count": 117,
-      "why": "德国来源的「源内 id → 码」表：与 0xrouter 那张同性质，按来源分开存。之前漏登记是因为守卫只认单引号 US 前缀码，现在认全了。"
-    },
     "service/intelligence/macro-calendar/marketCalendarCodeTable.json": {
       "count": 462,
       "why": "标准码表的数据本体（244 行）：键与 code 字段各出现一次，四名里可能带码形串。数据从 .ts 搬进 JSON 后，这里是它唯一的家；2026-11-20 +2：两条退役的 NSA 码 `supersededBy` 原来指向不存在的 `US.CORE_PCE.YOY`/`US.PCE.YOY`，改成真实存在的 active 码 `US.CORE_PCE.SA.YOY`/`US.PCE.SA.YOY`——这两个码是表里已有的字面量，数量涨 2 是因为「指向不存在的码」以前不计入（计数只数表里有的码）"
@@ -121,9 +93,21 @@
       "count": 26,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
+    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ph.ts": {
+      "count": 1,
+      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ru.ts": {
+      "count": 1,
+      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/sg.ts": {
       "count": 22,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/th.ts": {
+      "count": 1,
+      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
     },
     "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/tw.ts": {
       "count": 20,
@@ -137,21 +121,41 @@
       "count": 8,
       "why": "按国家拆分的映射表（源内 id → 码）：每个码都是身份事实，必须逐个写在这里；由 `marketCalendarCountrySourceMappings.ts` 拆出，条目数与原文件相等。"
     },
-    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ph.ts": {
-      "count": 1,
-      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    "service/intelligence/macro-calendar/marketCalendarDisplayNameTables.ts": {
+      "count": 39,
+      "why": "日历行展示名：按码给人读的名字"
     },
-    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/th.ts": {
-      "count": 1,
-      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    "service/intelligence/macro-calendar/marketCalendarGermanSourceMappings.ts": {
+      "count": 117,
+      "why": "德国来源的「源内 id → 码」表：与 0xrouter 那张同性质，按来源分开存。之前漏登记是因为守卫只认单引号 US 前缀码，现在认全了。"
     },
-    "service/intelligence/macro-calendar/marketCalendarCountrySourceMappings-byCountry/ru.ts": {
-      "count": 1,
-      "why": "政策利率映射（源内 id → 该国 POLICY_RATE 码）：一行一个源内身份，码必须写在这里；国家文件按国家拆开，新增国家时只加自己那一份。"
+    "service/intelligence/macro-calendar/marketCalendarMetricIdentity.ts": {
+      "count": 85,
+      "why": "旧源 indicator id / 事件 id ↔ 码（源侧字典，外部标识必须逐一列出）；2026-11-21 把 Narwhal `measure ↔ 码` 那 132 条搬到 `marketCalendarNarwhalMeasureKeys.ts`（文件体积门禁 525→390 行），基线同笔拆开：这里 217→85，那份 132 登记在下面那条。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarNarwhalMeasureKeys.ts": {
+      "count": 132,
+      "why": "Narwhal 的 `values[].measure` ↔ 规范指标码（源侧字典，132 条来自 16 号表，`measure ↔ metric_key` 双射；数据出处写在文件头，只增不改）。原来住在 `marketCalendarMetricIdentity.ts`，2026-11-21 为文件体积门禁抽成纯数据模块——**不是第二套真源**，全仓只有这一份。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarOfficialExpansionPolicy.ts": {
+      "count": 2,
+      "why": "官方扩表策略：按码说明哪些字段可扩"
     },
     "service/intelligence/macro-calendar/marketCalendarPeriodDerivationWhitelist.json": {
       "count": 3,
       "why": "期次推算白名单（只有 3 个初请码允许按发布结构推周次）：写的是码本身，必须在这里；新增要改这份数据并发版过评审。"
+    },
+    "service/intelligence/macro-calendar/marketCalendarReleaseGroups.ts": {
+      "count": 268,
+      "why": "指标→组/分级/主测度的数据表本身：它就是那张事实表，不是抄件"
+    },
+    "service/intelligence/macro-calendar/marketCalendarZeroXRouterSourceMappings.ts": {
+      "count": 139,
+      "why": "0xrouter 的「源内 id → 指标码」表：id 与码都是字面量，这张表的存在就是「按来源分开的码空间」。本批补映射 +83，删映射要同笔减。"
+    },
+    "service/intelligence/macro-calendar/narwhal-calendar/narwhalSeriesPrimaryMetric.ts": {
+      "count": 52,
+      "why": "Narwhal 系列 → 主测度码：外部系列名的落地位置"
     }
   }
 }
