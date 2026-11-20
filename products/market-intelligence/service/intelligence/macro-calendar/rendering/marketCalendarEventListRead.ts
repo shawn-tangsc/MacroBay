@@ -59,9 +59,18 @@ type Row = Readonly<{
 
 /** 国家码 → 中文名；`EMU` 与 `EU` 同义（与码表读口同一处口径）。
  * 导出给未映射读口复用：两处各写一份，迟早出现同一个码两处叫法不同。 */
-export function countryNameOf(code: string | null): string | null {
+export function countryNameFullOf(code: string | null, locale: 'zh' | 'en' = 'zh'): string | null {
   if (code === null || code.trim() === '') return null
-  return marketCalendarCountryNames[code === 'EMU' ? 'EU' : code]?.zh ?? null
+  const names = marketCalendarCountryNames[code === 'EMU' ? 'EU' : code]
+  if (names === undefined) return null
+  return locale === 'en' ? names.enFull : names.zh
+}
+
+export function countryNameOf(code: string | null, locale: 'zh' | 'en' = 'zh'): string | null {
+  if (code === null || code.trim() === '') return null
+  const names = marketCalendarCountryNames[code === 'EMU' ? 'EU' : code]
+  if (names === undefined) return null
+  return locale === 'en' ? names.en : names.zh
 }
 
 export function readCalendarEventList(database: DatabaseSync): CalendarEventListRead {

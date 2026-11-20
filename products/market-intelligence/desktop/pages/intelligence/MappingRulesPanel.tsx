@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+
 import { MappingRulesDialog, type MappingRulesText } from './MappingRulesDialog'
 import type { MappingRulesRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarMappingRulesRead'
 import type { CodeTableRead } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarCodeTableRead'
@@ -24,6 +26,14 @@ export function MappingRulesPanel({ open, onClose, text }: Readonly<{
   const [codes, setCodes] = useState<CodeTableRead | undefined>(undefined)
   const [events, setEvents] = useState<CalendarEventListRead | undefined>(undefined)
   const [attempt, setAttempt] = useState(0)
+  /**
+   * **当前界面语言传下去**（用户 2026-11-21：英文界面下国家列还是中文）：
+   * IPC 与读口都按 `locale` 取国家名——英文给两位代码、全名在 `countryNameFull`，中文给中文名。
+   */
+  const shellLanguage = useShellLanguage()
+  // 读口的契约是 `zh` / `en` 两档（shell 那边是 `zh-CN` / `en-US`）：在**一个地方**换算，别让
+  // 两种写法散到调用点去（散开就会出现某处忘了换、某处传错档）。
+  const locale: 'zh' | 'en' = shellLanguage === 'en-US' ? 'en' : 'zh'
 
   useEffect(() => {
     if (!open) return undefined
@@ -31,17 +41,17 @@ export function MappingRulesPanel({ open, onClose, text }: Readonly<{
     setView(undefined)
     setCodes(undefined)
     setEvents(undefined)
-    void marketCalendarClient.queryMappingRules()
+    void marketCalendarClient.queryMappingRules({ locale })
       .then((answer) => { if (current) setView(answer) })
       .catch(() => { if (current) setView({ state: 'unavailable', reasonCode: 'query-unavailable' }) })
-    void marketCalendarClient.queryCodeTable()
+    void marketCalendarClient.queryCodeTable({ locale })
       .then((answer) => { if (current) setCodes(answer) })
       .catch(() => { if (current) setCodes({ state: 'unavailable', reasonCode: 'query-unavailable' }) })
     void marketCalendarClient.queryEventList()
       .then((answer) => { if (current) setEvents(answer) })
       .catch(() => { if (current) setEvents({ state: 'unavailable', reasonCode: 'query-unavailable' }) })
     return () => { current = false }
-  }, [open, attempt])
+  }, [open, attempt, locale])
 
   return <MappingRulesDialog open={open} onClose={onClose} text={text} view={view} codes={codes} events={events}
     onRetry={() => setAttempt((value) => value + 1)} />

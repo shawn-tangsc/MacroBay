@@ -9,9 +9,9 @@ import { resolveProductTextKey } from '../../../shared/i18n/productTextKey'
  */
 describe('the streak column counts trading days, and says so', () => {
   it('names the unit in both languages', () => {
-    expect(resolveProductTextKey('zh-CN', 'pages.intelligence.portal.dashboard.capitalConditions.streak')).toContain('个交易日')
-    expect(resolveProductTextKey('zh-CN', 'pages.intelligence.portal.dashboard.capitalConditions.streakSingle')).toContain('个交易日')
-    expect(resolveProductTextKey('en-US', 'pages.intelligence.portal.dashboard.capitalConditions.streak')).toContain('trading days')
-    expect(resolveProductTextKey('en-US', 'pages.intelligence.portal.dashboard.capitalConditions.streakSingle')).toContain('trading day')
+    expect(resolveProductTextKey('zh-CN', 'pages.intelligence.portal.dashboard.capitalConditions.streakDays')).toContain('个交易日')
+    expect(resolveProductTextKey('zh-CN', 'pages.intelligence.portal.dashboard.capitalConditions.streakDaySingle')).toContain('个交易日')
+    expect(resolveProductTextKey('en-US', 'pages.intelligence.portal.dashboard.capitalConditions.streakDays')).toContain('trading days')
+    expect(resolveProductTextKey('en-US', 'pages.intelligence.portal.dashboard.capitalConditions.streakDaySingle')).toContain('trading day')
   })
 })

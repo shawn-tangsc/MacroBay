@@ -2,9 +2,19 @@
 
 # Disabled controls and their reason
 
-A disabled control must say why, in visible text next to it. `DisabledHint` from
-`@platform/ui/components/disabled-hint` renders that reason and links it to the control. A control
-that is only greyed out tells the reader "there was something here" and then refuses to say what.
+A disabled control must let the reader know why it cannot be used. **First check whether the
+interface already shows it (narrowed 2026-11-20):**
+
+- **It is visible → write no sentence.** The spinner on the button, the "in progress" row in the
+  list, and the control's own `aria-busy` are the evidence the reader needs. Adding "a run is in
+  progress. Try again when it finishes." says the same thing twice — that is the sentence the user
+  had deleted.
+- **It is not visible → it must be written**, with `DisabledHint` from
+  `@platform/ui/components/disabled-hint`, which renders the reason and links it to the control:
+  no permission, source not configured, quota exhausted.
+
+A control that is only greyed out, with nothing visible carrying the reason, tells the reader
+"there was something here" and then refuses to say what.
 
 ## Which case this covers — and the one it does not
 

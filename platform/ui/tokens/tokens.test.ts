@@ -45,6 +45,28 @@ describe('UI token file', () => {
     expect(css).not.toMatch(/--warning:\s*#/)
   })
 
+  /**
+   * 层级 token 与主题无关：只在 `:root` 定义一次，**不进浅色块**。
+   *
+   * 这条是**棘轮**（防数值倒退/重复），不是行为负向验证：行为在抽屉用例里量真实层级，
+   * 这里只钉住「一处定义 + 1100 < 1150 < 1200」的顺序。架构师 2026-11-20 定的：
+   * antd 1000 → 智能体浮窗 1100 → --layer-modal-top 1150 → 右键菜单 1200。
+   */
+  it('defines --layer-modal-top exactly once, above the agent layer and below the context menu', () => {
+    expect((css.match(/--layer-modal-top\s*:/g) ?? [])).toHaveLength(1)
+    expect(dark).toMatch(/--layer-modal-top:\s*1150;/)
+    expect(light).not.toMatch(/--layer-modal-top/)
+
+    const agentCss = readFileSync(join(ROOT, 'products/market-intelligence/desktop/pages/intelligence/intelligence.css'), 'utf8')
+    const menuCss = readFileSync(join(ROOT, 'platform/ui/components/menu/contextMenu.css'), 'utf8')
+    const agent = Number(/--mi-agent-floating-z:\s*(\d+)/.exec(agentCss)?.[1])
+    const menu = Number(/z-index:\s*(\d+)/.exec(menuCss)?.[1])
+    const top = Number(/--layer-modal-top:\s*(\d+)/.exec(css)?.[1])
+    expect(agent).toBeGreaterThan(1000)
+    expect(top).toBeGreaterThan(agent)
+    expect(menu).toBeGreaterThan(top)
+  })
+
   it('has no colour fallback at the call site', () => {
     const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
     expect(withoutComments).not.toMatch(/var\([^)]*,\s*#/)

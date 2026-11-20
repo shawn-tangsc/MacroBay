@@ -96,13 +96,16 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain('class="mi-capital-conditions__content-row"')
   })
 
-  it('renders the consecutive direction and day count in the table streak column', () => {
+  it('renders the consecutive direction and day count on two lines in the streak column', () => {
+    // 两行是用户 2026-11-20 定的：英文 `Outflow · 3 trading days` 挤到相邻列上。
     const text = productText['zh-CN'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: streakState() }))
     const body = etfTableBody(markup)
 
-    expect(body).toContain(format(text.streak, { flow: text.flowDirections.inflow, count: 3 }))
-    expect(body).toContain(format(text.streak, { flow: text.flowDirections.outflow, count: 5 }))
+    expect(body).toContain(`<span class="mi-capital-conditions__streak-line">${text.flowDirections.inflow}</span>`)
+    expect(body).toContain(format(text.streakDays, { count: 3 }))
+    expect(body).toContain(`<span class="mi-capital-conditions__streak-line">${text.shortFlowDirections.inflow}</span>`)
+    expect(body).toContain(format(text.streakDays, { count: 5 }))
     expect(markup).toContain('mi-capital-conditions__streak')
   })
 

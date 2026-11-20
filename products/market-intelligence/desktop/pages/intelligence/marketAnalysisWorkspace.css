@@ -48,7 +48,6 @@
 /* 方向标记：受控词表 + 语义色；无标记的结论保持中性，不做猜测着色。 */
 .mi-analysis-conclusion__direction { display: inline-flex; align-items: center; margin-right: 6px; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--mi-conclusion-direction) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--mi-conclusion-direction) 14%, transparent); color: var(--mi-conclusion-direction); font-size: 10px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; vertical-align: middle; }
 /* 正文语言与界面不同时的一句事实：muted、行内；「重新生成」是同一行里的文字动作。 */
-.mi-analysis-conclusion__language { margin: 6px 0 0; color: var(--muted); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-analysis-timeline__conclusion[data-direction="bullish"], .mi-analysis-conclusion-card__body[data-direction="bullish"] { border-left-color: var(--mi-conclusion-positive); }
 .mi-analysis-timeline__conclusion[data-direction="bearish"], .mi-analysis-conclusion-card__body[data-direction="bearish"] { border-left-color: var(--mi-conclusion-negative); }
 .mi-analysis-timeline__conclusion[data-direction="range"], .mi-analysis-timeline__conclusion[data-direction="mixed"], .mi-analysis-conclusion-card__body[data-direction="range"], .mi-analysis-conclusion-card__body[data-direction="mixed"] { border-left-color: var(--mi-conclusion-caution); }
@@ -58,11 +57,21 @@
 .mi-analysis-timeline__conclusion[data-direction]:not([data-direction="none"]) { border-left: 2px solid var(--mi-conclusion-direction); padding-left: 12px; }
 .mi-analysis-timeline__conclusion h3 { color: var(--text-strong); }
 
-/* 节点详情抽屉：非模态，无遮罩，覆盖在主看板之上但不覆盖 Agent 栏。 */
-.mi-analysis-drawer { position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
+/* 节点详情抽屉：非模态，无遮罩，覆盖在主看板之上但不覆盖 Agent 栏。
+   宽度写在抽屉自己身上，不写在布局容器上：叠层抽屉被 portal 到 body，祖先链里没有
+   `.mi-analysis-dashboard-layout`，变量取不到时整条 width 失效——固定定位 + `inset: 0 auto 0 0`
+   下 width:auto 会撑到内容宽，抽屉看起来就是「铺满」（用户 2026-11-21 反馈过大）。 */
+.mi-analysis-drawer { --mi-drawer-width: 520px; position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
+
+/* 叠在平台 modal 之上（政策抽屉盖在关键指标抽屉上）：挂 body + `--layer-modal-top`。
+   不加遮罩、不设焦点陷阱——下面那层仍可点、仍可见（用户 2026-11-20）。
+   `no-drag` 不是可选项：拖拽区按几何矩形算，不看 z-index 和 DOM。这层铺满窗高，标题栏正好压进
+   顶部 42px 的拖拽带，没有 `no-drag` 时关闭键「看得见、点不动」——按下被当成拖窗口
+   （用户 2026-11-21：「这个抽屉怎么关不掉」）。平台对 portal 到 body 的 antd 抽屉已写同款规则
+   （apps/desktop-shell styles.css 的 `.ant-drawer-*`），这里是我们自己画的壳，得自己声明。 */
+.mi-analysis-drawer--overlay { position: fixed; z-index: var(--layer-modal-top); -webkit-app-region: no-drag; }
 .mi-analysis-drawer[data-placement="right"] { inset: 0 0 0 auto; width: min(1280px, 94vw); border-right: 0; border-left: 1px solid var(--border); box-shadow: -12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); }
 .mi-analysis-drawer__controls { display: flex; align-items: center; gap: 6px; flex: none; }
-.mi-analysis-dashboard-layout { --mi-drawer-width: 520px; }
 .mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
 .mi-analysis-conclusion-card__body { display: grid; gap: 6px; padding-left: 10px; border-left: 2px solid transparent; }
 .mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
@@ -147,8 +156,10 @@
 .mi-analysis-change__row[data-change-kind='removed'] .mi-analysis-change__value strong { color: var(--mi-conclusion-negative); }
 
 /* Conclusion layout: a readable stack of labelled parts instead of one dense block. */
-.mi-analysis-conclusion__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.mi-analysis-conclusion__head .mi-analysis-timeline__section-label { margin: 0; }
+.mi-analysis-conclusion__head { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+/* 整行不许换行：ⓘ 与方向徽标固定不缩，标题让出空间后自己省略（用户 2026-11-20）。 */
+.mi-analysis-conclusion__head > span { flex: none; }
+.mi-analysis-conclusion__head .mi-analysis-timeline__section-label { margin: 0; flex: 1 1 auto; min-width: 6ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-analysis-conclusion__body { display: grid; gap: 10px; }
 .mi-analysis-conclusion__text { margin: 0; color: var(--text-strong); font-size: 13px; line-height: 1.75; }
 /* One row per horizon: the operation directions, above the prose they summarise. */

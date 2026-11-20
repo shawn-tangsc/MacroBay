@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import { standardRowToMarketEvent, standardRowsToMarketEvents } from './marketCalendarStandardEventAdapter'
+import { resolveStandardRowTitle } from '../../wiring/calendarReadings'
 import { eventTypeNameByCode, nameByMetricKey } from './marketCalendarCodeNames'
 import { readStandardCalendarMonth } from './marketCalendarStandardMonthRead'
 import { ensureCalendarStandardTables, upsertCalendarStandardRow, type CalendarStandardRow }
@@ -222,5 +223,25 @@ describe('国家全名（读屏用）', () => {
       readStandardCalendarMonth(database, { month: '2026-11' }).map((row) => ({ ...row, countryCode: '' })), context)
     expect(noCountry.length).toBeGreaterThan(0)
     expect(noCountry.every((event) => !('countryNameFull' in event))).toBe(true)
+  })
+})
+
+describe('英文界面不出中文名（用户 2026-11-20）', () => {
+  // **直接调线上那个函数**，不在测试里复刻规则——复刻的规则一旦与线上分叉，用例仍会全绿。
+  const localized = (locale: 'zh' | 'en') => ({
+    ...context, locale,
+    resolveTitle: (row: { metricKey: string }, at: 'zh' | 'en') => resolveStandardRowTitle(row, at)
+  } as never)
+
+  it('locale=en 时每个标题都不含 CJK，且非空；locale=zh 与原来逐条一致', () => {
+    const database = seed()
+    const rows = readStandardCalendarMonth(database, { month: '2026-11' })
+    const en = standardRowsToMarketEvents(rows, localized('en'))
+    const zh = standardRowsToMarketEvents(rows, localized('zh'))
+    expect(en.length).toBeGreaterThan(0)
+    expect(en.every((event) => event.title.trim().length > 0)).toBe(true)
+    expect(en.filter((event) => /[\u4e00-\u9fff]/.test(event.title)).map((event) => event.title)).toEqual([])
+    // 中文侧与改动前一致：指标码走中文短名。
+    expect(zh.find((event) => event.eventNameKey === 'US.CPI.NSA.YOY')!.title).toBe('CPI 年率')
   })
 })

@@ -51,8 +51,8 @@ type Text = {
   windowDays: string
   coverage: string
   streakColumn: string
-  streak: string
-  streakSingle: string
+  streakDays: string
+  streakDaySingle: string
   observedAt: string
   etfFlow: string
   chartWindow: string

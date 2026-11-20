@@ -158,7 +158,7 @@ export function PolicyPathCard({ reading, text, month, onOpen}: Readonly<{
   reading: PolicyPathReading
   text: PolicyPathCardText
   month: string
-  onOpen?: () => void
+  onOpen?: (trigger: HTMLElement) => void
   /** 关键指标抽屉的入口；宿主不挂这个抽屉时不给，卡上就不出现入口。 */
   onOpenIndicators?: () => void
   /** 入口的可访问名（「打开关键指标 · 预期变化抽屉」），由宿主从抽屉的文案表取。 */
@@ -324,7 +324,7 @@ export function PolicyPathCard({ reading, text, month, onOpen}: Readonly<{
 
     {/* The verdict survives the strip as one clickable grey line: the full explanation lives in the
         drawer, so the card keeps the normal reading position and only adds a memory. */}
-    {phase.kind === 'verdict' && judged && judged.direction !== 'missing' ? <Button type="text" className="mi-policy-card__judged" onClick={onOpen}>
+    {phase.kind === 'verdict' && judged && judged.direction !== 'missing' ? <Button type="text" className="mi-policy-card__judged" onClick={(event) => onOpen?.(event.currentTarget)}>
       <span>{text.judgedLabel}</span>
       <b data-direction={judged.direction}>{judged.label}</b>
     </Button> : null}
@@ -342,7 +342,7 @@ export function PolicyPathCard({ reading, text, month, onOpen}: Readonly<{
               {probability ? <span className="mi-policy-card__status">· {probability.venue}</span> : null}
             </>}
       </span>
-      {onOpen ? <Button type="text" size="small" className="text-action mi-policy-card__open" onClick={onOpen}
+      {onOpen ? <Button type="text" size="small" className="text-action mi-policy-card__open" onClick={(event) => onOpen?.(event.currentTarget)}
         aria-label={text.openDetailAria}>
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
       </Button> : null}

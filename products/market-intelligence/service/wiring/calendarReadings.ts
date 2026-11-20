@@ -28,6 +28,27 @@ import type { IntelligenceModule } from '../intelligence/intelligenceModule'
  * **只搬不改**：新鲜度仍从作业记录算（`lastRunAt` 与 `lastCollectedAt` 分开）、
  * 补跑仍是「排一次 tick、最多等 20 秒、按终态回答」，提醒仍走同一份设置与同一个提交口。
  */
+/**
+ * **标准表行的标题（按 locale）**（用户 2026-11-20）：原来装配处写死 `zhShort`，界面切英文后
+ * 数据侧仍给中文。码表每条都有 `enShort`，取它即可；**返回值 `undefined` 表示「名表里没有」**，
+ * 由适配器的回退链接手（英文不许出中文原文名）。
+ *
+ * 导出成具名函数只为一个理由：**让用例直接调它**，而不是在测试里复刻一遍规则——
+ * 复刻的规则一旦和线上分叉，用例仍然全绿（今晚已经出现过这种「代码对了没人守」）。
+ */
+export function resolveStandardRowTitle(
+  row: Readonly<{ metricKey: string }>,
+  locale: 'zh' | 'en',
+  tables: Readonly<{ metric: typeof nameByMetricKey; event: typeof eventTypeNameByCode }>
+    = { metric: nameByMetricKey, event: eventTypeNameByCode }
+): string | undefined {
+  const metric = tables.metric[row.metricKey]
+  if (metric !== undefined) return locale === 'en' ? metric.enShort : metric.zhShort
+  const event = tables.event[row.metricKey]
+  if (event !== undefined) return locale === 'en' ? event.enShort : event.zhShort
+  return undefined
+}
+
 export function wireCalendarReadings(input: Readonly<{
   database: DatabaseSync
   jobRuntime: JobRuntime
@@ -49,13 +70,8 @@ export function wireCalendarReadings(input: Readonly<{
   // 「其余 → 0xRouter」的死分支——旧源删掉之后它会把认不出的 provider 说成一个不存在的来源。
   const standardCalendarReader = createStandardMonthPageReader({
     database: input.database,
-    resolveTitle: (row) => {
-      const metric = nameByMetricKey[row.metricKey]
-      if (metric !== undefined) return metric.zhShort
-      const event = eventTypeNameByCode[row.metricKey]
-      if (event !== undefined) return event.zhShort
-      return row.sourceLabel
-    },
+    // 装配处只转调这一行——取名规则在 `resolveStandardRowTitle` 里，用例直接调它。
+    resolveTitle: (row, locale) => resolveStandardRowTitle(row, locale),
   })
   /**
    * **判定只读一个数**：标准表 `max(observed_at)`（用户 2026-11-16 定死）。

@@ -30,3 +30,10 @@
   font-weight: 400;
   white-space: nowrap;
 }
+
+/* 连续那一列分两行（方向 / 天数）：英文 Outflow · 3 trading days 在 20% 列宽里会压到相邻列，
+ * 两行后每行都短，列宽一条不用动（用户 2026-11-20）。td 自己是 nowrap，所以每行再声明一次。 */
+.mi-capital-conditions__streak-line {
+  display: block;
+  white-space: nowrap;
+}

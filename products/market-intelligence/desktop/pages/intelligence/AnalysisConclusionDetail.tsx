@@ -109,13 +109,9 @@ export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonl
     <section className="mi-analysis-timeline__conclusion" data-direction={direction ?? 'none'}
       style={direction ? { '--mi-conclusion-direction': `var(${analysisConclusionDirectionPolicy.colorTokens[direction]})` } as React.CSSProperties : undefined}>
       <header className="mi-analysis-conclusion__head">
-        <p className="mi-analysis-timeline__section-label">{text.conclusion}</p>
-        {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}
-      </header>
-      {/* 说明句收进 ⓘ（用户 2026-11-10：正文只放结论，说明统一收进 icon hover）；
-          行内只留读得懂的一句话动作「重新生成」。 */}
-      {languageNote === undefined ? null : <p className="mi-analysis-conclusion__language" role="note">
-        <Popover
+        {/* ⓘ 是标题行的一部分（用户 2026-11-20 点名：别掉到标题下面一行）：作为 header 的
+            第一个子元素排在标题前面，整行 nowrap，标题过长时自己省略。 */}
+        {languageNote === undefined ? null : <Popover
           content={<p>{languageNote}</p>}
           trigger={(triggerProps) => <IconButton
             {...triggerProps}
@@ -124,8 +120,10 @@ export function AnalysisConclusionDetail({ detail, text, onRegenerate }: Readonl
             resolveText={resolveProductText}
             size="sm"
             variant="plain" />}
-        />
-      </p>}
+        />}
+        <p className="mi-analysis-timeline__section-label" title={text.conclusion}>{text.conclusion}</p>
+        {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}
+      </header>
       {/* 「重新生成」原来误嵌在上面的语言说明条件里：没有语言说明时它根本不渲染——市场分析组
           因此会白丢一个入口。它是这一屏自己的动作，与语言说明无关，移出来。 */}
       {onRegenerate === undefined ? null : <Button className="text-action" onClick={onRegenerate} size="small" type="text">{text.regenerateConclusion}</Button>}

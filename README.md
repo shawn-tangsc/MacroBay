@@ -41,6 +41,16 @@ what changed, with the source and the cutoff time attached to every number.
 A claim that cannot be traced to a source record and a timestamp is supposed to be reported as a gap.
 That is the whole product: **not a paragraph you have to take on faith.**
 
+It is not your charting tool: candles, indicators and order tickets stay in the software you already
+use. It does two other things — it watches for the **changes that would move a call**, and it uses AI to
+say what the change means: which reading moved, by how much, what it is tied to, and what would prove
+the call wrong. Then it pushes a notification to your phone, with the source and the cutoff.
+
+**841 economic indicator codes and 524 collected release events are built in** — the official schedules
+of the U.S. Bureau of Labor Statistics, BEA, the Fed, Japan and Canada, with prior values and consensus
+aligned in one table. The data comes from public endpoints that are good enough on their own, so you do
+not also need the expensive institutional data and alert subscriptions.
+
 ### The daily briefing
 
 One page a morning, about three minutes: what the market is pricing, what changed overnight, and what
@@ -130,6 +140,14 @@ time on every reading, and make the AI show its work.
 The desk is where a briefing's evidence lives. Open any claim on the page and you land here: the same
 reading, its window, its source and its cutoff — plus the panels the brief draws from.
 
+The desk is the "don't miss the change" layer, not a trading terminal: it draws no intraday tape and
+gives no levels. Once AI has turned a change into a sentence you can read, the notification goes out
+through the channels you enabled — a briefing finished, an intelligence signal fired, a story above the
+strength threshold, or a calendar event before and after its release.
+
+Notifications can go to **Telegram, Slack, Discord, QQ and Lark**; several channels can be enabled at
+once, each gets its own copy, and a channel that did not receive it says why.
+
 <p align="center">
   <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: AI conclusion, market status, common-anchor returns, market sentiment and capital conditions, perpetual positioning and funding, source status, and the policy path and key sentiment rail" width="100%">
 </p>
@@ -191,8 +209,8 @@ it at 21:00 should produce two different, defensible answers — not one answer 
 - **Not a trading bot.** No order execution, no position management, no brokerage connection.
 - **Not a hosted account.** No MacroBay server holds your data or your keys; there is nothing to sign
   up for and nothing to cancel.
-- **Not a data bundle.** No bundled feeds and no bundled credentials — you enable the sources you
-  have access to.
+- **Not a data bundle.** What is built in is the adapter, not the data: no subscription bought on your
+  behalf and no credentials — you enable the sources you have access to.
 
 ## Data sources
 

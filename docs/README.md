@@ -102,6 +102,7 @@ time. See [Status and limitations](reference/status-and-limitations.md).
 - [First run](./getting-started/first-run.md)
 - [Product overview](./product/overview.md)
 - [Analysis workflow](./product/analysis-workflow.md)
+- [Macro calendar](./product/calendar.md)
 - [Traceability](./product/traceability.md)
 - [Crypto Market Analyst](./product/crypto-market-analyst.md)
 - [For professionals](./product/for-professionals.md)
@@ -117,6 +118,7 @@ time. See [Status and limitations](reference/status-and-limitations.md).
 - [Development setup](./development/setup.md)
 - [Testing](./development/testing.md)
 - [Packaging and release](./development/packaging.md)
+- [Release note body limits](./development/release-notes.md)
 - [Adding a product](./development/adding-a-product.md)
 
 ### Components and UI standards

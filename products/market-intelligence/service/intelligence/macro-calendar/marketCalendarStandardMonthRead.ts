@@ -45,6 +45,8 @@ export type StandardMonthRow = Readonly<{
   identityKind: CalendarIdentityKind
   /** `source` 身份行才有：源原文名（标准码的显示名去名表查）。 */
   sourceLabel?: string
+  /** 源原文名的英文版（标准表有 `source_label_en` 这一列）：英文界面的回退用它，不出中文原文名。 */
+  sourceLabelEn?: string
   sourceProviderId: string
   sourceEventId: string
   observedAt: string
@@ -76,7 +78,7 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
     ? calendarStandardTablePolicy.eventsTable
     : calendarStandardTablePolicy.releasesView
   const rows = database.prepare(`select country_code, metric_key, period_key, first_scheduled_date,
-    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, importance, event_type, release_count, release_dates_json,
+    scheduled_date, scheduled_at, time_precision, row_kind, status, identity_kind, source_label, source_label_en, importance, event_type, release_count, release_dates_json,
     source_provider_id, source_event_id, observed_at, values_json
     from ${source}
     where scheduled_date >= ? and scheduled_date < ?
@@ -100,6 +102,8 @@ export function readStandardCalendarMonth(database: DatabaseSync, input: Readonl
       ? String(row.status) as CalendarReleaseStatus : 'unknown',
     identityKind: String(row.identity_kind) === 'source' ? 'source' as const : 'code' as const,
     ...(row.source_label === null ? {} : { sourceLabel: String(row.source_label) }),
+    ...(row.source_label_en === null || row.source_label_en === undefined ? {}
+      : { sourceLabelEn: String(row.source_label_en) }),
     sourceProviderId: String(row.source_provider_id), sourceEventId: String(row.source_event_id),
     observedAt: String(row.observed_at),
     values: JSON.parse(String(row.values_json)) as Record<string, string>,

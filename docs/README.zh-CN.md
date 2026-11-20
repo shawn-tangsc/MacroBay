@@ -89,6 +89,7 @@ Windows x64 安装器可构建、可发布，未做真机安装验收（缺 Wind
 - [第一次运行](./getting-started/first-run.zh-CN.md)
 - [产品概览](./product/overview.zh-CN.md)
 - [分析流程](./product/analysis-workflow.zh-CN.md)
+- [宏观日历](./product/calendar.zh-CN.md)
 - [可追溯性](./product/traceability.zh-CN.md)
 - [数字货币市场解读员](./product/crypto-market-analyst.zh-CN.md)
 - [给靠这个吃饭的人](./product/for-professionals.zh-CN.md)
@@ -104,6 +105,7 @@ Windows x64 安装器可构建、可发布，未做真机安装验收（缺 Wind
 - [开发环境](./development/setup.zh-CN.md)
 - [测试](./development/testing.zh-CN.md)
 - [打包与发布](./development/packaging.zh-CN.md)
+- [发布说明正文的格式约束](./development/release-notes.zh-CN.md)
 - [新增产品](./development/adding-a-product.zh-CN.md)
 
 ### 组件与界面规范

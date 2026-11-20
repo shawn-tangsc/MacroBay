@@ -17,6 +17,7 @@ import type {
   CalendarEventListRead, CalendarEventRow
 } from '../../../service/intelligence/macro-calendar/rendering/marketCalendarEventListRead'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { formatShellDay } from '@platform/ui/time/shellTimeFormat'
 import { buildXlsx } from '@platform/files/export/xlsx'
 import { MetricNameText } from '../../shared/MetricNameText'
@@ -133,6 +134,9 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
   onRetry?: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  // 名称列按**界面语言**取主名（用户 2026-11-20）：英文界面只显示英文，缺英文才回退中文。
+  // 用平台既有的语言上下文，不新造一个；语言变了组件本来就整体重渲染。
+  const locale = useShellLanguage()
   const [query, setQuery] = useState('')
   const [onlyWithData, setOnlyWithData] = useState(false)
   /** 原因筛选：`''` = 全部。选项只列**当前这批行里真实出现过的原因**，不铺满七档。 */
@@ -207,7 +211,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
           title: text.codeColumns.name, dataIndex: 'names', width: CODE_TABLE_COLUMN_WIDTHS.name,
           render: (value: CodeTableReadRow['names']) =>
             <span title={`${value.zhFull} · ${value.enFull}`} className="mi-catalog__code-name">
-              <MetricNameText zh={value.zhFull} en={value.enFull} />
+              <MetricNameText zh={value.zhFull} en={value.enFull} locale={locale} />
             </span>
         },
         {
@@ -316,7 +320,7 @@ export function MappingRulesDialog({ open, onClose, text, view, codes, events, o
             render: (_value: unknown, row) => row.title === null
               ? <span data-event-title-missing>{text.eventTitleMissing}</span>
               : <span className="mi-catalog__code-name" title={row.titleEn === null ? row.title : `${row.title} · ${row.titleEn}`}>
-                <MetricNameText zh={row.title} en={row.titleEn ?? ''} />
+                <MetricNameText zh={row.title} en={row.titleEn ?? ''} locale={locale} />
               </span>
           },
           {

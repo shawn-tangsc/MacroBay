@@ -22,6 +22,12 @@ export it as an image, and look back at earlier editions; the generation time is
 
 ### Dashboard
 
+The dashboard is not here to replace your charting software: it draws no intraday tape and gives no
+levels. It watches for changes that would move a call, uses AI to say what each change means, and sends
+a notification through the channels you enabled for anything you should not miss — Telegram, Slack,
+Discord, QQ or Lark, several at once if you want. The built-in sources are free or cheap, so the
+expensive institutional data subscriptions stay optional.
+
 The dashboard groups the market picture into panels:
 
 - macro context;
@@ -37,11 +43,22 @@ traced to its source instead of ending at a chart label.
 
 ### Macro calendar
 
-The calendar lists scheduled releases and market events. It keeps the schedule identity, the
-observation boundary, and later revisions separate, so an updated official value does not rewrite
-what was known earlier.
+The calendar no longer takes a page of its own: it is a drawer opened from the calendar icon on the
+dashboard, titled **Key indicators · expectations**. The upper half is the policy path and three core
+indicators — the implied odds of a rate move at the next meeting, and the expected CPI YoY, payrolls and
+core PCE YoY — each card carrying its next release date and how many days away it is. Below that is the
+release calendar for the current month, with published, scheduled and today kept apart, a jump back to
+this month, and a way into the configuration. The right column holds what to watch and the events of the
+day, split into the standard table, items not in it, tier-two indicators, high-importance events and the
+rest; the footer names where the schedule and consensus values come from.
 
-![Macro calendar](../assets/screenshots/calendar-en.png)
+Behind the calendar are 841 codes in the calendar code table (284 of them U.S.: 283 metrics and 1
+event) and 524 collected release
+events; the 48 that are not yet mapped into the standard table are listed as such instead of being
+passed off as aligned.
+
+The calendar keeps the schedule identity, the observation boundary, and later revisions separate, so an
+updated official value does not rewrite what was known earlier.
 
 ### Analyst agent
 

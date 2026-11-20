@@ -8,7 +8,6 @@ import type { AnalysisConclusionDetail, AnalysisDetailText } from './AnalysisCon
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
-import { groupReanalysisOffered } from './analysisGroupReanalysisPolicy'
 import { analysisConclusionSurfacePolicy } from './analysisWorkspaceLayoutPolicy'
 import { analysisConclusionDirectionPolicy } from './analysisConclusionDirectionPolicy'
 import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
@@ -86,8 +85,6 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   // 「点了重新分析这条报错就不该有」）；这次再失败才会有新的失败行，报错自然重现。
   const retryRequested = requestState === 'loading' || requestState === 'queued'
   // 消息面组不提供重跑：它产出的是新闻抽屉里那三段，这张卡不会变（用户 2026-11-18）。
-  const cardGroupType = latest?.groupType ?? latestFailure?.groupType
-  const reanalysisOffered = groupReanalysisOffered(cardGroupType)
   const failureIsNewer = latestFailure !== undefined
     && (latest === undefined || latestFailure.occurredAt > latest.occurredAt)
     && !groupInFlight && !retryRequested
@@ -163,7 +160,7 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
         {workspaceText.latestConclusionAttemptFailed ?? ''}（<time>{formatTime(latestFailure.occurredAt, 'minute')}</time>）
       </span>
       {failureReason ? <span className="mi-analysis-conclusion-card__attempt-failure-reason">{failureReason}</span> : null}
-      {!reanalysisOffered || groupInFlight || retryRequested || workspaceText.retryAnalysis === undefined || workspaceText.latestConclusionAttemptFailed === undefined
+      {groupInFlight || retryRequested || workspaceText.retryAnalysis === undefined || workspaceText.latestConclusionAttemptFailed === undefined
         ? null
         : <Button size="small" onClick={() => void timeline.requestRefreshAnalysis()}>{workspaceText.retryAnalysis}</Button>}
     </div> : null}

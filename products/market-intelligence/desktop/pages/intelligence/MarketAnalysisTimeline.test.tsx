@@ -250,6 +250,23 @@ describe('MarketAnalysisTimeline', () => {
     expect(queuedButton?.querySelector('.loading-spinner')).not.toBeNull()
   })
 
+  it('offers the header refresh on a sentiment group too, because the click now runs a market analysis', async () => {
+    // 2026-11-20：手动入口已改成永远走市场线（不再分流到新闻解读），
+    // 「消息面组的重跑产出落在新闻抽屉」这个前提不再成立，按组类别藏按钮等于藏一个安全入口。
+    const invoke = vi.fn(async (_product: string, method: string) => method === 'marketAnalysis.listTimeline'
+      ? { schemaVersion: 1, items: [{ id: 'mi-tl-sent', eventGroupId: 'mi-eg-sent', analysisRunId: 'mi-ar-sent', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-sent', safeTitle: '解读已生成', safeExcerpt: '摘要', version: 1, triggerStatus: null, groupType: 'sentiment', groupSubject: 'Binance 公告' }], nextCursor: null }
+      : { itemId: 'item-1', queued: true })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    expect(refresh).toBeDefined()
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(invoke).toHaveBeenCalledWith('market-intelligence', 'marketAnalysis.requestInitialAnalysis', { mode: 'refresh' })
+  })
+
   it('replaces the queued refresh state when the new correction timeline node is published', async () => {
     let timelineReads = 0
     let attemptReads = 0
@@ -1017,7 +1034,7 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     return container
   }
 
-  it('running 行显示「正在解析」且不可点，「立即分析」禁用并给出原因', async () => {
+  it('running 行显示「正在解析」且不可点；「立即分析」禁用但不再附一句原因', async () => {
     const container = await mount(page([runningRow]))
     const rows = container.querySelectorAll('.mi-analysis-timeline__entry')
     // 空标题的 running 行必须活下来：sanitizer 若按「标题不可为空」判死，整屏会一条不剩。
@@ -1026,10 +1043,12 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     // 没有摘要可看，所以不可点：不是按钮，也不出 chevron。
     expect(container.querySelector('button.mi-analysis-timeline__entry')).toBeNull()
     expect(container.querySelector('.mi-analysis-timeline__chevron')).toBeNull()
-    // 禁用不能只留一个灰块：旁边必须有原因，且原因与禁用读同一个派生值。
+    // 禁用原因由可见状态承担（行上的「正在解析」+ 按钮转圈），不再写第二句「跑完再试」；
+    // 读屏仍要知道「正在忙」：aria-busy 保留。
     const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
     expect(action?.disabled).toBe(true)
-    expect(container.textContent).toContain(text.analysisInFlightReason)
+    expect(action?.getAttribute('aria-busy')).toBe('true')
+    expect(container.querySelector('.mi-analysis-timeline__reanalyse-reason')).toBeNull()
   })
 
   it('已发布行与 running 行同屏时，两条都显示', async () => {
@@ -1066,10 +1085,10 @@ describe('正在解析：条目、按钮禁用与就地换状态（用户 2026-1
     expect(rows).toHaveLength(1)
     expect(container.textContent).toContain(text.status.published)
     expect(container.textContent).not.toContain(text.status.running)
-    // 跑到终态 → 按钮恢复可点，原因句也一起消失。
+    // 跑到终态 → 按钮恢复可点，aria-busy 也撤掉。
     const action = Array.from(container.querySelectorAll('button')).find((button) => labelled(button, text.refreshAnalysis))
     expect(action?.disabled).toBe(false)
-    expect(container.textContent).not.toContain(text.analysisInFlightReason)
+    expect(action?.getAttribute('aria-busy')).toBeNull()
   })
 })
 
@@ -1267,7 +1286,7 @@ describe('成功 / 失败两个页签', () => {
 /**
  * 页头那颗重跑按钮也按组类别（用户 2026-11-18）：消息面组不给，市场分析组照旧。
  */
-describe('页头的重跑按钮按组类别出现', () => {
+describe('页头的重跑按钮不再按组类别隐藏', () => {
   const entryWithGroup = (groupType: string) => ({
     id: `mi-tl-${groupType}`, eventGroupId: `mi-eg-${groupType}`, analysisRunId: `mi-ar-${groupType}`,
     kind: 'analysis' as const, status: 'published' as const, runKey: `mi-ar-${groupType}`, failureCode: null,
@@ -1292,9 +1311,10 @@ describe('页头的重跑按钮按组类别出现', () => {
   const refresh = (container: HTMLElement): Element | undefined =>
     Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text.refreshAnalysis)
 
-  it('sentiment 组：页头没有「立即分析」', async () => {
+  it('sentiment 组：页头也有「立即分析」', async () => {
+    // 2026-11-20：手动入口已改成永远走市场线，这个组类型不再意味着「产出落在新闻抽屉」。
     const container = await mountWithGroup('sentiment')
-    expect(refresh(container)).toBeUndefined()
+    expect(refresh(container)?.textContent).toBe(text.refreshAnalysis)
   })
 
   it('市场分析组：页头有「立即分析」，文案一字不变', async () => {

@@ -1,8 +1,10 @@
+import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it, vi } from 'vitest'
 
 import { MACRO_ECONOMIC_CALENDAR_IPC_METHODS } from '../../../../contracts/macro/economicCalendarQueryContracts'
 import { registerMacroEconomicCalendarIpc } from './registerMacroEconomicCalendarIpc'
 import { marketCalendarPublicPolicy } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import { ensureCalendarStandardTables, upsertCalendarStandardRow } from '../marketCalendarStandardTable'
 
 describe('registerMacroEconomicCalendarIpc', () => {
   it('registers exact market refresh/query boundaries and rejects unsafe service responses', async () => {
@@ -336,4 +338,40 @@ describe('registerMacroEconomicCalendarIpc', () => {
       await expect(handlers.get(MACRO_ECONOMIC_CALENDAR_IPC_METHODS.importManualBlsIcs)?.({})).resolves.toEqual({ state: 'failed', failureCode })
     }
   )
+})
+
+/**
+ * 码表国家列的**语言接线**（用户 2026-11-21：英文界面下国家还是中文）。
+ *
+ * 读口已经按 `locale` 取（日历线 `3d43318`），但 IPC 不传就永远走默认中文——这条钉住「传了要生效」：
+ * 英文下 `countryName` 必须是两位大写代码且不含 CJK；不传时仍是中文名（向后兼容）。
+ * **红证**：把 handler 里的 `localeOf(payload)` 改成 `'zh'`，第一条立即红。
+ */
+it('passes the interface language through to the code table read', async () => {
+  const database = new DatabaseSync(':memory:')
+  ensureCalendarStandardTables(database)
+  upsertCalendarStandardRow(database, {
+    countryCode: 'US', metricKey: 'US.CPI.NSA.YOY', periodKey: '2026-10', scheduledDate: '2026-11-10',
+    timePrecision: 'date' as const, status: 'published' as const, valuesJson: '{"actual":"3.7%"}',
+    sourceProviderId: 'narwhal', sourceEventId: 'cpi-2026-10', parserVersion: 'v1',
+    observedAt: '2026-11-10T00:00:00.000Z', firstSeenAt: '2026-11-10T00:00:00.000Z'
+  })
+  const handlers = new Map<string, (payload: unknown) => unknown>()
+  registerMacroEconomicCalendarIpc((_productId, method, handler) => handlers.set(method, handler),
+    { listEffectiveMonthAsOf: () => [], getEffectiveEventAsOf: () => undefined } as never,
+    { preview: () => ({ state: 'failed', failureCode: 'invalid-file' }), import: () => ({ state: 'failed', failureCode: 'invalid-file' }) } as never,
+    undefined, undefined, undefined, undefined, undefined, undefined, { database } as never)
+  const handler = handlers.get(marketCalendarPublicPolicy.methods.queryCodeTable)!
+
+  const en = await handler({ locale: 'en' }) as { state: string; rows: readonly { countryName: string | null }[] }
+  expect(en.state).toBe('available')
+  const enNames = en.rows.map((row) => row.countryName).filter((name): name is string => name !== null)
+  expect(enNames.length).toBeGreaterThan(0)
+  for (const name of enNames) expect(name).toMatch(/^[A-Z]{2}$/u)
+  expect(enNames.join('')).not.toMatch(/[\u3400-\u9fff]/u)
+
+  // 不传 locale：默认中文，老载荷行为不变。
+  const zh = await handler({}) as { state: string; rows: readonly { countryName: string | null }[] }
+  const zhNames = zh.rows.map((row) => row.countryName).filter((name): name is string => name !== null)
+  expect(zhNames.some((name) => /[\u3400-\u9fff]/u.test(name))).toBe(true)
 })

@@ -53,9 +53,49 @@ const render = async (candidate: PolicyPathReading) => {
   document.body.append(host)
   root = createRoot(host)
   await act(async () => root!.render(createElement(PolicyPathDrawer, { reading: candidate, text, onClose: () => {} })))
-  // 抽屉是 modal：内容 portal 到 body，所以查询根是 body，不是渲染容器。
+  // 渲染容器挂在 body 上，查询根用 body：壳换成侧抽屉或平台弹窗时，这套查询都不用改。
   return document.body
 }
+
+describe('policy path drawer shell', () => {
+  it('renders the product side drawer at the left edge, not the platform modal', async () => {
+    // 2026-11-20 用户报「利率详情抽屉从左边弹、没那么宽，被改坏了」：0.4.4 把这里换成了平台
+    // modal Drawer（右侧、占满、带遮罩）。产品里所有抽屉共用 `MiSideDrawer`：同宽、同左沿、
+    // 同滑入，正好补日历抽屉之外那块。改回平台 Drawer 时这条会红。
+    const rendered = await render(reading)
+    const shell = rendered.querySelector('aside.mi-analysis-drawer')
+    expect(shell).not.toBeNull()
+    expect(shell?.getAttribute('data-placement')).toBe('left')
+    // 平台 modal 的三件套都不该出现：ant 抽屉、遮罩、以及被锁住的页面背景。
+    expect(rendered.querySelector('.ant-drawer')).toBeNull()
+    expect(rendered.querySelector('.ant-drawer-mask')).toBeNull()
+    // 内容没有跟着换壳：标题与结算段都还在同一个壳里。
+    expect(shell?.textContent).toContain(text.title)
+    expect(shell?.querySelector('[data-settlement]')).not.toBeNull()
+  })
+})
+
+describe('policy path drawer stacking', () => {
+  it('mounts as a body-level overlay above the platform modal layer', async () => {
+    // 真样式表注入后量**计算值**，不是只断言渲染了：政策层（--layer-modal-top）必须高于
+    // 平台 drawer 的 1000（antd 默认，rc-dialog 内联写入，我们量不到它的样式表，所以拿 1000 比）。
+    const read = (path: string) => readFileSync(`platform/ui/tokens/${path}`, 'utf8')
+    const style = document.createElement('style')
+    style.textContent = `${read('tokens.css')}\n${readFileSync('products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css', 'utf8')}`
+    document.head.append(style)
+    try {
+      const rendered = await render(reading)
+      const shell = rendered.querySelector('aside.mi-analysis-drawer--overlay')
+      expect(shell).not.toBeNull()
+      // portal：不在渲染容器里，挂在 body 上（DOM 顺序在日历抽屉之后，Tab 不会倒）。
+      expect(host!.contains(shell)).toBe(false)
+      const z = Number(getComputedStyle(shell as Element).zIndex)
+      expect(z).toBeGreaterThan(1000)
+    } finally {
+      style.remove()
+    }
+  })
+})
 
 /** 红线第 4 条：抽屉里同样不许自己切日期、也不许把 ISO 切成 19 位再显示。 */
 it('builds no date or clock string of its own', () => {

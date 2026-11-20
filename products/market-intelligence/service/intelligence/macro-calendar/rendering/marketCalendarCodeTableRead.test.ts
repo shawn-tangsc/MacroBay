@@ -100,3 +100,21 @@ describe('码表的「数据量」', () => {
     expect(read.rows.every((row) => row.releaseRowCount === 0)).toBe(true)
   })
 })
+
+describe('国家列按界面语言取值（用户 2026-11-21）', () => {
+  it('英文下国家是两个字母代码、不含 CJK；中文下逐字不变', () => {
+    const zh = readCalendarCodeTable(database, 'zh')
+    const en = readCalendarCodeTable(database, 'en')
+    if (zh.state !== 'available' || en.state !== 'available') throw new Error('expected available')
+    const withCountry = en.rows.filter((row) => row.countryName !== null)
+    expect(withCountry.length).toBeGreaterThan(0)
+    // 英文：两位代码，且一个 CJK 都不许出现（含国名「美国」这种）。
+    expect(withCountry.every((row) => /^[A-Z]{2}$/.test(row.countryName!))).toBe(true)
+    expect(withCountry.filter((row) => /[\u4e00-\u9fff]/.test(row.countryName!))).toEqual([])
+    // 全名不丢：仍然在 `countryNameFull` 里，供 title / aria-label。
+    expect(withCountry[0]!.countryNameFull).toMatch(/^[A-Z]/)
+    // 中文侧与改动前一致（中文名，不是代码）。
+    const zhWithCountry = zh.rows.filter((row) => row.countryName !== null)
+    expect(zhWithCountry[0]!.countryName).toMatch(/[\u4e00-\u9fff]/)
+  })
+})

@@ -61,7 +61,11 @@ export type MarketCalendarClient = {
    * 映射规则（源内 id ↔ 我们的指标码）与库里还没映射的 id：**只读、全量下发**。
    * 数据量很小（85 条规则 + 数百个 id），一次给完，前端本地筛选与分页。
    */
-  queryMappingRules: () => Promise<MappingRulesRead>
+  /**
+   * 映射规则表。**带 `locale`**（用户 2026-11-21）：未映射那列的国家名与码表同一口径，
+   * 英文下是两位代码、全名在 `countryNameFull`；不传则默认 `zh`（向后兼容）。
+   */
+  queryMappingRules: (input?: Readonly<{ locale?: 'zh' | 'en' }>) => Promise<MappingRulesRead>
   /**
    * 某一期、某个指标身份下**各来源写了什么**（只读，渲染专用）：`#47` 详情分块用。
    *
@@ -75,7 +79,8 @@ export type MarketCalendarClient = {
   queryValueRevisions: (input: Readonly<{ countryCode: string; metricKey: string
     periodKey: string; firstScheduledDate: string }>) => Promise<CalendarValueRevisionRead>
   /** 码表（只读整表，渲染专用）：一个码一行，带分级 · 口径 · 官网页 · 状态 · 认得它的源内 id 数。 */
-  queryCodeTable: () => Promise<CodeTableRead>
+  /** 码表整表。`locale` 同上：英文下 Country 列是两位代码（全名在 `countryNameFull`）。 */
+  queryCodeTable: (input?: Readonly<{ locale?: 'zh' | 'en' }>) => Promise<CodeTableRead>
   /**
    * **事件清单**（只读、渲染专用）：一行 = 一场事件，不参与映射。
    * 与经济指标分开取数——事件没有统计期，混进未映射表会让人以为它们该建码。
@@ -99,12 +104,14 @@ export const marketCalendarClient: MarketCalendarClient = {
     const value = await invoke(marketCalendarPublicPolicy.methods.getCollectionFreshness, {})
     return isMarketCalendarFreshness(value) ? value : { state: 'unavailable', failureCode: 'query-unavailable' }
   },
-  async queryMappingRules() {
-    const value = await invoke(marketCalendarPublicPolicy.methods.queryMappingRules, {})
+  async queryMappingRules(input) {
+    const value = await invoke(marketCalendarPublicPolicy.methods.queryMappingRules,
+      input?.locale === undefined ? {} : { locale: input.locale })
     return mappingRulesReadOf(value)
   },
-  async queryCodeTable() {
-    return codeTableReadOf(await invoke(marketCalendarPublicPolicy.methods.queryCodeTable, {}))
+  async queryCodeTable(input) {
+    return codeTableReadOf(await invoke(marketCalendarPublicPolicy.methods.queryCodeTable,
+      input?.locale === undefined ? {} : { locale: input.locale }))
   },
   async queryEventList() {
     return eventListReadOf(await invoke(marketCalendarPublicPolicy.methods.queryEventList, {}))
