@@ -34,8 +34,8 @@ export type CapitalTableText = Readonly<{
   windowDays: string
   coverage: string
   streakColumn: string
-  streak: string
-  streakSingle: string
+  streakDays: string
+  streakDaySingle: string
   shortFlowDirections: Record<'inflow' | 'outflow' | 'zero', string>
   etfUnknown: string
   etfMissingSourceUnreadable: string
@@ -270,9 +270,14 @@ function EtfRow({ asset, label, missing, text }: {
     ? format(dataText('pages.intelligence.portal.dashboard.capitalConditions.rowAsOf'), { day: latest.tradingDate.slice(5) })
     : undefined
   const days = latest ? consecutiveDirectionDays(asset.rows, latest.direction) : 0
-  const streak = latest && days > 0
-    ? format(days === 1 ? text.streakSingle : text.streak, { flow: text.shortFlowDirections[latest.direction], count: days })
-    : ''
+  /**
+   * 连续那一列分**两行**：方向一行、天数一行（用户 2026-11-20：「英语版 streak 太长了，和前面挤一起，
+   * 能不能换行」）。英文 Outflow · 3 trading days 在 20% 列宽下会压到 20 日那一列，两行后每行都短。
+   */
+  const streakFlow = latest && days > 0 ? text.shortFlowDirections[latest.direction] : undefined
+  const streakDays = latest && days > 0
+    ? format(days === 1 ? text.streakDaySingle : text.streakDays, { count: days })
+    : undefined
   return <tr>
     <th scope="row">
       <i className="mi-capital-conditions__asset-dot" data-series={asset.asset.toLowerCase()} aria-hidden="true" />{label}
@@ -280,7 +285,10 @@ function EtfRow({ asset, label, missing, text }: {
     </th>
     <td data-flow-direction={flowDirection(asset.latestNetFlowUsd)}>{asset.latestNetFlowUsd}</td>
     {asset.cumulative.map((window) => <td key={window.windowDays} data-flow-direction={flowDirection(window.netFlowUsd)}>{window.netFlowUsd}</td>)}
-    <td className="mi-capital-conditions__streak" data-flow-direction={latest?.direction}>{streak}</td>
+    <td className="mi-capital-conditions__streak" data-flow-direction={latest?.direction}>
+      {streakFlow === undefined ? null : <span className="mi-capital-conditions__streak-line">{streakFlow}</span>}
+      {streakDays === undefined ? null : <span className="mi-capital-conditions__streak-line">{streakDays}</span>}
+    </td>
   </tr>
 }
 
