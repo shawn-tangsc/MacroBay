@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 
 import { ensureCalendarStandardTables, upsertCalendarStandardRow } from '../intelligence/macro-calendar/marketCalendarStandardTable'
+import { listCrossSourceConflicts } from '../intelligence/macro-calendar/marketCalendarCrossSourceConflictAudit'
 import { syncOfficialStandardRowsAtStartup } from './calendarStandardRows'
 
 const sourceRow = () => ({
@@ -15,6 +16,38 @@ const sourceRow = () => ({
 const noRevisions = () => []
 
 describe('启动链：syncOfficialStandardRowsAtStartup', () => {
+  /**
+   * 启动链必须把「两家同一期、值不同」记成两条互指（Chief 2026-11-21，0.4.5 #18）：
+   * 规范化不再把冲突并成一行，扫描再把这对冲突写进修订表。再启动一次不翻倍。
+   */
+  it('启动扫描记下跨源值冲突：两条互指，重跑不翻倍', () => {
+    const database = new DatabaseSync(':memory:')
+    ensureCalendarStandardTables(database)
+    const seed = (providerId: string, firstScheduledDate: string, actual: string): void => {
+      upsertCalendarStandardRow(database, {
+        countryCode: 'US', metricKey: 'US.UNEMPLOYMENT.SA.RATE', periodKey: '2026-09',
+        scheduledDate: '2026-10-03', firstScheduledDate, timePrecision: 'date',
+        valuesJson: JSON.stringify({ actual }), valueState: 'present',
+        sourceProviderId: providerId, sourceEventId: `${providerId}-${firstScheduledDate}`,
+        parserVersion: 'v1', observedAt: '2026-10-03T12:31:00.000Z', firstSeenAt: '2026-10-03T12:31:00.000Z'
+      })
+    }
+    seed('narwhal', '2026-10-03', '4.1')
+    seed('0xrouter', '2026-10-04', '4.2')
+    const run = (): void => syncOfficialStandardRowsAtStartup({
+      database, listEffectiveMonthAsOf: noRevisions, now: () => new Date('2026-11-18T00:00:00.000Z')
+    })
+    run()
+    expect(listCrossSourceConflicts(database)).toHaveLength(1)
+    const rows = (): number => Number((database.prepare(
+      "select count(*) n from mi_calendar_value_revisions where decision = 'conflict:cross-source'"
+    ).get() as { n: number }).n)
+    expect(rows()).toBe(2)
+    run()
+    expect(listCrossSourceConflicts(database)).toHaveLength(1)
+    expect(rows()).toBe(2)
+  })
+
   it('启动时真的跑转正：源内身份就地改码', () => {
     const database = new DatabaseSync(':memory:')
     ensureCalendarStandardTables(database)

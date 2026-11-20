@@ -13,6 +13,7 @@ import { backfillObservationCountries } from '../intelligence/macro-calendar/mar
 import { fillObservationCountriesByName } from '../intelligence/macro-calendar/marketCalendarObservationCountryNameFill'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
+import { markCrossSourceConflicts } from '../intelligence/macro-calendar/marketCalendarCrossSourceConflictAudit'
 import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
 import { fixCalendarEventCountries } from '../intelligence/macro-calendar/marketCalendarEventCountryFix'
 import { fixFomcEventTypes } from '../intelligence/macro-calendar/marketCalendarFomcEventTypeFix'
@@ -253,9 +254,23 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     report(`[macro-calendar] 启动规范化：重算 ${normalized.valueStateToPresent + normalized.valueStateToMissing} 行`
       + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
       + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
-      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、耗时 ${elapsedMs}ms`)
+      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、`
+      + `跨源冲突保留 ${normalized.conflictGroupsKept} 组、耗时 ${elapsedMs}ms`)
   } catch (error) {
     report(`[macro-calendar] 启动规范化失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
+  }
+  /**
+   * **跨源冲突：采集批次这一侧也要扫**（Chief 2026-11-21）。启动链只覆盖「启动时有」的那批；
+   * 两家在两次启动之间各写一行、值冲突，等下次启动之前读者已经看到两条矛盾行——采集末尾补一次。
+   * 扫描只读标准表、幂等，同一份数据重扫记 0 条。
+   */
+  try {
+    const conflicts = markCrossSourceConflicts(input.database)
+    if (conflicts.recorded > 0) {
+      report(`[macro-calendar] 跨源数值冲突：待判 ${conflicts.groups} 对（身份×字段），本次新记 ${conflicts.recorded} 条`)
+    }
+  } catch (error) {
+    report(`[macro-calendar] 跨源冲突扫描失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
   }
   /**
    * **启动零网络盘点**（用户 2026-11-19 定）：五项扫描只读，不和任何源打交道。

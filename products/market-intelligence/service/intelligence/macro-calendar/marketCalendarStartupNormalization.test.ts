@@ -30,6 +30,7 @@ type Seed = Readonly<{
   status?: string
   eventType?: string
   identityKind?: 'code' | 'source'
+  providerId?: string
 }>
 
 let seq = 0
@@ -39,10 +40,11 @@ function seed(database: DatabaseSync, over: Seed): void {
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, time_precision,
      status, identity_kind, value_state, values_json, source_provider_id, source_event_id,
      parser_version, observed_at, first_seen_at, event_type, release_count)
-    values (?, ?, ?, ?, ?, 'date', ?, ?, ?, ?, 'test', ?, 'v1', ?, ?, ?, 1)`)
+    values (?, ?, ?, ?, ?, 'date', ?, ?, ?, ?, ?, ?, 'v1', ?, ?, ?, 1)`)
     .run(over.countryCode ?? 'US', over.metricKey, over.periodKey, over.firstScheduledDate,
       over.firstScheduledDate, over.status ?? 'published', over.identityKind ?? 'code',
-      over.valueState ?? 'missing', over.valuesJson ?? '{}', `x-${seq}`, now, now, over.eventType ?? null)
+      over.valueState ?? 'missing', over.valuesJson ?? '{}', over.providerId ?? 'test', `x-${seq}`, now, now,
+      over.eventType ?? null)
 }
 
 const run = (database: DatabaseSync) => normalizeCalendarStandardRows(database, { nowIso })
@@ -96,6 +98,28 @@ describe('启动链幂等规范化', () => {
     expect(audit).toHaveLength(1)
     expect(audit[0]!.rule).toBe('period-resolve-dup/latest-when-all-have-actual')
     expect(JSON.parse(audit[0]!.deleted_row_json).first_scheduled_date).toBe('2026-10-01')
+  })
+
+  /**
+   * 跨源冲突不许被「并成一行」抹掉（Chief 2026-11-21，0.4.5 #18）：
+   * 两家对同一期给出不同的数，合并会挑一个留下、另一个消失——那正是「谁也说不清哪来的」。
+   * 同源的两行仍按老规则合并（二读/三读是同一家的一次修订）。
+   */
+  it('两家两条行、actual 不同 → 保留两行（不并），并计数；同源两行照旧合并', () => {
+    const database = setup()
+    seed(database, { metricKey: 'US.E.NONE.RATE', periodKey: '2026-09', firstScheduledDate: '2026-10-03',
+      valuesJson: '{"actual":"4.1"}', valueState: 'present', providerId: 'narwhal' })
+    seed(database, { metricKey: 'US.E.NONE.RATE', periodKey: '2026-09', firstScheduledDate: '2026-10-04',
+      valuesJson: '{"actual":"4.2"}', valueState: 'present', providerId: '0xrouter' })
+    const report = run(database)
+    expect(report.conflictGroupsKept).toBe(1)
+    expect(report.droppedRows).toBe(0)
+    const after = rows(database)
+    expect(after).toHaveLength(2)
+    expect(after.map((row) => row.source_provider_id).sort()).toEqual(['0xrouter', 'narwhal'])
+    // 第二遍仍保留两行：这是持久语义，不是「第一次不并、第二次并」。
+    expect(run(database)).toMatchObject({ conflictGroupsKept: 1, droppedRows: 0 })
+    expect(rows(database)).toHaveLength(2)
   })
 
   it('期次解不出的行原样保留（不删、不改期次），第二遍 0 变更', () => {

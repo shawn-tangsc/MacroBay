@@ -34,6 +34,8 @@ export type CalendarNormalizationReport = Readonly<{
   mergedRows: number
   droppedRows: number
   unresolvedPeriods: number
+  /** 因「跨源值冲突」而**故意不并**的组数（同源两行仍按老规则合并）。 */
+  conflictGroupsKept: number
 }>
 
 type Row = Record<string, unknown>
@@ -84,7 +86,7 @@ export function normalizeCalendarStandardRows(
 
   const report = {
     scanned: 0, valueStateToPresent: 0, valueStateToMissing: 0, statusPromoted: 0,
-    periodsResolved: 0, mergedRows: 0, droppedRows: 0, unresolvedPeriods: 0
+    periodsResolved: 0, mergedRows: 0, droppedRows: 0, unresolvedPeriods: 0, conflictGroupsKept: 0
   }
   const byCode = new Map<string, Array<{ id: string; entry: Record<string, unknown> }>>()
   for (const [id, entry] of Object.entries(zeroXRouterIndicatorIdentities)) {
@@ -219,6 +221,25 @@ export function normalizeCalendarStandardRows(
       report.periodsResolved += 1
     }
 
+    /**
+     * **跨源值冲突不并**（Chief 2026-11-21，0.4.5 #18）：两家对同一期给出不同的数时，
+     * 合并会挑一行留下、另一行的值当场消失——读者看到的是一个来源的数，却以为是共识，
+     * 事后也查不到「曾有两家不一致」。**同源两行仍按老规则合并**（那是同一家的修订）。
+     */
+    const conflictsIn = (group: readonly Row[]): readonly string[] => {
+      if (new Set(group.map((row) => String(row.source_provider_id))).size < 2) return []
+      const conflicted: string[] = []
+      for (const field of ['actual', 'previous', 'consensus'] as const) {
+        const values = new Set<string>()
+        for (const row of group) {
+          const value = fieldsOf(row.values_json)[field]
+          if (isFilled(value)) values.add(String(value).trim())
+        }
+        if (values.size > 1) conflicted.push(field)
+      }
+      return conflicted
+    }
+
     // ── 3b. 桶二：同（国家+码+期次）多行，按「有 actual → 最晚 → 最早」合并 ──────
     const duplicatesByPeriod = database.prepare(`select country_code, metric_key, period_key
       from ${table} group by 1,2,3 having count(*) > 1`).all() as Row[]
@@ -226,6 +247,11 @@ export function normalizeCalendarStandardRows(
       const rowsHere = database.prepare(`select rowid as rowId, * from ${table}
         where country_code = ? and metric_key = ? and period_key = ?`).all(
         String(group.country_code), String(group.metric_key), String(group.period_key)) as Row[]
+      // 跨源且值不同：**一条都不删、不改**，留给冲突审计记一对互指；计数进报告，不静默。
+      if (conflictsIn(rowsHere).length > 0) {
+        report.conflictGroupsKept += 1
+        continue
+      }
       const ranked = rowsHere.map((row) => ({ row, hasActual: hasActualValue(String(row.values_json)) ? 1 : 0 }))
       ranked.sort((left, right) => {
         if (left.hasActual !== right.hasActual) return right.hasActual - left.hasActual

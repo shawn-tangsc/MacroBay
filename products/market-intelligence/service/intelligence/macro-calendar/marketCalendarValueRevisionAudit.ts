@@ -15,8 +15,13 @@ import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
  */
 export const calendarValueRevisionPolicy = Object.freeze({
   table: 'mi_calendar_value_revisions',
+  /**
+   * 闭集。前四个是**合并决定**（值写没写、为什么没写）；最后一个是**冲突标记**，
+   * 只由跨源冲突审计写（`marketCalendarCrossSourceConflictAudit.ts`），不参与取值，
+   * 也不进「数值修订」读口——把它当合并决定读，读者会看到一条 `value_after=null` 的假修订。
+   */
   decisions: Object.freeze(['write', 'keep:absent-in-source', 'keep:placeholder-zero',
-    'keep:zero-does-not-overwrite'] as const)
+    'keep:zero-does-not-overwrite', 'conflict:cross-source'] as const)
 })
 
 export type CalendarMergeDecision = typeof calendarValueRevisionPolicy.decisions[number]
@@ -27,7 +32,13 @@ export type CalendarValueRevisionInput = Readonly<{
   field: CalendarValueField; valueBefore: string | null; valueAfter: string | null
   decision: CalendarMergeDecision; providerId: string; sourceEventId: string; parserVersion: string
   observedAt: string; incomingHash: string; rawRecordId?: string
+  /** 冲突标记专用：这一行指认的**对方**来源；合并决定不写这两列（absence 即「不是冲突」）。 */
+  conflictWithProviderId?: string
+  conflictWithSourceEventId?: string
 }>
+
+/** 冲突决定不是合并决定：读口、守卫与可靠性计数都按这一处判，别在调用点各写一遍。 */
+export const crossSourceConflictDecision = 'conflict:cross-source' as const
 
 export function ensureCalendarValueRevisionTable(database: DatabaseSync): void {
   database.exec(`create table if not exists ${calendarValueRevisionPolicy.table} (
@@ -37,6 +48,18 @@ export function ensureCalendarValueRevisionTable(database: DatabaseSync): void {
     provider_id text not null, source_event_id text not null, parser_version text not null,
     observed_at text not null, incoming_hash text not null, raw_record_id text,
     primary key(country_code, metric_key, period_key, first_scheduled_date, field, observed_at, provider_id))`)
+  /**
+   * 冲突互指的两列（Chief 2026-11-21）：**追加可空列、幂等**，与标准表 `source_release_id` 同款。
+   * 不加显式版本标记——`mi_macro_calendar_migrations` 是数据迁移标记，加列本身幂等。
+   */
+  const columns = database.prepare(`select name from pragma_table_info('${calendarValueRevisionPolicy.table}')`)
+    .all() as Array<{ name: string }>
+  if (!columns.some((column) => column.name === 'conflict_with_provider_id')) {
+    database.exec(`alter table ${calendarValueRevisionPolicy.table} add column conflict_with_provider_id text`)
+  }
+  if (!columns.some((column) => column.name === 'conflict_with_source_event_id')) {
+    database.exec(`alter table ${calendarValueRevisionPolicy.table} add column conflict_with_source_event_id text`)
+  }
 }
 
 /** 本次 incoming values 的 sha256（键排序后序列化）：重放时能一眼认出「同一笔」。 */
@@ -45,18 +68,20 @@ export function hashIncomingValues(values: Readonly<Record<string, string | unde
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex')
 }
 
-/** 写一行审计；**`write` 且值没变直接返回 false，不碰表**。 */
+/** 写一行审计；**`write` 且值没变直接返回 false，不碰表**。返回这一行是否真的写进去了（冲突重记不翻倍）。 */
 export function recordCalendarValueRevision(database: DatabaseSync, input: CalendarValueRevisionInput): boolean {
   if (input.decision === 'write' && input.valueBefore === input.valueAfter) return false
   ensureCalendarValueRevisionTable(database)
-  database.prepare(`insert or ignore into ${calendarValueRevisionPolicy.table}
+  const result = database.prepare(`insert or ignore into ${calendarValueRevisionPolicy.table}
     (country_code, metric_key, period_key, first_scheduled_date, field, value_before, value_after, decision,
-     provider_id, source_event_id, parser_version, observed_at, incoming_hash, raw_record_id)
-    values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+     provider_id, source_event_id, parser_version, observed_at, incoming_hash, raw_record_id,
+     conflict_with_provider_id, conflict_with_source_event_id)
+    values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
     input.countryCode, input.metricKey, input.periodKey, input.firstScheduledDate, input.field,
     input.valueBefore, input.valueAfter, input.decision, input.providerId, input.sourceEventId,
-    input.parserVersion, input.observedAt, input.incomingHash, input.rawRecordId ?? null)
-  return true
+    input.parserVersion, input.observedAt, input.incomingHash, input.rawRecordId ?? null,
+    input.conflictWithProviderId ?? null, input.conflictWithSourceEventId ?? null)
+  return Number(result.changes) > 0
 }
 
 /**
@@ -93,7 +118,9 @@ export function readCalendarValueRevisions(
     rows = database.prepare(`select field, value_before, value_after, decision, provider_id, observed_at
       from ${calendarValueRevisionPolicy.table}
       where country_code=? and metric_key=? and period_key=? and first_scheduled_date=?
-      order by observed_at desc`).all(key.countryCode, key.metricKey, key.periodKey, key.firstScheduledDate) as typeof rows
+        and decision <> ?
+      order by observed_at desc`).all(key.countryCode, key.metricKey, key.periodKey, key.firstScheduledDate,
+      crossSourceConflictDecision) as typeof rows
   } catch (error) {
     return { state: 'unreadable', byField: {}, revisions: [], updatedAt: null, latestWriteProviderId: null,
       reason: (error as Error)?.message ?? 'unknown' }
@@ -149,9 +176,9 @@ export function calendarValueRevisionMismatches(database: DatabaseSync): number 
     from ${calendarValueRevisionPolicy.table} a
     join ${table} e on e.country_code=a.country_code and e.metric_key=a.metric_key
       and e.period_key=a.period_key and e.first_scheduled_date=a.first_scheduled_date
-    where a.observed_at = (select max(b.observed_at) from ${calendarValueRevisionPolicy.table} b
+    where a.decision <> ? and a.observed_at = (select max(b.observed_at) from ${calendarValueRevisionPolicy.table} b
         where b.country_code=a.country_code and b.metric_key=a.metric_key and b.period_key=a.period_key
-          and b.first_scheduled_date=a.first_scheduled_date and b.field=a.field)`).all() as
+          and b.first_scheduled_date=a.first_scheduled_date and b.field=a.field)`).all(crossSourceConflictDecision) as
     Array<{ field: string; value_before: string | null; value_after: string | null
       decision: CalendarMergeDecision; values_json: string }>
   let mismatched = 0
