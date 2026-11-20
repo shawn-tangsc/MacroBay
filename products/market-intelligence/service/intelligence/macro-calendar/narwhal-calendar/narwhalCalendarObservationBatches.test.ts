@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { narwhalCanonicalIdentityKey } from '../marketCalendarMetricIdentity'
+import { decodeCalendarSourceEventId } from '../marketCalendarSourceEventId'
 import { narwhalObservationBatches, narwhalStandardRowInputsDetailed } from './narwhalCalendarObservationBatches'
 import type { NarwhalParsedRelease } from './narwhalCalendarParser'
 
@@ -73,9 +74,13 @@ describe('不是发布的东西不进日历', () => {
         values: [{ measure: 'gdp_nowcast_qoq_annualized', concept: 'gdp', actual: '3.1' }] })
     ]).rows
     // 两条都写：即时预测标 estimate（日历会过滤掉它），GDP 那条不标（默认 release）。
-    expect(rows.map((row) => row.sourceEventId)).toEqual(['nowcast-1', 'gdp-1'])
-    expect(rows.find((row) => row.sourceEventId === 'nowcast-1')?.rowKind).toBe('estimate')
-    expect(rows.find((row) => row.sourceEventId === 'gdp-1')?.rowKind).toBeUndefined()
+    // 指标行的身份是**四段**（方案 §2.4）：`国家|指标码|期|首次排期日`，不再是源内 releaseId。
+    const decoded = rows.map((row) => decodeCalendarSourceEventId(row.sourceEventId))
+    expect(decoded.map((item) => item?.periodKey)).toEqual(['2026-Q4', '2026-Q3'])
+    expect(rows.find((row) => decodeCalendarSourceEventId(row.sourceEventId)?.periodKey === '2026-Q4')?.rowKind)
+      .toBe('estimate')
+    expect(rows.find((row) => decodeCalendarSourceEventId(row.sourceEventId)?.periodKey === '2026-Q3')?.rowKind)
+      .toBeUndefined()
   })
 })
 

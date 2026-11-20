@@ -467,7 +467,7 @@ export function narwhalEventSourceEventId(countryCode: string, eventKind: string
   return JSON.stringify([encodeIdentityToken(`${countryCode}|${eventKind}|${at}`), 1])
 }
 
-function encodeIdentityToken(plain: string): string {
+export function encodeIdentityToken(plain: string): string {
   return Buffer.from(plain, 'utf8').toString('base64url')
 }
 
