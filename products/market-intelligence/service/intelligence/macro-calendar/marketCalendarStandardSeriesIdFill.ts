@@ -32,17 +32,34 @@ export function fillStandardSeriesIds(database: DatabaseSync): SeriesIdFillRepor
   if (database.prepare("select 1 from sqlite_master where type = 'table' and name = ?").get(observations) === undefined) {
     return { pending: 0, filled: 0 }
   }
-  const pending = Number((database.prepare(`select count(*) as n from ${table}
-    where metric_key like '[%' and (series_id is null or trim(series_id) = '')`).get() as { n: number }).n)
-  if (pending === 0) return { pending: 0, filled: 0 }
-  const filled = Number(database.prepare(`update ${table} set series_id = (
-      select o.indicator_id from ${observations} o
-      where o.source_event_id = ${table}.source_event_id
-        and o.indicator_id is not null and trim(o.indicator_id) <> ''
-      order by o.last_seen_at desc limit 1)
-    where metric_key like '[%' and (series_id is null or trim(series_id) = '')
-      and exists (select 1 from ${observations} o
-        where o.source_event_id = ${table}.source_event_id
-          and o.indicator_id is not null and trim(o.indicator_id) <> '')`).run().changes)
-  return { pending, filled }
+  const awaiting = database.prepare(`select rowid as rowId, source_event_id from ${table}
+    where metric_key like '[%' and (series_id is null or trim(series_id) = '')`).all() as unknown as
+    { rowId: number; source_event_id: string }[]
+  if (awaiting.length === 0) return { pending: 0, filled: 0 }
+  /**
+   * **在内存里建一次映射，再逐行 update**：相关子查询版本在真库副本上实测 3.2 秒（观测表
+   * `source_event_id` 没有索引），启动链吃不消；这里一次分组扫描 + 一个事务，行数一样。
+   */
+  const byId = new Map<string, string>()
+  for (const row of database.prepare(`select source_event_id, indicator_id, max(last_seen_at) as seen
+    from ${observations}
+    where indicator_id is not null and trim(indicator_id) <> ''
+    group by source_event_id order by seen asc`).all() as unknown as
+  { source_event_id: string; indicator_id: string }[]) byId.set(row.source_event_id, row.indicator_id)
+  if (byId.size === 0) return { pending: awaiting.length, filled: 0 }
+  const update = database.prepare(`update ${table} set series_id = ? where rowid = ?`)
+  let filled = 0
+  database.exec('begin')
+  try {
+    for (const row of awaiting) {
+      const indicatorId = byId.get(row.source_event_id)
+      if (indicatorId === undefined) continue
+      filled += Number(update.run(indicatorId, row.rowId).changes)
+    }
+    database.exec('commit')
+  } catch (error) {
+    database.exec('rollback')
+    throw error
+  }
+  return { pending: awaiting.length, filled }
 }
