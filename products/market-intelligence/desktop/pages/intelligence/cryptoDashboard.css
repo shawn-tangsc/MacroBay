@@ -55,8 +55,6 @@
   --mi-dashboard-chart-gold: #f2e3a0;
   --mi-dashboard-band-zone-inline: 20px;
   --mi-dashboard-gauge-block-padding: 8px 0 0;
-  --mi-dashboard-positioning-sentiment-allocation: 1fr;
-  --mi-dashboard-positioning-funding-allocation: 4fr;
   --mi-dashboard-capital-summary-allocation: 10fr;
   --mi-dashboard-market-flow-allocation: 15fr;
   --mi-dashboard-source-row-gap: 8px;
@@ -138,7 +136,7 @@
 
 .mi-crypto-dashboard__capital-positioning-row {
   display: grid;
-  grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation));
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 
 /* 恐惧与防跌溢价：整行一条带。宽度跟着看板容器走（1080 视口下是 1040），两半各自 minmax(0,1fr)，
@@ -161,6 +159,8 @@
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 .mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; /* 卡宽跟卡片内容区：不由内容宽决定（空态不许缩水）。 */ width: 100%; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
+/* 仪表自带的那圈带内缩进是给旧并排带用的；进了卡的半格，缩进由卡的 gap 管。 */
+.mi-defensive-premium__half .mi-crypto-dashboard__sentiment { padding-left: 0; padding-right: 0; }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
 .mi-capital-conditions__summary > p { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions__header-band { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap); }
@@ -414,15 +414,9 @@
  */
 @container (max-width: 899px) {
   .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
-  .mi-crypto-dashboard__capital-positioning-row,
   .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .mi-crypto-dashboard__sentiment,
-  .mi-crypto-dashboard__capital-positioning-row > .mi-capital-conditions {
-    padding: 16px 0 0;
-    border-top: 1px solid var(--mi-dashboard-line);
-    border-left: 0;
-    border-right: 0;
-  }
+  /* 整行卡的两半在窄处上下排；两半各自 minmax(0,1fr)，图表不会因为剩 40px 被压成负宽。 */
+  .mi-defensive-premium__halves { grid-template-columns: minmax(0, 1fr); }
   .mi-capital-conditions__etf-flow { margin-right: 0; }
   .mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }
   .mi-crypto-dashboard__source-region > header { grid-column: auto; }

@@ -24,11 +24,15 @@ afterEach(() => {
 /** 一格都不关时的基线：跨资产那一路问一次快照（BTC/ETH 要它）。 */
 function clients() {
   const crossAssetQuery = vi.fn(async () => ({ state: 'unavailable' as const, cause: 'query' as const }))
-  const fearGreedQuery = vi.fn(async () => ({ state: 'empty' as const, asOf }))
+  // 恐惧贪婪搬到「恐惧与防跌溢价」卡之后，看板只从这一条复合查询读两半。
+  const sentimentOptionsQuery = vi.fn(async (input: { asOf: string; timeZone: string }) => ({
+    asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+    fearGreed: { state: 'empty' as const }, optionSkew: { state: 'not-connected' as const }
+  }))
   const macroQuery = vi.fn(async (_input?: { dollarSourceId?: string }) => ({ state: 'unavailable' as const }))
   return {
     crossAssetQuery,
-    fearGreedQuery,
+    sentimentOptionsQuery,
     macroQuery,
     crossAssetClient: {
       acquire: vi.fn(async () => ({ state: 'active' as const, leaseId: 'lease-1' })),
@@ -37,7 +41,7 @@ function clients() {
       refresh: vi.fn(async () => undefined),
       query: crossAssetQuery
     },
-    fearGreedClient: { querySnapshot: fearGreedQuery },
+    sentimentOptionsClient: { query: sentimentOptionsQuery },
     macroMarketClient: { query: macroQuery }
   }
 }
@@ -54,7 +58,7 @@ async function render(cellEnabledIo: CellEnabledIo | undefined, extraProps: Reco
         timeZone: 'UTC',
         children: createElement(CryptoIntelligenceDashboard, {
           client: { queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }) },
-          fearGreedClient: built.fearGreedClient,
+          sentimentOptionsClient: built.sentimentOptionsClient,
           fundingRateClient: { query: async () => ({ state: 'empty' as const, asOf }) },
           openInterestClient: { query: async () => ({ state: 'empty' as const, asOf, window: '7d' as const }) },
           crossAssetClient: built.crossAssetClient as never,
@@ -121,9 +125,11 @@ describe('dashboard cells read only when the reader left them on', () => {
     expect(off.container.querySelector('[data-status-row="index"]')?.getAttribute('data-source-state')).toBe('disabled')
   })
 
-  it('does not read the fear-and-greed snapshot when its only cell is off', async () => {
+  it('keeps the card read when the fear-and-greed cell is off, and shows the disabled row', async () => {
     const off = await render({ read: async () => ({ [dashboardCellId('fear-greed', 'index')]: false }) })
-    expect(off.fearGreedQuery).not.toHaveBeenCalled()
+    // 这一条查询同时喂两半：关掉恐惧贪婪那一格不等于关掉偏斜那半，所以请求照发；
+    // 被关掉的是左半的读数，由下面那行「没启用」说出来，不是不发请求。
+    expect(off.sentimentOptionsQuery).toHaveBeenCalled()
     // 卡仍在（用户 2026-11-11：不能因为没启用就不渲染），读数区被遮罩盖住。
     const card = off.container.querySelector('.mi-crypto-dashboard__sentiment')
     expect(card).not.toBeNull()
@@ -149,9 +155,9 @@ describe('dashboard cells read only when the reader left them on', () => {
   })
 
   it('reads everything when the enable map cannot be read (缺省 = 启用)', async () => {
-    const { crossAssetQuery, fearGreedQuery, container } = await render({ read: async () => { throw new Error('unreadable') } })
+    const { crossAssetQuery, sentimentOptionsQuery, container } = await render({ read: async () => { throw new Error('unreadable') } })
     expect(crossAssetQuery).toHaveBeenCalled()
-    expect(fearGreedQuery).toHaveBeenCalled()
+    expect(sentimentOptionsQuery).toHaveBeenCalled()
     expect(container.querySelector('[data-status-row="index"]')).not.toBeNull()
   })
 })

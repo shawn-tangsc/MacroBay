@@ -71,7 +71,6 @@ const never = async () => ({ state: 'unavailable' })
 const dashboardProps = {
   text: portal.dashboard,
     client: calendar,
-  fearGreedClient: { querySnapshot: never } as never,
   fundingRateClient: { query: never } as never,
   now: () => new Date(asOf),
   onConfigureSources: () => undefined,

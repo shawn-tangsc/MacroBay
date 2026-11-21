@@ -13,6 +13,7 @@ import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/ec
 import { AgentPortal } from './AgentPortal'
 import { CryptoIntelligenceDashboard as RawCryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { dashboardFeedStatusPublicPolicy } from '../../../contracts/macro/dashboardFeedStatusContracts'
+import type { FearGreedSnapshotResult, SentimentOptionsCardResult } from '../../../contracts/intelligenceQueryContracts'
 
 /** 测试里默认「所有源都已启用」：源状态是新的读取前提，不传就等于「读不到」，会把整套断言打乱。 */
 const allSourcesEnabled = {
@@ -104,15 +105,15 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     const gaugeRoot = createRoot(container)
     await act(async () => gaugeRoot.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient({
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient({
         state: 'available', asOf, score, bucket, observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
       onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard
     })))
     await flush()
     return {
-      // 新卡里也复用了同一副仪表；这里要的是资金面带里那一格。
-      gauge: container.querySelector<HTMLElement>('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')!,
+      // 仪表现在只此一副，住在「恐惧与防跌溢价」卡的左半。
+      gauge: container.querySelector<HTMLElement>('.mi-crypto-dashboard__sentiment [data-sentiment-gauge]')!,
       dispose: async () => {
         await act(async () => gaugeRoot.unmount())
         container.remove()
@@ -148,13 +149,16 @@ describe('crypto intelligence dashboard', () => {
         onConfigureSources: () => undefined,
         onManageSource: () => undefined,
                 client: dashboardClient(),
-        fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+        sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
         now: () => new Date(asOf),
         text: text.dashboard,
       })
     )
 
-    expect(markup).toContain(text.dashboard.sentiment.title)
+    // 情绪不再单独一格：卡名与它左半的行名都在，旧的「市场情绪」那一格已经不在页面上。
+    expect(markup).toContain(text.dashboard.defensivePremium.title)
+    expect(markup).toContain(text.dashboard.defensivePremium.fearGreed.name)
+    expect(markup).not.toContain(text.dashboard.sentiment.title)
     // Three panel-owned rows, plus the 异常优先 feed strip: one ✓ summary line and one line per feed
     // that needs a look (the fixtures leave every feed without a readable reading).
     const sourceRows = [...markup.matchAll(/mi-crypto-dashboard__source-row/g)].length
@@ -173,7 +177,7 @@ describe('crypto intelligence dashboard', () => {
         onConfigureSources: () => undefined,
         onManageSource: () => undefined,
         client: dashboardClient(),
-        fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+        sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
         now: () => new Date(asOf),
         text: text.dashboard,
       })
@@ -209,7 +213,7 @@ describe('crypto intelligence dashboard', () => {
     const pendingRead = () => new Promise<Record<string, boolean>>(() => undefined)
     const pendingSelection = () => new Promise<Record<string, string>>(() => undefined)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
       cellEnabledIo: { read: pendingRead, readSelection: pendingSelection },
       dashboardFeedStatusClient: allSourcesEnabled,
@@ -236,14 +240,14 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(result), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(result), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
       onConfigureSources: () => undefined, onManageSource: () => undefined,
       text: productText['zh-CN'].pages.intelligence.portal.dashboard
     })))
     await flush()
 
-    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
     const row = card.querySelector('[data-sentiment-state]')!
     // 状态句在图下方那一行上（`data-sentiment-state`），不在图里；两态互斥，各说各的。
     expect(row.getAttribute('data-sentiment-state')).toBe(expected)
@@ -260,7 +264,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient({
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient({
         state: 'available', asOf, score: 22, bucket: 'extreme-fear', observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient({
         state: 'available', asOf,
@@ -271,10 +275,10 @@ describe('crypto intelligence dashboard', () => {
     })))
     await flush()
 
-    // Sentiment sits with the money rows: the reading order is 资金 → 风险偏好 → 杠杆.
-    const row = container.querySelector('.mi-crypto-dashboard__capital-positioning-row')!
-    const gauge = row.querySelector('[data-sentiment-gauge]')!
-    expect(row.querySelector('.mi-capital-conditions')).not.toBeNull()
+    // 情绪住在上面那张整行卡的左半；资金面自己一条带，两处都不再并排。
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const gauge = band.querySelector('[data-sentiment-gauge]')!
+    expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
     const rows = container.querySelectorAll('.mi-crypto-dashboard__positioning-row [data-funding-latest]')
     const dial = gauge.querySelector('svg')!
@@ -296,13 +300,14 @@ describe('crypto intelligence dashboard', () => {
     expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
     expect(gauge.textContent).toContain('22')
     expect(gauge.textContent).toContain(text.dashboard.fearGreed.buckets['extreme-fear'])
-    expect(gauge.textContent).toContain(text.dashboard.fearGreed.observedAt)
+    // 卡里的行名是「截至」（数据源日），不再用旧那一格的「观测时间」。
+    expect(gauge.textContent).toContain(text.dashboard.defensivePremium.fearGreed.asOf)
     expect(rows).toHaveLength(2)
     expect(rows[0]?.textContent).toContain('+0.0123%')
     expect(rows[0]?.textContent).toContain(text.dashboard.positioning.paymentDirections['long-pays-short'])
     expect(rows[1]?.textContent).toContain('-0.0031%')
     expect(rows[1]?.textContent).toContain(text.dashboard.positioning.paymentDirections['short-pays-long'])
-    expect(row.textContent).not.toMatch(/58|conclusion|classification|https?:|sourceUrl|evidence|profile|health|credential|error/i)
+    expect(band.textContent).not.toMatch(/58|conclusion|classification|https?:|sourceUrl|evidence|profile|health|credential|error/i)
   })
 
   it('points the needle left, straight up and right at the score extremes', async () => {
@@ -356,7 +361,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(),
       openInterestClient: openInterestClient(),
       fundingRateClient: { querySnapshot: () => Promise.resolve({ state: 'empty' }) }, now: () => new Date(asOf),
       onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard
@@ -378,7 +383,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
       openInterestClient: openInterestClient(),
       onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard
     })))
@@ -411,7 +416,7 @@ describe('crypto intelligence dashboard', () => {
     }
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
       onConfigureSources: () => undefined, onManageSource: () => undefined, text: text.dashboard, cellEnabledIo
     })))
     await flush()
@@ -497,7 +502,7 @@ describe('crypto intelligence dashboard', () => {
     expect(ladder).toContain('--mi-dashboard-page-inline: 20px; --mi-dashboard-page-block: 20px;')
   })
 
-  it('uses one capital data band and a second sentiment/funding row without unequal panel borders', () => {
+  it('gives each band one owner: single-column money band, card band, positioning band', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const rowRule = cssBlock(styles, '.mi-crypto-dashboard__capital-positioning-row {')
     const capitalRule = cssBlock(styles, '.mi-capital-conditions {')
@@ -509,11 +514,12 @@ describe('crypto intelligence dashboard', () => {
     expect(dashboardRootRule).not.toContain('container-type')
     expect(rowRule).toContain('border-top: 1px solid var(--mi-dashboard-line)')
     expect(rowRule).toContain('border-bottom: 1px solid var(--mi-dashboard-line)')
-    // 资金面带现在是「情绪 | 资金面」两列；资金面内部的 content-row 仍是它自己的两列。
-    expect(rowRule).toContain('grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation))')
-    expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__capital-positioning-row,')
+    // 资金面带只剩资金面自己，一列到底；旧的「情绪 | 资金面」1fr:4fr 与两个分配 token 一起删掉，
+    // 断言反过来钉死：谁把它们加回来，这条就红。
+    expect(rowRule).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(styles).not.toContain('--mi-dashboard-positioning-sentiment-allocation')
+    expect(styles).not.toContain('--mi-dashboard-positioning-funding-allocation')
+    expect(stackStyles).not.toContain('.mi-crypto-dashboard__capital-positioning-row')
     expect(capitalRule).not.toContain('border-radius')
     expect(capitalRule).not.toContain('border-top')
     expect(capitalRule).not.toContain('border-bottom')
@@ -532,8 +538,8 @@ describe('crypto intelligence dashboard', () => {
 
     expect(sentimentRule).toContain('container-type: inline-size')
     expect(sentimentRule).toContain('container-name: mi-sentiment-positioning')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__sentiment,')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__capital-positioning-row > .mi-capital-conditions')
+    expect(stackStyles).toContain('.mi-defensive-premium__halves { grid-template-columns: minmax(0, 1fr); }')
+    expect(stackStyles).not.toContain('.mi-crypto-dashboard__capital-positioning-row > .mi-capital-conditions')
   })
 
   it('uses named compact rhythm inside the real data bands', () => {
@@ -606,8 +612,8 @@ describe('crypto intelligence dashboard', () => {
 
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 10fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 15fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
+    // 整行卡自己两半等分：这是页面上唯一还需要「并排」的地方，窄处由容器查询改成上下排。
+    expect(cssBlock(styles, '.mi-defensive-premium__halves {')).toContain('repeat(2, minmax(0, 1fr))')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
     expect(sourceRowRule).toContain('display: flex')
     expect(sourceRowRule).not.toContain('grid-template-columns')
@@ -641,7 +647,7 @@ describe('crypto intelligence dashboard', () => {
     expect(positioningRule).toContain('grid-template-columns: minmax(0, 1fr)')
     // 并排不再挂在"内容宽 ≥ 1176px"的闸门上：那道闸门在 16 寸全屏上差 4px 就整块塌掉。
     expect(styles).not.toContain('@container (min-width: 1176px)')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__capital-positioning-row,')
+    expect(stackStyles).not.toContain('.mi-crypto-dashboard__capital-positioning-row')
     expect(stackStyles).toContain('.mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }')
     expect(stackStyles).toContain('.mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }')
   })
@@ -684,19 +690,22 @@ describe('crypto intelligence dashboard', () => {
     expect(contentWidth(compactAt + 1, 'split'), '切换点以上（双栏）').toBeGreaterThanOrEqual(stackBelow)
   })
 
-  it('renders sentiment with capital in the first band and the perpetual card in the second', async () => {
+  it('gives the money band to the capital panel alone and keeps the perpetual card in the next band', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       capitalConditionsClient: capitalConditionsClient(), now: () => new Date(asOf), onConfigureSources: () => undefined,
       onManageSource: () => undefined, text: productText['en-US'].pages.intelligence.portal.dashboard
     } as never)))
     await flush()
     const row = container.querySelector<HTMLElement>('.mi-crypto-dashboard__capital-positioning-row')!
     const capital = row.querySelector<HTMLElement>('.mi-capital-conditions')!
-    expect([...row.children].map((child) => child.className || child.tagName)).toEqual(['mi-crypto-dashboard__sentiment', 'mi-capital-conditions'])
+    // 资金面带只剩资金面自己：仪表已经搬进上面那张整行卡，左列没有了。
+    expect([...row.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions'])
+    const cardBand = container.querySelector<HTMLElement>('.mi-crypto-dashboard__defensive-premium-row')!
+    expect(cardBand.querySelector('.mi-crypto-dashboard__sentiment')).not.toBeNull()
     const positioning = container.querySelector<HTMLElement>('.mi-crypto-dashboard__positioning-row')!
         // The perpetual card keeps the second band to itself, with the divergence footnote under it.
     expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-positioning-panel', 'mi-divergence'])
@@ -764,7 +773,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
       onManageSource: () => undefined, text: text.dashboard,
       briefingEnabled: false
@@ -780,7 +789,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
     const onOpenBriefing = vi.fn()
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
       onManageSource: () => undefined, text: text.dashboard,
       onOpenBriefing
@@ -812,7 +821,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
       onManageSource: () => undefined, text: text.dashboard
     })))
@@ -845,7 +854,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onConfigureSources: () => undefined,
       onManageSource: () => undefined, text: text.dashboard
     })))
@@ -895,7 +904,7 @@ function repositorySourceFiles(root: string, directory = root): string[] {
  */
 type DashboardProps = Parameters<typeof CryptoIntelligenceDashboard>[0]
 type CalendarEvents = Extract<Awaited<ReturnType<DashboardProps['client']['queryMonth']>>, { state: 'available' }>['events']
-type FearGreedSnapshot = Awaited<ReturnType<DashboardProps['fearGreedClient']['querySnapshot']>>
+type FearGreedSnapshot = FearGreedSnapshotResult
 type OpenInterestResult = Awaited<ReturnType<DashboardProps['openInterestClient']['query']>>
 type CapitalConditionsSnapshot = Awaited<ReturnType<NonNullable<DashboardProps['capitalConditionsClient']>['querySnapshot']>>
 
@@ -907,8 +916,26 @@ function dashboardClientByMonth(eventsByMonth: Record<string, CalendarEvents>): 
   return { queryMonth: async ({ month }) => ({ state: 'available' as const, asOf, events: eventsByMonth[month] ?? [] }) }
 }
 
-function fearGreedClient(result: FearGreedSnapshot = { state: 'empty' as const, asOf }): DashboardProps['fearGreedClient'] {
-  return { querySnapshot: async () => result }
+/**
+ * 卡上线后恐惧贪婪只从复合查询读（看板上一次请求两半）：旧快照夹具按同一份结果转成卡的左半，
+ * 让原来那些「仪表显示什么」的用例继续对着同一份输入说话，只是走的门换了。
+ */
+function toCardFearGreed(result: FearGreedSnapshot): SentimentOptionsCardResult['fearGreed'] {
+  if (result.state === 'empty') return { state: 'empty' }
+  if (result.state === 'unavailable') return { state: 'unavailable', failureCode: 'fear-greed-query-unavailable' }
+  return {
+    state: 'available', score: result.score, bucket: result.bucket, observedAt: result.observedAt,
+    latestDay: result.observedAt.slice(0, 10), daysAgo: 1, stale: false, seriesStart: '2025-08-05', points: []
+  }
+}
+
+function sentimentOptionsClient(result: FearGreedSnapshot = { state: 'empty' as const, asOf }): NonNullable<DashboardProps['sentimentOptionsClient']> {
+  return {
+    query: async (input) => ({
+      asOf: input.asOf, windowDays: 30, timeZone: input.timeZone,
+      fearGreed: toCardFearGreed(result), optionSkew: { state: 'not-connected' }
+    })
+  }
 }
 
 function openInterestClient(result: OpenInterestResult = { state: 'empty' as const, asOf, window: '7d' as const }): DashboardProps['openInterestClient'] {
@@ -977,7 +1004,7 @@ describe('host wiring: cells switched off and sources judged', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: allEnabled }) },
       onConfigureSources: () => undefined, onManageSource: () => undefined,
@@ -1110,8 +1137,8 @@ describe('host wiring: cells switched off and sources judged', () => {
       ] }) }
     })
     // 新卡复用了同一个仪表组件，页面里会有两个同名节点；这条测的是资金面带里那一个。
-    await settle(container, '.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')
-    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
+    await settle(container, '.mi-defensive-premium .mi-crypto-dashboard__sentiment')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
     expect(card.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['alternative-fear-greed'])
     // 不许拿「加载中」冒充。
     expect(card.textContent).not.toContain(dashboardText.fearGreed.loading)
@@ -1245,11 +1272,11 @@ describe('host wiring: cells switched off and sources judged', () => {
   it('cell off: the sentiment card keeps its figure, drops the needle, and offers one enable action', async () => {
     const onManageSource = vi.fn()
     const container = await renderCells({ 'fear-greed:index': false }, {
-      fearGreedClient: fearGreedClient(readableSentiment as never), onManageSource
+      sentimentOptionsClient: sentimentOptionsClient(readableSentiment as never), onManageSource
     })
-    await settle(container, '.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment [data-sentiment-state]')
-    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
-    expect(card.querySelector('h2')?.textContent).toBe(dashboardText.sentiment.title)
+    await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    expect(card.querySelector('h2')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
     // 图还在（弧线、刻度、三个标签），指针与读数圆盘不在——它们指向一个不存在的分数。
     expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment').length).toBeGreaterThan(0)
     expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
@@ -1268,10 +1295,10 @@ describe('host wiring: cells switched off and sources judged', () => {
 
   it('read failure: one row under the figure says temporarily unreadable, with one retry', async () => {
     const container = await renderCells({}, {
-      fearGreedClient: fearGreedClient({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' } as never)
+      sentimentOptionsClient: sentimentOptionsClient({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' } as never)
     })
     await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
-    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
     const row = card.querySelector('[data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('unreadable')
     expect(row.textContent).toContain(dataText.temporarilyUnavailable)
@@ -1285,9 +1312,9 @@ describe('host wiring: cells switched off and sources judged', () => {
   })
 
   it('cell on and readable: the gauge with its needle, and no state row', async () => {
-    const container = await renderCells({}, { fearGreedClient: fearGreedClient(readableSentiment as never) })
-    await settle(container, '.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__gauge-segment')
-    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
+    const container = await renderCells({}, { sentimentOptionsClient: sentimentOptionsClient(readableSentiment as never) })
+    await settle(container, '.mi-crypto-dashboard__sentiment [data-gauge-segment]')
+    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
     // 有数据时没有那一行：状态句只在没读数时出现。
     expect(card.querySelector('[data-sentiment-state]')).toBeNull()
     expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment')).toHaveLength(5)
@@ -1300,7 +1327,7 @@ describe('the defensive premium band', () => {
   const dashboardText = productText['zh-CN'].pages.intelligence.portal.dashboard
 
   /** 偏斜还没接入时的复合查询结果：左半有读数、右半是「未接入」，结论走降级句。 */
-  const sentimentOptionsClient = {
+  const notConnectedSkew = {
     query: async (input: { asOf: string; timeZone: string }) => ({
       asOf: input.asOf,
       windowDays: 30 as const,
@@ -1319,9 +1346,9 @@ describe('the defensive premium band', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
-      sentimentOptionsClient,
+      sentimentOptionsClient: notConnectedSkew,
       crossAssetClient: {
         acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
         renew: async () => ({ state: 'active' as const }),
@@ -1353,6 +1380,9 @@ describe('the defensive premium band', () => {
     // 整行卡：卡本体在带里，左右两半是这张卡自己的两列。
     expect(band.querySelector('[data-testid="defensive-premium-card"]')).not.toBeNull()
     expect(band.querySelectorAll('.mi-defensive-premium__half')).toHaveLength(2)
+    // 页面上只此一副恐惧贪婪仪表：旧的并排格已经摘掉，不是两处各画一个。
+    expect(container.querySelectorAll('.mi-crypto-dashboard__sentiment')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-sentiment-gauge]')).toHaveLength(1)
     expect(band.querySelector('.mi-defensive-premium__header h2')?.textContent).toBe(dashboardText.defensivePremium.title)
 
     // 偏斜未接入：右半说「未接入」并给查看来源，不写成读不到。
@@ -1388,7 +1418,7 @@ describe('host wiring: capital cells, one row at a time', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(),
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
@@ -1517,7 +1547,7 @@ describe('host wiring: each capital cell focuses its own cell', () => {
       }
     }))
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(),
       capitalConditionsClient: { querySnapshot: query }, now: () => new Date(asOf),
       dashboardFeedStatusClient: { query: async () => ({ state: 'available' as const, sources: [
@@ -1553,7 +1583,7 @@ describe('the calendar entry opens the drawer, not a page', () => {
     document.body.append(container)
     const drawerRoot = createRoot(container)
     await act(async () => drawerRoot.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient({
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient({
         state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf),
@@ -1572,7 +1602,7 @@ describe('the calendar entry opens the drawer, not a page', () => {
 
     // 页面层点那颗图标 = 递一个新的请求（序号加一；`openCalendar` 就是这么接的）。
     await act(async () => drawerRoot.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient({
+      client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient({
         state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf),
@@ -1607,7 +1637,7 @@ it('hands the injected calendar block down to the drawer, not just to its own pr
   document.body.append(container)
   const root = createRoot(container)
   await act(async () => root.render(createElement(CryptoIntelligenceDashboard, {
-    client: dashboardClient(), fearGreedClient: fearGreedClient({
+    client: dashboardClient(), sentimentOptionsClient: sentimentOptionsClient({
       state: 'available', asOf, score: 40, bucket: 'fear', observedAt: '2026-08-04T10:00:00.000Z'
     }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
     now: () => new Date(asOf),
