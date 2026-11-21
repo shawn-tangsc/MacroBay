@@ -1544,6 +1544,39 @@ describe('the defensive premium band', () => {
     expect(actions.map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
   })
 
+  it.each([
+    ['connection-unavailable', { state: 'unavailable' as const, failureCode: 'option-skew-collect-unavailable' as const, cause: 'connection-unavailable' as const }, 'connection'],
+    ['upstream-http-error', { state: 'unavailable' as const, failureCode: 'option-skew-collect-unavailable' as const, cause: 'upstream-http-error' as const }, 'source'],
+    ['query-failed', { state: 'unavailable' as const, failureCode: 'option-skew-query-unavailable' as const }, 'read']
+  ] as const)('names why the skew half could not be read (%s)', async (_name, optionSkew, key) => {
+    const client = { query: async (input: { asOf: string; timeZone: string }) => ({
+      asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+      fearGreed: { state: 'available' as const, score: 22, bucket: 'fear' as const, observedAt: '2026-08-04T00:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1, stale: false, seriesStart: '2025-08-05', points: fgPoints(30) },
+      optionSkew
+    }) }
+    const container = await renderBand(client)
+    const skewHalf = container.querySelector('[data-half="skew"]')!
+    expect(skewHalf.textContent).toContain(dashboardText.defensivePremium.skew.unavailable[key])
+    // 三句不许抄成一句：这一句不是另外两句。
+    for (const other of ['connection', 'source', 'read'] as const) {
+      if (other !== key) expect(skewHalf.textContent).not.toContain(dashboardText.defensivePremium.skew.unavailable[other])
+    }
+  })
+
+  it('marks a stale reading with a pill and the day it stops at', async () => {
+    const client = { query: async (input: { asOf: string; timeZone: string }) => ({
+      asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+      fearGreed: { state: 'available' as const, score: 22, bucket: 'fear' as const, observedAt: '2026-08-01T00:00:00.000Z', latestDay: '2026-08-01', daysAgo: 4, stale: true, seriesStart: '2025-08-05', points: fgPoints(30) },
+      optionSkew: { state: 'not-connected' as const }
+    }) }
+    const container = await renderBand(client)
+    const stale = container.querySelector('[data-stale="fear-greed"]')!
+    expect(stale.textContent).toContain(dashboardText.defensivePremium.stale.pill)
+    expect(stale.textContent).toContain('2026-08-01')
+    // 旧了只标「偏旧」，不自己变新：截至仍是源日那一天。
+    expect(container.querySelector('[data-half="fear-greed"]')?.textContent).toContain('2026-08-01')
+  })
+
   it('keeps both half frames while loading, so the card does not collapse', async () => {
     const container = await renderBand({ query: () => new Promise(() => undefined) })
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!

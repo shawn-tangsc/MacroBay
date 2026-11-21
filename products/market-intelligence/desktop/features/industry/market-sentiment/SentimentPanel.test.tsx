@@ -90,16 +90,17 @@ describe('the three non-data states keep the figure and put the sentence under i
     expect(markup(available)).toContain('mi-crypto-dashboard__gauge-readout')
   })
 
-  it('names the state in one row under the figure, with exactly the actions that exist', () => {
+  it('names the state in one row under the figure, with no action inside it', () => {
+    // 动作统一在卡标题行（AC-31）：这一行只说状态，按钮一颗都不放。
     const disabled = markup({ state: 'loading' }, openSources)
     expect(disabled).toContain('data-sentiment-state="disabled"')
     expect(disabled).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
-    expect(disabled).toContain(dataText.enableSources)
+    expect(disabled).not.toContain(dataText.enableSources)
 
     const unreadable = markup({ state: 'unavailable' })
     expect(unreadable).toContain('data-sentiment-state="unreadable"')
     expect(unreadable).toContain(dataText.temporarilyUnavailable)
-    expect(unreadable).toContain(dataText.retry)
+    expect(unreadable).not.toContain(dataText.retry)
 
     const empty = markup({ state: 'empty' })
     expect(empty).toContain('data-sentiment-state="empty"')
@@ -115,9 +116,9 @@ describe('the three non-data states keep the figure and put the sentence under i
     expect(markup(available)).not.toContain('data-sentiment-state=')
   })
 
-  it('offers one action at most: enable, retry, and nothing to press when there is simply no reading yet', () => {
-    expect((markup({ state: 'loading' }, openSources).match(/<button\b/g) ?? [])).toHaveLength(1)
-    expect((markup({ state: 'unavailable' }).match(/<button\b/g) ?? [])).toHaveLength(1)
+  it('renders no button at all: enable and retry live in the card header', () => {
+    expect((markup({ state: 'loading' }, openSources).match(/<button\b/g) ?? [])).toHaveLength(0)
+    expect((markup({ state: 'unavailable' }).match(/<button\b/g) ?? [])).toHaveLength(0)
     expect((markup({ state: 'empty' }).match(/<button\b/g) ?? [])).toHaveLength(0)
     // 旧的两套壳都作废：读不到不再整块画 `StateView`，也不再自绘遮罩。
     for (const shown of [markup({ state: 'loading' }, openSources), markup({ state: 'unavailable' }), markup({ state: 'empty' })]) {
@@ -142,13 +143,13 @@ describe('the three non-data states keep the figure and put the sentence under i
     }
   })
 
-  it('routes the row action to its own handler', async () => {
+  it('does not call the retry/enable handlers on its own', async () => {
     const open = vi.fn()
     const retry = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
-    const render = async (state: DashboardFearGreedState, cellOff?: typeof openSources): Promise<HTMLButtonElement> => {
+    const render = async (state: DashboardFearGreedState, cellOff?: typeof openSources): Promise<HTMLButtonElement | null> => {
       await act(async () => root?.render(createElement(ShellLanguageProvider, {
         language: 'zh-CN',
         children: createElement(ShellTimeZoneProvider, {
@@ -159,15 +160,14 @@ describe('the three non-data states keep the figure and put the sentence under i
           })
         })
       })))
-      return container.querySelector<HTMLButtonElement>('[data-sentiment-state] button')!
+      return container.querySelector<HTMLButtonElement>('[data-sentiment-state] button')
     }
-    const enable = await render({ state: 'loading' }, openSources)
-    await act(async () => enable.click())
-    expect(open).toHaveBeenCalledTimes(1)
+    // 行内没有按钮可点：渲染本身不该触发任何动作（点的是标题行那颗，归卡面用例管）。
+    const row = await render({ state: 'loading' }, openSources)
+    expect(row).toBeNull()
+    await render({ state: 'unavailable' })
+    expect(open).not.toHaveBeenCalled()
     expect(retry).not.toHaveBeenCalled()
-    const again = await render({ state: 'unavailable' })
-    await act(async () => again.click())
-    expect(retry).toHaveBeenCalledTimes(1)
   })
 })
 

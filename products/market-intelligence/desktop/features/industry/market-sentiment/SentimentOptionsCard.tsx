@@ -6,7 +6,8 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
-import type { OptionSkewDirection, SentimentOptionsCardResult } from '../../../../contracts/intelligenceQueryContracts'
+import { StatusPill } from '@platform/ui/components/status-pill'
+import type { OptionSkewCardSection, OptionSkewDirection, SentimentOptionsCardResult } from '../../../../contracts/intelligenceQueryContracts'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardSentimentOptionsState } from '../../../pages/intelligence/useDashboardSentimentOptionsCard'
 import type { DashboardFearGreedState } from '../../../pages/intelligence/dashboardFearGreedModel'
@@ -100,6 +101,12 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           onRetry={onRefresh}
           {...(cellOff === undefined ? {} : { cellOff })}
           {...(fearGreed?.state === 'available' ? { observedDay: fearGreed.latestDay } : {})} />
+        {fearGreed?.state === 'available' && fearGreed.stale
+          ? <p className="mi-defensive-premium__stale" data-stale="fear-greed">
+            <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+            <span>{fillLabelParams(text.stale.stopsAt, { date: fearGreed.latestDay })}</span>
+          </p>
+          : null}
         {state.state === 'loading' ? <ChartPlaceholder /> : null}
         {fearGreed?.state === 'available' && fearGreed.points.length > 0
           ? <FearGreedChart points={fearGreed.points} axisLabel={text.fearGreed.axis}
@@ -135,6 +142,12 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             : skew?.state === 'available' ? <>
             <p className="mi-defensive-premium__score"><strong>{skew.latest.riskReversal.toFixed(1)}</strong> <span>{text.skew.unit}</span></p>
             <p className="mi-defensive-premium__asof">{text.skew.asOf} {skew.latestDay}</p>
+            {skew.stale
+              ? <p className="mi-defensive-premium__stale" data-stale="skew">
+                <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+                <span>{fillLabelParams(text.stale.stopsAt, { date: skew.latestDay })}</span>
+              </p>
+              : null}
             {skew.points.length > 0
               ? <SkewChart points={skew.points} axisLabel={text.skew.name} unit={text.skew.unit}
                 ariaLabel={chartAria({
@@ -156,7 +169,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                 {text.skew.direction[skew.direction.kind]} · {text.skew.direction.window}
               </p>}
           </> : skew?.state === 'empty' ? <p className="mi-defensive-premium__state">{text.empty}</p>
-            : <p className="mi-defensive-premium__state">{dataText('pages.intelligence.portal.data.temporarilyUnavailable')}</p>}
+            : skew === undefined ? null : <p className="mi-defensive-premium__state">{skewUnavailableText(skew, text)}</p>}
       </div>
     </div>}
 
@@ -179,6 +192,13 @@ function chartAria(input: {
   return `${input.ariaLabel} ${fillLabelParams(input.summary, {
     from: oldest, to: newest, count: String(input.days.length), first: input.first, last: input.last
   })}`
+}
+
+/** 读不到要分原因：连不上、来源不可用、这次没读出来，三句不许抄成一句（AC-11）。 */
+function skewUnavailableText(section: Extract<OptionSkewCardSection, { state: 'unavailable' }>, text: DefensivePremiumCardText): string {
+  if ('cause' in section && section.cause === 'connection-unavailable') return text.skew.unavailable.connection
+  if ('cause' in section && section.cause === 'upstream-http-error') return text.skew.unavailable.source
+  return text.skew.unavailable.read
 }
 
 /** 方向未知时说明是哪种未知：不够几天 / 停在哪天 / 中间断档。三句各有自己的键，不共用一个泛句。 */

@@ -29,8 +29,10 @@ export type DefensivePremiumCardText = {
     unit: string
     direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
     history: { remaining: string }
+    unavailable: { connection: string; source: string; read: string }
   }
   chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
+  stale: { pill: string; stopsAt: string }
   action: { refresh: string; enable: string; viewSource: string }
   loading: string
   empty: string
@@ -57,8 +59,10 @@ type Source = {
       unit: string
       info: { definition: string; relative: string; since: string }
       direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
+      unavailable: { connection: string; source: string; read: string }
     }
     history: { remaining: string }
+    stale: { pill: string; stopsAt: string }
     chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
     action: { refresh: string; enable: string; viewSource: string }
   }
@@ -84,6 +88,7 @@ export function defensivePremiumCardText(text: Source): DefensivePremiumCardText
     gaugeMarkers: text.sentiment.gaugeMarkers,
     skew: { ...text.defensivePremium.skew, history: text.defensivePremium.history },
     chart: text.defensivePremium.chart,
+    stale: text.defensivePremium.stale,
     action: text.defensivePremium.action,
     loading: text.fearGreed.loading,
     empty: text.fearGreed.empty
