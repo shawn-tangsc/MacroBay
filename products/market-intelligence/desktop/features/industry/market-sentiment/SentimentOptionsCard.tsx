@@ -4,26 +4,14 @@ import { Info, RefreshCw } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
-import type { FearGreedSnapshotBucket, SentimentOptionsCardResult } from '../../../../contracts/intelligenceQueryContracts'
+import type { SentimentOptionsCardResult } from '../../../../contracts/intelligenceQueryContracts'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { DashboardSentimentOptionsState } from '../../../pages/intelligence/useDashboardSentimentOptionsCard'
 import type { DashboardFearGreedState } from '../../../pages/intelligence/dashboardFearGreedModel'
 import { SentimentPanel } from './SentimentPanel'
 import type { SourceCellOff } from '../shared/sourceCellOff'
+import type { DefensivePremiumCardText } from './defensivePremiumCardText'
 import '../../../shared/styles/sourceAvailability.css'
-
-type Text = {
-  title: string
-  titleInfoLabel: string
-  observedAt: string
-  provenance: string
-  fearGreed: { name: string; axis: string; asOf: string; buckets: Record<FearGreedSnapshotBucket, string> }
-  gaugeMarkers: { fear: string; neutral: string; greed: string }
-  skew: { name: string; notConnected: string }
-  action: { refresh: string; enable: string; viewSource: string }
-  loading: string
-  empty: string
-}
 
 const TEXT_PREFIX = 'pages.intelligence.portal.dashboard.defensivePremium'
 
@@ -35,7 +23,7 @@ const TEXT_PREFIX = 'pages.intelligence.portal.dashboard.defensivePremium'
  */
 export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cellOff }: Readonly<{
   state: DashboardSentimentOptionsState
-  text: Text
+  text: DefensivePremiumCardText
   onRefresh: () => void
   onViewSource: () => void
   cellOff?: SourceCellOff

@@ -111,7 +111,8 @@ describe('crypto intelligence dashboard', () => {
     })))
     await flush()
     return {
-      gauge: container.querySelector<HTMLElement>('[data-sentiment-gauge]')!,
+      // 新卡里也复用了同一副仪表；这里要的是资金面带里那一格。
+      gauge: container.querySelector<HTMLElement>('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')!,
       dispose: async () => {
         await act(async () => gaugeRoot.unmount())
         container.remove()
@@ -219,7 +220,9 @@ describe('crypto intelligence dashboard', () => {
 
     expect(container.querySelector('[data-loading-state]')).not.toBeNull()
     expect(container.querySelector('[data-source-state]')).toBeNull()
-    expect(container.querySelector('[data-state="disabled"], [data-state="error"]')).toBeNull()
+    // 卡片自己的刷新在图还没回来时是「禁用」，那是动作的可用性，不是面板的终态；
+    // 这里禁的是终态那一类，所以把动作按钮排除在外。
+    expect(container.querySelector('[data-state="disabled"]:not(.icon-button), [data-state="error"]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row')).not.toBeNull()
   })
 
@@ -240,7 +243,7 @@ describe('crypto intelligence dashboard', () => {
     })))
     await flush()
 
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
     const row = card.querySelector('[data-sentiment-state]')!
     // 状态句在图下方那一行上（`data-sentiment-state`），不在图里；两态互斥，各说各的。
     expect(row.getAttribute('data-sentiment-state')).toBe(expected)
@@ -449,7 +452,7 @@ describe('crypto intelligence dashboard', () => {
     const sources = [page, portal, dashboard].join('\n')
     // The injected read-only clients are the only IPC these files may name; every other line
     // still has to stay free of transport, service and network paths.
-    const injectedClientImports = ['../../shared/ipc/cellEnabledClient', '../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
+    const injectedClientImports = ['../../shared/ipc/cellEnabledClient', '../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/intelligenceSentimentOptionsCardClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
     const withoutInjectedClients = sources.split('\n')
       .filter(line => !injectedClientImports.some(client => line.includes(client))).join('\n')
 
@@ -1106,8 +1109,9 @@ describe('host wiring: cells switched off and sources judged', () => {
         { sourceId: 'defillama-stablecoins' as const, enabled: true, hasCredential: true }
       ] }) }
     })
-    await settle(container, '.mi-crypto-dashboard__sentiment')
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    // 新卡复用了同一个仪表组件，页面里会有两个同名节点；这条测的是资金面带里那一个。
+    await settle(container, '.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')
+    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
     expect(card.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['alternative-fear-greed'])
     // 不许拿「加载中」冒充。
     expect(card.textContent).not.toContain(dashboardText.fearGreed.loading)
@@ -1243,8 +1247,8 @@ describe('host wiring: cells switched off and sources judged', () => {
     const container = await renderCells({ 'fear-greed:index': false }, {
       fearGreedClient: fearGreedClient(readableSentiment as never), onManageSource
     })
-    await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    await settle(container, '.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment [data-sentiment-state]')
+    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
     expect(card.querySelector('h2')?.textContent).toBe(dashboardText.sentiment.title)
     // 图还在（弧线、刻度、三个标签），指针与读数圆盘不在——它们指向一个不存在的分数。
     expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment').length).toBeGreaterThan(0)
@@ -1267,7 +1271,7 @@ describe('host wiring: cells switched off and sources judged', () => {
       fearGreedClient: fearGreedClient({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' } as never)
     })
     await settle(container, '.mi-crypto-dashboard__sentiment [data-sentiment-state]')
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
     const row = card.querySelector('[data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('unreadable')
     expect(row.textContent).toContain(dataText.temporarilyUnavailable)
@@ -1282,13 +1286,88 @@ describe('host wiring: cells switched off and sources judged', () => {
 
   it('cell on and readable: the gauge with its needle, and no state row', async () => {
     const container = await renderCells({}, { fearGreedClient: fearGreedClient(readableSentiment as never) })
-    await settle(container, '.mi-crypto-dashboard__gauge-segment')
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    await settle(container, '.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__gauge-segment')
+    const card = container.querySelector('.mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__sentiment')!
     // 有数据时没有那一行：状态句只在没读数时出现。
     expect(card.querySelector('[data-sentiment-state]')).toBeNull()
     expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment')).toHaveLength(5)
     expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).not.toBeNull()
     expect(card.textContent).toContain('22')
+  })
+})
+
+describe('the defensive premium band', () => {
+  const dashboardText = productText['zh-CN'].pages.intelligence.portal.dashboard
+
+  /** 偏斜还没接入时的复合查询结果：左半有读数、右半是「未接入」，结论走降级句。 */
+  const sentimentOptionsClient = {
+    query: async (input: { asOf: string; timeZone: string }) => ({
+      asOf: input.asOf,
+      windowDays: 30 as const,
+      timeZone: input.timeZone,
+      fearGreed: {
+        state: 'available' as const, score: 22, bucket: 'extreme-fear' as const,
+        observedAt: '2026-08-04T10:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1,
+        stale: false, seriesStart: '2025-08-05', points: []
+      },
+      optionSkew: { state: 'not-connected' as const }
+    })
+  }
+
+  async function renderBand(): Promise<HTMLElement> {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      sentimentOptionsClient,
+      crossAssetClient: {
+        acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
+        renew: async () => ({ state: 'active' as const }),
+        release: async () => undefined,
+        refresh: vi.fn(async () => ({ state: 'accepted' as const })),
+        query: async () => ({ state: 'unavailable' as const, cause: 'query' as const })
+      },
+      onConfigureSources: () => undefined, onManageSource: () => undefined,
+      text: dashboardText
+    } as never)))
+    await flush()
+    return container
+  }
+
+  it('sits between the same-start return panel and the money band, as one full-width row', async () => {
+    const container = await renderBand()
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const crossAsset = container.querySelector('[data-cross-asset-workspace]')!
+    const capital = container.querySelector('.mi-crypto-dashboard__capital-positioning-row')!
+    const positioning = container.querySelector('.mi-crypto-dashboard__positioning-row')!
+
+    // 位置：同起点收益率之后、资金面之前，而且是三带的兄弟节点——不许塞进某一带里当第二列。
+    expect(band).not.toBeNull()
+    expect(crossAsset.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(band.compareDocumentPosition(capital) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(capital.compareDocumentPosition(positioning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(band.parentElement).toBe(capital.parentElement)
+
+    // 整行卡：卡本体在带里，左右两半是这张卡自己的两列。
+    expect(band.querySelector('[data-testid="defensive-premium-card"]')).not.toBeNull()
+    expect(band.querySelectorAll('.mi-defensive-premium__half')).toHaveLength(2)
+    expect(band.querySelector('.mi-defensive-premium__header h2')?.textContent).toBe(dashboardText.defensivePremium.title)
+
+    // 偏斜未接入：右半说「未接入」并给查看来源，不写成读不到。
+    const skew = band.querySelector('.mi-defensive-premium__half[data-half="skew"]')!
+    expect(skew.textContent).toContain(dashboardText.defensivePremium.skew.notConnected)
+    expect(skew.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.data.temporarilyUnavailable)
+    expect([...skew.querySelectorAll('button')].map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
+
+    // 结论在图下、跨全宽，按「恐惧档 + 偏斜缺失」查表，不在组件里拼句子。
+    const verdict = band.querySelector('[data-verdict]')!
+    expect(verdict.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
+
+    // 样式：带是整行一条，两半等分且可收缩（窄到哪里都不会把内容挤成负宽）。
+    expect(cssBlock(styles, '.mi-crypto-dashboard__defensive-premium-row {')).not.toContain('grid-template-columns')
+    expect(cssBlock(styles, '.mi-defensive-premium__halves {')).toContain('repeat(2, minmax(0, 1fr))')
   })
 })
 
