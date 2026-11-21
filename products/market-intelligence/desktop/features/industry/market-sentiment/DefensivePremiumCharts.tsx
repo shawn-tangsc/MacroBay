@@ -1,46 +1,107 @@
+import { useEffect, useRef } from 'react'
+import * as echarts from 'echarts/core'
+import { GaugeChart as GaugeSeries, LineChart } from 'echarts/charts'
+import { GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
+import { SVGRenderer } from 'echarts/renderers'
+
 import { LoadingState } from '@platform/ui/components/loading'
 
 import type { FearGreedSeriesPoint, OptionSkewSeriesPoint } from '../../../../contracts/intelligenceQueryContracts'
+import type { ChartFonts, ChartOption, ChartPalette } from './defensivePremiumChartOptions'
+import { fearGreedChartOption, gaugeChartOption, readChartFonts, readChartPalette, skewChartOption } from './defensivePremiumChartOptions'
 
 /**
- * 合并卡的两条走势图：各自一张 SVG、各自一根纵轴、各自一个单位。
+ * 注册集合**钉死在这里**：三张图只用到两个系列、三个组件与 SVG 渲染器，不整包引 ECharts。
+ * 用例按这个数组逐个比对（多注册一个、少注册一个、换成 `import *` 都会红）。
+ */
+export const CHART_MODULES = [LineChart, GaugeSeries, GridComponent, TooltipComponent, MarkLineComponent, SVGRenderer] as const
+
+echarts.use([...CHART_MODULES])
+
+/**
+ * 合并卡的三张图：ECharts（SVG renderer）。
  *
- * 为什么不是一张双轴图：两条线的量纲不同（指数 0–100 / 百分点），叠在一张图上读者会拿
- * 交叉点当关系；分开画，任何一条想说什么都只跟自己那条轴比。
+ * 为什么用 SVG renderer：这个 workspace 跑在 Electron 里、还要在 happy-dom 的用例里渲染，
+ * SVG renderer 两种环境都不需要 canvas。元素有布局时按真实宽度初始化，指针事件（十字光标、tooltip）
+ * 才有效；没有布局时（用例、离屏首帧）退回 ECharts 的 SSR 模式并给一个固定宽——那种模式不接指针
+ * 事件，只负责把图画出来。
  *
- * 横轴从最新一个源日往回数 30 天：只剩 1 个点就画在右端（不假装有一整条历史），29 天就把
- * 最左那格空着。日期就是源给的 `YYYY-MM-DD`，不印钟点、不换算时区。
- *
- * 高度按定稿 §4.5：曲线区 46 高（1080 下每格 452 宽），轴旁那句量程/单位说明画在同一个 SVG
- * 里、和刻度同一处，不另起一行——多一行就不是 46 了。
- *
- * **1 单位 = 1px**：viewBox 就按判据宽度 452 建，这样 452 宽时缩放是 1，轴与刻度的 `--font-meta`
- * 真的渲染成 11px（按 520 建再缩到 452 只剩约 9.6px，低于 ui-rules 那一档——不拿放大字号去凑）。
+ * 颜色从容器上读 `.mi-sample-surface` 继承下来的 CSS 变量（深浅主题各自有值），组件里不写死颜色。
  */
 
-const WIDTH = 452
-const HEIGHT = 46
-const PAD = { left: 34, right: 6, top: 14, bottom: 10 } as const
-const PLOT_WIDTH = WIDTH - PAD.left - PAD.right
-const PLOT_HEIGHT = HEIGHT - PAD.top - PAD.bottom
-const WINDOW_DAYS = 30
-const AXIS_LABEL_BASELINE = 9
+/** 曲线区高度（px）。与 CSS 里的 `--mi-defensive-premium-chart-height` 是同一个数，有用例对账。 */
+export const CHART_HEIGHT = 132
+
+/** 没有布局时（happy-dom 用例、离屏首帧）用来出图的宽度；有布局时永远用真实宽度。 */
+const FALLBACK_WIDTH = 416
+
+/** 图的主题：颜色与字号都从宿主的 CSS 变量读，读不到才用兜底值。 */
+function readChartTheme(element: Element): { palette: ChartPalette; fonts: ChartFonts } {
+  return { palette: readChartPalette(element), fonts: readChartFonts(element) }
+}
+
+type ChartFrameProps = Readonly<{
+  chart: 'fear-greed' | 'skew' | 'gauge'
+  height: number
+  /** 图的读屏名：一次说完「画的是什么、窗口多大、首末值」。 */
+  label: string
+  /** 装饰性的图（读数已经以文字出现在旁边）：不进可访问树。 */
+  decorative?: boolean
+  build: (theme: { palette: ChartPalette; fonts: ChartFonts }, size: { width: number; height: number }) => ChartOption
+}>
+
+function ChartFrame({ chart, height, label, decorative, build }: ChartFrameProps): React.ReactElement {
+  const host = useRef<HTMLDivElement | null>(null)
+  const instance = useRef<echarts.ECharts | null>(null)
+
+  useEffect(() => {
+    const element = host.current
+    if (!element) return undefined
+    const width = element.clientWidth || FALLBACK_WIDTH
+    // 不用 `ssr: true`：那种模式只产出 SVG 字符串、**不往元素里挂**，卡片会是一块空白，
+    // 而且不接指针事件（十字光标与 tooltip 就没了）。SVG renderer 在 happy-dom 里同样能跑，
+    // 所以这里始终用可挂载的模式，只把宽高显式给出来（无布局环境用兜底宽）。
+    const created = echarts.init(element, undefined, { renderer: 'svg', width, height })
+    instance.current = created
+    created.setOption(build(readChartTheme(element), { width, height }), true)
+    const observer = typeof ResizeObserver === 'undefined'
+      ? undefined
+      : new ResizeObserver(() => {
+        const next = element.clientWidth || FALLBACK_WIDTH
+        created.resize({ width: next, height })
+        created.setOption(build(readChartTheme(element), { width: next, height }), true)
+      })
+    observer?.observe(element)
+    return () => {
+      observer?.disconnect()
+      created.dispose()
+      instance.current = null
+    }
+    // 初始化只做一次；换数据由下面那个 effect 处理。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [height])
+
+  useEffect(() => {
+    const element = host.current
+    if (!element || instance.current === null) return
+    const width = element.clientWidth || FALLBACK_WIDTH
+    instance.current.setOption(build(readChartTheme(element), { width, height }), true)
+  }, [build, height])
+
+  return <figure className="mi-defensive-premium__chart" data-chart={chart} style={{ height }}
+    {...(decorative ? { 'aria-hidden': 'true' } : { role: 'img', 'aria-label': label })}>
+    <div ref={host} className="mi-defensive-premium__chart-canvas" aria-hidden="true" />
+  </figure>
+}
 
 export function FearGreedChart({ points, ariaLabel, axisLabel }: Readonly<{
   points: readonly FearGreedSeriesPoint[]
   ariaLabel: string
   axisLabel: string
 }>): React.ReactElement | null {
-  const newest = points[0]
-  if (!newest) return null
-  const plotted = points
-    .map(point => ({ day: point.day, value: point.score, x: xOf(point.day, newest.day), y: yOf(point.score, 0, 100) }))
-    .reverse()
-
-  return <ChartFigure ariaLabel={ariaLabel} axisLabel={axisLabel} ticks={[0, 50, 100]}>
-    <Series plotted={plotted} seriesKey="fear-greed" />
-    <XAxisLabels first={oldestLabel(plotted)} last={newest.day} />
-  </ChartFigure>
+  if (points.length === 0) return null
+  return <ChartFrame chart="fear-greed" height={CHART_HEIGHT} label={ariaLabel}
+    build={theme => fearGreedChartOption({ points, axisName: axisLabel, ...theme })} />
 }
 
 export function SkewChart({ points, ariaLabel, axis }: Readonly<{
@@ -49,124 +110,31 @@ export function SkewChart({ points, ariaLabel, axis }: Readonly<{
   /** 整句轴说明（名字 + 带括号的单位）：括号是文案的一部分，组件里不拼。 */
   axis: string
 }>): React.ReactElement | null {
-  const newest = points[0]
-  if (!newest) return null
-  const values = points.map(point => point.riskReversal)
-  const low = Math.min(...values)
-  const high = Math.max(...values)
-  // 一条水平线（或只有一个点）也要给它一圈上下限，否则坐标轴塌成零高。
-  const span = high - low < 0.1 ? 0.1 : high - low
-  const min = low - span * 0.15
-  const max = high + span * 0.15
-  const plotted = points
-    .map(point => ({ day: point.day, value: point.riskReversal, x: xOf(point.day, newest.day), y: yOf(point.riskReversal, min, max) }))
-    .reverse()
-
-  return <ChartFigure ariaLabel={ariaLabel} axisLabel={axis} ticks={[min, max]} formatTick={value => value.toFixed(1)}>
-    <Series plotted={plotted} seriesKey="skew" />
-    <XAxisLabels first={oldestLabel(plotted)} last={newest.day} />
-  </ChartFigure>
+  if (points.length === 0) return null
+  return <ChartFrame chart="skew" height={CHART_HEIGHT} label={ariaLabel}
+    build={theme => skewChartOption({ points, axisName: axis, ...theme })} />
 }
 
 /**
- * 加载态的空图框：与真图同一 viewBox、同一 `width: 100%`，所以高度由同一套布局算出来，
- * 不写死任何像素；不画线、不画值——它只占位，不让换态把卡压塌。
- *
- * 等待的转圈叠在图框里、不另占一行：它是指示，不是内容。
- * 给了 `waitingLabel` 时图框不再对读屏隐藏，转圈照常播报；空 `<svg>` 自己隐藏掉。
+ * 加载态的空图框：与真图同高（同一个高度变量），不画线、不画值。
+ * 转圈叠在图框里、不另占一行：它是指示，不是内容。
  */
 export function ChartPlaceholder({ axisLabel, waitingLabel }: Readonly<{ axisLabel: string; waitingLabel?: string }>): React.ReactElement {
-  return <figure className="mi-defensive-premium__chart" data-chart-placeholder
-    {...(waitingLabel === undefined ? { 'aria-hidden': 'true' } : {})}>
-    <span className="mi-defensive-premium__chart-frame">
-      {/* 只给宽：高由 viewBox 的固有比例算出来（452 宽 → 46 高）。写 `height="auto"` 反而会被
-          卡片样式算成另一个比例（实测 50.7 而不是 46）。 */}
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" aria-hidden="true">
-        {/* 与真图同一条轴说明：少了它，加载态比正常态矮一块。 */}
-        <text className="mi-defensive-premium__chart-axis" x="0" y={AXIS_LABEL_BASELINE}>{axisLabel}</text>
-      </svg>
-      {waitingLabel === undefined ? null : <span className="mi-defensive-premium__chart-wait">
-        <LoadingState label={waitingLabel} layout="inline" />
-      </span>}
-    </span>
-  </figure>
-}
-
-function ChartFigure({ ariaLabel, axisLabel, ticks, formatTick = String, children }: Readonly<{
-  ariaLabel: string
-  axisLabel: string
-  ticks: readonly number[]
-  formatTick?: (value: number) => string
-  children: React.ReactNode
-}>): React.ReactElement {
-  const unique = [...new Set(ticks)]
-  const min = Math.min(...unique)
-  const max = Math.max(...unique)
-  return <figure className="mi-defensive-premium__chart">
-    <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%">
-      <text className="mi-defensive-premium__chart-axis" x="0" y={AXIS_LABEL_BASELINE}>{axisLabel}</text>
-      <g className="mi-defensive-premium__grid">
-        {unique.map(value => <line key={value} x1={PAD.left} x2={WIDTH - PAD.right}
-          y1={yOf(value, min, max)} y2={yOf(value, min, max)} />)}
-      </g>
-      {children}
-      <g className="mi-defensive-premium__tick">
-        {unique.map(value => <text key={value} x={PAD.left - 4} textAnchor="end" dominantBaseline="middle"
-          y={yOf(value, min, max)}>{formatTick(value)}</text>)}
-      </g>
-    </svg>
-  </figure>
-}
-
-function XAxisLabels({ first, last }: Readonly<{ first: string; last: string }>): React.ReactElement {
-  // 只有一个点时左右两处会印同一个日期，看起来像有 30 天跨度；那种情况只留右缘那一个。
-  const baseline = HEIGHT - 2
-  return <g className="mi-defensive-premium__tick">
-    {first === last ? null : <text data-axis-date="first" x={PAD.left} y={baseline} textAnchor="start">{first}</text>}
-    <text data-axis-date="last" x={WIDTH - PAD.right} y={baseline} textAnchor="end">{last}</text>
-  </g>
+  return <div className="mi-defensive-premium__chart mi-defensive-premium__chart--placeholder" data-chart-placeholder
+    aria-hidden={waitingLabel === undefined ? 'true' : undefined}>
+    {/* 轴说明一直在（换成图之后同一句会在 Y 轴名上），转圈叠在它上面。 */}
+    <span className="mi-defensive-premium__chart-axis">{axisLabel}</span>
+    {waitingLabel === undefined ? null : <span className="mi-defensive-premium__chart-wait">
+      <LoadingState label={waitingLabel} layout="inline" />
+    </span>}
+  </div>
 }
 
 /**
- * 少于 5 个点只画点、不连线：几个点连起来会被读成「趋势」，而方向判定恰恰说这时不够判。
+ * 仪表那一列：五段弧 + 指针 + 圆盘里的分数；没有读数时只剩弧。
+ * 装饰性：分数与档位词以文字出现在它上面的读数行里，读屏不需要再念一遍这块画布。
  */
-function Series({ plotted, seriesKey }: Readonly<{ plotted: ReadonlyArray<{ x: number; y: number }>; seriesKey: string }>): React.ReactElement {
-  return <g data-chart-series={seriesKey}>
-    {plotted.length >= 5
-      ? <polyline className="mi-defensive-premium__line" fill="none" points={pointsOf(plotted)} data-chart-line={seriesKey} />
-      : null}
-    {plotted.map((point, index) => <circle key={`${point.x}-${index}`} className="mi-defensive-premium__dot" cx={point.x} cy={point.y} r="1.1" />)}
-  </g>
-}
-
-/**
- * `polyline` 的 `points` 是「x,y 空格分隔」的**点列**，不是路径语法：写成 `M … L …` 时解析器读到
- * 第一个不是数字的字符就停下，整条线一个点都没有——圆点还在、连线消失（读者 2026-11-22 看到的就是）。
- */
-function pointsOf(points: ReadonlyArray<{ x: number; y: number }>): string {
-  return points.map(point => `${point.x},${point.y}`).join(' ')
-}
-
-function oldestLabel(points: ReadonlyArray<{ day: string }>): string {
-  return points[0]?.day ?? ''
-}
-
-/** 横轴固定 30 天：最新一天贴右缘，越往回越靠左；窗口外的点（服务端不该给）落到左缘之外就夹住。 */
-function xOf(day: string, newestDay: string): number {
-  const offset = daysBetween(day, newestDay)
-  const ratio = Math.min(1, Math.max(0, offset / (WINDOW_DAYS - 1)))
-  return WIDTH - PAD.right - ratio * PLOT_WIDTH
-}
-
-function yOf(value: number, min: number, max: number): number {
-  const ratio = max === min ? 0.5 : (value - min) / (max - min)
-  return PAD.top + PLOT_HEIGHT - Math.min(1, Math.max(0, ratio)) * PLOT_HEIGHT
-}
-
-/** 源日都是 UTC 零点标记的日期标签：只做纯日期差，不引入读者时区。 */
-function daysBetween(day: string, newestDay: string): number {
-  const from = Date.parse(`${day}T00:00:00.000Z`)
-  const to = Date.parse(`${newestDay}T00:00:00.000Z`)
-  if (Number.isNaN(from) || Number.isNaN(to)) return 0
-  return Math.round((to - from) / 86_400_000)
+export function GaugeChart({ score }: Readonly<{ score: number | undefined }>): React.ReactElement {
+  return <ChartFrame chart="gauge" height={CHART_HEIGHT} label="" decorative
+    build={(theme, size) => gaugeChartOption({ score, width: size.width, height: size.height, ...theme })} />
 }

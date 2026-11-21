@@ -142,9 +142,20 @@
 /* 恐惧与防跌溢价：整行一条带。宽度跟着看板容器走（1080 视口下是 1040），两半各自 minmax(0,1fr)，
    所以窄到哪里都不会把曲线挤成负宽。 */
 .mi-crypto-dashboard__defensive-premium-row { min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-/* 定稿 §4.2：内容行三列并排 —— 仪表盘 112 | 恐惧贪婪格 1fr | BTC 偏斜格 1fr；
-   结论用 `grid-column: 1 / -1` 独占一行。没有断点、没有右列分支、没有 520 那套数字。 */
-.mi-defensive-premium { display: grid; grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; row-gap: 12px; min-width: 0; }
+/* 三列并排：仪表一列（按内容给 184，不再死守 112）、两格均分剩余；间距 12。
+   三列共用同一套行（标题 17 / 读数 18 / 图 132），所以标题、读数、图各自对齐。
+   尺寸收在两个变量里：`--mi-defensive-premium-gauge-width` 与 `--mi-defensive-premium-chart-height`，
+   用例按这两个名字对账，不在三处各写一遍。 */
+.mi-defensive-premium {
+  --mi-defensive-premium-gauge-width: 184px;
+  --mi-defensive-premium-column-gap: 12px;
+  --mi-defensive-premium-chart-height: 132px;
+  display: grid;
+  grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: var(--mi-defensive-premium-column-gap);
+  row-gap: 12px;
+  min-width: 0;
+}
 .mi-defensive-premium > .mi-defensive-premium__header,
 .mi-defensive-premium > .mi-defensive-premium__verdict,
 .mi-defensive-premium > .state-view { grid-column: 1 / -1; }
@@ -154,42 +165,49 @@
 .mi-defensive-premium__header h2 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-card-title); line-height: var(--line-card-title); font-weight: 650; }
 .mi-defensive-premium__refresh { margin-left: auto; }
 .mi-defensive-premium__window { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-.mi-defensive-premium__cell { display: grid; align-content: start; row-gap: 4px; min-width: 0; }
-.mi-defensive-premium__cell h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 500; }
+/* 一列 = 同一套三行：标题 17、读数 18（上距 6）、图 132（上距 10）。 */
+.mi-defensive-premium__col { display: grid; grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height); align-content: start; min-width: 0; }
+.mi-defensive-premium__col .mi-defensive-premium__cell-head,
+.mi-defensive-premium__col > .mi-defensive-premium__chart,
+.mi-defensive-premium__col > .mi-defensive-premium__state,
+.mi-defensive-premium__col > .mi-defensive-premium__reading { grid-column: 1; }
+.mi-defensive-premium__col h3 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); font-weight: 500; }
 .mi-defensive-premium__cell-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* 读数行（两格共用同一行高）：值是 12/650 tabular，方向词与「截至」是 11/400 muted。 */
+/* 读数行：分数 12/650 tabular，方向词与「截至」11/400 muted。 */
 .mi-defensive-premium__reading,
-.mi-defensive-premium__state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+.mi-defensive-premium__state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); min-height: 18px; }
 .mi-defensive-premium__reading strong { color: var(--mi-dashboard-text); font-size: var(--font-body); font-variant-numeric: tabular-nums; font-weight: 650; line-height: var(--line-body); }
+.mi-defensive-premium__reading .mi-crypto-dashboard__sentiment-state-row,
+.mi-defensive-premium__reading .mi-source-state { display: inline-flex; align-items: center; gap: 6px; }
+.mi-defensive-premium__reading [data-gauge-bucket-text] { font-size: var(--font-body); font-weight: 650; line-height: var(--line-body); }
+/* 档位词取五档语义色：图上指针的颜色由 ECharts 的色带表达，文字这一处仍按档位着色。 */
+.mi-defensive-premium [data-gauge-bucket-text='extreme-fear'] { color: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-defensive-premium [data-gauge-bucket-text='fear'] { color: var(--mi-dashboard-sentiment-fear); }
+.mi-defensive-premium [data-gauge-bucket-text='neutral'] { color: var(--mi-dashboard-sentiment-neutral); }
+.mi-defensive-premium [data-gauge-bucket-text='greed'] { color: var(--mi-dashboard-sentiment-greed); }
+.mi-defensive-premium [data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); }
 .mi-defensive-premium__verdict { margin: 0; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-text); font-size: var(--font-body); line-height: var(--line-body); }
 .mi-defensive-premium__source-action { justify-self: start; }
 .mi-defensive-premium__direction { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 只有「不知道方向」那三句才是警示色：正常的走阔/收窄不该被读成警告。 */
 .mi-defensive-premium__direction--unknown { color: var(--mi-dashboard-caution); }
 .mi-defensive-premium__history { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-/* 两条线各一张图，高度由 viewBox 与容器宽按同一比例算出来（1080 下 452 宽 → 46 高），
-   轴的刻度、日期与量程说明都画在这张 SVG 里，不另起一行。 */
-.mi-defensive-premium__chart { display: block; min-width: 0; margin: 0; }
-/* 空图框里的等待指示叠在图上，不占网格行：多一行，加载态就比正常态高。 */
-.mi-defensive-premium__chart-frame { position: relative; display: grid; }
+/* 图：ECharts 画在 canvas 容器里，外层 figure 定高定宽；读数行与图之间的 10 是列的第三行上距。 */
+.mi-defensive-premium__chart { position: relative; display: block; min-width: 0; margin: 10px 0 0; height: var(--mi-defensive-premium-chart-height); }
+.mi-defensive-premium__chart-canvas { width: 100%; height: 100%; }
+.mi-defensive-premium__chart--placeholder { position: relative; display: grid; align-content: start; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 70%, transparent); border-radius: 6px; }
+/* 转圈叠在空图框里、不占行：图框高度由同一个变量给，换态不塌。 */
 .mi-defensive-premium__chart-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
-/* 叠放的等待指示不吃自己那套内距与最小高：它的尺寸不该被用来撑卡，也不该溢出图框。 */
 .mi-defensive-premium__chart-wait .loading-state { min-height: 0; padding: 0; }
-.mi-defensive-premium__chart-axis { fill: var(--mi-dashboard-muted); font-size: var(--font-meta); }
-.mi-defensive-premium__grid line { stroke: var(--mi-dashboard-line); stroke-width: 1; }
-.mi-defensive-premium__line { stroke: var(--mi-dashboard-lime); stroke-width: 1.4; }
-.mi-defensive-premium__dot { fill: var(--mi-dashboard-lime); }
-.mi-defensive-premium__tick text { fill: var(--mi-dashboard-muted); font-size: var(--font-meta); }
+.mi-defensive-premium__chart-axis { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
+/* 仪表那一列的图框：转圈叠在图上，不占行。 */
+.mi-defensive-premium__chart-slot { position: relative; margin-top: 10px; height: var(--mi-defensive-premium-chart-height); }
+.mi-defensive-premium__chart-slot > .mi-defensive-premium__chart { margin-top: 0; }
+.mi-defensive-premium__col-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0 8px; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 .mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; /* 卡宽跟卡片内容区：不由内容宽决定（空态不许缩水）。 */ width: 100%; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
-/* 仪表自带的那圈带内缩进是给旧并排带用的；进了卡的第一列，缩进由卡的 column-gap 管。 */
-.mi-defensive-premium .mi-crypto-dashboard__sentiment { padding-left: 0; padding-right: 0; }
-/* 第一列的内容高按定稿 §4.8 是 80 + 4 + 18 = 102：那一列不再吃自己的上下内距，
-   档位词用 body 档（12 / 1.5 = 18）——差 7.5 就是这三处攒出来的。 */
-.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge { padding-top: 0; padding-bottom: 0; }
-.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] { margin-top: 4px; font-size: var(--font-body); line-height: var(--line-body); }
 .mi-capital-conditions__summary > p { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions__header-band { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap); }
 .mi-capital-conditions__observed-at { color: var(--mi-dashboard-muted); font-size: 10px; }
@@ -345,61 +363,6 @@
 /* 卡片标题行那一颗是**次按钮**（界面设计 2026-11-12 五档）：24 高（antd small 就是 24）、
    12 号字、正文色、`--border-strong` 描边。同屏同位置的卡级动作必须同形，所以这里不用 link 文字。 */
 .mi-capital-conditions__title-action.ant-btn { height: 24px; padding: 0 8px; color: var(--text); border-color: var(--border-strong); font-size: var(--font-body); }
-.mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; width: 100%; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
-.mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }
-/* The dial is the positioning context: the svg renders 112x80 from a 120x86 viewBox, and the
-   score is centred on the readout disc at y=60 (69.77% down). The disc is painted after the
-   needle, so the blade only exists outside its ring. */
-.mi-crypto-dashboard__sentiment-dial { position: relative; display: grid; justify-items: center; }
-/* 等待的转圈叠在圆盘的位置上（半圆中间的空档），不占网格行：多一行，加载态就比正常态高。
-   弧与刻度照画、指针照旧不画，读者看到的仍是同一个仪表。 */
-.mi-crypto-dashboard__sentiment-dial-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
-.mi-crypto-dashboard__sentiment-dial strong {
-  /* top 60/86 = 69.77%: the disc's centre in the rendered dial. */
-  position: absolute; top: 69.77%; right: 0; left: 0; transform: translateY(-50%);
-  color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 17px; font-variant-numeric: tabular-nums; font-weight: 650; line-height: 1; text-align: center;
-}
-.mi-crypto-dashboard__gauge-segment { fill: none; stroke-width: 10; }
-.mi-crypto-dashboard__gauge-tick { stroke: var(--mi-dashboard-text); stroke-width: .8; opacity: .26; }
-/* The blade is text-coloured and only its halo takes the bucket tone: an orange needle on the
-   orange fear band dissolved into the segment it was pointing at. */
-.mi-crypto-dashboard__gauge-needle { fill: none; stroke: var(--mi-dashboard-text); stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 1.8px var(--mi-gauge-glow)); }
-/* The disc is the needle's mask and the score's backdrop; its ring carries the bucket tone. */
-.mi-crypto-dashboard__gauge-readout { fill: var(--mi-dashboard-surface); stroke-width: 1.2; }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-fear); }
-.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='fear'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-fear); }
-.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='neutral'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-neutral); }
-.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='greed'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-greed); }
-.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-greed'] { stroke: var(--mi-dashboard-sentiment-extreme-greed); }
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-greed'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-greed); }
-.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='extreme-greed'] { stroke: var(--mi-dashboard-sentiment-extreme-greed); }
-.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); }
-.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-fear'] { color: var(--mi-dashboard-sentiment-extreme-fear); }
-.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='fear'] { color: var(--mi-dashboard-sentiment-fear); }
-.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='neutral'] { color: var(--mi-dashboard-sentiment-neutral); }
-.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='greed'] { color: var(--mi-dashboard-sentiment-greed); }
-/* Only the bucket label, not the dial, takes this margin: the dial is a span too. */
-.mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] { margin-top: 5px; font-size: 12px; }
-.mi-crypto-dashboard__sentiment-gauge small,
-.mi-crypto-dashboard__sentiment-gauge p { margin: 5px 0 0; color: var(--mi-dashboard-muted); font-size: 10px; }
-
-/* 没读数时那一行（界面设计 2026-11-11 定稿）：图下方、卡内一行，状态句 + 恰一颗按钮。
-   左右跟着卡自己的内距（这一行不再加 padding），不进图、不居中盖图。
-   12 号字走 `--font-body`，与遮罩里那句同档——不新造字号。 */
-.mi-crypto-dashboard__sentiment-state {
-  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px;
-  min-height: 32px; margin-top: 8px;
-}
-.mi-crypto-dashboard__sentiment-state .mi-source-state { font-size: var(--font-body); line-height: var(--line-body); }
 /*
  * 两条数据带**默认就是并排**，宽度按 fr 分配；断点只负责"真的放不下"时的堆叠。
  *

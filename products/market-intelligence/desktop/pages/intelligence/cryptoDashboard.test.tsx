@@ -8,6 +8,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
+import { CHART_HEIGHT } from '../../features/industry/market-sentiment/DefensivePremiumCharts'
+import { CHART_PALETTE_FIXTURE } from '../../features/industry/market-sentiment/defensivePremiumChartPalette.fixture'
+import {
+  CHART_FONTS_FALLBACK, fearGreedChartOption, gaugeChartOption, skewChartOption
+} from '../../features/industry/market-sentiment/defensivePremiumChartOptions'
 import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroEconomicCalendarEventView } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { AgentPortal } from './AgentPortal'
@@ -113,7 +118,7 @@ describe('crypto intelligence dashboard', () => {
     await flush()
     return {
       // 仪表现在只此一副，住在「恐惧与防跌溢价」卡的左半。
-      gauge: container.querySelector<HTMLElement>('.mi-crypto-dashboard__sentiment [data-sentiment-gauge]')!,
+      gauge: container.querySelector<HTMLElement>('[data-sentiment-gauge]')!,
       dispose: async () => {
         await act(async () => gaugeRoot.unmount())
         container.remove()
@@ -258,7 +263,7 @@ describe('crypto intelligence dashboard', () => {
     expect(row.textContent).not.toContain(expected === 'empty' ? text.data.temporarilyUnavailable : text.dashboard.fearGreed.empty)
   })
 
-  it('renders a textual half-gauge and independent BTC/ETH funding-history values', async () => {
+  it('puts the gauge column in the card and keeps funding history in its own band', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -275,38 +280,23 @@ describe('crypto intelligence dashboard', () => {
     })))
     await flush()
 
-    // 情绪住在上面那张整行卡的左半；资金面自己一条带，两处都不再并排。
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
     const gauge = band.querySelector('[data-sentiment-gauge]')!
+    // 仪表只此一副，住在卡的第一列；资金面与持仓两条带里都没有它。
     expect(container.querySelector('.mi-crypto-dashboard__capital-positioning-row [data-sentiment-gauge]')).toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
-    const rows = container.querySelectorAll('.mi-crypto-dashboard__positioning-row [data-funding-latest]')
-    const dial = gauge.querySelector('svg')!
-    expect(dial.getAttribute('aria-hidden')).toBe('true')
-    expect(dial.getAttribute('viewBox')).toBe('0 0 120 86')
-    expect(gauge.querySelectorAll('[data-gauge-segment]')).toHaveLength(5)
-    // The needle is its own path inside the mouth; the arc segments are never rotated as a whole.
-    expect(gauge.querySelectorAll('[data-gauge-segment][transform]')).toHaveLength(0)
-    expect(dial.querySelectorAll('.mi-crypto-dashboard__gauge-tick')).toHaveLength(5)
-    const needle = dial.querySelector('.mi-crypto-dashboard__gauge-needle')!
-    expect(needle.tagName.toLowerCase()).toBe('path')
-    expect(needle.getAttribute('d')).toBe('M 60 43 L 60 18')
-    expect(needle.getAttribute('data-gauge-bucket')).toBe('extreme-fear')
-    expect(needle.parentElement?.getAttribute('transform')).toBe('rotate(-50.4 60 60)')
-    // The readout is painted after the needle: it is the mask that keeps the blade out of the digits.
-    const readout = dial.querySelector('.mi-crypto-dashboard__gauge-readout')!
-    expect(readout.getAttribute('data-gauge-bucket')).toBe('extreme-fear')
-    expect(readout.previousElementSibling).toBe(needle.parentElement)
+    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
+    // 读数是「分数 + 档位词」的文字；画布本身不进可访问树，读屏念的是这行字。
+    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
     expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
-    // 仪表只回答「落在哪一档」：日期在恐惧贪婪格的读数行上，不在这一列。
-    expect(gauge.textContent).toBe('22极度恐惧')
-    expect(band.querySelector('[data-half="fear-greed"] .mi-defensive-premium__reading')?.textContent).toContain('截至')
-    expect(gauge.textContent).toContain('22')
-    expect(gauge.textContent).toContain(text.dashboard.fearGreed.buckets['extreme-fear'])
-    // 读数行写「截至」（数据源日），不用旧那一格的「观测时间」；它落在恐惧贪婪格里。
+    expect(gauge.querySelector('[data-chart="gauge"]')?.getAttribute('aria-hidden')).toBe('true')
+    // 仪表只回答「落在哪一档」：日期在恐惧贪婪格的读数行上。
+    expect(gauge.textContent).not.toContain('2026')
     expect(band.querySelector('[data-half="fear-greed"] .mi-defensive-premium__reading')?.textContent)
       .toContain(text.dashboard.defensivePremium.fearGreed.asOf)
     expect(band.textContent).not.toContain(text.dashboard.sentiment.observedAt)
+
+    const rows = container.querySelectorAll('.mi-crypto-dashboard__positioning-row [data-funding-latest]')
     expect(rows).toHaveLength(2)
     expect(rows[0]?.textContent).toContain('+0.0123%')
     expect(rows[0]?.textContent).toContain(text.dashboard.positioning.paymentDirections['long-pays-short'])
@@ -315,49 +305,44 @@ describe('crypto intelligence dashboard', () => {
     expect(band.textContent).not.toMatch(/58|conclusion|classification|https?:|sourceUrl|evidence|profile|health|credential|error/i)
   })
 
-  it('points the needle left, straight up and right at the score extremes', async () => {
-    for (const [score, bucket, transform] of [
-      [0, 'extreme-fear', 'rotate(-90 60 60)'],
-      [50, 'neutral', 'rotate(0 60 60)'],
-      [100, 'extreme-greed', 'rotate(90 60 60)']
-    ] as const) {
-      const { gauge, dispose } = await renderSentimentGauge(score, bucket)
-      expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.getAttribute('data-gauge-bucket')).toBe(bucket)
-      expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.parentElement?.getAttribute('transform')).toBe(transform)
-      expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe(bucket)
-      await dispose()
+  it('gives the gauge a needle only when there is a reading, and always the same five bands', () => {
+    const size = { width: 184, height: CHART_HEIGHT }
+    // 有读数：指针与圆盘里的分数都在，值就是那个分数（指针方向由 ECharts 按 0–100 算）。
+    for (const score of [0, 50, 100]) {
+      const option = gaugeChartOption({ score, ...size, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      const series = (option.series as Array<{ pointer: { show: boolean }; detail: { show: boolean }; data: Array<{ value: number }> }>)[0]!
+      expect(series.pointer.show).toBe(true)
+      expect(series.detail.show).toBe(true)
+      expect(series.data[0]!.value).toBe(score)
     }
+    // 没有读数：指针与分数都收起来，五段弧照旧。
+    const blind = gaugeChartOption({ score: undefined, ...size, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const series = (blind.series as Array<{ pointer: { show: boolean }; detail: { show: boolean }; axisLine: { lineStyle: { color: unknown[] } } }>)[0]!
+    expect(series.pointer.show).toBe(false)
+    expect(series.detail.show).toBe(false)
+    expect(series.axisLine.lineStyle.color).toHaveLength(5)
   })
 
-  it('keeps the needle and its bucket label on the same tone in all five bands', async () => {
+  it('keeps the bucket word on the matching tone in all five bands', async () => {
     for (const [score, bucket] of [
       [12, 'extreme-fear'], [37, 'fear'], [50, 'neutral'], [60, 'greed'], [88, 'extreme-greed']
     ] as const) {
       const { gauge, dispose } = await renderSentimentGauge(score, bucket)
-      expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.getAttribute('data-gauge-bucket')).toBe(bucket)
       expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe(bucket)
+      expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe(`${score}${text.dashboard.fearGreed.buckets[bucket]}`)
       await dispose()
     }
   })
 
-  it('centres the score on the readout disc so the needle starts underneath it', () => {
-    const scoreRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment-dial strong {')
-    const svgRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment-gauge svg {')
-    const needleRule = cssBlock(styles, '.mi-crypto-dashboard__gauge-needle {')
-    const readoutRule = cssBlock(styles, '.mi-crypto-dashboard__gauge-readout {')
-
-    expect(scoreRule).toContain('position: absolute')
-    expect(scoreRule).toContain('top: 69.77%')
-    expect(scoreRule).toContain('transform: translateY(-50%)')
-    expect(scoreRule).toContain('font-size: 17px')
-    expect(svgRule).toContain('height: 80px')
-    expect(needleRule).toContain('stroke: var(--mi-dashboard-text)')
-    expect(needleRule).toContain('stroke-width: 2.4')
-    expect(needleRule).toContain('stroke-linecap: round')
-    expect(needleRule).toContain('drop-shadow')
-    expect(readoutRule).toContain('fill: var(--mi-dashboard-surface)')
-    expect(styles).toContain('.mi-crypto-dashboard__gauge-tick { stroke: var(--mi-dashboard-text)')
-    expect(styles).toContain('--mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-fear)')
+  it('keeps one height variable for the chart row and one width for the gauge column', () => {
+    const cardRule = cssBlock(styles, '.mi-defensive-premium {')
+    // 图高与列宽各只有一处定义：这里、以及 ChartFrame 的 init 高度，两处必须相等。
+    expect(cardRule).toContain(`--mi-defensive-premium-chart-height: ${CHART_HEIGHT}px`)
+    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
+    expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
+    expect(cardRule).toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
+    // 三列共用同一套行：标题 17 / 读数 18 / 图（同一个高度变量）。
+    expect(cssBlock(styles, '.mi-defensive-premium__col {')).toContain('grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height)')
   })
 
   it('fails closed instead of crashing when a legacy funding client has no history query', async () => {
@@ -554,8 +539,6 @@ describe('crypto intelligence dashboard', () => {
     const rowRule = cssBlock(styles, '.mi-crypto-dashboard__capital-positioning-row {')
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
     const stableRule = cssBlock(styles, '.mi-capital-conditions__etf-col-asset {')
-    // 带前缀 `\n` 才不会命中卡里那条覆盖规则（`.mi-defensive-premium .mi-…-gauge {`）。
-    const gaugeRule = cssBlock(styles, '\n.mi-crypto-dashboard__sentiment-gauge {')
 
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-header-row-gap')
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-header-column-gap')
@@ -564,7 +547,6 @@ describe('crypto intelligence dashboard', () => {
     expect(headerBandRule).toContain('flex-wrap: wrap')
     expect(headerBandRule).toContain('gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap)')
     expect(stableRule).toContain('width: 26%')
-    expect(gaugeRule).toContain('padding: var(--mi-dashboard-gauge-block-padding)')
   })
 
   it('puts the stablecoin and fixed-layout ETF tables in the first band', () => {
@@ -621,7 +603,8 @@ describe('crypto intelligence dashboard', () => {
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 10fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 15fr')
     // 整行卡自己三列并排：仪表盘 112 + 两个 1fr（定稿 §4.2），结论跨全宽。
-    expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr)')
+    expect(cssBlock(styles, '.mi-defensive-premium {'))
+      .toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
     // 列间距 12：(1040 − 112 − 2×12) / 2 = 452，两格正好是定稿的曲线宽。
     expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('column-gap: 12px')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
@@ -715,7 +698,7 @@ describe('crypto intelligence dashboard', () => {
     // 资金面带只剩资金面自己：仪表已经搬进上面那张整行卡，左列没有了。
     expect([...row.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions'])
     const cardBand = container.querySelector<HTMLElement>('.mi-crypto-dashboard__defensive-premium-row')!
-    expect(cardBand.querySelector('.mi-crypto-dashboard__sentiment')).not.toBeNull()
+    expect(cardBand.querySelector('[data-sentiment-gauge]')).not.toBeNull()
     const positioning = container.querySelector<HTMLElement>('.mi-crypto-dashboard__positioning-row')!
         // The perpetual card keeps the second band to itself, with the divergence footnote under it.
     expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-positioning-panel', 'mi-divergence'])
@@ -727,16 +710,18 @@ describe('crypto intelligence dashboard', () => {
     expect(headerBandRule).toContain('min-width: 0')
   })
 
-  it('renders the gauge as five fear-to-greed color segments with a matching bucket needle', () => {
-    expect(styles).toContain('--mi-dashboard-sentiment-extreme-fear')
-    expect(styles).toContain('--mi-dashboard-sentiment-fear')
-    expect(styles).toContain('--mi-dashboard-sentiment-neutral')
-    expect(styles).toContain('--mi-dashboard-sentiment-greed')
-    expect(styles).toContain('--mi-dashboard-sentiment-extreme-greed')
-    expect(styles).toContain("[data-gauge-bucket='extreme-fear']")
-    expect(styles).toContain("[data-gauge-bucket='extreme-greed']")
-    expect(styles).toContain("[data-gauge-bucket-text='extreme-fear']")
-    expect(styles).toContain("[data-gauge-bucket-text='extreme-greed']")
+  it('draws the gauge as five fear-to-greed bands, and colours the bucket word by band', () => {
+    const option = gaugeChartOption({ score: 22, width: 184, height: CHART_HEIGHT, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const series = (option.series as Array<{ axisLine: { lineStyle: { color: Array<[number, string]> } } }>)[0]!
+    // 五段等宽：0–20 / 20–40 / 40–60 / 60–80 / 80–100，颜色依次从恐到贪。
+    expect(series.axisLine.lineStyle.color.map(([stop]) => stop)).toEqual([0.2, 0.4, 0.6, 0.8, 1])
+    expect(series.axisLine.lineStyle.color.map(([, color]) => color)).toEqual([...CHART_PALETTE_FIXTURE.bands])
+    // 色带与档位词都取门户色板上的五个 token：module 里的兜底值必须与样式表一致（改一处就红）。
+    const bands = ['extreme-fear', 'fear', 'neutral', 'greed', 'extreme-greed'] as const
+    bands.forEach((band, index) => {
+      expect(styles).toContain(`--mi-dashboard-sentiment-${band}: ${CHART_PALETTE_FIXTURE.bands[index]}`)
+      expect(styles).toContain(`.mi-defensive-premium [data-gauge-bucket-text='${band}']`)
+    })
   })
 
 
@@ -1150,8 +1135,9 @@ describe('host wiring: cells switched off and sources judged', () => {
     await settle(container, '.mi-defensive-premium [data-half="fear-greed"] [data-sentiment-state]')
     const cell = container.querySelector('.mi-defensive-premium [data-half="fear-greed"]')!
     expect(cell.textContent).toContain(productText['zh-CN'].settings.intelligenceSources.sourceNames['alternative-fear-greed'])
-    expect(container.querySelectorAll('.mi-crypto-dashboard__sentiment')).toHaveLength(1)
-    expect(container.querySelector('.mi-crypto-dashboard__sentiment .mi-crypto-dashboard__gauge-needle')).toBeNull()
+    // 页面上只有一副仪表；源关着时那一列只有弧，没有分数与档位词。
+    expect(container.querySelectorAll('[data-sentiment-gauge]')).toHaveLength(1)
+    expect(container.querySelector('[data-sentiment-gauge] [data-gauge-reading]')?.textContent).toBe('')
   })
 
   /** 市场状态表逐行也要点名（2026-11-12 第二处残留）：源关了说源，格关了说格。 */
@@ -1290,14 +1276,13 @@ describe('host wiring: cells switched off and sources judged', () => {
       onManageSource
     })
     await settle(container, '[data-half="fear-greed"] [data-sentiment-state]')
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const gauge = container.querySelector('[data-sentiment-gauge]')!
     const cell = container.querySelector('.mi-defensive-premium [data-half="fear-greed"]')!
     // 格自带 h3 行名，仪表那一列不再画自己的标题。
     expect(cell.querySelector('h3')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.name)
-    // 图还在（弧线与刻度），指针与读数圆盘不在——它们指向一个不存在的分数。
-    expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment').length).toBeGreaterThan(0)
-    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
-    expect(card.querySelector('.mi-crypto-dashboard__gauge-readout')).toBeNull()
+    // 仪表还在（弧照画），但读数行是空的——指针与分数都不指向一个关掉的格子。
+    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
+    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
     const row = cell.querySelector('[data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('disabled')
     expect(row.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
@@ -1310,11 +1295,11 @@ describe('host wiring: cells switched off and sources judged', () => {
     const headerActions = [...band.querySelectorAll('.mi-defensive-premium__header button')]
       .filter(button => button.getAttribute('aria-label') !== dashboardText.defensivePremium.titleInfoLabel)
     expect(headerActions).toHaveLength(1)
-    expect(card.textContent).not.toContain('22')
-    expect(card.querySelector('.state-view')).toBeNull()
+    expect(gauge.textContent).not.toContain('22')
+    expect(band.querySelector('.state-view')).toBeNull()
     // 关掉的那一半不画曲线，旧的也不画。
-    expect(band.querySelector('[data-chart-line="fear-greed"]')).toBeNull()
-    expect(band.querySelector('[data-half="fear-greed"] figure')).toBeNull()
+    expect(band.querySelector('[data-half="fear-greed"] [data-chart="fear-greed"]')).toBeNull()
+    expect(band.querySelector('[data-half="fear-greed"] [data-chart-placeholder]')).toBeNull()
     await act(async () => enable.click())
     expect(onManageSource).toHaveBeenCalledTimes(1)
   })
@@ -1333,7 +1318,7 @@ describe('host wiring: cells switched off and sources judged', () => {
       sentimentOptionsClient: sentimentOptionsClient({ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' } as never)
     })
     await settle(container, '[data-half="fear-greed"] [data-sentiment-state]')
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    const gauge = container.querySelector('[data-sentiment-gauge]')!
     const row = container.querySelector('[data-half="fear-greed"] [data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('unreadable')
     expect(row.textContent).toContain(dataText.temporarilyUnavailable)
@@ -1343,21 +1328,20 @@ describe('host wiring: cells switched off and sources judged', () => {
       .querySelector('.mi-defensive-premium__refresh')
     expect(refresh?.getAttribute('aria-label')).toBe(dashboardText.defensivePremium.action.refresh)
     expect(dataText.retry).not.toBe('')
-    // 图仍画着，指针不画；旧的整块 `StateView` 也不回来。
-    expect(card.querySelector('.mi-crypto-dashboard__gauge-segment')).not.toBeNull()
-    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
-    expect(card.querySelector('.state-view')).toBeNull()
+    // 仪表仍画着弧，但没有读数；旧的整块 `StateView` 也不回来。
+    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
+    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(container.querySelector('.mi-crypto-dashboard__defensive-premium-row .state-view')).toBeNull()
   })
 
-  it('cell on and readable: the gauge with its needle, and no state row', async () => {
+  it('cell on and readable: the gauge shows its reading, and no state row', async () => {
     const container = await renderCells({}, { sentimentOptionsClient: sentimentOptionsClient(readableSentiment as never) })
-    await settle(container, '.mi-crypto-dashboard__sentiment [data-gauge-segment]')
-    const card = container.querySelector('.mi-crypto-dashboard__sentiment')!
+    await settle(container, '[data-gauge-reading] strong')
+    const gauge = container.querySelector('[data-sentiment-gauge]')!
     // 有数据时没有那一行：状态句只在没读数时出现。
-    expect(card.querySelector('[data-sentiment-state]')).toBeNull()
-    expect(card.querySelectorAll('.mi-crypto-dashboard__gauge-segment')).toHaveLength(5)
-    expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).not.toBeNull()
-    expect(card.textContent).toContain('22')
+    expect(gauge.querySelector('[data-sentiment-state]')).toBeNull()
+    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
+    expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
   })
 })
 
@@ -1437,41 +1421,43 @@ describe('the defensive premium band', () => {
 
     // 整行卡：卡本体在带里，内容行是这张卡自己的三列（仪表盘 + 两格），结论独占一行。
     expect(band.querySelector('[data-testid="defensive-premium-card"]')).not.toBeNull()
-    expect(band.querySelectorAll('.mi-defensive-premium__cell')).toHaveLength(2)
-    expect(band.querySelectorAll('.mi-defensive-premium__cell[data-half]').length).toBe(2)
+    expect(band.querySelectorAll('.mi-defensive-premium__col')).toHaveLength(3)
+    expect(band.querySelectorAll('.mi-defensive-premium__col[data-half]')).toHaveLength(2)
     // 页面上只此一副恐惧贪婪仪表：旧的并排格已经摘掉，不是两处各画一个。
-    expect(container.querySelectorAll('.mi-crypto-dashboard__sentiment')).toHaveLength(1)
     expect(container.querySelectorAll('[data-sentiment-gauge]')).toHaveLength(1)
     expect(band.querySelector('.mi-defensive-premium__header h2')?.textContent).toBe(dashboardText.defensivePremium.title)
 
     // 偏斜未接入：右半说「未接入」并给查看来源，不写成读不到。
-    const skew = band.querySelector('.mi-defensive-premium__cell[data-half="skew"]')!
+    const skew = band.querySelector('.mi-defensive-premium__col[data-half="skew"]')!
     expect(skew.textContent).toContain(dashboardText.defensivePremium.skew.notConnected)
     expect(skew.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.data.temporarilyUnavailable)
     // 「未接入」不许被当成坏数据：卡面不是整块错误态，左半的读数也照旧在。
     expect(band.querySelector('.state-view')).toBeNull()
     expect(band.querySelector('[data-verdict]')).not.toBeNull()
-    // 仪表盘是独立的第一列，不在恐惧贪婪格里（定稿 §4.2）。
-    expect(band.querySelector('.mi-defensive-premium__cell[data-half="fear-greed"] .mi-crypto-dashboard__sentiment')).toBeNull()
-    expect(band.querySelector('.mi-crypto-dashboard__sentiment')).not.toBeNull()
+    // 仪表盘是独立的第一列，不在恐惧贪婪格里。
+    expect(band.querySelector('.mi-defensive-premium__col[data-half="fear-greed"] [data-sentiment-gauge]')).toBeNull()
+    expect(band.querySelector('[data-sentiment-gauge]')).not.toBeNull()
     // 「查看来源」是卡级动作、在标题行；行内只剩那颗说明用的 ⓘ（无文字）。
     expect([...skew.querySelectorAll('button')].map(button => button.textContent)).toEqual([''])
     expect([...band.querySelectorAll('.mi-defensive-premium__header button')].map(button => button.textContent))
       .toContain(dashboardText.defensivePremium.action.viewSource)
 
-    // 左半画出 30 天走势，用自己的纵轴与可访问描述；偏斜未接入时那半不画线。
-    const fearGreedChart = band.querySelector('[data-chart-line="fear-greed"]')!
-    expect(fearGreedChart).not.toBeNull()
-    const figure = fearGreedChart.closest('figure')!
-    const fearGreedAria = figure.querySelector('svg')?.getAttribute('aria-label') ?? ''
+    // 左半画出 30 天走势，用自己的纵轴与可访问描述；偏斜未接入时那半不画图。
+    const figure = band.querySelector('[data-chart="fear-greed"]')!
+    expect(figure).not.toBeNull()
+    const fearGreedAria = figure.getAttribute('aria-label') ?? ''
     expect(fearGreedAria).toContain(dashboardText.defensivePremium.chart.fearGreedAria)
     // 摘要要带窗口与首末值，不只是轴范围。
     expect(fearGreedAria).toContain('2026-08-04')
     expect(fearGreedAria).toContain(String(fgPoints(30)[29]!.score))
-    expect(figure.querySelector('.mi-defensive-premium__chart-axis')?.textContent).toBe(dashboardText.defensivePremium.fearGreed.axis)
-    expect(band.querySelector('[data-chart-line="skew"]')).toBeNull()
-    // 两条线不共用一张图：左半一张 figure，右半未接入时没有图。
-    expect(band.querySelectorAll('figure')).toHaveLength(1)
+    // 轴名（含单位）来自文案键，画在 Y 轴顶端，不压在刻度行上。
+    expect((fearGreedChartOption({ points: fgPoints(30), axisName: dashboardText.defensivePremium.fearGreed.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      .yAxis as { name: string; nameLocation: string }).name).toBe(dashboardText.defensivePremium.fearGreed.axis)
+    expect((fearGreedChartOption({ points: fgPoints(30), axisName: dashboardText.defensivePremium.fearGreed.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      .yAxis as { nameLocation: string }).nameLocation).toBe('end')
+    // 两条线不共用一张图：未接入时右格不画图，只有左格那一张。
+    expect(band.querySelector('[data-chart="skew"]')).toBeNull()
+    expect(band.querySelectorAll('[data-chart="fear-greed"]')).toHaveLength(1)
 
     // 三颗 ⓘ 各说各的：卡头、左半、右半的读屏名互不相同（AC-44）。
     const halfInfoLabels = [...band.querySelectorAll('.mi-defensive-premium__cell-head button[aria-label]')]
@@ -1490,35 +1476,38 @@ describe('the defensive premium band', () => {
 
     // 样式：带是整行一条；内容行三列（112 + 两个 1fr），窄处靠 minmax 收缩，不会挤成负宽。
     expect(cssBlock(styles, '.mi-crypto-dashboard__defensive-premium-row {')).not.toContain('grid-template-columns')
-    expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr)')
+    expect(cssBlock(styles, '.mi-defensive-premium {'))
+      .toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
     expect(cssBlock(styles, '.mi-defensive-premium {')).not.toContain('repeat(2')
   })
 
-  it('keeps the card at the designed 219: no source line, 102px gauge column, one 24px action', async () => {
+  it('keeps the card at the designed sizes: no source line, 184px gauge column, one 24px action', async () => {
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    // 卡上没有来源行（定稿 219 的组成里没有它）：来源身份在卡头 ⓘ 与两格格名上说。
+    // 卡上没有来源行：来源身份在卡头 ⓘ 与两格的行名上说。
     expect(band.querySelector('.mi-defensive-premium__provenance')).toBeNull()
     expect(band.textContent).not.toContain('Alternative.me')
-    // 第一列 80 + 4 + 18 = 102：不吃自己的上下内距，档位词用 body 档（12 / 1.5 = 18）。
-    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge {')).toContain('padding-top: 0')
-    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge {')).toContain('padding-bottom: 0')
-    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] {'))
-      .toContain('margin-top: 4px')
-    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] {'))
-      .toContain('line-height: var(--line-body)')
+    // 列宽与图高各只有一处定义（两个变量），三列都用它们。
+    const cardRule = cssBlock(styles, '.mi-defensive-premium {')
+    expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
+    expect(cardRule).toContain('--mi-defensive-premium-chart-height: 132px')
+    expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
     // 标题行的动作与文字按钮同档（24）：图标按钮用 md，换态时不跳 2px。
     expect(band.querySelector('.mi-defensive-premium__refresh')?.className).toContain('icon-button--md')
-    // 曲线只给宽：高由 viewBox 的固有比例算（452 宽 → 46 高），写 `height` 会被算成 50.7。
-    const chart = band.querySelector('[data-half="skew"] .mi-defensive-premium__chart svg')!
-    expect(chart.getAttribute('height')).toBeNull()
+    // 两条曲线各是一个 ECharts 容器，高度走同一个变量；图是 SVG renderer 画出来的。
+    for (const chart of ['fear-greed', 'skew']) {
+      const figure = band.querySelector(`[data-chart="${chart}"]`)!
+      expect(figure).not.toBeNull()
+      expect(figure.querySelector('svg')).not.toBeNull()
+      expect(figure.querySelector('canvas')).toBeNull()
+    }
   })
 
   it('lays the content row out as three columns, with the conclusion spanning all of them', async () => {
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const card = container.querySelector('.mi-defensive-premium')!
     const children = [...card.children]
-    const gauge = children.find(child => child.classList.contains('mi-crypto-dashboard__sentiment'))!
+    const gauge = children.find(child => child.hasAttribute('data-sentiment-gauge') || child.querySelector('[data-sentiment-gauge]') !== null)!
     const fearGreed = children.find(child => child.getAttribute('data-half') === 'fear-greed')!
     const skew = children.find(child => child.getAttribute('data-half') === 'skew')!
     // 读者看到的顺序：仪表盘 → 恐惧贪婪格 → 偏斜格；仪表是独立一列，不在任何一格里。
@@ -1529,10 +1518,9 @@ describe('the defensive premium band', () => {
     const verdict = card.querySelector('[data-verdict]')!
     expect(skew.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(cssBlock(styles, '.mi-defensive-premium > .mi-defensive-premium__header,')).toContain('grid-column: 1 / -1')
-    // 1080 下每格 452 宽、曲线 46 高，而且 **1 单位 = 1px**：viewBox 就按 452×46 建，
-    // 缩放是 1，轴与刻度的 `--font-meta` 才是真的 11px（按 520 建会缩到约 9.6px）。
-    const chart = fearGreed.querySelector('.mi-defensive-premium__chart svg')!
-    expect(chart.getAttribute('viewBox')).toBe('0 0 452 46')
+    // 曲线高度是一个变量（`--mi-defensive-premium-chart-height`），三列共用，不再按比例算。
+    expect(cssBlock(styles, '.mi-defensive-premium__col {'))
+      .toContain('grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height)')
   })
 
   function fearGreedSection(count = 30) {
@@ -1612,18 +1600,23 @@ describe('the defensive premium band', () => {
   ] as const)('draws the skew line on its own axis and names why the direction is %s', async (reason, direction) => {
     const container = await renderBand(skewClient(direction))
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    const skewLine = band.querySelector('[data-chart-line="skew"]')!
-    expect(skewLine).not.toBeNull()
-    const skewFigure = skewLine.closest('figure')!
-    const skewAria = skewFigure.querySelector('svg')?.getAttribute('aria-label') ?? ''
+    // 两张图各是一个 ECharts 容器，各自带读屏名；偏斜那张的轴名就是整句 `skew.axis`。
+    const skewChart = band.querySelector('[data-chart="skew"]')!
+    expect(skewChart).not.toBeNull()
+    const skewAria = skewChart.getAttribute('aria-label') ?? ''
     expect(skewAria).toContain(dashboardText.defensivePremium.chart.skewAria)
     expect(skewAria).toContain('2026-08-04')
     expect(skewAria).toContain(skewPoints(30)[0]!.riskReversal.toFixed(1))
-    // 自己那根轴与单位：指数 0–100 与百分点不共用一张图。轴说明是整句文案键（名字 + 带括号的单位），
-    // 组件不自己拼括号——用 name 与 unit 拼出来的串不等于这个键的值。
-    expect(skewFigure.querySelector('.mi-defensive-premium__chart-axis')?.textContent)
-      .toBe(dashboardText.defensivePremium.skew.axis)
-    expect(band.querySelectorAll('figure')).toHaveLength(2)
+    expect(band.querySelectorAll('[data-chart="fear-greed"], [data-chart="skew"]')).toHaveLength(2)
+    // 轴名（单位）来自文案键：组件不自己拼括号。
+    const option = skewChartOption({
+      points: skewPoints(30).map((point, index) => ({ day: point.day, observedAt: point.observedAt, riskReversal: point.riskReversal + index * 0 })),
+      axisName: dashboardText.defensivePremium.skew.axis,
+      palette: CHART_PALETTE_FIXTURE,
+      fonts: CHART_FONTS_FALLBACK
+    })
+    expect((option.yAxis as { name: string }).name).toBe(dashboardText.defensivePremium.skew.axis)
+    expect((option.yAxis as { name: string }).name).not.toBe(dashboardText.defensivePremium.skew.unit)
 
     const sentence = band.querySelector('[data-skew-direction]')!
     expect(sentence.getAttribute('data-skew-direction')).toBe(reason)
@@ -1637,37 +1630,36 @@ describe('the defensive premium band', () => {
     expect(band.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fear.skewMissing)
   })
 
-  it('draws the connecting line as point pairs, so the polyline really has a stroke', async () => {
-    const container = await renderBand(skewClient({ kind: 'steeper' }, 29))
-    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    const line = band.querySelector('[data-chart-line="skew"]')!
-    const pairs = (line.getAttribute('points') ?? '').trim().split(/\s+/)
-    // 29 个点就是 29 对坐标。写成 `M x y L x y`（路径语法）时 `points` 解析器一个点都读不到：
-    // 圆点还在、连线整条消失——读者 2026-11-22 在真机上看到的就是这个。
-    expect(pairs).toHaveLength(29)
-    for (const pair of pairs) expect(pair).toMatch(/^-?[\d.]+,-?[\d.]+$/)
-    // 线要有颜色：规则给 stroke，且它引用的 token 在门户色板里定义过（看板根上可继承）。
-    expect(cssBlock(styles, '.mi-defensive-premium__line {')).toContain('stroke: var(--mi-dashboard-lime)')
-    expect(readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/sampleMode.css'), 'utf8'))
-      .toContain('--mi-dashboard-lime:')
+  it('draws a smooth line with a light area only when there are enough points', () => {
+    const many = skewChartOption({ points: skewPoints(29), axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const manySeries = (many.series as Array<{ data: unknown[]; smooth: number; lineStyle: { width: number; opacity: number; color: string }; areaStyle?: unknown }>)[0]!
+    // 29 个点：一条平滑线 + 淡面积，点数一个不多一个不少。
+    expect(manySeries.data).toHaveLength(29)
+    expect(manySeries.smooth).toBe(0.22)
+    expect(manySeries.lineStyle.width).toBe(1.6)
+    expect(manySeries.lineStyle.opacity).toBe(1)
+    expect(manySeries.lineStyle.color).toBe(CHART_PALETTE_FIXTURE.line)
+    expect(manySeries.areaStyle).toBeDefined()
+    // 少于 5 个点只画点、不连线：线宽 0、透明度 0，也不铺面积。
+    for (const count of [1, 4]) {
+      const few = skewChartOption({ points: skewPoints(count), axisName: 'x', palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+      const fewSeries = (few.series as Array<{ lineStyle: { width: number; opacity: number }; areaStyle?: unknown }>)[0]!
+      expect(fewSeries.lineStyle.opacity).toBe(0)
+      expect(fewSeries.areaStyle).toBeUndefined()
+    }
   })
 
   it.each([1, 4, 5, 29, 30])('covers the %i-day edge of the skew window without inventing points', async (count) => {
-    const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, count))
-    const line = container.querySelector('[data-chart-line="skew"]')
-    const dots = container.querySelectorAll('[data-chart-series="skew"] circle')
-    // 点一个不多一个不少；少于 5 个点只画点、不连线。
-    expect(dots).toHaveLength(count)
-    expect(line !== null).toBe(count >= 5)
-    if (line) {
-      // `points` 是「x,y」点列（不是路径语法）：数点数就是数空格分隔的对。
-      const drawn = (line.getAttribute('points') ?? '').trim().split(/\s+/)
-      expect(drawn).toHaveLength(count)
-      for (const pair of drawn) expect(pair).toMatch(/^-?[\d.]+,-?[\d.]+$/)
-    }
-    // 只有一个点时横轴只印一个日期，不左右各印一次（只看偏斜这张图）。
-    const axisDates = container.querySelector('[data-chart-series="skew"]')!.closest('figure')!.querySelectorAll('[data-axis-date]')
-    expect(axisDates).toHaveLength(count === 1 ? 1 : 2)
+    const points = skewPoints(count)
+    const option = skewChartOption({ points, axisName: dashboardText.defensivePremium.skew.axis, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const series = (option.series as Array<{ data: number[] }>)[0]!
+    // 点一个不多一个不少；横轴就是这 count 天（新在前、画的时候反过来），不补假点。
+    expect(series.data).toHaveLength(count)
+    expect((option.xAxis as { data: string[] }).data).toHaveLength(count)
+    expect((option.xAxis as { data: string[] }).data[0]).toBe([...points].reverse()[0]!.day)
+    // 少于 5 个点不连线，5 个起才连（判据是点数，不是「有没有数据」）。
+    const lineStyle = (option.series as Array<{ lineStyle: { opacity: number } }>)[0]!.lineStyle
+    expect(lineStyle.opacity).toBe(count >= 5 ? 1 : 0)
   })
 
   it('names the direction with the 5-day window, and leaves one action in the header when not connected', async () => {
@@ -1729,52 +1721,43 @@ describe('the defensive premium band', () => {
   it('keeps the three columns and both chart frames while loading, so the card does not collapse', async () => {
     const container = await renderBand({ query: () => new Promise(() => undefined) })
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    // 仪表那一列一个装饰环、偏斜格一颗带文案的加载态；卡头与三列都还在，
-    // 不是整块被一个加载面替掉。整卡加载只许一处 role=status，否则读屏会念两遍。
-    expect(band.querySelectorAll('.mi-defensive-premium__cell')).toHaveLength(2)
+    // 三列都在；仪表列一个装饰环、偏斜格一颗带文案的加载态，不是整块被一个加载面替掉。
+    expect(band.querySelectorAll('.mi-defensive-premium__col')).toHaveLength(3)
     expect(band.querySelector('[data-sentiment-gauge]')).not.toBeNull()
     expect(band.querySelectorAll('[data-loading-state]')).toHaveLength(1)
     expect(band.querySelectorAll('.loading-spinner')).toHaveLength(2)
+    // 整卡加载只许一处 role=status，否则读屏会念两遍。
     expect(band.querySelectorAll('[role="status"]')).toHaveLength(1)
     expect(band.querySelector('.mi-defensive-premium__header')).not.toBeNull()
-    // 两格各一个空图框：同一 viewBox、不画线不画值，高度由同一套布局算，不写死。
+    // 两格各一个空图框：与真图同一高度变量、不画线不画值，还没初始化 ECharts。
     const placeholders = band.querySelectorAll('[data-chart-placeholder]')
     expect(placeholders).toHaveLength(2)
-    for (const placeholder of placeholders) {
-      expect(placeholder.querySelector('[data-chart-line]')).toBeNull()
-      expect(placeholder.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 452 46')
-    }
-    // 两格的空图框也用各自的整句轴说明键，不靠组件拼名字与单位。
+    expect(band.querySelector('[data-chart="fear-greed"]')).toBeNull()
+    expect(band.querySelector('[data-chart="skew"]')).toBeNull()
+    // 高度走同一个变量（`--mi-defensive-premium-chart-height`），不在这里写死。
+    for (const placeholder of placeholders) expect(placeholder.classList.contains('mi-defensive-premium__chart')).toBe(true)
+    // 空图框上也写着各自的整句轴说明，不靠组件拼名字与单位。
     expect([...placeholders].map(placeholder => placeholder.querySelector('.mi-defensive-premium__chart-axis')?.textContent))
       .toEqual([dashboardText.defensivePremium.fearGreed.axis, dashboardText.defensivePremium.skew.axis])
-    // 仪表仍在画弧与刻度，只是没有指针。
-    expect(band.querySelectorAll('.mi-crypto-dashboard__sentiment [data-gauge-segment]')).toHaveLength(5)
-    expect(band.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
+    // 仪表那一列照旧画弧（还没有读数，所以没有指针与分数）。
+    expect(band.querySelector('[data-sentiment-gauge] [data-chart="gauge"]')).not.toBeNull()
+    expect(band.querySelector('[data-gauge-reading]')?.textContent).toBe('')
   })
 
-  it('overlays each half wait on the frame it replaces, so loading adds no row', async () => {
+  it('overlays each wait on the frame it replaces, so loading adds no row', async () => {
     const container = await renderBand({ query: () => new Promise(() => undefined) })
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    const leftWait = band.querySelector('.mi-crypto-dashboard__sentiment .loading-spinner')!
-    const rightWait = band.querySelector('[data-half="skew"] [data-loading-state]')!
-    // 转圈叠在已有的元素上（仪表那一列叠圆盘、偏斜格叠空图框），不当网格里独立的一行：
+    const gaugeWait = band.querySelector('[data-sentiment-gauge] .loading-spinner')!
+    const skewWait = band.querySelector('[data-half="skew"] [data-loading-state]')!
+    // 环叠在仪表那一列、加载态叠在偏斜格的空图框里，都不当网格里独立的一行：
     // 当独立行时加载态比正常态整整高一行，换态卡就跳。
-    expect(leftWait.closest('.mi-crypto-dashboard__sentiment-dial')).not.toBeNull()
-    expect(rightWait.closest('[data-chart-placeholder]')).not.toBeNull()
-    // 播报只在右半那一处：左半只是装饰环，不能也算一次「加载中」。
-    expect(leftWait.getAttribute('aria-hidden')).toBe('true')
-    expect(leftWait.closest('[role="status"]')).toBeNull()
-    expect(rightWait.getAttribute('role')).toBe('status')
-    expect(rightWait.closest('[data-chart-placeholder]')?.getAttribute('aria-hidden')).toBeNull()
-  })
-
-  it('holds the header at the action height on the first frame, when no action is rendered', async () => {
-    const first = await renderBand({ query: () => new Promise(() => undefined) })
-    const header = first.querySelector('.mi-defensive-premium__header')!
-    // 首帧不出刷新（还是首帧的契约）……
-    expect(header.querySelector('.mi-defensive-premium__refresh')).toBeNull()
-    // ……但标题行不许因此塌 2px：24 是动作的 md 档高度，由标题行自己兜住（界面实测 216 对 218）。
-    expect(cssBlock(styles, '.mi-defensive-premium__header {')).toContain('min-height: 24px')
+    expect(gaugeWait.closest('.mi-defensive-premium__col-wait')).not.toBeNull()
+    expect(skewWait.closest('[data-chart-placeholder]')).not.toBeNull()
+    // 播报只在偏斜格那一处：仪表那颗只是装饰环。
+    expect(gaugeWait.getAttribute('aria-hidden')).toBe('true')
+    expect(gaugeWait.closest('[role="status"]')).toBeNull()
+    expect(skewWait.getAttribute('role')).toBe('status')
+    expect(skewWait.closest('[data-chart-placeholder]')?.getAttribute('aria-hidden')).toBeNull()
   })
 
   it('offers no refresh on the first frame, and keeps one disabled refresh while re-reading', async () => {

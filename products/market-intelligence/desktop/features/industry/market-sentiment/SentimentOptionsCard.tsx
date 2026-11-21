@@ -89,7 +89,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           <SentimentGauge state={toGaugeState(fearGreed)} buckets={text.fearGreed.buckets} titleId={FEAR_GREED_HEADING_ID}
             {...(cellOff === undefined ? {} : { cellOff })} />
 
-          <div className="mi-defensive-premium__cell" data-half="fear-greed">
+          <div className="mi-defensive-premium__col" data-half="fear-greed">
             <div className="mi-defensive-premium__cell-head">
               <h3 id={FEAR_GREED_HEADING_ID}>{text.fearGreed.name}</h3>
               <Popover resolveText={dataText} lines={[
@@ -102,22 +102,31 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               )} />
             </div>
             {/* 读数行：这一格只有「截至」，没有方向位——分数与档位词归仪表盘那一列（§4.5 第 2 条）。 */}
-            <FearGreedReading cellOff={cellOff} section={fearGreed} loading={loading}
-              text={text} dataText={dataText} />
-            {loading && cellOff === undefined ? <ChartPlaceholder axisLabel={text.fearGreed.axis} /> : null}
-            {/* 这一格被关掉时不出任何曲线（旧读数也不画）：AC-15 与定稿 §5 行 10。 */}
-            {cellOff === undefined && fearGreed?.state === 'available' && fearGreed.points.length > 0
-              ? <FearGreedChart points={fearGreed.points} axisLabel={text.fearGreed.axis}
-                ariaLabel={chartAria({
-                  ariaLabel: text.chart.fearGreedAria, summary: text.chart.fearGreedSummary,
-                  days: fearGreed.points.map(point => point.day),
-                  first: String(fearGreed.points[fearGreed.points.length - 1]!.score),
-                  last: String(fearGreed.points[0]!.score)
-                })} />
-              : null}
+            <FearGreedReading section={fearGreed} text={text} dataText={dataText} />
+            {/* 图位：曲线、加载空图框、或一块「这一格怎么没数」的状态块——三种都占同一个高度，
+                所以未接入/读不到时那一列不会塌成一行、留一大片空白。 */}
+            {cellOff !== undefined
+              ? <StateSlot tone="disabled" stateAttribute="disabled" icon={<CircleSlash size={14} aria-hidden="true" />}
+                sentence={`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）`} />
+              : fearGreed?.state === 'unavailable'
+                ? <StateSlot tone="unreadable" stateAttribute="unreadable" icon={<TriangleAlert size={14} aria-hidden="true" />}
+                  sentence={dataText('pages.intelligence.portal.data.temporarilyUnavailable')} />
+                : fearGreed?.state === 'empty'
+                  ? <StateSlot tone="empty" stateAttribute="empty" sentence={text.empty} />
+                  : loading
+                    ? <ChartPlaceholder axisLabel={text.fearGreed.axis} />
+                    : fearGreed?.state === 'available' && fearGreed.points.length > 0
+                      ? <FearGreedChart points={fearGreed.points} axisLabel={text.fearGreed.axis}
+                        ariaLabel={chartAria({
+                          ariaLabel: text.chart.fearGreedAria, summary: text.chart.fearGreedSummary,
+                          days: fearGreed.points.map(point => point.day),
+                          first: String(fearGreed.points[fearGreed.points.length - 1]!.score),
+                          last: String(fearGreed.points[0]!.score)
+                        })} />
+                      : null}
           </div>
 
-          <div className="mi-defensive-premium__cell" data-half="skew">
+          <div className="mi-defensive-premium__col" data-half="skew">
             <div className="mi-defensive-premium__cell-head">
               <h3 id={SKEW_HEADING_ID}>{text.skew.name}</h3>
               <Popover resolveText={dataText} lines={[
@@ -133,7 +142,10 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               <p className="mi-defensive-premium__reading" aria-hidden="true">&nbsp;</p>
               <ChartPlaceholder axisLabel={text.skew.axis} waitingLabel={text.loading} />
             </>
-              : skew?.state === 'not-connected' ? <p className="mi-defensive-premium__state">{text.skew.notConnected}</p>
+              : skew?.state === 'not-connected' ? <>
+                <p className="mi-defensive-premium__reading">&nbsp;</p>
+                <StateSlot tone="missing" sentence={text.skew.notConnected} />
+              </>
                 : skew?.state === 'available' ? <>
                 <p className="mi-defensive-premium__reading">
                   <strong>{skew.latest.riskReversal.toFixed(1)}</strong> <span>{text.skew.unit}</span>
@@ -169,8 +181,14 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                 {skew.direction.kind === 'unknown'
                   ? <SkewDirectionSentence direction={skew.direction} latestDay={skew.latestDay} text={text} />
                   : null}
-              </> : skew?.state === 'empty' ? <p className="mi-defensive-premium__state">{text.empty}</p>
-                : skew === undefined ? null : <p className="mi-defensive-premium__state">{skewUnavailableText(skew, text)}</p>}
+              </> : skew?.state === 'empty' ? <>
+                <p className="mi-defensive-premium__reading">&nbsp;</p>
+                <StateSlot tone="empty" sentence={text.empty} />
+              </>
+                : skew === undefined ? null : <>
+                  <p className="mi-defensive-premium__reading">&nbsp;</p>
+                  <StateSlot tone="unreadable" sentence={skewUnavailableText(skew, text)} />
+                </>}
           </div>
         </>}
 
@@ -183,45 +201,39 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
 
 /**
  * 恐惧贪婪格的读数行：这一格**没有方向位**，只有一条「截至」。
- * 读数不到 / 确实没有 / 被关掉时，把状态词写在这一行（原因留在这里，结论不重复）。
+ * 「为什么没数」不写在这里——它在图位那块状态块里，那一列才不会塌成一行。
  */
-function FearGreedReading({ section, cellOff, loading, text, dataText }: Readonly<{
+function FearGreedReading({ section, text, dataText }: Readonly<{
   section: SentimentOptionsCardResult['fearGreed'] | undefined
-  cellOff?: SourceCellOff
-  loading: boolean
   text: DefensivePremiumCardText
   dataText: (key: string) => string
 }>): React.ReactElement {
-  if (cellOff !== undefined) {
-    return <p className="mi-defensive-premium__reading mi-source-state" data-sentiment-state="disabled">
-      <CircleSlash aria-hidden="true" className="mi-source-state__icon" size={14} />
-      <span>{`${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）`}</span>
-    </p>
-  }
-  if (section?.state === 'unavailable') {
-    return <p className="mi-defensive-premium__reading mi-source-state" data-sentiment-state="unreadable" data-state="unreadable">
-      <TriangleAlert aria-hidden="true" className="mi-source-state__icon" size={14} />
-      <span>{dataText('pages.intelligence.portal.data.temporarilyUnavailable')}</span>
-    </p>
-  }
-  if (section?.state === 'empty') {
-    return <p className="mi-defensive-premium__reading mi-source-state" data-sentiment-state="empty">
-      <span>{text.empty}</span>
-    </p>
-  }
-  if (section?.state === 'available') {
-    return <p className="mi-defensive-premium__reading">
-      <span>{text.fearGreed.asOf} {section.latestDay}</span>
-      {section.stale
-        ? <span className="mi-defensive-premium__stale" data-stale="fear-greed">
-          <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
-          <span>{fillLabelParams(text.stale.stopsAt, { date: section.latestDay })}</span>
-        </span>
-        : null}
-    </p>
-  }
-  // 还在读：这一行先留出来（空占位），换态时这一格不缩。
-  return <p className="mi-defensive-premium__reading" aria-hidden="true">{loading ? '\u00a0' : ''}</p>
+  if (section?.state !== 'available') return <p className="mi-defensive-premium__reading">&nbsp;</p>
+  return <p className="mi-defensive-premium__reading">
+    <span>{text.fearGreed.asOf} {section.latestDay}</span>
+    {section.stale
+      ? <span className="mi-defensive-premium__stale" data-stale="fear-greed">
+        <StatusPill tone="warn" labelKey={`${TEXT_PREFIX}.stale.pill`} resolveText={dataText} />
+        <span>{fillLabelParams(text.stale.stopsAt, { date: section.latestDay })}</span>
+      </span>
+      : null}
+  </p>
+}
+
+/**
+ * 图位上的状态块：这一格没有数要画时，句子就落在这里，占住与曲线相同的高度。
+ * `stateAttribute` 给了就带上 `data-sentiment-state`（恐惧贪婪格的三种「没数」用它标记）。
+ */
+function StateSlot({ tone, sentence, icon, stateAttribute }: Readonly<{
+  tone: 'disabled' | 'unreadable' | 'empty' | 'missing'
+  sentence: string
+  icon?: React.ReactNode
+  stateAttribute?: 'disabled' | 'unreadable' | 'empty'
+}>): React.ReactElement {
+  return <p className="mi-defensive-premium__state-box" data-state={tone}
+    {...(stateAttribute === undefined ? {} : { 'data-sentiment-state': stateAttribute })}>
+    {icon}<span>{sentence}</span>
+  </p>
 }
 
 /** 读屏名 = 原图描述 + 一句带窗口、点数与首末值的摘要；参数都是已格式化的字符串。 */

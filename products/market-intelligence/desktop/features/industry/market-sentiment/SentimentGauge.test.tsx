@@ -1,96 +1,111 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
 import type { DashboardFearGreedState } from '../../../pages/intelligence/dashboardFearGreedModel'
 import { SentimentGauge } from './SentimentGauge'
+import { CHART_PALETTE_FIXTURE } from './defensivePremiumChartPalette.fixture'
+import { CHART_FONTS_FALLBACK, gaugeChartOption } from './defensivePremiumChartOptions'
+import { CHART_HEIGHT } from './DefensivePremiumCharts'
 
 /**
- * 仪表那一列（定稿 §4.4）：只回答「落在哪一档」。
+ * 仪表那一列：只回答「落在哪一档」。
  *
- * 三种「没有读数」——读不到、确实没有、被读者关掉——都照画弧与刻度，只是不画指针、圆盘与档位词；
- * 日期、状态词、三个区间标签都**不在这里**（日期与状态词归恐惧贪婪格的读数行）。
+ * 读数（分数 + 档位词）是**文字**，出现在这一列的读数行上；图是 ECharts 画的装饰（aria-hidden），
+ * 日期、状态词、三个区间标签都不在这里——日期与状态词归恐惧贪婪格的读数行。
  */
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard
 const buckets = text.fearGreed.buckets
 const observedAt = '2026-08-04T10:00:00.000Z'
 const available: DashboardFearGreedState = { state: 'available', score: 22, bucket: 'extreme-fear', observedAt }
 const openSources = { sourceLabel: '恐惧与贪婪', onOpenSources: () => undefined }
+let root: Root | undefined
 
-function markup(state: DashboardFearGreedState, cellOff?: typeof openSources): string {
-  return renderToStaticMarkup(createElement(SentimentGauge, {
+afterEach(async () => {
+  await act(async () => root?.unmount())
+  root = undefined
+  document.body.replaceChildren()
+})
+
+async function render(state: DashboardFearGreedState, cellOff?: typeof openSources): Promise<HTMLElement> {
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  await act(async () => root?.render(createElement(SentimentGauge, {
     state, buckets, titleId: 'mi-defensive-premium-fear-greed-heading',
     ...(cellOff ? { cellOff } : {})
-  }))
+  })))
+  await act(async () => { await Promise.resolve() })
+  return container.querySelector<HTMLElement>('[data-sentiment-gauge]')!
 }
 
 describe('the gauge column', () => {
-  it('keeps the arc and the five ticks in every state, and never an inline control', () => {
-    const states: DashboardFearGreedState[] = [available, { state: 'stale', score: 40, bucket: 'neutral', observedAt }, { state: 'loading' }, { state: 'empty' }, { state: 'unavailable' }]
+  it('shows the score and the bucket word as text, with the chart as decoration', async () => {
+    const gauge = await render(available)
+    expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('22极度恐惧')
+    expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
+    // 图是装饰：读屏念的是上面那行文字，不是画布。
+    const chart = gauge.querySelector('[data-chart="gauge"]')!
+    expect(chart.getAttribute('aria-hidden')).toBe('true')
+    expect(chart.hasAttribute('role')).toBe(false)
+    expect(chart.querySelector('svg')).not.toBeNull()
+  })
+
+  it('keeps the column free of dates, band markers and controls', async () => {
+    const states: DashboardFearGreedState[] = [
+      available,
+      { state: 'stale', score: 40, bucket: 'neutral', observedAt },
+      { state: 'loading' }, { state: 'empty' }, { state: 'unavailable' }
+    ]
     for (const state of states) {
-      for (const shown of [markup(state), markup(state, openSources)]) {
-        expect(shown.split('data-gauge-segment=').length - 1).toBe(5)
-        expect(shown.split('class="mi-crypto-dashboard__gauge-tick"').length - 1).toBe(5)
-        // 动作统一在卡标题行（AC-31）：这一列一颗按钮都没有，也不自绘遮罩。
-        expect(shown).not.toContain('<button')
-        expect(shown).not.toContain('mi-source-veil')
-        expect(shown).not.toContain('state-view')
+      for (const cellOff of [undefined, openSources]) {
+        const gauge = await render(state, cellOff)
+        expect(gauge.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+        expect(gauge.textContent).not.toContain(text.sentiment.observedAt)
+        expect(gauge.querySelector('button')).toBeNull()
+        expect(gauge.querySelector('[data-sentiment-state]')).toBeNull()
       }
     }
   })
 
-  it('draws the needle, the readout and the bucket word only when there is a reading', () => {
-    const readable = markup(available)
-    expect(readable).toContain('mi-crypto-dashboard__gauge-needle')
-    expect(readable).toContain('mi-crypto-dashboard__gauge-readout')
-    expect(readable).toContain('<strong>22</strong>')
-    expect(readable).toContain(`data-gauge-bucket-text="extreme-fear"`)
-    expect(readable).toContain(buckets['extreme-fear'])
-
-    // 读不到 / 空 / 还在读：弧与刻度在，指针、圆盘、分数、档位词都不在。
-    for (const state of [{ state: 'empty' as const }, { state: 'unavailable' as const }, { state: 'loading' as const }]) {
-      const shown = markup(state)
-      expect(shown).not.toContain('mi-crypto-dashboard__gauge-needle')
-      expect(shown).not.toContain('mi-crypto-dashboard__gauge-readout')
-      expect(shown).not.toContain('<strong>')
-      expect(shown).not.toContain('data-gauge-bucket-text="extreme-fear"')
+  it('draws the arcs in every state and drops the reading when the cell is switched off (AC-15)', async () => {
+    for (const state of [{ state: 'empty' } as const, { state: 'unavailable' } as const, { state: 'loading' } as const]) {
+      const gauge = await render(state)
+      // 弧照画（图一直在），但没有读数。
+      expect(gauge.querySelector('[data-chart="gauge"]')).not.toBeNull()
+      expect(gauge.querySelector('[data-gauge-reading]')?.textContent).toBe('')
     }
+    // 被关掉时连旧读数也不画：分数与档位词都不出现，弧还在。
+    const off = await render(available, openSources)
+    expect(off.querySelector('[data-gauge-reading]')?.textContent).toBe('')
+    expect(off.querySelector('[data-chart="gauge"]')).not.toBeNull()
   })
 
-  it('drops the reading when the cell is switched off, whatever the numbers say (AC-15)', () => {
-    const shown = markup(available, openSources)
-    expect(shown).not.toContain('mi-crypto-dashboard__gauge-needle')
-    expect(shown).not.toContain('<strong>22</strong>')
-    expect(shown).not.toContain(buckets['extreme-fear'])
-    // 弧与刻度照画：关掉一格不是把整张图撕掉。
-    expect(shown.split('data-gauge-segment=').length - 1).toBe(5)
+  it('announces nothing while waiting: the card allows one role=status, in the other column', async () => {
+    const gauge = await render({ state: 'loading' })
+    expect(gauge.querySelector('.loading-spinner')).not.toBeNull()
+    expect(gauge.querySelectorAll('[role="status"]')).toHaveLength(0)
+    expect(gauge.querySelector('[aria-live]')).toBeNull()
   })
 
-  it('shows the date nowhere: it belongs to the fear-greed cell reading row', () => {
-    for (const shown of [markup(available), markup({ state: 'loading' }), markup({ state: 'unavailable' })]) {
-      expect(shown).not.toContain(text.defensivePremium.fearGreed.asOf)
-      expect(shown).not.toContain('2026-08-04')
-      // 一个日期都不许出现：日期归恐惧贪婪格的读数行。
-      expect(shown).not.toMatch(/\d{4}-\d{2}-\d{2}/)
-    }
+  it('gives the needle a value only when there is a score', () => {
+    const size = { width: 184, height: CHART_HEIGHT }
+    const withScore = gaugeChartOption({ score: 22, ...size, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    const series = (withScore.series as Array<{ pointer: { show: boolean }; detail: { show: boolean }; data: Array<{ value: number }> }>)[0]!
+    expect(series.pointer.show).toBe(true)
+    expect(series.data[0]!.value).toBe(22)
+    const without = gaugeChartOption({ score: undefined, ...size, palette: CHART_PALETTE_FIXTURE, fonts: CHART_FONTS_FALLBACK })
+    expect((without.series as Array<{ pointer: { show: boolean } }>)[0]!.pointer.show).toBe(false)
   })
 
-  it('announces nothing while waiting: the card allows one role=status, in the other column', () => {
-    const shown = markup({ state: 'loading' })
-    expect(shown).toContain('loading-spinner')
-    expect(shown).not.toContain('role="status"')
-    expect(shown).not.toContain('aria-live')
-  })
-
-  it('stays inside the 112px column: no width of its own on the section', () => {
+  it('is the card’s first column: no width of its own, rows come from the shared template', () => {
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
-    const rule = [...styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, selector]) => selector.trim().endsWith('.mi-defensive-premium'))
-    expect(rule?.[2]).toContain('grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr)')
-    // 这一列不自己定宽：宽度由卡的三列网格给，窄了跟着缩。
-    expect(styles).toContain('.mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }')
+    // 列宽由卡的三列网格给（一个变量），这一列不自己定宽；行模板三列共用。
+    expect(styles).toContain('.mi-defensive-premium__col { display: grid; grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height)')
+    expect(styles).toContain('--mi-defensive-premium-gauge-width: 184px')
   })
 })
