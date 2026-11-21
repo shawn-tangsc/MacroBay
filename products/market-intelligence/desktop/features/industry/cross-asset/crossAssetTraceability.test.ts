@@ -6,6 +6,7 @@ import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macr
 import { FRED_MACRO_ADAPTER_CONFIG } from '../../../../service/intelligence/application/macroSourceCatalogMetadata'
 import * as serviceSide from '../../../../service/intelligence/provenance/traceabilityCatalog'
 import * as rendererSide from './crossAssetTraceability'
+import { buildUstRows, changeSet } from '../ust-curve/ustCurveModel'
 
 /**
  * 两张口径目录合起来是否真的覆盖了"读者能看到的数"（设计 144 §4.1 的实现期修正 I1）。
@@ -66,4 +67,13 @@ it('states the daily row\'s numbers from the contract and the source catalog tha
   // 别侧的族老实说不在这一侧。
   expect(rendererSide.isTraceabilityFamilyOwnedHere('cross-market-reading')).toBe(false)
   expect(rendererSide.resolveTraceability('chart-sampling')).toBeUndefined()
+})
+
+it('points the daily family at the card that actually computes it', () => {
+  // owner 从「面板日频行」迁到「国债收益率卡」（用户 2026-11-22）。谁把 functionRefs 指回旧实现，
+  // 这里就红：名字必须在映射里，而映射里那两个必须是卡片自己的函数，不是同名替身。
+  const entry = rendererSide.resolveTraceability('daily-rate-row')!
+  expect([...entry.formula.functionRefs]).toEqual(['changeSet', 'buildUstRows'])
+  expect(rendererSide.traceabilityFunctionRefs.changeSet).toBe(changeSet)
+  expect(rendererSide.traceabilityFunctionRefs.buildUstRows).toBe(buildUstRows)
 })
