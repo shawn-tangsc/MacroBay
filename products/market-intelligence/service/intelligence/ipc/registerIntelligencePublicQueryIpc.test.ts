@@ -154,6 +154,31 @@ describe('registerIntelligencePublicQueryIpc', () => {
     })
   })
 
+  it('keeps an unreadable skew store on the skew half only', async () => {
+    const handlers = new Map<string, ProductIpcHandler>()
+    // 存储读不出来是这一支第一次在生产里可达（`readOptionSkew` 抛错）。校验层若只认
+    // `not-connected`，整卡会被回退成两段 unavailable，恐惧贪婪那半也被牵连。
+    const payload = {
+      asOf: '2026-08-06T12:00:00.000Z', windowDays: 30, timeZone: 'Asia/Shanghai',
+      fearGreed: {
+        state: 'available', score: 22, bucket: 'extreme-fear',
+        observedAt: '2026-08-06T10:00:00.000Z', latestDay: '2026-08-06',
+        daysAgo: 0, stale: false, seriesStart: '2026-08-06',
+        points: [{ day: '2026-08-06', observedAt: '2026-08-06T10:00:00.000Z', score: 22, bucket: 'extreme-fear' }]
+      },
+      optionSkew: { state: 'unavailable', failureCode: 'option-skew-query-unavailable' }
+    }
+    registerIntelligencePublicQueryIpc(
+      (_productId, method, handler) => handlers.set(method, handler),
+      {} as JobRuntime,
+      { publicQueryService: { ...mockPublicQueryService, querySentimentOptionsCard: vi.fn(async () => payload) } } as never
+    )
+
+    await expect(handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.querySentimentOptionsCard)?.({
+      asOf: '2026-08-06T12:00:00.000Z', timeZone: 'Asia/Shanghai', windowDays: 30
+    })).resolves.toEqual(payload)
+  })
+
   it('reconstructs only a valid fixed Fear & Greed snapshot result', async () => {
     const handlers = new Map<string, ProductIpcHandler>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
