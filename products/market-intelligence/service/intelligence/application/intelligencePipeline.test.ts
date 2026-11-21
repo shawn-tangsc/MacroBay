@@ -220,7 +220,7 @@ describe('intelligencePipeline', () => {
       profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
       rawRecordStore
     })
-    rawRecordStore.appendRawRecord({
+    const badRecord = rawRecordStore.appendRawRecord({
       sourceId: 'defillama-tvl', runId: 'run-bad', sourceDedupeKey: 'tvl-bad', payloadFormat: 'json',
       payloadRefType: 'inline', payloadBody: '[]', payloadHash: 'hash-bad', parserVersion: 'fixture-v1'
     })
@@ -231,8 +231,12 @@ describe('intelligencePipeline', () => {
     expect(result.failedCount).toBe(1)
     expect(result.processedCount).toBe(2)
     expect(result.queuedJobs).toContain('market-intelligence.enrichNewsDocuments')
-    // 坏的记录没有被吞掉：仍在待办里，下一轮还会再试（修好解析后自然就过了）。
-    expect(rawRecordStore.listUnprocessed().map((record) => record.sourceId)).toEqual(['defillama-tvl'])
+    // 坏的记录转 `failed` 离开待办，原因码留在记录上：只隔离不挪队头的话，一轮 100 条全失败时
+    // 下一轮捞回来的还是这 100 条，第 101 条永远轮不到。
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+    const failedRecord = rawRecordStore.getRawRecord(badRecord!.rawRecordId)
+    expect(failedRecord?.processingState).toBe('failed')
+    expect(failedRecord?.errorMessage).toBe('MI_NORMALIZE_RECORD_FAILED')
   })
 
   it('persists a source normalize failure streak across rounds and collection successes', async () => {
@@ -244,12 +248,12 @@ describe('intelligencePipeline', () => {
       rawRecordStore,
       runtimeStateSnapshot: [runtimeState({ resourceId: 'sec-rss' })]
     })
-    rawRecordStore.appendRawRecord({
-      sourceId: 'sec-rss', runId: 'run-gone', sourceDedupeKey: 'sec-gone', payloadFormat: 'rss-item',
-      payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash', parserVersion: 'rss-v1'
-    })
-
     for (let round = 0; round < 3; round += 1) {
+      // 每轮一条新的坏记录：失败的记录已经离开待办（见上一条用例），生产里也是每 30 分钟新来一条。
+      rawRecordStore.appendRawRecord({
+        sourceId: 'sec-rss', runId: `run-gone-${round}`, sourceDedupeKey: `sec-gone-${round}`, payloadFormat: 'rss-item',
+        payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash', parserVersion: 'rss-v1'
+      })
       await pipeline.normalizeRawRecords({ sourceId: 'sec-rss' })
     }
 
@@ -310,13 +314,48 @@ describe('intelligencePipeline', () => {
     expect(pipeline.listMetricEvents().some(event => event.sourceId === 'defillama-tvl')).toBe(true)
   })
 
+  it('drains the queue after a whole round fails, so round two reaches the record behind it', async () => {
+    /* 只把记录标成 failed 不够，要证「下一轮能捞到第 101 条」：一百条坏记录 + 一条排在最旧的好记录，
+       第一轮把这 100 条按失败移出待办，第二轮就该轮到那条好记录。 */
+    const rawRecordStore = createRawRecordStore({ readPayload: () => ({ state: 'missing' as const }) })
+    const pipeline = createIntelligencePipeline({
+      profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
+      rawRecordStore
+    })
+    // 五个源各 20 条，正好填满一轮（每源每轮上限 20 见 `normalizationBatchSelection`）。
+    const badSources = ['binance-spot-market', 'alternative-fear-greed', 'defillama-tvl', 'fred-rates-liquidity', 'okx-api-announcements']
+    for (const [sourceIndex, sourceId] of badSources.entries()) {
+      for (let index = 0; index < 20; index += 1) {
+        rawRecordStore.appendRawRecord({
+          sourceId, runId: `run-bad-${sourceId}-${index}`, sourceDedupeKey: `bad-${sourceIndex}-${index}`,
+          payloadFormat: 'json', payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash',
+          parserVersion: 'metric-rest-api-v1',
+          detectedAt: `2026-11-21T07:${String(sourceIndex * 10 + index).padStart(2, '0')}:00.000Z`
+        })
+      }
+    }
+    rawRecordStore.appendRawRecord({
+      sourceId: 'sec-rss', runId: 'run-good', sourceDedupeKey: 'sec-good', payloadFormat: 'rss-item',
+      payloadRefType: 'inline', payloadBody: loadFixture('sec-rss-item-sample.json'), payloadHash: 'good-hash',
+      parserVersion: 'rss-v1', detectedAt: '2026-11-19T20:14:59.000Z'
+    })
+
+    const firstRound = await pipeline.normalizeRawRecords({})
+    expect(firstRound.failedCount).toBe(100)
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(1)
+
+    const secondRound = await pipeline.normalizeRawRecords({})
+    expect(secondRound.failedCount).toBe(0)
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+  })
+
   it('counts an unreadable externalized payload as failed and never parses an empty body', async () => {
     const rawRecordStore = createRawRecordStore({ readPayload: () => ({ state: 'missing' as const }) })
     const pipeline = createIntelligencePipeline({
       profileStore: createSourceProfileStore(createInMemoryProfileStorage()),
       rawRecordStore
     })
-    rawRecordStore.appendRawRecord({
+    const goneRecord = rawRecordStore.appendRawRecord({
       sourceId: 'sec-rss', runId: 'run-gone', sourceDedupeKey: 'sec-gone', payloadFormat: 'rss-item',
       payloadRefType: 'file', payloadFileRef: 'gone.bin', payloadHash: 'gone-hash', parserVersion: 'rss-v1'
     })
@@ -325,8 +364,9 @@ describe('intelligencePipeline', () => {
 
     expect(result.failedCount).toBe(1)
     expect(result.processedCount).toBe(0)
-    // 不把「读不到原文」当成「解析成功但 0 条」：记录留在待办里，下一轮还有机会。
-    expect(rawRecordStore.listUnprocessed()).toHaveLength(1)
+    // 不把「读不到原文」当成「解析成功但 0 条」：记录转 failed 并带上原因码，不再占待办名额。
+    expect(rawRecordStore.listUnprocessed()).toHaveLength(0)
+    expect(rawRecordStore.getRawRecord(goneRecord!.rawRecordId)?.errorMessage).toBe('MI_NORMALIZE_PAYLOAD_UNREADABLE')
   })
 
   it('writes raw records before parsing and avoids duplicate items', async () => {

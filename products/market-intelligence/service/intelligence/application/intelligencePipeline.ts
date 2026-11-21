@@ -34,7 +34,9 @@ import { resolveCluster } from './clusterResolver'
 import { getIntelligenceSourceDefinition, isDefillamaStablecoinRetiredPath } from './sourceCatalog'
 import { createRawRecordStore } from './rawRecordStore'
 import { parseRecordForNormalization } from './normalizeRecordParsing'
-import { countStaleNewsRecords } from './normalizeQueueDiagnostics'
+import { describeNormalizeQueue } from './normalizeQueueDiagnostics'
+import { selectNormalizationBatch } from './normalizationBatchSelection'
+import { settleNormalizedRecord } from './normalizeRecordOutcome'
 import { buildPipelineHealthSnapshot } from './pipelineHealth'
 import { mergeNormalizeStreak, normalizeStreakUpdate, preserveNormalizeStreak } from './sourceStaleness'
 import { resolveRevision } from './revisionResolver'
@@ -53,7 +55,6 @@ import type {
   IntelligencePipelineStateStorage
 } from '../store/intelligencePipelineStateStorage'
 import { createEmptyIntelligencePipelineSnapshot } from '../store/intelligencePipelineStateStorage'
-import { NEWS_SENTIMENT_SOURCE_IDS } from '../schema/newsSentiment'
 import type { IntelligenceRuntimeStateStorage } from '../store/intelligenceRuntimeStateStorage'
 import type { IntelligenceRuntimeStateHistoryStorage } from '../store/intelligenceRuntimeStateHistoryStorage'
 import {
@@ -71,11 +72,7 @@ import type { SentimentSignalInput, IntelligenceSentimentAggregate } from '../sc
 import type { IntelligenceSourceConfig, IntelligenceSourceDefinition } from '../schema/intelligenceSource'
 import type { ParsedIntelligenceRecord } from '../adapters/sourceAdapter'
 import type { IntelligenceEventPublisher } from './intelligenceEventPublisher'
-import {
-  classifyParsedIntelligence,
-  enrichDraftWithClassification,
-  SOURCE_CLASSIFIER_VERSION
-} from './sourceClassifiers/classifyParsedIntelligence'
+import { classifyParsedIntelligence, enrichDraftWithClassification } from './sourceClassifiers/classifyParsedIntelligence'
 import type { ClassifiedSourceEvent } from './sourceClassifiers/sourceClassifierTypes'
 import { notifySourceIssueForSource, type SourceIssueNotifier } from './sourceIssueNotifier'
 
@@ -95,6 +92,8 @@ export type IntelligencePipeline = {
     failedCount: number
     /** 超过 24 小时还没归一化出来的新闻原始记录数（饿死诊断，见 `registerIntelligenceJobs`）。 */
     staleNewsCount: number
+    /** 超过 24 小时还停在「已接收」的原始记录数，不分来源：盯的是队列整体还在不在动。 */
+    staleReceivedCount: number
     queuedJobs: string[]
     newItemIds: string[]
     /** Items older than the backfill age: created, but kept out of the translate/assess queues. */
@@ -451,11 +450,10 @@ export function createIntelligencePipeline(deps?: {
       const normalizeStats = new Map<string, { failed: number; parsed: number }>()
       const newItemIds: string[] = []
       const backfillItemIds: string[] = []
-      const pending = rawRecordStore
-        .listUnprocessed()
-        .filter((record) => !isDefillamaStablecoinRetiredPath(record.sourceId))
-        .filter((record) => (sourceId ? record.sourceId === sourceId : true))
-        .slice(0, limit)
+      const pending = selectNormalizationBatch(rawRecordStore, {
+        ...(sourceId === undefined ? {} : { sourceId }),
+        limit
+      })
 
       for (const rawRecord of pending) {
         const definition = getIntelligenceSourceDefinition(rawRecord.sourceId)
@@ -475,7 +473,13 @@ export function createIntelligencePipeline(deps?: {
           readPayloadBody: (record) => rawRecordStore.readPayloadBody(record),
           ...(deps?.onMetricWindow ? { onMetricWindow: deps.onMetricWindow } : {})
         })
-        if (recordParse.state === 'failed') { failedCount += 1; stats.failed += 1; continue }
+        // 失败的记录转 `failed` 离开待办：只隔离不挪队头，下一轮捞回来的还是这 100 条（2026-11-21）。
+        if (recordParse.state === 'failed') {
+          failedCount += 1
+          stats.failed += 1
+          rawRecordStore.markFailed(rawRecord.rawRecordId, recordParse.marker)
+          continue
+        }
         const { parsed, payloadBody } = recordParse
         stats.parsed += 1
         rawRecordStore.markParsed(rawRecord.rawRecordId)
@@ -546,24 +550,14 @@ export function createIntelligencePipeline(deps?: {
           }
         }
 
-        if (recordProcessed) {
-          rawRecordStore.markNormalized(rawRecord.rawRecordId)
-          processedCount += 1
-          queueJob(queuedJobs, 'market-intelligence.assessChangedItems')
-          queueJob(queuedJobs, 'market-intelligence.refreshSentimentAggregates')
-          queueJob(queuedJobs, 'market-intelligence.translateItems')
-          if ((NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(rawRecord.sourceId)) {
-            queueJob(queuedJobs, 'market-intelligence.enrichNewsDocuments')
-          }
-        } else if (recordIgnored && ignoredAudit?.ignoredReasonCode) {
-          rawRecordStore.markIgnored(rawRecord.rawRecordId, {
-            ignoredReasonCode: ignoredAudit.ignoredReasonCode,
-            classifierVersion: SOURCE_CLASSIFIER_VERSION,
-            classifierNotes: ignoredAudit.eventSubtype
-          })
-        } else {
-          rawRecordStore.markNormalized(rawRecord.rawRecordId)
-        }
+        const settled = settleNormalizedRecord({
+          rawRecord,
+          store: rawRecordStore,
+          recordProcessed,
+          ...(recordIgnored && ignoredAudit !== undefined ? { ignoredAudit } : {}),
+          enqueue: (jobId) => queueJob(queuedJobs, jobId)
+        })
+        if (settled === 'processed') processedCount += 1
       }
 
       if (stateDirty) {
@@ -588,8 +582,9 @@ export function createIntelligencePipeline(deps?: {
       }
 
       // 饿死诊断：新原始记录进来、却超过一天没有归一化出来的新闻条目——这次就是它被静默盖住的。
-      const staleNewsCount = countStaleNewsRecords(rawRecordStore.listUnprocessed())
-      return { processedCount, failedCount, staleNewsCount, queuedJobs: [...queuedJobs], newItemIds, backfillItemIds }
+      // 第二个数字不分来源，盯的是「队列整体还在不在动」：那次连 730 条行情记录也一起卡住了。
+      const queueDiagnostics = describeNormalizeQueue(rawRecordStore.listUnprocessed())
+      return { processedCount, failedCount, ...queueDiagnostics, queuedJobs: [...queuedJobs], newItemIds, backfillItemIds }
     },
 
     async assessChangedItems({ itemIds }) {
