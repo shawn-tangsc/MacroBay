@@ -1,4 +1,3 @@
-import { Button } from 'antd'
 import { CircleSlash, TriangleAlert } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -110,14 +109,13 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTit
             <LoadingState label={text.fearGreed.loading} minHeight={24} />
           </>}
     </div>
-    {/* 图下方卡内一行：状态句 + 恰一颗按钮（空态没有可点的动作）。左右跟卡内距，不进图、不居中盖图。 */}
+    {/* 图下方卡内一行：只说状态，不放按钮——动作统一在卡标题行（AC-31）。 */}
     {row
       ? <div className="mi-crypto-dashboard__sentiment-state" data-sentiment-state={row.tone}>
         <p className="mi-source-state" {...(row.tone === 'empty' ? {} : { 'data-state': row.tone })}>
           {Icon ? <Icon aria-hidden="true" className="mi-source-state__icon" size={14} /> : null}
           <span>{row.sentence}</span>
         </p>
-        {row.action ? <Button onClick={row.action.run} size="small">{row.action.label}</Button> : null}
       </div>
       : null}
   </section>

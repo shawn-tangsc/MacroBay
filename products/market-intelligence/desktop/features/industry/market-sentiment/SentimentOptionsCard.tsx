@@ -44,7 +44,10 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const wholeCardState: 'error' | 'empty' | undefined = state.state === 'unavailable' || bothUnavailable
     ? 'error'
     : bothEmpty ? 'empty' : undefined
-  const showRefresh = wholeCardState === undefined && skew?.state !== 'not-connected'
+  // 未接入时那颗卡级动作是「查看来源」；但如果恐惧贪婪那半读失败了，重试仍要留在标题行——
+  // 否则一条链路失败、另一条还没接入时，读者没有重试入口（AC-31）。
+  const showRefresh = wholeCardState === undefined
+    && (skew?.state !== 'not-connected' || fearGreed?.state === 'unavailable')
   const showViewSource = wholeCardState === undefined && skew?.state === 'not-connected'
   const verdictKey = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
@@ -60,6 +63,9 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           标题行不再给第二颗（AC-14）。 */}
       {showRefresh ? <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="sm" variant="plain"
         onSelect={onRefresh} disabled={state.state === 'loading'} className="mi-defensive-premium__refresh" /> : null}
+      {/* 这一格被读者关掉时，「去启用」也只在标题行；行内不再放按钮（AC-31）。 */}
+      {cellOff === undefined || wholeCardState !== undefined ? null
+        : <Button size="small" onClick={cellOff.onOpenSources} className="mi-defensive-premium__source-action">{text.action.enable}</Button>}
       <span className="mi-defensive-premium__window">{dataText(`${TEXT_PREFIX}.window`)}</span>
       {showViewSource ? <Button size="small" onClick={onViewSource} className="mi-defensive-premium__source-action">
         {text.action.viewSource}

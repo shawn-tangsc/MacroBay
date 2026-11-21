@@ -1285,12 +1285,14 @@ describe('host wiring: cells switched off and sources judged', () => {
     const row = card.querySelector('[data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('disabled')
     expect(row.textContent).toContain(`${dataText.sourcesNotEnabled}（恐惧与贪婪）`)
-    const buttons = [...row.querySelectorAll('button')]
-    expect(buttons).toHaveLength(1)
-    expect(buttons[0]?.textContent).toBe(dataText.enableSources)
+    // 行内不放按钮：动作统一在卡标题行（AC-31），这里只有「去启用」那一颗。
+    expect([...row.querySelectorAll('button')]).toHaveLength(0)
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const enable = band.querySelector('.mi-defensive-premium__source-action') as HTMLButtonElement
+    expect(enable.textContent).toBe(dataText.enableSources)
     expect(card.textContent).not.toContain('22')
     expect(card.querySelector('.state-view')).toBeNull()
-    await act(async () => buttons[0]!.click())
+    await act(async () => enable.click())
     expect(onManageSource).toHaveBeenCalledTimes(1)
   })
 
@@ -1303,9 +1305,12 @@ describe('host wiring: cells switched off and sources judged', () => {
     const row = card.querySelector('[data-sentiment-state]')!
     expect(row.getAttribute('data-sentiment-state')).toBe('unreadable')
     expect(row.textContent).toContain(dataText.temporarilyUnavailable)
-    const buttons = [...row.querySelectorAll('button')]
-    expect(buttons).toHaveLength(1)
-    expect(buttons[0]?.textContent).toBe(dataText.retry)
+    // 行内不再有「再试一次」；重试就是标题行那颗刷新。
+    expect([...row.querySelectorAll('button')]).toHaveLength(0)
+    const refresh = card.closest('.mi-crypto-dashboard__defensive-premium-row')!
+      .querySelector('.mi-defensive-premium__refresh')
+    expect(refresh?.getAttribute('aria-label')).toBe(dashboardText.defensivePremium.action.refresh)
+    expect(dataText.retry).not.toBe('')
     // 图仍画着，指针不画；旧的整块 `StateView` 也不回来。
     expect(card.querySelector('.mi-crypto-dashboard__gauge-segment')).not.toBeNull()
     expect(card.querySelector('.mi-crypto-dashboard__gauge-needle')).toBeNull()
