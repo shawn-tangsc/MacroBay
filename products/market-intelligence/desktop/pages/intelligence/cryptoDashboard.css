@@ -148,7 +148,9 @@
 .mi-defensive-premium > .mi-defensive-premium__header,
 .mi-defensive-premium > .mi-defensive-premium__verdict,
 .mi-defensive-premium > .state-view { grid-column: 1 / -1; }
-.mi-defensive-premium__header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+/* 24 = 标题行动作的 md 档高度（IconButton 24 / Button small 24）。首帧不出刷新时那颗 24 不在，
+   整行会从 24 掉到 22（只剩 22 高的 ⓘ），换态就差 2px——所以标题行自己兜住这个高度。 */
+.mi-defensive-premium__header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; min-height: 24px; }
 .mi-defensive-premium__header h2 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-card-title); line-height: var(--line-card-title); font-weight: 650; }
 .mi-defensive-premium__refresh { margin-left: auto; }
 .mi-defensive-premium__window { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }

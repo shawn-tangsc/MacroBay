@@ -1768,6 +1768,15 @@ describe('the defensive premium band', () => {
     expect(rightWait.closest('[data-chart-placeholder]')?.getAttribute('aria-hidden')).toBeNull()
   })
 
+  it('holds the header at the action height on the first frame, when no action is rendered', async () => {
+    const first = await renderBand({ query: () => new Promise(() => undefined) })
+    const header = first.querySelector('.mi-defensive-premium__header')!
+    // 首帧不出刷新（还是首帧的契约）……
+    expect(header.querySelector('.mi-defensive-premium__refresh')).toBeNull()
+    // ……但标题行不许因此塌 2px：24 是动作的 md 档高度，由标题行自己兜住（界面实测 216 对 218）。
+    expect(cssBlock(styles, '.mi-defensive-premium__header {')).toContain('min-height: 24px')
+  })
+
   it('offers no refresh on the first frame, and keeps one disabled refresh while re-reading', async () => {
     // 首帧（还没有过任何一次读数）：标题行不出刷新，重试无从谈起（PRD §6）。
     const first = await renderBand({ query: () => new Promise(() => undefined) })
