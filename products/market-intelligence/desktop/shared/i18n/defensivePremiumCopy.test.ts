@@ -91,18 +91,16 @@ const REQUIRED_PATHS = [
   'degraded.skew'
 ] as const
 
-/** 「这次」只在这一族里合法：那三句专说读不到，未接入另有 `skew.notConnected`，一句不必两用。 */
+/** 偏斜读不到那三句：按原因分句，不许抄成同一句。 */
 const UNAVAILABLE_PATHS = ['skew.unavailable.connection', 'skew.unavailable.source', 'skew.unavailable.read'] as const
 
-type Banned = Readonly<{ pattern: RegExp; why: string; except?: readonly string[] }>
-
-const BANNED: readonly Banned[] = [
+const BANNED: readonly { pattern: RegExp; why: string }[] = [
   { pattern: /交易日/u, why: '交易日会让读者以为是股票日历' },
   { pattern: /trading\s*day/iu, why: '同「交易日」' },
   { pattern: /session/iu, why: '同「交易日」' },
   { pattern: /代理/u, why: '代理是设置页的话，卡上不许出现' },
   { pattern: /\bproxy\b/iu, why: '同「代理」' },
-  { pattern: /这次/u, why: '同一句要覆盖「这回读不到」和「从来没接上」；读不到那族除外（未接入另有句子）', except: UNAVAILABLE_PATHS },
+  { pattern: /这次/u, why: '相对时间 2026-11-21 已定死删掉；同一句要覆盖「这回读不到」和「从来没接上」' },
   { pattern: /今天/u, why: '不让读者以为是相对时间' },
   { pattern: /昨天/u, why: '不让读者以为是相对时间' },
   { pattern: /明天/u, why: '不让读者以为是相对时间' },
@@ -171,7 +169,6 @@ describe('fear & greed + downside premium card copy', () => {
     const findings: string[] = []
     for (const leaf of [...zh, ...en]) {
       for (const banned of BANNED) {
-        if (banned.except?.includes(leaf.path)) continue
         if (banned.pattern.test(leaf.value)) findings.push(`${leaf.path}: ${banned.why}`)
       }
     }

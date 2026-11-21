@@ -663,7 +663,7 @@ mi: miText['zh-CN'],
                 unavailable: {
                   connection: '期权偏斜：Deribit 连不上。',
                   source: '期权偏斜：来源暂时不可用。',
-                  read: '期权偏斜：这次读数没读出来。'
+                  read: '期权偏斜：读数没读出来。'
                 },
                 direction: {
                   window: '近 5 天',
@@ -2267,7 +2267,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 unavailable: {
                   connection: 'Options skew: Deribit is unreachable.',
                   source: 'Options skew: the source is unavailable.',
-                  read: 'Options skew: this reading could not be read.'
+                  read: 'Options skew: the reading could not be read.'
                 },
                 direction: {
                   window: 'Last 5 days',
