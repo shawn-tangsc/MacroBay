@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { looksLikeTextKey } from '../textKeyShape'
+import { judgeTextKey, looksLikeTextKey } from '../textKeyShape'
 
 /**
  * `StatusPill` 的三条守卫（架构师 2026-11-02 定的门槛）：
@@ -95,7 +95,8 @@ describe('StatusPill guards', () => {
         const window = text.slice(call.index ?? 0, (call.index ?? 0) + CALL_WINDOW)
         const literal = LABEL_KEY.exec(window)?.[1]
         // 传的是变量/常量时这里看不到值，交给类型与评审；守卫只判字面量。
-        if (literal === undefined || looksLikeTextKey(literal)) return []
+        // 先展开同文件字符串常量再判形状；展开不了（不是同文件常量/还有别的表达式）与「传变量」同级，跳过。
+        if (literal === undefined || judgeTextKey(text, literal) !== 'reject') return []
         const line = text.slice(0, call.index ?? 0).split('\n').length
         return [{ file: relative(ROOT, file), line, value: literal }]
       })

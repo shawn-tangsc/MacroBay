@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { looksLikeTextKey } from '../textKeyShape'
+import { judgeTextKey, looksLikeTextKey } from '../textKeyShape'
 
 /**
  * `Tooltip` 的三条调用点守卫（契约 §6）。
@@ -123,7 +123,8 @@ describe('Tooltip call sites', () => {
         const literal = /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/.exec(site.source)?.[1]
         // 传变量/常量的调用点由定义处判，守卫只判字面量。
         // 键的形状与 `IconButton`、`StatusPill` 共用一份（`../textKeyShape`）：点分、无空白、无中文，**允许驼峰**。
-        if (literal === undefined || looksLikeTextKey(literal)) continue
+        // 先展开同文件字符串常量再判；展开不了就跳过（与传变量同级）。
+        if (literal === undefined || judgeTextKey(text, literal) !== 'reject') continue
         offenders.push({ file: relative(ROOT, file), line: site.line, detail: literal })
       }
       void text
