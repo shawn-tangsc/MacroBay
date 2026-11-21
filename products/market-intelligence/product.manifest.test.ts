@@ -108,7 +108,11 @@ describe('market-intelligence product manifest', () => {
     // another one cannot slip in without this list changing.
     // `cellEnabledClient` 在这一页只被 `read` / `readSelection` 读（业务开关的格快照），
     // 写入口由抽屉宿主自己持有——所以它仍属这一页的**只读**客户端。
-    const approvedClients = ['../../shared/ipc/cellEnabledClient', '../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
+    // `intelligenceSentimentOptionsCardClient` 只有一个 `query`：入参 `asOf` / `timeZone` /
+    // `windowDays`，走 `registerIntelligencePublicQueryIpc.ts` 的 `querySentimentOptionsCard`，
+    // 读已落库的恐惧贪婪点与期权偏斜点、算好分位与方向后返回卡片 section——不写任何 store。
+    // 列表顺序跟着页面 import 顺序，`toEqual` 因此能同时钉住「谁进了白名单」和「有没有别人混进来」。
+    const approvedClients = ['../../shared/ipc/intelligenceSentimentOptionsCardClient', '../../shared/ipc/cellEnabledClient', '../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
 
     expect(page).toContain('AgentPortal')
     const imports = [...page.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1])
