@@ -46,6 +46,7 @@ const REQUIRED_PATHS = [
   'skew.name',
   'skew.asOf',
   'skew.unit',
+  'skew.axis',
   'skew.notConnected',
   'skew.unavailable.connection',
   'skew.unavailable.source',
@@ -204,6 +205,24 @@ describe('fear & greed + downside premium card copy', () => {
     // AC-44：三处 ⓘ 不许说同一件事——日期口径只在卡头有一份，两个半条不再各说一遍。
     expect(valueOf('zh-CN', 'titleInfo')).toContain('数据源日（UTC）')
     expect(valueOf('en-US', 'titleInfo')).toMatch(/data source's day \(UTC\)/u)
+  })
+
+  it('keeps the skew axis label whole: name stem plus the unit in its own brackets', () => {
+    // 轴说明是 figcaption 的整句，组件里不许再把 `名字（单位）` 拼一次（架构师 2026-11-22 打回）：
+    // 判据断在值上——必须含名字主体（去掉行名里那截「（Deribit）」）与带括号的单位，中英括号各按全角/半角。
+    const stem = (name: string): string =>
+      name.replace(/（[^）]*）\s*$/u, '').replace(/\s*\([^)]*\)\s*$/u, '').trim()
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const name = stem(valueOf(locale, 'skew.name'))
+      const unit = valueOf(locale, 'skew.unit')
+      const axis = valueOf(locale, 'skew.axis')
+      expect(name, `${locale}: skew.name missing`).not.toBe('')
+      expect(unit, `${locale}: skew.unit missing`).not.toBe('')
+      expect(axis, `${locale}: skew.axis must carry the instrument and skew name`).toContain(name)
+      expect(axis, `${locale}: skew.axis must carry the unit in brackets`).toContain(
+        locale === 'zh-CN' ? `（${unit}）` : `(${unit})`
+      )
+    }
   })
 
   it('says which failure each unavailable line is, and keeps a dated "stops at" line', () => {
