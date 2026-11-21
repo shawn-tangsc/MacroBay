@@ -136,9 +136,10 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
       : <span className="source-provider-detail__row-stale">
         {staleLines.map((line) => <span key={line}>{line}</span>)}
       </span>}
-    {/* 两颗 ⓘ 装在**同一个格**里（界面设计 2026-11-21 量出来的）：栅格只有三列，一格里塞两个
-        独立子项时，第四个子项会被自动放置挤到下一行——行尾的「已应用 / 未应用」就掉到说明行
-        下面去了。包一层之后这一行永远只有「内容 / ⓘ / 行尾」三格，说明行独占第二行。
+    {/* 两颗 ⓘ 装在**同一个格**里（界面设计 2026-11-21）：这是结构简化——这一行恒定「内容 / ⓘ /
+        行尾」三格，以后再加子项只会横向挤成隐式列，不会像原先那样被自动放置挤到说明行下面。
+        真正把行尾钉在第一行的是 CSS 里 `.row-stale { grid-row: 2 }`（承重）与 `> * { grid-row: 1 }`
+        （防线）；别把这两条当冗余清掉，用例量不到布局。
         写库失败那颗（用户 2026-11-19）：与「没采到」是两件事，**只进 ⓘ**，行上不加警告色，
         也不把来源标成故障（`healthState` 仍只说采集）。 */}
     {(props.source.writeFailure === undefined && props.credentialMissing !== true)

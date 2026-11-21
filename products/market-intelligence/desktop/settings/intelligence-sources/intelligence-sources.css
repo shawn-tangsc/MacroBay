@@ -1168,12 +1168,16 @@
 /*
  * 第一行固定三格：内容 / 两颗 ⓘ（合成一格，见 JSX 里的 `row-notes`）/ 行尾那一格。
  *
- * 根因是**子项比列多**：两颗 ⓘ 各自一格时，加上内容、说明行、行尾就有五个子项，三个列装不下，
- * 自动放置把排在说明行后面的行尾顺到第三行（实测 tail 比 main 低 34.7～53px）。所以真正的修法是
- * 把两颗 ⓘ 收进一格——收进一格之后，第一行恰好三个子项，放置稳定。
+ * 机制是**放置游标**：说明行跨列放到第二行之后，游标停在第二行末尾，DOM 里排在它后面的子项就被
+ * 顺到第三行（实测 tail 比 main 低 34.7～53px）。
  *
- * 这条 `grid-row: 1` 是第二道防线（以后谁再往这一行加一个子项，也不会把它挤到别的行）；
+ * 承重的是下面那条 `.row-stale { grid-row: 2 }`：把说明行显式钉在第二行，游标不再越位。
+ * 这颗 `grid-row: 1` 是第二道防线——单独撤掉它结果不变（说明行已钉住），但别再往下清：
+ * 两层一起撤掉时 tail 会掉 +42.5px（探针 60.0 → 80.5）。**用例量不到布局**，撤掉不会红。
  * 顺序要紧：它写在说明行之前，说明行用子选择器（多一层特异性）盖回第二行。
+ *
+ * 两颗 ⓘ 收进一格是**结构简化**（不是放置稳定的原因）：这一行恒定三格，以后再加子项只会横向
+ * 挤成隐式列，不会掉行。包一层的守卫在 `SourceEnabledRow.staleReason.test.tsx`。
  */
 .source-provider-detail__row > * {
   grid-row: 1;
@@ -1182,8 +1186,8 @@
 .source-provider-detail__row > .source-provider-detail__row-stale {
   display: grid;
   grid-column: 1 / -1;
-  /* 第二行：**显式**放，不然放置游标停在说明行末尾，排在它后面的行尾那一格会被顺到第三行
-     （界面设计 2026-11-21 实测：不给行号时行尾掉到下一行，与内容不同一条中线）。 */
+  /* 第二行，**承重**：不钉死它，放置游标停在说明行末尾，排在它后面的行尾那一格就被顺到第三行
+     （界面设计 2026-11-21 实测：撤掉这行 grid-row 时 tail 比 main 低 42.5px，行高 60.0 → 80.5）。 */
   grid-row: 2;
   gap: 2px;
   color: var(--text-secondary);
@@ -1197,6 +1201,23 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/*
+ * 三格**连列一起钉死**：内容 → 第 1 列（吃满剩余），ⓘ → 第 2 列，行尾 → 第 3 列。
+ * 只钉行、靠自动列序时，没有 ⓘ 的那一行会让行尾落到第 2 列、第 3 列空着——今天看
+ * 不出差别（空列宽 0），但谁把列宽改了，行尾就会从右缘塌进去。钉死之后放置完全确定。
+ */
+.source-provider-detail__row > .source-provider-detail__main {
+  grid-column: 1;
+}
+
+.source-provider-detail__row > .source-provider-detail__row-notes {
+  grid-column: 2;
+}
+
+.source-provider-detail__row > .source-provider-detail__row-tail {
+  grid-column: 3;
 }
 
 .source-provider-detail__main {
