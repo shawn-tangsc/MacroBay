@@ -48,11 +48,18 @@ export function staleReasonLines(source: StaleReasonSource, resolveText: (key: s
   const reasons = source.staleReasons ?? []
   if (reasons.length === 0) return []
   const lines: string[] = []
-  let unreadable = false
+  let unreadableShown = false
   for (const reason of reasons) {
     const line = lineOf(reason, source.staleMeasurements, resolveText)
-    if (line === undefined) unreadable = true
-    else if (!lines.includes(line)) lines.push(line)
+    if (line === undefined) {
+      /* 「读不到」落在**缺数字那一条的位置**（界面设计 2026-11-21）：统一追加到末尾的话，
+         只有第二条缺数字时，读者会把这句话读成第一条的状态。两条都缺就只说一次。 */
+      if (unreadableShown) continue
+      lines.push(resolveText(unreadableKey))
+      unreadableShown = true
+      continue
+    }
+    if (!lines.includes(line)) lines.push(line)
   }
-  return unreadable ? [...lines, resolveText(unreadableKey)] : lines
+  return lines
 }

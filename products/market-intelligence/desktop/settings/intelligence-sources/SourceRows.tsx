@@ -136,20 +136,27 @@ export function SourceEnabledRow(props: SourceEnabledRowProps): React.ReactEleme
       : <span className="source-provider-detail__row-stale">
         {staleLines.map((line) => <span key={line}>{line}</span>)}
       </span>}
-    {/* 标准表**写库**失败（用户 2026-11-19）：与「没采到」是两件事，**只进 ⓘ**——行上不加警告色，
-        也不把来源标成故障（`healthState` 仍只说采集）。没有失败/还没写过/读不到三种情况不出这一颗。 */}
-    {props.source.writeFailure === undefined
+    {/* 两颗 ⓘ 装在**同一个格**里（界面设计 2026-11-21 量出来的）：栅格只有三列，一格里塞两个
+        独立子项时，第四个子项会被自动放置挤到下一行——行尾的「已应用 / 未应用」就掉到说明行
+        下面去了。包一层之后这一行永远只有「内容 / ⓘ / 行尾」三格，说明行独占第二行。
+        写库失败那颗（用户 2026-11-19）：与「没采到」是两件事，**只进 ⓘ**，行上不加警告色，
+        也不把来源标成故障（`healthState` 仍只说采集）。 */}
+    {(props.source.writeFailure === undefined && props.credentialMissing !== true)
       ? null
-      : <SettingsInfo
-        ariaLabelKey="settings.intelligenceSources.writeFailureAria"
-        labelKeys={[`settings.intelligenceSources.writeFailure.${props.source.writeFailure.code}`]}
-        resolveText={resolveText} />}
-    {props.credentialMissing === true
-      ? <SettingsInfo
-        ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
-        labelKeys={['settings.intelligenceSources.credentialRequiredToEnable']}
-        resolveText={resolveText} />
-      : null}
+      : <span className="source-provider-detail__row-notes">
+        {props.source.writeFailure === undefined
+          ? null
+          : <SettingsInfo
+            ariaLabelKey="settings.intelligenceSources.writeFailureAria"
+            labelKeys={[`settings.intelligenceSources.writeFailure.${props.source.writeFailure.code}`]}
+            resolveText={resolveText} />}
+        {props.credentialMissing === true
+          ? <SettingsInfo
+            ariaLabelKey="settings.intelligenceSources.credentialRequiredToEnableAria"
+            labelKeys={['settings.intelligenceSources.credentialRequiredToEnable']}
+            resolveText={resolveText} />
+          : null}
+      </span>}
     {/* 行尾是**文字状态**，不是开关（用户 2026-11-12）：这一屏的启停唯一编辑入口是页头那颗
         组开关，行上再画一颗点不动的开关就是假控件——「假控件比没有更坏」。
         文字不带交互语义、读屏按正文读出；只说这个源开没开，不写解释（解释进 ⓘ，这里不需要）。

@@ -51,6 +51,15 @@ describe('采集产出状态的两句话', () => {
     expect(lines({ staleReasons: ['no-output', 'normalize-failing'] })).toEqual([text.health.unknown])
   })
 
+  it('只有第二条缺数字时，「读不到」落在第二条的位置，不追到末尾', () => {
+    // 追到末尾会让读者把这句读成第一条的状态（界面设计 2026-11-21）。
+    expect(lines({ staleReasons: ['no-output', 'normalize-failing'], staleMeasurements: { noOutputHours: 30 } }))
+      .toEqual([text.staleReason['no-output'].replace('{hours}', '30'), text.health.unknown])
+    // 反过来（第一条缺、第二条有）也一样：位置就是原因的位置。
+    expect(lines({ staleReasons: ['no-output', 'normalize-failing'], staleMeasurements: { normalizeFailureStreak: 3 } }))
+      .toEqual([text.health.unknown, text.staleReason['normalize-failing'].replace('{count}', '3')])
+  })
+
   it('没有原因就是空数组——不评价「健康」', () => {
     expect(lines({})).toEqual([])
     expect(lines({ staleReasons: [] })).toEqual([])

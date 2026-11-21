@@ -56,7 +56,7 @@ const labels = {
   status: t.status
 }
 
-async function render(patch: Partial<SourceView>): Promise<HTMLElement> {
+async function render(patch: Partial<SourceView>, extra: { credentialMissing?: boolean } = {}): Promise<HTMLElement> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -70,7 +70,8 @@ async function render(patch: Partial<SourceView>): Promise<HTMLElement> {
         resolveText,
         source: { ...baseSource, ...patch } as never,
         tags: [],
-        unavailable: false
+        unavailable: false,
+        ...extra
       })
     }))
   })
@@ -103,6 +104,25 @@ describe('源行上的采集产出状态', () => {
   it('没有可报的病：整块不渲染，不留空 span', async () => {
     const host = await render({})
     expect(host.querySelector('.source-provider-detail__row-stale')).toBeNull()
+  })
+
+  it('两颗 ⓘ 收在同一格里：第一行只有三个子项（内容 / ⓘ / 行尾），行尾不会被挤到下一行', async () => {
+    // 界面设计 2026-11-21 量出来的缺陷：两颗 ⓘ 各自一格时子项比列多，行尾掉到说明行下面。
+    // 这条钉住结构——把 ⓘ 从 wrapper 里拿出来重新当兄弟节点，就要红。
+    const host = await render({
+      staleReasons: ['no-output'],
+      staleMeasurements: { noOutputHours: 30 },
+      writeFailure: { at: '2026-11-21T00:00:00.000Z', code: 'standard-write-failed' }
+    }, { credentialMissing: true })
+    const row = host.querySelector('.source-provider-detail__row')!
+    const notes = row.querySelector('.source-provider-detail__row-notes')!
+    expect(notes.querySelectorAll('button')).toHaveLength(2)
+    const rowOne = [...row.children].filter((child) => !child.classList.contains('source-provider-detail__row-stale'))
+    expect(rowOne.map((child) => child.className)).toEqual([
+      'source-provider-detail__main',
+      'source-provider-detail__row-notes',
+      'source-provider-detail__row-tail'
+    ])
   })
 
   it('原因有、数字没有：写「状态暂时读不到」，不显示带空格的半句', async () => {
