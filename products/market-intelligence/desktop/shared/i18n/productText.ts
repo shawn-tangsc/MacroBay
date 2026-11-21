@@ -675,7 +675,9 @@ mi: miText['zh-CN'],
               history: { since: '起始日', remaining: '还差 {days} 天满一年' },
               chart: {
                 fearGreedAria: '恐惧贪婪指数走势图：横轴是日期，纵轴是 0 到 100 的指数值',
-                skewAria: '25Δ 风险反转走势图：横轴是日期，纵轴是百分点'
+                skewAria: '25Δ 风险反转走势图：横轴是日期，纵轴是百分点',
+                fearGreedSummary: '恐惧贪婪走势：{from} 至 {to}，共 {count} 个源日；首值 {first}，末值 {last}，指数 0–100。',
+                skewSummary: '25Δ 风险反转走势：{from} 至 {to}，共 {count} 个源日；首值 {first}，末值 {last}，单位百分点。'
               },
               stale: { pill: '偏旧' },
               action: { refresh: '刷新', enable: '去启用', viewSource: '查看来源' },
@@ -2274,7 +2276,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               history: { since: 'Since', remaining: '{days} more days to a full year' },
               chart: {
                 fearGreedAria: 'Fear & Greed index chart: dates along the horizontal axis, the index from 0 to 100 along the vertical axis',
-                skewAria: '25-delta risk reversal chart: dates along the horizontal axis, percentage points along the vertical axis'
+                skewAria: '25-delta risk reversal chart: dates along the horizontal axis, percentage points along the vertical axis',
+                fearGreedSummary: 'Fear & Greed: {count} source days from {from} to {to}; first {first}, last {last}, index 0–100.',
+                skewSummary: '25-delta risk reversal: {count} source days from {from} to {to}; first {first}, last {last}, in percentage points.'
               },
               stale: { pill: 'Stale' },
               action: { refresh: 'Refresh', enable: 'Turn on', viewSource: 'View source' },

@@ -63,6 +63,8 @@ const REQUIRED_PATHS = [
   'history.remaining',
   'chart.fearGreedAria',
   'chart.skewAria',
+  'chart.fearGreedSummary',
+  'chart.skewSummary',
   'stale.pill',
   'action.refresh',
   'action.enable',
