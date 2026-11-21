@@ -350,3 +350,92 @@ export type MarketIntelligenceQueryResult<TData> = {
   evidenceRefs: AgentSafeEvidenceRef[]
   data: TData
 }
+
+/* ------------------------------------------------------------------ *
+ * 恐惧与防跌溢价（情绪 + 期权偏斜）一张卡：一条复合查询、两段独立状态
+ * ------------------------------------------------------------------ */
+
+export type SentimentOptionsWindowDays = 30 | 90
+
+export type SentimentOptionsCardQueryInput = {
+  asOf: string
+  timeZone: string
+  windowDays: SentimentOptionsWindowDays
+}
+
+/**
+ * The premium's direction over the latest five non-empty days. One vocabulary only: 走阔 / 收窄 /
+ * 基本没动 are rendered from these keys, never re-derived in the renderer.
+ */
+export type OptionSkewDirection =
+  | { kind: 'steeper' | 'flatter' | 'flat' }
+  | { kind: 'unknown'; reason: 'insufficient' | 'stale' | 'discontinuous' }
+
+export type FearGreedSeriesPoint = {
+  day: string
+  observedAt: string
+  score: number
+  bucket: FearGreedSnapshotBucket
+}
+
+export type OptionSkewSeriesPoint = {
+  day: string
+  observedAt: string
+  riskReversal: number
+}
+
+export type FearGreedCardSection =
+  | {
+      state: 'available'
+      score: number
+      bucket: FearGreedSnapshotBucket
+      /** Instant of the release that owns the latest day. Never rendered; only judged for staleness. */
+      observedAt: string
+      /** The source's day label. This is what the card prints. */
+      latestDay: string
+      /** Whole days between the reader's today and `latestDay`, already clamped at 0 by the server. */
+      daysAgo: number
+      stale: boolean
+      seriesStart: string
+      /** Newest first, one point per source day. */
+      points: readonly FearGreedSeriesPoint[]
+      percentile?: { value: number; basisDays: number; from: string; to: string }
+    }
+  | { state: 'empty' }
+  | { state: 'unavailable'; failureCode: 'fear-greed-query-unavailable' }
+
+export type OptionSkewCardSection =
+  | {
+      state: 'available'
+      latest: {
+        riskReversal: number
+        observedAt: string
+        tenorDays: 30
+        putIv25: number
+        callIv25: number
+        expiries: readonly [string, string]
+      }
+      direction: OptionSkewDirection
+      observedAt: string
+      latestDay: string
+      daysAgo: number
+      stale: boolean
+      seriesStart: string
+      /** Newest first, one point per UTC day. */
+      points: readonly OptionSkewSeriesPoint[]
+    }
+  | { state: 'empty' }
+  | { state: 'unavailable'; failureCode: 'option-skew-query-unavailable' }
+  | {
+      state: 'unavailable'
+      failureCode: 'option-skew-collect-unavailable'
+      cause: 'connection-unavailable' | 'upstream-http-error'
+    }
+
+export type SentimentOptionsCardResult = {
+  asOf: string
+  windowDays: SentimentOptionsWindowDays
+  timeZone: string
+  fearGreed: FearGreedCardSection
+  optionSkew: OptionSkewCardSection
+}
