@@ -55,10 +55,12 @@
 | 卡片 / 区块标题 | 13 / 1.4 / 650 | `--font-card-title` / `--line-card-title` |
 | 设置行标签 | 13 / 1.4 / 400 | **缺** |
 | 表内数字、坐标轴 | 11 / 1 / 400 或 600 + `tabular-nums` | **缺** |
+| 数据展示（读数、大数字，如仪表中心分数） | 24 / 30 / 42 / 600 + `tabular-nums` | `--font-metric-sm` / `--font-metric-md` / `--font-metric-lg` |
 
 - 行标题必须比分组标题**轻一档**（500 对 600）：内容比结构轻。
 - **可折叠分组的头行与分组标题同一档**：`--font-section` / `--line-section` / 600 / `--muted-strong`。平台 `CollapsibleGroup` 落地后必须用同一个值，否则壳与页面又是两套。
 - 卡标题 13 已有 token（`--font-card-title` / `--line-card-title`，2026-11-22 补）：新代码只许引用，不许再写字面量。
+- **数据展示字号是独立一支**（24 / 30 / 42），不进正文字阶：仪表中心分数用 `--font-metric-sm`（2026-11-22 起），不用 `body × 2` 这类推算值；出处 `docs-private/05-desktop/ui-audit/ui-component-baseline.md:23`。
 - **落进页面只许等值替换**（12 / 11 / 11.5 换成引用，视觉零变化）；把 10 / 10.5 / 9.5 抬到 11 是**可见变化**，单独一笔并带改前改后对比。
 - **禁止用 10 / 10.5 / 9.5 就近凑**。
 

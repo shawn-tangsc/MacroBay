@@ -55,10 +55,12 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | Card / section title | 13 / 1.4 / 650 | `--font-card-title` / `--line-card-title` |
 | Settings label | 13 / 1.4 / 400 | **missing** |
 | Table figure, axis | 11 / 1 / 400 or 600 + `tabular-nums` | **missing** |
+| Display figure (a reading or a large number, e.g. the gauge score) | 24 / 30 / 42 / 600 + `tabular-nums` | `--font-metric-sm` / `--font-metric-md` / `--font-metric-lg` |
 
 - A row title is one step lighter than its group heading (500 vs 600): content is lighter than structure.
 - **A collapsible group's header row uses the group-heading tier**: `--font-section` / `--line-section` / 600 / `--muted-strong`. The platform `CollapsibleGroup` must use the same values, or shell and pages drift apart again.
 - Card title 13 has a token now (`--font-card-title` / `--line-card-title`, added 2026-11-22): reference it, never a literal.
+- **The display figure scale is its own branch** (24 / 30 / 42) and does not join the body scale: a gauge score uses `--font-metric-sm` (from 2026-11-22), never a derived value such as `body × 2`; source `docs-private/05-desktop/ui-audit/ui-component-baseline.md:23`.
 - **Equivalent replacement only**: swap 12 / 11 / 11.5 for the references, visually unchanged. Raising 10 / 10.5 / 9.5 to 11 is a **visible change** — separate commit, with a before/after comparison.
 - **Never substitute 10 / 10.5 / 9.5.**
 
