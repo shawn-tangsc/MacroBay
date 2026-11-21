@@ -341,12 +341,19 @@ describe('crypto intelligence dashboard', () => {
     expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
     expect(cardRule).toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
-    // 三列共用同一套行，**间距算在行高里**：标题 17 / 读数 24（6+18）/ 图 142（10+132）。
+    // 一行列五道：标题 17 / 读数 24（6+18）/ 说明 auto / 留白 1fr / 图 142（10+132）。
     // 把间距写成子元素的外边距时，它会溢出固定行、从行间隙里偷走 12——实测图底到分隔线只剩 2px。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 17px 24px calc(var(--mi-defensive-premium-chart-height) + 10px)')
+      .toContain('grid-template-rows: 17px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('align-self: end')
     expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('margin: 0')
+    // 图与同类状态块钉在最后一行：不钉的话，没有说明句的那一列会把图自动放进第三行，
+    // 而第四行那条 1fr 会跑到图下面，把「图底到结论 12」改成 12 + 留白。
+    expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__state-box {'))
+      .toContain('grid-row: -2 / -1')
+    // 两句说明装在一个容器里落第三行（auto）：容器里堆叠，这一行才有两行高。
+    expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
+      .toContain('grid-row: 3')
   })
 
   it('fails closed instead of crashing when a legacy funding client has no history query', async () => {
@@ -1525,7 +1532,10 @@ describe('the defensive premium band', () => {
     // 曲线高度是一个变量（`--mi-defensive-premium-chart-height`），三列共用，不再按比例算；
     // 间距（6 与 10）算在行高里，不让外边距溢出到行外。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 17px 24px calc(var(--mi-defensive-premium-chart-height) + 10px)')
+      .toContain('grid-template-rows: 17px 24px auto minmax(0, 1fr) calc(var(--mi-defensive-premium-chart-height) + 10px)')
+    // 短窗那两句说明排在图上之前：位置一换，三列的图底就不再齐平。
+    expect(cssBlock(styles, '.mi-defensive-premium__col > .mi-defensive-premium__notes {'))
+      .toContain('grid-row: 3')
   })
 
   function fearGreedSection(count = 30) {
@@ -1688,6 +1698,30 @@ describe('the defensive premium band', () => {
     const header = notConnected.querySelector('.mi-defensive-premium__header')!
     const actions = [...header.querySelectorAll('button')].filter(button => button.getAttribute('aria-label') !== dashboardText.defensivePremium.titleInfoLabel)
     expect(actions.map(button => button.textContent)).toEqual([dashboardText.defensivePremium.action.viewSource])
+  })
+
+  it('keeps both short-window notes above the skew chart', async () => {
+    // 1 个点那天的形状：说明句与「还差几个」都不缺席。它们必须在图的**之前**（DOM 顺序，
+    // 不是视觉顺序）——挂到图后面就会落成隐式行，把图底到结论分隔线的 12 顶成 28.5。
+    const container = await renderBand(skewClient({ kind: 'unknown', reason: 'insufficient' }, 1))
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const chart = band.querySelector('[data-chart="skew"]')!
+    const history = band.querySelector('[data-skew-history]')!
+    const sentence = band.querySelector('[data-skew-direction="insufficient"]')!
+    expect(chart).not.toBeNull()
+    expect(history).not.toBeNull()
+    expect(sentence).not.toBeNull()
+    // 必须是**同一个容器**里的两句：两段散着挂进同一行会重叠成一行高，卡高就会少 16.5。
+    const notes = band.querySelector('.mi-defensive-premium__notes')!
+    expect(notes.contains(history)).toBe(true)
+    expect(notes.contains(sentence)).toBe(true)
+    expect(history.parentElement).toBe(notes)
+    expect(sentence.parentElement).toBe(notes)
+    expect(notes.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // 满窗那版没有说明句：图仍是同一列的最后一行。
+    const full = await renderBand(skewClient({ kind: 'steeper' }, 30))
+    expect(full.querySelector('[data-skew-history]')).toBeNull()
+    expect(full.querySelector('[data-chart="skew"]')).not.toBeNull()
   })
 
   it.each([

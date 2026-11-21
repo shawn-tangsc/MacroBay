@@ -163,6 +163,24 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                     </span>
                     : null}
                 </p>
+                {/* 两句说明装进**同一个容器**、排在图上之前：容器落进列模板的第三行（`auto`），
+                    两句话在里面正常堆叠，所以这一行的高度是两行字而不是一行。图在下面的最后一行，
+                    中间那条 `1fr` 是留白——三列的图底因此永远齐平，图底到结论分隔线恒 12。
+                    两段裸 `<p>` 都钉第三行会互相重叠，整行只算一行高（实测 1 点那档塌到 275.5）；
+                    挂到图后面则落进隐式行，把 12 顶成 28.5。 */}
+                {skew.points.length > 0 && skew.points.length < 30 || skew.direction.kind === 'unknown'
+                  ? <div className="mi-defensive-premium__notes">
+                    {/* 1–29 个读数才说「从哪天开始记录、还差几个」；0 点与满窗不说。 */}
+                    {skew.points.length > 0 && skew.points.length < 30
+                      ? <p className="mi-defensive-premium__history" data-skew-history>
+                        {fillLabelParams(text.skew.history.remaining, { date: skew.seriesStart, n: String(30 - skew.points.length) })}
+                      </p>
+                      : null}
+                    {skew.direction.kind === 'unknown'
+                      ? <SkewDirectionSentence direction={skew.direction} latestDay={skew.latestDay} text={text} />
+                      : null}
+                  </div>
+                  : null}
                 {skew.points.length > 0
                   ? <SkewChart points={skew.points} axis={text.skew.axis}
                     ariaLabel={chartAria({
@@ -171,15 +189,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
                       first: skew.points[skew.points.length - 1]!.riskReversal.toFixed(1),
                       last: skew.points[0]!.riskReversal.toFixed(1)
                     })} />
-                  : null}
-                {/* 1–29 个读数才说「从哪天开始记录、还差几个」；0 点与满窗不说。 */}
-                {skew.points.length > 0 && skew.points.length < 30
-                  ? <p className="mi-defensive-premium__history" data-skew-history>
-                    {fillLabelParams(text.skew.history.remaining, { date: skew.seriesStart, n: String(30 - skew.points.length) })}
-                  </p>
-                  : null}
-                {skew.direction.kind === 'unknown'
-                  ? <SkewDirectionSentence direction={skew.direction} latestDay={skew.latestDay} text={text} />
                   : null}
               </> : skew?.state === 'empty' ? <>
                 <p className="mi-defensive-premium__reading">&nbsp;</p>
