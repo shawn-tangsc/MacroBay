@@ -53,23 +53,26 @@ it('carries the policy meeting and the priced probability; no past plaque and no
   expect(unplaced.some((entry) => entry.metricKey === 'US.TARGET_RATE.DECISION')).toBe(false)
 })
 
-it('rings only the policy plaque when no indicator carries a market-implied expectation', () => {
+it('rings an indicator date without a market expectation, and the policy plaque gives way', () => {
   const model = buildClockCardModel({ today: '2026-11-15', metrics: clockScheduleMetrics({
     today: '2026-11-15', events, facts, policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
   }) })
-  // 两个指标都没有盘口预期 → 都不上环（不硬挂）；政策牌照旧单独一块，中央是利率路径面。
-  expect(model.plaques.map((plaque) => plaque.metricKey)).toEqual(['US.TARGET_RATE.DECISION'])
+  // 没有盘口预期的日期**也上环**（用户 2026-11-21：一级指标都要放），只是牌上没有数字。
+  const payrolls = model.plaques.find((plaque) => plaque.metricKey === 'US.NONFARM.CHANGE')!
+  expect(payrolls).toBeDefined()
+  expect(payrolls.value).toBeUndefined()
+  // 政策牌与它相撞时让位（指标发布牌优先）；中央仍是利率路径面。
   expect(model.center?.kind).toBe('policy')
-  // 没上环的原因写「没被选中」而不是「放不下」，并带上日期与天数供下沿那行列全。
-  expect(model.unplaced.filter((entry) => entry.reason === 'not-selected').map((entry) => entry.metricKey).sort())
-    .toEqual(['US.CPI.YOY', 'US.NONFARM.CHANGE'])
+  expect(model.unplaced).toEqual(expect.arrayContaining([
+    expect.objectContaining({ metricKey: 'US.TARGET_RATE.DECISION', reason: 'crowded' })
+  ]))
 })
 
 /**
- * 选法红证二：**只有 CPI 有盘口、PCE 没有**，且 PCE 更近（4 天）→ 环上必须是 CPI（19 天）。
- * 若选法退化成「取最近的指标」，这条立刻红——它证明的是「有盘口优先」，不是「永远挑某个指标」。
+ * 同一天有盘口的先上牌：**只有 CPI 有盘口、PCE 没有**，且 PCE 更近（4 天）。
+ * 两块牌都要在环上（每个日期一块），但只有 CPI 那块带数字——不是「有盘口才配挂」。
  */
-it('picks the indicator with a market-implied expectation even when another is nearer', () => {
+it('rings every date, and only the one with a market expectation carries a number', () => {
   const facts: readonly ClockCardFact[] = [
     { metricKey: 'US.CORE_PCE.SA.YOY', unit: 'percent' as const,
       next: { releaseAt: '2026-11-25T13:30:00.000Z' } },
@@ -78,14 +81,14 @@ it('picks the indicator with a market-implied expectation even when another is n
   ]
   const model = buildClockCardModel({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
-  // 环上那一个是 CPI（有盘口、更近的 PCE 没盘口）；这里没有政策读数，中央为空
-  // （窗口外没有利率路径可显示——不拿指标面冒充利率路径）。
-  expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey))
-    .toEqual(['US.CPI.YOY'])
+  expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey).sort())
+    .toEqual(['US.CORE_PCE.YOY', 'US.CPI.YOY'])
+  expect(model.plaques.find((plaque) => plaque.metricKey === 'US.CORE_PCE.YOY')!.value).toBeUndefined()
+  expect(model.plaques.find((plaque) => plaque.metricKey === 'US.CPI.YOY')!.value).toBe('3.20%')
   expect(model.center).toBeUndefined()
 })
 
-/** 数据商问卷值（`source-survey`）不算盘口：不能拿它当「有预期」把指标顶上环。 */
+/** 数据商问卷值（`source-survey`）不算盘口：牌上不出现它，也不拿它当「有预期」。 */
 it('does not treat a source-survey expectation as a market-implied one', () => {
   const surveyOnly: readonly ClockCardFact[] = [
     { ...facts[0]!, next: { releaseAt: '2026-12-10T13:30:00.000Z',
@@ -94,13 +97,15 @@ it('does not treat a source-survey expectation as a market-implied one', () => {
   const model = buildClockCardModel({ today: '2026-11-15',
     metrics: clockScheduleMetrics({ today: '2026-11-15', events, facts: surveyOnly }) })
   expect(model.center).toBeUndefined()
+  // 问卷值照旧显示在牌上，但它不算盘口：不影响「谁当代表」的优先级，也不进中央的窗口判定。
+  expect(model.plaques.find((plaque) => plaque.metricKey === 'US.CPI.YOY')!.value).toBe('3.20%')
 })
 
 /**
- * 选法红证一（用户 2026-11-21 的口径）：今天环上/主位必须是**核心 PCE 年率 · 4 天后 · 3.12%**，
- * 不是 13 天后的非农。三条候选都有一级码，只有 PCE 与 CPI 有盘口，PCE 更近。
+ * 真库形状（2026-11-21）：核心 PCE 4 天后、非农 13 天后、CPI 19 天后——**三块牌都在环上**，
+ * 核心 PCE 那块带 3.12% 盘口。（用户「CPI 非农怎么没了」就是这一条。）
  */
-it('rings the nearest market-implied indicator: core PCE, four days out, with its odds', () => {
+it('rings core PCE, payrolls and CPI on their own dates, with the odds on PCE', () => {
   const facts: readonly ClockCardFact[] = [
     { metricKey: 'US.CORE_PCE.SA.YOY', unit: 'percent' as const,
       next: { releaseAt: '2026-11-25T13:30:00.000Z', expected: { value: 3.12, provenance: 'market-implied' as const } } },
@@ -110,11 +115,11 @@ it('rings the nearest market-implied indicator: core PCE, four days out, with it
   ]
   const model = buildClockCardModel({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
-  // 环上那块与它的预期：核心 PCE · 4 天后 · 3.12%。
   const ring = model.plaques.filter((plaque) => plaque.zone === 'future')
-  expect(ring.map((plaque) => plaque.metricKey)).toEqual(['US.CORE_PCE.YOY'])
-  expect(ring[0]!.daysUntil).toBe(4)
-  expect(ring[0]!.value).toBe('3.12%')
-  // 不在发布窗口内（这里没给 now）：中央是利率路径面；没有政策读数时为空。
+  expect(ring.map((plaque) => plaque.metricKey).sort())
+    .toEqual(['US.CORE_PCE.YOY', 'US.CPI.YOY', 'US.NONFARM.CHANGE'])
+  const pce = ring.find((plaque) => plaque.metricKey === 'US.CORE_PCE.YOY')!
+  expect(pce.daysUntil).toBe(4)
+  expect(pce.value).toBe('3.12%')
   expect(model.center).toBeUndefined()
 })

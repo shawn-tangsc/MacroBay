@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { metricConceptOf } from '../../../contracts/metricKeyConcept'
 import { marketCalendarCodeTable } from '../../../service/intelligence/macro-calendar/marketCalendarCodeTable'
-import { clockRingRepresentativeConcepts, selectRingMetric } from './clockCardModel'
+import { clockRingRepresentativeConcepts, selectRingMetrics } from './clockCardModel'
 import { clockRingConcepts, clockRingNameKeys } from './clockScheduleMetrics'
 import { clockCardText } from './clockCardText'
 
@@ -40,11 +40,16 @@ describe('the ring catalogue follows the code table', () => {
     }
   })
 
-  /** 选法只从候选池里挑：没有盘口预期的一个都不上环。 */
-  it('never selects an indicator without a market-implied expectation', () => {
-    const none = selectRingMetric(clockRingConcepts.map((entry) => ({
+  /**
+   * 每个发布日一块牌；同一天多个一级指标只留一个代表。
+   * 没有盘口预期的日期也挂（用户 2026-11-21），所以这里不是「一个都不上环」，而是「只上一块」。
+   */
+  it('rings one representative per date even without a market-implied expectation', () => {
+    const ring = selectRingMetrics(clockRingConcepts.map((entry) => ({
       metricKey: entry.concept, nameKey: entry.nameKey, nextRelease: { date: '2026-12-10' }
     })))
-    expect(none).toBeUndefined()
+    // 12 个一级码全落在 12-10：只留一块，且按代表优先级是核心 PCE 年率。
+    expect(ring).toHaveLength(1)
+    expect(ring[0]!.metricKey).toBe('US.CORE_PCE.YOY')
   })
 })

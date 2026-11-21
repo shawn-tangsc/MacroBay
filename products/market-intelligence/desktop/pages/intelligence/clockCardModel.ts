@@ -166,11 +166,17 @@ export type ClockUnplaced = Readonly<{
 }>
 
 /**
- * **环上那一个指标的选法**（用户 2026-11-21，唯一口径）：
- * 1. 候选池 = 一级指标里**下一期有盘口预期**（`expectedFromMarket`）的；
- * 2. 多于一个 → 下一期发布最近的；
- * 3. 同一发布日 → 代表优先级：PCE→核心 PCE 年率、CPI→CPI 年率、就业→非农；
- * 4. 一个都没有盘口 → 不硬挂（`undefined`），由卡面走「暂无预期」，不许拿没有盘口的顶上去。
+ * 环上的牌子：**每个即将发布的日期一块**（用户 2026-11-21 更正）。
+ *
+ * 「只一个」指的是**同一天里只留一个**，不是整环只留一个：CPI、非农不能因为 PCE 更近就被挤掉。
+ *
+ * 同一天多个一级指标：
+ * 1. 先取**有盘口预期**（`expectedFromMarket`）的；
+ * 2. 再按代表优先级：PCE→核心 PCE 年率、CPI→CPI 年率、就业→非农；
+ * 3. 仍并列按码字典序（只为可复现）。
+ *
+ * **没有盘口预期的日期也挂**（用户最初就是「一级指标都要放」），只是牌上不显示数字——
+ * 不拿一个编出来的数顶上。
  */
 export const clockRingRepresentativeConcepts = Object.freeze([
   'US.CORE_PCE.YOY', 'US.CPI.YOY', 'US.NONFARM.CHANGE'
@@ -239,20 +245,43 @@ export function selectCenterWindow(input: Readonly<{
   return sorted[0]
 }
 
-export function selectRingMetric(metrics: readonly ClockScheduleMetric[]): ClockScheduleMetric | undefined {
-  const candidates = metrics.filter((metric) => metric.metricKey !== POLICY_METRIC_KEY
-    && metric.nextRelease !== undefined && metric.nextRelease.expectedFromMarket === true)
-  if (candidates.length === 0) return undefined
+/**
+ * 环上的代表：**每个发布日一个**。
+ *
+ * 同一天多个一级指标时，先取有盘口预期的（那是读者抬头要看的数），再按代表优先级，
+ * 最后按码字典序（只为可复现）。没有盘口的日期照样返回——牌要挂，只是不显示数字。
+ */
+export function selectRingMetrics(metrics: readonly ClockScheduleMetric[]): readonly ClockScheduleMetric[] {
   const rank = (metric: ClockScheduleMetric): number => {
     const index = (clockRingRepresentativeConcepts as readonly string[]).indexOf(metric.metricKey)
     return index === -1 ? clockRingRepresentativeConcepts.length : index
   }
-  const sorted = [...candidates].sort((left, right) => {
-    const leftDays = clockDayGap('1970-01-01', left.nextRelease!.date)
-    const rightDays = clockDayGap('1970-01-01', right.nextRelease!.date)
-    return leftDays - rightDays || rank(left) - rank(right) || left.metricKey.localeCompare(right.metricKey)
-  })
-  return sorted[0]
+  const hasMarket = (metric: ClockScheduleMetric): number => metric.nextRelease?.expectedFromMarket === true ? 0 : 1
+  const byDate = new Map<string, ClockScheduleMetric[]>()
+  for (const metric of metrics) {
+    if (metric.metricKey === POLICY_METRIC_KEY || metric.nextRelease === undefined) continue
+    const list = byDate.get(metric.nextRelease.date)
+    if (list === undefined) byDate.set(metric.nextRelease.date, [metric])
+    else list.push(metric)
+  }
+  return [...byDate.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, sameDay]) => [...sameDay].sort((left, right) => hasMarket(left) - hasMarket(right)
+      || rank(left) - rank(right)
+      || left.metricKey.localeCompare(right.metricKey))[0]!)
+}
+
+/**
+ * 窗口内的指标必须**出现在环上**（中央切成它的时候，环上不能挂着另一个）。
+ * 同一发布日就替掉当天的代表；不是同一天就补进去。
+ */
+function ringWithWindow(ring: readonly ClockScheduleMetric[], windowMetric: ClockScheduleMetric | undefined): readonly ClockScheduleMetric[] {
+  if (windowMetric === undefined) return ring
+  if (ring.some((metric) => metric.metricKey === windowMetric.metricKey)) return ring
+  const day = windowMetric.nextRelease?.date
+  if (day === undefined) return [...ring, windowMetric]
+  const replaced = ring.map((metric) => (metric.nextRelease?.date === day ? windowMetric : metric))
+  return replaced.includes(windowMetric) ? replaced : [...ring, windowMetric]
 }
 
 export type ClockCardModel = Readonly<{
@@ -302,6 +331,27 @@ Readonly<{ x: number; y: number }> {
   }
 }
 
+/**
+ * 牌子最大宽度（用户 2026-11-21：「这个事件面板太宽了」，长名字顶出卡右缘被裁）。
+ *
+ * 336 卡宽、圆心 168、轨道 r135 → 环最左 33、最右 303。牌子居中挂在环上，半宽超过 33 就会出卡。
+ * 128 是折中：两行装得下「核心 PCE 年率（季调）」这类长名字，又不越过环。**盒子与位置两侧都要管**，
+ * 只改 `max-width` 不夹位置，牌仍会被推到卡外一半。
+ */
+export const clockPlaqueMaxWidth = 128
+
+/** 牌子在卡内留的边距：牌虽然贴着环，但不许贴到卡边（截图里就是贴上去被裁的）。 */
+const PLAQUE_EDGE_MARGIN = 8
+
+/**
+ * 牌子的横向夹取：按最大宽算半宽，保证**整块**留在 `[0, 336]` 内。
+ * 只夹横向——纵向是环的几何，一点不动。
+ */
+export function clampPlaqueX(x: number): number {
+  const half = clockPlaqueMaxWidth / 2
+  return Math.min(Math.max(x, half + PLAQUE_EDGE_MARGIN), clockCardGeometry.cardWidth - half - PLAQUE_EDGE_MARGIN)
+}
+
 /** 角度归一到 [0, 360)：过去区算出来可能是负数或 ≥360。 */
 export function normalizeAngle(angle: number): number {
   const normalized = angle % 360
@@ -333,14 +383,15 @@ export function buildClockCardModel(input: Readonly<{
    */
   const window = input.now === undefined ? undefined : selectCenterWindow({ now: input.now, metrics: input.metrics })
   /**
-   * **环上只放一个指标**（用户 2026-11-21）：窗口内跟随中央；否则候选=有盘口预期的一级指标，取最近的一个；
-   * 其余全部进溢出清单。政策利率不是一级指标，照旧单独一块牌。
+   * **环上每个发布日一块牌**（用户 2026-11-21 更正）：CPI、非农不能因为 PCE 更近就消失。
+   * 窗口内的指标必须上环（否则中央切成它、环上却没有），同一天以它替掉当天的代表。
    */
-  const selected = window?.metric ?? selectRingMetric(input.metrics)
+  const ring = ringWithWindow(selectRingMetrics(input.metrics), window?.metric)
+  const ringKeys = new Set(ring.map((metric) => metric.metricKey))
 
   for (const metric of input.metrics) {
     const isPolicy = metric.metricKey === POLICY_METRIC_KEY
-    const isSelected = selected !== undefined && selected.metricKey === metric.metricKey
+    const isSelected = ringKeys.has(metric.metricKey)
     // 没被选中的一级指标：**不是放不下**，是没选中；日期与天数也带上，溢出清单要能说清漏的是哪一条。
     if (!isPolicy && !isSelected) {
       // 没有下一期日程的，原因照旧如实写（「没有下一期」不是「没被选中」）。
@@ -369,7 +420,7 @@ export function buildClockCardModel(input: Readonly<{
         const point = clockRingPoint(angle)
         plaques.push({
           id: `${metric.metricKey}:past`, metricKey: metric.metricKey, nameKey: metric.nameKey, zone: 'past',
-          angle, x: point.x, y: point.y, opacity: 1, daysAgo: pastDays,
+          angle, x: clampPlaqueX(point.x), y: point.y, opacity: 1, daysAgo: pastDays,
           ...(metric.lastRelease.value === undefined ? {} : { value: metric.lastRelease.value }),
           ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
         })
@@ -390,7 +441,7 @@ export function buildClockCardModel(input: Readonly<{
     const point = clockRingPoint(angle)
     plaques.push({
       id: `${metric.metricKey}:future`, metricKey: metric.metricKey, nameKey: metric.nameKey, zone: 'future',
-      angle, x: point.x, y: point.y, opacity: round4(clockFutureOpacity(daysUntil)), daysUntil,
+      angle, x: clampPlaqueX(point.x), y: point.y, opacity: round4(clockFutureOpacity(daysUntil)), daysUntil,
       ...(metric.nextRelease.expected === undefined ? {} : { value: metric.nextRelease.expected }),
       ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
     })
@@ -403,13 +454,22 @@ export function buildClockCardModel(input: Readonly<{
   const ordered = [...plaques].sort((left, right) => {
     if (left.zone !== right.zone) return left.zone === 'future' ? -1 : 1
     /**
-     * 未来区里**环上那一个指标优先**：它和政策牌撞上时，让位的是政策牌。
-     * 否则会出现「选中了 PCE，环上却只有政策牌」——主位与环上同一个这条就断了。
+     * 未来区里**窗口内那个指标优先**：它和政策牌撞上时，让位的是政策牌。
+     * 否则会出现「中央已经切成某个指标，环上却只有政策牌」——主位与环上同一条就断了。
      */
     if (left.zone === 'future') {
-      const leftRing = selected !== undefined && left.metricKey === selected.metricKey
-      const rightRing = selected !== undefined && right.metricKey === selected.metricKey
+      const windowKey = window?.metric.metricKey
+      const leftRing = windowKey !== undefined && left.metricKey === windowKey
+      const rightRing = windowKey !== undefined && right.metricKey === windowKey
       if (leftRing !== rightRing) return leftRing ? -1 : 1
+      /**
+       * **指标发布牌优先于政策牌**（用户 2026-11-21：「CPI、非农怎么没了」）。
+       * 政策牌和某天的发布牌撞上时，让位的是政策牌——它的日期在下面那张利率路径卡里还能看到，
+       * 而发布牌一旦让位，那天就从环上消失了，读者会以为没有这场发布。
+       */
+      const leftPolicy = left.metricKey === POLICY_METRIC_KEY ? 1 : 0
+      const rightPolicy = right.metricKey === POLICY_METRIC_KEY ? 1 : 0
+      if (leftPolicy !== rightPolicy) return leftPolicy - rightPolicy
     }
     const leftDays = left.zone === 'future' ? left.daysUntil ?? Number.POSITIVE_INFINITY : left.daysAgo ?? Number.POSITIVE_INFINITY
     const rightDays = right.zone === 'future' ? right.daysUntil ?? Number.POSITIVE_INFINITY : right.daysAgo ?? Number.POSITIVE_INFINITY
@@ -474,11 +534,13 @@ function metricCenterFace(entry: ClockCenterWindow): ClockCenterMetricFace {
 }
 
 /**
- * 牌的假定矩形：`min-width 62` × `min-height 37`，居中于挂点（`translate(-50%,-50%)`），
- * 另加 4px 主档间隔（界面设计 2026-11-15 基线 J 节）。名字更宽时牌会变宽，这里按最小宽算——
- * 偏保守：宁可多判一对相交，也不留两块压在一起。
+ * 牌的假定矩形：宽按**上限** `clockPlaqueMaxWidth`（128）、高 `min-height 37`，居中于挂点
+ * （`translate(-50%,-50%)`），另加 4px 主档间隔（界面设计 2026-11-15 基线 J 节）。
+ *
+ * 为什么不按 `min-width 62` 估：牌子现在可以长到 128（长名字两行），按 62 估会漏判一对相交，
+ * 两块长牌就压在一起。宁可多判一对，也不留叠牌。
  */
-const PLAQUE_BOX = { width: 62, height: 37, gap: 4 } as const
+const PLAQUE_BOX = { width: clockPlaqueMaxWidth, height: 37, gap: 4 } as const
 
 /**
  * 撞牌判据：**全环统一按矩形相交**，不分区。

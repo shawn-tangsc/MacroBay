@@ -6,18 +6,18 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { ClockCard } from './ClockCard'
-import { buildClockCardModel, clockRingPoint, type ClockScheduleMetric } from './clockCardModel'
+import { buildClockCardModel, clockPlaqueMaxWidth, clockRingPoint, type ClockScheduleMetric } from './clockCardModel'
 import { clockCardText } from './clockCardText'
 
 const text = clockCardText['zh-CN']
-const today = '2026-11-15'
+const today = '2026-11-21'
 /**
- * 环上只放一个指标（用户 2026-11-21）：候选=有盘口预期的一级指标。
- * 这里只有 CPI 有盘口 → 环上那一个是它；非农进溢出清单；政策牌单独一块（相撞时让位给指标）。
+ * 真库形状（用户 2026-11-21 更正「CPI 非农怎么没了」）：**每个发布日一块牌**。
+ * 12-04 非农、12-10 CPI 各一块，CPI 还有 11-19 刚发布过的过去牌；政策 12-09 与 CPI 未来牌相撞 → 让位。
  */
 const metrics: readonly ClockScheduleMetric[] = [
   { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
-    lastRelease: { date: '2026-11-10', at: '2026-11-10T13:30:00.000Z', value: '3.74%' },
+    lastRelease: { date: '2026-11-19', at: '2026-11-19T13:30:00.000Z', value: '3.74%' },
     nextRelease: { date: '2026-12-10', at: '2026-12-10T13:30:00.000Z', expected: '3.2%', expectedFromMarket: true as const }, periodDays: 30 },
   { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls', lastRelease: { date: '2026-11-06', value: '+165K' },
     nextRelease: { date: '2026-12-04' }, periodDays: 28 },
@@ -45,13 +45,15 @@ async function render(overrides: Partial<Parameters<typeof ClockCard>[0]> = {}) 
   return { host, opened }
 }
 
-it('puts the one market-implied indicator on the ring at the angle the schedule gives', async () => {
+it('rings one plaque per release date at the angle the schedule gives', async () => {
   const { host } = await render()
   const nodes = [...host.querySelectorAll<HTMLElement>('[data-clock-plaque]')]
-  // 环上只放一个指标：CPI（过去 + 未来）。非农没盘口 → 不上环；政策牌与 CPI 未来牌相撞 → 让位。
-  expect(nodes).toHaveLength(2)
+  // 12-04 非农、12-10 CPI 都在环上（用户：「CPI 非农怎么没了」）；政策 12-09 与 CPI 未来牌相撞 → 让位。
+  expect(nodes.map((node) => `${node.dataset.clockMetric}:${node.dataset.clockPlaque}`).sort())
+    .toEqual(['US.CPI.NSA.YOY:future', 'US.CPI.NSA.YOY:past', 'US.NONFARM.SA.CHANGE:future'])
   const cpiPast = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
-  const expected = clockRingPoint(300)
+  // 11-19 发布、P=30、今天 11-21 → 2 天 → 360 − 2/30×360 = 336°。
+  const expected = clockRingPoint(336)
   expect(Number.parseFloat(cpiPast.style.left)).toBeCloseTo(expected.x, 2)
   expect(Number.parseFloat(cpiPast.style.top)).toBeCloseTo(expected.y, 2)
   // 牌上永远是「名字 + 数值」：名字在，值在；天数不出现在牌上。
@@ -62,9 +64,9 @@ it('puts the one market-implied indicator on the ring at the angle the schedule 
 
 it('drives the ring plaque’s opacity from its position, not from a timer', async () => {
   const { host } = await render()
-  // CPI 下一期 25 天 → 0.5 + (25/30)²×0.5 ≈ 0.8472。
+  // CPI 下一期 19 天 → 0.5 + (19/30)²×0.5 ≈ 0.7006。
   const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
-  expect(Number(future.style.getPropertyValue('--o'))).toBeCloseTo(0.8472, 4)
+  expect(Number(future.style.getPropertyValue('--o'))).toBeCloseTo(0.7006, 4)
   // 过去牌不参与透明度：固定 1。
   const past = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
   expect(past.style.getPropertyValue('--o')).toBe('1')
@@ -97,12 +99,18 @@ it('opens the calendar drawer from the overlay icon and names it for a screen re
   expect(opened).toEqual(['calendar'])
 })
 
-it('lists the releases that are not on the ring under the card, with a count', async () => {
-  const { host } = await render()
+/** 同一天多个一级指标：只上一块牌，其余进溢出行（名字 · 日期 · 几天后）。 */
+const sameDayPair: readonly ClockScheduleMetric[] = [
+  { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy',
+    nextRelease: { date: '2026-12-11', expected: '3.1%', expectedFromMarket: true as const } },
+  { metricKey: 'US.CORE_PCE.MOM', nameKey: 'corePceMom', nextRelease: { date: '2026-12-11' } }
+]
+
+it('lists the same-day releases that did not make the ring, with a count', async () => {
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: sameDayPair }) })
   const line = host.querySelector<HTMLElement>('[data-clock-overflow]')!
-  // 非农（没盘口）在这一行里；计数是「发布」的条数。
+  // 12-11 只上一块（有盘口的 PCE 年率），PCE 月率在这一行里。
   expect(line.textContent).toContain('还有 1 个发布不在环上')
-  // 逐条在 ⓘ 里：名字 · 日期 · 几天后。
   expect(line.querySelector('button')).not.toBeNull()
 })
 
@@ -116,7 +124,7 @@ it('lists the releases that are not on the ring under the card, with a count', a
  * 所以这一行**实际占 22px**，11px 只是字号。政策降级行因此要上移到 40（16+22+2）才不压住它。
  */
 it('anchors the overflow line inside the card with exactly one trigger', async () => {
-  const { host } = await render()
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: sameDayPair }) })
   const line = host.querySelector<HTMLElement>('[data-clock-overflow]')!
   expect(line.parentElement?.tagName).toBe('SECTION')
   expect(line.parentElement?.className).toContain('mi-clock')
@@ -184,8 +192,8 @@ it('shows the policy path face outside any release window', async () => {
   const core = host.querySelector('.mi-clock__core')!
   expect(core.getAttribute('data-clock-center')).toBe('policy')
   expect(core.textContent).toContain('利率路径')
-  // 会议日与天数：12–09 · 24 天后（today 是 2026-11-15）。
-  expect(core.textContent).toContain('12–09 · 24 天')
+  // 会议日与天数：12–09 · 18 天后（today 是 2026-11-21）。
+  expect(core.textContent).toContain('12–09 · 18 天')
   // 这一份夹具的政策读数没有概率：写「概率暂未提供」，不许写 0%。
   expect(core.textContent).toContain('概率暂未提供')
 })
@@ -331,4 +339,13 @@ it('renders the orbit glow that spins', async () => {
   const orbit = host.querySelector('.mi-clock__orbit')
   expect(orbit).not.toBeNull()
   expect(orbit!.querySelector('path')).not.toBeNull()
+})
+
+/**
+ * 牌子宽度上限只有一处事实：模型里用于横向夹取的值，必须与 CSS 里那盒子的上限同一个数。
+ * 两处各写一份、某天只改一边，牌子又会被夹出卡外或撑破卡缘。
+ */
+it('keeps the plaque width limit identical in the model and the stylesheet', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  expect(css).toContain(`--mi-clock-plaque-max-width: ${clockPlaqueMaxWidth}px`)
 })

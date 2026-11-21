@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildClockCardModel, clockCardCenter, clockCardGeometry, clockFutureAngle, clockFutureOpacity,
-  clockPastAngle, clockRingPoint, type ClockScheduleMetric
+  clockPastAngle, clockPlaqueMaxWidth, clockRingPoint, type ClockScheduleMetric
 } from './clockCardModel'
 
 /**
@@ -77,20 +77,19 @@ const measured: readonly ClockScheduleMetric[] = [
 ]
 
 describe('the model built from real schedule dates', () => {
-  it('puts one indicator plaque (the market-implied one) plus the policy plaque', () => {
+  it('rings every release date, and lets the policy plaque give way on a collision', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
     const byId = new Map(model.plaques.map((plaque) => [plaque.id, plaque]))
-    // 环上只放一个指标：CPI（有盘口）——过去一块 + 未来一块；非农不进环。
-    expect(byId.has('US.NONFARM.SA.CHANGE:future')).toBe(false)
-    expect(byId.has('US.NONFARM.SA.CHANGE:past')).toBe(false)
+    // 每个发布日一块：CPI 有过去与未来两块，非农的未来牌也在（不再因为 CPI 更近就消失）。
+    expect(byId.has('US.NONFARM.SA.CHANGE:future')).toBe(true)
     expect(byId.get('US.CPI.NSA.YOY:past')!.angle).toBe(300)
-    expect(Number(byId.get('US.CPI.NSA.YOY:past')!.x.toFixed(2))).toBe(51.09)
+    // 300° 的挂点原值是 51.09；牌子宽了以后位置要夹在卡内，所以这里是夹取后的 72。
+    expect(Number(byId.get('US.CPI.NSA.YOY:past')!.x.toFixed(2))).toBe(72)
     expect(Number(byId.get('US.CPI.NSA.YOY:past')!.y.toFixed(2))).toBe(97.5)
-    expect(byId.get('US.CPI.NSA.YOY:future')!.angle).toBe(200)
     /**
-     * 这次夹具里 CPI 未来牌（25 天、200°）与政策牌（24 天、192°）相撞：
-     * **环上那一个指标优先**，让位的是政策牌（否则「主位与环上同一个」就断了）。
-     * 真库今天不是这形状：核心 PCE 4 天（32°）、政策会议 18 天（144°），两块不撞。
+     * 这份夹具里三块未来牌挤得很近（非农 19 天 / 政策 24 天 / CPI 25 天）。
+     * 相撞时**指标发布牌优先、政策牌让位**——政策日期在下面那张卡里还能看到，
+     * 发布牌让位的话那天就从环上消失了。
      */
     expect(byId.has('US.TARGET_RATE.DECISION:future')).toBe(false)
     expect(model.unplaced).toEqual(expect.arrayContaining([
@@ -99,9 +98,13 @@ describe('the model built from real schedule dates', () => {
   })
 
   /** 用户 2026-11-12 定：过去牌与未来牌各判各的，同一指标可以同时占两个位置。 */
-  it('lets the selected metric hold a past plaque and a future plaque at the same time', () => {
-    const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
-    expect(model.plaques.filter((plaque) => plaque.metricKey === 'US.CPI.NSA.YOY')).toHaveLength(2)
+  it('lets one metric hold a past plaque and a future plaque at the same time', () => {
+    const model = buildClockCardModel({ today: '2026-11-15', metrics: [{
+      metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+      lastRelease: { date: '2026-11-10', value: '3.74%' },
+      nextRelease: { date: '2026-12-05', expected: '3.2%' }, periodDays: 30
+    }] })
+    expect(model.plaques.map((plaque) => plaque.id).sort()).toEqual(['US.CPI.NSA.YOY:future', 'US.CPI.NSA.YOY:past'])
   })
 
   /** 保留期 P/3 是规则：CPI 11-10 发布、P=30 → 10 天后撤掉过去牌（11-21 满 11 天）。 */
@@ -128,26 +131,34 @@ describe('the model built from real schedule dates', () => {
     expect(model.center.probability).toBeUndefined()
   })
 
-  /** 其余指标进溢出清单：带日期与天数，供卡片下沿那行「还有 N 个发布不在环上」列全。 */
-  it('lists the indicators that are not on the ring with their date and days', () => {
-    const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
+  /**
+   * 溢出清单只装**同一天里没被选为代表**的那些：每块牌代表一个发布日，
+   * 同一天其余一级指标在这里列全（名字 · 日期 · 几天后）。
+   */
+  it('lists the same-day indicators that did not become the day’s representative', () => {
+    const model = buildClockCardModel({ today: '2026-11-15', metrics: [
+      { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy',
+        nextRelease: { date: '2026-11-25', expected: '3.1%', expectedFromMarket: true } },
+      { metricKey: 'US.CORE_PCE.MOM', nameKey: 'corePceMom', nextRelease: { date: '2026-11-25' } }
+    ] })
     const overflow = model.unplaced.filter((entry) => entry.reason === 'not-selected')
-    expect(overflow.map((entry) => entry.metricKey)).toContain('US.NONFARM.SA.CHANGE')
-    const payrolls = overflow.find((entry) => entry.metricKey === 'US.NONFARM.SA.CHANGE')!
-    expect(payrolls.date).toBe('2026-12-04')
-    expect(payrolls.daysUntil).toBe(19)
+    expect(overflow.map((entry) => entry.metricKey)).toEqual(['US.CORE_PCE.MOM'])
+    expect(overflow[0]!.date).toBe('2026-11-25')
+    expect(overflow[0]!.daysUntil).toBe(10)
   })
 
   /**
-   * 一个都没有盘口时不硬挂（用户 2026-11-21）：环上不出指标牌，中央也不会拿一个没有盘口的指标
-   * 顶上去假装有预期——它回到利率路径面。
+   * 没有盘口预期的日期**也挂**（用户最初就是「一级指标都要放」），只是牌上不显示数字——
+   * 不许因为没盘口就把那一天从环上抹掉。
    */
-  it('rings nothing when no candidate has a market-implied expectation', () => {
+  it('still rings a date whose indicator has no market expectation, without a number', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: measured.map((metric) => ({
       ...metric, nextRelease: metric.nextRelease === undefined ? undefined : { date: metric.nextRelease.date }
     })) })
     expect(model.center?.kind).toBe('policy')
-    expect(model.plaques.every((plaque) => plaque.metricKey === 'US.TARGET_RATE.DECISION')).toBe(true)
+    const payrolls = model.plaques.find((plaque) => plaque.metricKey === 'US.NONFARM.SA.CHANGE')
+    expect(payrolls).toBeDefined()
+    expect(payrolls!.value).toBeUndefined()
   })
 })
 
@@ -283,4 +294,57 @@ it('catches a past plaque and a future plaque meeting at the 8 o’clock gap', (
     nextRelease: { date: '2026-12-15', expected: '1.0%', expectedFromMarket: true }
   }] })
   expect(model.plaques).toHaveLength(1)
+})
+
+/**
+ * 环上**每个发布日一块牌**（用户 2026-11-21 更正：CPI、非农不能因为 PCE 更近就消失）。
+ * 「只一个」指同一天里只留一个；没有盘口的日期也挂，只是不显示数字。
+ */
+describe('the ring hangs one plaque per release date', () => {
+  const threeDays: readonly ClockScheduleMetric[] = [
+    { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy',
+      nextRelease: { date: '2026-11-25', expected: '3.12%', expectedFromMarket: true } },
+    { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+      nextRelease: { date: '2026-12-04' } },
+    { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+      nextRelease: { date: '2026-12-10', expected: '2.9%', expectedFromMarket: true } }
+  ]
+
+  it('rings core PCE, payrolls and CPI on their own dates', () => {
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: threeDays })
+    expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey).sort())
+      .toEqual(['US.CORE_PCE.YOY', 'US.CPI.NSA.YOY', 'US.NONFARM.SA.CHANGE'])
+    // 三块都在环上：谁也不是「不在环上」。
+    expect(model.unplaced.filter((entry) => entry.reason === 'not-selected')).toEqual([])
+  })
+
+  it('keeps one plaque per day and prefers the one with a market expectation', () => {
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: [
+      { metricKey: 'US.CORE_PCE.MOM', nameKey: 'corePceMom',
+        nextRelease: { date: '2026-11-25', expected: '0.2%', expectedFromMarket: true } },
+      { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy', nextRelease: { date: '2026-11-25' } }
+    ] })
+    expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey))
+      .toEqual(['US.CORE_PCE.MOM'])
+    // 同一天没被选为代表的那个进溢出行（不是「放不下」）。
+    expect(model.unplaced.filter((entry) => entry.reason === 'not-selected').map((entry) => entry.metricKey))
+      .toEqual(['US.CORE_PCE.YOY'])
+  })
+
+  it('still rings a date whose indicator has no market expectation, without a value', () => {
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: [threeDays[1]!] })
+    const plaque = model.plaques.find((entry) => entry.metricKey === 'US.NONFARM.SA.CHANGE')!
+    expect(plaque).toBeDefined()
+    expect(plaque.value).toBeUndefined()
+  })
+
+  /** 长名字（`核心 PCE 年率（季调）`）不许顶出卡边：牌宽按上限算，位置再夹一次。 */
+  it('keeps a long plaque name inside the card', () => {
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: [
+      { metricKey: 'US.CORE_PCE.YOY', nameKey: 'corePceYoy', nextRelease: { date: '2026-11-25' } }
+    ] })
+    const plaque = model.plaques[0]!
+    expect(plaque.x - clockPlaqueMaxWidth / 2).toBeGreaterThanOrEqual(0)
+    expect(plaque.x + clockPlaqueMaxWidth / 2).toBeLessThanOrEqual(clockCardGeometry.cardWidth)
+  })
 })
