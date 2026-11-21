@@ -1616,6 +1616,21 @@ describe('the defensive premium band', () => {
     expect(band.querySelector('[data-half="fear-greed"] .mi-crypto-dashboard__gauge-needle')).toBeNull()
   })
 
+  it('overlays each half wait on the frame it replaces, so loading adds no row', async () => {
+    const container = await renderBand({ query: () => new Promise(() => undefined) })
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const leftWait = band.querySelector('[data-half="fear-greed"] [data-loading-state]')!
+    const rightWait = band.querySelector('[data-half="skew"] [data-loading-state]')!
+    // 转圈叠在已有的元素上（左半叠仪表圆盘、右半叠空图框），不当网格里独立的一行：
+    // 当独立行时加载态比正常态整整高一行，换态卡就跳。
+    expect(leftWait.closest('.mi-crypto-dashboard__sentiment-dial')).not.toBeNull()
+    expect(rightWait.closest('[data-chart-placeholder]')).not.toBeNull()
+    // 叠起来不等于把读屏也藏掉：两半的等待仍由平台加载组件播报。
+    expect(leftWait.getAttribute('role')).toBe('status')
+    expect(rightWait.getAttribute('role')).toBe('status')
+    expect(rightWait.closest('[data-chart-placeholder]')?.getAttribute('aria-hidden')).toBeNull()
+  })
+
   it('turns a first-read failure into one whole-card error, with no half and one retry', async () => {
     const failing = { query: async () => { throw new Error('request failed') } }
     const container = await renderBand(failing)

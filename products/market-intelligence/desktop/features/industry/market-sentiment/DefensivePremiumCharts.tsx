@@ -1,3 +1,5 @@
+import { LoadingState } from '@platform/ui/components/loading'
+
 import type { FearGreedSeriesPoint, OptionSkewSeriesPoint } from '../../../../contracts/intelligenceQueryContracts'
 
 /**
@@ -62,12 +64,21 @@ export function SkewChart({ points, ariaLabel, axisLabel, unit }: Readonly<{
 /**
  * 加载态的空图框：与真图同一 viewBox、同一 `width: 100%`，所以高度由同一套布局算出来，
  * 不写死任何像素；不画线、不画值——它只占位，不让换态把卡压塌。
+ *
+ * 等待的转圈叠在图框里、不另占一行：它是指示，不是内容，多一行就把加载态撑得比正常态高。
+ * 给了 `waitingLabel` 时图框不再对读屏隐藏，转圈照常播报；空 `<svg>` 自己隐藏掉。
  */
-export function ChartPlaceholder({ axisLabel }: Readonly<{ axisLabel: string }>): React.ReactElement {
-  return <figure className="mi-defensive-premium__chart" data-chart-placeholder aria-hidden="true">
+export function ChartPlaceholder({ axisLabel, waitingLabel }: Readonly<{ axisLabel: string; waitingLabel?: string }>): React.ReactElement {
+  return <figure className="mi-defensive-premium__chart" data-chart-placeholder
+    {...(waitingLabel === undefined ? { 'aria-hidden': 'true' } : {})}>
     {/* 与真图同一条轴说明：少了它，加载态比正常态矮一行。 */}
     <figcaption className="mi-defensive-premium__chart-axis">{axisLabel}</figcaption>
-    <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto" />
+    <span className="mi-defensive-premium__chart-frame">
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto" aria-hidden="true" />
+      {waitingLabel === undefined ? null : <span className="mi-defensive-premium__chart-wait">
+        <LoadingState label={waitingLabel} minHeight={24} layout="inline" />
+      </span>}
+    </span>
   </figure>
 }
 

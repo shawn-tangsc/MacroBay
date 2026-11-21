@@ -104,12 +104,18 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTit
           </>
           // 走到这里的只剩「还在读」：弧线与刻度照画，指针和圆盘不画——换态时卡不许塌形。
           : <>
-            <GaugeFigure />
+            {/* 转圈叠在圆盘本来占的位置（半圆中间的空档），不另占一行：它是指示不是内容，
+                多一行加载态就比正常态高。读屏照常播报，弧与刻度也不被挡住。 */}
+            <span className="mi-crypto-dashboard__sentiment-dial">
+              <GaugeFigure />
+              <span className="mi-crypto-dashboard__sentiment-dial-wait">
+                <LoadingState label={text.fearGreed.loading} minHeight={24} layout="inline" />
+              </span>
+            </span>
             {/* 与正常态同构的占位：档位词与「截至」两行先留出来，换态时仪表不缩。 */}
             <span aria-hidden="true" data-gauge-bucket-text="neutral">&nbsp;</span>
             <small aria-hidden="true">&nbsp;</small>
             <p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
-            <LoadingState label={text.fearGreed.loading} minHeight={24} />
           </>}
     </div>
     {/* 图下方卡内一行：只说状态，不放按钮——动作统一在卡标题行（AC-31）。 */}

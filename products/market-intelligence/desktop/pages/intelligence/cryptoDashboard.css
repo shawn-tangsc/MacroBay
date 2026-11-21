@@ -163,6 +163,9 @@
 .mi-defensive-premium__history { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 两条线各一张图；轴的刻度与日期用 meta 档，不另写像素。 */
 .mi-defensive-premium__chart { display: grid; gap: 2px; min-width: 0; margin: 0; }
+/* 空图框里的等待指示叠在图上，不占网格行：多一行，加载态就比正常态高。 */
+.mi-defensive-premium__chart-frame { position: relative; display: grid; }
+.mi-defensive-premium__chart-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .mi-defensive-premium__chart-axis { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 .mi-defensive-premium__grid line { stroke: var(--mi-dashboard-line); stroke-width: 1; }
 .mi-defensive-premium__line { stroke: var(--mi-dashboard-lime); stroke-width: 1.5; }
@@ -336,6 +339,9 @@
    score is centred on the readout disc at y=60 (69.77% down). The disc is painted after the
    needle, so the blade only exists outside its ring. */
 .mi-crypto-dashboard__sentiment-dial { position: relative; display: grid; justify-items: center; }
+/* 等待的转圈叠在圆盘的位置上（半圆中间的空档），不占网格行：多一行，加载态就比正常态高。
+   弧与刻度照画、指针照旧不画，读者看到的仍是同一个仪表。 */
+.mi-crypto-dashboard__sentiment-dial-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .mi-crypto-dashboard__sentiment-dial strong {
   /* top 60/86 = 69.77%: the disc's centre in the rendered dial. */
   position: absolute; top: 69.77%; right: 0; left: 0; transform: translateY(-50%);

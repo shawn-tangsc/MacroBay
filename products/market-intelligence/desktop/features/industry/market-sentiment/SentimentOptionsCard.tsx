@@ -2,7 +2,6 @@ import { Button } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
-import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -138,11 +137,11 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           )} />
         </div>
         {skew === undefined && state.state === 'loading' ? <>
-          <LoadingState label={text.loading} minHeight={24} />
-          {/* 与正常态同构的占位：分数行、截至行、图框、方向行；空行不带文字也不画值。 */}
+          {/* 与正常态同构的占位：分数行、截至行、图框、方向行；空行不带文字也不画值。
+              转圈叠在图框里，不另占一行——多一行加载态就比正常态高。 */}
           <p className="mi-defensive-premium__score" aria-hidden="true"><strong>&nbsp;</strong> <span>&nbsp;</span></p>
           <p className="mi-defensive-premium__asof" aria-hidden="true">&nbsp;</p>
-          <ChartPlaceholder axisLabel={`${text.skew.name}（${text.skew.unit}）`} />
+          <ChartPlaceholder axisLabel={`${text.skew.name}（${text.skew.unit}）`} waitingLabel={text.loading} />
           <p className="mi-defensive-premium__direction" aria-hidden="true">&nbsp;</p>
         </>
           : skew?.state === 'not-connected' ? <p className="mi-defensive-premium__state">{text.skew.notConnected}</p>
