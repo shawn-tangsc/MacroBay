@@ -28,7 +28,7 @@ export type DefensivePremiumCardText = {
     asOf: string
     unit: string
     direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
-    history: { since: string; remaining: string }
+    history: { remaining: string }
   }
   chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
   action: { refresh: string; enable: string; viewSource: string }
@@ -58,7 +58,7 @@ type Source = {
       info: { definition: string; relative: string; since: string; sourceDay: string }
       direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
     }
-    history: { since: string; remaining: string }
+    history: { remaining: string }
     chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
     action: { refresh: string; enable: string; viewSource: string }
   }
