@@ -42,11 +42,11 @@ export function wireOptionSkew(deps: {
     isEnabled: deps.isEnabled
   })
   const ready = store.load()
-    .then(async () => {
+    .then(() => {
       deps.onReady({ readSnapshot: () => store.readSnapshot(), probe: () => runtime.probe() })
+      /* **排期只有一条路径**：`runtime.start()` 末尾自己会 `sync()` 一次（按已存开关排期，
+         否则重启后源会显示「未注册自动任务」）。这里不再补一次——两条路径以后容易不一致。 */
       runtime.start()
-      // 启动时按已存的开关排期：只等开关事件的话，重启后源会显示「未注册自动任务」。
-      await runtime.sync()
     })
     .catch(() => undefined)
   return {
