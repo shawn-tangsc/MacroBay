@@ -24,13 +24,15 @@ type ClockFact = Parameters<typeof clockScheduleMetrics>[0]['facts'][number]
  * 判断只有一处——不在卡里另判一次。
  */
 export function ClockCardSlot({
-  locale, text, today, events, facts, reading: input_reading, policyUnavailable, reloadPolicy,
+  locale, text, today, nowIso, events, facts, reading: input_reading, policyUnavailable, reloadPolicy,
   probability, fed, onConfigureSources, onManageSource, onOpenDrawer, resolveKey, slot
 }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   text: Readonly<{ policyPath: PolicyPathCopy }>
   /** 显示时区的「今天」（`YYYY-MM-DD`）。 */
   today: string
+  /** 此刻的 ISO 时刻：中央 ±24 小时窗口按它算（与 `today` 取自同一次）。 */
+  nowIso: string
   events: readonly ClockSourceEvent[]
   facts: readonly ClockFact[]
   /** 政策读数**已读到时**的那份（会议日 + 盘口概率）；读不到或没启用时不给。 */
@@ -51,6 +53,7 @@ export function ClockCardSlot({
   return <SlotHost slot={slot}>{<ClockCard
     model={buildClockCardModel({
       today,
+      now: nowIso,
       metrics: clockScheduleMetrics({
         today,
         events: events.map((event) => ({

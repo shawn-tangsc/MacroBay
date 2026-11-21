@@ -56,15 +56,26 @@ export type ClockScheduleMetric = Readonly<{
   /** 牌上第一行用的文案键（指标缩写）；文案内容由文案表给，判据不在这里。 */
   nameKey: string
   /** 上一次发布：日期取日程，值取这一期已公布的结果；这一期没有值就不给 `value`。 */
-  lastRelease?: Readonly<{ date: string; value?: string }>
+  lastRelease?: Readonly<{ date: string; value?: string
+    /** 发布时刻（ISO）。中央的 ±24 小时窗口**按时刻算，不按日期算**（42 号文件 §二）。 */
+    at?: string }>
   /** 下一期发布：只给出日期与预期值；没有预期值（比如盘未开）就不给 `expected`。 */
-  nextRelease?: Readonly<{ date: string; expected?: string
+  nextRelease?: Readonly<{ date: string; at?: string; expected?: string
     /** 预期来自盘口（`market-implied`）：环上只从这类候选里挑一个。 */
     expectedFromMarket?: true }>
   /** 同一指标相邻两次发布的间隔（天）；从日程算，不许写死。 */
   periodDays?: number
   /** 政策利率那一格：主推档（`hike-25` 等），牌名按它生成——档位会变，名字不能写死。 */
   policyOutcome?: string
+  /** 读数里这一期的实际值（发布后才有）。窗口内「有结果」那一态的大字就是它。 */
+  actualValue?: string
+  /** 上一期公布值（`previousAsPublished`）：窗口内「前值」那一行。 */
+  previousValue?: string
+  /** 本期共识（数据商问卷）：窗口内「预期」那一行。**不是盘口**，盘口在 `nextRelease.expected`。 */
+  consensusValue?: string
+  /** 本期实际减本期共识（带符号的数值差，如 `+0.10pp`）；方向由文案表说。 */
+  deltaAmount?: string
+  deltaDirection?: 'above' | 'below'
 }>
 
 export type ClockPlaque = Readonly<{
@@ -89,17 +100,52 @@ export type ClockPlaque = Readonly<{
   policyOutcome?: string
 }>
 
-export type ClockCenterMetric = Readonly<{
+/**
+ * 中央的两张面（用户 2026-11-21 拍板，42 号文件）：
+ * - 平时显示**利率路径**（版本一：「档名 + 概率」大字，下面「会议日 · 天数」）；
+ * - 只在某个一级指标发布**前后各 24 小时**内切成该指标的**指标面**。
+ *
+ * 几何一点不动：中央块仍是那 160×? 的 `mi-clock__core`，只换里面的行。
+ */
+export type ClockCenterPhase = 'upcoming' | 'released' | 'overdue'
+
+/** 中央政策面（平时那张）：档名按主推档生成，不写死。 */
+export type ClockCenterPolicyFace = Readonly<{
+  kind: 'policy'
+  /** 主推档（`hike-25` 等）；读不到就不给，卡面只写「政策利率」不编档位。 */
+  outcome?: string
+  /** 主推档概率，如 `91.7%`；取不到就不给（**不写 0%**）。 */
+  probability?: string
+  /** 会议日 `12–09`；取不到就不给，那一行整行不显示。 */
+  meetingDate?: string
+  /** 距会议天数；会议日读不到时没有。 */
+  daysUntil?: number
+}>
+
+/** 中央指标面（±24 小时窗口内）：名字与倒计时是同一件事。 */
+export type ClockCenterMetricFace = Readonly<{
+  kind: 'metric'
   metricKey: string
   nameKey: string
-  daysUntil: number
-  /** 预期值；没有就是「预期未提供」，绝不拿示例值顶。 */
+  /** 这次发布的时刻（ISO）；窗口就是围着它算的。 */
+  at: string
+  /** 正数＝已过多少小时，负数＝还有多少小时（pill 用）。 */
+  hoursFromNow: number
+  phase: ClockCenterPhase
+  /** 这次发布的市场预期；没有就写「暂无预期（盘未开）」，不拿别的数顶。 */
   expected?: string
-  /** 前值（上一次的公布值），没有就不给。 */
+  /** 上一期公布值。 */
   previous?: string
-  /** 政策主位：主推档，名字按它生成。 */
-  policyOutcome?: string
+  /** 这次发布的结果（有值才有）。 */
+  result?: string
+  /** 本期共识（数据商问卷）：发布后用来算「高于/低于预期」与副行。 */
+  consensus?: string
+  /** 实际与共识的差（带符号），如 `+0.10pp`；只有两个值都齐才给。 */
+  delta?: string
+  deltaDirection?: 'above' | 'below'
 }>
+
+export type ClockCenterFace = ClockCenterPolicyFace | ClockCenterMetricFace
 
 /**
  * 没上环的指标与原因：**必须留一行交代**，不许静默消失。
@@ -133,6 +179,66 @@ export const clockRingRepresentativeConcepts = Object.freeze([
 /** 政策利率不是一级指标，不参与「那一个」的挑选。 */
 const POLICY_METRIC_KEY = 'US.TARGET_RATE.DECISION'
 
+/**
+ * 中央窗口：发布时刻**前后各 24 小时**（42 号文件 §二）。
+ *
+ * 两个窗口不是同一个数，别混：中央窗口管「它什么时候占据视觉中心」，
+ * 环上那一个由「有盘口预期优先」驱动。将来改任何一个都不许顺手改另一个。
+ */
+export const clockCenterWindowHours = 24
+
+export type ClockCenterWindow = Readonly<{
+  metric: ClockScheduleMetric
+  at: string
+  /** 正数＝已过多少小时，负数＝还有多少小时。 */
+  hoursFromNow: number
+  phase: ClockCenterPhase
+}>
+
+/**
+ * 窗口命中：`now ∈ [发布时刻 − 24h, 发布时刻 + 24h]`，**按时刻算**。
+ *
+ * 只有日期没有时刻的发布**不参与窗口**：替它造一个时刻就是推算，我们一直在禁；
+ * 那种发布留在环上与溢出清单里，中央继续显示利率路径（宁可不说，不编）。
+ *
+ * 两个及以上指标同时进窗口：取离现在最近的；同一时刻按代表优先级；再并列按码字典序（只为可复现）。
+ */
+export function selectCenterWindow(input: Readonly<{
+  now: string
+  metrics: readonly ClockScheduleMetric[]
+}>): ClockCenterWindow | undefined {
+  const nowMs = Date.parse(input.now)
+  if (!Number.isFinite(nowMs)) return undefined
+  const windowMs = clockCenterWindowHours * 3_600_000
+  const hits: ClockCenterWindow[] = []
+  for (const metric of input.metrics) {
+    if (metric.metricKey === POLICY_METRIC_KEY) continue
+    for (const at of [metric.nextRelease?.at, metric.lastRelease?.at]) {
+      if (at === undefined) continue
+      const atMs = Date.parse(at)
+      if (!Number.isFinite(atMs)) continue
+      const deltaMs = nowMs - atMs
+      if (Math.abs(deltaMs) > windowMs) continue
+      const isPast = deltaMs >= 0
+      // 「已过时刻、仍无值」不是「已发布」：后者要有这一期的实际值，而且属于刚过去的那一条。
+      const hasResult = isPast && metric.actualValue !== undefined && metric.lastRelease?.at === at
+      hits.push({
+        metric, at, hoursFromNow: deltaMs / 3_600_000,
+        phase: isPast ? (hasResult ? 'released' : 'overdue') : 'upcoming'
+      })
+    }
+  }
+  if (hits.length === 0) return undefined
+  const rank = (metric: ClockScheduleMetric): number => {
+    const index = (clockRingRepresentativeConcepts as readonly string[]).indexOf(metric.metricKey)
+    return index === -1 ? clockRingRepresentativeConcepts.length : index
+  }
+  const sorted = hits.sort((left, right) => Math.abs(left.hoursFromNow) - Math.abs(right.hoursFromNow)
+    || rank(left.metric) - rank(right.metric)
+    || left.metric.metricKey.localeCompare(right.metric.metricKey))
+  return sorted[0]
+}
+
 export function selectRingMetric(metrics: readonly ClockScheduleMetric[]): ClockScheduleMetric | undefined {
   const candidates = metrics.filter((metric) => metric.metricKey !== POLICY_METRIC_KEY
     && metric.nextRelease !== undefined && metric.nextRelease.expectedFromMarket === true)
@@ -151,8 +257,7 @@ export function selectRingMetric(metrics: readonly ClockScheduleMetric[]): Clock
 
 export type ClockCardModel = Readonly<{
   plaques: readonly ClockPlaque[]
-  /** 主位：所有下一期里**最近**的那一个；没有下一期就没有主位。 */
-  center?: ClockCenterMetric
+  center?: ClockCenterFace
   unplaced: readonly ClockUnplaced[]
 }>
 
@@ -210,22 +315,28 @@ export function clockPeriodIsUsable(periodDays: number | undefined): boolean {
 }
 
 /**
- * 一天里这张卡画成什么样：牌挂在哪、主位是谁、谁没上环。
+ * 一天里这张卡画成什么样：牌挂在哪、中央是哪一张面、谁没上环。
  *
  * `today` 是**显示时区的日期**（`YYYY-MM-DD`）：卡上的天数跟读者看到的那一天走。
+ * `now` 是**此刻的 ISO 时刻**（可选）：中央的 ±24 小时窗口按它算；不给就只有利率路径面。
  */
 export function buildClockCardModel(input: Readonly<{
   today: string
+  now?: string
   metrics: readonly ClockScheduleMetric[]
 }>): ClockCardModel {
   const plaques: ClockPlaque[] = []
   const unplaced: ClockUnplaced[] = []
-  let center: ClockCenterMetric | undefined
   /**
-   * **环上只放一个指标**（用户 2026-11-21）：候选=有盘口预期的一级指标，取最近的一个；
+   * **中央的窗口先于环上那一个**（42 号文件 §二）：窗口内的指标优先上环，
+   * 否则会出现「中央已经切成某个指标，环上却挂着另一个」。
+   */
+  const window = input.now === undefined ? undefined : selectCenterWindow({ now: input.now, metrics: input.metrics })
+  /**
+   * **环上只放一个指标**（用户 2026-11-21）：窗口内跟随中央；否则候选=有盘口预期的一级指标，取最近的一个；
    * 其余全部进溢出清单。政策利率不是一级指标，照旧单独一块牌。
    */
-  const selected = selectRingMetric(input.metrics)
+  const selected = window?.metric ?? selectRingMetric(input.metrics)
 
   for (const metric of input.metrics) {
     const isPolicy = metric.metricKey === POLICY_METRIC_KEY
@@ -283,19 +394,10 @@ export function buildClockCardModel(input: Readonly<{
       ...(metric.nextRelease.expected === undefined ? {} : { value: metric.nextRelease.expected }),
       ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
     })
-    /**
-     * 主位 = **环上那一个**（用户 2026-11-21：名字与倒计时必须一致）。
-     * 政策利率不抢主位：它不是一级指标，主位留空时卡面走「暂无预期」。
-     */
-    if (isSelected && center === undefined) {
-      center = {
-        metricKey: metric.metricKey, nameKey: metric.nameKey, daysUntil,
-        ...(metric.nextRelease.expected === undefined ? {} : { expected: metric.nextRelease.expected }),
-        ...(metric.lastRelease?.value === undefined ? {} : { previous: metric.lastRelease.value }),
-        ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
-      }
-    }
   }
+
+  const center = clockCenterFace({ today: input.today, metrics: input.metrics,
+    ...(window === undefined ? {} : { window }) })
 
   // 撞牌：同一区内部比矩形，保留离「现在」更近的；让位的进交代行。
   const ordered = [...plaques].sort((left, right) => {
@@ -323,6 +425,52 @@ export function buildClockCardModel(input: Readonly<{
     })
   }
   return { plaques: kept, ...(center === undefined ? {} : { center }), unplaced }
+}
+
+/**
+ * 中央今天是哪一张面：**窗口内是指标面，窗口外是利率路径面**（42 号文件 §四 的判定顺序——
+ * 先问「有没有这条发布」，再问「政策读到没有」；反过来会把「不在窗口」说成「读不到」）。
+ *
+ * 政策牌不在（未启用/没配）时中央空着：卡面不画一个大数字假装有读数。
+ */
+function clockCenterFace(input: Readonly<{
+  today: string
+  metrics: readonly ClockScheduleMetric[]
+  window?: ClockCenterWindow
+}>): ClockCenterFace | undefined {
+  if (input.window !== undefined) return metricCenterFace(input.window)
+  const policy = input.metrics.find((metric) => metric.metricKey === POLICY_METRIC_KEY)
+  if (policy?.nextRelease === undefined) return undefined
+  const daysUntil = clockDayGap(input.today, policy.nextRelease.date)
+  return {
+    kind: 'policy',
+    ...(policy.policyOutcome === undefined ? {} : { outcome: policy.policyOutcome }),
+    ...(policy.nextRelease.expected === undefined ? {} : { probability: policy.nextRelease.expected }),
+    meetingDate: policy.nextRelease.date,
+    ...(Number.isNaN(daysUntil) ? {} : { daysUntil })
+  }
+}
+
+function metricCenterFace(entry: ClockCenterWindow): ClockCenterMetricFace {
+  const { metric, at, hoursFromNow, phase } = entry
+  const base = { kind: 'metric' as const, metricKey: metric.metricKey, nameKey: metric.nameKey, at, hoursFromNow, phase }
+  // 还没发布：大字是**市场预期**，前值是上一期（`previousValue` 没有时退回上一次发布的值）。
+  if (phase === 'upcoming') {
+    const previous = metric.previousValue ?? metric.lastRelease?.value
+    return {
+      ...base,
+      ...(metric.nextRelease?.expected === undefined ? {} : { expected: metric.nextRelease.expected }),
+      ...(previous === undefined ? {} : { previous })
+    }
+  }
+  return {
+    ...base,
+    ...(metric.consensusValue === undefined ? {} : { consensus: metric.consensusValue }),
+    ...(metric.actualValue === undefined ? {} : { result: metric.actualValue }),
+    ...(metric.previousValue === undefined ? {} : { previous: metric.previousValue }),
+    ...(metric.deltaAmount === undefined ? {} : { delta: metric.deltaAmount }),
+    ...(metric.deltaDirection === undefined ? {} : { deltaDirection: metric.deltaDirection })
+  }
 }
 
 /**

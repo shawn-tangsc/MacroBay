@@ -43,7 +43,29 @@ export const clockCardText = {
     /* 环上只放**一个**最重要的指标（用户 2026-11-21），其余全部在这行里，点 ⓘ 列全。 */
     overflowLine: '还有 {count} 个发布不在环上',
     /* 逐条：名字 · 日期 · 几天后；三样都写，读者才知道漏的是哪一条、还剩多久。 */
-    overflowItem: '{name} · {date} · {days} 天后'
+    overflowItem: '{name} · {date} · {days} 天后',
+    /* ── 中央两张面（用户 2026-11-21 拍板，42 号文件）──
+       平时是利率路径面，只在发布前后各 24 小时内切成指标面。 */
+    facePath: '利率路径',
+    /* 档名：`12 月加息 25bp`。月份来自会议日，动作名按主推档生成——写死就会出错。 */
+    policyOutcomeLead: '{month} 月{outcome}',
+    meetingLine: '{date} · {days} 天',
+    probabilityMissing: '概率暂未提供',
+    pathUnreadable: '利率路径暂时读不到',
+    pathDisabled: '利率路径未启用政策数据源',
+    actualLabel: '实际',
+    waitingResult: '等待发布结果',
+    metricUnreadable: '{name}暂时读不到',
+    expectationNotOpen: '暂无预期（盘未开）',
+    pillHoursAgo: '{hours} 小时前',
+    pillReleasesIn: '{hours} 小时后发布',
+    pillOverdue: '已过 {hours} 小时',
+    expectPrevShort: '预期 {expected} · 前值 {previous}',
+    prevOnly: '前值 {previous}',
+    deltaAbove: '{delta} 高于预期',
+    deltaBelow: '{delta} 低于预期',
+    retry: '再试',
+    enableSource: '去启用'
   },
   'en-US': {
     ariaLabel: 'Macro clock card',
@@ -80,6 +102,25 @@ export const clockCardText = {
     crowdedLead: '{count} more not on the ring: {items}',
     crowdedMore: '{count} more',
     overflowLine: '{count} more releases off the ring',
-    overflowItem: '{name} · {date} · in {days} days'
+    overflowItem: '{name} · {date} · in {days} days',
+    facePath: 'Policy path',
+    policyOutcomeLead: '{month} · {outcome}',
+    meetingLine: '{date} · {days} days',
+    probabilityMissing: 'Probability unavailable',
+    pathUnreadable: 'Policy path cannot be read right now',
+    pathDisabled: 'Policy path has no data source enabled',
+    actualLabel: 'Actual',
+    waitingResult: 'Waiting for the result',
+    metricUnreadable: '{name} cannot be read right now',
+    expectationNotOpen: 'No expectation (market closed)',
+    pillHoursAgo: '{hours}h ago',
+    pillReleasesIn: 'Releases in {hours}h',
+    pillOverdue: '{hours}h past due',
+    expectPrevShort: 'Exp. {expected} · Prev. {previous}',
+    prevOnly: 'Previous {previous}',
+    deltaAbove: '{delta} above expected',
+    deltaBelow: '{delta} below expected',
+    retry: 'Retry',
+    enableSource: 'Enable it'
   }
 } as const

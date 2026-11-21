@@ -39,12 +39,14 @@ export function DashboardMacroRow({
   /** 第一次读数还没回来：两块都先不画结论，也不说「读不到」。 */
   pending?: boolean
 }>): React.ReactElement {
-  const today = calendarDisplayDate(now().toISOString(), useShellTimeZone())
+  const nowIso = now().toISOString()
+  const today = calendarDisplayDate(nowIso, useShellTimeZone())
   return <div className="mi-crypto-dashboard__macro-row">
     <ClockCardSlot
       locale={locale}
       text={text}
       today={today}
+      nowIso={nowIso}
       events={events}
       facts={facts}
       {...(reading === undefined ? {} : { reading })}

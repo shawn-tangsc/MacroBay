@@ -29,9 +29,10 @@ it('takes dates and the period from the schedule, values from the same read as t
   const metrics = clockScheduleMetrics({ today: '2026-11-15', events, facts })
   const cpi = metrics.find((metric) => metric.metricKey === 'US.CPI.YOY')!
   // 本期 CPI 没有实际值 → 牌的数值位用上一期的结果，不编一个「本期」的。
-  expect(cpi.lastRelease).toEqual({ date: '2026-11-10', value: '3.74%' })
-  // 下一期来自读数里的 next（日程那边只读到过去两个月）。
-  expect(cpi.nextRelease).toEqual({ date: '2026-12-10' })
+  // `at` 是发布时刻：中央的 ±24 小时窗口按它算，不许在读取层丢掉。
+  expect(cpi.lastRelease).toEqual({ date: '2026-11-10', at: '2026-11-10T13:30:00.000Z', value: '3.74%' })
+  // 下一期来自读数里的 next（日程那边只读到过去两个月）；时刻同样保留给中央窗口用。
+  expect(cpi.nextRelease).toEqual({ date: '2026-12-10', at: '2026-12-10T13:30:00.000Z' })
   expect(cpi.periodDays).toBe(31)
 })
 
@@ -40,8 +41,6 @@ it('keeps the expectation absent when the read has none, so the card writes 预�
   const payrolls = metrics.find((metric) => metric.metricKey === 'US.NONFARM.CHANGE')!
   expect(payrolls.lastRelease?.value).toBe('+165K')
   expect(payrolls.nextRelease?.expected).toBeUndefined()
-  const model = buildClockCardModel({ today: '2026-11-15', metrics })
-  expect(model.center?.expected).toBeUndefined()
 })
 
 it('carries the policy meeting and the priced probability; no past plaque and no 挂不上 line for it', () => {
@@ -58,9 +57,9 @@ it('rings only the policy plaque when no indicator carries a market-implied expe
   const model = buildClockCardModel({ today: '2026-11-15', metrics: clockScheduleMetrics({
     today: '2026-11-15', events, facts, policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
   }) })
-  // 两个指标都没有盘口预期 → 都不上环（不硬挂），主位留空；政策牌照旧单独一块。
+  // 两个指标都没有盘口预期 → 都不上环（不硬挂）；政策牌照旧单独一块，中央是利率路径面。
   expect(model.plaques.map((plaque) => plaque.metricKey)).toEqual(['US.TARGET_RATE.DECISION'])
-  expect(model.center).toBeUndefined()
+  expect(model.center?.kind).toBe('policy')
   // 没上环的原因写「没被选中」而不是「放不下」，并带上日期与天数供下沿那行列全。
   expect(model.unplaced.filter((entry) => entry.reason === 'not-selected').map((entry) => entry.metricKey).sort())
     .toEqual(['US.CPI.YOY', 'US.NONFARM.CHANGE'])
@@ -79,8 +78,11 @@ it('picks the indicator with a market-implied expectation even when another is n
   ]
   const model = buildClockCardModel({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
-  expect(model.center?.metricKey).toBe('US.CPI.YOY')
-  expect(model.center?.daysUntil).toBe(19)
+  // 环上那一个是 CPI（有盘口、更近的 PCE 没盘口）；这里没有政策读数，中央为空
+  // （窗口外没有利率路径可显示——不拿指标面冒充利率路径）。
+  expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey))
+    .toEqual(['US.CPI.YOY'])
+  expect(model.center).toBeUndefined()
 })
 
 /** 数据商问卷值（`source-survey`）不算盘口：不能拿它当「有预期」把指标顶上环。 */
@@ -108,10 +110,11 @@ it('rings the nearest market-implied indicator: core PCE, four days out, with it
   ]
   const model = buildClockCardModel({ today: '2026-11-21',
     metrics: clockScheduleMetrics({ today: '2026-11-21', events: [], facts }) })
-  expect(model.center?.metricKey).toBe('US.CORE_PCE.YOY')
-  expect(model.center?.daysUntil).toBe(4)
-  expect(model.center?.expected).toBe('3.12%')
-  // 环上那块与主位是同一个指标（不许主位一个、环上另一个）。
-  expect(model.plaques.filter((plaque) => plaque.zone === 'future').map((plaque) => plaque.metricKey))
-    .toEqual(['US.CORE_PCE.YOY'])
+  // 环上那块与它的预期：核心 PCE · 4 天后 · 3.12%。
+  const ring = model.plaques.filter((plaque) => plaque.zone === 'future')
+  expect(ring.map((plaque) => plaque.metricKey)).toEqual(['US.CORE_PCE.YOY'])
+  expect(ring[0]!.daysUntil).toBe(4)
+  expect(ring[0]!.value).toBe('3.12%')
+  // 不在发布窗口内（这里没给 now）：中央是利率路径面；没有政策读数时为空。
+  expect(model.center).toBeUndefined()
 })

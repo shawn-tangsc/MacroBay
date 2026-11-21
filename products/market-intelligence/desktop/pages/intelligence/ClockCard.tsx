@@ -3,7 +3,7 @@ import { Calendar } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { helpTrigger } from '@platform/ui/components/popover'
 
-import type { ClockCardModel, ClockPlaque } from './clockCardModel'
+import type { ClockCardModel, ClockCenterFace, ClockPlaque } from './clockCardModel'
 import { clockCardCenter, clockCardGeometry } from './clockCardModel'
 import './clockCard.css'
 
@@ -92,6 +92,33 @@ export type ClockCardText = Readonly<{
   overflowLine: string
   /** 溢出逐条：`{name} · {date} · {days} 天后`。 */
   overflowItem: string
+  /* ── 中央两张面（用户 2026-11-21 拍板，42 号文件）── */
+  /** 平时的面名：`利率路径`。 */
+  facePath: string
+  /** 档名：`{month} 月{outcome}`，月份来自会议日，动作名按主推档生成。 */
+  policyOutcomeLead: string
+  /** 会议那一行：`{date} · {days} 天`。 */
+  meetingLine: string
+  probabilityMissing: string
+  pathUnreadable: string
+  pathDisabled: string
+  actualLabel: string
+  waitingResult: string
+  /** 窗口内读不到：`{name}暂时读不到`。 */
+  metricUnreadable: string
+  /** 窗口内没有盘口预期：`暂无预期（盘未开）`。 */
+  expectationNotOpen: string
+  /** 倒计时胶囊：`{hours} 小时前` / `{hours} 小时后发布` / `已过 {hours} 小时`。 */
+  pillHoursAgo: string
+  pillReleasesIn: string
+  pillOverdue: string
+  /** 已发布那态的副行：`预期 {expected} · 前值 {previous}`。 */
+  expectPrevShort: string
+  prevOnly: string
+  deltaAbove: string
+  deltaBelow: string
+  retry: string
+  enableSource: string
 }>
 
 export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCalendar, resolveText, policyState, onOpenPolicySources, policyNotice }: Readonly<{
@@ -129,7 +156,8 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       .replace('{name}', text.names[entry.nameKey] ?? entry.nameKey)
       .replace('{date}', entry.date ?? '—')
       .replace('{days}', String(entry.daysUntil ?? 0)))
-  const centerPlaqueId = center === undefined ? undefined : `${center.metricKey}:future`
+  // 中央是利率路径面时，环上没有「中央那一块」可沉底（政策牌与中央不同源），只有指标面才有。
+  const centerPlaqueId = center?.kind === 'metric' ? `${center.metricKey}:future` : undefined
 
   // 卡本体就是这个 section（原型也是 `<section class="n">`）：多包一层会让 min-width/flex 计算值变化。
   // 用户 2026-11-15：**不再缩放**。卡保持 336×330、`transform` 为单位矩阵，
@@ -173,18 +201,12 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
         <text className="mi-clock__now" x={clockCardCenter.svgX} y="67.0" textAnchor="middle" fontSize="11">{text.now}</text>
       </svg>
 
-      {center === undefined ? null : <div className="mi-clock__core">
-        <span className="mi-clock__row1">
-          <span className="mi-clock__name">{plaqueName(center.metricKey, center.nameKey, text, center.policyOutcome, true)}</span>
-          <span className="mi-clock__badge">{text.daysUntil.replace('{days}', String(center.daysUntil))}</span>
-        </span>
-        {/* 标签在数值**上方**（用户 2026-11-20 报「预期（市场共识）」像空的）：写在下面时，
-            读者会把大号数值当成实际值、把下面那行当成一个没有值的标签。 */}
-        {center.expected === undefined ? null : <p className="mi-clock__unit">{text.expectation}</p>}
-        <p className="mi-clock__value">{center.expected ?? text.expectationMissing}</p>
-        {center.previous === undefined ? null : <span className="mi-clock__tier">
-          {text.previous} <b>{center.previous}</b>
-        </span>}
+      {/* 中央两张面（用户 2026-11-21 拍板，42 号文件）：平时利率路径，±24 小时内切成指标。
+          几何不动：还是这个 `mi-clock__core`，只换里面的行（最多 5 行，界面设计实测）。 */}
+      {center === undefined ? null : <div className="mi-clock__core" data-clock-center={center.kind}>
+        <ClockFace center={center} text={text}
+          {...(policyState === undefined ? {} : { policyState })}
+          {...(notice === undefined ? {} : { notice })} />
       </div>}
 
       {/* 指标牌：位置与 --o 都由模型算。原型是 <button> 但没有动作，故渲染成不可点的节点
@@ -225,10 +247,13 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           里面装着来源说明、撞牌让位与其他没上环的原因（`not-selected` 那条在上一行的溢出行里，
           不重复搬到这里——两处各说一半，读者会以为漏了）。容器保留（它是 ⓘ 的定位上下文），卡高仍 330。 */}
       <div className="mi-clock__foot">
-        {/* 原型这一格就是 `<span title>`（不是浮层组件）：来源说明 + 撞牌/其他没上环原因的交代都放在这里。 */}
-        <span className="mi-clock__info" tabIndex={0}
-          title={[text.sourceNote, ...unplacedLines(model, text, policyState)].join('｜')}
-          data-clock-unplaced={model.unplaced.length}>ⓘ</span>
+        {/* 底部这格也是 ⓘ，与溢出行那颗**同一套交互**（`helpTrigger` → Popover）：一张卡上不留两种
+            交互（原生 `title` 在键盘/触屏上唤不出来，且与上面的浮层不一致）。
+            内容只放这里该说的：来源说明 + 撞牌让位 + 其他没上环的原因；`not-selected`（环上只放一个、
+            其余没被选中）由上面那行溢出行单独表达，**两处不重复**。 */}
+        <span className="mi-clock__info">
+          {helpTrigger({ text: [text.sourceNote, ...unplacedLines(model, text, policyState)].join('｜') })}
+        </span>
       </div>
   </section>
 }
@@ -257,17 +282,124 @@ function unplacedLines(model: ClockCardModel, text: ClockCardText, policyState?:
 }
 
 /**
- * 牌上的名字：政策利率那一格的值是**盘口主推档的概率**，不是利率水平——
- * 名字必须带「维持不变概率」，否则 90.9% 会被读成利率（用户 2026-11-20 报的就是这个）。
+ * 中央两张面（用户 2026-11-21 拍板，42 号文件 §四）：
+ * 平时是**利率路径面**；只在某条一级指标发布前后各 24 小时内切成**指标面**。
+ *
+ * 行数上限 5（界面设计实测：最高组合态 100.9，离刻度内沿 r=92 只剩 2.7px）。
+ * 数值态走 `--font-metric-md`，句子态走 `--font-body`——同一槽位不许两种字号混用。
  */
-function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, policyOutcome?: string, center = false): string {
+function ClockFace({ center, text, policyState, notice }: Readonly<{
+  center: ClockCenterFace
+  text: ClockCardText
+  policyState?: 'disabled' | 'unreadable'
+  notice?: Readonly<{ sentence: string; actionLabel?: string; onAction?: () => void }>
+}>): React.ReactElement {
+  return center.kind === 'metric'
+    ? <MetricFace face={center} text={text} />
+    : <PolicyFace face={center} text={text}
+        {...(policyState === undefined ? {} : { policyState })}
+        {...(notice === undefined ? {} : { notice })} />
+}
+
+/** 平时的利率路径面（版本一）：档名 + 概率大字 + 会议日 · 天数。 */
+function PolicyFace({ face, text, policyState, notice }: Readonly<{
+  face: Extract<ClockCenterFace, { kind: 'policy' }>
+  text: ClockCardText
+  policyState?: 'disabled' | 'unreadable'
+  notice?: Readonly<{ sentence: string; actionLabel?: string; onAction?: () => void }>
+}>): React.ReactElement {
+  const head = <span className="mi-clock__row1"><span className="mi-clock__name">{text.facePath}</span></span>
+  if (policyState === 'disabled') {
+    return <>{head}
+      <p className="mi-clock__sentence">{text.pathDisabled}</p>
+      {faceAction(notice?.actionLabel ?? text.enableSource, notice?.onAction)}
+    </>
+  }
+  if (policyState === 'unreadable') {
+    // 原因句由宿主给（哪一格没开 / 源自己关着 / 读失败）；没有就不写，不编一句。
+    return <>{head}
+      <p className="mi-clock__sentence">{text.pathUnreadable}</p>
+      {notice === undefined ? null : <span className="mi-clock__sub">{notice.sentence}</span>}
+      {faceAction(notice?.actionLabel ?? text.retry, notice?.onAction)}
+    </>
+  }
+  const outcomeName = face.outcome === undefined ? undefined : text.policyOutcomeNames[face.outcome]
+  // 档名按主推档生成：hike-25 → 「12 月加息 25bp」。取不到档位就不写这一行，不编一个。
+  const lead = outcomeName === undefined || face.meetingDate === undefined ? undefined
+    : text.policyOutcomeLead
+      .replace('{month}', String(Number(face.meetingDate.slice(5, 7))))
+      .replace('{outcome}', outcomeName)
+  return <>{head}
+    {lead === undefined ? null : <span className="mi-clock__label">{lead}</span>}
+    {face.probability === undefined
+      ? <p className="mi-clock__sentence">{text.probabilityMissing}</p>
+      : <p className="mi-clock__value">{face.probability}</p>}
+    {face.meetingDate === undefined || face.daysUntil === undefined ? null : <span className="mi-clock__sub">
+      {text.meetingLine.replace('{date}', shortMonthDay(face.meetingDate)).replace('{days}', String(face.daysUntil))}
+    </span>}
+  </>
+}
+
+/** 窗口内的指标面：四态按 42 号文件 §四——有结果 / 未到发布 / 已过时刻无结果 / 该指标读不到。 */
+function MetricFace({ face, text }: Readonly<{
+  face: Extract<ClockCenterFace, { kind: 'metric' }>
+  text: ClockCardText
+}>): React.ReactElement {
+  const name = text.names[face.nameKey] ?? face.nameKey
+  const hours = Math.max(1, Math.round(Math.abs(face.hoursFromNow)))
+  const pill = face.phase === 'upcoming' ? text.pillReleasesIn.replace('{hours}', String(hours))
+    : face.phase === 'released' ? text.pillHoursAgo.replace('{hours}', String(hours))
+      : text.pillOverdue.replace('{hours}', String(hours))
+  const head = <span className="mi-clock__row1">
+    <span className="mi-clock__name">{name}</span>
+    <span className="mi-clock__badge">{pill}</span>
+  </span>
+  // 预期、前值、结果全取不到：说这条暂时读不到，不拿别的数顶。
+  if (face.expected === undefined && face.previous === undefined && face.result === undefined) {
+    return <>{head}<p className="mi-clock__sentence">{text.metricUnreadable.replace('{name}', name)}</p></>
+  }
+  if (face.phase === 'upcoming') {
+    return <>{head}
+      <span className="mi-clock__label">{text.expectation}</span>
+      <p className="mi-clock__value">{face.expected ?? text.expectationNotOpen}</p>
+      {face.previous === undefined ? null : <span className="mi-clock__sub">{text.prevOnly.replace('{previous}', face.previous)}</span>}
+    </>
+  }
+  if (face.phase === 'overdue') {
+    return <>{head}
+      <p className="mi-clock__sentence">{text.waitingResult}</p>
+      {face.previous === undefined ? null : <span className="mi-clock__sub">{text.prevOnly.replace('{previous}', face.previous)}</span>}
+    </>
+  }
+  // 已发布：大字是实际值；「高于/低于预期」只在两个值都齐时才写。
+  const delta = face.delta === undefined ? undefined
+    : (face.deltaDirection === 'below' ? text.deltaBelow : text.deltaAbove).replace('{delta}', face.delta)
+  const sub = face.consensus !== undefined && face.previous !== undefined
+    ? text.expectPrevShort.replace('{expected}', face.consensus).replace('{previous}', face.previous)
+    : face.previous === undefined ? undefined : text.prevOnly.replace('{previous}', face.previous)
+  return <>{head}
+    <span className="mi-clock__label">{text.actualLabel}</span>
+    <p className="mi-clock__value">{face.result ?? text.waitingResult}</p>
+    {delta === undefined ? null : <span className="mi-clock__delta">{delta}</span>}
+    {sub === undefined ? null : <span className="mi-clock__sub">{sub}</span>}
+  </>
+}
+
+/** 一格只给一个主动作：再试 或 去启用。没有动作通道就不画按钮（不画一个点不动的）。 */
+function faceAction(label: string | undefined, onAction: (() => void) | undefined): React.ReactElement | null {
+  if (label === undefined || onAction === undefined) return null
+  return <button type="button" className="mi-clock__face-action" onClick={onAction}>{label}</button>
+}
+
+/** `2026-12-09` → `12–09`：会议日来自政策读数的日期串，不做时区换算（它是「哪一天开会」）。 */
+function shortMonthDay(date: string): string {
+  return date.length >= 10 ? `${date.slice(5, 7)}–${date.slice(8, 10)}` : date
+}
+function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, policyOutcome?: string): string {
   if (metricKey === 'US.TARGET_RATE.DECISION') {
     // 主推档名字按 outcome 取；取不到就写「政策利率」——不编一个档位。
     const outcomeName = text.policyOutcomeNames[policyOutcome ?? '']
     return outcomeName === undefined ? '政策利率' : text.policyOutcomeLabel.replace('{outcome}', outcomeName)
   }
-  const name = (center ? text.centerNames[nameKey as keyof typeof text.centerNames] : undefined)
-    ?? text.names[nameKey as keyof typeof text.names]
-    ?? nameKey
-  return name
+  return text.names[nameKey] ?? nameKey
 }

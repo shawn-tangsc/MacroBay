@@ -114,12 +114,18 @@ describe('the model built from real schedule dates', () => {
     expect(model.plaques.some((plaque) => plaque.id === 'US.CPI.NSA.YOY:future')).toBe(true)
   })
 
-  /** 主位 = **环上那一个**（用户 2026-11-21：名字与倒计时必须一致），不是「所有下一期里最近」。 */
-  it('gives the centre the same metric as the ring', () => {
+  /**
+   * 平时中央是**利率路径面**（用户 2026-11-21 拍板，42 号文件）：不在任何发布窗口内时，
+   * 中央显示政策路径，而不是环上那一个指标——环记时间，中央记概率。
+   */
+  it('shows the policy path face outside the release window', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
-    expect(model.center?.metricKey).toBe('US.CPI.NSA.YOY')
-    expect(model.center?.daysUntil).toBe(25)
-    expect(model.center?.expected).toBe('3.2%')
+    expect(model.center?.kind).toBe('policy')
+    if (model.center?.kind !== 'policy') throw new Error('expected the policy face')
+    expect(model.center.meetingDate).toBe('2026-12-09')
+    expect(model.center.daysUntil).toBe(24)
+    // 这一份夹具里政策读数没有概率：中央写「概率暂未提供」，绝不写 0%。
+    expect(model.center.probability).toBeUndefined()
   })
 
   /** 其余指标进溢出清单：带日期与天数，供卡片下沿那行「还有 N 个发布不在环上」列全。 */
@@ -133,14 +139,14 @@ describe('the model built from real schedule dates', () => {
   })
 
   /**
-   * 一个都没有盘口时不硬挂（用户 2026-11-21）：环上不出指标牌、主位留空，
-   * 不许拿没有盘口的指标顶上去假装有预期。
+   * 一个都没有盘口时不硬挂（用户 2026-11-21）：环上不出指标牌，中央也不会拿一个没有盘口的指标
+   * 顶上去假装有预期——它回到利率路径面。
    */
   it('rings nothing when no candidate has a market-implied expectation', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: measured.map((metric) => ({
       ...metric, nextRelease: metric.nextRelease === undefined ? undefined : { date: metric.nextRelease.date }
     })) })
-    expect(model.center).toBeUndefined()
+    expect(model.center?.kind).toBe('policy')
     expect(model.plaques.every((plaque) => plaque.metricKey === 'US.TARGET_RATE.DECISION')).toBe(true)
   })
 })
@@ -158,8 +164,8 @@ describe('the policy plaque and the single indicator plaque', () => {
   it('keeps the policy plaque even when no indicator has a market-implied expectation', () => {
     const model = buildClockCardModel({ today: '2026-11-15', metrics: policyOnly })
     expect(model.plaques.map((plaque) => plaque.metricKey)).toEqual(['US.TARGET_RATE.DECISION'])
-    // 没有一级指标候选时主位为空——不拿政策牌冒充「那一个指标」。
-    expect(model.center).toBeUndefined()
+    // 没有一级指标候选时，中央就是**利率路径面**——政策牌本来就在讲这件事。
+    expect(model.center?.kind).toBe('policy')
   })
 
   it('rings the market-implied indicator and the policy plaque, and nothing else', () => {
@@ -170,7 +176,84 @@ describe('the policy plaque and the single indicator plaque', () => {
     ] })
     expect(model.plaques.map((plaque) => plaque.metricKey).sort())
       .toEqual(['US.CORE_PCE.YOY', 'US.TARGET_RATE.DECISION'])
-    expect(model.center?.metricKey).toBe('US.CORE_PCE.YOY')
+    // 不在窗口内：中央仍是利率路径面（窗口那条另有用例）。
+    expect(model.center?.kind).toBe('policy')
+  })
+})
+
+/**
+ * 中央的 ±24 小时窗口（用户 2026-11-21 拍板，42 号文件 §二）。
+ *
+ * 判据是**发布时刻**前后各 24 小时，不是日期；窗口内环上那一个跟随中央，
+ * 窗口外恢复「有盘口预期优先」。两个窗口不是同一个数，别混。
+ */
+describe('the centre switches to the indicator only inside the release window', () => {
+  /** CPI 11-10 14:30Z 发布，有结果；下一期 12-10 也只有日期（不参与窗口）。 */
+  const windowed: readonly ClockScheduleMetric[] = [
+    { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+      lastRelease: { date: '2026-11-10', at: '2026-11-10T14:30:00.000Z', value: '3.74%' },
+      nextRelease: { date: '2026-12-10', expected: '3.2%', expectedFromMarket: true },
+      periodDays: 30,
+      actualValue: '3.74%', previousValue: '3.50%', consensusValue: '3.60%',
+      deltaAmount: '+0.14pp', deltaDirection: 'above' },
+    { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+      lastRelease: { date: '2026-11-06', at: '2026-11-06T13:30:00.000Z', value: '+165K' },
+      nextRelease: { date: '2026-12-04', at: '2026-12-04T13:30:00.000Z' }, periodDays: 28 },
+    { metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate', nextRelease: { date: '2026-12-09' }, periodDays: 42 }
+  ]
+
+  it('takes the indicator face two hours after its release, with the result', () => {
+    const model = buildClockCardModel({ today: '2026-11-10', now: '2026-11-10T16:30:00.000Z', metrics: windowed })
+    expect(model.center?.kind).toBe('metric')
+    if (model.center?.kind !== 'metric') throw new Error('expected the metric face')
+    expect(model.center.metricKey).toBe('US.CPI.NSA.YOY')
+    expect(model.center.phase).toBe('released')
+    expect(model.center.result).toBe('3.74%')
+    expect(model.center.consensus).toBe('3.60%')
+    expect(model.center.previous).toBe('3.50%')
+    expect(model.center.delta).toBe('+0.14pp')
+    expect(model.center.deltaDirection).toBe('above')
+    // 窗口内环上跟随中央：CPI 必须在环上。
+    expect(model.plaques.some((plaque) => plaque.metricKey === 'US.CPI.NSA.YOY')).toBe(true)
+  })
+
+  it('shows the expectation four hours before the release, and keeps the ring on the same indicator', () => {
+    // 非农 11-06 13:30Z 发布；09:30Z 是发布前 4 小时。它没有盘口，但窗口内仍然上环。
+    const model = buildClockCardModel({ today: '2026-11-06', now: '2026-11-06T09:30:00.000Z', metrics: windowed })
+    expect(model.center?.kind).toBe('metric')
+    if (model.center?.kind !== 'metric') throw new Error('expected the metric face')
+    expect(model.center.metricKey).toBe('US.NONFARM.SA.CHANGE')
+    expect(model.center.phase).toBe('upcoming')
+    expect(model.center.previous).toBe('+165K')
+    expect(model.plaques.some((plaque) => plaque.metricKey === 'US.NONFARM.SA.CHANGE')).toBe(true)
+  })
+
+  it('stays on the indicator past its time when no result has arrived yet', () => {
+    const noResult = windowed.map((metric) => metric.metricKey === 'US.NONFARM.SA.CHANGE'
+      ? { ...metric, actualValue: undefined }
+      : metric)
+    const model = buildClockCardModel({ today: '2026-11-06', now: '2026-11-06T15:30:00.000Z', metrics: noResult })
+    expect(model.center?.kind).toBe('metric')
+    if (model.center?.kind !== 'metric') throw new Error('expected the metric face')
+    expect(model.center.phase).toBe('overdue')
+  })
+
+  it('goes back to the policy path once the window has passed', () => {
+    // 非农发布后 25 小时：窗口已过。
+    const model = buildClockCardModel({ today: '2026-11-07', now: '2026-11-07T14:31:00.000Z', metrics: windowed })
+    expect(model.center?.kind).toBe('policy')
+  })
+
+  it('picks the release nearest to now when two indicators are inside the window', () => {
+    const twoInside: readonly ClockScheduleMetric[] = [
+      { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy', nextRelease: { date: '2026-11-11', at: '2026-11-11T12:00:00.000Z', expected: '3.2%' } },
+      { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls', nextRelease: { date: '2026-11-11', at: '2026-11-11T09:00:00.000Z', expected: '+90K' } }
+    ]
+    // 09:00Z 那一刻离非农更近（0 分钟）而不是 CPI（3 小时）。
+    const model = buildClockCardModel({ today: '2026-11-11', now: '2026-11-11T09:00:00.000Z', metrics: twoInside })
+    expect(model.center?.kind).toBe('metric')
+    if (model.center?.kind !== 'metric') throw new Error('expected the metric face')
+    expect(model.center.metricKey).toBe('US.NONFARM.SA.CHANGE')
   })
 })
 

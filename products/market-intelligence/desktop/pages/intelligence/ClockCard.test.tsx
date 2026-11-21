@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { ClockCard } from './ClockCard'
 import { buildClockCardModel, clockRingPoint, type ClockScheduleMetric } from './clockCardModel'
@@ -16,8 +16,9 @@ const today = '2026-11-15'
  * 这里只有 CPI 有盘口 → 环上那一个是它；非农进溢出清单；政策牌单独一块（相撞时让位给指标）。
  */
 const metrics: readonly ClockScheduleMetric[] = [
-  { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy', lastRelease: { date: '2026-11-10', value: '3.74%' },
-    nextRelease: { date: '2026-12-10', expected: '3.2%', expectedFromMarket: true as const }, periodDays: 30 },
+  { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+    lastRelease: { date: '2026-11-10', at: '2026-11-10T13:30:00.000Z', value: '3.74%' },
+    nextRelease: { date: '2026-12-10', at: '2026-12-10T13:30:00.000Z', expected: '3.2%', expectedFromMarket: true as const }, periodDays: 30 },
   { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls', lastRelease: { date: '2026-11-06', value: '+165K' },
     nextRelease: { date: '2026-12-04' }, periodDays: 28 },
   { metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate',
@@ -69,11 +70,13 @@ it('drives the ring plaque’s opacity from its position, not from a timer', asy
   expect(past.style.getPropertyValue('--o')).toBe('1')
 })
 
-it('writes the market-implied expectation the ring indicator carries', async () => {
+it('writes the market-implied expectation on the ring plaque it carries', async () => {
   const { host } = await render()
-  // 中央与环上同一个指标：CPI 的 3.2% 盘口预期 + 前值 3.74%。
-  expect(host.querySelector('.mi-clock__value')?.textContent).toBe('3.2%')
-  expect(host.querySelector('.mi-clock__tier')?.textContent).toContain('3.74%')
+  const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  // 牌上第二行是盘口预期 3.2%，不是上一期的 3.74%——两行都在，读者分得开「预期」与「前值」。
+  expect(future.textContent).toContain('CPI 年率')
+  expect(future.textContent).toContain('3.2%')
+  expect(future.textContent).not.toContain('3.74%')
 })
 
 /** 一个都没有盘口时不硬挂：中央不画大数字（不拿没盘口的指标顶上去假装有预期）。 */
@@ -135,34 +138,56 @@ it('positions the overflow line absolutely and lifts the policy note clear of it
   expect(lift, '政策行上移量必须盖过溢出行那 22px 的实际行高').toContain('bottom: 40px')
 })
 
+/**
+ * 底部 ⓘ 与溢出行那颗是**同一套交互**（`helpTrigger` → `Popover`），所以验证方式是点开浮层看那几句，
+ * 不再断言原生 `title`——那张卡上已经不留两种交互了。
+ */
 it('leaves a line for a metric it cannot place instead of dropping it silently', async () => {
   const model = buildClockCardModel({ today, metrics: [
     { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy', lastRelease: { date: '2026-11-13', value: '1' }, periodDays: 30 }
   ] })
   const { host } = await render({ model })
-  const info = host.querySelector<HTMLElement>('.mi-clock__info')!
-  expect(info.getAttribute('data-clock-unplaced')).toBe('1')
-  expect(info.getAttribute('title')).toContain('CPI 年率 未上环：没有下一期日程')
+  const trigger = host.querySelector<HTMLButtonElement>('.mi-clock__info button')!
+  // 读屏名是平台那句「查看说明」，不是浮层正文。
+  expect(trigger.getAttribute('aria-label')).toBe('查看说明')
+  await act(async () => trigger.click())
+  // 没上环的那一条必须能在浮层里读到原句（不许静默消失）。
+  expect(document.body.textContent).toContain('CPI 年率 未上环：没有下一期日程')
 })
 
 /**
  * 用户 2026-11-20 报的两处「看着像数据错了」：
  * ① 大号数值其实是**市场共识**，标签原来写在数值下面，读者把它当成实际值、把标签当成空值；
  * ② 政策利率那一格的值是**盘口主推档概率**，名字却只写「政策利率」，90.9% 会被读成利率水平。
+ *
+ * 现在中央平时是利率路径面，这张指标面只在发布前后各 24 小时内出现（用户 2026-11-21 拍板）。
  */
 it('puts the expectation label above the number, so the number is not read as the actual', async () => {
-  // 环上那一个必须有盘口预期才会上环：这里用非农 + 盘口，中央与环上同一个。
+  // 非农 11-25 13:30Z 发布；09:30Z 是发布前 4 小时 → 中央切成它的指标面。
   const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
     lastRelease: { date: '2026-11-06', value: '+165K' },
-    nextRelease: { date: '2026-11-25', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: withExpected }) })
+    nextRelease: { date: '2026-11-25', at: '2026-11-25T13:30:00.000Z', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
+  const { host } = await render({ model: buildClockCardModel({
+    today: '2026-11-25', now: '2026-11-25T09:30:00.000Z', metrics: withExpected }) })
   const core = host.querySelector('.mi-clock__core')!
-  const unit = core.querySelector('.mi-clock__unit')
+  const label = core.querySelector('.mi-clock__label')
   const value = core.querySelector('.mi-clock__value')
-  expect(unit, '主位必须有「预期（市场共识）」这行').not.toBeNull()
+  expect(label, '指标面必须有「预期（市场共识）」这行').not.toBeNull()
   expect(value?.textContent).toBe('+88K')
   // 顺序：标签在前、数值在后（读屏与视觉一致）。
-  expect(unit!.compareDocumentPosition(value!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(label!.compareDocumentPosition(value!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+/** 平时的中央是利率路径面：面名、「12 月加息 25bp」、概率、会议日与天数。 */
+it('shows the policy path face outside any release window', async () => {
+  const { host } = await render()
+  const core = host.querySelector('.mi-clock__core')!
+  expect(core.getAttribute('data-clock-center')).toBe('policy')
+  expect(core.textContent).toContain('利率路径')
+  // 会议日与天数：12–09 · 24 天后（today 是 2026-11-15）。
+  expect(core.textContent).toContain('12–09 · 24 天')
+  // 这一份夹具的政策读数没有概率：写「概率暂未提供」，不许写 0%。
+  expect(core.textContent).toContain('概率暂未提供')
 })
 
 it('names the policy slot by its leading outcome, never a hardcoded one', async () => {
@@ -186,14 +211,75 @@ it('names the policy slot by its leading outcome, never a hardcoded one', async 
 it('renders the expectation label in full, never truncated with an ellipsis', async () => {
   const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
     lastRelease: { date: '2026-11-06', value: '+165K' },
-    nextRelease: { date: '2026-11-25', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
-  const { host } = await render({ model: buildClockCardModel({ today, metrics: withExpected }) })
-  const unit = host.querySelector('.mi-clock__unit')!
-  expect(unit.textContent).toBe('预期（市场共识）')
-  // 放不下时缩小字档而不是省略号：这条格不许有省略/裁剪规则。
+    nextRelease: { date: '2026-11-25', at: '2026-11-25T13:30:00.000Z', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
+  const { host } = await render({ model: buildClockCardModel({
+    today: '2026-11-25', now: '2026-11-25T09:30:00.000Z', metrics: withExpected }) })
+  const label = host.querySelector('.mi-clock__label')!
+  expect(label.textContent).toBe('预期（市场共识）')
+  // 放不下时缩小字档而不是省略号：这一格不许有省略/裁剪规则。
   const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
-  const unitRule = /\.mi-clock__unit\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
-  expect(unitRule).not.toContain('text-overflow')
+  const labelRule = /\.mi-clock__label\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+  expect(labelRule).not.toContain('text-overflow')
+})
+
+/**
+ * 窗口内四态（42 号文件 §四）：有结果 / 未到发布 / 已过时刻无结果 / 该指标读不到。
+ * 每一条都钉住「读不到不编数、等待不空白」这两条硬边界。
+ */
+describe('the centre indicator face inside the release window', () => {
+  /** 刚发布那一次：11-25 13:30Z；下一期在 12-25。 */
+  const afterRelease = (extra: Record<string, unknown> = {}): readonly ClockScheduleMetric[] => [{
+    metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+    lastRelease: { date: '2026-11-25', at: '2026-11-25T13:30:00.000Z' },
+    nextRelease: { date: '2026-12-25', at: '2026-12-25T13:30:00.000Z' },
+    periodDays: 28, ...extra
+  }]
+  /** 还没发布那一次：11-25 13:30Z 是下一期，上一次是 10-28。 */
+  const beforeRelease = (extra: Record<string, unknown> = {}): readonly ClockScheduleMetric[] => [{
+    metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+    lastRelease: { date: '2026-10-28', at: '2026-10-28T13:30:00.000Z' },
+    nextRelease: { date: '2026-11-25', at: '2026-11-25T13:30:00.000Z' },
+    periodDays: 28, ...extra
+  }]
+  const coreAt = async (now: string, metrics: readonly ClockScheduleMetric[]) => {
+    const { host } = await render({ model: buildClockCardModel({ today: '2026-11-25', now, metrics }) })
+    return host.querySelector('.mi-clock__core')!
+  }
+
+  it('puts the actual in the big slot and the surprise on its own line after the release', async () => {
+    const core = await coreAt('2026-11-25T15:30:00.000Z', afterRelease({
+      actualValue: '+180K', previousValue: '+165K', consensusValue: '+150K',
+      deltaAmount: '+30K', deltaDirection: 'above'
+    }))
+    expect(core.textContent).toContain('实际')
+    expect(core.textContent).toContain('+180K')
+    expect(core.textContent).toContain('+30K 高于预期')
+    expect(core.textContent).toContain('预期 +150K · 前值 +165K')
+  })
+
+  it('says it is waiting for the result instead of drawing a blank when the time has passed', async () => {
+    const core = await coreAt('2026-11-25T15:30:00.000Z', afterRelease({ previousValue: '+165K' }))
+    expect(core.textContent).toContain('等待发布结果')
+    expect(core.textContent).toContain('前值 +165K')
+    // 不许画一个「实际值」出来顶上。
+    expect(core.querySelector('.mi-clock__label')).toBeNull()
+  })
+
+  it('says the indicator cannot be read when neither expectation nor previous is available', async () => {
+    const core = await coreAt('2026-11-25T09:30:00.000Z', beforeRelease())
+    expect(core.textContent).toContain('新增就业暂时读不到')
+    // 句子态不许进 30px 的取值档（那是给数值的）；也不许写 0%。
+    expect(core.querySelector('.mi-clock__value')).toBeNull()
+    expect(core.textContent).not.toContain('0%')
+  })
+
+  it('says the policy path is not enabled instead of showing an error tone', async () => {
+    const { host } = await render({ policyState: 'disabled' })
+    const core = host.querySelector('.mi-clock__core')!
+    expect(core.textContent).toContain('利率路径未启用政策数据源')
+    // 「未启用」不是故障：中央不出现 0%，也不画一块假读数。
+    expect(core.querySelector('.mi-clock__value')).toBeNull()
+  })
 })
 
 /**
