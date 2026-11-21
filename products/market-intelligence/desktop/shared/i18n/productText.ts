@@ -227,6 +227,8 @@ mi: miText['zh-CN'],
             // 时间轴跨事件组：同一屏出现多个事件时，每行标出它属于哪条事件、在说什么，
             // 否则相隔几十秒的两条结论（一条消息面、一条宏观）看起来像重复发布。
             groupTypes: { macro: '宏观', 'market-reaction': '行情反应', capital: '资金面', sentiment: '消息面', funding: '资金费率', 'cross-asset': '跨资产' },
+            /** 新闻分组里那行标题是**背景**，不是触发（用户 2026-11-21）；类型标签与它分两行。 */
+            groupBackground: '背景新闻：{title}',
             settings: '设置', settingsTitle: 'AI 分析设置', analysisEnabled: '开启 AI 分析',
             analysisEnabledHint: '关闭后不再自动分析，也不会调用模型。', analysisModel: '分析模型', modelFollowDefault: '跟随默认助手模型', followsDefaultPrefix: '跟随默认：',
             enableAnalysis: '开启 AI 分析', analysisOffHint: 'AI 分析已关闭。历史分析仍保留，开启后才会生成新的分析。',
@@ -1852,6 +1854,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             // The list spans event groups: on one screen each row says which event it belongs to,
             // so two conclusions seconds apart do not read as the same one posted twice.
             groupTypes: { macro: 'Macro', 'market-reaction': 'Market reaction', capital: 'Capital flows', sentiment: 'News', funding: 'Funding', 'cross-asset': 'Cross-asset' },
+            groupBackground: 'Background news: {title}',
             settings: 'Settings', settingsTitle: 'AI analysis settings', analysisEnabled: 'Enable AI analysis',
             analysisEnabledHint: 'When off, nothing is analysed automatically and no model is called.', analysisModel: 'Analysis model', modelFollowDefault: 'Follow the default assistant model', followsDefaultPrefix: 'Following default: ',
             enableAnalysis: 'Enable AI analysis', analysisOffHint: 'AI analysis is off. Published analyses are kept; new ones start once it is enabled.',
