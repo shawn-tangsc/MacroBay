@@ -5,6 +5,7 @@ import type {
 } from '../schema/intelligenceSource'
 import type { CredentialProbeFailureCode } from '../application/credentialedProviderProbes'
 import type { IntelligencePipelineHealth } from '../application/intelligencePipeline'
+import type { SourceStaleReason } from '../application/sourceStaleness'
 
 export type SafeIntelligenceSourceDefinition = Omit<IntelligenceSourceDefinition, 'requestGovernance'>
 
@@ -48,6 +49,8 @@ export type SafeIntelligenceSourceHealthView = {
   cursor?: string
   supportsHistoricalBackfill?: boolean
   collectionGap?: boolean
+  /** 采集产出状态的闭集值；两个病可能同时为真。文案由设置页各自映射，这里不拼句子。 */
+  staleReasons?: readonly SourceStaleReason[]
 }
 
 export type SafeIntelligenceSourceDetailView = {
@@ -192,7 +195,8 @@ export function toSafeHealthView(
     lastPublishedAt: health?.lastPublishedAt,
     cursor: health?.cursor,
     supportsHistoricalBackfill: health?.supportsHistoricalBackfill,
-    collectionGap: health?.collectionGap
+    collectionGap: health?.collectionGap,
+    ...(health?.staleReasons?.length ? { staleReasons: health.staleReasons } : {})
   } satisfies Omit<SafeIntelligenceSourceHealthView, 'connectivityStatus'>
 
   const normalized = {

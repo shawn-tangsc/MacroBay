@@ -57,4 +57,19 @@ describe('toSafeHealthView', () => {
       connectivityStatus: 'failed'
     })
   })
+
+  it('carries both closed-set stale reasons through to the settings-facing view', () => {
+    const view = toSafeHealthView(
+      'coindesk-rss',
+      {
+        sourceId: 'coindesk-rss',
+        runtimeStatus: 'healthy',
+        consecutiveFailures: 0,
+        staleReasons: ['no-output', 'normalize-failing']
+      },
+      true
+    )
+
+    expect(view.staleReasons).toEqual(['no-output', 'normalize-failing'])
+  })
 })
