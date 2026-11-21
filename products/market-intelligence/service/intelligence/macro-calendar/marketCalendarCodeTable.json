@@ -1206,8 +1206,11 @@
     "measure": "RATE",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出制造业产能利用率"
     },
     "status": "active"
   },
@@ -1227,8 +1230,11 @@
     "measure": "RATE",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出总行业产能利用率"
     },
     "status": "active"
   },
@@ -1545,8 +1551,11 @@
     "measure": "CHANGE",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g19/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.19 · 消费信贷当月发布，含总额与年率变动"
     },
     "status": "active"
   },
@@ -1807,8 +1816,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of Cleveland",
+      "url": "https://www.clevelandfed.org/indicators-and-data/inflation-nowcasting",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "克利夫兰联储 · 通胀即时预测页，发布 CPI 月度即时预测"
     },
     "status": "active"
   },
@@ -2872,8 +2884,11 @@
     "measure": "LEVEL",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Reserve Bank of New York",
+      "url": "https://www.newyorkfed.org/research/policy/gscpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "纽约联储 · 全球供应链压力指数（GSCPI）官方页"
     },
     "status": "active"
   },
@@ -3007,8 +3022,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出总指数按年变化"
     },
     "status": "active"
   },
@@ -3028,8 +3046,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 工业产出与产能利用率当月发布，含总指数月率"
     },
     "status": "active"
   },
@@ -3634,8 +3655,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出制造业产出按年变化"
     },
     "status": "active"
   },
@@ -3655,8 +3679,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Board of Governors of the Federal Reserve System",
+      "url": "https://www.federalreserve.gov/releases/g17/current/default.htm",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "联储 G.17 · 同一份发布给出制造业产出月率"
     },
     "status": "active"
   },
