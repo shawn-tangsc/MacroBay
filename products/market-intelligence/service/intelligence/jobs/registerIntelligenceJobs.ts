@@ -118,6 +118,7 @@ export function registerIntelligenceJobs(
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
       sourceId: input.sourceId,
       newItemIds: result.newItemIds,
+      ...(result.backfillItemIds.length > 0 ? { backfillItemIds: result.backfillItemIds } : {}),
       ...(input.firstCollection ? { firstCollection: true } : {})
     })
     await context.log({ level: 'info', message: 'Normalized pending raw records.' })

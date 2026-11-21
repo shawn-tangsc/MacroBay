@@ -358,7 +358,8 @@ function createPipelineStub(): IntelligencePipeline {
     normalizeRawRecords: vi.fn(async () => ({
       processedCount: 1,
       queuedJobs: [INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB, INTELLIGENCE_REFRESH_SENTIMENT_AGGREGATES_JOB],
-      newItemIds: ['item-1']
+      newItemIds: ['item-1'],
+      backfillItemIds: []
     })),
     assessChangedItems: vi.fn(async () => ({ assessmentCount: 1, failedCount: 0 })),
     retryItemAssessment: vi.fn(async () => ({ assessmentCount: 1, failedCount: 0 })),

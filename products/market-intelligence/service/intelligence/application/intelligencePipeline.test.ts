@@ -583,6 +583,29 @@ describe('intelligencePipeline', () => {
     expect(JSON.parse(item?.symbolsJson ?? '[]')).toContain('ETH')
   })
 
+  it('stores old fear-greed days as backfill: created, pending, and out of the queues', async () => {
+    const pipeline = createPipeline()
+    await pipeline.collectSource({
+      sourceId: 'alternative-fear-greed',
+      runId: 'fg-window',
+      fixtureText: JSON.stringify({ data: [
+        { value: '24', timestamp: '1795046400' },
+        { value: '40', timestamp: '1790899200' },
+        { value: '38', timestamp: '1790812800' }
+      ] })
+    })
+
+    const result = await pipeline.normalizeRawRecords({ sourceId: 'alternative-fear-greed' })
+
+    expect(result.newItemIds).toHaveLength(3)
+    expect(result.backfillItemIds).toHaveLength(2)
+    const labelsByDay = new Map(pipeline.listItems().map((item) => [item.publishedAt?.slice(0, 10), JSON.parse(item.processingLabelsJson ?? '{}')]))
+    expect(labelsByDay.get('2026-11-19')?.assessmentStatus).toBe('queued')
+    expect(labelsByDay.get('2026-10-02')?.assessmentStatus).toBe('pending')
+    expect(labelsByDay.get('2026-10-01')?.assessmentStatus).toBe('pending')
+    expect(labelsByDay.get('2026-10-02')?.isBackfill).toBe(true)
+  })
+
   it('keeps one fear-greed point per day and lets the latest same-day pull win without rolling back', async () => {
     const pipeline = createPipeline()
     const pull = (days: Array<{ value: string; timestamp: string }>): string => JSON.stringify({ data: days })

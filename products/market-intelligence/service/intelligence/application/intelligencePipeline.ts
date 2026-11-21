@@ -101,6 +101,8 @@ export type IntelligencePipeline = {
     processedCount: number
     queuedJobs: string[]
     newItemIds: string[]
+    /** Items older than the backfill age: created, but kept out of the translate/assess queues. */
+    backfillItemIds: string[]
   }>
   assessChangedItems: (input: { itemIds?: string[] }) => Promise<{ assessmentCount: number; failedCount: number }>
   retryItemAssessment: (input: { itemId: string }) => Promise<{ assessmentCount: number; failedCount: number }>
@@ -460,6 +462,7 @@ export function createIntelligencePipeline(deps?: {
       let processedCount = 0
       let stateDirty = false
       const newItemIds: string[] = []
+      const backfillItemIds: string[] = []
       const pending = rawRecordStore
         .listUnprocessed()
         .filter((record) => !isDefillamaStablecoinRetiredPath(record.sourceId))
@@ -530,6 +533,15 @@ export function createIntelligencePipeline(deps?: {
           }
 
           const enrichedDraft = enrichDraftWithClassification(draft, classification)
+          // One decision, two consumers: the label and the queue status must agree, so compute it
+          // once here and hand the same boolean into the draft writer.
+          const isBackfill = resolveIsBackfillLabel({
+            publishedAt: enrichedDraft.publishedAt,
+            detectedAt: enrichedDraft.detectedAt,
+            intelligenceLayer: enrichedDraft.intelligenceLayer ?? definition.intelligenceLayer,
+            eventFamily: enrichedDraft.eventFamily ?? definition.eventFamily
+          })
+          const itemCountBefore = newItemIds.length
           const created = processNormalizedDraft({
             draft: enrichedDraft,
             parsed,
@@ -542,11 +554,15 @@ export function createIntelligencePipeline(deps?: {
             clusters,
             revisions,
             metricEvents,
-            newItemIds
+            newItemIds,
+            isBackfill
           })
           if (created) {
             recordProcessed = true
             stateDirty = true
+            if (isBackfill && newItemIds.length > itemCountBefore) {
+              backfillItemIds.push(newItemIds[newItemIds.length - 1]!)
+            }
           }
         }
 
@@ -575,7 +591,7 @@ export function createIntelligencePipeline(deps?: {
         await publishEventsAfterPersist({ newItemIds: [...newItemIds] })
       }
 
-      return { processedCount, queuedJobs: [...queuedJobs], newItemIds }
+      return { processedCount, queuedJobs: [...queuedJobs], newItemIds, backfillItemIds }
     },
 
     async assessChangedItems({ itemIds }) {
@@ -802,6 +818,8 @@ function processNormalizedDraft(input: {
   revisions: IntelligenceItemRevision[]
   metricEvents: MetricIntelligenceEvent[]
   newItemIds: string[]
+  /** Older than the backfill age: kept out of the queues, so it must not say "queued". */
+  isBackfill: boolean
 }): boolean {
   const publishedAt = normalizePublishedAt(input.draft.publishedAt) ?? input.draft.publishedAt
   const eventType = normalizeEventType({
@@ -849,13 +867,9 @@ function processNormalizedDraft(input: {
 
   const processingLabels = serializeProcessingLabels(
     mergeProcessingLabels(parseProcessingLabels(existingItem?.processingLabelsJson), {
-      isBackfill: resolveIsBackfillLabel({
-        publishedAt: normalizedDraft.publishedAt,
-        detectedAt: normalizedDraft.detectedAt,
-        intelligenceLayer: normalizedDraft.intelligenceLayer ?? input.definition.intelligenceLayer,
-        eventFamily: normalizedDraft.eventFamily ?? input.definition.eventFamily
-      }),
-      assessmentStatus: 'queued',
+      isBackfill: input.isBackfill,
+      // A backfill item never enters the assess queue, so "queued" would be a lie it can never leave.
+      assessmentStatus: input.isBackfill ? 'pending' : 'queued',
       intelligenceLayer: normalizedDraft.intelligenceLayer ?? input.definition.intelligenceLayer,
       dataDomain: normalizedDraft.dataDomain ?? input.definition.dataDomain,
       eventFamily: normalizedDraft.eventFamily ?? input.definition.eventFamily,

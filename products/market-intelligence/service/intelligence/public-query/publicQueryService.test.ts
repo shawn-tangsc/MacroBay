@@ -111,7 +111,7 @@ function createMockPipeline(input: {
 }): IntelligencePipeline {
   return {
     collectSource: async () => ({ queuedJobs: [], counts: { httpCalls: 0, fetchedBytes: 0, parsed: 0, appended: 0, duplicates: 0 } }),
-    normalizeRawRecords: async () => ({ processedCount: 0, queuedJobs: [], newItemIds: [] }),
+    normalizeRawRecords: async () => ({ processedCount: 0, queuedJobs: [], newItemIds: [], backfillItemIds: [] }),
     assessChangedItems: async () => ({ assessmentCount: 0, failedCount: 0 }),
     retryItemAssessment: async () => ({ assessmentCount: 0, failedCount: 0 }),
     refreshSentimentAggregates: async () => ({ aggregateCount: 0 }),
