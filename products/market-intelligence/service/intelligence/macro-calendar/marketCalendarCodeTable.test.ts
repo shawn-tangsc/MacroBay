@@ -157,4 +157,41 @@ describe('年度化标记与载入校验', () => {
     }
     expect(() => validateCodeTableRows(broken)).toThrow(/annualization/)
   })
+
+  /**
+   * 运行时 fail-closed（架构师 2026-11-21 保留③，只补两条、不扩范围）：
+   * 整表断言管的是**现在这份数据**，这两条管的是**以后写错的数据**——写错一个词，
+   * 界面上的「机构不公开」就会变成「我们还没核」，两种事实换了位，事后查不出来。
+   */
+  it('官网页待补理由不在闭集里 → 载入即抛（点名码与取值）', () => {
+    const broken = {
+      'US.CPI.NSA.YOY': {
+        ...marketCalendarCodeTable['US.CPI.NSA.YOY'],
+        officialSource: { pending: true as const, reason: 'official-sauce-todo' as never }
+      }
+    }
+    expect(() => validateCodeTableRows(broken))
+      .toThrow(/US\.CPI\.NSA\.YOY：官网页待补理由不在闭集里（official-sauce-todo）/)
+  })
+
+  it('状态为 pending / not-built 而理由不在对应闭集 → 载入即抛', () => {
+    const pendingBroken = {
+      'US.CPI.NSA.YOY': {
+        ...marketCalendarCodeTable['US.CPI.NSA.YOY'],
+        status: 'pending' as const,
+        reason: 'official-sauce-todo' as never
+      }
+    }
+    expect(() => validateCodeTableRows(pendingBroken))
+      .toThrow(/US\.CPI\.NSA\.YOY：pending 的理由不在闭集里（official-sauce-todo）/)
+    const notBuiltBroken = {
+      'US.CPI.NSA.YOY': {
+        ...marketCalendarCodeTable['US.CPI.NSA.YOY'],
+        status: 'not-built' as const,
+        reason: 'official-source-todo' as never
+      }
+    }
+    expect(() => validateCodeTableRows(notBuiltBroken))
+      .toThrow(/US\.CPI\.NSA\.YOY：not-built 的理由不在闭集里（official-source-todo）/)
+  })
 })

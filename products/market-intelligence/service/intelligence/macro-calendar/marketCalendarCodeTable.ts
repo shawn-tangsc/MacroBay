@@ -122,6 +122,31 @@ export function validateCodeTableRows(raw: Record<string, unknown>): Record<stri
         throw new Error(`${where}：率类（measure=${String(row.measure)}）是百分比量纲，不许标 annualization:'flow'——利率年度化是错口径`)
       }
     }
+    /**
+     * 闭集在运行时也要**真的执行**（架构师 2026-11-21 保留③：只补这两条，别扩范围）。
+     *
+     * ① 官网页待补理由：界面悬停句直接取自这一格，写错一个词，读者看到的
+     *    「机构没有可长期引用的公开页」就会变成「我们还没能核到」——两种事实换了位，事后查不出来。
+     *    今天 48 行走这条（那 48 条都是 `status:'active'` + `officialSource.pending:true`）。
+     * ② 行级理由：状态为 `pending` / `not-built` 时，`reason` 必须取自对应闭集（今天 0 行，但闭集要有执行点）。
+     *
+     * **不许**在这里顺手加「active 不许带 row.reason」这类今天测不到的规则：它在 import 时抛，
+     * 等于整个服务模块加载失败。fail-closed 只对**已经出现的事实**生效。
+     */
+    const source = row.officialSource as { pending?: unknown; reason?: unknown } | undefined
+    if (source !== undefined && source.pending === true) {
+      if (!(codeTableReasonSets.pending as readonly unknown[]).includes(source.reason)) {
+        throw new Error(`${where}：官网页待补理由不在闭集里（${String(source.reason)}）`)
+      }
+    }
+    if (row.status === 'pending'
+      && !(codeTableReasonSets.pending as readonly unknown[]).includes(row.reason)) {
+      throw new Error(`${where}：pending 的理由不在闭集里（${String(row.reason)}）`)
+    }
+    if (row.status === 'not-built'
+      && !(codeTableReasonSets['not-built'] as readonly unknown[]).includes(row.reason)) {
+      throw new Error(`${where}：not-built 的理由不在闭集里（${String(row.reason)}）`)
+    }
     out[key] = value as CodeTableRow
   }
   return out
