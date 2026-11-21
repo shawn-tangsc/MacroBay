@@ -24,6 +24,7 @@
 | Inline text action (a "retry / shorten the lede / show details" inside a sentence, a notice bar, or a status line) | `<Button type="text" size="small" className="text-action">` | `type="link"` (antd `colorLink` is not a token — it introduces a second interaction colour); a hand-written `<button>`; per-call-site antd default overrides (`height` / `padding` / `font-size`) | **human review**: `type="link"` may only go down (baseline 2026-11-12: **12 sites in 8 files**, to be cleared); once it reaches 0, any new one is rejected |
 | Explanatory prose | the `ⓘ` beside that row's or group's title (`IconButton` + `Popover`), collapsed by default | a sentence, half-sentence, parenthetical or em-dash supplement in the body | `check:body-prose` |
 | Card-level action | **on the card title row, right side**: one action (enable source / retry) whenever any source the card depends on is unconfigured or unreadable; the body only names the missing cell | a second copy of that action inside the card; two entries for one action on a screen | **human review** (criterion below) |
+| Small text the reader must read (11px `--font-meta` and above) | `--text` / `--text-secondary`; hierarchy from weight or position | `--muted` on text the reader must see | **human review**: measured contrast against the surface it actually sits on ≥ **4.5:1** — measure it, never judge by eye |
 
 **A disabled control's reason: first ask whether it is already visible (narrowed 2026-11-20; the user had the redundant sentence deleted).** Two tests:
 
@@ -89,6 +90,8 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | `--success` | confirmed / healthy | "no data" |
 | `--info` | **Direction**: "below expectation" border/ink; on the light theme it outlines rather than fills | Any good/bad verdict — a high CPI is not "good" |
 | `--mi-dashboard-*` | dashboard semantic colours | borrowing across modules |
+
+**Small text that must be read never uses `--muted` (2026-11-21; the clock plaque measured 3.82:1).** `--muted` is for meta the reader may skip. A number or word the reader must catch keeps `--text` or `--text-secondary`, and hierarchy comes from weight or position rather than from dimming it. Criterion: the contrast between the small text and **the surface it actually sits on** (plaque fill, card fill) is ≥ 4.5:1, computed from the real values of that surface — measuring, not eyeballing. Counterexample: the clock plaque's "4 days away" sat on `#293958` in `--muted`, **3.82:1**; raising it to `--text` 650 gives **9.50:1**, with the value stepping back to `--text-secondary` 500 at **6.29:1**.
 
 Three gates, each with one hole:
 
