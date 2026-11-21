@@ -39,6 +39,7 @@ const REQUIRED_PATHS = [
   'skew.asOf',
   'skew.unit',
   'skew.notConnected',
+  'skew.infoLabel',
   'skew.info.definition',
   'skew.info.relative',
   'skew.info.since',
