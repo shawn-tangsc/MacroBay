@@ -196,6 +196,16 @@ export const macroIndicatorDrawerText = {
       mappingCountryAll: '全部国家', mappingCountryFilter: '按国家筛选',
       mappingCodeStatus: { active: '生效', 'not-built': '不建', pending: '待补', retired: '已退役' },
       mappingOfficialOpen: '查看', mappingOfficialPending: '待核', mappingOfficialNone: '—',
+      /* 悬停里**不许出现英文 token**：每个待补理由一句白话，键与码表闭集同名，加值不配文案就编译红。
+         「机构没有可长期引用的公开页」与「我们还没能核到」是两种事实，两句话不许合并成一句。 */
+      mappingOfficialPendingReasons: {
+        'official-source-todo': '我们还没能核到机构页',
+        'official-source-not-public': '该机构没有可长期引用的公开发布页',
+        'source-name-broken': '源给的名字认不出发布方',
+        'awaiting-data': '这类数据还没进库',
+        'period-unresolved': '期次解不出，暂对不到页',
+        'name-incomplete': '名表补不全，暂对不到页'
+      },
       mappingCodeEmpty: '没有匹配的码',
       mappingSheetCodes: '码表',
       mappingTabUnmapped: '未映射 ({count})',
@@ -394,6 +404,15 @@ export const macroIndicatorDrawerText = {
       mappingCountryAll: 'All countries', mappingCountryFilter: 'Filter by country',
       mappingCodeStatus: { active: 'Active', 'not-built': 'Not built', pending: 'Pending', retired: 'Retired' },
       mappingOfficialOpen: 'Open', mappingOfficialPending: 'Unverified', mappingOfficialNone: '—',
+      /* 见中文那份的说明：悬停里不许出现英文 token，理由句与闭集同名键一一对应。 */
+      mappingOfficialPendingReasons: {
+        'official-source-todo': 'We could not reach the agency\'s page yet',
+        'official-source-not-public': 'The agency has no durable public release page',
+        'source-name-broken': 'The source name does not identify a publisher',
+        'awaiting-data': 'This data has not arrived yet',
+        'period-unresolved': 'The period cannot be resolved yet',
+        'name-incomplete': 'The name set is incomplete'
+      },
       mappingCodeEmpty: 'No matching codes',
       mappingSheetCodes: 'Code table',
       mappingTabUnmapped: 'Unmapped ({count})',

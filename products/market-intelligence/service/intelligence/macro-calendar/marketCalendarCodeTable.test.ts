@@ -84,9 +84,11 @@ describe('标准码表', () => {
       }
     }
     expect(problems.slice(0, 8)).toEqual([])
-    // 闭集本身不许被写窄或写宽。
+    // 闭集本身不许被写窄或写宽。6 = todo / not-public / name-broken / awaiting-data /
+    // period-unresolved / name-incomplete；「机构不公开」与「我们还没核」是两种事实，不许合并。
     expect(codeTableReasonSets['not-built']).toHaveLength(4)
-    expect(codeTableReasonSets.pending).toHaveLength(5)
+    expect(codeTableReasonSets.pending).toHaveLength(6)
+    expect(codeTableReasonSets.pending).toContain('official-source-not-public')
   })
 
   it('事件身份不参与分级：`evt.*` 的 kind 是 event、tier 为 null', () => {
