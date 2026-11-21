@@ -1,24 +1,30 @@
 /* 国债收益率 · 日频：左表右图。
-   两栏宽度直接吃面板自己在用的那一对 token（`--mi-cross-asset-quote-medium/wide`），
-   所以 ≥1200 时新卡的左表与上面那张卡的左栏同宽，整页是一条左轨。 */
+   这张卡**自己是一个容器**（`mi-ust`），两栏断点量的是本卡的宽度。它上面那张联动面板有自己的容器与
+   21 处跨组件 token，但那是**兄弟**节点的作用域——借过来一条也解析不到（2026-11-22 界面设计复核时整块
+   版式因此没生效：两栏塌成一栏、表没有横竖线、图网格与轴标签在深色下发黑）。
+   颜色与线条一律引门户 token；栏宽这一对写在本卡上，数值与上面那张面板相同，两卡的左轨才对得齐。
+   要中心化由架构师提共享 token，本卡不自造跨组件的名字。 */
 
 .mi-ust {
-  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--mi-cross-asset-line);
+  --mi-ust-quote-medium: 320px;
+  --mi-ust-quote-wide: 380px;
+  container-type: inline-size;
+  container-name: mi-ust;
   display: flex; flex-direction: column; gap: 8px; min-width: 0;
 }
 .mi-ust__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .mi-ust__heading { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-.mi-ust__heading h3 { margin: 0; font-size: var(--font-body); font-weight: 600; color: var(--mi-cross-asset-text); }
+.mi-ust__heading h3 { margin: 0; font-size: var(--font-body); font-weight: 600; color: var(--text); }
 
 .mi-ust__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
 .mi-ust__body[data-whole="true"] { grid-template-columns: minmax(0, 1fr); }
 .mi-ust__table-col { min-width: 0; }
 .mi-ust__chart-col { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-@container mi-cross-asset (min-width: 800px) {
-  .mi-ust__body:not([data-whole="true"]) { grid-template-columns: var(--mi-cross-asset-quote-medium) minmax(0, 1fr); }
+@container mi-ust (min-width: 800px) {
+  .mi-ust__body:not([data-whole="true"]) { grid-template-columns: var(--mi-ust-quote-medium) minmax(0, 1fr); }
 }
-@container mi-cross-asset (min-width: 1200px) {
-  .mi-ust__body:not([data-whole="true"]) { grid-template-columns: minmax(0, var(--mi-cross-asset-quote-wide)) minmax(0, 1fr); }
+@container mi-ust (min-width: 1200px) {
+  .mi-ust__body:not([data-whole="true"]) { grid-template-columns: minmax(0, var(--mi-ust-quote-wide)) minmax(0, 1fr); }
 }
 
 /* ---- 数字表 ---- */
@@ -30,71 +36,70 @@
 .mi-ust__table .mi-ust__col-latest { width: 17%; }
 .mi-ust__table .mi-ust__col-window { width: 12.5%; }
 .mi-ust__table thead th {
-  padding: 0 0 6px; color: var(--mi-cross-asset-muted); font-size: var(--font-meta);
+  padding: 0 0 6px; color: var(--muted); font-size: var(--font-meta);
   font-weight: 500; text-align: right; white-space: nowrap; vertical-align: bottom;
-  border-bottom: 1px solid var(--mi-cross-asset-line);
+  border-bottom: 1px solid var(--border);
 }
 .mi-ust__table thead th[scope="colgroup"] { text-align: center; }
 .mi-ust__table thead tr + tr th { padding-bottom: 4px; }
 .mi-ust__table th.mi-ust__is-left, .mi-ust__table td.mi-ust__is-left { text-align: left; }
 /* 一列一条极淡的竖线：四个带符号的数挤在一起时，读者得先看出一个数到哪儿结束。 */
 .mi-ust__table thead th + th, .mi-ust__table tbody td + td {
-  border-left: 1px solid color-mix(in srgb, var(--mi-cross-asset-line) 45%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
 }
 .mi-ust__table tbody th {
   padding: 4px 0; text-align: left; font-weight: 600; font-size: var(--font-body);
-  color: var(--mi-cross-asset-text); white-space: nowrap;
+  color: var(--text); white-space: nowrap;
 }
 .mi-ust__table tbody td {
   padding: 4px 0; text-align: right; white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-body);
-  color: var(--mi-cross-asset-text);
+  color: var(--text);
 }
 /* 方向色只加强已经写出来的 `+ / −`，不是唯一线索；`最新` 列不带方向。 */
 .mi-ust__table tbody td[data-direction="1"] { color: var(--mi-dashboard-positive); }
 .mi-ust__table tbody td[data-direction="-1"] { color: var(--mi-dashboard-negative); }
-.mi-ust__table tbody td[data-unavailable="true"] { color: var(--mi-cross-asset-muted); }
+.mi-ust__table tbody td[data-unavailable="true"] { color: var(--muted); }
 /* 价差与分解两段各起一条实线：它们不是曲线上的一条，读起来得先分开。 */
-.mi-ust__table tbody tr[data-block="true"] > * { border-top: 1px solid var(--mi-cross-asset-line); }
+.mi-ust__table tbody tr[data-block="true"] > * { border-top: 1px solid var(--border); }
 .mi-ust__row-as-of {
-  display: block; color: var(--mi-cross-asset-muted); font-size: var(--font-meta);
+  display: block; color: var(--muted); font-size: var(--font-meta);
   font-weight: 400; line-height: var(--line-meta);
 }
 /* 整行读不到/未接入：一行小字横跨数据列，左对齐到「最新」列，不画一个假的 0。 */
 .mi-ust__row-state {
-  text-align: left !important; color: var(--mi-cross-asset-muted) !important;
+  text-align: left !important; color: var(--muted) !important;
   font-family: inherit !important; font-size: var(--font-meta) !important;
 }
 
 /* ---- 图表 ---- */
 .mi-ust__chart-tools { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
 .mi-ust__control { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.mi-ust__control-label { color: var(--mi-cross-asset-muted); font-size: var(--font-meta); white-space: nowrap; }
+.mi-ust__control-label { color: var(--muted); font-size: var(--font-meta); white-space: nowrap; }
 .mi-ust__frame { position: relative; flex: 1 1 auto; min-height: 200px; min-width: 0; }
 .mi-ust__svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }
-.mi-ust__grid { stroke: var(--mi-cross-asset-line); stroke-width: 1; }
+.mi-ust__grid { stroke: var(--border); stroke-width: 1; }
 .mi-ust__zero { stroke: var(--border-strong); stroke-width: 1; }
 .mi-ust__line { fill: none; stroke: var(--ust-color); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .mi-ust__dot { fill: var(--ust-color); }
-.mi-ust__crosshair { stroke: var(--mi-cross-asset-muted); stroke-width: 1; stroke-dasharray: 3 3; }
-.mi-ust__axis { fill: var(--mi-cross-asset-muted); font-size: var(--mi-chart-label-size); font-variant-numeric: tabular-nums; }
+.mi-ust__crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.mi-ust__axis { fill: var(--muted); font-size: var(--mi-chart-label-size); font-variant-numeric: tabular-nums; }
 .mi-ust__axis--end { font-size: var(--font-meta); }
 .mi-ust__leader { stroke: var(--ust-color); stroke-width: 1; opacity: .55; }
 
 .mi-ust__tooltip {
   position: absolute; z-index: 4; width: 210px; max-width: calc(100% - 16px); padding: 8px;
-  border: 1px solid var(--mi-cross-asset-line); border-radius: 4px; background: var(--mi-cross-asset-surface);
-  color: var(--mi-cross-asset-text); font-size: var(--font-meta); line-height: var(--line-meta); pointer-events: none;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--surface);
+  color: var(--text); font-size: var(--font-meta); line-height: var(--line-meta); pointer-events: none;
 }
-.mi-ust__tooltip[hidden] { display: none; }
 .mi-ust__tooltip time { display: block; margin-bottom: 6px; }
-.mi-ust__tooltip span { display: flex; align-items: center; gap: 6px; padding-block: 2px; }
+.mi-ust__tooltip span { display: flex; align-items: center; gap: 6px; padding-block: 4px; }
 .mi-ust__tooltip span i { display: inline-block; width: 12px; border-top: 2px solid var(--ust-color); }
 .mi-ust__tooltip b { margin-left: auto; font-variant-numeric: tabular-nums; }
 
 .mi-ust__foot {
   grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0;
-  color: var(--mi-cross-asset-muted); font-size: var(--font-meta); line-height: var(--line-meta);
+  color: var(--muted); font-size: var(--font-meta); line-height: var(--line-meta);
 }
 .mi-ust__foot i { font-style: normal; opacity: .6; }
 
@@ -106,4 +111,4 @@
 .mi-ust [data-tenor="10y"] { --ust-color: var(--mi-dashboard-chart-eth); }
 .mi-ust [data-tenor="30y"] { --ust-color: var(--mi-dashboard-chart-btc); }
 
-.mi-ust .state-view, .mi-ust__loading { min-height: 240px; }
+.mi-ust .state-view { min-height: 240px; }
