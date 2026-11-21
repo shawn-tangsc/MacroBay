@@ -4,6 +4,7 @@ import { CROSS_ASSET_INDEX_COLLECT_JOB_ID } from '../cross-asset/crossAssetIndex
 import { CALENDAR_EVENT_REMINDER_JOB_ID } from '../macro-calendar/calendarEventReminderJob'
 import { MACRO_MARKET_COLLECT_JOB_ID } from '../macro-market/macroMarketJob'
 import { REAL_MARKET_API_DXY_COLLECT_JOB_ID } from '../macro-market/realMarketApiDxyJob'
+import { OPTION_SKEW_COLLECT_JOB_ID } from '../option-skew/optionSkewJobId'
 import { MARKET_HISTORY_RETENTION_JOB_ID } from '../retention/marketHistoryRetentionJob'
 import { INTELLIGENCE_COLLECT_SOURCE_JOB, INTELLIGENCE_JOB_IDS, INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB } from './intelligenceJobIds'
 
@@ -45,6 +46,8 @@ const BY_HANDLER_ID: Readonly<Record<string, DataChangedTarget>> = {
   [MACRO_MARKET_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: [] },
   [REAL_MARKET_API_DXY_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: [] },
   [CROSS_ASSET_INDEX_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: [] },
+  // 期权偏斜写的是看板在读的点库；来源固定是它自己那一格。
+  [OPTION_SKEW_COLLECT_JOB_ID]: { panels: DASHBOARD, sources: ['deribit-options'] },
   [MARKET_HISTORY_RETENTION_JOB_ID]: NONE,
   // 日历侧：经济日历面板。
   'market-intelligence.refreshMacroCalendar': { panels: CALENDAR, sources: [] },
@@ -96,6 +99,7 @@ export const REGISTERED_DATA_CHANGED_HANDLER_IDS: readonly string[] = [
   MACRO_MARKET_COLLECT_JOB_ID,
   REAL_MARKET_API_DXY_COLLECT_JOB_ID,
   CROSS_ASSET_INDEX_COLLECT_JOB_ID,
+  OPTION_SKEW_COLLECT_JOB_ID,
   MARKET_HISTORY_RETENTION_JOB_ID,
   'market-intelligence.refreshMacroCalendar',
   'market-intelligence.syncBlsScheduleAndValues',
