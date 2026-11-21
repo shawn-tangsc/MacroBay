@@ -23,7 +23,7 @@ function normalizeResult(overrides: Record<string, unknown> = {}) {
 }
 
 function harness(input: Readonly<{
-  pending: number
+  pending?: number
   normalize?: () => Promise<ReturnType<typeof normalizeResult>>
 }>) {
   const handlers = new Map<string, JobHandler>()
@@ -39,8 +39,8 @@ function harness(input: Readonly<{
   } as unknown as JobRuntime
   const normalizeRawRecords = vi.fn(input.normalize ?? (async () => normalizeResult()))
   registerRawRecordRecoveryJob(jobRuntime, {
-    pendingRawRecordCount: () => input.pending,
-    normalizeRawRecords
+    normalizeRawRecords,
+    ...(input.pending === undefined ? {} : { pendingRawRecordCount: () => input.pending! })
   })
   const run = async (context = { log: vi.fn(async () => undefined) }) => {
     await handlers.get(INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB)!({}, context as never)
@@ -69,6 +69,15 @@ describe('rawRecordRecoveryJob', () => {
 
     expect(normalizeRawRecords).not.toHaveBeenCalled()
     expect(enqueued).toHaveLength(0)
+  })
+
+  it('still runs when the queue length cannot be measured — unknown is not empty', async () => {
+    // 「量不出来」不等于「队列是空的」：缺了计数器只该多跑一轮，不许把回捞静默关掉。
+    const { run, normalizeRawRecords } = harness({ pending: undefined })
+
+    await run()
+
+    expect(normalizeRawRecords).toHaveBeenCalledTimes(1)
   })
 
   it('drains one batch when records are waiting, and hands the new items downstream', async () => {

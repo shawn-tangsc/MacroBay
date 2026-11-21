@@ -33,14 +33,25 @@ export function rawRecordRecoveryDefinition(): Readonly<Record<string, unknown>>
   }
 }
 
+export type RawRecordRecoveryDeps = Readonly<{
+  normalizeRawRecords: IntelligencePipeline['normalizeRawRecords']
+  /**
+   * 待归一化的原始记录条数，与 `selectNormalizationBatch` 读的是同一个队列
+   * （`rawRecordStore.listUnprocessed`，已按 owner 与 `received/parsed` 过滤）。
+   *
+   * 省略时不早退：**「量不出来」不等于「队列是空的」**——宁可空跑一轮，也不许把回捞静默关掉。
+   */
+  pendingRawRecordCount?: () => number
+}>
+
 export function registerRawRecordRecoveryJob(
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'enqueueDefinition'>,
-  pipeline: Pick<IntelligencePipeline, 'pendingRawRecordCount' | 'normalizeRawRecords'>
+  deps: RawRecordRecoveryDeps
 ): void {
   jobRuntime.registerHandler(INTELLIGENCE_RECOVER_PENDING_RAW_RECORDS_JOB, async (_payload, context) => {
     // 先问一句「有没有活」：队列空时连解析都不进，不抓正文、不花模型调用。
-    if (pipeline.pendingRawRecordCount() === 0) return
-    const result = await pipeline.normalizeRawRecords({})
+    if ((deps.pendingRawRecordCount?.() ?? 1) === 0) return
+    const result = await deps.normalizeRawRecords({})
     await enqueueIntelligencePipelineJobs(jobRuntime, result.queuedJobs, {
       newItemIds: result.newItemIds,
       ...(result.backfillItemIds.length > 0 ? { backfillItemIds: result.backfillItemIds } : {})

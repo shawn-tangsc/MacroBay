@@ -3,6 +3,7 @@ import type { JobRuntime } from '@platform/jobs'
 import type { IntelligenceArchiveService } from '../application/intelligenceArchiveService'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { IntelligenceReplayService } from '../application/intelligenceReplayService'
+import type { RawRecordStore } from '../application/rawRecordStore'
 import type { IntelligenceTranslationService } from '../application/intelligenceTranslationService'
 import type { createNewsSentimentEnrichmentService } from '../news-sentiment/newsSentimentEnrichmentService'
 import type { createNewsSentimentScoringService } from '../news-sentiment/newsSentimentScoringService'
@@ -44,12 +45,19 @@ export function registerIntelligenceJobs(
     etfFlowHistory?: { refresh: () => Promise<Readonly<{ state: string; reason?: string }>> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
     openInterest?: { refresh: (input?: Readonly<{ log?: (entry: Readonly<{ level: 'warn'; message: string }>) => void | Promise<void> }>) => Promise<unknown> }
+    /** 定时回捞用它量队列长度；省略时回捞照常注册（不早退），不会静默关掉。 */
+    rawRecordStore?: Pick<RawRecordStore, 'listUnprocessed'>
   }
 ): void {
   const { pipeline, archiveService, replayService, translationService } = deps
 
   // 归一化不能只等「启动」或「该源有新记录」：采集全部命中去重时队列会整段停住（0.4.5 #44）。
-  registerRawRecordRecoveryJob(jobRuntime, pipeline)
+  registerRawRecordRecoveryJob(jobRuntime, {
+    normalizeRawRecords: pipeline.normalizeRawRecords,
+    ...(deps.rawRecordStore === undefined
+      ? {}
+      : { pendingRawRecordCount: () => deps.rawRecordStore!.listUnprocessed().length })
+  })
 
   jobRuntime.registerHandler(INTELLIGENCE_COLLECT_SOURCE_JOB, async (payload, context) => {
     const input = payload as { sourceId: string; runId?: string }

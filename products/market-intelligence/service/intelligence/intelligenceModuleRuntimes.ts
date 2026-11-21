@@ -115,6 +115,8 @@ export function createIntelligenceRuntimes(input: {
   // must see the new ones without being re-registered (a second registration throws).
   const intelligenceJobDeps: Parameters<typeof registerIntelligenceJobs>[1] = {
     pipeline,
+    // 回捞要先量队列长度：它读的就是采集写进来的那张原始记录表，与归一化同一份。
+    rawRecordStore,
     archiveService,
     replayService,
     translationService,

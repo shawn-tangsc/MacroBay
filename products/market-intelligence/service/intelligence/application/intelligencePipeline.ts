@@ -85,8 +85,6 @@ export type { SourceCollectionCounts, SourceCollectionResult } from './sourceCol
 export { EMPTY_SOURCE_COLLECTION_COUNTS } from './sourceCollectionRun'
 
 export type IntelligencePipeline = {
-  /** 待归一化的原始记录条数（定时回捞据此决定要不要真的跑一轮）。 */
-  pendingRawRecordCount: () => number
   collectSource: (input: { sourceId: string; runId: string; fixtureText?: string }) => Promise<SourceCollectionResult>
   normalizeRawRecords: (input: { sourceId?: string; limit?: number }) => Promise<{
     processedCount: number
@@ -427,13 +425,6 @@ export function createIntelligencePipeline(deps?: {
   }
 
   return {
-    /**
-     * 还有多少条原始记录排队等着归一化（`received`/`parsed`）。
-     *
-     * 定时回捞用它先问一句「有没有活」：0 条就不进解析、不抓正文、不花模型调用。
-     * 这是**队列长度**，不是「本轮能处理多少」——后者由 `normalizationBatchPolicy` 决定。
-     */
-    pendingRawRecordCount: () => rawRecordStore.listUnprocessed().length,
     async collectSource({ sourceId, runId, fixtureText }) {
       // 数字与去重逻辑在 `sourceCollectionRun.ts`（本文件只做接线：这一层不该再长）。
       return collectSourceOnce(
