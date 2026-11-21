@@ -19,11 +19,14 @@ export type ChartOption = ComposeOption<
   LineSeriesOption | GaugeSeriesOption | GridComponentOption | TooltipComponentOption
 >
 
-/** 图的字号也从 token 派生（`--font-body` / `--font-meta`），不写死数字。 */
-export type ChartFonts = { body: number; meta: number }
+/**
+ * 图的字号也从 token 派生，不写死数字：
+ * `--font-body`（读数与提示框）、`--font-meta`（轴与刻度）、`--font-metric-sm`（仪表圆盘里的分数）。
+ */
+export type ChartFonts = { body: number; meta: number; metricSm: number }
 
-/** 拿不到 CSS 变量时用：与 `tokens.css` 的 body / meta 两档一致。 */
-export const CHART_FONTS_FALLBACK: ChartFonts = { body: 12, meta: 11 }
+/** 拿不到 CSS 变量时用：与 `tokens.css` 的这三档一致。 */
+export const CHART_FONTS_FALLBACK: ChartFonts = { body: 12, meta: 11, metricSm: 24 }
 
 export type ChartTheme = { palette: ChartPalette; fonts: ChartFonts }
 
@@ -66,7 +69,11 @@ export function readChartFonts(element: Element | null): ChartFonts {
     const parsed = Number.parseFloat(style.getPropertyValue(name))
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
   }
-  return { body: read('--font-body', CHART_FONTS_FALLBACK.body), meta: read('--font-meta', CHART_FONTS_FALLBACK.meta) }
+  return {
+    body: read('--font-body', CHART_FONTS_FALLBACK.body),
+    meta: read('--font-meta', CHART_FONTS_FALLBACK.meta),
+    metricSm: read('--font-metric-sm', CHART_FONTS_FALLBACK.metricSm)
+  }
 }
 
 /** 从宿主元素上读色板；读不到就退回深色那组。 */
@@ -291,7 +298,7 @@ export function gaugeChartOption(input: {
         show: pointer,
         valueAnimation: false,
         offsetCenter: [0, '-42%'],
-        fontSize: fonts.body * 2,
+        fontSize: fonts.metricSm,
         fontWeight: 650,
         fontFamily: FONT,
         color: palette.text,

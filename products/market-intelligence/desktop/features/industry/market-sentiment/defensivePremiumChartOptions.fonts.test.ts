@@ -42,16 +42,18 @@ describe('chart font fallback', () => {
     for (const block of THEME_BLOCKS) {
       expect(pixelToken(block, 'font-body')).toBe(CHART_FONTS_FALLBACK.body)
       expect(pixelToken(block, 'font-meta')).toBe(CHART_FONTS_FALLBACK.meta)
+      // 仪表圆盘里的分数用 metric 档（24），不是把 body 乘二算出来的。
+      expect(pixelToken(block, 'font-metric-sm')).toBe(CHART_FONTS_FALLBACK.metricSm)
     }
   })
 
   it('reads the size from the host element variables instead of the fallback', () => {
-    vi.stubGlobal('getComputedStyle', () => styleOf({ '--font-body': '15px', '--font-meta': '13px' }))
-    expect(readChartFonts({} as Element)).toEqual({ body: 15, meta: 13 })
+    vi.stubGlobal('getComputedStyle', () => styleOf({ '--font-body': '15px', '--font-meta': '13px', '--font-metric-sm': '28px' }))
+    expect(readChartFonts({} as Element)).toEqual({ body: 15, meta: 13, metricSm: 28 })
   })
 
   it('falls back only when the variable is empty or unreadable', () => {
-    vi.stubGlobal('getComputedStyle', () => styleOf({ '--font-body': '', '--font-meta': 'not-a-size' }))
+    vi.stubGlobal('getComputedStyle', () => styleOf({ '--font-body': '', '--font-meta': 'not-a-size', '--font-metric-sm': '' }))
     expect(readChartFonts({} as Element)).toEqual(CHART_FONTS_FALLBACK)
   })
 })
