@@ -94,6 +94,8 @@
    值降一档（`--text-secondary` + 500，6.29:1，仍过小字 AA）。只换颜色与字重，不加字号档、不染状态色。 */
 .mi-clock__node-meta { display: flex; align-items: baseline; justify-content: center; gap: 6px; line-height: 1.2; max-width: 100%; }
 .mi-clock__node-when { font-size: var(--font-meta); color: var(--text); font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* 合并牌的一行（相邻两天放不下时）：单行、超长省略——两行日期 + 距离共 3 行，牌高仍在 37–44px。 */
+.mi-clock__node-merged-line { color: var(--text); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mi-clock__node--past { background: var(--mi-clock-node-past-bg); border-color: var(--mi-clock-node-past-bd); }
 .mi-clock__node:not(.mi-clock__node--past) { background: var(--mi-clock-node-future-bg); }
 .mi-clock__node--past span, .mi-clock__node--past b { color: var(--text); }

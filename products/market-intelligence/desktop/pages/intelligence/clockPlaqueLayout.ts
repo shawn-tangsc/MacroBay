@@ -70,6 +70,20 @@ export type ClockPlaque = Readonly<{
   daysAgo?: number
   /** 政策牌：主推档，牌名按它生成（写死档位名会出错）。 */
   policyOutcome?: string
+  /** 未来牌的发布日（`YYYY-MM-DD`）：合并牌要把两行日期写出来。 */
+  date?: string
+  /**
+   * 合并牌（用户 2026-11-21）：相邻两个日期物理放不下时合成一块，牌上两行各一个日期。
+   * 有它就不显示 `value`——两行日期之间没有单一预期值，写谁的都是错。
+   */
+  merged?: readonly ClockMergedEntry[]
+}>
+
+/** 合并牌的一行：哪天、哪个指标。 */
+export type ClockMergedEntry = Readonly<{
+  date: string
+  metricKey: string
+  nameKey: string
 }>
 
 /**

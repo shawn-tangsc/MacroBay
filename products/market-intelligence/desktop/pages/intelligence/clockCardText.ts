@@ -48,6 +48,8 @@ export const clockCardText = {
     overflowLine: '还有 {count} 个发布不在环上',
     /* 逐条：名字 · 日期 · 几天后；三样都写，读者才知道漏的是哪一条、还剩多久。 */
     overflowItem: '{name} · {date} · {days} 天后',
+    /* 合并牌的一行：相邻两天放不下时合成一块，牌上每行一个日期 + 名字。 */
+    mergedLine: '{date} {name}',
     /* ── 中央两张面（用户 2026-11-21 拍板，42 号文件）──
        平时是利率路径面，只在发布前后各 24 小时内切成指标面。 */
     facePath: '利率路径',
@@ -109,6 +111,7 @@ export const clockCardText = {
     crowdedMore: '{count} more',
     overflowLine: '{count} more releases off the ring',
     overflowItem: '{name} · {date} · in {days} days',
+    mergedLine: '{date} {name}',
     facePath: 'Policy path',
     policyOutcomeLead: '{month} · {outcome}',
     meetingLine: '{date} · {days} days',

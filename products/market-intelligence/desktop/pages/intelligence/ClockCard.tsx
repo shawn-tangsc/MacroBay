@@ -96,6 +96,8 @@ export type ClockCardText = Readonly<{
   overflowLine: string
   /** 溢出逐条：`{name} · {date} · {days} 天后`。 */
   overflowItem: string
+  /** 合并牌的一行：`{date} {name}`（相邻两天放不下时合成一块）。 */
+  mergedLine: string
   /* ── 中央两张面（用户 2026-11-21 拍板，42 号文件）── */
   /** 平时的面名：`利率路径`。 */
   facePath: string
@@ -216,7 +218,8 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
       {/* 指标牌：位置与 --o 都由模型算。原型是 <button> 但没有动作，故渲染成不可点的节点
           （规范：行容器不是按钮）；悬停恢复 100% 的视觉保留。
           牌上三样：名字、值（有才显示）、**距离**（用户 2026-11：「距离时间呢？」）。
-          距离并进值那一行，牌高仍在 37–44px，不为它改时钟几何。 */}
+          距离并进值那一行，牌高仍在 37–44px，不为它改时钟几何。
+          合并牌（相邻两天放不下）：两行「MM-DD 名字」+ 较近那个的天数，没有值。 */}
       {model.plaques.map((plaque: ClockPlaque) => {
         const distance = plaqueDistance(plaque, text)
         return <div
@@ -224,9 +227,16 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           className={`mi-clock__node${plaque.zone === 'past' ? ' mi-clock__node--past' : ''}`}
           data-clock-plaque={plaque.zone}
           data-clock-metric={plaque.metricKey}
+          {...(plaque.merged === undefined ? {} : { 'data-clock-merged': true })}
           {...(plaque.id === centerPlaqueId ? { 'data-center': true } : {})}
           style={{ left: plaque.x, top: plaque.y, '--o': plaque.opacity } as React.CSSProperties}>
-          <span className="mi-clock__node-name">{plaqueName(plaque.metricKey, plaque.nameKey, text, plaque.policyOutcome)}</span>
+          {plaque.merged === undefined
+            ? <span className="mi-clock__node-name">{plaqueName(plaque.nameKey, text)}</span>
+            : plaque.merged.map((entry) => <span className="mi-clock__node-merged-line" key={entry.metricKey}>
+              {text.mergedLine
+                .replace('{date}', shortMonthDay(entry.date))
+                .replace('{name}', plaqueName(entry.nameKey, text))}
+            </span>)}
           {plaque.value === undefined && distance === undefined ? null : <span className="mi-clock__node-meta">
             {plaque.value === undefined ? null : <b>{plaque.value}</b>}
             {distance === undefined ? null : <span className="mi-clock__node-when">{distance}</span>}
@@ -423,11 +433,7 @@ function plaqueDistance(plaque: ClockPlaque, text: ClockCardText): string | unde
  * 牌上的名字：政策利率那一格的值是**盘口主推档的概率**，不是利率水平——
  * 名字必须带「概率」，否则 90.9% 会被读成利率（用户 2026-11-20 报的就是这个）。
  */
-function plaqueName(metricKey: string, nameKey: string, text: ClockCardText, policyOutcome?: string): string {
-  if (metricKey === 'US.TARGET_RATE.DECISION') {
-    // 主推档名字按 outcome 取；取不到就写「政策利率」——不编一个档位。
-    const outcomeName = text.policyOutcomeNames[policyOutcome ?? '']
-    return outcomeName === undefined ? '政策利率' : text.policyOutcomeLabel.replace('{outcome}', outcomeName)
-  }
+/** 牌上的名字：直接从文案表取。政策牌也是「政策利率」——概率不进牌（中央已经有）。 */
+function plaqueName(nameKey: string, text: ClockCardText): string {
   return text.names[nameKey] ?? nameKey
 }

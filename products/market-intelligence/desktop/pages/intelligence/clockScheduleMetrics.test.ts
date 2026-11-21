@@ -53,19 +53,20 @@ it('carries the policy meeting and the priced probability; no past plaque and no
   expect(unplaced.some((entry) => entry.metricKey === 'US.TARGET_RATE.DECISION')).toBe(false)
 })
 
-it('rings an indicator date without a market expectation, and the policy plaque gives way', () => {
-  const model = buildClockCardModel({ today: '2026-11-15', metrics: clockScheduleMetrics({
-    today: '2026-11-15', events, facts, policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
+it('rings a date without a market expectation, and merges it with the adjacent policy date', () => {
+  const model = buildClockCardModel({ today: '2026-11-21', metrics: clockScheduleMetrics({
+    today: '2026-11-21',
+    events: [event('2026-12-04T13:30:00.000Z', 'US.NONFARM.SA.CHANGE'), event('2026-12-10T13:30:00.000Z', 'US.CPI.NSA.YOY')],
+    facts: [], policy: { meetingDate: '2026-12-09', probability: { value: 0.868 } }
   }) })
   // 没有盘口预期的日期**也上环**（用户 2026-11-21：一级指标都要放），只是牌上没有数字。
   const payrolls = model.plaques.find((plaque) => plaque.metricKey === 'US.NONFARM.CHANGE')!
   expect(payrolls).toBeDefined()
   expect(payrolls.value).toBeUndefined()
-  // 政策牌与它相撞时让位（指标发布牌优先）；中央仍是利率路径面。
+  // 政策 12-09 与 CPI 12-10 相交 → 合并一块，两行日期都在；中央仍是利率路径面。
+  const merged = model.plaques.find((plaque) => plaque.merged !== undefined)!
+  expect(merged.merged!.map((entry) => entry.date)).toEqual(['2026-12-09', '2026-12-10'])
   expect(model.center?.kind).toBe('policy')
-  expect(model.unplaced).toEqual(expect.arrayContaining([
-    expect.objectContaining({ metricKey: 'US.TARGET_RATE.DECISION', reason: 'crowded' })
-  ]))
 })
 
 /**

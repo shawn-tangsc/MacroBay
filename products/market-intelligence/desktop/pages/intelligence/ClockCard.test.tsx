@@ -25,6 +25,14 @@ const metrics: readonly ClockScheduleMetric[] = [
     nextRelease: { date: '2026-12-09' }, periodDays: 42, policyOutcome: 'hike-25' }
 ]
 
+/** 单独一块 CPI（不与政策相撞）：测牌自己的透明度与数值，不掺合并。 */
+const cpiOnly: ClockScheduleMetric = {
+  metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+  lastRelease: { date: '2026-11-19', at: '2026-11-19T13:30:00.000Z', value: '3.74%' },
+  nextRelease: { date: '2026-12-10', at: '2026-12-10T13:30:00.000Z', expected: '3.2%', expectedFromMarket: true as const },
+  periodDays: 30
+}
+
 let root: Root | null = null
 afterEach(async () => { await act(async () => root?.unmount()); root = null; document.body.replaceChildren() })
 
@@ -48,9 +56,9 @@ async function render(overrides: Partial<Parameters<typeof ClockCard>[0]> = {}) 
 it('rings one plaque per release date at the angle the schedule gives', async () => {
   const { host } = await render()
   const nodes = [...host.querySelectorAll<HTMLElement>('[data-clock-plaque]')]
-  // 12-04 非农、12-10 CPI 都在环上（用户：「CPI 非农怎么没了」）；政策 12-09 与 CPI 未来牌相撞 → 让位。
-  expect(nodes.map((node) => `${node.dataset.clockMetric}:${node.dataset.clockPlaque}`).sort())
-    .toEqual(['US.CPI.NSA.YOY:future', 'US.CPI.NSA.YOY:past', 'US.NONFARM.SA.CHANGE:future'])
+  // 12-04 非农一块；政策 12-09 与 CPI 12-10 只差一天、盒子相交 → 合并成一块；CPI 还有 11-19 的过去牌。
+  expect(nodes.map((node) => `${node.dataset.clockPlaque}:${node.dataset.clockMerged === undefined ? node.dataset.clockMetric : 'merged'}`).sort())
+    .toEqual(['future:US.NONFARM.SA.CHANGE', 'future:merged', 'past:US.CPI.NSA.YOY'])
   const cpiPast = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
   // 11-19 发布、P=30、今天 11-21 → 2 天 → 360 − 2/30×360 = 336°。
   const expected = clockRingPoint(336)
@@ -63,7 +71,7 @@ it('rings one plaque per release date at the angle the schedule gives', async ()
 })
 
 it('drives the ring plaque’s opacity from its position, not from a timer', async () => {
-  const { host } = await render()
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: [cpiOnly] }) })
   // CPI 下一期 19 天 → 0.5 + (19/30)²×0.5 ≈ 0.7006。
   const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
   expect(Number(future.style.getPropertyValue('--o'))).toBeCloseTo(0.7006, 4)
@@ -73,7 +81,7 @@ it('drives the ring plaque’s opacity from its position, not from a timer', asy
 })
 
 it('writes the market-implied expectation on the ring plaque it carries', async () => {
-  const { host } = await render()
+  const { host } = await render({ model: buildClockCardModel({ today, metrics: [cpiOnly] }) })
   const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
   // 牌上第二行是盘口预期 3.2%，不是上一期的 3.74%——两行都在，读者分得开「预期」与「前值」。
   expect(future.textContent).toContain('CPI 年率')
@@ -198,13 +206,19 @@ it('shows the policy path face outside any release window', async () => {
   expect(core.textContent).toContain('概率暂未提供')
 })
 
-it('names the policy slot by its leading outcome, never a hardcoded one', async () => {
+it('rings the policy event by name and leaves the odds to the centre', async () => {
   const policy = [{ metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate',
     nextRelease: { date: '2026-11-25', expected: '90.9%' }, periodDays: 28, policyOutcome: 'hike-25' }]
   const { host } = await render({ model: buildClockCardModel({ today, metrics: policy }) })
-  // 主推档是 hike-25 → 标签必须是「加息」，不是写死的「维持不变」。
-  expect(host.textContent).toContain('加息 25bp概率')
-  expect(host.textContent).not.toContain('维持不变概率')
+  // 牌上只有名字 + 距离，概率不重复（用户 2026-11：中央显示概率是对的，缺的是天数上环）。
+  const plaque = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.DECISION"]')!
+  expect(plaque.textContent).toContain('政策利率')
+  expect(plaque.textContent).toContain('4 天后')
+  expect(plaque.textContent).not.toContain('90.9%')
+  // 中央：档名按主推档生成（hike-25 →「加息 25bp」），不是写死的「维持」。
+  const core = host.querySelector('.mi-clock__core')!
+  expect(core.textContent).toContain('加息 25bp')
+  expect(core.textContent).toContain('90.9%')
 })
 
 /**
@@ -357,8 +371,9 @@ it('keeps the plaque width limit identical in the model and the stylesheet', () 
  */
 it('puts the distance on every plaque, in the future and in the past', async () => {
   const { host } = await render()
-  const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
-  expect(future.textContent).toContain('19 天后')
+  // 政策 12-09 与 CPI 12-10 合并成一块：距离写较近那个（18 天）。
+  const future = host.querySelector<HTMLElement>('[data-clock-merged]')!
+  expect(future.textContent).toContain('18 天后')
   const past = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
   expect(past.textContent).toContain('2 天前')
 })
@@ -412,4 +427,32 @@ it('keeps the distance on the only allowed size step, and never in the accent co
   const when = /\.mi-clock__node-when\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
   expect(when, '11px 是这张卡唯一可用档，不许新造字号档').toContain('font-size: var(--font-meta)')
   expect(when, '--accent 已用于「现在」与环上高光，第三处强调等于没有强调').not.toContain('--accent')
+})
+
+/**
+ * 政策会议是**一件事件**（用户 2026-11）：「12-09 · 18 天」不能只写在中央，
+ * 它要像其他指标一样在环上挂一块牌，写名字 + 还有几天；概率仍只在中央显示。
+ */
+it('rings the policy meeting as its own event, with its distance and no odds', async () => {
+  const { host } = await render()
+  const policy = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.DECISION"]')!
+  expect(policy, '政策会议必须在环上').not.toBeNull()
+  expect(policy.textContent).toContain('政策利率')
+  expect(policy.textContent).toContain('18 天后')
+  // 概率不进牌（中央已经有），牌上不重复表达。
+  expect(policy.textContent).not.toContain('89')
+})
+
+/**
+ * 12-09 与 12-10 只差一天、盒子必然相交 → **合成一块牌**，两行各写一个日期。
+ * 只合并相交的；不相交的日期各占一块。
+ */
+it('merges two adjacent dates that cannot both fit into one plaque', async () => {
+  const { host } = await render()
+  const merged = host.querySelector<HTMLElement>('[data-clock-merged]')!
+  expect(merged, '两块放不下时必须合并').not.toBeNull()
+  expect(merged.textContent).toContain('12–09 政策利率')
+  expect(merged.textContent).toContain('12–10 CPI 年率')
+  // 合并牌不写数字（两行日期之间没有单一预期值）。
+  expect(merged.textContent).toContain('18 天后')
 })

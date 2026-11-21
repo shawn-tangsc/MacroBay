@@ -182,7 +182,12 @@ export function buildClockCardModel(input: Readonly<{
     plaques.push({
       id: `${metric.metricKey}:future`, metricKey: metric.metricKey, nameKey: metric.nameKey, zone: 'future',
       angle, x: clampPlaqueX(point.x), y: point.y, opacity: round4(clockFutureOpacity(daysUntil)), daysUntil,
-      ...(metric.nextRelease.expected === undefined ? {} : { value: metric.nextRelease.expected }),
+      date: metric.nextRelease.date,
+      /**
+       * 政策牌的位置表达「哪一天开会」，**概率留在中央**（用户 2026-11：中央只显示加息概率是对的，
+       * 错的是「还有多少天」没上环）。同一个数不在牌和中央各写一遍。
+       */
+      ...(isPolicy || metric.nextRelease.expected === undefined ? {} : { value: metric.nextRelease.expected }),
       ...(metric.policyOutcome === undefined ? {} : { policyOutcome: metric.policyOutcome })
     })
   }
@@ -190,8 +195,20 @@ export function buildClockCardModel(input: Readonly<{
   const center = clockCenterFace({ today: input.today, metrics: input.metrics,
     ...(window === undefined ? {} : { window }) })
 
+  /**
+   * 相邻日期物理放不下时**先合并**（用户 2026-11-21：12-09 政策 / 12-10 CPI）：
+   * 合并要在撞牌之前做，否则政策牌会先被「指标优先」挤掉、根本没有机会合。
+   */
+  const merged = mergeAdjacentPlaques(plaques)
+  for (const absorbed of merged.absorbed) {
+    unplaced.push({
+      metricKey: absorbed.metricKey, nameKey: absorbed.nameKey, reason: 'crowded',
+      ...(absorbed.daysUntil === undefined ? {} : { daysUntil: absorbed.daysUntil })
+    })
+  }
+
   // 撞牌：同一区内部比矩形，保留离「现在」更近的；让位的进交代行。
-  const ordered = [...plaques].sort((left, right) => {
+  const ordered = [...merged.plaques].sort((left, right) => {
     if (left.zone !== right.zone) return left.zone === 'future' ? -1 : 1
     /**
      * 未来区里**窗口内那个指标优先**：它和政策牌撞上时，让位的是政策牌。
@@ -225,6 +242,48 @@ export function buildClockCardModel(input: Readonly<{
     })
   }
   return { plaques: kept, ...(center === undefined ? {} : { center }), unplaced }
+}
+
+/**
+ * 相邻两个日期物理放不下时**合成一块牌**（用户 2026-11-21：12-09 政策 / 12-10 CPI）。
+ *
+ * 判据仍是同一个矩形相交（不按天数）：两块盒子相交才合，不相交各占一块。
+ * 一组最多两个日期——第三个进下沿「还有 N 个发布不在环上」，不许静默丢。
+ * 合并牌没有值：两行日期之间没有单一预期值，只写两行「MM-DD 名字」+ 较近那个的天数。
+ */
+function mergeAdjacentPlaques(plaques: readonly ClockPlaque[]): Readonly<{
+  plaques: readonly ClockPlaque[]
+  absorbed: readonly ClockPlaque[]
+}> {
+  const dayOf = (entry: ClockPlaque): number => entry.daysUntil ?? Number.POSITIVE_INFINITY
+  const future = plaques.filter((entry) => entry.zone === 'future')
+    .sort((left, right) => dayOf(left) - dayOf(right))
+  const past = plaques.filter((entry) => entry.zone === 'past')
+  const kept: ClockPlaque[] = []
+  const absorbed: ClockPlaque[] = []
+  const used = new Set<string>()
+  for (const plaque of future) {
+    if (used.has(plaque.id)) continue
+    used.add(plaque.id)
+    const partner = future.find((other) => !used.has(other.id) && rectsIntersect(plaque, other))
+    if (partner === undefined) { kept.push(plaque); continue }
+    used.add(partner.id)
+    // 同一片区域里的第三个及以后：一块牌最多放两个日期。
+    for (const extra of future) {
+      if (used.has(extra.id) || !rectsIntersect(plaque, extra)) continue
+      used.add(extra.id)
+      absorbed.push(extra)
+    }
+    kept.push({
+      ...plaque,
+      id: `merged:${plaque.metricKey}+${partner.metricKey}`,
+      merged: [plaque, partner].map((entry) => ({
+        date: entry.date ?? '', metricKey: entry.metricKey, nameKey: entry.nameKey
+      })),
+      value: undefined
+    })
+  }
+  return { plaques: [...kept, ...past], absorbed }
 }
 
 /** 透明度落到 4 位小数：原型写 `.914`，多出来的浮点尾巴不该出现在行内样式里。 */

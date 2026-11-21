@@ -77,24 +77,38 @@ const measured: readonly ClockScheduleMetric[] = [
 ]
 
 describe('the model built from real schedule dates', () => {
-  it('rings every release date, and lets the policy plaque give way on a collision', () => {
-    const model = buildClockCardModel({ today: '2026-11-15', metrics: measured })
-    const byId = new Map(model.plaques.map((plaque) => [plaque.id, plaque]))
-    // 每个发布日一块：CPI 有过去与未来两块，非农的未来牌也在（不再因为 CPI 更近就消失）。
-    expect(byId.has('US.NONFARM.SA.CHANGE:future')).toBe(true)
-    expect(byId.get('US.CPI.NSA.YOY:past')!.angle).toBe(300)
-    // 300° 的挂点原值是 51.09；牌子宽了以后位置要夹在卡内，所以这里是夹取后的 72。
-    expect(Number(byId.get('US.CPI.NSA.YOY:past')!.x.toFixed(2))).toBe(72)
-    expect(Number(byId.get('US.CPI.NSA.YOY:past')!.y.toFixed(2))).toBe(97.5)
-    /**
-     * 这份夹具里三块未来牌挤得很近（非农 19 天 / 政策 24 天 / CPI 25 天）。
-     * 相撞时**指标发布牌优先、政策牌让位**——政策日期在下面那张卡里还能看到，
-     * 发布牌让位的话那天就从环上消失了。
-     */
-    expect(byId.has('US.TARGET_RATE.DECISION:future')).toBe(false)
-    expect(model.unplaced).toEqual(expect.arrayContaining([
-      expect.objectContaining({ metricKey: 'US.TARGET_RATE.DECISION', reason: 'crowded' })
-    ]))
+  /**
+   * 政策会议与 CPI 只差一天（真库 12-09 / 12-10）：盒子相交 → **合并成一块**，
+   * 两行各写一个日期，距离写较近那个。非农在 12-04，离得够远，各自一块。
+   */
+  it('merges the policy meeting with the CPI date when they cannot both fit', () => {
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: [
+      { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+        lastRelease: { date: '2026-11-19', value: '3.74%' },
+        nextRelease: { date: '2026-12-10', expected: '3.2%', expectedFromMarket: true }, periodDays: 30 },
+      { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+        lastRelease: { date: '2026-11-06', value: '+165K' }, nextRelease: { date: '2026-12-04' }, periodDays: 28 },
+      { metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate', nextRelease: { date: '2026-12-09' }, periodDays: 42 }
+    ] })
+    const merged = model.plaques.find((plaque) => plaque.merged !== undefined)!
+    expect(merged.merged!.map((entry) => entry.date)).toEqual(['2026-12-09', '2026-12-10'])
+    expect(merged.daysUntil).toBe(18)
+    // 合并牌也留在卡内（宽按上限算）。
+    expect(merged.x - clockPlaqueMaxWidth / 2).toBeGreaterThanOrEqual(0)
+    expect(merged.x + clockPlaqueMaxWidth / 2).toBeLessThanOrEqual(clockCardGeometry.cardWidth)
+    // 合并不是丢：两个日期都没有进交代行。
+    expect(model.unplaced.filter((entry) => entry.reason === 'crowded')).toEqual([])
+    expect(model.plaques.some((plaque) => plaque.metricKey === 'US.NONFARM.SA.CHANGE')).toBe(true)
+  })
+
+  /** 贴着环边的牌子要夹回卡内：276° 的挂点原值是 33.7，夹取后是 72。 */
+  it('clamps a plaque near the ring edge back inside the card', () => {
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: [{
+      metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+      lastRelease: { date: '2026-11-14', value: '3.74%' }, nextRelease: { date: '2026-12-10' }, periodDays: 30
+    }] })
+    const past = model.plaques.find((plaque) => plaque.id === 'US.CPI.NSA.YOY:past')!
+    expect(Number(past.x.toFixed(2))).toBe(72)
   })
 
   /** 用户 2026-11-12 定：过去牌与未来牌各判各的，同一指标可以同时占两个位置。 */
@@ -109,7 +123,10 @@ describe('the model built from real schedule dates', () => {
 
   /** 保留期 P/3 是规则：CPI 11-10 发布、P=30 → 10 天后撤掉过去牌（11-21 满 11 天）。 */
   it('retires the past plaque once the retention window has passed, without calling it a gap', () => {
-    const model = buildClockCardModel({ today: '2026-11-21', metrics: measured })
+    const model = buildClockCardModel({ today: '2026-11-21', metrics: [{
+      metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy',
+      lastRelease: { date: '2026-11-10', value: '3.74%' }, nextRelease: { date: '2026-12-10' }, periodDays: 30
+    }] })
     expect(model.plaques.some((plaque) => plaque.id === 'US.CPI.NSA.YOY:past')).toBe(false)
     // 撤掉是规则到点，不是「挂不上去」：不许因此冒出一条交代。
     expect(model.unplaced.some((entry) => entry.metricKey === 'US.CPI.NSA.YOY')).toBe(false)
