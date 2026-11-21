@@ -36,6 +36,8 @@ describe('UI token file', () => {
       expect(block).toMatch(/--line-meta:\s*1\.5;/)
       expect(block).toMatch(/--font-section:\s*11\.5px;/)
       expect(block).toMatch(/--line-section:\s*1\.6;/)
+      expect(block).toMatch(/--font-card-title:\s*13px;/)
+      expect(block).toMatch(/--line-card-title:\s*1\.4;/)
     }
   })
 

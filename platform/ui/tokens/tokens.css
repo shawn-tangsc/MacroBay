@@ -71,6 +71,10 @@
   --line-meta: 1.5;
   --font-section: 11.5px;
   --line-section: 1.6;
+  /* 卡片 / 区块标题：13 / 1.4。此前 ui-rules 记为「缺 token、按临时值写」，合并卡要 13 时
+     处处写字面量，字号门禁就会随卡增加而涨——所以补成 token（2026-11-22，Chief）。 */
+  --font-card-title: 13px;
+  --line-card-title: 1.4;
 
   /*
    * Motion: durations and easing live here and nowhere else. A component that writes `180ms` or
@@ -153,6 +157,10 @@
   --line-meta: 1.5;
   --font-section: 11.5px;
   --line-section: 1.6;
+  /* 卡片 / 区块标题：13 / 1.4。此前 ui-rules 记为「缺 token、按临时值写」，合并卡要 13 时
+     处处写字面量，字号门禁就会随卡增加而涨——所以补成 token（2026-11-22，Chief）。 */
+  --font-card-title: 13px;
+  --line-card-title: 1.4;
 
   --warning: var(--caution);
 }

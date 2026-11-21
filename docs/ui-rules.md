@@ -52,13 +52,13 @@ Only four weights: **400 / 500 / 600 / 650**. Everything else (620, 680, 700, 75
 | Group heading | 11.5 / 1.6 / 600 | `--font-section` / `--line-section` |
 | Reading note | 11.5 / 1.6 / 400 | same |
 | Page name (the screen's subject, e.g. a detail header) | 16 / 1.35 / 650 / `--text-strong` | **missing** (literal 16; the screen subject only — never a section title, never a row, **never a card header**: the config drawer's in-card title was removed, `3403c15`) |
-| Card / section title | 13 / 1.4 / 650 | **missing** |
+| Card / section title | 13 / 1.4 / 650 | `--font-card-title` / `--line-card-title` |
 | Settings label | 13 / 1.4 / 400 | **missing** |
 | Table figure, axis | 11 / 1 / 400 or 600 + `tabular-nums` | **missing** |
 
 - A row title is one step lighter than its group heading (500 vs 600): content is lighter than structure.
 - **A collapsible group's header row uses the group-heading tier**: `--font-section` / `--line-section` / 600 / `--muted-strong`. The platform `CollapsibleGroup` must use the same values, or shell and pages drift apart again.
-- Card title 13 still has **no token**; use the literal.
+- Card title 13 has a token now (`--font-card-title` / `--line-card-title`, added 2026-11-22): reference it, never a literal.
 - **Equivalent replacement only**: swap 12 / 11 / 11.5 for the references, visually unchanged. Raising 10 / 10.5 / 9.5 to 11 is a **visible change** — separate commit, with a before/after comparison.
 - **Never substitute 10 / 10.5 / 9.5.**
 
