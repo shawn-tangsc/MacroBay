@@ -21,6 +21,17 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * 正文那一行（`business-card__preset` 里）的读数：给一个**最小宽度**，配合父级的 `flex-wrap`。
+ * 容器够宽就与「频率 ⓘ」同排、吃掉剩余宽度；不够就整条落到第二行、仍然是一行文字。
+ * 没有这个下限时，容器窄到 11px 就会一字一行竖排（用户 2026-11-22 截图：核心指标那一屏）。
+ * 浮层里那份读数不受这条影响（它的父级是 `business-card__preset-help`）。
+ */
+.business-card__preset > .business-card__preset-readout {
+  flex: 1 1 6ch;
+  min-width: 6ch;
+}
+
 .business-card__preset-readout-sep {
   margin: 0 4px;
   color: var(--border-strong);

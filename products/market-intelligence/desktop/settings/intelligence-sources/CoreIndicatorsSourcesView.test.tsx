@@ -248,6 +248,49 @@ describe('三组十二项：文案齐全、不另设计布局', () => {
     expect(view).not.toContain('valueSourcesForMetric(')
   })
 
+  /**
+   * 宽度从哪里来（2026-11-22 用户截图：这一屏每个指标卡被压成窄条、频率一字一行）。
+   *
+   * 模块卡占几列由 `.business-module-grid > .business-card { grid-column: span var(--module-span) }`
+   * 决定——**靠结构，不靠属性**。原来的选择器是 `.business-card[data-business-card]`，这一屏漏了
+   * 那个属性，组卡就落回 1 列（1/3 宽），而 `--module-span: 3` 还在喂组内的 cell-grid，
+   * 结果是每张指标卡只剩 1/9 宽。两条一起钉：
+   * 1. 结构：每张组卡必须是 `.business-module-grid` 的**直接子元素**（中间加一层就红）；
+   * 2. 规则：占列的判据是结构选择器，属性选择器不许回来（改回属性就红）。
+   */
+  it('keeps each group card a direct child of the module grid', async () => {
+    const host = await render()
+    const groups = [...host.querySelectorAll<HTMLElement>('[data-core-indicator-group]')]
+    expect(groups.length).toBeGreaterThan(0)
+    for (const group of groups) {
+      expect(group.className, String(group.dataset.coreIndicatorGroup)).toContain('business-card')
+      expect(group.parentElement?.className, String(group.dataset.coreIndicatorGroup)).toContain('business-module-grid')
+    }
+  })
+
+  it('takes the module width from the structure, not from a data attribute', () => {
+    const css = readFileSync(join(__dirname, 'intelligence-sources.css'), 'utf8')
+    expect(css).toContain('.business-module-grid > .business-card {')
+    /* 属性选择器不许再承担宽度：它今天还兼着「跳到某个模块」的定位，但**宽度**只能来自结构。 */
+    expect(css).not.toContain('.business-card[data-business-card] {')
+  })
+
+  it('cannot make the frequency readout collapse into a column of single characters', () => {
+    /* 一字一行不是「不好看」，是坏状态：容器窄到 11px 时 `overflow-wrap: anywhere` 会逐字折。
+       结构上禁掉它——父级可换行、读数有 6ch 下限，于是放不下时整条读数落到第二行。 */
+    const layout = readFileSync(join(__dirname, 'intelligence-sources.css'), 'utf8')
+    const preset = layout.slice(layout.indexOf('.business-card__preset {'))
+    const presetRule = preset.slice(0, preset.indexOf('}'))
+    expect(presetRule).toContain('flex-wrap: wrap')
+    expect(presetRule).toContain('row-gap: 4px')
+
+    const readout = readFileSync(join(__dirname, 'frequencyReadout.css'), 'utf8')
+    const scoped = readout.slice(readout.indexOf('.business-card__preset > .business-card__preset-readout {'))
+    const scopedRule = scoped.slice(0, scoped.indexOf('}'))
+    expect(scopedRule).toContain('min-width: 6ch')
+    expect(scopedRule).toContain('flex: 1 1 6ch')
+  })
+
   it('carries no layout rule the dashboard does not have', () => {
     /* 只剩视图一个文件可查：这一屏自己的 css 已经删了（上一组用例断言它不存在）。 */
     const view = readFileSync(join(__dirname, 'CoreIndicatorsSourcesView.tsx'), 'utf8')

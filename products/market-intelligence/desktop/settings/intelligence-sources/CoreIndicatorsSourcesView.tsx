@@ -151,6 +151,10 @@ export function CoreIndicatorsSourcesView(props: CoreIndicatorsSourcesViewProps)
               sum + Math.min(catalog.get(row.metricKey)?.sources.length ?? 0, 3), 0),
             3
           )
+          /* 组卡必须是 `.business-module-grid` 的**直接子元素**：占几列由
+             `.business-module-grid > .business-card { grid-column: span var(--module-span) }` 决定。
+             中间再包一层，组卡就退化成 1 列，组内三列再分给每张指标卡，频率读数会被压成一字一行
+             （用户 2026-11-22 截图）。守卫在 `CoreIndicatorsSourcesView.test.tsx`。 */
           return <section
             className="business-card"
             data-core-indicator-group={group.id}
