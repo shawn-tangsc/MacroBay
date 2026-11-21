@@ -35,7 +35,6 @@ const REQUIRED_PATHS = [
   'titleInfoLabel',
   'window',
   'observedAt',
-  'provenance',
   'fearGreed.name',
   'fearGreed.axis',
   'fearGreed.asOf',
@@ -205,6 +204,16 @@ describe('fear & greed + downside premium card copy', () => {
     // AC-44：三处 ⓘ 不许说同一件事——日期口径只在卡头有一份，两个半条不再各说一遍。
     expect(valueOf('zh-CN', 'titleInfo')).toContain('数据源日（UTC）')
     expect(valueOf('en-US', 'titleInfo')).toMatch(/data source's day \(UTC\)/u)
+  })
+
+  it('keeps both providers named in the card head, now that the on-card source row is gone', () => {
+    // 卡面来源行按定稿删掉（2026-11-22），供应商名字只留在卡头 ⓘ：两家都必须点名，
+    // 且不许换成「全球指数 / BTC 单所」这类不点名的说法——那是读者查不到出处的写法。
+    for (const locale of ['zh-CN', 'en-US'] as const) {
+      const head = valueOf(locale, 'titleInfo')
+      expect(head, `${locale}: card head must name the sentiment provider`).toContain('Alternative.me')
+      expect(head, `${locale}: card head must name the skew provider`).toContain('Deribit')
+    }
   })
 
   it('keeps the skew axis label whole: name stem plus the unit in its own brackets', () => {
