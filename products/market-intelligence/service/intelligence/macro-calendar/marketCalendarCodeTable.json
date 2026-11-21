@@ -1311,8 +1311,11 @@
     "measure": "COUNT",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Challenger, Gray & Christmas",
+      "url": "https://www.challengergray.com/blog/category/job-cuts-report/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "挑战者 · 月度裁员公告报告分类页，含当月裁员总数"
     },
     "status": "active"
   },
@@ -1332,8 +1335,11 @@
     "measure": "MOM",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Challenger, Gray & Christmas",
+      "url": "https://www.challengergray.com/blog/category/job-cuts-report/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "挑战者 · 同一份月度裁员公告报告给出环比"
     },
     "status": "active"
   },
@@ -1353,8 +1359,11 @@
     "measure": "YOY",
     "seasonality": "NONE",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Challenger, Gray & Christmas",
+      "url": "https://www.challengergray.com/blog/category/job-cuts-report/",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "挑战者 · 同一份月度裁员公告报告给出同比"
     },
     "status": "active"
   },
@@ -2485,8 +2494,11 @@
     "measure": "COUNT",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/existing-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 成屋销售统计页，含季调年化销售总数"
     },
     "status": "active"
   },
@@ -2506,8 +2518,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/existing-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 成屋销售统计页同一份发布给出月率"
     },
     "status": "active"
   },
@@ -2671,8 +2686,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Housing Finance Agency",
+      "url": "https://www.fhfa.gov/data/hpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "FHFA · HPI 官方页，月度新闻稿含年率"
     },
     "status": "active"
   },
@@ -2692,8 +2710,11 @@
     "measure": "LEVEL",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Housing Finance Agency",
+      "url": "https://www.fhfa.gov/data/hpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "FHFA · 房价指数（HPI）官方页，含月度购买型指数"
     },
     "status": "active"
   },
@@ -2713,8 +2734,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "Federal Housing Finance Agency",
+      "url": "https://www.fhfa.gov/data/hpi",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "FHFA · HPI 官方页，月度新闻稿含月率"
     },
     "status": "active"
   },
@@ -4118,8 +4142,11 @@
     "measure": "YOY",
     "seasonality": "NSA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/pending-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 待售房屋销售统计页，含指数按年变化"
     },
     "status": "active"
   },
@@ -4139,8 +4166,11 @@
     "measure": "MOM",
     "seasonality": "SA",
     "officialSource": {
-      "pending": true,
-      "reason": "official-source-todo"
+      "agency": "National Association of Realtors",
+      "url": "https://www.nar.realtor/research-and-statistics/housing-statistics/pending-home-sales",
+      "pageKind": "release",
+      "verifiedAt": "2026-11-21",
+      "basis": "NAR · 待售房屋销售统计页同一份发布给出月率"
     },
     "status": "active"
   },
