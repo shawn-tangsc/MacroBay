@@ -2265,8 +2265,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 },
                 direction: {
                   window: 'Last 5 days',
-                  steeper: 'Steeper',
-                  flatter: 'Flatter',
+                  steeper: 'Widening',
+                  flatter: 'Narrowing',
                   flat: 'Little changed',
                   insufficient: 'Fewer than 5 days of skew data; no direction.',
                   stale: 'Skew data stops at {time}.',
@@ -2287,25 +2287,25 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 fear: {
                   steeper: 'Sentiment sits in the fear band; the cost of downside protection is widening.',
                   flatter: 'Sentiment sits in the fear band; the cost of downside protection is narrowing.',
-                  flat: 'Sentiment sits in the fear band; the cost of downside protection barely moved.',
+                  flat: 'Sentiment sits in the fear band; the cost of downside protection is little changed.',
                   skewMissing: 'Sentiment sits in the fear band; the skew half has no usable direction.'
                 },
                 greed: {
                   steeper: 'Sentiment sits in the greed band; the cost of downside protection is widening.',
                   flatter: 'Sentiment sits in the greed band; the cost of downside protection is narrowing.',
-                  flat: 'Sentiment sits in the greed band; the cost of downside protection barely moved.',
+                  flat: 'Sentiment sits in the greed band; the cost of downside protection is little changed.',
                   skewMissing: 'Sentiment sits in the greed band; the skew half has no usable direction.'
                 },
                 neutral: {
                   steeper: 'Sentiment sits in the neutral band; the cost of downside protection is widening.',
                   flatter: 'Sentiment sits in the neutral band; the cost of downside protection is narrowing.',
-                  flat: 'Sentiment sits in the neutral band; the cost of downside protection barely moved.',
+                  flat: 'Sentiment sits in the neutral band; the cost of downside protection is little changed.',
                   skewMissing: 'Sentiment sits in the neutral band; the skew half has no usable direction.'
                 },
                 fgMissing: {
                   steeper: 'Skew is widening; the Fear & Greed half has no usable reading.',
                   flatter: 'Skew is narrowing; the Fear & Greed half has no usable reading.',
-                  flat: 'Skew barely moved; the Fear & Greed half has no usable reading.'
+                  flat: 'Skew is little changed; the Fear & Greed half has no usable reading.'
                 }
               },
               degraded: {
