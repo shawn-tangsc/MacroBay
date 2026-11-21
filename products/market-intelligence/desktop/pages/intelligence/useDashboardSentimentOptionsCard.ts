@@ -5,7 +5,8 @@ import { isCanonicalFearGreedSnapshotTime, type SentimentOptionsCardResult } fro
 import { withQueryDeadline } from '../../shared/ipc/queryDeadline'
 
 export type DashboardSentimentOptionsState =
-  | { state: 'loading' }
+  /** `hadReading` 只有「已经读到过一次、现在在重读」时才是 true：首帧读不到这个字段。 */
+  | { state: 'loading'; hadReading?: boolean }
   | { state: 'available'; result: SentimentOptionsCardResult }
   | { state: 'unavailable' }
 
@@ -45,7 +46,7 @@ export function useDashboardSentimentOptionsCard({ client, now, timeZone, disabl
     let active = true
     const quiet = revisionRef.current !== undefined && revisionRef.current !== revision
     revisionRef.current = revision
-    if (!quiet) setState({ state: 'loading' })
+    if (!quiet) setState({ state: 'loading', hadReading: lastResult.current !== undefined })
     if (disabled) return () => { active = false }
     const asOf = readCanonicalClock(mountInput.now)
     if (!asOf) {

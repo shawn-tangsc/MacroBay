@@ -119,6 +119,25 @@ describe('useDashboardSentimentOptionsCard', () => {
     expect(query).toHaveBeenCalledTimes(2)
   })
 
+  it('marks a re-read with hadReading only after the first reading landed', async () => {
+    let resolve!: (value: unknown) => void
+    let reload: () => void = () => undefined
+    const query = vi.fn(() => new Promise((done) => { resolve = done }))
+    const page = await renderHook(query, () => new Date(asOf), value => { reload = value })
+    // 首帧：还没有过任何一次读数，这一态不带 hadReading（卡据此不出刷新）。
+    expect(page.state()).toBe('loading')
+    expect(page.hadReading()).toBeUndefined()
+
+    await act(async () => { resolve(card({ score: 22, bucket: 'fear' })); await Promise.resolve() })
+    await flush()
+    expect(page.state()).toBe('available')
+
+    // 读者按刷新：状态是「重读」，并带上「已经读到过一次」这个事实。
+    await act(async () => { reload() })
+    expect(page.state()).toBe('loading')
+    expect(page.hadReading()).toBe('true')
+  })
+
   it('fails closed when the client throws', async () => {
     const page = await renderHook(async () => { throw new Error('secret failure') }, () => new Date(asOf))
     await flush()
@@ -148,7 +167,11 @@ async function renderHook(
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
   await act(async () => localRoot.render(createElement(Harness, { client: { query }, now, onReady, disabled, revision })))
-  return { root: localRoot, container, state: () => container.querySelector('output')!.dataset.state! }
+  return {
+    root: localRoot, container,
+    state: () => container.querySelector('output')!.dataset.state!,
+    hadReading: () => container.querySelector('output')!.dataset.hadReading
+  }
 }
 
 function Harness({ client, now, onReady, disabled = false, revision }: {
@@ -160,7 +183,10 @@ function Harness({ client, now, onReady, disabled = false, revision }: {
 }) {
   const { state, reload } = useDashboardSentimentOptionsCard({ client: client as never, now, timeZone, disabled, revision })
   onReady?.(reload)
-  return createElement('output', { 'data-state': state.state })
+  return createElement('output', {
+    'data-state': state.state,
+    ...(state.state === 'loading' && state.hadReading ? { 'data-had-reading': 'true' } : {})
+  })
 }
 
 async function flush(): Promise<void> { await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() }) }

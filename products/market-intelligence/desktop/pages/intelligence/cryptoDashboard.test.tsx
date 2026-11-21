@@ -1652,8 +1652,11 @@ describe('the defensive premium band', () => {
   it('keeps both half frames while loading, so the card does not collapse', async () => {
     const container = await renderBand({ query: () => new Promise(() => undefined) })
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    // 两半各有自己的 inline loading，卡头还在，不是整块被一个加载面替掉。
-    expect(band.querySelectorAll('.mi-defensive-premium__half [data-loading-state]')).toHaveLength(2)
+    // 两半各有自己的等待指示（左半一个环、右半一颗带文案的加载态），卡头还在，
+    // 不是整块被一个加载面替掉；整卡加载只许一处 role=status，否则读屏会念两遍。
+    expect(band.querySelectorAll('.mi-defensive-premium__half [data-loading-state]')).toHaveLength(1)
+    expect(band.querySelectorAll('.mi-defensive-premium__half .loading-spinner')).toHaveLength(2)
+    expect(band.querySelectorAll('[role="status"]')).toHaveLength(1)
     expect(band.querySelector('.mi-defensive-premium__header')).not.toBeNull()
     // 两半各一个空图框：同一 viewBox、不画线不画值，高度由同一套布局算，不写死。
     const placeholders = band.querySelectorAll('[data-chart-placeholder]')
@@ -1673,16 +1676,39 @@ describe('the defensive premium band', () => {
   it('overlays each half wait on the frame it replaces, so loading adds no row', async () => {
     const container = await renderBand({ query: () => new Promise(() => undefined) })
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    const leftWait = band.querySelector('[data-half="fear-greed"] [data-loading-state]')!
+    const leftWait = band.querySelector('[data-half="fear-greed"] .loading-spinner')!
     const rightWait = band.querySelector('[data-half="skew"] [data-loading-state]')!
     // 转圈叠在已有的元素上（左半叠仪表圆盘、右半叠空图框），不当网格里独立的一行：
     // 当独立行时加载态比正常态整整高一行，换态卡就跳。
     expect(leftWait.closest('.mi-crypto-dashboard__sentiment-dial')).not.toBeNull()
     expect(rightWait.closest('[data-chart-placeholder]')).not.toBeNull()
-    // 叠起来不等于把读屏也藏掉：两半的等待仍由平台加载组件播报。
-    expect(leftWait.getAttribute('role')).toBe('status')
+    // 播报只在右半那一处：左半只是装饰环，不能也算一次「加载中」。
+    expect(leftWait.getAttribute('aria-hidden')).toBe('true')
+    expect(leftWait.closest('[role="status"]')).toBeNull()
     expect(rightWait.getAttribute('role')).toBe('status')
     expect(rightWait.closest('[data-chart-placeholder]')?.getAttribute('aria-hidden')).toBeNull()
+  })
+
+  it('offers no refresh on the first frame, and keeps one disabled refresh while re-reading', async () => {
+    // 首帧（还没有过任何一次读数）：标题行不出刷新，重试无从谈起（PRD §6）。
+    const first = await renderBand({ query: () => new Promise(() => undefined) })
+    expect(first.querySelector('.mi-crypto-dashboard__defensive-premium-row .mi-defensive-premium__refresh')).toBeNull()
+
+    // 读到过一次之后再按刷新：那颗仍在，但禁用——读者看得见入口，也不用担心重复点。
+    const base = skewClient({ kind: 'steeper' })
+    let calls = 0
+    const reread = { query: (input: Parameters<typeof base.query>[0]) => {
+      calls += 1
+      return calls === 1 ? base.query(input) : new Promise<never>(() => undefined)
+    } }
+    const container = await renderBand(reread)
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    const enabled = band.querySelector<HTMLButtonElement>('.mi-defensive-premium__refresh')!
+    expect(enabled.disabled).toBe(false)
+    await act(async () => enabled.click())
+    const redrawing = band.querySelector<HTMLButtonElement>('.mi-defensive-premium__refresh')
+    expect(redrawing).not.toBeNull()
+    expect(redrawing!.disabled).toBe(true)
   })
 
   it('turns a first-read failure into one whole-card error, with no half and one retry', async () => {

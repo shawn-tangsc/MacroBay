@@ -1,6 +1,6 @@
 import { CircleSlash, TriangleAlert } from 'lucide-react'
 
-import { LoadingState } from '@platform/ui/components/loading'
+import { LoadingSpinner } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import { FearGreedGaugePresentationPolicy, type DashboardFearGreedState } from '../../../pages/intelligence/dashboardFearGreedModel'
@@ -31,7 +31,6 @@ type Text = {
     gaugeMarkers: { fear: string; neutral: string; greed: string }
   }
   fearGreed: {
-    loading: string
     /** 读到了这一期、但库里没有这一期的观测值（不是读失败）。 */
     empty: string
     observedAt: string
@@ -102,11 +101,12 @@ export function SentimentPanel({ fearGreedState, text, cellOff, showTitle, title
           // 走到这里的只剩「还在读」：弧线与刻度照画，指针和圆盘不画——换态时卡不许塌形。
           : <>
             {/* 转圈叠在圆盘本来占的位置（半圆中间的空档），不另占一行：它是指示不是内容，
-                多一行加载态就比正常态高。读屏照常播报，弧与刻度也不被挡住。 */}
+                多一行加载态就比正常态高。这里只画环、不播报——整张卡一次加载只许一处
+                `role="status"`（在右半那颗带文案的 LoadingState 上），否则读屏会念两遍。 */}
             <span className="mi-crypto-dashboard__sentiment-dial">
               <GaugeFigure />
               <span className="mi-crypto-dashboard__sentiment-dial-wait">
-                <LoadingState label={text.fearGreed.loading} minHeight={24} layout="inline" />
+                <LoadingSpinner />
               </span>
             </span>
             {/* 与正常态同构的占位：档位词与「截至」两行先留出来，换态时仪表不缩。 */}

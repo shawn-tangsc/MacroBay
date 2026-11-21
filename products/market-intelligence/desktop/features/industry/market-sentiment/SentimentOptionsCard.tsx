@@ -51,7 +51,10 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const fearGreedFailed = fearGreed?.state === 'unavailable'
   const showViewSource = wholeCardState === undefined && notConnected && !fearGreedFailed
   const showEnable = wholeCardState === undefined && !notConnected && cellOff !== undefined
-  const showRefresh = wholeCardState === undefined && (notConnected ? fearGreedFailed : !showEnable)
+  // 首帧（还没有过任何一次读数）标题行不出刷新：那时候按下去只是把同一件事再问一遍（PRD §6）。
+  // 「有过读数、正在重读」才留一颗禁用的刷新，保住焦点与入口。
+  const firstReading = state.state === 'loading' && state.hadReading !== true
+  const showRefresh = !firstReading && wholeCardState === undefined && (notConnected ? fearGreedFailed : !showEnable)
   const verdictKey = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
 
@@ -99,7 +102,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           titleId={FEAR_GREED_HEADING_ID}
           text={{
             sentiment: { title: text.fearGreed.name, gaugeMarkers: text.gaugeMarkers },
-            fearGreed: { loading: text.loading, empty: text.empty, observedAt: text.fearGreed.asOf, buckets: text.fearGreed.buckets }
+            fearGreed: { empty: text.empty, observedAt: text.fearGreed.asOf, buckets: text.fearGreed.buckets }
           }}
           {...(cellOff === undefined ? {} : { cellOff })}
           {...(fearGreed?.state === 'available' ? { observedDay: fearGreed.latestDay } : {})} />

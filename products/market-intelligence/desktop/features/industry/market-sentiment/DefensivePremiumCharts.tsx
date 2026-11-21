@@ -76,7 +76,7 @@ export function ChartPlaceholder({ axisLabel, waitingLabel }: Readonly<{ axisLab
     <span className="mi-defensive-premium__chart-frame">
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto" aria-hidden="true" />
       {waitingLabel === undefined ? null : <span className="mi-defensive-premium__chart-wait">
-        <LoadingState label={waitingLabel} minHeight={24} layout="inline" />
+        <LoadingState label={waitingLabel} layout="inline" />
       </span>}
     </span>
   </figure>
