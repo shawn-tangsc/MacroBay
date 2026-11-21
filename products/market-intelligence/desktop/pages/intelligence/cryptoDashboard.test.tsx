@@ -1436,6 +1436,10 @@ describe('the defensive premium band', () => {
     const skew = band.querySelector('.mi-defensive-premium__half[data-half="skew"]')!
     expect(skew.textContent).toContain(dashboardText.defensivePremium.skew.notConnected)
     expect(skew.textContent).not.toContain(productText['zh-CN'].pages.intelligence.portal.data.temporarilyUnavailable)
+    // 「未接入」不许被当成坏数据：卡面不是整块错误态，左半的读数也照旧在。
+    expect(band.querySelector('.state-view')).toBeNull()
+    expect(band.querySelector('[data-verdict]')).not.toBeNull()
+    expect(band.querySelector('.mi-defensive-premium__half[data-half="fear-greed"] .mi-crypto-dashboard__sentiment')).not.toBeNull()
     // 「查看来源」是卡级动作、在标题行；行内只剩那颗说明用的 ⓘ（无文字）。
     expect([...skew.querySelectorAll('button')].map(button => button.textContent)).toEqual([''])
     expect([...band.querySelectorAll('.mi-defensive-premium__header button')].map(button => button.textContent))

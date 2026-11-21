@@ -63,6 +63,11 @@ const mockPublicQueryService = {
     },
     droppedInvalid: 1
   })),
+  querySentimentOptionsCard: vi.fn(async (): Promise<unknown> => ({
+    asOf: '2026-08-06T12:00:00.000Z', windowDays: 30, timeZone: 'Asia/Shanghai',
+    fearGreed: { state: 'empty' },
+    optionSkew: { state: 'not-connected' }
+  })),
   queryCapitalConditionsSnapshot: vi.fn(async (): Promise<unknown> => ({
     state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf: { state: 'unavailable' },
     coreStablecoins: { observedAt: '2026-08-06T10:00:00.000Z', verifiedAt: '2026-08-06T10:00:00.000Z', currentUsd: 310, change1dUsd: 10, change1dPercent: 3, change7dUsd: 10, change7dPercent: 3, change30dUsd: 30, change30dPercent: 10 }, conclusion: 'partial'
@@ -132,6 +137,21 @@ describe('registerIntelligencePublicQueryIpc', () => {
         asOf: '2026-07-08T10:00:00.000Z'
       })
     ).rejects.toThrow('evidenceRefId, itemId, impactId, or clusterId is required.')
+  })
+
+  it('keeps a not-connected skew half instead of collapsing the card into unreadable', async () => {
+    const handlers = new Map<string, ProductIpcHandler>()
+    registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime, moduleUnderTest)
+
+    // 源还没接入（readiness planned/pending）是第三种「没有读数」，不是坏数据：这一支漏在校验里，
+    // 整卡会被回退成两段 unavailable，读者在真机上看到的就是「读取失败」。
+    await expect(handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.querySentimentOptionsCard)?.({
+      asOf: '2026-08-06T12:00:00.000Z', timeZone: 'Asia/Shanghai', windowDays: 30
+    })).resolves.toEqual({
+      asOf: '2026-08-06T12:00:00.000Z', windowDays: 30, timeZone: 'Asia/Shanghai',
+      fearGreed: { state: 'empty' },
+      optionSkew: { state: 'not-connected' }
+    })
   })
 
   it('reconstructs only a valid fixed Fear & Greed snapshot result', async () => {

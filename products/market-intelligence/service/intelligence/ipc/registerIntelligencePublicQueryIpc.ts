@@ -361,6 +361,9 @@ function optionSkewSection(value: unknown, input: SentimentOptionsCardQueryInput
       : undefined
   }
   if (isExactDataRecord(value, ['state']) && value.state === 'empty') return { state: 'empty' }
+  // 源还没接入（readiness planned/pending）是第三种「没有读数」，不是坏数据：漏了这一支，
+  // 整卡会被判成回退两段 unavailable，读者看到的是「读取失败」。
+  if (isExactDataRecord(value, ['state']) && value.state === 'not-connected') return { state: 'not-connected' }
   if (!isExactDataRecord(value, ['state', 'latest', 'direction', 'observedAt', 'latestDay', 'daysAgo', 'stale', 'seriesStart', 'points'])) return undefined
   if (value.state !== 'available') return undefined
   if (!isExactDataRecord(value.latest, ['riskReversal', 'observedAt', 'tenorDays', 'putIv25', 'callIv25', 'expiries'])) return undefined
