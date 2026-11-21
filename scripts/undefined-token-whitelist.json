@@ -83,5 +83,10 @@
     "injectedBy": "ClockCard.tsx:172（行内 style 写在每块环牌 `.mi-clock__node` 上）",
     "file": "products/market-intelligence/desktop/pages/intelligence/ClockCard.tsx",
     "reason": "--o 是每块环牌的不透明度，由「离今天的天数」现算（0.5 + (天数÷30)² × 0.5）——是数据不是主题；CSS 侧 `opacity: var(--o, 1)` 只是接住它，写进 tokens.css 会给它一个和天数脱钩的假值。"
+  },
+  "--mi-clock-z": {
+    "injectedBy": "ClockCard.tsx:245",
+    "file": "products/market-intelligence/desktop/pages/intelligence/ClockCard.tsx",
+    "reason": "层级由模型按「离现在近的在上」算出来，一块牌一个值，注在牌的行内；写进 tokens.css 等于给同一个层级留两份定义，会和模型排序漂开。"
   }
 }
