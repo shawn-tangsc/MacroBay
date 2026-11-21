@@ -94,21 +94,25 @@ export function wireCrossAsset(input: Readonly<{
     macroSeries: (seriesId, fromMs, toMs) => input.intelligenceModule.macroMarket.store.series(seriesId, fromMs, toMs)
   }) : undefined
   registerCrossAssetIpc(input.register, { now: Date.now, runtime: crossAssetRuntime, query: crossAssetQuery, configuration: crossAssetConfiguration })
-  // Both market stores answer one retention policy, by one daily job and one look at startup: a store
-  // that has been kept since the product shipped has months of folding to do, and waiting for the first
+  // Every store answers one retention policy, by one daily job and one look at startup: a store that
+  // has been kept since the product shipped has months of folding to do, and waiting for the first
   // midnight would leave the reader's disk exactly as it was for a day.
-  if (crossAssetStore) {
-    const newsStore = input.intelligenceModule.newsSentiment.store
-    registerMarketRetention({
-      jobRuntime: input.deps.jobRuntime,
-      macroStore: input.intelligenceModule.macroMarket.store,
-      crossAssetStore,
-      analysisRepository: input.intelligenceModule.marketAnalysisRuntime.repository,
-      ...(newsStore ? { newsStore } : {}),
-      // 原始记录也挂这一跑（0.4.5 缺陷③ 的接线）：它没有自己的开关，也就不该有自己的调度。
-      rawRecordStore: input.intelligenceModule.rawRecordStore
-    })
-  }
+  //
+  // Registration is deliberately outside the `if (crossAssetStore)` guard: a cross-asset database that
+  // refused to open used to take the whole pass down with it, leaving macro, news, analysis and the raw
+  // records unpruned forever. The missing station is named in one skip line instead (reason below), so
+  // "not pruned this time" is never silent.
+  const newsStore = input.intelligenceModule.newsSentiment.store
+  registerMarketRetention({
+    jobRuntime: input.deps.jobRuntime,
+    macroStore: input.intelligenceModule.macroMarket.store,
+    ...(crossAssetStore ? { crossAssetStore } : {}),
+    analysisRepository: input.intelligenceModule.marketAnalysisRuntime.repository,
+    ...(newsStore ? { newsStore } : {}),
+    // 原始记录也挂这一跑（0.4.5 缺陷③ 的接线）：它没有自己的开关，也就不该有自己的调度。
+    rawRecordStore: input.intelligenceModule.rawRecordStore,
+    ...(crossAssetStore ? {} : { skipReasons: { crossAsset: 'cross-asset-store-unavailable' } })
+  })
   // One cross-asset source, two readers with two shapes: the analysis context reads through the
   // public query method, which validates with the renderer's own parser, while the prediction
   // verifier takes the raw synchronous query and parses the snapshot itself. Handing the async
