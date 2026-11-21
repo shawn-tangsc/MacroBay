@@ -105,7 +105,14 @@ function optionSkewSection(input: SentimentOptionsCardQueryInput & SentimentOpti
     return { state: 'unavailable', failureCode: 'option-skew-collect-unavailable', cause: 'connection-unavailable' }
   }
 
-  const stored = input.readOptionSkew()
+  let stored: OptionSkewStoreRead
+  try {
+    stored = input.readOptionSkew()
+  } catch {
+    // A store that cannot be read is "could not read", never "nothing yet": the fear-greed half
+    // still answers, only this leg degrades.
+    return { state: 'unavailable', failureCode: 'option-skew-query-unavailable' }
+  }
   const points = stored.points
   if (points.length > 0 && !points.every(isReadablePoint)) return { state: 'unavailable', failureCode: 'option-skew-query-unavailable' }
   if (points.length === 0) {

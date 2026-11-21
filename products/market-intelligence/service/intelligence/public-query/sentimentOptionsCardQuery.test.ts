@@ -91,6 +91,21 @@ describe('querySentimentOptionsCard', () => {
       .toEqual({ state: 'unavailable', failureCode: 'option-skew-collect-unavailable', cause: 'upstream-http-error' })
   })
 
+  it('degrades only the skew half when the store cannot be read', () => {
+    // A corrupt or unreadable point store must not take the fear-greed half down with it: the card
+    // reports one leg as unreadable and keeps the other.
+    const result = querySentimentOptionsCard({
+      asOf,
+      timeZone: 'UTC',
+      windowDays: 30,
+      pipeline: pipeline(history(30, () => 40)),
+      readSkewReadiness: () => 'live',
+      readOptionSkew: () => { throw new Error('option-skew store is unreadable') }
+    })
+    expect(result.optionSkew).toEqual({ state: 'unavailable', failureCode: 'option-skew-query-unavailable' })
+    expect(result.fearGreed.state).toBe('available')
+  })
+
   it('computes skew direction from the whole series, not from the chart window', () => {
     const points = skewHistory([3.0, 2.8, 2.6, 2.4, 2.2, 2.0, 1.8, 1.6, 1.4, 1.2])
     const base = { asOf, timeZone: 'UTC', pipeline: pipeline(history(30, () => 40)), readOptionSkew: () => ({ points }), readSkewReadiness: () => 'live' }
