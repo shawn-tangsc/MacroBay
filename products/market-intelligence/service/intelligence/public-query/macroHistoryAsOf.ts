@@ -162,7 +162,7 @@ function goldReading(deps: MacroHistoryAsOfDeps, asOf: string, asOfMs: number): 
 function rateReading(deps: MacroHistoryAsOfDeps, series: 'us10y' | 'us10y-real', asOf: string, asOfMs: number): MacroHistoryAsOfResult {
   const listMetricEvents = deps.listMetricEvents
   if (!listMetricEvents) return unwired(series, asOf, 'the metric-event store is not wired in this build.')
-  const seriesId = series === 'us10y' ? macroRatesSnapshotPublicPolicy.series.us10y : macroRatesSnapshotPublicPolicy.series.realRate
+  const seriesId = series === 'us10y' ? macroRatesSnapshotPublicPolicy.series.us10y : macroRatesSnapshotPublicPolicy.series.real10y
   const metricKey = series === 'us10y' ? macroRatesSnapshotPublicPolicy.metricKeys.DGS10 : macroRatesSnapshotPublicPolicy.metricKeys.DFII10
   const events = listMetricEvents()
   if (!Array.isArray(events)) return gap(series, asOf, 'query-unavailable', 'the stored metric events could not be listed.')

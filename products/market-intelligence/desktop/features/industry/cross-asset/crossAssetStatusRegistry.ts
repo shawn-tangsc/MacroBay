@@ -46,7 +46,7 @@ export const crossAssetMacroSeriesIds: Readonly<Record<'dxy' | 'gold', readonly 
  */
 export const crossAssetRatesSeriesIds: Readonly<Record<'us10y' | 'realRate', string>> = Object.freeze({
   us10y: macroRatesSnapshotPublicPolicy.series.us10y,
-  realRate: macroRatesSnapshotPublicPolicy.series.realRate
+  realRate: macroRatesSnapshotPublicPolicy.series.real10y
 })
 
 /** The rows that carry no reading at all until their own snapshot answers. */

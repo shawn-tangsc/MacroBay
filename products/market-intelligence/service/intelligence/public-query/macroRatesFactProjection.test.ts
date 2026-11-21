@@ -21,9 +21,9 @@ function readings(): MacroRatesReading[] {
   const day = (period: string, value: number) => [{ period, value }]
   return [
     { seriesId: SERIES.us10y, metricKey: 'US_10Y_YIELD', actual: 4.15, previous: 4.13, period: '2026-10-13', window: day('2026-10-13', 4.15) },
-    { seriesId: SERIES.realRate, metricKey: 'US_REAL_YIELD_10Y', actual: 1.85, previous: 1.82, period: '2026-10-13', window: day('2026-10-13', 1.85) },
+    { seriesId: SERIES.real10y, metricKey: 'US_REAL_YIELD_10Y', actual: 1.85, previous: 1.82, period: '2026-10-13', window: day('2026-10-13', 1.85) },
     { seriesId: SERIES.us2y, metricKey: 'US_2Y_YIELD', actual: 4.0, period: '2026-10-13', window: day('2026-10-13', 4.0) },
-    { seriesId: SERIES.breakevenInflation, metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.3, period: '2026-10-13', window: day('2026-10-13', 2.3) }
+    { seriesId: SERIES.breakeven10y, metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.3, period: '2026-10-13', window: day('2026-10-13', 2.3) }
   ]
 }
 
@@ -89,7 +89,7 @@ describe('projectMacroRates', () => {
 
   it('produces no fact at all for a series the query could not answer', () => {
     const { facts } = project(snapshot({
-      readings: readings().filter(reading => reading.seriesId !== SERIES.breakevenInflation)
+      readings: readings().filter(reading => reading.seriesId !== SERIES.breakeven10y)
     }))
 
     expect(metric(facts, MACRO_RATES_FACT_METRICS.breakevenInflation)).toBeUndefined()

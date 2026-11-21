@@ -39,17 +39,20 @@ function published(view: MacroRatesSnapshotView | undefined) {
 }
 
 describe('macro rates snapshot contract', () => {
-  it('admits the five tenors, the two extras and the two admitted spreads', () => {
+  it('admits the whole curve and the two spreads', () => {
     expect(macroRatesSnapshotPublicPolicy.method).toBe('intelligence.macro.ratesSnapshot.query')
-    // 曲线先排期限（3M → 30Y），两个非期限序列跟在后面：实际利率与通胀补偿。
-    expect(macroRatesSnapshotPublicPolicy.seriesIds)
-      .toEqual(['DGS3MO', 'DGS2', 'DGS5', 'DGS10', 'DGS30', 'DFII10', 'T10YIE'])
+    // 名义曲线（1M → 30Y）→ 实际利率（5Y → 30Y）→ 通胀预期（5Y / 10Y / 5Y5Y）。
+    expect(macroRatesSnapshotPublicPolicy.seriesIds).toEqual([
+      'DGS1MO', 'DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS3', 'DGS5', 'DGS7', 'DGS10', 'DGS20', 'DGS30',
+      'DFII5', 'DFII7', 'DFII10', 'DFII20', 'DFII30', 'T5YIE', 'T10YIE', 'T5YIFR'
+    ])
     expect(macroRatesSnapshotPublicPolicy.spreads.map((spread) => spread.key))
       .toEqual(['us10y-minus-us2y', 'us10y-minus-us3m'])
-    expect(macroRatesSnapshotPublicPolicy.series.us3m).toBe('DGS3MO')
-    expect(macroRatesSnapshotPublicPolicy.series.us5y).toBe('DGS5')
-    expect(macroRatesSnapshotPublicPolicy.series.us30y).toBe('DGS30')
-    expect(macroRatesSnapshotPublicPolicy.maximumReadings).toBe(7)
+    expect(macroRatesSnapshotPublicPolicy.series).toMatchObject({
+      us1m: 'DGS1MO', us1y: 'DGS1', us20y: 'DGS20', real5y: 'DFII5', real30y: 'DFII30',
+      breakeven5y: 'T5YIE', forward5y5y: 'T5YIFR'
+    })
+    expect(macroRatesSnapshotPublicPolicy.maximumReadings).toBe(19)
     expect(macroRatesSnapshotPublicPolicy.maximumSpreads).toBe(2)
     expect(macroRatesSnapshotPublicPolicy.windowPoints).toBeGreaterThan(200)
     expect(macroRatesSnapshotPublicPolicy.caveatIds).toEqual(['official-daily-close'])
@@ -110,7 +113,7 @@ describe('macro rates snapshot contract', () => {
     ['an unknown caveat', available({ caveats: ['planned-source-unavailable'] })],
     ['an extra field', available({ extension: true })],
     ['a non-canonical asOf', available({ asOf: '2026-10-14' })],
-    ['too many readings', available({ readings: Array.from({ length: 8 }, () => ({ ...us10y })) })],
+    ['too many readings', available({ readings: Array.from({ length: macroRatesSnapshotPublicPolicy.maximumReadings + 1 }, () => ({ ...us10y })) })],
     ['a prototype that is not Object.prototype', Object.assign(Object.create(null), available())]
   ])('fails closed for %s', (_name, input) => {
     expect(parseMacroRatesSnapshot(input)).toBeUndefined()

@@ -80,9 +80,9 @@ function macroRatesSnapshot(): MacroRatesSnapshot {
     state: 'available', asOf: AS_OF, caveats: ['official-daily-close'], spreads: [],
     readings: [
       { seriesId: SERIES_RATES.us10y, metricKey: 'US_10Y_YIELD', actual: 4.15, previous: 4.13, period: '2026-09-24', window: [{ period: '2026-09-24', value: 4.15 }] },
-      { seriesId: SERIES_RATES.realRate, metricKey: 'US_REAL_YIELD_10Y', actual: 1.85, previous: 1.82, period: '2026-09-24', window: [{ period: '2026-09-24', value: 1.85 }] },
+      { seriesId: SERIES_RATES.real10y, metricKey: 'US_REAL_YIELD_10Y', actual: 1.85, previous: 1.82, period: '2026-09-24', window: [{ period: '2026-09-24', value: 1.85 }] },
       { seriesId: SERIES_RATES.us2y, metricKey: 'US_2Y_YIELD', actual: 4.0, period: '2026-09-24', window: [{ period: '2026-09-24', value: 4.0 }] },
-      { seriesId: SERIES_RATES.breakevenInflation, metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.3, period: '2026-09-24', window: [{ period: '2026-09-24', value: 2.3 }] }
+      { seriesId: SERIES_RATES.breakeven10y, metricKey: 'US_10Y_BREAKEVEN_INFLATION', actual: 2.3, period: '2026-09-24', window: [{ period: '2026-09-24', value: 2.3 }] }
     ]
   }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroMarketRatesSeries, macroMarketRatesSeriesIds, macroRateSeriesRegistry } from './macroMarketSeries'
 
 /**
@@ -53,4 +54,14 @@ describe('macro rate series registry', () => {
     expect(withGap[0]?.gap).toContain('1986-12-31→1993-10-01')
   })
 
+
+  it('agrees with the public reading contract on which series exist and what they are called', () => {
+    expect([...macroRatesSnapshotPublicPolicy.seriesIds]).toEqual(macroRateSeriesRegistry.map((entry) => entry.providerSeriesId))
+    const contractMetricKeys = macroRatesSnapshotPublicPolicy.metricKeys as Record<string, string>
+    for (const entry of macroRateSeriesRegistry) expect(contractMetricKeys[entry.providerSeriesId], entry.providerSeriesId).toBe(entry.metricKey)
+    // 契约里的键名（us10y / real10y …）指的就是登记表里的供应商序列，一条不少。
+    for (const [key, seriesId] of Object.entries(macroRatesSnapshotPublicPolicy.series)) {
+      expect(macroRateSeriesRegistry.some((entry) => entry.providerSeriesId === seriesId), key).toBe(true)
+    }
+  })
 })

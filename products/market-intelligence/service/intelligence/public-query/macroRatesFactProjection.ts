@@ -96,9 +96,9 @@ export function projectMacroRates(
   // "complete the list" here without that decision.
   for (const [seriesId, metric, unit, suffix] of [
     [macroRatesSnapshotPublicPolicy.series.us10y, MACRO_RATES_FACT_METRICS.us10y, 'percent', 'level'],
-    [macroRatesSnapshotPublicPolicy.series.realRate, MACRO_RATES_FACT_METRICS.realRate, 'percent', 'level'],
+    [macroRatesSnapshotPublicPolicy.series.real10y, MACRO_RATES_FACT_METRICS.realRate, 'percent', 'level'],
     [macroRatesSnapshotPublicPolicy.series.us2y, MACRO_RATES_FACT_METRICS.us2y, 'percent', 'level'],
-    [macroRatesSnapshotPublicPolicy.series.breakevenInflation, MACRO_RATES_FACT_METRICS.breakevenInflation, 'percent', 'level']
+    [macroRatesSnapshotPublicPolicy.series.breakeven10y, MACRO_RATES_FACT_METRICS.breakevenInflation, 'percent', 'level']
   ] as const) {
     const reading = bySeries.get(seriesId)
     if (reading) add(metric, reading.actual, unit, reading, suffix)

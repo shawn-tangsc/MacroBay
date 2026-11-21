@@ -37,7 +37,7 @@ export function crossAssetRatesDailyExtras(input: Readonly<{
   const twoYear = rates.get(macroRatesSnapshotPublicPolicy.series.us2y)
   const spreadIsAboutOneDay = id === 'us10y' && twoYear !== undefined
   const mixedObservationDates = spreadIsAboutOneDay && twoYear.period !== reading.period
-  const breakeven = rates.get(macroRatesSnapshotPublicPolicy.series.breakevenInflation)
+  const breakeven = rates.get(macroRatesSnapshotPublicPolicy.series.breakeven10y)
   return Object.freeze({
     ...(spreadIsAboutOneDay && !mixedObservationDates ? { termSpreadDelta: reading.actual - twoYear.actual } : {}),
     ...(breakeven ? { breakeven: Object.freeze({ value: breakeven.actual, date: breakeven.period }) } : {}),

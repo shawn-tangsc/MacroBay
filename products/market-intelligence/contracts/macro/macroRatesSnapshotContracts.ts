@@ -14,25 +14,58 @@
 //   on a day both legs actually have a close for; a missing leg is `absent`, not a difference against
 //   nothing. They are prepared here so the panel can draw them; whether and where it does is the
 //   prototype's decision.
+//
+// The whole curve travels, not a few rows: a curve is a slice of one window across tenors, so every
+// series carries the same trading-day window and the reader can slice any day in it. Each series'
+// own history start differs (1M begins 2001, the TIPS series 2003, 30Y real 2010, and 20Y has a
+// 1987–1993 hole) — a slice of an early date simply has fewer tenors there, and that is the market's
+// history rather than a missing value.
 const macroRatesSeries = Object.freeze({
+  // 名义曲线，按期限升序（3M 起步，1M 在登记表里也有，但键名按曲线排）。
+  us1m: 'DGS1MO',
   us3m: 'DGS3MO',
+  us6m: 'DGS6MO',
+  us1y: 'DGS1',
   us2y: 'DGS2',
+  us3y: 'DGS3',
   us5y: 'DGS5',
+  us7y: 'DGS7',
   us10y: 'DGS10',
+  us20y: 'DGS20',
   us30y: 'DGS30',
-  realRate: 'DFII10',
-  breakevenInflation: 'T10YIE'
+  // 实际利率（TIPS）：5/7/10/20/30。
+  real5y: 'DFII5',
+  real7y: 'DFII7',
+  real10y: 'DFII10',
+  real20y: 'DFII20',
+  real30y: 'DFII30',
+  // 通胀预期：5 年、10 年盈亏平衡，加 5 年 5 年远期（FRED 用 TIPS 曲线算出来的）。
+  breakeven5y: 'T5YIE',
+  breakeven10y: 'T10YIE',
+  forward5y5y: 'T5YIFR'
 } as const)
 
 /** The metric keys the collector writes for those series; the pairing is enforced, not assumed. */
 const macroRatesMetricKeys = Object.freeze({
+  DGS1MO: 'US_1M_YIELD',
   DGS3MO: 'US_3M_YIELD',
+  DGS6MO: 'US_6M_YIELD',
+  DGS1: 'US_1Y_YIELD',
   DGS2: 'US_2Y_YIELD',
+  DGS3: 'US_3Y_YIELD',
   DGS5: 'US_5Y_YIELD',
+  DGS7: 'US_7Y_YIELD',
   DGS10: 'US_10Y_YIELD',
+  DGS20: 'US_20Y_YIELD',
   DGS30: 'US_30Y_YIELD',
+  DFII5: 'US_5Y_REAL_YIELD',
+  DFII7: 'US_7Y_REAL_YIELD',
   DFII10: 'US_REAL_YIELD_10Y',
-  T10YIE: 'US_10Y_BREAKEVEN_INFLATION'
+  DFII20: 'US_20Y_REAL_YIELD',
+  DFII30: 'US_30Y_REAL_YIELD',
+  T5YIE: 'US_5Y_BREAKEVEN_INFLATION',
+  T10YIE: 'US_10Y_BREAKEVEN_INFLATION',
+  T5YIFR: 'US_5Y5Y_FORWARD_INFLATION'
 } as const)
 
 /** The admitted differences, named once so the parser can reject anything else by construction. */
@@ -48,8 +81,8 @@ export const macroRatesSnapshotPublicPolicy = Object.freeze({
   sourceId: 'fred-rates-liquidity',
   series: macroRatesSeries,
   /**
-   * The admitted series, in the order the block reads them: the curve first (3M → 30Y), then the two
-   * series that are not tenors — the 10-year real yield and the 10-year breakeven.
+   * The admitted series, in the order the block reads them: the nominal curve (3M → 30Y), then the
+   * real-yield curve (5Y → 30Y), then the three inflation-expectation series.
    */
   seriesIds: Object.freeze(Object.values(macroRatesSeries)) as readonly string[],
   metricKeys: macroRatesMetricKeys,
@@ -65,8 +98,8 @@ export const macroRatesSnapshotPublicPolicy = Object.freeze({
   /** FRED's own date shape: a trading day, never an instant. */
   observationDatePattern: /^\d{4}-\d{2}-\d{2}$/,
   canonicalUtcPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
-  /** 五个期限 + 实际利率 + 盈亏平衡。 */
-  maximumReadings: 7,
+  /** 整条曲线：11 档名义 + 5 档实际 + 3 条通胀预期。 */
+  maximumReadings: 19,
   maximumSpreads: 2,
   /**
    * 每行带多少交易日：一年（约 252 个交易日）留出余量。面板要更长的窗口时只改这一处，
