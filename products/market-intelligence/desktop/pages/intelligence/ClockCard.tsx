@@ -219,7 +219,8 @@ export function ClockCard({ model, text, actionLabelKey, onOpenDetail, onOpenCal
           （规范：行容器不是按钮）；悬停恢复 100% 的视觉保留。
           牌上三样：名字、值（有才显示）、**距离**（用户 2026-11：「距离时间呢？」）。
           距离并进值那一行，牌高仍在 37–44px，不为它改时钟几何。
-          合并牌（相邻两天放不下）：两行「MM-DD 名字」+ 较近那个的天数，没有值。 */}
+          合并牌（相邻两天放不下）：两行「MM-DD 名字」+ 较近那个的天数，没有值。
+          合并牌不可点是刻意的，理由见 clockPlaqueLayout.ts 里 `merged` 那条注。 */}
       {model.plaques.map((plaque: ClockPlaque) => {
         const distance = plaqueDistance(plaque, text)
         return <div
