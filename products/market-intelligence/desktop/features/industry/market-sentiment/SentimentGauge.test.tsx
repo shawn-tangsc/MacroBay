@@ -105,7 +105,7 @@ describe('the gauge column', () => {
   it('is the card’s first column: no width of its own, rows come from the shared template', () => {
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
     // 列宽由卡的三列网格给（一个变量），这一列不自己定宽；行模板三列共用。
-    expect(styles).toContain('.mi-defensive-premium__col { display: grid; grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height)')
+    expect(styles).toContain('grid-template-rows: 17px 24px calc(var(--mi-defensive-premium-chart-height) + 10px)')
     expect(styles).toContain('--mi-defensive-premium-gauge-width: 184px')
   })
 })

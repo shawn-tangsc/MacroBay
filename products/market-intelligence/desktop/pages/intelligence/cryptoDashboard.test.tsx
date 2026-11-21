@@ -341,8 +341,12 @@ describe('crypto intelligence dashboard', () => {
     expect(cardRule).toContain('--mi-defensive-premium-gauge-width: 184px')
     expect(cardRule).toContain('--mi-defensive-premium-column-gap: 12px')
     expect(cardRule).toContain('grid-template-columns: var(--mi-defensive-premium-gauge-width) minmax(0, 1fr) minmax(0, 1fr)')
-    // 三列共用同一套行：标题 17 / 读数 18 / 图（同一个高度变量）。
-    expect(cssBlock(styles, '.mi-defensive-premium__col {')).toContain('grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height)')
+    // 三列共用同一套行，**间距算在行高里**：标题 17 / 读数 24（6+18）/ 图 142（10+132）。
+    // 把间距写成子元素的外边距时，它会溢出固定行、从行间隙里偷走 12——实测图底到分隔线只剩 2px。
+    expect(cssBlock(styles, '.mi-defensive-premium__col {'))
+      .toContain('grid-template-rows: 17px 24px calc(var(--mi-defensive-premium-chart-height) + 10px)')
+    expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('align-self: end')
+    expect(cssBlock(styles, '.mi-defensive-premium__chart {')).toContain('margin: 0')
   })
 
   it('fails closed instead of crashing when a legacy funding client has no history query', async () => {
@@ -1518,9 +1522,10 @@ describe('the defensive premium band', () => {
     const verdict = card.querySelector('[data-verdict]')!
     expect(skew.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(cssBlock(styles, '.mi-defensive-premium > .mi-defensive-premium__header,')).toContain('grid-column: 1 / -1')
-    // 曲线高度是一个变量（`--mi-defensive-premium-chart-height`），三列共用，不再按比例算。
+    // 曲线高度是一个变量（`--mi-defensive-premium-chart-height`），三列共用，不再按比例算；
+    // 间距（6 与 10）算在行高里，不让外边距溢出到行外。
     expect(cssBlock(styles, '.mi-defensive-premium__col {'))
-      .toContain('grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height)')
+      .toContain('grid-template-rows: 17px 24px calc(var(--mi-defensive-premium-chart-height) + 10px)')
   })
 
   function fearGreedSection(count = 30) {

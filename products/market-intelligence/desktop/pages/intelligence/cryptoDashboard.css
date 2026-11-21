@@ -165,8 +165,14 @@
 .mi-defensive-premium__header h2 { margin: 0; color: var(--mi-dashboard-text); font-size: var(--font-card-title); line-height: var(--line-card-title); font-weight: 650; }
 .mi-defensive-premium__refresh { margin-left: auto; }
 .mi-defensive-premium__window { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
-/* 一列 = 同一套三行：标题 17、读数 18（上距 6）、图 132（上距 10）。 */
-.mi-defensive-premium__col { display: grid; grid-template-rows: 17px 18px var(--mi-defensive-premium-chart-height); align-content: start; min-width: 0; }
+/* 一列 = 同一套三行，**间距算在行高里**：标题 17 / 读数 24（6 间距 + 18）/ 图 142（10 间距 + 132）。
+   写成「行高只放内容、子元素再带 margin」时，外边距会溢出到行外——实测把图底到结论的 12 压成了 2。 */
+.mi-defensive-premium__col {
+  display: grid;
+  grid-template-rows: 17px 24px calc(var(--mi-defensive-premium-chart-height) + 10px);
+  align-content: start;
+  min-width: 0;
+}
 .mi-defensive-premium__col .mi-defensive-premium__cell-head,
 .mi-defensive-premium__col > .mi-defensive-premium__chart,
 .mi-defensive-premium__col > .mi-defensive-premium__state,
@@ -175,7 +181,7 @@
 .mi-defensive-premium__cell-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* 读数行：分数 12/650 tabular，方向词与「截至」11/400 muted。 */
 .mi-defensive-premium__reading,
-.mi-defensive-premium__state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); min-height: 18px; }
+.mi-defensive-premium__state { display: flex; flex-wrap: wrap; align-items: start; gap: 6px; margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); min-height: 18px; }
 .mi-defensive-premium__reading strong { color: var(--mi-dashboard-text); font-size: var(--font-body); font-variant-numeric: tabular-nums; font-weight: 650; line-height: var(--line-body); }
 .mi-defensive-premium__reading .mi-crypto-dashboard__sentiment-state-row,
 .mi-defensive-premium__reading .mi-source-state { display: inline-flex; align-items: center; gap: 6px; }
@@ -193,7 +199,7 @@
 .mi-defensive-premium__direction--unknown { color: var(--mi-dashboard-caution); }
 .mi-defensive-premium__history { margin: 0; color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 图：ECharts 画在 canvas 容器里，外层 figure 定高定宽；读数行与图之间的 10 是列的第三行上距。 */
-.mi-defensive-premium__chart { position: relative; display: block; min-width: 0; margin: 10px 0 0; height: var(--mi-defensive-premium-chart-height); }
+.mi-defensive-premium__chart { position: relative; display: block; align-self: end; min-width: 0; margin: 0; height: var(--mi-defensive-premium-chart-height); }
 .mi-defensive-premium__chart-canvas { width: 100%; height: 100%; }
 .mi-defensive-premium__chart--placeholder { position: relative; display: grid; align-content: start; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 70%, transparent); border-radius: 6px; }
 /* 转圈叠在空图框里、不占行：图框高度由同一个变量给，换态不塌。 */
@@ -201,9 +207,18 @@
 .mi-defensive-premium__chart-wait .loading-state { min-height: 0; padding: 0; }
 .mi-defensive-premium__chart-axis { color: var(--mi-dashboard-muted); font-size: var(--font-meta); line-height: var(--line-meta); }
 /* 仪表那一列的图框：转圈叠在图上，不占行。 */
-.mi-defensive-premium__chart-slot { position: relative; margin-top: 10px; height: var(--mi-defensive-premium-chart-height); }
+.mi-defensive-premium__chart-slot { position: relative; align-self: end; margin: 0; height: var(--mi-defensive-premium-chart-height); }
 .mi-defensive-premium__chart-slot > .mi-defensive-premium__chart { margin-top: 0; }
 .mi-defensive-premium__col-wait { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+/* 这一格没有数要画时：句子落在图位上，占住与曲线同高的一行，那一列才不会塌成一行字。 */
+.mi-defensive-premium__state-box {
+  display: flex; align-items: center; gap: 6px; align-self: end; height: var(--mi-defensive-premium-chart-height);
+  margin: 0; padding: 0 12px;
+  border: 1px dashed color-mix(in srgb, var(--mi-dashboard-line) 90%, transparent); border-radius: 6px;
+  color: var(--mi-dashboard-text); font-size: var(--font-meta); line-height: var(--line-meta);
+}
+.mi-defensive-premium__state-box[data-state='unreadable'] .lucide-triangle-alert { color: var(--mi-dashboard-negative); }
+.mi-defensive-premium__state-box[data-state='disabled'] .lucide-circle-slash { color: var(--mi-dashboard-muted); }
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0 8px; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
