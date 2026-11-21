@@ -530,6 +530,20 @@ describe('intelligencePipeline', () => {
     expect(failed.queuedJobs).toEqual([])
   })
 
+  it('counts fetched bytes as UTF-8 bytes, not string length', async () => {
+    // 2026-11-21 排查被带偏两轮：日志写 `30562 byte(s)`，实际数的是 `body.length`（字符）。
+    // 同一条正文里有多字节字符时，字节数必须大于字符数。
+    const xml = '<?xml version="1.0"?><rss><channel><item><guid>g-utf8</guid><link>https://example.test/a</link>'
+      + '<title>中文标题</title><pubDate>Sat, 21 Nov 2026 06:16:42 +0000</pubDate></item></channel></rss>'
+    const profileStore = createSourceProfileStore(createInMemoryProfileStorage())
+    const pipeline = createIntelligencePipeline({ profileStore, fetchText: async () => xml })
+
+    const result = await pipeline.collectSource({ sourceId: 'coindesk-rss', runId: 'run-bytes' })
+
+    expect(result.counts.fetchedBytes).toBe(Buffer.byteLength(xml, 'utf8'))
+    expect(result.counts.fetchedBytes).toBeGreaterThan(xml.length)
+  })
+
   it('creates clusters and revisions while queueing downstream work', async () => {
     const pipeline = createPipeline()
     const fixture = loadFixture('rss-sample.xml')

@@ -111,7 +111,8 @@ export async function collectSourceOnce(
             }
             const body = await deps.fetchText(url, sourceId)
             httpCalls += 1
-            fetchedBytes += body.length
+            // 真字节：这里以前数 `body.length`（字符数），日志却写 byte(s)，排障时把 30562 当成了字节。
+            fetchedBytes += Buffer.byteLength(body, 'utf8')
             return body
           },
           fetchMetricTarget: deps.fetchMetricTarget
