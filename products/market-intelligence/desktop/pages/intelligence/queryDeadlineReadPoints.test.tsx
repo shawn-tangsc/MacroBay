@@ -11,7 +11,7 @@ import { useMacroRatesSnapshot } from '../../features/industry/cross-asset/useMa
 import { queryReadDeadlineMs } from '../../shared/ipc/queryDeadline'
 import { useDashboardDivergence } from './useDashboardDivergence'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
-import { useDashboardFearGreed } from './useDashboardFearGreed'
+import { useDashboardSentimentOptionsCard } from './useDashboardSentimentOptionsCard'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
 import { useDashboardOpenInterest } from './useDashboardOpenInterest'
 import { useCalendarCardData } from './useCalendarCardData'
@@ -50,7 +50,7 @@ async function passDeadline(multiplier = 4): Promise<void> {
 describe('every read point gives up when its read never settles', () => {
   it('fear and greed', async () => {
     let state: { state: string } | undefined
-    function Probe(): null { state = useDashboardFearGreed({ client: { querySnapshot: hang }, now: () => new Date(asOf) }).state; return null }
+    function Probe(): null { state = useDashboardSentimentOptionsCard({ client: { query: hang }, now: () => new Date(asOf), timeZone: 'UTC' }).state; return null }
     vi.useFakeTimers()
     mount(() => root!.render(createElement(Probe)))
     await passDeadline()

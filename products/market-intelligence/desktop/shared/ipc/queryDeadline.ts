@@ -49,7 +49,7 @@ export function withQueryDeadline<T>(read: Promise<T>, deadlineMs: number = quer
  * 1. 资金面 `useCapitalConditions` → `querySnapshot`
  * 2. `useDashboardOpenInterest`（`client.query`；信号腿失败本就可容忍，不另加）
  * 3. `useDashboardFundingRateHistory`（`client.query`）
- * 4. `useDashboardFearGreed`（`client.querySnapshot`）
+ * 4. 恐惧与防跌溢价卡 `useDashboardSentimentOptionsCard`（`client.query`，一次读两半）
  * 5. `useDashboardDivergence`（`client.query`）
  * 6. `useDashboardEconomicCalendar`（`client.queryMonth`）
  * 7. `useCalendarCardData`（两条日历读）
