@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { createMacroMarketStore, type MacroMarketStore } from './macroMarketStore'
 import { barRetentionCutoffs } from '../retention/barRetention'
+import { macroMarketRatesSeriesIds } from './macroMarketSeries'
 
 const directories: string[] = []
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
@@ -63,6 +64,23 @@ describe('macro-market bar retention', () => {
     expect(result).toEqual({ thinned: 0, deleted: 1, oldestKeptAtMs: twoYearsAgo })
     expect(store.count('ust-2y')).toBe(2)
     expect(store.count('dxy-real')).toBe(0)
+    store.close()
+  })
+
+  /**
+   * 新建一条日频序列时最容易漏的一步：保留期只认 bar 白名单，所以「不剪」是默认而不是逐条登记。
+   * 这条用例按登记表逐条钉，加一条档位忘了想保留期也会当场对上——而不是等写进库的第二天被剪掉。
+   */
+  it('never trims any registered daily rate series', () => {
+    const store = openStore()
+    const longAgo = nowMs - 900 * 24 * hour
+    expect(macroMarketRatesSeriesIds.length).toBe(7)
+    store.append(macroMarketRatesSeriesIds.map((series, index) => ({
+      series, atMs: longAgo + index * 24 * hour, value: 4, observedAtMs: nowMs
+    })))
+
+    expect(store.retention(barRetentionCutoffs(nowMs))).toEqual({ thinned: 0, deleted: 0, oldestKeptAtMs: longAgo })
+    for (const series of macroMarketRatesSeriesIds) expect(store.count(series)).toBe(1)
     store.close()
   })
 

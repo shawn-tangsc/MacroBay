@@ -157,6 +157,17 @@ export const BEA_MACRO_SERIES: MacroSeriesDefinition[] = [
  */
 export const FRED_MACRO_SERIES: MacroSeriesDefinition[] = [
   {
+    // The short end of the curve: the anchor of the 10Y−3M spread, and the tenor the policy rate
+    // moves first.
+    key: 'US_3M_YIELD',
+    providerSeriesId: 'DGS3MO',
+    metricName: 'US 3M Treasury Yield',
+    metricKind: 'treasury-yield',
+    comparisonBasis: 'period-change',
+    frequency: 'daily',
+    unit: 'percent'
+  },
+  {
     key: 'US_2Y_YIELD',
     providerSeriesId: 'DGS2',
     metricName: 'US 2Y Treasury Yield',
@@ -166,9 +177,29 @@ export const FRED_MACRO_SERIES: MacroSeriesDefinition[] = [
     unit: 'percent'
   },
   {
+    key: 'US_5Y_YIELD',
+    providerSeriesId: 'DGS5',
+    metricName: 'US 5Y Treasury Yield',
+    metricKind: 'treasury-yield',
+    comparisonBasis: 'period-change',
+    frequency: 'daily',
+    unit: 'percent'
+  },
+  {
     key: 'US_10Y_YIELD',
     providerSeriesId: 'DGS10',
     metricName: 'US 10Y Treasury Yield',
+    metricKind: 'treasury-yield',
+    comparisonBasis: 'period-change',
+    frequency: 'daily',
+    unit: 'percent'
+  },
+  {
+    // The long end. It starts in 1977, decades after the short tenors — a long window therefore has
+    // gaps at this tenor while 3M/2Y are continuous. That is the series' own history, not missing data.
+    key: 'US_30Y_YIELD',
+    providerSeriesId: 'DGS30',
+    metricName: 'US 30Y Treasury Yield',
     metricKind: 'treasury-yield',
     comparisonBasis: 'period-change',
     frequency: 'daily',

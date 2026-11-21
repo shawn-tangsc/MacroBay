@@ -109,7 +109,7 @@ describe('probeIntelligenceSourceConnection', () => {
     await probeIntelligenceSourceConnection(macroConfig('fred-rates-liquidity'))
 
     const request = mockedHttpRequest.mock.calls[0]?.[0]
-    expect(request?.url).toContain('series_id=DGS2')
+    expect(request?.url).toContain('series_id=DGS3MO')
     expect(request?.url).toContain('file_type=json')
   })
 

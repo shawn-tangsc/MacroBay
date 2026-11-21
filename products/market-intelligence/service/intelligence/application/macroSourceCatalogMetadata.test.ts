@@ -29,7 +29,15 @@ describe('macroSourceCatalogMetadata', () => {
 
   it('locks FRED series ids for rates and liquidity', () => {
     const ids = FRED_MACRO_SERIES.map((row) => row.providerSeriesId)
-    expect(ids).toEqual(['DGS2', 'DGS10', 'DFII10', 'T10YIE', 'DTWEXBGS', 'WALCL', 'DFEDTARU', 'DFEDTARL', 'EFFR'])
+    expect(ids).toEqual([
+      'DGS3MO', 'DGS2', 'DGS5', 'DGS10', 'DGS30', 'DFII10', 'T10YIE', 'DTWEXBGS', 'WALCL', 'DFEDTARU', 'DFEDTARL', 'EFFR'
+    ])
+    // 曲线是期限结构，不是两档：五个期限各自一个指标键，供应商代码与内部键一一对上。
+    const tenors = FRED_MACRO_SERIES.filter((row) => row.metricKind === 'treasury-yield')
+    expect(tenors.map((row) => [row.providerSeriesId, row.key])).toEqual([
+      ['DGS3MO', 'US_3M_YIELD'], ['DGS2', 'US_2Y_YIELD'], ['DGS5', 'US_5Y_YIELD'],
+      ['DGS10', 'US_10Y_YIELD'], ['DGS30', 'US_30Y_YIELD']
+    ])
     expect(FRED_MACRO_SERIES.find((row) => row.key === 'DXY_PROXY')?.providerSeriesId).toBe('DTWEXBGS')
   })
 

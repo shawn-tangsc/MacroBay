@@ -66,11 +66,16 @@ describe('fredRatesHistoryPoints', () => {
     expect(points.map(point => point.value)).toEqual([4.5, 4.73])
   })
 
-  it('maps the four admitted series to instrument names, not to the provider', () => {
+  it('maps the admitted series to instrument names, not to the provider', () => {
+    expect(Object.keys(macroMarketRatesSeries)).toHaveLength(7)
     expect(macroMarketRatesSeries).toEqual({
-      DGS2: 'ust-2y', DGS10: 'ust-10y', DFII10: 'ust-10y-real', T10YIE: 'ust-10y-breakeven'
+      DGS3MO: 'ust-3m', DGS2: 'ust-2y', DGS5: 'ust-5y', DGS10: 'ust-10y', DGS30: 'ust-30y',
+      DFII10: 'ust-10y-real', T10YIE: 'ust-10y-breakeven'
     })
-    expect(macroMarketRatesSeriesIds).toEqual(['ust-2y', 'ust-10y', 'ust-10y-real', 'ust-10y-breakeven'])
+    expect(macroMarketRatesSeriesIds).toHaveLength(7)
+    expect(macroMarketRatesSeriesIds).toEqual([
+      'ust-3m', 'ust-2y', 'ust-5y', 'ust-10y', 'ust-30y', 'ust-10y-real', 'ust-10y-breakeven'
+    ])
     const series = Object.keys(macroMarketRatesSeries).map(providerSeriesId =>
       fredRatesHistoryPoints({
         payload: fredPayload([{ date: '2026-11-10', value: '1.25' }]), providerSeriesId, observedAtMs: nowMs
@@ -111,7 +116,7 @@ describe('createFredRatesHistorySink', () => {
     store.close()
   })
 
-  it('writes the four series side by side in one store, each under its own instrument name', () => {
+  it('writes every admitted series side by side in one store, each under its own instrument name', () => {
     const store = openStore()
     const sink = createFredRatesHistorySink({ store, now: () => nowMs })
     for (const [providerSeriesId, series] of Object.entries(macroMarketRatesSeries)) {
@@ -122,7 +127,7 @@ describe('createFredRatesHistorySink', () => {
       })
       expect(store.count(series)).toBe(1)
     }
-    expect(store.count()).toBe(4)
+    expect(store.count()).toBe(macroMarketRatesSeriesIds.length)
     store.close()
   })
 
