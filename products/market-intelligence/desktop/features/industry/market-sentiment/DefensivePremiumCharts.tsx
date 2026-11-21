@@ -36,11 +36,11 @@ export function FearGreedChart({ points, ariaLabel, axisLabel }: Readonly<{
   </ChartFigure>
 }
 
-export function SkewChart({ points, ariaLabel, axisLabel, unit }: Readonly<{
+export function SkewChart({ points, ariaLabel, axis }: Readonly<{
   points: readonly OptionSkewSeriesPoint[]
   ariaLabel: string
-  axisLabel: string
-  unit: string
+  /** 整句轴说明（名字 + 带括号的单位）：括号是文案的一部分，组件里不拼。 */
+  axis: string
 }>): React.ReactElement | null {
   const newest = points[0]
   if (!newest) return null
@@ -55,7 +55,7 @@ export function SkewChart({ points, ariaLabel, axisLabel, unit }: Readonly<{
     .map(point => ({ day: point.day, value: point.riskReversal, x: xOf(point.day, newest.day), y: yOf(point.riskReversal, min, max) }))
     .reverse()
 
-  return <ChartFigure ariaLabel={ariaLabel} axisLabel={`${axisLabel}（${unit}）`} ticks={[min, max]} formatTick={value => value.toFixed(1)}>
+  return <ChartFigure ariaLabel={ariaLabel} axisLabel={axis} ticks={[min, max]} formatTick={value => value.toFixed(1)}>
     <Series plotted={plotted} seriesKey="skew" />
     <XAxisLabels first={oldestLabel(plotted)} last={newest.day} />
   </ChartFigure>

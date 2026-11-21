@@ -39,10 +39,9 @@ type Text = {
   }
 }
 
-export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTitle, titleId, observedDay }: Readonly<{
+export function SentimentPanel({ fearGreedState, text, cellOff, showTitle, titleId, observedDay }: Readonly<{
   fearGreedState: DashboardFearGreedState
   text: Text
-  onRetry: () => void
   /**
    * 这一格被读者关掉了：宿主给（来源配置属于宿主，卡片不自己推断）。给了就盖遮罩、**不再看读数**——
    * 关掉一格时这一次根本不会去读，状态会停在等待态，按读数画就会画成一个转圈。
@@ -62,18 +61,16 @@ export function SentimentPanel({ fearGreedState, text, onRetry, cellOff, showTit
     ? {
         tone: 'disabled' as const,
         icon: CircleSlash,
-        sentence: `${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）`,
-        action: { label: dataText('pages.intelligence.portal.data.enableSources'), run: cellOff.onOpenSources }
+        sentence: `${dataText('pages.intelligence.portal.data.sourcesNotEnabled')}（${cellOff.sourceLabel}）`
       }
     : fearGreedState.state === 'unavailable'
       ? {
           tone: 'unreadable' as const,
           icon: TriangleAlert,
-          sentence: dataText('pages.intelligence.portal.data.temporarilyUnavailable'),
-          action: { label: dataText('pages.intelligence.portal.data.retry'), run: onRetry }
+          sentence: dataText('pages.intelligence.portal.data.temporarilyUnavailable')
         }
       : fearGreedState.state === 'empty'
-        ? { tone: 'empty' as const, icon: undefined, sentence: text.fearGreed.empty, action: undefined }
+        ? { tone: 'empty' as const, icon: undefined, sentence: text.fearGreed.empty }
         : undefined
   // 只有真有读数的两种才画指针与圆盘；等待态仍是加载，不许画成「没有」。
   const reading = row === undefined && (fearGreedState.state === 'available' || fearGreedState.state === 'stale')

@@ -44,15 +44,13 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
   const wholeCardState: 'error' | 'empty' | undefined = state.state === 'unavailable' || bothUnavailable
     ? 'error'
     : bothEmpty ? 'empty' : undefined
-  // 未接入时那颗卡级动作是「查看来源」；但如果恐惧贪婪那半读失败了，重试仍要留在标题行——
-  // 否则一条链路失败、另一条还没接入时，读者没有重试入口（AC-31）。
-  // 一颗动作，按定稿 §4.3⑤ 的优先级：未接入 > 被关掉 > 刷新。只有一种情况例外——恐惧贪婪那半
-  // 读失败而偏斜还没接入时，刷新要留着，否则读者没有重试入口（AC-31）。
+  // 标题行只出一颗动作，按定稿 §4.3⑤ 的优先级：未接入 > 被关掉 > 刷新。
+  // 唯一例外是「偏斜未接入、恐惧贪婪读失败」——那一半正在失败，重试才是唯一有用的动作，
+  // 「未接入」右半行内已经写了，所以这里拿刷新**换掉**「查看来源」，不是再加上一颗（AC-31）。
   const notConnected = skew?.state === 'not-connected'
   const fearGreedFailed = fearGreed?.state === 'unavailable'
-  const showViewSource = wholeCardState === undefined && notConnected
+  const showViewSource = wholeCardState === undefined && notConnected && !fearGreedFailed
   const showEnable = wholeCardState === undefined && !notConnected && cellOff !== undefined
-  // 未接入时那颗是「查看来源」；但若恐惧贪婪这半同时读失败，重试必须留一颗，否则读者没有入口。
   const showRefresh = wholeCardState === undefined && (notConnected ? fearGreedFailed : !showEnable)
   const verdictKey = result && wholeCardState === undefined ? verdictPath(result) : undefined
   const percentile = fearGreed?.state === 'available' ? fearGreed.percentile : undefined
@@ -103,7 +101,6 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
             sentiment: { title: text.fearGreed.name, gaugeMarkers: text.gaugeMarkers },
             fearGreed: { loading: text.loading, empty: text.empty, observedAt: text.fearGreed.asOf, buckets: text.fearGreed.buckets }
           }}
-          onRetry={onRefresh}
           {...(cellOff === undefined ? {} : { cellOff })}
           {...(fearGreed?.state === 'available' ? { observedDay: fearGreed.latestDay } : {})} />
         {fearGreed?.state === 'available' && fearGreed.stale
@@ -141,7 +138,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               转圈叠在图框里，不另占一行——多一行加载态就比正常态高。 */}
           <p className="mi-defensive-premium__score" aria-hidden="true"><strong>&nbsp;</strong> <span>&nbsp;</span></p>
           <p className="mi-defensive-premium__asof" aria-hidden="true">&nbsp;</p>
-          <ChartPlaceholder axisLabel={`${text.skew.name}（${text.skew.unit}）`} waitingLabel={text.loading} />
+          <ChartPlaceholder axisLabel={text.skew.axis} waitingLabel={text.loading} />
           <p className="mi-defensive-premium__direction" aria-hidden="true">&nbsp;</p>
         </>
           : skew?.state === 'not-connected' ? <p className="mi-defensive-premium__state">{text.skew.notConnected}</p>
@@ -155,7 +152,7 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
               </p>
               : null}
             {skew.points.length > 0
-              ? <SkewChart points={skew.points} axisLabel={text.skew.name} unit={text.skew.unit}
+              ? <SkewChart points={skew.points} axis={text.skew.axis}
                 ariaLabel={chartAria({
                   ariaLabel: text.chart.skewAria, summary: text.chart.skewSummary,
                   days: skew.points.map(point => point.day),
@@ -223,7 +220,7 @@ function SkewDirectionSentence({ direction, latestDay, text }: Readonly<{
     ? text.skew.direction.insufficient
     : direction.reason === 'discontinuous'
       ? text.skew.direction.discontinuous
-      : text.skew.direction.stale.replace('{time}', latestDay)
+      : fillLabelParams(text.skew.direction.stale, { time: latestDay })
   return <p className="mi-defensive-premium__direction mi-defensive-premium__direction--unknown" data-skew-direction={direction.reason}>{sentence}</p>
 }
 
@@ -246,7 +243,9 @@ export function verdictPath(result: SentimentOptionsCardResult): string | undefi
     ? result.optionSkew.direction.kind
     : undefined
 
-  if (result.fearGreed.state === 'unavailable') {
+  // 恐惧贪婪这一半没有读数——读不到、或者窗口内确实没有——都只说保费方向，并指出缺的是它。
+  // 「为什么缺」由那一半的行内说，结论不重复原因（PRD §5.3）。
+  if (result.fearGreed.state !== 'available') {
     return direction ? `${TEXT_PREFIX}.verdict.fgMissing.${direction}` : `${TEXT_PREFIX}.degraded.fearGreed`
   }
   if (result.optionSkew.state === 'unavailable') {

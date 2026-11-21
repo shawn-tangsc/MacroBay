@@ -37,7 +37,7 @@ function markup(state: DashboardFearGreedState, cellOff?: { sourceLabel: string;
     children: createElement(ShellTimeZoneProvider, {
       timeZone: 'Asia/Shanghai',
       children: createElement(SentimentPanel, {
-        fearGreedState: state, text, onRetry: () => undefined,
+        fearGreedState: state, text,
         ...(cellOff ? { cellOff } : {})
       })
     })
@@ -56,7 +56,7 @@ describe('the sentiment panel after the move out of the dashboard page', () => {
       language: 'zh-CN',
       children: createElement(ShellTimeZoneProvider, {
         timeZone: 'Asia/Shanghai',
-        children: createElement(SentimentPanel, { fearGreedState: state, text, onRetry: () => undefined })
+        children: createElement(SentimentPanel, { fearGreedState: state, text })
       })
     })))
     expect(container.querySelector('.mi-crypto-dashboard__sentiment')?.outerHTML).toBe(BEFORE_THE_MOVE)
@@ -143,9 +143,8 @@ describe('the three non-data states keep the figure and put the sentence under i
     }
   })
 
-  it('does not call the retry/enable handlers on its own', async () => {
+  it('does not call the enable handler on its own', async () => {
     const open = vi.fn()
-    const retry = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -155,19 +154,18 @@ describe('the three non-data states keep the figure and put the sentence under i
         children: createElement(ShellTimeZoneProvider, {
           timeZone: 'Asia/Shanghai',
           children: createElement(SentimentPanel, {
-            fearGreedState: state, text, onRetry: retry,
+            fearGreedState: state, text,
             ...(cellOff ? { cellOff: { ...cellOff, onOpenSources: open } } : {})
           })
         })
       })))
       return container.querySelector<HTMLButtonElement>('[data-sentiment-state] button')
     }
-    // 行内没有按钮可点：渲染本身不该触发任何动作（点的是标题行那颗，归卡面用例管）。
+    // 行内没有按钮可点：渲染本身不该触发任何动作（动作统一在卡标题行，归卡面用例管）。
     const row = await render({ state: 'loading' }, openSources)
     expect(row).toBeNull()
     await render({ state: 'unavailable' })
     expect(open).not.toHaveBeenCalled()
-    expect(retry).not.toHaveBeenCalled()
   })
 })
 

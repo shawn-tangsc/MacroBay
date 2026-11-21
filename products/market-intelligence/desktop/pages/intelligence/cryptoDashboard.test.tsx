@@ -1387,7 +1387,7 @@ describe('the defensive premium band', () => {
     })
   }
 
-  async function renderBand(client: unknown = notConnectedSkew): Promise<HTMLElement> {
+  async function renderBand(client: unknown = notConnectedSkew, cells: Record<string, boolean> = {}): Promise<HTMLElement> {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -1395,6 +1395,7 @@ describe('the defensive premium band', () => {
       client: dashboardClient(), fundingRateClient: fundingRateClient(),
       openInterestClient: openInterestClient(), now: () => new Date(asOf),
       sentimentOptionsClient: client,
+      ...(Object.keys(cells).length === 0 ? {} : { cellEnabledIo: { read: async () => cells } }),
       crossAssetClient: {
         acquire: async () => ({ state: 'active' as const, leaseId: 'lease-1' }),
         renew: async () => ({ state: 'active' as const }),
@@ -1495,6 +1496,55 @@ describe('the defensive premium band', () => {
     }) }
   }
 
+  it('keeps exactly one header action in all five states, the mixed ones included (AC-31)', async () => {
+    const dataCopy = productText['zh-CN'].pages.intelligence.portal.data
+    const headerActions = (container: HTMLElement) => [...container.querySelectorAll('.mi-defensive-premium__header button')]
+      .filter(button => button.getAttribute('aria-label') !== dashboardText.defensivePremium.titleInfoLabel)
+      .map(button => button.getAttribute('aria-label') ?? button.textContent)
+    const refresh = dashboardText.defensivePremium.action.refresh
+    const viewSource = dashboardText.defensivePremium.action.viewSource
+    const readFailed = {
+      query: async (input: { asOf: string; timeZone: string }) => ({
+        asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+        fearGreed: { state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const },
+        optionSkew: { state: 'not-connected' as const }
+      })
+    }
+
+    // 正常（两条链路都可用）→ 刷新。
+    expect(headerActions(await renderBand(skewClient({ kind: 'steeper' })))).toEqual([refresh])
+    // 被关掉（偏斜读得到）→ 去启用。
+    expect(headerActions(await renderBand(skewClient({ kind: 'steeper' }), { 'fear-greed:index': false }))).toEqual([dataCopy.enableSources])
+    // 未接入、恐惧贪婪可读 → 查看来源。
+    expect(headerActions(await renderBand())).toEqual([viewSource])
+    // 未接入且恐惧贪婪读失败 → 只留刷新；「未接入」右半行内已经写着，不再给「查看来源」。
+    const mixed = await renderBand(readFailed)
+    expect(headerActions(mixed)).toEqual([refresh])
+    expect(mixed.querySelector('[data-half="skew"]')?.textContent).toContain(dashboardText.defensivePremium.skew.notConnected)
+    // 被关掉且未接入 → 未接入优先，只有查看来源。
+    expect(headerActions(await renderBand(notConnectedSkew, { 'fear-greed:index': false }))).toEqual([viewSource])
+  })
+
+  it('names the premium direction when the fear-greed half simply has no reading (AC-12)', async () => {
+    const emptyFearGreed = {
+      query: async (input: { asOf: string; timeZone: string }) => ({
+        asOf: input.asOf, windowDays: 30 as const, timeZone: input.timeZone,
+        fearGreed: { state: 'empty' as const },
+        optionSkew: {
+          state: 'available' as const,
+          latest: { riskReversal: 1.8, observedAt: '2026-08-04T00:00:00.000Z', tenorDays: 30 as const, putIv25: 60, callIv25: 58.2, expiries: ['2026-09-04', '2026-10-04'] as const },
+          direction: { kind: 'steeper' as const }, observedAt: '2026-08-04T00:00:00.000Z', latestDay: '2026-08-04', daysAgo: 1,
+          stale: false, seriesStart: '2026-07-06', points: skewPoints(30)
+        }
+      })
+    }
+    const band = (await renderBand(emptyFearGreed)).querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    // 确实没有 ≠ 读不到：这一态不是整卡状态面，结论只说保费方向并指出缺恐惧贪婪，不写为什么缺。
+    expect(band.querySelector('.state-view')).toBeNull()
+    expect(band.querySelector('[data-verdict]')?.textContent).toBe(dashboardText.defensivePremium.verdict.fgMissing.steeper)
+    expect(band.querySelector('[data-half="skew"]')?.textContent).toContain(dashboardText.defensivePremium.skew.direction.steeper)
+  })
+
   it.each([
     ['insufficient', { kind: 'unknown', reason: 'insufficient' }],
     ['stale', { kind: 'unknown', reason: 'stale' }],
@@ -1509,9 +1559,10 @@ describe('the defensive premium band', () => {
     expect(skewAria).toContain(dashboardText.defensivePremium.chart.skewAria)
     expect(skewAria).toContain('2026-08-04')
     expect(skewAria).toContain(skewPoints(30)[0]!.riskReversal.toFixed(1))
-    // 自己那根轴与单位：指数 0–100 与百分点不共用一张图。
+    // 自己那根轴与单位：指数 0–100 与百分点不共用一张图。轴说明是整句文案键（名字 + 带括号的单位），
+    // 组件不自己拼括号——用 name 与 unit 拼出来的串不等于这个键的值。
     expect(skewFigure.querySelector('.mi-defensive-premium__chart-axis')?.textContent)
-      .toContain(dashboardText.defensivePremium.skew.unit)
+      .toBe(dashboardText.defensivePremium.skew.axis)
     expect(band.querySelectorAll('figure')).toHaveLength(2)
 
     const sentence = band.querySelector('[data-skew-direction]')!
@@ -1611,6 +1662,9 @@ describe('the defensive premium band', () => {
       expect(placeholder.querySelector('[data-chart-line]')).toBeNull()
       expect(placeholder.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 520 132')
     }
+    // 两半的空图框也用各自的整句轴说明键，不靠组件拼名字与单位。
+    expect([...placeholders].map(placeholder => placeholder.querySelector('.mi-defensive-premium__chart-axis')?.textContent))
+      .toEqual([dashboardText.defensivePremium.fearGreed.axis, dashboardText.defensivePremium.skew.axis])
     // 仪表仍在画弧与刻度，只是没有指针。
     expect(band.querySelectorAll('[data-half="fear-greed"] [data-gauge-segment]')).toHaveLength(5)
     expect(band.querySelector('[data-half="fear-greed"] .mi-crypto-dashboard__gauge-needle')).toBeNull()

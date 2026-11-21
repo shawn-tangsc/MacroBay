@@ -27,6 +27,8 @@ export type DefensivePremiumCardText = {
     info: { definition: string; relative: string; since: string }
     asOf: string
     unit: string
+    /** 轴说明整句（名字 + 带括号的单位）：组件不自己拼括号。 */
+    axis: string
     direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
     history: { remaining: string }
     unavailable: { connection: string; source: string; read: string }
@@ -57,6 +59,7 @@ type Source = {
       infoLabel: string
       asOf: string
       unit: string
+      axis: string
       info: { definition: string; relative: string; since: string }
       direction: { window: string; steeper: string; flatter: string; flat: string; insufficient: string; stale: string; discontinuous: string }
       unavailable: { connection: string; source: string; read: string }
