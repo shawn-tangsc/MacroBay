@@ -544,12 +544,17 @@ it('keeps the plaques out of the tab order, because nothing happens on them', as
  * 读屏按文档顺序读得到——包括被压在最下面那块，以及和它压在一起的那条时间。
  */
 it('lets a screen reader read every plaque in full, including the covered one', async () => {
-  const { host } = await render()
-  const covered = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
-  // 今天被盖住的是 CPI：名字与它自己的 19 天都在文本里。
-  expect(covered.textContent).toContain('CPI 年率')
-  expect(covered.textContent).toContain('19 天后')
-  // 被盖住的那块没有被任何无障碍手段藏起来（藏了读屏就读不到）。
+  const model = build({ today, metrics })
+  const { host } = await render({ model })
+  // 每块牌都要把自己的名字与天数交出来——不只是最上面那块；被盖住的 CPI 也一样。
+  for (const plaque of model.plaques) {
+    const node = host.querySelector<HTMLElement>(`[data-clock-metric="${plaque.metricKey}"][data-clock-plaque="${plaque.zone}"]`)!
+    expect(node, `${plaque.metricKey} 必须画出来`).not.toBeNull()
+    expect(node.textContent, `${plaque.metricKey} 的名字要能读到`).toContain(text.names[plaque.nameKey as keyof typeof text.names])
+    const days = plaque.zone === 'future' ? plaque.daysUntil : plaque.daysAgo
+    expect(node.textContent, `${plaque.metricKey} 的天数要能读到`).toContain(`${String(days)} 天`)
+  }
+  // 被盖住的那块没有被任何无障碍手段藏起来（藏了读屏就读不到），也没有另起一个可访问名把同一句读两遍。
   for (const node of host.querySelectorAll<HTMLElement>('[data-clock-plaque]')) {
     expect(node.getAttribute('aria-hidden'), '盖住是视觉的，不许连读屏一起藏').toBeNull()
     expect(node.hasAttribute('hidden')).toBe(false)
