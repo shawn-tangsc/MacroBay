@@ -13,12 +13,14 @@ import { backfillObservationCountries } from '../intelligence/macro-calendar/mar
 import { fillObservationCountriesByName } from '../intelligence/macro-calendar/marketCalendarObservationCountryNameFill'
 import { backfillCalendarEventTypes } from '../intelligence/macro-calendar/marketCalendarEventTypeBackfill'
 import { mergeCrossSourceCalendarRows } from '../intelligence/macro-calendar/marketCalendarCrossSourceMerge'
+import { markCrossSourceConflicts } from '../intelligence/macro-calendar/marketCalendarCrossSourceConflictAudit'
 import { mergeSameSourceNameRows } from '../intelligence/macro-calendar/marketCalendarSameIdentityMerge'
 import { fixCalendarEventCountries } from '../intelligence/macro-calendar/marketCalendarEventCountryFix'
 import { fixFomcEventTypes } from '../intelligence/macro-calendar/marketCalendarFomcEventTypeFix'
 import { ensureReleaseStatusCheckExtended } from '../intelligence/macro-calendar/marketCalendarReleaseStatusMigration'
 import { reconcileExpiredReleaseStatuses } from '../intelligence/macro-calendar/marketCalendarReleaseStatusReconcile'
 import { ensureHistoricalValuesFilled } from '../intelligence/macro-calendar/marketCalendarHistoricalValueFill'
+import { fillStandardSeriesIds } from '../intelligence/macro-calendar/marketCalendarStandardSeriesIdFill'
 import { auditCalendarIntegrity, calendarIntegrityGaps } from '../intelligence/macro-calendar/marketCalendarIntegrityAudit'
 import { normalizeCalendarStandardRows } from '../intelligence/macro-calendar/marketCalendarStartupNormalization'
 import type { CalendarStandardWriteLayer } from '../intelligence/macro-calendar/calendarStandardWriteLayer'
@@ -103,7 +105,7 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       ...(input.writeLayer === undefined ? {} : { writeLayer: input.writeLayer }),
       log: (level, event, fields) => { input.log?.(level, event, fields) }
     })
-    report(`[macro-calendar] 官方发布入标准表：${months.join('/')} 读到 ${synced.revisions} 条、写入 ${synced.written} 条、失败 ${synced.failed} 条`)
+    report(`[macro-calendar] 官方发布入标准表：${months.join('/')} 读到 ${synced.revisions} 条、写入 ${synced.written} 条、失败 ${synced.failed} 条、数值解析不出 ${synced.numericUnparsed} 条`)
     // **官方历史回放（S1）挂在这里**：同一个启动点、同一套「失败不阻断启动」的语义。
     // 带版本标记（迁移 12），跑过一次就跳过；bootstrap 一行都不用新增。
     try {
@@ -131,9 +133,12 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
       }
       // 事件国家按机构归属（每次启动都跑，不是一次性迁移）：威廉姆斯归 US、拉加德/连恩归 EMU——按机构，不按开会地点。
       const countryFixed = fixCalendarEventCountries(database)
-      if (countryFixed.updated > 0 || countryFixed.merged > 0) {
+      if (countryFixed.updated > 0 || countryFixed.merged > 0 || countryFixed.invalidIdentities > 0) {
         report(`[macro-calendar] 事件国家修正：扫描 ${countryFixed.scanned} 行、改写 ${countryFixed.updated} 行、`
-          + `撞主键合并删 ${countryFixed.merged} 行`)
+          + `撞主键合并删 ${countryFixed.merged} 行`
+          + (countryFixed.invalidIdentities > 0
+            ? `、数组身份非法 JSON ${countryFixed.invalidIdentities} 条（未按身份处理，也不删）`
+            : ''))
       }
       // 待补清单：改正后仍有身份同一期挂在两个国家下，说明规则表漏了，下次启动还会冒。
       if (countryFixed.ambiguousIdentities.length > 0) {
@@ -220,6 +225,19 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
        * 接到启动链上：每次启动先转正、再重算，顺序不能反（转正会删掉清单里的过期条目，
        * 先重算会把「已转正」算成缺码）。
        */
+      /**
+       * **源内身份的稳定指标 id 补进标准表**（`series_id`）：显示名登记表按它查。
+       * 放在转正之前：转正要靠 `series_id` 重算身份，这里补不上，那一步就更算不出来。
+       * 判据是缺口（还有数组身份行没有 series_id 才跑），失败只记一行、不阻断启动。
+       */
+      try {
+        const seriesIds = fillStandardSeriesIds(database)
+        if (seriesIds.filled > 0) {
+          report(`[macro-calendar] 源内身份稳定 id：待补 ${seriesIds.pending} 行、补上 ${seriesIds.filled} 行`)
+        }
+      } catch (error) {
+        report(`[macro-calendar] 源内身份稳定 id 补齐失败（已忽略，下次启动重试）：${(error as Error)?.message ?? 'unknown'}`)
+      }
       const promotion = promoteSourceIdentities(database)
       if (promotion.scanned > 0) {
         report(`[macro-calendar] 源内身份转正：扫描 ${promotion.scanned} / 转正 ${promotion.promoted}`
@@ -253,9 +271,29 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     report(`[macro-calendar] 启动规范化：重算 ${normalized.valueStateToPresent + normalized.valueStateToMissing} 行`
       + `（转 present ${normalized.valueStateToPresent} / 转 missing ${normalized.valueStateToMissing}）、`
       + `并值 ${normalized.mergedRows} 行、解析期次 ${normalized.periodsResolved} 条、删重复 `
-      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、耗时 ${elapsedMs}ms`)
+      + `${normalized.droppedRows} 行、仍待解 ${normalized.unresolvedPeriods} 条、`
+      + `跨源冲突保留 ${normalized.conflictGroupsKept} 组、耗时 ${elapsedMs}ms`)
   } catch (error) {
     report(`[macro-calendar] 启动规范化失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)
+  }
+  /**
+   * **跨源冲突：采集批次这一侧也要扫**（Chief 2026-11-21）。启动链只覆盖「启动时有」的那批；
+   * 两家在两次启动之间各写一行、值冲突，等下次启动之前读者已经看到两条矛盾行——采集末尾补一次。
+   * 扫描只读标准表、幂等，同一份数据重扫记 0 条。
+   */
+  try {
+    const conflicts = markCrossSourceConflicts(input.database)
+    if (conflicts.recorded > 0 || conflicts.incomparable > 0 || conflicts.sameValueDifferentText > 0) {
+      // **「冲突 0 条」必须能被区分**：按展示串判的、同值不同写法的、某家这一格没给的，各自计数，
+      // 不能被读成「两家完全一致」。**按展示串判的那一类必须标注「未经数值校验」**——它只比了
+      // 源给的原始串，没按数算过，别让读的人以为它和数值判定同一可信度。
+      report(`[macro-calendar] 跨源数值冲突：记 ${conflicts.groups} 组（身份×字段）、本次新写 `
+        + `${conflicts.recorded} 条；其中按展示串比较 ${conflicts.displayCompared} 组（未经数值校验）、`
+        + `同值不同写法 ${conflicts.sameValueDifferentText} 组（不记冲突）、`
+        + `不可比 ${conflicts.incomparable} 组（某家这一格没给）`)
+    }
+  } catch (error) {
+    report(`[macro-calendar] 跨源冲突扫描失败（已忽略）：${(error as Error)?.message ?? 'unknown'}`)
   }
   /**
    * **启动零网络盘点**（用户 2026-11-19 定）：五项扫描只读，不和任何源打交道。
@@ -273,7 +311,11 @@ export function syncOfficialStandardRowsAtStartup(input: Readonly<{
     const gaps = calendarIntegrityGaps(counts)
     report(`[macro-calendar] 数据一致性盘点：present无值 ${counts.presentWithoutActual}、`
       + `missing有值 ${counts.missingWithActual}、同期重复 ${counts.duplicateGroups}组/${counts.duplicateRows}行、`
-      + `一二级过期欠账 ${counts.tierOverdueWithoutValueOrReason}、期次未解 ${counts.unresolvedPeriodRows}`
+      + `一二级过期欠账 ${counts.tierOverdueWithoutValueOrReason}、期次未解 ${counts.unresolvedPeriodRows}、`
+      + `类型名当身份 ${counts.typeNameIdentities}`
+      // >0 时把「为什么保留」一起打出来：不迁是决定，不是忘了。
+      + (counts.typeNameIdentities > 0
+        ? '（保留不迁：源侧没有稳定 id，改身份等于编一个；等源给出真实 id 再迁）' : '')
       + (gaps.length > 0 ? ` ← 有缺口：${gaps.join('、')}` : ''))
   } catch (error) {
     report(`[macro-calendar] 数据一致性盘点失败（已忽略，不影响启动）：${(error as Error)?.message ?? 'unknown'}`)

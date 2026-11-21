@@ -29,6 +29,8 @@ export const marketCalendarRefreshAttemptPolicy = Object.freeze({
 })
 
 export type MarketCalendarRefreshAttemptRow = Readonly<{
+  /** 追加顺序（自增）：同一时刻的两笔尝试也有确定先后，展示取「最后写的那条」。 */
+  attemptId: number
   descriptorId: string
   locale: 'zh' | 'en'
   /** The month the attempt was about; the calendar page shows its own month's verdict. */
@@ -45,35 +47,69 @@ export type MarketCalendarCollectionHighWater = Readonly<{
   lastCollectedAt: string
 }>
 
+/**
+ * 台账是**只追加**的事实记录（0.4.5 #16，Chief 2026-11-21）：
+ *
+ * 旧表主键是 `(descriptor, locale, month)`——同一月后一次成功会把之前那次失败**覆盖掉**，
+ * 出了采集问题只能靠推测。现在每行有自增 `attempt_id`，每次尝试各写一行；
+ * 「最新一次是哪条」由读口按 `attempted_at` 挑（`latestAttemptFor`），不再靠覆盖。
+ *
+ * 老库升级：建新表 → 逐行抄 → 旧表改名留回滚点（不 drop）→ 新表改名成正名，单事务。
+ */
+const ATTEMPTS_TABLE = 'mi_macro_calendar_market_refresh_attempts'
+const ATTEMPTS_BACKUP_TABLE = `${ATTEMPTS_TABLE}__pre_append_v1`
+
+function ensureAttemptTable(database: DatabaseSync): void {
+  const current = database.prepare(`select sql from sqlite_master where type='table' and name = ?`)
+    .get(ATTEMPTS_TABLE) as { sql: string } | undefined
+  const isOldShape = current !== undefined && current.sql.includes('primary key(descriptor_id, locale, month)')
+  if (isOldShape) {
+    const rebuilt = `${ATTEMPTS_TABLE}__append_v1`
+    database.exec('begin')
+    try {
+      const before = Number((database.prepare(`select count(*) as n from ${ATTEMPTS_TABLE}`)
+        .get() as { n: number }).n)
+      database.exec(createAttemptTableSql(rebuilt))
+      database.exec(`insert into ${rebuilt}
+        (descriptor_id, locale, month, attempted_at, state, trigger, failure_code)
+        select descriptor_id, locale, month, attempted_at, state, trigger, failure_code from ${ATTEMPTS_TABLE}`)
+      const copied = Number((database.prepare(`select count(*) as n from ${rebuilt}`).get() as { n: number }).n)
+      if (before !== copied) throw new Error(`attempt history row count changed: ${before} -> ${copied}`)
+      database.exec(`alter table ${ATTEMPTS_TABLE} rename to ${ATTEMPTS_BACKUP_TABLE}`)
+      database.exec(`alter table ${rebuilt} rename to ${ATTEMPTS_TABLE}`)
+      database.exec('commit')
+    } catch (error) {
+      try { database.exec('rollback') } catch { /* 保留原始错误 */ }
+      throw error
+    }
+  }
+  database.exec(createAttemptTableSql(ATTEMPTS_TABLE))
+  database.exec(`create index if not exists idx_mi_calendar_market_attempt_at on ${ATTEMPTS_TABLE}(attempted_at desc)`)
+}
+
+function createAttemptTableSql(table: string): string {
+  return `create table if not exists ${table} (
+    attempt_id integer primary key autoincrement,
+    descriptor_id text not null,
+    locale text not null,
+    month text not null,
+    attempted_at text not null,
+    state text not null check(state in ('succeeded', 'failed')),
+    trigger text not null check(trigger in ('manual', 'automatic')),
+    failure_code text
+  )`
+}
+
 export function createMarketCalendarRefreshAttemptStore(database: DatabaseSync) {
-  // Append-only DDL: a new table and its index, added beside the existing statements. No
-  // earlier table is rewritten, and an old library gets it on the next open.
-  database.exec(`
-    create table if not exists mi_macro_calendar_market_refresh_attempts (
-      descriptor_id text not null,
-      locale text not null,
-      month text not null,
-      attempted_at text not null,
-      state text not null check(state in ('succeeded', 'failed')),
-      trigger text not null check(trigger in ('manual', 'automatic')),
-      failure_code text,
-      primary key(descriptor_id, locale, month)
-    );
-    create index if not exists idx_mi_calendar_market_attempt_at
-      on mi_macro_calendar_market_refresh_attempts(attempted_at desc);
-  `)
-  const upsert = database.prepare(`
-    insert into mi_macro_calendar_market_refresh_attempts
+  ensureAttemptTable(database)
+  const insert = database.prepare(`
+    insert into ${ATTEMPTS_TABLE}
       (descriptor_id, locale, month, attempted_at, state, trigger, failure_code)
     values (?, ?, ?, ?, ?, ?, ?)
-    on conflict(descriptor_id, locale, month) do update set
-      attempted_at = excluded.attempted_at, state = excluded.state,
-      trigger = excluded.trigger, failure_code = excluded.failure_code
-    where excluded.attempted_at >= mi_macro_calendar_market_refresh_attempts.attempted_at
   `)
   const list = database.prepare(`
-    select descriptor_id, locale, month, attempted_at, state, trigger, failure_code
-    from mi_macro_calendar_market_refresh_attempts
+    select attempt_id, descriptor_id, locale, month, attempted_at, state, trigger, failure_code
+    from ${ATTEMPTS_TABLE} order by attempt_id asc
   `)
   const highWater = database.prepare(`
     select descriptor_id, locale, max(recorded_at) as last_collected_at
@@ -101,7 +137,7 @@ export function createMarketCalendarRefreshAttemptStore(database: DatabaseSync) 
         if (!(marketCalendarRefreshAttemptPolicy.triggers as readonly unknown[]).includes(value.trigger)) return false
         if (value.failureCode !== undefined &&
           !(marketCalendarRefreshAttemptPolicy.failureCodes as readonly unknown[]).includes(value.failureCode)) return false
-        upsert.run(value.descriptorId, value.locale, value.month, value.attemptedAt, String(value.state), String(value.trigger),
+        insert.run(value.descriptorId, value.locale, value.month, value.attemptedAt, String(value.state), String(value.trigger),
           value.failureCode === undefined ? null : String(value.failureCode))
         return true
       } catch {
@@ -113,11 +149,13 @@ export function createMarketCalendarRefreshAttemptStore(database: DatabaseSync) 
     listAttempts(): readonly MarketCalendarRefreshAttemptRow[] {
       return list.all().flatMap((row): MarketCalendarRefreshAttemptRow[] => {
         const value = row as Record<string, unknown>
-        if (!isDescriptor(value.descriptor_id) || !isLocale(value.locale) || typeof value.month !== 'string' || !instant(value.attempted_at) ||
+        if (typeof value.attempt_id !== 'number' || !Number.isSafeInteger(value.attempt_id) || value.attempt_id <= 0 ||
+          !isDescriptor(value.descriptor_id) || !isLocale(value.locale) || typeof value.month !== 'string' || !instant(value.attempted_at) ||
           !(marketCalendarRefreshAttemptPolicy.states as readonly unknown[]).includes(value.state) ||
           !(marketCalendarRefreshAttemptPolicy.triggers as readonly unknown[]).includes(value.trigger)) return []
         return [{
-          descriptorId: value.descriptor_id, locale: value.locale, month: value.month, attemptedAt: value.attempted_at,
+          attemptId: value.attempt_id, descriptorId: value.descriptor_id, locale: value.locale,
+          month: value.month, attemptedAt: value.attempted_at,
           state: value.state as 'succeeded' | 'failed', trigger: value.trigger as 'manual' | 'automatic',
           ...(typeof value.failure_code === 'string' ? { failureCode: value.failure_code } : {})
         }]
@@ -168,7 +206,9 @@ export function latestAttemptFor(attempts: readonly MarketCalendarRefreshAttempt
   for (const row of attempts) {
     if (row.descriptorId !== descriptorId) continue
     if (month !== undefined && row.month !== month) continue
-    if (!newest || row.attemptedAt > newest.attemptedAt) newest = row
+    // 同一时刻（测试里时钟被冻住是真实现象）按**写入顺序**定先后：后写的那条才是最新一次。
+    if (!newest || row.attemptedAt > newest.attemptedAt ||
+      (row.attemptedAt === newest.attemptedAt && row.attemptId > newest.attemptId)) newest = row
   }
   if (!newest) return undefined
   return { state: newest.state, attemptedAt: newest.attemptedAt, trigger: newest.trigger,

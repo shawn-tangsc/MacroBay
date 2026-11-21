@@ -4,6 +4,8 @@ import type { createNarwhalCalendarAssembly } from '../intelligence/macro-calend
 import { calendarStandardConservation } from '../intelligence/macro-calendar/marketCalendarStandardConservation'
 import { dualWriteMeasureRows } from '../intelligence/macro-calendar/marketCalendarStandardDualWrite'
 import { readFredObservationForPeriod } from '../intelligence/macro-calendar/fredIndicatorYoY'
+import { calendarNumericJsonFor } from '../intelligence/macro-calendar/marketCalendarNumericParse'
+import { calendarNumericUnitHintForMetricKey } from '../intelligence/macro-calendar/marketCalendarNumericUnits'
 import { ensureCalendarStandardTables, recordCalendarUnmapped } from '../intelligence/macro-calendar/marketCalendarStandardTable'
 import { promoteSourceIdentities } from '../intelligence/macro-calendar/marketCalendarSourcePromotion'
 import { recomputeUnmappedReasons } from '../intelligence/macro-calendar/marketCalendarUnmappedReasonBackfill'
@@ -56,15 +58,31 @@ export function createNarwhalStandardRowsWriter(
           detectedAt: observedAt, rawJson: JSON.stringify({ name: item.name, measureKeys: item.measureKeys ?? [] }),
           reason: item.reason })
       }
+      /**
+       * **N1：narwhal 适配器在这里解析数值**（架构师方案 §2/§6）：解析只发生在源适配器，
+       * 写入口 `dualWriteMeasureRows`/`upsertCalendarStandardRow` 只校验形状、不解析展示串。
+       * `unparsed` 是本轮计数（我们的问题），与「源没给值」分开。
+       */
+      let numericUnparsed = 0
+      const rowsWithNumeric = rows.map((row) => {
+        // 单位按该码的量纲补（同一张闭集表，N2）：Narwhal 给的展示串常常没有百分号。
+        const hint = calendarNumericUnitHintForMetricKey(row.metricKey)
+        const numeric = calendarNumericJsonFor({
+          actual: row.actual, previous: row.previous, consensus: row.consensus
+        }, hint === undefined ? undefined : { unit: hint })
+        // 按**值**计（一行三个值分别计）：半截行也看得见。
+        numericUnparsed += numeric.unparsedFields
+        return { ...row, numericJson: numeric.json }
+      })
       const counts = dualWriteMeasureRows(database, {
-        providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3', observedAt, rows
+        providerId: 'narwhal', parserVersion: 'narwhal-calendar-mc1-v3', observedAt, rows: rowsWithNumeric
       }, { onError: (message) => console.warn(`[macro-calendar] 标准表写入失败：${message}`) })
       // 算式只有一份实现（`calendarStandardConservation`，带能跑红的用例）：写在这里的
       // 闭包里没人能测，而它已经错过两版（恒平、恒红）。
       const conservation = calendarStandardConservation({ sourceTotals, rows, unmapped, failed: counts.failed })
       const { releaseDiff, measureDiff } = conservation
       // 「旧行无法判别」进本轮同一行汇总：只写进返回值的话，问「这轮撞了几笔旧行」还得翻日志。
-      console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 认领 ${conservation.creditedReleases}（落表∪未映射，按 id 去重）+ 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${conservation.landedMeasures} + 未映射 measure ${conservation.unmappedMeasures} + 事件型随行 ${conservation.excludedMeasures}（差 ${measureDiff}）；旧行无法判别 ${counts.legacyUnjudged} 笔`)
+      console.warn(`[macro-calendar] 标准行一批：发布层 输入 ${sourceTotals.releases} = 认领 ${conservation.creditedReleases}（落表∪未映射，按 id 去重）+ 失败 ${counts.failed}（差 ${releaseDiff}）；测度层 输入 ${sourceTotals.measures} = 指标行 ${conservation.landedMeasures} + 未映射 measure ${conservation.unmappedMeasures} + 事件型随行 ${conservation.excludedMeasures}（差 ${measureDiff}）；旧行无法判别 ${counts.legacyUnjudged} 笔；数值解析不出 ${numericUnparsed} 条`)
       if (releaseDiff !== 0) console.warn(`[macro-calendar] 发布层守恒式不成立：${releaseDiff} 条既没落表也没记未映射`)
       if (measureDiff !== 0) console.warn(`[macro-calendar] 测度层守恒式不成立：${measureDiff} 个 measure 没对上`)
       if (counts.failed > 0) console.warn(`[macro-calendar] 标准行写入失败 ${counts.failed} 条（已计入守恒式）`)

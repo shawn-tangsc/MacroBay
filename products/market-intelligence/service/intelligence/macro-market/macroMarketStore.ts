@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import { barRetentionPolicy, type BarRetentionCutoffs } from '../retention/barRetention'
+import { macroMarketBarSeriesIds } from './macroMarketSeries'
 
 /** Durable history for the macro-market series. Levels are all this needs: every fact is a level
  *  or a difference of levels, and storing OHLC the provider cannot be trusted to keep consistent
@@ -101,24 +102,34 @@ export function createMacroMarketStore(filePath: string) {
    * never holds the write lock long enough for a tick to miss its slot. Idempotent by construction: the
    * kept instant is the hour itself, so a second pass finds nothing left to fold, and a delete that
    * matches no row is a no-op rather than an error.
+   *
+   * It only touches **bar** series. The daily rate closes in this same table are one observation per
+   * trading day and decades of them are the point — thinning their spacing or dropping them past the
+   * thirty-day bar horizon would delete the trend, not compact it. The bar series are named in one
+   * place (`macroMarketSeries`), so a series added there without being added here is never trimmed by
+   * accident: the whitelist fails towards keeping data, which is the recoverable direction.
    */
   function retention(cutoffs: BarRetentionCutoffs): MacroMarketRetentionResult {
     let thinned = 0
     let deleted = 0
+    const bars = macroMarketBarSeriesIds
+    const barFilter = `and series in (${bars.map(() => '?').join(', ')})`
     database.exec('begin')
     try {
       const fold = database.prepare(`delete from macro_market_points where rowid in (
         select rowid from macro_market_points
-        where at_ms >= ? and at_ms < ? and at_ms % ? <> 0 limit ?)`)
+        where at_ms >= ? and at_ms < ? and at_ms % ? <> 0 ${barFilter} limit ?)`)
       for (;;) {
-        const changes = Number(fold.run(cutoffs.deleteBeforeMs, cutoffs.thinBeforeMs, barRetentionPolicy.hourMs, barRetentionPolicy.batchSize).changes)
+        const changes = Number(fold.run(
+          cutoffs.deleteBeforeMs, cutoffs.thinBeforeMs, barRetentionPolicy.hourMs, ...bars, barRetentionPolicy.batchSize
+        ).changes)
         thinned += changes
         if (changes < barRetentionPolicy.batchSize) break
       }
       const drop = database.prepare(`delete from macro_market_points where rowid in (
-        select rowid from macro_market_points where at_ms < ? limit ?)`)
+        select rowid from macro_market_points where at_ms < ? ${barFilter} limit ?)`)
       for (;;) {
-        const changes = Number(drop.run(cutoffs.deleteBeforeMs, barRetentionPolicy.batchSize).changes)
+        const changes = Number(drop.run(cutoffs.deleteBeforeMs, ...bars, barRetentionPolicy.batchSize).changes)
         deleted += changes
         if (changes < barRetentionPolicy.batchSize) break
       }
@@ -132,5 +143,9 @@ export function createMacroMarketStore(filePath: string) {
 }
 export type MacroMarketStore = ReturnType<typeof createMacroMarketStore>
 
-/** What a retention pass did, and where the series now begins: written down so it can be audited. */
+/**
+ * What a retention pass did, and the oldest point the store still holds — written down so it can be
+ * audited. That instant spans every series, including the ones retention leaves alone: it answers
+ * "how far back does this store go", not "how far back do the bars go".
+ */
 export type MacroMarketRetentionResult = Readonly<{ thinned: number; deleted: number; oldestKeptAtMs: number | null }>

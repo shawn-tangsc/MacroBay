@@ -287,4 +287,85 @@ describe('ChannelInboundExecutionCoordinator', () => {
     expect(delivery.deliverStreamFinal).toHaveBeenCalledWith(expect.objectContaining({ executionClaim: renewed }), ['final'])
     expect(inbound.finalizeDispatch).toHaveBeenCalledWith(renewed, 'completed', expect.any(Date))
   })
+  it('gives the assistant a real turn when the message is an image without text', async () => {
+    // 现状（0.4.5 缺陷）：只带图、没有配文的入站消息，coordinator 只取 `payload.text ?? ''`，
+    // 附件整段丢掉 → 助手收到**空回合**，聊天里看起来跟「消息根本没收到」一模一样。
+    const payload = {
+      providerMessageKey: 'm-1',
+      providerUserKey: 'u-1',
+      text: null,
+      attachments: [{ kind: 'image', stableRef: 'qq:file:stable-1', name: null, mimeType: 'image/png', sizeBytes: 1024 }]
+    }
+    const turns: string[] = []
+    const inbound = {
+      admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode(JSON.stringify(payload)), keyRef: 'ref', keyRevision: 1 })),
+      getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
+      finalizeDispatch: vi.fn(() => true),
+      renewDispatchLease: vi.fn((value) => value),
+      dispatchConversationId: vi.fn(() => 'conversation-a')
+    }
+    const runs = { get: vi.fn(() => null), start: vi.fn(() => true), complete: vi.fn(), markResult: vi.fn() }
+    const coordinator = new ChannelInboundExecutionCoordinator({
+      inbound: inbound as never,
+      delivery: { deliverStreamFinal: vi.fn(async () => ({ status: 'delivered' })) } as never,
+      cipher: {
+        decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext,
+        encrypt: async () => ({ ciphertext: new Uint8Array([1]), keyRef: 'ref', keyRevision: 1 })
+      } as never,
+      runtime: {
+        sendMessage: vi.fn(async ({ text }: { text: string }) => {
+          turns.push(text)
+          return { assistantMessage: { data: { parts: [{ type: 'text', text: '收到这张图片了。' }] } }, state: {} }
+        })
+      } as never,
+      attachmentsOnlyText: (attachments: readonly { kind: string; mimeType: string; stableRef: string }[]) =>
+        `收到一张图片，没有文字。\n${attachments.map((attachment) => `${attachment.mimeType} · ${attachment.stableRef}`).join('\n')}`,
+      runs: runs as never
+    })
+
+    await expect(coordinator.execute(claim)).resolves.toBe('completed')
+
+    // 助手侧不是空回合：这一轮有内容，而且带着可引用的稳定引用。
+    expect(turns).toHaveLength(1)
+    expect(turns[0]?.trim().length).toBeGreaterThan(0)
+    expect(turns[0]).toContain('收到一张图片，没有文字。')
+    expect(turns[0]).toContain('qq:file:stable-1')
+  })
+
+  it('leaves a plain text turn and an empty one exactly as they were', async () => {
+    const send = async (payload: unknown): Promise<string[]> => {
+      const turns: string[] = []
+      const inbound = {
+        admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode(JSON.stringify(payload)), keyRef: 'ref', keyRevision: 1 })),
+        getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
+        finalizeDispatch: vi.fn(() => true),
+        renewDispatchLease: vi.fn((value) => value),
+        dispatchConversationId: vi.fn(() => 'conversation-a')
+      }
+      const coordinator = new ChannelInboundExecutionCoordinator({
+        inbound: inbound as never,
+        delivery: { deliverStreamFinal: vi.fn(async () => ({ status: 'delivered' })) } as never,
+        cipher: {
+          decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext,
+          encrypt: async () => ({ ciphertext: new Uint8Array([1]), keyRef: 'ref', keyRevision: 1 })
+        } as never,
+        runtime: {
+          sendMessage: vi.fn(async ({ text }: { text: string }) => {
+            turns.push(text)
+            return { assistantMessage: { data: { parts: [{ type: 'text', text: 'ok' }] } }, state: {} }
+          })
+        } as never,
+        attachmentsOnlyText: () => '不该被用到',
+        runs: { get: vi.fn(() => null), start: vi.fn(() => true), complete: vi.fn(), markResult: vi.fn() } as never
+      })
+      await coordinator.execute(claim)
+      return turns
+    }
+
+    // 有配文：逐字照旧，不追加附件说明（改了会让每一轮历史消息都变样）。
+    await expect(send({ providerMessageKey: 'm-2', providerUserKey: 'u-1', text: '看图', attachments: [{ kind: 'image', stableRef: 'qq:file:stable-2', name: null, mimeType: 'image/png', sizeBytes: 1 }] }))
+      .resolves.toEqual(['看图'])
+    // 既没文字也没附件：本来就没有东西可转述，保持原样（不在这一笔里改它）。
+    await expect(send({ providerMessageKey: 'm-3', providerUserKey: 'u-1', text: null, attachments: [] })).resolves.toEqual([''])
+  })
 })

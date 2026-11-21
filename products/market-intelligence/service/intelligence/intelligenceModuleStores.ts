@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { EventBusRuntime } from '@platform/message-bus'
@@ -29,8 +29,10 @@ import {
 } from './store/intelligenceRuntimeStateHistoryStorage'
 import { createIntelligenceTranslationJsonStorage } from './store/intelligenceTranslationStorage'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
+import { createMacroMarketStore, macroMarketStoragePolicy } from './macro-market/macroMarketStore'
+import { createFredRatesHistorySink } from './macro-rates/fredRatesHistory'
 import { createRawRecordJsonStorage, readRawRecordSnapshotSync } from './store/rawRecordStorage'
-import { resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
+import { contentAddressedPayloadPolicy, resolvePayloadDirectory, writeVerifiedPayload } from './storage/contentAddressedPayloads'
 
 /**
  * `intelligenceModule` 的本地存储与采集底座（拆分 M2，2026-11-15，**只搬不改**）。
@@ -75,8 +77,41 @@ export function createIntelligenceStores(input: {
   const rawRecordStore = createRawRecordStore({
     storage: rawRecordStorage,
     snapshot: readRawRecordSnapshotSync(join(dataDir, 'intelligence-raw-records.json')),
-    ...(payloadDirectory === undefined ? {} : { payloadDirectory, writeVerifiedPayload })
+    ...(payloadDirectory === undefined ? {} : { payloadDirectory, writeVerifiedPayload }),
+    /* 保留期回收原文（缺陷③）：只在「内容寻址目录」里删，删前由 store 重新核对引用。 */
+    ...(payloadDirectory === undefined ? {} : {
+      deletePayload: (fileRef: string) => {
+        try {
+          const target = join(payloadDirectory, fileRef)
+          const bytes = statSync(target).size
+          unlinkSync(target)
+          return bytes
+        } catch {
+          return undefined
+        }
+      },
+      listPayloadFiles: () => {
+        try { return readdirSync(payloadDirectory).filter((name) => contentAddressedPayloadPolicy.filePattern.test(name)) }
+        catch { return undefined }
+      }
+    })
   })
+  /* 存量原文外置（0.4.5 缺陷②）：升级前就 inline 的正文不会自己搬出去，启动时幂等跑一次。
+     报数分三格（搬了多少 / 还剩多少 / 失败多少），第二遍必然 `inlineToFile: 0`。 */
+  const rawRecordPayloadMigration = rawRecordStore.migrateInlinePayloads()
+  console.log(JSON.stringify({
+    marker: 'RAW_RECORD_PAYLOAD_MIGRATION',
+    state: rawRecordPayloadMigration.state,
+    ...(rawRecordPayloadMigration.state === 'unavailable'
+      ? { reason: rawRecordPayloadMigration.reason }
+      : {
+          inlineToFile: rawRecordPayloadMigration.inlineToFile,
+          relocatedFromOldLayout: rawRecordPayloadMigration.relocatedFromOldLayout,
+          untouched: rawRecordPayloadMigration.untouched,
+          alreadyContentAddressed: rawRecordPayloadMigration.alreadyContentAddressed,
+          remainingInline: rawRecordPayloadMigration.remainingInline
+        })
+  }))
   const macroCalendarEvidenceArchive = createMacroCalendarEvidenceArchive({
     rawRecords: rawRecordStore,
     archiveDirectory: join(dataDir, 'macro-calendar-evidence')
@@ -108,6 +143,11 @@ export function createIntelligenceStores(input: {
   const sourceIssues = createSourceIssueWiring({ defaultFreshnessMs: DEFAULT_SOURCE_FRESHNESS_MS, timeZone,
     ...(submitNotification === undefined ? {} : { submit: submitNotification }),
     ...(log === undefined ? {} : { log }) })
+  /**
+   * 宏观市场历史表在这里建，不在下游的市场运行时里：日频国债收盘由 pipeline 的整窗出口写进来，
+   * 与 DXY / 金价共用同一张表、同一套读法，所以只能有一个写入口和一份连接。
+   */
+  const macroMarketStore = createMacroMarketStore(join(dataDir, macroMarketStoragePolicy.fileName))
   const pipeline = createIntelligencePipeline({
     profileStore,
     rawRecordStore,
@@ -122,7 +162,8 @@ export function createIntelligenceStores(input: {
     ),
     runtimeStateHistoryStorage,
     eventPublisher,
-    ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier })
+    ...(sourceIssues.notifier === undefined ? {} : { sourceIssueNotifier: sourceIssues.notifier }),
+    onMetricWindow: createFredRatesHistorySink({ store: macroMarketStore })
   })
   sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
   sourceIssues.bindRuntimeStates(() => pipeline.listRuntimeStates())
@@ -134,6 +175,7 @@ export function createIntelligenceStores(input: {
     translationStorage,
     credentialStore,
     fetchText,
-    pipeline
+    pipeline,
+    macroMarketStore
   }
 }

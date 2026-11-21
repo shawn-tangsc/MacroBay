@@ -7,10 +7,52 @@ import type {
   SafeRawRecordSummary
 } from '../schema/intelligenceRecord'
 import type { RawRecordSnapshot, RawRecordStorage } from '../store/rawRecordStorage'
-import { createEmptyRawRecordSnapshot } from '../store/rawRecordStorage'
+import { assertRawRecordSnapshotDoesNotShrink, createEmptyRawRecordSnapshot, type RawRecordWriteOptions } from '../store/rawRecordStorage'
+import { externalizeInlinePayloads } from './rawRecordPayloadExternalization'
+
+/** 存量原文外置的一次盘点：三格分开报，`remainingInline` 是「还剩多少条还是内联」。 */
+export type RawRecordPayloadMigration =
+  | Readonly<{ state: 'unavailable'; reason: 'no-payload-directory' }>
+  | Readonly<{
+    state: 'migrated' | 'unchanged'
+    /** `inline → file` 的条数。 */
+    inlineToFile: number
+    /** 老布局引用 → 内容寻址。本机预期 0（老实现一条都没外置过）。 */
+    relocatedFromOldLayout: number
+    /** hash 不符 / 读不到 / 写失败：原地不动，不产生「有记录无原文」。 */
+    untouched: number
+    alreadyContentAddressed: number
+    /** 跑完之后还剩多少条 inline（归零即停；不为零说明有 untouched）。 */
+    remainingInline: number
+  }>
+
+/** 保留期一次跑的结果：**可对账**——删了多少条、多少原文文件、释放多少字节、剩下多少。 */
+export type RawRecordPruneResult = Readonly<{
+  cutoff: string
+  removedRecords: number
+  removedPayloadFiles: number
+  removedOrphanFiles: number
+  reclaimedPayloadBytes: number
+  remainingRecords: number
+}>
 
 export type RawRecordStore = {
   appendRawRecord: (input: AppendRawRecordInput) => RawIntelligenceRecord | undefined
+  /**
+   * 保留期：删掉「通用」记录里超过 `retentionDays` 的那些，并回收不再被引用的原文文件。
+   *
+   * 日历记录**不跟着轮转**（它们的原文在证据归档里、按自己的配额管）。删除是本模块唯一的
+   * 合法「写少」路径，所以这里显式走 `allowRecordDecrease: 'explicit-delete'`；幂等：
+   * 同一天跑第二遍 `removedRecords === 0` 且不再写盘。
+   */
+  pruneRawRecords: (input: Readonly<{ retentionDays: number; now?: string; includeOrphans?: boolean }>) => RawRecordPruneResult
+  /**
+   * 启动时幂等跑一次：把升级前就 inline 的正文搬进「内容寻址」目录、换成 file 引用。
+   *
+   * 按缺口判据，不用版本标记：非零就迁、归零即停，跑第二遍 `inlineToFile === 0`。
+   * 失败的那条**原地不动**（`untouched`），绝不写一半——「有记录、原文读不到」比不迁更糟。
+   */
+  migrateInlinePayloads: () => RawRecordPayloadMigration
   getRawRecord: (rawRecordId: string) => RawIntelligenceRecord | undefined
   findBySourceDedupeKey: (sourceId: string, sourceDedupeKey: string) => RawIntelligenceRecord | undefined
   markParsed: (rawRecordId: string) => RawIntelligenceRecord | undefined
@@ -49,8 +91,17 @@ export function createRawRecordStore(deps?: {
   payloadDirectory?: string
   writeVerifiedPayload?: (input: Readonly<{ directory: string; body: string; expectedHash: string; temporarySequence: number }>) =>
     Readonly<{ state: 'written' | 'reused'; fileRef: string }> | Readonly<{ state: 'failed'; reason: string }>
+  /** 保留期删除原文文件（只有内容寻址目录里、且已无记录引用它时才调用）。返回释放的字节数。 */
+  deletePayload?: (fileRef: string) => number | undefined
+  /** 列出现有原文文件名（内容寻址名）；孤儿清理用。读不到就返回 undefined，按「不清理孤儿」处理。 */
+  listPayloadFiles?: () => readonly string[] | undefined
 }): RawRecordStore {
   const snapshot = deps?.snapshot ?? createEmptyRawRecordSnapshot()
+  /**
+   * 读入条数 = 这一次写盘的下限。整份快照写盘时它保证「写出去的不比读进来的少」——除非调用方
+   * 显式说明是删除（见 `RawRecordWriteOptions`）。2026-11-19 的复位就是少了这道闸。
+   */
+  let loadedRecordCount = snapshot.records.length
   const records = new Map<string, RawIntelligenceRecord>()
   const dedupeIndex = new Map<string, string>()
   let sequence = snapshot.sequence
@@ -61,17 +112,25 @@ export function createRawRecordStore(deps?: {
     dedupeIndex.set(`${record.sourceId}:${record.sourceDedupeKey}`, record.rawRecordId)
   }
 
-  function persist(): void {
+  function persist(options?: RawRecordWriteOptions): void {
     if (!deps?.storage) return
-    const snapshot = {
+    const next = {
       records: [...records.values()],
       sequence
     }
+    // 单一判据：写出去的条数不得少于读入的条数（除显式删除）。写少了就抛，一个字节都不写。
+    assertRawRecordSnapshotDoesNotShrink({
+      loadedRecordCount,
+      nextRecordCount: next.records.length,
+      ...(options?.allowRecordDecrease === undefined ? {} : { allowRecordDecrease: options.allowRecordDecrease })
+    })
     if (deps.storage.writeAllSync) {
-      deps.storage.writeAllSync(snapshot)
-      return
+      deps.storage.writeAllSync(next, options)
+    } else {
+      void deps.storage.writeAll(next, options)
     }
-    void deps.storage.writeAll(snapshot)
+    // 写成功之后下限前移到这次写的条数：正常增长不会触发，之后的删除仍要显式说明。
+    loadedRecordCount = next.records.length
   }
 
   function updateArchiveRefs(updates: readonly Readonly<{
@@ -93,6 +152,127 @@ export function createRawRecordStore(deps?: {
   }
 
   return {
+    pruneRawRecords(input) {
+      const nowMs = input.now === undefined ? Date.now() : Date.parse(input.now)
+      const cutoffMs = nowMs - input.retentionDays * 24 * 3_600_000
+      const cutoff = new Date(cutoffMs).toISOString()
+      const removable: RawIntelligenceRecord[] = []
+      for (const record of records.values()) {
+        // 只轮转通用采集；日历记录有自己的证据配额，不在这里删。
+        if (record.processingOwner !== 'generic-intelligence') continue
+        const detectedMs = Date.parse(record.detectedAt)
+        if (Number.isFinite(detectedMs) && detectedMs < cutoffMs) removable.push(record)
+      }
+
+      const removedIds = new Set(removable.map((record) => record.rawRecordId))
+      for (const record of removable) {
+        records.delete(record.rawRecordId)
+        dedupeIndex.delete(`${record.sourceId}:${record.sourceDedupeKey}`)
+      }
+
+      // 原文按「还有没有别的记录引用」决定去留：内容寻址会去重，删之前必须重新数一遍。
+      const stillReferenced = new Set(
+        [...records.values()].map((record) => record.payloadFileRef).filter((ref): ref is string => ref !== undefined)
+      )
+      let removedPayloadFiles = 0
+      let reclaimedPayloadBytes = 0
+      let removedOrphanFiles = 0
+      if (deps?.deletePayload !== undefined) {
+        for (const record of removable) {
+          const ref = record.payloadFileRef
+          if (ref === undefined || stillReferenced.has(ref)) continue
+          const freed = deps.deletePayload(ref)
+          if (freed === undefined) continue
+          removedPayloadFiles += 1
+          reclaimedPayloadBytes += freed
+        }
+        if (input.includeOrphans === true && deps.listPayloadFiles !== undefined) {
+          const files = deps.listPayloadFiles()
+          if (files !== undefined) {
+            const live = new Set([
+              ...stillReferenced,
+              ...[...records.values()].map((record) => record.payloadFileRef).filter((ref): ref is string => ref !== undefined)
+            ])
+            for (const fileRef of files) {
+              if (live.has(fileRef)) continue
+              const freed = deps.deletePayload(fileRef)
+              if (freed === undefined) continue
+              removedOrphanFiles += 1
+              reclaimedPayloadBytes += freed
+            }
+          }
+        }
+      }
+
+      if (removedIds.size > 0) {
+        // 唯一的合法「写少」：显式删除。写盘闸据此放行。
+        persist({ allowRecordDecrease: 'explicit-delete' })
+      }
+      return {
+        cutoff,
+        removedRecords: removedIds.size,
+        removedPayloadFiles,
+        removedOrphanFiles,
+        reclaimedPayloadBytes,
+        remainingRecords: records.size
+      } as const
+    },
+    migrateInlinePayloads() {
+      if (deps?.payloadDirectory === undefined || deps.writeVerifiedPayload === undefined) {
+        // 「没接上」必须与「没有要搬的」分开：前者是配置错误，不许报成 0 条。
+        return { state: 'unavailable', reason: 'no-payload-directory' } as const
+      }
+      const directory = deps.payloadDirectory
+      const write = deps.writeVerifiedPayload
+      // 只有 inline / file 两种引用参与迁移；别的形状原样留着，不猜。
+      // 日历证据的正文**不属于这条迁移**：它有自己的归档 owner（`macro-calendar-evidence`），
+      // 由 `macroCalendarEvidenceArchive.migrateInlineBodies()` 负责搬家并写回 `archiveStatus`。
+      // 这里先搬走，归档那边就再也看不到 inline 正文、`readBody` 直接读不到——那不是「没搬」，
+      // 是把证据搬到了一个没人认的地方。
+      const externalizable = [...records.values()]
+        .filter((record) => record.processingOwner !== 'macro-calendar')
+        .filter((record) => record.payloadRefType === 'inline' || record.payloadRefType === 'file')
+        .map((record) => ({
+          rawRecordId: record.rawRecordId,
+          payloadRefType: record.payloadRefType as 'inline' | 'file',
+          ...(record.payloadBody === undefined ? {} : { payloadBody: record.payloadBody }),
+          payloadHash: record.payloadHash,
+          ...(record.payloadFileRef === undefined ? {} : { payloadFileRef: record.payloadFileRef })
+        }))
+      const result = externalizeInlinePayloads({
+        records: externalizable,
+        deps: {
+          writeVerifiedPayload: ({ body, expectedHash }) => {
+            const written = write({ directory, body, expectedHash, temporarySequence: sequence + 1 })
+            return written.state === 'failed' ? undefined : written.fileRef
+          }
+        }
+      })
+      const changed = result.inlineToFile + result.relocatedFromOldLayout
+      if (changed > 0) {
+        // 迁移只换「原文放哪」，条数一条不变 ⇒ 写盘闸（不许比读入少）自然放行。
+        for (const entry of result.records) {
+          const current = records.get(entry.rawRecordId)
+          if (current === undefined) continue
+          const { payloadBody: _previousBody, ...withoutBody } = current
+          records.set(entry.rawRecordId, {
+            ...withoutBody,
+            payloadRefType: entry.payloadRefType,
+            ...(entry.payloadBody === undefined ? {} : { payloadBody: entry.payloadBody }),
+            ...(entry.payloadFileRef === undefined ? {} : { payloadFileRef: entry.payloadFileRef })
+          })
+        }
+        persist()
+      }
+      return {
+        state: changed > 0 ? 'migrated' : 'unchanged',
+        inlineToFile: result.inlineToFile,
+        relocatedFromOldLayout: result.relocatedFromOldLayout,
+        untouched: result.untouched,
+        alreadyContentAddressed: result.alreadyContentAddressed,
+        remainingInline: [...records.values()].filter((record) => record.payloadRefType === 'inline').length
+      } as const
+    },
     appendRawRecord(input) {
       const dedupeKey = `${input.sourceId}:${input.sourceDedupeKey}`
       if (dedupeIndex.has(dedupeKey)) {

@@ -64,8 +64,25 @@ describe('事件国家按机构归属', () => {
     expect(countryOf(database, identity('45145'))).toBe('EMU')
     expect(count(database, 'mi_calendar_events')).toBe(3)
     expect(fixCalendarEventCountries(database)).toEqual({
-      scanned: 0, updated: 0, merged: 0, ambiguousIdentities: []
+      scanned: 0, updated: 0, merged: 0, invalidIdentities: 0, ambiguousIdentities: []
     })
+  })
+
+  /**
+   * 数组身份的第二段是数字（`["214790",79090]`）——**整串是合法 JSON**，用 `json_extract` 就能取，
+   * 不需要按位置截取。真的非法时（下面这条截断了）**跳过并计数**，不许静默当成「没有身份」。
+   */
+  it('合法 JSON 照常按第一段取身份；非法 JSON 跳过并计数', () => {
+    const database = setup()
+    seedEvent(database, '45051', 'DE')
+    seed(database, '["45052",79090', 'DE')
+    const report = fixCalendarEventCountries(database)
+    expect(report.invalidIdentities).toBe(1)
+    expect(report.updated).toBe(1)
+    expect(countryOf(database, identity('45051'))).toBe('US')
+    // 非法那条原样留着（不删、不改国家）——读不出身份不等于可以清理它。
+    expect(countryOf(database, '["45052",79090')).toBe('DE')
+    expect(count(database, 'mi_calendar_events')).toBe(2)
   })
 
   it('同一身份挂在两个国家下：改正后只剩一行，另一条整行进审计表', () => {

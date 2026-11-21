@@ -6,7 +6,8 @@ import {
 import { macroCalendarReleaseValueMappings } from './macroCalendarReleaseValueMappingPolicy'
 import { MACRO_INDICATOR_GROUPS, MACRO_INDICATOR_RETIRED_METRIC_KEYS } from './macroIndicatorCardGroups'
 import { nameByMetricKey } from './marketCalendarCodeNames'
-import { narwhalMeasureMetricKeys, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from './marketCalendarNarwhalMeasureKeys'
 import {
   marketCalendarReleaseGroupByMetricKey,
   marketCalendarReleaseGroupPrimary,

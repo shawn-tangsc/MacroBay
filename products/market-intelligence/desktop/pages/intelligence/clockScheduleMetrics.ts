@@ -1,4 +1,5 @@
 import { metricConceptOf } from '../../../contracts/metricKeyConcept'
+import { marketCalendarCodeTable } from '../../../service/intelligence/macro-calendar/marketCalendarCodeTable'
 import type { ClockScheduleMetric } from './clockCardModel'
 import { clockDayGap } from './clockCardModel'
 
@@ -14,14 +15,40 @@ import { clockDayGap } from './clockCardModel'
  * 政策利率没有「日程 + 值」两份：会议日来自政策读数，值取盘口主推档概率。
  */
 /**
- * 环上画哪两个指标：用**概念串**（`US.CPI.YOY`）而不是四段指标码。
- * 同一个概念的季调/未季调变体对读者是同一个指标，匹配时一律走 `metricConceptOf`——
- * 这样新增变体不用改这里，也不会在源码里落一串指标码字面量（门禁 C）。
+ * 环上的指标清单：**不再写死两档**（用户 2026-11-21：一级指标都要有，PCE 也在）。
+ *
+ * 取码表里 `tier === 1 && status === 'active'` 的全部 metric 码（今天 12 个），概念串走
+ * `metricConceptOf`——同一概念的季调/未季调变体对读者是同一个指标，匹配时一律按概念。
+ *
+ * 名字来自码表（`zhShort` / `enShort`），`clockCardText.names` 只是它的语言投影；
+ * 两处不一致会由守卫用例当场红，不靠人记。
  */
-export const clockRingMetricKeys = Object.freeze([
-  { concept: 'US.CPI.YOY', nameKey: 'cpiYoy' },
-  { concept: 'US.NONFARM.CHANGE', nameKey: 'nonfarmPayrolls' }
-] as const)
+/**
+ * 每个一级概念的牌面名字键（与 `clockCardText.names` 同名）。
+ * **新增一级码必须在这里登记**，否则守卫红——这是「以后加一级指标环不会静默漏掉」的判据。
+ */
+export const clockRingNameKeys: Readonly<Record<string, string>> = Object.freeze({
+  'US.CPI.YOY': 'cpiYoy', 'US.CPI.MOM': 'cpiMom',
+  'US.CORE_CPI.YOY': 'coreCpiYoy', 'US.CORE_CPI.MOM': 'coreCpiMom',
+  'US.PCE.YOY': 'pceYoy', 'US.PCE.MOM': 'pceMom',
+  'US.CORE_PCE.YOY': 'corePceYoy', 'US.CORE_PCE.MOM': 'corePceMom',
+  'US.NONFARM.CHANGE': 'nonfarmPayrolls', 'US.UNEMPLOYMENT.RATE': 'unemploymentRate',
+  'US.AHE.YOY': 'aheYoy', 'US.AHE.MOM': 'aheMom'
+})
+
+/** 码表里全部一级 active 概念（顺序按码排序，稳定）。 */
+export const clockRingConcepts: readonly Readonly<{ concept: string; nameKey: string }>[] = Object.freeze(
+  Object.entries(marketCalendarCodeTable)
+    .filter(([, row]) => row.tier === 1 && row.status === 'active')
+    .map(([code]) => ({ code, concept: metricConceptOf(code) }))
+    .sort((left, right) => left.code.localeCompare(right.code))
+    .map(({ concept }) => {
+      const nameKey = clockRingNameKeys[concept]
+      // 没登记名字就抛：这是开发期契约错误，比「环上少一个指标」更容易被发现。
+      if (nameKey === undefined) throw new Error(`一级概念缺少名字键：${concept}`)
+      return Object.freeze({ concept, nameKey })
+    })
+)
 
 /** 日程里这张卡要读的字段；缺 `measureKeys` 的行不参与匹配（不按名字猜）。 */
 export type ClockScheduleEvent = Readonly<{ scheduledAt: string; measureKeys?: readonly string[] }>
@@ -35,13 +62,14 @@ export type ClockCardFact = Readonly<{
   unit?: 'percent' | 'thousands'
   next?: Readonly<{
     releaseAt: string
-    expected?: Readonly<{ value: number }>
+    expected?: Readonly<{ value: number; provenance?: 'market-implied' | 'source-survey' }>
   }>
 }>
 
 export type ClockPolicyReading = Readonly<{
   meetingDate: string
-  probability?: Readonly<{ value?: number }> | undefined
+  /** 主推档与它的概率：标签必须按 `outcome` 生成，不能写死「维持不变」。 */
+  probability?: Readonly<{ value?: number; outcome?: string }> | undefined
 }>
 
 export function clockScheduleMetrics(input: Readonly<{
@@ -52,7 +80,7 @@ export function clockScheduleMetrics(input: Readonly<{
   policy?: ClockPolicyReading
 }>): readonly ClockScheduleMetric[] {
   const metrics: ClockScheduleMetric[] = []
-  for (const metric of clockRingMetricKeys) {
+  for (const metric of clockRingConcepts) {
     const isThisConcept = (metricKey: string): boolean => metricConceptOf(metricKey) === metric.concept
     const fact = input.facts.find((entry) => isThisConcept(entry.metricKey))
     const dates = input.events
@@ -82,7 +110,12 @@ export function clockScheduleMetrics(input: Readonly<{
       ...(nextDate === undefined ? {} : {
         nextRelease: {
           date: nextDate,
-          ...(fact?.next?.expected === undefined ? {} : { expected: formatNumber(fact.next.expected.value, fact.unit) })
+          ...(fact?.next?.expected === undefined ? {} : { expected: formatNumber(fact.next.expected.value, fact.unit) }),
+          /**
+           * **这个候选有没有盘口预期**（用户 2026-11-21）：环上只挂「有盘口预期的」那一个；
+           * 数据商问卷值不算——那是另一条链，不能顶上去假装有盘口。
+           */
+          ...(fact?.next?.expected?.provenance === 'market-implied' ? { expectedFromMarket: true as const } : {})
         }
       }),
       ...(periodDays === undefined || !Number.isFinite(periodDays) || periodDays <= 0 ? {} : { periodDays })
@@ -97,7 +130,8 @@ export function clockScheduleMetrics(input: Readonly<{
       nextRelease: {
         date: clockDateOf(policy.meetingDate),
         ...(probability === undefined ? {} : { expected: `${(probability * 100).toFixed(1)}%` })
-      }
+      },
+      ...(policy.probability?.outcome === undefined ? {} : { policyOutcome: policy.probability.outcome })
     })
   }
   return metrics

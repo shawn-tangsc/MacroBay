@@ -27,6 +27,7 @@ import { etfOutflowSignalHandoff } from './signals/etfOutflowSignalHandoff'
 import { notifyEtfCapitalFlowUpdates } from './signals/capitalFlowUpdateNotifier'
 import { notifyStablecoinCapitalUpdate } from './capital-conditions/stablecoinCapitalUpdateNotifier'
 import { createMacroMarketRuntime } from './macro-market/macroMarketRuntime'
+import type { MacroMarketStore } from './macro-market/macroMarketStore'
 import { createMacroMarketLive } from './macro-market/macroMarketLive'
 import { macroMarketPolicy } from './macro-market/macroMarketPolicy'
 import { createDashboardFeedStatusQuery } from './macro-market/dashboardFeedStatusQuery'
@@ -62,6 +63,11 @@ export function createIntelligenceMarketData(input: {
   profileStore: SourceProfileStore
   credentialStore: IntelligenceCredentialStore
   pipeline: IntelligencePipeline
+  /**
+   * 宏观市场历史表：与 pipeline 的整窗出口共用同一份连接（日频国债收盘写、DXY 与金价也写），
+   * 所以由上层建好传进来，这里不再自己开第二个连接。
+   */
+  macroMarketStore: MacroMarketStore
   macroCalendarEvidenceArchive: MacroCalendarEvidenceArchive
   platformFetch: CapitalConditionsPlatformFetch
   /** 读者时区：通知的去重键要「读者日」（`shellTimeZone.get()` 由宿主注入，与舆情那条同一条链路）。 */
@@ -70,7 +76,7 @@ export function createIntelligenceMarketData(input: {
   createPlatformWebSocket?: () => PlatformWebSocketConstructor
 }) {
   const {
-    jobRuntime, dataDir, profileStore, credentialStore, pipeline, macroCalendarEvidenceArchive,
+    jobRuntime, dataDir, profileStore, credentialStore, pipeline, macroMarketStore, macroCalendarEvidenceArchive,
     platformFetch, timeZone, submitNotification, createPlatformWebSocket
   } = input
   const capitalConditionsStore = createCapitalConditionsCurrentStateStore({
@@ -108,6 +114,7 @@ export function createIntelligenceMarketData(input: {
   // takes the failing source id from the collector rather than naming one of the two sources.
   const macroMarket = createMacroMarketRuntime({
     jobRuntime,
+    store: macroMarketStore,
     resolveProfile: sourceId => profileStore.resolveProfile(sourceId),
     getCredential: credentialRef => credentialStore.getByRef(credentialRef as never),
     dataDirectory: dataDir,

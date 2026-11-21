@@ -18,6 +18,12 @@ import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
  * - `first_scheduled_date` 取更早的；**展示排期取官方排期**，没有官方行时取有值那一行的排期；
  * - 台账两个 `source_event_id` 都留（主键是 provider+id，天然两条），身份列跟着改到合并后的行；
  * - 备份整表、单事务、行数对账、二次运行 0 变更、**不 drop 旧表**（改名留作回滚点）。
+ *
+ * **判据是当前缺口，不是「跑过一次」**（2026-11-21）：这条原来用迁移版本 17 闸住，跑过一次就
+ * 永远短路。但写入端**还能继续产生这种形状**——标准表主键含 `first_scheduled_date`，而写入端只
+ * 在**同一来源**内认回身份（`marketCalendarSameIdentityWrite.ts` 按 `source_provider_id` 查），
+ * 两家来源对同一次发布的「首次排期」看法不同就是两行（改期、补排都会出现）。标记在、缺口在，
+ * 两边看起来都正常。所以改成每次启动算一次当前重复组，为 0 就跳过。
  */
 export const calendarCrossSourceMergePolicy = Object.freeze({
   migrationVersion: 17,
@@ -62,17 +68,18 @@ const isOfficial = (providerId: string): boolean =>
 export function mergeCrossSourceCalendarRows(database: DatabaseSync): CrossSourceMergeReport {
   const table = calendarStandardTablePolicy.eventsTable
   const version = calendarCrossSourceMergePolicy.migrationVersion
-  const done = database.prepare('select 1 from mi_macro_calendar_migrations where version = ?').get(version)
-  if (done !== undefined) return emptyReport()
+  // 老库留下的标记同时清掉：留着会让下一个人以为这条还受版本闸控制。
+  // 迁移表可能不存在（启动链那段 `try` 里踩过这个坑：缺表直接抛，后面的步骤一条都不跑）——
+  // 清理标记是附带动作，缺表不是错误。
+  if (database.prepare("select 1 from sqlite_master where type = 'table' and name = 'mi_macro_calendar_migrations'").get() !== undefined) {
+    database.prepare('delete from mi_macro_calendar_migrations where version = ?').run(version)
+  }
   const groups = database.prepare(`select country_code, metric_key, period_key, count(*) as n
     from ${table} where row_kind = 'release'
     group by country_code, metric_key, period_key having n > 1`).all() as unknown as
     { country_code: string; metric_key: string; period_key: string; n: number }[]
   const report = { ...emptyReport(), groups: groups.length }
-  if (groups.length === 0) {
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
-    return report
-  }
+  if (groups.length === 0) return report
   const before = Number((database.prepare(`select count(*) as n from ${table}`).get() as { n: number }).n)
   database.exec('begin')
   try {
@@ -151,7 +158,6 @@ export function mergeCrossSourceCalendarRows(database: DatabaseSync): CrossSourc
     if (after !== before - report.removedRows) {
       throw new Error(`cross-source merge row count mismatch: before=${before} after=${after} removed=${report.removedRows}`)
     }
-    database.prepare('insert or ignore into mi_macro_calendar_migrations(version) values (?)').run(version)
     database.exec('commit')
     return report
   } catch (error) {

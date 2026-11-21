@@ -5,7 +5,8 @@ import {
 } from './macroIndicatorCardFacts'
 import { applyOfficialYoY, type FredYoYReading } from './fredIndicatorYoY'
 import type { MacroCalendarLegacyMetricRow, MacroCalendarRepository } from './macroCalendarRepository'
-import { narwhalMeasureMetricKeys, zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
+import { zeroXRouterCanonicalIdentity } from './marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from './marketCalendarNarwhalMeasureKeys'
 import type { NarwhalReleaseRow, NarwhalReleaseValue } from './narwhalReleaseContracts'
 
 /**

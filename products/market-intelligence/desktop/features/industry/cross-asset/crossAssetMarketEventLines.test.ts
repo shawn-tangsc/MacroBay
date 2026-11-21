@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crossAssetMarketEventLinePolicy, crossAssetMarketEventSources, officialEventKeysInWindow } from './crossAssetMarketEventLines'
+import { crossAssetMarketEventLinePolicy, crossAssetMarketEventSources, fomcDecisionDatesOf, officialEventKeysInWindow } from './crossAssetMarketEventLines'
 
 /**
  * 0xRouter 市场路线进竖线（设计 140 §3.2）。
@@ -17,6 +17,16 @@ const event = (overrides: Record<string, unknown> = {}): Record<string, unknown>
   eventType: 'economic-indicator', importance: 'high', scheduledAt: '2026-10-15T12:30:00.000Z', ...overrides
 })
 const sources = (events: readonly unknown[], officialEventKeys: readonly string[] = []) => crossAssetMarketEventSources(events, officialEventKeys)
+
+/**
+ * FOMC 的身份只按「类别 + 日期」认（Chief 2026-11-21）：官方事件键里就带着决议日，
+ * 从里面取，不另外维护一份日期表，也不读 title 措辞。
+ */
+it('官方决议日从官方事件键里取，只认 US.FOMC.YYYY-MM-DD', () => {
+  expect(fomcDecisionDatesOf(['US.FOMC.2026-12-09', 'US.CPI.2026-11-10', 'US.FOMC.2027-01-27']))
+    .toEqual(['2026-12-09', '2027-01-27'])
+  expect(fomcDecisionDatesOf([])).toEqual([])
+})
 
 describe('the market route as chart lines', () => {
   it('keeps a high-importance US data release, named by the provider and dashed while it is still ahead', () => {

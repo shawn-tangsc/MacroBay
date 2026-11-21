@@ -42,6 +42,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
       -- 读者仍要能点开看到「第 1 次 11-25、第 2 次 12-23」——只给次数等于把细节藏了。
       release_dates_json text,
       values_json text not null,
+      -- **数值列**（架构师 2026-11-21 方案 §1）：一列 JSON，存状态 + 单位 + 三个值 + 各自小数位。
+      -- 可空；旧行 NULL = 数值未记录，不是 0。展示仍读 values_json，计算只读这一列。
+      numeric_json text,
       source_provider_id text not null,
       source_event_id text not null,
       -- **源内发布 id**（架构师 2026-11-21 批 (b)）：判别「同一发布改了排期」与「同期的第二次真实发布」
@@ -132,7 +135,9 @@ export function ensureCalendarStandardTables(database: DatabaseSync): void {
   const missingColumns: readonly [string, string][] = [
     ['missing_reason', 'text'],
     ['missing_basis', 'text'],
-    ['missing_review_at', 'text']
+    ['missing_review_at', 'text'],
+    // 数值列（架构师方案 §4）：只加列、不回填；旧行 NULL 由读侧表达成「数值未记录」。
+    ['numeric_json', 'text']
   ]
   const existingColumns = new Set((database.prepare(`pragma table_info(${eventsTable})`)
     .all() as { name: string }[]).map((column) => column.name))

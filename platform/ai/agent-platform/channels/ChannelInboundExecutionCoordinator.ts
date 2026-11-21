@@ -47,6 +47,13 @@ export class ChannelInboundExecutionCoordinator {
     runs?: ChannelDispatchRunRepository
     /** 失败原因码闭集之一；界面据此说人话。`dispatch-failed-unknown` 是**兜底**，不是解释。 */
     failureText?: (kind: 'run-failed' | 'run-interrupted', reason?: DispatchFailureReason) => string | Promise<string>
+    /**
+     * 只带附件、没有配文的消息，交给助手的那句话（含每条附件的稳定引用）。
+     *
+     * 为什么要它：这一轮原来是**空回合**——助手什么都没拿到，聊天里也看不出「收到过」，
+     * 读者分不清「没发」「发了没处理」。文案归注入方（按读者语言），这里只负责别让它变成空的。
+     */
+    attachmentsOnlyText?: (attachments: ChannelInboundPayload['attachments']) => string | Promise<string>
     now?: () => Date
     leaseMs?: number
     setInterval?: (callback: () => void, intervalMs: number) => Timer
@@ -124,7 +131,7 @@ export class ChannelInboundExecutionCoordinator {
       const payload = await this.decrypt(admitted)
       // 手机通道没有确认卡：分发前标记这个会话，工具审批直接收口，不排队等界面。
       markChannelSession(binding.sessionId)
-      const runtime = await this.deps.runtime.sendMessage({ agentId: binding.agentId, sessionId: binding.sessionId, text: payload.text ?? '', runId: owner.dispatchId })
+      const runtime = await this.deps.runtime.sendMessage({ agentId: binding.agentId, sessionId: binding.sessionId, text: await this.turnText(payload), runId: owner.dispatchId })
       if (this.deps.runs) {
         const text = getAgentTextParts(runtime.assistantMessage.data).join('\n')
         const encrypted = await this.deps.cipher.encrypt(owner.channelId, new TextEncoder().encode(text))
@@ -170,6 +177,26 @@ export class ChannelInboundExecutionCoordinator {
 
   private finalize(claim: ChannelExecutionClaim, status: 'completed' | 'failed'): 'completed' | 'failed' | 'deferred' {
     return this.deps.inbound.finalizeDispatch(claim, status, this.now()) ? status : 'deferred'
+  }
+
+  /**
+   * 交给助手的那一轮文本。
+   *
+   * 只带附件、没有配文的消息**不能变成空回合**：空回合在聊天里跟「消息没收到」一模一样，
+   * 助手也拿不到任何可引用的东西——读者分不清「没发」「发了没处理」。所以这种消息给一句说明
+   * （由注入方按读者语言写，带上每条附件的稳定引用），助手能回一句「收到图片」，界面上也看得出
+   * 这一轮存在。有配文时逐字照旧（不追加附件说明，否则每一轮历史消息都会变样）；
+   * 既没文字也没附件时保持原样——那种消息本来就没有内容可转述。
+   */
+  private async turnText(payload: ChannelInboundPayload): Promise<string> {
+    if (payload.text !== null && payload.text.trim().length > 0) return payload.text
+    if (payload.attachments.length === 0) return payload.text ?? ''
+    const composed = await this.deps.attachmentsOnlyText?.(payload.attachments)
+    if (composed !== undefined) return composed
+    // 没装文案端口时退成**数据行**：这里不写硬编码人话（可见文案归注入方）。
+    return payload.attachments
+      .map((attachment) => `${attachment.kind} ${attachment.mimeType} ref=${attachment.stableRef}`)
+      .join('\n')
   }
 
   private async decrypt(admission: { channelId: string; ciphertext: Uint8Array; keyRef: string; keyRevision: number }): Promise<ChannelInboundPayload> {

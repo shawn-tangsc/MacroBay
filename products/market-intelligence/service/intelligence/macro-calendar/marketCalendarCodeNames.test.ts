@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { eventTypeNameByCode, nameByMetricKey, nameForMetricKey } from './marketCalendarCodeNames'
-import { narwhalMeasureMetricKeys, zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { eventTypeNameByCode, nameByMetricKey, nameForMetricKey, registeredSourceIdentityName,
+  sourceInternalIdOf } from './marketCalendarCodeNames'
+import { zeroXRouterIndicatorIdentities } from './marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from './marketCalendarNarwhalMeasureKeys'
 
 /** 38 条已上线码名的**冻结期望值**：抄自 20 号表的现名，改一个字节这里就该红。 */
 const EXPECTED_LOCKED_NAMES: Readonly<Record<string, readonly [string, string, string, string]>> = Object.freeze({
@@ -86,6 +88,23 @@ describe('码名', () => {
       }
     }
     expect(entries.length).toBe(189)
+  })
+
+  /**
+   * 0.4.5 #14：源内身份有没有登记显示名，**只问登记表**，不读名字用了哪些字。
+   * 解析只有一处实现（`sourceInternalIdOf`）：身份第一段是源自己给的，不是我们猜的映射。
+   */
+  it('登记的源内身份给出中英名；没登记返回 undefined（回退源原文名，不编名字）', () => {
+    // 身份第一段只是「记录 id」，每期都换；登记表按**源的稳定指标 id**（series_id）查。
+    expect(sourceInternalIdOf('["9553",79090]')).toBe('id:9553')
+    expect(sourceInternalIdOf('US.CPI.NSA.YOY')).toBe('US.CPI.NSA.YOY')
+    expect(registeredSourceIdentityName('9553')).toEqual({
+      zh: '批发物价指数(年率)', en: 'Wholesale Price Index (YoY)'
+    })
+    expect(registeredSourceIdentityName('45210')).toBeUndefined()
+    // 没有稳定 id 就是「不知道是哪一条」，不许按别的字段猜。
+    expect(registeredSourceIdentityName(undefined)).toBeUndefined()
+    expect(registeredSourceIdentityName('  ')).toBeUndefined()
   })
 
   it('覆盖守卫：每一个在用码都有名字，一个都不许缺', () => {

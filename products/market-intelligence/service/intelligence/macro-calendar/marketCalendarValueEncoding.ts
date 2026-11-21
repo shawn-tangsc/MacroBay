@@ -18,20 +18,37 @@ export const calendarValueEncodingErrorCode = 'value-encoding-invalid' as const
 /** 值字段里出现这种前缀，说明它是被字符串化的 `{displayValue}` 对象。 */
 const STRINGIFIED_DISPLAY_VALUE_PREFIX = '{"displayValue"'
 
+/** 值对象的**结构部分**：展示串、源自报的数值、单位。三者都可能缺席。 */
+export type CalendarSourceValueText = Readonly<{ displayValue?: string; numericValue?: number; unit?: string }>
+
 /**
- * 观测表那一列（`{"displayValue":"4.7%"}` 的文本）→ 展示字符串。
+ * 观测表/修订表那一列（`{"displayValue":"4.7%","numericValue":4.7,"unit":"percent"}` 的文本）
+ * → 值对象里**能用的那几项**。
  *
- * 解析不出、`displayValue` 不是字符串、或者空串 → `undefined`：**该字段缺席**，
- * 不拿原文顶、不填空串（两者都会被读成「来源给了个怪值」或「确实没有」）。
+ * 这是「解释值编码」的唯一入口：展示串、数值、单位都从这里取，**别处不许再 JSON.parse 一遍**。
+ * 解析不出、或三项全缺 → `undefined`：**该字段缺席**，不拿原文顶、不填空串
+ * （两者都会被读成「来源给了个怪值」或「确实没有」）。
  */
-export function displayValueFromJson(text: string | null | undefined): string | undefined {
+export function valueObjectFromJson(text: string | null | undefined): CalendarSourceValueText | undefined {
   if (text === null || text === undefined || text.trim() === '') return undefined
-  try {
-    const parsed: unknown = JSON.parse(text)
-    if (typeof parsed !== 'object' || parsed === null) return undefined
-    const display = (parsed as { displayValue?: unknown }).displayValue
-    return typeof display === 'string' && display.trim() !== '' ? display : undefined
-  } catch { return undefined }
+  let parsed: unknown
+  try { parsed = JSON.parse(text) } catch { return undefined }
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const row = parsed as { displayValue?: unknown; numericValue?: unknown; unit?: unknown }
+  const displayValue = typeof row.displayValue === 'string' && row.displayValue.trim() !== '' ? row.displayValue : undefined
+  const numericValue = typeof row.numericValue === 'number' && Number.isFinite(row.numericValue) ? row.numericValue : undefined
+  const unit = typeof row.unit === 'string' && row.unit.trim() !== '' ? row.unit : undefined
+  if (displayValue === undefined && numericValue === undefined) return undefined
+  return {
+    ...(displayValue === undefined ? {} : { displayValue }),
+    ...(numericValue === undefined ? {} : { numericValue }),
+    ...(unit === undefined ? {} : { unit })
+  }
+}
+
+/** 只要展示串的那一档（值字段是展示串，读侧不拿它做算术）。 */
+export function displayValueFromJson(text: string | null | undefined): string | undefined {
+  return valueObjectFromJson(text)?.displayValue
 }
 
 const VALUE_FIELDS = ['actual', 'previous', 'consensus'] as const

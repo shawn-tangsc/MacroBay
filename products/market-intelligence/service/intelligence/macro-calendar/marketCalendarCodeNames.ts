@@ -1,4 +1,5 @@
 import { germanMetricNames } from './marketCalendarGermanSourceMappings'
+import { sourceIdentityDisplayNames } from './macroCalendarSourceIdentityNames'
 
 /**
  * 码名：**族名（measure-free）+ 测度词** 拼出来，已上线的 38 条用 `manualName` 冻结。
@@ -348,3 +349,27 @@ export const eventTypeNameByCode: Readonly<Record<string, Readonly<{
   'evt.petroleum-inventories': { zhFull: '石油库存报告', zhShort: '石油库存', enFull: 'Petroleum Inventories', enShort: 'Petroleum Stocks' },
   'evt.policy-rate-decision': { zhFull: '利率决议', zhShort: '利率决议', enFull: 'Fed Rate Decision', enShort: 'Rate Decision' },
 })
+
+/**
+ * 源内身份：数组形 `["214790",79090]` 的第一段就是指标身份（同一条发布的多个 measure 共用它）。
+ * 非数组形（规范码）原样返回。**这是「源自己说的身份」，不是我们猜的映射。**
+ *
+ * 只此一份实现（原来在 `rendering/marketCalendarEventIndexRead.ts`，两处各解析一次迟早会漂）。
+ */
+export function sourceInternalIdOf(metricKey: string): string {
+  const match = /^\["(\d+)"/.exec(metricKey)
+  return match === null ? metricKey : `id:${match[1]}`
+}
+
+/**
+ * **登记过的源内身份显示名**（唯一登记处 `sourceIdentityDisplayNames`）。
+ *
+ * 键是**源自己的稳定指标 id**（观测表 `indicator_id` → 标准表 `series_id`），不是数组身份第一段：
+ * 第一段每次发布都换一个（真库 1943 行对应 1544 个第一段，同一个指标每期一个新值），拿它登记名字
+ * 等于每期都要重新登记一遍。没有稳定 id 就返回 `undefined`——调用方回退源原文名，
+ * **绝不拿源原文冒充我们起的名字**。这条判据只问「这一条登记了没有」，不读名字里用了哪些字。
+ */
+export function registeredSourceIdentityName(seriesId: string | undefined): Readonly<{ zh: string; en: string }> | undefined {
+  if (seriesId === undefined || seriesId.trim() === '') return undefined
+  return sourceIdentityDisplayNames[seriesId.trim()]
+}

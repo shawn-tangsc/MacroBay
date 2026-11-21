@@ -7,14 +7,16 @@ import { analysisTriggerLedgerCutoffIso } from './analysisTriggerLedgerRetention
 import { predictionLedgerCutoffIso } from './predictionLedgerRetention'
 import type { BarRetentionCutoffs } from './barRetention'
 import { createNewsSentimentRetentionTarget } from '../news-sentiment/newsSentimentRetention'
+import { createRawRecordRetentionTarget, logRawRecordRetention } from './rawRecordRetention'
+import type { RawRecordStore } from '../application/rawRecordStore'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 
 /**
  * Register the one daily pass that keeps every market store inside its retention policy.
  *
  * The wiring lives here rather than in `bootstrap.ts` so the product entry point stays a call site,
- * and so the four windows this pass answers — conclusions, verdicts, the signal ledger, the model
- * call record — are read in one file next to the job that runs them.
+ * and so the windows this pass answers — conclusions, verdicts, the signal ledger, the model call
+ * record, the raw records and their payload files — are read in one file next to the job that runs them.
  */
 export function registerMarketRetention(input: Readonly<{
   jobRuntime: JobRuntime
@@ -22,6 +24,7 @@ export function registerMarketRetention(input: Readonly<{
   crossAssetStore: Readonly<{ retention: (cutoffs: BarRetentionCutoffs) => MarketHistoryRetentionResult; note: (key: string, value: string) => void }>
   analysisRepository: MarketAnalysisRepository
   newsStore?: Parameters<typeof createNewsSentimentRetentionTarget>[0]
+  rawRecordStore?: Pick<RawRecordStore, 'pruneRawRecords'>
 }>): void {
   const { analysisRepository } = input
   registerMarketHistoryRetentionJob(input.jobRuntime, createMarketHistoryRetention({
@@ -55,7 +58,10 @@ export function registerMarketRetention(input: Readonly<{
       // The news store keeps its own two windows (30 days of bodies, 365 of judgments) on this same
       // clock. It joins this job rather than owning a timer of its own: one daily pass, one startup
       // look, and a store whose database failed to open is simply absent from the pass.
-      ...(input.newsStore ? { news: createNewsSentimentRetentionTarget(input.newsStore) } : {})
+      ...(input.newsStore ? { news: createNewsSentimentRetentionTarget(input.newsStore) } : {}),
+      // 原始记录（json 元数据 + 内容寻址原文）是这一跑的最后一段：7 天轮转、孤儿每次顺手回收。
+      // 它也一样没有自己的时间：不接上就是「只增不减」，接上一跑就够。
+      ...(input.rawRecordStore ? { rawRecords: createRawRecordRetentionTarget(input.rawRecordStore, logRawRecordRetention) } : {})
     }
   }).run)
 }

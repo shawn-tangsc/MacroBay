@@ -50,4 +50,17 @@ describe('FOMC 各次会议的类别', () => {
     seed(database, 'US.FOMC', 'economic-indicator')
     expect(fixFomcEventTypes(database).updated).toBe(0)
   })
+
+  it('跑过一次之后新来的同类行照样被改：判据是当前缺口，不是版本标记', () => {
+    const database = setup()
+    seed(database, 'US.FOMC.2026-12-09', 'economic-indicator')
+    expect(fixFomcEventTypes(database).updated).toBe(1)
+    // 下一场会议到了：`backfillCalendarEventTypes` 的前缀规则（不以 `evt.` 开头 ⇒ 经济指标）
+    // 会把它补成 `economic-indicator`，所以这个形状每天都能再出现。
+    seed(database, 'US.FOMC.2027-01-27', 'economic-indicator')
+    expect(fixFomcEventTypes(database)).toEqual({ scanned: 1, updated: 1 })
+    const types = database.prepare("select event_type from mi_calendar_events where metric_key like 'US.FOMC.2027%'")
+      .all() as unknown as { event_type: string }[]
+    expect(types).toEqual([{ event_type: 'central-bank-activity' }])
+  })
 })

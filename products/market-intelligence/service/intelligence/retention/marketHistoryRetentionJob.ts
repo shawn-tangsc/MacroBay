@@ -15,7 +15,7 @@ const PRODUCT_ID = 'market-intelligence'
 export const marketHistoryRetentionPolicy = Object.freeze({
   intervalMs: 24 * 3_600_000,
   /** The stores this pass owns, and the note prefix each ledger line is filed under. */
-  stores: Object.freeze({ macro: 'macro-market', crossAsset: 'cross-asset', analysis: 'analysis', news: 'news-sentiment', analysisIo: 'analysis-io' } as const)
+  stores: Object.freeze({ macro: 'macro-market', crossAsset: 'cross-asset', analysis: 'analysis', news: 'news-sentiment', analysisIo: 'analysis-io', rawRecords: 'raw-records' } as const)
 })
 
 type StoreId = keyof typeof marketHistoryRetentionPolicy.stores

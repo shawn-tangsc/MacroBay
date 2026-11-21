@@ -11,12 +11,17 @@ import { clockCardText } from './clockCardText'
 
 const text = clockCardText['zh-CN']
 const today = '2026-11-15'
+/**
+ * 环上只放一个指标（用户 2026-11-21）：候选=有盘口预期的一级指标。
+ * 这里只有 CPI 有盘口 → 环上那一个是它；非农进溢出清单；政策牌单独一块（相撞时让位给指标）。
+ */
 const metrics: readonly ClockScheduleMetric[] = [
   { metricKey: 'US.CPI.NSA.YOY', nameKey: 'cpiYoy', lastRelease: { date: '2026-11-10', value: '3.74%' },
-    nextRelease: { date: '2026-12-10' }, periodDays: 30 },
+    nextRelease: { date: '2026-12-10', expected: '3.2%', expectedFromMarket: true as const }, periodDays: 30 },
   { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls', lastRelease: { date: '2026-11-06', value: '+165K' },
     nextRelease: { date: '2026-12-04' }, periodDays: 28 },
-  { metricKey: 'US.TARGET_RATE.HIKE_25', nameKey: 'policyRate', nextRelease: { date: '2026-12-09' }, periodDays: 42 }
+  { metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate',
+    nextRelease: { date: '2026-12-09' }, periodDays: 42, policyOutcome: 'hike-25' }
 ]
 
 let root: Root | null = null
@@ -39,12 +44,11 @@ async function render(overrides: Partial<Parameters<typeof ClockCard>[0]> = {}) 
   return { host, opened }
 }
 
-it('puts the four plaques at the angles the schedule gives', async () => {
+it('puts the one market-implied indicator on the ring at the angle the schedule gives', async () => {
   const { host } = await render()
   const nodes = [...host.querySelectorAll<HTMLElement>('[data-clock-plaque]')]
-  // 今天真实命中 4 块在上环：CPI 过去、非农过去/未来、政策利率未来。
-  // CPI 下一期（25 天、200°）与政策利率（24 天、192°）相撞 19px，按规则让位给更近的政策利率。
-  expect(nodes).toHaveLength(4)
+  // 环上只放一个指标：CPI（过去 + 未来）。非农没盘口 → 不上环；政策牌与 CPI 未来牌相撞 → 让位。
+  expect(nodes).toHaveLength(2)
   const cpiPast = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
   const expected = clockRingPoint(300)
   expect(Number.parseFloat(cpiPast.style.left)).toBeCloseTo(expected.x, 2)
@@ -55,23 +59,31 @@ it('puts the four plaques at the angles the schedule gives', async () => {
   expect(cpiPast.textContent).not.toContain('天')
 })
 
-it('drives each future plaque’s opacity from its position, not from a timer', async () => {
+it('drives the ring plaque’s opacity from its position, not from a timer', async () => {
   const { host } = await render()
-  const policy = host.querySelector<HTMLElement>('[data-clock-metric="US.TARGET_RATE.HIKE_25"]')!
-  expect(policy.style.getPropertyValue('--o')).toBe('0.82')
-  const payrolls = host.querySelector<HTMLElement>('[data-clock-metric="US.NONFARM.SA.CHANGE"][data-clock-plaque="future"]')!
-  expect(Number(payrolls.style.getPropertyValue('--o'))).toBeCloseTo(0.7006, 4)
+  // CPI 下一期 25 天 → 0.5 + (25/30)²×0.5 ≈ 0.8472。
+  const future = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="future"]')!
+  expect(Number(future.style.getPropertyValue('--o'))).toBeCloseTo(0.8472, 4)
   // 过去牌不参与透明度：固定 1。
-  const past = host.querySelector<HTMLElement>('[data-clock-metric="US.NONFARM.SA.CHANGE"][data-clock-plaque="past"]')!
+  const past = host.querySelector<HTMLElement>('[data-clock-metric="US.CPI.NSA.YOY"][data-clock-plaque="past"]')!
   expect(past.style.getPropertyValue('--o')).toBe('1')
 })
 
-it('writes 预期未提供 in the centre when the next release has no consensus, never a sample value', async () => {
+it('writes the market-implied expectation the ring indicator carries', async () => {
   const { host } = await render()
-  expect(host.querySelector('.mi-clock__value')?.textContent).toBe(text.expectationMissing)
-  expect(host.textContent).not.toContain('142K')
-  // 前值照旧写出来：拿不到的是预期，不是前值。
-  expect(host.querySelector('.mi-clock__tier')?.textContent).toContain('+165K')
+  // 中央与环上同一个指标：CPI 的 3.2% 盘口预期 + 前值 3.74%。
+  expect(host.querySelector('.mi-clock__value')?.textContent).toBe('3.2%')
+  expect(host.querySelector('.mi-clock__tier')?.textContent).toContain('3.74%')
+})
+
+/** 一个都没有盘口时不硬挂：中央不画大数字（不拿没盘口的指标顶上去假装有预期）。 */
+it('draws no centre value when no candidate has a market-implied expectation', async () => {
+  const model = buildClockCardModel({ today, metrics: [
+    { metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
+      lastRelease: { date: '2026-11-06', value: '+165K' }, nextRelease: { date: '2026-12-04' }, periodDays: 28 }
+  ] })
+  const { host } = await render({ model })
+  expect(host.querySelector('.mi-clock__value')).toBeNull()
 })
 
 it('opens the calendar drawer from the overlay icon and names it for a screen reader', async () => {
@@ -82,11 +94,45 @@ it('opens the calendar drawer from the overlay icon and names it for a screen re
   expect(opened).toEqual(['calendar'])
 })
 
-it('hands the crowded plaque a line that names it and says how many days out it is', async () => {
+it('lists the releases that are not on the ring under the card, with a count', async () => {
   const { host } = await render()
-  const info = host.querySelector<HTMLElement>('.mi-clock__info')!
-  expect(info.getAttribute('data-clock-unplaced')).toBe('1')
-  expect(info.getAttribute('title')).toContain('另有 1 项未上环：CPI 年率 25 天后')
+  const line = host.querySelector<HTMLElement>('[data-clock-overflow]')!
+  // 非农（没盘口）在这一行里；计数是「发布」的条数。
+  expect(line.textContent).toContain('还有 1 个发布不在环上')
+  // 逐条在 ⓘ 里：名字 · 日期 · 几天后。
+  expect(line.querySelector('button')).not.toBeNull()
+})
+
+/**
+ * 溢出行必须**贴在卡上**，不许落回文档流（0.4.5 #40）。
+ *
+ * 真事故：`.mi-clock__overflow` 全仓库只有类名、没有样式，`<p>` 回到普通文档流，
+ * 跑到卡片左上角压住钟面刻度。
+ *
+ * 行高不是 11px：行内那颗 ⓘ 是 `IconButton size="sm"`（22×22，尺寸只有 sm/md 两档），
+ * 所以这一行**实际占 22px**，11px 只是字号。政策降级行因此要上移到 40（16+22+2）才不压住它。
+ */
+it('anchors the overflow line inside the card with exactly one trigger', async () => {
+  const { host } = await render()
+  const line = host.querySelector<HTMLElement>('[data-clock-overflow]')!
+  expect(line.parentElement?.tagName).toBe('SECTION')
+  expect(line.parentElement?.className).toContain('mi-clock')
+  // 行内只有**一颗** ⓘ（底部那颗是另一件事：来源、撞牌、其他原因）。
+  expect(line.querySelectorAll('button')).toHaveLength(1)
+  // 行里只有那句计数：逐条清单在浮层里，不摊在卡面上。
+  expect(line.textContent).toBe('还有 1 个发布不在环上')
+})
+
+it('positions the overflow line absolutely and lifts the policy note clear of it', () => {
+  const css = readFileSync('products/market-intelligence/desktop/pages/intelligence/clockCard.css', 'utf8')
+  const rule = /\.mi-clock__overflow\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(rule, '溢出行必须自己定位；没有这条规则它就落回文档流压住钟面').toContain('position: absolute')
+  expect(rule).toContain('bottom: 16px')
+  expect(rule).toContain('font-size: var(--font-meta)')
+  // 没有溢出行时政策说明留在 16；有溢出行时整体上移，两行不叠。
+  expect(/\.mi-clock__policy-note\s*\{([^}]*)\}/u.exec(css)?.[1] ?? '').toContain('bottom: 16px')
+  const lift = /\.mi-clock__overflow ~ \.mi-clock__policy-note\s*\{([^}]*)\}/u.exec(css)?.[1] ?? ''
+  expect(lift, '政策行上移量必须盖过溢出行那 22px 的实际行高').toContain('bottom: 40px')
 })
 
 it('leaves a line for a metric it cannot place instead of dropping it silently', async () => {
@@ -105,9 +151,10 @@ it('leaves a line for a metric it cannot place instead of dropping it silently',
  * ② 政策利率那一格的值是**盘口主推档概率**，名字却只写「政策利率」，90.9% 会被读成利率水平。
  */
 it('puts the expectation label above the number, so the number is not read as the actual', async () => {
+  // 环上那一个必须有盘口预期才会上环：这里用非农 + 盘口，中央与环上同一个。
   const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
     lastRelease: { date: '2026-11-06', value: '+165K' },
-    nextRelease: { date: '2026-11-25', expected: '+88K' }, periodDays: 28 }]
+    nextRelease: { date: '2026-11-25', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
   const { host } = await render({ model: buildClockCardModel({ today, metrics: withExpected }) })
   const core = host.querySelector('.mi-clock__core')!
   const unit = core.querySelector('.mi-clock__unit')
@@ -118,13 +165,13 @@ it('puts the expectation label above the number, so the number is not read as th
   expect(unit!.compareDocumentPosition(value!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
-it('names the policy slot as a probability, never as the rate itself', async () => {
+it('names the policy slot by its leading outcome, never a hardcoded one', async () => {
   const policy = [{ metricKey: 'US.TARGET_RATE.DECISION', nameKey: 'policyRate',
-    nextRelease: { date: '2026-11-25', expected: '90.9%' }, periodDays: 28 }]
+    nextRelease: { date: '2026-11-25', expected: '90.9%' }, periodDays: 28, policyOutcome: 'hike-25' }]
   const { host } = await render({ model: buildClockCardModel({ today, metrics: policy }) })
-  // 中央主位与环上的牌都用同一个名字：说清「这是维持不变的概率」。
-  expect(host.textContent).toContain('维持不变概率')
-  expect(host.querySelector('.mi-clock__core')?.textContent).not.toBe('政策利率90.9%')
+  // 主推档是 hike-25 → 标签必须是「加息」，不是写死的「维持不变」。
+  expect(host.textContent).toContain('加息 25bp概率')
+  expect(host.textContent).not.toContain('维持不变概率')
 })
 
 /**
@@ -139,7 +186,7 @@ it('names the policy slot as a probability, never as the rate itself', async () 
 it('renders the expectation label in full, never truncated with an ellipsis', async () => {
   const withExpected = [{ metricKey: 'US.NONFARM.SA.CHANGE', nameKey: 'nonfarmPayrolls',
     lastRelease: { date: '2026-11-06', value: '+165K' },
-    nextRelease: { date: '2026-11-25', expected: '+88K' }, periodDays: 28 }]
+    nextRelease: { date: '2026-11-25', expected: '+88K', expectedFromMarket: true as const }, periodDays: 28 }]
   const { host } = await render({ model: buildClockCardModel({ today, metrics: withExpected }) })
   const unit = host.querySelector('.mi-clock__unit')!
   expect(unit.textContent).toBe('预期（市场共识）')

@@ -34,7 +34,8 @@ export function ClockCardSlot({
   events: readonly ClockSourceEvent[]
   facts: readonly ClockFact[]
   /** 政策读数**已读到时**的那份（会议日 + 盘口概率）；读不到或没启用时不给。 */
-  reading?: Readonly<{ meetingDate: string; probability?: Readonly<{ value: number }> }> | undefined
+  reading?: Readonly<{ meetingDate: string
+    probability?: Readonly<{ value: number; outcome?: string }> }> | undefined
   policyUnavailable: boolean
   reloadPolicy: () => void
   probability: CellReadDecision
@@ -60,7 +61,10 @@ export function ClockCardSlot({
         ...(reading === undefined ? {} : {
           policy: {
             meetingDate: reading.meetingDate,
-            ...(reading.probability === undefined ? {} : { probability: { value: reading.probability.value } })
+            ...(reading.probability === undefined ? {} : { probability: {
+              value: reading.probability.value,
+              ...(reading.probability.outcome === undefined ? {} : { outcome: reading.probability.outcome })
+            } })
           }
         })
       })

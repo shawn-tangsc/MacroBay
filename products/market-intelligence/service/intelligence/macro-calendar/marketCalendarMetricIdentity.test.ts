@@ -4,12 +4,12 @@ import {
   canonicalIdentityKey,
   keepRowsNotCoveredByNarwhal,
   narwhalCanonicalIdentityKey,
-  narwhalMeasureMetricKeys,
   narwhalSourceEventIdForIdentity,
   zeroXRouterCanonicalIdentity,
   zeroXRouterIndicatorIdentities,
   type ZeroXRouterPeriodRule
 } from './marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from './marketCalendarNarwhalMeasureKeys'
 
 /**
  * 身份表的数据守卫：**一张表只许一种理解**。
@@ -47,7 +47,8 @@ describe('identity tables stay one-to-one', () => {
   })
 
   it('keeps every period rule inside the closed set', () => {
-    const rules: readonly ZeroXRouterPeriodRule[] = ['month', 'week_end', 'quarter']
+    // 闭集按 PRD R38 §3.1（2026-11-21）：调查/景气类的「当月」是单独一条，不是 month 的默认。
+    const rules: readonly ZeroXRouterPeriodRule[] = ['month', 'current_month', 'week_end', 'quarter']
     for (const [indicatorId, entry] of Object.entries(zeroXRouterIndicatorIdentities)) {
       expect(rules, `indicator ${indicatorId}`).toContain(entry.periodRule)
       expect(entry.metricKey.length).toBeGreaterThan(0)

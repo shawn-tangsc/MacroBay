@@ -46,19 +46,52 @@ describe('market calendar refresh attempts', () => {
       state: 'failed', trigger: 'automatic', failureCode: 'response-unavailable' })).toBe(true)
 
     const reopened = createMarketCalendarRefreshAttemptStore(database)
-    expect(reopened.listAttempts()).toEqual([{ descriptorId: descriptors.economic, locale: 'zh', month: '2026-11',
-      attemptedAt: '2026-11-04T11:00:00.000Z', state: 'failed', trigger: 'automatic',
+    expect(reopened.listAttempts()).toEqual([{ attemptId: 1, descriptorId: descriptors.economic, locale: 'zh',
+      month: '2026-11', attemptedAt: '2026-11-04T11:00:00.000Z', state: 'failed', trigger: 'automatic',
       failureCode: 'response-unavailable' }])
   })
 
-  it('never lets an older verdict overwrite a newer one', () => {
+  /**
+   * 0.4.5 #16：一个月只能留一条，后一次成功会把之前那次失败**覆盖掉**——出了采集问题
+   * 只能靠推测。改成只追加：两次尝试都留着，读者看「最新那条」由读口按时间挑。
+   */
+  it('appends every attempt: a later success does not erase the earlier failure', () => {
     const { store } = harness()
     store.record({ descriptorId: descriptors.economic, locale: 'zh', month: '2026-11', attemptedAt: '2026-11-05T08:00:00.000Z',
-      state: 'succeeded', trigger: 'automatic' })
-    store.record({ descriptorId: descriptors.economic, locale: 'zh', month: '2026-11', attemptedAt: '2026-11-04T11:00:00.000Z',
       state: 'failed', trigger: 'automatic', failureCode: 'storage-pressure' })
-    expect(store.listAttempts()).toEqual([{ descriptorId: descriptors.economic, locale: 'zh', month: '2026-11',
-      attemptedAt: '2026-11-05T08:00:00.000Z', state: 'succeeded', trigger: 'automatic' }])
+    store.record({ descriptorId: descriptors.economic, locale: 'zh', month: '2026-11', attemptedAt: '2026-11-05T09:30:00.000Z',
+      state: 'succeeded', trigger: 'automatic' })
+    const rows = [...store.listAttempts()].sort((left, right) => left.attemptedAt.localeCompare(right.attemptedAt))
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ state: 'failed', failureCode: 'storage-pressure' })
+    expect(rows[1]).toMatchObject({ state: 'succeeded' })
+    // 展示口径不变：仍然只给「最新那一条」。
+    expect(latestAttemptFor(store.listAttempts(), descriptors.economic, '2026-11')).toMatchObject({
+      state: 'succeeded', attemptedAt: '2026-11-05T09:30:00.000Z'
+    })
+  })
+
+  it('upgrades an old month-keyed table: history is kept and new attempts append', () => {
+    const database = new DatabaseSync(join(mkdtempSync(join(tmpdir(), 'mc-attempts-old-')), 'calendar.sqlite'))
+    disposals.push(() => database.close())
+    database.exec(`create table mi_macro_calendar_market_refresh_attempts (
+      descriptor_id text not null, locale text not null, month text not null, attempted_at text not null,
+      state text not null check(state in ('succeeded','failed')),
+      trigger text not null check(trigger in ('manual','automatic')), failure_code text,
+      primary key(descriptor_id, locale, month))`)
+    database.prepare(`insert into mi_macro_calendar_market_refresh_attempts
+      (descriptor_id, locale, month, attempted_at, state, trigger, failure_code)
+      values (?, 'zh', '2026-11', '2026-11-04T11:00:00.000Z', 'failed', 'automatic', 'storage-pressure')`)
+      .run(descriptors.economic)
+    // 生产里仓库先建（collections 表是它建的），attempts 表由 store 建/升级——顺序照实复现。
+    createMarketCalendarEventRepository({ database })
+    const store = createMarketCalendarRefreshAttemptStore(database)
+    store.record({ descriptorId: descriptors.economic, locale: 'zh', month: '2026-11',
+      attemptedAt: '2026-11-05T09:30:00.000Z', state: 'succeeded', trigger: 'automatic' })
+    expect(store.listAttempts()).toHaveLength(2)
+    // 旧表留作回滚点，不 drop。
+    expect(database.prepare(`select name from sqlite_master where type='table'
+      and name='mi_macro_calendar_market_refresh_attempts__pre_append_v1'`).get()).toBeDefined()
   })
 
   it('reads last-collected per source as its own latest success', () => {
@@ -92,8 +125,8 @@ describe('market calendar refresh attempts', () => {
 
   it('shows the newest attempt of a source, across its locales', () => {
     const rows = [
-      { descriptorId: descriptors.economic, locale: 'zh' as const, month: '2026-11', attemptedAt: '2026-11-04T11:00:00.000Z', state: 'failed' as const, trigger: 'automatic' as const, failureCode: 'response-unavailable' },
-      { descriptorId: descriptors.economic, locale: 'en' as const, month: '2026-11', attemptedAt: '2026-11-05T08:19:00.000Z', state: 'succeeded' as const, trigger: 'automatic' as const }
+      { attemptId: 1, descriptorId: descriptors.economic, locale: 'zh' as const, month: '2026-11', attemptedAt: '2026-11-04T11:00:00.000Z', state: 'failed' as const, trigger: 'automatic' as const, failureCode: 'response-unavailable' },
+      { attemptId: 2, descriptorId: descriptors.economic, locale: 'en' as const, month: '2026-11', attemptedAt: '2026-11-05T08:19:00.000Z', state: 'succeeded' as const, trigger: 'automatic' as const }
     ]
     expect(latestAttemptFor(rows, descriptors.economic)).toEqual({ state: 'succeeded',
       attemptedAt: '2026-11-05T08:19:00.000Z', trigger: 'automatic' })

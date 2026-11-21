@@ -45,7 +45,7 @@ describe('按国家拆开的源内映射', () => {
     const codes = new Set(Object.keys(marketCalendarCountryCodeTable))
     for (const [sourceId, entry] of Object.entries(marketCalendarCountrySourceMappings)) {
       expect(codes.has(entry.metricKey), `${sourceId} → ${entry.metricKey} 不在码表里`).toBe(true)
-      expect(['month', 'week_end', 'quarter', 'event_date']).toContain(entry.periodRule)
+      expect(['month', 'current_month', 'week_end', 'quarter', 'event_date']).toContain(entry.periodRule)
     }
   })
 })

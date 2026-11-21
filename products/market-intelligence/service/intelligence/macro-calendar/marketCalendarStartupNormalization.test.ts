@@ -30,6 +30,7 @@ type Seed = Readonly<{
   status?: string
   eventType?: string
   identityKind?: 'code' | 'source'
+  providerId?: string
 }>
 
 let seq = 0
@@ -39,10 +40,11 @@ function seed(database: DatabaseSync, over: Seed): void {
     (country_code, metric_key, period_key, scheduled_date, first_scheduled_date, time_precision,
      status, identity_kind, value_state, values_json, source_provider_id, source_event_id,
      parser_version, observed_at, first_seen_at, event_type, release_count)
-    values (?, ?, ?, ?, ?, 'date', ?, ?, ?, ?, 'test', ?, 'v1', ?, ?, ?, 1)`)
+    values (?, ?, ?, ?, ?, 'date', ?, ?, ?, ?, ?, ?, 'v1', ?, ?, ?, 1)`)
     .run(over.countryCode ?? 'US', over.metricKey, over.periodKey, over.firstScheduledDate,
       over.firstScheduledDate, over.status ?? 'published', over.identityKind ?? 'code',
-      over.valueState ?? 'missing', over.valuesJson ?? '{}', `x-${seq}`, now, now, over.eventType ?? null)
+      over.valueState ?? 'missing', over.valuesJson ?? '{}', over.providerId ?? 'test', `x-${seq}`, now, now,
+      over.eventType ?? null)
 }
 
 const run = (database: DatabaseSync) => normalizeCalendarStandardRows(database, { nowIso })
@@ -98,6 +100,28 @@ describe('启动链幂等规范化', () => {
     expect(JSON.parse(audit[0]!.deleted_row_json).first_scheduled_date).toBe('2026-10-01')
   })
 
+  /**
+   * 跨源冲突不许被「并成一行」抹掉（Chief 2026-11-21，0.4.5 #18）：
+   * 两家对同一期给出不同的数，合并会挑一个留下、另一个消失——那正是「谁也说不清哪来的」。
+   * 同源的两行仍按老规则合并（二读/三读是同一家的一次修订）。
+   */
+  it('两家两条行、actual 不同 → 保留两行（不并），并计数；同源两行照旧合并', () => {
+    const database = setup()
+    seed(database, { metricKey: 'US.E.NONE.RATE', periodKey: '2026-09', firstScheduledDate: '2026-10-03',
+      valuesJson: '{"actual":"4.1"}', valueState: 'present', providerId: 'narwhal' })
+    seed(database, { metricKey: 'US.E.NONE.RATE', periodKey: '2026-09', firstScheduledDate: '2026-10-04',
+      valuesJson: '{"actual":"4.2"}', valueState: 'present', providerId: '0xrouter' })
+    const report = run(database)
+    expect(report.conflictGroupsKept).toBe(1)
+    expect(report.droppedRows).toBe(0)
+    const after = rows(database)
+    expect(after).toHaveLength(2)
+    expect(after.map((row) => row.source_provider_id).sort()).toEqual(['0xrouter', 'narwhal'])
+    // 第二遍仍保留两行：这是持久语义，不是「第一次不并、第二次并」。
+    expect(run(database)).toMatchObject({ conflictGroupsKept: 1, droppedRows: 0 })
+    expect(rows(database)).toHaveLength(2)
+  })
+
   it('期次解不出的行原样保留（不删、不改期次），第二遍 0 变更', () => {
     const database = setup()
     seed(database, { metricKey: '["999999",1]', periodKey: 'unknown:["999999",1]',
@@ -129,5 +153,25 @@ describe('启动链幂等规范化', () => {
     expect(after[0]!.value_state).toBe('present')
     const rule = (database.prepare('select rule from mi_calendar_events__merge_audit_v1').get() as { rule: string }).rule
     expect(rule).toBe('merged-value-then-delete')
+  })
+})
+
+describe('期次解析带发布窗口（PRD R38 §3.1 v4）', () => {
+  it('当月型序列下月头 7 天发布的终值：规范化也解成上一期，不是发布月', () => {
+    const database = setup()
+    // 该序列的历史发布日（15/16/17 日）→ 窗口 15..17；12-01 越窗且在头 7 天。
+    database.exec(`create table mi_macro_calendar_market_event_observations (
+      observation_id text primary key, provider_id text not null, source_event_id text not null,
+      indicator_id text, display_name text, scheduled_date text not null, last_seen_at text not null)`)
+    const observe = (id: string, date: string) => database.prepare(`insert into
+      mi_macro_calendar_market_event_observations
+      (observation_id, provider_id, source_event_id, indicator_id, display_name, scheduled_date, last_seen_at)
+      values (?, '0xrouter', ?, '214232', 'CB Consumer Confidence', ?, ?)`).run(id, `e-${id}`, date, `${date}T00:00:00.000Z`)
+    observe('o1', '2026-09-16'); observe('o2', '2026-10-16'); observe('o3', '2026-11-17')
+    seed(database, { metricKey: '["214232",1]', periodKey: 'unknown:["214232",1]',
+      firstScheduledDate: '2026-12-01', identityKind: 'source' })
+    run(database)
+    const [row] = rows(database)
+    expect(row!.period_key).toBe('2026-11')
   })
 })

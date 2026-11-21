@@ -140,6 +140,14 @@ export function createIntelligencePipeline(deps?: {
   eventPublisher?: IntelligenceEventPublisher
   /** 来源事件提交（`source.consecutive-failed` / `source.stale`）；不注入就不发通知。 */
   sourceIssueNotifier?: SourceIssueNotifier
+  /**
+   * 一个 metric 载荷刚解析完时，把**采集存下的整窗字节**交给产品自己的历史表。
+   *
+   * feed item 只需要最新一条，而国债四档的走势需要整年：这里传原文（与解析器看到的是同一份
+   * 字节），不传被压成「最新一条」的形状。写历史失败不允许打断采集——item、健康与通知是这一轮
+   * 的正事，历史是第二份副本。
+   */
+  onMetricWindow?: (input: Readonly<{ sourceId: string; payloadBody: string; payloadMetaJson?: string }>) => void
 }): IntelligencePipeline {
   const profileStore = deps?.profileStore ?? createSourceProfileStore(createInMemoryProfileStorage())
   const rawRecordStore = deps?.rawRecordStore ?? createRawRecordStore()
@@ -473,6 +481,20 @@ export function createIntelligencePipeline(deps?: {
             payloadBody: rawRecord.payloadBody
           }
         })
+        if (deps?.onMetricWindow && parsed.metricEvents?.length && rawRecord.payloadBody !== undefined) {
+          try {
+            deps.onMetricWindow({
+              sourceId: rawRecord.sourceId,
+              payloadBody: rawRecord.payloadBody,
+              ...(rawRecord.payloadMetaJson === undefined ? {} : { payloadMetaJson: rawRecord.payloadMetaJson })
+            })
+          } catch (error) {
+            console.log(JSON.stringify({
+              marker: 'MI_METRIC_WINDOW_SINK_FAILED', sourceId: rawRecord.sourceId,
+              message: String(error).slice(0, 200)
+            }))
+          }
+        }
         rawRecordStore.markParsed(rawRecord.rawRecordId)
 
         const drafts = adapter.normalizeParsedItems

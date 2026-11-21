@@ -34,16 +34,18 @@ function observe(database: DatabaseSync, input: Readonly<{
   measures?: string
   actual?: string
   lastSeenAt?: string
+  /** 源自己的稳定指标 id（数组身份行才有）：显示名登记表按它查。 */
+  indicatorId?: string
 }>): void {
   database.prepare(`insert into mi_macro_calendar_market_event_observations
-    (source_event_id, provider_id, market_fact_key, display_name, country_code, event_kind, scheduled_date,
-     scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
+    (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+     scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json, importance,
      measure_keys_json, last_seen_at)
-    values (?, 'narwhal', ?, ?, 'USA', 'economic-indicator', ?, ?, null, null, ?, 'high', ?, ?)`)
+    values (?, 'narwhal', ?, ?, 'USA', ?, 'economic-indicator', ?, ?, null, null, ?, 'high', ?, ?)`)
     .run(`event-${input.metricKey}-${input.periodKey}`,
       JSON.stringify(['narwhal', 'macro-calendar-narwhal-economic-data', 'zh',
         JSON.parse(narwhalSourceEventIdForIdentity({ countryCode: 'USA', metricKey: input.metricKey, periodKey: input.periodKey }))]),
-      input.displayName, input.scheduledAt.slice(0, 10), input.scheduledAt,
+      input.displayName, input.indicatorId ?? null, input.scheduledAt.slice(0, 10), input.scheduledAt,
       input.actual === '' ? null
         : input.actual === undefined ? JSON.stringify({ displayValue: '1' }) : JSON.stringify({ displayValue: input.actual }),
       input.measures ?? '["x"]', input.lastSeenAt ?? '2026-11-14T00:00:00.000Z')
@@ -76,6 +78,18 @@ describe('从观测表回填标准表', () => {
     backfillStandardRowsFromObservations(database, { providerId: '0xrouter', observedAt: '2026-11-16T00:00:00.000Z' })
     expect((database.prepare("select count(*) c from mi_calendar_unmapped where source_key = 'no-country-1'")
       .get() as { c: number }).c).toBe(1)
+  })
+
+  it('源内身份行带上源的稳定指标 id（series_id）：显示名登记表按它查，不按身份第一段', () => {
+    const database = openDatabase()
+    ensureCalendarStandardTables(database)
+    observe(database, { metricKey: 'US.UNMAPPED_INDICATOR.NONE.LEVEL', periodKey: '2026-10',
+      displayName: 'Something new', scheduledAt: '2026-10-17T15:00:00.000Z', measures: '[]', indicatorId: '9553' })
+    backfillStandardRowsFromObservations(database)
+    const row = database.prepare("select identity_kind, series_id from mi_calendar_events where metric_key = 'US.UNMAPPED_INDICATOR.NONE.LEVEL'")
+      .get() as { identity_kind: string; series_id: string | null }
+    expect(row.identity_kind).toBe('source')
+    expect(row.series_id).toBe('9553')
   })
 
   it('dry-run 一条都不写（库也可能是只读打开的）', () => {
@@ -246,32 +260,69 @@ describe('旧源重放：只补历史，不覆盖新源', () => {
     expect(row.period_key).toBe('2026-09')
   })
 
-  it('标题没有期次后缀 → fail-closed：不写 unknown 空壳行，落未映射 period-unresolved', () => {
+  it('源给了期次就用源的：越窗也不许拿窗口覆盖（窗口只服务「只有发布时刻」的序列）', () => {
+    const database = openOldDatabase()
+    ensureCalendarStandardTables(database)
+    const mapped = Object.entries(zeroXRouterIndicatorIdentities)
+      .find(([, entry]) => entry.periodRule === 'current_month')!
+    const observe = (sourceEventId: string, date: string, title: string) => database.prepare(`insert into
+      mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values (?, '0xrouter', null, ?, 'USA', ?, 'economic-indicator',
+        ?, ?, null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
+      .run(sourceEventId, title, mapped[0], date, `${date}T13:30:00.000Z`)
+    // 窗口（15..17 日）之外的 12-01，源标题明确写 (Dec)——窗口说「上月终值」也没有用：源期次是事实。
+    observe('a', '2026-11-16', 'CB consumer confidence (Nov)')
+    observe('b', '2026-11-17', 'CB consumer confidence (Nov)')
+    observe('c', '2026-11-18', 'CB consumer confidence (Nov)')
+    observe('late', '2026-12-01', 'CB consumer confidence (Dec)')
+    const report = backfillStandardRowsFromObservations(database,
+      { providerId: '0xrouter', observedAt: '2026-12-02T00:00:00.000Z' })
+    const late = database.prepare("select period_key from mi_calendar_events where source_event_id = 'late'")
+      .get() as { period_key: string }
+    expect(late.period_key).toBe('2026-12')
+    // 规则对这条推成 2026-11（头 7 天＝上月终值），源写 12 月 → **不一致**，计一次并上屏；
+    // 但行照落（源期次是事实），不是「推不出来」、也不进未映射。
+    expect(report.periodRuleConflicts).toBe(1)
+    expect(report.periodRuleConflictIdentities).toContain(mapped[1].metricKey)
+  })
+
+  it('越窗发布 → 期次缺、fail-closed：不写 unknown 空壳行，落未映射 period-unresolved', () => {
     const database = openOldDatabase()
     ensureCalendarStandardTables(database)
     const mapped = Object.entries(zeroXRouterIndicatorIdentities)
       .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
-    database.prepare(`insert into mi_macro_calendar_market_event_observations
+    // 先造一条 17 日发布的观测，让这条序列的窗口从历史发布日现算成 17 日附近。
+    const observe = (sourceEventId: string, scheduledDate: string) => database.prepare(`insert into
+      mi_macro_calendar_market_event_observations
       (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
        scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
        importance, measure_keys_json, last_seen_at)
-      values ('["900",1]', '0xrouter', null, 'Some index without period', 'USA', ?, 'economic-indicator',
-        '2026-11-16', '2026-11-16T13:30:00.000Z', null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
-      .run(mapped[0])
+      values (?, '0xrouter', null, 'Some index', 'USA', ?, 'economic-indicator',
+        ?, ?, null, null, '1.0', 'high', null, '2026-11-16T00:00:00.000Z')`)
+      .run(sourceEventId, mapped[0], scheduledDate, `${scheduledDate}T13:30:00.000Z`)
+    observe('["900",1]', '2026-11-17')   // 窗口内 → 按声明规则（上一月）落表
+    observe('["900",3]', '2026-11-17')   // 同窗口样本（窗口按分位算，至少要 3 个）
+    observe('["900",4]', '2026-11-18')
+    observe('["900",2]', '2026-11-28')   // 越窗、不在头 7 天 → 期次缺
     const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
-    // **fail-closed**（用户 2026-11-19）：有码但期次算不出来时，不写 `unknown:` 空壳行——
-    // 写进去每轮采集都会被启动规范化再清一遍，读者也会看到「有这一期却不知道是哪一期」。
-    expect(report.indicator).toBe(0)
+    /**
+     * **fail-closed**（用户 2026-11-19）：期次算不出来时不写 `unknown:` 空壳行——写进去每轮采集
+     * 都会被启动规范化再清一次，读者也会看到「有这一期却不知道是哪一期」。
+     * 现在「算不出来」的判据是**越窗**（PRD R38 §3.1），不是「标题没写期次」：源没写就按声明的
+     * 规则反推，那条 17 日的照常落表。
+     */
+    expect(report.indicator).toBe(3)
     expect(report.unmapped['period-unresolved']).toBe(1)
-    expect(database.prepare('select count(*) as c from mi_calendar_events').get()).toEqual({ c: 0 })
-    const unmapped = database.prepare(`select reason, raw_json from mi_calendar_unmapped where source_key = '["900",1]'`)
-      .all() as Array<{ reason: string; raw_json: string }>
+    // 两条 17 日的发布落成同一行（同期 + 同首次排期），18 日那条另一行。
+    expect(database.prepare('select count(*) as c from mi_calendar_events').get()).toEqual({ c: 2 })
+    const unmapped = database.prepare(`select reason from mi_calendar_unmapped where source_key = '["900",2]'`)
+      .all() as Array<{ reason: string }>
     expect(unmapped.map((row) => row.reason)).toEqual(['period-unresolved'])
-    expect(JSON.parse(unmapped[0]!.raw_json)).toMatchObject({ metricKey: mapped[1].metricKey, scheduledDate: '2026-11-16' })
   })
-})
 
-describe('周度码的期次按规则算（用户 2026-11-19）', () => {
   it('周度码没有标题期次 → 用发布日推的周六，不再写 unknown 空壳行', () => {
     const mapped = Object.entries(zeroXRouterIndicatorIdentities)
       .find(([, entry]) => entry.periodRule === 'week_end')!
@@ -379,5 +430,64 @@ describe('状态门只作用于 actual（架构师 2026-11-15 复核）', () => 
     const database = new DatabaseSync(':memory:')
     writeRow(database, { actual: '0', status: 'published' })
     expect(read(database)).toEqual({ actual: '0' })
+  })
+})
+
+/**
+ * N2：**旧源（0xrouter）也接同一套解析**（方案 §6 第二笔）。
+ *
+ * 以前只有 narwhal 接：旧源回放出来的行 `numeric_json` 是「有展示串却没有数值」→ `unparsed`，
+ * 于是同一张表里一半有数、一半没数，跨源比较永远只有一边可用。
+ */
+describe('旧源接入数值列（N2）', () => {
+  function openOldDatabase(): DatabaseSync {
+    const database = new DatabaseSync(':memory:')
+    database.exec(`create table mi_macro_calendar_market_event_observations (
+      source_event_id text not null, provider_id text not null, market_fact_key text,
+      display_name text not null, country_code text, indicator_id text, event_kind text not null,
+      scheduled_date text not null, scheduled_at text not null,
+      consensus_json text, provider_previous_json text, provider_actual_json text,
+      importance text not null, measure_keys_json text, last_seen_at text)`)
+    return database
+  }
+
+  const cpiYoy = () => Object.entries(zeroXRouterIndicatorIdentities)
+    .find(([, entry]) => entry.periodRule === 'month' && entry.metricKey.endsWith('.YOY'))!
+
+  function observeOld(database: DatabaseSync, input: Readonly<{ actual: string; previous?: string }>): void {
+    database.prepare(`insert into mi_macro_calendar_market_event_observations
+      (source_event_id, provider_id, market_fact_key, display_name, country_code, indicator_id, event_kind,
+       scheduled_date, scheduled_at, consensus_json, provider_previous_json, provider_actual_json,
+       importance, measure_keys_json, last_seen_at)
+      values ('["78",1]', '0xrouter', null, 'CPI yoy (Sep)', 'USA', ?, 'economic-indicator',
+        '2026-10-15', '2026-10-15T12:30:00.000Z', null, ?, ?, 'high', null, '2026-11-14T00:00:00.000Z')`)
+      .run(cpiYoy()[0],
+        input.previous === undefined ? null : JSON.stringify({ displayValue: input.previous }),
+        JSON.stringify({ displayValue: input.actual }))
+  }
+
+  const stored = (database: DatabaseSync) => JSON.parse(String(
+    (database.prepare('select numeric_json from mi_calendar_events').get() as { numeric_json: string }).numeric_json))
+
+  it('旧源的展示串在适配器里解析成数值列；「3.5」没有百分号也按年率的量纲落 percent', () => {
+    const database = openOldDatabase()
+    observeOld(database, { actual: '3.5', previous: '3.4' })
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    expect(report.numericUnparsed).toBe(0)
+    expect(stored(database)).toMatchObject({
+      state: 'available', unit: 'percent', values: { actual: 3.5, previous: 3.4 }, decimals: { actual: 1, previous: 1 }
+    })
+    // 展示串一个字节不动（分工：展示读展示串、计算只读数值列）。
+    expect(JSON.parse(String((database.prepare('select values_json from mi_calendar_events').get() as
+      { values_json: string }).values_json))).toEqual({ actual: '3.5', previous: '3.4' })
+  })
+
+  it('解析不出的展示串：落 unparsed、按轮计数，绝不写 0，也不在写入口里现算', () => {
+    const database = openOldDatabase()
+    observeOld(database, { actual: '--' })
+    const report = backfillStandardRowsFromObservations(database, { providerId: '0xrouter' })
+    expect(report.numericUnparsed).toBe(1)
+    expect(stored(database)).toMatchObject({ state: 'unparsed' })
+    expect(stored(database).values).toBeUndefined()
   })
 })

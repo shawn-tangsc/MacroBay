@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import { marketCalendarCodeTable } from './marketCalendarCodeTable'
 import { marketCalendarCountryCodeTable } from './marketCalendarCountryCodeTable'
 import { calendarStandardTablePolicy } from './marketCalendarStandardTable'
+import { sourceIdentityDisplayNames } from './macroCalendarSourceIdentityNames'
 
 /**
  * **日历数据一致性盘点**（用户 2026-11-19 定）：五项扫描做成一条可复用的只读检查。
@@ -25,6 +26,22 @@ export type CalendarIntegrityCounts = Readonly<{
   duplicateRows: number
   tierOverdueWithoutValueOrReason: number
   unresolvedPeriodRows: number
+  /** `metric_key` 槽位里是**事件类型名**（`financial-event` 这类）的行：它不是一个身份。 */
+  typeNameIdentities: number
+  /**
+   * **数组身份行还没有稳定指标 id 的行数**（`series_id` 为空）。
+   *
+   * 数组身份第一段每次发布都换一个（真库 1943 行对应 1544 个第一段），不能用来登记名字；
+   * 稳定的是源自己的 `indicator_id`。这一列为 0 之前，名字登记表再全也查不到这些行。
+   */
+  sourceIdentitiesWithoutStableId: number
+  /**
+   * **有稳定 id、但没登记显示名的指标个数**（`series_id` 不在 `sourceIdentityDisplayNames` 里）。
+   *
+   * 判据只问「这一条登记了没有」，不读名字用了哪些字（不许按措辞判内容）。
+   * 数字就是改名表的待办清单长度：登记一个，这个数减一。
+   */
+  unregisteredSourceNames: number
 }>
 
 const activeTierCodes = (): readonly string[] => {
@@ -44,6 +61,7 @@ export function auditCalendarIntegrity(
   const count = (sql: string, ...params: readonly string[]): number =>
     Number((database.prepare(sql).get(...(params as never[])) as { n: number }).n)
 
+  const registeredIdentityIds = Object.keys(sourceIdentityDisplayNames)
   const codes = activeTierCodes()
   const codePlaceholders = codes.map(() => '?').join(', ')
 
@@ -64,7 +82,25 @@ export function auditCalendarIntegrity(
         and first_scheduled_date < ?
         and not ${hasActualSql}
         and coalesce(missing_reason, '') = ''`, ...codes, options.today),
-    unresolvedPeriodRows: count(`select count(*) as n from ${table} where period_key like 'unknown:%'`)
+    unresolvedPeriodRows: count(`select count(*) as n from ${table} where period_key like 'unknown:%'`),
+    /**
+     * 类型名不是身份（0.4.5 #15）：写入口已经不再这么写（源内身份行用源自己的 `releaseId`）。
+     *
+     * **存量行保留、只报不改**（Chief 2026-11-21 定）：身份必须来自源侧事实，而这 3 行的
+     * `series_id` 是空的、源身份令牌本身就是用类型名拼的——改它等于我们**编一个身份**。
+     * 保留它们是诚实的：行的 `source_label` 仍给出真实名称，读者看得见；等源给出真实 id 再迁。
+     * 别把它当脏数据清掉：清掉就是删掉源确实发布过的事实。
+     */
+    typeNameIdentities: count(`select count(*) as n from ${table}
+      where metric_key in ('economic-indicator', 'financial-event', 'central-bank-activity')`),
+    // 数组身份还没有稳定 id 的行（0.4.5 #14）：名字登记表按稳定 id 查，这一列不归零就永远查不到。
+    sourceIdentitiesWithoutStableId: count(`select count(*) as n from ${table}
+      where metric_key like '[%' and (series_id is null or trim(series_id) = '')`),
+    // 有稳定 id、但没登记显示名的指标个数：只回答「登记了没有」，不评价名字好坏。
+    unregisteredSourceNames: count(`select count(distinct series_id) as n from ${table}
+      where metric_key like '[%' and series_id is not null and trim(series_id) <> ''
+        ${registeredIdentityIds.length === 0 ? '' : `and series_id not in (${registeredIdentityIds.map(() => '?').join(', ')})`}`,
+      ...registeredIdentityIds)
   }
 }
 
@@ -78,5 +114,10 @@ export function calendarIntegrityGaps(counts: CalendarIntegrityCounts): readonly
     gaps.push(`tier-overdue=${counts.tierOverdueWithoutValueOrReason}`)
   }
   if (counts.unresolvedPeriodRows > 0) gaps.push(`unresolved-period=${counts.unresolvedPeriodRows}`)
+  if (counts.typeNameIdentities > 0) gaps.push(`type-name-identity=${counts.typeNameIdentities}`)
+  if (counts.sourceIdentitiesWithoutStableId > 0) {
+    gaps.push(`source-identities-without-stable-id=${counts.sourceIdentitiesWithoutStableId}`)
+  }
+  if (counts.unregisteredSourceNames > 0) gaps.push(`unregistered-source-names=${counts.unregisteredSourceNames}`)
   return gaps
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { narwhalCanonicalIdentityKey, narwhalMeasureMetricKeys, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { narwhalCanonicalIdentityKey, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from '../marketCalendarNarwhalMeasureKeys'
 import { decodeCalendarSourceEventId, narwhalStandardSourceEventId } from '../marketCalendarSourceEventId'
 import { narwhalObservationBatches, narwhalStandardRowInputsDetailed } from './narwhalCalendarObservationBatches'
 

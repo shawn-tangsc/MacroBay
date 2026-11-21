@@ -1,4 +1,5 @@
-import { narwhalEventSourceEventId, narwhalMeasureMetricKeys, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { narwhalEventSourceEventId, narwhalSourceEventIdForIdentity } from '../marketCalendarMetricIdentity'
+import { narwhalMeasureMetricKeys } from '../marketCalendarNarwhalMeasureKeys'
 import { narwhalStandardSourceEventId } from '../marketCalendarSourceEventId'
 import { eventCodeBySourceType } from '../marketCalendarEventCodeTable'
 import type { CalendarIdentityKind, CalendarReleaseStatus, CalendarUnmappedReason } from '../marketCalendarStandardTable'

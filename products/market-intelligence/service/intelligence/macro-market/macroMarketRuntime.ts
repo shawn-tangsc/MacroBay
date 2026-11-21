@@ -68,8 +68,13 @@ export function createMacroMarketRuntime(deps: Readonly<{
    * 运行级失败与陈旧走 `source.consecutive-failed` / `source.stale`，不在这里重复。
    */
   submitNotification?: (request: NotificationSubmitRequest) => Promise<NotificationSubmitOutcome>
+  /**
+   * 这份历史表的连接。由模块上层建好传进来，因为日频国债收盘由 pipeline 的整窗出口写进同一张表——
+   * 一个库只许有一条写入连接，两个连接写同一个文件迟早会撞「database is locked」。
+   */
+  store?: MacroMarketStore
 }>): MacroMarketRuntime {
-  const store = createMacroMarketStore(join(deps.dataDirectory, macroMarketStoragePolicy.fileName))
+  const store = deps.store ?? createMacroMarketStore(join(deps.dataDirectory, macroMarketStoragePolicy.fileName))
   const collector = createMacroMarketCollector({
     transport: createMacroMarketTransport(deps.fetchImpl),
     store,

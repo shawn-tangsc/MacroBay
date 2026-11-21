@@ -1,8 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite'
 
 import type { MarketCalendarEvent } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import { calendarNamesFor, englishSearchName, namePairFromSourceIdentity, type CalendarNamePair } from '../marketCalendarCodeNames'
-import { sourceIdentityDisplayNames } from '../macroCalendarSourceIdentityNames'
+import { calendarNamesFor, englishSearchName, namePairFromSourceIdentity, registeredSourceIdentityName,
+  sourceInternalIdOf, type CalendarNamePair } from '../marketCalendarCodeNames'
 import { hierarchyForMetricKey } from '../marketCalendarZeroXRouterSourceMappings'
 
 /**
@@ -66,6 +66,7 @@ type Aggregate = Readonly<{
   importance: string | null
   source_label: string | null
   source_label_en: string | null
+  series_id: string | null
 }>
 
 const eventTypeOf = (metricKey: string): CalendarEventIndexRow['eventType'] => {
@@ -83,10 +84,12 @@ const cursorKey = (cursor: string): readonly [string, string] => {
 }
 
 /** 名字优先级：名表四列（中英各一对）→ 源原文名。都没有就不硬编。 */
-function namesOf(metricKey: string, sourceLabel: string | null, sourceLabelEn: string | null = null) {
+function namesOf(metricKey: string, sourceLabel: string | null, sourceLabelEn: string | null = null,
+  seriesId: string | null = null) {
   // 回退链：**码名表 → 源内身份名表 → 源原文名**（用户 2026-11-16 定）。
+  // 身份名表按**源的稳定指标 id**（`series_id`）查，不按身份第一段（每期都换）。
   const names = calendarNamesFor(metricKey)
-  const identity = sourceIdentityDisplayNames[sourceInternalIdOf(metricKey).replace(/^id:/, '')]
+  const identity = registeredSourceIdentityName(seriesId ?? undefined)
   const fallback = sourceLabel === null || sourceLabel.trim() === '' ? undefined : sourceLabel.trim()
   const display = names ?? (identity === undefined ? undefined : namePairFromSourceIdentity(identity.zh, identity.en))
   // **英文原文名单独存一列**（迁移 18 把库里中英两条合并成一行）：名表/身份名表已经给了英文就不覆盖，
@@ -109,7 +112,7 @@ function aggregates(database: DatabaseSync, today: string): Aggregate[] {
       max(case when scheduled_date <= ?1 then scheduled_date end) as last_date,
       min(case when scheduled_date > ?1 then scheduled_date end) as next_date,
       max(importance) as importance, max(source_label) as source_label,
-      max(source_label_en) as source_label_en
+      max(source_label_en) as source_label_en, max(series_id) as series_id
     from mi_calendar_events where row_kind = 'release'
     group by country_code, metric_key`).all(today) as unknown as Aggregate[]
 }
@@ -149,7 +152,7 @@ export function readCalendarEventIndex(database: DatabaseSync, input: Readonly<{
     const rows: CalendarEventIndexRow[] = []
     for (const aggregate of aggregates(database, input.today)) {
       if (input.countryCode !== undefined && input.countryCode !== '' && aggregate.country_code !== input.countryCode) continue
-      const names = namesOf(aggregate.metric_key, aggregate.source_label, aggregate.source_label_en)
+      const names = namesOf(aggregate.metric_key, aggregate.source_label, aggregate.source_label_en, aggregate.series_id)
       if (words.length > 0) {
         // 命中列集合 = 名表四列 + 源原文名。**不拼接**（拼接会造出跨字段假命中）。
         const haystack = Object.values(names)
@@ -211,14 +214,8 @@ export function readCalendarEventIndex(database: DatabaseSync, input: Readonly<{
   }
 }
 
-/**
- * 源内身份：数组形 `["214790",79090]` 的第一段就是指标身份（同一条发布的多个 measure 共用它）。
- * 非数组形（规范码）原样返回。**这是「源自己说的身份」，不是我们猜的映射。**
- */
-export function sourceInternalIdOf(metricKey: string): string {
-  const match = /^\["(\d+)"/.exec(metricKey)
-  return match === null ? metricKey : `id:${match[1]}`
-}
+// 解析只留一份（`marketCalendarCodeNames`）；这里 re-export 保持既有调用方路径不变。
+export { sourceInternalIdOf }
 
 const hasCjk = (value: string): boolean => /[\u4e00-\u9fff]/.test(value)
 

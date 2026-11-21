@@ -4,10 +4,12 @@ import {
 import { germanSourceMetricMappings } from './marketCalendarGermanSourceMappings'
 import { marketCalendarCountrySourceMappings } from './marketCalendarCountrySourceMappings'
 import { zeroXRouterEventIdentities } from './marketCalendarEventIdentities'
+import { classifyReleaseDay, type PublishWindow } from './marketCalendarPublishWindow'
 import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSourceMappings'
 
 /**
- * 跨源规范身份的**数据常量**：源内码 → `metric_key`。
+ * 跨源规范身份：源内码 → `metric_key` 的对照表。Narwhal 那张纯数据表搬到了
+ * `marketCalendarNarwhalMeasureKeys.ts`（不同职责：那张表只管源内码对照，这里管身份怎么算）。
  *
  * 数据出处（只增不改，改一条就要重跑身份守卫）：
  * - `docs-private/iterations/0.4.4-calendar-sources/14-映射表-美国202611-新源.csv`（Narwhal 70 条）
@@ -18,152 +20,36 @@ import { zeroXRouterSourceMetricMappings } from './marketCalendarZeroXRouterSour
  * 对不上的一律 `unmapped`——不猜、不按相似度、不拿名字兜底。
  */
 
-/** Narwhal 的 `values[].measure` → 规范指标键（132 条，来自 16 号表；`measure ↔ metric_key` 双射）。
- * 这 132 条是**已见过的**，不是全量：以后每批冒出新的 measure 是正常的，落 `unknown-measure` 就该补。 */
-export const narwhalMeasureMetricKeys: Readonly<Record<string, string>> = Object.freeze({
-  adp_employment_change: 'US.ADP.SA.CHANGE',  // usa-employment-statistics
-  average_hourly_earnings_mom: 'US.AHE.SA.MOM',  // usa-wages-and-earnings
-  average_hourly_earnings_yoy: 'US.AHE.NSA.YOY',  // usa-wages-and-earnings
-  building_permits: 'US.BUILDING_PERMITS.NONE.COUNT',  // usa-building-permits
-  building_permits_mom: 'US.BUILDING_PERMITS.NONE.MOM',  // usa-building-permits
-  business_inventories_mom: 'US.BUSINESS_INVENTORIES.SA.MOM',  // usa-business-inventories
-  capacity_utilization: 'US.CAPACITY_UTILIZATION.SA.RATE',  // usa-industrial-production
-  chicago_pmi: 'US.CHICAGO_PMI.SA.LEVEL',  // usa-chicago-pmi
-  composite_pmi: 'US.SP_COMPOSITE_PMI.SA.LEVEL',  // usa-composite-pmi
-  construction_spending_mom: 'US.CONSTRUCTION_SPENDING.SA.MOM',  // usa-construction-spending
-  consumer_confidence: 'US.CONSUMER_CONFIDENCE.SA.LEVEL',  // usa-consumer-confidence
-  consumer_confidence_index: 'US.CONFERENCE_BOARD_CONFIDENCE.NONE.LEVEL',  // usa-consumer-confidence
-  consumer_credit_growth: 'US.CONSUMER_CREDIT.SA.CHANGE',  // usa-credit-statistics
-  consumer_current_conditions_michigan: 'US.MICHIGAN_CURRENT.NONE.LEVEL',  // usa-consumer-confidence
-  consumer_expectations_michigan: 'US.MICHIGAN_EXPECTATIONS.NONE.LEVEL',  // usa-consumer-confidence
-  consumer_sentiment_michigan: 'US.MICHIGAN_SENTIMENT.NONE.LEVEL',  // usa-consumer-confidence
-  continuing_claims: 'US.JOBLESS_CLAIMS_CONTINUING.SA.COUNT',  // usa-jobless-claims
-  core_capital_goods_orders_mom: 'US.CORE_CAPEX_ORDERS.SA.MOM',  // usa-durable-goods-orders
-  core_cpi_mom: 'US.CORE_CPI.SA.MOM',  // usa-consumer-prices
-  core_cpi_yoy: 'US.CORE_CPI.NSA.YOY',  // usa-consumer-prices
-  core_pce_price_index_mom: 'US.CORE_PCE.SA.MOM',  // usa-income-and-spending
-  core_pce_price_index_yoy: 'US.CORE_PCE.SA.YOY',  // usa-income-and-spending
-  core_producer_price_change_mom: 'US.CORE_PPI.SA.MOM',  // usa-producer-prices
-  core_producer_price_change_yoy: 'US.CORE_PPI.NSA.YOY',  // usa-producer-prices
-  corporate_profits_qoq: 'US.CORPORATE_PROFITS.SA.QOQ',  // usa-corporate-profits
-  cpi_cleveland_mom: 'US.CPI_CLEVELAND.NONE.MOM',  // usa-consumer-prices
-  cpi_mom: 'US.CPI.SA.MOM',  // usa-consumer-prices
-  cpi_yoy: 'US.CPI.NSA.YOY',  // usa-consumer-prices
-  current_account_balance: 'US.CURRENT_ACCOUNT.NONE.DIFF',  // usa-balance-of-payments
-  dallas_fed_manufacturing: 'US.DALLAS_FED_MANUFACTURING.SA.LEVEL',  // usa-dallas-fed-manufacturing-survey
-  dallas_fed_services: 'US.DALLAS_FED_SERVICES.SA.LEVEL',  // usa-dallas-fed-services-survey
-  dallas_fed_services_revenues: 'US.DALLAS_FED_SERVICES_REVENUES.SA.LEVEL',  // usa-dallas-fed-services-survey
-  durable_goods_orders_ex_defense_mom: 'US.DURABLE_GOODS_EX_DEFENSE.SA.MOM',  // usa-durable-goods-orders
-  durable_goods_orders_ex_transport_mom: 'US.DURABLE_GOODS_EX_TRANSPORT.SA.MOM',  // usa-durable-goods-orders
-  durable_goods_orders_mom: 'US.DURABLE_GOODS_ORDERS.SA.MOM',  // usa-durable-goods-orders
-  empire_state_manufacturing: 'US.EMPIRE_STATE_MANUFACTURING.SA.LEVEL',  // usa-empire-state-manufacturing-survey
-  employment_trends_index: 'US.LEI_EMPLOYMENT_TRENDS.NONE.LEVEL',  // usa-leading-indicators
-  existing_home_sales: 'US.EXISTING_HOME_SALES.SA.COUNT',  // usa-existing-home-sales
-  existing_home_sales_mom: 'US.EXISTING_HOME_SALES.SA.MOM',  // usa-existing-home-sales
-  export_price_mom: 'US.EXPORT_PRICES.SA.MOM',  // usa-import-and-export-prices
-  export_price_yoy: 'US.EXPORT_PRICES.NSA.YOY',  // usa-import-and-export-prices
-  factory_orders_ex_transport_mom: 'US.FACTORY_ORDERS_EX_TRANSPORT.SA.MOM',  // usa-factory-orders
-  factory_orders_mom: 'US.FACTORY_ORDERS.SA.MOM',  // usa-factory-orders
-  federal_deficit: 'US.FEDERAL_BUDGET.NONE.DIFF',  // usa-public-finances
-  gdp_nowcast_qoq_annualized: 'US.GDP_NOWCAST.SA.ANNUALIZED_QOQ',  // usa-gdp-nowcast
-  government_payrolls_change: 'US.GOVERNMENT_PAYROLLS.SA.CHANGE',  // usa-payroll-employment
-  home_price_composite_mom: 'US.CASE_SHILLER_COMPOSITE.SA.MOM',  // usa-house-prices
-  home_price_composite_yoy: 'US.CASE_SHILLER_COMPOSITE.NSA.YOY',  // usa-house-prices
-  house_price_index: 'US.FHFA_HOUSE_PRICE.SA.LEVEL',  // usa-house-prices
-  house_price_index_mom: 'US.FHFA_HOUSE_PRICE.SA.MOM',  // usa-house-prices
-  house_price_index_yoy: 'US.FHFA_HOUSE_PRICE.NSA.YOY',  // usa-house-prices
-  housing_market_index: 'US.NAHB_HOUSING_MARKET.NONE.LEVEL',  // usa-housing-market-index
-  housing_starts: 'US.HOUSING_STARTS.SA.COUNT',  // usa-housing-starts
-  housing_starts_mom: 'US.HOUSING_STARTS.SA.MOM',  // usa-housing-starts
-  import_price_mom: 'US.IMPORT_PRICES.SA.MOM',  // usa-import-and-export-prices
-  import_price_yoy: 'US.IMPORT_PRICES.NSA.YOY',  // usa-import-and-export-prices
-  industrial_production_mom: 'US.INDUSTRIAL_PRODUCTION.SA.MOM',  // usa-industrial-production
-  industrial_production_yoy: 'US.INDUSTRIAL_PRODUCTION.NSA.YOY',  // usa-industrial-production
-  inflation_expectations: 'US.INFLATION_EXPECTATIONS.NONE.LEVEL',  // usa-inflation-expectations
-  inflation_expectations_1y: 'US.MICHIGAN_INFLATION_1Y.NONE.LEVEL',  // usa-consumer-confidence
-  inflation_expectations_5y: 'US.MICHIGAN_INFLATION_5Y.NONE.LEVEL',  // usa-consumer-confidence
-  initial_claims: 'US.JOBLESS_CLAIMS_INITIAL.SA.COUNT',  // usa-jobless-claims
-  initial_claims_4w_average: 'US.JOBLESS_CLAIMS_4W_AVERAGE.SA.AVERAGE',  // usa-jobless-claims
-  ism_manufacturing_employment: 'US.ISM_MANUFACTURING_EMPLOYMENT.SA.LEVEL',  // usa-ism-manufacturing-pmi
-  ism_manufacturing_new_orders: 'US.ISM_MANUFACTURING_NEW_ORDERS.SA.LEVEL',  // usa-ism-manufacturing-pmi
-  ism_manufacturing_pmi: 'US.ISM_MANUFACTURING.SA.LEVEL',  // usa-ism-manufacturing-pmi
-  ism_manufacturing_prices: 'US.ISM_MANUFACTURING_PRICES.SA.LEVEL',  // usa-ism-manufacturing-pmi
-  ism_services_business_activity: 'US.ISM_SERVICES_BUSINESS_ACTIVITY.SA.LEVEL',  // usa-ism-services-pmi
-  ism_services_employment: 'US.ISM_SERVICES_EMPLOYMENT.SA.LEVEL',  // usa-ism-services-pmi
-  ism_services_new_orders: 'US.ISM_SERVICES_NEW_ORDERS.SA.LEVEL',  // usa-ism-services-pmi
-  ism_services_pmi: 'US.ISM_SERVICES.SA.LEVEL',  // usa-ism-services-pmi
-  ism_services_prices: 'US.ISM_SERVICES_PRICES.SA.LEVEL',  // usa-ism-services-pmi
-  job_openings: 'US.JOLTS_OPENINGS.SA.COUNT',  // usa-job-openings
-  job_quits: 'US.JOLTS_QUITS.SA.COUNT',  // usa-job-openings
-  kansas_fed_composite: 'US.KANSAS_FED_COMPOSITE.SA.LEVEL',  // usa-kansas-city-fed-manufacturing-survey
-  kansas_fed_manufacturing: 'US.KANSAS_FED_MANUFACTURING.SA.LEVEL',  // usa-kansas-city-fed-manufacturing-survey
-  leading_index_mom: 'US.LEI.SA.MOM',  // usa-leading-indicators
-  logistics_managers_index: 'US.LOGISTICS_MANAGERS_INDEX.NONE.LEVEL',  // usa-logistics-managers-index
-  manufacturing_payrolls_change: 'US.MANUFACTURING_PAYROLLS.SA.CHANGE',  // usa-payroll-employment
-  manufacturing_pmi: 'US.SP_MANUFACTURING_PMI.SA.LEVEL',  // usa-manufacturing-pmi
-  manufacturing_production_mom: 'US.MANUFACTURING_PRODUCTION.SA.MOM',  // usa-industrial-production
-  manufacturing_production_yoy: 'US.MANUFACTURING_PRODUCTION.NSA.YOY',  // usa-manufacturing-output
-  mortgage_rate_15y: 'US.MORTGAGE_RATE_15Y.NONE.RATE',  // usa-mortgage-rates
-  mortgage_rate_30y: 'US.MORTGAGE_RATE_30Y.NONE.RATE',  // usa-mortgage-rates
-  national_activity_index: 'US.CHICAGO_FED_NATIONAL_ACTIVITY.NONE.LEVEL',  // usa-chicago-fed-activity-index
-  new_home_sales: 'US.NEW_HOME_SALES.SA.COUNT',  // usa-new-home-sales
-  new_home_sales_mom: 'US.NEW_HOME_SALES.SA.MOM',  // usa-new-home-sales
-  nonfarm_payrolls_change: 'US.NONFARM.SA.CHANGE',  // usa-employment-report
-  nonfarm_productivity_qoq: 'US.PRODUCTIVITY.SA.QOQ',  // usa-productivity-and-costs
-  participation_rate: 'US.PARTICIPATION_RATE.SA.RATE',  // usa-unemployment
-  pce_price_index_mom: 'US.PCE.SA.MOM',  // usa-income-and-spending
-  pce_price_index_yoy: 'US.PCE.SA.YOY',  // usa-income-and-spending
-  pending_home_sales_mom: 'US.PENDING_HOME_SALES.SA.MOM',  // usa-pending-home-sales
-  pending_home_sales_yoy: 'US.PENDING_HOME_SALES.NSA.YOY',  // usa-pending-home-sales
-  personal_income_mom: 'US.PERSONAL_INCOME.SA.MOM',  // usa-income-and-spending
-  personal_spending_mom: 'US.PERSONAL_SPENDING.SA.MOM',  // usa-income-and-spending
-  philly_fed_business_conditions: 'US.PHILLY_FED_BUSINESS_CONDITIONS.SA.LEVEL',  // usa-philadelphia-fed-manufacturing-survey
-  philly_fed_capex: 'US.PHILLY_FED_CAPEX.SA.LEVEL',  // usa-philadelphia-fed-manufacturing-survey
-  philly_fed_employment: 'US.PHILLY_FED_EMPLOYMENT.SA.LEVEL',  // usa-philadelphia-fed-manufacturing-survey
-  philly_fed_manufacturing: 'US.PHILLY_FED_MANUFACTURING.SA.LEVEL',  // usa-philadelphia-fed-manufacturing-survey
-  philly_fed_new_orders: 'US.PHILLY_FED_NEW_ORDERS.SA.LEVEL',  // usa-philadelphia-fed-manufacturing-survey
-  philly_fed_prices_paid: 'US.PHILLY_FED_PRICES_PAID.SA.LEVEL',  // usa-philadelphia-fed-manufacturing-survey
-  private_payrolls_change: 'US.PRIVATE_PAYROLLS.SA.CHANGE',  // usa-payroll-employment
-  producer_price_change_mom: 'US.PPI_FINAL_DEMAND.SA.MOM',  // usa-producer-prices
-  producer_price_change_yoy: 'US.PPI_FINAL_DEMAND.NSA.YOY',  // usa-producer-prices
-  producer_price_ex_food_energy_trade_change_mom: 'US.PPI_EX_FOOD_ENERGY_TRADE.SA.MOM',  // usa-producer-prices
-  producer_price_ex_food_energy_trade_change_yoy: 'US.PPI_EX_FOOD_ENERGY_TRADE.NSA.YOY',  // usa-producer-prices
-  producer_price_index: 'US.PPI.SA.LEVEL',  // usa-producer-prices
-  producer_prices_mom: 'US.PPI.SA.MOM',  // usa-producer-prices
-  producer_prices_yoy: 'US.PPI.NSA.YOY',  // usa-producer-prices
-  real_average_hourly_earnings_mom: 'US.REAL_AHE.NONE.MOM',  // usa-wages-and-earnings
-  real_average_hourly_earnings_yoy: 'US.REAL_AHE.NONE.YOY',  // usa-wages-and-earnings
-  retail_inventories_ex_autos_mom: 'US.RETAIL_INVENTORIES_EX_AUTOS.SA.MOM',  // usa-business-inventories
-  retail_sales_control_group_mom: 'US.RETAIL_SALES_CONTROL_GROUP.SA.MOM',  // usa-retail-sales
-  retail_sales_ex_autos_mom: 'US.RETAIL_SALES_EX_AUTOS.SA.MOM',  // usa-retail-sales
-  retail_sales_ex_gas_autos_mom: 'US.RETAIL_SALES_EX_GAS_AUTOS.SA.MOM',  // usa-retail-sales
-  retail_sales_mom: 'US.RETAIL_SALES.SA.MOM',  // usa-retail-sales
-  retail_sales_yoy: 'US.RETAIL_SALES.NSA.YOY',  // usa-retail-sales
-  richmond_fed_manufacturing: 'US.RICHMOND_FED_MANUFACTURING.SA.LEVEL',  // usa-richmond-fed-manufacturing-survey
-  richmond_fed_services: 'US.RICHMOND_FED_SERVICES.SA.LEVEL',  // usa-richmond-fed-services-survey
-  richmond_fed_shipments: 'US.RICHMOND_FED_SHIPMENTS.SA.LEVEL',  // usa-richmond-fed-manufacturing-survey
-  same_store_sales_yoy: 'US.REDBOOK_RETAIL_SALES.NONE.YOY',  // usa-retail-sales
-  services_pmi: 'US.SP_SERVICES_PMI.SA.LEVEL',  // usa-services-pmi
-  small_business_optimism: 'US.NFIB_OPTIMISM.NONE.LEVEL',  // usa-small-business-optimism
-  trade_balance: 'US.TRADE_BALANCE.NONE.DIFF',  // usa-goods-and-services-trade
-  unemployment_rate: 'US.UNEMPLOYMENT.SA.RATE',  // usa-employment-report
-  unemployment_rate_u6: 'US.UNEMPLOYMENT_U6.SA.RATE',  // usa-unemployment
-  used_car_prices_mom: 'US.USED_CAR_PRICES.NONE.MOM',  // usa-used-car-prices
-  used_car_prices_yoy: 'US.USED_CAR_PRICES.NONE.YOY',  // usa-used-car-prices
-  vehicle_sales_total: 'US.VEHICLE_SALES.SA.COUNT',  // usa-vehicle-sales
-  wholesale_inventories_mom: 'US.WHOLESALE_INVENTORIES.SA.MOM',  // usa-business-inventories
-  wholesale_sales_mom: 'US.WHOLESALE_SALES.SA.MOM',  // usa-wholesale-trade
-})
 
 /** 0xRouter 的 `indicator_id`（已落库的 `indicator_id` 列）→ 规范指标键与期间规则。 */
 /**
  * 期次取法。**事件型用 `event_date`**（用户 2026-11-17 定：事件身份 = 类型 + 日期）：
  * 一场活动一个身份。同月按 `month` 合并，会把一个月里的两场讲话并成一条、日期也并掉。
  */
-export type ZeroXRouterPeriodRule = 'month' | 'week_end' | 'quarter' | 'event_date'
-export type ZeroXRouterIdentityEntry = Readonly<{ metricKey: string; periodRule: ZeroXRouterPeriodRule }>
+/**
+ * 期次规则（PRD R38 §3.1，2026-11-21 产品定）。
+ *
+ * 五种形状对应五条规则：`month`→`YYYY-MM`（上月）、`current_month`→`YYYY-MM`（**当月**，
+ * 调查/景气类）、`quarter`→`YYYY-Qn`（上季）、`week_end`→`YYYY-MM-DD`（上一个截止日，
+ * 标题「（至MMDD）」优先）、`event_date`→`YYYY-MM-DD`（当天，不合并）。
+ *
+ * **`current_month` 是单独声明，不是 `month` 的默认**：纽约联储制造业、费城联储、密歇根
+ * 这类在发布月里发的是**当月值**，按「上月」会错记成上一期（11-17 发的 11 月值落成 2026-10）。
+ * 声明没写清的先按 `month`（统计月），在映射清单里标待核，不许猜。
+ */
+export type ZeroXRouterPeriodRule = 'month' | 'current_month' | 'week_end' | 'quarter' | 'event_date'
+/**
+ * 「这一条的期次规则产品还在点名」——先按 §3.1 的现规则（统计月）处理，但**标记出来**，
+ * 让后面的人一眼看出这是悬着的，不是我们忘了。产品给了口径就改成 `current_month` 并删标记。
+ */
+export type PeriodRuleReview = 'pending-product'
+export type ZeroXRouterIdentityEntry = Readonly<{
+  metricKey: string
+  periodRule: ZeroXRouterPeriodRule
+  periodRuleReview?: PeriodRuleReview
+}>
 export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouterIdentityEntry>> = Object.freeze({
-  '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'month' },
+  '10098': { metricKey: 'US.SP_MANUFACTURING_PMI.SA.LEVEL', periodRule: 'current_month' },
   '9413': { metricKey: 'US.CONSTRUCTION_SPENDING.SA.MOM', periodRule: 'month' },
   '4013': { metricKey: 'US.ISM_MANUFACTURING.SA.LEVEL', periodRule: 'month' },
   '9260': { metricKey: 'US.ISM_MANUFACTURING_PRODUCTION.SA.LEVEL', periodRule: 'month' },
@@ -190,7 +76,7 @@ export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouter
   '4022': { metricKey: 'US.TRADE_BALANCE.NONE.DIFF', periodRule: 'month' },
   '8791': { metricKey: 'US.EXPORTS.NONE.AMOUNT', periodRule: 'month' },
   '8792': { metricKey: 'US.IMPORTS.NONE.AMOUNT', periodRule: 'month' },
-  '10260': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'month' },
+  '10260': { metricKey: 'US.SP_SERVICES_PMI.SA.LEVEL', periodRule: 'current_month' },
   '10263': { metricKey: 'US.SP_COMPOSITE_PMI.SA.LEVEL', periodRule: 'month' },
   '9264': { metricKey: 'US.ISM_SERVICES_EMPLOYMENT.SA.LEVEL', periodRule: 'month' },
   '9262': { metricKey: 'US.ISM_SERVICES_SUPPLIER_DELIVERIES.SA.LEVEL', periodRule: 'month' },
@@ -222,11 +108,11 @@ export const zeroXRouterIndicatorIdentities: Readonly<Record<string, ZeroXRouter
   '9273': { metricKey: 'US.MANUFACTURING_PAYROLLS.SA.CHANGE', periodRule: 'month' },
   '9920': { metricKey: 'US.UNEMPLOYMENT_U6.SA.RATE', periodRule: 'month' },
   '9274': { metricKey: 'US.AHE.NSA.YOY', periodRule: 'month' },
-  '9940': { metricKey: 'US.MICHIGAN_SENTIMENT.NONE.LEVEL', periodRule: 'month' },
-  '10264': { metricKey: 'US.MICHIGAN_INFLATION_1Y.NONE.LEVEL', periodRule: 'month' },
-  '10267': { metricKey: 'US.MICHIGAN_INFLATION_5Y.NONE.LEVEL', periodRule: 'month' },
-  '10114': { metricKey: 'US.MICHIGAN_EXPECTATIONS.NONE.LEVEL', periodRule: 'month' },
-  '10111': { metricKey: 'US.MICHIGAN_CURRENT.NONE.LEVEL', periodRule: 'month' },
+  '9940': { metricKey: 'US.MICHIGAN_SENTIMENT.NONE.LEVEL', periodRule: 'current_month' },
+  '10264': { metricKey: 'US.MICHIGAN_INFLATION_1Y.NONE.LEVEL', periodRule: 'current_month' },
+  '10267': { metricKey: 'US.MICHIGAN_INFLATION_5Y.NONE.LEVEL', periodRule: 'current_month' },
+  '10114': { metricKey: 'US.MICHIGAN_EXPECTATIONS.NONE.LEVEL', periodRule: 'current_month' },
+  '10111': { metricKey: 'US.MICHIGAN_CURRENT.NONE.LEVEL', periodRule: 'current_month' },
   '9851': { metricKey: 'US.BAKER_HUGHES_OIL_RIGS.NONE.COUNT', periodRule: 'week_end' },
   '9853': { metricKey: 'US.BAKER_HUGHES_GAS_RIGS.NONE.COUNT', periodRule: 'week_end' },
   '9852': { metricKey: 'US.BAKER_HUGHES_TOTAL_RIGS.NONE.COUNT', periodRule: 'week_end' },
@@ -383,6 +269,11 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   countryCode: string | null; indicatorId: string | null; scheduledAt: string
   /** 源标题（可选）：**只用于周度期次**——标题里带 `（至MMDD）`/`(to MMDD)` 时优先用它。 */
   title?: string
+  /**
+   * 该序列的**发布窗口**（从历史发布日现算，见 `marketCalendarPublishWindow`）。月/当月规则用它判
+   * 「越窗但落在头 7 天」→ 上一期延迟/终值。不传就按声明规则直接算（老调用方行为不变）。
+   */
+  window?: PublishWindow
 }>): MarketCalendarCanonicalIdentity | undefined {
   if (!row.countryCode || !row.indicatorId) return undefined
   // 两个来源的 id 命名空间分开：0xrouter 自己那张表是「按来源拆」的起点（迁移后新增）。
@@ -399,9 +290,27 @@ export function zeroXRouterCanonicalIdentity(row: Readonly<{
   if (entry.periodRule === 'event_date') {
     return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey: row.scheduledAt.slice(0, 10) }
   }
-  const periodKey = entry.periodRule === 'month' ? previousMonthKey(row.scheduledAt)
-    : entry.periodRule === 'week_end' ? weekEndKeyFor(row.scheduledAt, row.title)
-    : previousQuarterKey(row.scheduledAt)
+  /**
+   * 月/当月规则先过窗口：**越窗且落在发布月头 7 天 → 上一期的延迟/终值**；
+   * 其它越窗 → 返回 `undefined`（调用方记 `unknown`、待核），**不许默认按当月**。
+   * 这一步只对月粒度生效：季/周/事件各有自己的边界，混进来会把正常排期判成越窗。
+   */
+  if (entry.periodRule === 'month' || entry.periodRule === 'current_month') {
+    const verdict = row.window === undefined ? 'in-window'
+      : classifyReleaseDay(row.scheduledAt.slice(0, 10), row.window)
+    /**
+     * 越窗且不在头 7 天：**期次明确缺失**（`''`），身份照旧保留——调用方按已有的
+     * `period-unresolved` 规则记未映射并跳过，不写 `unknown:` 空壳行，也不许默认按当月。
+     */
+    if (verdict === 'out-of-window') return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey: '' }
+    const periodKey = verdict === 'late-previous' ? previousMonthKey(row.scheduledAt)
+      : entry.periodRule === 'current_month' ? row.scheduledAt.slice(0, 7) : previousMonthKey(row.scheduledAt)
+    return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey }
+  }
+  // 逐条写全、不写「否则就当季度」：多一种规则时，漏写的那一支会静默变成别的形状。
+  const periodKey = entry.periodRule === 'week_end' ? weekEndKeyFor(row.scheduledAt, row.title)
+    : entry.periodRule === 'quarter' ? previousQuarterKey(row.scheduledAt)
+    : row.scheduledAt.slice(0, 10)
   return { countryCode: row.countryCode, metricKey: entry.metricKey, periodKey }
 }
 

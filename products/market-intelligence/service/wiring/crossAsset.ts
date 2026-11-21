@@ -104,7 +104,9 @@ export function wireCrossAsset(input: Readonly<{
       macroStore: input.intelligenceModule.macroMarket.store,
       crossAssetStore,
       analysisRepository: input.intelligenceModule.marketAnalysisRuntime.repository,
-      ...(newsStore ? { newsStore } : {})
+      ...(newsStore ? { newsStore } : {}),
+      // 原始记录也挂这一跑（0.4.5 缺陷③ 的接线）：它没有自己的开关，也就不该有自己的调度。
+      rawRecordStore: input.intelligenceModule.rawRecordStore
     })
   }
   // One cross-asset source, two readers with two shapes: the analysis context reads through the

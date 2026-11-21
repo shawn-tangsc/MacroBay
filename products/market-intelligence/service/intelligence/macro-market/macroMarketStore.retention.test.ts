@@ -43,6 +43,29 @@ describe('macro-market bar retention', () => {
     store.close()
   })
 
+  /**
+   * The daily closes are not bars: their spacing is a trading day and their whole value is a window of
+   * months. Folding or dropping them would delete the trend the rate rows draw, so retention has to
+   * leave them alone — the bar horizon answers minute-level history, not official daily closes.
+   */
+  it('never thins or drops the daily rate closes, however old they are', () => {
+    const store = openStore()
+    const twoYearsAgo = nowMs - 730 * 24 * hour
+    store.append([
+      { series: 'ust-2y', atMs: twoYearsAgo, value: 4.56, observedAtMs: nowMs },
+      { series: 'ust-2y', atMs: twoYearsAgo + 24 * hour, value: 4.73, observedAtMs: nowMs },
+      { series: 'dxy-real', atMs: nowMs - 40 * 24 * hour, value: 90, observedAtMs: nowMs }
+    ])
+
+    const result = store.retention(barRetentionCutoffs(nowMs))
+
+    // The bar outside the cold window is dropped; the far older daily closes stay.
+    expect(result).toEqual({ thinned: 0, deleted: 1, oldestKeptAtMs: twoYearsAgo })
+    expect(store.count('ust-2y')).toBe(2)
+    expect(store.count('dxy-real')).toBe(0)
+    store.close()
+  })
+
   it('leaves a series with no old bars exactly as it found it', () => {
     const store = openStore()
     store.append([{ series: 'xau-usd', atMs: nowMs - fiveMinute, value: 4150, observedAtMs: nowMs }])
