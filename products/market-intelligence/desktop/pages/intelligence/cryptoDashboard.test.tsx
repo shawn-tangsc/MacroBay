@@ -543,7 +543,9 @@ describe('crypto intelligence dashboard', () => {
 
     expect(sentimentRule).toContain('container-type: inline-size')
     expect(sentimentRule).toContain('container-name: mi-sentiment-positioning')
-    expect(stackStyles).toContain('.mi-defensive-premium__halves { grid-template-columns: minmax(0, 1fr); }')
+    // 窄处堆叠作用在真网格上（三列变一列），不留「两半」那个已经不存在的别名类。
+    expect(stackStyles).toContain('.mi-defensive-premium { grid-template-columns: minmax(0, 1fr); }')
+    expect(styles).not.toContain('mi-defensive-premium__halves')
     expect(stackStyles).not.toContain('.mi-crypto-dashboard__capital-positioning-row > .mi-capital-conditions')
   })
 
@@ -552,7 +554,8 @@ describe('crypto intelligence dashboard', () => {
     const rowRule = cssBlock(styles, '.mi-crypto-dashboard__capital-positioning-row {')
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
     const stableRule = cssBlock(styles, '.mi-capital-conditions__etf-col-asset {')
-    const gaugeRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment-gauge {')
+    // 带前缀 `\n` 才不会命中卡里那条覆盖规则（`.mi-defensive-premium .mi-…-gauge {`）。
+    const gaugeRule = cssBlock(styles, '\n.mi-crypto-dashboard__sentiment-gauge {')
 
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-header-row-gap')
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-header-column-gap')
@@ -619,7 +622,8 @@ describe('crypto intelligence dashboard', () => {
     expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 15fr')
     // 整行卡自己三列并排：仪表盘 112 + 两个 1fr（定稿 §4.2），结论跨全宽。
     expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr)')
-    expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('column-gap: 16px')
+    // 列间距 12：(1040 − 112 − 2×12) / 2 = 452，两格正好是定稿的曲线宽。
+    expect(cssBlock(styles, '.mi-defensive-premium {')).toContain('column-gap: 12px')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
     expect(sourceRowRule).toContain('display: flex')
     expect(sourceRowRule).not.toContain('grid-template-columns')
@@ -1490,6 +1494,26 @@ describe('the defensive premium band', () => {
     expect(cssBlock(styles, '.mi-defensive-premium {')).not.toContain('repeat(2')
   })
 
+  it('keeps the card at the designed 219: no source line, 102px gauge column, one 24px action', async () => {
+    const container = await renderBand(skewClient({ kind: 'steeper' }))
+    const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
+    // 卡上没有来源行（定稿 219 的组成里没有它）：来源身份在卡头 ⓘ 与两格格名上说。
+    expect(band.querySelector('.mi-defensive-premium__provenance')).toBeNull()
+    expect(band.textContent).not.toContain('Alternative.me')
+    // 第一列 80 + 4 + 18 = 102：不吃自己的上下内距，档位词用 body 档（12 / 1.5 = 18）。
+    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge {')).toContain('padding-top: 0')
+    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge {')).toContain('padding-bottom: 0')
+    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] {'))
+      .toContain('margin-top: 4px')
+    expect(cssBlock(styles, '.mi-defensive-premium .mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] {'))
+      .toContain('line-height: var(--line-body)')
+    // 标题行的动作与文字按钮同档（24）：图标按钮用 md，换态时不跳 2px。
+    expect(band.querySelector('.mi-defensive-premium__refresh')?.className).toContain('icon-button--md')
+    // 曲线只给宽：高由 viewBox 的固有比例算（452 宽 → 46 高），写 `height` 会被算成 50.7。
+    const chart = band.querySelector('[data-half="skew"] .mi-defensive-premium__chart svg')!
+    expect(chart.getAttribute('height')).toBeNull()
+  })
+
   it('lays the content row out as three columns, with the conclusion spanning all of them', async () => {
     const container = await renderBand(skewClient({ kind: 'steeper' }))
     const card = container.querySelector('.mi-defensive-premium')!
@@ -1505,10 +1529,10 @@ describe('the defensive premium band', () => {
     const verdict = card.querySelector('[data-verdict]')!
     expect(skew.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(cssBlock(styles, '.mi-defensive-premium > .mi-defensive-premium__header,')).toContain('grid-column: 1 / -1')
-    // 1080 下每格 452 宽、曲线 46 高：viewBox 520×53 时 452 宽正好渲染 46（定稿 §4.8 的 219 靠它）。
+    // 1080 下每格 452 宽、曲线 46 高，而且 **1 单位 = 1px**：viewBox 就按 452×46 建，
+    // 缩放是 1，轴与刻度的 `--font-meta` 才是真的 11px（按 520 建会缩到约 9.6px）。
     const chart = fearGreed.querySelector('.mi-defensive-premium__chart svg')!
-    const [width, height] = (chart.getAttribute('viewBox') ?? '').split(' ').slice(2).map(Number)
-    expect(Math.abs((452 * height!) / width! - 46)).toBeLessThanOrEqual(0.5)
+    expect(chart.getAttribute('viewBox')).toBe('0 0 452 46')
   })
 
   function fearGreedSection(count = 30) {
@@ -1718,7 +1742,7 @@ describe('the defensive premium band', () => {
     expect(placeholders).toHaveLength(2)
     for (const placeholder of placeholders) {
       expect(placeholder.querySelector('[data-chart-line]')).toBeNull()
-      expect(placeholder.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 520 53')
+      expect(placeholder.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 452 46')
     }
     // 两格的空图框也用各自的整句轴说明键，不靠组件拼名字与单位。
     expect([...placeholders].map(placeholder => placeholder.querySelector('.mi-defensive-premium__chart-axis')?.textContent))
@@ -1770,7 +1794,7 @@ describe('the defensive premium band', () => {
     const failing = { query: async () => { throw new Error('request failed') } }
     const container = await renderBand(failing)
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    expect(band.querySelector('.mi-defensive-premium__halves')).toBeNull()
+    expect(band.querySelector('.mi-defensive-premium__cell')).toBeNull()
     expect(band.querySelector('[data-verdict]')).toBeNull()
     const stateView = band.querySelector('.state-view')!
     expect(stateView).not.toBeNull()
@@ -1789,7 +1813,7 @@ describe('the defensive premium band', () => {
     }) }
     const container = await renderBand(bothDown)
     const band = container.querySelector('.mi-crypto-dashboard__defensive-premium-row')!
-    expect(band.querySelector('.mi-defensive-premium__halves')).toBeNull()
+    expect(band.querySelector('.mi-defensive-premium__cell')).toBeNull()
     expect(band.querySelector('[data-verdict]')).toBeNull()
     expect(band.querySelector('.state-view')).not.toBeNull()
     // 状态面自己带重试，标题行不再给第二颗（AC-14）。

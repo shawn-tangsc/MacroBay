@@ -13,12 +13,14 @@ import type { FearGreedSeriesPoint, OptionSkewSeriesPoint } from '../../../../co
  *
  * 高度按定稿 §4.5：曲线区 46 高（1080 下每格 452 宽），轴旁那句量程/单位说明画在同一个 SVG
  * 里、和刻度同一处，不另起一行——多一行就不是 46 了。
+ *
+ * **1 单位 = 1px**：viewBox 就按判据宽度 452 建，这样 452 宽时缩放是 1，轴与刻度的 `--font-meta`
+ * 真的渲染成 11px（按 520 建再缩到 452 只剩约 9.6px，低于 ui-rules 那一档——不拿放大字号去凑）。
  */
 
-const WIDTH = 520
-/** 452 宽时渲染 46 高（520 × 46 ÷ 452 ≈ 52.9）：高度随宽度等比，窄了只是变矮。 */
-const HEIGHT = 53
-const PAD = { left: 34, right: 6, top: 16, bottom: 11 } as const
+const WIDTH = 452
+const HEIGHT = 46
+const PAD = { left: 34, right: 6, top: 14, bottom: 10 } as const
 const PLOT_WIDTH = WIDTH - PAD.left - PAD.right
 const PLOT_HEIGHT = HEIGHT - PAD.top - PAD.bottom
 const WINDOW_DAYS = 30
@@ -77,7 +79,9 @@ export function ChartPlaceholder({ axisLabel, waitingLabel }: Readonly<{ axisLab
   return <figure className="mi-defensive-premium__chart" data-chart-placeholder
     {...(waitingLabel === undefined ? { 'aria-hidden': 'true' } : {})}>
     <span className="mi-defensive-premium__chart-frame">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto" aria-hidden="true">
+      {/* 只给宽：高由 viewBox 的固有比例算出来（452 宽 → 46 高）。写 `height="auto"` 反而会被
+          卡片样式算成另一个比例（实测 50.7 而不是 46）。 */}
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" aria-hidden="true">
         {/* 与真图同一条轴说明：少了它，加载态比正常态矮一块。 */}
         <text className="mi-defensive-premium__chart-axis" x="0" y={AXIS_LABEL_BASELINE}>{axisLabel}</text>
       </svg>
@@ -99,7 +103,7 @@ function ChartFigure({ ariaLabel, axisLabel, ticks, formatTick = String, childre
   const min = Math.min(...unique)
   const max = Math.max(...unique)
   return <figure className="mi-defensive-premium__chart">
-    <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height="auto">
+    <svg role="img" aria-label={ariaLabel} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%">
       <text className="mi-defensive-premium__chart-axis" x="0" y={AXIS_LABEL_BASELINE}>{axisLabel}</text>
       <g className="mi-defensive-premium__grid">
         {unique.map(value => <line key={value} x1={PAD.left} x2={WIDTH - PAD.right}
@@ -131,7 +135,7 @@ function Series({ plotted, seriesKey }: Readonly<{ plotted: ReadonlyArray<{ x: n
     {plotted.length >= 5
       ? <polyline className="mi-defensive-premium__line" fill="none" points={pointsOf(plotted)} data-chart-line={seriesKey} />
       : null}
-    {plotted.map((point, index) => <circle key={`${point.x}-${index}`} className="mi-defensive-premium__dot" cx={point.x} cy={point.y} r="1.6" />)}
+    {plotted.map((point, index) => <circle key={`${point.x}-${index}`} className="mi-defensive-premium__dot" cx={point.x} cy={point.y} r="1.1" />)}
   </g>
 }
 

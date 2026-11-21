@@ -9,8 +9,6 @@ import type { FearGreedSnapshotBucket } from '../../../../contracts/intelligence
 export type DefensivePremiumCardText = {
   title: string
   titleInfoLabel: string
-  observedAt: string
-  provenance: string
   fearGreed: {
     name: string
     axis: string
@@ -19,7 +17,6 @@ export type DefensivePremiumCardText = {
     infoLabel: string
     info: { volatility: string; percentile: string; percentileInsufficient: string }
   }
-  gaugeMarkers: { fear: string; neutral: string; greed: string }
   skew: {
     name: string
     notConnected: string
@@ -44,8 +41,6 @@ type Source = {
   defensivePremium: {
     title: string
     titleInfoLabel: string
-    observedAt: string
-    provenance: string
     fearGreed: {
       name: string
       axis: string
@@ -69,17 +64,14 @@ type Source = {
     chart: { fearGreedAria: string; skewAria: string; fearGreedSummary: string; skewSummary: string }
     action: { refresh: string; enable: string; viewSource: string }
   }
-  /** 两个半条和旧情绪卡共用同一批字：读数的「截至」与档位名只该有一份。 */
+  /** 格里的「截至」与档位名只该有一份。 */
   fearGreed: { loading: string; empty: string; buckets: Record<FearGreedSnapshotBucket, string> }
-  sentiment: { gaugeMarkers: { fear: string; neutral: string; greed: string } }
 }
 
 export function defensivePremiumCardText(text: Source): DefensivePremiumCardText {
   return {
     title: text.defensivePremium.title,
     titleInfoLabel: text.defensivePremium.titleInfoLabel,
-    observedAt: text.defensivePremium.observedAt,
-    provenance: text.defensivePremium.provenance,
     fearGreed: {
       name: text.defensivePremium.fearGreed.name,
       axis: text.defensivePremium.fearGreed.axis,
@@ -88,7 +80,6 @@ export function defensivePremiumCardText(text: Source): DefensivePremiumCardText
       infoLabel: text.defensivePremium.fearGreed.infoLabel,
       info: text.defensivePremium.fearGreed.info
     },
-    gaugeMarkers: text.sentiment.gaugeMarkers,
     skew: { ...text.defensivePremium.skew, history: text.defensivePremium.history },
     chart: text.defensivePremium.chart,
     stale: text.defensivePremium.stale,

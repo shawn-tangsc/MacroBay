@@ -68,7 +68,8 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
         )} />
       {/* 整卡只留一颗动作：未接入时是「查看来源」，其余可读状态下是刷新；整块状态面自己带动作，
           标题行不再给第二颗（AC-14）。 */}
-      {showRefresh ? <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="sm" variant="plain"
+      {/* 标题行的动作一律 24 高（`md`）：文字按钮是 24，图标按钮若用 22，换态时标题行会跳 2px。 */}
+      {showRefresh ? <IconButton ariaLabelKey="pages.intelligence.portal.dashboard.defensivePremium.action.refresh" icon={RefreshCw} resolveText={dataText} size="md" variant="plain"
         onSelect={onRefresh} disabled={loading} className="mi-defensive-premium__refresh" /> : null}
       {/* 这一格被读者关掉时，「去启用」也只在标题行；格内不再放按钮（AC-31）。 */}
       {showEnable && cellOff !== undefined
@@ -173,13 +174,10 @@ export function SentimentOptionsCard({ state, text, onRefresh, onViewSource, cel
           </div>
         </>}
 
-    {loading && wholeCardState === undefined ? <>
-      {/* 结论与来源行还没内容，但位置先按正常态留出来：换态时卡底不跳。 */}
-      <p className="mi-defensive-premium__verdict" aria-hidden="true">&nbsp;</p>
-      <p className="mi-defensive-premium__provenance" aria-hidden="true">&nbsp;</p>
-    </> : null}
+    {/* 结论行还没内容时先把位置留出来：换态时卡底不跳。卡上没有来源行——来源身份在卡头 ⓘ
+        与两格的格名（「BTC 期权偏斜（Deribit）」）上说，定稿 219 的组成里也没有那一行。 */}
+    {loading && wholeCardState === undefined ? <p className="mi-defensive-premium__verdict" aria-hidden="true">&nbsp;</p> : null}
     {verdictKey && !wholeCardState ? <p className="mi-defensive-premium__verdict" data-verdict>{dataText(verdictKey)}</p> : null}
-    {result ? <p className="mi-defensive-premium__provenance">{text.provenance}</p> : null}
   </section>
 }
 

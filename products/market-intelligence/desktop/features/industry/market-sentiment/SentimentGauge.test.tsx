@@ -74,7 +74,8 @@ describe('the gauge column', () => {
     for (const shown of [markup(available), markup({ state: 'loading' }), markup({ state: 'unavailable' })]) {
       expect(shown).not.toContain(text.defensivePremium.fearGreed.asOf)
       expect(shown).not.toContain('2026-08-04')
-      expect(shown).not.toContain(text.sentiment.observedAt)
+      // 一个日期都不许出现：日期归恐惧贪婪格的读数行。
+      expect(shown).not.toMatch(/\d{4}-\d{2}-\d{2}/)
     }
   })
 
