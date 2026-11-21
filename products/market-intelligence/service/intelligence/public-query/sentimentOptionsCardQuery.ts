@@ -9,6 +9,7 @@ import {
 } from '../../../contracts/intelligenceQueryContracts'
 import { marketPulsePolicy } from '../../../contracts/marketPulse'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
+import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
 import { readFearGreedDailyPoints } from './fearGreedDailyPoints'
 import {
   calendarDaysBetween,
@@ -41,6 +42,8 @@ export type SentimentOptionsCardQueryDependencies = {
   pipeline: Pick<IntelligencePipeline, 'listItems' | 'listMetricEvents'>
   /** Absent until the option-skew store exists: the card then reads "not connected", not "empty". */
   readOptionSkew?: () => OptionSkewStoreRead
+  /** Defaults to the product catalog. Injectable so tests can exercise the live path. */
+  readSkewReadiness?: () => string | undefined
 }
 
 export function querySentimentOptionsCard(
@@ -64,7 +67,8 @@ export function querySentimentOptionsCard(
 }
 
 function fearGreedSection(input: SentimentOptionsCardQueryInput & SentimentOptionsCardQueryDependencies): FearGreedCardSection {
-  const read = readFearGreedDailyPoints({ pipeline: input.pipeline, asOf: input.asOf })
+  // The series tolerates a corrupt day (skips and counts it); the snapshot stays strict.
+  const read = readFearGreedDailyPoints({ pipeline: input.pipeline, asOf: input.asOf, tolerateBadEntries: true })
   if (read.state === 'unavailable') return { state: 'unavailable', failureCode: fearGreedSnapshotPolicy.unavailableFailureCode }
   if (read.state === 'empty') return { state: 'empty' }
 
@@ -92,6 +96,11 @@ function fearGreedSection(input: SentimentOptionsCardQueryInput & SentimentOptio
 }
 
 function optionSkewSection(input: SentimentOptionsCardQueryInput & SentimentOptionsCardQueryDependencies): OptionSkewCardSection {
+  // "Not connected" is decided here, from the registered source's readiness — never in the
+  // renderer and never by inferring from a cell switch. A planned/pending source has no store to read.
+  const readiness = (input.readSkewReadiness ?? (() => getIntelligenceSourceDefinition(SKEW_SOURCE_ID)?.readiness))()
+  if (readiness === 'planned' || readiness === 'pending') return { state: 'not-connected' }
+
   if (!input.readOptionSkew) {
     return { state: 'unavailable', failureCode: 'option-skew-collect-unavailable', cause: 'connection-unavailable' }
   }
@@ -135,6 +144,8 @@ function optionSkewSection(input: SentimentOptionsCardQueryInput & SentimentOpti
     points: inWindow.map((point): OptionSkewSeriesPoint => ({ day: point.day, observedAt: point.observedAt, riskReversal: point.riskReversal }))
   }
 }
+
+const SKEW_SOURCE_ID = 'deribit-options'
 
 /** First day of the chart window: `windowDays` calendar days ending on the as-of UTC day. */
 function windowStartDay(asOf: string, windowDays: number): string {

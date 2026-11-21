@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
@@ -76,13 +76,16 @@ describe('querySentimentOptionsCard', () => {
     expect(result.fearGreed).toEqual({ state: 'empty' })
   })
 
-  it('reads "not connected" for the skew half before the store exists', () => {
-    const result = querySentimentOptionsCard({ asOf, timeZone: 'UTC', windowDays: 30, pipeline: pipeline(history(30, () => 40)) })
-    expect(result.optionSkew).toEqual({ state: 'unavailable', failureCode: 'option-skew-collect-unavailable', cause: 'connection-unavailable' })
+  it('reads "not connected" for the skew half while the source is planned, without touching a store', () => {
+    const readOptionSkew = vi.fn(() => ({ points: [] }))
+    const result = querySentimentOptionsCard({ asOf, timeZone: 'UTC', windowDays: 30, pipeline: pipeline(history(30, () => 40)), readOptionSkew })
+
+    expect(result.optionSkew).toEqual({ state: 'not-connected' })
+    expect(readOptionSkew).not.toHaveBeenCalled()
   })
 
   it('separates "no skew day yet" from "the latest pull failed"', () => {
-    const base = { asOf, timeZone: 'UTC', windowDays: 30 as const, pipeline: pipeline(history(30, () => 40)) }
+    const base = { asOf, timeZone: 'UTC', windowDays: 30 as const, pipeline: pipeline(history(30, () => 40)), readSkewReadiness: () => 'live' }
     expect(querySentimentOptionsCard({ ...base, readOptionSkew: () => ({ points: [] }) }).optionSkew).toEqual({ state: 'empty' })
     expect(querySentimentOptionsCard({ ...base, readOptionSkew: () => ({ points: [], lastFailureCause: 'upstream-http-error' }) }).optionSkew)
       .toEqual({ state: 'unavailable', failureCode: 'option-skew-collect-unavailable', cause: 'upstream-http-error' })
@@ -90,7 +93,7 @@ describe('querySentimentOptionsCard', () => {
 
   it('computes skew direction from the whole series, not from the chart window', () => {
     const points = skewHistory([3.0, 2.8, 2.6, 2.4, 2.2, 2.0, 1.8, 1.6, 1.4, 1.2])
-    const base = { asOf, timeZone: 'UTC', pipeline: pipeline(history(30, () => 40)), readOptionSkew: () => ({ points }) }
+    const base = { asOf, timeZone: 'UTC', pipeline: pipeline(history(30, () => 40)), readOptionSkew: () => ({ points }), readSkewReadiness: () => 'live' }
 
     const wide = querySentimentOptionsCard({ ...base, windowDays: 90 })
     const narrow = querySentimentOptionsCard({ ...base, windowDays: 30 })

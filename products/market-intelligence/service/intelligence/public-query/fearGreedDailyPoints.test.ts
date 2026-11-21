@@ -23,6 +23,7 @@ describe('readFearGreedDailyPoints', () => {
 
     expect(read).toEqual({
       state: 'available',
+      skipped: 0,
       days: [
         { day: '2026-08-06', observedAt: '2026-08-06T00:00:00.000Z', score: 40, bucket: 'fear' },
         { day: '2026-08-05', observedAt: '2026-08-05T00:00:00.000Z', score: 30, bucket: 'fear' },

@@ -125,6 +125,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.queryModuleSignalRead' },
     { method: 'intelligence.queryCapitalConditionsSnapshot' },
     { method: 'intelligence.queryFearGreedSnapshot' },
+    { method: 'intelligence.querySentimentOptionsCard' },
     { method: 'intelligence.dailyBriefing.getToday' },
     { method: 'intelligence.dailyBriefing.list' },
     { method: 'intelligence.dailyBriefing.get' },

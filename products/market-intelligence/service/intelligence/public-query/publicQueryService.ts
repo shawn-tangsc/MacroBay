@@ -35,6 +35,8 @@ import {
   type EvidenceExcerptQueryInput,
   type FearGreedSnapshotQueryInput,
   type FearGreedSnapshotResult,
+  type SentimentOptionsCardQueryInput,
+  type SentimentOptionsCardResult,
   type EvidenceExcerptResult,
   type ImpactTimelineData,
   type MarketIntelligenceQueryCaveat,
@@ -58,6 +60,7 @@ import {
   parseJsonRecord
 } from './publicQueryDataBuilders'
 import { queryFearGreedSnapshot } from './fearGreedSnapshotQuery'
+import { querySentimentOptionsCard } from './sentimentOptionsCardQuery'
 import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
@@ -110,6 +113,8 @@ export type MarketIntelligencePublicQueryService = {
     input: EvidenceExcerptQueryInput
   ) => Promise<MarketIntelligenceQueryResult<EvidenceExcerptResult>>
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
+  /** The card's one read: both halves, each with its own state; the skew half reads "not connected" until its store exists. */
+  querySentimentOptionsCard: (input: SentimentOptionsCardQueryInput) => Promise<SentimentOptionsCardResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
   queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
   queryMarketDivergence: (input: { asOf: string }) => Promise<MarketDivergenceResult>
@@ -338,6 +343,7 @@ export function createMarketIntelligencePublicQueryService(
       })
     },
     queryFearGreedSnapshot: async (queryInput) => queryFearGreedSnapshot({ ...queryInput, pipeline: input.pipeline }),
+    querySentimentOptionsCard: async (queryInput) => querySentimentOptionsCard({ ...queryInput, pipeline: input.pipeline }),
     queryFundingRateHistory: async (queryInput) => input.fundingRateHistoryStore
       ? queryFundingRateHistoryAsync({ ...queryInput, store: input.fundingRateHistoryStore })
       : { state: 'unavailable', failureCode: 'funding-rate-history-query-unavailable' },

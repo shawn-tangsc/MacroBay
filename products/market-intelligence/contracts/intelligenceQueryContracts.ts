@@ -425,6 +425,8 @@ export type OptionSkewCardSection =
       points: readonly OptionSkewSeriesPoint[]
     }
   | { state: 'empty' }
+  /** The registered source is not connected yet (readiness planned/pending). Not a failure. */
+  | { state: 'not-connected' }
   | { state: 'unavailable'; failureCode: 'option-skew-query-unavailable' }
   | {
       state: 'unavailable'
